@@ -223,18 +223,28 @@ constexpr int kSkullBlendTo = 9;  // stations 6..9 blend head -> spine (four
 // tools/pack/mkcreaturepage.py; and the head's own rings swell LATERALLY where
 // it sits, so the skull is widest exactly at the eyes and the outline says so.
 // That also deleted two bones and four ring parts.
-constexpr int kEyeStation0 = 3;      // first head station that carries the bulge
-constexpr int kEyeStation1 = 8;      // last
-constexpr int32_t kEyeBulgeNum = 42; // extra lateral half-width, % of the ring.
-                                     // 42, was 22 (Fabian 2026-08-28: "give
-                                     // them more bulge. They should look
-                                     // like they're on the sides when seen
-                                     // from the front"). A LOCAL googly rim
-                                     // riding on the culminating tube -- NOT
-                                     // a skull widening: the 85-era 1.97:1
-                                     // flattened disc is the recorded
-                                     // failure on the other side. Judged on
-                                     // the front diagnostic beside Front.png.
+constexpr int kEyeStation0 = 4;      // first head station that carries the bulge
+constexpr int kEyeStation1 = 7;      // last. 4..7, was 3..8 (v3 run): six
+                                     // stations of swell survived as a
+                                     // continuous lateral ridge along the
+                                     // whole head -- the "brim". Two fewer
+                                     // stations localise it at the eyes.
+#ifndef ZIXX_EYEBULGE
+#define ZIXX_EYEBULGE 16
+#endif
+constexpr int32_t kEyeBulgeNum = ZIXX_EYEBULGE;
+                                     // extra lateral half-width, % of the ring.
+                                     // 16, was 42 (v3 run): at 42 the head's
+                                     // head-on silhouette was a narrow pink
+                                     // dome sitting on a wide flat disc -- a
+                                     // MUSHROOM, not Front.png's rounded
+                                     // blob. The owner's "give them more
+                                     // bulge" stands as TWO LOCAL swellings
+                                     // at the eyes (see kEyeStation0/1), not
+                                     // a rim around the whole head. Picked
+                                     // off a rendered head-on ladder
+                                     // (12/16/20/24, v3 run evidence);
+                                     // judged beside Front.png.
 
 // THE BALL ENVELOPE IS RETIRED (2026-08-28). Fabian: "There should really
 // be no skull. It's one tube that bulges more and more towards the end,

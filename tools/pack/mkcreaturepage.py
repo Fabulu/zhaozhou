@@ -30,6 +30,7 @@ i.e. texel column 48 of 64. The pink dorsal band is centred there.
 Usage: mkcreaturepage.py [out.h]
 """
 import sys
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -59,6 +60,24 @@ GREEN_DARK = (44, 146, 86)    # DARK green: the front
 # toward the measured sheet pigment (233,188,206) -- NOT all the way back to
 # the pale rose that failed on dark ground at 240p. Judged on a render.
 PINK = (246, 94, 183)
+# THE DORSAL BAND'S WIDTH, the owner's knob, in TILE texels of U (64 = one
+# circumference; the atlas uses 2x this). Its history is a full oscillation:
+# 6.0 -> 4.5 (narrowed for a camera cause that had already been fixed --
+# wrong) -> 13 (the owner's "cover the entire top, including part of the
+# sideways dropoff" -- a RIGHT instruction over-delivered: at 13 the site
+# cameras, which sit slightly above and show the BACK, read a MAGENTA animal
+# with a green sliver, run 2339 verification). Side.png has GREEN dominant
+# with pink along the back. 9 was PICKED OFF A RENDERED LADDER (8/9/10/11,
+# walk + idle site cameras, v3 run evidence pink-ladder-8-9-10-11.png and
+# pink-zoom-8-vs-9.png): at 9 the top INCLUDING the shoulder drop-off stays
+# pink -- the ask stands -- while the flanks and belly stay green, so the
+# animal reads green with a pink back from the shipped shots; 8 lets the
+# near shoulder go green on the walk's grounded run, 10-11 fight green for
+# the animal again.
+# JUDGE ON THE SITE CAMERAS, NEVER ON A UV FRACTION: a band sized by
+# circumference fraction becomes most of the visible surface from a camera
+# that sits above the creature.
+PINK_HALF_TILE = 9.0
 BLUE = (3, 145, 205)
 YELLOW = (243, 232, 142)
 ORANGE = (218, 106, 71)
@@ -188,7 +207,7 @@ def body_tile(g_green, g_green_dark, g_pink, rng):
     # the old steep camera. A gentle taper at the very first rows keeps the
     # junction row matched to the head tile's crown width.
     for y in range(TILE):
-        half = 13.0
+        half = PINK_HALF_TILE
         # a hand-drawn edge: two slow incommensurate waves, no randomness, so
         # the page is byte-identical on every machine
         wob = 2.2 * np.sin(y * 0.21) + 1.4 * np.sin(y * 0.077 + 1.1)
@@ -247,7 +266,9 @@ EYE_BOX = (1418, 556, 1594, 734)
 # in the middle -- and it is already inside EYE_BOX. The orange ellipse this
 # file used to paint UNDER the eye was an invention, and it is what read as
 # a socket/ring. Deleted; the drawn eye is painted alone, slightly larger.
-EYE_ROW = 12     # first texel row of the eyeball down the head tile.
+EYE_ROW = 16     # first texel row of the eyeball down the head tile.
+                 # 16 keeps the SMALLER disc's centre where the 12-row start
+                 # put the old large one (centre ~row 28; see EYE_TEX_* note).
                  # 12, was 19 (Fabian, 2026-08-27: "eyes need to be more in
                  # front. Not completely, they still should be mostly on the
                  # side"): on the BALL skull the rows forward of the radial
@@ -255,15 +276,30 @@ EYE_ROW = 12     # first texel row of the eyeball down the head tile.
                  # sliding the eye 7 rows nose-ward wraps its front edge onto
                  # the frontal silhouette while the centre stays on the side
                  # line. Judged on head-on + side zooms, not derived.
-EYE_COL_A = 38   # +Z flank, RAISED 4 texels toward the back line (Fabian,
-                 # 2026-08-28: "Eyes should be more visible in front. Move
-                 # them up a little") -- toward U=48 is up on the ring
-EYE_COL_B = 58   # -Z flank, raised the same 4 texels (0 -> 60, wrapping
-                 # toward the back line from the other side)
-EYE_TEX_U = 17   # texels of U for the yellow ball (angle around the head).
-                 # 17, was 15: the sheet's eye is a LARGE disc, a
-                 # substantial fraction of the head's height
-EYE_TEX_V = 33   # texels of V for the yellow ball (length along the head)
+EYE_COL_A = 37   # +Z flank, 5 texels above the side line (U=32). Was 38
+                 # (v3 run): raised 6 toward the back, each disc's orange
+                 # ring reached the crown's pink gap and the two eyes read
+                 # as ONE yellow band wrapping the face head-on -- a
+                 # chinstrap, where Front.png draws two separated ovals
+                 # INSIDE the silhouette with blue between them. The raise
+                 # was for a steep camera and a level head; the head now
+                 # looks up (+4.6 deg), so the eyes read from the front at
+                 # the side lines. +5 keeps them a touch high, touching the
+                 # crown line the way the front sheet tilts them (picked on
+                 # the head-on still against +3, v3 evidence
+                 # eye-height-lo-vs-hi.png).
+EYE_COL_B = 59   # -Z flank, mirrored (5 below U=64, wrapping)
+EYE_TEX_U = 12   # texels of U for the yellow ball (angle around the head).
+                 # 12, was 17 (v3 run): at 17 the two discs plus their orange
+                 # rings MET over the crown -- head-on the eyes read as one
+                 # continuous yellow band wrapping the face, and in profile
+                 # the eye plus ring filled nearly the whole head. Side.png
+                 # draws the eye as a feature INSIDE the head, roughly a
+                 # third of its height; Front.png draws two clearly
+                 # separated ovals. Judged on still-front + side renders.
+EYE_TEX_V = 24   # texels of V for the yellow ball (length along the head).
+                 # 24, was 33 -- shrunk with EYE_TEX_U to keep the disc round
+                 # (v3 run, the eye-vs-head ratio fix)
 # THE ORANGE SURROND (Fabian, ruled YES; Front.png brackets each eye in
 # orange/red). Painted UNDER the lifted eye disc as a feathered ring a few
 # texels wider than the ball, so the drawn eye sits inside an orange rim
@@ -284,6 +320,9 @@ EYE_RING_RGB = (206, 88, 46)  # judged on the front render, not the scan
 # (verified by head-zoom render, not derived). The disc and its ink ring are
 # rotationally symmetric, so only the pupil band moves.
 EYE_ROT_DEG = -30
+# native-res pupil dilation radius, as a fraction of the crop's height (see
+# the classify-then-shrink note in eye_patch). 0.025 ~= 1.5x the drawn width.
+PUPIL_BOLD = 0.05
 
 
 def eye_patch(u_tex=None, v_tex=None):
@@ -311,15 +350,16 @@ def eye_patch(u_tex=None, v_tex=None):
     if EYE_ROT_DEG:
         crop = crop.rotate(EYE_ROT_DEG, resample=Image.BICUBIC,
                            fillcolor=(250, 226, 120))
-    crop = crop.resize((u_tex, v_tex), Image.BOX)
+    # CLASSIFY AT THE SCAN'S NATIVE RESOLUTION, THEN SHRINK (v3 run). The
+    # old order -- shrink to a couple dozen texels, then classify -- blurred
+    # the slit's texels into the yellow before the classifier ever saw them:
+    # the red-minus-green contrast collapsed, only the mid swell survived,
+    # and the drawn INK RING vanished entirely (its mixed texels failed the
+    # lum<96 gate). The shipped pupil was a soft blob; run 2339 declared it
+    # and the site render confirmed. At native resolution the slit and ring
+    # are hundreds of pixels and classify cleanly; the shrink then averages
+    # a coherent bold line instead of deleting a faint one.
     a = np.asarray(crop).astype(np.float64)
-    # SATURATE TOWARD THE READ (2026-08-27). The raw lift shipped the SCAN's
-    # values, and the scan is pale: at 240p under the key light the yellow
-    # ball read as beige and the pupil as brown -- the dorsal-pink lesson
-    # again (matching the paper is not matching the READ). Classify each
-    # texel by what the artist MEANT -- ink ring, orange pupil, yellow ball
-    # -- and pull it two thirds of the way to a saturated version of that
-    # intent, keeping a third of the original so the hand wobble survives.
     lum = a @ [0.299, 0.587, 0.114]
     # red-minus-GREEN separates the orange pupil from the yellow ball: the
     # scanned yellow is (250,230,150)-ish so red-minus-BLUE flags IT too
@@ -328,17 +368,37 @@ def eye_patch(u_tex=None, v_tex=None):
     rg = a[..., 0] - a[..., 1]
     ink = lum < 96
     pupil = (~ink) & (rg > 55) & (a[..., 0] > 120)
+    # BOLDEN THE SLIT: dilate the native-res pupil mask so the wavy line
+    # keeps ~1.5x its drawn width through the resize and the mip chain --
+    # the sheet's slit is the eye's dominant feature and it must survive
+    # 240p at gameplay distance. PUPIL_BOLD is the knob (fraction of the
+    # crop's height; the value was judged on site-camera renders).
+    r = max(1, int(round(a.shape[0] * PUPIL_BOLD)))
+    for _ in range(r):
+        pupil = pupil | ((np.roll(pupil, 1, 0) | np.roll(pupil, -1, 0)
+                          | np.roll(pupil, 1, 1) | np.roll(pupil, -1, 1)) & ~ink)
     ball = (~ink) & (~pupil)
+    # SATURATE TOWARD THE READ (2026-08-27). The raw lift shipped the SCAN's
+    # values, and the scan is pale: at 240p under the key light the yellow
+    # ball read as beige and the pupil as brown -- the dorsal-pink lesson
+    # again (matching the paper is not matching the READ). Pull each texel
+    # toward a saturated version of the artist's intent, keeping a quarter
+    # of the original so the hand wobble survives.
     tgt = np.zeros_like(a)
     tgt[ink] = (26, 22, 26)
-    tgt[pupil] = (234, 88, 30)
+    tgt[pupil] = (226, 66, 20)
     tgt[ball] = (252, 224, 74)
-    a = a * 0.34 + tgt * 0.66
+    a = a * 0.24 + tgt * 0.76
+    a = np.asarray(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
+                   .resize((u_tex, v_tex), Image.BOX)).astype(np.float64)
     yy, xx = np.mgrid[0:v_tex, 0:u_tex]
     cy = (v_tex - 1) / 2.0
     cx = (u_tex - 1) / 2.0
     r = np.hypot((xx - cx) / cx, (yy - cy) / cy)
-    alpha = np.clip((1.02 - r) * 6.0, 0.0, 1.0)
+    # 1.08, was 1.02 (v3 run): the tighter ellipse faded the slit's ENDS --
+    # in the sheet the wavy line runs rim to rim, and clipping its last
+    # texels read as a floating smear instead of a slit ACROSS the eye.
+    alpha = np.clip((1.08 - r) * 6.0, 0.0, 1.0)
     return a, alpha
 
 
@@ -416,8 +476,8 @@ def head_tile(g_blue, g_green_dark, g_pink, g_orange):
         if y < 16:
             return 0.0
         if y < 32:
-            return 4.0 + (13.0 - 4.0) * (y - 16) / 16.0
-        return 13.0
+            return 4.0 + (PINK_HALF_TILE - 4.0) * (y - 16) / 16.0
+        return PINK_HALF_TILE
     def throat_half(y):
         return 12.0 if y < 38 else 10.0
     # green rear flanks: fade in behind the skull; wobbly hand edge.
@@ -597,7 +657,11 @@ def quilt_field(mat, w, h):
     """T5 stroke layer: deterministic patch quilting with overlap blending.
     Patches are drawn from several real crops at near-native stroke scale and
     laid with a fixed-seed rng -- no square repeats down the animal."""
-    rng = np.random.default_rng(QUILT_SEED + hash(mat) % 1000)
+    # zlib.crc32, NOT hash(): Python salts str hash per process, so the old
+    # hash(mat) made every regeneration re-roll the quilt -- the committed
+    # bytes were unreproducible (found 2026-08-28 v3 run when a no-change
+    # regen diffed every data line). Same law, now actually deterministic.
+    rng = np.random.default_rng(QUILT_SEED + zlib.crc32(mat.encode()) % 1000)
     srcs = [_lift_lum(sh, box) for sh, box in STROKE_SOURCES[mat]]
     out = np.zeros((h, w))
     wgt = np.zeros((h, w))
@@ -662,12 +726,15 @@ def tinted(base, drift_anchor, mult, drift, tooth=None):
 
 
 # atlas-space constants (the tile-space knobs x2 in U, x50/64 or x205/64 in V)
-A_EYE_COL_A = EYE_COL_A * 2          # 76
-A_EYE_COL_B = EYE_COL_B * 2          # 116
-A_EYE_ROW = 9                        # head-tile row 12 -> atlas V 9
-A_EYE_U = 34                         # 17 tile texels of angle -> 34 atlas cols
-A_EYE_V = 26                         # 33 head rows -> 26 atlas rows
-A_EYE_RING = 4                       # orange surround, atlas texels of U
+A_EYE_COL_A = EYE_COL_A * 2          # 74
+A_EYE_COL_B = EYE_COL_B * 2          # 118
+A_EYE_ROW = 12                       # head-tile row 16 -> atlas V 12 (the
+                                     # smaller disc keeps the old centre)
+A_EYE_U = 24                         # 12 tile texels of angle -> 24 atlas cols
+A_EYE_V = 19                         # 24 head rows -> 19 atlas rows
+A_EYE_RING = 3                       # orange surround, atlas texels of U --
+                                     # thinned with the disc (Front.png's
+                                     # surround is a bracket, not a halo)
 DITHER_AMP = 0.9                     # T6 ordered dither, 0..1 of one 565 step
 _BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6],
                     [3, 11, 1, 9], [15, 7, 13, 5]], dtype=np.float64) / 16.0
@@ -742,11 +809,13 @@ def build_atlas():
     # PINK DORSAL BAND, crown to fork, one continuous top (starts behind the
     # dome so the frontal face is not split -- run 2339 r5/r6 lesson)
     def pink_half_atlas(y):
+        # plateau = the tile-space knob x2 (atlas U is 128 for the same ring)
+        full = PINK_HALF_TILE * 2.0
         if y < 12:
             return 0.0
         if y < 25:
-            return 8.0 + (26.0 - 8.0) * (y - 12) / 13.0
-        return 26.0
+            return 8.0 + (full - 8.0) * (y - 12) / 13.0
+        return full
     for y in range(2, H):
         half = pink_half_atlas(y)
         if half <= 0:
