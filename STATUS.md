@@ -40,6 +40,94 @@ not add one.
 
 ---
 
+## 2026-08-28 (evening) -- every Field operation now exists, and the tests
+## found nine real bugs doing it
+
+*Short version: all nine remaining operations are built and checked against the
+reference. Writing them found nine genuine faults, and I want to tell you about
+the shape of them rather than the count, because they were mostly NOT the kind
+of bug you would expect.*
+
+### What exists now
+
+    NOISE2, RIDGE     terrain and creature randomness, four points at a time
+    ROT2, ROT3        rotation
+    RING              the annulus falloff
+    NORMALIZE2/3      vector normalisation
+    SPLINE            smooth curve interpolation (the maths half)
+    CURVE, DCURVE     already done, earlier today
+
+Plus the pieces that carry work to them: a dispatcher that gathers four points,
+a writeback arbiter, and -- new this evening -- the path in the executor that
+hands an operation to a service and PARKS that point until the answer comes
+back.
+
+### The bugs were nearly all "still plausible"
+
+This is the part worth your time. Almost none of these produced obvious
+garbage:
+
+* **Rotation had cosine and sine swapped.** That is exactly a rotation by
+  (90 minus the angle) -- so every answer was a VALID rotation of the right
+  point by the WRONG angle. Nothing looked broken.
+* **The spline used the previous group's coefficients**, because I computed
+  them on the same clock I used them. A stale coefficient is a real coefficient
+  for a different segment: every curve was smooth and every curve was wrong.
+* **Normalisation was out by exactly 128** on every output, because I left off
+  a final shift. Every value still ordered correctly, just uniformly wrong.
+* **And normalisation broke only on lengths that are exact powers of two**,
+  because one register was 31 bits where it needed 32. Two of four lanes right,
+  two reading zero, and the only thing the broken ones shared was that.
+
+The lesson I would take from this: **plausible-but-wrong is the normal failure
+mode here, not garbage**. That is the same thing your note about Zixxtrixx said
+from the art side -- gates can be green while the animal reads completely
+wrong. It is not a creature problem, it is what happens whenever the check
+measures something adjacent to the thing you care about.
+
+The reason these were all caught in minutes is that every check runs against
+the SHIPPED interpreter rather than against a second implementation written
+next to the hardware. A second implementation would very likely have carried
+the same mistake.
+
+### One measurement you should see
+
+The register file has one write port, and both the maths and the results
+compete for it. I built three sharing policies and measured them on the same
+traffic:
+
+    ALU first     the results NEVER get through -- starved outright
+    drain first   done in 31 clocks, and the ALU loses exactly 8
+    round robin   done in 38 clocks, ALU loses the same 8
+
+I had argued in writing that "ALU first" would be self-limiting and therefore
+acceptable. It is not, and the measurement took one run to say so. The engine
+uses drain-first, and the starvation is now a permanent test so nobody
+re-introduces it by accident.
+
+### Still to do
+
+    the four remaining deliberate-defect sweeps (running now, sequentially)
+    the curve service widened to fetch four neighbours, which SPLINE's
+      lookup half needs -- currently the maths half is built and the lookup
+      half is not
+    wiring the whole service path into the engine as one machine
+
+### An honest note about my own tooling, again
+
+I broke a rule I had written down four hours earlier and it cost a sweep: a
+deliberate-defect run re-checks the whole project before every step, so a
+half-finished edit ANYWHERE breaks it -- even in a file that run never touches.
+Seventeen of twenty-three checks were thrown away. Nothing was corrupted and
+nothing was wrongly reported green; the safety check refused rather than
+guessing. But the run was lost, and it was my fault twice over: once for the
+edit, once for having written the rule too narrowly.
+
+Both halves are now in the build notes, and there is a command that answers
+"is a run in progress" so I stop having to remember.
+
+---
+
 ## 2026-08-28 (afternoon) -- two new pieces of the Field engine, and what the
 ## tests found out about my tests
 
