@@ -5,6 +5,41 @@ at the top.*
 
 ---
 
+## FABIAN — ABOUT THE ZIXXTRIXX NOTE, SO YOU CAN STOP RE-POSTING IT
+
+You have now posted it three times: `reports/zixxheadadvice`, `…advice2` and
+`…advice3`. The second and third are byte-identical; the first differs only by
+a stray repository URL glued onto one paragraph.
+
+**I am the hardware session, not the Zixxtrixx agent, and I have relayed it for
+you.** Your text, verbatim, is at
+
+    runs/CLAUDE-RUNS/RUN-20260828-0326-zixxtrixx-v4-closeout/OWNER-FEEDBACK-READ-FIRST.md
+
+I put it there because that run folder is the one place his session reads and
+writes every pass. I added a NEW file rather than appending to his TASK_LOG.md,
+so nothing of his can be clobbered.
+
+**Why re-posting will not work on its own:** his session already had the repo
+state from before your first commit, and nothing makes a running session pull.
+Each new copy lands in a commit he is not looking at. A fourth will do the same.
+
+**What will work, in order:**
+
+1. Paste it into his session directly. It is the only delivery that cannot
+   silently fail.
+2. If that session has stopped — his `TASK_LOG.md` was last written at 07:55
+   and it is now mid-morning, so it may well have — then starting a new one is
+   enough: my relay is sitting in the run folder it will read first.
+
+I have not touched anything the note names: no model, animation, texture,
+atlas, silhouette, clip or golden. I have no opinion on the geometry and did
+not add one.
+
+---
+
+---
+
 ## 2026-08-28 (afternoon) -- two new pieces of the Field engine, and what the
 ## tests found out about my tests
 
