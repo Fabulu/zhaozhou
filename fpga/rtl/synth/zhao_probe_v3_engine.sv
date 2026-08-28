@@ -81,7 +81,12 @@ module zhao_probe_v3_engine #(
     input var logic rival_req_i,
 
     // ---- observation -------------------------------------------------------
+    // The ALU's register-file write, as a REQUEST. Exposed so a test can
+    // REFUSE it: zhao_field_v3_svcpath's arbiter does exactly that, and until
+    // this port existed there was no way to drive the case at all. Tie it high
+    // and the engine behaves exactly as it did before.
     output var logic                    wb_valid_o,
+    input  var logic                    wb_ready_i,
     output var logic [$clog2(CTX)-1:0]  wb_ctx_o,
     output var logic [$clog2(REGS)-1:0] wb_reg_o,
     output var logic signed [31:0]      wb_data_o,
@@ -223,7 +228,8 @@ module zhao_probe_v3_engine #(
       .mul_req_b_o    (ex_req_b),
       .mul_rsp_valid_i(ex_rsp_valid),
       .mul_rsp_p_i    (ex_rsp_p),
-      .wb_valid_o(wb_valid_o), .wb_ctx_o(wb_ctx_o), .wb_reg_o(wb_reg_o),
+      .wb_valid_o(wb_valid_o), .wb_ready_i(wb_ready_i),
+      .wb_ctx_o(wb_ctx_o), .wb_reg_o(wb_reg_o),
       .wb_data_o(wb_data_o),
       .done_valid_o(done_valid_o), .done_ctx_o(done_ctx_o),
       .active_o(active_o), .unsupported_o(unsupported_o),

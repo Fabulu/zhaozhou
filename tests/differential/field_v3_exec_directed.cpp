@@ -180,6 +180,14 @@ struct Dut {
     t.up_we_i = 0;
     t.pre_we_i = 0;
     t.start_i = 0;
+    // GRANTED BY DEFAULT, so every existing section behaves exactly as it did
+    // before the write port could refuse. Only the section that sets
+    // `wb_refuse` drives it low, which is what keeps the new hold honest: if
+    // the default were low, every test would hang and the hold would look
+    // "covered" by tests that never meant to exercise it.
+    t.wb_ready_i = 1;
+    wb_refuse = false;
+    wb_denied = 0;
     t.eval();
     for (int i = 0; i < 3; ++i) zhao::tick(t);
     t.rst_n = 1;
@@ -221,17 +229,42 @@ struct Dut {
 
   int writebacks = 0;  // how many writes the block has actually made
 
+  // THE WRITE PORT CAN NOW SAY NO. zhao_field_v3_svcpath arbitrates this port
+  // between the ALU and the long-op drain and refuses the ALU by design -- its
+  // own measurement is eight lost clocks per four-point group. Until this
+  // existed the executor could not be refused at all, so every clock of that
+  // was a register write that would have vanished.
+  bool wb_refuse = false;  // drive the grant low on a pseudo-random schedule
+  uint32_t wb_seed = 0x5EED17;
+  int wb_denied = 0;  // clocks the block WANTED the port and was refused
+
   // Advance one clock, folding any writeback into the shadow. Returns true if
   // a context finished this clock, and reports which.
   bool step(int* done_ctx) {
-    const bool wb = t.wb_valid_o != 0;
-    if (wb) ++writebacks;
+    // The grant is decided BEFORE the combinational settle, so `wb_valid_o`
+    // and `wb_ready_i` describe the same clock.
+    if (wb_refuse) {
+      wb_seed = wb_seed * 1664525u + 1013904223u;
+      t.wb_ready_i = ((wb_seed >> 16) & 1u) ? 1 : 0;
+    } else {
+      t.wb_ready_i = 1;
+    }
+    t.eval();
+
+    // A WRITE LANDS ON A TRANSFER, NOT ON A VALID. The shadow IS the register
+    // file as far as every check in this file is concerned, so folding in a
+    // REFUSED write would make the test agree with a block that lost it --
+    // both would show the value present, and the defect would be invisible in
+    // exactly the place built to see it.
+    const bool xfer = (t.wb_valid_o != 0) && (t.wb_ready_i != 0);
+    if ((t.wb_valid_o != 0) && (t.wb_ready_i == 0)) ++wb_denied;
+    if (xfer) ++writebacks;
     const int wctx = (int)t.wb_ctx_o, wreg = (int)t.wb_reg_o;
     const int32_t wdata = (int32_t)t.wb_data_o;
     const bool dn = t.done_valid_o != 0;
     if (done_ctx && dn) *done_ctx = (int)t.done_ctx_o;
     zhao::tick(t);
-    if (wb) shadow[wctx][wreg] = wdata;
+    if (xfer) shadow[wctx][wreg] = wdata;
     return dn;
   }
 };
@@ -559,6 +592,115 @@ void test_barrel_occupancy(Vzhao_probe_v3_engine& top) {
         clocks_1 * kCtx, clocks_8);
 }
 
+// THE WRITE PORT MUST ACTUALLY REFUSE, for the same reason the rival must ask.
+//
+// `wb_valid_o` was pure observation until today: a bare assign mirroring a
+// write this block had already committed to its own register file. Composed
+// with zhao_field_v3_svcpath, whose arbiter refuses the ALU by design and
+// measures the cost at exactly eight clocks per four-point group, each of
+// those eight would have been a LOST REGISTER WRITE.
+//
+// The law is the strongest one available here, and it is deliberately not
+// "the answers are right": a refusal may cost CLOCKS and may not change or
+// lose a WRITE. So the same program runs twice, granted and refused, and the
+// two are compared against each other AND against the interpreter:
+//
+//   * every output register identical, refused vs granted vs interpreter;
+//   * the same NUMBER of writes transferred -- a lost write and a duplicated
+//     one both move this count, and neither necessarily changes a value,
+//     because a register written twice with the same datum looks fine;
+//   * the refusal actually happened, counted, so this cannot pass vacuously.
+//
+// That last line is the one that matters. A version of this test that forgot
+// to drive the grant low would agree with itself perfectly and prove nothing,
+// which is exactly how the rival port sat unexercised through a sweep that
+// scored five survivors.
+void test_writes_survive_a_refusing_port(Vzhao_probe_v3_engine& top, int programs) {
+  printf("-- the WRITE PORT refuses; not one write may be lost\n");
+  Prng rng(0x0B7A1E5);
+  int ran = 0, bad_val = 0, bad_count = 0;
+  int first_g = -1, first_r = -1;  // the first disagreeing pair, surfaced below
+  int total_denied = 0;
+
+  for (int k = 0; k < programs; ++k) {
+    const int n_in = 4;
+    const zfield::Decoded prog = alu_program(rng, n_in, 8 + (int)rng.below(8));
+    const zfield::Fplan fp = zfield::plan(prog, (1u << n_in) - 1u);
+    if (fp.uops.size() + 1 >= (size_t)kPlan) continue;
+
+    int32_t in[8] = {};
+    for (int i = 0; i < n_in; ++i) in[i] = rng.interesting();
+
+    // ---- pass 1: the port always grants (the behaviour that shipped) ------
+    int32_t got_granted[kRegs] = {};
+    int writes_granted = 0;
+    {
+      Dut d(top);
+      d.reset();
+      bool sc = false;
+      if (!install(d, 0, fp, in, (size_t)n_in, &sc)) continue;
+      d.start(0);
+      int done = -1, guard = 0;
+      while (guard++ < 20000) {
+        if (d.step(&done) && done == 0) break;
+      }
+      for (int r = 0; r < kRegs; ++r) got_granted[r] = d.shadow[0][r];
+      writes_granted = d.writebacks;
+    }
+
+    // ---- pass 2: the port refuses about half the time --------------------
+    int32_t got_refused[kRegs] = {};
+    int writes_refused = 0, denied = 0;
+    {
+      Dut d(top);
+      d.reset();
+      d.wb_refuse = true;
+      d.wb_seed = 0x5EED17u + (uint32_t)k * 2654435761u;
+      bool sc = false;
+      if (!install(d, 0, fp, in, (size_t)n_in, &sc)) continue;
+      d.start(0);
+      int done = -1, guard = 0;
+      // A refused write freezes the whole pipe, so the budget must be
+      // generous -- but it is still BOUNDED, because a hold that never
+      // released would be a hang and must fail rather than run forever.
+      while (guard++ < 20000) {
+        if (d.step(&done) && done == 0) break;
+      }
+      for (int r = 0; r < kRegs; ++r) got_refused[r] = d.shadow[0][r];
+      writes_refused = d.writebacks;
+      denied = d.wb_denied;
+    }
+    ++ran;
+    total_denied += denied;
+
+    if (writes_granted != writes_refused) {
+      ++bad_count;
+      first_g = (first_g < 0) ? writes_granted : first_g;
+      first_r = (first_r < 0) ? writes_refused : first_r;
+    }
+
+    const zfield::Prepared prep = zfield::prepare(fp, prog, in, (size_t)n_in);
+    int32_t want[4] = {};
+    zfield::execute_point(fp, prog, prep, in, (size_t)n_in, want, fp.out_map.size(), nullptr);
+    for (size_t o = 0; o < fp.out_map.size(); ++o) {
+      if (fp.out_map[o].kind != zfield::SrcKind::kVec) continue;
+      const int r = (int)fp.out_map[o].idx;
+      if (got_refused[r] != want[o] || got_granted[r] != want[o]) {
+        ++bad_val;
+        break;
+      }
+    }
+  }
+
+  printf("   MEASURED: %d programs, %d clocks refused across them\n", ran, total_denied);
+  check(ran > 0, "programs actually ran under a refusing port", 1, ran > 0 ? 1 : 0);
+  check(total_denied > 0, "the port REALLY refused -- not a vacuous pass", 1,
+        total_denied > 0 ? 1 : 0);
+  check(bad_val == 0, "every output matches the interpreter, refused and granted", 0, bad_val);
+  check(bad_count == 0, "and exactly as many writes transferred either way", (uint32_t)first_g,
+        (uint32_t)first_r);
+}
+
 // THE RIVAL MUST ACTUALLY ASK, or half this block is untested.
 //
 // The engine carries a `rival_req_i` port for one reason: the executor shares
@@ -693,6 +835,7 @@ int main(int argc, char** argv) {
     test_each_saturation_lane_alone(top);
     test_barrel_occupancy(top);
     test_results_survive_contention(top, 12);
+    test_writes_survive_a_refusing_port(top, 12);
   }
   return zhao::report_and_exit("FIELD.V3.EXEC");
 }

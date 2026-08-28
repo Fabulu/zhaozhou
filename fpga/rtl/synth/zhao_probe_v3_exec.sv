@@ -92,8 +92,26 @@ module zhao_probe_v3_exec #(
     input var logic                   start_i,
     input var logic [$clog2(CTX)-1:0] start_ctx_i,
 
-    // ---- observation -------------------------------------------------------
-    output var logic                    wb_valid_o,   // a result was written
+    // ---- the register-file write, as a REQUEST ------------------------------
+    // `wb_valid_o` was pure observation until 2026-08-28: a bare assign that
+    // mirrored a write this block had already committed to its own file.
+    //
+    // THAT SHAPE CANNOT BE COMPOSED. zhao_field_v3_svcpath arbitrates one write
+    // port between this ALU and the long-op drain, and it REFUSES the ALU by
+    // design -- its own measurement is that the ALU loses exactly eight clocks
+    // to the drain on every four-point group. Wired to an output that cannot be
+    // refused, each of those eight would be a LOST REGISTER WRITE.
+    //
+    // So the write is a request now, and `wb_ready_i` is the grant. This is the
+    // fourth time this engine has met an open-loop producer facing a consumer
+    // that can refuse -- after the executor's DOT, the curve service's hang and
+    // the dispatcher's missing operands -- and the first one caught BEFORE the
+    // composition was built rather than minutes after.
+    //
+    // TIE IT HIGH AND THE BEHAVIOUR IS EXACTLY WHAT IT WAS. Every existing test
+    // does that, which is why the mutants for the hold have to drive it low.
+    output var logic                    wb_valid_o,   // a result WANTS to be written
+    input  var logic                    wb_ready_i,   // ... and may
     output var logic [$clog2(CTX)-1:0]  wb_ctx_o,
     output var logic [$clog2(REGS)-1:0] wb_reg_o,
     output var logic signed [31:0]      wb_data_o,
@@ -347,7 +365,19 @@ module zhao_probe_v3_exec #(
   assign dot_at_s4_c = dot2_at_s4_c || dot3_at_s4_c;
   assign dot_need_c  = dot3_at_s4_c ? 2'd3 : 2'd2;
   // Hold until every product this op needs has ARRIVED and been accumulated.
-  assign hold_c = (dot_at_s4_c && (dot_cnt_r < dot_need_c)) || long_hold_c;
+  // WHY THE WRITEBACK JOINS `hold_c` RATHER THAN GETTING ITS OWN MECHANISM:
+  // a refused write must be RETRIED WITH THE SAME OPERANDS, and freezing the
+  // whole pipe is what makes that true -- the S1 read address is unchanged, so
+  // the register file re-presents the operands next clock. That argument is
+  // already written out above for `mul_denied_c`, and it is the same argument.
+  //
+  // Draining instead -- letting S4 retire and buffering the write -- needs a
+  // queue, and a queue needs a depth, and a depth is a claim about the longest
+  // refusal. The arbiter's policy is a runtime input, so no such bound exists.
+  // Split out, because the WRITE must know it: an instruction still held at
+  // S4 for one of these reasons has NOT retired, and must not write yet.
+  assign retire_hold_c = (dot_at_s4_c && (dot_cnt_r < dot_need_c)) || long_hold_c;
+  assign hold_c        = retire_hold_c || wb_hold_c;
 
   // A LONG OP AT S4 HOLDS THE PIPE UNTIL THE DISPATCHER TAKES IT. The operands
   // live in the s4_* registers and the next instruction would overwrite them,
@@ -484,6 +514,8 @@ module zhao_probe_v3_exec #(
   logic dot_here_c;
   assign dot_here_c = 1'b0;
 
+  logic wb_req_c, wb_hold_c, retire_hold_c;
+
   // ---- writeback ----------------------------------------------------------
   // The host preload wins the port when it is asserted; the machine is not
   // running during preload, so there is no contention to arbitrate.
@@ -494,14 +526,44 @@ module zhao_probe_v3_exec #(
       rf_wreg_c  = pre_reg_i;
       rf_wdata_c = pre_data_i;
     end else begin
-      rf_we_c    = s4_v_r && alu_writes && !alu_is_end && !dot_here_c;
+      // GATED ON THE GRANT. Without `&& wb_ready_i` the block would commit the
+      // write to its own file while telling the arbiter it still wants the
+      // port -- and then, once granted, write it a SECOND time through the
+      // shared port. A duplicated write is invisible for an idempotent value
+      // and wrong for every accumulating one.
+      rf_we_c    = wb_req_c && wb_ready_i;
       rf_wctx_c  = s4_ctx_r;
       rf_wreg_c  = s4_dst_r;
       rf_wdata_c = alu_result;
     end
   end
 
-  assign wb_valid_o = s4_v_r && alu_writes && !alu_is_end && !dot_here_c;
+  // ONE EXPRESSION, THREE READERS. The request, the hold and the register
+  // file's write enable must be the same condition -- if they can disagree,
+  // the block can hold without asking, or write without being granted. Both
+  // are silent, and the second is the one that corrupts a register.
+  // THE WRITE FIRES ONCE, ON THE CLOCK THE INSTRUCTION RETIRES.
+  //
+  // It used to fire on EVERY clock the instruction sat at S4 -- so a DOT
+  // writing its destination while accumulating wrote that register three or
+  // four times, once per hold clock, and a long op held awaiting handoff wrote
+  // on every clock of the wait. The last write carried the right value, so
+  // every check in this file passed and the defect was invisible.
+  //
+  // It stopped being invisible the moment the port could REFUSE, because then
+  // the duplicates are not free: they are port slots. The count that found it
+  // is "the same number of writes transfers whether or not the port refuses",
+  // which failed at 20 granted against 16 refused -- the granted figure was
+  // the inflated one.
+  //
+  // With a shared port this is not cosmetic. Every duplicate steals a slot the
+  // drain wanted, and each one momentarily publishes a PARTIAL accumulation to
+  // a register another context can read.
+  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&
+                      !retire_hold_c && !mul_denied_c;
+  assign wb_hold_c  = wb_req_c && !wb_ready_i;
+
+  assign wb_valid_o = wb_req_c;
   assign wb_ctx_o   = s4_ctx_r;
   assign wb_reg_o   = s4_dst_r;
   assign wb_data_o  = alu_result;
