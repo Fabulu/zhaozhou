@@ -1,5 +1,49 @@
 # What is actually blocking every remaining block
 
+> ## OPEN DEFECT, 2026-08-28: OPEN-LOOP CLAIMANTS ON THE SHARED MULTIPLIER
+>
+> Found by the first composition test, and it is the reason composition tests
+> exist. Two blocks, one cause.
+>
+> **The DOT sequencer cannot tolerate refusal.** `zhao_probe_v3_exec` issues
+> a DOT's second and third products at S3 and S4 on a FIXED CLOCK SCHEDULE
+> and never checks that either was granted. Behind an arbiter those requests
+> can be refused, and the accumulator then sums a product that never arrived.
+>
+> MEASURED: with a rival claimant contending, 4-5 of 12 programs containing
+> DOT give wrong answers. ALU-only programs pass every time, which is what
+> localises it. Three fixes were tried and all failed -- freezing the whole
+> pipe, upstream-only back-pressure, and a stall-with-bubble -- because the
+> multiplier is a FIXED-LATENCY PIPE: holding the instruction desynchronises
+> it from a product that arrives on schedule regardless.
+>
+> **The services have the identical defect.** Neither `zhao_probe_curve_svc`
+> nor `zhao_probe_dist_svc` has a `mul_ready` input at all. A refused service
+> advances as though its multiply happened.
+>
+> ### Why no sweep found either one
+>
+> Both blocks are correct in isolation and score full marks alone. The defect
+> is at the SEAM, and a claimant that never gets refused has no refusal path
+> to mutate. The engine sweep scored 4 of 11 on its first run for exactly
+> this reason -- seven mutants were unreachable because the test never drove
+> the rival.
+>
+> ### The fix, which is one decision for three blocks
+>
+> Every claimant on the bank must close the loop: hold state until its
+> product is GRANTED, or reserve the bank for a whole multi-product sequence.
+> That is one change of shape applied three times (executor, curve service,
+> distance service), and two of those are already probed and fitted, so their
+> numbers would need redoing.
+>
+> **Until then the composition is correct only when nothing contends**, which
+> is exactly the condition that will not hold once the services are attached.
+> The contention test is written and passing for ALU ops, with DOT programs
+> skipped under a comment naming this entry.
+
+
+
 > ## FIELD v3 STATE, 2026-08-28. The Field IR engine is no longer one block.
 >
 > The ledger treats `FIELD.SEQ.*` as sequencer blocks blocked on one another.

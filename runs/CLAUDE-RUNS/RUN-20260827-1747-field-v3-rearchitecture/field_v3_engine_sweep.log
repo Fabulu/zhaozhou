@@ -1,0 +1,49 @@
+== consumer roster ==
+== preflight ==
+preflight ok: E01 a refused request does not stall issue, so operands are lost
+preflight ok: E02 the denial is read from the wrong direction
+preflight ok: E03 a denial is only noticed when nothing was requested
+preflight ok: E04 the executor and the rival swap claimant slots
+preflight ok: E05 the executor is granted only when the rival is granted as well
+preflight ok: E06 the executor accepts a reply meant for either claimant
+preflight ok: E07 the executor is told it was granted whenever ANYONE was
+preflight ok: E08 the executor's operands are swapped on the way to the bank
+preflight ok: E09 the rival's operands are zero, which is a plausible product
+preflight ok: E10 the claimants share one tag, so replies cannot be told apart
+preflight ok: E11 the executor consumes a lane it does not own
+PREFLIGHT: all 11 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model de5e7fafa7b6522b)
+  E01 a refused request does not stall issue, so operands are lost  caught
+  E02 the denial is read from the wrong direction  *** SURVIVED ***
+  E03 a denial is only noticed when nothing was requested  caught
+  E04 the executor and the rival swap claimant slots  caught
+  E05 the executor is granted only when the rival is granted as well  caught
+  E06 the executor accepts a reply meant for either claimant  *** SURVIVED ***
+  E07 the executor is told it was granted whenever ANYONE was  *** SURVIVED ***
+  E08 the executor's operands are swapped on the way to the bank  *** SURVIVED ***
+  E09 the rival's operands are zero, which is a plausible product  *** SURVIVED ***
+  E10 the claimants share one tag, so replies cannot be told apart  *** SURVIVED ***
+  E11 the executor consumes a lane it does not own  *** SURVIVED ***
+== final restore ==
+clean: fpga/rtl/synth/zhao_probe_v3_engine.sv (8 mutants checked)
+clean: fpga/rtl/synth/zhao_probe_v3_exec.sv (3 mutants checked)
+
+== tally ==
+  attempted:  11 / 11
+  caught:     4
+  equivalent: 0
+  survived:   7
+  discarded:  0
+FAILED: 7 mutant(s) survived without a proof of equivalence
+  E02 the denial is read from the wrong direction
+  E06 the executor accepts a reply meant for either claimant
+  E07 the executor is told it was granted whenever ANYONE was
+  E08 the executor's operands are swapped on the way to the bank
+  E09 the rival's operands are zero, which is a plausible product
+  E10 the claimants share one tag, so replies cannot be told apart
+  E11 the executor consumes a lane it does not own
+EXIT:12
+clean: fpga/rtl/synth/zhao_probe_v3_engine.sv (8 mutants checked)
+clean: fpga/rtl/synth/zhao_probe_v3_exec.sv (3 mutants checked)
+CLEAN:0

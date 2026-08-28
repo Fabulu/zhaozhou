@@ -1,5 +1,7 @@
-﻿=== probe 5 then probe 4, sequential, 14000s each ===
-started 02:26:12
-zhao_probe_patch_acc               failed:quartus_fit.exe  4380.1s   ALM -
+﻿=== detached runner, probe 5 then probe 4, 14000s each ===
+started 2026-08-28 04:11:45
+--- zhao_probe_patch_acc begin 04:11:45 ---
+zhao_probe_patch_acc               failed:quartus_fit.exe  7606.2s   ALM -
 WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (71 block(s); 1 measured this run)
-=== probe 4 ===
+--- zhao_probe_patch_acc end 06:18:37 ---
+--- zhao_probe_curve_svc begin 06:18:37 ---

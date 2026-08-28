@@ -35,10 +35,26 @@
 // one clock later and its context is still in the barrel. So the claimant
 // whose stall is expensive wins.
 //
-// This is a CHOICE, not a law, and it is a knob: `PRIO_SERVICES_FIRST`. Round
-// robin is the obvious alternative and would be fairer to the lanes; whether
-// fairness or hostage-avoidance wins is a question the composition test can
-// answer and a microbenchmark cannot.
+// CORRECTED 2026-08-28: THIS IS NOT A CHOICE. It is a requirement, and round
+// robin would be actively wrong.
+//
+// Neither `zhao_probe_curve_svc` nor `zhao_probe_dist_svc` has a `mul_ready`
+// input -- grepped both, zero matches. The curve service asserts
+// `mul_issue_o = (f_state == F_ISSUE)` and advances on the next clock
+// regardless. A refused service does not retry; it proceeds as though the
+// multiply had been issued and later consumes a product that was never
+// computed. Refusing a service is silently INCORRECT, not slow.
+//
+// AND SERVICES-FIRST IS STILL NOT SUFFICIENT. CURVE and DIST are both
+// services. If both assert in one clock, one loses and has no way to know;
+// fixed priority merely decides which of them is corrupted. The ways out are
+// in reports/FIELD_V3_SERVICE_ATTACH.md, and the honest one is to give the
+// services back-pressure -- a claimant that cannot be told "no" is not a
+// claimant, it is an assumption.
+//
+// `PRIO_SERVICES_FIRST` stays a parameter because the LANES genuinely can be
+// refused and their priority genuinely is a trade. It must not be read as
+// licence to reorder the services.
 //
 // STARVATION IS POSSIBLE AND IS DECLARED, NOT DENIED. With fixed priority a
 // permanently busy service starves the lanes. Two facts bound it: a service

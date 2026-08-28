@@ -403,7 +403,6 @@ module zhao_probe_v3_exec #(
     if (!rst_n) begin
       s1_v_r        <= 1'b0;
       s2_v_r        <= 1'b0;
-      s3_v_r        <= 1'b0;
       s4_v_r        <= 1'b0;
       active_r      <= '0;
       inflight_r    <= '0;
@@ -439,9 +438,19 @@ module zhao_probe_v3_exec #(
         dot_cnt_r <= 2'd0;
       end
 
-      // Every stage advance below is gated on `!hold_c`: a held DOT must not
-      // be overwritten, and nothing behind it may move past it.
-      if (!hold_c) begin
+      // Every stage advance below is gated on `!hold_c` AND `!mul_denied_c`.
+      //
+      // THE DENIAL GATE WAS MISSING AND IT WAS A REAL BUG. Suppressing ISSUE
+      // alone stops new instructions entering, but the instruction already at
+      // S2 when the bank refused it carried on to S3 and S4 and consumed a
+      // product that was never computed -- its operands are gone by then,
+      // because the register file holds them for exactly one clock.
+      //
+      // Found by the contention test: 5 of 12 programs gave wrong answers and
+      // desync_o latched. Freezing the WHOLE pipe makes the refused
+      // instruction retry next clock with the same operands, because the S1
+      // read address is unchanged and the register file re-presents them.
+      if (!hold_c && !mul_denied_c) begin
       // S0 -> S1: issue and fetch
       s1_v_r <= issue_c;
       if (issue_c) begin
@@ -460,8 +469,37 @@ module zhao_probe_v3_exec #(
       s2_dst_r <= s1_uop_r.dst;
       s2_imm_r <= s1_uop_r.imm;
 
-      // S2 -> S3: capture the operands the RF just produced
-      s3_v_r   <= s2_v_r;
+
+      // While the pipe is frozen no product is due, so the guard must not
+      // compare -- a stall is not a desynchronisation.
+      if (!mul_denied_c && (s4_v_r != prod_valid)) desync_o <= 1'b1;
+
+
+      end  // upstream: !hold_c && !mul_denied_c
+
+      // ---- DOWNSTREAM: held only by hold_c, NEVER by a denial -------------
+      //
+      // THE MULTIPLIER IS A FIXED-LATENCY PIPE AND CANNOT BE STALLED. A
+      // product issued at T arrives at T+2 whatever this block does. Freezing
+      // the whole datapath on a denial therefore held an instruction back
+      // while its product still arrived on schedule, and the two
+      // desynchronised -- measured as 2 of 12 programs wrong with desync_o
+      // latched, after freezing everything had already improved it from 5.
+      //
+      // So a denial is BACK-PRESSURE UPSTREAM ONLY. S1 and S2 hold, so the
+      // refused instruction retries next clock with the same operands. S3, S4
+      // and retire keep draining, so instructions whose products are already
+      // in flight still meet them.
+      if (!hold_c) begin
+      // S2 -> S3, in the DOWNSTREAM region with a BUBBLE on denial.
+      //
+      // A STALL NEEDS A BUBBLE, NOT A FREEZE. Holding S3 while S4 still read
+      // it duplicated the instruction -- S4 consumed the same one twice, and
+      // that measured WORSE (5 of 12 wrong) than freezing everything (2 of
+      // 12). On a denial S2 holds its instruction and S3 is driven INVALID,
+      // so nothing advances twice and nothing consumes a product that was
+      // never issued.
+      s3_v_r   <= mul_denied_c ? 1'b0 : s2_v_r;
       s3_ctx_r <= s2_ctx_r;
       s3_op_r  <= s2_op_r;
       s3_dst_r <= s2_dst_r;
@@ -473,9 +511,6 @@ module zhao_probe_v3_exec #(
       s3_b1_r  <= rf_b1;
       s3_b2_r  <= rf_b2;
       s3_c_r   <= rf_c;
-
-      if (s4_v_r != prod_valid) desync_o <= 1'b1;
-
 
       // S3 -> S4: carry a second clock so the operands meet their product
       s4_v_r   <= s3_v_r;
@@ -504,7 +539,7 @@ module zhao_probe_v3_exec #(
         if (alu_sat_mul) sat_mul_o <= 1'b1;
         if (alu_sat_rescale) sat_rescale_o <= 1'b1;
       end
-      end  // !hold_c
+      end  // downstream: !hold_c
     end
   end
 

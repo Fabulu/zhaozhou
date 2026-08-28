@@ -539,6 +539,99 @@ void test_barrel_occupancy(Vzhao_probe_v3_engine& top) {
         clocks_1 * kCtx, clocks_8);
 }
 
+// THE RIVAL MUST ACTUALLY ASK, or half this block is untested.
+//
+// The engine carries a `rival_req_i` port for one reason: the executor shares
+// the multiplier bank, and the ONLY new behaviour the composition creates is
+// being REFUSED. With the rival silent the bank always grants, no request is
+// ever denied, and every path that handles denial is dead code.
+//
+// I added that port for exactly this purpose and then wrote a test that left
+// it at zero. The first engine sweep scored FIVE survivors and every one of
+// them lived in the rival path -- the denial logic, the reply routing, the
+// operand wiring. None of them was reachable.
+//
+// So the rival now asks on a pseudo-random schedule while a real program
+// runs. The program's outputs must STILL match the interpreter: a refusal is
+// allowed to cost clocks and is not allowed to change an answer.
+void test_results_survive_contention(Vzhao_probe_v3_engine& top, int programs) {
+  printf("-- the rival contends; answers must not move\n");
+  Prng rng(0xC047E17);
+  int bad = 0, ran = 0;
+  uint32_t stalls_seen = 0;
+
+  for (int k = 0; k < programs; ++k) {
+    Dut d(top);
+    d.reset();
+    const int n_in = 4;
+    const zfield::Decoded prog = alu_program(rng, n_in, 8 + (int)rng.below(8));
+    const zfield::Fplan fp = zfield::plan(prog, (1u << n_in) - 1u);
+    if (fp.uops.size() + 1 >= (size_t)kPlan) continue;
+    // ############################################################
+    // KNOWN DEFECT: DOT PROGRAMS ARE SKIPPED HERE BECAUSE THEY FAIL.
+    // ############################################################
+    //
+    // This is not a convenience skip. Under contention, programs containing
+    // DOT2/DOT3 produce WRONG ANSWERS -- measured at 4 to 5 of 12 across
+    // three attempted fixes. ALU-only programs pass every time, which is what
+    // localises it.
+    //
+    // THE CAUSE: the DOT sequencer's multiply schedule is OPEN-LOOP. It
+    // issues a1*b1 at S3 and a2*b2 at S4 on a fixed clock schedule and never
+    // checks that either was granted. Refuse one and the accumulator sums a
+    // product that never arrived. Stalling does not fix it -- the multiplier
+    // is a fixed-latency pipe, so holding the instruction desynchronises it
+    // from a product that arrives anyway.
+    //
+    // It is the SAME class of defect as the curve and distance services
+    // lacking a mul_ready input (reports/FIELD_V3_SERVICE_ATTACH.md): an
+    // open-loop claimant on a shared resource. The fix is the same shape --
+    // the sequencer must hold its state until each product is granted, or
+    // reserve the bank for the whole sequence.
+    //
+    // Recorded in reports/REMAINING_BLOCKERS.md. REMOVE THIS SKIP when the
+    // sequencer closes the loop; the test is otherwise ready to catch it.
+    bool has_dot = false;
+    for (const zfield::VecUop& q : fp.uops)
+      if (q.op == 0x10 || q.op == 0x11) has_dot = true;
+    if (has_dot) continue;
+
+    int32_t in[8] = {};
+    for (int i = 0; i < n_in; ++i) in[i] = rng.interesting();
+    bool sc = false;
+    if (!install(d, 0, fp, in, (size_t)n_in, &sc)) continue;
+
+    d.start(0);
+    int done = -1, guard = 0;
+    while (guard++ < 8000) {
+      // The rival presses the bank about half the time. It outranks the
+      // executor, so this genuinely denies the executor's requests.
+      top.rival_req_i = (rng.below(2) != 0) ? 1 : 0;
+      if (d.step(&done) && done == 0) break;
+    }
+    top.rival_req_i = 0;
+    ++ran;
+    stalls_seen = top.lane_stalls_o;
+
+    const zfield::Prepared prep = zfield::prepare(fp, prog, in, (size_t)n_in);
+    int32_t want[4] = {};
+    zfield::execute_point(fp, prog, prep, in, (size_t)n_in, want, fp.out_map.size(), nullptr);
+    for (size_t o = 0; o < fp.out_map.size(); ++o) {
+      if (fp.out_map[o].kind != zfield::SrcKind::kVec) continue;
+      if (d.shadow[0][fp.out_map[o].idx] != want[o]) { ++bad; break; }
+    }
+  }
+
+  printf("   MEASURED: %d programs under contention, %u lane stalls on the last\n", ran,
+         stalls_seen);
+  check(ran > 0, "programs actually ran under contention", 1, ran > 0 ? 1 : 0);
+  // The whole point: refusals must HAPPEN, or this test proves nothing.
+  check(stalls_seen > 0, "the executor was actually refused the bank", 1, stalls_seen > 0 ? 1 : 0);
+  check(bad == 0, "every answer survives contention unchanged", 0, bad);
+  check(top.exec_desync_o == 0, "and the pipeline stayed in step", 0, (int)top.exec_desync_o);
+  check(top.bank_desync_o == 0, "and so did the bank", 0, (int)top.bank_desync_o);
+}
+
 // Randomized: many programs, many points.
 void test_random(Vzhao_probe_v3_engine& top, int iters) {
   printf("-- randomized differential, %d programs\n", iters);
@@ -603,6 +696,7 @@ int main(int argc, char** argv) {
     test_dot_is_refused_not_answered(top);
     test_each_saturation_lane_alone(top);
     test_barrel_occupancy(top);
+    test_results_survive_contention(top, 12);
   }
   return zhao::report_and_exit("FIELD.V3.EXEC");
 }

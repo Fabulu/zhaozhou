@@ -1,0 +1,24 @@
+== consumer roster ==
+== preflight ==
+preflight ok: M01 a reply is delivered only if both shadow stages agree
+preflight ok: M02 the reply valid fires a clock before the product lands
+preflight ok: M03 the reply carries the stage-1 tag whenever one is in flight
+preflight ok: M04 the lane group is told every reply is also theirs
+preflight ok: M05 every asking claimant is told it won
+preflight ok: M06 a grant is issued even when nobody asked
+preflight ok: M07 the priority is reversed, so the lanes outrank the services
+preflight ok: M08 the lane-stall counter also counts the clocks the lanes WON
+preflight ok: M09 the grant counter counts every clock, asking or not
+preflight ok: M10 the bank always multiplies claimant 0's operands
+preflight ok: M11 lane l multiplies lane l's a against lane 0's b
+preflight ok: M12 the multiplier is issued every clock, grant or not
+preflight ok: M13 the desync guard never latches
+preflight ok: M14 the desync guard fires only if all four lanes disagree at once
+PREFLIGHT: all 14 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 674edb63ee970b1a)
+  M01 a reply is delivered only if both shadow stages agree  caught
+EXIT:127
+MUTANT TEXT PRESENT in fpga/rtl/field/zhao_field_v3_mulbank.sv (from sweep_field_v3_mulbank_mutants.py):
+  M02 the reply valid fires a clock before the product lands
+CLEAN:1
