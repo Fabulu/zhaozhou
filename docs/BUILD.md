@@ -248,12 +248,25 @@ bash tools/sweep_x.sh 2>&1 | head -25      # DO NOT
 `head` exits at line 25 and the sweep takes SIGPIPE mid-run, stranding a
 mutant. Redirect to a file and tail the file.
 
-### 5. One build tree, one writer, and no other build anywhere
+### 5. One build tree, one writer -- but a DIFFERENT tree is fine
 
-Separate build directories are not separate enough -- they share the source
-tree's cmake state. A build of a *different* tree running concurrently is
-enough to break a sweep's rebuild, because the sweep deletes its target's
-model directory and exe before rebuilding.
+**This entry originally said no other build anywhere, and that was wrong.**
+
+It was written from a hypothesis, not a measurement: a sweep kept aborting
+while I had a build running in another tree, so I blamed the build. The sweep
+then aborted with nothing of mine running, which disproved it, and the real
+cause turned out to be ccache (entry 1). Separate build directories have
+separate caches and the source tree is only read, so concurrent builds in
+different trees are fine.
+
+What IS true, and was measured: **two writers in the SAME tree break each
+other.** A sweep deletes its target''s model directory and exe before
+rebuilding, so anything else building that same target loses it. Give a sweep
+its own build directory and leave that one alone.
+
+Recorded this way on purpose. A rule inferred from a failure that was later
+explained by something else is worse than no rule -- it is a superstition
+with a changelog entry.
 
 ### And check the tree afterwards, from outside the sweep
 

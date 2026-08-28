@@ -1645,7 +1645,40 @@ The composed fit contains `CMD.DMA`, so **the composed fit cannot be expected
 to complete until this is fixed.** Step 8 of the FRAMEBLIT integration is
 gated on it.
 
-### The shape of the fix (NOT yet done, and it is a real redesign)
+### RESOLVED 2026-08-28. Verified against the RTL and the fit, not assumed.
+
+**This entry described the fix as "NOT yet done, and it is a real redesign".
+It has since been done, and leaving the entry standing would send the next
+reader to redo finished work.** Checking before starting it is the only
+reason that duplication was avoided.
+
+Both halves are in the tree:
+
+* **The payload CRC accumulates incrementally.** `zhao_cmd_dma.sv`'s fold mux
+  has a `default` arm taking `fold_c = crc_pay_r`, `fold_d = hps_rsp_i.data`,
+  `fold_is4 = beat_tail` -- one bridge beat per cycle -- and a dedicated
+  `M_SEED` state seeds it ahead of the ladder rather than behind it
+  (commits 59de7ca, 1bfca73).
+* **The staging buffer infers as a RAM.** It is `slot_ram`, 512 x 64b, and
+  carries the shape explicitly: *"M10K: no initialiser on the array, no reset
+  in this process, registered read. One word per bridge beat, which is
+  exactly what a beat is."*
+
+The measurement that settles it, from `reports/synthesis/zhao_block_fit.json`:
+
+| block | status | ALM |
+| --- | --- | --- |
+| `zhao_cmd_dma` | **ok** | 3,607 |
+| `zhao_debug_frameblit` | **ok** | 962 |
+
+The block that "has never been successfully fitted" now fits. **FRAMEBLIT
+step 8 is no longer gated on this.**
+
+One caution kept rather than dropped: those rows carry no Fmax, so this says
+the block PLACES, not that it closes timing. The composed fit and the timing
+claim remain separate questions.
+
+### The shape of the fix, as it was (kept for the record)
 
 The payload CRC seed must be computed **incrementally across cycles**, the way
 the fetch path already accumulates `crc_pay_r` one bridge beat at a time,
