@@ -1,7 +1,7 @@
 # Task Log: RUN-20260828-0326 - Zixxtrixx v4 closeout
 
 **Created:** 2026-08-28 03:26 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260828-0326-zixxtrixx-v4-closeout/
 
 ---
@@ -153,3 +153,16 @@ Finish the Zixxtrixx rework fully: PART 1 four standing faults, PART 2 falling d
   All renders re-encoded and committed (Upheaval 9ac4239). No deploy.
 - Final gates green (see FINDINGS). scratch-reel confirmed gitignored —
   the 830 MB trap from run 0227 not repeated.
+
+### 2026-08-28 07:3x - sacengine CLOSED: it runs
+
+- The tolerance rebuild landed after two flaky failures (dub cache lost
+  zlib externals once; the scratchpad GC silently EMPTIED the LDC
+  import tree — "unable to read module typecons" — LDC re-extracted to
+  a stable home inside the sacengine folder).
+- SDL2.dll 2.30.11 + OpenAL32 (openal-soft 1.24.2) dropped beside the
+  exe. 3d.exe now: boots, indexes all WADs (German install via shim),
+  initializes audio, loads OpenGL 4.0, opens its window and RUNS a map
+  until the test timeout kills it. Proof runs in the log above.
+- Status: Task complete. Zixxtrixx nominally complete; renders on disk,
+  committed, NOT deployed (owner publishes).

@@ -62,7 +62,16 @@ one line.** (My call, per the standing barge-ahead order; stated plainly.)
   dies in initKeycodes on a key-name text the German tables lack; patched
   tolerant (skip the localized alias, keep the English name) — rebuild
   status in Honest remainders.
-* Audio is skipped (no OpenAL32.dll) — cosmetic for our purpose.
+* **CLOSED AT RUN END: sacengine RUNS.** The keycode-tolerance rebuild
+  landed (one rebuild fought dub-cache flakiness and a scratchpad GC that
+  silently emptied the LDC toolchain's import tree — LDC now lives
+  stably inside the sacengine folder, where its own build scripts expect
+  it). With SDL2.dll (2.30.11) and OpenAL32 (openal-soft 1.24.2) dropped
+  beside the exe, 3d.exe boots, indexes every WAD of the German Steam
+  install through the data-shim, initializes audio and OpenGL 4.0, opens
+  its window and runs a map until the test timeout kills it. The owner's
+  ask — sacengine working on this machine, plus Sacrifice itself — is
+  delivered end to end.
 
 ### The vocabulary (the owner's queued ask)
 Upheaval/creature/Zixxtrixx/ANIMATION-VOCABULARY.md (committed): all 64
@@ -131,12 +140,11 @@ safety net the 2339 log described is now real code.
   disk and committed. NOT deployed — the owner verifies and publishes.
 
 ## Honest remainders
-* sacengine's keycode-tolerance rebuild was still compiling at close
-  (-lowmem is slow); the patched source sits in the working tree at
-  C:\programmieren\sacengine (NOT committed — it is the upstream author's
-  repo). Before the patch the engine already booted, indexed all WADs and
-  loaded a map deep; the remaining distance to a rendered frame is that
-  one localization crash plus whatever follows it.
+* sacengine's local changes (data_.d reconstruction, the keycodes
+  tolerance patch, the data-shim, the two DLLs, the LDC toolchain) sit in
+  the working tree at C:\programmieren\sacengine, NOT committed — it is
+  the upstream author's repo. If the owner wants them upstreamed, the
+  keycodes tolerance and data_.d are clean candidates.
 * The donor convention says FOUR idle flourishes; Zixxtrixx has two
   (tail-balance, look-around). Two more are owed, plus a third death,
   melee attack variants, tumble, stance2 and the personality block —
