@@ -155,11 +155,11 @@ MUTANTS = [
      "  assign wb_req_c   = s4_v_r && alu_writes && !dot_here_c &&\n"
      "                      !retire_hold_c;"),
     ("X13 the writeback lands in the wrong context",
-     "      rf_wctx_c  = s4_ctx_r;",
-     "      rf_wctx_c  = s4_ctx_r + CW'(1);"),
+     "      rf_wctx_c  = wb_ctx_o;",
+     "      rf_wctx_c  = s4_ctx_r;"),
     ("X14 the observed writeback stream disagrees with what the file was told",
-     "  assign wb_reg_o   = s4_dst_r;",
-     "  assign wb_reg_o   = s4_dst_r + RW'(1);"),
+     "      rf_wdata_c = wb_data_o;",
+     "      rf_wdata_c = alu_result;"),
 
     # ---- refusal and the ledger --------------------------------------------
     # Reshaped: dropping the term orphaned dot_here_c. AND keeps the operand
@@ -221,8 +221,8 @@ MUTANTS = [
     # executor moved onto the shared bank, because a refused request must stall
     # issue -- the register file holds operands for exactly one clock.
     ("X26 a DOT no longer freezes issue, so another op steals the multiplier",
-     "    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c;",
-     "    issue_c = (|ready_c || dot_inflight_c) && !hold_c && !mul_denied_c;"),
+     "    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c && !sk_busy_c;",
+     "    issue_c = (|ready_c || dot_inflight_c) && !hold_c && !mul_denied_c && !sk_busy_c;"),
     ("X27 only a DOT at S4 freezes issue, not one still upstream",
      "  assign dot_inflight_c = (s1_v_r && is_dot(s1_uop_r.op)) || (s2_v_r && is_dot(s2_op_r)) ||\n"
      "                          (s3_v_r && is_dot(s3_op_r))     || (s4_v_r && is_dot(s4_op_r));",
@@ -353,6 +353,37 @@ MUTANTS = [
      "      end else begin\n"
      "        opnd_held_r <= opnd_held_r;\n"
      "      end"),
+    # ---- the writeback skid ------------------------------------------------
+    # S4 cannot be stalled -- the multiplier is fixed-latency, so a product
+    # issued at T arrives at T+2 whatever this block does. The write therefore
+    # leaves on time and waits in a four-deep queue, and issue stops while
+    # anything is waiting.
+    ("X41 the skid pops whether or not the port granted",
+     "  assign sk_pop_c  = sk_ne_c && wb_ready_i;",
+     "  assign sk_pop_c  = sk_ne_c;"),
+    ("X42 the register file is written without a grant",
+     "      rf_we_c    = wb_valid_o && wb_ready_i;",
+     "      rf_we_c    = wb_valid_o;"),
+    ("X43 a refused write is not pushed, so it is simply dropped",
+     "  assign sk_push_c = wb_req_c && (sk_ne_c || !wb_ready_i);",
+     "  assign sk_push_c = wb_req_c && sk_ne_c;"),
+    ("X44 the bypass fires even when the skid already holds something",
+     "  assign wb_valid_o = sk_ne_c || wb_req_c;",
+     "  assign wb_valid_o = wb_req_c;"),
+    # Order is why this is a queue and not a register: two writes to one
+    # destination must land in program order or the later value is overwritten
+    # by the earlier.
+    ("X45 the skid is read from its tail rather than its head",
+     "  assign wb_ctx_o   = sk_ne_c ? sk_ctx_r[sk_hd_r]  : s4_ctx_r;",
+     "  assign wb_ctx_o   = sk_ne_c ? sk_ctx_r[sk_tl_r]  : s4_ctx_r;"),
+    # THE OFF-BY-ONE I ACTUALLY MADE. Gating issue on the REGISTERED sk_ne_c
+    # stops it a clock late, so a fifth instruction is already entering S1 when
+    # the depth allows four -- and it overflowed in silence, because a dropped
+    # write changes a VALUE and not a COUNT. Reshaped to mutate sk_busy_c's
+    # definition rather than delete its only use, which would orphan it.
+    ("X46 the issue gate is registered, so it stops a clock too late",
+     "  assign sk_busy_c = sk_ne_c || sk_push_c;",
+     "  assign sk_busy_c = sk_ne_c;"),
 ]
 
 
