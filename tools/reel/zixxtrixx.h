@@ -2080,15 +2080,69 @@ inline zc::Clip build_fall() {
 // (deepen and jerk half again bigger), the WHOLE BODY shoved back along
 // the blow, and the ring-out settles through two slow decaying
 // overshoots -- recoil, not vibration.
-constexpr int kHitKeys = 28;
-constexpr int32_t kHitDeepen = 700;    // recoil: the S snaps much tighter
-                                       // (900 buried the face in the neck
-                                       // on the sidecmp-03 tighter loop)
+constexpr int kHitKeys = 40;  // 28 -> 40, RUN 1730 (owner: "a hit should
+                              // look a lot stronger... looks like a little
+                              // flinch"): the violent onset stays two keys
+                              // sharp; the RING-OUT lengthens -- a large
+                              // sharp displacement, then an unhurried,
+                              // yielding return (house wobble, not jitter)
+constexpr int32_t kHitDeepen = 950;    // recoil compression through the
+                                       // struck section. 700 -> 950: the
+                                       // "face eaten at 900" verdict was
+                                       // recorded on the OLD tight hook;
+                                       // the reconstructed open climb nests
+                                       // far less (probe), so the strength
+                                       // the -85 mm shove trade gave away
+                                       // comes back here. Worst key
+                                       // rendered + probed (allowance 390).
 constexpr int32_t kHitHeadJerk = 7200; // ...the head whips back-up hard
 constexpr int32_t kHitSway = 4200;     // and away
-constexpr int32_t kHitShoveMm = 85;    // the body is MOVED by the blow --
-                                       // the impact lives in DISPLACEMENT
-                                       // (the fold was eating the face)
+constexpr int32_t kHitShoveMm = 210;   // the body is MOVED by the blow --
+                                       // 85 -> 210 (owner): displacement is
+                                       // what sells impact at 240p, and the
+                                       // face-protection trade that shrank
+                                       // it is obsolete with the open climb
+// THE SHOCKWAVE (RUN 1730, owner: "more of the snake should be affected").
+// The blow is a WAVE, not a local flinch: every joint receives the same
+// envelope DELAYED by its distance from the struck point and DECAYED as it
+// travels, so the impact visibly runs head -> body -> grounded run -> tail
+// and the far end still knows it was hit. Three lanes, all house machinery:
+// the front rides apply_stance's wave lane (root-compensated, belly stays
+// planted); the grounded run ripples LATERALLY by world-vertical
+// conjugation (a yaw about world up cannot dig the belly -- the idle
+// snake's own trick); the tail whips on the sway lane, biggest at the tip.
+constexpr int32_t kShockLagMk = 650;      // milli-keys of delay per joint
+constexpr int32_t kShockDecay = 520;      // per-mille amplitude lost across
+                                          // the front chain (the rest
+                                          // reaches the grounded run)
+constexpr int32_t kShockFrontAmp = 3400;  // pitch pulse through the raised
+                                          // front (angle16 at the head end)
+constexpr int32_t kShockGroundAmp = 2400; // lateral ripple, grounded joints
+constexpr int32_t kShockTailAmp = 6200;   // the tail's delayed whip
+// the delayed-envelope sampler: curve() at milli-key resolution, so a
+// per-joint lag under one key still lands between keys instead of stepping
+inline int curve_mk(const Key* k, int n, int fmk) {
+  if (fmk <= k[0].f * 1000) return k[0].v;
+  for (int i = 0; i + 1 < n; ++i) {
+    const int a = k[i].f * 1000, b = k[i + 1].f * 1000;
+    if (fmk >= a && fmk <= b) {
+      const int span = b - a;
+      if (span <= 0) return k[i + 1].v;
+      return k[i].v +
+             static_cast<int>((static_cast<int64_t>(k[i + 1].v - k[i].v) *
+                                   (fmk - a) + span / 2) / span);
+    }
+  }
+  return k[n - 1].v;
+}
+// the impact envelope, shared by the hit and the directional damages:
+// sharp violent onset (peak inside three keys), then a long loose damped
+// ring-out -- amplitudes fall 1000 / -320 / 150 / -70 / 28 on a slowing
+// period, which is wobble, not vibration, and lands exactly on rest.
+static const Key kImpactEnv[] = {{0, 0},   {1, 720},  {3, 1000}, {6, 470},
+                                 {10, -320}, {15, 150}, {21, -70}, {28, 28},
+                                 {34, -10},  {39, 0}};
+constexpr int kImpactEnvN = static_cast<int>(sizeof(kImpactEnv) / sizeof(Key));
 // DEATH, slot 6: shudder -> the S drains out -> the body keels onto its
 // side -> one last tail curl -> stillness. The player watches this one.
 constexpr int kDeathKeys = 96;
@@ -2185,29 +2239,52 @@ inline zc::Clip build_hit() {
   c.frame_count = static_cast<uint16_t>(kHitKeys);
   c.root.assign(static_cast<size_t>(kHitKeys) * 3, 0);
   c.quats.assign(static_cast<size_t>(kHitKeys) * kBoneCount, zc::quat16_identity());
-  // the flinch envelope: sharp rise, damped return with ONE overshoot
-  // (wobble not jitter: a single undershoot reads as recoil, a train of
-  // them reads as vibration). Keyed by hand:
-  static const Key kEnv[] = {{0, 0},    {2, 850},  {4, 1000}, {7, 520},
-                             {10, -260}, {14, 90},  {18, -30}, {22, 0},
-                             {27, 0}};
-  constexpr int kEnvN = static_cast<int>(sizeof(kEnv) / sizeof(Key));
+  // THE SHOCKWAVE build (see the constants above). e is the envelope at
+  // the struck point; ek[j] is the same envelope arriving at joint j late
+  // and lighter -- the whole serpent reacts, in order, and the recovery is
+  // slow and loose (the owner's structure: violent onset, yielding return).
   for (int f = 0; f < kHitKeys; ++f) {
-    const int32_t e = curve(kEnv, kEnvN, f);
+    const int32_t e = curve(kImpactEnv, kImpactEnvN, f);
+    int32_t ek[kStanceSlopes];
+    for (int j = 0; j < kStanceSlopes; ++j)
+      ek[j] = curve_mk(kImpactEnv, kImpactEnvN, f * 1000 - j * kShockLagMk);
     Rig g;
     g.reset();
-    // the neck's share of the whiplash rides the WAVE lane so
-    // apply_stance's exact root compensation keeps the belly planted (the
-    // first cut composed raw neck quats and the probe caught the grounded
-    // run swinging -67..+174 mm with the flinch)
+    // FRONT: the travelling pitch pulse rides the wave lane (exact root
+    // compensation -- the belly never feels it). Negative = the climb
+    // momentarily rears back, and the pulse runs on into the dive.
     int32_t wave[kStanceSlopes] = {};
-    wave[1] = -(e * kHitHeadJerk) / 3000;
-    wave[2] = -(e * kHitHeadJerk) / 3000;
+    for (int k = 1; k < kStanceGround0; ++k) {
+      const int32_t dec = 1000 - (k * kShockDecay) / (kStanceGround0 - 1);
+      wave[k] = -(ek[k] * ((kShockFrontAmp * dec) / 1000)) / 1000;
+    }
     const int32_t rise = apply_stance(g, 1000, (e * kHitDeepen) / 1000, wave);
-    // the head jerks BACK-UP and aside, then settles with the envelope
+    // the head jerks BACK-UP and aside first (it is the struck end), then
+    // settles on the same envelope
     g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + (e * kHitHeadJerk) / 1000),
                            quat_y((e * kHitSway) / 1000));
-    g.tail_rest(kBladeSplay + (e * 1400) / 1000, kBladeRise);
+    // GROUNDED RUN: the pulse continues as a LATERAL ripple -- a yaw about
+    // world vertical cannot dig the belly (the idle snake's conjugation)
+    zc::quat16 snacc = zc::quat16_identity();
+    for (int j = 0; j < kStanceGround0; ++j)
+      snacc = quat_mul(snacc, g.q[kBSpine0 + j]);
+    for (int k = kStanceGround0; k <= kStanceGround1; ++k) {
+      snacc = quat_mul(snacc, g.q[kBSpine0 + k]);
+      const zc::quat16 W = quat_y((ek[k] * kShockGroundAmp) / 1000);
+      const zc::quat16 L = quat_mul(quat_mul(quat_conj(snacc), W), snacc);
+      g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], L);
+      snacc = quat_mul(snacc, L);
+    }
+    // TAIL: the whip arrives last and biggest at the tip
+    for (int k = kStanceGround1 + 1; k < kSpineBones; ++k) {
+      const int reach =
+          400 + ((k - kStanceGround1 - 1) * 600) / (kSpineBones - kStanceGround1 - 2);
+      g.q[kBSpine0 + k] = quat_mul(
+          g.q[kBSpine0 + k],
+          quat_y((ek[k - 1] * ((kShockTailAmp * reach) / 1000)) / 1000));
+    }
+    // the blades snap open when the wave REACHES the fork, not at impact
+    g.tail_rest(kBladeSplay + (ek[kStanceSlopes - 1] * 1400) / 1000, kBladeRise);
     g.write(c, f);
     // the shove: the blow MOVES the animal backward, and it recovers with
     // the same envelope -- displacement is what sells impact at 240p
@@ -2751,12 +2828,27 @@ inline zc::Clip build_hitfloor() {
 // the set. Same 18-key envelope as the hit (one damped overshoot -- wobble,
 // not vibration); what differs is WHERE the reaction lives.
 constexpr int kDmgKeys = kHitKeys;
-constexpr int32_t kDmgSideSway = 6400;   // lateral whiplash, right/left
+// RUN 1730, the owner's hit verdict applied to all four directions ("more
+// of the snake should be affected and a hit should look a lot stronger",
+// and the directions must be OBVIOUSLY different -- that is the point of
+// five slots). Each direction now drives the same travelling shockwave as
+// the hit, in its own lane: sides throw the whole chain LATERALLY (plus a
+// real sideways root shove -- displacement sells force); back drives a
+// pitch pulse down the axis with a bigger surge; top crushes and shimmies.
+constexpr int32_t kDmgSideSway = 8200;   // head-bone lateral whiplash, R/L
+                                         // (6400 -> 8200, the violent snap)
+constexpr int32_t kDmgSideChain = 1600;  // per-joint lateral wave, decaying
+constexpr int32_t kDmgSideShove = 130;   // mm the whole animal is thrown
+                                         // SIDEWAYS -- the unmissable tell
 constexpr int32_t kDmgSideRollAmp = 900; // a touch of body roll with it
 constexpr int32_t kDmgBackJerk = 6200;   // head whips DOWN-forward
-constexpr int32_t kDmgBackSurge = 52;    // mm the body shoves forward
-constexpr int32_t kDmgTopCrush = 980;    // deepen: the arch flattens under it
+constexpr int32_t kDmgBackSurge = 160;   // mm the body shoves forward
+                                         // (52 -> 160: it was a nudge)
+constexpr int32_t kDmgTopCrush = 1250;   // deepen: the arch flattens under
+                                         // it (980 -> 1250, then rebounds)
 constexpr int32_t kDmgTopDuck = 4200;    // the head ducks
+constexpr int32_t kDmgShimmy = 500;      // back/top per-joint lateral
+                                         // shimmy -- the body absorbing
 
 inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
   zc::Clip c;
@@ -2765,35 +2857,37 @@ inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
   c.frame_count = static_cast<uint16_t>(kDmgKeys);
   c.root.assign(static_cast<size_t>(kDmgKeys) * 3, 0);
   c.quats.assign(static_cast<size_t>(kDmgKeys) * kBoneCount, zc::quat16_identity());
-  static const Key kEnv[] = {{0, 0},    {2, 850},  {4, 1000}, {7, 520},
-                             {10, -260}, {14, 90},  {18, -30}, {22, 0},
-                             {27, 0}};
-  constexpr int kEnvN = static_cast<int>(sizeof(kEnv) / sizeof(Key));
   for (int f = 0; f < kDmgKeys; ++f) {
-    const int32_t e = curve(kEnv, kEnvN, f);
+    const int32_t e = curve(kImpactEnv, kImpactEnvN, f);
+    // the travelling envelope: joint j gets the blow late and lighter
+    int32_t ek[kSpineBones];
+    for (int j = 0; j < kSpineBones; ++j)
+      ek[j] = curve_mk(kImpactEnv, kImpactEnvN, f * 1000 - j * kShockLagMk);
     Rig g;
     g.reset();
     int32_t deepen = 0;
     if (dir == 3) deepen = (e * kDmgTopCrush) / 1000;   // crush flattens the arch
     else if (dir == 1) deepen = -(e * 420) / 1000;      // back-shove opens the S
     else deepen = (e * kHitDeepen) / 2500;              // side: a whisper of it
-    // the back-whip's neck share rides apply_stance's wave lane -- raw neck
-    // quats pitched the whole body and drove the TAIL 233 mm under (probe,
-    // run 0326; the same trap the hit clip's comment records)
+    // BACK and TOP carry the travelling PITCH pulse down the axis in the
+    // wave lane (exact root compensation, belly planted -- the raw-quat
+    // trap that drove the tail 233 mm under stays dead); the sides carry
+    // only a whisper of pitch, their event is lateral.
     int32_t bwave[kStanceSlopes] = {};
-    if (dir == 1) {
-      bwave[1] = (e * kDmgBackJerk) / 3000;
-      bwave[2] = (e * kDmgBackJerk) / 4200;
+    for (int k = 1; k < kStanceGround0; ++k) {
+      const int32_t dec = 1000 - (k * kShockDecay) / (kStanceGround0 - 1);
+      const int32_t amp = dir == 1 ? kDmgBackJerk / 2
+                          : dir == 3 ? kShockFrontAmp / 2
+                                     : kShockFrontAmp / 6;
+      bwave[k] = ((dir == 1 ? ek[k] : -ek[k]) * ((amp * dec) / 1000)) / 1000;
     }
-    const int32_t rise = apply_stance(g, 1000, deepen, dir == 1 ? bwave : nullptr);
+    const int32_t rise = apply_stance(g, 1000, deepen, bwave);
     switch (dir) {
       case 0:    // RIGHT: lateral whiplash, head and neck swing off the blow
       case 2: {  // LEFT: mirrored
         const int32_t sgn = dir == 0 ? 1 : -1;
         g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + (e * 1100) / 1000),
                                quat_y(sgn * (e * kDmgSideSway) / 1000));
-        g.q[kBSpine0 + 1] = quat_mul(g.q[kBSpine0 + 1], quat_y(sgn * (e * kDmgSideSway) / 2600));
-        g.q[kBSpine0 + 2] = quat_mul(g.q[kBSpine0 + 2], quat_y(sgn * (e * kDmgSideSway) / 3600));
         // a touch of roll through the raised front -- the body leans off
         // the blow while the grounded run stays planted
         for (int k = 3; k <= 6; ++k)
@@ -2809,11 +2903,55 @@ inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
         break;
       }
     }
-    g.tail_rest(kBladeSplay + (e * 1400) / 1000,
-                kBladeRise - (dir == 3 ? (e * 900) / 1000 : 0));
+    // THE LATERAL SHOCKWAVE. Two lanes, because the conjugation trick is
+    // exact only where the accumulated bind chain is shallow: the first
+    // cut ran it over the STEEP front climb and the probe read the body
+    // 1.6 METRES under (probe-hits.txt) -- the same class of dig the idle
+    // snake's own comment warns about. So the FRONT takes direct
+    // travelling yaw on the first joints (the previously proven-planted
+    // side-whip lane), and the grounded run + tail take build_hit's exact
+    // machinery.
+    {
+      const int32_t latsgn = dir == 0 ? 1 : dir == 2 ? -1 : dir == 1 ? 1 : -1;
+      const int32_t latamp = (dir == 0 || dir == 2) ? kDmgSideChain : kDmgShimmy;
+      for (int k = 1; k <= 5; ++k) {
+        const int32_t dec = 1000 - (k * 700) / 6;
+        g.q[kBSpine0 + k] = quat_mul(
+            g.q[kBSpine0 + k],
+            quat_y(latsgn * ((ek[k] * ((latamp * dec) / 1000)) / 1000)));
+      }
+      zc::quat16 snacc = zc::quat16_identity();
+      for (int j = 0; j < kStanceGround0; ++j)
+        snacc = quat_mul(snacc, g.q[kBSpine0 + j]);
+      for (int k = kStanceGround0; k <= kStanceGround1; ++k) {
+        snacc = quat_mul(snacc, g.q[kBSpine0 + k]);
+        const zc::quat16 W =
+            quat_y(latsgn * ((ek[k] * ((latamp * 900) / 1000)) / 1000));
+        const zc::quat16 L = quat_mul(quat_mul(quat_conj(snacc), W), snacc);
+        g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], L);
+        snacc = quat_mul(snacc, L);
+      }
+      const int32_t tamp =
+          (dir == 0 || dir == 2) ? kShockTailAmp : kShockTailAmp / 2;
+      for (int k = kStanceGround1 + 1; k < kSpineBones; ++k) {
+        const int reach = 400 + ((k - kStanceGround1 - 1) * 600) /
+                                    (kSpineBones - kStanceGround1 - 2);
+        g.q[kBSpine0 + k] = quat_mul(
+            g.q[kBSpine0 + k],
+            quat_y(latsgn * ((ek[k - 1] * ((tamp * reach) / 1000)) / 1000)));
+      }
+    }
+    // the blades react when the wave REACHES the fork, not at impact
+    g.tail_rest(kBladeSplay + (ek[kSpineBones - 1] * 1400) / 1000,
+                kBladeRise - (dir == 3 ? (ek[kSpineBones - 1] * 900) / 1000 : 0));
     g.write(c, f);
+    // displacement per direction: back = a real forward shove; sides = the
+    // whole animal thrown SIDEWAYS -- the unmissable directional tell
     c.root[f * 3 + 0] = fxm(dir == 1 ? (e * kDmgBackSurge) / 1000 : 0);
     c.root[f * 3 + 1] = fxm(rise);
+    if (dir == 0 || dir == 2)
+      c.root[f * 3 + 2] =
+          fxm(((dir == 0 ? 1 : -1) * (e * kDmgSideShove)) / 1000);
   }
   c.events = {{1, zc::kEvFoot, static_cast<uint8_t>(10 + dir)}};
   return c;

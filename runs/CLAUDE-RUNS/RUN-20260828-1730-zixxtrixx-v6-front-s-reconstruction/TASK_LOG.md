@@ -250,3 +250,36 @@ only on his explicit word.
 an over-broad `git add`. Staging deliberately by path — never `git add -A` from a
 repo root — costs nothing; removing them afterwards costs a coordinated history
 rewrite across every agent working in the repo.
+
+### 2026-08-28 19:0x - THE HITS: from flinch to shockwave (owner feedback)
+
+- The verdict acted on: "more of the snake should be affected and a hit
+  should look a lot stronger. Right now it looks like a little flinch."
+  The old hit moved wave[1], wave[2] and the head bone -- two segments of
+  a 57-station serpent.
+- THE SHOCKWAVE: every joint receives the shared impact envelope DELAYED
+  by kShockLagMk per joint and DECAYED as it travels (curve_mk, the
+  milli-key sampler) -- head -> front -> grounded run -> tail -> blades,
+  in order. Three lanes, all house machinery: front pitch pulse in
+  apply_stance's wave lane (root-compensated), grounded lateral ripple by
+  world-vertical conjugation, tail whip on the sway lane biggest at the
+  tip; the blades react when the wave REACHES the fork.
+- STRENGTH: kHitShoveMm 85 -> 210 (the face-protection trade that shrank
+  it died with the hook); kHitDeepen 700 -> 950; kHitKeys 28 -> 40 -- the
+  onset stays two keys sharp, the RING-OUT lengthens (1000/-320/150/-70/28
+  on a slowing period: wobble, not vibration; ends exactly on rest).
+- DIRECTIONS made obvious: sides throw the WHOLE chain laterally with a
+  real 130 mm sideways root shove (the unmissable tell), back surges 160
+  (was 52) with the axis pitch pulse, top crushes 1250 (was 980) and
+  rebounds. damage-peak-frames.png: four visibly different throws.
+- THE DIG, caught by the probe and recorded: the first damage cut ran the
+  lateral conjugation over the STEEP front climb and the belly read -1599
+  (probe-hits.txt) -- the conjugation is only exact where the accumulated
+  bind chain is shallow, exactly as the idle snake's own comment warns.
+  Front now takes direct travelling yaw (the proven-planted lane);
+  grounded+tail take build_hit's machinery. probe-hits2.txt: hit family
+  planted ([-12..-10] hit; sides [-11..+12] -- the +12 is a declared
+  two-key launch transient as the animal is knocked off its coils, judged
+  on the render as a knock, not a float).
+- Probe 0, all overlaps within allowances (15,238 hits).
+

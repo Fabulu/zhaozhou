@@ -1,3 +1,6 @@
 renders/
 renders-baseline/
 obj/
+golden-work/
+golden-verify/
+*.rgb
