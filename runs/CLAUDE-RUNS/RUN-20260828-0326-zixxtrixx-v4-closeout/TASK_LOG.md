@@ -293,3 +293,31 @@ reasonably can", and when that was overruled I sent the stop without checking fo
 already-spawned background tasks. Lesson: **a stop instruction to an agent does
 not stop the background work it has already launched — kill the tasks too.**
 None of it was needed; the vocabulary came from one grep of `animations.d`.
+
+### Taper refinement: slim the upper S, the NECK is broadest, then the head
+
+*"The upper S part gets a bit too broad and big. The broadest biggest should be
+neck and then head. Neck doesn't really exist right now because it's just a huge
+dropoff from the rest of the tube."*
+
+* **The upper S carries too much girth** — slimming it is the enabling change,
+  because while it is nearly as broad as what follows, nothing downstream can
+  read as a distinct region.
+* **Girth order: body (slimmer) → NECK (broadest) → HEAD.** So the profile is NOT
+  a single monotonic ramp to the nose; it builds through a broad neck and peaks
+  into the head. A shaped curve, authored by eye against `Side.png`.
+* **The neck is missing because there is a CLIFF where it should be.** It must
+  become a readable stretch with its own length and girth, not a boundary event.
+
+**Held against the unchanged law:** still ONE CONTINUOUS TUBE, no skull, no
+junction. The neck is the broadest stretch of that same tube and must arrive and
+depart smoothly. **We are removing a cliff, not relocating it** — both failure
+modes are on record (the early "sheer drop like a cliff", then the
+"dissolved into the tube" over-correction), so author between them by rendering.
+
+Likely secondary benefit: a slimmer upper S should itself soften the "droopy
+ball" read, because a thinner body behind a large head reads as neck-and-head
+rather than as a lump with a ball stuck on it.
+
+Judged on the side diagnostic camera beside `Side.png`, candidate ladder on one
+contact sheet, frames committed to `evidence/`.
