@@ -46,9 +46,16 @@ MUTANTS = [
      "          else                   h_s[2'((trig_k - 4'd2) >> 1)] <= sin_result;",
      "          if (trig_k[0] == 1'b0) h_s[2'((trig_k - 4'd2) >> 1)] <= sin_result;\n"
      "          else                   h_c[2'((trig_k - 4'd2) >> 1)] <= sin_result;"),
+    # R02 SURVIVED and is equivalent -- proof in EQUIVALENT below. R24 is the
+    # same claim about the table's LATENCY put where it is observable.
     ("R02 the answer is captured one clock early, before the table has it",
      "        if (trig_k >= 4'd2) begin",
      "        if (trig_k >= 4'd1) begin"),
+    ("R24 the capture files each answer under the wrong issue index",
+     "          if (trig_k[0] == 1'b0) h_c[2'((trig_k - 4'd2) >> 1)] <= sin_result;\n"
+     "          else                   h_s[2'((trig_k - 4'd2) >> 1)] <= sin_result;",
+     "          if (trig_k[0] == 1'b0) h_c[2'((trig_k - 4'd1) >> 1)] <= sin_result;\n"
+     "          else                   h_s[2'((trig_k - 4'd1) >> 1)] <= sin_result;"),
     ("R03 the capture lands in the wrong point's slot",
      "          if (trig_k[0] == 1'b0) h_c[2'((trig_k - 4'd2) >> 1)] <= sin_result;",
      "          if (trig_k[0] == 1'b0) h_c[2'(4'd3 - ((trig_k - 4'd2) >> 1))] <= sin_result;"),
@@ -168,7 +175,28 @@ def mutate(gold, old, new):
 
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the
 # sweep. NOTHING IS DECLARED PREDICTIVELY.
-EQUIVALENT = {}
+EQUIVALENT = {
+    "R02": (
+        "THE EARLY CAPTURE IS OVERWRITTEN BEFORE ANYTHING READS IT, and the "
+        "proof is the walk order rather than an argument about timing. With "
+        "`>= 4'd1` the loop runs one extra iteration at trig_k == 1, whose "
+        "index is 2'((4'd1 - 4'd2) >> 1) -- the subtraction wraps to 4'd15, "
+        "the shift gives 7, and the truncation gives 3. So the extra write is "
+        "h_s[3], with whatever the table happened to be presenting. "
+        "h_s[3] is written AGAIN at trig_k == 9, by the correct capture for "
+        "issue 7, which is point 3's sine. Every other index is untouched by "
+        "the extra iteration. Modelled over the whole walk for both "
+        "thresholds: the final h_c and h_s are IDENTICAL, index for index. "
+        "Nothing reads h_c or h_s before R_CP, which cannot be entered until "
+        "trig_k reaches 9, so the stale value is never observable either. "
+        "R24 IS THE CATCHABLE FORM of the same claim -- it moves the INDEX by "
+        "one instead of the threshold, filing each answer under the wrong "
+        "issue, which no later write repairs. "
+        "RE-SCORE THIS IF THE WALK LENGTH CHANGES, or if anything reads h_c "
+        "or h_s before the drain completes: both would break the overwrite "
+        "that makes it equivalent."
+    ),
+}
 
 
 def write_rtl(text, path=RTL):

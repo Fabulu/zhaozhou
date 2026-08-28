@@ -434,6 +434,50 @@ int main(int argc, char** argv) {
       check(c3 == c2, "ROT3 costs the same -- the axis is a mux, not more work", (uint32_t)c2,
             (uint32_t)c3);
     }
+    printf("== section 8: saturation on SOME lanes, so a mirrored flag shows ==\n");
+    {
+      // R22 -- reporting sat_mul_o on the MIRRORED lane -- survived the first
+      // sweep. Every earlier section either saturates on no lane or on all
+      // four, and a mirror is invisible when the vector is symmetric.
+      //
+      // The reachable corner: cos(0x8000) is exactly -1.0, so c*p with
+      // p = INT32_MIN gives +2^31, one past the rail. Give that to ONE lane
+      // and leave the others small, and the fired vector is 1000 -- whose
+      // mirror is 0001.
+      Group g{};
+      g.ang[0] = 0x8000;  // cos = -1.0
+      g.x[0] = (int32_t)0x80000000;
+      g.y[0] = 0;
+      for (int l = 1; l < kLanes; ++l) {
+        g.ang[l] = 0x1000 * l;
+        g.x[l] = 1 << 16;
+        g.y[l] = 2 << 16;
+      }
+      for (int l = 0; l < kLanes; ++l) g.z[l] = 0;
+      run_one(dut, mb, false, 0, g, 0x70, "saturation on lane 0 only");
+      printf("   MEASURED sat_mul_o = %X (lane 0 alone)\n", dut.sat_mul_o);
+      check((dut.sat_mul_o & 1u) == 1u, "lane 0 reports its multiply saturation", 1,
+            dut.sat_mul_o & 1u);
+      check((dut.sat_mul_o & 0x8u) == 0u, "and lane 3 -- its mirror -- does NOT", 0,
+            (dut.sat_mul_o >> 3) & 1u);
+
+      // And the other way round, so a mirror cannot pass by luck of position.
+      Group h{};
+      h.ang[3] = 0x8000;
+      h.x[3] = (int32_t)0x80000000;
+      h.y[3] = 0;
+      for (int l = 0; l < 3; ++l) {
+        h.ang[l] = 0x1000 * (l + 1);
+        h.x[l] = 1 << 16;
+        h.y[l] = 2 << 16;
+      }
+      for (int l = 0; l < kLanes; ++l) h.z[l] = 0;
+      run_one(dut, mb, false, 0, h, 0x71, "saturation on lane 3 only");
+      printf("   MEASURED sat_mul_o = %X (lane 3 alone)\n", dut.sat_mul_o);
+      check((dut.sat_mul_o & 0x8u) == 0x8u, "lane 3 reports its own", 1,
+            (dut.sat_mul_o >> 3) & 1u);
+      check((dut.sat_mul_o & 1u) == 0u, "and lane 0 does not", 0, dut.sat_mul_o & 1u);
+    }
   } else {
     printf("== random differential: %d groups against zfield::exec_op ==\n", random_n);
     for (int i = 0; i < random_n; ++i) {
