@@ -57,6 +57,14 @@ Continue the interrupted v7 creature pass with a strong dedicated modelling agen
 - Made a run-local direct-build script, deleted every run-local reference object, recompiled the full reference set after the `TriMode` layout change, then relinked reel, probe, golden, choreo, planner, headaim, sideprofile, meshcheck and striketip without `cmake --build`.
 - Fresh gates pass: probe, choreo, planner, striketip and meshcheck all exit zero; two independent golden dumps are byte-identical; all 41 generated golden files compare byte-clean against `Upheaval/creature/Zixxtrixx/golden`; `zhao-reel --check` ends `all sequence CRCs match` with stdout redirected to `evidence/final-check.txt`.
 
+### 2026-08-29 01:38 UTC+02:00 - First publication verified; stage-two collection ready
+
+- Committed and pushed the first-stage state on both dedicated branches, fast-forwarded both remote `main` branches, then made the ordered first production publication. Deployment `https://f5e625f2.upheaval.pages.dev` and production alias `https://upheaval.pages.dev` returned HTTP 200 with `noindex,nofollow`; the corrected fall and four new experiment videos returned `video/webm`, and the all-clips collection was absent as required.
+- Only after that verification, freshly linked the contour-page reel and rendered, encoded and contact-sheeted all 17 canonical clips as separately named `zixxtrixx-exp-celthick-*` media. `celthick-collection.log` ends `CELTHICK COLLECTION DONE`, and the renderer/encoder process check is clean.
+- Looked through every frame of every alternate clip. Long fall poses remain framed; hit folds and both death poses have no cracks or stray geometry; the attack spear remains graphic and coherent through the hold; the salto curls remain held while rotation advances; and the five-pixel inward ink remains continuous on the body and narrow fins. At the very distant salto cameras the heavy mask intentionally reduces the animal to a bold ring/spear silhouette, an honest tradeoff visible in `evidence/celthick-all-clips-gameplay-sheet.png` rather than hidden by a close camera.
+- Added one responsive collection panel, not seventeen outer tabs. It presents two native 384x240 clips per row where width permits and one per row on narrow screens; each nested video has controls and does not autoplay. Headless-browser captures `site-stage2-collection-desktop.png` and `site-stage2-collection-mobile.png` were inspected and show the selected collection wired correctly in both layouts.
+- Reassembled the 75-media final site twice at byte-identical SHA-256 `3fe08dcb7f1c0f173e78f7b654dbd5f2740943d381de546eb803a7240d4c934e`. Final validation proves exactly 36 live outer entries plus one archive tab, one collection containing 17 controlled videos, intact `noindex,nofollow`, 17/17 WebMs fully decoding as 384x240 `yuv444p`, and 17/17 nearest-neighbour posters at 1152x720.
+
 ---
 
 ## Subagent Spawns
@@ -82,7 +90,6 @@ No subagents. Implementation remains serial as required.
 
 ## Next Steps
 
-1. Create the dedicated zhaozhou branch now that the live FPGA mutation sweep has restored its temporary file; stage only explicit Zixxtrixx/run paths and preserve every unrelated RTL, synthesis, capture and render directory.
-2. Make logical commits in both repositories, push both dedicated branches, then deliver this first-stage state to `main` without folding in the all-clips cel collection.
-3. **FIRST PUBLICATION:** run `deploy.ps1 -Project upheaval -Branch main`, verify production and log the URL/output.
-4. **TASK #8, ONLY AFTER STEP 3:** generate cel3+thick versions of every canonical animation, expose all clips behind one extra Zixxtrixx experimental collection tab, inspect at gameplay/site distance, make a second commit/push, and make a second production publication.
+1. Commit and push the completed second-stage render evidence and site collection on the two dedicated branches, staging only explicit Zixxtrixx/run/site paths.
+2. Fast-forward both remote `main` branches without absorbing unrelated working-tree lanes.
+3. **SECOND PUBLICATION:** run `deploy.ps1 -Project upheaval -Branch main`, verify the production alias, nested media and `noindex,nofollow`, then record the deployment and mark this run finished.

@@ -1,0 +1,4 @@
+assemble: wrote C:\programmieren\zencrifice\Upheaval\website\public\index.html - 1 creature(s), 75 render(s)
+assemble: wrote C:\programmieren\zencrifice\Upheaval\website\public\index.html - 1 creature(s), 75 render(s)
+first_sha256=3fe08dcb7f1c0f173e78f7b654dbd5f2740943d381de546eb803a7240d4c934e
+second_sha256=3fe08dcb7f1c0f173e78f7b654dbd5f2740943d381de546eb803a7240d4c934e

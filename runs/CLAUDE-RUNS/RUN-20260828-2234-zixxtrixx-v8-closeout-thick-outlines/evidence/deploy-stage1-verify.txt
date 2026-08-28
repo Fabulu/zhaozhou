@@ -1,0 +1,12 @@
+production page: HTTP 200, 53212 bytes
+robots noindex,nofollow: True
+normal + thick ink: True
+faceted cel3 + thick: True
+smooth toon3 + thick: True
+pencil construction: True
+all-clips cel collection absent: True
+renders/zixxtrixx-fall.webm: HTTP 200, video/webm, None bytes
+renders/zixxtrixx-exp-thick-idle.webm: HTTP 200, video/webm, None bytes
+renders/zixxtrixx-exp-celthick-idle.webm: HTTP 200, video/webm, None bytes
+renders/zixxtrixx-exp-smoothcelthick-idle.webm: HTTP 200, video/webm, None bytes
+renders/zixxtrixx-exp-pencil-idle.webm: HTTP 200, video/webm, None bytes
