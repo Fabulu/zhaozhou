@@ -1577,3 +1577,59 @@ The house rule is "check the reference/oracle resolves BEFORE writing any
 RTL", and I did -- the SPLINE oracle was read and resolved cleanly. Then I made
 a confident architectural claim about the RTL WITHOUT CHECKING THE RTL. The
 rule protects the direction I was already careful in.
+
+## NORMALIZE: 24 caught, 2 survived, and the survivors are opposite kinds
+
+    26 attempted   24 caught   2 SURVIVED   0 discarded
+
+### M18 -- the rail WAS hit, and still nothing saw it
+
+Moving the reciprocal's clamp one binade (u25 for u24) survived even though
+section 1 already drives an input that reaches the rail.
+
+The reference pins it: `rcp_u24_norm`'s only saturating input is `m == 2^23`,
+where the pre-clamp value is exactly 2^24 and the clamp gives 0xFFFFFF --
+"pinned law, not overflow", in its own words. `m` is 2^23 precisely when the
+LENGTH is an exact power of two, and section 1 lane 0 is `(1<<16, 0, 0)`.
+
+So this is not an unexercised branch. The branch was taken on every run.
+
+**The two clamps differ by exactly 1** in a u24 reciprocal, so the products
+differ by the component itself while the output rescale is by
+`31 + e = 8 + log2(len)`. The component is at most the length, so the gap is at
+most 1/256 of an output LSB. It is visible only where it straddles a rounding
+boundary -- about one component in 256. Section 1's did not.
+
+Solved for four that do, all at length exactly 2^17:
+
+    (131072,   1)   component 1        0 vs 1
+    (131071, 512)   component 131071   65535 vs 65536
+    (131071, 513)   component 513      256 vs 257
+    (131070, 725)   component 725      362 vs 363
+
+`131071^2 + 512^2` is `2^34 + 1` -- the floor-root lands on the power of two by
+a SINGLE count. A length merely NEAR a power of two does not reach the rail,
+which is why these had to be solved for rather than guessed.
+
+That is the third "same answer, wrong reason" survivor tonight, after SPLINE's
+S07 and the mirrored-flag family. The pattern is stable enough to name: **a
+branch being TAKEN is not evidence that anything observes what it does.**
+
+### M20 -- equivalent, and exhaustively so
+
+`n2` is `logic [63:0]`, UNSIGNED, and three squares of 32-bit components sum to
+at most `3*2^62`, below `2^64`. The sum cannot wrap, so `n2 == 0` holds if and
+only if every component is zero. The zero branch then sets `rx` and `expo` to 0
+explicitly, so the output multiply forms `0 * 0` and `out_k` is 31.
+`resc_var(0, k) = (0 + 2^(k-1)) >> k = 0` for every `k >= 1`, and `k` ranges
+over 8..39 here. Forced zero and computed value are the same number on every
+input that can reach the line -- not merely on the driven ones.
+
+**The guard stays.** It is not dead code being tolerated: it states the op's law
+where the law applies, and the LEDGER half of that same law is NOT redundant --
+normalize2 bumps RCP0, normalize3_approx bumps nothing -- and is caught by M19.
+
+Three re-score triggers, one per step of the argument: `n2` narrowing, `n2`
+becoming signed, or the zero branch ceasing to zero `rx`.
+
+### 363 checks after. Re-sweeping to confirm 25 + 1.
