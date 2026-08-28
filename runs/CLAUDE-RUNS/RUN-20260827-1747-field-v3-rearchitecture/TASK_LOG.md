@@ -1633,3 +1633,79 @@ Three re-score triggers, one per step of the argument: `n2` narrowing, `n2`
 becoming signed, or the zero branch ceasing to zero `rx`.
 
 ### 363 checks after. Re-sweeping to confirm 25 + 1.
+
+## The composition sweep: 19 caught, 5 survived, 1 discarded -- and it found the
+## thing composition sweeps exist to find
+
+    25 attempted   19 caught   5 SURVIVED   1 discarded
+
+### The rule's missing half, learned by ten refusals at once
+
+The first run never scored anything: 10 of 25 refused at the preflight, exit 8.
+All ten OBEYED the rule as written -- "prefer mutating a VALUE over deleting a
+USE" -- and were refused anyway. A wiring mutant does not delete a read, it
+MOVES one, and the thing it moved off is now unread. Verilator tracks usage per
+BIT, so a vector slot counts:
+
+    bank_req_ready[1] -> [0]       orphans bit 1
+    nz_b[l] -> nz_a[l]             orphans nz_b
+    drain_data -> alu_wb_data_i    orphans drain_data
+
+It had never come up because every earlier table mutated arithmetic, where a
+value change is the natural form. This is the first table whose mutants are
+almost all redirections.
+
+**One obvious repair was actively wrong.** Pointing B at A orphans nz_b; the
+obvious fix -- swap A and B -- keeps both live and is EQUIVALENT, multiplication
+commuting. It would have scored as a survivor and taught nothing.
+
+Twenty-two orphan refusals across this family now. BUILD.md gains rule 9.
+
+### V03 and V10 are the same hole: an output nothing reads
+
+Both coupled a claimant's grant line to its rival's. Both survived.
+
+The arbiter's served/stalled counters are computed INSIDE the arbiter, from
+req_valid and its own grant -- so they cannot see what THIS file does with
+req_ready_o. Only the claimant can. The test was reading the arbiter's account
+of itself.
+
+And `alu_offered` was already being collected from `alu_wb_ready_o` every
+clock, then compared to nothing. **A measurement gathered and never used looks
+exactly like coverage until a mutant walks through it.**
+
+One law, stated twice, closes both:
+
+    every grant the rival was shown produced exactly one reply
+    the ALU's ready line agrees with the writes it got
+    and, under all three policies, with the ARBITER's own count
+
+All exact on the pristine design -- no draining slack -- because the counts are
+taken at the same instant. 213 checks.
+
+### The three survivors and the discard are equivalent, with proofs
+
+**V08 is the identity.** Every branch of the noise unit's operand mux assigns
+`mul_b[l]` a CONSTANT -- C_X, C_Y, C_LCG_M, C_XSM -- with no dependence on `l`.
+Mirroring across points changes nothing. The asymmetry is the interesting part:
+`mul_a[l]` IS per point, which is why V07 is caught. **A four-wide bank request
+is cheap for this service precisely because one side of every product is
+shared.** Re-score trigger: any mul_b branch indexing by lane -- the S_LCG lane
+salt is the near miss, currently added to mul_a.
+
+**V09 was the discard, and the model hash proves it** rather than suggesting
+it: byte-identical elaboration means Verilator folded the tag away. The bank's
+tag is the bank's claim and its own sweep checks it.
+
+**V22's third result cannot be drained** -- NOISE2 and RIDGE are width 2 and 1,
+so index 2 is never read. Never, not rarely.
+
+**V25 disproved this file's header.** It claimed the rival's constants are
+"recognisable, so a routing bug looks wrong rather than convincing". They earn
+nothing: the bank returns products on a SHARED bus with a per-claimant valid,
+only the noise unit reads it, and rival_rsp_o carries the valid rather than the
+value. The routing bug is caught by V02 because the service's ANSWER is wrong
+-- which it would be for any rival operands, including zero. Header corrected.
+
+**Second header disproved by a mutant tonight**, after SPLINE's rounding claim.
+Both were arguments by analogy from a block where the reasoning was sound.
