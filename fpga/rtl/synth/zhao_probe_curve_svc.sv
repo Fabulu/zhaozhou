@@ -210,6 +210,13 @@ module zhao_probe_curve_svc (
   // to the UNIT INTERVAL and it is not decoration: a point past the end of its
   // segment would otherwise extrapolate the cubic, and Catmull-Rom leaves the
   // hull fast.
+  //
+  // ENFORCED-BY: tests/differential/field_curve_svc_directed.cpp:oracle
+  // ENFORCED-BY: tools/sweep_field_curve_svc_mutants.py:MUTANTS
+  //
+  // The differential probes past both ends of every table, which is where
+  // the clamp is the only thing between the cubic and its extrapolation,
+  // and mutant S05 drops the upper bound so those probes have to catch it.
   function automatic logic signed [31:0] spline_t(input logic signed [63:0] v);
     logic signed [31:0] r;
     begin
@@ -345,8 +352,18 @@ module zhao_probe_curve_svc (
   // 2..12; port B the same for lanes 2/3.
   logic consume[LANES];
   always_comb begin
-    consume[0] = s_busy && !s_done && cyc[0] && (cyc <= 4'd11);
-    consume[1] = s_busy && !s_done && !cyc[0] && (cyc >= 4'd2);
+    // `!n_busy`: THE SEARCH IS OVER BY THEN AND THE PORTS ARE READING
+    // SOMETHING ELSE. Left asserted through the neighbour phase, this
+    // capture-on-taken sees a NEIGHBOUR's x on `rd_x`, compares it against
+    // the clamped probe, and happily overwrites the segment the search just
+    // found -- reporting n-1 instead of the real one and taking that
+    // neighbour's y and dy with it.
+    //
+    // Measured: 173 of 6930 checks, all SPLINE, segment 0x20 where the oracle
+    // said 0 on the 33-knot table. CURVE and DCURVE never saw it because they
+    // hand off before the phase exists.
+    consume[0] = s_busy && !s_done && !n_busy && cyc[0] && (cyc <= 4'd11);
+    consume[1] = s_busy && !s_done && !n_busy && !cyc[0] && (cyc >= 4'd2);
     consume[2] = consume[0];
     consume[3] = consume[1];
   end
@@ -470,8 +487,19 @@ module zhao_probe_curve_svc (
   // SPLINE HANDS OFF ONE PHASE LATER. The search finding the segment is not
   // enough for it: p0, p2 and p3 are not in hand until the neighbour phase has
   // run. CURVE and DCURVE are unaffected -- they never enter it.
+  // SEVEN, NOT SIX, AND THE OFF-BY-ONE WAS REAL. Addresses go out on cycles
+  // 0..5 and the registered read lands them on 1..6 -- so at cycle 6 the LAST
+  // capture is still a non-blocking assignment in flight. Completing there
+  // handed the spline unit a p3 that had not been written yet: the previous
+  // group's, or reset garbage on the first one.
+  //
+  // It showed as 96 of 6930 checks, only on the midpoint probes -- the only
+  // ones where t is non-zero and the cubic actually runs -- and only on the
+  // 64-knot table. And the same probe values PASSED when run in isolation,
+  // because then the stale p3 happened to hold the right number. That
+  // order-dependence was the tell: same inputs, different answer.
   logic lookup_complete;
-  assign lookup_complete = (s_mode == M_SPLINE) ? (n_busy && (ncyc == 3'd6))
+  assign lookup_complete = (s_mode == M_SPLINE) ? (n_busy && (ncyc == 3'd7))
                                                 : search_complete;
 
   logic handoff_fire;
@@ -662,7 +690,7 @@ module zhao_probe_curve_svc (
       // cycles, not six. That one extra cycle is the same "the thirteenth
       // cycle consumes the final read" the search already pays.
       if (n_busy) begin
-        if (ncyc != 3'd6) ncyc <= ncyc + 3'd1;
+        if (ncyc != 3'd7) ncyc <= ncyc + 3'd1;
 
         if (ncyc != 3'd0) begin
           // What was addressed one cycle ago.

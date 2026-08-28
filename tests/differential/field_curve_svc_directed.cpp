@@ -148,24 +148,27 @@ struct Want {
   int seg[4];
 };
 
-Want oracle(const std::vector<zfield::Table>& tabs, int tbl, bool dcurve, const int32_t a[4]) {
+// mode: 0 = CURVE, 1 = DCURVE, 2 = SPLINE -- the service's own encoding, so
+// the test cannot drift from the RTL by using a different one.
+Want oracle(const std::vector<zfield::Table>& tabs, int tbl, int mode, const int32_t a[4]) {
   Want w;
   for (int l = 0; l < 4; ++l) {
     zref::SatLedger L{};
     int32_t src = a[l];
     int32_t dst = 0;
-    zfield::steps::exec_op(dcurve ? zfield::OP_DCURVE : zfield::OP_CURVE, (uint32_t)tbl, tabs, &src,
-                           &dst, &L);
+    const uint8_t op =
+        (mode == 1) ? zfield::OP_DCURVE : ((mode == 2) ? zfield::OP_SPLINE : zfield::OP_CURVE);
+    zfield::steps::exec_op(op, (uint32_t)tbl, tabs, &src, &dst, &L);
     w.r[l] = dst;
-    w.sat_add[l] = !dcurve && L.add > 0;
-    w.sat_mul[l] = !dcurve && L.mul > 0;
+    w.sat_add[l] = (mode != 1) && L.add > 0;
+    w.sat_mul[l] = (mode != 1) && L.mul > 0;
     w.seg[l] = zfield::steps::segment_search(tabs[(size_t)tbl], a[l]);
   }
   return w;
 }
 
-void drive_req(Vzhao_probe_curve_svc& dut, int tbl, bool dcurve, const int32_t a[4], uint8_t tag) {
-  dut.req_mode_i = dcurve ? 1 : 0;
+void drive_req(Vzhao_probe_curve_svc& dut, int tbl, int mode, const int32_t a[4], uint8_t tag) {
+  dut.req_mode_i = (uint8_t)mode;
   dut.req_tbl_i = (uint8_t)tbl;
   dut.req_a_0_i = (uint32_t)a[0];
   dut.req_a_1_i = (uint32_t)a[1];
@@ -193,8 +196,8 @@ void check_rsp(Vzhao_probe_curve_svc& dut, const Want& w, uint8_t tag, const cha
 
 /** One lone request through an idle service; returns reply latency. */
 int run_one(Vzhao_probe_curve_svc& dut, MulBank& mb, const std::vector<zfield::Table>& tabs,
-            int tbl, bool dcurve, const int32_t a[4], uint8_t tag, const char* what) {
-  drive_req(dut, tbl, dcurve, a, tag);
+            int tbl, int mode, const int32_t a[4], uint8_t tag, const char* what) {
+  drive_req(dut, tbl, mode, a, tag);
   dut.rsp_ready_i = 1;
   dut.eval();
   int guard = 0;
@@ -208,7 +211,7 @@ int run_one(Vzhao_probe_curve_svc& dut, MulBank& mb, const std::vector<zfield::T
     ++cycles;
   }
   check(cycles < 256, (std::string(what) + ": reply arrived").c_str(), 1, cycles < 256 ? 1 : 0);
-  check_rsp(dut, oracle(tabs, tbl, dcurve, a), tag, what);
+  check_rsp(dut, oracle(tabs, tbl, mode, a), tag, what);
   step(dut, mb);  // reply taken
   dut.eval();
   return cycles;
@@ -335,6 +338,17 @@ int main(int argc, char** argv) {
           run_one(dut, mb, tabs, s, false, a, tag++, msg);
           snprintf(msg, sizeof msg, "tbl %d DCURVE probe group %zu", s, p / 4);
           run_one(dut, mb, tabs, s, true, a, tag++, msg);
+          // SPLINE OVER THE SAME PROBES, which is where this sweep earns its
+          // keep: tabs[0] has TWO knots, so p0, p1, p2 and p3 all collapse onto
+          // the same pair and every end-replication clamp fires at once. Any
+          // off-by-one in i-1 / i+1 / i+2, or a wrap where the oracle replicates,
+          // shows up in a single answer rather than needing a case built for it.
+          //
+          // The probes already include every knot, both neighbours of every knot,
+          // the midpoints, and points beyond both ends -- so the segment lands at
+          // 0 and at n-1 as well as inside.
+          snprintf(msg, sizeof msg, "tbl %d SPLINE probe group %zu", s, p / 4);
+          run_one(dut, mb, tabs, s, 2, a, tag++, msg);
         }
       }
     }

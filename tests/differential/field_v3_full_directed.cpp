@@ -204,7 +204,11 @@ int run_long(Vzhao_probe_v3_full& top, uint8_t op, int n_ctx, const int32_t* xs,
 
 void check_group(Vzhao_probe_v3_full& top, uint8_t op, int n_ctx, uint32_t seed, int policy,
                  bool rival, Prng& rng, const std::string& what) {
-  int32_t xs[kCtx], ys[kCtx], got[kCtx][2];
+  // ZERO-INITIALISED, NOT MERELY DECLARED. Only n_ctx of kCtx entries are
+  // filled, and all kCtx are passed down. A differential whose inputs are
+  // stack garbage has a verdict that depends on the stack -- it would pass
+  // or fail on what the previous call happened to leave behind.
+  int32_t xs[kCtx] = {}, ys[kCtx] = {}, got[kCtx][2] = {};
   for (int c = 0; c < n_ctx; ++c) {
     xs[c] = rng.interesting();
     ys[c] = rng.interesting();
@@ -277,7 +281,7 @@ int main(int argc, char** argv) {
     const int ns[5] = {4, 5, 6, 7, 8};
     for (int ri = 0; ri < 2; ++ri) {
       for (int i = 0; i < 5; ++i) {
-        int32_t xs[kCtx], ys[kCtx], got[kCtx][2];
+        int32_t xs[kCtx] = {}, ys[kCtx] = {}, got[kCtx][2] = {};
         for (int c = 0; c < kCtx; ++c) {
           xs[c] = (int32_t)((c + 1) << 16);
           ys[c] = (int32_t)((c + 2) << 16);
@@ -323,7 +327,7 @@ int main(int argc, char** argv) {
     // WHICH DOES THE FAULT FOLLOW -- the context number, or the slot it lands
     // in? Starting the contexts in reverse changes which context reaches the
     // dispatcher first without changing anything else.
-    int32_t xs[kCtx], ys[kCtx], got[kCtx][2];
+    int32_t xs[kCtx] = {}, ys[kCtx] = {}, got[kCtx][2] = {};
     for (int c = 0; c < kCtx; ++c) {
       xs[c] = (int32_t)((c + 1) << 16);
       ys[c] = (int32_t)((c + 2) << 16);
@@ -346,7 +350,7 @@ int main(int argc, char** argv) {
   }
 
   {
-    int32_t xs[kCtx], ys[kCtx], got[kCtx][2];
+    int32_t xs[kCtx] = {}, ys[kCtx] = {}, got[kCtx][2] = {};
     for (int c = 0; c < kCtx; ++c) {
       xs[c] = (int32_t)((c + 1) << 16);
       ys[c] = (int32_t)((c + 2) << 16);
@@ -366,7 +370,7 @@ int main(int argc, char** argv) {
     // starved claimant is the thing producing the work.
     const char* names[3] = {"ALU first", "drain first", "round robin"};
     for (int pol = 0; pol < 3; ++pol) {
-      int32_t xs[kCtx], ys[kCtx], got[kCtx][2];
+      int32_t xs[kCtx] = {}, ys[kCtx] = {}, got[kCtx][2] = {};
       for (int c = 0; c < kCtx; ++c) {
         xs[c] = (int32_t)((c + 1) << 16);
         ys[c] = (int32_t)((c + 3) << 16);

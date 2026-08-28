@@ -114,3 +114,65 @@ test from the first commit, not added later when a mutant survives.
 4. Join lookup to arithmetic as a spline service on the path.
 5. SPLINE into `zhao_field_ops_pkg` -- one line.
 6. Then the ring, and the two-service starvation measurement it unlocks.
+
+---
+
+## 2026-08-29 — the SPLINE lookup closes, 6930/6930
+
+The neighbour phase is correct and the differential against the shipped
+interpreter is green across every table, every knot, both neighbours of every
+knot, every midpoint, and past both ends.
+
+### The defect, and why it took three passes to see
+
+`lookup_complete` fired at `ncyc == 6`. Addresses go out on cycles 0..5 and the
+table's read is REGISTERED, so the datum addressed on cycle 5 does not land
+until cycle 6 — as a non-blocking assignment, i.e. after the handoff on that
+same edge has already sampled `s_p3`. The spline unit was therefore handed a
+p3 that had not been written yet.
+
+The phase is seven cycles, not six. This is the same "the thirteenth cycle
+consumes the final read" that the search itself already pays, and I wrote that
+sentence in the comment for the neighbour phase while getting the constant
+wrong two lines below it.
+
+### The symptom was actively misleading
+
+* **96 of 6930**, so it read as an edge case rather than a structural error.
+* Only on **midpoint** probes — the only ones where `t != 0`, so the cubic
+  actually evaluates and a wrong p3 can move the answer. At a knot the answer
+  is p1 regardless, so 3/4 of the probes passed while the bug was fully present.
+* Only on the **64-knot** table, because on the small tables the clamps drove
+  p3 to an index the previous group had already loaded.
+* **The same probe passed in isolation.** The stale register held the correct
+  value when the group before it happened to leave the right number there.
+
+That last one is the finding. A value that is right when you test it alone and
+wrong in sequence is not a flaky test — it is uninitialised state being read,
+and the ordering dependence is the evidence, not the noise. I had already
+recorded "one context is a DIFFERENT test, not a weaker one"; here the two
+contexts disagreed and the disagreement was the whole diagnosis.
+
+### What actually found it
+
+Not reasoning — five temporary debug ports (`dbg_t3_o`, `dbg_p0..p3_o`) hauling
+the lane-3 operands out to the C++ side, printed next to the oracle's. One line
+of output settled it:
+
+    DUT t3=1408 p0=7 p1=7 p2=1007 p3=-10345
+
+`t` correct, `p0/p1/p2` correct, `p3` not a number in the table at all. That
+localises the fault to one of six captures without a single guess about the
+arithmetic. Hand-checking `t` first mattered — had `t` been wrong the whole
+rescale path would have been suspect and the search much wider.
+
+The ports and the C++ diagnostics are removed; the count drops 6948 -> 6930
+because the DIAG group went with them.
+
+### Standing
+
+* SPLINE lookup + arithmetic: **green, 6930 checks**, lint clean at `-Wall`.
+* NOT yet done, and none of it is assumed: CURVE.SVC's 18 mutants must be
+  **re-scored** against the new shape (the phase is new logic and the old score
+  does not carry), SPLINE into `field_long_width`, the service on the path,
+  `UOP_RING_PREP`, and the two-service starvation measurement.

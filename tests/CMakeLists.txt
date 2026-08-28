@@ -1401,7 +1401,8 @@ target_link_libraries(test_field_curve_svc_directed PRIVATE zhao_harness zhao_zr
 verilate(test_field_curve_svc_directed
   PREFIX Vzhao_probe_curve_svc
   TOP_MODULE zhao_probe_curve_svc
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv)
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv)
 add_test(NAME field_curve_svc_directed COMMAND test_field_curve_svc_directed)
 set_tests_properties(field_curve_svc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 add_test(NAME field_curve_svc_random COMMAND test_field_curve_svc_directed --random 400)

@@ -25,7 +25,15 @@ cd "$(dirname "$0")/.." || exit 1
 
 MUT=tools/sweep_field_v3_spline_mutants.py
 RTL=fpga/rtl/field/zhao_field_v3_spline.sv
-TARGETS="test_field_v3_spline_directed"
+# TWO CONSUMERS SINCE 2026-08-29. zhao_probe_curve_svc began instantiating
+# the spline unit when SPLINE went hot, so its differential elaborates this
+# file too. The roster guard caught that immediately and refused to run --
+# correctly: a mutant that dies in the spline's own test can still be alive in
+# a consumer nobody scored.
+#
+# The fix is to SCORE the new consumer, not to declare it UNRUN. Declaring it
+# would silence the guard and leave exactly the hole the guard exists to find.
+TARGETS="test_field_v3_spline_directed test_field_curve_svc_directed"
 
 # An ABSOLUTE path inside the repo, not /tmp. Git-for-Windows bash and the
 # msys bash map /tmp to DIFFERENT directories, so a log written by a detached
@@ -99,15 +107,37 @@ check_consumers() {
 # nothing at all.
 #
 # It is read from the verilate() PREFIX now, so it cannot drift again.
-MODEL=$(python tools/sweep_consumers.py --prefix "$(echo $TARGETS | cut -d" " -f1)") || {
-  echo "ABORT: cannot resolve the verilate PREFIX for $TARGETS"
-  exit 9
+# THE PREFIX IS PER TARGET, NOT PER SWEEP. This resolved one prefix from the
+# FIRST target and used it for every target in the roster. That is invisible
+# while the roster holds a single target and wrong the moment a second
+# consumer with a different PREFIX joins: the model directory under
+# test_field_curve_svc_directed.dir is Vzhao_probe_curve_svc.dir, so a
+# hardcoded Vzhao_field_v3_spline.dir is simply absent and EVERY mutant is
+# DISCARDED -- a sweep that scores nothing while printing a tally.
+MODELS=""
+for t in $TARGETS; do
+  m=$(python tools/sweep_consumers.py --prefix "$t") || {
+    echo "ABORT: cannot resolve the verilate PREFIX for $t"
+    exit 9
+  }
+  MODELS="$MODELS $t:$m"
+done
+
+prefix_for() {
+  local p
+  for p in $MODELS; do
+    case "$p" in
+      "$1:"*) echo "${p#*:}"; return 0 ;;
+    esac
+  done
+  return 1
 }
 
 model_hash() {
-  local t h=""
+  local t m h=""
   for t in $TARGETS; do
-    h="$h$(find "$BUILD_DIR/tests/CMakeFiles/$t.dir/${MODEL}.dir" -type f \
+    m=$(prefix_for "$t") || return 1
+    h="$h$(find "$BUILD_DIR/tests/CMakeFiles/$t.dir/${m}.dir" -type f \
              \( -name "*.cpp" -o -name "*.h" \) 2>/dev/null \
            | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d" " -f1)"
   done
@@ -115,9 +145,10 @@ model_hash() {
 }
 
 models_present() {
-  local t
+  local t m
   for t in $TARGETS; do
-    [ -d "$BUILD_DIR/tests/CMakeFiles/$t.dir/${MODEL}.dir" ] || return 1
+    m=$(prefix_for "$t") || return 1
+    [ -d "$BUILD_DIR/tests/CMakeFiles/$t.dir/${m}.dir" ] || return 1
   done
   return 0
 }
@@ -196,9 +227,14 @@ rebuild() {
 # one-line grep of its source, and that is now the check rather than the
 # inherited prose -- svcpath's driver, derived from this one, really does
 # have only one lane and says so with the grep behind it.
+# EVERY consumer's fast lanes, or the second target is rebuilt and never
+# actually run -- which satisfies the roster guard while scoring nothing new,
+# the exact hole the guard is meant to close.
 run_lanes() {
   ./$BUILD_DIR/tests/test_field_v3_spline_directed.exe >/dev/null 2>&1 || return 1
   ./$BUILD_DIR/tests/test_field_v3_spline_directed.exe --random 40 >/dev/null 2>&1 || return 1
+  ./$BUILD_DIR/tests/test_field_curve_svc_directed.exe >/dev/null 2>&1 || return 1
+  ./$BUILD_DIR/tests/test_field_curve_svc_directed.exe --random 400 >/dev/null 2>&1 || return 1
   return 0
 }
 

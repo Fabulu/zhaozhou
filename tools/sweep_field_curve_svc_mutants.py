@@ -142,6 +142,60 @@ MUTANTS = [
      RTL,
      "  assign mul_issue_o = (f_state == F_ISSUE);",
      "  assign mul_issue_o = (f_state == F_ISSUE) && mul_ready_i;"),
+    # ---- the neighbour phase, added 2026-08-29 with SPLINE -----------------
+    # The eighteen above were scored against a service that had no such phase.
+    # A NEW PHASE IS NEW LOGIC AND THE OLD SCORE DOES NOT COVER IT -- these
+    # attack it directly, and S01 and S10 are regression mutants for the two
+    # defects that were actually in the shipped RTL during this run.
+    ("S01 the neighbour phase completes one cycle early (stale p3)",
+     "fpga/rtl/synth/zhao_probe_curve_svc.sv",
+     """  assign lookup_complete = (s_mode == M_SPLINE) ? (n_busy && (ncyc == 3'd7))""",
+     """  assign lookup_complete = (s_mode == M_SPLINE) ? (n_busy && (ncyc == 3'd6))"""),
+    # THE REAL DEFECT. The table read is registered, so the datum addressed on
+    # cycle 5 lands on cycle 6 as a non-blocking assignment -- after a handoff
+    # on that same edge has sampled it. Completing at 6 hands the spline unit
+    # the PREVIOUS group's p3. It showed as 96 of 6930, only on midpoints
+    # (t != 0), only on the 64-knot table, and the same probe PASSED when run
+    # alone because the stale register happened to hold the right number.
+    ("S02 the low end wraps instead of replicating (i-1 reads the far end)",
+     "fpga/rtl/synth/zhao_probe_curve_svc.sv",
+     """      if (want < 9'sd0)                nb_idx = 6'd0;""",
+     """      if (want < 9'sd0)                nb_idx = s_nm1[5:0];"""),
+    ("S03 the high clamp is one short (i+1/i+2 stop at n-2)",
+     "fpga/rtl/synth/zhao_probe_curve_svc.sv",
+     """      else if (want > 9'(s_nm1))       nb_idx = s_nm1[5:0];""",
+     """      else if (want > 9'(s_nm1))       nb_idx = s_nm1[5:0] - 6'd1;"""),
+    ("S04 the capture reads the current cycle's address, not the previous",
+     "fpga/rtl/synth/zhao_probe_curve_svc.sv",
+     """          automatic logic [2:0] prev  = ncyc - 3'd1;""",
+     """          automatic logic [2:0] prev  = ncyc;"""),
+    ("S05 t is not clamped at the top of the unit interval",
+     "fpga/rtl/synth/zhao_probe_curve_svc.sv",
+     """      else if (r > 32'sd65536)   spline_t = 32'sd65536;""",
+     """      else if (r > 32'sd65536)   spline_t = r;"""),
+    ("S06 the search keeps consuming through the neighbour phase",
+     "fpga/rtl/synth/zhao_probe_curve_svc.sv",
+     """    consume[0] = s_busy && !s_done && !n_busy && cyc[0] && (cyc <= 4'd11);""",
+     """    consume[0] = s_busy && !s_done && cyc[0] && (cyc <= 4'd11);"""),
+    # ALSO A REAL DEFECT, found earlier the same run: the neighbour reads went
+    # through the same compare-and-step logic and walked the segment down to
+    # n-1. 173 failures.
+    ("S07 p1 takes a neighbour instead of the search's own entry",
+     "fpga/rtl/synth/zhao_probe_curve_svc.sv",
+     """          f_p1[l]   <= upd_ye[l];""",
+     """          f_p1[l]   <= s_p0[l];"""),
+    ("S08 the group is offered to the spline unit every cycle (sent twice)",
+     "fpga/rtl/synth/zhao_probe_curve_svc.sv",
+     """          if (spl_v_valid && spl_v_ready) f_spl_offered <= 1'b1;""",
+     """          if (spl_v_valid && spl_v_ready) f_spl_offered <= 1'b0;"""),
+    ("S09 the spline unit is never granted the multiplier (hang)",
+     "fpga/rtl/synth/zhao_probe_curve_svc.sv",
+     """  assign spl_mul_ready = mul_ready_i && (f_state == F_SPL);""",
+     """  assign spl_mul_ready = mul_ready_i && (f_state == F_WAIT);"""),
+    ("S10 the phase runs one cycle too long (p3 overwritten by a re-read)",
+     "fpga/rtl/synth/zhao_probe_curve_svc.sv",
+     """        if (ncyc != 3'd7) ncyc <= ncyc + 3'd1;""",
+     """        if (ncyc != 3'd6) ncyc <= ncyc + 3'd1;"""),
 ]
 
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails

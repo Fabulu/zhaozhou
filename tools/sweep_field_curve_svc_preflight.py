@@ -18,7 +18,13 @@ VROOT = os.environ.get(
     "VERILATOR_ROOT", r"C:\programmieren\zencrifice\.tools\oss-cad-suite\share\verilator")
 VBIN = os.path.normpath(os.path.join(VROOT, "..", "..", "bin", "verilator_bin.exe"))
 
+# -I IS NOT OPTIONAL AND STOPPED BEING OPTIONAL ON 2026-08-29. The service
+# now instantiates zhao_field_v3_spline, so a bare lint cannot find the module
+# and every mutant fails preflight identically -- which looks like a broken
+# mutant table and is actually a broken command line.
 CMD = [VBIN, "--lint-only", "-Wall", "-Wno-DECLFILENAME",
+       "-I" + os.path.join(ROOT, "fpga", "rtl", "field"),
+       "-I" + os.path.join(ROOT, "fpga", "rtl", "synth"),
        "--top-module", "zhao_probe_curve_svc", os.path.join(ROOT, RTL)]
 
 
