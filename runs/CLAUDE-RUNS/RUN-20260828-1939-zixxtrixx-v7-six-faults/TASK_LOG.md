@@ -102,3 +102,38 @@ rigidity, visible at a glance where per-frame inspection misses it.
 
 *Note: the previous agent's transcript was gone, so this went to a fresh agent
 with full context rather than a resume.*
+
+### Items 9-11: the salto family
+
+9. **The salto CAMERA is jittery** — *"Salto camera is too jittery."* Hypothesis
+   relayed: the tracking camera follows a point attached to the SPINNING body, so
+   the rotation transfers into the shot; the six-somersault variant is worst
+   because twice the revolutions means twice the transferred wobble. It should
+   track a SMOOTH quantity — the ballistic path, or a low-passed centre —
+   something describing where the animal is GOING, not how it is ORIENTED. Falls
+   under the recorded rule that the camera is part of the animation and must
+   frame the moment rather than ride the subject. (This is also the legitimate
+   reason to touch `trk_*`, which the owner had queried earlier.)
+10. **The six-somersault spin is still wrong** — *"the saltos aren't the elegant
+    wheel but a weird jittery spin, totally wrong."* The previous run's fix (a
+    phase-boundary theta snap, made one continuous accumulated function) was
+    NECESSARY BUT NOT SUFFICIENT. The authored three-salto's character is an
+    **elegant WHEEL**: the body holds a constant curl and ROLLS. A "jittery spin"
+    is what you get when the SHAPE changes during rotation — so the fault is
+    likely the coil parameter or per-joint distribution varying through the spin,
+    not the interpolation. The wheel needs the curl HELD while theta advances.
+    His shortcut stands: take the authored clip's own curves and give them more
+    revolutions; do not defend a generated result that looks worse than the
+    hand-authored one. Diagnostic: contact-sheet both — a constant rotating
+    silhouette is the wheel, a shape changing frame to frame is the fault.
+11. **The flying salto target should have WINGS** — it is currently the watchdog
+    quadruped hovering, which reads as a ground animal suspended. Reel-only prop:
+    keep it cheap, out of the site card and out of the creature page set, and
+    give the wings a little motion since a static winged prop reads nearly as odd
+    as a wingless one.
+
+**Pattern worth noting across 10 and the earlier salto fix:** a correct mechanical
+fix (continuous theta) did not deliver the desired READ, because the fault was
+never only in the interpolation. **A gate passing is not the thing looking right**
+— the same lesson as the head, where a measured-horizontal snout still hung from a
+descending hook.
