@@ -1873,3 +1873,65 @@ command piped it through `tail -5` and threw the error away. Re-running with
 the whole log to a file. **Not guessing at the cause from a truncated log** --
 the last time a truncated observation was read as a cause today, it produced
 the v4/v5 mistake above.
+
+## The fast lane was blocked by the CASE of a directory
+
+`test_texture_aux_directed` would not link -- hundreds of
+
+    multiple definition of `VerilatedModel::traceConfig() const'
+
+while every other target built and every test over the same RTL passed.
+
+It linked Verilator's `verilated.cpp` **twice**, as two objects whose paths
+differ only in the case of one directory:
+
+    .../C_/programmieren/.../include/verilated.cpp.obj
+    .../C_/Programmieren/.../include/verilated.cpp.obj
+
+Windows calls those one file; CMake calls them two sources and emits two
+compile rules, so the linker receives two copies of every runtime symbol.
+
+**It only bites a target that calls `verilate()` TWICE.** With one model the
+duplicate has nothing to collide with -- which is why it sat inside the FAST
+lane behind a wall of green.
+
+### Proved stale, not assumed
+
+A fresh configure into a throwaway directory with one consistent spelling gave
+**450 objects of one case and 0 of the other**. So the CMake files are fine and
+the tree was contaminated: every sweep driver reconfigures the WHOLE project
+before every rebuild, so a run of sweeps reconfigures repeatedly, and any
+inconsistency in how `VERILATOR_ROOT` is spelled accumulates.
+
+### The canonical spelling is LOWERCASE, checked against the disk
+
+`(Get-Item C:\programmieren).Name` returns `programmieren`. The capitalised
+form is merely accepted by Windows, and is what `find_program` cached because
+the shell that first configured the tree had `C:\Programmieren` on its PATH.
+
+That flipped the fix mid-way: I had been about to normalise everything to the
+CAPITAL spelling because the cache said so. All 16 sweep drivers already
+default to the correct lowercase form -- the poisoning came from manual export
+lines, mine among them.
+
+### And the cheap repair does NOT work -- measured
+
+BUILD.md first said "reconfiguring does not clean it" as an ASSUMPTION.
+Clearing every cached Verilator variable and reconfiguring against the correct
+path changed the counts **not at all** -- still 108 against 360, cache back to
+capitalised. The stale entries name sources that exist under both spellings, so
+the regenerate has no reason to drop them. Corrected in BUILD.md from assumption
+to measurement, because clearing the cache is the first thing anyone would try.
+
+### Two process errors of my own, both recorded
+
+* I ran the repair attempt BESIDE a cold build of another tree. They competed
+  for every core and the reconfigure never finished before I stopped it. I
+  started it *because* the cold build was slow, which is what made both slower.
+* The first build's error was undiagnosable because the command piped it
+  through `tail -5` and threw it away. Re-ran with the whole log to a file
+  rather than name a cause from a truncated log twice in one day.
+
+Clean tree built: **BUILD_EXIT 0, zero failures.** (The task reported "failed"
+only because the trailing `grep -c FAILED:` exits 1 when it matches nothing --
+my command's fault, not the build's.) Fast lane running there now.
