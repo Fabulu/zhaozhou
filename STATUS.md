@@ -5,6 +5,81 @@ at the top.*
 
 ---
 
+## 2026-08-28 (morning) -- the engine has its arithmetic, and one item on your
+## list was already done
+
+*Short version: the shared multiplier is built and the engine is wired to it.
+One thing the notes said was blocking you has been finished for a while and
+the notes were wrong. And I spent most of a night fighting my own tooling,
+which is worth telling you about honestly.*
+
+### The multiplier is shared now, and that was not optional
+
+Your own directive settled this and the tree already had the evidence: the
+first synthesis of the Field engine measured **79 DSPs against a chip with
+112**, because ten operation units each owned a private multiplier while nine
+of them sat idle at any moment.
+
+So there is one four-wide multiplier bank and everything takes turns on it.
+It measures:
+
+* **18,202 requests over 20,000 clocks, none lost, none misdelivered**
+* one four-wide request accepted **every clock**, sustained
+* when a service and the main lanes both want it, the service wins every
+  single clock and the lanes get nothing -- which is the priority I chose,
+  and the test proves the starvation rather than hiding it
+
+The engine now runs the executor against that shared bank instead of a private
+multiplier, and produces **identical timing** to before: 66 clocks for one
+context, 166 for eight. Sharing cost nothing when nobody else is asking, which
+is the result worth having.
+
+### One of your priorities was already finished
+
+DEBUG.FRAMEBLIT is top of my standing list, and the notes said it was blocked
+on a CMD.DMA redesign described as *"NOT yet done, and it is a real redesign"*.
+
+I checked before starting it. **It was done** -- and both blocks now fit
+(CMD.DMA at 3,607 ALM, FRAMEBLIT at 962). The note was stale and would have
+sent me to redo finished work. Corrected in place with the evidence.
+
+The one caution I kept: those fits say the blocks PLACE. They do not say they
+close timing. That is still a separate question.
+
+### The honest part: a night mostly spent on my own tools
+
+One mutation sweep took **six attempts**, and not one of them failed for the
+reason it appeared to. The real cause was a compiler cache refusing to run
+because an environment variable was missing in a background process.
+
+Every safety check I have built worked correctly the whole time. None of them
+could say WHY. That is the lesson and I have now fixed it in four places: the
+checks record what actually happened, not just that something was wrong.
+
+Four of the mistakes were mine, including reading results out of a run that
+had already declared itself broken, and one "fix" that silently deleted
+another so neither was ever really tested. All written down in the run log.
+
+**Nothing shipped on a bad number.** The guard that catches it has now caught
+five separate cases, and the whole sequence is written into docs/BUILD.md in
+the order the next person will hit it.
+
+### What is next, and what I cannot do
+
+Next: the remaining nine field operations, grouped by which shared part each
+one borrows -- five of them need only the multiplier and are unblocked now.
+Then the whole thing measured against your 850,000-cycle frame budget, which
+is the number that says whether v3 actually works.
+
+**What I cannot finish for you**, so it does not look like drift:
+
+* the clock, reset and memory-controller blocks need a real board;
+* the particle, 2D and post blocks need your decisions, and I am instructed
+  not to invent them;
+* five more blocks have no reference model in the tree, and the rule is that
+  I do not write hardware before the reference exists.
+
+---
 ## 2026-08-28 (late) -- the engine runs real programs, and a warning about me
 
 *Short version: the Field v3 executor now runs actual compiled Earth programs
