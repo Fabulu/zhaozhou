@@ -1,0 +1,2 @@
+golden snapshot written to golden-work
+golden snapshot written to golden-verify

@@ -177,7 +177,10 @@ constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
 // (tools/reel/zixx_probe.cpp): the grounded run's belly rides a few mm under.
 // The skinned mesh sits ~15 mm below the centreline prototype (ring blending
 // sags into the bends), so this is chosen off the PROBE, not the sketch.
-constexpr int32_t kBodyY = 1117;  // RE-SOLVED, RUN 1730 front-S
+constexpr int32_t kBodyY = 1075;  // RE-SOLVED AGAIN, compact-S pass (front
+                                 // sine sum 1.090 -> 0.826, flat approach
+                                 // 0): same solve, same probe law. Was
+                                 // 1117 at kFrontSegs 5. // RE-SOLVED, RUN 1730 front-S
                                  // (1121 by the sine solve, then -4 off
                                  // the PROBE: the breath's belly ripple
                                  // widened to 9 mm with the climbing
@@ -503,13 +506,27 @@ constexpr int kFallKeys = 144;  // SLOWER STILL (2026-08-27 pass 3, Fabian:
 // kFrontEaseQ bends the ramp (0 = constant turn per joint; 1000 =
 // fully quadratic, turn gathering toward the anchor) -- a named knob,
 // picked by looking at the Side.png overlay, like every value here.
-constexpr int kFrontSegs = 5;                   // seg0..4 generated
+constexpr int kFrontSegs = 4;                   // seg0..3 generated
+    // 4, was 5 (coordinator gate on sidecmp-13): the climb was RIGHT but it
+    // read as a long shallow ramp against the sheet's compact curled S. The
+    // mid-body ANCHOR moves one segment closer to the head -- the dive
+    // starts sooner, the upper loop closes tighter, and the head carries IN
+    // over the body instead of out at arm's length. The snout tangent and
+    // the C1 handover are untouched: the neck still climbs, on a tighter
+    // curve. The freed segment becomes kFrontApproachSlopeA16 below.
 constexpr int32_t kFrontSnoutSlopeA16 = 900;    // ~4.9 deg up into the skull
     // 900, was 1600 (sidecmp-11): at 1600 the whole skull rode a ~29 deg
     // rocket climb; the sheet's terminal lobe runs nearly LEVEL, arcing
     // gently over. Snout shallower, still up -- the climb is real.
 constexpr int32_t kFrontAnchorSlopeA16 = 6800;  // the dive entry, unchanged
 constexpr int32_t kFrontEaseQ = 1000;           // 0 linear .. 1000 quadratic
+// The segment the shorter front frees: a FLAT approach between the dive's
+// steep arrival and the grounded run -- the body pays out along the ground
+// a full segment earlier, which is also the owner's standing preference
+// ("make the part that touches the ground longer"). Slope 0 = the node
+// rides at exactly the grounded height (taper is flat 860 there), and the
+// descent-lobe deepen is a multiplicative no-op on it by construction.
+constexpr int32_t kFrontApproachSlopeA16 = 0;
     // 1000, was 0 (sidecmp-11): the sheet's comma is straightish through
     // the fat lobe and gathers its turn into the dive; the constant-rate
     // ramp spent too much turn at the head end.
@@ -568,10 +585,13 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // (3000/-4000/-8000/-11650/-7650 and their ancestors) preserved the
     // descending hook that five head passes could not compensate away.
     front_slope(0), front_slope(1), front_slope(2), front_slope(3),
-    front_slope(4),
     // the dive, past vertical and back under itself; its entry is the
-    // front spline's mid-body anchor
+    // front spline's mid-body anchor (one segment closer to the head since
+    // the compact-S pass -- see kFrontSegs)
     kFrontAnchorSlopeA16, 14600, 21400, 25200, 20000, 11600,
+    // the flat approach: the dive has landed; the body lies out along the
+    // ground for a segment before the walking/snaking grounded set begins
+    kFrontApproachSlopeA16,
     // the grounded run, LONG. These slopes RAMP because the belly line must
     // follow the TAPER: the centreline of a grounded run sits one radius up,
     // and the tail-stem radius falls 136 -> 68 mm across these six nodes --
@@ -582,7 +602,7 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // the tail rises behind, short and steep
     -5600, -11400};
 // which slope entries the descent lobe occupies (breathing deepens these)
-constexpr int kStanceDescend0 = 5;
+constexpr int kStanceDescend0 = 4;  // follows the anchor (compact-S pass)
 constexpr int kStanceDescend1 = 10;
 // and which are the grounded run (the walk's hump travels here)
 constexpr int kStanceGround0 = 11;
@@ -733,7 +753,17 @@ constexpr int kAtkStickEnd = 212;        // impact + 150 keys = 5.0 s stuck
 // posed S's planform centre, measured by the pose probe.
 constexpr int32_t kFallPivotX = -990;   // mm behind the nose
 constexpr int32_t kFallPivotY = -60;    // mm below the nose
-constexpr int32_t kFallLift = 1180;   // 1300 rode the raised kBodyY out the frame top (run 0326)     // mm of air under the nose; the probe
+constexpr int32_t kFallLift = 890;    // 934 -> 890, compact-S pass: the
+    // shorter front shrank the tumble disc and the bottom rose to 64 mm
+    // of air; the approved character NEAR-BRUSHES (~20 mm).
+    // RE-AUTHORED RUN 1730: the front-S
+    // reconstruction carries the bind pose 547 mm higher and the raised
+    // climb sweeps a bigger tumble disc -- at 1180 the loop left the
+    // fixed side frame for ~2 contact-sheet rows (motion-fall-sheet).
+    // 934 = 1180 - 246 restores the approved near-brush clearance
+    // (0757 band bottom 18 mm; probe re-run after). The camera widens
+    // one step in the reel for the larger disc, which is real geometry.
+    // (1300 rode the then-570 kBodyY out the frame top, run 0326.)     // mm of air under the nose; the probe
                                         // verifies the loop never touches
                                         // (1150 left the longer blades 24 mm)
 // ROTATION DOWN, WOBBLE UP (2026-08-27 pass 3, Fabian: "When falling, the
