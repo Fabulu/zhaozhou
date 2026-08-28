@@ -40,6 +40,68 @@ not add one.
 
 ---
 
+## 2026-08-28 (afternoon) -- the gates, and the two I had not been running
+
+*Short version: nine blocks closed, the ledger green, the fast lane at 305/306.
+The one still red is the creature session's, not mine. But the honest headline
+is that I had not been RUNNING two of the three gates.*
+
+### The gates
+
+    nine mutation sweeps    closed, nothing unaccounted for
+    ledger check            green
+    ctest -L fast           305 / 306
+
+### The ledger had been red since 04:20 and I never looked
+
+Four claims of mine stated an invariant with no named enforcer. The rules put
+that check immediately before "commit and push", and I had been committing and
+pushing all morning without running it once. Nothing hid it — it works, reports
+clearly, and fails loudly. **A gate you do not run is worse than one that
+skips**, because a skip at least leaves a line in a log.
+
+All four now name a check I verified actually enforces them, rather than one
+that happened to be nearby. Pointing a gate at a plausible-looking enforcer
+would be worse than leaving it red.
+
+### The fast lane was blocked by the CASE of a directory
+
+One test would not link: it compiled Verilator's runtime twice, as two files
+whose paths differed only by `programmieren` versus `Programmieren`. Windows
+calls those one file; the build system calls them two. **It only bites a target
+that builds two models at once**, which is why it sat inside the fast lane
+behind a wall of green.
+
+Not a bug in the build files — proved by configuring a fresh copy, which came
+out perfectly consistent. The working copy had been poisoned by repeated
+reconfigures spelling that path two ways, which is what a run of sweeps does.
+And the disk says lowercase, so the drivers were right and my own typed
+commands were the ones at fault.
+
+### And I misread the last failure the same way I misread the others
+
+I told you the formatting failure was the creature session's drift. It was not:
+sixteen files, **twelve of them mine**. I had read the top of the output, which
+happens to list two creature headers, and generalised.
+
+That is the third time today — a truncated build log, a run-folder timestamp,
+and this. Read the whole thing before naming a cause.
+
+Mine are fixed. The creature session's four were formatting too, and I fixed
+those as well, but the interesting part is that their `creature_core` test was
+*already failing*, so the risk was not breaking it but changing **how** it
+fails and corrupting their diagnosis. Captured its output before and after:
+byte identical, tolerance numbers and all.
+
+### The one still red is not mine, and I am leaving it
+
+`creature_core` — "creature does not fill the frame". Your own direction #3
+tells that agent to break the S deliberately and **re-pin the goldens
+afterward**, so red there may well be the expected state mid-rework. Guessing
+at a fix would be me inventing creature behaviour.
+
+---
+
 ## FABIAN — THE ZIXXTRIXX NOTE IS NOW WHERE IT BELONGS
 
 You were right, and the diagnosis is worse than "wrong folder".
