@@ -42,11 +42,13 @@ MUTANTS = [
      "          mul_b[l] = 33'(h_rA);",
      "          mul_a[l] = 33'(sub_sat(h_d[l], h_m));\n"
      "          mul_b[l] = 33'(h_rA);"),
-    ("G02 the first smoothstep uses the SECOND reciprocal",
-     "          mul_a[l] = 33'(sub_sat(h_d[l], h_r0));\n"
-     "          mul_b[l] = 33'(h_rA);",
-     "          mul_a[l] = 33'(sub_sat(h_d[l], h_r0));\n"
-     "          mul_b[l] = 33'(h_rB);"),
+    # Reshaped: using rB twice ORPHANS rA and the linter refuses it. Swapping
+    # the two keeps both live and is the same claim from both ends at once.
+    ("G02 the two smoothsteps use each other's reciprocal",
+     "            h_rA <= rA_i;\n"
+     "            h_rB <= rB_i;",
+     "            h_rA <= rB_i;\n"
+     "            h_rB <= rA_i;"),
     ("G03 the subtraction runs the wrong way round",
      "          mul_a[l] = 33'(sub_sat(h_d[l], h_r0));\n"
      "          mul_b[l] = 33'(h_rA);",
@@ -124,8 +126,13 @@ MUTANTS = [
      "      if (r > 65'sd2147483647) resc16 = 32'sh7FFF_FFFF;"),
 
     # ---- per point vs shared ------------------------------------------------
-    ("G17 every point uses point 0's distance",
+    # Reshaped: broadcasting d_0_i ORPHANS d_1_i. Swapping two lanes keeps both
+    # live and is a sharper mutant -- it needs a group whose points differ to be
+    # seen at all.
+    ("G17 two points' distances are exchanged",
+     "            h_d[0] <= d_0_i;\n"
      "            h_d[1] <= d_1_i;",
+     "            h_d[0] <= d_1_i;\n"
      "            h_d[1] <= d_0_i;"),
     ("G18 the answer is written from the wrong lane's product",
      "              o0_1_o <= resc16(prod[1]);",
@@ -137,9 +144,12 @@ MUTANTS = [
      "            if (mul_ready_i) state <= state + 5'd1;",
      "          if (is_issue_c) begin\n"
      "            if (1'b1) state <= state + 5'd1;"),
-    ("G20 a product is consumed without waiting for it",
+    # Reshaped: a constant condition ORPHANS mul_valid_i. Inverting keeps the
+    # signal and is a real defect -- the product is consumed on exactly the
+    # clocks it is not there.
+    ("G20 a product is consumed on the clocks it is absent",
      "          end else if (mul_valid_i) begin",
-     "          end else if (1'b1) begin"),
+     "          end else if (!mul_valid_i) begin"),
     ("G21 the walk skips a step, so one product is never issued",
      "            state <= (state == G_P9 + 5'd1) ? G_OUT : (state + 5'd1);",
      "            state <= (state == G_P9 + 5'd1) ? G_OUT : (state + 5'd2);"),

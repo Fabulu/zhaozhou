@@ -1271,3 +1271,59 @@ A change of pace from the last three: `3 - (...)` mixes a 32-bit literal with
 four-bit counter arithmetic and Verilator refuses the expression. Fixed by
 writing the literal at the width it belongs to, `4'd3`. The preflight cost one
 minute and would have cost a whole sweep slot to discover otherwise.
+
+---
+
+## 2026-08-28 -- ROT closes, NORMALIZE lands, and the orphan rule earns its keep
+## a fourth and fifth time
+
+    FIELD.V3.ROT        24 mutants  23 caught  1 equivalent  0 survived
+    FIELD.V3.NORMALIZE  327 directed + 3,600 random checks
+                        166 clocks for N2, 172 for N3
+
+### NORMALIZE had four faults and the differential named each one precisely
+
+1. **A clean factor of 128 on every output.** `rcp_u24_norm` finishes with a
+   shift of SEVEN and a clamp to 0xFFFFFF, turning the iterate into the Q24
+   reciprocal. I left it out. A wrong SCALE is the easiest bug to see and the
+   easiest to leave in: every value is still smooth and correctly ordered.
+
+2. **A 31-bit iterate that needs 32.** The reference's x is a `uint32_t` and it
+   REACHES 2^31 -- for m == 2^23 exactly, which is any length that is an exact
+   power of two. Lanes 1 and 2 were right and lanes 0 and 3 read zero, and the
+   only thing those two shared was a power-of-two length. **A width bug that
+   bites only on exact powers of two survives random testing for a long time.**
+
+3. **A hang**, from gating the isqrt request on the `zero` REGISTER rather than
+   on n2 itself. The register is set one clock late, so the isqrt accepted
+   n2 == 0 -- and nobody consumes an answer for a lane that took the zero path,
+   so `n_ready_o` stays low and every LATER lane hangs. Four zeros passed;
+   zeros on lanes 0 and 2 never replied. That asymmetry named the cause.
+
+4. **One in my test, not the RTL.** THE TWO OPS DISAGREE ABOUT THE LEDGER:
+   `normalize2` bumps RCP0 for the zero vector, `normalize3_approx` returns
+   zeros and bumps NOTHING. The values are identical, so only the ledger
+   separates them -- exactly the kind of difference that gets implemented once
+   and applied to both. Both directions are checked now.
+
+And a fifth, caught by the LINTER before any test ran: I was ignoring the
+isqrt's `ready`, so on the clock an answer was taken the isqrt could re-accept
+the same n2 -- handing the next lane the previous lane's length.
+
+### THE ORPHAN RULE, four and five
+
+    C16  dropped the only read of mul_ready_i     -> orphaned port
+    N01  replaced s_mix[l] with s_reg[l]          -> orphaned signal
+    D09  replaced PAD_A with a literal            -> orphaned parameter
+    G02  used rB where rA was                     -> orphaned h_rA
+    G17  broadcast d_0_i                          -> orphaned d_1_i
+    G20  a constant condition                     -> orphaned mul_valid_i
+
+Same cause every time, and the reshapes are again better mutants: G17 swaps two
+lanes, so it needs a group whose points DIFFER to be seen at all.
+
+G02 needed a second pass. Swapping the reciprocals at their USE sites only
+replaced one of two, because `mutate()` does one replacement -- so rA was still
+orphaned. Moved to the CAPTURE, where the two assignments are adjacent and one
+anchor covers both. **A mutation that must change two places needs an anchor
+that spans them, or it changes one and breaks the build.**

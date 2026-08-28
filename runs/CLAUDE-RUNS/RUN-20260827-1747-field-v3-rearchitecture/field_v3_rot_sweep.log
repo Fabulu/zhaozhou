@@ -1,0 +1,67 @@
+== consumer roster ==
+== preflight ==
+preflight ok: R01 cos and sin are captured swapped -- the defect this block HAD
+preflight ok: R02 the answer is captured one clock early, before the table has it
+preflight ok: R24 the capture files each answer under the wrong issue index
+preflight ok: R03 the capture lands in the wrong point's slot
+preflight ok: R04 every point looks up point 0's angle
+preflight ok: R05 the cos/sin alternation is dropped, so every lookup is a sine
+preflight ok: R06 the angle takes the whole word, not the low half
+preflight ok: R07 the X axis takes the wrong pair
+preflight ok: R08 the Y axis takes the Z axis's pair
+preflight ok: R09 ROT2 is treated as ROT3, so the axis mux applies to it
+preflight ok: R10 the second product is s*p rather than s*q
+preflight ok: R11 the first product uses sin where it should use cos
+preflight ok: R12 the rounding truncates instead of rounding half up
+preflight ok: R13 the rescale shifts by the wrong amount
+preflight ok: R14 the two rotated values are swapped
+preflight ok: R15 the difference becomes a sum, fusing what the law keeps apart
+preflight ok: R16 the X axis writes its pass-through to the wrong register
+preflight ok: R17 the pass-through lane is a rotated value rather than the input
+preflight ok: R18 ROT2 writes a third lane, which the op does not have
+preflight ok: R19 the Y axis swaps which destination gets which rotated value
+preflight ok: R20 the first product advances on a REFUSED request
+preflight ok: R21 the third product reads its grant inverted
+preflight ok: R22 a multiply saturation is reported on the wrong lane
+preflight ok: R23 the add flag ignores the second sum
+PREFLIGHT: all 24 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 0953976a64a5d07a)
+  R01 cos and sin are captured swapped -- the defect this block HAD  caught
+  R02 the answer is captured one clock early, before the table has it  equivalent (proven)
+        THE EARLY CAPTURE IS OVERWRITTEN BEFORE ANYTHING READS IT, and the proof is the walk order rather than an argument about timing. With `>= 4'd1` the loop runs one extra iteration at trig_k == 1, whose index is 2'((4'd1 - 4'd2) >> 1) -- the subtraction wraps to 4'd15, the shift gives 7, and the truncation gives 3. So the extra write is h_s[3], with whatever the table happened to be presenting. h_s[3] is written AGAIN at trig_k == 9, by the correct capture for issue 7, which is point 3's sine. Every other index is untouched by the extra iteration. Modelled over the whole walk for both thresholds: the final h_c and h_s are IDENTICAL, index for index. Nothing reads h_c or h_s before R_CP, which cannot be entered until trig_k reaches 9, so the stale value is never observable either. R24 IS THE CATCHABLE FORM of the same claim -- it moves the INDEX by one instead of the threshold, filing each answer under the wrong issue, which no later write repairs. RE-SCORE THIS IF THE WALK LENGTH CHANGES, or if anything reads h_c or h_s before the drain completes: both would break the overwrite that makes it equivalent.
+  R24 the capture files each answer under the wrong issue index  caught
+  R03 the capture lands in the wrong point's slot  caught
+  R04 every point looks up point 0's angle  caught
+  R05 the cos/sin alternation is dropped, so every lookup is a sine  caught
+  R06 the angle takes the whole word, not the low half  caught
+  R07 the X axis takes the wrong pair  caught
+  R08 the Y axis takes the Z axis's pair  caught
+  R09 ROT2 is treated as ROT3, so the axis mux applies to it  caught
+  R10 the second product is s*p rather than s*q  caught
+  R11 the first product uses sin where it should use cos  caught
+  R12 the rounding truncates instead of rounding half up  caught
+  R13 the rescale shifts by the wrong amount  caught
+  R14 the two rotated values are swapped  caught
+  R15 the difference becomes a sum, fusing what the law keeps apart  caught
+  R16 the X axis writes its pass-through to the wrong register  caught
+  R17 the pass-through lane is a rotated value rather than the input  caught
+  R18 ROT2 writes a third lane, which the op does not have  caught
+  R19 the Y axis swaps which destination gets which rotated value  caught
+  R20 the first product advances on a REFUSED request  caught
+  R21 the third product reads its grant inverted  caught
+  R22 a multiply saturation is reported on the wrong lane  caught
+  R23 the add flag ignores the second sum  caught
+== final restore ==
+clean: fpga/rtl/field/zhao_field_v3_rot.sv (24 mutants checked)
+
+== tally ==
+  attempted:  24 / 24
+  caught:     23
+  equivalent: 1
+  survived:   0
+  discarded:  0
+SWEEP OK
+EXIT:0
+clean: fpga/rtl/field/zhao_field_v3_rot.sv (24 mutants checked)
+CLEAN:0
