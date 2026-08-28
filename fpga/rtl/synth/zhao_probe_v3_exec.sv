@@ -112,6 +112,24 @@ module zhao_probe_v3_exec #(
     // does that, which is why the mutants for the hold have to drive it low.
     output var logic                    wb_valid_o,   // a result WANTS to be written
     input  var logic                    wb_ready_i,   // ... and may
+
+    // HOW MANY TIMES THE REGISTER FILE WAS ACTUALLY WRITTEN, preload excluded.
+    //
+    // Added because mutant X36 -- "the register file is written without a
+    // grant" -- SURVIVED. Nothing in the test observes the file: the harness
+    // rebuilds a shadow from the writeback STREAM, so a write that lands with
+    // no grant is invisible to it, and a write that lands twice looks like one.
+    //
+    // The shadow cannot be fixed to see this. It is built from the same signals
+    // the mutant leaves untouched. The only way to catch a write nobody
+    // authorised is to count the writes the file really takes, which is what
+    // this is.
+    //
+    // The law it enables is exact and worth stating: the file is written once
+    // per GRANTED request and never otherwise, so this must equal the number of
+    // transfers the arbiter saw. Not "about equal" -- equal.
+    // ENFORCED-BY: tests/differential/field_v3_exec_directed.cpp:test_results_survive_contention
+    output var logic [31:0]             rf_writes_o,
     output var logic [$clog2(CTX)-1:0]  wb_ctx_o,
     output var logic [$clog2(REGS)-1:0] wb_reg_o,
     output var logic signed [31:0]      wb_data_o,
@@ -365,19 +383,45 @@ module zhao_probe_v3_exec #(
   assign dot_at_s4_c = dot2_at_s4_c || dot3_at_s4_c;
   assign dot_need_c  = dot3_at_s4_c ? 2'd3 : 2'd2;
   // Hold until every product this op needs has ARRIVED and been accumulated.
-  // WHY THE WRITEBACK JOINS `hold_c` RATHER THAN GETTING ITS OWN MECHANISM:
-  // a refused write must be RETRIED WITH THE SAME OPERANDS, and freezing the
-  // whole pipe is what makes that true -- the S1 read address is unchanged, so
-  // the register file re-presents the operands next clock. That argument is
-  // already written out above for `mul_denied_c`, and it is the same argument.
+  // THE WRITEBACK REFUSAL IS NOT IN `hold_c`, AND THAT IS THE FINDING.
   //
-  // Draining instead -- letting S4 retire and buffering the write -- needs a
-  // queue, and a queue needs a depth, and a depth is a claim about the longest
-  // refusal. The arbiter's policy is a runtime input, so no such bound exists.
-  // Split out, because the WRITE must know it: an instruction still held at
-  // S4 for one of these reasons has NOT retired, and must not write yet.
+  // It was, briefly, on 2026-08-28. The reasoning: a refused write must be
+  // retried with the same operands, and freezing the pipe makes that true --
+  // the argument written out for `mul_denied_c` above.
+  //
+  // THIS BLOCK ALREADY LEARNED THAT ARGUMENT IS WRONG, one screen further
+  // down, in the paragraph introducing the downstream region:
+  //
+  //     THE MULTIPLIER IS A FIXED-LATENCY PIPE AND CANNOT BE STALLED. A
+  //     product issued at T arrives at T+2 whatever this block does.
+  //     Freezing the whole datapath on a denial therefore held an
+  //     instruction back while its product still arrived on schedule, and
+  //     the two desynchronised -- measured as 2 of 12 programs wrong.
+  //
+  // Adding a writeback hold to `hold_c` freezes that same downstream region.
+  // Measured, with the port refusing and the rival contending together:
+  // 1 OF 12 PROGRAMS WRONG. The same defect, re-created for a different
+  // reason, in the file that already carried the warning.
+  //
+  // It hid because each contention alone is harmless. Refusal with the rival
+  // silent passed 35 checks -- no product is ever in flight across the
+  // freeze. Two sources of back-pressure, and testing them one at a time
+  // proves nothing about either.
+  //
+  // WHAT A CORRECT VERSION NEEDS, so the next attempt does not restart from
+  // nothing: S4 must stall without the downstream stalling, which means a
+  // SKID -- the retiring write moves to a holding register, S4 drains, and
+  // ISSUE stops while the skid is occupied. The part that makes it more than
+  // an afternoon is DEPTH: between the skid filling and issue actually
+  // stopping, the instructions already in S1..S3 still arrive, so one entry
+  // is not obviously enough and the bound must be derived, not assumed.
+  //
+  // UNTIL THEN: `wb_ready_i` gates the WRITE and not the pipe, so nothing is
+  // written without a grant, but a refusal LOSES the result. The engine ties
+  // it high -- the behaviour that shipped and is verified. It must not be
+  // wired to an arbiter that can say no until the skid exists.
   assign retire_hold_c = (dot_at_s4_c && (dot_cnt_r < dot_need_c)) || long_hold_c;
-  assign hold_c        = retire_hold_c || wb_hold_c;
+  assign hold_c        = retire_hold_c;
 
   // A LONG OP AT S4 HOLDS THE PIPE UNTIL THE DISPATCHER TAKES IT. The operands
   // live in the s4_* registers and the next instruction would overwrite them,
@@ -514,7 +558,7 @@ module zhao_probe_v3_exec #(
   logic dot_here_c;
   assign dot_here_c = 1'b0;
 
-  logic wb_req_c, wb_hold_c, retire_hold_c;
+  logic wb_req_c, retire_hold_c;
 
   // ---- writeback ----------------------------------------------------------
   // The host preload wins the port when it is asserted; the machine is not
@@ -538,10 +582,11 @@ module zhao_probe_v3_exec #(
     end
   end
 
-  // ONE EXPRESSION, THREE READERS. The request, the hold and the register
-  // file's write enable must be the same condition -- if they can disagree,
-  // the block can hold without asking, or write without being granted. Both
-  // are silent, and the second is the one that corrupts a register.
+  // ONE EXPRESSION, TWO READERS: the request and the register file's write
+  // enable must be the same condition, or the block can write without being
+  // granted -- the one failure that corrupts a register rather than merely
+  // losing a result.
+  //
   // THE WRITE FIRES ONCE, ON THE CLOCK THE INSTRUCTION RETIRES.
   //
   // It used to fire on EVERY clock the instruction sat at S4 -- so a DOT
@@ -561,7 +606,6 @@ module zhao_probe_v3_exec #(
   // a register another context can read.
   assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&
                       !retire_hold_c && !mul_denied_c;
-  assign wb_hold_c  = wb_req_c && !wb_ready_i;
 
   assign wb_valid_o = wb_req_c;
   assign wb_ctx_o   = s4_ctx_r;
@@ -580,6 +624,7 @@ module zhao_probe_v3_exec #(
       active_r      <= '0;
       inflight_r    <= '0;
       waiting_r     <= '0;
+      rf_writes_o   <= 32'd0;
       unsupported_o <= 1'b0;
       desync_o      <= 1'b0;
       issued_s1_r   <= 1'b0;
@@ -631,6 +676,12 @@ module zhao_probe_v3_exec #(
         dot_cnt_r   <= 2'd0;
         dot_issue_r <= 2'd0;
       end
+
+      // COUNTED HERE rather than beside `rf_we_c`, because `rf_we_c` is
+      // combinational and this must tick once per CLOCK on which the file is
+      // written. Preload excluded: that is the host filling the file, not the
+      // machine writing a result.
+      if (rf_we_c && !pre_we_i) rf_writes_o <= rf_writes_o + 32'd1;
 
       // Every stage advance below is gated on `!hold_c` AND `!mul_denied_c`.
       //

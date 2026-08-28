@@ -312,24 +312,16 @@ MUTANTS = [
      "                      !retire_hold_c && !mul_denied_c;",
      "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
      "                      !mul_denied_c;"),
+    # X35, X36 and X37 targeted the writeback HOLD and its grant, which was measured wrong and
+    # removed the same day -- see zhao_probe_v3_exec.sv. They return with the
+    # skid; against a block that no longer holds they are mutants that cannot
+    # fail. X33 and X34 stay: `retire_hold_c` and `mul_denied_c` still gate the
+    # write, and X33 is the regression mutant for the duplicate-write bug.
     ("X34 the write fires while a multiply is DENIED",
      "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
      "                      !retire_hold_c && !mul_denied_c;",
      "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
      "                      !retire_hold_c;"),
-    # Reshaped: dropping wb_hold_c from hold_c ORPHANS it -- read in exactly
-    # one place. Requiring BOTH keeps it live and states the same defect: a
-    # refused write no longer freezes the pipe on its own, so the instruction
-    # retires and its write is LOST.
-    ("X35 a refused write does not hold the pipe by itself",
-     "  assign hold_c        = retire_hold_c || wb_hold_c;",
-     "  assign hold_c        = retire_hold_c && wb_hold_c;"),
-    ("X36 the register file is written without a grant",
-     "      rf_we_c    = wb_req_c && wb_ready_i;",
-     "      rf_we_c    = wb_req_c;"),
-    ("X37 the writeback hold reads its grant inverted",
-     "  assign wb_hold_c  = wb_req_c && !wb_ready_i;",
-     "  assign wb_hold_c  = wb_req_c && wb_ready_i;"),
 ]
 
 
