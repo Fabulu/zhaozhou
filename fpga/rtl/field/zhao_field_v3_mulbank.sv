@@ -64,6 +64,13 @@
 // and `stall_lanes_o` counts exactly how long the lanes waited so the claim
 // is measured rather than argued.
 //
+// ENFORCED-BY: tests/differential/field_v3_mulbank_directed.cpp:test_priority_is_the_declared_one
+//
+// That test does not merely observe starvation, it PINS THE COUNT: it holds a
+// service busy for a known number of clocks and requires stall_lanes_o to
+// equal exactly that number. A counter that under-reported would leave the
+// claim "measured rather than argued" true in wording and false in fact.
+//
 // Law:
 //   reports/Fieldv3.md                     four-wide vector multiply/MAD bank
 //   reports/FIELD_V3_SERVICE_ATTACH.md     the three claimants and this design

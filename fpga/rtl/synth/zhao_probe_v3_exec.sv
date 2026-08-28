@@ -394,7 +394,14 @@ module zhao_probe_v3_exec #(
     // At S4 the operands sit in registers that do not move for the whole
     // sequence. Each product is issued, retried on refusal, and accumulated
     // when it lands. Nothing can miss anything, by construction, and a
-    // refusal costs only a clock.
+    // refusal costs only a clock. That reasoning was wrong five times before
+    // it was right, so it is checked rather than trusted: the named test
+    // drives the engine's rival on a pseudo-random schedule so the bank
+    // really refuses, and requires the answers not to move. With the rival
+    // silent this path is dead code -- which is how an earlier sweep of it
+    // scored 4 of 11.
+    //
+    // ENFORCED-BY: tests/differential/field_v3_exec_directed.cpp:test_results_survive_contention
     if (dot_at_s4_c && (dot_issue_r < dot_need_c)) begin
       mul_issue_c = 1'b1;
       unique case (dot_issue_r)

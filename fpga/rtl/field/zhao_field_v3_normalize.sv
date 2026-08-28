@@ -283,7 +283,15 @@ module zhao_field_v3_normalize (
     end
   endfunction
 
-  // The unsigned Newton rescale, which never saturates by construction.
+  // The unsigned Newton rescale, which never saturates by construction: the
+  // iterate is bounded above by 2^31 and the result is masked to 32 bits, so
+  // the mask never discards a set bit. That reasoning has already been wrong
+  // here once -- the iterate REACHES 2^31 whenever the length is an exact
+  // power of two, and a 31-bit register wrapped it to zero, leaving two lanes
+  // right and two reading zero. The defect is kept as mutant M02 and caught,
+  // so the bound below is checked rather than asserted.
+  //
+  // ENFORCED-BY: tests/differential/field_v3_normalize_directed.cpp:main
   function automatic logic [31:0] resc_u30(input logic signed [65:0] v);
     logic [65:0] u;
     begin

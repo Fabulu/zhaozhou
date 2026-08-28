@@ -120,6 +120,12 @@ module zhao_field_v3_svcpath #(
     // which is exactly why it is worth an output rather than a comment: the
     // day a second service is attached, this is the wire that says the routing
     // went wrong, instead of a wrong answer that looks like an arithmetic bug.
+    //
+    // ENFORCED-BY: tests/differential/field_v3_svcpath_directed.cpp:main
+    //
+    // Every group asserts wrong_op_o == 0, and mutant V23 -- which makes the
+    // detector fire on the ops that ARE implemented -- is caught, so the wire
+    // is known to be live rather than merely tied low.
     output var logic                          wrong_op_o
 );
 
