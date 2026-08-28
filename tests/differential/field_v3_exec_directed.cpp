@@ -188,6 +188,7 @@ struct Dut {
     t.wb_ready_i = 1;
     wb_refuse = false;
     wb_denied = 0;
+    wb_burst = 0;
     t.eval();
     for (int i = 0; i < 3; ++i) zhao::tick(t);
     t.rst_n = 1;
@@ -237,6 +238,7 @@ struct Dut {
   // was a register write that would have vanished.
   bool wb_refuse = false;  // drive the grant low on a pseudo-random schedule
   uint32_t wb_seed = 0x5EED17;
+  int wb_burst = 0;   // clocks left in the current refusal burst
   int wb_denied = 0;  // clocks the block WANTED the port and was refused
 
   // Advance one clock, folding any writeback into the shadow. Returns true if
@@ -245,8 +247,24 @@ struct Dut {
     // The grant is decided BEFORE the combinational settle, so `wb_valid_o`
     // and `wb_ready_i` describe the same clock.
     if (wb_refuse) {
-      wb_seed = wb_seed * 1664525u + 1013904223u;
-      t.wb_ready_i = ((wb_seed >> 16) & 1u) ? 1 : 0;
+      // BURSTS, NOT COIN FLIPS. A 50/50 grant refuses for a run of one or two
+      // clocks, which never puts more than a single entry in the skid -- and
+      // with one entry its head and tail are the same slot, so reading the
+      // wrong one is invisible. A burst of six is longer than the pipe is
+      // deep, so the queue genuinely fills and its ordering, its depth and its
+      // issue gate are all exercised.
+      if (wb_burst > 0) {
+        --wb_burst;
+        t.wb_ready_i = 0;
+      } else {
+        wb_seed = wb_seed * 1664525u + 1013904223u;
+        if (((wb_seed >> 16) & 7u) == 0u) {
+          wb_burst = 6;
+          t.wb_ready_i = 0;
+        } else {
+          t.wb_ready_i = 1;
+        }
+      }
     } else {
       t.wb_ready_i = 1;
     }
@@ -686,6 +704,103 @@ void test_contention_with_many_contexts(Vzhao_probe_v3_engine& top, int programs
         (uint32_t)dbg_writes);
 }
 
+void test_writes_survive_a_refusing_port(Vzhao_probe_v3_engine& top, int programs) {
+  printf("-- the WRITE PORT refuses while the bank is contended; no write may be lost\n");
+  Prng rng(0x0B7A1E5);
+  int ran = 0, bad_val = 0, bad_count = 0, bad_rf = 0, total_denied = 0;
+  int wrote = 0, expect = 0;
+  const int kUse = 4;
+
+  // FOUR CONTEXTS AND BURST REFUSALS FROM THE FIRST LINE, because every weaker
+  // version of this test passed over broken silicon. One context with
+  // coin-flip grants passed 37 checks against a skid whose depth was wrong by
+  // one, and against a register-file bug that mispaired operands on every
+  // denial. The weak test is not merely less thorough -- it is the reason both
+  // survived.
+  for (int k = 0; k < programs; ++k) {
+    const int n_in = 4;
+    const zfield::Decoded prog = alu_program(rng, n_in, 8 + (int)rng.below(8));
+    const zfield::Fplan fp = zfield::plan(prog, (1u << n_in) - 1u);
+    if (fp.uops.size() + 1 >= (size_t)kPlan) continue;
+
+    int32_t in[4][8] = {};
+    for (int c = 0; c < kUse; ++c)
+      for (int i = 0; i < n_in; ++i) in[c][i] = rng.interesting();
+
+    int32_t got[4][kRegs] = {};
+    int writes = 0, rfw = 0, denied = 0;
+    bool skipped = false;
+    {
+      Dut d(top);
+      d.reset();
+      d.wb_refuse = true;
+      d.wb_seed = 0x5EED17u + (uint32_t)k * 2654435761u;
+      for (int c = 0; c < kUse; ++c) {
+        bool sc = false;
+        if (!install(d, c, fp, in[c], (size_t)n_in, &sc)) {
+          skipped = true;
+          break;
+        }
+      }
+      if (skipped) continue;
+      for (int c = 0; c < kUse; ++c) d.start(c);
+      int fin = 0, guard = 0, done = -1;
+      Prng rv(0x0DEA1u + (uint32_t)k);
+      while (guard++ < 40000 && fin < kUse) {
+        top.rival_req_i = (rv.below(2) != 0) ? 1 : 0;
+        if (d.step(&done)) ++fin;
+      }
+      top.rival_req_i = 0;
+      // DRAIN BEFORE READING. A context reports DONE when its last instruction
+      // retires, which with a skid is no longer the clock its write lands.
+      d.wb_refuse = false;
+      for (int i = 0; i < 32; ++i) d.step(&done);
+      for (int c = 0; c < kUse; ++c)
+        for (int r = 0; r < kRegs; ++r) got[c][r] = d.shadow[c][r];
+      writes = d.writebacks;
+      rfw = (int)top.rf_writes_o;
+      denied = d.wb_denied;
+    }
+    ++ran;
+    total_denied += denied;
+    wrote += writes;
+    expect += kUse * (int)fp.uops.size();
+    if (rfw != writes) ++bad_rf;
+
+    for (int c = 0; c < kUse; ++c) {
+      const zfield::Prepared prep = zfield::prepare(fp, prog, in[c], (size_t)n_in);
+      int32_t want[4] = {};
+      zfield::execute_point(fp, prog, prep, in[c], (size_t)n_in, want, fp.out_map.size(), nullptr);
+      bool bad = false;
+      for (size_t o = 0; o < fp.out_map.size(); ++o) {
+        if (fp.out_map[o].kind != zfield::SrcKind::kVec) continue;
+        if (got[c][fp.out_map[o].idx] != want[o]) {
+          bad = true;
+          break;
+        }
+      }
+      if (bad) {
+        ++bad_val;
+        break;
+      }
+    }
+  }
+
+  printf("   MEASURED: %d programs x %d contexts, %d clocks refused\n", ran, kUse, total_denied);
+  check(ran > 0, "programs ran with the port refusing and the bank contended", 1, ran > 0 ? 1 : 0);
+  check(total_denied > 0, "the port REALLY refused -- not a vacuous pass", 1,
+        total_denied > 0 ? 1 : 0);
+  check(bad_val == 0, "every context still matches the interpreter", 0, bad_val);
+  check(wrote == expect, "one register written per uop, per context, refusals and all",
+        (uint32_t)expect, (uint32_t)wrote);
+  check(bad_rf == 0, "the file was written once per transfer, never otherwise", 0, bad_rf);
+  // THE DEPTH IS DERIVED, AND A DERIVATION CAN BE WRONG. Mine was, by one, and
+  // a dropped write changes a VALUE and not a COUNT -- so no counting law
+  // above can see an overflow. Only the block can report it.
+  check(top.sk_overflow_o == 0, "and the skid never overflowed", 0, (uint32_t)top.sk_overflow_o);
+  (void)bad_count;
+}
+
 // THE RIVAL MUST ACTUALLY ASK, or half this block is untested.
 //
 // The engine carries a `rival_req_i` port for one reason: the executor shares
@@ -834,6 +949,7 @@ int main(int argc, char** argv) {
     test_barrel_occupancy(top);
     test_results_survive_contention(top, 12);
     test_contention_with_many_contexts(top, 12);
+    test_writes_survive_a_refusing_port(top, 12);
   }
   return zhao::report_and_exit("FIELD.V3.EXEC");
 }

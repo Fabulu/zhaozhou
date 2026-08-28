@@ -130,6 +130,13 @@ module zhao_probe_v3_exec #(
     // transfers the arbiter saw. Not "about equal" -- equal.
     // ENFORCED-BY: tests/differential/field_v3_exec_directed.cpp:test_results_survive_contention
     output var logic [31:0]             rf_writes_o,
+
+    // THE SKID OVERFLOWED: a write was dropped for want of room. Sticky, and
+    // an output rather than an assertion, because the depth is DERIVED and a
+    // derivation can be wrong -- mine was, by one, and it cost 11 of 12
+    // programs precisely because the overflow was silent.
+    // ENFORCED-BY: tests/differential/field_v3_exec_directed.cpp:test_writes_survive_a_refusing_port
+    output var logic                    sk_overflow_o,
     output var logic [$clog2(CTX)-1:0]  wb_ctx_o,
     output var logic [$clog2(REGS)-1:0] wb_reg_o,
     output var logic signed [31:0]      wb_data_o,
@@ -271,7 +278,7 @@ module zhao_probe_v3_exec #(
     // A REFUSED REQUEST STALLS ISSUE. The register file's operands are live
     // for exactly one clock, so an instruction whose product the bank
     // declined to start cannot carry on -- its operands are gone next clock.
-    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c;
+    issue_c = |ready_c && !dot_inflight_c && !hold_c && !mul_denied_c && !sk_busy_c;
     issue_ctx_c = '0;
     for (int i = CTX - 1; i >= 0; i--) if (ready_c[i]) issue_ctx_c = CW'(i);
   end
@@ -608,6 +615,57 @@ module zhao_probe_v3_exec #(
 
 
 
+
+  // ---- THE WRITEBACK SKID -------------------------------------------------
+  //
+  // S4 CANNOT BE STALLED. The multiplier is a fixed-latency pipe: a product
+  // issued at T arrives at T+2 whatever this block does, so any scheme that
+  // holds an instruction back while its product arrives on schedule
+  // desynchronises the two. Measured twice: 2 of 12 programs wrong when a
+  // freeze was tried for multiplier denials, and 1 of 12 when it was tried
+  // again for the write port. The write therefore LEAVES on time and waits.
+  //
+  // DEPTH IS DERIVED. Issue stops the moment the skid is non-empty. At that
+  // instant S1, S2 and S3 may each hold an instruction, and they drain into S4
+  // over the next three clocks whatever the port does. One entry for the write
+  // that could not go out plus three retiring behind it is FOUR --
+  //
+  // -- AND THE GATE MUST BE COMBINATIONAL FOR THAT TO HOLD. `sk_ne_c` alone is
+  // registered, so issue would stop a clock late and a FIFTH instruction would
+  // already be entering S1. That is one more than the depth allows and it
+  // overflowed in silence, because a dropped write changes a VALUE and not a
+  // COUNT -- no transfer-count law can see it. `sk_overflow_o` exists so the
+  // derivation can never fail quietly again.
+  //
+  // A BYPASS KEEPS THE COMMON CASE FREE: when the skid is empty and the port
+  // grants, the write goes straight out and nothing is pushed, so an
+  // uncontended engine never stalls issue. The barrel numbers are unchanged at
+  // 69 and 190 clocks, which is how that claim is checked rather than asserted.
+  //
+  // AND THE READ-AFTER-WRITE HAZARD ANSWERS ITSELF: a context whose write is
+  // still in the skid has retired, so it could re-issue and read its own stale
+  // register -- but issue is stopped while the skid is non-empty, so the
+  // earliest it can issue again is the clock after its write lands.
+  localparam int SKD = 4;
+
+  logic [$clog2(SKD+1)-1:0] sk_n_r;
+  logic [CW-1:0]            sk_ctx_r  [SKD];
+  logic [RW-1:0]            sk_reg_r  [SKD];
+  logic signed [31:0]       sk_data_r [SKD];
+  logic [$clog2(SKD)-1:0]   sk_hd_r, sk_tl_r;
+
+  logic sk_ne_c, sk_push_c, sk_pop_c, sk_busy_c;
+  assign sk_ne_c = (sk_n_r != '0);
+
+  assign wb_valid_o = sk_ne_c || wb_req_c;
+  assign wb_ctx_o   = sk_ne_c ? sk_ctx_r[sk_hd_r]  : s4_ctx_r;
+  assign wb_reg_o   = sk_ne_c ? sk_reg_r[sk_hd_r]  : s4_dst_r;
+  assign wb_data_o  = sk_ne_c ? sk_data_r[sk_hd_r] : alu_result;
+
+  assign sk_pop_c  = sk_ne_c && wb_ready_i;
+  assign sk_push_c = wb_req_c && (sk_ne_c || !wb_ready_i);
+  assign sk_busy_c = sk_ne_c || sk_push_c;
+
   // ---- writeback ----------------------------------------------------------
   // The host preload wins the port when it is asserted; the machine is not
   // running during preload, so there is no contention to arbitrate.
@@ -626,10 +684,12 @@ module zhao_probe_v3_exec #(
       // ONE SOURCE FOR THE FILE AND THE PORT. `wb_*_o` already selects skid
       // head or S4; the file follows it exactly, so the two can never disagree
       // about what was written.
-      rf_we_c    = wb_req_c && wb_ready_i;
-      rf_wctx_c  = s4_ctx_r;
-      rf_wreg_c  = s4_dst_r;
-      rf_wdata_c = alu_result;
+      // ONE SOURCE FOR THE FILE AND THE PORT, so the two cannot disagree about
+      // what was written.
+      rf_we_c    = wb_valid_o && wb_ready_i;
+      rf_wctx_c  = wb_ctx_o;
+      rf_wreg_c  = wb_reg_o;
+      rf_wdata_c = wb_data_o;
     end
   end
 
@@ -674,10 +734,6 @@ module zhao_probe_v3_exec #(
   assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&
                       !retire_hold_c;
 
-  assign wb_valid_o = wb_req_c;
-  assign wb_ctx_o   = s4_ctx_r;
-  assign wb_reg_o   = s4_dst_r;
-  assign wb_data_o  = alu_result;
 
 
   assign done_valid_o = s4_v_r && alu_is_end;
@@ -692,6 +748,15 @@ module zhao_probe_v3_exec #(
       active_r      <= '0;
       inflight_r    <= '0;
       waiting_r     <= '0;
+      sk_n_r        <= '0;
+      sk_hd_r       <= '0;
+      sk_tl_r       <= '0;
+      sk_overflow_o <= 1'b0;
+      for (int i = 0; i < SKD; i++) begin
+        sk_ctx_r[i]  <= '0;
+        sk_reg_r[i]  <= '0;
+        sk_data_r[i] <= 32'sd0;
+      end
       opnd_held_r   <= 1'b0;
       h_a0_r        <= 32'sd0;
       h_a1_r        <= 32'sd0;
@@ -752,6 +817,19 @@ module zhao_probe_v3_exec #(
         dot_cnt_r   <= 2'd0;
         dot_issue_r <= 2'd0;
       end
+
+      // THE SKID MOVES EVERY CLOCK, outside every hold: it exists so the pipe
+      // can keep draining while a write waits.
+      if (sk_push_c) begin
+        sk_ctx_r[sk_tl_r]  <= s4_ctx_r;
+        sk_reg_r[sk_tl_r]  <= s4_dst_r;
+        sk_data_r[sk_tl_r] <= alu_result;
+        sk_tl_r            <= (sk_tl_r == $clog2(SKD)'(SKD - 1)) ? '0 : sk_tl_r + 1'b1;
+      end
+      if (sk_pop_c) sk_hd_r <= (sk_hd_r == $clog2(SKD)'(SKD - 1)) ? '0 : sk_hd_r + 1'b1;
+      if (sk_push_c && !sk_pop_c && (sk_n_r == $clog2(SKD+1)'(SKD))) sk_overflow_o <= 1'b1;
+      if (sk_push_c && !sk_pop_c)      sk_n_r <= sk_n_r + 1'b1;
+      else if (sk_pop_c && !sk_push_c) sk_n_r <= sk_n_r - 1'b1;
 
       // CAPTURE ON THE FIRST DENIED CLOCK, RELEASE WHEN THE INSTRUCTION MOVES.
       // On the denial clock the file is still presenting the stalled

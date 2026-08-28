@@ -91,6 +91,9 @@ module zhao_probe_v3_engine #(
     // was written exactly as often as the port was asked -- see the port's
     // comment in zhao_probe_v3_exec.
     output var logic [31:0]             rf_writes_o,
+    // A write was dropped for want of skid room -- sticky; see the port's
+    // comment in zhao_probe_v3_exec.
+    output var logic                    sk_overflow_o,
     output var logic [$clog2(CTX)-1:0]  wb_ctx_o,
     output var logic [$clog2(REGS)-1:0] wb_reg_o,
     output var logic signed [31:0]      wb_data_o,
@@ -233,7 +236,7 @@ module zhao_probe_v3_engine #(
       .mul_rsp_valid_i(ex_rsp_valid),
       .mul_rsp_p_i    (ex_rsp_p),
       .wb_valid_o(wb_valid_o), .wb_ready_i(wb_ready_i),
-      .rf_writes_o(rf_writes_o),
+      .rf_writes_o(rf_writes_o), .sk_overflow_o(sk_overflow_o),
       .wb_ctx_o(wb_ctx_o), .wb_reg_o(wb_reg_o),
       .wb_data_o(wb_data_o),
       .done_valid_o(done_valid_o), .done_ctx_o(done_ctx_o),
