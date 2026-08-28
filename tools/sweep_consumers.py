@@ -33,6 +33,21 @@ import os
 import re
 import sys
 
+# LF, NOT CRLF, AND THAT IS LOAD-BEARING.
+#
+# Python on Windows translates every '\n' on stdout into '\r\n'. The sweep
+# drivers read this output into a shell variable and compare the names
+# against their TARGETS list, so a stray carriage return makes 'foo' and
+# 'foo' plus a carriage return different strings -- and the consumer-roster guard then reports a
+# target it IS running as one it is not.
+#
+# That went unnoticed while every sweep had exactly ONE consumer, because
+# the abort only fires on a name that fails to match and there was nothing
+# else to compare. The first sweep with TWO consumers exposed it, which is
+# an uncomfortable thing to learn about a guard: it had been comparing
+# strings that could never be equal, and passing.
+sys.stdout.reconfigure(newline="\n")
+
 VERILATE = re.compile(r"^\s*verilate\((\w+)", re.M)
 SETVAR = re.compile(r"^\s*set\((\w+)\b", re.M)
 REF = re.compile(r"\$\{(\w+)\}")
