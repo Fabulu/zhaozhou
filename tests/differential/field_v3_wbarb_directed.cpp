@@ -64,17 +64,30 @@ struct Counts {
   int crossed = 0;    // the port carried a field belonging to a different claimant
   int multi = 0;      // more than one claimant told it was served
   int ready_idle = 0; // somebody was told it was served with no write happening
+  // WHO WON, IN ORDER. Counts and fairness both pass under a rotation that is
+  // merely phase-shifted (W07: starting one claimant late is still 10/10/10
+  // over 30 clocks). The sequence is the only thing that separates them.
+  std::vector<int> order;
 };
 
 /** Run `clocks` cycles with a fixed asking set and policy, recording what happened. */
-Counts run(Vzhao_field_v3_wbarb& t, uint8_t asking, int policy, int clocks) {
+Counts run(Vzhao_field_v3_wbarb& t, uint8_t asking, int policy, int clocks,
+           bool do_reset = true) {
   Counts n;
-  t.rst_n = 0;
+  // `do_reset = false` continues from whatever state the last run left. That
+  // is not a convenience: the POLICY IS A RUNTIME INPUT, so changing it
+  // without a reset is the case it exists for, and W06 -- rotating the round
+  // robin pointer under every policy -- is invisible to any test that resets
+  // in between.
+  if (do_reset) {
+    t.rst_n = 0;
+    t.policy_i = (uint8_t)policy;
+    drive(t, 0);
+    t.eval();
+    for (int i = 0; i < 4; ++i) zhao::tick(t);
+    t.rst_n = 1;
+  }
   t.policy_i = (uint8_t)policy;
-  drive(t, 0);
-  t.eval();
-  for (int i = 0; i < 4; ++i) zhao::tick(t);
-  t.rst_n = 1;
   drive(t, asking);
   t.eval();
 
@@ -98,6 +111,7 @@ Counts run(Vzhao_field_v3_wbarb& t, uint8_t asking, int policy, int clocks) {
       ++n.writes;
       if (who >= 0) {
         ++n.served[who];
+        n.order.push_back(who);
         // Law 1: every field on the port must belong to the winner.
         if ((int)t.wr_ctx_o != who + 1 || (int)t.wr_reg_o != 8 * (who + 1) ||
             (uint32_t)t.wr_data_o != (0xC0000000u | (uint32_t)who)) {
@@ -172,6 +186,15 @@ int main(int argc, char** argv) {
           (uint32_t)clocks, (int)t.stalled_o[0]);
     check((int)t.stalled_o[1] == clocks, "and claimant 1's", (uint32_t)clocks,
           (int)t.stalled_o[1]);
+    // W14: served_o counting REQUESTS instead of GRANTS is invisible for a
+    // claimant that wins every clock, which is the only case section 2 has.
+    // The separating case is a claimant that ASKS AND LOSES -- it is right
+    // here, and it was unasserted.
+    check((int)t.served_o[0] == 0, "claimant 0 was SERVED nothing, though it asked", 0,
+          (int)t.served_o[0]);
+    check((int)t.served_o[1] == 0, "and claimant 1 likewise", 0, (int)t.served_o[1]);
+    check((int)t.served_o[2] == clocks, "while claimant 2 was served every clock",
+          (uint32_t)clocks, (int)t.served_o[2]);
     printf("   MEASURED policy 1: served %d/%d/%d, stalled %u/%u/%u\n", n.served[0], n.served[1],
            n.served[2], t.stalled_o[0], t.stalled_o[1], t.stalled_o[2]);
   }
@@ -236,6 +259,40 @@ int main(int argc, char** argv) {
       check(n.crossed == 0, (std::string(c.what) + ": fields intact").c_str(), 0,
             (uint32_t)n.crossed);
     }
+  }
+
+  printf("== section 7: round robin's ORDER, not just its totals ==\n");
+  {
+    // W07 -- starting one claimant late -- is still 10/10/10 over 30 clocks,
+    // so counts and fairness both pass. The sequence is what separates them.
+    const Counts n = run(t, 0x7, POL_ROUND_ROBIN, 9);
+    std::string got;
+    for (size_t i = 0; i < n.order.size(); ++i) got += std::to_string(n.order[i]);
+    printf("   MEASURED grant order: %s\n", got.c_str());
+    check(got == "012012012", "the rotation runs 0,1,2 from reset and repeats",
+          0, (uint32_t)(got == "012012012" ? 0 : 1));
+  }
+
+  printf("== section 8: the rotation pointer does NOT move under a fixed policy ==\n");
+  {
+    // W06 -- advancing rr_r whatever the policy -- is invisible to any test
+    // that resets between sections, because only the round-robin arm READS it.
+    // But the policy is a RUNTIME input: changing it without a reset is the
+    // case it exists for.
+    //
+    // Policy 0 is the one that exposes it. Its winner is always claimant 0, so
+    // a rotation that advanced would leave the pointer at 1, and the first
+    // round-robin grant would go to claimant 1 instead of 0. (Under policy 1
+    // the winner is always 2 and the pointer wraps back to 0, which hides the
+    // defect -- so the choice of policy here is the whole test.)
+    run(t, 0x7, POL_LOW_FIRST, 12);
+    const Counts n = run(t, 0x7, POL_ROUND_ROBIN, 9, /*do_reset=*/false);
+    std::string got;
+    for (size_t i = 0; i < n.order.size(); ++i) got += std::to_string(n.order[i]);
+    printf("   MEASURED order after a policy-0 phase: %s\n", got.c_str());
+    check(got == "012012012",
+          "the rotation still starts at 0 -- a fixed policy left it alone", 0,
+          (uint32_t)(got == "012012012" ? 0 : 1));
   }
 
   return zhao::report_and_exit("field_v3_wbarb_directed");

@@ -1123,3 +1123,51 @@ Reading `git status` before a push, and asking why a file was modified when it
 should not be, found both this and the two files the proofs commit left behind.
 Staging by explicit path is not sufficient on its own -- the diff has to be
 read, and "why is that file dirty" is the question that does the work.
+
+---
+
+## 2026-08-28 -- the arbiter's three survivors, and one of them is a lesson I
+## had already written down
+
+    first run:  17 attempted  14 caught  3 SURVIVED  0 discarded
+    after:      55 checks, up from 50
+
+### W14: I wrote the trap at the top of the file and then fell into it
+
+`served_o` counting REQUESTS instead of GRANTS survived. The file's own header
+explains exactly this trap -- it is the multiplier bank's M08 defect, which
+survived ITS first sweep because every test there had the claimant losing on
+every clock, where the two readings coincide. I wrote that paragraph, built
+section 2 around the separating case for `stalled_o` ... and never applied it
+to `served_o`.
+
+Section 3 had the separating case sitting in it the whole time: two claimants
+that ASK AND LOSE. It asserted their `stalled_o` and never their `served_o`.
+Three lines.
+
+The general shape is worth keeping: **knowing why a mutant is hard to catch
+does not automatically produce the check.** The lesson has to be applied once
+per counter, not once per file.
+
+### W07 and W06: counts and fairness are not the same as ORDER and STATE
+
+* **W07** starts the rotation one claimant late. Over 30 clocks that is still
+  10/10/10 and still perfectly fair, so both of my round-robin assertions
+  passed. Only the SEQUENCE differs. The test now records the grant order and
+  pins it at `012012012`.
+
+* **W06** advances the rotation pointer under every policy, not just round
+  robin. `rr_r` is only READ by the round-robin arm, and my `run()` reset
+  between every section, so a polluted pointer never survived to be read.
+  Invisible -- but not equivalent, and the difference matters: **the policy is
+  a RUNTIME input precisely so it can change without a reset.**
+
+  The new section runs policy 0, then switches to round robin with no reset.
+  The choice of policy 0 is the whole test: its winner is always claimant 0, so
+  a rotation that advanced leaves the pointer at 1 and the first grant goes to
+  the wrong claimant. Under policy 1 the winner is always 2 and the pointer
+  wraps back to 0, which would have hidden it.
+
+That last point is the one to remember: a test that exercises a defect through
+the state that HAPPENS TO WRAP proves nothing. Choosing the stimulus that
+leaves the state somewhere visible is the work.
