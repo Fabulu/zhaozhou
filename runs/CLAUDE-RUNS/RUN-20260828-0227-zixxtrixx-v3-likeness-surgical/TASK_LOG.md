@@ -155,3 +155,14 @@ the T5 quilt and the committed page bytes were unreproducible. Fixed with
 the thrown-away pose probe: **a result that cannot be reproduced is not
 evidence**, and it had been sitting under a "committed bytes, fixed seed"
 requirement that was silently not being met.
+
+### Published
+
+`zhao-reel --check` came back **"all sequence CRCs match"** across 29 subjects,
+no mismatches — which was the gate that actually mattered here: the texture
+changed (pink band 13 -> 9, eye discs, bolder pupil), so every creature
+subject's rendered pixels changed with it, and the re-pins had to be right or
+this fails. They were.
+
+Deployed https://upheaval.pages.dev (build `de9bd0e5`). Eight live clips plus
+the Archive tab. Run 0227 closes green.
