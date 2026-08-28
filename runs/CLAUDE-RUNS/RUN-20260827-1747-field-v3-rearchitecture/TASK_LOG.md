@@ -1982,3 +1982,79 @@ Fabian's direction #3 tells that agent to break the S-curve DELIBERATELY and
 **re-pin the goldens afterward** -- so a framing assertion going red mid-rework
 is plausibly the expected state. Guessing at a fix would be inventing creature
 behaviour, which is the one thing this session is explicitly told not to do.
+
+## The executor can be REFUSED now, and asking that found a bug older than the port
+
+`wb_valid_o` was pure observation -- a bare assign mirroring a write already
+committed to this block's own register file. Composed with
+`zhao_field_v3_svcpath`, whose arbiter refuses the ALU by design at a measured
+eight clocks per four-point group, each of those eight would have been a **lost
+register write**.
+
+It is a request now. `wb_ready_i` is the grant and the refusal joins `hold_c` --
+the same mechanism and the same argument as the multiplier denial two screens
+above it: a refused write must retry WITH THE SAME OPERANDS, and freezing the
+whole pipe is what makes that true, because the S1 read address is unchanged
+and the register file re-presents them.
+
+Draining instead needs a queue; a queue needs a depth; a depth is a claim about
+the longest refusal. The arbiter's policy is a runtime input, so no such bound
+exists.
+
+### The law is about WRITES, not answers -- and that is what caught it
+
+The section runs each program twice, granted and refused, and compares both
+against each other and the interpreter, counting transfers each way. Not "the
+answers are right": **a refusal may cost clocks and may not change or lose a
+write.**
+
+The values agreed. The counts did not: **20 granted against 16 refused.**
+
+The granted figure was the inflated one. `rf_we_c` fired on EVERY clock the
+instruction sat at S4, so a DOT wrote its destination once per accumulation
+hold clock and a long op wrote on every clock it waited for handoff. The last
+write always carried the right value, so all 34 checks passed and nothing saw
+it. Under a refusing port some duplicates were simply refused -- which is what
+made the counts diverge and the defect visible at last.
+
+Not cosmetic once the port is shared: every duplicate steals a slot the drain
+wanted, and each momentarily publishes a PARTIAL accumulation to a register
+another context can read.
+
+Fixed to fire once, on retire: `!retire_hold_c && !mul_denied_c`. 35 checks,
+123 clocks genuinely refused across 12 programs, so it cannot pass vacuously.
+
+## AND THE 31/31 I HAVE BEEN QUOTING ALL DAY WAS STALE
+
+    07:31   exec sweep runs, 31/31
+    10:36   the long-op commit MOVES two lines its mutants anchor on
+    ~15:00  the writeback change moves two more
+
+The driver exits 3 on an unresolvable anchor rather than scoring -- but only if
+somebody runs it. Nobody did. So the tally was reported all day as though it
+described today's executor; it described the executor before the long-op path
+existed.
+
+Third instance today of one failure: **a result that was true when measured,
+carried forward as though still true.** The ledger red for eight hours, the
+fast lane never run, and now this.
+
+`tools/sweep_anchors_check.py` closes it -- every anchor in every table against
+the file each mutant names, under a second, runnable after any RTL edit. Across
+the repo: **675 anchors, 26 tables, exec the only stale one.**
+
+It states what it is NOT in its own header. A resolving anchor means the mutant
+can be APPLIED, not that it would be CAUGHT. Re-scoring is the sweep's job.
+
+### And I nearly reported three more as stale that were fine
+
+X30/X31/X32 are 4-tuples naming `zhao_field_v3_rf.sv`, and my first checker
+read them against `exec.sv`. **The tool was wrong, not the table.** Verified the
+checker before trusting its verdict -- which is precisely the discipline that
+was missing in all three failures above.
+
+### Deleted `build-verify`
+
+BUILD.md's own remedy for a case-poisoned tree, now applied rather than just
+written down. The sweep driver reconfigures it fresh with the lowercase
+spelling it exports, so the tree can only ever hold one spelling.
