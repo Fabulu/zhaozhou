@@ -40,6 +40,135 @@ not add one.
 
 ---
 
+## 2026-08-28 (night) -- the deliberate-defect runs are closing, and one of
+## them proved a comment of mine wrong
+
+*Short version: SPLINE is closed at full marks, NORMALIZE is running, and the
+service path now has a run of its own. The thing worth your five minutes is in
+the middle: a deliberate defect I planted to fail INSTEAD proved that a claim I
+had written into the hardware was false.*
+
+### Where the sweeps stand
+
+These are the runs that plant a deliberate fault and check the tests notice.
+Seven blocks are now closed with nothing unaccounted for:
+
+    FIELD.V3.EXEC     31/31        NOISE       23/23
+    CURVE.SVC         18/18        DISPATCH    28/28
+    WBARB             17/17        ROT         24/24
+    RING              23/23        SPLINE      21/21
+
+NORMALIZE is running as I write this. The service path -- the whole long-op
+route composed into one machine -- has a 25-mutant run written and queued
+behind it.
+
+### The one that proved me wrong
+
+I had written into the SPLINE hardware, as a numbered law, that its
+multiply-add "is ONE rounding, not two", and warned that doing it the other way
+round is the mistake to avoid. I planted a deliberate defect that does it the
+other way round, expecting the tests to catch it.
+
+They did not, and they were right not to. The two arrangements are **the same
+number** -- not close, identical, for every input. The value being added has
+sixteen zero bits at the bottom, so adding it before or after the shift cannot
+change the answer. I measured it over 200,000 random pairs: zero differences.
+
+My comment had reasoned by analogy with the ROTATE block, where the same
+distinction is real and does matter. The analogy was the error. The rounding
+difference that genuinely bites is rounding each PRODUCT separately, and
+SPLINE's arithmetic has only one product per step, so the question never
+arises.
+
+I mention it because it is the same failure your Zixxtrixx note is about, in a
+different medium. A number that *feels* like evidence -- here, a rule written
+down in a header, in confident capitals, sitting next to correct code -- stops
+getting questioned. It took a machine planting faults to notice, and the header
+now carries the correction and the measurement rather than the analogy.
+
+### SPLINE was not checking its own error flags at all
+
+Same run, less flattering. Three deliberate defects survived. One was the
+equivalence above. The other two were genuine holes, and one of them shows how
+a test can look thorough while missing a whole class:
+
+* A defect that clamps a coefficient's PARTS instead of its RESULT survived
+  because the control points I had chosen were so extreme that both versions
+  ran into the same rail. Same answer, wrong reason. Separating them needed a
+  case built deliberately -- one where a single term overflows but the total
+  does not.
+* The block reports which points saturated, and **nothing was checking those
+  reports.** Values and labels were compared; the flags were not. So a defect
+  that reports the right saturation against the wrong point sailed through.
+  They are now compared per point, which matters: one combined report for a
+  group of four would smear them together and a mirrored answer would look
+  correct.
+
+That is the third block in a row where a mirrored flag survived, always for the
+same reason -- every test group happened to saturate on all four points or on
+none.
+
+### The service path gets its own run, and it only mutates WIRING
+
+Every block in this engine has now been swept alone and every one has closed.
+And every defect that has cost me real time lived in **none** of those runs:
+
+    the executor's open-loop multiply     no refusal wire existed to break
+    the curve service's hang              no refusal wire existed to break
+    the dispatcher's two missing operands no wire existed to carry them
+
+A run that plants faults cannot plant one in a wire that is not there. So the
+new run does not re-check any block's arithmetic -- it breaks the CONNECTIONS:
+a unit reading its neighbour's grant, two claimants' request lines crossed,
+results delivered into the wrong point's registers, an opcode off by one. Each
+is a one-token change, and none of them is visible from inside either block.
+
+Four of the twenty-five ask a question rather than stating a fault -- they
+break a claim the file makes in its own comments, where I do not yet know
+whether anything can observe it. If those survive, that is a finding about the
+tests and gets recorded as one.
+
+### Two notes about my own tooling, both small, both mine
+
+**A stale comment nearly made me delete a real test.** Above the two test lanes
+in one sweep driver sat a paragraph, copied wholesale from another block,
+explaining at length why that binary has only ONE lane. The code was right and
+the comment was wrong. That is the dangerous kind of stale -- it did not merely
+describe the wrong thing, it argued persuasively for removing something that
+works. I nearly acted on it. Whether a binary has a second lane is a one-line
+check of its source, so that is the check now instead of the inherited prose.
+
+**The guard that refuses to stage a file caught me for the third time**, and
+for the first time it caught me BEFORE the mistake rather than after. I tried
+to commit a file while its own fault-injection run still had control of it --
+exactly the thing that put a deliberate defect into a pushed commit yesterday.
+It said no. I committed the rest and waited.
+
+### Your first priority was already finished
+
+You listed the frame-blit debug path first. It is closed: verified on the
+composed path, swept 20/20 on the atomicity law, and fitted at 7,442 ALM
+(17.8% of the device), 13 M10K, no DSPs. The block that a week ago could not
+be fitted at all is now smaller than most of the design. Nothing there needs
+you.
+
+### Still to do
+
+    NORMALIZE's run to finish, then the service path's
+    the curve service widened to fetch four neighbours, which SPLINE's
+      lookup half needs -- the maths half is built, the lookup half is not
+    wiring the service path into the engine as one machine
+    the two-service starvation question, which needs both services attached
+      before it can be measured rather than argued about
+
+### Still yours, still untouched
+
+The particle simulation, the compositor and the 2D blocks need decisions about
+how the GAME behaves, and I am not making those up. They stay recorded as
+waiting on you.
+
+---
+
 ## 2026-08-28 (evening) -- every Field operation now exists, and the tests
 ## found nine real bugs doing it
 
