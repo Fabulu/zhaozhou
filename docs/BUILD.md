@@ -380,6 +380,34 @@ The refusal was luck, not a guard -- it only happened because a concurrent
 session had pushed first. With nothing racing, the push would have succeeded
 and the hazard would have gone unnoticed until the day it did not.
 
+### 8. THE PROJECT MUST CONFIGURE AT EVERY INSTANT
+
+The disjointness rule in mode 5 is about MUTATION: another build must not
+elaborate a file the sweep can mutate. That is necessary and it is not
+sufficient.
+
+**A sweep re-runs `cmake` over the whole project before every rebuild.** So any
+file that breaks the CONFIGURE breaks the sweep, including files the sweep
+never elaborates and never mutates.
+
+On 2026-08-28 a 23-mutant RING sweep lost seventeen mutants to
+"model or exe absent after rebuild" and aborted with exit 4. The cause was a
+missing pin -- `svc_s3_o` -- in `zhao_field_v3_svcpath.sv`, a file with nothing
+to do with RING. A port had been added to the dispatcher and not yet connected
+in the block that instantiates it, and the sweep's next configure landed inside
+that window.
+
+Nothing was corrupted and nothing was falsely scored: the guard discarded
+rather than pretending, and `sweep_check_clean.py` confirmed the RTL was
+untouched. The cost was the run.
+
+    A PORT CHANGE THAT SPANS TWO FILES HAS A WINDOW IN WHICH THE PROJECT
+    DOES NOT CONFIGURE. Do not open that window while a sweep is running.
+
+`python tools/git_add_safe.py --check` answers "is a sweep running" for exactly
+this purpose -- ask it before starting a multi-file RTL edit, not only before
+staging one.
+
 ### And check the tree afterwards, from outside the sweep
 
 ```

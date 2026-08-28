@@ -102,6 +102,32 @@ module zhao_probe_v3_exec #(
     output var logic [$clog2(CTX)-1:0] done_ctx_o,
 
     output var logic [CTX-1:0] active_o,
+    // ---- the LONG-OP PATH, to zhao_field_v3_dispatch -----------------------
+    // An op the ALU does not implement leaves here instead of raising
+    // `unsupported_o`, and its CONTEXT PARKS until the service answers.
+    //
+    // That parking is the whole change. zhao_probe_ctx_fifo's header describes
+    // the lifecycle -- "long op enters the service ... service completion
+    // RE-ENQUEUES it" -- and this block used to hold a context for a FIXED
+    // PIPELINE DEPTH, which is right for short ops and wrong for a wait whose
+    // length nobody can predict.
+    output var logic                      long_valid_o,
+    input  var logic                      long_ready_i,
+    output var logic [CW-1:0]             long_ctx_o,
+    output var logic [7:0]                long_op_o,
+    output var logic [RW-1:0]             long_dst_o,
+    output var logic signed [31:0]        long_s0_o,
+    output var logic signed [31:0]        long_s1_o,
+    output var logic signed [31:0]        long_s2_o,
+    output var logic signed [31:0]        long_s3_o,
+    output var logic [31:0]               long_imm_o,
+    // "No further context can join this group." See the comment at its
+    // assignment: an EAGER flush costs group size, a LATE one deadlocks.
+    output var logic                      flush_o,
+    // A parked context comes back.
+    input  var logic                      rel_valid_i,
+    input  var logic [CW-1:0]             rel_ctx_i,
+
     output var logic           unsupported_o,  // an op this increment omits
 
     // ---- saturation ledger, ORed across the run ---------------------------
@@ -151,6 +177,28 @@ module zhao_probe_v3_exec #(
   logic [PW-1:0] pc_r[0:CTX-1];
   logic [CTX-1:0] active_r;    // started, not yet ENDed
   logic [CTX-1:0] inflight_r;  // has an instruction in the pipe
+  // PARKED ON A SERVICE. A parked context is still `inflight` -- it must not
+  // re-issue -- but it is not in the pipe, and it comes back on `rel_valid_i`
+  // rather than on a schedule.
+  logic [CTX-1:0] waiting_r;
+
+  // The ops this block hands to a service rather than executing. Every one of
+  // them is a four-point unit that borrows the shared bank; the list is the
+  // generated op table's, not a guess.
+  function automatic logic is_long(input logic [7:0] op);
+    case (op)
+      8'h15, 8'h16,          // NORMALIZE2, NORMALIZE3
+      8'h1A, 8'h1B, 8'h1C,   // CURVE, SPLINE, NOISE2
+      8'h1D,                 // DCURVE
+      8'h21, 8'h22,          // RING, RIDGE
+      8'h28, 8'h29:          // ROT2, ROT3
+        is_long = 1'b1;
+      default: is_long = 1'b0;
+    endcase
+  endfunction
+
+  logic long_at_s4_c;
+  logic long_hold_c;
 
   assign active_o = active_r;
 
@@ -299,7 +347,35 @@ module zhao_probe_v3_exec #(
   assign dot_at_s4_c = dot2_at_s4_c || dot3_at_s4_c;
   assign dot_need_c  = dot3_at_s4_c ? 2'd3 : 2'd2;
   // Hold until every product this op needs has ARRIVED and been accumulated.
-  assign hold_c = dot_at_s4_c && (dot_cnt_r < dot_need_c);
+  assign hold_c = (dot_at_s4_c && (dot_cnt_r < dot_need_c)) || long_hold_c;
+
+  // A LONG OP AT S4 HOLDS THE PIPE UNTIL THE DISPATCHER TAKES IT. The operands
+  // live in the s4_* registers and the next instruction would overwrite them,
+  // so the alternative is a per-context parking copy of seven values. Holding
+  // costs a clock or two and no state at all; the dispatcher accepts unless it
+  // is mid-group with a different op.
+  assign long_at_s4_c = s4_v_r && is_long(s4_op_r);
+  assign long_hold_c  = long_at_s4_c && !(long_valid_o && long_ready_i);
+
+  assign long_valid_o = long_at_s4_c;
+  assign long_ctx_o   = s4_ctx_r;
+  assign long_op_o    = s4_op_r;
+  assign long_dst_o   = s4_dst_r;
+  assign long_s0_o    = s4_a0_r;
+  assign long_s1_o    = s4_a1_r;
+  assign long_s2_o    = s4_a2_r;
+  assign long_s3_o    = s4_b0_r;
+  assign long_imm_o   = s4_imm_r;
+
+  // AN EAGER FLUSH COSTS GROUP SIZE; A LATE ONE DEADLOCKS. The safe rule is
+  // "no active context can still join", and a context can still join exactly
+  // while it is running rather than parked -- every context runs the same
+  // program, so a running one will reach this instruction.
+  //
+  // So flush when every active context is parked. With eight contexts the
+  // group fills long before that; with one, it is the only thing that ever
+  // issues the group at all.
+  assign flush_o = ~|(active_r & ~waiting_r);
 
   always_comb begin
     mul_issue_c = s2_v_r && !is_dot(s2_op_r);
@@ -434,6 +510,7 @@ module zhao_probe_v3_exec #(
       s4_v_r        <= 1'b0;
       active_r      <= '0;
       inflight_r    <= '0;
+      waiting_r     <= '0;
       unsupported_o <= 1'b0;
       desync_o      <= 1'b0;
       issued_s1_r   <= 1'b0;
@@ -585,8 +662,16 @@ module zhao_probe_v3_exec #(
       s4_b2_r  <= s3_b2_r;
       s4_c_r   <= s3_c_r;
 
-      // S4: retire
-      if (s4_v_r) begin
+      // S4: retire -- or PARK, if the op belongs to a service.
+      //
+      // A parked context keeps `inflight_r` so it cannot re-issue, gains
+      // `waiting_r` so the flush rule can see it, and does NOT advance its pc:
+      // the instruction has not finished, it has been handed over.
+      if (s4_v_r && long_at_s4_c) begin
+        if (long_ready_i) begin
+          waiting_r[s4_ctx_r] <= 1'b1;
+        end
+      end else if (s4_v_r) begin
         inflight_r[s4_ctx_r] <= 1'b0;
         if (alu_is_end) begin
           active_r[s4_ctx_r] <= 1'b0;
@@ -597,6 +682,16 @@ module zhao_probe_v3_exec #(
         if (alu_sat_add) sat_add_o <= 1'b1;
         if (alu_sat_mul) sat_mul_o <= 1'b1;
         if (alu_sat_rescale) sat_rescale_o <= 1'b1;
+      end
+
+      // THE SERVICE ANSWERED. The context leaves the parked set, leaves the
+      // pipe, and only NOW advances -- the write has already landed through
+      // the writeback arbiter, which is why the release is the dispatcher's to
+      // send and not this block's to guess.
+      if (rel_valid_i) begin
+        waiting_r[rel_ctx_i]  <= 1'b0;
+        inflight_r[rel_ctx_i] <= 1'b0;
+        pc_r[rel_ctx_i]       <= pc_r[rel_ctx_i] + PW'(1);
       end
       end  // downstream: !hold_c
     end

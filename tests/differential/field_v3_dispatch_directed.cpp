@@ -150,6 +150,7 @@ struct Dut {
     t.long_s0_i = (uint32_t)p.s0;
     t.long_s1_i = (uint32_t)p.s1;
     t.long_s2_i = (uint32_t)p.s2;
+    t.long_s3_i = 0;
     int guard = 0;
     t.eval();
     while (!t.long_ready_o && guard++ < guard_max) step();
@@ -410,6 +411,7 @@ int main(int argc, char** argv) {
     d.t.long_s0_i = 99;
     d.t.long_s1_i = 98;
     d.t.long_s2_i = 97;
+    d.t.long_s3_i = 97;
     d.t.eval();
     check(d.t.long_ready_o == 0, "ready is LOW while flushing -- the offer is refused", 0,
           (int)d.t.long_ready_o);
@@ -528,6 +530,7 @@ int main(int argc, char** argv) {
     d.t.long_s0_i = (uint32_t)-1;
     d.t.long_s1_i = (uint32_t)-1;
     d.t.long_s2_i = (uint32_t)-1;
+    d.t.long_s3_i = (uint32_t)-1;
     d.t.eval();
     check(d.t.long_ready_o == 0, "a fifth context is REFUSED while four are gathered", 0,
           (int)d.t.long_ready_o);

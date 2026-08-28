@@ -109,7 +109,27 @@ module zhao_probe_v3_engine #(
 
     output var logic [7:0]              bank_tag_o,
     output var logic [31:0]             bank_grants_o,
-    output var logic [31:0]             lane_stalls_o
+    output var logic [31:0]             lane_stalls_o,
+
+    // ---- the LONG-OP PATH, brought out so this engine can be COMPOSED ------
+    // The executor hands a service op out here and PARKS its context until
+    // `rel_valid_i` says the answer landed. Nothing in this file implements a
+    // service: the ports exist so zhao_field_v3_svcpath can be attached
+    // without changing the engine, and the executor's own suite drives them
+    // from the testbench.
+    output var logic                    long_valid_o,
+    input  var logic                    long_ready_i,
+    output var logic [$clog2(CTX)-1:0]  long_ctx_o,
+    output var logic [7:0]              long_op_o,
+    output var logic [$clog2(REGS)-1:0] long_dst_o,
+    output var logic signed [31:0]      long_s0_o,
+    output var logic signed [31:0]      long_s1_o,
+    output var logic signed [31:0]      long_s2_o,
+    output var logic signed [31:0]      long_s3_o,
+    output var logic [31:0]             long_imm_o,
+    output var logic                    long_flush_o,
+    input  var logic                    rel_valid_i,
+    input  var logic [$clog2(CTX)-1:0]  rel_ctx_i
 );
 
   localparam int CLAIMANTS = 2;  // 0 = this executor lane, 1 = the rival
@@ -176,6 +196,21 @@ module zhao_probe_v3_engine #(
   ) u_exec (
       .clk   (clk),
       .rst_n (rst_n),
+      // THIS COMPOSITION CARRIES NO SERVICE, so the long-op path is tied
+      // off. `long_ready_i` is HIGH rather than low deliberately: a long
+      // op would then park its context forever and the barrel would
+      // visibly stop, where a low ready would hold the whole pipe and
+      // look like a stall somewhere else. Neither can happen here -- the
+      // executor's own suite runs ALU and DOT programs only -- and the
+      // louder failure is the right one to choose.
+      .long_ready_i (long_ready_i),
+      .rel_valid_i  (rel_valid_i),
+      .rel_ctx_i    (rel_ctx_i),
+      .long_valid_o (long_valid_o), .long_ctx_o (long_ctx_o),
+      .long_op_o    (long_op_o),    .long_dst_o (long_dst_o),
+      .long_s0_o    (long_s0_o),    .long_s1_o  (long_s1_o),
+      .long_s2_o    (long_s2_o),    .long_s3_o  (long_s3_o),
+      .long_imm_o   (long_imm_o),   .flush_o    (long_flush_o),
       .up_we_i(up_we_i), .up_ctx_i(up_ctx_i), .up_pc_i(up_pc_i), .up_op_i(up_op_i),
       .up_dst_i(up_dst_i), .up_a_i(up_a_i), .up_b_i(up_b_i), .up_c_i(up_c_i),
       .up_imm_i(up_imm_i),

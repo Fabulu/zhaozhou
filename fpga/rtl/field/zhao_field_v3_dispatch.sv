@@ -90,6 +90,15 @@ module zhao_field_v3_dispatch #(
     input  var logic signed [31:0]            long_s0_i,
     input  var logic signed [31:0]            long_s1_i,
     input  var logic signed [31:0]            long_s2_i,
+    // A FOURTH SOURCE, because ROT3 needs one. Found the same way the
+    // immediate was: by wiring the executor to this block and discovering it
+    // could not describe the op. The generated op table says ROT3 has n_src 4
+    // -- groups {3, 1}, three components AND an angle -- and three scalars
+    // cannot carry four.
+    //
+    // Four is the maximum any long op needs: ROT3 four, RING and NORMALIZE3
+    // three, NOISE2 and RIDGE two, CURVE and SPLINE one.
+    input  var logic signed [31:0]            long_s3_i,
     // THE INSTRUCTION'S IMMEDIATE, which is an OPERAND to several long ops and
     // was missing until the first attempt to compose this with a service.
     // NOISE2 and RIDGE take their seed from it, CURVE and SPLINE their table
@@ -113,6 +122,7 @@ module zhao_field_v3_dispatch #(
     output var logic signed [31:0]            svc_s0_o [4],
     output var logic signed [31:0]            svc_s1_o [4],
     output var logic signed [31:0]            svc_s2_o [4],
+    output var logic signed [31:0]            svc_s3_o [4],
     output var logic        [31:0]            svc_imm_o,
     output var logic [TAGW-1:0]               svc_tag_o,
 
@@ -157,6 +167,7 @@ module zhao_field_v3_dispatch #(
   localparam logic signed [31:0] PAD_A = 32'sd3;
   localparam logic signed [31:0] PAD_B = 32'sd5;
   localparam logic signed [31:0] PAD_C = 32'sd7;
+  localparam logic signed [31:0] PAD_D = 32'sd11;
 
   // ---- the op table's dst_width, mirrored and nothing else ----------------
   localparam logic [7:0] OP_NORMALIZE2 = 8'h15;
@@ -186,7 +197,7 @@ module zhao_field_v3_dispatch #(
   logic [REGW-1:0]           g_dst_r;
   logic [31:0]               g_imm_r;
   logic [CTXW-1:0]           g_ctx_r [4];
-  logic signed [31:0]        g_s0_r [4], g_s1_r [4], g_s2_r [4];
+  logic signed [31:0]        g_s0_r [4], g_s1_r [4], g_s2_r [4], g_s3_r [4];
 
   // ---- the one outstanding slot -------------------------------------------
   typedef enum logic [1:0] {D_GATHER, D_ISSUE, D_WAIT, D_DRAIN} state_e;
@@ -252,10 +263,12 @@ module zhao_field_v3_dispatch #(
         svc_s0_o[l] = g_s0_r[l];
         svc_s1_o[l] = g_s1_r[l];
         svc_s2_o[l] = g_s2_r[l];
+        svc_s3_o[l] = g_s3_r[l];
       end else begin
         svc_s0_o[l] = PAD_A;
         svc_s1_o[l] = PAD_B;
         svc_s2_o[l] = PAD_C;
+        svc_s3_o[l] = PAD_D;
       end
     end
   end
@@ -309,6 +322,7 @@ module zhao_field_v3_dispatch #(
         g_s0_r[l]  <= '0;
         g_s1_r[l]  <= '0;
         g_s2_r[l]  <= '0;
+        g_s3_r[l]  <= '0;
         s_ctx_r[l] <= '0;
         r0_r[l]    <= '0;
         r1_r[l]    <= '0;
@@ -324,6 +338,7 @@ module zhao_field_v3_dispatch #(
         g_s0_r[fill_r[1:0]]  <= long_s0_i;
         g_s1_r[fill_r[1:0]]  <= long_s1_i;
         g_s2_r[fill_r[1:0]]  <= long_s2_i;
+        g_s3_r[fill_r[1:0]]  <= long_s3_i;
         fill_r <= fill_r + 3'd1;
       end
 

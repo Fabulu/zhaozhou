@@ -100,7 +100,36 @@ def files_of(name):
 def main(argv):
     if len(argv) < 2:
         sys.stderr.write("usage: git_add_safe.py <path> [path...]\n")
+        sys.stderr.write("       git_add_safe.py --check\n")
         return 2
+
+    # --check answers "is a sweep running at all", which is a DIFFERENT
+    # question from "may I stage this file" and has its own reason to exist.
+    #
+    # A sweep re-runs `cmake` over the WHOLE PROJECT before every rebuild, so
+    # ANY file that breaks the configure breaks the sweep -- including files the
+    # sweep never elaborates. A port change that spans two files has a window,
+    # however short, in which the project does not configure.
+    #
+    # On 2026-08-28 that window cost a 23-mutant RING sweep: seventeen mutants
+    # DISCARDED with "model or exe absent after rebuild", and the cause was a
+    # missing pin in a file the sweep had nothing to do with. The guard was
+    # right -- it discarded rather than scoring -- but the run was lost.
+    #
+    # So ask this BEFORE starting a multi-file RTL edit, not only before
+    # staging one.
+    if argv[1] == "--check":
+        live = live_sweeps()
+        if not live:
+            print("no sweep is running")
+            return 0
+        for name, log in live:
+            print("RUNNING: %s  (%s)" % (name, os.path.relpath(log, ROOT)))
+        print("\nA sweep configures the WHOLE project on every rebuild, so an edit\n"
+              "that leaves the project un-configurable for even a moment breaks it --\n"
+              "in a file the sweep never touches. Finish the edit first, or wait.")
+        return 1
+
     wanted = {os.path.normpath(p) for p in argv[1:]}
 
     blocked = []

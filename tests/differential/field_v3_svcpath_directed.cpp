@@ -155,6 +155,7 @@ struct Dut {
     t.long_s0_i = (uint32_t)c.x;
     t.long_s1_i = (uint32_t)c.y;
     t.long_s2_i = 0;
+    t.long_s3_i = 0;
     t.long_imm_i = imm;
     int guard = 0;
     t.eval();
