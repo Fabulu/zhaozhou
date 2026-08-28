@@ -45,18 +45,30 @@
 //             t = fx_sub(fx_add(u, u), 1<<16)
 //             dst0 = fx_sub(1<<16, abs_sat(t)),  dst1 = 0
 //
-// EVERY PRODUCT IS MODULO 2^32 AND NEVER SATURATES (law 3). The bank lane is
-// 33x33 SIGNED, and the two agree on the only bits read: the low 32 bits of a
-// signed product are bit-identical to the low 32 of the unsigned product of
-// the same bit patterns, because sign extension only affects bits at or above
-// the operand width. The operands are ZERO-extended into 33 bits -- a u32
-// handed to a signed port unextended reads as negative for half of all inputs
-// -- and only mul_p_*_i[31:0] is consumed.
+// EVERY PRODUCT IS MODULO 2^32 AND NEVER SATURATES (law 3), and the bank lane
+// is 33x33 SIGNED. The operands are ZERO-extended into 33 bits and only
+// mul_p_*_i[31:0] is consumed.
 //
-// This is the one place where the shared bank's signedness could silently
-// disagree with an op's semantics, and the disagreement would look like a bad
-// seed rather than a bad multiply: right for small coordinates, wrong for
-// large ones. Hence it is stated here rather than inherited.
+// THE EXTENSION IS NOT LOAD-BEARING, AND THE SWEEP IS WHAT PROVED IT. An
+// earlier version of this comment claimed a sign-extended operand would be
+// "right for small coordinates and wrong for large ones". That is false.
+// Mutant N07 sign-extends point 0's operand and SURVIVED every check in the
+// differential, including a section written specifically to catch it, because:
+//
+//     A0 = a                      zero-extended
+//     A1 = a - 2^32*(a>>31)       sign-extended
+//     A0*B - A1*B = 2^32*(a>>31)*B
+//
+// The two products differ by an exact multiple of 2^32, so their low 32 bits
+// are identical for every input. No stimulus can separate them while nothing
+// above bit 31 is read.
+//
+// The zero-extension stays as DEFENCE IN DEPTH: it says these are unsigned
+// hash words, and it is the form that remains correct if anything ever reads
+// above bit 31 -- or if the lane is ever narrowed below 33 bits, where the
+// operand would be truncated rather than extended and the two forms would
+// finally separate. The proof and its re-score trigger live in
+// tools/sweep_field_v3_noise_mutants.py.
 module zhao_field_v3_noise (
     input logic clk,
     input logic rst_n,
@@ -408,6 +420,20 @@ module zhao_field_v3_noise (
         S_OUT: begin
           if (!r_valid_o) begin
             // RIDGE lands here with lane0 holding each point's finished hash.
+            //
+            // THE SATURATION FLAGS BELOW ARE UNREACHABLE, and that is proven
+            // rather than assumed: u is the TOP 16 BITS of a hash word, so its
+            // entire domain is 0..65535. Checked exhaustively over all 65,536
+            // values, ridge_t lands in [-65536, 65534] and touches neither
+            // rail, and no add or sub in the fold saturates once. Both flags
+            // are identically zero for every input this op can be given.
+            //
+            // They are KEPT because they mirror the reference's fold exactly,
+            // and the reference keeps its saturating forms for the same
+            // reason: they become live the moment the domain widens. Mutant
+            // N19 survives here because both rails are constant-false; N23 is
+            // the reachable counterpart that keeps the zero assertion honest.
+            // tools/sweep_field_v3_noise_mutants.py carries both proofs.
             o0_0_o <= ridge_r[0];
             o0_1_o <= ridge_r[1];
             o0_2_o <= ridge_r[2];

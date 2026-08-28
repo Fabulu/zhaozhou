@@ -266,3 +266,48 @@ COS as standalone ops also want a table, that is a second M10K, and two out of
 553 is still the right trade. If a later count shows M10K pressure -- the
 terrain and texture caches are the plausible source -- this is the first thing
 to revisit, and the arbitration it would need is already designed twice over.
+
+---
+
+## The barrel is over POINTS of one program, and that is what makes a
+## four-point service request easy -- and one case easy to forget
+
+`test_barrel_occupancy` installs the SAME fplan into all eight contexts and
+starts them together. That is the Field engine's shape: one program, many
+evaluation points, one context per point. It is worth stating explicitly
+because it settles how a four-point service request gets filled.
+
+The services take four POINTS. The executor's four-wide register-file group is
+four MEMBERS of one vector. **These are different axes**, and the attach has to
+cross them: a four-point CURVE request is built from FOUR CONTEXTS that have
+reached the same instruction, not from one context's group.
+
+Because every context runs the same program, four of them arrive at a long op
+within a few clocks of each other, so gathering is cheap. But it makes the
+dispatcher wait for four, and that raises the case that will otherwise be
+found late:
+
+> **A long op must work when fewer than four contexts want it.**
+
+One context alone executing a CURVE is a legal program -- the barrel test runs
+exactly that case for ALU ops, and `zhao_probe_ctx_fifo` supports a single
+active context. So the dispatcher needs a partial-group path: pad the unused
+lanes with a recognisable value, issue anyway, and discard those lanes'
+results.
+
+Two things follow that are worth fixing in the design rather than in
+debugging:
+
+* **The pad must not be zero.** Zero is a plausible coordinate and a plausible
+  result, so a routing bug that lets a padded lane reach a writeback would
+  look correct. `zhao_probe_v3_engine` already ties its unused bank lanes to 3
+  and 5 for this reason; the same argument applies here.
+* **There must be a timeout or a flush, not just a wait-for-four.** If three
+  contexts want a CURVE and the fourth has finished its program, waiting for a
+  fourth is a deadlock. The condition to issue is "four gathered OR no other
+  context can still join", and the second half of that is the part a test has
+  to force.
+
+Neither is exotic. Both are the kind of thing that is obvious while writing the
+dispatcher and invisible afterwards, which is why they are written down before
+it exists.

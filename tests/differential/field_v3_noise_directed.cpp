@@ -24,8 +24,15 @@
 //      catches a replay that reuses the post-salt word instead.
 //   5. PRODUCTS ARE MODULO 2^32 AND NEVER SATURATE, while the bank lane is
 //      33x33 SIGNED. Section 5 drives coordinates whose lattice terms have
-//      the top bit set, where a sign-extended operand or a saturating lane
-//      would diverge and a zero-extended one is exact.
+//      the top bit set.
+//
+//      IT DOES NOT TEST THE EXTENSION, though it was written believing it
+//      did. Mutant N07 sign-extends an operand and survives, provably: the
+//      two 33-bit forms differ by 2^32, so their products differ by a
+//      multiple of 2^32 and their low 32 bits -- the only bits read -- are
+//      identical. What the section DOES exercise is the shift-and-xor tail
+//      on words with bit 31 set, which is worth keeping and is not what the
+//      old comment claimed.
 //   6. RIDGE'S FOLD AND ITS FLAGS are the reference's fx_add/fx_sub/abs_sat,
 //      and RIDGE writes dst1 = 0.
 //   7. THE BANK CAN REFUSE. Section 6 refuses on a pseudo-random schedule
@@ -339,8 +346,10 @@ int main(int argc, char** argv) {
 
     printf("== section 5: lattice terms with the top bit set ==\n");
     {
-      // Law 5: the products are modulo 2^32 and the bank lane is signed. A
-      // sign-extended operand diverges exactly here and nowhere else.
+      // Law 5, corrected by mutant N07: a sign-extended operand does NOT
+      // diverge here, or anywhere, while only the low 32 bits are read. This
+      // section exercises the shift-and-xor tail on words with bit 31 set,
+      // which is a real path and not the one it was named for.
       // THE BUDGET IS A 1-IN-256 DRAW, and 400 attempts found two groups.
       // Requiring all EIGHT lattice terms of a group to have bit 31 set is
       // deliberate -- it puts every lane on the divergent side at once -- but
