@@ -550,3 +550,34 @@ of fidelity", in a new costume.
   the ledger with the owner's instructions verbatim; probe-golden.txt
   refreshed. reel --check "all sequence CRCs match" -> final-check.txt
   (exit 0, REDIRECTED TO A FILE).
+
+### Two more variants: outline THICKNESS as its own axis
+
+*"Also make a cel shaded version and a normal version with very thick outlines,
+moreso than usual."*
+
+Adds **cel + very thick outline** and **normal shading + very thick outline**,
+alongside (not replacing) the standard-weight contour and the cel+contour pairing.
+"Moreso than usual" = the bold-marker end of the range, not a tasteful hairline —
+push past what looks correct in a zoom, since that is what an experiment is for.
+
+**The implementation decision this forces, and it is the interesting part:**
+* **Baked into the texture** → on-screen thickness shrinks with distance and gets
+  chewed by the mip chain. A bold line up close can vanish at gameplay distance,
+  making the thick variant indistinguishable from the thin one **in exactly the
+  shot that matters**.
+* **Silhouette/rim computed at render time** → thickness stays consistent on
+  screen.
+
+A very thick outline is the case that forces this choice, so it must be made
+deliberately and stated in the findings.
+
+**Judging note:** 384×240, creature occupying a modest part of it. An outline that
+reads bold and characterful in a zoom may be three pixels of black eating the
+silhouette in the real shot — or "very thick" in texel space may still resolve to
+one pixel. **The zoom will lie in both directions.** Judge on the site cameras.
+
+Tab budget flagged: the experiment set is now sizeable, and if it exceeds
+`MAX_TABS` 18 that means moving `assemble.py` and all three `style.css` selector
+families together. If the group gets unwieldy, it may want its own collapsed
+grouping the way Archive works rather than a long tab strip.
