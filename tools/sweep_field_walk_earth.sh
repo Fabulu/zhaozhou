@@ -34,7 +34,12 @@ MUT=tools/sweep_field_walk_earth_mutants.py
 RTL=fpga/rtl/synth/zhao_probe_walk_earth.sv
 TARGETS="test_field_walk_earth_directed"
 
-REBUILD_LOG="${REBUILD_LOG:-/tmp/zhao_sweep_rebuild.log}"
+# An ABSOLUTE path inside the repo, not /tmp. Git-for-Windows bash and the
+# msys bash map /tmp to DIFFERENT directories, so a log written by a detached
+# runner was invisible to the shell reading it -- which is why the rebuild
+# diagnostics appeared to be missing entirely when they were simply somewhere
+# else.
+REBUILD_LOG="${REBUILD_LOG:-$(pwd)/runs/CLAUDE-RUNS/sweep_rebuild.log}"
 
 hash_of() { sha256sum <"$1" | cut -d' ' -f1; }
 
