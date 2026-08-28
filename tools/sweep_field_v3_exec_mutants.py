@@ -87,10 +87,10 @@ MUTANTS = [
      "      if (prod_valid != (issued_s2_r || issued_s1_r)) desync_o <= 1'b1;"),
     # Re-pointed with X19, same reason.
     ("X04 the multiplier zero-extends its operands instead of sign-extending",
-     "    mul_a_c     = 33'(rf_a0);\n"
-     "    mul_b_c     = 33'(rf_b0);",
-     "    mul_a_c     = 33'($unsigned(rf_a0));\n"
-     "    mul_b_c     = 33'($unsigned(rf_b0));"),
+     "    mul_a_c     = 33'(use_a0_c);\n"
+     "    mul_b_c     = 33'(use_b0_c);",
+     "    mul_a_c     = 33'($unsigned(use_a0_c));\n"
+     "    mul_b_c     = 33'($unsigned(use_b0_c));"),
 
     # ---- one instruction in flight per context -----------------------------
     ("X05 a context is released for re-issue a stage before its write lands",
@@ -291,10 +291,10 @@ MUTANTS = [
     # arm -- which is still the a0*b0 product, so the equivalence proof below
     # is unchanged.
     ("X19 the multiplier's operands are swapped",
-     "    mul_a_c     = 33'(rf_a0);\n"
-     "    mul_b_c     = 33'(rf_b0);",
-     "    mul_a_c     = 33'(rf_b0);\n"
-     "    mul_b_c     = 33'(rf_a0);"),
+     "    mul_a_c     = 33'(use_a0_c);\n"
+     "    mul_b_c     = 33'(use_b0_c);",
+     "    mul_a_c     = 33'(use_b0_c);\n"
+     "    mul_b_c     = 33'(use_a0_c);"),
     # ---- the writeback port, which gained a GRANT on 2026-08-28 ------------
     # `wb_valid_o` was pure observation until then: a bare assign mirroring a
     # write already committed to this block's own register file. It is a
@@ -325,6 +325,34 @@ MUTANTS = [
      "                      !retire_hold_c;",
      "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c &&\n"
      "                      !retire_hold_c && !mul_denied_c;"),
+    # ---- operands held across a denial, 2026-08-28 -------------------------
+    # The register file's read is a PIPELINE STAGE and a freeze does not freeze
+    # it: the data arriving after a denial belongs to the instruction BEHIND the
+    # stalled one. Without the hold, S3 pairs the stalled instruction's control
+    # with its successor's operands -- 21 of 48 context-programs wrong, and
+    # invisible with one context because the pipe is too empty for a denial to
+    # land behind anything.
+    # Reshaped: taking rf_a0 live orphans h_a0_r, read in exactly one place.
+    # Inverting WHEN the hold applies keeps it live and states the same
+    # defect -- the stalled instruction is paired with operands that are not
+    # its own, just on the opposite clock.
+    ("X38 the hold applies on the wrong clock, so the stale pair is used",
+     "    use_a0_c = (opnd_held_r && !mul_denied_c) ? h_a0_r : rf_a0;",
+     "    use_a0_c = (opnd_held_r && mul_denied_c) ? h_a0_r : rf_a0;"),
+    ("X39 the hold is captured a clock late, after the file has moved on",
+     "        if (!opnd_held_r) begin\n"
+     "          opnd_held_r <= 1'b1;\n"
+     "          h_a0_r <= rf_a0;",
+     "        if (!opnd_held_r) begin\n"
+     "          opnd_held_r <= 1'b1;\n"
+     "          h_a0_r <= h_a1_r;"),
+    ("X40 the hold is never released, so every later operand is stale",
+     "      end else begin\n"
+     "        opnd_held_r <= 1'b0;\n"
+     "      end",
+     "      end else begin\n"
+     "        opnd_held_r <= opnd_held_r;\n"
+     "      end"),
 ]
 
 
