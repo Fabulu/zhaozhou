@@ -274,6 +274,53 @@ void test_every_reply_is_its_own_product(Vzhao_field_v3_mulbank& top, int clocks
   check(top.desync_o == 0, "the lanes stayed in step throughout", 0, (int)top.desync_o);
 }
 
+// THE LANE-STALL COUNTER MUST COUNT LOSSES, NOT REQUESTS.
+//
+// M08 -- making stall_lanes_o count every clock the lanes ASKED rather than
+// only those they LOST -- survived the first sweep. The priority test has the
+// lanes asking and losing on every single clock, so asking and losing are the
+// same number there and the mutant is indistinguishable. The randomized lane
+// printed the counter but never asserted on it.
+//
+// The distinguishing case is the lanes asking and WINNING. Alone, claimant 0
+// takes the bank every clock, so a counter that counts requests reads the full
+// clock count while a counter that counts losses reads ZERO.
+void test_lane_stalls_count_losses_not_requests(Vzhao_field_v3_mulbank& top) {
+  printf("-- the lane-stall counter counts losses, not requests\n");
+  Bank b(top);
+  b.reset();
+  Prng rng(0x105E5);
+  const int kClocks = 24;
+  int granted = 0;
+  for (int k = 0; k < kClocks; ++k) {
+    Pending p{};
+    for (int l = 0; l < kLanes; ++l) {
+      p.a[l] = rng.operand();
+      p.b[l] = rng.operand();
+    }
+    p.tag = (uint8_t)(k & 0x3F);
+    b.set_request(0, p);          // ONLY the lane group asks
+    top.req_valid_i = 0x1;
+    top.eval();
+    if (top.req_ready_o & 1) {
+      b.outstanding[0].push_back(p);
+      ++b.accepted[0];
+      ++granted;
+    }
+    b.step();
+  }
+  top.req_valid_i = 0;
+  for (int k = 0; k < 8; ++k) b.step();
+
+  printf("   MEASURED: %d grants, %d lane stalls over %d clocks\n", granted,
+         (int)top.stall_lanes_o, kClocks);
+  check(granted == kClocks, "the lanes win every clock when nobody contends", kClocks, granted);
+  check((int)top.stall_lanes_o == 0,
+        "and stall_lanes_o stays ZERO -- it counts losses, not requests", 0,
+        (int)top.stall_lanes_o);
+  check(b.wrong_value == 0, "every product is still the requester's own", 0, b.wrong_value);
+}
+
 // A single claimant must sustain one request per clock -- the bank is
 // pipelined, and if it did not the services would each cost 3x.
 void test_sustains_one_per_clock(Vzhao_field_v3_mulbank& top) {
@@ -324,6 +371,7 @@ int main(int argc, char** argv) {
     test_every_reply_is_its_own_product(top, iters);
   } else {
     test_priority_is_the_declared_one(top);
+    test_lane_stalls_count_losses_not_requests(top);
     test_every_reply_is_its_own_product(top, 300);
     test_sustains_one_per_clock(top);
   }

@@ -151,7 +151,26 @@ def mutate(gold, old, new):
 # FIELD.V3.EXEC -- two proofs written before any evidence, both then
 # contradicted by a run. An equivalence claim is worth its evidence, and the
 # evidence is a SURVIVING mutant, never an argument.
-EQUIVALENT = {}
+EQUIVALENT = {
+    "M14":
+        "THE FOUR LANES CANNOT DISAGREE, BY CONSTRUCTION. All four "
+        "zhao_field_mul instances are driven from ONE issue_i (grant_v_c), "
+        "one clock and one reset, so their p_valid_o outputs are identical "
+        "every cycle. The weakened guard -- firing only when ALL four "
+        "disagree -- is therefore indistinguishable from the strong one: no "
+        "stimulus can make a single lane fall out of step while the others "
+        "hold. "
+        "The strong form is kept as defence in depth, not because a test "
+        "reaches it. It costs one comparison and it states the intent at the "
+        "point of use rather than relying on a property of the generate "
+        "block above it. "
+        "RE-SCORE THIS THE MOMENT ANY LANE GETS ITS OWN ISSUE SIGNAL -- a "
+        "per-lane enable, a lane that can be masked off, or a bank whose "
+        "width is parameterised below four. Each makes lanes independently "
+        "valid and the weakened guard immediately wrong. "
+        "Declared AFTER the mutant survived, not before: this table's own "
+        "rule is that an equivalence is worth its evidence.",
+}
 
 
 def write_rtl(text, path=RTL):
