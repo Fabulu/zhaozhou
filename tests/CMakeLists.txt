@@ -1409,6 +1409,25 @@ set_tests_properties(field_curve_svc_random PROPERTIES LABELS "fast;nightly" TIM
 add_test(NAME field_curve_svc_random_nightly COMMAND test_field_curve_svc_directed --random 5000)
 set_tests_properties(field_curve_svc_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# FIELD v3 Phase 4: the four-wide multiplier bank and its arbiter. The bank
+# is shared by the ALU lanes AND the curve and distance services, which own
+# no multiplier of their own. The oracle is the arithmetic -- every reply must
+# equal the requester's own a*b -- so what is under test is ROUTING under
+# contention, not a C model of the same arbitration.
+add_executable(test_field_v3_mulbank_directed differential/field_v3_mulbank_directed.cpp)
+target_link_libraries(test_field_v3_mulbank_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_mulbank_directed
+  PREFIX Vzhao_field_v3_mulbank
+  TOP_MODULE zhao_field_v3_mulbank
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)
+add_test(NAME field_v3_mulbank_directed COMMAND test_field_v3_mulbank_directed)
+set_tests_properties(field_v3_mulbank_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_v3_mulbank_random COMMAND test_field_v3_mulbank_directed --random 2000)
+set_tests_properties(field_v3_mulbank_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+add_test(NAME field_v3_mulbank_random_nightly COMMAND test_field_v3_mulbank_directed --random 20000)
+set_tests_properties(field_v3_mulbank_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
 # FIELD v3 Phase 4: the vector executor DATAPATH, one lane. The differential
 # runs the SAME FPLAN through the RTL and through zfield::execute_point --
 # the interpreter the whole Field IR is defined by, not a model written
