@@ -226,8 +226,13 @@ constexpr int kHeadEnd = kHeadStations + 2;  // station 11, x = 599 mm
 #endif
 constexpr int32_t kHeadAttitude = ZIXX_ATTITUDE;
 // where the skull bone pivots, mm behind the nose (~station 3.5, the
-// culminating head's centroid — see the bone-table note)
-constexpr int32_t kHeadPivotMm = 0;
+// culminating head's centroid). RUN 0326, owner: "head should be joint
+// rotation, it's just that the joint needs to fit onto a body that
+// doesn't suddenly have the head drop 5 meters" -- the value was 0, so
+// the joint pivoted at the NOSE TIP and every attitude change ORBITED
+// the cranium about its own snout (the sweep sheet shows the arc). At
+// the centroid the head turns roughly about itself.
+constexpr int32_t kHeadPivotMm = 190;
 constexpr int kSkullRigidTo = 4;  // stations 0..4 fully on the head bone
                                   // (5 -> 4, run 0326: the hinge must be
                                   // SEAMLESS -- a shorter rigid core and a

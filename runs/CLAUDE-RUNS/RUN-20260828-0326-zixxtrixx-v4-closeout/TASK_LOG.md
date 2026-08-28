@@ -460,3 +460,19 @@ nothing new to build; probably the strongest "alive" signal available here.
 opposite failure: wobble is not jitter.** "Alive" means loose, yielding and
 intentional — NOT faster or busier. If in doubt, slow it down and add a REACTION
 rather than another oscillation.
+
+### 2026-08-28 09:4x - THE PIVOT + the Side.png gate
+
+- Owner rig correction: "head should be joint rotation, it's just that
+  the joint needs to fit onto a body that doesn't suddenly have the head
+  drop 5 meters." kHeadPivotMm was 0 — the comment SAID centroid, the
+  number said nose-tip, so every attitude change ORBITED the cranium
+  about its own snout. Now 190 (station ~3.5 centroid); the pivoted sweep
+  (attitude-sweep-pivoted.png) shows the head turning IN PLACE across
+  -18000..+12000. Attitude re-judged: -12000 keeps (near-horizontal,
+  clean crown, continues the curl).
+- NEW STANDING GATE (owner: "always compare with side view on sketch"):
+  every head/neck change now produces sidecmp-NN.png — the side camera
+  beside Side.png at matched scale. sidecmp-01.png committed: the front
+  half now reads as the sheet (fat horizontal head at height, eye
+  high-forward, blue running back, pink over the whole crown).
