@@ -104,6 +104,59 @@ Four pieces, in the order they should be built and measured:
 4. **The remaining ops**, which split into two groups that need different
    work — see below.
 
+## CORRECTION 2: THE SERVICES CANNOT BE REFUSED, and two of them can ask at once
+
+Found while specifying the curve-service attach, before writing it.
+
+**Neither `zhao_probe_curve_svc` nor `zhao_probe_dist_svc` has a `mul_ready`
+input.** Grepped both: zero matches. The curve service simply asserts
+
+```
+  assign mul_issue_o = (f_state == F_ISSUE);
+```
+
+and advances its state machine on the next clock regardless. A refused
+service does not retry -- it proceeds as though the multiply had been issued
+and later consumes a product that was never computed.
+
+### What this changes
+
+**`PRIO_SERVICES_FIRST` is not a preference. It is a requirement.** The
+`zhao_field_v3_mulbank` header calls it "a CHOICE, not a law" and offers round
+robin as "the obvious alternative". That is wrong as written: round robin would
+refuse a service roughly half the time, and a refused service is silently
+incorrect rather than slow.
+
+**And services-first is not sufficient either.** The bank has three claimants,
+and CURVE and DIST are both services. If both assert in the same clock one of
+them loses -- and the loser has no way to know. Fixed priority merely decides
+WHICH service is corrupted.
+
+### The three ways out, none of them chosen yet
+
+1. **Give the services back-pressure.** Add `mul_ready_i` to both and hold
+   `F_ISSUE` until granted. Correct, and it changes two blocks that are
+   already probed and measured -- their fits would need redoing.
+2. **Guarantee they never ask together.** A single service queue that admits
+   one long op at a time. Cheap, and it serialises CURVE against DIST even
+   when the bank could have served both.
+3. **Widen the bank so both fit.** Eight lanes. Doubles the DSP cost the
+   79-DSP measurement was fought to avoid, so it needs a sustained-rate
+   argument before anyone reaches for it.
+
+**Option 1 is the honest one** -- a claimant that cannot be told "no" is not a
+claimant, it is an assumption. But it touches measured blocks, so it is a
+decision to take deliberately rather than a fix to slip in.
+
+### Why this was not caught by the bank's own sweep
+
+Because the bank is correct. It arbitrates exactly as specified and its 14
+mutants all score. The defect is at the SEAM: a port that does not exist on
+the other side cannot be mutated, and no sweep of either block can see a
+missing wire between them. That is what composition tests are for, and it is
+the argument for building the composition before the services rather than
+after.
+
 ## CORRECTION, 2026-08-28: there are FIVE shared resources, not one, and
 ## v2 already arbitrates them
 
