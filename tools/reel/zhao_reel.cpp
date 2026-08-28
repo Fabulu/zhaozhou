@@ -1516,6 +1516,124 @@ const zc::CreatureType& watchdog_type() {
   return t;
 }
 
+// RUN 1939 (owner: "Would be cool if the flying salto target had wings").
+// The FLYING target dummy only: the hovering watchdog read as a ground
+// animal suspended in air. Same six bones and parts plus two membrane
+// wings on their own bones, and a slow flap baked into its idle clip so
+// the prop is not a static mount. A reel prop, not a creature: never on
+// the site's creature pages, never authored to the sheet standard.
+const zc::CreatureType& winged_dummy_type() {
+  static const zc::CreatureType t = [] {
+    zc::Skeleton sk;
+    sk.bone_count = 8;
+    sk.bones[0] = zc::Bone{0, 0, fxm(520), 0};
+    sk.bones[1] = zc::Bone{0, fxm(390), fxm(80), 0};
+    sk.bones[2] = zc::Bone{0, fxm(300), -fxm(20), -fxm(180)};
+    sk.bones[3] = zc::Bone{0, fxm(300), -fxm(20), fxm(180)};
+    sk.bones[4] = zc::Bone{0, -fxm(300), -fxm(20), -fxm(180)};
+    sk.bones[5] = zc::Bone{0, -fxm(300), -fxm(20), fxm(180)};
+    sk.bones[6] = zc::Bone{0, fxm(60), fxm(150), -fxm(200)};  // wing roots
+    sk.bones[7] = zc::Bone{0, fxm(60), fxm(150), fxm(200)};
+
+    std::vector<zc::RingPart> parts;
+    zc::RingPart body;
+    body.rings = {{-fxm(450), fxm(145), 10},
+                  {-fxm(300), fxm(185), 10},
+                  {0, fxm(205), 10},
+                  {fxm(300), fxm(185), 10},
+                  {fxm(450), fxm(145), 10}};
+    body.caps = zc::kCapTop | zc::kCapBot;
+    body.pitch_q = 1;
+    body.yaw_q = 1;
+    body.bone = 0;
+    body.r = 198;
+    body.g = 108;
+    body.b = 58;
+    parts.push_back(body);
+
+    zc::RingPart head;
+    head.rings = {{-fxm(80), fxm(135), 8}, {fxm(110), fxm(120), 8}, {fxm(300), fxm(75), 8}};
+    head.caps = zc::kCapTop | zc::kCapBot;
+    head.pitch_q = 1;
+    head.yaw_q = 1;
+    head.bone = 1;
+    head.r = 232;
+    head.g = 168;
+    head.b = 96;
+    parts.push_back(head);
+
+    for (int leg = 0; leg < 4; ++leg) {
+      zc::RingPart lp;
+      lp.rings = {{0, fxm(55), 6}, {-fxm(260), fxm(48), 6}, {-fxm(520), fxm(38), 6}};
+      lp.caps = zc::kCapTop | zc::kCapBot;
+      lp.bone = static_cast<uint8_t>(2 + leg);
+      lp.r = 122;
+      lp.g = 74;
+      lp.b = 52;
+      parts.push_back(lp);
+    }
+
+    // the wings: flat elliptical membranes spanning +-Z off the shoulders
+    // (rings stack +Y, pitch_q 1 maps +Y -> +Z; rx = chord along X, rz =
+    // membrane thickness). Sized to read at the salto-fly camera.
+    for (int w = 0; w < 2; ++w) {
+      zc::RingPart wp;
+      const int32_t sgn = w == 0 ? -1 : 1;
+      for (int i = 0; i < 4; ++i) {
+        zc::RingSpec rs;
+        rs.y = sgn * fxm(60 + i * 230);
+        rs.radius = fxm(200 - i * 45);
+        rs.segments = 6;
+        rs.rx = fxm(260 - i * 55);  // chord
+        rs.rz = fxm(20);            // membrane
+        wp.rings.push_back(rs);
+      }
+      wp.caps = zc::kCapTop | zc::kCapBot;
+      wp.pitch_q = 1;
+      wp.bone = static_cast<uint8_t>(6 + w);
+      wp.r = 214;
+      wp.g = 150;
+      wp.b = 88;
+      parts.push_back(wp);
+    }
+
+    zc::ClipBank bank;
+    bank.bone_count = 8;
+    zc::Clip idle;
+    idle.slot_id = 1;
+    idle.interpolate = true;
+    idle.frame_count = 32;
+    idle.root.assign(32 * 3, 0);
+    idle.quats.assign(static_cast<size_t>(32) * 8, zc::quat16_identity());
+    for (uint16_t f = 0; f < 32; ++f) {
+      const zref::angle16 breathe{static_cast<uint16_t>(f * (65536u / 32u))};
+      idle.root[f * 3 + 1] = (zref::fx_sin(breathe).raw * 520) >> 16;  // +-8 mm
+      // the flap: two slow cycles per loop, +-16 deg about X (the span
+      // tilts up and down), antiphased a touch so the hover reads alive
+      const int32_t fl =
+          zref::fx_sin(zref::angle16{static_cast<uint16_t>((f * 4096) & 0xFFFF)}).raw;
+      const int32_t a = (fl * 2900) >> 16;
+      for (int wb = 6; wb <= 7; ++wb) {
+        const int32_t aa = wb == 6 ? a : -a;  // mirrored: both tips rise together
+        const zref::angle16 half{static_cast<uint16_t>((aa >> 1) & 0xFFFF)};
+        idle.quats[static_cast<size_t>(f) * 8 + wb] =
+            zc::quat16_axis_angle(zref::fx16{1 << 16}, zref::fx16{0}, zref::fx16{0},
+                                  zref::fx_sin(half), zref::fx_cos(half));
+      }
+    }
+    bank.clips.push_back(std::move(idle));
+
+    zc::CreatureType type;
+    type.type_id = 4;
+    const char* reason = "";
+    if (!zc::compile_creature(sk, bank, parts, type, &reason)) {
+      std::fprintf(stderr, "winged_dummy_type: compile failed: %s\n", reason);
+    }
+    return type;
+  }();
+  return t;
+}
+
 struct ReelGibPiece {
   int32_t x = 0, y = 0, z = 0;
   int32_t vx = 0, vy = 0, vz = 0;
@@ -1814,7 +1932,9 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.inst = &dog_inst;
     cr_ctx.poses = &dog_poses;
     if (sub.dummy) {
-      dummy_inst.type = &watchdog_type();
+      // the FLYING target (salto-fly, creature 36) wears the wings; the
+      // grounded dummy stays the plain watchdog
+      dummy_inst.type = sub.creature == 36 ? &winged_dummy_type() : &watchdog_type();
       dummy_inst.tilt_mode = zc::TiltMode::kCompletely;
       dummy_inst.facing = zref::angle16{uint16_t{0x8000}};  // faces the snake
       dummy_inst.anim.cut(1);  // its idle breath
@@ -1906,19 +2026,25 @@ int render_scene(const SceneSubject& sub) {
       trk_y = fxm((zixx::attack_lift_mm(static_cast<int>(f)) * sub.cam_track_num) / 1000 -
                   (aim * (zixx::kAtkTipDrop / 2)) / 1000);
     } else if (sub.cam_track && sub.creature >= 35 && sub.creature <= 37) {
-      // run 0326 salto variations: follow the BAKED ROOT of the variant
-      // clip (the whole trajectory lives in its root channels). The camera
-      // rides a fraction of the lift so the ground never leaves frame.
+      // RUN 1939 (owner: "Salto camera is too jittery"): the variant camera
+      // used to follow the clip's BAKED ROOT, which carries the coil
+      // re-pivot orbit -- six somersaults put six 485 mm camera orbits into
+      // the shot. It now follows the PLAN's smooth trajectory
+      // (zixx_variant_track): where the animal is going, not how it is
+      // oriented -- the same lesson the golden attack's camera already
+      // carries. Frame -> key at the 2-frames-per-key law, lerped at the
+      // half key so the track cannot step.
       const uint16_t slot = static_cast<uint16_t>(sub.creature - 2);
-      for (const zc::Clip& cc : zixx::type().bank.clips) {
-        if (cc.slot_id != slot) continue;
-        uint32_t fr = f / 2;
-        if (fr >= cc.frame_count) fr = cc.frame_count - 1;
-        trk_x = cc.root[fr * 3 + 0];
-        trk_y = static_cast<int32_t>(
-            (static_cast<int64_t>(cc.root[fr * 3 + 1]) * sub.cam_track_num) / 1000);
-        break;
-      }
+      const bool air = slot != zixx::kSlotAtkSix;
+      int32_t x0, y0, x1, y1;
+      const int key = static_cast<int>(f / 2);
+      zixx::zixx_variant_track(slot, air, key, x0, y0);
+      zixx::zixx_variant_track(slot, air, key + 1, x1, y1);
+      const int32_t xm = (f & 1) ? (x0 + x1) / 2 : x0;
+      const int32_t ym = (f & 1) ? (y0 + y1) / 2 : y0;
+      trk_x = fxm(xm);
+      trk_y = static_cast<int32_t>(
+          (static_cast<int64_t>(fxm(ym)) * sub.cam_track_num) / 1000);
     }
 
     // ---- creature sim (the driver composes the tick cadence; the laws are
@@ -1999,7 +2125,7 @@ int render_scene(const SceneSubject& sub) {
           if (sub.dummy) {
             const zc::ClipEvent* df = nullptr;
             uint8_t dn = 0;
-            zc::anim_advance(dummy_inst.anim, watchdog_type().bank, &df, dn);
+            zc::anim_advance(dummy_inst.anim, dummy_inst.type->bank, &df, dn);
           }
         }
         zc::ground_tilt_update(dog_inst.tilt, dog_inst.tilt_mode, dog_inst.facing, lat,

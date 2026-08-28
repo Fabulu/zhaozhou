@@ -467,3 +467,47 @@ of fidelity", in a new costume.
   the class). dmg-right blades kiss -31 for two keys mid-throw.
   Probe exit 0; overlaps 8,177 hits all within allowances.
 - Page regen VERIFIED deterministic (two regens cmp-identical).
+
+### 2026-08-28 late - RIGIDITY + SALTO BLOCKS (items 6,7,8,14, 9.1-9.3, audit)
+
+- BALANCE (item 6): the topple now BUCKLES -- per-joint delayed collapse
+  (kBalBuckleLagK 6, head end first, base last), overshoot whip past the
+  corpse slope (foot excluded: the whip drove the fan -819 through the
+  dirt; probe-caught, gated), post-flop travelling ripple on the shared
+  impact envelope (foot excluded), TWO incommensurate fight periods plus
+  a failing one-way lean (kBalLeanA16) before the loss, slow breath under
+  the whole clip, the head countering the wobble then watching the ground
+  arrive. Fork curve retuned to the rolled fan off the probe (stand
+  plateau 480 -> 580; topple keys traced from measured deficits). Bands:
+  stand [-8..4]; gather press -50 (weight on the belly while the tail
+  curls under -- authored); flop keel -31.
+- TAUNT (items 7+14): rebuilt on idle_body(750) -- every segment alive
+  under the performance -- with the fast cheeky BOBBLE: quat_x ROLL on
+  the skull bone (ear-to-shoulder, 4 rocks over keys 20..42, kTauntBobble
+  6200) with a second-harmonic figure-eight trace, composed by quat_mul.
+  CONSCIOUS house-style exception: the gesture is fast BECAUSE the body
+  under it is slow. A roll leak onto joint 1 was tried and REMOVED (the
+  probe read the grounded run digging -26 in time with the bobble --
+  rolling the climbing tube swings the whole downstream body). Band
+  [-11..1].
+- HIT DEFORMATION (item 8): kFoldEnv/kHitFoldAmp -- a +F/-2F/+F hairpin
+  kink at the struck stations for ~2 keys, net-zero turn, released into
+  the UNTOUCHED approved ring-out. Each direction folds in its own axis
+  (front joints 1-3 pitch; back 3-5; top 2-4; sides lateral 2-4 on the
+  proven-planted lane). Overlap probe: worst 158 mm against allowance 390
+  (hit), 32/235 (sides) -- inside authored allowances, no widening.
+- STRIKE audit fix: the last bare-apply_stance action clip now runs
+  idle_body(500) underneath; bands [-9..-4].
+- SALTO CAMERA (9.1): the variant tracker followed the BAKED ROOT --
+  which carries the coil re-pivot orbit: six somersaults = six 485 mm
+  camera orbits, the owner's jitter. zixx_variant_track now follows the
+  PLAN's smooth trajectory (plans extracted to zixx_variant_plan), the
+  golden camera's own lesson applied.
+- SIX-SALTO WHEEL (9.2): with the camera fixed, the contact sheet shows
+  the coil holding ONE closed-ring silhouette through the whole flight
+  with the markings rotating inside it -- the elegant wheel. The local
+  shape was already held (coil slice pinned at key 19); the shaking
+  frame was the wheel-orbit in the camera, not the body.
+- WINGS (9.3): winged_dummy_type -- the watchdog plus two membrane wings
+  on their own bones with a slow +-16 deg flap baked into its idle.
+  FLYING dummy only (subject creature 36); a reel prop, not a creature.

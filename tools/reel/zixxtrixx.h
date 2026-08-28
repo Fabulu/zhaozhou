@@ -2337,6 +2337,21 @@ constexpr int32_t kShockFrontAmp = 3400;  // pitch pulse through the raised
                                           // front (angle16 at the head end)
 constexpr int32_t kShockGroundAmp = 2400; // lateral ripple, grounded joints
 constexpr int32_t kShockTailAmp = 6200;   // the tail's delayed whip
+// THE FOLD (RUN 1939, item 8; owner: "The wobbles in the hit animations
+// are good, but the hit itself just needs more impact. Really bend the
+// hit part of the snake out of shape."). The approved shockwave/ring-out
+// is UNTOUCHED -- what was missing is the MOMENT: a sharp local
+// deformation AT the struck section, a hairpin kink far tighter than the
+// body ever takes elsewhere, held for ~2 keys and released into the
+// standing wobble. This is the deliberate exception to the smoothness
+// law: smoothness is the resting law, violence is authored, and it lives
+// only inside kFoldEnv's five keys. Each direction folds in its own axis
+// (front/top/back pitch, sides lateral). The kink is a +F/-2F/+F triple,
+// so its net turn is ~zero and nothing downstream is displaced.
+constexpr int32_t kHitFoldAmp = 4200;   // F; the kink's centre joint takes 2F
+static const Key kFoldEnv[] = {{0, 0}, {1, 1000}, {2, 900}, {4, 300}, {7, 0}};
+constexpr int kFoldEnvN = static_cast<int>(sizeof(kFoldEnv) / sizeof(Key));
+
 // the delayed-envelope sampler: curve() at milli-key resolution, so a
 // per-joint lag under one key still lands between keys instead of stepping
 inline int curve_mk(const Key* k, int n, int fmk) {
@@ -2399,6 +2414,25 @@ constexpr int32_t kBalFootMargin = 98;     // fork height when the tail lies fla
                                            // (tuned on probe + render until the
                                            // tips kiss dirt, no hover, no dig)
 constexpr int32_t kBalFinFlare = 2600;     // fins flare wide for balance
+// THE BUCKLING TOPPLE (RUN 1939, item 6; owner: "Tail balance is wonky.
+// Not wobbly enough. Particularly the fall -- it just falls rigid like
+// it's a stick."). The falling flail's cure carried across: a toppling
+// body loses its structure PROGRESSIVELY -- the head end gives way first
+// and the planted base last (kBalBuckleLagK keys of spread), each section
+// whips PAST the corpse slope (kBalOvershoot) and settles back, and the
+// flop's shock travels tailward on the shared impact envelope
+// (kBalRippleAmp) so nothing arrives together. Before the fall, the fight
+// gets a second slower wobble term and a one-way LEAN the corrections no
+// longer pull back (kBalLeanA16 per joint) -- the loss reads as a loss.
+// All slow, loose, low-frequency: wobble, not jitter.
+constexpr int kBalBuckleLagK = 6;        // keys between head-end and base give
+                                         // (10 dug the still-steep foot -819:
+                                         // the fork height curve and the base's
+                                         // delayed clock must overlap)
+constexpr int32_t kBalOvershoot = 2600;  // slope past the corpse at the whip
+constexpr int32_t kBalLeanA16 = 120;     // per-joint failing lean (~11 deg total)
+constexpr int32_t kBalBreath = 700;      // the life layer under the stunt
+constexpr int32_t kBalRippleAmp = 2200;  // the flop's travelling ring-out
 // LOOK-AROUND, slot 8: the head-aim rig capability performed — Zixx looks
 // left, up, right, down, unhurried, while the body idles quietly. The aim
 // lives on the HEAD BONE (the head is bone 0, the ROOT — a joint rotation
@@ -2476,6 +2510,13 @@ inline zc::Clip build_hit() {
       const int32_t dec = 1000 - (k * kShockDecay) / (kStanceGround0 - 1);
       wave[k] = -(ek[k] * ((kShockFrontAmp * dec) / 1000)) / 1000;
     }
+    // THE FOLD: the struck section (the front -- this is damageFront)
+    // kinks HARD for two keys: +F/-2F/+F on joints 1..3, net turn ~zero,
+    // released into the approved ring-out (see kHitFoldAmp)
+    const int32_t fold = curve(kFoldEnv, kFoldEnvN, f);
+    wave[1] += (fold * kHitFoldAmp) / 1000;
+    wave[2] -= (fold * 2 * kHitFoldAmp) / 1000;
+    wave[3] += (fold * kHitFoldAmp) / 1000;
     const int32_t rise = apply_stance(g, 1000, (e * kHitDeepen) / 1000, wave);
     // the head jerks BACK-UP and aside first (it is the struck end), then
     // settles on the same envelope
@@ -2655,16 +2696,28 @@ inline zc::Clip build_balance() {
     //   rise2    k165..196 back up into the S
     //   settle   k196..223 exact canonical S for the loop
     const int32_t up = ss1000(f, 28, 77);           // stance -> vertical
-    const int32_t back1 = ss1000(f, 140, 157);      // vertical -> flat...
-    const int32_t over = (back1 * back1) / 1000;    // ...ACCELERATING (gravity)
+    const int32_t over = (ss1000(f, 140, 157) * ss1000(f, 140, 157)) / 1000;
     const int32_t recover = ss1000(f, 165, 196);    // flat -> stance
-    // the wobble: grows through the balance, spills into the loss
+    // THE FIGHT: grows through the balance on TWO incommensurate slow
+    // periods (never one oscillation), and from key ~122 a one-way LEAN
+    // creeps in that the wobble no longer corrects -- the balance is
+    // being LOST, visibly, before it goes.
     const int32_t fight = ss1000(f, 77, 133);
-    const int32_t ph = f * (65536 / 34);  // ~one wobble cycle per 1.1 s --
-                                          // slower with the slower clock
+    const int32_t lean = ss1000(f, 122, 142);
+    const int32_t phw = f * (65536 / 34);
     const int32_t wob =
-        (zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw *
+        (zref::fx_sin(zref::angle16{static_cast<uint16_t>(phw & 0xFFFF)}).raw *
          ((kBalWobble * fight) / 1000)) >> 16;
+    const int32_t phw2 = f * (65536 / 89) + 21000;
+    const int32_t wob2 =
+        (zref::fx_sin(zref::angle16{static_cast<uint16_t>(phw2 & 0xFFFF)}).raw *
+         (((kBalWobble * 2) / 3 * fight) / 1000)) >> 16;
+    // the life layer: a slow breath through the raised stretch, damped
+    // while standing (the effort holds the breath), full at the ends
+    const int32_t phl = f * (65536 / kBalKeys);
+    const int32_t s_breath =
+        zref::fx_sin(zref::angle16{static_cast<uint16_t>((phl * 2) & 0xFFFF)}).raw;
+    const int32_t breathw = 300 + (700 * (1000 - up)) / 1000;
     int64_t sum_sin = 0, sum_cos = 0;
     int32_t prev = 0;
     for (int k = 0; k < kStanceSlopes; ++k) {
@@ -2675,15 +2728,38 @@ inline zc::Clip build_balance() {
       const int32_t vert = k >= kStanceSlopes - 2 ? kBalVertSlope + 500
                                                   : kBalVertSlope;
       d += ((vert - d) * up) / 1000;
-      // the topple lands in the CORPSE pose, not a flat line -- a lying
-      // body's centreline follows the taper (see kCorpseSlope)
-      d += ((kCorpseSlope[k] - d) * over) / 1000;
+      // THE BUCKLING TOPPLE (see the knobs): each joint collapses to the
+      // corpse pose on its OWN clock -- head end first, base last -- with
+      // an overshoot whip past the target, so the fall is a body losing
+      // its structure, never a rotating rod
+      const int fk = f - (k * kBalBuckleLagK) / (kStanceSlopes - 1);
+      const int32_t b1 = ss1000(fk, 140, 157);
+      const int32_t over_k = (b1 * b1) / 1000;
+      // the whip stays OFF the planted foot (last three joints): an
+      // overshoot there drives the fan through the dirt (probe, -819)
+      const int32_t osh = k < kStanceSlopes - 3
+                              ? ss1000(fk, 150, 158) - ss1000(fk, 158, 172)
+                              : 0;
+      const int64_t target = kCorpseSlope[k] + (kBalOvershoot * osh) / 1000;
+      d += ((target - d) * over_k) / 1000;
       d += ((kStanceSlope[k] - d) * recover) / 1000;  // and the S returns
-      // the fight -- gated OUT by the topple: once falling the fight is
-      // lost, and a full-amplitude wobble on the flat pose pivoted the
-      // whole plank +-5 deg about the fork (+-233 mm at the nose; probe)
-      if (f >= 77 && f < 165 && k < kStanceSlopes - 2)
-        d += (wob * (1000 - over)) / 1000;
+      // the fight -- gated OUT joint-by-joint as the buckle takes each
+      if (f >= 77 && f < 165 && k < kStanceSlopes - 2) {
+        d += ((wob + wob2) * (1000 - over_k)) / 1000;
+        d += (kBalLeanA16 * lean * (1000 - over_k)) / 1000000;
+      }
+      // the breath rides the raised stretch
+      if (k >= 1 && k <= 9)
+        d += (((s_breath * kBalBreath) >> 16) * breathw) / 1000;
+      // THE IMPACT RIPPLE: the flop's shock travels tailward on the
+      // shared impact envelope and rings out -- absorb, follow through,
+      // settle loosely
+      if (f >= 157 && k < kStanceSlopes - 3) {  // the foot never ripples
+        const int32_t ek = curve_mk(kImpactEnv, kImpactEnvN,
+                                    (f - 157) * 1000 - k * kShockLagMk);
+        d += (static_cast<int64_t>(ek) * kBalRippleAmp * (1000 - recover)) /
+             1000000;
+      }
       const uint16_t a = static_cast<uint16_t>(d & 0xFFFF);
       sum_sin += zref::fx_sin(zref::angle16{a}).raw;
       sum_cos += zref::fx_cos(zref::angle16{a}).raw;
@@ -2699,11 +2775,15 @@ inline zc::Clip build_balance() {
     // slopes and the wobble do. 0 at both ends makes the loop exact; the
     // correction absorbing the wobble is what keeps the foot PLANTED
     // through the balance fight.
+    // RUN 1939: the rolled fan holds the fork ~100 mm higher for the same
+    // planted tips, so the stand plateau rises 480 -> 580 (probe: the
+    // stand phase dug -95..-156 at the old keys); the topple keys ease
+    // with the buckle so the base lands as the last section gives
     static const Key kBalFork[] = {
-        {0, 0},      {28, 0},     {45, -175}, {56, 120},  {66, 420},
-        {77, 480},   {140, 480},  {146, 420}, {151, 120},
-        {157, -300}, {165, -330}, {172, -145}, {179, -82}, {185, -48},
-        {190, -26},  {196, 0},    {223, 0}};
+        {0, 0},      {28, 0},     {45, -175}, {56, 150},  {66, 500},
+        {77, 580},   {140, 580},  {148, 580}, {154, 575},
+        {157, 470},  {160, 120},  {163, -160}, {166, -240}, {172, -120},
+        {179, -62},  {185, -34},  {190, -16},  {196, 0},    {223, 0}};
     // run 0326: the get-up used to hand the fork straight back to +30 by
     // k130, which lifted the WHOLE half-flat body off the dirt (probe: minY
     // +65 at k128 -- a 200 mm-class push-up hop on the render). The keys
@@ -2722,10 +2802,19 @@ inline zc::Clip build_balance() {
     if (f >= 157 && f < 167) {
       root_y -= (kBalImpactSink * (1000 - ss1000(f, 160, 166))) / 1000;
     }
-    // the head: tucks slightly with the effort on the way up, jams
-    // nose-first at the flop, recovers with the S
-    g.q[kBHead] = quat_z(kHeadAttitude + (up * -2200) / 1000 + (over * 1800) / 1000
-                         - (recover * -400) / 1000);
+    // the head: tucks with the effort on the way up, COUNTERS the wobble
+    // while the fight is on (the strongest aliveness signal: the animal
+    // visibly correcting), looks AT the arriving ground through the
+    // topple, jams nose-first at the flop, and wakes with a small loose
+    // settle as the S returns
+    const int32_t head_fight =
+        (f >= 77 && f < 150) ? -((wob + wob2) / 2) : 0;
+    const int32_t see = (over * 2600) / 1000;  // the ground is coming
+    const int32_t wake = ss1000(f, 168, 176) - ss1000(f, 176, 192);
+    g.q[kBHead] =
+        quat_z(kHeadAttitude + (up * -2200) / 1000 + head_fight + see +
+               (over * 1800) / 1000 - (wake * 900) / 1000 -
+               (recover * -400) / 1000);
     // fins: they ARE the foot -- they stay pressed along the tail line
     // while the animal stands on them (flaring them mid-stand lifted the
     // whole support 373 mm off the dirt; the probe caught it), with only a
@@ -3099,6 +3188,20 @@ inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
                                      : kShockFrontAmp / 6;
       bwave[k] = ((dir == 1 ? ek[k] : -ek[k]) * ((amp * dec) / 1000)) / 1000;
     }
+    // THE FOLD (item 8), in each direction's own axis. BACK and TOP kink
+    // the pitch lane here (back folds deeper down the body -- the blow
+    // lands from behind; top folds where the crush concentrates); the
+    // SIDES fold LATERALLY below, on the proven-planted front-yaw lane.
+    const int32_t fold = curve(kFoldEnv, kFoldEnvN, f);
+    if (dir == 1) {
+      bwave[3] -= (fold * kHitFoldAmp) / 1000;
+      bwave[4] += (fold * 2 * kHitFoldAmp) / 1000;
+      bwave[5] -= (fold * kHitFoldAmp) / 1000;
+    } else if (dir == 3) {
+      bwave[2] += (fold * kHitFoldAmp) / 1000;
+      bwave[3] -= (fold * 2 * kHitFoldAmp) / 1000;
+      bwave[4] += (fold * kHitFoldAmp) / 1000;
+    }
     const int32_t rise = apply_stance(g, 1000, deepen, bwave);
     switch (dir) {
       case 0:    // RIGHT: lateral whiplash, head and neck swing off the blow
@@ -3132,11 +3235,16 @@ inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
     {
       const int32_t latsgn = dir == 0 ? 1 : dir == 2 ? -1 : dir == 1 ? 1 : -1;
       const int32_t latamp = (dir == 0 || dir == 2) ? kDmgSideChain : kDmgShimmy;
+      const int32_t lfold =
+          (dir == 0 || dir == 2) ? curve(kFoldEnv, kFoldEnvN, f) : 0;
       for (int k = 1; k <= 5; ++k) {
         const int32_t dec = 1000 - (k * 700) / 6;
-        g.q[kBSpine0 + k] = quat_mul(
-            g.q[kBSpine0 + k],
-            quat_y(latsgn * ((ek[k] * ((latamp * dec) / 1000)) / 1000)));
+        int32_t yawk = latsgn * ((ek[k] * ((latamp * dec) / 1000)) / 1000);
+        // the sides' FOLD (item 8): a lateral hairpin at the struck
+        // stations for two keys -- the body visibly dents around the blow
+        if (k == 2 || k == 4) yawk += latsgn * (lfold * kHitFoldAmp) / 1000;
+        if (k == 3) yawk -= latsgn * (lfold * 2 * kHitFoldAmp) / 1000;
+        g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_y(yawk));
       }
       zc::quat16 snacc = zc::quat16_identity();
       for (int j = 0; j < kStanceGround0; ++j)
@@ -3384,10 +3492,23 @@ constexpr int32_t kTauntRear = 1250;  // angle16 PER FRONT SEGMENT (k0..4).
                                       // read as a crumple). Lifting the
                                       // ascending neck rears the front up
                                       // WITH the head. ~35 deg accumulated.
-constexpr int32_t kTauntWag = 3600;
+constexpr int32_t kTauntWag = 2200;   // 3600 -> 2200, RUN 1939: the slow
+                                      // lateral wander UNDER the bobble --
+                                      // the fast layer owns the gesture now
 constexpr int32_t kTauntFlare = 2600;
 constexpr int32_t kTauntRise = 1400;
 constexpr int32_t kTauntNose = 3400;  // the head rises WITH the rear-up
+// THE BOBBLE (RUN 1939, item 14; owner: "cheeky fast side to side to side
+// etc. headshake, like the Indian 'I am being funny' headshake"). A
+// TILT/ROLL, not a yaw -- ear toward shoulder -- quick and light, four-ish
+// rocks and done, with a second-harmonic pitch trace so it draws a slight
+// figure-eight instead of a metronome. THIS IS A CONSCIOUS EXCEPTION to
+// "fewer and slower": the gesture is DEFINED by being fast and light; the
+// body underneath stays on the slow loose idle recipe, and that contrast
+// is what sells it. Composed with quat_mul (roll * yaw * pitch), never an
+// axis switch.
+constexpr int32_t kTauntBobble = 6200;    // roll amplitude (reads at 240p)
+constexpr int32_t kTauntBobbleFig8 = 1400;  // the figure-eight pitch trace
 
 inline zc::Clip build_taunt() {
   zc::Clip c;
@@ -3396,32 +3517,56 @@ inline zc::Clip build_taunt() {
   c.frame_count = static_cast<uint16_t>(kTauntKeys);
   c.root.assign(static_cast<size_t>(kTauntKeys) * 3, 0);
   c.quats.assign(static_cast<size_t>(kTauntKeys) * kBoneCount, zc::quat16_identity());
+  // REBUILT RUN 1939 (item 7, owner: "Taunt is too rigid too, all parts of
+  // body should bend"): the performance now rides idle_body's full living
+  // recipe -- breath + front wave with exact root compensation, grounded
+  // sideways snake, torsion, tail sway, blade play -- so no segment holds
+  // a fixed shape for the duration. The gesture layers ON TOP: rear-up in
+  // the wave lane, the slow wag, and the fast cheeky BOBBLE (item 14).
+  const int32_t per_key = 65536 / kTauntKeys;
   for (int f = 0; f < kTauntKeys; ++f) {
     Rig g;
     g.reset();
+    const int32_t ph = f * per_key;
     const int32_t up = ss1000(f, 6, 16) - ss1000(f, 42, 52);
     const int32_t wag_env = ss1000(f, 14, 20) - ss1000(f, 38, 44);
-    // 2.5 wag cycles across the window, eased in and out by wag_env
     int32_t wag = 0;
     if (wag_env != 0) {
-      const int32_t ph = ((f - 14) * 5851);  // 2.5 cycles over 28 keys
-      wag = (zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw *
+      const int32_t pw = ((f - 14) * 5851);  // 2.5 slow cycles
+      wag = (zref::fx_sin(zref::angle16{static_cast<uint16_t>(pw & 0xFFFF)}).raw *
              ((kTauntWag * wag_env) / 1000)) >> 16;
     }
+    // the rear-up rides the compensated wave lane OVER the living body
     int32_t wave[kStanceSlopes] = {};
     for (int k = 0; k <= 4; ++k) wave[k] = (up * kTauntRear) / 1000;
-    const int32_t rise = apply_stance(g, 1000, 0, wave);
-    g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + (up * kTauntNose) / 1000),
-                           quat_y(wag));
+    const int32_t rise = idle_body(g, ph, 750, wave);
+    // THE BOBBLE: fast light roll, ~4 rocks over keys 20..42, gone after
+    const int32_t bob_env = ss1000(f, 20, 25) - ss1000(f, 38, 44);
+    int32_t roll = 0, fig8 = 0;
+    if (bob_env != 0) {
+      const int32_t pb = (f - 20) * 13107;  // one rock per 5 keys: FAST
+      roll = (zref::fx_sin(zref::angle16{static_cast<uint16_t>(pb & 0xFFFF)}).raw *
+              ((kTauntBobble * bob_env) / 1000)) >> 16;
+      fig8 = (zref::fx_sin(zref::angle16{static_cast<uint16_t>((pb * 2 + 16000) & 0xFFFF)}).raw *
+              ((kTauntBobbleFig8 * bob_env) / 1000)) >> 16;
+    }
+    g.q[kBHead] = quat_mul(
+        quat_mul(quat_z(kHeadAttitude + (up * kTauntNose) / 1000 + fig8),
+                 quat_y(wag)),
+        quat_x(roll));
     if (wag != 0) {
       g.q[kBSpine0 + 1] = quat_mul(g.q[kBSpine0 + 1], quat_y(wag / 3));
       g.q[kBSpine0 + 2] = quat_mul(g.q[kBSpine0 + 2], quat_y(wag / 5));
-      // the mid-body counter-sways a whisper, so the wag reads as intent,
-      // not as the whole animal wobbling
-      for (int k = 6; k <= 9; ++k)
-        g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_y(-wag / 8));
     }
-    g.tail_rest(kBladeSplay + (up * kTauntFlare) / 1000,
+    // (a roll leak onto joint 1 was tried and REMOVED: a roll about the
+    // climbing tube's axis swings the entire downstream body -- the probe
+    // read the grounded run digging -26 in time with the bobble. The
+    // skull bone pivots at the cranium centroid, which IS the neck-borne
+    // read.)
+    // blades: the flare rides ON the idle play instead of replacing it
+    const int32_t st = zref::fx_sin(
+        zref::angle16{static_cast<uint16_t>((ph * 2 - 21000) & 0xFFFF)}).raw;
+    g.tail_rest(kBladeSplay + (up * kTauntFlare) / 1000 + ((st * 900) >> 16),
                 kBladeRise + (up * kTauntRise) / 1000);
     g.write(c, f);
     c.root[f * 3 + 1] = fxm(rise);
@@ -4180,6 +4325,7 @@ inline zc::Clip build_strike() {
   constexpr int nC = static_cast<int>(sizeof(kCock) / sizeof(Key));
   constexpr int nJ = static_cast<int>(sizeof(kJab) / sizeof(Key));
   constexpr int nS = static_cast<int>(sizeof(kShove) / sizeof(Key));
+  const int32_t per_key = 65536 / kStrikeKeys;
   for (int f = 0; f < kStrikeKeys; ++f) {
     Rig g;
     g.reset();
@@ -4193,8 +4339,13 @@ inline zc::Clip build_strike() {
                  static_cast<int32_t>(
                      (static_cast<int64_t>(kStrikeOpen[k] - kStanceSlope[k]) * jab) / 1000);
     }
-    const int32_t rise = apply_stance(g, 1000, (cock * 180) / 1000, extra);
+    // RUN 1939 rigidity audit: the strike was the last action clip on a
+    // bare apply_stance -- the grounded run and tail held one shape for
+    // 1.5 s. The idle's living body now runs underneath at half
+    // amplitude; the strike's own deltas ride its wave lane.
+    const int32_t rise = idle_body(g, f * per_key, 500, extra);
     // the head: cocks up-back, drives level through the bite, settles
+    // (owns the head bone -- overwrites idle_body's write)
     g.q[kBHead] =
         quat_z(kHeadAttitude + (3400 * cock) / 1000 - (1600 * jab) / 1000 +
                extra[1] + extra[2]);
@@ -4561,16 +4712,11 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
 
 // the three variants' PLANS, fixed for the reel showcases (the sim would
 // make its own): the grounded dummy stands 4.6 m out; the flyer hovers at
-// 3.2 m; the six-salto dives on a far ground mark with its spin forced
-inline zc::Clip build_attack_dummy() {
-  zc::AttackPlan p = zixx_plan_attack(4600, 350, 0, 0);
-  return build_attack_variant(kSlotAtkDummy, p, true);
-}
-inline zc::Clip build_attack_fly() {
-  zc::AttackPlan p = zixx_plan_attack(3800, 3200, 0, 0);
-  return build_attack_variant(kSlotAtkFly, p, true);
-}
-inline zc::Clip build_attack_six() {
+// 3.2 m; the six-salto dives on a far ground mark with its spin forced.
+// EXTRACTED (RUN 1939): the reel's tracking camera needs the same plan.
+inline zc::AttackPlan zixx_variant_plan(uint16_t slot) {
+  if (slot == kSlotAtkDummy) return zixx_plan_attack(4600, 350, 0, 0);
+  if (slot == kSlotAtkFly) return zixx_plan_attack(3800, 3200, 0, 0);
   zc::AttackPlan p = zixx_plan_attack(5200, 0, 0, 0);
   p.spin_mturns = 6000;  // the ask: SIX somersaults
   p.apex_mm = kAtkApexLift;          // the full showcase height earns them
@@ -4578,7 +4724,57 @@ inline zc::Clip build_attack_six() {
   zixx_plan_lock_spear(p);  // the overrides moved the commit point: the
                             // spear MUST re-lock or it still aims at the
                             // planner's 8 m apex (probe: tip 4.6 m off)
-  return build_attack_variant(kSlotAtkSix, p, false);
+  return p;
+}
+
+// THE VARIANT CAMERA'S TRACK (RUN 1939, owner: "Salto camera is too
+// jittery"). The old camera followed the variant clip's BAKED ROOT, which
+// carries the coil re-pivot orbit disp = c - R(theta)c -- at six
+// somersaults that is six 485 mm camera orbits per flight, and the shot
+// shook in time with the spin. The golden attack's camera already learned
+// this lesson ("Not the decoded root, which also carries the coil
+// re-pivot wobble"): follow the PLAN's smooth trajectory instead -- where
+// the animal is GOING, never how it is oriented. Same phase math as the
+// baker, minus the wheel orbit, minus the recoil kick.
+inline void zixx_variant_track(uint16_t slot, bool air_hit, int key,
+                               int32_t& x_mm, int32_t& y_mm) {
+  const zc::AttackPlan p = zixx_variant_plan(slot);
+  const int t0 = p.compress_keys + p.release_keys;
+  const int t1 = t0 + p.coil_keys;
+  const int t2 = t1 + p.unroll_keys;
+  const int t3 = t2 + p.plunge_keys;
+  const int kHold = air_hit ? 12 : 8;
+  const int kDrop = 14;
+  const ChoreoSample end_s = zixx_plan_sample(p, t3);
+  if (key <= t3) {
+    const ChoreoSample sm = zixx_plan_sample(p, key);
+    x_mm = sm.x_mm;
+    y_mm = sm.y_mm;
+    return;
+  }
+  if (key < t3 + kHold) {
+    x_mm = end_s.x_mm;
+    y_mm = end_s.y_mm;
+    return;
+  }
+  const int j = key - t3 - kHold;
+  const int32_t tj = (j >= kDrop ? 1000 : (j * 1000) / kDrop);
+  const int32_t tt = (tj * tj) / 1000;
+  const int32_t gx = end_s.x_mm - (air_hit ? 420 : -380);
+  x_mm = end_s.x_mm + ((gx - end_s.x_mm) * tj) / 1000;
+  y_mm = end_s.y_mm -
+         static_cast<int32_t>((static_cast<int64_t>(end_s.y_mm) * tt) / 1000);
+  if (j >= kDrop) y_mm = 0;
+}
+
+inline zc::Clip build_attack_dummy() {
+  return build_attack_variant(kSlotAtkDummy, zixx_variant_plan(kSlotAtkDummy), true);
+}
+inline zc::Clip build_attack_fly() {
+  return build_attack_variant(kSlotAtkFly, zixx_variant_plan(kSlotAtkFly), true);
+}
+inline zc::Clip build_attack_six() {
+  return build_attack_variant(kSlotAtkSix, zixx_variant_plan(kSlotAtkSix), false);
 }
 
 // ------------------------------------------------------------ the build ----
