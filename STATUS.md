@@ -5,6 +5,85 @@ at the top.*
 
 ---
 
+## 2026-08-28 (late) -- the engine runs real programs, and a warning about me
+
+*Short version: the Field v3 executor now runs actual compiled Earth programs
+and agrees with the reference on every one. Two things it found are more
+important than the feature. And I put a broken line into a pushed commit,
+which you should know about.*
+
+### The engine executes
+
+The executor takes a compiled program and runs it, four points at a time. It
+is checked against `zfield::execute_point` -- the interpreter the whole Field
+language is DEFINED by, not a model written next to the hardware. **440
+randomised programs, every output matching.**
+
+Dot products landed too. They need two or three multiplies against a budget
+of one multiplier per lane, so they are sequenced.
+
+Mutation sweep: **27 caught, 4 proven equivalent, 0 survived, 0 discarded.**
+
+### The thing that should worry you slightly, and why it does not
+
+The executor was built on the wrong register file for a day.
+
+`zhao_probe_banked_rf` exists to let Quartus PRICE your banked-register-file
+idea. Its own header says it implements no semantics -- it is a shape, not a
+working part. I wired the engine to it. It addresses every bank with the same
+row, which cannot read three consecutive registers when they straddle a
+boundary.
+
+**440 programs passed anyway**, because ordinary instructions only ever read
+ONE register per operand. The first dot product -- which reads three -- broke
+immediately: 30 of 400 programs disagreed, exactly the ones landing on the
+bad boundary.
+
+That is the failure mode this project keeps finding: a test suite that is
+green because it never asks the question. The real register file is now
+written and the broken addressing is a permanent regression test, so it
+cannot come back quietly.
+
+One consequence for your numbers: the 372 ALM / 93.14 MHz measured for that
+probe is now a FLOOR for the real thing, not a measurement of it. The real
+file does arithmetic the probe does not. It needs its own fit.
+
+### I committed a broken line and pushed it
+
+Telling you plainly because you should not have to find it.
+
+A mutation sweep deliberately breaks the RTL one line at a time to check the
+tests notice. One of those broken lines ended up in a commit whose message
+said the block was FIXED. It was pushed.
+
+Three things lined up: a killed job left processes still running that kept
+editing files after the system said they were dead; the broken line changed
+only a reporting signal, so every test still passed; and I checked the diff
+with a filter that cut it off.
+
+It is removed, and there is now a tool that asks "is any known-broken line
+present in this file?" and refuses to let a sweep report success if one is.
+It has already caught two more.
+
+Nothing shipped on it -- the line affected an observation port, not a
+computed value, so nothing downstream was ever wrong.
+
+### What I owe you next
+
+* **Place and route for two probes.** Failed three times, all my fault: a
+  budget I set too low, then twice from running too many heavy jobs at once
+  on a machine that cannot take it. Running alone now.
+* **The composition** -- walker into executor into accumulator, running your
+  three real spells, against the 850,000-cycle frame budget. That is the one
+  that says whether v3 actually works, and everything so far is a component
+  measured on its own.
+
+### Still yours to decide
+
+The two reducer laws from before (how `material` picks a winner, how
+`nav_cost` reduces) are still flagged **chosen, not found**. No rush.
+
+---
 ## 2026-08-28 -- the walker works, and it is the piece v3 was for
 
 *Short version: the thing that killed v2 is gone, measured rather than argued.
