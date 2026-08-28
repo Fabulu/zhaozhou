@@ -2033,7 +2033,12 @@ inline zc::Clip build_balance() {
     static const Key kBalFork[] = {
         {0, 0},      {20, 0},     {32, -175}, {40, 120},  {47, 420},
         {55, 480},   {100, 480},  {104, 420}, {108, 120},
-        {112, -300}, {118, -330}, {123, -140}, {130, 30}, {140, 0},  {159, 0}};
+        {112, -300}, {118, -330}, {123, -145}, {128, -82}, {132, -48},
+        {136, -26},  {140, 0},    {159, 0}};
+    // run 0326: the get-up used to hand the fork straight back to +30 by
+    // k130, which lifted the WHOLE half-flat body off the dirt (probe: minY
+    // +65 at k128 -- a 200 mm-class push-up hop on the render). The keys
+    // above keep the belly kissing the ground while the S re-forms.
     constexpr int kBalForkN = static_cast<int>(sizeof(kBalFork) / sizeof(Key));
     const int32_t base_fork =
         kBodyY - static_cast<int32_t>((segL * base_sin) >> 16);

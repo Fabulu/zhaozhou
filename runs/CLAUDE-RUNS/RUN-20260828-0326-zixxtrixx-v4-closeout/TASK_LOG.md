@@ -47,3 +47,19 @@ Finish the Zixxtrixx rework fully: PART 1 four standing faults, PART 2 falling d
 ## Next Steps
 
 *Updated as progress is made*
+
+### 2026-08-28 03:5x - PART 1 item 1 DONE: death pink-forward
+
+- Rendered death, contact-sheeted every 2nd frame (death-before-sheet.png):
+  after the keel (row 3 on) the corpse is a magenta smear — the +11600 roll
+  turns the dorsal band square at the 3/4 site camera.
+- kDeathRoll +11600 -> -11600 (keel AWAY): corpse reads green flank + blue
+  underside, pink on the far silhouette edge (death-flip-sheet.png,
+  death-before-after-pairs.png). Probe exit 0, no allowance moved.
+- DISCOVERY on the same sheet: final rendered frame flashed the STANCE —
+  anim_advance wraps one-shot clips to key 0 and interpolation wraps the
+  last segment. Added Clip::hold_last (default false, looping clips
+  bit-untouched); death sets it. Fixed in sim + midpoint bake + nlerp path.
+  Evidence: death-lastframes-fixed.png (189/190/191 all hold the corpse).
+- Golden drift scope PROVEN: clip-6.bin + pose-crcs clip-6 keys 31..95 only.
+  Re-pinned with provenance (zhaozhou 1ac98b0, Upheaval d9e1084).
