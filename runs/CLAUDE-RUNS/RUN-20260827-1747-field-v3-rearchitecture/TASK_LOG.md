@@ -1522,3 +1522,58 @@ What it gave up stays covered: an `out_k` ignoring `expo` differs from `31 + e`
 for exactly the inputs where M11 differs.
 
 Preflight then passed all 26. Full sweep running.
+
+## I made a confident claim about RTL without opening the RTL
+
+Twice in one hour, into two documents and Fabian's channel: "SPLINE's lookup
+half is not built" and "the next step is widening the curve service to fetch
+four neighbours". Both wrong.
+
+`zhao_field_curve.sv` implements OP_CURVE, OP_DCURVE **and OP_SPLINE** --
+six-step search, clamp, `t`, all four control points with the ends replicated
+(`S_P0/S_P2/S_P3` carry exactly the reference's `i-1`, `i+1`, `i+2` clamping),
+the coefficients, the Horner. Four test targets elaborate it; both
+`zhao_field_v2_core` and `zhao_field_exec_shared` instantiate it. It has been
+there the whole time.
+
+And `zhao_probe_curve_svc.sv` states the architectural position in its own
+header: "MODES: CURVE (0) and DCURVE (1) only. SPLINE is COLD by the brief's
+own service split (section 6 'cold service lane': spline) and is not
+barreled." Fieldv3.md section 6 confirms it.
+
+### The finding underneath the mistake
+
+    SPLINE, one point, from a table      BUILT and verified (v2)
+    SPLINE, four points, given p0..p3    BUILT and swept 21/21 (v3)
+    SPLINE, four points, from a table    NOT BUILT -- and possibly SHOULD NOT BE
+
+`zhao_field_v3_spline.sv` computes FOUR points at once. That shape is only
+motivated if SPLINE is hot. The brief classifies it cold. **I built a hot block
+for an op the architecture had already classified cold, and did not notice
+until I went looking for its lookup.**
+
+The block is correct and closed at full marks, and four-wide maths is a
+superset of one-wide, so nothing is broken. But cold and hot cost very
+differently from here -- cold needs nothing further and the new block is a
+labelled spare part; hot needs a width change on a service with eighteen
+mutants riding on its current shape, all of which need RE-SCORING rather than
+assuming they carry. Sent to Fabian as a decision with both prices, not
+guessed at.
+
+### And a gap that is consistent only by accident
+
+`dst_width_of` in the dispatcher has no entry for SPLINE, so the dispatcher
+refuses it. That is CORRECT -- 0 means "not a long op this block knows" and
+refusing beats guessing a width -- and it matches SPLINE being cold. But
+nothing says "deliberately absent, cold-lane op". A reader finds a missing
+case, not a decision. To be annotated once the running sweep is out of the way;
+it is a comment change and cannot break the configure, but starting a
+multi-file RTL edit during a run is exactly the rule that cost RING seventeen
+mutants.
+
+### The shape of the error
+
+The house rule is "check the reference/oracle resolves BEFORE writing any
+RTL", and I did -- the SPLINE oracle was read and resolved cleanly. Then I made
+a confident architectural claim about the RTL WITHOUT CHECKING THE RTL. The
+rule protects the direction I was already careful in.
