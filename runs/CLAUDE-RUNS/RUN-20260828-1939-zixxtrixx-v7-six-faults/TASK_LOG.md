@@ -320,3 +320,54 @@ that is precisely what makes a wild experiment safe.
 
 **Queued LAST**, behind the head/neck block, the rigidity pass and the salto
 family. It must not delay the head.
+
+### Item 15 expanded: ALL the experiments, plus three of mine
+
+*"Contour sounds fire! Do all of them, think up two more, this might be going
+places."* Then: *"If it's not a lot of trouble maybe try to cel shade one or two
+versions."*
+
+Build the whole set, each as its own labelled experimental tab: the **black ink
+contour** (the sheets carry it around the creature and every colour region; our
+renders never have), directional strokes, wax build-up at the melds, paper tooth,
+hand-wobbled boundaries, drawn snake markings.
+
+**My additions, chosen to PAIR with the contour rather than compete with it:**
+
+**A) "Colouring outside the lines."** In a hand-coloured drawing the crayon never
+registers exactly with the ink: it overshoots on one edge and leaves bare paper on
+another. **That mis-registration is the signature of hand-colouring**, and it is
+invisible in every computed texture because a computed fill always registers
+perfectly with its own boundary. Vary the offset along the length so it wanders
+rather than reading as a uniform margin. With the contour, this may be the whole
+effect.
+
+**B) BOIL — the only TEMPORAL experiment.** Hand-drawn animation is redrawn every
+frame, so line and fill shimmer frame to frame. No static grain achieves that, and
+at 240p a boiling contour could look extraordinary. **Determinism is satisfiable:**
+derive it from the animation key or tick — never wall-clock, never `Math.random`,
+never process-salted `hash()` — and it stays replay-exact. It will move the
+sequence CRCs of any subject using it, so keep it on experimental subjects.
+
+**C) CEL SHADING — a LIGHTING experiment, the first in the batch.** Should be
+cheap: the Gouraud path already computes a per-vertex lighting term, so cel
+shading is that term **quantised to two or three steps** before it modulates the
+texel — a small transform on a value we already have, thresholds as named
+constants. No new lane, no silicon question.
+
+**And the pairing worth stating: cel shading + the black contour IS the concept
+art's own look** — bold outline, flat crayon fill, no smooth shading. At least one
+variant must combine them; separately they are two effects, together they may be
+the thing. Do a hard two-tone and a softer three-tone, because at 240p a hard
+terminator can read as a mistake on a curved tube and that is a looking question.
+
+Bonus if cheap: faint pencil under-drawing showing through the crayon.
+
+**Scope note carried:** paper white, graphite grey and ink black are colours of
+the MEDIUM, not of the creature. "The colour scheme should stick" governs
+Zixxtrixx's own pigments. **Cel shading is conditioned on being easy** — if it
+demands restructuring the shade path or touching the hardware lane's territory,
+stop and say so.
+
+All of it gated to experimental subjects; the normal creature must render
+byte-identically throughout. Still queued LAST.
