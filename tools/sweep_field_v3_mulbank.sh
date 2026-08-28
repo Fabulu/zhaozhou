@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# sweep_field_curve_svc.sh — mutation sweep for the FIELD v3 barrel curve service
-# probe (fpga/rtl/synth/zhao_probe_curve_svc.sv; Phase 3 probe 4 of
+# sweep_field_v3_mulbank.sh — mutation sweep for the FIELD v3 four-bank patch
+# probe (fpga/rtl/synth/zhao_field_v3_mulbank.sv; accumulator; Phase 3 probe 5 of
 # reports/Fieldv3.md).
 #
 # Inherits the house guards (sweep_geom_wcache.sh / sweep_cmd_dma.sh):
@@ -11,7 +11,7 @@
 #   7  consumer roster — the probe must be elaborated by exactly the targets
 #      this sweep runs, or mutant-derived models could survive in unscored
 #      consumers;
-#   8  the binary is THREE ctest lanes (bare, --random 400, nightly 5000);
+#   8  the binary is THREE ctest lanes (bare, --random 40, nightly 400);
 #      the sweep runs every FAST lane; the nightly is excluded by the
 #      cmd_dma precedent.
 #
@@ -19,27 +19,29 @@
 #             7 pristine tests red, 8 preflight, 9 consumer roster,
 #             12 undeclared survivor.
 #
-# DEDICATED BUILD DIR (build-fieldv3), added after a MEASURED collision:
-# 2026-08-27, the sibling patch-acc sweep ran against the shared build/
-# while other sessions' ninja was live in it; mutants were DISCARDED with
-# "model or exe absent after rebuild" -- two writers, one build dir. This
-# sweep's own clean 15/15 run predates that window; the port here is so it
-# never rolls the same dice. Same pinned toolchain as windows-native.
+# DEDICATED BUILD DIR (build-verify), added after a MEASURED collision:
+# 2026-08-27, this sweep ran against the shared build/ while a concurrent
+# session's ninja was live in it; nine of fifteen mutants were DISCARDED
+# with "model or exe absent after rebuild" -- two writers, one build dir.
+# The sweep now configures its own tree (same pinned toolchain as the
+# windows-native preset). Sources are still the LIVE working tree, so the
+# guard-7 single-consumer rule is what keeps a concurrently-edited file
+# out of this sweep's scored cone.
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
-MUT=tools/sweep_field_curve_svc_mutants.py
-RTL=fpga/rtl/synth/zhao_probe_curve_svc.sv
-TARGETS="test_field_curve_svc_directed"
+MUT=tools/sweep_field_v3_mulbank_mutants.py
+RTL=fpga/rtl/field/zhao_field_v3_mulbank.sv
+TARGETS="test_field_v3_mulbank_directed"
 
 hash_of() { sha256sum <"$1" | cut -d' ' -f1; }
 
 check_consumers() {
   local declared
-  declared=$(grep -B12 "TOP_MODULE zhao_probe_curve_svc" tests/CMakeLists.txt \
+  declared=$(grep -B12 "TOP_MODULE zhao_field_v3_mulbank" tests/CMakeLists.txt \
              | grep -oE "verilate\(test_[a-z_0-9]+" | sed 's/verilate(//' | sort -u)
   if [ "$declared" != "$TARGETS" ]; then
-    echo "ABORT: tests/CMakeLists.txt elaborates zhao_probe_curve_svc into target(s):"
+    echo "ABORT: tests/CMakeLists.txt elaborates zhao_field_v3_mulbank into target(s):"
     echo "$declared"
     echo "but this sweep runs: $TARGETS — update TARGETS or the roster."
     return 1
@@ -50,7 +52,7 @@ check_consumers() {
 model_hash() {
   local t h=""
   for t in $TARGETS; do
-    h="$h$(find "build-fieldv3/tests/CMakeFiles/$t.dir/Vzhao_probe_curve_svc.dir" -type f \
+    h="$h$(find "build-verify/tests/CMakeFiles/$t.dir/Vzhao_field_v3_mulbank.dir" -type f \
              \( -name "*.cpp" -o -name "*.h" \) 2>/dev/null \
            | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d" " -f1)"
   done
@@ -60,7 +62,7 @@ model_hash() {
 models_present() {
   local t
   for t in $TARGETS; do
-    [ -d "build-fieldv3/tests/CMakeFiles/$t.dir/Vzhao_probe_curve_svc.dir" ] || return 1
+    [ -d "build-verify/tests/CMakeFiles/$t.dir/Vzhao_field_v3_mulbank.dir" ] || return 1
   done
   return 0
 }
@@ -68,7 +70,7 @@ models_present() {
 exes_present() {
   local t
   for t in $TARGETS; do
-    [ -x "build-fieldv3/tests/$t.exe" ] || return 1
+    [ -x "build-verify/tests/$t.exe" ] || return 1
   done
   return 0
 }
@@ -76,13 +78,13 @@ exes_present() {
 rebuild() {
   local t
   for t in $TARGETS; do
-    rm -rf "build-fieldv3/tests/CMakeFiles/$t.dir"
+    rm -rf "build-verify/tests/CMakeFiles/$t.dir"
     # guard 5: the exe lives OUTSIDE the target dir, so it must be deleted
     # too -- and it must be deleted from THIS sweep's own build dir. This
     # line said "build/tests" until 2026-08-27, which both left the real
     # stale exe in place (defeating the guard) and deleted another
     # session's binary out of the shared tree.
-    rm -f "build-fieldv3/tests/$t.exe"
+    rm -f "build-verify/tests/$t.exe"
   done
   # deleting a verilated target dir removes files only CONFIGURE regenerates
   # (the house sweeps learned this the same way); VERILATOR_ROOT must be set
@@ -96,15 +98,25 @@ rebuild() {
   # tree that had once configured successfully kept working while a fresh one
   # would fail its verilator guard and leave the target unbuilt.
   export PATH="/c/programmieren/dsstuff/mingw64/bin:/c/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator/bin:$PATH"
-  cmake -S . -B build-fieldv3 -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     >/dev/null 2>&1
+  cmake -S . -B build-verify -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     >/dev/null 2>&1
   # shellcheck disable=SC2086
-  ninja -C build-fieldv3 $TARGETS >/dev/null 2>&1
+  ninja -C build-verify $TARGETS >/dev/null 2>&1
 }
 
-# Guard 8: bare AND --random 400, the two fast ctest lanes of this binary.
+# Guard 8: bare AND --random 40, the two fast ctest lanes of this binary.
+# EVERY FAST CTEST LANE OF THIS BINARY, with the arguments tests/CMakeLists.txt
+# actually registers. CMD.DMA's sweep scored 6 of 21 instead of 12 because it
+# ran only the bare exe while three lanes were registered over it, and the
+# consumer-roster guard cannot catch this: it checks which TARGETS elaborate
+# the module, not which ARGUMENTS the lanes pass.
+#
+# `--random 2000` here, not the 40 this driver was derived with. The
+# randomized lane is where contention between claimants actually happens; the
+# directed lane drives one saturating case and would miss a routing bug that
+# only appears when the winner changes clock to clock.
 run_lanes() {
-  ./build-fieldv3/tests/test_field_curve_svc_directed.exe >/dev/null 2>&1 || return 1
-  ./build-fieldv3/tests/test_field_curve_svc_directed.exe --random 400 >/dev/null 2>&1 || return 1
+  ./build-verify/tests/test_field_v3_mulbank_directed.exe >/dev/null 2>&1 || return 1
+  ./build-verify/tests/test_field_v3_mulbank_directed.exe --random 2000 >/dev/null 2>&1 || return 1
   return 0
 }
 
@@ -112,10 +124,37 @@ echo "== consumer roster =="
 check_consumers || exit 9
 
 echo "== preflight =="
-python tools/sweep_field_curve_svc_preflight.py || exit 8
+python tools/sweep_field_v3_mulbank_preflight.py || exit 8
 
 expected=$(python "$MUT" --count) || exit 3
 
+# EVERY FILE THE TABLE CAN MUTATE GETS A SNAPSHOT, not just $RTL.
+#
+# 2026-08-28: this driver snapshotted $RTL alone while the mutant table had
+# grown to cover the register file too. Mutants applied to that second file
+# were therefore NEVER RESTORED, and because X30/X31/X32 touch three different
+# lines they ACCUMULATED -- each later mutant was scored against a file that
+# still carried the earlier ones. Every result for that file was contaminated.
+#
+# The driver's own model-hash guard caught it at the final restore and the run
+# aborted with exit 4, which is that guard doing its job. This removes the
+# cause rather than relying on the guard to keep finding it.
+FILES=$(python - "$MUT" <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("mut", sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+paths = {e[1] if len(e) == 4 else m.RTL for e in m.MUTANTS}
+print(" ".join(sorted(paths)))
+PY
+) || exit 3
+
+GOLDDIR=$(mktemp -d)
+gi=0
+for f in $FILES; do
+  cp "$f" "$GOLDDIR/g$gi" || exit 4
+  gi=$((gi + 1))
+done
 GOLDTMP=$(mktemp)
 cp "$RTL" "$GOLDTMP" || exit 4
 GOLDHASH=$(hash_of "$RTL")
@@ -123,8 +162,18 @@ GOLDHASH=$(hash_of "$RTL")
 restore() {
   local i
   for i in 1 2 3 4 5 6 7 8 9 10; do
-    cp "$GOLDTMP" "$RTL" 2>/dev/null
-    if [ "$(hash_of "$RTL")" = "$GOLDHASH" ]; then return 0; fi
+    ri=0
+    for f in $FILES; do
+      cp "$GOLDDIR/g$ri" "$f" 2>/dev/null
+      ri=$((ri + 1))
+    done
+    ok=1
+    ri=0
+    for f in $FILES; do
+      cmp -s "$GOLDDIR/g$ri" "$f" || ok=0
+      ri=$((ri + 1))
+    done
+    if [ "$ok" = "1" ] && [ "$(hash_of "$RTL")" = "$GOLDHASH" ]; then return 0; fi
     sleep 1
   done
   return 1
@@ -157,8 +206,23 @@ while [ "$k" -lt "$expected" ]; do
     continue
   fi
   if [ "$(model_hash)" = "$PRISTINE_MODEL" ]; then
-    echo "  $name  DISCARDED (model identical to pristine — did not re-elaborate)"
-    discards+=("$name")
+    # An identical model has TWO possible causes and they are not the same
+    # finding. rebuild() deletes the verilated model directory before every
+    # mutant, so elaboration definitely RAN; an identical result therefore
+    # means the mutation was semantically null -- the mutant is EQUIVALENT,
+    # not unscored. The guard cannot tell that apart from a genuine failure
+    # to re-elaborate on its own, so it only accepts the equivalence reading
+    # when a PROOF has been written down for this mutant. Everything else
+    # stays a discard and still fails the run.
+    tok=${name%% *}
+    if proof=$(python "$MUT" --equiv "$tok" 2>/dev/null); then
+      echo "  $name  equivalent (proven, and the model is byte-identical)"
+      echo "        $proof"
+      equivalents+=("$name")
+    else
+      echo "  $name  DISCARDED (model identical to pristine — did not re-elaborate)"
+      discards+=("$name")
+    fi
     k=$((k + 1))
     continue
   fi
@@ -204,6 +268,7 @@ if ! python tools/sweep_check_clean.py "$MUT"; then
   exit 14
 fi
 rm -f "$GOLDTMP"
+rm -rf "$GOLDDIR"
 
 attempted=$k
 accounted=$((caught + ${#survivors[@]} + ${#equivalents[@]} + ${#discards[@]}))
@@ -227,8 +292,8 @@ fi
 if [ "${#discards[@]}" -gt 0 ]; then
   # A mutant that could not build was never SCORED. Counting it as accounted
   # and then printing SWEEP OK reports a run that tested nothing as a clean
-  # sweep -- which is what the 2026-08-27 22:40 patch-accumulator rerun did:
-  # 7 of 15 unscored, tally printed, exit 0.
+  # sweep -- which is what this driver's 22:40 rerun did: 7 of 15 unscored,
+  # tally printed, exit 0.
   echo "FAILED: ${#discards[@]} discarded mutant(s) were NOT scored -- fix and re-run"
   printf '  %s\n' "${discards[@]}"
   exit 13

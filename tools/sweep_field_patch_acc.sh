@@ -92,7 +92,12 @@ rebuild() {
   export VERILATOR_ROOT="${VERILATOR_ROOT:-C:/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator}"
   # BUILD.md: three cmakes are on PATH and the msys2 one reports MSYS, which
   # disables every preset and leaves the OLD build.ninja in place. Pin it.
-  export PATH="/c/programmieren/dsstuff/mingw64/bin:/c/programmieren/zencrifice/.tools/oss-cad-suite/bin:$PATH"
+  # The verilator binary lives under share/verilator/bin, NOT under
+  # oss-cad-suite/bin -- that directory does not exist, and this line named it
+  # for five drivers. It survived only because cmake CACHES find_program, so a
+  # tree that had once configured successfully kept working while a fresh one
+  # would fail its verilator guard and leave the target unbuilt.
+  export PATH="/c/programmieren/dsstuff/mingw64/bin:/c/programmieren/zencrifice/.tools/oss-cad-suite/share/verilator/bin:$PATH"
   cmake -S . -B build-fieldv3 -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     >/dev/null 2>&1
   # shellcheck disable=SC2086
   ninja -C build-fieldv3 $TARGETS >/dev/null 2>&1
