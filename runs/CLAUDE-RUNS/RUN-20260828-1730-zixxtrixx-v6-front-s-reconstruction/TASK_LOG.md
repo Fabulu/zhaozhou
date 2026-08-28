@@ -217,3 +217,36 @@ The agent recorded a process fault honestly: **an over-broad `git add` pushed 98
 raw `.rgb` frames into two commits.** Untracked and fenced going forward, but the
 blobs remain in remote history — a history scrub is the owner's call, not mine to
 take unasked.
+
+### History scrub — the raw render frames, on the owner's authorisation
+
+*"scrub them"* — 2026-08-28. Destructive and history-rewriting, so it was done
+only on his explicit word.
+
+**Done:** 867 `.rgb` blobs removed from the three commits that carried them
+(`cb28c2b`, `390e441`, `d283dee`). `origin/main` `23d6d414` → **`971826c`**.
+
+**How, and why this way:**
+* **Rewrote in a SEPARATE CLONE**, never in the working repo — the modelling
+  agent had 96 uncommitted files in that tree and a `filter-branch` there would
+  have put them at risk for no reason.
+* **Scoped the rewrite to 7 commits.** The remaining 126 `.rgb` blobs live in two
+  commits from 08-16; reaching those means rewriting **1002 commits**, which
+  would invalidate every other checkout in this repo including the FPGA lane's.
+  87% of the blobs for 0.7% of the blast radius. The remnants are reported to the
+  owner as his call, not silently left.
+* **Told the agent to stop pushing FIRST.** A push landing mid-rewrite either
+  gets clobbered or re-introduces the blobs on top of the new history.
+* **`--force-with-lease` against the exact expected hash**, after re-fetching to
+  confirm the remote had not moved.
+* **Verified after:** zero `.rgb` in the rewritten range; all 7 commits survive
+  (none pruned); the run's 18 evidence PNGs still present. Content loss would
+  have been the real failure here, not blob count.
+* **Repaired the agent's checkout with `git reset --soft origin/main`** —
+  deliberately soft, so all 96 uncommitted files survived. Confirmed in sync.
+* Local tag `prescrub-backup` retains the old tip.
+
+**The lesson, and it is the cheap half of the fault:** the frames got in through
+an over-broad `git add`. Staging deliberately by path — never `git add -A` from a
+repo root — costs nothing; removing them afterwards costs a coordinated history
+rewrite across every agent working in the repo.
