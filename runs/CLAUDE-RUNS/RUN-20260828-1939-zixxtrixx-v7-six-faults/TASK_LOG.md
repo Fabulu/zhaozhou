@@ -166,3 +166,35 @@ Two things on record so they are not re-earned:
   reads.
 
 Texture-page change, not geometry — cheap. Sits with the head block.
+
+### Item 13: stray triangle in the right eye (death2) — a BUG, not an art call
+
+*"Also in death 2 I see a weird stray triangle in the right eye."*
+
+Pose-dependent by inference: it shows in `zixxtrixx-death2` and nowhere reported,
+so the geometry is fine at rest and breaks at a pose that clip reaches. That
+points at SKINNING rather than topology — **a vertex bound to the wrong bone sits
+in roughly the right place while neighbouring bones are aligned, and flies off
+the moment a pose separates them**, dragging its triangles into a spike. Death2
+keels the animal, so it diverges further than most clips. The eye discs have been
+resized and moved twice recently (17×33 → 12×24, and moving again for the
+forward/down/bulge item), so a leftover vertex from those edits is the prime
+suspect. Cheap to also rule out a degenerate/flipped triangle.
+
+Method required: contact-sheet every frame to find the triggering keys; render
+those keys zoomed, **unlit and with normal visualisation**, to separate "wrong
+place" from "shaded wrong"; then **interrogate the posed vertices with a
+committed probe, not an inference from the image** — same principle as ground
+contact and the tail tip, and `zixx-probe`/`zixx-striketip` are the precedents.
+Check whether the same vertex misbehaves at lesser magnitude in other clips: if
+so it is one bug with one visible symptom and fixing it clears latent damage.
+
+**Explicitly forbidden: papering over it** by nudging the disc or hiding it under
+a texture change — that leaves a broken vertex to resurface in the next clip that
+bends far enough.
+
+**Gate implication worth recording:** probe, choreo, planner and `--check` all
+pass while this is visibly wrong. The owner spotted it by looking. If a
+mesh-integrity check would have caught it, that gate is worth having — this is
+the same lesson as *"component checks passing is not likeness evidence"*, now in
+its correctness form rather than its art form.
