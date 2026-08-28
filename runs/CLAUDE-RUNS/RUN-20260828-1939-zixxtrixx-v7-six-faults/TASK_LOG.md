@@ -371,3 +371,36 @@ stop and say so.
 
 All of it gated to experimental subjects; the normal creature must render
 byte-identically throughout. Still queued LAST.
+
+### Correction: the experiments are a MENU, not a blend
+
+*"Cel shade is in addition, I want stuff to pick from, don't cel shade the
+contour or anything."* Then, second-guessing himself: *"Though I guess cel shade
+should have contour?"*
+
+**Isolation is the default and it is the whole point.** He wants individually
+judgeable effects — each variant changing exactly ONE thing against the normal
+creature. A mixed variant that looks good tells him nothing about what to keep.
+
+**I had over-pushed the opposite**, writing that at least one variant "must"
+combine cel shading with the contour because together they are the concept art's
+look. That framing was wrong for the purpose: combination is not the goal,
+PICKABILITY is. Corrected with the agent before it built anything.
+
+**His own follow-up is right, though**, and gets ONE exception: cel shading alone
+tends to read as a shading bug rather than a style, because toon shading and line
+art evolved together. So the set is:
+* every effect ALONE — contour, directional strokes, wax build-up, paper tooth,
+  hand-wobbled boundaries, drawn markings, mis-registration, boil, cel shading;
+* **plus one clearly-labelled cel + contour combination**, beside the standalone
+  cel variant so the outline's contribution is visible;
+* the two cel versions he asked for (hard two-tone, softer three-tone), because a
+  hard terminator on a curved tube can read as a mistake at 240p.
+
+Any other pairing that looks strong gets rendered as an EXTRA, never at the cost
+of an isolated variant.
+
+**Lesson worth keeping: when the owner asks for options, the deliverable is the
+AXIS, not the best point on it.** Pre-mixing effects is a way of making the choice
+for him — which is the same fault as "never remove the owner's control in the name
+of fidelity", in a new costume.
