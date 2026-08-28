@@ -395,3 +395,37 @@ creature HOLDS them is mechanical.** Fix the holding, keep the shapes.
   body SHOVED -55mm along the blow, two slow decaying overshoots.
   Worst-key render layers cleanly; allowance re-authored 215 -> 255 with
   evidence. Directional set scaled to match (6400/6200/980/4200).
+
+### Rig correction: the head IS joint rotation — the fault is the body under it
+
+*"head should be joint rotation, it's just that the joint needs to fit onto a
+body that doesn't suddenly have the head drop 5 meters"*
+
+**I had been repeating a lesson past its expiry date.** "The head is bone 0 = the
+ROOT, so head motion is root displacement, never a joint rotation" was TRUE of
+the ORIGINAL rig and is why two early head-bob passes failed. It stopped being
+true when the dedicated `head_attitude` bone (the V2 plan's bone 25) was added —
+that bone is precisely what makes head rotation a proper joint rotation. I kept
+citing the trap after the trap was gone. Owner's framing supersedes mine.
+
+**The mechanism is right; the GEOMETRY under the joint is wrong.** Rotating the
+head currently flings it down an enormous distance — that is the droopy-ball
+read. Two likely causes, both already in scope:
+
+1. **Pivot placement.** If the pivot is offset from where the head's mass is, any
+   rotation swings the head through a large arc instead of turning it in place.
+   The head should turn about ITSELF, not orbit a distant point.
+2. **What the joint is mounted on** — the same fault as the missing neck. There
+   is a cliff where the neck should be and the head bone hangs off the end of it.
+
+**So the taper work and the head-aim work are ONE problem.** Slim the upper S,
+build the broad neck, place the head joint so the head pivots about itself at the
+end of that neck — the drop should resolve as a consequence. Then sweep the
+resting attitude wide and pick off a contact sheet; it must go WAY up.
+
+Verification is direct: rotate the head joint through its range with the body
+visibly planted. A big arc or a drop means the pivot is wrong; a crease at the
+weighting falloff means lengthen and soften it. Still one continuous tube.
+
+**Lesson worth keeping beyond this creature: a hard-won rig lesson has a SCOPE,
+and re-citing it after the rig changed made me argue against the correct fix.**
