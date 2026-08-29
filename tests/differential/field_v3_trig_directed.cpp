@@ -200,5 +200,51 @@ int main(int argc, char** argv) {
     zhao::check(dut.tag_o == 0x77, "and the tag intact", 0x77, (uint32_t)dut.tag_o);
   }
 
+  printf("== section 5: the INITIATION INTERVAL, STREAMED ==\n");
+  {
+    // Offer whenever the service is ready, accept whenever it replies, and
+    // divide elapsed clocks by groups RETIRED. Waiting for each reply before
+    // offering the next measures LATENCY and calls it throughput -- a mistake
+    // this project made once already, in the distance service's harness.
+    reset(dut);
+    const int32_t a[kLanes] = {0x1111, 0x4321, 0x8ABC, 0xC0DE};
+    int32_t want[kLanes];
+    for (int l = 0; l < kLanes; ++l) want[l] = oracle(false, a[l]);
+
+    const int kGroups = 32;
+    int offered = 0, retired = 0, wrong = 0, clocks = 0, guard = 0;
+    dut.is_cos_i = 0;
+    dut.r_ready_i = 1;
+    dut.a0_0_i = (uint32_t)a[0];
+    dut.a0_1_i = (uint32_t)a[1];
+    dut.a0_2_i = (uint32_t)a[2];
+    dut.a0_3_i = (uint32_t)a[3];
+    while (retired < kGroups && guard++ < 20000) {
+      dut.v_valid_i = (offered < kGroups) ? 1 : 0;
+      dut.tag_i = (uint8_t)(offered & 0xFF);
+      dut.eval();
+      const bool took = dut.v_valid_i && dut.v_ready_o;
+      const bool gave = dut.r_valid_o && dut.r_ready_i;
+      if (gave) {
+        const int32_t g[kLanes] = {(int32_t)dut.o0_0_o, (int32_t)dut.o0_1_o, (int32_t)dut.o0_2_o,
+                                   (int32_t)dut.o0_3_o};
+        for (int l = 0; l < kLanes; ++l)
+          if (g[l] != want[l]) ++wrong;
+        if ((int)dut.tag_o != (retired & 0xFF)) ++wrong;  // ACCEPT ORDER
+        ++retired;
+      }
+      if (took) ++offered;
+      zhao::tick(dut);
+      ++clocks;
+    }
+    dut.v_valid_i = 0;
+    dut.eval();
+    zhao::check(retired == kGroups, "all 32 streamed groups retire", kGroups, retired);
+    zhao::check(wrong == 0, "every streamed answer is right and IN ORDER", 0, wrong);
+    const int ii = retired ? (clocks / retired) : 0;
+    printf("   MEASURED: %d groups streamed in %d clocks, II = %d clocks/group\n", retired, clocks,
+           ii);
+  }
+
   return zhao::report_and_exit("field_v3_trig_directed");
 }
