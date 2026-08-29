@@ -195,7 +195,7 @@ module zhao_probe_v3_full #(
   logic [$clog2(CTX)-1:0]  long_ctx;
   logic [7:0]              long_op;
   logic [$clog2(REGS)-1:0] long_dst;
-  logic signed [31:0]      long_s0, long_s1, long_s2, long_s3;
+  logic signed [31:0]      long_s0, long_s1, long_s2, long_s3, long_s4;
   logic [31:0]             long_imm;
   logic                    long_flush;
 
@@ -251,7 +251,8 @@ module zhao_probe_v3_full #(
       .long_valid_o(long_valid), .long_ready_i(long_ready),
       .long_ctx_o(long_ctx), .long_op_o(long_op), .long_dst_o(long_dst),
       .long_s0_o(long_s0), .long_s1_o(long_s1), .long_s2_o(long_s2),
-      .long_s3_o(long_s3), .long_imm_o(long_imm), .long_flush_o(long_flush),
+      .long_s3_o(long_s3), .long_s4_o(long_s4),
+      .long_imm_o(long_imm), .long_flush_o(long_flush),
       .rel_valid_i(rel_valid), .rel_ctx_i(rel_ctx)
   );
 
@@ -262,7 +263,8 @@ module zhao_probe_v3_full #(
       .long_valid_i(long_valid), .long_ready_o(long_ready),
       .long_ctx_i(long_ctx), .long_op_i(long_op), .long_dst_i(long_dst),
       .long_s0_i(long_s0), .long_s1_i(long_s1), .long_s2_i(long_s2),
-      .long_s3_i(long_s3), .long_imm_i(long_imm), .flush_i(long_flush),
+      .long_s3_i(long_s3), .long_s4_i(long_s4),
+      .long_imm_i(long_imm), .flush_i(long_flush),
 
       .alu_wb_valid_i(alu_wb_valid), .alu_wb_ready_o(alu_wb_ready),
       .alu_wb_ctx_i(alu_wb_ctx), .alu_wb_reg_i(alu_wb_reg),

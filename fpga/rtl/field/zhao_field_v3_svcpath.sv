@@ -68,6 +68,7 @@ module zhao_field_v3_svcpath #(
     input  var logic signed [31:0]            long_s1_i,
     input  var logic signed [31:0]            long_s2_i,
     input  var logic signed [31:0]            long_s3_i,
+    input  var logic signed [31:0]            long_s4_i,
     input  var logic        [31:0]            long_imm_i,
     input  var logic                          flush_i,
 
@@ -236,7 +237,7 @@ module zhao_field_v3_svcpath #(
   // ---- dispatcher <-> service --------------------------------------------
   logic               svc_valid, svc_ready;
   logic        [7:0]  svc_op;
-  logic signed [31:0] svc_s0 [4], svc_s1 [4], svc_s2 [4], svc_s3 [4];
+  logic signed [31:0] svc_s0 [4], svc_s1 [4], svc_s2 [4], svc_s3 [4], svc_s4 [4];
   logic        [31:0] svc_imm;
   logic [TAGW-1:0]    svc_tag;
 
@@ -257,11 +258,11 @@ module zhao_field_v3_svcpath #(
       .long_valid_i(long_valid_i), .long_ready_o(long_ready_o),
       .long_ctx_i(long_ctx_i), .long_op_i(long_op_i), .long_dst_i(long_dst_i),
       .long_s0_i(long_s0_i), .long_s1_i(long_s1_i), .long_s2_i(long_s2_i),
-      .long_s3_i(long_s3_i),
+      .long_s3_i(long_s3_i), .long_s4_i(long_s4_i),
       .long_imm_i(long_imm_i), .flush_i(flush_i),
       .svc_valid_o(svc_valid), .svc_ready_i(svc_ready),
       .svc_op_o(svc_op), .svc_s0_o(svc_s0), .svc_s1_o(svc_s1), .svc_s2_o(svc_s2),
-      .svc_s3_o(svc_s3),
+      .svc_s3_o(svc_s3), .svc_s4_o(svc_s4),
       .svc_imm_o(svc_imm), .svc_tag_o(svc_tag),
       .rsp_valid_i(rsp_valid), .rsp_ready_o(rsp_ready), .rsp_tag_i(rsp_tag),
       .rsp_r0_i(rsp_r0), .rsp_r1_i(rsp_r1), .rsp_r2_i(rsp_r2),
@@ -278,9 +279,11 @@ module zhao_field_v3_svcpath #(
   /* verilator lint_off UNUSEDSIGNAL */
   logic signed [31:0] svc_s2_unused [4];
   logic signed [31:0] svc_s3_unused [4];
+  logic signed [31:0] svc_s4_unused [4];
   /* verilator lint_on UNUSEDSIGNAL */
   assign svc_s2_unused = svc_s2;
   assign svc_s3_unused = svc_s3;
+  assign svc_s4_unused = svc_s4;
 
   // ---- the service, and the bank it borrows ------------------------------
   logic               nz_mul_issue, nz_mul_ready, nz_mul_valid;

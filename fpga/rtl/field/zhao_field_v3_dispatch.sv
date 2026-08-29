@@ -99,6 +99,7 @@ module zhao_field_v3_dispatch #(
     // Four is the maximum any long op needs: ROT3 four, RING and NORMALIZE3
     // three, NOISE2 and RIDGE two, CURVE and SPLINE one.
     input  var logic signed [31:0]            long_s3_i,
+    input  var logic signed [31:0]            long_s4_i,
     // THE INSTRUCTION'S IMMEDIATE, which is an OPERAND to several long ops and
     // was missing until the first attempt to compose this with a service.
     // NOISE2 and RIDGE take their seed from it, CURVE and SPLINE their table
@@ -123,6 +124,7 @@ module zhao_field_v3_dispatch #(
     output var logic signed [31:0]            svc_s1_o [4],
     output var logic signed [31:0]            svc_s2_o [4],
     output var logic signed [31:0]            svc_s3_o [4],
+    output var logic signed [31:0]            svc_s4_o [4],
     output var logic        [31:0]            svc_imm_o,
     output var logic [TAGW-1:0]               svc_tag_o,
 
@@ -168,6 +170,9 @@ module zhao_field_v3_dispatch #(
   localparam logic signed [31:0] PAD_B = 32'sd5;
   localparam logic signed [31:0] PAD_C = 32'sd7;
   localparam logic signed [31:0] PAD_D = 32'sd11;
+  // The fifth pad, for operand b's second member. Recognisable like the
+  // others, so a lane nobody filled looks wrong rather than convincing.
+  localparam logic signed [31:0] PAD_E = 32'sd13;
 
   // ---- the op table's dst_width, mirrored and nothing else ----------------
   // The opcode constants that stood here are GONE, not moved twice: they
@@ -228,6 +233,7 @@ module zhao_field_v3_dispatch #(
   logic [31:0]               g_imm_r;
   logic [CTXW-1:0]           g_ctx_r [4];
   logic signed [31:0]        g_s0_r [4], g_s1_r [4], g_s2_r [4], g_s3_r [4];
+  logic signed [31:0]        g_s4_r [4];
 
   // ---- MORE THAN ONE GROUP IN FLIGHT --------------------------------------
   //
@@ -400,11 +406,13 @@ module zhao_field_v3_dispatch #(
         svc_s1_o[l] = g_s1_r[l];
         svc_s2_o[l] = g_s2_r[l];
         svc_s3_o[l] = g_s3_r[l];
+        svc_s4_o[l] = g_s4_r[l];
       end else begin
         svc_s0_o[l] = PAD_A;
         svc_s1_o[l] = PAD_B;
         svc_s2_o[l] = PAD_C;
         svc_s3_o[l] = PAD_D;
+        svc_s4_o[l] = PAD_E;
       end
     end
   end
@@ -520,6 +528,7 @@ module zhao_field_v3_dispatch #(
         g_s1_r[l]  <= '0;
         g_s2_r[l]  <= '0;
         g_s3_r[l]  <= '0;
+        g_s4_r[l]  <= '0;
       end
     end else begin
       // ---- accept one context into the group ------------------------------
@@ -532,6 +541,7 @@ module zhao_field_v3_dispatch #(
         g_s1_r[fill_r[1:0]]  <= long_s1_i;
         g_s2_r[fill_r[1:0]]  <= long_s2_i;
         g_s3_r[fill_r[1:0]]  <= long_s3_i;
+        g_s4_r[fill_r[1:0]]  <= long_s4_i;
         fill_r <= fill_r + 3'd1;
       end
 

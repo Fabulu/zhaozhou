@@ -184,6 +184,15 @@ module zhao_probe_v3_exec #(
     output var logic signed [31:0]        long_s1_o,
     output var logic signed [31:0]        long_s2_o,
     output var logic signed [31:0]        long_s3_o,
+    // OPERAND B'S SECOND MEMBER. Added 2026-08-29 for DIST2, which is the last
+    // opcode the shipped Earth programs need and this machine did not serve.
+    //
+    // Its decode shape is {1, {2, 2, 0}, 2, 0}: operand a has TWO members and
+    // operand b has TWO. Every long op before it had a single-member b, so
+    // three ports for a and one for b covered them all -- and DIST2 simply
+    // could not be expressed. The register already existed here; it was feeding
+    // the DOT sequencer and was never exported.
+    output var logic signed [31:0]        long_s4_o,
     output var logic [31:0]               long_imm_o,
     // "No further context can join this group." See the comment at its
     // assignment: an EAGER flush costs group size, a LATE one deadlocks.
@@ -464,6 +473,7 @@ module zhao_probe_v3_exec #(
   assign long_s1_o    = s4_a1_r;
   assign long_s2_o    = s4_a2_r;
   assign long_s3_o    = s4_b0_r;
+  assign long_s4_o    = s4_b1_r;
   assign long_imm_o   = s4_imm_r;
 
   // AN EAGER FLUSH COSTS GROUP SIZE; A LATE ONE DEADLOCKS. The safe rule is
