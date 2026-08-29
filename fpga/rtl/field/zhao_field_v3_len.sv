@@ -33,14 +33,30 @@
 // The squares come from the shared four-wide bank, one component at a time
 // across all four lanes, and are accumulated at full width here.
 //
-// The root is `zhao_field_isqrt`, the engine's own floor-exact restoring unit
-// -- 32 fixed iterations, the same one NORMALIZE uses, which is why that op
-// costs 182 clocks. ONE unit is walked across the four lanes rather than four
-// instantiated: this engine is short of area, and the walk is the same trade
-// the rotation and trig services already make.
+// The root is `zhao_field_isqrt`, the engine's own floor-exact restoring unit:
+// 32 fixed iterations, serial, with `n_ready_o` gated on being idle. It cannot
+// be pipelined without being rewritten.
 //
-// That makes this the slowest service on the path by a wide margin, and it is
-// slow for a reason that is not negotiable: `len_of` is exact, and an
+// ---------------------------------------------------------------------------
+// FOUR ROOTS, NOT ONE WALKED -- AND THE MEASUREMENT IS WHY
+// ---------------------------------------------------------------------------
+// This block first shipped with ONE root walked across the four lanes, on the
+// reasoning that the engine is shorter of area than of clocks. That reasoning
+// was wrong, and it was a measurement that said so rather than an argument:
+//
+//     MEASURED: 8 groups, 1168 clocks, II = 146 clocks/group
+//
+// against an Earth budget of 24.3 clocks per four-point group. 128 of those 146
+// clocks were the walk -- four lanes, 32 iterations each, strictly in turn --
+// and DIST2 was 74% of the entire 128-association frame.
+//
+// Four roots run the lanes together, so the root phase is 32 clocks rather than
+// 128. That is roughly 1,000 ALMs against ~251 for one, and it is the trade the
+// budget demands. `zhao_probe_dist_svc` was probed with EIGHT in two banks for
+// exactly this reason, so the shape was foreseen; four is the smaller step and
+// the measurement decides whether it is enough.
+//
+// What is NOT negotiable is exactness. `len_of` is floor-exact and an
 // approximate root would be a different answer, not a faster one.
 module zhao_field_v3_len #(
     parameter int LANES = 4
@@ -121,22 +137,25 @@ module zhao_field_v3_len #(
     end
   endfunction
 
-  // ---- the root, walked ----------------------------------------------------
-  logic        rt_n_valid, rt_n_ready, rt_r_valid;
-  logic [63:0] rt_n, rt_r;
-  logic [1:0]  root_lane_r;
-  logic        root_done_r;
+  // ---- four roots, one per lane -------------------------------------------
+  // `started_r` drops each lane's request the clock after it is taken, so one
+  // n2 is not offered twice -- the same guard the curve and ring services
+  // carry. `got_r` marks the lanes whose answers have landed; the phase ends
+  // when all four have, not when the last one is merely in flight.
+  logic [LANES-1:0] rt_n_valid, rt_n_ready, rt_r_valid;
+  logic [63:0]      rt_r [LANES];
+  logic [LANES-1:0] started_r, got_r;
 
-  zhao_field_isqrt u_isqrt (
-      .clk(clk), .rst_n(rst_n),
-      .n_valid_i(rt_n_valid), .n_ready_o(rt_n_ready),
-      .n_i(rt_n),
-      .r_valid_o(rt_r_valid), .r_ready_i(1'b1),
-      .r_o(rt_r)
-  );
-
-  assign rt_n       = n2_r[root_lane_r];
-  assign rt_n_valid = (state_r == L_ROOT) && !root_done_r;
+  for (genvar g = 0; g < LANES; g++) begin : gen_root
+    zhao_field_isqrt u_isqrt (
+        .clk(clk), .rst_n(rst_n),
+        .n_valid_i(rt_n_valid[g]), .n_ready_o(rt_n_ready[g]),
+        .n_i(n2_r[g]),
+        .r_valid_o(rt_r_valid[g]), .r_ready_i(1'b1),
+        .r_o(rt_r[g])
+    );
+    assign rt_n_valid[g] = (state_r == L_ROOT) && !started_r[g];
+  end
 
   // ---- the bank request: one component across all four lanes ---------------
   assign mul_issue_o = (state_r == L_ISSUE);
@@ -159,8 +178,8 @@ module zhao_field_v3_len #(
       tag_r         <= 8'd0;
       comp_r        <= 2'd0;
       ncomp_r       <= 2'd2;
-      root_lane_r   <= 2'd0;
-      root_done_r   <= 1'b0;
+      started_r     <= '0;
+      got_r         <= '0;
       sat_rescale_o <= 4'd0;
       o0_0_o <= '0; o0_1_o <= '0; o0_2_o <= '0; o0_3_o <= '0;
       for (int c = 0; c < 3; c++)
@@ -221,10 +240,10 @@ module zhao_field_v3_len #(
             n2_r[3] <= n2_r[3] + mul_p_3_i[63:0];
 
             if (comp_r + 2'd1 >= ncomp_r) begin
-              comp_r      <= 2'd0;
-              root_lane_r <= 2'd0;
-              root_done_r <= 1'b0;
-              state_r     <= L_ROOT;
+              comp_r    <= 2'd0;
+              started_r <= '0;
+              got_r     <= '0;
+              state_r   <= L_ROOT;
             end else begin
               comp_r  <= comp_r + 2'd1;
               state_r <= L_ISSUE;
@@ -232,39 +251,39 @@ module zhao_field_v3_len #(
           end
         end
 
-        // One root unit, four lanes, in order. `root_done_r` drops the request
-        // for the clock the answer is taken so a single n2 is not offered
-        // twice -- the same guard the curve and ring services carry.
+        // All four roots run together. The phase ends when every lane's answer
+        // has LANDED -- `got_r` is set by the capture below, so it cannot end
+        // while one is still a non-blocking assignment in flight. That is the
+        // same off-by-one the neighbour phase and the uniform fetch each cost a
+        // debugging session for.
         L_ROOT: begin
-          if (rt_n_valid && rt_n_ready) root_done_r <= 1'b1;
-          if (rt_r_valid) begin
-            // len_of's saturation: above INT32_MAX the answer clamps and the
-            // RESCALE lane is bumped, not the add lane.
-            if (rt_r > 64'd2147483647) begin
-              sat_rescale_o[root_lane_r] <= 1'b1;
-              case (root_lane_r)
-                2'd0: o0_0_o <= 32'sd2147483647;
-                2'd1: o0_1_o <= 32'sd2147483647;
-                2'd2: o0_2_o <= 32'sd2147483647;
-                default: o0_3_o <= 32'sd2147483647;
-              endcase
-            end else begin
-              sat_rescale_o[root_lane_r] <= 1'b0;
-              case (root_lane_r)
-                2'd0: o0_0_o <= rt_r[31:0];
-                2'd1: o0_1_o <= rt_r[31:0];
-                2'd2: o0_2_o <= rt_r[31:0];
-                default: o0_3_o <= rt_r[31:0];
-              endcase
-            end
-
-            if (root_lane_r == 2'd3) begin
-              state_r <= L_HOLD;
-            end else begin
-              root_lane_r <= root_lane_r + 2'd1;
-              root_done_r <= 1'b0;
+          for (int l = 0; l < LANES; l++) begin
+            if (rt_n_valid[l] && rt_n_ready[l]) started_r[l] <= 1'b1;
+            if (rt_r_valid[l] && !got_r[l]) begin
+              got_r[l] <= 1'b1;
+              // len_of's saturation: above INT32_MAX the answer clamps and the
+              // RESCALE lane is bumped, not the add lane.
+              if (rt_r[l] > 64'd2147483647) begin
+                sat_rescale_o[l] <= 1'b1;
+                case (l)
+                  0: o0_0_o <= 32'sd2147483647;
+                  1: o0_1_o <= 32'sd2147483647;
+                  2: o0_2_o <= 32'sd2147483647;
+                  default: o0_3_o <= 32'sd2147483647;
+                endcase
+              end else begin
+                sat_rescale_o[l] <= 1'b0;
+                case (l)
+                  0: o0_0_o <= rt_r[l][31:0];
+                  1: o0_1_o <= rt_r[l][31:0];
+                  2: o0_2_o <= rt_r[l][31:0];
+                  default: o0_3_o <= rt_r[l][31:0];
+                endcase
+              end
             end
           end
+
+          if (&got_r) state_r <= L_HOLD;
         end
 
         L_HOLD: begin
