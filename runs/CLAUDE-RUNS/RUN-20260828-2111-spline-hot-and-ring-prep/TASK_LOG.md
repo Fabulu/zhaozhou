@@ -902,3 +902,76 @@ is exactly what the art law forbids.
 
 Main fast-forwarded to `677458a`. Verified afterwards that all 34 hardware
 commits are ancestors of main rather than trusting the push output.
+
+## 2026-08-29 — Field and Earth, connected and measured: 9.1x over, and why
+
+**The machine is correct and it is nine times too slow.** Those are different
+problems, and the second one could not be seen until the first was finished.
+
+    crater_ring   222 clocks/group -> 7,757,568 per frame vs 850,000   9.1x
+    impact_wave   207              -> 7,233,408                        8.5x
+    wave_pool     219              -> 7,652,736                        9.0x
+
+    budget  850,000 / (128 x 273) = 24.3 clocks per four-point group
+                            / 13 uops =  1.9 clocks per vector uop
+    actual                    222 / 13 = 17.1 clocks per vector uop
+
+### The wrong model, caught before it was believed
+
+The first figure summed LATENCIES, and I reported it as an upper bound and said
+so, because the admission law asks for *initiation intervals* and summing
+latencies is the wrong model for a pipelined machine. Measuring a projection of
+the thing instead of the thing is the failure this project's own art law warns
+about, and it applies to silicon exactly as it does to a creature's proportions.
+
+So the II was measured. For the length service it is **146 clocks, equal to its
+latency** -- the bound was not pessimistic there. But the curve service measures
+**II 13 against a latency of 32**, so the two are emphatically not the same
+number in general, and assuming they were would have been wrong in the other
+direction.
+
+### The systemic finding: one service in seven is pipelined
+
+    curve service   assign req_ready_o = !st_valid;      II 13, latency 32
+    noise           assign v_ready_o = (state == S_IDLE);
+    rot             assign v_ready_o = (state == R_IDLE);
+    normalize       assign v_ready_o = (state == S_IDLE);
+    ring            assign v_ready_o = (state == G_IDLE);
+    spline          assign v_ready_o = (state == P_IDLE);
+    trig            assign v_ready_o = (state_r == T_IDLE);
+    len             assign v_ready_o = (state_r == L_IDLE);
+
+**Six of the seven refuse a new group until the current one is completely
+finished, so their throughput equals their latency.** The curve service alone
+carries a staging register and a barrel, which is why it is the only one under
+budget.
+
+Against the 24.3-clock budget:
+
+    CURVE / DCURVE / SPLINE   13   fits
+    SIN / COS                 22   fits, barely
+    RIDGE                     29   over
+    NOISE2                    36   over
+    ROT2 / ROT3            39/40   over
+    RING_PREP                 50   over
+    LEN2 / LEN3 / DIST2   146/164  over by 6x
+    NORMALIZE2 / 3        182/189  over by 8x
+
+### Which makes the fix one repeatable change, not seven different ones
+
+The curve service is the worked example. A staging register that accepts group
+N+1 while N is finishing turns latency into throughput, and it is already
+proven in this engine at 13 clocks.
+
+Two distinct pieces of work fall out, in this order:
+
+1. **A staging register on every service.** Cheap, mechanical, and it is the
+   difference between II = latency and II = the longest single phase.
+2. **Parallel roots for LEN and NORMALIZE.** Those two are dominated by ONE
+   exact `zhao_field_isqrt` walked across four lanes -- 128 of the length
+   service's 146 clocks. Four units, or a pipelined root, is the only thing
+   that touches it. `zhao_probe_dist_svc` already exists as a probe with eight
+   roots in two banks and a measured target of II <= 20, so the shape was
+   foreseen before the problem was hit.
+
+DIST2 alone is 74% of frame time, so it goes first.
