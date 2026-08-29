@@ -339,6 +339,18 @@ def mutate(gold, old, new):
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the
 # sweep. NOTHING IS DECLARED PREDICTIVELY.
 EQUIVALENT = {
+    # DECLARED 2026-08-29, after the run that showed it surviving.
+    "W06": (
+        "EQUIVALENT, AND CHECKED IN THE DISPATCHER RATHER THAN ARGUED. An "
+        "unzeroed rsp_r1 cannot be observed for a width-1 op: the drain "
+        "selects r1_r only when d_memb_r == 1, and d_memb_r counts 0 .. "
+        "width-1, so a width-1 op never reaches that branch. CURVE, DCURVE "
+        "and SPLINE are all width 1 in zhao_field_ops_pkg. The tie is "
+        "DEFENSIVE, exactly like f_spl_offered in the curve service: it makes "
+        "a width the dispatcher should never ask for drain a defined value, "
+        "wrong the same way twice instead of differently each run. "
+        "RE-SCORE IF: any op routed to the curve service is ever given a "
+        "field_long_width above 1, or the drain reads r1_r anywhere else."),
     "V08": (
         "THE NOISE UNIT'S B OPERAND IS PER STEP, NOT PER POINT, so mirroring "
         "it across the four points is the IDENTITY. Every branch of "

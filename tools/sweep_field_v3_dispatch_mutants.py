@@ -33,6 +33,23 @@ import sys
 RTL = "fpga/rtl/field/zhao_field_v3_dispatch.sv"
 
 MUTANTS = [
+    # ---- the third issue term, added 2026-08-29 with the deadlock fix ------
+    # D29 IS THE DEADLOCK ITSELF. Requiring flush_i alongside the new term makes
+    # it add nothing the flush term did not already give, which is exactly the
+    # pre-fix machine -- and it keeps every signal read, so it builds. Two
+    # contexts on different long ops then wait on each other forever, so this
+    # is caught by a TIMEOUT rather than a wrong value.
+    ("D29 the group is not closed for a context that cannot join (the deadlock)",
+     "                        (long_valid_i && !same_group_c));",
+     "                        (flush_i && long_valid_i && !same_group_c));"),
+
+    # And the other side of it: closing on a stale mismatch when nobody is
+    # actually asking. same_group_c reads the OFFERED op, which is meaningless
+    # while long_valid_i is low, so this issues short groups for no reason.
+    ("D30 the group is closed on a mismatch nobody is offering",
+     "                        (long_valid_i && !same_group_c));",
+     "                        (!same_group_c));"),
+
     # ---- the gather ---------------------------------------------------------
     ("D01 a context lands in the wrong lane of the group",
      "        g_ctx_r[fill_r[1:0]] <= long_ctx_i;",
@@ -72,14 +89,14 @@ MUTANTS = [
 
     # ---- the issue rule -----------------------------------------------------
     ("D06 a partial group is never issued, so one context alone DEADLOCKS",
-     "                       ((fill_r == 3'd4) || (flush_i && (fill_r != 3'd0)));",
-     "                       (fill_r == 3'd4);"),
+     "                       ((fill_r == 3'd4) || (flush_i && (fill_r != 3'd0)) ||",
+     "                       ((fill_r == 3'd4) || (1'b0 && flush_i && (fill_r != 3'd0)) ||"),
     ("D07 an EMPTY group is issued on flush",
-     "                       ((fill_r == 3'd4) || (flush_i && (fill_r != 3'd0)));",
-     "                       ((fill_r == 3'd4) || flush_i);"),
+     "                       ((fill_r == 3'd4) || (flush_i && (fill_r != 3'd0)) ||",
+     "                       ((fill_r == 3'd4) || flush_i ||"),
     ("D08 the group issues one context early",
-     "                       ((fill_r == 3'd4) || (flush_i && (fill_r != 3'd0)));",
-     "                       ((fill_r == 3'd3) || (flush_i && (fill_r != 3'd0)));"),
+     "                       ((fill_r == 3'd4) || (flush_i && (fill_r != 3'd0)) ||",
+     "                       ((fill_r == 3'd3) || (flush_i && (fill_r != 3'd0)) ||"),
 
     # ---- the pad ------------------------------------------------------------
     # Zero is a plausible coordinate, which is the whole reason the pad is
