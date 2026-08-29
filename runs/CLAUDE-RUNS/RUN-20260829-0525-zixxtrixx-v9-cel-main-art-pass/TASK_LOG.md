@@ -1,7 +1,7 @@
 # Task Log: RUN-20260829-0525 - Zixxtrixx v9 cel-main art pass
 
 **Created:** 2026-08-29 05:25 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260829-0525-zixxtrixx-v9-cel-main-art-pass/
 
 ---
@@ -139,13 +139,22 @@ Refine the promising-but-unsuccessful v8 cel experiment into Zixxtrixx's main pr
 - Repeated desktop and true 390 CSS-pixel current/archive interactions after correction. Both widths retain one visible requested panel, correct autoplay/controls behavior and zero horizontal overflow. Stopped both servers and all `zv9-final-*` browser profiles; ports 8765/8766 are no longer listening.
 - Replaced the stale final-presentation visual/media evidence with the corrected cel-main output and added the explicit 5,744-frame repeat plus every final direct gate report. Golden repeat/comparison evidence remains valid because clip payloads were never affected by the renderer selector.
 
+### 2026-08-29 19:19 UTC+02:00 - Integrated, published once and production-verified
+
+- Deliberately re-pinned the committed Upheaval contract to all 45 final clip payloads and the 28-bone pose CRCs from the reproducible dump. The final dump byte-matches the clean committed Upheaval checkout; no staging golden was used. Refreshed the committed 3D probe, true cel-main sequence CRCs, four every-frame 60 Hz contact sheets and durable provenance naming immutable source commit `65350e04b4cabd357a28296f69713cd0c9b2a880`.
+- Reassembled and validated the finished site: exact `noindex, nofollow`, 21 current WebM/PNG pairs, all four new clip entries, six requested archive generations in order and no missing media. Both Python tools compile, assembly is idempotent, and every one of the 5,744 encoded frames decodes from the 10,086,599-byte VP9 set.
+- Fast-forwarded both feature branches over the latest remote mains without conflicts. The production-bearing Upheaval main is `d97f7a424c9015c9ffc128406760fa5ccf370964`; zhaozhou main reached evidence commit `4ee70c628d93c432f913c5adbc738036976116fe` before this closeout record.
+- Invoked `website/deploy.ps1 -Project upheaval -Branch main` exactly once. Cloudflare deployment completed at `https://19a9bf54.upheaval.pages.dev`; production is `https://upheaval.pages.dev`.
+- Fetched both production aliases with cache bypass. Their index bytes match the clean committed Upheaval main checkout, preserve noindex and expose all required current/archive entries. Downloaded every production WebM/PNG pair; all bytes match the accepted corrected cel-main media, all 5,744 VP9 frames decode, and direct visual inspection of the production idle poster confirms the projected-size exterior contour is present.
+- Promoted `final-presentation-22-production-verification.txt`. All direct creature gates, repeat renders, media decoding, assembly, desktop/narrow interaction and production checks pass. Stopped and verified all renderer, encoder, browser, server and deployment processes; no listeners remain on ports 8765/8766 and no v9 background job survives.
+
 ---
 
 ## Subagent Spawns
 
 | Timestamp | Agent | Purpose | Status |
 |-----------|-------|---------|--------|
-| 2026-08-29 05:25 UTC+02:00 | strong Zixxtrixx modelling agent | Complete all v9 art, render, archive, gate and delivery work serially | Running |
+| 2026-08-29 05:25 UTC+02:00 | strong Zixxtrixx modelling agent | Complete all v9 art, render, archive, gate and delivery work serially | Complete |
 
 ---
 
@@ -170,9 +179,4 @@ Refine the promising-but-unsuccessful v8 cel experiment into Zixxtrixx's main pr
 
 ## Next Steps
 
-1. Resume the strong modelling agent; read all durable direction including owner direction #4 and audit published v8.
-2. Refine cel outline, lighting and texture with close/far comparison evidence.
-3. Iterate head/neck/eyes against Side.png and unlit seam evidence.
-4. Reauthor balance, add the new taunt, strengthen hit/fall, and stabilize target-embedded salto impact.
-5. Promote refined cel and restructure archive generations.
-6. Render all clips, run all gates, commit/push logical milestones, publish and verify production.
+None for this pass. Zixxtrixx v9 cel-main is integrated, deliberately re-pinned, published once and verified in production.
