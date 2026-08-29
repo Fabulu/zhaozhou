@@ -876,3 +876,29 @@ what I had never properly started.
 4-mutant question.** The acceptance test is four specific mutants. Run
 directly, it takes fifteen minutes instead of two hours. Scope the run to the
 question.
+
+## 2026-08-29 — the hardware work lands on main
+
+`main` was `98d2919` (the v9 art close) and the whole Field-engine day was on
+`zixxtrixx-v8-closeout` — 34 commits the authoritative branch did not have,
+with main 14 ahead of it. Two lanes, two histories, neither complete.
+
+Merged `origin/main` into the hardware branch: **zero conflicts**, both sides
+intact. The merged tree builds clean and the fast lane came back with only
+`format_check` and `creature_core` red — and both were verified to be
+**pre-existing on main**, because all four art-lane files are byte-identical to
+main. The merge introduced nothing.
+
+`format_check` is now green. Five files: two of mine that had never had
+clang-format run on them, and three of the art lane's that I had deliberately
+left alone all day. Reformatting a file another session is editing is a
+collision rather than a fix — that reason expired when their handoff landed and
+they stopped, and by then their 47 whitespace lines were the only thing keeping
+the repository's own gate red.
+
+`creature_core` stays red and stays untouched. "Creature does not fill the
+frame" is the creature's appearance, and a hardware pass quietly changing that
+is exactly what the art law forbids.
+
+Main fast-forwarded to `677458a`. Verified afterwards that all 34 hardware
+commits are ancestors of main rather than trusting the push output.
