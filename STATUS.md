@@ -5,6 +5,83 @@ at the top.*
 
 ---
 
+## 2026-08-29 (later) -- there are now TWO services on the bank
+
+*Short version: SPLINE runs on the fast path end to end, the composed machine
+checks its answers against the reference, and the arrangement your starvation
+question was about now physically exists.*
+
+Until today the service path had exactly one service, so "can one service
+starve another" was not a question the hardware could answer -- one claimant
+cannot starve anybody. It has two now: the noise unit, and the curve service
+that does CURVE, DCURVE and SPLINE.
+
+### What I had to decide, and what I deliberately did not
+
+**Order.** Adding SPLINE to the opcode table is one line, and it is what makes
+the executor OFFER the op. Doing it first would have rebuilt precisely the
+deadlock that table exists to prevent -- an instruction offered by one block
+and answerable by nobody, parked forever, nothing timing out. So the service
+went onto the path first and the one-line table entry was the LAST step.
+
+**Tables belong to the program.** Curve and spline read a knot table your
+program supplies. I ran a load port straight through the machine rather than
+parking a table inside the service. A service with a table baked into it looks
+self-contained in exactly the way that hides the missing plumbing.
+
+**Priority is a choice, and I am flagging it rather than burying it.** The bank
+now has three claimants -- the ALU lanes, the noise unit, the curve service --
+and the curve service outranks the noise unit. That is not a consequence of
+being added last; it is a decision, and it is the decision your starvation
+question is about. **I have not predicted what it costs.** The measurement is
+its own step and it comes with a number or not at all.
+
+### The composed machine now checks SPLINE's ANSWERS
+
+The maths was already closed and so was the table lookup. What was unproven was
+the path between them and the rest of the machine: the op being offered,
+accepted, routed to the right service rather than the other one, and the answer
+landing in the right register.
+
+Proving that needs a VALUE check, not a liveness check -- "it finished and
+nothing complained" would pass just as happily if the answer belonged to
+somebody else. Four probes, deliberately spread below the table, exactly on a
+knot, between two knots and past the end, each compared against the reference:
+
+    below the table   ->  458752    (the first knot's value, replicated)
+    on a knot         ->  720896    (that knot's value)
+    between two       ->  184320    (the cubic actually running)
+    past the end      ->  131072    (the last knot's value, replicated)
+
+All four match. 102 checks on the composed machine, up from 86.
+
+### One test had to change, and I want to be explicit about it
+
+A check that asserted "SPLINE is refused as unsupported" was true this morning
+and is false by design tonight. I moved it rather than deleting it: `OP_RING`
+takes over that role, and not as a convenient stand-in -- your brief leaves the
+varying-radius ring cold, so it is genuinely an op the table does not know.
+
+A test that changes because the behaviour changed is fine. A test deleted
+because it became inconvenient is not, and the difference is worth stating.
+
+### The stale-binary trap caught me, and the tell was the number
+
+The composed build failed, and the shell then ran the OLD executable, which
+cheerfully reported everything green including the old "SPLINE is unsupported"
+result -- for a machine that no longer existed. The tell is the one in the
+build notes: a measurement that did not move after a change that must have
+moved it.
+
+### Running now
+
+The service path's 37 deliberate-defect checks -- 25 re-scored against the new
+shape, 12 written for the routing and arbitration that did not exist before.
+Three of the 25 had to be repaired first; they had been scored as passing and
+had quietly stopped being applicable at all. That is twice today.
+
+---
+
 ## 2026-08-29 -- SPLINE's lookup is green, and the bug argued against being found
 
 *Short version: the hot SPLINE path now matches the reference oracle exactly --
