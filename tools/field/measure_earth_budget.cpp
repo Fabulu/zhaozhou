@@ -66,25 +66,37 @@ constexpr int kAssociationsPerFrame = 128;
 constexpr long kFrameBudget = 850000;
 constexpr long kAssociationBudget = 6000;
 
-/** Measured end-to-end group latency, in clocks, on the composed machine. */
+/** MEASURED INITIATION INTERVAL, in clocks per four-point group.
+ *
+ *  II, NOT LATENCY. The admission law asks for "measured service initiation
+ *  intervals" and this tool first used latencies, which reported Earth 9.1x
+ *  over. That was an upper bound and it was labelled as one, but for the six
+ *  services that gated ready on being idle the two numbers were the same and
+ *  the bound was tight. Pipelining them separated the two, so the figures below
+ *  are streamed measurements: N groups back to back, elapsed clocks divided by
+ *  groups RETIRED.
+ *
+ *  Sources: each block's own `MEASURED: ... II = N clocks/group` line.
+ */
 int cost_of(uint8_t op) {
   switch (op) {
-    // ---- the service path, measured 2026-08-29 ----------------------------
-    case zfield::OP_CURVE: return 32;
-    case zfield::OP_DCURVE: return 29;
-    case zfield::OP_SPLINE: return 53;
+    // ---- pipelined, streamed measurements --------------------------------
+    case zfield::OP_CURVE: return 13;        // curve service, II gate
+    case zfield::OP_DCURVE: return 13;
+    case zfield::OP_SPLINE: return 13;
+    case zfield::OP_SIN: return 4;           // trig, streamed
+    case zfield::OP_COS: return 4;
+    case zfield::UOP_RING_PREP: return 19;   // two ring units
+    case zfield::OP_LEN2: return 22;         // two banks of four roots
+    case zfield::OP_LEN3: return 22;
+    case zfield::OP_DIST2: return 22;
+    // ---- STILL BLOCKING: v_ready gated on idle, so II = latency ----------
     case zfield::OP_RIDGE: return 29;
     case zfield::OP_NOISE2: return 36;
     case zfield::OP_NORMALIZE2: return 182;
     case zfield::OP_ROT2: return 39;
     case zfield::OP_NORMALIZE3: return 189;
     case zfield::OP_ROT3: return 40;
-    case zfield::UOP_RING_PREP: return 50;
-    case zfield::OP_SIN: return 22;
-    case zfield::OP_COS: return 22;
-    case zfield::OP_LEN2: return 161;
-    case zfield::OP_LEN3: return 164;
-    case zfield::OP_DIST2: return 161;
     // ---- the ALU: one instruction per clock through the pipe --------------
     // Short ops retire at issue rate. Counted as 1 rather than 0 so a program
     // made entirely of them still has a cost.
@@ -177,8 +189,24 @@ int main(int argc, char** argv) {
       per_group += c;
       by_op[v.op] += c;
     }
+    // TWO BOUNDS, because one of them is a projection and saying which is the
+    // difference between a measurement and a hope.
+    //
+    // SERIAL sums every uop's II: what the machine costs if nothing overlaps.
+    // OVERLAPPED takes the busiest single service: what it costs if every
+    // service runs concurrently and the group rate is set by whichever is most
+    // loaded. The truth is between them, and WHERE between them is a composed
+    // measurement this tool cannot make.
+    long busiest = 0;
+    for (const auto& kv : by_op)
+      if (kv.second > busiest) busiest = kv.second;
+    const long ov_group = busiest;
+    const long ov_frame = ov_group * kGroupsPerAssociation * kAssociationsPerFrame;
+
     const long per_assoc = per_group * kGroupsPerAssociation;
     const long per_frame = per_assoc * kAssociationsPerFrame;
+    printf("%-16s  OVERLAPPED group %4ld  frame %9ld %s\n", base(argv[i]), ov_group,
+           ov_frame, ov_frame <= kFrameBudget ? "FITS" : "OVER");
     if (per_frame > worst_frame) {
       worst_frame = per_frame;
       worst_name = base(argv[i]);
