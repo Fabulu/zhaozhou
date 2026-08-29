@@ -1608,6 +1608,18 @@ set_tests_properties(field_v3_ring_random_nightly PROPERTIES LABELS "nightly" TI
 # FIELD v3 Phase 4: NORMALIZE2 and NORMALIZE3 for four points at once. Owns an
 # isqrt (walked four times -- the documented slow path, and NORMALIZE is COLD in
 # the op table) and an rcp24 seed ROM, and takes ten four-wide bank requests.
+# ---- the uniform (scalar) bank -------------------------------------------
+# 64 slots because tools/field/measure_sreg_hwm.cpp measured a worst case of 41
+# across the corpus; the probe is committed so the number can be rechecked.
+add_executable(test_field_v3_sbank_directed differential/field_v3_sbank_directed.cpp)
+target_link_libraries(test_field_v3_sbank_directed PRIVATE zhao_harness)
+verilate(test_field_v3_sbank_directed
+  PREFIX Vzhao_field_v3_sbank
+  TOP_MODULE zhao_field_v3_sbank
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_sbank.sv)
+add_test(NAME field_v3_sbank_directed COMMAND test_field_v3_sbank_directed)
+set_tests_properties(field_v3_sbank_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_executable(test_field_v3_normalize_directed differential/field_v3_normalize_directed.cpp)
 target_link_libraries(test_field_v3_normalize_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_v3_normalize_directed
