@@ -992,8 +992,15 @@ constexpr int32_t kFallWaveSpatial = 4700; // ~1.3 wavelengths down the body
 // straight, collapses into a tighter curve, and the recognisable S
 // RECURS instead of being mandatory. Wobble not jitter: one term, slow.
 constexpr int32_t kFallAuthMid = 500;      // mean S authority, 1/1000
-constexpr int32_t kFallAuthSwing = 420;    // swing: 16%..84% over the loop
+constexpr int32_t kFallAuthSwing = 420;    // swing: 8%..92% over the loop
 constexpr int32_t kFallAuthSpatial = 4400; // phase step per joint
+// V9 falling flail: a separate two-cycle pitch-shape wave moves through the
+// entire chain over the slow 4.8 s tumble. It changes accumulated slope rather
+// than spraying rotations onto joints, so the response is quicker and bends
+// harder while remaining one broad, readable propagation with no twitch.
+constexpr int32_t kFallBendAmp = 6200;
+constexpr int32_t kFallBendSpatial = 4700;
+constexpr int32_t kFallBendTailAuthority = 720;  // 1/1000 at the fork
 // NONUNIFORM tumble (2026-08-27, reports/ZixxtrixxReport: "a perfectly
 // uniform full revolution reads like a display turntable"). The tumble
 // phase is warped by this * sin(phase): it accelerates through one half of
@@ -2435,8 +2442,17 @@ inline zc::Clip build_fall() {
         const int32_t sa =
             zref::fx_sin(zref::angle16{static_cast<uint16_t>(pa & 0xFFFF)}).raw;
         const int32_t auth = kFallAuthMid + ((sa * kFallAuthSwing) >> 16);
+        const int32_t pb = ph * 2 - k * kFallBendSpatial + 7000;
+        const int32_t sb =
+            zref::fx_sin(zref::angle16{static_cast<uint16_t>(pb & 0xFFFF)}).raw;
+        const int32_t bend_env =
+            1000 - ((1000 - kFallBendTailAuthority) * k) /
+                       (kStanceSlopes - 1);
+        const int32_t bend = static_cast<int32_t>(
+            (static_cast<int64_t>(sb) * kFallBendAmp * bend_env / 1000) >> 16);
         const int32_t d =
-            static_cast<int32_t>((static_cast<int64_t>(kStanceSlope[k]) * auth) / 1000);
+            static_cast<int32_t>((static_cast<int64_t>(kStanceSlope[k]) * auth) / 1000) +
+            bend;
         const int32_t pitch = d - prev;
         prev = d;
         g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_z(pitch));
@@ -3232,6 +3248,7 @@ inline zc::Clip build_look() {
 // complete.") Which donor slot each of these answers, and the engine
 // semantics behind the choices, is documented in
 // Upheaval/creature/Zixxtrixx/ANIMATION-VOCABULARY.md.
+constexpr int kSlotFall = 4;       // donor fall -- looping loose aerial flail
 constexpr int kSlotKnock = 20;     // donor knocked2Floor
 constexpr int kSlotGetUp = 21;     // donor getUp
 constexpr int kSlotHitFloor = 22;  // donor hitFloor (the landing after falling)
@@ -3241,8 +3258,9 @@ constexpr int kSlotDmgLeft = 25;   // donor damageLeft
 constexpr int kSlotDmgTop = 26;    // donor damageTop
 constexpr int kSlotRun = 27;       // donor run
 constexpr int kSlotDeath1 = 28;    // donor death1 (random pick with death0)
-constexpr int kSlotTaunt = 30;     // donor laugh -- the owner's taunt
+constexpr int kSlotTaunt = 30;     // donor laugh -- the owner's quick taunt
 constexpr int kSlotCorpse = 31;    // donor corpse (the dead body is a clip)
+constexpr int kSlotSlowTaunt = 44; // slower neck-led left/right taunt
 
 // ---- the knockdown chain --------------------------------------------------
 // THE KNOCKED POSE is ONE set of bytes: knocked2Floor and hitFloor END on it
@@ -3886,6 +3904,81 @@ inline zc::Clip build_taunt() {
     c.root[f * 3 + 1] = fxm(rise);
   }
   c.events = {{14, zc::kEvSound, 1}};  // the taunt call
+  return c;
+}
+
+// ---- Slot 44 - SLOW NECK-LED TAUNT ---------------------------------------
+// Slot 30 is frozen. This is a separate, much slower performance: the lower
+// neck starts each left/right change, the skull follows four keys later, and
+// the bend is countered back to zero before the grounded body so it reads as a
+// travelling neck gesture rather than a rigid whole-animal yaw. The head's
+// Indian-style ear-to-shoulder tilt is the punctuation, not the driver.
+constexpr int kSlowTauntKeys = 120;
+constexpr int32_t kSlowTauntNeckYaw = 3900;
+constexpr int32_t kSlowTauntHeadYaw = 2300;
+constexpr int32_t kSlowTauntHeadTilt = 5200;
+constexpr int32_t kSlowTauntBodyLife = 460;
+constexpr int kSlowTauntHeadLagKeys = 4;
+
+inline int32_t slow_taunt_side(int f) {
+  // Centre -> left hold -> right hold -> left hold -> centre. Each crossing is
+  // a long smooth transition; there is no high-frequency joint noise.
+  return ss1000(f, 8, 24) -
+         2 * ss1000(f, 34, 54) +
+         2 * ss1000(f, 66, 86) -
+         ss1000(f, 98, 114);
+}
+
+inline zc::Clip build_slow_taunt() {
+  zc::Clip c;
+  c.slot_id = kSlotSlowTaunt;
+  c.interpolate = true;
+  c.frame_count = static_cast<uint16_t>(kSlowTauntKeys);
+  c.root.assign(static_cast<size_t>(kSlowTauntKeys) * 3, 0);
+  c.quats.assign(static_cast<size_t>(kSlowTauntKeys) * kBoneCount,
+                 zc::quat16_identity());
+
+  const int32_t per_key = 65536 / kSlowTauntKeys;
+  for (int f = 0; f < kSlowTauntKeys; ++f) {
+    Rig g;
+    g.reset();
+    const int32_t ph = f * per_key;
+    const int32_t life = ss1000(f, 0, 12) - ss1000(f, 106, 119);
+    const int32_t body_amp = (kSlowTauntBodyLife * life) / 1000;
+    const int32_t rise = idle_body(g, ph, body_amp);
+
+    const int32_t neck_side = slow_taunt_side(f);
+    const int32_t head_side = slow_taunt_side(f - kSlowTauntHeadLagKeys);
+    const int32_t neck = (neck_side * kSlowTauntNeckYaw) / 1000;
+
+    // Desired accumulated world-yaw profile through the visible neck. The
+    // profile returns to zero at joint 4, so the long grounded run does not
+    // swivel or dig while the front performs. Express each world delta in the
+    // current joint's local frame, as in the grounded idle snake.
+    constexpr int32_t kNeckProfile[5] = {650, 1000, 700, 320, 0};
+    zc::quat16 acc = zc::quat16_identity();
+    int32_t previous = 0;
+    for (int k = 0; k < 5; ++k) {
+      acc = quat_mul(acc, g.q[kBSpine0 + k]);
+      const int32_t desired = (neck * kNeckProfile[k]) / 1000;
+      const zc::quat16 world_delta = quat_y(desired - previous);
+      const zc::quat16 local_delta =
+          quat_mul(quat_mul(quat_conj(acc), world_delta), acc);
+      g.q[kBSpine0 + k] =
+          quat_mul(g.q[kBSpine0 + k], local_delta);
+      acc = quat_mul(acc, local_delta);
+      previous = desired;
+    }
+
+    const int32_t head_yaw = (head_side * kSlowTauntHeadYaw) / 1000;
+    const int32_t head_tilt = (head_side * kSlowTauntHeadTilt) / 1000;
+    g.q[kBHead] = quat_mul(
+        g.q[kBHead], quat_mul(quat_y(head_yaw), quat_x(head_tilt)));
+
+    g.write(c, f);
+    c.root[f * 3 + 1] = fxm(rise);
+  }
+  c.events = {{16, zc::kEvSound, 1}};
   return c;
 }
 
@@ -4891,7 +4984,6 @@ inline zc::Clip build_sweep() {
 constexpr int kSlotAtkDummy = 33;  // strike the grounded target dummy
 constexpr int kSlotAtkFly = 34;    // strike the FLYING target dummy
 constexpr int kSlotAtkSix = 35;    // six somersaults, the long ground dive
-constexpr int kSlotSlowTaunt = 44; // reserved for the slower neck-led taunt
 constexpr int kSlotJumpOne = 46;   // immediate spring jump, one salto
 constexpr int kSlotJumpMulti = 47; // same jump builder, three saltos
 constexpr int kSlotAtkNine = 48;   // nine-salto target attack / limit probe
@@ -5758,6 +5850,7 @@ inline const zc::CreatureType& type() {
     bank.clips.push_back(build_run());
     bank.clips.push_back(build_death1());
     bank.clips.push_back(build_taunt());
+    bank.clips.push_back(build_slow_taunt());
     {
       // the corpse starts on the death's own final key, byte-for-byte
       const zc::Clip* d0 = nullptr;

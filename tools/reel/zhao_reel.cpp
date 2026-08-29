@@ -4215,10 +4215,10 @@ SceneSubject subject_zixx_fall_side() {
   s.frames = zixx::kFallKeys * 2;
   s.orbit = false;
   zixx_common(s);
-  s.cam_k = 290000;  // RUN 1939: kFallLift rose 916 -> 1371 for the rolled
-                     // fan's deeper sweep, and at 340000 the loop left the
-                     // frame top for two contact-sheet rows (fall-it4-sheet)
-                     // -- the recorded fault class, re-widened
+  // Match the accepted site shot's pullback/bias. The diagnostic only helps if
+  // every travelling bend stays visible instead of leaving the frame.
+  s.cam_k = 140000;
+  s.cam_bias = 16000;
   s.note = "DIAGNOSTIC: one full falling loop, fixed side camera, no orbit";
   return s;
 }
@@ -4550,6 +4550,26 @@ SceneSubject subject_zixx_taunt() {
       "slot): the front lobe rears up proud, the blades flare wide, and the "
       "head wags side to side -- slow and eased, the neck following, the "
       "mid-body counter-swaying a whisper";
+  return s;
+}
+
+// The separate slow taunt, fixed three-quarter so the neck's lateral curve and
+// the delayed ear-to-shoulder head tilt remain readable together.
+SceneSubject subject_zixx_slow_taunt() {
+  SceneSubject s;
+  s.name = "zixxtrixx-slow-taunt";
+  s.creature = 46;  // clip slot 44
+  s.frames = 2 * (zixx::kSlowTauntKeys - 1) + 1;
+  s.canonical_creature_timeline = true;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 12288;
+  s.cam_k = 300000;
+  s.bump_ext = 18;
+  s.note =
+      "A separate slow neck-led taunt: the lower neck bends left and right, "
+      "the skull follows with a delayed funny tilt, and the loose body keeps "
+      "breathing underneath";
   return s;
 }
 
@@ -5212,8 +5232,10 @@ constexpr LibraryEntry kLibrary[] = {
      "The caterpillar gait at a hungry cadence, taller hump, nose in", true},
     {"zixxtrixx-death2", "Zixxtrixx death, second way",
      "Agony rear-up, forward collapse to prone, two tail slaps, still", true},
-    {"zixxtrixx-taunt", "Zixxtrixx taunt",
-     "Rears up proud, blades flared, head wagging side to side", true},
+    {"zixxtrixx-taunt", "Zixxtrixx quick taunt",
+     "Preserved fast cheeky head bobble over a loose body", true},
+    {"zixxtrixx-slow-taunt", "Zixxtrixx slow taunt",
+     "Neck-led left/right bends with a delayed funny head tilt", true},
     {"zixxtrixx-salto-dummy", "Zixxtrixx salto: grounded target",
      "The planner aims the spear at a standing dummy; mid-air hit, recoil", true},
     {"zixxtrixx-salto-fly", "Zixxtrixx salto: flying target",
@@ -5412,6 +5434,7 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-run")) rc |= render_scene(subject_zixx_run());
   if (wanted("zixxtrixx-death2")) rc |= render_scene(subject_zixx_death2());
   if (wanted("zixxtrixx-taunt")) rc |= render_scene(subject_zixx_taunt());
+  if (wanted("zixxtrixx-slow-taunt")) rc |= render_scene(subject_zixx_slow_taunt());
   if (wanted("zixxtrixx-corpse")) rc |= render_scene(subject_zixx_corpse());
   if (wanted("zixxtrixx-salto-dummy")) rc |= render_scene(subject_zixx_salto_dummy());
   if (wanted("zixxtrixx-salto-fly")) rc |= render_scene(subject_zixx_salto_fly());

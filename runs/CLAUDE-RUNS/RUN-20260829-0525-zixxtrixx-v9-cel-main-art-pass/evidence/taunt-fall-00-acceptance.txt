@@ -1,0 +1,23 @@
+Zixxtrixx v9 slow-taunt and falling-flail acceptance — 2026-08-29
+
+Art adjudication
+- Slot 30's historical quick taunt was left intact. A pre-edit golden and the final direct-build golden compare byte-for-byte exactly: 13,224 bytes and SHA-256 6823ae3a192915931e62617647b4f0daa472f0e48442fe6670512ca7e0c05f05.
+- Slot 44 is a separate 120-key slow performance. The lower neck leads broad left/right changes, the skull follows four authored keys later, and its ear-to-shoulder tilt supplies the funny punctuation. Slow loose body life continues underneath.
+- Inspected all 239 canonical cel-main frames and the native-size every-eight-frame sheet. The motion reads center-left-right-left-center, is substantially slower than slot 30, and has no isolated bad frame, snap or twitch. It begins and ends at exact canonical rest.
+- Strengthened slot 4 by adding a two-cycle travelling accumulated-pitch wave rather than unrelated high-frequency joint rotations. The slow nonuniform tumble, loose loll, lateral motion and blade play remain intact.
+- Inspected all 288 looping cel-main frames and native-size samples. The complete body now progresses through straighter stretches, deep C bends and recurring S shapes; propagation is faster while the performance remains slow and loose.
+- Rejected fixed diagnostic framings at camera scales 290000, 210000 and 180000 because parts of the rotating fan left or touched the frame. The accepted 140000 fixed side camera keeps every bend and fan tip visible through the whole loop.
+- All animation, timing and diagnostic-camera values remain named controls. Measurements below compare and guard the eye-authored accepted motion; they did not generate it.
+
+Committed comparison envelopes
+- Slow taunt: 120 keys / 239 samples; four-key neck lead; maximum 60 Hz station step 20 mm (accepted ceiling 40 mm); exact first/final root and complete palette.
+- Fall: 144 keys / 288 looping samples, including the real final-key-to-first-key midpoint.
+- Rigid-transform-invariant chord travel through regions 0–14 / 14–28 / 28–42 / 42–56 is 349 / 203 / 68 / 177 mm.
+- Consecutive regional compression extrema propagate with 32 / 32 presentation-tick lags.
+- Maximum fall 60 Hz station step is 149 mm; the two loop-seam half-steps are 130 / 128 mm (accepted ceiling 220 mm).
+
+Reproducibility and gates
+- Clean direct rebuild of every dependent creature tool passed. No cmake build was used.
+- A second final-source render is byte-identical across all 239 slow-taunt frames and all 288 falling frames.
+- Posed taunt/fall/contact/continuity probe, strike-tip, exact target interaction, camera/LOD/outline/fixed-point limits, mesh/seam, planner, choreography and redirected reel sequence-CRC gates all pass.
+- Final complete-v9 golden repinning remains deliberately deferred to the complete creature closeout.

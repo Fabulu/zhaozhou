@@ -88,7 +88,9 @@ ClipScan scan_clip(const zc::CreatureType& type, const zc::Clip& clip,
                    const std::vector<Station>& stations) {
   ClipScan scan;
   scan.clip = &clip;
-  const int ns = presentation_samples(clip);
+  const int ns = clip.slot_id == zixx::kSlotFall
+                     ? 2 * static_cast<int>(clip.frame_count)
+                     : presentation_samples(clip);
   scan.samples.reserve(ns);
   for (int tick = 0; tick < ns; ++tick) {
     PosedSample s;
@@ -481,6 +483,167 @@ int main() {
             "balance does not recover bit-exactly to authored rest");
   }
 
+  // The historical quick taunt remains slot 30. Slot 44 is deliberately a
+  // separate, much slower performance: lower-neck rotation starts first, then
+  // the skull's local wobble arrives four authored keys later. These checks
+  // guard the visually accepted 239-frame sequence; they do not choose motion.
+  if (const ClipScan* slow = find_scan(scans, zixx::kSlotSlowTaunt)) {
+    const ClipScan* quick = find_scan(scans, zixx::kSlotTaunt);
+    require(slow->clip->frame_count == zixx::kSlowTauntKeys &&
+                slow->samples.size() ==
+                    static_cast<size_t>(2 * (zixx::kSlowTauntKeys - 1) + 1),
+            "slow taunt lost its authored 120-key / 239-sample cadence");
+    require(quick != nullptr &&
+                slow->clip->frame_count > 2 * quick->clip->frame_count,
+            "slow taunt is no longer substantially slower than quick slot 30");
+    require(key_pose_equal(*slow->clip, 0, zixx::kSlowTauntKeys - 1,
+                           type.bank.bone_count, true),
+            "slow taunt does not begin and end at bit-exact rest");
+
+    const auto idle_at = [](int f) {
+      zixx::Rig g;
+      g.reset();
+      const int32_t ph = f * (65536 / zixx::kSlowTauntKeys);
+      const int32_t life = zixx::ss1000(f, 0, 12) -
+                           zixx::ss1000(f, 106, 119);
+      zixx::idle_body(g, ph, (zixx::kSlowTauntBodyLife * life) / 1000);
+      return g;
+    };
+    constexpr int kNeckLeadKey = 12;
+    constexpr int kHeadFollowKey =
+        kNeckLeadKey + zixx::kSlowTauntHeadLagKeys;
+    const zixx::Rig lead_idle = idle_at(kNeckLeadKey);
+    const zixx::Rig follow_idle = idle_at(kHeadFollowKey);
+    const zc::quat16& lead_neck =
+        slow->clip->quats[kNeckLeadKey * type.bank.bone_count +
+                          zixx::kBSpine0];
+    const zc::quat16& lead_head =
+        slow->clip->quats[kNeckLeadKey * type.bank.bone_count + zixx::kBHead];
+    const zc::quat16& follow_head =
+        slow->clip->quats[kHeadFollowKey * type.bank.bone_count + zixx::kBHead];
+    require(std::memcmp(&lead_neck, &lead_idle.q[zixx::kBSpine0],
+                        sizeof(lead_neck)) != 0,
+            "slow taunt lower neck no longer initiates the gesture");
+    require(std::memcmp(&lead_head, &lead_idle.q[zixx::kBHead],
+                        sizeof(lead_head)) == 0,
+            "slow taunt skull moved before its declared neck lead");
+    require(std::memcmp(&follow_head, &follow_idle.q[zixx::kBHead],
+                        sizeof(follow_head)) != 0,
+            "slow taunt skull no longer follows the neck with delayed tilt");
+
+    const StationStepMaximum continuity = station_step_max_mm(
+        *slow, 1, static_cast<int>(slow->samples.size()) - 1);
+    constexpr int32_t kAcceptedSlowTauntMaxStationStepMm = 40;
+    require(continuity.mm <= kAcceptedSlowTauntMaxStationStepMm,
+            "slow taunt regained a high-frequency station twitch");
+    std::printf("TAUNT slow: %d keys / %zu samples, neck lead %d keys, "
+                "max 60 Hz station step %d mm at %d%s station %d\n",
+                slow->clip->frame_count, slow->samples.size(),
+                zixx::kSlowTauntHeadLagKeys, continuity.mm,
+                continuity.tick / 2, (continuity.tick & 1) ? ".5" : "",
+                continuity.station);
+  } else {
+    require(false, "missing separate slow taunt in slot 44");
+  }
+
+  // Falling is a looping 4.8-second tumble, so unlike one-shot clips its 60 Hz
+  // scan includes the real midpoint from final key back to key zero. Rigid-
+  // transform-invariant chord ranges compare the accepted faster travelling
+  // bend through four complete body regions, while station steps catch twitch.
+  if (const ClipScan* fall = find_scan(scans, zixx::kSlotFall)) {
+    require(fall->clip->frame_count == zixx::kFallKeys &&
+                fall->samples.size() ==
+                    static_cast<size_t>(2 * zixx::kFallKeys),
+            "fall lost its authored 144-key / 288-sample loop cadence");
+    constexpr std::array<std::pair<int, int>, 4> kFallSpans = {
+        std::pair<int, int>{0, 14}, {14, 28}, {28, 42}, {42, 56}};
+    std::array<int32_t, kFallSpans.size()> chord_low{};
+    std::array<int32_t, kFallSpans.size()> chord_high{};
+    std::array<int, kFallSpans.size()> low_tick{};
+    std::array<int, kFallSpans.size()> high_tick{};
+    chord_low.fill(INT32_MAX);
+    chord_high.fill(INT32_MIN);
+    for (const PosedSample& s : fall->samples) {
+      for (size_t i = 0; i < kFallSpans.size(); ++i) {
+        const int a = kFallSpans[i].first;
+        const int b = kFallSpans[i].second;
+        const int64_t dx = s.x_mm[b] - s.x_mm[a];
+        const int64_t dy = s.y_mm[b] - s.y_mm[a];
+        const int64_t dz = s.z_mm[b] - s.z_mm[a];
+        const int32_t chord = static_cast<int32_t>(zref::isqrt_u64(
+            static_cast<uint64_t>(dx * dx + dy * dy + dz * dz)));
+        if (chord < chord_low[i]) {
+          chord_low[i] = chord;
+          low_tick[i] = s.tick;
+        }
+        if (chord > chord_high[i]) {
+          chord_high[i] = chord;
+          high_tick[i] = s.tick;
+        }
+      }
+    }
+    const StationStepMaximum continuity = station_step_max_mm(
+        *fall, 1, static_cast<int>(fall->samples.size()) - 1);
+    int32_t seam_first_half_step = 0;
+    int32_t seam_second_half_step = 0;
+    const PosedSample& seam_key = fall->samples[fall->samples.size() - 2];
+    const PosedSample& seam_mid = fall->samples.back();
+    const PosedSample& first = fall->samples.front();
+    for (int i = 0; i < zixx::kProfileStations; ++i) {
+      const int64_t ax = seam_mid.x_mm[i] - seam_key.x_mm[i];
+      const int64_t ay = seam_mid.y_mm[i] - seam_key.y_mm[i];
+      const int64_t az = seam_mid.z_mm[i] - seam_key.z_mm[i];
+      seam_first_half_step = std::max(
+          seam_first_half_step,
+          static_cast<int32_t>(zref::isqrt_u64(
+              static_cast<uint64_t>(ax * ax + ay * ay + az * az))));
+      const int64_t dx = first.x_mm[i] - seam_mid.x_mm[i];
+      const int64_t dy = first.y_mm[i] - seam_mid.y_mm[i];
+      const int64_t dz = first.z_mm[i] - seam_mid.z_mm[i];
+      seam_second_half_step = std::max(
+          seam_second_half_step,
+          static_cast<int32_t>(zref::isqrt_u64(
+              static_cast<uint64_t>(dx * dx + dy * dy + dz * dz))));
+    }
+    constexpr std::array<int32_t, 4> kAcceptedFallMinChordTravelMm = {
+        280, 160, 50, 140};
+    bool whole_body_shape_travels = true;
+    for (size_t i = 0; i < kFallSpans.size(); ++i)
+      if (chord_high[i] - chord_low[i] < kAcceptedFallMinChordTravelMm[i])
+        whole_body_shape_travels = false;
+    require(whole_body_shape_travels,
+            "fall lost the accepted stronger bend through a body region");
+    // The first three regional compression extrema follow one another by 16
+    // authored keys in the accepted motion. A broad 12..20-key envelope proves
+    // propagation without turning that observed art into a generated value.
+    const int lead_lag_01 = low_tick[0] - low_tick[1];
+    const int lead_lag_12 = low_tick[1] - low_tick[2];
+    require(lead_lag_01 >= 24 && lead_lag_01 <= 40 &&
+                lead_lag_12 >= 24 && lead_lag_12 <= 40,
+            "fall bend no longer propagates progressively through the body");
+    constexpr int32_t kAcceptedFallMaxStationStepMm = 220;
+    require(continuity.mm <= kAcceptedFallMaxStationStepMm &&
+                seam_first_half_step <= kAcceptedFallMaxStationStepMm &&
+                seam_second_half_step <= kAcceptedFallMaxStationStepMm,
+            "fall regained a high-frequency step or looping-seam twitch");
+    std::printf("FALL shape-travel chord ranges:");
+    for (size_t i = 0; i < kFallSpans.size(); ++i)
+      std::printf(" %d-%d=%d (lo %d%s / hi %d%s)",
+                  kFallSpans[i].first, kFallSpans[i].second,
+                  chord_high[i] - chord_low[i], low_tick[i] / 2,
+                  (low_tick[i] & 1) ? ".5" : "", high_tick[i] / 2,
+                  (high_tick[i] & 1) ? ".5" : "");
+    std::printf(" mm; regional propagation lags %d/%d ticks; max 60 Hz "
+                "station step %d mm at %d%s station %d; seam half-steps "
+                "%d/%d mm\n",
+                lead_lag_01, lead_lag_12, continuity.mm,
+                continuity.tick / 2,
+                (continuity.tick & 1) ? ".5" : "", continuity.station,
+                seam_first_half_step, seam_second_half_step);
+  } else {
+    require(false, "missing looping fall clip in slot 4");
+  }
+
   // Non-adjacent station overlap at the real 60 Hz presentation cadence.
   int total_overlaps = 0;
   for (const ClipScan& scan : scans) {
@@ -842,7 +1005,7 @@ int main() {
 
   if (failures == 0) {
     std::printf("ZIXX PROBE: PASS — every key + midpoint, declared 3D contact, "
-                "balance/impact/spring/jump/limit/overlap gates\n");
+                "balance/taunt/fall/impact/spring/jump/limit/overlap gates\n");
     return 0;
   }
   std::printf("ZIXX PROBE: FAIL — %d assertion(s)\n", failures);

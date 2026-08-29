@@ -102,6 +102,16 @@ Refine the promising-but-unsuccessful v8 cel experiment into Zixxtrixx's main pr
 - Four rigid-transform-invariant upper-body chord spans vary by `16/21/9/49 mm`, proving actual shape travel rather than global rotation. Maximum 60 Hz posed-station step is `263 mm`; first/final roots and all palette channels are bit-exact.
 - Rebuilt every dependent tool directly and passed posed contact/shape travel, strike-tip, exact frozen target interaction, camera/LOD/outline/fixed-point limits, mesh/seam, planner, choreography and redirected reel sequence-CRC gates. Promoted the accepted visual sheets and ten gate reports under `evidence/balance-*`; final golden repinning remains deliberately deferred to complete-v9 closeout.
 
+### 2026-08-29 23:34 UTC+02:00 - Separate slow taunt and stronger loose falling flail accepted
+
+- Preserved historical quick taunt slot 30 without editing its builder. Captured a golden before the animation source changes and compared it against the final clean direct-build golden: both 13,224-byte `clip-30.bin` payloads have SHA-256 `6823ae3a192915931e62617647b4f0daa472f0e48442fe6670512ca7e0c05f05` and compare byte-for-byte exactly.
+- Added slot 44 as a separate 120-key slow taunt. Broad lower-neck changes initiate each left/right transition, the skull follows four authored keys later, and a stronger local tilt supplies the funny head-wobble punctuation while slow loose body life continues underneath. First and final root plus all 28 palette channels are bit-exact rest.
+- Inspected all 239 canonical cel-main frames and native-size samples. The complete center-left-right-left-center performance is visibly slower than slot 30, smooth throughout, and free of isolated broken frames, snaps or twitch.
+- Strengthened slot 4 with a two-cycle accumulated-pitch wave travelling through the whole chain rather than adding unrelated high-frequency joint rotations. The original slow nonuniform tumble, neck loll, lateral writhe, breathing authority and blade play remain intact.
+- Inspected all 288 looping cel-main frames and native-size samples. The body now moves through stronger straight, C and S silhouettes with faster visible propagation while retaining a slow loose read. Rejected diagnostic scales 290000, 210000 and 180000 because they hid or grazed fan tips; the accepted fixed-side scale 140000 keeps every bend visible.
+- Extended the committed posed probe over slot 44 and the complete slot-4 loop midpoint. Slow-taunt maximum 60 Hz station motion is 20 mm. Fall regional chord travel is `349/203/68/177 mm`, propagation lags are `32/32` presentation ticks, maximum 60 Hz motion is 149 mm, and seam half-steps are `130/128 mm`.
+- Clean direct rebuild of every dependent creature tool passed. A repeat render is byte-identical across all 239 slow-taunt and 288 fall frames. Posed taunt/fall/contact/continuity, strike-tip, target, limit, mesh/seam, planner, choreography and redirected reel checks all pass; promoted fourteen numbered reports and visual sheets under `evidence/taunt-fall-*`.
+
 ---
 
 ## Subagent Spawns
