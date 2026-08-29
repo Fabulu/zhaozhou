@@ -3630,6 +3630,14 @@ SceneSubject subject_zixx_side() {
   return s;
 }
 
+SceneSubject subject_zixx_side_game() {
+  SceneSubject s = subject_zixx_side();
+  s.name = "zixxtrixx-side-game";
+  s.cam_k = 160000;
+  s.note = "DIAGNOSTIC: full idle loop, fixed true-side gameplay-distance pupil check";
+  return s;
+}
+
 SceneSubject subject_zixx_tq() {
   SceneSubject s;
   s.name = "zixxtrixx-tq";
@@ -3658,6 +3666,14 @@ SceneSubject subject_zixx_frontfix() {
   return s;
 }
 
+SceneSubject subject_zixx_frontfix_game() {
+  SceneSubject s = subject_zixx_frontfix();
+  s.name = "zixxtrixx-frontfix-game";
+  s.cam_k = 160000;
+  s.note = "DIAGNOSTIC: full idle loop, fixed head-on gameplay-distance two-eye check";
+  return s;
+}
+
 // One STILL frame, fixed side camera: the orientation-sweep unit. Rebuilt
 // once per candidate kHeadAttitude (-DZIXX_ATTITUDE=...), rendered once,
 // and the nine stills go on ONE contact sheet to be judged by eye.
@@ -3670,6 +3686,18 @@ SceneSubject subject_zixx_still() {
   zixx_common(s);
   s.note = "DIAGNOSTIC: single idle key 0 frame, fixed side camera, for the "
            "head-attitude orientation sweep";
+  return s;
+}
+
+// Same pose, light and true-side camera as zixxtrixx-still, pulled back to a
+// real gameplay-scale read. Kept as a committed counterpart so smooth toon
+// topology comparisons cannot substitute an enlarged close crop for distance.
+SceneSubject subject_zixx_still_game() {
+  SceneSubject s = subject_zixx_still();
+  s.name = "zixxtrixx-still-game";
+  s.cam_k = 160000;
+  s.note = "DIAGNOSTIC: idle key 0 at fixed gameplay distance; same-pose "
+           "normal/faceted/smooth-toon comparison";
   return s;
 }
 
@@ -3808,6 +3836,47 @@ SceneSubject subject_zixx_look() {
       "softly. The head is bone 0 (the ROOT), so the aim lives on the "
       "dedicated skull bone: the body stays planted while the head turns, "
       "which is the rig capability the sim will later drive";
+  return s;
+}
+
+SceneSubject subject_zixx_look_game() {
+  SceneSubject s = subject_zixx_look();
+  s.name = "zixxtrixx-look-game";
+  s.cam_k = 160000;
+  s.note = "DIAGNOSTIC: full target-led look clip at gameplay distance for pupil motion";
+  return s;
+}
+
+// Direction #8 acceptance unit: a completely static head while the coordinated
+// pupil/stripe system visits both vertical and diagonal extrema, holds, reverses
+// and settles. Side and head-on cameras are paired at close and gameplay scale.
+SceneSubject subject_zixx_pupil_proof(bool front, bool game) {
+  SceneSubject s;
+  s.name = front ? (game ? "zixxtrixx-pupil-proof-front-game"
+                         : "zixxtrixx-pupil-proof-front")
+                 : (game ? "zixxtrixx-pupil-proof-game"
+                         : "zixxtrixx-pupil-proof");
+  s.creature = 47;  // diagnostic clip slot 45
+  s.frames = zixx::kPupilProofKeys * 2;
+  s.orbit = false;
+  zixx_common(s);
+  if (front) {
+    s.cam_yaw = 16384;
+    s.cam_ps = 4571;
+    s.cam_pc = 65377;
+    s.cam_eye = 10;
+  }
+  if (game) s.cam_k = 160000;
+  s.note = "DIAGNOSTIC: static-head pupil and elastic stripe boundary-following sweep";
+  return s;
+}
+
+SceneSubject subject_zixx_pupil_proof_other(bool game) {
+  SceneSubject s = subject_zixx_pupil_proof(false, game);
+  s.name = game ? "zixxtrixx-pupil-proof-other-game"
+                : "zixxtrixx-pupil-proof-other";
+  s.cam_yaw = 32768;  // opposite true side: exposes the second eye directly
+  s.note = "DIAGNOSTIC: opposite-flank static-head pupil/stripe sweep";
   return s;
 }
 
@@ -4569,15 +4638,25 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-fall")) rc |= render_scene(subject_zixx_fall());
   if (wanted("zixxtrixx-front")) rc |= render_scene(subject_zixx_front());
   if (wanted("zixxtrixx-side")) rc |= render_scene(subject_zixx_side());
+  if (wanted("zixxtrixx-side-game")) rc |= render_scene(subject_zixx_side_game());
   if (wanted("zixxtrixx-tq")) rc |= render_scene(subject_zixx_tq());
   if (wanted("zixxtrixx-frontfix")) rc |= render_scene(subject_zixx_frontfix());
+  if (wanted("zixxtrixx-frontfix-game")) rc |= render_scene(subject_zixx_frontfix_game());
   if (wanted("zixxtrixx-still")) rc |= render_scene(subject_zixx_still());
+  if (wanted("zixxtrixx-still-game")) rc |= render_scene(subject_zixx_still_game());
   if (wanted("zixxtrixx-still-front")) rc |= render_scene(subject_zixx_still_front());
   if (wanted("zixxtrixx-fall-side")) rc |= render_scene(subject_zixx_fall_side());
   if (wanted("zixxtrixx-hit")) rc |= render_scene(subject_zixx_hit());
   if (wanted("zixxtrixx-death")) rc |= render_scene(subject_zixx_death());
   if (wanted("zixxtrixx-balance")) rc |= render_scene(subject_zixx_balance());
   if (wanted("zixxtrixx-look")) rc |= render_scene(subject_zixx_look());
+  if (wanted("zixxtrixx-look-game")) rc |= render_scene(subject_zixx_look_game());
+  if (wanted("zixxtrixx-pupil-proof")) rc |= render_scene(subject_zixx_pupil_proof(false, false));
+  if (wanted("zixxtrixx-pupil-proof-game")) rc |= render_scene(subject_zixx_pupil_proof(false, true));
+  if (wanted("zixxtrixx-pupil-proof-front")) rc |= render_scene(subject_zixx_pupil_proof(true, false));
+  if (wanted("zixxtrixx-pupil-proof-front-game")) rc |= render_scene(subject_zixx_pupil_proof(true, true));
+  if (wanted("zixxtrixx-pupil-proof-other")) rc |= render_scene(subject_zixx_pupil_proof_other(false));
+  if (wanted("zixxtrixx-pupil-proof-other-game")) rc |= render_scene(subject_zixx_pupil_proof_other(true));
   if (wanted("zixxtrixx-knockdown")) rc |= render_scene(subject_zixx_knockdown());
   if (wanted("zixxtrixx-hitfloor")) rc |= render_scene(subject_zixx_hitfloor());
   if (wanted("zixxtrixx-damage")) rc |= render_scene(subject_zixx_damage());

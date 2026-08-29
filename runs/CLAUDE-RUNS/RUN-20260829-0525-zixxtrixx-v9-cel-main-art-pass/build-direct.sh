@@ -1,7 +1,7 @@
 #!/bin/bash
 # Direct g++ build for the reel and Zixxtrixx tools. Never use cmake --build:
 # the repository's build.ninja regeneration race can leave a stale binary.
-# Usage: build-direct.sh [clean|reel|cel|probe|golden|choreo|planner|headaim|sideprofile|meshcheck|striketip|all]
+# Usage: build-direct.sh [clean|reel|cel|frozenpupil|probe|golden|choreo|planner|headaim|sideprofile|meshcheck|striketip|all]
 # Objects and executables are run-local. After a struct-layout change, run clean then all.
 set -e
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
@@ -34,6 +34,14 @@ if want "$1" cel; then
   fi
   printf '%s\n' "LD zhao-reel-cel"
   $CXX $FLAGS "-DZIXX_PAGE_VARIANT=\"$CEL_HEADER\"" "$T/zhao_reel.cpp" $LIBOBJS -o "$BIN/zhao-reel-cel.exe" &
+fi
+if want "$1" frozenpupil; then
+  if [ ! -f "$T/zixxtrixx_page_cel.h" ]; then
+    printf '%s\n' "missing tools/reel/zixxtrixx_page_cel.h; run mkcreaturepage.py --cel-main first" >&2
+    exit 1
+  fi
+  printf '%s\n' "LD zhao-reel-cel-frozenpupil"
+  $CXX $FLAGS -DZIXX_PUPIL_MOTION=0 "-DZIXX_PAGE_VARIANT=\"$CEL_HEADER\"" "$T/zhao_reel.cpp" $LIBOBJS -o "$BIN/zhao-reel-cel-frozenpupil.exe" &
 fi
 if want "$1" probe;       then printf '%s\n' "LD zixx-probe";    $CXX $FLAGS "$T/zixx_probe.cpp"     $LIBOBJS -o "$BIN/zixx-probe.exe" & fi
 if want "$1" golden;      then printf '%s\n' "LD zixx-golden";   $CXX $FLAGS "$T/zixx_golden.cpp"    $LIBOBJS -o "$BIN/zixx-golden.exe" & fi

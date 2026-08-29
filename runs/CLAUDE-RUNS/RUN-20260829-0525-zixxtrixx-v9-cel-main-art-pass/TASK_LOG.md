@@ -57,6 +57,17 @@ Refine the promising-but-unsuccessful v8 cel experiment into Zixxtrixx's main pr
 - Verified 1,582 default frames byte-identical after the renderer refactor. Normal generation repeated byte-identically at `c90fa2a...c2b`; cel generation repeated byte-identically at `fc0113e...e8d`.
 - Accepted numbered evidence `evidence/cel-presentation-01-adaptive-outline.png` and `evidence/cel-presentation-01-results.txt` at native 384×240. Task #10's first presentation milestone is ready to commit and push; form and animation remain untouched.
 
+### 2026-08-29 11:27 UTC+02:00 - Complete form, eyes and coordinated pupil system accepted
+
+- Reauthored the full nose-to-tail profile through named regional radius controls, including the gentle nose/neck/front/middle/ground progression and one sustained thin-tail contrast. Judged complete side silhouette beside `Side.png` and in the accepted walk camera, never generated from a 2D measurement.
+- Moved both eyes noseward, strengthened only their local head support, removed the painted static slit, and added two mirrored pupil bones with one deterministic target-led gaze intent. Added a compile-time `ZIXX_PUPIL_MOTION=0` frozen control.
+- Built each orange eye marking as a seven-ring skinned elastic ribbon: boundary tips stay with the painted eye/head bind, shoulder rings blend, and the core follows the pupil. Vertical/diagonal travel extends one arm while contracting the other.
+- Added slot 45's 64-key static-head acceptance sweep and fixed side, front, opposite-flank, close and gameplay-distance reel subjects. Inspected all committed normal/cel-main every-frame sheets, extrema, holds, reversal and settle, plus moving/deforming idle and look clips. No gap, overshoot, detachment, width accident, texture swim, edge escape, snap or crossed/independent gaze was seen; gameplay motion remains a restrained visible 1–2 pixel change.
+- Same-pose normal/faceted/smooth/cel-main/unlit/normal-visualization/wireframe diagnosis found no actual neck seam. Exterior-only contouring removes the false internal joint ink while preserving the real sky-visible hook concavity.
+- The new grounded form initially changed slot 30 through shared stance slopes. Added a historical local stance override used only by `build_taunt()`. All 26 legacy bone channels and root channels now match the committed v8 quick-taunt payload byte-for-byte; only the two appended identity pupil channels and 28-bone header are new.
+- Clean direct rebuild of every dependent tool succeeded. Posed-vertex probe, mesh check and slot-30 compatibility pass. Two independent 42-file golden dumps are identical. Normal and cel pages each regenerate identically twice and match the tracked headers at `ad321900...f8b` and `04359015...a3d`.
+- Committed durable numbered form, seam, static-pupil, frozen-pupil and real moving/deforming every-frame evidence under `evidence/`; `form-eye-00-acceptance.txt` records all named controls, CRCs, hashes and adjudication.
+
 ---
 
 ## Subagent Spawns

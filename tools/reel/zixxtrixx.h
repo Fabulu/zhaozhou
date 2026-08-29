@@ -195,66 +195,51 @@ struct TaperKey {
 #define ZIXX_GIRTH 850
 #endif
 
-// RUN 1939, fault 5 (owner: "Snake is too fat in front after the neck and
-// keeps being fat for too long, you barely see the S anymore"). The girth
-// ORDER stands (body < head 1830 < neck 1900) -- what changes is the SHAPE
-// of the drop: the previous profile was still >1000 at t=400 and only
-// reached body width at t~470-560, so the thick tube ran through most of
-// the dive and the S's middle stroke read as one fat mass. The drop now
-// leaves the peak immediately and lands on body width by t~340 -- "behind
-// the neck the body drops off QUICKLY to normal". Judged on the unlit
-// side outline beside Side.png (the S must read as an S at a glance).
-// Grounded radii t>=560 stay untouched to the millimetre (load-bearing).
+// V9 complete nose-to-tail progression. Every regional value is a named art
+// knob: nose only a little slimmer than the subtle neck maximum; the long
+// front, middle S and grounded run change gently; the one strong contrast is
+// the sustained tail taper. These were authored as a continuous silhouette
+// and are accepted only through the numbered full-side + walk evidence.
+constexpr int32_t kRadiusNose = 1120;
+constexpr int32_t kRadiusNoseFull = 1160;
+constexpr int32_t kRadiusHead = 1210;
+constexpr int32_t kRadiusNeckFull = 1240;
+constexpr int32_t kRadiusNeckRelease = 1210;
+constexpr int32_t kRadiusLongFront = 1160;
+constexpr int32_t kRadiusMiddleFront = 1140;
+constexpr int32_t kRadiusMiddle = 1100;
+constexpr int32_t kRadiusGroundEntry = 1060;
+constexpr int32_t kRadiusGroundRun = 1040;
+constexpr int32_t kRadiusTaperShoulder = 980;
+constexpr int32_t kRadiusTailHeavy = 780;
+constexpr int32_t kRadiusTailMiddle = 580;
+constexpr int32_t kRadiusTailFine = 400;
+constexpr int32_t kRadiusTailThin = 260;
+constexpr int32_t kRadiusTailTip = 180;
 constexpr TaperKey kTaper[] = {
-    {0, 1620},  {50, 1760}, {110, 1830}, {170, 1900}, {230, 1620},
-    {290, 1180}, {340, 950}, {400, 880}, {470, 865}, {560, 860}, {620, 860},
-    {720, 790}, {820, 620}, {900, 450}, {950, 330}, {1000, 260}
+    {0, kRadiusNose},
+    {50, kRadiusNoseFull},
+    {110, kRadiusHead},
+    {170, kRadiusNeckFull},
+    {230, kRadiusNeckRelease},
+    {320, kRadiusLongFront},
+    {430, kRadiusMiddleFront},
+    {560, kRadiusMiddle},
+    {650, kRadiusGroundEntry},
+    {720, kRadiusGroundRun},
+    {760, kRadiusTaperShoulder},
+    {820, kRadiusTailHeavy},
+    {880, kRadiusTailMiddle},
+    {930, kRadiusTailFine},
+    {970, kRadiusTailThin},
+    {1000, kRadiusTailTip},
 };
 constexpr int kTaperKeys = static_cast<int>(sizeof(kTaper) / sizeof(TaperKey));
-// Bind height of the body axis. This is the HEAD height: bone 0 is the nose
-// and the reel ground-snaps the ROOT, so the head is CARRIED at this height
-// and the whole S hangs from it. TUNED against the pose probe
-// (tools/reel/zixx_probe.cpp): the grounded run's belly rides a few mm under.
-// The skinned mesh sits ~15 mm below the centreline prototype (ring blending
-// sags into the bends), so this is chosen off the PROBE, not the sketch.
-constexpr int32_t kBodyY =
-    1075 - (152 * (1000 - ZIXX_GIRTH)) / 1000;
-                                 // 152, not the plain 138-mm radius
-                                 // carry: the skinned belly sags a
-                                 // shade more as the tube slims --
-                                 // PROBE-corrected at the 850 rung
-                                 // (idle grazed -1; now [-13..-3])
-                                 // the girth term drops the carry with the
-                                 // grounded radius (~138 mm at full girth)
-                                 // so the belly stays planted at every
-                                 // ladder rung. RE-SOLVED AGAIN, compact-S pass (front
-                                 // sine sum 1.090 -> 0.826, flat approach
-                                 // 0): same solve, same probe law. Was
-                                 // 1117 at kFrontSegs 5. // RE-SOLVED, RUN 1730 front-S
-                                 // (1121 by the sine solve, then -4 off
-                                 // the PROBE: the breath's belly ripple
-                                 // widened to 9 mm with the climbing
-                                 // front and key 24 rode +1 -- one key
-                                 // of hover is the recorded fault class)
-                                 // reconstruction: grounded height is
-                                 // kBodyY - segL*sum(sin(slope 0..10)),
-                                 // and the raised front (sine sum seg0..4
-                                 // -2.353 -> +1.090) carries the head at
-                                 // the TOP of the climb while the belly
-                                 // lands exactly where the approved table
-                                 // put it. Solved numerically, then
-                                 // probe-corrected like every kBodyY
-                                 // before it. Was 570 (+32, RUN 0757: the notch-campaign neck
-                                 // redistribution (sine sum -2.859 -> -2.637
-                                 // over seg0..4) lowered everything behind the
-                                 // head by 36 mm; re-planted, then probe-run  // re-solved with the taller loop (sidecmp-02,
-                                 // then corrected -11 against the PROBE --
-                                 // the sine table is hand-added);
-                                 // node 11 keeps its height exactly  // retuned 2026-08-27 pass 3: the blade
-                                 // re-rake and the neck re-sum left the idle
-                                 // belly touching 0 at one key -- 3 mm down
-                                 // restores the authored sink (probe: idle
-                                 // [-7..-3] mm, walk [-13..+10] mm.)
+// Bind height of the body axis. The v9 grounded run is intentionally thicker,
+// so its named carry starts 32 mm above the v8 value; the committed 3D probe,
+// never a rendered terrain pixel, verifies the authored contact.
+constexpr int32_t kBodyCarryMm = 1084;
+constexpr int32_t kBodyY = kBodyCarryMm;
 // Planform centre of the posed S, nose to tail extent midpoint, for staging:
 // the folded S spans ~1.8 m behind the nose, so the reel offsets the instance
 // by this to keep the animal centred in an orbit shot.
@@ -382,31 +367,65 @@ constexpr int kSkullBlendTo = 10; // last station that carries any kBHead
                                   // station_bind EXACTLY in both parts; the
                                   // meshcheck gate holds it at zero.
 
-// THE EYE IS NOT GEOMETRY. A yellow ball on the side of the head was the
-// obvious thing and it looked exactly like what it was: a sphere glued to a
-// tube. MODELINGGUIDE asks for eyes "integrated into the head contour" so they
-// influence the SILHOUETTE rather than sitting on it.
-//
-// So the eye is two things instead. The drawing's own eye -- disc, ink ring
-// and red-orange slit pupil -- is painted into the head page by
-// tools/pack/mkcreaturepage.py; and the head's own rings swell LATERALLY where
-// it sits, so the skull is widest exactly at the eyes and the outline says so.
-// That also deleted two bones and four ring parts.
-constexpr int kEyeStation0 = 4;      // first head station that carries the bulge
-constexpr int kEyeStation1 = 7;      // last. 4..7, was 3..8 (v3 run): six
-                                     // stations of swell survived as a
-                                     // continuous lateral ridge along the
-                                     // whole head -- the "brim". Two fewer
-                                     // stations localise it at the eyes.
+// THE EYE DISC IS PAINT; ONLY THE MOVING PUPIL IS TINY GEOMETRY. A whole
+// yellow eyeball mesh looked exactly like a sphere glued to a tube, so the
+// drawing's disc and ink ring stay in the head page and the head's own rings
+// swell LATERALLY beneath it. V9 adds one shallow orange slit decal per side:
+// both follow the same authored gaze and never contribute to the silhouette.
+constexpr int kEyeStation0 = 3;      // first head station that carries the bulge
+constexpr int kEyeStation1 = 6;      // last: shifted one station noseward so
+                                     // the two local swellings support the
+                                     // painted side eyes instead of trailing
+                                     // them toward the neck.
 #ifndef ZIXX_EYEBULGE
-// 26, was 22 (RUN 1939, owner: "bulge a little more" -- the third ask on
-// this knob, and the ladder history brackets it: 16 was thin crescents,
-// 42 was the mushroom brim, 28 "starts wedging the skull outline". 26
-// sits under the recorded wedge threshold; judged on the head-on still
-// beside Front.png with the crown gap intact).
-#define ZIXX_EYEBULGE 26
+// V9 local eye support: stronger than 26 without returning to the old
+// six-station 42-percent brim. Judge with the noseward atlas row in fixed
+// front and side views.
+#define ZIXX_EYEBULGE 32
 #endif
 constexpr int32_t kEyeBulgeNum = ZIXX_EYEBULGE;
+// Moving-pupil construction and motion knobs. The orange marking is ONE
+// deforming stripe: its swollen middle follows the pupil pivot while the two
+// tips remain attached to the painted eyeball boundary. Thus vertical or
+// diagonal gaze extends one arm and contracts the other instead of letting a
+// fixed decal float inside the eye (owner direction #8). Two mirrored bones
+// still share one intent; their signs differ only because the eyes face
+// opposite sides.
+constexpr int kPupilStation = 5;
+constexpr int32_t kPupilCoreHalfWidthMm = 20;      // the stripe's peculiar swell
+constexpr int32_t kPupilCoreHalfAngleA16 = 1900;   // extent of the moving swell
+constexpr int32_t kPupilStripeShoulderA16 = 3300;  // elastic arm control point
+constexpr int32_t kPupilStripeBoundaryA16 = 5700;  // endpoint on eyeball rim
+constexpr int32_t kPupilStripeCoreEdgeMm = 13;
+constexpr int32_t kPupilStripeArmHalfWidthMm = 7;
+constexpr int32_t kPupilStripeTipHalfWidthMm = 3;
+constexpr int32_t kPupilStripeSurfaceLiftMm = 7;
+constexpr int32_t kPupilStripeDepthMm = 2;
+constexpr uint8_t kPupilStripeShoulderFollow = 28; // /64 pupil, remainder head
+constexpr int kPupilStripeSides = 4;
+#ifndef ZIXX_PUPIL_MOTION
+#define ZIXX_PUPIL_MOTION 1
+#endif
+constexpr bool kPupilMotion = ZIXX_PUPIL_MOTION != 0;
+constexpr int32_t kPupilGlanceA16 = 1700;       // readable ~9-degree side glance
+constexpr int32_t kPupilGlanceLiftA16 = 720;    // restrained vertical settle
+constexpr int kPupilHeadLagKeys = 4;
+constexpr int kPupilIdleMoveInKey = 26;
+constexpr int kPupilIdleSettleKey = 36;
+constexpr int kPupilIdleHoldEndKey = 62;
+constexpr int kPupilIdleMoveOutKey = 74;
+constexpr int kPupilIdleRestKey = 84;
+// Static-head acceptance clip: it deliberately reaches both vertical extrema
+// and both diagonal corners, then holds before and after the reversal. This is
+// committed proof machinery, not runtime wandering.
+constexpr uint16_t kSlotPupilProof = 45;
+constexpr int kPupilProofKeys = 64;
+constexpr int kPupilProofRestEndKey = 8;
+constexpr int kPupilProofUpKey = 18;
+constexpr int kPupilProofUpHoldEndKey = 26;
+constexpr int kPupilProofDownKey = 38;
+constexpr int kPupilProofDownHoldEndKey = 46;
+constexpr int kPupilProofReturnKey = 56;
                                      // extra lateral half-width, % of the ring.
                                      // 22, was 16 (run 0326): head-on at 16
                                      // each eye was a thin crescent hugging
@@ -635,6 +654,16 @@ constexpr int32_t front_slope(int k) {
          ((kFrontAnchorSlopeA16 - kFrontSnoutSlopeA16) * v) / 1000;
 }
 
+// Named centreline slopes for the weight-bearing run. The first three keep
+// the newly thick middle close to level; the last three follow the authored
+// tail taper. The 3D probe corrects contact after each visual profile choice.
+constexpr int32_t kGroundSlopeEntryA16 = 260;
+constexpr int32_t kGroundSlopeCarryA16 = 220;
+constexpr int32_t kGroundSlopeReleaseA16 = 360;
+constexpr int32_t kGroundSlopeTaper0A16 = 1380;
+constexpr int32_t kGroundSlopeTaper1A16 = 1990;
+constexpr int32_t kGroundSlopeTaper2A16 = 1760;
+
 constexpr int kStanceSlopes = kSpineBones - 1;  // 19 segments
 constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // neck: the cobra hook. THE HEAD LOOKS UP (2026-08-27 pass 3, Fabian:
@@ -690,16 +719,29 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // the flat approach: the dive has landed; the body lies out along the
     // ground for a segment before the walking/snaking grounded set begins
     kFrontApproachSlopeA16,
-    // the grounded run, LONG. These slopes RAMP because the belly line must
-    // follow the TAPER: the centreline of a grounded run sits one radius up,
-    // and the tail-stem radius falls 136 -> 68 mm across these six nodes --
-    // a flat centreline here lifts the thinning belly off the ground and a
-    // flat 900-ish table dug it 30 mm under (probe, 2026-08-27). Each slope
-    // is asin(radius drop / segment): the belly rides the ground exactly.
+    // the grounded run: three weight-bearing, nearly-level segments followed
+    // by the sustained taper's centreline compensation
+    (kGroundSlopeEntryA16 * ZIXX_GIRTH) / 1000,
+    (kGroundSlopeCarryA16 * ZIXX_GIRTH) / 1000,
+    (kGroundSlopeReleaseA16 * ZIXX_GIRTH) / 1000,
+    (kGroundSlopeTaper0A16 * ZIXX_GIRTH) / 1000,
+    (kGroundSlopeTaper1A16 * ZIXX_GIRTH) / 1000,
+    (kGroundSlopeTaper2A16 * ZIXX_GIRTH) / 1000,
+    // the tail rises behind, short and steep
+    -5600, -11400};
+
+// Slot 30 is an accepted quick taunt and remains a frozen animation. V9's
+// thicker weight-bearing run required new stance slopes for the living clips,
+// but must not silently retime or reshape this existing gesture. These are its
+// historical v8 stance values, kept as a named local bind so all 26 pre-pupil
+// bone channels and the root remain byte-identical to the committed golden.
+constexpr int32_t kQuickTauntStanceSlope[kStanceSlopes] = {
+    front_slope(0), front_slope(1), front_slope(2), front_slope(3),
+    kFrontAnchorSlopeA16, 14600, 21400, 25200, 20000, 11600,
+    kFrontApproachSlopeA16,
     (40 * ZIXX_GIRTH) / 1000, (380 * ZIXX_GIRTH) / 1000,
     (710 * ZIXX_GIRTH) / 1000, (960 * ZIXX_GIRTH) / 1000,
     (1100 * ZIXX_GIRTH) / 1000, (1220 * ZIXX_GIRTH) / 1000,
-    // the tail rises behind, short and steep
     -5600, -11400};
 // which slope entries the descent lobe occupies (breathing deepens these)
 constexpr int kStanceDescend0 = 4;  // follows the anchor (compact-S pass)
@@ -1158,9 +1200,13 @@ enum : uint8_t {
   kBBladeR2 = static_cast<uint8_t>(kSpineBones + 3),
   kBSpike = static_cast<uint8_t>(kSpineBones + 4),
   // the dedicated skull bone: child of the root at the nose, carries the
-  // rigid cranium (see kHeadAttitude). 26 of 32.
+  // rigid cranium (see kHeadAttitude).
   kBHead = static_cast<uint8_t>(kSpineBones + 5),
-  kBoneCount = static_cast<uint8_t>(kSpineBones + 6)
+  // Mirrored pupils have separate pivots but one authored intent. Two bones
+  // avoid a shared off-centre rotation arc and still leave four spare slots.
+  kBPupilL = static_cast<uint8_t>(kSpineBones + 6),
+  kBPupilR = static_cast<uint8_t>(kSpineBones + 7),
+  kBoneCount = static_cast<uint8_t>(kSpineBones + 8)
 };
 static_assert(kBoneCount <= 32, "creature_rules 1.2: <= 32 bones");
 
@@ -1303,7 +1349,7 @@ enum : uint8_t {
   kTileBody = 0,         // flank: dorsal band at U=192, throat wedge on the belly
   kTileHead = 1,         // head: blue front/underside, pink crown, side eyes
   kTileEye = 2,          // (reserved)
-  kTileRim = 3,          // (reserved)
+  kTilePupil = 3,       // flat orange page on the two shallow pupil decals
   kTileBladePinkUp = 4,  // tail blade: both faces pink, green slice at one edge
   kTileBladeGreenUp = 5  // tail blade: both faces pink, green slice at the other
 };
@@ -1327,29 +1373,31 @@ inline const zref::render::Tileset& page() {
 // pixels: filtering requires direct colour (stars_and_flares 1), and the
 // TMU decodes RGB565 today. The CLUT8 page above stays as the
 // ordinary-creature format tier and the fallback.
-// THE LAYOUT (T4, 2026-08-28): tiles 0..3 all address the ONE 128x256
-// BODY ATLAS at byte 0 (head and body parts share it -- their v0/v1 ranges
-// split the V axis at the junction row); tiles 4..5 are the fins' own
-// 64x64 pages appended after the atlas chain, each with its own mode word
-// (per-tile modes are lawful: the TMU mode is per-bind). Bilinear + mips
-// BLEED across atlas neighbours, which is exactly why the fins do NOT live
-// in the atlas.
+// THE LAYOUT (T4, 2026-08-28; pupil extension 2026-08-29): tiles 0..2
+// address the ONE 256x512 BODY ATLAS at byte 0. Tile 3 is the pupil's flat
+// orange 64x64 page; tiles 4..5 are the fins' own 64x64 pages. Each appended
+// page has its own mode word (per-tile modes are lawful: the TMU mode is
+// per-bind). Bilinear + mips bleed across atlas neighbours, which is why the
+// small rigid parts do not live in the atlas.
 inline const zref::DirectPageSet& page_direct() {
   static const zref::DirectPageSet ps = [] {
     zref::DirectPageSet p;
     constexpr int kWords = static_cast<int>(sizeof(kPageDirect[0]) / sizeof(uint16_t));
     p.mem.base = 0;
     const uint32_t atlas_bytes = static_cast<uint32_t>(kPageAtlasWords) * 2;
-    p.mem.bytes.resize(atlas_bytes + static_cast<size_t>(2) * kWords * 2);
+    p.mem.bytes.resize(atlas_bytes + static_cast<size_t>(3) * kWords * 2);
     for (int i = 0; i < kPageAtlasWords; ++i) {  // little-endian halfwords
       p.mem.bytes[static_cast<size_t>(i) * 2] = static_cast<uint8_t>(kPageAtlas[i] & 0xFF);
       p.mem.bytes[static_cast<size_t>(i) * 2 + 1] = static_cast<uint8_t>(kPageAtlas[i] >> 8);
     }
-    for (int t = 0; t < 2; ++t) {  // the two blade tiles (page indices 4, 5)
+    constexpr uint8_t kAppendedPage[3] = {kTilePupil, kTileBladePinkUp,
+                                          kTileBladeGreenUp};
+    for (int t = 0; t < 3; ++t) {
       const size_t dst = atlas_bytes + static_cast<size_t>(t) * kWords * 2;
+      const int page = kAppendedPage[t];
       for (int i = 0; i < kWords; ++i) {
-        p.mem.bytes[dst + i * 2] = static_cast<uint8_t>(kPageDirect[4 + t][i] & 0xFF);
-        p.mem.bytes[dst + i * 2 + 1] = static_cast<uint8_t>(kPageDirect[4 + t][i] >> 8);
+        p.mem.bytes[dst + i * 2] = static_cast<uint8_t>(kPageDirect[page][i] & 0xFF);
+        p.mem.bytes[dst + i * 2 + 1] = static_cast<uint8_t>(kPageDirect[page][i] >> 8);
       }
     }
     zref::Tmu::Mode ma;  // the atlas
@@ -1367,8 +1415,10 @@ inline const zref::DirectPageSet& page_direct() {
     mb.max_level = 6;
     const uint32_t am = ma.pack(), bm = mb.pack();
     p.mode = am;
-    p.tile_base = {0, 0, 0, 0, atlas_bytes, atlas_bytes + kWords * 2};
-    p.tile_mode = {am, am, am, am, bm, bm};
+    const uint32_t page_bytes = static_cast<uint32_t>(kWords) * 2;
+    p.tile_base = {0, 0, 0, atlas_bytes, atlas_bytes + page_bytes,
+                   atlas_bytes + page_bytes * 2};
+    p.tile_mode = {am, am, am, bm, bm, bm};
     return p;
   }();
   return ps;
@@ -1414,6 +1464,45 @@ struct Rig {
   }
 };
 
+inline int32_t pupil_clamp(int32_t v, int32_t limit) {
+  return v < -limit ? -limit : (v > limit ? limit : v);
+}
+
+// One apparent gaze, mirrored onto the two side-facing pupil pivots. A +side
+// glance rotates both pupils noseward in world space; the mirrored signs are
+// construction, not independent intent. Vertical travel is clamped tighter.
+inline void apply_pupil_gaze(Rig& g, int32_t side_a16, int32_t lift_a16) {
+  if (!kPupilMotion) {
+    g.q[kBPupilL] = zc::quat16_identity();
+    g.q[kBPupilR] = zc::quat16_identity();
+    return;
+  }
+  const int32_t side = pupil_clamp(side_a16, kPupilGlanceA16);
+  const int32_t lift = pupil_clamp(lift_a16, kPupilGlanceLiftA16);
+  g.q[kBPupilL] = quat_mul(quat_x(-lift), quat_y(side));
+  g.q[kBPupilR] = quat_mul(quat_x(lift), quat_y(-side));
+}
+
+inline void apply_idle_pupil_gaze(Rig& g, int f) {
+  // One slow intentional glance and calm hold per 3.2-second idle loop. The
+  // return reaches rest well before the wrap, so interpolation cannot pop.
+  static const Key kSide[] = {
+      {0, 0}, {kPupilIdleMoveInKey, 0},
+      {kPupilIdleSettleKey, kPupilGlanceA16},
+      {kPupilIdleHoldEndKey, kPupilGlanceA16},
+      {kPupilIdleMoveOutKey, 0}, {kPupilIdleRestKey, 0},
+      {kIdleKeys - 1, 0}};
+  static const Key kLift[] = {
+      {0, 0}, {kPupilIdleMoveInKey + kPupilHeadLagKeys, 0},
+      {kPupilIdleSettleKey + kPupilHeadLagKeys, -kPupilGlanceLiftA16},
+      {kPupilIdleHoldEndKey, -kPupilGlanceLiftA16},
+      {kPupilIdleMoveOutKey + kPupilHeadLagKeys, 0},
+      {kPupilIdleRestKey, 0}, {kIdleKeys - 1, 0}};
+  apply_pupil_gaze(g,
+                   curve(kSide, static_cast<int>(sizeof(kSide) / sizeof(Key)), f),
+                   curve(kLift, static_cast<int>(sizeof(kLift) / sizeof(Key)), f));
+}
+
 // The canonical S from the slope table: joint pitch is the DIFFERENCE of
 // adjacent segment slopes, so the whole chain makes the shape and no single
 // joint carries a corner. `authority` in 1/1000 scales the whole pose (the
@@ -1429,12 +1518,14 @@ struct Rig {
 // EXACTLY. This replaces the hand-tuned kIdleBobComp -- and it IS the bob:
 // as the breath deepens the lobe, the computed rise lifts the whole front.
 inline int32_t apply_stance(Rig& g, int32_t authority, int32_t deepen = 0,
-                            const int32_t* wave = nullptr) {
+                            const int32_t* wave = nullptr,
+                            const int32_t* stance_override = nullptr) {
+  const int32_t* stance = stance_override != nullptr ? stance_override : kStanceSlope;
   int32_t prev = 0;
   int64_t sink = 0;  // fx16 mm of belly drop vs the plain stance
   const int32_t segL = kBodyLenMm / (kSpineBones - 1);
   for (int k = 0; k < kStanceSlopes; ++k) {
-    int64_t d = kStanceSlope[k];
+    int64_t d = stance[k];
     if (k >= kStanceDescend0 && k <= kStanceDescend1 && deepen != 0) {
       // The breath pushes every lobe slope toward MORE DESCENT. sin() rises
       // with the angle only below 90 deg (16384); past vertical it falls
@@ -1450,7 +1541,7 @@ inline int32_t apply_stance(Rig& g, int32_t authority, int32_t deepen = 0,
     d = (d * authority) / 1000;
     if (wave != nullptr && wave[k] != 0) d += wave[k];
     if (k < kStanceGround0) {
-      const int64_t base = (static_cast<int64_t>(kStanceSlope[k]) * authority) / 1000;
+      const int64_t base = (static_cast<int64_t>(stance[k]) * authority) / 1000;
       const int32_t s_new =
           zref::fx_sin(zref::angle16{static_cast<uint16_t>(d & 0xFFFF)}).raw;
       const int32_t s_base =
@@ -1490,7 +1581,8 @@ inline int32_t apply_stance(Rig& g, int32_t authority, int32_t deepen = 0,
 // (attitude + nod + sway); a clip that owns the head overwrites it after.
 // Returns the computed root rise in mm.
 inline int32_t idle_body(Rig& g, int32_t ph, int32_t amp,
-                         const int32_t* extra_wave = nullptr) {
+                         const int32_t* extra_wave = nullptr,
+                         const int32_t* stance_override = nullptr) {
   const auto A = [amp](int32_t v) {
     return amp == 1000 ? v : static_cast<int32_t>((static_cast<int64_t>(v) * amp) / 1000);
   };
@@ -1509,7 +1601,9 @@ inline int32_t idle_body(Rig& g, int32_t ph, int32_t amp,
   }
   if (extra_wave != nullptr)
     for (int k = 0; k < kStanceSlopes; ++k) wave[k] += extra_wave[k];
-  const int32_t rise = apply_stance(g, 1000, A((breath * kIdleDeepen) / 1000), wave);
+  const int32_t rise =
+      apply_stance(g, 1000, A((breath * kIdleDeepen) / 1000), wave,
+                   stance_override);
   const int32_t sh =
       zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph + 30000) & 0xFFFF)}).raw;
   for (int k = 0; k <= 2; ++k) {
@@ -1663,11 +1757,52 @@ inline zc::Clip build_idle() {
           quat_y(static_cast<int32_t>((static_cast<int64_t>(sway) * (400 + reach)) / 1000)));
     }
     g.tail_rest(kBladeSplay + ((st * 900) >> 16), kBladeRise + ((s * 500) >> 16));
+    apply_idle_pupil_gaze(g, f);
     g.write(c, f);
     // the computed root rise that keeps the belly planted (see apply_stance).
     // ROOT CHANNEL UNITS ARE fx16 METRES -- the first pass wrote plain mm
     // here, which is 1/65536 of a mm once decoded: the "bob" never existed.
     c.root[f * 3 + 1] = fxm(rise);
+  }
+  return c;
+}
+
+// Diagnostic-only pupil/stripe sweep. The BODY and HEAD are frozen at idle
+// key zero so any change in the rendered eye belongs to the authored gaze and
+// its elastic boundary-following stripe, not to camera or neck motion.
+inline zc::Clip build_pupil_proof() {
+  const zc::Clip idle = build_idle();
+  zc::Clip c;
+  c.slot_id = kSlotPupilProof;
+  c.interpolate = true;
+  c.frame_count = static_cast<uint16_t>(kPupilProofKeys);
+  c.root.assign(static_cast<size_t>(kPupilProofKeys) * 3, 0);
+  c.quats.assign(static_cast<size_t>(kPupilProofKeys) * kBoneCount,
+                 zc::quat16_identity());
+  static const Key kSide[] = {
+      {0, 0}, {kPupilProofRestEndKey, 0},
+      {kPupilProofUpKey, kPupilGlanceA16},
+      {kPupilProofUpHoldEndKey, kPupilGlanceA16},
+      {kPupilProofDownKey, -kPupilGlanceA16},
+      {kPupilProofDownHoldEndKey, -kPupilGlanceA16},
+      {kPupilProofReturnKey, 0}, {kPupilProofKeys - 1, 0}};
+  static const Key kLift[] = {
+      {0, 0}, {kPupilProofRestEndKey, 0},
+      {kPupilProofUpKey, kPupilGlanceLiftA16},
+      {kPupilProofUpHoldEndKey, kPupilGlanceLiftA16},
+      {kPupilProofDownKey, -kPupilGlanceLiftA16},
+      {kPupilProofDownHoldEndKey, -kPupilGlanceLiftA16},
+      {kPupilProofReturnKey, 0}, {kPupilProofKeys - 1, 0}};
+  for (int f = 0; f < kPupilProofKeys; ++f) {
+    Rig g;
+    for (int b = 0; b < kBoneCount; ++b) g.q[b] = idle.quats[b];
+    apply_pupil_gaze(
+        g, curve(kSide, static_cast<int>(sizeof(kSide) / sizeof(Key)), f),
+        curve(kLift, static_cast<int>(sizeof(kLift) / sizeof(Key)), f));
+    g.write(c, f);
+    c.root[f * 3 + 0] = idle.root[0];
+    c.root[f * 3 + 1] = idle.root[1];
+    c.root[f * 3 + 2] = idle.root[2];
   }
   return c;
 }
@@ -2915,6 +3050,13 @@ inline zc::Clip build_look() {
         acc = quat_mul(acc, L);
       }
     }
+    // The pupils preserve the previous apparent target for four authored keys
+    // while the head begins each gesture, then settle back to centre on the
+    // long holds. This is coordinated head-motion lag, not a second itinerary.
+    int32_t pupil_yaw, pupil_pitch;
+    aim_at(f >= kPupilHeadLagKeys ? f - kPupilHeadLagKeys : 0,
+           pupil_yaw, pupil_pitch);
+    apply_pupil_gaze(g, pupil_yaw - yaw, pupil_pitch - pitch);
     // blades: idle_body already gave them the idle's play
     g.write(c, f);
     c.root[f * 3 + 1] = fxm(rise);
@@ -3546,7 +3688,8 @@ inline zc::Clip build_taunt() {
     // the rear-up rides the compensated wave lane OVER the living body
     int32_t wave[kStanceSlopes] = {};
     for (int k = 0; k <= 4; ++k) wave[k] = (up * kTauntRear) / 1000;
-    const int32_t rise = idle_body(g, ph, 750, wave);
+    const int32_t rise =
+        idle_body(g, ph, 750, wave, kQuickTauntStanceSlope);
     // THE BOBBLE: fast light roll, ~4 rocks over keys 20..42, gone after
     const int32_t bob_env = ss1000(f, 20, 25) - ss1000(f, 38, 44);
     int32_t roll = 0, fig8 = 0;
@@ -4812,6 +4955,9 @@ inline const zc::CreatureType& type() {
     // Side.png nests it. All of the cranium's pitch lives on this bone
     // (kHeadAttitude plus per-clip head motion).
     sk.bones[kBHead] = zc::Bone{kBSpine0, -fxm(kHeadPivotMm), 0, 0};
+    const int32_t pupil_x = station_x(kPupilStation) - kHeadPivotMm;
+    sk.bones[kBPupilL] = zc::Bone{kBHead, -fxm(pupil_x), 0, 0};
+    sk.bones[kBPupilR] = zc::Bone{kBHead, -fxm(pupil_x), 0, 0};
     std::vector<zc::RingPart> parts;
 
     // ---- THE HEAD: the skull surface itself, stations 0..kHeadEnd --------
@@ -4853,6 +4999,74 @@ inline const zc::CreatureType& type() {
       p.v1 = 50;
       set_rgb(p, kBlue);
       parts.push_back(p);
+    }
+
+    // ---- MOVING PUPILS: one deforming boundary-to-boundary stripe per eye --
+    // The yellow eyeball and ink perimeter remain paint on the swollen head.
+    // Each orange stripe is a seven-ring shallow ribbon. Its middle three
+    // rings follow the pupil pivot, its two shoulder rings blend back toward
+    // the skull, and its tapered tips use the same bind as the painted eye.
+    // The tips therefore stay joined to the eyeball boundary while diagonal
+    // travel stretches/contracts the arms continuously. This is geometry and
+    // skinning, not a screen-space UV trick, so the marking cannot texture-swim.
+    {
+      int32_t eye_rx = 0, eye_rz = 0;
+      head_ring(kPupilStation, eye_rx, eye_rz);
+      const Bind eye_bind = head_station_bind(kPupilStation);
+      const int32_t eye_x = -station_x(kPupilStation);
+      struct PupilStripeRing {
+        int32_t angle_a16;
+        int32_t half_width_mm;
+        uint8_t follow;  // 0 = painted eye, 1 = shoulder blend, 2 = pupil
+      };
+      static constexpr PupilStripeRing kStripe[] = {
+          {-kPupilStripeBoundaryA16, kPupilStripeTipHalfWidthMm, 0},
+          {-kPupilStripeShoulderA16, kPupilStripeArmHalfWidthMm, 1},
+          {-kPupilCoreHalfAngleA16, kPupilStripeCoreEdgeMm, 2},
+          {0, kPupilCoreHalfWidthMm, 2},
+          {kPupilCoreHalfAngleA16, kPupilStripeCoreEdgeMm, 2},
+          {kPupilStripeShoulderA16, kPupilStripeArmHalfWidthMm, 1},
+          {kPupilStripeBoundaryA16, kPupilStripeTipHalfWidthMm, 0},
+      };
+      for (int side = 0; side < 2; ++side) {
+        const uint8_t pupil_bone = side == 0 ? kBPupilL : kBPupilR;
+        const int32_t flank = side == 0 ? 1 : -1;
+        zc::RingPart stripe;
+        stripe.chain = true;
+        stripe.caps = zc::kCapTop | zc::kCapBot;
+        stripe.page = kTilePupil;
+        set_rgb(stripe, kOrange);
+        for (const PupilStripeRing& sr : kStripe) {
+          const zref::angle16 a{static_cast<uint16_t>(sr.angle_a16 & 0xFFFF)};
+          const int32_t rise =
+              static_cast<int32_t>((static_cast<int64_t>(eye_rz) * zref::fx_sin(a).raw) >> 16);
+          const int32_t radial =
+              static_cast<int32_t>((static_cast<int64_t>(eye_rx) * zref::fx_cos(a).raw) >> 16);
+          zc::RingSpec rs;
+          rs.y = fxm(kBodyY + rise);
+          rs.radius = fxm(sr.half_width_mm);
+          rs.segments = static_cast<uint8_t>(kPupilStripeSides);
+          rs.cx = fxm(eye_x);
+          rs.cz = fxm(flank * (radial + kPupilStripeSurfaceLiftMm));
+          rs.rx = fxm(sr.half_width_mm);
+          rs.rz = fxm(kPupilStripeDepthMm);
+          if (sr.follow == 0) {
+            rs.b0 = eye_bind.b0;
+            rs.b1 = eye_bind.b1;
+            rs.w0 = eye_bind.w0;
+          } else if (sr.follow == 1) {
+            rs.b0 = pupil_bone;
+            rs.b1 = kBHead;
+            rs.w0 = kPupilStripeShoulderFollow;
+          } else {
+            rs.b0 = pupil_bone;
+            rs.b1 = pupil_bone;
+            rs.w0 = 64;
+          }
+          stripe.rings.push_back(rs);
+        }
+        parts.push_back(stripe);
+      }
     }
 
     // ---- THE BODY: one chain part, junction station to fork --------------
@@ -4972,6 +5186,7 @@ inline const zc::CreatureType& type() {
     bank.clips.push_back(build_death());
     bank.clips.push_back(build_balance());
     bank.clips.push_back(build_look());
+    bank.clips.push_back(build_pupil_proof());
     // C2: the phase vocabulary, sliced from the local-body attack at shared
     // keys; the two authored phases start/end on the exact spear pose. The
     // declared seams below are ENFORCED by compile_creature -- a phase edit
