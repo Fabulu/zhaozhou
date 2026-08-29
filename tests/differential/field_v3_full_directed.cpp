@@ -566,6 +566,10 @@ int main(int argc, char** argv) {
         {zfield::OP_ROT3, "ROT3", 3, true, 3, 1u, false},
         // THE TENTH. A synthetic uop the executor runs and no .zprog contains.
         {zfield::UOP_RING_PREP, "RING_PREP", 1, false, 1, 0u, true},
+        // ELEVEN AND TWELVE. Two of the three opcodes the Earth programs need
+        // and this machine did not serve until today.
+        {zfield::OP_SIN, "SIN", 1, false, 1, 0u, false},
+        {zfield::OP_COS, "COS", 1, false, 1, 0u, false},
     };
 
     zfield::Table tb;
