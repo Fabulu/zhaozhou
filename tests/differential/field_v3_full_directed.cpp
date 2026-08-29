@@ -230,6 +230,42 @@ int run_long(Vzhao_probe_v3_full& top, uint8_t op, int n_ctx, const int32_t* xs,
   return (fin == n_ctx) ? d.alarms() : -1;
 }
 
+// BOTH SERVICES AT ONCE. Every other runner in this file gives all contexts
+// the SAME op, so exactly one service is ever busy and the path between them
+// is never contended. That is not a small omission: it is the arrangement the
+// second service was added to create, and five deliberate defects survived the
+// 37-mutant sweep purely because nothing here produced it.
+//
+// Each context gets its own op and its own immediate, and they are all started
+// before any finishes.
+int run_mixed(Vzhao_probe_v3_full& top, const uint8_t* ops, const uint32_t* imms, int n_ctx,
+              const int32_t* xs, const int32_t* ys, int32_t out[][2], int* clocks,
+              const zfield::Table* t0, const zfield::Table* t2) {
+  Dut d(top);
+  d.reset(0);
+  if (t0) d.load_table(0, *t0);
+  if (t2) d.load_table(2, *t2);
+  for (int c = 0; c < n_ctx; ++c) {
+    d.preload(c, 0, xs[c]);
+    d.preload(c, 1, ys[c]);
+    d.load_uop(c, 0, ops[c], 2, 0, 1, 0, imms[c]);
+    d.load_uop(c, 1, zfield::OP_END, 0, 0, 0, 0, 0);
+  }
+  for (int c = 0; c < n_ctx; ++c) d.start(c);
+
+  int fin = 0, guard = 0, done = -1;
+  while (guard++ < 400000 && fin < n_ctx) {
+    if (d.step(&done)) ++fin;
+  }
+  for (int i = 0; i < 32; ++i) d.step(&done);
+  for (int c = 0; c < n_ctx; ++c) {
+    out[c][0] = d.shadow[c][2];
+    out[c][1] = d.shadow[c][3];
+  }
+  if (clocks) *clocks = guard;
+  return (fin == n_ctx) ? d.alarms() : -1;
+}
+
 void check_group(Vzhao_probe_v3_full& top, uint8_t op, int n_ctx, uint32_t seed, int policy,
                  bool rival, Prng& rng, const std::string& what) {
   // ZERO-INITIALISED, NOT MERELY DECLARED. Only n_ctx of kCtx entries are
@@ -516,6 +552,77 @@ int main(int argc, char** argv) {
             (uint32_t)top.wrong_op_o);
       printf("   MEASURED: probe %d -> %d in %d clocks\n", p, got[0][0], clocks);
     }
+  }
+
+  printf("== section 7: BOTH services at once, every answer against the oracle ==\n");
+  {
+    // FIVE DEFECTS SURVIVED THE SWEEP AND FOUR OF THEM ARE HERE. Every other
+    // runner gives all contexts the same op, so one service is busy and the
+    // other is idle, and:
+    //
+    //   W02  taking the handshake from the service that was NOT asked is
+    //        invisible while both are idle and therefore both ready;
+    //   W04  dropping the losing service's held response needs BOTH to be
+    //        holding one in the same cycle;
+    //   W07  serving DCURVE as CURVE needs a DCURVE to exist at all, and no
+    //        program in this file contained one;
+    //   W09  reading the table index from the wrong bits of the immediate is
+    //        invisible while every table index is ZERO.
+    //
+    // So: two different tables, one of them in a NON-ZERO slot, and eight
+    // contexts split across both services, all started before any finishes.
+    zfield::Table ta;
+    ta.kind = 0;
+    ta.x = {-(1 << 20), 0, 1 << 20, 3 << 20};
+    ta.y = {7 << 16, 11 << 16, -(5 << 16), 2 << 16};
+    ta.dy = {1 << 12, 1 << 12, 1 << 12, 1 << 12};
+
+    // DELIBERATELY UNLIKE ta. If the two tables agreed, reading the wrong one
+    // would give the right answer and W09 would survive this section too.
+    zfield::Table tb;
+    tb.kind = 0;
+    tb.x = {-(2 << 20), -(1 << 19), 2 << 20, 5 << 20};
+    tb.y = {-(3 << 16), 23 << 16, 1 << 16, -(9 << 16)};
+    tb.dy = {1 << 11, 3 << 11, 1 << 13, 1 << 12};
+
+    // The oracle indexes tables[imm], so slot 1 must exist even though the
+    // hardware is never asked for it. It is ta, not an empty table: an empty
+    // one would crash the oracle rather than disagree with the hardware.
+    std::vector<zfield::Table> tabs{ta, ta, tb};
+
+    const uint8_t ops[8] = {zfield::OP_SPLINE, zfield::OP_NOISE2, zfield::OP_DCURVE,
+                            zfield::OP_RIDGE,  zfield::OP_CURVE,  zfield::OP_SPLINE,
+                            zfield::OP_NOISE2, zfield::OP_DCURVE};
+    // Curve ops carry a TABLE INDEX; noise ops carry a SEED. Same field.
+    const uint32_t imms[8] = {0u, 0xA5A5u, 2u, 0x1234u, 2u, 2u, 0x77u, 0u};
+    const int32_t xs[8] = {(1 << 19), 3 << 16, -(3 << 20), 5 << 16,
+                           0,         9 << 20, -(1 << 16), (1 << 21)};
+    const int32_t ys[8] = {0, 5 << 16, 0, -(7 << 16), 0, 0, 2 << 16, 0};
+
+    int32_t got[kCtx][2] = {};
+    int clocks = 0;
+    const int al = run_mixed(top, ops, imms, 8, xs, ys, got, &clocks, &ta, &tb);
+    check(al == 0, "eight mixed contexts finish with no alarm", 0, al);
+    check(top.wrong_op_o == 0, "and no service was asked for an op it lacks", 0,
+          (uint32_t)top.wrong_op_o);
+
+    for (int c = 0; c < 8; ++c) {
+      zref::SatLedger L{};
+      int32_t src[2] = {xs[c], ys[c]};
+      int32_t dst[2] = {0, 0};
+      zfield::steps::exec_op(ops[c], imms[c], tabs, src, dst, &L);
+
+      const bool wide = (ops[c] == zfield::OP_NOISE2) || (ops[c] == zfield::OP_RIDGE);
+      char what[96];
+      snprintf(what, sizeof what, "ctx %d (op %02X) lands the oracle's value", c, (unsigned)ops[c]);
+      check(got[c][0] == dst[0], what, (uint32_t)dst[0], (uint32_t)got[c][0]);
+      if (wide) {
+        snprintf(what, sizeof what, "ctx %d (op %02X) lands the second register", c,
+                 (unsigned)ops[c]);
+        check(got[c][1] == dst[1], what, (uint32_t)dst[1], (uint32_t)got[c][1]);
+      }
+    }
+    printf("   MEASURED: 8 mixed contexts across two services in %d clocks\n", clocks);
   }
 
   return zhao::report_and_exit("field_v3_full_directed");

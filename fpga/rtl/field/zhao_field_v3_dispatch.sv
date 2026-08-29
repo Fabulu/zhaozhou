@@ -273,11 +273,50 @@ module zhao_field_v3_dispatch #(
   assign long_ready_o = (state_r == D_GATHER) && (fill_r < 3'd4) && !flush_i &&
                         (dst_width_of(long_op_i) != 2'd0) && same_group_c;
 
-  // Issue when the group is full, or when the executor says nobody else can
-  // join and there is at least one point to send. Rule 1.
+  // Issue when the group is full, when the executor says nobody else can join
+  // and there is at least one point to send, OR WHEN SOMEBODY IS ASKING AND
+  // CANNOT JOIN. Rule 1, plus the case that rule 1 did not cover.
+  //
+  // ---------------------------------------------------------------------------
+  // THE THIRD TERM FIXES A REAL DEADLOCK, FOUND 2026-08-29
+  // ---------------------------------------------------------------------------
+  // Two contexts running DIFFERENT long ops at the same time hung the machine
+  // forever. Not slowly -- forever, with nothing timing out and no flag raised.
+  //
+  //   1. Context A offers NOISE2. fill_r goes to 1 and A is marked `waiting`.
+  //   2. Context B offers RIDGE. `same_group_c` is false, so `long_ready_o` is
+  //      low and B is refused -- correctly, a group carries ONE opcode.
+  //   3. But `waiting_r` is set only for a context the dispatcher ACCEPTED, so
+  //      B stays active-and-not-waiting.
+  //   4. `flush_o = ~|(active_r & ~waiting_r)` therefore never asserts.
+  //   5. The group of one never issues, so A is never released, so B is never
+  //      accepted. Both wait on each other.
+  //
+  // THE FIFTH SEAM DEFECT IN THIS ENGINE AND THE SAME SHAPE AS THE OTHER FOUR:
+  // two blocks that must agree, with nothing forcing them to. The dispatcher
+  // decides who may join; the executor decides whether anyone else might; and
+  // "refused because the op differs" was invisible to the side computing the
+  // second answer.
+  //
+  // It survived nine mutation sweeps and two closed compositions because every
+  // test in the suite gave all contexts the SAME op, so a group always either
+  // filled or was flushed. It is not exotic traffic: eight contexts run eight
+  // independent programs, so they reach different long ops as a matter of
+  // course.
+  //
+  // The repair is local, which is why it is this one. The dispatcher already
+  // knows both halves -- `long_valid_i` says somebody is asking and
+  // `same_group_c` says they cannot join -- so closing the group here needs no
+  // new agreement with anybody. Widening `flush_o` instead would have meant
+  // teaching the executor why the dispatcher refused, which is another copy of
+  // the same seam.
+  //
+  // `!same_group_c` already implies `fill_r != 0` (an empty group accepts
+  // anyone), so no fill test is repeated here.
   logic issue_now_c;
   assign issue_now_c = (state_r == D_GATHER) &&
-                       ((fill_r == 3'd4) || (flush_i && (fill_r != 3'd0)));
+                       ((fill_r == 3'd4) || (flush_i && (fill_r != 3'd0)) ||
+                        (long_valid_i && !same_group_c));
 
   // ---- the request ports --------------------------------------------------
   assign svc_valid_o = (state_r == D_ISSUE);

@@ -304,3 +304,98 @@ knots and past the end, each compared against `exec_op`:
 * Both consumers of the service path needed the new sources, not just the one
   I was building. `sweep_consumers.py` answers that question directly instead
   of guessing.
+
+## 2026-08-29 — a shipped deadlock, found by the traffic nobody had run
+
+The service path sweep scored **28 caught, 4 equivalent, 5 SURVIVED** (exit 12).
+All five survivors were in the new logic, and writing the test that should
+catch four of them found something much worse.
+
+### The defect
+
+**Two contexts running DIFFERENT long ops at the same time hang the engine
+forever.** Not slowly — forever, with nothing timing out and no flag raised.
+
+    1. Context A offers NOISE2. The group fills to 1 and A is marked `waiting`.
+    2. Context B offers RIDGE. `same_group_c` is false, so `long_ready_o` is
+       low and B is refused -- correctly, a group carries ONE opcode.
+    3. But `waiting_r` is set ONLY for a context the dispatcher ACCEPTED, so B
+       stays active-and-not-waiting.
+    4. `flush_o = ~|(active_r & ~waiting_r)` therefore never asserts.
+    5. The group of one never issues, so A is never released, so B is never
+       accepted. They wait on each other.
+
+**This is the fifth seam defect in this engine and it has the same shape as the
+other four**: two blocks that must agree, with nothing forcing them to. The
+dispatcher decides who may join; the executor decides whether anyone else
+might; and "refused because the op differs" was invisible to the side computing
+the second answer.
+
+### Why it survived nine sweeps and two closed compositions
+
+Every runner in the composed differential gives ALL contexts the same op. A
+group therefore always either filled to four or was flushed, and the third
+case — somebody asking who cannot join — never occurred. It is not exotic
+traffic either: eight contexts run eight independent programs, so reaching
+different long ops is the normal case, not a corner.
+
+### It is NOT my second service
+
+Worth proving rather than asserting, because I had just changed that area and
+the obvious suspect was the new arbitration. The isolating run used **NOISE2
+and RIDGE only** — both served by the pre-existing noise unit, one immediate,
+nothing of the curve service involved. It deadlocked identically, 0 of 8
+contexts finishing. The defect is in the shipped dispatcher/executor pair and
+predates today.
+
+### The repair, and why it is on the dispatcher side
+
+    assign issue_now_c = (state_r == D_GATHER) &&
+                         ((fill_r == 3'd4) || (flush_i && (fill_r != 3'd0)) ||
+                          (long_valid_i && !same_group_c));
+
+The dispatcher already knows both halves: `long_valid_i` says somebody is
+asking, `same_group_c` says they cannot join. Closing the group there needs no
+new agreement with anybody. Widening `flush_o` instead would have meant
+teaching the executor WHY the dispatcher refused — another copy of the same
+seam, which is what produced this bug in the first place.
+
+`!same_group_c` already implies `fill_r != 0`, so no fill test is repeated.
+
+**400001 clocks (hung) -> 191 clocks** on the isolating case, and the full
+mixed traffic across both services now runs in 228 clocks with every answer
+matching the oracle. 115 checks, up from 102.
+
+### Section 7, which is the test that was missing
+
+Eight contexts split across both services — SPLINE, NOISE2, DCURVE, RIDGE,
+CURVE, SPLINE, NOISE2, DCURVE — all started before any finishes, two different
+tables with one of them in a NON-ZERO slot, every answer checked against
+`exec_op`. It exists because four of the five survivors needed it:
+
+    W02  taking the handshake from the service that was NOT asked is invisible
+         while both services are idle and therefore both ready
+    W04  dropping the losing service's held response needs BOTH to be holding
+         one in the same cycle
+    W07  serving DCURVE as CURVE needs a DCURVE to exist, and no program in
+         this file contained one
+    W09  reading the table index from the wrong bits of the immediate is
+         invisible while every table index is ZERO
+
+The two tables are deliberately UNLIKE each other. If they agreed, reading the
+wrong one would give the right answer and W09 would survive this section too.
+
+### W06 is equivalent, and that is checked rather than assumed
+
+`rsp_r1` unzeroed for a width-1 answer cannot be observed: the drain selects
+`r1_r` only when `d_memb_r == 1`, and `d_memb_r` counts `0 .. width-1`, so a
+width-1 op never reaches it. CURVE, DCURVE and SPLINE are all width 1. The tie
+is defensive, like `f_spl_offered`. **RE-SCORE IF** any op routed to the curve
+service ever has width > 1.
+
+### Still open
+
+The svcpath sweep must be re-run to confirm W02/W04/W07/W09 are now caught, and
+the DISPATCH sweep's 28 mutants must be re-scored against the changed issue
+condition with a new mutant for the third term. Neither is done yet and neither
+is assumed.
