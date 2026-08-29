@@ -60,6 +60,18 @@
 // by construction rather than by tag arithmetic -- the same reasoning the
 // distance probe gives for the same choice.
 //
+// ENFORCED-BY: tests/differential/field_v3_len_directed.cpp:main
+//
+// BY CONSTRUCTION IS A CLAIM, SO IT IS CHECKED. Section 6 streams thirty-two
+// groups each carrying DISTINCT operands and compares every reply against its
+// own answer. It used to stream one operand pair past all of them, which could
+// not have caught a cross-group swap at all -- every value matched because
+// every value was the same value. The tag order check did not cover it either:
+// the tag rides the order queue and the data rides the banks, so the tags can
+// be in perfect order over swapped numbers.
+//
+// ENFORCED-BY: tests/differential/field_v3_len_directed.cpp:main
+//
 // What is NOT negotiable is exactness. `len_of` is floor-exact and an
 // approximate root would be a different answer, not a faster one.
 module zhao_field_v3_len #(

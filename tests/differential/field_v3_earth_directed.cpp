@@ -75,7 +75,13 @@
 
 namespace {
 
-constexpr int kCtx = 8;
+// The context count is a BUILD knob so the same harness can measure the same
+// programs on a wider machine without disturbing the CTX=8 tallies every other
+// block test was scored at.
+#ifndef ZHAO_EARTH_CTX
+#define ZHAO_EARTH_CTX 8
+#endif
+constexpr int kCtx = ZHAO_EARTH_CTX;
 constexpr int kRegs = 32;
 constexpr int kPlan = 32;
 
@@ -85,8 +91,8 @@ constexpr long kAssocBudget = 6000;
 constexpr long kGroupsPerAssoc = 273;
 constexpr long kAssocPerFrame = 128;
 
-int failures = 0;      // gates the exit status
-int diag_failures = 0; // real, recorded, and NOT yet gating -- see the report
+int failures = 0;       // gates the exit status
+int diag_failures = 0;  // real, recorded, and NOT yet gating -- see the report
 bool gating = true;
 int printed = 0;
 int wb_policy_probe = 1;  // experiment knob: 1 = drain-first, 0 = ALU-first
@@ -239,9 +245,9 @@ struct Dut {
   // `done_at` is the clock a context retired on; any write that arrives for
   // that context afterwards, before it is restarted, is a LATE WRITE and means
   // `done_valid_o` is not the guarantee a consumer would read it as.
-  long done_at[kCtx];
-  int late_writes[kCtx];
-  int late_reg[kCtx];
+  long done_at[kCtx] = {};
+  int late_writes[kCtx] = {};
+  int late_reg[kCtx] = {};
 
   // A RETIREMENT IS A QUEUE, NOT A FLAG.
   //
@@ -254,7 +260,7 @@ struct Dut {
   // Wave drive never noticed: it reloads all eight only between waves, when
   // nothing is in flight. Staggered drive reloads inside the loop, which is
   // why the two wrong values appeared there and only there.
-  bool done_q[kCtx];
+  bool done_q[kCtx] = {};
 
   // AND A RETIREMENT IS ONLY REAL IF THE CONTEXT WAS ACTUALLY RUNNING.
   //
@@ -264,13 +270,13 @@ struct Dut {
   // single-flag version hid this by accident: reloading overwrote the flag.
   // `running` is the guard that makes the retirement edge-true rather than
   // level-true.
-  bool running[kCtx];
+  bool running[kCtx] = {};
 
   // Did the context actually RUN? A stale answer and a fresh oracle value is
   // consistent with both "ran and computed wrongly" and "never ran at all",
   // and those need completely different fixes.
-  long start_clk[kCtx];
-  int writes_since_start[kCtx];
+  long start_clk[kCtx] = {};
+  int writes_since_start[kCtx] = {};
 
   // THE WRITE TRACE, so a wrong answer can be asked what it READ.
   //
@@ -288,7 +294,12 @@ struct Dut {
   std::vector<long> wclk[kCtx], aclk[kCtx];
   // Every clock this context had an instruction at S2: what operand a was
   // about to be captured, and what the file was actually presenting.
-  struct Cap { long clk; int op; int32_t use_a0; int32_t rf_a0; };
+  struct Cap {
+    long clk;
+    int op;
+    int32_t use_a0;
+    int32_t rf_a0;
+  };
   std::vector<Cap> caps[kCtx];
 
   explicit Dut(Vzhao_probe_v3_full& top) : t(top) {}
@@ -514,7 +525,7 @@ void expected_regs(const zfield::Fplan& fp, const zfield::Decoded& prog,
     int32_t src[9] = {};
     for (int k = 0; k < (int)v.n_src && k < 9; ++k) {
       const int r = v.src[k].kind == zfield::SrcKind::kVec ? (int)v.src[k].idx
-                                                          : scalar_base + (int)v.src[k].idx;
+                                                           : scalar_base + (int)v.src[k].idx;
       src[k] = (r >= 0 && r < n_rf) ? rf[r] : 0;
     }
     int32_t dst[3] = {};
@@ -545,7 +556,7 @@ int32_t oracle_uop_value(const zfield::Fplan& fp, const zfield::Decoded& prog,
     int32_t src[9] = {};
     for (int k = 0; k < (int)v.n_src && k < 9; ++k) {
       const int r = v.src[k].kind == zfield::SrcKind::kVec ? (int)v.src[k].idx
-                                                          : scalar_base + (int)v.src[k].idx;
+                                                           : scalar_base + (int)v.src[k].idx;
       src[k] = (r < n_rf) ? rf[(size_t)r] : 0;
     }
     int32_t dst[3] = {};
@@ -601,7 +612,7 @@ void explain_uop(const zfield::Fplan& fp, const zfield::Decoded& prog, const zfi
     int32_t src_hw[9] = {};
     for (int k = 0; k < (int)v.n_src && k < 9; ++k) {
       const int r = v.src[k].kind == zfield::SrcKind::kVec ? (int)v.src[k].idx
-                                                          : scalar_base + (int)v.src[k].idx;
+                                                           : scalar_base + (int)v.src[k].idx;
       src[k] = (r < n_rf) ? orc[(size_t)r] : 0;
       src_hw[k] = (r < n_rf) ? hw[(size_t)r] : 0;
     }
@@ -622,13 +633,13 @@ void explain_uop(const zfield::Fplan& fp, const zfield::Decoded& prog, const zfi
         // they were sound, the arithmetic or its product routing is at fault;
         // if not, this uop is only carrying an earlier fault forward.
         bool src_ok = true;
-        int off = snprintf(out, outsz, "      EARLIEST BAD WRITE: uop %d op 0x%02X -> r%zu = %d, "
-                                       "oracle %d; read",
+        int off = snprintf(out, outsz,
+                           "      EARLIEST BAD WRITE: uop %d op 0x%02X -> r%zu = %d, "
+                           "oracle %d; read",
                            u, v.op, r, got, dst[m]);
         for (int k = 0; k < (int)v.n_src && k < 9 && off < (int)outsz - 60; ++k) {
-          const int rr = v.src[k].kind == zfield::SrcKind::kVec
-                             ? (int)v.src[k].idx
-                             : scalar_base + (int)v.src[k].idx;
+          const int rr = v.src[k].kind == zfield::SrcKind::kVec ? (int)v.src[k].idx
+                                                                : scalar_base + (int)v.src[k].idx;
           if (src_hw[k] != src[k]) src_ok = false;
           off += snprintf(out + off, outsz - (size_t)off, " r%d=%d%s", rr, src_hw[k],
                           (src_hw[k] == src[k]) ? "" : "(STALE)");
@@ -650,7 +661,7 @@ void explain_uop(const zfield::Fplan& fp, const zfield::Decoded& prog, const zfi
 
 struct Result {
   bool ran = false;
-  long ii_x4 = 0;       // clocks per four-point group, scaled by 4 for rounding
+  long ii_x4 = 0;  // clocks per four-point group, scaled by 4 for rounding
   long group_clocks = 0;
   long assoc = 0;
   long frame = 0;
@@ -689,9 +700,8 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive,
 
   if (n_vreg + n_scalar > kRegs) {
     char buf[160];
-    snprintf(buf, sizeof buf,
-             "needs %d vector + %d uniform = %d registers, and the file holds %d", n_vreg, n_scalar,
-             n_vreg + n_scalar, kRegs);
+    snprintf(buf, sizeof buf, "needs %d vector + %d uniform = %d registers, and the file holds %d",
+             n_vreg, n_scalar, n_vreg + n_scalar, kRegs);
     R.refusal = buf;
     return R;
   }
@@ -846,8 +856,8 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive,
         char srcbuf[360];
         int bu = -1, bm = 0;
         int32_t bval = 0;
-        explain_uop(fp, dec.prog, prep, pt_in[c].data(), n_in, scalar_base, kRegs,
-                    d.wtrace[c], -1, srcbuf, sizeof srcbuf, &bu, &bm, &bval);
+        explain_uop(fp, dec.prog, prep, pt_in[c].data(), n_in, scalar_base, kRegs, d.wtrace[c], -1,
+                    srcbuf, sizeof srcbuf, &bu, &bm, &bval);
         printf("%s\n", srcbuf);
         {
           char qb[300];
@@ -859,8 +869,8 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive,
           char wb2[300];
           int wo = snprintf(wb2, sizeof wb2, "      writes this context LANDED:");
           for (size_t wi = 0; wi < d.wtrace[c].size() && wo < (int)sizeof wb2 - 40; ++wi)
-            wo += snprintf(wb2 + wo, sizeof wb2 - (size_t)wo, " r%d=%d@%ld",
-                           d.wtrace[c][wi].first, d.wtrace[c][wi].second, d.wclk[c][wi]);
+            wo += snprintf(wb2 + wo, sizeof wb2 - (size_t)wo, " r%d=%d@%ld", d.wtrace[c][wi].first,
+                           d.wtrace[c][wi].second, d.wclk[c][wi]);
           printf("%s\n", wb2);
           char cb[360];
           int co = snprintf(cb, sizeof cb, "      operand a AT CAPTURE (S2):");
@@ -881,9 +891,10 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive,
             const int32_t v = oracle_uop_value(fp, dec.prog, prep, pt_in[c2].data(), n_in,
                                                scalar_base, kRegs, bu, bm);
             if (v == bval) {
-              printf("      ^ that value is ctx %d's CORRECT answer for the same uop --\n"
-                     "        a response delivered to the wrong group, not bad arithmetic\n",
-                     c2);
+              printf(
+                  "      ^ that value is ctx %d's CORRECT answer for the same uop --\n"
+                  "        a response delivered to the wrong group, not bad arithmetic\n",
+                  c2);
               break;
             }
           }
@@ -1081,8 +1092,8 @@ int main(int argc, char** argv) {
     const int stag_bad = diag_failures;
     printed = 0;
     if (S.ran)
-      printf("   %-22s STAGGERED group %4ld  frame %9ld  partial %ld/%ld  WRONG VALUES %d\n",
-             base, S.group_clocks, S.frame, S.partial, S.groups, stag_bad);
+      printf("   %-22s STAGGERED group %4ld  frame %9ld  partial %ld/%ld  WRONG VALUES %d\n", base,
+             S.group_clocks, S.frame, S.partial, S.groups, stag_bad);
     total_stag_bad += stag_bad;
 
     const Result R = run_program(f, points, 0xC0FFEEull, true, n_ctx);
@@ -1099,19 +1110,21 @@ int main(int argc, char** argv) {
       worst_frame = R.frame;
       worst_name = base;
     }
-    printf("   %-22s WAVE      group %4ld  association %7ld  frame %9ld  %s\n", base, R.group_clocks, R.assoc,
-           R.frame, fits ? "FITS" : "OVER");
-    printf("   %-22s   %d values checked against the oracle, %ld of the counted clocks were "
-           "harness preload\n",
-           "", R.checked, R.preloads);
+    printf("   %-22s WAVE      group %4ld  association %7ld  frame %9ld  %s\n", base,
+           R.group_clocks, R.assoc, R.frame, fits ? "FITS" : "OVER");
+    printf(
+        "   %-22s   %d values checked against the oracle, %ld of the counted clocks were "
+        "harness preload\n",
+        "", R.checked, R.preloads);
     // WHICH STAGE. A dispatch group that went out with fewer than four points
     // did a group's worth of waiting for a fraction of a group's work, so
     // `partial` against `groups` is the difference between a service that is
     // slow and a service that is STARVED.
-    printf("   %-22s   dispatch groups %ld of which PARTIAL %ld (%.0f%%), uops issued %ld, "
-           "engine idle %ld\n",
-           "", R.groups, R.partial, R.groups ? 100.0 * (double)R.partial / (double)R.groups : 0.0,
-           R.uops, R.idle);
+    printf(
+        "   %-22s   dispatch groups %ld of which PARTIAL %ld (%.0f%%), uops issued %ld, "
+        "engine idle %ld\n",
+        "", R.groups, R.partial, R.groups ? 100.0 * (double)R.partial / (double)R.groups : 0.0,
+        R.uops, R.idle);
     printf("   %-22s   writeback: ALU served %ld stalled %ld, drain served %ld stalled %ld\n", "",
            R.wb_served[0], R.wb_stalled[0], R.wb_served[1], R.wb_stalled[1]);
   }
@@ -1135,8 +1148,7 @@ int main(int argc, char** argv) {
            worst_name, worst_frame, kFrameBudget, (double)worst_frame / (double)kFrameBudget);
   }
 
-  printf("\n[field_v3_earth_directed] %d value check(s), %d failure(s)\n",
-         total_checks, failures);
+  printf("\n[field_v3_earth_directed] %d value check(s), %d failure(s)\n", total_checks, failures);
 
   return failures == 0 ? 0 : 1;
 }
