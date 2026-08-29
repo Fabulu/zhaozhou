@@ -119,8 +119,8 @@ MUTANTS = [
     # this composition's test can see it is a different question, and one this
     # mutant asks rather than assumes.
     ("V06 the bank puts the LANES above the service",
-     "      .CLAIMANTS(5), .PRIO_SERVICES_FIRST(1'b1), .TAGW(TAGW)",
-     "      .CLAIMANTS(5), .PRIO_SERVICES_FIRST(1'b0), .TAGW(TAGW)"),
+     "      .CLAIMANTS(6), .PRIO_SERVICES_FIRST(1'b1), .TAGW(TAGW)",
+     "      .CLAIMANTS(6), .PRIO_SERVICES_FIRST(1'b0), .TAGW(TAGW)"),
     ("V07 the service's A operands are broadcast from point 0",
      "      bank_a[1][l] = nz_a[l];",
      "      bank_a[1][l] = nz_a[0];"),
@@ -225,7 +225,8 @@ MUTANTS = [
      "                : rt_rsp_valid ? rt_r2[l] : 32'sd0;",
      "                : rt_rsp_valid ? rt_r2[l] : 32'sd1;"),
     ("V23 the wrong-op detector fires on the ops that ARE implemented",
-     "                 !is_noise_c && !is_curve_c && !is_norm_c && !is_rot_c) begin",
+     "                 !is_noise_c && !is_curve_c && !is_norm_c && !is_rot_c &&" + "\n" +
+     "                 !is_ring_c) begin",
      "                 is_noise_c) begin"),
     # Reshaped from flush tied low, which orphans flush_i. Qualifying it with
     # long_valid_i is the sharper defect anyway: flush is RAISED after the last
@@ -267,7 +268,8 @@ MUTANTS = [
     # unit sees its response accepted on a cycle the mux published the curve
     # service's, and its answer is gone -- not late, gone.
     ("W04 the losing service's response is dropped instead of held",
-     "  assign nz_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid && !rt_rsp_valid;",
+     "  assign nz_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid && !rt_rsp_valid &&" + "\n" +
+     "                        !rg_rsp_valid;",
      "  assign nz_rsp_ready = rsp_ready;"),
 
     ("W05 the response carries the other service's tag",
@@ -318,8 +320,10 @@ MUTANTS = [
      "  assign cv_mul_valid  = bank_rsp_valid[1];"),
 
     ("W12 the wrong-op detector fires on a SPLINE it does serve",
-     "                 !is_noise_c && !is_curve_c && !is_norm_c && !is_rot_c) begin",
-     "                 !is_noise_c && !is_norm_c && !is_rot_c) begin"),
+     "                 !is_noise_c && !is_curve_c && !is_norm_c && !is_rot_c &&" + "\n" +
+     "                 !is_ring_c) begin",
+     "                 !is_noise_c && !is_norm_c && !is_rot_c &&" + "\n" +
+     "                 !is_ring_c) begin"),
     # ---- the other two services, added 2026-08-29 -------------------------
     # NORMALIZE2/3 and ROT2/3 were in the opcode table and answered by the
     # NOISE unit's else-branch. These attack the routing that replaced it, the
@@ -360,17 +364,21 @@ MUTANTS = [
     # and third keeps every bit read and is the same class of defect.
     ("X07 normalize's second and third result registers are crossed",
      "                : nm_rsp_valid ? nm_r1[l]" + "\n" +
-     "                : rt_rsp_valid ? rt_r1[l] : nz_r1[l];" + "\n" +
+     "                : rt_rsp_valid ? rt_r1[l]" + "\n" +
+     "                : rg_rsp_valid ? 32'sd0 : nz_r1[l];" + "\n" +
      "      rsp_r2[l] = nm_rsp_valid ? nm_r2[l]",
      "                : nm_rsp_valid ? nm_r2[l]" + "\n" +
-     "                : rt_rsp_valid ? rt_r1[l] : nz_r1[l];" + "\n" +
+     "                : rt_rsp_valid ? rt_r1[l]" + "\n" +
+     "                : rg_rsp_valid ? 32'sd0 : nz_r1[l];" + "\n" +
      "      rsp_r2[l] = nm_rsp_valid ? nm_r1[l]"),
 
     ("X08 rot's second and third result registers are crossed",
-     "                : rt_rsp_valid ? rt_r1[l] : nz_r1[l];" + "\n" +
+     "                : rt_rsp_valid ? rt_r1[l]" + "\n" +
+     "                : rg_rsp_valid ? 32'sd0 : nz_r1[l];" + "\n" +
      "      rsp_r2[l] = nm_rsp_valid ? nm_r2[l]" + "\n" +
      "                : rt_rsp_valid ? rt_r2[l] : 32'sd0;",
-     "                : rt_rsp_valid ? rt_r2[l] : nz_r1[l];" + "\n" +
+     "                : rt_rsp_valid ? rt_r2[l]" + "\n" +
+     "                : rg_rsp_valid ? 32'sd0 : nz_r1[l];" + "\n" +
      "      rsp_r2[l] = nm_rsp_valid ? nm_r2[l]" + "\n" +
      "                : rt_rsp_valid ? rt_r1[l] : 32'sd0;"),
 
@@ -383,8 +391,10 @@ MUTANTS = [
      "  assign rt_mul_ready  = bank_req_ready[3];"),
 
     ("X10 the wrong-op detector no longer accepts the rot ops",
-     "                 !is_noise_c && !is_curve_c && !is_norm_c && !is_rot_c) begin",
-     "                 !is_noise_c && !is_curve_c && !is_norm_c) begin"),
+     "                 !is_noise_c && !is_curve_c && !is_norm_c && !is_rot_c &&" + "\n" +
+     "                 !is_ring_c) begin",
+     "                 !is_noise_c && !is_curve_c && !is_norm_c &&" + "\n" +
+     "                 !is_ring_c) begin"),
 
     ("X11 rot's response is taken while normalize is also holding one",
      "  assign rt_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid;",
