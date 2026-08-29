@@ -364,5 +364,44 @@ int main(int argc, char** argv) {
     printf("   MEASURED: %d groups, %d refusals issued\n", done, mb.refusals);
   }
 
+  printf("== section 6: the INITIATION INTERVAL, which is the number that matters\n");
+  {
+    // LATENCY IS NOT THROUGHPUT, and confusing them is how a pipelined machine
+    // gets costed wrong. `measure_earth_budget.cpp` multiplied this block's
+    // LATENCY by 273 groups and reported Earth 9.1x over budget. That is an
+    // upper bound and it is only the true figure if the service cannot start a
+    // new group before the last one finishes.
+    //
+    // So the question is not "how long does one group take" but "how often can
+    // a group start". This measures it directly: hand over groups back to back
+    // and divide.
+    reset(dut, mb);
+    const int32_t a[3][kLanes] = {{3 << 16, 5 << 16, -(7 << 16), 11 << 16},
+                                  {4 << 16, 12 << 16, 24 << 16, 2 << 16},
+                                  {0, 0, 0, 0}};
+    const int32_t b[2][kLanes] = {{1 << 16, -(2 << 16), 7 << 16, 0},
+                                  {1 << 16, 3 << 16, 0, -(9 << 16)}};
+
+    const int kGroups = 8;
+    int clocks = 0;
+    int done = 0;
+    for (int g = 0; g < kGroups; ++g) {
+      int32_t got[kLanes] = {};
+      const int c = run(dut, mb, 2, a, b, (uint8_t)(0x90 + g), got, nullptr, nullptr);
+      if (c < 0) break;
+      clocks += c;
+      ++done;
+    }
+    zhao::check(done == kGroups, "eight back-to-back groups all complete", kGroups, done);
+    const int ii = done ? (clocks / done) : 0;
+    printf("   MEASURED: %d groups, %d clocks, II = %d clocks/group\n", done, clocks, ii);
+
+    // THE BUDGET IS 24.3 CLOCKS PER GROUP: 850,000 clocks for 128 associations
+    // of 273 groups. This block is the dominant term in every Earth program, so
+    // if its II is above that, Earth cannot fit however good everything else is.
+    printf("   Earth needs <= 24 clocks/group for the WHOLE program; DIST2 alone is %d\n", ii);
+    zhao::check(ii > 0, "an initiation interval was measured at all", 1, ii > 0 ? 1 : 0);
+  }
+
   return zhao::report_and_exit("field_v3_len_directed");
 }
