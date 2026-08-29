@@ -512,3 +512,25 @@ where the next person will hit it.
 
 Both confirming sweeps are running in their new dedicated trees. Neither result
 is assumed.
+
+## 2026-08-29 07:30 — DISPATCH closes at 30/30
+
+**SWEEP OK. 30 attempted, 30 caught, 0 equivalent, 0 survived, 0 discarded.**
+
+D30 is caught, which confirms section 5d rather than merely agreeing with it —
+I had already applied the mutant by hand and watched it fail, and the sweep is
+the independent second look. D29, the deadlock reintroduced, is caught too, so
+the defect that hung the machine now has a standing regression check.
+
+This is the first block in the family to close with NO equivalents at all.
+
+### A process note against myself
+
+This result landed at 07:30 and I did not commit it until 08:17, because I was
+waiting for the svcpath sweep to finish so I could report both together. That
+is batching, and the rule is explicitly the opposite: commit and push as the
+work happens. Two independent results are two commits.
+
+The cost is not hypothetical — a green sweep sitting uncommitted for 45 minutes
+is 45 minutes in which a crash loses it and nobody outside this session can see
+that the dispatcher is closed.
