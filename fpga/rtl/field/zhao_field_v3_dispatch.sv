@@ -229,20 +229,74 @@ module zhao_field_v3_dispatch #(
   logic [CTXW-1:0]           g_ctx_r [4];
   logic signed [31:0]        g_s0_r [4], g_s1_r [4], g_s2_r [4], g_s3_r [4];
 
-  // ---- the one outstanding slot -------------------------------------------
-  typedef enum logic [1:0] {D_GATHER, D_ISSUE, D_WAIT, D_DRAIN} state_e;
-  state_e state_r;
+  // ---- MORE THAN ONE GROUP IN FLIGHT --------------------------------------
+  //
+  // This block used to run D_GATHER -> D_ISSUE -> D_WAIT -> D_DRAIN with
+  // exactly one group outstanding, and that single fact made four separate
+  // deliberate defects UNKILLABLE: W02, W04, X05 and X11 on the service path
+  // all survived their sweeps because two services could never be busy at
+  // once. The response arbitration and the ready mux across five services were
+  // unexercised silicon.
+  //
+  // It is also a throughput ceiling nobody chose. A curve group takes ~30
+  // clocks and a noise group ~15; serialising them wastes the difference every
+  // time, and the owner's two-service starvation measurement is VACUOUS while
+  // it holds -- it would report zero starvation and be measuring the
+  // serialisation rather than the bank's priority.
+  //
+  // So: a bounded in-flight queue. Two is the smallest depth that lets a
+  // second service start work, which is all the goal requires; the parameter
+  // exists so the depth is a knob rather than a rewrite.
+  //
+  // OUT-OF-ORDER CAPTURE, IN-ORDER DRAIN. Services answer at their own speeds,
+  // so a response may arrive for the YOUNGER group first -- that is the whole
+  // point of overlapping them. Responses are therefore matched BY TAG into
+  // whichever slot owns them. Draining still runs oldest-first, because write
+  // ordering and release timing are the two things that must not change.
+  parameter int OUTSTANDING = 2;
+  localparam int SW = (OUTSTANDING <= 2) ? 1 : 2;
 
-  logic [7:0]                s_op_r;
-  logic [REGW-1:0]           s_dst_r;
-  logic [31:0]               s_imm_r;
-  logic [CTXW-1:0]           s_ctx_r [4];
-  logic [2:0]                s_used_r;    // how many lanes were real
-  logic [1:0]                s_width_r;
-  logic [TAGW-1:0]           s_tag_r;
+  // THE POINTER WRAP IS WRITTEN OUT, NOT DONE WITH A MODULO, and the reason is
+  // a bug this cost an hour of.
+  //
+  // `SW'(OUTSTANDING)` truncates the depth to the POINTER's width. At
+  // OUTSTANDING = 2 that is 1'(2) == 0, so every `% SW'(OUTSTANDING)` was a
+  // modulo by ZERO -- the pointers never advanced and two groups in flight
+  // deadlocked the machine. At OUTSTANDING = 1 it was 1'(1) == 1 and modulo 1
+  // is 0, so the depth-1 path worked BY ACCIDENT and passed 341/341 + 163/163
+  // while the arithmetic underneath it was nonsense.
+  //
+  // That is the shape worth remembering: a refactor that is provably
+  // equivalent at the old setting can still be wrong everywhere else, and the
+  // equivalence test will not say so.
+  function automatic logic [SW-1:0] next_slot(input logic [SW-1:0] p);
+    next_slot = (p == SW'(OUTSTANDING - 1)) ? SW'(0) : SW'(p + SW'(1));
+  endfunction
+
+  typedef enum logic {I_GATHER, I_ISSUE} istate_e;
+  istate_e istate_r;
+
+  logic [7:0]                s_op_r    [OUTSTANDING];
+  logic [REGW-1:0]           s_dst_r   [OUTSTANDING];
+  logic [31:0]               s_imm_r   [OUTSTANDING];
+  logic [CTXW-1:0]           s_ctx_r   [OUTSTANDING][4];
+  logic [2:0]                s_used_r  [OUTSTANDING];
+  logic [1:0]                s_width_r [OUTSTANDING];
+  logic [TAGW-1:0]           s_tag_r   [OUTSTANDING];
+  logic                      s_done_r  [OUTSTANDING];  // its response is captured
   logic [TAGW-1:0]           next_tag_r;
 
-  logic signed [31:0]        r0_r [4], r1_r [4], r2_r [4];
+  logic [SW-1:0]             head_r, tail_r;   // oldest in flight, next to fill
+  logic [SW:0]               count_r;          // 0 .. OUTSTANDING
+
+  logic signed [31:0]        r0_r [OUTSTANDING][4];
+  logic signed [31:0]        r1_r [OUTSTANDING][4];
+  logic signed [31:0]        r2_r [OUTSTANDING][4];
+
+  // The drain is its own small machine now, because it must be able to run
+  // while the issue side is gathering the group after next.
+  typedef enum logic {DR_IDLE, DR_RUN} dstate_e;
+  dstate_e dstate_r;
 
   // The drain walks (lane, member) in that order: all of a point's registers
   // land together, so the release pulse for that context can follow its last
@@ -270,7 +324,17 @@ module zhao_field_v3_dispatch #(
   // executor's side; dropping ready leaves the offer standing and it joins the
   // NEXT group. A design that is robust to its own contract being broken beats
   // one that is merely right about who broke it.
-  assign long_ready_o = (state_r == D_GATHER) && (fill_r < 3'd4) && !flush_i &&
+  // `count_r != OUTSTANDING` IS PART OF READY, not only of issue. Accepting a
+  // context into a group that cannot be issued strands it: the executor has
+  // handshaked it away and parked it, and nothing will ever take it.
+  //
+  // At OUTSTANDING = 1 this reduces exactly to the old behaviour -- ready stays
+  // low for the whole time a group is in flight -- which is what the bench
+  // asserts and what the previous single-slot machine did by having no
+  // D_GATHER state to be in. At 2 it is what lets a second group be gathered
+  // while the first is still running, which is the entire point.
+  assign long_ready_o = (istate_r == I_GATHER) && (count_r != (SW+1)'(OUTSTANDING)) &&
+                        (fill_r < 3'd4) && !flush_i &&
                         (dst_width_of(long_op_i) != 2'd0) && same_group_c;
 
   // Issue when the group is full, when the executor says nobody else can join
@@ -314,21 +378,24 @@ module zhao_field_v3_dispatch #(
   // `!same_group_c` already implies `fill_r != 0` (an empty group accepts
   // anyone), so no fill test is repeated here.
   logic issue_now_c;
-  assign issue_now_c = (state_r == D_GATHER) &&
+  // `count_r != OUTSTANDING` is the bound. Without it the queue wraps and a
+  // group in flight is overwritten by its successor -- a lost instruction,
+  // which is worse than a slow one.
+  assign issue_now_c = (istate_r == I_GATHER) && (count_r != (SW+1)'(OUTSTANDING)) &&
                        ((fill_r == 3'd4) || (flush_i && (fill_r != 3'd0)) ||
                         (long_valid_i && !same_group_c));
 
   // ---- the request ports --------------------------------------------------
-  assign svc_valid_o = (state_r == D_ISSUE);
-  assign svc_op_o    = s_op_r;
-  assign svc_imm_o   = s_imm_r;
-  assign svc_tag_o   = s_tag_r;
+  assign svc_valid_o = (istate_r == I_ISSUE);
+  assign svc_op_o    = s_op_r[tail_r];
+  assign svc_imm_o   = s_imm_r[tail_r];
+  assign svc_tag_o   = s_tag_r[tail_r];
 
   always_comb begin
     for (int l = 0; l < 4; l++) begin
       // Rule 2: a lane nobody filled carries a value that is obviously not a
       // coordinate, so a routing bug looks wrong rather than convincing.
-      if (3'(l) < s_used_r) begin
+      if (3'(l) < s_used_r[tail_r]) begin
         svc_s0_o[l] = g_s0_r[l];
         svc_s1_o[l] = g_s1_r[l];
         svc_s2_o[l] = g_s2_r[l];
@@ -342,44 +409,106 @@ module zhao_field_v3_dispatch #(
     end
   end
 
-  assign rsp_ready_o = (state_r == D_WAIT);
+  // READY WHENEVER ANYTHING IS OUTSTANDING, not only while waiting on one
+  // particular group. A service that has finished must be able to hand its
+  // answer over even though an older group is still running, or the overlap
+  // this queue exists to create never happens.
+  // Which slots hold a group right now: the `count_r` entries starting at
+  // `head_r`, wrapping. DERIVED rather than stored, so it cannot disagree with
+  // the pointers -- two places holding the same fact is the seam defect this
+  // engine has produced five times.
+  logic in_flight_c [OUTSTANDING];
+  always_comb begin
+    for (int i = 0; i < OUTSTANDING; i++) in_flight_c[i] = 1'b0;
+    for (int k = 0; k < OUTSTANDING; k++)
+      if ((SW+1)'(k) < count_r) begin
+        // int arithmetic on purpose: the sum must not be truncated to the
+        // pointer width before the wrap is taken.
+        automatic int idx = (int'(head_r) + k) % OUTSTANDING;
+        in_flight_c[idx] = 1'b1;
+      end
+  end
+
+  logic awaiting_c;
+  always_comb begin
+    awaiting_c = 1'b0;
+    for (int i = 0; i < OUTSTANDING; i++)
+      if (in_flight_c[i] && !s_done_r[i]) awaiting_c = 1'b1;
+  end
+  assign rsp_ready_o = awaiting_c;
+
+  // The push and the pop, named once and read by both the occupancy counter
+  // and nothing else.
+  logic push_c, pop_c;
+  assign push_c = (istate_r == I_ISSUE) && svc_ready_i;
+  assign pop_c  = (dstate_r == DR_RUN) && wb_ready_i &&
+                  (d_memb_r == 2'(s_width_r[head_r] - 2'd1)) &&
+                  (d_lane_r + 3'd1 >= s_used_r[head_r]);
+
+  // The slot a response belongs to, by TAG. A response whose tag matches no
+  // outstanding group is the fault `tag_mismatch_o` exists for -- and with
+  // more than one group in flight that guard stops being decorative.
+  logic [SW-1:0] rsp_slot_c;
+  logic          rsp_hit_c;
+  always_comb begin
+    rsp_slot_c = '0;
+    rsp_hit_c  = 1'b0;
+    for (int i = 0; i < OUTSTANDING; i++)
+      if (in_flight_c[i] && !s_done_r[i] && (s_tag_r[i] == rsp_tag_i)) begin
+        rsp_slot_c = SW'(i);
+        rsp_hit_c  = 1'b1;
+      end
+  end
 
   // ---- the drain ----------------------------------------------------------
   logic signed [31:0] wb_data_c;
   always_comb begin
     unique case (d_memb_r)
-      2'd0:    wb_data_c = r0_r[d_lane_r[1:0]];
-      2'd1:    wb_data_c = r1_r[d_lane_r[1:0]];
-      default: wb_data_c = r2_r[d_lane_r[1:0]];
+      2'd0:    wb_data_c = r0_r[head_r][d_lane_r[1:0]];
+      2'd1:    wb_data_c = r1_r[head_r][d_lane_r[1:0]];
+      default: wb_data_c = r2_r[head_r][d_lane_r[1:0]];
     endcase
   end
 
-  assign wb_valid_o = (state_r == D_DRAIN);
-  assign wb_ctx_o   = s_ctx_r[d_lane_r[1:0]];
-  assign wb_reg_o   = s_dst_r + REGW'(d_memb_r);
+  assign wb_valid_o = (dstate_r == DR_RUN);
+  assign wb_ctx_o   = s_ctx_r[head_r][d_lane_r[1:0]];
+  assign wb_reg_o   = s_dst_r[head_r] + REGW'(d_memb_r);
   assign wb_data_o  = wb_data_c;
 
   // The release follows a context's LAST register, on the same clock it is
   // accepted. Earlier and the context could re-issue and read a register the
   // drain has not written yet.
   assign rel_valid_o = wb_valid_o && wb_ready_i &&
-                       (d_memb_r == 2'(s_width_r - 2'd1));
-  assign rel_ctx_o   = s_ctx_r[d_lane_r[1:0]];
+                       (d_memb_r == 2'(s_width_r[head_r] - 2'd1));
+  assign rel_ctx_o   = s_ctx_r[head_r][d_lane_r[1:0]];
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      state_r    <= D_GATHER;
+      istate_r   <= I_GATHER;
+      dstate_r   <= DR_IDLE;
+      head_r     <= '0;
+      tail_r     <= '0;
+      count_r    <= '0;
       fill_r     <= 3'd0;
       g_op_r     <= 8'd0;
       g_dst_r    <= '0;
       g_imm_r    <= 32'd0;
-      s_op_r     <= 8'd0;
-      s_dst_r    <= '0;
-      s_imm_r    <= 32'd0;
-      s_used_r   <= 3'd0;
-      s_width_r  <= 2'd0;
-      s_tag_r    <= '0;
       next_tag_r <= '0;
+      for (int i = 0; i < OUTSTANDING; i++) begin
+        s_op_r[i]    <= 8'd0;
+        s_dst_r[i]   <= '0;
+        s_imm_r[i]   <= 32'd0;
+        s_used_r[i]  <= 3'd0;
+        s_width_r[i] <= 2'd0;
+        s_tag_r[i]   <= '0;
+        s_done_r[i]  <= 1'b0;
+        for (int l = 0; l < 4; l++) begin
+          s_ctx_r[i][l] <= '0;
+          r0_r[i][l]    <= '0;
+          r1_r[i][l]    <= '0;
+          r2_r[i][l]    <= '0;
+        end
+      end
       d_lane_r   <= 3'd0;
       d_memb_r   <= 2'd0;
       groups_o   <= 32'd0;
@@ -392,10 +521,6 @@ module zhao_field_v3_dispatch #(
         g_s1_r[l]  <= '0;
         g_s2_r[l]  <= '0;
         g_s3_r[l]  <= '0;
-        s_ctx_r[l] <= '0;
-        r0_r[l]    <= '0;
-        r1_r[l]    <= '0;
-        r2_r[l]    <= '0;
       end
     end else begin
       // ---- accept one context into the group ------------------------------
@@ -411,62 +536,99 @@ module zhao_field_v3_dispatch #(
         fill_r <= fill_r + 3'd1;
       end
 
-      case (state_r)
-        D_GATHER: begin
+      // ---- the ISSUE side ------------------------------------------------
+      case (istate_r)
+        I_GATHER: begin
           // `issue_now_c` reads fill_r BEFORE this clock's accept, so a group
           // that fills and flushes on the same clock issues next clock with
           // the newly accepted point included. That is why the snapshot below
           // uses the post-accept count.
           if (issue_now_c) begin
-            s_op_r    <= g_op_r;
-            s_dst_r   <= g_dst_r;
-            s_imm_r   <= g_imm_r;
-            s_width_r <= dst_width_of(g_op_r);
-            s_used_r  <= fill_r;
-            s_tag_r   <= next_tag_r;
-            for (int l = 0; l < 4; l++) s_ctx_r[l] <= g_ctx_r[l];
-            state_r   <= D_ISSUE;
+            s_op_r[tail_r]    <= g_op_r;
+            s_dst_r[tail_r]   <= g_dst_r;
+            s_imm_r[tail_r]   <= g_imm_r;
+            s_width_r[tail_r] <= dst_width_of(g_op_r);
+            s_used_r[tail_r]  <= fill_r;
+            s_tag_r[tail_r]   <= next_tag_r;
+            s_done_r[tail_r]  <= 1'b0;
+            for (int l = 0; l < 4; l++) s_ctx_r[tail_r][l] <= g_ctx_r[l];
+            istate_r <= I_ISSUE;
             if (fill_r != 3'd4) partial_o <= partial_o + 32'd1;
           end
         end
 
-        D_ISSUE: begin
+        I_ISSUE: begin
           if (svc_ready_i) begin
             next_tag_r <= next_tag_r + TAGW'(1);
             groups_o   <= groups_o + 32'd1;
             fill_r     <= 3'd0;
-            state_r    <= D_WAIT;
+            tail_r     <= next_slot(tail_r);
+            istate_r   <= I_GATHER;
           end
         end
 
-        D_WAIT: begin
-          if (rsp_valid_i) begin
-            // ONE GROUP IS OUTSTANDING AND THE SERVICE REPLIES IN ACCEPT
-            // ORDER, so the tag can only be this one. Checked anyway: a guard
-            // that never fires costs a comparator, and the same choice caught
-            // a real bug in the executor on its first run.
-            if (rsp_tag_i != s_tag_r) tag_mismatch_o <= 1'b1;
-            for (int l = 0; l < 4; l++) begin
-              r0_r[l] <= rsp_r0_i[l];
-              r1_r[l] <= rsp_r1_i[l];
-              r2_r[l] <= rsp_r2_i[l];
-            end
+        default: istate_r <= I_GATHER;
+      endcase
+
+      // ---- capture a response, BY TAG, into whichever slot owns it --------
+      //
+      // With one group in flight the tag could only ever be that group's and
+      // this guard was decorative. It is not any more: two services answer at
+      // their own speeds, so the YOUNGER group's response can arrive first and
+      // has to land in its own slot rather than over the older one.
+      if (rsp_valid_i && rsp_ready_o) begin
+        if (!rsp_hit_c) begin
+          tag_mismatch_o <= 1'b1;
+        end else begin
+          for (int l = 0; l < 4; l++) begin
+            r0_r[rsp_slot_c][l] <= rsp_r0_i[l];
+            r1_r[rsp_slot_c][l] <= rsp_r1_i[l];
+            r2_r[rsp_slot_c][l] <= rsp_r2_i[l];
+          end
+          s_done_r[rsp_slot_c] <= 1'b1;
+        end
+      end
+
+      // ---- the DRAIN side, OLDEST FIRST ----------------------------------
+      //
+      // Draining in issue order is what keeps write ordering and release
+      // timing unchanged, and those are the two things this rework must not
+      // move.
+      case (dstate_r)
+        DR_IDLE: begin
+          // THE DRAIN STARTS ON THE CAPTURE, NOT ONE CLOCK AFTER IT. The old
+          // single-slot machine went D_WAIT -> (capture) -> D_DRAIN in one
+          // transition, so `wb_valid_o` rose on the clock after the response
+          // was accepted. Waiting for the registered `s_done_r` instead adds a
+          // cycle of latency, and every consumer that expects the write port
+          // to be live immediately sees zero writes -- which is exactly how
+          // this showed up: the dispatcher's own bench reported no writes at
+          // all rather than wrong ones.
+          //
+          // So the head's arrival is taken from the capture happening NOW, and
+          // `s_done_r` covers the case where the response landed while an
+          // older group was still draining.
+          if ((count_r != '0) &&
+              (s_done_r[head_r] ||
+               (rsp_valid_i && rsp_ready_o && rsp_hit_c && (rsp_slot_c == head_r)))) begin
             d_lane_r <= 3'd0;
             d_memb_r <= 2'd0;
-            state_r  <= D_DRAIN;
+            dstate_r <= DR_RUN;
           end
         end
 
-        D_DRAIN: begin
+        DR_RUN: begin
           if (wb_ready_i) begin
             writes_o <= writes_o + 32'd1;
-            if (d_memb_r == 2'(s_width_r - 2'd1)) begin
+            if (d_memb_r == 2'(s_width_r[head_r] - 2'd1)) begin
               d_memb_r <= 2'd0;
               // A PADDED LANE IS NEVER DRAINED. The loop runs to s_used_r, not
               // to four, so a lane nobody filled writes nothing and its
               // context -- which does not exist -- is never released.
-              if (d_lane_r + 3'd1 >= s_used_r) begin
-                state_r <= D_GATHER;
+              if (d_lane_r + 3'd1 >= s_used_r[head_r]) begin
+                s_done_r[head_r] <= 1'b0;
+                head_r   <= next_slot(head_r);
+                dstate_r <= DR_IDLE;
               end else begin
                 d_lane_r <= d_lane_r + 3'd1;
               end
@@ -476,8 +638,14 @@ module zhao_field_v3_dispatch #(
           end
         end
 
-        default: state_r <= D_GATHER;
+        default: dstate_r <= DR_IDLE;
       endcase
+
+      // ---- the queue's occupancy, in ONE place ---------------------------
+      // A push and a pop on the same clock must not each win separately and
+      // leave the count wrong, so both are decided here together.
+      if (push_c && !pop_c)      count_r <= count_r + (SW+1)'(1);
+      else if (pop_c && !push_c) count_r <= count_r - (SW+1)'(1);
     end
   end
 

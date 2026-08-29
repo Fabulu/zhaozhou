@@ -732,3 +732,85 @@ dispatcher, where the result is stronger than a green line today: not
     curve service's own bench          6930 checks
 
 Nothing survives without a proof. Nothing was discarded.
+
+## 2026-08-29 — the dispatcher keeps two groups in flight
+
+The last piece of the owner's direction. `D_GATHER -> D_ISSUE -> D_WAIT ->
+D_DRAIN` with exactly one group outstanding becomes an issue FSM, a bounded
+in-flight queue, and a drain FSM.
+
+**Out-of-order capture, in-order drain.** Services answer at their own speeds,
+so the younger group's response can arrive first; responses are matched BY TAG
+into whichever slot owns them. Draining still runs oldest-first, because write
+ordering and release timing are the two things that must not change.
+
+Depth 2 is the smallest that lets a second service start work, which is all the
+goal needs. `OUTSTANDING` is a parameter so the depth is a knob rather than a
+rewrite.
+
+### The method that made this safe
+
+**Prove the refactor equivalent at the OLD setting first.** At `OUTSTANDING = 1`
+the restructured block passed 341/341 and 163/163 — identical behaviour to the
+single-slot machine it replaced. Only then was depth 2 enabled.
+
+That discipline paid immediately, and then it lied to me, which is the more
+interesting half.
+
+### The bug that hid behind its own equivalence proof
+
+    localparam int SW = (OUTSTANDING <= 2) ? 1 : 2;
+    ... % SW'(OUTSTANDING)
+
+`SW'(OUTSTANDING)` truncates the depth to the POINTER's width. At depth 2 that
+is `1'(2) == 0`, so **every pointer wrap was a modulo by ZERO**. The pointers
+never advanced and two groups in flight deadlocked the machine outright —
+`HUNG in 400001 clocks`, with four contexts never written at all.
+
+At depth 1 it was `1'(1) == 1`, and modulo 1 is 0, so the depth-1 path **worked
+by accident** and passed 341 + 163 checks while the arithmetic underneath it
+was nonsense.
+
+**That is the shape worth keeping: a refactor can be provably equivalent at the
+old setting and still be wrong everywhere else, and the equivalence test will
+not say so.** The wrap is written out as a function now, with the truncation
+named in a comment where the next person will meet it.
+
+### Two more, both mine
+
+* **A cycle of latency I added.** The old machine went `D_WAIT ->` (capture)
+  `-> D_DRAIN` in one transition, so the write port was live the clock after a
+  response was accepted. Waiting for the registered `s_done_r` instead added a
+  cycle, and every consumer expecting an immediate write saw ZERO writes rather
+  than wrong ones. The drain now starts on the capture itself.
+* **`long_ready_o` was not gated on queue room.** Accepting a context into a
+  group that cannot be issued strands it: the executor has handshaked it away
+  and parked it, and nothing will ever take it. At depth 1 the gate reduces
+  exactly to the old "ready stays low while a group is in flight".
+
+### One test contract changed, and it is stated rather than quietly flipped
+
+Section 6 asserted "ready stays LOW while a group is outstanding". That was
+correct until today and is false by design now: a standing offer is taken as
+soon as there is ROOM rather than after a full round trip. The property the
+section exists for — a refused offer is not swallowed — is unchanged; only the
+wait got shorter.
+
+Section 6b is new and tests the capability directly rather than inferring it
+from a throughput number: two groups issued with nothing replied, distinct
+tags, the YOUNGER replied first, and then
+
+    MEASURED: 4 writes, A's last at 1, B's first at 2
+
+the older group draining entirely before the younger. Out-of-order in,
+in-order out.
+
+**348 checks on the dispatcher (up from 341), 213 on the service path, 163 on
+the composed machine.**
+
+### Next, and it is the real proof
+
+W02, W04, X05 and X11 are declared equivalent on the grounds that one group in
+flight means two services are never busy together. That is no longer true, so
+those four must now be **CAUGHT**. If they are not, this change did not create
+concurrency and the starvation measurement built on it would still be vacuous.

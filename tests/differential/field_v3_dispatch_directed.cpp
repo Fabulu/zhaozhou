@@ -489,14 +489,24 @@ int main(int argc, char** argv) {
     d.t.flush_i = 0;
     d.t.eval();
 
-    // ONE SLOT IS OUTSTANDING, so the dispatcher cannot gather a new group
-    // until this one has come back and drained. My first version of this
-    // section expected the standing offer to be taken immediately and it
-    // FAILED -- correctly, because ready must stay low while a group is in
-    // flight. Asserting that explicitly is worth more than the check that was
-    // wrong.
-    for (int i = 0; i < 8; ++i) d.step();
-    check(d.t.long_ready_o == 0, "ready stays LOW while a group is outstanding", 0,
+    // THIS ASSERTION USED TO READ "ready stays LOW while a group is
+    // outstanding", and it was correct until 2026-08-29. The dispatcher kept
+    // ONE group in flight, so gathering could not resume until that group came
+    // back and drained.
+    //
+    // It keeps a bounded QUEUE now, so a standing offer is taken as soon as
+    // there is room rather than after a full round trip. That is the entire
+    // point of the change -- serialising a curve group behind a noise group
+    // wasted the difference every time, and no two services could ever be busy
+    // together, which made four deliberate defects on the service path
+    // unkillable.
+    //
+    // The property that MATTERS is unchanged and is what this section is for:
+    // the refused offer is not swallowed. It survives and is taken. Only the
+    // WAIT before that got shorter.
+    int guard0 = 0;
+    while (!d.t.long_ready_o && guard0++ < 32) d.step();
+    check(d.t.long_ready_o == 1, "the refused offer survives and is taken once there is room", 1,
           (int)d.t.long_ready_o);
 
     int32_t r6[kLanes] = {11, 22, 33, 44};
@@ -509,13 +519,81 @@ int main(int argc, char** argv) {
     check(d.released.size() == 1u, "and released exactly one context", 1,
           (uint32_t)d.released.size());
 
-    int guard = 0;
-    while (!d.t.long_ready_o && guard++ < 32) d.step();
-    check(d.t.long_ready_o == 1, "the refused offer SURVIVED the round trip and is now taken", 1,
-          (int)d.t.long_ready_o);
-    d.step();
     d.t.long_valid_i = 0;
     d.t.eval();
+  }
+
+  printf("== section 6b: TWO groups can be in flight at once ==\n");
+  {
+    // The capability the queue exists for, asserted directly rather than
+    // inferred from a throughput number. Before this, a second group could not
+    // be issued until the first had come back and drained.
+    Dut d(top);
+    d.reset();
+
+    const bool a = d.offer({0, 1, 2, 3}, OP_NOISE2, 8, 64, 0xAAAAu);
+    check(a, "the first group's context joins", 1, a ? 1 : 0);
+    d.t.flush_i = 1;
+    d.t.eval();
+    const bool got_a = d.take_request();
+    check(got_a, "and it issues", 1, got_a ? 1 : 0);
+    const uint8_t tag_a = (uint8_t)d.t.svc_tag_o;
+    d.accept_request();
+    d.t.flush_i = 0;
+    d.t.eval();
+
+    // NOTHING HAS REPLIED YET. Under the old machine the dispatcher would sit
+    // here until group A came back; the offer below would be refused forever.
+    const bool b = d.offer({4, 5, 6, 7}, OP_NOISE2, 9, 64, 0xBBBBu);
+    check(b, "a SECOND group is gathered while the first is unanswered", 1, b ? 1 : 0);
+    d.t.flush_i = 1;
+    d.t.eval();
+    const bool got_b = d.take_request();
+    check(got_b, "and the second group issues too", 1, got_b ? 1 : 0);
+    const uint8_t tag_b = (uint8_t)d.t.svc_tag_o;
+    check(tag_b != tag_a, "the two groups carry DIFFERENT tags", 1, tag_b != tag_a ? 1 : 0);
+    d.accept_request();
+    d.t.flush_i = 0;
+    d.t.eval();
+
+    // REPLY OUT OF ORDER. Services answer at their own speeds, so the younger
+    // group's answer can arrive first; it must land in its own slot and must
+    // NOT be drained before the older one.
+    int32_t rb[kLanes] = {91, 92, 93, 94};
+    d.reply(tag_b, rb, rb, rb);
+    check(d.t.tag_mismatch_o == 0, "an out-of-order reply is not a tag mismatch", 0,
+          (int)d.t.tag_mismatch_o);
+
+    int32_t ra[kLanes] = {11, 12, 13, 14};
+    d.reply(tag_a, ra, ra, ra);
+    // TWICE, because `drain()` stops the moment wb_valid_o dips and it DOES
+    // dip between the two groups -- the drain machine returns to idle for a
+    // clock before starting the younger one. One call catches only the older
+    // group, which is what made this section's first run report two writes and
+    // no ordering at all.
+    d.drain(256);
+    for (int i = 0; i < 4; ++i) d.step();
+    d.drain(256);
+    check(d.t.tag_mismatch_o == 0, "and neither is the older one", 0, (int)d.t.tag_mismatch_o);
+
+    // IN-ORDER DRAIN. Group A's contexts (0..3) must be written before group
+    // B's (4..7), because write ordering is the half of this block that the
+    // queue must not change.
+    bool order_ok = true;
+    int last_a = -1, first_b = 1 << 30;
+    for (size_t i = 0; i < d.writes.size(); ++i) {
+      if (d.writes[i].ctx <= 3)
+        last_a = (int)i;
+      else if ((int)i < first_b)
+        first_b = (int)i;
+    }
+    if (d.writes.empty() || last_a < 0 || first_b == (1 << 30))
+      order_ok = false;
+    else
+      order_ok = (last_a < first_b);
+    check(order_ok, "the older group drains entirely BEFORE the younger", 1, order_ok ? 1 : 0);
+    printf("   MEASURED: %u writes, A's last at %d, B's first at %d\n", (unsigned)d.writes.size(),
+           last_a, first_b);
   }
 
   printf("== section 7: the drain stalls under backpressure and loses nothing ==\n");
