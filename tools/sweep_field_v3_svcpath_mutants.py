@@ -414,6 +414,39 @@ def mutate(gold, old, new):
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the
 # sweep. NOTHING IS DECLARED PREDICTIVELY.
 EQUIVALENT = {
+    # ---- X05 and X11 join W02 and W04 in ONE equivalence class ------------
+    #
+    # Four mutants, one root cause, and the class is now large enough to be a
+    # statement about the architecture rather than a list of excuses: the
+    # response arbitration and the ready mux across all four services are
+    # currently UNEXERCISED, because the dispatcher never lets two services
+    # work at once.
+    #
+    # THAT MAKES THESE FOUR THE ACCEPTANCE TEST FOR THE PIPELINED DISPATCHER.
+    # The owner has authorised a bounded multi-outstanding dispatcher precisely
+    # so more than one service can be active. When it lands, all four must turn
+    # from equivalent to CAUGHT. If they do not, the dispatcher did not
+    # actually create concurrency and the starvation measurement built on it
+    # would be measuring nothing -- which is the failure this class exists to
+    # make impossible to miss.
+    "X05": (
+        "EQUIVALENT, same root cause as W02. The dispatcher runs D_GATHER -> "
+        "D_ISSUE -> D_WAIT -> D_DRAIN with exactly one group in flight, so at "
+        "every offer BOTH the normalize and rot services are idle and both "
+        "assert ready -- swapping which one's ready is read selects between "
+        "two signals that are both 1. The mux is DEFENSIVE and stays, because "
+        "it is correct the day the dispatcher gains a second outstanding "
+        "group. RE-SCORE THE MOMENT THE DISPATCHER CAN HAVE TWO GROUPS "
+        "OUTSTANDING -- and expect this to be CAUGHT then, not equivalent."),
+    "X11": (
+        "EQUIVALENT, same root cause as W04. One group in flight means at most "
+        "one service is ever holding a response, so dropping the "
+        "!nm_rsp_valid guard removes protection against a collision that "
+        "cannot currently occur. It stays because a dropped response is a "
+        "wrong VALUE reaching a register rather than a slower machine, and "
+        "that is exactly what this becomes under a pipelined dispatcher. "
+        "RE-SCORE THE MOMENT THE DISPATCHER CAN HAVE TWO GROUPS OUTSTANDING "
+        "-- and expect this to be CAUGHT then, not equivalent."),
     # ---- W02 and W04: THE DISPATCHER SERIALISES, SO THE SECOND SERVICE ADDS
     # ---- NO REQUEST-LEVEL CONCURRENCY -------------------------------------
     #

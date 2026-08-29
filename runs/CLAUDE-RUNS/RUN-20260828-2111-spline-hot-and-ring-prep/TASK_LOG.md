@@ -681,3 +681,54 @@ have had to change.
 Above 64 the hardware REFUSES rather than wraps, matching how this engine
 already treats an unknown opcode: a width of zero means refuse, and a refusal
 fails loudly where a wrap corrupts a value silently.
+
+## 2026-08-29 — the four-service checkpoint, and an accidental acceptance test
+
+**48 attempted, 39 caught, 7 proven equivalent, 2 survived, 0 discarded.**
+
+The checkpoint the owner asked for before more integration lands. It caught
+what it should: every routing predicate, both mode bits, the width-3 response
+path, the axis immediate, the crossed bank grants, and X04 — the angle taken
+from `s2` instead of `s3`, which is the indexing error I actually made and is
+now a standing test rather than a lesson.
+
+### The two survivors are one finding, not two
+
+X05 (normalize and rot handed each other's requests) and X11 (rot's response
+taken while normalize also holds one) join W02 and W04 in a single equivalence
+class with a single root cause: **the dispatcher keeps exactly one group in
+flight**, so two services are never active together. At every offer both are
+idle and both assert ready, so swapping which ready is read picks between two
+1s; and only one service can ever hold a response, so a loser-holds guard has
+no loser.
+
+Four mutants, one cause. That is large enough to be a statement about the
+architecture rather than a list of excuses: **the response arbitration and the
+ready mux across all four services are currently unexercised silicon.**
+
+### Which turns them into the acceptance test for the next job
+
+The owner has authorised a bounded multi-outstanding dispatcher precisely so
+more than one service can be active. When it lands, **all four of these must
+turn from equivalent to CAUGHT.**
+
+If they stay equivalent, the dispatcher did not actually create concurrency,
+and the two-service starvation measurement built on top of it would be
+measuring nothing — which is exactly the "true and useless number" failure I
+flagged when declining to produce a starvation figure earlier today. Now it is
+impossible to miss: four pre-written tests fail to fire.
+
+So the confirming green run is not being spent now. It happens after the
+dispatcher, where the result is stronger than a green line today: not
+"equivalent, proven" but "caught", which is evidence the machine changed.
+
+### Standing after the checkpoint
+
+    curve service (CURVE.SVC)   29/29   closed
+    dispatcher (DISPATCH)       30/30   closed, no equivalents
+    service path (SVCPATH)      48      39 caught + 9 equivalent (2 just declared)
+    composed machine                    150 checks, all nine table ops served
+    dispatcher's own bench              341 checks
+    curve service's own bench          6930 checks
+
+Nothing survives without a proof. Nothing was discarded.

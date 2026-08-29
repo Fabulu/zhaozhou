@@ -1,0 +1,121 @@
+== consumer roster ==
+== preflight ==
+preflight ok: V01 the service's grant is coupled to the RIVAL's
+preflight ok: V02 the service's product is coupled to the RIVAL's
+preflight ok: V03 the rival's grant is coupled to the SERVICE's
+preflight ok: V04 the rival's reply is coupled to the SERVICE's
+preflight ok: V05 the two bank claimants' request-valid lines are crossed
+preflight ok: V06 the bank puts the LANES above the service
+preflight ok: V07 the service's A operands are broadcast from point 0
+preflight ok: V08 the service's B operands are mirrored across the four points
+preflight ok: V09 both bank claimants carry the same tag
+preflight ok: V10 the ALU's ready is coupled to the drain's
+preflight ok: V11 the drain's ready is coupled to the ALU's
+preflight ok: V12 the two claimants' write DATA are crossed
+preflight ok: V13 the two claimants' write CONTEXTS are crossed
+preflight ok: V14 the two claimants' write REGISTERS are crossed
+preflight ok: V15 the two writeback claimants' request-valid lines are crossed
+preflight ok: V16 the writeback policy loses its top bit
+preflight ok: V17 RIDGE is decoded as NOISE2
+preflight ok: V18 the RIDGE opcode is off by one
+preflight ok: V19 the NOISE2 opcode is off by one
+preflight ok: V20 the seed handed to the service is perturbed
+preflight ok: V21 the tag handed to the service is not the one the dispatcher expects
+preflight ok: V22 the third result is not zero
+preflight ok: V23 the wrong-op detector fires on the ops that ARE implemented
+preflight ok: V24 flush reaches the dispatcher only while an op is being offered
+preflight ok: V25 the rival's multiplicand is changed
+preflight ok: W01 curve ops are also handed to the noise unit
+preflight ok: W02 the handshake is taken from the service that was NOT asked
+preflight ok: W03 the response mux publishes the other service's value
+preflight ok: W04 the losing service's response is dropped instead of held
+preflight ok: W05 the response carries the other service's tag
+preflight ok: W06 a width-1 answer leaves the second register unzeroed
+preflight ok: W07 DCURVE is served as CURVE
+preflight ok: W08 SPLINE is served as DCURVE
+preflight ok: W09 the table index is read from the wrong bits of the immediate
+preflight ok: W10 the two services' bank grants are crossed
+preflight ok: W11 the two services' bank products are crossed
+preflight ok: W12 the wrong-op detector fires on a SPLINE it does serve
+preflight ok: X01 NORMALIZE3 is served as NORMALIZE2
+preflight ok: X02 ROT3 is served as ROT2
+preflight ok: X03 the rotation axis is read from the wrong bits of the immediate
+preflight ok: X04 ROT takes its angle from s2 instead of s3
+preflight ok: X05 normalize and rot are handed each other's requests
+preflight ok: X06 the noise unit is offered the rot group as well
+preflight ok: X07 normalize's second and third result registers are crossed
+preflight ok: X08 rot's second and third result registers are crossed
+preflight ok: X09 the two new services' bank grants are crossed
+preflight ok: X10 the wrong-op detector no longer accepts the rot ops
+preflight ok: X11 rot's response is taken while normalize is also holding one
+PREFLIGHT: all 48 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model e95b018236012f82)
+  V01 the service's grant is coupled to the RIVAL's  caught
+  V02 the service's product is coupled to the RIVAL's  caught
+  V03 the rival's grant is coupled to the SERVICE's  caught
+  V04 the rival's reply is coupled to the SERVICE's  caught
+  V05 the two bank claimants' request-valid lines are crossed  caught
+  V06 the bank puts the LANES above the service  caught
+  V07 the service's A operands are broadcast from point 0  caught
+  V08 the service's B operands are mirrored across the four points  equivalent (proven)
+        THE NOISE UNIT'S B OPERAND IS PER STEP, NOT PER POINT, so mirroring it across the four points is the IDENTITY. Every branch of zhao_field_v3_noise's operand mux assigns mul_b[l] a CONSTANT -- C_X, C_Y, C_LCG_M, C_XSM, or zero -- with no dependence on l whatsoever. So mul_b[0] == mul_b[1] == mul_b[2] == mul_b[3] at every instant and nz_b[3 - l] == nz_b[l] identically. Exhaustive by inspection of the mux, not measured over a sample. THE ASYMMETRY IS THE POINT: mul_a[l] IS per point (ix[l], iy[l], s_reg[l], rxs_in[l]), which is why V07 -- broadcasting A from point 0 -- is caught while this is not. A four-wide bank request is cheap for this service precisely because one side of every product is shared. RE-SCORE THIS IF ANY mul_b BRANCH EVER INDEXES BY LANE. The lane salt in S_LCG is the near miss to watch: it is added to mul_a, and moving it to mul_b would break the equivalence on that step alone.
+  V09 both bank claimants carry the same tag  equivalent (proven, and the model is byte-identical)
+        THE BANK'S REQUEST TAG IS DEAD IN THIS COMPOSITION, and the model hash proves it rather than merely suggesting it: the mutant elaborated to a BYTE-IDENTICAL model, which means Verilator folded the tag away entirely. Nothing here consumes it -- bank_rsp_tag is declared with an explicit UNUSEDSIGNAL waiver, and the bank's desync_o does not depend on the request tags' VALUES. This is not a hole in the test: the bank's tag is the BANK's claim, and it is checked where it is made, by the mulbank sweep. What this file can be wrong about is which claimant gets which slot, and that is V01-V05, all caught. RE-SCORE THIS THE MOMENT bank_rsp_tag IS READ -- the waiver comment on it is the tripwire.
+  V10 the ALU's ready is coupled to the drain's  caught
+  V11 the drain's ready is coupled to the ALU's  caught
+  V12 the two claimants' write DATA are crossed  caught
+  V13 the two claimants' write CONTEXTS are crossed  caught
+  V14 the two claimants' write REGISTERS are crossed  caught
+  V15 the two writeback claimants' request-valid lines are crossed  caught
+  V16 the writeback policy loses its top bit  caught
+  V17 RIDGE is decoded as NOISE2  caught
+  V18 the RIDGE opcode is off by one  caught
+  V19 the NOISE2 opcode is off by one  caught
+  V20 the seed handed to the service is perturbed  caught
+  V21 the tag handed to the service is not the one the dispatcher expects  caught
+  V22 the third result is not zero  equivalent (proven)
+        THE THIRD RESULT CANNOT BE DRAINED, so its value cannot be observed. This service implements NOISE2 and RIDGE only, and the dispatcher's dst_width_of gives them 2 and 1. The drain writes exactly `width` registers per point, so index 2 is never read for either op -- not rarely, never. THE TIE-OFF STAYS, and its own comment already says why: it exists so that a width-3 op routed here by mistake drains a DEFINED value, wrong the same way twice rather than differently each run. That is a statement about a case this composition makes unreachable, which is exactly what wrong_op_o is for -- and V23, which breaks that detector, is caught. RE-SCORE THIS IF A WIDTH-3 OP IS EVER ROUTED TO THIS SERVICE, which is the same event that would make wrong_op_o fire.
+  V23 the wrong-op detector fires on the ops that ARE implemented  caught
+  V24 flush reaches the dispatcher only while an op is being offered  caught
+  V25 the rival's multiplicand is changed  equivalent (proven)
+        NOTHING CAN READ THE RIVAL'S PRODUCT, so its operands cannot matter. The bank returns products on a SHARED rsp_p bus with a per-claimant valid; the noise unit samples it only under bank_rsp_valid[1], and no other reader exists. rival_rsp_o carries the VALID, not the value. So RIVAL_A is unobservable by construction. AND THIS CORRECTS THE HEADER THAT MOTIVATED IT. That header says the constants are 'recognisable, so a routing bug into an unused lane looks wrong rather than convincing'. The recognisability earns nothing: V02 -- the service taking the rival's product -- is caught because the service's ANSWER is wrong, and it would be wrong for any rival operands at all, including zero. The constants are a debugging convenience when reading a waveform, which is worth having and is not what the header claimed. RE-SCORE THIS IF THE BANK EVER GIVES EACH CLAIMANT ITS OWN PRODUCT BUS, or if a check reads the rival's product directly.
+  W01 curve ops are also handed to the noise unit  caught
+  W02 the handshake is taken from the service that was NOT asked  equivalent (proven)
+        EQUIVALENT, AND THE REASON MATTERS MORE THAN THE MUTANT. zhao_field_v3_dispatch runs D_GATHER -> D_ISSUE -> D_WAIT -> D_DRAIN and back, with svc_valid_o asserted ONLY in D_ISSUE and rsp_ready_o ONLY in D_WAIT. Exactly one group is in flight at any time. So at every offer the previous group has already responded and drained, BOTH services are idle, and both assert ready -- swapping which one's ready is read selects between two signals that are both 1. The mux is DEFENSIVE and correct to keep: it makes this block right the day the dispatcher gains a second outstanding group. RE-SCORE THE MOMENT THE DISPATCHER CAN HAVE TWO GROUPS OUTSTANDING.
+  W03 the response mux publishes the other service's value  caught
+  W04 the losing service's response is dropped instead of held  equivalent (proven)
+        EQUIVALENT, same root cause as W02 and not a second coincidence. One group in flight means at most one service can be holding a response, so the loser-holds guard never has a loser to protect. It stays because a dropped response is a wrong VALUE reaching a register rather than a slower machine, and that is exactly the failure this would become under a pipelined dispatcher. RE-SCORE THE MOMENT THE DISPATCHER CAN HAVE TWO GROUPS OUTSTANDING.
+  W05 the response carries the other service's tag  caught
+  W06 a width-1 answer leaves the second register unzeroed  equivalent (proven)
+        EQUIVALENT, AND CHECKED IN THE DISPATCHER RATHER THAN ARGUED. An unzeroed rsp_r1 cannot be observed for a width-1 op: the drain selects r1_r only when d_memb_r == 1, and d_memb_r counts 0 .. width-1, so a width-1 op never reaches that branch. CURVE, DCURVE and SPLINE are all width 1 in zhao_field_ops_pkg. The tie is DEFENSIVE, exactly like f_spl_offered in the curve service: it makes a width the dispatcher should never ask for drain a defined value, wrong the same way twice instead of differently each run. RE-SCORE IF: any op routed to the curve service is ever given a field_long_width above 1, or the drain reads r1_r anywhere else.
+  W07 DCURVE is served as CURVE  caught
+  W08 SPLINE is served as DCURVE  caught
+  W09 the table index is read from the wrong bits of the immediate  caught
+  W10 the two services' bank grants are crossed  caught
+  W11 the two services' bank products are crossed  caught
+  W12 the wrong-op detector fires on a SPLINE it does serve  caught
+  X01 NORMALIZE3 is served as NORMALIZE2  caught
+  X02 ROT3 is served as ROT2  caught
+  X03 the rotation axis is read from the wrong bits of the immediate  caught
+  X04 ROT takes its angle from s2 instead of s3  caught
+  X05 normalize and rot are handed each other's requests  *** SURVIVED ***
+  X06 the noise unit is offered the rot group as well  caught
+  X07 normalize's second and third result registers are crossed  caught
+  X08 rot's second and third result registers are crossed  caught
+  X09 the two new services' bank grants are crossed  caught
+  X10 the wrong-op detector no longer accepts the rot ops  caught
+  X11 rot's response is taken while normalize is also holding one  *** SURVIVED ***
+== final restore ==
+clean: fpga/rtl/field/zhao_field_v3_svcpath.sv (48 mutants checked)
+
+== tally ==
+  attempted:  48 / 48
+  caught:     39
+  equivalent: 7
+  survived:   2
+  discarded:  0
+FAILED: 2 mutant(s) survived without a proof of equivalence
+  X05 normalize and rot are handed each other's requests
+  X11 rot's response is taken while normalize is also holding one
+SVCPATH_EXIT=12
