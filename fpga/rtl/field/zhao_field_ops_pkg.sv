@@ -55,8 +55,19 @@
 // zfield_decode.cpp gives OP_SPLINE the same shape as OP_CURVE and OP_DCURVE,
 // m = {1, {1,0,0}, 1, 3}, whose leading field is the destination width.
 //
-// RING is still absent, for the same reason SPLINE was until today: no ring
-// service exists yet. When one does, it is one line here.
+// UOP_RING_PREP JOINED ON 2026-08-29, and in the same ORDER as SPLINE did: the
+// service was wired onto the path FIRST and this entry is the LAST step. The
+// entry is what makes the executor OFFER the op; adding it before something
+// could answer would rebuild exactly the park-forever deadlock this file was
+// written to prevent.
+//
+// Its width is 1, read from zfield_plan.cpp rather than reasoned about --
+// `(v.op == UOP_RING_PREP) ? 1 : optable::shape_of(v.op)->dst_width`, because
+// a synthetic uop has no entry in the canonical shape table at all.
+//
+// The varying-radius OP_RING (0x21) is still absent and stays absent: the
+// brief leaves it COLD, and per-point it would need a reciprocal per point
+// rather than two prepared once.
 //
 // The brief costs the PREPARED ring (`UOP_RING_PREP`, 0xF1) as its HOT path
 // and leaves the varying-radius `OP_RING` (0x21) cold -- so 0xF1 is what
@@ -87,6 +98,12 @@ package zhao_field_ops_pkg;
   localparam logic [7:0] OP_ROT2       = 8'h28;
   localparam logic [7:0] OP_ROT3       = 8'h29;
 
+  // A PLAN-INTERNAL MICRO-OP, not a canonical opcode. The lowerer emits it in
+  // place of RING when both radii are uniform, so it appears in the uop stream
+  // the executor runs and never in a .zprog. Deliberately above 0xF0, outside
+  // the canonical space, which tops out at 0x29.
+  localparam logic [7:0] UOP_RING_PREP = 8'hF1;
+
   // Registers written back per point. ZERO MEANS NOT A LONG OP, and it is the
   // safe default on purpose: an opcode nobody has classified is refused rather
   // than guessed at, because a wrong width corrupts a register while a refusal
@@ -94,7 +111,7 @@ package zhao_field_ops_pkg;
   function automatic logic [1:0] field_long_width(input logic [7:0] op);
     case (op)
       OP_CURVE, OP_DCURVE, OP_RIDGE,
-      OP_SPLINE:                          field_long_width = 2'd1;
+      OP_SPLINE, UOP_RING_PREP:           field_long_width = 2'd1;
       OP_NOISE2, OP_ROT2, OP_NORMALIZE2:  field_long_width = 2'd2;
       OP_ROT3, OP_NORMALIZE3:             field_long_width = 2'd3;
       default:                            field_long_width = 2'd0;

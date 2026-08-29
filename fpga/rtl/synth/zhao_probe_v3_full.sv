@@ -178,6 +178,15 @@ module zhao_probe_v3_full #(
     input  var logic signed [31:0]      tl_dy_i,
     input  var logic                    tl_commit_i,
     input  var logic [6:0]              tl_n_i,
+
+    // ---- the uniform (scalar) bank, straight through -----------------------
+    // The ARM runs the plan's PREP block once per association and writes the
+    // answers here; the prepared ring reads them by index.
+    input  var logic                    sb_we_i,
+    input  var logic [15:0]             sb_waddr_i,
+    input  var logic signed [31:0]      sb_wdata_i,
+    output var logic                    sb_bad_o,
+    output var logic                    imm_bad_o,
     output var logic                    sk_overflow_o
 );
 
@@ -278,7 +287,9 @@ module zhao_probe_v3_full #(
       .wrong_op_o(wrong_op_o),
       .tl_we_i(tl_we_i), .tl_tbl_i(tl_tbl_i), .tl_idx_i(tl_idx_i),
       .tl_x_i(tl_x_i), .tl_y_i(tl_y_i), .tl_dy_i(tl_dy_i),
-      .tl_commit_i(tl_commit_i), .tl_n_i(tl_n_i)
+      .tl_commit_i(tl_commit_i), .tl_n_i(tl_n_i),
+      .sb_we_i(sb_we_i), .sb_waddr_i(sb_waddr_i), .sb_wdata_i(sb_wdata_i),
+      .sb_bad_o(sb_bad_o), .imm_bad_o(imm_bad_o)
   );
 
 endmodule : zhao_probe_v3_full

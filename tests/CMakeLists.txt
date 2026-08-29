@@ -1554,6 +1554,9 @@ verilate(test_field_v3_full_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rot.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_sbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
@@ -1580,6 +1583,9 @@ verilate(test_field_v3_svcpath_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rot.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_sbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)

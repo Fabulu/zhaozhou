@@ -143,7 +143,26 @@ module zhao_field_v3_svcpath #(
     input  var logic signed [31:0]            tl_y_i,
     input  var logic signed [31:0]            tl_dy_i,
     input  var logic                          tl_commit_i,
-    input  var logic [6:0]                    tl_n_i
+    input  var logic [6:0]                    tl_n_i,
+
+    // ---- the uniform (scalar) bank's load port -----------------------------
+    //
+    // The ARM runs the plan's PREP block once per association and writes the
+    // answers here. Same reasoning as the table port above: the values belong
+    // to the PROGRAM, and a service that synthesised its own uniforms would
+    // look self-contained while hiding the missing plumbing.
+    //
+    // The address is SIXTEEN bits against a six-bit bank on purpose -- the
+    // planner's slot numbers are uint16_t, so an overflow has to be
+    // representable at this boundary or it wraps silently in the wiring.
+    input  var logic                          sb_we_i,
+    input  var logic [15:0]                   sb_waddr_i,
+    input  var logic signed [31:0]            sb_wdata_i,
+    output var logic                          sb_bad_o,
+
+    // Latches if a prepared-ring instruction sets the immediate's reserved
+    // bits -- a program written against a later encoding than this silicon.
+    output var logic                          imm_bad_o
 );
 
   localparam int CTXW = $clog2(CONTEXTS);
@@ -180,6 +199,13 @@ module zhao_field_v3_svcpath #(
   localparam logic [7:0] OP_NORMALIZE3 = 8'h16;
   localparam logic [7:0] OP_ROT2       = 8'h28;
   localparam logic [7:0] OP_ROT3       = 8'h29;
+
+  // UOP_RING_PREP IS NOT A CANONICAL OPCODE. It is a plan-internal micro-op,
+  // deliberately outside the canonical space (>= 0xF0; canonical v1 tops out
+  // at 0x29), emitted by the lowerer when a RING's radii are uniform. It never
+  // appears in a .zprog -- it appears in the uop stream the executor runs,
+  // which is why the hardware has to know it and the file format does not.
+  localparam logic [7:0] UOP_RING_PREP = 8'hF1;
 
   // A DEBUGGING CONVENIENCE, AND NOT MORE THAN THAT. These are the same
   // constants zhao_probe_v3_engine ties its spare bank lanes to, and this
@@ -274,6 +300,17 @@ module zhao_field_v3_svcpath #(
   logic [3:0] rt_sat_add_unused, rt_sat_mul_unused;
   /* verilator lint_on UNUSEDSIGNAL */
 
+  logic               rg_rsp_valid, rg_rsp_ready;
+  logic        [ 7:0] rg_rsp_tag;
+  logic signed [31:0] rg_r0 [4];
+  logic               rg_mul_issue, rg_mul_ready, rg_mul_valid;
+  logic signed [32:0] rg_a [4], rg_b [4];
+  logic        [ 5:0] sb_raddr;
+  logic signed [31:0] sb_rdata;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [3:0] rg_sat_add_unused, rg_sat_mul_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
+
   logic               cv_rsp_valid, cv_rsp_ready;
   logic        [ 7:0] cv_rsp_tag;
   logic signed [31:0] cv_r0 [4];
@@ -294,22 +331,24 @@ module zhao_field_v3_svcpath #(
   // WHICH SERVICE OWNS THIS OP. Decoded once, read by the request routing,
   // the response mux and the wrong-op detector, so the three cannot disagree
   // about it -- which is the seam defect this engine has produced four times.
-  logic is_curve_c, is_norm_c, is_rot_c, is_noise_c;
+  logic is_curve_c, is_norm_c, is_rot_c, is_noise_c, is_ring_c;
   assign is_curve_c = (svc_op == OP_CURVE) || (svc_op == OP_DCURVE) ||
                       (svc_op == OP_SPLINE);
   assign is_norm_c  = (svc_op == OP_NORMALIZE2) || (svc_op == OP_NORMALIZE3);
   assign is_rot_c   = (svc_op == OP_ROT2) || (svc_op == OP_ROT3);
   assign is_noise_c = (svc_op == OP_NOISE2) || (svc_op == OP_RIDGE);
+  assign is_ring_c  = (svc_op == UOP_RING_PREP);
 
   // EVERY SERVICE IS SELECTED BY ITS OWN PREDICATE, and the noise unit no
   // longer sits in an else-branch. That branch is exactly how four ops the
   // table offered ended up being answered with noise: "not curve" is not the
   // same claim as "is noise", and only one of them stays true when an op is
   // added.
-  logic nz_v_ready, cv_req_ready, nm_v_ready, rt_v_ready;
+  logic nz_v_ready, cv_req_ready, nm_v_ready, rt_v_ready, rg_req_ready;
   assign svc_ready = is_curve_c ? cv_req_ready
                    : is_norm_c  ? nm_v_ready
                    : is_rot_c   ? rt_v_ready
+                   : is_ring_c  ? rg_req_ready
                    : is_noise_c ? nz_v_ready : 1'b0;
 
   zhao_field_v3_noise u_noise (
@@ -424,7 +463,39 @@ module zhao_field_v3_svcpath #(
       .mul_p_2_i(bank_p[2]), .mul_p_3_i(bank_p[3])
   );
 
-  // ---- one response port, FOUR services ----------------------------------
+  zhao_field_v3_sbank u_sbank (
+      .clk(clk), .rst_n(rst_n),
+      .we_i(sb_we_i), .waddr_i(sb_waddr_i), .wdata_i(sb_wdata_i), .we_bad_o(sb_bad_o),
+      .raddr_i(sb_raddr), .rdata_o(sb_rdata)
+  );
+
+  // ONE READER, SO NO ARBITRATION. The prepared ring is the only consumer of
+  // uniforms today, so its read port connects straight through. The day a
+  // second service needs one, this is where the contention appears -- and it
+  // will be visible as a port that two blocks drive, not as a silent wrong
+  // answer.
+  zhao_field_v3_ring_svc u_ring (
+      .clk(clk), .rst_n(rst_n),
+      .req_valid_i(svc_valid && is_ring_c), .req_ready_o(rg_req_ready),
+      .req_d_0_i(svc_s0[0]), .req_d_1_i(svc_s0[1]),
+      .req_d_2_i(svc_s0[2]), .req_d_3_i(svc_s0[3]),
+      .req_imm_i(svc_imm), .req_tag_i(svc_tag),
+      .sb_raddr_o(sb_raddr), .sb_rdata_i(sb_rdata),
+      .mul_issue_o(rg_mul_issue), .mul_ready_i(rg_mul_ready),
+      .mul_a_0_o(rg_a[0]), .mul_a_1_o(rg_a[1]), .mul_a_2_o(rg_a[2]), .mul_a_3_o(rg_a[3]),
+      .mul_b_0_o(rg_b[0]), .mul_b_1_o(rg_b[1]), .mul_b_2_o(rg_b[2]), .mul_b_3_o(rg_b[3]),
+      .mul_valid_i(rg_mul_valid),
+      .mul_p_0_i(bank_p[0]), .mul_p_1_i(bank_p[1]),
+      .mul_p_2_i(bank_p[2]), .mul_p_3_i(bank_p[3]),
+      .rsp_valid_o(rg_rsp_valid), .rsp_ready_i(rg_rsp_ready),
+      .rsp_r_0_o(rg_r0[0]), .rsp_r_1_o(rg_r0[1]),
+      .rsp_r_2_o(rg_r0[2]), .rsp_r_3_o(rg_r0[3]),
+      .rsp_sat_add_o(rg_sat_add_unused), .rsp_sat_mul_o(rg_sat_mul_unused),
+      .rsp_tag_o(rg_rsp_tag),
+      .imm_bad_o(imm_bad_o)
+  );
+
+  // ---- one response port, FIVE services ----------------------------------
   //
   // BOTH CAN BE HOLDING AN ANSWER AT ONCE and the dispatcher takes one per
   // cycle, so this is an arbitration and not a mux. The curve service wins
@@ -438,25 +509,32 @@ module zhao_field_v3_svcpath #(
   assign cv_rsp_ready = rsp_ready;
   assign nm_rsp_ready = rsp_ready && !cv_rsp_valid;
   assign rt_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid;
-  assign nz_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid && !rt_rsp_valid;
+  assign rg_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid && !rt_rsp_valid;
+  assign nz_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid && !rt_rsp_valid &&
+                        !rg_rsp_valid;
 
-  assign rsp_valid = cv_rsp_valid || nm_rsp_valid || rt_rsp_valid || nz_rsp_valid;
+  assign rsp_valid = cv_rsp_valid || nm_rsp_valid || rt_rsp_valid || rg_rsp_valid ||
+                     nz_rsp_valid;
   assign rsp_tag   = cv_rsp_valid ? cv_rsp_tag
                    : nm_rsp_valid ? nm_rsp_tag
-                   : rt_rsp_valid ? rt_rsp_tag : nz_rsp_tag;
+                   : rt_rsp_valid ? rt_rsp_tag
+                   : rg_rsp_valid ? rg_rsp_tag : nz_rsp_tag;
 
   always_comb begin
     for (int l = 0; l < 4; l++) begin
       rsp_r0[l] = cv_rsp_valid ? cv_r0[l]
                 : nm_rsp_valid ? nm_r0[l]
-                : rt_rsp_valid ? rt_r0[l] : nz_r0[l];
+                : rt_rsp_valid ? rt_r0[l]
+                : rg_rsp_valid ? rg_r0[l] : nz_r0[l];
       // CURVE, DCURVE and SPLINE write ONE register per point, so their
       // second and third are zero by the op's own law. NOISE2 and RIDGE write
       // two. NORMALIZE3 and ROT3 write THREE, which is the first time this
       // path has ever driven rsp_r2 with anything but zero.
+      // The prepared ring writes ONE register per point, like the curve ops.
       rsp_r1[l] = cv_rsp_valid ? 32'sd0
                 : nm_rsp_valid ? nm_r1[l]
-                : rt_rsp_valid ? rt_r1[l] : nz_r1[l];
+                : rt_rsp_valid ? rt_r1[l]
+                : rg_rsp_valid ? 32'sd0 : nz_r1[l];
       rsp_r2[l] = nm_rsp_valid ? nm_r2[l]
                 : rt_rsp_valid ? rt_r2[l] : 32'sd0;
     end
@@ -469,7 +547,8 @@ module zhao_field_v3_svcpath #(
     if (!rst_n) begin
       wrong_op_o <= 1'b0;
     end else if (svc_valid && svc_ready &&
-                 !is_noise_c && !is_curve_c && !is_norm_c && !is_rot_c) begin
+                 !is_noise_c && !is_curve_c && !is_norm_c && !is_rot_c &&
+                 !is_ring_c) begin
       wrong_op_o <= 1'b1;
     end
   end
@@ -485,9 +564,9 @@ module zhao_field_v3_svcpath #(
   // claimant that can ask every cycle, the loser's worst case is not obviously
   // bounded. This wires it; the measurement is a separate step and its number
   // is not predicted here.
-  logic [4:0]         bank_req_valid, bank_req_ready, bank_rsp_valid;
-  logic signed [32:0] bank_a [5][4], bank_b [5][4];
-  logic [TAGW-1:0]    bank_tag [5];
+  logic [5:0]         bank_req_valid, bank_req_ready, bank_rsp_valid;
+  logic signed [32:0] bank_a [6][4], bank_b [6][4];
+  logic [TAGW-1:0]    bank_tag [6];
   /* verilator lint_off UNUSEDSIGNAL */
   logic [TAGW-1:0]    bank_rsp_tag;
   /* verilator lint_on UNUSEDSIGNAL */
@@ -498,6 +577,7 @@ module zhao_field_v3_svcpath #(
     bank_req_valid[2] = cv_mul_issue;
     bank_req_valid[3] = nm_mul_issue;
     bank_req_valid[4] = rt_mul_issue;
+    bank_req_valid[5] = rg_mul_issue;
     for (int l = 0; l < 4; l++) begin
       bank_a[0][l] = RIVAL_A;
       bank_b[0][l] = RIVAL_B;
@@ -509,12 +589,15 @@ module zhao_field_v3_svcpath #(
       bank_b[3][l] = nm_b[l];
       bank_a[4][l] = rt_a[l];
       bank_b[4][l] = rt_b[l];
+      bank_a[5][l] = rg_a[l];
+      bank_b[5][l] = rg_b[l];
     end
     bank_tag[0] = 8'd0;
     bank_tag[1] = 8'd1;
     bank_tag[2] = 8'd2;
     bank_tag[3] = 8'd3;
     bank_tag[4] = 8'd4;
+    bank_tag[5] = 8'd5;
   end
 
   assign rival_grant_o = bank_req_ready[0];
@@ -527,9 +610,11 @@ module zhao_field_v3_svcpath #(
   assign nm_mul_valid  = bank_rsp_valid[3];
   assign rt_mul_ready  = bank_req_ready[4];
   assign rt_mul_valid  = bank_rsp_valid[4];
+  assign rg_mul_ready  = bank_req_ready[5];
+  assign rg_mul_valid  = bank_rsp_valid[5];
 
   zhao_field_v3_mulbank #(
-      .CLAIMANTS(5), .PRIO_SERVICES_FIRST(1'b1), .TAGW(TAGW)
+      .CLAIMANTS(6), .PRIO_SERVICES_FIRST(1'b1), .TAGW(TAGW)
   ) u_bank (
       .clk(clk), .rst_n(rst_n),
       .req_valid_i(bank_req_valid), .req_ready_o(bank_req_ready),

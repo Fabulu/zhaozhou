@@ -39,6 +39,7 @@
 #include "Vzhao_probe_v3_full.h"
 
 #include "zfield/zfield.hpp"
+#include "zfield/zfield_plan.hpp"
 #include "zfield/zfield_steps.hpp"
 #include "zhao_sim.hpp"
 
@@ -99,6 +100,7 @@ struct Dut {
     t.rival_req_i = 0;
     t.tl_we_i = 0;
     t.tl_commit_i = 0;
+    t.sb_we_i = 0;
     t.wb_policy_i = (uint8_t)policy;
     t.eval();
     for (int i = 0; i < 4; ++i) zhao::tick(t);
@@ -147,6 +149,18 @@ struct Dut {
     t.eval();
     zhao::tick(t);
     t.tl_commit_i = 0;
+    t.eval();
+  }
+
+  /** One uniform slot. The ARM does this once per association from the plan's
+      PREP block; here the harness does, which is the same wire. */
+  void load_scalar(int slot, int32_t v) {
+    t.sb_we_i = 1;
+    t.sb_waddr_i = (uint16_t)slot;
+    t.sb_wdata_i = (uint32_t)v;
+    t.eval();
+    zhao::tick(t);
+    t.sb_we_i = 0;
     t.eval();
   }
 
@@ -273,10 +287,13 @@ int run_mixed(Vzhao_probe_v3_full& top, const uint8_t* ops, const uint32_t* imms
 // is not a small gap: it is why nothing in this file had ever run the two
 // widest ops through the whole machine.
 int run_one(Vzhao_probe_v3_full& top, uint8_t op, uint32_t imm, const int32_t src[4],
-            int32_t out[3], int* clocks, const zfield::Table* tab) {
+            int32_t out[3], int* clocks, const zfield::Table* tab, const int32_t* uni = nullptr,
+            const int* uni_slots = nullptr) {
   Dut d(top);
   d.reset(0);
   if (tab) d.load_table(0, *tab);
+  if (uni && uni_slots)
+    for (int i = 0; i < 4; ++i) d.load_scalar(uni_slots[i], uni[i]);
   for (int r = 0; r < 4; ++r) d.preload(0, r, src[r]);
   // a = reg0 (the group start, 1..3 members) and b = reg3 (the single-member
   // operand: ROT's angle). The destination is well clear of both.
@@ -520,19 +537,35 @@ int main(int argc, char** argv) {
       bool has_b;     // ROT's single-member angle operand
       int width;      // destination registers, from field_long_width
       uint32_t imm;
+      bool is_ring;  // UOP_RING_PREP: a synthetic uop with its own oracle
     };
     // Read from zfield_decode.cpp, not inferred: the shapes are
     // {dst, {a, b, c}, groups, imm_class}.
+    // The prepared ring's uniforms, and the scattered slots they live in.
+    // Non-consecutive on purpose: the immediate carries four independent
+    // indices, and consecutive slots would pass even if three were ignored.
+    const int uni_slots[4] = {17, 2, 58, 33};
+    zref::SatLedger PL;
+    const int32_t ring_r0 = 2 << 16, ring_r1 = 9 << 16;
+    const int32_t ring_m = zfield::steps::ring_mid(ring_r0, ring_r1, &PL);
+    const int32_t ring_rA = zref::field_rcp(zref::fx16{(int32_t)(ring_m - ring_r0)}, &PL).raw;
+    const int32_t ring_rB = zref::field_rcp(zref::fx16{(int32_t)(ring_r1 - ring_m)}, &PL).raw;
+    const int32_t uni[4] = {ring_r0, ring_m, ring_rA, ring_rB};
+    const uint32_t ring_imm = (uint32_t)((uni_slots[0] & 63) | ((uni_slots[1] & 63) << 6) |
+                                         ((uni_slots[2] & 63) << 12) | ((uni_slots[3] & 63) << 18));
+
     const OpCase cases[] = {
-        {zfield::OP_CURVE, "CURVE", 1, false, 1, 0u},
-        {zfield::OP_DCURVE, "DCURVE", 1, false, 1, 0u},
-        {zfield::OP_SPLINE, "SPLINE", 1, false, 1, 0u},
-        {zfield::OP_RIDGE, "RIDGE", 2, false, 1, 0x31u},
-        {zfield::OP_NOISE2, "NOISE2", 2, false, 2, 0x5Bu},
-        {zfield::OP_NORMALIZE2, "NORMALIZE2", 2, false, 2, 0u},
-        {zfield::OP_ROT2, "ROT2", 2, true, 2, 0u},
-        {zfield::OP_NORMALIZE3, "NORMALIZE3", 3, false, 3, 0u},
-        {zfield::OP_ROT3, "ROT3", 3, true, 3, 1u},
+        {zfield::OP_CURVE, "CURVE", 1, false, 1, 0u, false},
+        {zfield::OP_DCURVE, "DCURVE", 1, false, 1, 0u, false},
+        {zfield::OP_SPLINE, "SPLINE", 1, false, 1, 0u, false},
+        {zfield::OP_RIDGE, "RIDGE", 2, false, 1, 0x31u, false},
+        {zfield::OP_NOISE2, "NOISE2", 2, false, 2, 0x5Bu, false},
+        {zfield::OP_NORMALIZE2, "NORMALIZE2", 2, false, 2, 0u, false},
+        {zfield::OP_ROT2, "ROT2", 2, true, 2, 0u, false},
+        {zfield::OP_NORMALIZE3, "NORMALIZE3", 3, false, 3, 0u, false},
+        {zfield::OP_ROT3, "ROT3", 3, true, 3, 1u, false},
+        // THE TENTH. A synthetic uop the executor runs and no .zprog contains.
+        {zfield::UOP_RING_PREP, "RING_PREP", 1, false, 1, 0u, true},
     };
 
     zfield::Table tb;
@@ -551,7 +584,9 @@ int main(int argc, char** argv) {
     for (const OpCase& c : cases) {
       int32_t out[3] = {};
       int clocks = 0;
-      const int al = run_one(top, c.op, c.imm, src, out, &clocks, &tb);
+      const uint32_t imm = c.is_ring ? ring_imm : c.imm;
+      const int al = run_one(top, c.op, imm, src, out, &clocks, &tb, c.is_ring ? uni : nullptr,
+                             c.is_ring ? uni_slots : nullptr);
 
       // The oracle's src[] is the FLATTENED operand list: a's members first,
       // then b's. That is why ROT2 finds its angle at src[2] and ROT3 at
@@ -563,13 +598,24 @@ int main(int argc, char** argv) {
 
       zref::SatLedger L{};
       int32_t odst[3] = {};
-      zfield::steps::exec_op(c.op, c.imm, tabs, osrc, odst, &L);
+      if (c.is_ring) {
+        // exec_op does not know 0xF1 -- it is plan-internal. The planner's own
+        // evaluator calls ring_prepared, so this calls the same function,
+        // which is what makes the immediate's field order TESTABLE rather than
+        // merely documented.
+        odst[0] = zfield::steps::ring_prepared(src[0], uni[0], uni[1], uni[2], uni[3], &L);
+      } else {
+        zfield::steps::exec_op(c.op, c.imm, tabs, osrc, odst, &L);
+      }
 
       char what[96];
       snprintf(what, sizeof what, "%s is served with no alarm", c.name);
       check(al == 0, what, 0, al);
       snprintf(what, sizeof what, "%s does not raise wrong_op_o", c.name);
       check(top.wrong_op_o == 0, what, 0, (uint32_t)top.wrong_op_o);
+      snprintf(what, sizeof what, "%s leaves the bank and immediate faults clear", c.name);
+      check(top.sb_bad_o == 0 && top.imm_bad_o == 0, what, 0,
+            (uint32_t)(top.sb_bad_o | top.imm_bad_o));
       for (int m = 0; m < c.width; ++m) {
         snprintf(what, sizeof what, "%s result register %d matches the oracle", c.name, m);
         check(out[m] == odst[m], what, (uint32_t)odst[m], (uint32_t)out[m]);
