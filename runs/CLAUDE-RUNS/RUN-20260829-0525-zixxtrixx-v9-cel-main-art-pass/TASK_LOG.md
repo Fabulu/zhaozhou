@@ -120,6 +120,16 @@ Refine the promising-but-unsuccessful v8 cel experiment into Zixxtrixx's main pr
 - Every sequence keeps one stable width throughout, with zero threshold transitions or flicker. Smooth three-band light remains continuous across the tube, exterior-only ink preserves interior colour and concavities, and distant animals remain coloured silhouettes rather than black masses.
 - Repeated all 1,776 final representative frames after the direct rebuild; every RGB frame is byte-identical. Promoted the native close/mid/far comparison, continuity report and deterministic-repeat report under `evidence/final-cel-*`.
 
+### 2026-08-29 18:33 UTC+02:00 - Canonical media and archive presentation accepted
+
+- Promoted the accepted fixed-side 288-frame fall diagnostic to the actual site subject instead of retaining the stale 576-frame orbit that hid deformation. Added explicit library entries for the one-turn jump, three-turn jump and 24 m nine-salto limit so every new v9 performance is independently renderable and discoverable.
+- Rendered and looked through every frame of all 21 final cel-main subjects, 5,744 frames total. The poster mosaic, final fall and slow-taunt sheets, both spring-jump sheets, nine-salto sheet and representative look, balance, attack and hit sequences show no crop, broken eye/stripe, stray triangle, black distant silhouette, target loss or isolated bad frame.
+- Encoded 21 canonical full-colour WebM/PNG pairs as VP9 CRF 16, 384x240 yuv444p at 60 fps with 1152x720 same-basename posters. Every WebM decoded completely; all frame counts match source; total encoded size is 9,232,358 bytes.
+- Proved all 34 previously-current v8 normal media files were preserved byte-for-byte behind the archive before replacing current names. The assembled page exposes 21 current clips and six explicitly ordered archive generations while retaining `noindex, nofollow`.
+- Exercised current and nested archive radio tabs in local Edge at 1410 px and a true 390 CSS-pixel viewport. Exactly one requested panel/generation shows, archive clips have controls and never autoplay, and both widths have zero horizontal overflow. Stopped the local servers and browser profiles and verified no process remained.
+- Generated two independent final 28-bone golden dumps: all 46 payload/CRC files match byte-for-byte. Comparison targeted only committed Upheaval goldens: 45 final payloads versus 40 committed, five additions and no removals. The complete deliberate re-pin remains deferred until this presentation commit establishes the immutable final source SHA.
+- Promoted selected final poster/contact-sheet, media/CRC, golden-comparison and desktop/narrow interaction evidence under `evidence/final-presentation-*`.
+
 ---
 
 ## Subagent Spawns

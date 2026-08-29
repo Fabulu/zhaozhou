@@ -4743,31 +4743,18 @@ SceneSubject subject_zixx_salto_nine() {
   return s;
 }
 
-// The FALLING FLAIL, slow orbit so the corkscrew reads from every side.
+// The FALLING FLAIL. Use the accepted fixed-side diagnostic framing as the
+// actual presentation: an orbit competing with the body's three-axis tumble hid
+// the propagation, and the closer legacy shot cropped the most useful bends.
 SceneSubject subject_zixx_fall() {
-  SceneSubject s;
+  SceneSubject s = subject_zixx_fall_side();
   s.name = "zixxtrixx-fall";
-  s.creature = 6;
-  s.frames = zixx::kFallKeys * 2 * 2;  // two 3.2 s tumbles per revolution
-  s.orbit = true;
-  zixx_common(s);
-  // RUN 2234: judge the whole tumble, not one average frame. At 290000 the
-  // long body still crossed the top edge for a large part of the loop and the
-  // automatically chosen poster was only a cropped flank. These are named,
-  // eye-authored shot knobs: pull back enough for the longest vertical pose,
-  // then lower the airborne animal without moving the authored root.
-  constexpr int32_t kFallCamScale = 210000;
-  constexpr int32_t kFallCamBias = 16000;
-  s.cam_k = kFallCamScale;
-  s.cam_bias = kFallCamBias;
   s.note =
-      "The falling loop, SLOW on purpose (2026-08-26 rewrite): airborne "
-      "throughout, the S at full authority every frame, and the whole animal "
-      "turns about its own centre -- one full pitch revolution per 3.2 s "
-      "loop (head-down at the half, back up by the end, the salto's re-pivot "
-      "trick on all three axes) with slow roll/yaw wobbles. The head and "
-      "neck loll on one- and two-cycle waves; gentle mid-body writhe; "
-      "slow-waving blades. Two tumbles per camera revolution";
+      "One complete 4.8-second loose falling loop on the accepted fixed-side "
+      "camera: nonuniform tumble and low stance authority let the signature S "
+      "recur rather than remain rigid, while neck loll, lateral writhe and a "
+      "strong two-cycle accumulated bend propagate through straighter, deep-C "
+      "and S silhouettes. Faster response over slow broad terms, never twitch";
   return s;
 }
 
@@ -5214,7 +5201,7 @@ constexpr LibraryEntry kLibrary[] = {
     {"zixxtrixx-attack", "Zixxtrixx triple salto",
      "Three somersaults, a diagonal javelin strike, 5 s planted; tracked", true},
     {"zixxtrixx-fall", "Zixxtrixx falling flail",
-     "Panicked airborne corkscrew loop", true},
+     "One fixed-side loose loop through straight, deep-C and S bends", true},
     {"zixxtrixx-hit", "Zixxtrixx hit flinch",
      "Damage recoil: the S snaps tighter, head whips, damped return", true},
     {"zixxtrixx-death", "Zixxtrixx death",
@@ -5237,12 +5224,18 @@ constexpr LibraryEntry kLibrary[] = {
      "Preserved fast cheeky head bobble over a loose body", true},
     {"zixxtrixx-slow-taunt", "Zixxtrixx slow taunt",
      "Neck-led left/right bends with a delayed funny head tilt", true},
+    {"zixxtrixx-jump-one", "Zixxtrixx spring jump",
+     "Immediate whole-S squash, one programmed salto, stable landing", true},
+    {"zixxtrixx-jump-multi", "Zixxtrixx three-turn jump",
+     "The same deterministic spring jump with three complete turns", true},
     {"zixxtrixx-salto-dummy", "Zixxtrixx salto: grounded target",
      "The planner aims the spear at a standing dummy; mid-air hit, recoil", true},
     {"zixxtrixx-salto-fly", "Zixxtrixx salto: flying target",
      "The committed spear intercepts a hovering dummy at 3.2 m", true},
     {"zixxtrixx-salto-six", "Zixxtrixx salto: six somersaults",
-     "The full apex earns six flips before the committed dive", true},
+     "The preserved 12 m baseline spends six coherent wheel turns", true},
+    {"zixxtrixx-salto-nine", "Zixxtrixx salto: nine-turn limit",
+     "Nine turns at 24 m, target entry, exact hold, extraction and recovery", true},
     {"zixxtrixx-stance2", "Zixxtrixx damaged stance",
      "Wounded with no HP bar: the S sags, weak breath, drooping fins", true},
     {"zixxtrixx-tumble", "Zixxtrixx tumble",
