@@ -250,17 +250,31 @@ module zhao_field_v3_dispatch #(
   // it holds -- it would report zero starvation and be measuring the
   // serialisation rather than the bank's priority.
   //
-  // So: a bounded in-flight queue. Two is the smallest depth that lets a
-  // second service start work, which is all the goal requires; the parameter
-  // exists so the depth is a knob rather than a rewrite.
+  // So: a bounded in-flight queue. It shipped at TWO, the smallest depth that
+  // lets a second service start work at all, and the depth was then MEASURED
+  // rather than argued about -- eight mixed contexts through the composed
+  // machine:
+  //
+  //     depth 2   147 clocks
+  //     depth 4   107 clocks     <- chosen
+  //     depth 8   103 clocks
+  //
+  // Four takes 27% off and eight takes another 4%, so the knee is at four and
+  // the rest of the gap is no longer here. Every slot costs a full group
+  // record -- op, dst, imm, four contexts, width, tag and three result
+  // registers per lane -- so depth 8 doubles that state to buy 4%.
+  //
+  // The bottleneck past this point is the SERVICES: six of the seven gate
+  // `v_ready` on being idle, so no queue depth can overlap them with
+  // themselves.
   //
   // OUT-OF-ORDER CAPTURE, IN-ORDER DRAIN. Services answer at their own speeds,
   // so a response may arrive for the YOUNGER group first -- that is the whole
   // point of overlapping them. Responses are therefore matched BY TAG into
   // whichever slot owns them. Draining still runs oldest-first, because write
   // ordering and release timing are the two things that must not change.
-  parameter int OUTSTANDING = 2;
-  localparam int SW = (OUTSTANDING <= 2) ? 1 : 2;
+  parameter int OUTSTANDING = 4;
+  localparam int SW = (OUTSTANDING <= 2) ? 1 : ((OUTSTANDING <= 4) ? 2 : ((OUTSTANDING <= 8) ? 3 : 4));
 
   // THE POINTER WRAP IS WRITTEN OUT, NOT DONE WITH A MODULO, and the reason is
   // a bug this cost an hour of.
