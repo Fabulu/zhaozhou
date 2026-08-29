@@ -384,45 +384,64 @@ int main(int argc, char** argv) {
     // So this streams: offer whenever the service is ready, accept whenever it
     // replies, and divide elapsed clocks by groups RETIRED.
     reset(dut, mb);
-    const int32_t a[3][kLanes] = {{3 << 16, 5 << 16, -(7 << 16), 11 << 16},
-                                  {4 << 16, 12 << 16, 24 << 16, 2 << 16},
-                                  {0, 0, 0, 0}};
-    const int32_t b[2][kLanes] = {{1 << 16, -(2 << 16), 7 << 16, 0},
-                                  {1 << 16, 3 << 16, 0, -(9 << 16)}};
 
-    // The answer every group must give, taken from the serial path above.
-    int32_t want[kLanes] = {};
-    for (int l = 0; l < kLanes; ++l) want[l] = oracle(2, a, b, l, nullptr);
+    // EVERY GROUP CARRIES ITS OWN NUMBERS, AND THAT IS THE WHOLE POINT.
+    //
+    // This section used to set one pair of operands outside the loop and stream
+    // thirty-two IDENTICAL groups past them. It measured the initiation
+    // interval correctly, and it could not have seen a cross-group mix-up at
+    // all: if the service had handed group 7's answer to group 3, every value
+    // still matched, because every value was the same value. The order check
+    // on `tag_o` did not cover it either -- the tag comes from the order queue
+    // and the data from the banks, so the tags can be in perfect order while
+    // the numbers underneath them are swapped.
+    //
+    // The composed Earth gate found wrong answers that appear only when two
+    // groups are in flight at once. Two groups in flight is exactly what this
+    // section streams, and identical data is exactly what hid it.
+    constexpr int kGroups = 32;
+    int32_t ga[kGroups][3][kLanes];
+    int32_t gb[kGroups][2][kLanes];
+    int32_t want[kGroups][kLanes];
+    for (int g = 0; g < kGroups; ++g) {
+      for (int l = 0; l < kLanes; ++l) {
+        ga[g][0][l] = (int32_t)((g * 7 + l * 3 + 1) << 16);
+        ga[g][1][l] = (int32_t)(((g * 5 + l * 11 + 2) << 16)) * ((l & 1) ? -1 : 1);
+        ga[g][2][l] = 0;
+        gb[g][0][l] = (int32_t)(((g * 3 + l * 2) << 16)) * ((g & 1) ? -1 : 1);
+        gb[g][1][l] = (int32_t)((g + l * 4) << 16);
+      }
+      for (int l = 0; l < kLanes; ++l) want[g][l] = oracle(2, ga[g], gb[g], l, nullptr);
+    }
 
-    const int kGroups = 32;
     int offered = 0, retired = 0, wrong = 0, clocks = 0;
     dut.r_ready_i = 1;
     dut.mode_i = 2;
-    dut.a0_0_i = (uint32_t)a[0][0];
-    dut.a0_1_i = (uint32_t)a[0][1];
-    dut.a0_2_i = (uint32_t)a[0][2];
-    dut.a0_3_i = (uint32_t)a[0][3];
-    dut.a1_0_i = (uint32_t)a[1][0];
-    dut.a1_1_i = (uint32_t)a[1][1];
-    dut.a1_2_i = (uint32_t)a[1][2];
-    dut.a1_3_i = (uint32_t)a[1][3];
-    dut.a2_0_i = (uint32_t)a[2][0];
-    dut.a2_1_i = (uint32_t)a[2][1];
-    dut.a2_2_i = (uint32_t)a[2][2];
-    dut.a2_3_i = (uint32_t)a[2][3];
-    dut.b0_0_i = (uint32_t)b[0][0];
-    dut.b0_1_i = (uint32_t)b[0][1];
-    dut.b0_2_i = (uint32_t)b[0][2];
-    dut.b0_3_i = (uint32_t)b[0][3];
-    dut.b1_0_i = (uint32_t)b[1][0];
-    dut.b1_1_i = (uint32_t)b[1][1];
-    dut.b1_2_i = (uint32_t)b[1][2];
-    dut.b1_3_i = (uint32_t)b[1][3];
-
     int guard = 0;
     while (retired < kGroups && guard++ < 20000) {
+      const int g = (offered < kGroups) ? offered : (kGroups - 1);
       dut.v_valid_i = (offered < kGroups) ? 1 : 0;
       dut.tag_i = (uint8_t)(offered & 0xFF);
+      dut.a0_0_i = (uint32_t)ga[g][0][0];
+      dut.a0_1_i = (uint32_t)ga[g][0][1];
+      dut.a0_2_i = (uint32_t)ga[g][0][2];
+      dut.a0_3_i = (uint32_t)ga[g][0][3];
+      dut.a1_0_i = (uint32_t)ga[g][1][0];
+      dut.a1_1_i = (uint32_t)ga[g][1][1];
+      dut.a1_2_i = (uint32_t)ga[g][1][2];
+      dut.a1_3_i = (uint32_t)ga[g][1][3];
+      dut.a2_0_i = (uint32_t)ga[g][2][0];
+      dut.a2_1_i = (uint32_t)ga[g][2][1];
+      dut.a2_2_i = (uint32_t)ga[g][2][2];
+      dut.a2_3_i = (uint32_t)ga[g][2][3];
+      dut.b0_0_i = (uint32_t)gb[g][0][0];
+      dut.b0_1_i = (uint32_t)gb[g][0][1];
+      dut.b0_2_i = (uint32_t)gb[g][0][2];
+      dut.b0_3_i = (uint32_t)gb[g][0][3];
+      dut.b1_0_i = (uint32_t)gb[g][1][0];
+      dut.b1_1_i = (uint32_t)gb[g][1][1];
+      dut.b1_2_i = (uint32_t)gb[g][1][2];
+      dut.b1_3_i = (uint32_t)gb[g][1][3];
       dut.eval();
       const bool took = dut.v_valid_i && dut.v_ready_o;
       const bool gave = dut.r_valid_o && dut.r_ready_i;
@@ -432,7 +451,7 @@ int main(int argc, char** argv) {
                                         : l == 1 ? dut.o0_1_o
                                         : l == 2 ? dut.o0_2_o
                                                  : dut.o0_3_o);
-          if (got != want[l]) ++wrong;
+          if (got != want[retired][l]) ++wrong;
         }
         if ((int)dut.tag_o != (retired & 0xFF)) ++wrong;  // ACCEPT ORDER
         ++retired;
@@ -445,7 +464,7 @@ int main(int argc, char** argv) {
     dut.eval();
 
     zhao::check(retired == kGroups, "all 32 streamed groups retire", kGroups, retired);
-    zhao::check(wrong == 0, "every streamed answer is right and IN ORDER", 0, wrong);
+    zhao::check(wrong == 0, "every streamed group gets ITS OWN right answer, in order", 0, wrong);
     const int ii = retired ? (clocks / retired) : 0;
     printf("   MEASURED: %d groups streamed in %d clocks, II = %d clocks/group\n", retired, clocks,
            ii);

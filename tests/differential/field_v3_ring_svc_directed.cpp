@@ -338,31 +338,43 @@ int main(int argc, char** argv) {
     sb.mem[7] = p.rA;
     sb.mem[8] = p.rB;
     const uint32_t imm = pack_slots(5, 6, 7, 8);
-    int32_t want[kLanes];
-    for (int l = 0; l < kLanes; ++l) {
-      zref::SatLedger L;
-      want[l] = zfield::steps::ring_prepared(d[l], p.r0, p.m, p.rA, p.rB, &L);
-    }
+    // EVERY GROUP CARRIES ITS OWN DISTANCES.
+    //
+    // Streaming one distance set past every group compares them all to one
+    // answer, so a service that handed group 7's ring to group 3 would pass:
+    // every value was the same value. Two ring units share the bank here, which
+    // is precisely the machinery a cross-group swap lives in. The tag check
+    // does not cover it -- the tag rides the order queue and the data rides the
+    // units, so tags can be in perfect order over swapped numbers.
+    constexpr int kGroups = 24;
+    int32_t gd[kGroups][kLanes];
+    int32_t want[kGroups][kLanes];
+    for (int g = 0; g < kGroups; ++g)
+      for (int l = 0; l < kLanes; ++l) {
+        gd[g][l] = (int32_t)((g * 3 + l + 1) << 15);
+        zref::SatLedger L;
+        want[g][l] = zfield::steps::ring_prepared(gd[g][l], p.r0, p.m, p.rA, p.rB, &L);
+      }
 
-    const int kGroups = 24;
     int offered = 0, retired = 0, wrong = 0, clocks = 0, guard = 0;
     dut.rsp_ready_i = 1;
     dut.req_imm_i = imm;
-    dut.req_d_0_i = (uint32_t)d[0];
-    dut.req_d_1_i = (uint32_t)d[1];
-    dut.req_d_2_i = (uint32_t)d[2];
-    dut.req_d_3_i = (uint32_t)d[3];
     while (retired < kGroups && guard++ < 20000) {
+      const int g = (offered < kGroups) ? offered : (kGroups - 1);
       dut.req_valid_i = (offered < kGroups) ? 1 : 0;
       dut.req_tag_i = (uint8_t)(offered & 0xFF);
+      dut.req_d_0_i = (uint32_t)gd[g][0];
+      dut.req_d_1_i = (uint32_t)gd[g][1];
+      dut.req_d_2_i = (uint32_t)gd[g][2];
+      dut.req_d_3_i = (uint32_t)gd[g][3];
       dut.eval();
       const bool took = dut.req_valid_i && dut.req_ready_o;
       const bool gave = dut.rsp_valid_o && dut.rsp_ready_i;
       if (gave) {
-        const int32_t g[kLanes] = {(int32_t)dut.rsp_r_0_o, (int32_t)dut.rsp_r_1_o,
-                                   (int32_t)dut.rsp_r_2_o, (int32_t)dut.rsp_r_3_o};
+        const int32_t got[kLanes] = {(int32_t)dut.rsp_r_0_o, (int32_t)dut.rsp_r_1_o,
+                                     (int32_t)dut.rsp_r_2_o, (int32_t)dut.rsp_r_3_o};
         for (int l = 0; l < kLanes; ++l)
-          if (g[l] != want[l]) ++wrong;
+          if (got[l] != want[retired][l]) ++wrong;
         if ((int)dut.rsp_tag_o != (retired & 0xFF)) ++wrong;
         ++retired;
       }

@@ -206,30 +206,46 @@ int main(int argc, char** argv) {
     // divide elapsed clocks by groups RETIRED. Waiting for each reply before
     // offering the next measures LATENCY and calls it throughput -- a mistake
     // this project made once already, in the distance service's harness.
+    // EVERY GROUP CARRIES ITS OWN ANGLES.
+    //
+    // This streamed one angle set past thirty-two groups and compared them all
+    // to one answer, so a service that handed group 7's sines to group 3 would
+    // have passed: every value was the same value. Two group slots and a
+    // two-deep shadow pipeline are exactly the machinery a cross-group swap
+    // lives in, and identical data made this section blind to it.
+    //
+    // The tag order check did not cover it. The tag travels with the order
+    // queue and the data with the slots, so the tags can be in perfect order
+    // while the numbers under them are swapped.
     reset(dut);
-    const int32_t a[kLanes] = {0x1111, 0x4321, 0x8ABC, 0xC0DE};
-    int32_t want[kLanes];
-    for (int l = 0; l < kLanes; ++l) want[l] = oracle(false, a[l]);
+    constexpr int kGroups = 32;
+    int32_t ga[kGroups][kLanes];
+    int32_t want[kGroups][kLanes];
+    for (int g = 0; g < kGroups; ++g)
+      for (int l = 0; l < kLanes; ++l) {
+        ga[g][l] = (int32_t)((g * 2731 + l * 9109 + 17) & 0xFFFF);
+        want[g][l] = oracle(false, ga[g][l]);
+      }
 
-    const int kGroups = 32;
     int offered = 0, retired = 0, wrong = 0, clocks = 0, guard = 0;
     dut.is_cos_i = 0;
     dut.r_ready_i = 1;
-    dut.a0_0_i = (uint32_t)a[0];
-    dut.a0_1_i = (uint32_t)a[1];
-    dut.a0_2_i = (uint32_t)a[2];
-    dut.a0_3_i = (uint32_t)a[3];
     while (retired < kGroups && guard++ < 20000) {
+      const int g = (offered < kGroups) ? offered : (kGroups - 1);
       dut.v_valid_i = (offered < kGroups) ? 1 : 0;
       dut.tag_i = (uint8_t)(offered & 0xFF);
+      dut.a0_0_i = (uint32_t)ga[g][0];
+      dut.a0_1_i = (uint32_t)ga[g][1];
+      dut.a0_2_i = (uint32_t)ga[g][2];
+      dut.a0_3_i = (uint32_t)ga[g][3];
       dut.eval();
       const bool took = dut.v_valid_i && dut.v_ready_o;
       const bool gave = dut.r_valid_o && dut.r_ready_i;
       if (gave) {
-        const int32_t g[kLanes] = {(int32_t)dut.o0_0_o, (int32_t)dut.o0_1_o, (int32_t)dut.o0_2_o,
-                                   (int32_t)dut.o0_3_o};
+        const int32_t got[kLanes] = {(int32_t)dut.o0_0_o, (int32_t)dut.o0_1_o, (int32_t)dut.o0_2_o,
+                                     (int32_t)dut.o0_3_o};
         for (int l = 0; l < kLanes; ++l)
-          if (g[l] != want[l]) ++wrong;
+          if (got[l] != want[retired][l]) ++wrong;
         if ((int)dut.tag_o != (retired & 0xFF)) ++wrong;  // ACCEPT ORDER
         ++retired;
       }
@@ -240,7 +256,7 @@ int main(int argc, char** argv) {
     dut.v_valid_i = 0;
     dut.eval();
     zhao::check(retired == kGroups, "all 32 streamed groups retire", kGroups, retired);
-    zhao::check(wrong == 0, "every streamed answer is right and IN ORDER", 0, wrong);
+    zhao::check(wrong == 0, "every streamed group gets ITS OWN right answer, in order", 0, wrong);
     const int ii = retired ? (clocks / retired) : 0;
     printf("   MEASURED: %d groups streamed in %d clocks, II = %d clocks/group\n", retired, clocks,
            ii);
