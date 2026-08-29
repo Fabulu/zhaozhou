@@ -42,6 +42,13 @@ CONE = [
     RTL,
     "fpga/rtl/field/zhao_field_v3_dispatch.sv",
     "fpga/rtl/field/zhao_field_v3_noise.sv",
+    # THE SECOND SERVICE, 2026-08-29. This cone and the SOURCES list in
+    # tests/CMakeLists.txt are two places that must agree about the same
+    # set of files -- the shape of seam defect this engine has produced
+    # four times. They are not yet derived from one another; when this
+    # list is next wrong, that is the fix.
+    "fpga/rtl/synth/zhao_probe_curve_svc.sv",
+    "fpga/rtl/field/zhao_field_v3_spline.sv",
     "fpga/rtl/field/zhao_field_v3_mulbank.sv",
     "fpga/rtl/field/zhao_field_v3_wbarb.sv",
     "fpga/rtl/field/zhao_field_mul.sv",

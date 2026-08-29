@@ -119,8 +119,8 @@ MUTANTS = [
     # this composition's test can see it is a different question, and one this
     # mutant asks rather than assumes.
     ("V06 the bank puts the LANES above the service",
-     "      .CLAIMANTS(2), .PRIO_SERVICES_FIRST(1'b1), .TAGW(TAGW)",
-     "      .CLAIMANTS(2), .PRIO_SERVICES_FIRST(1'b0), .TAGW(TAGW)"),
+     "      .CLAIMANTS(3), .PRIO_SERVICES_FIRST(1'b1), .TAGW(TAGW)",
+     "      .CLAIMANTS(3), .PRIO_SERVICES_FIRST(1'b0), .TAGW(TAGW)"),
     ("V07 the service's A operands are broadcast from point 0",
      "      bank_a[1][l] = nz_a[l];",
      "      bank_a[1][l] = nz_a[0];"),
@@ -222,11 +222,11 @@ MUTANTS = [
     # result may never be drained at all. This asks whether the tie-off is
     # checked or merely present.
     ("V22 the third result is not zero",
-     "    for (int l = 0; l < 4; l++) rsp_r2[l] = 32'sd0;",
-     "    for (int l = 0; l < 4; l++) rsp_r2[l] = 32'sd1;"),
+     "      rsp_r2[l] = 32'sd0;",
+     "      rsp_r2[l] = 32'sd1;"),
     ("V23 the wrong-op detector fires on the ops that ARE implemented",
-     "                 (svc_op != OP_NOISE2) && (svc_op != OP_RIDGE)) begin",
-     "                 (svc_op == OP_NOISE2) || (svc_op == OP_RIDGE)) begin"),
+     "                 (svc_op != OP_NOISE2) && (svc_op != OP_RIDGE) &&",
+     "                 (svc_op == OP_NOISE2) || (svc_op == OP_RIDGE) ||"),
     # Reshaped from flush tied low, which orphans flush_i. Qualifying it with
     # long_valid_i is the sharper defect anyway: flush is RAISED after the last
     # context is offered and long_valid_i is low by then, so a partial group
@@ -240,6 +240,80 @@ MUTANTS = [
     ("V25 the rival's multiplicand is changed",
      "  localparam logic signed [32:0] RIVAL_A = 33'sd3;",
      "  localparam logic signed [32:0] RIVAL_A = 33'sd7;"),
+    # ---- the second service, added 2026-08-29 -----------------------------
+    # The twenty-five above were scored against a path with ONE service. None
+    # of them can reach the request routing, the response arbitration or the
+    # third bank claimant, because none of that existed. Three of the
+    # twenty-five (V06, V22, V23) also had to be re-anchored, which is the
+    # same argument in its sharpest form: they were scored CAUGHT and had
+    # stopped being applicable at all.
+    ("W01 curve ops are also handed to the noise unit",
+     "      .v_valid_i(svc_valid && !is_curve_c), .v_ready_o(nz_v_ready),",
+     "      .v_valid_i(svc_valid), .v_ready_o(nz_v_ready),"),
+
+    ("W02 the handshake is taken from the service that was NOT asked",
+     "  assign svc_ready = is_curve_c ? cv_req_ready : nz_v_ready;",
+     "  assign svc_ready = is_curve_c ? nz_v_ready : cv_req_ready;"),
+
+    ("W03 the response mux publishes the other service's value",
+     "      rsp_r0[l] = cv_rsp_valid ? cv_r0[l] : nz_r0[l];",
+     "      rsp_r0[l] = cv_rsp_valid ? nz_r0[l] : cv_r0[l];"),
+
+    # THE ONE THAT LOSES A VALUE RATHER THAN TIME. Without the guard the noise
+    # unit sees its response accepted on a cycle the mux published the curve
+    # service's, and its answer is gone -- not late, gone.
+    ("W04 the losing service's response is dropped instead of held",
+     "  assign nz_rsp_ready = rsp_ready && !cv_rsp_valid;",
+     "  assign nz_rsp_ready = rsp_ready;"),
+
+    ("W05 the response carries the other service's tag",
+     "  assign rsp_tag   = cv_rsp_valid ? cv_rsp_tag : nz_rsp_tag;",
+     "  assign rsp_tag   = cv_rsp_valid ? nz_rsp_tag : cv_rsp_tag;"),
+
+    ("W06 a width-1 answer leaves the second register unzeroed",
+     "      rsp_r1[l] = cv_rsp_valid ? 32'sd0 : nz_r1[l];",
+     "      rsp_r1[l] = nz_r1[l];"),
+
+    ("W07 DCURVE is served as CURVE",
+     "  assign cv_mode_c = (svc_op == OP_DCURVE) ? 2'd1",
+     "  assign cv_mode_c = (svc_op == OP_DCURVE) ? 2'd0"),
+
+    ("W08 SPLINE is served as DCURVE",
+     "                   : (svc_op == OP_SPLINE) ? 2'd2 : 2'd0;",
+     "                   : (svc_op == OP_SPLINE) ? 2'd1 : 2'd0;"),
+
+    ("W09 the table index is read from the wrong bits of the immediate",
+     "      .req_mode_i(cv_mode_c), .req_tbl_i(svc_imm[1:0]),",
+     "      .req_mode_i(cv_mode_c), .req_tbl_i(svc_imm[3:2]),"),
+
+    # RESHAPED AFTER THE PREFLIGHT REFUSED THEM. Pointing the curve service at
+    # claimant 1 leaves bank_req_ready[2] read by nobody, and Verilator tracks
+    # usage per BIT -- so the mutant orphans a signal and cannot build. That is
+    # the preflight doing its job: a mutant that will not elaborate would be
+    # scored CAUGHT by a compile failure, the most flattering way to be wrong.
+    #
+    # Crossing the two claimants keeps every bit read and states the same
+    # claim from both sides at once: each service is answered by the other's
+    # slot.
+    ("W10 the two services' bank grants are crossed",
+     "  assign nz_mul_ready  = bank_req_ready[1];\n"
+     "  assign nz_mul_valid  = bank_rsp_valid[1];\n"
+     "  assign cv_mul_ready  = bank_req_ready[2];",
+     "  assign nz_mul_ready  = bank_req_ready[2];\n"
+     "  assign nz_mul_valid  = bank_rsp_valid[1];\n"
+     "  assign cv_mul_ready  = bank_req_ready[1];"),
+
+    ("W11 the two services' bank products are crossed",
+     "  assign nz_mul_valid  = bank_rsp_valid[1];\n"
+     "  assign cv_mul_ready  = bank_req_ready[2];\n"
+     "  assign cv_mul_valid  = bank_rsp_valid[2];",
+     "  assign nz_mul_valid  = bank_rsp_valid[2];\n"
+     "  assign cv_mul_ready  = bank_req_ready[2];\n"
+     "  assign cv_mul_valid  = bank_rsp_valid[1];"),
+
+    ("W12 the wrong-op detector fires on a SPLINE it does serve",
+     "                 (svc_op != OP_SPLINE)) begin",
+     "                 (svc_op != OP_NOISE2)) begin"),
 ]
 
 
