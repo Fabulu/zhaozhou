@@ -126,15 +126,43 @@ module zhao_field_v3_svcpath #(
     // Every group asserts wrong_op_o == 0, and mutant V23 -- which makes the
     // detector fire on the ops that ARE implemented -- is caught, so the wire
     // is known to be live rather than merely tied low.
-    output var logic                          wrong_op_o
+    output var logic                          wrong_op_o,
+
+    // ---- the curve service's table cache -----------------------------------
+    //
+    // TABLES COME FROM OUTSIDE AND THAT IS NOT A PLACEHOLDER. CURVE, DCURVE
+    // and SPLINE read a knot table the program supplies; the service path does
+    // not synthesise one and must not pretend to. In the finished machine the
+    // command stream fills this port. Here the differential drives it, which
+    // is the same wire either way -- what would be wrong is inventing a table
+    // inside the service so the block looks self-contained.
+    input  var logic                          tl_we_i,
+    input  var logic [1:0]                    tl_tbl_i,
+    input  var logic [5:0]                    tl_idx_i,
+    input  var logic signed [31:0]            tl_x_i,
+    input  var logic signed [31:0]            tl_y_i,
+    input  var logic signed [31:0]            tl_dy_i,
+    input  var logic                          tl_commit_i,
+    input  var logic [6:0]                    tl_n_i
 );
 
   localparam int CTXW = $clog2(CONTEXTS);
   localparam int REGW = $clog2(REGS);
 
-  // The op the one attached service implements. RIDGE and NOISE2 share it.
+  // The ops the attached services implement. RIDGE and NOISE2 share the noise
+  // unit; CURVE, DCURVE and SPLINE share the curve service.
   localparam logic [7:0] OP_NOISE2 = 8'h1C;
   localparam logic [7:0] OP_RIDGE  = 8'h22;
+
+  // THE SECOND SERVICE, added 2026-08-29 when SPLINE went hot. Until now this
+  // path had exactly one service and `wrong_op_o` was the wire that said so.
+  //
+  // Two services is not a bigger version of one. It is the first arrangement
+  // in which a service can be STARVED -- one claimant cannot starve anybody --
+  // and measuring that is the reason the owner paid for the hot path.
+  localparam logic [7:0] OP_CURVE  = 8'h1A;
+  localparam logic [7:0] OP_SPLINE = 8'h1B;
+  localparam logic [7:0] OP_DCURVE = 8'h1D;
 
   // A DEBUGGING CONVENIENCE, AND NOT MORE THAN THAT. These are the same
   // constants zhao_probe_v3_engine ties its spare bank lanes to, and this
@@ -208,6 +236,20 @@ module zhao_field_v3_svcpath #(
   logic signed [32:0] nz_a [4], nz_b [4];
   logic signed [65:0] bank_p [4];
 
+  logic               nz_rsp_valid, nz_rsp_ready;
+  logic [TAGW-1:0]    nz_rsp_tag;
+  logic signed [31:0] nz_r0 [4], nz_r1 [4];
+
+  logic               cv_rsp_valid, cv_rsp_ready;
+  logic        [ 7:0] cv_rsp_tag;
+  logic signed [31:0] cv_r0 [4];
+  logic               cv_mul_issue, cv_mul_ready, cv_mul_valid;
+  logic signed [32:0] cv_a [4], cv_b [4];
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [ 3:0] cv_sat_add_unused, cv_sat_mul_unused;
+  logic [23:0] cv_seg_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
+
   logic [3:0] nz_sat_add, nz_sat_rescale;
   /* verilator lint_off UNUSEDSIGNAL */
   logic [3:0] nz_sat_add_unused, nz_sat_rescale_unused;
@@ -215,17 +257,27 @@ module zhao_field_v3_svcpath #(
   assign nz_sat_add_unused = nz_sat_add;
   assign nz_sat_rescale_unused = nz_sat_rescale;
 
+  // WHICH SERVICE OWNS THIS OP. Decoded once, read by the request routing,
+  // the response mux and the wrong-op detector, so the three cannot disagree
+  // about it -- which is the seam defect this engine has produced four times.
+  logic is_curve_c;
+  assign is_curve_c = (svc_op == OP_CURVE) || (svc_op == OP_DCURVE) ||
+                      (svc_op == OP_SPLINE);
+
+  logic nz_v_ready, cv_req_ready;
+  assign svc_ready = is_curve_c ? cv_req_ready : nz_v_ready;
+
   zhao_field_v3_noise u_noise (
       .clk(clk), .rst_n(rst_n),
-      .v_valid_i(svc_valid), .v_ready_o(svc_ready),
+      .v_valid_i(svc_valid && !is_curve_c), .v_ready_o(nz_v_ready),
       .is_ridge_i(svc_op == OP_RIDGE),
       .a0_0_i(svc_s0[0]), .a0_1_i(svc_s0[1]), .a0_2_i(svc_s0[2]), .a0_3_i(svc_s0[3]),
       .a1_0_i(svc_s1[0]), .a1_1_i(svc_s1[1]), .a1_2_i(svc_s1[2]), .a1_3_i(svc_s1[3]),
       .seed_i(svc_imm), .tag_i(svc_tag),
-      .r_valid_o(rsp_valid), .r_ready_i(rsp_ready),
-      .o0_0_o(rsp_r0[0]), .o0_1_o(rsp_r0[1]), .o0_2_o(rsp_r0[2]), .o0_3_o(rsp_r0[3]),
-      .o1_0_o(rsp_r1[0]), .o1_1_o(rsp_r1[1]), .o1_2_o(rsp_r1[2]), .o1_3_o(rsp_r1[3]),
-      .sat_add_o(nz_sat_add), .sat_rescale_o(nz_sat_rescale), .tag_o(rsp_tag),
+      .r_valid_o(nz_rsp_valid), .r_ready_i(nz_rsp_ready),
+      .o0_0_o(nz_r0[0]), .o0_1_o(nz_r0[1]), .o0_2_o(nz_r0[2]), .o0_3_o(nz_r0[3]),
+      .o1_0_o(nz_r1[0]), .o1_1_o(nz_r1[1]), .o1_2_o(nz_r1[2]), .o1_3_o(nz_r1[3]),
+      .sat_add_o(nz_sat_add), .sat_rescale_o(nz_sat_rescale), .tag_o(nz_rsp_tag),
       .mul_issue_o(nz_mul_issue), .mul_ready_i(nz_mul_ready),
       .mul_a_0_o(nz_a[0]), .mul_a_1_o(nz_a[1]), .mul_a_2_o(nz_a[2]), .mul_a_3_o(nz_a[3]),
       .mul_b_0_o(nz_b[0]), .mul_b_1_o(nz_b[1]), .mul_b_2_o(nz_b[2]), .mul_b_3_o(nz_b[3]),
@@ -234,34 +286,97 @@ module zhao_field_v3_svcpath #(
       .mul_p_2_i(bank_p[2]), .mul_p_3_i(bank_p[3])
   );
 
-  // THE SERVICE IS ASKED ONLY FOR OPS IT IMPLEMENTS, and this says so out
+  // ---- the curve service: CURVE, DCURVE and SPLINE -----------------------
+  //
+  // The mode is derived from the op HERE and nowhere else, so the encoding
+  // lives beside the opcodes it comes from.
+  logic [1:0] cv_mode_c;
+  assign cv_mode_c = (svc_op == OP_DCURVE) ? 2'd1
+                   : (svc_op == OP_SPLINE) ? 2'd2 : 2'd0;
+
+  zhao_probe_curve_svc u_curve (
+      .clk(clk), .rst_n(rst_n),
+      .tl_we_i(tl_we_i), .tl_tbl_i(tl_tbl_i), .tl_idx_i(tl_idx_i),
+      .tl_x_i(tl_x_i), .tl_y_i(tl_y_i), .tl_dy_i(tl_dy_i),
+      .tl_commit_i(tl_commit_i), .tl_n_i(tl_n_i),
+      .req_valid_i(svc_valid && is_curve_c), .req_ready_o(cv_req_ready),
+      .req_mode_i(cv_mode_c), .req_tbl_i(svc_imm[1:0]),
+      .req_a_0_i(svc_s0[0]), .req_a_1_i(svc_s0[1]),
+      .req_a_2_i(svc_s0[2]), .req_a_3_i(svc_s0[3]),
+      .req_tag_i(svc_tag),
+      .mul_issue_o(cv_mul_issue), .mul_ready_i(cv_mul_ready),
+      .mul_a_0_o(cv_a[0]), .mul_a_1_o(cv_a[1]),
+      .mul_a_2_o(cv_a[2]), .mul_a_3_o(cv_a[3]),
+      .mul_b_0_o(cv_b[0]), .mul_b_1_o(cv_b[1]),
+      .mul_b_2_o(cv_b[2]), .mul_b_3_o(cv_b[3]),
+      .mul_valid_i(cv_mul_valid),
+      .mul_p_0_i(bank_p[0]), .mul_p_1_i(bank_p[1]),
+      .mul_p_2_i(bank_p[2]), .mul_p_3_i(bank_p[3]),
+      .rsp_valid_o(cv_rsp_valid), .rsp_ready_i(cv_rsp_ready),
+      .rsp_r_0_o(cv_r0[0]), .rsp_r_1_o(cv_r0[1]),
+      .rsp_r_2_o(cv_r0[2]), .rsp_r_3_o(cv_r0[3]),
+      .rsp_sat_add_o(cv_sat_add_unused), .rsp_sat_mul_o(cv_sat_mul_unused),
+      .rsp_seg_o(cv_seg_unused), .rsp_tag_o(cv_rsp_tag)
+  );
+
+  // ---- one response port, two services -----------------------------------
+  //
+  // BOTH CAN BE HOLDING AN ANSWER AT ONCE and the dispatcher takes one per
+  // cycle, so this is an arbitration and not a mux. The curve service wins
+  // when both are ready: its answer is parked in the finish registers of a
+  // pipelined barrel, so making it wait stalls a group BEHIND it, whereas the
+  // noise unit's answer is its own last stage and holding costs one group.
+  //
+  // NEITHER CAN BE DROPPED. The loser keeps r_ready low and keeps its answer;
+  // it is not overwritten, because a lost response is a wrong VALUE reaching a
+  // register rather than a slower machine.
+  assign cv_rsp_ready = rsp_ready;
+  assign nz_rsp_ready = rsp_ready && !cv_rsp_valid;
+
+  assign rsp_valid = cv_rsp_valid || nz_rsp_valid;
+  assign rsp_tag   = cv_rsp_valid ? cv_rsp_tag : nz_rsp_tag;
+
+  always_comb begin
+    for (int l = 0; l < 4; l++) begin
+      rsp_r0[l] = cv_rsp_valid ? cv_r0[l] : nz_r0[l];
+      // CURVE, DCURVE and SPLINE write ONE register per point; NOISE2 and
+      // RIDGE write two. The unwritten registers are zero by each op's own
+      // law, and they are tied rather than left dangling so a width the
+      // dispatcher should never ask for drains a defined value -- wrong the
+      // same way twice instead of differently each run.
+      rsp_r1[l] = cv_rsp_valid ? 32'sd0 : nz_r1[l];
+      rsp_r2[l] = 32'sd0;
+    end
+  end
+
+  // THE SERVICES ARE ASKED ONLY FOR OPS THEY IMPLEMENT, and this says so out
   // loud. It latches, because a single wrong request is the whole finding and
   // a level would be missed by any test that samples.
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       wrong_op_o <= 1'b0;
     end else if (svc_valid && svc_ready &&
-                 (svc_op != OP_NOISE2) && (svc_op != OP_RIDGE)) begin
+                 (svc_op != OP_NOISE2) && (svc_op != OP_RIDGE) &&
+                 (svc_op != OP_CURVE) && (svc_op != OP_DCURVE) &&
+                 (svc_op != OP_SPLINE)) begin
       wrong_op_o <= 1'b1;
     end
   end
 
-  // NOISE2 and RIDGE write two registers per point; the third is always zero,
-  // by the op's own law. Tied here rather than left dangling so the dispatcher
-  // drains a defined value if a width-3 op is ever routed to this service by
-  // mistake -- it would be wrong, and it would be wrong the same way twice
-  // rather than differently each run.
-  always_comb begin
-    for (int l = 0; l < 4; l++) rsp_r2[l] = 32'sd0;
-  end
-
-  // ---- the shared bank: claimant 0 is the rival, 1 is the service ---------
+  // ---- the shared bank: 0 is the rival, 1 the noise unit, 2 the curve -----
   // The bank's own rule: claimant 0 is the ALU lanes, higher indices are
   // services, and with PRIO_SERVICES_FIRST the highest wins. The rival sits
-  // in the lanes' slot so it loses to the service exactly as the lanes would.
-  logic [1:0]         bank_req_valid, bank_req_ready, bank_rsp_valid;
-  logic signed [32:0] bank_a [2][4], bank_b [2][4];
-  logic [TAGW-1:0]    bank_tag [2];
+  // in the lanes' slot so it loses to the services exactly as the lanes would.
+  //
+  // SO THE CURVE SERVICE OUTRANKS THE NOISE UNIT, and that ordering is a
+  // CHOICE rather than a consequence of where it was added. It is also the
+  // arrangement the starvation question is about: with a fixed priority and a
+  // claimant that can ask every cycle, the loser's worst case is not obviously
+  // bounded. This wires it; the measurement is a separate step and its number
+  // is not predicted here.
+  logic [2:0]         bank_req_valid, bank_req_ready, bank_rsp_valid;
+  logic signed [32:0] bank_a [3][4], bank_b [3][4];
+  logic [TAGW-1:0]    bank_tag [3];
   /* verilator lint_off UNUSEDSIGNAL */
   logic [TAGW-1:0]    bank_rsp_tag;
   /* verilator lint_on UNUSEDSIGNAL */
@@ -269,23 +384,29 @@ module zhao_field_v3_svcpath #(
   always_comb begin
     bank_req_valid[0] = rival_req_i;
     bank_req_valid[1] = nz_mul_issue;
+    bank_req_valid[2] = cv_mul_issue;
     for (int l = 0; l < 4; l++) begin
       bank_a[0][l] = RIVAL_A;
       bank_b[0][l] = RIVAL_B;
       bank_a[1][l] = nz_a[l];
       bank_b[1][l] = nz_b[l];
+      bank_a[2][l] = cv_a[l];
+      bank_b[2][l] = cv_b[l];
     end
     bank_tag[0] = 8'd0;
     bank_tag[1] = 8'd1;
+    bank_tag[2] = 8'd2;
   end
 
   assign rival_grant_o = bank_req_ready[0];
   assign rival_rsp_o   = bank_rsp_valid[0];
   assign nz_mul_ready  = bank_req_ready[1];
   assign nz_mul_valid  = bank_rsp_valid[1];
+  assign cv_mul_ready  = bank_req_ready[2];
+  assign cv_mul_valid  = bank_rsp_valid[2];
 
   zhao_field_v3_mulbank #(
-      .CLAIMANTS(2), .PRIO_SERVICES_FIRST(1'b1), .TAGW(TAGW)
+      .CLAIMANTS(3), .PRIO_SERVICES_FIRST(1'b1), .TAGW(TAGW)
   ) u_bank (
       .clk(clk), .rst_n(rst_n),
       .req_valid_i(bank_req_valid), .req_ready_o(bank_req_ready),

@@ -97,6 +97,8 @@ struct Dut {
     t.pre_we_i = 0;
     t.start_i = 0;
     t.rival_req_i = 0;
+    t.tl_we_i = 0;
+    t.tl_commit_i = 0;
     t.wb_policy_i = (uint8_t)policy;
     t.eval();
     for (int i = 0; i < 4; ++i) zhao::tick(t);
@@ -120,6 +122,31 @@ struct Dut {
     t.eval();
     zhao::tick(t);
     t.up_we_i = 0;
+    t.eval();
+  }
+
+  // The knot table the curve service reads. It belongs to the PROGRAM, so
+  // the harness supplies it exactly as the command stream will -- there is no
+  // table inside the silicon to fall back on.
+  void load_table(int slot, const zfield::Table& tb) {
+    const int n = (int)tb.x.size();
+    for (int i = 0; i < n; ++i) {
+      t.tl_we_i = 1;
+      t.tl_tbl_i = (uint8_t)slot;
+      t.tl_idx_i = (uint8_t)i;
+      t.tl_x_i = (uint32_t)tb.x[(size_t)i];
+      t.tl_y_i = (uint32_t)tb.y[(size_t)i];
+      t.tl_dy_i = (uint32_t)tb.dy[(size_t)i];
+      t.eval();
+      zhao::tick(t);
+    }
+    t.tl_we_i = 0;
+    t.tl_commit_i = 1;
+    t.tl_tbl_i = (uint8_t)slot;
+    t.tl_n_i = (uint8_t)n;
+    t.eval();
+    zhao::tick(t);
+    t.tl_commit_i = 0;
     t.eval();
   }
 
@@ -170,9 +197,10 @@ struct Dut {
 /** One long op per context: preload x,y then run `op` into r2 (and r3). */
 int run_long(Vzhao_probe_v3_full& top, uint8_t op, int n_ctx, const int32_t* xs, const int32_t* ys,
              uint32_t seed, int policy, bool rival, int32_t out[][2], int* clocks,
-             bool reverse_start = false) {
+             bool reverse_start = false, const zfield::Table* tab = nullptr) {
   Dut d(top);
   d.reset(policy);
+  if (tab) d.load_table(0, *tab);
   for (int c = 0; c < n_ctx; ++c) {
     d.preload(c, 0, xs[c]);
     d.preload(c, 1, ys[c]);
@@ -413,8 +441,12 @@ int main(int argc, char** argv) {
   printf("== section 6: an op the TABLE does not know is refused, not handed over ==\n");
   {
     // zhao_field_ops_pkg is the single answer to "does this op leave the pipe".
-    // SPLINE (0x1B) is not in it today, so the executor must NOT offer it: the
-    // ALU reports it through unsupported_o and the context RETIRES.
+    //
+    // SPLINE HELD THIS ROLE UNTIL 2026-08-29 and no longer can: it is in the
+    // table now, it is served by the curve service, and section 6b checks that
+    // it is. OP_RING (0x21) takes over, and it is not a stand-in picked for
+    // convenience -- the brief leaves the varying-radius ring on the COLD
+    // lane, so it is genuinely an op this table does not know.
     //
     // If the executor ever regains a private opinion and offers an op the
     // dispatcher will not take, that context parks forever -- which is exactly
@@ -422,18 +454,68 @@ int main(int argc, char** argv) {
     // matters is not the flag, it is that THE PROGRAM FINISHES AT ALL.
     //
     // Mutant X49 is that defect, and it survived until this section existed:
-    // no test program contained a SPLINE, so nothing could reach it. Same shape
+    // no test program contained a refused op, so nothing could reach it. Same shape
     // as X46 before the barrel was full -- a mutant stating a real fragility
     // that the traffic could not exercise.
     int32_t xs[1] = {3 << 16}, ys[1] = {5 << 16}, got[1][2];
     int clocks = 0;
-    (void)run_long(top, zfield::OP_SPLINE, 1, xs, ys, 0u, 1, false, got, &clocks);
-    check(clocks < 20000, "a SPLINE program finishes rather than parking forever", 1,
+    (void)run_long(top, zfield::OP_RING, 1, xs, ys, 0u, 1, false, got, &clocks);
+    check(clocks < 20000, "a RING program finishes rather than parking forever", 1,
           clocks < 20000 ? 1 : 0);
     check(top.unsupported_o == 1, "and the ALU reports it as unsupported", 1,
           (uint32_t)top.unsupported_o);
-    printf("   MEASURED: SPLINE retired in %d clocks, unsupported_o = %u\n", clocks,
+    printf("   MEASURED: RING retired in %d clocks, unsupported_o = %u\n", clocks,
            (unsigned)top.unsupported_o);
+  }
+
+  printf("== section 6b: SPLINE is SERVED, and its answer reaches the register ==\n");
+  {
+    // THE SEAM, NOT THE ARITHMETIC. The cubic is closed at 21/21 in the spline
+    // unit's own sweep and the lookup at 6930 checks in the curve service's,
+    // so what is unproven HERE is the path: the executor offering 0x1B, the
+    // dispatcher accepting it, the service path routing it to the curve
+    // service rather than the noise unit, and the answer arriving in the right
+    // register of the right context under the right tag.
+    //
+    // A VALUE CHECK IS WHAT PROVES THAT PATH. "It finished and no flag fired"
+    // would pass just as happily if the answer were somebody else's.
+    zfield::Table tb;
+    // SET, NOT DEFAULTED. `kind` is read only by the DECODER, which validates
+    // a serialised table; exec_op never looks at it, so it cannot move the
+    // answer. It is initialised anyway because reading an uninitialised member
+    // is a defect whether or not this particular reader happens to skip it --
+    // and 0 is what the curve service's own bench uses for its SPLINE probes,
+    // so the two differentials agree about the table they describe.
+    tb.kind = 0;
+    tb.x = {-(1 << 20), 0, 1 << 20, 3 << 20};
+    tb.y = {7 << 16, 11 << 16, -(5 << 16), 2 << 16};
+    tb.dy = {1 << 12, 1 << 12, 1 << 12, 1 << 12};
+    std::vector<zfield::Table> tabs{tb};
+
+    // Deliberately spread: below the first knot, exactly on a knot, between
+    // two, and past the last -- so the end replication is exercised through
+    // the whole machine and not only in the service's own bench.
+    const int32_t probes[4] = {-(3 << 20), 0, (1 << 19), (9 << 20)};
+    for (int p = 0; p < 4; ++p) {
+      int32_t xs[1] = {probes[p]}, ys[1] = {0}, got[1][2] = {};
+      int clocks = 0;
+      const int al =
+          run_long(top, zfield::OP_SPLINE, 1, xs, ys, 0u, 1, false, got, &clocks, false, &tb);
+
+      zref::SatLedger L{};
+      int32_t src = probes[p], dst = 0;
+      zfield::steps::exec_op(zfield::OP_SPLINE, 0u, tabs, &src, &dst, &L);
+
+      char what[96];
+      snprintf(what, sizeof what, "SPLINE probe %d lands the oracle's value", p);
+      check(al == 0, "a served SPLINE raises no alarm", 0, al);
+      check(got[0][0] == dst, what, (uint32_t)dst, (uint32_t)got[0][0]);
+      check(top.unsupported_o == 0, "and it is NOT reported unsupported", 0,
+            (uint32_t)top.unsupported_o);
+      check(top.wrong_op_o == 0, "and no service was asked for an op it lacks", 0,
+            (uint32_t)top.wrong_op_o);
+      printf("   MEASURED: probe %d -> %d in %d clocks\n", p, got[0][0], clocks);
+    }
   }
 
   return zhao::report_and_exit("field_v3_full_directed");

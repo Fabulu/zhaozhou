@@ -163,6 +163,21 @@ module zhao_probe_v3_full #(
     output var logic                    svc_bank_desync_o,
     output var logic                    tag_mismatch_o,
     output var logic                    wrong_op_o,
+
+    // ---- the curve service's table cache, straight through -----------------
+    // The knot tables belong to the PROGRAM, not to the silicon. In the
+    // finished machine the command stream fills this; here the differential
+    // does. Passing it through rather than parking a table inside the service
+    // is the difference between a block that is wired and one that only looks
+    // self-contained.
+    input  var logic                    tl_we_i,
+    input  var logic [1:0]              tl_tbl_i,
+    input  var logic [5:0]              tl_idx_i,
+    input  var logic signed [31:0]      tl_x_i,
+    input  var logic signed [31:0]      tl_y_i,
+    input  var logic signed [31:0]      tl_dy_i,
+    input  var logic                    tl_commit_i,
+    input  var logic [6:0]              tl_n_i,
     output var logic                    sk_overflow_o
 );
 
@@ -260,7 +275,10 @@ module zhao_probe_v3_full #(
       .bank_grants_o(svc_bank_grants), .bank_stall_lanes_o(svc_bank_stalls),
       .wb_served_o(wb_served_o), .wb_stalled_o(wb_stalled_o),
       .bank_desync_o(svc_bank_desync_o), .tag_mismatch_o(tag_mismatch_o),
-      .wrong_op_o(wrong_op_o)
+      .wrong_op_o(wrong_op_o),
+      .tl_we_i(tl_we_i), .tl_tbl_i(tl_tbl_i), .tl_idx_i(tl_idx_i),
+      .tl_x_i(tl_x_i), .tl_y_i(tl_y_i), .tl_dy_i(tl_dy_i),
+      .tl_commit_i(tl_commit_i), .tl_n_i(tl_n_i)
   );
 
 endmodule : zhao_probe_v3_full

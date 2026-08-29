@@ -231,3 +231,76 @@ is the same failure the stale anchors were.
 **Second run: SWEEP OK. 29 attempted, 27 caught, 2 proven equivalent, 0
 survived, 0 discarded.** S11 is caught, so the claim inside S06's proof is
 measured rather than asserted. CURVE.SVC is closed at 29 against the new shape.
+
+## 2026-08-29 — the second service is on the path
+
+The service path had exactly one service since it was built. It now has two:
+the noise unit (NOISE2, RIDGE) and the curve service (CURVE, DCURVE, SPLINE).
+
+### The order this had to be done in, and why it is not arbitrary
+
+`zhao_field_ops_pkg::field_long_width` is what makes the executor OFFER an op.
+Adding SPLINE to it is one line, and it was tempting to do first because it is
+the smallest change on the list.
+
+It would have rebuilt the exact deadlock that file exists to prevent: an op
+offered by the executor, accepted by the dispatcher, and answerable by nobody
+— a context parked forever with nothing timing out. **The service goes on the
+path first; the table entry is the LAST step.**
+
+The width itself was read from the oracle rather than reasoned about:
+`zfield_decode.cpp` gives `OP_SPLINE` the same shape as CURVE and DCURVE,
+`m = {1, {1,0,0}, 1, 3}`, whose leading field is the destination width.
+
+### What the wiring actually decides
+
+* **Tables come from outside.** CURVE/DCURVE/SPLINE read a knot table the
+  PROGRAM supplies. The path now carries a `tl_*` load port straight through
+  from the probe top, driven by the differential here and by the command
+  stream in the finished machine. Inventing a table inside the service would
+  have made the block look self-contained and been a lie.
+* **Two services, one response port.** Both can hold an answer at once and the
+  dispatcher takes one per cycle, so this is an arbitration and not a mux. The
+  curve service wins: its answer sits in the finish registers of a pipelined
+  barrel, so making it wait stalls a group behind it, whereas the noise unit's
+  answer is its own last stage. The loser holds — a dropped response is a
+  wrong VALUE reaching a register, not merely a slower machine.
+* **Three bank claimants**: 0 rival/ALU, 1 noise, 2 curve. Under
+  `PRIO_SERVICES_FIRST` the highest wins, so the curve service outranks the
+  noise unit. **That ordering is a choice, not a consequence of being added
+  last**, and it is the arrangement the starvation question is about. The
+  number is NOT predicted here — the measurement is its own step.
+
+### The test that had to change, and the one that had to be added
+
+Section 6 asserted SPLINE is refused as unsupported. That was true and is now
+false by design, so the expectation moved rather than being deleted: `OP_RING`
+(0x21) takes the role, and it is not a convenient stand-in — the brief leaves
+the varying-radius ring on the cold lane, so it is genuinely an op the table
+does not know.
+
+Section 6b is new and is the one that matters. The cubic is closed at 21/21 and
+the lookup at 6930 checks, so what was unproven here is the PATH: 0x1B offered,
+accepted, routed to the curve service rather than the noise unit, and the
+answer landing in the right register. **That needs a value check** — "it
+finished and no flag fired" would pass just as happily if the answer belonged
+to somebody else. Four probes, spread below the table, on a knot, between two
+knots and past the end, each compared against `exec_op`:
+
+    probe 0  -> 458752  (7<<16, replicated below the first knot)
+    probe 1  -> 720896  (11<<16, exactly on a knot)
+    probe 2  -> 184320  (between two knots, the cubic actually running)
+    probe 3  -> 131072  (2<<16, replicated past the last)
+
+**102 checks pass**, up from 86.
+
+### Two traps hit on the way
+
+* The composed build FAILED and the shell then ran the stale exe, which
+  reported 86 green including "SPLINE unsupported = 1" — the old answer, from
+  the old binary, for a machine that no longer existed. This is the documented
+  cmake/Verilator regeneration race. An explicit `cmake -S . -B` fixed it. The
+  tell was that the number did not move after a change that must have moved it.
+* Both consumers of the service path needed the new sources, not just the one
+  I was building. `sweep_consumers.py` answers that question directly instead
+  of guessing.
