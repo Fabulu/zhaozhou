@@ -534,3 +534,25 @@ work happens. Two independent results are two commits.
 The cost is not hypothetical — a green sweep sitting uncommitted for 45 minutes
 is 45 minutes in which a crash loses it and nobody outside this session can see
 that the dispatcher is closed.
+
+## 2026-08-29 08:2x — SVCPATH closes at 37/37
+
+**SWEEP OK. 37 attempted, 30 caught, 7 proven equivalent, 0 survived, 0
+discarded.**
+
+W07 and W09 are caught by section 7's mixed traffic; W02, W04 and W06 are the
+new equivalents, each with its proof and its re-score trigger. Both sweeps ran
+in their own build trees, so neither could collide with the other or with an
+interactive ctest.
+
+### The run's blocks, as they stand
+
+    curve service (CURVE.SVC)   29/29   27 caught + 2 equivalent   CLOSED
+    service path (SVCPATH)      37/37   30 caught + 7 equivalent   CLOSED
+    dispatcher (DISPATCH)       30/30   30 caught, no equivalents  CLOSED
+    composed machine                    117 checks
+    dispatcher's own bench              341 checks
+    curve service's own bench          6930 checks
+
+Every equivalence was declared AFTER a run that showed the mutant surviving,
+never before one, and every one carries the condition that ends it.
