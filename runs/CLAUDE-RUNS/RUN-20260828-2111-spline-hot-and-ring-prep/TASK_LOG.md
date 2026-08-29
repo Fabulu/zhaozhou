@@ -399,3 +399,54 @@ The svcpath sweep must be re-run to confirm W02/W04/W07/W09 are now caught, and
 the DISPATCH sweep's 28 mutants must be re-scored against the changed issue
 condition with a new mutant for the third term. Neither is done yet and neither
 is assumed.
+
+## 2026-08-29 — the starvation question has an answer, and it is "it cannot happen yet"
+
+The svcpath re-sweep: **30 caught, 5 equivalent, 2 survived.** W07 and W09 are
+now caught, so section 7 did what it was written to do. W02 and W04 survived it
+too — and chasing that produced the finding of the day after the deadlock.
+
+### The two survivors are equivalent for one reason, not two
+
+`zhao_field_v3_dispatch` runs `D_GATHER -> D_ISSUE -> D_WAIT -> D_DRAIN` and
+back, with `svc_valid_o` asserted ONLY in D_ISSUE and `rsp_ready_o` ONLY in
+D_WAIT. **Exactly one group is in flight at any time.**
+
+So at every offer, the previous group has already responded and drained. Both
+services are idle. Both assert ready. W02 swaps which one's ready is read and
+picks between two signals that are both 1. W04 protects a loser that cannot
+exist, because only one service can ever be holding a response.
+
+I did not reach that by writing a third test. Section 7 already runs mixed
+traffic across both services and they still survived it — the traffic was never
+the problem, the assumption was.
+
+### What this means for the question the owner actually asked
+
+Fabian paid for the hot path partly to make the starvation question measurable:
+"one service cannot starve anybody." Two services now exist — **and they still
+cannot starve each other**, because the dispatcher never lets both work at
+once. The bank's priority ordering I chose (curve above noise) is real silicon
+and currently unobservable.
+
+**So the honest answer is not a number.** The measurement as scoped would
+report zero starvation and that would be true and useless — it would be
+measuring the dispatcher's serialisation, not the bank's priority. Reporting
+"no starvation observed" without saying why would be one of the most flattering
+possible ways to be wrong.
+
+The contention that DOES exist today is rival/ALU against whichever single
+service is live, and that is already measured — the curve service's own bench
+section 7 reports 24 groups under refusal with 11 refusals issued, answers
+unchanged.
+
+### What would make it a real question
+
+A dispatcher that keeps more than one group outstanding — which is also the
+change that would make W02 and W04 load-bearing, and is why both guards stay in
+the RTL rather than being deleted as dead logic. Both equivalences carry the
+same re-score trigger, in those words.
+
+That is a genuine piece of engine work with its own consequences (tags, the
+drain, response ordering) and it is NOT in this run's scope. It is the next
+thing worth doing if the owner wants the starvation number to mean anything.

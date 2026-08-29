@@ -339,6 +339,32 @@ def mutate(gold, old, new):
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails the
 # sweep. NOTHING IS DECLARED PREDICTIVELY.
 EQUIVALENT = {
+    # ---- W02 and W04: THE DISPATCHER SERIALISES, SO THE SECOND SERVICE ADDS
+    # ---- NO REQUEST-LEVEL CONCURRENCY -------------------------------------
+    #
+    # Both survived a run that DOES put mixed traffic across both services
+    # (section 7 of field_v3_full_directed), which is what made me look at the
+    # dispatcher instead of writing a third test. The traffic was not the
+    # problem; the assumption was.
+    "W02": (
+        "EQUIVALENT, AND THE REASON MATTERS MORE THAN THE MUTANT. "
+        "zhao_field_v3_dispatch runs D_GATHER -> D_ISSUE -> D_WAIT -> D_DRAIN "
+        "and back, with svc_valid_o asserted ONLY in D_ISSUE and rsp_ready_o "
+        "ONLY in D_WAIT. Exactly one group is in flight at any time. So at "
+        "every offer the previous group has already responded and drained, "
+        "BOTH services are idle, and both assert ready -- swapping which "
+        "one's ready is read selects between two signals that are both 1. "
+        "The mux is DEFENSIVE and correct to keep: it makes this block right "
+        "the day the dispatcher gains a second outstanding group. "
+        "RE-SCORE THE MOMENT THE DISPATCHER CAN HAVE TWO GROUPS OUTSTANDING."),
+    "W04": (
+        "EQUIVALENT, same root cause as W02 and not a second coincidence. "
+        "One group in flight means at most one service can be holding a "
+        "response, so the loser-holds guard never has a loser to protect. "
+        "It stays because a dropped response is a wrong VALUE reaching a "
+        "register rather than a slower machine, and that is exactly the "
+        "failure this would become under a pipelined dispatcher. "
+        "RE-SCORE THE MOMENT THE DISPATCHER CAN HAVE TWO GROUPS OUTSTANDING."),
     # DECLARED 2026-08-29, after the run that showed it surviving.
     "W06": (
         "EQUIVALENT, AND CHECKED IN THE DISPATCHER RATHER THAN ARGUED. An "
