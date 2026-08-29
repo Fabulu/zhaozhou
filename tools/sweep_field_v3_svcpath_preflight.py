@@ -59,6 +59,7 @@ CONE = [
     "fpga/rtl/field/zhao_field_v3_ring_svc.sv",
     "fpga/rtl/field/zhao_field_v3_ring.sv",
     "fpga/rtl/field/zhao_field_v3_trig.sv",
+    "fpga/rtl/field/zhao_field_v3_len.sv",
     "fpga/rtl/field/zhao_field_v3_mulbank.sv",
     "fpga/rtl/field/zhao_field_v3_wbarb.sv",
     "fpga/rtl/field/zhao_field_mul.sv",

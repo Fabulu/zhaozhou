@@ -286,7 +286,7 @@ int run_mixed(Vzhao_probe_v3_full& top, const uint8_t* ops, const uint32_t* imms
 // operand -- so NORMALIZE3 and ROT3 cannot be expressed in them at all. That
 // is not a small gap: it is why nothing in this file had ever run the two
 // widest ops through the whole machine.
-int run_one(Vzhao_probe_v3_full& top, uint8_t op, uint32_t imm, const int32_t src[4],
+int run_one(Vzhao_probe_v3_full& top, uint8_t op, uint32_t imm, const int32_t src[5],
             int32_t out[3], int* clocks, const zfield::Table* tab, const int32_t* uni = nullptr,
             const int* uni_slots = nullptr) {
   Dut d(top);
@@ -294,9 +294,9 @@ int run_one(Vzhao_probe_v3_full& top, uint8_t op, uint32_t imm, const int32_t sr
   if (tab) d.load_table(0, *tab);
   if (uni && uni_slots)
     for (int i = 0; i < 4; ++i) d.load_scalar(uni_slots[i], uni[i]);
-  for (int r = 0; r < 4; ++r) d.preload(0, r, src[r]);
-  // a = reg0 (the group start, 1..3 members) and b = reg3 (the single-member
-  // operand: ROT's angle). The destination is well clear of both.
+  for (int r = 0; r < 5; ++r) d.preload(0, r, src[r]);
+  // a = reg0 (the group start, 1..3 members) and b = reg3 (1 or 2 members:
+  // ROT's angle, or DIST2's second point). The destination clears both.
   d.load_uop(0, 0, op, 8, 0, 3, 0, imm);
   d.load_uop(0, 1, zfield::OP_END, 0, 0, 0, 0, 0);
   d.start(0);
@@ -534,7 +534,7 @@ int main(int argc, char** argv) {
       uint8_t op;
       const char* name;
       int a_members;  // members of operand a, from zfield_decode's shape
-      bool has_b;     // ROT's single-member angle operand
+      int b_members;  // 0, 1 (ROT's angle) or 2 (DIST2's second point)
       int width;      // destination registers, from field_long_width
       uint32_t imm;
       bool is_ring;  // UOP_RING_PREP: a synthetic uop with its own oracle
@@ -555,21 +555,28 @@ int main(int argc, char** argv) {
                                          ((uni_slots[2] & 63) << 12) | ((uni_slots[3] & 63) << 18));
 
     const OpCase cases[] = {
-        {zfield::OP_CURVE, "CURVE", 1, false, 1, 0u, false},
-        {zfield::OP_DCURVE, "DCURVE", 1, false, 1, 0u, false},
-        {zfield::OP_SPLINE, "SPLINE", 1, false, 1, 0u, false},
-        {zfield::OP_RIDGE, "RIDGE", 2, false, 1, 0x31u, false},
-        {zfield::OP_NOISE2, "NOISE2", 2, false, 2, 0x5Bu, false},
-        {zfield::OP_NORMALIZE2, "NORMALIZE2", 2, false, 2, 0u, false},
-        {zfield::OP_ROT2, "ROT2", 2, true, 2, 0u, false},
-        {zfield::OP_NORMALIZE3, "NORMALIZE3", 3, false, 3, 0u, false},
-        {zfield::OP_ROT3, "ROT3", 3, true, 3, 1u, false},
+        {zfield::OP_CURVE, "CURVE", 1, 0, 1, 0u, false},
+        {zfield::OP_DCURVE, "DCURVE", 1, 0, 1, 0u, false},
+        {zfield::OP_SPLINE, "SPLINE", 1, 0, 1, 0u, false},
+        {zfield::OP_RIDGE, "RIDGE", 2, 0, 1, 0x31u, false},
+        {zfield::OP_NOISE2, "NOISE2", 2, 0, 2, 0x5Bu, false},
+        {zfield::OP_NORMALIZE2, "NORMALIZE2", 2, 0, 2, 0u, false},
+        {zfield::OP_ROT2, "ROT2", 2, 1, 2, 0u, false},
+        {zfield::OP_NORMALIZE3, "NORMALIZE3", 3, 0, 3, 0u, false},
+        {zfield::OP_ROT3, "ROT3", 3, 1, 3, 1u, false},
         // THE TENTH. A synthetic uop the executor runs and no .zprog contains.
-        {zfield::UOP_RING_PREP, "RING_PREP", 1, false, 1, 0u, true},
+        {zfield::UOP_RING_PREP, "RING_PREP", 1, 0, 1, 0u, true},
         // ELEVEN AND TWELVE. Two of the three opcodes the Earth programs need
         // and this machine did not serve until today.
-        {zfield::OP_SIN, "SIN", 1, false, 1, 0u, false},
-        {zfield::OP_COS, "COS", 1, false, 1, 0u, false},
+        {zfield::OP_SIN, "SIN", 1, 0, 1, 0u, false},
+        {zfield::OP_COS, "COS", 1, 0, 1, 0u, false},
+        // THIRTEEN TO FIFTEEN. The distance family, and DIST2 is the last
+        // opcode the Earth programs need. It is also the only case here with a
+        // TWO-member operand b, which is why the executor grew a fifth source
+        // port for it.
+        {zfield::OP_LEN2, "LEN2", 2, 0, 1, 0u, false},
+        {zfield::OP_LEN3, "LEN3", 3, 0, 1, 0u, false},
+        {zfield::OP_DIST2, "DIST2", 2, 2, 1, 0u, false},
     };
 
     zfield::Table tb;
@@ -582,8 +589,8 @@ int main(int argc, char** argv) {
     // reg3 is ROT's angle, so it is a real one rather than zero -- an angle of
     // zero makes cos 1 and sin 0, and a rotation that does nothing would pass
     // with the sine term wired to anything at all.
-    const int32_t src[4] = {(3 << 16) + 1234, -(2 << 16) + 77, (1 << 16) - 991,
-                            (int32_t)0x00003A2Bu};
+    const int32_t src[5] = {(3 << 16) + 1234, -(2 << 16) + 77, (1 << 16) - 991,
+                            (int32_t)0x00003A2Bu, -(5 << 16) + 313};
 
     for (const OpCase& c : cases) {
       int32_t out[3] = {};
@@ -595,10 +602,10 @@ int main(int argc, char** argv) {
       // The oracle's src[] is the FLATTENED operand list: a's members first,
       // then b's. That is why ROT2 finds its angle at src[2] and ROT3 at
       // src[3] -- the same register, a different index.
-      int32_t osrc[4] = {};
+      int32_t osrc[5] = {};
       int n = 0;
       for (int m = 0; m < c.a_members; ++m) osrc[n++] = src[m];
-      if (c.has_b) osrc[n++] = src[3];
+      for (int m = 0; m < c.b_members; ++m) osrc[n++] = src[3 + m];
 
       zref::SatLedger L{};
       int32_t odst[3] = {};
