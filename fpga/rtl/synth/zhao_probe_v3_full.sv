@@ -187,10 +187,35 @@ module zhao_probe_v3_full #(
     input  var logic signed [31:0]      sb_wdata_i,
     output var logic                    sb_bad_o,
     output var logic                    imm_bad_o,
-    output var logic                    sk_overflow_o
+    output var logic                    sk_overflow_o,
+
+    // ---- DEBUG: the long-op handover, exactly as the dispatcher sees it ----
+    //
+    // Not decoration. The composed gate found a CURVE returning the curve of
+    // ZERO for a point whose operand was plainly not zero, and no block-level
+    // test can see that: the service is handed a number and answers it
+    // faithfully. The only way to tell a bad ANSWER from a bad QUESTION is to
+    // watch the question being asked.
+    output var logic                    dbg_long_valid_o,
+    output var logic                    dbg_long_ready_o,
+    output var logic [$clog2(CTX)-1:0]  dbg_long_ctx_o,
+    output var logic [7:0]              dbg_long_op_o,
+    output var logic signed [31:0]      dbg_long_s0_o,
+    output var logic                    pre_ready_o,
+    output var logic                    dbg_s2_v_o,
+    output var logic [$clog2(CTX)-1:0]  dbg_s2_ctx_o,
+    output var logic [7:0]              dbg_s2_op_o,
+    output var logic signed [31:0]      dbg_use_a0_o,
+    output var logic signed [31:0]      dbg_rf_a0_o
 );
 
   // ---- engine -> service path --------------------------------------------
+  assign dbg_long_valid_o = long_valid;
+  assign dbg_long_ready_o = long_ready;
+  assign dbg_long_ctx_o   = long_ctx;
+  assign dbg_long_op_o    = long_op;
+  assign dbg_long_s0_o    = long_s0;
+
   logic                    long_valid, long_ready;
   logic [$clog2(CTX)-1:0]  long_ctx;
   logic [7:0]              long_op;
@@ -228,6 +253,9 @@ module zhao_probe_v3_full #(
       .pre_data_i(pre_data_i),
       .start_i(start_i), .start_ctx_i(start_ctx_i),
       .rival_req_i(rival_req_i),
+      .pre_ready_o(pre_ready_o),
+      .dbg_s2_v_o(dbg_s2_v_o), .dbg_s2_ctx_o(dbg_s2_ctx_o), .dbg_s2_op_o(dbg_s2_op_o),
+      .dbg_use_a0_o(dbg_use_a0_o), .dbg_rf_a0_o(dbg_rf_a0_o),
 
       // SEAM 2: the ALU asks the arbiter, and takes back whatever it grants.
       .wb_valid_o(alu_wb_valid), .wb_ready_i(alu_wb_ready),

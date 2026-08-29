@@ -179,6 +179,14 @@ module zhao_probe_v3_exec #(
     input  var logic                      long_ready_i,
     output var logic [CW-1:0]             long_ctx_o,
     output var logic [7:0]                long_op_o,
+    // DEBUG: the operand as it is CAPTURED, with the instruction it belongs to.
+    // The preload landed this clock. A host that ignores it loses writes.
+    output var logic                      pre_ready_o,
+    output var logic                      dbg_s2_v_o,
+    output var logic [$clog2(CTX)-1:0]    dbg_s2_ctx_o,
+    output var logic [7:0]                dbg_s2_op_o,
+    output var logic signed [31:0]        dbg_use_a0_o,
+    output var logic signed [31:0]        dbg_rf_a0_o,
     output var logic [RW-1:0]             long_dst_o,
     output var logic signed [31:0]        long_s0_o,
     output var logic signed [31:0]        long_s1_o,
@@ -465,6 +473,12 @@ module zhao_probe_v3_exec #(
   assign long_at_s4_c = s4_v_r && is_long(s4_op_r);
   assign long_hold_c  = long_at_s4_c && !(long_valid_o && long_ready_i);
 
+  assign dbg_s2_v_o   = s2_v_r;
+  assign dbg_s2_ctx_o = s2_ctx_r;
+  assign dbg_s2_op_o  = s2_op_r;
+  assign dbg_use_a0_o = use_a0_c;
+  assign dbg_rf_a0_o  = rf_a0;
+
   assign long_valid_o = long_at_s4_c;
   assign long_ctx_o   = s4_ctx_r;
   assign long_op_o    = s4_op_r;
@@ -732,10 +746,34 @@ module zhao_probe_v3_exec #(
   assign sk_busy_c = sk_ne_c || sk_push_c;
 
   // ---- writeback ----------------------------------------------------------
-  // The host preload wins the port when it is asserted; the machine is not
-  // running during preload, so there is no contention to arbitrate.
+  // THE MACHINE'S WRITE WINS. THE PRELOAD RETRIES.
+  //
+  // This block used to give the host preload absolute priority, on the stated
+  // ground that "the machine is not running during preload, so there is no
+  // contention to arbitrate". That premise is false the moment points are fed
+  // to a retired context while other contexts are still executing -- which is
+  // how an association actually streams -- and the consequence was that every
+  // preload clock SILENTLY DISCARDED whatever write the arbiter had just
+  // granted. The result was already on the shared write port, so it looked
+  // delivered from outside; it simply never reached the file.
+  //
+  // The composed Earth gate found it as a CURVE service returning the curve of
+  // ZERO for a point whose operand was plainly not zero: the producing SUB's
+  // write had been granted three clocks earlier and dropped, so the consumer
+  // read a register that had never been updated.
+  //
+  // The asymmetry decides the priority. A granted write cannot be retried --
+  // the ALU result and the service's answer are both gone by the next clock --
+  // while a preload is host-side and can simply be offered again. So the
+  // machine wins and `pre_ready_o` tells the host when its write landed.
+  //
+  // A DROPPED WRITE MUST NEVER BE SILENT. That is the whole lesson: the old
+  // behaviour was not merely the wrong priority, it was the wrong priority
+  // with nothing to say so.
+  assign pre_ready_o = !wr_en_i;
+
   always_comb begin
-    if (pre_we_i) begin
+    if (pre_we_i && !wr_en_i) begin
       rf_we_c    = 1'b1;
       rf_wctx_c  = pre_ctx_i;
       rf_wreg_c  = pre_reg_i;

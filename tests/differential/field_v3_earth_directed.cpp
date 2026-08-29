@@ -89,6 +89,7 @@ int failures = 0;      // gates the exit status
 int diag_failures = 0; // real, recorded, and NOT yet gating -- see the report
 bool gating = true;
 int printed = 0;
+int wb_policy_probe = 1;  // experiment knob: 1 = drain-first, 0 = ALU-first
 
 void fail(const char* what, const char* detail) {
   if (printed++ < 6) printf("  %s %s: %s\n", gating ? "FAIL" : "DEFECT", what, detail);
@@ -280,6 +281,16 @@ struct Dut {
   // the register file as it stood when that MUL executed.
   std::vector<std::pair<int, int32_t>> wtrace[kCtx];
 
+  // Every long-op QUESTION this context asked: opcode and first operand, at
+  // the clock the dispatcher took it.
+  std::vector<std::pair<int, int32_t>> asked[kCtx];
+  // Clock stamps, so ORDER can be shown rather than argued about.
+  std::vector<long> wclk[kCtx], aclk[kCtx];
+  // Every clock this context had an instruction at S2: what operand a was
+  // about to be captured, and what the file was actually presenting.
+  struct Cap { long clk; int op; int32_t use_a0; int32_t rf_a0; };
+  std::vector<Cap> caps[kCtx];
+
   explicit Dut(Vzhao_probe_v3_full& top) : t(top) {}
 
   void reset() {
@@ -293,7 +304,7 @@ struct Dut {
     t.sb_we_i = 0;
     // Drain-first. The measurement is already in: ALU-first STARVES the drain
     // outright, drain-first costs the ALU eight clocks per four-point group.
-    t.wb_policy_i = 1;
+    t.wb_policy_i = (uint8_t)wb_policy_probe;
     t.eval();
     for (int i = 0; i < 4; ++i) zhao::tick(t);
     t.rst_n = 1;
@@ -325,6 +336,14 @@ struct Dut {
     const bool w = t.wr_en_o != 0;
     const int wc = (int)t.wr_ctx_o, wr = (int)t.wr_reg_o;
     const int32_t wd = (int32_t)t.wr_data_o;
+    const bool took_long = (t.dbg_long_valid_o != 0) && (t.dbg_long_ready_o != 0);
+    const int lc = (int)t.dbg_long_ctx_o;
+    const int lop = (int)t.dbg_long_op_o;
+    const int32_t ls0 = (int32_t)t.dbg_long_s0_o;
+    if (t.dbg_s2_v_o && (int)t.dbg_s2_ctx_o < kCtx) {
+      const Cap cp{clocks, (int)t.dbg_s2_op_o, (int32_t)t.dbg_use_a0_o, (int32_t)t.dbg_rf_a0_o};
+      caps[(int)t.dbg_s2_ctx_o].push_back(cp);
+    }
     saw_done = t.done_valid_o != 0;
     if (saw_done) last_done = (int)t.done_ctx_o;
     zhao::tick(t);
@@ -333,11 +352,16 @@ struct Dut {
       shadow[wc][wr] = wd;
       ++writes_since_start[wc];
       wtrace[wc].push_back(std::make_pair(wr, wd));
+      wclk[wc].push_back(clocks);
       // A write for a context that has already said it was finished.
       if (done_at[wc] >= 0) {
         ++late_writes[wc];
         late_reg[wc] = wr;
       }
+    }
+    if (took_long && lc < kCtx) {
+      asked[lc].push_back(std::make_pair(lop, ls0));
+      aclk[lc].push_back(clocks);
     }
     if (saw_done && last_done < kCtx && running[last_done]) {
       done_at[last_done] = clocks;
@@ -346,6 +370,22 @@ struct Dut {
   }
 
   void preload(int ctx, int reg, int32_t v) {
+    // THE PRELOAD PORT STEALS THE REGISTER FILE.
+    //
+    // `zhao_probe_v3_exec` gives the host preload absolute priority over the
+    // machine's own write, on the stated ground that "the machine is not
+    // running during preload". Under staggered drive that premise is false:
+    // this harness reloads a retired context while seven others are still
+    // executing, and every preload clock silently discards whatever write the
+    // arbiter had just granted.
+    //
+    // The machine now wins the port and `pre_ready_o` says when the preload
+    // landed. A host that ignores it loses its own write instead.
+    t.eval();
+    while (t.pre_ready_o == 0) {
+      advance();
+      t.eval();
+    }
     t.pre_we_i = 1;
     t.pre_ctx_i = (uint8_t)ctx;
     t.pre_reg_i = (uint8_t)reg;
@@ -369,6 +409,10 @@ struct Dut {
     start_clk[ctx] = clocks;
     writes_since_start[ctx] = 0;
     wtrace[ctx].clear();
+    asked[ctx].clear();
+    wclk[ctx].clear();
+    aclk[ctx].clear();
+    caps[ctx].clear();
   }
 
   // ---- setup, before the clock counter matters -----------------------------
@@ -484,6 +528,36 @@ void expected_regs(const zfield::Fplan& fp, const zfield::Decoded& prog,
   }
 }
 
+/** The oracle's value for one uop's member, for a given point. Used to ask
+ *  whether a wrong answer is actually ANOTHER point's correct answer -- the
+ *  difference between a duplicated response and corrupted arithmetic. */
+int32_t oracle_uop_value(const zfield::Fplan& fp, const zfield::Decoded& prog,
+                         const zfield::Prepared& prep, const int32_t* in, size_t n_in,
+                         int scalar_base, int n_rf, int target_u, int target_m) {
+  std::vector<int32_t> rf((size_t)n_rf, 0);
+  for (int s = 0; s < (int)fp.n_scalar && scalar_base + s < n_rf; ++s)
+    rf[(size_t)(scalar_base + s)] = prep.scalar[(size_t)s];
+  for (size_t i = 0; i < n_in && i < fp.in_vreg.size(); ++i)
+    if (fp.in_vreg[i] != 0xFF && (int)fp.in_vreg[i] < n_rf) rf[fp.in_vreg[i]] = in[i];
+  zref::SatLedger L;
+  for (int u = 0; u < (int)fp.uops.size(); ++u) {
+    const zfield::VecUop& v = fp.uops[(size_t)u];
+    int32_t src[9] = {};
+    for (int k = 0; k < (int)v.n_src && k < 9; ++k) {
+      const int r = v.src[k].kind == zfield::SrcKind::kVec ? (int)v.src[k].idx
+                                                          : scalar_base + (int)v.src[k].idx;
+      src[k] = (r < n_rf) ? rf[(size_t)r] : 0;
+    }
+    int32_t dst[3] = {};
+    zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    if (u == target_u) return dst[target_m < 3 ? target_m : 0];
+    const auto* sh = zfield::optable::shape_of(v.op);
+    const int w = (v.op == zfield::UOP_RING_PREP) ? 1 : (sh ? (int)sh->dst_width : 1);
+    for (int m = 0; m < w && (int)v.dst + m < n_rf; ++m) rf[(size_t)((int)v.dst + m)] = dst[m];
+  }
+  return 0;
+}
+
 /** Replay one context's writes in PROGRAM order and say what a given uop read.
  *
  *  The trace cannot be walked positionally: long-op results drain back
@@ -497,7 +571,9 @@ void expected_regs(const zfield::Fplan& fp, const zfield::Decoded& prog,
 void explain_uop(const zfield::Fplan& fp, const zfield::Decoded& prog, const zfield::Prepared& prep,
                  const int32_t* in, size_t n_in, int scalar_base, int n_rf,
                  const std::vector<std::pair<int, int32_t>>& trace, int target_uop, char* out,
-                 size_t outsz) {
+                 size_t outsz, int* bad_u = nullptr, int* bad_m = nullptr,
+                 int32_t* bad_val = nullptr) {
+  if (bad_u) *bad_u = -1;
   std::vector<std::vector<int32_t>> q((size_t)n_rf);
   for (const auto& w : trace)
     if (w.first >= 0 && w.first < n_rf) q[(size_t)w.first].push_back(w.second);
@@ -514,41 +590,62 @@ void explain_uop(const zfield::Fplan& fp, const zfield::Decoded& prog, const zfi
       orc[fp.in_vreg[i]] = in[i];
     }
 
+  // THE FIRST UOP WHOSE WRITE DISAGREED, which the final register file cannot
+  // tell you: a register written wrongly early is usually overwritten by a
+  // later uop with a correct value, so the end state is clean and the fault is
+  // invisible. Only the write TRACE has it.
   zref::SatLedger L;
-  for (int u = 0; u <= target_uop && u < (int)fp.uops.size(); ++u) {
+  for (int u = 0; u < (int)fp.uops.size(); ++u) {
     const zfield::VecUop& v = fp.uops[(size_t)u];
-    if (u == target_uop) {
-      int off = snprintf(out, outsz, "      uop %d read", u);
-      for (int k = 0; k < (int)v.n_src && k < 9 && off < (int)outsz - 70; ++k) {
-        const int r = v.src[k].kind == zfield::SrcKind::kVec ? (int)v.src[k].idx
-                                                            : scalar_base + (int)v.src[k].idx;
-        const int32_t a = (r < n_rf) ? hw[(size_t)r] : 0;
-        const int32_t b = (r < n_rf) ? orc[(size_t)r] : 0;
-        off += snprintf(out + off, outsz - (size_t)off, "  r%d=%d%s", r, a,
-                        (a == b) ? "" : (b == 0 ? "[WRONG]" : "[WRONG, should be ...]"));
-        if (a != b && off < (int)outsz - 24)
-          off += snprintf(out + off, outsz - (size_t)off, "(want %d)", b);
-      }
-      return;
-    }
     int32_t src[9] = {};
+    int32_t src_hw[9] = {};
     for (int k = 0; k < (int)v.n_src && k < 9; ++k) {
       const int r = v.src[k].kind == zfield::SrcKind::kVec ? (int)v.src[k].idx
                                                           : scalar_base + (int)v.src[k].idx;
       src[k] = (r < n_rf) ? orc[(size_t)r] : 0;
+      src_hw[k] = (r < n_rf) ? hw[(size_t)r] : 0;
     }
     int32_t dst[3] = {};
     zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
     const auto* sh = zfield::optable::shape_of(v.op);
     const int w = (v.op == zfield::UOP_RING_PREP) ? 1 : (sh ? (int)sh->dst_width : 1);
+
     for (int m = 0; m < w && (int)v.dst + m < n_rf; ++m) {
       const size_t r = (size_t)((int)v.dst + m);
+      const bool have = take[r] < q[r].size();
+      const int32_t got = have ? q[r][take[r]] : hw[r];
+      if (got != dst[m] && (target_uop < 0 || u <= target_uop)) {
+        if (bad_u) *bad_u = u;
+        if (bad_m) *bad_m = m;
+        if (bad_val) *bad_val = got;
+        // Say whether the operands it read were themselves already wrong. If
+        // they were sound, the arithmetic or its product routing is at fault;
+        // if not, this uop is only carrying an earlier fault forward.
+        bool src_ok = true;
+        int off = snprintf(out, outsz, "      EARLIEST BAD WRITE: uop %d op 0x%02X -> r%zu = %d, "
+                                       "oracle %d; read",
+                           u, v.op, r, got, dst[m]);
+        for (int k = 0; k < (int)v.n_src && k < 9 && off < (int)outsz - 60; ++k) {
+          const int rr = v.src[k].kind == zfield::SrcKind::kVec
+                             ? (int)v.src[k].idx
+                             : scalar_base + (int)v.src[k].idx;
+          if (src_hw[k] != src[k]) src_ok = false;
+          off += snprintf(out + off, outsz - (size_t)off, " r%d=%d%s", rr, src_hw[k],
+                          (src_hw[k] == src[k]) ? "" : "(STALE)");
+        }
+        if (off < (int)outsz - 40)
+          snprintf(out + off, outsz - (size_t)off, "  [operands %s]",
+                   src_ok ? "SOUND -> arithmetic/product fault" : "already wrong upstream");
+        return;
+      }
       orc[r] = dst[m];
-      hw[r] = (take[r] < q[r].size()) ? q[r][take[r]] : hw[r];
-      if (take[r] < q[r].size()) ++take[r];
+      if (have) {
+        hw[r] = got;
+        ++take[r];
+      }
     }
   }
-  snprintf(out, outsz, "      uop %d not reached", target_uop);
+  snprintf(out, outsz, "      every write matched -- divergence is not in the trace");
 }
 
 struct Result {
@@ -727,7 +824,7 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive,
       // ANOTHER context's correct answer is a routing or operand fault, and
       // those need completely different fixes. So the value is looked up.
       char whose[96];
-      whose[0] = ' ';
+      whose[0] = '\0';
       const int32_t got = d.shadow[c][r];
       for (int r2 = 0; r2 < (int)fp.n_vreg && !whose[0]; ++r2)
         if (r2 != r && exp_rf[c][r2] == got)
@@ -747,9 +844,50 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive,
       // oracle side by side, so a stale operand names itself.
       if (u >= 0 && u < (int)fp.uops.size() && printed <= 6) {
         char srcbuf[360];
+        int bu = -1, bm = 0;
+        int32_t bval = 0;
         explain_uop(fp, dec.prog, prep, pt_in[c].data(), n_in, scalar_base, kRegs,
-                    d.wtrace[c], u, srcbuf, sizeof srcbuf);
+                    d.wtrace[c], -1, srcbuf, sizeof srcbuf, &bu, &bm, &bval);
         printf("%s\n", srcbuf);
+        {
+          char qb[300];
+          int qo = snprintf(qb, sizeof qb, "      long ops this context ASKED:");
+          for (size_t qi = 0; qi < d.asked[c].size() && qo < (int)sizeof qb - 48; ++qi)
+            qo += snprintf(qb + qo, sizeof qb - (size_t)qo, " [op 0x%02X s0=%d @%ld]",
+                           d.asked[c][qi].first, d.asked[c][qi].second, d.aclk[c][qi]);
+          printf("%s\n", qb);
+          char wb2[300];
+          int wo = snprintf(wb2, sizeof wb2, "      writes this context LANDED:");
+          for (size_t wi = 0; wi < d.wtrace[c].size() && wo < (int)sizeof wb2 - 40; ++wi)
+            wo += snprintf(wb2 + wo, sizeof wb2 - (size_t)wo, " r%d=%d@%ld",
+                           d.wtrace[c][wi].first, d.wtrace[c][wi].second, d.wclk[c][wi]);
+          printf("%s\n", wb2);
+          char cb[360];
+          int co = snprintf(cb, sizeof cb, "      operand a AT CAPTURE (S2):");
+          for (size_t ci = 0; ci < d.caps[c].size() && co < (int)sizeof cb - 56; ++ci)
+            co += snprintf(cb + co, sizeof cb - (size_t)co, " [op 0x%02X use=%d rf=%d @%ld]",
+                           d.caps[c][ci].op, d.caps[c][ci].use_a0, d.caps[c][ci].rf_a0,
+                           d.caps[c][ci].clk);
+          printf("%s\n", cb);
+        }
+
+        // IS IT ANOTHER POINT'S CORRECT ANSWER? A duplicated or misrouted
+        // response and corrupted arithmetic look identical in one number, and
+        // they need entirely different fixes. Every other context in flight is
+        // asked whether this value is the answer IT was owed.
+        if (bu >= 0) {
+          for (int c2 = 0; c2 < n_ctx; ++c2) {
+            if (c2 == c) continue;
+            const int32_t v = oracle_uop_value(fp, dec.prog, prep, pt_in[c2].data(), n_in,
+                                               scalar_base, kRegs, bu, bm);
+            if (v == bval) {
+              printf("      ^ that value is ctx %d's CORRECT answer for the same uop --\n"
+                     "        a response delivered to the wrong group, not bad arithmetic\n",
+                     c2);
+              break;
+            }
+          }
+        }
       }
       break;
     }
@@ -898,6 +1036,8 @@ int main(int argc, char** argv) {
     const std::string a = argv[i];
     if (a == "--points" && i + 1 < argc) {
       points = std::atoi(argv[++i]);
+    } else if (a == "--wb" && i + 1 < argc) {
+      wb_policy_probe = std::atoi(argv[++i]);
     } else if (a == "--contexts" && i + 1 < argc) {
       n_ctx = std::atoi(argv[++i]);
       if (n_ctx < 1) n_ctx = 1;
@@ -929,17 +1069,16 @@ int main(int argc, char** argv) {
 
     // The staggered pattern first, purely so the contrast is on the record.
     // It is the obvious way to drive this engine and it is the wrong one.
-    // The staggered pattern runs with the gate OFF, and that decision is
-    // written down rather than hidden: it currently produces WRONG VALUES, they
-    // are counted and reported, and the reason they do not fail the build yet
-    // is that the defect is in the machine and is being chased -- not that it
-    // is acceptable. See the OPEN DEFECT block at the end.
-    gating = false;
-    printed = 0;
+    // BOTH DRIVE PATTERNS GATE THE BUILD NOW.
+    //
+    // Staggered drive used to be run with the gate off because it produced
+    // wrong values and the cause was still being chased. It was the preload
+    // port stealing the register file; the machine's write wins it now. So the
+    // pattern that FOUND the defect is the pattern that guards against its
+    // return, which is the only honest place for it.
     diag_failures = 0;
     const Result S = run_program(f, points, 0xC0FFEEull, false, n_ctx);
     const int stag_bad = diag_failures;
-    gating = true;
     printed = 0;
     if (S.ran)
       printf("   %-22s STAGGERED group %4ld  frame %9ld  partial %ld/%ld  WRONG VALUES %d\n",
@@ -978,22 +1117,8 @@ int main(int argc, char** argv) {
   }
 
   if (total_stag_bad != 0) {
-    printf("\n== OPEN DEFECT: WRONG VALUES AT SIX OR MORE CONTEXTS ===\n");
-    printf("   %d value(s) wrong under staggered drive. Narrowed, not merely observed:\n",
-           total_stag_bad);
-    printf("     * contexts 1,2,4 -> exact. 5 -> exact. 6,7,8 -> wrong. The threshold is\n");
-    printf("       where a second dispatch group becomes genuinely concurrent.\n");
-    printf("     * NOT partial groups: one context makes 192/192 of them partial and is\n");
-    printf("       exact. Four contexts make none and are exact.\n");
-    printf("     * NOT the services. len, trig and ring_svc each stream groups carrying\n");
-    printf("       distinct data through their own concurrency and keep every answer\n");
-    printf("       with its group.\n");
-    printf("     * The first divergent register is written by a plain ALU MUL in the\n");
-    printf("       EXECUTOR, not by any long op -- so the corruption is upstream of the\n");
-    printf("       service path entirely.\n");
-    printf("     * No alarm fires: right context, right register, wrong number.\n");
-    printf("   Suspect: the executor's operand hold across an upstream freeze, whose own\n");
-    printf("   header records this defect class twice already. Not gating yet.\n");
+    printf("\n== STAGGERED DRIVE PRODUCED WRONG VALUES ==\n");
+    printf("   %d of them. This gate is closed -- it should be zero.\n", total_stag_bad);
   }
 
   printf("\n== VERDICT ==\n");
