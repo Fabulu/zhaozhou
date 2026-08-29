@@ -5,6 +5,44 @@ at the top.*
 
 ---
 
+## 2026-08-29 (morning) -- the three blocks are closed
+
+    curve service (CURVE.SVC)   29/29   27 caught + 2 proven equivalent
+    service path (SVCPATH)      37/37   30 caught + 7 proven equivalent
+    dispatcher (DISPATCH)       30/30   30 caught, NO equivalents
+
+    composed machine                     117 checks
+    dispatcher's own bench               341 checks
+    curve service's own bench           6930 checks
+
+Nothing survived, nothing was discarded, and every equivalence was declared
+AFTER a run that showed the mutant living through the tests -- never before
+one -- with the condition that ends it written down beside it.
+
+The dispatcher is the first block in this family to close with no equivalents
+at all, which is worth noting because it is also the block that had the
+deadlock: the two defects that matter most there, the hang itself and the
+premature group close, both have standing checks now.
+
+### Two process notes, because both cost real time
+
+**I sat on a green result for 45 minutes.** The dispatcher sweep finished at
+07:30 and I did not push it until 08:17, because I wanted to report it together
+with the other sweep. That is batching and the rule is the opposite: two
+independent results are two commits. You noticed the gap before I did, which is
+the correct outcome of the rule existing and the wrong outcome of me following
+it.
+
+**Two sweeps were writing the build tree I run tests in.** They defaulted to
+`build-verify`, which is the same directory an interactive session uses -- the
+exact collision the curve service's sweep was moved away from in August. It
+bit: a sweep killed mid-run left that tree with a deleted target directory and
+left a MUTANT applied to the hardware source. The guard that exists for
+precisely that (`sweep_check_clean.py`) caught it, nothing was committed in
+that state, and both sweeps now have their own trees.
+
+---
+
 ## FABIAN -- YOUR STARVATION QUESTION HAS AN ANSWER, AND IT IS NOT A NUMBER
 
 *2026-08-29. You paid for the hot path partly so "can one service starve
