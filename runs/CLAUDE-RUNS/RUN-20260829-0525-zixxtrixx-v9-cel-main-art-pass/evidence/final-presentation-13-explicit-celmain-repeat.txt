@@ -1,0 +1,27 @@
+Zixxtrixx v9 explicit final-source cel-main repeat render
+
+Both sets use ZIXX_EXP=celmain and the directly rebuilt cel texture/page binary.
+
+zixxtrixx-idle: 576 / 576 frames byte-identical - PASS
+zixxtrixx-walk: 160 / 160 frames byte-identical - PASS
+zixxtrixx-run: 96 / 96 frames byte-identical - PASS
+zixxtrixx-look: 384 / 384 frames byte-identical - PASS
+zixxtrixx-balance: 447 / 447 frames byte-identical - PASS
+zixxtrixx-taunt: 224 / 224 frames byte-identical - PASS
+zixxtrixx-slow-taunt: 239 / 239 frames byte-identical - PASS
+zixxtrixx-jump-one: 143 / 143 frames byte-identical - PASS
+zixxtrixx-jump-multi: 143 / 143 frames byte-identical - PASS
+zixxtrixx-attack: 480 / 480 frames byte-identical - PASS
+zixxtrixx-hit: 300 / 300 frames byte-identical - PASS
+zixxtrixx-damage: 400 / 400 frames byte-identical - PASS
+zixxtrixx-knockdown: 184 / 184 frames byte-identical - PASS
+zixxtrixx-fall: 288 / 288 frames byte-identical - PASS
+zixxtrixx-hitfloor: 176 / 176 frames byte-identical - PASS
+zixxtrixx-salto-dummy: 243 / 243 frames byte-identical - PASS
+zixxtrixx-salto-fly: 245 / 245 frames byte-identical - PASS
+zixxtrixx-salto-six: 265 / 265 frames byte-identical - PASS
+zixxtrixx-salto-nine: 367 / 367 frames byte-identical - PASS
+zixxtrixx-death: 192 / 192 frames byte-identical - PASS
+zixxtrixx-death2: 192 / 192 frames byte-identical - PASS
+
+PASS: 21 subjects and 5744 RGB frames byte-identical across independent final cel-main renders.

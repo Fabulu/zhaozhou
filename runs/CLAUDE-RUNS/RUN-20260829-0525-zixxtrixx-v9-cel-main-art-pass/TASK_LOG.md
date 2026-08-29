@@ -130,6 +130,15 @@ Refine the promising-but-unsuccessful v8 cel experiment into Zixxtrixx's main pr
 - Generated two independent final 28-bone golden dumps: all 46 payload/CRC files match byte-for-byte. Comparison targeted only committed Upheaval goldens: 45 final payloads versus 40 committed, five additions and no removals. The complete deliberate re-pin remains deferred until this presentation commit establishes the immutable final source SHA.
 - Promoted selected final poster/contact-sheet, media/CRC, golden-comparison and desktop/narrow interaction evidence under `evidence/final-presentation-*`.
 
+### 2026-08-29 19:06 UTC+02:00 - Final media mode omission found and corrected
+
+- The first explicit all-subject repeat exposed a presentation-mode omission that the generic reel CRC check could not see: the initially encoded site frames used `zhao-reel-cel.exe` and therefore the calm cel texture page, but were rendered without the required runtime `ZIXX_EXP=celmain` selector. They consequently lacked the smooth three-band cel-main lighting and projected-size exterior contour despite the earlier acceptance note.
+- Discarded that media set as canonical evidence. Directly rerendered all 21 subjects twice from immutable source commit `65350e0` with `ZIXX_EXP=celmain`; all 5,744 RGB frames are byte-for-byte identical across the two independent runs.
+- Looked through the corrected poster mosaic and every frame of all 21 corrected subjects. The intended exterior ink is visibly present at close, gameplay and limit distances; the complete performances retain their accepted form, eyes, elastic stripes, targets and framing.
+- Replaced all 21 current WebM/PNG pairs from the corrected frames and decoded every WebM completely. Counts match all 5,744 source frames; the corrected encoded set totals 10,086,599 bytes. Reassembled the page with `noindex, nofollow` intact.
+- Repeated desktop and true 390 CSS-pixel current/archive interactions after correction. Both widths retain one visible requested panel, correct autoplay/controls behavior and zero horizontal overflow. Stopped both servers and all `zv9-final-*` browser profiles; ports 8765/8766 are no longer listening.
+- Replaced the stale final-presentation visual/media evidence with the corrected cel-main output and added the explicit 5,744-frame repeat plus every final direct gate report. Golden repeat/comparison evidence remains valid because clip payloads were never affected by the renderer selector.
+
 ---
 
 ## Subagent Spawns
