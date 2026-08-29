@@ -1568,6 +1568,43 @@ verilate(test_field_v3_full_directed
 add_test(NAME field_v3_full_directed COMMAND test_field_v3_full_directed)
 set_tests_properties(field_v3_full_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+add_executable(test_field_v3_earth_directed differential/field_v3_earth_directed.cpp)
+target_link_libraries(test_field_v3_earth_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_earth_directed
+  PREFIX Vzhao_probe_v3_full
+  TOP_MODULE zhao_probe_v3_full
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_full.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rot.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_sbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_trig.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv)
+add_test(NAME field_v3_earth_directed COMMAND test_field_v3_earth_directed --points 256
+         ${CMAKE_SOURCE_DIR}/compiler/tests/generated/crater_ring.zprog
+         ${CMAKE_SOURCE_DIR}/compiler/tests/generated/impact_wave.zprog
+         ${CMAKE_SOURCE_DIR}/compiler/tests/generated/wave_pool.zprog)
+set_tests_properties(field_v3_earth_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
 add_executable(test_field_v3_svcpath_directed differential/field_v3_svcpath_directed.cpp)
 target_link_libraries(test_field_v3_svcpath_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_v3_svcpath_directed
