@@ -5,6 +5,53 @@ at the top.*
 
 ---
 
+## FABIAN -- YOUR STARVATION QUESTION HAS AN ANSWER, AND IT IS NOT A NUMBER
+
+*2026-08-29. You paid for the hot path partly so "can one service starve
+another" would become measurable, on the grounds that one service cannot starve
+anybody. There are two services now. They still cannot starve each other, and
+the reason is worth knowing before you decide what to do about it.*
+
+### What I found
+
+The dispatcher handles **one batch at a time**. It gathers points, issues them,
+waits for the answer, drains it, and only then starts gathering again. So the
+second service is never working while the first one is — they take turns.
+
+Two claimants that never run at once cannot starve each other. The priority I
+picked when wiring the bank (curve service above the noise unit) is real
+silicon, and today it is **unobservable**.
+
+### Why I am not giving you the number anyway
+
+I could run the measurement as scoped. It would report zero starvation. That
+would be true, and it would be worthless — it would be measuring the
+dispatcher's turn-taking, not the bank's priority, and a reader six months from
+now would take it as evidence the priority is safe. It is not evidence of
+anything.
+
+Two deliberate defects survived the sweep for exactly this reason: I had
+written guards for a contention that cannot currently occur. I have kept the
+guards, because they are correct and they cost nothing, and recorded against
+both of them the precise condition that would make them matter again.
+
+### What would make it a real question
+
+**A dispatcher that keeps more than one batch in flight.** That is the change
+that turns the two services into genuine competitors, and it is the same change
+that would make those two guards load-bearing.
+
+It is real work with real consequences — tags, the drain, and the order answers
+come back in all have to cope — and I have NOT started it. It is the honest
+next step if you want the starvation number to mean something, and it is also
+worth having on its own: right now the machine can only ever have one service
+busy, which is a throughput ceiling nobody chose deliberately.
+
+**Your call.** I am not going to widen the engine's execution model on my own
+judgement — that is an architecture decision, not plumbing.
+
+---
+
 ## FABIAN -- A REAL BUG IN THE SHIPPED ENGINE, AND IT WAS NOT A CORNER CASE
 
 *2026-08-29. Short version: the Field engine hung forever whenever two of its
