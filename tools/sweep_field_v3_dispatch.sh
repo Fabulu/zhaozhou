@@ -50,7 +50,18 @@ TARGETS="test_field_v3_dispatch_directed test_field_v3_svcpath_directed test_fie
 #
 # (An earlier note here claimed no build could run anywhere during a sweep.
 # That was inferred from a failure later explained by ccache, and is wrong.)
-BUILD_DIR="${BUILD_DIR:-build-verify}"
+# A DEDICATED TREE, NOT THE SHARED ONE. This defaulted to build-verify --
+# the tree an interactive session runs ctest and hand builds in -- which is
+# two writers in one build directory, the exact collision the curve service's
+# sweep was moved off build/ to avoid on 2026-08-27.
+#
+# MEASURED HERE ON 2026-08-29, not theorised: this sweep was killed mid-run
+# while the same tree was being used interactively, and it left build-verify
+# with a deleted target directory (a later compile failed on a missing
+# dependency file) AND a mutant still applied to the RTL. The mutant was
+# caught by sweep_check_clean.py, which is the guard that exists because a
+# killed run put one into a pushed commit on 2026-08-28.
+BUILD_DIR="${BUILD_DIR:-build-fieldv3-dispatch}"
 REBUILD_LOG="${REBUILD_LOG:-$(pwd)/runs/CLAUDE-RUNS/sweep_rebuild_${BUILD_DIR}.log}"
 
 hash_of() { sha256sum <"$1" | cut -d' ' -f1; }

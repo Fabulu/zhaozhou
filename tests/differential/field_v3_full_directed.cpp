@@ -421,6 +421,18 @@ int main(int argc, char** argv) {
     }
     int clocks = 0;
     (void)run_long(top, zfield::OP_NOISE2, kCtx, xs, ys, 0x11u, 1, false, got, &clocks);
+    // BATCHING IS ASSERTED, NOT MERELY PRINTED. These five numbers were
+    // measured and shown for eight releases and never checked, so mutant D30
+    // -- which closes a group on a mismatch nobody is offering, collapsing
+    // every batch to a single point -- survived a 30-mutant sweep with the
+    // count sitting in the output the whole time.
+    //
+    // Eight points of ONE op is exactly two full groups. If the dispatcher
+    // ever closes a group early, this is 8 and partial is non-zero, which is
+    // the entire reason the block batches at all.
+    check(top.groups_o == 2u, "eight same-op points batch into TWO full groups", 2,
+          (int)top.groups_o);
+    check(top.partial_o == 0u, "and neither of them is partial", 0, (int)top.partial_o);
     printf("   n=8 groups=%u partial=%u drain_writes=%u served[0]=%u served[1]=%u\n",
            (unsigned)top.groups_o, (unsigned)top.partial_o, (unsigned)top.drain_writes_o,
            (unsigned)top.wb_served_o[0], (unsigned)top.wb_served_o[1]);

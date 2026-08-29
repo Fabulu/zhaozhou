@@ -421,6 +421,42 @@ int main(int argc, char** argv) {
           after ? 1 : 0);
   }
 
+  printf("== section 5d: the offer fields are IGNORED while long_valid_i is low ==\n");
+  {
+    // MUTANT D30 SURVIVED EVERYTHING ELSE. The group-closing term added with
+    // the deadlock fix reads `long_valid_i && !same_group_c`; dropping the
+    // valid leaves the dispatcher acting on whatever the port happens to be
+    // carrying when NOBODY IS OFFERING.
+    //
+    // Nothing else reaches it. `offer()` leaves the fields at the last
+    // offered values, which by construction MATCH the group, so the stale
+    // fields never disagree. And in the composed machine the traffic that
+    // would expose it -- a partly-filled group plus a non-matching idle port
+    // -- did not arise in any program the suite runs. I tried asserting the
+    // batch count in the composed differential first; it passed with the
+    // mutant applied, which is worth recording because it looked like the
+    // obvious kill and was not one.
+    //
+    // So the condition is built directly: fill the group by one, then present
+    // a DIFFERENT op with valid LOW and let several clocks pass.
+    Dut d(top);
+    d.reset();
+    const bool first = d.offer({0, 1, 2, 3}, OP_NOISE2, 8, 64, 0xAAAAu);
+    check(first, "the first context joins", 1, first ? 1 : 0);
+
+    d.t.long_valid_i = 0;
+    d.t.long_op_i = OP_RIDGE;
+    d.t.long_dst_i = 9;
+    d.t.long_imm_i = 0xBBBBu;
+    d.t.eval();
+    for (int i = 0; i < 4; ++i) d.step();
+
+    check(d.t.groups_o == 0u, "a group is not closed by fields nobody is offering", 0,
+          (int)d.t.groups_o);
+    const bool second = d.offer({1, 4, 5, 6}, OP_NOISE2, 8, 64, 0xAAAAu);
+    check(second, "and a matching context can still join afterwards", 1, second ? 1 : 0);
+  }
+
   printf("== section 6: an offer arriving WITH flush is refused, not swallowed ==\n");
   {
     // THE HOLE THIS CLOSES. Accepted on the flush clock, the context would
