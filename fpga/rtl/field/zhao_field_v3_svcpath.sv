@@ -450,11 +450,6 @@ module zhao_field_v3_svcpath #(
       rsp_r0[l] = cv_rsp_valid ? cv_r0[l]
                 : nm_rsp_valid ? nm_r0[l]
                 : rt_rsp_valid ? rt_r0[l] : nz_r0[l];
-      // CURVE, DCURVE and SPLINE write ONE register per point; NOISE2 and
-      // RIDGE write two. The unwritten registers are zero by each op's own
-      // law, and they are tied rather than left dangling so a width the
-      // dispatcher should never ask for drains a defined value -- wrong the
-      // same way twice instead of differently each run.
       // CURVE, DCURVE and SPLINE write ONE register per point, so their
       // second and third are zero by the op's own law. NOISE2 and RIDGE write
       // two. NORMALIZE3 and ROT3 write THREE, which is the first time this

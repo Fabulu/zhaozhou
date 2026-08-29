@@ -119,8 +119,8 @@ MUTANTS = [
     # this composition's test can see it is a different question, and one this
     # mutant asks rather than assumes.
     ("V06 the bank puts the LANES above the service",
-     "      .CLAIMANTS(3), .PRIO_SERVICES_FIRST(1'b1), .TAGW(TAGW)",
-     "      .CLAIMANTS(3), .PRIO_SERVICES_FIRST(1'b0), .TAGW(TAGW)"),
+     "      .CLAIMANTS(5), .PRIO_SERVICES_FIRST(1'b1), .TAGW(TAGW)",
+     "      .CLAIMANTS(5), .PRIO_SERVICES_FIRST(1'b0), .TAGW(TAGW)"),
     ("V07 the service's A operands are broadcast from point 0",
      "      bank_a[1][l] = nz_a[l];",
      "      bank_a[1][l] = nz_a[0];"),
@@ -222,11 +222,11 @@ MUTANTS = [
     # result may never be drained at all. This asks whether the tie-off is
     # checked or merely present.
     ("V22 the third result is not zero",
-     "      rsp_r2[l] = 32'sd0;",
-     "      rsp_r2[l] = 32'sd1;"),
+     "                : rt_rsp_valid ? rt_r2[l] : 32'sd0;",
+     "                : rt_rsp_valid ? rt_r2[l] : 32'sd1;"),
     ("V23 the wrong-op detector fires on the ops that ARE implemented",
-     "                 (svc_op != OP_NOISE2) && (svc_op != OP_RIDGE) &&",
-     "                 (svc_op == OP_NOISE2) || (svc_op == OP_RIDGE) ||"),
+     "                 !is_noise_c && !is_curve_c && !is_norm_c && !is_rot_c) begin",
+     "                 is_noise_c) begin"),
     # Reshaped from flush tied low, which orphans flush_i. Qualifying it with
     # long_valid_i is the sharper defect anyway: flush is RAISED after the last
     # context is offered and long_valid_i is low by then, so a partial group
@@ -248,31 +248,37 @@ MUTANTS = [
     # same argument in its sharpest form: they were scored CAUGHT and had
     # stopped being applicable at all.
     ("W01 curve ops are also handed to the noise unit",
-     "      .v_valid_i(svc_valid && !is_curve_c), .v_ready_o(nz_v_ready),",
-     "      .v_valid_i(svc_valid), .v_ready_o(nz_v_ready),"),
+     "      .v_valid_i(svc_valid && is_noise_c), .v_ready_o(nz_v_ready),",
+     "      .v_valid_i(svc_valid && (is_noise_c || is_curve_c)), .v_ready_o(nz_v_ready),"),
 
     ("W02 the handshake is taken from the service that was NOT asked",
-     "  assign svc_ready = is_curve_c ? cv_req_ready : nz_v_ready;",
-     "  assign svc_ready = is_curve_c ? nz_v_ready : cv_req_ready;"),
+     "  assign svc_ready = is_curve_c ? cv_req_ready" + "\n" +
+     "                   : is_norm_c  ? nm_v_ready",
+     "  assign svc_ready = is_curve_c ? nm_v_ready" + "\n" +
+     "                   : is_norm_c  ? cv_req_ready"),
 
     ("W03 the response mux publishes the other service's value",
-     "      rsp_r0[l] = cv_rsp_valid ? cv_r0[l] : nz_r0[l];",
-     "      rsp_r0[l] = cv_rsp_valid ? nz_r0[l] : cv_r0[l];"),
+     "      rsp_r0[l] = cv_rsp_valid ? cv_r0[l]" + "\n" +
+     "                : nm_rsp_valid ? nm_r0[l]",
+     "      rsp_r0[l] = cv_rsp_valid ? nm_r0[l]" + "\n" +
+     "                : nm_rsp_valid ? cv_r0[l]"),
 
     # THE ONE THAT LOSES A VALUE RATHER THAN TIME. Without the guard the noise
     # unit sees its response accepted on a cycle the mux published the curve
     # service's, and its answer is gone -- not late, gone.
     ("W04 the losing service's response is dropped instead of held",
-     "  assign nz_rsp_ready = rsp_ready && !cv_rsp_valid;",
+     "  assign nz_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid && !rt_rsp_valid;",
      "  assign nz_rsp_ready = rsp_ready;"),
 
     ("W05 the response carries the other service's tag",
-     "  assign rsp_tag   = cv_rsp_valid ? cv_rsp_tag : nz_rsp_tag;",
-     "  assign rsp_tag   = cv_rsp_valid ? nz_rsp_tag : cv_rsp_tag;"),
+     "  assign rsp_tag   = cv_rsp_valid ? cv_rsp_tag" + "\n" +
+     "                   : nm_rsp_valid ? nm_rsp_tag",
+     "  assign rsp_tag   = cv_rsp_valid ? nm_rsp_tag" + "\n" +
+     "                   : nm_rsp_valid ? cv_rsp_tag"),
 
     ("W06 a width-1 answer leaves the second register unzeroed",
-     "      rsp_r1[l] = cv_rsp_valid ? 32'sd0 : nz_r1[l];",
-     "      rsp_r1[l] = nz_r1[l];"),
+     "      rsp_r1[l] = cv_rsp_valid ? 32'sd0",
+     "      rsp_r1[l] = cv_rsp_valid ? nz_r1[l]"),
 
     ("W07 DCURVE is served as CURVE",
      "  assign cv_mode_c = (svc_op == OP_DCURVE) ? 2'd1",
@@ -312,8 +318,77 @@ MUTANTS = [
      "  assign cv_mul_valid  = bank_rsp_valid[1];"),
 
     ("W12 the wrong-op detector fires on a SPLINE it does serve",
-     "                 (svc_op != OP_SPLINE)) begin",
-     "                 (svc_op != OP_NOISE2)) begin"),
+     "                 !is_noise_c && !is_curve_c && !is_norm_c && !is_rot_c) begin",
+     "                 !is_noise_c && !is_norm_c && !is_rot_c) begin"),
+    # ---- the other two services, added 2026-08-29 -------------------------
+    # NORMALIZE2/3 and ROT2/3 were in the opcode table and answered by the
+    # NOISE unit's else-branch. These attack the routing that replaced it, the
+    # width-3 response path, and the two mode bits that separate each unit's
+    # pair of ops.
+    ("X01 NORMALIZE3 is served as NORMALIZE2",
+     "      .is_n3_i(svc_op == OP_NORMALIZE3),",
+     "      .is_n3_i(1'b0 && (svc_op == OP_NORMALIZE3)),"),
+
+    ("X02 ROT3 is served as ROT2",
+     "      .is_rot3_i(svc_op == OP_ROT3), .axis_i(svc_imm[1:0]),",
+     "      .is_rot3_i(1'b0 && (svc_op == OP_ROT3)), .axis_i(svc_imm[1:0]),"),
+
+    ("X03 the rotation axis is read from the wrong bits of the immediate",
+     "      .is_rot3_i(svc_op == OP_ROT3), .axis_i(svc_imm[1:0]),",
+     "      .is_rot3_i(svc_op == OP_ROT3), .axis_i(svc_imm[3:2]),"),
+
+    # THE ANGLE INDEXING ERROR I ACTUALLY MADE. The oracle flattens src[] and
+    # ROT2's angle is src[2] there; the hardware fills s0..s2 from operand a
+    # and s3 from operand b, so it is s3 for BOTH. Wiring ROT2 to s2 passes
+    # ROT3 and fails ROT2, which is exactly what this reproduces.
+    ("X04 ROT takes its angle from s2 instead of s3",
+     "      .ang_0_i(svc_s3[0]), .ang_1_i(svc_s3[1]), .ang_2_i(svc_s3[2]), .ang_3_i(svc_s3[3]),",
+     "      .ang_0_i(svc_s2[0]), .ang_1_i(svc_s2[1]), .ang_2_i(svc_s2[2]), .ang_3_i(svc_s2[3]),"),
+
+    ("X05 normalize and rot are handed each other's requests",
+     "                   : is_norm_c  ? nm_v_ready\n"
+     "                   : is_rot_c   ? rt_v_ready",
+     "                   : is_norm_c  ? rt_v_ready\n"
+     "                   : is_rot_c   ? nm_v_ready"),
+
+    ("X06 the noise unit is offered the rot group as well",
+     "      .v_valid_i(svc_valid && is_noise_c), .v_ready_o(nz_v_ready),",
+     "      .v_valid_i(svc_valid && (is_noise_c || is_rot_c)), .v_ready_o(nz_v_ready),"),
+
+    # Reshaped: driving the third register to zero leaves nm_r2 read by
+    # nobody, and Verilator tracks usage per BIT. Crossing normalize's second
+    # and third keeps every bit read and is the same class of defect.
+    ("X07 normalize's second and third result registers are crossed",
+     "                : nm_rsp_valid ? nm_r1[l]" + "\n" +
+     "                : rt_rsp_valid ? rt_r1[l] : nz_r1[l];" + "\n" +
+     "      rsp_r2[l] = nm_rsp_valid ? nm_r2[l]",
+     "                : nm_rsp_valid ? nm_r2[l]" + "\n" +
+     "                : rt_rsp_valid ? rt_r1[l] : nz_r1[l];" + "\n" +
+     "      rsp_r2[l] = nm_rsp_valid ? nm_r1[l]"),
+
+    ("X08 rot's second and third result registers are crossed",
+     "                : rt_rsp_valid ? rt_r1[l] : nz_r1[l];" + "\n" +
+     "      rsp_r2[l] = nm_rsp_valid ? nm_r2[l]" + "\n" +
+     "                : rt_rsp_valid ? rt_r2[l] : 32'sd0;",
+     "                : rt_rsp_valid ? rt_r2[l] : nz_r1[l];" + "\n" +
+     "      rsp_r2[l] = nm_rsp_valid ? nm_r2[l]" + "\n" +
+     "                : rt_rsp_valid ? rt_r1[l] : 32'sd0;"),
+
+    ("X09 the two new services' bank grants are crossed",
+     "  assign nm_mul_ready  = bank_req_ready[3];\n"
+     "  assign nm_mul_valid  = bank_rsp_valid[3];\n"
+     "  assign rt_mul_ready  = bank_req_ready[4];",
+     "  assign nm_mul_ready  = bank_req_ready[4];\n"
+     "  assign nm_mul_valid  = bank_rsp_valid[3];\n"
+     "  assign rt_mul_ready  = bank_req_ready[3];"),
+
+    ("X10 the wrong-op detector no longer accepts the rot ops",
+     "                 !is_noise_c && !is_curve_c && !is_norm_c && !is_rot_c) begin",
+     "                 !is_noise_c && !is_curve_c && !is_norm_c) begin"),
+
+    ("X11 rot's response is taken while normalize is also holding one",
+     "  assign rt_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid;",
+     "  assign rt_rsp_ready = rsp_ready && !cv_rsp_valid;"),
 ]
 
 
