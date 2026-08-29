@@ -112,6 +112,14 @@ Refine the promising-but-unsuccessful v8 cel experiment into Zixxtrixx's main pr
 - Extended the committed posed probe over slot 44 and the complete slot-4 loop midpoint. Slow-taunt maximum 60 Hz station motion is 20 mm. Fall regional chord travel is `349/203/68/177 mm`, propagation lags are `32/32` presentation ticks, maximum 60 Hz motion is 149 mm, and seam half-steps are `130/128 mm`.
 - Clean direct rebuild of every dependent creature tool passed. A repeat render is byte-identical across all 239 slow-taunt and 288 fall frames. Posed taunt/fall/contact/continuity, strike-tip, target, limit, mesh/seam, planner, choreography and redirected reel checks all pass; promoted fourteen numbered reports and visual sheets under `evidence/taunt-fall-*`.
 
+### 2026-08-29 23:52 UTC+02:00 - Final cel-main distance continuity accepted
+
+- Corrected the balance presentation subject to the canonical one-shot cadence already required by its accepted animation evidence: key zero, each real midpoint once, and final key once, for `2 * (224 - 1) + 1 = 447` frames rather than an extra loop-seam midpoint.
+- Rebuilt the normal and cel reels directly and rendered complete final-source cel-main sequences at the actual close/mid/far cameras: idle 576 frames, balance 447, grounded-target salto 243, flying-target salto 245 and six-salto 265.
+- Inspected the representative native comparison and complete-sequence outline telemetry. Close idle holds 4 px exterior ink at projected radii `367.7..623.4 px`; balance and grounded target hold 2 px at `209.7` and `170.7..181.4 px`; flying and six-salto hold 1 px at `140.0..155.2` and `106.2..125.2 px`.
+- Every sequence keeps one stable width throughout, with zero threshold transitions or flicker. Smooth three-band light remains continuous across the tube, exterior-only ink preserves interior colour and concavities, and distant animals remain coloured silhouettes rather than black masses.
+- Repeated all 1,776 final representative frames after the direct rebuild; every RGB frame is byte-identical. Promoted the native close/mid/far comparison, continuity report and deterministic-repeat report under `evidence/final-cel-*`.
+
 ---
 
 ## Subagent Spawns

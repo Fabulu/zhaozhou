@@ -4270,7 +4270,8 @@ SceneSubject subject_zixx_balance() {
   SceneSubject s;
   s.name = "zixxtrixx-balance";
   s.creature = 9;  // clip slot 7
-  s.frames = zixx::kBalKeys * 2;
+  s.frames = 2 * (zixx::kBalKeys - 1) + 1;
+  s.canonical_creature_timeline = true;
   s.orbit = false;
   zixx_common(s);
   s.cam_k = 150000;  // the nose reaches ~3 m: this shot needs headroom
