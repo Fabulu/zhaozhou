@@ -372,11 +372,10 @@ constexpr int kSkullBlendTo = 10; // last station that carries any kBHead
 // drawing's disc and ink ring stay in the head page and the head's own rings
 // swell LATERALLY beneath it. V9 adds one shallow orange slit decal per side:
 // both follow the same authored gaze and never contribute to the silhouette.
-constexpr int kEyeStation0 = 3;      // first head station that carries the bulge
-constexpr int kEyeStation1 = 6;      // last: shifted one station noseward so
-                                     // the two local swellings support the
-                                     // painted side eyes instead of trailing
-                                     // them toward the neck.
+constexpr int kEyeStation0 = 2;      // first head station that carries the bulge
+constexpr int kEyeStation1 = 5;      // v10: the complete support window moves
+                                     // noseward with the painted side eyes;
+                                     // no global skull or tube radius changes.
 #ifndef ZIXX_EYEBULGE
 // V9 local eye support: stronger than 26 without returning to the old
 // six-station 42-percent brim. Judge with the noseward atlas row in fixed
@@ -391,7 +390,7 @@ constexpr int32_t kEyeBulgeNum = ZIXX_EYEBULGE;
 // fixed decal float inside the eye (owner direction #8). Two mirrored bones
 // still share one intent; their signs differ only because the eyes face
 // opposite sides.
-constexpr int kPupilStation = 5;
+constexpr int kPupilStation = 4;    // v10: follows the eye-disc centre noseward
 constexpr int32_t kPupilCoreHalfWidthMm = 20;      // the stripe's peculiar swell
 constexpr int32_t kPupilCoreHalfAngleA16 = 1900;   // extent of the moving swell
 constexpr int32_t kPupilStripeShoulderA16 = 3300;  // elastic arm control point
@@ -482,6 +481,11 @@ constexpr int kBladeRings = 6;
 // taper to the point) replacing the root-heavy 1-t^2 paddle. Splay 3000
 // and the 80-deg roll keep their owner-ordered values.
 constexpr int32_t kBladeLen = 860;
+constexpr int32_t kBladeRootInsetMm = 72; // v10: grow each blade from inside
+                                          // the tail shell; the buried open
+                                          // root cannot draw a detached cap
+constexpr int32_t kBladeRootOffsetMm = 34; // overlap the thin tail tip deeply
+                                           // before the fork separates
 constexpr int32_t kBladeW0 = 36;       // half-width at the leaf's widest (LATERAL)
 constexpr int32_t kBladeThick0 = 12;   // half-thickness at the root (VERTICAL)
 // 1500, was 6900 (Fabian, 2026-08-27 pass 3: the fins "should be rotated
@@ -5564,9 +5568,9 @@ inline const zc::CreatureType& type() {
     for (int k = 1; k < kSpineBones; ++k) {
       sk.bones[kBSpine0 + k] = zc::Bone{static_cast<uint8_t>(kBSpine0 + k - 1), -fxm(seg), 0, 0};
     }
-    sk.bones[kBBladeL] = zc::Bone{kBFork, 0, 0, fxm(56)};
+    sk.bones[kBBladeL] = zc::Bone{kBFork, 0, 0, fxm(kBladeRootOffsetMm)};
     sk.bones[kBBladeL2] = zc::Bone{kBBladeL, -fxm(kBladeLen / 2), 0, 0};
-    sk.bones[kBBladeR] = zc::Bone{kBFork, 0, 0, -fxm(56)};
+    sk.bones[kBBladeR] = zc::Bone{kBFork, 0, 0, -fxm(kBladeRootOffsetMm)};
     sk.bones[kBBladeR2] = zc::Bone{kBBladeR, -fxm(kBladeLen / 2), 0, 0};
     sk.bones[kBSpike] = zc::Bone{kBFork, 0, fxm(30), 0};
     // the skull bone: child of the root, PIVOT AT THE SKULL'S OWN CENTRE
@@ -5748,11 +5752,14 @@ inline const zc::CreatureType& type() {
       p.chain = true;
       p.pitch_q = 1;
       p.yaw_q = 3;
-      p.caps = zc::kCapBot | zc::kCapTop;
+      // The body fork owns the visible closure. Each blade begins open and
+      // buried inside that shell, so no separately shaded root cap can draw a
+      // black cut across the attachment.
+      p.caps = zc::kCapTop;
       const uint8_t broot = side == 0 ? kBBladeL : kBBladeR;
       const uint8_t btip = side == 0 ? kBBladeL2 : kBBladeR2;
       const int32_t bx = station_x(kProfileStations - 1);
-      const int32_t bz = side == 0 ? 56 : -56;
+      const int32_t bz = side == 0 ? kBladeRootOffsetMm : -kBladeRootOffsetMm;
       for (int i = 0; i < kBladeRings; ++i) {
         const int t = (i * 1000) / (kBladeRings - 1);
         // LEAF profile (RUN 0757): rises 700 -> 1000 by t=300, then one long
@@ -5761,18 +5768,34 @@ inline const zc::CreatureType& type() {
         const int32_t k = t < 300 ? 700 + t
                                   : (1000 * (1000 - t)) / 700;
         zc::RingSpec rs;
-        rs.y = fxm(bx + (kBladeLen * t) / 1000);
+        rs.y = fxm(bx - kBladeRootInsetMm +
+                    ((kBladeLen + kBladeRootInsetMm) * t) / 1000);
         rs.segments = static_cast<uint8_t>(kBladeSides);
         rs.radius = fxm(kBladeW0 * k / 1000);
         rs.rx = fxm(kBladeW0 * k / 1000 + 6);      // LATERAL: broad
         rs.rz = fxm(kBladeThick0 * k / 1000 + 3);  // VERTICAL: flat
-        rs.cx = fxm(bz);
+        const int root_spread = t < 200 ? t * 5 : 1000;
+        rs.cx = fxm((bz * root_spread) / 1000);
         rs.cz = -fxm(kBodyY);
-        // root half on the root bone, tip half on the tip bone, blended
-        const int wroot = t < 500 ? 64 - (t * 64) / 500 : 0;
-        rs.b0 = btip;
-        rs.b1 = broot;
-        rs.w0 = static_cast<uint8_t>(64 - wroot);
+        // The first ring belongs to the fork itself and the shoulder blends
+        // into the blade root before normal root-to-tip flex begins. Rotation
+        // can therefore animate the leaf without pulling its planted edge out
+        // of the body shell.
+        if (i == 0) {
+          rs.b0 = kBFork;
+          rs.b1 = kBFork;
+          rs.w0 = 64;
+        } else if (i == 1) {
+          rs.b0 = broot;
+          rs.b1 = kBFork;
+          rs.w0 = 40;
+        } else {
+          // Root half on the root bone, tip half on the tip bone, blended.
+          const int wroot = t < 500 ? 64 - (t * 64) / 500 : 0;
+          rs.b0 = btip;
+          rs.b1 = broot;
+          rs.w0 = static_cast<uint8_t>(64 - wroot);
+        }
         p.rings.push_back(rs);
       }
       // BOTH faces of each fin carry BOTH colours (Fabian, 2026-08-27
