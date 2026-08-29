@@ -389,10 +389,36 @@ int main(int argc, char** argv) {
     d.reset();
     const bool first = d.offer({0, 1, 2, 3}, OP_NOISE2, 8, 64, 0xAAAAu);
     check(first, "the first context joins", 1, first ? 1 : 0);
-    const bool other_imm = d.offer({1, 4, 5, 6}, OP_NOISE2, 8, 8, 0xBBBBu);
-    check(!other_imm, "a different immediate cannot join the same request", 0, other_imm ? 1 : 0);
     const bool same_imm = d.offer({1, 4, 5, 6}, OP_NOISE2, 8, 64, 0xAAAAu);
-    check(same_imm, "and the SAME immediate still can", 1, same_imm ? 1 : 0);
+    check(same_imm, "and the SAME immediate shares the request", 1, same_imm ? 1 : 0);
+  }
+
+  printf("== section 5c: a refused offer CLOSES the group, it does not stall it ==\n");
+  {
+    // THE CONTRACT CHANGED ON 2026-08-29 AND THIS IS THE NEW HALF. It used to
+    // be that a mismatched offer was refused and the group stayed open, so a
+    // later matching context could still join. That read as strictly better --
+    // more batching, same answers -- and it DEADLOCKED THE MACHINE.
+    //
+    // The executor holds its pipe at S4 until the dispatcher takes the long op
+    // ("A LONG OP AT S4 HOLDS THE PIPE UNTIL THE DISPATCHER TAKES IT", and the
+    // line after it already noted the dispatcher refuses when mid-group with a
+    // different op). So a refused context BLOCKS EVERY OTHER CONTEXT from
+    // reaching S4. The later matching context this section used to check for
+    // can never arrive in the composed machine -- only a bench driving the
+    // port directly, like this one, can produce that sequence.
+    //
+    // So closing the group costs no batching that was ever reachable, and
+    // leaving it open costs the machine. The group closes.
+    Dut d(top);
+    d.reset();
+    const bool first = d.offer({0, 1, 2, 3}, OP_NOISE2, 8, 64, 0xAAAAu);
+    check(first, "the first context joins", 1, first ? 1 : 0);
+    const bool other_imm = d.offer({1, 4, 5, 6}, OP_NOISE2, 8, 8, 0xBBBBu);
+    check(!other_imm, "a different immediate is still refused", 0, other_imm ? 1 : 0);
+    const bool after = d.offer({1, 4, 5, 6}, OP_NOISE2, 8, 8, 0xAAAAu);
+    check(!after, "and the group has CLOSED -- even a matching context must wait", 0,
+          after ? 1 : 0);
   }
 
   printf("== section 6: an offer arriving WITH flush is refused, not swallowed ==\n");
