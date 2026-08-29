@@ -20,7 +20,7 @@ Preserve the approved v9 whole-body proportions and rendering style while repair
 | #18 | lighting and eye artifacts | In progress — claimed |
 | #19 | constrained face and fins | Pending |
 | #20 | shared rigid-S spring | Pending |
-| #21 | full validation | Pending |
+| #21 | bounded risk-based validation | Pending |
 | #22 | publish and handoff | Pending |
 
 Only one task is active at a time. A task becomes complete only after its evidence, gates, logical commit and push are complete.
@@ -58,6 +58,37 @@ Only one task is active at a time. A task becomes complete only after its eviden
 - Claimed task #18. No art constants or creature/renderer source have been changed.
 - Next action is a clean direct-build v9 baseline followed by fixed-camera every-frame reproduction and root-cause isolation.
 
+### 2026-08-29 22:55 UTC+02:00 - Owner bounded the validation campaign
+
+- Stopped before launching the baseline build or any render; no unnecessary validation work had started.
+- Updated durable owner direction #10, SPEC and this log: whole-catalog exhaustive review is explicitly rejected unless an actual regression signal justifies escalation.
+- Defined named budget `V10-BUDGET-1` before running checks. It permits:
+  1. at most two known lighting reproductions × two fixed cameras × four diagnostic/presentation modes;
+  2. at most two known eye reproductions × two fixed cameras × normal/cel-main, with every-frame inspection only in bounded failure windows;
+  3. one representative normal/deforming temporal trace plus the reused v9 mesh/reel checks after the root fix;
+  4. every-frame review for only the four specifically broken spring subjects plus bounded attack contact/landing windows;
+  5. one representative deterministic cel-main pair per changed milestone;
+  6. final media manifest/count/poster and bounded start/middle/end decode sampling, with exhaustive catalogue work gated on a recorded regression trigger.
+- Every executed check must be entered in a validation ledger with its acceptance question, reason, result and stop/escalation decision. Implementation and native-resolution art iteration stay dominant.
+- Committed and pushed the corrected durable owner direction in Upheaval as `c8425f7`.
+
+---
+
+## Validation Ledger — `V10-BUDGET-1`
+
+Budget set before any build/render. Each row must answer one question and end with stop or a concrete escalation trigger.
+
+| Check ID | Acceptance question / why it exists | Bounded input | Result | Decision |
+|---|---|---|---|---|
+| B01 | Does current source direct-build cleanly, proving later output is not stale? | One clean direct `all` build | Pending | Stop after one successful clean build; investigate only compiler failure |
+| L01 | Which shared stage causes apparently random illumination assignment/flicker? | ≤2 known clips × ≤2 fixed cameras × normal/cel-main/unlit-or-normal/debug | Pending | Stop after one root hypothesis explains pre-fix modes and a controlled change disproves alternatives |
+| L02 | Does lighting remain temporally attached to surfaces after the fix? | One normal and one deforming representative trace, badness-ranked | Pending | Stop on smooth/expected trace; escalate one clip only on unexplained discontinuity |
+| E01 | What structurally creates malformed eye triangles? | Knockdown right-eye reproduction plus ≤1 second known clip, ≤2 cameras, normal/cel-main and topology debug | Pending | Stop when topology/projection cause is reproduced and structurally removed |
+| E02 | Does the eye fix generalize without catalogue exhaustion? | Reused mesh check plus representative badness-ranked samples | Pending | Stop on clean topology and no ranked artifact; escalate only a concrete survivor |
+| S01 | Does corrected spring lower the rigid S from the top with head contact and no rear curl? | Every frame of jump-one, jump-multi, salto-six, salto-nine; bounded attack contact/landing | Deferred to #20 | Required targeted all-frame exception |
+| D01 | Are changed true cel-main outputs deterministic? | One representative pair per changed milestone | Pending | Stop on byte match; escalate only on mismatch |
+| M01 | Is final media/site structurally valid? | Manifest/count/poster plus bounded start/middle/end decode and desktop/narrow interaction | Deferred to #22 | Exhaustive decode only on mismatch/decode/browser signal |
+
 ---
 
 ## Subagent Spawns
@@ -82,7 +113,9 @@ None. Owner explicitly requires this to remain a sole implementation/modelling l
 - Normal Gouraud and true cel-main share root-cause investigation; thresholds/global brightness cannot mask the defect.
 - Eye artifact acceptance is exhaustive across all production clips/cameras/modes, not keyed to the named knockdown example.
 - The spring is a mostly rigid-S top-down descent with head ground contact and no rear roll/curl, shared by all jumps/saltos.
-- Every-frame native visual review is authoritative; diagnostics compare and rank but do not author art.
+- Targeted every-frame native visual review is authoritative for broken spring clips and bounded known defect reproductions; diagnostics compare and rank but do not author art.
+- For unaffected catalogue coverage, representative/badness-ranked samples plus the smallest relevant reused v9 gates replace exhaustive review.
+- Validation stops when its recorded acceptance question is answered; whole-catalog rerender/redecode needs a concrete logged regression trigger.
 - V9 archive media and exact noindex contract are immutable inputs to v10 promotion.
 
 ---
@@ -91,5 +124,5 @@ None. Owner explicitly requires this to remain a sole implementation/modelling l
 
 1. Commit/push this run setup and mark #17 complete.
 2. Claim #18.
-3. Establish clean direct-build baseline and reproduce lighting/eye defects with fixed-camera normal/cel-main, unlit/normals/wire/debug views, every-frame sheets, badness ranking and temporal surface tracking.
-4. Explain the true structural roots before implementing the smallest reversible fixes.
+3. Establish clean direct-build baseline and reproduce lighting/eye defects within `V10-BUDGET-1` using fixed-camera normal/cel-main, unlit/normals/wire/debug views, bounded every-frame windows, badness ranking and temporal surface tracking.
+4. Explain the true structural roots before implementing the smallest reversible fixes, and stop each diagnostic lane as soon as its acceptance question is answered.

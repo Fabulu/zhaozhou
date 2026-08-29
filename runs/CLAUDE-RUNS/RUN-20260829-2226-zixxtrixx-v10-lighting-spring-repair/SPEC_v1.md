@@ -26,9 +26,10 @@ Deliver and publish a Zixxtrixx v10 that preserves the approved v9 whole-body pr
 - Reauthor tail-fin topology/attachment/outline so fins visibly join the body in every pose, view and distance.
 - Replace the shared spring with a mostly rigid-S top-down descent, head-to-ground contact, optional small authored head flatten, almost-flat full-S compression, no rear roll/curl, and coherent whole-S release.
 - Apply the corrected spring to `jump-one`, `jump-multi`, every salto variant, and attack anticipation; inspect attack contact and landing too.
-- Render and inspect every frame of every production clip at native 384x240 in the required modes/cameras.
-- Run direct-built posed/contact/strike/target/limit/mesh/planner/choreography/reel/golden/determinism/media/browser gates and two byte-identical independent true cel-main generations.
-- Preserve and archive v9 as a usable generation; regenerate all v10 PNG/WebM; decode every frame; preserve prior archive media and exact `noindex, nofollow`.
+- Inspect every frame only for the specifically broken spring sequences and the bounded known eye/lighting reproductions needed to prove root causes.
+- Set a named validation budget before running checks; record the acceptance question and reason for each check; use representative/badness-ranked samples and targeted temporal diagnostics elsewhere; reuse the minimum relevant v9 direct gates and stop when the question is answered.
+- Require two byte-identical independent true cel-main generations of a bounded deterministic representative set.
+- Preserve and archive v9 as a usable generation; regenerate v10 PNG/WebM required by the systemic render change; use bounded structure/count/sample-decode and browser checks, escalating to exhaustive catalogue render/decode only on a real regression signal.
 - Integrate current remote mains without losing hardware commits, publish exactly once when complete, verify production and immutable deployment/media URLs, and stop all lane jobs.
 
 **Out of Scope:**
@@ -54,7 +55,14 @@ Deliver and publish a Zixxtrixx v10 that preserves the approved v9 whole-body pr
 - Keep every shape, colour, light and timing control named and editable.
 - Never run Sacengine, use a worktree, invoke `cmake --build`, stage via `git add -A`, or touch shared checkouts.
 - Direct-build every dependent `.cpp` after any struct-layout change; use lane-local outputs only.
-- Inspect all production frames, not sparse uniform samples; gates are regression evidence, not likeness evidence.
+- Use bounded validation: targeted every-frame review only where required to answer the spring and known root-cause questions; representative/badness-ranked evidence elsewhere. Gates are regression evidence, not likeness evidence.
+- Validation budget `V10-BUDGET-1` applies before baseline work:
+  - at most 2 known lighting reproduction clips × 2 fixed cameras × 4 modes for root isolation;
+  - at most 2 known eye-artifact clips × 2 fixed cameras × normal/cel-main, with every-frame review only around the bounded reproduction windows;
+  - one representative normal/deforming temporal trace and the reused v9 mesh/reel checks after the root fix;
+  - spring work may inspect every frame of the four explicitly required jump/salto subjects plus bounded attack contact/landing windows;
+  - one representative deterministic cel-main pair per changed milestone, not duplicate whole-catalog generations;
+  - final media receives manifest/count/poster plus bounded start/middle/end decode sampling; exhaustive rerender/redecode requires a recorded regression trigger.
 - Commit and push each logical milestone as it lands.
 - Preserve exact `noindex, nofollow`; deploy once only after the entire pass is finished and worth looking at, with `website/deploy.ps1 -Project upheaval -Branch main`.
 - Stop and verify every render/build/encoder/browser/server/deploy job before handoff.
@@ -67,7 +75,7 @@ Deliver and publish a Zixxtrixx v10 that preserves the approved v9 whole-body pr
 2. **#18 lighting/eye artifacts:** reproduce, diagnose, explain and repair systemic lighting plus malformed eye topology; add diagnostics and evidence; commit/push.
 3. **#19 constrained face/fins:** noseward eyes, moderate mouth, continuous fin attachment without body-proportion changes; render/look/adjust; commit/push.
 4. **#20 rigid-S spring:** completely replace shared rear-curling compression and inspect required all-frame sequences; commit/push.
-5. **#21 full validation:** every production frame plus complete direct gate, deterministic generation, media and browser validation.
+5. **#21 bounded validation:** named budget, targeted every-frame proof, representative/badness-ranked review, minimum relevant reused direct gates, deterministic representative generation, bounded media/browser checks.
 6. **#22 publish/handoff:** archive v9, integrate mains, regenerate/promote v10, publish exactly once, production verification, stop jobs and report exact SHAs/URLs.
 
 ---
@@ -77,11 +85,11 @@ Deliver and publish a Zixxtrixx v10 that preserves the approved v9 whole-body pr
 - Fixed-camera every-frame native comparisons of pre-fix versus fixed normal Gouraud and true cel-main.
 - Normals, unlit, debug-light and topology/wire evidence sufficient to identify root causes.
 - Badness-ranked lighting frames and temporal per-surface diagnostics with explicit pre/post results.
-- Full all-clip/all-camera/all-mode malformed-eye-polygon review or an equivalent exhaustive committed diagnostic plus visual inspection.
-- Native face and tail-fin evidence across representative close/far, side/front/opposite/three-quarter and deforming poses.
+- Bounded known-reproduction review for malformed eye polygons in normal/cel-main plus a structural diagnostic and representative badness-ranked regression samples.
+- Native face and tail-fin evidence across the smallest representative close/far, side/opposite and deforming set that answers attachment and silhouette questions.
 - Every-frame `jump-one`, `jump-multi`, `salto-six`, `salto-nine`, attack contact/landing evidence proving whole S descent, head ground reach, no rear curl and coherent release.
-- Every production clip reviewed frame-by-frame for lighting, eye polygons, fin connection, contact, twitch and preserved v9 behaviour.
-- Direct gate outputs, two true cel-main byte-identical generations, complete media decode/counts and desktop/narrow browser checks.
+- A recorded bounded validation ledger mapping every executed check to one acceptance question, result and stop/escalation decision.
+- Minimum relevant reused direct gate outputs, two representative true cel-main byte-identical generations, bounded media structure/count/sample-decode and desktop/narrow browser checks.
 - v9 archive preservation inventory and v10 production/deployment byte verification.
 
 ---
@@ -96,7 +104,8 @@ Deliver and publish a Zixxtrixx v10 that preserves the approved v9 whole-body pr
 - Fixing only the named knockdown eye frame instead of the structural artifact class.
 - Hiding fin seams by weakening every outline or painting over detached topology.
 - Returning to the historical nearly/twice-as-large mouth.
-- Sparse frame sampling; it misses isolated broken frames.
+- Unbudgeted exhaustive validation or multiplying near-duplicate gates/evidence after the acceptance question is answered.
+- Sparse uniform samples for a known isolated-frame defect; use targeted every-frame windows or badness ranking instead.
 - Trusting a gate without looking at the complete rendered creature.
 - `cmake --build`; the known regeneration race can execute stale binaries.
 - Publishing an intermediate save or half-fixed milestone.
