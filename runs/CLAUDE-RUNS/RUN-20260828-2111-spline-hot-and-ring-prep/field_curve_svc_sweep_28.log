@@ -1,0 +1,74 @@
+== consumer roster ==
+== preflight ==
+preflight ok: C01 lanes 0/2 search only five steps
+preflight ok: C02 the lower clamp bound is dropped (search on raw a below x[0])
+preflight ok: C03 the mid guard is off by one (top knot never landed)
+preflight ok: C04 the entry x is not captured on a taken step (stale x_ent)
+preflight ok: C05 entry-0 init reads dy0 into y (swapped meta lanes)
+preflight ok: C06 port B is slaved to port A (lanes 2/3 search lane 0/1 addresses)
+preflight ok: C07 the barrel de-pipelines (II gate must bite)
+preflight ok: C08 the add flags collapse onto lane 0
+preflight ok: C09 the mad's y term is halved
+preflight ok: C10 the result rescale truncates instead of rounding half-up
+preflight ok: C11 DCURVE returns y instead of dy
+preflight ok: C12 a held reply is clobbered by the next push (early reuse)
+preflight ok: C13 a fifth group is accepted while replies are blocked
+preflight ok: C14 the table-cache commit writes the wrong slot's entry count
+preflight ok: C15 the staging register is never popped (group re-runs forever)
+preflight ok: C16 a refused issue advances anyway, publishing without its product
+preflight ok: C17 the grant is read inverted, so it advances only when refused
+preflight ok: C18 the request is withdrawn while it is being refused
+preflight ok: S01 the neighbour phase completes one cycle early (stale p3)
+preflight ok: S02 the low end wraps instead of replicating (i-1 reads the far end)
+preflight ok: S03 the high clamp is one short (i+1/i+2 stop at n-2)
+preflight ok: S04 the capture reads the current cycle's address, not the previous
+preflight ok: S05 t is not clamped at the top of the unit interval
+preflight ok: S06 the search keeps consuming through the neighbour phase
+preflight ok: S07 p1 takes a neighbour instead of the search's own entry
+preflight ok: S08 the group is offered to the spline unit every cycle (sent twice)
+preflight ok: S09 the spline unit is never granted the multiplier (hang)
+preflight ok: S10 the phase runs one cycle too long (p3 overwritten by a re-read)
+PREFLIGHT: all 28 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 27cb129dd08853ca)
+  C01 lanes 0/2 search only five steps  caught
+  C02 the lower clamp bound is dropped (search on raw a below x[0])  caught
+  C03 the mid guard is off by one (top knot never landed)  caught
+  C04 the entry x is not captured on a taken step (stale x_ent)  caught
+  C05 entry-0 init reads dy0 into y (swapped meta lanes)  caught
+  C06 port B is slaved to port A (lanes 2/3 search lane 0/1 addresses)  caught
+  C07 the barrel de-pipelines (II gate must bite)  caught
+  C08 the add flags collapse onto lane 0  caught
+  C09 the mad's y term is halved  caught
+  C10 the result rescale truncates instead of rounding half-up  caught
+  C11 DCURVE returns y instead of dy  caught
+  C12 a held reply is clobbered by the next push (early reuse)  caught
+  C13 a fifth group is accepted while replies are blocked  caught
+  C14 the table-cache commit writes the wrong slot's entry count  caught
+  C15 the staging register is never popped (group re-runs forever)  caught
+  C16 a refused issue advances anyway, publishing without its product  caught
+  C17 the grant is read inverted, so it advances only when refused  caught
+  C18 the request is withdrawn while it is being refused  caught
+  S01 the neighbour phase completes one cycle early (stale p3)  caught
+  S02 the low end wraps instead of replicating (i-1 reads the far end)  caught
+  S03 the high clamp is one short (i+1/i+2 stop at n-2)  caught
+  S04 the capture reads the current cycle's address, not the previous  caught
+  S05 t is not clamped at the top of the unit interval  caught
+  S06 the search keeps consuming through the neighbour phase  *** SURVIVED ***
+  S07 p1 takes a neighbour instead of the search's own entry  caught
+  S08 the group is offered to the spline unit every cycle (sent twice)  *** SURVIVED ***
+  S09 the spline unit is never granted the multiplier (hang)  caught
+  S10 the phase runs one cycle too long (p3 overwritten by a re-read)  caught
+== final restore ==
+clean: fpga/rtl/synth/zhao_probe_curve_svc.sv (28 mutants checked)
+
+== tally ==
+  attempted:  28 / 28
+  caught:     26
+  equivalent: 0
+  survived:   2
+  discarded:  0
+FAILED: 2 mutant(s) survived without a proof of equivalence
+  S06 the search keeps consuming through the neighbour phase
+  S08 the group is offered to the spline unit every cycle (sent twice)
+SWEEP_EXIT=12

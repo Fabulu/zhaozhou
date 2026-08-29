@@ -176,3 +176,58 @@ because the DIAG group went with them.
   **re-scored** against the new shape (the phase is new logic and the old score
   does not carry), SPLINE into `field_long_width`, the service on the path,
   `UOP_RING_PREP`, and the two-service starvation measurement.
+
+## 2026-08-29 — the sweep, 28 then 29
+
+**First run: 26 caught, 0 discarded, 2 survived (exit 12).**
+
+Before it could run at all, the preflight refused **C01 and C18**: their
+anchors named lines the neighbour phase had since edited (`consume[0]` gained
+`!n_busy`; `mul_issue_o` gained the SPLINE half of its mux). Both had been
+scored CAUGHT in the 18/18 run. Carrying that number forward would have
+reported two checks as passing while neither could be applied to the RTL at
+all — a stale anchor is not a weaker test, it is NO test, and it looks exactly
+like a passing one. Re-scoring was in the plan for the shape change; it paid
+for itself on the tooling instead.
+
+Also mine: I piped the first attempt through `tee`, so the shell reported
+`tee`'s exit code and a run that aborted at preflight looked like exit 0. The
+gate returned 1 correctly. Re-run without the pipe.
+
+### The two survivors, and what proving them showed
+
+Both are genuinely equivalent, and both proofs are recorded in `EQUIVALENT`
+with the condition that would end them.
+
+**S06** removes `!n_busy` from `consume[0]`. `cyc` stops incrementing at 12 and
+the neighbour phase runs with it pinned there; `consume[0]` requires `cyc[0]`
+and 12 is even, so it is already false for the whole phase. The guard is
+redundant *on lane 0*.
+
+That is the useful half: on **lane 1** the identical guard IS load-bearing —
+`consume[1]` wants `!cyc[0] && cyc >= 2`, both true at 12. So the sweep had a
+mutant for the guard that does nothing and none for the guard that does the
+work. **S11** is that mutant, and the 29-mutant run exists to score it.
+
+The redundant guard stays in the RTL. It states the intent instead of resting
+on a parity argument about a constant three lines away.
+
+**S08** stops `f_spl_offered` latching, so the group is offered every cycle.
+The spline unit drives `v_ready_o = (state == P_IDLE)` and stays in `P_OUT`
+until `r_valid_o && r_ready_i`, returning to `P_IDLE` on the same edge this
+service leaves `F_SPL`. The cycle the unit is ready again is the cycle the
+offer has already gone low, so the only cycle both are high is the intended
+first one. `f_spl_offered` is defensive, not load-bearing — **given** `r_ready_i`
+is tied to `1'b1` here, which is the re-score trigger.
+
+I did not take "it survived" as evidence of equivalence. Surviving 6930 checks
+plus a 400-case random lane is strong, but the argument above is what makes it
+a declaration rather than a guess.
+
+**Second run: 29 mutants, in flight.** It has to confirm S11 is caught — my own
+equivalence text for S06 asserts that, and an unverified claim inside a proof
+is the same failure the stale anchors were.
+
+**Second run: SWEEP OK. 29 attempted, 27 caught, 2 proven equivalent, 0
+survived, 0 discarded.** S11 is caught, so the claim inside S06's proof is
+measured rather than asserted. CURVE.SVC is closed at 29 against the new shape.

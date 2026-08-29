@@ -1,0 +1,76 @@
+== consumer roster ==
+== preflight ==
+preflight ok: C01 lanes 0/2 search only five steps
+preflight ok: C02 the lower clamp bound is dropped (search on raw a below x[0])
+preflight ok: C03 the mid guard is off by one (top knot never landed)
+preflight ok: C04 the entry x is not captured on a taken step (stale x_ent)
+preflight ok: C05 entry-0 init reads dy0 into y (swapped meta lanes)
+preflight ok: C06 port B is slaved to port A (lanes 2/3 search lane 0/1 addresses)
+preflight ok: C07 the barrel de-pipelines (II gate must bite)
+preflight ok: C08 the add flags collapse onto lane 0
+preflight ok: C09 the mad's y term is halved
+preflight ok: C10 the result rescale truncates instead of rounding half-up
+preflight ok: C11 DCURVE returns y instead of dy
+preflight ok: C12 a held reply is clobbered by the next push (early reuse)
+preflight ok: C13 a fifth group is accepted while replies are blocked
+preflight ok: C14 the table-cache commit writes the wrong slot's entry count
+preflight ok: C15 the staging register is never popped (group re-runs forever)
+preflight ok: C16 a refused issue advances anyway, publishing without its product
+preflight ok: C17 the grant is read inverted, so it advances only when refused
+preflight ok: C18 the request is withdrawn while it is being refused
+preflight ok: S01 the neighbour phase completes one cycle early (stale p3)
+preflight ok: S02 the low end wraps instead of replicating (i-1 reads the far end)
+preflight ok: S03 the high clamp is one short (i+1/i+2 stop at n-2)
+preflight ok: S04 the capture reads the current cycle's address, not the previous
+preflight ok: S05 t is not clamped at the top of the unit interval
+preflight ok: S06 the search keeps consuming through the neighbour phase
+preflight ok: S07 p1 takes a neighbour instead of the search's own entry
+preflight ok: S08 the group is offered to the spline unit every cycle (sent twice)
+preflight ok: S09 the spline unit is never granted the multiplier (hang)
+preflight ok: S11 the search consumes on lane 1 through the neighbour phase
+preflight ok: S10 the phase runs one cycle too long (p3 overwritten by a re-read)
+PREFLIGHT: all 29 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 27cb129dd08853ca)
+  C01 lanes 0/2 search only five steps  caught
+  C02 the lower clamp bound is dropped (search on raw a below x[0])  caught
+  C03 the mid guard is off by one (top knot never landed)  caught
+  C04 the entry x is not captured on a taken step (stale x_ent)  caught
+  C05 entry-0 init reads dy0 into y (swapped meta lanes)  caught
+  C06 port B is slaved to port A (lanes 2/3 search lane 0/1 addresses)  caught
+  C07 the barrel de-pipelines (II gate must bite)  caught
+  C08 the add flags collapse onto lane 0  caught
+  C09 the mad's y term is halved  caught
+  C10 the result rescale truncates instead of rounding half-up  caught
+  C11 DCURVE returns y instead of dy  caught
+  C12 a held reply is clobbered by the next push (early reuse)  caught
+  C13 a fifth group is accepted while replies are blocked  caught
+  C14 the table-cache commit writes the wrong slot's entry count  caught
+  C15 the staging register is never popped (group re-runs forever)  caught
+  C16 a refused issue advances anyway, publishing without its product  caught
+  C17 the grant is read inverted, so it advances only when refused  caught
+  C18 the request is withdrawn while it is being refused  caught
+  S01 the neighbour phase completes one cycle early (stale p3)  caught
+  S02 the low end wraps instead of replicating (i-1 reads the far end)  caught
+  S03 the high clamp is one short (i+1/i+2 stop at n-2)  caught
+  S04 the capture reads the current cycle's address, not the previous  caught
+  S05 t is not clamped at the top of the unit interval  caught
+  S06 the search keeps consuming through the neighbour phase  equivalent (proven)
+        EQUIVALENT. `cyc` stops incrementing at 12 (the search's own last cycle) and the neighbour phase runs with it pinned there, so during the phase cyc == 12. consume[0] requires cyc[0], and 12 is EVEN, so consume[0] is already false for the whole phase and the `!n_busy` this mutant removes cannot change it. The guard is redundant on lane 0 and deliberately kept: it states the intent rather than resting on a parity argument about a constant three lines away. On lane 1 the same guard IS load-bearing -- consume[1] wants !cyc[0] && cyc >= 2, both true at 12 -- which is mutant S11, and S11 is caught. RE-SCORE IF: cyc stops being pinned at 12 during the phase, or consume[0]'s cycle predicate changes parity.
+  S07 p1 takes a neighbour instead of the search's own entry  caught
+  S08 the group is offered to the spline unit every cycle (sent twice)  equivalent (proven)
+        EQUIVALENT. The offer and the unit's readiness never overlap twice. zhao_field_v3_spline drives v_ready_o = (state == P_IDLE) and stays in P_OUT until r_valid_o && r_ready_i, returning to P_IDLE on that same edge -- the edge on which this service leaves F_SPL. So the cycle the unit is ready again is the cycle spl_v_valid has already gone low, and the only cycle both are high is the intended first one. f_spl_offered is defensive, not load-bearing, GIVEN r_ready_i is tied to 1'b1 here. RE-SCORE IF: r_ready_i stops being constant 1, F_SPL's exit stops being spl_r_valid, or the unit gains a path back to P_IDLE that does not coincide with raising r_valid_o.
+  S09 the spline unit is never granted the multiplier (hang)  caught
+  S11 the search consumes on lane 1 through the neighbour phase  caught
+  S10 the phase runs one cycle too long (p3 overwritten by a re-read)  caught
+== final restore ==
+clean: fpga/rtl/synth/zhao_probe_curve_svc.sv (29 mutants checked)
+
+== tally ==
+  attempted:  29 / 29
+  caught:     27
+  equivalent: 2
+  survived:   0
+  discarded:  0
+SWEEP OK
+SWEEP_EXIT=0

@@ -202,6 +202,16 @@ MUTANTS = [
      "fpga/rtl/synth/zhao_probe_curve_svc.sv",
      """  assign spl_mul_ready = mul_ready_i && (f_state == F_SPL);""",
      """  assign spl_mul_ready = mul_ready_i && (f_state == F_WAIT);"""),
+    # S11 EXISTS BECAUSE S06 SURVIVED. Proving S06 equivalent showed that the
+    # `!n_busy` it removes is redundant on lane 0 and load-bearing on lane 1 --
+    # so the sweep had a mutant for the guard that does nothing and none for
+    # the guard that does the work. This is that one, and it is the mutant S06
+    # was always meant to be.
+    ("S11 the search consumes on lane 1 through the neighbour phase",
+     RTL,
+     "    consume[1] = s_busy && !s_done && !n_busy && !cyc[0] && (cyc >= 4'd2);",
+     "    consume[1] = s_busy && !s_done && !cyc[0] && (cyc >= 4'd2);"),
+
     ("S10 the phase runs one cycle too long (p3 overwritten by a re-read)",
      "fpga/rtl/synth/zhao_probe_curve_svc.sv",
      """        if (ncyc != 3'd7) ncyc <= ncyc + 3'd1;""",
@@ -210,7 +220,34 @@ MUTANTS = [
 
 # Machine-readable, so a survivor is either PROVEN equivalent here or fails
 # the sweep. Nothing is declared until the first run says what survives.
-EQUIVALENT = {}
+EQUIVALENT = {
+    # DECLARED 2026-08-29, AFTER the run that showed them surviving -- never
+    # before one. Each carries the argument and the condition that would make
+    # it stop being true.
+    "S06": (
+        "EQUIVALENT. `cyc` stops incrementing at 12 (the search's own last "
+        "cycle) and the neighbour phase runs with it pinned there, so during "
+        "the phase cyc == 12. consume[0] requires cyc[0], and 12 is EVEN, so "
+        "consume[0] is already false for the whole phase and the `!n_busy` "
+        "this mutant removes cannot change it. The guard is redundant on "
+        "lane 0 and deliberately kept: it states the intent rather than "
+        "resting on a parity argument about a constant three lines away. "
+        "On lane 1 the same guard IS load-bearing -- consume[1] wants "
+        "!cyc[0] && cyc >= 2, both true at 12 -- which is mutant S11, and "
+        "S11 is caught. RE-SCORE IF: cyc stops being pinned at 12 during the "
+        "phase, or consume[0]'s cycle predicate changes parity."),
+    "S08": (
+        "EQUIVALENT. The offer and the unit's readiness never overlap twice. "
+        "zhao_field_v3_spline drives v_ready_o = (state == P_IDLE) and stays "
+        "in P_OUT until r_valid_o && r_ready_i, returning to P_IDLE on that "
+        "same edge -- the edge on which this service leaves F_SPL. So the "
+        "cycle the unit is ready again is the cycle spl_v_valid has already "
+        "gone low, and the only cycle both are high is the intended first "
+        "one. f_spl_offered is defensive, not load-bearing, GIVEN r_ready_i "
+        "is tied to 1'b1 here. RE-SCORE IF: r_ready_i stops being constant "
+        "1, F_SPL's exit stops being spl_r_valid, or the unit gains a path "
+        "back to P_IDLE that does not coincide with raising r_valid_o."),
+}
 
 
 def mutate(gold, old, new):
