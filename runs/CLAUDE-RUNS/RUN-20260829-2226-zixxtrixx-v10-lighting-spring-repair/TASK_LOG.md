@@ -16,8 +16,8 @@ Preserve the approved v9 whole-body proportions and rendering style while repair
 
 | Task | Scope | Status |
 |---|---|---|
-| #17 | setup and durable direction | In progress — claimed |
-| #18 | lighting and eye artifacts | Pending |
+| #17 | setup and durable direction | Complete — `0d1f45e` / `f75306f`, pushed |
+| #18 | lighting and eye artifacts | In progress — claimed |
 | #19 | constrained face and fins | Pending |
 | #20 | shared rigid-S spring | Pending |
 | #21 | full validation | Pending |
@@ -50,6 +50,13 @@ Only one task is active at a time. A task becomes complete only after its eviden
 - Wrote durable `Upheaval/creature/Zixxtrixx/OWNER-DIRECTION-10-2026-08-29.md` faithfully recording the approved-proportion freeze, systemic lighting/eye diagnosis, constrained face/fins and rigid-S spring requirements.
 - Committed and pushed the durable direction early on the Upheaval v10 branch as `f75306f`.
 - Filled v10 SPEC and TASK_LOG with ordered tracker mapping, evidence requirements and explicit failed approaches not to retry.
+
+### 2026-08-29 22:48 UTC+02:00 - Setup pushed; lighting/eye diagnosis claimed
+
+- Committed and pushed the zhaozhou run setup as `0d1f45e`.
+- Task #17 is complete only after both setup commits reached their remote branches.
+- Claimed task #18. No art constants or creature/renderer source have been changed.
+- Next action is a clean direct-build v9 baseline followed by fixed-camera every-frame reproduction and root-cause isolation.
 
 ---
 
