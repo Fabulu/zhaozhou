@@ -58,8 +58,8 @@ MUTANTS = [
      "        g_s0_r[fill_r[1:0]]  <= long_s0_i;",
      "        g_s0_r[3 - fill_r[1:0]]  <= long_s0_i;"),
     ("D03 a fifth context overwrites the fourth",
-     "  assign long_ready_o = (state_r == D_GATHER) && (fill_r < 3'd4) && !flush_i &&",
-     "  assign long_ready_o = (state_r == D_GATHER) && (fill_r <= 3'd4) && !flush_i &&"),
+     "                        (fill_r < 3'd4) && !flush_i &&",
+     "                        (fill_r <= 3'd4) && !flush_i &&"),
     # Reshaped: dropping the term orphans same_group_c, and the linter refuses
     # an unused signal. Inverting keeps the operand and is a real defect -- a
     # context can ONLY join a group it does not match.
@@ -81,8 +81,8 @@ MUTANTS = [
      "                         (long_imm_i == g_imm_r));",
      "                        ((long_op_i == g_op_r) && (long_dst_i == g_dst_r));"),
     ("D27 the request carries the WRONG group's immediate",
-     "            s_imm_r   <= g_imm_r;",
-     "            s_imm_r   <= g_imm_r + 32'd1;"),
+     "            s_imm_r[tail_r]   <= g_imm_r;",
+     "            s_imm_r[tail_r]   <= g_imm_r + 32'd1;"),
     ("D28 the gathered immediate is never captured",
      "        g_imm_r <= long_imm_i;",
      "        g_imm_r <= g_imm_r;"),
@@ -109,71 +109,114 @@ MUTANTS = [
      "  localparam logic signed [31:0] PAD_A = 32'sd3;",
      "  localparam logic signed [31:0] PAD_A = 32'sd0;"),
     ("D10 every lane is treated as real, so pads are sent as data",
-     "      if (3'(l) < s_used_r) begin",
-     "      if (3'(l) <= s_used_r) begin"),
+     "      if (3'(l) < s_used_r[tail_r]) begin",
+     "      if (3'(l) <= s_used_r[tail_r]) begin"),
 
     # ---- the slot snapshot --------------------------------------------------
     ("D11 the slot records the wrong destination base",
-     "            s_dst_r   <= g_dst_r;",
-     "            s_dst_r   <= g_dst_r + REGW'(1);"),
+     "            s_dst_r[tail_r]   <= g_dst_r;",
+     "            s_dst_r[tail_r]   <= g_dst_r + REGW'(1);"),
     ("D12 the slot records a full group however many joined",
-     "            s_used_r  <= fill_r;",
-     "            s_used_r  <= 3'd4;"),
+     "            s_used_r[tail_r]  <= fill_r;",
+     "            s_used_r[tail_r]  <= 3'd4;"),
     ("D13 the destination width is one register whatever the op",
-     "            s_width_r <= dst_width_of(g_op_r);",
-     "            s_width_r <= 2'd1;"),
+     "            s_width_r[tail_r] <= dst_width_of(g_op_r);",
+     "            s_width_r[tail_r] <= 2'd1;"),
 
     # ---- the lost-context hole, which was REAL -----------------------------
     ("D14 an offer arriving with flush is accepted and then thrown away",
-     "  assign long_ready_o = (state_r == D_GATHER) && (fill_r < 3'd4) && !flush_i &&",
-     "  assign long_ready_o = (state_r == D_GATHER) && (fill_r < 3'd4) &&"),
+     "                        (fill_r < 3'd4) && !flush_i &&",
+     "                        (fill_r < 3'd4) &&"),
 
     # ---- the drain ----------------------------------------------------------
     ("D15 the drain writes every lane, including the padded ones",
-     "              if (d_lane_r + 3'd1 >= s_used_r) begin",
+     "              if (d_lane_r + 3'd1 >= s_used_r[head_r]) begin",
      "              if (d_lane_r + 3'd1 >= 3'd4) begin"),
     ("D16 the drain stops one lane early",
-     "              if (d_lane_r + 3'd1 >= s_used_r) begin",
-     "              if (d_lane_r + 3'd1 >= s_used_r - 3'd1) begin"),
+     "              if (d_lane_r + 3'd1 >= s_used_r[head_r]) begin",
+     "              if (d_lane_r + 3'd1 >= s_used_r[head_r] - 3'd1) begin"),
     ("D17 the destination register does not advance with the member",
-     "  assign wb_reg_o   = s_dst_r + REGW'(d_memb_r);",
-     "  assign wb_reg_o   = s_dst_r;"),
+     "  assign wb_reg_o   = s_dst_r[head_r] + REGW'(d_memb_r);",
+     "  assign wb_reg_o   = s_dst_r[head_r];"),
     ("D18 the writeback goes to a different context than the lane it came from",
-     "  assign wb_ctx_o   = s_ctx_r[d_lane_r[1:0]];",
-     "  assign wb_ctx_o   = s_ctx_r[3 - d_lane_r[1:0]];"),
+     "  assign wb_ctx_o   = s_ctx_r[head_r][d_lane_r[1:0]];",
+     "  assign wb_ctx_o   = s_ctx_r[head_r][3 - d_lane_r[1:0]];"),
     ("D19 the members are drained in the wrong order",
-     "      2'd0:    wb_data_c = r0_r[d_lane_r[1:0]];\n"
-     "      2'd1:    wb_data_c = r1_r[d_lane_r[1:0]];",
-     "      2'd0:    wb_data_c = r1_r[d_lane_r[1:0]];\n"
-     "      2'd1:    wb_data_c = r0_r[d_lane_r[1:0]];"),
+     "      2'd0:    wb_data_c = r0_r[head_r][d_lane_r[1:0]];\n"
+     "      2'd1:    wb_data_c = r1_r[head_r][d_lane_r[1:0]];",
+     "      2'd0:    wb_data_c = r1_r[head_r][d_lane_r[1:0]];\n"
+     "      2'd1:    wb_data_c = r0_r[head_r][d_lane_r[1:0]];"),
     ("D20 the drain ignores backpressure and runs at one write per clock",
-     "        D_DRAIN: begin\n"
+     "        DR_RUN: begin\n"
      "          if (wb_ready_i) begin",
-     "        D_DRAIN: begin\n"
+     "        DR_RUN: begin\n"
      "          if (1'b1) begin"),
 
     # ---- the release --------------------------------------------------------
     ("D21 a context is released before its LAST register lands",
      "  assign rel_valid_o = wb_valid_o && wb_ready_i &&\n"
-     "                       (d_memb_r == 2'(s_width_r - 2'd1));",
+     "                       (d_memb_r == 2'(s_width_r[head_r] - 2'd1));",
      "  assign rel_valid_o = wb_valid_o && wb_ready_i &&\n"
      "                       (d_memb_r == 2'd0);"),
     ("D22 the release names a different context than the one written",
-     "  assign rel_ctx_o   = s_ctx_r[d_lane_r[1:0]];",
-     "  assign rel_ctx_o   = s_ctx_r[3 - d_lane_r[1:0]];"),
+     "  assign rel_ctx_o   = s_ctx_r[head_r][d_lane_r[1:0]];",
+     "  assign rel_ctx_o   = s_ctx_r[head_r][3 - d_lane_r[1:0]];"),
     ("D23 a context is released even when the write was refused",
      "  assign rel_valid_o = wb_valid_o && wb_ready_i &&\n"
-     "                       (d_memb_r == 2'(s_width_r - 2'd1));",
+     "                       (d_memb_r == 2'(s_width_r[head_r] - 2'd1));",
      "  assign rel_valid_o = wb_valid_o &&\n"
-     "                       (d_memb_r == 2'(s_width_r - 2'd1));"),
+     "                       (d_memb_r == 2'(s_width_r[head_r] - 2'd1));"),
 
     # ---- the tag ------------------------------------------------------------
     ("D24 every group carries the same tag",
      "            next_tag_r <= next_tag_r + TAGW'(1);",
      "            next_tag_r <= next_tag_r;"),
     ("D25 the tag guard never reports a mismatch",
-     "            if (rsp_tag_i != s_tag_r) tag_mismatch_o <= 1'b1;",
-     "            if (rsp_tag_i == s_tag_r) tag_mismatch_o <= 1'b1;"),
+     "        if (!rsp_hit_c) begin",
+     "        if (rsp_hit_c) begin"),
+    # ---- the in-flight queue, added 2026-08-29 ---------------------------
+    # Three of these are regressions for bugs that were really in this block
+    # while it was being written. They are in the table so the next person
+    # meets them as a failing check rather than as a hang.
+
+    # D31 IS THE MODULO-BY-ZERO. SW'(OUTSTANDING) truncated the depth to the
+    # pointer width -- 1'(2) == 0 -- so no pointer ever advanced and two groups
+    # in flight deadlocked outright. It passed at depth 1 because modulo 1 is
+    # 0, which is the right answer for the wrong reason.
+    ("D31 the slot pointer never advances (the modulo-by-zero deadlock)",
+     "    next_slot = (p == SW'(OUTSTANDING - 1)) ? SW'(0) : SW'(p + SW'(1));",
+     "    next_slot = (p == SW'(OUTSTANDING - 1)) ? SW'(0) : p;"),
+
+    # D32: the drain starting a clock late. Every consumer that expects the
+    # write port live immediately then sees ZERO writes rather than wrong
+    # ones, which reads as a dead block rather than a broken one.
+    ("D32 the drain waits a clock instead of starting on the capture",
+     "              (s_done_r[head_r] ||\n"
+     "               (rsp_valid_i && rsp_ready_o && rsp_hit_c && (rsp_slot_c == head_r)))) begin",
+     "              (s_done_r[head_r] ||\n"
+     "               (1'b0 && rsp_valid_i && rsp_ready_o && rsp_hit_c && (rsp_slot_c == head_r)))) begin"),
+
+    # D33: a response landing in the OLDEST slot rather than the one its tag
+    # names. Harmless while one group is in flight and silent corruption the
+    # moment two are -- the younger group's answer overwrites the older's.
+    ("D33 a response is captured into the oldest slot, not the tagged one",
+     "            r0_r[rsp_slot_c][l] <= rsp_r0_i[l];",
+     "            r0_r[head_r][l] <= rsp_r0_i[l];"),
+
+    # D34: accepting a context into a group that cannot be issued. The
+    # executor has handshaked it away and parked it, so nothing will ever take
+    # it -- a lost instruction, not a slow one.
+    ("D34 ready is not gated on queue room, so a context is stranded",
+     "  assign long_ready_o = (istate_r == I_GATHER) && (count_r != (SW+1)'(OUTSTANDING)) &&",
+     "  assign long_ready_o = (istate_r == I_GATHER) &&"),
+
+    # D35: draining the NEWEST group first. Write ordering and release timing
+    # are the half of this block the queue was not allowed to change.
+    ("D35 the drain runs newest-first, breaking write ordering",
+     "          if ((count_r != '0) &&\n"
+     "              (s_done_r[head_r] ||",
+     "          if ((count_r != '0) &&\n"
+     "              (s_done_r[tail_r] ||"),
 ]
 
 

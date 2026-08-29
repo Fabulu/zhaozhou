@@ -421,12 +421,11 @@ module zhao_field_v3_dispatch #(
   always_comb begin
     for (int i = 0; i < OUTSTANDING; i++) in_flight_c[i] = 1'b0;
     for (int k = 0; k < OUTSTANDING; k++)
-      if ((SW+1)'(k) < count_r) begin
-        // int arithmetic on purpose: the sum must not be truncated to the
-        // pointer width before the wrap is taken.
-        automatic int idx = (int'(head_r) + k) % OUTSTANDING;
-        in_flight_c[idx] = 1'b1;
-      end
+      // int arithmetic on purpose: the sum must not be truncated to the
+      // pointer width before the wrap is taken. Indexed inline rather than
+      // through a named int, which would be a 32-bit signal with two bits used
+      // and is a lint error rather than a style question.
+      if ((SW+1)'(k) < count_r) in_flight_c[(int'(head_r) + k) % OUTSTANDING] = 1'b1;
   end
 
   logic awaiting_c;
