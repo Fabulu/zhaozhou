@@ -450,3 +450,65 @@ same re-score trigger, in those words.
 That is a genuine piece of engine work with its own consequences (tags, the
 drain, response ordering) and it is NOT in this run's scope. It is the next
 thing worth doing if the owner wants the starvation number to mean anything.
+
+## 2026-08-29 — the dispatch sweep, D30, and a build-tree collision
+
+**Dispatch: 29 caught, 1 survived, 0 discarded.** D29 — the deadlock itself,
+reintroduced — is CAUGHT, so that defect now has a regression check.
+
+### D30 and the kill that was not one
+
+D30 drops the `long_valid_i` guard from the new issue term, so the dispatcher
+acts on whatever the port carries while nobody is offering.
+
+I was confident the fix was to assert the batch count in the composed
+differential: a prematurely closed group means eight groups instead of two, and
+that number was already being PRINTED and never checked. I added the assertion
+and **the mutant passed it.** In that test all eight contexts carry the same op,
+so the idle port always matches the group and the mismatch never arises.
+
+Worth recording plainly: it looked like the obvious kill, the reasoning was
+clean, and it was wrong. Applying the mutant and watching the test pass is what
+settled it, not the argument.
+
+Section 5d builds the condition directly instead — fill the group by one, then
+present a DIFFERENT op with valid LOW for four clocks. Verified by applying D30
+and watching it fail, then restoring.
+
+The batch-count assertion stays on its own merits. It asserts the dispatcher's
+whole reason for existing, and it had been sitting in the output unchecked.
+
+### A build-tree collision, measured rather than theorised
+
+Both the svcpath and dispatch sweeps defaulted to `BUILD_DIR=build-verify` —
+the tree an interactive session runs ctest and hand builds in. Two writers, one
+build directory: the exact collision the curve service's sweep was moved off
+`build/` to avoid on 2026-08-27, still present in two other drivers.
+
+It bit. The svcpath sweep was killed mid-run while I was using that tree, and
+left behind:
+
+* `build-verify` with a deleted target directory — a later compile failed on a
+  missing dependency file, which reads like a broken toolchain and is not one;
+* **a mutant still applied to the RTL** (W12).
+
+`sweep_check_clean.py` caught the mutant. That guard exists because a killed
+run put one into a pushed commit on 2026-08-28, and this is the second time it
+has earned its place. Nothing was staged in that state — the check ran before
+any add, and `git_add_safe` would have refused anyway.
+
+Each sweep now has its own tree, and the reason is written into both scripts
+where the next person will hit it.
+
+### Standing
+
+    curve service (CURVE.SVC)   29/29   closed, 27 caught + 2 proven equivalent
+    service path (SVCPATH)      37      30 caught + 5 proven equivalent, needs
+                                        one clean end-to-end run to record it
+    dispatcher (DISPATCH)       30      29 caught + D30, now killed by 5d,
+                                        needs the confirming run
+    composed machine                    117 checks
+    dispatcher's own bench              341 checks
+
+Both confirming sweeps are running in their new dedicated trees. Neither result
+is assumed.

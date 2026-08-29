@@ -1,0 +1,36 @@
+== consumer roster ==
+== preflight ==
+preflight ok: D29 the group is not closed for a context that cannot join (the deadlock)
+preflight ok: D30 the group is closed on a mismatch nobody is offering
+preflight ok: D01 a context lands in the wrong lane of the group
+preflight ok: D02 the operands land in a different lane than the context
+preflight ok: D03 a fifth context overwrites the fourth
+preflight ok: D04 a context with a different op or destination joins anyway
+preflight ok: D05 a short op is accepted as a long one
+preflight ok: D26 the immediate is not part of the group key
+preflight ok: D27 the request carries the WRONG group's immediate
+preflight ok: D28 the gathered immediate is never captured
+preflight ok: D06 a partial group is never issued, so one context alone DEADLOCKS
+preflight ok: D07 an EMPTY group is issued on flush
+preflight ok: D08 the group issues one context early
+preflight ok: D09 the pad is zero, which is a plausible coordinate
+preflight ok: D10 every lane is treated as real, so pads are sent as data
+preflight ok: D11 the slot records the wrong destination base
+preflight ok: D12 the slot records a full group however many joined
+preflight ok: D13 the destination width is one register whatever the op
+preflight ok: D14 an offer arriving with flush is accepted and then thrown away
+preflight ok: D15 the drain writes every lane, including the padded ones
+preflight ok: D16 the drain stops one lane early
+preflight ok: D17 the destination register does not advance with the member
+preflight ok: D18 the writeback goes to a different context than the lane it came from
+preflight ok: D19 the members are drained in the wrong order
+preflight ok: D20 the drain ignores backpressure and runs at one write per clock
+preflight ok: D21 a context is released before its LAST register lands
+preflight ok: D22 the release names a different context than the one written
+preflight ok: D23 a context is released even when the write was refused
+preflight ok: D24 every group carries the same tag
+preflight ok: D25 the tag guard never reports a mismatch
+PREFLIGHT: all 30 mutants lint and restore
+== pristine baseline ==
+ABORT: the PRISTINE tree fails its own lanes — nothing can be scored
+DISPATCH_EXIT=7

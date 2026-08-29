@@ -1,0 +1,77 @@
+== consumer roster ==
+== preflight ==
+preflight ok: D29 the group is not closed for a context that cannot join (the deadlock)
+preflight ok: D30 the group is closed on a mismatch nobody is offering
+preflight ok: D01 a context lands in the wrong lane of the group
+preflight ok: D02 the operands land in a different lane than the context
+preflight ok: D03 a fifth context overwrites the fourth
+preflight ok: D04 a context with a different op or destination joins anyway
+preflight ok: D05 a short op is accepted as a long one
+preflight ok: D26 the immediate is not part of the group key
+preflight ok: D27 the request carries the WRONG group's immediate
+preflight ok: D28 the gathered immediate is never captured
+preflight ok: D06 a partial group is never issued, so one context alone DEADLOCKS
+preflight ok: D07 an EMPTY group is issued on flush
+preflight ok: D08 the group issues one context early
+preflight ok: D09 the pad is zero, which is a plausible coordinate
+preflight ok: D10 every lane is treated as real, so pads are sent as data
+preflight ok: D11 the slot records the wrong destination base
+preflight ok: D12 the slot records a full group however many joined
+preflight ok: D13 the destination width is one register whatever the op
+preflight ok: D14 an offer arriving with flush is accepted and then thrown away
+preflight ok: D15 the drain writes every lane, including the padded ones
+preflight ok: D16 the drain stops one lane early
+preflight ok: D17 the destination register does not advance with the member
+preflight ok: D18 the writeback goes to a different context than the lane it came from
+preflight ok: D19 the members are drained in the wrong order
+preflight ok: D20 the drain ignores backpressure and runs at one write per clock
+preflight ok: D21 a context is released before its LAST register lands
+preflight ok: D22 the release names a different context than the one written
+preflight ok: D23 a context is released even when the write was refused
+preflight ok: D24 every group carries the same tag
+preflight ok: D25 the tag guard never reports a mismatch
+PREFLIGHT: all 30 mutants lint and restore
+== pristine baseline ==
+   pristine lanes green (model 8495804231c7d08e)
+  D29 the group is not closed for a context that cannot join (the deadlock)  caught
+  D30 the group is closed on a mismatch nobody is offering  *** SURVIVED ***
+  D01 a context lands in the wrong lane of the group  caught
+  D02 the operands land in a different lane than the context  caught
+  D03 a fifth context overwrites the fourth  caught
+  D04 a context with a different op or destination joins anyway  caught
+  D05 a short op is accepted as a long one  caught
+  D26 the immediate is not part of the group key  caught
+  D27 the request carries the WRONG group's immediate  caught
+  D28 the gathered immediate is never captured  caught
+  D06 a partial group is never issued, so one context alone DEADLOCKS  caught
+  D07 an EMPTY group is issued on flush  caught
+  D08 the group issues one context early  caught
+  D09 the pad is zero, which is a plausible coordinate  caught
+  D10 every lane is treated as real, so pads are sent as data  caught
+  D11 the slot records the wrong destination base  caught
+  D12 the slot records a full group however many joined  caught
+  D13 the destination width is one register whatever the op  caught
+  D14 an offer arriving with flush is accepted and then thrown away  caught
+  D15 the drain writes every lane, including the padded ones  caught
+  D16 the drain stops one lane early  caught
+  D17 the destination register does not advance with the member  caught
+  D18 the writeback goes to a different context than the lane it came from  caught
+  D19 the members are drained in the wrong order  caught
+  D20 the drain ignores backpressure and runs at one write per clock  caught
+  D21 a context is released before its LAST register lands  caught
+  D22 the release names a different context than the one written  caught
+  D23 a context is released even when the write was refused  caught
+  D24 every group carries the same tag  caught
+  D25 the tag guard never reports a mismatch  caught
+== final restore ==
+clean: fpga/rtl/field/zhao_field_v3_dispatch.sv (30 mutants checked)
+
+== tally ==
+  attempted:  30 / 30
+  caught:     29
+  equivalent: 0
+  survived:   1
+  discarded:  0
+FAILED: 1 mutant(s) survived without a proof of equivalence
+  D30 the group is closed on a mismatch nobody is offering
+DISPATCH_EXIT=12
