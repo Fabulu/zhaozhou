@@ -2235,3 +2235,83 @@ the arbiter's output.
 
 **Five defects in shipped RTL today, four needing either multiple contexts or
 two blocks composed to appear at all.**
+
+---
+
+## 2026-08-30 — GATE 3: the composed Earth measurement, and the defect it found
+
+**The number.** Real Earth programs on the real composed engine, counted:
+
+| | clocks/group | frame | against 850,000 |
+|---|---|---|---|
+| impact_wave | 125 | 4,368,000 | 5.1x over |
+| wave_pool | 129 | 4,507,776 | 5.3x over |
+
+1,536 values checked against `zfield::execute_point`, zero mismatches, both
+drive patterns. The estimate history is worth keeping because each step was a
+different KIND of error, not a better guess:
+
+    9.1x   latency mistaken for throughput
+    2.1x   serial bound, II summed
+    fits   overlapped bound, busiest service only
+    5.3x   MEASURED on the composed machine
+
+**The drive pattern was worth 5x and no table could have said so.** Reloading
+each context the instant it retires -- the obvious loop, the one that keeps the
+engine fullest -- sent 98% of dispatch groups out PARTIAL: a whole group's
+latency spent on one point. Contexts that retire at different moments drift
+apart, stop sharing an opcode, and the drift is self-reinforcing. Aligned waves
+instead: 0% partial, idle 16,489 -> 1,760, 624 -> 125 clocks/group.
+
+**ROOT CAUSE of the wrong values: the host preload port silently stole the
+register file.** The write mux gave `pre_we_i` absolute priority on a premise
+written beside it -- "the machine is not running during preload". False the
+moment points are fed to a retired context while others still execute, which is
+how an association streams. Every preload clock discarded a granted write. The
+value was already on the shared write port, so from outside it looked
+delivered.
+
+Fixed: the machine wins the port (a granted write cannot be retried; a preload
+can), and `pre_ready_o` tells the host when its write landed. 175 wrong -> 0.
+
+**What this cost, and the lesson.** Four hypotheses died before the right one:
+partial groups, the services, late writeback, dropped starts. Each was killed
+by a measurement rather than an argument, and each measurement was cheap. What
+finally worked was refusing to reason about the RTL any further:
+
+  * replay the write trace in PROGRAM order, report the EARLIEST divergent uop
+    rather than the lowest divergent register;
+  * CURVE(0) = 52897 matched the wrong value exactly -- so the service had
+    answered its question correctly and the QUESTION was wrong;
+  * expose the handover: the executor was passing s0=0;
+  * clock-stamp it: the producing write was granted NINE clocks earlier;
+  * expose the file read: still presenting 0 at capture.
+
+A write that is granted and then dropped is invisible to every guard the engine
+owns -- `desync_o` counts products, the tags match, and the write port shows the
+value going past. Only comparing the file against the oracle catches it.
+
+**Two speculative fixes were tried, measured, and REVERTED** rather than
+shipped: an operand-hold condition and a per-stage product carry. Both were
+plausible, both changed nothing. The one earlier change that did move the number
+(the scalar multiply re-issuing on every held clock, 175 -> 149) is
+independently correct and stayed.
+
+**Three streaming tests were blind to it by construction.** len, trig and
+ring_svc each streamed N groups past ONE pair of operands and compared every
+answer to ONE expected value -- so a cross-group swap could not have been seen.
+The tag order check did not cover it either: the tag rides the order queue and
+the data rides the banks, so tags can be in perfect order over swapped numbers.
+All three now carry per-group data; all three still pass, which is what
+EXONERATED them and forced the search upstream.
+
+**Still open: the 5.3x.** The evidence says latency-bound, not
+arithmetic-bound. A point's program latency is ~250 clocks and only 8 are ever
+in flight. Little's law wants ~41 points in flight for 6.1 clocks/point, so
+CTX 8 -> ~48, and the dispatcher's OUTSTANDING 4 -> ~12, since 4 groups caps
+the service path at 16 points regardless of CTX. Every one of those is a
+parameter and they all descend from `CTX` in `zhao_probe_v3_full`.
+
+**crater_ring still does not run at all:** 7 vector + 29 uniform = 36 registers
+against a file of 32. The executor has no scalar-bank read path, so uniforms
+reach it only by broadcast. That refusal is a finding, not a skip.
