@@ -1644,6 +1644,19 @@ verilate(test_field_v3_trig_directed
 add_test(NAME field_v3_trig_directed COMMAND test_field_v3_trig_directed)
 set_tests_properties(field_v3_trig_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# ---- LEN2, LEN3 and DIST2 ------------------------------------------------
+# The last opcode the Earth programs need. One block for three, because len_of
+# is the whole of all three in the reference too.
+add_executable(test_field_v3_len_directed differential/field_v3_len_directed.cpp)
+target_link_libraries(test_field_v3_len_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_len_directed
+  PREFIX Vzhao_field_v3_len
+  TOP_MODULE zhao_field_v3_len
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv)
+add_test(NAME field_v3_len_directed COMMAND test_field_v3_len_directed)
+set_tests_properties(field_v3_len_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # ---- the uniform (scalar) bank -------------------------------------------
 # 64 slots because tools/field/measure_sreg_hwm.cpp measured a worst case of 41
 # across the corpus; the probe is committed so the number can be rechecked.
