@@ -1608,6 +1608,19 @@ set_tests_properties(field_v3_ring_random_nightly PROPERTIES LABELS "nightly" TI
 # FIELD v3 Phase 4: NORMALIZE2 and NORMALIZE3 for four points at once. Owns an
 # isqrt (walked four times -- the documented slow path, and NORMALIZE is COLD in
 # the op table) and an rcp24 seed ROM, and takes ten four-wide bank requests.
+# ---- the prepared ring, joined to its uniforms ----------------------------
+# The arithmetic is closed at 23/23 in zhao_field_v3_ring; what this proves is
+# the JOIN -- four scalars fetched by index over a registered read port.
+add_executable(test_field_v3_ring_svc_directed differential/field_v3_ring_svc_directed.cpp)
+target_link_libraries(test_field_v3_ring_svc_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_ring_svc_directed
+  PREFIX Vzhao_field_v3_ring_svc
+  TOP_MODULE zhao_field_v3_ring_svc
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv)
+add_test(NAME field_v3_ring_svc_directed COMMAND test_field_v3_ring_svc_directed)
+set_tests_properties(field_v3_ring_svc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # ---- the uniform (scalar) bank -------------------------------------------
 # 64 slots because tools/field/measure_sreg_hwm.cpp measured a worst case of 41
 # across the corpus; the probe is committed so the number can be rechecked.
