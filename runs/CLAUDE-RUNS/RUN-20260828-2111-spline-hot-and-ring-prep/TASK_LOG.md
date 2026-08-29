@@ -556,3 +556,63 @@ interactive ctest.
 
 Every equivalence was declared AFTER a run that showed the mutant surviving,
 never before one, and every one carries the condition that ends it.
+
+## 2026-08-29 — every op the table offers is now actually served
+
+The table gave NORMALIZE2/3 and ROT2/3 a destination width, which is what makes
+the executor OFFER them. Nothing on the service path could compute any of them.
+They fell into the noise unit's else-branch — `!is_curve_c` — were answered
+with NOISE semantics, and the wrong number was written to a real register with
+only `wrong_op_o` to say so.
+
+**A raised flag beside a wrong value is not a safe failure.** It is the worst
+outcome available: individually plausible, completely wrong, and discoverable
+only by someone who thought to read the flag. Four of the nine ops the machine
+advertised were in that state.
+
+Both units already existed and were closed (NORMALIZE 26/26, ROT 24), and both
+take PER-POINT sources only — so neither needed the uniform path that
+UOP_RING_PREP is still blocked on. The work was wiring, not arithmetic.
+
+### What changed
+
+* Four services on the path now, not two: noise, curve, normalize, rot.
+* **The noise unit is no longer an else-branch.** Every service is selected by
+  its own predicate. "Not curve" is not the same claim as "is noise", and only
+  one of those stays true when an op is added — that else-branch IS the defect.
+* Five bank claimants, and `rsp_r2` is driven with something other than zero
+  for the first time, because NORMALIZE3 and ROT3 write three registers.
+* `wrong_op_o` is now the complement of the four predicates rather than a
+  hand-written list of opcodes to exclude.
+
+### Section 5 inverted
+
+It used to assert that ROT2 RAISES `wrong_op_o`. That was true and correct to
+check. It is now false by design, so the check inverts into the invariant that
+actually matters: **run every op the table offers and demand the machine answer
+it correctly.** Nine ops, each against `exec_op`, each result register checked.
+If either list ever gains an entry the other lacks, this fails.
+
+That also needed a third runner. The existing ones hardwire a = reg0, b = reg1,
+destination reg2 — which collides with the SOURCES of a three-member operand,
+so NORMALIZE3 and ROT3 could not be expressed in them at all. Nothing in this
+file had ever run the two widest ops through the whole machine.
+
+**150 checks pass**, up from 117.
+
+### The mistake, because it is the instructive part
+
+I wired ROT2's angle to `s2` and ROT3's to `s3`, reasoning from the ORACLE,
+where `src[]` is flattened and ROT2's angle genuinely is `src[2]` while ROT3's
+is `src[3]`. ROT3 passed; ROT2 came back wrong.
+
+The hardware does not flatten. `zhao_probe_v3_exec` drives `long_s0/s1/s2` from
+operand **a**'s three members and `long_s3` from operand **b**, whatever a's
+width — so ROT2's angle arrives on `s3` with `s2` left idle. Both statements
+were true and they were about different things: the same register, a different
+index, in two different representations.
+
+I had written a comment asserting the wrong one, confidently, citing the
+oracle. **One op right and its near twin wrong is the shape of an indexing
+error, not an arithmetic one** — and it was the invariant section running all
+nine that made the pair visible at once.

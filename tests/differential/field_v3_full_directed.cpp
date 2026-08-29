@@ -266,6 +266,33 @@ int run_mixed(Vzhao_probe_v3_full& top, const uint8_t* ops, const uint32_t* imms
   return (fin == n_ctx) ? d.alarms() : -1;
 }
 
+// One context, one long op, an explicit register layout, and up to three
+// result registers. The other runners hardwire a = reg0 and b = reg1 with the
+// destination at reg2, which collides with the SOURCES of a three-member
+// operand -- so NORMALIZE3 and ROT3 cannot be expressed in them at all. That
+// is not a small gap: it is why nothing in this file had ever run the two
+// widest ops through the whole machine.
+int run_one(Vzhao_probe_v3_full& top, uint8_t op, uint32_t imm, const int32_t src[4],
+            int32_t out[3], int* clocks, const zfield::Table* tab) {
+  Dut d(top);
+  d.reset(0);
+  if (tab) d.load_table(0, *tab);
+  for (int r = 0; r < 4; ++r) d.preload(0, r, src[r]);
+  // a = reg0 (the group start, 1..3 members) and b = reg3 (the single-member
+  // operand: ROT's angle). The destination is well clear of both.
+  d.load_uop(0, 0, op, 8, 0, 3, 0, imm);
+  d.load_uop(0, 1, zfield::OP_END, 0, 0, 0, 0, 0);
+  d.start(0);
+  int fin = 0, guard = 0, done = -1;
+  while (guard++ < 100000 && fin < 1) {
+    if (d.step(&done)) ++fin;
+  }
+  for (int i = 0; i < 32; ++i) d.step(&done);
+  for (int m = 0; m < 3; ++m) out[m] = d.shadow[0][8 + m];
+  if (clocks) *clocks = guard;
+  return (fin == 1) ? d.alarms() : -1;
+}
+
 void check_group(Vzhao_probe_v3_full& top, uint8_t op, int n_ctx, uint32_t seed, int policy,
                  bool rival, Prng& rng, const std::string& what) {
   // ZERO-INITIALISED, NOT MERELY DECLARED. Only n_ctx of kCtx entries are
@@ -468,22 +495,87 @@ int main(int argc, char** argv) {
     }
   }
 
-  printf("== section 5: an op the service does NOT implement must RAISE, not answer ==\n");
+  printf("== section 5: EVERY op the table offers is actually served ==\n");
   {
-    // ROT2 is dispatchable -- `dst_width_of` knows it -- and the service path
-    // has only the noise unit, so it arrives somewhere that cannot compute it.
+    // THIS SECTION USED TO ASSERT THE OPPOSITE and it was right to. Until
+    // 2026-08-29 the table gave NORMALIZE2/3 and ROT2/3 a destination width --
+    // which is what makes the executor OFFER them -- while the service path
+    // had nothing that could compute them. They fell into the noise unit's
+    // else-branch, were answered with NOISE semantics, and the wrong number
+    // was written to a real register with only `wrong_op_o` to say so.
     //
-    // THE POINT IS THAT THIS IS LOUD. A composition that answered it quietly
-    // would be the worst outcome available: a plausible wrong number in a real
-    // register. `wrong_op_o` exists for exactly this and is asserted here
-    // rather than trusted.
-    int32_t xs[1] = {3 << 16}, ys[1] = {5 << 16}, got[1][2];
-    int clocks = 0;
-    (void)run_long(top, zfield::OP_ROT2, 1, xs, ys, 0u, 1, false, got, &clocks);
-    check(top.wrong_op_o == 1, "the service reported an op it does not implement", 1,
-          (uint32_t)top.wrong_op_o);
-    printf("   MEASURED: wrong_op_o = %u after a ROT2 (dispatchable, unserved)\n",
-           (unsigned)top.wrong_op_o);
+    // A raised flag beside a wrong value is not a safe failure. It is the
+    // worst outcome available: individually plausible, completely wrong, and
+    // discoverable only by someone who thought to read the flag.
+    //
+    // So the check inverts. The table and the service path are two lists that
+    // must agree -- the fifth instance of that shape in this engine -- and the
+    // way to hold them together is to run EVERY op the table offers and demand
+    // the machine answer it correctly. If either list gains an entry the other
+    // lacks, this fails.
+    struct OpCase {
+      uint8_t op;
+      const char* name;
+      int a_members;  // members of operand a, from zfield_decode's shape
+      bool has_b;     // ROT's single-member angle operand
+      int width;      // destination registers, from field_long_width
+      uint32_t imm;
+    };
+    // Read from zfield_decode.cpp, not inferred: the shapes are
+    // {dst, {a, b, c}, groups, imm_class}.
+    const OpCase cases[] = {
+        {zfield::OP_CURVE, "CURVE", 1, false, 1, 0u},
+        {zfield::OP_DCURVE, "DCURVE", 1, false, 1, 0u},
+        {zfield::OP_SPLINE, "SPLINE", 1, false, 1, 0u},
+        {zfield::OP_RIDGE, "RIDGE", 2, false, 1, 0x31u},
+        {zfield::OP_NOISE2, "NOISE2", 2, false, 2, 0x5Bu},
+        {zfield::OP_NORMALIZE2, "NORMALIZE2", 2, false, 2, 0u},
+        {zfield::OP_ROT2, "ROT2", 2, true, 2, 0u},
+        {zfield::OP_NORMALIZE3, "NORMALIZE3", 3, false, 3, 0u},
+        {zfield::OP_ROT3, "ROT3", 3, true, 3, 1u},
+    };
+
+    zfield::Table tb;
+    tb.kind = 0;
+    tb.x = {-(1 << 20), 0, 1 << 20, 3 << 20};
+    tb.y = {7 << 16, 11 << 16, -(5 << 16), 2 << 16};
+    tb.dy = {1 << 12, 1 << 12, 1 << 12, 1 << 12};
+    std::vector<zfield::Table> tabs{tb};
+
+    // reg3 is ROT's angle, so it is a real one rather than zero -- an angle of
+    // zero makes cos 1 and sin 0, and a rotation that does nothing would pass
+    // with the sine term wired to anything at all.
+    const int32_t src[4] = {(3 << 16) + 1234, -(2 << 16) + 77, (1 << 16) - 991,
+                            (int32_t)0x00003A2Bu};
+
+    for (const OpCase& c : cases) {
+      int32_t out[3] = {};
+      int clocks = 0;
+      const int al = run_one(top, c.op, c.imm, src, out, &clocks, &tb);
+
+      // The oracle's src[] is the FLATTENED operand list: a's members first,
+      // then b's. That is why ROT2 finds its angle at src[2] and ROT3 at
+      // src[3] -- the same register, a different index.
+      int32_t osrc[4] = {};
+      int n = 0;
+      for (int m = 0; m < c.a_members; ++m) osrc[n++] = src[m];
+      if (c.has_b) osrc[n++] = src[3];
+
+      zref::SatLedger L{};
+      int32_t odst[3] = {};
+      zfield::steps::exec_op(c.op, c.imm, tabs, osrc, odst, &L);
+
+      char what[96];
+      snprintf(what, sizeof what, "%s is served with no alarm", c.name);
+      check(al == 0, what, 0, al);
+      snprintf(what, sizeof what, "%s does not raise wrong_op_o", c.name);
+      check(top.wrong_op_o == 0, what, 0, (uint32_t)top.wrong_op_o);
+      for (int m = 0; m < c.width; ++m) {
+        snprintf(what, sizeof what, "%s result register %d matches the oracle", c.name, m);
+        check(out[m] == odst[m], what, (uint32_t)odst[m], (uint32_t)out[m]);
+      }
+      printf("   MEASURED: %-10s width %d in %5d clocks\n", c.name, c.width, clocks);
+    }
   }
 
   printf("== section 6: an op the TABLE does not know is refused, not handed over ==\n");

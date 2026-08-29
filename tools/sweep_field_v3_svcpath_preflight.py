@@ -49,6 +49,12 @@ CONE = [
     # list is next wrong, that is the fix.
     "fpga/rtl/synth/zhao_probe_curve_svc.sv",
     "fpga/rtl/field/zhao_field_v3_spline.sv",
+    "fpga/rtl/field/zhao_field_v3_normalize.sv",
+    "fpga/rtl/field/zhao_field_isqrt.sv",
+    "fpga/rtl/field/zhao_field_rcp24_rom.sv",
+    "fpga/rtl/field/zhao_field_v3_rot.sv",
+    "fpga/rtl/field/zhao_field_sin.sv",
+    "fpga/rtl/field/zhao_field_sin_rom.sv",
     "fpga/rtl/field/zhao_field_v3_mulbank.sv",
     "fpga/rtl/field/zhao_field_v3_wbarb.sv",
     "fpga/rtl/field/zhao_field_mul.sv",
