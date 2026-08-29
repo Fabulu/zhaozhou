@@ -82,6 +82,15 @@ Refine the promising-but-unsuccessful v8 cel experiment into Zixxtrixx's main pr
 - Rebuilt every dependent tool directly and reran all seven motion gates plus redirected `zhao-reel --check` after the review fixes. Every gate passes; post-review one-salto and nine-salto renders remain byte-identical to accepted output.
 - Promoted 13 numbered visual sheets and 13 numbered acceptance/gate reports under `evidence/motion-*`. Task #12 is complete; balance, new taunt and hit/fall work remain separate milestones.
 
+### 2026-08-29 18:48 UTC+02:00 - Hit, air recoil and exact victim freeze accepted
+
+- Reauthored the generic/front reaction as an immediate asymmetric fold through a visible struck length, a full-body shove and a delayed wave through the grounded run into the supporting tail. Extended the clip from 40 to 50 authored keys so the delayed tail envelope finishes naturally at bit-exact rest instead of leaving residual motion in the final pose.
+- Iterated the mirrored side reactions four times by looking at complete native sequences. Rejected technically-valid versions that foreshortened the animal into a compact blob; selected a strong local hairpin plus 229/230 mm whole-body side shove that retains the readable long body. Back now surges forward around a separate down/forward fold; top has its own deep crush and duck.
+- Strengthened standalone slot 16 into a smooth complete-spear bow with skull counter-whip and blade flare while retaining exact phase seams. Inspected every native slot-48 frame through entry, exact embedded hold, extraction, recoil and landing; the victim stays still, extraction clears first, and the stronger recoil remains controlled rather than twitchy.
+- Extended the committed posed probe with accepted-image comparison envelopes for struck-section displacement, delayed tail propagation, directional distinction/mirroring, low-frequency station continuity, exact rest and whole-spear bow. Measurements gate the eye-authored result; none generated an art value.
+- Extended actual victim-triangle validation to compare both the complete decoded victim bone palette and rendered world transform exactly from impact onward. Slots 33, 34 and 48 pass entry/hold/extraction at every key and midpoint with `victim frozen pose+world exact`.
+- Rebuilt every dependent creature tool directly and passed the posed probe, strike-tip, target, limit, mesh/seam, planner, choreography and redirected reel sequence-CRC gates. Promoted five every-frame/native visual sheets and nine reports under `evidence/impact-*`; final golden repinning remains deferred to complete-v9 closeout.
+
 ---
 
 ## Subagent Spawns

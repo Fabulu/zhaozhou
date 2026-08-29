@@ -225,6 +225,71 @@ StationStepMaximum station_step_max_mm(const ClipScan& scan, int begin_tick,
   return worst;
 }
 
+struct RelativePeak {
+  int32_t mm = 0;
+  int tick = -1;
+};
+
+// Motion of one station relative to another removes the authored root shove.
+// This compares the accepted animation; it does not derive any art value.
+RelativePeak relative_peak_mm(const ClipScan& scan, int station, int anchor,
+                              int begin_tick, int end_tick) {
+  RelativePeak peak;
+  if (scan.samples.empty()) return peak;
+  begin_tick = std::max(begin_tick, 0);
+  end_tick = std::min(end_tick, static_cast<int>(scan.samples.size()) - 1);
+  const PosedSample& rest = scan.samples[0];
+  const int32_t rx = rest.x_mm[station] - rest.x_mm[anchor];
+  const int32_t ry = rest.y_mm[station] - rest.y_mm[anchor];
+  const int32_t rz = rest.z_mm[station] - rest.z_mm[anchor];
+  for (int t = begin_tick; t <= end_tick; ++t) {
+    const PosedSample& s = scan.samples[t];
+    const int64_t dx = (s.x_mm[station] - s.x_mm[anchor]) - rx;
+    const int64_t dy = (s.y_mm[station] - s.y_mm[anchor]) - ry;
+    const int64_t dz = (s.z_mm[station] - s.z_mm[anchor]) - rz;
+    const int32_t d = static_cast<int32_t>(zref::isqrt_u64(
+        static_cast<uint64_t>(dx * dx + dy * dy + dz * dz)));
+    if (d > peak.mm) peak = {d, t};
+  }
+  return peak;
+}
+
+struct BowMaximum {
+  int32_t mm = 0;
+  int tick = -1;
+  int station = -1;
+};
+
+// Maximum centreline distance from the chord joining the head and tail.  Slot
+// 16 starts as a straight spear, so this is a direct comparison of the visible
+// whole-spear bow after impact, independent of world translation or rotation.
+BowMaximum chord_bow_max_mm(const ClipScan& scan) {
+  BowMaximum worst;
+  constexpr int a = 0;
+  constexpr int b = zixx::kProfileStations - 1;
+  for (const PosedSample& s : scan.samples) {
+    const int64_t vx = s.x_mm[b] - s.x_mm[a];
+    const int64_t vy = s.y_mm[b] - s.y_mm[a];
+    const int64_t vz = s.z_mm[b] - s.z_mm[a];
+    const uint64_t vv = static_cast<uint64_t>(vx * vx + vy * vy + vz * vz);
+    const uint64_t vlen = zref::isqrt_u64(vv);
+    if (vlen == 0) continue;
+    for (int i = 1; i < b; ++i) {
+      const int64_t wx = s.x_mm[i] - s.x_mm[a];
+      const int64_t wy = s.y_mm[i] - s.y_mm[a];
+      const int64_t wz = s.z_mm[i] - s.z_mm[a];
+      const int64_t cx = wy * vz - wz * vy;
+      const int64_t cy = wz * vx - wx * vz;
+      const int64_t cz = wx * vy - wy * vx;
+      const uint64_t cross = zref::isqrt_u64(
+          static_cast<uint64_t>(cx * cx + cy * cy + cz * cz));
+      const int32_t d = static_cast<int32_t>(cross / vlen);
+      if (d > worst.mm) worst = {d, s.tick, i};
+    }
+  }
+  return worst;
+}
+
 }  // namespace
 
 int main() {
@@ -458,6 +523,113 @@ int main() {
                 (continuity.tick & 1) ? ".5" : "", continuity.station);
   }
 
+  // Impact vocabulary acceptance. These envelopes surround the native 240p
+  // every-frame silhouettes selected by eye; they prevent later edits from
+  // quietly returning the hits to local twitches or high-frequency shake.
+  const ClipScan* hit = find_scan(scans, 5);
+  require(hit != nullptr, "missing generic hit clip");
+  if (hit) {
+    require(key_pose_equal(*hit->clip, 0, hit->clip->frame_count - 1,
+                           type.bank.bone_count, true),
+            "generic hit does not recover bit-exactly to rest");
+    const RelativePeak front = relative_peak_mm(*hit, 0, 12, 0, 16);
+    const RelativePeak tail = relative_peak_mm(
+        *hit, zixx::kProfileStations - 1, 44, 0,
+        static_cast<int>(hit->samples.size()) - 1);
+    const StationStepMaximum step = station_step_max_mm(
+        *hit, 1, static_cast<int>(hit->samples.size()) - 1);
+    std::printf("HIT generic: front relative peak %d mm at %d%s, tail "
+                "relative peak %d mm at %d%s, max 60 Hz step %d mm at %d%s\n",
+                front.mm, front.tick / 2, (front.tick & 1) ? ".5" : "",
+                tail.mm, tail.tick / 2, (tail.tick & 1) ? ".5" : "",
+                step.mm, step.tick / 2, (step.tick & 1) ? ".5" : "");
+    require(front.mm >= 230,
+            "generic hit lost its strong displaced struck length");
+    require(tail.mm >= 60,
+            "generic hit shock no longer reaches the supporting tail");
+    require(tail.tick >= front.tick + 6,
+            "generic hit tail no longer reacts after the struck section");
+    require(step.mm <= 500,
+            "generic hit regained a high-frequency station twitch");
+  }
+
+  const ClipScan* right = find_scan(scans, 23);
+  const ClipScan* back = find_scan(scans, 24);
+  const ClipScan* left = find_scan(scans, 25);
+  const ClipScan* top = find_scan(scans, 26);
+  for (const ClipScan* directional : {right, back, left, top}) {
+    require(directional != nullptr, "missing directional damage clip");
+    if (directional)
+      require(key_pose_equal(*directional->clip, 0,
+                             directional->clip->frame_count - 1,
+                             type.bank.bone_count, true),
+              "directional hit does not recover bit-exactly to rest");
+  }
+  if (right && left) {
+    int32_t mirror_error = 0;
+    for (size_t t = 0; t < std::min(right->samples.size(), left->samples.size()); ++t) {
+      for (int i = 0; i < zixx::kProfileStations; ++i) {
+        mirror_error = std::max(
+            mirror_error,
+            std::abs(right->samples[t].x_mm[i] - left->samples[t].x_mm[i]));
+        mirror_error = std::max(
+            mirror_error,
+            std::abs(right->samples[t].y_mm[i] - left->samples[t].y_mm[i]));
+        mirror_error = std::max(
+            mirror_error,
+            std::abs(right->samples[t].z_mm[i] + left->samples[t].z_mm[i]));
+      }
+    }
+    int32_t right_shove = 0, left_shove = 0;
+    for (int k = 0; k < right->clip->frame_count; ++k) {
+      right_shove = std::max(right_shove,
+                             std::abs(to_mm(right->clip->root[k * 3 + 2])));
+      left_shove = std::max(left_shove,
+                            std::abs(to_mm(left->clip->root[k * 3 + 2])));
+    }
+    std::printf("HIT sides: root shove R/L %d/%d mm, mirrored station error "
+                "%d mm\n", right_shove, left_shove, mirror_error);
+    require(right_shove >= 180 && left_shove >= 180,
+            "side hit lost its unmistakable whole-body displacement");
+    require(mirror_error <= 90,
+            "right/left directional hits stopped being spatial mirrors");
+  }
+  if (back && top) {
+    int32_t back_surge = 0;
+    for (int k = 0; k < back->clip->frame_count; ++k)
+      back_surge = std::max(back_surge,
+                            std::abs(to_mm(back->clip->root[k * 3 + 0])));
+    const RelativePeak back_front = relative_peak_mm(*back, 0, 12, 0, 16);
+    const RelativePeak top_front = relative_peak_mm(*top, 0, 12, 0, 16);
+    std::printf("HIT back/top: back root surge %d mm; struck-length peaks "
+                "%d/%d mm\n", back_surge, back_front.mm, top_front.mm);
+    require(back_surge >= 210,
+            "back hit lost its forward whole-body surge");
+    require(back_front.mm >= 180 && top_front.mm >= 180,
+            "back/top hit lost its large local struck-section deformation");
+    require(std::memcmp(back->clip->quats.data(), top->clip->quats.data(),
+                        back->clip->quats.size() * sizeof(back->clip->quats[0])) != 0,
+            "back and top hit silhouettes collapsed into one reaction");
+  }
+
+  const ClipScan* air_hit = find_scan(scans, zixx::kSlotAtkAirHit);
+  require(air_hit != nullptr, "missing standalone air-hit clip");
+  if (air_hit) {
+    const BowMaximum bow = chord_bow_max_mm(*air_hit);
+    const StationStepMaximum step = station_step_max_mm(
+        *air_hit, 1, static_cast<int>(air_hit->samples.size()) - 1);
+    std::printf("HIT air: whole-spear chord bow %d mm at %d%s station %d; "
+                "max 60 Hz step %d mm\n", bow.mm, bow.tick / 2,
+                (bow.tick & 1) ? ".5" : "", bow.station, step.mm);
+    require(key_pose_equal(*air_hit->clip, 0, air_hit->clip->frame_count - 1,
+                           type.bank.bone_count, true),
+            "standalone air hit no longer has exact spear seams");
+    require(bow.mm >= 100,
+            "standalone air hit lost its visible whole-spear bow");
+    require(step.mm <= 600,
+            "standalone air hit regained a high-frequency station twitch");
+  }
+
   // Six/nine matched limit declarations and phase-specific terrain policy.
   const zc::AttackPlan six_plan =
       zixx::zixx_variant_plan(zixx::kSlotAtkSix);
@@ -527,7 +699,7 @@ int main() {
 
   if (failures == 0) {
     std::printf("ZIXX PROBE: PASS — every key + midpoint, declared 3D contact, "
-                "spring/jump/limit/overlap gates\n");
+                "impact/spring/jump/limit/overlap gates\n");
     return 0;
   }
   std::printf("ZIXX PROBE: FAIL — %d assertion(s)\n", failures);

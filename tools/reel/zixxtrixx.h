@@ -2565,12 +2565,9 @@ inline zc::Clip build_fall() {
 // (deepen and jerk half again bigger), the WHOLE BODY shoved back along
 // the blow, and the ring-out settles through two slow decaying
 // overshoots -- recoil, not vibration.
-constexpr int kHitKeys = 40;  // 28 -> 40, RUN 1730 (owner: "a hit should
-                              // look a lot stronger... looks like a little
-                              // flinch"): the violent onset stays two keys
-                              // sharp; the RING-OUT lengthens -- a large
-                              // sharp displacement, then an unhurried,
-                              // yielding return (house wobble, not jitter)
+constexpr int kHitKeys = 50;  // long enough for the delayed tail envelope to
+                              // finish naturally and land on exact rest; the
+                              // violent onset remains two keys sharp
 constexpr int32_t kHitDeepen = 950;    // recoil compression through the
                                        // struck section. 700 -> 950: the
                                        // "face eaten at 900" verdict was
@@ -2580,13 +2577,11 @@ constexpr int32_t kHitDeepen = 950;    // recoil compression through the
                                        // the -85 mm shove trade gave away
                                        // comes back here. Worst key
                                        // rendered + probed (allowance 390).
-constexpr int32_t kHitHeadJerk = 7200; // ...the head whips back-up hard
-constexpr int32_t kHitSway = 4200;     // and away
-constexpr int32_t kHitShoveMm = 210;   // the body is MOVED by the blow --
-                                       // 85 -> 210 (owner): displacement is
-                                       // what sells impact at 240p, and the
-                                       // face-protection trade that shrank
-                                       // it is obsolete with the open climb
+constexpr int32_t kHitHeadJerk = 9000; // ...the head whips back-up hard
+constexpr int32_t kHitSway = 5200;     // and away
+constexpr int32_t kHitShoveMm = 300;   // the body is MOVED by the blow --
+                                       // a full tube-width at 240p, not a
+                                       // local neck flinch
 // THE SHOCKWAVE (RUN 1730, owner: "more of the snake should be affected").
 // The blow is a WAVE, not a local flinch: every joint receives the same
 // envelope DELAYED by its distance from the struck point and DECAYED as it
@@ -2596,27 +2591,26 @@ constexpr int32_t kHitShoveMm = 210;   // the body is MOVED by the blow --
 // planted); the grounded run ripples LATERALLY by world-vertical
 // conjugation (a yaw about world up cannot dig the belly -- the idle
 // snake's own trick); the tail whips on the sway lane, biggest at the tip.
-constexpr int32_t kShockLagMk = 650;      // milli-keys of delay per joint
-constexpr int32_t kShockDecay = 520;      // per-mille amplitude lost across
+constexpr int32_t kShockLagMk = 520;      // milli-keys of delay per joint
+constexpr int32_t kShockDecay = 420;      // per-mille amplitude lost across
                                           // the front chain (the rest
                                           // reaches the grounded run)
-constexpr int32_t kShockFrontAmp = 3400;  // pitch pulse through the raised
+constexpr int32_t kShockFrontAmp = 4800;  // pitch pulse through the raised
                                           // front (angle16 at the head end)
-constexpr int32_t kShockGroundAmp = 2400; // lateral ripple, grounded joints
-constexpr int32_t kShockTailAmp = 6200;   // the tail's delayed whip
-// THE FOLD (RUN 1939, item 8; owner: "The wobbles in the hit animations
-// are good, but the hit itself just needs more impact. Really bend the
-// hit part of the snake out of shape."). The approved shockwave/ring-out
-// is UNTOUCHED -- what was missing is the MOMENT: a sharp local
-// deformation AT the struck section, a hairpin kink far tighter than the
-// body ever takes elsewhere, held for ~2 keys and released into the
-// standing wobble. This is the deliberate exception to the smoothness
-// law: smoothness is the resting law, violence is authored, and it lives
-// only inside kFoldEnv's five keys. Each direction folds in its own axis
-// (front/top/back pitch, sides lateral). The kink is a +F/-2F/+F triple,
-// so its net turn is ~zero and nothing downstream is displaced.
-constexpr int32_t kHitFoldAmp = 4200;   // F; the kink's centre joint takes 2F
-static const Key kFoldEnv[] = {{0, 0}, {1, 1000}, {2, 900}, {4, 300}, {7, 0}};
+constexpr int32_t kShockGroundAmp = 3300; // lateral ripple, grounded joints
+constexpr int32_t kShockTailAmp = 7600;   // the tail's delayed whip
+// THE IMPACT SHAPE. The old +F/-2F/+F triple was mathematically tidy but
+// visually self-cancelled: it made a tiny crease and deliberately returned the
+// next section to its untouched line. This profile is authored as WORLD slope
+// displacement at the first seven segments. The first two make the struck
+// hairpin, the next three are carried bodily out of line, and the last two pay
+// the bend back into the travelling shockwave. It is a real displaced length
+// of animal rather than an isolated hinge; every value remains an eye-tunable
+// art control.
+constexpr int32_t kHitFoldSlope[kStanceSlopes] = {
+    0, 8200, -12400, -8600, 5200, 3400, 1500, 400, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0};
+static const Key kFoldEnv[] = {{0, 0}, {1, 1000}, {2, 940}, {4, 380}, {7, 0}};
 constexpr int kFoldEnvN = static_cast<int>(sizeof(kFoldEnv) / sizeof(Key));
 
 // the delayed-envelope sampler: curve() at milli-key resolution, so a
@@ -2777,13 +2771,12 @@ inline zc::Clip build_hit() {
       const int32_t dec = 1000 - (k * kShockDecay) / (kStanceGround0 - 1);
       wave[k] = -(ek[k] * ((kShockFrontAmp * dec) / 1000)) / 1000;
     }
-    // THE FOLD: the struck section (the front -- this is damageFront)
-    // kinks HARD for two keys: +F/-2F/+F on joints 1..3, net turn ~zero,
-    // released into the approved ring-out (see kHitFoldAmp)
+    // THE IMPACT SHAPE: an asymmetric hairpin with a carried downstream
+    // displacement, authored in segment-slope space so the side silhouette
+    // changes at once and then hands motion to the delayed whole-body wave.
     const int32_t fold = curve(kFoldEnv, kFoldEnvN, f);
-    wave[1] += (fold * kHitFoldAmp) / 1000;
-    wave[2] -= (fold * 2 * kHitFoldAmp) / 1000;
-    wave[3] += (fold * kHitFoldAmp) / 1000;
+    for (int k = 1; k < kStanceGround0; ++k)
+      wave[k] += (fold * kHitFoldSlope[k]) / 1000;
     const int32_t rise = apply_stance(g, 1000, (e * kHitDeepen) / 1000, wave);
     // the head jerks BACK-UP and aside first (it is the struck end), then
     // settles on the same envelope
@@ -3416,20 +3409,30 @@ constexpr int kDmgKeys = kHitKeys;
 // the hit, in its own lane: sides throw the whole chain LATERALLY (plus a
 // real sideways root shove -- displacement sells force); back drives a
 // pitch pulse down the axis with a bigger surge; top crushes and shimmies.
-constexpr int32_t kDmgSideSway = 8200;   // head-bone lateral whiplash, R/L
-                                         // (6400 -> 8200, the violent snap)
-constexpr int32_t kDmgSideChain = 1600;  // per-joint lateral wave, decaying
-constexpr int32_t kDmgSideShove = 130;   // mm the whole animal is thrown
+constexpr int32_t kDmgSideSway = 8000;   // head-bone lateral whiplash, R/L
+constexpr int32_t kDmgSideChain = 1200;  // per-joint lateral wave, decaying
+constexpr int32_t kDmgSideShove = 230;   // mm the whole animal is thrown
                                          // SIDEWAYS -- the unmissable tell
-constexpr int32_t kDmgSideRollAmp = 900; // a touch of body roll with it
-constexpr int32_t kDmgBackJerk = 6200;   // head whips DOWN-forward
-constexpr int32_t kDmgBackSurge = 160;   // mm the body shoves forward
-                                         // (52 -> 160: it was a nudge)
-constexpr int32_t kDmgTopCrush = 1250;   // deepen: the arch flattens under
-                                         // it (980 -> 1250, then rebounds)
-constexpr int32_t kDmgTopDuck = 4200;    // the head ducks
-constexpr int32_t kDmgShimmy = 500;      // back/top per-joint lateral
-                                         // shimmy -- the body absorbing
+constexpr int32_t kDmgSideRollAmp = 2200;// raised front rolls off the blow
+constexpr int32_t kDmgBackJerk = 8500;   // head whips DOWN-forward
+constexpr int32_t kDmgBackSurge = 260;   // mm the body shoves forward
+constexpr int32_t kDmgTopCrush = 1400;   // arch flattens under a top strike
+constexpr int32_t kDmgTopDuck = 7000;    // the head ducks
+constexpr int32_t kDmgShimmy = 900;      // back/top whole-body absorption
+
+// Direction-specific impact silhouettes. Back and top are absolute pitch-
+// slope displacements; sides are local yaw bends and are mirrored by sign.
+// None is a zero-sum crease: the struck length stays thrown out of line long
+// enough for the delayed wave to pick it up and carry it to the tail.
+constexpr int32_t kDmgBackFoldSlope[kStanceSlopes] = {
+    0, 0, -2200, -7600, 10800, 7600, -3600, -1800, -700, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0};
+constexpr int32_t kDmgTopFoldSlope[kStanceSlopes] = {
+    0, 0, 6500, -13800, -9200, 5800, 3200, 1200, 300, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0};
+constexpr int32_t kDmgSideFoldYaw[kSpineBones] = {
+    0, 0, 6000, -10000, -5000, 4000, 2000, 800, 200, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
   zc::Clip c;
@@ -3462,19 +3465,14 @@ inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
                                      : kShockFrontAmp / 6;
       bwave[k] = ((dir == 1 ? ek[k] : -ek[k]) * ((amp * dec) / 1000)) / 1000;
     }
-    // THE FOLD (item 8), in each direction's own axis. BACK and TOP kink
-    // the pitch lane here (back folds deeper down the body -- the blow
-    // lands from behind; top folds where the crush concentrates); the
-    // SIDES fold LATERALLY below, on the proven-planted front-yaw lane.
+    // The local struck length is displaced in the direction's own pitch
+    // silhouette. The carried, non-zero profile then releases into the wave.
     const int32_t fold = curve(kFoldEnv, kFoldEnvN, f);
-    if (dir == 1) {
-      bwave[3] -= (fold * kHitFoldAmp) / 1000;
-      bwave[4] += (fold * 2 * kHitFoldAmp) / 1000;
-      bwave[5] -= (fold * kHitFoldAmp) / 1000;
-    } else if (dir == 3) {
-      bwave[2] += (fold * kHitFoldAmp) / 1000;
-      bwave[3] -= (fold * 2 * kHitFoldAmp) / 1000;
-      bwave[4] += (fold * kHitFoldAmp) / 1000;
+    if (dir == 1 || dir == 3) {
+      const int32_t* profile =
+          dir == 1 ? kDmgBackFoldSlope : kDmgTopFoldSlope;
+      for (int k = 1; k < kStanceGround0; ++k)
+        bwave[k] += (fold * profile[k]) / 1000;
     }
     const int32_t rise = apply_stance(g, 1000, deepen, bwave);
     switch (dir) {
@@ -3511,13 +3509,12 @@ inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
       const int32_t latamp = (dir == 0 || dir == 2) ? kDmgSideChain : kDmgShimmy;
       const int32_t lfold =
           (dir == 0 || dir == 2) ? curve(kFoldEnv, kFoldEnvN, f) : 0;
-      for (int k = 1; k <= 5; ++k) {
-        const int32_t dec = 1000 - (k * 700) / 6;
+      for (int k = 1; k <= 8; ++k) {
+        const int32_t dec = 1000 - (k * 700) / 9;
         int32_t yawk = latsgn * ((ek[k] * ((latamp * dec) / 1000)) / 1000);
-        // the sides' FOLD (item 8): a lateral hairpin at the struck
-        // stations for two keys -- the body visibly dents around the blow
-        if (k == 2 || k == 4) yawk += latsgn * (lfold * kHitFoldAmp) / 1000;
-        if (k == 3) yawk -= latsgn * (lfold * 2 * kHitFoldAmp) / 1000;
+        // Side impacts bend a whole visible length out of the image plane;
+        // the residual turn is deliberate, then propagates down-chain.
+        yawk += latsgn * (lfold * kDmgSideFoldYaw[k]) / 1000;
         g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_y(yawk));
       }
       zc::quat16 snacc = zc::quat16_identity();
@@ -3977,7 +3974,9 @@ inline zc::Clip build_spear_flex() {
 // travel with a two-lobe ring-down, spear to spear (the recovery phase is
 // where the S returns; this is just the blow landing).
 constexpr int kAirHitKeys = 12;
-constexpr int32_t kAirHitAmp = 3600;
+constexpr int32_t kAirHitAmp = 7000;       // whole spear bows visibly at 240p
+constexpr int32_t kAirHitHeadKick = 2600;  // skull counter-whip at impact
+constexpr int32_t kAirHitBladeFlare = 1800;// weapon-end impact punctuation
 inline zc::Clip build_air_hit() {
   zc::Clip c;
   c.slot_id = kSlotAtkAirHit;
@@ -3994,12 +3993,17 @@ inline zc::Clip build_air_hit() {
     spear_rig(g);
     const int32_t e = curve(kEnv, kEnvN, f);
     for (int k = 1; k < kSpineBones - 1; ++k) {
-      // strongest at the impact end (the tail tip is the weapon), fading
-      // toward the head, one soft spatial arc rather than a zigzag
+      // A continuous hard bow through the complete spear. The previous /8
+      // attenuation was present in numbers but visually invisible; /5 keeps
+      // the tube volumetric while making the impact silhouette unmistakable.
       const int env_k = 1000 - (k * 700) / (kSpineBones - 2);
       g.q[kBSpine0 + k] = quat_mul(
-          g.q[kBSpine0 + k], quat_z((e * kAirHitAmp * env_k) / (1000 * 1000) / 8));
+          g.q[kBSpine0 + k], quat_z((e * kAirHitAmp * env_k) / (1000 * 1000) / 5));
     }
+    g.q[kBHead] = quat_z(-(e * kAirHitHeadKick) / 1000);
+    const int32_t flare_e = e < 0 ? -e : e;
+    if (flare_e != 0)
+      g.tail_rest(kBladeSplay / 5 + (flare_e * kAirHitBladeFlare) / 1000, 0, 0);
     g.write(c, f);
   }
   return c;

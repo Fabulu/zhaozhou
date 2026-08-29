@@ -1865,6 +1865,14 @@ int validate_zixx_target_interactions() {
     const int32_t target_y = target_ground_y + fxm(target.y_mm);
     zc::GroundTilt attack_tilt{};
     zc::GroundTilt target_tilt{};
+    const zc::Clip* target_idle =
+        target.type ? reel_find_clip(*target.type, target.clip_slot) : nullptr;
+    const int freeze_tick = zixx_target_freeze_tick(slot);
+    std::array<zc::mat3x4fx, zc::kMaxBones> frozen_target_local{};
+    zc::mat3x4fx frozen_target_world{};
+    bool have_frozen_target = false;
+    bool victim_pose_stable = target_idle != nullptr;
+    int first_victim_twitch = -1;
     std::vector<uint8_t> intersects;
     std::vector<int> counts;
     intersects.reserve(end_tick - begin_tick + 1);
@@ -1883,6 +1891,29 @@ int validate_zixx_target_interactions() {
           zref::angle16{uint16_t{0}}, attack_tilt, attack_x, attack_y, 0);
       const zc::mat3x4fx target_world = probe_instance_world(
           target.facing, target_tilt, target_x, target_y, 0);
+      // No-victim-twitch law: from the first embedded sample onward both the
+      // decoded victim palette and its rendered world transform are bit-exact.
+      // Checking only the idle key is insufficient because a still local pose
+      // can visibly creep while the terrain-tilt smoother continues moving.
+      if (tick >= freeze_tick && target_idle) {
+        const int target_period = 2 * static_cast<int>(target_idle->frame_count);
+        const int target_tick = std::min(tick, freeze_tick) % target_period;
+        std::array<zc::mat3x4fx, zc::kMaxBones> target_local;
+        zc::decode_pose(*target.type, *target_idle,
+                        static_cast<uint16_t>(target_tick / 2), target_local,
+                        nullptr, static_cast<uint8_t>(target_tick & 1));
+        if (!have_frozen_target) {
+          frozen_target_local = target_local;
+          frozen_target_world = target_world;
+          have_frozen_target = true;
+        } else if (std::memcmp(target_local.data(), frozen_target_local.data(),
+                               sizeof(zc::mat3x4fx) * target.type->bank.bone_count) != 0 ||
+                   std::memcmp(&target_world, &frozen_target_world,
+                               sizeof(target_world)) != 0) {
+          victim_pose_stable = false;
+          if (first_victim_twitch < 0) first_victim_twitch = tick;
+        }
+      }
       int hits = 0;
       const bool hit = blade_segment_hits_target(
           slot, tick, attack_world, target_world, hits);
@@ -1918,6 +1949,14 @@ int validate_zixx_target_interactions() {
           hold_min_hits, counts[static_cast<size_t>(tick - begin_tick)]);
     }
     const bool clear_before_recoil = !at(end_tick);
+    if (!have_frozen_target || !victim_pose_stable) {
+      ++failures;
+      std::fprintf(stderr,
+                   "target-check slot %u: victim pose/world transform twitched "
+                   "after embedding (first %d%s)\n",
+                   slot, first_victim_twitch >= 0 ? first_victim_twitch / 2 : -1,
+                   first_victim_twitch >= 0 && (first_victim_twitch & 1) ? ".5" : "");
+    }
     if (entries != 1) {
       ++failures;
       std::fprintf(stderr,
@@ -1963,7 +2002,8 @@ int validate_zixx_target_interactions() {
     }
     std::printf(
         "target-check slot %u: victim=%s, entry=%d%s, hold %d..%d "
-        "(%d+ triangle hits/sample), clear=%d%s, recoil=%d — %s\n",
+        "(%d+ triangle hits/sample), clear=%d%s, recoil=%d, victim frozen "
+        "pose+world exact — %s\n",
         slot, slot == zixx::kSlotAtkFly ? "winged-watchdog"
                                         : "watchdog",
         first_entry >= 0 ? first_entry / 2 : -1,
@@ -1972,14 +2012,15 @@ int validate_zixx_target_interactions() {
         first_clear >= 0 ? first_clear / 2 : -1,
         first_clear >= 0 && (first_clear & 1) ? ".5" : "",
         ph.recoil_begin,
-        entries == 1 && held && clear_before_recoil &&
-                !reentry_after_clear && first_clear >= 0
+        have_frozen_target && victim_pose_stable && entries == 1 && held &&
+                clear_before_recoil && !reentry_after_clear && first_clear >= 0
             ? "PASS"
             : "FAIL");
   }
   std::printf(failures == 0
                   ? "TARGET INTERACTION: PASS — rendered world-space posed "
-                    "victim triangles, entry/hold/extraction at every key + midpoint\n"
+                    "victim triangles, exact frozen victim pose/world, "
+                    "entry/hold/extraction at every key + midpoint\n"
                   : "TARGET INTERACTION: FAIL — %d assertion(s)\n",
               failures);
   return failures == 0 ? 0 : 1;
