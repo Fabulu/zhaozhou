@@ -55,6 +55,11 @@ struct Prng {
 
 // ---- the four-wide bank, modelled as the engine drives it -----------------
 struct MulBank {
+  // TWO DEEP AND PIPELINED, because zhao_field_v3_mulbank is: "each is two
+  // clocks deep and FULLY PIPELINED". A one-at-a-time model measures this
+  // service's own scaffolding rather than the machine.
+  bool st_v[2] = {false, false};
+  int64_t st_p[2][kLanes] = {};
   bool busy = false;
   int cnt = 0;
   int64_t p[kLanes] = {0, 0, 0, 0};
@@ -82,28 +87,27 @@ void set66(W& w, int64_t p) {
 void step(Vzhao_field_v3_len& dut, MulBank& mb) {
   if (mb.flaky) mb.grant = (mb.next() % 4u) != 0u;
   dut.mul_ready_i = mb.grant ? 1 : 0;
-  if (mb.busy && mb.cnt == 0) {
-    set66(dut.mul_p_0_i, mb.p[0]);
-    set66(dut.mul_p_1_i, mb.p[1]);
-    set66(dut.mul_p_2_i, mb.p[2]);
-    set66(dut.mul_p_3_i, mb.p[3]);
+  if (mb.st_v[1]) {
+    set66(dut.mul_p_0_i, mb.st_p[1][0]);
+    set66(dut.mul_p_1_i, mb.st_p[1][1]);
+    set66(dut.mul_p_2_i, mb.st_p[1][2]);
+    set66(dut.mul_p_3_i, mb.st_p[1][3]);
     dut.mul_valid_i = 1;
-    mb.busy = false;
   } else {
     dut.mul_valid_i = 0;
   }
   dut.eval();
+  mb.st_v[1] = mb.st_v[0];
+  for (int l = 0; l < kLanes; ++l) mb.st_p[1][l] = mb.st_p[0][l];
+  mb.st_v[0] = false;
   if (dut.mul_issue_o && !mb.grant) {
     ++mb.refusals;
   } else if (dut.mul_issue_o) {
-    mb.p[0] = sx33(dut.mul_a_0_o) * sx33(dut.mul_b_0_o);
-    mb.p[1] = sx33(dut.mul_a_1_o) * sx33(dut.mul_b_1_o);
-    mb.p[2] = sx33(dut.mul_a_2_o) * sx33(dut.mul_b_2_o);
-    mb.p[3] = sx33(dut.mul_a_3_o) * sx33(dut.mul_b_3_o);
-    mb.busy = true;
-    mb.cnt = 1;
-  } else if (mb.busy && mb.cnt > 0) {
-    --mb.cnt;
+    mb.st_p[0][0] = sx33(dut.mul_a_0_o) * sx33(dut.mul_b_0_o);
+    mb.st_p[0][1] = sx33(dut.mul_a_1_o) * sx33(dut.mul_b_1_o);
+    mb.st_p[0][2] = sx33(dut.mul_a_2_o) * sx33(dut.mul_b_2_o);
+    mb.st_p[0][3] = sx33(dut.mul_a_3_o) * sx33(dut.mul_b_3_o);
+    mb.st_v[0] = true;
   }
   zhao::tick(dut);
 }

@@ -28,6 +28,12 @@ constexpr int kSlots = 64;
 
 // ---- the four-wide multiplier bank, modelled as the engine drives it ------
 struct MulBank {
+  // TWO DEEP AND PIPELINED, because zhao_field_v3_mulbank is: "each is two
+  // clocks deep and FULLY PIPELINED". A one-at-a-time model measured this
+  // service at II 27 and that was the MODEL's limit, not the hardware's --
+  // a number describing the scaffolding rather than the thing.
+  bool st_v[2] = {false, false};
+  int64_t st_p[2][kLanes] = {};
   bool busy = false;
   int cnt = 0;
   int64_t p[kLanes] = {0, 0, 0, 0};
@@ -74,13 +80,12 @@ void step(Vzhao_field_v3_ring_svc& dut, MulBank& mb, SBank& sb) {
 
   if (mb.flaky) mb.grant = (mb.next() % 4u) != 0u;  // refuse about one clock in four
   dut.mul_ready_i = mb.grant ? 1 : 0;
-  if (mb.busy && mb.cnt == 0) {
-    set66(dut.mul_p_0_i, mb.p[0]);
-    set66(dut.mul_p_1_i, mb.p[1]);
-    set66(dut.mul_p_2_i, mb.p[2]);
-    set66(dut.mul_p_3_i, mb.p[3]);
+  if (mb.st_v[1]) {
+    set66(dut.mul_p_0_i, mb.st_p[1][0]);
+    set66(dut.mul_p_1_i, mb.st_p[1][1]);
+    set66(dut.mul_p_2_i, mb.st_p[1][2]);
+    set66(dut.mul_p_3_i, mb.st_p[1][3]);
     dut.mul_valid_i = 1;
-    mb.busy = false;
   } else {
     dut.mul_valid_i = 0;
   }
@@ -89,17 +94,18 @@ void step(Vzhao_field_v3_ring_svc& dut, MulBank& mb, SBank& sb) {
   // Latch the address the DUT is presenting NOW; it is answered next clock.
   sb.pending = (uint32_t)dut.sb_raddr_o;
 
+  // Advance the two stages, then accept this clock's request into stage 0.
+  mb.st_v[1] = mb.st_v[0];
+  for (int l = 0; l < kLanes; ++l) mb.st_p[1][l] = mb.st_p[0][l];
+  mb.st_v[0] = false;
   if (dut.mul_issue_o && !mb.grant) {
     ++mb.refusals;
   } else if (dut.mul_issue_o) {
-    mb.p[0] = sx33(dut.mul_a_0_o) * sx33(dut.mul_b_0_o);
-    mb.p[1] = sx33(dut.mul_a_1_o) * sx33(dut.mul_b_1_o);
-    mb.p[2] = sx33(dut.mul_a_2_o) * sx33(dut.mul_b_2_o);
-    mb.p[3] = sx33(dut.mul_a_3_o) * sx33(dut.mul_b_3_o);
-    mb.busy = true;
-    mb.cnt = 1;
-  } else if (mb.busy && mb.cnt > 0) {
-    --mb.cnt;
+    mb.st_p[0][0] = sx33(dut.mul_a_0_o) * sx33(dut.mul_b_0_o);
+    mb.st_p[0][1] = sx33(dut.mul_a_1_o) * sx33(dut.mul_b_1_o);
+    mb.st_p[0][2] = sx33(dut.mul_a_2_o) * sx33(dut.mul_b_2_o);
+    mb.st_p[0][3] = sx33(dut.mul_a_3_o) * sx33(dut.mul_b_3_o);
+    mb.st_v[0] = true;
   }
   zhao::tick(dut);
 }
@@ -318,6 +324,59 @@ int main(int argc, char** argv) {
     zhao::check(done == 6, "every group still finishes under a refusing bank", 6, done);
     zhao::check(wrong == 0, "every group under refusal gives the SAME answers", 0, wrong);
     printf("   MEASURED: %d groups completed, %d refusals issued\n", done, mb.refusals);
+  }
+
+  printf("== section 5: the INITIATION INTERVAL, STREAMED ==\n");
+  {
+    // Offer whenever ready, accept whenever it replies, divide by groups
+    // RETIRED. Waiting for each reply before offering the next measures
+    // latency and calls it throughput.
+    reset(dut, mb, sb);
+    const Prep p = prepare(2 << 16, 9 << 16);
+    sb.mem[5] = p.r0;
+    sb.mem[6] = p.m;
+    sb.mem[7] = p.rA;
+    sb.mem[8] = p.rB;
+    const uint32_t imm = pack_slots(5, 6, 7, 8);
+    int32_t want[kLanes];
+    for (int l = 0; l < kLanes; ++l) {
+      zref::SatLedger L;
+      want[l] = zfield::steps::ring_prepared(d[l], p.r0, p.m, p.rA, p.rB, &L);
+    }
+
+    const int kGroups = 24;
+    int offered = 0, retired = 0, wrong = 0, clocks = 0, guard = 0;
+    dut.rsp_ready_i = 1;
+    dut.req_imm_i = imm;
+    dut.req_d_0_i = (uint32_t)d[0];
+    dut.req_d_1_i = (uint32_t)d[1];
+    dut.req_d_2_i = (uint32_t)d[2];
+    dut.req_d_3_i = (uint32_t)d[3];
+    while (retired < kGroups && guard++ < 20000) {
+      dut.req_valid_i = (offered < kGroups) ? 1 : 0;
+      dut.req_tag_i = (uint8_t)(offered & 0xFF);
+      dut.eval();
+      const bool took = dut.req_valid_i && dut.req_ready_o;
+      const bool gave = dut.rsp_valid_o && dut.rsp_ready_i;
+      if (gave) {
+        const int32_t g[kLanes] = {(int32_t)dut.rsp_r_0_o, (int32_t)dut.rsp_r_1_o,
+                                   (int32_t)dut.rsp_r_2_o, (int32_t)dut.rsp_r_3_o};
+        for (int l = 0; l < kLanes; ++l)
+          if (g[l] != want[l]) ++wrong;
+        if ((int)dut.rsp_tag_o != (retired & 0xFF)) ++wrong;
+        ++retired;
+      }
+      if (took) ++offered;
+      step(dut, mb, sb);
+      ++clocks;
+    }
+    dut.req_valid_i = 0;
+    dut.eval();
+    zhao::check(retired == kGroups, "all 24 streamed groups retire", kGroups, retired);
+    zhao::check(wrong == 0, "every streamed answer is right and IN ORDER", 0, wrong);
+    const int ii = retired ? (clocks / retired) : 0;
+    printf("   MEASURED: %d groups streamed in %d clocks, II = %d clocks/group\n", retired, clocks,
+           ii);
   }
 
   return zhao::report_and_exit("field_v3_ring_svc_directed");
