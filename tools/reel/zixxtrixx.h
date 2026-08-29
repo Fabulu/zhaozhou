@@ -2661,20 +2661,34 @@ constexpr int32_t kDeathRollLift = 132;   // mm: keeps the rolled tube's centre
 // down. Then getting back up."): gather -> rear up toward vertical
 // (ALMOST the attack's spear, wobbling, never achieving it -- the
 // contrast is the joke) -> lose it -> topple flat forward -> get back up.
-constexpr int kBalKeys = 224;  // 160 -> 224 (run 0326 owner redirect:
-                               // "too fast and robotic. More wobbly
-                               // creatureness" -- the same choreography
-                               // 1.4x slower, the fight wobblier)
-constexpr int32_t kBalVertSlope = 15600;   // ~86 deg: ALMOST vertical, never 90
-constexpr int32_t kBalWobble = 1150;       // the balance fight, growing
-                                           // (900 -> 1150 with the slower
-                                           // clock: the struggle must READ)
+constexpr int kBalKeys = 224;  // long, effortful stunt: rise, fight, buckle,
+                               // flop, then a loose complete recovery
+// The raised silhouette is an authored L, not a rigid spear. Eleven upper
+// segments struggle toward vertical, three make the weight-bearing elbow, and
+// the final five lie almost flat as a broad supporting tail. These are complete
+// segment directions, deliberately named and eye-tunable.
+constexpr int32_t kBalRaisedSlope[kStanceSlopes] = {
+    15000, 16500, 14300, 16600, 14800, 16800, 14400, 16400, 14600, 16400,
+    14800, 13600, 9500, 4200, 1350, 1200, 1100, 1000, 900};
+constexpr int kBalSupport0 = 14;          // five body segments rest near-flat
+constexpr int kBalSupportBeginKey = 77;
+constexpr int kBalSupportEndKey = 140;
+constexpr int kBalImpactBeginKey = 157;
+constexpr int kBalImpactEndKey = 166;
+constexpr int kBalImpactLeadPresentationTicks = 1;  // baked 156.5 contact lead
+// Committed 3D declarations for the accepted raised-L contact. These compare
+// actual posed vertices; they never generate the shape or root curve.
+constexpr int32_t kBalSupportBiteMm = 40;
+constexpr int32_t kBalSupportHoverMm = 20;
+constexpr int32_t kBalImpactBiteMm = 70;
+constexpr int32_t kBalImpactContactMinMm = 25;
+constexpr int32_t kBalMinShapeChordTravelMm = 5;
+constexpr int32_t kBalMaxStationStepMm = 320;
+constexpr int32_t kBalWobble = 3900;      // travelling primary struggle
+constexpr int32_t kBalWobble2 = 2400;     // slow incommensurate body answer
 constexpr int32_t kBalImpactSink = 22;     // mm: the flop's authored bite
-constexpr int32_t kBalFootReach = 690;     // blade-foot reach below the fork
-constexpr int32_t kBalFootMargin = 98;     // fork height when the tail lies flat
-                                           // (tuned on probe + render until the
-                                           // tips kiss dirt, no hover, no dig)
 constexpr int32_t kBalFinFlare = 2600;     // fins flare wide for balance
+constexpr int32_t kBalBladeUpBias = 9000;  // body bears weight; fan clears terrain
 // THE BUCKLING TOPPLE (RUN 1939, item 6; owner: "Tail balance is wonky.
 // Not wobbly enough. Particularly the fall -- it just falls rigid like
 // it's a stick."). The falling flail's cure carried across: a toppling
@@ -2691,7 +2705,7 @@ constexpr int kBalBuckleLagK = 6;        // keys between head-end and base give
                                          // the fork height curve and the base's
                                          // delayed clock must overlap)
 constexpr int32_t kBalOvershoot = 2600;  // slope past the corpse at the whip
-constexpr int32_t kBalLeanA16 = 120;     // per-joint failing lean (~11 deg total)
+constexpr int32_t kBalLeanA16 = 3000;    // growing headward failure bend
 constexpr int32_t kBalBreath = 700;      // the life layer under the stunt
 constexpr int32_t kBalRippleAmp = 2200;  // the flop's travelling ring-out
 // LOOK-AROUND, slot 8: the head-aim rig capability performed — Zixx looks
@@ -2922,13 +2936,12 @@ inline zc::Clip build_death() {
   return c;
 }
 
-// Slot 7 - TAIL-BALANCE, the idle stunt. Gather onto the tail, rear up
-// toward vertical -- ALMOST the attack's rigid spear, but effortful and
-// wobbling, never straight -- lose the fight, topple flat forward with an
-// authored ground bite, and get back up into the canonical S. The root is
-// COMPUTED from the tail-tip ground constraint the whole way up and over,
-// so the stunt pivots on the planted tail like a real balance, not a
-// root curve pretending to be one.
+// Slot 7 - TAIL-BALANCE, the idle stunt. Gather onto a broad length of tail,
+// rise into a difficult L that never becomes a rigid spear, lose the fight,
+// buckle flat forward with an authored ground bite, and get back up into the
+// canonical S. The root curve lays six tapered body regions across five tail
+// segments onto terrain; the raised fan is visibly incapable of being the foot.
+// Two phase-lagged waves keep changing the upper-body shape over that base.
 inline zc::Clip build_balance() {
   zc::Clip c;
   c.slot_id = 7;
@@ -2948,30 +2961,23 @@ inline zc::Clip build_balance() {
     Rig g;
     g.reset();
     // the choreography, phase by phase, all in one blend weight table:
-    //   gather   k0..28    weight into the rear, tail curls under
-    //   rise     k28..77   slopes -> kBalVertSlope (almost vertical)
-    //   balance  k77..119  held, wobble GROWS (the fight)
-    //   lose     k119..140 wobble diverges into a lean
+    //   gather   k0..28    weight spreads into the supporting tail
+    //   rise     k28..77   slopes -> the wobbling raised L
+    //   balance  k77..119  body-shape waves keep travelling (the fight)
+    //   lose     k119..140 corrections diverge into a headward lean
     //   topple   k140..157 slopes -> flat, accelerating; IMPACT at 157
     //   rise2    k165..196 back up into the S
     //   settle   k196..223 exact canonical S for the loop
     const int32_t up = ss1000(f, 28, 77);           // stance -> vertical
     const int32_t over = (ss1000(f, 140, 157) * ss1000(f, 140, 157)) / 1000;
     const int32_t recover = ss1000(f, 165, 196);    // flat -> stance
-    // THE FIGHT: grows through the balance on TWO incommensurate slow
-    // periods (never one oscillation), and from key ~122 a one-way LEAN
-    // creeps in that the wobble no longer corrects -- the balance is
-    // being LOST, visibly, before it goes.
-    const int32_t fight = ss1000(f, 77, 133);
+    // THE FIGHT is a travelling shape change, not one rigid-body sway. Each
+    // upper segment samples two slow waves at its own phase below; the tail
+    // authority fades to zero before the five-segment ground support. A one-way
+    // headward bend grows from key 122 so the corrections visibly stop winning.
+    const int32_t fight = ss1000(f, 30, 77);
+    const int32_t struggle = 300 + (700 * fight) / 1000;
     const int32_t lean = ss1000(f, 122, 142);
-    const int32_t phw = f * (65536 / 34);
-    const int32_t wob =
-        (zref::fx_sin(zref::angle16{static_cast<uint16_t>(phw & 0xFFFF)}).raw *
-         ((kBalWobble * fight) / 1000)) >> 16;
-    const int32_t phw2 = f * (65536 / 89) + 21000;
-    const int32_t wob2 =
-        (zref::fx_sin(zref::angle16{static_cast<uint16_t>(phw2 & 0xFFFF)}).raw *
-         (((kBalWobble * 2) / 3 * fight) / 1000)) >> 16;
     // the life layer: a slow breath through the raised stretch, damped
     // while standing (the effort holds the breath), full at the ends
     const int32_t phl = f * (65536 / kBalKeys);
@@ -2980,14 +2986,13 @@ inline zc::Clip build_balance() {
     const int32_t breathw = 300 + (700 * (1000 - up)) / 1000;
     int64_t sum_sin = 0, sum_cos = 0;
     int32_t prev = 0;
+    int32_t head_fight_wave = 0;
     for (int k = 0; k < kStanceSlopes; ++k) {
-      // per-joint blend: stance -> almost-vertical -> flat -> stance
+      // stance -> the authored raised L -> flat corpse -> stance. The tail
+      // target itself is horizontal; support is several body joints, never a
+      // fork-tip balancing trick.
       int64_t d = kStanceSlope[k];
-      // the rise leaves the last two segments (the planted foot) steeper
-      // late, so the animal visibly takes its weight on the tail
-      const int32_t vert = k >= kStanceSlopes - 2 ? kBalVertSlope + 500
-                                                  : kBalVertSlope;
-      d += ((vert - d) * up) / 1000;
+      d += ((kBalRaisedSlope[k] - d) * up) / 1000;
       // THE BUCKLING TOPPLE (see the knobs): each joint collapses to the
       // corpse pose on its OWN clock -- head end first, base last -- with
       // an overshoot whip past the target, so the fall is a body losing
@@ -3003,14 +3008,39 @@ inline zc::Clip build_balance() {
       const int64_t target = kCorpseSlope[k] + (kBalOvershoot * osh) / 1000;
       d += ((target - d) * over_k) / 1000;
       d += ((kStanceSlope[k] - d) * recover) / 1000;  // and the S returns
-      // the fight -- gated OUT joint-by-joint as the buckle takes each
-      if (f >= 77 && f < 165 && k < kStanceSlopes - 2) {
-        d += ((wob + wob2) * (1000 - over_k)) / 1000;
-        d += (kBalLeanA16 * lean * (1000 - over_k)) / 1000000;
+      // Two slow, spatially lagged waves keep changing the complete upper-body
+      // shape through gather, rise and fight. Their authority fades across the
+      // elbow and is exactly zero on the broad ground support.
+      if (f >= 12 && f < 165 && k < kBalSupport0) {
+        const int32_t live =
+            500 + ((kBalSupport0 - 1 - k) * 500) / (kBalSupport0 - 1);
+        const int32_t ph1 = f * (65536 / 47) - k * 5600;
+        const int32_t ph2 = f * (65536 / 103) + k * 3100 + 17000;
+        const int32_t sw1 = zref::fx_sin(
+            zref::angle16{static_cast<uint16_t>(ph1 & 0xFFFF)}).raw;
+        const int32_t sw2 = zref::fx_sin(
+            zref::angle16{static_cast<uint16_t>(ph2 & 0xFFFF)}).raw;
+        int32_t shape_wave =
+            static_cast<int32_t>((static_cast<int64_t>(sw1) * kBalWobble) >> 16) +
+            static_cast<int32_t>((static_cast<int64_t>(sw2) * kBalWobble2) >> 16);
+        shape_wave = (shape_wave * live) / 1000;
+        shape_wave = (shape_wave * struggle) / 1000;
+        shape_wave = (shape_wave * (1000 - over_k)) / 1000;
+        shape_wave = (shape_wave * (1000 - recover)) / 1000;
+        d += shape_wave;
+        if (k == 0) head_fight_wave = shape_wave;
+
+        int32_t failure = (kBalLeanA16 * lean) / 1000;
+        failure = (failure * (kBalSupport0 - k)) / kBalSupport0;
+        failure = (failure * (1000 - over_k)) / 1000;
+        failure = (failure * (1000 - recover)) / 1000;
+        d += failure;
       }
       // the breath rides the raised stretch
       if (k >= 1 && k <= 9)
-        d += (((s_breath * kBalBreath) >> 16) * breathw) / 1000;
+        d += (((((s_breath * kBalBreath) >> 16) * breathw) / 1000) *
+              (1000 - recover)) /
+             1000;
       // THE IMPACT RIPPLE: the flop's shock travels tailward on the
       // shared impact envelope and rings out -- absorb, follow through,
       // settle loosely
@@ -3035,15 +3065,17 @@ inline zc::Clip build_balance() {
     // slopes and the wobble do. 0 at both ends makes the loop exact; the
     // correction absorbing the wobble is what keeps the foot PLANTED
     // through the balance fight.
-    // RUN 1939: the rolled fan holds the fork ~100 mm higher for the same
-    // planted tips, so the stand plateau rises 480 -> 580 (probe: the
-    // stand phase dug -95..-156 at the old keys); the topple keys ease
-    // with the buckle so the base lands as the last section gives
+    // The raised-L pass puts the tapered BODY support on terrain, not the fan
+    // tips. The old +580 plateau held bones 14..19 roughly 750 mm in the air.
+    // This curve now eases the fork downward as the five-segment support lays
+    // out, keeps that broad base planted through the fight and topple, then
+    // hands the already-nearby corpse height into the loose recovery.
     static const Key kBalFork[] = {
-        {0, 0},      {28, 0},     {45, -175}, {56, 150},  {66, 500},
-        {77, 580},   {140, 580},  {148, 580}, {154, 575},
-        {157, 470},  {160, 120},  {163, -160}, {166, -240}, {172, -120},
-        {179, -62},  {185, -34},  {190, -16},  {196, 0},    {223, 0}};
+        {0, 0},      {28, 0},      {45, 0},      {56, -50},
+        {66, -172},  {77, -255},   {140, -255},  {148, -255},
+        {154, -250}, {157, -220},  {160, -240},  {163, -250},
+        {166, -240}, {172, -120},  {179, -62},   {185, -34},
+        {190, -16},  {196, 0},     {223, 0}};
     // run 0326: the get-up used to hand the fork straight back to +30 by
     // k130, which lifted the WHOLE half-flat body off the dirt (probe: minY
     // +65 at k128 -- a 200 mm-class push-up hop on the render). The keys
@@ -3067,20 +3099,30 @@ inline zc::Clip build_balance() {
     // visibly correcting), looks AT the arriving ground through the
     // topple, jams nose-first at the flop, and wakes with a small loose
     // settle as the S returns
-    const int32_t head_fight =
-        (f >= 77 && f < 150) ? -((wob + wob2) / 2) : 0;
+    const int32_t head_fight = -head_fight_wave / 2;
     const int32_t see = (over * 2600) / 1000;  // the ground is coming
     const int32_t wake = ss1000(f, 168, 176) - ss1000(f, 176, 192);
+    const int32_t head_stunt =
+        (up * -2200) / 1000 + head_fight + see + (over * 1800) / 1000;
     g.q[kBHead] =
-        quat_z(kHeadAttitude + (up * -2200) / 1000 + head_fight + see +
-               (over * 1800) / 1000 - (wake * 900) / 1000 -
-               (recover * -400) / 1000);
-    // fins: they ARE the foot -- they stay pressed along the tail line
-    // while the animal stands on them (flaring them mid-stand lifted the
-    // whole support 373 mm off the dirt; the probe caught it), with only a
-    // small strain flare during the fight, and they slap flat at the flop
-    g.tail_rest(kBladeSplay + (kBalFinFlare * fight) / 3000 - (600 * over) / 1000,
-                kBladeRise - (kBladeRise * up) / 1400 - (600 * over) / 1000);
+        quat_z(kHeadAttitude + (head_stunt * (1000 - recover)) / 1000 -
+               (wake * 900) / 1000);
+    // The BODY tail is the foot. The fan lifts just clear of terrain during
+    // the raised L so it cannot masquerade as point support, flares with the
+    // effort, then returns exactly to its canonical authored rest by key 223.
+    const int32_t blade_support = up * (1000 - recover) / 1000;
+    const int32_t blade_bias =
+        kBladeUpBias + ((kBalBladeUpBias - kBladeUpBias) * blade_support) / 1000;
+    const int32_t blade_anim = 1000 - recover;
+    const int32_t blade_splay_offset =
+        (((kBalFinFlare * fight) / 3000 - (600 * over) / 1000) *
+         blade_anim) /
+        1000;
+    const int32_t blade_rise_offset =
+        (-(kBladeRise * up) / 1400 - (600 * over) / 1000) * blade_anim /
+        1000;
+    g.tail_rest(kBladeSplay + blade_splay_offset,
+                kBladeRise + blade_rise_offset, blade_bias);
     g.write(c, f);
     c.root[f * 3 + 0] = fxm(root_x);
     c.root[f * 3 + 1] = fxm(root_y);

@@ -91,6 +91,17 @@ Refine the promising-but-unsuccessful v8 cel experiment into Zixxtrixx's main pr
 - Extended actual victim-triangle validation to compare both the complete decoded victim bone palette and rendered world transform exactly from impact onward. Slots 33, 34 and 48 pass entry/hold/extraction at every key and midpoint with `victim frozen pose+world exact`.
 - Rebuilt every dependent creature tool directly and passed the posed probe, strike-tip, target, limit, mesh/seam, planner, choreography and redirected reel sequence-CRC gates. Promoted five every-frame/native visual sheets and nine reports under `evidence/impact-*`; final golden repinning remains deferred to complete-v9 closeout.
 
+### 2026-08-29 21:42 UTC+02:00 - Broad grounded travelling-wave balance accepted
+
+- Rejected the historical raised spear and the first travelling-wave revisions after complete-sequence review: despite local motion, the animal still read as one rigid body balancing on fork tips. Increased two incommensurate phase-lagged waves, began the struggle during gather/rise, and retained independent per-segment authority so curvature visibly travels through the upper body at all times.
+- Reauthored the raised pose into a difficult weight-bearing L. Eleven uneven upper segments approach vertical, three form an elbow, and five tapered support segments lie broadly along terrain. Positive support slopes compensate the taper by eye; the root plateau moved from the old `+580` fan-tip balance to the accepted `-255` broad-body support.
+- Rejected a backwards support compensation that buried bone 14 and two distal blade-curl experiments that either worsened or failed to improve penetration. The accepted fan uses a named balance-only up-bias through the flop, stays visibly lifted, and returns exactly to canonical rest.
+- Inspected all 447 canonical cel-main frames plus a native-size every-four-key review. Rise and plateau continuously change curvature; the lower body remains visibly supported; failure buckles progressively rather than rotating like a rod; and recovery contains no twitch or isolated broken frame.
+- Extended the committed 3D probe to track actual skinned-vertex minima for every influencing bone. At every key and midpoint through keys 77–140, all six support regions b14–b19 remain present with minima `-12..14 mm`; plateau all/blade minima are `-34/-34 mm`.
+- Declared shallow support and flop impact separately. Worst terrain contact outside the impact is `-35 mm` at key 155.5; the real baked midpoint is explicitly included as a one-presentation-tick impact lead; the flop reaches `-66 mm` at key 161 inside its authored `-70..-25 mm` band.
+- Four rigid-transform-invariant upper-body chord spans vary by `16/21/9/49 mm`, proving actual shape travel rather than global rotation. Maximum 60 Hz posed-station step is `263 mm`; first/final roots and all palette channels are bit-exact.
+- Rebuilt every dependent tool directly and passed posed contact/shape travel, strike-tip, exact frozen target interaction, camera/LOD/outline/fixed-point limits, mesh/seam, planner, choreography and redirected reel sequence-CRC gates. Promoted the accepted visual sheets and ten gate reports under `evidence/balance-*`; final golden repinning remains deliberately deferred to complete-v9 closeout.
+
 ---
 
 ## Subagent Spawns

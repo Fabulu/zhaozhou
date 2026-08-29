@@ -69,6 +69,7 @@ struct PosedSample {
   std::array<int32_t, zixx::kProfileStations> x_mm{};
   std::array<int32_t, zixx::kProfileStations> y_mm{};
   std::array<int32_t, zixx::kProfileStations> z_mm{};
+  std::array<int32_t, zc::kMaxBones> bone_min_y_fx{};
   uint64_t saturation = 0;
 };
 
@@ -92,6 +93,7 @@ ClipScan scan_clip(const zc::CreatureType& type, const zc::Clip& clip,
   for (int tick = 0; tick < ns; ++tick) {
     PosedSample s;
     s.tick = tick;
+    s.bone_min_y_fx.fill(INT32_MAX);
     const uint16_t key = static_cast<uint16_t>(tick / 2);
     const uint8_t sub = static_cast<uint8_t>(tick & 1);
     std::array<zc::mat3x4fx, zc::kMaxBones> pose;
@@ -101,6 +103,13 @@ ClipScan scan_clip(const zc::CreatureType& type, const zc::Clip& clip,
       for (const auto& v : meshlet.verts) {
         int32_t x = 0, y = 0, z = 0;
         zc::skin_vertex(pose.data(), v, x, y, z, &ledger);
+        // Keep actual skinned-vertex minima per influencing bone. Balance uses
+        // these to prove several body segments, rather than only blade tips,
+        // share the authored terrain support.
+        if (v.b0 < zc::kMaxBones && v.w0 != 0)
+          s.bone_min_y_fx[v.b0] = std::min(s.bone_min_y_fx[v.b0], y);
+        if (v.b1 < zc::kMaxBones && v.w0 != 255)
+          s.bone_min_y_fx[v.b1] = std::min(s.bone_min_y_fx[v.b1], y);
         if (y < s.min_y_fx) {
           s.min_y_fx = y;
           s.min_b0 = v.b0;
@@ -337,6 +346,140 @@ int main() {
       std::printf("  ** FAIL: %s\n", what);
     }
   };
+
+  // Tail-balance contact is proved from actual posed vertices at every key and
+  // midpoint. The accepted art deliberately puts all six vertex regions across
+  // the five-segment tapered support into a shallow terrain bite; merely touching
+  // blade tips can no longer pass. Only the declared flop window may go deeper.
+  if (const ClipScan* balance = find_scan(scans, 7)) {
+    std::array<int32_t, zixx::kSpineBones> low{};
+    std::array<int32_t, zixx::kSpineBones> high{};
+    low.fill(INT32_MAX);
+    high.fill(INT32_MIN);
+    int least_near = zixx::kSpineBones;
+    int least_tick = -1;
+    int32_t plateau_worst = INT32_MAX;
+    int32_t plateau_blade_worst = INT32_MAX;
+    for (int t = 2 * zixx::kBalSupportBeginKey;
+         t <= 2 * zixx::kBalSupportEndKey; ++t) {
+      const PosedSample& s = balance->samples[t];
+      plateau_worst = std::min(plateau_worst, to_mm(s.min_y_fx));
+      plateau_blade_worst =
+          std::min(plateau_blade_worst, to_mm(s.blade_min_y_fx));
+      int near = 0;
+      for (int b = zixx::kBalSupport0; b < zixx::kSpineBones; ++b) {
+        const int32_t y = to_mm(s.bone_min_y_fx[b]);
+        low[b] = std::min(low[b], y);
+        high[b] = std::max(high[b], y);
+        if (y >= -zixx::kBalSupportBiteMm &&
+            y <= zixx::kBalSupportHoverMm)
+          ++near;
+      }
+      if (near < least_near) {
+        least_near = near;
+        least_tick = t;
+      }
+    }
+
+    int32_t outside_worst = INT32_MAX;
+    int outside_tick = -1;
+    int outside_b0 = -1, outside_b1 = -1;
+    int32_t impact_worst = INT32_MAX;
+    int impact_tick = -1;
+    int impact_b0 = -1, impact_b1 = -1;
+    for (const PosedSample& s : balance->samples) {
+      const bool impact =
+          s.tick >= 2 * zixx::kBalImpactBeginKey -
+                        zixx::kBalImpactLeadPresentationTicks &&
+          s.tick <= 2 * zixx::kBalImpactEndKey;
+      const int32_t y = to_mm(s.min_y_fx);
+      if (impact) {
+        if (y < impact_worst) {
+          impact_worst = y;
+          impact_tick = s.tick;
+          impact_b0 = s.min_b0;
+          impact_b1 = s.min_b1;
+        }
+      } else if (y < outside_worst) {
+        outside_worst = y;
+        outside_tick = s.tick;
+        outside_b0 = s.min_b0;
+        outside_b1 = s.min_b1;
+      }
+    }
+
+    // Chord-length ranges are rigid-transform invariant: a nonzero range in
+    // every successive upper-body span proves the accepted silhouette really
+    // changes shape throughout the fight rather than rotating as one rod.
+    constexpr std::array<std::pair<int, int>, 4> kShapeSpans = {
+        std::pair<int, int>{0, 10}, {10, 20}, {20, 30}, {30, 40}};
+    std::array<int32_t, kShapeSpans.size()> chord_low{};
+    std::array<int32_t, kShapeSpans.size()> chord_high{};
+    chord_low.fill(INT32_MAX);
+    chord_high.fill(INT32_MIN);
+    for (int t = 2 * zixx::kBalSupportBeginKey;
+         t <= 2 * zixx::kBalSupportEndKey; ++t) {
+      const PosedSample& s = balance->samples[t];
+      for (size_t i = 0; i < kShapeSpans.size(); ++i) {
+        const int a = kShapeSpans[i].first;
+        const int b = kShapeSpans[i].second;
+        const int64_t dx = s.x_mm[b] - s.x_mm[a];
+        const int64_t dy = s.y_mm[b] - s.y_mm[a];
+        const int64_t dz = s.z_mm[b] - s.z_mm[a];
+        const int32_t chord = static_cast<int32_t>(zref::isqrt_u64(
+            static_cast<uint64_t>(dx * dx + dy * dy + dz * dz)));
+        chord_low[i] = std::min(chord_low[i], chord);
+        chord_high[i] = std::max(chord_high[i], chord);
+      }
+    }
+    const StationStepMaximum continuity = station_step_max_mm(
+        *balance, 1, static_cast<int>(balance->samples.size()) - 1);
+
+    std::printf("BALANCE support posed-vertex minima by bone:");
+    for (int b = zixx::kBalSupport0; b < zixx::kSpineBones; ++b)
+      std::printf(" b%d=%d..%d", b, low[b], high[b]);
+    std::printf(" mm; least body regions=%d at %d%s; plateau all/blade "
+                "%d/%d mm\n",
+                least_near, least_tick / 2,
+                (least_tick & 1) ? ".5" : "", plateau_worst,
+                plateau_blade_worst);
+    std::printf("BALANCE terrain: outside impact %d mm at %d%s (bones %d/%d); "
+                "declared impact %d mm at %d%s (bones %d/%d)\n",
+                outside_worst, outside_tick / 2,
+                (outside_tick & 1) ? ".5" : "", outside_b0, outside_b1,
+                impact_worst, impact_tick / 2,
+                (impact_tick & 1) ? ".5" : "", impact_b0, impact_b1);
+
+    std::printf("BALANCE shape-travel chord ranges:");
+    for (size_t i = 0; i < kShapeSpans.size(); ++i)
+      std::printf(" %d-%d=%d", kShapeSpans[i].first,
+                  kShapeSpans[i].second, chord_high[i] - chord_low[i]);
+    std::printf(" mm; max 60 Hz station step %d mm at %d%s station %d\n",
+                continuity.mm, continuity.tick / 2,
+                (continuity.tick & 1) ? ".5" : "", continuity.station);
+
+    bool whole_body_shape_travels = true;
+    for (size_t i = 0; i < kShapeSpans.size(); ++i)
+      if (chord_high[i] - chord_low[i] <
+          zixx::kBalMinShapeChordTravelMm)
+        whole_body_shape_travels = false;
+    require(whole_body_shape_travels,
+            "balance shape change stopped travelling through the upper body");
+    require(continuity.mm <= zixx::kBalMaxStationStepMm,
+            "balance contains a high-frequency 60 Hz station step");
+    require(least_near == zixx::kSpineBones - zixx::kBalSupport0,
+            "balance reverted from broad body support to tip-only contact");
+    require(plateau_worst >= -zixx::kBalSupportBiteMm,
+            "balance support phase exceeds its authored terrain bite");
+    require(outside_worst >= -zixx::kBalSupportBiteMm,
+            "balance has undeclared terrain penetration outside the flop");
+    require(impact_worst >= -zixx::kBalImpactBiteMm &&
+                impact_worst <= -zixx::kBalImpactContactMinMm,
+            "balance flop left its declared impact-contact band");
+    require(key_pose_equal(*balance->clip, 0, zixx::kBalKeys - 1,
+                           type.bank.bone_count, true),
+            "balance does not recover bit-exactly to authored rest");
+  }
 
   // Non-adjacent station overlap at the real 60 Hz presentation cadence.
   int total_overlaps = 0;
@@ -699,7 +842,7 @@ int main() {
 
   if (failures == 0) {
     std::printf("ZIXX PROBE: PASS — every key + midpoint, declared 3D contact, "
-                "impact/spring/jump/limit/overlap gates\n");
+                "balance/impact/spring/jump/limit/overlap gates\n");
     return 0;
   }
   std::printf("ZIXX PROBE: FAIL — %d assertion(s)\n", failures);

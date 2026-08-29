@@ -1,0 +1,22 @@
+Zixxtrixx v9 balance acceptance — 2026-08-29
+
+Art adjudication
+- Rejected the historical raised spear and early travelling-wave revisions because the complete sequence still read as a rigid body rotating over fan tips.
+- Selected the authored raised L after inspecting all 447 canonical cel-main frames and a native-size review sheet. The long lower run lies visibly across terrain; lifted fan blades no longer plausibly carry the animal.
+- Two phase-lagged waves begin during gather and travel through the upper body throughout the struggle. Curvature changes continuously rather than moving as one rigid rotation.
+- The gradual headward failure bend overwhelms the corrections, the body buckles section by section into the flop, and recovery returns smoothly to the canonical S without a twitch or isolated broken frame.
+- All shape, contact, colour and timing values remain named art controls. Posed measurements compare and guard the accepted render; they did not generate it.
+
+Committed 3D comparison envelopes
+- Every actual skinned-vertex region influenced by support bones 14–19 remains in the declared support band at every key and real midpoint from keys 77–140.
+- Support-region minima: b14 -12..-10 mm, b15 -12..-10, b16 -9..-7, b17 -1..1, b18 5..7, b19 12..14.
+- All six body regions participate in support. Plateau global/blade minimum is -34/-34 mm.
+- Worst contact outside the declared flop is -35 mm at key 155.5. Declared flop contact reaches -66 mm at key 161 and remains within its authored -70..-25 mm band.
+- Rigid-transform-invariant chord ranges across four consecutive upper-body spans are 16, 21, 9 and 49 mm, proving shape change travels through the body.
+- Maximum 60 Hz posed-station step is 263 mm. First and final roots and complete palettes are bit-exact.
+
+Gates
+- Direct rebuild of every dependent creature tool passed.
+- Posed vertex/contact/shape-travel/continuity probe passed at every authored key and real midpoint.
+- Strike-tip, exact frozen target interaction, camera/LOD/outline/fixed-point limits, mesh/seam, planner, choreography and redirected reel sequence-CRC gates passed.
+- Golden repinning remains deliberately deferred until the complete v9 creature pass.
