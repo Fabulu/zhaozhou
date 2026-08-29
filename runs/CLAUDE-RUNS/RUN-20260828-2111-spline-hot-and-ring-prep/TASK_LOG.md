@@ -616,3 +616,68 @@ I had written a comment asserting the wrong one, confidently, citing the
 oracle. **One op right and its near twin wrong is the shape of an indexing
 error, not an arithmetic one** — and it was the invariant section running all
 nine that made the pair visible at once.
+
+## 2026-08-29 — the scalar bank's geometry, derived rather than chosen
+
+Fabian's direction on prepared RING was option (a), the reusable uniform/scalar
+path, with "the physical bank geometry is yours to derive and measure". So it
+was measured.
+
+### What the hardware actually has to do
+
+`spec/form/cost-model.md` settles the biggest question: `uniform_ops` are
+"executed ONCE per association **on the ARM**". The prep block is host work.
+The silicon therefore needs only two things — a bank the host loads, and a read
+path for the services. That is the same shape as the curve service's table
+cache, which is already built and closed, so there is a proven pattern to
+follow rather than a new one to invent.
+
+### Why a single base index does not work
+
+The planner allocates the prepared ring's scalars NON-consecutively:
+
+    s_m  = alloc_slots(1)      the midpoint
+    s_d0 = alloc_slots(1)      a temporary
+    s_rA = alloc_slots(1)      the first reciprocal
+    s_d1 = alloc_slots(1)      another temporary
+    s_rB = alloc_slots(1)      the second reciprocal
+
+with `s_r0` coming from wherever the source register already lived. The uop's
+four scalar operands are `s_r0, s_m, s_rA, s_rB` — two temporaries sit between
+them. So the instruction has to carry four indices, and the index WIDTH is what
+the bank depth decides.
+
+### The measurement
+
+A standalone tool (no build tree, no RTL — it cannot collide with a running
+sweep) plans every program in the corpus under six varying masks:
+
+    WORST sreg_hwm = 41      impact_wave, mask 0
+    Earth mask (x,z vary)    crater_ring 29, impact_wave 23, wave_pool 19
+    all inputs varying       6 - 8
+    vreg_hwm never above 26  (declared cap 32 -- consistent, a good sanity check)
+
+11 programs decoded, 0 failed.
+
+**The bank is worst when EVERYTHING is uniform**, which is the opposite of the
+intuition that a busier program needs more scalars: a value that varies lives
+in a vector register, and a value that does not becomes a scalar slot. Sweeping
+the mask found that; planning only the Earth mask would have reported 29 and
+undersized the bank by 40%.
+
+### The geometry
+
+    depth       64 slots      1.5x the observed worst, and a power of two
+    index       6 bits
+    ring operand encoding   four indices x 6 bits = 24 bits
+
+**Twenty-four bits fits inside the existing 32-bit immediate with eight to
+spare, so the instruction word does not have to grow.** That is the whole
+reason to measure before designing: had the worst case come out above 64, the
+indices would have needed 7 bits, 28 bits total, still fitting — but above 128
+slots the immediate would have been too small and the instruction format would
+have had to change.
+
+Above 64 the hardware REFUSES rather than wraps, matching how this engine
+already treats an unknown opcode: a width of zero means refuse, and a refusal
+fails loudly where a wrap corrupts a value silently.
