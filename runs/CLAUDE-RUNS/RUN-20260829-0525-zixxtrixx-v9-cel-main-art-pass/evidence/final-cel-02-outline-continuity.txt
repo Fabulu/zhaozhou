@@ -1,0 +1,11 @@
+Zixxtrixx v9 final cel-main projected-outline continuity — 2026-08-29
+
+idle: 576 frames; projected primary radius 367.7..623.4 px; widths [4]; transitions 0; maximum adjacent width jump 0
+balance: 447 frames; projected primary radius 209.7..209.7 px; widths [2]; transitions 0; maximum adjacent width jump 0
+salto-dummy: 243 frames; projected primary radius 170.7..181.4 px; widths [2]; transitions 0; maximum adjacent width jump 0
+salto-fly: 245 frames; projected primary radius 140.0..155.2 px; widths [1]; transitions 0; maximum adjacent width jump 0
+salto-six: 265 frames; projected primary radius 106.2..125.2 px; widths [1]; transitions 0; maximum adjacent width jump 0
+
+telemetry rows: 1776 (expected/used 1776)
+Visual review: smooth three-band cel lighting remains continuous across the tube; the exterior-only contour never overwrites interior colour or fills the eye/neck concavities. Close idle reads with strong 4 px ink, mid balance/ground-target with 2 px, and far flying/six-salto with 1 px rather than collapsing into a black mass.
+All five complete sequences hold one stable width apiece with zero threshold flicker. Balance uses the canonical 2*(224-1)+1 = 447 sample one-shot cadence.

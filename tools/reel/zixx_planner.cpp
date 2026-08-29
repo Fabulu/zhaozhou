@@ -59,8 +59,8 @@ int main() {
   // ---- 2/3. parametric plans hit their locked intercepts -----------------
   const auto check_plan = [&](const char* name, int32_t tx, int32_t ty) {
     const zc::AttackPlan p = zixx::zixx_plan_attack(tx, ty, 0, 0);
-    const int t3 = p.compress_keys + p.release_keys + p.coil_keys +
-                   p.unroll_keys + p.plunge_keys;
+    const int t3 = p.compress_keys + p.compress_hold_keys + p.release_keys +
+                   p.coil_keys + p.unroll_keys + p.plunge_keys;
     const zixx::ChoreoSample at_impact = zixx::zixx_plan_sample(p, t3);
     // THE WEAPON IS THE TAIL TIP (owner, 2026-08-28). The old assertion
     // "plunge terminus == locked intercept" checked the ROOT -- exactly
@@ -105,13 +105,25 @@ int main() {
   const zc::AttackPlan fwd = check_plan("long forward", 12000, 1200);
   expect(fwd.spin_mturns <= high.spin_mturns,
          "the flat shot spends fewer turns than the high one");
+  const zc::AttackPlan ceiling = check_plan("ceiling aerial", 0, 12000);
+  expect(ceiling.apex_mm <= zixx::kAtkApexLift,
+         "generic spear lock cannot borrow slot 48's 24 m apex exception");
   // ---- 4. a moving target is LED, then the lock holds --------------------
   {
     const zc::AttackPlan p = zixx::zixx_plan_attack(6000, 4000, 120, 0);
-    expect(p.intercept_x_mm > 6000, "the intercept leads a moving target");
-    // after the lock, re-planning does not change the flight in progress:
-    // the plan is immutable data -- sample() reads only the plan
-    const int t2 = p.compress_keys + p.release_keys + p.coil_keys + p.unroll_keys;
+    const int impact = p.compress_keys + p.compress_hold_keys +
+                       p.release_keys + p.coil_keys + p.unroll_keys +
+                       p.plunge_keys;
+    expect(p.intercept_x_mm == 6000 + 120 * impact &&
+               p.intercept_y_mm == 4000,
+           "moving-target intercept equals target position at the actual "
+           "impact key");
+    std::printf("moving target: impact key %d, target/intercept (%d, %d) mm — exact\n",
+                impact, p.intercept_x_mm, p.intercept_y_mm);
+    // After the lock, re-planning does not change the flight in progress:
+    // the plan is immutable data -- sample() reads only the plan.
+    const int t2 = p.compress_keys + p.compress_hold_keys + p.release_keys +
+                   p.coil_keys + p.unroll_keys;
     const zixx::ChoreoSample s1 = zixx::zixx_plan_sample(p, t2 + 3);
     const zixx::ChoreoSample s2 = zixx::zixx_plan_sample(p, t2 + 3);
     expect(s1.x_mm == s2.x_mm && s1.y_mm == s2.y_mm && s1.theta == s2.theta,

@@ -1,0 +1,94 @@
+Zixxtrixx v9 form / eyes / pupil / stripe acceptance — 2026-08-29
+
+ART ADJUDICATION
+- form-02 was authored and judged as a complete nose-to-tail silhouette beside Side.png and in the accepted walk camera; no projected drawing measurement generated a 3D value.
+- The profile reads as: slightly slimmer nose; subtle neck maximum; long near-nose-width front; gently slimmer middle; weight-bearing grounded run; sustained taper; thin tail.
+- Noseward eyes and the local station 3..6 bulge read in fixed side and front views.
+- Same-pose normal, faceted, smooth, cel-main, unlit, normal-visualization and wireframe evidence shows no mesh seam. The unwanted internal cel joint ink is gone. The remaining dark opening in the neck hook is genuine exterior sky/terrain-visible concavity and is intentionally retained.
+- Every committed static-proof sheet was inspected at native 384x240, in normal and cel-main, side/front/opposite flank, close and gameplay distance. The elastic orange stripe remains joined to the appropriate eyeball boundary at both extrema, holds, reversal and settle, without overshoot, internal termination, accidental width change, texture swim or detached pixels.
+- Every committed moving idle/look sheet was inspected in normal and cel-main at close and gameplay distance. The exposed pupil/stripe remains coherent while the head deforms. Motion is restrained, deterministic and target-led; it changes the gameplay footprint by approximately 1–2 pixels. Frozen-pupil comparisons are unambiguous, and both frozen sheets remain static for all 128 frames.
+
+NAMED FORM CONTROLS (mm)
+kRadiusNose=1120
+kRadiusNoseFull=1160
+kRadiusHead=1210
+kRadiusNeckFull=1240
+kRadiusNeckRelease=1210
+kRadiusLongFront=1160
+kRadiusMiddleFront=1140
+kRadiusMiddle=1100
+kRadiusGroundEntry=1060
+kRadiusGroundRun=1040
+kRadiusTaperShoulder=980
+kRadiusTailHeavy=780
+kRadiusTailMiddle=580
+kRadiusTailFine=400
+kRadiusTailThin=260
+kRadiusTailTip=180
+kBodyCarryMm=1084
+kEyeStation0=3
+kEyeStation1=6
+ZIXX_EYEBULGE=32
+
+NAMED PUPIL / STRIPE CONTROLS
+kPupilStation=5
+kPupilCoreHalfWidthMm=20
+kPupilCoreHalfAngleA16=1900
+kPupilStripeShoulderA16=3300
+kPupilStripeBoundaryA16=5700
+kPupilStripeCoreEdgeMm=13
+kPupilStripeArmHalfWidthMm=7
+kPupilStripeTipHalfWidthMm=3
+kPupilStripeSurfaceLiftMm=7
+kPupilStripeDepthMm=2
+kPupilStripeShoulderFollow=28
+kPupilGlanceA16=1700
+kPupilGlanceLiftA16=720
+kPupilHeadLagKeys=4
+kPupilIdleMoveInKey=26
+kPupilIdleSettleKey=36
+kPupilIdleHoldEndKey=62
+kPupilIdleMoveOutKey=74
+kPupilIdleRestKey=84
+kPupilProofKeys=64 (128 baked presentation frames)
+kPupilProofRestEndKey=8
+kPupilProofUpKey=18
+kPupilProofUpHoldEndKey=26
+kPupilProofDownKey=38
+kPupilProofDownHoldEndKey=46
+kPupilProofReturnKey=56
+ZIXX_PUPIL_MOTION=0 selects the compile-time frozen control build.
+
+STATIC PROOF SEQUENCE CRCS
+cel side close=0x0E09D5E3
+cel side game=0xB6DAC3DE
+cel front close=0x148BCF0F
+cel front game=0x024E22C7
+cel opposite close=0x8349A056
+cel opposite game=0x18F8CE4D
+normal side close=0xCC9AD2E7
+normal side game=0xBBA67735
+normal front close=0x546A27E6
+normal front game=0xC7F4F2EB
+normal opposite close=0xC1006312
+normal opposite game=0x407AB943
+frozen cel side close=0xB5AA6376
+frozen cel side game=0x0C1095D9
+
+MOVING / DEFORMING SEQUENCE CRCS
+cel idle close=0xE8403508
+cel idle game=0x8BB4052F
+cel look close=0xFC615B77
+cel look game=0x0FCB012A
+normal idle close=0xB44557C9
+normal idle game=0x2E76CF33
+normal look close=0x7238AF72
+normal look game=0xDFBD4AA1
+
+DETERMINISM AND STRUCTURAL GATES
+- Two independent 42-file golden dumps: byte-identical.
+- Normal generated page, two runs and tracked header: ad321900ab8f7a5cf326fe49bb16e5cfecf06297257955fd1e03062bed8c3f8b
+- Cel generated page, two runs and tracked header: 043590154ab3725ef8a04c3f9a206dbca6a8482a5d1f079faa9cfee21c967a3d
+- Posed-vertex probe: exit 0. Full output committed as form-eye-01-posed-vertex-probe.txt.
+- Mesh check: 1776 vertices, 1106 shared-position groups, zero disagreeing binds, zero seam split for every clip; OK.
+- Committed Upheaval golden comparison: all clips expectedly differ after form/bone changes. Slot 30's 26 legacy bone channels and all root channels are byte-identical to v8; the two appended pupil channels are identity. This is the meaningful preserved quick-taunt payload after the bank grew from 26 to 28 bones.

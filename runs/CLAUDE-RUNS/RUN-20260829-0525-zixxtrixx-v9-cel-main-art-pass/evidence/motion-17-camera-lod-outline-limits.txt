@@ -1,0 +1,2 @@
+limit-camera slot 48: 184 keys/367 samples, bbox [117..337]x[97..228], worst native margin 11 px, projected radius 83.76..121.27 px, ink 1..1 px, coarsest LOD 1, target_visible=1, saturation=0
+LIMIT CAMERA: PASS — native camera, LOD, one-pixel far outline, target and fixed-point range

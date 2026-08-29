@@ -1,0 +1,4 @@
+target-check slot 33: victim=watchdog, entry=60, hold 61..75 (4+ triangle hits/sample), clear=79.5, recoil=83 — PASS
+target-check slot 34: victim=winged-watchdog, entry=61.5, hold 62..76 (3+ triangle hits/sample), clear=79.5, recoil=84 — PASS
+target-check slot 48: victim=watchdog, entry=123, hold 123..137 (2+ triangle hits/sample), clear=139.5, recoil=145 — PASS
+TARGET INTERACTION: PASS — rendered world-space posed victim triangles, entry/hold/extraction at every key + midpoint

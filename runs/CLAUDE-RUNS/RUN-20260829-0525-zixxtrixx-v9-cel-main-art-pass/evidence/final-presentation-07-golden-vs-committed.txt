@@ -1,0 +1,12 @@
+Zixxtrixx v9 deliberate golden comparison against COMMITTED Upheaval goldens
+
+committed payloads: 40
+v9 generated payloads: 45
+byte-identical existing payloads: 0 — none
+changed existing payloads: 40 — clip-1.bin, clip-2.bin, clip-3.bin, clip-4.bin, clip-5.bin, clip-6.bin, clip-7.bin, clip-8.bin, clip-10.bin, clip-11.bin, clip-12.bin, clip-13.bin, clip-14.bin, clip-15.bin, clip-16.bin, clip-17.bin, clip-20.bin, clip-21.bin, clip-22.bin, clip-23.bin, clip-24.bin, clip-25.bin, clip-26.bin, clip-27.bin, clip-28.bin, clip-29.bin, clip-30.bin, clip-31.bin, clip-32.bin, clip-33.bin, clip-34.bin, clip-35.bin, clip-36.bin, clip-37.bin, clip-38.bin, clip-39.bin, clip-40.bin, clip-41.bin, clip-42.bin, clip-43.bin
+new payloads: 5 — clip-44.bin, clip-45.bin, clip-46.bin, clip-47.bin, clip-48.bin
+removed payloads: 0 — none
+
+pose-crcs.txt: changed (26 -> 28 bones and final v9 poses)
+Comparison target: C:/programmieren/zencrifice/Upheaval/creature/Zixxtrixx/golden (committed branch content, never staging)
+Generated repeat: 46/46 payload/CRC files byte-identical across independent dumps.

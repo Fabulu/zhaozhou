@@ -217,6 +217,15 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc) {
     for (int b = 0; b < bc; ++b) {
       const quat16& q1 = c.quats[static_cast<size_t>(k1) * bc + b];
       const quat16& q2r = c.quats[static_cast<size_t>(k2) * bc + b];
+      // A held authored channel must remain held at presentation cadence.
+      // Cubic neighbours are allowed to shape motion *between different keys*,
+      // never to pull a midpoint away when both segment endpoints are already
+      // bit-identical.  Without this, an attack's constant embedded pose still
+      // twitched at 60 Hz from the entry/extraction keys outside the segment.
+      if (std::memcmp(&q1, &q2r, sizeof(q1)) == 0) {
+        c.mid_quats[static_cast<size_t>(k) * bc + b] = q1;
+        continue;
+      }
       if (plain[static_cast<size_t>(k)]) {
         c.mid_quats[static_cast<size_t>(k) * bc + b] = quat16_nlerp(q1, q2r, 1, 2);
         continue;

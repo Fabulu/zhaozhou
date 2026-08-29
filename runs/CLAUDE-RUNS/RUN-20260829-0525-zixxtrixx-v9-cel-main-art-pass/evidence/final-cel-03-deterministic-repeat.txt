@@ -1,0 +1,9 @@
+Zixxtrixx v9 final cel-main representative-sequence repeat
+
+zixxtrixx-idle: 576/576 frames byte-identical — PASS
+zixxtrixx-balance: 447/447 frames byte-identical — PASS
+zixxtrixx-salto-dummy: 243/243 frames byte-identical — PASS
+zixxtrixx-salto-fly: 245/245 frames byte-identical — PASS
+zixxtrixx-salto-six: 265/265 frames byte-identical — PASS
+
+Total: 1,776/1,776 RGB frames byte-identical after a fresh direct reel rebuild.

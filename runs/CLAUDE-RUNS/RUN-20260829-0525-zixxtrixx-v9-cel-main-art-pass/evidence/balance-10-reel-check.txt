@@ -1,0 +1,41 @@
+terrain-wave: 64 frames, 143 unique colours, sequence_crc32c=0x31159F59
+terrain-impact: 80 frames, 150 unique colours, sequence_crc32c=0x12427B5F
+terrain-scars: 96 frames, 144 unique colours, sequence_crc32c=0x3C186D25
+terrain-breach frame 36: 8 cell(s) breached (total 8)
+terrain-breach frame 37: 26 cell(s) breached (total 34)
+terrain-breach frame 38: 28 cell(s) breached (total 62)
+terrain-breach frame 39: 25 cell(s) breached (total 87)
+terrain-breach frame 40: 27 cell(s) breached (total 114)
+terrain-breach frame 41: 23 cell(s) breached (total 137)
+terrain-breach frame 42: 26 cell(s) breached (total 163)
+terrain-breach frame 43: 21 cell(s) breached (total 184)
+terrain-breach: 64 frames, 161 unique colours, sequence_crc32c=0x54B0C505
+sky-sweep: 64 frames, 67 unique colours, sequence_crc32c=0x99A3E1A0
+star-boil: 63 frames, 170 unique colours, sequence_crc32c=0xDF05E21E
+noctis-flare: 64 frames, 240 unique colours, sequence_crc32c=0x347B72F6
+pulsar: 64 frames, 194 unique colours, sequence_crc32c=0x69F44CA3
+flare-occlusion: 64 frames, 110 unique colours, sequence_crc32c=0x47C98B90
+blue-giant: 64 frames, 125 unique colours, sequence_crc32c=0xE1CB9DA8
+white-dwarf: 64 frames, 133 unique colours, sequence_crc32c=0x227942AE
+orange-giant: 64 frames, 160 unique colours, sequence_crc32c=0xF76001F9
+blue-dwarf: 64 frames, 188 unique colours, sequence_crc32c=0xEBCA7820
+multiple: 64 frames, 204 unique colours, sequence_crc32c=0xCC14D30A
+infant: 64 frames, 160 unique colours, sequence_crc32c=0x91F8EB1A
+atmo-sun-donor: 64 frames, 151 unique colours, sequence_crc32c=0xD16723F6
+atmo-sun-thick: 64 frames, 152 unique colours, sequence_crc32c=0x08B5A606
+planet-sun-violet: 48 frames, 130 unique colours, sequence_crc32c=0x7DFDD03C
+planet-sun-terran: 48 frames, 151 unique colours, sequence_crc32c=0x503D3FB9
+planet-sun-dust: 48 frames, 137 unique colours, sequence_crc32c=0x6FFC26E5
+planet-sun-methane: 48 frames, 149 unique colours, sequence_crc32c=0xFB3E3581
+planet-sun-airless: 48 frames, 108 unique colours, sequence_crc32c=0x921A069F
+planet-sun-ember: 48 frames, 120 unique colours, sequence_crc32c=0xE4A93123
+planet-sun-giant: 48 frames, 117 unique colours, sequence_crc32c=0xF4C0DB5D
+planet-sun-supergiant: 48 frames, 156 unique colours, sequence_crc32c=0x2514843B
+planet-sun-redgiant: 48 frames, 93 unique colours, sequence_crc32c=0xFDC57719
+planet-sun-binary: 48 frames, 134 unique colours, sequence_crc32c=0xA9D2C999
+creature-wave-walk: 462 unique colours — full-colour lane, palette gate not applied
+creature-wave-walk: 96 frames, 462 unique colours, sequence_crc32c=0xF46B3B4A
+creature-bulk-pop: detached-piece invariant: 18 spawned, 12 early frames with >=10 in view, span 133018 -> 980452 raw
+creature-bulk-pop: 289 unique colours — full-colour lane, palette gate not applied
+creature-bulk-pop: 72 frames, 289 unique colours, sequence_crc32c=0x3D259C7E
+reel --check: all sequence CRCs match

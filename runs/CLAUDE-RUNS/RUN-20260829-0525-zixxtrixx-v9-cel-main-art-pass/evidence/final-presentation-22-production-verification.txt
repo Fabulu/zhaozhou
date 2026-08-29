@@ -1,0 +1,10 @@
+Production URL: https://upheaval.pages.dev
+Deployment URL: https://19a9bf54.upheaval.pages.dev
+Integrated Upheaval source: d97f7a424c9015c9ffc128406760fa5ccf370964
+Both production and deployment-alias index bytes match the integrated local index.
+Robots: noindex, nofollow - PASS
+Current media: 21 WebM/PNG pairs - PASS
+New clips: slow taunt, one-turn jump, three-turn jump, nine-salto - PASS
+Archive generations: 6 in requested newest-first order - PASS
+Production media: all files byte-match accepted corrected cel-main output; 5744 VP9 frames decoded; 10086599 WebM bytes - PASS
+Production and deployment-alias index bytes match the clean committed Upheaval origin/main checkout (Git stores normalized LF) - PASS

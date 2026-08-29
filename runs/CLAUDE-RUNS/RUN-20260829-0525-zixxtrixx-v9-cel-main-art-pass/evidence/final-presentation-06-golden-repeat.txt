@@ -1,0 +1,1 @@
+golden repeat: byte-identical across 46 generated files

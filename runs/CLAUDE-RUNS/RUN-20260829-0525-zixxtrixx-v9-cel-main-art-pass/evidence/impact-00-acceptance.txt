@@ -1,0 +1,25 @@
+Zixxtrixx v9 hit and target-impact acceptance — 2026-08-29
+
+Art adjudication
+- Generic/front: selected after native 384x240 every-frame review. A visible struck length folds immediately, the entire animal is shoved, and the reaction travels through the grounded run into a delayed tail whip. The long recovery reads as yielding low-frequency wobble, not a rapid twitch, and now completes naturally at exact rest.
+- Right/left: selected after four native-render iterations. The earlier stronger yaw versions foreshortened the body into a compact blob and were rejected despite passing probes. The accepted pair keeps body length visible, mirrors the local hairpin and whole-body side shove, and remains unmistakably lateral.
+- Back: a forward whole-animal surge with a down/forward local fold, visually distinct from every other direction.
+- Top: an unmistakable downward crush and duck with a separate local silhouette.
+- Standalone air hit: the accepted recoil bows the complete spear, counter-whips the skull and flares the blades. Every frame of the slot-48 entry, embedded hold, extraction and recoil was inspected at native resolution. Extraction clears before the stronger bow; the recoil remains smooth and volumetric.
+- Embedded victim: the watchdog remains visually still throughout the accepted hold. The committed gate also proves exact decoded local palette and exact rendered world transform from impact onward, in addition to actual posed victim-triangle entry/hold/extraction.
+
+Committed acceptance envelopes (comparison only; no value was generated from them)
+- Generic struck-length relative peak: 255 mm at key 2.
+- Generic supporting-tail relative peak: 848 mm at key 10, delayed after the struck section.
+- Generic maximum 60 Hz station step: 265 mm.
+- Side root shove: 229/230 mm; mirrored posed-station error at fixed-point precision: 80 mm.
+- Back root surge: 259 mm; back/top struck-length peaks: 226/267 mm.
+- Air-hit maximum whole-spear chord bow: 181 mm; maximum 60 Hz station step: 546 mm.
+- Generic, all four directional reactions, and standalone air hit recover to exact authored rest/seam.
+
+Gates
+- Direct rebuild of every dependent creature tool passed.
+- Posed vertex/contact/impact/overlap probe passed at every authored key and midpoint.
+- Actual victim-triangle target interaction and exact frozen victim pose/world gate passed for slots 33, 34 and 48.
+- Strike-tip, camera/LOD/outline/fixed-point limit, mesh/seam, planner, choreography and redirected reel sequence-CRC gates passed.
+- Golden repinning remains deliberately deferred until the complete v9 creature pass.

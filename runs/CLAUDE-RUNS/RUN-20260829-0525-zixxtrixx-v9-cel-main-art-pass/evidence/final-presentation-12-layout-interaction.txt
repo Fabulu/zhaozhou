@@ -1,0 +1,36 @@
+Zixxtrixx v9 local browser layout and interaction verification
+
+Browser: Microsoft Edge headless Chromium, generated public site served over localhost.
+Desktop viewport: 1410 x 1105 CSS px.
+True narrow viewport: 390 x 1105 CSS px (explicit same-origin iframe viewport; Chromium's 500 px headless window minimum was not mistaken for a 390 px test).
+
+PASS desktop current tab interaction
+- Selected zixxtrixx-6 (Slow neck wobble).
+- Exactly one outer panel displayed.
+- Visible caption: Slow neck-led left/right taunt, 120 keys / 239 canonical frames.
+- documentElement scrollWidth == clientWidth == 1410; no horizontal overflow.
+
+PASS desktop archive interaction
+- Selected zixxtrixx-archive and archive generation 0.
+- Exactly one outer panel and one requested archive generation displayed.
+- Visible generation: v8 normal main - 2026-08-29.
+- Archive clips expose controls and none autoplays.
+- documentElement scrollWidth == clientWidth == 1410; no horizontal overflow.
+
+PASS narrow current interaction
+- Selected zixxtrixx-6 at a real 390 CSS-pixel content viewport.
+- Exactly one outer panel displayed; tab labels wrap within the card.
+- documentElement scrollWidth == clientWidth == 390; no horizontal overflow.
+
+PASS narrow archive-generation interaction
+- Selected zixxtrixx-archive and archive generation 2.
+- Visible generation: v8 faceted cel collection - 2026-08-28.
+- The six generation selectors wrap into a readable single-column control set; the selected collection is the only shown generation.
+- Archive videos expose controls and do not autoplay.
+- documentElement scrollWidth == clientWidth == 390; no horizontal overflow.
+
+PASS metadata and media behavior
+- robots metadata is exactly noindex, nofollow in every checked layout.
+- Current clips retain their intended muted loop/autoplay viewer behavior.
+- Archived clips retain explicit controls, preload=none and no autoplay.
+- No browser or local-server process remained after capture.

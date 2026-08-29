@@ -1,0 +1,5 @@
+golden_files=42
+golden_repeat=IDENTICAL
+texture_normal_repeat=IDENTICAL
+texture_cel_repeat=IDENTICAL
+tracked_headers_match=YES

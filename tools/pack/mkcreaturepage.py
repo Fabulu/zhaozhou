@@ -105,6 +105,12 @@ GRAIN_SOURCES = {
     "orange": ("Front", (1228, 562, 1248, 606)),
 }
 
+# Small 64x64 fin/head-page grain. These names keep the shipping values
+# editable while allowing the independently selectable cel page to calm them.
+SMALL_GRAIN_GAIN = 2.1
+SMALL_GRAIN_MIN = 0.74
+SMALL_GRAIN_MAX = 1.26
+
 
 def grain(sheet, box, seed):
     """Lift a TILE x TILE multiplier field from real crayon.
@@ -142,8 +148,8 @@ def grain(sheet, box, seed):
     # The raw multiplier field survives the trip to screen at roughly half its
     # amplitude once the light rig and RGB565 have had their say, so push it
     # here, at the source, where the stroke shapes are still real.
-    g = 1.0 + (g - 1.0) * 2.1
-    return np.clip(g, 0.74, 1.26)
+    g = 1.0 + (g - 1.0) * SMALL_GRAIN_GAIN
+    return np.clip(g, SMALL_GRAIN_MIN, SMALL_GRAIN_MAX)
 
 
 def tint(base, g):
@@ -329,6 +335,10 @@ EYE_ROT_DEG = -30
 # slit and rim into one blob. The accurate wavy line does not survive 240p
 # at gameplay distance -- a bolder simpler slit that DOES was the brief.
 PUPIL_BOLD = 0.08
+# V9 moves the pupil as a tiny deterministic surface decal. The painted eye
+# therefore keeps only its yellow ball and ink perimeter; leaving any static
+# slit underneath would read as two pupils during a glance.
+MOVING_PUPIL_DECALS = True
 
 
 def eye_patch(u_tex=None, v_tex=None):
@@ -401,6 +411,16 @@ def eye_patch(u_tex=None, v_tex=None):
     cy = (v_tex - 1) / 2.0
     cx = (u_tex - 1) / 2.0
     r = np.hypot((xx - cx) / cx, (yy - cy) / cy)
+    if MOVING_PUPIL_DECALS:
+        # Preserve the hand-drawn footprint but clean the interior for the
+        # moving decal. A calm deterministic 4% tooth keeps the yellow from
+        # becoming plastic without reintroducing the static slit.
+        tooth = 0.96 + 0.04 * np.sin(xx * 0.71 + yy * 0.37 + 0.4)
+        ball_rgb = np.array((252.0, 224.0, 74.0))[None, None, :] * tooth[..., None]
+        inner = r < 0.82
+        perimeter = (r >= 0.82) & (r <= 1.08)
+        a[inner] = np.clip(ball_rgb[inner], 0, 255)
+        a[perimeter] = (26.0, 22.0, 26.0)
     # 1.08, was 1.02 (v3 run): the tighter ellipse faded the slit's ENDS --
     # in the sheet the wavy line runs rim to rim, and clipping its last
     # texels read as a floating smear instead of a slit ACROSS the eye.
@@ -409,9 +429,11 @@ def eye_patch(u_tex=None, v_tex=None):
 
 
 def paint_eyes(tile, g_orange):
-    """The drawing's own eye -- yellow ball, ink rim, top-to-bottom orange
-    slit swelling in the middle -- on BOTH side lines. Nothing else: the
-    invented orange socket is gone (see the note at EYE_BOX)."""
+    """The drawing's yellow ball and ink ring on BOTH side lines.
+
+    With MOVING_PUPIL_DECALS the orange slit is deliberately absent here and
+    supplied by the creature's two coordinated shallow pupil parts.
+    """
     rgb, alpha = eye_patch()
     ring = tint(EYE_RING_RGB, g_orange) if g_orange is not None else None
     for col in (EYE_COL_A, EYE_COL_B):
@@ -748,21 +770,28 @@ A_EYE_COL_A = EYE_COL_A * 2 - 8      # 66: judged on the head-on still --
 # at 70 the discs still rode high and the ball read mushroom-topped;
 # Front.png centres the eyes at the head's midline
 A_EYE_COL_B = EYE_COL_B * 2 + 8      # 126 (mirror)
-A_EYE_ROW = 18                       # 12 -> 18, RUN 1939: the dome repack
-                                     # (kHeadStationYMm) carries every head
-                                     # V row ~70 mm nose-ward, which IS the
-                                     # owner's "eyes need to come forward
-                                     # more" -- but at row 12 the disc's
-                                     # front edge landed on the dome curve
-                                     # (the recorded wrap fault); 15 keeps
-                                     # the whole disc on the ball with the
-                                     # net move still firmly forward
+A_EYE_ROW = 12                       # V9: move the atlas eye disc noseward;
+                                     # judged with the local 3..6 geometry
+                                     # swelling in fixed front and side views.
 A_EYE_U = 24                         # 12 tile texels of angle -> 24 atlas cols
 A_EYE_V = 19                         # 24 head rows -> 19 atlas rows
 A_EYE_RING = 3                       # orange surround, atlas texels of U --
                                      # thinned with the disc (Front.png's
                                      # surround is a bracket, not a halo)
 DITHER_AMP = 0.9                     # T6 ordered dither, 0..1 of one 565 step
+
+# V9 independently selectable cel page. Pigment anchors remain the fixed
+# GREEN/GREEN_DARK/PINK/BLUE/YELLOW/ORANGE values above; only the handmade
+# modulation is calmed so the three authored toon bands own the large read.
+CEL_MAIN_COVERAGE_AMP = 0.09
+CEL_MAIN_STROKE_AMP = 0.18
+CEL_MAIN_TOOTH_AMP = 0.06
+CEL_MAIN_HUE_DRIFT_AMP = 0.0
+CEL_MAIN_WOB_SCALE = 0.65
+CEL_MAIN_DITHER_AMP = 0.40
+CEL_MAIN_SMALL_GRAIN_GAIN = 1.35
+CEL_MAIN_SMALL_GRAIN_MIN = 0.82
+CEL_MAIN_SMALL_GRAIN_MAX = 1.18
 _BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6],
                     [3, 11, 1, 9], [15, 7, 13, 5]], dtype=np.float64) / 16.0
 
@@ -1263,8 +1292,33 @@ EXPERIMENTS = {
 }
 
 
+def apply_cel_main_controls():
+    """Select the deterministic calmer cel modulation before either payload."""
+    global COVERAGE_AMP, STROKE_AMP, TOOTH_AMP, HUE_DRIFT_AMP
+    global WOB_SCALE, DITHER_AMP
+    global SMALL_GRAIN_GAIN, SMALL_GRAIN_MIN, SMALL_GRAIN_MAX
+    COVERAGE_AMP = CEL_MAIN_COVERAGE_AMP
+    STROKE_AMP = CEL_MAIN_STROKE_AMP
+    TOOTH_AMP = CEL_MAIN_TOOTH_AMP
+    HUE_DRIFT_AMP = CEL_MAIN_HUE_DRIFT_AMP
+    WOB_SCALE = CEL_MAIN_WOB_SCALE
+    DITHER_AMP = CEL_MAIN_DITHER_AMP
+    SMALL_GRAIN_GAIN = CEL_MAIN_SMALL_GRAIN_GAIN
+    SMALL_GRAIN_MIN = CEL_MAIN_SMALL_GRAIN_MIN
+    SMALL_GRAIN_MAX = CEL_MAIN_SMALL_GRAIN_MAX
+
+
 def main():
     global WOB_SCALE
+    if "--cel-main" in sys.argv:
+        i = sys.argv.index("--cel-main")
+        out = Path(sys.argv[i + 1]) if len(sys.argv) > i + 1 else (
+            HERE.parents[1] / "tools" / "reel" / "zixxtrixx_page_cel.h")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        apply_cel_main_controls()
+        tiles, names = build_tiles()
+        emit(tiles, names, out, atlas=build_atlas())
+        return
     if "--experiment" in sys.argv:
         i = sys.argv.index("--experiment")
         name = sys.argv[i + 1]

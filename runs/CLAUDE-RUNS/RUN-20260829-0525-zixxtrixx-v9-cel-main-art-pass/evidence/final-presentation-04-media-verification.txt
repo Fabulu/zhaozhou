@@ -1,0 +1,27 @@
+Zixxtrixx v9 canonical cel-main media verification
+
+Encoder: ffmpeg libvpx-vp9, CRF 16, unconstrained bitrate, yuv444p, 60 fps, no audio.
+zixxtrixx-idle: 576 RGB frames; 1946390 B WebM; VP9 384x240 yuv444p 60/1; decoded 576; 1152x720 PNG poster; CRC32C 0x118DB21D - PASS
+zixxtrixx-walk: 160 RGB frames; 423001 B WebM; VP9 384x240 yuv444p 60/1; decoded 160; 1152x720 PNG poster; CRC32C 0x589E41F8 - PASS
+zixxtrixx-run: 96 RGB frames; 298060 B WebM; VP9 384x240 yuv444p 60/1; decoded 96; 1152x720 PNG poster; CRC32C 0x728EC067 - PASS
+zixxtrixx-look: 384 RGB frames; 585487 B WebM; VP9 384x240 yuv444p 60/1; decoded 384; 1152x720 PNG poster; CRC32C 0x019368B9 - PASS
+zixxtrixx-balance: 447 RGB frames; 427605 B WebM; VP9 384x240 yuv444p 60/1; decoded 447; 1152x720 PNG poster; CRC32C 0xD1277015 - PASS
+zixxtrixx-taunt: 224 RGB frames; 526220 B WebM; VP9 384x240 yuv444p 60/1; decoded 224; 1152x720 PNG poster; CRC32C 0x73338074 - PASS
+zixxtrixx-slow-taunt: 239 RGB frames; 417364 B WebM; VP9 384x240 yuv444p 60/1; decoded 239; 1152x720 PNG poster; CRC32C 0xF834112F - PASS
+zixxtrixx-jump-one: 143 RGB frames; 361717 B WebM; VP9 384x240 yuv444p 60/1; decoded 143; 1152x720 PNG poster; CRC32C 0xD605B7D0 - PASS
+zixxtrixx-jump-multi: 143 RGB frames; 399631 B WebM; VP9 384x240 yuv444p 60/1; decoded 143; 1152x720 PNG poster; CRC32C 0x61A34BC8 - PASS
+zixxtrixx-attack: 480 RGB frames; 657807 B WebM; VP9 384x240 yuv444p 60/1; decoded 480; 1152x720 PNG poster; CRC32C 0xA5C6EAB1 - PASS
+zixxtrixx-hit: 300 RGB frames; 595072 B WebM; VP9 384x240 yuv444p 60/1; decoded 300; 1152x720 PNG poster; CRC32C 0x7CAEC0F4 - PASS
+zixxtrixx-damage: 400 RGB frames; 733568 B WebM; VP9 384x240 yuv444p 60/1; decoded 400; 1152x720 PNG poster; CRC32C 0x0D074486 - PASS
+zixxtrixx-knockdown: 184 RGB frames; 269096 B WebM; VP9 384x240 yuv444p 60/1; decoded 184; 1152x720 PNG poster; CRC32C 0xCAA26AA6 - PASS
+zixxtrixx-fall: 288 RGB frames; 426139 B WebM; VP9 384x240 yuv444p 60/1; decoded 288; 1152x720 PNG poster; CRC32C 0x626DCAF4 - PASS
+zixxtrixx-hitfloor: 176 RGB frames; 234135 B WebM; VP9 384x240 yuv444p 60/1; decoded 176; 1152x720 PNG poster; CRC32C 0x7B14D00D - PASS
+zixxtrixx-salto-dummy: 243 RGB frames; 328909 B WebM; VP9 384x240 yuv444p 60/1; decoded 243; 1152x720 PNG poster; CRC32C 0xB4BC3C66 - PASS
+zixxtrixx-salto-fly: 245 RGB frames; 302739 B WebM; VP9 384x240 yuv444p 60/1; decoded 245; 1152x720 PNG poster; CRC32C 0x3730A02E - PASS
+zixxtrixx-salto-six: 265 RGB frames; 287720 B WebM; VP9 384x240 yuv444p 60/1; decoded 265; 1152x720 PNG poster; CRC32C 0x155417A6 - PASS
+zixxtrixx-salto-nine: 367 RGB frames; 317632 B WebM; VP9 384x240 yuv444p 60/1; decoded 367; 1152x720 PNG poster; CRC32C 0xEC607225 - PASS
+zixxtrixx-death: 192 RGB frames; 292146 B WebM; VP9 384x240 yuv444p 60/1; decoded 192; 1152x720 PNG poster; CRC32C 0x3F8BBE9B - PASS
+zixxtrixx-death2: 192 RGB frames; 256161 B WebM; VP9 384x240 yuv444p 60/1; decoded 192; 1152x720 PNG poster; CRC32C 0xC64682C8 - PASS
+
+PASS: 21 full-colour WebM/PNG pairs, 5744 source/decoded frames, 10086599 encoded bytes.
+Every complete WebM decoded without error; every source sequence also has an every-frame contact sheet.
