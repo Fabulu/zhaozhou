@@ -125,8 +125,8 @@ int main(int argc, char** argv) {
     top.raddr_i = 9;
     top.eval();
     zhao::check((int32_t)top.rdata_o == (int32_t)0x11111111,
-                "a new address does not disturb the datum already presented",
-                (uint32_t)0x11111111, (uint32_t)top.rdata_o);
+                "a new address does not disturb the datum already presented", (uint32_t)0x11111111,
+                (uint32_t)top.rdata_o);
     zhao::tick(top);
     top.eval();
     zhao::check((int32_t)top.rdata_o == (int32_t)0x22222222,
@@ -144,8 +144,8 @@ int main(int argc, char** argv) {
     write_slot(top, 64, (int32_t)0xDEADBEEF);
     zhao::check(top.we_bad_o == 1, "slot 64 raises the fault", 1, (uint32_t)top.we_bad_o);
     zhao::check(read_slot(top, 0) == (int32_t)0x0BADF00D,
-                "and slot 0 is UNTOUCHED -- the refused write did not land",
-                (uint32_t)0x0BADF00D, (uint32_t)read_slot(top, 0));
+                "and slot 0 is UNTOUCHED -- the refused write did not land", (uint32_t)0x0BADF00D,
+                (uint32_t)read_slot(top, 0));
 
     // The planner's slot numbers are uint16_t, so a program really can name a
     // slot in the thousands. 4000 & 63 == 32, which is a perfectly ordinary
@@ -153,8 +153,7 @@ int main(int argc, char** argv) {
     reset(top);
     write_slot(top, 32, (int32_t)0x5150C0DE);
     write_slot(top, 4000, (int32_t)0x0);
-    zhao::check(top.we_bad_o == 1, "a far out-of-range slot raises too", 1,
-                (uint32_t)top.we_bad_o);
+    zhao::check(top.we_bad_o == 1, "a far out-of-range slot raises too", 1, (uint32_t)top.we_bad_o);
     zhao::check(read_slot(top, 32) == (int32_t)0x5150C0DE,
                 "and slot 4000 & 63 == 32 was NOT overwritten", (uint32_t)0x5150C0DE,
                 (uint32_t)read_slot(top, 32));

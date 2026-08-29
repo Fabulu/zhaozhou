@@ -427,19 +427,16 @@ constexpr int32_t kCel2Thresh = 52000;
 constexpr int32_t kCel2Level[2] = {36000, 70000};
 constexpr int32_t kCel3Thresh[2] = {43000, 57000};
 constexpr int32_t kCel3Level[3] = {28000, 50000, 82000};
-constexpr render::ToonRamp kSmoothCel2Ramp{2, {kCel2Thresh, 0},
-                                           {kCel2Level[0], kCel2Level[1], 0}};
-constexpr render::ToonRamp kSmoothCel3Ramp{3, {kCel3Thresh[0], kCel3Thresh[1]},
-                                           {kCel3Level[0], kCel3Level[1], kCel3Level[2]}};
+constexpr render::ToonRamp kSmoothCel2Ramp{2, {kCel2Thresh, 0}, {kCel2Level[0], kCel2Level[1], 0}};
+constexpr render::ToonRamp kSmoothCel3Ramp{
+    3, {kCel3Thresh[0], kCel3Thresh[1]}, {kCel3Level[0], kCel3Level[1], kCel3Level[2]}};
 inline Shade3 cel_quantise(const Shade3& s) {
   const int32_t m = (s.r + s.g + s.b) / 3;
   int32_t q;
   if (g_cel_bands <= 2) {
     q = m < kCel2Thresh ? kCel2Level[0] : kCel2Level[1];
   } else {
-    q = m < kCel3Thresh[0] ? kCel3Level[0]
-        : m < kCel3Thresh[1] ? kCel3Level[1]
-                             : kCel3Level[2];
+    q = m < kCel3Thresh[0] ? kCel3Level[0] : m < kCel3Thresh[1] ? kCel3Level[1] : kCel3Level[2];
   }
   if (m <= 0) return Shade3{q, q, q};
   return Shade3{static_cast<int32_t>(static_cast<int64_t>(s.r) * q / m),
@@ -459,20 +456,15 @@ DebugShade g_debug_shade = DebugShade::kOff;
 int g_cel_bands = 0;
 int g_smooth_toon_bands = 0;
 
-bool projected_bound_radius_q8(
-    const mat4fx& vp,
-    int32_t world_x, int32_t world_y, int32_t world_z,
-    int32_t bound_radius, uint32_t viewport_w,
-    int32_t& radius_q8, SatLedger* L) {
-  const vec4fx clip = mat4_vec4(
-      vp, vec4fx{fx16{world_x}, fx16{world_y}, fx16{world_z}, fx16{1 << 16}}, L);
+bool projected_bound_radius_q8(const mat4fx& vp, int32_t world_x, int32_t world_y, int32_t world_z,
+                               int32_t bound_radius, uint32_t viewport_w, int32_t& radius_q8,
+                               SatLedger* L) {
+  const vec4fx clip =
+      mat4_vec4(vp, vec4fx{fx16{world_x}, fx16{world_y}, fx16{world_z}, fx16{1 << 16}}, L);
   if (clip.w.raw <= 0) return false;
-  const int32_t kx =
-      std::max(std::max(std::abs(vp.m[0][0].raw),
-                        std::abs(vp.m[0][1].raw)),
-               std::abs(vp.m[0][2].raw));
-  const __int128 rnum =
-      static_cast<__int128>(kx) * bound_radius * viewport_w * 128;
+  const int32_t kx = std::max(std::max(std::abs(vp.m[0][0].raw), std::abs(vp.m[0][1].raw)),
+                              std::abs(vp.m[0][2].raw));
+  const __int128 rnum = static_cast<__int128>(kx) * bound_radius * viewport_w * 128;
   const __int128 rden = static_cast<__int128>(clip.w.raw) << 16;
   radius_q8 = static_cast<int32_t>((rnum + rden / 2) / rden);
   return true;
@@ -508,8 +500,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
     // W/2 (project_vertex, rast.cpp), so
     //   radius_q8 = kx*R*W*128 / (w << 16)   — ONE round_half_up division.
     int32_t radius_q8 = 0;
-    if (!projected_bound_radius_q8(vp, ci.x, ci.y, ci.z, T.bound_radius,
-                                   w, radius_q8, L))
+    if (!projected_bound_radius_q8(vp, ci.x, ci.y, ci.z, T.bound_radius, w, radius_q8, L))
       continue;  // behind the eye: whole creature
 
     lod_update(ci.lod, radius_q8, thresh_q8, T);

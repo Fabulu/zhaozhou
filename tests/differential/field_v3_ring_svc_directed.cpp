@@ -121,8 +121,7 @@ Prep prepare(int32_t r0, int32_t r1) {
 }
 
 uint32_t pack_slots(int s_r0, int s_m, int s_rA, int s_rB) {
-  return (uint32_t)((s_r0 & 63) | ((s_m & 63) << 6) | ((s_rA & 63) << 12) |
-                    ((s_rB & 63) << 18));
+  return (uint32_t)((s_r0 & 63) | ((s_m & 63) << 6) | ((s_rA & 63) << 12) | ((s_rB & 63) << 18));
 }
 
 void reset(Vzhao_field_v3_ring_svc& dut, MulBank& mb, SBank& sb) {
@@ -142,8 +141,8 @@ void reset(Vzhao_field_v3_ring_svc& dut, MulBank& mb, SBank& sb) {
 }
 
 /** Drive one group and collect its four answers. Returns clocks taken, or -1. */
-int run_group(Vzhao_field_v3_ring_svc& dut, MulBank& mb, SBank& sb, const int32_t* d,
-              uint32_t imm, uint8_t tag, int32_t* out, uint8_t* out_tag) {
+int run_group(Vzhao_field_v3_ring_svc& dut, MulBank& mb, SBank& sb, const int32_t* d, uint32_t imm,
+              uint8_t tag, int32_t* out, uint8_t* out_tag) {
   dut.req_valid_i = 1;
   dut.req_d_0_i = (uint32_t)d[0];
   dut.req_d_1_i = (uint32_t)d[1];
@@ -202,12 +201,11 @@ int main(int argc, char** argv) {
 
     int32_t got[kLanes] = {};
     uint8_t tag = 0;
-    const int clocks = run_group(dut, mb, sb, d, pack_slots(s_r0, s_m, s_rA, s_rB), 0x5A, got,
-                                 &tag);
+    const int clocks =
+        run_group(dut, mb, sb, d, pack_slots(s_r0, s_m, s_rA, s_rB), 0x5A, got, &tag);
     zhao::check(clocks >= 0, "the group completes", 1, clocks >= 0 ? 1 : 0);
     zhao::check(tag == 0x5A, "and its tag comes back", 0x5A, tag);
-    zhao::check(dut.imm_bad_o == 0, "a clean immediate raises nothing", 0,
-                (uint32_t)dut.imm_bad_o);
+    zhao::check(dut.imm_bad_o == 0, "a clean immediate raises nothing", 0, (uint32_t)dut.imm_bad_o);
 
     for (int l = 0; l < kLanes; ++l) {
       zref::SatLedger L;
@@ -216,8 +214,7 @@ int main(int argc, char** argv) {
       snprintf(what, sizeof what, "lane %d matches ring_prepared", l);
       zhao::check(got[l] == want, what, (uint32_t)want, (uint32_t)got[l]);
     }
-    printf("   MEASURED: group in %d clocks, slots %d/%d/%d/%d\n", clocks, s_r0, s_m, s_rA,
-           s_rB);
+    printf("   MEASURED: group in %d clocks, slots %d/%d/%d/%d\n", clocks, s_r0, s_m, s_rA, s_rB);
   }
 
   printf("== section 2: a second group REFETCHES, it does not reuse ==\n");
@@ -229,8 +226,14 @@ int main(int argc, char** argv) {
     const Prep p1 = prepare(2 << 16, 9 << 16);
     const Prep p2 = prepare(1 << 16, 40 << 16);  // deliberately unlike p1
 
-    sb.mem[10] = p1.r0; sb.mem[11] = p1.m; sb.mem[12] = p1.rA; sb.mem[13] = p1.rB;
-    sb.mem[30] = p2.r0; sb.mem[31] = p2.m; sb.mem[32] = p2.rA; sb.mem[33] = p2.rB;
+    sb.mem[10] = p1.r0;
+    sb.mem[11] = p1.m;
+    sb.mem[12] = p1.rA;
+    sb.mem[13] = p1.rB;
+    sb.mem[30] = p2.r0;
+    sb.mem[31] = p2.m;
+    sb.mem[32] = p2.rA;
+    sb.mem[33] = p2.rB;
 
     int32_t g1[kLanes] = {}, g2[kLanes] = {};
     (void)run_group(dut, mb, sb, d, pack_slots(10, 11, 12, 13), 0x11, g1, nullptr);
@@ -253,7 +256,10 @@ int main(int argc, char** argv) {
   {
     reset(dut, mb, sb);
     const Prep p = prepare(2 << 16, 9 << 16);
-    sb.mem[1] = p.r0; sb.mem[2] = p.m; sb.mem[3] = p.rA; sb.mem[4] = p.rB;
+    sb.mem[1] = p.r0;
+    sb.mem[2] = p.m;
+    sb.mem[3] = p.rA;
+    sb.mem[4] = p.rB;
 
     int32_t got[kLanes] = {};
     const uint32_t imm = pack_slots(1, 2, 3, 4) | 0x01000000u;  // one reserved bit
@@ -280,20 +286,29 @@ int main(int argc, char** argv) {
     // curve service had before mul_ready_i existed.
     reset(dut, mb, sb);
     const Prep p = prepare(2 << 16, 9 << 16);
-    sb.mem[5] = p.r0; sb.mem[6] = p.m; sb.mem[7] = p.rA; sb.mem[8] = p.rB;
+    sb.mem[5] = p.r0;
+    sb.mem[6] = p.m;
+    sb.mem[7] = p.rA;
+    sb.mem[8] = p.rB;
     const uint32_t imm = pack_slots(5, 6, 7, 8);
 
     int32_t clean[kLanes] = {};
     (void)run_group(dut, mb, sb, d, imm, 0x44, clean, nullptr);
 
     reset(dut, mb, sb);
-    sb.mem[5] = p.r0; sb.mem[6] = p.m; sb.mem[7] = p.rA; sb.mem[8] = p.rB;
+    sb.mem[5] = p.r0;
+    sb.mem[6] = p.m;
+    sb.mem[7] = p.rA;
+    sb.mem[8] = p.rB;
     int done = 0, wrong = 0;
     mb.flaky = true;
     for (int g = 0; g < 6; ++g) {
       int32_t got[kLanes] = {};
       const int c = run_group(dut, mb, sb, d, imm, (uint8_t)(0x50 + g), got, nullptr);
-      if (c < 0) { ++wrong; continue; }
+      if (c < 0) {
+        ++wrong;
+        continue;
+      }
       ++done;
       for (int l = 0; l < kLanes; ++l)
         if (got[l] != clean[l]) ++wrong;

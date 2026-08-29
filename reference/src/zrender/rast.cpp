@@ -77,8 +77,8 @@ inline uint8_t sat_u8(int32_t v) { return static_cast<uint8_t>(v > 255 ? 255 : (
 
 inline void apply_toon_ramp(const ToonRamp* ramp, int32_t& r, int32_t& g, int32_t& b) {
   if (ramp == nullptr || ramp->bands == 0) return;
-  const int32_t mean = static_cast<int32_t>(
-      (static_cast<int64_t>(r) + static_cast<int64_t>(g) + b) / 3);
+  const int32_t mean =
+      static_cast<int32_t>((static_cast<int64_t>(r) + static_cast<int64_t>(g) + b) / 3);
   const int32_t q = ramp->bands <= 2
                         ? (mean < ramp->threshold[0] ? ramp->level[0] : ramp->level[1])
                         : (mean < ramp->threshold[0]
