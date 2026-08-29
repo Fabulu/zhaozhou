@@ -1627,6 +1627,21 @@ verilate(test_field_v3_ring_svc_directed
 add_test(NAME field_v3_ring_svc_directed COMMAND test_field_v3_ring_svc_directed)
 set_tests_properties(field_v3_ring_svc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# ---- OP_SIN and OP_COS ---------------------------------------------------
+# Two of the three opcodes measure_earth_ops.cpp found the Earth programs need
+# and the hardware did not serve. The arithmetic is zhao_field_sin, already
+# trusted by the rotation service; what is new is the four-lane walk around it.
+add_executable(test_field_v3_trig_directed differential/field_v3_trig_directed.cpp)
+target_link_libraries(test_field_v3_trig_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_trig_directed
+  PREFIX Vzhao_field_v3_trig
+  TOP_MODULE zhao_field_v3_trig
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_trig.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
+add_test(NAME field_v3_trig_directed COMMAND test_field_v3_trig_directed)
+set_tests_properties(field_v3_trig_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # ---- the uniform (scalar) bank -------------------------------------------
 # 64 slots because tools/field/measure_sreg_hwm.cpp measured a worst case of 41
 # across the corpus; the probe is committed so the number can be rechecked.
