@@ -364,17 +364,21 @@ int main(int argc, char** argv) {
     printf("   MEASURED: %d groups, %d refusals issued\n", done, mb.refusals);
   }
 
-  printf("== section 6: the INITIATION INTERVAL, which is the number that matters\n");
+  printf("== section 6: the INITIATION INTERVAL, STREAMED ==\n");
   {
-    // LATENCY IS NOT THROUGHPUT, and confusing them is how a pipelined machine
-    // gets costed wrong. `measure_earth_budget.cpp` multiplied this block's
-    // LATENCY by 273 groups and reported Earth 9.1x over budget. That is an
-    // upper bound and it is only the true figure if the service cannot start a
-    // new group before the last one finishes.
+    // THE FIRST VERSION OF THIS SECTION MEASURED THE WRONG THING. It called
+    // run(), which offers a group and then WAITS for its reply before offering
+    // the next -- so it never had two groups in flight and reported latency
+    // while calling it an initiation interval. It read 146, then 42, then 43,
+    // and 43 was the tell: the two-bank rebuild could not possibly have left
+    // throughput unchanged.
     //
-    // So the question is not "how long does one group take" but "how often can
-    // a group start". This measures it directly: hand over groups back to back
-    // and divide.
+    // Measuring a projection of the thing instead of the thing is the failure
+    // this project's art law names, and it applies to a testbench exactly as it
+    // does to a creature's proportions.
+    //
+    // So this streams: offer whenever the service is ready, accept whenever it
+    // replies, and divide elapsed clocks by groups RETIRED.
     reset(dut, mb);
     const int32_t a[3][kLanes] = {{3 << 16, 5 << 16, -(7 << 16), 11 << 16},
                                   {4 << 16, 12 << 16, 24 << 16, 2 << 16},
@@ -382,25 +386,67 @@ int main(int argc, char** argv) {
     const int32_t b[2][kLanes] = {{1 << 16, -(2 << 16), 7 << 16, 0},
                                   {1 << 16, 3 << 16, 0, -(9 << 16)}};
 
-    const int kGroups = 8;
-    int clocks = 0;
-    int done = 0;
-    for (int g = 0; g < kGroups; ++g) {
-      int32_t got[kLanes] = {};
-      const int c = run(dut, mb, 2, a, b, (uint8_t)(0x90 + g), got, nullptr, nullptr);
-      if (c < 0) break;
-      clocks += c;
-      ++done;
-    }
-    zhao::check(done == kGroups, "eight back-to-back groups all complete", kGroups, done);
-    const int ii = done ? (clocks / done) : 0;
-    printf("   MEASURED: %d groups, %d clocks, II = %d clocks/group\n", done, clocks, ii);
+    // The answer every group must give, taken from the serial path above.
+    int32_t want[kLanes] = {};
+    for (int l = 0; l < kLanes; ++l) want[l] = oracle(2, a, b, l, nullptr);
 
-    // THE BUDGET IS 24.3 CLOCKS PER GROUP: 850,000 clocks for 128 associations
-    // of 273 groups. This block is the dominant term in every Earth program, so
-    // if its II is above that, Earth cannot fit however good everything else is.
-    printf("   Earth needs <= 24 clocks/group for the WHOLE program; DIST2 alone is %d\n", ii);
-    zhao::check(ii > 0, "an initiation interval was measured at all", 1, ii > 0 ? 1 : 0);
+    const int kGroups = 32;
+    int offered = 0, retired = 0, wrong = 0, clocks = 0;
+    dut.r_ready_i = 1;
+    dut.mode_i = 2;
+    dut.a0_0_i = (uint32_t)a[0][0];
+    dut.a0_1_i = (uint32_t)a[0][1];
+    dut.a0_2_i = (uint32_t)a[0][2];
+    dut.a0_3_i = (uint32_t)a[0][3];
+    dut.a1_0_i = (uint32_t)a[1][0];
+    dut.a1_1_i = (uint32_t)a[1][1];
+    dut.a1_2_i = (uint32_t)a[1][2];
+    dut.a1_3_i = (uint32_t)a[1][3];
+    dut.a2_0_i = (uint32_t)a[2][0];
+    dut.a2_1_i = (uint32_t)a[2][1];
+    dut.a2_2_i = (uint32_t)a[2][2];
+    dut.a2_3_i = (uint32_t)a[2][3];
+    dut.b0_0_i = (uint32_t)b[0][0];
+    dut.b0_1_i = (uint32_t)b[0][1];
+    dut.b0_2_i = (uint32_t)b[0][2];
+    dut.b0_3_i = (uint32_t)b[0][3];
+    dut.b1_0_i = (uint32_t)b[1][0];
+    dut.b1_1_i = (uint32_t)b[1][1];
+    dut.b1_2_i = (uint32_t)b[1][2];
+    dut.b1_3_i = (uint32_t)b[1][3];
+
+    int guard = 0;
+    while (retired < kGroups && guard++ < 20000) {
+      dut.v_valid_i = (offered < kGroups) ? 1 : 0;
+      dut.tag_i = (uint8_t)(offered & 0xFF);
+      dut.eval();
+      const bool took = dut.v_valid_i && dut.v_ready_o;
+      const bool gave = dut.r_valid_o && dut.r_ready_i;
+      if (gave) {
+        for (int l = 0; l < kLanes; ++l) {
+          const int32_t got = (int32_t)(l == 0   ? dut.o0_0_o
+                                        : l == 1 ? dut.o0_1_o
+                                        : l == 2 ? dut.o0_2_o
+                                                 : dut.o0_3_o);
+          if (got != want[l]) ++wrong;
+        }
+        if ((int)dut.tag_o != (retired & 0xFF)) ++wrong;  // ACCEPT ORDER
+        ++retired;
+      }
+      if (took) ++offered;
+      step(dut, mb);
+      ++clocks;
+    }
+    dut.v_valid_i = 0;
+    dut.eval();
+
+    zhao::check(retired == kGroups, "all 32 streamed groups retire", kGroups, retired);
+    zhao::check(wrong == 0, "every streamed answer is right and IN ORDER", 0, wrong);
+    const int ii = retired ? (clocks / retired) : 0;
+    printf("   MEASURED: %d groups streamed in %d clocks, II = %d clocks/group\n", retired, clocks,
+           ii);
+    printf("   Earth budget is 24 clocks/group for the WHOLE program.\n");
+    zhao::check(ii > 0, "an initiation interval was measured", 1, ii > 0 ? 1 : 0);
   }
 
   return zhao::report_and_exit("field_v3_len_directed");

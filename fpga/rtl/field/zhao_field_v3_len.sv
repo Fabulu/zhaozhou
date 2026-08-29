@@ -1,60 +1,64 @@
-// zhao_field_v3_len.sv — LEN2, LEN3 and DIST2.
+// zhao_field_v3_len.sv — LEN2, LEN3 and DIST2, at an initiation interval.
 //
 // ENFORCED-BY: tests/differential/field_v3_len_directed.cpp:main
 //
 // ---------------------------------------------------------------------------
 // THREE OPCODES, ONE DATAPATH
 // ---------------------------------------------------------------------------
-// The oracle makes the sharing obvious rather than clever:
-//
-//     LEN2   dst = len_of({a0, a1},      2)
-//     LEN3   dst = len_of({a0, a1, a2},  3)
+//     LEN2   dst = len_of({a0, a1},       2)
+//     LEN3   dst = len_of({a0, a1, a2},   3)
 //     DIST2  dst = len_of({a0-b0, a1-b1}, 2)
 //
-// and `len_of` is one function:
+// and `len_of` is one function: n2 as an EXACT u64, isqrt_u64, clamp to
+// INT32_MAX with a RESCALE bump. DIST2 is LEN2 with a saturating subtract in
+// front; LEN3 is LEN2 with a third term.
 //
-//     n2  = sum of v[i]*v[i] as an EXACT u64
-//     len = isqrt_u64(n2)
-//     if len > INT32_MAX -> INT32_MAX and bump the rescale ledger
-//
-// So DIST2 is LEN2 with a saturating subtract in front, and LEN3 is LEN2 with
-// a third term. Building them as one block is not an economy measure; it is
-// what the reference already says they are.
-//
-// DIST2 is the reason the executor grew a fifth source port. Its shape is
-// {1, {2,2,0}, 2, 0} -- two members in operand a and TWO in b -- and every
-// long op before it had a single-member b.
+// DIST2 is the reason the executor grew a fifth source port: its shape is
+// {1, {2,2,0}, 2, 0} and every long op before it had a single-member b.
 //
 // ---------------------------------------------------------------------------
-// EXACT, NOT APPROXIMATE, AND THAT IS THE EXPENSIVE PART
+// THIS BLOCK IS SHAPED BY A DEADLINE, AND REBUILT TWICE BY MEASUREMENT
 // ---------------------------------------------------------------------------
-// `n2` is a u64 and must stay one: two s32 squares can reach 2^62, so summing
-// them in 32 or even 33 bits would wrap on perfectly ordinary coordinates.
-// The squares come from the shared four-wide bank, one component at a time
-// across all four lanes, and are accumulated at full width here.
+// Earth's stress frame is 850,000 clocks for 128 associations of 273
+// four-point groups: 24.3 clocks per group for the WHOLE program, and DIST2
+// appears in all three shipped Earth programs.
 //
-// The root is `zhao_field_isqrt`, the engine's own floor-exact restoring unit:
-// 32 fixed iterations, serial, with `n_ready_o` gated on being idle. It cannot
-// be pipelined without being rewritten.
+//     one root, walked over four lanes      II 146    74% of the whole frame
+//     four roots, one per lane              II  42
+//     two banks of four                     this file
+//
+// The first number is why the other two exist. Nothing here was designed from
+// an opinion about what would be fast.
 //
 // ---------------------------------------------------------------------------
-// FOUR ROOTS, NOT ONE WALKED -- AND THE MEASUREMENT IS WHY
+// LATENCY IS NOT THROUGHPUT
 // ---------------------------------------------------------------------------
-// This block first shipped with ONE root walked across the four lanes, on the
-// reasoning that the engine is shorter of area than of clocks. That reasoning
-// was wrong, and it was a measurement that said so rather than an argument:
+// A group may take 60 clocks end to end provided another group is using the
+// machinery meanwhile. The curve service already proves it in this engine:
+// latency 32, initiation interval 13.
 //
-//     MEASURED: 8 groups, 1168 clocks, II = 146 clocks/group
+// `zhao_field_isqrt` is 32 fixed iterations, serial, with `n_ready_o` gated on
+// idle -- it cannot be pipelined without being rewritten. So the answer is two
+// banks of four:
 //
-// against an Earth budget of 24.3 clocks per four-point group. 128 of those 146
-// clocks were the walk -- four lanes, 32 iterations each, strictly in turn --
-// and DIST2 was 74% of the entire 128-association frame.
+//     bank A   [--- 32-clock roots for group N ---]
+//     bank B                  [--- 32-clock roots for group N+1 ---]
+//     front    [sq N][sq N+1][sq N+2] ...
 //
-// Four roots run the lanes together, so the root phase is 32 clocks rather than
-// 128. That is roughly 1,000 ALMs against ~251 for one, and it is the trade the
-// budget demands. `zhao_probe_dist_svc` was probed with EIGHT in two banks for
-// exactly this reason, so the shape was foreseen; four is the smaller step and
-// the measurement decides whether it is enough.
+// While one bank roots, the other takes the next group and the front end
+// computes squares continuously. The initiation interval becomes the larger of
+// "how fast the front produces an n2" and "half the root time", instead of the
+// whole latency.
+//
+// EIGHT ROOTS IS ROUGHLY 2,000 ALMs against ~251 for one. That is a real cost
+// and it is the one the deadline demands. `zhao_probe_dist_svc` was probed at
+// exactly this topology -- two banks of four, target II <= 20 -- before the
+// problem was hit, so the shape was foreseen rather than invented here.
+//
+// REPLIES DRAIN IN ACCEPT ORDER. A two-entry order queue records which bank
+// took which group, so "every reply returns to its issuing requester" is true
+// by construction rather than by tag arithmetic -- the same reasoning the
+// distance probe gives for the same choice.
 //
 // What is NOT negotiable is exactness. `len_of` is floor-exact and an
 // approximate root would be a different answer, not a faster one.
@@ -80,8 +84,6 @@ module zhao_field_v3_len #(
     output var logic               r_valid_o,
     input  var logic               r_ready_i,
     output var logic signed [31:0] o0_0_o, o0_1_o, o0_2_o, o0_3_o,
-    // Per lane: the length exceeded INT32_MAX and was clamped. `len_of` bumps
-    // the RESCALE lane for this, not the add lane.
     output var logic        [ 3:0] sat_rescale_o,
     output var logic        [ 7:0] tag_o,
 
@@ -91,11 +93,8 @@ module zhao_field_v3_len #(
     output var logic signed [32:0] mul_a_0_o, mul_a_1_o, mul_a_2_o, mul_a_3_o,
     output var logic signed [32:0] mul_b_0_o, mul_b_1_o, mul_b_2_o, mul_b_3_o,
     input  var logic               mul_valid_i,
-    // THE TOP TWO BITS OF EACH PRODUCT ARE NOT READ, AND THAT IS A LAW RATHER
-    // THAN AN OVERSIGHT. The bank returns 66 bits because a general 33x33
-    // product needs them. Every product this service asks for is a SQUARE, so
-    // it is non-negative and at most (2^31)^2 = 2^62 -- it cannot reach bit 64.
-    // The waiver states that; it does not hide a truncation.
+    // The top two bits of each product are not read, and that is a LAW: every
+    // product here is a SQUARE, so it is non-negative and at most 2^62.
     /* verilator lint_off UNUSEDSIGNAL */
     input  var logic signed [65:0] mul_p_0_i, mul_p_1_i, mul_p_2_i, mul_p_3_i
     /* verilator lint_on UNUSEDSIGNAL */
@@ -105,27 +104,8 @@ module zhao_field_v3_len #(
   localparam logic [1:0] M_LEN3  = 2'd1;
   localparam logic [1:0] M_DIST2 = 2'd2;
 
-  localparam logic [2:0] L_IDLE  = 3'd0;
-  localparam logic [2:0] L_ISSUE = 3'd1;
-  localparam logic [2:0] L_WAIT  = 3'd2;
-  localparam logic [2:0] L_ROOT  = 3'd3;
-  localparam logic [2:0] L_HOLD  = 3'd4;
-
-  logic [2:0]         state_r;
-  // No `mode_r`. The mode decides two things -- how many components and
-  // whether to subtract -- and BOTH are resolved at capture time, into
-  // `ncomp_r` and into `v_r` itself. Storing the mode as well would be a
-  // second copy of a fact already recorded, which is the shape of every
-  // seam defect this engine has produced.
-  logic [7:0]         tag_r;
-  logic [1:0]         comp_r;      // which component is being squared, 0..2
-  logic [1:0]         ncomp_r;     // 2 or 3
-  logic signed [31:0] v_r [3][LANES];
-  logic        [63:0] n2_r [LANES];
-
-  // ---- the saturating subtract DIST2 needs --------------------------------
-  // `fx_sub` saturates; a wrapped delta would give a plausible short distance
-  // for two far-apart points, which is the worst kind of wrong.
+  // A wrapped delta would report two maximally distant points as nearly
+  // coincident: plausible, and completely wrong.
   function automatic logic signed [31:0] sub_sat(input logic signed [31:0] a,
                                                  input logic signed [31:0] b);
     logic signed [32:0] w;
@@ -137,161 +117,230 @@ module zhao_field_v3_len #(
     end
   endfunction
 
-  // ---- four roots, one per lane -------------------------------------------
-  // `started_r` drops each lane's request the clock after it is taken, so one
-  // n2 is not offered twice -- the same guard the curve and ring services
-  // carry. `got_r` marks the lanes whose answers have landed; the phase ends
-  // when all four have, not when the last one is merely in flight.
-  logic [LANES-1:0] rt_n_valid, rt_n_ready, rt_r_valid;
-  logic [63:0]      rt_r [LANES];
-  logic [LANES-1:0] started_r, got_r;
+  // ---- the front end: squares, one component across four lanes ------------
+  localparam logic [1:0] F_IDLE  = 2'd0;
+  localparam logic [1:0] F_ISSUE = 2'd1;
+  localparam logic [1:0] F_WAIT  = 2'd2;
+  localparam logic [1:0] F_HAND  = 2'd3;
 
-  for (genvar g = 0; g < LANES; g++) begin : gen_root
-    zhao_field_isqrt u_isqrt (
-        .clk(clk), .rst_n(rst_n),
-        .n_valid_i(rt_n_valid[g]), .n_ready_o(rt_n_ready[g]),
-        .n_i(n2_r[g]),
-        .r_valid_o(rt_r_valid[g]), .r_ready_i(1'b1),
-        .r_o(rt_r[g])
-    );
-    assign rt_n_valid[g] = (state_r == L_ROOT) && !started_r[g];
+  logic [1:0]         f_state_r;
+  logic [1:0]         f_comp_r, f_ncomp_r;
+  logic [7:0]         f_tag_r;
+  logic signed [31:0] f_v_r [3][LANES];
+  logic        [63:0] f_n2_r [LANES];
+
+  // ---- the two root banks --------------------------------------------------
+  logic               bk_busy_r [2];
+  logic               bk_done_r [2];
+  logic        [ 7:0] bk_tag_r  [2];
+  logic signed [31:0] bk_res_r  [2][LANES];
+  logic        [ 3:0] bk_sat_r  [2];
+  logic [LANES-1:0]   bk_started_r [2];
+  logic [LANES-1:0]   bk_got_r     [2];
+  logic        [63:0] bk_n2_r   [2][LANES];
+
+  logic [LANES-1:0] rt_n_valid [2], rt_n_ready [2], rt_r_valid [2];
+  logic [63:0]      rt_r [2][LANES];
+
+  for (genvar bk = 0; bk < 2; bk++) begin : gen_bank
+    for (genvar g = 0; g < LANES; g++) begin : gen_root
+      zhao_field_isqrt u_isqrt (
+          .clk(clk), .rst_n(rst_n),
+          .n_valid_i(rt_n_valid[bk][g]), .n_ready_o(rt_n_ready[bk][g]),
+          .n_i(bk_n2_r[bk][g]),
+          .r_valid_o(rt_r_valid[bk][g]), .r_ready_i(1'b1),
+          .r_o(rt_r[bk][g])
+      );
+      assign rt_n_valid[bk][g] = bk_busy_r[bk] && !bk_done_r[bk] && !bk_started_r[bk][g];
+    end
   end
 
-  // ---- the bank request: one component across all four lanes ---------------
-  assign mul_issue_o = (state_r == L_ISSUE);
-  assign mul_a_0_o = 33'(v_r[comp_r][0]);
-  assign mul_a_1_o = 33'(v_r[comp_r][1]);
-  assign mul_a_2_o = 33'(v_r[comp_r][2]);
-  assign mul_a_3_o = 33'(v_r[comp_r][3]);
-  assign mul_b_0_o = 33'(v_r[comp_r][0]);
-  assign mul_b_1_o = 33'(v_r[comp_r][1]);
-  assign mul_b_2_o = 33'(v_r[comp_r][2]);
-  assign mul_b_3_o = 33'(v_r[comp_r][3]);
+  // ---- the order queue: two entries, one bit each -------------------------
+  // Replies leave in ACCEPT ORDER, so a bank that finishes early cannot
+  // overtake and hand a caller somebody else's length.
+  // HEAD AND TAIL POINTERS, NOT A SHIFTING QUEUE. The first version shifted
+  // entry 1 down to 0 on a retire while a push wrote entry 1, so a push and a
+  // retire on the SAME clock both assigned oq[1] and the push was silently
+  // lost. It showed as 31 of 32 streamed groups retiring with the tags out of
+  // order -- a lost instruction, not a slow one.
+  //
+  // Pointers cannot collide: a push writes [tail] and a retire advances head,
+  // and the count is decided in ONE place from both. That is the same shape
+  // the dispatcher's in-flight queue already uses, and for the same reason.
+  logic       oq_bk_r [2];
+  logic       oq_head_r, oq_tail_r;
+  logic [1:0] oq_count_r;
 
-  assign v_ready_o = (state_r == L_IDLE);
-  assign r_valid_o = (state_r == L_HOLD);
-  assign tag_o     = tag_r;
+  logic free_bank_c, have_free_c;
+  always_comb begin
+    have_free_c = 1'b0;
+    free_bank_c = 1'b0;
+    if (!bk_busy_r[0]) begin
+      have_free_c = 1'b1;
+      free_bank_c = 1'b0;
+    end else if (!bk_busy_r[1]) begin
+      have_free_c = 1'b1;
+      free_bank_c = 1'b1;
+    end
+  end
+
+  assign mul_issue_o = (f_state_r == F_ISSUE);
+  assign mul_a_0_o = 33'(f_v_r[f_comp_r][0]);
+  assign mul_a_1_o = 33'(f_v_r[f_comp_r][1]);
+  assign mul_a_2_o = 33'(f_v_r[f_comp_r][2]);
+  assign mul_a_3_o = 33'(f_v_r[f_comp_r][3]);
+  assign mul_b_0_o = 33'(f_v_r[f_comp_r][0]);
+  assign mul_b_1_o = 33'(f_v_r[f_comp_r][1]);
+  assign mul_b_2_o = 33'(f_v_r[f_comp_r][2]);
+  assign mul_b_3_o = 33'(f_v_r[f_comp_r][3]);
+
+  // THE FRONT ACCEPTS WHENEVER IT IS FREE AND THE ORDER QUEUE HAS ROOM. It does
+  // NOT wait for the roots, and that gate is the whole difference between II 42
+  // and this file -- the same change the curve service made to reach 13.
+  assign v_ready_o = (f_state_r == F_IDLE) && (oq_count_r != 2'd2);
+
+  logic head_bk_c;
+  assign head_bk_c = oq_bk_r[oq_head_r];
+  assign r_valid_o = (oq_count_r != 2'd0) && bk_busy_r[head_bk_c] && bk_done_r[head_bk_c];
+  assign o0_0_o    = bk_res_r[head_bk_c][0];
+  assign o0_1_o    = bk_res_r[head_bk_c][1];
+  assign o0_2_o    = bk_res_r[head_bk_c][2];
+  assign o0_3_o    = bk_res_r[head_bk_c][3];
+  assign sat_rescale_o = bk_sat_r[head_bk_c];
+  assign tag_o     = bk_tag_r[head_bk_c];
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      state_r       <= L_IDLE;
-      tag_r         <= 8'd0;
-      comp_r        <= 2'd0;
-      ncomp_r       <= 2'd2;
-      started_r     <= '0;
-      got_r         <= '0;
-      sat_rescale_o <= 4'd0;
-      o0_0_o <= '0; o0_1_o <= '0; o0_2_o <= '0; o0_3_o <= '0;
+      f_state_r  <= F_IDLE;
+      f_comp_r   <= 2'd0;
+      f_ncomp_r  <= 2'd2;
+      f_tag_r    <= 8'd0;
+      oq_count_r <= 2'd0;
+      oq_head_r  <= 1'b0;
+      oq_tail_r  <= 1'b0;
       for (int c = 0; c < 3; c++)
-        for (int l = 0; l < LANES; l++) v_r[c][l] <= '0;
-      for (int l = 0; l < LANES; l++) n2_r[l] <= 64'd0;
+        for (int l = 0; l < LANES; l++) f_v_r[c][l] <= '0;
+      for (int l = 0; l < LANES; l++) f_n2_r[l] <= 64'd0;
+      for (int b = 0; b < 2; b++) begin
+        bk_busy_r[b]    <= 1'b0;
+        bk_done_r[b]    <= 1'b0;
+        bk_tag_r[b]     <= 8'd0;
+        bk_sat_r[b]     <= 4'd0;
+        bk_started_r[b] <= '0;
+        bk_got_r[b]     <= '0;
+        oq_bk_r[b]      <= 1'b0;
+        for (int l = 0; l < LANES; l++) begin
+          bk_res_r[b][l] <= '0;
+          bk_n2_r[b][l]  <= 64'd0;
+        end
+      end
     end else begin
-      case (state_r)
-        L_IDLE: begin
-          if (v_valid_i) begin
-            tag_r   <= tag_i;
-            // Spelled out for all three rather than defaulted, so adding a
-            // fourth mode has to name its own width instead of inheriting one.
-            ncomp_r <= (mode_i == M_LEN3)  ? 2'd3
-                     : (mode_i == M_LEN2)  ? 2'd2
-                     : /* M_DIST2 */         2'd2;
-            comp_r  <= 2'd0;
-            for (int l = 0; l < LANES; l++) n2_r[l] <= 64'd0;
+      case (f_state_r)
+        F_IDLE: begin
+          if (v_valid_i && v_ready_o) begin
+            f_tag_r   <= tag_i;
+            f_ncomp_r <= (mode_i == M_LEN3) ? 2'd3 : (mode_i == M_LEN2) ? 2'd2 : 2'd2;
+            f_comp_r  <= 2'd0;
+            for (int l = 0; l < LANES; l++) f_n2_r[l] <= 64'd0;
 
-            // DIST2 subtracts; the other two take the components as they are.
             if (mode_i == M_DIST2) begin
-              v_r[0][0] <= sub_sat(a0_0_i, b0_0_i);
-              v_r[0][1] <= sub_sat(a0_1_i, b0_1_i);
-              v_r[0][2] <= sub_sat(a0_2_i, b0_2_i);
-              v_r[0][3] <= sub_sat(a0_3_i, b0_3_i);
-              v_r[1][0] <= sub_sat(a1_0_i, b1_0_i);
-              v_r[1][1] <= sub_sat(a1_1_i, b1_1_i);
-              v_r[1][2] <= sub_sat(a1_2_i, b1_2_i);
-              v_r[1][3] <= sub_sat(a1_3_i, b1_3_i);
+              f_v_r[0][0] <= sub_sat(a0_0_i, b0_0_i);
+              f_v_r[0][1] <= sub_sat(a0_1_i, b0_1_i);
+              f_v_r[0][2] <= sub_sat(a0_2_i, b0_2_i);
+              f_v_r[0][3] <= sub_sat(a0_3_i, b0_3_i);
+              f_v_r[1][0] <= sub_sat(a1_0_i, b1_0_i);
+              f_v_r[1][1] <= sub_sat(a1_1_i, b1_1_i);
+              f_v_r[1][2] <= sub_sat(a1_2_i, b1_2_i);
+              f_v_r[1][3] <= sub_sat(a1_3_i, b1_3_i);
             end else begin
-              v_r[0][0] <= a0_0_i; v_r[0][1] <= a0_1_i;
-              v_r[0][2] <= a0_2_i; v_r[0][3] <= a0_3_i;
-              v_r[1][0] <= a1_0_i; v_r[1][1] <= a1_1_i;
-              v_r[1][2] <= a1_2_i; v_r[1][3] <= a1_3_i;
+              f_v_r[0][0] <= a0_0_i; f_v_r[0][1] <= a0_1_i;
+              f_v_r[0][2] <= a0_2_i; f_v_r[0][3] <= a0_3_i;
+              f_v_r[1][0] <= a1_0_i; f_v_r[1][1] <= a1_1_i;
+              f_v_r[1][2] <= a1_2_i; f_v_r[1][3] <= a1_3_i;
             end
-            v_r[2][0] <= a2_0_i; v_r[2][1] <= a2_1_i;
-            v_r[2][2] <= a2_2_i; v_r[2][3] <= a2_3_i;
-
-            state_r <= L_ISSUE;
+            f_v_r[2][0] <= a2_0_i; f_v_r[2][1] <= a2_1_i;
+            f_v_r[2][2] <= a2_2_i; f_v_r[2][3] <= a2_3_i;
+            f_state_r <= F_ISSUE;
           end
         end
 
-        // AN INSTRUCTION MAY NOT ADVANCE PAST A REFUSED ISSUE. The bank is
-        // shared and can say no; advancing anyway would wait for a product
-        // nobody started, which is the open-loop defect this engine has fixed
-        // twice already.
-        L_ISSUE: begin
-          if (mul_ready_i) state_r <= L_WAIT;
-        end
+        // An instruction may not advance past a refused issue.
+        F_ISSUE: if (mul_ready_i) f_state_r <= F_WAIT;
 
-        L_WAIT: begin
+        F_WAIT: begin
           if (mul_valid_i) begin
-            // The square of an s32 needs 64 bits and the sum of three needs
-            // 64 too; taking the low 64 of the 66-bit product is exact here
-            // because a square is non-negative and fits.
-            n2_r[0] <= n2_r[0] + mul_p_0_i[63:0];
-            n2_r[1] <= n2_r[1] + mul_p_1_i[63:0];
-            n2_r[2] <= n2_r[2] + mul_p_2_i[63:0];
-            n2_r[3] <= n2_r[3] + mul_p_3_i[63:0];
-
-            if (comp_r + 2'd1 >= ncomp_r) begin
-              comp_r    <= 2'd0;
-              started_r <= '0;
-              got_r     <= '0;
-              state_r   <= L_ROOT;
-            end else begin
-              comp_r  <= comp_r + 2'd1;
-              state_r <= L_ISSUE;
+            f_n2_r[0] <= f_n2_r[0] + mul_p_0_i[63:0];
+            f_n2_r[1] <= f_n2_r[1] + mul_p_1_i[63:0];
+            f_n2_r[2] <= f_n2_r[2] + mul_p_2_i[63:0];
+            f_n2_r[3] <= f_n2_r[3] + mul_p_3_i[63:0];
+            if (f_comp_r + 2'd1 >= f_ncomp_r) f_state_r <= F_HAND;
+            else begin
+              f_comp_r  <= f_comp_r + 2'd1;
+              f_state_r <= F_ISSUE;
             end
           end
         end
 
-        // All four roots run together. The phase ends when every lane's answer
-        // has LANDED -- `got_r` is set by the capture below, so it cannot end
-        // while one is still a non-blocking assignment in flight. That is the
-        // same off-by-one the neighbour phase and the uniform fetch each cost a
-        // debugging session for.
-        L_ROOT: begin
+        // Hand the finished n2 to a free bank. If both are busy the front WAITS
+        // here rather than dropping it: back-pressure, not loss.
+        F_HAND: begin
+          if (have_free_c) begin
+            bk_n2_r[free_bank_c][0] <= f_n2_r[0];
+            bk_n2_r[free_bank_c][1] <= f_n2_r[1];
+            bk_n2_r[free_bank_c][2] <= f_n2_r[2];
+            bk_n2_r[free_bank_c][3] <= f_n2_r[3];
+            bk_tag_r[free_bank_c]     <= f_tag_r;
+            bk_busy_r[free_bank_c]    <= 1'b1;
+            bk_done_r[free_bank_c]    <= 1'b0;
+            bk_started_r[free_bank_c] <= '0;
+            bk_got_r[free_bank_c]     <= '0;
+            bk_sat_r[free_bank_c]     <= 4'd0;
+
+            oq_bk_r[oq_tail_r] <= free_bank_c;
+            oq_tail_r          <= ~oq_tail_r;
+            f_state_r          <= F_IDLE;
+          end
+        end
+
+        default: f_state_r <= F_IDLE;
+      endcase
+
+      // ---- the banks, independently ---------------------------------------
+      for (int b = 0; b < 2; b++) begin
+        if (bk_busy_r[b] && !bk_done_r[b]) begin
           for (int l = 0; l < LANES; l++) begin
-            if (rt_n_valid[l] && rt_n_ready[l]) started_r[l] <= 1'b1;
-            if (rt_r_valid[l] && !got_r[l]) begin
-              got_r[l] <= 1'b1;
-              // len_of's saturation: above INT32_MAX the answer clamps and the
-              // RESCALE lane is bumped, not the add lane.
-              if (rt_r[l] > 64'd2147483647) begin
-                sat_rescale_o[l] <= 1'b1;
-                case (l)
-                  0: o0_0_o <= 32'sd2147483647;
-                  1: o0_1_o <= 32'sd2147483647;
-                  2: o0_2_o <= 32'sd2147483647;
-                  default: o0_3_o <= 32'sd2147483647;
-                endcase
+            if (rt_n_valid[b][l] && rt_n_ready[b][l]) bk_started_r[b][l] <= 1'b1;
+            if (rt_r_valid[b][l] && !bk_got_r[b][l]) begin
+              bk_got_r[b][l] <= 1'b1;
+              if (rt_r[b][l] > 64'd2147483647) begin
+                bk_sat_r[b][l] <= 1'b1;
+                bk_res_r[b][l] <= 32'sd2147483647;
               end else begin
-                sat_rescale_o[l] <= 1'b0;
-                case (l)
-                  0: o0_0_o <= rt_r[l][31:0];
-                  1: o0_1_o <= rt_r[l][31:0];
-                  2: o0_2_o <= rt_r[l][31:0];
-                  default: o0_3_o <= rt_r[l][31:0];
-                endcase
+                bk_sat_r[b][l] <= 1'b0;
+                bk_res_r[b][l] <= rt_r[b][l][31:0];
               end
             end
           end
-
-          if (&got_r) state_r <= L_HOLD;
+          // Done only when every lane has LANDED, never while one is in flight.
+          if (&bk_got_r[b]) bk_done_r[b] <= 1'b1;
         end
+      end
 
-        L_HOLD: begin
-          if (r_ready_i) state_r <= L_IDLE;
-        end
+      // ---- retiring the oldest entry ---------------------------------------
+      if (r_valid_o && r_ready_i) begin
+        bk_busy_r[head_bk_c] <= 1'b0;
+        bk_done_r[head_bk_c] <= 1'b0;
+        oq_head_r            <= ~oq_head_r;
+      end
 
-        default: state_r <= L_IDLE;
-      endcase
+      // ---- the occupancy, decided in ONE place -----------------------------
+      // A push and a retire on the same clock must not each win separately.
+      begin
+        automatic logic push = (f_state_r == F_HAND) && have_free_c;
+        automatic logic pop  = r_valid_o && r_ready_i;
+        if (push && !pop)      oq_count_r <= oq_count_r + 2'd1;
+        else if (pop && !push) oq_count_r <= oq_count_r - 2'd1;
+      end
     end
   end
 
