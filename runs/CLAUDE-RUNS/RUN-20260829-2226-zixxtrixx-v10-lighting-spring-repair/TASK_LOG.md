@@ -18,8 +18,8 @@ Preserve the approved v9 whole-body proportions and rendering style while repair
 |---|---|---|
 | #17 | setup and durable direction | Complete — `0d1f45e` / `f75306f`, pushed |
 | #18 | lighting and eye artifacts | Complete — structural roots fixed in `1dd01a4`, pushed |
-| #19 | constrained face and fins | In progress — claimed |
-| #20 | shared rigid-S spring | Pending |
+| #19 | constrained face and fins | Complete — `32ca883`, pushed |
+| #20 | shared rigid-S spring | In progress — claimed |
 | #21 | bounded risk-based validation | Pending |
 | #22 | publish and handoff | Pending |
 
@@ -84,6 +84,17 @@ Only one task is active at a time. A task becomes complete only after its eviden
 - Determinism D01: 185 knockdown files byte-identical, aggregate SHA-256 `3a542ba6eff022ed24d9953b3ee3718a5d6d6b360befb60fabcad2be6904700e`.
 - Committed and pushed the structural repair and reusable diagnostics as `1dd01a4`. Task #18 complete; task #19 claimed.
 
+### 2026-08-30 - Task #19 constrained face and fin repair complete
+
+- Preserved every approved body taper, radius and centreline control. Both eye discs moved four atlas rows noseward; only their local support window moved from stations 3..6 to 2..5, and the moving-pupil pivot moved from station 5 to 4. Fixed side/front comparisons show a clear noseward move without a global skull or tube change.
+- The two moving orange stripes retain their original shared gaze curves and boundary-to-boundary construction. Representative rest, vertical-extreme, diagonal and return frames show each stripe continuously reaching the painted ink boundary; no floating endpoint or pupil-motion loss was introduced.
+- Moderately enlarged the mouth from three short rows to four unequal hand-wobbled rows. The fixed frontal comparison shows a wider readable slit while remaining far below the retired quarter-head grin.
+- Fin attachment root: each separately capped leaf began at the already-capped body endpoint, with centres offset 56 mm on a tail tip only about that whole width. This left almost no overlap and exposed independently shaded closures/gaps as black cuts. V10 removes the blade root caps, buries open roots 72 mm inside the body shell, narrows their root offsets, converges both leaves into a shared fork-bound first ring, and blends the shoulders from fork to blade before normal fin flex. The approved tail stem and blade length/tip location remain unchanged.
+- Visual acceptance used fixed close side/front, gameplay distance, 12 representative orbit views, eight idle phases, and targeted high-risk rear views—not catalogue review. The fork now reads as one planted Y across views, distances and idle deformation; no blade appears detached.
+- Structural gate: 1,774 vertices, 1,098 shared-position groups, zero disagreeing binds, zero seam split in every registered clip, `meshcheck: OK`. A first 36 mm root offset accidentally made mirrored shoulder vertices exactly coincident with different blade binds and the gate correctly rejected it; the authored 34 mm overlap removes that false seam while retaining the visual root.
+- Determinism D01 #19: side plus pupil-proof, 320/320 true cel-main files byte-identical; aggregate SHA-256 `d40fe6acc03842fb46ea78163c16f73c4e633d012e555e2abdd0ae161df27966`.
+- Committed and pushed the constrained source/media-generation milestone as `32ca883`. Task #19 complete; task #20 claimed. Per coordinator direction, remote `origin/main` is currently `ccd31d9` with one unrelated hardware commit; this lane does not integrate it until task #22.
+
 ---
 
 ## Validation Ledger — `V10-BUDGET-1`
@@ -97,8 +108,9 @@ Budget set before any build/render. Each row must answer one question and end wi
 | L02 | Does lighting remain temporally attached to surfaces after the fix? | One deforming surface at 60 Hz, 192 ticks, inward/outward face comparator | PASS — normalized response is continuous (`max_jump=2228`) and outward face response changes on the matching side; final render is coherent | STOP — no unexplained discontinuity or escalation signal |
 | E01 | What structurally creates malformed eye triangles? | Knockdown frame 30/window 22..41; unlit/normals/wire/triangle IDs; exact triangle dump | PASS — micro head triangles 81/89, UV V=25..33, proved coarse eye-bearing shell fans; preserving head rings/sides removes shard | STOP — exact owner and causal repair proven |
 | E02 | Does the eye fix generalize without catalogue exhaustion? | Window 22..41, badness-ranked death2, reused meshcheck | PASS — coherent eye boundary throughout bounded window; zero bind/seam/stretch faults; original pupil and full mips retained | STOP — no surviving artifact; no full-catalog trigger |
+| F01 | Do the constrained face and fin changes satisfy direction without altering approved whole-body form? | Fixed side/front, gameplay still, pupil extrema, 12 orbit views, 8 idle phases, high-risk rear samples, meshcheck | PASS — eyes/support/pupils moved together noseward; mouth moderately larger; fork is a planted Y with no cap seam/detachment; body controls untouched; zero bind/seam faults | STOP — each task #19 acceptance question answered; no catalogue escalation signal |
 | S01 | Does corrected spring lower the rigid S from the top with head contact and no rear curl? | Every frame of jump-one, jump-multi, salto-six, salto-nine; bounded attack contact/landing | Deferred to #20 | Required targeted all-frame exception |
-| D01 | Are changed true cel-main outputs deterministic? | One representative pair per changed milestone | PASS #18 — 185/185 knockdown files byte-identical; aggregate SHA-256 `3a542ba6...4700e` | Repeat once after each later changed milestone; escalate only on mismatch |
+| D01 | Are changed true cel-main outputs deterministic? | One representative pair per changed milestone | PASS #18 — 185/185 knockdown files byte-identical, SHA-256 `3a542ba6...4700e`; PASS #19 — 320/320 side+pupil files byte-identical, SHA-256 `d40fe6ac...27966` | Repeat once after each later changed milestone; escalate only on mismatch |
 | M01 | Is final media/site structurally valid? | Manifest/count/poster plus bounded start/middle/end decode and desktop/narrow interaction | Deferred to #22 | Exhaustive decode only on mismatch/decode/browser signal |
 
 ---
@@ -135,6 +147,6 @@ None. Owner explicitly requires this to remain a sole implementation/modelling l
 
 ## Next Steps
 
-1. Task #19: move both eyes noseward without losing bulge/gaze/stripe attachment, moderately enlarge the mouth, and reconnect the tail fins without touching the approved body envelope.
-2. Render native fixed front/side plus representative moving poses; author by eye and stop when the constrained acceptance questions are answered.
-3. Run one representative deterministic pair, commit and push #19, then claim #20.
+1. Task #20: replace the inherited rear-curl spring with one shared mostly-rigid S that descends vertically from above to an almost-flat authored compression with head ground contact.
+2. Reuse it across jump-one, jump-multi, salto-six, salto-nine and attack anticipation without changing the approved airborne wheel or resting signature S.
+3. Inspect every frame only for the four named spring clips plus bounded attack contact/landing windows, run D01, commit and push, then claim #21.
