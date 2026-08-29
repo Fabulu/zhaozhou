@@ -1717,11 +1717,66 @@ int g_exp_boil = 0;            // hand-drawn shimmer: a chunky deterministic
                         // (a function of x, y and FRAME -- never wall-clock)
 uint32_t g_exp_frame = 0;
 
+// V9 main cel presentation. This is deliberately separate from the archived
+// inward experiment contour above: it draws only into border-connected
+// background and scales by projected creature size at the actual camera.
+int g_cel_main = 0;
+constexpr int32_t kCelInkFarRadiusQ8 = 120 * 256;
+constexpr int32_t kCelInkMidRadiusQ8 = 200 * 256;
+constexpr int32_t kCelInkCloseRadiusQ8 = 360 * 256;
+constexpr int kCelInkFarWidthPx = 1;
+constexpr int kCelInkMidWidthPx = 2;
+constexpr int kCelInkCloseWidthPx = 4;
+constexpr uint8_t kCelInkR = 26;
+constexpr uint8_t kCelInkG = 24;
+constexpr uint8_t kCelInkB = 22;
+
+int cel_main_ink_width(int32_t radius_q8) {
+  const auto blend = [](int32_t x, int32_t x0, int32_t x1,
+                        int y0, int y1) {
+    const int64_t num = static_cast<int64_t>(x - x0) * (y1 - y0);
+    const int64_t den = x1 - x0;
+    return y0 + static_cast<int>((num + den / 2) / den);
+  };
+  if (radius_q8 <= kCelInkFarRadiusQ8) return kCelInkFarWidthPx;
+  if (radius_q8 < kCelInkMidRadiusQ8)
+    return blend(radius_q8, kCelInkFarRadiusQ8, kCelInkMidRadiusQ8,
+                 kCelInkFarWidthPx, kCelInkMidWidthPx);
+  if (radius_q8 < kCelInkCloseRadiusQ8)
+    return blend(radius_q8, kCelInkMidRadiusQ8, kCelInkCloseRadiusQ8,
+                 kCelInkMidWidthPx, kCelInkCloseWidthPx);
+  return kCelInkCloseWidthPx;
+}
+
 void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
                    uint32_t /*tick*/) {
   CreatureReelCtx& c = *static_cast<CreatureReelCtx*>(vctx);
   static std::vector<uint8_t> pre;
-  if (g_exp_contour || g_exp_boil) pre.assign(rgb, rgb + static_cast<size_t>(w) * h * 3);
+  static std::vector<int32_t> pre_depth;
+  if (g_exp_contour || g_exp_boil || g_cel_main)
+    pre.assign(rgb, rgb + static_cast<size_t>(w) * h * 3);
+  if (g_cel_main)
+    pre_depth.assign(depth, depth + static_cast<size_t>(w) * h);
+  int32_t primary_radius_q8 = 0;
+  int32_t dummy_radius_q8 = 0;
+  bool primary_radius_visible = false;
+  bool dummy_radius_visible = false;
+  if (g_cel_main) {
+    primary_radius_visible = zc::projected_bound_radius_q8(
+        c.vp, c.inst->x, c.inst->y, c.inst->z, c.inst->type->bound_radius,
+        w, primary_radius_q8, nullptr);
+    if (c.dummy != nullptr) {
+      dummy_radius_visible = zc::projected_bound_radius_q8(
+          c.vp, c.dummy->x, c.dummy->y, c.dummy->z,
+          c.dummy->type->bound_radius, w, dummy_radius_q8, nullptr);
+    }
+    std::fprintf(stderr,
+                 "celmain projected_radius_q8 primary=%d primary_visible=%d "
+                 "dummy=%d dummy_visible=%d ink_width=%d\n",
+                 primary_radius_q8, primary_radius_visible ? 1 : 0,
+                 dummy_radius_q8, dummy_radius_visible ? 1 : 0,
+                 cel_main_ink_width(primary_radius_q8));
+  }
 #ifdef ZHAO_CREATURE_DEBUG
   {
     // telemetry: rung, projected radius, screen bbox of the skinned mesh
@@ -1752,13 +1807,15 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   // ---- RUN 1939 experiment post-pass (env-gated, default off). Placed
   // HERE because the hook returns early when there are no gibs -- the
   // first cut sat after that return and never ran on the idle. ----------
-  if (g_exp_contour || g_exp_boil) {
+  if (g_exp_contour || g_exp_boil || g_cel_main) {
     const size_t n = static_cast<size_t>(w) * h;
     std::vector<uint8_t> mask(n, 0);
     for (size_t i = 0; i < n; ++i) {
       const size_t b3 = i * 3;
-      if (rgb[b3] != pre[b3] || rgb[b3 + 1] != pre[b3 + 1] ||
-          rgb[b3 + 2] != pre[b3 + 2])
+      const bool rgb_changed =
+          rgb[b3] != pre[b3] || rgb[b3 + 1] != pre[b3 + 1] ||
+          rgb[b3 + 2] != pre[b3 + 2];
+      if (rgb_changed || (g_cel_main && depth[i] != pre_depth[i]))
         mask[i] = 1;
     }
     if (g_exp_boil) {
@@ -1816,6 +1873,75 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
         rgb[i * 3] = 26;
         rgb[i * 3 + 1] = 24;
         rgb[i * 3 + 2] = 22;
+      }
+    }
+    if (g_cel_main) {
+      // Exterior-only contour. Four-neighbour flood fill identifies only the
+      // background connected to the viewport border; enclosed holes therefore
+      // remain uninked. The ring then grows with eight-neighbour connectivity
+      // through that exterior and never overwrites a creature pixel.
+      std::vector<uint8_t> exterior(n, 0);
+      std::vector<size_t> queue;
+      queue.reserve(n);
+      const auto admit_exterior = [&](uint32_t x, uint32_t y) {
+        const size_t i = static_cast<size_t>(y) * w + x;
+        if (mask[i] || exterior[i]) return;
+        exterior[i] = 1;
+        queue.push_back(i);
+      };
+      for (uint32_t x = 0; x < w; ++x) {
+        admit_exterior(x, 0);
+        if (h > 1) admit_exterior(x, h - 1);
+      }
+      for (uint32_t y = 1; y + 1 < h; ++y) {
+        admit_exterior(0, y);
+        if (w > 1) admit_exterior(w - 1, y);
+      }
+      for (size_t q = 0; q < queue.size(); ++q) {
+        const size_t i = queue[q];
+        const uint32_t x = static_cast<uint32_t>(i % w);
+        const uint32_t y = static_cast<uint32_t>(i / w);
+        if (x > 0) admit_exterior(x - 1, y);
+        if (x + 1 < w) admit_exterior(x + 1, y);
+        if (y > 0) admit_exterior(x, y - 1);
+        if (y + 1 < h) admit_exterior(x, y + 1);
+      }
+
+      std::vector<uint8_t> edge(n, 0);
+      std::vector<size_t> frontier;
+      frontier.reserve(n);
+      for (size_t i = 0; i < n; ++i)
+        if (mask[i]) frontier.push_back(i);
+      const int ink_width = cel_main_ink_width(primary_radius_q8);
+      for (int r = 0; r < ink_width && !frontier.empty(); ++r) {
+        std::vector<size_t> next;
+        next.reserve(frontier.size() * 2);
+        for (const size_t i : frontier) {
+          const int x = static_cast<int>(i % w);
+          const int y = static_cast<int>(i / w);
+          for (int dy = -1; dy <= 1; ++dy) {
+            for (int dx = -1; dx <= 1; ++dx) {
+              if (dx == 0 && dy == 0) continue;
+              const int nx = x + dx;
+              const int ny = y + dy;
+              if (nx < 0 || ny < 0 || nx >= static_cast<int>(w) ||
+                  ny >= static_cast<int>(h))
+                continue;
+              const size_t j = static_cast<size_t>(ny) * w +
+                               static_cast<uint32_t>(nx);
+              if (!exterior[j] || edge[j]) continue;
+              edge[j] = 1;
+              next.push_back(j);
+            }
+          }
+        }
+        frontier.swap(next);
+      }
+      for (size_t i = 0; i < n; ++i) {
+        if (!edge[i]) continue;
+        rgb[i * 3] = kCelInkR;
+        rgb[i * 3 + 1] = kCelInkG;
+        rgb[i * 3 + 2] = kCelInkB;
       }
     }
     ++g_exp_frame;
@@ -4374,6 +4500,10 @@ int main(int argc, char** argv) {
     if (e == "cel2") zc::g_cel_bands = 2;
     else if (e == "cel3") zc::g_cel_bands = 3;
     else if (e == "smoothcel3") zc::g_smooth_toon_bands = 3;
+    else if (e == "celmain") {
+      zc::g_smooth_toon_bands = 3;
+      g_cel_main = 1;
+    }
     else if (e == "contour") g_exp_contour = 1;
     else if (e == "celcontour") { zc::g_cel_bands = 3; g_exp_contour = 1; }
     else if (e == "thick") { g_exp_contour = 1; g_exp_contour_radius = 5; }

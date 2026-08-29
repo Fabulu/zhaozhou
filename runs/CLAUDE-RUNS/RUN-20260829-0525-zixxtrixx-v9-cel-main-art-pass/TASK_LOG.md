@@ -47,6 +47,16 @@ Refine the promising-but-unsuccessful v8 cel experiment into Zixxtrixx's main pr
 - Task #9 (pass setup and isolation) is complete. Task #10 (cel presentation) is now in progress.
 - Process correction for this and future concurrent lanes: isolation must be established before work begins. Every lane in one repository gets its own clone or worktree and its own build/output directories. A run folder separates evidence; it does not isolate a checkout. No lane may let its branch switch, generated build tree, linked executable, or tracked-source sweep block another lane.
 
+### 2026-08-29 17:48 UTC+02:00 - Cel presentation wave 1 accepted
+
+- Extracted the renderer's projected-bound-radius law into the public `projected_bound_radius_q8` helper and routed `compose_creatures` through it without changing the default render.
+- Added an isolated `ZIXX_EXP=celmain` selector: smooth three-band toon plus a projected-size contour, while every legacy selector and the archived inward contour remain unchanged.
+- Cel-main visibility uses RGB-or-depth change, a four-neighbour border flood to classify exterior, and eight-neighbour outward dilation. It never overwrites a creature pixel and does not ink enclosed holes.
+- Authored the first accepted native-camera controls by eye after telemetry: far/mid/close anchors 120/200/360 px and widths 1/2/4 px. Idle retains strong 4 px ink, balance resolves at 2 px, dummy salto at 2 px, and the distant fly/six cameras at 1 px.
+- Added deterministic `--cel-main` texture generation with fixed pigment anchors, no hue drift, calmer atlas/fin grain, lower wobble and reduced RGB565 dither. The cel payload is separately selectable through `ZIXX_PAGE_VARIANT`.
+- Verified 1,582 default frames byte-identical after the renderer refactor. Normal generation repeated byte-identically at `c90fa2a...c2b`; cel generation repeated byte-identically at `fc0113e...e8d`.
+- Accepted numbered evidence `evidence/cel-presentation-01-adaptive-outline.png` and `evidence/cel-presentation-01-results.txt` at native 384×240. Task #10's first presentation milestone is ready to commit and push; form and animation remain untouched.
+
 ---
 
 ## Subagent Spawns

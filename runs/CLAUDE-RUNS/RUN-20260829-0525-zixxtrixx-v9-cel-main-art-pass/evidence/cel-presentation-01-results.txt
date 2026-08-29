@@ -1,0 +1,18 @@
+Zixxtrixx v9 cel-presentation evidence 01
+
+Named projected-radius anchors (S12.8 converted to pixels): far=120 px, mid=200 px, close=360 px.
+Named widths: far=1 px, mid=2 px, close=4 px. Interpolation is clamped at endpoints.
+Contour grows outward only through four-neighbour border-connected exterior using eight-neighbour dilation; creature pixels and enclosed holes are not inked.
+
+Native 384x240 telemetry:
+idle: primary 367.0..622.2 px; dummy_q8 0..0; widths [4]
+balance: primary 209.3..209.3 px; dummy_q8 0..0; widths [2]
+salto-dummy: primary 170.4..179.2 px; dummy_q8 10354..10887; widths [2]
+salto-fly: primary 139.7..153.4 px; dummy_q8 11001..12153; widths [1]
+salto-six: primary 106.0..123.9 px; dummy_q8 0..0; widths [1]
+
+Default renderer identity after the projected-radius helper and isolated celmain path: 1582/1582 frames byte-identical; 0 different.
+Normal generated page before/after refactor (two repeats): c90fa2acb580f5ce27d6ffeeef523d35ab80f18103da82f866d21f30fcce6c2b.
+Cel generated page (two repeats): fc0113e3b5fa6ac5bec2081716ebf95ce0909987b0a4510e5e095830bb5b0e8d.
+
+Visual judgement: 4 px remains strong at close idle; balance resolves at 2 px; distant fly/six salto resolves at 1 px rather than becoming a black mass. The outward contour preserves all interior colour. The cel page keeps the fixed pigments while reducing grain agitation, and smooth three-band toon remains the primary surface treatment.

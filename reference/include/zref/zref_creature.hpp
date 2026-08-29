@@ -718,6 +718,12 @@ inline constexpr uint16_t kLodHoldTicks = 15;
  * threshold, S12.8). The raw selection takes the COARSEST legal rung
  * (fewest pixels that still meets the error budget).
  */
+bool projected_bound_radius_q8(
+    const mat4fx& vp,
+    int32_t world_x, int32_t world_y, int32_t world_z,
+    int32_t bound_radius, uint32_t viewport_w,
+    int32_t& radius_q8, SatLedger* L);
+
 LodRung lod_raw(int32_t proj_radius_q8, int32_t thresh_q8, const CreatureType& type);
 
 /** Ladder state: current rung + ticks held there. */

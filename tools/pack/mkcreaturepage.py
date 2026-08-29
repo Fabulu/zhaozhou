@@ -105,6 +105,12 @@ GRAIN_SOURCES = {
     "orange": ("Front", (1228, 562, 1248, 606)),
 }
 
+# Small 64x64 fin/head-page grain. These names keep the shipping values
+# editable while allowing the independently selectable cel page to calm them.
+SMALL_GRAIN_GAIN = 2.1
+SMALL_GRAIN_MIN = 0.74
+SMALL_GRAIN_MAX = 1.26
+
 
 def grain(sheet, box, seed):
     """Lift a TILE x TILE multiplier field from real crayon.
@@ -142,8 +148,8 @@ def grain(sheet, box, seed):
     # The raw multiplier field survives the trip to screen at roughly half its
     # amplitude once the light rig and RGB565 have had their say, so push it
     # here, at the source, where the stroke shapes are still real.
-    g = 1.0 + (g - 1.0) * 2.1
-    return np.clip(g, 0.74, 1.26)
+    g = 1.0 + (g - 1.0) * SMALL_GRAIN_GAIN
+    return np.clip(g, SMALL_GRAIN_MIN, SMALL_GRAIN_MAX)
 
 
 def tint(base, g):
@@ -763,6 +769,19 @@ A_EYE_RING = 3                       # orange surround, atlas texels of U --
                                      # thinned with the disc (Front.png's
                                      # surround is a bracket, not a halo)
 DITHER_AMP = 0.9                     # T6 ordered dither, 0..1 of one 565 step
+
+# V9 independently selectable cel page. Pigment anchors remain the fixed
+# GREEN/GREEN_DARK/PINK/BLUE/YELLOW/ORANGE values above; only the handmade
+# modulation is calmed so the three authored toon bands own the large read.
+CEL_MAIN_COVERAGE_AMP = 0.09
+CEL_MAIN_STROKE_AMP = 0.18
+CEL_MAIN_TOOTH_AMP = 0.06
+CEL_MAIN_HUE_DRIFT_AMP = 0.0
+CEL_MAIN_WOB_SCALE = 0.65
+CEL_MAIN_DITHER_AMP = 0.40
+CEL_MAIN_SMALL_GRAIN_GAIN = 1.35
+CEL_MAIN_SMALL_GRAIN_MIN = 0.82
+CEL_MAIN_SMALL_GRAIN_MAX = 1.18
 _BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6],
                     [3, 11, 1, 9], [15, 7, 13, 5]], dtype=np.float64) / 16.0
 
@@ -1263,8 +1282,33 @@ EXPERIMENTS = {
 }
 
 
+def apply_cel_main_controls():
+    """Select the deterministic calmer cel modulation before either payload."""
+    global COVERAGE_AMP, STROKE_AMP, TOOTH_AMP, HUE_DRIFT_AMP
+    global WOB_SCALE, DITHER_AMP
+    global SMALL_GRAIN_GAIN, SMALL_GRAIN_MIN, SMALL_GRAIN_MAX
+    COVERAGE_AMP = CEL_MAIN_COVERAGE_AMP
+    STROKE_AMP = CEL_MAIN_STROKE_AMP
+    TOOTH_AMP = CEL_MAIN_TOOTH_AMP
+    HUE_DRIFT_AMP = CEL_MAIN_HUE_DRIFT_AMP
+    WOB_SCALE = CEL_MAIN_WOB_SCALE
+    DITHER_AMP = CEL_MAIN_DITHER_AMP
+    SMALL_GRAIN_GAIN = CEL_MAIN_SMALL_GRAIN_GAIN
+    SMALL_GRAIN_MIN = CEL_MAIN_SMALL_GRAIN_MIN
+    SMALL_GRAIN_MAX = CEL_MAIN_SMALL_GRAIN_MAX
+
+
 def main():
     global WOB_SCALE
+    if "--cel-main" in sys.argv:
+        i = sys.argv.index("--cel-main")
+        out = Path(sys.argv[i + 1]) if len(sys.argv) > i + 1 else (
+            HERE.parents[1] / "tools" / "reel" / "zixxtrixx_page_cel.h")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        apply_cel_main_controls()
+        tiles, names = build_tiles()
+        emit(tiles, names, out, atlas=build_atlas())
+        return
     if "--experiment" in sys.argv:
         i = sys.argv.index("--experiment")
         name = sys.argv[i + 1]
