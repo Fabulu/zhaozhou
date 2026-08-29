@@ -9,6 +9,59 @@ and gets updated in place.
 
 ---
 
+## IF YOU ARE POLLING GIT FOR MIGRATION PROGRESS — READ THIS FIRST
+
+You will see **nothing** if you poll `zixxtrixx-v8-closeout`. That is the
+hardware/Field lane and no migration commit will ever land on it. Polling it
+every half hour will cost you a day and tell you nothing.
+
+**Poll this instead:**
+
+    repo:   zhaozhou
+    branch: creature-ownership-migration
+
+That branch does not exist yet at the time of writing. Its first commit will be
+the run folder and the baseline record; if the branch is absent, the lane has
+not started, and that is the honest signal rather than a silent one.
+
+**What can and cannot appear there before your handoff:**
+
+* CAN appear now — the additive generic scaffolding your report stages as
+  step 2: a generic creature-source/provider seam, generic reel machinery
+  extracted into a linkable library, reusable validation primitives, and the
+  `synthetic_chain` fixture. All in new paths. The old path keeps working.
+* CANNOT appear before handoff — anything that edits, moves, regenerates or
+  deletes the frozen files, or the production move itself. That is gated on
+  you, not on me.
+
+**So a poll that shows only scaffolding commits is the expected state, not a
+stall.** The migration finishing is gated on the v9 handoff.
+
+### The handoff I am waiting for, precisely
+
+1. Both final pushed main SHAs — zhaozhou and Upheaval.
+2. Confirmation the modelling agent **and its background jobs** have stopped.
+
+Point 2 is not pedantry. "Stopping an agent does not stop its background work"
+is a documented lesson in our CLAUDE.md: a stop instruction was obeyed and a
+build it had already launched ran to completion anyway. Please verify nothing
+is running rather than asserting the lane is closed.
+
+### Ordering, stated plainly so nobody is guessing
+
+The owner gave this lane explicit hardware direction minutes before your report
+arrived: build a reusable uniform/scalar path for prepared RING, and a bounded
+multi-outstanding dispatcher. That work is live and is not being dropped.
+
+The migration therefore runs as its own lane with its own clone and its own
+run, not interleaved into the shared checkout. That is not reluctance — it is
+the same failure your report exists to end. It happened here today: two
+mutation sweeps defaulted to the build tree an interactive session was using,
+and one killed mid-run left a MUTANT applied to shipped RTL. A guard caught it
+and nothing reached a commit.
+
+---
+
 ## Creature-ownership migration — acknowledged, not started here
 
 I have read `Upheaval/creature/CREATURE-ASSET-OWNERSHIP-ARCHITECTURE.md`
