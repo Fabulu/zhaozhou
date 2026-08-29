@@ -5615,6 +5615,11 @@ inline const zc::CreatureType& type() {
         p.rings.push_back(rs);
       }
       p.page = kTileHead;
+      // The eye disc is paint on these rings. Preserve both axes in the micro
+      // rung so its boundary stays a coherent oval instead of a few isolated
+      // zipper fans at grazing poses.
+      p.micro_keep_rings = true;
+      p.micro_keep_segments = true;
       // T4: the head part owns atlas V rows 0..50 (nose to the junction
       // station); the body part continues at 50 with the SAME junction V,
       // so the painted surface is continuous across the shared ring.

@@ -379,6 +379,16 @@ struct SkinVertex {
 void skin_vertex(const mat3x4fx* palette, const SkinVertex& v, int32_t& ox, int32_t& oy,
                  int32_t& oz, SatLedger* L);
 
+/**
+ * Transform a packed bind-space normal through the same two-bone linear blend
+ * as its vertex, NORMALISE the blended direction, then take one clamped
+ * Lambert against a unit Q16.16 light.  Blending the already-clamped response
+ * of each bone is not equivalent: it makes light follow influence weights
+ * instead of the deformed surface whenever the two bones disagree.
+ */
+int32_t skin_normal_lambert(const mat3x4fx* palette, const SkinVertex& v, int32_t lx,
+                            int32_t ly, int32_t lz);
+
 // -------------------------------------------------------------- meshlets ---
 
 inline constexpr int kMeshletMaxVerts = 64;  // charter 10
@@ -461,6 +471,15 @@ struct RingPart {
    * snakes, tails, tentacles, long necks.
    */
   bool chain = false;
+  /**
+   * FEATURE-PRESERVING MICRO CONTROLS. The default compiler rung still keeps
+   * every second ring and halves radial segments. Painted or silhouette-critical
+   * parts can independently retain either axis, so a coarse LOD cannot turn a
+   * bounded marking into disconnected fan triangles. These are authoring knobs,
+   * not a screen-space inference; the resulting rung error is still measured.
+   */
+  bool micro_keep_rings = false;
+  bool micro_keep_segments = false;
   uint8_t pitch_q = 0;  // quarter turns about X applied at build
   uint8_t yaw_q = 0;    // quarter turns about Y applied at build
   uint8_t r = 128, g = 128, b = 128;
@@ -887,7 +906,7 @@ inline AttackOutcome attack_plan_branch(bool hit_terrain, bool hit_creature) {
  * surface: kOff (the default) is bit-identical to not having the enum at
  * all, no pinned subject sets it, and no RTL contract sees it.
  */
-enum class DebugShade : uint8_t { kOff = 0, kUnlit, kNormals, kWire };
+enum class DebugShade : uint8_t { kOff = 0, kUnlit, kNormals, kWire, kTriangleIds };
 extern DebugShade g_debug_shade;
 // RUN 1939/2234 texture-experiment lane. 0 = off (the shipping path,
 // bit-identical). g_cel_bands 2/3 selects constant-per-triangle FACETED cel.
