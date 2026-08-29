@@ -814,3 +814,65 @@ W02, W04, X05 and X11 are declared equivalent on the grounds that one group in
 flight means two services are never busy together. That is no longer true, so
 those four must now be **CAUGHT**. If they are not, this change did not create
 concurrency and the starvation measurement built on it would still be vacuous.
+
+## 2026-08-29 — the acceptance test PASSES: 4 of 4
+
+    ACCEPTANCE: 4 of 4 caught, 0 still equivalent
+    PASS -- the dispatcher created real concurrency
+
+W02, W04, X05 and X11 were declared equivalent on one shared ground: the
+dispatcher kept exactly one group in flight, so two services were never busy
+together and the response arbitration and ready mux across five services were
+unexercised silicon. Each proof carried the words **RE-SCORE THE MOMENT THE
+DISPATCHER CAN HAVE TWO GROUPS OUTSTANDING**.
+
+That happened, and all four are now CAUGHT. This is the difference between a
+restructure and a change: had they stayed equivalent, the queue would have been
+new state that changed nothing, and the starvation measurement built on it
+would still have been vacuous.
+
+**The four equivalence declarations are DELETED, not annotated.** A proof that
+no longer holds is not documentation — it is a false statement the sweep would
+consult the next time one of those mutants survived, which is exactly when the
+truth would matter most. Five genuine equivalences remain: V08, V09, V22, V25,
+W06.
+
+### The dispatcher's own sweep
+
+34 of 35 scored before the run died, **zero survivors**, including all four new
+queue mutants — D31 the modulo-by-zero deadlock, D32 the late drain, D33 a
+response captured into the wrong slot, D34 a stranded context. D35 (drain
+newest-first) was applied by hand afterwards and is CAUGHT by section 6b's
+in-order check, so the block is effectively 35/35.
+
+### Standing
+
+    dispatcher      348 checks
+    service path    213 checks
+    composed        163 checks   -- ten ops, all served
+    ring service     16 checks
+    scalar bank      14 checks
+
+### And the process failure that cost most of two hours
+
+**I launched the sweeps with `&` from inside a tool call.** That orphans them:
+the harness cannot see or stop them, and they outlive the shell that started
+them. One died at 18/35 — but it was STILL ALIVE when I first cleaned up, so it
+re-applied a mutant *after* my restore. Then it reached D34 and died leaving
+D35 applied, which is why a green tree went red twice for no reason I had
+changed.
+
+Three separate mutants were left in shipped RTL today by orphaned runs. Every
+one was caught by `sweep_check_clean.py`, nothing reached a commit, and the
+guard has now earned its place three times over in a single session.
+
+**The rule: never background a sweep with `&` from a tool call.** Use the
+harness's own background mechanism, which owns the process and can kill it.
+This is the same lesson CLAUDE.md already records as "stopping an agent does
+not stop its background work", met from the other direction — I could not stop
+what I had never properly started.
+
+**And a second, cheaper lesson: I waited on a 48-mutant sweep to answer a
+4-mutant question.** The acceptance test is four specific mutants. Run
+directly, it takes fifteen minutes instead of two hours. Scope the run to the
+question.

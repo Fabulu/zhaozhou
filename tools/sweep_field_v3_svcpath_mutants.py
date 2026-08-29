@@ -439,51 +439,26 @@ EQUIVALENT = {
     # actually create concurrency and the starvation measurement built on it
     # would be measuring nothing -- which is the failure this class exists to
     # make impossible to miss.
-    "X05": (
-        "EQUIVALENT, same root cause as W02. The dispatcher runs D_GATHER -> "
-        "D_ISSUE -> D_WAIT -> D_DRAIN with exactly one group in flight, so at "
-        "every offer BOTH the normalize and rot services are idle and both "
-        "assert ready -- swapping which one's ready is read selects between "
-        "two signals that are both 1. The mux is DEFENSIVE and stays, because "
-        "it is correct the day the dispatcher gains a second outstanding "
-        "group. RE-SCORE THE MOMENT THE DISPATCHER CAN HAVE TWO GROUPS "
-        "OUTSTANDING -- and expect this to be CAUGHT then, not equivalent."),
-    "X11": (
-        "EQUIVALENT, same root cause as W04. One group in flight means at most "
-        "one service is ever holding a response, so dropping the "
-        "!nm_rsp_valid guard removes protection against a collision that "
-        "cannot currently occur. It stays because a dropped response is a "
-        "wrong VALUE reaching a register rather than a slower machine, and "
-        "that is exactly what this becomes under a pipelined dispatcher. "
-        "RE-SCORE THE MOMENT THE DISPATCHER CAN HAVE TWO GROUPS OUTSTANDING "
-        "-- and expect this to be CAUGHT then, not equivalent."),
-    # ---- W02 and W04: THE DISPATCHER SERIALISES, SO THE SECOND SERVICE ADDS
-    # ---- NO REQUEST-LEVEL CONCURRENCY -------------------------------------
+    # ---- W02, W04, X05 and X11 ARE NO LONGER EQUIVALENT ------------------
     #
-    # Both survived a run that DOES put mixed traffic across both services
-    # (section 7 of field_v3_full_directed), which is what made me look at the
-    # dispatcher instead of writing a third test. The traffic was not the
-    # problem; the assumption was.
-    "W02": (
-        "EQUIVALENT, AND THE REASON MATTERS MORE THAN THE MUTANT. "
-        "zhao_field_v3_dispatch runs D_GATHER -> D_ISSUE -> D_WAIT -> D_DRAIN "
-        "and back, with svc_valid_o asserted ONLY in D_ISSUE and rsp_ready_o "
-        "ONLY in D_WAIT. Exactly one group is in flight at any time. So at "
-        "every offer the previous group has already responded and drained, "
-        "BOTH services are idle, and both assert ready -- swapping which "
-        "one's ready is read selects between two signals that are both 1. "
-        "The mux is DEFENSIVE and correct to keep: it makes this block right "
-        "the day the dispatcher gains a second outstanding group. "
-        "RE-SCORE THE MOMENT THE DISPATCHER CAN HAVE TWO GROUPS OUTSTANDING."),
-    "W04": (
-        "EQUIVALENT, same root cause as W02 and not a second coincidence. "
-        "One group in flight means at most one service can be holding a "
-        "response, so the loser-holds guard never has a loser to protect. "
-        "It stays because a dropped response is a wrong VALUE reaching a "
-        "register rather than a slower machine, and that is exactly the "
-        "failure this would become under a pipelined dispatcher. "
-        "RE-SCORE THE MOMENT THE DISPATCHER CAN HAVE TWO GROUPS OUTSTANDING."),
-    # DECLARED 2026-08-29, after the run that showed it surviving.
+    # They were, and the proof was sound: the dispatcher kept exactly one
+    # group in flight, so two services were never busy together and the
+    # response arbitration and ready mux across five services were
+    # unexercised silicon. Four mutants, one root cause.
+    #
+    # That root cause was removed on 2026-08-29. zhao_field_v3_dispatch now
+    # keeps a bounded queue of groups, so the condition each of those
+    # proofs rested on is false, and all four are CAUGHT:
+    #
+    #     ACCEPTANCE: 4 of 4 caught, 0 still equivalent
+    #
+    # The declarations are DELETED rather than left with a note. An
+    # equivalence proof that no longer holds is not documentation, it is a
+    # false statement the sweep would consult if the mutant ever survived
+    # again -- which is exactly when the truth would matter most.
+    #
+    # Every one of them carried the words RE-SCORE THE MOMENT THE
+    # DISPATCHER CAN HAVE TWO GROUPS OUTSTANDING. That is what happened.
     "W06": (
         "EQUIVALENT, AND CHECKED IN THE DISPATCHER RATHER THAN ARGUED. An "
         "unzeroed rsp_r1 cannot be observed for a width-1 op: the drain "
