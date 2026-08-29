@@ -60,6 +60,7 @@
 #include <cstring>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "verilated.h"
@@ -270,6 +271,15 @@ struct Dut {
   long start_clk[kCtx];
   int writes_since_start[kCtx];
 
+  // THE WRITE TRACE, so a wrong answer can be asked what it READ.
+  //
+  // The final register file only shows the END state, and a bad operand is
+  // usually overwritten by a later uop before the program finishes -- which is
+  // exactly what happened here: a MUL wrote a wrong number while both its
+  // source registers ended up correct. Replaying the writes in order rebuilds
+  // the register file as it stood when that MUL executed.
+  std::vector<std::pair<int, int32_t>> wtrace[kCtx];
+
   explicit Dut(Vzhao_probe_v3_full& top) : t(top) {}
 
   void reset() {
@@ -322,6 +332,7 @@ struct Dut {
     if (w && wc < kCtx && wr < kRegs) {
       shadow[wc][wr] = wd;
       ++writes_since_start[wc];
+      wtrace[wc].push_back(std::make_pair(wr, wd));
       // A write for a context that has already said it was finished.
       if (done_at[wc] >= 0) {
         ++late_writes[wc];
@@ -357,6 +368,7 @@ struct Dut {
     running[ctx] = true;
     start_clk[ctx] = clocks;
     writes_since_start[ctx] = 0;
+    wtrace[ctx].clear();
   }
 
   // ---- setup, before the clock counter matters -----------------------------
@@ -470,6 +482,73 @@ void expected_regs(const zfield::Fplan& fp, const zfield::Decoded& prog,
       (*wrote_by)[(size_t)((int)v.dst + m)] = (int)u;
     }
   }
+}
+
+/** Replay one context's writes in PROGRAM order and say what a given uop read.
+ *
+ *  The trace cannot be walked positionally: long-op results drain back
+ *  asynchronously, so an ALU write can overtake a service write in the stream.
+ *  Writes to ONE register are still in program order, though, so each uop's
+ *  write is found by popping the front of that register's own queue.
+ *
+ *  Two register files are then stepped side by side -- one fed the hardware's
+ *  written values, one fed the oracle's -- so the sources of the offending uop
+ *  can be compared as they stood AT THAT MOMENT rather than at the end. */
+void explain_uop(const zfield::Fplan& fp, const zfield::Decoded& prog, const zfield::Prepared& prep,
+                 const int32_t* in, size_t n_in, int scalar_base, int n_rf,
+                 const std::vector<std::pair<int, int32_t>>& trace, int target_uop, char* out,
+                 size_t outsz) {
+  std::vector<std::vector<int32_t>> q((size_t)n_rf);
+  for (const auto& w : trace)
+    if (w.first >= 0 && w.first < n_rf) q[(size_t)w.first].push_back(w.second);
+  std::vector<size_t> take((size_t)n_rf, 0);
+
+  std::vector<int32_t> hw((size_t)n_rf, 0), orc((size_t)n_rf, 0);
+  for (int s = 0; s < (int)fp.n_scalar && scalar_base + s < n_rf; ++s) {
+    hw[(size_t)(scalar_base + s)] = prep.scalar[(size_t)s];
+    orc[(size_t)(scalar_base + s)] = prep.scalar[(size_t)s];
+  }
+  for (size_t i = 0; i < n_in && i < fp.in_vreg.size(); ++i)
+    if (fp.in_vreg[i] != 0xFF && (int)fp.in_vreg[i] < n_rf) {
+      hw[fp.in_vreg[i]] = in[i];
+      orc[fp.in_vreg[i]] = in[i];
+    }
+
+  zref::SatLedger L;
+  for (int u = 0; u <= target_uop && u < (int)fp.uops.size(); ++u) {
+    const zfield::VecUop& v = fp.uops[(size_t)u];
+    if (u == target_uop) {
+      int off = snprintf(out, outsz, "      uop %d read", u);
+      for (int k = 0; k < (int)v.n_src && k < 9 && off < (int)outsz - 70; ++k) {
+        const int r = v.src[k].kind == zfield::SrcKind::kVec ? (int)v.src[k].idx
+                                                            : scalar_base + (int)v.src[k].idx;
+        const int32_t a = (r < n_rf) ? hw[(size_t)r] : 0;
+        const int32_t b = (r < n_rf) ? orc[(size_t)r] : 0;
+        off += snprintf(out + off, outsz - (size_t)off, "  r%d=%d%s", r, a,
+                        (a == b) ? "" : (b == 0 ? "[WRONG]" : "[WRONG, should be ...]"));
+        if (a != b && off < (int)outsz - 24)
+          off += snprintf(out + off, outsz - (size_t)off, "(want %d)", b);
+      }
+      return;
+    }
+    int32_t src[9] = {};
+    for (int k = 0; k < (int)v.n_src && k < 9; ++k) {
+      const int r = v.src[k].kind == zfield::SrcKind::kVec ? (int)v.src[k].idx
+                                                          : scalar_base + (int)v.src[k].idx;
+      src[k] = (r < n_rf) ? orc[(size_t)r] : 0;
+    }
+    int32_t dst[3] = {};
+    zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    const auto* sh = zfield::optable::shape_of(v.op);
+    const int w = (v.op == zfield::UOP_RING_PREP) ? 1 : (sh ? (int)sh->dst_width : 1);
+    for (int m = 0; m < w && (int)v.dst + m < n_rf; ++m) {
+      const size_t r = (size_t)((int)v.dst + m);
+      orc[r] = dst[m];
+      hw[r] = (take[r] < q[r].size()) ? q[r][take[r]] : hw[r];
+      if (take[r] < q[r].size()) ++take[r];
+    }
+  }
+  snprintf(out, outsz, "      uop %d not reached", target_uop);
 }
 
 struct Result {
@@ -624,17 +703,54 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive,
   };
 
   auto check_point = [&](int c) {
-    // WHICH UOP FIRST DISAGREED. Reported before the output check, because the
-    // output is downstream of everything and names nothing.
+    // WHICH UOP FIRST DISAGREED -- EARLIEST BY PROGRAM ORDER, not by register
+    // index. Scanning registers in index order reports whichever wrong value
+    // happens to sit lowest in the file, which is arbitrary: it named a MUL
+    // that was faithfully squaring a number an EARLIER uop had already got
+    // wrong. The register a fault lands in says nothing about when it happened.
+    int worst_r = -1, worst_u = 1 << 30;
     for (int r = 0; r < (int)fp.n_vreg; ++r) {
       if (d.shadow[c][r] == exp_rf[c][r]) continue;
+      const int uu = (r < (int)wrote_by.size()) ? wrote_by[(size_t)r] : -1;
+      const int key = (uu < 0) ? (1 << 29) : uu;
+      if (key < worst_u) {
+        worst_u = key;
+        worst_r = r;
+      }
+    }
+    for (int r = worst_r; r >= 0; r = -1) {
       const int u = (r < (int)wrote_by.size()) ? wrote_by[(size_t)r] : -1;
       const uint8_t op = (u >= 0 && u < (int)fp.uops.size()) ? fp.uops[(size_t)u].op : 0;
-      char buf[220];
+
+      // WHOSE NUMBER IS IT? A wrong value that belongs to nobody is arithmetic
+      // going astray; a wrong value that is exactly ANOTHER register's or
+      // ANOTHER context's correct answer is a routing or operand fault, and
+      // those need completely different fixes. So the value is looked up.
+      char whose[96];
+      whose[0] = ' ';
+      const int32_t got = d.shadow[c][r];
+      for (int r2 = 0; r2 < (int)fp.n_vreg && !whose[0]; ++r2)
+        if (r2 != r && exp_rf[c][r2] == got)
+          snprintf(whose, sizeof whose, "; equals THIS context's correct r%d", r2);
+      for (int c2 = 0; c2 < n_ctx && !whose[0]; ++c2)
+        if (c2 != c && exp_rf[c2][r] == got)
+          snprintf(whose, sizeof whose, "; equals ctx %d's correct r%d", c2, r);
+      if (!whose[0]) snprintf(whose, sizeof whose, "; matches no other register or context");
+
+      char buf[320];
       snprintf(buf, sizeof buf,
-               "%s point %d ctx %d: r%d is %d, oracle %d -- written by uop %d, opcode 0x%02X",
-               path, retired, c, r, d.shadow[c][r], exp_rf[c][r], u, op);
+               "%s point %d ctx %d: r%d is %d, oracle %d -- written by uop %d, opcode 0x%02X%s",
+               path, retired, c, r, got, exp_rf[c][r], u, op, whose);
       fail("first divergent register", buf);
+
+      // WHAT DID THAT UOP READ? Replayed in program order, hardware and
+      // oracle side by side, so a stale operand names itself.
+      if (u >= 0 && u < (int)fp.uops.size() && printed <= 6) {
+        char srcbuf[360];
+        explain_uop(fp, dec.prog, prep, pt_in[c].data(), n_in, scalar_base, kRegs,
+                    d.wtrace[c], u, srcbuf, sizeof srcbuf);
+        printf("%s\n", srcbuf);
+      }
       break;
     }
     for (size_t o = 0; o < n_out; ++o) {

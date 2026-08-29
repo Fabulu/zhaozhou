@@ -487,7 +487,26 @@ module zhao_probe_v3_exec #(
   assign flush_o = ~|(active_r & ~waiting_r);
 
   always_comb begin
-    mul_issue_c = s2_v_r && !is_dot(s2_op_r);
+    // `!hold_c` IS THE SAME LAW THE DOT SEQUENCE BELOW WAS REWRITTEN FOR,
+    // APPLIED TO THE SCALAR PATH TOO.
+    //
+    // The note below states it: an instruction CANNOT BE STALLED between its
+    // multiply issue and its product arrival, because the product lands two
+    // clocks later on a fixed schedule. The DOT sequence was moved to S4 to
+    // obey that. The scalar issue stayed at S2 and UNGATED, so a long-op
+    // handover holding the pipe re-issued the same multiply on every held
+    // clock -- one instruction, k+1 products, and only the count was ever
+    // checked. `desync_o` compares how MANY products came back, never which
+    // instruction they belonged to, so the surplus was invisible.
+    //
+    // Issuing only on a clock the instruction will actually advance makes it
+    // exactly one product per multiply, arriving exactly when the instruction
+    // reaches the stage that consumes it.
+    //
+    // Found by the composed Earth gate: a MUL wrote a wrong product from two
+    // operands it had read CORRECTLY, and only at six or more contexts --
+    // which is where long-op holds last more than a single clock.
+    mul_issue_c = s2_v_r && !is_dot(s2_op_r) && !hold_c;
     // THE SAME HELD OPERANDS THE PIPE USES. The multiply is issued from S2,
     // whose operands come from the register file's moving read -- so a retry
     // after a denial would multiply the SUCCESSOR's numbers and hand the
