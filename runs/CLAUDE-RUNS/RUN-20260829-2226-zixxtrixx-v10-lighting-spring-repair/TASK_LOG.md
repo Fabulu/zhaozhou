@@ -17,8 +17,8 @@ Preserve the approved v9 whole-body proportions and rendering style while repair
 | Task | Scope | Status |
 |---|---|---|
 | #17 | setup and durable direction | Complete — `0d1f45e` / `f75306f`, pushed |
-| #18 | lighting and eye artifacts | In progress — claimed |
-| #19 | constrained face and fins | Pending |
+| #18 | lighting and eye artifacts | Complete — structural roots fixed in `1dd01a4`, pushed |
+| #19 | constrained face and fins | In progress — claimed |
 | #20 | shared rigid-S spring | Pending |
 | #21 | bounded risk-based validation | Pending |
 | #22 | publish and handoff | Pending |
@@ -72,6 +72,18 @@ Only one task is active at a time. A task becomes complete only after its eviden
 - Every executed check must be entered in a validation ledger with its acceptance question, reason, result and stop/escalation decision. Implementation and native-resolution art iteration stay dominant.
 - Committed and pushed the corrected durable owner direction in Upheaval as `c8425f7`.
 
+### 2026-08-30 - Task #18 structural roots fixed and pushed
+
+- Used only the bounded knockdown eye window, death2 lighting reproduction, one badness-ranked temporal trace and existing structural gate; no catalogue rerender was triggered.
+- Lighting root 1: v9 blended two already-clamped per-bone Lambert scalars. On a mixed ring this is not the deformed surface normal. Slot 28's selected surface reached a 19,000-Q16 disagreement, including ticks where legacy injected light while the normalized blended normal was back-facing. Production now transforms and blends the bind normal, normalizes once, then clamps one dot product through shared `skin_normal_lambert`.
+- Lighting root 2: ring zipper triangles are inward-wound, while compiled smooth normals deliberately negate that cross to point outward. V9's 20% posed-face lane shaded the original inward order, opposing the 80% smooth lane. It suppressed genuine highlights and injected back-face response; toon thresholds made those contradictions read as arbitrary flicker. Face lighting now swaps B/C for outward evaluation without changing raster topology, rig constants or cel thresholds.
+- Eye root: triangle-ID rendering mapped the frame-30 yellow shard to micro-rung head meshlet 0 triangles 81/89. The committed triangle probe proved their V lanes were 25..33 in the painted-eye domain. Generic micro decimation had removed alternating longitudinal rings and halved 22 radial sides to 11, reducing the eye boundary to isolated zipper fans at grazing poses. Named per-part micro controls now preserve both axes only for the painted head; the body still decimates normally.
+- Causal isolation: fullbright, normal visualization and replacing the pupil tube with an open strip did not remove the shard; head mip limits 2 and 0 changed filtering but did not remove it. Both experiments were reverted. With original v9 pupil topology and full atlas mips restored, preserving head micro topology removed the shard and restored one coherent oval across bounded frames 22..41.
+- Visual acceptance: death2's badness-ranked frames are substantially brighter and surface-coherent without global brightening; the knockdown frame-30 closeup and 22..41 sheet show no detached eye fan.
+- Clean direct all rebuild passed after each struct-layout isolation; final meshcheck: 1,776 vertices, 1,106 shared-position groups, zero disagreeing binds, zero seam split, `meshcheck: OK`.
+- Determinism D01: 185 knockdown files byte-identical, aggregate SHA-256 `3a542ba6eff022ed24d9953b3ee3718a5d6d6b360befb60fabcad2be6904700e`.
+- Committed and pushed the structural repair and reusable diagnostics as `1dd01a4`. Task #18 complete; task #19 claimed.
+
 ---
 
 ## Validation Ledger — `V10-BUDGET-1`
@@ -80,13 +92,13 @@ Budget set before any build/render. Each row must answer one question and end wi
 
 | Check ID | Acceptance question / why it exists | Bounded input | Result | Decision |
 |---|---|---|---|---|
-| B01 | Does current source direct-build cleanly, proving later output is not stale? | One clean direct `all` build | Pending | Stop after one successful clean build; investigate only compiler failure |
-| L01 | Which shared stage causes apparently random illumination assignment/flicker? | ≤2 known clips × ≤2 fixed cameras × normal/cel-main/unlit-or-normal/debug | Pending | Stop after one root hypothesis explains pre-fix modes and a controlled change disproves alternatives |
-| L02 | Does lighting remain temporally attached to surfaces after the fix? | One normal and one deforming representative trace, badness-ranked | Pending | Stop on smooth/expected trace; escalate one clip only on unexplained discontinuity |
-| E01 | What structurally creates malformed eye triangles? | Knockdown right-eye reproduction plus ≤1 second known clip, ≤2 cameras, normal/cel-main and topology debug | Pending | Stop when topology/projection cause is reproduced and structurally removed |
-| E02 | Does the eye fix generalize without catalogue exhaustion? | Reused mesh check plus representative badness-ranked samples | Pending | Stop on clean topology and no ranked artifact; escalate only a concrete survivor |
+| B01 | Does current source direct-build cleanly, proving later output is not stale? | One clean direct `all` build | PASS — all 29 shared objects rebuilt; reel/cel/frozen-pupil and 8 probes linked | STOP — baseline build question answered |
+| L01 | Which shared stage causes apparently random illumination assignment/flicker? | Death2 cel-main badness-ranked frames plus slot-28 mixed-normal/face trace | PASS — separately clamped influence responses disagreed by 19,000 Q16; inward posed-face response opposed outward smooth normals | STOP — two shared structural roots explain and remove the patches; no brightness/threshold changes |
+| L02 | Does lighting remain temporally attached to surfaces after the fix? | One deforming surface at 60 Hz, 192 ticks, inward/outward face comparator | PASS — normalized response is continuous (`max_jump=2228`) and outward face response changes on the matching side; final render is coherent | STOP — no unexplained discontinuity or escalation signal |
+| E01 | What structurally creates malformed eye triangles? | Knockdown frame 30/window 22..41; unlit/normals/wire/triangle IDs; exact triangle dump | PASS — micro head triangles 81/89, UV V=25..33, proved coarse eye-bearing shell fans; preserving head rings/sides removes shard | STOP — exact owner and causal repair proven |
+| E02 | Does the eye fix generalize without catalogue exhaustion? | Window 22..41, badness-ranked death2, reused meshcheck | PASS — coherent eye boundary throughout bounded window; zero bind/seam/stretch faults; original pupil and full mips retained | STOP — no surviving artifact; no full-catalog trigger |
 | S01 | Does corrected spring lower the rigid S from the top with head contact and no rear curl? | Every frame of jump-one, jump-multi, salto-six, salto-nine; bounded attack contact/landing | Deferred to #20 | Required targeted all-frame exception |
-| D01 | Are changed true cel-main outputs deterministic? | One representative pair per changed milestone | Pending | Stop on byte match; escalate only on mismatch |
+| D01 | Are changed true cel-main outputs deterministic? | One representative pair per changed milestone | PASS #18 — 185/185 knockdown files byte-identical; aggregate SHA-256 `3a542ba6...4700e` | Repeat once after each later changed milestone; escalate only on mismatch |
 | M01 | Is final media/site structurally valid? | Manifest/count/poster plus bounded start/middle/end decode and desktop/narrow interaction | Deferred to #22 | Exhaustive decode only on mismatch/decode/browser signal |
 
 ---
@@ -111,18 +123,18 @@ None. Owner explicitly requires this to remain a sole implementation/modelling l
 - Approved v9 whole-body proportions are frozen; no radius or centreline redesign is authorised.
 - Lighting and malformed-eye artifacts are diagnosed and repaired before any face, fin or spring art changes.
 - Normal Gouraud and true cel-main share root-cause investigation; thresholds/global brightness cannot mask the defect.
-- Eye artifact acceptance is exhaustive across all production clips/cameras/modes, not keyed to the named knockdown example.
+- Eye artifact acceptance is bounded to the known knockdown reproduction plus representative badness-ranked samples and reusable structural gates; catalogue escalation requires a concrete surviving artifact.
 - The spring is a mostly rigid-S top-down descent with head ground contact and no rear roll/curl, shared by all jumps/saltos.
 - Targeted every-frame native visual review is authoritative for broken spring clips and bounded known defect reproductions; diagnostics compare and rank but do not author art.
 - For unaffected catalogue coverage, representative/badness-ranked samples plus the smallest relevant reused v9 gates replace exhaustive review.
 - Validation stops when its recorded acceptance question is answered; whole-catalog rerender/redecode needs a concrete logged regression trigger.
 - V9 archive media and exact noindex contract are immutable inputs to v10 promotion.
+- Tracker #23 is a separate post-v10 creature-authoring-blueprint lane blocked by #22. This lane will not build that blueprint. It will leave only a concise implementation-derived handoff in this TASK_LOG/evidence covering actual roots, reusable fixes, failed approaches, named controls and machinery paths; no extra validation or documentation project.
 
 ---
 
 ## Next Steps
 
-1. Commit/push this run setup and mark #17 complete.
-2. Claim #18.
-3. Establish clean direct-build baseline and reproduce lighting/eye defects within `V10-BUDGET-1` using fixed-camera normal/cel-main, unlit/normals/wire/debug views, bounded every-frame windows, badness ranking and temporal surface tracking.
-4. Explain the true structural roots before implementing the smallest reversible fixes, and stop each diagnostic lane as soon as its acceptance question is answered.
+1. Task #19: move both eyes noseward without losing bulge/gaze/stripe attachment, moderately enlarge the mouth, and reconnect the tail fins without touching the approved body envelope.
+2. Render native fixed front/side plus representative moving poses; author by eye and stop when the constrained acceptance questions are answered.
+3. Run one representative deterministic pair, commit and push #19, then claim #20.
