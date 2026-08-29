@@ -5,6 +5,77 @@ at the top.*
 
 ---
 
+## FABIAN -- A REAL BUG IN THE SHIPPED ENGINE, AND IT WAS NOT A CORNER CASE
+
+*2026-08-29. Short version: the Field engine hung forever whenever two of its
+eight contexts ran different long operations at the same time. That is normal
+traffic, not a corner. It is fixed, and the reason it hid for nine sweeps is
+worth two minutes of your time.*
+
+### What was broken
+
+Eight contexts run eight independent programs. The moment two of them reached
+DIFFERENT long operations -- say one wants NOISE2 and another wants RIDGE --
+the machine stopped. Not slowed down. Stopped, permanently, with no timeout, no
+alarm, and no flag raised anywhere.
+
+The mechanism, in plain terms:
+
+* The dispatcher batches up to four points into one request, and every point in
+  a batch must be running the SAME operation. That is correct -- the service is
+  told one opcode.
+* A batch that is not full waits for the executor to say "nobody else is
+  coming".
+* The executor computes that as "every running context is parked waiting".
+* But a context is only marked *parked* once the dispatcher has ACCEPTED it.
+
+So the second context, refused because its operation differs, was neither
+accepted nor parked. The executor therefore never said "nobody else is coming",
+the half-full batch never went out, the first context was never released, and
+the second was never accepted. Each waiting on the other, forever.
+
+### Why nine sweeps and two closed compositions missed it
+
+Because every test in the suite gives all eight contexts the SAME operation. A
+batch then always either fills to four or gets flushed, and the third
+case -- somebody asking who cannot join -- simply never happened. The tests
+were thorough about what they tested and unanimous about what they did not.
+
+This is the fifth defect of this exact shape in the engine: two blocks that
+must agree, with nothing forcing them to agree. It is now the best-documented
+one, because it is the first where the disagreement was invisible to BOTH
+sides rather than merely wrong on one.
+
+### I checked it was not my own change first
+
+I had just put a second service on that path, so the new arbitration was the
+obvious suspect. Blaming it would have been convenient and wrong. The isolating
+run used only NOISE2 and RIDGE -- both handled by the OLD service, nothing of
+the new one involved -- and it deadlocked identically. The defect predates
+today's work.
+
+### The fix, and why it went where it did
+
+The dispatcher now closes a batch when someone is asking who cannot join. It
+goes there because that block already knows both halves of the fact. The
+alternative -- teaching the executor why the dispatcher refused -- would have
+been another copy of the very seam that caused this.
+
+    hung at 400001 clocks  ->  191 clocks
+
+### What it cost to find
+
+One test that nobody had written: eight contexts doing DIFFERENT things at
+once, which is what the hardware is actually for. Four separate deliberate
+defects had already survived a sweep purely because that traffic did not exist
+anywhere in the suite. Writing the test to catch them found this instead.
+
+**The general lesson, which I am recording because it will apply again:** a
+test suite that always exercises one op at a time will pass forever on a
+machine that cannot do two.
+
+---
+
 ## 2026-08-29 (later) -- there are now TWO services on the bank
 
 *Short version: SPLINE runs on the fast path end to end, the composed machine
