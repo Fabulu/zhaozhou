@@ -851,10 +851,11 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
  * missile (the counterplay).
  */
 struct AttackPlan {
-  bool preset_golden = false;  // the approved 226-key Ground Dive, verbatim
-  // phase durations, 30 Hz keys (the local phase clips play against these)
-  uint16_t compress_keys = 10, release_keys = 10, coil_keys = 20;
-  uint16_t unroll_keys = 9, plunge_keys = 10;
+  bool preset_golden = false;  // the approved Ground Dive choreography
+  // phase durations, 30 Hz keys. Direction #9 makes maximum compression a
+  // first-class hold instead of hiding it inside a wobble-shaped clip.
+  uint16_t compress_keys = 12, compress_hold_keys = 6, release_keys = 10;
+  uint16_t coil_keys = 20, unroll_keys = 9, plunge_keys = 10;
   // trajectory
   int32_t apex_mm = 0;      // root lift at the top of the coil flight
   int32_t apex_fwd_mm = 0;  // forward travel by the apex

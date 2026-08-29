@@ -547,17 +547,13 @@ constexpr uint8_t kOrange[3] = {218, 106, 71};
 // A key is held 2 sim ticks, so reel frames = keys * 2 at step 1.
 constexpr int kIdleKeys = 96;  // SLOW. 3.2 s of breathing.
 constexpr int kWalkKeys = 40;
-// 226 keys = 452 frames = 7.53 s at 60 Hz. The salto sticks its landing as
-// a planted spear for FIVE REAL SECONDS (Fabian: "Make it stick for 5
-// actual seconds"): keys 62..212 are the stick -- 150 keys, 300 frames,
-// 5.000 s at the site's 60 fps -- and the remaining 13 keys pull it out and
-// close the loop. 220 -> 226 keys 2026-08-28, OWNER-LICENSED EDIT to the
-// frozen salto (Fabian: "the salto is great. Maybe have it hold a tad
-// longer at its apex before the spear comes down, for effect"): the apex
-// HANG grows from 2 keys (~0.07 s) to 8 (~0.27 s) -- a hang-time beat,
-// not slow motion; the plunge keeps its exact speed and violence, every
-// later key shifts +6. clip-3.bin re-pins with this provenance.
-constexpr int kAttackKeys = 226;
+// 240 keys = 480 frames = 8.00 s at 60 Hz. Direction #9 adds a real,
+// theatrical whole-body spring anticipation before the approved airborne
+// wheel. The previous wobble-only prep was 10 keys; the new prep takes
+// 18 keys to compress and hold, then releases over the next 10. Everything
+// from the approved flight is shifted by 12 keys, without changing its wheel,
+// apex hang, plunge, five-real-second planted-spear hold, or recovery timing.
+constexpr int kAttackKeys = 240;
 constexpr int kFallKeys = 144;  // SLOWER STILL (2026-08-27 pass 3, Fabian:
                                 // "When falling, the rotation is too
                                 // strong"): one tumble now takes 4.8 s, so
@@ -730,6 +726,35 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // the tail rises behind, short and steep
     -5600, -11400};
 
+// THE WHOLE-BODY SPRING (owner direction #9). This is a separately authored
+// pose, not a larger idle breath and not a scale trick. The vertical S pays
+// out almost flat just above the floor while a broad lateral concertina keeps
+// the continuous tube visibly compact and volumetric in 3D. Every salto and
+// jump calls apply_spring_stance below, so the obsolete deepen-only wobble
+// cannot survive in a variant. These are absolute segment directions, like
+// kStanceSlope; pitch/yaw joints are their adjacent differences.
+constexpr int32_t kSpringCompressionDepth = 1000;  // profile authority, 1/1000
+constexpr int32_t kSpringCompressionDropMm = 600;  // full-squash root descent
+constexpr int32_t kSpringDeclaredBiteMm = 40;      // permitted posed-surface bite
+constexpr int32_t kSpringCompressedSlope[kStanceSlopes] = {
+    200, 400, 700, 900, 700, 300, -300, -600, -400, 0,
+    500, 800, 650, 300, 0, -200, -100, 300, 600};
+constexpr int32_t kSpringCompressedYaw[kStanceSlopes] = {
+    0, 3000, 7000, 11000, 13500, 11000, 5000, -6500, -13000, -11000,
+    -4500, 7000, 13000, 11000, 5000, -6000, -10500, -5000, 0};
+constexpr int32_t kSpringHeadAttitude = 0;          // snout joins the flat spring
+constexpr int32_t kSpringBladeFlare = 900;          // fan braces during compression
+
+// Named theatrical timing. The existing attack spends long enough at maximum
+// squash to be readable; immediate jumps use the short controls declared with
+// their plan below.
+constexpr int kSaltoCompressEndKey = 11;
+constexpr int kSaltoCompressHoldEndKey = 17;
+constexpr int kSaltoReleaseEndKey = 28;
+constexpr int kSaltoCoilPoseKey = kSaltoReleaseEndKey + 1;  // past signed-rounding residue
+constexpr int kSaltoUnrollStartKey = 52;
+constexpr int kSaltoUnrollEndKey = 60;
+
 // Slot 30 is an accepted quick taunt and remains a frozen animation. V9's
 // thicker weight-bearing run required new stance slopes for the living clips,
 // but must not silently retime or reshape this existing gesture. These are its
@@ -875,7 +900,8 @@ constexpr int32_t kCoilR = 485;
 // toward +X. Tip drop from the nose = reach * sin(60) = 3830 * 0.86603 =
 // 3317 mm (reach = kBodyLenMm + kBladeLen with the blades on the spear line);
 // tip forward reach = 3830 * 0.5 = 1915 mm.
-constexpr int32_t kAtkApexLift = 12000;  // mm of root lift at the apex
+constexpr int32_t kAtkApexLift = 12000;  // mm of root lift at the six-salto apex
+constexpr int32_t kAtkNineApexLift = 2 * kAtkApexLift;  // exact direction-9 ratio
 constexpr int32_t kAtkFwdMax = 7420;     // mm forward at impact: 1850 by the
                                          // apex + 5570 on the 30-deg plunge
 constexpr int32_t kAtkSpinStick = 3333;  // 1/1000 turns: 30 deg from vertical
@@ -902,8 +928,8 @@ constexpr int32_t kAtkPlungeMinMm = 600; // the dive must exist: the commit
                                          // point sits at least reach+this
                                          // from the intercept
 constexpr int32_t kAtkStickLift = kAtkTipDrop - kBodyY - kAtkStickDepth;
-constexpr int kAtkImpactKey = 62;        // reel frame 124 (keys held 2 ticks)
-constexpr int kAtkStickEnd = 212;        // impact + 150 keys = 5.0 s stuck
+constexpr int kAtkImpactKey = 74;        // approved flight shifted by spring prep
+constexpr int kAtkStickEnd = 224;        // impact + 150 keys = 5.0 s stuck
 
 // FALL: the slow distress tumble. The whole S rotates about its own centre
 // (re-pivoted off the nose exactly the way the salto re-pivots its spin to
@@ -1107,32 +1133,32 @@ inline int curve(const Key* k, int n, int f) {
 // kAtkStickEnd; then it pulls straight out along the lift axis BEFORE the
 // fourth turn is allowed to swing.
 static const Key kAtkLift[] = {
-    {0, 0},          {10, 0},        {12, 180},      {14, 700},
-    {16, 1500},      {20, 3200},     {26, 5600},     {32, 8200},
-    {38, 10600},     {43, 11700},
-    {47, kAtkApexLift}, {55, kAtkApexLift},   // the LICENSED longer hang
-    {56, 11803},     {57, 11213},    {58, 10228},    {59, 8851},
-    {60, 7079},      {61, 4914},
+    {0, 0},          {22, 0},        {24, 180},      {26, 700},
+    {28, 1500},      {32, 3200},     {38, 5600},     {44, 8200},
+    {50, 10600},     {55, 11700},
+    {59, kAtkApexLift}, {67, kAtkApexLift},   // approved eight-key apex hang
+    {68, 11803},     {69, 11213},    {70, 10228},    {71, 8851},
+    {72, 7079},      {73, 4914},
     {kAtkImpactKey, kAtkStickLift},  {kAtkStickEnd, kAtkStickLift},
-    {214, 3200},     {216, 3400},    {219, 2200},    {222, 900},
-    {224, 200},      {225, 0}};
+    {226, 3200},     {228, 3400},    {231, 2200},     {234, 900},
+    {237, 200},      {kAttackKeys - 1, 0}};
 // forward drive in mm. THE PLUNGE IS THE STRAIGHT SHOT: over the dive keys
 // the drive is 1850 + t^2 * 5570 -- the SAME t^2 as the lift, so every dive
 // key sits exactly on the 30-degrees-from-vertical line the spear points
 // along. Held through the stick, returned across the landing for the loop.
 static const Key kAtkFwd[] = {
-    {0, 0},     {14, 0},    {18, 150},  {26, 500},  {34, 1000},
-    {42, 1550}, {49, 1850}, {55, 1850},  // the drive hangs with the lift
-    {56, 1964}, {57, 2305}, {58, 2873}, {59, 3669}, {60, 4692}, {61, 5942},
+    {0, 0},     {26, 0},    {30, 150},  {38, 500},  {46, 1000},
+    {54, 1550}, {61, 1850}, {67, 1850},  // drive hangs with the lift
+    {68, 1964}, {69, 2305}, {70, 2873}, {71, 3669}, {72, 4692}, {73, 5942},
     {kAtkImpactKey, kAtkFwdMax},
-    {kAtkStickEnd, kAtkFwdMax}, {216, 5200}, {220, 2600}, {225, 0}};
-// THE PRELOAD (anticipation): 1/1000 of extra descent-lobe authority fed to
-// apply_stance's deepen -- the same mechanism as the idle's breath, pushed
-// far past it, so the S visibly TIGHTENS and shortens ("stored energy"),
-// with the computed root rise keeping the belly planted. Released as the
-// coil begins.
+    {kAtkStickEnd, kAtkFwdMax}, {228, 5200}, {232, 2600}, {kAttackKeys - 1, 0}};
+// REAL PRELOAD: authority of the shared almost-flat spring profile. The whole
+// animal descends over eleven keys, holds fully loaded for six, then releases
+// while the approved wheel gathers. No descent-lobe deepen remains here.
 static const Key kAtkPre[] = {
-    {0, 0}, {3, 380}, {6, 700}, {9, 700}, {12, 260}, {15, 0}, {225, 0}};
+    {0, 0}, {3, 170}, {7, 620}, {kSaltoCompressEndKey, 1000},
+    {kSaltoCompressHoldEndKey, 1000}, {22, 520},
+    {kSaltoReleaseEndKey, 0}, {kAttackKeys - 1, 0}};
 constexpr int kAtkPreN = static_cast<int>(sizeof(kAtkPre) / sizeof(Key));
 // how much the TRACKING CAMERA aims at the spear's midpoint instead of the
 // nose, in 1/1000 (Fabian, 2026-08-27 pass 3: the camera "doesn't catch the
@@ -1142,7 +1168,7 @@ constexpr int kAtkPreN = static_cast<int>(sizeof(kAtkPre) / sizeof(Key));
 // five-second stick -- the buried tail is the shot -- and released only as
 // the extraction re-gathers the S.
 static const Key kAtkAim[] = {
-    {0, 0}, {40, 0}, {47, 1000}, {214, 1000}, {220, 0}, {225, 0}};
+    {0, 0}, {52, 0}, {59, 1000}, {226, 1000}, {232, 0}, {kAttackKeys - 1, 0}};
 constexpr int kAtkLiftN = static_cast<int>(sizeof(kAtkLift) / sizeof(Key));
 constexpr int kAtkFwdN = static_cast<int>(sizeof(kAtkFwd) / sizeof(Key));
 constexpr int kAtkAimN = static_cast<int>(sizeof(kAtkAim) / sizeof(Key));
@@ -1155,11 +1181,14 @@ constexpr int kAtkAimN = static_cast<int>(sizeof(kAtkAim) / sizeof(Key));
 // 1000 = rolled into the coil, 0 = straight. The roll-up waits for the
 // anticipation (keys 0..9 are the compress + hold).
 static const Key kAtkCurl[] = {
-    {0, 0}, {9, 0}, {13, 350}, {18, 1000}, {40, 1000}, {47, 0}, {kAttackKeys - 1, 0}};
-// how much of the canonical S remains -- FULL through the compress/hold
-// (the preload deepens it on top), gone by the time the coil owns the body
-static const Key kAtkAuth[] = {{0, 1000},          {9, 1000},  {18, 0},
-                               {214, 0},           {220, 650}, {kAttackKeys - 1, 1000}};
+    {0, 0}, {kSaltoCompressHoldEndKey, 0}, {21, 350},
+    {kSaltoReleaseEndKey, 1000}, {52, 1000}, {59, 0},
+    {kAttackKeys - 1, 0}};
+// how much of the canonical S remains -- the shared spring profile owns the
+// loaded pose, then authority hands to the unchanged airborne wheel.
+static const Key kAtkAuth[] = {{0, 1000}, {kSaltoCompressHoldEndKey, 1000},
+                               {kSaltoReleaseEndKey, 0}, {226, 0},
+                               {232, 650}, {kAttackKeys - 1, 1000}};
 // accumulated turn of the WHOLE BODY in 1/1000 of a full rotation. 3000 =
 // the three somersaults; kAtkSpinStick (3333) = the DIAGONAL spear, tail
 // 60 deg below horizontal pointing down-and-forward, HELD from the apex
@@ -1169,11 +1198,11 @@ static const Key kAtkAuth[] = {{0, 1000},          {9, 1000},  {18, 0},
 // INSIDE the release, not the hold: at spin -40 the whole body pitches
 // about the nose, and during the grounded compress that floated the rear
 // 750 mm off the dirt (probe). By key 12 the launch is already airborne.
-static const Key kAtkSpin[] = {{0, 0},          {10, 0},          {12, -40},
-                               {15, 0},         {20, 700},        {28, 1600},
-                               {36, 2600},      {43, 3050},       {47, kAtkSpinStick},
-                               {214, kAtkSpinStick},              {218, 3650},
-                               {221, 3900},     {kAttackKeys - 1, 4000}};
+static const Key kAtkSpin[] = {{0, 0},          {22, 0},          {24, -40},
+                               {27, 0},         {32, 700},        {40, 1600},
+                               {48, 2600},      {55, 3050},       {59, kAtkSpinStick},
+                               {226, kAtkSpinStick},               {230, 3650},
+                               {233, 3900},     {kAttackKeys - 1, 4000}};
 constexpr int kAtkCurlN = static_cast<int>(sizeof(kAtkCurl) / sizeof(Key));
 constexpr int kAtkAuthN = static_cast<int>(sizeof(kAtkAuth) / sizeof(Key));
 constexpr int kAtkSpinN = static_cast<int>(sizeof(kAtkSpin) / sizeof(Key));
@@ -1553,6 +1582,65 @@ inline int32_t apply_stance(Rig& g, int32_t authority, int32_t deepen = 0,
     g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_z(pitch));
   }
   return static_cast<int32_t>(sink >> 16);  // mm of root RISE needed
+}
+
+// Root descent accelerates only as the whole concertina arrives. A linear
+// drop made the still-tall middle pose push its grounded run through the floor
+// and then lift back out at maximum squash. Quadratic easing keeps the
+// travelling compression visible above ground and makes contact at the
+// authored deepest pose, where stored spring energy should read. Kept as a
+// shared pure helper so local clips and programmable root plans cannot drift.
+inline int32_t spring_root_drop(int32_t amount) {
+  if (amount < 0) amount = 0;
+  if (amount > 1000) amount = 1000;
+  const int32_t drop_amount = static_cast<int32_t>(
+      (static_cast<int64_t>(amount) * amount) / 1000);
+  return -static_cast<int32_t>(
+      (static_cast<int64_t>(kSpringCompressionDropMm) * drop_amount) / 1000);
+}
+
+// Shared real spring pose for every salto and jump. `amount` is 0..1000 and
+// blends absolute vertical and lateral segment directions before taking joint
+// differences, so the chain remains continuous and never changes thickness.
+// The root drop is authored explicitly: compression contact is intentional and
+// checked by the committed posed-vertex probe, never inferred from a render.
+inline int32_t apply_spring_stance(Rig& g, int32_t authority, int32_t amount) {
+  if (amount < 0) amount = 0;
+  if (amount > 1000) amount = 1000;
+  amount = (amount * kSpringCompressionDepth) / 1000;
+  zc::quat16 prev_world = zc::quat16_identity();
+  for (int k = 0; k < kStanceSlopes; ++k) {
+    const int32_t slope = kStanceSlope[k] + static_cast<int32_t>(
+        (static_cast<int64_t>(kSpringCompressedSlope[k] - kStanceSlope[k]) * amount) / 1000);
+    const int32_t yaw = static_cast<int32_t>(
+        (static_cast<int64_t>(kSpringCompressedYaw[k]) * amount) / 1000);
+    const int32_t pitch_auth = static_cast<int32_t>(
+        (static_cast<int64_t>(slope) * authority) / 1000);
+    const int32_t yaw_auth = static_cast<int32_t>(
+        (static_cast<int64_t>(yaw) * authority) / 1000);
+
+    // Author each segment's complete WORLD orientation, then derive this
+    // joint's local difference. World yaw precedes pitch, so lateral folding
+    // cannot tilt with an already-pitched parent and secretly become a dive.
+    // Building the absolute orientation directly also avoids accumulating 19
+    // conjugations in quat16 (the first world-delta draft magnified rounding
+    // at the fork into a one-key spike). One inverse-product per joint keeps
+    // the broad concertina deterministic and vertically honest.
+    const zc::quat16 world =
+        quat_mul(quat_y(yaw_auth), quat_z(pitch_auth));
+    const zc::quat16 local = quat_mul(quat_conj(prev_world), world);
+    g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], local);
+    prev_world = world;
+  }
+  return spring_root_drop(amount);
+}
+
+inline int32_t spring_head_attitude(int32_t authority, int32_t amount) {
+  if (amount < 0) amount = 0;
+  if (amount > 1000) amount = 1000;
+  const int32_t a = kHeadAttitude + static_cast<int32_t>(
+      (static_cast<int64_t>(kSpringHeadAttitude - kHeadAttitude) * amount) / 1000);
+  return static_cast<int32_t>((static_cast<int64_t>(a) * authority) / 1000);
 }
 
 // Slot 1 - IDLE. The canonical S, RELAXED. Fabian: "Like breathing, up and
@@ -1995,10 +2083,10 @@ inline zc::Clip build_attack(bool choreo = false) {
     const int fwd = curve(kAtkFwd, kAtkFwdN, f);
     const int pre = curve(kAtkPre, kAtkPreN, f);
 
-    // the anticipation preload deepens the S (same lever as the idle's
-    // breath, much harder); the returned rise keeps the belly planted
-    // through the compress -- it is ~0 whenever pre is 0.
-    const int32_t pre_rise = apply_stance(g, auth, pre);
+    // Direction #9's real anticipation: the shared authored floor spring
+    // replaces the old descent-lobe deepen. It lowers and laterally compacts
+    // every region, holds, then pays out into the approved wheel.
+    const int32_t pre_drop = apply_spring_stance(g, auth, pre);
     // the coil: every interior joint bends the same way, so the body is a
     // wheel; bone 0 is left to the spin alone
     for (int k = 1; k < kSpineBones - 1; ++k) {
@@ -2024,16 +2112,18 @@ inline zc::Clip build_attack(bool choreo = false) {
     // skull follows the coil's own curvature (one joint's worth of coil
     // pitch approximates the bulb's 1.7-segment arc) instead of chording
     // across it.
-    g.q[kBHead] = quat_z((kHeadAttitude * auth) / 1000 + (coil_pitch * curl) / 1000);
+    g.q[kBHead] = quat_z(spring_head_attitude(auth, pre) +
+                            (coil_pitch * curl) / 1000);
 
     // the blades close to the spear line while coiled or straight-diving,
     // and flare as the S returns
-    g.tail_rest((kBladeSplay * auth) / 1000 + kBladeSplay / 5,
+    g.tail_rest((kBladeSplay * auth) / 1000 + kBladeSplay / 5 +
+                    (pre * kSpringBladeFlare) / 1000,
                 (kBladeRise * auth) / 1000, (kBladeUpBias * auth) / 1000);
     g.write(c, f);
     if (!choreo) {
       c.root[f * 3 + 0] = fxm(fwd + (piv_x * curl) / 1000);
-      c.root[f * 3 + 1] = fxm(lift + (piv_y * curl) / 1000 + pre_rise);
+      c.root[f * 3 + 1] = fxm(lift + (piv_y * curl) / 1000 + pre_drop);
     }  // choreo: root channels stay ZERO -- trajectory is the instance's
   }
   c.events = {{kAtkImpactKey, zc::kEvAttack, 0}};  // contact: reel frame 112
@@ -2057,7 +2147,7 @@ inline ChoreoSample attack_choreo_sample(int key) {
   const int pre = curve(kAtkPre, kAtkPreN, key);
   Rig g;
   g.reset();
-  const int32_t pre_rise = apply_stance(g, auth, pre);  // the belly-planting rise
+  const int32_t pre_drop = apply_spring_stance(g, auth, pre);
   const int32_t theta = static_cast<int32_t>((static_cast<int64_t>(spin) * 65536) / 1000);
   const uint16_t th16 = static_cast<uint16_t>(theta & 0xFFFF);
   const int32_t sth = zref::fx_sin(zref::angle16{th16}).raw;
@@ -2066,7 +2156,7 @@ inline ChoreoSample attack_choreo_sample(int key) {
   const int32_t piv_y = kCoilR - static_cast<int32_t>((static_cast<int64_t>(kCoilR) * cth) >> 16);
   ChoreoSample out;
   out.x_mm = fwd + (piv_x * curl) / 1000;
-  out.y_mm = lift + (piv_y * curl) / 1000 + pre_rise;
+  out.y_mm = lift + (piv_y * curl) / 1000 + pre_drop;
   out.theta = theta;
   // PIVOT CORRECTION: on bone 0 the spin acted about the NOSE at kBodyY;
   // the instance rotation acts about the world origin under it. Re-pivot
@@ -2097,7 +2187,8 @@ inline ChoreoSample attack_choreo_sample(int key) {
 // struck 1.07 m high. Law: the ROOT stops where the TIP arrives at the
 // intercept and buries the declared kAtkStickDepth -- a stab that lands
 // and plants, never a pass-through, never a weightless surface stop.
-inline void zixx_plan_lock_spear(zc::AttackPlan& p) {
+inline void zixx_plan_lock_spear(zc::AttackPlan& p,
+                                 int32_t apex_limit_mm = kAtkApexLift) {
   // the committed AIM line, apex -> intercept
   p.spear_dx_mm = p.intercept_x_mm - p.apex_fwd_mm;
   p.spear_dy_mm = p.intercept_y_mm - p.apex_mm;
@@ -2115,8 +2206,15 @@ inline void zixx_plan_lock_spear(zc::AttackPlan& p) {
     if (need * need > dx2)
       dyn = static_cast<int32_t>(
           zref::isqrt_u64(static_cast<uint64_t>(need * need - dx2)));
-    p.apex_mm = p.intercept_y_mm + dyn;
-    if (p.apex_mm > kAtkApexLift) p.apex_mm = kAtkApexLift;
+    const int32_t raised_apex = p.intercept_y_mm + dyn;
+    // Generic attacks may not borrow slot 48's 24 m exception.  If a target
+    // already sits too near the 12 m ceiling, approaching from above would
+    // exceed that limit; commit the same minimum-length line from below
+    // instead of silently raising the whole family into the limit lane.
+    p.apex_mm = raised_apex <= apex_limit_mm
+                    ? raised_apex
+                    : p.intercept_y_mm - dyn;
+    if (p.apex_mm > apex_limit_mm) p.apex_mm = apex_limit_mm;
     p.spear_dy_mm = p.intercept_y_mm - p.apex_mm;
     sy0 = p.spear_dy_mm;
     sl = static_cast<int32_t>(
@@ -2176,31 +2274,41 @@ inline zc::AttackPlan zixx_plan_attack(int32_t tgt_x_mm, int32_t tgt_y_mm,
   if (flight < 18) flight = 18;
   if (flight > 44) flight = 44;
   p.coil_keys = static_cast<uint16_t>(flight);
-  // one fixed-point intercept iteration: where the target will be when the
-  // spear can reach it (coil + unroll + half the plunge)
-  const int32_t lead = flight + p.unroll_keys + p.plunge_keys / 2;
-  p.intercept_x_mm = tgt_x_mm + tgt_vx_mmk * lead;
-  p.intercept_y_mm = tgt_y_mm + tgt_vy_mmk * lead;
-  // the apex: high enough to dive on the intercept -- 2 m above it for an
-  // aerial target, the full showcase height for a grounded one, never more
-  // than the approved 12 m
-  p.apex_mm = p.intercept_y_mm > 0 ? p.intercept_y_mm + 2000 : 8000;
-  if (p.apex_mm > kAtkApexLift) p.apex_mm = kAtkApexLift;
-  if (p.apex_mm < 3000) p.apex_mm = 3000;
-  // forward travel by the apex: a third of the way to the intercept
-  p.apex_fwd_mm = p.intercept_x_mm / 3;
-  // spin appetite follows the APEX, not the flight length (the amendment:
-  // a low/distant target gets FEWER flips and a long horizontal shot; the
-  // proof caught the first cut giving the flat lance more turns than the
-  // high dive because it flew longer): one somersault per ~3 m of height
-  int32_t turns = p.apex_mm / 3000;
-  if (turns < 1) turns = 1;
-  if (turns > 5) turns = 5;
-  p.spin_mturns = turns * 1000;
-  // THE COMMITMENT: the spear is locked from the apex toward the
-  // intercept by the shared lock (aim, tip lead, kBodyY carry, plunge
-  // sizing). Projectile, not missile.
-  zixx_plan_lock_spear(p);
+  // Lead the target to the actual impact key.  Anticipation, release, the full
+  // coil/unroll and the complete plunge all elapse after the trigger; the old
+  // `coil + unroll + half plunge` estimate omitted 28 prep keys and half the
+  // plunge, so a 120 mm/key target was 3.48 m beyond the committed intercept.
+  // Spear locking can change the discrete plunge duration, so iterate that
+  // small 6..14-key fixed point deterministically before freezing the plan.
+  const auto configure_locked_intercept = [&]() {
+    // The generic family stays under the approved 12 m ceiling.  Slot 48 is
+    // the sole 24 m limit exception and explicitly passes its larger ceiling
+    // when it re-locks the overridden plan.
+    p.apex_mm = p.intercept_y_mm > 0 ? p.intercept_y_mm + 2000 : 8000;
+    if (p.apex_mm > kAtkApexLift) p.apex_mm = kAtkApexLift;
+    if (p.apex_mm < 3000) p.apex_mm = 3000;
+    p.apex_fwd_mm = p.intercept_x_mm / 3;
+    zixx_plan_lock_spear(p);
+    // Spin appetite follows the final locked apex, not the pre-lock guess.
+    int32_t turns = p.apex_mm / 3000;
+    if (turns < 1) turns = 1;
+    if (turns > 5) turns = 5;
+    p.spin_mturns = turns * 1000;
+  };
+  for (int iteration = 0; iteration < 16; ++iteration) {
+    const int32_t lead = p.compress_keys + p.compress_hold_keys +
+                         p.release_keys + p.coil_keys + p.unroll_keys +
+                         p.plunge_keys;
+    const int32_t intercept_x = tgt_x_mm + tgt_vx_mmk * lead;
+    const int32_t intercept_y = tgt_y_mm + tgt_vy_mmk * lead;
+    const uint16_t prior_plunge = p.plunge_keys;
+    const bool intercept_stable =
+        p.intercept_x_mm == intercept_x && p.intercept_y_mm == intercept_y;
+    p.intercept_x_mm = intercept_x;
+    p.intercept_y_mm = intercept_y;
+    configure_locked_intercept();
+    if (intercept_stable && p.plunge_keys == prior_plunge) break;
+  }
   return p;
 }
 
@@ -2209,13 +2317,30 @@ inline zc::AttackPlan zixx_plan_attack(int32_t tgt_x_mm, int32_t tgt_y_mm,
 inline ChoreoSample zixx_plan_sample(const zc::AttackPlan& p, int key) {
   if (p.preset_golden) return attack_choreo_sample(key);
   ChoreoSample out{0, 0, 0};
-  const int t0 = p.compress_keys + p.release_keys;        // launch key
-  const int t1 = t0 + p.coil_keys;                        // commit (apex)
-  const int t2 = t1 + p.unroll_keys;                      // spear locked
-  const int t3 = t2 + p.plunge_keys;                      // impact
+  const int tc = p.compress_keys;
+  const int th = tc + p.compress_hold_keys;
+  const int t0 = th + p.release_keys;                  // launch key
+  const int t1 = t0 + p.coil_keys;                     // commit (apex)
+  const int t2 = t1 + p.unroll_keys;                   // spear locked
+  const int t3 = t2 + p.plunge_keys;                   // impact
   if (key <= t0) {
-    // grounded: the local compress/release clips own the shape; the root
-    // waits (the preload rise lives in the local clips' own root lane)
+    // The same whole-body spring root used by the local pose: descend, hold,
+    // and release to zero before flight. There is no hidden runtime physics.
+    int32_t amount = 0;
+    if (key < tc) {
+      if (tc <= 1) {
+        amount = 1000;
+      } else {
+        const int64_t u = (static_cast<int64_t>(key) * 1000) / (tc - 1);
+        amount = static_cast<int32_t>(u * u * (3000 - 2 * u) / 1000000);
+      }
+    } else if (key < th) {
+      amount = 1000;
+    } else if (p.release_keys > 0) {
+      const int64_t u = (static_cast<int64_t>(key - th) * 1000) / p.release_keys;
+      amount = 1000 - static_cast<int32_t>(u * u * (3000 - 2 * u) / 1000000);
+    }
+    out.y_mm = spring_root_drop(amount);
     return out;
   }
   if (key <= t1) {
@@ -3774,10 +3899,10 @@ inline zc::Clip build_corpse(const zc::Clip& death) {
 // CONSTRUCTION -- and compile_creature now enforces it (ClipBank::seams).
 // Slots 10..17 of the 64 vocabulary.
 enum : uint16_t {
-  kSlotAtkCompress = 10,  // settle + compress + hold (keys 0..9)
-  kSlotAtkRelease = 11,   // preload releases, rolls to the coil (9..18)
-  kSlotAtkCoil = 12,      // the wheel, looping (18..19; spin is the ROOT's)
-  kSlotAtkUnroll = 13,    // coil -> rigid spear (40..47)
+  kSlotAtkCompress = 10,  // settle + real compression + hold (keys 0..17)
+  kSlotAtkRelease = 11,   // shared spring releases into the coil (17..29)
+  kSlotAtkCoil = 12,      // the wheel, looping (duplicate of clean key 29)
+  kSlotAtkUnroll = 13,    // coil -> rigid spear (52..60)
   kSlotAtkSpearFlex = 14, // NEW: elastic flex wave on the held spear
   kSlotAtkStick = 15,     // the planted spear, looping (62..63)
   kSlotAtkAirHit = 16,    // NEW: mid-air impact recoil, spear to spear
@@ -3793,6 +3918,17 @@ inline zc::Clip slice_clip(const zc::Clip& src, uint16_t slot, int k0, int k1) {
                 src.root.begin() + (static_cast<size_t>(k1) + 1) * 3);
   c.quats.assign(src.quats.begin() + static_cast<size_t>(k0) * kBoneCount,
                  src.quats.begin() + (static_cast<size_t>(k1) + 1) * kBoneCount);
+  return c;
+}
+
+inline zc::Clip duplicate_pose_clip(const zc::Clip& src, uint16_t slot,
+                                    int key) {
+  zc::Clip c = slice_clip(src, slot, key, key);
+  c.frame_count = 2;
+  c.root.resize(6);
+  for (int i = 0; i < 3; ++i) c.root[3 + i] = c.root[i];
+  c.quats.resize(static_cast<size_t>(2) * kBoneCount);
+  for (int b = 0; b < kBoneCount; ++b) c.quats[kBoneCount + b] = c.quats[b];
   return c;
 }
 
@@ -4706,9 +4842,83 @@ inline zc::Clip build_sweep() {
 // creature...). Hit a flying target dummy. One with 6 saltos, maybe you
 // get some ideas." The donor format has THREE attack slots -- these are
 // attack1/attack2, not extras (ANIMATION-VOCABULARY.md).
-constexpr int kSlotAtkDummy = 33;  // strike the grounded target dummy (air-hit outcome)
+constexpr int kSlotAtkDummy = 33;  // strike the grounded target dummy
 constexpr int kSlotAtkFly = 34;    // strike the FLYING target dummy
 constexpr int kSlotAtkSix = 35;    // six somersaults, the long ground dive
+constexpr int kSlotSlowTaunt = 44; // reserved for the slower neck-led taunt
+constexpr int kSlotJumpOne = 46;   // immediate spring jump, one salto
+constexpr int kSlotJumpMulti = 47; // same jump builder, three saltos
+constexpr int kSlotAtkNine = 48;   // nine-salto target attack / limit probe
+
+// Shared attack-outcome timing. Target attacks now ENTER, hold bit-constant,
+// extract fully, and only then recoil; the old "hold" moved during recoil and
+// could never prove stable embedding.
+constexpr int kAtkTargetHoldKeys = 14;
+constexpr int kAtkGroundHoldKeys = 8;
+constexpr int kAtkExtractKeys = 8;
+constexpr int kAtkRecoilKeys = 12;
+constexpr int kAtkOutcomeDropKeys = 16;
+constexpr int kAtkOutcomeSettleKeys = 10;
+// A visible full pull-back, authored by eye from the accepted 760 mm pass.
+// The earlier value crossed from 420 mm beyond the target centre to only
+// 340 mm before it, leaving the long watchdog volume still threaded on the
+// blade.  This longer stroke reads as an extraction and clears the actual
+// posed target before recoil rather than merely moving inside it.
+constexpr int32_t kAtkExtractionMm = 1200;
+constexpr int32_t kAtkDelayedRecoilMm = 260;
+constexpr int32_t kAtkLandingBiteMm = 18;
+// Per-clip committed 3D terrain/contact declarations.  These are comparison
+// envelopes around visually accepted authored impacts, never generation data.
+constexpr int32_t kAtkSixGroundStrikeDepthMm = 450;
+constexpr int32_t kAtkNineTargetContactDepthMm = 110;
+
+// One exclusive-end phase table owns baking, tracking and diagnostics.  The
+// impact value is the authored key that first enters the target/ground; hold
+// spans [impact, extract_begin), extraction spans
+// [extract_begin, recoil_begin), and recoil cannot begin before that range is
+// complete.
+struct AttackVariantPhases {
+  int compress_end = 0;
+  int hold_end = 0;
+  int release_end = 0;
+  int coil_end = 0;
+  int unroll_end = 0;
+  int impact = 0;
+  int extract_begin = 0;
+  int recoil_begin = 0;
+  int recover_begin = 0;
+  int frame_count = 0;
+  int last_key = 0;
+};
+
+inline AttackVariantPhases zixx_attack_variant_phases(
+    const zc::AttackPlan& p, bool target_hit) {
+  AttackVariantPhases v;
+  v.compress_end = p.compress_keys;
+  v.hold_end = v.compress_end + p.compress_hold_keys;
+  v.release_end = v.hold_end + p.release_keys;
+  v.coil_end = v.release_end + p.coil_keys;
+  v.unroll_end = v.coil_end + p.unroll_keys;
+  v.impact = v.unroll_end + p.plunge_keys;
+  v.extract_begin = v.impact +
+                    (target_hit ? kAtkTargetHoldKeys : kAtkGroundHoldKeys);
+  v.recoil_begin = v.extract_begin + kAtkExtractKeys;
+  v.recover_begin = v.recoil_begin + (target_hit ? kAtkRecoilKeys : 0);
+  v.frame_count = v.recover_begin + kAtkOutcomeDropKeys +
+                  kAtkOutcomeSettleKeys + 1;
+  v.last_key = v.frame_count - 1;
+  return v;
+}
+
+inline bool zixx_variant_air_hit(uint16_t slot) {
+  return slot == kSlotAtkDummy || slot == kSlotAtkFly ||
+         slot == kSlotAtkNine;
+}
+
+inline int zixx_attack_variant_key_count(const zc::AttackPlan& p,
+                                         bool target_hit) {
+  return zixx_attack_variant_phases(p, target_hit).frame_count;
+}
 
 // integer atan2 in 1/1000 turns (offline bake only; deterministic scan --
 // 4096 candidates, argmax dot, ~0.09 deg steps)
@@ -4725,6 +4935,19 @@ inline int32_t atan2_mturns(int32_t y, int32_t x) {
   return (best_phi * 1000) / 65536;  // 1/1000 turns
 }
 
+// Add only the final spear-alignment fraction after preserving the requested
+// whole-salto count.  Shared by the baker and the trajectory validator so a
+// diagnostic can never silently count a nearby, differently oriented plan.
+inline zc::AttackPlan zixx_orient_variant_spin(zc::AttackPlan p) {
+  const int32_t phi = atan2_mturns(p.intercept_y_mm - p.apex_mm,
+                                   p.intercept_x_mm - p.apex_fwd_mm);
+  int32_t frac = phi - 500;
+  while (frac < 0) frac += 1000;
+  const int32_t turns = p.spin_mturns / 1000;
+  p.spin_mturns = turns * 1000 + frac;
+  return p;
+}
+
 // The variant baker: local phase poses (the C2 slices' own source keys)
 // re-timed to the PLAN's phases, the plan's trajectory on the root, the
 // spin on bone 0 with the golden's own coil re-pivot law, and an authored
@@ -4739,22 +4962,22 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
   // spear_d fields hold the ROOT's offset path since the tail-tip lock
   // (tip lead + kBodyY carry) -- orienting on THOSE pitched the dummy
   // variants ~30 deg too steep (striketip probe, this run). The local
-  // spear pose at theta 0 points -X, so theta_frac = atan2(aim) - half
-  // a turn.
-  const int32_t phi = atan2_mturns(p.intercept_y_mm - p.apex_mm,
-                                   p.intercept_x_mm - p.apex_fwd_mm);
-  int32_t frac = phi - 500;
-  while (frac < 0) frac += 1000;
+  // spear pose at theta 0 points -X; preserve the requested whole turns and
+  // add the shared final aim-line alignment fraction.
+  p = zixx_orient_variant_spin(p);
   const int32_t turns = p.spin_mturns / 1000;
-  p.spin_mturns = turns * 1000 + frac;
-  const int t0 = p.compress_keys + p.release_keys;
-  const int t1 = t0 + p.coil_keys;
-  const int t2 = t1 + p.unroll_keys;
-  const int t3 = t2 + p.plunge_keys;
-  const int kHold = air_hit_outcome ? 12 : 8;           // recoil / stick quiver
-  const int kDrop = air_hit_outcome ? 14 : 14;          // fall out of the sky / recover
-  const int kSettle = 6;
-  const int total = t3 + kHold + kDrop + kSettle;
+  const AttackVariantPhases phase =
+      zixx_attack_variant_phases(p, air_hit_outcome);
+  const int tc = phase.compress_end;
+  const int th = phase.hold_end;
+  const int t0 = phase.release_end;
+  const int t1 = phase.coil_end;
+  const int t2 = phase.unroll_end;
+  const int t3 = phase.impact;
+  const int extract0 = phase.extract_begin;
+  const int recoil0 = phase.recoil_begin;
+  const int recover0 = phase.recover_begin;
+  const int total = phase.frame_count;
   zc::Clip c;
   c.slot_id = slot;
   c.interpolate = true;
@@ -4763,6 +4986,15 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
   c.root.assign(static_cast<size_t>(total) * 3, 0);
   c.quats.assign(static_cast<size_t>(total) * kBoneCount, zc::quat16_identity());
   const ChoreoSample end_s = zixx_plan_sample(p, t3);
+  const int64_t aim_dx = p.intercept_x_mm - p.apex_fwd_mm;
+  const int64_t aim_dy = p.intercept_y_mm - p.apex_mm;
+  int32_t aim_len = static_cast<int32_t>(zref::isqrt_u64(
+      static_cast<uint64_t>(aim_dx * aim_dx + aim_dy * aim_dy)));
+  if (aim_len < 1) aim_len = 1;
+  const int32_t extract_x = end_s.x_mm -
+      static_cast<int32_t>(aim_dx * kAtkExtractionMm / aim_len);
+  const int32_t extract_y = end_s.y_mm -
+      static_cast<int32_t>(aim_dy * kAtkExtractionMm / aim_len);
   // rest rig for the settle blend
   Rig rest;
   rest_rig(rest);
@@ -4773,27 +5005,42 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
     int32_t curl = 0;  // how coiled the body is (drives the wheel re-pivot)
     if (k < t3) {
       int lk;
-      if (k < 10) { lk = k; curl = curve(kAtkCurl, kAtkCurlN, k); }
-      else if (k < t0) { lk = 9 + (k - 10); curl = curve(kAtkCurl, kAtkCurlN, lk); }
-      else if (k < t1) { lk = 19; curl = 1000; }
-      else if (k < t2) { lk = 40 + ((k - t1) * 8) / (p.unroll_keys > 0 ? p.unroll_keys : 1); curl = 1000 - ((k - t1) * 1000) / (p.unroll_keys > 0 ? p.unroll_keys : 1); }
-      else { lk = 62; curl = 0; }
+      if (k < tc) {
+        lk = tc > 1 ? (k * kSaltoCompressEndKey) / (tc - 1)
+                    : kSaltoCompressEndKey;
+      } else if (k < th) {
+        lk = kSaltoCompressHoldEndKey;
+      } else if (k < t0) {
+        lk = kSaltoCompressHoldEndKey +
+             ((k - th) * (kSaltoCoilPoseKey - kSaltoCompressHoldEndKey)) /
+                 (p.release_keys > 0 ? p.release_keys : 1);
+      } else if (k < t1) {
+        lk = kSaltoCoilPoseKey;
+      } else if (k < t2) {
+        lk = kSaltoUnrollStartKey +
+             ((k - t1) * (kSaltoUnrollEndKey - kSaltoUnrollStartKey)) /
+                 (p.unroll_keys > 0 ? p.unroll_keys : 1);
+      } else {
+        lk = kAtkImpactKey;
+      }
+      curl = curve(kAtkCurl, kAtkCurlN, lk);
       for (int b = 0; b < kBoneCount; ++b)
         g.q[b] = local.quats[static_cast<size_t>(lk) * kBoneCount + b];
-    } else if (k < t3 + kHold) {
-      if (air_hit_outcome) {
-        const int rk = k - t3;
-        const int rmax = static_cast<int>(recoil.frame_count) - 1;
-        const int use = rk > rmax ? rmax : rk;
-        for (int b = 0; b < kBoneCount; ++b)
-          g.q[b] = recoil.quats[static_cast<size_t>(use) * kBoneCount + b];
-      } else {
-        for (int b = 0; b < kBoneCount; ++b)
-          g.q[b] = local.quats[static_cast<size_t>(62) * kBoneCount + b];
-      }
+    } else if (k < recoil0) {
+      // Impact hold and extraction are the exact spear pose. No root or bone
+      // changes are permitted during the embedded hold.
+      for (int b = 0; b < kBoneCount; ++b)
+        g.q[b] = local.quats[static_cast<size_t>(kAtkImpactKey) * kBoneCount + b];
+    } else if (k < recover0 && air_hit_outcome) {
+      const int rk = k - recoil0;
+      const int use = rk < static_cast<int>(recoil.frame_count)
+                          ? rk
+                          : static_cast<int>(recoil.frame_count) - 1;
+      for (int b = 0; b < kBoneCount; ++b)
+        g.q[b] = recoil.quats[static_cast<size_t>(use) * kBoneCount + b];
     } else {
-      // the drop / recover and settle: nlerp from the phase's last pose
-      // toward the rest S (slow, loose -- a body reclaiming its shape)
+      // Drop and settle: reclaim the signature S only after extraction and,
+      // for target hits, the delayed recoil.
       Rig from;
       from.reset();
       if (air_hit_outcome) {
@@ -4802,10 +5049,11 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
           from.q[b] = recoil.quats[static_cast<size_t>(rmax) * kBoneCount + b];
       } else {
         for (int b = 0; b < kBoneCount; ++b)
-          from.q[b] = local.quats[static_cast<size_t>(62) * kBoneCount + b];
+          from.q[b] = local.quats[static_cast<size_t>(kAtkImpactKey) * kBoneCount + b];
       }
-      const int j = k - t3 - kHold;
-      const int32_t t = ss1000(j, 0, kDrop + kSettle - 2);
+      const int j = k - recover0;
+      const int32_t t = ss1000(j, 0,
+                               kAtkOutcomeDropKeys + kAtkOutcomeSettleKeys - 2);
       for (int b = 0; b < kBoneCount; ++b)
         g.q[b] = zc::quat16_nlerp(from.q[b], rest.q[b], t, 1000);
     }
@@ -4813,33 +5061,50 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
     ChoreoSample sm;
     if (k < t3) {
       sm = zixx_plan_sample(p, k);
-    } else if (k < t3 + kHold) {
+    } else if (k < extract0) {
+      // Entered target / planted ground: bit-constant root and spear pose.
       sm = end_s;
-      if (air_hit_outcome) {
-        // the recoil kick: shoved back along the spear line, briefly up
-        const int rk = k - t3;
-        const int32_t e = ss1000(rk, 0, 3) - ss1000(rk, 5, kHold - 1) / 2;
-        sm.x_mm -= (p.spear_dx_mm >= 0 ? 1 : -1) * (e * 260) / 1000;
-        sm.y_mm += (e * 140) / 1000;
-      }
+    } else if (k < recoil0) {
+      // Pull completely back along the committed line before any recoil.
+      const int j = k - extract0;
+      const int32_t e = ss1000(j, 0, kAtkExtractKeys - 1);
+      sm = end_s;
+      sm.x_mm += ((extract_x - end_s.x_mm) * e) / 1000;
+      sm.y_mm += ((extract_y - end_s.y_mm) * e) / 1000;
+    } else if (k < recover0) {
+      // Delayed target recoil, already clear: a small further kick opposite
+      // the impact line, with no chance to jitter inside the model.
+      const int j = k - recoil0;
+      const int32_t e = ss1000(j, 0, 3) - ss1000(j, 5, kAtkRecoilKeys - 1);
+      sm = end_s;
+      sm.x_mm = extract_x - static_cast<int32_t>(
+          (aim_dx * kAtkDelayedRecoilMm * e) / (static_cast<int64_t>(aim_len) * 1000));
+      sm.y_mm = extract_y - static_cast<int32_t>(
+          (aim_dy * kAtkDelayedRecoilMm * e) / (static_cast<int64_t>(aim_len) * 1000));
     } else {
-      // fall out of the sky (t^2) / recover to the ground beside the strike
-      const int j = k - t3 - kHold;
-      const int32_t tj = (j >= kDrop ? 1000 : (j * 1000) / kDrop);
+      // Fall/recover to the ground beside the strike after the weapon is clear.
+      const int j = k - recover0;
+      const int32_t tj = j >= kAtkOutcomeDropKeys
+                             ? 1000
+                             : (j * 1000) / kAtkOutcomeDropKeys;
       const int32_t tt = (tj * tj) / 1000;
-      const int32_t gx = end_s.x_mm - (air_hit_outcome ? 420 : -380);
-      sm.x_mm = end_s.x_mm + ((gx - end_s.x_mm) * tj) / 1000;
-      sm.y_mm = end_s.y_mm - (static_cast<int32_t>(
-                    (static_cast<int64_t>(end_s.y_mm) * tt) / 1000));
-      if (j >= kDrop) sm.y_mm = 0;
-      // the landing bite, declared: two keys, -18 mm
-      if (j == kDrop || j == kDrop + 1) sm.y_mm = -18;
-      // theta unwinds to the next upright turn -- slow, with the body
+      const int32_t gx = extract_x - (air_hit_outcome ? 420 : -380);
+      sm.x_mm = extract_x + ((gx - extract_x) * tj) / 1000;
+      sm.y_mm = extract_y - static_cast<int32_t>(
+          (static_cast<int64_t>(extract_y) * tt) / 1000);
+      if (j >= kAtkOutcomeDropKeys) sm.y_mm = 0;
+      if (j == kAtkOutcomeDropKeys || j == kAtkOutcomeDropKeys + 1)
+        sm.y_mm = -kAtkLandingBiteMm;
+      // Complete only the alignment fraction after the count's whole turns;
+      // every count therefore reaches the same upright landing phase.
       const int32_t th_end = (turns + 1) * 1000;
       sm.theta = static_cast<int32_t>(
           ((static_cast<int64_t>(p.spin_mturns) +
-            (static_cast<int64_t>(th_end - p.spin_mturns) * ss1000(j, 0, kDrop + 2)) / 1000) *
-           65536) / 1000);
+            (static_cast<int64_t>(th_end - p.spin_mturns) *
+             ss1000(j, 0, kAtkOutcomeDropKeys + 2)) /
+                1000) *
+           65536) /
+          1000);
     }
     const uint16_t th16 = static_cast<uint16_t>(sm.theta & 0xFFFF);
     const zc::quat16 spin_q = quat_z(sm.theta);
@@ -4867,13 +5132,19 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
 inline zc::AttackPlan zixx_variant_plan(uint16_t slot) {
   if (slot == kSlotAtkDummy) return zixx_plan_attack(4600, 350, 0, 0);
   if (slot == kSlotAtkFly) return zixx_plan_attack(3800, 3200, 0, 0);
+  if (slot == kSlotAtkNine) {
+    zc::AttackPlan p = zixx_plan_attack(8500, 350, 0, 0);
+    p.spin_mturns = 9000;
+    p.apex_mm = kAtkNineApexLift;  // exactly 2x slot 35's 12 m apex
+    p.coil_keys = 72;              // spend nine coherent turns in one wheel
+    zixx_plan_lock_spear(p, kAtkNineApexLift);
+    return p;
+  }
   zc::AttackPlan p = zixx_plan_attack(5200, 0, 0, 0);
-  p.spin_mturns = 6000;  // the ask: SIX somersaults
-  p.apex_mm = kAtkApexLift;          // the full showcase height earns them
-  p.coil_keys = 44;                  // the long flight to spend them in
-  zixx_plan_lock_spear(p);  // the overrides moved the commit point: the
-                            // spear MUST re-lock or it still aims at the
-                            // planner's 8 m apex (probe: tip 4.6 m off)
+  p.spin_mturns = 6000;  // the preserved ask: SIX somersaults
+  p.apex_mm = kAtkApexLift;
+  p.coil_keys = 44;
+  zixx_plan_lock_spear(p);
   return p;
 }
 
@@ -4886,45 +5157,259 @@ inline zc::AttackPlan zixx_variant_plan(uint16_t slot) {
 // re-pivot wobble"): follow the PLAN's smooth trajectory instead -- where
 // the animal is GOING, never how it is oriented. Same phase math as the
 // baker, minus the wheel orbit, minus the recoil kick.
-inline void zixx_variant_track(uint16_t slot, bool air_hit, int key,
+inline void zixx_variant_track(uint16_t slot, int key,
                                int32_t& x_mm, int32_t& y_mm) {
   const zc::AttackPlan p = zixx_variant_plan(slot);
-  const int t0 = p.compress_keys + p.release_keys;
-  const int t1 = t0 + p.coil_keys;
-  const int t2 = t1 + p.unroll_keys;
-  const int t3 = t2 + p.plunge_keys;
-  const int kHold = air_hit ? 12 : 8;
-  const int kDrop = 14;
+  const bool target_hit = zixx_variant_air_hit(slot);
+  const AttackVariantPhases phase =
+      zixx_attack_variant_phases(p, target_hit);
+  const int t3 = phase.impact;
+  const int extract0 = phase.extract_begin;
+  const int recoil0 = phase.recoil_begin;
+  const int recover0 = phase.recover_begin;
   const ChoreoSample end_s = zixx_plan_sample(p, t3);
+  const int64_t aim_dx = p.intercept_x_mm - p.apex_fwd_mm;
+  const int64_t aim_dy = p.intercept_y_mm - p.apex_mm;
+  int32_t aim_len = static_cast<int32_t>(zref::isqrt_u64(
+      static_cast<uint64_t>(aim_dx * aim_dx + aim_dy * aim_dy)));
+  if (aim_len < 1) aim_len = 1;
+  const int32_t ex = end_s.x_mm -
+      static_cast<int32_t>(aim_dx * kAtkExtractionMm / aim_len);
+  const int32_t ey = end_s.y_mm -
+      static_cast<int32_t>(aim_dy * kAtkExtractionMm / aim_len);
   if (key <= t3) {
     const ChoreoSample sm = zixx_plan_sample(p, key);
     x_mm = sm.x_mm;
     y_mm = sm.y_mm;
-    return;
-  }
-  if (key < t3 + kHold) {
+  } else if (key < extract0) {
     x_mm = end_s.x_mm;
     y_mm = end_s.y_mm;
-    return;
+  } else if (key < recoil0) {
+    const int32_t e = ss1000(key - extract0, 0, kAtkExtractKeys - 1);
+    x_mm = end_s.x_mm + ((ex - end_s.x_mm) * e) / 1000;
+    y_mm = end_s.y_mm + ((ey - end_s.y_mm) * e) / 1000;
+  } else if (key < recover0) {
+    const int j = key - recoil0;
+    const int32_t e = ss1000(j, 0, 3) - ss1000(j, 5, kAtkRecoilKeys - 1);
+    x_mm = ex - static_cast<int32_t>(
+        (aim_dx * kAtkDelayedRecoilMm * e) / (static_cast<int64_t>(aim_len) * 1000));
+    y_mm = ey - static_cast<int32_t>(
+        (aim_dy * kAtkDelayedRecoilMm * e) / (static_cast<int64_t>(aim_len) * 1000));
+  } else {
+    const int j = key - recover0;
+    const int32_t tj = j >= kAtkOutcomeDropKeys
+                           ? 1000
+                           : (j * 1000) / kAtkOutcomeDropKeys;
+    const int32_t tt = (tj * tj) / 1000;
+    const int32_t gx = ex - (target_hit ? 420 : -380);
+    x_mm = ex + ((gx - ex) * tj) / 1000;
+    y_mm = ey - static_cast<int32_t>(
+        (static_cast<int64_t>(ey) * tt) / 1000);
+    if (j >= kAtkOutcomeDropKeys) y_mm = 0;
   }
-  const int j = key - t3 - kHold;
-  const int32_t tj = (j >= kDrop ? 1000 : (j * 1000) / kDrop);
-  const int32_t tt = (tj * tj) / 1000;
-  const int32_t gx = end_s.x_mm - (air_hit ? 420 : -380);
-  x_mm = end_s.x_mm + ((gx - end_s.x_mm) * tj) / 1000;
-  y_mm = end_s.y_mm -
-         static_cast<int32_t>((static_cast<int64_t>(end_s.y_mm) * tt) / 1000);
-  if (j >= kDrop) y_mm = 0;
 }
 
 inline zc::Clip build_attack_dummy() {
-  return build_attack_variant(kSlotAtkDummy, zixx_variant_plan(kSlotAtkDummy), true);
+  return build_attack_variant(kSlotAtkDummy, zixx_variant_plan(kSlotAtkDummy),
+                              zixx_variant_air_hit(kSlotAtkDummy));
 }
 inline zc::Clip build_attack_fly() {
-  return build_attack_variant(kSlotAtkFly, zixx_variant_plan(kSlotAtkFly), true);
+  return build_attack_variant(kSlotAtkFly, zixx_variant_plan(kSlotAtkFly),
+                              zixx_variant_air_hit(kSlotAtkFly));
 }
 inline zc::Clip build_attack_six() {
-  return build_attack_variant(kSlotAtkSix, zixx_variant_plan(kSlotAtkSix), false);
+  return build_attack_variant(kSlotAtkSix, zixx_variant_plan(kSlotAtkSix),
+                              zixx_variant_air_hit(kSlotAtkSix));
+}
+inline zc::Clip build_attack_nine() {
+  return build_attack_variant(kSlotAtkNine, zixx_variant_plan(kSlotAtkNine),
+                              zixx_variant_air_hit(kSlotAtkNine));
+}
+
+// PROGRAMMABLE IMMEDIATE JUMP FAMILY (direction #9). One builder owns the
+// spring, wheel, whole-turn count, exact ground return and signature-S settle.
+// It differs from AttackPlan only in outcome: this is a ground stunt, so there
+// is no unroll/spear/target branch.
+struct JumpPlan {
+  uint16_t slot = 0;
+  uint16_t compress_keys = 5;
+  uint16_t compress_hold_keys = 2;
+  // Six authored intervals keep the launch immediate (0.20 s) while letting
+  // the complete animal visibly pay the flat spring into its wheel.  Four
+  // intervals snapped the rear half through a metre-scale station step.
+  uint16_t release_keys = 6;
+  uint16_t flight_keys = 38;
+  uint16_t landing_keys = 6;
+  uint16_t settle_keys = 14;
+  int32_t apex_mm = 4800;
+  int32_t salto_count = 1;
+};
+constexpr int32_t kJumpLandingBiteMm = 10;
+constexpr int kJumpLandingGatherKeys = 5;
+// Every native 60 Hz frame was reviewed after the six-key release was authored.
+// The fastest accepted sample is the intentional landing slam (1121 mm on the
+// three-salto take), not a launch reset; 1150 keeps a narrow regression guard.
+constexpr int32_t kJumpMaxStationStepMm = 1150;
+
+inline JumpPlan zixx_jump_plan(uint16_t slot, int32_t count) {
+  JumpPlan p;
+  p.slot = slot;
+  p.salto_count = count < 1 ? 1 : (count > 9 ? 9 : count);
+  return p;
+}
+
+struct JumpPhases {
+  int compress_end = 0;
+  int hold_end = 0;
+  int launch_key = 0;
+  int landing_key = 0;
+  int landing_end = 0;
+  int frame_count = 0;
+  int last_key = 0;
+};
+
+inline JumpPhases zixx_jump_phases(const JumpPlan& p) {
+  JumpPhases v;
+  v.compress_end = p.compress_keys;
+  v.hold_end = v.compress_end + p.compress_hold_keys;
+  v.launch_key = v.hold_end + p.release_keys;
+  v.landing_key = v.launch_key + p.flight_keys;
+  v.landing_end = v.landing_key + p.landing_keys;
+  v.frame_count = v.landing_end + p.settle_keys + 1;
+  v.last_key = v.frame_count - 1;
+  return v;
+}
+
+inline int zixx_jump_key_count(const JumpPlan& p) {
+  return zixx_jump_phases(p).frame_count;
+}
+
+struct JumpMotionSample {
+  int32_t spring = 0;
+  int32_t curl = 0;
+  int32_t theta = 0;
+  int32_t lift = 0;
+};
+
+// One deterministic motion sample serves the baker, camera and limit probe.
+// Keeping the count/phase law here prevents a camera-only or diagnostic-only
+// copy from hiding a rotation-wrap or landing drift in the actual clip.
+inline JumpMotionSample zixx_jump_motion_sample(const JumpPlan& p, int f) {
+  const JumpPhases phase = zixx_jump_phases(p);
+  const int tc = phase.compress_end;
+  const int th = phase.hold_end;
+  const int launch = phase.launch_key;
+  const int land = phase.landing_key;
+  JumpMotionSample m;
+  if (f < tc) {
+    m.spring = tc > 1 ? ss1000(f, 0, tc - 1) : 1000;
+  } else if (f < th) {
+    m.spring = 1000;
+  } else if (f < launch) {
+    const int32_t u = ss1000(f, th, launch);
+    m.spring = 1000 - u;
+    m.curl = u;
+  } else if (f <= land) {
+    const int j = f - launch;
+    const int32_t t = p.flight_keys > 0
+                          ? (j * 1000) / p.flight_keys
+                          : 1000;
+    const int32_t sm = (t * t / 1000) * (3000 - 2 * t) / 1000;
+    m.theta = static_cast<int32_t>(
+        (static_cast<int64_t>(p.salto_count) * 65536 * sm) / 1000);
+    m.lift = static_cast<int32_t>(
+        (static_cast<int64_t>(4) * p.apex_mm * t * (1000 - t)) /
+        1000000);
+    // Release has already paid the compressed S continuously into the complete
+    // wheel by the launch key.  Keep that wheel through flight, then gather the
+    // last few keys into the landing spring.  The earlier version restarted
+    // curl at zero on the launch key, producing a real 2.67 m one-tick shape
+    // discontinuity between the final release key and takeoff.
+    const int gather_in = p.flight_keys > 0
+                              ? (kJumpLandingGatherKeys * 1000) / p.flight_keys
+                              : 0;
+    const int gather_out = 1000 - gather_in;
+    if (t > gather_out && gather_in > 0) {
+      m.spring = ((t - gather_out) * 1000) / gather_in;
+      if (m.spring > 1000) m.spring = 1000;
+      m.curl = 1000 - m.spring;
+    } else {
+      m.curl = 1000;
+    }
+  } else {
+    // Absorb in the loaded spring, then recover slowly and hold exact rest.
+    const int j = f - land;
+    m.spring = 1000 - ss1000(j, 1, p.landing_keys + p.settle_keys - 4);
+    if (m.spring < 0) m.spring = 0;
+    m.theta = p.salto_count * 65536;  // whole counts: identity at landing
+  }
+  return m;
+}
+
+inline void zixx_jump_track(const JumpPlan& p, int key,
+                            int32_t& x_mm, int32_t& y_mm) {
+  if (key < 0) key = 0;
+  const int last = zixx_jump_phases(p).last_key;
+  if (key > last) key = last;
+  const JumpMotionSample m = zixx_jump_motion_sample(p, key);
+  x_mm = 0;
+  y_mm = m.lift + spring_root_drop(m.spring);
+}
+
+inline zc::Clip build_jump(const JumpPlan& p) {
+  const JumpPhases phase = zixx_jump_phases(p);
+  const int land = phase.landing_key;
+  const int total = phase.frame_count;
+  zc::Clip c;
+  c.slot_id = p.slot;
+  c.interpolate = true;
+  c.hold_last = true;
+  c.frame_count = static_cast<uint16_t>(total);
+  c.root.assign(static_cast<size_t>(total) * 3, 0);
+  c.quats.assign(static_cast<size_t>(total) * kBoneCount,
+                 zc::quat16_identity());
+  const int32_t coil_pitch = -(65536 / (kSpineBones - 2));
+  for (int f = 0; f < total; ++f) {
+    const JumpMotionSample motion = zixx_jump_motion_sample(p, f);
+    const int32_t spring = motion.spring;
+    const int32_t curl = motion.curl;
+    const int32_t theta = motion.theta;
+    const int32_t lift = motion.lift;
+
+    Rig g;
+    g.reset();
+    const int32_t drop = apply_spring_stance(g, 1000 - curl, spring);
+    for (int k = 1; k < kSpineBones - 1; ++k)
+      g.q[kBSpine0 + k] = quat_mul(
+          g.q[kBSpine0 + k], quat_z((coil_pitch * curl) / 1000));
+    g.q[kBHead] = quat_z(spring_head_attitude(1000 - curl, spring) +
+                          (coil_pitch * curl) / 1000);
+    g.tail_rest(kBladeSplay + (spring * kSpringBladeFlare) / 1000,
+                (kBladeRise * (1000 - curl)) / 1000,
+                (kBladeUpBias * (1000 - curl)) / 1000);
+    g.q[kBSpine0] = quat_mul(quat_z(theta), g.q[kBSpine0]);
+    const uint16_t th16 = static_cast<uint16_t>(theta & 0xFFFF);
+    const int32_t sth = zref::fx_sin(zref::angle16{th16}).raw;
+    const int32_t cth = zref::fx_cos(zref::angle16{th16}).raw;
+    const int32_t piv_x = static_cast<int32_t>(
+        (static_cast<int64_t>(kCoilR) * sth) >> 16);
+    const int32_t piv_y = kCoilR - static_cast<int32_t>(
+        (static_cast<int64_t>(kCoilR) * cth) >> 16);
+    g.write(c, f);
+    c.root[f * 3 + 0] = fxm((piv_x * curl) / 1000);
+    int32_t y = lift + drop + (piv_y * curl) / 1000;
+    if (f == land || f == land + 1) y -= kJumpLandingBiteMm;
+    c.root[f * 3 + 1] = fxm(y);
+  }
+  c.events = {{static_cast<uint16_t>(land), zc::kEvFoot, 4}};
+  return c;
+}
+
+inline zc::Clip build_jump_one() {
+  return build_jump(zixx_jump_plan(kSlotJumpOne, 1));
+}
+inline zc::Clip build_jump_multi() {
+  return build_jump(zixx_jump_plan(kSlotJumpMulti, 3));
 }
 
 // ------------------------------------------------------------ the build ----
@@ -5193,30 +5678,27 @@ inline const zc::CreatureType& type() {
     // that breaks a seam fails the whole creature compile.
     {
       const zc::Clip atk_local = build_attack(true);
-      bank.clips.push_back(slice_clip(atk_local, kSlotAtkCompress, 0, 9));
-      // release runs one key past the curl's arrival: integer curve
-      // truncation leaves auth = 1 (not 0) at key 18 exactly, so the clean
-      // coil keys are 19..20 (the compiler's seam check caught it)
-      bank.clips.push_back(slice_clip(atk_local, kSlotAtkRelease, 9, 19));
-      bank.clips.push_back(slice_clip(atk_local, kSlotAtkCoil, 19, 20));
-      bank.clips.push_back(slice_clip(atk_local, kSlotAtkUnroll, 40, 48));  // 48: curl truncation (=1 at 47)
+      bank.clips.push_back(slice_clip(atk_local, kSlotAtkCompress, 0, 17));
+      bank.clips.push_back(slice_clip(atk_local, kSlotAtkRelease, 17, 29));
+      bank.clips.push_back(duplicate_pose_clip(atk_local, kSlotAtkCoil, 29));
+      bank.clips.push_back(slice_clip(atk_local, kSlotAtkUnroll, 52, 60));
       bank.clips.push_back(build_spear_flex());
-      bank.clips.push_back(slice_clip(atk_local, kSlotAtkStick, 62, 63));
+      bank.clips.push_back(slice_clip(atk_local, kSlotAtkStick, 74, 75));
       bank.clips.push_back(build_air_hit());
-      bank.clips.push_back(slice_clip(atk_local, kSlotAtkRecover, 212, 225));
+      bank.clips.push_back(slice_clip(atk_local, kSlotAtkRecover, 224, 239));
       bank.seams = {
-          {kSlotAtkCompress, 9, kSlotAtkRelease, 0},
-          {kSlotAtkRelease, 10, kSlotAtkCoil, 0},
-          {kSlotAtkCoil, 0, kSlotAtkCoil, 1},          // the hold loops
+          {kSlotAtkCompress, 17, kSlotAtkRelease, 0},
+          {kSlotAtkRelease, 12, kSlotAtkCoil, 0},
+          {kSlotAtkCoil, 0, kSlotAtkCoil, 1},
           {kSlotAtkCoil, 1, kSlotAtkUnroll, 0},
-          {kSlotAtkUnroll, 8, kSlotAtkSpearFlex, 0},   // unroll ends straight
-          {kSlotAtkSpearFlex, 0, kSlotAtkSpearFlex, 9},// flex returns straight
+          {kSlotAtkUnroll, 8, kSlotAtkSpearFlex, 0},
+          {kSlotAtkSpearFlex, 0, kSlotAtkSpearFlex, 9},
           {kSlotAtkSpearFlex, 0, kSlotAtkStick, 0},
-          {kSlotAtkStick, 0, kSlotAtkStick, 1},        // the stick loops
+          {kSlotAtkStick, 0, kSlotAtkStick, 1},
           {kSlotAtkStick, 1, kSlotAtkAirHit, 0},
-          {kSlotAtkAirHit, 0, kSlotAtkAirHit, 11},     // the recoil rings out
+          {kSlotAtkAirHit, 0, kSlotAtkAirHit, 11},
           {kSlotAtkAirHit, 11, kSlotAtkRecover, 0},
-          {kSlotAtkRecover, 13, kSlotAtkCompress, 0},  // ...back to the S
+          {kSlotAtkRecover, 15, kSlotAtkCompress, 0},
       };
     }
     // run 0326: the vocabulary close-out (see ANIMATION-VOCABULARY.md)
@@ -5242,6 +5724,9 @@ inline const zc::CreatureType& type() {
     bank.clips.push_back(build_attack_dummy());
     bank.clips.push_back(build_attack_fly());
     bank.clips.push_back(build_attack_six());
+    bank.clips.push_back(build_jump_one());
+    bank.clips.push_back(build_jump_multi());
+    bank.clips.push_back(build_attack_nine());
     // RUN 0757: the vocabulary close-out (see the section above)
     bank.clips.push_back(build_stance2());
     bank.clips.push_back(build_tumble());

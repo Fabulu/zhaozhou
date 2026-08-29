@@ -1068,6 +1068,10 @@ struct SceneSubject {
   // never part of the shipped creature or its site card.
   bool dummy = false;
   int32_t dummy_x_mm = 0, dummy_y_mm = 0;
+  // Canonical one-shot evidence starts on authored key 0, includes each real
+  // midpoint once, and ends on the final authored key: 2*(keys-1)+1 samples.
+  // Legacy looping/pinned subjects keep their historical pre-advance cadence.
+  bool canonical_creature_timeline = false;
   // --check golden: CRC-32C over all frame RGB bytes in sequence (0 = none).
   // Moves whenever the renderer, the field programs or the authoring here
   // legitimately change — update it in the same commit and say so.
@@ -1634,6 +1638,353 @@ const zc::CreatureType& winged_dummy_type() {
   return t;
 }
 
+// One descriptor is the source of truth for both the rendered prop and the
+// committed blade-vs-victim triangle gate.  It intentionally names an actual
+// creature mesh and idle clip rather than reducing the victim to a sphere.
+struct ZixxTargetDescriptor {
+  const zc::CreatureType* type = nullptr;
+  uint16_t clip_slot = 1;
+  zref::angle16 facing{uint16_t{0x8000}};
+  int32_t x_mm = 0;
+  int32_t y_mm = 0;
+};
+
+ZixxTargetDescriptor zixx_target_descriptor(uint16_t attack_slot) {
+  constexpr int32_t kTargetTorsoCentreMm = 520;
+  const zc::AttackPlan p = zixx::zixx_variant_plan(attack_slot);
+  ZixxTargetDescriptor d;
+  d.type = attack_slot == zixx::kSlotAtkFly ? &winged_dummy_type()
+                                             : &watchdog_type();
+  d.x_mm = p.intercept_x_mm;
+  // Ground watchdogs stand on the shared terrain; their attack intercept is a
+  // point within the lower torso, not an instruction to lift the whole animal.
+  // The flying victim is instead placed so its authored 520 mm torso centre is
+  // exactly at the planned aerial intercept.  The old descriptor added the
+  // intercept as a root height in both cases, making grounded dogs hover and
+  // steering the blade underneath both actual posed meshes.
+  d.y_mm = attack_slot == zixx::kSlotAtkFly
+               ? p.intercept_y_mm - kTargetTorsoCentreMm
+               : 0;
+  return d;
+}
+
+int zixx_target_freeze_tick(uint16_t attack_slot) {
+  const zc::AttackPlan p = zixx::zixx_variant_plan(attack_slot);
+  return 2 * zixx::zixx_attack_variant_phases(p, true).impact;
+}
+
+const zc::Clip* reel_find_clip(const zc::CreatureType& type, uint16_t slot) {
+  for (const zc::Clip& c : type.bank.clips)
+    if (c.slot_id == slot) return &c;
+  return nullptr;
+}
+
+struct ProbeVec3 {
+  int64_t x = 0, y = 0, z = 0;  // integer millimetres
+};
+
+ProbeVec3 probe_cross(const ProbeVec3& a, const ProbeVec3& b) {
+  return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z,
+          a.x * b.y - a.y * b.x};
+}
+ProbeVec3 probe_sub(const ProbeVec3& a, const ProbeVec3& b) {
+  return {a.x - b.x, a.y - b.y, a.z - b.z};
+}
+__int128 probe_dot(const ProbeVec3& a, const ProbeVec3& b) {
+  return static_cast<__int128>(a.x) * b.x +
+         static_cast<__int128>(a.y) * b.y +
+         static_cast<__int128>(a.z) * b.z;
+}
+
+// Exact integer Moller-Trumbore predicates.  All comparisons are homogeneous,
+// so no quotient or floating tolerance can turn a grazing frame into a
+// platform-dependent hit.
+bool segment_hits_triangle(const ProbeVec3& p, const ProbeVec3& q,
+                           const ProbeVec3& a, const ProbeVec3& b,
+                           const ProbeVec3& c) {
+  const ProbeVec3 d = probe_sub(q, p);
+  const ProbeVec3 e1 = probe_sub(b, a);
+  const ProbeVec3 e2 = probe_sub(c, a);
+  const ProbeVec3 h = probe_cross(d, e2);
+  __int128 det = probe_dot(e1, h);
+  if (det == 0) return false;
+  const ProbeVec3 s = probe_sub(p, a);
+  __int128 u = probe_dot(s, h);
+  const ProbeVec3 r = probe_cross(s, e1);
+  __int128 v = probe_dot(d, r);
+  __int128 t = probe_dot(e2, r);
+  if (det < 0) {
+    det = -det;
+    u = -u;
+    v = -v;
+    t = -t;
+  }
+  return u >= 0 && v >= 0 && u + v <= det && t >= 0 && t <= det;
+}
+
+ProbeVec3 skinned_probe_point(
+    const std::array<zc::mat3x4fx, zc::kMaxBones>& pose,
+    const zc::SkinVertex& v) {
+  int32_t x = 0, y = 0, z = 0;
+  zc::skin_vertex(pose.data(), v, x, y, z, nullptr);
+  return {static_cast<int64_t>(x) * 1000 >> 16,
+          static_cast<int64_t>(y) * 1000 >> 16,
+          static_cast<int64_t>(z) * 1000 >> 16};
+}
+
+zc::mat3x4fx probe_instance_world(zref::angle16 facing,
+                                  const zc::GroundTilt& ground_tilt,
+                                  int32_t x, int32_t y, int32_t z) {
+  const int32_t fc = zref::fx_cos(facing).raw;
+  const int32_t fs = zref::fx_sin(facing).raw;
+  const zc::mat3x4fx roty{{fc, 0, fs, 0,
+                           0, 1 << 16, 0, 0,
+                           -fs, 0, fc, 0}};
+  const zc::mat3x4fx tilt = zc::tilt_matrix(ground_tilt, nullptr);
+  zc::mat3x4fx world{};
+  zc::mat3x4_mul(roty, tilt, world, nullptr);
+  world.m[3] = x;
+  world.m[7] = y;
+  world.m[11] = z;
+  return world;
+}
+
+std::array<zc::mat3x4fx, zc::kMaxBones> probe_world_pose(
+    const zc::CreatureType& type,
+    const std::array<zc::mat3x4fx, zc::kMaxBones>& pose,
+    const zc::mat3x4fx& world) {
+  std::array<zc::mat3x4fx, zc::kMaxBones> out{};
+  for (int b = 0; b < type.bank.bone_count; ++b)
+    zc::mat3x4_mul(world, pose[b], out[b], nullptr);
+  return out;
+}
+
+bool blade_segment_hits_target(uint16_t attack_slot, int presentation_tick,
+                               const zc::mat3x4fx& attack_world,
+                               const zc::mat3x4fx& target_world,
+                               int& triangle_hits) {
+  triangle_hits = 0;
+  const zc::CreatureType& attacker = zixx::type();
+  const zc::Clip* attack = reel_find_clip(attacker, attack_slot);
+  if (!attack) return false;
+  const uint16_t attack_key =
+      static_cast<uint16_t>(presentation_tick / 2);
+  const uint8_t attack_sub = static_cast<uint8_t>(presentation_tick & 1);
+  std::array<zc::mat3x4fx, zc::kMaxBones> attack_local;
+  zc::decode_pose(attacker, *attack, attack_key, attack_local, nullptr,
+                  attack_sub);
+  const std::array<zc::mat3x4fx, zc::kMaxBones> attack_pose =
+      probe_world_pose(attacker, attack_local, attack_world);
+
+  const zixx::Bind fork_bind = zixx::station_bind(56);
+  const zc::SkinVertex fork_v{-fxm(zixx::station_x(56)), fxm(zixx::kBodyY),
+                              0, fork_bind.b0, fork_bind.b1, fork_bind.w0,
+                              0, 0};
+  const zc::SkinVertex left_tip{
+      -fxm(zixx::station_x(56) + zixx::kBladeLen), fxm(zixx::kBodyY), 0,
+      zixx::kBBladeL2, zixx::kBBladeL2, 64, 0, 0};
+  const zc::SkinVertex right_tip{
+      -fxm(zixx::station_x(56) + zixx::kBladeLen), fxm(zixx::kBodyY), 0,
+      zixx::kBBladeR2, zixx::kBBladeR2, 64, 0, 0};
+  const ProbeVec3 blade_base = skinned_probe_point(attack_pose, fork_v);
+  const ProbeVec3 blade_tip[2] = {
+      skinned_probe_point(attack_pose, left_tip),
+      skinned_probe_point(attack_pose, right_tip)};
+
+  const ZixxTargetDescriptor target = zixx_target_descriptor(attack_slot);
+  if (!target.type) return false;
+  const zc::Clip* idle = reel_find_clip(*target.type, target.clip_slot);
+  if (!idle || idle->frame_count == 0) return false;
+  const int target_period = 2 * static_cast<int>(idle->frame_count);
+  // The victim idles until contact, then its posed body becomes the stable
+  // embedded surface.  Advancing an unrelated idle loop under a stopped blade
+  // made the target leave and re-enter the weapon during the committed hold.
+  // This is the same freeze law the reel applies to its rendered target.
+  const int frozen_tick = zixx_target_freeze_tick(attack_slot);
+  const int target_tick =
+      std::min(presentation_tick, frozen_tick) % target_period;
+  const uint16_t target_key = static_cast<uint16_t>(target_tick / 2);
+  const uint8_t target_sub = static_cast<uint8_t>(target_tick & 1);
+  std::array<zc::mat3x4fx, zc::kMaxBones> target_local;
+  zc::decode_pose(*target.type, *idle, target_key, target_local, nullptr,
+                  target_sub);
+  const std::array<zc::mat3x4fx, zc::kMaxBones> target_pose =
+      probe_world_pose(*target.type, target_local, target_world);
+
+  for (const zc::Meshlet& m : target.type->mesh) {
+    std::vector<ProbeVec3> world(m.verts.size());
+    for (size_t i = 0; i < m.verts.size(); ++i)
+      world[i] = skinned_probe_point(target_pose, m.verts[i]);
+    for (size_t i = 0; i + 2 < m.idx.size(); i += 3) {
+      const ProbeVec3& a = world[m.idx[i]];
+      const ProbeVec3& b = world[m.idx[i + 1]];
+      const ProbeVec3& c = world[m.idx[i + 2]];
+      for (const ProbeVec3& tip : blade_tip) {
+        if (segment_hits_triangle(blade_base, tip, a, b, c))
+          ++triangle_hits;
+      }
+    }
+  }
+  return triangle_hits > 0;
+}
+
+int validate_zixx_target_interactions() {
+  int failures = 0;
+  // Reproduce the exact static reel terrain and per-frame instance transforms.
+  // A flat local-space test can pass while the rendered attacker and victim sit
+  // on different terrain columns (slot 48 differs by more than half a metre).
+  // The gate therefore advances the same ground-tilt smoothing from frame zero,
+  // ground-snaps each root to its own column, and skins both meshes in world
+  // space before running the integer segment/triangle predicate.
+  const zref::render::TerrainPatch patch = rtest::bump_patch(161, 161, 18, 8);
+  const std::vector<zref::render::FieldApp> no_fields;
+  const zref::terrain::ComposedLattice lat = zref::render::compose_lattice(
+      patch, rtest::xform_identity(), no_fields, 0, nullptr, nullptr);
+  for (uint16_t slot : {zixx::kSlotAtkDummy, zixx::kSlotAtkFly,
+                        zixx::kSlotAtkNine}) {
+    const zc::AttackPlan p = zixx::zixx_variant_plan(slot);
+    const zixx::AttackVariantPhases ph =
+        zixx::zixx_attack_variant_phases(p, true);
+    const int begin_tick = 2 * ph.unroll_end;
+    const int end_tick = 2 * (ph.recoil_begin - 1);
+    const ZixxTargetDescriptor target = zixx_target_descriptor(slot);
+    const int32_t attack_x = fxm(zixx::kStageCentreMm);
+    const int32_t target_x = fxm(zixx::kStageCentreMm + target.x_mm);
+    const zref::terrain::ColumnResult attack_col = zref::terrain::column_query(
+        lat, zref::fx16{attack_x}, zref::fx16{0});
+    const zref::terrain::ColumnResult target_col = zref::terrain::column_query(
+        lat, zref::fx16{target_x}, zref::fx16{0});
+    const int32_t attack_y =
+        attack_col.cls == zref::terrain::ColumnClass::kSolid
+            ? attack_col.top.raw
+            : 0;
+    const int32_t target_ground_y =
+        target_col.cls == zref::terrain::ColumnClass::kSolid
+            ? target_col.top.raw
+            : 0;
+    const int32_t target_y = target_ground_y + fxm(target.y_mm);
+    zc::GroundTilt attack_tilt{};
+    zc::GroundTilt target_tilt{};
+    std::vector<uint8_t> intersects;
+    std::vector<int> counts;
+    intersects.reserve(end_tick - begin_tick + 1);
+    counts.reserve(end_tick - begin_tick + 1);
+    for (int tick = 0; tick <= end_tick; ++tick) {
+      zc::ground_tilt_update(attack_tilt, zc::TiltMode::kSideways,
+                             zref::angle16{uint16_t{0}}, lat,
+                             zref::fx16{attack_x}, zref::fx16{0},
+                             zref::fx16{fxm(40)}, zref::fx16{fxm(20)});
+      zc::ground_tilt_update(target_tilt, zc::TiltMode::kCompletely,
+                             target.facing, lat, zref::fx16{target_x},
+                             zref::fx16{0}, zref::fx16{fxm(40)},
+                             zref::fx16{fxm(20)});
+      if (tick < begin_tick) continue;
+      const zc::mat3x4fx attack_world = probe_instance_world(
+          zref::angle16{uint16_t{0}}, attack_tilt, attack_x, attack_y, 0);
+      const zc::mat3x4fx target_world = probe_instance_world(
+          target.facing, target_tilt, target_x, target_y, 0);
+      int hits = 0;
+      const bool hit = blade_segment_hits_target(
+          slot, tick, attack_world, target_world, hits);
+      intersects.push_back(hit ? 1 : 0);
+      counts.push_back(hits);
+    }
+    const auto at = [&](int tick) -> bool {
+      return intersects[static_cast<size_t>(tick - begin_tick)] != 0;
+    };
+    int entries = 0;
+    bool prior = false;
+    int first_entry = -1;
+    int first_clear = -1;
+    bool reentry_after_clear = false;
+    for (int tick = begin_tick; tick <= end_tick; ++tick) {
+      const bool hit = at(tick);
+      if (hit && !prior) {
+        ++entries;
+        if (first_entry < 0) first_entry = tick;
+        if (first_clear >= 0) reentry_after_clear = true;
+      }
+      if (!hit && prior && tick >= 2 * ph.extract_begin && first_clear < 0)
+        first_clear = tick;
+      prior = hit;
+    }
+    bool held = true;
+    int hold_min_hits = INT32_MAX;
+    int first_hold_miss = -1;
+    for (int tick = 2 * ph.impact; tick <= 2 * ph.extract_begin; ++tick) {
+      held = held && at(tick);
+      if (!at(tick) && first_hold_miss < 0) first_hold_miss = tick;
+      hold_min_hits = std::min(
+          hold_min_hits, counts[static_cast<size_t>(tick - begin_tick)]);
+    }
+    const bool clear_before_recoil = !at(end_tick);
+    if (entries != 1) {
+      ++failures;
+      std::fprintf(stderr,
+                   "target-check slot %u: expected one entry, observed %d\n",
+                   slot, entries);
+    }
+    if (!held) {
+      ++failures;
+      std::fprintf(stderr,
+                   "target-check slot %u: blade left actual victim mesh "
+                   "during committed hold\n",
+                   slot);
+    }
+    if (!clear_before_recoil || reentry_after_clear || first_clear < 0) {
+      ++failures;
+      std::fprintf(stderr,
+                   "target-check slot %u: extraction did not clear once and "
+                   "stay clear before recoil\n",
+                   slot);
+    }
+    if (entries != 1 || !held || !clear_before_recoil ||
+        reentry_after_clear || first_clear < 0) {
+      std::printf("  target diagnostic slot %u: hit ranges", slot);
+      bool in_range = false;
+      int range_begin = -1;
+      for (int tick = begin_tick; tick <= end_tick + 1; ++tick) {
+        const bool hit = tick <= end_tick ? at(tick) : false;
+        if (hit && !in_range) {
+          in_range = true;
+          range_begin = tick;
+        }
+        if (!hit && in_range) {
+          const int range_end = tick - 1;
+          std::printf(" %d%s..%d%s", range_begin / 2,
+                      (range_begin & 1) ? ".5" : "", range_end / 2,
+                      (range_end & 1) ? ".5" : "");
+          in_range = false;
+        }
+      }
+      std::printf("; first hold miss %d%s\n",
+                  first_hold_miss >= 0 ? first_hold_miss / 2 : -1,
+                  first_hold_miss >= 0 && (first_hold_miss & 1) ? ".5" : "");
+    }
+    std::printf(
+        "target-check slot %u: victim=%s, entry=%d%s, hold %d..%d "
+        "(%d+ triangle hits/sample), clear=%d%s, recoil=%d — %s\n",
+        slot, slot == zixx::kSlotAtkFly ? "winged-watchdog"
+                                        : "watchdog",
+        first_entry >= 0 ? first_entry / 2 : -1,
+        first_entry >= 0 && (first_entry & 1) ? ".5" : "",
+        ph.impact, ph.extract_begin, hold_min_hits,
+        first_clear >= 0 ? first_clear / 2 : -1,
+        first_clear >= 0 && (first_clear & 1) ? ".5" : "",
+        ph.recoil_begin,
+        entries == 1 && held && clear_before_recoil &&
+                !reentry_after_clear && first_clear >= 0
+            ? "PASS"
+            : "FAIL");
+  }
+  std::printf(failures == 0
+                  ? "TARGET INTERACTION: PASS — rendered world-space posed "
+                    "victim triangles, entry/hold/extraction at every key + midpoint\n"
+                  : "TARGET INTERACTION: FAIL — %d assertion(s)\n",
+              failures);
+  return failures == 0 ? 0 : 1;
+}
+
 struct ReelGibPiece {
   int32_t x = 0, y = 0, z = 0;
   int32_t vx = 0, vy = 0, vz = 0;
@@ -2099,6 +2450,7 @@ int render_scene(const SceneSubject& sub) {
   const zc::CreatureType* dog = nullptr;
   zc::CreatureInstance dog_inst;
   zc::CreatureInstance dummy_inst;  // run 0326: the salto target dummy
+  ZixxTargetDescriptor target_desc;
   zc::PoseBank dog_poses;
   std::vector<ReelGibPiece> gibs;
   CreatureReelCtx cr_ctx;
@@ -2142,14 +2494,14 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.inst = &dog_inst;
     cr_ctx.poses = &dog_poses;
     if (sub.dummy) {
-      // the FLYING target (salto-fly, creature 36) wears the wings; the
-      // grounded dummy stays the plain watchdog
-      dummy_inst.type = sub.creature == 36 ? &winged_dummy_type() : &watchdog_type();
+      const uint16_t attack_slot = static_cast<uint16_t>(sub.creature - 2);
+      target_desc = zixx_target_descriptor(attack_slot);
+      dummy_inst.type = target_desc.type;
       dummy_inst.tilt_mode = zc::TiltMode::kCompletely;
-      dummy_inst.facing = zref::angle16{uint16_t{0x8000}};  // faces the snake
-      dummy_inst.anim.cut(1);  // its idle breath
-      dummy_inst.x = fxm(zixx::kStageCentreMm + sub.dummy_x_mm);
-      dummy_inst.y = fxm(sub.dummy_y_mm);
+      dummy_inst.facing = target_desc.facing;
+      dummy_inst.anim.cut(target_desc.clip_slot);
+      dummy_inst.x = fxm(zixx::kStageCentreMm + target_desc.x_mm);
+      dummy_inst.y = fxm(target_desc.y_mm);
       cr_ctx.dummy = &dummy_inst;
     }
     cr_ctx.gibs = &gibs;
@@ -2235,7 +2587,9 @@ int render_scene(const SceneSubject& sub) {
                   (aim * (zixx::kAtkTipFwd / 2)) / 1000);
       trk_y = fxm((zixx::attack_lift_mm(static_cast<int>(f)) * sub.cam_track_num) / 1000 -
                   (aim * (zixx::kAtkTipDrop / 2)) / 1000);
-    } else if (sub.cam_track && sub.creature >= 35 && sub.creature <= 37) {
+    } else if (sub.cam_track &&
+               ((sub.creature >= 35 && sub.creature <= 37) ||
+                sub.creature == zixx::kSlotAtkNine + 2)) {
       // RUN 1939 (owner: "Salto camera is too jittery"): the variant camera
       // used to follow the clip's BAKED ROOT, which carries the coil
       // re-pivot orbit -- six somersaults put six 485 mm camera orbits into
@@ -2245,11 +2599,27 @@ int render_scene(const SceneSubject& sub) {
       // carries. Frame -> key at the 2-frames-per-key law, lerped at the
       // half key so the track cannot step.
       const uint16_t slot = static_cast<uint16_t>(sub.creature - 2);
-      const bool air = slot != zixx::kSlotAtkSix;
       int32_t x0, y0, x1, y1;
       const int key = static_cast<int>(f / 2);
-      zixx::zixx_variant_track(slot, air, key, x0, y0);
-      zixx::zixx_variant_track(slot, air, key + 1, x1, y1);
+      zixx::zixx_variant_track(slot, key, x0, y0);
+      zixx::zixx_variant_track(slot, key + 1, x1, y1);
+      const int32_t xm = (f & 1) ? (x0 + x1) / 2 : x0;
+      const int32_t ym = (f & 1) ? (y0 + y1) / 2 : y0;
+      trk_x = fxm(xm);
+      trk_y = static_cast<int32_t>(
+          (static_cast<int64_t>(fxm(ym)) * sub.cam_track_num) / 1000);
+    } else if (sub.cam_track &&
+               (sub.creature == zixx::kSlotJumpOne + 2 ||
+                sub.creature == zixx::kSlotJumpMulti + 2)) {
+      // Immediate jumps share one smooth vertical trajectory sample. Follow
+      // lift and spring descent, never the wheel's c-R(c) re-pivot orbit.
+      const uint16_t slot = static_cast<uint16_t>(sub.creature - 2);
+      const int32_t count = slot == zixx::kSlotJumpOne ? 1 : 3;
+      const zixx::JumpPlan p = zixx::zixx_jump_plan(slot, count);
+      const int key = static_cast<int>(f / 2);
+      int32_t x0, y0, x1, y1;
+      zixx::zixx_jump_track(p, key, x0, y0);
+      zixx::zixx_jump_track(p, key + 1, x1, y1);
       const int32_t xm = (f & 1) ? (x0 + x1) / 2 : x0;
       const int32_t ym = (f & 1) ? (y0 + y1) / 2 : y0;
       trk_x = fxm(xm);
@@ -2328,15 +2698,29 @@ int render_scene(const SceneSubject& sub) {
               (static_cast<int64_t>(gsn) * zixx::kIdleGirth) / 1000);
           dog_inst.bulk.target = dog_inst.bulk.scale;
         }
-        for (uint32_t t = 0; t < sub.step; ++t) {
-          const zc::ClipEvent* fired = nullptr;
-          uint8_t nf = 0;
-          zc::anim_advance(dog_inst.anim, dog->bank, &fired, nf);
-          if (sub.dummy) {
-            const zc::ClipEvent* df = nullptr;
-            uint8_t dn = 0;
-            zc::anim_advance(dummy_inst.anim, dummy_inst.type->bank, &df, dn);
+        const bool advance_creature =
+            !sub.canonical_creature_timeline || f > 0;
+        if (advance_creature) {
+          for (uint32_t t = 0; t < sub.step; ++t) {
+            const zc::ClipEvent* fired = nullptr;
+            uint8_t nf = 0;
+            zc::anim_advance(dog_inst.anim, dog->bank, &fired, nf);
+            if (sub.dummy) {
+              const zc::ClipEvent* df = nullptr;
+              uint8_t dn = 0;
+              zc::anim_advance(dummy_inst.anim, dummy_inst.type->bank, &df, dn);
+            }
           }
+        }
+        if (sub.dummy) {
+          const uint16_t attack_slot =
+              static_cast<uint16_t>(sub.creature - 2);
+          const uint64_t shown_tick = sub.canonical_creature_timeline
+                                          ? static_cast<uint64_t>(f) * sub.step
+                                          : f;
+          if (shown_tick >= static_cast<uint64_t>(
+                                zixx_target_freeze_tick(attack_slot)))
+            dummy_inst.anim.frozen = true;
         }
         zc::ground_tilt_update(dog_inst.tilt, dog_inst.tilt_mode, dog_inst.facing, lat,
                                zref::fx16{dog_inst.x}, zref::fx16{dog_inst.z}, zref::fx16{fxm(40)},
@@ -2427,7 +2811,7 @@ int render_scene(const SceneSubject& sub) {
         const zref::terrain::ColumnResult dcol = zref::terrain::column_query(
             lat, zref::fx16{dummy_inst.x}, zref::fx16{dummy_inst.z});
         if (dcol.cls == zref::terrain::ColumnClass::kSolid)
-          dummy_inst.y = dcol.top.raw + fxm(sub.dummy_y_mm);
+          dummy_inst.y = dcol.top.raw + fxm(target_desc.y_mm);
       }
       // Detached-chunk ballistics advance at the start of subsequent frames,
       // so the exact authored breakup pose is visible for one full frame.
@@ -3585,6 +3969,50 @@ SceneSubject subject_zixx_attack() {
   return s;
 }
 
+// DIAGNOSTIC: exact fixed-side comparison required by owner direction #9.
+// The short subject ends at the clean wheel key, keeping all anticipation
+// frames large enough to judge at native resolution.
+constexpr uint32_t kZixxSpringDiagnosticKeys = 30;
+constexpr uint32_t kZixxSpringDiagnosticSamples =
+    2 * (kZixxSpringDiagnosticKeys - 1) + 1;
+SceneSubject subject_zixx_spring_side() {
+  SceneSubject s;
+  s.name = "zixxtrixx-spring-side";
+  s.creature = 5;  // slot 3, the theatrical attack
+  s.frames = kZixxSpringDiagnosticSamples;  // key 0, each midpoint, key 29
+  s.canonical_creature_timeline = true;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_k = 150000;  // keep exact rest, broad squash and release wheel in frame
+  s.note = "DIAGNOSTIC: every frame of shared whole-body spring anticipation, "
+           "fixed true-side camera; exact rest through compression hold and "
+           "release";
+  return s;
+}
+
+// DIAGNOSTIC: the complete shared spring from exact rest through release,
+// seen from high three-quarter so its broad lateral concertina cannot hide in
+// the beauty camera's side projection. Every theatrical salto and immediate
+// jump calls the same authored pose function; this shot is the fast art loop.
+SceneSubject subject_zixx_spring_top() {
+  SceneSubject s;
+  s.name = "zixxtrixx-spring-top";
+  s.creature = 5;  // slot 3, the theatrical attack
+  s.frames = kZixxSpringDiagnosticSamples;  // key 0, each midpoint, key 29
+  s.canonical_creature_timeline = true;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_yaw = 8192;   // three-quarter around the animal
+  s.cam_ps = 53684;   // 55 degrees down
+  s.cam_pc = 37590;
+  s.cam_eye = 20;     // eye - tan(55 deg)*8 m aims at the 8 m stage crown
+  s.cam_k = 280000;  // keep broad planform and release wheel in frame
+  s.note = "DIAGNOSTIC: every frame of the shared whole-body spring, fixed "
+           "high three-quarter camera; exact rest through compression hold "
+           "and release";
+  return s;
+}
+
 // DIAGNOSTIC (deliberately NOT in kLibrary, so it never ships to the site):
 // a near-LEVEL orbit for the Front.png acceptance test -- "a straight-on
 // view must look like the frontal sketch". The showcase camera looks down
@@ -4104,11 +4532,18 @@ SceneSubject subject_zixx_corpse() {
 // ---- run 0326: the salto variations (attack1/attack2, owner's ask) --------
 // Wide fixed side shots -- the whole flight must stay in frame, and the
 // target dummy (the watchdog quadruped) stands where the plan aims.
+uint32_t zixx_one_shot_presentation_frames(int keys) {
+  return keys > 0 ? static_cast<uint32_t>(2 * (keys - 1) + 1) : 0;
+}
+
 SceneSubject subject_zixx_salto_dummy() {
   SceneSubject s;
   s.name = "zixxtrixx-salto-dummy";
   s.creature = 35;  // clip slot 33
-  s.frames = 85 * 2;
+  s.frames = zixx_one_shot_presentation_frames(
+      zixx::zixx_attack_variant_key_count(
+          zixx::zixx_variant_plan(zixx::kSlotAtkDummy), true));
+  s.canonical_creature_timeline = true;
   s.orbit = false;
   zixx_common(s);
   s.cam_k = 180000;
@@ -4132,7 +4567,10 @@ SceneSubject subject_zixx_salto_fly() {
   SceneSubject s;
   s.name = "zixxtrixx-salto-fly";
   s.creature = 36;  // clip slot 34
-  s.frames = 86 * 2;
+  s.frames = zixx_one_shot_presentation_frames(
+      zixx::zixx_attack_variant_key_count(
+          zixx::zixx_variant_plan(zixx::kSlotAtkFly), true));
+  s.canonical_creature_timeline = true;
   s.orbit = false;
   zixx_common(s);
   s.cam_k = 170000;
@@ -4156,7 +4594,10 @@ SceneSubject subject_zixx_salto_six() {
   SceneSubject s;
   s.name = "zixxtrixx-salto-six";
   s.creature = 37;  // clip slot 35
-  s.frames = 108 * 2;
+  s.frames = zixx_one_shot_presentation_frames(
+      zixx::zixx_attack_variant_key_count(
+          zixx::zixx_variant_plan(zixx::kSlotAtkSix), false));
+  s.canonical_creature_timeline = true;
   s.orbit = false;
   zixx_common(s);
   s.cam_k = 150000;
@@ -4170,6 +4611,73 @@ SceneSubject subject_zixx_salto_six() {
       "apex earns SIX somersaults on a 44-key flight before the committed "
       "dive onto a far ground mark -- the spin law spends them all on the "
       "way up and the diagonal spear arrives exactly oriented";
+  return s;
+}
+
+// Direction #9: immediate ground-jump examples from one programmable builder.
+// Both use the same camera, timing and apex; only the authored whole-turn count
+// differs, so a landing-phase drift cannot hide behind staging differences.
+SceneSubject subject_zixx_jump_one() {
+  SceneSubject s;
+  const zixx::JumpPlan p =
+      zixx::zixx_jump_plan(zixx::kSlotJumpOne, 1);
+  s.name = "zixxtrixx-jump-one";
+  s.creature = zixx::kSlotJumpOne + 2;
+  s.frames = zixx_one_shot_presentation_frames(zixx::zixx_jump_key_count(p));
+  s.canonical_creature_timeline = true;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_k = 210000;
+  s.bump_ext = 18;
+  s.cam_track = true;
+  s.cam_track_num = 1000;
+  s.note = "Immediate spring jump: short readable whole-body squash, one "
+           "complete salto, authored landing bite, absorption and exact "
+           "signature-S settle";
+  return s;
+}
+
+SceneSubject subject_zixx_jump_multi() {
+  SceneSubject s = subject_zixx_jump_one();
+  const zixx::JumpPlan p =
+      zixx::zixx_jump_plan(zixx::kSlotJumpMulti, 3);
+  s.name = "zixxtrixx-jump-multi";
+  s.creature = zixx::kSlotJumpMulti + 2;
+  s.frames = zixx_one_shot_presentation_frames(zixx::zixx_jump_key_count(p));
+  s.canonical_creature_timeline = true;
+  s.note = "The same immediate spring-jump builder and trajectory with three "
+           "complete saltos; wheel shape and upright landing phase are shared";
+  return s;
+}
+
+// Direction #9's deliberate system-limit attack: same target planner/baker as
+// the preserved six-salto baseline, nine whole wheel turns and exactly 24 m
+// root apex. The tracked fixed-side shot retains the full arc and the grounded
+// victim through entry, stable hold, extraction, recoil, landing and recovery.
+SceneSubject subject_zixx_salto_nine() {
+  SceneSubject s;
+  const zc::AttackPlan p =
+      zixx::zixx_variant_plan(zixx::kSlotAtkNine);
+  s.name = "zixxtrixx-salto-nine";
+  s.creature = zixx::kSlotAtkNine + 2;
+  s.frames = zixx_one_shot_presentation_frames(
+      zixx::zixx_attack_variant_key_count(p, true));
+  s.canonical_creature_timeline = true;
+  s.orbit = false;
+  zixx_common(s);
+  s.cam_k = 145000;
+  s.cam_eye = 15;
+  s.cam_dist = 13;
+  s.bump_ext = 18;
+  s.cam_track = true;
+  s.cam_track_num = 1000;
+  s.dummy = true;
+  s.dummy_x_mm = 8500;
+  s.dummy_y_mm = 350;
+  s.note = "Nine-salto target attack / fixed-point limit probe: shared real "
+           "spring, nine coherent wheel turns, exact 24 m root apex (twice "
+           "the preserved six-salto 12 m apex), target entry, bit-constant "
+           "embedded hold, extraction, delayed recoil and stable recovery";
   return s;
 }
 
@@ -4402,6 +4910,199 @@ SceneSubject subject_creaturepop() {
   return s;
 }
 
+// Task #12 camera/LOD/outline limit gate.  This evaluates the exact nine-salto
+// subject camera at every key and midpoint, projects every posed LOD0 vertex at
+// native 384x240, and checks the same projected-radius/ink-width law used by
+// creature_hook.  It catches clipping and silent splat/glint demotion; visual
+// likeness remains the every-frame sheet's job.
+int validate_zixx_nine_camera() {
+  constexpr uint32_t kW = 384, kH = 240;
+  const SceneSubject sub = subject_zixx_salto_nine();
+  const zc::CreatureType& type = zixx::type();
+  const zc::Clip* clip = reel_find_clip(type, zixx::kSlotAtkNine);
+  if (!clip) {
+    std::fprintf(stderr, "limit-camera: slot 48 missing\n");
+    return 1;
+  }
+  const zc::AttackPlan plan = zixx::zixx_variant_plan(zixx::kSlotAtkNine);
+  const zixx::AttackVariantPhases phase =
+      zixx::zixx_attack_variant_phases(plan, true);
+  const int samples = 2 * (static_cast<int>(clip->frame_count) - 1) + 1;
+
+  zref::render::TerrainPatch patch =
+      rtest::bump_patch(161, 161, sub.bump_ext, 8);
+  const std::vector<zref::render::FieldApp> no_fields;
+  const zref::terrain::ComposedLattice lat = zref::render::compose_lattice(
+      patch, rtest::xform_identity(), no_fields, 0, nullptr, nullptr);
+  const int32_t dog_x = fxm(zixx::kStageCentreMm);
+  const zref::terrain::ColumnResult dog_col = zref::terrain::column_query(
+      lat, zref::fx16{dog_x}, zref::fx16{0});
+  const int32_t dog_y = dog_col.cls == zref::terrain::ColumnClass::kSolid
+                            ? dog_col.top.raw
+                            : 0;
+
+  int failures = 0;
+  int32_t min_radius_q8 = INT32_MAX, max_radius_q8 = 0;
+  int min_ink = INT32_MAX, max_ink = 0;
+  int max_lod = 0;
+  int global_min_x = INT32_MAX, global_max_x = INT32_MIN;
+  int global_min_y = INT32_MAX, global_max_y = INT32_MIN;
+  int worst_margin = INT32_MAX;
+  uint64_t saturation = 0;
+  bool target_visible = true;
+  const zref::render::Viewport viewport{0, 0, kW, kH};
+  const ZixxTargetDescriptor target =
+      zixx_target_descriptor(zixx::kSlotAtkNine);
+  const int32_t target_x = fxm(zixx::kStageCentreMm + target.x_mm);
+  const zref::terrain::ColumnResult target_col = zref::terrain::column_query(
+      lat, zref::fx16{target_x}, zref::fx16{0});
+  const int32_t target_y =
+      (target_col.cls == zref::terrain::ColumnClass::kSolid
+           ? target_col.top.raw
+           : 0) +
+      fxm(target.y_mm);
+  struct LimitTargetPoint {
+    int32_t x = 0, y = 0, z = 0;
+  };
+  std::vector<LimitTargetPoint> target_points;
+  const zc::Clip* target_clip =
+      target.type ? reel_find_clip(*target.type, target.clip_slot) : nullptr;
+  if (!target_clip || target_clip->frame_count == 0) {
+    ++failures;
+  } else {
+    const int target_period = 2 * static_cast<int>(target_clip->frame_count);
+    const int target_tick =
+        zixx_target_freeze_tick(zixx::kSlotAtkNine) % target_period;
+    std::array<zc::mat3x4fx, zc::kMaxBones> target_pose;
+    zc::decode_pose(*target.type, *target_clip,
+                    static_cast<uint16_t>(target_tick / 2), target_pose,
+                    nullptr, static_cast<uint8_t>(target_tick & 1));
+    const int32_t fc = zref::fx_cos(target.facing).raw;
+    const int32_t fs = zref::fx_sin(target.facing).raw;
+    for (const zc::Meshlet& m : target.type->mesh) {
+      for (const zc::SkinVertex& v : m.verts) {
+        int32_t x = 0, y = 0, z = 0;
+        zc::skin_vertex(target_pose.data(), v, x, y, z, nullptr);
+        target_points.push_back(
+            {target_x + zref::rescale_s32(
+                            static_cast<int64_t>(fc) * x +
+                                static_cast<int64_t>(fs) * z,
+                            16, nullptr),
+             target_y + y,
+             zref::rescale_s32(-static_cast<int64_t>(fs) * x +
+                                   static_cast<int64_t>(fc) * z,
+                               16, nullptr)});
+      }
+    }
+  }
+
+  for (int tick = 0; tick < samples; ++tick) {
+    const int key = tick / 2;
+    int32_t x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+    zixx::zixx_variant_track(zixx::kSlotAtkNine, key, x0, y0);
+    zixx::zixx_variant_track(zixx::kSlotAtkNine, key + 1, x1, y1);
+    const int32_t track_x_mm = (tick & 1) ? (x0 + x1) / 2 : x0;
+    const int32_t track_y_mm = (tick & 1) ? (y0 + y1) / 2 : y0;
+    zhao_abi::ZhMat4fx camera = cam_pitch(
+        sub.cam_k, sub.cam_eye, sub.cam_dist, sub.cam_ps, sub.cam_pc,
+        sub.cam_bias, -1, 0);
+    camera = mat4_mul(
+        camera,
+        mat_world_translate(-fxm(track_x_mm), -fxm(track_y_mm), 0));
+    const zref::mat4fx vp = rtest::to_zref(camera);
+
+    zref::SatLedger ledger;
+    int32_t radius_q8 = 0;
+    const bool radius_visible = zc::projected_bound_radius_q8(
+        vp, dog_x, dog_y, 0, type.bound_radius, kW, radius_q8, &ledger);
+    if (!radius_visible || radius_q8 <= 0) ++failures;
+    min_radius_q8 = std::min(min_radius_q8, radius_q8);
+    max_radius_q8 = std::max(max_radius_q8, radius_q8);
+    const int ink = cel_main_ink_width(radius_q8);
+    min_ink = std::min(min_ink, ink);
+    max_ink = std::max(max_ink, ink);
+    const zc::LodRung rung = zc::lod_raw(radius_q8, 2 * 256, type);
+    max_lod = std::max(max_lod, static_cast<int>(rung));
+
+    std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+    zc::decode_pose(type, *clip, static_cast<uint16_t>(key), pose, &ledger,
+                    static_cast<uint8_t>(tick & 1));
+    int frame_min_x = INT32_MAX, frame_max_x = INT32_MIN;
+    int frame_min_y = INT32_MAX, frame_max_y = INT32_MIN;
+    bool any = false;
+    for (const zc::Meshlet& m : type.mesh) {
+      for (const zc::SkinVertex& v : m.verts) {
+        int32_t x = 0, y = 0, z = 0;
+        zc::skin_vertex(pose.data(), v, x, y, z, &ledger);
+        const zref::render::ProjOut po = zref::render::project_vertex(
+            vp, viewport, zref::fx16{x + dog_x}, zref::fx16{y + dog_y},
+            zref::fx16{z}, &ledger);
+        if (!po.in) continue;
+        any = true;
+        const int px = po.s.x >> 8;
+        const int py = po.s.y >> 8;
+        frame_min_x = std::min(frame_min_x, px);
+        frame_max_x = std::max(frame_max_x, px);
+        frame_min_y = std::min(frame_min_y, py);
+        frame_max_y = std::max(frame_max_y, py);
+      }
+    }
+    if (!any) {
+      ++failures;
+    } else {
+      global_min_x = std::min(global_min_x, frame_min_x);
+      global_max_x = std::max(global_max_x, frame_max_x);
+      global_min_y = std::min(global_min_y, frame_min_y);
+      global_max_y = std::max(global_max_y, frame_max_y);
+      const int margin = std::min(
+          {frame_min_x, static_cast<int>(kW) - 1 - frame_max_x,
+           frame_min_y, static_cast<int>(kH) - 1 - frame_max_y});
+      worst_margin = std::min(worst_margin, margin);
+      if (margin < 0) ++failures;
+    }
+
+    if (tick >= 2 * phase.impact && tick <= 2 * phase.recoil_begin) {
+      bool target_mesh_visible = false;
+      for (const LimitTargetPoint& p : target_points) {
+        const zref::render::ProjOut tp = zref::render::project_vertex(
+            vp, viewport, zref::fx16{p.x}, zref::fx16{p.y},
+            zref::fx16{p.z}, &ledger);
+        const int px = tp.s.x >> 8, py = tp.s.y >> 8;
+        if (tp.in && px >= 0 && px < static_cast<int>(kW) && py >= 0 &&
+            py < static_cast<int>(kH)) {
+          target_mesh_visible = true;
+          break;
+        }
+      }
+      if (!target_mesh_visible) target_visible = false;
+    }
+    saturation += ledger.total();
+  }
+
+  if (clip->frame_count != phase.frame_count) ++failures;
+  if (min_ink < 1 || max_ink > kCelInkCloseWidthPx || min_ink != 1)
+    ++failures;
+  if (max_lod > static_cast<int>(zc::LodRung::kMicro)) ++failures;
+  if (!target_visible) ++failures;
+  if (saturation != 0) ++failures;
+  std::printf(
+      "limit-camera slot 48: %d keys/%d samples, bbox [%d..%d]x[%d..%d], "
+      "worst native margin %d px, projected radius %.2f..%.2f px, ink "
+      "%d..%d px, coarsest LOD %d, target_visible=%d, saturation=%llu\n",
+      clip->frame_count, samples, global_min_x, global_max_x, global_min_y,
+      global_max_y, worst_margin, min_radius_q8 / 256.0,
+      max_radius_q8 / 256.0, min_ink, max_ink, max_lod,
+      target_visible ? 1 : 0,
+      static_cast<unsigned long long>(saturation));
+  if (failures == 0) {
+    std::printf("LIMIT CAMERA: PASS — native camera, LOD, one-pixel far "
+                "outline, target and fixed-point range\n");
+    return 0;
+  }
+  std::printf("LIMIT CAMERA: FAIL — %d assertion(s)\n", failures);
+  return 1;
+}
+
 }  // namespace
 
 // Library catalogue for --list
@@ -4506,6 +5207,11 @@ constexpr LibraryEntry kLibrary[] = {
     {nullptr, nullptr, nullptr, false}};
 
 int main(int argc, char** argv) {
+  if (argc > 1 && std::strcmp(argv[1], "--zixx-target-check") == 0)
+    return validate_zixx_target_interactions();
+  if (argc > 1 && std::strcmp(argv[1], "--zixx-limit-check") == 0)
+    return validate_zixx_nine_camera();
+
   // --list: enumerate the library catalogue
   if (argc > 1 && std::strcmp(argv[1], "--list") == 0) {
     std::printf("=== Zhaozhou Effects Library ===\n\n");
@@ -4635,6 +5341,8 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-idle")) rc |= render_scene(subject_zixx_idle());
   if (wanted("zixxtrixx-walk")) rc |= render_scene(subject_zixx_walk());
   if (wanted("zixxtrixx-attack")) rc |= render_scene(subject_zixx_attack());
+  if (wanted("zixxtrixx-spring-side")) rc |= render_scene(subject_zixx_spring_side());
+  if (wanted("zixxtrixx-spring-top")) rc |= render_scene(subject_zixx_spring_top());
   if (wanted("zixxtrixx-fall")) rc |= render_scene(subject_zixx_fall());
   if (wanted("zixxtrixx-front")) rc |= render_scene(subject_zixx_front());
   if (wanted("zixxtrixx-side")) rc |= render_scene(subject_zixx_side());
@@ -4667,6 +5375,9 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-salto-dummy")) rc |= render_scene(subject_zixx_salto_dummy());
   if (wanted("zixxtrixx-salto-fly")) rc |= render_scene(subject_zixx_salto_fly());
   if (wanted("zixxtrixx-salto-six")) rc |= render_scene(subject_zixx_salto_six());
+  if (wanted("zixxtrixx-jump-one")) rc |= render_scene(subject_zixx_jump_one());
+  if (wanted("zixxtrixx-jump-multi")) rc |= render_scene(subject_zixx_jump_multi());
+  if (wanted("zixxtrixx-salto-nine")) rc |= render_scene(subject_zixx_salto_nine());
   if (wanted("zixxtrixx-stance2")) rc |= render_scene(subject_zixx_stance2());
   if (wanted("zixxtrixx-tumble")) rc |= render_scene(subject_zixx_tumble());
   if (wanted("zixxtrixx-death3")) rc |= render_scene(subject_zixx_death3());

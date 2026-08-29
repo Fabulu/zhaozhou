@@ -1,314 +1,300 @@
-// zixx_probe — the COMMITTED pose probe for the Zixxtrixx model.
+// zixx_probe — committed 3D pose/contact/continuity probe for Zixxtrixx.
 //
-// Ground contact must be authored, never accidental (CLAUDE.md), and it must
-// be MEASURED with a 3D pose probe, not read off a rendered frame: a 2D frame
-// cannot separate "in front of the dirt" from "inside it". This probe decodes
-// every key of every clip, skins EVERY mesh vertex, and reports world-Y
-// statistics against the flat ground plane the reel's root ground-snap
-// establishes (root at terrain top, so ground = 0).
-//
-// Per clip it prints per-key min/max Y (sampled), the worst penetration and
-// where it happens, and clip-specific numbers:
-//   - idle/walk: belly excursion across the loop (the authored few-mm sink);
-//   - attack:    blade-tip minimum per key around contact (the authored bite);
-//   - fall:      whole-loop clearance (must NEVER touch).
-//
-// Build (from zhaozhou/, same flags as the reel — no cmake, see CLAUDE.md):
-//   G="C:/Programmieren/dsstuff/mingw64/bin/g++.exe"
-//   "$G" -Itests/render -Icompiler/tests/generated -Ireference/src \
-//        -Ireference/include -Iruntime/include -O2 -DNDEBUG -std=c++17 \
-//        tools/reel/zixx_probe.cpp build/reference/libzhao_zref.a \
-//        -o build/tools/zixx-probe.exe
+// A rendered frame cannot distinguish terrain in front of the animal from a
+// vertex inside it.  This tool decodes the actual 60 Hz presentation timeline
+// (every authored key and every runtime-equivalent midpoint), skins every mesh
+// vertex once per sample, and applies declared per-clip contact policy.  It also
+// checks non-neighbouring station overlap, the shared whole-body spring, the
+// programmable jumps, and the nine-salto fixed-point limit case.
 #include "zref/zref_creature.hpp"
 #include "zrender/internal.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <utility>
 #include <vector>
 
 namespace zc = zref::creature;
 constexpr int32_t fxm(int64_t milli) {
-  return static_cast<int32_t>((milli * 65536 + (milli >= 0 ? 500 : -500)) / 1000);
+  return static_cast<int32_t>((milli * 65536 + (milli >= 0 ? 500 : -500)) /
+                              1000);
 }
 #include "zixxtrixx.h"
 
 namespace {
-int32_t to_mm(int64_t fx) { return static_cast<int32_t>(fx * 1000 >> 16); }
-}  // namespace
 
-// ---- THE SELF-INTERSECTION PROBE (2026-08-27 head-only run) ---------------
-// Headache.md: "compare non-neighbouring ring-centre distances against their
-// radii. It does not need triangle-exact collision -- it needs to SHOUT when
-// the skull overlaps the neck or trunk." So: every body/head station's ring
-// CENTRE is skinned through the same pose the mesh uses (bind centre at
-// (-station_x, kBodyY, 0), the station's own bind), its radius is the ring's
-// LATERAL half-width (the larger axis, eye bulge included), and every pair
-// of stations that is genuinely non-neighbouring -- bind-pose centre
-// separation > 1.15 * (r_i + r_j), so the tube's own continuity can never
-// trigger it -- is checked posed: centre distance < r_i + r_j is an overlap,
-// printed with its depth. Run over EVERY key of EVERY clip.
-//
-// TWO HONESTY RULES, both learned from the first run of this probe:
-//   - the radius used is the VERTICAL one (station_r), not the lateral
-//     half-width: the S lives in the X-Y plane and the ring's in-plane
-//     extent IS rz -- the googly-eye bulge sticks out in +-Z where there is
-//     nothing to hit, and counting it flagged phantom overlaps ~150 mm deep;
-//   - pairs closer than 8 stations along the body are skipped outright: the
-//     walk's hump legitimately BUNCHES the grounded run, so stations 6 apart
-//     can approach through the surface without any clipping (station 38 vs
-//     44 fired at "180 mm" on the approved walk).
-namespace probe {
+int32_t to_mm(int64_t fx) { return static_cast<int32_t>(fx * 1000 >> 16); }
+
+int presentation_samples(const zc::Clip& c) {
+  return c.frame_count == 0 ? 0 : 2 * (static_cast<int>(c.frame_count) - 1) + 1;
+}
+
 struct Station {
-  zc::SkinVertex v;   // bind centre + bind, for skin_vertex
-  int32_t r_mm;       // vertical (in-plane) half-thickness in mm
+  zc::SkinVertex v;
+  int32_t r_mm;
 };
-inline std::vector<Station> stations() {
-  std::vector<Station> s;
+
+std::vector<Station> make_stations() {
+  std::vector<Station> out;
+  out.reserve(zixx::kProfileStations);
   for (int i = 0; i < zixx::kProfileStations; ++i) {
-    const zixx::Bind bd =
-        i <= zixx::kHeadEnd ? zixx::head_station_bind(i) : zixx::station_bind(i);
+    const zixx::Bind bd = i <= zixx::kHeadEnd
+                              ? zixx::head_station_bind(i)
+                              : zixx::station_bind(i);
     Station st;
     st.v = zc::SkinVertex{-fxm(zixx::station_x(i)), fxm(zixx::kBodyY), 0,
                           bd.b0, bd.b1, bd.w0, 0, 0};
-    // the in-plane (vertical) half-extent of the ring ACTUALLY BUILT: for
-    // head stations that is the ball-swollen rz (head_ring), not the bare
-    // taper radius -- the probe must measure the surface the mesh has.
     if (i <= zixx::kHeadEnd) {
-      int32_t rx_mm, rz_mm;
+      int32_t rx_mm = 0, rz_mm = 0;
       zixx::head_ring(i, rx_mm, rz_mm);
       st.r_mm = rz_mm;
     } else {
       st.r_mm = zixx::station_r(i);
     }
-    s.push_back(st);
+    out.push_back(st);
   }
-  return s;
+  return out;
 }
-}  // namespace probe
+
+struct PosedSample {
+  int tick = 0;  // 60 Hz presentation tick; even=authored key, odd=midpoint
+  int32_t min_y_fx = INT32_MAX;
+  int32_t max_y_fx = INT32_MIN;
+  int32_t blade_min_y_fx = INT32_MAX;
+  int min_b0 = -1;
+  int min_b1 = -1;
+  std::array<int32_t, zixx::kProfileStations> x_mm{};
+  std::array<int32_t, zixx::kProfileStations> y_mm{};
+  std::array<int32_t, zixx::kProfileStations> z_mm{};
+  uint64_t saturation = 0;
+};
+
+struct ClipScan {
+  const zc::Clip* clip = nullptr;
+  std::vector<PosedSample> samples;
+  int32_t worst_min_fx = INT32_MAX;
+  int32_t worst_max_fx = INT32_MIN;
+  int worst_tick = -1;
+  int worst_b0 = -1;
+  int worst_b1 = -1;
+  uint64_t saturation = 0;
+};
+
+ClipScan scan_clip(const zc::CreatureType& type, const zc::Clip& clip,
+                   const std::vector<Station>& stations) {
+  ClipScan scan;
+  scan.clip = &clip;
+  const int ns = presentation_samples(clip);
+  scan.samples.reserve(ns);
+  for (int tick = 0; tick < ns; ++tick) {
+    PosedSample s;
+    s.tick = tick;
+    const uint16_t key = static_cast<uint16_t>(tick / 2);
+    const uint8_t sub = static_cast<uint8_t>(tick & 1);
+    std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+    zref::SatLedger ledger;
+    zc::decode_pose(type, clip, key, pose, &ledger, sub);
+    for (const auto& meshlet : type.mesh) {
+      for (const auto& v : meshlet.verts) {
+        int32_t x = 0, y = 0, z = 0;
+        zc::skin_vertex(pose.data(), v, x, y, z, &ledger);
+        if (y < s.min_y_fx) {
+          s.min_y_fx = y;
+          s.min_b0 = v.b0;
+          s.min_b1 = v.b1;
+        }
+        s.max_y_fx = std::max(s.max_y_fx, y);
+        if (v.b0 >= zixx::kBBladeL && v.b0 <= zixx::kBBladeR2)
+          s.blade_min_y_fx = std::min(s.blade_min_y_fx, y);
+      }
+    }
+    for (int i = 0; i < zixx::kProfileStations; ++i) {
+      int32_t x = 0, y = 0, z = 0;
+      zc::skin_vertex(pose.data(), stations[i].v, x, y, z, &ledger);
+      s.x_mm[i] = to_mm(x);
+      s.y_mm[i] = to_mm(y);
+      s.z_mm[i] = to_mm(z);
+    }
+    s.saturation = ledger.total();
+    scan.saturation += s.saturation;
+    if (s.min_y_fx < scan.worst_min_fx) {
+      scan.worst_min_fx = s.min_y_fx;
+      scan.worst_tick = tick;
+      scan.worst_b0 = s.min_b0;
+      scan.worst_b1 = s.min_b1;
+    }
+    scan.worst_max_fx = std::max(scan.worst_max_fx, s.max_y_fx);
+    scan.samples.push_back(s);
+  }
+  return scan;
+}
+
+const ClipScan* find_scan(const std::vector<ClipScan>& scans, int slot) {
+  for (const auto& s : scans)
+    if (s.clip && s.clip->slot_id == slot) return &s;
+  return nullptr;
+}
+
+int32_t overlap_allowance_mm(int slot) {
+  switch (slot) {
+    case 1: return 250;
+    case 2: return 300;
+    case 3: return 370;
+    case 4: return 120;
+    case 5: return 390;
+    case 6: return 265;
+    case 7: return 210;
+    case 8: return 250;
+    case 10: case 11: case 12: case 13: case 14: case 15: case 16: case 17:
+      return 370;
+    case 20: return 285;
+    case 21: return 265;
+    case 22: return 265;
+    case 23: return 235;
+    case 24: return 290;
+    case 25: return 235;
+    case 26: return 400;
+    case 27: return 340;
+    case 28: return 410;
+    case 29: return 285;
+    case 30: return 215;  // frozen legacy quick taunt
+    case 31: return 265;
+    case 32: return 190;
+    case 33: case 34: case 35:
+      return 370;  // attack-wheel family, visually accepted at its worst key
+    case 36: return 390;
+    case 37: return 275;
+    case 38: return 250;
+    case 39: return 240;
+    case 40: return 240;
+    case 41: return 215;
+    case 42: return 245;
+    case 43: return 125;
+    case 46: case 47: case 48:
+      // Task #12 uses the same clean, nose-to-tail wheel closure as the
+      // accepted attack family.  Every-frame native sheets were judged before
+      // declaring this shared ceiling; the probe may compare, never author it.
+      return 370;
+    default: return 0;
+  }
+}
+
+bool key_pose_equal(const zc::Clip& c, int a, int b, int bones,
+                    bool compare_root) {
+  if (a < 0 || b < 0 || a >= c.frame_count || b >= c.frame_count) return false;
+  if (compare_root &&
+      std::memcmp(&c.root[static_cast<size_t>(a) * 3],
+                  &c.root[static_cast<size_t>(b) * 3],
+                  3 * sizeof(c.root[0])) != 0)
+    return false;
+  return std::memcmp(&c.quats[static_cast<size_t>(a) * bones],
+                     &c.quats[static_cast<size_t>(b) * bones],
+                     static_cast<size_t>(bones) * sizeof(c.quats[0])) == 0;
+}
+
+struct StationStepMaximum {
+  int32_t mm = 0;
+  int tick = -1;
+  int station = -1;
+};
+
+StationStepMaximum station_step_max_mm(const ClipScan& scan, int begin_tick,
+                                       int end_tick) {
+  begin_tick = std::max(begin_tick, 1);
+  end_tick = std::min(end_tick, static_cast<int>(scan.samples.size()) - 1);
+  StationStepMaximum worst;
+  for (int t = begin_tick; t <= end_tick; ++t) {
+    const auto& a = scan.samples[t - 1];
+    const auto& b = scan.samples[t];
+    for (int i = 0; i < zixx::kProfileStations; ++i) {
+      const int64_t dx = b.x_mm[i] - a.x_mm[i];
+      const int64_t dy = b.y_mm[i] - a.y_mm[i];
+      const int64_t dz = b.z_mm[i] - a.z_mm[i];
+      const int32_t d = static_cast<int32_t>(zref::isqrt_u64(
+          static_cast<uint64_t>(dx * dx + dy * dy + dz * dz)));
+      if (d > worst.mm) {
+        worst.mm = d;
+        worst.tick = t;
+        worst.station = i;
+      }
+    }
+  }
+  return worst;
+}
+
+}  // namespace
 
 int main() {
-  const zc::CreatureType& T = zixx::type();
-  size_t nv = 0, nt = 0;
-  for (const auto& m : T.mesh) {
+  const zc::CreatureType& type = zixx::type();
+  size_t nv = 0, nt = 0, mnt = 0;
+  for (const auto& m : type.mesh) {
     nv += m.verts.size();
     nt += m.idx.size() / 3;
   }
-  size_t mnt = 0;
-  for (const auto& m : T.micro) mnt += m.idx.size() / 3;
+  for (const auto& m : type.micro) mnt += m.idx.size() / 3;
   std::printf("bones=%d meshlets=%zu verts=%zu tris=%zu | micro: %zu meshlets "
-              "%zu tris, compiler micro_error=%d (a MEASURED result, never an "
-              "art target)\n",
-              (int)T.bank.bone_count, T.mesh.size(), nv, nt, T.micro.size(), mnt,
-              (int)T.micro_error);
+              "%zu tris, compiler micro_error=%d\n",
+              static_cast<int>(type.bank.bone_count), type.mesh.size(), nv, nt,
+              type.micro.size(), mnt, static_cast<int>(type.micro_error));
 
-  for (const zc::Clip& clip : T.bank.clips) {
-    int32_t worst_min = INT32_MAX, worst_max = INT32_MIN;
-    int worst_f = -1;
-    int worst_b0 = -1, worst_b1 = -1;  // the min vertex's bind at the worst key
-    int32_t belly_lo = INT32_MAX, belly_hi = INT32_MIN;  // per-loop belly band
-    std::printf("clip slot %d (%d keys)\n", clip.slot_id, clip.frame_count);
-    for (uint16_t f = 0; f < clip.frame_count; ++f) {
-      std::array<zc::mat3x4fx, zc::kMaxBones> pose;
-      zc::decode_pose(T, clip, f, pose, nullptr, 0);
-      int32_t mn = INT32_MAX, mx = INT32_MIN;
-      // blade-tip minimum: the last two blade bones' meshlets carry the tips;
-      // cheaper and robust to just track the min over vertices bound to the
-      // blade bones.
-      int32_t blade_mn = INT32_MAX;
-      int mnb0 = -1, mnb1 = -1;
-      for (const auto& m : T.mesh) {
-        for (const auto& v : m.verts) {
-          int32_t x, y, z;
-          zc::skin_vertex(pose.data(), v, x, y, z, nullptr);
-          if (y < mn) { mnb0 = v.b0; mnb1 = v.b1; }
-          mn = std::min(mn, y);
-          mx = std::max(mx, y);
-          if (v.b0 >= zixx::kBBladeL && v.b0 <= zixx::kBBladeR2)
-            blade_mn = std::min(blade_mn, y);
-        }
-      }
-      if (mn < worst_min) {
-        worst_min = mn;
-        worst_f = f;
-        worst_b0 = mnb0;
-        worst_b1 = mnb1;
-      }
-      worst_max = std::max(worst_max, mx);
-      belly_lo = std::min(belly_lo, mn);
-      belly_hi = std::max(belly_hi, mn);
-      const bool attack = clip.slot_id == 3;
-      if ((attack && f >= 44) || f % 8 == 0 || mn < -30)
-        std::printf("  k%3d  minY %6d  maxY %6d  bladeMin %6d  (mm)\n", f, to_mm(mn), to_mm(mx),
-                    to_mm(blade_mn));
-    }
-    std::printf("  WORST minY %d mm at key %d (bones %d/%d); apex %d mm; "
-                "belly band [%d..%d] mm\n",
-                to_mm(worst_min), worst_f, worst_b0, worst_b1, to_mm(worst_max),
-                to_mm(belly_lo), to_mm(belly_hi));
-  }
-
-  // ---- non-adjacent ring overlap, every key of every clip -----------------
-  const std::vector<probe::Station> sts = probe::stations();
-  const int n = static_cast<int>(sts.size());
-  // pairs to check: bind separation strictly beyond tube continuity
+  const std::vector<Station> stations = make_stations();
   std::vector<std::pair<int, int>> pairs;
-  for (int i = 0; i < n; ++i) {
-    for (int j = i + 8; j < n; ++j) {
+  for (int i = 0; i < zixx::kProfileStations; ++i) {
+    for (int j = i + 8; j < zixx::kProfileStations; ++j) {
       const int64_t bind_mm = zixx::station_x(j) - zixx::station_x(i);
-      if (bind_mm * 100 > static_cast<int64_t>(sts[i].r_mm + sts[j].r_mm) * 115)
+      if (bind_mm * 100 >
+          static_cast<int64_t>(stations[i].r_mm + stations[j].r_mm) * 115)
         pairs.push_back({i, j});
     }
   }
-  // AUTHORED NESTING ALLOWANCES, per clip slot -- the same doctrine as
-  // ground contact: declared overlap is design, anything beyond it is the
-  // fault. The concept NESTS the head inside the S's hook, so ring centres
-  // legitimately come within radii of each other.
-  // RE-AUTHORED 2026-08-28 (run 2339): the head is now the CULMINATION of
-  // the one tube (kTaper peak ~218 mm) and looks UP (-6000 attitude, owner
-  // order) -- a bigger head riding higher inside the same approved hook
-  // nests deeper by construction, exactly as Side.png merges the head
-  // against the descending stroke. Each figure was re-judged on the worst
-  // key's RENDER before being re-authored (run 2339 scratch r10/r11):
-  //   idle 250:  breath extreme k81 presses the crown ~239 mm into the
-  //              deepened fold (render: head tucked into the coil, eye and
-  //              face fully clean -- the sheet's nesting, transient);
-  //   walk 165:  gait fold k16 ~154 mm, head in front of the arch, eye
-  //              clean; the grounded-run bunching is the approved walk;
-  //   attack 210: the REST pose itself nests the culminating head ~199 mm
-  //              against the dive stroke (k0 render = the approved S read);
-  //              the coil's own closing stays under this;
-  //   fall 40:   TIGHTENED from 200: the 2026-08-28 S-authority relax
-  //              (owner: "relax by a ton") took the flail from 10,768
-  //              hits/307 mm to 67 hits/18 mm -- the loose fall genuinely
-  //              stopped folding through itself, so the allowance follows
-  //              the evidence DOWN, not up.
-  // A regression that digs DEEPER than these prints and exits 1.
-  // The 2026-08-28 vocabulary (each judged on its worst-key render,
-  // run 2339): hit 215 (the recoil presses the head into the hook, the
-  // rest-nesting family); death 265 (the shudder's deepen at k5 presses
-  // like the idle breath extreme; the keeled corpse itself sits at -44);
-  // balance 210 (the rest nesting; the flop's -191 ground bite is the
-  // declared impact, not an overlap); look 250 (the full right turn swings
-  // the skull closest to the hook, k72 render: clean overlap layering).
-  // RE-AUTHORED 2026-08-28 late (run 0326 sidecmp-03), then AGAIN at
-  // sidecmp-05 -- THE CHUBBY BODY. The outline gate proved the front tube
-  // was a wire against the sheet (tube ~22%% of the loop height vs the
-  // sheet's ~40%%); the owner-directed fatten (neck 190 mm half-width)
-  // makes the S's own coils LAP, exactly as Side.png draws them lapping.
-  // Every nesting figure below is therefore the fat-body family: each was
-  // re-judged on the sidecmp-05 render and re-checked on the final site
-  // contact sheets; the fall now touches its own coils in flight (94 mm)
-  // because a chubby snake's loose coils DO -- the sheet's own look.
-  const auto allow_mm = [](int slot) -> int32_t {
-    switch (slot) {
-      case 1: return 250;
-      case 2: return 300;
-      case 3: return 370;   // RE-AUTHORED run 0326 pivot pass: the skull
-                             // pivot moved to its centroid (kHeadPivotMm
-                             // 0 -> 190) and the coil's nose-to-tail wheel
-                             // closure rides ~22 mm deeper for the same
-                             // approved coil; worst key rendered clean
-                             // (attack-coil-worstkey.png)
-      case 4: return 120;
-      case 5: return 390;   // RE-AUTHORED run 0326: the exaggerated hit's
-                             // peak recoil (owner: "more exaggerated and
-                             // impactful") bunches mid-body vs grounded
-                             // run 245 for ~3 keys -- worst-key render
-                             // (hit-impact-frames.png) layers cleanly
-      case 6: return 265;
-      case 7: return 210;
-      case 8: return 250;
-      // the C2 phase clips are SLICES of the attack (slots 10..17): they
-      // inherit its authored nesting wholesale (the coil's nose-to-tail
-      // wheel closure, the rest pose's hook nesting)
-      case 10: case 11: case 12: case 13: case 14: case 15: case 16: case 17:
-        return 370;  // the attack's slices inherit its re-author
-      // run 0326 vocabulary (each to be re-judged on its worst-key render
-      // before close): the knockdown family lies in the death's corpse
-      // family (drain to kCorpseSlope + flank roll -- death carries 265);
-      // the directional damage set is the hit family (215), with TOP's
-      // crush pressing like the breath extreme; the run is the walk family
-      // with a taller hump; death1 is a death; the taunt OPENS the S so it
-      // nests less; the corpse holds the death's own final pose.
-      // RE-AUTHORED on worst-key renders (run 0326 evidence
-      // overlap-worst-keys.png -- each judged layered-and-clean before its
-      // figure moved):
-      case 20: return 285;   // knocked2Floor: k2's head-snap presses the
-                             // skull into the hook 273 -- the hit family's
-                             // transient, eye clean on the render
-      case 21: return 265;   // getUp (passes back through the rest nesting)
-      case 22: return 265;   // hitFloor
-      case 23: return 235;   // damageRight (215 -> 235, RUN 0757: the
-                             // notch-campaign neck reaches FORWARD, so the
-                             // lateral whiplash nests the head 15 mm deeper
-                             // into the arch at its peak -- worst key 4
-                             // rendered clean, dmg-worst-keys.png)
-      case 24: return 290;   // damageBack: the forward whip tucks the head
-                             // under the arch 275 for two keys -- violent
-                             // but layered (worst-key render)
-      case 25: return 235;   // damageLeft (mirror of 23; same 0757 provenance)
-      case 26: return 400;   // damageTop: the crush presses like the breath
-                             // extreme (263; idle's own extreme carries 250)
-      case 27: return 340;   // run: the taller hump bunches the grounded
-                             // run 194 vs the walk's 154 -- same mechanism
-      case 28: return 410;   // death1: k20 is the crumple moment (agony
-                             // meets drain, 353) -- reads as the animal
-                             // collapsing into a heap, face clean
-      case 30: return 215;   // taunt (the crumple was FIXED in motion:
-                             // front-lift rear-up took 355 -> 211)
-      case 31: return 265;   // corpse
-      case 33: case 34: case 35:
-        return 370;          // the salto variations inherit the attack
-                             // family's pivot-era wheel-closure allowance
-      // RUN 0757 vocabulary close-out -- each authored just above its
-      // worst key, which was RENDERED and judged clean first
-      // (worst_tumble/worst_death3/worst_stretch in the run evidence):
-      case 29: return 285;   // death3: k2 pre-shake = the rest nesting
-      case 32: return 190;   // stance2: the sagged front nests less deep
-      case 36: return 390;   // tumble: the bunched ball at k40 -- the
-                             // thrown animal curled around itself, layered
-                             // clean; the attack coil's family, deeper
-      case 37: return 275;   // idle2/stretch: the lift peak vs the arch
-      case 38: return 250;   // idle3/fork-watch
-      case 39: return 240;   // strike: the cocked hook
-      case 40: return 240;   // notify: the alert gather
-      case 41: return 215;   // bow: the dip passes the rest nesting
-      case 42: return 245;   // talk
-      case 43: return 125;   // sorrow: the sag OPENS the S -- follows the
-                             // evidence DOWN like the taunt
-      default: return 0;
+
+  std::vector<ClipScan> scans;
+  scans.reserve(type.bank.clips.size());
+  for (const zc::Clip& clip : type.bank.clips) {
+    scans.push_back(scan_clip(type, clip, stations));
+    const ClipScan& s = scans.back();
+    std::printf("slot %2d: %3d keys / %3zu presentation samples; minY %4d mm "
+                "at %d%s; maxY %5d mm; saturation %llu\n",
+                clip.slot_id, clip.frame_count, s.samples.size(),
+                to_mm(s.worst_min_fx), s.worst_tick / 2,
+                (s.worst_tick & 1) ? ".5" : "",
+                to_mm(s.worst_max_fx),
+                static_cast<unsigned long long>(s.saturation));
+  }
+
+  int failures = 0;
+  auto require = [&](bool ok, const char* what) {
+    if (!ok) {
+      ++failures;
+      std::printf("  ** FAIL: %s\n", what);
     }
   };
+
+  // Non-adjacent station overlap at the real 60 Hz presentation cadence.
   int total_overlaps = 0;
-  int violations = 0;
-  for (const zc::Clip& clip : T.bank.clips) {
+  for (const ClipScan& scan : scans) {
     int clip_overlaps = 0;
     int32_t worst_depth = 0;
-    int worst_key = -1, worst_i = -1, worst_j = -1;
-    for (uint16_t f = 0; f < clip.frame_count; ++f) {
-      std::array<zc::mat3x4fx, zc::kMaxBones> pose;
-      zc::decode_pose(T, clip, f, pose, nullptr, 0);
-      std::vector<int64_t> cx(n), cy(n), cz(n);
-      for (int i = 0; i < n; ++i) {
-        int32_t x, y, z;
-        zc::skin_vertex(pose.data(), sts[i].v, x, y, z, nullptr);
-        cx[i] = to_mm(x);
-        cy[i] = to_mm(y);
-        cz[i] = to_mm(z);
-      }
+    int worst_tick = -1, worst_i = -1, worst_j = -1;
+    for (const PosedSample& s : scan.samples) {
       for (const auto& pr : pairs) {
         const int i = pr.first, j = pr.second;
-        const int64_t dx = cx[i] - cx[j], dy = cy[i] - cy[j], dz = cz[i] - cz[j];
+        const int64_t dx = s.x_mm[i] - s.x_mm[j];
+        const int64_t dy = s.y_mm[i] - s.y_mm[j];
+        const int64_t dz = s.z_mm[i] - s.z_mm[j];
         const int64_t d2 = dx * dx + dy * dy + dz * dz;
-        const int64_t rr = sts[i].r_mm + sts[j].r_mm;
+        const int64_t rr = stations[i].r_mm + stations[j].r_mm;
         if (d2 < rr * rr) {
-          const int32_t depth =
-              static_cast<int32_t>(rr - static_cast<int64_t>(zref::isqrt_u64(static_cast<uint64_t>(d2))));
           ++clip_overlaps;
+          const int32_t depth = static_cast<int32_t>(
+              rr - static_cast<int64_t>(zref::isqrt_u64(
+                       static_cast<uint64_t>(d2))));
           if (depth > worst_depth) {
             worst_depth = depth;
-            worst_key = f;
+            worst_tick = s.tick;
             worst_i = i;
             worst_j = j;
           }
@@ -316,22 +302,234 @@ int main() {
       }
     }
     total_overlaps += clip_overlaps;
-    const int32_t allow = allow_mm(clip.slot_id);
-    if (worst_depth > allow) ++violations;
-    if (clip_overlaps > 0) {
-      std::printf(
-          "clip slot %d OVERLAP: %d station-pair hits; worst %d mm deep (allowance %d), "
-          "key %d, stations %d vs %d%s\n",
-          clip.slot_id, clip_overlaps, worst_depth, allow, worst_key, worst_i, worst_j,
-          worst_depth > allow ? "  ** BEYOND ALLOWANCE **" : "");
-    } else {
-      std::printf("clip slot %d overlap: none\n", clip.slot_id);
+    const int32_t allow = overlap_allowance_mm(scan.clip->slot_id);
+    if (worst_depth > allow) {
+      ++failures;
+      std::printf("  ** FAIL: slot %d overlap %d mm > declared %d mm at "
+                  "%d%s, stations %d/%d\n",
+                  scan.clip->slot_id, worst_depth, allow, worst_tick / 2,
+                  (worst_tick & 1) ? ".5" : "", worst_i, worst_j);
+    } else if (clip_overlaps > 0) {
+      std::printf("slot %2d overlap: %d samples/pairs, worst %d/%d mm at "
+                  "%d%s (stations %d/%d)\n",
+                  scan.clip->slot_id, clip_overlaps, worst_depth, allow,
+                  worst_tick / 2, (worst_tick & 1) ? ".5" : "", worst_i,
+                  worst_j);
     }
   }
-  if (violations == 0) {
-    std::printf("OVERLAP PROBE: %d hits, all within authored allowances\n", total_overlaps);
+  std::printf("OVERLAP: %d sample/pair hits, all checked at keys + midpoints\n",
+              total_overlaps);
+
+  // Shared spring: compare the authored rest against the first held deepest
+  // compression in slot 35.  Thresholds are regression envelopes around the
+  // visually accepted native side/top sheets, not generators for the pose.
+  const ClipScan* spring = find_scan(scans, zixx::kSlotAtkSix);
+  require(spring != nullptr, "missing slot 35 shared-spring clip");
+  if (spring) {
+    const zc::AttackPlan plan = zixx::zixx_variant_plan(zixx::kSlotAtkSix);
+    const zixx::AttackVariantPhases ph =
+        zixx::zixx_attack_variant_phases(plan, false);
+    const int deep_tick = 2 * ph.compress_end;
+    require(deep_tick < static_cast<int>(spring->samples.size()),
+            "spring deepest sample outside clip");
+    if (deep_tick < static_cast<int>(spring->samples.size())) {
+      const PosedSample& rest = spring->samples[0];
+      const PosedSample& deep = spring->samples[deep_tick];
+      struct Region { const char* name; int lo; int hi; };
+      const Region regions[] = {
+          {"head", 0, 5}, {"neck", 6, 12}, {"front", 13, 20},
+          {"middle", 21, 32}, {"grounded run", 33, 44},
+          {"taper", 45, 51}, {"tail", 52, 56}};
+      int32_t center_lo = INT32_MAX, center_hi = INT32_MIN;
+      int64_t whole_rest_y = 0, whole_deep_y = 0;
+      std::printf("SPRING regions (deep minus rest centre Y):");
+      int region_index = 0;
+      for (const Region& r : regions) {
+        int64_t a = 0, b = 0;
+        for (int i = r.lo; i <= r.hi; ++i) {
+          a += rest.y_mm[i];
+          b += deep.y_mm[i];
+        }
+        whole_rest_y += a;
+        whole_deep_y += b;
+        const int32_t delta = static_cast<int32_t>(
+            (b - a) / (r.hi - r.lo + 1));
+        std::printf(" %s=%d", r.name, delta);
+        // Compression participation is motion into the shared concertina, not
+        // a forced sign for every point.  The raised front must come down; rear
+        // troughs rise into the same nearly-flat silhouette.  Requiring every
+        // region to lower contradicted the accepted complete-animal pose and
+        // merely measured which side of the original S each region occupied.
+        require(delta <= -250 || region_index >= 3,
+                "a raised front spring region failed to descend strongly");
+        require(delta <= -100 || delta >= 100,
+                "a spring region stopped participating in whole-body compression");
+        ++region_index;
+      }
+      require(whole_deep_y < whole_rest_y,
+              "the complete spring no longer descends overall");
+      std::printf(" mm\n");
+      for (int i = 0; i < zixx::kProfileStations; ++i) {
+        center_lo = std::min(center_lo, deep.y_mm[i]);
+        center_hi = std::max(center_hi, deep.y_mm[i]);
+      }
+      const int32_t center_span = center_hi - center_lo;
+      const int32_t mesh_span = to_mm(deep.max_y_fx - deep.min_y_fx);
+      std::printf("SPRING deepest: centre span %d mm, mesh span %d mm, "
+                  "minY %d mm\n",
+                  center_span, mesh_span, to_mm(deep.min_y_fx));
+      require(center_span <= 520,
+              "deepest spring no longer has the accepted almost-flat silhouette");
+      require(mesh_span >= 150,
+              "deepest spring lost the tube's volumetric cross-section");
+      int32_t spring_worst = INT32_MAX;
+      for (int t = 0; t <= 2 * ph.hold_end &&
+                      t < static_cast<int>(spring->samples.size()); ++t)
+        spring_worst = std::min(spring_worst,
+                                to_mm(spring->samples[t].min_y_fx));
+      std::printf("SPRING declared terrain bite: %d mm (law -40..-15)\n",
+                  spring_worst);
+      require(spring_worst >= -zixx::kSpringDeclaredBiteMm &&
+                  spring_worst <= -15,
+              "shared spring terrain bite left its authored declaration");
+    }
+  }
+
+  // Immediate programmable jump family.
+  for (const auto spec : {std::pair<int, int>{zixx::kSlotJumpOne, 1},
+                          std::pair<int, int>{zixx::kSlotJumpMulti, 3}}) {
+    const ClipScan* scan = find_scan(scans, spec.first);
+    require(scan != nullptr, "missing programmable jump clip");
+    if (!scan) continue;
+    const zixx::JumpPlan p = zixx::zixx_jump_plan(
+        static_cast<uint16_t>(spec.first), spec.second);
+    const zixx::JumpPhases ph = zixx::zixx_jump_phases(p);
+    require(scan->clip->frame_count == ph.frame_count,
+            "jump duration drifted from shared phase table");
+    require(scan->clip->events.size() == 1 &&
+                scan->clip->events[0].frame == ph.landing_key &&
+                scan->clip->events[0].event == zc::kEvFoot,
+            "jump landing event drifted from shared phase table");
+    const zixx::JumpMotionSample at_launch =
+        zixx::zixx_jump_motion_sample(p, ph.launch_key);
+    const zixx::JumpMotionSample after_launch =
+        zixx::zixx_jump_motion_sample(p, ph.launch_key + 1);
+    require(at_launch.lift == 0 && after_launch.lift > 0,
+            "jump does not leave immediately after release");
+    int32_t apex = 0;
+    int32_t prev_theta = 0;
+    bool monotonic = true;
+    for (int k = ph.launch_key; k <= ph.landing_key; ++k) {
+      const zixx::JumpMotionSample m = zixx::zixx_jump_motion_sample(p, k);
+      apex = std::max(apex, m.lift);
+      if (k > ph.launch_key && m.theta < prev_theta) monotonic = false;
+      prev_theta = m.theta;
+    }
+    const zixx::JumpMotionSample landed =
+        zixx::zixx_jump_motion_sample(p, ph.landing_key);
+    require(apex == p.apex_mm, "jump authored root-lift apex drifted");
+    require(monotonic && landed.theta == spec.second * 65536 &&
+                (landed.theta & 0xFFFF) == 0,
+            "jump turn count/wrap is not exact and monotonic");
+    const StationStepMaximum continuity = station_step_max_mm(
+        *scan, 1, static_cast<int>(scan->samples.size()) - 1);
+    require(continuity.mm <= zixx::kJumpMaxStationStepMm,
+            "jump has a discontinuous 60 Hz station step");
+    require(key_pose_equal(*scan->clip, 0, ph.last_key,
+                           type.bank.bone_count, true),
+            "jump does not recover bit-exactly to its starting rest pose");
+    int32_t contact_worst = INT32_MAX;
+    for (const PosedSample& s : scan->samples)
+      contact_worst = std::min(contact_worst, to_mm(s.min_y_fx));
+    require(contact_worst >= -zixx::kSpringDeclaredBiteMm &&
+                contact_worst <= -15,
+            "jump ground contact left the declared spring/absorption band");
+    const int clear_begin = 2 * (ph.launch_key + 2);
+    const int clear_end = 2 * (ph.landing_key - 2);
+    bool clear_flight = true;
+    for (int t = clear_begin; t <= clear_end; ++t)
+      if (to_mm(scan->samples[t].min_y_fx) <= 0) clear_flight = false;
+    require(clear_flight, "jump touches terrain in the undeclared flight core");
+    std::printf("JUMP slot %d: apex %d mm, turns %d, landing key %d, "
+                "contact %d mm, max 60 Hz station step %d mm at %d%s "
+                "station %d\n",
+                spec.first, apex, spec.second, ph.landing_key, contact_worst,
+                continuity.mm, continuity.tick / 2,
+                (continuity.tick & 1) ? ".5" : "", continuity.station);
+  }
+
+  // Six/nine matched limit declarations and phase-specific terrain policy.
+  const zc::AttackPlan six_plan =
+      zixx::zixx_variant_plan(zixx::kSlotAtkSix);
+  const zc::AttackPlan nine_plan =
+      zixx::zixx_variant_plan(zixx::kSlotAtkNine);
+  require(six_plan.apex_mm == 12000 && nine_plan.apex_mm == 24000 &&
+              nine_plan.apex_mm == 2 * six_plan.apex_mm,
+          "six/nine authored root apex is not exactly 12000/24000 mm");
+  require(six_plan.spin_mturns == 6000 && nine_plan.spin_mturns == 9000,
+          "six/nine programmed whole-salto count drifted");
+  for (const auto spec : {
+           std::pair<int, int>{zixx::kSlotAtkSix,
+                               zixx::kAtkSixGroundStrikeDepthMm},
+           std::pair<int, int>{zixx::kSlotAtkNine,
+                               zixx::kAtkNineTargetContactDepthMm}}) {
+    const ClipScan* scan = find_scan(scans, spec.first);
+    require(scan != nullptr, "missing six/nine attack limit clip");
+    if (!scan) continue;
+    const bool target = zixx::zixx_variant_air_hit(
+        static_cast<uint16_t>(spec.first));
+    const zc::AttackPlan p = zixx::zixx_variant_plan(
+        static_cast<uint16_t>(spec.first));
+    const zixx::AttackVariantPhases ph =
+        zixx::zixx_attack_variant_phases(p, target);
+    require(scan->clip->frame_count == ph.frame_count,
+            "six/nine duration drifted from shared phase table");
+    require(scan->clip->events.size() == 1 &&
+                scan->clip->events[0].frame == ph.impact &&
+                scan->clip->events[0].event == zc::kEvAttack,
+            "six/nine impact event drifted from shared phase table");
+    int32_t outside_worst = INT32_MAX;
+    int32_t committed_worst = INT32_MAX;
+    for (const PosedSample& s : scan->samples) {
+      const bool committed =
+          s.tick >= 2 * ph.impact && s.tick <= 2 * ph.recoil_begin;
+      if (committed)
+        committed_worst = std::min(committed_worst, to_mm(s.min_y_fx));
+      else
+        outside_worst = std::min(outside_worst, to_mm(s.min_y_fx));
+    }
+    require(committed_worst >= -spec.second,
+            "committed strike exceeded its declared 3D contact depth");
+    require(outside_worst >= -zixx::kSpringDeclaredBiteMm,
+            "six/nine clip penetrates terrain outside declared phases");
+    if (spec.first == zixx::kSlotAtkNine) {
+      require(committed_worst <= -50,
+              "nine-salto target insertion no longer reaches its declared depth");
+      require(scan->saturation == 0,
+              "nine-salto decode/skinning saturated fixed-point arithmetic");
+    }
+    const StationStepMaximum continuity = station_step_max_mm(
+        *scan, 1, static_cast<int>(scan->samples.size()) - 1);
+    require(continuity.mm <= 2200,
+            "six/nine attack has a discontinuous 60 Hz station step");
+    require(key_pose_equal(*scan->clip, ph.impact, ph.extract_begin,
+                           type.bank.bone_count, true),
+            "impact hold is not bit-constant through extraction start");
+    std::printf("ATTACK slot %d: %d keys / %zu samples, impact %d, "
+                "contact committed %d mm, outside %d mm, max step %d mm at "
+                "%d%s station %d, saturation %llu\n",
+                spec.first, scan->clip->frame_count, scan->samples.size(),
+                ph.impact, committed_worst, outside_worst, continuity.mm,
+                continuity.tick / 2, (continuity.tick & 1) ? ".5" : "",
+                continuity.station,
+                static_cast<unsigned long long>(scan->saturation));
+  }
+
+  if (failures == 0) {
+    std::printf("ZIXX PROBE: PASS — every key + midpoint, declared 3D contact, "
+                "spring/jump/limit/overlap gates\n");
     return 0;
   }
-  std::printf("OVERLAP PROBE: %d clip(s) beyond allowance -- SHOUTING\n", violations);
+  std::printf("ZIXX PROBE: FAIL — %d assertion(s)\n", failures);
   return 1;
 }

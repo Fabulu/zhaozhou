@@ -1,0 +1,9 @@
+Canonical one-shot law: samples = 2 * (authored_keys - 1) + 1.
+Sampling begins at authored key 0, includes each baked midpoint once, and ends at the final authored key without a wrapped sample.
+zixxtrixx-jump-one: 72 keys -> 143 samples; raw 0000..0142; first_crc=0x478FF322; final_crc=0x1FB9140D; first_not_final=1 - PASS
+zixxtrixx-jump-multi: 72 keys -> 143 samples; raw 0000..0142; first_crc=0x478FF322; final_crc=0x1FB9140D; first_not_final=1 - PASS
+zixxtrixx-salto-six: 133 keys -> 265 samples; raw 0000..0264; first_crc=0xA49118F9; final_crc=0x1924E9B0; first_not_final=1 - PASS
+zixxtrixx-salto-nine: 184 keys -> 367 samples; raw 0000..0366; first_crc=0x0C9DDE7B; final_crc=0x3D66DC8A; first_not_final=1 - PASS
+zixxtrixx-spring-side: 30 keys -> 59 samples; raw 0000..0058; first_crc=0x67C27886; final_crc=0x9C5326D4; first_not_final=1 - PASS
+zixxtrixx-spring-top: 30 keys -> 59 samples; raw 0000..0058; first_crc=0x6383CD79; final_crc=0x9274314A; first_not_final=1 - PASS
+CADENCE: PASS - no cadence-generated wrap or appended final duplicate; identical adjacent images occur only inside authored stable holds.

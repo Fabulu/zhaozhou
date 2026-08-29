@@ -1,0 +1,8 @@
+comparison target: committed Upheaval/creature/Zixxtrixx/golden (read-only)
+comparison law: common pre-pupil quaternion channels per key plus complete root; current 28-bone blobs cannot be whole-file equal to 26-bone goldens
+shared-channel/root identical: clip-12.bin clip-13.bin clip-14.bin clip-15.bin clip-16.bin clip-30.bin
+authored motion drift: clip-1.bin clip-2.bin clip-3.bin clip-4.bin clip-5.bin clip-6.bin clip-7.bin clip-8.bin clip-10.bin clip-11.bin clip-17.bin clip-20.bin clip-21.bin clip-22.bin clip-23.bin clip-24.bin clip-25.bin clip-26.bin clip-27.bin clip-28.bin clip-29.bin clip-31.bin clip-32.bin clip-33.bin clip-34.bin clip-35.bin clip-36.bin clip-37.bin clip-38.bin clip-39.bin clip-40.bin clip-41.bin clip-42.bin clip-43.bin
+new clips without committed golden: clip-45.bin clip-46.bin clip-47.bin clip-48.bin
+structural omissions:
+legacy quick taunt slot 30: PASS
+no staging golden used; no golden modified
