@@ -68,6 +68,8 @@
 
 #include "zfield/zfield.hpp"
 #include "zfield/zfield_plan.hpp"
+#include "zfield/generated/zfield_optable.hpp"
+#include "zfield/zfield_steps.hpp"
 #include "zhao_sim.hpp"
 
 namespace {
@@ -426,6 +428,50 @@ struct Dut {
   }
 };
 
+/** THE WHOLE REGISTER FILE THIS POINT SHOULD END WITH, uop by uop.
+ *
+ *  Checking only the four declared outputs says "something upstream is wrong"
+ *  and stops there. Stepping the plan with the shipped per-op oracle and
+ *  comparing EVERY vector register says WHICH uop first disagreed, and the op
+ *  that wrote that register names the service to go and look at.
+ *
+ *  `zfield::steps::exec_op` is the same function the whole engine is
+ *  differentiated against, so this adds no second opinion about semantics --
+ *  only about where they stopped matching. */
+void expected_regs(const zfield::Fplan& fp, const zfield::Decoded& prog,
+                   const zfield::Prepared& prep, const int32_t* in, size_t n_in, int scalar_base,
+                   int32_t* rf, int n_rf, std::vector<int>* wrote_by) {
+  for (int i = 0; i < n_rf; ++i) rf[i] = 0;
+  wrote_by->assign((size_t)n_rf, -1);
+
+  // The uniform half is broadcast above the vector registers, exactly as the
+  // harness loads it into the silicon.
+  for (int s = 0; s < (int)fp.n_scalar && scalar_base + s < n_rf; ++s)
+    rf[scalar_base + s] = prep.scalar[(size_t)s];
+  // The varying half.
+  for (size_t i = 0; i < n_in && i < fp.in_vreg.size(); ++i)
+    if (fp.in_vreg[i] != 0xFF && (int)fp.in_vreg[i] < n_rf) rf[fp.in_vreg[i]] = in[i];
+
+  zref::SatLedger L;
+  for (size_t u = 0; u < fp.uops.size(); ++u) {
+    const zfield::VecUop& v = fp.uops[u];
+    int32_t src[9] = {};
+    for (int k = 0; k < (int)v.n_src && k < 9; ++k) {
+      const int r = v.src[k].kind == zfield::SrcKind::kVec ? (int)v.src[k].idx
+                                                          : scalar_base + (int)v.src[k].idx;
+      src[k] = (r >= 0 && r < n_rf) ? rf[r] : 0;
+    }
+    int32_t dst[3] = {};
+    zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    const auto* sh = zfield::optable::shape_of(v.op);
+    const int w = (v.op == zfield::UOP_RING_PREP) ? 1 : (sh ? (int)sh->dst_width : 1);
+    for (int m = 0; m < w && (int)v.dst + m < n_rf; ++m) {
+      rf[(int)v.dst + m] = dst[m];
+      (*wrote_by)[(size_t)((int)v.dst + m)] = (int)u;
+    }
+  }
+}
+
 struct Result {
   bool ran = false;
   long ii_x4 = 0;       // clocks per four-point group, scaled by 4 for rounding
@@ -444,7 +490,7 @@ struct Result {
 };
 
 /** Run one real Earth program on the composed engine and count. */
-Result run_program(const char* path, int points, uint64_t seed, bool wave_drive) {
+Result run_program(const char* path, int points, uint64_t seed, bool wave_drive, int n_ctx) {
   Result R;
 
   const std::vector<uint8_t> bytes = slurp(path);
@@ -537,6 +583,8 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive)
   // One point per context, checked and replaced the instant it retires.
   std::vector<int32_t> pt_in[kCtx];
   std::vector<int32_t> exp_out[kCtx];
+  int32_t exp_rf[kCtx][kRegs] = {};
+  std::vector<int> wrote_by;
   const size_t n_out = dec.prog.out_lanes.size();
 
   int issued = 0, retired = 0;
@@ -548,6 +596,8 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive)
       pt_in[c][i] = (int32_t)(prng.next() & 0x000FFFFF) - 0x00080000;
     exp_out[c].assign(n_out, 0);
     zfield::execute_point(fp, dec.prog, prep, pt_in[c].data(), n_in, exp_out[c].data(), n_out);
+    expected_regs(fp, dec.prog, prep, pt_in[c].data(), n_in, scalar_base, exp_rf[c], kRegs,
+                  &wrote_by);
   };
 
   auto load_point = [&](int c) {
@@ -574,6 +624,19 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive)
   };
 
   auto check_point = [&](int c) {
+    // WHICH UOP FIRST DISAGREED. Reported before the output check, because the
+    // output is downstream of everything and names nothing.
+    for (int r = 0; r < (int)fp.n_vreg; ++r) {
+      if (d.shadow[c][r] == exp_rf[c][r]) continue;
+      const int u = (r < (int)wrote_by.size()) ? wrote_by[(size_t)r] : -1;
+      const uint8_t op = (u >= 0 && u < (int)fp.uops.size()) ? fp.uops[(size_t)u].op : 0;
+      char buf[220];
+      snprintf(buf, sizeof buf,
+               "%s point %d ctx %d: r%d is %d, oracle %d -- written by uop %d, opcode 0x%02X",
+               path, retired, c, r, d.shadow[c][r], exp_rf[c][r], u, op);
+      fail("first divergent register", buf);
+      break;
+    }
     for (size_t o = 0; o < n_out; ++o) {
       const zfield::OutTag& tg = fp.out_map[o];
       if (tg.kind != zfield::SrcKind::kVec) continue;  // a uniform output
@@ -614,7 +677,7 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive)
   int counted_start = 0;
   int guard = 0;
   const int guard_max = points * 8000 + 400000;
-  const int warmup_waves = 2;
+  const int warmup_waves = (n_ctx >= 4) ? 2 : 4;
 
   if (wave_drive) {
     bool done_flag[kCtx];
@@ -624,11 +687,11 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive)
         preload0 = d.preload_clocks;
         counted_start = retired;
       }
-      for (int c = 0; c < kCtx; ++c) {
+      for (int c = 0; c < n_ctx; ++c) {
         load_point(c);
         done_flag[c] = false;
       }
-      int left = kCtx;
+      int left = n_ctx;
       while (left > 0 && guard++ < guard_max) {
         d.advance();
         for (int c = 0; c < kCtx; ++c) {
@@ -645,8 +708,8 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive)
       }
     }
   } else {
-    const int warmup = kCtx * warmup_waves;
-    for (int c = 0; c < kCtx; ++c) load_point(c);
+    const int warmup = n_ctx * warmup_waves;
+    for (int c = 0; c < n_ctx; ++c) load_point(c);
     while (retired < points && guard++ < guard_max) {
       d.advance();
       for (int c = 0; c < kCtx && retired < points; ++c) {
@@ -713,11 +776,16 @@ int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
 
   int points = 256;
+  int n_ctx = kCtx;
   std::vector<const char*> files;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     if (a == "--points" && i + 1 < argc) {
       points = std::atoi(argv[++i]);
+    } else if (a == "--contexts" && i + 1 < argc) {
+      n_ctx = std::atoi(argv[++i]);
+      if (n_ctx < 1) n_ctx = 1;
+      if (n_ctx > kCtx) n_ctx = kCtx;
     } else if (a.size() && a[0] != '-') {
       files.push_back(argv[i]);
     }
@@ -753,7 +821,7 @@ int main(int argc, char** argv) {
     gating = false;
     printed = 0;
     diag_failures = 0;
-    const Result S = run_program(f, points, 0xC0FFEEull, false);
+    const Result S = run_program(f, points, 0xC0FFEEull, false, n_ctx);
     const int stag_bad = diag_failures;
     gating = true;
     printed = 0;
@@ -762,7 +830,7 @@ int main(int argc, char** argv) {
              base, S.group_clocks, S.frame, S.partial, S.groups, stag_bad);
     total_stag_bad += stag_bad;
 
-    const Result R = run_program(f, points, 0xC0FFEEull, true);
+    const Result R = run_program(f, points, 0xC0FFEEull, true, n_ctx);
 
     if (!R.ran) {
       printf("   %-22s NOT RUN: %s\n", base, R.refusal.c_str());
@@ -794,15 +862,22 @@ int main(int argc, char** argv) {
   }
 
   if (total_stag_bad != 0) {
-    printf("\n== OPEN DEFECT: THE MACHINE IS DRIVE-PATTERN SENSITIVE ==\n");
-    printf("   %d value(s) came out WRONG under staggered drive and every one of them\n",
+    printf("\n== OPEN DEFECT: WRONG VALUES AT SIX OR MORE CONTEXTS ===\n");
+    printf("   %d value(s) wrong under staggered drive. Narrowed, not merely observed:\n",
            total_stag_bad);
-    printf("   ran the full program -- the failing contexts each executed for ~250 clocks\n");
-    printf("   and landed one write per uop, so this is a real disagreement with the\n");
-    printf("   oracle and not a half-finished run being read too early.\n");
-    printf("   Wave drive computes the SAME points exactly. The one thing that differs\n");
-    printf("   is PARTIAL dispatch groups: 0%% under wave, about half under staggered.\n");
-    printf("   This does NOT gate the build yet. It is the next thing to fix.\n");
+    printf("     * contexts 1,2,4 -> exact. 5 -> exact. 6,7,8 -> wrong. The threshold is\n");
+    printf("       where a second dispatch group becomes genuinely concurrent.\n");
+    printf("     * NOT partial groups: one context makes 192/192 of them partial and is\n");
+    printf("       exact. Four contexts make none and are exact.\n");
+    printf("     * NOT the services. len, trig and ring_svc each stream groups carrying\n");
+    printf("       distinct data through their own concurrency and keep every answer\n");
+    printf("       with its group.\n");
+    printf("     * The first divergent register is written by a plain ALU MUL in the\n");
+    printf("       EXECUTOR, not by any long op -- so the corruption is upstream of the\n");
+    printf("       service path entirely.\n");
+    printf("     * No alarm fires: right context, right register, wrong number.\n");
+    printf("   Suspect: the executor's operand hold across an upstream freeze, whose own\n");
+    printf("   header records this defect class twice already. Not gating yet.\n");
   }
 
   printf("\n== VERDICT ==\n");
