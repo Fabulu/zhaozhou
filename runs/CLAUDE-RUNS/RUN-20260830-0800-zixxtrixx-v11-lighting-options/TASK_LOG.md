@@ -1,7 +1,7 @@
 # Task Log: RUN-20260830-0800 - Zixxtrixx v11 lighting options
 
 **Created:** 2026-08-30 08:00 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/`
 
 ---
@@ -56,6 +56,16 @@ Diagnose residual lighting machinery versus artistic-rig insufficiency, author a
 - Bounded Edge checks passed at 1440x1000 and 390x844: all five choice items load, stills report 384x240, video reports 768x520, and neither layout has horizontal overflow.
 - Stopped the local HTTP server and browser children after evidence capture.
 
+### 2026-08-30 - Safe integration, one deployment and production closeout
+
+- Fetched both remotes before integration. Zhaozhou current main advanced only in concurrent field-v3 Earth-fit work; it was merged into the feature without overlap. Upheaval main remained at the feature base.
+- Pushed Zhaozhou feature `7531ff33b6704b0221f6ca3c767a665b5a2165c0`, then integrated it into main at `059dc736f636da9e700c05e33f966be08557355a`. Pushed Upheaval feature `245b836f82e02212baa11a881f49b7fa0e707d69`, then integrated it into main at `a9411ce4b84646f10d7c22a86a7f9562fb1f2bcc`. No force push or shared checkout was used.
+- Invoked `website/deploy.ps1 -Project upheaval -Branch main` exactly once. Wrangler published deployment `https://4b269d53.upheaval.pages.dev`; the production alias is `https://upheaval.pages.dev`.
+- Cache-bypassed exact-byte checks passed on both URLs for the generated index, all four choice stills and the comparison WebM. Production contains exact noindex once, exposes the choice section, and still starts on the v10 Idle.
+- Production Edge checks passed at 1440x1000 and 390x844 with all media dimensions and no horizontal overflow intact.
+- Restored the deploy-time generated timestamp change, removed untracked render output, and found no lane-owned renderer, ffmpeg, HTTP server, Playwright Edge, Wrangler or build child remaining.
+- Protected 2026-08-27/28 archives remain untouched. The animation catalogue was not regenerated, the spring was not changed, and migration work was not released.
+
 ---
 
 ## Validation Ledger — `V11-LIGHT-BUDGET-1`
@@ -64,7 +74,7 @@ Diagnose residual lighting machinery versus artistic-rig insufficiency, author a
 |---|---|---|---|
 | L11-S | Does any normal/transform/winding/light-space/state defect survive v10? | One source/state audit; one identical-pose unlit/normals/baseline set; smallest existing normal/temporal probe | **PASS** — machinery coherent; baseline rig is back/side-weighted for the fixed native shot |
 | L11-A | Do named alternatives differ only in lighting and remain stable/readable at native resolution? | One identical 384×240 baseline-plus-options set; one short deforming sample only if needed | **PASS** — baseline + three named rigs, one 24-frame 2x2 comparison, no state bleed |
-| L11-W | Does comparison media load with exact noindex on local and production site? | Media existence/decode; desktop+narrow section check; bounded cache-bypassed production bytes | **LOCAL PASS / production pending** — exact noindex, five items and responsive dimensions verified in Edge |
+| L11-W | Does comparison media load with exact noindex on local and production site? | Media existence/decode; desktop+narrow section check; bounded cache-bypassed production bytes | **PASS** — exact noindex, selected v10 Idle, five choice items, responsive layouts and exact production media bytes verified |
 
 No catalogue rerender/redecode or spring checks unless a concrete regression signal triggers escalation.
 
@@ -91,6 +101,9 @@ None. This remains the sole implementation/modelling lane.
 - `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/lighting-options-{contact,motion-check}.png`
 - `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/option-{render-final,motion-render}.txt`
 - `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/website-local-{browser.txt,desktop.png,narrow.png}`
+- `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/deployment.txt`
+- `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/production-verification.txt`
+- `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/website-production-{browser.txt,desktop.png,narrow.png}`
 
 ---
 
@@ -103,7 +116,6 @@ None. This remains the sole implementation/modelling lane.
 
 ---
 
-## Next Steps
+## Closeout
 
-1. Integrate both current mains without overwriting concurrent work, then deploy exactly once from Upheaval `main`.
-2. Verify production noindex/media bytes, stop all jobs and close the run.
+Run complete. V10 remains the selected production presentation; the next implementation pass begins only after the owner chooses a lighting direction, at which point the durable queued gummy-spring direction can be implemented.
