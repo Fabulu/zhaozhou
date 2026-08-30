@@ -726,6 +726,7 @@ struct Result {
   // group" names no stage, and a number that cannot say which block produced
   // it is the start of a guess rather than the end of a measurement.
   long groups = 0, partial = 0, uops = 0, idle = 0, drain = 0;
+  long held = 0, blocked = 0;
   long wb_served[2] = {0, 0}, wb_stalled[2] = {0, 0};
   // THE ONE WRITE PORT. Every uop of every point lands through it, one per
   // clock, so its occupancy is a hard floor on the whole machine however wide
@@ -1176,6 +1177,8 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   R.partial = (long)top.partial_o;
   R.uops = (long)top.uops_issued_o;
   R.idle = (long)top.idle_clocks_o;
+  R.held = (long)top.hold_clocks_o;
+  R.blocked = (long)top.blocked_clocks_o;
   R.drain = (long)top.drain_writes_o;
   for (int i = 0; i < 2; ++i) {
     R.wb_served[i] = (long)top.wb_served_o[i];
@@ -1312,6 +1315,11 @@ int main(int argc, char** argv) {
         "engine idle %ld\n",
         "", D.groups, D.partial, D.groups ? 100.0 * (double)D.partial / (double)D.groups : 0.0,
         D.uops, D.idle);
+    if (D.span_clocks > 0)
+      printf(
+          "   %-22s   FROZEN by a long op awaiting the dispatcher %ld clocks (%.0f%%); "
+          "ready-but-could-not-issue %ld\n",
+          "", D.held, 100.0 * (double)D.held / (double)D.span_clocks, D.blocked);
     printf("   %-22s   writeback: ALU served %ld stalled %ld, drain served %ld stalled %ld\n", "",
            D.wb_served[0], D.wb_stalled[0], D.wb_served[1], D.wb_stalled[1]);
     // THE FLOOR THE PORT ITSELF SETS. One write per clock, so this is what the

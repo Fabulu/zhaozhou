@@ -122,6 +122,8 @@ module zhao_probe_v3_engine #(
     output var logic                    bank_desync_o,
     output var logic [31:0]             uops_issued_o,
     output var logic [31:0]             idle_clocks_o,
+    output var logic [31:0]             hold_clocks_o,
+    output var logic [31:0]             blocked_clocks_o,
     // The rival's grant and reply, so a test can prove it was actually SERVED
     // rather than merely asking. Tying these off would make the contention
     // unobservable, which would leave the executor's refusal path tested only
@@ -289,6 +291,7 @@ module zhao_probe_v3_engine #(
       .active_o(active_o), .unsupported_o(unsupported_o),
       .sat_add_o(sat_add_o), .sat_mul_o(sat_mul_o), .sat_rescale_o(sat_rescale_o),
       .uops_issued_o(uops_issued_o), .idle_clocks_o(idle_clocks_o),
+      .hold_clocks_o(hold_clocks_o), .blocked_clocks_o(blocked_clocks_o),
       .desync_o(exec_desync_o)
   );
 

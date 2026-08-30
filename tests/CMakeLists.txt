@@ -1692,8 +1692,8 @@ verilate(test_field_v3_earth_quad
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
-  VERILATOR_ARGS -GCTX=16 -GOUTSTANDING=12 -GLANES=4)
-target_compile_definitions(test_field_v3_earth_quad PRIVATE ZHAO_EARTH_CTX=16 ZHAO_EARTH_LANES=4)
+  VERILATOR_ARGS -GCTX=32 -GOUTSTANDING=16 -GGATHERS=8 -GLANES=4)
+target_compile_definitions(test_field_v3_earth_quad PRIVATE ZHAO_EARTH_CTX=32 ZHAO_EARTH_LANES=4)
 add_test(NAME field_v3_earth_quad COMMAND test_field_v3_earth_quad --points 256
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/impact_wave.zprog
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/wave_pool.zprog)

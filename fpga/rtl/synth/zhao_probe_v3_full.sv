@@ -92,6 +92,7 @@ module zhao_probe_v3_full #(
     parameter int OUTSTANDING = 4,
     // Points per context. Everything below simply carries it.
     parameter int LANES = 1,
+    parameter int GATHERS = 4,
     parameter int REGS = 32,
     parameter int PLAN = 32,
     parameter int TAGW = 8
@@ -149,6 +150,8 @@ module zhao_probe_v3_full #(
     // ---- evidence, per stage, so a number names its own stage --------------
     output var logic [31:0]             uops_issued_o,
     output var logic [31:0]             idle_clocks_o,
+    output var logic [31:0]             hold_clocks_o,
+    output var logic [31:0]             blocked_clocks_o,
     output var logic [31:0]             rf_writes_o,
     output var logic [31:0]             groups_o,
     output var logic [31:0]             partial_o,
@@ -276,6 +279,7 @@ module zhao_probe_v3_full #(
       .active_o(active_o), .unsupported_o(unsupported_o),
       .exec_desync_o(exec_desync_o), .bank_desync_o(bank_desync_o),
       .uops_issued_o(uops_issued_o), .idle_clocks_o(idle_clocks_o),
+      .hold_clocks_o(hold_clocks_o), .blocked_clocks_o(blocked_clocks_o),
       .rival_grant_o(engine_rival_grant), .rival_rsp_o(engine_rival_rsp),
       .lane_stalls_o(engine_lane_stalls),
       .sat_add_o(sat_add_o), .sat_mul_o(sat_mul_o), .sat_rescale_o(sat_rescale_o),
@@ -291,7 +295,8 @@ module zhao_probe_v3_full #(
   );
 
   zhao_field_v3_svcpath #(
-      .CONTEXTS(CTX), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING), .LANES(LANES)
+      .CONTEXTS(CTX), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING), .LANES(LANES),
+      .GATHERS(GATHERS)
   ) u_svc (
       .clk(clk), .rst_n(rst_n),
       .long_valid_i(long_valid), .long_ready_o(long_ready),

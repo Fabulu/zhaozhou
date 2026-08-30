@@ -241,6 +241,19 @@ module zhao_probe_v3_exec #(
     // ---- counters ----------------------------------------------------------
     output var logic [31:0] uops_issued_o,
     output var logic [31:0] idle_clocks_o,  // no context was ready to issue
+    // WHERE THE CLOCKS GO WHEN NOBODY IS IDLE.
+    //
+    // `hold_clocks` counts clocks frozen by `hold_c` -- overwhelmingly a long
+    // op sitting at S4 that the dispatcher has not taken yet. That freeze is
+    // EXECUTOR-WIDE: contexts with ordinary ALU work and no interest in that
+    // service stop as well. `blocked_clocks` counts clocks where a context was
+    // READY and still did not issue, for any reason at all.
+    //
+    // Two numbers rather than one, because "the machine stopped" and "the
+    // machine stopped ON SOMETHING NAMEABLE" want different fixes, and this
+    // engine has already spent a session mistaking the first for the second.
+    output var logic [31:0] hold_clocks_o,
+    output var logic [31:0] blocked_clocks_o,
 
     // ---- the shared multiplier bank (this lane's claimant port) -----------
     // One lane of a four-wide bank. The other three belong to the other three
@@ -933,6 +946,8 @@ module zhao_probe_v3_exec #(
       sat_rescale_o <= 1'b0;
       uops_issued_o <= 32'd0;
       idle_clocks_o <= 32'd0;
+      hold_clocks_o <= 32'd0;
+      blocked_clocks_o <= 32'd0;
       for (int i = 0; i < CTX; i++) pc_r[i] <= '0;
     end else begin
       if (up_we_i)
@@ -1052,6 +1067,11 @@ module zhao_probe_v3_exec #(
       end else if (|active_r) begin
         idle_clocks_o <= idle_clocks_o + 32'd1;
       end
+      // Counted unconditionally, not as another arm of the issue decision:
+      // a clock can be BOTH held and blocked, and folding them into the
+      // if/else above would make each hide the other.
+      if (hold_c) hold_clocks_o <= hold_clocks_o + 32'd1;
+      if (|ready_c && !issue_c) blocked_clocks_o <= blocked_clocks_o + 32'd1;
 
       // S1 -> S2: RF read is in flight
       s2_v_r   <= s1_v_r;

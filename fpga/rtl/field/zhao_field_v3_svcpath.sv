@@ -63,6 +63,8 @@ module zhao_field_v3_svcpath #(
     // the executor hands over at once and how many a single register write
     // carries back.
     parameter int LANES = 1,
+    // Gather slots, one per opcode in flight. Forwarded, not fixed here.
+    parameter int GATHERS = 4,
     parameter int REGS     = 32,
     parameter int TAGW     = 8
 ) (
@@ -271,7 +273,7 @@ module zhao_field_v3_svcpath #(
 
   zhao_field_v3_dispatch #(
       .CONTEXTS(CONTEXTS), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING),
-      .LANES(LANES)
+      .LANES(LANES), .GATHERS(GATHERS)
   ) u_dispatch (
       .clk(clk), .rst_n(rst_n),
       .long_valid_i(long_valid_i), .long_ready_o(long_ready_o),
