@@ -194,6 +194,17 @@ enum EventKind : uint8_t {
 };
 
 /**
+ * Optional bind-space radial deformation sample. Both lanes are Q0.16
+ * DELTAS from identity: flatten contracts the authored radial axis and spread
+ * expands its perpendicular plane. {0,0} is exact identity. The positive-volume
+ * gate rejects flatten == 1.0; ordinary clips carry no samples at all.
+ */
+struct DeformSample {
+  uint16_t flatten = 0;
+  uint16_t spread = 0;
+};
+
+/**
  * One clip: slot id, frame_count keys, per-frame root displacement (3 x fx16)
  * and bone_count quantized quats (8 B/bone/frame as authored), plus the
  * event tags. Frames loop (the donor's walk/idle cycles); events replay with
@@ -205,6 +216,10 @@ struct Clip {
   std::vector<int32_t> root;      // 3 * frame_count fx16 (x, y, z per frame)
   std::vector<quat16> quats;      // frame_count * bone_count
   std::vector<ClipEvent> events;  // frame-sorted
+  // Optional narrow deformation sidecar. Empty means exact identity; otherwise
+  // one fixed-point sample per authored key. It never enters the PoseBank, so
+  // decoded bone matrices remain rigid and shareable.
+  std::vector<DeformSample> deform;
   /**
    * PRESENTATION INTERPOLATION (added 2026-08-26, MODELINGGUIDE section 8).
    *
@@ -249,8 +264,9 @@ struct Clip {
    * ordinary creatures keep the nlerp fallback (the pose-cache economy
    * is sized for armies, not for every creature carrying double frames).
    */
-  std::vector<quat16> mid_quats;  // frame_count * bone_count, or empty
-  std::vector<int32_t> mid_root;  // frame_count * 3, or empty
+  std::vector<quat16> mid_quats;       // frame_count * bone_count, or empty
+  std::vector<int32_t> mid_root;       // frame_count * 3, or empty
+  std::vector<DeformSample> mid_deform;  // frame_count, or empty
 };
 
 /**
@@ -368,6 +384,38 @@ struct SkinVertex {
   int8_t nx = 0, ny = 0, nz = 0;
 };
 
+/** Optional parallel metadata for one compiled vertex. */
+enum class DeformRole : uint8_t {
+  kNone = 0,
+  // Scale the real vertex around centre: contract `axis`, expand the two
+  // perpendicular lanes. Normals receive the fixed-point inverse transpose.
+  kRadial = 1,
+  // Translate an attachment by the carrier point's contraction only. Its own
+  // dimensions and normals remain rigid, so markings/fins follow but are not
+  // crushed or spread away from their carrier.
+  kFollower = 2,
+};
+
+struct DeformVertex {
+  int32_t center_x = 0, center_y = 0, center_z = 0;    // fx16 bind-space centre
+  int32_t carrier_x = 0, carrier_y = 0, carrier_z = 0;  // follower sample point
+  DeformRole role = DeformRole::kNone;
+  uint8_t axis = 0;      // bind-space cardinal axis: 0=x, 1=y, 2=z
+  uint8_t strength = 0;  // 0..255 local authority
+};
+
+/** Resolve the optional authored/presentation sample; bad/absent means identity. */
+DeformSample deformation_sample(const CreatureType& type, uint16_t slot, uint16_t frame,
+                                uint8_t sub = 0);
+
+/**
+ * Apply one bind-space sidecar sample, returning a regular SkinVertex for the
+ * unchanged rigid skin path. Identity exits before arithmetic. kRadial also
+ * applies inverse-transpose normal correction and integer renormalisation.
+ */
+SkinVertex deform_skin_vertex(const SkinVertex& v, const DeformVertex& meta,
+                              const DeformSample& sample);
+
 /**
  * Skin one vertex against a decoded palette. Single-rounding law: the FULL
  * expression w0*(Sa v) + w1*(Sb v) is evaluated exactly in s128 (products
@@ -399,6 +447,10 @@ inline constexpr int kMeshletMaxTris = 126;  // charter 10 (96..126 band)
 /** One compiled meshlet (charter 10): <=64 verts, <=126 tris, one material. */
 struct Meshlet {
   std::vector<SkinVertex> verts;
+  // Optional parallel sidecar. Empty is exact identity; otherwise size exactly
+  // matches verts. Full and compiler-decimated micro rungs are built from the
+  // same RingSpec metadata rather than copied between topologies.
+  std::vector<DeformVertex> deform;
   std::vector<uint8_t> idx;           // 3 * tri_count vertex indices
   uint8_t r = 128, g = 128, b = 128;  // part material (the CLUT8 page stand-in)
   uint8_t page = 255;                 // tile in the creature's Tileset; 255 = flat colour
@@ -426,6 +478,14 @@ struct RingSpec {
   // flattened tail blade or a skull that is wider than it is deep, and
   // MODELINGGUIDE asks for both.
   int32_t rx = 0, rz = 0;
+  // Optional radial-deformation authorship, expressed in this part's local
+  // bind axes and quarter-turned with the ring. `deform_center_*` is the tube
+  // centre about which the sample acts. A follower uses the ring centre as its
+  // carrier point. Defaults are exact identity and emit no compiled sidecar.
+  DeformRole deform_role = DeformRole::kNone;
+  uint8_t deform_axis = 0;      // local cardinal axis, 0=x, 1=y, 2=z
+  uint8_t deform_strength = 0;  // 0..255
+  int32_t deform_center_x = 0, deform_center_y = 0, deform_center_z = 0;
 };
 
 inline constexpr uint8_t kCapTop = 1;  // fan cap closing the +Y end

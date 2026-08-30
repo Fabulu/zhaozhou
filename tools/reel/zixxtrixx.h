@@ -742,21 +742,27 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
 // motion may not concertina sideways. These are absolute segment directions,
 // like kStanceSlope; joints are adjacent differences.
 constexpr int32_t kSpringCompressionDepth = 1000;  // profile authority, 1/1000
-constexpr int32_t kSpringCompressionDropMm = 252;  // full-squash root descent
-constexpr int32_t kSpringCompressionClearanceLiftMm = 98;  // mid-morph arc
-constexpr int32_t kSpringHeadRetractMm = 620;      // nose travels body-side on squash
-constexpr int32_t kSpringJumpRootLiftMm = 40;      // grounded enlarged-S settle
-constexpr int32_t kSpringTailJoinLag = 350;        // progressive entry, 1/1000
-constexpr int32_t kSpringDeclaredBiteMm = 40;      // permitted posed-surface bite
+constexpr int32_t kSpringDeclaredBiteMm = 34;      // planted support's authored bite
+constexpr int kSpringPlantSegment = 14;            // support after this spine segment
+constexpr int32_t kSpringJumpRootLiftMm = 0;       // no clearance hop during entry
+// Real cross-section controls (Q0.16 deltas from identity at full sample).
+constexpr uint16_t kSpringBodyFlattenQ16 = 17000;  // ~26% vertical contraction
+constexpr uint16_t kSpringBodySpreadQ16 = 5200;    // ~8% lateral/lengthwise bulge
+constexpr uint8_t kSpringSkullDeformStrength = 64; // head only squashes slightly
+constexpr uint8_t kSpringThroatDeformStrength = 188;
+constexpr uint8_t kSpringBodyDeformStrength = 255;
+constexpr uint8_t kSpringTailDeformStrength = 210;
+constexpr int kSpringBodyStrengthRampStations = 4;
+constexpr int kSpringTailStrengthRampStations = 6;
 constexpr int32_t kSpringJumpSlope[kStanceSlopes] = {
-    300, 900, 2400, 5200, 8200, 16500, 23500, 26000, 20500, 10000,
-    -500, -900, -1800, -3200, -5000, -7000, -9000, -11500, -14000};
+    1000, 1800, 3600, 6500, 10500, 15000, 20500, 24000, 22000, 15000,
+    6000, 1000, 500, 800, 1800, 2800, 600, -7000, -13000};
 constexpr int32_t kSpringCompressedSlope[kStanceSlopes] = {
-    0, 400, 1000, 2200, 4000, 6500, 9000, 10500, 9000, 6000,
-    2000, -2000, -6000, -9000, -10500, -9000, -6000, -3000, -1000};
-constexpr int32_t kSpringJumpHeadAttitude = 700;    // follows the taller entry arc
-constexpr int32_t kSpringHeadAttitude = 4200;       // retracts; never nose-first lunges
-constexpr int32_t kSpringBladeFlare = 900;          // fan braces during compression
+    -5000, -7000, -7000, -4000, 3000, 11000, 19000, 25000, 25000, 19000,
+    10000, 1500, 500, 500, 1200, 1800, 1600, -1500, -4000};
+constexpr int32_t kSpringJumpHeadAttitude = 700;   // follows the taller entry arc
+constexpr int32_t kSpringHeadAttitude = 2200;      // a restrained brace, not a head crush
+constexpr int32_t kSpringBladeFlare = 900;         // fan braces during compression
 
 // Named theatrical timing. The accepted attack still leaves the terrain at key
 // 23, but now spends its opening six keys enlarging through the tail before the
@@ -766,7 +772,7 @@ constexpr int kSaltoSpringEntryEndKey = 6;
 constexpr int kSaltoCompressEndKey = 12;
 constexpr int kSaltoCompressHoldEndKey = 18;
 constexpr int kSaltoSpringReleasePoseKey = 22;  // exact grounded S before lift
-constexpr int kSaltoRigidReleaseEndKey = 22;    // airborne gather may begin after this
+constexpr int kSaltoRigidReleaseEndKey = 24;    // whole S rises before wheel gather
 constexpr int kSaltoReleaseEndKey = 28;         // accepted airborne wheel is complete
 constexpr int kSaltoAirCoilKeys = 6;  // planned variants clear before wheel lock
 constexpr int kSaltoCoilPoseKey = kSaltoReleaseEndKey + 1;  // past signed-rounding residue
@@ -1020,15 +1026,13 @@ constexpr int32_t kFallBendAmp = 6200;
 constexpr int32_t kFallBendSpatial = 4700;
 constexpr int32_t kFallBendTailAuthority = 720;  // 1/1000 at the fork
 // NONUNIFORM tumble (2026-08-27, reports/ZixxtrixxReport: "a perfectly
-// uniform full revolution reads like a display turntable"). The tumble
-// phase is warped by this * sin(phase): it accelerates through one half of
-// the turn and hesitates through the other, while the endpoints stay exact
-// so the loop still closes. ~9% of a turn of maximum lead/lag.
-constexpr int32_t kFallTumbleWarp = 8200;
-constexpr int32_t kFallTumbleWarp2 = 3000;  // second harmonic: the tumble
-                                            // SLOWS near upright (a righting
-                                            // attempt) and gives way -- the
-                                            // fight, not more oscillation
+// uniform full revolution reads like a display turntable"). One named,
+// unwrapped phase law now owns head aim, body and root. Its single broad
+// sinusoidal ease accelerates through the first half and makes one natural
+// hesitation through the second without stopping or reversing; endpoints
+// stay exact so the loop still closes. This is an authored timing knob, not
+// a stack of independently wrapped corrections.
+constexpr int32_t kFallTumbleHesitation = 8200;
 constexpr int32_t kFallHeadAim = 4600;      // the head LOOKS where it falls
                                             // (the aim rig's payoff): pitches
                                             // toward the ground through the
@@ -1047,6 +1051,21 @@ inline zc::quat16 quat_axis(int32_t ax, int32_t ay, int32_t az, int32_t a) {
 inline zc::quat16 quat_x(int32_t a) { return quat_axis(1 << 16, 0, 0, a); }
 inline zc::quat16 quat_y(int32_t a) { return quat_axis(0, 1 << 16, 0, a); }
 inline zc::quat16 quat_z(int32_t a) { return quat_axis(0, 0, 1 << 16, a); }
+
+// One unwrapped timing law for every fall-tumble consumer. The linear lane is
+// never masked: a caller can inspect the complete turn as 0..65536 and prove
+// forward progress. Only sine lookup wraps, as the periodic ease requires.
+inline int32_t fall_tumble_phase(int32_t tick, int32_t ticks_per_loop) {
+  if (ticks_per_loop <= 0) return 0;
+  const int32_t unwrapped = static_cast<int32_t>(
+      (static_cast<int64_t>(tick) << 16) / ticks_per_loop);
+  const int32_t hesitation = static_cast<int32_t>(
+      (static_cast<int64_t>(kFallTumbleHesitation) *
+       zref::fx_sin(zref::angle16{
+           static_cast<uint16_t>(unwrapped & 0xFFFF)}).raw) >>
+      16);
+  return unwrapped + hesitation;
+}
 
 /**
  * Hamilton product of two quat16, S 1.0.14 lanes, ONE rescale(.,14) per lane.
@@ -1149,8 +1168,9 @@ inline int curve(const Key* k, int n, int f) {
 // and the launch now has the explicit gummy ordering required by owner
 // direction #13: keys 0..6 enlarge the grounded S through the tail tip, keys
 // 6..12 squash the complete silhouette, keys 12..18 HOLD, and keys 18..22
-// release back to one intact grounded S. Lift begins at key 23, after the hold
-// and release. The accepted climb, apex hang, plunge and extraction stay intact.
+// release back to one intact grounded S. The complete S rises during keys
+// 22..24; only then may the accepted airborne wheel gather. The accepted
+// climb, apex hang, plunge and extraction stay intact.
 static const Key kAtkLift[] = {
     {0, 0},          {22, 0},        {23, 300},      {24, 600},
     {26, 1100},      {28, 1500},     {32, 3200},     {38, 5600},
@@ -1173,8 +1193,9 @@ static const Key kAtkFwd[] = {
     {kAtkStickEnd, kAtkFwdMax}, {228, 5200}, {232, 2600}, {kAttackKeys - 1, 0}};
 // TWO-STAGE PRELOAD. Entry reaches the enlarged full-tail jump S before
 // squash authority is allowed to move at all. Both return to exact rest at key
-// 22; lift begins only at key 23. This preserves the accepted airborne wheel
-// and impact choreography while making the anticipation readable.
+// 22; lift begins only after the planted release is complete. The profile stays
+// an intact S through key 24 while that lift takes the entire animal airborne;
+// only then does the wheel gather.
 static const Key kAtkSpringEntry[] = {
     {0, 0}, {3, 420}, {kSaltoSpringEntryEndKey, 1000},
     {kSaltoCompressHoldEndKey, 1000}, {kSaltoSpringReleasePoseKey, 0},
@@ -1207,12 +1228,13 @@ constexpr int kAtkAimN = static_cast<int>(sizeof(kAtkAim) / sizeof(Key));
 // 1000 = rolled into the coil, 0 = straight. The roll-up waits for the
 // anticipation (keys 0..9 are the compress + hold).
 static const Key kAtkCurl[] = {
-    {0, 0}, {kSaltoCompressHoldEndKey, 0}, {22, 0}, {24, 350},
+    {0, 0}, {kSaltoCompressHoldEndKey, 0}, {kSaltoRigidReleaseEndKey, 0},
     {kSaltoReleaseEndKey, 1000}, {52, 1000}, {59, 0},
     {kAttackKeys - 1, 0}};
 // how much of the canonical S remains -- the shared spring profile owns the
-// loaded pose, then authority hands to the unchanged airborne wheel.
-static const Key kAtkAuth[] = {{0, 1000}, {22, 1000},
+// loaded pose, then the complete released S rises rigidly for two keys before
+// authority hands to the unchanged airborne wheel.
+static const Key kAtkAuth[] = {{0, 1000}, {kSaltoRigidReleaseEndKey, 1000},
                                {kSaltoReleaseEndKey, 0}, {226, 0},
                                {232, 650}, {kAttackKeys - 1, 1000}};
 // accumulated turn of the WHOLE BODY in 1/1000 of a full rotation. 3000 =
@@ -1220,12 +1242,12 @@ static const Key kAtkAuth[] = {{0, 1000}, {22, 1000},
 // 60 deg below horizontal pointing down-and-forward, HELD from the apex
 // through the dive, the impact and the whole stick; the extraction keeps
 // it held until the tip is probed clear of the ground (key 206), and only
-// then does the fourth turn land it. The -40 at key 12 is the wind-up --
-// INSIDE the release, not the hold: at spin -40 the whole body pitches
-// about the nose, and during the grounded compress that floated the rear
-// 750 mm off the dirt (probe). By key 12 the launch is already airborne.
-static const Key kAtkSpin[] = {{0, 0},          {22, 0},          {24, -40},
-                               {27, 0},         {32, 700},        {40, 1600},
+// then does the fourth turn land it. The small -40 airborne wind-up waits
+// until the complete released S has risen through key 24; it never rotates
+// the planted compression or masquerades as lift.
+static const Key kAtkSpin[] = {{0, 0},          {kSaltoRigidReleaseEndKey, 0},
+                               {26, -40},        {29, 0},
+                               {32, 700},        {40, 1600},
                                {48, 2600},      {55, 3050},       {59, kAtkSpinStick},
                                {226, kAtkSpinStick},               {230, 3650},
                                {233, 3900},     {kAttackKeys - 1, 4000}};
@@ -1625,73 +1647,115 @@ inline int32_t spring_smooth_amount(int32_t amount) {
       1000000);
 }
 
+inline uint8_t spring_deform_strength(int station) {
+  if (station <= kSkullBlendTo) return kSpringSkullDeformStrength;
+  if (station <= kHeadEnd) {
+    const int den = kHeadEnd - kSkullBlendTo;
+    const int t = den > 0 ? (station - kSkullBlendTo) * 255 / den : 255;
+    return static_cast<uint8_t>(
+        kSpringSkullDeformStrength +
+        (kSpringThroatDeformStrength - kSpringSkullDeformStrength) * t / 255);
+  }
+  if (station < kHeadEnd + kSpringBodyStrengthRampStations) {
+    const int t = (station - kHeadEnd) * 255 / kSpringBodyStrengthRampStations;
+    return static_cast<uint8_t>(
+        kSpringThroatDeformStrength +
+        (kSpringBodyDeformStrength - kSpringThroatDeformStrength) * t / 255);
+  }
+  const int tail0 = kProfileStations - kSpringTailStrengthRampStations;
+  if (station >= tail0) {
+    const int t = (station - tail0) * 255 /
+                  (kSpringTailStrengthRampStations - 1);
+    return static_cast<uint8_t>(
+        kSpringBodyDeformStrength +
+        (kSpringTailDeformStrength - kSpringBodyDeformStrength) * t / 255);
+  }
+  return kSpringBodyDeformStrength;
+}
+
+inline zc::DeformSample spring_deform_sample(int32_t amount) {
+  const int32_t q = spring_smooth_amount(amount);
+  return zc::DeformSample{
+      static_cast<uint16_t>((static_cast<uint32_t>(kSpringBodyFlattenQ16) * q) / 1000),
+      static_cast<uint16_t>((static_cast<uint32_t>(kSpringBodySpreadQ16) * q) / 1000)};
+}
+
 inline int32_t spring_root_drop(int32_t amount) {
-  const int32_t e = spring_smooth_amount(amount);
+  const int32_t q = spring_smooth_amount(amount);
   return -static_cast<int32_t>(
-      (static_cast<int64_t>(kSpringCompressionDropMm) * e) / 1000);
+      (static_cast<int64_t>(kSpringDeclaredBiteMm) * q) / 1000);
+}
+
+inline int32_t spring_profile_slope(int k, int32_t authority, int32_t entry,
+                                    int32_t squash) {
+  const int32_t e = spring_smooth_amount(entry);
+  const int32_t q = spring_smooth_amount(
+      (squash * kSpringCompressionDepth) / 1000);
+  const int32_t jump = kStanceSlope[k] + static_cast<int32_t>(
+      (static_cast<int64_t>(kSpringJumpSlope[k] - kStanceSlope[k]) * e) / 1000);
+  const int32_t compressed = jump + static_cast<int32_t>(
+      (static_cast<int64_t>(kSpringCompressedSlope[k] - jump) * q) / 1000);
+  return static_cast<int32_t>((static_cast<int64_t>(compressed) * authority) / 1000);
+}
+
+// The grounded support is an authored spine station, not the nose/root. Profile
+// changes articulate every earlier segment around that support; the resulting
+// root X/Y is therefore the head's real motion relative to planted body, not a
+// free whole-creature slide. The support itself only takes the declared bite.
+inline void spring_anchor_offset(int32_t authority, int32_t entry,
+                                 int32_t squash, int32_t& out_x,
+                                 int32_t& out_y) {
+  const int32_t seg = kBodyLenMm / (kSpineBones - 1);
+  int64_t x = 0, y = 0;
+  for (int k = 0; k < kSpringPlantSegment; ++k) {
+    const int32_t base = static_cast<int32_t>(
+        (static_cast<int64_t>(kStanceSlope[k]) * authority) / 1000);
+    const int32_t posed = spring_profile_slope(k, authority, entry, squash);
+    const int32_t cb = zref::fx_cos(zref::angle16{static_cast<uint16_t>(base & 0xFFFF)}).raw;
+    const int32_t sb = zref::fx_sin(zref::angle16{static_cast<uint16_t>(base & 0xFFFF)}).raw;
+    const int32_t cp = zref::fx_cos(zref::angle16{static_cast<uint16_t>(posed & 0xFFFF)}).raw;
+    const int32_t sp = zref::fx_sin(zref::angle16{static_cast<uint16_t>(posed & 0xFFFF)}).raw;
+    x += static_cast<int64_t>(seg) * (cp - cb);
+    y += static_cast<int64_t>(seg) * (sp - sb);
+  }
+  out_x = static_cast<int32_t>(x >> 16);
+  out_y = static_cast<int32_t>(y >> 16) + spring_root_drop(squash);
 }
 
 inline int32_t spring_root_offset(int32_t entry, int32_t squash) {
-  const int32_t e = spring_smooth_amount(entry);
-  const int32_t q = spring_smooth_amount(squash);
-  const int32_t jump_settle = static_cast<int32_t>(
-      (static_cast<int64_t>(kSpringJumpRootLiftMm) * e) / 1000);
-  const int32_t clearance_arc = static_cast<int32_t>(
-      (static_cast<int64_t>(4) * q * (1000 - q)) / 1000);
-  const int32_t clearance_lift = static_cast<int32_t>(
-      (static_cast<int64_t>(kSpringCompressionClearanceLiftMm) *
-       clearance_arc) /
-      1000);
-  return static_cast<int32_t>(
-             (static_cast<int64_t>(jump_settle) * (1000 - q)) / 1000) +
-         spring_root_drop(q) + clearance_lift;
+  int32_t x = 0, y = 0;
+  spring_anchor_offset(1000, entry, squash, x, y);
+  return y + static_cast<int32_t>(
+                 (static_cast<int64_t>(kSpringJumpRootLiftMm) *
+                  spring_smooth_amount(entry)) /
+                 1000);
 }
 
-inline int32_t spring_root_retract(int32_t squash) {
-  const int32_t q = spring_smooth_amount(squash);
-  return -static_cast<int32_t>(
-      (static_cast<int64_t>(kSpringHeadRetractMm) * q) / 1000);
+inline int32_t spring_root_anchor_x(int32_t entry, int32_t squash) {
+  int32_t x = 0, y = 0;
+  spring_anchor_offset(1000, entry, squash, x, y);
+  return x;
 }
 
-// Shared real spring pose for every salto and jump. `entry` progressively
-// recruits the profile from nose to tail: later segments receive a delayed but
-// complete smoothstep, and at entry=1000 every segment is exactly on the named
-// enlarged jump S. `squash` cannot begin until callers reach that state; it
-// blends the complete jump S into a broad, clearance-preserving squat S.
+// Shared real spring pose for every salto and jump. The enlarged profile recruits
+// the whole chain together: the tail participates in the same sample and cannot
+// lead. Squash then folds that complete S around the planted support.
 inline int32_t apply_spring_stance(Rig& g, int32_t authority, int32_t entry,
                                    int32_t squash) {
   if (entry < 0) entry = 0;
   if (entry > 1000) entry = 1000;
   if (squash < 0) squash = 0;
   if (squash > 1000) squash = 1000;
-  const int32_t compressed = spring_smooth_amount(
-      (squash * kSpringCompressionDepth) / 1000);
   int32_t prev = 0;
   for (int k = 0; k < kStanceSlopes; ++k) {
-    const int32_t delay =
-        (k * kSpringTailJoinLag) / (kStanceSlopes - 1);
-    int32_t joined = 0;
-    if (entry >= 1000) {
-      joined = 1000;
-    } else if (entry > delay) {
-      joined = spring_smooth_amount(
-          ((entry - delay) * 1000) / (1000 - delay));
-    }
-    const int32_t jump_slope = kStanceSlope[k] + static_cast<int32_t>(
-        (static_cast<int64_t>(kSpringJumpSlope[k] - kStanceSlope[k]) *
-         joined) /
-        1000);
-    const int32_t slope = jump_slope + static_cast<int32_t>(
-        (static_cast<int64_t>(kSpringCompressedSlope[k] - jump_slope) *
-         compressed) /
-        1000);
-    const int32_t directed = static_cast<int32_t>(
-        (static_cast<int64_t>(slope) * authority) / 1000);
+    const int32_t directed = spring_profile_slope(k, authority, entry, squash);
     g.q[kBSpine0 + k] =
         quat_mul(g.q[kBSpine0 + k], quat_z(directed - prev));
     prev = directed;
   }
-  return spring_root_offset(entry, squash);
+  int32_t anchor_x = 0, anchor_y = 0;
+  spring_anchor_offset(authority, entry, squash, anchor_x, anchor_y);
+  return anchor_y;
 }
 
 inline int32_t spring_head_attitude(int32_t authority, int32_t entry,
@@ -2105,6 +2169,7 @@ inline zc::Clip build_attack(bool choreo = false) {
   c.frame_count = static_cast<uint16_t>(kAttackKeys);
   c.root.assign(static_cast<size_t>(kAttackKeys) * 3, 0);
   c.quats.assign(static_cast<size_t>(kAttackKeys) * kBoneCount, zc::quat16_identity());
+  c.deform.assign(static_cast<size_t>(kAttackKeys), zc::DeformSample{});
 
   // WHAT HAPPENS, in order (Fabian, 2026-08-26 base + 2026-08-27 rework):
   //
@@ -2146,8 +2211,9 @@ inline zc::Clip build_attack(bool choreo = false) {
     const int fwd = curve(kAtkFwd, kAtkFwdN, f);
     const int entry = curve(kAtkSpringEntry, kAtkSpringEntryN, f);
     const int pre = curve(kAtkPre, kAtkPreN, f);
+    c.deform[static_cast<size_t>(f)] = spring_deform_sample(pre);
 
-    // Direction #13's ordered anticipation: first the whole animal grows into
+    // Direction #17's ordered anticipation: first the whole animal grows into
     // the named jump S through its tail tip; only then may the separate squash
     // retract and compact it. The same samples own body, head and root.
     const int32_t pre_drop = apply_spring_stance(g, auth, entry, pre);
@@ -2187,7 +2253,7 @@ inline zc::Clip build_attack(bool choreo = false) {
     g.write(c, f);
     if (!choreo) {
       c.root[f * 3 + 0] = fxm(fwd + (piv_x * curl) / 1000 +
-                                  spring_root_retract(pre));
+                                  spring_root_anchor_x(entry, pre));
       c.root[f * 3 + 1] = fxm(lift + (piv_y * curl) / 1000 + pre_drop);
     }  // choreo: root channels stay ZERO -- trajectory is the instance's
   }
@@ -2221,7 +2287,7 @@ inline ChoreoSample attack_choreo_sample(int key) {
   const int32_t piv_x = static_cast<int32_t>((static_cast<int64_t>(kCoilR) * sth) >> 16);
   const int32_t piv_y = kCoilR - static_cast<int32_t>((static_cast<int64_t>(kCoilR) * cth) >> 16);
   ChoreoSample out;
-  out.x_mm = fwd + (piv_x * curl) / 1000 + spring_root_retract(pre);
+  out.x_mm = fwd + (piv_x * curl) / 1000 + spring_root_anchor_x(entry, pre);
   out.y_mm = lift + (piv_y * curl) / 1000 + pre_drop;
   out.theta = theta;
   // PIVOT CORRECTION: on bone 0 the spin acted about the NOSE at kBodyY;
@@ -2450,7 +2516,7 @@ inline ChoreoSample zixx_plan_sample(const zc::AttackPlan& p, int key) {
     // the tail, compact/retract, hold, then return to exact S before flight.
     const int32_t entry = zixx_plan_spring_entry_amount(p, key);
     const int32_t squash = zixx_plan_spring_amount(p, key);
-    out.x_mm = spring_root_retract(squash);
+    out.x_mm = spring_root_anchor_x(entry, squash);
     out.y_mm = spring_root_offset(entry, squash);
     return out;
   }
@@ -2563,15 +2629,10 @@ inline zc::Clip build_fall() {
       }
     }
 
-    // the tumble's warped angle, PRE-computed for the head's aim below
-    // (the tumble itself recomputes it identically later)
-    const int32_t theta_u_pre =
-        static_cast<int32_t>((static_cast<int64_t>(f) << 16) / kFallKeys);
-    const int32_t theta_pre =
-        theta_u_pre + static_cast<int32_t>(
-                          (static_cast<int64_t>(kFallTumbleWarp) *
-                           zref::fx_sin(zref::angle16{static_cast<uint16_t>(theta_u_pre & 0xFFFF)}).raw) >>
-                          16);
+    // One shared unwrapped phase drives the head's aim and the root/body turn.
+    // It is computed once here so no independently wrapped expression can
+    // make the creature look against its own fall.
+    const int32_t theta = fall_tumble_phase(f, kFallKeys);
 
     // SLOW LOOSE NECK: the head lolls on one- and two-cycle waves, phase
     // staggered down the first joints so the motion travels instead of
@@ -2608,7 +2669,7 @@ inline zc::Clip build_fall() {
       // eased by the tumble's own sine so the glance arrives and releases
       // slowly. Layered UNDER the loose loll, not replacing it.
       const int32_t aim =
-          (zref::fx_sin(zref::angle16{static_cast<uint16_t>(theta_pre & 0xFFFF)}).raw *
+          (zref::fx_sin(zref::angle16{static_cast<uint16_t>(theta & 0xFFFF)}).raw *
            kFallHeadAim) >> 16;
       g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + aim + ((s1 * (kFallNeckAmp / 2)) >> 16)),
                              quat_y((s2 * (kFallNeckAmp * 2 / 3)) >> 16));
@@ -2639,22 +2700,9 @@ inline zc::Clip build_fall() {
         zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph * 2 + 9000) & 0xFFFF)}).raw;
     g.tail_rest(kBladeSplay + ((fl * 1800) >> 16), kBladeRise + ((fl * 1000) >> 16));
 
-    // THE TUMBLE. One full pitch turn per loop (wraps exactly: 65536 = 0) so
-    // the loop closes; slow roll and yaw wobbles complete whole cycles too.
-    // The phase is WARPED (kFallTumbleWarp) so the revolution hesitates and
-    // then tips over instead of turning like a turntable -- sin(0) = 0 at
-    // both ends, so the loop seam is untouched.
-    const int32_t theta_u =
-        static_cast<int32_t>((static_cast<int64_t>(f) << 16) / kFallKeys);
-    const int32_t theta =
-        theta_u + static_cast<int32_t>(
-                      (static_cast<int64_t>(kFallTumbleWarp) *
-                       zref::fx_sin(zref::angle16{static_cast<uint16_t>(theta_u & 0xFFFF)}).raw) >>
-                      16) +
-        static_cast<int32_t>(
-            (static_cast<int64_t>(kFallTumbleWarp2) *
-             zref::fx_sin(zref::angle16{static_cast<uint16_t>((2 * theta_u + 9000) & 0xFFFF)}).raw) >>
-            16);
+    // THE TUMBLE. One full unwrapped pitch turn per loop. The shared phase
+    // clock above gives it one broad hesitation without a cusp; roll and yaw
+    // wobbles complete whole cycles too, so the loop seam stays exact.
     const int32_t t2 =
         zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph + 17000) & 0xFFFF)}).raw;
     const int32_t t3 =
@@ -2719,6 +2767,57 @@ constexpr int32_t kShockFrontAmp = 4800;  // pitch pulse through the raised
                                           // front (angle16 at the head end)
 constexpr int32_t kShockGroundAmp = 3300; // lateral ripple, grounded joints
 constexpr int32_t kShockTailAmp = 7600;   // the tail's delayed whip
+constexpr int32_t kHitWaveFloor = 250;    // distant joints still answer
+constexpr int32_t kDmgLateralDecay = 700; // stronger directional falloff
+// Named body contact stations. A hit chooses WHERE independently from its
+// direction: the station centres both the immediate fold and the delayed wave;
+// direction continues to choose pitch/lateral lane and sign.
+enum class HitStation : uint8_t { kFront = 0, kMiddle = 1, kRear = 2 };
+constexpr int kHitStationFront = 3;
+constexpr int kHitStationMiddle = 8;
+constexpr int kHitStationRear = 14;
+constexpr int kHitFoldRadiusBefore = 3;
+constexpr int kHitFoldSamples = 9;
+
+inline constexpr int hit_station_joint(HitStation station) {
+  switch (station) {
+    case HitStation::kFront: return kHitStationFront;
+    case HitStation::kMiddle: return kHitStationMiddle;
+    case HitStation::kRear: return kHitStationRear;
+  }
+  return kHitStationFront;
+}
+
+inline constexpr int hit_station_profile_index(HitStation station) {
+  return (hit_station_joint(station) * (kProfileStations - 1) +
+          (kSpineBones - 1) / 2) /
+         (kSpineBones - 1);
+}
+
+// Committed 3D contact declarations, recorded after the station-centred art was
+// accepted. The hit can press into the ground, but only inside these explicit
+// full/micro posed-vertex bands.
+constexpr int32_t kHitFrontBiteMm = 210;
+constexpr int32_t kHitFrontContactMinMm = 150;
+constexpr int32_t kDmgRightBiteMm = 150;
+constexpr int32_t kDmgRightContactMinMm = 90;
+constexpr int32_t kDmgBackBiteMm = 175;
+constexpr int32_t kDmgBackContactMinMm = 110;
+constexpr int32_t kDmgLeftBiteMm = 75;
+constexpr int32_t kDmgLeftContactMinMm = 35;
+constexpr int32_t kDmgTopBiteMm = 140;
+constexpr int32_t kDmgTopContactMinMm = 85;
+
+inline int32_t hit_local_sample(const int32_t (&profile)[kHitFoldSamples],
+                                int joint, int contact) {
+  const int local = joint - contact + kHitFoldRadiusBefore;
+  return local >= 0 && local < kHitFoldSamples ? profile[local] : 0;
+}
+
+inline int hit_station_distance(int joint, int contact) {
+  return joint >= contact ? joint - contact : contact - joint;
+}
+
 // THE IMPACT SHAPE. The old +F/-2F/+F triple was mathematically tidy but
 // visually self-cancelled: it made a tiny crease and deliberately returned the
 // next section to its untouched line. This profile is authored as WORLD slope
@@ -2727,9 +2826,8 @@ constexpr int32_t kShockTailAmp = 7600;   // the tail's delayed whip
 // the bend back into the travelling shockwave. It is a real displaced length
 // of animal rather than an isolated hinge; every value remains an eye-tunable
 // art control.
-constexpr int32_t kHitFoldSlope[kStanceSlopes] = {
-    0, 8200, -12400, -8600, 5200, 3400, 1500, 400, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0};
+constexpr int32_t kHitFoldSlope[kHitFoldSamples] = {
+    0, 8200, -12400, -8600, 5200, 3400, 1500, 400, 0};
 static const Key kFoldEnv[] = {{0, 0}, {1, 1000}, {2, 940}, {4, 380}, {7, 0}};
 constexpr int kFoldEnvN = static_cast<int>(sizeof(kFoldEnv) / sizeof(Key));
 
@@ -2757,6 +2855,30 @@ static const Key kImpactEnv[] = {{0, 0},   {1, 720},  {3, 1000}, {6, 470},
                                  {10, -320}, {15, 150}, {21, -70}, {28, 28},
                                  {34, -10},  {39, 0}};
 constexpr int kImpactEnvN = static_cast<int>(sizeof(kImpactEnv) / sizeof(Key));
+
+// A single startled glance, then calm well before the body finishes ringing.
+// Hits do not inherit the idle scan and the damped body overshoots do not make
+// the eyes jitter.
+constexpr int kHitPupilRestKey = 14;
+constexpr int kHitPupilEndKey = 49;
+static const Key kHitPupilEnv[] = {
+    {0, 0}, {1, 700}, {3, 1000}, {8, 500},
+    {kHitPupilRestKey, 0}, {kHitPupilEndKey, 0}};
+constexpr int kHitPupilEnvN =
+    static_cast<int>(sizeof(kHitPupilEnv) / sizeof(Key));
+constexpr int32_t kHitPupilSideA16 = 1000;
+constexpr int32_t kHitPupilLiftA16 = 800;
+constexpr int32_t kHitFrontPupilSideA16 = -700;
+constexpr int32_t kHitFrontPupilLiftA16 = -500;
+constexpr int32_t kHitSidePupilLiftA16 = -250;
+constexpr int32_t kHitBackPupilLiftA16 = -400;
+
+inline int32_t hit_station_envelope(int f, int joint, int contact) {
+  return curve_mk(kImpactEnv, kImpactEnvN,
+                  f * 1000 -
+                      hit_station_distance(joint, contact) * kShockLagMk);
+}
+
 // DEATH, slot 6: shudder -> the S drains out -> the body keels onto its
 // side -> one last tail curl -> stillness. The player watches this one.
 constexpr int kDeathKeys = 96;
@@ -2776,13 +2898,25 @@ constexpr int32_t kDeathDropMm = 300;    // ...while the carried front sinks
 constexpr int32_t kDeathTailCurl = 7000; // the last slow curl and release
 constexpr int32_t kDeathRollLift = 132;   // mm: keeps the rolled tube's centre
                                          // one radius up (h*(1-cos) comp)
+// Committed posed-vertex terrain declarations. The death remains grounded
+// throughout: ordinary support before the keel, the authored flank bite during
+// collapse, then the shared corpse's shallow held contact.
+constexpr int kDeathCollapseContactBeginKey = 14;
+constexpr int kDeathCollapseContactEndKey = 62;
+constexpr int32_t kDeathRestTerrainBiteMm = 20;
+constexpr int32_t kDeathCollapseTerrainBiteMm = 55;
+constexpr int32_t kDeathCorpseTerrainBiteMm = 20;
+constexpr int32_t kDeathGroundHoverMm = 20;
 // TAIL-BALANCE, slot 7 (owner: "Balancing on its tail and trying to
 // stretch up while standing, almost becoming a spear, and then falling
 // down. Then getting back up."): gather -> rear up toward vertical
 // (ALMOST the attack's spear, wobbling, never achieving it -- the
 // contrast is the joke) -> lose it -> topple flat forward -> get back up.
-constexpr int kBalKeys = 224;  // long, effortful stunt: rise, fight, buckle,
-                               // flop, then a loose complete recovery
+constexpr int kBalAftermathExtensionKeys = 23;  // 46 rendered frames at 60 Hz
+constexpr int kBalOriginalKeys = 224;           // preserves pre-impact phase
+constexpr int kBalKeys = kBalOriginalKeys + kBalAftermathExtensionKeys;
+constexpr int kBalRecoveryBeginKey = 188;
+constexpr int kBalRecoveryEndKey = 219;
 // The raised silhouette is an authored L, not a rigid spear. Eleven upper
 // segments struggle toward vertical, three make the weight-bearing elbow, and
 // the final five lie almost flat as a broad supporting tail. These are complete
@@ -2795,6 +2929,8 @@ constexpr int kBalSupportBeginKey = 77;
 constexpr int kBalSupportEndKey = 140;
 constexpr int kBalImpactBeginKey = 157;
 constexpr int kBalImpactEndKey = 166;
+constexpr int kBalAftermathBeginKey = kBalImpactEndKey + 1;
+constexpr int kBalAftermathEndKey = kBalRecoveryEndKey;
 constexpr int kBalImpactLeadPresentationTicks = 1;  // baked 156.5 contact lead
 // Committed 3D declarations for the accepted raised-L contact. These compare
 // actual posed vertices; they never generate the shape or root curve.
@@ -2802,6 +2938,8 @@ constexpr int32_t kBalSupportBiteMm = 40;
 constexpr int32_t kBalSupportHoverMm = 20;
 constexpr int32_t kBalImpactBiteMm = 70;
 constexpr int32_t kBalImpactContactMinMm = 25;
+constexpr int32_t kBalAftermathBiteMm = 135;
+constexpr int32_t kBalAftermathContactMinMm = 80;
 constexpr int32_t kBalMinShapeChordTravelMm = 5;
 constexpr int32_t kBalMaxStationStepMm = 320;
 constexpr int32_t kBalWobble = 3900;      // travelling primary struggle
@@ -2828,6 +2966,11 @@ constexpr int32_t kBalOvershoot = 2600;  // slope past the corpse at the whip
 constexpr int32_t kBalLeanA16 = 3000;    // growing headward failure bend
 constexpr int32_t kBalBreath = 700;      // the life layer under the stunt
 constexpr int32_t kBalRippleAmp = 2200;  // the flop's travelling ring-out
+// A restrained front-body answer keeps the new grounded aftermath alive while
+// the animal decides to rise. It is a named profile, not noise and not a loop.
+constexpr int32_t kBalAftermathWave[kStanceSlopes] = {
+    0, 380, 620, 700, 620, 430, 220, 80, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0};
 // LOOK-AROUND, slot 8: the head-aim rig capability performed — Zixx looks
 // left, up, right, down, unhurried, while the body idles quietly. The aim
 // lives on the HEAD BONE (the head is bone 0, the ROOT — a joint rotation
@@ -2890,11 +3033,12 @@ inline zc::Clip build_hit() {
   // the struck point; ek[j] is the same envelope arriving at joint j late
   // and lighter -- the whole serpent reacts, in order, and the recovery is
   // slow and loose (the owner's structure: violent onset, yielding return).
+  const int contact = hit_station_joint(HitStation::kFront);
   for (int f = 0; f < kHitKeys; ++f) {
     const int32_t e = curve(kImpactEnv, kImpactEnvN, f);
-    int32_t ek[kStanceSlopes];
-    for (int j = 0; j < kStanceSlopes; ++j)
-      ek[j] = curve_mk(kImpactEnv, kImpactEnvN, f * 1000 - j * kShockLagMk);
+    int32_t ek[kSpineBones];
+    for (int j = 0; j < kSpineBones; ++j)
+      ek[j] = hit_station_envelope(f, j, contact);
     Rig g;
     g.reset();
     // FRONT: the travelling pitch pulse rides the wave lane (exact root
@@ -2902,7 +3046,9 @@ inline zc::Clip build_hit() {
     // momentarily rears back, and the pulse runs on into the dive.
     int32_t wave[kStanceSlopes] = {};
     for (int k = 1; k < kStanceGround0; ++k) {
-      const int32_t dec = 1000 - (k * kShockDecay) / (kStanceGround0 - 1);
+      const int dist = hit_station_distance(k, contact);
+      int32_t dec = 1000 - (dist * kShockDecay) / (kStanceGround0 - 1);
+      if (dec < kHitWaveFloor) dec = kHitWaveFloor;
       wave[k] = -(ek[k] * ((kShockFrontAmp * dec) / 1000)) / 1000;
     }
     // THE IMPACT SHAPE: an asymmetric hairpin with a carried downstream
@@ -2910,12 +3056,16 @@ inline zc::Clip build_hit() {
     // changes at once and then hands motion to the delayed whole-body wave.
     const int32_t fold = curve(kFoldEnv, kFoldEnvN, f);
     for (int k = 1; k < kStanceGround0; ++k)
-      wave[k] += (fold * kHitFoldSlope[k]) / 1000;
+      wave[k] +=
+          (fold * hit_local_sample(kHitFoldSlope, k, contact)) / 1000;
     const int32_t rise = apply_stance(g, 1000, (e * kHitDeepen) / 1000, wave);
-    // the head jerks BACK-UP and aside first (it is the struck end), then
-    // settles on the same envelope
-    g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + (e * kHitHeadJerk) / 1000),
-                           quat_y((e * kHitSway) / 1000));
+    // The head answers only when the station-centred wave reaches it; this
+    // keeps the contact point visibly in charge rather than making every hit
+    // begin at the face.
+    const int32_t he = ek[0];
+    g.q[kBHead] = quat_mul(
+        quat_z(kHeadAttitude + (he * kHitHeadJerk) / 1000),
+        quat_y((he * kHitSway) / 1000));
     // GROUNDED RUN: the pulse continues as a LATERAL ripple -- a yaw about
     // world vertical cannot dig the belly (the idle snake's conjugation)
     zc::quat16 snacc = zc::quat16_identity();
@@ -2934,10 +3084,14 @@ inline zc::Clip build_hit() {
           400 + ((k - kStanceGround1 - 1) * 600) / (kSpineBones - kStanceGround1 - 2);
       g.q[kBSpine0 + k] = quat_mul(
           g.q[kBSpine0 + k],
-          quat_y((ek[k - 1] * ((kShockTailAmp * reach) / 1000)) / 1000));
+          quat_y((ek[k] * ((kShockTailAmp * reach) / 1000)) / 1000));
     }
     // the blades snap open when the wave REACHES the fork, not at impact
-    g.tail_rest(kBladeSplay + (ek[kStanceSlopes - 1] * 1400) / 1000, kBladeRise);
+    g.tail_rest(kBladeSplay + (ek[kSpineBones - 1] * 1400) / 1000,
+                kBladeRise);
+    const int32_t pupil = curve(kHitPupilEnv, kHitPupilEnvN, f);
+    apply_pupil_gaze(g, (pupil * kHitFrontPupilSideA16) / 1000,
+                     (pupil * kHitFrontPupilLiftA16) / 1000);
     g.write(c, f);
     // the shove: the blow MOVES the animal backward, and it recovers with
     // the same envelope -- displacement is what sells impact at 240p
@@ -3077,6 +3231,28 @@ inline zc::Clip build_balance() {
     base_sin += zref::fx_sin(zref::angle16{a}).raw;
     base_cos += zref::fx_cos(zref::angle16{a}).raw;
   }
+  // One damped whole-front response crosses the new grounded hold. The eyes
+  // concentrate through the balance, find the ground before impact, then hold
+  // a stunned downward glance before deciding to get up.
+  static const Key kAftermathPulse[] = {
+      {0, 0}, {166, 0}, {171, 1000}, {177, -550}, {184, 280},
+      {188, 0}, {kBalKeys - 1, 0}};
+  static const Key kPupilSide[] = {
+      {0, 0}, {28, 0}, {60, 600}, {110, -700}, {132, -1200},
+      {148, kPupilGlanceA16}, {166, kPupilGlanceA16}, {178, 0},
+      {188, -700}, {205, -300}, {kBalRecoveryEndKey, 0},
+      {kBalKeys - 1, 0}};
+  static const Key kPupilLift[] = {
+      {0, 0}, {28, 0}, {77, 400}, {132, 300},
+      {148, -kPupilGlanceLiftA16}, {166, -kPupilGlanceLiftA16},
+      {177, 260}, {188, 0}, {kBalRecoveryEndKey, 0},
+      {kBalKeys - 1, 0}};
+  constexpr int kAftermathPulseN =
+      static_cast<int>(sizeof(kAftermathPulse) / sizeof(Key));
+  constexpr int kPupilSideN =
+      static_cast<int>(sizeof(kPupilSide) / sizeof(Key));
+  constexpr int kPupilLiftN =
+      static_cast<int>(sizeof(kPupilLift) / sizeof(Key));
   for (int f = 0; f < kBalKeys; ++f) {
     Rig g;
     g.reset();
@@ -3086,11 +3262,14 @@ inline zc::Clip build_balance() {
     //   balance  k77..119  body-shape waves keep travelling (the fight)
     //   lose     k119..140 corrections diverge into a headward lean
     //   topple   k140..157 slopes -> flat, accelerating; IMPACT at 157
-    //   rise2    k165..196 back up into the S
-    //   settle   k196..223 exact canonical S for the loop
+    //   aftermath k157..188 grounded shock, stunned hold, one living settle
+    //   rise2    k188..219 back up into the S
+    //   settle   k219..246 exact canonical S for the loop
     const int32_t up = ss1000(f, 28, 77);           // stance -> vertical
     const int32_t over = (ss1000(f, 140, 157) * ss1000(f, 140, 157)) / 1000;
-    const int32_t recover = ss1000(f, 165, 196);    // flat -> stance
+    const int32_t recover =
+        ss1000(f, kBalRecoveryBeginKey, kBalRecoveryEndKey);
+    const int32_t aftermath = curve(kAftermathPulse, kAftermathPulseN, f);
     // THE FIGHT is a travelling shape change, not one rigid-body sway. Each
     // upper segment samples two slow waves at its own phase below; the tail
     // authority fades to zero before the five-segment ground support. A one-way
@@ -3100,7 +3279,7 @@ inline zc::Clip build_balance() {
     const int32_t lean = ss1000(f, 122, 142);
     // the life layer: a slow breath through the raised stretch, damped
     // while standing (the effort holds the breath), full at the ends
-    const int32_t phl = f * (65536 / kBalKeys);
+    const int32_t phl = f * (65536 / kBalOriginalKeys);
     const int32_t s_breath =
         zref::fx_sin(zref::angle16{static_cast<uint16_t>((phl * 2) & 0xFFFF)}).raw;
     const int32_t breathw = 300 + (700 * (1000 - up)) / 1000;
@@ -3128,6 +3307,7 @@ inline zc::Clip build_balance() {
       const int64_t target = kCorpseSlope[k] + (kBalOvershoot * osh) / 1000;
       d += ((target - d) * over_k) / 1000;
       d += ((kStanceSlope[k] - d) * recover) / 1000;  // and the S returns
+      d += (static_cast<int64_t>(kBalAftermathWave[k]) * aftermath) / 1000;
       // Two slow, spatially lagged waves keep changing the complete upper-body
       // shape through gather, rise and fight. Their authority fades across the
       // elbow and is exactly zero on the broad ground support.
@@ -3193,9 +3373,9 @@ inline zc::Clip build_balance() {
     static const Key kBalFork[] = {
         {0, 0},      {28, 0},      {45, 0},      {56, -50},
         {66, -172},  {77, -255},   {140, -255},  {148, -255},
-        {154, -250}, {157, -220},  {160, -240},  {163, -250},
-        {166, -240}, {172, -120},  {179, -62},   {185, -34},
-        {190, -16},  {196, 0},     {223, 0}};
+        {154, -250}, {157, -220}, {160, -240}, {163, -250},
+        {166, -240}, {188, -240}, {195, -120}, {202, -62},
+        {208, -34},  {213, -16},  {219, 0},     {246, 0}};
     // run 0326: the get-up used to hand the fork straight back to +30 by
     // k130, which lifted the WHOLE half-flat body off the dirt (probe: minY
     // +65 at k128 -- a 200 mm-class push-up hop on the render). The keys
@@ -3205,7 +3385,9 @@ inline zc::Clip build_balance() {
         kBodyY - static_cast<int32_t>((segL * base_sin) >> 16);
     const int32_t fork_y0 =
         kBodyY - static_cast<int32_t>((segL * sum_sin) >> 16);
-    const int32_t stunt = f < 165 ? ss1000(f, 28, 70) : 1000 - recover;
+    const int32_t stunt = f < kBalRecoveryBeginKey
+                              ? ss1000(f, 28, 70)
+                              : 1000 - recover;
     const int32_t dx = static_cast<int32_t>((segL * (sum_cos - base_cos)) >> 16);
     int32_t root_x = -(dx * stunt) / 1000;
     int32_t root_y = base_fork + curve(kBalFork, kBalForkN, f) - fork_y0;
@@ -3229,7 +3411,7 @@ inline zc::Clip build_balance() {
                (wake * 900) / 1000);
     // The BODY tail is the foot. The fan lifts just clear of terrain during
     // the raised L so it cannot masquerade as point support, flares with the
-    // effort, then returns exactly to its canonical authored rest by key 223.
+    // effort, then returns exactly to its canonical authored rest by key 246.
     const int32_t blade_support = up * (1000 - recover) / 1000;
     const int32_t blade_bias =
         kBladeUpBias + ((kBalBladeUpBias - kBladeUpBias) * blade_support) / 1000;
@@ -3243,6 +3425,8 @@ inline zc::Clip build_balance() {
         1000;
     g.tail_rest(kBladeSplay + blade_splay_offset,
                 kBladeRise + blade_rise_offset, blade_bias);
+    apply_pupil_gaze(g, curve(kPupilSide, kPupilSideN, f),
+                     curve(kPupilLift, kPupilLiftN, f));
     g.write(c, f);
     c.root[f * 3 + 0] = fxm(root_x);
     c.root[f * 3 + 1] = fxm(root_y);
@@ -3370,9 +3554,9 @@ constexpr int kSlotSlowTaunt = 44; // slower neck-led left/right taunt
 // THE KNOCKED POSE is ONE set of bytes: knocked2Floor and hitFloor END on it
 // and getUp STARTS on it, and the seams are declared in the bank so
 // compile_creature FAILS if an edit ever splits them.
-constexpr int kKnockKeys = 26;
+constexpr int kKnockKeys = 32;
 constexpr int kGetUpKeys = 40;
-constexpr int kHitFloorKeys = 26;
+constexpr int kHitFloorKeys = 32;
 constexpr int32_t kKnockRoll = -7400;    // ~41 deg onto the flank, AWAY from
                                          // the site lens (the death's lesson:
                                          // dorsal square at the camera reads
@@ -3380,14 +3564,44 @@ constexpr int32_t kKnockRoll = -7400;    // ~41 deg onto the flank, AWAY from
                                          // than the death's -11600: knocked,
                                          // not dead.
 constexpr int32_t kKnockRollLift = 58;   // h*(1-cos41): death's 132@64deg law
-constexpr int32_t kKnockFold = 650;      // blades fold most of the way
-constexpr int32_t kKnockJolt = 3100;     // the blow's head-snap, key 0..5
-                                         // (4200 on the wave lane carried
-                                         // the skull 301 mm into the hook;
-                                         // softened until the worst key sat
-                                         // back in the hit family)
-constexpr int32_t kKnockBounceMm = 12;   // the little rebound after the slam
-constexpr int32_t kHitFloorBiteMm = 24;  // authored impact bite, keys 9..13
+constexpr int32_t kKnockFold = 650;       // blades fold most of the way
+constexpr int32_t kKnockJolt = 3800;      // head leads; displacement sells force
+constexpr int32_t kKnockShoveMm = 190;    // externally driven backward throw
+constexpr int32_t kKnockBounceMm = 20;    // one absorbed rebound after the slam
+constexpr int32_t kHitFloorBiteMm = 42;   // authored impact bite, keys 9..12
+constexpr int32_t kHitFloorDropStartMm = 820;
+constexpr int32_t kHitFloorAbsorbHead = 2100;
+constexpr int32_t kKnockedPupilSideA16 = -500;
+constexpr int32_t kKnockedPupilLiftA16 = -600;
+// Committed 3D terrain policy for the complete KO/recovery chain. These are
+// surface-vertex declarations, distinct from the root-motion knobs above.
+constexpr int kKnockImpactContactBeginPresentationTick = 19;  // key 9.5
+constexpr int kKnockImpactContactEndPresentationTick = 56;    // key 28
+constexpr int32_t kKnockLeadTerrainBiteMm = 30;
+constexpr int32_t kKnockImpactTerrainBiteMm = 60;
+constexpr int32_t kKnockImpactContactMinMm = 35;
+constexpr int32_t kKnockHeldTerrainBiteMm = 50;
+constexpr int32_t kKnockHeldContactMinMm = 40;
+constexpr int32_t kKnockGroundHoverMm = 20;
+constexpr int32_t kGetUpTerrainBiteMm = 70;
+constexpr int32_t kGetUpContactMinMm = 5;
+constexpr int32_t kGetUpGroundHoverMm = 20;
+// Hit-floor approaches clear, contact begins at the runtime midpoint before key
+// 9, keys 9..12 own the deep bite, keys 12.5..23.5 own rebound absorption, and
+// key 24 onward owns the exact stunned settle.
+constexpr int kHitFloorApproachEndPresentationTick = 16;  // key 8
+constexpr int kHitFloorImpactBeginPresentationTick = 17;  // key 8.5
+constexpr int kHitFloorImpactEndPresentationTick = 24;    // key 12
+constexpr int kHitFloorAbsorbEndPresentationTick = 47;    // key 23.5
+constexpr int kHitFloorSettleBeginPresentationTick = 48;  // key 24
+constexpr int32_t kHitFloorImpactTerrainBiteMm = 110;
+constexpr int32_t kHitFloorImpactContactMinMm = 80;
+constexpr int32_t kHitFloorAbsorbTerrainBiteMm = 75;
+constexpr int32_t kHitFloorSettleTerrainBiteMm = 50;
+constexpr int32_t kHitFloorSettleContactMinMm = 40;
+static const int32_t kHitFloorAbsorbSlope[kStanceSlopes] = {
+    0, 1200, 1700, -2100, -1300, 900, 550, 250, 80, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 // The shared lying-body composer: the death clip's collapse law factored to
 // knobs. drain (stance -> corpse slopes), roll1000 (share of kKnockRoll),
@@ -3456,20 +3670,32 @@ inline zc::Clip build_knock() {
   c.frame_count = static_cast<uint16_t>(kKnockKeys);
   c.root.assign(static_cast<size_t>(kKnockKeys) * 3, 0);
   c.quats.assign(static_cast<size_t>(kKnockKeys) * kBoneCount, zc::quat16_identity());
-  static const Key kJolt[] = {{0, 0}, {1, 900}, {3, 1000}, {6, 260}, {9, 0}, {25, 0}};
-  // the final segment is PINNED to zero one key early: curve()'s integer
-  // rounding on a falling segment returns 1 (not 0) at the last key, and
-  // one leftover millimetre of bounce broke the byte-identical seam to
-  // getUp key 0 (the compiler's seam check caught it, run 0326)
-  static const Key kBounce[] = {{0, 0}, {17, 0}, {19, 12}, {22, 3}, {24, 0}, {25, 0}};
+  static const Key kJolt[] = {
+      {0, 650}, {1, 1000}, {3, 760}, {6, -260}, {10, 80}, {13, 0},
+      {kKnockKeys - 1, 0}};
+  // A single physical rebound, then two much smaller absorptions. The last
+  // four keys are exact knocked-pose stillness for the get-up seam.
+  static const Key kBounce[] = {
+      {0, 0}, {16, 0}, {19, 1000}, {22, -280}, {25, 120},
+      {28, 0}, {kKnockKeys - 1, 0}};
+  static const Key kKnockPupilSide[] = {
+      {0, 1400}, {2, 1700}, {5, -900}, {10, 500},
+      {17, kKnockedPupilSideA16}, {kKnockKeys - 1, kKnockedPupilSideA16}};
+  static const Key kKnockPupilLift[] = {
+      {0, 300}, {3, -500}, {8, 200}, {16, kKnockedPupilLiftA16},
+      {kKnockKeys - 1, kKnockedPupilLiftA16}};
   constexpr int kJoltN = static_cast<int>(sizeof(kJolt) / sizeof(Key));
   constexpr int kBounceN = static_cast<int>(sizeof(kBounce) / sizeof(Key));
+  constexpr int kKnockPupilSideN =
+      static_cast<int>(sizeof(kKnockPupilSide) / sizeof(Key));
+  constexpr int kKnockPupilLiftN =
+      static_cast<int>(sizeof(kKnockPupilLift) / sizeof(Key));
   for (int f = 0; f < kKnockKeys; ++f) {
     Rig g;
     g.reset();
     const int32_t jolt = curve(kJolt, kJoltN, f);
-    const int32_t drain = ss1000(f, 2, 15);
-    const int32_t roll = ss1000(f, 8, 19);
+    const int32_t drain = ss1000(f, 3, 18);
+    const int32_t roll = ss1000(f, 10, 22);
     // the neck's share of the snap rides the WAVE lane so the rear-node
     // constraint keeps the grounded run planted (raw quats lifted it +94)
     int32_t wave[kStanceSlopes] = {};
@@ -3478,12 +3704,18 @@ inline zc::Clip build_knock() {
     int32_t root_mm[3];
     lying_frame(g, drain, roll, (jolt * kKnockJolt) / 1000,
                 (drain * kKnockFold) / 1000, root_mm, wave);
+    apply_pupil_gaze(g,
+                     curve(kKnockPupilSide, kKnockPupilSideN, f),
+                     curve(kKnockPupilLift, kKnockPupilLiftN, f));
     g.write(c, f);
-    c.root[f * 3 + 0] = fxm(root_mm[0]);
-    c.root[f * 3 + 1] = fxm(root_mm[1] + (curve(kBounce, kBounceN, f) * kKnockBounceMm) / 12);
+    c.root[f * 3 + 0] =
+        fxm(root_mm[0] - (jolt * kKnockShoveMm) / 1000);
+    c.root[f * 3 + 1] =
+        fxm(root_mm[1] +
+            (curve(kBounce, kBounceN, f) * kKnockBounceMm) / 1000);
     c.root[f * 3 + 2] = fxm(root_mm[2]);
   }
-  c.events = {{15, zc::kEvFoot, 5}};  // the flank hits the dirt
+  c.events = {{18, zc::kEvFoot, 5}};  // the flank hits after the head-led throw
   return c;
 }
 
@@ -3500,6 +3732,16 @@ inline zc::Clip build_getup() {
   c.frame_count = static_cast<uint16_t>(kGetUpKeys);
   c.root.assign(static_cast<size_t>(kGetUpKeys) * 3, 0);
   c.quats.assign(static_cast<size_t>(kGetUpKeys) * kBoneCount, zc::quat16_identity());
+  static const Key kGetUpPupilSide[] = {
+      {0, kKnockedPupilSideA16}, {4, kKnockedPupilSideA16},
+      {10, 300}, {16, 0}, {kGetUpKeys - 1, 0}};
+  static const Key kGetUpPupilLift[] = {
+      {0, kKnockedPupilLiftA16}, {5, kKnockedPupilLiftA16},
+      {11, 200}, {18, 0}, {kGetUpKeys - 1, 0}};
+  constexpr int kGetUpPupilSideN =
+      static_cast<int>(sizeof(kGetUpPupilSide) / sizeof(Key));
+  constexpr int kGetUpPupilLiftN =
+      static_cast<int>(sizeof(kGetUpPupilLift) / sizeof(Key));
   for (int f = 0; f < kGetUpKeys; ++f) {
     Rig g;
     g.reset();
@@ -3516,6 +3758,9 @@ inline zc::Clip build_getup() {
     if (lift != 0) {
       g.q[kBHead] = quat_mul(g.q[kBHead], quat_z(-(lift * 1100) / 1000));
     }
+    apply_pupil_gaze(g,
+                     curve(kGetUpPupilSide, kGetUpPupilSideN, f),
+                     curve(kGetUpPupilLift, kGetUpPupilLiftN, f));
     g.write(c, f);
     c.root[f * 3 + 0] = fxm(root_mm[0]);
     c.root[f * 3 + 1] = fxm(root_mm[1]);
@@ -3537,19 +3782,46 @@ inline zc::Clip build_hitfloor() {
   c.frame_count = static_cast<uint16_t>(kHitFloorKeys);
   c.root.assign(static_cast<size_t>(kHitFloorKeys) * 3, 0);
   c.quats.assign(static_cast<size_t>(kHitFloorKeys) * kBoneCount, zc::quat16_identity());
-  // the drop accelerates (gravity), the bite releases over four keys, a
-  // small rebound rings out -- all one authored height curve (mm)
-  static const Key kDrop[] = {{0, 540}, {3, 430},  {6, 240},  {8, 80},
-                              {9, -24}, {12, -24}, {14, 8},   {17, 2},
-                              {20, 0},  {25, 0}};
+  // Gravity visibly accelerates into a deeper authored bite. The whole animal
+  // then rebounds once, over-absorbs, and settles under control into the exact
+  // knocked pose consumed by getUp.
+  static const Key kDrop[] = {
+      {0, kHitFloorDropStartMm}, {2, 750}, {4, 590}, {6, 340},
+      {8, 90}, {9, -kHitFloorBiteMm}, {12, -kHitFloorBiteMm},
+      {14, 72}, {17, -18}, {20, 22}, {24, 0}, {kHitFloorKeys - 1, 0}};
+  static const Key kAbsorb[] = {
+      {0, 0}, {7, 0}, {9, 1000}, {12, -520}, {16, 260},
+      {20, -80}, {24, 0}, {kHitFloorKeys - 1, 0}};
+  static const Key kLandPupilSide[] = {
+      {0, 300}, {6, 600}, {9, 1700}, {13, -900},
+      {20, kKnockedPupilSideA16},
+      {kHitFloorKeys - 1, kKnockedPupilSideA16}};
+  static const Key kLandPupilLift[] = {
+      {0, -300}, {7, -500}, {9, 300}, {14, -500},
+      {20, kKnockedPupilLiftA16},
+      {kHitFloorKeys - 1, kKnockedPupilLiftA16}};
   constexpr int kDropN = static_cast<int>(sizeof(kDrop) / sizeof(Key));
+  constexpr int kAbsorbN = static_cast<int>(sizeof(kAbsorb) / sizeof(Key));
+  constexpr int kLandPupilSideN =
+      static_cast<int>(sizeof(kLandPupilSide) / sizeof(Key));
+  constexpr int kLandPupilLiftN =
+      static_cast<int>(sizeof(kLandPupilLift) / sizeof(Key));
   for (int f = 0; f < kHitFloorKeys; ++f) {
     Rig g;
     g.reset();
     const int32_t drain = 350 + (650 * ss1000(f, 0, 9)) / 1000;  // already loose
     const int32_t roll = ss1000(f, 5, 14);
+    const int32_t absorb = curve(kAbsorb, kAbsorbN, f);
+    int32_t wave[kStanceSlopes] = {};
+    for (int k = 0; k < kStanceSlopes; ++k)
+      wave[k] = (absorb * kHitFloorAbsorbSlope[k]) / 1000;
     int32_t root_mm[3];
-    lying_frame(g, drain, roll, 0, (drain * kKnockFold) / 1000, root_mm);
+    lying_frame(g, drain, roll,
+                (absorb * kHitFloorAbsorbHead) / 1000,
+                (drain * kKnockFold) / 1000, root_mm, wave);
+    apply_pupil_gaze(g,
+                     curve(kLandPupilSide, kLandPupilSideN, f),
+                     curve(kLandPupilLift, kLandPupilLiftN, f));
     g.write(c, f);
     c.root[f * 3 + 0] = fxm(root_mm[0]);
     c.root[f * 3 + 1] = fxm(root_mm[1] + curve(kDrop, kDropN, f));
@@ -3579,6 +3851,7 @@ constexpr int32_t kDmgSideShove = 230;   // mm the whole animal is thrown
                                          // SIDEWAYS -- the unmissable tell
 constexpr int32_t kDmgSideRollAmp = 2200;// raised front rolls off the blow
 constexpr int32_t kDmgBackJerk = 8500;   // head whips DOWN-forward
+constexpr int32_t kDmgBackRearWave = 1500; // broad rear-body kick before travel
 constexpr int32_t kDmgBackSurge = 260;   // mm the body shoves forward
 constexpr int32_t kDmgTopCrush = 1400;   // arch flattens under a top strike
 constexpr int32_t kDmgTopDuck = 7000;    // the head ducks
@@ -3588,15 +3861,18 @@ constexpr int32_t kDmgShimmy = 900;      // back/top whole-body absorption
 // slope displacements; sides are local yaw bends and are mirrored by sign.
 // None is a zero-sum crease: the struck length stays thrown out of line long
 // enough for the delayed wave to pick it up and carry it to the tail.
-constexpr int32_t kDmgBackFoldSlope[kStanceSlopes] = {
-    0, 0, -2200, -7600, 10800, 7600, -3600, -1800, -700, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0};
-constexpr int32_t kDmgTopFoldSlope[kStanceSlopes] = {
-    0, 0, 6500, -13800, -9200, 5800, 3200, 1200, 300, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0};
-constexpr int32_t kDmgSideFoldYaw[kSpineBones] = {
-    0, 0, 6000, -10000, -5000, 4000, 2000, 800, 200, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+constexpr int32_t kDmgBackFoldSlope[kHitFoldSamples] = {
+    0, 200, 500, 1200, 1600, 1100, 500, 200, 0};
+constexpr int32_t kDmgTopFoldSlope[kHitFoldSamples] = {
+    0, 1200, 3200, -5500, -3600, 1800, 800, 200, 0};
+constexpr int32_t kDmgSideFoldYaw[kHitFoldSamples] = {
+    0, 0, 3500, -7000, -3500, 2600, 1300, 500, 100};
+
+inline HitStation damage_hit_station(int dir) {
+  if (dir == 1) return HitStation::kRear;
+  if (dir == 0 || dir == 2) return HitStation::kMiddle;
+  return HitStation::kMiddle;  // top strike lands across the creature's back
+}
 
 inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
   zc::Clip c;
@@ -3605,12 +3881,15 @@ inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
   c.frame_count = static_cast<uint16_t>(kDmgKeys);
   c.root.assign(static_cast<size_t>(kDmgKeys) * 3, 0);
   c.quats.assign(static_cast<size_t>(kDmgKeys) * kBoneCount, zc::quat16_identity());
+  const HitStation station = damage_hit_station(dir);
+  const int contact = hit_station_joint(station);
   for (int f = 0; f < kDmgKeys; ++f) {
     const int32_t e = curve(kImpactEnv, kImpactEnvN, f);
-    // the travelling envelope: joint j gets the blow late and lighter
+    // The travelling envelope expands in both directions from the named
+    // contact station. It is never implicitly indexed from the head.
     int32_t ek[kSpineBones];
     for (int j = 0; j < kSpineBones; ++j)
-      ek[j] = curve_mk(kImpactEnv, kImpactEnvN, f * 1000 - j * kShockLagMk);
+      ek[j] = hit_station_envelope(f, j, contact);
     Rig g;
     g.reset();
     int32_t deepen = 0;
@@ -3622,41 +3901,56 @@ inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
     // trap that drove the tail 233 mm under stays dead); the sides carry
     // only a whisper of pitch, their event is lateral.
     int32_t bwave[kStanceSlopes] = {};
-    for (int k = 1; k < kStanceGround0; ++k) {
-      const int32_t dec = 1000 - (k * kShockDecay) / (kStanceGround0 - 1);
-      const int32_t amp = dir == 1 ? kDmgBackJerk / 2
+    // A rear strike lifts the rear/tail in its longitudinal lane. Top and
+    // side pitch stays on the root-compensated raised run; their travelling
+    // answer continues safely through the grounded body in the lateral lane.
+    const int pitch_end = dir == 1 ? kStanceSlopes : kStanceGround0;
+    for (int k = 1; k < pitch_end; ++k) {
+      const int dist = hit_station_distance(k, contact);
+      int32_t dec = 1000 - (dist * kShockDecay) / (kStanceGround0 - 1);
+      if (dec < kHitWaveFloor) dec = kHitWaveFloor;
+      const int32_t amp = dir == 1 ? kDmgBackRearWave
                           : dir == 3 ? kShockFrontAmp / 2
                                      : kShockFrontAmp / 6;
-      bwave[k] = ((dir == 1 ? ek[k] : -ek[k]) * ((amp * dec) / 1000)) / 1000;
+      bwave[k] = ((dir == 1 ? ek[k] : -ek[k]) *
+                  ((amp * dec) / 1000)) /
+                 1000;
     }
     // The local struck length is displaced in the direction's own pitch
     // silhouette. The carried, non-zero profile then releases into the wave.
     const int32_t fold = curve(kFoldEnv, kFoldEnvN, f);
     if (dir == 1 || dir == 3) {
-      const int32_t* profile =
-          dir == 1 ? kDmgBackFoldSlope : kDmgTopFoldSlope;
-      for (int k = 1; k < kStanceGround0; ++k)
-        bwave[k] += (fold * profile[k]) / 1000;
+      for (int k = 1; k < pitch_end; ++k) {
+        const int32_t local =
+            dir == 1 ? hit_local_sample(kDmgBackFoldSlope, k, contact)
+                     : hit_local_sample(kDmgTopFoldSlope, k, contact);
+        bwave[k] += (fold * local) / 1000;
+      }
     }
     const int32_t rise = apply_stance(g, 1000, deepen, bwave);
+    const int32_t he = ek[0];
     switch (dir) {
       case 0:    // RIGHT: lateral whiplash, head and neck swing off the blow
       case 2: {  // LEFT: mirrored
         const int32_t sgn = dir == 0 ? 1 : -1;
-        g.q[kBHead] = quat_mul(quat_z(kHeadAttitude + (e * 1100) / 1000),
-                               quat_y(sgn * (e * kDmgSideSway) / 1000));
-        // a touch of roll through the raised front -- the body leans off
-        // the blow while the grounded run stays planted
+        g.q[kBHead] = quat_mul(
+            quat_z(kHeadAttitude + (he * 1100) / 1000),
+            quat_y(sgn * (he * kDmgSideSway) / 1000));
+        // A touch of roll follows the wave through the raised front.
         for (int k = 3; k <= 6; ++k)
-          g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_x(sgn * (e * kDmgSideRollAmp) / 4000));
+          g.q[kBSpine0 + k] = quat_mul(
+              g.q[kBSpine0 + k],
+              quat_x(sgn * (ek[k] * kDmgSideRollAmp) / 4000));
         break;
       }
       case 1: {  // BACK: shoved forward, the head whips down then recovers
-        g.q[kBHead] = quat_z(kHeadAttitude - (e * kDmgBackJerk) / 1000);
+        g.q[kBHead] =
+            quat_z(kHeadAttitude - (he * kDmgBackJerk) / 1000);
         break;
       }
       case 3: {  // TOP: crushed down -- the deepen lowers the whole front
-        g.q[kBHead] = quat_z(kHeadAttitude - (e * kDmgTopDuck) / 1000);
+        g.q[kBHead] =
+            quat_z(kHeadAttitude - (he * kDmgTopDuck) / 1000);
         break;
       }
     }
@@ -3674,21 +3968,35 @@ inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
       const int32_t lfold =
           (dir == 0 || dir == 2) ? curve(kFoldEnv, kFoldEnvN, f) : 0;
       for (int k = 1; k <= 8; ++k) {
-        const int32_t dec = 1000 - (k * 700) / 9;
-        int32_t yawk = latsgn * ((ek[k] * ((latamp * dec) / 1000)) / 1000);
-        // Side impacts bend a whole visible length out of the image plane;
-        // the residual turn is deliberate, then propagates down-chain.
-        yawk += latsgn * (lfold * kDmgSideFoldYaw[k]) / 1000;
-        g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_y(yawk));
+        const int dist = hit_station_distance(k, contact);
+        int32_t dec = 1000 - (dist * kDmgLateralDecay) / 9;
+        if (dec < kHitWaveFloor) dec = kHitWaveFloor;
+        int32_t yawk =
+            latsgn * ((ek[k] * ((latamp * dec) / 1000)) / 1000);
+        // If a middle-station side fold reaches the raised run, retain its
+        // direction-specific lateral lane here.
+        yawk += latsgn *
+                (lfold * hit_local_sample(kDmgSideFoldYaw, k, contact)) /
+                1000;
+        g.q[kBSpine0 + k] =
+            quat_mul(g.q[kBSpine0 + k], quat_y(yawk));
       }
       zc::quat16 snacc = zc::quat16_identity();
       for (int j = 0; j < kStanceGround0; ++j)
         snacc = quat_mul(snacc, g.q[kBSpine0 + j]);
       for (int k = kStanceGround0; k <= kStanceGround1; ++k) {
         snacc = quat_mul(snacc, g.q[kBSpine0 + k]);
-        const zc::quat16 W =
-            quat_y(latsgn * ((ek[k] * ((latamp * 900) / 1000)) / 1000));
-        const zc::quat16 L = quat_mul(quat_mul(quat_conj(snacc), W), snacc);
+        const int dist = hit_station_distance(k, contact);
+        int32_t dec = 1000 - (dist * kDmgLateralDecay) / 9;
+        if (dec < kHitWaveFloor) dec = kHitWaveFloor;
+        int32_t yawk =
+            latsgn * ((ek[k] * ((latamp * dec) / 1000)) / 1000);
+        yawk += latsgn *
+                (lfold * hit_local_sample(kDmgSideFoldYaw, k, contact)) /
+                1000;
+        const zc::quat16 W = quat_y(yawk);
+        const zc::quat16 L =
+            quat_mul(quat_mul(quat_conj(snacc), W), snacc);
         g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], L);
         snacc = quat_mul(snacc, L);
       }
@@ -3699,12 +4007,26 @@ inline zc::Clip build_damage(uint16_t slot, int dir) {  // 0 R, 1 B, 2 L, 3 T
                                     (kSpineBones - kStanceGround1 - 2);
         g.q[kBSpine0 + k] = quat_mul(
             g.q[kBSpine0 + k],
-            quat_y(latsgn * ((ek[k - 1] * ((tamp * reach) / 1000)) / 1000)));
+            quat_y(latsgn *
+                   ((ek[k] * ((tamp * reach) / 1000)) / 1000)));
       }
     }
     // the blades react when the wave REACHES the fork, not at impact
     g.tail_rest(kBladeSplay + (ek[kSpineBones - 1] * 1400) / 1000,
                 kBladeRise - (dir == 3 ? (ek[kSpineBones - 1] * 900) / 1000 : 0));
+    const int32_t pupil = curve(kHitPupilEnv, kHitPupilEnvN, f);
+    int32_t pupil_side = 0;
+    int32_t pupil_lift = 0;
+    if (dir == 0 || dir == 2) {
+      pupil_side =
+          (dir == 0 ? -1 : 1) * (pupil * kHitPupilSideA16) / 1000;
+      pupil_lift = (pupil * kHitSidePupilLiftA16) / 1000;
+    } else if (dir == 1) {
+      pupil_lift = (pupil * kHitBackPupilLiftA16) / 1000;
+    } else {
+      pupil_lift = (pupil * kHitPupilLiftA16) / 1000;
+    }
+    apply_pupil_gaze(g, pupil_side, pupil_lift);
     g.write(c, f);
     // displacement per direction: back = a real forward shove; sides = the
     // whole animal thrown SIDEWAYS -- the unmissable directional tell
@@ -3815,7 +4137,7 @@ inline zc::Clip build_run() {
 // agony rear-up, then the collapse runs FORWARD into a mostly-prone corpse
 // (a shallow tilt, same away-from-lens sign as death0's keel -- the
 // run-0326 magenta-smear lesson), two decaying tail slaps, stillness.
-constexpr int kDeath1Keys = 96;
+constexpr int kDeath1Keys = 120;
 constexpr int32_t kD1Agony = 520;      // negative deepen: the front rears UP
 constexpr int32_t kD1HeadRear = 3200;  // the nose climbs with it
 constexpr int32_t kD1Roll = -5200;     // shallow flank tilt -- prone, not keeled
@@ -3824,6 +4146,27 @@ constexpr int32_t kD1Slap = 13000;     // the decaying tail slaps (6000
                                        // read as a whisper on the strip;
                                        // a dying slap must READ)
 constexpr int32_t kD1Shudder = 2000;   // the head's dying tremor (angle16)
+// This death fights before it falls. Two broad, phase-lagged bends pass through
+// the complete animal while the front is reared; the tail and head answer the
+// same motion rather than twitching independently. These are authored gesture
+// knobs, deliberately separate from the later corpse drain.
+constexpr int32_t kD1WrithePitch = 2500;
+constexpr int32_t kD1WritheYaw = 400;
+constexpr int32_t kD1WritheHeadYaw = 3400;
+constexpr int32_t kD1WritheHeadRoll = 2400;
+constexpr int32_t kD1WritheLiftMm = 140;  // the middle buck lifts off its slam
+// Full posed-surface terrain policy: the writhing fight owns one declared
+// whole-animal buck clear of terrain as well as its contact bite; collapse owns
+// its own bite; the tail-slap/corpse interval stays pressed into contact. Every
+// authored key belongs to exactly one phase.
+constexpr int kD1FightContactEndKey = 49;
+constexpr int kD1CollapseContactEndKey = 78;
+constexpr int32_t kD1FightTerrainBiteMm = 65;
+constexpr int32_t kD1FightTerrainClearanceMinMm = 100;
+constexpr int32_t kD1FightTerrainClearanceMm = 160;
+constexpr int32_t kD1CollapseTerrainBiteMm = 65;
+constexpr int32_t kD1AftermathTerrainBiteMm = 60;
+constexpr int32_t kD1GroundHoverMm = 20;
 
 inline zc::Clip build_death1() {
   zc::Clip c;
@@ -3840,19 +4183,48 @@ inline zc::Clip build_death1() {
       acc += zref::fx_sin(zref::angle16{static_cast<uint16_t>(kStanceSlope[k] & 0xFFFF)}).raw;
     return acc;
   }();
+  static const Key kD1PupilSide[] = {
+      {0, 0}, {7, 0}, {13, 900}, {20, -1500}, {28, 1300},
+      {36, -800}, {46, 350}, {56, 0}, {kDeath1Keys - 1, 0}};
+  static const Key kD1PupilLift[] = {
+      {0, 0}, {9, 0}, {16, 300}, {23, -720}, {31, 450},
+      {40, -600}, {52, 0}, {kDeath1Keys - 1, 0}};
+  constexpr int kD1PupilSideN =
+      static_cast<int>(sizeof(kD1PupilSide) / sizeof(Key));
+  constexpr int kD1PupilLiftN =
+      static_cast<int>(sizeof(kD1PupilLift) / sizeof(Key));
   for (int f = 0; f < kDeath1Keys; ++f) {
     Rig g;
     g.reset();
-    // agony: rises over k4..16, gone by k34 as the collapse takes over
-    const int32_t agony = ss1000(f, 4, 16) - ss1000(f, 16, 34);
-    const int32_t drain = ss1000(f, 18, 46);
-    // the head's dying tremor rides the agony (slow, two cycles)
+    // The first third is a readable fight: rear up, hold the effort through two
+    // broad whole-body writhes, then lose it. Collapse begins only after that
+    // phrase has played, rather than erasing the struggle as it starts.
+    const int32_t agony = ss1000(f, 4, 16) - ss1000(f, 34, 46);
+    const int32_t writhe = ss1000(f, 7, 13) - ss1000(f, 39, 49);
+    static const Key kDrain[] = {
+        {0, 0}, {34, 0}, {42, 260}, {47, 220}, {55, 650},
+        {66, 920}, {78, 1000}, {kDeath1Keys - 1, 1000}};
+    constexpr int kDrainN = static_cast<int>(sizeof(kDrain) / sizeof(Key));
+    const int32_t drain = curve(kDrain, kDrainN, f);
+    // A low tremor sits beneath the larger gestures; it does not become the
+    // gesture. The broad writhe below owns the silhouette.
     int32_t shake = 0;
-    if (f < 20) {
-      const int32_t ph = f * 6554;
+    if (f < 32) {
+      const int32_t ph = f * 4096;
       shake = (zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw *
                kD1Shudder) >> 16;
     }
+    const int32_t writhe_ph = f * 5200;
+    const int32_t head_writhe = static_cast<int32_t>(
+        (static_cast<int64_t>(zref::fx_sin(zref::angle16{
+             static_cast<uint16_t>((writhe_ph + 6000) & 0xFFFF)}).raw) *
+         kD1WritheHeadYaw * writhe) /
+        (65536 * 1000));
+    const int32_t head_roll = static_cast<int32_t>(
+        (static_cast<int64_t>(zref::fx_sin(zref::angle16{
+             static_cast<uint16_t>((writhe_ph * 2 - 9000) & 0xFFFF)}).raw) *
+         kD1WritheHeadRoll * writhe) /
+        (65536 * 1000));
     int64_t rear_sin = 0;
     int32_t prev = 0;
     for (int k = 0; k < kStanceSlopes; ++k) {
@@ -3864,51 +4236,66 @@ inline zc::Clip build_death1() {
         if (d <= 16384) d += (d * deepen) / 1000;
         else d -= ((32768 - d) * deepen) / 1000;
       }
+      int32_t side_writhe = 0;
+      if (writhe != 0) {
+        const int32_t pitch_wave = zref::fx_sin(zref::angle16{
+            static_cast<uint16_t>((writhe_ph - k * 3600) & 0xFFFF)}).raw;
+        const int32_t side_wave = zref::fx_sin(zref::angle16{
+            static_cast<uint16_t>((writhe_ph - k * 4200 + 15000) & 0xFFFF)}).raw;
+        d += (static_cast<int64_t>(pitch_wave) * kD1WrithePitch * writhe) /
+             (65536 * 1000);
+        side_writhe = static_cast<int32_t>(
+            (static_cast<int64_t>(side_wave) * kD1WritheYaw * writhe) /
+            (65536 * 1000));
+      }
       d += ((kCorpseSlope[k] - d) * drain) / 1000;
-      // the tail slaps: two decaying cycles, k48..80, lift-dominant with a
-      // small authored bite on the down-beat (the sine's negative half is
-      // clamped to a quarter of the lift). The slap owns the last FIVE
-      // segments, not just the two past the stance's grounded run -- on the
-      // lying body only the thin 320 mm tip moved and a frame diff showed
-      // ~130 changed pixels: a whisper, not a slap (run 0326).
-      // the REAR-NODE CONSTRAINT MUST NOT SEE THE SLAP: three slap joints
-      // sit inside its window, and compensating them dove the whole root
-      // and pressed the FRONT 146 mm under (probe, run 0326). rear_sin
-      // accumulates the un-slapped slope; the slap moves only the tail.
+      // Once the body has landed, two decaying tail slaps spend the last
+      // reserve of motion. They begin after the delayed collapse, not during
+      // the full-body fight.
       const uint16_t a = static_cast<uint16_t>(d & 0xFFFF);
       if (k <= kStanceGround1) rear_sin += zref::fx_sin(zref::angle16{a}).raw;
-      if (k >= kSpineBones - 6 && f >= 48 && f < 80) {
-        const int32_t ph = ((f - 48) * 4096);  // two cycles over 32 keys
+      if (k >= kSpineBones - 6 && f >= 76 && f < 108) {
+        const int32_t ph = ((f - 76) * 4096);  // two cycles over 32 keys
         int32_t sl = zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw;
         if (sl < -16384) sl = -16384;
-        const int32_t decay = ((80 - f) * 1000) / 32;
+        const int32_t decay = ((108 - f) * 1000) / 32;
         d -= (static_cast<int64_t>(kD1Slap) * sl / 65536) * decay /
              (1000 * 6);
       }
       const int32_t pitch = static_cast<int32_t>(d) - prev;
       prev = static_cast<int32_t>(d);
       g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], quat_z(pitch));
+      if (side_writhe != 0)
+        g.q[kBSpine0 + k] =
+            quat_mul(g.q[kBSpine0 + k], quat_y(side_writhe));
     }
     const int32_t root_y =
         static_cast<int32_t>((segL * (rear_sin - base_rear_sin)) >> 16);
-    const int32_t roll = (kD1Roll * ss1000(f, 26, 50)) / 1000;
-    const int32_t roll_lift = (kD1RollLift * ss1000(f, 26, 50)) / 1000;
+    const int32_t roll = (kD1Roll * ss1000(f, 50, 78)) / 1000;
+    const int32_t roll_lift = (kD1RollLift * ss1000(f, 50, 78)) / 1000;
     g.q[kBHead] = quat_mul(
-        quat_z(kHeadAttitude + (agony * kD1HeadRear) / 1000 - (1400 * drain) / 1000 +
-               shake / 2),
-        quat_y(shake));
-    g.tail_rest((kBladeSplay * (1000 + (agony * 800) / 1000 - drain / 2)) / 1000,
-                (kBladeRise * (1000 - drain)) / 1000);
+        quat_mul(quat_z(kHeadAttitude + (agony * kD1HeadRear) / 1000 -
+                            (1400 * drain) / 1000 + shake / 2),
+                 quat_y(shake + head_writhe)),
+        quat_x(head_roll));
+    g.tail_rest(
+        (kBladeSplay * (1000 + (agony * 800) / 1000 - drain / 2)) / 1000 +
+            (writhe * 1800) / 1000,
+        (kBladeRise * (1000 - drain)) / 1000 + (writhe * 900) / 1000);
+    apply_pupil_gaze(g, curve(kD1PupilSide, kD1PupilSideN, f),
+                     curve(kD1PupilLift, kD1PupilLiftN, f));
     const zc::quat16 rq = quat_x(roll);
     g.q[kBSpine0] = quat_mul(rq, g.q[kBSpine0]);
     g.write(c, f);
     int32_t rx, ry, rz;
     quat_rot_vec(rq, kDeathPivotX, -kBodyY - root_y, 0, rx, ry, rz);
+    const int32_t fight_lift = (kD1WritheLiftMm * writhe) / 1000;
     c.root[f * 3 + 0] = fxm(kDeathPivotX - rx);
-    c.root[f * 3 + 1] = fxm(root_y + roll_lift + (-kBodyY - root_y - ry));
+    c.root[f * 3 + 1] =
+        fxm(root_y + fight_lift + roll_lift + (-kBodyY - root_y - ry));
     c.root[f * 3 + 2] = fxm(-rz);
   }
-  c.events = {{40, zc::kEvFoot, 3}};  // the body lands
+  c.events = {{68, zc::kEvFoot, 3}};  // the delayed body landing
   return c;
 }
 
@@ -3944,6 +4331,16 @@ constexpr int32_t kTauntNose = 3400;  // the head rises WITH the rear-up
 // axis switch.
 constexpr int32_t kTauntBobble = 6200;    // roll amplitude (reads at 240p)
 constexpr int32_t kTauntBobbleFig8 = 1400;  // the figure-eight pitch trace
+constexpr int32_t kTauntPupilSideA16 = 600;  // one held conspiratorial glance
+constexpr int32_t kTauntPupilCatchA16 = -250;
+constexpr int32_t kTauntPupilLiftA16 = -300;
+static const Key kTauntPupilSide[] = {
+    {0, 0}, {14, 0}, {20, kTauntPupilSideA16},
+    {34, kTauntPupilSideA16}, {42, kTauntPupilCatchA16},
+    {48, 0}, {kTauntKeys - 1, 0}};
+static const Key kTauntPupilLift[] = {
+    {0, 0}, {20, 0}, {25, kTauntPupilLiftA16},
+    {38, kTauntPupilLiftA16}, {46, 0}, {kTauntKeys - 1, 0}};
 
 inline zc::Clip build_taunt() {
   zc::Clip c;
@@ -4004,6 +4401,14 @@ inline zc::Clip build_taunt() {
         zref::angle16{static_cast<uint16_t>((ph * 2 - 21000) & 0xFFFF)}).raw;
     g.tail_rest(kBladeSplay + (up * kTauntFlare) / 1000 + ((st * 900) >> 16),
                 kBladeRise + (up * kTauntRise) / 1000);
+    // One readable glance joins the joke, holds calmly through the bobble, then
+    // gives a tiny catch before returning to neutral. It is not an idle scan.
+    apply_pupil_gaze(
+        g,
+        curve(kTauntPupilSide,
+              static_cast<int>(sizeof(kTauntPupilSide) / sizeof(Key)), f),
+        curve(kTauntPupilLift,
+              static_cast<int>(sizeof(kTauntPupilLift) / sizeof(Key)), f));
     g.write(c, f);
     c.root[f * 3 + 1] = fxm(rise);
   }
@@ -4023,6 +4428,18 @@ constexpr int32_t kSlowTauntHeadYaw = 2300;
 constexpr int32_t kSlowTauntHeadTilt = 5200;
 constexpr int32_t kSlowTauntBodyLife = 460;
 constexpr int kSlowTauntHeadLagKeys = 4;
+constexpr int32_t kSlowTauntPupilSideA16 = 650;
+constexpr int32_t kSlowTauntPupilLiftA16 = -220;
+static const Key kSlowTauntPupilSide[] = {
+    {0, 0}, {12, 0}, {22, kSlowTauntPupilSideA16},
+    {31, kSlowTauntPupilSideA16}, {42, -kSlowTauntPupilSideA16},
+    {59, -kSlowTauntPupilSideA16}, {75, kSlowTauntPupilSideA16},
+    {94, kSlowTauntPupilSideA16}, {106, 0},
+    {kSlowTauntKeys - 1, 0}};
+static const Key kSlowTauntPupilLift[] = {
+    {0, 0}, {18, kSlowTauntPupilLiftA16},
+    {98, kSlowTauntPupilLiftA16}, {110, 0},
+    {kSlowTauntKeys - 1, 0}};
 
 inline int32_t slow_taunt_side(int f) {
   // Centre -> left hold -> right hold -> left hold -> centre. Each crossing is
@@ -4079,6 +4496,14 @@ inline zc::Clip build_slow_taunt() {
     g.q[kBHead] = quat_mul(
         g.q[kBHead], quat_mul(quat_y(head_yaw), quat_x(head_tilt)));
 
+    // The eyes choose each taunt-side target once and hold it through the slow
+    // neck phrase. Three deliberate target changes, never an idle itinerary.
+    apply_pupil_gaze(
+        g,
+        curve(kSlowTauntPupilSide,
+              static_cast<int>(sizeof(kSlowTauntPupilSide) / sizeof(Key)), f),
+        curve(kSlowTauntPupilLift,
+              static_cast<int>(sizeof(kSlowTauntPupilLift) / sizeof(Key)), f));
     g.write(c, f);
     c.root[f * 3 + 1] = fxm(rise);
   }
@@ -4154,6 +4579,8 @@ inline zc::Clip slice_clip(const zc::Clip& src, uint16_t slot, int k0, int k1) {
                 src.root.begin() + (static_cast<size_t>(k1) + 1) * 3);
   c.quats.assign(src.quats.begin() + static_cast<size_t>(k0) * kBoneCount,
                  src.quats.begin() + (static_cast<size_t>(k1) + 1) * kBoneCount);
+  if (!src.deform.empty())
+    c.deform.assign(src.deform.begin() + k0, src.deform.begin() + k1 + 1);
   return c;
 }
 
@@ -4165,6 +4592,7 @@ inline zc::Clip duplicate_pose_clip(const zc::Clip& src, uint16_t slot,
   for (int i = 0; i < 3; ++i) c.root[3 + i] = c.root[i];
   c.quats.resize(static_cast<size_t>(2) * kBoneCount);
   for (int b = 0; b < kBoneCount; ++b) c.quats[kBoneCount + b] = c.quats[b];
+  if (!c.deform.empty()) c.deform.resize(2, c.deform[0]);
   return c;
 }
 
@@ -4308,13 +4736,11 @@ inline zc::Clip build_fall_baked() {
     for (int st = 0; st < steps_per_loop; ++st) {
       const int key = st / 2;
       const int32_t ph = key * (65536 / kFallKeys) + (st & 1) * (32768 / kFallKeys);
-      // the tumble's warped phase (build_fall's own law) -> root angular
-      // velocity -> its DERIVATIVE is the inertia forcing
-      const int32_t theta_u = static_cast<int32_t>((static_cast<int64_t>(st) << 16) / steps_per_loop);
-      const int32_t warp = static_cast<int32_t>(
-          (static_cast<int64_t>(kFallTumbleWarp) *
-           zref::fx_sin(zref::angle16{static_cast<uint16_t>(theta_u & 0xFFFF)}).raw) >> 16);
-      const int32_t theta = theta_u + warp;
+      // The same unwrapped fall clock drives the preview baker. Keep warm-up
+      // loop count in the linear lane so the seam cannot masquerade as a huge
+      // backwards angular acceleration.
+      const int32_t theta = fall_tumble_phase(
+          loop * steps_per_loop + st, steps_per_loop);
       const int32_t om_root = theta - prev_theta;
       const int32_t al_root = om_root - prev_om_root;  // root angular accel
       prev_theta = theta;
@@ -4398,11 +4824,8 @@ inline zc::Clip build_fall_baked() {
     const int32_t fl = zref::fx_sin(
         zref::angle16{static_cast<uint16_t>((f * (65536 / kFallKeys) * 2 + 9000) & 0xFFFF)}).raw;
     g.tail_rest(kBladeSplay + ((fl * 1800) >> 16), kBladeRise + ((fl * 1000) >> 16));
-    // the tumble root, exactly build_fall's law
-    const int32_t theta_u = static_cast<int32_t>((static_cast<int64_t>(f) << 16) / kFallKeys);
-    const int32_t theta = theta_u + static_cast<int32_t>(
-        (static_cast<int64_t>(kFallTumbleWarp) *
-         zref::fx_sin(zref::angle16{static_cast<uint16_t>(theta_u & 0xFFFF)}).raw) >> 16);
+    // the tumble root, exactly build_fall's shared unwrapped phase law
+    const int32_t theta = fall_tumble_phase(f, kFallKeys);
     const int32_t ph = f * (65536 / kFallKeys);
     const int32_t t2 = zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph + 17000) & 0xFFFF)}).raw;
     const int32_t t3 = zref::fx_sin(zref::angle16{static_cast<uint16_t>((ph * 2 + 40000) & 0xFFFF)}).raw;
@@ -4449,6 +4872,12 @@ constexpr int kIdle2Keys = 98;    // flourish median
 constexpr int kIdle3Keys = 98;
 constexpr int kStrikeKeys = 45;   // melee median
 constexpr int kNotifyKeys = 48;
+constexpr int32_t kNotifyPupilLeadPerMille = 600;
+constexpr int32_t kNotifyPupilAlertLiftA16 = -360;
+static const Key kNotifyPupilLift[] = {
+    {0, 0}, {1, 0}, {4, kNotifyPupilAlertLiftA16},
+    {34, kNotifyPupilAlertLiftA16}, {41, 0},
+    {kNotifyKeys - 1, 0}};
 constexpr int kBowKeys = 72;      // donor bow median
 constexpr int kTalkKeys = 98;     // donor talk median
 constexpr int kSorrowKeys = 98;
@@ -4601,6 +5030,23 @@ static const int32_t kD2Stretch[kStanceSlopes] = {
     // of a lying body (the corpse table's law, stretched longer)
     900, 700, 550, 420, 320, 240, 180, 130, 90, 60,
     40,  20,  0,   -20, -40, -60, -80, -120, -220};
+// The complaint is carried without a jaw: a sorrow-weighted front heave with a
+// small counter-answer through the middle. The key track below phrases this
+// profile irregularly while talk-style nods and yaw make the calls readable.
+static const int32_t kD2ComplaintPulseProfile[kStanceSlopes] = {
+    0, 1250, 1450, 1250, 900, 520, 240, 60, -120, -220,
+    -240, -160, -80, 0, 0, 0, 0, 0, 0};
+constexpr int32_t kD2StruggleAmp = 2300;
+constexpr int32_t kD2ComplaintLiftMm = 50;  // one heaving lift, then contact
+// Full posed-surface terrain policy for the complaint, the loss of the S, and
+// the final paid-out hold. The heaving phrase owns the slightly deeper bite.
+constexpr int kD2ComplaintContactEndKey = 48;
+constexpr int kD2UnwindContactEndKey = 72;
+constexpr int32_t kD2ComplaintTerrainBiteMm = 30;
+constexpr int32_t kD2ComplaintTerrainClearanceMm = 40;
+constexpr int32_t kD2UnwindTerrainBiteMm = 30;
+constexpr int32_t kD2HeldTerrainBiteMm = 15;
+constexpr int32_t kD2GroundHoverMm = 20;
 inline zc::Clip build_death2() {
   zc::Clip c;
   c.slot_id = kSlotDeath2;
@@ -4621,27 +5067,58 @@ inline zc::Clip build_death2() {
   // paid-out line's belly is not at the nose, so the nose cannot be the
   // thing that meters the drop.
   constexpr int32_t kD2Bite = 10;
-  // the unwind gives unevenly: give, a half-catch, the big give, slow end
-  static const Key kPay[] = {{0, 0},   {12, 0},  {20, 320}, {25, 280},
-                             {33, 640}, {44, 900}, {58, 1000}, {95, 1000}};
+  // The S holds long enough to complain in three uneven phrases. Only after
+  // the last answer does the unwind begin; the give still catches once before
+  // the larger collapse.
+  static const Key kPay[] = {{0, 0},   {26, 0},  {34, 260}, {40, 220},
+                             {49, 600}, {60, 900}, {72, 1000}, {95, 1000}};
+  static const Key kComplaintPulse[] = {
+      {0, 0}, {5, -180}, {11, 680}, {16, -300}, {22, 920},
+      {28, -520}, {35, 760}, {43, -180}, {50, 0}, {95, 0}};
+  static const Key kComplaintNod[] = {
+      {0, 0}, {6, -700}, {10, 350}, {16, -1700}, {21, -200},
+      {27, -1300}, {33, 250}, {39, -1900}, {47, -300}, {55, 0},
+      {95, 0}};
+  static const Key kComplaintSide[] = {
+      {0, 0}, {8, 850}, {15, -1250}, {23, 1050}, {31, -900},
+      {39, 700}, {49, -250}, {58, 0}, {95, 0}};
+  static const Key kD2PupilSide[] = {
+      {0, 0}, {8, 500}, {15, -1050}, {23, 850}, {32, -700},
+      {41, 450}, {52, 0}, {95, 0}};
+  static const Key kD2PupilLift[] = {
+      {0, 0}, {10, -220}, {17, -650}, {24, -180}, {33, -720},
+      {43, -320}, {56, 0}, {95, 0}};
   constexpr int kPayN = static_cast<int>(sizeof(kPay) / sizeof(Key));
+  constexpr int kComplaintPulseN =
+      static_cast<int>(sizeof(kComplaintPulse) / sizeof(Key));
+  constexpr int kComplaintNodN =
+      static_cast<int>(sizeof(kComplaintNod) / sizeof(Key));
+  constexpr int kComplaintSideN =
+      static_cast<int>(sizeof(kComplaintSide) / sizeof(Key));
+  constexpr int kD2PupilSideN =
+      static_cast<int>(sizeof(kD2PupilSide) / sizeof(Key));
+  constexpr int kD2PupilLiftN =
+      static_cast<int>(sizeof(kD2PupilLift) / sizeof(Key));
   for (int f = 0; f < kDeath2Keys; ++f) {
     Rig g;
     g.reset();
-    int32_t headshake = 0;
-    if (f <= 12) {
-      const int32_t ph = f * 10923;  // two slow shakes over 12 keys
-      const int32_t sh = zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw;
-      headshake = (sh * 1900) >> 16;
-    }
     const int32_t pay = curve(kPay, kPayN, f);
-    // the struggle: two travelling waves that die as the body pays out
-    const int32_t strug_amp = (1800 * (1000 - pay)) / 1000;
+    const int32_t complaint_pulse =
+        curve(kComplaintPulse, kComplaintPulseN, f);
+    const int32_t complaint_nod = curve(kComplaintNod, kComplaintNodN, f);
+    const int32_t complaint_side =
+        curve(kComplaintSide, kComplaintSideN, f);
+    // A residual travelling writhe survives into the first part of the unwind,
+    // but the complaint phrases, not a regular tremor, own the opening.
+    const int32_t strug_amp = (kD2StruggleAmp * (1000 - pay)) / 1000;
     int64_t sum_cos = 0;
     int32_t prev = 0;
     for (int k = 0; k < kStanceSlopes; ++k) {
       int64_t d = kStanceSlope[k];
       d += ((kD2Stretch[k] - d) * pay) / 1000;
+      d += (static_cast<int64_t>(kD2ComplaintPulseProfile[k]) *
+            complaint_pulse * (1000 - pay)) /
+           1000000;
       if (k >= 2 && k <= 12 && strug_amp > 0) {
         const int32_t pw = f * 4200 - k * 9000;
         const int32_t sw =
@@ -4689,21 +5166,30 @@ inline zc::Clip build_death2() {
       }
       drop = static_cast<int32_t>(-(kBodyY + minv) - kD2Bite);
     }
-    // the dying head: eases TOWARD the paid-out line (a further droop
-    // tucked the ball chin-under -- first render), the early shakes ride
-    // on top, and the very end has one small settling turn
+    // Talk-style irregular nods and phrase turns ride a sorrowful hanging
+    // attitude. As the S pays out, that language drains into the old low head.
     const int32_t last = ss1000(f, 84, 88) - ss1000(f, 88, 95);
     g.q[kBHead] = quat_mul(
-        quat_z(kHeadAttitude + (5200 * pay) / 1000 + headshake - (last * 500) / 1000),
-        quat_y(headshake + (last * 1100) / 1000));
-    // the fork folds with the paying-out, most of the way
-    g.tail_rest((kBladeSplay * (1000 - (pay * 550) / 1000)) / 1000,
-                (kBladeRise * (1000 - (pay * 700) / 1000)) / 1000);
+        quat_z(kHeadAttitude + (5200 * pay) / 1000 - complaint_nod -
+               (last * 500) / 1000),
+        quat_y(complaint_side + (last * 1100) / 1000));
+    const int32_t complaint_open =
+        complaint_pulse < 0 ? -complaint_pulse : complaint_pulse;
+    // The fork answers the body pulses while there is strength, then folds with
+    // the paying-out, most of the way.
+    g.tail_rest(
+        (kBladeSplay * (1000 - (pay * 550) / 1000)) / 1000 +
+            (complaint_open * 500) / 1000,
+        (kBladeRise * (1000 - (pay * 700) / 1000)) / 1000 +
+            (complaint_open * 300) / 1000);
+    apply_pupil_gaze(g, curve(kD2PupilSide, kD2PupilSideN, f),
+                     curve(kD2PupilLift, kD2PupilLiftN, f));
     g.write(c, f);
     c.root[f * 3 + 0] = fxm((ext_mm * 380) / 1000);
-    c.root[f * 3 + 1] = fxm(drop);
+    c.root[f * 3 + 1] =
+        fxm(drop + (complaint_open * kD2ComplaintLiftMm) / 1000);
   }
-  c.events = {{44, zc::kEvFoot, 2}};  // the body settles flat
+  c.events = {{60, zc::kEvFoot, 2}};  // the body settles after the complaint
   return c;
 }
 
@@ -4912,11 +5398,22 @@ inline zc::Clip build_notify() {
     // two slow scanning turns while held
     const int32_t scan =
         zref::fx_sin(zref::angle16{static_cast<uint16_t>((f * 3200 + 6000) & 0xFFFF)}).raw;
+    const int32_t scan_ahead = zref::fx_sin(zref::angle16{
+        static_cast<uint16_t>(((f + 3) * 3200 + 6000) & 0xFFFF)}).raw;
+    const int32_t head_scan = (((scan * 2400) >> 16) * alert) / 1000;
+    const int32_t target_scan =
+        (((scan_ahead * 2400) >> 16) * alert) / 1000;
     g.q[kBHead] = quat_mul(
         quat_z(kHeadAttitude + (4600 * alert) / 1000 + extra[1] + extra[2]),
-        quat_y((((scan * 2400) >> 16) * alert) / 1000));
+        quat_y(head_scan));
     g.tail_rest(kBladeSplay + (2100 * alert) / 1000,
                 kBladeRise + (1400 * alert) / 1000);
+    // Eyes arrive three keys before the head at each of the two alert targets,
+    // then hold with it; the local lead is scaled and clamped, never jitter.
+    apply_pupil_gaze(
+        g, ((target_scan - head_scan) * kNotifyPupilLeadPerMille) / 1000,
+        curve(kNotifyPupilLift,
+              static_cast<int>(sizeof(kNotifyPupilLift) / sizeof(Key)), f));
     g.write(c, f);
     c.root[f * 3 + 1] = fxm(rise);
   }
@@ -5225,7 +5722,9 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
   c.frame_count = static_cast<uint16_t>(total);
   c.root.assign(static_cast<size_t>(total) * 3, 0);
   c.quats.assign(static_cast<size_t>(total) * kBoneCount, zc::quat16_identity());
+  c.deform.assign(static_cast<size_t>(total), zc::DeformSample{});
   const ChoreoSample end_s = zixx_plan_sample(p, t3);
+
   const int64_t aim_dx = p.intercept_x_mm - p.apex_fwd_mm;
   const int64_t aim_dy = p.intercept_y_mm - p.apex_mm;
   int32_t aim_len = static_cast<int32_t>(zref::isqrt_u64(
@@ -5250,6 +5749,7 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
       // curve; one shared sample releases the entire S coherently.
       const int32_t entry = zixx_plan_spring_entry_amount(p, k);
       const int32_t amount = zixx_plan_spring_amount(p, k);
+      c.deform[static_cast<size_t>(k)] = spring_deform_sample(amount);
       apply_spring_stance(g, 1000, entry, amount);
       g.q[kBHead] = quat_z(spring_head_attitude(1000, entry, amount));
       g.tail_rest(kBladeSplay + kBladeSplay / 5 +
@@ -5623,7 +6123,7 @@ inline void zixx_jump_track(const JumpPlan& p, int key,
   const int last = zixx_jump_phases(p).last_key;
   if (key > last) key = last;
   const JumpMotionSample m = zixx_jump_motion_sample(p, key);
-  x_mm = spring_root_retract(m.spring);
+  x_mm = spring_root_anchor_x(m.entry, m.spring);
   y_mm = m.lift + spring_root_offset(m.entry, m.spring);
 }
 
@@ -5639,6 +6139,7 @@ inline zc::Clip build_jump(const JumpPlan& p) {
   c.root.assign(static_cast<size_t>(total) * 3, 0);
   c.quats.assign(static_cast<size_t>(total) * kBoneCount,
                  zc::quat16_identity());
+  c.deform.assign(static_cast<size_t>(total), zc::DeformSample{});
   const int32_t coil_pitch = -(65536 / (kSpineBones - 2));
   for (int f = 0; f < total; ++f) {
     const JumpMotionSample motion = zixx_jump_motion_sample(p, f);
@@ -5647,6 +6148,7 @@ inline zc::Clip build_jump(const JumpPlan& p) {
     const int32_t curl = motion.curl;
     const int32_t theta = motion.theta;
     const int32_t lift = motion.lift;
+    c.deform[static_cast<size_t>(f)] = spring_deform_sample(spring);
 
     Rig g;
     g.reset();
@@ -5669,7 +6171,7 @@ inline zc::Clip build_jump(const JumpPlan& p) {
         (static_cast<int64_t>(kCoilR) * cth) >> 16);
     g.write(c, f);
     c.root[f * 3 + 0] = fxm((piv_x * curl) / 1000 +
-                                spring_root_retract(spring));
+                                spring_root_anchor_x(entry, spring));
     int32_t y = lift + drop + (piv_y * curl) / 1000;
     if (f == land || f == land + 1) y -= kJumpLandingBiteMm;
     c.root[f * 3 + 1] = fxm(y);
@@ -5747,6 +6249,12 @@ inline const zc::CreatureType& type() {
         rs.rx = fxm(rx_mm);    // LATERAL, ball + the eye rim
         rs.rz = fxm(rz_mm);    // VERTICAL, ball
         rs.cz = -fxm(kBodyY);  // chain rings are creature-global; UP is -cz
+        rs.deform_role = zc::DeformRole::kRadial;
+        rs.deform_axis = 2;  // local Z quarter-turns onto bind-space vertical
+        rs.deform_strength = spring_deform_strength(i);
+        rs.deform_center_x = rs.cx;
+        rs.deform_center_y = rs.y;
+        rs.deform_center_z = rs.cz;
         p.rings.push_back(rs);
       }
       p.page = kTileHead;
@@ -5826,6 +6334,12 @@ inline const zc::CreatureType& type() {
             rs.b1 = pupil_bone;
             rs.w0 = 64;
           }
+          rs.deform_role = zc::DeformRole::kFollower;
+          rs.deform_axis = 1;  // stripe is already authored in global bind axes
+          rs.deform_strength = spring_deform_strength(kPupilStation);
+          rs.deform_center_x = fxm(eye_x);
+          rs.deform_center_y = fxm(kBodyY);
+          rs.deform_center_z = 0;
           stripe.rings.push_back(rs);
         }
         parts.push_back(stripe);
@@ -5852,6 +6366,12 @@ inline const zc::CreatureType& type() {
         rs.rx = fxm(r * station_wide(i) / 100);  // LATERAL
         rs.rz = fxm(r);                          // VERTICAL
         rs.cz = -fxm(kBodyY);
+        rs.deform_role = zc::DeformRole::kRadial;
+        rs.deform_axis = 2;
+        rs.deform_strength = spring_deform_strength(i);
+        rs.deform_center_x = rs.cx;
+        rs.deform_center_y = rs.y;
+        rs.deform_center_z = rs.cz;
         p.rings.push_back(rs);
       }
       p.page = kTileBody;
@@ -5927,6 +6447,12 @@ inline const zc::CreatureType& type() {
           rs.b1 = broot;
           rs.w0 = static_cast<uint8_t>(64 - wroot);
         }
+        rs.deform_role = zc::DeformRole::kFollower;
+        rs.deform_axis = 2;
+        rs.deform_strength = kSpringTailDeformStrength;
+        rs.deform_center_x = 0;
+        rs.deform_center_y = rs.y;  // preserve blade length; follow lateral root
+        rs.deform_center_z = -fxm(kBodyY);
         p.rings.push_back(rs);
       }
       // BOTH faces of each fin carry BOTH colours (Fabian, 2026-08-27
@@ -5949,6 +6475,15 @@ inline const zc::CreatureType& type() {
       p.rings = {{0, fxm(kSpikeR), 6},
                  {fxm(kSpikeLen / 2), fxm(kSpikeR * 6 / 10), 6},
                  {fxm(kSpikeLen), fxm(kSpikeR / 5), 6}};
+      for (zc::RingSpec& rs : p.rings) {
+        rs.deform_role = zc::DeformRole::kFollower;
+        rs.deform_axis = 2;
+        rs.deform_strength = kSpringTailDeformStrength;
+        rs.deform_center_y = rs.y;
+        // Spike bone rests 30 mm above the fork centre. Local +Z maps to -Y
+        // through this part's quarter turns, bringing the origin back to body.
+        rs.deform_center_z = fxm(30);
+      }
       p.page = 255;  // a 26 mm spike does not repay a texture page
       set_rgb(p, kPink);
       parts.push_back(p);

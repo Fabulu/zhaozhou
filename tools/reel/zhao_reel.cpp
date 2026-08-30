@@ -2121,6 +2121,11 @@ void sample_zixx_moving_source(uint32_t frame, uint32_t frames,
   constexpr int32_t kPathHeightMm = 1400;
   constexpr int32_t kHighArchMm = 1200;
   constexpr int32_t kReturnArchMm = 900;
+  constexpr int32_t kLightInnerRadiusMm = 1100;
+  constexpr int32_t kLightOuterRadiusMm = 5200;
+  constexpr int32_t kLightGainR = 65536;
+  constexpr int32_t kLightGainG = 44564;
+  constexpr int32_t kLightGainB = 26214;
   const uint32_t leg_frames = std::max<uint32_t>(1, frames / 4);
   const uint32_t leg = std::min<uint32_t>(3, frame / leg_frames);
   const uint32_t local = frame - leg * leg_frames;
@@ -2165,11 +2170,11 @@ void sample_zixx_moving_source(uint32_t frame, uint32_t frames,
   out.world_x = staged_centre_x + fxm(x_mm);
   out.world_y = inst.y + fxm(y_mm);
   out.world_z = inst.z + fxm(z_mm);
-  out.inner_radius = fxm(450);
-  out.outer_radius = fxm(3600);
-  out.gain_r = 65536;  // warm gummy-lamp source
-  out.gain_g = 44564;
-  out.gain_b = 26214;
+  out.inner_radius = fxm(kLightInnerRadiusMm);
+  out.outer_radius = fxm(kLightOuterRadiusMm);
+  out.gain_r = kLightGainR;  // warm gummy-lamp source
+  out.gain_g = kLightGainG;
+  out.gain_b = kLightGainB;
 }
 
 void draw_zixx_moving_source_marker(const CreatureReelCtx& c, uint8_t* rgb,
@@ -2859,11 +2864,19 @@ int render_scene(const SceneSubject& sub) {
               static_cast<int64_t>(fxm(zixx::kWalkSpeed)) * fs, 16, nullptr);
         }
         // THE IDLE BREATHES IN GIRTH. A clip carries rotations and a root
-        // offset, not scale, so the swell rides the instance bulk, which
-        // multiplies the decoded pose and is exactly the right lever.
+        // offset, not scale, so the swell rides the instance bulk. Its phase
+        // belongs to the IDLE CLIP, never to the presentation length: the site
+        // orbit is three clip loops long, and dividing by sub.frames made one
+        // slow girth cycle fight three real breaths (fat on exhale, thin on
+        // inhale). Fixed side happened to hide the bug because it is one loop.
         if (sub.creature == 3 && !sub.creature_hold) {
+          constexpr uint32_t kIdlePresentationFrames = zixx::kIdleKeys * 2u;
+          const uint32_t idle_frame =
+              static_cast<uint32_t>((static_cast<uint64_t>(f) * sub.step) %
+                                    kIdlePresentationFrames);
           const uint16_t gph = static_cast<uint16_t>(
-              (static_cast<uint32_t>(f) * 65536u) / (sub.frames ? sub.frames : 1));
+              (static_cast<uint64_t>(idle_frame) * 65536u) /
+              kIdlePresentationFrames);
           const int32_t gsn = zref::fx_sin(zref::angle16{gph}).raw;
           dog_inst.bulk.scale = (1 << 16) + static_cast<int32_t>(
               (static_cast<int64_t>(gsn) * zixx::kIdleGirth) / 1000);

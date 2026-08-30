@@ -47,6 +47,52 @@ Completed runs are logged here (newest first). Working directories remain in
 
 ---
 
+### [RUN-20260830-1828] Zixxtrixx whole-body spring and expression correction
+
+**Archived:** 2026-08-31 01:01 UTC+02:00
+**Created:** 2026-08-30 18:28 UTC+02:00
+**Completed:** 2026-08-31 01:01 UTC+02:00
+**Duration:** ~6 hours 33 minutes
+**Working Directory:** `runs/CLAUDE-RUNS/RUN-20260830-1828-zixxtrixx-coil-expression-correction/`
+**Branch:** `zixxtrixx-coil-expression` / `main`
+
+**Summary:**
+Replaced the rejected tail-led spring with an authored whole-animal sequence: the
+complete signature S enlarges through the tail tip, packs downward around a named
+support with real positive-volume cross-section squash, holds, releases intact,
+and only then gathers into the accepted airborne somersault. A generic optional
+fixed-point deformation sidecar performs bind-space radial/follower deformation
+before unchanged rigid two-weight skinning, with corrected normals and exact
+identity outside the authorised spring.
+
+The same pass completed the requested secondary performances, face-to-body blue
+wedge, idle-cycle synchronisation and broader local inspection-light pool. It
+preserved the former 22-subject bank as immutable Archive Generation Nine,
+rendered and encoded the final Cool Cross bank once, integrated concurrent
+renderer mainline work, and published the finished bestiary once.
+
+**Deliverables:**
+- Generic deformation sidecar in `reference/include/zref/zref_creature.hpp` and `reference/src/zcreature/`
+- Final Zixxtrixx mesh/animation/probe authority in `tools/reel/zixxtrixx.h`, `zhao_reel.cpp`, `zixx_probe.cpp`, and `build-direct.sh`
+- Shared pigment authority in `tools/pack/mkcreaturepage.py` plus regenerated normal/cel atlases
+- Durable owner direction and Archive Generation Nine hash manifest under `Upheaval/creature/Zixxtrixx/`
+- Complete 22-clip VP9/yuv444p live bank, 3x posters, ninth archive selector, and manifest-generated noindex site
+
+**Notes:**
+Exactly one run and one implementation/modelling/animation agent were used; no
+subagents, worktrees, Sacengine, CMake/Ninja/Verilator build, authored hardware
+changes, or historical CRC investigation entered the creature lane. Fresh direct final-main
+build, rigid/deformation mesh checks and the committed full/micro 3D pose probe
+all pass. Every 268-file current/protected deployment asset was downloaded and
+matched byte-for-byte after publication.
+
+**Outcome:** Complete and live. Immutable deployment:
+`https://59eb33bf.upheaval.pages.dev`; production:
+`https://upheaval.pages.dev`. Both serve identical HTTP 200 HTML with exact
+`noindex, nofollow`, all nine archive generations, and the 22 final live clips.
+
+---
+
 ### [RUN-20260828-2234] Zixxtrixx v8 closeout, selectable render strategies, and two-stage publication
 
 **Archived:** 2026-08-29 01:55 UTC+02:00

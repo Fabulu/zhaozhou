@@ -36,6 +36,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <map>
 #include <set>
 #include <vector>
@@ -108,6 +109,53 @@ int32_t signed_flat_dot(const int32_t p[3][3], int32_t lx, int32_t ly, int32_t l
 
 int main(int argc, char** argv) {
   const zc::CreatureType& T = zixx::type();
+
+  // Generic fixed-point sidecar fixture. It proves the exact identity exit,
+  // radial position lanes, inverse-transpose normal direction, rigid follower
+  // translation and baked presentation sample without relying on Zixxtrixx art.
+  if (argc == 2 && std::string_view(argv[1]) == "--deform-sidecar") {
+    zc::SkinVertex v{fxm(100), fxm(200), fxm(-300), 0, 0, 64, 0, 0, 90, 90, 0};
+    zc::DeformVertex radial;
+    radial.role = zc::DeformRole::kRadial;
+    radial.axis = 1;
+    radial.strength = 255;
+    const zc::SkinVertex identity = zc::deform_skin_vertex(v, radial, {});
+    bool ok = std::memcmp(&identity, &v, sizeof(v)) == 0;
+
+    const zc::DeformSample active{16384, 8192};  // 25% contract, 12.5% spread
+    const zc::SkinVertex d = zc::deform_skin_vertex(v, radial, active);
+    ok = ok && to_mm(d.x) == 112 && to_mm(d.y) == 149 && to_mm(d.z) == -338;
+    ok = ok && d.nx > 0 && d.ny > d.nx && d.nz == 0;
+
+    zc::DeformVertex follower = radial;
+    follower.role = zc::DeformRole::kFollower;
+    follower.carrier_y = fxm(200);
+    const zc::SkinVertex f = zc::deform_skin_vertex(v, follower, active);
+    ok = ok && f.x == v.x && to_mm(f.y) == 149 && f.z == v.z;
+    ok = ok && f.nx == v.nx && f.ny == v.ny && f.nz == v.nz;
+
+    zc::CreatureType fixture;
+    fixture.bank.bone_count = 1;
+    zc::Clip clip;
+    clip.slot_id = 7;
+    clip.frame_count = 2;
+    clip.interpolate = true;
+    clip.root.assign(6, 0);
+    clip.quats.assign(2, zc::quat16_identity());
+    clip.deform = {{0, 0}, {32768, 16384}};
+    zc::bake_presentation_midpoints(clip, 1);
+    fixture.bank.clips.push_back(clip);
+    const zc::DeformSample mid = zc::deformation_sample(fixture, 7, 0, 1);
+    ok = ok && mid.flatten == 16384 && mid.spread == 8192;
+
+    std::printf("deform-sidecar: identity=%s radial_mm=(%d,%d,%d) normal=(%d,%d,%d) "
+                "follower_y_mm=%d midpoint=(%u,%u)\n",
+                std::memcmp(&identity, &v, sizeof(v)) == 0 ? "exact" : "CHANGED",
+                to_mm(d.x), to_mm(d.y), to_mm(d.z), d.nx, d.ny, d.nz, to_mm(f.y),
+                mid.flatten, mid.spread);
+    std::printf("deform-sidecar: %s\n", ok ? "OK" : "FAIL");
+    return ok ? 0 : 2;
+  }
 
   // ---- V13 executable direction/orientation proof: --light-sign -----------
   // This is deliberately bounded: one known horizontal fixture and six actual

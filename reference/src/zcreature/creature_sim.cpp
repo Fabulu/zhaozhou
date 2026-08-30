@@ -831,6 +831,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
     for (int b = 0; b < T.bank.bone_count; ++b) {
       mat3x4_mul(world, pose[b], worldm[b], L);
     }
+    const DeformSample deform =
+        deformation_sample(T, ci.anim.slot, ci.anim.frame, ci.anim.sub);
 
     // ---- PER-VERTEX LIGHTING (V10 structural repair) --------------------
     // Skin each packed bind normal through the SAME weighted rotation blend as
@@ -854,7 +856,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
       };
       std::vector<PV> pvs(m.verts.size());
       for (size_t vi = 0; vi < m.verts.size(); ++vi) {
-        const SkinVertex& sv = m.verts[vi];
+        SkinVertex sv = m.verts[vi];
+        if (!m.deform.empty()) sv = deform_skin_vertex(sv, m.deform[vi], deform);
         skin_vertex(worldm.data(), sv, pvs[vi].wx, pvs[vi].wy, pvs[vi].wz, L);
         const render::ProjOut po = render::project_vertex(vp, vpp, fx16{pvs[vi].wx},
                                                           fx16{pvs[vi].wy}, fx16{pvs[vi].wz}, L);
