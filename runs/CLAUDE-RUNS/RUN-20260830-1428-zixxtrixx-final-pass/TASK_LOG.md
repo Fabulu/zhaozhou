@@ -78,6 +78,18 @@ Complete Task #28 from accepted V14 as a deliberately small head/neck/colour adj
 
 ---
 
+### 2026-08-30 - Final Cool Cross media and site accepted locally
+
+- Reconciled the existing live manifest rather than inventing a second catalogue: twenty-one normal Zixxtrixx subjects, plus the one new moving-light inspection. The existing V14 workbench plan validated Cool Cross as the named default and preserved the fixed V14 comparison route.
+- Used the already clean direct-built cel binary once with all twenty-two named subjects under `ZIXX_EXP=celmain` and `ZIXX_LIGHT=diagonal-cool-cross`. No catalogue-wide render and no CMake/Ninja/Verilator path occurred. Raw output is exactly twenty-two 384x240 RGB24 sequences; the moving-light media repeat retained CRC32C `0xEE25C6BE`.
+- Reviewed a native-scale poster grid for the complete bank, every frame of idle/orbit, look-around, balance, quick/slow taunts, knockdown and second death, plus the already accepted complete spring and moving-light sheets. Cool Cross keeps the whole animal readable; the rounded head/crown and coordinated eyes survive the orbit, grazing face angles and deformed clips without a stray triangle or old monstrous silhouette.
+- Encoded all twenty-two clips through the existing `website/tools/tovideo.py`: VP9 CRF16, yuv444p, 384x240, 60 fps, exact source frame counts and exact 3x nearest-neighbour posters. Added only the named moving-light poster choice (frame 412).
+- Before replacement, copied all twenty-one prior V10 WebM/poster pairs into one V10 archive generation. All forty-two archive files hash byte-identically to the pre-pass Upheaval HEAD versions. Every older archive remains present, and the ten original V14 lighting videos remain visible as retained selection history.
+- Updated the existing creature manifest for the selected final presentation, slow gummy spring and moving-light inspection. The generated site resolves all 167 declared media references, exposes eight ordered archive generations, retains the V14 study, and contains the exact `<meta name="robots" content="noindex, nofollow">` tag once.
+- The existing workbench `check-existing` action independently passed the preserved 600-frame Cool Cross V14 media, 1152x720 poster and exact noindex. Publication has not yet been invoked; it remains the single explicit finished-pass action after integration to Upheaval main.
+
+---
+
 ## Subagent Spawns
 
 No subagents. This run has one implementation/modelling agent.
@@ -103,6 +115,6 @@ No subagents. This run has one implementation/modelling agent.
 
 ## Next Steps
 
-1. Commit and push the accepted moving-light compositor/subject milestone.
-2. Reconcile the existing manifest/site inventory, then render and encode the single final Cool Cross media pass plus moving-light clip.
-3. Preserve archives/V14 history and exact noindex, assemble/check the site, merge and push both mains, publish once, close the run, clean both trees and verify every spawned child stopped.
+1. Commit and push the accepted final media/site milestone in Upheaval.
+2. Integrate and push Upheaval main, invoke the guarded publisher exactly once with explicit project/branch, and verify the deployed noindex page/media.
+3. Record closeout, commit/push this run, integrate and push zhaozhou main, verify clean trees and terminate/verify every spawned child.
