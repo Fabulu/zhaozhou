@@ -81,6 +81,15 @@ Correct the rejected published Zixxtrixx spring before any secondary polish, the
 - Added the six required eye-authored controls: `BLUE_JUNCTION_CONTINUITY`, `BLUE_WEDGE_START_BREADTH`, `BLUE_WEDGE_TAPER_CHARACTER`, `BLUE_WEDGE_POINT_EXTENT`, `BLUE_WEDGE_EDGE_MELD`, and `BLUE_DARK_TO_LIGHT_HANDOFF`. The normal/cel atlas and small fallback tiles share the same wedge profile and handoff intent.
 - Regenerated both `zixxtrixx_page.h` and `zixxtrixx_page_cel.h` through the generator and verified a second regeneration is SHA-256 identical. A direct clean all-consumer build, Python compile, ordinary meshcheck and deformation-sidecar check pass.
 - Inspected the authored atlas plus native held front, fixed side, fixed three-quarter, complete head-on/side/quarter idle loops, unlit front/side, normviz, and every accepted spring deformation sample under explicit cel-main/Cool Cross. The front now reads as one face-to-point gesture with no transverse collar; side/quarter restore blue -> dark -> light order without blue chest dominance. The close unlit outline and normviz independently show no residual junction crease, so geometry stays frozen. Evidence is lane-local under `build/pigment-iter1`.
+- Committed and pushed the complete pigment milestone as zhaozhou `f3e78c6` (`Repair Zixxtrixx face wedge pigment`).
+
+### 2026-08-30 - Idle diagnosis and moving inspection light
+
+- Compared the full 576-frame orbit, one-loop fixed side, held still, normviz and unlit under explicit cel-main/Cool Cross. Neutral shape, atlas and posed normals remain sound. The apparent inflate/deflate contradiction was presentation timing: the 576-frame site orbit performed three 192-frame idle breaths while instance girth used the arbitrary subject length and completed only one cycle.
+- Rephased only Zixxtrixx reel idle girth from the idle clip's named `kIdleKeys * 2` presentation period. The corrected orbit now repeats girth with each real breath; complete every-frame and matched before/after inspection accepted the inhale/exhale relationship. Fixed side (192 frames), held still, normviz and unlit remain byte-exact because the one-loop case was already in phase.
+- Rendered and inspected the complete 600-frame moving-light baseline plus two bounded authored iterations. Kept the warm gains and every world-space path control unchanged, named all radius/gain controls, and accepted a broader 1100 mm inner / 5200 mm outer pool. More of the complete S is illuminated at once without the rejected trial's electric gain lift or loss of crayon grain.
+- The point source is still sampled exactly once after terrain snap; compositor and depth-tested marker consume the identical stored world position. Inspected every accepted frame, selected native-nearest 2x comparisons and the explicit accepted frame `599 -> 0` pair under cel-main/Cool Cross. Source, marker and illumination traverse the seam continuously. Evidence is lane-local under `build/idle-synced` and `build/moving-light-iter2`.
+- A fresh direct `--clean all` build recompiled every consumer without CMake/Ninja/Verilator. Ordinary meshcheck, deformation-sidecar and the complete every-key/midpoint 3D probe pass; validation evidence is lane-local under `build/idle-light-final`.
 
 ---
 
@@ -117,6 +126,4 @@ The mandated `subagents/20260830-1730-zixxtrixx-coil-expression/` directory was 
 
 ## Next Steps
 
-1. Commit and push the completed generated pigment milestone with explicit paths.
-2. Diagnose idle under explicit cel-main/Cool Cross, strengthen only the moving local inspection light if needed, and inspect moving-light frame `599 -> 0`.
-3. Preserve archive generation nine, render the exact final twenty-two-subject bank once, integrate current mains, and publish the finished pass exactly once.
+1. Preserve archive generation nine, render the exact final twenty-two-subject bank once, integrate current mains, and publish the finished pass exactly once.
