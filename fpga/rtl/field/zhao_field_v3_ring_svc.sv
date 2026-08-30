@@ -53,12 +53,21 @@ module zhao_field_v3_ring_svc #(
     // TWO GIVES II 19 against an admission ceiling of 24.33 for the WHOLE
     // program, so on crater_ring -- the only program that uses the prepared
     // ring -- this service alone takes 78% of the budget.
-    parameter int UNITS = 2
+    parameter int UNITS = 2,
+    // PREPARED DESCRIPTORS, CACHED. See the block comment at the cache itself.
+    // Two entries cover the whole of crater_ring -- one full ring descriptor
+    // and one smooth-mode descriptor -- which is the program this exists for.
+    parameter int DESC = 2
 ) (
     input var logic clk,
     input var logic rst_n,
 
     // ---- request: one four-point group -------------------------------------
+    // THE SCALAR BANK'S WRITE STROBE, so the descriptor cache can be dropped
+    // the moment the prepared values behind it change. A cache that cannot be
+    // invalidated is a way to serve last association's crater.
+    input  var logic               sb_we_i,
+
     input  var logic               req_valid_i,
     output var logic               req_ready_o,
     input  var logic signed [31:0] req_d_0_i, req_d_1_i, req_d_2_i, req_d_3_i,
@@ -85,7 +94,20 @@ module zhao_field_v3_ring_svc #(
     output var logic        [ 3:0] rsp_sat_mul_o,
     output var logic        [ 7:0] rsp_tag_o,
 
-    output var logic               imm_bad_o
+    output var logic               imm_bad_o,
+
+    // ---- evidence -----------------------------------------------------------
+    // The front end, not the arithmetic. `zhao_field_v3_ring` was measured at
+    // 62% multiplier-bank occupancy while crater_ring sat at 19.57 clocks per
+    // four-point group, so the question stopped being "how fast can it
+    // multiply" and became "how often can it ACCEPT". These count that.
+    //
+    // ENFORCED-BY: tests/differential/field_v3_ring_svc_directed.cpp:main
+    output var logic [31:0]        req_taken_o,      // requests accepted
+    output var logic [31:0]        fetch_clocks_o,   // spent walking the bank
+    output var logic [31:0]        hand_wait_clocks_o,  // no free unit
+    output var logic [31:0]        desc_hit_o,
+    output var logic [31:0]        desc_miss_o
 );
 
   // =========================================================================
@@ -126,6 +148,53 @@ module zhao_field_v3_ring_svc #(
   logic        [ 7:0] u_tag_r [UNITS];
   // Smooth mode travels with the group, not with the unit.
   logic               u_smooth_r [UNITS];
+
+  // ---------------------------------------------------------------------------
+  // THE PREPARED-DESCRIPTOR CACHE
+  // ---------------------------------------------------------------------------
+  // A ring request names FOUR prepared scalars by bank index -- r0, m, rA and
+  // rB -- and this service used to re-read all four, one per clock, for EVERY
+  // four-point group. The values do not change within an association: the ARM
+  // computes them once in `prepare()` and writes them to the scalar bank, and
+  // every group of the association then names the same indices.
+  //
+  // crater_ring makes 273 groups x 2 ring requests x 4 reads = 2,184 scalar
+  // reads per association over what are only TWO distinct descriptors.
+  //
+  // WHY IT IS THE FRONT END AND NOT THE ARITHMETIC. The accept path was
+  //     F_IDLE (1) -> F_FETCH (6) -> F_HAND (1) = 8 clocks per request,
+  // so a program with two ring requests per group cannot go faster than 16
+  // clocks per group whatever the units do. crater_ring measures 19.57. That
+  // is the ceiling it has been sitting against, and it explains the three
+  // results that made no sense: RING_UNITS 8/16/32 changing nothing, deleting
+  // 19% of the multiplier traffic changing nothing, and 24% of clocks with
+  // neither multiplier bank busy.
+  //
+  // The key is the immediate's four packed indices, so a request naming
+  // DIFFERENT scalars is a miss and gets its own fetch -- the service's own
+  // directed test already requires that a second request refetches rather than
+  // reusing, and a keyed cache keeps that true rather than asserting it.
+  //
+  // ENFORCED-BY: tests/differential/field_v3_ring_svc_directed.cpp:main
+  logic [23:0]        dc_key_r [DESC];
+  logic               dc_val_r [DESC];
+  logic signed [31:0] dc_dat_r [DESC][4];
+  // One entry still needs a pointer, so the width has a floor of 1 -- the
+  // same rule the long-op queue and the four service ladders now use.
+  localparam int DW = (DESC <= 1) ? 1 : $clog2(DESC);
+  logic [DW-1:0]      dc_vic_r;  // round-robin victim
+
+  logic               dc_hit_c;
+  logic [DW-1:0]      dc_way_c;
+  always_comb begin
+    dc_hit_c = 1'b0;
+    dc_way_c = '0;
+    for (int w = 0; w < DESC; w++)
+      if (dc_val_r[w] && (dc_key_r[w] == req_imm_i[23:0])) begin
+        dc_hit_c = 1'b1;
+        dc_way_c = DW'(w);
+      end
+  end
   logic               f_smooth_r;
 
   for (genvar u = 0; u < UNITS; u++) begin : gen_unit
@@ -277,7 +346,26 @@ module zhao_field_v3_ring_svc #(
         f_slot_r[i] <= 6'd0;
         f_uni_r[i]  <= '0;
       end
-      for (int u = 0; u < 2; u++) begin
+      // UNITS, NOT TWO. This loop and the offer loop below were written when
+      // the service had exactly two units and were left behind when UNITS
+      // became a parameter. The Earth target instantiates EIGHT, so units 2..7
+      // were never reset and never marked as offered: `u_off_r` for those units
+      // is X out of reset in real silicon, `rg_v_valid = u_busy && !u_off` is
+      // therefore X, and only Verilator's two-state zero-fill made it look
+      // fine. A parameterised block whose loops are not parameterised is
+      // dishonest, and no wider-unit sweep taken before this fix is evidence.
+      for (int w = 0; w < DESC; w++) begin
+        dc_val_r[w] <= 1'b0;
+        dc_key_r[w] <= 24'd0;
+        for (int i = 0; i < 4; i++) dc_dat_r[w][i] <= '0;
+      end
+      dc_vic_r           <= '0;
+      req_taken_o        <= 32'd0;
+      fetch_clocks_o     <= 32'd0;
+      hand_wait_clocks_o <= 32'd0;
+      desc_hit_o         <= 32'd0;
+      desc_miss_o        <= 32'd0;
+      for (int u = 0; u < UNITS; u++) begin
         u_busy_r[u] <= 1'b0;
         u_off_r[u]  <= 1'b0;
         u_tag_r[u]  <= 8'd0;
@@ -314,15 +402,39 @@ module zhao_field_v3_ring_svc #(
             f_smooth_r  <= req_imm_i[24];
             if (req_imm_i[31:25] != 7'd0) imm_bad_o <= 1'b1;
             f_cyc_r   <= 3'd0;
-            f_state_r <= F_FETCH;
+            req_taken_o <= req_taken_o + 32'd1;
+            // A HIT SKIPS THE WHOLE WALK. The four prepared scalars are copied
+            // out of the cache in this same clock, so the request goes straight
+            // to F_HAND and the accept path is two clocks instead of eight.
+            if (dc_hit_c) begin
+              for (int i = 0; i < 4; i++) f_uni_r[i] <= dc_dat_r[dc_way_c][i];
+              desc_hit_o <= desc_hit_o + 32'd1;
+              f_state_r  <= F_HAND;
+            end else begin
+              desc_miss_o <= desc_miss_o + 32'd1;
+              f_state_r   <= F_FETCH;
+            end
           end
         end
 
         F_FETCH: begin
+          fetch_clocks_o <= fetch_clocks_o + 32'd1;
           if (f_cyc_r != 3'd5) f_cyc_r <= f_cyc_r + 3'd1;
           if ((f_cyc_r >= 3'd1) && (f_cyc_r <= 3'd4)) begin
             automatic logic [1:0] cap = 2'(f_cyc_r - 3'd1);
             f_uni_r[cap] <= sb_rdata_i;
+            // The last capture completes the descriptor, so the entry is
+            // filled from the three registered values plus the one landing
+            // now -- writing it from `f_uni_r` alone would store a hole.
+            if (f_cyc_r == 3'd4) begin
+              dc_key_r[dc_vic_r]    <= {f_slot_r[3], f_slot_r[2], f_slot_r[1], f_slot_r[0]};
+              dc_dat_r[dc_vic_r][0] <= f_uni_r[0];
+              dc_dat_r[dc_vic_r][1] <= f_uni_r[1];
+              dc_dat_r[dc_vic_r][2] <= f_uni_r[2];
+              dc_dat_r[dc_vic_r][3] <= sb_rdata_i;
+              dc_val_r[dc_vic_r]    <= 1'b1;
+              dc_vic_r              <= (dc_vic_r == DW'(DESC - 1)) ? DW'(0) : dc_vic_r + DW'(1);
+            end
           end
           if (f_cyc_r == 3'd5) f_state_r <= F_HAND;
         end
@@ -330,6 +442,7 @@ module zhao_field_v3_ring_svc #(
         // Hand to a free unit. If both are busy the front WAITS rather than
         // dropping the group: back-pressure, not loss.
         F_HAND: begin
+          if (!have_free_c) hand_wait_clocks_o <= hand_wait_clocks_o + 32'd1;
           if (have_free_c) begin
             for (int i = 0; i < 4; i++) begin
               u_d_r[free_u_c][i]   <= f_d_r[i];
@@ -349,8 +462,16 @@ module zhao_field_v3_ring_svc #(
       endcase
 
       // ---- each unit is offered its group exactly once ---------------------
-      for (int u = 0; u < 2; u++)
+      for (int u = 0; u < UNITS; u++)
         if (rg_v_valid[u] && rg_v_ready[u]) u_off_r[u] <= 1'b1;
+
+      // ---- the prepared values changed, so the cache is worthless ----------
+      // Bluntly, on any scalar-bank write. A finer rule -- invalidate only the
+      // entries naming the written index -- is a correct optimisation and an
+      // unnecessary risk: the bank is written once per association during
+      // prepare(), so the coarse rule costs at most one refetch per descriptor
+      // per association and cannot be wrong.
+      if (sb_we_i) for (int w = 0; w < DESC; w++) dc_val_r[w] <= 1'b0;
 
       // ---- retire the oldest -----------------------------------------------
       if (ret_fire_c) begin

@@ -1681,27 +1681,27 @@ option(ZHAO_FIELD_SWEEP "Build the Field v3 Earth parameter sweep targets" OFF)
 set(ZHAO_FIELD_SWEEP_POINTS
   # name              CTX OUTSTANDING LANES LONGQ DIST_BANKS RING_UNITS REGS GATHERS
   #
-  # ROUNDS 1-2 WERE MEASURED ON A QUANTISED FRAME FIGURE and their conclusions
-  # are only trustworthy where the difference exceeded a whole clock per group.
-  # Re-run anything narrower before quoting it. Round 3, on the exact interval,
-  # already overturned one of them: LONGQ was called "no help" and shallower is
-  # in fact the best lever found so far.
+  # ROUNDS 1-2 WERE MEASURED ON A QUANTISED FRAME FIGURE. Do not trust any of
+  # their conclusions that turned on less than a whole clock per group. Round 3
+  # overturned two of them on the exact interval: LONGQ was called "no help"
+  # and shallower is the best single lever, and DIST_BANKS 8 was called "double
+  # the roots for no change" but IS worth 4% once LONGQ is shallow.
   #
-  #   base (LONGQ 16)   crater 683,960
-  #   LONGQ 8           crater 675,193
-  #   LONGQ 4           crater 660,027   <- best worst-case
-  #   OUTSTANDING 16-32 crater 683,960, wave_pool 504,937 at 16
+  #   base   LONGQ 16, DIST 4          crater 683,960
+  #   LONGQ 4                          crater 660,027
+  #   LONGQ 4 + DIST_BANKS 8           crater 634,206   <- best worst-case
+  #   LONGQ 1                          worse than base on all three
+  #   RING_UNITS 16 with LONGQ 4       identical to LONGQ 4, again
   #
-  # Round 4 pushes LONGQ down further and re-tests the levers that rounds 1-2
-  # rejected on the broken metric.
-  "base|32|12|4|16|4|8|64|4"
-  "longq4|32|12|4|4|4|8|64|4"
-  "longq2|32|12|4|2|4|8|64|4"
-  "longq1|32|12|4|1|4|8|64|4"
-  "longq4out16|32|16|4|4|4|8|64|4"
-  "longq4ctx64|64|12|4|4|4|8|64|4"
-  "longq4ring16|32|12|4|4|4|16|64|4"
+  # Round 5 explores around that corner.
   "longq4dist8|32|12|4|4|8|8|64|4"
+  "longq4dist8ctx48|48|12|4|4|8|8|64|4"
+  "longq4dist8ctx64|64|12|4|4|8|8|64|4"
+  "longq4dist8out16|32|16|4|4|8|8|64|4"
+  "longq4dist8out8|32|8|4|4|8|8|64|4"
+  "longq4dist8gath8|32|12|4|4|8|8|64|8"
+  "longq8dist8|32|12|4|8|8|8|64|4"
+  "longq2dist8|32|12|4|2|8|8|64|4"
 )
 
 if(ZHAO_FIELD_SWEEP)

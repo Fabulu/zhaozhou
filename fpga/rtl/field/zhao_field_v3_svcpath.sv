@@ -130,6 +130,14 @@ module zhao_field_v3_svcpath #(
     output var logic [31:0]                   groups_o,
     output var logic [31:0]                   partial_o,
     output var logic [31:0]                   drain_writes_o,
+    // The RING service's front end, which the composed measurement showed to
+    // be the ceiling rather than its arithmetic. Counters only.
+    output var logic [31:0]                   ring_req_taken_o,
+    output var logic [31:0]                   ring_fetch_clocks_o,
+    output var logic [31:0]                   ring_hand_wait_o,
+    output var logic [31:0]                   ring_desc_hit_o,
+    output var logic [31:0]                   ring_desc_miss_o,
+
     output var logic [31:0]                   bank_grants_o,
     output var logic [31:0]                   bank_stall_lanes_o,
     output var logic [31:0]                   wb_served_o  [2],
@@ -536,6 +544,9 @@ module zhao_field_v3_svcpath #(
       .UNITS(RING_UNITS)
   ) u_ring (
       .clk(clk), .rst_n(rst_n),
+      // The write strobe the descriptor cache invalidates on: the same one
+      // that changes the prepared scalars it is caching.
+      .sb_we_i(sb_we_i),
       .req_valid_i(svc_valid && is_ring_c), .req_ready_o(rg_req_ready),
       .req_d_0_i(svc_s0[0]), .req_d_1_i(svc_s0[1]),
       .req_d_2_i(svc_s0[2]), .req_d_3_i(svc_s0[3]),
@@ -552,7 +563,12 @@ module zhao_field_v3_svcpath #(
       .rsp_r_2_o(rg_r0[2]), .rsp_r_3_o(rg_r0[3]),
       .rsp_sat_add_o(rg_sat_add_unused), .rsp_sat_mul_o(rg_sat_mul_unused),
       .rsp_tag_o(rg_rsp_tag),
-      .imm_bad_o(imm_bad_o)
+      .imm_bad_o(imm_bad_o),
+      .req_taken_o(ring_req_taken_o),
+      .fetch_clocks_o(ring_fetch_clocks_o),
+      .hand_wait_clocks_o(ring_hand_wait_o),
+      .desc_hit_o(ring_desc_hit_o),
+      .desc_miss_o(ring_desc_miss_o)
   );
 
   // NO BANK CLAIMANT. Every other service on this path borrows the four-wide

@@ -192,6 +192,16 @@ module zhao_probe_v3_full #(
     output var logic [31:0]             bank_engine_only_o,
     output var logic [31:0]             bank_svc_only_o,
     output var logic [31:0]             bank_neither_o,
+
+    // THE RING SERVICE'S FRONT END. Its accept path was IDLE -> six clocks of
+    // serial scalar reads -> HAND, so a program making two ring requests per
+    // four-point group could not beat sixteen clocks per group however fast
+    // its arithmetic was. These say whether the descriptor cache moved it.
+    output var logic [31:0]             ring_req_taken_o,
+    output var logic [31:0]             ring_fetch_clocks_o,
+    output var logic [31:0]             ring_hand_wait_o,
+    output var logic [31:0]             ring_desc_hit_o,
+    output var logic [31:0]             ring_desc_miss_o,
     output var logic [31:0]             wb_served_o  [2],
     output var logic [31:0]             wb_stalled_o [2],
 
@@ -360,6 +370,9 @@ module zhao_probe_v3_full #(
       .rel_valid_o(rel_valid), .rel_ctx_o(rel_ctx),
 
       .groups_o(groups_o), .partial_o(partial_o), .drain_writes_o(drain_writes_o),
+      .ring_req_taken_o(ring_req_taken_o), .ring_fetch_clocks_o(ring_fetch_clocks_o),
+      .ring_hand_wait_o(ring_hand_wait_o),
+      .ring_desc_hit_o(ring_desc_hit_o), .ring_desc_miss_o(ring_desc_miss_o),
       .bank_grants_o(svc_bank_grants), .bank_stall_lanes_o(svc_bank_stalls),
       .wb_served_o(wb_served_o), .wb_stalled_o(wb_stalled_o),
       .bank_desync_o(svc_bank_desync_o), .tag_mismatch_o(tag_mismatch_o),
