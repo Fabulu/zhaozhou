@@ -49,6 +49,13 @@ Diagnose residual lighting machinery versus artistic-rig insufficiency, author a
 - Rendered one four-still native comparison and one 24-frame fixed-camera idle excerpt per rig, assembled as a single 2x2 motion comparison. Each comparison cell remains native 384x240; frame 0 matches its still byte-for-byte.
 - Bounded review found coherent moving light and no state bleed. No catalogue, spring or broad regression campaign was run.
 
+### 2026-08-30 - Noindex comparison authored and checked locally
+
+- Added one experimental owner-choice collection after the selected v10 production clips: four native 384x240 stills and one short 768x520 VP9 four-up comparison. The production Idle remains initially selected.
+- Regenerated the site from `website/creatures.json`; exact `<meta name="robots" content="noindex, nofollow">` remains present once and all protected 2026-08-27/28 archives remain untouched.
+- Bounded Edge checks passed at 1440x1000 and 390x844: all five choice items load, stills report 384x240, video reports 768x520, and neither layout has horizontal overflow.
+- Stopped the local HTTP server and browser children after evidence capture.
+
 ---
 
 ## Validation Ledger — `V11-LIGHT-BUDGET-1`
@@ -57,7 +64,7 @@ Diagnose residual lighting machinery versus artistic-rig insufficiency, author a
 |---|---|---|---|
 | L11-S | Does any normal/transform/winding/light-space/state defect survive v10? | One source/state audit; one identical-pose unlit/normals/baseline set; smallest existing normal/temporal probe | **PASS** — machinery coherent; baseline rig is back/side-weighted for the fixed native shot |
 | L11-A | Do named alternatives differ only in lighting and remain stable/readable at native resolution? | One identical 384×240 baseline-plus-options set; one short deforming sample only if needed | **PASS** — baseline + three named rigs, one 24-frame 2x2 comparison, no state bleed |
-| L11-W | Does comparison media load with exact noindex on local and production site? | Media existence/decode; desktop+narrow section check; bounded cache-bypassed production bytes | Pending |
+| L11-W | Does comparison media load with exact noindex on local and production site? | Media existence/decode; desktop+narrow section check; bounded cache-bypassed production bytes | **LOCAL PASS / production pending** — exact noindex, five items and responsive dimensions verified in Edge |
 
 No catalogue rerender/redecode or spring checks unless a concrete regression signal triggers escalation.
 
@@ -83,6 +90,7 @@ None. This remains the sole implementation/modelling lane.
 - `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/lighting-options-values.txt`
 - `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/lighting-options-{contact,motion-check}.png`
 - `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/option-{render-final,motion-render}.txt`
+- `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/website-local-{browser.txt,desktop.png,narrow.png}`
 
 ---
 
@@ -97,5 +105,5 @@ None. This remains the sole implementation/modelling lane.
 
 ## Next Steps
 
-1. Encode only the four matched stills and one short 2x2 motion comparison for the noindex choice section.
-2. Integrate both current mains without overwriting concurrent work, deploy exactly once, verify production and stop all jobs.
+1. Integrate both current mains without overwriting concurrent work, then deploy exactly once from Upheaval `main`.
+2. Verify production noindex/media bytes, stop all jobs and close the run.
