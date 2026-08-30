@@ -1,7 +1,7 @@
 # Task Log: RUN-20260829-2226 - Zixxtrixx v10 lighting and rigid-spring repair
 
 **Created:** 2026-08-29 22:26 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** `runs/CLAUDE-RUNS/RUN-20260829-2226-zixxtrixx-v10-lighting-spring-repair/`
 
 ---
@@ -20,8 +20,8 @@ Preserve the approved v9 whole-body proportions and rendering style while repair
 | #18 | lighting and eye artifacts | Complete — structural roots fixed in `1dd01a4`, pushed |
 | #19 | constrained face and fins | Complete — `32ca883`, pushed |
 | #20 | shared rigid-S spring | Complete — `065b732`, pushed |
-| #21 | bounded risk-based validation | Complete — ledger closeout pending commit |
-| #22 | publish and handoff | In progress — claimed |
+| #21 | bounded risk-based validation | Complete — `769b04b`, pushed |
+| #22 | publish and handoff | Complete — Upheaval main `9d70baa`; production deployment `606f25e1`; Zhaozhou closeout in this commit |
 
 Only one task is active at a time. A task becomes complete only after its evidence, gates, logical commit and push are complete.
 
@@ -115,6 +115,20 @@ Only one task is active at a time. A task becomes complete only after its eviden
 - No regression signal met the recorded threshold for whole-catalog rerender/redecode. Validation therefore stops here. Media structure/count/decode and desktop/narrow production checks remain one bounded `M01` question for task #22 after v10 media exists.
 - Task #21 complete; task #22 claimed. Tracker #23 remains untouched and blocked for the parent-session handoff.
 
+### 2026-08-30 - Task #22 media, integration and publication complete
+
+- Froze production to immutable accepted source milestone `065b732` and `ZIXX_EXP=celmain`. Rendered the 21 canonical subjects into lane-local output only: 5,744/5,744 contiguous 384×240 RGB888 frames with aggregate SHA-256 `b6cf9417df9773d7705cf3ac06836cc36a5d749044d8a4c5e1e87936513799a8`. Full per-subject CRC32 and frame counts are recorded in `task22-v10-render-manifest.txt`.
+- Encoded 21 VP9 CRF16 `yuv444p` WebMs at 60 fps and 21 exact 3× nearest-neighbour 1152×720 posters. All expected stream dimensions, frame counts, rates, durations, poster frames and 63 bounded start/middle/end seek-decodes passed; total WebM payload is 9,389,494 bytes across 5,744 frames.
+- Preserved 21 v9 WebMs and 21 v9 posters under `archive-2026-08-29-v9-cel-main-*`. All 42 archive files are byte-identical to Upheaval baseline `d97f7a424c9015c9ffc128406760fa5ccf370964`; no protected archive file was deleted.
+- Generated one 117-entry bestiary from `website/creatures.json`: 21 promoted v10 live clips and seven preserved generations, newest archive v9. Exact `<meta name="robots" content="noindex, nofollow">` occurs once.
+- `M01 MEDIA: PASS`: 117/117 declarations, 21/21 live WebMs, 21/21 v9 archive WebMs, zero missing media, valid bounded decode/poster evidence. `M01 BROWSER: PASS`: Edge CDP at 1410 px and 390 px shows one requested panel/generation, no horizontal overflow, 21 autoplaying/muted/looped live clips, 21 controlled/non-autoplay/preload-none v9 clips, and exact robots metadata. Representative promoted media was inspected by eye: coherent idle face/fork, no knockdown right-eye shard, intact rigid-S jump release and mature salto wheel, and attached death2 lighting.
+- Diagnosed the current-main 313/314 compositor smoke gate rather than widening it. `mat4fx` is row-major, but the test had encoded its declared `w=z+4` in clip-Z and left clip-W at 1. The stale camera produced `lit=4096/4096`; moving `z+4` to row 3 produces clip-W 4, `lit=1305/4096`, and all `creature_core` anchors green. This is a diagnostic-camera fix only (`0e8e0ca`): no production renderer, creature, toon or threshold changed.
+- Integrated Zhaozhou `origin/main` `99fd53c3599022f60ae9c22aee06724b1499422a` into feature head `5dddb21d9d0170772bae47c560bcdddb9bd4e380` and pushed. Both current main and immutable source `065b732` are ancestors; the main merge changed neither `reference/` nor `tools/reel/` relative to the accepted pre-merge feature head.
+- Committed the exact 86-file Upheaval media/site promotion as `14b712b`, fast-forwarded main, then committed the deployment stamp. Final Upheaval main is `9d70baa20a73bcc12356f7ffc26717c18c03b03c`, pushed and clean.
+- Invoked `website/deploy.ps1 -Project upheaval -Branch main` exactly once. Wrangler deployment `https://606f25e1.upheaval.pages.dev` completed successfully; production is `https://upheaval.pages.dev`.
+- Cache-bypassed alias and production verification passed: both indexes are byte-identical to local (103,157 bytes, SHA-256 `c6b97182ca5c1c40aa175dc1a848277a89d332d963b5c440a4befa68a1e2ec69`), preserve exact noindex/nofollow, declare v10 and v9, and contain 115 video plus 2 static render entries. V10 knockdown and jump-one WebM/PNG plus v9 knockdown WebM/PNG all returned HTTP 200 and matched local bytes on both hosts.
+- No migration was released. No renderer, probe, encoder, ffmpeg, browser, local server, Wrangler, compiler or lane-local build process remains; diagnostic ports 8765 and 9239 are closed.
+
 ---
 
 ## Validation Ledger — `V10-BUDGET-1`
@@ -131,7 +145,7 @@ Budget set before any build/render. Each row must answer one question and end wi
 | F01 | Do the constrained face and fin changes satisfy direction without altering approved whole-body form? | Fixed side/front, gameplay still, pupil extrema, 12 orbit views, 8 idle phases, high-risk rear samples, meshcheck | PASS — eyes/support/pupils moved together noseward; mouth moderately larger; fork is a planted Y with no cap seam/detachment; body controls untouched; zero bind/seam faults | STOP — each task #19 acceptance question answered; no catalogue escalation signal |
 | S01 | Does corrected spring lower the rigid S from the top with head contact and no rear curl? | Every frame of jump-one, jump-multi, salto-six, salto-nine; bounded close side/top and launch/contact windows; committed posed-vertex probe | PASS — no yaw/concertina remains; whole S descends to a 99 mm side span with head/rear surfaces -3/-10 mm; it releases intact before airborne wheel gather; all four every-frame sheets accepted | STOP — the named spring question is answered; no unrelated catalogue escalation |
 | D01 | Are changed true cel-main outputs deterministic? | One representative pair per changed milestone | PASS #18 — 185/185 knockdown files byte-identical, SHA-256 `3a542ba6...4700e`; PASS #19 — 320/320 side+pupil files byte-identical, SHA-256 `d40fe6ac...27966`; PASS #20 — 510/510 jump-one+salto-nine files byte-identical, SHA-256 `afa5ab2b...f60ad` | STOP for #20; one final bounded media/site validation remains under #22 |
-| M01 | Is final media/site structurally valid? | Manifest/count/poster plus bounded start/middle/end decode and desktop/narrow interaction | Deferred to #22 | Exhaustive decode only on mismatch/decode/browser signal |
+| M01 | Is final media/site structurally valid? | 21-subject manifest/count/posters; 63 bounded start/middle/end seek-decodes; representative encoded visual review; desktop/narrow browser interaction; cache-bypassed alias/production byte checks | PASS — 5,744 frames, 42 live files, 42 byte-identical v9 archive files, 117/117 declarations, exact robots metadata, local browser behavior and production bytes all accepted | STOP — all final media/site questions answered; no full-catalog redecode or publication retry triggered |
 
 ---
 
@@ -165,8 +179,21 @@ None. Owner explicitly requires this to remain a sole implementation/modelling l
 
 ---
 
-## Next Steps
+## Tracker #23 implementation-derived handoff — not implemented here
 
-1. Task #22: preserve/archive v9, generate and promote the required v10 PNG/WebM media from immutable source milestone `065b732`, and record exact manifests.
-2. Integrate both current mains without disturbing the unrelated hardware/migration lane; do not release migration. Preserve exact `noindex, nofollow`.
-3. Run bounded `M01`, commit and push both repositories, publish the finished bestiary exactly once with explicit project and branch, verify production/media, and stop every job.
+- **Actual reusable roots:** blended deformed normals must be transformed per influence, blended, normalized once and evaluated once; inward zipper winding must be reversed only for outward face-light evaluation. Generic LOD decimation cannot erase rings/sides carrying painted facial boundaries. Separately capped fin leaves need open, buried, converged Y roots. Spring shape and root descent must share one amount, and grounded rigid-S release must finish before airborne wheel gather.
+- **Reusable machinery:** normal and per-part micro controls are in `reference/include/zref/zref_creature.hpp`, `reference/src/zcreature/creature_core.cpp` and `reference/src/zcreature/creature_sim.cpp`; authoring controls and shared jump/attack timing are in `tools/reel/zixxtrixx.h`; committed every-key/midpoint posed-geometry contact is in `tools/reel/zixx_probe.cpp`; clean direct compilation is captured by this run's `build-direct.sh`.
+- **Failed approaches not to repeat:** global brightening/toon widening; open pupil ribbon or mip-limit changes for the eye shard; 36 mm fin-root offset that creates coincident vertices with disagreeing binds; signed negative near-half-turn spring angles that interpolate down the wrong route; linear profile/root timing that sweeps through terrain; 2D rendered-pixel ground estimates; component-gate passing as likeness evidence.
+- **Named owner controls worth preserving:** eye and pupil stations; fin blade length/root inset/root offset; spring compressed slopes, head attitude, root drop, declared bite, blade flare, and compression/hold/release/air-gather keys. These remain hand-authored knobs, not values inferred from the concept projection.
+- **Migration boundary:** tracker #23 and creature-authoring migration remain separate. This lane did not release migration; the parent session may hand off these proven roots and paths after v10.
+
+---
+
+## Closeout
+
+- Tasks #17 through #22 are complete and pushed.
+- Immutable accepted Zixxtrixx v10 source: `065b732`.
+- Upheaval main: `9d70baa20a73bcc12356f7ffc26717c18c03b03c`.
+- Deployment: `https://606f25e1.upheaval.pages.dev`; production: `https://upheaval.pages.dev`.
+- Zhaozhou main is to be fast-forwarded to this final ledger closeout commit; the exact resulting SHA is emitted by the commit/push integration evidence and final report (a commit cannot contain its own SHA).
+- No further work is authorised in this lane. Tracker #23 remains for parent-session handoff only.
