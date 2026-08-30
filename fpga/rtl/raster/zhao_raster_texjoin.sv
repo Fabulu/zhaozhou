@@ -301,8 +301,15 @@ module zhao_raster_texjoin #(
         pri_sent_r <= 1'b0;
         aux_sent_r <= 1'b0;
         // The rail flag belongs to the FRAGMENT, not to the sample, so it is
-        // stored beside its context -- in the slot latched at accept, which is
-        // the same fragment by construction.
+        // stored beside its context, in the slot latched at accept.
+        //
+        // That slot is the right one because `f_ready_o` requires `!req_live_r`
+        // AND the divide's own ready, so at most one fragment is ever between
+        // accept and request -- there is nothing else `inflight_slot_r` could
+        // be pointing at. The consequence of getting it wrong is a rail flag on
+        // a neighbouring pixel, which the ordering and pairing checks over 120
+        // fragments would surface.
+        // ENFORCED-BY: tests/raster/raster_texjoin_directed.cpp:main
         sat_q[inflight_slot_r] <= pv_sat;
         req_aux_r              <= inflight_aux_r;
       end

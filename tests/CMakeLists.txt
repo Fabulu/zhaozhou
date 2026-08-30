@@ -1986,6 +1986,7 @@ verilate(test_raster_texjoin_directed
 add_test(NAME raster_texjoin_directed COMMAND test_raster_texjoin_directed)
 set_tests_properties(raster_texjoin_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
@@ -3081,6 +3082,37 @@ verilate(test_raster_edgewalk_setupcost
   SOURCES ${ZHAO_RASTER_EDGEWALK_SV})
 add_test(NAME raster_edgewalk_setupcost COMMAND test_raster_edgewalk_setupcost)
 set_tests_properties(raster_edgewalk_setupcost PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# THE SEAM. Five of the attribute blocks in one executable, driven in sequence
+# over one textured triangle. Each of them already passes alone with inputs it
+# supplied itself; this is the first thing that makes them agree with EACH OTHER
+# about what the formats mean.
+add_executable(test_render_textured_seam render/render_textured_seam.cpp)
+target_link_libraries(test_render_textured_seam PRIVATE zhao_harness zhao_zref)
+verilate(test_render_textured_seam
+  PREFIX Vzhao_geom_attrsetup
+  TOP_MODULE zhao_geom_attrsetup
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_attrsetup.sv)
+verilate(test_render_textured_seam
+  PREFIX Vzhao_raster_edgewalk
+  TOP_MODULE zhao_raster_edgewalk
+  SOURCES ${ZHAO_RASTER_EDGEWALK_SV})
+verilate(test_render_textured_seam
+  PREFIX Vzhao_raster_attrinterp
+  TOP_MODULE zhao_raster_attrinterp
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrinterp.sv)
+verilate(test_render_textured_seam
+  PREFIX Vzhao_raster_attrdiv
+  TOP_MODULE zhao_raster_attrdiv
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv)
+verilate(test_render_textured_seam
+  PREFIX Vzhao_raster_perspuv
+  TOP_MODULE zhao_raster_perspuv
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME render_textured_seam COMMAND test_render_textured_seam)
+set_tests_properties(render_textured_seam PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
 add_executable(test_raster_edgewalk_random raster/raster_edgewalk_random.cpp)
 target_link_libraries(test_raster_edgewalk_random PRIVATE zhao_harness zhao_zref)
