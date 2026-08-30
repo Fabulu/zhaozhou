@@ -1,123 +1,134 @@
 # What is actually left to build
 
-An audit of `design/blocks.yml` against the RTL and test trees, 2026-08-31.
-It exists because the ledger's own summary is misleading in both directions, and
-"finish the console" needs a real list rather than a status field.
+An audit of `design/blocks.yml` against the RTL tree, the test tree and the
+CONTRACTS, 2026-08-31. It exists because the ledger's own summary is misleading
+in both directions, and "finish the console" needs a real list rather than a
+status field.
+
+**This file was wrong on its first pass and is corrected below.** The first
+version listed seven blocks as "real, unblocked hardware work" on the strength
+of their ledger entries. Reading their contracts changes that to **zero**. The
+first-pass reasoning is kept at the end, because the way it was wrong is the
+useful part.
 
 ---
 
 ## The headline
 
-`design/blocks.yml` holds **92 blocks** and reports:
+`design/blocks.yml` holds **92 blocks** and reports 37 SPECIFIED. Of those:
 
-| maturity | count |
-|---|---|
-| SPECIFIED | 37 |
-| REFERENCE_COMPLETE | 4 |
-| UNIT_VERIFIED | 35 |
-| RTL_VERIFIED | 16 |
+| | count | |
+|---|---|---|
+| `blocked_on: hardware` | 6 | waiting for a board, not for work |
+| software / profile entries | 12 | behind hardware by standing direction |
+| **already built, ledger stale** | **2** | should be advanced |
+| waiting on owner decisions about behaviour | 10 | particles, 2D, compositor |
+| **have no usable contract** | **7** | see below |
 
-**37 SPECIFIED overstates the remaining work.** Of those 37:
-
-* **6 are `blocked_on: hardware`** and cannot advance regardless of evidence —
-  `SYS.PLL`, `SYS.RESET`, `SYS.CDC`, `MEM.SDRAM`, `SW.TOOLS.REPORT`,
-  `SW.TOOLS.BOARDPROBE`. They are waiting for a board, not for work.
-* **12 are software or profile entries**, which the standing direction puts
-  behind hardware.
-* **2 are already built and the ledger is simply stale** (below).
-* **10 are explicitly waiting on owner decisions** (below).
-* **which leaves 7 blocks of real, unblocked hardware work.**
+**The number of blocks that can be built today from what is written down is
+zero.** Not because they are hard — several are small — but because in every
+case the laws they would have to obey do not exist yet.
 
 ---
 
-## Built, but still listed SPECIFIED — the ledger is stale
+## Built, but still listed SPECIFIED — advance these
 
 | block | the RTL | the gate |
 |---|---|---|
-| `TERRAIN.PATCH` | `fpga/rtl/terrain/zhao_terrain_patch.sv` | `terrain_patch_directed`, composed 33x33 dual patch |
+| `TERRAIN.PATCH` | `zhao_terrain_patch.sv` | `terrain_patch_directed`, composed 33x33 dual patch |
 | `GEOM.WCACHE` | `zhao_geom_wcache.sv` over `zhao_vertex_arena.sv` | 73-check differential, mutation sweep, inductive formal proof |
 
-Both should be advanced. `GEOM.WCACHE`'s shell landed 2026-08-31; its mechanism
-had been finished, proved and mutation-swept for a week under a different file
-name, which is exactly why a maturity field is not a substitute for looking.
-
-**The audit method matters here.** Searching the RTL for each block's contract
-path found only `TERRAIN.PATCH`, and reported `GEOM.WCACHE` as unbuilt — because
-`zhao_vertex_arena` implements it without citing it. Searching for a test named
-after the block found both. Neither method alone is reliable; a block can be
-finished under any name.
+**The audit method is itself a finding.** Searching the RTL for each block's
+contract path found only `TERRAIN.PATCH` and reported `GEOM.WCACHE` as unbuilt,
+because `zhao_vertex_arena` implements it without citing it. Searching for a test
+named after the block found both. Neither method alone is reliable: a block can
+be finished under any name.
 
 ---
 
-## Waiting on owner decisions, not on work
+## Waiting on owner decisions about behaviour
 
 Standing direction: *"Do NOT invent game behaviour for the particle-simulation,
-compositor or 2D blocks — those need Fabian's decisions."*
+compositor or 2D blocks."*
 
-| group | blocks |
+`PART.STATE`, `PART.UPDATE`, `PART.COLLIDE`, `PART.SPAWN`, `PART.LADDER`,
+`TWOD.PLANE`, `TWOD.SPRITE`, `POST.GATHER`, `POST.COMPOSITE`, `POST.ECHO`.
+
+---
+
+## The seven that looked buildable, and what each is actually missing
+
+| block | what is missing |
 |---|---|
-| particles | `PART.STATE`, `PART.UPDATE`, `PART.COLLIDE`, `PART.SPAWN`, `PART.LADDER` |
-| 2D | `TWOD.PLANE`, `TWOD.SPRITE` |
-| compositor / post | `POST.GATHER`, `POST.COMPOSITE`, `POST.ECHO` |
+| `INPUT.SNAC` | contract is a **stub: 15 TODO sections** — clocks, packets, backpressure, Q formats, refusals, all unwritten |
+| `FORGE.PRIM` | **15 TODO sections** |
+| `GEOM.VDECODE` | **15 TODO sections**, and the compressed vertex FORMAT is not pinned anywhere in `spec/` |
+| `GEOM.WARP` | **15 TODO sections** |
+| `GEOM.LOOM` | **15 TODO sections**; the purpose line is a list of BEHAVIOURS (gait, formations) that the particle rule covers |
+| `GEOM.MESHFETCH` | contract has a real cull ruling and a real latency table, but **clocks, packets, memory ownership, Q formats and throughput are all TODO**. Two of its three thirds are already built (`zhao_geom_lod`, `zhao_geom_cull`); the third is a descriptor fetch whose memory layout does not exist |
+| `MEASURE.HISTOGRAM` | **a documented refusal, not a gap** |
 
-Ten blocks. They are specified as blocks but their BEHAVIOUR is a design
-decision, and nothing here should guess it.
+### `MEASURE.HISTOGRAM` deserves quoting, because it is the model
 
----
+Its contract already explains at length why it was deliberately not started: it
+would need **four stacked inventions** — the error metric, the bucket
+boundaries, the cutoff rule, and a Version-2 input to a governor just built to
+Version 1 — and none has a law anywhere in the tree. Its own words:
 
-## The seven that are real, unblocked hardware work
+> a small block built on four invented laws is worse than no block, because the
+> inventions become ratified by being built.
 
-| block | purpose | notes |
-|---|---|---|
-| `GEOM.MESHFETCH` | meshlet descriptors, frustum reject, LOD per governor | head of the geometry front-end |
-| `GEOM.VDECODE` | decode compressed vertex data into the skinning format | needs the compressed vertex FORMAT to be pinned |
-| `GEOM.LOOM` | bounded transform graph (orbit/aim/billboard/gait/formations) | the largest of the seven, and closest to game behaviour |
-| `GEOM.WARP` | Warp8 deformation programs on instanced vertices | consumes `FIELD.SEQ.WARP` |
-| `MEASURE.HISTOGRAM` | error-bucket histogram feeding the governor | small; both neighbours built |
-| `FORGE.PRIM` | procedural primitive expansion | feeds `GEOM.SETUP` |
-| `INPUT.SNAC` | the SNAC controller interface | small, self-contained |
+That is the correct answer for all seven, and the contract for one of them
+already says so.
 
-Plus the five `FIELD.SEQ.*` entries (`EARTH`, `WARP`, `FLOW`, `FORMATION`,
-`STAMP`), which are **Field IR programs rather than new datapaths** — the Field
-engine they run on is built and heavily optimised. They are listed SPECIFIED
-because no program has been authored, and authoring one is closer to content
-than to hardware.
+### And the five `FIELD.SEQ.*` entries
 
-### Two of them are not as ready as they look
-
-* **`GEOM.VDECODE`** decodes "compressed vertex data". Nothing in `spec/` pins
-  that compression format. Building it means choosing it, and the choice
-  determines asset size for every mesh in the game.
-* **`GEOM.LOOM`** evaluates orbit, aim, billboard, oscillator, spline, gait and
-  formation nodes. That is a list of BEHAVIOURS, and the same rule that holds
-  the particle blocks applies to at least the gait and formation halves of it.
-
-`MEASURE.HISTOGRAM`, `INPUT.SNAC`, `GEOM.MESHFETCH` and `FORGE.PRIM` are the
-four with no such hole in front of them.
+`EARTH`, `WARP`, `FLOW`, `FORMATION`, `STAMP` are **Field IR programs, not
+datapaths.** The engine they run on is built and heavily optimised. They are
+SPECIFIED because no program has been authored, and authoring one is closer to
+content than to hardware.
 
 ---
 
-## And what is blocking outside the block list
+## What is genuinely open, and it is all decisions
 
-Two things, both decisions:
-
-1. **`wmin`, `wmax`, `scale`** — `reports/OPEN-SPEC-DEPTH-QUANTISATION.md`.
-   Blocks GEOM.PROJECT's attribute carry, the last piece of the renderer's
-   step 6.
-2. **The binner arena capacity** — `reports/BINNER_CAPACITY_FOR_8KM_MAPS.md`.
-   An army needs ~150x the triangle capacity and ~25x the references. Every
-   capacity question in the renderer now leads here, including what ruling 4's
-   TriangleContext would cost.
+1. **`wmin`, `wmax`, `scale`** — `OPEN-SPEC-DEPTH-QUANTISATION.md`. Blocks
+   GEOM.PROJECT's attribute carry, the renderer's last step-6 piece.
+2. **The binner arena capacity** — `BINNER_CAPACITY_FOR_8KM_MAPS.md`. An army
+   needs ~150x the triangle capacity and ~25x the references.
+3. **What `276,480` counts** — `PER_PIXEL_BUDGET.md`. Decides whether two
+   per-pixel blocks need replicating at all.
+4. **Seven contracts to write**, or a ruling that a subset may be specified by
+   whoever builds them.
 
 ---
 
 ## Honest summary
 
-The console is not 37 blocks from done. It is **7 blocks of unblocked hardware
-work, 2 ledger updates, 10 blocks waiting on design decisions, 6 waiting on a
-board, and 2 open numeric decisions** — with the renderer's per-pixel path built,
-composed and measured end to end.
+The console's remaining hardware is **not blocked on effort**. It is blocked on
+**specification**: seven contracts that are stubs, ten blocks whose behaviour is
+a design decision, six waiting on a board, and four open numeric or policy
+questions.
 
-That is a very different picture from the status field, in both directions: less
-work remaining than it says, and more of it blocked on things only the owner can
-answer.
+What is finished and measured is substantial — the renderer's per-pixel path is
+built, composed end to end and priced against a frame — and what remains cannot
+honestly be advanced by writing more RTL against contracts that say TODO.
+
+---
+
+## Appendix: how the first pass got this wrong
+
+The first version of this file read `design/blocks.yml`, filtered by `maturity`,
+`kind` and `blocked_on`, cross-checked the RTL and test trees, and concluded
+seven blocks were ready to build. Every one of those steps was correct. **It
+never opened the contracts.**
+
+The ledger says what a block IS. The contract says whether anyone has decided
+what it must DO. A block can be unblocked, unbuilt, untested, small, and still
+completely unbuildable — and only the contract shows it.
+
+This is the same shape as two other errors made the same day: a setup cost
+measured over the wrong interval, and an existing 268-line test nearly
+overwritten because a file's absence was assumed rather than checked. In all
+three the available evidence was consistent with the wrong answer, and the fix
+was the same — go and look at the thing itself.
