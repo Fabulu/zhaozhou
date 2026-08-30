@@ -90,6 +90,22 @@ Correct the rejected published Zixxtrixx spring before any secondary polish, the
 - Rendered and inspected the complete 600-frame moving-light baseline plus two bounded authored iterations. Kept the warm gains and every world-space path control unchanged, named all radius/gain controls, and accepted a broader 1100 mm inner / 5200 mm outer pool. More of the complete S is illuminated at once without the rejected trial's electric gain lift or loss of crayon grain.
 - The point source is still sampled exactly once after terrain snap; compositor and depth-tested marker consume the identical stored world position. Inspected every accepted frame, selected native-nearest 2x comparisons and the explicit accepted frame `599 -> 0` pair under cel-main/Cool Cross. Source, marker and illumination traverse the seam continuously. Evidence is lane-local under `build/idle-synced` and `build/moving-light-iter2`.
 - A fresh direct `--clean all` build recompiled every consumer without CMake/Ninja/Verilator. Ordinary meshcheck, deformation-sidecar and the complete every-key/midpoint 3D probe pass; validation evidence is lane-local under `build/idle-light-final`.
+- Committed and pushed the idle/light milestone as zhaozhou `a5a175f` (`Synchronize Zixxtrixx idle and inspection light`).
+
+### 2026-08-30 - Immutable Archive Generation Nine
+
+- Hashed the complete pre-replacement live bank and copied all twenty-two PNG/WebM pairs into named Generation Nine archive paths. Its durable manifest records 44 source-to-archive SHA-256 mappings; every copied file still retains its captured hash.
+- Protected every earlier archive byte: the prior set remains exactly 160 files with canonical set SHA-256 `f0432da84c5f110d891969794bd1293cc4320f05537dd215985224c4b829e0a1`. The complete V14 study set remains exactly 20 files with canonical set SHA-256 `5d27ba6c5ea99c71590f48c6b6b1907a59d74eec79fe387d67ea2b2ff01b7334`.
+- Raised `MAX_ARCHIVE_GENERATIONS` from eight to nine, extended both archive-selector CSS families, added the complete generation to `creatures.json`, and regenerated `public/index.html` only through `assemble.py`. The page reports nine generations and retains the exact noindex line.
+- Committed and pushed the archive/site milestone as Upheaval `aeb75de` (`Preserve Zixxtrixx Archive Generation Nine`).
+
+### 2026-08-31 - Final twenty-two-subject bank rendered and encoded
+
+- Made one fresh direct all-consumer build at `build/zixxtrixx-final-bank-build`, then rendered each exact existing current-bank subject once under explicit `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross`. The complete bank is exactly twenty-two consecutive 384x240 RGB sequences totalling 6514 frames.
+- Encoded every subject exactly once through unchanged `website/tools/tovideo.py`. All twenty-two live streams probe as VP9, 384x240, `yuv444p`, 60 fps, with exact expected frame counts; every nearest-neighbour poster is 1152x720. A final all-subject poster sheet was inspected without finding a poster-level regression.
+- Regenerated the manifest-driven page after correcting the walk description to its source-authored two cycles. `assemble.py` reports one creature and 189 render items, the archive label is `Archive (9 generations)`, and the page retains exactly `<meta name="robots" content="noindex, nofollow">`.
+- Reverified immutability after replacement: all 44 Generation Nine files match the durable captured hashes, the protected prior/V14 set digests remain exact, and all 44 current live files now differ from their archived predecessors.
+- Committed and pushed the final live bank as Upheaval `f80e70a` (`Replace Zixxtrixx final live media`).
 
 ---
 
@@ -126,4 +142,5 @@ The mandated `subagents/20260830-1730-zixxtrixx-coil-expression/` directory was 
 
 ## Next Steps
 
-1. Preserve archive generation nine, render the exact final twenty-two-subject bank once, integrate current mains, and publish the finished pass exactly once.
+1. Integrate both current remote mains into the feature work, rerun the fresh direct/source/site/archive gates, push both mains, then publish the finished pass exactly once.
+2. Verify the production deployment, close and archive this one mandatory run, and stop/verify only this lane's child tooling.
