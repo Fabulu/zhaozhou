@@ -36,6 +36,26 @@
 // sign, which is the same three steps in the same order as the reference.
 //
 // ---------------------------------------------------------------------------
+// THE RADIX IS A PARAMETER BECAUSE THE ANSWER IS A MEASUREMENT
+// ---------------------------------------------------------------------------
+// reports/PER_PIXEL_BUDGET.md puts this block 2 to 5 times short of what a
+// frame's attributes actually ask for, even at eight units. Three things could
+// close that -- more units, fewer divides, or a shorter divider -- and the
+// third is the one nobody could argue about without building it.
+//
+// So RADIX is 2 or 4 and both elaborate. Radix 4 consumes two quotient bits a
+// step instead of one, at the cost of comparing against 1x, 2x and 3x the
+// divisor rather than just 1x. The trade is iterations against per-step logic,
+// and which side wins is a FIT question, not a reasoning question.
+//
+// THE ANSWER MUST NOT MOVE. Long division is deterministic: the same numerator
+// over the same divisor produces the same quotient whatever the radix, so the
+// two builds are required to agree BIT FOR BIT with each other and with the
+// oracle. The test runs the identical case list at both radices, which is the
+// only way to be sure the faster one is the same divider and not a different
+// one that mostly agrees.
+//
+// ---------------------------------------------------------------------------
 // WIDTHS, AND WHY THE QUOTIENT IS SMALL
 // ---------------------------------------------------------------------------
 // The numerator reaches 2^78 and the area 2^46, but the QUOTIENT cannot exceed
@@ -46,7 +66,11 @@
 // instead of silently truncating.
 `default_nettype none
 
-module zhao_raster_attrdiv (
+module zhao_raster_attrdiv #(
+    // 2 or 4. See THE RADIX IS A PARAMETER above; the answer is identical at
+    // both, and the test proves that rather than assuming it.
+    parameter int unsigned RADIX = 2
+) (
     input var logic clk,
     input var logic rst_n,
 
@@ -78,6 +102,15 @@ module zhao_raster_attrdiv (
   // would otherwise wrap silently.
   localparam int unsigned QBITS = 33;
 
+  // Bits consumed per step, and the number of quotient POSITIONS the walk
+  // covers. Radix 4 needs an even count, so it covers 34 positions -- the extra
+  // one is always zero, because `fits_c` below still uses the stricter
+  // 33-position test at both radices. Same refusals, same answer, half the
+  // steps.
+  localparam int unsigned RBITS = (RADIX == 4) ? 2 : 1;
+  localparam int unsigned QPOS  = (RADIX == 4) ? 34 : 33;
+  localparam int unsigned STEPS = QPOS / RBITS;
+
   localparam logic [1:0] D_IDLE = 2'd0;
   localparam logic [1:0] D_RUN  = 2'd1;
   localparam logic [1:0] D_DONE = 2'd2;
@@ -91,11 +124,13 @@ module zhao_raster_attrdiv (
   // rediscovered at each use.
   logic [79:0] num_r;    // the bits still to be shifted in
   logic        rem_top_unused;
-  // 49 bits so a shifted remainder cannot lose its top bit before the compare;
-  // bit 48 is only ever live inside `rem_shift_c` and is sunk below.
-  logic [48:0] rem_r;
+  // 51 bits so a shifted remainder cannot lose its top bit before the compare.
+  // Radix 2 shifts by one and needs 49; radix 4 shifts by two and compares
+  // against 3x the divisor, so it needs 51. Both carry 51 -- two bits of an
+  // adder is not worth a second width to reason about.
+  logic [50:0] rem_r;
   logic [47:0] den_r;
-  logic [QBITS-1:0] q_r;
+  logic [QPOS-1:0] q_r;
 
   logic signed [95:0] n_abs_c;
   logic [79:0]        num_c;
@@ -119,12 +154,49 @@ module zhao_raster_attrdiv (
   // service below backpressures for real, so the guard is on the result too.
   assign v_ready_o = (st_r == D_IDLE) && !r_valid_o;
 
-  // One shift-subtract step, most significant quotient bit first.
-  logic [48:0] rem_shift_c;
-  logic        sub_ok_c;
+  // One step, most significant quotient position first. At radix 2 that is the
+  // classic shift-subtract; at radix 4 it is the same walk taking two bits and
+  // choosing a digit from {0,1,2,3} against 1x, 2x and 3x the divisor.
+  logic [50:0]      rem_shift_c;
+  logic [50:0]      d1_c, d2_c, d3_c;
+  logic [RBITS-1:0] digit_c;
+  logic [50:0]      rem_next_c;
+  // Only the low RBITS are consumed -- this is a shift-to-select, and the
+  // discard is the whole point of it.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [79:0]      shifted_c;
+  /* verilator lint_on UNUSEDSIGNAL */
   always_comb begin
-    rem_shift_c = {rem_r[47:0], num_r[{1'b0, iter_r}]};
-    sub_ok_c    = (rem_shift_c >= 49'({1'b0, den_r}));
+    d1_c      = 51'({3'd0, den_r});
+    d2_c      = d1_c << 1;
+    d3_c      = d1_c + d2_c;
+    // The next RBITS bits of the numerator, most significant first.
+    shifted_c = num_r >> (32'(iter_r) * 32'(RBITS));
+    rem_shift_c = (rem_r << RBITS) | 51'(shifted_c[RBITS-1:0]);
+
+    if (RADIX == 4) begin
+      if (rem_shift_c >= d3_c) begin
+        digit_c    = RBITS'(3);
+        rem_next_c = rem_shift_c - d3_c;
+      end else if (rem_shift_c >= d2_c) begin
+        digit_c    = RBITS'(2);
+        rem_next_c = rem_shift_c - d2_c;
+      end else if (rem_shift_c >= d1_c) begin
+        digit_c    = RBITS'(1);
+        rem_next_c = rem_shift_c - d1_c;
+      end else begin
+        digit_c    = RBITS'(0);
+        rem_next_c = rem_shift_c;
+      end
+    end else begin
+      if (rem_shift_c >= d1_c) begin
+        digit_c    = RBITS'(1);
+        rem_next_c = rem_shift_c - d1_c;
+      end else begin
+        digit_c    = RBITS'(0);
+        rem_next_c = rem_shift_c;
+      end
+    end
   end
 
   always_ff @(posedge clk or negedge rst_n) begin
@@ -134,9 +206,9 @@ module zhao_raster_attrdiv (
       neg_r         <= 1'b0;
       bad_r         <= 1'b0;
       num_r         <= 80'd0;
-      rem_r         <= 49'd0;
+      rem_r         <= 51'd0;
       den_r         <= 48'd0;
-      q_r           <= {QBITS{1'b0}};
+      q_r           <= {QPOS{1'b0}};
       r_valid_o     <= 1'b0;
       q_o           <= 32'sd0;
       q_overflow_o  <= 1'b0;
@@ -152,21 +224,19 @@ module zhao_raster_attrdiv (
             bad_r  <= !fits_c;
             num_r  <= num_c;
             den_r  <= den_c;
-            // The quotient's bits come out of the window above QBITS, so the
-            // remainder starts as that window.
-            rem_r  <= 49'(num_c >> QBITS);
-            q_r    <= {QBITS{1'b0}};
-            iter_r <= 6'(QBITS - 1);
+            // The quotient's bits come out of the window above the positions
+            // being walked, so the remainder starts as that window.
+            rem_r  <= 51'(num_c >> QPOS);
+            q_r    <= {QPOS{1'b0}};
+            iter_r <= 6'(STEPS - 1);
             st_r   <= D_RUN;
           end
         end
 
         D_RUN: begin
-          if (sub_ok_c) begin
-            rem_r        <= rem_shift_c - 49'({1'b0, den_r});
-            q_r[iter_r]  <= 1'b1;
-          end else begin
-            rem_r <= rem_shift_c;
+          rem_r <= rem_next_c;
+          for (int unsigned b = 0; b < RBITS; ++b) begin
+            q_r[32'(iter_r) * 32'(RBITS) + b] <= digit_c[b];
           end
           if (iter_r == 6'd0) st_r <= D_DONE;
           else iter_r <= iter_r - 6'd1;
@@ -178,7 +248,10 @@ module zhao_raster_attrdiv (
           q_o          <= bad_r ? 32'sd0
                         : (neg_r ? 32'(-$signed({1'b0, q_r[31:0]}))
                                  : 32'($signed({1'b0, q_r[31:0]})));
-          q_overflow_o <= bad_r || q_r[QBITS-1];
+          // ANY bit above 31 means the quotient did not fit, which is one bit
+          // at radix 2 and two at radix 4 -- written as a range so the two
+          // builds cannot disagree about what "too big" means.
+          q_overflow_o <= bad_r || (|q_r[QPOS-1:32]);
           r_valid_o    <= 1'b1;
           divides_o    <= divides_o + 32'd1;
           st_r         <= D_IDLE;
@@ -191,7 +264,7 @@ module zhao_raster_attrdiv (
     end
   end
 
-  assign rem_top_unused = rem_r[48];
+  assign rem_top_unused = ^rem_r[50:48];
 
 endmodule : zhao_raster_attrdiv
 
