@@ -1950,7 +1950,6 @@ verilate(test_geom_clip_attrswap_directed
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clip.sv)
 add_test(NAME geom_clip_attrswap_directed COMMAND test_geom_clip_attrswap_directed)
 set_tests_properties(geom_clip_attrswap_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
-
 # rcp_u24 for the raster: walked over its ENTIRE 16.7M input domain against the
 # frozen RCP24_FULL_HASH, so it is nightly rather than fast.
 add_executable(test_raster_rcp24_directed raster/raster_rcp24_directed.cpp)
@@ -4175,6 +4174,19 @@ add_test(NAME lint_geom_bin_pipe
                  --top-module zhao_geom_bin_pipe
                  ${ZHAO_GEOM_BIN_PIPE_SV})
 set_tests_properties(lint_geom_bin_pipe PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# GEOM.WCACHE's shell. It adds no logic -- the mechanism, the formal proof and
+# the 73-check differential all live on zhao_vertex_arena -- so a lint is the
+# whole gate it needs. What the shell carries is the projected-vertex parameters
+# and the payload's MEANING, which the primitive must not know.
+add_test(NAME lint_geom_wcache
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_wcache
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_wcache.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_vertex_arena.sv)
+set_tests_properties(lint_geom_wcache PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
