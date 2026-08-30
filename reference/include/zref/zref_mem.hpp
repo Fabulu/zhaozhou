@@ -649,10 +649,26 @@ class VramArbiter {
 // ===========================================================================
 // zref::MemoryGuard — Phase-2 region-map verdict oracle (memory_rules §5)
 // ===========================================================================
+// THE FRAMEBUFFER-WRITER LEASE. This was a blit-specific grant, and it becomes
+// a lease that NAMES ITS WRITER, because there are now two blocks that write an
+// inactive framebuffer slot: DEBUG.FRAMEBLIT and RASTER.FBWRITE.
+//
+// They share the SPATIAL window and not the TEMPORAL permission. A second
+// overlapping region entry would have copied the same address law, cost more
+// policy plumbing, and still not stopped the two writers corrupting each other.
+// VIDEO.SLOTMGR already owns one lease at a time with a generation, so the
+// lease is the natural place to say WHO may write.
+//
+// A v1 frame uses the renderer or DebugFrameBlit, never both.
 struct GuardMap {
-  bool valid = false;      // a blit grant exists this frame
-  unsigned blit_slot = 0;  // 0/1
-  uint32_t blit_span = 0;  // granted bytes (canvas_bytes(mode))
+  // Writer identity. Kept as an enum rather than a bool so a third writer is a
+  // compile error at every switch rather than a silently wrong comparison.
+  enum Writer { WRITER_BLIT = 0, WRITER_ENGINE0 = 1 };
+
+  bool valid = false;             // a framebuffer-write lease exists this frame
+  unsigned blit_slot = 0;         // 0/1 -- the leased slot
+  uint32_t blit_span = 0;         // granted bytes (canvas_bytes(mode))
+  unsigned writer = WRITER_BLIT;  // which client the lease is held BY
 };
 
 constexpr uint32_t kFbSlot0Base = 0x00000000u;
@@ -685,13 +701,21 @@ struct MemoryGuard {
         // cannot bridge from slot 0 into slot 1)
         return !r.write && (end <= kFbSlot0Base + kFbSlotSpan ||
                             (r.addr >= kFbSlot1Base && end <= kFbSlot1Base + kFbSlotSpan));
-      case BLIT_DMA: {
+      case BLIT_DMA:
+      case ENGINE0: {
+        // ONE WINDOW, ONE OWNER AT A TIME. Both writers are checked against the
+        // same clamped slot span; what separates them is which one the lease
+        // names. A writer without the lease is refused exactly as a request
+        // outside the window is.
         if (!r.write || !m.valid) return false;
+        const unsigned want =
+            (r.client == BLIT_DMA) ? GuardMap::WRITER_BLIT : GuardMap::WRITER_ENGINE0;
+        if (m.writer != want) return false;
         const uint32_t base = m.blit_slot ? kFbSlot1Base : kFbSlot0Base;
         return r.addr >= base && end <= base + m.blit_span;
       }
       default:
-        return false;  // engines/debug own nothing in Phase 2
+        return false;  // ENGINE1 and DEBUG own nothing
     }
   }
 };

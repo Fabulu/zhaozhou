@@ -301,9 +301,22 @@ std::vector<PipeTile> expect_frame(const std::vector<BinTri>& tris, const Look& 
   // within one tile the triangles in submission order.
   for (int ty = 0; ty < kGridH; ++ty) {
     for (int tx = 0; tx < kGridW; ++tx) {
-      for (size_t i = 0; i < tris.size(); ++i) {
-        for (const zref::Binner::Ref& r : refs[i]) {
-          if (r.tx != tx || r.ty != ty) continue;
+      // ONE RESOLVE PER TILE. The pipe clears the bank on the tile's FIRST
+      // reference and resolves on its LAST, so a tile several triangles share
+      // is rendered once with all of them in it. Collect the tile's references
+      // before running any, because the oracle needs to know which is last.
+      std::vector<size_t> mine;
+      for (size_t i = 0; i < tris.size(); ++i)
+        for (const zref::Binner::Ref& r : refs[i])
+          if (r.tx == tx && r.ty == ty) mine.push_back(i);
+      if (mine.empty()) continue;
+
+      uint32_t tile_cov = 0;
+      for (size_t k = 0; k < mine.size(); ++k) {
+        {
+          const size_t i = mine[k];
+          const bool first = (k == 0);
+          const bool last = (k + 1 == mine.size());
           PipeJob j;
           // The edge walker takes VERTICES, not the setup coefficients -- it
           // re-derives its own edges. BinTri carries the winding-normalised
@@ -327,7 +340,9 @@ std::vector<PipeTile> expect_frame(const std::vector<BinTri>& tris, const Look& 
           j.texel_rgb = lk.texel_rgb;
           j.texel_a = lk.texel_a;
           j.texel_idx = lk.texel_idx;
-          const PipeExpect e = pipe_oracle(store, ez, j);
+          const PipeExpect e = pipe_oracle(store, ez, j, first, last);
+          tile_cov += e.count;
+          if (!last) continue;
 
           PipeTile pt;
           for (int p = 0; p < kPipePixels; ++p) {
@@ -336,7 +351,10 @@ std::vector<PipeTile> expect_frame(const std::vector<BinTri>& tris, const Look& 
           }
           pt.crc32c = e.res.crc32c;
           pt.crc_index = j.index;
-          pt.count = e.count;
+          // The tile pipe reports the coverage of the TILE, accumulated over
+          // its triangles, not of the last one -- so the expectation sums the
+          // same way.
+          pt.count = tile_cov;
           pt.degenerate = e.degenerate;
           out.push_back(pt);
         }
@@ -401,6 +419,17 @@ int main(int argc, char** argv) {
     zhao::check(top.overflow_o == 0, "the arena did not overflow", 0, (uint32_t)top.overflow_o);
     printf("   MEASURED: %zu tiles in %ld clocks, %u job stalls\n", d.tiles.size(), d.clocks,
            (uint32_t)top.job_stall_clocks_o);
+    // THE ARENA, WHICH NOTHING WAS READING. GEOM.BINNER reports its own
+    // high-water marks and every one of them was tied off. The measured frame
+    // in reports/BINNER_CAPACITY_FOR_8KM_MAPS.md is 150x the triangle budget
+    // and 25x the reference arena, so these stop being trivia the moment the
+    // capacities move -- and a capacity change nobody measures here is a
+    // capacity change nobody checked.
+    printf("   ARENA: %u references, deepest tile list %u, %u triangles culled\n",
+           (uint32_t)top.tile_references_o, (uint32_t)top.max_tile_list_depth_o,
+           (uint32_t)top.triangles_culled_o);
+    zhao::check(top.triangles_culled_o == 0, "no triangle was culled, so the arena held this frame",
+                0, (uint32_t)top.triangles_culled_o);
   }
 
   printf("== section 2: overlapping triangles share tiles, and ORDER decides the picture ==\n");

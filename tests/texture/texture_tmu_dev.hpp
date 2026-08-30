@@ -34,7 +34,21 @@
 
 #include "verilated.h"
 
+// ONE HARNESS, TWO IMPLEMENTATIONS. `zhao_texture_tmu` is the serial FSM and
+// `zhao_texture_tmu_pipe` is the v2 sampler; they carry IDENTICAL ports, which
+// is the whole reason the second one was built beside the first rather than by
+// editing it. Pointing this harness at either means the v2 block inherits every
+// directed and random check the serial block earned -- the cheapest
+// verification available, and the only kind that can say "the new machine
+// samples what the old one did" rather than "the new machine agrees with
+// itself".
+#ifdef ZHAO_TMU_PIPE
+#include "Vzhao_texture_tmu_pipe.h"
+using TmuTop = Vzhao_texture_tmu_pipe;
+#else
 #include "Vzhao_texture_tmu.h"
+using TmuTop = Vzhao_texture_tmu;
+#endif
 
 #include "zhao_sim.hpp"
 #include "zref/zref_texture.hpp"
@@ -295,7 +309,7 @@ class TmuDev {
     top_.eval();
   }
 
-  Vzhao_texture_tmu top_;
+  TmuTop top_;
 };
 
 /** The oracle's verdict for the same batch. */

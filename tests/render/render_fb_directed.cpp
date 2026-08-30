@@ -75,6 +75,10 @@ constexpr int kFbH = kGridH * kPipeTile;   // 96 px
 constexpr uint32_t kStride = kFbW * 2;     // bytes per row
 constexpr uint32_t kFbBase = 0x0010'0000;  // somewhere unremarkable in VRAM
 constexpr size_t kFbBytes = static_cast<size_t>(kStride) * kFbH;
+// Clocks between a beat being accepted and its words being credited back. Any
+// value > 1 is enough to separate "accepted" from "retired"; 7 is chosen so the
+// gap spans more than one burst.
+constexpr int kRetireDelay = 7;
 
 // `zhao_guard_req_t` is 103 bits packed, so Verilator hands it over as a word
 // array rather than a scalar. The field offsets are read off the struct's
@@ -125,6 +129,18 @@ struct Vram {
   // to wait.
   uint32_t stall_mask = 0;
   uint32_t tick = 0;
+  // RETIREMENT IS LATE AND SEPARATE FROM ACCEPTANCE. The arbiter reissues
+  // credits as bursts retire, which is well after the write queue took the
+  // beats. Modelled as a delay line so `drained_o` cannot be satisfied by the
+  // block simply having finished offering -- which is the exact confusion the
+  // frame transaction exists to prevent.
+  std::vector<uint32_t> retire_pipe = std::vector<uint32_t>(kRetireDelay, 0);
+  uint32_t retire_rp = 0;
+  uint32_t retired_total = 0;
+  // Set if `drained_o` was ever high while words were still outstanding. That
+  // would make the signal a synonym for "finished offering", which is exactly
+  // what it must not be.
+  bool drained_too_early = false;
 
   bool in_region(uint32_t addr, uint32_t len) const {
     return addr >= kFbBase && (uint64_t)addr + len <= (uint64_t)kFbBase + kFbBytes;
@@ -176,6 +192,7 @@ struct Dut {
     t.fb_stride_i = kStride;
     t.guard_rsp_i = 0;
     t.guard_wready_i = 0;
+    t.retire_words_i = 0;
     t.eval();
     for (int i = 0; i < 4; ++i) zhao::tick(t);
     t.rst_n = 1;
@@ -230,8 +247,25 @@ struct Dut {
       }
       got += 8;
       ++mem.beats;
+      // Four 16-bit words per 64-bit beat, credited kRetireDelay clocks later.
+      mem.retire_pipe[(mem.retire_rp + kRetireDelay - 1) % kRetireDelay] += 4;
       if (t.guard_wlast_o) active = false;
     }
+
+    // Present this clock's credits, then advance the delay line.
+    const uint32_t credit = mem.retire_pipe[mem.retire_rp];
+    mem.retire_pipe[mem.retire_rp] = 0;
+    mem.retire_rp = (mem.retire_rp + 1) % kRetireDelay;
+    mem.retired_total += credit;
+    t.retire_words_i = (uint8_t)credit;
+    t.eval();
+
+    // DRAINED MUST NEVER LEAD RETIREMENT. Checked every clock rather than at
+    // the end, because at the end everything has retired and the distinction
+    // between "accepted" and "retired" is invisible -- which is how a frame
+    // controller would come to publish a slot whose bytes are still in a FIFO.
+    if (t.fb_drained_o && (t.fb_issued_words_o != t.fb_retired_words_o))
+      mem.drained_too_early = true;
 
     zhao::tick(t);
     ++clocks;
@@ -313,9 +347,21 @@ std::vector<uint16_t> expect_frame(const std::vector<BinTri>& tris, const Look& 
   zref::EarlyZ ez;
   for (int ty = 0; ty < kGridH; ++ty) {
     for (int tx = 0; tx < kGridW; ++tx) {
-      for (size_t i = 0; i < tris.size(); ++i) {
-        for (const zref::Binner::Ref& r : refs[i]) {
-          if (r.tx != tx || r.ty != ty) continue;
+      // ONE RESOLVE PER TILE. The pipe clears on a tile's FIRST reference and
+      // resolves on its LAST, so a tile several triangles share is written to
+      // the framebuffer once with all of them composed into it. Collect the
+      // tile's references first, because the oracle must know which is last.
+      std::vector<size_t> mine;
+      for (size_t i = 0; i < tris.size(); ++i)
+        for (const zref::Binner::Ref& r : refs[i])
+          if (r.tx == tx && r.ty == ty) mine.push_back(i);
+      if (mine.empty()) continue;
+
+      for (size_t k = 0; k < mine.size(); ++k) {
+        {
+          const size_t i = mine[k];
+          const bool first = (k == 0);
+          const bool last = (k + 1 == mine.size());
           PipeJob j;
           j.tri.ax = tris[i].ax;
           j.tri.ay = tris[i].ay;
@@ -334,7 +380,8 @@ std::vector<uint16_t> expect_frame(const std::vector<BinTri>& tris, const Look& 
           j.texel_rgb = lk.texel_rgb;
           j.texel_a = lk.texel_a;
           j.texel_idx = lk.texel_idx;
-          const PipeExpect e = pipe_oracle(store, ez, j);
+          const PipeExpect e = pipe_oracle(store, ez, j, first, last);
+          if (!last) continue;
           for (int row = 0; row < kPipeTile; ++row)
             for (int col = 0; col < kPipeTile; ++col) {
               const int sx = tx * kPipeTile + col;
@@ -435,6 +482,23 @@ int main(int argc, char** argv) {
                 d.mem.refused);
     zhao::check(top.fragment_error_o == 0, "no fragment error", 0, (uint32_t)top.fragment_error_o);
     zhao::check(top.overflow_o == 0, "the arena did not overflow", 0, (uint32_t)top.overflow_o);
+
+    // THE FRAME TRANSACTION. `busy_o` falls when the last beat is ACCEPTED;
+    // `drained_o` requires every word handed to the guard to have been RETIRED
+    // by the arbiter. A framebuffer slot may be published on the second and
+    // never on the first, which is the whole point of carrying two counts.
+    zhao::check(top.fb_issued_words_o == top.fb_retired_words_o,
+                "every word issued to the guard was retired by the arbiter",
+                (uint32_t)top.fb_issued_words_o, (uint32_t)top.fb_retired_words_o);
+    zhao::check(top.fb_issued_words_o == (uint32_t)top.pixels_written_o,
+                "and the word ledger agrees with the pixel count", (uint32_t)top.pixels_written_o,
+                (uint32_t)top.fb_issued_words_o);
+    zhao::check(top.fb_drained_o == 1, "so the frame is drained and may be published", 1,
+                (uint32_t)top.fb_drained_o);
+    zhao::check(top.fb_fatal_o == 0, "and nothing made it unpublishable", 0,
+                (uint32_t)top.fb_fatal_o);
+    zhao::check(!d.mem.drained_too_early, "drained never led retirement on any clock of the frame",
+                1, d.mem.drained_too_early ? 0 : 1);
     printf("   MEASURED: %u pixels in %u bursts, %ld clocks, %u job stalls, %u fb stalls\n",
            (uint32_t)top.pixels_written_o, (uint32_t)top.bursts_issued_o, d.clocks,
            (uint32_t)top.job_stall_clocks_o, (uint32_t)top.fb_stall_clocks_o);
@@ -442,7 +506,7 @@ int main(int argc, char** argv) {
            (uint32_t)top.px_taken_o);
   }
 
-  printf("== section 2: two overlapping triangles, and the later write wins ==\n");
+  printf("== section 2: two overlapping triangles COMPOSE in one tile ==\n");
   {
     std::vector<BinTri> tris;
     BinTri a, b;
@@ -459,8 +523,13 @@ int main(int argc, char** argv) {
     zhao::check(d.drain(), "the frame drains", 1, 1);
 
     const std::vector<uint16_t> want = expect_frame(tris, lk);
+    // THIS USED TO SAY "the later write wins". It did, and that was the defect:
+    // a tile both triangles referenced was rendered twice and the second job's
+    // clear erased the first. The pipe clears once per tile and resolves once
+    // now, so the two triangles COMPOSE -- 29 tiles written from 40 jobs
+    // instead of 40 writes over 29 tiles.
     zhao::check(compare(d, want, "section 2") == 0,
-                "the composed image matches the oracles applied in job order", 1, 1);
+                "both triangles are in the picture, composed in one resolve per tile", 1, 1);
     zhao::check(top.fb_stream_error_o == 0, "the stream stayed contiguous", 0,
                 (uint32_t)top.fb_stream_error_o);
     printf("   MEASURED: %u pixels in %u bursts, %u jobs\n", (uint32_t)top.pixels_written_o,

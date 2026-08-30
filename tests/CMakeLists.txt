@@ -1866,6 +1866,85 @@ verilate(test_render_fb_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv)
+add_executable(test_geom_attrsetup_directed geometry/geom_attrsetup_directed.cpp)
+target_link_libraries(test_geom_attrsetup_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_attrsetup_directed
+  PREFIX Vzhao_geom_attrsetup
+  TOP_MODULE zhao_geom_attrsetup
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_attrsetup.sv)
+add_executable(test_raster_attrdiv_directed raster/raster_attrdiv_directed.cpp)
+target_link_libraries(test_raster_attrdiv_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_attrdiv_directed
+  PREFIX Vzhao_raster_attrdiv
+  TOP_MODULE zhao_raster_attrdiv
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv)
+add_test(NAME raster_attrdiv_directed COMMAND test_raster_attrdiv_directed)
+set_tests_properties(raster_attrdiv_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
+set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# The divide service, one elaborated build per UNITS. The sweep is the point:
+# a single divider measures 36 clocks and is ~6x short of a frame's depth
+# interpolation on its own, so how much divide the renderer needs is a
+# measurement against real hardware at each point, not an argument.
+foreach(div_units 1 2 4 8)
+  set(div_tgt test_raster_attrdiv_svc_u${div_units})
+  add_executable(${div_tgt} raster/raster_attrdiv_svc_directed.cpp)
+  target_link_libraries(${div_tgt} PRIVATE zhao_harness zhao_zref)
+  target_compile_definitions(${div_tgt} PRIVATE ZHAO_SVC_UNITS=${div_units})
+  verilate(${div_tgt}
+    PREFIX Vzhao_raster_attrdiv_svc
+    TOP_MODULE zhao_raster_attrdiv_svc
+    SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_svc.sv
+            ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv
+    VERILATOR_ARGS -GUNITS=${div_units})
+  add_test(NAME raster_attrdiv_svc_u${div_units} COMMAND ${div_tgt})
+  set_tests_properties(raster_attrdiv_svc_u${div_units}
+    PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+endforeach()
+
+add_executable(test_raster_attrinterp_directed raster/raster_attrinterp_directed.cpp)
+target_link_libraries(test_raster_attrinterp_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_attrinterp_directed
+  PREFIX Vzhao_raster_attrinterp
+  TOP_MODULE zhao_raster_attrinterp
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrinterp.sv)
+add_test(NAME raster_attrinterp_directed COMMAND test_raster_attrinterp_directed)
+set_tests_properties(raster_attrinterp_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_executable(test_geom_clip_attrswap_directed geometry/geom_clip_attrswap_directed.cpp)
+target_link_libraries(test_geom_clip_attrswap_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_clip_attrswap_directed
+  PREFIX Vzhao_geom_clip
+  TOP_MODULE zhao_geom_clip
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clip.sv)
+add_test(NAME geom_clip_attrswap_directed COMMAND test_geom_clip_attrswap_directed)
+set_tests_properties(geom_clip_attrswap_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# rcp_u24 for the raster: walked over its ENTIRE 16.7M input domain against the
+# frozen RCP24_FULL_HASH, so it is nightly rather than fast.
+add_executable(test_raster_rcp24_directed raster/raster_rcp24_directed.cpp)
+target_link_libraries(test_raster_rcp24_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_rcp24_directed
+  PREFIX Vzhao_raster_rcp24
+  TOP_MODULE zhao_raster_rcp24
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME raster_rcp24_directed COMMAND test_raster_rcp24_directed)
+set_tests_properties(raster_rcp24_directed PROPERTIES LABELS "nightly" TIMEOUT 1800)
+
+add_executable(test_raster_perspuv_directed raster/raster_perspuv_directed.cpp)
+target_link_libraries(test_raster_perspuv_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_perspuv_directed
+  PREFIX Vzhao_raster_perspuv
+  TOP_MODULE zhao_raster_perspuv
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME raster_perspuv_directed COMMAND test_raster_perspuv_directed)
+set_tests_properties(raster_perspuv_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
@@ -3302,6 +3381,22 @@ verilate(test_texture_tmu_directed
   PREFIX Vzhao_texture_tmu
   TOP_MODULE zhao_texture_tmu
   SOURCES ${ZHAO_TEXTURE_TMU_SV})
+# The v2 sampler against the SERIAL block's own suite. Same ports, same checks,
+# same untouched zref::Tmu oracle -- so a difference is a defect in the new
+# implementation and nothing else.
+add_executable(test_texture_tmu_pipe texture/texture_tmu_directed.cpp)
+target_compile_definitions(test_texture_tmu_pipe PRIVATE ZHAO_TMU_PIPE=1 ZHAO_FILT_LANES=2)
+target_link_libraries(test_texture_tmu_pipe PRIVATE zhao_harness zhao_zref)
+verilate(test_texture_tmu_pipe
+  PREFIX Vzhao_texture_tmu_pipe
+  TOP_MODULE zhao_texture_tmu_pipe
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp.sv)
+# Green as of 2026-08-30: the v2 sampler passes all 79 of the serial block's
+# checks against the same untouched zref::Tmu, so it joins the shared gates.
+add_test(NAME texture_tmu_pipe COMMAND test_texture_tmu_pipe)
+set_tests_properties(texture_tmu_pipe PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_test(NAME texture_tmu_directed COMMAND test_texture_tmu_directed)
 set_tests_properties(texture_tmu_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
@@ -4119,6 +4214,22 @@ set(ZHAO_SHELL_RTL
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_arbiter.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_frameblit.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_slotmgr.sv
+    # RENDER: the shell drives the arbiter ENGINE0 port now, so its whole cone
+    # is part of the synthesizable shell.
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fbwrite.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_bin_pipe.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_shell_top.sv)
 
 # synthesizable-cone lint (the model/tb are excluded by construction)

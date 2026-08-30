@@ -96,6 +96,7 @@ struct GuardHarness {
     top.map_valid = m.valid;
     top.blit_slot = m.blit_slot;
     top.blit_span = m.blit_span;
+    top.fb_writer = (m.writer == GuardMap::WRITER_ENGINE0) ? 1 : 0;
     top.g_valid = 1;
     top.g_write = r.write;
     top.g_client = r.client;
@@ -205,11 +206,38 @@ int main(int argc, char** argv) {
     h.request(MemoryGuard::Req{true, false, MemoryGuard::BLIT_DMA, 0x0000, 64, full_be(64)}, map);
   }
 
-  // ---- engines/debug own nothing ---------------------------------------------
+  // ---- the framebuffer-writer lease -------------------------------------------
+  // Two blocks write an inactive framebuffer slot now -- DEBUG.FRAMEBLIT and
+  // RASTER.FBWRITE -- and they share the SPATIAL window but not the TEMPORAL
+  // permission. The lease names ONE writer; the other is refused exactly as a
+  // request outside the window is. That is the whole difference between this
+  // and simply granting ENGINE0 the blit's window, which would have let both
+  // write the same slot in the same frame.
   {
-    for (unsigned c = MemoryGuard::ENGINE0; c <= MemoryGuard::DEBUG; c++) {
+    GuardMap eng{true, 0, 0x0003C000, GuardMap::WRITER_ENGINE0};
+
+    // The lease holder may write, and only inside the window.
+    h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, 0x0000, 64, full_be(64)}, eng);
+    h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, 0x0003BFC0, 64, full_be(64)}, eng);
+    h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, 0x0003C000, 64, full_be(64)}, eng);
+
+    // OWNER MISMATCH, BOTH WAYS. The engine holds the lease, so the blit is
+    // refused; the blit holds it, so the engine is refused. Neither is an
+    // address error -- both requests are squarely inside the window, which is
+    // exactly why a window check alone would have passed them.
+    h.request(MemoryGuard::Req{true, true, MemoryGuard::BLIT_DMA, 0x0000, 64, full_be(64)}, eng);
+    h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, 0x0000, 64, full_be(64)}, map);
+
+    // The engine reads nothing and writes nothing without a lease.
+    h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE0, 0x0000, 64, full_be(64)}, eng);
+    GuardMap none{false, 0, 0x0003C000, GuardMap::WRITER_ENGINE0};
+    h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, 0x0000, 64, full_be(64)}, none);
+
+    // ENGINE1 and DEBUG still own nothing, under either lease.
+    for (unsigned c = MemoryGuard::ENGINE1; c <= MemoryGuard::DEBUG; c++) {
       h.request(MemoryGuard::Req{true, false, c, 0x0000, 64, full_be(64)}, map);
       h.request(MemoryGuard::Req{true, true, c, 0x0000, 64, full_be(64)}, map);
+      h.request(MemoryGuard::Req{true, true, c, 0x0000, 64, full_be(64)}, eng);
     }
   }
 

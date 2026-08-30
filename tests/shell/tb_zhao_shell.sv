@@ -173,6 +173,35 @@ module tb_zhao_shell (
     .phy_dq_o   (phy_dq_o),
     .phy_dq_oe_o(phy_dq_oe),
     .phy_dqm_o  (phy_dqm),
+    // ---- RENDER, tied off ------------------------------------------------
+    // This bench drives the shell CMD/MEM/VIDEO path and does not draw. The
+    // render port is held quiet rather than left dangling, so a future bench
+    // that DOES draw has to name every pin it uses instead of inheriting an X.
+    .render_frame_begin_i(1'b0), .render_frame_end_i(1'b0),
+    .render_grid_w_i(6'd0), .render_grid_h_i(6'd0),
+    .render_tri_valid_i(1'b0), .render_tri_ready_o(),
+    .render_kx0_i(23'sd0), .render_ky0_i(23'sd0), .render_kc0_i(48'sd0),
+    .render_kx1_i(23'sd0), .render_ky1_i(23'sd0), .render_kc1_i(48'sd0),
+    .render_kx2_i(23'sd0), .render_ky2_i(23'sd0), .render_kc2_i(48'sd0),
+    .render_tl_i(3'd0),
+    .render_ax_i(21'sd0), .render_ay_i(21'sd0),
+    .render_bx_i(21'sd0), .render_by_i(21'sd0),
+    .render_cx_i(21'sd0), .render_cy_i(21'sd0),
+    .render_min_x_i(12'sd0), .render_max_x_i(12'sd0),
+    .render_min_y_i(12'sd0), .render_max_y_i(12'sd0),
+    .render_src_id_i(16'd0),
+    .render_fill_word_i(64'd0), .render_clear_word_i(64'd0),
+    .render_state_i(32'd0), .render_src_a_i(8'd0),
+    .render_texel_rgb_i(24'd0), .render_texel_a_i(8'd0), .render_texel_idx_i(8'd0),
+    .render_fb_base_i(27'd0), .render_fb_stride_i(16'd0),
+    // The lease names the blit, which is what this bench drives.
+    .fb_writer_i(1'b0),
+    .render_drain_done_o(), .render_busy_o(),
+    .render_pixels_o(), .render_bursts_o(),
+    .render_stream_error_o(), .render_overflow_o(), .render_fragment_error_o(),
+    .render_drained_o(), .render_fatal_o(),
+    .render_issued_words_o(), .render_retired_words_o(),
+
     .phy_dq_i   (phy_dq_i)
   );
 

@@ -34,6 +34,15 @@
 > are marked unproved. The endpoint identity is still exact, but it needs its
 > own proof or a citation to the exhaustive equivalence, not to a green P3.
 >
+> **AND A SECOND CORRECTION, 2026-08-30 (ruling 8).** This file treats "one
+> primary sample" as a settled law and reasons from it. It is the cheap DEFAULT
+> and must NOT be read as a permanent hardware maximum: the amended rule allows a
+> bounded recipe of up to THREE samples through the same primary TMU, because
+> Sacrifice's sampled DETAIL layer has no substitute in this machine (the
+> lightmap does -- the 33x33 vertex tint -- and AUX returns {tag, strength}, not
+> RGB). See reports/MATERIAL_ARCHITECTURE.md. The three-sample known frame is
+> 1,094,600 samples, which is tight but not obviously impossible.
+>
 > The conclusion that survives: the feature set is broadly right, the WORKLOAD
 > MODEL was wrong, the one-request-at-a-time implementation is wrong, and the
 > expensive filtered path is wrongly in series with the dominant nearest one.

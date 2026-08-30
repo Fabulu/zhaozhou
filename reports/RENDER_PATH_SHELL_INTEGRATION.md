@@ -75,6 +75,23 @@ Changing the RTL alone put the hardware and its oracle out of step, and
 **The test did its job.** The RTL and formal edits are reverted; the tree is
 green.
 
+### ANSWERED 2026-08-30 — see reports/RENDERER_ARCHITECTURE.md
+
+**Share the window. Do not create a second framebuffer map entry.** But not with
+the unconditional line below either: share the SPATIAL window, not the TEMPORAL
+permission. VIDEO.SLOTMGR already owns a single framebuffer lease with slot and
+generation and formally guarantees one at a time — generalise that lease to name
+its writer, and have MEM.GUARD check `lease_owner` as well as the window. A v1
+frame uses the renderer or DebugFrameBlit, never both; meeting both writer
+classes faults the frame and the slot is released dirty rather than published.
+
+That also corrects this file's "two writers are CMD.SCHEDULER's problem": the
+split is CMD.SCHEDULER selects the writer, VIDEO.SLOTMGR owns the lease,
+MEM.GUARD enforces capability and bounds, and the writer proves its traffic
+retired before publication.
+
+The original question is kept below for the record.
+
 ### The question for the owner
 
 **Should the render engine share the blit's framebuffer window, or own its own

@@ -154,19 +154,32 @@ inline zref::FragmentPipeline::Frag pipe_frag(const PipeJob& j, uint8_t addr) {
  * reset the depth floor would show up as a divergence on the SECOND tile
  * rather than being hidden by a fresh model per job.
  */
-inline PipeExpect pipe_oracle(zref::TileStore& store, zref::EarlyZ& ez, const PipeJob& j) {
+// ONE LIFECYCLE PER TILE. `first` clears the bank and begins the tile in
+// early-Z; `last` swaps and resolves. Both default to true, which is the
+// one-clear-one-triangle-one-resolve shape the block test drives and which this
+// oracle described exclusively until GEOM.BINNER started saying where a
+// reference sits in its tile's list.
+//
+// A tile with several triangles calls this once per triangle with first on the
+// first and last on the last, and the returned PipeExpect is only meaningful
+// for the LAST one -- the earlier calls advance the store and the early-Z state
+// so the later triangles see what their predecessors wrote.
+inline PipeExpect pipe_oracle(zref::TileStore& store, zref::EarlyZ& ez, const PipeJob& j,
+                              bool first = true, bool last = true) {
   PipeExpect e;
   const zref::EdgeWalk::Cov cov = zref::EdgeWalk::tile(j.tri, j.tx, j.ty);
   e.count = cov.count;
   e.degenerate = cov.degenerate;
 
-  zref::TileStore::Cycle c;
-  c.clear = true;
-  c.clear_data = j.clear;
-  store.step(c);
-  // Same cycle, same event: the tile now holds the clear word everywhere, so
-  // the clear word's DEPTH field is exactly the early-Z floor.
-  ez.tile_begin(PipeWord::unpack(j.clear).depth);
+  if (first) {
+    zref::TileStore::Cycle c;
+    c.clear = true;
+    c.clear_data = j.clear;
+    store.step(c);
+    // Same cycle, same event: the tile now holds the clear word everywhere, so
+    // the clear word's DEPTH field is exactly the early-Z floor.
+    ez.tile_begin(PipeWord::unpack(j.clear).depth);
+  }
 
   const int front = store.front();
   for (int row = 0; row < kPipeTile; ++row) {
@@ -197,6 +210,10 @@ inline PipeExpect pipe_oracle(zref::TileStore& store, zref::EarlyZ& ez, const Pi
       store.step(w);
     }
   }
+
+  // An earlier triangle of a tile does not swap and does not resolve; its
+  // pixels stay in the front bank for the next one to read.
+  if (!last) return e;
 
   const int written = store.front();  // the bank the swap is about to retire
   zref::TileStore::Cycle s;
@@ -410,6 +427,16 @@ class PipeDev {
     top_.job_by_i = mask21(j.tri.by);
     top_.job_cx_i = mask21(j.tri.cx);
     top_.job_cy_i = mask21(j.tri.cy);
+    // ONE TRIANGLE PER TILE, WHICH IS WHAT THIS BLOCK TEST DRIVES. `job_first_i`
+    // and `job_last_i` let a caller accumulate several triangles into one tile
+    // before resolving; a caller that asserts BOTH gets exactly the
+    // one-clear-one-triangle-one-resolve shape this file has always tested, so
+    // every check below is unchanged and still means what it did.
+    //
+    // The COMPOSED test drives them properly: tests/render/render_pipe_directed
+    // hands the pipe a real tile list from GEOM.BINNER.
+    top_.job_first_i = 1;
+    top_.job_last_i = 1;
     top_.job_tile_x_i = mask12(j.tx);
     top_.job_tile_y_i = mask12(j.ty);
     top_.job_fill_word_i = j.fill;

@@ -55,7 +55,11 @@ module formal_mem_guard
   // free region map (sampled once at cycle 0, held constant below)
   input logic        env_map_valid_i,
   input logic        env_blit_slot_i,
-  input logic [31:0] env_blit_span_i
+  input logic [31:0] env_blit_span_i,
+  // Which writer the lease names. Free, and held constant for the trace like
+  // the rest of the map, because a lease that changed mid-frame is a different
+  // property from the one this file proves.
+  input logic        env_fb_writer_i
 );
 
   // ------------------------------------------------------- reset discipline
@@ -80,11 +84,13 @@ module formal_mem_guard
   logic        env_map_valid;
   logic        env_blit_slot;
   logic [31:0] env_blit_span;
+  logic        env_fb_writer;
   always_ff @(posedge clk) begin
     if (cyc == 4'd0) begin
       env_map_valid <= env_map_valid_i;
       env_blit_slot <= env_blit_slot_i;
       env_blit_span <= env_blit_span_i;
+      env_fb_writer <= env_fb_writer_i;
     end
   end
 
@@ -110,7 +116,7 @@ module formal_mem_guard
     .clk, .rst_n,
     .req, .rsp,
     .map_valid (env_map_valid), .blit_slot (env_blit_slot),
-    .blit_span (env_blit_span),
+    .blit_span (env_blit_span), .fb_writer (env_fb_writer),
     .arb_req, .arb_rsp,
     .guard_violation, .guard_violations, .guard_violation_req
   );
@@ -133,17 +139,29 @@ module formal_mem_guard
       a2_len: assert (arb_req.len >= 7'd1 && arb_req.len <= 7'd64);
 
       // A1 region: exactly one of the two Phase-2 ownership laws
+      // A1 region: exactly one of the three ownership laws. ENGINE0 is
+      // RASTER.FBWRITE and it is held to the SAME window as the blit, byte for
+      // byte -- write-only, lease-gated, inside the clamped slot span -- so the
+      // no-escape guarantee this file exists for is unchanged in MEANING: a
+      // third client was admitted to an EXISTING window, not a third window
+      // opened. What separates the two writers is `fb_writer`, and each is
+      // required to hold the lease.
       a1_region: assert (
            (arb_req.client == ZHAO_CLIENT_SCANOUT && !arb_req.write
             && (fwd_in_slot0 || fwd_in_slot1))
         || (arb_req.client == ZHAO_CLIENT_BLIT_DMA && arb_req.write
-            && env_map_valid
+            && env_map_valid && !env_fb_writer
+            && (fwd_addr32 >= blit_base)
+            && (fwd_end32  <= blit_base + blit_span_eff))
+        || (arb_req.client == ZHAO_CLIENT_ENGINE0 && arb_req.write
+            && env_map_valid && env_fb_writer
             && (fwd_addr32 >= blit_base)
             && (fwd_end32  <= blit_base + blit_span_eff)));
 
-      // engines/debug own nothing in Phase 2 and must never be forwarded
+      // ENGINE1 and DEBUG still own nothing and must never be forwarded
       a1_client: assert (arb_req.client == ZHAO_CLIENT_SCANOUT
-                      || arb_req.client == ZHAO_CLIENT_BLIT_DMA);
+                      || arb_req.client == ZHAO_CLIENT_BLIT_DMA
+                      || arb_req.client == ZHAO_CLIENT_ENGINE0);
 
       // a forward NEVER escapes the two frame-buffer slots, whatever the map
       a1_map: assert (fwd_in_slot0 || fwd_in_slot1);
@@ -170,6 +188,9 @@ module formal_mem_guard
       c_forward:        cover (arb_req.valid);
       c_forward_scan:   cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_SCANOUT);
       c_forward_blit:   cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_BLIT_DMA);
+      // Without this the ENGINE0 arm of a1_region could be vacuous, which is
+      // the exact failure this file's header records having shipped once.
+      c_forward_engine: cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_ENGINE0);
       c_accept_ok:      cover (rsp.ok);
       c_violation:      cover (guard_violation);
       c_handshake:      cover (arb_req.valid && arb_rsp.grant);

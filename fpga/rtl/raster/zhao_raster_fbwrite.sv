@@ -89,6 +89,20 @@ module zhao_raster_fbwrite
 
     input  var logic        frame_end_i,
 
+    // ---- retirement, which is the only thing that means "the write landed" --
+    // The arbiter reissues credits as bursts RETIRE. Accepting a beat means the
+    // write queue took it; it says nothing about whether SDRAM has it. A
+    // framebuffer slot must never be published on an acceptance count, and this
+    // block used to expose nothing else -- `frame_end_i` merely reset counters.
+    //
+    // This is DEBUG.FRAMEBLIT's already-ratified transaction law, applied to
+    // the renderer: accepted is not retired; failure stops new side effects;
+    // issued traffic drains; a dirty inactive slot is acceptable; publication
+    // requires every intended byte to have retired.
+    //
+    // ENFORCED-BY: tests/render/render_fb_directed.cpp:main
+    input  var logic [ 7:0] retire_words_i,
+
     // ---- MEM.GUARD, exactly as zhao_debug_frameblit drives it -------------
     output var zhao_guard_req_t guard_req_o,
     input  var zhao_guard_rsp_t guard_rsp_i,
@@ -102,6 +116,18 @@ module zhao_raster_fbwrite
     output var logic [31:0] bursts_issued_o,
     output var logic [31:0] stall_clocks_o,   // pixel offered, not accepted
     output var logic        stream_error_o,   // sticky: a non-contiguous pixel
+
+    // ---- the frame transaction ---------------------------------------------
+    output var logic [31:0] issued_words_o,   // 16-bit words handed to the guard
+    output var logic [31:0] retired_words_o,  // ...that the arbiter has retired
+    // Every issued word retired and nothing in flight. THIS is the signal a
+    // frame controller may publish a slot on; `busy_o` is not.
+    output var logic        drained_o,
+    // Sticky. A guard denial or a broken pixel stream means the frame's picture
+    // is wrong, so the slot must be released dirty rather than published. The
+    // old behaviour -- drop the refused row and carry on -- is right for a
+    // standalone seam test and wrong for a frame.
+    output var logic        fatal_error_o,
     output var logic        busy_o
 );
 
@@ -201,19 +227,31 @@ module zhao_raster_fbwrite
       bursts_issued_o  <= 32'd0;
       stall_clocks_o   <= 32'd0;
       stream_error_o   <= 1'b0;
+      issued_words_o   <= 32'd0;
+      retired_words_o  <= 32'd0;
+      fatal_error_o    <= 1'b0;
       for (int unsigned k = 0; k < ROW_PX; k++) begin
         row_r[k] <= 16'd0;
         out_r[k] <= 16'd0;
       end
     end else begin
       if (frame_end_i) begin
-        // Counters are per-frame windows for the harness; the stream error is
-        // NOT cleared here, because a frame that produced a bad address is not
-        // made good by ending.
+        // Counters are per-frame windows for the harness; the stream error and
+        // the fatal latch are NOT cleared here, because a frame that produced a
+        // bad address is not made good by ending. The word ledger is not
+        // cleared either -- it has to balance ACROSS the drain that follows
+        // frame_end, which is exactly when publication is decided.
         pixels_written_o <= 32'd0;
         bursts_issued_o  <= 32'd0;
         stall_clocks_o   <= 32'd0;
       end
+
+      // The arbiter's credit stream. This is the only statement in the block
+      // that means a write actually landed.
+      retired_words_o <= retired_words_o + 32'({24'd0, retire_words_i});
+
+      // A broken pixel stream is fatal to the frame, not just to a row.
+      if (stream_error_o) fatal_error_o <= 1'b1;
 
       if (px_valid_i && !px_ready_o) stall_clocks_o <= stall_clocks_o + 32'd1;
 
@@ -256,12 +294,17 @@ module zhao_raster_fbwrite
               w_state_r <= W_DATA;
               beat_r    <= 3'd0;
               bursts_issued_o <= bursts_issued_o + 32'd1;
+              // Words, not bytes: the arbiter's credits are 16-bit words and
+              // the two ledgers have to be in the same unit to balance.
+              issued_words_o  <= issued_words_o + 32'({27'd0, out_n_r});
             end else begin
-              // The guard REFUSED: the write is outside the granted region and
-              // nothing was written. Dropping the row is correct -- the guard
-              // has already counted and latched the violation, and inventing a
-              // retry here would write it somewhere it does not belong.
-              w_state_r <= W_IDLE;
+              // The guard REFUSED: the write is outside the leased region and
+              // nothing was written. Dropping the row is still correct -- the
+              // guard has counted and latched the violation, and a retry would
+              // write it somewhere it does not belong -- but the FRAME is now
+              // unpublishable, and that is what the latch below says.
+              w_state_r     <= W_IDLE;
+              fatal_error_o <= 1'b1;
             end
           end
         end
@@ -294,6 +337,15 @@ module zhao_raster_fbwrite
       endcase
     end
   end
+
+  // DRAINED: every word this block handed to the guard has been retired by the
+  // arbiter, and nothing is in flight. A frame controller publishes on THIS.
+  //
+  // `busy_o` is not the same claim and must not be used for it: busy falls when
+  // the last beat is ACCEPTED, which is several stages before the byte is in
+  // SDRAM.
+  assign drained_o = !busy_o && (w_state_r == W_IDLE)
+                   && (issued_words_o == retired_words_o);
 
 endmodule : zhao_raster_fbwrite
 

@@ -37,6 +37,26 @@ would have cost a shipped duplicate.
 
 ---
 
+> ## FIXED 2026-08-30. The decision was option 1.
+>
+> The owner chose "accumulate several triangles into one tile before resolving",
+> and it is built. GEOM.BINNER now emits `job_first_o` and `job_last_o` from its
+> drain cursor -- which already knew where a reference sat in a tile's list --
+> and RASTER.TILE_PIPE clears the front bank on the FIRST reference of a tile
+> and swaps-and-resolves on the LAST.
+>
+>     section 2, before   40 resolves over 29 tiles, the second clear erasing
+>                         the first triangle
+>     section 2, after    29 resolves from 40 jobs, both triangles composed
+>     framebuffer         10,240 px in 640 bursts -> 7,424 px in 464 bursts
+>
+> A caller that ties both bits high gets exactly the old behaviour, which is why
+> the tile pipe's own 74 directed checks are unchanged and still mean what they
+> did. `pipe_oracle` grew the same two flags so the oracle models the machine.
+>
+> The section below is kept as the record of how it was found and what the three
+> options were.
+
 ## The finding that matters: a shared tile is rendered TWICE, and the second render erases the first
 
 `zhao_raster_tile_pipe` states its own scope at the top of the file: **"no

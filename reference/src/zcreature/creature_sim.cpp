@@ -446,85 +446,85 @@ const CreatureLightRig kCreatureLightCorrectedToplight1{
 // Q16.16 surface-to-source direction fixed in world space. Opposing sky/fill
 // and ambient open the side planes without erasing the diagonal key.
 const CreatureLightRig kCreatureLightDiagonalDaylight{
-    -40000, 40000, -33000,    // clear top-diagonal sun from -X/-Z
-    30000, 50000, 30000,      // cool opposing upper sky
-    26214, 27525, 30147,      // ambient: .40, .42, .46
-    40632,                    // white key: .62
-    10486, 13107, 18350};     // cool sky fill: .16, .20, .28
+    -40000, 40000, -33000,  // clear top-diagonal sun from -X/-Z
+    30000,  50000, 30000,   // cool opposing upper sky
+    26214,  27525, 30147,   // ambient: .40, .42, .46
+    40632,                  // white key: .62
+    10486,  13107, 18350};  // cool sky fill: .16, .20, .28
 
 const CreatureLightRig kCreatureLightDiagonalOpenSky{
-    36000, 42000, -35000,     // broad top-diagonal daylight from +X/-Z
-    -30000, 55000, 19000,     // high opposing blue sky
-    31457, 33423, 36700,      // ambient: .48, .51, .56
-    31457,                    // soft white key: .48
-    11796, 15073, 20972};     // open blue fill: .18, .23, .32
+    36000,  42000, -35000,  // broad top-diagonal daylight from +X/-Z
+    -30000, 55000, 19000,   // high opposing blue sky
+    31457,  33423, 36700,   // ambient: .48, .51, .56
+    31457,                  // soft white key: .48
+    11796,  15073, 20972};  // open blue fill: .18, .23, .32
 
 const CreatureLightRig kCreatureLightDiagonalWarmCross{
-    -46000, 35000, -31000,    // low warm-side top diagonal from -X/-Z
-    45000, 35000, 32000,      // strong opposing top-diagonal crossfill
-    30147, 28836, 27525,      // warm ambient: .46, .44, .42
-    39322,                    // white key: .60
-    29491, 24904, 18350};     // warm crossfill: .45, .38, .28
+    -46000, 35000, -31000,  // low warm-side top diagonal from -X/-Z
+    45000,  35000, 32000,   // strong opposing top-diagonal crossfill
+    30147,  28836, 27525,   // warm ambient: .46, .44, .42
+    39322,                  // white key: .60
+    29491,  24904, 18350};  // warm crossfill: .45, .38, .28
 
 const CreatureLightRig kCreatureLightDiagonalCoolCross{
-    43000, 36000, 35000,      // top diagonal from +X/+Z
-    -45000, 35000, -32000,    // strong opposing top-diagonal crossfill
-    26214, 29491, 36700,      // cool ambient: .40, .45, .56
-    38011,                    // white key: .58
-    16384, 24904, 36045};     // blue crossfill: .25, .38, .55
+    43000,  36000, 35000,   // top diagonal from +X/+Z
+    -45000, 35000, -32000,  // strong opposing top-diagonal crossfill
+    26214,  29491, 36700,   // cool ambient: .40, .45, .56
+    38011,                  // white key: .58
+    16384,  24904, 36045};  // blue crossfill: .25, .38, .55
 
 const CreatureLightRig kCreatureLightDiagonalSoftCloud{
-    -31000, 44000, -37000,    // softened top diagonal through cloud
-    27000, 57000, 17000,      // broad high sky response
-    35389, 36700, 39322,      // open ambient: .54, .56, .60
-    24904,                    // soft white key: .38
-    11796, 13107, 16384};     // restrained neutral-cool fill: .18, .20, .25
+    -31000, 44000, -37000,  // softened top diagonal through cloud
+    27000,  57000, 17000,   // broad high sky response
+    35389,  36700, 39322,   // open ambient: .54, .56, .60
+    24904,                  // soft white key: .38
+    11796,  13107, 16384};  // restrained neutral-cool fill: .18, .20, .25
 
 const CreatureLightRig kCreatureLightDiagonalHardSun{
-    47000, 33000, -32000,     // hard low-diagonal sun from +X/-Z
-    -38000, 50000, 18000,     // readable upper opposing sky
-    25559, 26870, 29491,      // ambient: .39, .41, .45
-    49807,                    // hard white key: .76
-    16384, 18350, 22282};     // cool side fill: .25, .28, .34
+    47000,  33000, -32000,  // hard low-diagonal sun from +X/-Z
+    -38000, 50000, 18000,   // readable upper opposing sky
+    25559,  26870, 29491,   // ambient: .39, .41, .45
+    49807,                  // hard white key: .76
+    16384,  18350, 22282};  // cool side fill: .25, .28, .34
 
 const CreatureLightRig kCreatureLightDiagonalCloudbreak{
-    -43000, 38000, 32000,     // strong top-diagonal cloudbreak from -X/+Z
-    46000, 36000, -30000,     // warm opposing top-diagonal bounce
-    28836, 29491, 31457,      // ambient: .44, .45, .48
-    45875,                    // white key: .70
-    27525, 22282, 17039};     // warm fill: .42, .34, .26
+    -43000, 38000, 32000,   // strong top-diagonal cloudbreak from -X/+Z
+    46000,  36000, -30000,  // warm opposing top-diagonal bounce
+    28836,  29491, 31457,   // ambient: .44, .45, .48
+    45875,                  // white key: .70
+    27525,  22282, 17039};  // warm fill: .42, .34, .26
 
 const CreatureLightRig kCreatureLightDiagonalSilverMoon{
-    35000, 39000, 40000,      // silver top diagonal from +X/+Z
-    -42000, 39000, -33000,    // opposing top-diagonal blue sky
-    26214, 29491, 38011,      // moon ambient: .40, .45, .58
-    34079,                    // white key: .52
-    13107, 24904, 38011};     // silver-blue fill: .20, .38, .58
+    35000,  39000, 40000,   // silver top diagonal from +X/+Z
+    -42000, 39000, -33000,  // opposing top-diagonal blue sky
+    26214,  29491, 38011,   // moon ambient: .40, .45, .58
+    34079,                  // white key: .52
+    13107,  24904, 38011};  // silver-blue fill: .20, .38, .58
 
 const CreatureLightRig kCreatureLightDiagonalBroadBounce{
-    -37000, 43000, 33000,     // broad top diagonal from -X/+Z
-    35000, 52000, -19000,     // generous upper opposing bounce
-    27525, 28180, 30147,      // neutral ambient: .42, .43, .46
-    35389,                    // white key: .54
-    19661, 20972, 23593};     // broad neutral-cool fill: .30, .32, .36
+    -37000, 43000, 33000,   // broad top diagonal from -X/+Z
+    35000,  52000, -19000,  // generous upper opposing bounce
+    27525,  28180, 30147,   // neutral ambient: .42, .43, .46
+    35389,                  // white key: .54
+    19661,  20972, 23593};  // broad neutral-cool fill: .30, .32, .36
 
 const CreatureLightRig kCreatureLightDiagonalRoseDusk{
-    49000, 30000, -32000,     // low top diagonal at rose dusk from +X/-Z
-    -47000, 33000, 31000,     // opposing top-diagonal rose bounce
-    34079, 30147, 34734,      // rose ambient: .52, .46, .53
-    40632,                    // white key: .62
-    30147, 22282, 27525};     // rose fill: .46, .34, .42
+    49000,  30000, -32000,  // low top diagonal at rose dusk from +X/-Z
+    -47000, 33000, 31000,   // opposing top-diagonal rose bounce
+    34079,  30147, 34734,   // rose ambient: .52, .46, .53
+    40632,                  // white key: .62
+    30147,  22282, 27525};  // rose fill: .46, .34, .42
 
 // Dim neutral-cool daylight for the moving-source inspection clip. The local
 // source is the subject, so this rig preserves form and pigment without
 // competing with it. Like every alternative rig, it is selected only by reel
 // tooling and never becomes the process default.
 const CreatureLightRig kCreatureLightMovingInspection{
-    43000, 36000, 35000,      // same honest top diagonal as Cool Cross
-    -45000, 35000, -32000,    // restrained opposing sky direction
-    12452, 14418, 18350,      // dim cool ambient: .19, .22, .28
-    15729,                    // dim white sunlight: .24
-    4588, 6554, 9830};        // faint blue fill: .07, .10, .15
+    43000,  36000, 35000,   // same honest top diagonal as Cool Cross
+    -45000, 35000, -32000,  // restrained opposing sky direction
+    12452,  14418, 18350,   // dim cool ambient: .19, .22, .28
+    15729,                  // dim white sunlight: .24
+    4588,   6554,  9830};   // faint blue fill: .07, .10, .15
 
 const CreatureLightRig* g_creature_light_rig = &kCreatureLightBaseline;
 const CreaturePointLight* g_creature_point_light = nullptr;
@@ -612,18 +612,16 @@ struct PointDirection {
 // Deterministic world-space source sample. Distance is computed in the same raw
 // Q16.16 world coordinates as posed vertices; one integer square root serves
 // both direction and falloff, so there is no camera input and no floating point.
-inline PointDirection point_direction(const CreaturePointLight& p,
-                                      int32_t wx, int32_t wy, int32_t wz) {
+inline PointDirection point_direction(const CreaturePointLight& p, int32_t wx, int32_t wy,
+                                      int32_t wz) {
   const int64_t dx = static_cast<int64_t>(p.world_x) - wx;
   const int64_t dy = static_cast<int64_t>(p.world_y) - wy;
   const int64_t dz = static_cast<int64_t>(p.world_z) - wz;
-  const uint64_t mag2 = static_cast<uint64_t>(dx * dx) +
-                        static_cast<uint64_t>(dy * dy) +
+  const uint64_t mag2 = static_cast<uint64_t>(dx * dx) + static_cast<uint64_t>(dy * dy) +
                         static_cast<uint64_t>(dz * dz);
   if (mag2 == 0) return PointDirection{0, 1 << 16, 0, 1 << 16};
   const int64_t dist = static_cast<int64_t>(isqrt_u64(mag2));
-  if (dist >= p.outer_radius || p.outer_radius <= p.inner_radius)
-    return PointDirection{};
+  if (dist >= p.outer_radius || p.outer_radius <= p.inner_radius) return PointDirection{};
 
   const auto unit = [dist](int64_t d) {
     const int64_t bias = d >= 0 ? dist / 2 : -dist / 2;
@@ -633,50 +631,40 @@ inline PointDirection point_direction(const CreaturePointLight& p,
   const int32_t attenuation =
       dist <= p.inner_radius
           ? (1 << 16)
-          : static_cast<int32_t>(
-                ((static_cast<int64_t>(p.outer_radius) - dist) * 65536 +
-                 (p.outer_radius - p.inner_radius) / 2) /
-                (p.outer_radius - p.inner_radius));
+          : static_cast<int32_t>(((static_cast<int64_t>(p.outer_radius) - dist) * 65536 +
+                                  (p.outer_radius - p.inner_radius) / 2) /
+                                 (p.outer_radius - p.inner_radius));
   return PointDirection{unit(dx), unit(dy), unit(dz), attenuation};
 }
 
-inline int32_t point_vertex_response(const CreaturePointLight& p,
-                                     const mat3x4fx* palette, const SkinVertex& v,
-                                     int32_t wx, int32_t wy, int32_t wz) {
+inline int32_t point_vertex_response(const CreaturePointLight& p, const mat3x4fx* palette,
+                                     const SkinVertex& v, int32_t wx, int32_t wy, int32_t wz) {
   const PointDirection d = point_direction(p, wx, wy, wz);
   if (d.attenuation == 0) return 0;
   const int32_t lam = skin_normal_lambert(palette, v, d.x, d.y, d.z);
-  return static_cast<int32_t>(
-      (static_cast<int64_t>(lam) * d.attenuation + 32768) >> 16);
+  return static_cast<int32_t>((static_cast<int64_t>(lam) * d.attenuation + 32768) >> 16);
 }
 
-inline int32_t point_face_response(const CreaturePointLight& p,
-                                   int32_t ax, int32_t ay, int32_t az,
-                                   int32_t bx, int32_t by, int32_t bz,
-                                   int32_t cx, int32_t cy, int32_t cz,
-                                   SatLedger* L) {
-  const int32_t mx = static_cast<int32_t>(
-      (static_cast<int64_t>(ax) + bx + cx) / 3);
-  const int32_t my = static_cast<int32_t>(
-      (static_cast<int64_t>(ay) + by + cy) / 3);
-  const int32_t mz = static_cast<int32_t>(
-      (static_cast<int64_t>(az) + bz + cz) / 3);
+inline int32_t point_face_response(const CreaturePointLight& p, int32_t ax, int32_t ay, int32_t az,
+                                   int32_t bx, int32_t by, int32_t bz, int32_t cx, int32_t cy,
+                                   int32_t cz, SatLedger* L) {
+  const int32_t mx = static_cast<int32_t>((static_cast<int64_t>(ax) + bx + cx) / 3);
+  const int32_t my = static_cast<int32_t>((static_cast<int64_t>(ay) + by + cy) / 3);
+  const int32_t mz = static_cast<int32_t>((static_cast<int64_t>(az) + bz + cz) / 3);
   const PointDirection d = point_direction(p, mx, my, mz);
   if (d.attenuation == 0) return 0;
-  const int32_t lam = render::shade_flat_tri_dir(
-      ax, ay, az, bx, by, bz, cx, cy, cz, d.x, d.y, d.z, L);
-  return static_cast<int32_t>(
-      (static_cast<int64_t>(lam) * d.attenuation + 32768) >> 16);
+  const int32_t lam =
+      render::shade_flat_tri_dir(ax, ay, az, bx, by, bz, cx, cy, cz, d.x, d.y, d.z, L);
+  return static_cast<int32_t>((static_cast<int64_t>(lam) * d.attenuation + 32768) >> 16);
 }
 
-inline Shade3 creature_light(const CreatureLightRig& rig, int32_t lam_key,
-                             int32_t lam_fill, int32_t lam_point,
-                             const CreaturePointLight* point) {
+inline Shade3 creature_light(const CreatureLightRig& rig, int32_t lam_key, int32_t lam_fill,
+                             int32_t lam_point, const CreaturePointLight* point) {
   // The disabled default deliberately takes the old helper verbatim. This is
   // the byte-identity boundary for every ordinary subject and oracle call.
   if (point == nullptr) return creature_light(rig, lam_key, lam_fill);
-  const auto mix = [lam_key, lam_fill, lam_point](int32_t amb, int32_t key,
-                                                 int32_t fill, int32_t local) {
+  const auto mix = [lam_key, lam_fill, lam_point](int32_t amb, int32_t key, int32_t fill,
+                                                  int32_t local) {
     const int64_t k = (static_cast<int64_t>(key) * lam_key) >> 16;
     const int64_t f = (static_cast<int64_t>(fill) * lam_fill) >> 16;
     const int64_t p = (static_cast<int64_t>(local) * lam_point) >> 16;
@@ -913,11 +901,10 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         const int32_t lam_fill =
             render::shade_flat_tri_dir(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz,
                                        rig.fill_x, rig.fill_y, rig.fill_z, L);
-        const int32_t lam_point =
-            point != nullptr
-                ? point_face_response(*point, a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy,
-                                      c.wz, L)
-                : 0;
+        const int32_t lam_point = point != nullptr
+                                      ? point_face_response(*point, a.wx, a.wy, a.wz, b.wx, b.wy,
+                                                            b.wz, c.wx, c.wy, c.wz, L)
+                                      : 0;
         render::TriMode tm;  // opaque: depth test + write
         // GOURAUD (N3): when the compiled mesh carries normals, each corner
         // gets its own Lambert — kSmoothMixNum parts the per-vertex smooth
@@ -946,8 +933,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           }
           tm.gouraud = true;
         } else {
-          shc[0] = shc[1] = shc[2] =
-              creature_light(rig, lam_key, lam_fill, lam_point, point);
+          shc[0] = shc[1] = shc[2] = creature_light(rig, lam_key, lam_fill, lam_point, point);
         }
         // RUN 1939/2234 cel experiment (default 0: this branch never runs on
         // the shipping path and the normal render stays bit-identical). Cel
@@ -962,8 +948,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           // fragment in raster. This is deliberately separate from faceted cel.
           tm.toon = g_smooth_toon_bands <= 2 ? &kSmoothCel2Ramp : &kSmoothCel3Ramp;
         } else if (g_cel_bands != 0 && g_debug_shade == DebugShade::kOff) {
-          const Shade3 cel = cel_quantise(
-              creature_light(rig, lam_key, lam_fill, lam_point, point));
+          const Shade3 cel = cel_quantise(creature_light(rig, lam_key, lam_fill, lam_point, point));
           shc[0] = shc[1] = shc[2] = cel;
           tm.gouraud = false;
         }

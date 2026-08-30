@@ -87,6 +87,8 @@ module zhao_probe_render_fb
     output var logic            guard_wvalid_o,
     input  var logic            guard_wready_i,
     output var logic            guard_wlast_o,
+    // The arbiter's credit stream, modelled by the harness.
+    input  var logic [7:0]      retire_words_i,
 
     // ---- evidence ----------------------------------------------------------
     output var logic        drain_busy_o,
@@ -95,6 +97,10 @@ module zhao_probe_render_fb
     output var logic        fragment_error_o,
     output var logic        fb_stream_error_o,
     output var logic        fb_busy_o,
+    output var logic        fb_drained_o,
+    output var logic        fb_fatal_o,
+    output var logic [31:0] fb_issued_words_o,
+    output var logic [31:0] fb_retired_words_o,
     output var logic [31:0] pixels_written_o,
     output var logic [31:0] bursts_issued_o,
     output var logic [31:0] fb_stall_clocks_o,
@@ -171,6 +177,7 @@ module zhao_probe_render_fb
       .px_valid_i(px_valid), .px_ready_o(px_ready),
       .px_rgb565_i(px_rgb565), .px_x_i(px_x), .px_y_i(px_y), .px_last_i(px_last),
       .frame_end_i(frame_end_i),
+      .retire_words_i(retire_words_i),
       .guard_req_o(guard_req_o), .guard_rsp_i(guard_rsp_i),
       .guard_wdata_o(guard_wdata_o), .guard_wvalid_o(guard_wvalid_o),
       .guard_wready_i(guard_wready_i), .guard_wlast_o(guard_wlast_o),
@@ -178,6 +185,10 @@ module zhao_probe_render_fb
       .bursts_issued_o(bursts_issued_o),
       .stall_clocks_o(fb_stall_clocks_o),
       .stream_error_o(fb_stream_error_o),
+      .issued_words_o(fb_issued_words_o),
+      .retired_words_o(fb_retired_words_o),
+      .drained_o(fb_drained_o),
+      .fatal_error_o(fb_fatal_o),
       .busy_o(fb_busy_o)
   );
 

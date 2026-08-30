@@ -271,6 +271,19 @@ module zhao_geom_binner #(
   output logic signed [20:0] job_by_o,
   output logic signed [20:0] job_cx_o,
   output logic signed [20:0] job_cy_o,
+  // ---- where this reference sits in its tile's list ----------------------
+  // The drain already walks a tile list head to tail with `d_rem_r` counting
+  // down, so first and last are free. RASTER.TILE_PIPE uses them to clear the
+  // bank ONCE per tile and resolve it ONCE, instead of once per triangle --
+  // which is what stops a shared tile being rendered twice with the second
+  // clear erasing the first triangle.
+  //
+  // A tile with exactly one reference asserts BOTH, which is the old
+  // behaviour and why nothing downstream had to change to keep working.
+  //
+  // ENFORCED-BY: tests/render/render_pipe_directed.cpp:main
+  output logic               job_first_o,
+  output logic               job_last_o,
   output logic signed [11:0] job_tile_x_o,
   output logic signed [11:0] job_tile_y_o,
   output logic        [15:0] job_src_id_o,
@@ -587,6 +600,11 @@ module zhao_geom_binner #(
   // rasterized picture — to catch it, which is exactly why that composition
   // was built. tests/geometry/geom_binner_directed.cpp:test_pixel_origin now
   // pins it directly.)
+  // `d_rem_r` is the number of references LEFT in this tile including the one
+  // being emitted, so 1 means last. `d_first_r` is set when a list is opened
+  // and cleared on its first accepted emit.
+  assign job_first_o  = d_first_r;
+  assign job_last_o   = (d_rem_r == {{(CNT_W-1){1'b0}}, 1'b1});
   assign job_tile_x_o = $signed({2'd0, d_jx_r, 4'd0});
   assign job_tile_y_o = $signed({2'd0, d_jy_r, 4'd0});
   assign drain_busy_o = (state >= D_TILE) && (state <= D_EMIT);
@@ -595,6 +613,7 @@ module zhao_geom_binner #(
   // ---------------------------------------------------------- sequential ---
   // The two cursors advance in exactly one place each, driven by these two
   // predicates, so no register is written from two different case arms.
+  logic d_first_r; // this emit is the first reference of its tile
   logic adv;       // finish this tile and move the BIN cursor
   logic nxt_tile;  // finish this tile and move the DRAIN cursor
 
@@ -608,6 +627,7 @@ module zhao_geom_binner #(
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       state        <= S_CLEAR;
+      d_first_r    <= 1'b1;
       clear_i_r    <= {TIDX_W{1'b0}};
       tx_r         <= 6'd0;
       ty_r         <= 6'd0;
@@ -770,6 +790,7 @@ module zhao_geom_binner #(
             d_slot_r  <= {SLOT_W{1'b0}};
             d_jx_r    <= d_tx_r;
             d_jy_r    <= d_ty_r;
+            d_first_r <= 1'b1;
             state     <= D_REF;
           end
 
@@ -782,7 +803,8 @@ module zhao_geom_binner #(
               d_tri_r <= tri_q;
               d_job_v <= 1'b1;
             end else if (job_ready_i) begin
-              d_job_v <= 1'b0;
+              d_job_v   <= 1'b0;
+              d_first_r <= 1'b0;
               if (d_rem_r != {{(CNT_W-1){1'b0}}, 1'b1}) begin
                 d_rem_r <= d_rem_r - {{(CNT_W-1){1'b0}}, 1'b1};
                 if (d_slot_r == SLOT_W'(CHUNK_REFS - 1)) begin
