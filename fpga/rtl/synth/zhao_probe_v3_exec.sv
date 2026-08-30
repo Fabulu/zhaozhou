@@ -179,11 +179,28 @@ module zhao_probe_v3_exec #(
     input  var logic                      long_ready_i,
     output var logic [CW-1:0]             long_ctx_o,
     output var logic [7:0]                long_op_o,
+    // DEBUG: the operand as it is CAPTURED, with the instruction it belongs to.
+    // The preload landed this clock. A host that ignores it loses writes.
+    output var logic                      pre_ready_o,
+    output var logic                      dbg_s2_v_o,
+    output var logic [$clog2(CTX)-1:0]    dbg_s2_ctx_o,
+    output var logic [7:0]                dbg_s2_op_o,
+    output var logic signed [31:0]        dbg_use_a0_o,
+    output var logic signed [31:0]        dbg_rf_a0_o,
     output var logic [RW-1:0]             long_dst_o,
     output var logic signed [31:0]        long_s0_o,
     output var logic signed [31:0]        long_s1_o,
     output var logic signed [31:0]        long_s2_o,
     output var logic signed [31:0]        long_s3_o,
+    // OPERAND B'S SECOND MEMBER. Added 2026-08-29 for DIST2, which is the last
+    // opcode the shipped Earth programs need and this machine did not serve.
+    //
+    // Its decode shape is {1, {2, 2, 0}, 2, 0}: operand a has TWO members and
+    // operand b has TWO. Every long op before it had a single-member b, so
+    // three ports for a and one for b covered them all -- and DIST2 simply
+    // could not be expressed. The register already existed here; it was feeding
+    // the DOT sequencer and was never exported.
+    output var logic signed [31:0]        long_s4_o,
     output var logic [31:0]               long_imm_o,
     // "No further context can join this group." See the comment at its
     // assignment: an EAGER flush costs group size, a LATE one deadlocks.
@@ -456,6 +473,12 @@ module zhao_probe_v3_exec #(
   assign long_at_s4_c = s4_v_r && is_long(s4_op_r);
   assign long_hold_c  = long_at_s4_c && !(long_valid_o && long_ready_i);
 
+  assign dbg_s2_v_o   = s2_v_r;
+  assign dbg_s2_ctx_o = s2_ctx_r;
+  assign dbg_s2_op_o  = s2_op_r;
+  assign dbg_use_a0_o = use_a0_c;
+  assign dbg_rf_a0_o  = rf_a0;
+
   assign long_valid_o = long_at_s4_c;
   assign long_ctx_o   = s4_ctx_r;
   assign long_op_o    = s4_op_r;
@@ -464,6 +487,7 @@ module zhao_probe_v3_exec #(
   assign long_s1_o    = s4_a1_r;
   assign long_s2_o    = s4_a2_r;
   assign long_s3_o    = s4_b0_r;
+  assign long_s4_o    = s4_b1_r;
   assign long_imm_o   = s4_imm_r;
 
   // AN EAGER FLUSH COSTS GROUP SIZE; A LATE ONE DEADLOCKS. The safe rule is
@@ -477,7 +501,26 @@ module zhao_probe_v3_exec #(
   assign flush_o = ~|(active_r & ~waiting_r);
 
   always_comb begin
-    mul_issue_c = s2_v_r && !is_dot(s2_op_r);
+    // `!hold_c` IS THE SAME LAW THE DOT SEQUENCE BELOW WAS REWRITTEN FOR,
+    // APPLIED TO THE SCALAR PATH TOO.
+    //
+    // The note below states it: an instruction CANNOT BE STALLED between its
+    // multiply issue and its product arrival, because the product lands two
+    // clocks later on a fixed schedule. The DOT sequence was moved to S4 to
+    // obey that. The scalar issue stayed at S2 and UNGATED, so a long-op
+    // handover holding the pipe re-issued the same multiply on every held
+    // clock -- one instruction, k+1 products, and only the count was ever
+    // checked. `desync_o` compares how MANY products came back, never which
+    // instruction they belonged to, so the surplus was invisible.
+    //
+    // Issuing only on a clock the instruction will actually advance makes it
+    // exactly one product per multiply, arriving exactly when the instruction
+    // reaches the stage that consumes it.
+    //
+    // Found by the composed Earth gate: a MUL wrote a wrong product from two
+    // operands it had read CORRECTLY, and only at six or more contexts --
+    // which is where long-op holds last more than a single clock.
+    mul_issue_c = s2_v_r && !is_dot(s2_op_r) && !hold_c;
     // THE SAME HELD OPERANDS THE PIPE USES. The multiply is issued from S2,
     // whose operands come from the register file's moving read -- so a retry
     // after a denial would multiply the SUCCESSOR's numbers and hand the
@@ -703,10 +746,34 @@ module zhao_probe_v3_exec #(
   assign sk_busy_c = sk_ne_c || sk_push_c;
 
   // ---- writeback ----------------------------------------------------------
-  // The host preload wins the port when it is asserted; the machine is not
-  // running during preload, so there is no contention to arbitrate.
+  // THE MACHINE'S WRITE WINS. THE PRELOAD RETRIES.
+  //
+  // This block used to give the host preload absolute priority, on the stated
+  // ground that "the machine is not running during preload, so there is no
+  // contention to arbitrate". That premise is false the moment points are fed
+  // to a retired context while other contexts are still executing -- which is
+  // how an association actually streams -- and the consequence was that every
+  // preload clock SILENTLY DISCARDED whatever write the arbiter had just
+  // granted. The result was already on the shared write port, so it looked
+  // delivered from outside; it simply never reached the file.
+  //
+  // The composed Earth gate found it as a CURVE service returning the curve of
+  // ZERO for a point whose operand was plainly not zero: the producing SUB's
+  // write had been granted three clocks earlier and dropped, so the consumer
+  // read a register that had never been updated.
+  //
+  // The asymmetry decides the priority. A granted write cannot be retried --
+  // the ALU result and the service's answer are both gone by the next clock --
+  // while a preload is host-side and can simply be offered again. So the
+  // machine wins and `pre_ready_o` tells the host when its write landed.
+  //
+  // A DROPPED WRITE MUST NEVER BE SILENT. That is the whole lesson: the old
+  // behaviour was not merely the wrong priority, it was the wrong priority
+  // with nothing to say so.
+  assign pre_ready_o = !wr_en_i;
+
   always_comb begin
-    if (pre_we_i) begin
+    if (pre_we_i && !wr_en_i) begin
       rf_we_c    = 1'b1;
       rf_wctx_c  = pre_ctx_i;
       rf_wreg_c  = pre_reg_i;

@@ -89,6 +89,7 @@
 // says so rather than quietly avoiding the other two.
 module zhao_probe_v3_full #(
     parameter int CTX  = 8,
+    parameter int OUTSTANDING = 4,
     parameter int REGS = 32,
     parameter int PLAN = 32,
     parameter int TAGW = 8
@@ -187,15 +188,40 @@ module zhao_probe_v3_full #(
     input  var logic signed [31:0]      sb_wdata_i,
     output var logic                    sb_bad_o,
     output var logic                    imm_bad_o,
-    output var logic                    sk_overflow_o
+    output var logic                    sk_overflow_o,
+
+    // ---- DEBUG: the long-op handover, exactly as the dispatcher sees it ----
+    //
+    // Not decoration. The composed gate found a CURVE returning the curve of
+    // ZERO for a point whose operand was plainly not zero, and no block-level
+    // test can see that: the service is handed a number and answers it
+    // faithfully. The only way to tell a bad ANSWER from a bad QUESTION is to
+    // watch the question being asked.
+    output var logic                    dbg_long_valid_o,
+    output var logic                    dbg_long_ready_o,
+    output var logic [$clog2(CTX)-1:0]  dbg_long_ctx_o,
+    output var logic [7:0]              dbg_long_op_o,
+    output var logic signed [31:0]      dbg_long_s0_o,
+    output var logic                    pre_ready_o,
+    output var logic                    dbg_s2_v_o,
+    output var logic [$clog2(CTX)-1:0]  dbg_s2_ctx_o,
+    output var logic [7:0]              dbg_s2_op_o,
+    output var logic signed [31:0]      dbg_use_a0_o,
+    output var logic signed [31:0]      dbg_rf_a0_o
 );
 
   // ---- engine -> service path --------------------------------------------
+  assign dbg_long_valid_o = long_valid;
+  assign dbg_long_ready_o = long_ready;
+  assign dbg_long_ctx_o   = long_ctx;
+  assign dbg_long_op_o    = long_op;
+  assign dbg_long_s0_o    = long_s0;
+
   logic                    long_valid, long_ready;
   logic [$clog2(CTX)-1:0]  long_ctx;
   logic [7:0]              long_op;
   logic [$clog2(REGS)-1:0] long_dst;
-  logic signed [31:0]      long_s0, long_s1, long_s2, long_s3;
+  logic signed [31:0]      long_s0, long_s1, long_s2, long_s3, long_s4;
   logic [31:0]             long_imm;
   logic                    long_flush;
 
@@ -228,6 +254,9 @@ module zhao_probe_v3_full #(
       .pre_data_i(pre_data_i),
       .start_i(start_i), .start_ctx_i(start_ctx_i),
       .rival_req_i(rival_req_i),
+      .pre_ready_o(pre_ready_o),
+      .dbg_s2_v_o(dbg_s2_v_o), .dbg_s2_ctx_o(dbg_s2_ctx_o), .dbg_s2_op_o(dbg_s2_op_o),
+      .dbg_use_a0_o(dbg_use_a0_o), .dbg_rf_a0_o(dbg_rf_a0_o),
 
       // SEAM 2: the ALU asks the arbiter, and takes back whatever it grants.
       .wb_valid_o(alu_wb_valid), .wb_ready_i(alu_wb_ready),
@@ -251,18 +280,20 @@ module zhao_probe_v3_full #(
       .long_valid_o(long_valid), .long_ready_i(long_ready),
       .long_ctx_o(long_ctx), .long_op_o(long_op), .long_dst_o(long_dst),
       .long_s0_o(long_s0), .long_s1_o(long_s1), .long_s2_o(long_s2),
-      .long_s3_o(long_s3), .long_imm_o(long_imm), .long_flush_o(long_flush),
+      .long_s3_o(long_s3), .long_s4_o(long_s4),
+      .long_imm_o(long_imm), .long_flush_o(long_flush),
       .rel_valid_i(rel_valid), .rel_ctx_i(rel_ctx)
   );
 
   zhao_field_v3_svcpath #(
-      .CONTEXTS(CTX), .REGS(REGS), .TAGW(TAGW)
+      .CONTEXTS(CTX), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING)
   ) u_svc (
       .clk(clk), .rst_n(rst_n),
       .long_valid_i(long_valid), .long_ready_o(long_ready),
       .long_ctx_i(long_ctx), .long_op_i(long_op), .long_dst_i(long_dst),
       .long_s0_i(long_s0), .long_s1_i(long_s1), .long_s2_i(long_s2),
-      .long_s3_i(long_s3), .long_imm_i(long_imm), .flush_i(long_flush),
+      .long_s3_i(long_s3), .long_s4_i(long_s4),
+      .long_imm_i(long_imm), .flush_i(long_flush),
 
       .alu_wb_valid_i(alu_wb_valid), .alu_wb_ready_o(alu_wb_ready),
       .alu_wb_ctx_i(alu_wb_ctx), .alu_wb_reg_i(alu_wb_reg),

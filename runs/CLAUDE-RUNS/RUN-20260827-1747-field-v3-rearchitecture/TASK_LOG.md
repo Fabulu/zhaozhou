@@ -2235,3 +2235,138 @@ the arbiter's output.
 
 **Five defects in shipped RTL today, four needing either multiple contexts or
 two blocks composed to appear at all.**
+
+---
+
+## 2026-08-30 — GATE 3: the composed Earth measurement, and the defect it found
+
+**The number.** Real Earth programs on the real composed engine, counted:
+
+| | clocks/group | frame | against 850,000 |
+|---|---|---|---|
+| impact_wave | 125 | 4,368,000 | 5.1x over |
+| wave_pool | 129 | 4,507,776 | 5.3x over |
+
+1,536 values checked against `zfield::execute_point`, zero mismatches, both
+drive patterns. The estimate history is worth keeping because each step was a
+different KIND of error, not a better guess:
+
+    9.1x   latency mistaken for throughput
+    2.1x   serial bound, II summed
+    fits   overlapped bound, busiest service only
+    5.3x   MEASURED on the composed machine
+
+**The drive pattern was worth 5x and no table could have said so.** Reloading
+each context the instant it retires -- the obvious loop, the one that keeps the
+engine fullest -- sent 98% of dispatch groups out PARTIAL: a whole group's
+latency spent on one point. Contexts that retire at different moments drift
+apart, stop sharing an opcode, and the drift is self-reinforcing. Aligned waves
+instead: 0% partial, idle 16,489 -> 1,760, 624 -> 125 clocks/group.
+
+**ROOT CAUSE of the wrong values: the host preload port silently stole the
+register file.** The write mux gave `pre_we_i` absolute priority on a premise
+written beside it -- "the machine is not running during preload". False the
+moment points are fed to a retired context while others still execute, which is
+how an association streams. Every preload clock discarded a granted write. The
+value was already on the shared write port, so from outside it looked
+delivered.
+
+Fixed: the machine wins the port (a granted write cannot be retried; a preload
+can), and `pre_ready_o` tells the host when its write landed. 175 wrong -> 0.
+
+**What this cost, and the lesson.** Four hypotheses died before the right one:
+partial groups, the services, late writeback, dropped starts. Each was killed
+by a measurement rather than an argument, and each measurement was cheap. What
+finally worked was refusing to reason about the RTL any further:
+
+  * replay the write trace in PROGRAM order, report the EARLIEST divergent uop
+    rather than the lowest divergent register;
+  * CURVE(0) = 52897 matched the wrong value exactly -- so the service had
+    answered its question correctly and the QUESTION was wrong;
+  * expose the handover: the executor was passing s0=0;
+  * clock-stamp it: the producing write was granted NINE clocks earlier;
+  * expose the file read: still presenting 0 at capture.
+
+A write that is granted and then dropped is invisible to every guard the engine
+owns -- `desync_o` counts products, the tags match, and the write port shows the
+value going past. Only comparing the file against the oracle catches it.
+
+**Two speculative fixes were tried, measured, and REVERTED** rather than
+shipped: an operand-hold condition and a per-stage product carry. Both were
+plausible, both changed nothing. The one earlier change that did move the number
+(the scalar multiply re-issuing on every held clock, 175 -> 149) is
+independently correct and stayed.
+
+**Three streaming tests were blind to it by construction.** len, trig and
+ring_svc each streamed N groups past ONE pair of operands and compared every
+answer to ONE expected value -- so a cross-group swap could not have been seen.
+The tag order check did not cover it either: the tag rides the order queue and
+the data rides the banks, so tags can be in perfect order over swapped numbers.
+All three now carry per-group data; all three still pass, which is what
+EXONERATED them and forced the search upstream.
+
+**Still open: the 5.3x.** The evidence says latency-bound, not
+arithmetic-bound. A point's program latency is ~250 clocks and only 8 are ever
+in flight. Little's law wants ~41 points in flight for 6.1 clocks/point, so
+CTX 8 -> ~48, and the dispatcher's OUTSTANDING 4 -> ~12, since 4 groups caps
+the service path at 16 points regardless of CTX. Every one of those is a
+parameter and they all descend from `CTX` in `zhao_probe_v3_full`.
+
+**crater_ring still does not run at all:** 7 vector + 29 uniform = 36 registers
+against a file of 32. The executor has no scalar-bank read path, so uniforms
+reach it only by broadcast. That refusal is a finding, not a skip.
+
+### Later the same day — scaling, the gather, and where the machine actually stops
+
+**Widened the composition.** `CTX` and `OUTSTANDING` now reach the top, so the
+same programs can be measured on a bigger machine without disturbing the CTX=8
+tallies. `OUTSTANDING` had to be promoted out of the dispatcher's BODY into its
+parameter port list -- a parameter declared in the body cannot be overridden by
+an instance, and Verilator says so in as many words.
+
+**One gather slot per opcode.** The dispatcher had ONE gather buffer, so one
+(op, dst, imm) could accumulate and the first stranger forced the group out
+half-empty. Full groups and overlapped services were in direct conflict, and no
+drive pattern could resolve it.
+
+    partial groups   138/215, 364/427  ->  0/138, 0/206
+    clocks/group     CTX=8  125 -> 111      CTX=32  92 -> 82
+
+**A prediction from a counter is still a guess until it is run.** I estimated
+3.4x from those same counters and was wrong: 215 groups against 256 points
+reads as 1.19 points/group only if you forget each point issues TWO long ops.
+The honest figure was 1.7x, and 1.7x on the gather is what 92 -> 82 reflects
+once the rest of the machine is in the way.
+
+**A third drive pattern, and why none of them was the answer.** WAVE starts
+every context together so all sit on the same opcode -- groups full, services
+never overlapped. STAGGERED overlaps the services but lets contexts drift one at
+a time. QUAD keeps four aligned (a dispatch group IS four points) and staggers
+the quads. QUAD was the right idea and barely helped, which is what sent the
+search past the gather.
+
+**WHERE IT ACTUALLY STOPS, measured:**
+
+    register writes 4096 in 4464 clocks = 92% of the ONE write port
+
+Every uop of every point lands through a single port at one per clock.
+impact_wave is 16 uops, so a four-point group costs 64 writes and therefore
+>= 64 clocks against a budget of 24.3. Across the stress frame that is
+2,236,416 writes: **2.6x over 850,000 from writes alone**, whatever the services
+do. The machine is not arithmetic-bound and no longer gather-bound.
+
+**The asymmetry is structural.** The service path is FOUR points wide; the
+executor is scalar -- one point, one instruction, one write per clock. Four
+lanes of ALU and writeback is the change that fits the shape of the rest of the
+machine, and it is the next real piece of work.
+
+There is a wrinkle worth writing down before anyone starts: the register file is
+banked on register[1:0] so that a register GROUP (a, a+1, a+2) can be read for
+one context in a single clock. Four lanes of a drain write the SAME register
+index for FOUR DIFFERENT contexts, which is one bank and four rows -- so a
+bank-per-port scheme does not give four writes a clock. Writes want banking by
+context, reads want banking by register. That is the actual design problem, and
+it should be settled before any RTL is cut.
+
+    frame, impact_wave, CTX=32   4,368,000 -> 2,865,408   (5.1x -> 3.4x over)
+    every measurement above is EXACT: 4,608 values against the oracle

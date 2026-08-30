@@ -1,72 +1,50 @@
-// zhao_field_v3_ring_svc.sv — THE PREPARED RING, JOINED TO ITS UNIFORMS.
+// zhao_field_v3_ring_svc.sv — the prepared ring, joined to its uniforms, twice.
 //
 // ENFORCED-BY: tests/differential/field_v3_ring_svc_directed.cpp:main
 //
 // ---------------------------------------------------------------------------
 // WHAT THIS BLOCK IS
 // ---------------------------------------------------------------------------
-// `zhao_field_v3_ring` already computes the prepared ring and is closed at
-// 23/23. It takes the four varying distances and FOUR UNIFORM SCALARS — r0,
-// the midpoint m, and the two smoothstep reciprocals rA and rB — as direct
-// inputs, because the reference computes those once per association on the
-// ARM (`spec/form/cost-model.md`: uniform_ops are "executed ONCE per
-// association ON THE ARM").
+// `zhao_field_v3_ring` computes the prepared ring and is closed at 23/23. It
+// takes four varying distances and FOUR UNIFORM SCALARS -- r0, the midpoint m,
+// and the two smoothstep reciprocals rA and rB -- because the reference
+// computes those once per association on the ARM. `zhao_field_v3_sbank` holds
+// them. This is the piece between: it fetches the four scalars by index and
+// hands them to a unit.
 //
-// So the arithmetic half exists and the storage half exists
-// (`zhao_field_v3_sbank`). This is the piece between them: it fetches the four
-// scalars out of the bank and hands them to the unit.
+// The slots are packed four-to-an-immediate, six bits each:
 //
-// THE OWNER CHOSE THIS SHAPE DELIBERATELY. Option (b) was to replicate each
-// uniform across all four lanes and pass them as ordinary vector operands.
-// That would have worked and it was rejected as a permanent architecture:
-// "Do not make replicated uniform values in all four lanes the permanent
-// architecture, and do not move RING back to cold." Four copies of one number
-// burn register-file bandwidth and invent a special case that the next
-// prepared operation would have to invent again.
+//     imm[ 5: 0] r0   imm[11: 6] m   imm[17:12] rA   imm[23:18] rB
+//     imm[31:24] reserved, must be zero
+//
+// which fits because the bank depth was MEASURED at 64 slots before the
+// encoding was chosen. The planner allocates those four non-consecutively, so
+// one base index cannot address them.
 //
 // ---------------------------------------------------------------------------
-// WHY THE SLOTS ARE PACKED INTO THE IMMEDIATE
+// TWO UNITS, BECAUSE THE NINE PRODUCTS ARE A DEPENDENCY CHAIN
 // ---------------------------------------------------------------------------
-// The planner allocates the four scalars NON-CONSECUTIVELY — `s_m`, then a
-// temporary, then `s_rA`, then another temporary, then `s_rB`, with `s_r0`
-// wherever the source register already lived. So one base index cannot
-// address them and four indices have to travel with the instruction.
+// This service first shipped with one unit and measured 50 clocks per group on
+// the composed machine, against Earth's budget of 24.3 clocks per group for the
+// WHOLE program. It was the largest blocking service left after the distance
+// and trig rebuilds.
 //
-// `tools/field/measure_sreg_hwm.cpp` measured the bank at a worst case of 41
-// slots, so 64 is the depth and 6 bits is the index. Four of them is 24 bits,
-// which fits the existing 32-bit immediate with 8 to spare. The instruction
-// word does not grow. That is why the depth was measured before this encoding
-// was chosen rather than after.
+// The ring's nine products cannot be issued faster: p2 is t0*t0 and needs p1,
+// p4 needs p2, and so on down the chain. Each product is an issue and a wait,
+// so the unit spends most of its life stalled on a multiply it has to have.
 //
-//     imm[ 5: 0]  slot of r0
-//     imm[11: 6]  slot of m
-//     imm[17:12]  slot of rA
-//     imm[23:18]  slot of rB
-//     imm[31:24]  reserved, must be zero
+// But the shared bank only owes NINE SLOTS per group. The stalls are therefore
+// fillable by somebody else's work rather than shortenable, which is what two
+// units buy: while group N waits for its product, group N+1 issues its own.
 //
-// ---------------------------------------------------------------------------
-// THE FETCH IS SIX CYCLES FOR FOUR VALUES, AND THAT IS NOT A MISTAKE
-// ---------------------------------------------------------------------------
-// The bank's read is REGISTERED: the datum for the address presented on cycle
-// T lands on T+1, as a non-blocking assignment. So:
+//     unit A   [p1]--wait--[p2]--wait--[p3]...
+//     unit B        [p1]--wait--[p2]--wait--...
+//     bank      A    B    A     B    A     B
 //
-//     cycle 0   present r0's address
-//     cycle 1   present m's  address, capture r0
-//     cycle 2   present rA's address, capture m
-//     cycle 3   present rB's address, capture rA
-//     cycle 4                          capture rB
-//     cycle 5   all four are readable  -> hand off
-//
-// **Handing off at cycle 4 would be the SPLINE bug again.** The curve
-// service's neighbour phase declared itself finished on the cycle its last
-// capture was still in flight and gave the arithmetic a value that had not
-// been written yet: 96 failures out of 6930, visible only on the probes where
-// the cubic actually ran, and passing outright when a probe was run in
-// isolation because the stale register happened to hold the right number.
-//
-// One extra cycle, paid once per group, against a ring that already spends
-// nine multiplier slots on that group. It is not on the critical path and it
-// is the difference between right and subtly wrong.
+// The bank port is arbitrated with the OLDER group winning, so a younger group
+// can never starve an older one into missing its deadline -- and the reply
+// order is kept by the same head/tail queue the distance service uses, so a
+// unit that finishes early cannot hand a caller somebody else's ring.
 module zhao_field_v3_ring_svc (
     input var logic clk,
     input var logic rst_n,
@@ -75,7 +53,7 @@ module zhao_field_v3_ring_svc (
     input  var logic               req_valid_i,
     output var logic               req_ready_o,
     input  var logic signed [31:0] req_d_0_i, req_d_1_i, req_d_2_i, req_d_3_i,
-    input  var logic        [31:0] req_imm_i,   // packed slots, see above
+    input  var logic        [31:0] req_imm_i,
     input  var logic        [ 7:0] req_tag_i,
 
     // ---- the uniform bank's single read port -------------------------------
@@ -98,145 +76,249 @@ module zhao_field_v3_ring_svc (
     output var logic        [ 3:0] rsp_sat_mul_o,
     output var logic        [ 7:0] rsp_tag_o,
 
-    // Latches if an instruction ever sets the reserved immediate bits. They
-    // are the only place a future encoding can grow, so a program that already
-    // uses them is a program written against a different ABI, and that is a
-    // fault to report rather than a field to ignore.
     output var logic               imm_bad_o
 );
 
-  localparam logic [2:0] S_IDLE  = 3'd0;
-  localparam logic [2:0] S_FETCH = 3'd1;
-  localparam logic [2:0] S_RUN   = 3'd2;
-  localparam logic [2:0] S_HOLD  = 3'd3;
+  // =========================================================================
+  // THE FRONT END: fetch four uniforms, six cycles
+  // =========================================================================
+  //
+  // The bank's read is REGISTERED, so the datum for an address presented on
+  // cycle T lands on T+1: addresses on 0..3, captures on 1..4, done at 5.
+  // Finishing at 4 would hand the arithmetic a value not yet written, which is
+  // the bug the curve service's neighbour phase cost a session for.
+  localparam logic [1:0] F_IDLE  = 2'd0;
+  localparam logic [1:0] F_FETCH = 2'd1;
+  localparam logic [1:0] F_HAND  = 2'd2;
 
-  logic [2:0] state_r;
-  logic [2:0] fcyc_r;            // 0..5, the fetch phase
+  logic [1:0]         f_state_r;
+  logic [2:0]         f_cyc_r;
+  logic signed [31:0] f_d_r [4];
+  logic        [ 7:0] f_tag_r;
+  logic        [ 5:0] f_slot_r [4];
+  logic signed [31:0] f_uni_r [4];
 
-  logic signed [31:0] d_r [4];
-  logic        [ 7:0] tag_r;
-  logic        [ 5:0] slot_r [4];
-  logic signed [31:0] uni_r [4];  // r0, m, rA, rB in that order
+  assign sb_raddr_o = f_slot_r[f_cyc_r[1:0]];
 
-  // ---- the fetch schedule ---------------------------------------------------
-  // Address on 0..3, capture on 1..4, complete at 5. `fcyc_r` names the cycle
-  // and both halves derive from it, so the address and the capture cannot
-  // disagree about which slot is in flight.
-  assign sb_raddr_o = slot_r[fcyc_r[1:0]];
+  // =========================================================================
+  // TWO RING UNITS
+  // =========================================================================
+  logic               u_busy_r [2];
+  logic               u_off_r  [2];   // the group has been offered to the unit
+  logic               rg_v_valid [2], rg_v_ready [2], rg_r_valid [2];
+  logic signed [31:0] rg_o [2][4];
+  logic        [ 3:0] rg_sat_add [2], rg_sat_mul [2];
+  logic        [ 7:0] rg_tag_o [2];
+  logic               rg_mul_issue [2], rg_mul_ready [2], rg_mul_valid [2];
+  logic signed [32:0] rg_a [2][4], rg_b [2][4];
 
-  logic fetch_done_c;
-  assign fetch_done_c = (state_r == S_FETCH) && (fcyc_r == 3'd5);
+  logic signed [31:0] u_d_r [2][4];
+  logic signed [31:0] u_uni_r [2][4];
+  logic        [ 7:0] u_tag_r [2];
 
-  // ---- the arithmetic -------------------------------------------------------
-  logic rg_v_valid, rg_v_ready, rg_r_valid;
-  logic rg_offered_r;
+  for (genvar u = 0; u < 2; u++) begin : gen_unit
+    assign rg_v_valid[u] = u_busy_r[u] && !u_off_r[u];
+    zhao_field_v3_ring u_ring (
+        .clk(clk), .rst_n(rst_n),
+        .v_valid_i(rg_v_valid[u]), .v_ready_o(rg_v_ready[u]),
+        .d_0_i(u_d_r[u][0]), .d_1_i(u_d_r[u][1]),
+        .d_2_i(u_d_r[u][2]), .d_3_i(u_d_r[u][3]),
+        .r0_i(u_uni_r[u][0]), .m_i(u_uni_r[u][1]),
+        .rA_i(u_uni_r[u][2]), .rB_i(u_uni_r[u][3]),
+        .tag_i(u_tag_r[u]),
+        .r_valid_o(rg_r_valid[u]), .r_ready_i(ret_fire_c && (head_u_c == 1'(u))),
+        .o0_0_o(rg_o[u][0]), .o0_1_o(rg_o[u][1]),
+        .o0_2_o(rg_o[u][2]), .o0_3_o(rg_o[u][3]),
+        .sat_add_o(rg_sat_add[u]), .sat_mul_o(rg_sat_mul[u]), .tag_o(rg_tag_o[u]),
+        .mul_issue_o(rg_mul_issue[u]), .mul_ready_i(rg_mul_ready[u]),
+        .mul_a_0_o(rg_a[u][0]), .mul_a_1_o(rg_a[u][1]),
+        .mul_a_2_o(rg_a[u][2]), .mul_a_3_o(rg_a[u][3]),
+        .mul_b_0_o(rg_b[u][0]), .mul_b_1_o(rg_b[u][1]),
+        .mul_b_2_o(rg_b[u][2]), .mul_b_3_o(rg_b[u][3]),
+        .mul_valid_i(rg_mul_valid[u]),
+        .mul_p_0_i(mul_p_0_i), .mul_p_1_i(mul_p_1_i),
+        .mul_p_2_i(mul_p_2_i), .mul_p_3_i(mul_p_3_i)
+    );
+  end
 
-  // Offered for exactly one clock. The unit latches on its own valid/ready and
-  // re-offering a group it already took would send it twice. Defensive here
-  // for the same reason the curve service's `f_spl_offered` is: it costs one
-  // flop and it is correct the day the surrounding handshake changes.
-  assign rg_v_valid = (state_r == S_RUN) && !rg_offered_r;
+  // ---- the order queue -----------------------------------------------------
+  logic       oq_u_r [2];
+  logic       oq_head_r, oq_tail_r;
+  logic [1:0] oq_count_r;
 
-  zhao_field_v3_ring u_ring (
-      .clk(clk), .rst_n(rst_n),
-      .v_valid_i(rg_v_valid), .v_ready_o(rg_v_ready),
-      .d_0_i(d_r[0]), .d_1_i(d_r[1]), .d_2_i(d_r[2]), .d_3_i(d_r[3]),
-      .r0_i(uni_r[0]), .m_i(uni_r[1]), .rA_i(uni_r[2]), .rB_i(uni_r[3]),
-      .tag_i(tag_r),
-      .r_valid_o(rg_r_valid), .r_ready_i(rsp_ready_i),
-      .o0_0_o(rsp_r_0_o), .o0_1_o(rsp_r_1_o), .o0_2_o(rsp_r_2_o), .o0_3_o(rsp_r_3_o),
-      .sat_add_o(rsp_sat_add_o), .sat_mul_o(rsp_sat_mul_o), .tag_o(rsp_tag_o),
-      .mul_issue_o(mul_issue_o), .mul_ready_i(mul_ready_i),
-      .mul_a_0_o(mul_a_0_o), .mul_a_1_o(mul_a_1_o),
-      .mul_a_2_o(mul_a_2_o), .mul_a_3_o(mul_a_3_o),
-      .mul_b_0_o(mul_b_0_o), .mul_b_1_o(mul_b_1_o),
-      .mul_b_2_o(mul_b_2_o), .mul_b_3_o(mul_b_3_o),
-      .mul_valid_i(mul_valid_i),
-      .mul_p_0_i(mul_p_0_i), .mul_p_1_i(mul_p_1_i),
-      .mul_p_2_i(mul_p_2_i), .mul_p_3_i(mul_p_3_i)
-  );
+  logic head_u_c;
+  assign head_u_c = oq_u_r[oq_head_r];
 
-  assign rsp_valid_o = rg_r_valid;
-  assign req_ready_o = (state_r == S_IDLE);
+  logic free_u_c, have_free_c;
+  always_comb begin
+    have_free_c = 1'b0;
+    free_u_c    = 1'b0;
+    if (!u_busy_r[0]) begin
+      have_free_c = 1'b1;
+      free_u_c    = 1'b0;
+    end else if (!u_busy_r[1]) begin
+      have_free_c = 1'b1;
+      free_u_c    = 1'b1;
+    end
+  end
+
+  // ---- the bank port, OLDER GROUP FIRST ------------------------------------
+  // A younger group must never starve an older one: the deadline belongs to the
+  // group that was accepted first, and fairness here is not a preference.
+  logic bank_u_c;
+  always_comb begin
+    if (rg_mul_issue[head_u_c])      bank_u_c = head_u_c;
+    else if (rg_mul_issue[~head_u_c]) bank_u_c = ~head_u_c;
+    else                              bank_u_c = head_u_c;
+  end
+
+  // NO SERIALISATION. `zhao_field_v3_mulbank` is FULLY PIPELINED -- two clocks
+  // deep, a new pair accepted every clock, with its own two-stage tag shadow.
+  // An earlier version here allowed one product in flight and measured II 27;
+  // that was this file's limit, not the bank's, and shipping it would have been
+  // a number describing my own scaffolding.
+  assign mul_issue_o = rg_mul_issue[bank_u_c];
+  assign mul_a_0_o = rg_a[bank_u_c][0];
+  assign mul_a_1_o = rg_a[bank_u_c][1];
+  assign mul_a_2_o = rg_a[bank_u_c][2];
+  assign mul_a_3_o = rg_a[bank_u_c][3];
+  assign mul_b_0_o = rg_b[bank_u_c][0];
+  assign mul_b_1_o = rg_b[bank_u_c][1];
+  assign mul_b_2_o = rg_b[bank_u_c][2];
+  assign mul_b_3_o = rg_b[bank_u_c][3];
+
+  // A TWO-DEEP OWNER SHADOW, matching the bank's own two stages. The bank
+  // routes products back per CLAIMANT and this service is one claimant with two
+  // units behind it, so the split between them is this block's job.
+  //
+  // THE GRANT MUST CARRY THE SAME CONDITION THE ISSUE DOES. An earlier version
+  // gated the issue and left the grant ungated, which told a unit it was served
+  // when its request never reached the bank -- it then advanced and waited
+  // forever for a product nobody started. That is the OPEN-LOOP CLAIMANT defect
+  // this engine's blockers document describes at length, recreated here by me
+  // while fixing something else, and it showed as multiplies issuing every
+  // three clocks forever with no reply ever arriving.
+  logic sh_v_r [2];
+  logic sh_u_r [2];
+  for (genvar u = 0; u < 2; u++) begin : gen_grant
+    assign rg_mul_ready[u] = mul_ready_i && (bank_u_c == 1'(u));
+    assign rg_mul_valid[u] = mul_valid_i && sh_v_r[1] && (sh_u_r[1] == 1'(u));
+  end
+
+  assign req_ready_o = (f_state_r == F_IDLE) && (oq_count_r != 2'd2);
+
+  logic ret_fire_c;
+  assign rsp_valid_o   = (oq_count_r != 2'd0) && u_busy_r[head_u_c] && rg_r_valid[head_u_c];
+  assign ret_fire_c    = rsp_valid_o && rsp_ready_i;
+  assign rsp_r_0_o     = rg_o[head_u_c][0];
+  assign rsp_r_1_o     = rg_o[head_u_c][1];
+  assign rsp_r_2_o     = rg_o[head_u_c][2];
+  assign rsp_r_3_o     = rg_o[head_u_c][3];
+  assign rsp_sat_add_o = rg_sat_add[head_u_c];
+  assign rsp_sat_mul_o = rg_sat_mul[head_u_c];
+  assign rsp_tag_o     = rg_tag_o[head_u_c];
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      state_r      <= S_IDLE;
-      fcyc_r       <= 3'd0;
-      tag_r        <= 8'd0;
-      rg_offered_r <= 1'b0;
-      imm_bad_o    <= 1'b0;
+      f_state_r   <= F_IDLE;
+      f_cyc_r     <= 3'd0;
+      f_tag_r     <= 8'd0;
+      imm_bad_o   <= 1'b0;
+      oq_head_r   <= 1'b0;
+      oq_tail_r   <= 1'b0;
+      oq_count_r  <= 2'd0;
+      sh_v_r[0]   <= 1'b0;
+      sh_v_r[1]   <= 1'b0;
+      sh_u_r[0]   <= 1'b0;
+      sh_u_r[1]   <= 1'b0;
       for (int i = 0; i < 4; i++) begin
-        d_r[i]    <= '0;
-        slot_r[i] <= 6'd0;
-        uni_r[i]  <= '0;
+        f_d_r[i]    <= '0;
+        f_slot_r[i] <= 6'd0;
+        f_uni_r[i]  <= '0;
+      end
+      for (int u = 0; u < 2; u++) begin
+        u_busy_r[u] <= 1'b0;
+        u_off_r[u]  <= 1'b0;
+        u_tag_r[u]  <= 8'd0;
+        oq_u_r[u]   <= 1'b0;
+        for (int i = 0; i < 4; i++) begin
+          u_d_r[u][i]   <= '0;
+          u_uni_r[u][i] <= '0;
+        end
       end
     end else begin
-      case (state_r)
-        S_IDLE: begin
-          if (req_valid_i) begin
-            d_r[0] <= req_d_0_i;
-            d_r[1] <= req_d_1_i;
-            d_r[2] <= req_d_2_i;
-            d_r[3] <= req_d_3_i;
-            tag_r  <= req_tag_i;
-            slot_r[0] <= req_imm_i[5:0];
-            slot_r[1] <= req_imm_i[11:6];
-            slot_r[2] <= req_imm_i[17:12];
-            slot_r[3] <= req_imm_i[23:18];
-            // LATCHED, not a pulse: one instruction with a stale encoding is
-            // the whole finding.
+      // ---- the owner shadow, one stage per bank stage ---------------------
+      sh_v_r[1] <= sh_v_r[0];
+      sh_u_r[1] <= sh_u_r[0];
+      sh_v_r[0] <= mul_issue_o && mul_ready_i;
+      sh_u_r[0] <= bank_u_c;
+
+      // ---- the front end ---------------------------------------------------
+      case (f_state_r)
+        F_IDLE: begin
+          if (req_valid_i && req_ready_o) begin
+            f_d_r[0] <= req_d_0_i;
+            f_d_r[1] <= req_d_1_i;
+            f_d_r[2] <= req_d_2_i;
+            f_d_r[3] <= req_d_3_i;
+            f_tag_r  <= req_tag_i;
+            f_slot_r[0] <= req_imm_i[5:0];
+            f_slot_r[1] <= req_imm_i[11:6];
+            f_slot_r[2] <= req_imm_i[17:12];
+            f_slot_r[3] <= req_imm_i[23:18];
             if (req_imm_i[31:24] != 8'd0) imm_bad_o <= 1'b1;
-            fcyc_r       <= 3'd0;
-            rg_offered_r <= 1'b0;
-            state_r      <= S_FETCH;
+            f_cyc_r   <= 3'd0;
+            f_state_r <= F_FETCH;
           end
         end
 
-        S_FETCH: begin
-          if (fcyc_r != 3'd5) fcyc_r <= fcyc_r + 3'd1;
-
-          // The capture lags the address by one cycle, so cycle c writes the
-          // slot addressed on c-1. Deriving both from `fcyc_r` is what stops
-          // the two drifting apart.
-          if ((fcyc_r >= 3'd1) && (fcyc_r <= 3'd4)) begin
-            // The cast is explicit because the index is 2 bits and the counter
-            // is 3. Verilator refuses the implicit narrowing, and it is right
-            // to: an off-by-one here writes the wrong uniform, which is the
-            // same class of fault as the neighbour-phase bug this schedule is
-            // shaped to avoid.
-            automatic logic [1:0] cap_idx = 2'(fcyc_r - 3'd1);
-            uni_r[cap_idx] <= sb_rdata_i;
+        F_FETCH: begin
+          if (f_cyc_r != 3'd5) f_cyc_r <= f_cyc_r + 3'd1;
+          if ((f_cyc_r >= 3'd1) && (f_cyc_r <= 3'd4)) begin
+            automatic logic [1:0] cap = 2'(f_cyc_r - 3'd1);
+            f_uni_r[cap] <= sb_rdata_i;
           end
-
-          if (fetch_done_c) state_r <= S_RUN;
+          if (f_cyc_r == 3'd5) f_state_r <= F_HAND;
         end
 
-        S_RUN: begin
-          if (rg_v_valid && rg_v_ready) rg_offered_r <= 1'b1;
-          // THE HANDSHAKE CAN COMPLETE ON THE EDGE THE ANSWER APPEARS, and
-          // going to S_HOLD unconditionally is a hang. A consumer that is
-          // already ready takes the reply on this same clock: the unit sees
-          // r_valid && r_ready, drops r_valid, and S_HOLD would then wait
-          // forever for a valid that has already been consumed.
-          //
-          // Found by this block's own differential -- the first group answered
-          // correctly and the SECOND never started, which is the signature of
-          // a state machine that parks rather than one that computes wrongly.
-          // Same shape as the neighbour phase completing a cycle early: a
-          // state waiting on something that is already gone.
-          if (rg_r_valid) state_r <= rsp_ready_i ? S_IDLE : S_HOLD;
+        // Hand to a free unit. If both are busy the front WAITS rather than
+        // dropping the group: back-pressure, not loss.
+        F_HAND: begin
+          if (have_free_c) begin
+            for (int i = 0; i < 4; i++) begin
+              u_d_r[free_u_c][i]   <= f_d_r[i];
+              u_uni_r[free_u_c][i] <= f_uni_r[i];
+            end
+            u_tag_r[free_u_c]  <= f_tag_r;
+            u_busy_r[free_u_c] <= 1'b1;
+            u_off_r[free_u_c]  <= 1'b0;
+            oq_u_r[oq_tail_r]  <= free_u_c;
+            oq_tail_r          <= ~oq_tail_r;
+            f_state_r          <= F_IDLE;
+          end
         end
 
-        // Reached only when the answer arrived while the consumer was NOT
-        // ready. The unit holds it; this state stops a new group being
-        // accepted over the top of a reply still on the wire.
-        S_HOLD: begin
-          if (rg_r_valid && rsp_ready_i) state_r <= S_IDLE;
-        end
-
-        default: state_r <= S_IDLE;
+        default: f_state_r <= F_IDLE;
       endcase
+
+      // ---- each unit is offered its group exactly once ---------------------
+      for (int u = 0; u < 2; u++)
+        if (rg_v_valid[u] && rg_v_ready[u]) u_off_r[u] <= 1'b1;
+
+      // ---- retire the oldest -----------------------------------------------
+      if (ret_fire_c) begin
+        u_busy_r[head_u_c] <= 1'b0;
+        u_off_r[head_u_c]  <= 1'b0;
+        oq_head_r          <= ~oq_head_r;
+      end
+
+      // ---- occupancy, decided in ONE place ---------------------------------
+      begin
+        automatic logic push = (f_state_r == F_HAND) && have_free_c;
+        automatic logic pop  = ret_fire_c;
+        if (push && !pop)      oq_count_r <= oq_count_r + 2'd1;
+        else if (pop && !push) oq_count_r <= oq_count_r - 2'd1;
+      end
     end
   end
 

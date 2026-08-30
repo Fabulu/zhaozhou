@@ -88,8 +88,13 @@ package zhao_field_ops_pkg;
   // design/ops.yml has `field_ir_opcode` but no destination widths, so it
   // would need a new field, a generator change and a ledger update. That is
   // worth doing on its own and not worth blocking a deadlock fix on.
+  localparam logic [7:0] OP_LEN2       = 8'h12;
+  localparam logic [7:0] OP_LEN3       = 8'h13;
+  localparam logic [7:0] OP_DIST2      = 8'h14;
   localparam logic [7:0] OP_NORMALIZE2 = 8'h15;
   localparam logic [7:0] OP_NORMALIZE3 = 8'h16;
+  localparam logic [7:0] OP_SIN        = 8'h18;
+  localparam logic [7:0] OP_COS        = 8'h19;
   localparam logic [7:0] OP_CURVE      = 8'h1A;
   localparam logic [7:0] OP_SPLINE     = 8'h1B;
   localparam logic [7:0] OP_NOISE2     = 8'h1C;
@@ -111,7 +116,9 @@ package zhao_field_ops_pkg;
   function automatic logic [1:0] field_long_width(input logic [7:0] op);
     case (op)
       OP_CURVE, OP_DCURVE, OP_RIDGE,
-      OP_SPLINE, UOP_RING_PREP:           field_long_width = 2'd1;
+      OP_SPLINE, UOP_RING_PREP,
+      OP_SIN, OP_COS,
+      OP_LEN2, OP_LEN3, OP_DIST2:         field_long_width = 2'd1;
       OP_NOISE2, OP_ROT2, OP_NORMALIZE2:  field_long_width = 2'd2;
       OP_ROT3, OP_NORMALIZE3:             field_long_width = 2'd3;
       default:                            field_long_width = 2'd0;

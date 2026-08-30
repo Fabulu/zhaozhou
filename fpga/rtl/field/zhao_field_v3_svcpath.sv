@@ -52,6 +52,12 @@
 //   adds storage and no new behaviour. The test checks the port.
 module zhao_field_v3_svcpath #(
     parameter int CONTEXTS = 8,
+    // How many long-op groups may be in flight at once. Forwarded to the
+    // dispatcher; default 4, which is what every existing tally was taken at.
+    // It is a top-level knob because four groups caps the service path at
+    // SIXTEEN points in flight no matter how many contexts exist, and covering
+    // the services' latency is what the Earth budget turns on.
+    parameter int OUTSTANDING = 4,
     parameter int REGS     = 32,
     parameter int TAGW     = 8
 ) (
@@ -68,6 +74,7 @@ module zhao_field_v3_svcpath #(
     input  var logic signed [31:0]            long_s1_i,
     input  var logic signed [31:0]            long_s2_i,
     input  var logic signed [31:0]            long_s3_i,
+    input  var logic signed [31:0]            long_s4_i,
     input  var logic        [31:0]            long_imm_i,
     input  var logic                          flush_i,
 
@@ -207,6 +214,21 @@ module zhao_field_v3_svcpath #(
   // which is why the hardware has to know it and the file format does not.
   localparam logic [7:0] UOP_RING_PREP = 8'hF1;
 
+  // SIN and COS, wired 2026-08-29. tools/field/measure_earth_ops.cpp planned
+  // the three shipped Earth programs and found exactly three opcodes they use
+  // that this path did not serve: DIST2, SIN and COS. These are two of them,
+  // and they are the only service here that needs NO multiplier at all -- the
+  // answer is a table lookup, so this claimant does not exist on the bank.
+  localparam logic [7:0] OP_SIN = 8'h18;
+  localparam logic [7:0] OP_COS = 8'h19;
+
+  // The distance family, wired 2026-08-29. DIST2 is the last opcode the
+  // shipped Earth programs need; LEN2 and LEN3 come free because `len_of` is
+  // the whole of all three in the reference.
+  localparam logic [7:0] OP_LEN2  = 8'h12;
+  localparam logic [7:0] OP_LEN3  = 8'h13;
+  localparam logic [7:0] OP_DIST2 = 8'h14;
+
   // A DEBUGGING CONVENIENCE, AND NOT MORE THAN THAT. These are the same
   // constants zhao_probe_v3_engine ties its spare bank lanes to, and this
   // comment used to repeat that block's argument: "recognisable, so a routing
@@ -228,7 +250,7 @@ module zhao_field_v3_svcpath #(
   // ---- dispatcher <-> service --------------------------------------------
   logic               svc_valid, svc_ready;
   logic        [7:0]  svc_op;
-  logic signed [31:0] svc_s0 [4], svc_s1 [4], svc_s2 [4], svc_s3 [4];
+  logic signed [31:0] svc_s0 [4], svc_s1 [4], svc_s2 [4], svc_s3 [4], svc_s4 [4];
   logic        [31:0] svc_imm;
   logic [TAGW-1:0]    svc_tag;
 
@@ -243,17 +265,17 @@ module zhao_field_v3_svcpath #(
   logic signed [31:0] drain_data;
 
   zhao_field_v3_dispatch #(
-      .CONTEXTS(CONTEXTS), .REGS(REGS), .TAGW(TAGW)
+      .CONTEXTS(CONTEXTS), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING)
   ) u_dispatch (
       .clk(clk), .rst_n(rst_n),
       .long_valid_i(long_valid_i), .long_ready_o(long_ready_o),
       .long_ctx_i(long_ctx_i), .long_op_i(long_op_i), .long_dst_i(long_dst_i),
       .long_s0_i(long_s0_i), .long_s1_i(long_s1_i), .long_s2_i(long_s2_i),
-      .long_s3_i(long_s3_i),
+      .long_s3_i(long_s3_i), .long_s4_i(long_s4_i),
       .long_imm_i(long_imm_i), .flush_i(flush_i),
       .svc_valid_o(svc_valid), .svc_ready_i(svc_ready),
       .svc_op_o(svc_op), .svc_s0_o(svc_s0), .svc_s1_o(svc_s1), .svc_s2_o(svc_s2),
-      .svc_s3_o(svc_s3),
+      .svc_s3_o(svc_s3), .svc_s4_o(svc_s4),
       .svc_imm_o(svc_imm), .svc_tag_o(svc_tag),
       .rsp_valid_i(rsp_valid), .rsp_ready_o(rsp_ready), .rsp_tag_i(rsp_tag),
       .rsp_r0_i(rsp_r0), .rsp_r1_i(rsp_r1), .rsp_r2_i(rsp_r2),
@@ -270,9 +292,11 @@ module zhao_field_v3_svcpath #(
   /* verilator lint_off UNUSEDSIGNAL */
   logic signed [31:0] svc_s2_unused [4];
   logic signed [31:0] svc_s3_unused [4];
+
   /* verilator lint_on UNUSEDSIGNAL */
   assign svc_s2_unused = svc_s2;
   assign svc_s3_unused = svc_s3;
+  // svc_s4 is read by the length service now, for DIST2's operand b.
 
   // ---- the service, and the bank it borrows ------------------------------
   logic               nz_mul_issue, nz_mul_ready, nz_mul_valid;
@@ -299,6 +323,19 @@ module zhao_field_v3_svcpath #(
   logic [3:0] nm_sat_resc_unused, nm_rcp0_unused;
   logic [3:0] rt_sat_add_unused, rt_sat_mul_unused;
   /* verilator lint_on UNUSEDSIGNAL */
+
+  logic               ln_rsp_valid, ln_rsp_ready;
+  logic        [ 7:0] ln_rsp_tag;
+  logic signed [31:0] ln_r0 [4];
+  logic               ln_mul_issue, ln_mul_ready, ln_mul_valid;
+  logic signed [32:0] ln_a [4], ln_b [4];
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [3:0] ln_sat_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  logic               tg_rsp_valid, tg_rsp_ready;
+  logic        [ 7:0] tg_rsp_tag;
+  logic signed [31:0] tg_r0 [4];
 
   logic               rg_rsp_valid, rg_rsp_ready;
   logic        [ 7:0] rg_rsp_tag;
@@ -331,24 +368,30 @@ module zhao_field_v3_svcpath #(
   // WHICH SERVICE OWNS THIS OP. Decoded once, read by the request routing,
   // the response mux and the wrong-op detector, so the three cannot disagree
   // about it -- which is the seam defect this engine has produced four times.
-  logic is_curve_c, is_norm_c, is_rot_c, is_noise_c, is_ring_c;
+  logic is_curve_c, is_norm_c, is_rot_c, is_noise_c, is_ring_c, is_trig_c, is_len_c;
   assign is_curve_c = (svc_op == OP_CURVE) || (svc_op == OP_DCURVE) ||
                       (svc_op == OP_SPLINE);
   assign is_norm_c  = (svc_op == OP_NORMALIZE2) || (svc_op == OP_NORMALIZE3);
   assign is_rot_c   = (svc_op == OP_ROT2) || (svc_op == OP_ROT3);
   assign is_noise_c = (svc_op == OP_NOISE2) || (svc_op == OP_RIDGE);
   assign is_ring_c  = (svc_op == UOP_RING_PREP);
+  assign is_trig_c  = (svc_op == OP_SIN) || (svc_op == OP_COS);
+  assign is_len_c   = (svc_op == OP_LEN2) || (svc_op == OP_LEN3) ||
+                      (svc_op == OP_DIST2);
 
   // EVERY SERVICE IS SELECTED BY ITS OWN PREDICATE, and the noise unit no
   // longer sits in an else-branch. That branch is exactly how four ops the
   // table offered ended up being answered with noise: "not curve" is not the
   // same claim as "is noise", and only one of them stays true when an op is
   // added.
-  logic nz_v_ready, cv_req_ready, nm_v_ready, rt_v_ready, rg_req_ready;
+  logic nz_v_ready, cv_req_ready, nm_v_ready, rt_v_ready, rg_req_ready, tg_v_ready;
+  logic ln_v_ready;
   assign svc_ready = is_curve_c ? cv_req_ready
                    : is_norm_c  ? nm_v_ready
                    : is_rot_c   ? rt_v_ready
                    : is_ring_c  ? rg_req_ready
+                   : is_trig_c  ? tg_v_ready
+                   : is_len_c   ? ln_v_ready
                    : is_noise_c ? nz_v_ready : 1'b0;
 
   zhao_field_v3_noise u_noise (
@@ -495,7 +538,46 @@ module zhao_field_v3_svcpath #(
       .imm_bad_o(imm_bad_o)
   );
 
-  // ---- one response port, FIVE services ----------------------------------
+  // NO BANK CLAIMANT. Every other service on this path borrows the four-wide
+  // multiplier; this one answers out of a table, so it is the first service
+  // here that cannot contend for anything. Worth saying because "add a service"
+  // has meant "add a claimant" five times running, and this is the exception.
+  zhao_field_v3_trig u_trig (
+      .clk(clk), .rst_n(rst_n),
+      .v_valid_i(svc_valid && is_trig_c), .v_ready_o(tg_v_ready),
+      .is_cos_i(svc_op == OP_COS),
+      .a0_0_i(svc_s0[0]), .a0_1_i(svc_s0[1]), .a0_2_i(svc_s0[2]), .a0_3_i(svc_s0[3]),
+      .tag_i(svc_tag),
+      .r_valid_o(tg_rsp_valid), .r_ready_i(tg_rsp_ready),
+      .o0_0_o(tg_r0[0]), .o0_1_o(tg_r0[1]), .o0_2_o(tg_r0[2]), .o0_3_o(tg_r0[3]),
+      .tag_o(tg_rsp_tag)
+  );
+
+  // THE SLOWEST SERVICE ON THE PATH, and knowingly so: one exact root walked
+  // across four lanes at 32 iterations each. `len_of` is exact and an
+  // approximate root would be a different answer rather than a faster one.
+  zhao_field_v3_len u_len (
+      .clk(clk), .rst_n(rst_n),
+      .v_valid_i(svc_valid && is_len_c), .v_ready_o(ln_v_ready),
+      .mode_i((svc_op == OP_LEN3) ? 2'd1 : (svc_op == OP_DIST2) ? 2'd2 : 2'd0),
+      .a0_0_i(svc_s0[0]), .a0_1_i(svc_s0[1]), .a0_2_i(svc_s0[2]), .a0_3_i(svc_s0[3]),
+      .a1_0_i(svc_s1[0]), .a1_1_i(svc_s1[1]), .a1_2_i(svc_s1[2]), .a1_3_i(svc_s1[3]),
+      .a2_0_i(svc_s2[0]), .a2_1_i(svc_s2[1]), .a2_2_i(svc_s2[2]), .a2_3_i(svc_s2[3]),
+      .b0_0_i(svc_s3[0]), .b0_1_i(svc_s3[1]), .b0_2_i(svc_s3[2]), .b0_3_i(svc_s3[3]),
+      .b1_0_i(svc_s4[0]), .b1_1_i(svc_s4[1]), .b1_2_i(svc_s4[2]), .b1_3_i(svc_s4[3]),
+      .tag_i(svc_tag),
+      .r_valid_o(ln_rsp_valid), .r_ready_i(ln_rsp_ready),
+      .o0_0_o(ln_r0[0]), .o0_1_o(ln_r0[1]), .o0_2_o(ln_r0[2]), .o0_3_o(ln_r0[3]),
+      .sat_rescale_o(ln_sat_unused), .tag_o(ln_rsp_tag),
+      .mul_issue_o(ln_mul_issue), .mul_ready_i(ln_mul_ready),
+      .mul_a_0_o(ln_a[0]), .mul_a_1_o(ln_a[1]), .mul_a_2_o(ln_a[2]), .mul_a_3_o(ln_a[3]),
+      .mul_b_0_o(ln_b[0]), .mul_b_1_o(ln_b[1]), .mul_b_2_o(ln_b[2]), .mul_b_3_o(ln_b[3]),
+      .mul_valid_i(ln_mul_valid),
+      .mul_p_0_i(bank_p[0]), .mul_p_1_i(bank_p[1]),
+      .mul_p_2_i(bank_p[2]), .mul_p_3_i(bank_p[3])
+  );
+
+  // ---- one response port, SEVEN services ----------------------------------
   //
   // BOTH CAN BE HOLDING AN ANSWER AT ONCE and the dispatcher takes one per
   // cycle, so this is an arbitration and not a mux. The curve service wins
@@ -510,22 +592,30 @@ module zhao_field_v3_svcpath #(
   assign nm_rsp_ready = rsp_ready && !cv_rsp_valid;
   assign rt_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid;
   assign rg_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid && !rt_rsp_valid;
-  assign nz_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid && !rt_rsp_valid &&
+  assign tg_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid && !rt_rsp_valid &&
                         !rg_rsp_valid;
+  assign ln_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid && !rt_rsp_valid &&
+                        !rg_rsp_valid && !tg_rsp_valid;
+  assign nz_rsp_ready = rsp_ready && !cv_rsp_valid && !nm_rsp_valid && !rt_rsp_valid &&
+                        !rg_rsp_valid && !tg_rsp_valid && !ln_rsp_valid;
 
   assign rsp_valid = cv_rsp_valid || nm_rsp_valid || rt_rsp_valid || rg_rsp_valid ||
-                     nz_rsp_valid;
+                     tg_rsp_valid || ln_rsp_valid || nz_rsp_valid;
   assign rsp_tag   = cv_rsp_valid ? cv_rsp_tag
                    : nm_rsp_valid ? nm_rsp_tag
                    : rt_rsp_valid ? rt_rsp_tag
-                   : rg_rsp_valid ? rg_rsp_tag : nz_rsp_tag;
+                   : rg_rsp_valid ? rg_rsp_tag
+                   : tg_rsp_valid ? tg_rsp_tag
+                   : ln_rsp_valid ? ln_rsp_tag : nz_rsp_tag;
 
   always_comb begin
     for (int l = 0; l < 4; l++) begin
       rsp_r0[l] = cv_rsp_valid ? cv_r0[l]
                 : nm_rsp_valid ? nm_r0[l]
                 : rt_rsp_valid ? rt_r0[l]
-                : rg_rsp_valid ? rg_r0[l] : nz_r0[l];
+                : rg_rsp_valid ? rg_r0[l]
+                : tg_rsp_valid ? tg_r0[l]
+                : ln_rsp_valid ? ln_r0[l] : nz_r0[l];
       // CURVE, DCURVE and SPLINE write ONE register per point, so their
       // second and third are zero by the op's own law. NOISE2 and RIDGE write
       // two. NORMALIZE3 and ROT3 write THREE, which is the first time this
@@ -534,7 +624,9 @@ module zhao_field_v3_svcpath #(
       rsp_r1[l] = cv_rsp_valid ? 32'sd0
                 : nm_rsp_valid ? nm_r1[l]
                 : rt_rsp_valid ? rt_r1[l]
-                : rg_rsp_valid ? 32'sd0 : nz_r1[l];
+                : rg_rsp_valid ? 32'sd0
+                : tg_rsp_valid ? 32'sd0
+                : ln_rsp_valid ? 32'sd0 : nz_r1[l];
       rsp_r2[l] = nm_rsp_valid ? nm_r2[l]
                 : rt_rsp_valid ? rt_r2[l] : 32'sd0;
     end
@@ -548,7 +640,7 @@ module zhao_field_v3_svcpath #(
       wrong_op_o <= 1'b0;
     end else if (svc_valid && svc_ready &&
                  !is_noise_c && !is_curve_c && !is_norm_c && !is_rot_c &&
-                 !is_ring_c) begin
+                 !is_ring_c && !is_trig_c && !is_len_c) begin
       wrong_op_o <= 1'b1;
     end
   end
@@ -564,9 +656,9 @@ module zhao_field_v3_svcpath #(
   // claimant that can ask every cycle, the loser's worst case is not obviously
   // bounded. This wires it; the measurement is a separate step and its number
   // is not predicted here.
-  logic [5:0]         bank_req_valid, bank_req_ready, bank_rsp_valid;
-  logic signed [32:0] bank_a [6][4], bank_b [6][4];
-  logic [TAGW-1:0]    bank_tag [6];
+  logic [6:0]         bank_req_valid, bank_req_ready, bank_rsp_valid;
+  logic signed [32:0] bank_a [7][4], bank_b [7][4];
+  logic [TAGW-1:0]    bank_tag [7];
   /* verilator lint_off UNUSEDSIGNAL */
   logic [TAGW-1:0]    bank_rsp_tag;
   /* verilator lint_on UNUSEDSIGNAL */
@@ -578,6 +670,7 @@ module zhao_field_v3_svcpath #(
     bank_req_valid[3] = nm_mul_issue;
     bank_req_valid[4] = rt_mul_issue;
     bank_req_valid[5] = rg_mul_issue;
+    bank_req_valid[6] = ln_mul_issue;
     for (int l = 0; l < 4; l++) begin
       bank_a[0][l] = RIVAL_A;
       bank_b[0][l] = RIVAL_B;
@@ -591,6 +684,8 @@ module zhao_field_v3_svcpath #(
       bank_b[4][l] = rt_b[l];
       bank_a[5][l] = rg_a[l];
       bank_b[5][l] = rg_b[l];
+      bank_a[6][l] = ln_a[l];
+      bank_b[6][l] = ln_b[l];
     end
     bank_tag[0] = 8'd0;
     bank_tag[1] = 8'd1;
@@ -598,6 +693,7 @@ module zhao_field_v3_svcpath #(
     bank_tag[3] = 8'd3;
     bank_tag[4] = 8'd4;
     bank_tag[5] = 8'd5;
+    bank_tag[6] = 8'd6;
   end
 
   assign rival_grant_o = bank_req_ready[0];
@@ -612,9 +708,11 @@ module zhao_field_v3_svcpath #(
   assign rt_mul_valid  = bank_rsp_valid[4];
   assign rg_mul_ready  = bank_req_ready[5];
   assign rg_mul_valid  = bank_rsp_valid[5];
+  assign ln_mul_ready  = bank_req_ready[6];
+  assign ln_mul_valid  = bank_rsp_valid[6];
 
   zhao_field_v3_mulbank #(
-      .CLAIMANTS(6), .PRIO_SERVICES_FIRST(1'b1), .TAGW(TAGW)
+      .CLAIMANTS(7), .PRIO_SERVICES_FIRST(1'b1), .TAGW(TAGW)
   ) u_bank (
       .clk(clk), .rst_n(rst_n),
       .req_valid_i(bank_req_valid), .req_ready_o(bank_req_ready),
