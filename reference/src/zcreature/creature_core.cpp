@@ -185,6 +185,10 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc) {
   const int n = c.frame_count;
   c.mid_quats.assign(static_cast<size_t>(n) * bc, quat16_identity());
   c.mid_root.assign(static_cast<size_t>(n) * 3, 0);
+  if (c.deform.size() == static_cast<size_t>(n))
+    c.mid_deform.assign(static_cast<size_t>(n), DeformSample{});
+  else
+    c.mid_deform.clear();
   // event-adjacent segments keep the plain nlerp midpoint (monotone at
   // impact/burial/extraction: no smoothing across a gameplay moment)
   std::vector<bool> plain(n, false);
@@ -213,6 +217,27 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc) {
       if (m < lo) m = lo;
       if (m > hi) m = hi;
       c.mid_root[static_cast<size_t>(k) * 3 + i] = static_cast<int32_t>(m);
+    }
+    if (!c.mid_deform.empty()) {
+      const DeformSample& d0 = c.deform[static_cast<size_t>(k0)];
+      const DeformSample& d1 = c.deform[static_cast<size_t>(k1)];
+      const DeformSample& d2 = c.deform[static_cast<size_t>(k2)];
+      const DeformSample& d3 = c.deform[static_cast<size_t>(k3)];
+      const auto mid_lane = [&](uint16_t p0, uint16_t p1, uint16_t p2,
+                                uint16_t p3) {
+        if (p1 == p2) return p1;  // a held deformation stays held
+        int64_t m = plain[static_cast<size_t>(k)]
+                        ? (static_cast<int64_t>(p1) + p2) / 2
+                        : (-static_cast<int64_t>(p0) + 9 * p1 + 9 * p2 - p3) / 16;
+        const int64_t lo = p1 < p2 ? p1 : p2;
+        const int64_t hi = p1 < p2 ? p2 : p1;
+        if (m < lo) m = lo;
+        if (m > hi) m = hi;
+        return static_cast<uint16_t>(m);
+      };
+      c.mid_deform[static_cast<size_t>(k)] =
+          DeformSample{mid_lane(d0.flatten, d1.flatten, d2.flatten, d3.flatten),
+                       mid_lane(d0.spread, d1.spread, d2.spread, d3.spread)};
     }
     for (int b = 0; b < bc; ++b) {
       const quat16& q1 = c.quats[static_cast<size_t>(k1) * bc + b];
@@ -370,6 +395,92 @@ const mat3x4fx* PoseBank::acquire(const CreatureType& type, uint16_t slot, uint1
 }
 
 // ------------------------------------------------------------- skinning ----
+
+DeformSample deformation_sample(const CreatureType& type, uint16_t slot,
+                                uint16_t frame, uint8_t sub) {
+  const Clip* clip = nullptr;
+  for (const Clip& c : type.bank.clips)
+    if (c.slot_id == slot) clip = &c;
+  if (clip == nullptr || frame >= clip->frame_count || clip->deform.empty())
+    return DeformSample{};
+  if (clip->deform.size() != clip->frame_count) return DeformSample{};
+  if (clip->interpolate && sub != 0) {
+    if (clip->mid_deform.size() == clip->frame_count)
+      return clip->mid_deform[frame];
+    const uint16_t nf = static_cast<uint16_t>(
+        frame + 1 >= clip->frame_count ? (clip->hold_last ? frame : 0) : frame + 1);
+    const DeformSample& a = clip->deform[frame];
+    const DeformSample& b = clip->deform[nf];
+    return DeformSample{static_cast<uint16_t>((static_cast<uint32_t>(a.flatten) + b.flatten) / 2),
+                        static_cast<uint16_t>((static_cast<uint32_t>(a.spread) + b.spread) / 2)};
+  }
+  return clip->deform[frame];
+}
+
+SkinVertex deform_skin_vertex(const SkinVertex& v, const DeformVertex& meta,
+                              const DeformSample& sample) {
+  // This branch is the exact-identity contract: no fixed-point round is allowed
+  // to touch an ordinary clip, an unauthorised key, or an unmarked vertex.
+  if (meta.role == DeformRole::kNone || meta.strength == 0 ||
+      (sample.flatten == 0 && sample.spread == 0))
+    return v;
+
+  SkinVertex out = v;
+  const int32_t flatten = static_cast<int32_t>(
+      (static_cast<uint32_t>(sample.flatten) * meta.strength + 127) / 255);
+  const int32_t spread = static_cast<int32_t>(
+      (static_cast<uint32_t>(sample.spread) * meta.strength + 127) / 255);
+  if (flatten == 0 && spread == 0) return v;
+  const int32_t squash_scale = 65536 - flatten;  // always positive: flatten is u16
+  const int32_t spread_scale = 65536 + spread;
+  const uint8_t axis = meta.axis < 3 ? meta.axis : 0;
+
+  int32_t* const dst[3] = {&out.x, &out.y, &out.z};
+  const int32_t src[3] = {v.x, v.y, v.z};
+  const int32_t center[3] = {meta.center_x, meta.center_y, meta.center_z};
+  const int32_t carrier[3] = {meta.carrier_x, meta.carrier_y, meta.carrier_z};
+  if (meta.role == DeformRole::kRadial) {
+    for (uint8_t lane = 0; lane < 3; ++lane) {
+      const int32_t scale = lane == axis ? squash_scale : spread_scale;
+      *dst[lane] = center[lane] +
+                   rescale_s32(static_cast<int64_t>(src[lane] - center[lane]) * scale,
+                               16, nullptr);
+    }
+
+    // For diag(t,t,s), inverse-transpose is diag(1/t,1/t,1/s).
+    // Multiplying by the common positive factor s*t gives diag(s,s,t),
+    // preserving the exact direction without reciprocal division.
+    if (v.nx != 0 || v.ny != 0 || v.nz != 0) {
+      const int32_t packed[3] = {v.nx, v.ny, v.nz};
+      int64_t n[3];
+      for (uint8_t lane = 0; lane < 3; ++lane)
+        n[lane] = static_cast<int64_t>(packed[lane]) *
+                  (lane == axis ? spread_scale : squash_scale);
+      const uint64_t mag2 = static_cast<uint64_t>(n[0] * n[0]) +
+                            static_cast<uint64_t>(n[1] * n[1]) +
+                            static_cast<uint64_t>(n[2] * n[2]);
+      if (mag2 != 0) {
+        const int64_t mag = static_cast<int64_t>(isqrt_u64(mag2));
+        const auto pack = [mag](int64_t c) {
+          const int64_t q = (c * 127 + (c >= 0 ? mag / 2 : -mag / 2)) / mag;
+          return static_cast<int8_t>(q > 127 ? 127 : (q < -127 ? -127 : q));
+        };
+        out.nx = pack(n[0]);
+        out.ny = pack(n[1]);
+        out.nz = pack(n[2]);
+      }
+    }
+  } else if (meta.role == DeformRole::kFollower) {
+    // Followers inherit carrier contraction as a pure translation. Perpendicular
+    // spread belongs to the deforming body, not to a rigid fin/marking offset.
+    const int32_t moved = center[axis] +
+                          rescale_s32(static_cast<int64_t>(carrier[axis] - center[axis]) *
+                                          squash_scale,
+                                      16, nullptr);
+    *dst[axis] += moved - carrier[axis];
+  }
+  return out;
+}
 
 void skin_vertex(const mat3x4fx* palette, const SkinVertex& v, int32_t& ox, int32_t& oy,
                  int32_t& oz, SatLedger* L) {
@@ -615,6 +726,32 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     y = ny;
     z = nz;
   };
+  const auto deform_of = [&](const RingSpec& rs) {
+    DeformVertex d;
+    d.role = rs.deform_role;
+    d.strength = rs.deform_strength;
+    if (d.role == DeformRole::kNone || d.strength == 0) return d;
+    d.center_x = rs.deform_center_x;
+    d.center_y = rs.deform_center_y;
+    d.center_z = rs.deform_center_z;
+    orient(d.center_x, d.center_y, d.center_z);
+    d.carrier_x = rs.cx;
+    d.carrier_y = rs.y;
+    d.carrier_z = rs.cz;
+    orient(d.carrier_x, d.carrier_y, d.carrier_z);
+    int32_t ax = rs.deform_axis == 0 ? 65536 : 0;
+    int32_t ay = rs.deform_axis == 1 ? 65536 : 0;
+    int32_t az = rs.deform_axis == 2 ? 65536 : 0;
+    orient(ax, ay, az);
+    d.axis = ax != 0 ? 0 : (ay != 0 ? 1 : 2);  // sign is irrelevant to scaling
+    return d;
+  };
+  const auto drop_identity_sidecar = [](Meshlet& m) {
+    bool active = false;
+    for (const DeformVertex& d : m.deform)
+      active = active || (d.role != DeformRole::kNone && d.strength != 0);
+    if (!active) m.deform.clear();
+  };
   // TEXTURE SEAM LAW (2026-08-26). U is periodic (a full turn is 256) but a
   // SkinVertex u is 8-bit, so the ring's closing face used to interpolate
   // u 2xx -> 0 BACKWARD across the whole tile — one face per ring wearing the
@@ -638,12 +775,15 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     const uint8_t vb0 = part.chain ? rs.b0 : part.bone;
     const uint8_t vb1 = part.chain ? rs.b1 : part.bone;
     const uint8_t vw0 = part.chain ? rs.w0 : 64;
+    const DeformVertex dm = deform_of(rs);
     for (const BuiltVert& bv : ring_cache.back()) {
       cur.verts.push_back(SkinVertex{bv.x, bv.y, bv.z, vb0, vb1, vw0, bv.u, bv.v});
+      cur.deform.push_back(dm);
     }
     if (dup != 0) {
       const BuiltVert& b0 = ring_cache.back()[0];
       cur.verts.push_back(SkinVertex{b0.x, b0.y, b0.z, vb0, vb1, vw0, 255, b0.v});
+      cur.deform.push_back(dm);
     }
     return base;
   };
@@ -662,6 +802,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
       cur.r = part.r;
       cur.g = part.g;
       cur.b = part.b;
+      drop_identity_sidecar(cur);
       out.push_back(std::move(cur));
       cur = Meshlet{};
       ring_cache.clear();
@@ -702,6 +843,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
                                      part.chain ? part.rings[0].b1 : part.bone,
                                      part.chain ? part.rings[0].w0 : uint8_t{64},
                                      static_cast<uint8_t>(part.align), 0});
+      cur.deform.push_back(deform_of(part.rings[0]));
       for (int k = 0; k < n; ++k) {
         cur.idx.push_back(static_cast<uint8_t>(lo + k));
         cur.idx.push_back(static_cast<uint8_t>(lo + (k + 1 == n ? lo_wrap : k + 1)));
@@ -718,6 +860,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
                                      part.chain ? part.rings[n_rings - 1].b1 : part.bone,
                                      part.chain ? part.rings[n_rings - 1].w0 : uint8_t{64},
                                      static_cast<uint8_t>(part.align), 255});
+      cur.deform.push_back(deform_of(part.rings[n_rings - 1]));
       for (int k = 0; k < m; ++k) {
         cur.idx.push_back(static_cast<uint8_t>(hi + k));
         cur.idx.push_back(static_cast<uint8_t>(hi + (k + 1 == m ? hi_wrap : k + 1)));
@@ -730,6 +873,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     cur.r = part.r;
     cur.g = part.g;
     cur.b = part.b;
+    drop_identity_sidecar(cur);
     out.push_back(std::move(cur));
   }
   return out;
@@ -782,6 +926,11 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
     for (int k = 0; k < 3 && same; ++k)
       same = a->root[static_cast<size_t>(sp.key_a) * 3 + k] ==
              b->root[static_cast<size_t>(sp.key_b) * 3 + k];
+    if (same) {
+      const DeformSample da = a->deform.empty() ? DeformSample{} : a->deform[sp.key_a];
+      const DeformSample db = b->deform.empty() ? DeformSample{} : b->deform[sp.key_b];
+      same = da.flatten == db.flatten && da.spread == db.spread;
+    }
     if (!same) {
       static char msg[96];
       std::snprintf(msg, sizeof(msg),
@@ -804,6 +953,19 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
     for (const RingSpec& rs : p.rings) {
       if (rs.segments < 3 || rs.segments > 32) {
         if (reason) *reason = "ring segments outside 3..32 (meshlet limit)";
+        return false;
+      }
+      if (static_cast<uint8_t>(rs.deform_role) >
+          static_cast<uint8_t>(DeformRole::kFollower)) {
+        if (reason) *reason = "unknown deformation role";
+        return false;
+      }
+      if (rs.deform_axis > 2) {
+        if (reason) *reason = "deformation axis outside 0..2";
+        return false;
+      }
+      if ((rs.deform_role == DeformRole::kNone) != (rs.deform_strength == 0)) {
+        if (reason) *reason = "deformation role/strength mismatch";
         return false;
       }
       // CHAIN parts carry per-ring bones and a 1/64 weight. w1 = 64 - w0 is
@@ -830,7 +992,8 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
   // clips: array shapes + event validation (<=4 per frame, in range, sorted)
   for (const Clip& c : bank.clips) {
     if (c.quats.size() != static_cast<size_t>(c.frame_count) * bank.bone_count ||
-        c.root.size() != static_cast<size_t>(c.frame_count) * 3) {
+        c.root.size() != static_cast<size_t>(c.frame_count) * 3 ||
+        (!c.deform.empty() && c.deform.size() != c.frame_count)) {
       if (reason) *reason = "clip frame arrays";
       return false;
     }
@@ -874,6 +1037,20 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
         v.x += bx;
         v.y += by;
         v.z += bz;
+      }
+      if (!m.deform.empty()) {
+        if (m.deform.size() != m.verts.size()) {
+          if (reason) *reason = "full deformation metadata count";
+          return false;
+        }
+        for (DeformVertex& d : m.deform) {
+          d.center_x += bx;
+          d.center_y += by;
+          d.center_z += bz;
+          d.carrier_x += bx;
+          d.carrier_y += by;
+          d.carrier_z += bz;
+        }
       }
       for (const SkinVertex& v : m.verts) {
         const int64_t r2 = static_cast<int64_t>(v.x) * v.x + static_cast<int64_t>(v.y) * v.y +
@@ -921,6 +1098,20 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
         v.x += bx;
         v.y += by;
         v.z += bz;
+      }
+      if (!m.deform.empty()) {
+        if (m.deform.size() != m.verts.size()) {
+          if (reason) *reason = "micro deformation metadata count";
+          return false;
+        }
+        for (DeformVertex& d : m.deform) {
+          d.center_x += bx;
+          d.center_y += by;
+          d.center_z += bz;
+          d.carrier_x += bx;
+          d.carrier_y += by;
+          d.carrier_z += bz;
+        }
       }
       out.micro.push_back(std::move(m));
     }

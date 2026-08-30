@@ -37,6 +37,15 @@ Correct the rejected published Zixxtrixx spring before any secondary polish, the
 - Exported historical commit `065b732` into lane-local `build/` (not a worktree), compiled it with the current durable direct-build recipe, and rendered the same fixed-side/high-three-quarter subjects. Historical sheets are `evidence/historical-065b732-*`; this older rigid top-down spring is not a revert target, but it usefully shows a coherent whole-profile descent/recovery without the current tail-led enlargement. It lacks the required whole-tail enlarged S and real cross-section squash.
 - The comparison is motion evidence only: the historical build predates selected Cool Cross, so it was rendered in its own cel-main default light. Camera subjects and 59-sample timing are identical; no values will be derived from either image set.
 
+### 2026-08-30 - Generic identity-default deformation sidecar
+
+- Added an optional fixed-point `DeformSample` lane to clips and matching baked presentation midpoints. Samples remain outside `PoseBank`; decoded bone palettes and rigid validation are unchanged.
+- Added optional parallel `DeformVertex` metadata to full/micro meshlets, authored from `RingSpec` and rebuilt independently through the existing micro decimator. Metadata supports radial body vertices and rigid followers; cardinal axes and centres are transformed with each part's exact quarter-turn authoring transform.
+- The compositor now resolves one generic sample per instance, applies bind-space deformation before ordinary two-weight skinning, and passes inverse-transpose-corrected, integer-renormalised normals through the unchanged rigid normal blend. There is no creature/species branch.
+- Exact identity is an early return when samples or metadata are absent/zero. A clean direct all-target rebuild preserved the untouched side/top spring CRCs exactly: `0x87445BC2` and `0x996FAF35`.
+- Added and ran `zixx-meshcheck --deform-sidecar`: exact byte identity, expected radial/follower fixed-point positions, inverse-transpose normal direction and baked midpoint all pass. Ordinary `zixx-meshcheck` remains green with zero bind disagreements and zero seam splits.
+- Compile gates now reject malformed clip sample counts, metadata role/strength/axis combinations and full/micro metadata count mismatches; declared phase seams compare deformation as well as roots/quaternions.
+
 ---
 
 ## Subagent Spawns
@@ -72,7 +81,7 @@ The mandated `subagents/20260830-1730-zixxtrixx-coil-expression/` directory was 
 
 ## Next Steps
 
-1. Refresh agent-pack current-baseline handoff while retaining V14 history.
-2. Fresh direct build and capture the rejected current spring from identical fixed-side/high-three-quarter views; recover an earlier better spring reference without wholesale revert.
-3. Commit/push direction/run/handoff milestone.
-4. Implement and prove the generic identity path, then visually reauthor the coil before unlocking secondary work.
+1. Commit/push the proven generic identity-sidecar milestone.
+2. Author Zixxtrixx full/micro deformation metadata and spring-only samples; remove root retreat, early clearance and tail-leading profile.
+3. Iterate every-frame fixed-side/high-three-quarter renders and actual playback until the complete coil reads correctly, then derive committed regression bands from that accepted art.
+4. Only after recording coil acceptance, begin the queued secondary expression/action/pigment/light work.
