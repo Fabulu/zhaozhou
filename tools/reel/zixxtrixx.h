@@ -742,21 +742,27 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
 // motion may not concertina sideways. These are absolute segment directions,
 // like kStanceSlope; joints are adjacent differences.
 constexpr int32_t kSpringCompressionDepth = 1000;  // profile authority, 1/1000
-constexpr int32_t kSpringCompressionDropMm = 252;  // full-squash root descent
-constexpr int32_t kSpringCompressionClearanceLiftMm = 98;  // mid-morph arc
-constexpr int32_t kSpringHeadRetractMm = 620;      // nose travels body-side on squash
-constexpr int32_t kSpringJumpRootLiftMm = 40;      // grounded enlarged-S settle
-constexpr int32_t kSpringTailJoinLag = 350;        // progressive entry, 1/1000
-constexpr int32_t kSpringDeclaredBiteMm = 40;      // permitted posed-surface bite
+constexpr int32_t kSpringDeclaredBiteMm = 34;      // planted support's authored bite
+constexpr int kSpringPlantSegment = 14;            // support after this spine segment
+constexpr int32_t kSpringJumpRootLiftMm = 0;       // no clearance hop during entry
+// Real cross-section controls (Q0.16 deltas from identity at full sample).
+constexpr uint16_t kSpringBodyFlattenQ16 = 17000;  // ~26% vertical contraction
+constexpr uint16_t kSpringBodySpreadQ16 = 5200;    // ~8% lateral/lengthwise bulge
+constexpr uint8_t kSpringSkullDeformStrength = 64; // head only squashes slightly
+constexpr uint8_t kSpringThroatDeformStrength = 188;
+constexpr uint8_t kSpringBodyDeformStrength = 255;
+constexpr uint8_t kSpringTailDeformStrength = 210;
+constexpr int kSpringBodyStrengthRampStations = 4;
+constexpr int kSpringTailStrengthRampStations = 6;
 constexpr int32_t kSpringJumpSlope[kStanceSlopes] = {
-    300, 900, 2400, 5200, 8200, 16500, 23500, 26000, 20500, 10000,
-    -500, -900, -1800, -3200, -5000, -7000, -9000, -11500, -14000};
+    1000, 1800, 3600, 6500, 10500, 15000, 20500, 24000, 22000, 15000,
+    6000, 1000, 500, 800, 1800, 2800, 600, -7000, -13000};
 constexpr int32_t kSpringCompressedSlope[kStanceSlopes] = {
-    0, 400, 1000, 2200, 4000, 6500, 9000, 10500, 9000, 6000,
-    2000, -2000, -6000, -9000, -10500, -9000, -6000, -3000, -1000};
-constexpr int32_t kSpringJumpHeadAttitude = 700;    // follows the taller entry arc
-constexpr int32_t kSpringHeadAttitude = 4200;       // retracts; never nose-first lunges
-constexpr int32_t kSpringBladeFlare = 900;          // fan braces during compression
+    -5000, -7000, -7000, -4000, 3000, 11000, 19000, 25000, 25000, 19000,
+    10000, 1500, 500, 500, 1200, 1800, 1600, -1500, -4000};
+constexpr int32_t kSpringJumpHeadAttitude = 700;   // follows the taller entry arc
+constexpr int32_t kSpringHeadAttitude = 2200;      // a restrained brace, not a head crush
+constexpr int32_t kSpringBladeFlare = 900;         // fan braces during compression
 
 // Named theatrical timing. The accepted attack still leaves the terrain at key
 // 23, but now spends its opening six keys enlarging through the tail before the
@@ -766,7 +772,7 @@ constexpr int kSaltoSpringEntryEndKey = 6;
 constexpr int kSaltoCompressEndKey = 12;
 constexpr int kSaltoCompressHoldEndKey = 18;
 constexpr int kSaltoSpringReleasePoseKey = 22;  // exact grounded S before lift
-constexpr int kSaltoRigidReleaseEndKey = 22;    // airborne gather may begin after this
+constexpr int kSaltoRigidReleaseEndKey = 24;    // whole S rises before wheel gather
 constexpr int kSaltoReleaseEndKey = 28;         // accepted airborne wheel is complete
 constexpr int kSaltoAirCoilKeys = 6;  // planned variants clear before wheel lock
 constexpr int kSaltoCoilPoseKey = kSaltoReleaseEndKey + 1;  // past signed-rounding residue
@@ -1149,8 +1155,9 @@ inline int curve(const Key* k, int n, int f) {
 // and the launch now has the explicit gummy ordering required by owner
 // direction #13: keys 0..6 enlarge the grounded S through the tail tip, keys
 // 6..12 squash the complete silhouette, keys 12..18 HOLD, and keys 18..22
-// release back to one intact grounded S. Lift begins at key 23, after the hold
-// and release. The accepted climb, apex hang, plunge and extraction stay intact.
+// release back to one intact grounded S. The complete S rises during keys
+// 22..24; only then may the accepted airborne wheel gather. The accepted
+// climb, apex hang, plunge and extraction stay intact.
 static const Key kAtkLift[] = {
     {0, 0},          {22, 0},        {23, 300},      {24, 600},
     {26, 1100},      {28, 1500},     {32, 3200},     {38, 5600},
@@ -1173,8 +1180,9 @@ static const Key kAtkFwd[] = {
     {kAtkStickEnd, kAtkFwdMax}, {228, 5200}, {232, 2600}, {kAttackKeys - 1, 0}};
 // TWO-STAGE PRELOAD. Entry reaches the enlarged full-tail jump S before
 // squash authority is allowed to move at all. Both return to exact rest at key
-// 22; lift begins only at key 23. This preserves the accepted airborne wheel
-// and impact choreography while making the anticipation readable.
+// 22; lift begins only after the planted release is complete. The profile stays
+// an intact S through key 24 while that lift takes the entire animal airborne;
+// only then does the wheel gather.
 static const Key kAtkSpringEntry[] = {
     {0, 0}, {3, 420}, {kSaltoSpringEntryEndKey, 1000},
     {kSaltoCompressHoldEndKey, 1000}, {kSaltoSpringReleasePoseKey, 0},
@@ -1207,12 +1215,13 @@ constexpr int kAtkAimN = static_cast<int>(sizeof(kAtkAim) / sizeof(Key));
 // 1000 = rolled into the coil, 0 = straight. The roll-up waits for the
 // anticipation (keys 0..9 are the compress + hold).
 static const Key kAtkCurl[] = {
-    {0, 0}, {kSaltoCompressHoldEndKey, 0}, {22, 0}, {24, 350},
+    {0, 0}, {kSaltoCompressHoldEndKey, 0}, {kSaltoRigidReleaseEndKey, 0},
     {kSaltoReleaseEndKey, 1000}, {52, 1000}, {59, 0},
     {kAttackKeys - 1, 0}};
 // how much of the canonical S remains -- the shared spring profile owns the
-// loaded pose, then authority hands to the unchanged airborne wheel.
-static const Key kAtkAuth[] = {{0, 1000}, {22, 1000},
+// loaded pose, then the complete released S rises rigidly for two keys before
+// authority hands to the unchanged airborne wheel.
+static const Key kAtkAuth[] = {{0, 1000}, {kSaltoRigidReleaseEndKey, 1000},
                                {kSaltoReleaseEndKey, 0}, {226, 0},
                                {232, 650}, {kAttackKeys - 1, 1000}};
 // accumulated turn of the WHOLE BODY in 1/1000 of a full rotation. 3000 =
@@ -1220,12 +1229,12 @@ static const Key kAtkAuth[] = {{0, 1000}, {22, 1000},
 // 60 deg below horizontal pointing down-and-forward, HELD from the apex
 // through the dive, the impact and the whole stick; the extraction keeps
 // it held until the tip is probed clear of the ground (key 206), and only
-// then does the fourth turn land it. The -40 at key 12 is the wind-up --
-// INSIDE the release, not the hold: at spin -40 the whole body pitches
-// about the nose, and during the grounded compress that floated the rear
-// 750 mm off the dirt (probe). By key 12 the launch is already airborne.
-static const Key kAtkSpin[] = {{0, 0},          {22, 0},          {24, -40},
-                               {27, 0},         {32, 700},        {40, 1600},
+// then does the fourth turn land it. The small -40 airborne wind-up waits
+// until the complete released S has risen through key 24; it never rotates
+// the planted compression or masquerades as lift.
+static const Key kAtkSpin[] = {{0, 0},          {kSaltoRigidReleaseEndKey, 0},
+                               {26, -40},        {29, 0},
+                               {32, 700},        {40, 1600},
                                {48, 2600},      {55, 3050},       {59, kAtkSpinStick},
                                {226, kAtkSpinStick},               {230, 3650},
                                {233, 3900},     {kAttackKeys - 1, 4000}};
@@ -1625,73 +1634,115 @@ inline int32_t spring_smooth_amount(int32_t amount) {
       1000000);
 }
 
+inline uint8_t spring_deform_strength(int station) {
+  if (station <= kSkullBlendTo) return kSpringSkullDeformStrength;
+  if (station <= kHeadEnd) {
+    const int den = kHeadEnd - kSkullBlendTo;
+    const int t = den > 0 ? (station - kSkullBlendTo) * 255 / den : 255;
+    return static_cast<uint8_t>(
+        kSpringSkullDeformStrength +
+        (kSpringThroatDeformStrength - kSpringSkullDeformStrength) * t / 255);
+  }
+  if (station < kHeadEnd + kSpringBodyStrengthRampStations) {
+    const int t = (station - kHeadEnd) * 255 / kSpringBodyStrengthRampStations;
+    return static_cast<uint8_t>(
+        kSpringThroatDeformStrength +
+        (kSpringBodyDeformStrength - kSpringThroatDeformStrength) * t / 255);
+  }
+  const int tail0 = kProfileStations - kSpringTailStrengthRampStations;
+  if (station >= tail0) {
+    const int t = (station - tail0) * 255 /
+                  (kSpringTailStrengthRampStations - 1);
+    return static_cast<uint8_t>(
+        kSpringBodyDeformStrength +
+        (kSpringTailDeformStrength - kSpringBodyDeformStrength) * t / 255);
+  }
+  return kSpringBodyDeformStrength;
+}
+
+inline zc::DeformSample spring_deform_sample(int32_t amount) {
+  const int32_t q = spring_smooth_amount(amount);
+  return zc::DeformSample{
+      static_cast<uint16_t>((static_cast<uint32_t>(kSpringBodyFlattenQ16) * q) / 1000),
+      static_cast<uint16_t>((static_cast<uint32_t>(kSpringBodySpreadQ16) * q) / 1000)};
+}
+
 inline int32_t spring_root_drop(int32_t amount) {
-  const int32_t e = spring_smooth_amount(amount);
+  const int32_t q = spring_smooth_amount(amount);
   return -static_cast<int32_t>(
-      (static_cast<int64_t>(kSpringCompressionDropMm) * e) / 1000);
+      (static_cast<int64_t>(kSpringDeclaredBiteMm) * q) / 1000);
+}
+
+inline int32_t spring_profile_slope(int k, int32_t authority, int32_t entry,
+                                    int32_t squash) {
+  const int32_t e = spring_smooth_amount(entry);
+  const int32_t q = spring_smooth_amount(
+      (squash * kSpringCompressionDepth) / 1000);
+  const int32_t jump = kStanceSlope[k] + static_cast<int32_t>(
+      (static_cast<int64_t>(kSpringJumpSlope[k] - kStanceSlope[k]) * e) / 1000);
+  const int32_t compressed = jump + static_cast<int32_t>(
+      (static_cast<int64_t>(kSpringCompressedSlope[k] - jump) * q) / 1000);
+  return static_cast<int32_t>((static_cast<int64_t>(compressed) * authority) / 1000);
+}
+
+// The grounded support is an authored spine station, not the nose/root. Profile
+// changes articulate every earlier segment around that support; the resulting
+// root X/Y is therefore the head's real motion relative to planted body, not a
+// free whole-creature slide. The support itself only takes the declared bite.
+inline void spring_anchor_offset(int32_t authority, int32_t entry,
+                                 int32_t squash, int32_t& out_x,
+                                 int32_t& out_y) {
+  const int32_t seg = kBodyLenMm / (kSpineBones - 1);
+  int64_t x = 0, y = 0;
+  for (int k = 0; k < kSpringPlantSegment; ++k) {
+    const int32_t base = static_cast<int32_t>(
+        (static_cast<int64_t>(kStanceSlope[k]) * authority) / 1000);
+    const int32_t posed = spring_profile_slope(k, authority, entry, squash);
+    const int32_t cb = zref::fx_cos(zref::angle16{static_cast<uint16_t>(base & 0xFFFF)}).raw;
+    const int32_t sb = zref::fx_sin(zref::angle16{static_cast<uint16_t>(base & 0xFFFF)}).raw;
+    const int32_t cp = zref::fx_cos(zref::angle16{static_cast<uint16_t>(posed & 0xFFFF)}).raw;
+    const int32_t sp = zref::fx_sin(zref::angle16{static_cast<uint16_t>(posed & 0xFFFF)}).raw;
+    x += static_cast<int64_t>(seg) * (cp - cb);
+    y += static_cast<int64_t>(seg) * (sp - sb);
+  }
+  out_x = static_cast<int32_t>(x >> 16);
+  out_y = static_cast<int32_t>(y >> 16) + spring_root_drop(squash);
 }
 
 inline int32_t spring_root_offset(int32_t entry, int32_t squash) {
-  const int32_t e = spring_smooth_amount(entry);
-  const int32_t q = spring_smooth_amount(squash);
-  const int32_t jump_settle = static_cast<int32_t>(
-      (static_cast<int64_t>(kSpringJumpRootLiftMm) * e) / 1000);
-  const int32_t clearance_arc = static_cast<int32_t>(
-      (static_cast<int64_t>(4) * q * (1000 - q)) / 1000);
-  const int32_t clearance_lift = static_cast<int32_t>(
-      (static_cast<int64_t>(kSpringCompressionClearanceLiftMm) *
-       clearance_arc) /
-      1000);
-  return static_cast<int32_t>(
-             (static_cast<int64_t>(jump_settle) * (1000 - q)) / 1000) +
-         spring_root_drop(q) + clearance_lift;
+  int32_t x = 0, y = 0;
+  spring_anchor_offset(1000, entry, squash, x, y);
+  return y + static_cast<int32_t>(
+                 (static_cast<int64_t>(kSpringJumpRootLiftMm) *
+                  spring_smooth_amount(entry)) /
+                 1000);
 }
 
-inline int32_t spring_root_retract(int32_t squash) {
-  const int32_t q = spring_smooth_amount(squash);
-  return -static_cast<int32_t>(
-      (static_cast<int64_t>(kSpringHeadRetractMm) * q) / 1000);
+inline int32_t spring_root_anchor_x(int32_t entry, int32_t squash) {
+  int32_t x = 0, y = 0;
+  spring_anchor_offset(1000, entry, squash, x, y);
+  return x;
 }
 
-// Shared real spring pose for every salto and jump. `entry` progressively
-// recruits the profile from nose to tail: later segments receive a delayed but
-// complete smoothstep, and at entry=1000 every segment is exactly on the named
-// enlarged jump S. `squash` cannot begin until callers reach that state; it
-// blends the complete jump S into a broad, clearance-preserving squat S.
+// Shared real spring pose for every salto and jump. The enlarged profile recruits
+// the whole chain together: the tail participates in the same sample and cannot
+// lead. Squash then folds that complete S around the planted support.
 inline int32_t apply_spring_stance(Rig& g, int32_t authority, int32_t entry,
                                    int32_t squash) {
   if (entry < 0) entry = 0;
   if (entry > 1000) entry = 1000;
   if (squash < 0) squash = 0;
   if (squash > 1000) squash = 1000;
-  const int32_t compressed = spring_smooth_amount(
-      (squash * kSpringCompressionDepth) / 1000);
   int32_t prev = 0;
   for (int k = 0; k < kStanceSlopes; ++k) {
-    const int32_t delay =
-        (k * kSpringTailJoinLag) / (kStanceSlopes - 1);
-    int32_t joined = 0;
-    if (entry >= 1000) {
-      joined = 1000;
-    } else if (entry > delay) {
-      joined = spring_smooth_amount(
-          ((entry - delay) * 1000) / (1000 - delay));
-    }
-    const int32_t jump_slope = kStanceSlope[k] + static_cast<int32_t>(
-        (static_cast<int64_t>(kSpringJumpSlope[k] - kStanceSlope[k]) *
-         joined) /
-        1000);
-    const int32_t slope = jump_slope + static_cast<int32_t>(
-        (static_cast<int64_t>(kSpringCompressedSlope[k] - jump_slope) *
-         compressed) /
-        1000);
-    const int32_t directed = static_cast<int32_t>(
-        (static_cast<int64_t>(slope) * authority) / 1000);
+    const int32_t directed = spring_profile_slope(k, authority, entry, squash);
     g.q[kBSpine0 + k] =
         quat_mul(g.q[kBSpine0 + k], quat_z(directed - prev));
     prev = directed;
   }
-  return spring_root_offset(entry, squash);
+  int32_t anchor_x = 0, anchor_y = 0;
+  spring_anchor_offset(authority, entry, squash, anchor_x, anchor_y);
+  return anchor_y;
 }
 
 inline int32_t spring_head_attitude(int32_t authority, int32_t entry,
@@ -2105,6 +2156,7 @@ inline zc::Clip build_attack(bool choreo = false) {
   c.frame_count = static_cast<uint16_t>(kAttackKeys);
   c.root.assign(static_cast<size_t>(kAttackKeys) * 3, 0);
   c.quats.assign(static_cast<size_t>(kAttackKeys) * kBoneCount, zc::quat16_identity());
+  c.deform.assign(static_cast<size_t>(kAttackKeys), zc::DeformSample{});
 
   // WHAT HAPPENS, in order (Fabian, 2026-08-26 base + 2026-08-27 rework):
   //
@@ -2146,8 +2198,9 @@ inline zc::Clip build_attack(bool choreo = false) {
     const int fwd = curve(kAtkFwd, kAtkFwdN, f);
     const int entry = curve(kAtkSpringEntry, kAtkSpringEntryN, f);
     const int pre = curve(kAtkPre, kAtkPreN, f);
+    c.deform[static_cast<size_t>(f)] = spring_deform_sample(pre);
 
-    // Direction #13's ordered anticipation: first the whole animal grows into
+    // Direction #17's ordered anticipation: first the whole animal grows into
     // the named jump S through its tail tip; only then may the separate squash
     // retract and compact it. The same samples own body, head and root.
     const int32_t pre_drop = apply_spring_stance(g, auth, entry, pre);
@@ -2187,7 +2240,7 @@ inline zc::Clip build_attack(bool choreo = false) {
     g.write(c, f);
     if (!choreo) {
       c.root[f * 3 + 0] = fxm(fwd + (piv_x * curl) / 1000 +
-                                  spring_root_retract(pre));
+                                  spring_root_anchor_x(entry, pre));
       c.root[f * 3 + 1] = fxm(lift + (piv_y * curl) / 1000 + pre_drop);
     }  // choreo: root channels stay ZERO -- trajectory is the instance's
   }
@@ -2221,7 +2274,7 @@ inline ChoreoSample attack_choreo_sample(int key) {
   const int32_t piv_x = static_cast<int32_t>((static_cast<int64_t>(kCoilR) * sth) >> 16);
   const int32_t piv_y = kCoilR - static_cast<int32_t>((static_cast<int64_t>(kCoilR) * cth) >> 16);
   ChoreoSample out;
-  out.x_mm = fwd + (piv_x * curl) / 1000 + spring_root_retract(pre);
+  out.x_mm = fwd + (piv_x * curl) / 1000 + spring_root_anchor_x(entry, pre);
   out.y_mm = lift + (piv_y * curl) / 1000 + pre_drop;
   out.theta = theta;
   // PIVOT CORRECTION: on bone 0 the spin acted about the NOSE at kBodyY;
@@ -2450,7 +2503,7 @@ inline ChoreoSample zixx_plan_sample(const zc::AttackPlan& p, int key) {
     // the tail, compact/retract, hold, then return to exact S before flight.
     const int32_t entry = zixx_plan_spring_entry_amount(p, key);
     const int32_t squash = zixx_plan_spring_amount(p, key);
-    out.x_mm = spring_root_retract(squash);
+    out.x_mm = spring_root_anchor_x(entry, squash);
     out.y_mm = spring_root_offset(entry, squash);
     return out;
   }
@@ -4154,6 +4207,8 @@ inline zc::Clip slice_clip(const zc::Clip& src, uint16_t slot, int k0, int k1) {
                 src.root.begin() + (static_cast<size_t>(k1) + 1) * 3);
   c.quats.assign(src.quats.begin() + static_cast<size_t>(k0) * kBoneCount,
                  src.quats.begin() + (static_cast<size_t>(k1) + 1) * kBoneCount);
+  if (!src.deform.empty())
+    c.deform.assign(src.deform.begin() + k0, src.deform.begin() + k1 + 1);
   return c;
 }
 
@@ -4165,6 +4220,7 @@ inline zc::Clip duplicate_pose_clip(const zc::Clip& src, uint16_t slot,
   for (int i = 0; i < 3; ++i) c.root[3 + i] = c.root[i];
   c.quats.resize(static_cast<size_t>(2) * kBoneCount);
   for (int b = 0; b < kBoneCount; ++b) c.quats[kBoneCount + b] = c.quats[b];
+  if (!c.deform.empty()) c.deform.resize(2, c.deform[0]);
   return c;
 }
 
@@ -5225,7 +5281,9 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
   c.frame_count = static_cast<uint16_t>(total);
   c.root.assign(static_cast<size_t>(total) * 3, 0);
   c.quats.assign(static_cast<size_t>(total) * kBoneCount, zc::quat16_identity());
+  c.deform.assign(static_cast<size_t>(total), zc::DeformSample{});
   const ChoreoSample end_s = zixx_plan_sample(p, t3);
+
   const int64_t aim_dx = p.intercept_x_mm - p.apex_fwd_mm;
   const int64_t aim_dy = p.intercept_y_mm - p.apex_mm;
   int32_t aim_len = static_cast<int32_t>(zref::isqrt_u64(
@@ -5250,6 +5308,7 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
       // curve; one shared sample releases the entire S coherently.
       const int32_t entry = zixx_plan_spring_entry_amount(p, k);
       const int32_t amount = zixx_plan_spring_amount(p, k);
+      c.deform[static_cast<size_t>(k)] = spring_deform_sample(amount);
       apply_spring_stance(g, 1000, entry, amount);
       g.q[kBHead] = quat_z(spring_head_attitude(1000, entry, amount));
       g.tail_rest(kBladeSplay + kBladeSplay / 5 +
@@ -5623,7 +5682,7 @@ inline void zixx_jump_track(const JumpPlan& p, int key,
   const int last = zixx_jump_phases(p).last_key;
   if (key > last) key = last;
   const JumpMotionSample m = zixx_jump_motion_sample(p, key);
-  x_mm = spring_root_retract(m.spring);
+  x_mm = spring_root_anchor_x(m.entry, m.spring);
   y_mm = m.lift + spring_root_offset(m.entry, m.spring);
 }
 
@@ -5639,6 +5698,7 @@ inline zc::Clip build_jump(const JumpPlan& p) {
   c.root.assign(static_cast<size_t>(total) * 3, 0);
   c.quats.assign(static_cast<size_t>(total) * kBoneCount,
                  zc::quat16_identity());
+  c.deform.assign(static_cast<size_t>(total), zc::DeformSample{});
   const int32_t coil_pitch = -(65536 / (kSpineBones - 2));
   for (int f = 0; f < total; ++f) {
     const JumpMotionSample motion = zixx_jump_motion_sample(p, f);
@@ -5647,6 +5707,7 @@ inline zc::Clip build_jump(const JumpPlan& p) {
     const int32_t curl = motion.curl;
     const int32_t theta = motion.theta;
     const int32_t lift = motion.lift;
+    c.deform[static_cast<size_t>(f)] = spring_deform_sample(spring);
 
     Rig g;
     g.reset();
@@ -5669,7 +5730,7 @@ inline zc::Clip build_jump(const JumpPlan& p) {
         (static_cast<int64_t>(kCoilR) * cth) >> 16);
     g.write(c, f);
     c.root[f * 3 + 0] = fxm((piv_x * curl) / 1000 +
-                                spring_root_retract(spring));
+                                spring_root_anchor_x(entry, spring));
     int32_t y = lift + drop + (piv_y * curl) / 1000;
     if (f == land || f == land + 1) y -= kJumpLandingBiteMm;
     c.root[f * 3 + 1] = fxm(y);
@@ -5747,6 +5808,12 @@ inline const zc::CreatureType& type() {
         rs.rx = fxm(rx_mm);    // LATERAL, ball + the eye rim
         rs.rz = fxm(rz_mm);    // VERTICAL, ball
         rs.cz = -fxm(kBodyY);  // chain rings are creature-global; UP is -cz
+        rs.deform_role = zc::DeformRole::kRadial;
+        rs.deform_axis = 2;  // local Z quarter-turns onto bind-space vertical
+        rs.deform_strength = spring_deform_strength(i);
+        rs.deform_center_x = rs.cx;
+        rs.deform_center_y = rs.y;
+        rs.deform_center_z = rs.cz;
         p.rings.push_back(rs);
       }
       p.page = kTileHead;
@@ -5826,6 +5893,12 @@ inline const zc::CreatureType& type() {
             rs.b1 = pupil_bone;
             rs.w0 = 64;
           }
+          rs.deform_role = zc::DeformRole::kFollower;
+          rs.deform_axis = 1;  // stripe is already authored in global bind axes
+          rs.deform_strength = spring_deform_strength(kPupilStation);
+          rs.deform_center_x = fxm(eye_x);
+          rs.deform_center_y = fxm(kBodyY);
+          rs.deform_center_z = 0;
           stripe.rings.push_back(rs);
         }
         parts.push_back(stripe);
@@ -5852,6 +5925,12 @@ inline const zc::CreatureType& type() {
         rs.rx = fxm(r * station_wide(i) / 100);  // LATERAL
         rs.rz = fxm(r);                          // VERTICAL
         rs.cz = -fxm(kBodyY);
+        rs.deform_role = zc::DeformRole::kRadial;
+        rs.deform_axis = 2;
+        rs.deform_strength = spring_deform_strength(i);
+        rs.deform_center_x = rs.cx;
+        rs.deform_center_y = rs.y;
+        rs.deform_center_z = rs.cz;
         p.rings.push_back(rs);
       }
       p.page = kTileBody;
@@ -5927,6 +6006,12 @@ inline const zc::CreatureType& type() {
           rs.b1 = broot;
           rs.w0 = static_cast<uint8_t>(64 - wroot);
         }
+        rs.deform_role = zc::DeformRole::kFollower;
+        rs.deform_axis = 2;
+        rs.deform_strength = kSpringTailDeformStrength;
+        rs.deform_center_x = 0;
+        rs.deform_center_y = rs.y;  // preserve blade length; follow lateral root
+        rs.deform_center_z = -fxm(kBodyY);
         p.rings.push_back(rs);
       }
       // BOTH faces of each fin carry BOTH colours (Fabian, 2026-08-27
@@ -5949,6 +6034,15 @@ inline const zc::CreatureType& type() {
       p.rings = {{0, fxm(kSpikeR), 6},
                  {fxm(kSpikeLen / 2), fxm(kSpikeR * 6 / 10), 6},
                  {fxm(kSpikeLen), fxm(kSpikeR / 5), 6}};
+      for (zc::RingSpec& rs : p.rings) {
+        rs.deform_role = zc::DeformRole::kFollower;
+        rs.deform_axis = 2;
+        rs.deform_strength = kSpringTailDeformStrength;
+        rs.deform_center_y = rs.y;
+        // Spike bone rests 30 mm above the fork centre. Local +Z maps to -Y
+        // through this part's quarter turns, bringing the origin back to body.
+        rs.deform_center_z = fxm(30);
+      }
       p.page = 255;  // a 26 mm spike does not repay a texture page
       set_rgb(p, kPink);
       parts.push_back(p);

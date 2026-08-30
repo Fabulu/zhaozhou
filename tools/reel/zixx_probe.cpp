@@ -11,9 +11,12 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <map>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -63,12 +66,20 @@ struct PosedSample {
   int tick = 0;  // 60 Hz presentation tick; even=authored key, odd=midpoint
   int32_t min_y_fx = INT32_MAX;
   int32_t max_y_fx = INT32_MIN;
+  std::array<int32_t, 2> rung_min_y_fx{INT32_MAX, INT32_MAX};
+  std::array<int32_t, 2> rung_max_y_fx{INT32_MIN, INT32_MIN};
+  std::array<uint64_t, 2> normal_faults{};
+  std::array<int32_t, 2> normal_min_len2{INT32_MAX, INT32_MAX};
+  std::array<int32_t, 2> normal_max_len2{};
   int32_t blade_min_y_fx = INT32_MAX;
   int min_b0 = -1;
   int min_b1 = -1;
   std::array<int32_t, zixx::kProfileStations> x_mm{};
   std::array<int32_t, zixx::kProfileStations> y_mm{};
   std::array<int32_t, zixx::kProfileStations> z_mm{};
+  int32_t support_x_mm = 0;
+  int32_t support_y_mm = 0;
+  int32_t support_z_mm = 0;
   std::array<int32_t, zc::kMaxBones> bone_min_y_fx{};
   uint64_t saturation = 0;
 };
@@ -81,6 +92,9 @@ struct ClipScan {
   int worst_tick = -1;
   int worst_b0 = -1;
   int worst_b1 = -1;
+  std::array<uint64_t, 2> normal_faults{};
+  std::array<int32_t, 2> normal_min_len2{INT32_MAX, INT32_MAX};
+  std::array<int32_t, 2> normal_max_len2{};
   uint64_t saturation = 0;
 };
 
@@ -101,25 +115,60 @@ ClipScan scan_clip(const zc::CreatureType& type, const zc::Clip& clip,
     std::array<zc::mat3x4fx, zc::kMaxBones> pose;
     zref::SatLedger ledger;
     zc::decode_pose(type, clip, key, pose, &ledger, sub);
-    for (const auto& meshlet : type.mesh) {
-      for (const auto& v : meshlet.verts) {
-        int32_t x = 0, y = 0, z = 0;
-        zc::skin_vertex(pose.data(), v, x, y, z, &ledger);
-        // Keep actual skinned-vertex minima per influencing bone. Balance uses
-        // these to prove several body segments, rather than only blade tips,
-        // share the authored terrain support.
-        if (v.b0 < zc::kMaxBones && v.w0 != 0)
-          s.bone_min_y_fx[v.b0] = std::min(s.bone_min_y_fx[v.b0], y);
-        if (v.b1 < zc::kMaxBones && v.w0 != 255)
-          s.bone_min_y_fx[v.b1] = std::min(s.bone_min_y_fx[v.b1], y);
-        if (y < s.min_y_fx) {
-          s.min_y_fx = y;
-          s.min_b0 = v.b0;
-          s.min_b1 = v.b1;
+    const zc::DeformSample deform =
+        zc::deformation_sample(type, clip.slot_id, key, sub);
+    for (int rung = 0; rung < 2; ++rung) {
+      const auto& mesh = rung == 0 ? type.mesh : type.micro;
+      for (const auto& meshlet : mesh) {
+        for (size_t vi = 0; vi < meshlet.verts.size(); ++vi) {
+          const zc::SkinVertex& bind = meshlet.verts[vi];
+          zc::SkinVertex v = bind;
+          if (!meshlet.deform.empty())
+            v = zc::deform_skin_vertex(bind, meshlet.deform[vi], deform);
+          int32_t x = 0, y = 0, z = 0;
+          zc::skin_vertex(pose.data(), v, x, y, z, &ledger);
+          s.rung_min_y_fx[rung] = std::min(s.rung_min_y_fx[rung], y);
+          s.rung_max_y_fx[rung] = std::max(s.rung_max_y_fx[rung], y);
+          // Keep actual LOD0 skinned-vertex minima per influencing bone. Balance
+          // uses these to prove several body segments, rather than only blade
+          // tips, share the authored terrain support.
+          if (rung == 0) {
+            if (v.b0 < zc::kMaxBones && v.w0 != 0)
+              s.bone_min_y_fx[v.b0] = std::min(s.bone_min_y_fx[v.b0], y);
+            if (v.b1 < zc::kMaxBones && v.w0 != 255)
+              s.bone_min_y_fx[v.b1] = std::min(s.bone_min_y_fx[v.b1], y);
+            if (v.b0 >= zixx::kBBladeL && v.b0 <= zixx::kBBladeR2)
+              s.blade_min_y_fx = std::min(s.blade_min_y_fx, y);
+          }
+          if (y < s.min_y_fx) {
+            s.min_y_fx = y;
+            s.min_b0 = v.b0;
+            s.min_b1 = v.b1;
+          }
+          s.max_y_fx = std::max(s.max_y_fx, y);
+
+          if (bind.nx != 0 || bind.ny != 0 || bind.nz != 0) {
+            const int32_t n2 = static_cast<int32_t>(v.nx) * v.nx +
+                               static_cast<int32_t>(v.ny) * v.ny +
+                               static_cast<int32_t>(v.nz) * v.nz;
+            s.normal_min_len2[rung] = std::min(s.normal_min_len2[rung], n2);
+            s.normal_max_len2[rung] = std::max(s.normal_max_len2[rung], n2);
+            const int32_t dx = zc::skin_normal_lambert(
+                                   pose.data(), v, 65536, 0, 0) -
+                               zc::skin_normal_lambert(
+                                   pose.data(), v, -65536, 0, 0);
+            const int32_t dy = zc::skin_normal_lambert(
+                                   pose.data(), v, 0, 65536, 0) -
+                               zc::skin_normal_lambert(
+                                   pose.data(), v, 0, -65536, 0);
+            const int32_t dz = zc::skin_normal_lambert(
+                                   pose.data(), v, 0, 0, 65536) -
+                               zc::skin_normal_lambert(
+                                   pose.data(), v, 0, 0, -65536);
+            if (n2 == 0 || (dx == 0 && dy == 0 && dz == 0))
+              ++s.normal_faults[rung];
+          }
         }
-        s.max_y_fx = std::max(s.max_y_fx, y);
-        if (v.b0 >= zixx::kBBladeL && v.b0 <= zixx::kBBladeR2)
-          s.blade_min_y_fx = std::min(s.blade_min_y_fx, y);
       }
     }
     for (int i = 0; i < zixx::kProfileStations; ++i) {
@@ -129,8 +178,26 @@ ClipScan scan_clip(const zc::CreatureType& type, const zc::Clip& clip,
       s.y_mm[i] = to_mm(y);
       s.z_mm[i] = to_mm(z);
     }
+    const uint8_t support_bone =
+        static_cast<uint8_t>(zixx::kBSpine0 + zixx::kSpringPlantSegment);
+    const zc::SkinVertex support{
+        type.baked.world_x[support_bone], type.baked.world_y[support_bone],
+        type.baked.world_z[support_bone], support_bone, support_bone, 64, 0, 0};
+    int32_t support_x = 0, support_y = 0, support_z = 0;
+    zc::skin_vertex(pose.data(), support, support_x, support_y, support_z,
+                    &ledger);
+    s.support_x_mm = to_mm(support_x);
+    s.support_y_mm = to_mm(support_y);
+    s.support_z_mm = to_mm(support_z);
     s.saturation = ledger.total();
     scan.saturation += s.saturation;
+    for (int rung = 0; rung < 2; ++rung) {
+      scan.normal_faults[rung] += s.normal_faults[rung];
+      scan.normal_min_len2[rung] =
+          std::min(scan.normal_min_len2[rung], s.normal_min_len2[rung]);
+      scan.normal_max_len2[rung] =
+          std::max(scan.normal_max_len2[rung], s.normal_max_len2[rung]);
+    }
     if (s.min_y_fx < scan.worst_min_fx) {
       scan.worst_min_fx = s.min_y_fx;
       scan.worst_tick = tick;
@@ -297,6 +364,192 @@ BowMaximum chord_bow_max_mm(const ClipScan& scan) {
       const int32_t d = static_cast<int32_t>(cross / vlen);
       if (d > worst.mm) worst = {d, s.tick, i};
     }
+  }
+  return worst;
+}
+
+struct PosedRung {
+  std::vector<std::vector<zc::SkinVertex>> deformed;
+  std::vector<std::vector<std::array<int32_t, 3>>> xyz_fx;
+};
+
+PosedRung pose_rung(const zc::CreatureType& type, const zc::Clip& clip,
+                    int rung, int tick) {
+  const auto& mesh = rung == 0 ? type.mesh : type.micro;
+  const uint16_t key = static_cast<uint16_t>(tick / 2);
+  const uint8_t sub = static_cast<uint8_t>(tick & 1);
+  const zc::DeformSample sample =
+      zc::deformation_sample(type, clip.slot_id, key, sub);
+  std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+  zc::decode_pose(type, clip, key, pose, nullptr, sub);
+  PosedRung out;
+  out.deformed.resize(mesh.size());
+  out.xyz_fx.resize(mesh.size());
+  for (size_t mi = 0; mi < mesh.size(); ++mi) {
+    const zc::Meshlet& m = mesh[mi];
+    out.deformed[mi].resize(m.verts.size());
+    out.xyz_fx[mi].resize(m.verts.size());
+    for (size_t vi = 0; vi < m.verts.size(); ++vi) {
+      zc::SkinVertex v = m.verts[vi];
+      if (!m.deform.empty())
+        v = zc::deform_skin_vertex(v, m.deform[vi], sample);
+      out.deformed[mi][vi] = v;
+      zc::skin_vertex(pose.data(), v, out.xyz_fx[mi][vi][0],
+                      out.xyz_fx[mi][vi][1], out.xyz_fx[mi][vi][2], nullptr);
+    }
+  }
+  return out;
+}
+
+int station_for_center_x(int32_t center_x_fx) {
+  const int32_t x_mm = to_mm(center_x_fx);
+  int best = 0;
+  int32_t best_error = INT32_MAX;
+  for (int i = 0; i < zixx::kProfileStations; ++i) {
+    const int32_t error = std::abs(x_mm + zixx::station_x(i));
+    if (error < best_error) {
+      best = i;
+      best_error = error;
+    }
+  }
+  return best;
+}
+
+struct Vec3d {
+  double x = 0, y = 0, z = 0;
+};
+
+Vec3d mm_vec(const std::array<int32_t, 3>& p) {
+  return Vec3d{static_cast<double>(to_mm(p[0])),
+               static_cast<double>(to_mm(p[1])),
+               static_cast<double>(to_mm(p[2]))};
+}
+
+Vec3d sub(Vec3d a, Vec3d b) {
+  return Vec3d{a.x - b.x, a.y - b.y, a.z - b.z};
+}
+
+Vec3d cross(Vec3d a, Vec3d b) {
+  return Vec3d{a.y * b.z - a.z * b.y,
+               a.z * b.x - a.x * b.z,
+               a.x * b.y - a.y * b.x};
+}
+
+double dot(Vec3d a, Vec3d b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+
+bool segment_hits_triangle(Vec3d p0, Vec3d p1, Vec3d a, Vec3d b,
+                           Vec3d c) {
+  const Vec3d dir = sub(p1, p0);
+  const Vec3d e1 = sub(b, a);
+  const Vec3d e2 = sub(c, a);
+  const Vec3d h = cross(dir, e2);
+  const double det = dot(e1, h);
+  constexpr double kEps = 1.0e-9;
+  if (std::abs(det) < kEps) return false;
+  const double inv = 1.0 / det;
+  const Vec3d s = sub(p0, a);
+  const double u = inv * dot(s, h);
+  if (u < -kEps || u > 1.0 + kEps) return false;
+  const Vec3d q = cross(s, e1);
+  const double v = inv * dot(dir, q);
+  if (v < -kEps || u + v > 1.0 + kEps) return false;
+  const double t = inv * dot(e2, q);
+  return t >= -kEps && t <= 1.0 + kEps;
+}
+
+bool triangles_intersect(const std::array<Vec3d, 3>& a,
+                         const std::array<Vec3d, 3>& b) {
+  const auto disjoint_axis = [](const std::array<Vec3d, 3>& x,
+                                const std::array<Vec3d, 3>& y, int lane) {
+    double xlo = 1.0e30, xhi = -1.0e30, ylo = 1.0e30, yhi = -1.0e30;
+    for (int i = 0; i < 3; ++i) {
+      const double xv = lane == 0 ? x[i].x : (lane == 1 ? x[i].y : x[i].z);
+      const double yv = lane == 0 ? y[i].x : (lane == 1 ? y[i].y : y[i].z);
+      xlo = std::min(xlo, xv);
+      xhi = std::max(xhi, xv);
+      ylo = std::min(ylo, yv);
+      yhi = std::max(yhi, yv);
+    }
+    return xhi < ylo || yhi < xlo;
+  };
+  for (int lane = 0; lane < 3; ++lane)
+    if (disjoint_axis(a, b, lane)) return false;
+  for (int i = 0; i < 3; ++i) {
+    if (segment_hits_triangle(a[i], a[(i + 1) % 3], b[0], b[1], b[2]))
+      return true;
+    if (segment_hits_triangle(b[i], b[(i + 1) % 3], a[0], a[1], a[2]))
+      return true;
+  }
+  return false;
+}
+
+struct SurfaceTriangle {
+  std::array<Vec3d, 3> p{};
+  int station_lo = 0;
+  int station_hi = 0;
+};
+
+std::vector<SurfaceTriangle> body_triangles(const zc::CreatureType& type,
+                                            int rung,
+                                            const PosedRung& posed) {
+  const auto& mesh = rung == 0 ? type.mesh : type.micro;
+  std::vector<SurfaceTriangle> out;
+  for (size_t mi = 0; mi < mesh.size(); ++mi) {
+    const zc::Meshlet& m = mesh[mi];
+    if (m.page != zixx::kTileHead && m.page != zixx::kTileBody) continue;
+    if (m.deform.empty()) continue;
+    for (size_t ti = 0; ti + 2 < m.idx.size(); ti += 3) {
+      SurfaceTriangle tri;
+      tri.station_lo = zixx::kProfileStations;
+      tri.station_hi = -1;
+      bool radial = true;
+      for (int k = 0; k < 3; ++k) {
+        const uint8_t vi = m.idx[ti + static_cast<size_t>(k)];
+        const zc::DeformVertex& d = m.deform[vi];
+        radial = radial && d.role == zc::DeformRole::kRadial;
+        const int station = station_for_center_x(d.center_x);
+        tri.station_lo = std::min(tri.station_lo, station);
+        tri.station_hi = std::max(tri.station_hi, station);
+        tri.p[k] = mm_vec(posed.xyz_fx[mi][vi]);
+      }
+      if (radial) out.push_back(tri);
+    }
+  }
+  return out;
+}
+
+struct IntersectionPeak {
+  int count = 0;
+  int tick = -1;
+  int station_a = -1;
+  int station_b = -1;
+};
+
+IntersectionPeak spring_self_intersections(const zc::CreatureType& type,
+                                           const zc::Clip& clip, int rung,
+                                           int end_tick) {
+  IntersectionPeak worst;
+  for (int tick = 0; tick <= end_tick; ++tick) {
+    const PosedRung posed = pose_rung(type, clip, rung, tick);
+    const std::vector<SurfaceTriangle> tris = body_triangles(type, rung, posed);
+    int hits = 0;
+    int hit_a = -1, hit_b = -1;
+    for (size_t i = 0; i < tris.size(); ++i) {
+      for (size_t j = i + 1; j < tris.size(); ++j) {
+        const bool separated =
+            tris[i].station_hi + 7 <= tris[j].station_lo ||
+            tris[j].station_hi + 7 <= tris[i].station_lo;
+        if (!separated) continue;
+        if (!triangles_intersect(tris[i].p, tris[j].p)) continue;
+        ++hits;
+        if (hit_a < 0) {
+          hit_a = tris[i].station_lo;
+          hit_b = tris[j].station_lo;
+        }
+      }
+    }
+    if (hits > worst.count)
+      worst = IntersectionPeak{hits, tick, hit_a, hit_b};
   }
   return worst;
 }
@@ -691,153 +944,422 @@ int main() {
   std::printf("OVERLAP: %d sample/pair hits, all checked at keys + midpoints\n",
               total_overlaps);
 
-  // Whole-body gummy spring. The probe checks the authored rendered choice; it
-  // does not generate its shape. Ordering is structural: the full-tail entry
-  // reaches 1000 while squash is still exactly zero, then the broad squat S
-  // retracts the head, stays in the side plane, preserves volume/clearance and
-  // keeps only the declared terrain bite.
-  const ClipScan* spring = find_scan(scans, zixx::kSlotAtkSix);
-  require(spring != nullptr, "missing slot 35 shared-spring clip");
+  // Whole-body gummy spring. These envelopes are written only after the fixed
+  // side/high-three-quarter playback has been accepted. They compare the chosen
+  // art at every real vertex, key and runtime midpoint; no probe value authors
+  // the pose.
+  const ClipScan* spring = find_scan(scans, 3);
+  require(spring != nullptr, "missing primary slot 3 shared spring clip");
   if (spring) {
-    const zc::AttackPlan plan = zixx::zixx_variant_plan(zixx::kSlotAtkSix);
-    const zixx::AttackVariantPhases ph =
-        zixx::zixx_attack_variant_phases(plan, false);
-    const int entry_key = zixx::zixx_plan_spring_entry_end(plan);
-    const int entry_tick = 2 * entry_key;
-    const int deep_tick = 2 * ph.compress_end;
+    const int entry_tick = 2 * zixx::kSaltoSpringEntryEndKey;
+    const int deep_tick = 2 * zixx::kSaltoCompressEndKey;
+    const int hold_end_tick = 2 * zixx::kSaltoCompressHoldEndKey;
+    const int released_tick = 2 * zixx::kSaltoSpringReleasePoseKey;
+    const int rigid_air_tick = 2 * zixx::kSaltoRigidReleaseEndKey;
     require(entry_tick < static_cast<int>(spring->samples.size()) &&
-                deep_tick < static_cast<int>(spring->samples.size()),
-            "spring phase sample outside clip");
-    require(zixx::zixx_plan_spring_entry_amount(plan, entry_key) == 1000 &&
-                zixx::zixx_plan_spring_amount(plan, entry_key) == 0 &&
-                zixx::zixx_plan_spring_amount(plan, entry_key - 1) == 0 &&
-                zixx::zixx_plan_spring_amount(plan, entry_key + 1) > 0,
+                deep_tick < static_cast<int>(spring->samples.size()) &&
+                rigid_air_tick < static_cast<int>(spring->samples.size()),
+            "spring phase sample outside primary clip");
+    require(zixx::curve(zixx::kAtkSpringEntry, zixx::kAtkSpringEntryN,
+                        zixx::kSaltoSpringEntryEndKey) == 1000 &&
+                zixx::curve(zixx::kAtkPre, zixx::kAtkPreN,
+                            zixx::kSaltoSpringEntryEndKey) == 0 &&
+                zixx::curve(zixx::kAtkPre, zixx::kAtkPreN,
+                            zixx::kSaltoSpringEntryEndKey + 1) > 0,
             "spring squash begins before full-tail entry is complete");
-    if (entry_tick < static_cast<int>(spring->samples.size()) &&
-        deep_tick < static_cast<int>(spring->samples.size())) {
-      const PosedSample& rest = spring->samples[0];
-      const PosedSample& entry = spring->samples[entry_tick];
-      const PosedSample& deep = spring->samples[deep_tick];
-      struct Region { const char* name; int lo; int hi; };
-      const Region regions[] = {
-          {"head", 0, 5}, {"neck", 6, 12}, {"front", 13, 20},
-          {"middle", 21, 32}, {"grounded run", 33, 44},
-          {"taper", 45, 51}, {"tail", 52, 56}};
-      bool every_region_joins = true;
-      int32_t region_motion[7] = {};
-      std::printf("SPRING full-S entry mean station travel:");
-      int ri = 0;
-      for (const Region& r : regions) {
-        int64_t travel = 0;
-        for (int i = r.lo; i <= r.hi; ++i) {
-          const int64_t dx = entry.x_mm[i] - rest.x_mm[i];
-          const int64_t dy = entry.y_mm[i] - rest.y_mm[i];
-          const int64_t dz = entry.z_mm[i] - rest.z_mm[i];
-          travel += static_cast<int32_t>(zref::isqrt_u64(
-              static_cast<uint64_t>(dx * dx + dy * dy + dz * dz)));
-        }
-        region_motion[ri] =
-            static_cast<int32_t>(travel / (r.hi - r.lo + 1));
-        if (region_motion[ri] < 20) every_region_joins = false;
-        std::printf(" %s=%d", r.name, region_motion[ri]);
-        ++ri;
-      }
-      std::printf(" mm\n");
-      require(every_region_joins,
-              "enlarged jump S no longer recruits every body region");
-      require(region_motion[6] >= 100,
-              "enlarged jump S no longer reaches the tail tip");
 
-      auto centre_span = [](const PosedSample& s) {
-        int32_t lo = INT32_MAX, hi = INT32_MIN;
-        for (int i = 0; i < zixx::kProfileStations; ++i) {
-          lo = std::min(lo, s.y_mm[i]);
-          hi = std::max(hi, s.y_mm[i]);
-        }
-        return hi - lo;
-      };
-      const int32_t entry_span = centre_span(entry);
-      const int32_t deep_span = centre_span(deep);
-      int32_t lateral_lo = INT32_MAX, lateral_hi = INT32_MIN;
-      int x_reversals = 0;
-      for (int i = 0; i < zixx::kProfileStations; ++i) {
-        lateral_lo = std::min(lateral_lo, deep.z_mm[i]);
-        lateral_hi = std::max(lateral_hi, deep.z_mm[i]);
-        if (i > 0 && deep.x_mm[i] > deep.x_mm[i - 1] + 8) ++x_reversals;
+    const PosedSample& rest = spring->samples[0];
+    const PosedSample& entry = spring->samples[entry_tick];
+    const PosedSample& deep = spring->samples[deep_tick];
+    const PosedSample& released = spring->samples[released_tick];
+    const PosedSample& rigid_air = spring->samples[rigid_air_tick];
+    struct Region { const char* name; int lo; int hi; };
+    const Region regions[] = {
+        {"head", 0, 5}, {"neck", 6, 12}, {"front", 13, 20},
+        {"middle", 21, 32}, {"grounded run", 33, 44},
+        {"taper", 45, 51}, {"tail", 52, 56}};
+    std::array<int32_t, 7> region_motion{};
+    std::array<int32_t, 7> region_descent{};
+    bool every_region_joins = true;
+    std::printf("SPRING full-S entry mean station travel / compression descent:");
+    for (size_t ri = 0; ri < region_motion.size(); ++ri) {
+      const Region& r = regions[ri];
+      int64_t travel = 0;
+      int64_t descent = 0;
+      for (int i = r.lo; i <= r.hi; ++i) {
+        const int64_t dx = entry.x_mm[i] - rest.x_mm[i];
+        const int64_t dy = entry.y_mm[i] - rest.y_mm[i];
+        const int64_t dz = entry.z_mm[i] - rest.z_mm[i];
+        travel += static_cast<int32_t>(zref::isqrt_u64(
+            static_cast<uint64_t>(dx * dx + dy * dy + dz * dz)));
+        descent += deep.y_mm[i] - entry.y_mm[i];
       }
-      int32_t entry_min_clearance = INT32_MAX;
-      int entry_clear_i = -1, entry_clear_j = -1;
-      int32_t min_clearance = INT32_MAX;
-      int clear_i = -1, clear_j = -1;
-      for (const auto& pr : pairs) {
-        const int i = pr.first, j = pr.second;
-        const int64_t entry_dx = entry.x_mm[i] - entry.x_mm[j];
-        const int64_t entry_dy = entry.y_mm[i] - entry.y_mm[j];
-        const int64_t entry_dz = entry.z_mm[i] - entry.z_mm[j];
-        const int32_t entry_d = static_cast<int32_t>(zref::isqrt_u64(
-            static_cast<uint64_t>(entry_dx * entry_dx + entry_dy * entry_dy +
-                                  entry_dz * entry_dz)));
-        const int32_t entry_clearance =
-            entry_d - stations[i].r_mm - stations[j].r_mm;
-        if (entry_clearance < entry_min_clearance) {
-          entry_min_clearance = entry_clearance;
-          entry_clear_i = i;
-          entry_clear_j = j;
-        }
-        const int64_t dx = deep.x_mm[i] - deep.x_mm[j];
-        const int64_t dy = deep.y_mm[i] - deep.y_mm[j];
-        const int64_t dz = deep.z_mm[i] - deep.z_mm[j];
+      region_motion[ri] =
+          static_cast<int32_t>(travel / (r.hi - r.lo + 1));
+      region_descent[ri] =
+          static_cast<int32_t>(descent / (r.hi - r.lo + 1));
+      every_region_joins = every_region_joins && region_motion[ri] > 0;
+      std::printf(" %s=%d/%d", r.name, region_motion[ri],
+                  region_descent[ri]);
+    }
+    std::printf(" mm\n");
+    require(every_region_joins,
+            "enlarged jump S stopped recruiting a body region");
+    // These bands surround the visually accepted iteration-15 motion. They are
+    // intentionally wider than fixed-point noise while narrow enough to catch a
+    // return to the rejected head-only/tail-led anticipation.
+    constexpr std::array<int32_t, 7> kAcceptedEntryTravelMinMm = {
+        250, 215, 135, 105, 5, 12, 16};
+    constexpr std::array<int32_t, 7> kAcceptedEntryTravelMaxMm = {
+        310, 275, 180, 145, 14, 28, 34};
+    constexpr std::array<int32_t, 7> kAcceptedCompressionDescentMinMm = {
+        -630, -350, -55, -15, -50, -30, -160};
+    constexpr std::array<int32_t, 7> kAcceptedCompressionDescentMaxMm = {
+        -560, -285, -20, 4, -20, -6, -110};
+    bool accepted_regional_motion = true;
+    for (size_t ri = 0; ri < region_motion.size(); ++ri) {
+      accepted_regional_motion = accepted_regional_motion &&
+          region_motion[ri] >= kAcceptedEntryTravelMinMm[ri] &&
+          region_motion[ri] <= kAcceptedEntryTravelMaxMm[ri] &&
+          region_descent[ri] >= kAcceptedCompressionDescentMinMm[ri] &&
+          region_descent[ri] <= kAcceptedCompressionDescentMaxMm[ri];
+    }
+    require(accepted_regional_motion,
+            "spring left the accepted whole-S entry/compression envelope");
+    require(zixx::kSaltoSpringEntryEndKey >= 5 &&
+                zixx::kSaltoSpringEntryEndKey <= 7 &&
+                zixx::kSaltoCompressEndKey -
+                        zixx::kSaltoSpringEntryEndKey >= 5 &&
+                zixx::kSaltoCompressEndKey -
+                        zixx::kSaltoSpringEntryEndKey <= 7 &&
+                zixx::kSaltoCompressHoldEndKey -
+                        zixx::kSaltoCompressEndKey >= 5 &&
+                zixx::kSaltoCompressHoldEndKey -
+                        zixx::kSaltoCompressEndKey <= 7 &&
+                zixx::kSaltoSpringReleasePoseKey -
+                        zixx::kSaltoCompressHoldEndKey >= 3 &&
+                zixx::kSaltoSpringReleasePoseKey -
+                        zixx::kSaltoCompressHoldEndKey <= 5 &&
+                zixx::kSaltoRigidReleaseEndKey -
+                        zixx::kSaltoSpringReleasePoseKey >= 2 &&
+                zixx::kSaltoRigidReleaseEndKey -
+                        zixx::kSaltoSpringReleasePoseKey <= 3 &&
+                zixx::kSaltoReleaseEndKey -
+                        zixx::kSaltoRigidReleaseEndKey >= 3 &&
+                zixx::kSaltoReleaseEndKey -
+                        zixx::kSaltoRigidReleaseEndKey <= 5,
+            "spring phase timing left the accepted entry/hold/release envelope");
+
+    const PosedRung rest_full = pose_rung(type, *spring->clip, 0, 0);
+    const PosedRung entry_full = pose_rung(type, *spring->clip, 0, entry_tick);
+    int64_t tail_follower_travel = 0;
+    int32_t tail_follower_max = 0;
+    int tail_follower_count = 0;
+    for (size_t mi = 0; mi < type.mesh.size(); ++mi) {
+      const zc::Meshlet& m = type.mesh[mi];
+      if (m.deform.empty()) continue;
+      for (size_t vi = 0; vi < m.verts.size(); ++vi) {
+        if (m.deform[vi].role != zc::DeformRole::kFollower ||
+            (m.verts[vi].b0 < zixx::kBBladeL &&
+             m.verts[vi].b1 < zixx::kBBladeL))
+          continue;
+        const auto& a = rest_full.xyz_fx[mi][vi];
+        const auto& b = entry_full.xyz_fx[mi][vi];
+        const int64_t dx = to_mm(b[0]) - to_mm(a[0]);
+        const int64_t dy = to_mm(b[1]) - to_mm(a[1]);
+        const int64_t dz = to_mm(b[2]) - to_mm(a[2]);
         const int32_t d = static_cast<int32_t>(zref::isqrt_u64(
             static_cast<uint64_t>(dx * dx + dy * dy + dz * dz)));
-        const int32_t clearance = d - stations[i].r_mm - stations[j].r_mm;
-        if (clearance < min_clearance) {
-          min_clearance = clearance;
-          clear_i = i;
-          clear_j = j;
-        }
+        tail_follower_travel += d;
+        tail_follower_max = std::max(tail_follower_max, d);
+        ++tail_follower_count;
       }
-      const int32_t mesh_span = to_mm(deep.max_y_fx - deep.min_y_fx);
-      const int32_t head_retract = deep.x_mm[0] - entry.x_mm[0];
-      std::printf("SPRING ordered pose: entry/deep centre span %d/%d mm, "
-                  "head X delta %d mm, lateral span %d mm, X reversals %d, "
-                  "entry/deep non-neighbour clearance %d@%d/%d / %d@%d/%d "
-                  "mm, mesh span %d mm\n",
-                  entry_span, deep_span, head_retract,
-                  lateral_hi - lateral_lo, x_reversals, entry_min_clearance,
-                  entry_clear_i, entry_clear_j, min_clearance, clear_i, clear_j,
-                  mesh_span);
-      require(deep_span < entry_span,
-              "whole-model squash no longer flattens the enlarged jump S");
-      require(head_retract <= -500,
-              "spring head no longer retracts backward into body-side space");
-      require(lateral_hi - lateral_lo <= 20,
-              "spring centreline left the side plane and regained a concertina");
-      require(x_reversals == 0 && entry_min_clearance >= 0 &&
-                  min_clearance >= 0,
-              "spring entry or compressed body runs intersect or fold back through one another");
-      require(mesh_span - deep_span >= 250,
-              "deepest spring lost the tube's volumetric cross-section");
-
-      int32_t spring_worst = INT32_MAX;
-      int spring_worst_tick = -1;
-      for (int t = 0; t <= 2 * ph.hold_end &&
-                      t < static_cast<int>(spring->samples.size()); ++t) {
-        const int32_t min_y = to_mm(spring->samples[t].min_y_fx);
-        if (min_y < spring_worst) {
-          spring_worst = min_y;
-          spring_worst_tick = t;
-        }
-      }
-      const PosedSample& worst_pose = spring->samples[spring_worst_tick];
-      std::printf("SPRING declared terrain bite: %d mm at %d%s, bones %d/%d "
-                  "(law -40..-15)\n", spring_worst,
-                  spring_worst_tick / 2,
-                  (spring_worst_tick & 1) ? ".5" : "",
-                  worst_pose.min_b0, worst_pose.min_b1);
-      require(spring_worst >= -zixx::kSpringDeclaredBiteMm &&
-                  spring_worst <= -15,
-              "shared spring terrain bite left its authored declaration");
     }
+    const int32_t tail_follower_mean = tail_follower_count == 0
+        ? 0 : static_cast<int32_t>(tail_follower_travel / tail_follower_count);
+    std::printf("SPRING real tail followers: %d vertices, entry travel mean/max "
+                "%d/%d mm\n", tail_follower_count, tail_follower_mean,
+                tail_follower_max);
+    require(tail_follower_count >= 150 && tail_follower_mean >= 155 &&
+                tail_follower_mean <= 205 && tail_follower_max >= 250 &&
+                tail_follower_max <= 315,
+            "real tail tips left the accepted enlarged-S travel envelope");
+
+    auto centre_span = [](const PosedSample& s) {
+      int32_t lo = INT32_MAX, hi = INT32_MIN;
+      for (int i = 0; i < zixx::kProfileStations; ++i) {
+        lo = std::min(lo, s.y_mm[i]);
+        hi = std::max(hi, s.y_mm[i]);
+      }
+      return hi - lo;
+    };
+    const int32_t entry_span = centre_span(entry);
+    const int32_t deep_span = centre_span(deep);
+    const int32_t head_support_dx =
+        (deep.x_mm[0] - deep.support_x_mm) -
+        (entry.x_mm[0] - entry.support_x_mm);
+    const int32_t head_support_dy =
+        (deep.y_mm[0] - deep.support_y_mm) -
+        (entry.y_mm[0] - entry.support_y_mm);
+    const int32_t support_dx = deep.support_x_mm - entry.support_x_mm;
+    const int32_t support_dy = deep.support_y_mm - entry.support_y_mm;
+    int32_t lateral_lo = INT32_MAX, lateral_hi = INT32_MIN;
+    for (int i = 0; i < zixx::kProfileStations; ++i) {
+      lateral_lo = std::min(lateral_lo, deep.z_mm[i]);
+      lateral_hi = std::max(lateral_hi, deep.z_mm[i]);
+    }
+    std::printf("SPRING ordered pose: entry/deep centre span %d/%d mm; "
+                "head relative support dX/dY %d/%d mm; support dX/dY %d/%d "
+                "mm; lateral span %d mm\n", entry_span, deep_span,
+                head_support_dx, head_support_dy, support_dx, support_dy,
+                lateral_hi - lateral_lo);
+    require(entry_span >= 1200 && entry_span <= 1360 &&
+                deep_span >= 890 && deep_span <= 1020 &&
+                entry_span - deep_span >= 250 &&
+                entry_span - deep_span <= 390,
+            "whole-S silhouette left the accepted entry/compression span envelope");
+    require(head_support_dx >= -70 && head_support_dx <= -20 &&
+                head_support_dy >= -640 && head_support_dy <= -550,
+            "spring head left the accepted backward/down support-relative brace");
+    require(std::abs(support_dx) <= 1 && support_dy >= -35 &&
+                support_dy <= -33 && lateral_hi - lateral_lo <= 30,
+            "spring planted support or planar brace left its accepted envelope");
+
+    int32_t hold_shape_drift = 0;
+    int32_t hold_support_drift = 0;
+    for (int t = deep_tick; t <= hold_end_tick; ++t) {
+      const PosedSample& held = spring->samples[t];
+      hold_support_drift = std::max(
+          hold_support_drift,
+          std::max({std::abs(held.support_x_mm - deep.support_x_mm),
+                    std::abs(held.support_y_mm - deep.support_y_mm),
+                    std::abs(held.support_z_mm - deep.support_z_mm)}));
+      for (int i = 0; i < zixx::kProfileStations; ++i) {
+        hold_shape_drift = std::max(
+            hold_shape_drift,
+            std::max({std::abs((held.x_mm[i] - held.support_x_mm) -
+                               (deep.x_mm[i] - deep.support_x_mm)),
+                      std::abs((held.y_mm[i] - held.support_y_mm) -
+                               (deep.y_mm[i] - deep.support_y_mm)),
+                      std::abs((held.z_mm[i] - held.support_z_mm) -
+                               (deep.z_mm[i] - deep.support_z_mm))}));
+      }
+    }
+    std::printf("SPRING compressed hold: shape/support drift %d/%d mm over %d "
+                "keys\n", hold_shape_drift, hold_support_drift,
+                zixx::kSaltoCompressHoldEndKey - zixx::kSaltoCompressEndKey);
+    require(hold_shape_drift <= 1 && hold_support_drift <= 1,
+            "spring lost its readable, genuinely held maximum brace");
+
+    int32_t release_shape_error = 0;
+    int32_t rigid_air_shape_error = 0;
+    for (int i = 0; i < zixx::kProfileStations; ++i) {
+      release_shape_error = std::max(
+          release_shape_error,
+          std::max({std::abs((released.x_mm[i] - released.support_x_mm) -
+                             (rest.x_mm[i] - rest.support_x_mm)),
+                    std::abs((released.y_mm[i] - released.support_y_mm) -
+                             (rest.y_mm[i] - rest.support_y_mm)),
+                    std::abs((released.z_mm[i] - released.support_z_mm) -
+                             (rest.z_mm[i] - rest.support_z_mm))}));
+      rigid_air_shape_error = std::max(
+          rigid_air_shape_error,
+          std::max({std::abs((rigid_air.x_mm[i] - rigid_air.support_x_mm) -
+                             (released.x_mm[i] - released.support_x_mm)),
+                    std::abs((rigid_air.y_mm[i] - rigid_air.support_y_mm) -
+                             (released.y_mm[i] - released.support_y_mm)),
+                    std::abs((rigid_air.z_mm[i] - rigid_air.support_z_mm) -
+                             (released.z_mm[i] - released.support_z_mm))}));
+    }
+    const int32_t rigid_air_lift =
+        rigid_air.support_y_mm - released.support_y_mm;
+    std::printf("SPRING release: rest-shape error %d mm, intact airborne-S "
+                "error %d mm, whole-support lift %d mm\n",
+                release_shape_error, rigid_air_shape_error, rigid_air_lift);
+    require(release_shape_error <= 1 && rigid_air_shape_error <= 1 &&
+                rigid_air_lift >= 550 && rigid_air_lift <= 650,
+            "spring no longer releases and rises as one intact S before coiling");
+
+    bool identity_keys_exact = true;
+    for (int f = 0; f < spring->clip->frame_count; ++f) {
+      const bool authorised =
+          f > zixx::kSaltoSpringEntryEndKey &&
+          f < zixx::kSaltoSpringReleasePoseKey;
+      const zc::DeformSample d = spring->clip->deform.empty()
+          ? zc::DeformSample{} : spring->clip->deform[static_cast<size_t>(f)];
+      if (!authorised && (d.flatten != 0 || d.spread != 0))
+        identity_keys_exact = false;
+    }
+    for (int rung = 0; rung < 2; ++rung) {
+      const auto& mesh = rung == 0 ? type.mesh : type.micro;
+      for (const zc::Meshlet& m : mesh) {
+        if (m.deform.empty()) continue;
+        for (size_t vi = 0; vi < m.verts.size(); ++vi) {
+          const zc::SkinVertex id =
+              zc::deform_skin_vertex(m.verts[vi], m.deform[vi], {});
+          if (std::memcmp(&id, &m.verts[vi], sizeof(id)) != 0)
+            identity_keys_exact = false;
+        }
+      }
+    }
+    require(identity_keys_exact,
+            "deformation sidecar lost exact identity outside spring frames");
+
+    for (int rung = 0; rung < 2; ++rung) {
+      const auto& mesh = rung == 0 ? type.mesh : type.micro;
+      const zc::DeformSample active = zc::deformation_sample(
+          type, spring->clip->slot_id, zixx::kSaltoCompressEndKey, 0);
+      int32_t min_radial_ratio = INT32_MAX;
+      int32_t body_radial_ratio = INT32_MAX;
+      int32_t head_radial_ratio = INT32_MAX;
+      int follower_count = 0;
+      int follower_faults = 0;
+      for (const zc::Meshlet& m : mesh) {
+        if (m.deform.empty()) continue;
+        for (size_t vi = 0; vi < m.verts.size(); ++vi) {
+          const zc::SkinVertex& v = m.verts[vi];
+          const zc::DeformVertex& d = m.deform[vi];
+          const zc::SkinVertex moved = zc::deform_skin_vertex(v, d, active);
+          if (d.role == zc::DeformRole::kRadial) {
+            const int64_t bx = to_mm(v.x) - to_mm(d.center_x);
+            const int64_t by = to_mm(v.y) - to_mm(d.center_y);
+            const int64_t bz = to_mm(v.z) - to_mm(d.center_z);
+            const int64_t ax = to_mm(moved.x) - to_mm(d.center_x);
+            const int64_t ay = to_mm(moved.y) - to_mm(d.center_y);
+            const int64_t az = to_mm(moved.z) - to_mm(d.center_z);
+            const int32_t before = static_cast<int32_t>(zref::isqrt_u64(
+                static_cast<uint64_t>(bx * bx + by * by + bz * bz)));
+            const int32_t after = static_cast<int32_t>(zref::isqrt_u64(
+                static_cast<uint64_t>(ax * ax + ay * ay + az * az)));
+            if (before >= 10) {
+              const int32_t ratio = after * 1000 / before;
+              min_radial_ratio = std::min(min_radial_ratio, ratio);
+              if (d.strength == zixx::kSpringBodyDeformStrength)
+                body_radial_ratio = std::min(body_radial_ratio, ratio);
+              if (d.strength == zixx::kSpringSkullDeformStrength)
+                head_radial_ratio = std::min(head_radial_ratio, ratio);
+            }
+          } else if (d.role == zc::DeformRole::kFollower) {
+            ++follower_count;
+            zc::SkinVertex carrier = v;
+            carrier.x = d.carrier_x;
+            carrier.y = d.carrier_y;
+            carrier.z = d.carrier_z;
+            zc::DeformVertex radial = d;
+            radial.role = zc::DeformRole::kRadial;
+            const zc::SkinVertex moved_carrier =
+                zc::deform_skin_vertex(carrier, radial, active);
+            if (moved.x - v.x != moved_carrier.x - carrier.x ||
+                moved.y - v.y != moved_carrier.y - carrier.y ||
+                moved.z - v.z != moved_carrier.z - carrier.z ||
+                moved.nx != v.nx || moved.ny != v.ny || moved.nz != v.nz)
+              ++follower_faults;
+          }
+        }
+      }
+      std::printf("SPRING rung %s: radial retained min/body/head %d/%d/%d "
+                  "per-mille; rigid followers %d, faults %d; normals len2 "
+                  "%d..%d faults %llu\n", rung == 0 ? "full" : "micro",
+                  min_radial_ratio, body_radial_ratio, head_radial_ratio,
+                  follower_count, follower_faults,
+                  spring->normal_min_len2[rung], spring->normal_max_len2[rung],
+                  static_cast<unsigned long long>(spring->normal_faults[rung]));
+      require(min_radial_ratio >= 700 && min_radial_ratio <= 770 &&
+                  body_radial_ratio >= 700 && body_radial_ratio <= 770 &&
+                  head_radial_ratio >= 900 && head_radial_ratio <= 950,
+              "spring cross-sections left the accepted positive-volume, "
+              "selective-squash envelope");
+      require(follower_count >= (rung == 0 ? 160 : 70) &&
+                  follower_faults == 0,
+              "spring attachment no longer follows its radial carrier rigidly");
+      require(spring->normal_faults[rung] == 0,
+              "spring deformation produced an invalid full/micro normal");
+    }
+
+    auto same_bind_source = [](const zc::SkinVertex& a,
+                               const zc::SkinVertex& b) {
+      return a.x == b.x && a.y == b.y && a.z == b.z && a.b0 == b.b0 &&
+             a.b1 == b.b1 && a.w0 == b.w0;
+    };
+    auto same_deform_source = [](const zc::DeformVertex& a,
+                                 const zc::DeformVertex& b) {
+      return a.center_x == b.center_x && a.center_y == b.center_y &&
+             a.center_z == b.center_z && a.carrier_x == b.carrier_x &&
+             a.carrier_y == b.carrier_y && a.carrier_z == b.carrier_z &&
+             a.role == b.role && a.axis == b.axis &&
+             a.strength == b.strength;
+    };
+    int shared_micro_vertices = 0;
+    int shared_metadata_faults = 0;
+    for (const zc::Meshlet& micro : type.micro) {
+      if (micro.deform.empty()) continue;
+      for (size_t mvi = 0; mvi < micro.verts.size(); ++mvi) {
+        if (micro.deform[mvi].role == zc::DeformRole::kNone) continue;
+        bool shares_bind_source = false;
+        bool metadata_agrees = false;
+        for (const zc::Meshlet& full : type.mesh) {
+          if (full.deform.empty()) continue;
+          for (size_t fvi = 0; fvi < full.verts.size(); ++fvi) {
+            if (!same_bind_source(micro.verts[mvi], full.verts[fvi])) continue;
+            shares_bind_source = true;
+            if (same_deform_source(micro.deform[mvi], full.deform[fvi]))
+              metadata_agrees = true;
+          }
+        }
+        if (shares_bind_source) {
+          ++shared_micro_vertices;
+          if (!metadata_agrees) ++shared_metadata_faults;
+        }
+      }
+    }
+    std::printf("SPRING shared full/micro deform sources: %d vertices, %d "
+                "metadata faults\n", shared_micro_vertices,
+                shared_metadata_faults);
+    require(shared_micro_vertices > 0 && shared_metadata_faults == 0,
+            "shared full/micro ring vertices disagree on deformation metadata");
+
+    const IntersectionPeak full_hits = spring_self_intersections(
+        type, *spring->clip, 0, rigid_air_tick);
+    const IntersectionPeak micro_hits = spring_self_intersections(
+        type, *spring->clip, 1, rigid_air_tick);
+    std::printf("SPRING real surface intersections full/micro: ");
+    if (full_hits.count == 0)
+      std::printf("none");
+    else
+      std::printf("%d@%d%s (%d/%d)", full_hits.count, full_hits.tick / 2,
+                  (full_hits.tick & 1) ? ".5" : "", full_hits.station_a,
+                  full_hits.station_b);
+    std::printf(" / ");
+    if (micro_hits.count == 0)
+      std::printf("none\n");
+    else
+      std::printf("%d@%d%s (%d/%d)\n", micro_hits.count,
+                  micro_hits.tick / 2, (micro_hits.tick & 1) ? ".5" : "",
+                  micro_hits.station_a, micro_hits.station_b);
+    require(full_hits.count == 0 && micro_hits.count == 0,
+            "spring body runs intersect on the real full or micro surface");
+
+    std::array<int32_t, 2> terrain_worst{INT32_MAX, INT32_MAX};
+    std::array<int, 2> terrain_tick{-1, -1};
+    for (int t = 0; t <= hold_end_tick; ++t) {
+      for (int rung = 0; rung < 2; ++rung) {
+        const int32_t y = to_mm(spring->samples[t].rung_min_y_fx[rung]);
+        if (y < terrain_worst[rung]) {
+          terrain_worst[rung] = y;
+          terrain_tick[rung] = t;
+        }
+      }
+    }
+    std::printf("SPRING terrain full/micro: %d mm at %d%s / %d mm at %d%s "
+                "(declared bite %d mm)\n", terrain_worst[0],
+                terrain_tick[0] / 2, (terrain_tick[0] & 1) ? ".5" : "",
+                terrain_worst[1], terrain_tick[1] / 2,
+                (terrain_tick[1] & 1) ? ".5" : "",
+                zixx::kSpringDeclaredBiteMm);
+    require(terrain_worst[0] >= -zixx::kSpringDeclaredBiteMm &&
+                terrain_worst[0] <= -28 && terrain_worst[1] >= -30 &&
+                terrain_worst[1] <= -20,
+            "spring left its accepted authored full/micro ground-bite envelope");
   }
 
   // Immediate programmable jump family.

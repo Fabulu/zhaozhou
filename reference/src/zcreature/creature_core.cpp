@@ -471,13 +471,17 @@ SkinVertex deform_skin_vertex(const SkinVertex& v, const DeformVertex& meta,
       }
     }
   } else if (meta.role == DeformRole::kFollower) {
-    // Followers inherit carrier contraction as a pure translation. Perpendicular
-    // spread belongs to the deforming body, not to a rigid fin/marking offset.
-    const int32_t moved = center[axis] +
-                          rescale_s32(static_cast<int64_t>(carrier[axis] - center[axis]) *
-                                          squash_scale,
-                                      16, nullptr);
-    *dst[axis] += moved - carrier[axis];
+    // Followers inherit the carrier point's ellipsoidal displacement as a pure
+    // translation. Their own dimensions/normals stay rigid; authors place the
+    // per-ring centre so only intended attachment offsets participate.
+    for (uint8_t lane = 0; lane < 3; ++lane) {
+      const int32_t scale = lane == axis ? squash_scale : spread_scale;
+      const int32_t moved =
+          center[lane] +
+          rescale_s32(static_cast<int64_t>(carrier[lane] - center[lane]) * scale,
+                      16, nullptr);
+      *dst[lane] += moved - carrier[lane];
+    }
   }
   return out;
 }

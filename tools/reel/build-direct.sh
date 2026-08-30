@@ -6,7 +6,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: tools/reel/build-direct.sh --output <dir> [--clean] [reel|cel|meshcheck|all]
+Usage: tools/reel/build-direct.sh --output <dir> [--clean] [reel|cel|meshcheck|probe|all]
 
 Build the reference reel directly into <dir>/bin with objects in <dir>/obj.
 The caller owns <dir>; no output is written beside this script.
@@ -15,7 +15,8 @@ Targets:
   reel       zhao-reel.exe
   cel        zhao-reel-cel.exe (default)
   meshcheck  zixx-meshcheck.exe
-  all        all three executables
+  probe      zixx-probe.exe
+  all        all four executables
 EOF
 }
 
@@ -37,7 +38,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|all)
+    reel|cel|meshcheck|probe|all)
       TARGET="$1"
       shift
       ;;
@@ -143,14 +144,22 @@ build_meshcheck() {
     -o "$BIN/zixx-meshcheck.exe"
 }
 
+build_probe() {
+  printf '%s\n' "LD zixx-probe"
+  "$CXX" "${FLAGS[@]}" "$T/zixx_probe.cpp" "${LIBOBJS[@]}" \
+    -o "$BIN/zixx-probe.exe"
+}
+
 case "$TARGET" in
   reel) build_reel ;;
   cel) build_cel ;;
   meshcheck) build_meshcheck ;;
+  probe) build_probe ;;
   all)
     build_reel
     build_cel
     build_meshcheck
+    build_probe
     ;;
 esac
 printf 'build-direct: done (%s)\n' "$BIN"

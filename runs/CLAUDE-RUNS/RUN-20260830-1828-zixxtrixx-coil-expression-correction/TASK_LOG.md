@@ -46,6 +46,21 @@ Correct the rejected published Zixxtrixx spring before any secondary polish, the
 - Added and ran `zixx-meshcheck --deform-sidecar`: exact byte identity, expected radial/follower fixed-point positions, inverse-transpose normal direction and baked midpoint all pass. Ordinary `zixx-meshcheck` remains green with zero bind disagreements and zero seam splits.
 - Compile gates now reject malformed clip sample counts, metadata role/strength/axis combinations and full/micro metadata count mismatches; declared phase seams compare deformation as well as roots/quaternions.
 
+### 2026-08-30 - Corrected whole-body spring visually accepted
+
+- Authored twelve fixed-side/high-three-quarter visual iterations under explicit cel-main/Cool Cross, inspecting every integer key and presentation midpoint at native 384x240 as well as continuous playback. No measured value selected the animation.
+- Accepted iteration twelve as the coil art gate: the exact regular grounded S enlarges coherently through the tail tip; the complete S packs downward with connected runs and visible positive-volume radial squash; the head moves backward and down relative to the planted support and squashes less than the body; a readable compressed hold precedes an intact whole-S release; the intact S is airborne before wheel gathering begins.
+- Removed the rejected global head-retreat/early-clearance devices. The only root consequence is preservation of the named planted body support plus its declared 34 mm authored ground bite. Curl, stance release and spin now wait until after the complete S has risen through key 24.
+- Visual acceptance unlocked regression probing only. Objective bands were derived from the chosen animation and used to catch regressions, not to redesign it. Secondary expression/action/pigment/light work stayed gated until the full/micro posed-vertex probe passed.
+
+### 2026-08-30 - Contact-safe final spring and committed 3D probe
+
+- Extended the durable `zixx-probe` to apply the real per-sample deformation before rigid skinning on both full and micro rungs at every authored key and runtime midpoint. It now probes exact planted-support motion, real tail followers, positive radial volume, corrected normals, shared full/micro ring-source metadata, real body-surface triangle intersections and posed-vertex terrain contact.
+- The first deformation-aware contact result exposed an accidental roughly 54 mm tail-region bite. Kept root lift at zero and corrected only the named enlarged-S profile knob (`kSpringJumpSlope` segment 16, ultimately 600), preserving the planted support and avoiding the prohibited clearance pop. Final full/micro terrain minima are -32/-25 mm inside the authored 34 mm bite.
+- Rendered the exact final source as iteration fifteen with explicit `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross`: 59 side and 59 high-three-quarter samples, CRC32C `0x8B3817A1` and `0x2C087B18`. Inspected both every-frame sheets and side playback. The local contact correction does not weaken the enlarged whole-tail S, connected downward pack, six-key brace hold, intact release or delayed transition into the accepted airborne wheel.
+- Derived bounded regression envelopes only after that visual acceptance. The final probe records regional whole-S travel/descent, 166 travelling tail-follower vertices, -43/-596 mm head motion relative to the named support, 0/0 mm hold drift, 730/925 per-mille body/head retained radius, 804 shared full/micro metadata matches with zero faults, zero full/micro real-surface intersections, exact sidecar identity outside authorised frames and intact release shape through key 24.
+- `zixx-probe` passes the complete bank: every key and presentation midpoint, declared 3D contact, spring, jump, balance, taunt, fall, impact, fixed-point limit and overlap gates. A fresh direct `--clean all` build recompiled every shared-layout consumer; ordinary meshcheck and `--deform-sidecar` both pass. The coil milestone is now closed; secondary art work is unlocked.
+
 ---
 
 ## Subagent Spawns
@@ -81,7 +96,7 @@ The mandated `subagents/20260830-1730-zixxtrixx-coil-expression/` directory was 
 
 ## Next Steps
 
-1. Commit/push the proven generic identity-sidecar milestone.
-2. Author Zixxtrixx full/micro deformation metadata and spring-only samples; remove root retreat, early clearance and tail-leading profile.
-3. Iterate every-frame fixed-side/high-three-quarter renders and actual playback until the complete coil reads correctly, then derive committed regression bands from that accepted art.
-4. Only after recording coil acceptance, begin the queued secondary expression/action/pigment/light work.
+1. Clean-build every direct consumer, run ordinary mesh, deformation-sidecar and full probe gates, then commit and push the accepted coil milestone with explicit paths.
+2. Author and visually review the queued selective pupil, monotonic fall-tumble, named hit-station, landing/KO/death and extended tail-balance work.
+3. Repair the generated junction pigment, inspect idle and strengthen only the moving local inspection light as needed.
+4. Preserve archive generation nine, render the exact final twenty-two-subject bank once, integrate current mains, and publish the finished pass exactly once.
