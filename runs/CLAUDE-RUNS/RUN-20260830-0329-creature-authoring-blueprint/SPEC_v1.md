@@ -2,7 +2,7 @@
 
 **Run ID:** RUN-20260830-0329
 **Created:** 2026-08-30 03:29 UTC+02:00
-**Status:** Active
+**Status:** Complete
 **Previous Version:** N/A
 
 ---
@@ -63,4 +63,27 @@ Stop when this question is answered and all checks pass; do not expand validatio
 ## Open Questions / Migration Assumptions
 
 - Current generic API paths may move when the independent production-ownership migration lands. Record every verified path with a commit and a stable role so later path updates are localized.
+- Generic `CreatureSourceProvider`, extracted `zreel`, and Upheaval-local direct
+  build scripts are target contracts, not all landed APIs at the tested mains.
+- Current production Zixxtrixx source/recipe/subjects/probes remain under
+  `zhaozhou/tools/`; active links must move after migration while their pinned
+  historical commit:path evidence remains.
+- `mkcreaturepage.py` and `zhao_reel.cpp` retain legacy source-location/default
+  output or registration assumptions that new species must not copy.
 - Main integration is permitted only if latest remote changes are cleanly nonoverlapping with the new blueprint folder.
+
+---
+
+## Acceptance Result
+
+**PASS.** The committed quickstart created the neutral package, all rendered JSON
+parsed, 23 repository commit:file pointers and 22 local Markdown links resolved,
+and independent LF/CRLF plus delete/rebuild generations were byte-identical.
+Generated texture output was likewise identical and preserved a leading
+whitespace-valued pixel. Both repository snapshots remained unchanged. All C++
+skeletons syntax-checked through the pinned generic include, and the directly
+linked neutral posed-vertex probe passed.
+
+The question is answered within budget. No visual production, catalogue render,
+Sacengine, `cmake --build`, encoder, browser/server, deployment, or broad decode
+was needed or run.

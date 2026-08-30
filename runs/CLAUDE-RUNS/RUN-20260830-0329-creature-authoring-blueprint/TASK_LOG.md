@@ -1,7 +1,7 @@
 # Task Log: RUN-20260830-0329 - Creature authoring blueprint
 
 **Created:** 2026-08-30 03:29 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260830-0329-creature-authoring-blueprint/
 
 ---
@@ -82,7 +82,8 @@ separator bytes; it preserves a valid first pixel byte equal to whitespace.
   `1387ea0528f2603b94bb1fbd7df418d952b916781bebe232322a788f45055528`;
 - texture output tree SHA-256
   `a884385c199d81dc1c41f39856f4390825d5856682193a9f3b61a3ed7a4550a1`;
-- independent outputs and complete delete/rebuild outputs byte-identical;
+- independent, LF/CRLF-equivalent checkout, and complete delete/rebuild
+  outputs byte-identical;
 - escaping destination rejected;
 - input repository HEAD/tracked state unchanged.
 
@@ -132,11 +133,23 @@ None. This lane is being performed serially by the assigned implementation agent
 
 ---
 
-## Remaining closeout
+## Closeout
 
-1. Stage exact blueprint paths, commit and push the feature branch.
-2. Fetch current Upheaval main, verify nonoverlap, integrate without rewriting
-   other-lane history, and push main.
-3. Commit/push the dedicated run records on their isolated zhaozhou branch.
-4. Record feature/main/run SHAs, final clean statuses, and targeted stopped-job
-   verification.
+- Upheaval logical commits were pushed as authored:
+  - `5529297` — neutral scaffold machinery;
+  - `315f0d7` — specifications, references, index and validator;
+  - `2ff2ffa` — canonical LF/CRLF-independent scaffold digest and regression.
+- Feature branch `creature-authoring-blueprint` is pushed at
+  `2ff2ffa12d4076d8147e6b54c474b06a4053ac3f`.
+- Latest remote Upheaval main was still the recorded nonoverlapping base, so main
+  was fast-forwarded and pushed at the same
+  `2ff2ffa12d4076d8147e6b54c474b06a4053ac3f`.
+- Dedicated zhaozhou evidence records were pushed on
+  `creature-authoring-blueprint-run`; initial evidence commit
+  `15e220ffee688af866866b17a8cabba63d2e0ad5`, followed by this final closeout.
+- Both isolated repositories were clean and their corresponding remote refs
+  matched before final record update.
+- No deployment or publication occurred.
+- Targeted final process inspection reported:
+  `run-owned build/render/encode/browser/server/deploy processes: NONE`.
+- No subagent or child background task was started.
