@@ -140,6 +140,45 @@ puts the frame over.
 
 ---
 
+## The 276,480 is ambiguous, and it changes three verdicts
+
+Every "SHORT" in this file and in three block tests is measured against ruling
+7's **276,480 terrain-primary** figure. `tools/render/count_fragment_load` now
+measures the fragment count of a full-screen terrain pass directly, with the
+shipped oracle, and gets **92,160 — exactly one per pixel, at 1.00x overdraw.**
+
+276,480 is exactly 3 x 92,160, and that leaves two readings:
+
+* **276,480 is FRAGMENTS.** Then the terrain-primary component assumes 3x
+  overdraw (or three layers, or a larger canvas), and the per-fragment units are
+  short as this file says.
+* **276,480 is DIVIDES.** A textured fragment needs three — `invw24`,
+  `u_over_w`, `v_over_w` — so 92,160 pixels is 276,480 divides exactly. Then it
+  is a figure about the DIVIDE and comparing per-fragment units against it is a
+  category error.
+
+**Ruling 7 uses it for AUX requests, which are per fragment, so the first
+reading is the one it intends.** That is the conservative one and it is what the
+tests assert against, which is the right default. But it should be confirmed
+rather than inherited, because under the second reading the picture changes:
+
+| unit | per frame | vs 92,160 fragments | vs 276,480 fragments |
+|---|---|---|---|
+| `RASTER.PERSPUV` | 151,515 | **1.64x, sufficient** | 0.55x, short |
+| `RASTER.RCP24` | 238,095 | **2.58x, sufficient** | 0.86x, short |
+| `TEXTURE.TMU` CLUT | 555,555 | 6.03x | 2.01x |
+| `TEXTURE.AUX` | 277,778 | 3.01x | 1.00x |
+
+So whether **PERSPUV and RCP24 need replicating at all** turns entirely on what
+that one number means. Both are comfortable against a measured full-screen pass
+and both are short against ruling 7's estimate of it.
+
+**This is not resolved here.** What is now measured is that a full-screen
+terrain pass is 92,160 fragments; what 276,480 counts is a question for whoever
+wrote it. The units stay sized for the conservative reading until then, because
+being 3x over-provisioned costs area and being 3x under-provisioned costs the
+frame.
+
 ## What is measured, and what is not
 
 **Measured, against running RTL:** every clock count in the first table, the
