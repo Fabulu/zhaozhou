@@ -2315,3 +2315,58 @@ parameter and they all descend from `CTX` in `zhao_probe_v3_full`.
 **crater_ring still does not run at all:** 7 vector + 29 uniform = 36 registers
 against a file of 32. The executor has no scalar-bank read path, so uniforms
 reach it only by broadcast. That refusal is a finding, not a skip.
+
+### Later the same day — scaling, the gather, and where the machine actually stops
+
+**Widened the composition.** `CTX` and `OUTSTANDING` now reach the top, so the
+same programs can be measured on a bigger machine without disturbing the CTX=8
+tallies. `OUTSTANDING` had to be promoted out of the dispatcher's BODY into its
+parameter port list -- a parameter declared in the body cannot be overridden by
+an instance, and Verilator says so in as many words.
+
+**One gather slot per opcode.** The dispatcher had ONE gather buffer, so one
+(op, dst, imm) could accumulate and the first stranger forced the group out
+half-empty. Full groups and overlapped services were in direct conflict, and no
+drive pattern could resolve it.
+
+    partial groups   138/215, 364/427  ->  0/138, 0/206
+    clocks/group     CTX=8  125 -> 111      CTX=32  92 -> 82
+
+**A prediction from a counter is still a guess until it is run.** I estimated
+3.4x from those same counters and was wrong: 215 groups against 256 points
+reads as 1.19 points/group only if you forget each point issues TWO long ops.
+The honest figure was 1.7x, and 1.7x on the gather is what 92 -> 82 reflects
+once the rest of the machine is in the way.
+
+**A third drive pattern, and why none of them was the answer.** WAVE starts
+every context together so all sit on the same opcode -- groups full, services
+never overlapped. STAGGERED overlaps the services but lets contexts drift one at
+a time. QUAD keeps four aligned (a dispatch group IS four points) and staggers
+the quads. QUAD was the right idea and barely helped, which is what sent the
+search past the gather.
+
+**WHERE IT ACTUALLY STOPS, measured:**
+
+    register writes 4096 in 4464 clocks = 92% of the ONE write port
+
+Every uop of every point lands through a single port at one per clock.
+impact_wave is 16 uops, so a four-point group costs 64 writes and therefore
+>= 64 clocks against a budget of 24.3. Across the stress frame that is
+2,236,416 writes: **2.6x over 850,000 from writes alone**, whatever the services
+do. The machine is not arithmetic-bound and no longer gather-bound.
+
+**The asymmetry is structural.** The service path is FOUR points wide; the
+executor is scalar -- one point, one instruction, one write per clock. Four
+lanes of ALU and writeback is the change that fits the shape of the rest of the
+machine, and it is the next real piece of work.
+
+There is a wrinkle worth writing down before anyone starts: the register file is
+banked on register[1:0] so that a register GROUP (a, a+1, a+2) can be read for
+one context in a single clock. Four lanes of a drain write the SAME register
+index for FOUR DIFFERENT contexts, which is one bank and four rows -- so a
+bank-per-port scheme does not give four writes a clock. Writes want banking by
+context, reads want banking by register. That is the actual design problem, and
+it should be settled before any RTL is cut.
+
+    frame, impact_wave, CTX=32   4,368,000 -> 2,865,408   (5.1x -> 3.4x over)
+    every measurement above is EXACT: 4,608 values against the oracle
