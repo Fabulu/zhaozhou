@@ -76,6 +76,22 @@ work.
   left the existing expected constants untouched and did not expand this art pass
   into a generic renderer investigation.
 
+### 2026-08-30 13:35 UTC+02:00 - Media and exact-noindex site
+
+- Encoded exactly ten VP9 WebMs at CRF16, 384x240, `yuv444p`, 60 Hz, 600 frames
+  and 10.000000 seconds, plus ten exact 1152x720 nearest-neighbour posters.
+- `ffprobe` counted every stream and a complete decode of all ten returned no
+  errors; hashes and properties are recorded in `media-probe.txt`.
+- Added one compact v14 current-experiment collection through the existing data
+  pattern. V10 Idle stays the first checked outer tab; v13 is retained as the
+  corrected prior reference; rejected v12, v11 and every archive remain present.
+- Existing assembler generated 145 declared renders with the exact
+  `noindex, nofollow` tag once. No site architecture or styling changed.
+- Headless Edge passed at exact 1280x900 and 390x844 viewports: ten controlled,
+  non-autoplay videos load at native 384x240 / ten seconds; narrow media is 324 px
+  wide; v10 is initially selected; exact noindex is present; no request/page error
+  or horizontal overflow occurred. The lane-local server and Edge were stopped.
+
 ---
 
 ## Validation Ledger — `V14-DIAGONAL-MODES-1`
@@ -84,8 +100,8 @@ work.
 |---|---|---|
 | V14-SOURCE | Exactly ten named top-diagonal fixed-world rigs? | Pass — ten named tables/selectors; existing subject reused |
 | V14-VISUAL | Most body/sides readable with directional shape in all ten? | Pass — final quarter-turn and every-frame sheets reviewed by eye |
-| V14-MEDIA | Ten exact 600-frame/60 Hz/384x240/10 s final assets? | Pending |
-| V14-WEB | Usable comparison, retained history/initial v10, exact noindex? | Pending |
+| V14-MEDIA | Ten exact 600-frame/60 Hz/384x240/10 s final assets? | Pass — ffprobe plus complete decode of all ten |
+| V14-WEB | Usable comparison, retained history/initial v10, exact noindex? | Pass locally — desktop and exact 390px Edge checks |
 
 ---
 
