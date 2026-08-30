@@ -170,8 +170,23 @@ module zhao_texture_tmu_pipe #(
   localparam logic [2:0] FMT_ARGB1555 = 3'd3, FMT_ARGB4444 = 3'd4;
   localparam logic [1:0] WRAP_REPEAT = 2'd0, WRAP_CLAMP = 2'd1, WRAP_MIRROR = 2'd2;
 
-  logic [31:0] REP4 [0:15];
-  always_comb for (int unsigned k = 0; k < 16; k++) REP4[k] = 32'h5555_5555 >> (2 * (15 - k));
+  // REP4[L] = (4^L - 1)/3, the base-4 repunits, COPIED FROM THE SERIAL BLOCK
+  // RATHER THAN GENERATED. The first version of this file computed it as
+  // `32'h5555_5555 >> (2 * (15 - k))`, which is off by one at every entry: it
+  // gives REP4[0] = 1 where the law says 0 and REP4[15] = 1,431,655,765 where
+  // the law says 357,913,941. Every mip level above zero then addressed the
+  // wrong level offset, the texel came back as a zero byte, and the record
+  // retired with a CLUT index of 0.
+  //
+  // This block's whole claim is that its arithmetic is the serial block's,
+  // staged rather than rewritten. A cleverer expression for a table that is
+  // already written down is not staging, it is rewriting.
+  localparam logic [31:0] REP4 [0:15] = '{
+    32'd0,       32'd1,        32'd5,        32'd21,
+    32'd85,      32'd341,      32'd1365,     32'd5461,
+    32'd21845,   32'd87381,    32'd349525,   32'd1398101,
+    32'd5592405, 32'd22369621, 32'd89478485, 32'd357913941
+  };
 
   // ---- A0: capture ---------------------------------------------------------
   // Nothing downstream reads a request pin. This is the register that turns a
@@ -425,6 +440,34 @@ module zhao_texture_tmu_pipe #(
   logic issue_fire_c;
   assign issue_fire_c = a0_v && !pf_v && (!c_v || cac_ready_i);
 
+  // ---- the mode verdict, taken from the PINS at accept --------------------
+  // `mode_error_o` belongs to the request accepted on the previous clock --
+  // that is the relationship the serial block has and the shared harness reads.
+  // Deriving it from the CAPTURED mode instead makes it one clock later than
+  // the harness expects, and all five mode-error checks fail while every
+  // sampled value is right.
+  //
+  // This is the one thing allowed to look at a request pin, and it is allowed
+  // because it is not the deep arithmetic the A0 register exists to cut off:
+  // a handful of comparisons on the mode word into a flop. The addresses still
+  // come from the captured copy.
+  logic [2:0]  p_fmt;
+  logic [3:0]  p_log2w, p_log2h, p_maxlvl;
+  logic        p_is_clut, p_fmt_bad, err_pin_c;
+  always_comb begin
+    p_fmt     = req_mode_i[2:0];
+    p_log2w   = req_mode_i[11:8];
+    p_log2h   = req_mode_i[15:12];
+    p_maxlvl  = req_mode_i[19:16];
+    p_is_clut = (p_fmt == FMT_CLUT8) || (p_fmt == FMT_CLUT4);
+    p_fmt_bad = !p_is_clut && (p_fmt != FMT_RGB565) && (p_fmt != FMT_ARGB1555) &&
+                (p_fmt != FMT_ARGB4444);
+    err_pin_c = (req_mode_i[3] && p_is_clut)
+              || (req_mode_i[31:21] != 11'd0)
+              || (p_maxlvl > ((p_log2w < p_log2h) ? p_log2w : p_log2h))
+              || p_fmt_bad;
+  end
+
   // ---- the head retires ----------------------------------------------------
   logic [RW-1:0] head_c;
   assign head_c      = rb_rp[RW-1:0];
@@ -560,7 +603,13 @@ module zhao_texture_tmu_pipe #(
       // `mode_error_o` is the ACCEPTED request's verdict, one clock later --
       // the same relationship the serial block has, so the shared harness
       // reads it the same way.
-      if (issue_fire_c) mode_error_o <= err_c;
+      // A PULSE, not a level. It is high for exactly the clock after the
+      // accept it belongs to. The serial block can hold it because it accepts
+      // one request at a time and the next accept overwrites it; a pipeline
+      // accepting every clock would leave a stale verdict standing over
+      // requests that did not earn it, which the harness reports as
+      // "mode_error_o pulsed with no request to attribute it to".
+      mode_error_o <= accept_c && err_pin_c;
 
       // ---- A1 -> the cache issue register ---------------------------------
       if (!c_v || cac_ready_i) begin

@@ -92,6 +92,25 @@ blocks:
           robustness target with a deliberately filter-heavy mode mix. It is
           NOT terrain demand and must never again be quoted as one.
         total_samples: 850000
+      sacrifice_terrain_3sample:
+        confidence: synthetic
+        source: >-
+          The capability profile, not the default. If the material rule allows a
+          bounded THREE-sample terrain recipe (base + detail + light/mask), the
+          known frame becomes 1,094,600 samples. At a one-per-clock hit path
+          that leaves 572,067 raw clocks, or 238,733 against the 20% reserve
+          target, for creatures, objects, misses and integration. Tight but not
+          obviously impossible -- and the terrain term multiplies GEOMETRIC
+          overdraw by three, so with Early-Z genuinely ahead of sampling the
+          real stream should be lower. See reports/MATERIAL_ARCHITECTURE.md.
+        clut8_nearest:
+          terrain_base_detail_light: 829440
+          sky_backdrop: 92160
+          stars: 128000
+          subtotal: 1049600
+        argb4444_bilinear:
+          clouds: 45000
+        total_samples: 1094600
       trace_derived:
         confidence: unmeasured
         source: >-
