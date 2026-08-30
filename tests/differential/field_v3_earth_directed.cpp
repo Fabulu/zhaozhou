@@ -91,6 +91,20 @@ constexpr int kCtx = ZHAO_EARTH_CTX;
 #endif
 constexpr int kLanes = ZHAO_EARTH_LANES;
 
+// A DISPATCH GROUP IS FOUR POINTS. It is NOT four contexts -- that was true
+// only while a context was one point, and it silently stopped being true when
+// the executor was widened.
+//
+// Bundling four CONTEXTS at LANES=4 starts sixteen synchronised points, which
+// is a four-point group's worth of alignment applied four times over. It
+// collides exactly the distance, curve and trig requests that staggering the
+// groups exists to spread out -- so the driver was manufacturing the service
+// contention it was written to avoid, and the machine was measured under it.
+constexpr int kPointsPerDispatchGroup = 4;
+static_assert(kPointsPerDispatchGroup % kLanes == 0,
+              "a dispatch group must be a whole number of contexts");
+constexpr int kCtxPerGroup = kPointsPerDispatchGroup / kLanes;
+
 // Verilator hands a 32-bit port back as a scalar and a 128-bit one as an
 // indexable word array, so the two cannot share an accessor. Branching on the
 // width here keeps every call site below reading as if they could.
@@ -1065,16 +1079,16 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
     // and reloaded together -- which fills every group -- while different quads
     // sit at different points in the program, which is what keeps DIST2, CURVE
     // and the trig unit busy at the same time.
-    const int nq = n_ctx / 4;
+    const int nq = n_ctx / kCtxPerGroup;
     std::vector<int> left((size_t)nq, 0);
     std::vector<bool> qdone((size_t)n_ctx, false);
     int wave = 0;
     for (int q = 0; q < nq; ++q) {
-      for (int k = 0; k < 4; ++k) {
-        load_point(q * 4 + k);
-        qdone[(size_t)(q * 4 + k)] = false;
+      for (int k = 0; k < kCtxPerGroup; ++k) {
+        load_point(q * kCtxPerGroup + k);
+        qdone[(size_t)(q * kCtxPerGroup + k)] = false;
       }
-      left[(size_t)q] = 4;
+      left[(size_t)q] = kCtxPerGroup;
     }
     while (retired < points && guard++ < guard_max) {
       d.advance();
@@ -1084,7 +1098,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         d.running[c] = false;
         if (qdone[(size_t)c]) continue;
         qdone[(size_t)c] = true;
-        --left[(size_t)(c / 4)];
+        --left[(size_t)(c / kCtxPerGroup)];
         check_point(c);
         retired += kLanes;
       }
@@ -1097,11 +1111,11 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           counted_start = retired;
         }
         ++wave;
-        for (int k = 0; k < 4; ++k) {
-          load_point(q * 4 + k);
-          qdone[(size_t)(q * 4 + k)] = false;
+        for (int k = 0; k < kCtxPerGroup; ++k) {
+          load_point(q * kCtxPerGroup + k);
+          qdone[(size_t)(q * kCtxPerGroup + k)] = false;
         }
-        left[(size_t)q] = 4;
+        left[(size_t)q] = kCtxPerGroup;
       }
     }
   } else {
@@ -1269,6 +1283,26 @@ int main(int argc, char** argv) {
         "   %-22s   %d values checked against the oracle, %ld of the counted clocks were "
         "harness preload\n",
         "", D.checked, D.preloads);
+    // WALL, PRELOAD AND ENGINE, SEPARATELY.
+    //
+    // Point data comes in one register per clock through the probe's preload
+    // port; the finished machine streams it from memory instead. Those clocks
+    // are real and they are COUNTED -- subtracting them silently would be
+    // flattering the result -- but they belong to the fixture, not the Earth
+    // executor, and the split says which of the two any remaining excess is.
+    if (D.group_clocks > 0 && D.span_clocks > 0) {
+      // preloads are clocks over the SAME window the span covers, so the share
+      // of a group's clocks they account for is preloads/span. Multiplying by
+      // four as well counted each group four times over and reported 7.9 where
+      // the truth is nearer 2 -- flattering, and in the direction I wanted.
+      const double pre_per_group = (double)D.preloads /
+                                   (double)((D.span_clocks > 0) ? D.span_clocks : 1) *
+                                   (double)D.group_clocks;
+      printf(
+          "   %-22s   clocks per four-point group: %ld wall, %.1f of them harness preload, "
+          "%.1f engine\n",
+          "", D.group_clocks, pre_per_group, (double)D.group_clocks - pre_per_group);
+    }
     // WHICH STAGE. A dispatch group that went out with fewer than four points
     // did a group's worth of waiting for a fraction of a group's work, so
     // `partial` against `groups` is the difference between a service that is
