@@ -1,7 +1,7 @@
 # Task Log: RUN-20260830-1828 - Zixxtrixx coil and expression correction
 
 **Created:** 2026-08-30 18:28 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260830-1828-zixxtrixx-coil-expression-correction/
 
 ---
@@ -116,6 +116,14 @@ Correct the rejected published Zixxtrixx spring before any secondary polish, the
 - The required pre-push refetch caught one late zhaozhou main commit, `8418364`, after the first gates completed. It touched exactly five raster-hardware/test/report paths and had zero overlap with the creature path set. Integrated it through the feature branch as `98ee417`, then into local main as `6af0632`, preserving rather than overwriting the concurrent work.
 - Repeated the entire direct `--clean all` build against that final integrated tree at `build/zixxtrixx-main-final`. All four consumers rebuilt; ordinary meshcheck, deformation-sidecar and the complete 3D probe pass again.
 
+### 2026-08-31 01:01 UTC+02:00 - Mains published, production verified, run complete
+
+- Pushed the validated implementation histories to both remote mains before deployment: zhaozhou `e0300368b34bccf41d29307034eefb57cbed0189` and Upheaval `f80e70a4067f31a4deae80a47a55a62f8fbd94b4`; each remote ref was read back equal to its local main.
+- Invoked the authorised deployment exactly once, with the mandatory arguments: `website/deploy.ps1 -Project upheaval -Branch main`. Wrangler 4.86.0 uploaded 46 changed files and produced the immutable deployment `https://59eb33bf.upheaval.pages.dev`; production is `https://upheaval.pages.dev`.
+- Both URLs return HTTP 200 and byte-identical generated HTML from the main-branch deployment, with build stamp `2026-08-30 22:57 UTC`, the exact noindex meta, and all nine archive generations. The production CSS is byte-exact and carries both generation-nine selector families.
+- Downloaded and SHA-256 compared every protected/current production asset: 44 live files (13.69 MiB), 44 Generation Nine files (13.56 MiB), 160 prior archive files (46.10 MiB), and 20 V14 study files (23.28 MiB). All 268 files / 96.63 MiB are byte-exact against the validated main tree.
+- Restored the deploy script's expected timestamp-only local `public/index.html` regeneration after remote verification. Upheaval is clean; no second deployment was made. This creature pass is complete and worth owner review at the production URL.
+
 ---
 
 ## Subagent Spawns
@@ -151,5 +159,4 @@ The mandated `subagents/20260830-1730-zixxtrixx-coil-expression/` directory was 
 
 ## Next Steps
 
-1. Commit this integrated validation record, push both validated mains, then publish the finished pass exactly once.
-2. Verify production and archive delivery, close/archive this one mandatory run, and stop/verify only this lane's child tooling.
+None for this completed pass. Any owner-directed visual revision begins in a new creature run from the published mains.
