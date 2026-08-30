@@ -908,6 +908,27 @@ inline AttackOutcome attack_plan_branch(bool hit_terrain, bool hit_creature) {
  */
 enum class DebugShade : uint8_t { kOff = 0, kUnlit, kNormals, kWire, kTriangleIds };
 extern DebugShade g_debug_shade;
+
+/**
+ * Named, editable world-space preview-light controls. The baseline remains the
+ * default oracle behavior; reel tooling may point g_creature_light_rig at one
+ * of the alternatives for an identical-art comparison. These values affect
+ * illumination only: no material, toon-ramp, geometry or camera state lives in
+ * a rig. Directions and gains are Q16.16.
+ */
+struct CreatureLightRig {
+  int32_t key_x, key_y, key_z;
+  int32_t fill_x, fill_y, fill_z;
+  int32_t ambient_r, ambient_g, ambient_b;
+  int32_t key_gain;
+  int32_t fill_r, fill_g, fill_b;
+};
+extern const CreatureLightRig kCreatureLightBaseline;
+extern const CreatureLightRig kCreatureLightFrontSoft;
+extern const CreatureLightRig kCreatureLightHighOpen;
+extern const CreatureLightRig kCreatureLightCrossfill;
+extern const CreatureLightRig* g_creature_light_rig;
+
 // RUN 1939/2234 texture-experiment lane. 0 = off (the shipping path,
 // bit-identical). g_cel_bands 2/3 selects constant-per-triangle FACETED cel.
 // g_smooth_toon_bands 2/3 keeps coherent shared normals/Gouraud light and asks

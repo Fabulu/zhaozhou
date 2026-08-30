@@ -319,6 +319,39 @@ bool creature_update(CreatureInstance& inst, const SimParams& sp,
 
 // ----------------------------------------------------- compositor preview --
 
+// V11 owner-choice rigs. All directions are unit Q16.16 world-space vectors;
+// all gains are Q16.16. Baseline copies the v10 values exactly and remains the
+// default. Alternatives are restrained preview-light models, not creature art.
+const CreatureLightRig kCreatureLightBaseline{
+    26758, 53521, 26758,       // key: (1,2,1)/sqrt(6)
+    -14301, -57205, -28602,   // warm bounce from below/opposite
+    22282, 23265, 24248,      // ambient: .34, .355, .37
+    48497,                    // white key: .74
+    19661, 15073, 10486};     // fill: .30, .23, .16
+
+const CreatureLightRig kCreatureLightFrontSoft{
+    5246, 19672, -62293,      // soft frontal/elevated key
+    -32850, -9855, -55845,    // low opposing camera-side fill
+    23593, 24904, 26870,      // ambient: .36, .38, .41
+    27525,                    // white key: .42
+    7864, 7209, 6554};        // near-neutral fill: .12, .11, .10
+
+const CreatureLightRig kCreatureLightHighOpen{
+    -6539, 47080, -45118,     // high open key, still camera-side
+    6539, -7847, -64735,      // near-camera sky fill
+    30147, 32113, 34734,      // ambient: .46, .49, .53
+    36045,                    // white key: .55
+    5243, 7209, 10486};       // cool fill: .08, .11, .16
+
+const CreatureLightRig kCreatureLightCrossfill{
+    43835, 18319, -45143,     // right/elevated camera-side key
+    -43916, 11798, -47193,    // left camera-side warm fill
+    19005, 20316, 22282,      // ambient: .29, .31, .34
+    38011,                    // white key: .58
+    22938, 19005, 14418};     // warm fill: .35, .29, .22
+
+const CreatureLightRig* g_creature_light_rig = &kCreatureLightBaseline;
+
 namespace {
 
 // quantize a Q16.16 lambert weight to 16 levels (palette law: a creature
@@ -364,34 +397,9 @@ inline int32_t quant_shade(int32_t shade) {
 // silicon; this is the reference renderer's material response.
 // ---------------------------------------------------------------------------
 
-// The rig below was SOLVED, not chosen: a 120,000-point sweep over fill
-// direction, key strength, ambient tint and fill tint, scored on (a) no face
-// darker than the shadow floor, (b) worst-case chroma spread of the concept's
-// dorsal pink, (c) distinct face values across a body of revolution, and
-// (d) a near-neutral highlight. `tools/tune_creature_light.py` reproduces it.
-//
-// Measured against the old one-light model, over 36 faces of a horizontal
-// cylinder, with the concept's raw dorsal pink (233,188,206):
-//
-//                          OLD      NEW
-//   darkest face gain      0.250 -> 0.375   (the shadow side stops being a
-//                                            flat silhouette)
-//   distinct face values   7     -> 21      (form instead of six identical
-//                                            faces)
-//   worst chroma spread    11    -> 17      (+55%; the pastel survives)
-//   brightest face         0.938 -> 1.000   (unity was unreachable before)
-//   highlight neutrality   n/a   -> exact   (a white key reads white)
-//
-// The fill came out as a WARM bounce from BELOW under a cool neutral ambient.
-// That is ground light off the ochre terrain plus sky -- the sweep was not
-// told to prefer it; it scored best. Physical coherence for free.
-inline constexpr int32_t kFillX = -14301;  // -0.21822
-inline constexpr int32_t kFillY = -57205;  // -0.87287
-inline constexpr int32_t kFillZ = -28602;  // -0.43644
-
-inline constexpr int32_t kAmbR = 22282, kAmbG = 23265, kAmbB = 24248;     // .34 .355 .37
-inline constexpr int32_t kKey = 48497;                                    // .74, white
-inline constexpr int32_t kFillR = 19661, kFillG = 15073, kFillB = 10486;  // .30 .23 .16
+// V11 leaves the v10 baseline intact and exposes restrained named rigs beside
+// it. Their values are authored by looking at identical native-resolution
+// renders; no sweep chooses them and no rig changes pigments or cel thresholds.
 
 struct Shade3 {
   int32_t r, g, b;  // Q16.16 gain per channel
@@ -407,14 +415,21 @@ inline constexpr int32_t kSmoothMixNum = 819;
 // same 1/16 ladder the palette tool counts, so the shade COUNT per material is
 // unchanged -- what changes is that the three channels no longer move
 // together, which is the whole point.
-inline Shade3 creature_light(int32_t lam_key, int32_t lam_fill) {
-  const auto mix = [](int32_t amb, int32_t fill, int32_t lk, int32_t lf) {
-    const int64_t k = (static_cast<int64_t>(kKey) * lk) >> 16;
-    const int64_t f = (static_cast<int64_t>(fill) * lf) >> 16;
-    return quant_shade(static_cast<int32_t>(amb + k + f));
+inline Shade3 creature_light(const CreatureLightRig& rig, int32_t lam_key, int32_t lam_fill) {
+  const auto mix = [](int32_t amb, int32_t key, int32_t fill,
+                      int32_t lk, int32_t lf) {
+    const int64_t k =
+        (static_cast<int64_t>(key) * lk) >> 16;
+    const int64_t f =
+        (static_cast<int64_t>(fill) * lf) >> 16;
+    return quant_shade(
+        static_cast<int32_t>(amb + k + f));
   };
-  return Shade3{mix(kAmbR, kFillR, lam_key, lam_fill), mix(kAmbG, kFillG, lam_key, lam_fill),
-                mix(kAmbB, kFillB, lam_key, lam_fill)};
+
+  return Shade3{
+      mix(rig.ambient_r, rig.key_gain, rig.fill_r, lam_key, lam_fill),
+      mix(rig.ambient_g, rig.key_gain, rig.fill_g, lam_key, lam_fill),
+      mix(rig.ambient_b, rig.key_gain, rig.fill_b, lam_key, lam_fill)};
 }
 
 // the ambient floor of the dual-terrain walls (0.25 + 0.75*lambert) -- kept
@@ -474,6 +489,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                        CreatureInstance* const* instances, size_t count, PoseBank& poses,
                        SatLedger* L) {
   if (count == 0) return;
+  const CreatureLightRig& rig = *g_creature_light_rig;
   // deterministic order: sort the pointers (the ABI order is caller truth;
   // the compositor must not depend on it)
   std::vector<CreatureInstance*> inst(instances, instances + count);
@@ -610,10 +626,10 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         pvs[vi].ny = sv.ny;
         pvs[vi].nz = sv.nz;
         if (pvs[vi].lit) {
-          pvs[vi].lam_k = skin_normal_lambert(worldm.data(), sv, render::kLightX,
-                                              render::kLightY, render::kLightZ);
-          pvs[vi].lam_f =
-              skin_normal_lambert(worldm.data(), sv, kFillX, kFillY, kFillZ);
+          pvs[vi].lam_k = skin_normal_lambert(worldm.data(), sv, rig.key_x,
+                                              rig.key_y, rig.key_z);
+          pvs[vi].lam_f = skin_normal_lambert(worldm.data(), sv, rig.fill_x,
+                                              rig.fill_y, rig.fill_z);
         } else {
           pvs[vi].lam_k = pvs[vi].lam_f = 0;
         }
@@ -629,10 +645,12 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         // passed the inward index order here, so the 20% face lane opposed the
         // 80% smooth lane: it suppressed real highlights and injected light on
         // back-facing patches as triangles deformed across toon thresholds.
-        const int32_t lam_key =
-            render::shade_flat_tri(a.wx, a.wy, a.wz, c.wx, c.wy, c.wz, b.wx, b.wy, b.wz, L);
+        const int32_t lam_key = render::shade_flat_tri_dir(
+            a.wx, a.wy, a.wz, c.wx, c.wy, c.wz, b.wx, b.wy, b.wz,
+            rig.key_x, rig.key_y, rig.key_z, L);
         const int32_t lam_fill = render::shade_flat_tri_dir(
-            a.wx, a.wy, a.wz, c.wx, c.wy, c.wz, b.wx, b.wy, b.wz, kFillX, kFillY, kFillZ, L);
+            a.wx, a.wy, a.wz, c.wx, c.wy, c.wz, b.wx, b.wy, b.wz,
+            rig.fill_x, rig.fill_y, rig.fill_z, L);
         render::TriMode tm;  // opaque: depth test + write
         // GOURAUD (N3): when the compiled mesh carries normals, each corner
         // gets its own Lambert — kSmoothMixNum parts the per-vertex smooth
@@ -653,11 +671,11 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                 (static_cast<int64_t>(kSmoothMixNum) * corner[k]->lam_f +
                  static_cast<int64_t>(1024 - kSmoothMixNum) * lam_fill + 512) >>
                 10);
-            shc[k] = creature_light(lk, lf);
+            shc[k] = creature_light(rig, lk, lf);
           }
           tm.gouraud = true;
         } else {
-          shc[0] = shc[1] = shc[2] = creature_light(lam_key, lam_fill);
+          shc[0] = shc[1] = shc[2] = creature_light(rig, lam_key, lam_fill);
         }
         // RUN 1939/2234 cel experiment (default 0: this branch never runs on
         // the shipping path and the normal render stays bit-identical). Cel
@@ -672,7 +690,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           // fragment in raster. This is deliberately separate from faceted cel.
           tm.toon = g_smooth_toon_bands <= 2 ? &kSmoothCel2Ramp : &kSmoothCel3Ramp;
         } else if (g_cel_bands != 0 && g_debug_shade == DebugShade::kOff) {
-          const Shade3 cel = cel_quantise(creature_light(lam_key, lam_fill));
+          const Shade3 cel = cel_quantise(creature_light(rig, lam_key, lam_fill));
           shc[0] = shc[1] = shc[2] = cel;
           tm.gouraud = false;
         }

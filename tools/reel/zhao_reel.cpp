@@ -4158,6 +4158,18 @@ SceneSubject subject_zixx_still() {
   return s;
 }
 
+// V11 lighting options: one deliberately short fixed-camera idle excerpt. It
+// is not a catalogue subject and changes no animation data; it exists only so
+// four identical 24-frame renders can be assembled into ONE bounded owner-
+// choice motion comparison.
+SceneSubject subject_zixx_light_choice() {
+  SceneSubject s = subject_zixx_still();
+  s.name = "zixxtrixx-light-choice";
+  s.frames = 24;
+  s.note = "DIAGNOSTIC: v11 lighting choice, first 24 idle ticks, fixed side camera";
+  return s;
+}
+
 // Same pose, light and true-side camera as zixxtrixx-still, pulled back to a
 // real gameplay-scale read. Kept as a committed counterpart so smooth toon
 // topology comparisons cannot substitute an enlarged close crop for distance.
@@ -5364,6 +5376,27 @@ int main(int argc, char** argv) {
     if (!e.empty())
       std::fprintf(stderr, "ZIXX_EXP=%s (experimental lane)\n", e.c_str());
   }
+  // V11 bounded owner-choice lane. The selector changes only the generic
+  // creature preview rig; baseline is still the default when the variable is
+  // absent. Named alternatives share identical art, toon ramp and cameras.
+  if (const char* light = std::getenv("ZIXX_LIGHT")) {
+    const std::string name = light;
+    if (name == "baseline")
+      zc::g_creature_light_rig = &zc::kCreatureLightBaseline;
+    else if (name == "front-soft")
+      zc::g_creature_light_rig = &zc::kCreatureLightFrontSoft;
+    else if (name == "high-open")
+      zc::g_creature_light_rig = &zc::kCreatureLightHighOpen;
+    else if (name == "crossfill")
+      zc::g_creature_light_rig = &zc::kCreatureLightCrossfill;
+    else {
+      std::fprintf(stderr,
+                   "unknown ZIXX_LIGHT=%s (expected baseline, front-soft, high-open, crossfill)\n",
+                   light);
+      return 2;
+    }
+    std::fprintf(stderr, "ZIXX_LIGHT=%s (lighting choice lane)\n", light);
+  }
   std::vector<std::string> want;
   for (int i = 2; i < argc; ++i) want.push_back(argv[i]);
   const auto wanted = [&](const char* n) {
@@ -5419,6 +5452,7 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-frontfix")) rc |= render_scene(subject_zixx_frontfix());
   if (wanted("zixxtrixx-frontfix-game")) rc |= render_scene(subject_zixx_frontfix_game());
   if (wanted("zixxtrixx-still")) rc |= render_scene(subject_zixx_still());
+  if (wanted("zixxtrixx-light-choice")) rc |= render_scene(subject_zixx_light_choice());
   if (wanted("zixxtrixx-still-game")) rc |= render_scene(subject_zixx_still_game());
   if (wanted("zixxtrixx-still-front")) rc |= render_scene(subject_zixx_still_front());
   if (wanted("zixxtrixx-fall-side")) rc |= render_scene(subject_zixx_fall_side());

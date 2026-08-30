@@ -1,0 +1,24 @@
+ZIXX_EXP=celmain (experimental lane)
+ZIXX_LIGHT=baseline (lighting choice lane)
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+zhao-reel: deterministic frame sequences -> C:/programmieren/zencrifice/zixxtrixx-v11-lighting-lane/zhaozhou/runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/render/options/baseline
+zixxtrixx-still: 842 unique colours — full-colour lane, palette gate not applied
+zixxtrixx-still: 1 frames, 842 unique colours, sequence_crc32c=0xF0DA9F88
+ZIXX_EXP=celmain (experimental lane)
+ZIXX_LIGHT=front-soft (lighting choice lane)
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+zhao-reel: deterministic frame sequences -> C:/programmieren/zencrifice/zixxtrixx-v11-lighting-lane/zhaozhou/runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/render/options/front-soft
+zixxtrixx-still: 1871 unique colours — full-colour lane, palette gate not applied
+zixxtrixx-still: 1 frames, 1871 unique colours, sequence_crc32c=0xF0809039
+ZIXX_EXP=celmain (experimental lane)
+ZIXX_LIGHT=high-open (lighting choice lane)
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+zhao-reel: deterministic frame sequences -> C:/programmieren/zencrifice/zixxtrixx-v11-lighting-lane/zhaozhou/runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/render/options/high-open
+zixxtrixx-still: 2243 unique colours — full-colour lane, palette gate not applied
+zixxtrixx-still: 1 frames, 2243 unique colours, sequence_crc32c=0x00A2B82D
+ZIXX_EXP=celmain (experimental lane)
+ZIXX_LIGHT=crossfill (lighting choice lane)
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+zhao-reel: deterministic frame sequences -> C:/programmieren/zencrifice/zixxtrixx-v11-lighting-lane/zhaozhou/runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/render/options/crossfill
+zixxtrixx-still: 2327 unique colours — full-colour lane, palette gate not applied
+zixxtrixx-still: 1 frames, 2327 unique colours, sequence_crc32c=0xF662D430

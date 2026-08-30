@@ -1,0 +1,23 @@
+V11 bounded current-main compositor gate diagnosis
+
+Reported signal
+- Hardware run reported `FAIL: creature does not fill the frame` with 4,096/4,096 lit pixels.
+- V10 corrected output is 1,305/4,096; the extent threshold must not be widened.
+
+Source/integration check
+- Isolated branch base: 94ae98178346e460eca74b8bfddd554903d60a01.
+- Fetched current origin/main: 0550405bbf659f26a9b8750fe38a36d5f92899fb.
+- No diff from the v11 base to current origin/main in tests/geometry/creature_core.cpp, reference creature paths, zhao_reel.cpp or zixxtrixx.h.
+- The committed camera correctly encodes clip Z = z and clip W = z + 4.
+
+Fresh direct result
+- Deleted every run-local object/executable and rebuilt all 29 reference translation units directly with g++; no CMake build was used.
+- Fresh creature_core result: all anchors green.
+- Instrumented identical source: clip_w=262144/65536 (4 m), lit=1305/4096.
+
+Conclusion
+- No source, camera-matrix, compositor-state or integration regression exists.
+- The 4,096-pixel report came from a stale executable/object generated before camera fix 0e8e0ca, exactly matching the known stale-camera result where clip W remained 1.
+- Approved creature extent and the `lit < W*H` gate remain unchanged.
+
+COMPOSITOR CURRENT-MAIN DIAGNOSIS: PASS — stale-build signal isolated; no code fix required.
