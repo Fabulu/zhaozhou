@@ -365,6 +365,16 @@ struct Dut {
   std::vector<std::pair<int, int32_t>> asked[kCtx];
   // Clock stamps, so ORDER can be shown rather than argued about.
   std::vector<long> wclk[kCtx], aclk[kCtx];
+
+  // HOW MANY CONTEXTS THE FIXTURE IS KEEPING ALIVE.
+  //
+  // `idle_clocks` counts only clocks where a context was ACTIVE and none could
+  // issue; `blocked` counts only ready-but-refused. A context that has retired
+  // and is waiting for this harness to reload it is NEITHER, so it falls
+  // through both -- and on wave_pool those two counters read zero while issue
+  // occupancy was 63%. Summing `active_o` says whether the machine is short of
+  // work or the fixture is short of hands.
+  long active_sum = 0, active_clocks = 0;
   // Every clock this context had an instruction at S2: what operand a was
   // about to be captured, and what the file was actually presenting.
   struct Cap {
@@ -425,6 +435,9 @@ struct Dut {
     // then quietly broke here when it grew lanes.
     int32_t wdl[kLanes];
     for (int l = 0; l < kLanes; ++l) wdl[l] = get_wr_lane(t, l);
+    for (int c = 0; c < kCtx; ++c)
+      if ((t.active_o >> c) & 1) ++active_sum;
+    ++active_clocks;
     const int32_t wd = wdl[0];
     const bool took_long = (t.dbg_long_valid_o != 0) && (t.dbg_long_ready_o != 0);
     const int lc = (int)t.dbg_long_ctx_o;
@@ -780,6 +793,7 @@ struct Result {
   // it is the start of a guess rather than the end of a measurement.
   long groups = 0, partial = 0, uops = 0, idle = 0, drain = 0;
   long held = 0, blocked = 0;
+  double avg_active = 0.0;
   long wb_served[2] = {0, 0}, wb_stalled[2] = {0, 0};
   // THE ONE WRITE PORT. Every uop of every point lands through it, one per
   // clock, so its occupancy is a hard floor on the whole machine however wide
@@ -1083,7 +1097,14 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   // at different moments drift apart, stop sharing an op, and the group goes
   // out PARTIAL -- a whole group's latency spent on one point. The drift is
   // self-reinforcing, which is how 98% of groups went out partial.
-  long t0 = 0, preload0 = 0, writes0 = 0;
+  // EVERY COUNTER DIFFERENCED OVER THE MEASURED WINDOW. The engine's counters
+  // run from RESET and the span covers only the counted part of the run, so
+  // reporting one against the other is not a tight measurement -- it printed
+  // 2,390 uops issued inside 1,742 clocks, which is more than one per clock and
+  // therefore impossible. The write ratio was fixed once and the rest were left
+  // behind; they are all differenced now.
+  long t0 = 0, preload0 = 0, writes0 = 0, uops0 = 0, idle0 = 0, held0 = 0, blocked0 = 0;
+  long active_sum0 = 0, active_clocks0 = 0;
   int counted_start = 0;
   int guard = 0;
   const int guard_max = points * 8000 + 400000;
@@ -1096,6 +1117,22 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         t0 = d.clocks;
         preload0 = d.preload_clocks;
         writes0 = (long)top.rf_writes_o;
+        uops0 = (long)top.uops_issued_o;
+        idle0 = (long)top.idle_clocks_o;
+        held0 = (long)top.hold_clocks_o;
+        blocked0 = (long)top.blocked_clocks_o;
+        active_sum0 = d.active_sum;
+        active_clocks0 = d.active_clocks;
+        active_sum0 = d.active_sum;
+        active_clocks0 = d.active_clocks;
+        uops0 = (long)top.uops_issued_o;
+        idle0 = (long)top.idle_clocks_o;
+        held0 = (long)top.hold_clocks_o;
+        blocked0 = (long)top.blocked_clocks_o;
+        active_sum0 = d.active_sum;
+        active_clocks0 = d.active_clocks;
+        active_sum0 = d.active_sum;
+        active_clocks0 = d.active_clocks;
         counted_start = retired;
       }
       for (int c = 0; c < n_ctx; ++c) {
@@ -1162,6 +1199,36 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           t0 = d.clocks;
           preload0 = d.preload_clocks;
           writes0 = (long)top.rf_writes_o;
+          uops0 = (long)top.uops_issued_o;
+          idle0 = (long)top.idle_clocks_o;
+          held0 = (long)top.hold_clocks_o;
+          blocked0 = (long)top.blocked_clocks_o;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          uops0 = (long)top.uops_issued_o;
+          idle0 = (long)top.idle_clocks_o;
+          held0 = (long)top.hold_clocks_o;
+          blocked0 = (long)top.blocked_clocks_o;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          uops0 = (long)top.uops_issued_o;
+          idle0 = (long)top.idle_clocks_o;
+          held0 = (long)top.hold_clocks_o;
+          blocked0 = (long)top.blocked_clocks_o;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
           counted_start = retired;
         }
         ++wave;
@@ -1187,6 +1254,36 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           t0 = d.clocks;
           preload0 = d.preload_clocks;
           writes0 = (long)top.rf_writes_o;
+          uops0 = (long)top.uops_issued_o;
+          idle0 = (long)top.idle_clocks_o;
+          held0 = (long)top.hold_clocks_o;
+          blocked0 = (long)top.blocked_clocks_o;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          uops0 = (long)top.uops_issued_o;
+          idle0 = (long)top.idle_clocks_o;
+          held0 = (long)top.hold_clocks_o;
+          blocked0 = (long)top.blocked_clocks_o;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          uops0 = (long)top.uops_issued_o;
+          idle0 = (long)top.idle_clocks_o;
+          held0 = (long)top.hold_clocks_o;
+          blocked0 = (long)top.blocked_clocks_o;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
+          active_sum0 = d.active_sum;
+          active_clocks0 = d.active_clocks;
           counted_start = retired;
         }
         if (retired < points) load_point(c);
@@ -1228,10 +1325,13 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   R.span_clocks = span;
   R.groups = (long)top.groups_o;
   R.partial = (long)top.partial_o;
-  R.uops = (long)top.uops_issued_o;
-  R.idle = (long)top.idle_clocks_o;
-  R.held = (long)top.hold_clocks_o;
-  R.blocked = (long)top.blocked_clocks_o;
+  R.uops = (long)top.uops_issued_o - uops0;
+  R.idle = (long)top.idle_clocks_o - idle0;
+  R.held = (long)top.hold_clocks_o - held0;
+  R.blocked = (long)top.blocked_clocks_o - blocked0;
+  R.avg_active = (d.active_clocks > active_clocks0) ? (double)(d.active_sum - active_sum0) /
+                                                          (double)(d.active_clocks - active_clocks0)
+                                                    : 0.0;
   R.drain = (long)top.drain_writes_o;
   for (int i = 0; i < 2; ++i) {
     R.wb_served[i] = (long)top.wb_served_o[i];
@@ -1373,13 +1473,16 @@ int main(int argc, char** argv) {
           "   %-22s   FROZEN by a long op awaiting the dispatcher %ld clocks (%.0f%%); "
           "ready-but-could-not-issue %ld\n",
           "", D.held, 100.0 * (double)D.held / (double)D.span_clocks, D.blocked);
+    printf("   %-22s   contexts alive %.1f of %d, uops issued %ld in %ld clocks (%.0f%%)\n", "",
+           D.avg_active, n_ctx, D.uops, D.span_clocks,
+           D.span_clocks ? 100.0 * (double)D.uops / (double)D.span_clocks : 0.0);
     printf("   %-22s   writeback: ALU served %ld stalled %ld, drain served %ld stalled %ld\n", "",
            D.wb_served[0], D.wb_stalled[0], D.wb_served[1], D.wb_stalled[1]);
     // THE FLOOR THE PORT ITSELF SETS. One write per clock, so this is what the
     // machine could not beat even with infinitely fast services.
     if (D.span_clocks > 0)
       printf("   %-22s   register writes %ld in %ld clocks = %.0f%% of the ONE write port\n", "",
-             R.writes, R.span_clocks, 100.0 * (double)D.writes / (double)D.span_clocks);
+             D.writes, D.span_clocks, 100.0 * (double)D.writes / (double)D.span_clocks);
   }
 
   if (total_stag_bad != 0) {
