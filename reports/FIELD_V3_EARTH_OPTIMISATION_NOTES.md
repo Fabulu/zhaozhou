@@ -310,6 +310,64 @@ that were wrong.**
 All three inside 850,000. The remaining roadmap items are diminishing returns
 against a 22% margin on the worst program.
 
+## Round 3: the frame figure was quantised, and two "5% regressions" were 1%
+
+`group_clocks` was rounded to a whole clock per four-point group and the frame
+cost was then `group_clocks x 273 x 128`. **One clock of rounding is 34,944
+clocks of frame -- 4.1% of the entire admission budget.** Both changes this
+session reported as ~5% regressions had moved the measured span by about 1%,
+and crossed a rounding boundary.
+
+`Result::group_exact` keeps the interval as measured and the frame comes from
+it. Every figure below is on the exact arithmetic at `--points 2048`, and they
+are not comparable with the integer figures above.
+
+### The ring's two `x2` products are exact shifts. Proven, built, and it does not help crater_ring.
+
+`ring_prepared` computes `fx_mul(F(2 << 16), t)` twice, and `t` has just been
+clamped to [0, 1.0]. So `2*t` is in [0, 2.0], 2.0 is exactly representable, and
+`resc16(131072 * t)` never carries its rounding term. It is `t << 1` with no
+residue and no ledger event.
+
+**Proved exhaustively, not argued:** all 65,537 values of `t` in [0, 1.0] give
+an identical raw and an untouched `SatLedger`. The full ring goes from nine
+products to seven; smooth mode from four to three. The two steps also stop
+costing a bank transaction and a wait state, so the walk is shorter as well as
+cheaper. All 23 ring-service checks pass; 49,184 Earth values exact.
+
+    A/B at --points 2048, exact arithmetic
+
+    |             | nine products      | shifts             |        |
+    | crater_ring | 19.32   675,193    | 19.57   683,960    | +1.3%  |
+    | impact_wave | 16.69   583,236    | 16.39   572,879    | -1.8%  |
+    | wave_pool   | 17.05   595,776    | 16.67   582,609    | -2.2%  |
+    | crater bank | 6,654 grants, 77%  | 5,379 grants, 62%  | -19%   |
+
+**Nineteen percent of crater_ring's multiplier traffic was deleted and it got
+1.3% SLOWER.** Together with RING_UNITS 8/16/32 and DIST_BANKS 4/8 doing
+nothing, that settles it: **crater_ring is not multiplier-bank bound.** 77% was
+the highest occupancy in the machine and it was still not the constraint. The
+remaining cost is dependency latency and phase, not arithmetic throughput.
+
+The change is kept: it improves two of three programs, deletes real DSP
+transactions and a wait state, and a shift is not a multiply. But it is kept as
+an honesty and area change, not as a speed one, and **the projection that it
+would reach 559,104 did not happen** -- the same class of error as every other
+prediction in this file. The arithmetic count was right; the assumption that
+the machine was arithmetic-bound was not.
+
+### Three architectural prescriptions, all measured, all wrong
+
+| prescription | outcome |
+|---|---|
+| four ctx-banked register write ports | deadlocked; widening the WORD was the answer |
+| more ring units / more root banks | not one clock, three times |
+| DIST2 front end at II 8 | 1.3% slower |
+| delete 19% of the multiplier traffic | 1.3% slower on the program it was aimed at |
+
+Every one followed from a correct measurement. **A correct measurement does not
+make a prescription correct**, and this engine has now paid for that four times.
+
 ## Open items
 
 * **`wave_pool` has 1.3% margin.** That is thin enough that a timing or workload

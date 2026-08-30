@@ -143,7 +143,36 @@ module zhao_field_v3_ring (
   logic [4:0] last_wait_c;
   assign last_wait_c = smooth_r ? (G_P4 + 5'd1) : (G_P9 + 5'd1);
   logic       is_issue_c;
-  assign is_issue_c = (state != G_IDLE) && (state != G_OUT) && (state[0] == 1'b1);
+  // ---------------------------------------------------------------------------
+  // P3 AND P7 ARE SHIFTS, NOT PRODUCTS
+  // ---------------------------------------------------------------------------
+  // The reference writes `fx_mul(F(2 << 16), t)` and this block used to issue
+  // it into the shared multiplier bank like any other product. It is not one.
+  // `t` has just been CLAMPED to [0, 1.0] by `clamp01`, so 2*t is in [0, 2.0]
+  // and cannot overflow; 2.0 is exactly representable, so
+  //
+  //     fx_mul(2<<16, t) = resc16(131072 * t) = ((131072*t) + 32768) >> 16
+  //
+  // and 131072*t is an exact multiple of 65536, so the rounding term never
+  // carries. The result is t << 1 with no residue and no ledger event. That is
+  // proved EXHAUSTIVELY, not argued: all 65,537 values of t in [0, 1.0] give
+  // an identical raw and an untouched SatLedger.
+  //
+  // ENFORCED-BY: tests/differential/field_v3_ring_svc_directed.cpp:main
+  //
+  // WHY IT MATTERS, WHICH IS NOT THE ARITHMETIC. Every service in this engine
+  // -- every ring unit, every root bank, trig, curve -- issues into ONE
+  // four-wide multiplier bank, and crater_ring measured that bank at 75%
+  // occupancy while parameter sweeps of RING_UNITS 8/16/32 and DIST_BANKS 4/8
+  // moved the frame cost by not one clock. More units behind a saturated bank
+  // are more consumers of the constraint. These two steps were 2 of the 9
+  // grants a full ring makes and 1 of the 4 a smooth ring makes, and deleting
+  // them deletes the BANK TRANSACTION as well as the arithmetic: the walk
+  // skips the wait state too, because there is nothing in flight to wait for.
+  logic       is_shift_c;
+  assign is_shift_c = (state == G_P3) || (state == G_P7);
+  assign is_issue_c = (state != G_IDLE) && (state != G_OUT) && (state[0] == 1'b1) &&
+                      !is_shift_c;
 
   logic [7:0]         h_tag;
   logic signed [31:0] h_d [LANES];
@@ -257,9 +286,10 @@ module zhao_field_v3_ring (
 
   // In smooth mode the walk never reaches P5..P9, so those terms are dead
   // rather than suppressed -- the state simply never gets there.
-  assign mul_issue_o = (state == G_P1) || (state == G_P2) || (state == G_P3) ||
+  // P3 and P7 are absent: they are shifts and never ask the bank.
+  assign mul_issue_o = (state == G_P1) || (state == G_P2) ||
                        (state == G_P4) || (state == G_P5) || (state == G_P6) ||
-                       (state == G_P7) || (state == G_P8) || (state == G_P9);
+                       (state == G_P8) || (state == G_P9);
   assign mul_a_0_o = mul_a[0];
   assign mul_a_1_o = mul_a[1];
   assign mul_a_2_o = mul_a[2];
@@ -338,7 +368,15 @@ module zhao_field_v3_ring (
           // EVERY ISSUE HOLDS UNTIL GRANTED, and every wait holds until the
           // product lands. The operands are registers that do not move, so a
           // refusal costs one clock.
-          if (is_issue_c) begin
+          // The two shift steps complete in their own clock and skip their
+          // wait state, because no product is in flight to wait for.
+          if (is_shift_c) begin
+            for (int l = 0; l < LANES; l++) begin
+              if (state == G_P3) u0[l] <= t0[l] <<< 1;
+              else               u1[l] <= t1[l] <<< 1;
+            end
+            state <= state + 5'd2;
+          end else if (is_issue_c) begin
             if (mul_ready_i) state <= state + 5'd1;
           end else if (mul_valid_i) begin
             for (int l = 0; l < LANES; l++) begin
@@ -348,11 +386,12 @@ module zhao_field_v3_ring (
                 // clamps immediately after the product and before squaring.
                 G_P1 + 5'd1: t0[l]  <= clamp01(resc16(prod[l]));
                 G_P2 + 5'd1: t0s[l] <= resc16(prod[l]);
-                G_P3 + 5'd1: u0[l]  <= resc16(prod[l]);
+                // P3 and P7 no longer land here -- their wait states are
+                // never entered. Named rather than deleted so the walk still
+                // reads against the reference's numbered products.
                 G_P4 + 5'd1: s0[l]  <= resc16(prod[l]);
                 G_P5 + 5'd1: t1[l]  <= clamp01(resc16(prod[l]));
                 G_P6 + 5'd1: t1s[l] <= resc16(prod[l]);
-                G_P7 + 5'd1: u1[l]  <= resc16(prod[l]);
                 G_P8 + 5'd1: s1[l]  <= resc16(prod[l]);
                 // The ninth product is the ANSWER and is written below, once
                 // rather than per lane. Named rather than defaulted so the

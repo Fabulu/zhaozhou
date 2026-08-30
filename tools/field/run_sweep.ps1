@@ -51,7 +51,7 @@ foreach ($e in $exes) {
 
   # The frame cost of the QUAD drive, per program: that is the drive the
   # admission law is quoted against.
-  $frames = [regex]::Matches($out, '(\S+\.zprog)\s+QUAD\s+group\s+(\d+)\s+association\s+(\d+)\s+frame\s+(\d+)')
+  $frames = [regex]::Matches($out, '(\S+\.zprog)\s+QUAD\s+group\s+([\d.]+)\s+association\s+(\d+)\s+frame\s+(\d+)')
   $worst = 0
   $per = @{}
   foreach ($m in $frames) {

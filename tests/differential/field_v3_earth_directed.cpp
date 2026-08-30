@@ -930,6 +930,14 @@ struct Result {
   bool ran = false;
   long ii_x4 = 0;  // clocks per four-point group, scaled by 4 for rounding
   long group_clocks = 0;
+  // THE FRAME COST IS NOT DERIVED FROM `group_clocks`. Rounding the initiation
+  // interval to a whole clock and THEN multiplying by 34,944 groups turns one
+  // clock of rounding into 34,944 clocks of frame -- 4.1% of the entire
+  // admission budget. Two changes were read as 5% regressions on that
+  // arithmetic while the measured span had moved by 0.6%. `group_exact` keeps
+  // the interval as measured; `assoc` and `frame` come from it, so a change
+  // smaller than a clock shows as a change smaller than a clock.
+  double group_exact = 0.0;
   long assoc = 0;
   long frame = 0;
   long preloads = 0;
@@ -1790,8 +1798,9 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   R.preloads = d.preload_clocks - preload0;
   // Four points make one group, which is the unit the admission law speaks in.
   R.group_clocks = (span * 4 + counted / 2) / (counted > 0 ? counted : 1);
-  R.assoc = R.group_clocks * kGroupsPerAssoc;
-  R.frame = R.assoc * kAssocPerFrame;
+  R.group_exact = (counted > 0) ? (double)span * 4.0 / (double)counted : 0.0;
+  R.assoc = (long)(R.group_exact * (double)kGroupsPerAssoc + 0.5);
+  R.frame = (long)(R.group_exact * (double)kGroupsPerAssoc * (double)kAssocPerFrame + 0.5);
 
   for (int c = 0; c < kCtx; ++c)
     if (d.late_writes[c] > 0) {
@@ -1891,14 +1900,14 @@ int main(int argc, char** argv) {
     const int stag_bad = diag_failures;
     printed = 0;
     if (S.ran)
-      printf("   %-22s STAGGERED group %4ld  frame %9ld  partial %ld/%ld  WRONG VALUES %d\n", base,
-             S.group_clocks, S.frame, S.partial, S.groups, stag_bad);
+      printf("   %-22s STAGGERED group %6.2f  frame %9ld  partial %ld/%ld  WRONG VALUES %d\n", base,
+             S.group_exact, S.frame, S.partial, S.groups, stag_bad);
     total_stag_bad += stag_bad;
 
     const Result Q = run_program(f, points, 0xC0FFEEull, kDriveQuad, n_ctx);
     if (Q.ran)
-      printf("   %-22s QUAD      group %4ld  association %7ld  frame %9ld  partial %ld/%ld  %s\n",
-             base, Q.group_clocks, Q.assoc, Q.frame, Q.partial, Q.groups,
+      printf("   %-22s QUAD      group %6.2f  association %7ld  frame %9ld  partial %ld/%ld  %s\n",
+             base, Q.group_exact, Q.assoc, Q.frame, Q.partial, Q.groups,
              Q.frame <= kFrameBudget ? "FITS" : "OVER");
     total_checks += Q.checked;
 
@@ -1923,8 +1932,8 @@ int main(int argc, char** argv) {
       worst_frame = verdict_frame;
       worst_name = base;
     }
-    printf("   %-22s WAVE      group %4ld  association %7ld  frame %9ld  %s\n", base,
-           R.group_clocks, R.assoc, R.frame, fits ? "FITS" : "OVER");
+    printf("   %-22s WAVE      group %6.2f  association %7ld  frame %9ld  %s\n", base,
+           R.group_exact, R.assoc, R.frame, fits ? "FITS" : "OVER");
     // THE DETAIL FOLLOWS THE QUAD RESULT, because QUAD is how the machine is
     // actually fed: aligned fours so the groups fill, staggered quads so the
     // services overlap. WAVE and STAGGERED stay as controls.
@@ -1949,9 +1958,9 @@ int main(int argc, char** argv) {
                                    (double)((D.span_clocks > 0) ? D.span_clocks : 1) *
                                    (double)D.group_clocks;
       printf(
-          "   %-22s   clocks per four-point group: %ld wall, %.1f of them harness preload, "
+          "   %-22s   clocks per four-point group: %.2f wall, %.1f of them harness preload, "
           "%.1f engine\n",
-          "", D.group_clocks, pre_per_group, (double)D.group_clocks - pre_per_group);
+          "", D.group_exact, pre_per_group, D.group_exact - pre_per_group);
     }
     // WHICH STAGE. A dispatch group that went out with fewer than four points
     // did a group's worth of waiting for a fraction of a group's work, so

@@ -315,7 +315,7 @@ int main(int argc, char** argv) {
       snprintf(what, sizeof what, "smooth lane %d equals the seven uops it replaces", l);
       zhao::check(got[l] == want, what, (uint32_t)want, (uint32_t)got[l]);
     }
-    printf("   MEASURED: smooth group in %d clocks (four products, not nine)\n", clocks);
+    printf("   MEASURED: smooth group in %d clocks (three products, not seven)\n", clocks);
   }
 
   printf("== section 4: the bank can REFUSE, and the answers do not move ==\n");
