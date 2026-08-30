@@ -44,25 +44,51 @@
 
 `default_nettype none
 
+// ---------------------------------------------------------------------------
+// LANES: A REGISTER IS A VECTOR, NOT A NUMBER
+// ---------------------------------------------------------------------------
+// The service path is FOUR POINTS WIDE and the executor is scalar, so every
+// uop's result lands through one write port one at a time. The composed Earth
+// gate measured what that costs: 4,096 register writes in 4,464 clocks, 92% of
+// a single port, and 16 uops per point means a four-point group needs 64 writes
+// against a budget of 24.3 clocks. 2.6x over the frame budget on writes alone,
+// whatever the services do.
+//
+// The fix is not more PORTS -- it is a wider WORD. A register holds one value
+// per point of a quad, so one write stores four results and one read fetches
+// four operands. Four lanes then cost exactly the clocks one lane costs today.
+//
+// THE BANKING IS UNTOUCHED, and that is the point of doing it this way. The
+// four-way banking below exists so that a register GROUP (a, a+1, a+2) can be
+// read in a single clock; it indexes by REGISTER and knows nothing about what a
+// register contains. Widening the word changes no address, no row and no
+// rotation. An earlier plan added a second banking by context to win four write
+// PORTS, which would have collided with this one -- reads wanting register
+// banking, writes wanting context banking. There is no conflict to resolve if
+// the width carries the lanes.
+//
+// LANES = 1 is bit-identical to the scalar file this grew from, which is what
+// the executor, full and Earth differentials check today.
 module zhao_field_v3_rf #(
     parameter int CONTEXTS = 8,
-    parameter int REGS     = 32
+    parameter int REGS     = 32,
+    parameter int LANES    = 1
 ) (
     input var logic clk,
 
     input var logic                          wr_en_i,
     input var logic [$clog2(CONTEXTS)-1:0]   wr_ctx_i,
     input var logic [$clog2(REGS)-1:0]       wr_reg_i,
-    input var logic signed [31:0]            wr_data_i,
+    input var logic signed [32*LANES-1:0]    wr_data_i,
 
     input var logic [$clog2(CONTEXTS)-1:0]   rd_ctx_i,
     input var logic [$clog2(REGS)-1:0]       rd_a_i,
     input var logic [$clog2(REGS)-1:0]       rd_b_i,
     input var logic [$clog2(REGS)-1:0]       rd_c_i,
 
-    output var logic signed [31:0] a0_o, a1_o, a2_o,
-    output var logic signed [31:0] b0_o, b1_o, b2_o,
-    output var logic signed [31:0] c_o
+    output var logic signed [32*LANES-1:0] a0_o, a1_o, a2_o,
+    output var logic signed [32*LANES-1:0] b0_o, b1_o, b2_o,
+    output var logic signed [32*LANES-1:0] c_o
 );
 
   localparam int BANKS = 4;
@@ -71,8 +97,8 @@ module zhao_field_v3_rf #(
   localparam int AW = $clog2(CONTEXTS * RPB);
   localparam int RSEL = $clog2(REGS);
 
-  logic signed [31:0] mem[BANKS][COPIES][0:(1<<AW)-1];
-  logic signed [31:0] q[BANKS][COPIES];
+  logic signed [32*LANES-1:0] mem[BANKS][COPIES][0:(1<<AW)-1];
+  logic signed [32*LANES-1:0] q[BANKS][COPIES];
   logic [AW-1:0] ra[BANKS][COPIES];
 
   // The row a given bank must present for a group starting at `base`. `bk` is

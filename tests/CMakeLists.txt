@@ -1649,6 +1649,16 @@ add_test(NAME field_v3_earth_wide COMMAND test_field_v3_earth_wide --points 256
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/wave_pool.zprog)
 set_tests_properties(field_v3_earth_wide PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
 
+add_executable(test_field_alu_vec_directed differential/field_alu_vec_directed.cpp)
+target_link_libraries(test_field_alu_vec_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_alu_vec_directed
+  PREFIX Vzhao_field_alu_vec
+  TOP_MODULE zhao_field_alu_vec
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv)
+add_test(NAME field_alu_vec_directed COMMAND test_field_alu_vec_directed)
+set_tests_properties(field_alu_vec_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_field_v3_svcpath_directed differential/field_v3_svcpath_directed.cpp)
 target_link_libraries(test_field_v3_svcpath_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_v3_svcpath_directed
