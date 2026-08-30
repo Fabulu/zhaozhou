@@ -1067,8 +1067,12 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   Dut d(top);
   d.reset();
 
-  for (size_t i = 0; i < dec.prog.tables.size() && i < 4; ++i)
+  for (size_t i = 0; i < dec.prog.tables.size() && i < 4; ++i) {
     d.load_table((int)i, dec.prog.tables[i]);
+    if (show_histogram)
+      printf("                            table %zu: %zu entries\n", i,
+             dec.prog.tables[i].x.size());
+  }
 
   // The uniform values go to BOTH homes, because the machine has two consumers
   // of them and they read by different routes: the prepared ring reads the
