@@ -1974,6 +1974,18 @@ verilate(test_raster_perspuv_directed
 add_test(NAME raster_perspuv_directed COMMAND test_raster_perspuv_directed)
 set_tests_properties(raster_perspuv_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+add_executable(test_raster_texjoin_directed raster/raster_texjoin_directed.cpp)
+target_link_libraries(test_raster_texjoin_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_texjoin_directed
+  PREFIX Vzhao_raster_texjoin
+  TOP_MODULE zhao_raster_texjoin
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_texjoin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME raster_texjoin_directed COMMAND test_raster_texjoin_directed)
+set_tests_properties(raster_texjoin_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
