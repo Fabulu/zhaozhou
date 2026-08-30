@@ -20,8 +20,8 @@ Preserve the approved v9 whole-body proportions and rendering style while repair
 | #18 | lighting and eye artifacts | Complete — structural roots fixed in `1dd01a4`, pushed |
 | #19 | constrained face and fins | Complete — `32ca883`, pushed |
 | #20 | shared rigid-S spring | Complete — `065b732`, pushed |
-| #21 | bounded risk-based validation | In progress — claimed |
-| #22 | publish and handoff | Pending |
+| #21 | bounded risk-based validation | Complete — ledger closeout pending commit |
+| #22 | publish and handoff | In progress — claimed |
 
 Only one task is active at a time. A task becomes complete only after its evidence, gates, logical commit and push are complete.
 
@@ -107,6 +107,14 @@ Only one task is active at a time. A task becomes complete only after its eviden
 - D01 true cel-main repeat: jump-one plus salto-nine, 510/510 files byte-identical, aggregate SHA-256 `afa5ab2b1b7ad598d6c9e7581030fe67876e8a1f507a9d52a1953dfcafaf60ad`.
 - Committed and pushed the spring source and committed 3D probe as `065b732`. Task #20 complete; task #21 claimed. No catalogue escalation signal was found.
 
+### 2026-08-30 - Task #21 bounded validation complete
+
+- Closed every non-media acceptance question in `V10-BUDGET-1`. The authorised campaign stayed bounded to the death2 lighting trace, knockdown eye window, constrained face/fin views, four named spring clips, bounded contact/launch windows, and one representative deterministic pair per changed milestone.
+- The final direct `all` build relinked every reel and probe from current source. The reused structural and behavioural gates all pass: posed-vertex probe, meshcheck, choreography, planner, target interactions, and native nine-salto camera/LOD/range. No stale output, fixed-point saturation, bind disagreement, seam split, undeclared terrain penetration, target-intersection loss or mature-flight regression survived.
+- Art acceptance came from the complete rendered creature rather than numeric gates: the corrected lighting stays attached to surfaces, eye paint remains coherent, fins read as a planted fork, and all four spring sheets show the rigid S compressing and releasing without rear curl. Diagnostics were used only to explain and guard those reads.
+- No regression signal met the recorded threshold for whole-catalog rerender/redecode. Validation therefore stops here. Media structure/count/decode and desktop/narrow production checks remain one bounded `M01` question for task #22 after v10 media exists.
+- Task #21 complete; task #22 claimed. Tracker #23 remains untouched and blocked for the parent-session handoff.
+
 ---
 
 ## Validation Ledger — `V10-BUDGET-1`
@@ -115,7 +123,7 @@ Budget set before any build/render. Each row must answer one question and end wi
 
 | Check ID | Acceptance question / why it exists | Bounded input | Result | Decision |
 |---|---|---|---|---|
-| B01 | Does current source direct-build cleanly, proving later output is not stale? | One clean direct `all` build | PASS — all 29 shared objects rebuilt; reel/cel/frozen-pupil and 8 probes linked | STOP — baseline build question answered |
+| B01 | Does current source direct-build cleanly, proving later output is not stale? | One clean direct `all` baseline plus one final direct `all` relink after spring source settled | PASS — all 29 shared objects were clean-built at baseline; final reel/cel/frozen-pupil and 8 probes relinked from current source | STOP — current binaries and evidence are not stale |
 | L01 | Which shared stage causes apparently random illumination assignment/flicker? | Death2 cel-main badness-ranked frames plus slot-28 mixed-normal/face trace | PASS — separately clamped influence responses disagreed by 19,000 Q16; inward posed-face response opposed outward smooth normals | STOP — two shared structural roots explain and remove the patches; no brightness/threshold changes |
 | L02 | Does lighting remain temporally attached to surfaces after the fix? | One deforming surface at 60 Hz, 192 ticks, inward/outward face comparator | PASS — normalized response is continuous (`max_jump=2228`) and outward face response changes on the matching side; final render is coherent | STOP — no unexplained discontinuity or escalation signal |
 | E01 | What structurally creates malformed eye triangles? | Knockdown frame 30/window 22..41; unlit/normals/wire/triangle IDs; exact triangle dump | PASS — micro head triangles 81/89, UV V=25..33, proved coarse eye-bearing shell fans; preserving head rings/sides removes shard | STOP — exact owner and causal repair proven |
@@ -159,6 +167,6 @@ None. Owner explicitly requires this to remain a sole implementation/modelling l
 
 ## Next Steps
 
-1. Task #21: close the named bounded validation ledger using the already-rendered authorised windows and the smallest relevant inherited v9 gates; do not rerender the catalogue without a recorded regression signal.
-2. Commit and push the validation closeout, then claim task #22.
-3. Preserve/archive v9, promote v10 media, integrate both current mains without disturbing the hardware/migration lane, publish the finished noindex bestiary exactly once, verify production, and stop every job.
+1. Task #22: preserve/archive v9, generate and promote the required v10 PNG/WebM media from immutable source milestone `065b732`, and record exact manifests.
+2. Integrate both current mains without disturbing the unrelated hardware/migration lane; do not release migration. Preserve exact `noindex, nofollow`.
+3. Run bounded `M01`, commit and push both repositories, publish the finished bestiary exactly once with explicit project and branch, verify production/media, and stop every job.
