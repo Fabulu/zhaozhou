@@ -76,6 +76,24 @@ module zhao_field_v3_ring (
     input  var logic signed [31:0] m_i,
     input  var logic signed [31:0] rA_i,
     input  var logic signed [31:0] rB_i,
+    // ---- SMOOTH MODE: stop after the FIRST smoothstep -----------------------
+    //
+    // Every Earth builder expands `smoothstep(e0, e1, x)` into seven varying
+    // uops, and this unit already computes exactly that sequence as products
+    // P1..P4 -- the whole first half of `ring_prepared`. Contracting those
+    // seven uops into one request is bit-exact (39,321 combinations of
+    // distance, edge and span, zero value and zero ledger mismatches) and was
+    // measured as a LOSS when it ran the full nine-product recipe: the ring
+    // went from serving one program to serving every point of all three, and
+    // the shared multiplier bank could not carry it. Doubling the unit count
+    // recovered almost nothing, which is what identified the PRODUCTS rather
+    // than the units as the cost.
+    //
+    // A smoothstep needs four of the nine. `smooth_i` stops the walk after P4
+    // and answers with s0, skipping the dead second branch and the identity
+    // multiply by one. Same arithmetic, same order, same rounding -- simply
+    // fewer steps taken.
+    input  var logic               smooth_i,
     input  var logic        [ 7:0] tag_i,
 
     // ---- reply -------------------------------------------------------------
@@ -120,6 +138,10 @@ module zhao_field_v3_ring (
   // An issue state is even and its wait state is the next odd one, so the two
   // read as one step and the FSM is a straight walk.
   logic [4:0] state;
+  // Which wait state carries the answer, and therefore where the walk stops.
+  logic       smooth_r;
+  logic [4:0] last_wait_c;
+  assign last_wait_c = smooth_r ? (G_P4 + 5'd1) : (G_P9 + 5'd1);
   logic       is_issue_c;
   assign is_issue_c = (state != G_IDLE) && (state != G_OUT) && (state[0] == 1'b1);
 
@@ -233,6 +255,8 @@ module zhao_field_v3_ring (
     end
   end
 
+  // In smooth mode the walk never reaches P5..P9, so those terms are dead
+  // rather than suppressed -- the state simply never gets there.
   assign mul_issue_o = (state == G_P1) || (state == G_P2) || (state == G_P3) ||
                        (state == G_P4) || (state == G_P5) || (state == G_P6) ||
                        (state == G_P7) || (state == G_P8) || (state == G_P9);
@@ -251,6 +275,7 @@ module zhao_field_v3_ring (
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       state <= G_IDLE;
+      smooth_r <= 1'b0;
       h_tag <= 8'd0;
       h_r0 <= '0;
       h_m <= '0;
@@ -289,6 +314,7 @@ module zhao_field_v3_ring (
             h_rA <= rA_i;
             h_rB <= rB_i;
             h_tag <= tag_i;
+            smooth_r <= smooth_i;
             fired_mul <= 4'b0;
             fired_add <= 4'b0;
             sat_add_o <= 4'b0;
@@ -334,14 +360,16 @@ module zhao_field_v3_ring (
                 default: ;
               endcase
             end
-            // The ninth product IS the answer, one register per point.
-            if (state == G_P9 + 5'd1) begin
+            // THE ANSWER IS THE LAST PRODUCT THIS MODE TAKES: the ninth for a
+            // full ring, the FOURTH for a smoothstep -- P4 is `s0`, which is
+            // what the seven contracted uops computed.
+            if (state == last_wait_c) begin
               o0_0_o <= resc16(prod[0]);
               o0_1_o <= resc16(prod[1]);
               o0_2_o <= resc16(prod[2]);
               o0_3_o <= resc16(prod[3]);
             end
-            state <= (state == G_P9 + 5'd1) ? G_OUT : (state + 5'd1);
+            state <= (state == last_wait_c) ? G_OUT : (state + 5'd1);
           end
         end
       endcase

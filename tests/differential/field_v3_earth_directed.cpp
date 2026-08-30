@@ -170,6 +170,41 @@ int printed = 0;
 // Both numbers are reported rather than only the flattering one.
 int wb_policy_probe = 0;
 
+// ON, AND THE MEASUREMENT IS WHY -- IN BOTH DIRECTIONS.
+//
+// Every Earth builder expands `smoothstep(e0, e1, x)` into SEVEN varying uops,
+// which is a third of wave_pool's hot loop and the largest single block of work
+// in any of the three programs. The prepared ring already computes exactly that
+// sequence as its first four products.
+//
+// The substitution is bit-exact: 39,321 combinations of distance, edge and span
+// with zero value AND zero ledger mismatches, then confirmed end to end by this
+// gate -- the hardware runs the REWRITTEN program while `execute_point` checks
+// it against the UNTOUCHED plan, so the oracle has never heard of the rewrite.
+//
+// It was a LOSS first. Run through the full nine-product ring recipe it made
+// every program worse:
+//
+//     crater_ring  663,936 -> 1,083,264      longop-hold  398 -> 1372
+//
+// Seven cheap ALU slots became one expensive service request, and all three
+// programs contain a smoothstep, so the ring went from serving one program to
+// serving every point of all three. Doubling RING_UNITS recovered almost
+// nothing, which is what identified the nine PRODUCTS rather than the unit
+// count as the cost -- and justified building a mode that takes only the four
+// a smoothstep needs.
+//
+// With that mode (imm bit 24):
+//
+//     impact_wave  733,824 -> 594,048
+//     wave_pool    663,936 -> 559,104
+//     crater_ring  663,936 -> 663,936   (two ring ops per point; RING_UNITS 8)
+//
+// `--smoothstep` is now the default and `--no-smoothstep` turns it off, because
+// the contraction is the shipped behaviour and the un-contracted plan is the
+// control.
+bool contract_ss = true;
+
 void fail(const char* what, const char* detail) {
   if (printed++ < 6) printf("  %s %s: %s\n", gating ? "FAIL" : "DEFECT", what, detail);
   if (gating) {
@@ -267,8 +302,10 @@ struct Translator {
           return false;
         }
       }
+      // Bit 24 carries smooth mode through from the contraction.
       m->imm = ((uint32_t)u.src[1].idx) | ((uint32_t)u.src[2].idx << 6) |
-               ((uint32_t)u.src[3].idx << 12) | ((uint32_t)u.src[4].idx << 18);
+               ((uint32_t)u.src[3].idx << 12) | ((uint32_t)u.src[4].idx << 18) |
+               (u.imm & (1u << 24));
       return true;
     }
 
@@ -587,6 +624,112 @@ struct Dut {
   }
 };
 
+/** SEVEN UOPS OF SMOOTHSTEP BECOME ONE PREPARED RING.
+ *
+ *  The builders expand every `smoothstep(e0, e1, x)` into the same seven
+ *  varying instructions, in this exact order and operand order:
+ *
+ *      SUB   x, e0          CLAMP t, 0, 1      SUB   3.0, 2t
+ *      MUL   t, rcp         MUL   t, t         MUL   t2, (3-2t)
+ *                           MUL   2.0, t
+ *
+ *  In wave_pool that is SEVEN of seventeen uops -- a third of the hot loop --
+ *  and `zhao_field_v3_ring_svc` already computes exactly that sequence as the
+ *  FIRST HALF of `ring_prepared`, in hardware that crater_ring requires anyway.
+ *
+ *  Setting rB = 0 kills the second smoothstep: t1 clamps to 0, s1 becomes 0,
+ *  and the final `s0 * (1 - 0)` is an exact fixed-point identity. Setting
+ *  m = e0 makes the dead branch's subtraction the SAME subtraction the live
+ *  branch already performs, so it cannot saturate where the original does not
+ *  -- which is what keeps the SatLedger identical rather than merely the value.
+ *
+ *  Checked exhaustively before any of this was wired: 39,321 combinations of
+ *  distance, edge and span, zero value mismatches and zero ledger mismatches
+ *  against the seven-uop sequence run through the shipped `exec_op`.
+ *
+ *  THIS IS A PROTOTYPE IN THE HARNESS ON PURPOSE. The hardware runs the
+ *  REWRITTEN program while `zfield::execute_point` still checks it against the
+ *  UNTOUCHED plan, so the contraction is validated end to end against an oracle
+ *  that has never heard of it. If it wins, it belongs in the planner.
+ */
+struct Peep {
+  int at;               // index of the first uop of the run
+  zfield::VecUop ring;  // what replaces the seven
+};
+
+bool match_smoothstep(const zfield::Fplan& fp, size_t i, zfield::VecUop* out) {
+  if (i + 7 > fp.uops.size()) return false;
+  const zfield::VecUop* u = &fp.uops[i];
+  auto vec = [](const zfield::UopSrc& s) { return s.kind == zfield::SrcKind::kVec; };
+  auto sca = [](const zfield::UopSrc& s) { return s.kind == zfield::SrcKind::kSca; };
+
+  // SUB d, e0 -> t
+  if (u[0].op != zfield::OP_SUB || u[0].n_src != 2 || !vec(u[0].src[0]) || !sca(u[0].src[1]))
+    return false;
+  // MUL t, rcp
+  if (u[1].op != zfield::OP_MUL || u[1].n_src != 2 || u[1].src[0].idx != u[0].dst ||
+      !vec(u[1].src[0]) || !sca(u[1].src[1]))
+    return false;
+  // CLAMP t, lo, hi
+  if (u[2].op != zfield::OP_CLAMP || u[2].n_src != 3 || u[2].src[0].idx != u[1].dst ||
+      !vec(u[2].src[0]) || !sca(u[2].src[1]) || !sca(u[2].src[2]))
+    return false;
+  // MUL t, t
+  if (u[3].op != zfield::OP_MUL || u[3].n_src != 2 || !vec(u[3].src[0]) || !vec(u[3].src[1]) ||
+      u[3].src[0].idx != u[2].dst || u[3].src[1].idx != u[2].dst)
+    return false;
+  // MUL 2.0, t   -- constant FIRST, as the builder emits it
+  if (u[4].op != zfield::OP_MUL || u[4].n_src != 2 || !sca(u[4].src[0]) || !vec(u[4].src[1]) ||
+      u[4].src[1].idx != u[2].dst)
+    return false;
+  // SUB 3.0, 2t
+  if (u[5].op != zfield::OP_SUB || u[5].n_src != 2 || !sca(u[5].src[0]) || !vec(u[5].src[1]) ||
+      u[5].src[1].idx != u[4].dst)
+    return false;
+  // MUL t2, (3-2t)
+  if (u[6].op != zfield::OP_MUL || u[6].n_src != 2 || !vec(u[6].src[0]) || !vec(u[6].src[1]) ||
+      u[6].src[0].idx != u[3].dst || u[6].src[1].idx != u[5].dst)
+    return false;
+
+  // The prepared ring takes the distance and four uniform SLOTS. `m` reuses e0
+  // and `rB` reuses the clamp's lower bound, which is the literal zero the
+  // program already carries -- so the rewrite invents no new prep value.
+  zfield::VecUop r{};
+  r.op = zfield::UOP_RING_PREP;
+  r.dst = u[6].dst;
+  r.n_src = 5;
+  r.src[0] = u[0].src[0];  // d
+  r.src[1] = u[0].src[1];  // r0 = e0
+  r.src[2] = u[0].src[1];  // m  = e0, so the dead subtraction is the live one
+  r.src[3] = u[1].src[1];  // rA = reciprocal
+  r.src[4] = u[2].src[1];  // rB = the clamp low bound, which is 0
+  // BIT 24 ASKS FOR SMOOTH MODE: four products instead of nine. The full ring
+  // recipe gives the same answer -- that was measured first -- but costs the
+  // shared multiplier bank more than the seven ALU uops it replaces.
+  r.imm = 1u << 24;
+  r.src_pc = u[0].src_pc;
+  *out = r;
+  return true;
+}
+
+/** The plan with every smoothstep run contracted. */
+std::vector<zfield::VecUop> contract_smoothstep(const zfield::Fplan& fp, int* saved) {
+  std::vector<zfield::VecUop> out;
+  *saved = 0;
+  for (size_t i = 0; i < fp.uops.size();) {
+    zfield::VecUop r{};
+    if (match_smoothstep(fp, i, &r)) {
+      out.push_back(r);
+      i += 7;
+      *saved += 6;
+    } else {
+      out.push_back(fp.uops[i]);
+      ++i;
+    }
+  }
+  return out;
+}
+
 /** THE WHOLE REGISTER FILE THIS POINT SHOULD END WITH, uop by uop.
  *
  *  Checking only the four declared outputs says "something upstream is wrong"
@@ -597,9 +740,10 @@ struct Dut {
  *  `zfield::steps::exec_op` is the same function the whole engine is
  *  differentiated against, so this adds no second opinion about semantics --
  *  only about where they stopped matching. */
-void expected_regs(const zfield::Fplan& fp, const zfield::Decoded& prog,
-                   const zfield::Prepared& prep, const int32_t* in, size_t n_in, int scalar_base,
-                   int32_t* rf, int n_rf, std::vector<int>* wrote_by) {
+void expected_regs(const zfield::Fplan& fp, const std::vector<zfield::VecUop>& uops,
+                   const zfield::Decoded& prog, const zfield::Prepared& prep, const int32_t* in,
+                   size_t n_in, int scalar_base, int32_t* rf, int n_rf,
+                   std::vector<int>* wrote_by) {
   for (int i = 0; i < n_rf; ++i) rf[i] = 0;
   wrote_by->assign((size_t)n_rf, -1);
 
@@ -612,8 +756,8 @@ void expected_regs(const zfield::Fplan& fp, const zfield::Decoded& prog,
     if (fp.in_vreg[i] != 0xFF && (int)fp.in_vreg[i] < n_rf) rf[fp.in_vreg[i]] = in[i];
 
   zref::SatLedger L;
-  for (size_t u = 0; u < fp.uops.size(); ++u) {
-    const zfield::VecUop& v = fp.uops[u];
+  for (size_t u = 0; u < uops.size(); ++u) {
+    const zfield::VecUop& v = uops[u];
     int32_t src[9] = {};
     for (int k = 0; k < (int)v.n_src && k < 9; ++k) {
       const int r = v.src[k].kind == zfield::SrcKind::kVec ? (int)v.src[k].idx
@@ -643,17 +787,18 @@ void expected_regs(const zfield::Fplan& fp, const zfield::Decoded& prog,
 /** The oracle's value for one uop's member, for a given point. Used to ask
  *  whether a wrong answer is actually ANOTHER point's correct answer -- the
  *  difference between a duplicated response and corrupted arithmetic. */
-int32_t oracle_uop_value(const zfield::Fplan& fp, const zfield::Decoded& prog,
-                         const zfield::Prepared& prep, const int32_t* in, size_t n_in,
-                         int scalar_base, int n_rf, int target_u, int target_m) {
+int32_t oracle_uop_value(const zfield::Fplan& fp, const std::vector<zfield::VecUop>& uops,
+                         const zfield::Decoded& prog, const zfield::Prepared& prep,
+                         const int32_t* in, size_t n_in, int scalar_base, int n_rf, int target_u,
+                         int target_m) {
   std::vector<int32_t> rf((size_t)n_rf, 0);
   for (int s = 0; s < (int)fp.n_scalar && scalar_base + s < n_rf; ++s)
     rf[(size_t)(scalar_base + s)] = prep.scalar[(size_t)s];
   for (size_t i = 0; i < n_in && i < fp.in_vreg.size(); ++i)
     if (fp.in_vreg[i] != 0xFF && (int)fp.in_vreg[i] < n_rf) rf[fp.in_vreg[i]] = in[i];
   zref::SatLedger L;
-  for (int u = 0; u < (int)fp.uops.size(); ++u) {
-    const zfield::VecUop& v = fp.uops[(size_t)u];
+  for (int u = 0; u < (int)uops.size(); ++u) {
+    const zfield::VecUop& v = uops[(size_t)u];
     int32_t src[9] = {};
     for (int k = 0; k < (int)v.n_src && k < 9; ++k) {
       const int r = v.src[k].kind == zfield::SrcKind::kVec ? (int)v.src[k].idx
@@ -689,8 +834,9 @@ int32_t oracle_uop_value(const zfield::Fplan& fp, const zfield::Decoded& prog,
  *  Two register files are then stepped side by side -- one fed the hardware's
  *  written values, one fed the oracle's -- so the sources of the offending uop
  *  can be compared as they stood AT THAT MOMENT rather than at the end. */
-void explain_uop(const zfield::Fplan& fp, const zfield::Decoded& prog, const zfield::Prepared& prep,
-                 const int32_t* in, size_t n_in, int scalar_base, int n_rf,
+void explain_uop(const zfield::Fplan& fp, const std::vector<zfield::VecUop>& uops,
+                 const zfield::Decoded& prog, const zfield::Prepared& prep, const int32_t* in,
+                 size_t n_in, int scalar_base, int n_rf,
                  const std::vector<std::pair<int, int32_t>>& trace, int target_uop, char* out,
                  size_t outsz, int* bad_u = nullptr, int* bad_m = nullptr,
                  int32_t* bad_val = nullptr) {
@@ -716,8 +862,8 @@ void explain_uop(const zfield::Fplan& fp, const zfield::Decoded& prog, const zfi
   // later uop with a correct value, so the end state is clean and the fault is
   // invisible. Only the write TRACE has it.
   zref::SatLedger L;
-  for (int u = 0; u < (int)fp.uops.size(); ++u) {
-    const zfield::VecUop& v = fp.uops[(size_t)u];
+  for (int u = 0; u < (int)uops.size(); ++u) {
+    const zfield::VecUop& v = uops[(size_t)u];
     int32_t src[9] = {};
     int32_t src_hw[9] = {};
     for (int k = 0; k < (int)v.n_src && k < 9; ++k) {
@@ -835,7 +981,15 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
     R.refusal = buf;
     return R;
   }
-  if ((int)fp.uops.size() + 1 > kPlan) {
+  // THE CONTRACTED PROGRAM. The hardware runs this; `zfield::execute_point`
+  // below still checks the outputs against the UNTOUCHED plan, so the rewrite
+  // is validated against an oracle that has never heard of it.
+  int ss_saved = 0;
+  const std::vector<zfield::VecUop> uops =
+      contract_ss ? contract_smoothstep(fp, &ss_saved)
+                  : std::vector<zfield::VecUop>(fp.uops.begin(), fp.uops.end());
+
+  if ((int)uops.size() + 1 > kPlan) {
     R.refusal = "program longer than the uop store";
     return R;
   }
@@ -843,7 +997,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   // ---- translate the plan into the silicon's own operand shape -------------
   Translator tr(fp, scalar_base);
   std::vector<Mapped> prog;
-  for (const zfield::VecUop& u : fp.uops) {
+  for (const zfield::VecUop& u : uops) {
     Mapped m;
     if (!tr.map_one(u, &m)) {
       R.refusal = tr.refusal;
@@ -922,8 +1076,8 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
       exp_out[c][l].assign(n_out, 0);
       zfield::execute_point(fp, dec.prog, prep, pt_in[c][l].data(), n_in, exp_out[c][l].data(),
                             n_out);
-      expected_regs(fp, dec.prog, prep, pt_in[c][l].data(), n_in, scalar_base, exp_rf[c][l], kRegs,
-                    &wrote_by);
+      expected_regs(fp, uops, dec.prog, prep, pt_in[c][l].data(), n_in, scalar_base, exp_rf[c][l],
+                    kRegs, &wrote_by);
     }
   };
 
@@ -975,7 +1129,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
     }
     for (int r = worst_r; r >= 0; r = -1) {
       const int u = (r < (int)wrote_by.size()) ? wrote_by[(size_t)r] : -1;
-      const uint8_t op = (u >= 0 && u < (int)fp.uops.size()) ? fp.uops[(size_t)u].op : 0;
+      const uint8_t op = (u >= 0 && u < (int)uops.size()) ? uops[(size_t)u].op : 0;
 
       // WHOSE NUMBER IS IT? A wrong value that belongs to nobody is arithmetic
       // going astray; a wrong value that is exactly ANOTHER register's or
@@ -1007,12 +1161,12 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
       // it to four lanes would add surface without adding an answer, and a
       // diagnostic that quietly reported lane 0's operands as though they were
       // lane 3's would be worse than not having it.
-      if (u >= 0 && u < (int)fp.uops.size() && lane == 0 && printed <= 6) {
+      if (u >= 0 && u < (int)uops.size() && lane == 0 && printed <= 6) {
         char srcbuf[360];
         int bu = -1, bm = 0;
         int32_t bval = 0;
-        explain_uop(fp, dec.prog, prep, pt_in[c][0].data(), n_in, scalar_base, kRegs, d.wtrace[c],
-                    -1, srcbuf, sizeof srcbuf, &bu, &bm, &bval);
+        explain_uop(fp, uops, dec.prog, prep, pt_in[c][0].data(), n_in, scalar_base, kRegs,
+                    d.wtrace[c], -1, srcbuf, sizeof srcbuf, &bu, &bm, &bval);
         printf("%s\n", srcbuf);
         {
           char qb[300];
@@ -1043,7 +1197,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         if (bu >= 0) {
           for (int c2 = 0; c2 < n_ctx; ++c2) {
             if (c2 == c) continue;
-            const int32_t v = oracle_uop_value(fp, dec.prog, prep, pt_in[c2][0].data(), n_in,
+            const int32_t v = oracle_uop_value(fp, uops, dec.prog, prep, pt_in[c2][0].data(), n_in,
                                                scalar_base, kRegs, bu, bm);
             if (v == bval) {
               printf(
@@ -1542,6 +1696,10 @@ int main(int argc, char** argv) {
     const std::string a = argv[i];
     if (a == "--points" && i + 1 < argc) {
       points = std::atoi(argv[++i]);
+    } else if (a == "--smoothstep") {
+      contract_ss = true;
+    } else if (a == "--no-smoothstep") {
+      contract_ss = false;
     } else if (a == "--wb" && i + 1 < argc) {
       wb_policy_probe = std::atoi(argv[++i]);
     } else if (a == "--contexts" && i + 1 < argc) {
