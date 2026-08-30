@@ -1,0 +1,93 @@
+Zixxtrixx v12 — exactly ten new overhead world-space rigs
+All raw values are Q16.16. Decimal values are raw / 65536.
+Every key_y and fill_y is positive; all directional light arrives from the upper hemisphere.
+
+1. Zenith Sun [zenith-sun]
+   key raw=(7850, 63453, -14391) decimal=(0.11978, 0.96822, -0.21959)
+   fill direction raw=(-18371, 60363, 17715) decimal=(-0.28032, 0.92107, 0.27031)
+   ambient raw=(24904, 26214, 28180) decimal=(0.38000, 0.39999, 0.42999)
+   key_gain raw=40632 decimal=0.62000
+   fill_rgb raw=(5243, 6554, 9175) decimal=(0.08000, 0.10001, 0.14000)
+   orbit sequence CRC32C=0x8D6B5DDF
+   art: Near-vertical neutral sun with a restrained cool upper-sky counterfill; calm, balanced dorsal read.
+
+2. Morning Crown [morning-crown]
+   key raw=(44616, 44616, -17715) decimal=(0.68079, 0.68079, -0.27031)
+   fill direction raw=(-19699, 59098, 20356) decimal=(-0.30058, 0.90176, 0.31061)
+   ambient raw=(22282, 23593, 25559) decimal=(0.34000, 0.36000, 0.39000)
+   key_gain raw=41943 decimal=0.64000
+   fill_rgb raw=(4588, 6554, 9830) decimal=(0.07001, 0.10001, 0.14999)
+   orbit sequence CRC32C=0xC534C2EF
+   art: Lower high-angle +X morning sun; the lit crown travels clearly from one side into a cool open-sky shadow.
+
+3. Evening Crown [evening-crown]
+   key raw=(-47165, 41924, -17687) decimal=(-0.71968, 0.63971, -0.26988)
+   fill direction raw=(19672, 60326, 16393) decimal=(0.30017, 0.92050, 0.25014)
+   ambient raw=(20972, 22282, 23593) decimal=(0.32001, 0.34000, 0.36000)
+   key_gain raw=39322 decimal=0.60001
+   fill_rgb raw=(10486, 7209, 4588) decimal=(0.16000, 0.11000, 0.07001)
+   orbit sequence CRC32C=0xF1012AF6
+   art: Opposed high -X late-sun placement with a warm upper-sky fill and deeper dusk floor.
+
+4. North Skylight [north-skylight]
+   key raw=(7883, 44672, 47300) decimal=(0.12029, 0.68164, 0.72174)
+   fill direction raw=(-29565, 56502, -15111) decimal=(-0.45113, 0.86215, -0.23058)
+   ambient raw=(25559, 27525, 30802) decimal=(0.39000, 0.42000, 0.47000)
+   key_gain raw=36700 decimal=0.56000
+   fill_rgb raw=(3932, 6554, 11796) decimal=(0.06000, 0.10001, 0.17999)
+   orbit sequence CRC32C=0xF74FE841
+   art: Directional +Z clear skylight, cool opposite fill, and a broad bright band that reveals the rear-facing dorsal surface.
+
+5. South Skylight [south-skylight]
+   key raw=(-11805, 45910, -45254) decimal=(-0.18013, 0.70053, -0.69052)
+   fill direction raw=(30787, 55678, 15721) decimal=(0.46977, 0.84958, 0.23988)
+   ambient raw=(23593, 25559, 28180) decimal=(0.36000, 0.39000, 0.42999)
+   key_gain raw=39322 decimal=0.60001
+   fill_rgb raw=(6554, 7209, 7864) decimal=(0.10001, 0.11000, 0.12000)
+   orbit sequence CRC32C=0x6691E287
+   art: Directional -Z open sky with near-neutral upper fill; a strong complementary side/top balance to North Skylight.
+
+6. Open Overcast [open-overcast]
+   key raw=(0, 64890, -9176) decimal=(0.00000, 0.99014, -0.14001)
+   fill direction raw=(-24974, 59148, 13144) decimal=(-0.38107, 0.90253, 0.20056)
+   ambient raw=(34079, 36045, 38666) decimal=(0.52000, 0.55000, 0.59000)
+   key_gain raw=26214 decimal=0.39999
+   fill_rgb raw=(5243, 6554, 9830) decimal=(0.08000, 0.10001, 0.14999)
+   orbit sequence CRC32C=0x241C1B5E
+   art: Soft almost-vertical daylight over the highest cool ambient floor; broadest quiet read without an underside key.
+
+7. Hard Noon [hard-noon]
+   key raw=(18332, 61542, -13094) decimal=(0.27972, 0.93906, -0.19980)
+   fill direction raw=(-38055, 51177, 15091) decimal=(-0.58067, 0.78090, 0.23027)
+   ambient raw=(15729, 17039, 19005) decimal=(0.24001, 0.25999, 0.28999)
+   key_gain raw=53740 decimal=0.82001
+   fill_rgb raw=(3277, 3932, 5243) decimal=(0.05000, 0.06000, 0.08000)
+   orbit sequence CRC32C=0x0CE62D9F
+   art: Hard near-overhead sun, low ambient and faint upper fill; strongest top-to-side cel contrast.
+
+8. Veiled Sun [veiled-sun]
+   key raw=(-22299, 59027, -17708) decimal=(-0.34026, 0.90068, -0.27020)
+   fill direction raw=(26255, 57761, 16409) decimal=(0.40062, 0.88136, 0.25038)
+   ambient raw=(30147, 32113, 34079) decimal=(0.46001, 0.49001, 0.52000)
+   key_gain raw=31457 decimal=0.48000
+   fill_rgb raw=(6554, 7209, 8520) decimal=(0.10001, 0.11000, 0.13000)
+   orbit sequence CRC32C=0x53A3DC66
+   art: High sun behind thin cloud: gentler key, lifted neutral-cool floor, and soft upper counterfill.
+
+9. Silver Moon [silver-moon]
+   key raw=(30039, 54853, 19590) decimal=(0.45836, 0.83699, 0.29892)
+   fill direction raw=(-16382, 60939, -17692) decimal=(-0.24997, 0.92986, -0.26996)
+   ambient raw=(19661, 22282, 28180) decimal=(0.30000, 0.34000, 0.42999)
+   key_gain raw=34079 decimal=0.52000
+   fill_rgb raw=(3932, 6554, 13107) decimal=(0.06000, 0.10001, 0.20000)
+   orbit sequence CRC32C=0x430C0BEA
+   art: High +X/+Z moon with a distinctly silver-blue sky floor and sparse cool upper fill.
+
+10. Cloudbreak [cloudbreak]
+   key raw=(-31475, 56392, 11147) decimal=(-0.48027, 0.86047, 0.17009)
+   fill direction raw=(29522, 55764, -17713) decimal=(0.45047, 0.85089, -0.27028)
+   ambient raw=(21627, 22938, 25559) decimal=(0.33000, 0.35001, 0.39000)
+   key_gain raw=45875 decimal=0.70000
+   fill_rgb raw=(11796, 9175, 6554) decimal=(0.17999, 0.14000, 0.10001)
+   orbit sequence CRC32C=0x9C8249F9
+   art: Strong high -X opening in the cloud deck with warm upper counterlight and sculpted cel bands.
