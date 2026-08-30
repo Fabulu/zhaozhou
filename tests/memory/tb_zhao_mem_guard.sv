@@ -24,6 +24,10 @@ module tb_zhao_mem_guard
   input logic        map_valid,
   input logic        blit_slot,
   input logic [31:0] blit_span,
+  // Which writer holds the framebuffer lease: 0 = DEBUG.FRAMEBLIT,
+  // 1 = RASTER.FBWRITE. Driven by the harness so owner mismatch is a case
+  // the directed test can actually construct.
+  input logic        fb_writer,
 
   // ---- guard events --------------------------------------------------------
   output logic        guard_violation,
@@ -75,7 +79,7 @@ module tb_zhao_mem_guard
   zhao_mem_guard u_guard (
     .clk, .rst_n,
     .req (g_req), .rsp (g_rsp),
-    .map_valid, .blit_slot, .blit_span,
+    .map_valid, .blit_slot, .blit_span, .fb_writer,
     .arb_req, .arb_rsp,
     .guard_violation, .guard_violations,
     .guard_violation_req (viol_req)

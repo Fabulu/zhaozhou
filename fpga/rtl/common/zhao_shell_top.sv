@@ -575,6 +575,9 @@ module zhao_shell_top
     .map_valid  (1'b0),
     .blit_slot  (1'b0),
     .blit_span  (32'd0),
+    // Scanout reads and never writes, so the lease owner cannot reach its
+    // verdict. Tied to the blit writer rather than left dangling.
+    .fb_writer  (1'b0),
     .arb_req    (scan_arb_req),
     .arb_rsp    (client_rsp[0]),
     .guard_violation     (scan_gv),
@@ -595,6 +598,10 @@ module zhao_shell_top
     .map_valid  (map_valid_q),
     .blit_slot  (map_slot_q),
     .blit_span  (map_span_q),
+    // DEBUG.FRAMEBLIT is writer 0. When RASTER.FBWRITE is wired to
+    // client_req[2] this becomes the lease's own owner field, published by
+    // VIDEO.SLOTMGR and selected by CMD.SCHEDULER.
+    .fb_writer  (1'b0),
     .arb_req    (blit_arb_req),
     .arb_rsp    (client_rsp[1]),
     .guard_violation     (blit_gv),

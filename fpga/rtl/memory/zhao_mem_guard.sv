@@ -50,8 +50,19 @@ module zhao_mem_guard
 
   // region map inputs (CMD.SCHEDULER grants at frame start; deny-all below)
   input  logic        map_valid,     // a blit grant exists this frame
-  input  logic        blit_slot,     // 0/1: the granted FB slot
+  input  logic        blit_slot,     // 0/1: the leased FB slot
   input  logic [31:0] blit_span,     // granted bytes (canvas_bytes(mode))
+  // WHICH WRITER HOLDS THE LEASE. 0 = DEBUG.FRAMEBLIT, 1 = RASTER.FBWRITE.
+  // Two blocks now write an inactive framebuffer slot and they share the
+  // SPATIAL window but not the TEMPORAL permission: a second overlapping region
+  // entry would copy the same address law, cost more plumbing, and still not
+  // stop them corrupting each other. VIDEO.SLOTMGR already guarantees one lease
+  // at a time with a generation, so the lease is where the writer is named.
+  //
+  // A v1 frame uses the renderer or DebugFrameBlit, never both.
+  //
+  // ENFORCED-BY: tests/formal/formal_mem_guard.sv:a1_region
+  input  logic        fb_writer,
 
   // forwarded side (guard -> MEM.VRAM.ARBITER), ready/valid
   output zhao_arb_req_t arb_req,
@@ -109,14 +120,22 @@ module zhao_mem_guard
   assign blit_base     = blit_slot ? ZHAO_FB_SLOT1_BASE : ZHAO_FB_SLOT0_BASE;
   assign blit_span_eff = (blit_span > ZHAO_FB_SLOT_SPAN) ? ZHAO_FB_SLOT_SPAN : blit_span;
   assign blit_end      = blit_base + blit_span_eff;
+  // The window check, shared by both writers. `fb_window_ok` is the name the
+  // ruling gives it; `blit_ok` is kept as the identifier so the proof's own
+  // wording still lines up with the code it proves.
   assign blit_ok       = req.write && map_valid
                          && (addr32 >= blit_base) && (end32 <= blit_end);
 
+  // ONE WINDOW, ONE OWNER AT A TIME. Both writers are checked against the same
+  // clamped slot span; what separates them is which one the lease names. A
+  // writer without the lease is refused exactly as a request outside the window
+  // is, and the region this block guarantees nothing escapes is unchanged.
   always_comb begin
     unique case (req.client)
-      ZHAO_CLIENT_SCANOUT: pass_ok = shape_ok && scan_ok;
-      ZHAO_CLIENT_BLIT_DMA: pass_ok = shape_ok && blit_ok;
-      default: pass_ok = 1'b0;      // engines/debug own nothing in Phase 2
+      ZHAO_CLIENT_SCANOUT:  pass_ok = shape_ok && scan_ok;
+      ZHAO_CLIENT_BLIT_DMA: pass_ok = shape_ok && blit_ok && (fb_writer == 1'b0);
+      ZHAO_CLIENT_ENGINE0:  pass_ok = shape_ok && blit_ok && (fb_writer == 1'b1);
+      default: pass_ok = 1'b0;      // ENGINE1 and DEBUG own nothing
     endcase
   end
 
