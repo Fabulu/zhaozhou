@@ -22,6 +22,14 @@ Complete Task #28 from accepted V14 as a deliberately small head/neck/colour adj
 - Initialized this mandatory creature run.
 - Boundary: sole implementation/modelling agent; direct builds only; no unrelated hardware/compiler/test/CMake work.
 
+### 2026-08-30 - Durable direction and source review complete
+
+- Read `AGENT-PACK/START-HERE.md`, its history pointers and executable V14 manifest; read all sixteen species-local `OWNER-DIRECTION-*` files in chronological order.
+- Read the current species reports, Headache report and accepted V14 run log; checked report history and found no newer zhaozhou creature report after V14.
+- Traced current head/eye/tube controls, texture-page generator, full clip bank, shared spring helpers and timing consumers, the Cool Cross selector/rig, smooth-normal compositor, reel subject machinery and per-frame `render_scene` hook.
+- Chosen local-light seam: a disabled-by-default reference-compositor point-light control sampled once per reel frame; the same named world-space sample will also drive a small depth-tested marker. Cool Cross remains an explicit Zixxtrixx selection rather than a global default, so unrelated creatures stay unchanged.
+- Bounded validation budget: identical native front/side/orbit before/after art reads; every-frame spring sheets plus the committed 3D contact/clearance probe; one complete native moving-light review plus source/marker agreement checks; direct clean compile, focused existing reel checks, media metadata/noindex/archive checks, and deployed page spot-check. No broad hardware/CRC catalogue investigation.
+
 ---
 
 ## Subagent Spawns
