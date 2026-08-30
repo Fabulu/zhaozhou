@@ -1934,6 +1934,17 @@ verilate(test_raster_rcp24_directed
 add_test(NAME raster_rcp24_directed COMMAND test_raster_rcp24_directed)
 set_tests_properties(raster_rcp24_directed PROPERTIES LABELS "nightly" TIMEOUT 1800)
 
+add_executable(test_raster_perspuv_directed raster/raster_perspuv_directed.cpp)
+target_link_libraries(test_raster_perspuv_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_perspuv_directed
+  PREFIX Vzhao_raster_perspuv
+  TOP_MODULE zhao_raster_perspuv
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME raster_perspuv_directed COMMAND test_raster_perspuv_directed)
+set_tests_properties(raster_perspuv_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
