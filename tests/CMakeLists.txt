@@ -1681,30 +1681,27 @@ option(ZHAO_FIELD_SWEEP "Build the Field v3 Earth parameter sweep targets" OFF)
 set(ZHAO_FIELD_SWEEP_POINTS
   # name              CTX OUTSTANDING LANES LONGQ DIST_BANKS RING_UNITS REGS GATHERS
   #
-  # ROUND 1 RESULT, kept so the next sweep does not re-run it:
-  #   RING_UNITS 8 -> 16 -> 32   no change at all. The ring is NOT the limit,
-  #                              even though 36% of clocks read as frozen on a
-  #                              long op. That counter is backpressure working,
-  #                              not backpressure hurting.
-  #   GATHERS 4 -> 8             no change.
-  #   LONGQ 16 -> 32             freeze 36% -> 0% and the machine gets SLOWER
-  #                              (wave_pool 594,048 -> 803,712). Draining the
-  #                              freeze counter to zero costs 35%. The queue is
-  #                              a throttle that helps, exactly as the writeback
-  #                              skid fence turned out to be.
-  #   CTX 32 -> 64               worse on all three.
-  #   OUTSTANDING 12 -> 24       crater WORSE (663,936 -> 698,880) and wave_pool
-  #                              much BETTER (594,048 -> 454,272). The two pull
-  #                              in opposite directions, which is what round 2
-  #                              is for.
+  # ROUNDS 1-2 WERE MEASURED ON A QUANTISED FRAME FIGURE and their conclusions
+  # are only trustworthy where the difference exceeded a whole clock per group.
+  # Re-run anything narrower before quoting it. Round 3, on the exact interval,
+  # already overturned one of them: LONGQ was called "no help" and shallower is
+  # in fact the best lever found so far.
+  #
+  #   base (LONGQ 16)   crater 683,960
+  #   LONGQ 8           crater 675,193
+  #   LONGQ 4           crater 660,027   <- best worst-case
+  #   OUTSTANDING 16-32 crater 683,960, wave_pool 504,937 at 16
+  #
+  # Round 4 pushes LONGQ down further and re-tests the levers that rounds 1-2
+  # rejected on the broken metric.
   "base|32|12|4|16|4|8|64|4"
-  "out16|32|16|4|16|4|8|64|4"
-  "out20|32|20|4|16|4|8|64|4"
-  "out24|32|24|4|16|4|8|64|4"
-  "out32|32|32|4|16|4|8|64|4"
-  "longq8|32|12|4|8|4|8|64|4"
   "longq4|32|12|4|4|4|8|64|4"
-  "out20longq8|32|20|4|8|4|8|64|4"
+  "longq2|32|12|4|2|4|8|64|4"
+  "longq1|32|12|4|1|4|8|64|4"
+  "longq4out16|32|16|4|4|4|8|64|4"
+  "longq4ctx64|64|12|4|4|4|8|64|4"
+  "longq4ring16|32|12|4|4|4|16|64|4"
+  "longq4dist8|32|12|4|4|8|8|64|4"
 )
 
 if(ZHAO_FIELD_SWEEP)

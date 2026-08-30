@@ -368,6 +368,46 @@ the machine was arithmetic-bound was not.
 Every one followed from a correct measurement. **A correct measurement does not
 make a prescription correct**, and this engine has now paid for that four times.
 
+## Round 4: both multiplier banks, per clock, exclusively
+
+There are TWO four-wide multiplier banks: the executor's, for ordinary MUL and
+MAD, and the service path's, shared by every ring unit, root bank, trig and
+curve service. They are physically independent, so a program's arithmetic floor
+is `max(service grants, engine grants)` per group and **not their sum**. Whether
+they ever run together had never been measured. Four exclusive buckets that sum
+to the clock count, at `--points 2048`:
+
+| program | both | engine only | service only | neither | sum |
+|---|---|---|---|---|---|
+| crater_ring | 2,371 (27%) | 1,199 (14%) | 3,008 (35%) | **2,132 (24%)** | 8,710 of 8,710 |
+| impact_wave | 1,807 (25%) | 3,109 (42%) | 866 (12%) | 1,579 (21%) | 7,361 of 7,361 |
+| wave_pool | 1,617 (22%) | 3,726 (50%) | 621 (8%) | 1,472 (20%) | 7,436 of 7,436 |
+
+**The banks do overlap — 27%, 25%, 22% of clocks — so the machine is not
+phase-serialised.** That hypothesis is dead. Per four-point group, crater_ring:
+
+    service grants   10.5      both              4.63 clocks
+    engine grants     6.97     engine only       2.34
+                               service only      5.88
+                               NEITHER           4.16
+                               ------------------------
+                               engine time      17.01   (+2.1 harness preload)
+
+Total grants per group is 17.5 and engine time per group is 17.0. **The machine
+issues almost exactly one multiplier grant per clock, across the two banks
+combined.** With perfect overlap the floor would be max(10.5, 6.97) = 10.5
+clocks per group, or about 367,000 clocks per frame.
+
+The gap is 6.5 clocks per group, and the largest single slice of it is the
+**4.16 clocks per group where NEITHER bank is doing anything at all.** That,
+and not bank throughput, is what is left to attack. It is consistent with
+everything else this file records: deleting 19% of the service traffic did not
+help because the bubbles simply grew, and adding units behind either bank
+cannot fill a bubble.
+
+`contexts alive` is 30.6 of 32. The machine has run out of independent work, not
+out of multipliers.
+
 ## Open items
 
 * **`wave_pool` has 1.3% margin.** That is thin enough that a timing or workload

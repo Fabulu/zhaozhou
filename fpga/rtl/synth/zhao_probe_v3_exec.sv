@@ -541,7 +541,13 @@ module zhao_probe_v3_exec #(
   localparam int LQD = LONGQ;
 
   logic [$clog2(LQD+1)-1:0] lq_n_r;
-  logic [$clog2(LQD)-1:0]   lq_hd_r, lq_tl_r;
+  // A ONE-ENTRY QUEUE STILL NEEDS A POINTER. `$clog2(1)` is 0 and a
+  // zero-width vector is not a register, so LQD=1 failed to elaborate at all --
+  // the same family as the four width ladders already fixed in the service
+  // path, arriving from the other direction. The floor is stated once here and
+  // used everywhere the pointer is formed.
+  localparam int LQW = (LQD <= 1) ? 1 : $clog2(LQD);
+  logic [LQW-1:0]           lq_hd_r, lq_tl_r;
   logic [CW-1:0]            lq_ctx_r [LQD];
   logic [7:0]               lq_op_r  [LQD];
   logic [RW-1:0]            lq_dst_r [LQD];
@@ -1153,9 +1159,9 @@ module zhao_probe_v3_exec #(
         lq_s2_r[lq_tl_r]  <= s4_a2_r;
         lq_s3_r[lq_tl_r]  <= s4_b0_r;
         lq_s4_r[lq_tl_r]  <= s4_b1_r;
-        lq_tl_r <= (lq_tl_r == ($clog2(LQD))'(LQD - 1)) ? '0 : lq_tl_r + 1'b1;
+        lq_tl_r <= (lq_tl_r == LQW'(LQD - 1)) ? '0 : lq_tl_r + 1'b1;
       end
-      if (lq_pop_c) lq_hd_r <= (lq_hd_r == ($clog2(LQD))'(LQD - 1)) ? '0 : lq_hd_r + 1'b1;
+      if (lq_pop_c) lq_hd_r <= (lq_hd_r == LQW'(LQD - 1)) ? '0 : lq_hd_r + 1'b1;
       // Occupancy decided in ONE place.
       if (lq_push_c && !lq_pop_c)      lq_n_r <= lq_n_r + 1'b1;
       else if (lq_pop_c && !lq_push_c) lq_n_r <= lq_n_r - 1'b1;

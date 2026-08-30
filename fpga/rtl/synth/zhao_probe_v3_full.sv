@@ -173,6 +173,25 @@ module zhao_probe_v3_full #(
     // from a `longop-hold` counter that cannot see either.
     output var logic [31:0]             mul_grants_o,
     output var logic [31:0]             mul_stall_lanes_o,
+
+    // TWO MULTIPLIER BANKS, AND WHETHER THEY EVER RUN AT THE SAME TIME.
+    // The executor has its own four-wide bank for ordinary MUL and MAD; the
+    // service path has a second one that every ring unit, root bank, trig and
+    // curve service shares. They are physically independent, so the arithmetic
+    // floor of a program is max(service grants, engine grants) per group -- not
+    // their sum. If the measured cost is close to the SUM, the two banks are
+    // running in separate phases and the machine is leaving half its multiplier
+    // capacity idle at all times.
+    //
+    // These four buckets are EXCLUSIVE and sum to the clock count, because this
+    // engine has already shipped three overlapping counters that could all read
+    // zero while a third of the run was unaccounted for.
+    //
+    // ENFORCED-BY: tests/differential/field_v3_earth_directed.cpp:main
+    output var logic [31:0]             bank_both_o,
+    output var logic [31:0]             bank_engine_only_o,
+    output var logic [31:0]             bank_svc_only_o,
+    output var logic [31:0]             bank_neither_o,
     output var logic [31:0]             wb_served_o  [2],
     output var logic [31:0]             wb_stalled_o [2],
 
@@ -355,5 +374,34 @@ module zhao_probe_v3_full #(
 
   assign mul_grants_o      = svc_bank_grants;
   assign mul_stall_lanes_o = svc_bank_stalls;
+
+
+  // A grant is a counter INCREMENT. Taking the co-occurrence from the counters
+  // rather than from new grant ports keeps the sub-blocks untouched, and the
+  // shadow registers make "this clock" unambiguous.
+  logic [31:0] eng_prev_r, svc_prev_r;
+  logic        eng_now_c, svc_now_c;
+  assign eng_now_c = (engine_bank_grants != eng_prev_r);
+  assign svc_now_c = (svc_bank_grants != svc_prev_r);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      eng_prev_r         <= 32'd0;
+      svc_prev_r         <= 32'd0;
+      bank_both_o        <= 32'd0;
+      bank_engine_only_o <= 32'd0;
+      bank_svc_only_o    <= 32'd0;
+      bank_neither_o     <= 32'd0;
+    end else begin
+      eng_prev_r <= engine_bank_grants;
+      svc_prev_r <= svc_bank_grants;
+      unique case ({eng_now_c, svc_now_c})
+        2'b11: bank_both_o        <= bank_both_o + 32'd1;
+        2'b10: bank_engine_only_o <= bank_engine_only_o + 32'd1;
+        2'b01: bank_svc_only_o    <= bank_svc_only_o + 32'd1;
+        2'b00: bank_neither_o     <= bank_neither_o + 32'd1;
+      endcase
+    end
+  end
 
 endmodule : zhao_probe_v3_full
