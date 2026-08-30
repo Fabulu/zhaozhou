@@ -1,7 +1,7 @@
 # Task Log: RUN-20260830-1049 - Correct Zixxtrixx light direction
 
 **Created:** 2026-08-30 10:49 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260830-1049-zixxtrixx-v13-light-direction-fix/
 
 ---
@@ -63,6 +63,17 @@ Establish the renderer's executable directional-light, normal and space conventi
 - Bounded local Edge checks passed at 1280x900 and exact 390x844: the single candidate loads at 384x240/10 seconds, selects correctly, is 324 px wide at the narrow viewport, and neither viewport has horizontal overflow.
 - Committed and pushed the Upheaval website/media milestone as `f8e639c`.
 
+### 2026-08-30 - Integrated, Deployed Once, Verified and Stopped
+
+- Fetched both remotes immediately before integration. Zhaozhou `origin/main` remained `c325f51`; Upheaval `origin/main` remained `8bfc1d4`, so no concurrent merge was needed.
+- Fast-forwarded and pushed Zhaozhou main to the v13 run head `0ca9a32` and Upheaval feature/main to `f8e639c` without force.
+- Invoked `website/deploy.ps1 -Project upheaval -Branch main` exactly once. Wrangler reported deployment `https://675a96ba.upheaval.pages.dev`; production is `https://upheaval.pages.dev`.
+- Cache-bypassed review and production checks found exact noindex once. The one candidate WebM and poster returned HTTP 200 on both hosts and matched local bytes exactly (`481d29d…` WebM, `4ce72654…` poster).
+- Production Edge checks passed at exact 1280x900 and 390x844: v10 Idle remains initially selected, the candidate selects and loads at 384x240/10 seconds, the narrow video is 324 px wide, and neither viewport overflows horizontally.
+- Restored the deploy-time timestamp-only generated index change and removed the verified temporary 600-frame raw tree.
+- Verified no lane renderer, ffmpeg, compiler, headless Edge, local HTTP server, Wrangler, Node or deployment/build child remained; validation ports 63571–63573 are closed.
+- No second candidate was rendered or published. No gummy-spring code, animation, probe or catalogue media was started.
+
 ---
 
 ## Subagent Spawns
@@ -89,7 +100,4 @@ None. This run is intentionally single-agent.
 
 ## Next Steps
 
-1. Fetch and inspect the latest main in both isolated clones, then merge only non-overlapping concurrent work.
-2. Push both mains without force.
-3. Deploy exactly once from Upheaval main and verify review/production noindex, media bytes and bounded layout.
-4. Remove temporary raw frames, stop child processes, close the run and await owner feedback.
+None in this run. Await owner feedback on the single published `Corrected Toplight 1` candidate; the recorded gummy-spring direction remains queued and unimplemented.
