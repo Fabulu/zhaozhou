@@ -336,7 +336,18 @@ module zhao_texture_tmu_pipe #(
   assign cac_en_o     = c_en;
   assign cac_addr_o   = c_addr;
   assign cac_src_id_o = c_src;
-  assign cac_ready_o  = 1'b1;   // a response is always taken; the ROB holds it
+  // A RESPONSE IS TAKEN UNLESS THE FILTER LANE IS STILL HOLDING ONE. There is
+  // one channel lane, so a second filtered footprint arriving while the first
+  // is mid-walk would overwrite `fl_rec` and its record would never complete --
+  // the ROB head then waits forever on a filter that has forgotten it. That is
+  // exactly what happened: the direct batch never finished while CLUT ran at 3
+  // clocks a sample.
+  //
+  // Stalling the response port rather than the request port is the right place:
+  // the filter always drains in at most four clocks with no external
+  // dependency, so this cannot deadlock, and a nearest sample queued behind it
+  // waits four clocks rather than being refused at the front door.
+  assign cac_ready_o  = !fl_v;
 
   // ==========================================================================
   // the in-flight tag FIFO
@@ -404,6 +415,15 @@ module zhao_texture_tmu_pipe #(
   assign accept_c    = req_valid_i && req_ready_o;
 
   assign idle_o = (rb_occ == '0) && !a0_v && !c_v;
+
+  // WHEN A0'S REQUEST ACTUALLY LEAVES. The issue register can be free while a
+  // cold palette fetch is taking it, and A0 must NOT be cleared then -- its
+  // plan has not been issued and clearing it drops the request silently. That
+  // is one condition written once, because the first version had it spelled
+  // out separately at the clear site and at the issue site and they disagreed:
+  // 30 of 32 requests in a batch vanished.
+  logic issue_fire_c;
+  assign issue_fire_c = a0_v && !pf_v && (!c_v || cac_ready_i);
 
   // ---- the head retires ----------------------------------------------------
   logic [RW-1:0] head_c;
@@ -533,14 +553,14 @@ module zhao_texture_tmu_pipe #(
         rb_done[rb_wp[RW-1:0]] <= 1'b0;
         rb_src [rb_wp[RW-1:0]] <= req_src_id_i;
         rb_wp <= rb_wp + (RW+1)'(1);
-      end else if (!c_v || cac_ready_i) begin
+      end else if (issue_fire_c) begin
         a0_v <= 1'b0;
       end
 
       // `mode_error_o` is the ACCEPTED request's verdict, one clock later --
       // the same relationship the serial block has, so the shared harness
       // reads it the same way.
-      if (a0_v && (!c_v || cac_ready_i)) mode_error_o <= err_c;
+      if (issue_fire_c) mode_error_o <= err_c;
 
       // ---- A1 -> the cache issue register ---------------------------------
       if (!c_v || cac_ready_i) begin
@@ -557,9 +577,10 @@ module zhao_texture_tmu_pipe #(
           tagp[tag_wp[RW-1:0]] <= 1'b1;
           tag_wp <= tag_wp + (RW+1)'(1);
           pf_v   <= 1'b0;
-        end else
-        c_v <= a0_v;
-        if (a0_v && !pf_v) begin
+        end else begin
+          c_v <= a0_v;
+        end
+        if (issue_fire_c) begin
           c_en      <= filter_eff ? 4'b1111 : 4'b0001;
           c_addr    <= {addr[3], addr[2], addr[1], addr[0]};
           c_src     <= a0_src;
@@ -592,7 +613,12 @@ module zhao_texture_tmu_pipe #(
       end
 
       // ---- the cache response ---------------------------------------------
-      if (cac_valid_i && tag_ne) begin
+      // A RESPONSE IS CONSUMED ONLY ON ITS OWN HANDSHAKE. This read
+      // `cac_valid_i && tag_ne` and ignored `cac_ready_o` -- so every clock the
+      // filter held the port closed, the SAME response was popped again and
+      // applied to the NEXT record. CLUT never noticed, because CLUT never
+      // stalls the port; the bilinear batch hung outright.
+      if (cac_valid_i && cac_ready_o && tag_ne) begin
         tag_rp <= tag_rp + (RW+1)'(1);
 
         if (rsp_is_pal) begin

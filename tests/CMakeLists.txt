@@ -3302,6 +3302,25 @@ verilate(test_texture_tmu_directed
   PREFIX Vzhao_texture_tmu
   TOP_MODULE zhao_texture_tmu
   SOURCES ${ZHAO_TEXTURE_TMU_SV})
+# The v2 sampler against the SERIAL block's own suite. Same ports, same checks,
+# same untouched zref::Tmu oracle -- so a difference is a defect in the new
+# implementation and nothing else.
+add_executable(test_texture_tmu_pipe texture/texture_tmu_directed.cpp)
+target_compile_definitions(test_texture_tmu_pipe PRIVATE ZHAO_TMU_PIPE=1 ZHAO_FILT_LANES=2)
+target_link_libraries(test_texture_tmu_pipe PRIVATE zhao_harness zhao_zref)
+verilate(test_texture_tmu_pipe
+  PREFIX Vzhao_texture_tmu_pipe
+  TOP_MODULE zhao_texture_tmu_pipe
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp.sv)
+# NOT IN `fast` OR `nightly` YET, AND THAT IS DELIBERATE. The v2 sampler is
+# under construction and currently fails 17 of the serial block's 79 checks. It
+# is registered so it can be run by name -- `ctest -R texture_tmu_pipe` -- and
+# labelled `wip` so it cannot turn a shared gate red while it is being built.
+# Move it to "fast;nightly" in the commit that makes it green, not before.
+add_test(NAME texture_tmu_pipe COMMAND test_texture_tmu_pipe)
+set_tests_properties(texture_tmu_pipe PROPERTIES LABELS "wip" TIMEOUT 900)
+
 add_test(NAME texture_tmu_directed COMMAND test_texture_tmu_directed)
 set_tests_properties(texture_tmu_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
