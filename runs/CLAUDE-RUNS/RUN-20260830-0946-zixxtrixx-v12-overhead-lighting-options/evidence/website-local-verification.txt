@@ -1,0 +1,6 @@
+Local bounded website check: http://127.0.0.1:63571
+exact noindex meta count one — PASS
+all ten local WebM endpoints serve complete local bytes — PASS
+desktop 1280: v10 Idle remains initially selected; v12 has 10 controlled 384x240/10s videos at 384px and 2 secondary references; no horizontal overflow — PASS
+narrow 390: single-column videos remain 324px wide; v10 initially selected; no horizontal overflow — PASS
+local HTTP server and Edge browser closed — PASS

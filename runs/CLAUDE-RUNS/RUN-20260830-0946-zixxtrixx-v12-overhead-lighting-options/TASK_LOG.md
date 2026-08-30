@@ -40,6 +40,15 @@ Author exactly ten physically coherent world-space overhead lighting options for
 - Recorded exact values, ten deterministic sequence CRCs and the bounded orbit verdict. Raw render trees remain uncommitted production inputs for the website encodes.
 - New spring feedback arrived during lighting work. Recorded and pushed it without implementation as durable `OWNER-DIRECTION-13-2026-08-30.md`, Upheaval commit `0c8a909`; it remains queued behind owner lighting selection.
 
+### 2026-08-30 - Compact owner-choice site assembled and checked locally
+
+- Encoded the ten common 600-frame orbits as distinct VP9 CRF16 `yuv444p` WebMs at 384x240 and 60 fps, with exact 3× nearest-neighbour 1152x720 posters. `ffprobe` counted 600 frames in every stream and Zenith Sun decoded completely.
+- Added one compact two-column v12 collection containing exactly the ten numbered new orbit choices, followed by secondary static High Open and Crossfill references. V10 Idle remains the initially selected tab and the complete v11 section and archives remain intact.
+- Regenerated `website/public/index.html`; exact `<meta name="robots" content="noindex, nofollow">` occurs once.
+- Bounded local Edge checks passed at 1280x900 and 390x844: ten 384x240/10-second controlled videos load, the narrow collection remains 324 px wide, and neither viewport has horizontal overflow.
+- Committed and pushed Upheaval website/media milestone `8bfc1d4`.
+- Fetched both remotes immediately before integration. `origin/main` remained at recorded setup tips in both repositories, so both feature branches already contain the latest current mains and no concurrent merge is required.
+
 ---
 
 ## Validation Ledger — `V12-OVERHEAD-BUDGET-1`
@@ -69,6 +78,9 @@ None. This is the sole modelling/art lane.
 - `runs/CLAUDE-RUNS/RUN-20260830-0946-zixxtrixx-v12-overhead-lighting-options/build-direct.sh`
 - `runs/CLAUDE-RUNS/RUN-20260830-0946-zixxtrixx-v12-overhead-lighting-options/evidence/overhead-rig-values.txt`
 - `runs/CLAUDE-RUNS/RUN-20260830-0946-zixxtrixx-v12-overhead-lighting-options/evidence/orbit-verdict.txt`
+- `runs/CLAUDE-RUNS/RUN-20260830-0946-zixxtrixx-v12-overhead-lighting-options/evidence/website-media-verification.txt`
+- `runs/CLAUDE-RUNS/RUN-20260830-0946-zixxtrixx-v12-overhead-lighting-options/evidence/website-local-verification.txt`
+- `runs/CLAUDE-RUNS/RUN-20260830-0946-zixxtrixx-v12-overhead-lighting-options/evidence/website-v12-desktop-panel.png`
 - Ten final quarter-turn sheets, two review mosaics, direct-build evidence and ten render logs under the same `evidence/` directory.
 - Ten 600-frame raw orbit trees under `render/` are temporary, deliberately uncommitted production inputs.
 
@@ -86,6 +98,6 @@ None. This is the sole modelling/art lane.
 
 ## Next Steps
 
-1. Commit and push the completed Zhaozhou implementation and bounded visual evidence milestone.
-2. Encode the ten identical native orbits and publish one compact noindex comparison while preserving v10 selection, v11 references and every archive.
-3. Safely integrate both latest current mains, deploy exactly once, perform only O12-W production verification, close the run and stop all jobs.
+1. Commit and push the website verification evidence, then fast-forward both isolated local mains to their completed feature heads and push without force.
+2. Deploy exactly once with the mandatory project and branch arguments.
+3. Perform only O12-W production verification, close the run, stop all jobs and do not begin spring work.

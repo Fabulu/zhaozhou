@@ -1,0 +1,17 @@
+Zixxtrixx v12 overhead-orbit website media
+Encoder: ffmpeg libvpx-vp9, CRF 16, unconstrained bitrate, yuv444p, 60 fps, no audio.
+Bounded verification: ffprobe frame-counted all ten streams; one representative fully decoded.
+
+zenith-sun: 1820380 B; VP9 384x240 yuv444p 60/1; decoded-count 600; poster RGB 1152x720; sha256 c904658ef1a4b54944784728569ba1be924d95d2d7c6b2cef0b42d8e20090209 — PASS
+morning-crown: 1836413 B; VP9 384x240 yuv444p 60/1; decoded-count 600; poster RGB 1152x720; sha256 9c4cc6fa5dbc17fbcea7aa3dcf7e8939b5ed482576b2c5811c9ab120a1530b64 — PASS
+evening-crown: 1810763 B; VP9 384x240 yuv444p 60/1; decoded-count 600; poster RGB 1152x720; sha256 5f3199846d8b15700836bba9e350cb61c480f609eed5720a3a19c00f06a3713e — PASS
+north-skylight: 2046906 B; VP9 384x240 yuv444p 60/1; decoded-count 600; poster RGB 1152x720; sha256 ed8cf9b31f103edcfd45d4e3a21ddf55173f5019e954fe399f99328304578c1c — PASS
+south-skylight: 1935344 B; VP9 384x240 yuv444p 60/1; decoded-count 600; poster RGB 1152x720; sha256 a7efa720be7e79d71de1564961611a455589087c0236d65f2bb9e22f67d65680 — PASS
+open-overcast: 1924816 B; VP9 384x240 yuv444p 60/1; decoded-count 600; poster RGB 1152x720; sha256 13b1ee77ffd37301ade79c958e4831a244b0b5134aa6b9dfd0cff58c0d0fba88 — PASS
+hard-noon: 1787061 B; VP9 384x240 yuv444p 60/1; decoded-count 600; poster RGB 1152x720; sha256 4e026632f2d4cb838770d4f475d5affc34235533815975e4634a2125d8c5425b — PASS
+veiled-sun: 1874097 B; VP9 384x240 yuv444p 60/1; decoded-count 600; poster RGB 1152x720; sha256 714fd55547e477bf35a2969b177ce81172572be0fb4183a7c17e78f8f61c3d10 — PASS
+silver-moon: 1765190 B; VP9 384x240 yuv444p 60/1; decoded-count 600; poster RGB 1152x720; sha256 9c7876d64dd459acc04a6ec7da9f222a63e1fd8b255775178cc8010758af6528 — PASS
+cloudbreak: 1865946 B; VP9 384x240 yuv444p 60/1; decoded-count 600; poster RGB 1152x720; sha256 39bb17018ad240551df77c5888e869d7545afa97cd34593d7b4b2684b39107f0 — PASS
+
+Representative complete decode: zenith-sun, 600/600 frames — PASS
+All ten WebM byte hashes are distinct — PASS
