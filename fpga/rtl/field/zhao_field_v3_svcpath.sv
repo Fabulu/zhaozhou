@@ -69,6 +69,9 @@ module zhao_field_v3_svcpath #(
     // in the engine -- each bank is four floor-exact roots -- and the one that
     // decides whether DIST2 fits the admission budget at all.
     parameter int DIST_BANKS = 2,
+    // Ring units. The nine products inside one are a dependency chain, so this
+    // buys throughput the same way DIST_BANKS does and costs the same way.
+    parameter int RING_UNITS = 2,
     parameter int REGS     = 32,
     parameter int TAGW     = 8
 ) (
@@ -529,7 +532,9 @@ module zhao_field_v3_svcpath #(
   // second service needs one, this is where the contention appears -- and it
   // will be visible as a port that two blocks drive, not as a silent wrong
   // answer.
-  zhao_field_v3_ring_svc u_ring (
+  zhao_field_v3_ring_svc #(
+      .UNITS(RING_UNITS)
+  ) u_ring (
       .clk(clk), .rst_n(rst_n),
       .req_valid_i(svc_valid && is_ring_c), .req_ready_o(rg_req_ready),
       .req_d_0_i(svc_s0[0]), .req_d_1_i(svc_s0[1]),

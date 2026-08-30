@@ -1692,7 +1692,7 @@ verilate(test_field_v3_earth_quad
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
-  VERILATOR_ARGS -GCTX=32 -GOUTSTANDING=12 -GLANES=4 -GDIST_BANKS=4 -GREGS=64)
+  VERILATOR_ARGS -GCTX=32 -GOUTSTANDING=12 -GLANES=4 -GDIST_BANKS=4 -GRING_UNITS=4 -GREGS=64)
 target_compile_definitions(test_field_v3_earth_quad PRIVATE ZHAO_EARTH_CTX=32 ZHAO_EARTH_LANES=4 ZHAO_EARTH_REGS=64)
 add_test(NAME field_v3_earth_quad COMMAND test_field_v3_earth_quad --points 256
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/crater_ring.zprog
@@ -1771,6 +1771,21 @@ verilate(test_field_v3_ring_svc_directed
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv)
 add_test(NAME field_v3_ring_svc_directed COMMAND test_field_v3_ring_svc_directed)
+
+# THE SAME SERVICE WITH FOUR RING UNITS. The nine products inside one unit
+# are a dependency chain and cannot be pipelined, so throughput is bought only
+# by having more units. Both counts are tested because the shipped default is
+# still 2.
+add_executable(test_field_v3_ring_svc_units4 differential/field_v3_ring_svc_directed.cpp)
+target_link_libraries(test_field_v3_ring_svc_units4 PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_ring_svc_units4
+  PREFIX Vzhao_field_v3_ring_svc
+  TOP_MODULE zhao_field_v3_ring_svc
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv
+  VERILATOR_ARGS -GUNITS=4)
+add_test(NAME field_v3_ring_svc_units4 COMMAND test_field_v3_ring_svc_units4)
+set_tests_properties(field_v3_ring_svc_units4 PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 set_tests_properties(field_v3_ring_svc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
 # ---- OP_SIN and OP_COS ---------------------------------------------------
