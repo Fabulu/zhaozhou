@@ -6,6 +6,41 @@ measured on the real RTL, not modelled.
 
 ---
 
+> ## CORRECTED 2026-08-30, AFTER BUILDING IT
+>
+> **The diagnosis in this file was right and the prescribed mechanism was
+> wrong.** The machine really was write-port bound at 92%, and widening the
+> executor really was the fix. But the section below headed "The register-file
+> banking conflict, which must be settled FIRST" prescribes **four write ports
+> banked by `ctx[1:0]`**, and that is not what was built and not what worked.
+>
+> **What worked: a register is a VECTOR, not a number.** The register file word
+> widened from 32 bits to `32*LANES`, so one write port carries all four lanes'
+> results in a single write. There is still ONE write port. The read/write
+> banking conflict the section agonises over **does not exist** once the four
+> lanes' values live in the same word -- there is nothing to bank against,
+> because the four lanes were never four separate accesses.
+>
+> The four-port version was actually attempted and reverted: it deadlocked and
+> was never measured. The width version shipped, and the whole file went from
+> 5.1x over budget to inside it.
+>
+> Everything above the banking section -- the 92% measurement, the ALU/long
+> split, the service initiation intervals, the preload defect -- stands as
+> written. The banking resolution and the "expected result" arithmetic at the
+> end are superseded by
+> `reports/FIELD_V3_EARTH_OPTIMISATION_NOTES.md`, which reports the measured
+> outcome: crater_ring 663,936, impact_wave 594,048, wave_pool 559,104, all
+> inside 850,000, 12,308 values exact.
+>
+> Kept rather than deleted because the reasoning is the interesting part: the
+> conflict was real, the resolution was elaborate, and the actual answer was to
+> make the conflict not arise. A confident architectural prescription derived
+> from a correct measurement is still a prescription, and this one cost a
+> deadlocked afternoon.
+
+---
+
 ## The finding, in one line
 
 **The machine is write-port bound at 92% occupancy, and no service can fix it.**

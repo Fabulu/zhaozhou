@@ -374,7 +374,14 @@ class SetupDev {
 
 // ===========================================================================
 #ifdef ZHAO_GEOM_DEV_BINNER
+// `BinTri`, `BinJob` and `make_bin_tri` are views onto zref::Clip and
+// zref::Setup and know nothing about Verilator. A COMPOSITION containing the
+// binner needs those and cannot have this model, because its own top is a
+// different module and only one is generated per target. Same reasoning, and
+// same spelling, as the raster dev header's oracle-only mode.
+#ifndef ZHAO_GEOM_DEV_ORACLE_ONLY
 #include "Vzhao_geom_binner.h"
+#endif
 
 namespace zhao_geom {
 
@@ -450,6 +457,7 @@ struct BinStatus {
 };
 
 /** Drives zhao_geom_binner through one whole frame. */
+#ifndef ZHAO_GEOM_DEV_ORACLE_ONLY
 class BinnerDev {
  public:
   BinnerDev() { reset(); }
@@ -664,6 +672,7 @@ class BinnerDev {
 
   Vzhao_geom_binner top_;
 };
+#endif  // ZHAO_GEOM_DEV_ORACLE_ONLY
 
 }  // namespace zhao_geom
 #endif  // ZHAO_GEOM_DEV_BINNER

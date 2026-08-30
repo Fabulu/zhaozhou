@@ -36,7 +36,20 @@
 
 #include "verilated.h"
 
+// THE ORACLE HALF OF THIS HEADER IS USEFUL WITHOUT THE MODEL.
+//
+// `PipeJob`, `PipeTile`, `PipeExpect` and `pipe_oracle` are views onto the
+// frozen reference blocks and know nothing about Verilator. A COMPOSITION that
+// contains the tile pipe -- the geometry->raster seam, say -- needs exactly
+// those and cannot have this model, because its own top is a different module
+// and only one is generated per target.
+//
+// Defining ZHAO_PIPE_DEV_ORACLE_ONLY takes the oracle and leaves the driver.
+// The alternative was copying the oracle into the composition, which is how
+// two versions of an expectation start disagreeing.
+#ifndef ZHAO_PIPE_DEV_ORACLE_ONLY
 #include "Vzhao_raster_tile_pipe.h"
+#endif
 
 #include "zhao_sim.hpp"
 #include "zref/zref_earlyz.hpp"
@@ -205,6 +218,7 @@ enum class PipeFeed {
   kGapped       // job_valid_i PCG-gated (feed_seed)
 };
 
+#ifndef ZHAO_PIPE_DEV_ORACLE_ONLY
 class PipeDev {
  public:
   PipeDev() { reset(); }
@@ -427,6 +441,7 @@ class PipeDev {
   size_t max_in_flight_ = 0;
   bool frag_error_ = false;
 };
+#endif  // ZHAO_PIPE_DEV_ORACLE_ONLY
 
 // ---------------------------------------------------------------- helpers ---
 inline uint64_t pipe_word(uint8_t r, uint8_t g, uint8_t b, uint8_t tag = 0, uint32_t depth = 0,

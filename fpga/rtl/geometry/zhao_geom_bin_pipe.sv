@@ -142,7 +142,22 @@ module zhao_geom_bin_pipe (
   output logic        [31:0] tile_references_o,
   output logic        [15:0] max_tile_list_depth_o,
   output logic        [31:0] triangles_culled_o,
-  output logic               overflow_o
+  output logic               overflow_o,
+  output logic               arena_full_o,
+
+  // ---- SEAM observability, added 2026-08-30 ------------------------------
+  // Counters, not behaviour: nothing below drives a datapath. They exist
+  // because the interesting property of this composition is not whether it is
+  // CORRECT -- both halves were green before it was written -- but how much of
+  // the frame the binner spends waiting for the rasterizer, which is a number
+  // neither block can report about itself. `job_stall_clocks_o` counts clocks
+  // where the binner is OFFERING a job the pipe will not take.
+  //
+  // ENFORCED-BY: tests/render/render_pipe_directed.cpp:main
+  output logic        [31:0] jobs_taken_o,
+  output logic        [31:0] job_stall_clocks_o,
+  output logic        [31:0] early_z_rejects_o,
+  output logic               fragment_error_o
 );
 
   // ------------------------------------------------------- the job splice --
@@ -151,7 +166,7 @@ module zhao_geom_bin_pipe (
   logic signed [11:0] job_tile_x, job_tile_y;
   logic        [15:0] job_src_id;
 
-  logic               arena_full_unused;
+  // (arena_full_o is a port now; arena_used_o stays unused here.)
   logic        [8:0]  arena_used_unused;
 
   zhao_geom_binner u_binner (
@@ -203,7 +218,7 @@ module zhao_geom_bin_pipe (
     .max_tile_list_depth_o(max_tile_list_depth_o),
     .triangles_culled_o   (triangles_culled_o),
     .overflow_o           (overflow_o),
-    .arena_full_o         (arena_full_unused),
+    .arena_full_o         (arena_full_o),
     .arena_used_o         (arena_used_unused)
   );
 
@@ -211,11 +226,11 @@ module zhao_geom_bin_pipe (
   logic [15:0] tile_index;
   assign tile_index = {4'd0, job_tile_y[9:4], job_tile_x[9:4]};
 
-  logic [31:0] tp_tile_refs_unused, tp_resolved_unused, tp_ez_rej_unused;
+  logic [31:0] tp_tile_refs_unused, tp_resolved_unused;
   logic [31:0] tp_ez_cov_unused, tp_fr_cov_unused, tp_blended_unused;
   logic [7:0]  tp_bin_mask_unused;
   logic [23:0] tp_zfloor_unused;
-  logic        tp_front_unused, tp_err_unused;
+  logic        tp_front_unused;
 
   zhao_raster_tile_pipe u_pipe (
     .clk                (clk),
@@ -256,13 +271,27 @@ module zhao_geom_bin_pipe (
     .front_bank_o       (tp_front_unused),
     .tile_references_o  (tp_tile_refs_unused),
     .resolved_tiles_o   (tp_resolved_unused),
-    .early_z_rejects_o  (tp_ez_rej_unused),
+    .early_z_rejects_o  (early_z_rejects_o),
     .ez_covered_o       (tp_ez_cov_unused),
     .fr_covered_o       (tp_fr_cov_unused),
     .blended_fragments_o(tp_blended_unused),
     .bin_mask_o         (tp_bin_mask_unused),
     .z_floor_o          (tp_zfloor_unused),
-    .fragment_error_o   (tp_err_unused)
+    .fragment_error_o   (fragment_error_o)
   );
+
+  // The seam, counted. Free-running from reset, so a measured window is the
+  // DIFFERENCE of two reads -- the Field engine shipped a 123%-occupancy
+  // report by dividing a from-reset counter by a windowed clock count, and
+  // this file is not repeating it.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      jobs_taken_o       <= 32'd0;
+      job_stall_clocks_o <= 32'd0;
+    end else begin
+      if (job_valid && job_ready) jobs_taken_o <= jobs_taken_o + 32'd1;
+      if (job_valid && !job_ready) job_stall_clocks_o <= job_stall_clocks_o + 32'd1;
+    end
+  end
 
 endmodule : zhao_geom_bin_pipe

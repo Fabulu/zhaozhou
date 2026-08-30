@@ -1710,6 +1710,33 @@ verilate(test_field_alu_vec_directed
 add_test(NAME field_alu_vec_directed COMMAND test_field_alu_vec_directed)
 set_tests_properties(field_alu_vec_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# THE GEOMETRY -> RASTER SEAM. Both sides are individually green and have
+# never been joined: the binner decides which tiles a triangle touches and
+# the raster pipe renders exactly those jobs in exactly that order. Every
+# composed machine this project has built found something its blocks could
+# not.
+add_executable(test_render_pipe_directed render/render_pipe_directed.cpp)
+target_link_libraries(test_render_pipe_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_render_pipe_directed
+  PREFIX Vzhao_geom_bin_pipe
+  TOP_MODULE zhao_geom_bin_pipe
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_bin_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv)
+add_test(NAME render_pipe_directed COMMAND test_render_pipe_directed)
+set_tests_properties(render_pipe_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_executable(test_field_v3_svcpath_directed differential/field_v3_svcpath_directed.cpp)
 target_link_libraries(test_field_v3_svcpath_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_v3_svcpath_directed
