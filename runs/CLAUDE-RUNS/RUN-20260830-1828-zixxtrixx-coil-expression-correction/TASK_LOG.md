@@ -107,6 +107,13 @@ Correct the rejected published Zixxtrixx spring before any secondary polish, the
 - Reverified immutability after replacement: all 44 Generation Nine files match the durable captured hashes, the protected prior/V14 set digests remain exact, and all 44 current live files now differ from their archived predecessors.
 - Committed and pushed the final live bank as Upheaval `f80e70a` (`Replace Zixxtrixx final live media`).
 
+### 2026-08-31 - Current mains integrated and validated
+
+- Fetched both current remote mains before integration. Upheaval remained at the supplied `940a644`; zhaozhou had advanced by 22 hardware/renderer commits from `5321530` to `43fe72e`. The two zhaozhou path sets overlapped only in `reference/src/zcreature/creature_sim.cpp`, where current main carried formatter-only changes around the independent deformation insertion.
+- Merged `origin/main` into the zhaozhou feature branch without conflict as `6e99a72`, retaining all 46 current-main paths and the complete creature changes, and pushed that integration. Fast-forwarded both local `main` branches through their feature tips without rewriting either history.
+- Made a new direct `--clean all` integration build at `build/zixxtrixx-main-integration`, recompiling all shared-layout consumers. Ordinary meshcheck reports 1774 vertices, 1098 shared-position groups, zero disagreeing binds and `OK`; `--deform-sidecar` reports exact identity and `OK`; the committed full/micro every-key/midpoint 3D probe ends `ZIXX PROBE: PASS`.
+- Regenerated the integrated site through `assemble.py`: one creature, 189 render items. Verified all 22 live VP9/yuv444p/60 fps streams and exact frame counts, all 1152x720 posters, all three immutable archive set checks, the nine-generation label, and the exact noindex line. The regenerated output differs from the committed page only by its generated timestamp; restored that temporary timestamp change, leaving both main working trees clean.
+
 ---
 
 ## Subagent Spawns
@@ -142,5 +149,5 @@ The mandated `subagents/20260830-1730-zixxtrixx-coil-expression/` directory was 
 
 ## Next Steps
 
-1. Integrate both current remote mains into the feature work, rerun the fresh direct/source/site/archive gates, push both mains, then publish the finished pass exactly once.
-2. Verify the production deployment, close and archive this one mandatory run, and stop/verify only this lane's child tooling.
+1. Commit this integrated validation record, push both validated mains, then publish the finished pass exactly once.
+2. Verify production and archive delivery, close/archive this one mandatory run, and stop/verify only this lane's child tooling.
