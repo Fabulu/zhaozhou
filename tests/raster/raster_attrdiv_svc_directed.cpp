@@ -44,10 +44,19 @@
 #ifndef ZHAO_SVC_UNITS
 #define ZHAO_SVC_UNITS 1
 #endif
+#ifndef ZHAO_SVC_RADIX
+#define ZHAO_SVC_RADIX 2
+#endif
 
 namespace {
 
 constexpr int64_t kClocksPerFrame = 1666667;
+
+// One unit's measured latency, which is what UNITS divides into. These are the
+// numbers raster_attrdiv_directed prints at each radix -- restated here so the
+// scaling check below has something to be right or wrong ABOUT, rather than a
+// tolerance wide enough to accept anything.
+constexpr double kUnitLatency = (ZHAO_SVC_RADIX == 4) ? 20.0 : 36.0;
 
 int64_t div_rhu(__int128 n, int64_t d) {
   const __int128 dd = d;
@@ -141,7 +150,8 @@ int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
   Vzhao_raster_attrdiv_svc top;
   const int units = ZHAO_SVC_UNITS;
-  printf("== the attribute divide service, UNITS = %d ==\n", units);
+  printf("== the attribute divide service, UNITS = %d, RADIX = %d ==\n", units,
+         ZHAO_SVC_RADIX);
 
   // ------------------------------------------------------------------ 1 ---
   printf("== section 1: distinct values come back in ISSUE ORDER ==\n");
@@ -186,15 +196,15 @@ int main(int argc, char** argv) {
     const int64_t per_frame = static_cast<int64_t>(kClocksPerFrame / per_divide);
     printf("   MEASURED: 240 divides in %lld clocks = %.2f clocks a divide\n",
            (long long)saturated_clocks, per_divide);
-    printf("   THROUGHPUT: %lld attribute-pixels a frame at UNITS = %d\n", (long long)per_frame,
-           units);
+    printf("   THROUGHPUT: %lld attribute-pixels a frame at UNITS = %d, RADIX = %d\n",
+           (long long)per_frame, units, ZHAO_SVC_RADIX);
     printf("   AGAINST: 276480 terrain-primary pixels need invw24 each before early-Z\n");
     printf("   VERDICT: %s for depth alone\n", per_frame >= 276480 ? "SUFFICIENT" : "SHORT");
 
     // The claim under test is that units are actually parallel. One unit
-    // measures ~36; N units must beat 36/N by a margin that no serialisation
+    // measures kUnitLatency; N units must beat that over N by a margin that no
     // bug could fake. 15% of headroom absorbs the ramp.
-    const double ideal = 36.0 / units;
+    const double ideal = kUnitLatency / units;
     zhao::check(per_divide <= ideal * 1.15 + 1.0,
                 "the measured rate tracks UNITS, so the units really are parallel",
                 (uint32_t)(ideal * 100), (uint32_t)(per_divide * 100));

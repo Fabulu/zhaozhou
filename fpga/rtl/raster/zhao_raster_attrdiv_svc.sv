@@ -53,7 +53,12 @@
 
 module zhao_raster_attrdiv_svc #(
     parameter int unsigned UNITS = 4,
-    parameter int unsigned TAGW  = 16
+    parameter int unsigned TAGW  = 16,
+    // Forwarded to every unit. UNITS and RADIX are the two independent knobs on
+    // this service and the sweep crosses them, because "more units" and
+    // "shorter units" cost different things and the fit decides which is
+    // cheaper -- not this file.
+    parameter int unsigned RADIX = 2
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -118,7 +123,7 @@ module zhao_raster_attrdiv_svc #(
 
   generate
     for (genvar g = 0; g < int'(UNITS); ++g) begin : g_unit
-      zhao_raster_attrdiv u_div (
+      zhao_raster_attrdiv #(.RADIX(RADIX)) u_div (
           .clk          (clk),
           .rst_n        (rst_n),
           .v_valid_i    (u_vvalid[g]),

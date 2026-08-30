@@ -1888,6 +1888,19 @@ set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TI
 # a single divider measures 36 clocks and is ~6x short of a frame's depth
 # interpolation on its own, so how much divide the renderer needs is a
 # measurement against real hardware at each point, not an argument.
+# The divider itself at both radices: the answers must be IDENTICAL and only
+# the clock count may move, which is what makes radix 4 a speed-up rather than
+# a different divider.
+add_executable(test_raster_attrdiv_r4 raster/raster_attrdiv_directed.cpp)
+target_link_libraries(test_raster_attrdiv_r4 PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_attrdiv_r4
+  PREFIX Vzhao_raster_attrdiv
+  TOP_MODULE zhao_raster_attrdiv
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv
+  VERILATOR_ARGS -GRADIX=4)
+add_test(NAME raster_attrdiv_r4 COMMAND test_raster_attrdiv_r4)
+set_tests_properties(raster_attrdiv_r4 PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 foreach(div_units 1 2 4 8)
   set(div_tgt test_raster_attrdiv_svc_u${div_units})
   add_executable(${div_tgt} raster/raster_attrdiv_svc_directed.cpp)
@@ -1901,6 +1914,22 @@ foreach(div_units 1 2 4 8)
     VERILATOR_ARGS -GUNITS=${div_units})
   add_test(NAME raster_attrdiv_svc_u${div_units} COMMAND ${div_tgt})
   set_tests_properties(raster_attrdiv_svc_u${div_units}
+    PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+  # The same points at radix 4, so the sweep is a GRID: more units and shorter
+  # units cost different things, and only a fit can say which is cheaper.
+  set(div_tgt4 test_raster_attrdiv_svc_u${div_units}_r4)
+  add_executable(${div_tgt4} raster/raster_attrdiv_svc_directed.cpp)
+  target_link_libraries(${div_tgt4} PRIVATE zhao_harness zhao_zref)
+  target_compile_definitions(${div_tgt4} PRIVATE ZHAO_SVC_UNITS=${div_units} ZHAO_SVC_RADIX=4)
+  verilate(${div_tgt4}
+    PREFIX Vzhao_raster_attrdiv_svc
+    TOP_MODULE zhao_raster_attrdiv_svc
+    SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_svc.sv
+            ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv
+    VERILATOR_ARGS -GUNITS=${div_units} -GRADIX=4)
+  add_test(NAME raster_attrdiv_svc_u${div_units}_r4 COMMAND ${div_tgt4})
+  set_tests_properties(raster_attrdiv_svc_u${div_units}_r4
     PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 endforeach()
 

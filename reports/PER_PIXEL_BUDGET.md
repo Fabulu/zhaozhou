@@ -41,12 +41,27 @@ per-pixel picture sits in one place.
 `RASTER.ATTRDIV.SVC` makes the unit count a build parameter, and the sweep is
 linear, which is the property its test exists to check:
 
-| UNITS | clocks per divide | divides per frame | against 276,480 |
-|---|---|---|---|
-| 1 | 36.00 | 46,296 | short, 6.0x |
-| 2 | 18.00 | 92,571 | short, 3.0x |
-| 4 | 9.01 | 184,928 | short, 1.5x |
-| 8 | 4.53 | 367,985 | **sufficient**, 1.33x |
+The sweep is now a GRID, because the divider's RADIX is a parameter too --
+radix 4 takes two quotient bits a step, against 1x, 2x and 3x the divisor,
+instead of one bit against 1x. A single unit drops from **36 clocks to 20**.
+
+| UNITS | RADIX 2, divides/frame | RADIX 4, divides/frame |
+|---|---|---|
+| 1 | 46,296 | 83,333 |
+| 2 | 92,571 | 166,597 |
+| 4 | 184,928 | 332,502 |
+| 8 | 367,985 | **658,978** |
+
+Both axes are linear and they compose. The comparison a fit has to make is the
+DIAGONAL: **radix 4 at UNITS = 4 (332,502) is within 10% of radix 2 at UNITS = 8
+(367,985), for half the units.** Whether four wider dividers are cheaper than
+eight narrow ones is a place-and-route question, and this grid is what makes it
+answerable rather than arguable.
+
+THE ANSWERS DO NOT MOVE. Both radices run the identical case list against the
+same oracle -- the exact halves, both signs, the 400-case random sweep and the
+broken preconditions -- and both are bit-exact against it. Radix 4 is the same
+divider going faster, not a different one that mostly agrees.
 
 ---
 
@@ -82,26 +97,29 @@ Divides per frame, for 276,480 covered fragments:
 | 0.50 | 552,960 | 1,105,920 |
 | 1.00 | 829,440 | 1,935,360 |
 
-Against the sweep above, **UNITS = 8 (367,985 a frame) does not cover any column
-of that table.** It covers `invw24` alone and nothing else. The honest reading:
+Against the grid above:
 
-* the divide count needed is **2 to 5 times** what the largest measured sweep
-  point delivers;
-* so either UNITS goes well past 8, or the divider gets shorter than 36 clocks,
-  or fewer attributes get divided per pixel.
+* **radix 2 at UNITS = 8 (367,985) covers no column of that table.** It covers
+  `invw24` alone.
+* **radix 4 at UNITS = 8 (658,978) covers the textured-only column up to
+  s = 0.5**, and comes within 5% of textured + Gouraud at s = 0.25.
+* nothing measured yet covers **textured + Gouraud at s >= 0.5**, which wants
+  1.1 to 1.9 million divides a frame.
 
-All three are open. None of them should be chosen from this file.
+So the shorter divider closed roughly half the gap in one parameter. How much of
+the rest needs closing depends entirely on s, and on whether Gouraud is
+interpolated per pixel at all. Those are the two open questions and neither is
+settled here.
 
 ---
 
 ## What this changes about the shape of the work
 
-**The divider is the wall, and it is a wide one.** A radix-4 divider halves the
-iterations for roughly double the per-step logic; a fully pipelined array reaches
-one result per clock at 33 stages of area. At 36 clocks and needing 2–5x more
-than eight units deliver, this is no longer a "tune it later" item — it is the
-thing that decides whether the textured path fits, and it wants a fit before
-more blocks are built on top of it.
+**The divider was the wall, and radix 4 moved it once.** 36 clocks to 20 is
+measured, and it cost one parameter. What is left on that axis is a fully
+pipelined array (one result a clock, at 33 stages of area) or radix 8/16, both
+trading more per-step logic for fewer steps. None of them should be chosen
+without a fit, and the grid above is what a fit compares against.
 
 **Early-Z is worth more than any arithmetic here.** The gap between the two
 columns of that table is entirely Gouraud, and the gap between `1` and `1 + 6s`
@@ -125,7 +143,7 @@ puts the frame over.
 ## What is measured, and what is not
 
 **Measured, against running RTL:** every clock count in the first table, the
-whole of the UNITS sweep, and the fact that the sweep is linear.
+whole of the UNITS x RADIX grid, and the fact that both axes are linear.
 
 **Not measured:** the survivor fraction s; the real covered-fragment count for
 an actual 8 km map frame (276,480 is ruling 7's estimate for the terrain
