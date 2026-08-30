@@ -60,6 +60,18 @@ Correct the rejected published Zixxtrixx spring before any secondary polish, the
 - Rendered the exact final source as iteration fifteen with explicit `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross`: 59 side and 59 high-three-quarter samples, CRC32C `0x8B3817A1` and `0x2C087B18`. Inspected both every-frame sheets and side playback. The local contact correction does not weaken the enlarged whole-tail S, connected downward pack, six-key brace hold, intact release or delayed transition into the accepted airborne wheel.
 - Derived bounded regression envelopes only after that visual acceptance. The final probe records regional whole-S travel/descent, 166 travelling tail-follower vertices, -43/-596 mm head motion relative to the named support, 0/0 mm hold drift, 730/925 per-mille body/head retained radius, 804 shared full/micro metadata matches with zero faults, zero full/micro real-surface intersections, exact sidecar identity outside authorised frames and intact release shape through key 24.
 - `zixx-probe` passes the complete bank: every key and presentation midpoint, declared 3D contact, spring, jump, balance, taunt, fall, impact, fixed-point limit and overlap gates. A fresh direct `--clean all` build recompiled every shared-layout consumer; ordinary meshcheck and `--deform-sidecar` both pass. The coil milestone is now closed; secondary art work is unlocked.
+- Committed and pushed the complete coil/deformation milestone as zhaozhou `3ba4131` (`Correct Zixxtrixx whole-body spring`).
+
+### 2026-08-30 - Secondary motion, expression and contact milestone
+
+- Replaced the three independent wrapped fall rotations with one monotonic unwrapped `fall_tumble_phase`. Its single sinusoidal hesitation never stops or reverses: the fresh 60 Hz probe records strictly positive 48..408 angle16 steps, one exact turn and the slowest step at the inverted pose.
+- Preserved tail-balance loss and impact timing, then appended 23 authored keys: exactly 46 rendered frames of grounded aftermath. A restrained travelling front-body answer and coordinated pupils keep the animal alive before the unchanged recovery; the accepted impact remains keys 157..166 and recovery remains keys 188..219.
+- Rebuilt the five ground-hit reactions around named front/middle/rear stations. Contact location now owns the local fold and bidirectional propagation; direction owns lane/sign. Fresh every-frame sheets rejected two earlier detached/shard-like attempts before the accepted broad, connected reactions. Hit pupils recoil once and settle rather than inheriting an idle scan.
+- Death slot 28 now fights through broad whole-body reversals and a declared 147 mm buck before its delayed collapse and tail slaps. Death slot 29 holds the signature S through three irregular complaint phrases using talk/sorrow head language, front-body pulses and coordinated pupils, then visibly loses the S into a paid-out line. The original slot 6 keel remains distinct and all three exact corpse contracts remain intact.
+- KO now reads as an externally driven head-led jolt with a 190 mm shove, delayed body drain, flank impact, damped rebound and stunned finality. Landing now enters from 820 mm clear, accelerates into a 42 mm root bite / 101 mm posed-surface contact, rebounds and absorbs before settling to the exact same stunned body/root/pupil bytes. Get-up begins on that exact seam, wakes through the head and pupils, then gathers the S.
+- Added restrained, clip-specific coordinated pupils to quick taunt, slow taunt and notify. Quick taunt owns one held conspiratorial glance, slow taunt chooses three calm held targets, and notify eyes lead its two deliberate scan targets by three keys. Selected 2x/native views preserve visible travel and the orange eye-boundary connection without perpetual scan or jitter.
+- Inspected every frame of the revised KO, landing, both revised deaths and pupil clips under explicit `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross`. Accepted evidence lives under lane-local `build/ko-landing-iter1`, `build/death-performance-iter4` and `build/pupil-secondary-iter1`.
+- Added complete, non-overlapping posed-vertex terrain declarations for KO impact/hold, hit-floor approach/bite/rebound/settle, get-up, and every interval of all three deaths. The declarations explicitly preserve the hard-death buck and complaint heave rather than forcing false contact. Fresh direct `--clean all`, ordinary meshcheck, deformation-sidecar and full every-key/midpoint probe all pass; final contact evidence is `build/pupil-secondary-iter1/probe-final.txt`.
 
 ---
 
@@ -96,7 +108,7 @@ The mandated `subagents/20260830-1730-zixxtrixx-coil-expression/` directory was 
 
 ## Next Steps
 
-1. Clean-build every direct consumer, run ordinary mesh, deformation-sidecar and full probe gates, then commit and push the accepted coil milestone with explicit paths.
-2. Author and visually review the queued selective pupil, monotonic fall-tumble, named hit-station, landing/KO/death and extended tail-balance work.
-3. Repair the generated junction pigment, inspect idle and strengthen only the moving local inspection light as needed.
+1. Commit and push the visually accepted secondary-animation/contact milestone with explicit paths.
+2. Repair the generated junction pigment through `tools/pack/mkcreaturepage.py`, regenerate both page families and inspect the held/deformed junction under lit and unlit views.
+3. Diagnose idle under explicit cel-main/Cool Cross, strengthen only the moving local inspection light if needed, and inspect moving-light frame `599 -> 0`.
 4. Preserve archive generation nine, render the exact final twenty-two-subject bank once, integrate current mains, and publish the finished pass exactly once.

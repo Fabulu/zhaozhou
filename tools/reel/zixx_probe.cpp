@@ -554,6 +554,43 @@ IntersectionPeak spring_self_intersections(const zc::CreatureType& type,
   return worst;
 }
 
+struct TerrainWindow {
+  int32_t worst_mm = INT32_MAX;
+  int worst_tick = -1;
+  int32_t shallowest_mm = INT32_MIN;
+  int shallowest_tick = -1;
+};
+
+// A terrain declaration owns an inclusive presentation-tick interval. `worst`
+// catches excess penetration; `shallowest` proves a supposedly grounded phase
+// never loses all surface contact. Both are actual posed LOD0 vertices.
+TerrainWindow terrain_window(const ClipScan& scan, int begin_tick, int end_tick) {
+  TerrainWindow out;
+  begin_tick = std::max(begin_tick, 0);
+  end_tick = std::min(end_tick, static_cast<int>(scan.samples.size()) - 1);
+  for (int tick = begin_tick; tick <= end_tick; ++tick) {
+    const int32_t y = to_mm(scan.samples[tick].min_y_fx);
+    if (y < out.worst_mm) {
+      out.worst_mm = y;
+      out.worst_tick = tick;
+    }
+    if (y > out.shallowest_mm) {
+      out.shallowest_mm = y;
+      out.shallowest_tick = tick;
+    }
+  }
+  return out;
+}
+
+void print_terrain_window(const char* clip, const char* phase,
+                          const TerrainWindow& w) {
+  std::printf("CONTACT %s %s: deepest %d mm at %d%s; shallowest %d mm "
+              "at %d%s\n",
+              clip, phase, w.worst_mm, w.worst_tick / 2,
+              (w.worst_tick & 1) ? ".5" : "", w.shallowest_mm,
+              w.shallowest_tick / 2, (w.shallowest_tick & 1) ? ".5" : "");
+}
+
 }  // namespace
 
 int main() {
@@ -586,10 +623,10 @@ int main() {
     scans.push_back(scan_clip(type, clip, stations));
     const ClipScan& s = scans.back();
     std::printf("slot %2d: %3d keys / %3zu presentation samples; minY %4d mm "
-                "at %d%s; maxY %5d mm; saturation %llu\n",
+                "at %d%s (bones %d/%d); maxY %5d mm; saturation %llu\n",
                 clip.slot_id, clip.frame_count, s.samples.size(),
                 to_mm(s.worst_min_fx), s.worst_tick / 2,
-                (s.worst_tick & 1) ? ".5" : "",
+                (s.worst_tick & 1) ? ".5" : "", s.worst_b0, s.worst_b1,
                 to_mm(s.worst_max_fx),
                 static_cast<unsigned long long>(s.saturation));
   }
@@ -642,11 +679,17 @@ int main() {
     int32_t impact_worst = INT32_MAX;
     int impact_tick = -1;
     int impact_b0 = -1, impact_b1 = -1;
+    int32_t aftermath_worst = INT32_MAX;
+    int aftermath_tick = -1;
+    int aftermath_b0 = -1, aftermath_b1 = -1;
     for (const PosedSample& s : balance->samples) {
       const bool impact =
           s.tick >= 2 * zixx::kBalImpactBeginKey -
                         zixx::kBalImpactLeadPresentationTicks &&
           s.tick <= 2 * zixx::kBalImpactEndKey;
+      const bool aftermath =
+          s.tick >= 2 * zixx::kBalAftermathBeginKey &&
+          s.tick <= 2 * zixx::kBalAftermathEndKey;
       const int32_t y = to_mm(s.min_y_fx);
       if (impact) {
         if (y < impact_worst) {
@@ -654,6 +697,13 @@ int main() {
           impact_tick = s.tick;
           impact_b0 = s.min_b0;
           impact_b1 = s.min_b1;
+        }
+      } else if (aftermath) {
+        if (y < aftermath_worst) {
+          aftermath_worst = y;
+          aftermath_tick = s.tick;
+          aftermath_b0 = s.min_b0;
+          aftermath_b1 = s.min_b1;
         }
       } else if (y < outside_worst) {
         outside_worst = y;
@@ -698,12 +748,15 @@ int main() {
                 least_near, least_tick / 2,
                 (least_tick & 1) ? ".5" : "", plateau_worst,
                 plateau_blade_worst);
-    std::printf("BALANCE terrain: outside impact %d mm at %d%s (bones %d/%d); "
-                "declared impact %d mm at %d%s (bones %d/%d)\n",
-                outside_worst, outside_tick / 2,
-                (outside_tick & 1) ? ".5" : "", outside_b0, outside_b1,
-                impact_worst, impact_tick / 2,
-                (impact_tick & 1) ? ".5" : "", impact_b0, impact_b1);
+    std::printf(
+        "BALANCE terrain: outside declared contact %d mm at %d%s "
+        "(bones %d/%d); impact %d mm at %d%s (bones %d/%d); "
+        "aftermath %d mm at %d%s (bones %d/%d)\n",
+        outside_worst, outside_tick / 2, (outside_tick & 1) ? ".5" : "",
+        outside_b0, outside_b1, impact_worst, impact_tick / 2,
+        (impact_tick & 1) ? ".5" : "", impact_b0, impact_b1,
+        aftermath_worst, aftermath_tick / 2,
+        (aftermath_tick & 1) ? ".5" : "", aftermath_b0, aftermath_b1);
 
     std::printf("BALANCE shape-travel chord ranges:");
     for (size_t i = 0; i < kShapeSpans.size(); ++i)
@@ -731,9 +784,163 @@ int main() {
     require(impact_worst >= -zixx::kBalImpactBiteMm &&
                 impact_worst <= -zixx::kBalImpactContactMinMm,
             "balance flop left its declared impact-contact band");
+    require(aftermath_worst >= -zixx::kBalAftermathBiteMm &&
+                aftermath_worst <= -zixx::kBalAftermathContactMinMm,
+            "balance grounded aftermath left its authored contact band");
     require(key_pose_equal(*balance->clip, 0, zixx::kBalKeys - 1,
                            type.bank.bone_count, true),
             "balance does not recover bit-exactly to authored rest");
+  }
+
+  // KO, landing, recovery, and all three death approaches now have complete,
+  // non-overlapping 3D terrain declarations. Values were named in the authored
+  // clips after every-frame visual acceptance; this probe only compares the real
+  // posed surface against them.
+  if (const ClipScan* knock = find_scan(scans, zixx::kSlotKnock)) {
+    const TerrainWindow before = terrain_window(
+        *knock, 0, zixx::kKnockImpactContactBeginPresentationTick - 1);
+    const TerrainWindow impact = terrain_window(
+        *knock, zixx::kKnockImpactContactBeginPresentationTick,
+        zixx::kKnockImpactContactEndPresentationTick);
+    const TerrainWindow held = terrain_window(
+        *knock, zixx::kKnockImpactContactEndPresentationTick + 1,
+        static_cast<int>(knock->samples.size()) - 1);
+    print_terrain_window("knock", "head-led throw", before);
+    print_terrain_window("knock", "flank impact", impact);
+    print_terrain_window("knock", "stunned hold", held);
+    require(before.worst_mm >= -zixx::kKnockLeadTerrainBiteMm &&
+                before.shallowest_mm <= zixx::kKnockGroundHoverMm,
+            "knock pre-impact support left its terrain declaration");
+    require(impact.worst_mm >= -zixx::kKnockImpactTerrainBiteMm &&
+                impact.worst_mm <= -zixx::kKnockImpactContactMinMm &&
+                impact.shallowest_mm <= zixx::kKnockGroundHoverMm,
+            "knock flank impact left its authored contact band");
+    require(held.worst_mm >= -zixx::kKnockHeldTerrainBiteMm &&
+                held.worst_mm <= -zixx::kKnockHeldContactMinMm,
+            "knock stunned hold left its authored flank contact");
+  } else {
+    require(false, "missing knock clip contact declaration");
+  }
+
+  if (const ClipScan* getup = find_scan(scans, zixx::kSlotGetUp)) {
+    const TerrainWindow contact =
+        terrain_window(*getup, 0, static_cast<int>(getup->samples.size()) - 1);
+    print_terrain_window("get-up", "complete recovery", contact);
+    require(contact.worst_mm >= -zixx::kGetUpTerrainBiteMm &&
+                contact.worst_mm <= -zixx::kGetUpContactMinMm &&
+                contact.shallowest_mm <= zixx::kGetUpGroundHoverMm,
+            "get-up left its complete grounded recovery declaration");
+  } else {
+    require(false, "missing get-up clip contact declaration");
+  }
+
+  if (const ClipScan* landing = find_scan(scans, zixx::kSlotHitFloor)) {
+    const TerrainWindow approach = terrain_window(
+        *landing, 0, zixx::kHitFloorApproachEndPresentationTick);
+    const TerrainWindow impact = terrain_window(
+        *landing, zixx::kHitFloorImpactBeginPresentationTick,
+        zixx::kHitFloorImpactEndPresentationTick);
+    const TerrainWindow absorb = terrain_window(
+        *landing, zixx::kHitFloorImpactEndPresentationTick + 1,
+        zixx::kHitFloorAbsorbEndPresentationTick);
+    const TerrainWindow settle = terrain_window(
+        *landing, zixx::kHitFloorSettleBeginPresentationTick,
+        static_cast<int>(landing->samples.size()) - 1);
+    print_terrain_window("landing", "clear approach", approach);
+    print_terrain_window("landing", "impact bite", impact);
+    print_terrain_window("landing", "rebound absorption", absorb);
+    print_terrain_window("landing", "stunned settle", settle);
+    require(approach.worst_mm >= 0,
+            "landing touched terrain before its declared impact lead");
+    require(impact.worst_mm >= -zixx::kHitFloorImpactTerrainBiteMm &&
+                impact.worst_mm <= -zixx::kHitFloorImpactContactMinMm,
+            "landing impact left its authored deep contact band");
+    require(absorb.worst_mm >= -zixx::kHitFloorAbsorbTerrainBiteMm,
+            "landing rebound exceeded its authored absorption bite");
+    require(settle.worst_mm >= -zixx::kHitFloorSettleTerrainBiteMm &&
+                settle.worst_mm <= -zixx::kHitFloorSettleContactMinMm &&
+                settle.shallowest_mm <= zixx::kKnockGroundHoverMm,
+            "landing stunned settle left its authored shallow contact");
+  } else {
+    require(false, "missing hit-floor clip contact declaration");
+  }
+
+  if (const ClipScan* death = find_scan(scans, 6)) {
+    const TerrainWindow living = terrain_window(
+        *death, 0, 2 * zixx::kDeathCollapseContactBeginKey - 1);
+    const TerrainWindow collapse = terrain_window(
+        *death, 2 * zixx::kDeathCollapseContactBeginKey,
+        2 * zixx::kDeathCollapseContactEndKey);
+    const TerrainWindow corpse = terrain_window(
+        *death, 2 * zixx::kDeathCollapseContactEndKey + 1,
+        static_cast<int>(death->samples.size()) - 1);
+    print_terrain_window("death0", "shudder and give", living);
+    print_terrain_window("death0", "flank collapse", collapse);
+    print_terrain_window("death0", "corpse hold", corpse);
+    require(living.worst_mm >= -zixx::kDeathRestTerrainBiteMm &&
+                living.shallowest_mm <= zixx::kDeathGroundHoverMm,
+            "death0 living interval left its terrain declaration");
+    require(collapse.worst_mm >= -zixx::kDeathCollapseTerrainBiteMm &&
+                collapse.shallowest_mm <= zixx::kDeathGroundHoverMm,
+            "death0 collapse exceeded its declared flank contact");
+    require(corpse.worst_mm >= -zixx::kDeathCorpseTerrainBiteMm &&
+                corpse.shallowest_mm <= zixx::kDeathGroundHoverMm,
+            "death0 corpse interval left its shallow contact declaration");
+  } else {
+    require(false, "missing death0 contact declaration");
+  }
+
+  if (const ClipScan* death = find_scan(scans, zixx::kSlotDeath1)) {
+    const TerrainWindow fight = terrain_window(
+        *death, 0, 2 * zixx::kD1FightContactEndKey);
+    const TerrainWindow collapse = terrain_window(
+        *death, 2 * zixx::kD1FightContactEndKey + 1,
+        2 * zixx::kD1CollapseContactEndKey);
+    const TerrainWindow aftermath = terrain_window(
+        *death, 2 * zixx::kD1CollapseContactEndKey + 1,
+        static_cast<int>(death->samples.size()) - 1);
+    print_terrain_window("death1", "whole-body fight", fight);
+    print_terrain_window("death1", "delayed collapse", collapse);
+    print_terrain_window("death1", "tail slaps and hold", aftermath);
+    require(fight.worst_mm >= -zixx::kD1FightTerrainBiteMm &&
+                fight.shallowest_mm >=
+                    zixx::kD1FightTerrainClearanceMinMm &&
+                fight.shallowest_mm <= zixx::kD1FightTerrainClearanceMm,
+            "death1 fight left its authored contact/buck interval");
+    require(collapse.worst_mm >= -zixx::kD1CollapseTerrainBiteMm &&
+                collapse.shallowest_mm <= zixx::kD1GroundHoverMm,
+            "death1 delayed collapse exceeded its terrain declaration");
+    require(aftermath.worst_mm >= -zixx::kD1AftermathTerrainBiteMm &&
+                aftermath.shallowest_mm <= zixx::kD1GroundHoverMm,
+            "death1 aftermath left its tail-slap/corpse declaration");
+  } else {
+    require(false, "missing death1 contact declaration");
+  }
+
+  if (const ClipScan* death = find_scan(scans, zixx::kSlotDeath2)) {
+    const TerrainWindow complaint = terrain_window(
+        *death, 0, 2 * zixx::kD2ComplaintContactEndKey);
+    const TerrainWindow unwind = terrain_window(
+        *death, 2 * zixx::kD2ComplaintContactEndKey + 1,
+        2 * zixx::kD2UnwindContactEndKey);
+    const TerrainWindow held = terrain_window(
+        *death, 2 * zixx::kD2UnwindContactEndKey + 1,
+        static_cast<int>(death->samples.size()) - 1);
+    print_terrain_window("death2", "complaint phrases", complaint);
+    print_terrain_window("death2", "loss of S", unwind);
+    print_terrain_window("death2", "paid-out hold", held);
+    require(complaint.worst_mm >= -zixx::kD2ComplaintTerrainBiteMm &&
+                complaint.shallowest_mm <=
+                    zixx::kD2ComplaintTerrainClearanceMm,
+            "death2 complaint interval left its terrain/heave declaration");
+    require(unwind.worst_mm >= -zixx::kD2UnwindTerrainBiteMm &&
+                unwind.shallowest_mm <= zixx::kD2GroundHoverMm,
+            "death2 unwind left its terrain declaration");
+    require(held.worst_mm >= -zixx::kD2HeldTerrainBiteMm &&
+                held.shallowest_mm <= zixx::kD2GroundHoverMm,
+            "death2 paid-out hold left its shallow terrain declaration");
+  } else {
+    require(false, "missing death2 contact declaration");
   }
 
   // The historical quick taunt remains slot 30. Slot 44 is deliberately a
@@ -808,6 +1015,36 @@ int main() {
                 fall->samples.size() ==
                     static_cast<size_t>(2 * zixx::kFallKeys),
             "fall lost its authored 144-key / 288-sample loop cadence");
+
+    // Authored-art timing contract, added only after the shared-clock render
+    // was accepted by eye. Inspect the helper's UNWRAPPED output at the real
+    // 60 Hz cadence: every step must advance, endpoints must make one exact
+    // turn, and the one broad hesitation must remain near the inverted pose.
+    const int fall_phase_ticks = 2 * zixx::kFallKeys;
+    int32_t previous_phase = zixx::fall_tumble_phase(0, fall_phase_ticks);
+    int32_t min_phase_step = INT32_MAX;
+    int32_t max_phase_step = INT32_MIN;
+    int slowest_phase_tick = -1;
+    bool phase_monotonic = true;
+    for (int tick = 1; tick <= fall_phase_ticks; ++tick) {
+      const int32_t phase =
+          zixx::fall_tumble_phase(tick, fall_phase_ticks);
+      const int32_t step = phase - previous_phase;
+      if (step <= 0) phase_monotonic = false;
+      if (step < min_phase_step) {
+        min_phase_step = step;
+        slowest_phase_tick = tick;
+      }
+      max_phase_step = std::max(max_phase_step, step);
+      previous_phase = phase;
+    }
+    require(phase_monotonic &&
+                previous_phase == (1 << 16),
+            "fall tumble phase stopped, reversed or lost its exact turn");
+    require(slowest_phase_tick >= fall_phase_ticks / 2 - 12 &&
+                slowest_phase_tick <= fall_phase_ticks / 2 + 12 &&
+                min_phase_step * 4 < max_phase_step,
+            "fall tumble lost its accepted single broad hesitation");
     constexpr std::array<std::pair<int, int>, 4> kFallSpans = {
         std::pair<int, int>{0, 14}, {14, 28}, {28, 42}, {42, 56}};
     std::array<int32_t, kFallSpans.size()> chord_low{};
@@ -879,6 +1116,10 @@ int main() {
                 seam_first_half_step <= kAcceptedFallMaxStationStepMm &&
                 seam_second_half_step <= kAcceptedFallMaxStationStepMm,
             "fall regained a high-frequency step or looping-seam twitch");
+    std::printf("FALL tumble phase: exact unwrapped turn, step %d..%d angle16, "
+                "slowest at %d%s\n",
+                min_phase_step, max_phase_step, slowest_phase_tick / 2,
+                (slowest_phase_tick & 1) ? ".5" : "");
     std::printf("FALL shape-travel chord ranges:");
     for (size_t i = 0; i < kFallSpans.size(); ++i)
       std::printf(" %d-%d=%d (lo %d%s / hi %d%s)",
@@ -1442,17 +1683,25 @@ int main() {
     require(key_pose_equal(*hit->clip, 0, hit->clip->frame_count - 1,
                            type.bank.bone_count, true),
             "generic hit does not recover bit-exactly to rest");
+    const int contact =
+        zixx::hit_station_profile_index(zixx::HitStation::kFront);
+    const RelativePeak local = relative_peak_mm(*hit, contact, contact + 8, 0, 20);
     const RelativePeak front = relative_peak_mm(*hit, 0, 12, 0, 16);
     const RelativePeak tail = relative_peak_mm(
         *hit, zixx::kProfileStations - 1, 44, 0,
         static_cast<int>(hit->samples.size()) - 1);
     const StationStepMaximum step = station_step_max_mm(
         *hit, 1, static_cast<int>(hit->samples.size()) - 1);
-    std::printf("HIT generic: front relative peak %d mm at %d%s, tail "
-                "relative peak %d mm at %d%s, max 60 Hz step %d mm at %d%s\n",
-                front.mm, front.tick / 2, (front.tick & 1) ? ".5" : "",
-                tail.mm, tail.tick / 2, (tail.tick & 1) ? ".5" : "",
-                step.mm, step.tick / 2, (step.tick & 1) ? ".5" : "");
+    std::printf("HIT generic front station %d: local peak %d mm at %d%s; "
+                "head-span %d mm at %d%s; tail %d mm at %d%s; "
+                "max 60 Hz step %d mm at %d%s; terrain %d mm\n",
+                contact, local.mm, local.tick / 2,
+                (local.tick & 1) ? ".5" : "", front.mm, front.tick / 2,
+                (front.tick & 1) ? ".5" : "", tail.mm, tail.tick / 2,
+                (tail.tick & 1) ? ".5" : "", step.mm, step.tick / 2,
+                (step.tick & 1) ? ".5" : "", to_mm(hit->worst_min_fx));
+    require(local.mm >= 350 && local.mm <= 460,
+            "generic hit front-station fold left its accepted local band");
     require(front.mm >= 230,
             "generic hit lost its strong displaced struck length");
     require(tail.mm >= 60,
@@ -1461,12 +1710,20 @@ int main() {
             "generic hit tail no longer reacts after the struck section");
     require(step.mm <= 500,
             "generic hit regained a high-frequency station twitch");
+    const int32_t contact_y = to_mm(hit->worst_min_fx);
+    require(contact_y >= -zixx::kHitFrontBiteMm &&
+                contact_y <= -zixx::kHitFrontContactMinMm,
+            "generic front hit left its declared 3D contact band");
   }
 
   const ClipScan* right = find_scan(scans, 23);
   const ClipScan* back = find_scan(scans, 24);
   const ClipScan* left = find_scan(scans, 25);
   const ClipScan* top = find_scan(scans, 26);
+  const int middle_contact =
+      zixx::hit_station_profile_index(zixx::HitStation::kMiddle);
+  const int rear_contact =
+      zixx::hit_station_profile_index(zixx::HitStation::kRear);
   for (const ClipScan* directional : {right, back, left, top}) {
     require(directional != nullptr, "missing directional damage clip");
     if (directional)
@@ -1475,7 +1732,35 @@ int main() {
                              type.bank.bone_count, true),
               "directional hit does not recover bit-exactly to rest");
   }
+  if (right) {
+    const int32_t y = to_mm(right->worst_min_fx);
+    require(y >= -zixx::kDmgRightBiteMm &&
+                y <= -zixx::kDmgRightContactMinMm,
+            "right middle-station hit left its declared 3D contact band");
+  }
+  if (back) {
+    const int32_t y = to_mm(back->worst_min_fx);
+    require(y >= -zixx::kDmgBackBiteMm &&
+                y <= -zixx::kDmgBackContactMinMm,
+            "back rear-station hit left its declared 3D contact band");
+  }
+  if (left) {
+    const int32_t y = to_mm(left->worst_min_fx);
+    require(y >= -zixx::kDmgLeftBiteMm &&
+                y <= -zixx::kDmgLeftContactMinMm,
+            "left middle-station hit left its declared 3D contact band");
+  }
+  if (top) {
+    const int32_t y = to_mm(top->worst_min_fx);
+    require(y >= -zixx::kDmgTopBiteMm &&
+                y <= -zixx::kDmgTopContactMinMm,
+            "top middle-station hit left its declared 3D contact band");
+  }
   if (right && left) {
+    const RelativePeak right_local =
+        relative_peak_mm(*right, middle_contact, middle_contact + 8, 0, 20);
+    const RelativePeak left_local =
+        relative_peak_mm(*left, middle_contact, middle_contact + 8, 0, 20);
     int32_t mirror_error = 0;
     for (size_t t = 0; t < std::min(right->samples.size(), left->samples.size()); ++t) {
       for (int i = 0; i < zixx::kProfileStations; ++i) {
@@ -1497,10 +1782,19 @@ int main() {
       left_shove = std::max(left_shove,
                             std::abs(to_mm(left->clip->root[k * 3 + 2])));
     }
-    std::printf("HIT sides: root shove R/L %d/%d mm, mirrored station error "
-                "%d mm\n", right_shove, left_shove, mirror_error);
+    std::printf("HIT sides middle station %d: local peaks R/L %d/%d mm at "
+                "%d%s/%d%s; root shove %d/%d mm; mirrored station error "
+                "%d mm; terrain %d/%d mm\n",
+                middle_contact, right_local.mm, left_local.mm,
+                right_local.tick / 2, (right_local.tick & 1) ? ".5" : "",
+                left_local.tick / 2, (left_local.tick & 1) ? ".5" : "",
+                right_shove, left_shove, mirror_error,
+                to_mm(right->worst_min_fx), to_mm(left->worst_min_fx));
     require(right_shove >= 180 && left_shove >= 180,
             "side hit lost its unmistakable whole-body displacement");
+    require(right_local.mm >= 110 && right_local.mm <= 150 &&
+                left_local.mm >= 110 && left_local.mm <= 150,
+            "side hit middle-station folds left their accepted local band");
     require(mirror_error <= 90,
             "right/left directional hits stopped being spatial mirrors");
   }
@@ -1509,14 +1803,25 @@ int main() {
     for (int k = 0; k < back->clip->frame_count; ++k)
       back_surge = std::max(back_surge,
                             std::abs(to_mm(back->clip->root[k * 3 + 0])));
-    const RelativePeak back_front = relative_peak_mm(*back, 0, 12, 0, 16);
-    const RelativePeak top_front = relative_peak_mm(*top, 0, 12, 0, 16);
-    std::printf("HIT back/top: back root surge %d mm; struck-length peaks "
-                "%d/%d mm\n", back_surge, back_front.mm, top_front.mm);
+    const RelativePeak back_local =
+        relative_peak_mm(*back, rear_contact, rear_contact - 8, 0, 20);
+    const RelativePeak top_local =
+        relative_peak_mm(*top, middle_contact, middle_contact + 8, 0, 20);
+    const RelativePeak back_front = relative_peak_mm(*back, 0, 12, 0, 30);
+    const RelativePeak top_front = relative_peak_mm(*top, 0, 12, 0, 30);
+    std::printf("HIT back rear station %d / top middle station %d: local "
+                "peaks %d/%d mm at %d%s/%d%s; delayed head spans %d/%d "
+                "mm; back surge %d mm; terrain %d/%d mm\n",
+                rear_contact, middle_contact, back_local.mm, top_local.mm,
+                back_local.tick / 2, (back_local.tick & 1) ? ".5" : "",
+                top_local.tick / 2, (top_local.tick & 1) ? ".5" : "",
+                back_front.mm, top_front.mm, back_surge,
+                to_mm(back->worst_min_fx), to_mm(top->worst_min_fx));
     require(back_surge >= 210,
             "back hit lost its forward whole-body surge");
-    require(back_front.mm >= 180 && top_front.mm >= 180,
-            "back/top hit lost its large local struck-section deformation");
+    require(back_local.mm >= 65 && back_local.mm <= 95 &&
+                top_local.mm >= 165 && top_local.mm <= 215,
+            "back/top named contact stations left their accepted local bands");
     require(std::memcmp(back->clip->quats.data(), top->clip->quats.data(),
                         back->clip->quats.size() * sizeof(back->clip->quats[0])) != 0,
             "back and top hit silhouettes collapsed into one reaction");
