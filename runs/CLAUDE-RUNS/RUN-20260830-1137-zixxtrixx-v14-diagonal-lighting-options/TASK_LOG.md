@@ -1,7 +1,7 @@
 # Task Log: RUN-20260830-1137 - Zixxtrixx v14 top-diagonal lighting modes
 
 **Created:** 2026-08-30 11:37 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260830-1137-zixxtrixx-v14-diagonal-lighting-options/
 
 ---
@@ -92,6 +92,27 @@ work.
   wide; v10 is initially selected; exact noindex is present; no request/page error
   or horizontal overflow occurred. The lane-local server and Edge were stopped.
 
+### 2026-08-30 14:10 UTC+02:00 - Integrated, deployed once and stopped
+
+- Fetched both origins immediately before integration. `origin/main` remained the
+  v13 bases (`c954ad63` Zhaozhou, `f8e639c5` Upheaval), so both mains were
+  fast-forwarded from the v14 feature branches and pushed without force.
+- Invoked `website/deploy.ps1 -Project upheaval -Branch main` exactly once.
+  Wrangler published review deployment `https://be43d20c.upheaval.pages.dev` and
+  production `https://upheaval.pages.dev`.
+- Review and production both serve exact noindex, initial v10, the v14 ten-mode
+  collection and retained v13/v12/v11/archive history. All twenty new WebM/poster
+  assets return HTTP 200 and match local bytes exactly; details are recorded in
+  `remote-verify.txt`.
+- Production Edge passed again at exact 1280x900 and 390x844 with ten controlled
+  videos, native dimensions/duration, 324 px narrow width and no overflow/errors.
+- Restored the deploy-time timestamp-only generated index change and removed raw,
+  preview and temporary CRC media after verified encoding.
+- Verified no lane renderer, ffmpeg, compiler, Edge, local server, Wrangler, Node,
+  deployment or build child remains; validation port 63574 is closed. Stopped-job
+  proof is recorded in `cleanup-proof.txt`.
+- No spring code, animation, probe, render or catalogue work was begun.
+
 ---
 
 ## Validation Ledger — `V14-DIAGONAL-MODES-1`
@@ -101,7 +122,7 @@ work.
 | V14-SOURCE | Exactly ten named top-diagonal fixed-world rigs? | Pass — ten named tables/selectors; existing subject reused |
 | V14-VISUAL | Most body/sides readable with directional shape in all ten? | Pass — final quarter-turn and every-frame sheets reviewed by eye |
 | V14-MEDIA | Ten exact 600-frame/60 Hz/384x240/10 s final assets? | Pass — ffprobe plus complete decode of all ten |
-| V14-WEB | Usable comparison, retained history/initial v10, exact noindex? | Pass locally — desktop and exact 390px Edge checks |
+| V14-WEB | Usable comparison, retained history/initial v10, exact noindex? | Pass — local plus review/production desktop and 390px checks |
 
 ---
 
@@ -131,7 +152,5 @@ None. This is the sole implementation/art lane.
 
 ## Next Steps
 
-1. Commit and push the frozen ten-table source/render evidence milestone.
-2. Encode and probe exactly ten WebMs and posters through the existing path.
-3. Add one current experimental collection through existing comparison data.
-4. Integrate both mains, deploy once, verify, clean all temporary jobs/data and stop.
+None in this run. Await owner feedback on the ten published diagonal modes; the
+recorded spring direction remains queued and untouched.

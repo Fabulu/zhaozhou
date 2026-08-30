@@ -1,0 +1,70 @@
+[
+  {
+    "name": "desktop",
+    "viewport": [
+      1280,
+      900
+    ],
+    "initial": "zixxtrixx-0",
+    "count": 10,
+    "first": {
+      "width": 384,
+      "height": 240,
+      "duration": 10,
+      "clientWidth": 384,
+      "controls": true,
+      "autoplay": false
+    },
+    "last": {
+      "width": 384,
+      "height": 240,
+      "duration": 10,
+      "clientWidth": 384,
+      "controls": true,
+      "autoplay": false
+    },
+    "geometry": {
+      "innerWidth": 1280,
+      "scrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "checked": "zixxtrixx-21",
+      "noindex": 1
+    },
+    "errors": [],
+    "pass": true
+  },
+  {
+    "name": "narrow",
+    "viewport": [
+      390,
+      844
+    ],
+    "initial": "zixxtrixx-0",
+    "count": 10,
+    "first": {
+      "width": 384,
+      "height": 240,
+      "duration": 10,
+      "clientWidth": 324,
+      "controls": true,
+      "autoplay": false
+    },
+    "last": {
+      "width": 384,
+      "height": 240,
+      "duration": 10,
+      "clientWidth": 324,
+      "controls": true,
+      "autoplay": false
+    },
+    "geometry": {
+      "innerWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "checked": "zixxtrixx-21",
+      "noindex": 1
+    },
+    "errors": [],
+    "pass": true
+  }
+]
