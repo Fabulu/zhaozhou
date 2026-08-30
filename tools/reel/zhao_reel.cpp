@@ -1045,6 +1045,10 @@ struct SceneSubject {
   // creature subjects (creature_rules.md lane): 1 = wave-walk (the identity
   // shot: walk + wave tilt + LOD pull-back), 2 = bulk-pop (inflate -> gibs)
   int creature = 0;
+  // V12 inspection-only camera orbit: hold the selected creature key and bulk
+  // exactly while the view turns around it. This is reel presentation state,
+  // never an animation/asset change.
+  bool creature_hold = false;
   // FULL-COLOUR LANE (MODELINGGUIDE section 5). The 256-colour rule is a
   // GIF-EXPORT constraint, and it was allowed to redesign a creature: it
   // deleted an eye colour, a mouth and a throat transition, and it forced a
@@ -2524,6 +2528,7 @@ int render_scene(const SceneSubject& sub) {
     // 6 = falling flail. The watchdog keeps its own two.
     dog_inst.anim.cut(zixx_subject ? static_cast<uint16_t>(sub.creature - 2)
                                    : (sub.creature == 1 ? 2 : 1));
+    dog_inst.anim.frozen = sub.creature_hold;
     // Stand the animal on its OWN centre, not its root bone, or the orbit
     // swings its body out of frame. The walk starts half its travel back
     // from there so it crosses through the middle of the shot.
@@ -2731,7 +2736,7 @@ int render_scene(const SceneSubject& sub) {
         // THE IDLE BREATHES IN GIRTH. A clip carries rotations and a root
         // offset, not scale, so the swell rides the instance bulk, which
         // multiplies the decoded pose and is exactly the right lever.
-        if (sub.creature == 3) {
+        if (sub.creature == 3 && !sub.creature_hold) {
           const uint16_t gph = static_cast<uint16_t>(
               (static_cast<uint32_t>(f) * 65536u) / (sub.frames ? sub.frames : 1));
           const int32_t gsn = zref::fx_sin(zref::angle16{gph}).raw;
@@ -4170,6 +4175,23 @@ SceneSubject subject_zixx_light_choice() {
   return s;
 }
 
+// V12 overhead-lighting inspection: the same authored idle key is held exactly
+// while the camera makes one continuous world-yaw turn. Ten seconds at 60 Hz
+// felt slow enough to read each side and the dorsal bands without becoming a
+// static turntable. The light rig remains fixed in compose_creatures world
+// space; only the view matrix changes, explicitly exposing any accidental
+// camera-relative-light defect.
+SceneSubject subject_zixx_overhead_orbit() {
+  SceneSubject s = subject_zixx_still();
+  s.name = "zixxtrixx-overhead-orbit";
+  s.frames = 600;
+  s.orbit = true;
+  s.creature_hold = true;
+  s.note = "EXPERIMENTAL: v12 overhead-lighting choice, held signature-S pose, "
+           "one slow continuous 10-second world-space inspection orbit";
+  return s;
+}
+
 // Same pose, light and true-side camera as zixxtrixx-still, pulled back to a
 // real gameplay-scale read. Kept as a committed counterpart so smooth toon
 // topology comparisons cannot substitute an enlarged close crop for distance.
@@ -5376,9 +5398,10 @@ int main(int argc, char** argv) {
     if (!e.empty())
       std::fprintf(stderr, "ZIXX_EXP=%s (experimental lane)\n", e.c_str());
   }
-  // V11 bounded owner-choice lane. The selector changes only the generic
+  // V11/V12 bounded owner-choice lane. The selector changes only the generic
   // creature preview rig; baseline is still the default when the variable is
-  // absent. Named alternatives share identical art, toon ramp and cameras.
+  // absent. All alternatives share identical art and toon ramps. V12's ten
+  // overhead options also share one held-pose world-space inspection orbit.
   if (const char* light = std::getenv("ZIXX_LIGHT")) {
     const std::string name = light;
     if (name == "baseline")
@@ -5389,9 +5412,31 @@ int main(int argc, char** argv) {
       zc::g_creature_light_rig = &zc::kCreatureLightHighOpen;
     else if (name == "crossfill")
       zc::g_creature_light_rig = &zc::kCreatureLightCrossfill;
+    else if (name == "zenith-sun")
+      zc::g_creature_light_rig = &zc::kCreatureLightZenithSun;
+    else if (name == "morning-crown")
+      zc::g_creature_light_rig = &zc::kCreatureLightMorningCrown;
+    else if (name == "evening-crown")
+      zc::g_creature_light_rig = &zc::kCreatureLightEveningCrown;
+    else if (name == "north-skylight")
+      zc::g_creature_light_rig = &zc::kCreatureLightNorthSkylight;
+    else if (name == "south-skylight")
+      zc::g_creature_light_rig = &zc::kCreatureLightSouthSkylight;
+    else if (name == "open-overcast")
+      zc::g_creature_light_rig = &zc::kCreatureLightOpenOvercast;
+    else if (name == "hard-noon")
+      zc::g_creature_light_rig = &zc::kCreatureLightHardNoon;
+    else if (name == "veiled-sun")
+      zc::g_creature_light_rig = &zc::kCreatureLightVeiledSun;
+    else if (name == "silver-moon")
+      zc::g_creature_light_rig = &zc::kCreatureLightSilverMoon;
+    else if (name == "cloudbreak")
+      zc::g_creature_light_rig = &zc::kCreatureLightCloudbreak;
     else {
       std::fprintf(stderr,
-                   "unknown ZIXX_LIGHT=%s (expected baseline, front-soft, high-open, crossfill)\n",
+                   "unknown ZIXX_LIGHT=%s (expected baseline, front-soft, high-open, crossfill, "
+                   "zenith-sun, morning-crown, evening-crown, north-skylight, south-skylight, "
+                   "open-overcast, hard-noon, veiled-sun, silver-moon, cloudbreak)\n",
                    light);
       return 2;
     }
@@ -5453,6 +5498,7 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-frontfix-game")) rc |= render_scene(subject_zixx_frontfix_game());
   if (wanted("zixxtrixx-still")) rc |= render_scene(subject_zixx_still());
   if (wanted("zixxtrixx-light-choice")) rc |= render_scene(subject_zixx_light_choice());
+  if (wanted("zixxtrixx-overhead-orbit")) rc |= render_scene(subject_zixx_overhead_orbit());
   if (wanted("zixxtrixx-still-game")) rc |= render_scene(subject_zixx_still_game());
   if (wanted("zixxtrixx-still-front")) rc |= render_scene(subject_zixx_still_front());
   if (wanted("zixxtrixx-fall-side")) rc |= render_scene(subject_zixx_fall_side());

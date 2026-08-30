@@ -1,0 +1,10 @@
+V12 OVERHEAD ORBIT VERDICT
+
+PASS: exactly ten new named rigs. High Open and Crossfill remain unchanged references and are not counted.
+PASS: every new key has positive world +Y authority from 0.63971 through 0.99014; every fill direction also lies in the upper hemisphere. No underside key or camera-following fill exists.
+PASS: source flow fixes g_creature_light_rig before rendering and changes only view_projection by rot_world_yaw for the orbit. compose_creatures evaluates the unchanged rig against world-space posed normals. The light cannot follow the camera.
+PASS by eye at native 384x240: the dorsal/top colour bands remain illuminated around the shared held-pose orbit. Directional options visibly move the lit world side through the view; zenith/overcast/noon options retain a crown-led read. None gets readability by making the underside brighter than the top.
+PASS: ten independently authored arrangements remain useful rather than a mechanical angle/gain sweep. Morning/Evening and North/South establish meaningful opposed azimuth choices; Zenith, Overcast, Noon, Veiled, Moon and Cloudbreak establish materially distinct authority, floor and colour characters.
+PASS: each orbit is 600 frames, 384x240, one deterministic continuous 10-second turn at 60 Hz with the exact same frozen idle key, target and framing.
+
+Review was deliberately bounded to the common orbit, ten quarter-turn native sheets and two comparison mosaics. No animation catalogue, spring work, broad regression or stale creature_core investigation was run.

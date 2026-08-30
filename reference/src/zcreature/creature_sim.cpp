@@ -350,6 +350,81 @@ const CreatureLightRig kCreatureLightCrossfill{
     38011,                    // white key: .58
     22938, 19005, 14418};     // warm fill: .35, .29, .22
 
+// V12 overhead owner-choice rigs. These are ten authored alternatives, not a
+// parameter sweep: every key and fill direction is an independently chosen
+// unit world-space vector, every key has strong +Y (above) authority, and every
+// directional fill also arrives from the upper hemisphere. Camera motion never
+// touches these values. Baseline and all v11 rigs above remain unchanged.
+const CreatureLightRig kCreatureLightZenithSun{
+    7850, 63453, -14391,      // near-zenith neutral sun
+    -18371, 60363, 17715,     // soft cool sky from above/opposite
+    24904, 26214, 28180,      // ambient: .38, .40, .43
+    40632,                    // white key: .62
+    5243, 6554, 9175};        // cool fill: .08, .10, .14
+
+const CreatureLightRig kCreatureLightMorningCrown{
+    44616, 44616, -17715,     // high +X morning-side sun
+    -19699, 59098, 20356,     // opposing open sky, still from above
+    22282, 23593, 25559,      // ambient: .34, .36, .39
+    41943,                    // white key: .64
+    4588, 6554, 9830};        // cool fill: .07, .10, .15
+
+const CreatureLightRig kCreatureLightEveningCrown{
+    -47165, 41924, -17687,    // high -X late-sun crown
+    19672, 60326, 16393,      // broad upper-sky counterlight
+    20972, 22282, 23593,      // ambient: .32, .34, .36
+    39322,                    // white key: .60
+    10486, 7209, 4588};       // warm fill: .16, .11, .07
+
+const CreatureLightRig kCreatureLightNorthSkylight{
+    7883, 44672, 47300,       // high +Z clear-sky key
+    -29565, 56502, -15111,    // upper opposite blue fill
+    25559, 27525, 30802,      // ambient: .39, .42, .47
+    36700,                    // white key: .56
+    3932, 6554, 11796};       // clear blue fill: .06, .10, .18
+
+const CreatureLightRig kCreatureLightSouthSkylight{
+    -11805, 45910, -45254,    // high -Z open-sky key
+    30787, 55678, 15721,      // soft upper counterfill
+    23593, 25559, 28180,      // ambient: .36, .39, .43
+    39322,                    // white key: .60
+    6554, 7209, 7864};        // near-neutral fill: .10, .11, .12
+
+const CreatureLightRig kCreatureLightOpenOvercast{
+    0, 64890, -9176,          // almost vertical soft daylight
+    -24974, 59148, 13144,     // broad upper sky from one side
+    34079, 36045, 38666,      // ambient: .52, .55, .59
+    26214,                    // white key: .40
+    5243, 6554, 9830};        // cool soft fill: .08, .10, .15
+
+const CreatureLightRig kCreatureLightHardNoon{
+    18332, 61542, -13094,     // hard near-overhead sun, slight +X
+    -38055, 51177, 15091,     // restrained high opposing sky
+    15729, 17039, 19005,      // ambient: .24, .26, .29
+    53740,                    // white key: .82
+    3277, 3932, 5243};        // faint cool fill: .05, .06, .08
+
+const CreatureLightRig kCreatureLightVeiledSun{
+    -22299, 59027, -17708,    // high sun behind thin cloud
+    26255, 57761, 16409,      // soft upper counterfill
+    30147, 32113, 34079,      // ambient: .46, .49, .52
+    31457,                    // white key: .48
+    6554, 7209, 8520};        // near-neutral fill: .10, .11, .13
+
+const CreatureLightRig kCreatureLightSilverMoon{
+    30039, 54853, 19590,      // high +X/+Z moon
+    -16382, 60939, -17692,    // very high cool sky fill
+    19661, 22282, 28180,      // ambient: .30, .34, .43
+    34079,                    // white key: .52
+    3932, 6554, 13107};       // silver-blue fill: .06, .10, .20
+
+const CreatureLightRig kCreatureLightCloudbreak{
+    -31475, 56392, 11147,     // high -X break in the cloud deck
+    29522, 55764, -17713,     // broad warm upper counterlight
+    21627, 22938, 25559,      // ambient: .33, .35, .39
+    45875,                    // white key: .70
+    11796, 9175, 6554};       // warm fill: .18, .14, .10
+
 const CreatureLightRig* g_creature_light_rig = &kCreatureLightBaseline;
 
 namespace {

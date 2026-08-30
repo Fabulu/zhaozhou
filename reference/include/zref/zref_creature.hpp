@@ -927,6 +927,19 @@ extern const CreatureLightRig kCreatureLightBaseline;
 extern const CreatureLightRig kCreatureLightFrontSoft;
 extern const CreatureLightRig kCreatureLightHighOpen;
 extern const CreatureLightRig kCreatureLightCrossfill;
+// V12 experimental owner-choice rigs. Exactly ten new options, each with a
+// dominant world-space key from above; the v11 declarations above remain
+// byte-identical references and are not counted among these ten.
+extern const CreatureLightRig kCreatureLightZenithSun;
+extern const CreatureLightRig kCreatureLightMorningCrown;
+extern const CreatureLightRig kCreatureLightEveningCrown;
+extern const CreatureLightRig kCreatureLightNorthSkylight;
+extern const CreatureLightRig kCreatureLightSouthSkylight;
+extern const CreatureLightRig kCreatureLightOpenOvercast;
+extern const CreatureLightRig kCreatureLightHardNoon;
+extern const CreatureLightRig kCreatureLightVeiledSun;
+extern const CreatureLightRig kCreatureLightSilverMoon;
+extern const CreatureLightRig kCreatureLightCloudbreak;
 extern const CreatureLightRig* g_creature_light_rig;
 
 // RUN 1939/2234 texture-experiment lane. 0 = off (the shipping path,
