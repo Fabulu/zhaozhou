@@ -515,7 +515,19 @@ const CreatureLightRig kCreatureLightDiagonalRoseDusk{
     40632,                    // white key: .62
     30147, 22282, 27525};     // rose fill: .46, .34, .42
 
+// Dim neutral-cool daylight for the moving-source inspection clip. The local
+// source is the subject, so this rig preserves form and pigment without
+// competing with it. Like every alternative rig, it is selected only by reel
+// tooling and never becomes the process default.
+const CreatureLightRig kCreatureLightMovingInspection{
+    43000, 36000, 35000,      // same honest top diagonal as Cool Cross
+    -45000, 35000, -32000,    // restrained opposing sky direction
+    12452, 14418, 18350,      // dim cool ambient: .19, .22, .28
+    15729,                    // dim white sunlight: .24
+    4588, 6554, 9830};        // faint blue fill: .07, .10, .15
+
 const CreatureLightRig* g_creature_light_rig = &kCreatureLightBaseline;
+const CreaturePointLight* g_creature_point_light = nullptr;
 
 namespace {
 
@@ -597,6 +609,89 @@ inline Shade3 creature_light(const CreatureLightRig& rig, int32_t lam_key, int32
       mix(rig.ambient_b, rig.key_gain, rig.fill_b, lam_key, lam_fill)};
 }
 
+struct PointDirection {
+  int32_t x = 0, y = 0, z = 0;  // unit surface-to-source direction, Q16.16
+  int32_t attenuation = 0;      // named linear falloff, Q16.16
+};
+
+// Deterministic world-space source sample. Distance is computed in the same raw
+// Q16.16 world coordinates as posed vertices; one integer square root serves
+// both direction and falloff, so there is no camera input and no floating point.
+inline PointDirection point_direction(const CreaturePointLight& p,
+                                      int32_t wx, int32_t wy, int32_t wz) {
+  const int64_t dx = static_cast<int64_t>(p.world_x) - wx;
+  const int64_t dy = static_cast<int64_t>(p.world_y) - wy;
+  const int64_t dz = static_cast<int64_t>(p.world_z) - wz;
+  const uint64_t mag2 = static_cast<uint64_t>(dx * dx) +
+                        static_cast<uint64_t>(dy * dy) +
+                        static_cast<uint64_t>(dz * dz);
+  if (mag2 == 0) return PointDirection{0, 1 << 16, 0, 1 << 16};
+  const int64_t dist = static_cast<int64_t>(isqrt_u64(mag2));
+  if (dist >= p.outer_radius || p.outer_radius <= p.inner_radius)
+    return PointDirection{};
+
+  const auto unit = [dist](int64_t d) {
+    const int64_t bias = d >= 0 ? dist / 2 : -dist / 2;
+    const int64_t q = (d * 65536 + bias) / dist;
+    return static_cast<int32_t>(std::max<int64_t>(-65536, std::min<int64_t>(65536, q)));
+  };
+  const int32_t attenuation =
+      dist <= p.inner_radius
+          ? (1 << 16)
+          : static_cast<int32_t>(
+                ((static_cast<int64_t>(p.outer_radius) - dist) * 65536 +
+                 (p.outer_radius - p.inner_radius) / 2) /
+                (p.outer_radius - p.inner_radius));
+  return PointDirection{unit(dx), unit(dy), unit(dz), attenuation};
+}
+
+inline int32_t point_vertex_response(const CreaturePointLight& p,
+                                     const mat3x4fx* palette, const SkinVertex& v,
+                                     int32_t wx, int32_t wy, int32_t wz) {
+  const PointDirection d = point_direction(p, wx, wy, wz);
+  if (d.attenuation == 0) return 0;
+  const int32_t lam = skin_normal_lambert(palette, v, d.x, d.y, d.z);
+  return static_cast<int32_t>(
+      (static_cast<int64_t>(lam) * d.attenuation + 32768) >> 16);
+}
+
+inline int32_t point_face_response(const CreaturePointLight& p,
+                                   int32_t ax, int32_t ay, int32_t az,
+                                   int32_t bx, int32_t by, int32_t bz,
+                                   int32_t cx, int32_t cy, int32_t cz,
+                                   SatLedger* L) {
+  const int32_t mx = static_cast<int32_t>(
+      (static_cast<int64_t>(ax) + bx + cx) / 3);
+  const int32_t my = static_cast<int32_t>(
+      (static_cast<int64_t>(ay) + by + cy) / 3);
+  const int32_t mz = static_cast<int32_t>(
+      (static_cast<int64_t>(az) + bz + cz) / 3);
+  const PointDirection d = point_direction(p, mx, my, mz);
+  if (d.attenuation == 0) return 0;
+  const int32_t lam = render::shade_flat_tri_dir(
+      ax, ay, az, bx, by, bz, cx, cy, cz, d.x, d.y, d.z, L);
+  return static_cast<int32_t>(
+      (static_cast<int64_t>(lam) * d.attenuation + 32768) >> 16);
+}
+
+inline Shade3 creature_light(const CreatureLightRig& rig, int32_t lam_key,
+                             int32_t lam_fill, int32_t lam_point,
+                             const CreaturePointLight* point) {
+  // The disabled default deliberately takes the old helper verbatim. This is
+  // the byte-identity boundary for every ordinary subject and oracle call.
+  if (point == nullptr) return creature_light(rig, lam_key, lam_fill);
+  const auto mix = [lam_key, lam_fill, lam_point](int32_t amb, int32_t key,
+                                                 int32_t fill, int32_t local) {
+    const int64_t k = (static_cast<int64_t>(key) * lam_key) >> 16;
+    const int64_t f = (static_cast<int64_t>(fill) * lam_fill) >> 16;
+    const int64_t p = (static_cast<int64_t>(local) * lam_point) >> 16;
+    return quant_shade(static_cast<int32_t>(amb + k + f + p));
+  };
+  return Shade3{mix(rig.ambient_r, rig.key_gain, rig.fill_r, point->gain_r),
+                mix(rig.ambient_g, rig.key_gain, rig.fill_g, point->gain_g),
+                mix(rig.ambient_b, rig.key_gain, rig.fill_b, point->gain_b)};
+}
+
 // the ambient floor of the dual-terrain walls (0.25 + 0.75*lambert) -- kept
 // because the gib/debris path still uses the single-scalar form
 // RUN 1939 cel experiment: the light gain quantised into 2 or 3 bands.
@@ -655,6 +750,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                        SatLedger* L) {
   if (count == 0) return;
   const CreatureLightRig& rig = *g_creature_light_rig;
+  const CreaturePointLight* const point = g_creature_point_light;
   // deterministic order: sort the pointers (the ABI order is caller truth;
   // the compositor must not depend on it)
   std::vector<CreatureInstance*> inst(instances, instances + count);
@@ -768,7 +864,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         render::ScreenV s;
         bool in;
         int32_t wx, wy, wz;
-        int32_t lam_k, lam_f;  // per-vertex clamped Lamberts (Q16.16)
+        int32_t lam_k, lam_f;  // directional clamped Lamberts (Q16.16)
+        int32_t lam_p;         // attenuated world-space point response (Q16.16)
         bool lit;              // vertex carries a compiled normal
         int8_t nx, ny, nz;     // the packed bind normal (diagnostic viz)
       };
@@ -795,8 +892,13 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                                               rig.key_y, rig.key_z);
           pvs[vi].lam_f = skin_normal_lambert(worldm.data(), sv, rig.fill_x,
                                               rig.fill_y, rig.fill_z);
+          pvs[vi].lam_p = point != nullptr
+                              ? point_vertex_response(*point, worldm.data(), sv,
+                                                      pvs[vi].wx, pvs[vi].wy,
+                                                      pvs[vi].wz)
+                              : 0;
         } else {
-          pvs[vi].lam_k = pvs[vi].lam_f = 0;
+          pvs[vi].lam_k = pvs[vi].lam_f = pvs[vi].lam_p = 0;
         }
       }
       for (size_t ti = 0; ti + 2 < m.idx.size(); ti += 3) {
@@ -815,6 +917,11 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         const int32_t lam_fill = render::shade_flat_tri_dir(
             a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz,
             rig.fill_x, rig.fill_y, rig.fill_z, L);
+        const int32_t lam_point =
+            point != nullptr
+                ? point_face_response(*point, a.wx, a.wy, a.wz, b.wx, b.wy,
+                                      b.wz, c.wx, c.wy, c.wz, L)
+                : 0;
         render::TriMode tm;  // opaque: depth test + write
         // GOURAUD (N3): when the compiled mesh carries normals, each corner
         // gets its own Lambert — kSmoothMixNum parts the per-vertex smooth
@@ -835,11 +942,16 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                 (static_cast<int64_t>(kSmoothMixNum) * corner[k]->lam_f +
                  static_cast<int64_t>(1024 - kSmoothMixNum) * lam_fill + 512) >>
                 10);
-            shc[k] = creature_light(rig, lk, lf);
+            const int32_t lp = static_cast<int32_t>(
+                (static_cast<int64_t>(kSmoothMixNum) * corner[k]->lam_p +
+                 static_cast<int64_t>(1024 - kSmoothMixNum) * lam_point + 512) >>
+                10);
+            shc[k] = creature_light(rig, lk, lf, lp, point);
           }
           tm.gouraud = true;
         } else {
-          shc[0] = shc[1] = shc[2] = creature_light(rig, lam_key, lam_fill);
+          shc[0] = shc[1] = shc[2] =
+              creature_light(rig, lam_key, lam_fill, lam_point, point);
         }
         // RUN 1939/2234 cel experiment (default 0: this branch never runs on
         // the shipping path and the normal render stays bit-identical). Cel
@@ -854,7 +966,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           // fragment in raster. This is deliberately separate from faceted cel.
           tm.toon = g_smooth_toon_bands <= 2 ? &kSmoothCel2Ramp : &kSmoothCel3Ramp;
         } else if (g_cel_bands != 0 && g_debug_shade == DebugShade::kOff) {
-          const Shade3 cel = cel_quantise(creature_light(rig, lam_key, lam_fill));
+          const Shade3 cel = cel_quantise(
+              creature_light(rig, lam_key, lam_fill, lam_point, point));
           shc[0] = shc[1] = shc[2] = cel;
           tm.gouraud = false;
         }

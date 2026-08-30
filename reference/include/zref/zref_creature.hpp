@@ -958,7 +958,24 @@ extern const CreatureLightRig kCreatureLightDiagonalCloudbreak;
 extern const CreatureLightRig kCreatureLightDiagonalSilverMoon;
 extern const CreatureLightRig kCreatureLightDiagonalBroadBounce;
 extern const CreatureLightRig kCreatureLightDiagonalRoseDusk;
+// Final Zixxtrixx inspection clip: deliberately dim directional daylight so a
+// small moving local source can be read without changing the creature material.
+extern const CreatureLightRig kCreatureLightMovingInspection;
 extern const CreatureLightRig* g_creature_light_rig;
+
+/**
+ * Optional reel-inspection point source. Position and falloff radii are raw
+ * Q16.16 world coordinates; RGB gains are Q16.16. A null global is the shipping
+ * default and leaves compose_creatures byte-identical. Reel tooling samples one
+ * world-space position per frame and points this global at that SAME descriptor
+ * while composing and drawing its visible marker.
+ */
+struct CreaturePointLight {
+  int32_t world_x, world_y, world_z;
+  int32_t inner_radius, outer_radius;
+  int32_t gain_r, gain_g, gain_b;
+};
+extern const CreaturePointLight* g_creature_point_light;
 
 // RUN 1939/2234 texture-experiment lane. 0 = off (the shipping path,
 // bit-identical). g_cel_bands 2/3 selects constant-per-triangle FACETED cel.

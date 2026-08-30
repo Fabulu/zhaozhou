@@ -65,6 +65,19 @@ Complete Task #28 from accepted V14 as a deliberately small head/neck/colour adj
 
 ---
 
+### 2026-08-30 - Deterministic moving-light inspection accepted
+
+- Extended the existing reference creature compositor with one optional point-source descriptor. Its null default takes the old directional-light helper verbatim; the enabled lane computes a posed per-vertex surface-to-source direction, deterministic distance attenuation and the existing 80/20 smooth/flat contribution before Gouraud interpolation and smooth-toon thresholding.
+- Added a named dim neutral-cool inspection sunlight rig. The ordinary Cool Cross selector remains untouched; only `zixxtrixx-moving-light` scopes the dim rig and point descriptor around `compose_creatures`, then restores both globals immediately.
+- Added one 600-frame held-signature-S fixed-three-quarter subject. One sampled descriptor in `CreatureReelCtx` carries the world position through four slow continuous paths: near-side longitudinal pass, high whole-body crossover, far-side return and a lower around-and-over crossover.
+- The descriptor is sampled exactly once per frame after terrain snap. Both the real point response and the small depth-tested warm marker read the exact same `world_x/world_y/world_z`; no view or screen coordinate participates in the light.
+- Rejected the first arch height because the source left the frame near its apex. Lowered only the two named arch heights; the accepted complete 600-frame sheet keeps the marker readable while showing coherent response travel from tail through belly, neck, head and back around.
+- Final sequence: 600 frames, 6222 colours, CRC32C `0xEE25C6BE`. Every frame and 18 enlarged phase samples were inspected under `build/moving-light-v2`; no marker jump, camera-relative drift, unrelated orb, mesh fault or lighting discontinuity was found.
+- Fresh direct clean all-target compile completed after the shared-header change. Disabled-path proof: ordinary Cool Cross `zixxtrixx-still` remained exactly `0x5681FDF9` before/after. State-restoration proof: `zixxtrixx-still-game` remained exactly `0xC20DDF66` both alone and immediately after the moving-light subject. Unresolved historical reel expectations were not edited.
+- `zixx-meshcheck` remains 1774 vertices, 1098 shared-position groups, zero disagreeing binds and zero seam splits across every clip.
+
+---
+
 ## Subagent Spawns
 
 No subagents. This run has one implementation/modelling agent.
@@ -90,7 +103,6 @@ No subagents. This run has one implementation/modelling agent.
 
 ## Next Steps
 
-1. Commit and push the accepted spring/probe milestone.
-2. Implement the optional disabled-by-default world-space local light and its deterministic inspection subject; render and inspect its complete clip.
-3. Reconcile the existing manifest/site inventory, then render and encode the single final Cool Cross media pass plus moving-light clip.
-4. Preserve archives/V14 history and exact noindex, assemble/check the site, merge and push both mains, publish once, close the run, clean both trees and verify every spawned child stopped.
+1. Commit and push the accepted moving-light compositor/subject milestone.
+2. Reconcile the existing manifest/site inventory, then render and encode the single final Cool Cross media pass plus moving-light clip.
+3. Preserve archives/V14 history and exact noindex, assemble/check the site, merge and push both mains, publish once, close the run, clean both trees and verify every spawned child stopped.
