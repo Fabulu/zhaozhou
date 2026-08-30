@@ -816,8 +816,8 @@ void test_compositor() {
   // the 64 px canvas. All entries exact fx16 integers.
   zref::mat4fx vp{{{fx16{8 << 16}, fx16{0}, fx16{0}, fx16{0}},
                    {fx16{0}, fx16{8 << 16}, fx16{0}, fx16{0}},
-                   {fx16{0}, fx16{0}, fx16{1 << 16}, fx16{4 << 16}},
-                   {fx16{0}, fx16{0}, fx16{0}, fx16{1 << 16}}}};
+                   {fx16{0}, fx16{0}, fx16{1 << 16}, fx16{0}},
+                   {fx16{0}, fx16{0}, fx16{1 << 16}, fx16{4 << 16}}}};
   const uint32_t W = 64, H = 64;
   std::vector<uint8_t> rgb(W * H * 3, 9);
   std::vector<int32_t> dep(W * H, 0);
