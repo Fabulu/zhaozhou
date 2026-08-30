@@ -217,7 +217,10 @@ module zhao_probe_v3_full #(
   assign dbg_long_ready_o = long_ready;
   assign dbg_long_ctx_o   = long_ctx;
   assign dbg_long_op_o    = long_op;
-  assign dbg_long_s0_o    = long_s0;
+  // Lane 0. This tap exists for a bench that reads one point at a time, and it
+  // is what found the preload defect; a four-lane version would say nothing the
+  // per-lane value checks do not already say.
+  assign dbg_long_s0_o    = long_s0[31:0];
 
   logic                    long_valid, long_ready;
   logic [$clog2(CTX)-1:0]  long_ctx;

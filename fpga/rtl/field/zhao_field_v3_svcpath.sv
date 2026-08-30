@@ -267,7 +267,7 @@ module zhao_field_v3_svcpath #(
   logic               drain_valid, drain_ready;
   logic [CTXW-1:0]    drain_ctx;
   logic [REGW-1:0]    drain_reg;
-  logic signed [31:0] drain_data;
+  logic signed [32*LANES-1:0] drain_data;
 
   zhao_field_v3_dispatch #(
       .CONTEXTS(CONTEXTS), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING),

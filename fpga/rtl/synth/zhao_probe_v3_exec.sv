@@ -910,16 +910,16 @@ module zhao_probe_v3_exec #(
       for (int i = 0; i < SKD; i++) begin
         sk_ctx_r[i]  <= '0;
         sk_reg_r[i]  <= '0;
-        sk_data_r[i] <= 32'sd0;
+        sk_data_r[i] <= '0;
       end
       opnd_held_r   <= 1'b0;
-      h_a0_r        <= 32'sd0;
-      h_a1_r        <= 32'sd0;
-      h_a2_r        <= 32'sd0;
-      h_b0_r        <= 32'sd0;
-      h_b1_r        <= 32'sd0;
-      h_b2_r        <= 32'sd0;
-      h_c_r         <= 32'sd0;
+      h_a0_r        <= '0;
+      h_a1_r        <= '0;
+      h_a2_r        <= '0;
+      h_b0_r        <= '0;
+      h_b1_r        <= '0;
+      h_b2_r        <= '0;
+      h_c_r         <= '0;
       rf_writes_o   <= 32'd0;
       unsupported_o <= 1'b0;
       desync_o      <= 1'b0;

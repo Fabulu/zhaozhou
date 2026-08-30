@@ -82,6 +82,33 @@ namespace {
 #define ZHAO_EARTH_CTX 8
 #endif
 constexpr int kCtx = ZHAO_EARTH_CTX;
+
+// POINTS PER CONTEXT. At 1 a context is one point and the machine is the
+// scalar executor this file was written against. At 4 a context IS a quad: one
+// instruction, four points, one register write carrying all four.
+#ifndef ZHAO_EARTH_LANES
+#define ZHAO_EARTH_LANES 1
+#endif
+constexpr int kLanes = ZHAO_EARTH_LANES;
+
+// Verilator hands a 32-bit port back as a scalar and a 128-bit one as an
+// indexable word array, so the two cannot share an accessor. Branching on the
+// width here keeps every call site below reading as if they could.
+inline void put_lane(Vzhao_probe_v3_full& t, const int32_t* v) {
+#if ZHAO_EARTH_LANES == 1
+  t.pre_data_i = (uint32_t)v[0];
+#else
+  for (int l = 0; l < kLanes; ++l) t.pre_data_i[l] = (uint32_t)v[l];
+#endif
+}
+inline int32_t get_wr_lane(const Vzhao_probe_v3_full& t, int lane) {
+#if ZHAO_EARTH_LANES == 1
+  (void)lane;
+  return (int32_t)t.wr_data_o;
+#else
+  return (int32_t)t.wr_data_o[lane];
+#endif
+}
 constexpr int kRegs = 32;
 constexpr int kPlan = 32;
 
@@ -234,7 +261,7 @@ struct Translator {
 
 struct Dut {
   Vzhao_probe_v3_full& t;
-  int32_t shadow[kCtx][kRegs] = {};
+  int32_t shadow[kCtx][kRegs][kLanes] = {};
   long clocks = 0;
   long preload_clocks = 0;
   int last_done = -1;
@@ -352,7 +379,13 @@ struct Dut {
     t.eval();
     const bool w = t.wr_en_o != 0;
     const int wc = (int)t.wr_ctx_o, wr = (int)t.wr_reg_o;
-    const int32_t wd = (int32_t)t.wr_data_o;
+    // EVERY LANE CAPTURED BEFORE THE TICK. Reading the port after the clock
+    // edge returns the NEXT clock's write, which is the same
+    // capture-before-you-advance discipline this file states for `done` and
+    // then quietly broke here when it grew lanes.
+    int32_t wdl[kLanes];
+    for (int l = 0; l < kLanes; ++l) wdl[l] = get_wr_lane(t, l);
+    const int32_t wd = wdl[0];
     const bool took_long = (t.dbg_long_valid_o != 0) && (t.dbg_long_ready_o != 0);
     const int lc = (int)t.dbg_long_ctx_o;
     const int lop = (int)t.dbg_long_op_o;
@@ -366,7 +399,7 @@ struct Dut {
     zhao::tick(t);
     ++clocks;
     if (w && wc < kCtx && wr < kRegs) {
-      shadow[wc][wr] = wd;
+      for (int l = 0; l < kLanes; ++l) shadow[wc][wr][l] = wdl[l];
       ++writes_since_start[wc];
       wtrace[wc].push_back(std::make_pair(wr, wd));
       wclk[wc].push_back(clocks);
@@ -386,7 +419,7 @@ struct Dut {
     }
   }
 
-  void preload(int ctx, int reg, int32_t v) {
+  void preload(int ctx, int reg, const int32_t* v) {
     // THE PRELOAD PORT STEALS THE REGISTER FILE.
     //
     // `zhao_probe_v3_exec` gives the host preload absolute priority over the
@@ -406,11 +439,11 @@ struct Dut {
     t.pre_we_i = 1;
     t.pre_ctx_i = (uint8_t)ctx;
     t.pre_reg_i = (uint8_t)reg;
-    t.pre_data_i = (uint32_t)v;
+    put_lane(t, v);
     advance();
     ++preload_clocks;
     t.pre_we_i = 0;
-    shadow[ctx][reg] = v;
+    for (int l = 0; l < kLanes; ++l) shadow[ctx][reg][l] = v[l];
   }
 
   void start(int ctx) {
@@ -482,16 +515,16 @@ struct Dut {
     t.eval();
   }
 
-  void preload_setup(int ctx, int reg, int32_t v) {
+  void preload_setup(int ctx, int reg, const int32_t* v) {
     t.pre_we_i = 1;
     t.pre_ctx_i = (uint8_t)ctx;
     t.pre_reg_i = (uint8_t)reg;
-    t.pre_data_i = (uint32_t)v;
+    put_lane(t, v);
     t.eval();
     zhao::tick(t);
     t.pre_we_i = 0;
     t.eval();
-    shadow[ctx][reg] = v;
+    for (int l = 0; l < kLanes; ++l) shadow[ctx][reg][l] = v[l];
   }
 
   int alarms() const {
@@ -766,7 +799,12 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   // scalar bank by packed index, and everything else reads a register.
   for (int s = 0; s < n_scalar && s < 64; ++s) d.load_scalar_bank(s, prep.scalar[(size_t)s]);
   for (int c = 0; c < kCtx; ++c)
-    for (int s = 0; s < n_scalar; ++s) d.preload_setup(c, scalar_base + s, prep.scalar[(size_t)s]);
+    for (int s = 0; s < n_scalar; ++s) {
+      // A uniform is the same in every point of the quad, by definition.
+      int32_t lane[kLanes];
+      for (int l = 0; l < kLanes; ++l) lane[l] = prep.scalar[(size_t)s];
+      d.preload_setup(c, scalar_base + s, lane);
+    }
 
   for (int c = 0; c < kCtx; ++c) {
     for (size_t p = 0; p < prog.size(); ++p) d.load_uop(c, (int)p, prog[p]);
@@ -777,9 +815,12 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
 
   // ---- the points ----------------------------------------------------------
   // One point per context, checked and replaced the instant it retires.
-  std::vector<int32_t> pt_in[kCtx];
-  std::vector<int32_t> exp_out[kCtx];
-  int32_t exp_rf[kCtx][kRegs] = {};
+  // A CONTEXT IS kLanes POINTS. At kLanes = 1 that is the scalar machine this
+  // file was written against; at 4 a context is a quad and every one of these
+  // carries four points' worth.
+  std::vector<int32_t> pt_in[kCtx][kLanes];
+  std::vector<int32_t> exp_out[kCtx][kLanes];
+  int32_t exp_rf[kCtx][kLanes][kRegs] = {};
   std::vector<int> wrote_by;
   const size_t n_out = dec.prog.out_lanes.size();
 
@@ -787,13 +828,16 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   Rng prng(seed ^ 0xA5A5A5A5u);
 
   auto make_point = [&](int c) {
-    pt_in[c] = base_in;
-    for (size_t i = 0; i < n_in && i < 2; ++i)
-      pt_in[c][i] = (int32_t)(prng.next() & 0x000FFFFF) - 0x00080000;
-    exp_out[c].assign(n_out, 0);
-    zfield::execute_point(fp, dec.prog, prep, pt_in[c].data(), n_in, exp_out[c].data(), n_out);
-    expected_regs(fp, dec.prog, prep, pt_in[c].data(), n_in, scalar_base, exp_rf[c], kRegs,
-                  &wrote_by);
+    for (int l = 0; l < kLanes; ++l) {
+      pt_in[c][l] = base_in;
+      for (size_t i = 0; i < n_in && i < 2; ++i)
+        pt_in[c][l][i] = (int32_t)(prng.next() & 0x000FFFFF) - 0x00080000;
+      exp_out[c][l].assign(n_out, 0);
+      zfield::execute_point(fp, dec.prog, prep, pt_in[c][l].data(), n_in, exp_out[c][l].data(),
+                            n_out);
+      expected_regs(fp, dec.prog, prep, pt_in[c][l].data(), n_in, scalar_base, exp_rf[c][l], kRegs,
+                    &wrote_by);
+    }
   };
 
   auto load_point = [&](int c) {
@@ -813,13 +857,20 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
     make_point(c);
     for (size_t i = 0; i < n_in; ++i) {
       const uint8_t vr = i < fp.in_vreg.size() ? fp.in_vreg[i] : 0xFF;
-      if (vr != 0xFF) d.preload(c, (int)vr, pt_in[c][i]);
+      if (vr == 0xFF) continue;
+      int32_t lane[kLanes];
+      for (int l = 0; l < kLanes; ++l) lane[l] = pt_in[c][l][i];
+      d.preload(c, (int)vr, lane);
     }
     d.start(c);
     ++issued;
   };
 
-  auto check_point = [&](int c) {
+  // ONE LANE AT A TIME. Every point of the quad is its own comparison against
+  // the oracle -- a quad that got three right and one wrong is wrong, and a
+  // check that only looked at lane 0 would pass a machine whose upper lanes
+  // were never wired.
+  auto check_lane = [&](int c, int lane) {
     // WHICH UOP FIRST DISAGREED -- EARLIEST BY PROGRAM ORDER, not by register
     // index. Scanning registers in index order reports whichever wrong value
     // happens to sit lowest in the file, which is arbitrary: it named a MUL
@@ -827,7 +878,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
     // wrong. The register a fault lands in says nothing about when it happened.
     int worst_r = -1, worst_u = 1 << 30;
     for (int r = 0; r < (int)fp.n_vreg; ++r) {
-      if (d.shadow[c][r] == exp_rf[c][r]) continue;
+      if (d.shadow[c][r][lane] == exp_rf[c][lane][r]) continue;
       const int uu = (r < (int)wrote_by.size()) ? wrote_by[(size_t)r] : -1;
       const int key = (uu < 0) ? (1 << 29) : uu;
       if (key < worst_u) {
@@ -845,29 +896,36 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
       // those need completely different fixes. So the value is looked up.
       char whose[96];
       whose[0] = '\0';
-      const int32_t got = d.shadow[c][r];
+      const int32_t got = d.shadow[c][r][lane];
       for (int r2 = 0; r2 < (int)fp.n_vreg && !whose[0]; ++r2)
-        if (r2 != r && exp_rf[c][r2] == got)
+        if (r2 != r && exp_rf[c][lane][r2] == got)
           snprintf(whose, sizeof whose, "; equals THIS context's correct r%d", r2);
       for (int c2 = 0; c2 < n_ctx && !whose[0]; ++c2)
-        if (c2 != c && exp_rf[c2][r] == got)
+        if (c2 != c && exp_rf[c2][lane][r] == got)
           snprintf(whose, sizeof whose, "; equals ctx %d's correct r%d", c2, r);
       if (!whose[0]) snprintf(whose, sizeof whose, "; matches no other register or context");
 
       char buf[320];
       snprintf(buf, sizeof buf,
-               "%s point %d ctx %d: r%d is %d, oracle %d -- written by uop %d, opcode 0x%02X%s",
-               path, retired, c, r, got, exp_rf[c][r], u, op, whose);
+               "%s point %d ctx %d lane %d: r%d is %d, oracle %d -- uop %d, opcode 0x%02X%s", path,
+               retired, c, lane, r, got, exp_rf[c][lane][r], u, op, whose);
       fail("first divergent register", buf);
 
       // WHAT DID THAT UOP READ? Replayed in program order, hardware and
       // oracle side by side, so a stale operand names itself.
-      if (u >= 0 && u < (int)fp.uops.size() && printed <= 6) {
+      //
+      // LANE 0 ONLY, deliberately. The write trace records one lane of each
+      // write, so this replay can only speak for lane 0; it exists to name a
+      // failing uop, and it found the preload-port defect that way. Widening
+      // it to four lanes would add surface without adding an answer, and a
+      // diagnostic that quietly reported lane 0's operands as though they were
+      // lane 3's would be worse than not having it.
+      if (u >= 0 && u < (int)fp.uops.size() && lane == 0 && printed <= 6) {
         char srcbuf[360];
         int bu = -1, bm = 0;
         int32_t bval = 0;
-        explain_uop(fp, dec.prog, prep, pt_in[c].data(), n_in, scalar_base, kRegs, d.wtrace[c], -1,
-                    srcbuf, sizeof srcbuf, &bu, &bm, &bval);
+        explain_uop(fp, dec.prog, prep, pt_in[c][0].data(), n_in, scalar_base, kRegs, d.wtrace[c],
+                    -1, srcbuf, sizeof srcbuf, &bu, &bm, &bval);
         printf("%s\n", srcbuf);
         {
           char qb[300];
@@ -898,7 +956,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         if (bu >= 0) {
           for (int c2 = 0; c2 < n_ctx; ++c2) {
             if (c2 == c) continue;
-            const int32_t v = oracle_uop_value(fp, dec.prog, prep, pt_in[c2].data(), n_in,
+            const int32_t v = oracle_uop_value(fp, dec.prog, prep, pt_in[c2][0].data(), n_in,
                                                scalar_base, kRegs, bu, bm);
             if (v == bval) {
               printf(
@@ -915,19 +973,23 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
     for (size_t o = 0; o < n_out; ++o) {
       const zfield::OutTag& tg = fp.out_map[o];
       if (tg.kind != zfield::SrcKind::kVec) continue;  // a uniform output
-      const int32_t got = d.shadow[c][(int)tg.idx];
-      if (got != exp_out[c][o]) {
-        char buf[200];
+      const int32_t got = d.shadow[c][(int)tg.idx][lane];
+      if (got != exp_out[c][lane][o]) {
+        char buf[220];
         snprintf(buf, sizeof buf,
-                 "%s point %d ctx %d out %zu: hardware %d, oracle %d "
+                 "%s point %d ctx %d lane %d out %zu: hardware %d, oracle %d "
                  "[ran %ld clocks, %d writes landed]",
-                 path, retired, c, o, got, exp_out[c][o], d.clocks - d.start_clk[c],
+                 path, retired, c, lane, o, got, exp_out[c][lane][o], d.clocks - d.start_clk[c],
                  d.writes_since_start[c]);
         fail("composed Earth value", buf);
         return;
       }
       ++R.checked;
     }
+  };
+
+  auto check_point = [&](int c) {
+    for (int lane = 0; lane < kLanes; ++lane) check_lane(c, lane);
   };
 
   // FILL IS NOT RATE. The first points through an empty pipeline are slower
@@ -977,7 +1039,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
             done_flag[c] = true;
             --left;
             check_point(c);
-            ++retired;
+            retired += kLanes;
           }
         }
       }
@@ -1018,7 +1080,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         qdone[(size_t)c] = true;
         --left[(size_t)(c / 4)];
         check_point(c);
-        ++retired;
+        retired += kLanes;
       }
       for (int q = 0; q < nq && retired < points; ++q) {
         if (left[(size_t)q] != 0) continue;
@@ -1045,7 +1107,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         d.done_q[c] = false;
         d.running[c] = false;
         check_point(c);
-        ++retired;
+        retired += kLanes;
         if (retired == warmup) {
           t0 = d.clocks;
           preload0 = d.preload_clocks;
