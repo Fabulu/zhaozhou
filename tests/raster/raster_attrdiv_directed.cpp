@@ -215,5 +215,77 @@ int main(int argc, char** argv) {
     zhao::check(ovf, "and is reported rather than silently truncated", 1, ovf ? 1 : 0);
   }
 
+  // ------------------------------------------------------------------ 5 ---
+  printf("== section 5: a result that is not consumed is not overwritten ==\n");
+  {
+    // Every case above holds r_ready_i high, so none of them can see what
+    // happens when the consumer is BUSY -- which is the normal case behind the
+    // service, where one divider's answer waits for its turn in issue order.
+    // The block returns to idle in the same clock it raises r_valid_o, so a
+    // ready that looked only at the state would accept a second divide here and
+    // clobber the first answer 34 clocks later, under a raised valid.
+    top.rst_n = 0;
+    top.v_valid_i = 0;
+    top.r_ready_i = 0;
+    top.eval();
+    for (int i = 0; i < 3; ++i) zhao::tick(top);
+    top.rst_n = 1;
+    top.eval();
+
+    // First divide, answer deliberately left unconsumed.
+    const __int128 n1 = 1234567;
+    const uint64_t d1 = 89;
+    put96(top, n1);
+    top.area_i = d1;
+    top.v_valid_i = 1;
+    for (int i = 0; i < 60; ++i) {
+      top.eval();
+      if (top.v_ready_o) {
+        zhao::tick(top);
+        break;
+      }
+      zhao::tick(top);
+    }
+    top.v_valid_i = 0;
+    int waited = 0;
+    for (; waited < 100; ++waited) {
+      top.eval();
+      if (top.r_valid_o) break;
+      zhao::tick(top);
+    }
+    zhao::check(waited < 100, "the first divide answers", 1, waited < 100 ? 1 : 0);
+    const int64_t held = static_cast<int32_t>(top.q_o);
+
+    // Now offer a SECOND, different divide for 80 clocks with the answer still
+    // unconsumed. It must be refused for every one of them, and the held answer
+    // must still be the first one's.
+    put96(top, 999999999);
+    top.area_i = 7;
+    top.v_valid_i = 1;
+    int accepted = 0;
+    for (int i = 0; i < 80; ++i) {
+      top.eval();
+      if (top.v_ready_o) ++accepted;
+      zhao::tick(top);
+    }
+    top.v_valid_i = 0;
+    top.eval();
+    zhao::check(accepted == 0, "no second divide is accepted while the answer waits", 0,
+                (uint32_t)accepted);
+    zhao::check(top.r_valid_o == 1, "the answer is still being offered", 1,
+                (uint32_t)top.r_valid_o);
+    const int64_t want1 = div_rhu(n1, static_cast<int64_t>(d1));
+    zhao::check(static_cast<int32_t>(top.q_o) == want1 && held == want1,
+                "and it is still the FIRST divide's value, not overwritten", 1,
+                (static_cast<int32_t>(top.q_o) == want1 && held == want1) ? 1 : 0);
+
+    // Consume it; the block must then take work again.
+    top.r_ready_i = 1;
+    zhao::tick(top);
+    top.eval();
+    zhao::check(top.v_ready_o == 1, "consuming the answer reopens the block", 1,
+                (uint32_t)top.v_ready_o);
+  }
+
   return zhao::report_and_exit("raster_attrdiv_directed");
 }

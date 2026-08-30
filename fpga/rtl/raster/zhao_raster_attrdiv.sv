@@ -111,7 +111,13 @@ module zhao_raster_attrdiv (
     fits_c  = (area_i != 47'd0) && ((num_c >> QBITS) < 80'(den_c));
   end
 
-  assign v_ready_o = (st_r == D_IDLE);
+  // D_IDLE alone is NOT enough. The D_DONE step returns to D_IDLE in the same
+  // clock that raises `r_valid_o`, so a block that only checked the state would
+  // accept a second divide while the first answer is still waiting for a
+  // consumer -- and 34 clocks later overwrite `q_o` under a raised `r_valid_o`.
+  // The standalone test never saw it because it holds `r_ready_i` high; the
+  // service below backpressures for real, so the guard is on the result too.
+  assign v_ready_o = (st_r == D_IDLE) && !r_valid_o;
 
   // One shift-subtract step, most significant quotient bit first.
   logic [48:0] rem_shift_c;

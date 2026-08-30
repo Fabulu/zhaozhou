@@ -1884,6 +1884,26 @@ set_tests_properties(raster_attrdiv_directed PROPERTIES LABELS "fast;nightly" TI
 add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
 set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The divide service, one elaborated build per UNITS. The sweep is the point:
+# a single divider measures 36 clocks and is ~6x short of a frame's depth
+# interpolation on its own, so how much divide the renderer needs is a
+# measurement against real hardware at each point, not an argument.
+foreach(div_units 1 2 4 8)
+  set(div_tgt test_raster_attrdiv_svc_u${div_units})
+  add_executable(${div_tgt} raster/raster_attrdiv_svc_directed.cpp)
+  target_link_libraries(${div_tgt} PRIVATE zhao_harness zhao_zref)
+  target_compile_definitions(${div_tgt} PRIVATE ZHAO_SVC_UNITS=${div_units})
+  verilate(${div_tgt}
+    PREFIX Vzhao_raster_attrdiv_svc
+    TOP_MODULE zhao_raster_attrdiv_svc
+    SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_svc.sv
+            ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv
+    VERILATOR_ARGS -GUNITS=${div_units})
+  add_test(NAME raster_attrdiv_svc_u${div_units} COMMAND ${div_tgt})
+  set_tests_properties(raster_attrdiv_svc_u${div_units}
+    PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+endforeach()
+
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
