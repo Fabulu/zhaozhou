@@ -19,8 +19,8 @@ Preserve the approved v9 whole-body proportions and rendering style while repair
 | #17 | setup and durable direction | Complete — `0d1f45e` / `f75306f`, pushed |
 | #18 | lighting and eye artifacts | Complete — structural roots fixed in `1dd01a4`, pushed |
 | #19 | constrained face and fins | Complete — `32ca883`, pushed |
-| #20 | shared rigid-S spring | In progress — claimed |
-| #21 | bounded risk-based validation | Pending |
+| #20 | shared rigid-S spring | Complete — `065b732`, pushed |
+| #21 | bounded risk-based validation | In progress — claimed |
 | #22 | publish and handoff | Pending |
 
 Only one task is active at a time. A task becomes complete only after its evidence, gates, logical commit and push are complete.
@@ -95,6 +95,18 @@ Only one task is active at a time. A task becomes complete only after its eviden
 - Determinism D01 #19: side plus pupil-proof, 320/320 true cel-main files byte-identical; aggregate SHA-256 `d40fe6acc03842fb46ea78163c16f73c4e633d012e555e2abdd0ae161df27966`.
 - Committed and pushed the constrained source/media-generation milestone as `32ca883`. Task #19 complete; task #20 claimed. Per coordinator direction, remote `origin/main` is currently `ccd31d9` with one unrelated hardware commit; this lane does not integrate it until task #22.
 
+### 2026-08-30 - Task #20 shared rigid-S spring complete
+
+- Replaced the v9 lateral concertina/rear curl with a separately authored side-plane compression profile. The profile retains the signature doubled-back S through explicit near-half-turn middle directions; the yaw lane was deleted, so the back and tail cannot coil sideways during preload.
+- The entire silhouette descends from above under one named quadratic root drop. A smoothstepped profile arrives slightly ahead of root contact, avoiding a transition sweep through terrain. The deepest authored pose is almost flat, puts the head onto the ground, keeps the rear above its permitted floor, and retains the tube's volume.
+- Separated grounded spring release from airborne wheel gather. Jump-one and jump-multi release the complete S while grounded, then form the approved wheel during the first five airborne keys. Base attack holds the intact S through key 22 before a six-key wheel gather; the accepted mature flight, turn counts, spear, impact and recovery paths remain unchanged.
+- Programmable salto variants now use `zixx_plan_spring_amount` as the single body/root timing source. Their exact S is held for one key before the plan enters flight, eliminating the previous mismatched-root ground curl and half-tick terrain dip.
+- Every frame was inspected for the four authorised subjects only: jump-one (143), jump-multi (143), salto-six (265), and salto-nine (367), plus the bounded close side/top spring views and native launch window. The whole S lowers coherently, the head meets the terrain, the rear never rolls or curls, release returns through the intact S, and the mature airborne wheel remains stable.
+- Committed posed-geometry evidence passes every key and midpoint: deepest centre/lateral span `99/10 mm`, head/rear surface `-3/-10 mm`, declared bite `-23 mm`; jump contacts `-33 mm`; six/nine outside-phase minima `-23 mm`. Meshcheck remains 1,774 vertices, 1,098 shared-position groups, zero disagreeing binds and zero seam split.
+- Reused only the affected choreography/planner/target/limit gates. Choreography retains 2 mm worst spin-migration error; planner preserves the 240-key golden preset and exact intercepts; all target interaction windows and the nine-salto native camera/LOD/range check pass.
+- D01 true cel-main repeat: jump-one plus salto-nine, 510/510 files byte-identical, aggregate SHA-256 `afa5ab2b1b7ad598d6c9e7581030fe67876e8a1f507a9d52a1953dfcafaf60ad`.
+- Committed and pushed the spring source and committed 3D probe as `065b732`. Task #20 complete; task #21 claimed. No catalogue escalation signal was found.
+
 ---
 
 ## Validation Ledger — `V10-BUDGET-1`
@@ -109,8 +121,8 @@ Budget set before any build/render. Each row must answer one question and end wi
 | E01 | What structurally creates malformed eye triangles? | Knockdown frame 30/window 22..41; unlit/normals/wire/triangle IDs; exact triangle dump | PASS — micro head triangles 81/89, UV V=25..33, proved coarse eye-bearing shell fans; preserving head rings/sides removes shard | STOP — exact owner and causal repair proven |
 | E02 | Does the eye fix generalize without catalogue exhaustion? | Window 22..41, badness-ranked death2, reused meshcheck | PASS — coherent eye boundary throughout bounded window; zero bind/seam/stretch faults; original pupil and full mips retained | STOP — no surviving artifact; no full-catalog trigger |
 | F01 | Do the constrained face and fin changes satisfy direction without altering approved whole-body form? | Fixed side/front, gameplay still, pupil extrema, 12 orbit views, 8 idle phases, high-risk rear samples, meshcheck | PASS — eyes/support/pupils moved together noseward; mouth moderately larger; fork is a planted Y with no cap seam/detachment; body controls untouched; zero bind/seam faults | STOP — each task #19 acceptance question answered; no catalogue escalation signal |
-| S01 | Does corrected spring lower the rigid S from the top with head contact and no rear curl? | Every frame of jump-one, jump-multi, salto-six, salto-nine; bounded attack contact/landing | Deferred to #20 | Required targeted all-frame exception |
-| D01 | Are changed true cel-main outputs deterministic? | One representative pair per changed milestone | PASS #18 — 185/185 knockdown files byte-identical, SHA-256 `3a542ba6...4700e`; PASS #19 — 320/320 side+pupil files byte-identical, SHA-256 `d40fe6ac...27966` | Repeat once after each later changed milestone; escalate only on mismatch |
+| S01 | Does corrected spring lower the rigid S from the top with head contact and no rear curl? | Every frame of jump-one, jump-multi, salto-six, salto-nine; bounded close side/top and launch/contact windows; committed posed-vertex probe | PASS — no yaw/concertina remains; whole S descends to a 99 mm side span with head/rear surfaces -3/-10 mm; it releases intact before airborne wheel gather; all four every-frame sheets accepted | STOP — the named spring question is answered; no unrelated catalogue escalation |
+| D01 | Are changed true cel-main outputs deterministic? | One representative pair per changed milestone | PASS #18 — 185/185 knockdown files byte-identical, SHA-256 `3a542ba6...4700e`; PASS #19 — 320/320 side+pupil files byte-identical, SHA-256 `d40fe6ac...27966`; PASS #20 — 510/510 jump-one+salto-nine files byte-identical, SHA-256 `afa5ab2b...f60ad` | STOP for #20; one final bounded media/site validation remains under #22 |
 | M01 | Is final media/site structurally valid? | Manifest/count/poster plus bounded start/middle/end decode and desktop/narrow interaction | Deferred to #22 | Exhaustive decode only on mismatch/decode/browser signal |
 
 ---
@@ -147,6 +159,6 @@ None. Owner explicitly requires this to remain a sole implementation/modelling l
 
 ## Next Steps
 
-1. Task #20: replace the inherited rear-curl spring with one shared mostly-rigid S that descends vertically from above to an almost-flat authored compression with head ground contact.
-2. Reuse it across jump-one, jump-multi, salto-six, salto-nine and attack anticipation without changing the approved airborne wheel or resting signature S.
-3. Inspect every frame only for the four named spring clips plus bounded attack contact/landing windows, run D01, commit and push, then claim #21.
+1. Task #21: close the named bounded validation ledger using the already-rendered authorised windows and the smallest relevant inherited v9 gates; do not rerender the catalogue without a recorded regression signal.
+2. Commit and push the validation closeout, then claim task #22.
+3. Preserve/archive v9, promote v10 media, integrate both current mains without disturbing the hardware/migration lane, publish the finished noindex bestiary exactly once, verify production, and stop every job.
