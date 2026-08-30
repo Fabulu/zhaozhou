@@ -536,6 +536,74 @@ head: six dependent binary-search steps x 2 lanes x 2 cycles = 12 address slots
 per port plus one handoff clock. That is the next wall, and it is a table-search
 problem, not a multiplier or scheduling one.
 
+## Round 7 — where it finished, and the one rule that produced most of the gain
+
+    2026-08-30, --points 4096, exact interval, CTX=32 OUTSTANDING=16 LANES=4
+    LONGQ=16 DIST_BANKS=8 RING_UNITS=8 REGS=64
+
+    crater_ring  12.07  421,887   50.4% margin
+    impact_wave  14.37  502,006   41.0% margin   <- worst
+    wave_pool    13.12  458,387   46.1% margin
+    98,540 values against the oracle, zero failures
+
+    worst program over the session:  683,960 -> 502,006   -26.6%
+    worst margin:                        19.5% -> 41.0%
+
+### What actually moved it
+
+| change | worst program |
+|---|---|
+| ring prepared-descriptor cache (accept path 8 clocks -> 2) | -14.5% |
+| DIST2 front end, ISSUE/COLLECT instead of ISSUE/WAIT | -2.7% |
+| curve search starts at the first step that can succeed (II 13 -> 8) | -5.3% |
+| DIST_BANKS 4 -> 8 with OUTSTANDING 16 | -9.1% |
+
+### THE RULE: a rejection is only valid against the bottleneck it was measured on
+
+Three of those four had already been rejected on this engine.
+
+* **DIST_BANKS 8** was rejected TWICE, once written up as "double the roots for
+  no change". It is worth 9.1% now.
+* **DIST2 front-end pipelining** cost 1.3% in round 3 and buys 2.7% now.
+* **`LONGQ=4`** was the best sweep point in round 3 and is among the worst now.
+
+Nothing about any of them changed. The wall moved out from under them: ring
+feeder, then curve search, then the root banks. **Re-sweep and re-test after
+every structural change**, and read a date against every "measured and rejected"
+row in this file.
+
+The counterpart still holds and is not in tension with it: **four LATENCY
+reductions each cost the worst program time, and every acceptance-rate increase
+paid.** A service's initiation interval is an acceptance rate. Its end-to-end
+latency is not.
+
+### The measurement that ended six rounds of guessing
+
+Per-service accept/refuse counters. Six sweep rounds failed to find the wall;
+two counters named it immediately, and then named the next two as they moved:
+
+    impact_wave, before      curve refused 4,704   len 3,664   ring     0
+    after the curve fix      curve refused 1,957   len 4,266   ring     0
+    after DIST_BANKS 8       curve refused 2,902   len 1,832   ring    14
+
+**Measure which unit REFUSES, not which unit looks busy.** Occupancy said the
+multiplier bank was at 77% and it was never the constraint; the refusal counter
+said CURVE and it was.
+
+### Still open on this engine
+
+* **CURVE is the top refuser again** on impact_wave at 2,902 clocks. Its II is 8
+  now and the floor for a 9-entry table is 2x4+1 = 9 with two lanes per port.
+  Below that needs four table read ports and two groups in flight so a port
+  never idles on a dependent read.
+* **RING refuses 4,370 clocks on crater_ring**, which issues two ring ops per
+  group. It refuses nothing at all on the other two.
+* **Area is unmeasured and now matters.** Eight banks of four lanes is
+  thirty-two floor-exact roots, and the LEN header prices eight roots at roughly
+  2,000 ALMs. `RING_UNITS=8`, `LANES=4` and `REGS=64` are all above the shipped
+  narrow defaults. **Re-fit in Quartus before quoting any resource number.**
+* Timing closure at 100 MHz is unverified for any of this.
+
 ## Open items
 
 * **`wave_pool` has 1.3% margin.** That is thin enough that a timing or workload

@@ -1681,26 +1681,18 @@ option(ZHAO_FIELD_SWEEP "Build the Field v3 Earth parameter sweep targets" OFF)
 set(ZHAO_FIELD_SWEEP_POINTS
   # name              CTX OUTSTANDING LANES LONGQ DIST_BANKS RING_UNITS REGS GATHERS
   #
-  # ROUND 6, AND EVERY EARLIER ROUND IS NOW STALE. The prepared-descriptor
-  # cache took crater_ring from 19.57 to 13.42 clocks per group and made the
-  # ring service's accept path two clocks instead of eight. That is a different
-  # machine: the worst program is impact_wave now, not crater_ring, and every
-  # parameter conclusion drawn before it was drawn against a feeder ceiling
-  # that no longer exists.
-  #
-  # impact_wave is EXECUTOR dominated -- 6,272 engine-only clocks against 1,501
-  # service-only, and 26% of clocks with neither multiplier bank busy -- so this
-  # round sweeps the things that give the executor more independent work rather
-  # than the things that make a service finish sooner. This engine has measured
-  # four latency reductions and every one of them cost the worst program time.
+  # ROUND 7. Every earlier round is stale AGAIN: the ring descriptor cache, the
+  # DIST2 front-end pipeline and the shortened curve search have each moved the
+  # bottleneck since. LEN/DIST2 is now the top refuser on all three programs --
+  # 4,266 clocks on impact_wave, 3,359 on crater_ring, 1,369 on wave_pool -- so
+  # this round is about the root banks, which two earlier rounds rejected while
+  # the wall was somewhere else entirely.
   "base|32|12|4|16|4|8|64|4"
-  "ctx48|48|12|4|16|4|8|64|4"
-  "ctx64|64|12|4|16|4|8|64|4"
-  "ctx64out24|64|24|4|16|4|8|64|4"
-  "ctx48out20|48|20|4|16|4|8|64|4"
-  "longq4|32|12|4|4|4|8|64|4"
-  "ctx64longq4|64|12|4|4|4|8|64|4"
-  "ctx64dist8|64|12|4|16|8|8|64|4"
+  "dist8|32|12|4|16|8|8|64|4"
+  "dist16|32|12|4|16|16|8|64|4"
+  "dist8out16|32|16|4|16|8|8|64|4"
+  "dist8longq8|32|12|4|8|8|8|64|4"
+  "dist8ctx48|48|12|4|16|8|8|64|4"
 )
 
 if(ZHAO_FIELD_SWEEP)
@@ -1790,7 +1782,21 @@ verilate(test_field_v3_earth_quad
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
-  VERILATOR_ARGS -GCTX=32 -GOUTSTANDING=12 -GLANES=4 -GLONGQ=16 -GDIST_BANKS=4 -GRING_UNITS=8 -GREGS=64)
+  # DIST_BANKS 8 and OUTSTANDING 16, adopted 2026-08-30 from sweep round 7.
+  # Both were REJECTED in earlier rounds -- DIST_BANKS 8 twice, as "double the
+  # roots for no change" -- while the wall was the ring service's eight-clock
+  # accept path and then the curve search. With those gone, LEN/DIST2 became
+  # the top refuser on all three programs and the root banks finally matter:
+  #
+  #   base (DIST 4, OUT 12)   crater 444,578  impact 553,680  wave 555,586
+  #   DIST 8                         427,434         456,000         540,655
+  #   DIST 8 + OUT 16                420,669         505,030         461,604
+  #   DIST 16                  identical to DIST 8, so eight is the stopping point
+  #
+  # AREA IS UNMEASURED. Eight banks of four lanes is thirty-two floor-exact
+  # roots, and the LEN header prices eight at roughly 2,000 ALMs. Re-fit in
+  # Quartus before quoting any resource number for this configuration.
+  VERILATOR_ARGS -GCTX=32 -GOUTSTANDING=16 -GLANES=4 -GLONGQ=16 -GDIST_BANKS=8 -GRING_UNITS=8 -GREGS=64)
 target_compile_definitions(test_field_v3_earth_quad PRIVATE ZHAO_EARTH_CTX=32 ZHAO_EARTH_LANES=4 ZHAO_EARTH_REGS=64)
 # --points 1024, NOT 256. The admission law is about an INITIATION INTERVAL,
 # which is a steady-state quantity, and at 256 points a CTX=32 LANES=4 machine
