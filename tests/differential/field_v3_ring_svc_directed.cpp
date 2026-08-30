@@ -258,6 +258,55 @@ int main(int argc, char** argv) {
                 same < kLanes ? 1 : 0);
   }
 
+  printf("== section 2b: the descriptor cache is DROPPED when the bank is rewritten ==\n");
+  {
+    // THE CACHE'S ONE WAY TO BE WRONG. Section 2 proves a request naming
+    // DIFFERENT slots refetches, which the key alone gives you. This is the
+    // other half, and a key does NOT give you it: the SAME slots holding
+    // DIFFERENT values, because a new association's prepare() has run. A cache
+    // that ignores the write strobe serves last association's crater from
+    // perfectly correct indices, and every other check in this file passes.
+    reset(dut, mb, sb);
+    const Prep p1 = prepare(2 << 16, 9 << 16);
+    const Prep p2 = prepare(1 << 16, 40 << 16);  // same slots, different field
+
+    sb.mem[10] = p1.r0;
+    sb.mem[11] = p1.m;
+    sb.mem[12] = p1.rA;
+    sb.mem[13] = p1.rB;
+
+    int32_t g1[kLanes] = {}, g2[kLanes] = {}, g3[kLanes] = {};
+    (void)run_group(dut, mb, sb, d, pack_slots(10, 11, 12, 13), 0x31, g1, nullptr);
+    // A second group on the SAME indices -- this is the one the cache serves,
+    // and it must still be right.
+    (void)run_group(dut, mb, sb, d, pack_slots(10, 11, 12, 13), 0x32, g2, nullptr);
+
+    // Now the association changes: the host rewrites those four slots and
+    // pulses the write strobe, exactly as zhao_field_v3_sbank sees it.
+    sb.mem[10] = p2.r0;
+    sb.mem[11] = p2.m;
+    sb.mem[12] = p2.rA;
+    sb.mem[13] = p2.rB;
+    dut.sb_we_i = 1;
+    step(dut, mb, sb);
+    dut.sb_we_i = 0;
+    step(dut, mb, sb);
+
+    (void)run_group(dut, mb, sb, d, pack_slots(10, 11, 12, 13), 0x33, g3, nullptr);
+
+    int wrong = 0, stale = 0;
+    for (int l = 0; l < kLanes; ++l) {
+      zref::SatLedger L1, L2;
+      const int32_t w1 = zfield::steps::ring_prepared(d[l], p1.r0, p1.m, p1.rA, p1.rB, &L1);
+      const int32_t w2 = zfield::steps::ring_prepared(d[l], p2.r0, p2.m, p2.rA, p2.rB, &L2);
+      if (g1[l] != w1 || g2[l] != w1 || g3[l] != w2) ++wrong;
+      if (g3[l] == w1 && w1 != w2) ++stale;
+    }
+    zhao::check(wrong == 0, "a cached descriptor is served, and it is the right one", 0, wrong);
+    zhao::check(stale == 0, "and the rewrite dropped it -- no lane got last association's answer",
+                0, stale);
+  }
+
   printf("== section 3: the reserved immediate bits are a FAULT, not padding ==\n");
   {
     reset(dut, mb, sb);

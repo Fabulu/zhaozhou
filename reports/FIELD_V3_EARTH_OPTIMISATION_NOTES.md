@@ -408,6 +408,81 @@ cannot fill a bubble.
 `contexts alive` is 30.6 of 32. The machine has run out of independent work, not
 out of multipliers.
 
+## Round 5: the descriptor cache, and the law it exposed
+
+### The ring service was FEED-bound. That was the whole thing.
+
+Its accept path was `F_IDLE (1) -> F_FETCH (6 serial scalar reads) -> F_HAND (1)`
+= **eight clocks per request**, so crater_ring's two ring requests per
+four-point group sat under a sixteen-clock floor whatever the arithmetic did.
+It measured 19.57.
+
+A ring request names four prepared scalars by bank index and the ARM writes them
+once per association, so the service was re-reading the same four values
+273 x 2 x 4 = 2,184 times per association over TWO distinct descriptors. A
+two-entry cache keyed on the immediate's packed indices turns a hit into two
+clocks instead of eight.
+
+    --points 2048                before          after
+      crater_ring             19.57  683,960   13.43  469,237    -31%
+      WORST of the three             683,960          584,918    -14.5%
+      crater mul bank occupancy         62%              90%
+      crater "neither bank"       2,132 (24%)       388 (6%)
+      crater ring front end            --        896 requests, 896 hits,
+                                                 0 misses, 0 fetch clocks
+
+**That single fact retroactively explains every result this engine refused to
+give up**: RING_UNITS 8/16/32 doing nothing three separate times, DIST_BANKS 4/8
+doing nothing, deleting 19% of the multiplier traffic doing nothing, and 24% of
+clocks with neither multiplier bank busy. None of them were the feeder.
+
+Invalidation is on any scalar-bank write, and the test for it is real: removing
+the invalidation line kills exactly the two new checks and nothing else. A key
+alone is not enough -- section 2 covers "different slots must refetch", and this
+covers the case a key cannot, the SAME slots holding a new association's values.
+
+### THE LAW: in this engine, throughput comes from ACCEPTING faster, not from FINISHING faster
+
+Four latency reductions have now been built and measured. Every one of them made
+the worst program slower or did nothing:
+
+| change | effect on the worst program |
+|---|---|
+| DIST2 front end II 12 -> 8 | +1.3% |
+| ring `x2` products -> exact shifts (nine grants to seven) | +1.3% on crater_ring |
+| ring P3/P7 shift STATES removed (latency 32 -> 30, II 14 -> 13) | **+6.4%** |
+| LONGQ 16 -> 32, which removes all visible backpressure | +21% |
+
+And the one change that increased ACCEPTANCE rate was worth 31%.
+
+The mechanism is the same every time. A fixed number of contexts feeds the
+machine. Returning a context sooner does not create new independent work -- it
+bunches the next requests, and the bubbles grow to swallow the saving. The
+long-op queue depth behaves identically: driving its "frozen" counter to zero
+costs 21%, because the throttle was spacing the traffic.
+
+**Before building anything else here, ask whether it makes the machine accept
+sooner or merely finish sooner.** Only the first kind has ever paid.
+
+The P3/P7 state removal is therefore REVERTED, measured at 4,096 points:
+
+    impact_wave  16.90  590,642   (states kept)
+                 17.99  628,517   (states removed)
+    crater_ring  13.42  468,789 / 13.41  468,665   (no difference)
+
+The arithmetic change from commit 01eb557 stays -- it deletes real bank
+transactions -- but the schedule change on top of it does not.
+
+### Standing
+
+    crater_ring  13.42  468,789   44.8% margin
+    impact_wave  16.90  590,642   30.5% margin   <- now the worst
+    wave_pool    16.51  576,771   32.1% margin
+
+impact_wave is engine-bank dominated: 6,272 engine-only clocks against 1,501
+service-only, and 4,116 (26%) with neither bank busy. It is an executor problem,
+not a service one, and the ring work above barely touches it.
+
 ## Open items
 
 * **`wave_pool` has 1.3% margin.** That is thin enough that a timing or workload
