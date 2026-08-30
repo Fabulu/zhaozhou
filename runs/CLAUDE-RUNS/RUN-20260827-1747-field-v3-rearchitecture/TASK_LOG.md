@@ -2394,3 +2394,65 @@ presentation changed the creature's extent.
 
 Everything in the Field lane is green, including the composed Earth gate under
 all three drive patterns.
+
+### The quad machine, built and measured
+
+The write port was the wall, so the executor was widened to four points per
+context: one instruction, four ALUs, four operands out of one register, four
+results back into one.
+
+**The design note was wrong about the mechanism and it mattered.** It called for
+four register-file write PORTS plus a second banking by context to feed them,
+and spent its longest section resolving the conflict that creates. Building it
+showed there is no conflict: a register does not need four ports, it needs to be
+four values WIDE. The banking never had to change at all. Second time in one
+session the paper design was more complicated than the real one.
+
+    zhao_field_v3_rf        LANES parameter, word widened, addressing untouched
+    zhao_field_alu_vec      LANES copies of the swept ALU, NO new arithmetic
+    zhao_probe_v3_exec      datapath widened; every state machine SHARED
+    dispatcher              an offer is LANES points; the drain writes LANES
+                            points per write instead of walking them
+
+LANES=1 stayed bit-identical at every step, which is what made the widening
+safe to do in pieces: exec 42, dispatch 348, svcpath 213, wbarb 55, full 183,
+earth 2,304 -- all unchanged from before it started.
+
+**Result, CTX=32 LANES=4, against 24.33 clocks per four-point group:**
+
+    impact_wave   27 wall = 2.0 preload + 25.0 engine    943,488   1.11x
+    wave_pool     31 wall = 2.0 preload + 29.0 engine  1,083,264   1.27x
+
+From 4,368,000 and 4,507,776 when the composed gate was stood up. 9,228 values
+against the oracle, zero failures, every lane checked separately.
+
+    write port occupancy   92% -> 49%
+
+**A reviewer caught a stale assumption in the driver** and it was the same shape
+as everything else this session: correct when written, silently false after the
+thing underneath changed. The quad driver bundled four CONTEXTS per dispatch
+group -- right while a context was one point, and a sixteen-point super-wave
+afterwards, colliding exactly the requests staggering exists to spread. Fixed as
+`kCtxPerGroup = 4 / kLanes` with a static_assert. Worth 33 -> 28 clocks.
+
+**And I got one wrong in my own favour.** The wall/preload/engine split first
+printed 7.9 preload clocks per group; the share is preloads/span and I
+multiplied by four again. It made the engine look like 20.1 clocks -- under the
+ceiling, which was the answer I wanted. The truth is 2.0, exactly the two
+registers a quad loads, and the engine is 25.0. Caught by asking whether the
+number was plausible rather than whether it was pleasing.
+
+**What is NOT the bottleneck, measured rather than assumed:**
+
+  * the write port -- 49%, half idle
+  * partial groups -- 0 of 279
+  * the executor-wide freeze on long-op backpressure -- **0 clocks, 0%**. This
+    was the review's next target and a one-entry service skid was the proposed
+    fix. The per-op gather already gives an offer somewhere to go, so S4 is
+    essentially never refused. Instrumenting first saved building it.
+  * groups in flight -- OUTSTANDING 16 / GATHERS 8 is indistinguishable from
+    12 / 4, and CTX 32 beats CTX 16 by one clock
+
+What remains is nine clocks per group above a floor of 16 uops issued and 16
+writes retired: about 12% ready-but-could-not-issue, the rest contexts parked on
+services with no other work. That is scheduling, and it is the last 1.1-1.3x.
