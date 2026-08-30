@@ -152,7 +152,12 @@
 // Conservative SystemVerilog subset only (charter §2); no package deps.
 // Lint: clean under `verilator_bin --lint-only -Wall` (lint_geom_clip).
 
-module zhao_geom_clip (
+module zhao_geom_clip #(
+  // The attribute-bearing vertex packet, ruling 5: invw24, u_over_w, v_over_w,
+  // lit r/g/b and alpha, each a 32-bit field. A flat, untextured triangle sets
+  // ATTRS to whatever it actually carries; the block never interprets them.
+  parameter int unsigned ATTRS = 7
+) (
   input  logic clk,
   input  logic rst_n,
 
@@ -170,6 +175,12 @@ module zhao_geom_clip (
   input  logic signed [20:0] tri_cy_i,
   input  logic        [2:0]  tri_behind_i,
   input  logic        [15:0] tri_src_id_i,   // source_id passthrough
+  // ---- the attribute-bearing vertex packet, per vertex -------------------
+  // Carried through untouched EXCEPT for the winding flip, which is the whole
+  // reason they pass through this block rather than around it. See out_attr_*.
+  input  logic [ATTRS*32-1:0] tri_attr_a_i,
+  input  logic [ATTRS*32-1:0] tri_attr_b_i,
+  input  logic [ATTRS*32-1:0] tri_attr_c_i,
 
   // ---- configuration, sampled with the packet ----------------------------
   // The scissor rectangle in whole pixels (zref::render::Viewport: a canvas
@@ -196,6 +207,20 @@ module zhao_geom_clip (
   output logic signed [11:0] out_min_y_o,
   output logic signed [11:0] out_max_y_o,
   output logic        [15:0] out_src_id_o,
+  // ---- the attributes, FOLLOWING their vertices --------------------------
+  // When the double-sided law swaps B and C to normalise winding, B's
+  // attributes must swap with it. Swapping the positions and not the
+  // attributes produces a triangle that is geometrically correct and shaded
+  // wrong, on exactly the back-facing half of the scene -- so it survives any
+  // test whose triangles are all wound one way. That is why the swap is here,
+  // beside the decision, rather than in a companion block that would have to
+  // re-derive the area sign and could disagree.
+  output logic [ATTRS*32-1:0] out_attr_a_o,
+  output logic [ATTRS*32-1:0] out_attr_b_o,
+  output logic [ATTRS*32-1:0] out_attr_c_o,
+  // The flip actually applied, so a consumer can say so out loud rather than
+  // inferring it.
+  output logic               out_flip_o,
 
   // ---- per-triangle verdict (one-cycle pulse, every retired triangle) ----
   output logic               ret_valid_o,
@@ -289,6 +314,7 @@ module zhao_geom_clip (
   // ============================================================ stage 1 ====
   logic signed [20:0] s1_ax, s1_ay, s1_bx, s1_by, s1_cx, s1_cy;
   logic        [15:0] s1_src;
+  logic [ATTRS*32-1:0] s1_aa, s1_ab, s1_ac;
   logic        [2:0]  s1_behind;
   logic        [1:0]  s1_cull;
   logic        [11:0] s1_x0, s1_y0, s1_w, s1_h;
@@ -298,6 +324,7 @@ module zhao_geom_clip (
   logic signed [DIFF_W-1:0] s2_p, s2_q, s2_u, s2_v_op;
   logic signed [20:0] s2_ax, s2_ay, s2_bx, s2_by, s2_cx, s2_cy;
   logic        [15:0] s2_src;
+  logic [ATTRS*32-1:0] s2_aa, s2_ab, s2_ac;
   logic        [2:0]  s2_behind;
   logic        [1:0]  s2_cull;
   logic        [11:0] s2_x0, s2_y0, s2_w, s2_h;
@@ -314,6 +341,7 @@ module zhao_geom_clip (
   logic signed [CROSS_W-1:0] s3_area;
   logic signed [20:0] s3_ax, s3_ay, s3_bx, s3_by, s3_cx, s3_cy;
   logic        [15:0] s3_src;
+  logic [ATTRS*32-1:0] s3_aa, s3_ab, s3_ac;
   logic        [2:0]  s3_behind;
   logic        [1:0]  s3_cull;
   // The box is registered at the OUTPUT width (12 bits, RASTER.EDGEWALK's tile
@@ -375,6 +403,10 @@ module zhao_geom_clip (
   assign out_min_y_o = s3_min_y;
   assign out_max_y_o = s3_max_y;
   assign out_src_id_o = s3_src;
+  assign out_attr_a_o = s3_aa;
+  assign out_attr_b_o = flip ? s3_ac : s3_ab;
+  assign out_attr_c_o = flip ? s3_ab : s3_ac;
+  assign out_flip_o   = flip;
 
   assign ret_valid_o   = s3_v && pipe_en;
   assign ret_verdict_o = s3_verdict;
@@ -402,6 +434,9 @@ module zhao_geom_clip (
       s1_cx     <= 21'sd0;
       s1_cy     <= 21'sd0;
       s1_src    <= 16'd0;
+      s1_aa     <= '0;
+      s1_ab     <= '0;
+      s1_ac     <= '0;
       s1_behind <= 3'd0;
       s1_cull   <= CULL_NONE;
       s1_x0     <= 12'd0;
@@ -419,6 +454,9 @@ module zhao_geom_clip (
       s2_cx     <= 21'sd0;
       s2_cy     <= 21'sd0;
       s2_src    <= 16'd0;
+      s2_aa     <= '0;
+      s2_ab     <= '0;
+      s2_ac     <= '0;
       s2_behind <= 3'd0;
       s2_cull   <= CULL_NONE;
       s2_x0     <= 12'd0;
@@ -437,6 +475,9 @@ module zhao_geom_clip (
       s3_cx     <= 21'sd0;
       s3_cy     <= 21'sd0;
       s3_src    <= 16'd0;
+      s3_aa     <= '0;
+      s3_ab     <= '0;
+      s3_ac     <= '0;
       s3_behind <= 3'd0;
       s3_cull   <= CULL_NONE;
       s3_min_x  <= 12'sd0;
@@ -457,6 +498,9 @@ module zhao_geom_clip (
       s1_cx     <= tri_cx_i;
       s1_cy     <= tri_cy_i;
       s1_src    <= tri_src_id_i;
+      s1_aa     <= tri_attr_a_i;
+      s1_ab     <= tri_attr_b_i;
+      s1_ac     <= tri_attr_c_i;
       s1_behind <= tri_behind_i;
       s1_cull   <= cull_mode_i;
       s1_x0     <= vp_x0_i;
@@ -480,6 +524,9 @@ module zhao_geom_clip (
       s2_cx     <= s1_cx;
       s2_cy     <= s1_cy;
       s2_src    <= s1_src;
+      s2_aa     <= s1_aa;
+      s2_ab     <= s1_ab;
+      s2_ac     <= s1_ac;
       s2_behind <= s1_behind;
       s2_cull   <= s1_cull;
       s2_x0     <= s1_x0;
@@ -509,6 +556,9 @@ module zhao_geom_clip (
       s3_cx     <= s2_cx;
       s3_cy     <= s2_cy;
       s3_src    <= s2_src;
+      s3_aa     <= s2_aa;
+      s3_ab     <= s2_ab;
+      s3_ac     <= s2_ac;
       s3_behind <= s2_behind;
       s3_cull   <= s2_cull;
       s3_min_x     <= box_minx_w[11:0];

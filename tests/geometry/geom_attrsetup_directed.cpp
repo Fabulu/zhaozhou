@@ -146,6 +146,18 @@ int main(int argc, char** argv) {
     snprintf(what, sizeof what, "%s: every pixel matches the oracle's own arithmetic", t.what);
     zhao::check(bad == 0, what, 0, (uint32_t)bad);
 
+    // BOTH GRADIENTS ARE MULTIPLES OF 256, which is not decoration: it is the
+    // precondition RASTER.INTERP's exactness rests on. INTERP places the plane
+    // at the tile's first PIXEL CENTRE, and a pixel centre sits half a step
+    // from a pixel origin, so it adds dNdx/2 + dNdy/2. That halving is exact
+    // only because PIXEL_SHIFT = 8 is this block's last act. If a future change
+    // ever scaled a gradient differently, INTERP would start losing a bit here
+    // and the loss would look like a faint attribute error, not like a bug in
+    // either block -- so the property is asserted where it is CREATED.
+    zhao::check((dndx & 255) == 0 && (dndy & 255) == 0,
+                "both gradients are multiples of 256, so a half-pixel step is exact", 1,
+                ((dndx & 255) == 0 && (dndy & 255) == 0) ? 1 : 0);
+
     // A CONSTANT ATTRIBUTE HAS A FLAT PLANE. Cheap, and it catches a gradient
     // that is merely SMALL rather than zero -- which a units mistake produces.
     if (t.va == t.vb && t.vb == t.vc) {

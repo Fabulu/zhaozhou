@@ -22,7 +22,10 @@
 //     N(p,q) = N0 + dNdx*p + dNdy*q + dNdx/2 + dNdy/2
 //
 // Both halves are exact, because dNdx and dNdy are multiples of 256 by
-// construction -- ATTRSETUP shifts by PIXEL_SHIFT = 8 as its last act.
+// construction -- ATTRSETUP shifts by PIXEL_SHIFT = 8 as its last act. That is
+// a precondition this block cannot check for itself, so it is asserted where it
+// is created rather than assumed here.
+// ENFORCED-BY: tests/geometry/geom_attrsetup_directed.cpp:main
 //
 // Leaving that term out is the kind of error this project has already made once
 // in a test and once in a shift: everything still interpolates smoothly, every
@@ -113,6 +116,7 @@ module zhao_raster_attrinterp (
   // N0 + dNdx*tile_x + dNdy*tile_y + dNdx/2 + dNdy/2. The two halves are exact:
   // ATTRSETUP's last act is a shift by 8, so both gradients are multiples of 256
   // and their arithmetic right shift by one loses nothing.
+  // ENFORCED-BY: tests/geometry/geom_attrsetup_directed.cpp:main
   logic signed [95:0] dndx_c, dndy_c, base_c;
   always_comb begin
     dndx_c = 96'(job_dndx_i);

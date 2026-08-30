@@ -1913,6 +1913,15 @@ verilate(test_raster_attrinterp_directed
 add_test(NAME raster_attrinterp_directed COMMAND test_raster_attrinterp_directed)
 set_tests_properties(raster_attrinterp_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+add_executable(test_geom_clip_attrswap_directed geometry/geom_clip_attrswap_directed.cpp)
+target_link_libraries(test_geom_clip_attrswap_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_clip_attrswap_directed
+  PREFIX Vzhao_geom_clip
+  TOP_MODULE zhao_geom_clip
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clip.sv)
+add_test(NAME geom_clip_attrswap_directed COMMAND test_geom_clip_attrswap_directed)
+set_tests_properties(geom_clip_attrswap_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
