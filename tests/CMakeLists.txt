@@ -1922,6 +1922,18 @@ verilate(test_geom_clip_attrswap_directed
 add_test(NAME geom_clip_attrswap_directed COMMAND test_geom_clip_attrswap_directed)
 set_tests_properties(geom_clip_attrswap_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# rcp_u24 for the raster: walked over its ENTIRE 16.7M input domain against the
+# frozen RCP24_FULL_HASH, so it is nightly rather than fast.
+add_executable(test_raster_rcp24_directed raster/raster_rcp24_directed.cpp)
+target_link_libraries(test_raster_rcp24_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_rcp24_directed
+  PREFIX Vzhao_raster_rcp24
+  TOP_MODULE zhao_raster_rcp24
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME raster_rcp24_directed COMMAND test_raster_rcp24_directed)
+set_tests_properties(raster_rcp24_directed PROPERTIES LABELS "nightly" TIMEOUT 1800)
+
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
