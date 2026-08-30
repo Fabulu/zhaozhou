@@ -388,8 +388,8 @@ void skin_vertex(const mat3x4fx* palette, const SkinVertex& v, int32_t& ox, int3
  * of each bone is not equivalent: it makes light follow influence weights
  * instead of the deformed surface whenever the two bones disagree.
  */
-int32_t skin_normal_lambert(const mat3x4fx* palette, const SkinVertex& v, int32_t lx,
-                            int32_t ly, int32_t lz);
+int32_t skin_normal_lambert(const mat3x4fx* palette, const SkinVertex& v, int32_t lx, int32_t ly,
+                            int32_t lz);
 
 // -------------------------------------------------------------- meshlets ---
 

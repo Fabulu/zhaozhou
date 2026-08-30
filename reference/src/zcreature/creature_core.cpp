@@ -408,8 +408,8 @@ void skin_vertex(const mat3x4fx* palette, const SkinVertex& v, int32_t& ox, int3
   }
 }
 
-int32_t skin_normal_lambert(const mat3x4fx* palette, const SkinVertex& v, int32_t lx,
-                            int32_t ly, int32_t lz) {
+int32_t skin_normal_lambert(const mat3x4fx* palette, const SkinVertex& v, int32_t lx, int32_t ly,
+                            int32_t lz) {
   if (v.nx == 0 && v.ny == 0 && v.nz == 0) return 0;
   const mat3x4fx& A = palette[v.b0];
   const mat3x4fx& B = palette[v.b1];
@@ -432,21 +432,19 @@ int32_t skin_normal_lambert(const mat3x4fx* palette, const SkinVertex& v, int32_
 
   // Range-reduce before squaring. The same shift is applied to every lane, so
   // direction is unchanged; this only protects the fixed-width magnitude.
-  int64_t mx = std::max({n[0] < 0 ? -n[0] : n[0], n[1] < 0 ? -n[1] : n[1],
-                         n[2] < 0 ? -n[2] : n[2]});
+  int64_t mx =
+      std::max({n[0] < 0 ? -n[0] : n[0], n[1] < 0 ? -n[1] : n[1], n[2] < 0 ? -n[2] : n[2]});
   while (mx >= (int64_t{1} << 30)) {
     n[0] >>= 1;
     n[1] >>= 1;
     n[2] >>= 1;
     mx >>= 1;
   }
-  const uint64_t mag2 = static_cast<uint64_t>(n[0] * n[0]) +
-                        static_cast<uint64_t>(n[1] * n[1]) +
+  const uint64_t mag2 = static_cast<uint64_t>(n[0] * n[0]) + static_cast<uint64_t>(n[1] * n[1]) +
                         static_cast<uint64_t>(n[2] * n[2]);
   if (mag2 == 0) return 0;
   const int64_t mag = static_cast<int64_t>(isqrt_u64(mag2));
-  const __int128 dot = static_cast<__int128>(n[0]) * lx +
-                       static_cast<__int128>(n[1]) * ly +
+  const __int128 dot = static_cast<__int128>(n[0]) * lx + static_cast<__int128>(n[1]) * ly +
                        static_cast<__int128>(n[2]) * lz;
   if (dot <= 0) return 0;
   int64_t lam = static_cast<int64_t>((dot + mag / 2) / mag);

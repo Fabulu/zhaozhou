@@ -323,32 +323,32 @@ bool creature_update(CreatureInstance& inst, const SimParams& sp,
 // all gains are Q16.16. Baseline copies the v10 values exactly and remains the
 // default. Alternatives are restrained preview-light models, not creature art.
 const CreatureLightRig kCreatureLightBaseline{
-    26758, 53521, 26758,       // key: (1,2,1)/sqrt(6)
-    -14301, -57205, -28602,   // warm bounce from below/opposite
-    22282, 23265, 24248,      // ambient: .34, .355, .37
-    48497,                    // white key: .74
-    19661, 15073, 10486};     // fill: .30, .23, .16
+    26758,  53521,  26758,   // key: (1,2,1)/sqrt(6)
+    -14301, -57205, -28602,  // warm bounce from below/opposite
+    22282,  23265,  24248,   // ambient: .34, .355, .37
+    48497,                   // white key: .74
+    19661,  15073,  10486};  // fill: .30, .23, .16
 
 const CreatureLightRig kCreatureLightFrontSoft{
-    5246, 19672, -62293,      // soft frontal/elevated key
-    -32850, -9855, -55845,    // low opposing camera-side fill
-    23593, 24904, 26870,      // ambient: .36, .38, .41
-    27525,                    // white key: .42
-    7864, 7209, 6554};        // near-neutral fill: .12, .11, .10
+    5246,   19672, -62293,  // soft frontal/elevated key
+    -32850, -9855, -55845,  // low opposing camera-side fill
+    23593,  24904, 26870,   // ambient: .36, .38, .41
+    27525,                  // white key: .42
+    7864,   7209,  6554};   // near-neutral fill: .12, .11, .10
 
 const CreatureLightRig kCreatureLightHighOpen{
-    -6539, 47080, -45118,     // high open key, still camera-side
-    6539, -7847, -64735,      // near-camera sky fill
-    30147, 32113, 34734,      // ambient: .46, .49, .53
-    36045,                    // white key: .55
-    5243, 7209, 10486};       // cool fill: .08, .11, .16
+    -6539, 47080, -45118,  // high open key, still camera-side
+    6539,  -7847, -64735,  // near-camera sky fill
+    30147, 32113, 34734,   // ambient: .46, .49, .53
+    36045,                 // white key: .55
+    5243,  7209,  10486};  // cool fill: .08, .11, .16
 
 const CreatureLightRig kCreatureLightCrossfill{
-    43835, 18319, -45143,     // right/elevated camera-side key
-    -43916, 11798, -47193,    // left camera-side warm fill
-    19005, 20316, 22282,      // ambient: .29, .31, .34
-    38011,                    // white key: .58
-    22938, 19005, 14418};     // warm fill: .35, .29, .22
+    43835,  18319, -45143,  // right/elevated camera-side key
+    -43916, 11798, -47193,  // left camera-side warm fill
+    19005,  20316, 22282,   // ambient: .29, .31, .34
+    38011,                  // white key: .58
+    22938,  19005, 14418};  // warm fill: .35, .29, .22
 
 // V12 overhead owner-choice rigs. These are ten authored alternatives, not a
 // parameter sweep: every key and fill direction is an independently chosen
@@ -356,74 +356,74 @@ const CreatureLightRig kCreatureLightCrossfill{
 // directional fill also arrives from the upper hemisphere. Camera motion never
 // touches these values. Baseline and all v11 rigs above remain unchanged.
 const CreatureLightRig kCreatureLightZenithSun{
-    7850, 63453, -14391,      // near-zenith neutral sun
-    -18371, 60363, 17715,     // soft cool sky from above/opposite
-    24904, 26214, 28180,      // ambient: .38, .40, .43
-    40632,                    // white key: .62
-    5243, 6554, 9175};        // cool fill: .08, .10, .14
+    7850,   63453, -14391,  // near-zenith neutral sun
+    -18371, 60363, 17715,   // soft cool sky from above/opposite
+    24904,  26214, 28180,   // ambient: .38, .40, .43
+    40632,                  // white key: .62
+    5243,   6554,  9175};   // cool fill: .08, .10, .14
 
 const CreatureLightRig kCreatureLightMorningCrown{
-    44616, 44616, -17715,     // high +X morning-side sun
-    -19699, 59098, 20356,     // opposing open sky, still from above
-    22282, 23593, 25559,      // ambient: .34, .36, .39
-    41943,                    // white key: .64
-    4588, 6554, 9830};        // cool fill: .07, .10, .15
+    44616,  44616, -17715,  // high +X morning-side sun
+    -19699, 59098, 20356,   // opposing open sky, still from above
+    22282,  23593, 25559,   // ambient: .34, .36, .39
+    41943,                  // white key: .64
+    4588,   6554,  9830};   // cool fill: .07, .10, .15
 
 const CreatureLightRig kCreatureLightEveningCrown{
-    -47165, 41924, -17687,    // high -X late-sun crown
-    19672, 60326, 16393,      // broad upper-sky counterlight
-    20972, 22282, 23593,      // ambient: .32, .34, .36
-    39322,                    // white key: .60
-    10486, 7209, 4588};       // warm fill: .16, .11, .07
+    -47165, 41924, -17687,  // high -X late-sun crown
+    19672,  60326, 16393,   // broad upper-sky counterlight
+    20972,  22282, 23593,   // ambient: .32, .34, .36
+    39322,                  // white key: .60
+    10486,  7209,  4588};   // warm fill: .16, .11, .07
 
 const CreatureLightRig kCreatureLightNorthSkylight{
-    7883, 44672, 47300,       // high +Z clear-sky key
-    -29565, 56502, -15111,    // upper opposite blue fill
-    25559, 27525, 30802,      // ambient: .39, .42, .47
-    36700,                    // white key: .56
-    3932, 6554, 11796};       // clear blue fill: .06, .10, .18
+    7883,   44672, 47300,   // high +Z clear-sky key
+    -29565, 56502, -15111,  // upper opposite blue fill
+    25559,  27525, 30802,   // ambient: .39, .42, .47
+    36700,                  // white key: .56
+    3932,   6554,  11796};  // clear blue fill: .06, .10, .18
 
 const CreatureLightRig kCreatureLightSouthSkylight{
-    -11805, 45910, -45254,    // high -Z open-sky key
-    30787, 55678, 15721,      // soft upper counterfill
-    23593, 25559, 28180,      // ambient: .36, .39, .43
-    39322,                    // white key: .60
-    6554, 7209, 7864};        // near-neutral fill: .10, .11, .12
+    -11805, 45910, -45254,  // high -Z open-sky key
+    30787,  55678, 15721,   // soft upper counterfill
+    23593,  25559, 28180,   // ambient: .36, .39, .43
+    39322,                  // white key: .60
+    6554,   7209,  7864};   // near-neutral fill: .10, .11, .12
 
 const CreatureLightRig kCreatureLightOpenOvercast{
-    0, 64890, -9176,          // almost vertical soft daylight
-    -24974, 59148, 13144,     // broad upper sky from one side
-    34079, 36045, 38666,      // ambient: .52, .55, .59
-    26214,                    // white key: .40
-    5243, 6554, 9830};        // cool soft fill: .08, .10, .15
+    0,      64890, -9176,  // almost vertical soft daylight
+    -24974, 59148, 13144,  // broad upper sky from one side
+    34079,  36045, 38666,  // ambient: .52, .55, .59
+    26214,                 // white key: .40
+    5243,   6554,  9830};  // cool soft fill: .08, .10, .15
 
 const CreatureLightRig kCreatureLightHardNoon{
-    18332, 61542, -13094,     // hard near-overhead sun, slight +X
-    -38055, 51177, 15091,     // restrained high opposing sky
-    15729, 17039, 19005,      // ambient: .24, .26, .29
-    53740,                    // white key: .82
-    3277, 3932, 5243};        // faint cool fill: .05, .06, .08
+    18332,  61542, -13094,  // hard near-overhead sun, slight +X
+    -38055, 51177, 15091,   // restrained high opposing sky
+    15729,  17039, 19005,   // ambient: .24, .26, .29
+    53740,                  // white key: .82
+    3277,   3932,  5243};   // faint cool fill: .05, .06, .08
 
 const CreatureLightRig kCreatureLightVeiledSun{
-    -22299, 59027, -17708,    // high sun behind thin cloud
-    26255, 57761, 16409,      // soft upper counterfill
-    30147, 32113, 34079,      // ambient: .46, .49, .52
-    31457,                    // white key: .48
-    6554, 7209, 8520};        // near-neutral fill: .10, .11, .13
+    -22299, 59027, -17708,  // high sun behind thin cloud
+    26255,  57761, 16409,   // soft upper counterfill
+    30147,  32113, 34079,   // ambient: .46, .49, .52
+    31457,                  // white key: .48
+    6554,   7209,  8520};   // near-neutral fill: .10, .11, .13
 
 const CreatureLightRig kCreatureLightSilverMoon{
-    30039, 54853, 19590,      // high +X/+Z moon
-    -16382, 60939, -17692,    // very high cool sky fill
-    19661, 22282, 28180,      // ambient: .30, .34, .43
-    34079,                    // white key: .52
-    3932, 6554, 13107};       // silver-blue fill: .06, .10, .20
+    30039,  54853, 19590,   // high +X/+Z moon
+    -16382, 60939, -17692,  // very high cool sky fill
+    19661,  22282, 28180,   // ambient: .30, .34, .43
+    34079,                  // white key: .52
+    3932,   6554,  13107};  // silver-blue fill: .06, .10, .20
 
 const CreatureLightRig kCreatureLightCloudbreak{
-    -31475, 56392, 11147,     // high -X break in the cloud deck
-    29522, 55764, -17713,     // broad warm upper counterlight
-    21627, 22938, 25559,      // ambient: .33, .35, .39
-    45875,                    // white key: .70
-    11796, 9175, 6554};       // warm fill: .18, .14, .10
+    -31475, 56392, 11147,   // high -X break in the cloud deck
+    29522,  55764, -17713,  // broad warm upper counterlight
+    21627,  22938, 25559,   // ambient: .33, .35, .39
+    45875,                  // white key: .70
+    11796,  9175,  6554};   // warm fill: .18, .14, .10
 
 // V13 single candidate, authored only after the executable sign fixture proved
 // and repaired the generic inward-normal defect. Both unit Q16.16 directions
@@ -432,11 +432,11 @@ const CreatureLightRig kCreatureLightCloudbreak{
 // a weaker cool open-sky fill stays above/opposite. Every value remains a named,
 // editable art knob; none is derived from the rejected v12 constants.
 const CreatureLightRig kCreatureLightCorrectedToplight1{
-    -18000, 59000, -22000,    // dominant high sun: upper -X/-Z crown
-    26000, 56000, 22000,      // weak cool upper opposing sky
-    24904, 26214, 28180,      // ambient: .38, .40, .43
-    45875,                    // white key: .70
-    6554, 7864, 11141};       // cool fill: .10, .12, .17
+    -18000, 59000, -22000,  // dominant high sun: upper -X/-Z crown
+    26000,  56000, 22000,   // weak cool upper opposing sky
+    24904,  26214, 28180,   // ambient: .38, .40, .43
+    45875,                  // white key: .70
+    6554,   7864,  11141};  // cool fill: .10, .12, .17
 
 const CreatureLightRig* g_creature_light_rig = &kCreatureLightBaseline;
 
@@ -504,20 +504,15 @@ inline constexpr int32_t kSmoothMixNum = 819;
 // unchanged -- what changes is that the three channels no longer move
 // together, which is the whole point.
 inline Shade3 creature_light(const CreatureLightRig& rig, int32_t lam_key, int32_t lam_fill) {
-  const auto mix = [](int32_t amb, int32_t key, int32_t fill,
-                      int32_t lk, int32_t lf) {
-    const int64_t k =
-        (static_cast<int64_t>(key) * lk) >> 16;
-    const int64_t f =
-        (static_cast<int64_t>(fill) * lf) >> 16;
-    return quant_shade(
-        static_cast<int32_t>(amb + k + f));
+  const auto mix = [](int32_t amb, int32_t key, int32_t fill, int32_t lk, int32_t lf) {
+    const int64_t k = (static_cast<int64_t>(key) * lk) >> 16;
+    const int64_t f = (static_cast<int64_t>(fill) * lf) >> 16;
+    return quant_shade(static_cast<int32_t>(amb + k + f));
   };
 
-  return Shade3{
-      mix(rig.ambient_r, rig.key_gain, rig.fill_r, lam_key, lam_fill),
-      mix(rig.ambient_g, rig.key_gain, rig.fill_g, lam_key, lam_fill),
-      mix(rig.ambient_b, rig.key_gain, rig.fill_b, lam_key, lam_fill)};
+  return Shade3{mix(rig.ambient_r, rig.key_gain, rig.fill_r, lam_key, lam_fill),
+                mix(rig.ambient_g, rig.key_gain, rig.fill_g, lam_key, lam_fill),
+                mix(rig.ambient_b, rig.key_gain, rig.fill_b, lam_key, lam_fill)};
 }
 
 // the ambient floor of the dual-terrain walls (0.25 + 0.75*lambert) -- kept
@@ -714,10 +709,9 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         pvs[vi].ny = sv.ny;
         pvs[vi].nz = sv.nz;
         if (pvs[vi].lit) {
-          pvs[vi].lam_k = skin_normal_lambert(worldm.data(), sv, rig.key_x,
-                                              rig.key_y, rig.key_z);
-          pvs[vi].lam_f = skin_normal_lambert(worldm.data(), sv, rig.fill_x,
-                                              rig.fill_y, rig.fill_z);
+          pvs[vi].lam_k = skin_normal_lambert(worldm.data(), sv, rig.key_x, rig.key_y, rig.key_z);
+          pvs[vi].lam_f =
+              skin_normal_lambert(worldm.data(), sv, rig.fill_x, rig.fill_y, rig.fill_z);
         } else {
           pvs[vi].lam_k = pvs[vi].lam_f = 0;
         }
@@ -732,12 +726,12 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         // dot(face,outward), while the historical B/C reversal made the flat
         // lane inward. Use the compiled order, matching the corrected packed
         // smooth normals.
-        const int32_t lam_key = render::shade_flat_tri_dir(
-            a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz,
-            rig.key_x, rig.key_y, rig.key_z, L);
-        const int32_t lam_fill = render::shade_flat_tri_dir(
-            a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz,
-            rig.fill_x, rig.fill_y, rig.fill_z, L);
+        const int32_t lam_key =
+            render::shade_flat_tri_dir(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz,
+                                       rig.key_x, rig.key_y, rig.key_z, L);
+        const int32_t lam_fill =
+            render::shade_flat_tri_dir(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz,
+                                       rig.fill_x, rig.fill_y, rig.fill_z, L);
         render::TriMode tm;  // opaque: depth test + write
         // GOURAUD (N3): when the compiled mesh carries normals, each corner
         // gets its own Lambert — kSmoothMixNum parts the per-vertex smooth
@@ -800,8 +794,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           // Topology ownership view: exact, reversible meshlet/triangle ID in
           // R/G and a blue marker. This maps a visible shard to its source
           // triangle without guessing from a wireframe at 240p.
-          const uint32_t id = static_cast<uint32_t>(&m - mset.data()) * 128u +
-                              static_cast<uint32_t>(ti / 3) + 1u;
+          const uint32_t id =
+              static_cast<uint32_t>(&m - mset.data()) * 128u + static_cast<uint32_t>(ti / 3) + 1u;
           const Shade3 tag{static_cast<int32_t>((id & 255u) * 65536u / 255u),
                            static_cast<int32_t>(((id >> 8) & 255u) * 65536u / 255u), 65536};
           shc[0] = shc[1] = shc[2] = tag;
@@ -845,8 +839,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         const bool want_tex = (T.page_direct != nullptr || T.page_set != nullptr) &&
                               m.page != 255 && g_debug_shade != DebugShade::kNormals &&
                               g_debug_shade != DebugShade::kTriangleIds;
-        const bool diagnostic_colour = g_debug_shade == DebugShade::kNormals ||
-                                       g_debug_shade == DebugShade::kTriangleIds;
+        const bool diagnostic_colour =
+            g_debug_shade == DebugShade::kNormals || g_debug_shade == DebugShade::kTriangleIds;
         const uint8_t em_r = diagnostic_colour ? 255 : m.r;
         const uint8_t em_g = diagnostic_colour ? 255 : m.g;
         const uint8_t em_b = diagnostic_colour ? 255 : m.b;

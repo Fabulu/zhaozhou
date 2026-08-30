@@ -236,10 +236,10 @@ inline constexpr int32_t kLightZ = 26758;
  * As shade_flat_tri, but against an ARBITRARY unit Q16.16 direction FROM the
  * shaded surface TOWARD the light source (not incoming ray travel). A +Y top
  * winding therefore returns unity under L=(0,+1,0), while the corresponding
- * -Y underside returns zero. Added 2026-08-26 for the creature fill light: the one-light model left half
- * of a body of revolution at an identical flat ambient floor with no form and
- * no chroma (see RUN-20260826-1615 FINDINGS-R1 section D.3). The arithmetic is
- * verbatim shade_flat_tri; only the light is a parameter.
+ * -Y underside returns zero. Added 2026-08-26 for the creature fill light: the one-light model left
+ * half of a body of revolution at an identical flat ambient floor with no form and no chroma (see
+ * RUN-20260826-1615 FINDINGS-R1 section D.3). The arithmetic is verbatim shade_flat_tri; only the
+ * light is a parameter.
  */
 int32_t shade_flat_tri_dir(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_t bz,
                            int32_t cx, int32_t cy, int32_t cz, int32_t lx, int32_t ly, int32_t lz,
