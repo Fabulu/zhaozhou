@@ -1,7 +1,7 @@
 # Task Log: RUN-20260830-1318 - Creature authoring workbench scaffold
 
 **Created:** 2026-08-30 13:18 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260830-1318-creature-authoring-workbench-scaffold/
 
 ---
@@ -111,6 +111,19 @@ sample while preserving art, archives, noindex and explicit-only publication.
 - No render, encode, site assembly, browser, server or deploy process was
   launched. No V14 media or expected CRC constant changed.
 
+### 2026-08-30 14:12 UTC+02:00 - Closeout and integration preflight
+
+- Fetched both origins. `origin/main` still exactly matched the requested bases:
+  zhaozhou `910fd9636100cd15b73b6357ab756fdd0297ed55` and Upheaval
+  `04ab965b26e8d0c60272940d42da2d67e946f897`; both feature histories are therefore
+  clean fast-forwards.
+- Removed the one temporary builder-check output and confirmed no Python bytecode
+  cache or selected encoder staging was left by this run.
+- Windows process inspection found no lane-owned builder/compiler, reel, ffmpeg,
+  ffprobe, Python workbench/encoder/assembler, Node/Wrangler or browser process.
+- Both feature trees were clean. Scaffold implementation is complete; Task #28
+  remains queued and untouched.
+
 ---
 
 ## Validation Ledger — `WORKBENCH-SCAFFOLD-1`
@@ -167,8 +180,8 @@ None. This is the sole implementation lane.
 
 ## Next Steps
 
-- Fetch both origins and verify each remote main still equals the requested base.
-- Fast-forward both feature branches to main without force, push and record exact
-  main SHAs.
-- Remove the one lane-local builder-check output, verify no owned child survives
-  and prove both repository trees clean.
+- No remaining scaffold implementation or validation work.
+- Integrate the already-fetched feature fast-forwards to both mains and report
+  their exact remote SHAs.
+- Start Task #28 only as its own future Zixxtrixx creature run after rereading all
+  sixteen owner directions and checking for newer reports.
