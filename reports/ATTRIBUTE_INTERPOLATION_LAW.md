@@ -1,4 +1,49 @@
-# The attribute seam is blocked on a numeric law, and the law that exists is not implementable
+# The attribute seam: the plane form IS the oracle, and step 6 is unblocked
+
+> ## RESOLVED THE SAME DAY. Read this box; the analysis below is kept for its reasoning.
+>
+> I recommended checking, before deciding anything, whether some incremental
+> form is bit-identical to the shipped oracle. **It is.**
+>
+>     tests/proofs/attribute_plane_equivalence.cpp
+>     32,805 pixel-attributes over five triangle shapes, 0 mismatches
+>
+> The reasoning the analysis below missed: the oracle's edge functions step by
+> CONSTANTS (`w0 += dw0_dx` in rast.cpp), so the 128-bit NUMERATOR
+>
+>     N(x,y) = w0*A + w1*B + w2*C
+>
+> is itself an exact integer plane — `N(x,y) = N0 + x*dNdx + y*dNdy`, with no
+> rounding anywhere in the stepping. The division is applied to the stepped
+> numerator exactly as the oracle applies it to the recomputed one, so the two
+> agree bit for bit.
+>
+> **So `spec/qformats.md` and `rast.cpp` were never in conflict.** "Interpolate
+> by plane equation" describes the NUMERATOR, which is a plane; the per-pixel
+> divide stays. My reading below — that no plane form could match because
+> division does not distribute over the increment — was wrong: nothing is being
+> distributed, because the increment happens BEFORE the divide, not after.
+>
+> ### What that gives step 6
+>
+> `GEOM.ATTRSETUP` has a testable output format and it is exact:
+>
+>     per triangle, per attribute:  { N0, dNdx, dNdy }   plus the shared area
+>     per pixel:                    N += dNdx (or dNdy per row), then ONE divide
+>
+> The plane half is **free and exact** — integer adds. The divide is the real
+> cost and it is unchanged, but ruling 6's ordering is what pays for it: only
+> `invw24` is needed BEFORE early-Z, so one divide per covered pixel; `u` and
+> `v` are paid only by survivors; colour and alpha only when Gouraud is on.
+>
+> The seven-divides-per-pixel figure below is the worst case for a textured
+> Gouraud triangle with every attribute live, not the common path.
+>
+> **Nothing in `zref` has to change and no golden capture moves.** Options 1 and
+> 2 below are both withdrawn.
+
+## The original analysis, kept for its reasoning
+
 
 Written 2026-08-30 while starting step 6 of `reports/RENDERER_ARCHITECTURE.md`
 (the attribute-bearing geometry seam). It is the gate on everything textured, so
