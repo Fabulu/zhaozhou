@@ -215,6 +215,76 @@ module zhao_shell_top
   output logic        shell_err_cdc_o,       // starvation sample moved at tick
   output logic        shell_err_framer_o,    // record queue overflow (glue 3)
 
+  // ---- RENDER: the geometry front door ----------------------------------
+  // The console's first render path. GEOM.BINNER -> RASTER.TILE_PIPE ->
+  // RASTER.FBWRITE -> MEM.GUARD -> the arbiter ENGINE0 port, which zhao_pkg has
+  // always called a "reserved guaranteed slot" and which was tied to zero until
+  // now.
+  //
+  // The triangle port sits at the SHELL edge because CMD.SCHEDULER does not
+  // feed it yet. That is provisional and says so: when the command front end
+  // grows a draw path these become internal and nothing else here changes.
+  //
+  // What it draws is FLAT-shaded. zhao_raster_tile_pipe carries one colour,
+  // alpha, depth and texel across a triangle because interpolating them is
+  // GEOM.SETUP work and GEOM.SETUP has no attribute input yet. This is the
+  // path, not the picture.
+  input  logic        render_frame_begin_i,
+  input  logic        render_frame_end_i,
+  input  logic [5:0]  render_grid_w_i,
+  input  logic [5:0]  render_grid_h_i,
+
+  input  logic               render_tri_valid_i,
+  output logic               render_tri_ready_o,
+  input  logic signed [22:0] render_kx0_i, render_ky0_i,
+  input  logic signed [47:0] render_kc0_i,
+  input  logic signed [22:0] render_kx1_i, render_ky1_i,
+  input  logic signed [47:0] render_kc1_i,
+  input  logic signed [22:0] render_kx2_i, render_ky2_i,
+  input  logic signed [47:0] render_kc2_i,
+  input  logic        [ 2:0] render_tl_i,
+  input  logic signed [20:0] render_ax_i, render_ay_i,
+  input  logic signed [20:0] render_bx_i, render_by_i,
+  input  logic signed [20:0] render_cx_i, render_cy_i,
+  input  logic signed [11:0] render_min_x_i, render_max_x_i,
+  input  logic signed [11:0] render_min_y_i, render_max_y_i,
+  input  logic        [15:0] render_src_id_i,
+
+  input  logic [63:0] render_fill_word_i,
+  input  logic [63:0] render_clear_word_i,
+  input  logic [31:0] render_state_i,
+  input  logic [ 7:0] render_src_a_i,
+  input  logic [23:0] render_texel_rgb_i,
+  input  logic [ 7:0] render_texel_a_i,
+  input  logic [ 7:0] render_texel_idx_i,
+
+  input  logic [26:0] render_fb_base_i,
+  input  logic [15:0] render_fb_stride_i,
+
+  // WHO HOLDS THE FRAMEBUFFER-WRITE LEASE THIS FRAME.
+  // 0 = DEBUG.FRAMEBLIT, 1 = RASTER.FBWRITE.
+  //
+  // ONE SIGNAL, BOTH GUARDS. The first version of this wiring hardwired
+  // `fb_writer` to 0 inside the blit guard and 1 inside the render guard, so
+  // each compared the client against its OWN constant and BOTH writers passed
+  // at once -- which is precisely the corruption the lease exists to prevent,
+  // reintroduced by the wiring of the block that prevents it. The owner is one
+  // value, and both guards are told the same one.
+  //
+  // Provisional at the shell edge: VIDEO.SLOTMGR already owns one lease at a
+  // time with a generation, and this becomes that lease's owner field once
+  // CMD.SCHEDULER selects the writer. Until then it is an input so a bench can
+  // exercise either writer, and it defaults to the blit at the caller.
+  input  logic        fb_writer_i,
+
+  output logic        render_drain_done_o,
+  output logic        render_busy_o,
+  output logic [31:0] render_pixels_o,
+  output logic [31:0] render_bursts_o,
+  output logic        render_stream_error_o,
+  output logic        render_overflow_o,
+  output logic        render_fragment_error_o,
+
   // ---- SDR PHY pins (behavioural model in the tb wrapper; D2) ------------
   output logic        phy_cs_n_o,
   output logic        phy_ras_n_o,
@@ -598,10 +668,9 @@ module zhao_shell_top
     .map_valid  (map_valid_q),
     .blit_slot  (map_slot_q),
     .blit_span  (map_span_q),
-    // DEBUG.FRAMEBLIT is writer 0. When RASTER.FBWRITE is wired to
-    // client_req[2] this becomes the lease's own owner field, published by
-    // VIDEO.SLOTMGR and selected by CMD.SCHEDULER.
-    .fb_writer  (1'b0),
+    // The lease owner, shared with the render guard below. This guard passes
+    // only when the lease names the blit.
+    .fb_writer  (fb_writer_i),
     .arb_req    (blit_arb_req),
     .arb_rsp    (client_rsp[1]),
     .guard_violation     (blit_gv),
@@ -609,7 +678,10 @@ module zhao_shell_top
     .guard_violation_req (blit_gv_req)
   );
 
-  assign guard_violations_o = scan_gv_cnt + blit_gv_cnt;
+  // All THREE guards now: scanout, the blit, and the render engine. A render
+  // write outside the leased slot is a violation like any other and must not be
+  // invisible in the shell's own counter.
+  assign guard_violations_o = scan_gv_cnt + blit_gv_cnt + render_gv_cnt;
 
   // ---- GLUE 10: the blit pacer -------------------------------------------
   // Even with the FB-slot bank split (which removed the single-bank row
@@ -656,7 +728,111 @@ module zhao_shell_top
   end
 
   assign client_req[0] = scan_arb_req;
-  assign client_req[2] = '0;
+  // ---- RENDER: the path, its guard, and the arbiter port ------------------
+  // Wired exactly as DEBUG.FRAMEBLIT is: producer -> zhao_mem_guard ->
+  // client_req[n]. The guard fb_writer is 1 here and the blit guard is 0, so a
+  // frame whose lease names one refuses the other -- one writer per frame,
+  // enforced by the block whose contract is that nothing escapes the window.
+  zhao_guard_req_t render_guard_req;
+  zhao_guard_rsp_t render_guard_rsp;
+  logic [63:0]     render_wdata;
+  logic            render_wvalid, render_wready, render_wlast;
+  zhao_arb_req_t   render_arb_req;
+  logic            render_gv;
+  logic [31:0]     render_gv_cnt;
+  zhao_guard_req_t render_gv_req;
+
+  logic [15:0] rp_fb_src_unused;
+  logic [ 7:0] rp_fb_tag_unused, rp_fb_addr_unused;
+  logic [15:0] rp_crc_idx_unused, rp_depth_unused;
+  logic [31:0] rp_crc_unused, rp_ez_unused, rp_refs_unused, rp_culled_unused;
+  logic [31:0] rp_jobs_unused, rp_jobstall_unused, rp_stall_unused;
+  logic [ 8:0] rp_cov_unused;
+  logic        rp_done_unused, rp_degen_unused, rp_arenafull_unused, rp_busy_unused;
+  logic        rp_tok_unused;
+
+  logic               rpx_valid, rpx_ready, rpx_last;
+  logic        [15:0] rpx_rgb565;
+  logic signed [11:0] rpx_x, rpx_y;
+
+  zhao_geom_bin_pipe u_render_bin (
+    .clk(gpu_clk), .rst_n(rst_n),
+    .frame_begin_i(render_frame_begin_i), .frame_end_i(render_frame_end_i),
+    .grid_w_i(render_grid_w_i), .grid_h_i(render_grid_h_i),
+    .tri_valid_i(render_tri_valid_i), .tri_ready_o(render_tri_ready_o),
+    .tri_kx0_i(render_kx0_i), .tri_ky0_i(render_ky0_i), .tri_kc0_i(render_kc0_i),
+    .tri_kx1_i(render_kx1_i), .tri_ky1_i(render_ky1_i), .tri_kc1_i(render_kc1_i),
+    .tri_kx2_i(render_kx2_i), .tri_ky2_i(render_ky2_i), .tri_kc2_i(render_kc2_i),
+    .tri_tl_i(render_tl_i),
+    .tri_ax_i(render_ax_i), .tri_ay_i(render_ay_i),
+    .tri_bx_i(render_bx_i), .tri_by_i(render_by_i),
+    .tri_cx_i(render_cx_i), .tri_cy_i(render_cy_i),
+    .tri_min_x_i(render_min_x_i), .tri_max_x_i(render_max_x_i),
+    .tri_min_y_i(render_min_y_i), .tri_max_y_i(render_max_y_i),
+    .tri_src_id_i(render_src_id_i),
+    // MEASURE.TOKENS does not gate the shell render path yet; every triangle is
+    // granted. When the governor is wired this becomes its grant.
+    .tok_req_o(rp_tok_unused), .tok_grant_i(1'b1),
+    .job_fill_word_i(render_fill_word_i), .job_clear_word_i(render_clear_word_i),
+    .job_state_i(render_state_i), .job_src_a_i(render_src_a_i),
+    .job_texel_rgb_i(render_texel_rgb_i), .job_texel_a_i(render_texel_a_i),
+    .job_texel_idx_i(render_texel_idx_i),
+    .fb_valid_o(rpx_valid), .fb_ready_i(rpx_ready),
+    .fb_rgb565_o(rpx_rgb565),
+    .fb_tag_o(rp_fb_tag_unused), .fb_addr_o(rp_fb_addr_unused),
+    .fb_x_o(rpx_x), .fb_y_o(rpx_y), .fb_last_o(rpx_last),
+    .fb_src_id_o(rp_fb_src_unused),
+    .tile_crc_o(rp_crc_unused), .tile_crc_index_o(rp_crc_idx_unused),
+    .tile_done_o(rp_done_unused), .tile_cov_count_o(rp_cov_unused),
+    .tile_degenerate_o(rp_degen_unused),
+    .drain_busy_o(rp_busy_unused), .drain_done_o(render_drain_done_o),
+    .tile_references_o(rp_refs_unused),
+    .max_tile_list_depth_o(rp_depth_unused),
+    .triangles_culled_o(rp_culled_unused),
+    .overflow_o(render_overflow_o),
+    .arena_full_o(rp_arenafull_unused),
+    .jobs_taken_o(rp_jobs_unused),
+    .job_stall_clocks_o(rp_jobstall_unused),
+    .early_z_rejects_o(rp_ez_unused),
+    .fragment_error_o(render_fragment_error_o)
+  );
+
+  zhao_raster_fbwrite u_render_fbw (
+    .clk(gpu_clk), .rst_n(rst_n),
+    .fb_base_i(render_fb_base_i), .fb_stride_i(render_fb_stride_i),
+    .px_valid_i(rpx_valid), .px_ready_o(rpx_ready),
+    .px_rgb565_i(rpx_rgb565), .px_x_i(rpx_x), .px_y_i(rpx_y), .px_last_i(rpx_last),
+    .frame_end_i(render_frame_end_i),
+    .guard_req_o(render_guard_req), .guard_rsp_i(render_guard_rsp),
+    .guard_wdata_o(render_wdata), .guard_wvalid_o(render_wvalid),
+    .guard_wready_i(render_wready), .guard_wlast_o(render_wlast),
+    .pixels_written_o(render_pixels_o),
+    .bursts_issued_o(render_bursts_o),
+    .stall_clocks_o(rp_stall_unused),
+    .stream_error_o(render_stream_error_o),
+    .busy_o(render_busy_o)
+  );
+
+  zhao_mem_guard u_guard_render (
+    .clk        (gpu_clk),
+    .rst_n      (rst_n),
+    .req        (render_guard_req),
+    .rsp        (render_guard_rsp),
+    .map_valid  (map_valid_q),
+    .blit_slot  (map_slot_q),
+    .blit_span  (map_span_q),
+    // The SAME lease owner the blit guard sees. This guard passes only when the
+    // lease names the render engine, so exactly one of the two writers can ever
+    // pass in a frame -- the lease ruling in hardware rather than in a comment.
+    .fb_writer  (fb_writer_i),
+    .arb_req    (render_arb_req),
+    .arb_rsp    (client_rsp[2]),
+    .guard_violation     (render_gv),
+    .guard_violations    (render_gv_cnt),
+    .guard_violation_req (render_gv_req)
+  );
+
+  assign client_req[2] = render_arb_req;
   assign client_req[3] = '0;
   assign client_req[4] = '0;
 
@@ -699,14 +875,23 @@ module zhao_shell_top
       // beat becomes four 16-bit words, so it is ready exactly when four fit.
       // `wf_err` stays as a tripwire; the overflow branch is now structurally
       // unreachable from the write side.
-      if (blit_wvalid && blit_wready) begin
+      // ONE WRITE QUEUE, ONE WRITER PER FRAME. DEBUG.FRAMEBLIT and
+      // RASTER.FBWRITE both produce 64-bit write beats, and MEM.GUARD has
+      // already made it impossible for both to pass in the same frame -- the
+      // lease names one of them and refuses the other. So the queue takes
+      // whichever is presenting, with no arbitration to get wrong: a mux here
+      // that could pick the wrong source would need two ACTIVE sources, and the
+      // guard guarantees there is at most one.
+      //
+      // ENFORCED-BY: tests/memory/mem_guard_directed.cpp (owner mismatch)
+      if (fbw_wvalid && fbw_wready) begin
         if (wf_occ > ($bits(wf_occ))'(WFIFO_W - 4)) begin
           wf_err <= 1'b1;                      // overflow: beats dropped
         end else begin
           for (int j = 0; j < 4; j++) begin
             // power-of-two depth: the pointer's low bits ARE the index
             wfifo[($clog2(WFIFO_W))'(wf_wp + ($bits(wf_wp))'(j))]
-              <= blit_wdata[16*j +: 16];
+              <= fbw_wdata[16*j +: 16];
           end
           wf_wp <= wf_wp + ($bits(wf_wp))'(4);
         end
@@ -717,7 +902,14 @@ module zhao_shell_top
       end
     end
   end
-  assign blit_wready = (wf_occ <= ($bits(wf_occ))'(WFIFO_W - 4));
+  // The selected framebuffer writer, and the readiness both are told.
+  logic [63:0] fbw_wdata;
+  logic        fbw_wvalid, fbw_wready;
+  assign fbw_wvalid = blit_wvalid || render_wvalid;
+  assign fbw_wdata  = render_wvalid ? render_wdata : blit_wdata;
+  assign fbw_wready = (wf_occ <= ($bits(wf_occ))'(WFIFO_W - 4));
+  assign blit_wready   = fbw_wready;
+  assign render_wready = fbw_wready;
   assign shell_err_wfifo_o = wf_err;
 
   // read-beat packer (glue 2): 4 rdata words -> one 64-bit scanout beat
@@ -985,6 +1177,11 @@ module zhao_shell_top
                     // per beat and the controller pops them on its own schedule,
                     // so nothing here has to know which beat was final.
                     ^ blit_wlast
+                    // The render guard's trace-only outputs, sunk exactly
+                    // as the scanout and blit guards' are. `render_wlast`
+                    // is the burst's last beat, which the write queue does
+                    // not need because the arbiter counts words.
+                    ^ render_wlast ^ render_gv ^ ^render_gv_req
                     // The slot manager's observability: exposed for tracing and
                     // for the counters, consumed by neither yet.
                     ^ slot_lease_grant ^ slot_lease_refused

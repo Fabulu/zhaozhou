@@ -4135,6 +4135,22 @@ set(ZHAO_SHELL_RTL
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_arbiter.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_frameblit.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_slotmgr.sv
+    # RENDER: the shell drives the arbiter ENGINE0 port now, so its whole cone
+    # is part of the synthesizable shell.
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fbwrite.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_bin_pipe.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_shell_top.sv)
 
 # synthesizable-cone lint (the model/tb are excluded by construction)
