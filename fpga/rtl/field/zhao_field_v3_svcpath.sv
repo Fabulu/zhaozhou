@@ -135,6 +135,17 @@ module zhao_field_v3_svcpath #(
     output var logic [31:0]                   drain_writes_o,
     // The RING service's front end, which the composed measurement showed to
     // be the ceiling rather than its arithmetic. Counters only.
+    // WHICH SERVICE IS THE WALL. `longop-hold` says the executor cannot hand a
+    // long op to the dispatcher, and the dispatcher cannot take one because a
+    // SERVICE will not accept -- but which one is a guess without this. Two
+    // numbers per service: groups it ACCEPTED, and clocks it was OFFERED a
+    // group and refused. The second is the one that names a bottleneck; the
+    // first is what divides into the run to give an initiation interval.
+    //
+    // ENFORCED-BY: tests/differential/field_v3_earth_directed.cpp:main
+    output var logic [31:0]                   svc_taken_o   [7],
+    output var logic [31:0]                   svc_refused_o [7],
+
     output var logic [31:0]                   ring_req_taken_o,
     output var logic [31:0]                   ring_fetch_clocks_o,
     output var logic [31:0]                   ring_hand_wait_o,
@@ -796,5 +807,32 @@ module zhao_field_v3_svcpath #(
       .wr_data_o(wr_data_o),
       .served_o(wb_served_o), .stalled_o(wb_stalled_o)
   );
+
+
+  // Index order is fixed and stated once: 0 noise, 1 curve, 2 normalize,
+  // 3 rot, 4 ring, 5 trig, 6 len. The harness prints these names against
+  // these indices and nothing else derives them.
+  logic [6:0] svc_sel_c, svc_acc_c;
+  assign svc_sel_c = {is_len_c, is_trig_c, is_ring_c, is_rot_c,
+                      is_norm_c, is_curve_c, is_noise_c};
+  assign svc_acc_c = {is_len_c   && ln_v_ready,   is_trig_c && tg_v_ready,
+                      is_ring_c  && rg_req_ready, is_rot_c  && rt_v_ready,
+                      is_norm_c  && nm_v_ready,   is_curve_c && cv_req_ready,
+                      is_noise_c && nz_v_ready};
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      for (int k = 0; k < 7; k++) begin
+        svc_taken_o[k]   <= 32'd0;
+        svc_refused_o[k] <= 32'd0;
+      end
+    end else if (svc_valid) begin
+      for (int k = 0; k < 7; k++)
+        if (svc_sel_c[k]) begin
+          if (svc_acc_c[k]) svc_taken_o[k] <= svc_taken_o[k] + 32'd1;
+          else              svc_refused_o[k] <= svc_refused_o[k] + 32'd1;
+        end
+    end
+  end
 
 endmodule : zhao_field_v3_svcpath

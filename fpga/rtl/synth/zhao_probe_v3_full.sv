@@ -198,6 +198,9 @@ module zhao_probe_v3_full #(
     // serial scalar reads -> HAND, so a program making two ring requests per
     // four-point group could not beat sixteen clocks per group however fast
     // its arithmetic was. These say whether the descriptor cache moved it.
+    // 0 noise, 1 curve, 2 normalize, 3 rot, 4 ring, 5 trig, 6 len.
+    output var logic [31:0]             svc_taken_o   [7],
+    output var logic [31:0]             svc_refused_o [7],
     output var logic [31:0]             ring_req_taken_o,
     output var logic [31:0]             ring_fetch_clocks_o,
     output var logic [31:0]             ring_hand_wait_o,
@@ -372,6 +375,7 @@ module zhao_probe_v3_full #(
       .rel_valid_o(rel_valid), .rel_ctx_o(rel_ctx),
 
       .groups_o(groups_o), .partial_o(partial_o), .drain_writes_o(drain_writes_o),
+      .svc_taken_o(svc_taken_o), .svc_refused_o(svc_refused_o),
       .ring_req_taken_o(ring_req_taken_o), .ring_fetch_clocks_o(ring_fetch_clocks_o),
       .ring_hand_wait_o(ring_hand_wait_o),
       .ring_desc_hit_o(ring_desc_hit_o), .ring_desc_miss_o(ring_desc_miss_o),

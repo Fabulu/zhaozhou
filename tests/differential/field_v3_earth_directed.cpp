@@ -959,6 +959,8 @@ struct Result {
   long bank_both = 0, bank_eng = 0, bank_svc = 0, bank_none = 0;
   // The RING service's accept path, which was the real ceiling.
   long ring_taken = 0, ring_fetch = 0, ring_wait = 0, ring_hit = 0, ring_miss = 0;
+  // 0 noise, 1 curve, 2 normalize, 3 rot, 4 ring, 5 trig, 6 len.
+  long svc_taken[7] = {}, svc_refused[7] = {};
   double avg_active = 0.0;
   long wb_served[2] = {0, 0}, wb_stalled[2] = {0, 0};
   // THE ONE WRITE PORT. Every uop of every point lands through it, one per
@@ -1296,6 +1298,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   long mulg0 = 0, muls0 = 0;
   long bb0 = 0, be0 = 0, bs0 = 0, bn0 = 0;
   long rt0 = 0, rf0 = 0, rw0 = 0, rh0 = 0, rm0 = 0;
+  long st0[7] = {}, sr0[7] = {};
   int counted_start = 0;
   int guard = 0;
   const int guard_max = points * 8000 + 400000;
@@ -1328,6 +1331,10 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         rw0 = (long)top.ring_hand_wait_o;
         rh0 = (long)top.ring_desc_hit_o;
         rm0 = (long)top.ring_desc_miss_o;
+        for (int k = 0; k < 7; ++k) {
+          st0[k] = (long)top.svc_taken_o[k];
+          sr0[k] = (long)top.svc_refused_o[k];
+        }
         denied0 = (long)top.denied_clocks_o;
         dotc0 = (long)top.dot_clocks_o;
         skid0 = (long)top.skid_clocks_o;
@@ -1342,6 +1349,10 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         rw0 = (long)top.ring_hand_wait_o;
         rh0 = (long)top.ring_desc_hit_o;
         rm0 = (long)top.ring_desc_miss_o;
+        for (int k = 0; k < 7; ++k) {
+          st0[k] = (long)top.svc_taken_o[k];
+          sr0[k] = (long)top.svc_refused_o[k];
+        }
         active_sum0 = d.active_sum;
         active_clocks0 = d.active_clocks;
         denied0 = (long)top.denied_clocks_o;
@@ -1358,6 +1369,10 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         rw0 = (long)top.ring_hand_wait_o;
         rh0 = (long)top.ring_desc_hit_o;
         rm0 = (long)top.ring_desc_miss_o;
+        for (int k = 0; k < 7; ++k) {
+          st0[k] = (long)top.svc_taken_o[k];
+          sr0[k] = (long)top.svc_refused_o[k];
+        }
         denied0 = (long)top.denied_clocks_o;
         dotc0 = (long)top.dot_clocks_o;
         skid0 = (long)top.skid_clocks_o;
@@ -1372,6 +1387,10 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         rw0 = (long)top.ring_hand_wait_o;
         rh0 = (long)top.ring_desc_hit_o;
         rm0 = (long)top.ring_desc_miss_o;
+        for (int k = 0; k < 7; ++k) {
+          st0[k] = (long)top.svc_taken_o[k];
+          sr0[k] = (long)top.svc_refused_o[k];
+        }
         uops0 = (long)top.uops_issued_o;
         idle0 = (long)top.idle_clocks_o;
         held0 = (long)top.hold_clocks_o;
@@ -1392,6 +1411,10 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         rw0 = (long)top.ring_hand_wait_o;
         rh0 = (long)top.ring_desc_hit_o;
         rm0 = (long)top.ring_desc_miss_o;
+        for (int k = 0; k < 7; ++k) {
+          st0[k] = (long)top.svc_taken_o[k];
+          sr0[k] = (long)top.svc_refused_o[k];
+        }
         denied0 = (long)top.denied_clocks_o;
         dotc0 = (long)top.dot_clocks_o;
         skid0 = (long)top.skid_clocks_o;
@@ -1406,6 +1429,10 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         rw0 = (long)top.ring_hand_wait_o;
         rh0 = (long)top.ring_desc_hit_o;
         rm0 = (long)top.ring_desc_miss_o;
+        for (int k = 0; k < 7; ++k) {
+          st0[k] = (long)top.svc_taken_o[k];
+          sr0[k] = (long)top.svc_refused_o[k];
+        }
         active_sum0 = d.active_sum;
         active_clocks0 = d.active_clocks;
         denied0 = (long)top.denied_clocks_o;
@@ -1422,6 +1449,10 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         rw0 = (long)top.ring_hand_wait_o;
         rh0 = (long)top.ring_desc_hit_o;
         rm0 = (long)top.ring_desc_miss_o;
+        for (int k = 0; k < 7; ++k) {
+          st0[k] = (long)top.svc_taken_o[k];
+          sr0[k] = (long)top.svc_refused_o[k];
+        }
         denied0 = (long)top.denied_clocks_o;
         dotc0 = (long)top.dot_clocks_o;
         skid0 = (long)top.skid_clocks_o;
@@ -1436,6 +1467,10 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         rw0 = (long)top.ring_hand_wait_o;
         rh0 = (long)top.ring_desc_hit_o;
         rm0 = (long)top.ring_desc_miss_o;
+        for (int k = 0; k < 7; ++k) {
+          st0[k] = (long)top.svc_taken_o[k];
+          sr0[k] = (long)top.svc_refused_o[k];
+        }
         counted_start = retired;
       }
       for (int c = 0; c < n_ctx; ++c) {
@@ -1522,11 +1557,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1536,11 +1587,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -1555,11 +1622,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1569,11 +1652,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -1588,11 +1687,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1602,11 +1717,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
@@ -1623,11 +1754,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1637,11 +1784,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -1656,11 +1819,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1670,11 +1849,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -1689,11 +1884,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1703,11 +1914,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
@@ -1724,11 +1951,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1738,11 +1981,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -1757,11 +2016,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1771,11 +2046,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -1790,11 +2081,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1804,11 +2111,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           uops0 = (long)top.uops_issued_o;
           idle0 = (long)top.idle_clocks_o;
           held0 = (long)top.hold_clocks_o;
@@ -1829,11 +2152,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1843,11 +2182,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -1862,11 +2217,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1876,11 +2247,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -1895,11 +2282,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1909,11 +2312,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
@@ -1930,11 +2349,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1944,11 +2379,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -1963,11 +2414,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -1977,11 +2444,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -1996,11 +2479,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2010,11 +2509,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
@@ -2031,11 +2546,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2045,11 +2576,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2064,11 +2611,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2078,11 +2641,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2097,11 +2676,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2111,11 +2706,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           uops0 = (long)top.uops_issued_o;
           idle0 = (long)top.idle_clocks_o;
           held0 = (long)top.hold_clocks_o;
@@ -2136,11 +2747,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2150,11 +2777,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2169,11 +2812,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2183,11 +2842,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2202,11 +2877,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2216,11 +2907,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
@@ -2237,11 +2944,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2251,11 +2974,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2270,11 +3009,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2284,11 +3039,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2303,11 +3074,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2317,11 +3104,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
@@ -2338,11 +3141,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2352,11 +3171,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2371,11 +3206,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2385,11 +3236,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2404,11 +3271,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2418,11 +3301,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           counted_start = retired;
         }
         ++wave;
@@ -2468,11 +3367,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2482,11 +3397,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2501,11 +3432,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2515,11 +3462,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2534,11 +3497,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2548,11 +3527,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
@@ -2569,11 +3564,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2583,11 +3594,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2602,11 +3629,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2616,11 +3659,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2635,11 +3694,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2649,11 +3724,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
@@ -2670,11 +3761,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2684,11 +3791,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2703,11 +3826,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2717,11 +3856,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2736,11 +3891,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2750,11 +3921,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           uops0 = (long)top.uops_issued_o;
           idle0 = (long)top.idle_clocks_o;
           held0 = (long)top.hold_clocks_o;
@@ -2775,11 +3962,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2789,11 +3992,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2808,11 +4027,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2822,11 +4057,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2841,11 +4092,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2855,11 +4122,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
@@ -2876,11 +4159,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2890,11 +4189,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2909,11 +4224,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2923,11 +4254,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -2942,11 +4289,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2956,11 +4319,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
@@ -2977,11 +4356,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -2991,11 +4386,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -3010,11 +4421,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -3024,11 +4451,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -3043,11 +4486,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -3057,11 +4516,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           uops0 = (long)top.uops_issued_o;
           idle0 = (long)top.idle_clocks_o;
           held0 = (long)top.hold_clocks_o;
@@ -3082,11 +4557,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -3096,11 +4587,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -3115,11 +4622,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -3129,11 +4652,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -3148,11 +4687,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -3162,11 +4717,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
@@ -3183,11 +4754,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -3197,11 +4784,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -3216,11 +4819,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -3230,11 +4849,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -3249,11 +4884,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -3263,11 +4914,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
@@ -3284,11 +4951,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -3298,11 +4981,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -3317,11 +5016,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -3331,11 +5046,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
@@ -3350,11 +5081,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           bb0 = (long)top.bank_both_o;
           be0 = (long)top.bank_engine_only_o;
           bs0 = (long)top.bank_svc_only_o;
@@ -3364,11 +5111,27 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           rt0 = (long)top.ring_req_taken_o;
           rf0 = (long)top.ring_fetch_clocks_o;
           rw0 = (long)top.ring_hand_wait_o;
           rh0 = (long)top.ring_desc_hit_o;
           rm0 = (long)top.ring_desc_miss_o;
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
+          for (int k = 0; k < 7; ++k) {
+            st0[k] = (long)top.svc_taken_o[k];
+            sr0[k] = (long)top.svc_refused_o[k];
+          }
           counted_start = retired;
         }
         if (retired < points) load_point(c);
@@ -3429,6 +5192,10 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   R.ring_wait = (long)top.ring_hand_wait_o - rw0;
   R.ring_hit = (long)top.ring_desc_hit_o - rh0;
   R.ring_miss = (long)top.ring_desc_miss_o - rm0;
+  for (int k = 0; k < 7; ++k) {
+    R.svc_taken[k] = (long)top.svc_taken_o[k] - st0[k];
+    R.svc_refused[k] = (long)top.svc_refused_o[k] - sr0[k];
+  }
   R.avg_active = (d.active_clocks > active_clocks0) ? (double)(d.active_sum - active_sum0) /
                                                           (double)(d.active_clocks - active_clocks0)
                                                     : 0.0;
@@ -3628,6 +5395,18 @@ int main(int argc, char** argv) {
           "   %-22s   ring: %ld requests, descriptor %ld hit / %ld miss, %ld fetch clocks, "
           "%ld waiting for a free unit\n",
           "", D.ring_taken, D.ring_hit, D.ring_miss, D.ring_fetch, D.ring_wait);
+    // WHICH SERVICE IS THE WALL. `refused` is clocks a service was offered a
+    // group and would not take it -- the number that names a bottleneck --
+    // and elapsed/taken is that service's measured initiation interval.
+    {
+      static const char* kSvcName[7] = {"noise", "curve", "norm", "rot", "ring", "trig", "len"};
+      for (int k = 0; k < 7; ++k) {
+        if (D.svc_taken[k] == 0 && D.svc_refused[k] == 0) continue;
+        printf("   %-22s   svc %-6s took %5ld, refused %6ld clocks, II %.1f\n", "", kSvcName[k],
+               D.svc_taken[k], D.svc_refused[k],
+               D.svc_taken[k] ? (double)D.span_clocks / (double)D.svc_taken[k] : 0.0);
+      }
+    }
   }
 
   if (total_stag_bad != 0) {
