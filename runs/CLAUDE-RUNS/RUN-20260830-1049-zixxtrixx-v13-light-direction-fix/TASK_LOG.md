@@ -37,6 +37,15 @@ Establish the renderer's executable directional-light, normal and space conventi
 - Root cause: the ring zipper was already outward-wound. Two historical assertions said it was inward and independently inverted it: `generate_smooth_normals` negated the correct cross, and `compose_creatures` reversed each triangle before flat Lambert. Smooth/flat agreement therefore meant both lanes agreed inward.
 - Pre-fix executable evidence is `light-sign-before.txt`; expected exit was 1.
 
+### 2026-08-30 - Generic Orientation Defect Repaired
+
+- Removed the erroneous cross-product negation in `generate_smooth_normals`.
+- Removed the erroneous B/C reversal at both flat directional-light calls in `compose_creatures`.
+- Made both APIs' direction contract explicit: a unit vector from the surface toward the source, never incoming ray travel.
+- Fresh direct rebuild recompiled both dependent creature translation units.
+- The identical bounded probe now returns +65374..+65532 for actual smooth `dot(normal,outward)` and +64711..+64837 for index-order flat faces; the obsolete reverse order is negative. Synthetic top/underside remains 65536/0 in both lanes.
+- Post-fix executable evidence is `light-sign-after.txt`; exit 0.
+
 ---
 
 ## Subagent Spawns

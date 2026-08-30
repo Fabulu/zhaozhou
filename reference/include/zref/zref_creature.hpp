@@ -382,7 +382,9 @@ void skin_vertex(const mat3x4fx* palette, const SkinVertex& v, int32_t& ox, int3
 /**
  * Transform a packed bind-space normal through the same two-bone linear blend
  * as its vertex, NORMALISE the blended direction, then take one clamped
- * Lambert against a unit Q16.16 light.  Blending the already-clamped response
+ * Lambert against a unit Q16.16 vector FROM the surface TOWARD the light
+ * source (not the incoming ray-travel direction). Blending the already-clamped
+ * response
  * of each bone is not equivalent: it makes light follow influence weights
  * instead of the deformed surface whenever the two bones disagree.
  */

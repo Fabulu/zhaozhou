@@ -714,17 +714,16 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         const PV& b = pvs[m.idx[ti + 1]];
         const PV& c = pvs[m.idx[ti + 2]];
         if (!a.in || !b.in || !c.in) continue;  // Phase-3 near-plane law
-        // build_ring_part's zipper is deliberately inward-wound under the
-        // double-sided raster (the smooth-normal compiler negates the same
-        // cross). Flat response must use that SAME outward orientation. V9
-        // passed the inward index order here, so the 20% face lane opposed the
-        // 80% smooth lane: it suppressed real highlights and injected light on
-        // back-facing patches as triangles deformed across toon thresholds.
+        // build_ring_part's zipper is already outward-wound. V13's committed
+        // posed-ring fixture proved the index-order face has positive
+        // dot(face,outward), while the historical B/C reversal made the flat
+        // lane inward. Use the compiled order, matching the corrected packed
+        // smooth normals.
         const int32_t lam_key = render::shade_flat_tri_dir(
-            a.wx, a.wy, a.wz, c.wx, c.wy, c.wz, b.wx, b.wy, b.wz,
+            a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz,
             rig.key_x, rig.key_y, rig.key_z, L);
         const int32_t lam_fill = render::shade_flat_tri_dir(
-            a.wx, a.wy, a.wz, c.wx, c.wy, c.wz, b.wx, b.wy, b.wz,
+            a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz,
             rig.fill_x, rig.fill_y, rig.fill_z, L);
         render::TriMode tm;  // opaque: depth test + write
         // GOURAUD (N3): when the compiled mesh carries normals, each corner
