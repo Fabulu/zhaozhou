@@ -47,17 +47,99 @@ blocks:
 
   zhao_texture_tmu:
     unit: samples
-    itemsPerFrame: 850000
-    confidence: derived
-    source: >-
-      docs/OWNER_DOCKET.md 2026-08-23, TEXTURE.TMU demand table: Z60 384x240 at
-      overdraw 3.0 is 829,440 samples/frame; 850,000 is the ruled figure with
-      headroom. Terrain is CLUT8, so the CLUT path is the demand-critical one.
-    measuredII: 6
+    # ------------------------------------------------------------------------
+    # 850,000 WAS DERIVED WRONG, AND IS KEPT ONLY AS A SYNTHETIC STRESS PROFILE.
+    # ------------------------------------------------------------------------
+    # The old figure was 92,160 px x 3.0 overdraw x THREE TEXTURE LAYERS, and
+    # the third multiplier came from docs/OWNER_DOCKET.md quoting Sacrifice's
+    # layered map format (`sacmap.d:136-174`, tile + detail + lightmap).
+    # Zhaozhou does not do that: charter 26 rules ONE primary detail sample,
+    # reference/src/zrender/rast.cpp says "ONE primary sample" in the shipping
+    # terrain branch, and zhao_raster_fragment has exactly one texel port.
+    #
+    # But 276,480 -- terrain alone -- is NOT the console's demand either. The
+    # sampler also serves the sky backdrop, the stars and the cloud sheet, and
+    # then creatures, giants, objects and beams on 8 km maps.
+    #
+    # A SINGLE `itemsPerFrame` AND A SINGLE `requiredII` CANNOT DESCRIBE THIS
+    # BLOCK. It does heterogeneous work over independent resources: a CLUT8
+    # nearest sample uses the cache port and the palette RAM and no multiplier
+    # at all, while an ARGB4444 bilinear sample uses four cache lanes and four
+    # filter channel jobs. The floor is the resource that REFUSES, not the sum
+    # of the work -- which is the lesson the Field engine paid six sweep rounds
+    # to learn. So the model below is a vector, and the derived floor is a max
+    # over resources rather than a division of one total.
+    profiles:
+      ratified_known_z60:
+        confidence: derived
+        source: >-
+          spec sky_and_beams 1.1 (full-canvas backdrop, ~45,000 cloud
+          fragments), spec stars 1 (up to 128,000 star fragments at Z60),
+          terrain at 384x240 x 3.0 overdraw x ONE primary sample.
+          EXCLUDES creatures, giants, objects, beams and cache misses.
+        clut8_nearest:
+          terrain: 276480
+          sky_backdrop: 92160
+          stars: 128000
+          subtotal: 496640
+        argb4444_bilinear:
+          clouds: 45000
+        total_samples: 541640
+      synthetic_850k_mixed:
+        confidence: synthetic
+        source: >-
+          The old ruled figure, RETAINED DELIBERATELY as a whole-frame
+          robustness target with a deliberately filter-heavy mode mix. It is
+          NOT terrain demand and must never again be quoted as one.
+        total_samples: 850000
+      trace_derived:
+        confidence: unmeasured
+        source: >-
+          To be produced by instrumenting ZRef after Early-Z and serialising
+          the actual primary-TMU request stream: terrain+sky, maximum stars,
+          creature army, giant near camera, beams/storm, Duo, adversarial
+          cache thrash. Until these exist the mode mix is an estimate.
+    # Per-frame resource demand, derived from a profile's mode counts:
+    #   cache_accesses      = every sample (one access each)
+    #   palette_reads       = every CLUT8 sample
+    #   filter_channel_jobs = 3 * RGB565_bilinear + 4 * ARGB4444_bilinear
+    #   output_samples      = every sample
+    # Hit-path floor = max(cache_accesses, palette_reads,
+    #                      ceil(filter_channel_jobs / FILTER_LANES),
+    #                      output_samples)
+    # then plus MEASURED fill stalls, queue pressure, ordering bubbles and
+    # pipeline drain. On ratified_known_z60 with FILTER_LANES=1 that is
+    # max(541,640, 496,640, 180,000, 541,640) = 541,640 -- the cache port and
+    # the output port, and NOT the filter.
+    resourceModel:
+      cacheAccessesPerFrame: 541640
+      paletteReadsPerFrame: 496640
+      filterChannelJobsPerFrame: 180000
+      outputSamplesPerFrame: 541640
+      hitPathFloorClocks: 541640
+      budgetClocks: 1666667
+      reserveTargetClocks: 1333333   # 20% reserve; the gate, not the budget
+    measuredII:
+      clut8_nearest: 5
+      direct_nearest: 5
+      direct_bilinear: 5
     measuredIISource: >-
-      RUN-20260823-1736, asserted in the suite: 6 clocks per CLUT sample.
-      277,778/frame against 850,000 = 0.33x.
-    requiredII: 1
+      texture_tmu_directed after commit 9059eeb (resident palette): CLUT fell
+      from 6 clocks a sample to 5 because the second, dependent texture-cache
+      access for the palette entry is gone. All three paths are still limited
+      by the one-request-at-a-time FSM, which accepts only in ST_IDLE.
+    requiredII:
+      clut8_nearest: 1
+      direct_nearest: 1
+      filter_channel_per_lane: 1
+      cache_hit_access: 1
+      ordered_output: 1
+    requiredIISource: >-
+      TEXTURE.TMU v2 respec, 2026-08-30. The dominant nearest path takes one
+      request per clock because the cache already supports it and pipelining is
+      required for 100 MHz regardless; the much smaller bilinear workload gets a
+      separately sized filter lane. A universal all-bilinear 850,000 machine is
+      explicitly NOT required.
     reserve: 0.20
 
   zhao_surface_stamp:

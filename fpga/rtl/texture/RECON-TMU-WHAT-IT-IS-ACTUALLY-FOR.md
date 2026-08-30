@@ -1,7 +1,47 @@
 # TEXTURE.TMU — recon before the respec
 
-**Status: INFORMATION ONLY. No design decision is made here and none should be
-read out of it.** Fabian and the reviewer concluded 2026-08-30 that the TMU was
+> # CORRECTED 2026-08-30 BY THE V2 RESPEC. READ THIS BOX BEFORE THE FILE.
+>
+> This recon was right that 850,000 came from Sacrifice's three-layer
+> `tile + detail + lightmap` format and is not Zhaozhou terrain demand.
+>
+> **It then overcorrected.** 276,480 is the TERRAIN-PRIMARY component only. It
+> is not the console's TMU workload, and this file's "1.21x clear" reading is
+> against terrain alone. Ratified Z60 work already known:
+>
+>     terrain     CLUT8 nearest        276,480
+>     sky backdrop CLUT8 nearest        92,160
+>     stars       CLUT8 nearest        128,000
+>     clouds      ARGB4444 bilinear     45,000
+>     ----------------------------------------
+>     known subtotal                   541,640
+>
+> and that is BEFORE creatures, a giant filling most of a Duo view, beams, and
+> cache misses — on 8 km maps with hundreds of textured creatures and objects.
+> Against 541,640 the readings become:
+>
+>     old CLUT II 6      277,778   0.51x
+>     today's II 5       333,333   0.62x
+>     nearest II 3       555,556   2.6% margin -- not a resting place
+>     nearest II 2       833,333   provisional margin
+>     nearest II 1     1,666,667   the cache port's own ceiling
+>
+> **850,000 stays as a named SYNTHETIC whole-frame stress profile.** It is not a
+> derived terrain law and must never again be quoted as one.
+>
+> Also corrected: this file cites `texture_bilerp.sby` P3 as proving the nearest
+> bypass. **That BMC does not currently close on the factored filter** — P1..P4
+> are marked unproved. The endpoint identity is still exact, but it needs its
+> own proof or a citation to the exhaustive equivalence, not to a green P3.
+>
+> The conclusion that survives: the feature set is broadly right, the WORKLOAD
+> MODEL was wrong, the one-request-at-a-time implementation is wrong, and the
+> expensive filtered path is wrongly in series with the dominant nearest one.
+
+**Status: SUPERSEDED IN ITS NUMBERS by the v2 respec. The feature analysis below
+stands; the demand arithmetic is corrected in the box above.**
+
+Fabian and the reviewer concluded 2026-08-30 that the TMU was
 "specced wrong from the beginning, able to do too much" and that 850,000 is not
 the number it needs. Written while waiting for the replacement spec, to put the
 facts that respec will rest on in one place.

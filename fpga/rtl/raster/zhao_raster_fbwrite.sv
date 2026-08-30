@@ -1,7 +1,7 @@
 // zhao_raster_fbwrite.sv — RASTER.FBWRITE: the rasterizer's pixel stream
 // becomes VRAM writes.
 //
-// ENFORCED-BY: tests/render/render_fbwrite_directed.cpp:main
+// ENFORCED-BY: tests/render/render_fb_directed.cpp:main
 //
 // ---------------------------------------------------------------------------
 // WHY THIS BLOCK EXISTS: THE CONSOLE HAS NEVER DRAWN A PIXEL
