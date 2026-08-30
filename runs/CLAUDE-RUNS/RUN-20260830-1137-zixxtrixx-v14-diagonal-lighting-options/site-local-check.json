@@ -1,0 +1,206 @@
+[
+  {
+    "name": "desktop",
+    "viewport": [
+      1280,
+      900
+    ],
+    "initial": "zixxtrixx-0",
+    "count": 10,
+    "playback": [
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-daylight.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-open-sky.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-warm-cross.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-cool-cross.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-soft-cloud.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-hard-sun.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-cloudbreak.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-silver-moon.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-broad-bounce.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-rose-dusk.webm"
+      }
+    ],
+    "first": {
+      "width": 384,
+      "height": 240,
+      "duration": 10,
+      "clientWidth": 384
+    },
+    "last": {
+      "width": 384,
+      "height": 240,
+      "duration": 10,
+      "clientWidth": 384
+    },
+    "geometry": {
+      "innerWidth": 1280,
+      "scrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "checked": "zixxtrixx-21",
+      "noindex": 1
+    },
+    "errors": [],
+    "pass": true
+  },
+  {
+    "name": "narrow",
+    "viewport": [
+      390,
+      844
+    ],
+    "initial": "zixxtrixx-0",
+    "count": 10,
+    "playback": [
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-daylight.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-open-sky.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-warm-cross.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-cool-cross.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-soft-cloud.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-hard-sun.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-cloudbreak.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-silver-moon.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-broad-bounce.webm"
+      },
+      {
+        "controls": true,
+        "autoplay": false,
+        "loop": true,
+        "muted": true,
+        "src": "renders/zixxtrixx-v14-diagonal-rose-dusk.webm"
+      }
+    ],
+    "first": {
+      "width": 384,
+      "height": 240,
+      "duration": 10,
+      "clientWidth": 324
+    },
+    "last": {
+      "width": 384,
+      "height": 240,
+      "duration": 10,
+      "clientWidth": 324
+    },
+    "geometry": {
+      "innerWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "checked": "zixxtrixx-21",
+      "noindex": 1
+    },
+    "errors": [],
+    "pass": true
+  }
+]

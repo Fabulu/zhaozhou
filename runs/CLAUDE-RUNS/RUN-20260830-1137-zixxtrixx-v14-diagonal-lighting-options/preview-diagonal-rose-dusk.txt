@@ -1,0 +1,6 @@
+ZIXX_EXP=celmain (experimental lane)
+ZIXX_LIGHT=diagonal-rose-dusk (lighting choice lane)
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+zhao-reel: deterministic frame sequences -> C:/programmieren/zencrifice/zixxtrixx-v14-diagonal-lighting-lane/zhaozhou/runs/CLAUDE-RUNS/RUN-20260830-1137-zixxtrixx-v14-diagonal-lighting-options/preview/diagonal-rose-dusk
+zixxtrixx-still: 1538 unique colours — full-colour lane, palette gate not applied
+zixxtrixx-still: 1 frames, 1538 unique colours, sequence_crc32c=0x6B772D2D

@@ -438,6 +438,83 @@ const CreatureLightRig kCreatureLightCorrectedToplight1{
     45875,                  // white key: .70
     6554,   7864,  11141};  // cool fill: .10, .12, .17
 
+// V14's ten artistic modes preserve the v13 sign/space repair but move the
+// dominant source unmistakably off the zenith. They were authored as distinct
+// scene reads, not generated from a numeric sweep: clear daylight, open sky,
+// warm/cool crosslight, cloud softness, hard sun, cloudbreak, moonlight, broad
+// bounce and rose dusk. Every key and fill remains an upper-hemisphere unit-ish
+// Q16.16 surface-to-source direction fixed in world space. Opposing sky/fill
+// and ambient open the side planes without erasing the diagonal key.
+const CreatureLightRig kCreatureLightDiagonalDaylight{
+    -40000, 40000, -33000,    // clear top-diagonal sun from -X/-Z
+    30000, 50000, 30000,      // cool opposing upper sky
+    26214, 27525, 30147,      // ambient: .40, .42, .46
+    40632,                    // white key: .62
+    10486, 13107, 18350};     // cool sky fill: .16, .20, .28
+
+const CreatureLightRig kCreatureLightDiagonalOpenSky{
+    36000, 42000, -35000,     // broad top-diagonal daylight from +X/-Z
+    -30000, 55000, 19000,     // high opposing blue sky
+    31457, 33423, 36700,      // ambient: .48, .51, .56
+    31457,                    // soft white key: .48
+    11796, 15073, 20972};     // open blue fill: .18, .23, .32
+
+const CreatureLightRig kCreatureLightDiagonalWarmCross{
+    -46000, 35000, -31000,    // low warm-side top diagonal from -X/-Z
+    45000, 35000, 32000,      // strong opposing top-diagonal crossfill
+    30147, 28836, 27525,      // warm ambient: .46, .44, .42
+    39322,                    // white key: .60
+    29491, 24904, 18350};     // warm crossfill: .45, .38, .28
+
+const CreatureLightRig kCreatureLightDiagonalCoolCross{
+    43000, 36000, 35000,      // top diagonal from +X/+Z
+    -45000, 35000, -32000,    // strong opposing top-diagonal crossfill
+    26214, 29491, 36700,      // cool ambient: .40, .45, .56
+    38011,                    // white key: .58
+    16384, 24904, 36045};     // blue crossfill: .25, .38, .55
+
+const CreatureLightRig kCreatureLightDiagonalSoftCloud{
+    -31000, 44000, -37000,    // softened top diagonal through cloud
+    27000, 57000, 17000,      // broad high sky response
+    35389, 36700, 39322,      // open ambient: .54, .56, .60
+    24904,                    // soft white key: .38
+    11796, 13107, 16384};     // restrained neutral-cool fill: .18, .20, .25
+
+const CreatureLightRig kCreatureLightDiagonalHardSun{
+    47000, 33000, -32000,     // hard low-diagonal sun from +X/-Z
+    -38000, 50000, 18000,     // readable upper opposing sky
+    25559, 26870, 29491,      // ambient: .39, .41, .45
+    49807,                    // hard white key: .76
+    16384, 18350, 22282};     // cool side fill: .25, .28, .34
+
+const CreatureLightRig kCreatureLightDiagonalCloudbreak{
+    -43000, 38000, 32000,     // strong top-diagonal cloudbreak from -X/+Z
+    46000, 36000, -30000,     // warm opposing top-diagonal bounce
+    28836, 29491, 31457,      // ambient: .44, .45, .48
+    45875,                    // white key: .70
+    27525, 22282, 17039};     // warm fill: .42, .34, .26
+
+const CreatureLightRig kCreatureLightDiagonalSilverMoon{
+    35000, 39000, 40000,      // silver top diagonal from +X/+Z
+    -42000, 39000, -33000,    // opposing top-diagonal blue sky
+    26214, 29491, 38011,      // moon ambient: .40, .45, .58
+    34079,                    // white key: .52
+    13107, 24904, 38011};     // silver-blue fill: .20, .38, .58
+
+const CreatureLightRig kCreatureLightDiagonalBroadBounce{
+    -37000, 43000, 33000,     // broad top diagonal from -X/+Z
+    35000, 52000, -19000,     // generous upper opposing bounce
+    27525, 28180, 30147,      // neutral ambient: .42, .43, .46
+    35389,                    // white key: .54
+    19661, 20972, 23593};     // broad neutral-cool fill: .30, .32, .36
+
+const CreatureLightRig kCreatureLightDiagonalRoseDusk{
+    49000, 30000, -32000,     // low top diagonal at rose dusk from +X/-Z
+    -47000, 33000, 31000,     // opposing top-diagonal rose bounce
+    34079, 30147, 34734,      // rose ambient: .52, .46, .53
+    40632,                    // white key: .62
+    30147, 22282, 27525};     // rose fill: .46, .34, .42
+
 const CreatureLightRig* g_creature_light_rig = &kCreatureLightBaseline;
 
 namespace {
