@@ -70,6 +70,47 @@ third of the entire arena for two triangles.
     does not get drawn, and it should be deciding that, not the arena's
     high-water mark.
 
+## MEASURED, 2026-08-30 — `tools/render/count_bin_load.cpp`
+
+The estimates above are now measurements. GEOM.BINNER's binning law IS
+`zref::Binner`, so counting (triangle, tile) pairs through the shipped oracle
+counts exactly what the hardware would have to store. Z60 384x240, 24x15 tiles:
+
+| scene | triangles | vs 128 | references | vs 1,024 | deepest tile |
+|---|---:|---:|---:|---:|---:|
+| sky backdrop, 2 triangles | 2 | 0.0x | **396** | 0.4x | 2 |
+| one terrain patch, 32x32 cells | 2,048 | **16.0x** | 4,080 | 4.0x | 12 |
+| creature army, 200 x 96 tris | 19,200 | **150.0x** | 23,912 | **23.4x** | **341** |
+| giant near camera, 126 tris | 126 | **1.0x** | **25,704** | **25.1x** | 126 |
+
+There is no camera, visibility or LOD in the tool, so each row is an UPPER bound
+for the geometry it describes and a LOWER bound for a real frame, which carries
+several of these at once.
+
+### The two limits fail INDEPENDENTLY, which the estimate did not show
+
+* **The giant fits in TRI_CAP and destroys the arena.** 126 triangles is 1.0x
+  the triangle budget -- it would be accepted -- and they generate 25,704
+  references, 25x the arena. Sizing TRI_CAP alone would not have caught it.
+* **The army destroys TRI_CAP and is comparatively easy on references.** 19,200
+  triangles is 150x, but its references are 23x -- *less* than the giant's, from
+  152x more triangles, because an army is many SMALL things.
+* **Two triangles can eat 40% of the arena.** The sky backdrop needs 396
+  references for 2 triangles.
+
+So there is no single number to raise. **A triangle budget and a reference
+budget are different resources with different worst cases**, and any capacity
+decision has to state both and name which scene each is sized for -- exactly
+the shape the Field engine ended up with, where the wall was whichever resource
+refused rather than the one that looked busy.
+
+### And the deepest tile list is 341
+
+A chunked list at `CHUNK_REFS = 4` walks 86 chunks to drain that one tile, one
+pointer chase each. That is a latency the drain pays per tile, and it is not
+visible in either total. `max_tile_list_depth_o` already reports it and nothing
+reads it.
+
 ## What to measure before choosing
 
 The instrumentation already exists and is not being used: `tile_references_o`,
