@@ -1844,6 +1844,31 @@ verilate(test_render_pipe_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv)
+add_executable(test_render_fb_directed render/render_fb_directed.cpp)
+target_link_libraries(test_render_fb_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_render_fb_directed
+  PREFIX Vzhao_probe_render_fb
+  TOP_MODULE zhao_probe_render_fb
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_render_fb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fbwrite.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_bin_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv)
+add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
+set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_test(NAME render_pipe_directed COMMAND test_render_pipe_directed)
 set_tests_properties(render_pipe_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
