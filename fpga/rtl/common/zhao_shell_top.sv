@@ -282,6 +282,14 @@ module zhao_shell_top
   output logic [31:0] render_pixels_o,
   output logic [31:0] render_bursts_o,
   output logic        render_stream_error_o,
+  // The frame transaction. `render_drained_o` is the ONLY signal a frame
+  // controller may publish a slot on: it means every word handed to the guard
+  // has been RETIRED by the arbiter. `render_busy_o` falls when the last beat
+  // is merely accepted, several stages earlier.
+  output logic        render_drained_o,
+  output logic        render_fatal_o,
+  output logic [31:0] render_issued_words_o,
+  output logic [31:0] render_retired_words_o,
   output logic        render_overflow_o,
   output logic        render_fragment_error_o,
 
@@ -803,6 +811,10 @@ module zhao_shell_top
     .px_valid_i(rpx_valid), .px_ready_o(rpx_ready),
     .px_rgb565_i(rpx_rgb565), .px_x_i(rpx_x), .px_y_i(rpx_y), .px_last_i(rpx_last),
     .frame_end_i(render_frame_end_i),
+    // Retirement is the arbiter credit stream for the ENGINE0 client, exactly
+    // as DEBUG.FRAMEBLIT takes client_rsp[1].credits. The block's own issue
+    // count says nothing about whether the write landed.
+    .retire_words_i(client_rsp[2].credits),
     .guard_req_o(render_guard_req), .guard_rsp_i(render_guard_rsp),
     .guard_wdata_o(render_wdata), .guard_wvalid_o(render_wvalid),
     .guard_wready_i(render_wready), .guard_wlast_o(render_wlast),
@@ -810,6 +822,10 @@ module zhao_shell_top
     .bursts_issued_o(render_bursts_o),
     .stall_clocks_o(rp_stall_unused),
     .stream_error_o(render_stream_error_o),
+    .issued_words_o(render_issued_words_o),
+    .retired_words_o(render_retired_words_o),
+    .drained_o(render_drained_o),
+    .fatal_error_o(render_fatal_o),
     .busy_o(render_busy_o)
   );
 

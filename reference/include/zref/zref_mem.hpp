@@ -665,9 +665,9 @@ struct GuardMap {
   // compile error at every switch rather than a silently wrong comparison.
   enum Writer { WRITER_BLIT = 0, WRITER_ENGINE0 = 1 };
 
-  bool valid = false;           // a framebuffer-write lease exists this frame
-  unsigned blit_slot = 0;       // 0/1 -- the leased slot
-  uint32_t blit_span = 0;       // granted bytes (canvas_bytes(mode))
+  bool valid = false;             // a framebuffer-write lease exists this frame
+  unsigned blit_slot = 0;         // 0/1 -- the leased slot
+  uint32_t blit_span = 0;         // granted bytes (canvas_bytes(mode))
   unsigned writer = WRITER_BLIT;  // which client the lease is held BY
 };
 
@@ -708,8 +708,8 @@ struct MemoryGuard {
         // names. A writer without the lease is refused exactly as a request
         // outside the window is.
         if (!r.write || !m.valid) return false;
-        const unsigned want = (r.client == BLIT_DMA) ? GuardMap::WRITER_BLIT
-                                                     : GuardMap::WRITER_ENGINE0;
+        const unsigned want =
+            (r.client == BLIT_DMA) ? GuardMap::WRITER_BLIT : GuardMap::WRITER_ENGINE0;
         if (m.writer != want) return false;
         const uint32_t base = m.blit_slot ? kFbSlot1Base : kFbSlot0Base;
         return r.addr >= base && end <= base + m.blit_span;

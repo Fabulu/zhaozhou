@@ -199,6 +199,8 @@ module tb_zhao_shell (
     .render_drain_done_o(), .render_busy_o(),
     .render_pixels_o(), .render_bursts_o(),
     .render_stream_error_o(), .render_overflow_o(), .render_fragment_error_o(),
+    .render_drained_o(), .render_fatal_o(),
+    .render_issued_words_o(), .render_retired_words_o(),
 
     .phy_dq_i   (phy_dq_i)
   );
