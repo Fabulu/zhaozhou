@@ -210,11 +210,13 @@ module zhao_raster_perspuv (
         P_RCP: begin
           if (rcp_rvalid) begin
             if (rcp_zero) begin
-              // Unreachable by construction -- a zero depth is filtered before
-              // the reciprocal is offered anything -- but a reciprocal that
-              // reports a caller bug is not something to walk past. If the
-              // filter above ever stops being true, this reports rather than
-              // multiplies by a meaningless mantissa.
+              // ASSUMPTION, upheld by the accept filter above: a zero depth
+              // never reaches the reciprocal, because P_IDLE routes it straight
+              // to P_DONE. This branch is what happens if that ever stops being
+              // true -- it reports, rather than multiplying by a mantissa that
+              // means nothing. It is a fallback for a broken assumption, not a
+              // claim that the assumption holds.
+              // ENFORCED-BY: tests/raster/raster_perspuv_directed.cpp:main
               zero_r <= 1'b1;
               st_r   <= P_DONE;
             end else begin
