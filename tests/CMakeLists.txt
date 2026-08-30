@@ -3071,6 +3071,17 @@ verilate(test_raster_edgewalk_directed
 add_test(NAME raster_edgewalk_directed COMMAND test_raster_edgewalk_directed)
 set_tests_properties(raster_edgewalk_directed PROPERTIES LABELS "fast;nightly")
 
+# What ruling 4 would actually buy: the setup cost, measured, priced against the
+# four scenes count_bin_load reports. Evidence for a decision, not the decision.
+add_executable(test_raster_edgewalk_setupcost raster/raster_edgewalk_setupcost_directed.cpp)
+target_link_libraries(test_raster_edgewalk_setupcost PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_edgewalk_setupcost
+  PREFIX Vzhao_raster_edgewalk
+  TOP_MODULE zhao_raster_edgewalk
+  SOURCES ${ZHAO_RASTER_EDGEWALK_SV})
+add_test(NAME raster_edgewalk_setupcost COMMAND test_raster_edgewalk_setupcost)
+set_tests_properties(raster_edgewalk_setupcost PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_raster_edgewalk_random raster/raster_edgewalk_random.cpp)
 target_link_libraries(test_raster_edgewalk_random PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_raster_edgewalk_random PRIVATE
