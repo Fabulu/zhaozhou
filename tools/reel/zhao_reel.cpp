@@ -5448,12 +5448,35 @@ int main(int argc, char** argv) {
       zc::g_creature_light_rig = &zc::kCreatureLightCloudbreak;
     else if (name == "corrected-toplight-1")
       zc::g_creature_light_rig = &zc::kCreatureLightCorrectedToplight1;
+    else if (name == "diagonal-daylight")
+      zc::g_creature_light_rig = &zc::kCreatureLightDiagonalDaylight;
+    else if (name == "diagonal-open-sky")
+      zc::g_creature_light_rig = &zc::kCreatureLightDiagonalOpenSky;
+    else if (name == "diagonal-warm-cross")
+      zc::g_creature_light_rig = &zc::kCreatureLightDiagonalWarmCross;
+    else if (name == "diagonal-cool-cross")
+      zc::g_creature_light_rig = &zc::kCreatureLightDiagonalCoolCross;
+    else if (name == "diagonal-soft-cloud")
+      zc::g_creature_light_rig = &zc::kCreatureLightDiagonalSoftCloud;
+    else if (name == "diagonal-hard-sun")
+      zc::g_creature_light_rig = &zc::kCreatureLightDiagonalHardSun;
+    else if (name == "diagonal-cloudbreak")
+      zc::g_creature_light_rig = &zc::kCreatureLightDiagonalCloudbreak;
+    else if (name == "diagonal-silver-moon")
+      zc::g_creature_light_rig = &zc::kCreatureLightDiagonalSilverMoon;
+    else if (name == "diagonal-broad-bounce")
+      zc::g_creature_light_rig = &zc::kCreatureLightDiagonalBroadBounce;
+    else if (name == "diagonal-rose-dusk")
+      zc::g_creature_light_rig = &zc::kCreatureLightDiagonalRoseDusk;
     else {
       std::fprintf(stderr,
                    "unknown ZIXX_LIGHT=%s (expected baseline, front-soft, high-open, crossfill, "
                    "zenith-sun, morning-crown, evening-crown, north-skylight, south-skylight, "
                    "open-overcast, hard-noon, veiled-sun, silver-moon, cloudbreak, "
-                   "corrected-toplight-1)\n",
+                   "corrected-toplight-1, diagonal-daylight, diagonal-open-sky, "
+                   "diagonal-warm-cross, diagonal-cool-cross, diagonal-soft-cloud, "
+                   "diagonal-hard-sun, diagonal-cloudbreak, diagonal-silver-moon, "
+                   "diagonal-broad-bounce, diagonal-rose-dusk)\n",
                    light);
       return 2;
     }

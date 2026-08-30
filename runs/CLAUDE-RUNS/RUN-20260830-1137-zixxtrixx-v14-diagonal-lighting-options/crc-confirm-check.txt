@@ -1,0 +1,8 @@
+creature-wave-walk: sequence_crc32c 0x1C1A15BA != expected 0xF46B3B4A — the reel drifted. Either a renderer/field change moved it legitimately (regenerate the reel, update the constant, and say so) or something is nondeterministic (report it loudly).
+creature-bulk-pop: sequence_crc32c 0x8554FF23 != expected 0x3D259C7E — the reel drifted. Either a renderer/field change moved it legitimately (regenerate the reel, update the constant, and say so) or something is nondeterministic (report it loudly).
+creature-wave-walk: 505 unique colours — full-colour lane, palette gate not applied
+creature-wave-walk: 96 frames, 505 unique colours, sequence_crc32c=0x1C1A15BA
+creature-bulk-pop: detached-piece invariant: 18 spawned, 12 early frames with >=10 in view, span 133018 -> 980452 raw
+creature-bulk-pop: 364 unique colours — full-colour lane, palette gate not applied
+creature-bulk-pop: 72 frames, 364 unique colours, sequence_crc32c=0x8554FF23
+reel --check: FAILED

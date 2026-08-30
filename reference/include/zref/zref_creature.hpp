@@ -945,6 +945,19 @@ extern const CreatureLightRig kCreatureLightCloudbreak;
 // V13: exactly one post-diagnosis candidate. It is separate from the rejected
 // v12 family and is evaluated only after the generic outward-normal repair.
 extern const CreatureLightRig kCreatureLightCorrectedToplight1;
+// V14: exactly ten artistic top-diagonal modes. All preserve v13's corrected
+// surface-to-source/outward-normal convention and differ only in named light
+// controls; the held pose, materials and view-only orbit remain common.
+extern const CreatureLightRig kCreatureLightDiagonalDaylight;
+extern const CreatureLightRig kCreatureLightDiagonalOpenSky;
+extern const CreatureLightRig kCreatureLightDiagonalWarmCross;
+extern const CreatureLightRig kCreatureLightDiagonalCoolCross;
+extern const CreatureLightRig kCreatureLightDiagonalSoftCloud;
+extern const CreatureLightRig kCreatureLightDiagonalHardSun;
+extern const CreatureLightRig kCreatureLightDiagonalCloudbreak;
+extern const CreatureLightRig kCreatureLightDiagonalSilverMoon;
+extern const CreatureLightRig kCreatureLightDiagonalBroadBounce;
+extern const CreatureLightRig kCreatureLightDiagonalRoseDusk;
 extern const CreatureLightRig* g_creature_light_rig;
 
 // RUN 1939/2234 texture-experiment lane. 0 = off (the shipping path,

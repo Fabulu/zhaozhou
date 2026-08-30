@@ -46,14 +46,44 @@ work.
 - Recorded bounded validation budget `V14-DIAGONAL-MODES-1` in `SPEC_v1.md` before
   build or rendering.
 
+### 2026-08-30 12:05 UTC+02:00 - Ten-mode authoring and direct render
+
+- Added exactly ten named `CreatureLightRig` tables and extended the existing
+  `ZIXX_LIGHT` selector; no renderer, material, geometry, pose, camera, threshold,
+  outline or animation architecture changed.
+- Reused v13's `zixxtrixx-corrected-toplight-1` subject exactly: held signature-S,
+  600 frames at 60 Hz, ten-second view-only orbit, fixed world-space light.
+- Direct-built the reel from lane-local objects; never invoked CMake.
+- Rendered all ten complete native sequences. The first visual comparison found
+  Warm Cross, Hard Sun and Rose Dusk too closed; ambient/fill was opened by eye.
+  The every-frame comparison then exposed opposing sides in Cool Cross,
+  Cloudbreak and Silver Moon as too dark, so their named top-diagonal crossfills
+  were opened in one final table-only adjustment.
+- Rebuilt only `creature_sim` and relinked the reel, rerendered only the affected
+  modes, and froze the result. Final quarter-turn and every-frame sheets show a
+  coherent world-fixed diagonal sweep, readable bodies/sides, retained directional
+  shape and ten genuinely different moods without any broken orbit frame.
+- One ten-mode shell render exceeded the command timeout after five complete modes
+  and one partial mode. Verified no child survived, deleted the partial mode only,
+  and completed the remaining work in bounded groups.
+
+### 2026-08-30 13:05 UTC+02:00 - Bounded sequence-CRC follow-up
+
+- Fresh direct two-subject checks produced `creature-wave-walk=0x1C1A15BA` and
+  `creature-bulk-pop=0x8554FF23` twice (write and check paths). These do not confirm
+  the hardware lane's reported `0xBAD382E8` / `0xA641B9F8`; they would introduce a
+  third compiler/build-specific pair. Per the coordinator's conditional direction,
+  left the existing expected constants untouched and did not expand this art pass
+  into a generic renderer investigation.
+
 ---
 
 ## Validation Ledger — `V14-DIAGONAL-MODES-1`
 
 | ID | Acceptance question | Status |
 |---|---|---|
-| V14-SOURCE | Exactly ten named top-diagonal fixed-world rigs? | Pending |
-| V14-VISUAL | Most body/sides readable with directional shape in all ten? | Pending |
+| V14-SOURCE | Exactly ten named top-diagonal fixed-world rigs? | Pass — ten named tables/selectors; existing subject reused |
+| V14-VISUAL | Most body/sides readable with directional shape in all ten? | Pass — final quarter-turn and every-frame sheets reviewed by eye |
 | V14-MEDIA | Ten exact 600-frame/60 Hz/384x240/10 s final assets? | Pending |
 | V14-WEB | Usable comparison, retained history/initial v10, exact noindex? | Pending |
 
@@ -85,7 +115,7 @@ None. This is the sole implementation/art lane.
 
 ## Next Steps
 
-1. Inspect the current v13 rig/subject and direct-build recipe.
-2. Author exactly ten named v14 rigs and selectors, then direct-build.
-3. Render one common orbit per mode, look at all final frames and adjust by eye.
-4. Encode, integrate, deploy once, verify bounded output, clean up and stop.
+1. Commit and push the frozen ten-table source/render evidence milestone.
+2. Encode and probe exactly ten WebMs and posters through the existing path.
+3. Add one current experimental collection through existing comparison data.
+4. Integrate both mains, deploy once, verify, clean all temporary jobs/data and stop.
