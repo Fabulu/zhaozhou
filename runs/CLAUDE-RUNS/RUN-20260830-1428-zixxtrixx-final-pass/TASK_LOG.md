@@ -1,7 +1,7 @@
 # Task Log: RUN-20260830-1428 - Zixxtrixx final small-adjustment pass
 
 **Created:** 2026-08-30 14:28 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260830-1428-zixxtrixx-final-pass/
 
 ---
@@ -86,7 +86,18 @@ Complete Task #28 from accepted V14 as a deliberately small head/neck/colour adj
 - Encoded all twenty-two clips through the existing `website/tools/tovideo.py`: VP9 CRF16, yuv444p, 384x240, 60 fps, exact source frame counts and exact 3x nearest-neighbour posters. Added only the named moving-light poster choice (frame 412).
 - Before replacement, copied all twenty-one prior V10 WebM/poster pairs into one V10 archive generation. All forty-two archive files hash byte-identically to the pre-pass Upheaval HEAD versions. Every older archive remains present, and the ten original V14 lighting videos remain visible as retained selection history.
 - Updated the existing creature manifest for the selected final presentation, slow gummy spring and moving-light inspection. The generated site resolves all 167 declared media references, exposes eight ordered archive generations, retains the V14 study, and contains the exact `<meta name="robots" content="noindex, nofollow">` tag once.
-- The existing workbench `check-existing` action independently passed the preserved 600-frame Cool Cross V14 media, 1152x720 poster and exact noindex. Publication has not yet been invoked; it remains the single explicit finished-pass action after integration to Upheaval main.
+- The existing workbench `check-existing` action independently passed the preserved 600-frame Cool Cross V14 media, 1152x720 poster and exact noindex. No publication occurred during local authoring or validation.
+
+---
+
+### 2026-08-30 - Integration and single publication complete
+
+- Committed and pushed the complete media/site milestone to Upheaval feature commit `940a6440d4b575709c77b9e8ddea2e2cdd7bc443`, then fast-forwarded and pushed Upheaval main to that exact commit. Both refs and `origin/main` agree.
+- Invoked the guarded publisher exactly once from Upheaval main with explicit `-Project upheaval -Branch main`. Wrangler uploaded the changed site and returned `https://d9d91e35.upheaval.pages.dev`; the stable production address is `https://upheaval.pages.dev`.
+- Fetched both deployed addresses with a browser user agent. Each returned HTTP 200, the exact noindex tag once, the final Cool Cross text, moving-light tab, retained V14 study and eight-generation archive. The deployed moving-light WebM returned HTTP 200 with the expected EBML signature.
+- Restored only the deploy-time generated footer minute after the guarded script reran the assembler, leaving the committed Upheaval tree clean without changing site content.
+- The render, encoder and Wrangler jobs all exited successfully. A lane-local process sweep found no remaining renderer, mesh/probe, ffmpeg/ffprobe, compiler, Python encoder, PowerShell deployer, Wrangler/Node, browser or server child.
+- This completed run record is the final zhaozhou feature change; zhaozhou main is fast-forwarded and pushed immediately after this commit.
 
 ---
 
@@ -115,6 +126,4 @@ No subagents. This run has one implementation/modelling agent.
 
 ## Next Steps
 
-1. Commit and push the accepted final media/site milestone in Upheaval.
-2. Integrate and push Upheaval main, invoke the guarded publisher exactly once with explicit project/branch, and verify the deployed noindex page/media.
-3. Record closeout, commit/push this run, integrate and push zhaozhou main, verify clean trees and terminate/verify every spawned child.
+Run complete. No implementation or publication steps remain; only the immediate feature-to-main fast-forward/push and final clean/stopped-state report follow this committed record.
