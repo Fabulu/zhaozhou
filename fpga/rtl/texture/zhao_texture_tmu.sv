@@ -283,6 +283,11 @@
 // zhao_texture_bilerp. Lint: clean under `-Wall` (lint_texture_tmu).
 
 module zhao_texture_tmu #(
+  // RESIDENT PALETTE PAGES. Each is 256 RGB565 entries = 4,096 bits, so two
+  // slots is 8 Kbit and eight is 32 Kbit. Two is the shipping default because
+  // it covers a terrain page plus one other without thrashing; the sweep can
+  // argue for more once real traces exist. See "resident palette" below.
+  parameter int unsigned PAL_SLOTS = 2,
   // 1, 2 or 4 — see FILT_LANES above. Enforced by a generate-if static
   // assertion below, wrapped in `generate`/`endgenerate` because
   // QUARTUS_GOTCHAS.md §8 records that Quartus 17.0.2 rejects a module-scope
@@ -331,6 +336,23 @@ module zhao_texture_tmu #(
 
   // ---- texture_requests in (RASTER.FRAGMENT) ----------------------------
   input  logic        req_valid_i,
+  // ---- palette residency invalidate ---------------------------------------
+  // TEXTURE.CACHE already carries `inv_valid_i`/`inv_all_i`/`inv_addr_i` and
+  // its header says why: "hot palette entries: a palette-page invalidate per
+  // upload". The resident palette below is the same data with the same
+  // lifetime, so it takes the same strobe from the same source. A cache that
+  // cannot be invalidated is a way to serve last frame's palette.
+  //
+  // The rule here is deliberately COARSER than the texture cache's: ANY
+  // invalidate, line or all, drops every resident palette entry. A palette
+  // page is uploaded rarely and refilling it costs one access per index that
+  // is actually used again, so the coarse rule cannot be wrong and the fine
+  // one can. The Field engine's descriptor cache took the same decision for
+  // the same reason.
+  //
+  // ENFORCED-BY: tests/texture/texture_tmu_directed.cpp:main
+  input  logic        pal_inv_valid_i,
+
   output logic        req_ready_o,
   input  logic [31:0] req_u_i,         // S 15.16, texture units (see THE UV FORMAT)
   input  logic [31:0] req_v_i,
@@ -769,6 +791,55 @@ module zhao_texture_tmu #(
   logic [31:0] pal_addr_c;
   assign pal_addr_c = q_palbase_r + {23'd0, bus_idx, 1'b0};
 
+  // =================================================== resident palette ====
+  // A CLUT sample used to cost TWO dependent texture-cache accesses: one for
+  // the index, one for the palette entry that index names. That second access
+  // is the whole reason CLUT runs at 6 clocks a sample -- 277,778 samples a
+  // frame against a demand of 850,000, 0.33x -- and it is the reason this
+  // file's own throughput note concluded that "II = 2 is the port's own floor".
+  // It is not the port's floor. It is the floor of asking the port twice.
+  //
+  // The palette does not belong in the texture cache. A cache lane is
+  // LINES x LINE_BYTES = 256 bytes and a 256-entry RGB565 page is 512, so a
+  // page cannot even reside in one lane; the mapping is direct, so entries
+  // alias; there is one fill engine and no hit-under-miss, so a palette miss
+  // blocks the texel access sitting behind it. Palettes are tiny, they are
+  // named explicitly by `req_pal_base_i`, and they are rewritten once per
+  // upload -- exactly the wrong thing to demand-page through a general cache.
+  //
+  // So they live here instead. SLOTS pages, each 256 RGB565 entries, tagged by
+  // the palette base address the request already carries. On a hit the palette
+  // entry is in hand the same cycle the index arrives and the sample never
+  // enters ST_PAL at all. On a miss it takes the access it always took and
+  // fills the entry on the way past, so the SECOND use of any index is free.
+  //
+  // No contract changed to do this. The request still names a VRAM palette
+  // base; nothing was added to the mode word; `zref::Tmu` has not been touched.
+  // The residency is an implementation of the same law, which is why the whole
+  // existing directed and random suite is the evidence that it is exact.
+  //
+  // ENFORCED-BY: tests/texture/texture_tmu_directed.cpp:main
+  logic [31:0]  pal_tag_r  [PAL_SLOTS];
+  logic         pal_ten_r  [PAL_SLOTS];              // this slot holds a page
+  logic [255:0] pal_val_r  [PAL_SLOTS];              // per-entry residency
+  logic [15:0]  pal_dat_r  [PAL_SLOTS][256];
+  logic [PAL_SLOTS == 1 ? 0 : $clog2(PAL_SLOTS)-1:0] pal_vic_r;
+
+  // Which slot holds this request's page, and is the entry it wants resident?
+  logic pal_slot_hit_c, pal_entry_hit_c;
+  logic [PAL_SLOTS == 1 ? 0 : $clog2(PAL_SLOTS)-1:0] pal_way_c;
+  always_comb begin
+    pal_slot_hit_c  = 1'b0;
+    pal_entry_hit_c = 1'b0;
+    pal_way_c       = '0;
+    for (int unsigned w = 0; w < PAL_SLOTS; w++)
+      if (pal_ten_r[w] && (pal_tag_r[w] == q_palbase_r)) begin
+        pal_slot_hit_c  = 1'b1;
+        pal_way_c       = $bits(pal_way_c)'(w);
+        pal_entry_hit_c = pal_val_r[w][bus_idx];
+      end
+  end
+
   // ---- the sample --------------------------------------------------------
   // Driven combinationally off registered state in ST_OUT: no extra cycle,
   // and no dependence on `smp_ready_i`.
@@ -817,6 +888,12 @@ module zhao_texture_tmu #(
     if (!rst_n) begin
       st_r              <= ST_IDLE;
       pass_r            <= 2'd0;
+      pal_vic_r         <= '0;
+      for (int unsigned w = 0; w < PAL_SLOTS; w++) begin
+        pal_ten_r[w] <= 1'b0;
+        pal_tag_r[w] <= 32'd0;
+        pal_val_r[w] <= 256'd0;
+      end
       fres_r            <= 32'd0;
       sent_r            <= 1'b0;
       q_addr_r          <= 128'd0;
@@ -866,10 +943,23 @@ module zhao_texture_tmu #(
               // a palette is never filtered (stars §1), so there is exactly
               // one index to look up.
               idx_r             <= bus_idx;
-              q_en_r            <= 4'b0001;
-              q_addr_r[31:0]    <= pal_addr_c;
-              sent_r            <= 1'b0;
-              st_r              <= ST_PAL;
+              if (pal_entry_hit_c) begin
+                // RESIDENT. The colour is in hand in the same cycle the index
+                // arrived, so the second cache access does not happen and the
+                // sample goes straight out. This is the clock the CLUT path
+                // exists to save, and it is saved on the acceptance side --
+                // the request after this one starts one state earlier.
+                hw_r[0] <= pal_dat_r[pal_way_c][bus_idx];
+                st_r    <= ST_OUT;
+              end else begin
+                // A second access for the palette entry -- lane 0 only,
+                // because a palette is never filtered (stars section 1), so
+                // there is exactly one index to look up.
+                q_en_r            <= 4'b0001;
+                q_addr_r[31:0]    <= pal_addr_c;
+                sent_r            <= 1'b0;
+                st_r              <= ST_PAL;
+              end
             end else begin
               // Direct colour: the texels are here, so the filter can run. At
               // FILT_LANES = 4 there is exactly one pass and it is ST_OUT's,
@@ -905,6 +995,27 @@ module zhao_texture_tmu #(
           if (cac_rsp) begin
             hw_r[0] <= cac_data_i[15:0];
             st_r    <= ST_OUT;
+            // FILL ON THE WAY PAST. The entry is being paid for anyway, so
+            // record it: the next sample that lands on this index skips the
+            // access entirely. A page not yet resident claims a slot here, and
+            // claiming it clears that slot's entries -- a slot holds ONE page
+            // and a stale bit from the previous occupant would be served as
+            // this page's colour.
+            if (pal_slot_hit_c) begin
+              pal_dat_r[pal_way_c][idx_r] <= cac_data_i[15:0];
+              pal_val_r[pal_way_c][idx_r] <= 1'b1;
+            end else begin
+              pal_tag_r[pal_vic_r]        <= q_palbase_r;
+              pal_ten_r[pal_vic_r]        <= 1'b1;
+              pal_val_r[pal_vic_r]        <= 256'd0;
+              pal_val_r[pal_vic_r][idx_r] <= 1'b1;
+              pal_dat_r[pal_vic_r][idx_r] <= cac_data_i[15:0];
+              pal_vic_r <= (PAL_SLOTS == 1)
+                             ? '0
+                             : (($bits(pal_vic_r)'(pal_vic_r) == $bits(pal_vic_r)'(PAL_SLOTS - 1))
+                                    ? '0
+                                    : pal_vic_r + $bits(pal_vic_r)'(1));
+            end
           end
         end
 
@@ -918,6 +1029,17 @@ module zhao_texture_tmu #(
 
         default: st_r <= ST_IDLE;
       endcase
+
+      // ANY INVALIDATE DROPS EVERY RESIDENT PAGE. Placed after the case so it
+      // beats a fill landing in the same clock: a fill that raced an upload
+      // would install the value the upload has just replaced, which is the one
+      // failure a resident palette can have and the one no throughput number
+      // would ever show.
+      if (pal_inv_valid_i)
+        for (int unsigned w = 0; w < PAL_SLOTS; w++) begin
+          pal_ten_r[w] <= 1'b0;
+          pal_val_r[w] <= 256'd0;
+        end
     end
   end
 

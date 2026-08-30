@@ -732,10 +732,25 @@ void test_throughput_against_the_derived_demand() {
       static_cast<double>(clut_per_frame) / kDemandSamplesPerFrame,
       static_cast<double>(clut_per_frame) / kDerivedSamplesPerFrame);
 
-  check(clut_ii == 6u,
-        "throughput: a CLUT sample is SIX clocks -- two serial cache accesses, no filter, and "
-        "FILT_LANES does not move it",
-        6, clut_ii);
+  // FIVE, NOT SIX, AND THE MISSING CLOCK IS THE PALETTE ACCESS. A CLUT sample
+  // used to make TWO dependent texture-cache accesses: one for the index, one
+  // for the palette entry it names. The TMU now holds PAL_SLOTS resident
+  // palette pages of 256 RGB565 entries, tagged by the palette base the
+  // request already carries, so the second access happens only on the FIRST
+  // use of an index and never again until an invalidate.
+  //
+  // This batch reuses its palette, so it measures the resident cost. A batch
+  // that touched 256 distinct indices once each would measure six, and that is
+  // not a regression -- it is the fill being paid once.
+  //
+  // Five is not the destination. The demand is 850,000 samples in 1,666,667
+  // clocks, which is 1.96 clocks a sample, so the CLUT path has to reach ONE.
+  // Getting there needs the request pipeline: this FSM still accepts one
+  // sample, walks it to the end and only then accepts the next.
+  check(clut_ii == 5u,
+        "throughput: a CLUT sample is FIVE clocks -- the palette entry is resident, so the "
+        "second cache access is gone",
+        5, clut_ii);
   check(direct_ii == want_direct_ii,
         "throughput: a direct-colour sample is 3 + PASSES clocks (4/5/7 at FILT_LANES 4/2/1)",
         want_direct_ii, direct_ii);
@@ -743,8 +758,85 @@ void test_throughput_against_the_derived_demand() {
 
 }  // namespace
 
+/**
+ * THE RESIDENT PALETTE'S ONE WAY TO BE WRONG.
+ *
+ * The TMU holds PAL_SLOTS palette pages of 256 RGB565 entries, tagged by the
+ * palette base the request already carries, so the second cache access a CLUT
+ * sample used to make happens only on the first use of an index. That took the
+ * CLUT path from six clocks to five.
+ *
+ * A request naming a DIFFERENT base misses on the tag, which the tag gives you
+ * for free. What a tag does NOT give you is the case that matters: the SAME
+ * base, holding NEW colours, because a palette upload has replaced the page in
+ * place. TEXTURE.CACHE carries `inv_valid_i` for exactly this and its header
+ * says so -- "hot palette entries: a palette-page invalidate per upload".
+ *
+ * So: sample a page, rewrite it underneath the block, invalidate, and require
+ * the NEW colours. Without the invalidate the block serves last upload's
+ * palette from perfectly correct indices, and every other check in this file
+ * still passes.
+ */
+// TmuSample has no operator==; the fields that a stale palette would change
+// are the colour ones, and `idx` is the index the block reported rather than
+// the colour it looked up -- a stale entry keeps the RIGHT index and returns
+// the WRONG colour, so comparing idx alone would see nothing.
+bool same_sample(const TmuSample& a, const TmuSample& b) {
+  return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a && a.idx == b.idx &&
+         a.src_id == b.src_id && a.mode_error == b.mode_error;
+}
+
+void test_resident_palette_is_invalidated() {
+  // Two memories that differ ONLY in the palette page, at the same base.
+  static const zref::TextureMemory before = build_pool();
+  static const zref::TextureMemory after = [] {
+    zref::TextureMemory m = build_pool();
+    for (uint32_t i = 0; i < 256u; ++i) {
+      // Distinct from `before` for every index INCLUDING zero, so a stale
+      // entry cannot coincide with the right answer on any probe.
+      const uint16_t v = static_cast<uint16_t>(((i ^ 0xFFu) << 8) | ((i * 37u) & 0xFFu));
+      m.bytes[kPal + i * 2u - kBase] = static_cast<uint8_t>(v & 0xFFu);
+      m.bytes[kPal + i * 2u - kBase + 1] = static_cast<uint8_t>(v >> 8);
+    }
+    return m;
+  }();
+
+  const Mode m = mk_mode(Fmt::kClut8, false, Wrap::kRepeat, Wrap::kRepeat, 3, 3);
+  std::vector<TmuReq> reqs;
+  // Several distinct indices, each visited TWICE, so the first pass fills the
+  // residency and the second pass is served from it. If the second pass were
+  // not resident this test would prove nothing about invalidation.
+  for (int pass = 0; pass < 2; ++pass)
+    for (int32_t k = 0; k < 6; ++k) reqs.push_back(mk(k << 16, 0, kTexIdent, m));
+
+  std::string err;
+  dev().reset();
+  const TmuRun r1 = dev().feed(reqs, before, 0, 0, 0, 1, &err);
+  const std::vector<TmuSample> w1 = tmu_expect(reqs, before);
+  bool ok1 = err.empty() && r1.out.size() == w1.size();
+  for (size_t i = 0; ok1 && i < w1.size(); ++i) ok1 = same_sample(r1.out[i], w1[i]);
+  check(ok1, "resident palette: a page sampled twice is right both times", 1, ok1 ? 1 : 0);
+
+  // The upload happens. Same base, new colours.
+  dev().palette_invalidate();
+  const TmuRun r2 = dev().feed(reqs, after, 0, 0, 0, 1, &err);
+  const std::vector<TmuSample> w2 = tmu_expect(reqs, after);
+  const std::vector<TmuSample> stale = tmu_expect(reqs, before);
+
+  int wrong = 0, served_stale = 0;
+  for (size_t i = 0; i < w2.size() && i < r2.out.size(); ++i) {
+    if (!same_sample(r2.out[i], w2[i])) ++wrong;
+    if (same_sample(r2.out[i], stale[i]) && !same_sample(stale[i], w2[i])) ++served_stale;
+  }
+  check(err.empty() && wrong == 0,
+        "resident palette: after the invalidate every lane reads the NEW page", 0, wrong);
+  check(served_stale == 0, "resident palette: and no lane was handed last upload's colour", 0,
+        served_stale);
+}
+
 int main() {
   test_formats();
+  test_resident_palette_is_invalidated();
   test_clut_index_zero_and_the_fragment();
   test_wrap_modes();
   test_mirror_is_the_frozen_fold();

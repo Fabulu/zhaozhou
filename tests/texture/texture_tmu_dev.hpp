@@ -88,6 +88,21 @@ class TmuDev {
   }
 
   /**
+   * Drop every resident palette page, as a palette upload does.
+   *
+   * TEXTURE.CACHE carries `inv_valid_i` for exactly this and its header names
+   * the reason: "hot palette entries: a palette-page invalidate per upload".
+   * The TMU's resident palette takes the same strobe from the same source, and
+   * an invalidate nothing ever drives is not an invalidate.
+   */
+  void palette_invalidate() {
+    top_.pal_inv_valid_i = 1;
+    edge();
+    top_.pal_inv_valid_i = 0;
+    top_.eval();
+  }
+
+  /**
    * Feed a batch. `in_seed` != 0 gates the offer, `out_seed` != 0 gates
    * `smp_ready_i`, `cac_stall` != 0 gates the modelled cache's readiness.
    * `cac_lat` is the cycles from an accepted cache access to its response.
@@ -264,6 +279,7 @@ class TmuDev {
   }
 
   void park() {
+    top_.pal_inv_valid_i = 0;
     top_.req_valid_i = 0;
     top_.smp_ready_i = 1;
     top_.cac_ready_i = 1;
