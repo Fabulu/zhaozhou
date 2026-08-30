@@ -691,89 +691,133 @@ int main() {
   std::printf("OVERLAP: %d sample/pair hits, all checked at keys + midpoints\n",
               total_overlaps);
 
-  // Shared spring: compare the authored rest against the first held deepest
-  // compression in slot 35.  Thresholds are regression envelopes around the
-  // visually accepted native side/top sheets, not generators for the pose.
+  // Whole-body gummy spring. The probe checks the authored rendered choice; it
+  // does not generate its shape. Ordering is structural: the full-tail entry
+  // reaches 1000 while squash is still exactly zero, then the broad squat S
+  // retracts the head, stays in the side plane, preserves volume/clearance and
+  // keeps only the declared terrain bite.
   const ClipScan* spring = find_scan(scans, zixx::kSlotAtkSix);
   require(spring != nullptr, "missing slot 35 shared-spring clip");
   if (spring) {
     const zc::AttackPlan plan = zixx::zixx_variant_plan(zixx::kSlotAtkSix);
     const zixx::AttackVariantPhases ph =
         zixx::zixx_attack_variant_phases(plan, false);
+    const int entry_key = zixx::zixx_plan_spring_entry_end(plan);
+    const int entry_tick = 2 * entry_key;
     const int deep_tick = 2 * ph.compress_end;
-    require(deep_tick < static_cast<int>(spring->samples.size()),
-            "spring deepest sample outside clip");
-    if (deep_tick < static_cast<int>(spring->samples.size())) {
+    require(entry_tick < static_cast<int>(spring->samples.size()) &&
+                deep_tick < static_cast<int>(spring->samples.size()),
+            "spring phase sample outside clip");
+    require(zixx::zixx_plan_spring_entry_amount(plan, entry_key) == 1000 &&
+                zixx::zixx_plan_spring_amount(plan, entry_key) == 0 &&
+                zixx::zixx_plan_spring_amount(plan, entry_key - 1) == 0 &&
+                zixx::zixx_plan_spring_amount(plan, entry_key + 1) > 0,
+            "spring squash begins before full-tail entry is complete");
+    if (entry_tick < static_cast<int>(spring->samples.size()) &&
+        deep_tick < static_cast<int>(spring->samples.size())) {
       const PosedSample& rest = spring->samples[0];
+      const PosedSample& entry = spring->samples[entry_tick];
       const PosedSample& deep = spring->samples[deep_tick];
       struct Region { const char* name; int lo; int hi; };
       const Region regions[] = {
           {"head", 0, 5}, {"neck", 6, 12}, {"front", 13, 20},
           {"middle", 21, 32}, {"grounded run", 33, 44},
           {"taper", 45, 51}, {"tail", 52, 56}};
-      int32_t center_lo = INT32_MAX, center_hi = INT32_MIN;
-      int32_t lateral_lo = INT32_MAX, lateral_hi = INT32_MIN;
-      int64_t whole_rest_y = 0, whole_deep_y = 0;
-      int32_t region_delta[7] = {};
-      std::printf("SPRING regions (deep minus rest centre Y):");
-      int region_index = 0;
+      bool every_region_joins = true;
+      int32_t region_motion[7] = {};
+      std::printf("SPRING full-S entry mean station travel:");
+      int ri = 0;
       for (const Region& r : regions) {
-        int64_t a = 0, b = 0;
+        int64_t travel = 0;
         for (int i = r.lo; i <= r.hi; ++i) {
-          a += rest.y_mm[i];
-          b += deep.y_mm[i];
+          const int64_t dx = entry.x_mm[i] - rest.x_mm[i];
+          const int64_t dy = entry.y_mm[i] - rest.y_mm[i];
+          const int64_t dz = entry.z_mm[i] - rest.z_mm[i];
+          travel += static_cast<int32_t>(zref::isqrt_u64(
+              static_cast<uint64_t>(dx * dx + dy * dy + dz * dz)));
         }
-        whole_rest_y += a;
-        whole_deep_y += b;
-        const int32_t delta = static_cast<int32_t>(
-            (b - a) / (r.hi - r.lo + 1));
-        region_delta[region_index++] = delta;
-        std::printf(" %s=%d", r.name, delta);
+        region_motion[ri] =
+            static_cast<int32_t>(travel / (r.hi - r.lo + 1));
+        if (region_motion[ri] < 20) every_region_joins = false;
+        std::printf(" %s=%d", r.name, region_motion[ri]);
+        ++ri;
       }
-      // Raised regions must visibly descend; the already-grounded run and
-      // taper are allowed to move little while the radius-aware final profile
-      // settles onto terrain. The tail still comes down rather than rolling up.
-      require(region_delta[0] <= -700 && region_delta[1] <= -600 &&
-                  region_delta[2] <= -450 && region_delta[3] <= -100,
-              "raised spring regions no longer descend from above");
-      require(region_delta[6] <= -50,
-              "spring tail has started rolling upward during compression");
-      require(whole_deep_y < whole_rest_y,
-              "the complete spring no longer descends overall");
       std::printf(" mm\n");
+      require(every_region_joins,
+              "enlarged jump S no longer recruits every body region");
+      require(region_motion[6] >= 100,
+              "enlarged jump S no longer reaches the tail tip");
+
+      auto centre_span = [](const PosedSample& s) {
+        int32_t lo = INT32_MAX, hi = INT32_MIN;
+        for (int i = 0; i < zixx::kProfileStations; ++i) {
+          lo = std::min(lo, s.y_mm[i]);
+          hi = std::max(hi, s.y_mm[i]);
+        }
+        return hi - lo;
+      };
+      const int32_t entry_span = centre_span(entry);
+      const int32_t deep_span = centre_span(deep);
+      int32_t lateral_lo = INT32_MAX, lateral_hi = INT32_MIN;
+      int x_reversals = 0;
       for (int i = 0; i < zixx::kProfileStations; ++i) {
-        center_lo = std::min(center_lo, deep.y_mm[i]);
-        center_hi = std::max(center_hi, deep.y_mm[i]);
         lateral_lo = std::min(lateral_lo, deep.z_mm[i]);
         lateral_hi = std::max(lateral_hi, deep.z_mm[i]);
+        if (i > 0 && deep.x_mm[i] > deep.x_mm[i - 1] + 8) ++x_reversals;
       }
-      const int32_t center_span = center_hi - center_lo;
-      const int32_t lateral_span = lateral_hi - lateral_lo;
+      int32_t entry_min_clearance = INT32_MAX;
+      int entry_clear_i = -1, entry_clear_j = -1;
+      int32_t min_clearance = INT32_MAX;
+      int clear_i = -1, clear_j = -1;
+      for (const auto& pr : pairs) {
+        const int i = pr.first, j = pr.second;
+        const int64_t entry_dx = entry.x_mm[i] - entry.x_mm[j];
+        const int64_t entry_dy = entry.y_mm[i] - entry.y_mm[j];
+        const int64_t entry_dz = entry.z_mm[i] - entry.z_mm[j];
+        const int32_t entry_d = static_cast<int32_t>(zref::isqrt_u64(
+            static_cast<uint64_t>(entry_dx * entry_dx + entry_dy * entry_dy +
+                                  entry_dz * entry_dz)));
+        const int32_t entry_clearance =
+            entry_d - stations[i].r_mm - stations[j].r_mm;
+        if (entry_clearance < entry_min_clearance) {
+          entry_min_clearance = entry_clearance;
+          entry_clear_i = i;
+          entry_clear_j = j;
+        }
+        const int64_t dx = deep.x_mm[i] - deep.x_mm[j];
+        const int64_t dy = deep.y_mm[i] - deep.y_mm[j];
+        const int64_t dz = deep.z_mm[i] - deep.z_mm[j];
+        const int32_t d = static_cast<int32_t>(zref::isqrt_u64(
+            static_cast<uint64_t>(dx * dx + dy * dy + dz * dz)));
+        const int32_t clearance = d - stations[i].r_mm - stations[j].r_mm;
+        if (clearance < min_clearance) {
+          min_clearance = clearance;
+          clear_i = i;
+          clear_j = j;
+        }
+      }
       const int32_t mesh_span = to_mm(deep.max_y_fx - deep.min_y_fx);
-      const int32_t head_surface_y = to_mm(deep.bone_min_y_fx[zixx::kBHead]);
-      const int32_t rear_surface_y = to_mm(
-          std::min(deep.bone_min_y_fx[zixx::kBSpine0 + 16],
-                   deep.bone_min_y_fx[zixx::kBSpine0 + 17]));
-      std::printf("SPRING deepest: centre/lateral span %d/%d mm, mesh span "
-                  "%d mm, minY %d mm at bones %d/%d; head/rear surface "
-                  "%d/%d mm\n",
-                  center_span, lateral_span, mesh_span, to_mm(deep.min_y_fx),
-                  deep.min_b0, deep.min_b1, head_surface_y, rear_surface_y);
-      std::printf("SPRING deepest centre Y (each fourth station):");
-      for (int i = 0; i < zixx::kProfileStations; i += 4)
-        std::printf(" %d:%d", i, deep.y_mm[i]);
-      std::printf(" %d:%d mm\n", zixx::kProfileStations - 1,
-                  deep.y_mm[zixx::kProfileStations - 1]);
-      require(center_span <= 150,
-              "deepest spring no longer has the accepted almost-flat silhouette");
-      require(lateral_span <= 15,
+      const int32_t head_retract = deep.x_mm[0] - entry.x_mm[0];
+      std::printf("SPRING ordered pose: entry/deep centre span %d/%d mm, "
+                  "head X delta %d mm, lateral span %d mm, X reversals %d, "
+                  "entry/deep non-neighbour clearance %d@%d/%d / %d@%d/%d "
+                  "mm, mesh span %d mm\n",
+                  entry_span, deep_span, head_retract,
+                  lateral_hi - lateral_lo, x_reversals, entry_min_clearance,
+                  entry_clear_i, entry_clear_j, min_clearance, clear_i, clear_j,
+                  mesh_span);
+      require(deep_span < entry_span,
+              "whole-model squash no longer flattens the enlarged jump S");
+      require(head_retract <= -500,
+              "spring head no longer retracts backward into body-side space");
+      require(lateral_hi - lateral_lo <= 20,
               "spring centreline left the side plane and regained a concertina");
-      require(head_surface_y >= -15 && head_surface_y <= 5,
-              "compressed spring head no longer meets its authored contact band");
-      require(rear_surface_y >= -15,
-              "compressed spring rear penetrates terrain instead of staying rigid");
-      require(mesh_span >= 150,
+      require(x_reversals == 0 && entry_min_clearance >= 0 &&
+                  min_clearance >= 0,
+              "spring entry or compressed body runs intersect or fold back through one another");
+      require(mesh_span - deep_span >= 250,
               "deepest spring lost the tube's volumetric cross-section");
+
       int32_t spring_worst = INT32_MAX;
       int spring_worst_tick = -1;
       for (int t = 0; t <= 2 * ph.hold_end &&

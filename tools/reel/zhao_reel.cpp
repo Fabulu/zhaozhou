@@ -1049,6 +1049,10 @@ struct SceneSubject {
   // exactly while the view turns around it. This is reel presentation state,
   // never an animation/asset change.
   bool creature_hold = false;
+  // Final Zixxtrixx inspection clip: one deterministic world-space descriptor
+  // drives BOTH genuine spatial point lighting and its depth-tested marker.
+  // All ordinary subjects leave this false and retain their selected rig.
+  bool creature_moving_light = false;
   // FULL-COLOUR LANE (MODELINGGUIDE section 5). The 256-colour rule is a
   // GIF-EXPORT constraint, and it was allowed to redesign a creature: it
   // deleted an eye colour, a mouth and a throat transition, and it forced a
@@ -2100,7 +2104,115 @@ struct CreatureReelCtx {
   zref::mat4fx vp;
   std::vector<ReelGibPiece>* gibs = nullptr;
   uint32_t gibs_in_view = 0;
+  bool moving_light = false;
+  zc::CreaturePointLight moving_source{};
 };
+
+// Four slow, continuous world-space passes: along the camera-side flank, over
+// the whole animal, back along the far flank, then over and around to the start.
+// The path is authored in millimetres around the staged signature-S, never from
+// camera coordinates. Each leg eases to rest so its direction change reads as a
+// deliberate inspection rather than a bouncing light.
+void sample_zixx_moving_source(uint32_t frame, uint32_t frames,
+                               const zc::CreatureInstance& inst,
+                               zc::CreaturePointLight& out) {
+  constexpr int32_t kPathHalfMm = 1750;
+  constexpr int32_t kPathSideMm = 850;
+  constexpr int32_t kPathHeightMm = 1400;
+  constexpr int32_t kHighArchMm = 1200;
+  constexpr int32_t kReturnArchMm = 900;
+  const uint32_t leg_frames = std::max<uint32_t>(1, frames / 4);
+  const uint32_t leg = std::min<uint32_t>(3, frame / leg_frames);
+  const uint32_t local = frame - leg * leg_frames;
+  const int32_t linear = static_cast<int32_t>(
+      (static_cast<uint64_t>(local) * 1000u) / leg_frames);
+  const int32_t ease = static_cast<int32_t>(
+      (static_cast<int64_t>(linear) * linear * (3000 - 2 * linear)) /
+      1000000);
+  const int32_t arch = zref::fx_sin(zref::angle16{
+      static_cast<uint16_t>((static_cast<uint32_t>(linear) * 32768u) / 1000u)})
+                           .raw;
+  const auto lerp_mm = [ease](int32_t a, int32_t b) {
+    return a + static_cast<int32_t>(
+                   (static_cast<int64_t>(b - a) * ease + 500) / 1000);
+  };
+
+  int32_t x_mm = 0, y_mm = kPathHeightMm, z_mm = 0;
+  switch (leg) {
+    case 0:  // near-side longitudinal pass
+      x_mm = lerp_mm(-kPathHalfMm, kPathHalfMm);
+      z_mm = -kPathSideMm;
+      break;
+    case 1:  // high diagonal arch over the complete S
+      x_mm = lerp_mm(kPathHalfMm, -kPathHalfMm);
+      z_mm = lerp_mm(-kPathSideMm, kPathSideMm);
+      y_mm += static_cast<int32_t>(
+          (static_cast<int64_t>(kHighArchMm) * arch + 32768) >> 16);
+      break;
+    case 2:  // far-side longitudinal return
+      x_mm = lerp_mm(-kPathHalfMm, kPathHalfMm);
+      z_mm = kPathSideMm;
+      break;
+    default:  // lower crossover completes the around-and-over loop
+      x_mm = lerp_mm(kPathHalfMm, -kPathHalfMm);
+      z_mm = lerp_mm(kPathSideMm, -kPathSideMm);
+      y_mm += static_cast<int32_t>(
+          (static_cast<int64_t>(kReturnArchMm) * arch + 32768) >> 16);
+      break;
+  }
+
+  const int32_t staged_centre_x = inst.x - fxm(zixx::kStageCentreMm);
+  out.world_x = staged_centre_x + fxm(x_mm);
+  out.world_y = inst.y + fxm(y_mm);
+  out.world_z = inst.z + fxm(z_mm);
+  out.inner_radius = fxm(450);
+  out.outer_radius = fxm(3600);
+  out.gain_r = 65536;  // warm gummy-lamp source
+  out.gain_g = 44564;
+  out.gain_b = 26214;
+}
+
+void draw_zixx_moving_source_marker(const CreatureReelCtx& c, uint8_t* rgb,
+                                    int32_t* depth, uint32_t w, uint32_t h) {
+  const zref::render::Viewport viewport{0, 0, w, h};
+  const zref::render::ProjOut p = zref::render::project_vertex(
+      c.vp, viewport, zref::fx16{c.moving_source.world_x},
+      zref::fx16{c.moving_source.world_y},
+      zref::fx16{c.moving_source.world_z}, nullptr);
+  if (!p.in) return;
+  const int32_t cx = p.s.x >> 8;
+  const int32_t cy = p.s.y >> 8;
+  constexpr int32_t kHaloRadiusPx = 7;
+  constexpr int32_t kCoreRadiusSq = 4;
+  for (int32_t dy = -kHaloRadiusPx; dy <= kHaloRadiusPx; ++dy) {
+    for (int32_t dx = -kHaloRadiusPx; dx <= kHaloRadiusPx; ++dx) {
+      const int32_t d2 = dx * dx + dy * dy;
+      if (d2 > kHaloRadiusPx * kHaloRadiusPx) continue;
+      const int32_t x = cx + dx;
+      const int32_t y = cy + dy;
+      if (x < 0 || y < 0 || x >= static_cast<int32_t>(w) ||
+          y >= static_cast<int32_t>(h))
+        continue;
+      const size_t i = static_cast<size_t>(y) * w + x;
+      // Q16.16 1/w: larger is closer. The orb therefore disappears honestly
+      // behind the creature or terrain instead of becoming an unrelated HUD dot.
+      if (p.s.d < depth[i]) continue;
+      uint8_t* px = &rgb[i * 3];
+      if (d2 <= kCoreRadiusSq) {
+        px[0] = 255;
+        px[1] = 232;
+        px[2] = 170;
+        depth[i] = p.s.d;
+      } else {
+        const int32_t a = ((kHaloRadiusPx * kHaloRadiusPx - d2) * 150) /
+                          (kHaloRadiusPx * kHaloRadiusPx);
+        px[0] = static_cast<uint8_t>(px[0] + ((255 - px[0]) * a + 127) / 255);
+        px[1] = static_cast<uint8_t>(px[1] + ((184 - px[1]) * a + 127) / 255);
+        px[2] = static_cast<uint8_t>(px[2] + ((92 - px[2]) * a + 127) / 255);
+      }
+    }
+  }
+}
 
 // RUN 1939/2234 texture-experiment lane: reel-side post effects, env-gated.
 // Default off: the normal render never enters these branches and stays
@@ -2197,8 +2309,18 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
 #endif
   {
     zc::CreatureInstance* insts[2] = {c.inst, c.dummy};
+    const zc::CreatureLightRig* const saved_rig = zc::g_creature_light_rig;
+    const zc::CreaturePointLight* const saved_point = zc::g_creature_point_light;
+    if (c.moving_light) {
+      zc::g_creature_light_rig = &zc::kCreatureLightMovingInspection;
+      zc::g_creature_point_light = &c.moving_source;
+    }
     zc::compose_creatures(rgb, depth, w, h, c.vp, insts,
                           c.dummy != nullptr ? 2 : 1, *c.poses, nullptr);
+    // Subject-scoped by construction: a moving-light render cannot tint the
+    // next requested subject in this one-binary catalogue process.
+    zc::g_creature_light_rig = saved_rig;
+    zc::g_creature_point_light = saved_point;
   }
   // ---- RUN 1939 experiment post-pass (env-gated, default off). Placed
   // HERE because the hook returns early when there are no gibs -- the
@@ -2342,6 +2464,8 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     }
     ++g_exp_frame;
   }
+  if (c.moving_light)
+    draw_zixx_moving_source_marker(c, rgb, depth, w, h);
   c.gibs_in_view = 0;
   if (c.gibs == nullptr || c.gibs->empty()) return;
 
@@ -2539,6 +2663,7 @@ int render_scene(const SceneSubject& sub) {
       dog_inst.x -= fxm(zixx::kRunSpeed * static_cast<int32_t>(sub.frames)) / 2;
     cr_ctx.inst = &dog_inst;
     cr_ctx.poses = &dog_poses;
+    cr_ctx.moving_light = sub.creature_moving_light;
     if (sub.dummy) {
       const uint16_t attack_slot = static_cast<uint16_t>(sub.creature - 2);
       target_desc = zixx_target_descriptor(attack_slot);
@@ -2859,6 +2984,12 @@ int render_scene(const SceneSubject& sub) {
         if (dcol.cls == zref::terrain::ColumnClass::kSolid)
           dummy_inst.y = dcol.top.raw + fxm(target_desc.y_mm);
       }
+      // Sample exactly once, only after terrain snap. The resulting named
+      // world-space coordinates live in cr_ctx.moving_source and are consumed
+      // unchanged by both the compositor and the depth-tested visible marker.
+      if (sub.creature_moving_light)
+        sample_zixx_moving_source(f, sub.frames, dog_inst,
+                                  cr_ctx.moving_source);
       // Detached-chunk ballistics advance at the start of subsequent frames,
       // so the exact authored breakup pose is visible for one full frame.
       if (!gibs.empty()) {
@@ -4175,6 +4306,21 @@ SceneSubject subject_zixx_light_choice() {
   return s;
 }
 
+SceneSubject subject_zixx_moving_light() {
+  SceneSubject s = subject_zixx_still();
+  s.name = "zixxtrixx-moving-light";
+  s.frames = 600;
+  s.creature_hold = true;
+  s.creature_moving_light = true;
+  s.cam_yaw = 8192;  // fixed three-quarter view; the SOURCE moves, not the eye
+  s.cam_k = 280000;
+  s.cam_dist = 9;
+  s.note = "FINAL INSPECTION: held signature-S under dim sunlight; one visible "
+           "world-space local source makes four slow around-and-over passes and "
+           "drives the real posed-vertex light";
+  return s;
+}
+
 // V12 overhead-lighting inspection: the same authored idle key is held exactly
 // while the camera makes one continuous world-yaw turn. Ten seconds at 60 Hz
 // felt slow enough to read each side and the dorsal bands without becoming a
@@ -5255,6 +5401,8 @@ constexpr LibraryEntry kLibrary[] = {
     // for the creature site: one camera orbit per loop, performed on ground
     {"zixxtrixx-idle", "Zixxtrixx idle",
      "Relaxed S stance: breathing, bobbing, girth swell, lazy tail sway", true},
+    {"zixxtrixx-moving-light", "Zixxtrixx moving-light inspection",
+     "Held signature-S under one visible world-space source, around and over", true},
     {"zixxtrixx-walk", "Zixxtrixx walk",
      "Caterpillar gait, vertical and longitudinal, fixed camera", true},
     {"zixxtrixx-attack", "Zixxtrixx triple salto",
@@ -5525,6 +5673,8 @@ int main(int argc, char** argv) {
   if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
   if (wanted("creature-bulk-pop")) rc |= render_scene(subject_creaturepop());
   if (wanted("zixxtrixx-idle")) rc |= render_scene(subject_zixx_idle());
+  if (wanted("zixxtrixx-moving-light"))
+    rc |= render_scene(subject_zixx_moving_light());
   if (wanted("zixxtrixx-walk")) rc |= render_scene(subject_zixx_walk());
   if (wanted("zixxtrixx-attack")) rc |= render_scene(subject_zixx_attack());
   if (wanted("zixxtrixx-spring-side")) rc |= render_scene(subject_zixx_spring_side());
