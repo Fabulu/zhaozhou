@@ -89,6 +89,7 @@
 // says so rather than quietly avoiding the other two.
 module zhao_probe_v3_full #(
     parameter int CTX  = 8,
+    parameter int OUTSTANDING = 4,
     parameter int REGS = 32,
     parameter int PLAN = 32,
     parameter int TAGW = 8
@@ -285,7 +286,7 @@ module zhao_probe_v3_full #(
   );
 
   zhao_field_v3_svcpath #(
-      .CONTEXTS(CTX), .REGS(REGS), .TAGW(TAGW)
+      .CONTEXTS(CTX), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING)
   ) u_svc (
       .clk(clk), .rst_n(rst_n),
       .long_valid_i(long_valid), .long_ready_o(long_ready),

@@ -85,6 +85,12 @@ constexpr int kCtx = ZHAO_EARTH_CTX;
 constexpr int kRegs = 32;
 constexpr int kPlan = 32;
 
+// The three ways points can be fed to the machine. They are not equivalent and
+// the difference is larger than any arithmetic change measured so far.
+constexpr int kDriveStaggered = 0;
+constexpr int kDriveWave = 1;
+constexpr int kDriveQuad = 2;
+
 // The law, from reports/Fieldv3.md and the owner's own number.
 constexpr long kFrameBudget = 850000;
 constexpr long kAssocBudget = 6000;
@@ -677,7 +683,7 @@ struct Result {
 };
 
 /** Run one real Earth program on the composed engine and count. */
-Result run_program(const char* path, int points, uint64_t seed, bool wave_drive, int n_ctx) {
+Result run_program(const char* path, int points, uint64_t seed, int drive, int n_ctx) {
   Result R;
 
   const std::vector<uint8_t> bytes = slurp(path);
@@ -944,7 +950,7 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive,
   const int guard_max = points * 8000 + 400000;
   const int warmup_waves = (n_ctx >= 4) ? 2 : 4;
 
-  if (wave_drive) {
+  if (drive == kDriveWave) {
     bool done_flag[kCtx];
     for (int wave = 0; retired < points && guard < guard_max; ++wave) {
       if (wave == warmup_waves) {
@@ -970,6 +976,59 @@ Result run_program(const char* path, int points, uint64_t seed, bool wave_drive,
             ++retired;
           }
         }
+      }
+    }
+  } else if (drive == kDriveQuad) {
+    // QUADS ALIGNED, QUADS STAGGERED.
+    //
+    // The other two patterns each give up one of the two things that matter.
+    // WAVE starts every context together, so all of them sit on the SAME
+    // opcode at once and the services never overlap -- the machine runs one
+    // service at a time with the rest idle. STAGGERED overlaps the services but
+    // lets contexts drift apart one at a time, so they stop sharing an op and
+    // the groups go out PARTIAL: 82% of them at 32 contexts.
+    //
+    // A dispatch group is FOUR points. So the unit that must stay aligned is
+    // four contexts, not one and not all of them. Quads are started together
+    // and reloaded together -- which fills every group -- while different quads
+    // sit at different points in the program, which is what keeps DIST2, CURVE
+    // and the trig unit busy at the same time.
+    const int nq = n_ctx / 4;
+    std::vector<int> left((size_t)nq, 0);
+    std::vector<bool> qdone((size_t)n_ctx, false);
+    int wave = 0;
+    for (int q = 0; q < nq; ++q) {
+      for (int k = 0; k < 4; ++k) {
+        load_point(q * 4 + k);
+        qdone[(size_t)(q * 4 + k)] = false;
+      }
+      left[(size_t)q] = 4;
+    }
+    while (retired < points && guard++ < guard_max) {
+      d.advance();
+      for (int c = 0; c < n_ctx; ++c) {
+        if (!d.done_q[c]) continue;
+        d.done_q[c] = false;
+        d.running[c] = false;
+        if (qdone[(size_t)c]) continue;
+        qdone[(size_t)c] = true;
+        --left[(size_t)(c / 4)];
+        check_point(c);
+        ++retired;
+      }
+      for (int q = 0; q < nq && retired < points; ++q) {
+        if (left[(size_t)q] != 0) continue;
+        if (wave == warmup_waves * nq) {
+          t0 = d.clocks;
+          preload0 = d.preload_clocks;
+          counted_start = retired;
+        }
+        ++wave;
+        for (int k = 0; k < 4; ++k) {
+          load_point(q * 4 + k);
+          qdone[(size_t)(q * 4 + k)] = false;
+        }
+        left[(size_t)q] = 4;
       }
     }
   } else {
@@ -1088,7 +1147,7 @@ int main(int argc, char** argv) {
     // pattern that FOUND the defect is the pattern that guards against its
     // return, which is the only honest place for it.
     diag_failures = 0;
-    const Result S = run_program(f, points, 0xC0FFEEull, false, n_ctx);
+    const Result S = run_program(f, points, 0xC0FFEEull, kDriveStaggered, n_ctx);
     const int stag_bad = diag_failures;
     printed = 0;
     if (S.ran)
@@ -1096,7 +1155,14 @@ int main(int argc, char** argv) {
              S.group_clocks, S.frame, S.partial, S.groups, stag_bad);
     total_stag_bad += stag_bad;
 
-    const Result R = run_program(f, points, 0xC0FFEEull, true, n_ctx);
+    const Result Q = run_program(f, points, 0xC0FFEEull, kDriveQuad, n_ctx);
+    if (Q.ran)
+      printf("   %-22s QUAD      group %4ld  association %7ld  frame %9ld  partial %ld/%ld  %s\n",
+             base, Q.group_clocks, Q.assoc, Q.frame, Q.partial, Q.groups,
+             Q.frame <= kFrameBudget ? "FITS" : "OVER");
+    total_checks += Q.checked;
+
+    const Result R = run_program(f, points, 0xC0FFEEull, kDriveWave, n_ctx);
 
     if (!R.ran) {
       printf("   %-22s NOT RUN: %s\n", base, R.refusal.c_str());

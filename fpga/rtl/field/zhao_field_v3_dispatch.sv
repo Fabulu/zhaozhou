@@ -76,7 +76,17 @@
 module zhao_field_v3_dispatch #(
     parameter int CONTEXTS = 8,
     parameter int REGS     = 32,
-    parameter int TAGW     = 8
+    parameter int TAGW     = 8,
+    // HOW MANY GROUPS MAY BE IN FLIGHT. In the parameter PORT list rather than
+    // the body, because a parameter declared in the body cannot be overridden
+    // by an instance -- SystemVerilog treats it as a localparam, and Verilator
+    // says so in as many words. It has to be overridable: four groups cap the
+    // service path at SIXTEEN points in flight however many contexts exist,
+    // and covering the services' latency is what the Earth budget turns on.
+    //
+    // The default stays 4, which is what every tally on this block was taken
+    // at. SW below reaches 16.
+    parameter int OUTSTANDING = 4
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -273,7 +283,6 @@ module zhao_field_v3_dispatch #(
   // point of overlapping them. Responses are therefore matched BY TAG into
   // whichever slot owns them. Draining still runs oldest-first, because write
   // ordering and release timing are the two things that must not change.
-  parameter int OUTSTANDING = 4;
   localparam int SW = (OUTSTANDING <= 2) ? 1 : ((OUTSTANDING <= 4) ? 2 : ((OUTSTANDING <= 8) ? 3 : 4));
 
   // THE POINTER WRAP IS WRITTEN OUT, NOT DONE WITH A MODULO, and the reason is

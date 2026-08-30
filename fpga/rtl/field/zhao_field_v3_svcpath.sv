@@ -52,6 +52,12 @@
 //   adds storage and no new behaviour. The test checks the port.
 module zhao_field_v3_svcpath #(
     parameter int CONTEXTS = 8,
+    // How many long-op groups may be in flight at once. Forwarded to the
+    // dispatcher; default 4, which is what every existing tally was taken at.
+    // It is a top-level knob because four groups caps the service path at
+    // SIXTEEN points in flight no matter how many contexts exist, and covering
+    // the services' latency is what the Earth budget turns on.
+    parameter int OUTSTANDING = 4,
     parameter int REGS     = 32,
     parameter int TAGW     = 8
 ) (
@@ -259,7 +265,7 @@ module zhao_field_v3_svcpath #(
   logic signed [31:0] drain_data;
 
   zhao_field_v3_dispatch #(
-      .CONTEXTS(CONTEXTS), .REGS(REGS), .TAGW(TAGW)
+      .CONTEXTS(CONTEXTS), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING)
   ) u_dispatch (
       .clk(clk), .rst_n(rst_n),
       .long_valid_i(long_valid_i), .long_ready_o(long_ready_o),
