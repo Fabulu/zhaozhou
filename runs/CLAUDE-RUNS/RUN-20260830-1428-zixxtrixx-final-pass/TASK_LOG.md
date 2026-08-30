@@ -53,6 +53,18 @@ Complete Task #28 from accepted V14 as a deliberately small head/neck/colour adj
 
 ---
 
+### 2026-08-30 - Whole-body gummy spring accepted
+
+- Replaced the superseded almost-flat press with two explicit, editable side-profile authorities: a progressive enlarged jump-S entry that reaches the complete tail tip, followed only after completion by a broad low volumetric squash. V14 rest/body/topology/rig and the accepted airborne wheel/spear/impact choreography remain intact.
+- Applied the same entry/squash/head/root samples to the golden attack, every planned target/six/nine-salto attack and the one/multi-salto jump builder. The head retracts 620 mm body-side during squash; the root stays grounded through a six-key hold and gummy release, and launch begins only afterward.
+- Authored by rendered iteration rather than drawing measurements. Rejected the first tight circular compressed profile as a tangle, rejected positive root travel after an identical side crop proved it pushed the head forward, and kept the final broad non-looping profile with negative retraction.
+- Inspected every frame in fixed-side and high three-quarter spring sheets, plus every frame of the planned six-salto and immediate one-salto jump. The final read is progressive and whole-bodied, the broad squash retains tube volume and clearance, the hold is theatrical, release has no root pop, and the existing airborne/impact/landing motion remains coherent.
+- Fresh clean direct all-target build completed; no CMake/Ninja/Verilator route. Updated the committed posed-vertex probe to assert entry-before-squash, all-region/tail-tip participation, backward head travel, side-plane coherence, entry/deep non-neighbour clearance, retained volume and declared ground contact.
+- Final committed 3D probe passes at every key and midpoint: all seven regions participate; tail mean travel 656 mm; head X delta -635 mm; entry/deep clearance +13/+104 mm; deepest anticipation bite -38 mm inside the declared -40..-15 mm band; planned one/multi jump landing contact exactly -40 mm; no saturation. `zixx-meshcheck` remains 1774 vertices, zero disagreeing binds and zero seam splits.
+- Diagnostic frame sequences and complete contact sheets are lane-local under `build/final-spring`; the durable authored controls and probe remain in source.
+
+---
+
 ## Subagent Spawns
 
 No subagents. This run has one implementation/modelling agent.
@@ -78,9 +90,7 @@ No subagents. This run has one implementation/modelling agent.
 
 ## Next Steps
 
-1. Read AGENT-PACK START-HERE/current state, every `OWNER-DIRECTION-*`, all relevant reports, and significant run pointers.
-2. Inspect V14 executable sample/workbench and identify exact normal clip/media inventory.
-3. Capture identical-view V14 before evidence with a fresh direct build.
-4. Make and visually inspect the bounded geometry/colour edits, then commit/push the accepted milestone.
-5. Implement and inspect the gummy spring and moving-light clip; commit/push logical milestones.
-6. Render/encode the final Cool Cross pass, preserve archive history/noindex, publish, integrate, clean, and stop every child.
+1. Commit and push the accepted spring/probe milestone.
+2. Implement the optional disabled-by-default world-space local light and its deterministic inspection subject; render and inspect its complete clip.
+3. Reconcile the existing manifest/site inventory, then render and encode the single final Cool Cross media pass plus moving-light clip.
+4. Preserve archives/V14 history and exact noindex, assemble/check the site, merge and push both mains, publish once, close the run, clean both trees and verify every spawned child stopped.
