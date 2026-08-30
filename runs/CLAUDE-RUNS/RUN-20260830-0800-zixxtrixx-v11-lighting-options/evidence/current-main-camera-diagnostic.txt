@@ -1,0 +1,4 @@
+quat sweep (S 1.0.14, 3600 rotations): decode element err <= 0.50 LSB, column-norm drift <= 15.86 LSB, end-to-end column angle err <= 0.0156 deg
+  creature extent law: radius/scale/rigid gates OK
+FRESH DIRECT CAMERA: clip_w=262144/65536 lit=1305/4096
+creature_core: all anchors green
