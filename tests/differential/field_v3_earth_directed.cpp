@@ -123,7 +123,13 @@ inline int32_t get_wr_lane(const Vzhao_probe_v3_full& t, int lane) {
   return (int32_t)t.wr_data_o[lane];
 #endif
 }
-constexpr int kRegs = 32;
+// REGISTERS PER CONTEXT. A build knob because crater_ring does not fit in 32:
+// it needs 7 vector + 29 uniform = 36, and the executor has no scalar-bank read
+// path, so uniforms reach it only by being broadcast into registers.
+#ifndef ZHAO_EARTH_REGS
+#define ZHAO_EARTH_REGS 32
+#endif
+constexpr int kRegs = ZHAO_EARTH_REGS;
 constexpr int kPlan = 32;
 
 // The three ways points can be fed to the machine. They are not equivalent and
@@ -602,7 +608,16 @@ void expected_regs(const zfield::Fplan& fp, const zfield::Decoded& prog,
       src[k] = (r >= 0 && r < n_rf) ? rf[r] : 0;
     }
     int32_t dst[3] = {};
-    zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    // UOP_RING_PREP IS NOT A CANONICAL OPCODE. The planner synthesises it, so
+    // `exec_op` has never heard of it and indexing the op table with 0xF1 walks
+    // off the end -- which is why crater_ring, the only program that uses it,
+    // was the only one that crashed. It has its own reference function, and its
+    // four uniforms arrive as scalar-bank slots rather than registers.
+    if (v.op == zfield::UOP_RING_PREP) {
+      dst[0] = zfield::steps::ring_prepared(src[0], src[1], src[2], src[3], src[4], &L);
+    } else {
+      zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    }
     const auto* sh = zfield::optable::shape_of(v.op);
     const int w = (v.op == zfield::UOP_RING_PREP) ? 1 : (sh ? (int)sh->dst_width : 1);
     for (int m = 0; m < w && (int)v.dst + m < n_rf; ++m) {
@@ -633,7 +648,16 @@ int32_t oracle_uop_value(const zfield::Fplan& fp, const zfield::Decoded& prog,
       src[k] = (r < n_rf) ? rf[(size_t)r] : 0;
     }
     int32_t dst[3] = {};
-    zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    // UOP_RING_PREP IS NOT A CANONICAL OPCODE. The planner synthesises it, so
+    // `exec_op` has never heard of it and indexing the op table with 0xF1 walks
+    // off the end -- which is why crater_ring, the only program that uses it,
+    // was the only one that crashed. It has its own reference function, and its
+    // four uniforms arrive as scalar-bank slots rather than registers.
+    if (v.op == zfield::UOP_RING_PREP) {
+      dst[0] = zfield::steps::ring_prepared(src[0], src[1], src[2], src[3], src[4], &L);
+    } else {
+      zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    }
     if (u == target_u) return dst[target_m < 3 ? target_m : 0];
     const auto* sh = zfield::optable::shape_of(v.op);
     const int w = (v.op == zfield::UOP_RING_PREP) ? 1 : (sh ? (int)sh->dst_width : 1);
@@ -690,7 +714,16 @@ void explain_uop(const zfield::Fplan& fp, const zfield::Decoded& prog, const zfi
       src_hw[k] = (r < n_rf) ? hw[(size_t)r] : 0;
     }
     int32_t dst[3] = {};
-    zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    // UOP_RING_PREP IS NOT A CANONICAL OPCODE. The planner synthesises it, so
+    // `exec_op` has never heard of it and indexing the op table with 0xF1 walks
+    // off the end -- which is why crater_ring, the only program that uses it,
+    // was the only one that crashed. It has its own reference function, and its
+    // four uniforms arrive as scalar-bank slots rather than registers.
+    if (v.op == zfield::UOP_RING_PREP) {
+      dst[0] = zfield::steps::ring_prepared(src[0], src[1], src[2], src[3], src[4], &L);
+    } else {
+      zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    }
     const auto* sh = zfield::optable::shape_of(v.op);
     const int w = (v.op == zfield::UOP_RING_PREP) ? 1 : (sh ? (int)sh->dst_width : 1);
 
