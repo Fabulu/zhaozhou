@@ -187,6 +187,7 @@ def body_tile(g_green, g_green_dark, g_pink, rng):
     # mid-body with a wobbly hand edge. Painted before the dorsal band and
     # the throat wedge so both stay on top.
     dk = tint(GREEN_DARK, g_green_dark)
+    fallback_handoff = BLUE_DARK_TO_LIGHT_HANDOFF * TILE / 128.0
     for y in range(0, 35):
         # width of the dark band around the belly line, in texels of U
         w = 24.0 * (1.0 - (y / 33.0) ** 1.6)
@@ -195,8 +196,9 @@ def body_tile(g_green, g_green_dark, g_pink, rng):
         wob = 2.0 * np.sin(y * 0.24 + 0.4) + 1.2 * np.sin(y * 0.066 + 1.7)
         for x in range(TILE):
             d = min(abs(x - (16 + wob)), TILE - abs(x - (16 + wob)))
-            if d < w:
-                t[y, x] = dk[y, x]
+            a = float(np.clip((w - d) / fallback_handoff + 0.5, 0.0, 1.0))
+            if a > 0.0:
+                t[y, x] = t[y, x] * (1.0 - a) + dk[y, x] * a
     back = 48  # U = 192/256
     # 13, not 4.5 (Fabian, 2026-08-27: "the pink should cover the entire top
     # of the snake, right now it's just a thin line. Top also means part of
@@ -224,30 +226,27 @@ def body_tile(g_green, g_green_dark, g_pink, rng):
             d = min(abs(x - (lo + hi) / 2), TILE - abs(x - (lo + hi) / 2))
             if d < (hi - lo) / 2:
                 t[y, x] = p[y, x]
-    # THE THROAT RUNS ON PAST THE HEAD (both sheets: the blue continues along
-    # the underside behind the skull, a teardrop down the chest in Front.png).
-    # The head part now ends exactly where this tile begins, so the wedge
-    # starts AT row 0 -- matched to the head tile's ~10-texel throat width so
-    # the two read as one marking across the junction -- and tapers away by
-    # row 19 (~1.3 m behind the nose, the owner's authored length).
-    # LONGER AND FULLER, 2026-08-28 (Fabian: "The blue should also go down
-    # its front body a bit before it goes into the dark green ... We need a
-    # bit more of that in the front body" -- and Side.png runs the blue a
-    # substantial way back along the tube). The wedge now HOLDS its full
-    # width for the first rows and tapers out by row 30 (~1.2 m behind the
-    # junction), so the read is blue -> dark green -> light green with the
-    # blue owning the chest.
+    # THE THROAT RUNS ON PAST THE HEAD as the SAME centred wedge. The six
+    # BLUE_* controls below also drive the continuous atlas painter: fallback
+    # generation scales them into this tile rather than inventing a second bib.
+    # Dark green was painted first, so it surrounds the immediately narrowing
+    # blue and remains beneath its point before the light-green flank dominates.
     b = tint(BLUE, g_green)
-    for y in range(0, 31):
-        yt = max(0.0, (y - 10) / 20.0)
-        w = 12.0 * (1.0 - yt) ** 1.3
-        if w < 0.6:
+    fallback_extent = BLUE_WEDGE_POINT_EXTENT * TILE / (256.0 - V_JUNCTION)
+    fallback_u_scale = TILE / 128.0
+    for y in range(0, min(TILE, int(np.ceil(fallback_extent)) + 1)):
+        v_from_junction = y * (256.0 - V_JUNCTION) / TILE
+        half = blue_wedge_half(v_from_junction) * fallback_u_scale
+        if half <= 0.0:
             continue
-        wob = 1.1 * np.sin(y * 0.31)
+        wob = fallback_u_scale * 1.1 * np.sin(v_from_junction * 0.18)
+        soft = min(BLUE_WEDGE_EDGE_MELD * fallback_u_scale,
+                   max(0.55, half * 0.55))
         for x in range(TILE):
             d = min(abs(x - (16 + wob)), TILE - abs(x - (16 + wob)))
-            if d < w:
-                t[y, x] = b[y, x]
+            w = float(np.clip((half - d) / soft + 0.5, 0.0, 1.0))
+            if w > 0.0:
+                t[y, x] = t[y, x] * (1.0 - w) + b[y, x] * w
     # V row 63 is the tail cap fan's whole sample row (cap apex v = 255 and the
     # end ring's v = 255, so every cap pixel lands here): keep it flat pigment
     # so the cap reads as a solid tip, not a streak.
@@ -492,18 +491,22 @@ def head_tile(g_blue, g_green_dark, g_pink, g_orange):
             return 4.0 + (PINK_HALF_TILE - 4.0) * (y - 16) / 16.0
         return PINK_HALF_TILE
     def throat_half(y):
-        return 12.0 if y < 38 else 10.0
-    # green rear flanks: fade in behind the skull; wobbly hand edge.
-    # PUSHED BACK 2026-08-27 pass 3 (34 -> 40): at 34 the green covered the
-    # rear half of the SKULL, and a head-on view showed it as a green rim
-    # ringing the face -- Front.png's ball has no green on it at all. At 40
-    # the green begins on the neck rows only.
-    # ...and again in the head-only run (40 -> 47): the skull is now LEVEL
-    # on its own bone, so a frontal camera sees its whole crown -- at 40 the
-    # ball's top read as a green cap where Front.png paints blue and pink.
-    # 47 leaves the green to the blend-zone neck rows.
+        # Establish the shipping atlas's junction breadth before this fallback
+        # tile ends, so its final row and body row zero are one blue marking.
+        junction_half = BLUE_WEDGE_START_BREADTH * TILE / 128.0
+        lead_start = TILE * (1.0 - BLUE_JUNCTION_CONTINUITY / V_JUNCTION)
+        if y <= lead_start:
+            return 12.0
+        a = np.clip((y - lead_start) / max(1.0, TILE - 1.0 - lead_start), 0.0, 1.0)
+        return 12.0 * (1.0 - a) + junction_half * a
+    # The rear transition begins BLUE_JUNCTION_CONTINUITY rows (in the shared
+    # atlas law) before the join. This replaces the old independent literal:
+    # green closes around the same centred throat wedge that body row zero
+    # continues, rather than forming a transverse blue collar.
+    fallback_lead_start = TILE * (1.0 - BLUE_JUNCTION_CONTINUITY / V_JUNCTION)
     for x in range(TILE):
-        start = 47 + 3.0 * np.sin(x * 0.47) + 2.0 * np.sin(x * 0.13 + 0.7)
+        start = (fallback_lead_start + 3.0 * np.sin(x * 0.47)
+                 + 2.0 * np.sin(x * 0.13 + 0.7))
         for y in range(max(0, int(start)), TILE):
             dtop = min(abs(x - 48), TILE - abs(x - 48))
             dbel = min(abs(x - 16), TILE - abs(x - 16))
@@ -613,6 +616,29 @@ WOB_SCALE = 1.0
 V_JUNCTION = 50           # station 11 of 57 = x 599 mm of 3050 -> 50 of 255
 BACK_COL, BELLY_COL = 96, 32
 SIDE_A_COL, SIDE_B_COL = 64, 0
+
+# THE FACE-TO-CHEST WEDGE, authored in the original 128x256 atlas grid so the
+# normal and cel pages, and the small fallback tiles, all share one intent.
+# These are LOOKING knobs, not values inferred from the projected concept:
+# render the held front/quarter/side at 384x240, then turn them by eye.
+BLUE_JUNCTION_CONTINUITY = 11.0   # head rows that establish the same wedge before V_JUNCTION
+BLUE_WEDGE_START_BREADTH = 19.0   # half-width at the shared row, in base U columns
+BLUE_WEDGE_TAPER_CHARACTER = 1.35 # >1 narrows immediately, then draws out into the point
+BLUE_WEDGE_POINT_EXTENT = 48.0    # base V rows below the junction to the distinct point
+BLUE_WEDGE_EDGE_MELD = 5.5        # crayon crossfade at each blue/dark-green edge
+BLUE_DARK_TO_LIGHT_HANDOFF = 9.0  # dark-underside edge crossfade into light-green flanks
+
+
+def blue_wedge_half(v_from_junction):
+    """Continuous blue-wedge half-width in the original atlas grid."""
+    if v_from_junction < -BLUE_JUNCTION_CONTINUITY:
+        return 0.0
+    if v_from_junction <= 0.0:
+        return BLUE_WEDGE_START_BREADTH
+    if v_from_junction >= BLUE_WEDGE_POINT_EXTENT:
+        return 0.0
+    remain = 1.0 - v_from_junction / BLUE_WEDGE_POINT_EXTENT
+    return BLUE_WEDGE_START_BREADTH * remain ** BLUE_WEDGE_TAPER_CHARACTER
 
 # ---- T5: the multi-scale crayon law ---------------------------------------
 # Three honest scan-derived scales, each a named knob (art law: the eye
@@ -819,54 +845,54 @@ def build_atlas():
         # 1 inside the band, 0 outside, a smooth ramp `soft` texels wide
         return float(np.clip((half - d) / soft + 0.5, 0.0, 1.0))
 
-    # 1. UNDERSIDE = DARK GREEN, the whole animal, melding up into the flanks
+    # 1. UNDERSIDE = DARK GREEN, the whole animal. Its named handoff width
+    # makes light green take over smoothly farther outward while leaving a
+    # readable dark surround for the blue point.
     for y in range(0, H):
         wob = WOB_SCALE * SC * (3.5 * np.sin(y * 0.055 / max(1, H // 256) + 0.9)
                     + 2.0 * np.sin(y * 0.017 / max(1, H // 256) + 2.1))
         for x in range(W):
             d = wrapd(x, belly + wob)
-            w = meldw(d, 25.0 * SC, 9.0 * SC)
+            w = meldw(d, 25.0 * SC, BLUE_DARK_TO_LIGHT_HANDOFF * SC)
             if w <= 0.0:
                 continue
             rgb[y, x] = rgb[y, x] * (1 - w) + dk_rgb[y, x] * w
             tooth[y, x] = tooth[y, x] * (1 - w) + mats["green_dark"][1][y, x] * w
 
-    # 2. HEAD ROWS: the blue face (the dome and the face rows stay blue);
-    # the rear upper flanks behind the face go LIGHT green now (the sides'
-    # colour under the new law), melded, and the underside bib below covers
-    # the throat
+    # 2. HEAD ROWS: blue owns the dome and face, then yields BEFORE the shared
+    # ring. The old arithmetic accidentally scaled this rear boundary twice,
+    # keeping every U column blue through V_JUNCTION and creating the horizontal
+    # collar visible in atlas_preview.png. Here the broad face ends once; the
+    # wedge below is a separate circumferential mask that crosses the join.
     for x in range(W):
-        start = (37 + 2.3 * np.sin(x * 0.24 / SC) + 1.6 * np.sin(x * 0.065 / SC + 0.7)) * (H / 256.0) / 1.0
-        start = start * (256.0 / H) * (H / 256.0)  # keep in atlas rows
-        start_row = int(start * (H / 256.0)) if H != 256 else int(start)
+        start_row = int((37.0 + 2.3 * np.sin(x * 0.24 / SC)
+                         + 1.6 * np.sin(x * 0.065 / SC + 0.7)) * (H / 256.0))
         for y in range(0, V_J):
-            # MELD WIDENED 4 -> 11 (RUN 0757): the blue face's rear boundary
-            # was a ~48 mm crossfade -- at 240p it rendered as a hard wedge
-            # line and the colour edge read as a SHAPE edge at the head/neck
-            # junction (the notch's ghost, after the geometry was proven
-            # continuous on the unlit outline). Side.png fades blue -> green
-            # over a lazy ~150 mm of crayon; ~11 rows/side matches that.
             w = float(np.clip((start_row - y) / (11.0 * SC) + 0.5, 0.0, 1.0))
             if w <= 0.0:
                 continue
             rgb[y, x] = rgb[y, x] * (1 - w) + bl_rgb[y, x] * w
             tooth[y, x] = tooth[y, x] * (1 - w) + mats["blue"][1][y, x] * w
 
-    # 3. THE BLUE BIB: from the head down the front underside, TAPERING INTO
-    # A TRIANGLE (Front.png's shape read), melding into the dark green at
-    # its edges and its point
-    bib_end = V_J + 100 * (H // 256)
-    for y in range(V_J, bib_end):
-        yt = (y - V_J) / float(bib_end - V_J)
-        half = 26.0 * SC * (1.0 - yt) ** 1.15  # the triangle's straightish sides
-        if half < 0.8:
+    # 3. ONE BLUE WEDGE crosses V_JUNCTION. It is already present during the
+    # final head rows, starts at one authored breadth on the shared row, narrows
+    # immediately, and reaches a geometrically distinct point without the old
+    # last-third opacity haze. Adaptive softness retains a crayon meld while
+    # preventing the tip from dissolving into a long pale streak.
+    row_scale = H / 256.0
+    wedge_begin = int(np.floor(V_J - BLUE_JUNCTION_CONTINUITY * row_scale))
+    wedge_end = min(H, int(np.ceil(V_J + BLUE_WEDGE_POINT_EXTENT * row_scale)) + 1)
+    for y in range(max(0, wedge_begin), wedge_end):
+        v_from_junction = (y - V_J) / row_scale
+        half = blue_wedge_half(v_from_junction) * SC
+        if half <= 0.0:
             continue
-        wob = WOB_SCALE * SC * 2.2 * np.sin(y * 0.097 / max(1, H // 256))
-        # the tip melds long: the last third fades rather than cutting
-        tipfade = float(np.clip((1.0 - yt) / 0.33, 0.0, 1.0))
+        wob = WOB_SCALE * SC * 2.2 * np.sin(v_from_junction * 0.18)
+        soft = min(BLUE_WEDGE_EDGE_MELD * SC,
+                   max(0.75 * SC, half * 0.55))
         for x in range(W):
             d = wrapd(x, belly + wob)
-            w = meldw(d, half, 8.0 * SC) * min(1.0, tipfade)
+            w = meldw(d, half, soft)
             if w <= 0.0:
                 continue
             rgb[y, x] = rgb[y, x] * (1 - w) + bl_rgb[y, x] * w
@@ -1125,15 +1151,14 @@ def exp_contour(rgb, tooth):
                      + 2.0 * np.sin(y * 0.017 / max(1, H_ // 256) + 2.1))
         stroke(y, belly + wob2 - 25.0 * SC - 1, 0.7)
         stroke(y, belly + wob2 + 25.0 * SC - 1, 0.7)
-        # the blue bib's triangle edges
-        bib_end = V_J + 100 * (H_ // 256)
-        if V_J <= y < bib_end:
-            yt = (y - V_J) / float(bib_end - V_J)
-            bh = 26.0 * SC * (1.0 - yt) ** 1.15
-            if bh >= 2.0:
-                wob3 = SC * 2.2 * np.sin(y * 0.097 / max(1, H_ // 256))
-                stroke(y, belly + wob3 - bh, 0.8)
-                stroke(y, belly + wob3 + bh, 0.8)
+        # the same continuous blue-wedge edges as the shipping painter
+        row_scale = H_ / 256.0
+        v_from_junction = (y - V_J) / row_scale
+        bh = blue_wedge_half(v_from_junction) * SC
+        if bh >= 2.0:
+            wob3 = SC * 2.2 * np.sin(v_from_junction * 0.18)
+            stroke(y, belly + wob3 - bh, 0.8)
+            stroke(y, belly + wob3 + bh, 0.8)
     # the blue face's rear boundary (head rows)
     for x in range(W_):
         start = (37 + 2.3 * np.sin(x * 0.24 / SC) + 1.6 * np.sin(x * 0.065 / SC + 0.7))

@@ -72,6 +72,15 @@ Correct the rejected published Zixxtrixx spring before any secondary polish, the
 - Added restrained, clip-specific coordinated pupils to quick taunt, slow taunt and notify. Quick taunt owns one held conspiratorial glance, slow taunt chooses three calm held targets, and notify eyes lead its two deliberate scan targets by three keys. Selected 2x/native views preserve visible travel and the orange eye-boundary connection without perpetual scan or jitter.
 - Inspected every frame of the revised KO, landing, both revised deaths and pupil clips under explicit `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross`. Accepted evidence lives under lane-local `build/ko-landing-iter1`, `build/death-performance-iter4` and `build/pupil-secondary-iter1`.
 - Added complete, non-overlapping posed-vertex terrain declarations for KO impact/hold, hit-floor approach/bite/rebound/settle, get-up, and every interval of all three deaths. The declarations explicitly preserve the hard-death buck and complaint heave rather than forcing false contact. Fresh direct `--clean all`, ordinary meshcheck, deformation-sidecar and full every-key/midpoint probe all pass; final contact evidence is `build/pupil-secondary-iter1/probe-final.txt`.
+- Committed and pushed the complete secondary-performance/contact milestone as zhaozhou `ae80dd6` (`Refine Zixxtrixx secondary performances`).
+
+### 2026-08-30 - Continuous face-wedge pigment repair
+
+- Repaired only the texture authority in `tools/pack/mkcreaturepage.py`; head/neck dimensions, topology, normals, eyes, crown, lighting and animation remain untouched. The source fault was a double-scaled head fade that kept every circumference column blue through the join, followed by a separately restarted 100-row broad bib.
+- Replaced those two phases with one centred blue wedge that is already established before `V_JUNCTION`, crosses the shared row at one authored breadth, narrows immediately and ends in a distinct point. Dark green surrounds and catches the point; its named edge handoff yields outward to light green.
+- Added the six required eye-authored controls: `BLUE_JUNCTION_CONTINUITY`, `BLUE_WEDGE_START_BREADTH`, `BLUE_WEDGE_TAPER_CHARACTER`, `BLUE_WEDGE_POINT_EXTENT`, `BLUE_WEDGE_EDGE_MELD`, and `BLUE_DARK_TO_LIGHT_HANDOFF`. The normal/cel atlas and small fallback tiles share the same wedge profile and handoff intent.
+- Regenerated both `zixxtrixx_page.h` and `zixxtrixx_page_cel.h` through the generator and verified a second regeneration is SHA-256 identical. A direct clean all-consumer build, Python compile, ordinary meshcheck and deformation-sidecar check pass.
+- Inspected the authored atlas plus native held front, fixed side, fixed three-quarter, complete head-on/side/quarter idle loops, unlit front/side, normviz, and every accepted spring deformation sample under explicit cel-main/Cool Cross. The front now reads as one face-to-point gesture with no transverse collar; side/quarter restore blue -> dark -> light order without blue chest dominance. The close unlit outline and normviz independently show no residual junction crease, so geometry stays frozen. Evidence is lane-local under `build/pigment-iter1`.
 
 ---
 
@@ -108,7 +117,6 @@ The mandated `subagents/20260830-1730-zixxtrixx-coil-expression/` directory was 
 
 ## Next Steps
 
-1. Commit and push the visually accepted secondary-animation/contact milestone with explicit paths.
-2. Repair the generated junction pigment through `tools/pack/mkcreaturepage.py`, regenerate both page families and inspect the held/deformed junction under lit and unlit views.
-3. Diagnose idle under explicit cel-main/Cool Cross, strengthen only the moving local inspection light if needed, and inspect moving-light frame `599 -> 0`.
-4. Preserve archive generation nine, render the exact final twenty-two-subject bank once, integrate current mains, and publish the finished pass exactly once.
+1. Commit and push the completed generated pigment milestone with explicit paths.
+2. Diagnose idle under explicit cel-main/Cool Cross, strengthen only the moving local inspection light if needed, and inspect moving-light frame `599 -> 0`.
+3. Preserve archive generation nine, render the exact final twenty-two-subject bank once, integrate current mains, and publish the finished pass exactly once.
