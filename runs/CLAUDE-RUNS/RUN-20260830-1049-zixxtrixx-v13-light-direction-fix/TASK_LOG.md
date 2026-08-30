@@ -46,6 +46,15 @@ Establish the renderer's executable directional-light, normal and space conventi
 - The identical bounded probe now returns +65374..+65532 for actual smooth `dot(normal,outward)` and +64711..+64837 for index-order flat faces; the obsolete reverse order is negative. Synthetic top/underside remains 65536/0 in both lanes.
 - Post-fix executable evidence is `light-sign-after.txt`; exit 0.
 
+### 2026-08-30 - One Corrected Candidate Authored and Reviewed
+
+- Added exactly one named rig, `Corrected Toplight 1`: key `(-18000,59000,-22000)`, fill `(26000,56000,22000)`, ambient `(24904,26214,28180)`, key gain `45875`, fill RGB `(6554,7864,11141)`.
+- Added exactly one new subject, `zixxtrixx-corrected-toplight-1`, inheriting the frozen held signature-S, framing, 600-frame duration and continuous view-only orbit.
+- Direct-built the cel-main reel and rendered this one animation once at native 384x240. Result: 600 frames, 60 Hz target, sequence CRC32C `0xCB8C0E8A`.
+- Inspected the four quarter turns and an every-frame sheet. The pink/cyan dorsal crown is plainly brightest, sides retain blue/green modelling, and underside remains subordinate but readable. The orbit is continuous and no pose/art change occurred.
+- Traced a +Y dorsal sample through production arithmetic: key/fill Lambert `59000/56000`, pre-toon gain mean `65536`, frozen bright toon level `82000` (1.2512). Native frame-0 dorsal pixel `(240,96)` is RGB `(255,105,206)`, proving the direct term survives to a visibly bright top pixel.
+- Source and executable transform trace confirms `worldm = world * pose` feeds both vertices and normals, while the rig vectors bypass `vp`; the orbit mutates only `view_projection`.
+
 ---
 
 ## Subagent Spawns

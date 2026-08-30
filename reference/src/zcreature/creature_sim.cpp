@@ -425,6 +425,19 @@ const CreatureLightRig kCreatureLightCloudbreak{
     45875,                    // white key: .70
     11796, 9175, 6554};       // warm fill: .18, .14, .10
 
+// V13 single candidate, authored only after the executable sign fixture proved
+// and repaired the generic inward-normal defect. Both unit Q16.16 directions
+// point FROM the surface TOWARD sources in the upper world hemisphere. The
+// dominant neutral key is near overhead with enough azimuth to model the side;
+// a weaker cool open-sky fill stays above/opposite. Every value remains a named,
+// editable art knob; none is derived from the rejected v12 constants.
+const CreatureLightRig kCreatureLightCorrectedToplight1{
+    -18000, 59000, -22000,    // dominant high sun: upper -X/-Z crown
+    26000, 56000, 22000,      // weak cool upper opposing sky
+    24904, 26214, 28180,      // ambient: .38, .40, .43
+    45875,                    // white key: .70
+    6554, 7864, 11141};       // cool fill: .10, .12, .17
+
 const CreatureLightRig* g_creature_light_rig = &kCreatureLightBaseline;
 
 namespace {

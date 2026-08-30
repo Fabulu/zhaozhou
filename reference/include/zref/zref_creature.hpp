@@ -942,6 +942,9 @@ extern const CreatureLightRig kCreatureLightHardNoon;
 extern const CreatureLightRig kCreatureLightVeiledSun;
 extern const CreatureLightRig kCreatureLightSilverMoon;
 extern const CreatureLightRig kCreatureLightCloudbreak;
+// V13: exactly one post-diagnosis candidate. It is separate from the rejected
+// v12 family and is evaluated only after the generic outward-normal repair.
+extern const CreatureLightRig kCreatureLightCorrectedToplight1;
 extern const CreatureLightRig* g_creature_light_rig;
 
 // RUN 1939/2234 texture-experiment lane. 0 = off (the shipping path,
