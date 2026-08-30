@@ -123,6 +123,66 @@ army, giant near camera, beams/storm, Duo, adversarial thrash.
 per frame in software.** That costs nothing, needs no RTL, and turns this file's
 estimates into measurements. Only then is a capacity frontier worth fitting.
 
+## THE DECIDING ARITHMETIC: a frame-resident triangle arena cannot be built
+
+`TRI_ENT_W = 16 + 6*21 = 142 bits` a triangle, and the device has **553 M10Ks =
+5.53 Mbit**. So:
+
+| triangles held | arena bits | M10K | share of the device |
+|---:|---:|---:|---:|
+| 128 (today) | 18 Kbit | ~2 | 0.3% |
+| 2,048 (one terrain patch) | 291 Kbit | ~29 | 5% |
+| 19,200 (the measured army) | 2.73 Mbit | ~273 | **49%** |
+| 25,000 | 3.55 Mbit | ~355 | **64%** |
+
+**References are cheap by comparison.** A reference is a triangle index plus the
+chunk's `next` pointer, so 25,000 references in 4-reference chunks is about
+6,250 x (4x15 + 13) = 456 Kbit, roughly **46 M10K — 8%**. That asymmetry is the
+whole finding: the arena's expensive half is the one holding VERTICES.
+
+### Which kills the obvious fixes, in order
+
+* **Raising TRI_CAP does not work.** Holding one measured army costs half the
+  device's memory, and that is before the terrain it is standing on, the sky,
+  the effects, and every other RAM in the console.
+* **A patch/strip primitive for terrain does not rescue it either.** Collapsing
+  2,048 terrain triangles into one record is a large, real saving — and the
+  army is still 19,200 records of creature geometry with no grid structure to
+  exploit. Terrain is not what breaks this.
+* **TriangleContext makes it strictly worse.** Storing edge coefficients and
+  attribute planes per triangle widens the record that is already the problem.
+
+### So the arena must stop being frame-resident
+
+The conclusion the numbers force is that a bounded arena cannot hold a frame,
+and therefore **the overflow wall should become a FLUSH, not a cull**:
+
+    bin until the arena is full
+      -> drain the tiles that have references
+      -> reset the arena
+      -> continue binning the SAME frame
+
+Nothing is dropped; the frame simply takes more passes over the tile grid, and
+each pass pays the tiles it touches. That is the standard sort-middle answer to
+bounded binning memory, and this block is already most of the way there: it has
+a chunked arena, a safe wall that abandons cleanly, and a drain that walks tiles
+in order. What it lacks is the ability to drain and then KEEP GOING.
+
+Two things that change and must be designed rather than assumed:
+
+* **A tile may now be visited more than once per frame**, so RASTER.TILE_PIPE's
+  brand-new one-clear-one-resolve-per-tile lifecycle needs a third state: the
+  SECOND pass over a tile must NOT clear it, and must resolve into what the
+  first pass left. That is exactly the `job_first_i`/`job_last_i` pair already
+  built, driven across passes instead of within one.
+* **Submission order still has to hold.** Terrain's painter order is
+  semantically observable, so a flush boundary must not reorder two triangles
+  that land in the same tile.
+
+**This is an owner-level decision and the numbers are the input to it, not a
+substitute for it.** What is no longer open is whether a bigger constant would
+do: it would not, and the reason is 49% of the device for one army.
+
 ## What this does NOT block
 
 The render path works and is tested at the sizes it is built for:
