@@ -268,7 +268,10 @@ int main(int argc, char** argv) {
     sb.mem[4] = p.rB;
 
     int32_t got[kLanes] = {};
-    const uint32_t imm = pack_slots(1, 2, 3, 4) | 0x01000000u;  // one reserved bit
+    // BIT 24 IS SMOOTH MODE NOW, so the reserved space starts at 25. Picking a
+    // bit that still means nothing is the point of the check; using 24 would
+    // now be asserting that a LEGAL request is illegal.
+    const uint32_t imm = pack_slots(1, 2, 3, 4) | 0x02000000u;  // one reserved bit
     (void)run_group(dut, mb, sb, d, imm, 0x33, got, nullptr);
     zhao::check(dut.imm_bad_o == 1, "a set reserved bit raises", 1, (uint32_t)dut.imm_bad_o);
 
@@ -282,6 +285,37 @@ int main(int argc, char** argv) {
       snprintf(what, sizeof what, "lane %d still answers correctly", l);
       zhao::check(got[l] == want, what, (uint32_t)want, (uint32_t)got[l]);
     }
+  }
+
+  printf("== section 3b: SMOOTH MODE is the first smoothstep, exactly ==\n");
+  {
+    // The whole reason this mode exists: every Earth builder expands
+    // `smoothstep(e0, e1, x)` into seven varying uops, and those seven are
+    // products P1..P4 of this unit. Contracting them into one request is only
+    // worth anything if the answer is IDENTICAL, so it is compared against the
+    // reference's own `ring_prepared` with the second branch killed -- which is
+    // what the seven uops compute, verified separately across 39,321 edge and
+    // span combinations before any of this was built.
+    reset(dut, mb, sb);
+    const Prep p = prepare(2 << 16, 9 << 16);
+    sb.mem[5] = p.r0;
+    sb.mem[6] = p.r0;  // m = r0: the dead subtraction is the live one
+    sb.mem[7] = p.rA;
+    sb.mem[8] = 0;  // rB = 0 kills the second smoothstep
+
+    int32_t got[kLanes] = {};
+    const uint32_t imm = pack_slots(5, 6, 7, 8) | 0x01000000u;  // bit 24: smooth
+    const int clocks = run_group(dut, mb, sb, d, imm, 0x5A, got, nullptr);
+    zhao::check(dut.imm_bad_o == 0, "smooth mode is not a reserved-bit fault", 0,
+                (uint32_t)dut.imm_bad_o);
+    for (int l = 0; l < kLanes; ++l) {
+      zref::SatLedger L;
+      const int32_t want = zfield::steps::ring_prepared(d[l], p.r0, p.r0, p.rA, 0, &L);
+      char what[80];
+      snprintf(what, sizeof what, "smooth lane %d equals the seven uops it replaces", l);
+      zhao::check(got[l] == want, what, (uint32_t)want, (uint32_t)got[l]);
+    }
+    printf("   MEASURED: smooth group in %d clocks (four products, not nine)\n", clocks);
   }
 
   printf("== section 4: the bank can REFUSE, and the answers do not move ==\n");

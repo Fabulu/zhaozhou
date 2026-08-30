@@ -124,6 +124,9 @@ module zhao_field_v3_ring_svc #(
   logic signed [31:0] u_d_r [UNITS][4];
   logic signed [31:0] u_uni_r [UNITS][4];
   logic        [ 7:0] u_tag_r [UNITS];
+  // Smooth mode travels with the group, not with the unit.
+  logic               u_smooth_r [UNITS];
+  logic               f_smooth_r;
 
   for (genvar u = 0; u < UNITS; u++) begin : gen_unit
     assign rg_v_valid[u] = u_busy_r[u] && !u_off_r[u];
@@ -132,6 +135,7 @@ module zhao_field_v3_ring_svc #(
         .v_valid_i(rg_v_valid[u]), .v_ready_o(rg_v_ready[u]),
         .d_0_i(u_d_r[u][0]), .d_1_i(u_d_r[u][1]),
         .d_2_i(u_d_r[u][2]), .d_3_i(u_d_r[u][3]),
+        .smooth_i(u_smooth_r[u]),
         .r0_i(u_uni_r[u][0]), .m_i(u_uni_r[u][1]),
         .rA_i(u_uni_r[u][2]), .rB_i(u_uni_r[u][3]),
         .tag_i(u_tag_r[u]),
@@ -253,6 +257,7 @@ module zhao_field_v3_ring_svc #(
       f_cyc_r     <= 3'd0;
       f_tag_r     <= 8'd0;
       imm_bad_o   <= 1'b0;
+      f_smooth_r  <= 1'b0;
       oq_head_r   <= '0;
       oq_tail_r   <= '0;
       oq_count_r  <= '0;
@@ -295,7 +300,12 @@ module zhao_field_v3_ring_svc #(
             f_slot_r[1] <= req_imm_i[11:6];
             f_slot_r[2] <= req_imm_i[17:12];
             f_slot_r[3] <= req_imm_i[23:18];
-            if (req_imm_i[31:24] != 8'd0) imm_bad_o <= 1'b1;
+            // BIT 24 IS SMOOTH MODE: answer with the first smoothstep alone and
+            // stop after four products instead of nine. It comes out of what
+            // used to be reserved space, so [31:25] stays a FAULT rather than
+            // padding -- a caller with rubbish in the top bits is still told.
+            f_smooth_r  <= req_imm_i[24];
+            if (req_imm_i[31:25] != 7'd0) imm_bad_o <= 1'b1;
             f_cyc_r   <= 3'd0;
             f_state_r <= F_FETCH;
           end
@@ -318,7 +328,8 @@ module zhao_field_v3_ring_svc #(
               u_d_r[free_u_c][i]   <= f_d_r[i];
               u_uni_r[free_u_c][i] <= f_uni_r[i];
             end
-            u_tag_r[free_u_c]  <= f_tag_r;
+            u_tag_r[free_u_c]    <= f_tag_r;
+            u_smooth_r[free_u_c] <= f_smooth_r;
             u_busy_r[free_u_c] <= 1'b1;
             u_off_r[free_u_c]  <= 1'b0;
             oq_u_r[oq_tail_r]  <= free_u_c;
