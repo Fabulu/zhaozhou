@@ -1,6 +1,27 @@
 # TEXTURE.TMU — target-closure direction
 
-**Status: QUEUED, not started. Do not begin until the Field/Earth lane closes.**
+> # SUPERSEDED IN ITS TARGET, 2026-08-30. READ `RECON-TMU-WHAT-IT-IS-ACTUALLY-FOR.md` FIRST.
+>
+> Fabian and the reviewer concluded that the TMU "was specced wrong from the
+> beginning, able to do too much" and that **850,000 is not the number it
+> needs**. A replacement spec is coming.
+>
+> The recon beside this file shows where 850,000 came from: `92,160 px x 3.0
+> overdraw x 3 texture layers`, and the third multiplier is Sacrifice's layered
+> `tile + detail + lightmap` read out of `sacmap.d`. **This console samples ONCE
+> per fragment** -- the charter says so in §26, the reference renderer says so in
+> its terrain branch, and `zhao_raster_fragment` has exactly one texel port. On a
+> one-sample model the demand is ~276,480/frame and ~6 clocks a sample, so the
+> block was at parity when this document called it 0.33x.
+>
+> **The ENGINEERING in this file survives; the NUMBER does not.** Resident
+> palettes (landed), acceptance-over-latency, the nearest bypass, pipelined
+> address generation, fill multicast, never identifying a record by `src_id`,
+> and early-Z ahead of the sampler are all still right. The II=1 target, the
+> packed-DSP probe justification and every "against 850,000" verdict below are
+> not. Do not start the run described here.
+
+**Status: SUPERSEDED. Do not begin. Awaiting a replacement spec.**
 
 Received 2026-08-30 from the reviewer, relayed by Fabian, with the instruction to
 write it down because "it might be a while until we get to it". It lives here,
