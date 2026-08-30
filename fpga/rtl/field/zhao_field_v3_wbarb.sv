@@ -80,7 +80,11 @@
 // it costs nothing at all once the answer is known: tie `policy_i` to a
 // constant in the engine and synthesis prunes the arms that cannot be reached.
 // So the knob survives into silicon only if somebody wants it there.
+// LANES only changes how WIDE a granted write is, never who wins it. The
+// arbitration is about the single port, and one port carrying four points is
+// still one port.
 module zhao_field_v3_wbarb #(
+    parameter int LANES = 1,
     parameter int CLAIMANTS = 3,
     parameter int CONTEXTS  = 8,
     parameter int REGS      = 32
@@ -97,12 +101,12 @@ module zhao_field_v3_wbarb #(
     output var logic [CLAIMANTS-1:0]                 req_ready_o,
     input  var logic [$clog2(CONTEXTS)-1:0]          req_ctx_i  [CLAIMANTS],
     input  var logic [$clog2(REGS)-1:0]              req_reg_i  [CLAIMANTS],
-    input  var logic signed [31:0]                   req_data_i [CLAIMANTS],
+    input  var logic signed [32*LANES-1:0]           req_data_i [CLAIMANTS],
 
     output var logic                                 wr_en_o,
     output var logic [$clog2(CONTEXTS)-1:0]          wr_ctx_o,
     output var logic [$clog2(REGS)-1:0]              wr_reg_o,
-    output var logic signed [31:0]                   wr_data_o,
+    output var logic signed [32*LANES-1:0]           wr_data_o,
 
     // ---- evidence ----------------------------------------------------------
     // PER CLAIMANT, because "the port was busy" is not the same finding as

@@ -100,7 +100,16 @@ module zhao_field_v3_dispatch #(
     // 215 groups. That is 1.19 points per FOUR-point group, a 3.4x waste, on a
     // frame that was 3.8x over budget. Full groups and overlapped services were
     // in direct conflict and no drive pattern could resolve it.
-    parameter int GATHERS = 4
+    parameter int GATHERS = 4,
+    // POINTS PER OFFER. The executor used to hand over one point at a time and
+    // this block gathered four of them; a quad-wide executor hands over all
+    // four at once. Both are the same loop with a different stride, so `fill`
+    // counts POINTS and an accept advances it by LANES.
+    //
+    // At LANES = 4 the gather still exists and still costs a clock, but it has
+    // nothing left to do -- which is the point. The half-empty groups it used
+    // to issue were the executor's narrowness showing through.
+    parameter int LANES = 1
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -111,9 +120,9 @@ module zhao_field_v3_dispatch #(
     input  var logic [$clog2(CONTEXTS)-1:0]   long_ctx_i,
     input  var logic [7:0]                    long_op_i,
     input  var logic [$clog2(REGS)-1:0]       long_dst_i,
-    input  var logic signed [31:0]            long_s0_i,
-    input  var logic signed [31:0]            long_s1_i,
-    input  var logic signed [31:0]            long_s2_i,
+    input  var logic signed [32*LANES-1:0]    long_s0_i,
+    input  var logic signed [32*LANES-1:0]    long_s1_i,
+    input  var logic signed [32*LANES-1:0]    long_s2_i,
     // A FOURTH SOURCE, because ROT3 needs one. Found the same way the
     // immediate was: by wiring the executor to this block and discovering it
     // could not describe the op. The generated op table says ROT3 has n_src 4
@@ -122,8 +131,8 @@ module zhao_field_v3_dispatch #(
     //
     // Four is the maximum any long op needs: ROT3 four, RING and NORMALIZE3
     // three, NOISE2 and RIDGE two, CURVE and SPLINE one.
-    input  var logic signed [31:0]            long_s3_i,
-    input  var logic signed [31:0]            long_s4_i,
+    input  var logic signed [32*LANES-1:0]    long_s3_i,
+    input  var logic signed [32*LANES-1:0]    long_s4_i,
     // THE INSTRUCTION'S IMMEDIATE, which is an OPERAND to several long ops and
     // was missing until the first attempt to compose this with a service.
     // NOISE2 and RIDGE take their seed from it, CURVE and SPLINE their table
@@ -165,7 +174,7 @@ module zhao_field_v3_dispatch #(
     input  var logic                          wb_ready_i,
     output var logic [$clog2(CONTEXTS)-1:0]   wb_ctx_o,
     output var logic [$clog2(REGS)-1:0]       wb_reg_o,
-    output var logic signed [31:0]            wb_data_o,
+    output var logic signed [32*LANES-1:0]    wb_data_o,
 
     // ---- back to the context FIFO ------------------------------------------
     // A context that issued a long op LEFT the ready set. This is how it comes
@@ -274,7 +283,7 @@ module zhao_field_v3_dispatch #(
     automatic logic [GW-1:0] slot_m = '0;
     automatic logic [GW-1:0] slot_f = '0;
     for (int i = GATHERS - 1; i >= 0; i--) begin
-      if (g_v_r[i] && (g_fill_r[i] < 3'd4) && (g_op_r[i] == long_op_i) &&
+      if (g_v_r[i] && (g_fill_r[i] <= 3'(4 - LANES)) && (g_op_r[i] == long_op_i) &&
           (g_dst_r[i] == long_dst_i) && (g_imm_r[i] == long_imm_i)) begin
         found_m = 1'b1;
         slot_m  = GW'(i);
@@ -547,7 +556,7 @@ module zhao_field_v3_dispatch #(
   assign push_c = (istate_r == I_ISSUE) && svc_ready_i;
   assign pop_c  = (dstate_r == DR_RUN) && wb_ready_i &&
                   (d_memb_r == 2'(s_width_r[head_r] - 2'd1)) &&
-                  (d_lane_r + 3'd1 >= s_used_r[head_r]);
+                  (d_lane_r + 3'(LANES) >= s_used_r[head_r]);
 
   // The slot a response belongs to, by TAG. A response whose tag matches no
   // outstanding group is the fault `tag_mismatch_o` exists for -- and with
@@ -565,13 +574,21 @@ module zhao_field_v3_dispatch #(
   end
 
   // ---- the drain ----------------------------------------------------------
-  logic signed [31:0] wb_data_c;
+  //
+  // ONE WRITE CARRIES LANES POINTS. A register in the file is LANES values
+  // wide, so the walk that used to spend four writes putting four points into
+  // four registers now spends one. That is the whole reason this widening
+  // exists: the composed gate measured 92% occupancy on this port.
+  logic signed [32*LANES-1:0] wb_data_c;
   always_comb begin
-    unique case (d_memb_r)
-      2'd0:    wb_data_c = r0_r[head_r][d_lane_r[1:0]];
-      2'd1:    wb_data_c = r1_r[head_r][d_lane_r[1:0]];
-      default: wb_data_c = r2_r[head_r][d_lane_r[1:0]];
-    endcase
+    for (int l = 0; l < LANES; l++) begin
+      automatic logic [1:0] pt = 2'(d_lane_r + 3'(l));
+      unique case (d_memb_r)
+        2'd0:    wb_data_c[32*l+:32] = r0_r[head_r][pt];
+        2'd1:    wb_data_c[32*l+:32] = r1_r[head_r][pt];
+        default: wb_data_c[32*l+:32] = r2_r[head_r][pt];
+      endcase
+    end
   end
 
   assign wb_valid_o = (dstate_r == DR_RUN);
@@ -638,13 +655,19 @@ module zhao_field_v3_dispatch #(
         g_op_r[acc_slot_c]  <= long_op_i;
         g_dst_r[acc_slot_c] <= long_dst_i;
         g_imm_r[acc_slot_c] <= long_imm_i;
-        g_ctx_r[acc_slot_c][g_fill_r[acc_slot_c][1:0]] <= long_ctx_i;
-        g_s0_r[acc_slot_c][g_fill_r[acc_slot_c][1:0]]  <= long_s0_i;
-        g_s1_r[acc_slot_c][g_fill_r[acc_slot_c][1:0]]  <= long_s1_i;
-        g_s2_r[acc_slot_c][g_fill_r[acc_slot_c][1:0]]  <= long_s2_i;
-        g_s3_r[acc_slot_c][g_fill_r[acc_slot_c][1:0]]  <= long_s3_i;
-        g_s4_r[acc_slot_c][g_fill_r[acc_slot_c][1:0]]  <= long_s4_i;
-        g_fill_r[acc_slot_c] <= g_fill_r[acc_slot_c] + 3'd1;
+        // ONE OFFER IS LANES POINTS. Every lane of the offer belongs to the
+        // same context, because a quad IS a context -- so the context is
+        // recorded against each of the points it brought.
+        for (int l = 0; l < LANES; l++) begin
+          automatic logic [1:0] pt = 2'(g_fill_r[acc_slot_c] + 3'(l));
+          g_ctx_r[acc_slot_c][pt] <= long_ctx_i;
+          g_s0_r[acc_slot_c][pt]  <= signed'(long_s0_i[32*l+:32]);
+          g_s1_r[acc_slot_c][pt]  <= signed'(long_s1_i[32*l+:32]);
+          g_s2_r[acc_slot_c][pt]  <= signed'(long_s2_i[32*l+:32]);
+          g_s3_r[acc_slot_c][pt]  <= signed'(long_s3_i[32*l+:32]);
+          g_s4_r[acc_slot_c][pt]  <= signed'(long_s4_i[32*l+:32]);
+        end
+        g_fill_r[acc_slot_c] <= g_fill_r[acc_slot_c] + 3'(LANES);
       end
 
       // ---- the ISSUE side ------------------------------------------------
@@ -743,12 +766,12 @@ module zhao_field_v3_dispatch #(
               // A PADDED LANE IS NEVER DRAINED. The loop runs to s_used_r, not
               // to four, so a lane nobody filled writes nothing and its
               // context -- which does not exist -- is never released.
-              if (d_lane_r + 3'd1 >= s_used_r[head_r]) begin
+              if (d_lane_r + 3'(LANES) >= s_used_r[head_r]) begin
                 s_done_r[head_r] <= 1'b0;
                 head_r   <= next_slot(head_r);
                 dstate_r <= DR_IDLE;
               end else begin
-                d_lane_r <= d_lane_r + 3'd1;
+                d_lane_r <= d_lane_r + 3'(LANES);
               end
             end else begin
               d_memb_r <= d_memb_r + 2'd1;
