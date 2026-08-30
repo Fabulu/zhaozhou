@@ -1,0 +1,116 @@
+ZIXX_EXP=celmain (experimental lane)
+ZIXX_LIGHT=baseline (lighting choice lane)
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+zhao-reel: deterministic frame sequences -> C:/programmieren/zencrifice/zixxtrixx-v11-lighting-lane/zhaozhou/runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/render/motion/baseline
+zixxtrixx-light-choice: 1610 unique colours — full-colour lane, palette gate not applied
+zixxtrixx-light-choice: 24 frames, 1610 unique colours, sequence_crc32c=0x6000473B
+ZIXX_EXP=celmain (experimental lane)
+ZIXX_LIGHT=front-soft (lighting choice lane)
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+zhao-reel: deterministic frame sequences -> C:/programmieren/zencrifice/zixxtrixx-v11-lighting-lane/zhaozhou/runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/render/motion/front-soft
+zixxtrixx-light-choice: 5087 unique colours — full-colour lane, palette gate not applied
+zixxtrixx-light-choice: 24 frames, 5087 unique colours, sequence_crc32c=0xBD4F45CD
+ZIXX_EXP=celmain (experimental lane)
+ZIXX_LIGHT=high-open (lighting choice lane)
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+zhao-reel: deterministic frame sequences -> C:/programmieren/zencrifice/zixxtrixx-v11-lighting-lane/zhaozhou/runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/render/motion/high-open
+zixxtrixx-light-choice: 7008 unique colours — full-colour lane, palette gate not applied
+zixxtrixx-light-choice: 24 frames, 7008 unique colours, sequence_crc32c=0x5340BCAC
+ZIXX_EXP=celmain (experimental lane)
+ZIXX_LIGHT=crossfill (lighting choice lane)
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+celmain projected_radius_q8 primary=142937 primary_visible=1 dummy=0 dummy_visible=0 ink_width=4
+zhao-reel: deterministic frame sequences -> C:/programmieren/zencrifice/zixxtrixx-v11-lighting-lane/zhaozhou/runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/render/motion/crossfill
+zixxtrixx-light-choice: 7050 unique colours — full-colour lane, palette gate not applied
+zixxtrixx-light-choice: 24 frames, 7050 unique colours, sequence_crc32c=0x90AD6158

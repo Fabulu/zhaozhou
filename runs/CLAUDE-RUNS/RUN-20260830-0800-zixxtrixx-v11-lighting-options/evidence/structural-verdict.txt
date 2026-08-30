@@ -1,0 +1,21 @@
+V11-LIGHT-BUDGET-1 / L11-S structural verdict
+
+Bounded inputs
+- Source/state-flow audit of the v10 compositor path.
+- One identical 384x240 idle-key-0 set: unlit, bind-normal visualisation and current cel-main baseline.
+- One two-direction axis probe (+Z versus -Z) used only to identify which world hemisphere the fixed comparison exposes.
+
+Observed
+- Unlit output is intact, bright and continuous: pigments/texture/geometry are not intrinsically dark.
+- Normal visualisation changes smoothly around the complete tube and across deformed ring/bone boundaries; no isolated flips, uninitialised lanes or meshlet seams appear.
+- Both influence normals are transformed by their pose matrices, blended as directions, normalised once and clamped once.
+- Key and fill are evaluated in the same world space. The 20% face lane reverses the inward zipper order and agrees with the 80% smooth lane.
+- Gouraud light is interpolated before the unchanged cel-main thresholds.
+- The visible fixed-side hemisphere responds coherently to -Z. The v10 baseline key is (26758,53521,26758), strongly elevated and +Z-weighted, while its fill is mostly below/opposite. The result is therefore a back/side-weighted rig for this native comparison, not a broken normal pipeline.
+
+Verdict
+- No residual transform, normal-blend, winding, interpolation, state or light-space defect was found.
+- Root cause of the shadow-clad read: the baseline artistic key/fill/ambient placement and authority.
+- No generic machinery repair is required. Baseline remains byte-identical (cel-main still CRC32C 0xF0DA9F88).
+
+L11-S: PASS — machinery sound; proceed with lighting-only owner choices.

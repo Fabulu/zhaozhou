@@ -1,0 +1,42 @@
+Zixxtrixx v11 lighting-choice controls (Q16.16)
+
+All options use the identical approved model, pose, camera, pigments, texture, crayon treatment, smooth/face mix and cel-main thresholds. Only CreatureLightRig values differ. Baseline remains the default.
+
+baseline / current v10
+- key direction raw (26758, 53521, 26758), decimal (0.40829, 0.81667, 0.40829)
+- fill direction raw (-14301, -57205, -28602), decimal (-0.21822, -0.87288, -0.43643)
+- ambient RGB raw (22282, 23265, 24248), decimal (0.34000, 0.35500, 0.37000)
+- white key gain raw 48497, decimal 0.74001
+- fill RGB raw (19661, 15073, 10486), decimal (0.30000, 0.23000, 0.16000)
+- still CRC32C F0DA9F88 (byte-identical to pre-selector baseline)
+
+A / front-soft
+- key direction raw (5246, 19672, -62293), decimal (0.08005, 0.30017, -0.95052)
+- fill direction raw (-32850, -9855, -55845), decimal (-0.50125, -0.15038, -0.85213)
+- ambient RGB raw (23593, 24904, 26870), decimal (0.36000, 0.38000, 0.41000)
+- white key gain raw 27525, decimal 0.42000
+- fill RGB raw (7864, 7209, 6554), decimal (0.12000, 0.11000, 0.10001)
+- still CRC32C F0809039
+
+B / high-open
+- key direction raw (-6539, 47080, -45118), decimal (-0.09978, 0.71838, -0.68845)
+- fill direction raw (6539, -7847, -64735), decimal (0.09978, -0.11974, -0.98778)
+- ambient RGB raw (30147, 32113, 34734), decimal (0.46001, 0.49001, 0.53000)
+- white key gain raw 36045, decimal 0.55000
+- fill RGB raw (5243, 7209, 10486), decimal (0.08000, 0.11000, 0.16000)
+- still CRC32C 00A2B82D
+
+C / crossfill
+- key direction raw (43835, 18319, -45143), decimal (0.66887, 0.27953, -0.68883)
+- fill direction raw (-43916, 11798, -47193), decimal (-0.67010, 0.18002, -0.72011)
+- ambient RGB raw (19005, 20316, 22282), decimal (0.28999, 0.31000, 0.34000)
+- white key gain raw 38011, decimal 0.58000
+- fill RGB raw (22938, 19005, 14418), decimal (0.35001, 0.28999, 0.22000)
+- still CRC32C F662D430
+
+Bounded motion comparison
+- Four identical 24-frame fixed-camera idle excerpts assembled into one 2x2 comparison.
+- Each cell retains its native 384x240 frame; frame 0 is byte-identical to its matched still.
+- Bounded visual check at frames 0, 6, 12 and 18 shows coherent moving light with no discontinuity or state bleed.
+
+L11-A: PASS — four materially distinct lighting-only reads render coherently; no catalogue was run.
