@@ -165,6 +165,9 @@ module zhao_geom_bin_pipe (
   logic signed [20:0] job_ax, job_ay, job_bx, job_by, job_cx, job_cy;
   logic signed [11:0] job_tile_x, job_tile_y;
   logic        [15:0] job_src_id;
+  // The tile-list position, straight through. This composition adds nothing to
+  // it -- the binner knows where a reference sits and the tile pipe acts on it.
+  logic               job_first, job_last;
 
   // (arena_full_o is a port now; arena_used_o stays unused here.)
   logic        [8:0]  arena_used_unused;
@@ -209,6 +212,8 @@ module zhao_geom_bin_pipe (
     .job_by_o             (job_by),
     .job_cx_o             (job_cx),
     .job_cy_o             (job_cy),
+    .job_first_o          (job_first),
+    .job_last_o           (job_last),
     .job_tile_x_o         (job_tile_x),
     .job_tile_y_o         (job_tile_y),
     .job_src_id_o         (job_src_id),
@@ -243,6 +248,8 @@ module zhao_geom_bin_pipe (
     .job_by_i           (job_by),
     .job_cx_i           (job_cx),
     .job_cy_i           (job_cy),
+    .job_first_i        (job_first),
+    .job_last_i         (job_last),
     .job_tile_x_i       (job_tile_x),
     .job_tile_y_i       (job_tile_y),
     .job_fill_word_i    (job_fill_word_i),

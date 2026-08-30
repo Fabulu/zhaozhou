@@ -168,6 +168,28 @@ module zhao_raster_tile_pipe (
   input  logic        [63:0] job_fill_word_i,
   input  logic        [63:0] job_clear_word_i,  // the tile's clear word
   input  logic        [15:0] job_tile_index_i,  // .zcap TILE_CRC tile_index
+  // ---- ONE LIFECYCLE PER TILE, NOT PER TRIANGLE --------------------------
+  // This block used to be "one job = one clear + one triangle + one resolve",
+  // which is correct in isolation and wrong in a frame: a tile two triangles
+  // both reference was rendered TWICE and the second job's clear erased the
+  // first triangle. tests/render/render_pipe_directed.cpp measured exactly
+  // that, and reports/RENDER_SEAM_FINDINGS.md recorded it as the owner's
+  // decision.
+  //
+  // The decision was option 1 -- accumulate a tile's triangles in the store
+  // before resolving -- and this pair of bits is the whole protocol:
+  //
+  //   job_first_i  clear the front bank before walking this triangle
+  //   job_last_i   swap and resolve after it
+  //
+  // A caller that ties BOTH high gets exactly the old behaviour, which is why
+  // every existing directed and random test still passes unchanged. GEOM.BINNER
+  // drives them from its own drain cursor, which already knows a tile list's
+  // first and last reference.
+  //
+  // ENFORCED-BY: tests/render/render_pipe_directed.cpp:main
+  input  logic               job_first_i,
+  input  logic               job_last_i,
   input  logic        [15:0] job_src_id_i,      // source_id passthrough
 
   // ---- the recipe, flat across the triangle ------------------------------
@@ -226,6 +248,9 @@ module zhao_raster_tile_pipe (
   localparam logic [1:0] RS_SWAP  = 2'd3;
 
   logic [1:0] rs_state;
+  logic        job_first_r;  // this triangle begins its tile
+  logic        job_last_r;   // this triangle ends its tile
+  logic [8:0]  cov_acc_r;    // pixels covered by the TILE so far
 
   // the job, latched at acceptance
   logic signed [20:0] ax_r, ay_r, bx_r, by_r, cx_r, cy_r;
@@ -315,8 +340,17 @@ module zhao_raster_tile_pipe (
   // accepted on the same edge (law 1 above); RASTER.TILESTORE's `swap_ready_o`
   // is a constant 1, so that composition is loop-free.
   assign job_ready_o   = (rs_state == RS_IDLE);
+  // RS_CLEAR DOES THREE THINGS AND ONLY ONE OF THEM BELONGS TO THE TILE:
+  // it launches the EDGE WALK, it begins the tile in RASTER.EARLYZ, and it
+  // clears the front bank. The walk is per TRIANGLE and must happen for every
+  // job; the clear and the early-Z floor are per TILE and must happen once.
+  //
+  // Skipping the whole state for a non-first triangle skipped the WALK too, so
+  // the pipe accepted nine jobs and then stalled forever waiting for coverage
+  // that was never going to arrive. The state always runs; the two tile-scoped
+  // actions are what `job_first_r` gates.
   assign ew_start      = (rs_state == RS_CLEAR);
-  assign ts_clear      = (rs_state == RS_CLEAR);
+  assign ts_clear      = (rs_state == RS_CLEAR) && job_first_r;
   assign cov_ready     = (rs_state == RS_WALK) && (pend_mask_r == 16'd0);
   assign ez_frag_valid = (rs_state == RS_WALK) && (pend_mask_r != 16'd0);
   assign rz_start      = (rs_state == RS_SWAP);
@@ -566,6 +600,9 @@ module zhao_raster_tile_pipe (
       pend_mask_r <= 16'd0;
       ew_done_r   <= 1'b0;
       ew_count_r  <= 9'd0;
+      job_first_r <= 1'b1;
+      job_last_r  <= 1'b1;
+      cov_acc_r   <= 9'd0;
       ew_degen_r  <= 1'b0;
       rz_tile_x_r <= 12'd0;
       rz_tile_y_r <= 12'd0;
@@ -605,7 +642,16 @@ module zhao_raster_tile_pipe (
             ew_done_r   <= 1'b0;
             ew_count_r  <= 9'd0;
             ew_degen_r  <= 1'b0;
+            job_first_r <= job_first_i;
+            job_last_r  <= job_last_i;
+            // The clear belongs to the TILE, so only the first triangle of a
+            // tile pays for it. A later triangle walks straight into the bank
+            // its predecessors already wrote, which is what makes them
+            // compose instead of overwrite.
             rs_state    <= RS_CLEAR;
+            // Coverage accumulates across the tile: the resolve reports how
+            // many pixels the TILE covered, not the last triangle.
+            if (job_first_i) cov_acc_r <= 9'd0;
           end
         end
 
@@ -633,7 +679,13 @@ module zhao_raster_tile_pipe (
           // resolve is about to read. `pipe_empty` closes exactly that gap.
           // ENFORCED-BY: tests/raster/raster_tile_pipe_directed.cpp:
           //   test_pipeline_drain_before_swap
-          if (ew_done_r && (pend_mask_r == 16'd0) && !cov_acc && pipe_empty) rs_state <= RS_SWAP;
+          // ...and now the LAST triangle of the tile swaps and resolves; an
+          // earlier one returns to IDLE so the next reference for the same
+          // tile can be accepted into the same bank.
+          if (ew_done_r && (pend_mask_r == 16'd0) && !cov_acc && pipe_empty) begin
+            cov_acc_r <= cov_acc_r + ew_count_r;
+            rs_state  <= job_last_r ? RS_SWAP : RS_IDLE;
+          end
         end
 
         RS_SWAP: begin
@@ -642,7 +694,7 @@ module zhao_raster_tile_pipe (
           if (swap_acc) begin
             rz_tile_x_r <= tile_x_r;
             rz_tile_y_r <= tile_y_r;
-            rz_count_r  <= ew_count_r;
+            rz_count_r  <= cov_acc_r;
             rz_degen_r  <= ew_degen_r;
             rs_state    <= RS_IDLE;
           end

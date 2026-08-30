@@ -347,9 +347,21 @@ std::vector<uint16_t> expect_frame(const std::vector<BinTri>& tris, const Look& 
   zref::EarlyZ ez;
   for (int ty = 0; ty < kGridH; ++ty) {
     for (int tx = 0; tx < kGridW; ++tx) {
-      for (size_t i = 0; i < tris.size(); ++i) {
-        for (const zref::Binner::Ref& r : refs[i]) {
-          if (r.tx != tx || r.ty != ty) continue;
+      // ONE RESOLVE PER TILE. The pipe clears on a tile's FIRST reference and
+      // resolves on its LAST, so a tile several triangles share is written to
+      // the framebuffer once with all of them composed into it. Collect the
+      // tile's references first, because the oracle must know which is last.
+      std::vector<size_t> mine;
+      for (size_t i = 0; i < tris.size(); ++i)
+        for (const zref::Binner::Ref& r : refs[i])
+          if (r.tx == tx && r.ty == ty) mine.push_back(i);
+      if (mine.empty()) continue;
+
+      for (size_t k = 0; k < mine.size(); ++k) {
+        {
+          const size_t i = mine[k];
+          const bool first = (k == 0);
+          const bool last = (k + 1 == mine.size());
           PipeJob j;
           j.tri.ax = tris[i].ax;
           j.tri.ay = tris[i].ay;
@@ -368,7 +380,8 @@ std::vector<uint16_t> expect_frame(const std::vector<BinTri>& tris, const Look& 
           j.texel_rgb = lk.texel_rgb;
           j.texel_a = lk.texel_a;
           j.texel_idx = lk.texel_idx;
-          const PipeExpect e = pipe_oracle(store, ez, j);
+          const PipeExpect e = pipe_oracle(store, ez, j, first, last);
+          if (!last) continue;
           for (int row = 0; row < kPipeTile; ++row)
             for (int col = 0; col < kPipeTile; ++col) {
               const int sx = tx * kPipeTile + col;
@@ -493,7 +506,7 @@ int main(int argc, char** argv) {
            (uint32_t)top.px_taken_o);
   }
 
-  printf("== section 2: two overlapping triangles, and the later write wins ==\n");
+  printf("== section 2: two overlapping triangles COMPOSE in one tile ==\n");
   {
     std::vector<BinTri> tris;
     BinTri a, b;
@@ -510,8 +523,13 @@ int main(int argc, char** argv) {
     zhao::check(d.drain(), "the frame drains", 1, 1);
 
     const std::vector<uint16_t> want = expect_frame(tris, lk);
+    // THIS USED TO SAY "the later write wins". It did, and that was the defect:
+    // a tile both triangles referenced was rendered twice and the second job's
+    // clear erased the first. The pipe clears once per tile and resolves once
+    // now, so the two triangles COMPOSE -- 29 tiles written from 40 jobs
+    // instead of 40 writes over 29 tiles.
     zhao::check(compare(d, want, "section 2") == 0,
-                "the composed image matches the oracles applied in job order", 1, 1);
+                "both triangles are in the picture, composed in one resolve per tile", 1, 1);
     zhao::check(top.fb_stream_error_o == 0, "the stream stayed contiguous", 0,
                 (uint32_t)top.fb_stream_error_o);
     printf("   MEASURED: %u pixels in %u bursts, %u jobs\n", (uint32_t)top.pixels_written_o,
