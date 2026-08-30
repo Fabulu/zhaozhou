@@ -86,7 +86,21 @@ module zhao_field_v3_dispatch #(
     //
     // The default stays 4, which is what every tally on this block was taken
     // at. SW below reaches 16.
-    parameter int OUTSTANDING = 4
+    parameter int OUTSTANDING = 4,
+    // HOW MANY OPCODES MAY BE GATHERED AT ONCE.
+    //
+    // One gather buffer means one (op, dst, imm) can be accumulating, and the
+    // first context offering anything else forces the current group out
+    // half-empty. Fine while every context runs in lockstep, and fatal when
+    // they do not -- which is exactly the case worth having, because contexts
+    // all sitting on the same opcode is the case where one service is busy and
+    // the other six are idle.
+    //
+    // MEASURED on the composed machine at 32 contexts: 256 points went out as
+    // 215 groups. That is 1.19 points per FOUR-point group, a 3.4x waste, on a
+    // frame that was 3.8x over budget. Full groups and overlapped services were
+    // in direct conflict and no drive pattern could resolve it.
+    parameter int GATHERS = 4
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -236,14 +250,76 @@ module zhao_field_v3_dispatch #(
     dst_width_of = zhao_field_ops_pkg::field_long_width(op);
   endfunction
 
-  // ---- the gather ---------------------------------------------------------
-  logic [2:0]                fill_r;      // 0..4 points gathered
-  logic [7:0]                g_op_r;
-  logic [REGW-1:0]           g_dst_r;
-  logic [31:0]               g_imm_r;
-  logic [CTXW-1:0]           g_ctx_r [4];
-  logic signed [31:0]        g_s0_r [4], g_s1_r [4], g_s2_r [4], g_s3_r [4];
-  logic signed [31:0]        g_s4_r [4];
+  // ---- the gather, ONE SLOT PER OPCODE IN FLIGHT --------------------------
+  logic                      g_v_r    [GATHERS];
+  logic [2:0]                g_fill_r [GATHERS];   // 0..4 points gathered
+  logic [7:0]                g_op_r   [GATHERS];
+  logic [REGW-1:0]           g_dst_r  [GATHERS];
+  logic [31:0]               g_imm_r  [GATHERS];
+  logic [CTXW-1:0]           g_ctx_r  [GATHERS][4];
+  logic signed [31:0]        g_s0_r [GATHERS][4], g_s1_r [GATHERS][4];
+  logic signed [31:0]        g_s2_r [GATHERS][4], g_s3_r [GATHERS][4];
+  logic signed [31:0]        g_s4_r [GATHERS][4];
+
+  localparam int GW = (GATHERS <= 2) ? 1 : ((GATHERS <= 4) ? 2 : 3);
+  logic [GW-1:0] acc_slot_c, iss_slot_c, iss_slot_r;
+  logic          have_acc_c, have_iss_c;
+
+  // WHICH SLOT AN OFFER JOINS. Derived every clock rather than stored: two
+  // places holding the same fact is the seam defect this engine has produced
+  // five times.
+  always_comb begin
+    automatic logic found_m = 1'b0;
+    automatic logic found_f = 1'b0;
+    automatic logic [GW-1:0] slot_m = '0;
+    automatic logic [GW-1:0] slot_f = '0;
+    for (int i = GATHERS - 1; i >= 0; i--) begin
+      if (g_v_r[i] && (g_fill_r[i] < 3'd4) && (g_op_r[i] == long_op_i) &&
+          (g_dst_r[i] == long_dst_i) && (g_imm_r[i] == long_imm_i)) begin
+        found_m = 1'b1;
+        slot_m  = GW'(i);
+      end
+      if (!g_v_r[i]) begin
+        found_f = 1'b1;
+        slot_f  = GW'(i);
+      end
+    end
+    have_acc_c = found_m || found_f;
+    acc_slot_c = found_m ? slot_m : slot_f;
+  end
+
+  // WHICH SLOT GOES OUT. A full group first. Otherwise, when the executor says
+  // nobody else can join, or when an offer cannot be housed at all, send the
+  // FULLEST group -- evicting the emptiest would maximise exactly the waste
+  // this structure exists to remove.
+  always_comb begin
+    automatic logic found_full = 1'b0;
+    automatic logic found_any  = 1'b0;
+    automatic logic [GW-1:0] slot_full = '0;
+    automatic logic [GW-1:0] slot_any  = '0;
+    automatic logic [2:0]    best      = 3'd0;
+    for (int i = GATHERS - 1; i >= 0; i--) begin
+      if (g_v_r[i] && (g_fill_r[i] == 3'd4)) begin
+        found_full = 1'b1;
+        slot_full  = GW'(i);
+      end
+      if (g_v_r[i] && (g_fill_r[i] != 3'd0) && (g_fill_r[i] >= best)) begin
+        found_any = 1'b1;
+        slot_any  = GW'(i);
+        best      = g_fill_r[i];
+      end
+    end
+    if (found_full) begin
+      have_iss_c = 1'b1;
+      iss_slot_c = slot_full;
+    end else if (found_any && (flush_i || (long_valid_i && !have_acc_c))) begin
+      have_iss_c = 1'b1;
+      iss_slot_c = slot_any;
+    end else begin
+      have_iss_c = 1'b0;
+      iss_slot_c = '0;
+    end
+  end
 
   // ---- MORE THAN ONE GROUP IN FLIGHT --------------------------------------
   //
@@ -333,13 +409,12 @@ module zhao_field_v3_dispatch #(
   logic [2:0]                d_lane_r;
   logic [1:0]                d_memb_r;
 
-  logic same_group_c;
-  // A context joins the group only if it is running the SAME op with the SAME
-  // destination base. Different ops cannot share a request -- the service is
-  // told one opcode -- and different destinations cannot share a drain.
-  assign same_group_c = (fill_r == 3'd0) ||
-                        ((long_op_i == g_op_r) && (long_dst_i == g_dst_r) &&
-                         (long_imm_i == g_imm_r));
+  // A context still joins only a group running the SAME op with the SAME
+  // destination base -- different ops cannot share a request, because the
+  // service is told one opcode, and different destinations cannot share a
+  // drain. That test now lives in `acc_slot_c` above, where it selects WHICH
+  // group is joined instead of deciding whether the single group must be
+  // thrown out to make room.
 
   // `!flush_i` IS LOAD-BEARING AND IT CLOSES A LOST-CONTEXT HOLE. Without it,
   // a context offered on the same clock a partial group flushes would be
@@ -362,9 +437,10 @@ module zhao_field_v3_dispatch #(
   // asserts and what the previous single-slot machine did by having no
   // D_GATHER state to be in. At 2 it is what lets a second group be gathered
   // while the first is still running, which is the entire point.
+  // `have_acc_c` replaces "matches the one open group and it has room": an
+  // offer is accepted if ANY slot can house it.
   assign long_ready_o = (istate_r == I_GATHER) && (count_r != (SW+1)'(OUTSTANDING)) &&
-                        (fill_r < 3'd4) && !flush_i &&
-                        (dst_width_of(long_op_i) != 2'd0) && same_group_c;
+                        !flush_i && (dst_width_of(long_op_i) != 2'd0) && have_acc_c;
 
   // Issue when the group is full, when the executor says nobody else can join
   // and there is at least one point to send, OR WHEN SOMEBODY IS ASKING AND
@@ -410,9 +486,7 @@ module zhao_field_v3_dispatch #(
   // `count_r != OUTSTANDING` is the bound. Without it the queue wraps and a
   // group in flight is overwritten by its successor -- a lost instruction,
   // which is worse than a slow one.
-  assign issue_now_c = (istate_r == I_GATHER) && (count_r != (SW+1)'(OUTSTANDING)) &&
-                       ((fill_r == 3'd4) || (flush_i && (fill_r != 3'd0)) ||
-                        (long_valid_i && !same_group_c));
+  assign issue_now_c = (istate_r == I_GATHER) && (count_r != (SW+1)'(OUTSTANDING)) && have_iss_c;
 
   // ---- the request ports --------------------------------------------------
   assign svc_valid_o = (istate_r == I_ISSUE);
@@ -425,11 +499,11 @@ module zhao_field_v3_dispatch #(
       // Rule 2: a lane nobody filled carries a value that is obviously not a
       // coordinate, so a routing bug looks wrong rather than convincing.
       if (3'(l) < s_used_r[tail_r]) begin
-        svc_s0_o[l] = g_s0_r[l];
-        svc_s1_o[l] = g_s1_r[l];
-        svc_s2_o[l] = g_s2_r[l];
-        svc_s3_o[l] = g_s3_r[l];
-        svc_s4_o[l] = g_s4_r[l];
+        svc_s0_o[l] = g_s0_r[iss_slot_r][l];
+        svc_s1_o[l] = g_s1_r[iss_slot_r][l];
+        svc_s2_o[l] = g_s2_r[iss_slot_r][l];
+        svc_s3_o[l] = g_s3_r[iss_slot_r][l];
+        svc_s4_o[l] = g_s4_r[iss_slot_r][l];
       end else begin
         svc_s0_o[l] = PAD_A;
         svc_s1_o[l] = PAD_B;
@@ -519,10 +593,6 @@ module zhao_field_v3_dispatch #(
       head_r     <= '0;
       tail_r     <= '0;
       count_r    <= '0;
-      fill_r     <= 3'd0;
-      g_op_r     <= 8'd0;
-      g_dst_r    <= '0;
-      g_imm_r    <= 32'd0;
       next_tag_r <= '0;
       for (int i = 0; i < OUTSTANDING; i++) begin
         s_op_r[i]    <= 8'd0;
@@ -545,27 +615,36 @@ module zhao_field_v3_dispatch #(
       partial_o  <= 32'd0;
       writes_o   <= 32'd0;
       tag_mismatch_o <= 1'b0;
-      for (int l = 0; l < 4; l++) begin
-        g_ctx_r[l] <= '0;
-        g_s0_r[l]  <= '0;
-        g_s1_r[l]  <= '0;
-        g_s2_r[l]  <= '0;
-        g_s3_r[l]  <= '0;
-        g_s4_r[l]  <= '0;
+      iss_slot_r <= '0;
+      for (int i = 0; i < GATHERS; i++) begin
+        g_v_r[i]    <= 1'b0;
+        g_fill_r[i] <= 3'd0;
+        g_op_r[i]   <= 8'd0;
+        g_dst_r[i]  <= '0;
+        g_imm_r[i]  <= 32'd0;
+        for (int l = 0; l < 4; l++) begin
+          g_ctx_r[i][l] <= '0;
+          g_s0_r[i][l]  <= '0;
+          g_s1_r[i][l]  <= '0;
+          g_s2_r[i][l]  <= '0;
+          g_s3_r[i][l]  <= '0;
+          g_s4_r[i][l]  <= '0;
+        end
       end
     end else begin
-      // ---- accept one context into the group ------------------------------
+      // ---- accept one context into ITS OWN GROUP ---------------------------
       if (long_valid_i && long_ready_o) begin
-        g_op_r  <= long_op_i;
-        g_dst_r <= long_dst_i;
-        g_imm_r <= long_imm_i;
-        g_ctx_r[fill_r[1:0]] <= long_ctx_i;
-        g_s0_r[fill_r[1:0]]  <= long_s0_i;
-        g_s1_r[fill_r[1:0]]  <= long_s1_i;
-        g_s2_r[fill_r[1:0]]  <= long_s2_i;
-        g_s3_r[fill_r[1:0]]  <= long_s3_i;
-        g_s4_r[fill_r[1:0]]  <= long_s4_i;
-        fill_r <= fill_r + 3'd1;
+        g_v_r[acc_slot_c]   <= 1'b1;
+        g_op_r[acc_slot_c]  <= long_op_i;
+        g_dst_r[acc_slot_c] <= long_dst_i;
+        g_imm_r[acc_slot_c] <= long_imm_i;
+        g_ctx_r[acc_slot_c][g_fill_r[acc_slot_c][1:0]] <= long_ctx_i;
+        g_s0_r[acc_slot_c][g_fill_r[acc_slot_c][1:0]]  <= long_s0_i;
+        g_s1_r[acc_slot_c][g_fill_r[acc_slot_c][1:0]]  <= long_s1_i;
+        g_s2_r[acc_slot_c][g_fill_r[acc_slot_c][1:0]]  <= long_s2_i;
+        g_s3_r[acc_slot_c][g_fill_r[acc_slot_c][1:0]]  <= long_s3_i;
+        g_s4_r[acc_slot_c][g_fill_r[acc_slot_c][1:0]]  <= long_s4_i;
+        g_fill_r[acc_slot_c] <= g_fill_r[acc_slot_c] + 3'd1;
       end
 
       // ---- the ISSUE side ------------------------------------------------
@@ -576,16 +655,20 @@ module zhao_field_v3_dispatch #(
           // the newly accepted point included. That is why the snapshot below
           // uses the post-accept count.
           if (issue_now_c) begin
-            s_op_r[tail_r]    <= g_op_r;
-            s_dst_r[tail_r]   <= g_dst_r;
-            s_imm_r[tail_r]   <= g_imm_r;
-            s_width_r[tail_r] <= dst_width_of(g_op_r);
-            s_used_r[tail_r]  <= fill_r;
+            s_op_r[tail_r]    <= g_op_r[iss_slot_c];
+            s_dst_r[tail_r]   <= g_dst_r[iss_slot_c];
+            s_imm_r[tail_r]   <= g_imm_r[iss_slot_c];
+            s_width_r[tail_r] <= dst_width_of(g_op_r[iss_slot_c]);
+            s_used_r[tail_r]  <= g_fill_r[iss_slot_c];
             s_tag_r[tail_r]   <= next_tag_r;
             s_done_r[tail_r]  <= 1'b0;
-            for (int l = 0; l < 4; l++) s_ctx_r[tail_r][l] <= g_ctx_r[l];
+            for (int l = 0; l < 4; l++) s_ctx_r[tail_r][l] <= g_ctx_r[iss_slot_c][l];
+            // WHICH SLOT IS ON THE WIRE. The request ports read the gather
+            // registers directly, so the choice has to survive into I_ISSUE --
+            // and the slot must NOT be freed until the service has taken it.
+            iss_slot_r <= iss_slot_c;
             istate_r <= I_ISSUE;
-            if (fill_r != 3'd4) partial_o <= partial_o + 32'd1;
+            if (g_fill_r[iss_slot_c] != 3'd4) partial_o <= partial_o + 32'd1;
           end
         end
 
@@ -593,7 +676,10 @@ module zhao_field_v3_dispatch #(
           if (svc_ready_i) begin
             next_tag_r <= next_tag_r + TAGW'(1);
             groups_o   <= groups_o + 32'd1;
-            fill_r     <= 3'd0;
+            // Freed only now, with the handshake. Freeing it at the decision
+            // would let an accept overwrite operands still on the wire.
+            g_v_r[iss_slot_r]    <= 1'b0;
+            g_fill_r[iss_slot_r] <= 3'd0;
             tail_r     <= next_slot(tail_r);
             istate_r   <= I_GATHER;
           end

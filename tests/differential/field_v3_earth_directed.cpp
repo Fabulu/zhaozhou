@@ -680,6 +680,10 @@ struct Result {
   // it is the start of a guess rather than the end of a measurement.
   long groups = 0, partial = 0, uops = 0, idle = 0, drain = 0;
   long wb_served[2] = {0, 0}, wb_stalled[2] = {0, 0};
+  // THE ONE WRITE PORT. Every uop of every point lands through it, one per
+  // clock, so its occupancy is a hard floor on the whole machine however wide
+  // the services get.
+  long writes = 0, span_clocks = 0;
 };
 
 /** Run one real Earth program on the composed engine and count. */
@@ -1082,6 +1086,8 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
       break;
     }
 
+  R.writes = (long)top.rf_writes_o;
+  R.span_clocks = span;
   R.groups = (long)top.groups_o;
   R.partial = (long)top.partial_o;
   R.uops = (long)top.uops_issued_o;
@@ -1193,6 +1199,11 @@ int main(int argc, char** argv) {
         R.uops, R.idle);
     printf("   %-22s   writeback: ALU served %ld stalled %ld, drain served %ld stalled %ld\n", "",
            R.wb_served[0], R.wb_stalled[0], R.wb_served[1], R.wb_stalled[1]);
+    // THE FLOOR THE PORT ITSELF SETS. One write per clock, so this is what the
+    // machine could not beat even with infinitely fast services.
+    if (R.span_clocks > 0)
+      printf("   %-22s   register writes %ld in %ld clocks = %.0f%% of the ONE write port\n", "",
+             R.writes, R.span_clocks, 100.0 * (double)R.writes / (double)R.span_clocks);
   }
 
   if (total_stag_bad != 0) {
