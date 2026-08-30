@@ -91,6 +91,20 @@ constexpr int kCtx = ZHAO_EARTH_CTX;
 #endif
 constexpr int kLanes = ZHAO_EARTH_LANES;
 
+// A DISPATCH GROUP IS FOUR POINTS. It is NOT four contexts -- that was true
+// only while a context was one point, and it silently stopped being true when
+// the executor was widened.
+//
+// Bundling four CONTEXTS at LANES=4 starts sixteen synchronised points, which
+// is a four-point group's worth of alignment applied four times over. It
+// collides exactly the distance, curve and trig requests that staggering the
+// groups exists to spread out -- so the driver was manufacturing the service
+// contention it was written to avoid, and the machine was measured under it.
+constexpr int kPointsPerDispatchGroup = 4;
+static_assert(kPointsPerDispatchGroup % kLanes == 0,
+              "a dispatch group must be a whole number of contexts");
+constexpr int kCtxPerGroup = kPointsPerDispatchGroup / kLanes;
+
 // Verilator hands a 32-bit port back as a scalar and a 128-bit one as an
 // indexable word array, so the two cannot share an accessor. Branching on the
 // width here keeps every call site below reading as if they could.
@@ -109,7 +123,13 @@ inline int32_t get_wr_lane(const Vzhao_probe_v3_full& t, int lane) {
   return (int32_t)t.wr_data_o[lane];
 #endif
 }
-constexpr int kRegs = 32;
+// REGISTERS PER CONTEXT. A build knob because crater_ring does not fit in 32:
+// it needs 7 vector + 29 uniform = 36, and the executor has no scalar-bank read
+// path, so uniforms reach it only by being broadcast into registers.
+#ifndef ZHAO_EARTH_REGS
+#define ZHAO_EARTH_REGS 32
+#endif
+constexpr int kRegs = ZHAO_EARTH_REGS;
 constexpr int kPlan = 32;
 
 // The three ways points can be fed to the machine. They are not equivalent and
@@ -128,7 +148,27 @@ int failures = 0;       // gates the exit status
 int diag_failures = 0;  // real, recorded, and NOT yet gating -- see the report
 bool gating = true;
 int printed = 0;
-int wb_policy_probe = 1;  // experiment knob: 1 = drain-first, 0 = ALU-first
+// 0 = ALU-first, 1 = drain-first, 2 = round robin.
+//
+// DRAIN-FIRST WAS RIGHT AND IS NOT ANY MORE. It was chosen when a drain needed
+// FOUR writes to return a four-point group, one point at a time, and ALU-first
+// starved it outright. A drain now returns all four points in ONE write, so it
+// asks for the port a quarter as often and the old measurement is stale.
+//
+//     ALU-first     impact_wave 803,712 FITS   wave_pool 838,656 FITS
+//     round robin   impact_wave 803,712 FITS   wave_pool 873,600 2.8% over
+//     drain-first   impact_wave 803,712 FITS   wave_pool 908,544 6.9% over
+//
+// ALU-first stalls the drain 1,043 clocks against round robin's 11, and it is
+// still the right default, because that delay CANNOT become starvation. For
+// the ALU to hold the port forever some context must always have ALU work;
+// that context must not be parked; so its long op must have returned; so the
+// drain must have run. The drain always eventually wins, and the measurements
+// agree -- every group is served and every value is exact under all three.
+//
+// Round robin is the conservative alternative and it costs 2.8% on wave_pool.
+// Both numbers are reported rather than only the flattering one.
+int wb_policy_probe = 0;
 
 void fail(const char* what, const char* detail) {
   if (printed++ < 6) printf("  %s %s: %s\n", gating ? "FAIL" : "DEFECT", what, detail);
@@ -568,7 +608,16 @@ void expected_regs(const zfield::Fplan& fp, const zfield::Decoded& prog,
       src[k] = (r >= 0 && r < n_rf) ? rf[r] : 0;
     }
     int32_t dst[3] = {};
-    zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    // UOP_RING_PREP IS NOT A CANONICAL OPCODE. The planner synthesises it, so
+    // `exec_op` has never heard of it and indexing the op table with 0xF1 walks
+    // off the end -- which is why crater_ring, the only program that uses it,
+    // was the only one that crashed. It has its own reference function, and its
+    // four uniforms arrive as scalar-bank slots rather than registers.
+    if (v.op == zfield::UOP_RING_PREP) {
+      dst[0] = zfield::steps::ring_prepared(src[0], src[1], src[2], src[3], src[4], &L);
+    } else {
+      zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    }
     const auto* sh = zfield::optable::shape_of(v.op);
     const int w = (v.op == zfield::UOP_RING_PREP) ? 1 : (sh ? (int)sh->dst_width : 1);
     for (int m = 0; m < w && (int)v.dst + m < n_rf; ++m) {
@@ -599,7 +648,16 @@ int32_t oracle_uop_value(const zfield::Fplan& fp, const zfield::Decoded& prog,
       src[k] = (r < n_rf) ? rf[(size_t)r] : 0;
     }
     int32_t dst[3] = {};
-    zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    // UOP_RING_PREP IS NOT A CANONICAL OPCODE. The planner synthesises it, so
+    // `exec_op` has never heard of it and indexing the op table with 0xF1 walks
+    // off the end -- which is why crater_ring, the only program that uses it,
+    // was the only one that crashed. It has its own reference function, and its
+    // four uniforms arrive as scalar-bank slots rather than registers.
+    if (v.op == zfield::UOP_RING_PREP) {
+      dst[0] = zfield::steps::ring_prepared(src[0], src[1], src[2], src[3], src[4], &L);
+    } else {
+      zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    }
     if (u == target_u) return dst[target_m < 3 ? target_m : 0];
     const auto* sh = zfield::optable::shape_of(v.op);
     const int w = (v.op == zfield::UOP_RING_PREP) ? 1 : (sh ? (int)sh->dst_width : 1);
@@ -656,7 +714,16 @@ void explain_uop(const zfield::Fplan& fp, const zfield::Decoded& prog, const zfi
       src_hw[k] = (r < n_rf) ? hw[(size_t)r] : 0;
     }
     int32_t dst[3] = {};
-    zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    // UOP_RING_PREP IS NOT A CANONICAL OPCODE. The planner synthesises it, so
+    // `exec_op` has never heard of it and indexing the op table with 0xF1 walks
+    // off the end -- which is why crater_ring, the only program that uses it,
+    // was the only one that crashed. It has its own reference function, and its
+    // four uniforms arrive as scalar-bank slots rather than registers.
+    if (v.op == zfield::UOP_RING_PREP) {
+      dst[0] = zfield::steps::ring_prepared(src[0], src[1], src[2], src[3], src[4], &L);
+    } else {
+      zfield::steps::exec_op(v.op, v.imm, prog.tables, src, dst, &L);
+    }
     const auto* sh = zfield::optable::shape_of(v.op);
     const int w = (v.op == zfield::UOP_RING_PREP) ? 1 : (sh ? (int)sh->dst_width : 1);
 
@@ -712,10 +779,16 @@ struct Result {
   // group" names no stage, and a number that cannot say which block produced
   // it is the start of a guess rather than the end of a measurement.
   long groups = 0, partial = 0, uops = 0, idle = 0, drain = 0;
+  long held = 0, blocked = 0;
   long wb_served[2] = {0, 0}, wb_stalled[2] = {0, 0};
   // THE ONE WRITE PORT. Every uop of every point lands through it, one per
   // clock, so its occupancy is a hard floor on the whole machine however wide
   // the services get.
+  // BOTH DIFFERENCED OVER THE SAME WINDOW. `rf_writes_o` counts from reset
+  // while the span is only the measured part of the run, and dividing one by
+  // the other printed 123% of a single write port -- which is not a tight
+  // measurement, it is an impossible one. A ratio is only a ratio if its two
+  // halves cover the same clocks.
   long writes = 0, span_clocks = 0;
 };
 
@@ -1010,7 +1083,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   // at different moments drift apart, stop sharing an op, and the group goes
   // out PARTIAL -- a whole group's latency spent on one point. The drift is
   // self-reinforcing, which is how 98% of groups went out partial.
-  long t0 = 0, preload0 = 0;
+  long t0 = 0, preload0 = 0, writes0 = 0;
   int counted_start = 0;
   int guard = 0;
   const int guard_max = points * 8000 + 400000;
@@ -1022,6 +1095,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
       if (wave == warmup_waves) {
         t0 = d.clocks;
         preload0 = d.preload_clocks;
+        writes0 = (long)top.rf_writes_o;
         counted_start = retired;
       }
       for (int c = 0; c < n_ctx; ++c) {
@@ -1059,16 +1133,16 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
     // and reloaded together -- which fills every group -- while different quads
     // sit at different points in the program, which is what keeps DIST2, CURVE
     // and the trig unit busy at the same time.
-    const int nq = n_ctx / 4;
+    const int nq = n_ctx / kCtxPerGroup;
     std::vector<int> left((size_t)nq, 0);
     std::vector<bool> qdone((size_t)n_ctx, false);
     int wave = 0;
     for (int q = 0; q < nq; ++q) {
-      for (int k = 0; k < 4; ++k) {
-        load_point(q * 4 + k);
-        qdone[(size_t)(q * 4 + k)] = false;
+      for (int k = 0; k < kCtxPerGroup; ++k) {
+        load_point(q * kCtxPerGroup + k);
+        qdone[(size_t)(q * kCtxPerGroup + k)] = false;
       }
-      left[(size_t)q] = 4;
+      left[(size_t)q] = kCtxPerGroup;
     }
     while (retired < points && guard++ < guard_max) {
       d.advance();
@@ -1078,7 +1152,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         d.running[c] = false;
         if (qdone[(size_t)c]) continue;
         qdone[(size_t)c] = true;
-        --left[(size_t)(c / 4)];
+        --left[(size_t)(c / kCtxPerGroup)];
         check_point(c);
         retired += kLanes;
       }
@@ -1087,14 +1161,15 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         if (wave == warmup_waves * nq) {
           t0 = d.clocks;
           preload0 = d.preload_clocks;
+          writes0 = (long)top.rf_writes_o;
           counted_start = retired;
         }
         ++wave;
-        for (int k = 0; k < 4; ++k) {
-          load_point(q * 4 + k);
-          qdone[(size_t)(q * 4 + k)] = false;
+        for (int k = 0; k < kCtxPerGroup; ++k) {
+          load_point(q * kCtxPerGroup + k);
+          qdone[(size_t)(q * kCtxPerGroup + k)] = false;
         }
-        left[(size_t)q] = 4;
+        left[(size_t)q] = kCtxPerGroup;
       }
     }
   } else {
@@ -1111,6 +1186,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         if (retired == warmup) {
           t0 = d.clocks;
           preload0 = d.preload_clocks;
+          writes0 = (long)top.rf_writes_o;
           counted_start = retired;
         }
         if (retired < points) load_point(c);
@@ -1148,12 +1224,14 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
       break;
     }
 
-  R.writes = (long)top.rf_writes_o;
+  R.writes = (long)top.rf_writes_o - writes0;
   R.span_clocks = span;
   R.groups = (long)top.groups_o;
   R.partial = (long)top.partial_o;
   R.uops = (long)top.uops_issued_o;
   R.idle = (long)top.idle_clocks_o;
+  R.held = (long)top.hold_clocks_o;
+  R.blocked = (long)top.blocked_clocks_o;
   R.drain = (long)top.drain_writes_o;
   for (int i = 0; i < 2; ++i) {
     R.wb_served[i] = (long)top.wb_served_o[i];
@@ -1238,18 +1316,49 @@ int main(int argc, char** argv) {
     }
     ++ran;
     total_checks += R.checked + S.checked;
-    const bool fits = R.frame <= kFrameBudget;
+
+    // THE VERDICT FOLLOWS THE QUAD RESULT. That is how the machine is meant to
+    // be fed -- aligned fours so groups fill, staggered quads so the services
+    // overlap -- and judging it by the WAVE control would report a number no
+    // one would ever drive it at. WAVE and STAGGERED stay above as controls,
+    // and all three are gated for correctness regardless.
+    const long verdict_frame = Q.ran ? Q.frame : R.frame;
+    const bool fits = verdict_frame <= kFrameBudget;
     if (!fits) ++over;
-    if (R.frame > worst_frame) {
-      worst_frame = R.frame;
+    if (verdict_frame > worst_frame) {
+      worst_frame = verdict_frame;
       worst_name = base;
     }
     printf("   %-22s WAVE      group %4ld  association %7ld  frame %9ld  %s\n", base,
            R.group_clocks, R.assoc, R.frame, fits ? "FITS" : "OVER");
+    // THE DETAIL FOLLOWS THE QUAD RESULT, because QUAD is how the machine is
+    // actually fed: aligned fours so the groups fill, staggered quads so the
+    // services overlap. WAVE and STAGGERED stay as controls.
+    const Result& D = Q.ran ? Q : R;
     printf(
         "   %-22s   %d values checked against the oracle, %ld of the counted clocks were "
         "harness preload\n",
-        "", R.checked, R.preloads);
+        "", D.checked, D.preloads);
+    // WALL, PRELOAD AND ENGINE, SEPARATELY.
+    //
+    // Point data comes in one register per clock through the probe's preload
+    // port; the finished machine streams it from memory instead. Those clocks
+    // are real and they are COUNTED -- subtracting them silently would be
+    // flattering the result -- but they belong to the fixture, not the Earth
+    // executor, and the split says which of the two any remaining excess is.
+    if (D.group_clocks > 0 && D.span_clocks > 0) {
+      // preloads are clocks over the SAME window the span covers, so the share
+      // of a group's clocks they account for is preloads/span. Multiplying by
+      // four as well counted each group four times over and reported 7.9 where
+      // the truth is nearer 2 -- flattering, and in the direction I wanted.
+      const double pre_per_group = (double)D.preloads /
+                                   (double)((D.span_clocks > 0) ? D.span_clocks : 1) *
+                                   (double)D.group_clocks;
+      printf(
+          "   %-22s   clocks per four-point group: %ld wall, %.1f of them harness preload, "
+          "%.1f engine\n",
+          "", D.group_clocks, pre_per_group, (double)D.group_clocks - pre_per_group);
+    }
     // WHICH STAGE. A dispatch group that went out with fewer than four points
     // did a group's worth of waiting for a fraction of a group's work, so
     // `partial` against `groups` is the difference between a service that is
@@ -1257,15 +1366,20 @@ int main(int argc, char** argv) {
     printf(
         "   %-22s   dispatch groups %ld of which PARTIAL %ld (%.0f%%), uops issued %ld, "
         "engine idle %ld\n",
-        "", R.groups, R.partial, R.groups ? 100.0 * (double)R.partial / (double)R.groups : 0.0,
-        R.uops, R.idle);
+        "", D.groups, D.partial, D.groups ? 100.0 * (double)D.partial / (double)D.groups : 0.0,
+        D.uops, D.idle);
+    if (D.span_clocks > 0)
+      printf(
+          "   %-22s   FROZEN by a long op awaiting the dispatcher %ld clocks (%.0f%%); "
+          "ready-but-could-not-issue %ld\n",
+          "", D.held, 100.0 * (double)D.held / (double)D.span_clocks, D.blocked);
     printf("   %-22s   writeback: ALU served %ld stalled %ld, drain served %ld stalled %ld\n", "",
-           R.wb_served[0], R.wb_stalled[0], R.wb_served[1], R.wb_stalled[1]);
+           D.wb_served[0], D.wb_stalled[0], D.wb_served[1], D.wb_stalled[1]);
     // THE FLOOR THE PORT ITSELF SETS. One write per clock, so this is what the
     // machine could not beat even with infinitely fast services.
-    if (R.span_clocks > 0)
+    if (D.span_clocks > 0)
       printf("   %-22s   register writes %ld in %ld clocks = %.0f%% of the ONE write port\n", "",
-             R.writes, R.span_clocks, 100.0 * (double)R.writes / (double)R.span_clocks);
+             R.writes, R.span_clocks, 100.0 * (double)D.writes / (double)D.span_clocks);
   }
 
   if (total_stag_bad != 0) {

@@ -45,7 +45,16 @@
 // can never starve an older one into missing its deadline -- and the reply
 // order is kept by the same head/tail queue the distance service uses, so a
 // unit that finishes early cannot hand a caller somebody else's ring.
-module zhao_field_v3_ring_svc (
+module zhao_field_v3_ring_svc #(
+    // RING UNITS. The nine products inside one unit are a dependency chain and
+    // cannot be pipelined, so throughput here is bought only by having more
+    // units -- the same trade the distance service makes with its root banks.
+    //
+    // TWO GIVES II 19 against an admission ceiling of 24.33 for the WHOLE
+    // program, so on crater_ring -- the only program that uses the prepared
+    // ring -- this service alone takes 78% of the budget.
+    parameter int UNITS = 2
+) (
     input var logic clk,
     input var logic rst_n,
 
@@ -103,20 +112,20 @@ module zhao_field_v3_ring_svc (
   // =========================================================================
   // TWO RING UNITS
   // =========================================================================
-  logic               u_busy_r [2];
-  logic               u_off_r  [2];   // the group has been offered to the unit
-  logic               rg_v_valid [2], rg_v_ready [2], rg_r_valid [2];
-  logic signed [31:0] rg_o [2][4];
-  logic        [ 3:0] rg_sat_add [2], rg_sat_mul [2];
-  logic        [ 7:0] rg_tag_o [2];
-  logic               rg_mul_issue [2], rg_mul_ready [2], rg_mul_valid [2];
-  logic signed [32:0] rg_a [2][4], rg_b [2][4];
+  logic               u_busy_r [UNITS];
+  logic               u_off_r  [UNITS];   // the group has been offered to the unit
+  logic               rg_v_valid [UNITS], rg_v_ready [UNITS], rg_r_valid [UNITS];
+  logic signed [31:0] rg_o [UNITS][4];
+  logic        [ 3:0] rg_sat_add [UNITS], rg_sat_mul [UNITS];
+  logic        [ 7:0] rg_tag_o [UNITS];
+  logic               rg_mul_issue [UNITS], rg_mul_ready [UNITS], rg_mul_valid [UNITS];
+  logic signed [32:0] rg_a [UNITS][4], rg_b [UNITS][4];
 
-  logic signed [31:0] u_d_r [2][4];
-  logic signed [31:0] u_uni_r [2][4];
-  logic        [ 7:0] u_tag_r [2];
+  logic signed [31:0] u_d_r [UNITS][4];
+  logic signed [31:0] u_uni_r [UNITS][4];
+  logic        [ 7:0] u_tag_r [UNITS];
 
-  for (genvar u = 0; u < 2; u++) begin : gen_unit
+  for (genvar u = 0; u < UNITS; u++) begin : gen_unit
     assign rg_v_valid[u] = u_busy_r[u] && !u_off_r[u];
     zhao_field_v3_ring u_ring (
         .clk(clk), .rst_n(rst_n),
@@ -126,7 +135,7 @@ module zhao_field_v3_ring_svc (
         .r0_i(u_uni_r[u][0]), .m_i(u_uni_r[u][1]),
         .rA_i(u_uni_r[u][2]), .rB_i(u_uni_r[u][3]),
         .tag_i(u_tag_r[u]),
-        .r_valid_o(rg_r_valid[u]), .r_ready_i(ret_fire_c && (head_u_c == 1'(u))),
+        .r_valid_o(rg_r_valid[u]), .r_ready_i(ret_fire_c && (head_u_c == UW'(u))),
         .o0_0_o(rg_o[u][0]), .o0_1_o(rg_o[u][1]),
         .o0_2_o(rg_o[u][2]), .o0_3_o(rg_o[u][3]),
         .sat_add_o(rg_sat_add[u]), .sat_mul_o(rg_sat_mul[u]), .tag_o(rg_tag_o[u]),
@@ -142,34 +151,54 @@ module zhao_field_v3_ring_svc (
   end
 
   // ---- the order queue -----------------------------------------------------
-  logic       oq_u_r [2];
-  logic       oq_head_r, oq_tail_r;
-  logic [1:0] oq_count_r;
+  localparam int UW = (UNITS <= 2) ? 1 : ((UNITS <= 4) ? 2 : 3);
+  logic [UW-1:0] oq_u_r [UNITS];
+  logic [UW-1:0] oq_head_r, oq_tail_r;
+  logic [UW:0]   oq_count_r;
 
-  logic head_u_c;
+  logic [UW-1:0] head_u_c;
   assign head_u_c = oq_u_r[oq_head_r];
 
-  logic free_u_c, have_free_c;
+  function automatic logic [UW-1:0] next_u(input logic [UW-1:0] p);
+    // `UNITS - 1` is a CONSTANT, so this narrowing is exact rather than a
+    // truncation waiting to happen. The wrap above is the one that bit.
+    next_u = (p == UW'(UNITS - 1)) ? UW'(0) : UW'(p + UW'(1));
+  endfunction
+
+  logic [UW-1:0] free_u_c;
+  logic          have_free_c;
   always_comb begin
     have_free_c = 1'b0;
-    free_u_c    = 1'b0;
-    if (!u_busy_r[0]) begin
-      have_free_c = 1'b1;
-      free_u_c    = 1'b0;
-    end else if (!u_busy_r[1]) begin
-      have_free_c = 1'b1;
-      free_u_c    = 1'b1;
-    end
+    free_u_c    = '0;
+    // Lowest free unit, scanned downwards so unit 0 wins -- arbitrary but FIXED.
+    for (int u = UNITS - 1; u >= 0; u--)
+      if (!u_busy_r[u]) begin
+        have_free_c = 1'b1;
+        free_u_c    = UW'(u);
+      end
   end
 
   // ---- the bank port, OLDER GROUP FIRST ------------------------------------
   // A younger group must never starve an older one: the deadline belongs to the
   // group that was accepted first, and fairness here is not a preference.
-  logic bank_u_c;
+  logic [UW-1:0] bank_u_c;
   always_comb begin
-    if (rg_mul_issue[head_u_c])      bank_u_c = head_u_c;
-    else if (rg_mul_issue[~head_u_c]) bank_u_c = ~head_u_c;
-    else                              bank_u_c = head_u_c;
+    // The oldest unit that wants the bank, walking the accept order from the
+    // head. A younger group must never starve an older one.
+    // INT ARITHMETIC ON PURPOSE. `UW'(UNITS)` truncates the count to the
+    // POINTER's width -- at UNITS=4 that is 2 bits and UW'(4) is ZERO, so the
+    // wrap became a modulo by zero. The dispatcher paid an hour for exactly
+    // this with `SW'(OUTSTANDING)`; the sum must not be narrowed before the
+    // wrap is taken.
+    //
+    // Only the `oq_count_r` entries starting at the head hold a group. Reading
+    // past them would arbitrate for a unit that was never enqueued.
+    bank_u_c = head_u_c;
+    for (int k = UNITS - 1; k >= 0; k--)
+      if ((UW+1)'(k) < oq_count_r) begin
+        automatic logic [UW-1:0] cand = oq_u_r[(int'(oq_head_r) + k) % UNITS];
+        if (rg_mul_issue[cand]) bank_u_c = cand;
+      end
   end
 
   // NO SERIALISATION. `zhao_field_v3_mulbank` is FULLY PIPELINED -- two clocks
@@ -198,17 +227,17 @@ module zhao_field_v3_ring_svc (
   // this engine's blockers document describes at length, recreated here by me
   // while fixing something else, and it showed as multiplies issuing every
   // three clocks forever with no reply ever arriving.
-  logic sh_v_r [2];
-  logic sh_u_r [2];
-  for (genvar u = 0; u < 2; u++) begin : gen_grant
-    assign rg_mul_ready[u] = mul_ready_i && (bank_u_c == 1'(u));
-    assign rg_mul_valid[u] = mul_valid_i && sh_v_r[1] && (sh_u_r[1] == 1'(u));
+  logic          sh_v_r [2];
+  logic [UW-1:0] sh_u_r [2];
+  for (genvar u = 0; u < UNITS; u++) begin : gen_grant
+    assign rg_mul_ready[u] = mul_ready_i && (bank_u_c == UW'(u));
+    assign rg_mul_valid[u] = mul_valid_i && sh_v_r[1] && (sh_u_r[1] == UW'(u));
   end
 
-  assign req_ready_o = (f_state_r == F_IDLE) && (oq_count_r != 2'd2);
+  assign req_ready_o = (f_state_r == F_IDLE) && (oq_count_r != (UW+1)'(UNITS));
 
   logic ret_fire_c;
-  assign rsp_valid_o   = (oq_count_r != 2'd0) && u_busy_r[head_u_c] && rg_r_valid[head_u_c];
+  assign rsp_valid_o   = (oq_count_r != '0) && u_busy_r[head_u_c] && rg_r_valid[head_u_c];
   assign ret_fire_c    = rsp_valid_o && rsp_ready_i;
   assign rsp_r_0_o     = rg_o[head_u_c][0];
   assign rsp_r_1_o     = rg_o[head_u_c][1];
@@ -224,13 +253,13 @@ module zhao_field_v3_ring_svc (
       f_cyc_r     <= 3'd0;
       f_tag_r     <= 8'd0;
       imm_bad_o   <= 1'b0;
-      oq_head_r   <= 1'b0;
-      oq_tail_r   <= 1'b0;
-      oq_count_r  <= 2'd0;
+      oq_head_r   <= '0;
+      oq_tail_r   <= '0;
+      oq_count_r  <= '0;
       sh_v_r[0]   <= 1'b0;
       sh_v_r[1]   <= 1'b0;
-      sh_u_r[0]   <= 1'b0;
-      sh_u_r[1]   <= 1'b0;
+      sh_u_r[0]   <= '0;
+      sh_u_r[1]   <= '0;
       for (int i = 0; i < 4; i++) begin
         f_d_r[i]    <= '0;
         f_slot_r[i] <= 6'd0;
@@ -240,7 +269,7 @@ module zhao_field_v3_ring_svc (
         u_busy_r[u] <= 1'b0;
         u_off_r[u]  <= 1'b0;
         u_tag_r[u]  <= 8'd0;
-        oq_u_r[u]   <= 1'b0;
+        oq_u_r[u]   <= '0;
         for (int i = 0; i < 4; i++) begin
           u_d_r[u][i]   <= '0;
           u_uni_r[u][i] <= '0;
@@ -293,7 +322,7 @@ module zhao_field_v3_ring_svc (
             u_busy_r[free_u_c] <= 1'b1;
             u_off_r[free_u_c]  <= 1'b0;
             oq_u_r[oq_tail_r]  <= free_u_c;
-            oq_tail_r          <= ~oq_tail_r;
+            oq_tail_r          <= next_u(oq_tail_r);
             f_state_r          <= F_IDLE;
           end
         end
@@ -309,15 +338,15 @@ module zhao_field_v3_ring_svc (
       if (ret_fire_c) begin
         u_busy_r[head_u_c] <= 1'b0;
         u_off_r[head_u_c]  <= 1'b0;
-        oq_head_r          <= ~oq_head_r;
+        oq_head_r          <= next_u(oq_head_r);
       end
 
       // ---- occupancy, decided in ONE place ---------------------------------
       begin
         automatic logic push = (f_state_r == F_HAND) && have_free_c;
         automatic logic pop  = ret_fire_c;
-        if (push && !pop)      oq_count_r <= oq_count_r + 2'd1;
-        else if (pop && !push) oq_count_r <= oq_count_r - 2'd1;
+        if (push && !pop)      oq_count_r <= oq_count_r + (UW+1)'(1);
+        else if (pop && !push) oq_count_r <= oq_count_r - (UW+1)'(1);
       end
     end
   end
