@@ -254,6 +254,9 @@ module zhao_probe_v3_exec #(
     // engine has already spent a session mistaking the first for the second.
     output var logic [31:0] hold_clocks_o,
     output var logic [31:0] blocked_clocks_o,
+    output var logic [31:0] denied_clocks_o,
+    output var logic [31:0] dot_clocks_o,
+    output var logic [31:0] skid_clocks_o,
 
     // ---- the shared multiplier bank (this lane's claimant port) -----------
     // One lane of a four-wide bank. The other three belong to the other three
@@ -948,6 +951,9 @@ module zhao_probe_v3_exec #(
       idle_clocks_o <= 32'd0;
       hold_clocks_o <= 32'd0;
       blocked_clocks_o <= 32'd0;
+      denied_clocks_o <= 32'd0;
+      dot_clocks_o <= 32'd0;
+      skid_clocks_o <= 32'd0;
       for (int i = 0; i < CTX; i++) pc_r[i] <= '0;
     end else begin
       if (up_we_i)
@@ -1063,15 +1069,7 @@ module zhao_probe_v3_exec #(
         s1_ctx_r              <= issue_ctx_c;
         s1_uop_r              <= store[(int'(issue_ctx_c) * PLAN) + int'(pc_r[issue_ctx_c])];
         inflight_r[issue_ctx_c] <= 1'b1;
-        uops_issued_o         <= uops_issued_o + 32'd1;
-      end else if (|active_r) begin
-        idle_clocks_o <= idle_clocks_o + 32'd1;
       end
-      // Counted unconditionally, not as another arm of the issue decision:
-      // a clock can be BOTH held and blocked, and folding them into the
-      // if/else above would make each hide the other.
-      if (hold_c) hold_clocks_o <= hold_clocks_o + 32'd1;
-      if (|ready_c && !issue_c) blocked_clocks_o <= blocked_clocks_o + 32'd1;
 
       // S1 -> S2: RF read is in flight
       s2_v_r   <= s1_v_r;
@@ -1095,6 +1093,28 @@ module zhao_probe_v3_exec #(
 
 
       end  // upstream: !hold_c && !mul_denied_c
+
+      // ---- WHERE EVERY CLOCK WENT, EXACTLY ONCE ---------------------------
+      //
+      // These used to live inside `if (!hold_c && !mul_denied_c)` -- including
+      // the counter for `hold_c` itself, which therefore could not increment
+      // during a hold and read ZERO for the entire Earth run. That zero was
+      // then quoted as evidence that the long-op freeze never happens. It was
+      // evidence that the counter was inside the gate it was measuring.
+      //
+      // EXCLUSIVE, in priority order, so the buckets sum to the clock count and
+      // nothing can hide behind anything else. Three overlapping counters that
+      // could all read zero while a third of the run was unaccounted for is
+      // worse than one honest one.
+      if (|active_r) begin
+        if (issue_c)              uops_issued_o    <= uops_issued_o + 32'd1;
+        else if (hold_c)          hold_clocks_o    <= hold_clocks_o + 32'd1;
+        else if (mul_denied_c)    denied_clocks_o  <= denied_clocks_o + 32'd1;
+        else if (dot_inflight_c)  dot_clocks_o     <= dot_clocks_o + 32'd1;
+        else if (sk_busy_c)       skid_clocks_o    <= skid_clocks_o + 32'd1;
+        else if (|ready_c)        blocked_clocks_o <= blocked_clocks_o + 32'd1;
+        else                      idle_clocks_o    <= idle_clocks_o + 32'd1;
+      end
 
       // ---- DOWNSTREAM: held only by hold_c, NEVER by a denial -------------
       //
