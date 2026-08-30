@@ -1904,6 +1904,15 @@ foreach(div_units 1 2 4 8)
     PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 endforeach()
 
+add_executable(test_raster_attrinterp_directed raster/raster_attrinterp_directed.cpp)
+target_link_libraries(test_raster_attrinterp_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_attrinterp_directed
+  PREFIX Vzhao_raster_attrinterp
+  TOP_MODULE zhao_raster_attrinterp
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrinterp.sv)
+add_test(NAME raster_attrinterp_directed COMMAND test_raster_attrinterp_directed)
+set_tests_properties(raster_attrinterp_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
