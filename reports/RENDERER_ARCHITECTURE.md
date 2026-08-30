@@ -260,6 +260,81 @@ correct frame renderer.**
 
 ---
 
+## STATUS, 2026-08-31 — where the nine steps actually stand
+
+Written against the ordered list below, so the two can be read together. Every
+clock figure here is a measurement from a directed test against running RTL.
+
+| # | step | state |
+|---|---|---|
+| 1 | framebuffer-writer lease | **done** — one region, one dynamic owner |
+| 2 | wire the flat renderer into the shell | **done** — `client_req[2]`, 3 guards |
+| 3 | renderer frame transaction | **done** — publish only on `drained_o` |
+| 4 | tile lifecycle | **done** — one lifecycle per TILE |
+| 5 | TriangleContext + arena | **priced, not built** — see below |
+| 6 | attribute-bearing geometry seam | **done bar one spec hole** |
+| 7 | TMU v2 + perspective + TEXJOIN | **done** |
+| 8 | pipeline AUX, run it concurrently | **concurrency done**, AUX block open |
+| 9 | real traces, size the capacities | **open, and now blocking** |
+
+### Step 6, in detail
+
+| block | what it does | gate |
+|---|---|---|
+| `zhao_geom_attrsetup` | the numerator plane, no divide | 21/21 |
+| `zhao_raster_attrdiv` | the divide, exact rounding | 12/12 at each radix |
+| `zhao_raster_attrdiv_svc` | N dividers, tagged, in order | 11/11 at 8 grid points |
+| `zhao_raster_attrinterp` | steps the plane onto pixel CENTRES | 11/11 |
+| `zhao_geom_clip` | attributes follow the winding flip | 13/13 |
+| `zhao_raster_rcp24` | `rcp_u24`, full-domain hash | 9/9 |
+| `zhao_raster_perspuv` | the perspective divide | 12/12 |
+| `zhao_raster_texjoin` | context FIFO, sequence, ordered rejoin | 19/19 |
+
+The one hole is **GEOM.PROJECT's attribute carry**, blocked on `wmin`, `wmax`
+and `scale`, which have no value anywhere in the repo. See
+`reports/OPEN-SPEC-DEPTH-QUANTISATION.md`. It is a decision, not a task.
+
+### Step 5, priced
+
+Ruling 4 is right that setup is repeated per tile reference. Measured:
+
+* **setup is 5 clocks a job** (`raster_edgewalk_setupcost`), derived so the
+  derivation carries risk and cross-checked against the degenerate path;
+* the saving is `(refs - tris) x 5`, which is **0.12% of a frame on the sky,
+  1.41% on the army and 7.67% on the giant**;
+* the cost is 3x the per-triangle record — 36 Kbit at the shipped `TRI_CAP`,
+  8.2 Mbit at the capacity an army actually needs.
+
+Worth building for the giant. Not urgent, and its cost is entangled with the
+arena decision rather than separable from it.
+
+**A first probe of this got it four times too high**, by measuring accept-to-
+first-coverage-beat and not noticing the 16-row walk sits inside that window.
+The correction is in the test's own header, because the next person to reach for
+that interval will find the same convincing wrong number.
+
+### What the per-pixel path costs, all measured
+
+See `reports/PER_PIXEL_BUDGET.md`. In one line: three independent per-pixel
+units — `RCP24` at 238,095 a frame, `PERSPUV` at 151,515, `AUX` at 277,778
+(ruling 7's figure) — all sit within a factor of two of the 276,480-pixel
+terrain estimate, so there is no slack anywhere on that path. The attribute
+divide needs 2 to 5 times what eight radix-2 units deliver; radix 4 closed about
+half of that gap and is a build parameter now.
+
+### The two things that are blocking, and neither is code
+
+1. **`wmin`, `wmax`, `scale`** — step 6's last block.
+2. **The arena capacity** — step 5's cost, step 9's whole point, and the reason
+   an army cannot be frame-resident. Every capacity question now leads here.
+
+Step 9 was ordered last and three separate findings now depend on it: the
+survivor fraction `s` that swings the divide budget by 4x, the references-per-
+triangle that swings ruling 4 by 100x, and the arena sizing itself. **It should
+move up.**
+
+---
+
 ## The order to build in
 
 1. **Land the framebuffer-writer lease ruling.** One region, one dynamic owner;
