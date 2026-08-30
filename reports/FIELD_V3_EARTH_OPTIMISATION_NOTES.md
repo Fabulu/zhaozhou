@@ -483,6 +483,59 @@ impact_wave is engine-bank dominated: 6,272 engine-only clocks against 1,501
 service-only, and 4,116 (26%) with neither bank busy. It is an executor problem,
 not a service one, and the ring work above barely touches it.
 
+## Round 6: a rejected change becomes a winner when the bottleneck moves
+
+### The parameter space re-optimised itself, and the shipped defaults won
+
+Every point in rounds 1-5 was measured against a machine bound by the ring
+service's eight-clock accept path. With that gone, re-swept at 2,048 points:
+
+| point | crater_ring | impact_wave | wave_pool | worst |
+|---|---|---|---|---|
+| **base (shipped)** | 469,237 | 584,918 | 576,771 | **584,918** |
+| LONGQ 4 | 484,447 | 626,886 | 621,644 | 626,886 |
+| CTX 64 + LONGQ 4 | 499,160 | 645,568 | 602,006 | 645,568 |
+| CTX 64 + OUTSTANDING 24 | 608,608 | 710,787 | 631,859 | 710,787 |
+| CTX 64 + DIST_BANKS 8 | 518,764 | 716,014 | 569,275 | 716,014 |
+| CTX 48 | 625,314 | 696,442 | 766,314 | 766,314 |
+| CTX 64 | 621,783 | 802,325 | 653,150 | 802,325 |
+
+**`LONGQ=4` was the best point in round 3 and is among the worst now.** A
+parameter optimum does not survive an architectural change, and shipping the
+round-3 winner would have cost 7%. Re-sweep after every structural change or do
+not quote the sweep.
+
+### DIST2 front-end pipelining, rejected in round 3, is worth 2.7% here
+
+Identical change: `F_ISSUE -> F_COLLECT` instead of `ISSUE -> WAIT -> ISSUE ->
+WAIT`, so a DIST2's two squarings go out on consecutive clocks and the products
+are accumulated wherever they land. It cost the worst program 1.3% when the ring
+feeder was the wall. Measured again at 4,096 points on this engine:
+
+    impact_wave  16.90  590,642  ->  16.44  574,444   -2.7%
+    crater_ring  13.42  468,789  ->  13.22  461,989   -1.5%
+    wave_pool    16.51  576,771  ->  15.67  547,602   -5.1%
+
+98,324 values against the oracle, zero failures. All three improved.
+
+**This is not a contradiction of the acceptance law, it is a demonstration of
+it.** A service's initiation interval IS its acceptance rate; what the four
+rejected changes lowered was LATENCY. And it is the sharpest possible statement
+of the other rule this session has been paying for: **a change is only ever
+measured against the bottleneck that exists at the time.** A rejected change
+deserves re-testing every time the bottleneck moves, and this file's "measured
+and rejected" table needs reading with a date against every row.
+
+### Where impact_wave's clocks are now
+
+    issue 10,579 (67%)   longop-hold 4,135 (26%)   idle 1,051 (7%)
+
+Three long ops per group -- DIST2, CURVE, RING_PREP -- against initiation
+intervals of 12, 13 and 13. CURVE's 13 is structural and documented at its own
+head: six dependent binary-search steps x 2 lanes x 2 cycles = 12 address slots
+per port plus one handoff clock. That is the next wall, and it is a table-search
+problem, not a multiplier or scheduling one.
+
 ## Open items
 
 * **`wave_pool` has 1.3% margin.** That is thin enough that a timing or workload

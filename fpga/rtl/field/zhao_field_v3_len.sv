@@ -144,13 +144,36 @@ module zhao_field_v3_len #(
   endfunction
 
   // ---- the front end: squares, one component across four lanes ------------
-  localparam logic [1:0] F_IDLE  = 2'd0;
-  localparam logic [1:0] F_ISSUE = 2'd1;
-  localparam logic [1:0] F_WAIT  = 2'd2;
-  localparam logic [1:0] F_HAND  = 2'd3;
+  // ---------------------------------------------------------------------------
+  // THE SQUARES GO OUT BACK TO BACK
+  // ---------------------------------------------------------------------------
+  // This walked ISSUE -> WAIT -> ISSUE -> WAIT, paying the multiplier's whole
+  // latency once per component although `zhao_field_v3_mulbank` accepts an
+  // issue every clock and replies in issue order two clocks later. So COLLECT
+  // is separate from ISSUE: components go out on consecutive clocks while the
+  // bank allows, and products are accumulated wherever they land -- for LEN3
+  // the first product returns while the third is still being issued, which is
+  // exactly why accumulation is not inside a state.
+  //
+  // THIS WAS BUILT, MEASURED, REJECTED AND REBUILT. On the engine before the
+  // ring descriptor cache it cost the worst program 1.3%, because that machine
+  // was bound by the ring service's eight-clock accept path and nothing else
+  // mattered. With the feeder ceiling gone the worst program is impact_wave,
+  // which spends 28% of its clocks unable to hand a long op to the dispatcher
+  // and holds DIST2, CURVE and RING at initiation intervals of 12, 13 and 13
+  // against three long ops per group. This lowers DIST2's, which is an
+  // ACCEPTANCE rate and not a latency -- the distinction this engine has paid
+  // for four times.
+  localparam logic [1:0] F_IDLE    = 2'd0;
+  localparam logic [1:0] F_ISSUE   = 2'd1;
+  localparam logic [1:0] F_COLLECT = 2'd2;
+  localparam logic [1:0] F_HAND    = 2'd3;
 
   logic [1:0]         f_state_r;
   logic [1:0]         f_comp_r, f_ncomp_r;
+  // What has been COLLECTED, as against `f_comp_r` which counts what has been
+  // ISSUED. Conflating the two is what made the old machine wait.
+  logic [1:0]         f_got_r;
   logic [7:0]         f_tag_r;
   logic signed [31:0] f_v_r [3][LANES];
   logic        [63:0] f_n2_r [LANES];
@@ -254,6 +277,7 @@ module zhao_field_v3_len #(
     if (!rst_n) begin
       f_state_r  <= F_IDLE;
       f_comp_r   <= 2'd0;
+      f_got_r    <= 2'd0;
       f_ncomp_r  <= 2'd2;
       f_tag_r    <= 8'd0;
       oq_count_r <= '0;
@@ -276,12 +300,25 @@ module zhao_field_v3_len #(
         end
       end
     end else begin
+      // PRODUCTS ARE ACCUMULATED WHEREVER THEY LAND, because with components
+      // going out on consecutive clocks a product can arrive while F_ISSUE is
+      // still running. Placed before the case so a new group's reset of
+      // `f_got_r` in F_IDLE wins over a stale increment.
+      if (mul_valid_i) begin
+        f_n2_r[0] <= f_n2_r[0] + mul_p_0_i[63:0];
+        f_n2_r[1] <= f_n2_r[1] + mul_p_1_i[63:0];
+        f_n2_r[2] <= f_n2_r[2] + mul_p_2_i[63:0];
+        f_n2_r[3] <= f_n2_r[3] + mul_p_3_i[63:0];
+        f_got_r   <= f_got_r + 2'd1;
+      end
+
       case (f_state_r)
         F_IDLE: begin
           if (v_valid_i && v_ready_o) begin
             f_tag_r   <= tag_i;
             f_ncomp_r <= (mode_i == M_LEN3) ? 2'd3 : (mode_i == M_LEN2) ? 2'd2 : 2'd2;
             f_comp_r  <= 2'd0;
+            f_got_r   <= 2'd0;
             for (int l = 0; l < LANES; l++) f_n2_r[l] <= 64'd0;
 
             if (mode_i == M_DIST2) begin
@@ -305,22 +342,17 @@ module zhao_field_v3_len #(
           end
         end
 
-        // An instruction may not advance past a refused issue.
-        F_ISSUE: if (mul_ready_i) f_state_r <= F_WAIT;
-
-        F_WAIT: begin
-          if (mul_valid_i) begin
-            f_n2_r[0] <= f_n2_r[0] + mul_p_0_i[63:0];
-            f_n2_r[1] <= f_n2_r[1] + mul_p_1_i[63:0];
-            f_n2_r[2] <= f_n2_r[2] + mul_p_2_i[63:0];
-            f_n2_r[3] <= f_n2_r[3] + mul_p_3_i[63:0];
-            if (f_comp_r + 2'd1 >= f_ncomp_r) f_state_r <= F_HAND;
-            else begin
-              f_comp_r  <= f_comp_r + 2'd1;
-              f_state_r <= F_ISSUE;
-            end
+        // An instruction may not advance past a refused issue, but it does not
+        // wait for the product either: the next component goes out on the next
+        // clock the bank will take it.
+        F_ISSUE:
+          if (mul_ready_i) begin
+            if (f_comp_r + 2'd1 >= f_ncomp_r) f_state_r <= F_COLLECT;
+            else f_comp_r <= f_comp_r + 2'd1;
           end
-        end
+
+        // Everything is issued; wait only for what is still in flight.
+        F_COLLECT: if (f_got_r + (mul_valid_i ? 2'd1 : 2'd0) >= f_ncomp_r) f_state_r <= F_HAND;
 
         // Hand the finished n2 to a free bank. If both are busy the front WAITS
         // here rather than dropping it: back-pressure, not loss.

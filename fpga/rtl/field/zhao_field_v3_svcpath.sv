@@ -72,6 +72,9 @@ module zhao_field_v3_svcpath #(
     // Ring units. The nine products inside one are a dependency chain, so this
     // buys throughput the same way DIST_BANKS does and costs the same way.
     parameter int RING_UNITS = 2,
+    // Prepared ring descriptors held in the service. Two is the whole of
+    // crater_ring; it is a parameter so the sweep can prove that.
+    parameter int RING_DESC  = 2,
     parameter int REGS     = 32,
     parameter int TAGW     = 8
 ) (
@@ -541,7 +544,7 @@ module zhao_field_v3_svcpath #(
   // will be visible as a port that two blocks drive, not as a silent wrong
   // answer.
   zhao_field_v3_ring_svc #(
-      .UNITS(RING_UNITS)
+      .UNITS(RING_UNITS), .DESC(RING_DESC)
   ) u_ring (
       .clk(clk), .rst_n(rst_n),
       // The write strobe the descriptor cache invalidates on: the same one

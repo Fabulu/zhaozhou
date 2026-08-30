@@ -1681,27 +1681,26 @@ option(ZHAO_FIELD_SWEEP "Build the Field v3 Earth parameter sweep targets" OFF)
 set(ZHAO_FIELD_SWEEP_POINTS
   # name              CTX OUTSTANDING LANES LONGQ DIST_BANKS RING_UNITS REGS GATHERS
   #
-  # ROUNDS 1-2 WERE MEASURED ON A QUANTISED FRAME FIGURE. Do not trust any of
-  # their conclusions that turned on less than a whole clock per group. Round 3
-  # overturned two of them on the exact interval: LONGQ was called "no help"
-  # and shallower is the best single lever, and DIST_BANKS 8 was called "double
-  # the roots for no change" but IS worth 4% once LONGQ is shallow.
+  # ROUND 6, AND EVERY EARLIER ROUND IS NOW STALE. The prepared-descriptor
+  # cache took crater_ring from 19.57 to 13.42 clocks per group and made the
+  # ring service's accept path two clocks instead of eight. That is a different
+  # machine: the worst program is impact_wave now, not crater_ring, and every
+  # parameter conclusion drawn before it was drawn against a feeder ceiling
+  # that no longer exists.
   #
-  #   base   LONGQ 16, DIST 4          crater 683,960
-  #   LONGQ 4                          crater 660,027
-  #   LONGQ 4 + DIST_BANKS 8           crater 634,206   <- best worst-case
-  #   LONGQ 1                          worse than base on all three
-  #   RING_UNITS 16 with LONGQ 4       identical to LONGQ 4, again
-  #
-  # Round 5 explores around that corner.
-  "longq4dist8|32|12|4|4|8|8|64|4"
-  "longq4dist8ctx48|48|12|4|4|8|8|64|4"
-  "longq4dist8ctx64|64|12|4|4|8|8|64|4"
-  "longq4dist8out16|32|16|4|4|8|8|64|4"
-  "longq4dist8out8|32|8|4|4|8|8|64|4"
-  "longq4dist8gath8|32|12|4|4|8|8|64|8"
-  "longq8dist8|32|12|4|8|8|8|64|4"
-  "longq2dist8|32|12|4|2|8|8|64|4"
+  # impact_wave is EXECUTOR dominated -- 6,272 engine-only clocks against 1,501
+  # service-only, and 26% of clocks with neither multiplier bank busy -- so this
+  # round sweeps the things that give the executor more independent work rather
+  # than the things that make a service finish sooner. This engine has measured
+  # four latency reductions and every one of them cost the worst program time.
+  "base|32|12|4|16|4|8|64|4"
+  "ctx48|48|12|4|16|4|8|64|4"
+  "ctx64|64|12|4|16|4|8|64|4"
+  "ctx64out24|64|24|4|16|4|8|64|4"
+  "ctx48out20|48|20|4|16|4|8|64|4"
+  "longq4|32|12|4|4|4|8|64|4"
+  "ctx64longq4|64|12|4|4|4|8|64|4"
+  "ctx64dist8|64|12|4|16|8|8|64|4"
 )
 
 if(ZHAO_FIELD_SWEEP)
