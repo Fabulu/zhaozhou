@@ -2488,3 +2488,67 @@ from clean before reporting, and I did not.
 
 The fast-suite figure of 313/314 in this log should be read as 314/314 with a
 correctly built tree.
+
+### Optimisation runs: 838,656 -> 733,824 worst, and a conclusion I had to retract
+
+**The counter was inside the gate it was measuring.** Every clock counter,
+including `hold_clocks_o` itself, sat inside `if (!hold_c && !mul_denied_c)`, so
+the counter for `hold_c` could not increment while `hold_c` was true. It read
+ZERO for the whole Earth run and I quoted that as evidence the executor-wide
+long-op freeze never happens -- and told the reviewer not to build the service
+skid they had proposed.
+
+Rewritten as SEVEN EXCLUSIVE BUCKETS outside every gate, which must sum to the
+clock count:
+
+    crater_ring   issue  884, longop-hold 398   sum 1282 of 1282
+    impact_wave   issue 1042, longop-hold 381   sum 1423 of 1423
+    wave_pool     issue 1102, longop-hold 403   sum 1505 of 1505
+
+27-31%, not zero. The reviewer's diagnosis was right and I dismissed it on a
+broken measurement. The sum check is the part that makes this hard to repeat:
+three overlapping counters could all read zero while a third of the run went
+missing; seven that must add up cannot.
+
+**The long-op request queue**, which that measurement then justified: S4
+deposits and carries on instead of freezing every context. The pipe stalls only
+when the queue is full.
+
+    worst program   838,656 -> 733,824
+    longop-hold     impact_wave 381 -> 170, wave_pool 403 -> 151
+
+Two non-obvious consequences, both written into the RTL: a context is PARKED
+WHEN QUEUED rather than when the dispatcher takes it -- which is also what
+bounds the queue, since a parked context cannot produce a second request -- and
+`flush_o` now requires the queue EMPTY, because a context can be parked while
+its request has not been offered yet and flushing then would close a group with
+members still coming.
+
+**Depth was swept, not derived, and it is not monotonic:**
+
+    LONGQ    4     8    16    24    32
+    worst  768k  768k  734k  734k  839k
+
+Four was the derived guess and it made crater_ring WORSE (hold 398 -> 458),
+because a queue that lets more contexts run also collects more requests and
+crater_ring issues two long ops per point. 16 ships.
+
+**More contexts now HURT.** CTX 64 puts impact_wave back OVER budget at 908,544
+with hold at 1069 -- the services and the queue saturate before the extra
+contexts pay for themselves. CTX 32 stands.
+
+**What the fixture is now costing.** Contexts alive fell to 19.8 of 32 as the
+engine got faster. `pre_ready_o = !wr_en_i`, so the probe's single preload port
+waits whenever the machine writes -- and the write port is at 74-81%. The point
+data path is genuinely competing with the engine, which makes these numbers
+PESSIMISTIC and makes "how do points actually get in" a real design question
+rather than a fixture detail.
+
+**Why 400,000 is a different problem.** It is 11.4 clocks per four-point group.
+impact_wave is 16 uops and wave_pool 17, issued one per clock, each landing one
+register write. Issue occupancy is already 79-85%. The floor is the uop count,
+so no amount of scheduling reaches 11.4 -- it needs dual issue ACROSS CONTEXTS
+(two contexts issue per clock; they share no registers, so no dependency
+analysis is needed, but it doubles read ports, ALUs and write ports), or fewer
+uops. Fused SINCOS saves one uop of seventeen in wave_pool; CURVE_DCURVE does
+not apply, because impact_wave has only one CURVE.
