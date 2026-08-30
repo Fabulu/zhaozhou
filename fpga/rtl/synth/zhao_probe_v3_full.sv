@@ -162,6 +162,17 @@ module zhao_probe_v3_full #(
     output var logic [31:0]             groups_o,
     output var logic [31:0]             partial_o,
     output var logic [31:0]             drain_writes_o,
+
+    // THE SHARED MULTIPLIER BANK, BROUGHT OUT. Every service in the path --
+    // the ring units, the length banks, the trig and curve services -- issues
+    // into ONE four-wide multiplier bank. That is why adding ring units or
+    // root banks can move nothing: more consumers of a resource that was
+    // already the constraint. These two counters are the only way to tell a
+    // service-throughput limit from a shared-multiplier limit, and until they
+    // were brought out this engine had been reasoning about the difference
+    // from a `longop-hold` counter that cannot see either.
+    output var logic [31:0]             mul_grants_o,
+    output var logic [31:0]             mul_stall_lanes_o,
     output var logic [31:0]             wb_served_o  [2],
     output var logic [31:0]             wb_stalled_o [2],
 
@@ -340,5 +351,9 @@ module zhao_probe_v3_full #(
       .sb_we_i(sb_we_i), .sb_waddr_i(sb_waddr_i), .sb_wdata_i(sb_wdata_i),
       .sb_bad_o(sb_bad_o), .imm_bad_o(imm_bad_o)
   );
+
+
+  assign mul_grants_o      = svc_bank_grants;
+  assign mul_stall_lanes_o = svc_bank_stalls;
 
 endmodule : zhao_probe_v3_full

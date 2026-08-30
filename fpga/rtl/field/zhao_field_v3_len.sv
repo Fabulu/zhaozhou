@@ -195,7 +195,13 @@ module zhao_field_v3_len #(
   // the dispatcher's in-flight queue already uses, and for the same reason.
   // Accept order, by pointer rather than by shifting -- a push and a retire on
   // the same clock must not both write the same entry.
-  localparam int BW = (BANKS <= 2) ? 1 : ((BANKS <= 4) ? 2 : 3);
+  // WIDTH FROM THE PARAMETER, NOT FROM A LADDER. This was a hand-written chain
+  // of ternaries that stopped at eight banks, so configuring more silently
+  // produced a pointer one bit too narrow -- the failure the Field notes
+  // already record for `UW'(UNITS)` and `SW'(OUTSTANDING)`, where a narrowed
+  // constant became a modulo by zero. The floor of 1 is because $clog2(2) is 1
+  // and a zero-width pointer is not a pointer.
+  localparam int BW = (BANKS <= 2) ? 1 : $clog2(BANKS);
   logic [BW-1:0]  oq_bk_r [BANKS];
   logic [BW-1:0]  oq_head_r, oq_tail_r;
   logic [BW:0]    oq_count_r;

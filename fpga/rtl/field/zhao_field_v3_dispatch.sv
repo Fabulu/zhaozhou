@@ -270,7 +270,14 @@ module zhao_field_v3_dispatch #(
   logic signed [31:0]        g_s2_r [GATHERS][4], g_s3_r [GATHERS][4];
   logic signed [31:0]        g_s4_r [GATHERS][4];
 
-  localparam int GW = (GATHERS <= 2) ? 1 : ((GATHERS <= 4) ? 2 : 3);
+  // WIDTH FROM THE PARAMETER, NOT FROM A LADDER. This was a hand-written
+  // chain of ternaries that stopped at eight gather slots, so configuring more than eight gather slots
+  // silently produced a pointer one bit too narrow -- the same failure the
+  // Field notes already record for `UW'(UNITS)` and `SW'(OUTSTANDING)`, where
+  // a narrowed constant became a modulo by zero. $clog2 cannot go stale when
+  // the parameter moves. The floor of 1 is because $clog2(2) is 1 and
+  // $clog2(1) is 0, and a zero-width pointer is not a pointer.
+  localparam int GW = (GATHERS <= 2) ? 1 : $clog2(GATHERS);
   logic [GW-1:0] acc_slot_c, iss_slot_c, iss_slot_r;
   logic          have_acc_c, have_iss_c;
 
@@ -368,7 +375,14 @@ module zhao_field_v3_dispatch #(
   // point of overlapping them. Responses are therefore matched BY TAG into
   // whichever slot owns them. Draining still runs oldest-first, because write
   // ordering and release timing are the two things that must not change.
-  localparam int SW = (OUTSTANDING <= 2) ? 1 : ((OUTSTANDING <= 4) ? 2 : ((OUTSTANDING <= 8) ? 3 : 4));
+  // WIDTH FROM THE PARAMETER, NOT FROM A LADDER. This was a hand-written
+  // chain of ternaries that stopped at sixteen outstanding slots, so configuring more than sixteen outstanding slots
+  // silently produced a pointer one bit too narrow -- the same failure the
+  // Field notes already record for `UW'(UNITS)` and `SW'(OUTSTANDING)`, where
+  // a narrowed constant became a modulo by zero. $clog2 cannot go stale when
+  // the parameter moves. The floor of 1 is because $clog2(2) is 1 and
+  // $clog2(1) is 0, and a zero-width pointer is not a pointer.
+  localparam int SW = (OUTSTANDING <= 2) ? 1 : $clog2(OUTSTANDING);
 
   // THE POINTER WRAP IS WRITTEN OUT, NOT DONE WITH A MODULO, and the reason is
   // a bug this cost an hour of.

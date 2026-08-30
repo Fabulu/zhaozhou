@@ -57,6 +57,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <map>
 #include <cstring>
 #include <fstream>
 #include <string>
@@ -204,6 +205,7 @@ int wb_policy_probe = 0;
 // the contraction is the shipped behaviour and the un-contracted plan is the
 // control.
 bool contract_ss = true;
+bool show_histogram = false;
 
 void fail(const char* what, const char* detail) {
   if (printed++ < 6) printf("  %s %s: %s\n", gating ? "FAIL" : "DEFECT", what, detail);
@@ -939,6 +941,8 @@ struct Result {
   // it is the start of a guess rather than the end of a measurement.
   long groups = 0, partial = 0, uops = 0, idle = 0, drain = 0;
   long held = 0, blocked = 0, denied = 0, dotc = 0, skid = 0;
+  // The SHARED four-wide multiplier bank, which every service issues into.
+  long mul_grants = 0, mul_stalls = 0;
   double avg_active = 0.0;
   long wb_served[2] = {0, 0}, wb_stalled[2] = {0, 0};
   // THE ONE WRITE PORT. Every uop of every point lands through it, one per
@@ -992,6 +996,19 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   if ((int)uops.size() + 1 > kPlan) {
     R.refusal = "program longer than the uop store";
     return R;
+  }
+
+  // THE PROGRAM, BY OPCODE. `longop-hold` says the machine spends most of its
+  // clocks unable to hand a long op to the dispatcher, and a sweep of every
+  // service parameter moved none of it -- so the question is WHICH long op,
+  // and that is answered from the plan rather than guessed from the counters.
+  // Printed only on request, because it is a diagnosis and not a measurement.
+  if (show_histogram) {
+    std::map<uint8_t, int> hist;
+    for (const zfield::VecUop& u : uops) ++hist[u.op];
+    printf("                            plan: %zu uops ->", uops.size());
+    for (const auto& kv : hist) printf("  0x%02X x%d", kv.first, kv.second);
+    printf("\n");
   }
 
   // ---- translate the plan into the silicon's own operand shape -------------
@@ -1260,6 +1277,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   long t0 = 0, preload0 = 0, writes0 = 0, uops0 = 0, idle0 = 0, held0 = 0, blocked0 = 0;
   long active_sum0 = 0, active_clocks0 = 0;
   long denied0 = 0, dotc0 = 0, skid0 = 0;
+  long mulg0 = 0, muls0 = 0;
   int counted_start = 0;
   int guard = 0;
   const int guard_max = points * 8000 + 400000;
@@ -1281,17 +1299,25 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         denied0 = (long)top.denied_clocks_o;
         dotc0 = (long)top.dot_clocks_o;
         skid0 = (long)top.skid_clocks_o;
+        mulg0 = (long)top.mul_grants_o;
+        muls0 = (long)top.mul_stall_lanes_o;
         denied0 = (long)top.denied_clocks_o;
         dotc0 = (long)top.dot_clocks_o;
         skid0 = (long)top.skid_clocks_o;
+        mulg0 = (long)top.mul_grants_o;
+        muls0 = (long)top.mul_stall_lanes_o;
         active_sum0 = d.active_sum;
         active_clocks0 = d.active_clocks;
         denied0 = (long)top.denied_clocks_o;
         dotc0 = (long)top.dot_clocks_o;
         skid0 = (long)top.skid_clocks_o;
+        mulg0 = (long)top.mul_grants_o;
+        muls0 = (long)top.mul_stall_lanes_o;
         denied0 = (long)top.denied_clocks_o;
         dotc0 = (long)top.dot_clocks_o;
         skid0 = (long)top.skid_clocks_o;
+        mulg0 = (long)top.mul_grants_o;
+        muls0 = (long)top.mul_stall_lanes_o;
         uops0 = (long)top.uops_issued_o;
         idle0 = (long)top.idle_clocks_o;
         held0 = (long)top.hold_clocks_o;
@@ -1301,17 +1327,25 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
         denied0 = (long)top.denied_clocks_o;
         dotc0 = (long)top.dot_clocks_o;
         skid0 = (long)top.skid_clocks_o;
+        mulg0 = (long)top.mul_grants_o;
+        muls0 = (long)top.mul_stall_lanes_o;
         denied0 = (long)top.denied_clocks_o;
         dotc0 = (long)top.dot_clocks_o;
         skid0 = (long)top.skid_clocks_o;
+        mulg0 = (long)top.mul_grants_o;
+        muls0 = (long)top.mul_stall_lanes_o;
         active_sum0 = d.active_sum;
         active_clocks0 = d.active_clocks;
         denied0 = (long)top.denied_clocks_o;
         dotc0 = (long)top.dot_clocks_o;
         skid0 = (long)top.skid_clocks_o;
+        mulg0 = (long)top.mul_grants_o;
+        muls0 = (long)top.mul_stall_lanes_o;
         denied0 = (long)top.denied_clocks_o;
         dotc0 = (long)top.dot_clocks_o;
         skid0 = (long)top.skid_clocks_o;
+        mulg0 = (long)top.mul_grants_o;
+        muls0 = (long)top.mul_stall_lanes_o;
         counted_start = retired;
       }
       for (int c = 0; c < n_ctx; ++c) {
@@ -1387,34 +1421,52 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           uops0 = (long)top.uops_issued_o;
           idle0 = (long)top.idle_clocks_o;
           held0 = (long)top.hold_clocks_o;
@@ -1424,34 +1476,52 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           uops0 = (long)top.uops_issued_o;
           idle0 = (long)top.idle_clocks_o;
           held0 = (long)top.hold_clocks_o;
@@ -1461,34 +1531,52 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           counted_start = retired;
         }
         ++wave;
@@ -1523,34 +1611,52 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           uops0 = (long)top.uops_issued_o;
           idle0 = (long)top.idle_clocks_o;
           held0 = (long)top.hold_clocks_o;
@@ -1560,34 +1666,52 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           uops0 = (long)top.uops_issued_o;
           idle0 = (long)top.idle_clocks_o;
           held0 = (long)top.hold_clocks_o;
@@ -1597,34 +1721,52 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           active_sum0 = d.active_sum;
           active_clocks0 = d.active_clocks;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           denied0 = (long)top.denied_clocks_o;
           dotc0 = (long)top.dot_clocks_o;
           skid0 = (long)top.skid_clocks_o;
+          mulg0 = (long)top.mul_grants_o;
+          muls0 = (long)top.mul_stall_lanes_o;
           counted_start = retired;
         }
         if (retired < points) load_point(c);
@@ -1673,6 +1815,8 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   R.denied = (long)top.denied_clocks_o - denied0;
   R.dotc = (long)top.dot_clocks_o - dotc0;
   R.skid = (long)top.skid_clocks_o - skid0;
+  R.mul_grants = (long)top.mul_grants_o - mulg0;
+  R.mul_stalls = (long)top.mul_stall_lanes_o - muls0;
   R.avg_active = (d.active_clocks > active_clocks0) ? (double)(d.active_sum - active_sum0) /
                                                           (double)(d.active_clocks - active_clocks0)
                                                     : 0.0;
@@ -1698,6 +1842,8 @@ int main(int argc, char** argv) {
       points = std::atoi(argv[++i]);
     } else if (a == "--smoothstep") {
       contract_ss = true;
+    } else if (a == "--histogram") {
+      show_histogram = true;
     } else if (a == "--no-smoothstep") {
       contract_ss = false;
     } else if (a == "--wb" && i + 1 < argc) {
@@ -1839,6 +1985,18 @@ int main(int argc, char** argv) {
     if (D.span_clocks > 0)
       printf("   %-22s   register writes %ld in %ld clocks = %.0f%% of the ONE write port\n", "",
              D.writes, D.span_clocks, 100.0 * (double)D.writes / (double)D.span_clocks);
+    // THE SHARED MULTIPLIER BANK. Every service in the path -- every ring
+    // unit, every root bank, trig and curve -- issues into ONE four-wide
+    // multiplier. That makes this occupancy the ceiling on the whole service
+    // path however many units are built, and it is the only measurement that
+    // can tell a service-throughput limit from a shared-multiplier one.
+    // `lost` counts clocks a service wanted the bank and another had it.
+    if (D.span_clocks > 0)
+      printf(
+          "   %-22s   mul bank: %ld grants in %ld clocks = %.0f%% occupied, %ld lost to "
+          "contention\n",
+          "", D.mul_grants, D.span_clocks, 100.0 * (double)D.mul_grants / (double)D.span_clocks,
+          D.mul_stalls);
   }
 
   if (total_stag_bad != 0) {

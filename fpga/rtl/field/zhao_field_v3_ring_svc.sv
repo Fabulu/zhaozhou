@@ -155,7 +155,14 @@ module zhao_field_v3_ring_svc #(
   end
 
   // ---- the order queue -----------------------------------------------------
-  localparam int UW = (UNITS <= 2) ? 1 : ((UNITS <= 4) ? 2 : 3);
+  // WIDTH FROM THE PARAMETER, NOT FROM A LADDER. This was a hand-written
+  // chain of ternaries that stopped at eight units, so configuring more than eight units
+  // silently produced a pointer one bit too narrow -- the same failure the
+  // Field notes already record for `UW'(UNITS)` and `SW'(OUTSTANDING)`, where
+  // a narrowed constant became a modulo by zero. $clog2 cannot go stale when
+  // the parameter moves. The floor of 1 is because $clog2(2) is 1 and
+  // $clog2(1) is 0, and a zero-width pointer is not a pointer.
+  localparam int UW = (UNITS <= 2) ? 1 : $clog2(UNITS);
   logic [UW-1:0] oq_u_r [UNITS];
   logic [UW-1:0] oq_head_r, oq_tail_r;
   logic [UW:0]   oq_count_r;

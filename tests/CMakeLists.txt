@@ -1660,6 +1660,108 @@ set_tests_properties(field_v3_earth_wide PROPERTIES LABELS "fast;nightly" TIMEOU
 # 32 points in flight as the CTX=32 scalar target above, which is what makes
 # the two comparable -- the difference between them is the WIDTH, not the
 # occupancy.
+# ---------------------------------------------------------------------------
+# THE FIELD SWEEP, off by default: -DZHAO_FIELD_SWEEP=ON
+# ---------------------------------------------------------------------------
+# Every parameter of the Earth engine is a Verilator -G, so a sweep is a
+# REBUILD per point and cannot be done from the command line of a shipped
+# binary. The optimisation notes record several sweeps whose numbers are now
+# unreproducible because the configurations lived in somebody's shell history.
+# These targets are that shell history, committed.
+#
+# Each point builds `test_field_v3_earth_sweep_<name>` and registers no test --
+# a sweep is a measurement, not a gate, and the gate is
+# `field_v3_earth_quad` at the SHIPPED configuration.
+#
+#   cmake -S . -B build -DZHAO_FIELD_SWEEP=ON
+#   cmake --build build --target field_sweep
+#   tools/field/run_sweep.ps1        # runs every point and tabulates
+option(ZHAO_FIELD_SWEEP "Build the Field v3 Earth parameter sweep targets" OFF)
+
+set(ZHAO_FIELD_SWEEP_POINTS
+  # name              CTX OUTSTANDING LANES LONGQ DIST_BANKS RING_UNITS REGS GATHERS
+  #
+  # ROUND 1 RESULT, kept so the next sweep does not re-run it:
+  #   RING_UNITS 8 -> 16 -> 32   no change at all. The ring is NOT the limit,
+  #                              even though 36% of clocks read as frozen on a
+  #                              long op. That counter is backpressure working,
+  #                              not backpressure hurting.
+  #   GATHERS 4 -> 8             no change.
+  #   LONGQ 16 -> 32             freeze 36% -> 0% and the machine gets SLOWER
+  #                              (wave_pool 594,048 -> 803,712). Draining the
+  #                              freeze counter to zero costs 35%. The queue is
+  #                              a throttle that helps, exactly as the writeback
+  #                              skid fence turned out to be.
+  #   CTX 32 -> 64               worse on all three.
+  #   OUTSTANDING 12 -> 24       crater WORSE (663,936 -> 698,880) and wave_pool
+  #                              much BETTER (594,048 -> 454,272). The two pull
+  #                              in opposite directions, which is what round 2
+  #                              is for.
+  "base|32|12|4|16|4|8|64|4"
+  "out16|32|16|4|16|4|8|64|4"
+  "out20|32|20|4|16|4|8|64|4"
+  "out24|32|24|4|16|4|8|64|4"
+  "out32|32|32|4|16|4|8|64|4"
+  "longq8|32|12|4|8|4|8|64|4"
+  "longq4|32|12|4|4|4|8|64|4"
+  "out20longq8|32|20|4|8|4|8|64|4"
+)
+
+if(ZHAO_FIELD_SWEEP)
+  add_custom_target(field_sweep)
+  foreach(pt IN LISTS ZHAO_FIELD_SWEEP_POINTS)
+    string(REPLACE "|" ";" f "${pt}")
+    list(GET f 0 sw_name)
+    list(GET f 1 sw_ctx)
+    list(GET f 2 sw_out)
+    list(GET f 3 sw_lanes)
+    list(GET f 4 sw_longq)
+    list(GET f 5 sw_dist)
+    list(GET f 6 sw_ring)
+    list(GET f 7 sw_regs)
+    list(GET f 8 sw_gath)
+    set(tgt test_field_v3_earth_sweep_${sw_name})
+    add_executable(${tgt} differential/field_v3_earth_directed.cpp)
+    target_link_libraries(${tgt} PRIVATE zhao_harness zhao_zref)
+    verilate(${tgt}
+      PREFIX Vzhao_probe_v3_full
+      TOP_MODULE zhao_probe_v3_full
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_full.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rot.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_sbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_trig.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+      VERILATOR_ARGS -GCTX=${sw_ctx} -GOUTSTANDING=${sw_out} -GLANES=${sw_lanes}
+                     -GLONGQ=${sw_longq} -GDIST_BANKS=${sw_dist}
+                     -GRING_UNITS=${sw_ring} -GREGS=${sw_regs} -GGATHERS=${sw_gath})
+    target_compile_definitions(${tgt} PRIVATE
+      ZHAO_EARTH_CTX=${sw_ctx} ZHAO_EARTH_LANES=${sw_lanes} ZHAO_EARTH_REGS=${sw_regs})
+    add_dependencies(field_sweep ${tgt})
+  endforeach()
+endif()
+
 add_executable(test_field_v3_earth_quad differential/field_v3_earth_directed.cpp)
 target_link_libraries(test_field_v3_earth_quad PRIVATE zhao_harness zhao_zref)
 verilate(test_field_v3_earth_quad
@@ -1694,7 +1796,13 @@ verilate(test_field_v3_earth_quad
           ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
   VERILATOR_ARGS -GCTX=32 -GOUTSTANDING=12 -GLANES=4 -GLONGQ=16 -GDIST_BANKS=4 -GRING_UNITS=8 -GREGS=64)
 target_compile_definitions(test_field_v3_earth_quad PRIVATE ZHAO_EARTH_CTX=32 ZHAO_EARTH_LANES=4 ZHAO_EARTH_REGS=64)
-add_test(NAME field_v3_earth_quad COMMAND test_field_v3_earth_quad --points 256
+# --points 1024, NOT 256. The admission law is about an INITIATION INTERVAL,
+# which is a steady-state quantity, and at 256 points a CTX=32 LANES=4 machine
+# spends most of the run filling and draining its contexts. The same binary
+# reads 28 clocks per group at 256 points and 19 at 1024 -- the difference
+# between reporting 1.23x OVER and reporting a 22% margin. The gate measured
+# the ramp for as long as it was registered at 256.
+add_test(NAME field_v3_earth_quad COMMAND test_field_v3_earth_quad --points 1024
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/crater_ring.zprog
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/impact_wave.zprog
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/wave_pool.zprog)
