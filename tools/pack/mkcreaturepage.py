@@ -272,16 +272,8 @@ EYE_BOX = (1418, 556, 1594, 734)
 # in the middle -- and it is already inside EYE_BOX. The orange ellipse this
 # file used to paint UNDER the eye was an invention, and it is what read as
 # a socket/ring. Deleted; the drawn eye is painted alone, slightly larger.
-EYE_ROW = 16     # first texel row of the eyeball down the head tile.
-                 # 16 keeps the SMALLER disc's centre where the 12-row start
-                 # put the old large one (centre ~row 28; see EYE_TEX_* note).
-                 # 12, was 19 (Fabian, 2026-08-27: "eyes need to be more in
-                 # front. Not completely, they still should be mostly on the
-                 # side"): on the BALL skull the rows forward of the radial
-                 # peak (station 4 ~ V row 23) face increasingly FORWARD, so
-                 # sliding the eye 7 rows nose-ward wraps its front edge onto
-                 # the frontal silhouette while the centre stays on the side
-                 # line. Judged on head-on + side zooms, not derived.
+EYE_ROW = 14     # final pass: complete disc moves slightly noseward; atlas,
+                  # model support and moving-pupil pivot follow the same intent.
 EYE_COL_A = 37   # +Z flank, 5 texels above the side line (U=32). Was 38
                  # (v3 run): raised 6 toward the back, each disc's orange
                  # ring reached the crown's pink gap and the two eyes read
@@ -489,20 +481,13 @@ def head_tile(g_blue, g_green_dark, g_pink, g_orange):
     # left between them on the rear rows is the GREEN neck flank -- Side.png
     # shows green riding high on the neck right behind the skull.
     def pink_half(y):
-        # THE PINK RUNS TO THE NOSE TIP (2026-08-28; Side.png -- the shape
-        # authority -- draws the dorsal band continuing OVER the head to the
-        # very tip, and Fabian: "Top of head should be pink, but from front
-        # you only see the blue"). A slim band from the first dome rows,
-        # widening over the crown to the body band's half-width by y=30 and
-        # holding it to the junction, so head-on the top of the head reads
-        # PINK with the blue face beneath it.
-        # the band begins BEHIND the visible dome (y=16 ~ station 3): the
-        # front read wins -- a band on the dome rows painted a pink stripe
-        # down the middle of the face head-on (r5/r6 renders), which
-        # Front.png does not draw. From the side the crown pink now starts
-        # just behind the nose and widens over the skull.
-        if y < 16:
+        # Final pass: a narrow crown starts on the front dome and grows into
+        # the established band, preserving the blue face while making the full
+        # top of the head pink in side and orbit views.
+        if y < 2:
             return 0.0
+        if y < 16:
+            return 1.5 + (4.0 - 1.5) * (y - 2) / 14.0
         if y < 32:
             return 4.0 + (PINK_HALF_TILE - 4.0) * (y - 16) / 16.0
         return PINK_HALF_TILE
@@ -770,9 +755,9 @@ A_EYE_COL_A = EYE_COL_A * 2 - 8      # 66: judged on the head-on still --
 # at 70 the discs still rode high and the ball read mushroom-topped;
 # Front.png centres the eyes at the head's midline
 A_EYE_COL_B = EYE_COL_B * 2 + 8      # 126 (mirror)
-A_EYE_ROW = 8                        # v10: both complete eye discs move
-                                     # noseward together; the model's local
-                                     # support and moving-pupil pivot follow.
+A_EYE_ROW = 6                        # final pass: a small noseward move shared
+                                     # by both complete discs; model support and
+                                     # moving-pupil pivot move with the paint.
 A_EYE_U = 24                         # 12 tile texels of angle -> 24 atlas cols
 A_EYE_V = 19                         # 24 head rows -> 19 atlas rows
 A_EYE_RING = 3                       # orange surround, atlas texels of U --
@@ -887,18 +872,17 @@ def build_atlas():
             rgb[y, x] = rgb[y, x] * (1 - w) + bl_rgb[y, x] * w
             tooth[y, x] = tooth[y, x] * (1 - w) + mats["blue"][1][y, x] * w
 
-    # 4. PINK DORSAL BAND, crown to fork, melded edges (starts behind the
-    # dome so the frontal face is not split -- run 2339 r5/r6 lesson)
+    # 4. PINK DORSAL BAND, crown to fork, melded edges. The final small pass
+    # carries a slim pink crown across the complete dome instead of beginning
+    # behind the eyes; it widens gently, so the top reads continuously pink in
+    # side/orbit views without turning the blue frontal face into a stripe.
     def pink_half_atlas(y):
-        # start pushed 12 -> 20 (RUN 1939): the dome repack pulls V rows
-        # nose-ward, so a band starting at V 12 would paint ONTO the new
-        # dome (ring 2.6 now sits at ~70 mm) and re-earn the recorded
-        # pink-stripe-down-the-face fault. V 20 = ring ~4.4 = just behind
-        # the dome's end; the ramp completes by the mid-skull as before.
         y128 = y / (H / 256.0)
         full = PINK_HALF_TILE * 2.0 * SC
-        if y128 < 17:
+        if y128 < 2:
             return 0.0
+        if y128 < 17:
+            return 3.0 * SC + (8.0 * SC - 3.0 * SC) * (y128 - 2) / 15.0
         if y128 < 30:
             return 8.0 * SC + (full - 8.0 * SC) * (y128 - 17) / 13.0
         return full

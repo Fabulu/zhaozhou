@@ -203,8 +203,8 @@ struct TaperKey {
 constexpr int32_t kRadiusNose = 1120;
 constexpr int32_t kRadiusNoseFull = 1160;
 constexpr int32_t kRadiusHead = 1210;
-constexpr int32_t kRadiusNeckFull = 1240;
-constexpr int32_t kRadiusNeckRelease = 1210;
+constexpr int32_t kRadiusNeckFull = 1250;     // final pass: +0.8%, only just fuller
+constexpr int32_t kRadiusNeckRelease = 1220;  // than accepted five-percent head swell
 constexpr int32_t kRadiusLongFront = 1160;
 constexpr int32_t kRadiusMiddleFront = 1140;
 constexpr int32_t kRadiusMiddle = 1100;
@@ -372,9 +372,8 @@ constexpr int kSkullBlendTo = 10; // last station that carries any kBHead
 // drawing's disc and ink ring stay in the head page and the head's own rings
 // swell LATERALLY beneath it. V9 adds one shallow orange slit decal per side:
 // both follow the same authored gaze and never contribute to the silhouette.
-constexpr int kEyeStation0 = 2;      // first head station that carries the bulge
-constexpr int kEyeStation1 = 5;      // v10: the complete support window moves
-                                     // noseward with the painted side eyes;
+constexpr int kEyeStation0 = 1;      // final pass: complete support window moves
+constexpr int kEyeStation1 = 4;      // one station noseward with eye paint/pupil;
                                      // no global skull or tube radius changes.
 #ifndef ZIXX_EYEBULGE
 // V9 local eye support: stronger than 26 without returning to the old
@@ -390,7 +389,8 @@ constexpr int32_t kEyeBulgeNum = ZIXX_EYEBULGE;
 // fixed decal float inside the eye (owner direction #8). Two mirrored bones
 // still share one intent; their signs differ only because the eyes face
 // opposite sides.
-constexpr int kPupilStation = 4;    // v10: follows the eye-disc centre noseward
+constexpr int kPupilStation = 3;    // final pass: follows the eye-disc centre one
+                                    // packed head station noseward
 constexpr int32_t kPupilCoreHalfWidthMm = 20;      // the stripe's peculiar swell
 constexpr int32_t kPupilCoreHalfAngleA16 = 1900;   // extent of the moving swell
 constexpr int32_t kPupilStripeShoulderA16 = 3300;  // elastic arm control point
@@ -446,16 +446,16 @@ constexpr int kPupilProofReturnKey = 56;
                                      // (12/16/20/24, v3 run evidence);
                                      // judged beside Front.png.
 
-// THE BALL ENVELOPE IS RETIRED (2026-08-28). Fabian: "There should really
-// be no skull. It's one tube that bulges more and more towards the end,
-// culminating in a head." The culmination now lives IN kTaper itself --
-// one hand-authored radius profile for the one tube -- so a second local
-// swell grafted on top would re-create exactly the seam he rejected.
-// kBallNum stays as a knob (0 = off) because the machinery also carries
-// the eye rim; the envelope stations are kept for it.
-constexpr int kBallStation0 = 1;   // envelope start (unused at kBallNum 0)
-constexpr int kBallPeak = 4;       // envelope peak (unused at kBallNum 0)
-constexpr int32_t kBallNum = 0;    // peak swell, 1/1000 of station radius
+// FINAL SMALL-ADJUSTMENT HEAD FULLNESS (2026-08-30). This is not a shell,
+// graft or second skull: it is a five-percent smooth swell of the same continuous
+// tube surface, peaking around the eyes and fading completely before the shared
+// head/body junction. V14 looked slab-flat in the identical fixed side view;
+// 50 is the first modest authored rung that gives the head a genuinely rounded
+// 3D read without reviving the old bulbous silhouette. The neck taper receives
+// only the sub-percent increase required to remain a tiny bit fuller than this peak.
+constexpr int kHeadFullnessStart = 1;
+constexpr int kHeadFullnessPeak = 4;
+constexpr int32_t kHeadFullnessNum = 50;  // peak swell, 1/1000 of station radius
 
 // the dorsal crest: geometry, because there is no texture page pipeline yet
 constexpr int32_t kCrestNum = 46;   // crest half-width = body half-width * n/100
@@ -1314,14 +1314,17 @@ inline int station_sides(int i) {
 inline void head_ring(int i, int32_t& rx_mm, int32_t& rz_mm) {
   const int32_t r = station_r(i);
   int e = 0;
-  if (i >= kBallStation0 && i < kHeadEnd) {
-    const int t = i <= kBallPeak
-                      ? ((i - kBallStation0) * 1000) / (kBallPeak - kBallStation0)
-                      : ((kHeadEnd - i) * 1000) / (kHeadEnd - kBallPeak);
+  if (i >= kHeadFullnessStart && i < kHeadEnd) {
+    const int t = i <= kHeadFullnessPeak
+                      ? ((i - kHeadFullnessStart) * 1000) /
+                            (kHeadFullnessPeak - kHeadFullnessStart)
+                      : ((kHeadEnd - i) * 1000) /
+                            (kHeadEnd - kHeadFullnessPeak);
     e = t * t * (3000 - 2 * t) / 1000000;  // integer smoothstep, 0..1000
   }
   const int32_t swollen =
-      r + static_cast<int32_t>((static_cast<int64_t>(r) * kBallNum * e) / 1000000);
+      r + static_cast<int32_t>(
+              (static_cast<int64_t>(r) * kHeadFullnessNum * e) / 1000000);
   int32_t eye_w = 0;
   if (i >= kEyeStation0 && i <= kEyeStation1) {
     const int span = kEyeStation1 - kEyeStation0;

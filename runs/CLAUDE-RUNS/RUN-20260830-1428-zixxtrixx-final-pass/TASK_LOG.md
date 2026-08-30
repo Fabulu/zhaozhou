@@ -41,6 +41,18 @@ Complete Task #28 from accepted V14 as a deliberately small head/neck/colour adj
 
 ---
 
+### 2026-08-30 - Small model/colour adjustment accepted
+
+- Authored one bounded rung and stopped: a five-percent smooth fullness envelope on the existing continuous head surface, fading before the unchanged shared junction; no new shell, topology, rig or body widening.
+- Raised only `kRadiusNeckFull`/`kRadiusNeckRelease` by 10 profile units (less than one percent) so the neck remains just fuller than the accepted head instead of reviving the old heavy neck.
+- Shifted both painted eye discs, their local support and their shared moving-pupil pivot slightly noseward; moved the complete system together rather than leaving paint/geometry detached.
+- Extended a narrow dorsal-pink crown across the complete head top, gently widening into the accepted body band. Authored in `mkcreaturepage.py` and regenerated the committed cel page; no hand-edited generated table.
+- Rendered the exact same side/front/600-frame orbit under Cool Cross and committed six `after-final-*` comparisons. The first rung reads modestly rounder, keeps the signature-S/body unchanged, preserves a blue frontal face and avoids the historical bulbous/monstrous silhouette, so geometry iteration stopped there.
+- Inspected all 128 close side and front pupil-proof frames plus both extrema: both coordinated stripes remain on their eye discs and still meet the eye boundary after the shift.
+- Fresh direct all-target build and `zixx-meshcheck` pass: 1774 vertices, 1098 shared-position groups, zero disagreeing binds, zero seam split across every clip, `meshcheck: OK`.
+
+---
+
 ## Subagent Spawns
 
 No subagents. This run has one implementation/modelling agent.
