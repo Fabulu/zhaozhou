@@ -372,11 +372,10 @@ constexpr int kSkullBlendTo = 10; // last station that carries any kBHead
 // drawing's disc and ink ring stay in the head page and the head's own rings
 // swell LATERALLY beneath it. V9 adds one shallow orange slit decal per side:
 // both follow the same authored gaze and never contribute to the silhouette.
-constexpr int kEyeStation0 = 3;      // first head station that carries the bulge
-constexpr int kEyeStation1 = 6;      // last: shifted one station noseward so
-                                     // the two local swellings support the
-                                     // painted side eyes instead of trailing
-                                     // them toward the neck.
+constexpr int kEyeStation0 = 2;      // first head station that carries the bulge
+constexpr int kEyeStation1 = 5;      // v10: the complete support window moves
+                                     // noseward with the painted side eyes;
+                                     // no global skull or tube radius changes.
 #ifndef ZIXX_EYEBULGE
 // V9 local eye support: stronger than 26 without returning to the old
 // six-station 42-percent brim. Judge with the noseward atlas row in fixed
@@ -391,7 +390,7 @@ constexpr int32_t kEyeBulgeNum = ZIXX_EYEBULGE;
 // fixed decal float inside the eye (owner direction #8). Two mirrored bones
 // still share one intent; their signs differ only because the eyes face
 // opposite sides.
-constexpr int kPupilStation = 5;
+constexpr int kPupilStation = 4;    // v10: follows the eye-disc centre noseward
 constexpr int32_t kPupilCoreHalfWidthMm = 20;      // the stripe's peculiar swell
 constexpr int32_t kPupilCoreHalfAngleA16 = 1900;   // extent of the moving swell
 constexpr int32_t kPupilStripeShoulderA16 = 3300;  // elastic arm control point
@@ -482,6 +481,11 @@ constexpr int kBladeRings = 6;
 // taper to the point) replacing the root-heavy 1-t^2 paddle. Splay 3000
 // and the 80-deg roll keep their owner-ordered values.
 constexpr int32_t kBladeLen = 860;
+constexpr int32_t kBladeRootInsetMm = 72; // v10: grow each blade from inside
+                                          // the tail shell; the buried open
+                                          // root cannot draw a detached cap
+constexpr int32_t kBladeRootOffsetMm = 34; // overlap the thin tail tip deeply
+                                           // before the fork separates
 constexpr int32_t kBladeW0 = 36;       // half-width at the leaf's widest (LATERAL)
 constexpr int32_t kBladeThick0 = 12;   // half-thickness at the root (VERTICAL)
 // 1500, was 6900 (Fabian, 2026-08-27 pass 3: the fins "should be rotated
@@ -726,23 +730,21 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // the tail rises behind, short and steep
     -5600, -11400};
 
-// THE WHOLE-BODY SPRING (owner direction #9). This is a separately authored
-// pose, not a larger idle breath and not a scale trick. The vertical S pays
-// out almost flat just above the floor while a broad lateral concertina keeps
-// the continuous tube visibly compact and volumetric in 3D. Every salto and
-// jump calls apply_spring_stance below, so the obsolete deepen-only wobble
-// cannot survive in a variant. These are absolute segment directions, like
-// kStanceSlope; pitch/yaw joints are their adjacent differences.
+// THE WHOLE-BODY SPRING (owner direction #10). This is a separately authored
+// almost-flat SIDE profile, not a larger idle breath, scale trick or plan-view
+// coil. The middle stroke remains doubled back (the near-180-degree entries),
+// preserving the signature S while its height is pressed down from above.
+// There is deliberately NO yaw lane: compression may not roll or concertina
+// the rear/tail sideways. Every salto and jump calls apply_spring_stance below,
+// so no variant can retain the obsolete rear-body curl. These are absolute
+// segment directions, like kStanceSlope; joints are adjacent differences.
 constexpr int32_t kSpringCompressionDepth = 1000;  // profile authority, 1/1000
-constexpr int32_t kSpringCompressionDropMm = 600;  // full-squash root descent
+constexpr int32_t kSpringCompressionDropMm = 915;  // full-squash root descent
 constexpr int32_t kSpringDeclaredBiteMm = 40;      // permitted posed-surface bite
 constexpr int32_t kSpringCompressedSlope[kStanceSlopes] = {
-    200, 400, 700, 900, 700, 300, -300, -600, -400, 0,
-    500, 800, 650, 300, 0, -200, -100, 300, 600};
-constexpr int32_t kSpringCompressedYaw[kStanceSlopes] = {
-    0, 3000, 7000, 11000, 13500, 11000, 5000, -6500, -13000, -11000,
-    -4500, 7000, 13000, 11000, 5000, -6000, -10500, -5000, 0};
-constexpr int32_t kSpringHeadAttitude = 0;          // snout joins the flat spring
+    100, 150, 250, 350, 500, 900, 32836, 32936, 32886, 700,
+    0, 200, 180, 260, 700, 1000, 900, -1000, -2200};
+constexpr int32_t kSpringHeadAttitude = -2200;      // nose presses into the terrain
 constexpr int32_t kSpringBladeFlare = 900;          // fan braces during compression
 
 // Named theatrical timing. The existing attack spends long enough at maximum
@@ -750,7 +752,10 @@ constexpr int32_t kSpringBladeFlare = 900;          // fan braces during compres
 // their plan below.
 constexpr int kSaltoCompressEndKey = 11;
 constexpr int kSaltoCompressHoldEndKey = 17;
-constexpr int kSaltoReleaseEndKey = 28;
+constexpr int kSaltoSpringReleasePoseKey = 21;  // intact S, held before lift
+constexpr int kSaltoRigidReleaseEndKey = 22;    // airborne gather may begin after this
+constexpr int kSaltoReleaseEndKey = 28;         // accepted airborne wheel is complete
+constexpr int kSaltoAirCoilKeys = 6;  // planned variants clear before wheel lock
 constexpr int kSaltoCoilPoseKey = kSaltoReleaseEndKey + 1;  // past signed-rounding residue
 constexpr int kSaltoUnrollStartKey = 52;
 constexpr int kSaltoUnrollEndKey = 60;
@@ -1140,9 +1145,9 @@ inline int curve(const Key* k, int n, int f) {
 // kAtkStickEnd; then it pulls straight out along the lift axis BEFORE the
 // fourth turn is allowed to swing.
 static const Key kAtkLift[] = {
-    {0, 0},          {22, 0},        {24, 180},      {26, 700},
-    {28, 1500},      {32, 3200},     {38, 5600},     {44, 8200},
-    {50, 10600},     {55, 11700},
+    {0, 0},          {22, 0},        {23, 300},      {24, 600},
+    {26, 1100},      {28, 1500},     {32, 3200},     {38, 5600},
+    {44, 8200},      {50, 10600},    {55, 11700},
     {59, kAtkApexLift}, {67, kAtkApexLift},   // approved eight-key apex hang
     {68, 11803},     {69, 11213},    {70, 10228},    {71, 8851},
     {72, 7079},      {73, 4914},
@@ -1160,11 +1165,12 @@ static const Key kAtkFwd[] = {
     {kAtkImpactKey, kAtkFwdMax},
     {kAtkStickEnd, kAtkFwdMax}, {228, 5200}, {232, 2600}, {kAttackKeys - 1, 0}};
 // REAL PRELOAD: authority of the shared almost-flat spring profile. The whole
-// animal descends over eleven keys, holds fully loaded for six, then releases
-// while the approved wheel gathers. No descent-lobe deepen remains here.
+// animal descends over eleven keys and holds fully loaded for six. It then
+// releases as one intact S by key 21 and holds that exact silhouette for one
+// key; only then does the root leave the terrain and the accepted wheel gather.
 static const Key kAtkPre[] = {
     {0, 0}, {3, 170}, {7, 620}, {kSaltoCompressEndKey, 1000},
-    {kSaltoCompressHoldEndKey, 1000}, {22, 520},
+    {kSaltoCompressHoldEndKey, 1000}, {kSaltoSpringReleasePoseKey, 0},
     {kSaltoReleaseEndKey, 0}, {kAttackKeys - 1, 0}};
 constexpr int kAtkPreN = static_cast<int>(sizeof(kAtkPre) / sizeof(Key));
 // how much the TRACKING CAMERA aims at the spear's midpoint instead of the
@@ -1188,12 +1194,12 @@ constexpr int kAtkAimN = static_cast<int>(sizeof(kAtkAim) / sizeof(Key));
 // 1000 = rolled into the coil, 0 = straight. The roll-up waits for the
 // anticipation (keys 0..9 are the compress + hold).
 static const Key kAtkCurl[] = {
-    {0, 0}, {kSaltoCompressHoldEndKey, 0}, {21, 350},
+    {0, 0}, {kSaltoCompressHoldEndKey, 0}, {22, 0}, {24, 350},
     {kSaltoReleaseEndKey, 1000}, {52, 1000}, {59, 0},
     {kAttackKeys - 1, 0}};
 // how much of the canonical S remains -- the shared spring profile owns the
 // loaded pose, then authority hands to the unchanged airborne wheel.
-static const Key kAtkAuth[] = {{0, 1000}, {kSaltoCompressHoldEndKey, 1000},
+static const Key kAtkAuth[] = {{0, 1000}, {22, 1000},
                                {kSaltoReleaseEndKey, 0}, {226, 0},
                                {232, 650}, {kAttackKeys - 1, 1000}};
 // accumulated turn of the WHOLE BODY in 1/1000 of a full rotation. 3000 =
@@ -1591,12 +1597,10 @@ inline int32_t apply_stance(Rig& g, int32_t authority, int32_t deepen = 0,
   return static_cast<int32_t>(sink >> 16);  // mm of root RISE needed
 }
 
-// Root descent accelerates only as the whole concertina arrives. A linear
-// drop made the still-tall middle pose push its grounded run through the floor
-// and then lift back out at maximum squash. Quadratic easing keeps the
-// travelling compression visible above ground and makes contact at the
-// authored deepest pose, where stored spring energy should read. Kept as a
-// shared pure helper so local clips and programmable root plans cannot drift.
+// Root descent accelerates as the rigid S arrives from above. Quadratic easing
+// keeps the early silhouette recognisably upright, then places the almost-flat
+// authored profile onto the terrain at maximum load. Kept as a shared pure
+// helper so local clips and programmable root plans cannot drift.
 inline int32_t spring_root_drop(int32_t amount) {
   if (amount < 0) amount = 0;
   if (amount > 1000) amount = 1000;
@@ -1607,39 +1611,35 @@ inline int32_t spring_root_drop(int32_t amount) {
 }
 
 // Shared real spring pose for every salto and jump. `amount` is 0..1000 and
-// blends absolute vertical and lateral segment directions before taking joint
-// differences, so the chain remains continuous and never changes thickness.
-// The root drop is authored explicitly: compression contact is intentional and
-// checked by the committed posed-vertex probe, never inferred from a render.
+// blends absolute SIDE-profile segment directions before taking adjacent joint
+// differences. The near-180-degree middle directions keep the doubled-back S;
+// omitting yaw is intentional, so neither the rear nor tail can become the old
+// lateral coil. The root drop is authored explicitly and checked by the
+// committed posed-vertex probe, never inferred from a render.
 inline int32_t apply_spring_stance(Rig& g, int32_t authority, int32_t amount) {
   if (amount < 0) amount = 0;
   if (amount > 1000) amount = 1000;
-  amount = (amount * kSpringCompressionDepth) / 1000;
-  zc::quat16 prev_world = zc::quat16_identity();
+  const int32_t loaded_amount = (amount * kSpringCompressionDepth) / 1000;
+  // Let the profile arrive slightly ahead of the quadratic root descent. The
+  // S is visibly pressed almost flat before it meets terrain instead of
+  // swinging its doubled-back middle through the ground en route.
+  const int32_t profile_amount = static_cast<int32_t>(
+      (static_cast<int64_t>(loaded_amount) * loaded_amount *
+       (3000 - 2 * loaded_amount)) /
+      1000000);
+  int32_t prev = 0;
   for (int k = 0; k < kStanceSlopes; ++k) {
     const int32_t slope = kStanceSlope[k] + static_cast<int32_t>(
-        (static_cast<int64_t>(kSpringCompressedSlope[k] - kStanceSlope[k]) * amount) / 1000);
-    const int32_t yaw = static_cast<int32_t>(
-        (static_cast<int64_t>(kSpringCompressedYaw[k]) * amount) / 1000);
-    const int32_t pitch_auth = static_cast<int32_t>(
+        (static_cast<int64_t>(kSpringCompressedSlope[k] - kStanceSlope[k]) *
+         profile_amount) /
+        1000);
+    const int32_t directed = static_cast<int32_t>(
         (static_cast<int64_t>(slope) * authority) / 1000);
-    const int32_t yaw_auth = static_cast<int32_t>(
-        (static_cast<int64_t>(yaw) * authority) / 1000);
-
-    // Author each segment's complete WORLD orientation, then derive this
-    // joint's local difference. World yaw precedes pitch, so lateral folding
-    // cannot tilt with an already-pitched parent and secretly become a dive.
-    // Building the absolute orientation directly also avoids accumulating 19
-    // conjugations in quat16 (the first world-delta draft magnified rounding
-    // at the fork into a one-key spike). One inverse-product per joint keeps
-    // the broad concertina deterministic and vertically honest.
-    const zc::quat16 world =
-        quat_mul(quat_y(yaw_auth), quat_z(pitch_auth));
-    const zc::quat16 local = quat_mul(quat_conj(prev_world), world);
-    g.q[kBSpine0 + k] = quat_mul(g.q[kBSpine0 + k], local);
-    prev_world = world;
+    g.q[kBSpine0 + k] =
+        quat_mul(g.q[kBSpine0 + k], quat_z(directed - prev));
+    prev = directed;
   }
-  return spring_root_drop(amount);
+  return spring_root_drop(loaded_amount);
 }
 
 inline int32_t spring_head_attitude(int32_t authority, int32_t amount) {
@@ -2319,6 +2319,31 @@ inline zc::AttackPlan zixx_plan_attack(int32_t tgt_x_mm, int32_t tgt_y_mm,
   return p;
 }
 
+// One shared amount drives both the planned variant's local body and its root.
+// Keeping this outside zixx_plan_sample prevents a retimed body pose from
+// releasing against a differently timed root and grazing terrain mid-launch.
+inline int32_t zixx_plan_spring_amount(const zc::AttackPlan& p, int key) {
+  const int tc = p.compress_keys;
+  const int th = tc + p.compress_hold_keys;
+  const int t0 = th + p.release_keys;
+  if (key < 0 || key > t0) return 0;
+  if (key < tc) {
+    if (tc <= 1) return 1000;
+    const int64_t u = (static_cast<int64_t>(key) * 1000) / (tc - 1);
+    return static_cast<int32_t>(u * u * (3000 - 2 * u) / 1000000);
+  }
+  if (key < th) return 1000;
+  // Finish one key before the plan's flight boundary and hold the exact S.
+  // This removes a quaternion midpoint between a nearly-rest pose and rest
+  // that could otherwise dip the taper below terrain on the final half-tick.
+  const int release_end = t0 - 1;
+  if (p.release_keys <= 1 || key >= release_end) return 0;
+  const int64_t u =
+      (static_cast<int64_t>(key - th) * 1000) / (release_end - th);
+  return 1000 -
+         static_cast<int32_t>(u * u * (3000 - 2 * u) / 1000000);
+}
+
 // the plan's per-key root sample -- the general form of
 // attack_choreo_sample. Golden preset: the authored tables verbatim.
 inline ChoreoSample zixx_plan_sample(const zc::AttackPlan& p, int key) {
@@ -2331,23 +2356,9 @@ inline ChoreoSample zixx_plan_sample(const zc::AttackPlan& p, int key) {
   const int t2 = t1 + p.unroll_keys;                   // spear locked
   const int t3 = t2 + p.plunge_keys;                   // impact
   if (key <= t0) {
-    // The same whole-body spring root used by the local pose: descend, hold,
+    // The same whole-body spring amount drives body and root: descend, hold,
     // and release to zero before flight. There is no hidden runtime physics.
-    int32_t amount = 0;
-    if (key < tc) {
-      if (tc <= 1) {
-        amount = 1000;
-      } else {
-        const int64_t u = (static_cast<int64_t>(key) * 1000) / (tc - 1);
-        amount = static_cast<int32_t>(u * u * (3000 - 2 * u) / 1000000);
-      }
-    } else if (key < th) {
-      amount = 1000;
-    } else if (p.release_keys > 0) {
-      const int64_t u = (static_cast<int64_t>(key - th) * 1000) / p.release_keys;
-      amount = 1000 - static_cast<int32_t>(u * u * (3000 - 2 * u) / 1000000);
-    }
-    out.y_mm = spring_root_drop(amount);
+    out.y_mm = spring_root_drop(zixx_plan_spring_amount(p, key));
     return out;
   }
   if (key <= t1) {
@@ -5106,8 +5117,6 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
   const int32_t turns = p.spin_mturns / 1000;
   const AttackVariantPhases phase =
       zixx_attack_variant_phases(p, air_hit_outcome);
-  const int tc = phase.compress_end;
-  const int th = phase.hold_end;
   const int t0 = phase.release_end;
   const int t1 = phase.coil_end;
   const int t2 = phase.unroll_end;
@@ -5141,19 +5150,32 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
     Rig g;
     g.reset();
     int32_t curl = 0;  // how coiled the body is (drives the wheel re-pivot)
-    if (k < t3) {
+    if (k <= t0) {
+      // Compression and release are authored directly from the SAME amount as
+      // zixx_plan_sample's root. Retiming discrete local keys here used to make
+      // separate body regions graze terrain while the root followed another
+      // curve; one shared sample releases the entire S coherently.
+      const int32_t amount = zixx_plan_spring_amount(p, k);
+      apply_spring_stance(g, 1000, amount);
+      g.q[kBHead] = quat_z(spring_head_attitude(1000, amount));
+      g.tail_rest(kBladeSplay + kBladeSplay / 5 +
+                      (amount * kSpringBladeFlare) / 1000,
+                  kBladeRise, kBladeUpBias);
+    } else if (k < t3) {
       int lk;
-      if (k < tc) {
-        lk = tc > 1 ? (k * kSaltoCompressEndKey) / (tc - 1)
-                    : kSaltoCompressEndKey;
-      } else if (k < th) {
-        lk = kSaltoCompressHoldEndKey;
-      } else if (k < t0) {
-        lk = kSaltoCompressHoldEndKey +
-             ((k - th) * (kSaltoCoilPoseKey - kSaltoCompressHoldEndKey)) /
-                 (p.release_keys > 0 ? p.release_keys : 1);
-      } else if (k < t1) {
-        lk = kSaltoCoilPoseKey;
+      if (k < t1) {
+        // Once the planned root is airborne, spend the first few flight keys
+        // gathering S -> wheel, then hold the exact accepted wheel throughout
+        // the remaining rotations. This prevents shape-changing spins.
+        const int air_key = k - t0;
+        if (air_key <= kSaltoAirCoilKeys) {
+          lk = kSaltoRigidReleaseEndKey +
+               (air_key *
+                (kSaltoCoilPoseKey - kSaltoRigidReleaseEndKey)) /
+                   kSaltoAirCoilKeys;
+        } else {
+          lk = kSaltoCoilPoseKey;
+        }
       } else if (k < t2) {
         lk = kSaltoUnrollStartKey +
              ((k - t1) * (kSaltoUnrollEndKey - kSaltoUnrollStartKey)) /
@@ -5373,8 +5395,8 @@ struct JumpPlan {
   uint16_t compress_keys = 5;
   uint16_t compress_hold_keys = 2;
   // Six authored intervals keep the launch immediate (0.20 s) while letting
-  // the complete animal visibly pay the flat spring into its wheel.  Four
-  // intervals snapped the rear half through a metre-scale station step.
+  // the complete animal visibly release from the flat spring back into its
+  // signature S. The accepted wheel gathers only after terrain clearance.
   uint16_t release_keys = 6;
   uint16_t flight_keys = 38;
   uint16_t landing_keys = 6;
@@ -5383,6 +5405,10 @@ struct JumpPlan {
   int32_t salto_count = 1;
 };
 constexpr int32_t kJumpLandingBiteMm = 10;
+// The spring first releases into the intact signature S on the ground. During
+// these first airborne keys it gathers into the already-approved wheel; this
+// ordering makes rear/tail coiling during compression structurally impossible.
+constexpr int kJumpAirCoilKeys = 5;
 constexpr int kJumpLandingGatherKeys = 5;
 // Every native 60 Hz frame was reviewed after the six-key release was authored.
 // The fastest accepted sample is the intentional landing slam (1121 mm on the
@@ -5443,10 +5469,11 @@ inline JumpMotionSample zixx_jump_motion_sample(const JumpPlan& p, int f) {
     m.spring = tc > 1 ? ss1000(f, 0, tc - 1) : 1000;
   } else if (f < th) {
     m.spring = 1000;
-  } else if (f < launch) {
-    const int32_t u = ss1000(f, th, launch);
+  } else if (f <= launch) {
+    // Release the loaded silhouette as one S while it is still grounded. The
+    // rear and tail may not begin forming the wheel during this interval.
+    const int32_t u = ss1000(f, th - 1, launch - 1);
     m.spring = 1000 - u;
-    m.curl = u;
   } else if (f <= land) {
     const int j = f - launch;
     const int32_t t = p.flight_keys > 0
@@ -5458,11 +5485,9 @@ inline JumpMotionSample zixx_jump_motion_sample(const JumpPlan& p, int f) {
     m.lift = static_cast<int32_t>(
         (static_cast<int64_t>(4) * p.apex_mm * t * (1000 - t)) /
         1000000);
-    // Release has already paid the compressed S continuously into the complete
-    // wheel by the launch key.  Keep that wheel through flight, then gather the
-    // last few keys into the landing spring.  The earlier version restarted
-    // curl at zero on the launch key, producing a real 2.67 m one-tick shape
-    // discontinuity between the final release key and takeoff.
+    // Keep the mature wheel through flight, then gather the last few keys into
+    // the landing spring. On takeoff, form that wheel only after the complete
+    // S has released and the existing parabola has lifted it clear of terrain.
     const int gather_in = p.flight_keys > 0
                               ? (kJumpLandingGatherKeys * 1000) / p.flight_keys
                               : 0;
@@ -5472,7 +5497,7 @@ inline JumpMotionSample zixx_jump_motion_sample(const JumpPlan& p, int f) {
       if (m.spring > 1000) m.spring = 1000;
       m.curl = 1000 - m.spring;
     } else {
-      m.curl = 1000;
+      m.curl = ss1000(j, 0, kJumpAirCoilKeys);
     }
   } else {
     // Absorb in the loaded spring, then recover slowly and hold exact rest.
@@ -5564,9 +5589,9 @@ inline const zc::CreatureType& type() {
     for (int k = 1; k < kSpineBones; ++k) {
       sk.bones[kBSpine0 + k] = zc::Bone{static_cast<uint8_t>(kBSpine0 + k - 1), -fxm(seg), 0, 0};
     }
-    sk.bones[kBBladeL] = zc::Bone{kBFork, 0, 0, fxm(56)};
+    sk.bones[kBBladeL] = zc::Bone{kBFork, 0, 0, fxm(kBladeRootOffsetMm)};
     sk.bones[kBBladeL2] = zc::Bone{kBBladeL, -fxm(kBladeLen / 2), 0, 0};
-    sk.bones[kBBladeR] = zc::Bone{kBFork, 0, 0, -fxm(56)};
+    sk.bones[kBBladeR] = zc::Bone{kBFork, 0, 0, -fxm(kBladeRootOffsetMm)};
     sk.bones[kBBladeR2] = zc::Bone{kBBladeR, -fxm(kBladeLen / 2), 0, 0};
     sk.bones[kBSpike] = zc::Bone{kBFork, 0, fxm(30), 0};
     // the skull bone: child of the root, PIVOT AT THE SKULL'S OWN CENTRE
@@ -5615,6 +5640,11 @@ inline const zc::CreatureType& type() {
         p.rings.push_back(rs);
       }
       p.page = kTileHead;
+      // The eye disc is paint on these rings. Preserve both axes in the micro
+      // rung so its boundary stays a coherent oval instead of a few isolated
+      // zipper fans at grazing poses.
+      p.micro_keep_rings = true;
+      p.micro_keep_segments = true;
       // T4: the head part owns atlas V rows 0..50 (nose to the junction
       // station); the body part continues at 50 with the SAME junction V,
       // so the painted surface is continuous across the shared ring.
@@ -5743,11 +5773,14 @@ inline const zc::CreatureType& type() {
       p.chain = true;
       p.pitch_q = 1;
       p.yaw_q = 3;
-      p.caps = zc::kCapBot | zc::kCapTop;
+      // The body fork owns the visible closure. Each blade begins open and
+      // buried inside that shell, so no separately shaded root cap can draw a
+      // black cut across the attachment.
+      p.caps = zc::kCapTop;
       const uint8_t broot = side == 0 ? kBBladeL : kBBladeR;
       const uint8_t btip = side == 0 ? kBBladeL2 : kBBladeR2;
       const int32_t bx = station_x(kProfileStations - 1);
-      const int32_t bz = side == 0 ? 56 : -56;
+      const int32_t bz = side == 0 ? kBladeRootOffsetMm : -kBladeRootOffsetMm;
       for (int i = 0; i < kBladeRings; ++i) {
         const int t = (i * 1000) / (kBladeRings - 1);
         // LEAF profile (RUN 0757): rises 700 -> 1000 by t=300, then one long
@@ -5756,18 +5789,34 @@ inline const zc::CreatureType& type() {
         const int32_t k = t < 300 ? 700 + t
                                   : (1000 * (1000 - t)) / 700;
         zc::RingSpec rs;
-        rs.y = fxm(bx + (kBladeLen * t) / 1000);
+        rs.y = fxm(bx - kBladeRootInsetMm +
+                    ((kBladeLen + kBladeRootInsetMm) * t) / 1000);
         rs.segments = static_cast<uint8_t>(kBladeSides);
         rs.radius = fxm(kBladeW0 * k / 1000);
         rs.rx = fxm(kBladeW0 * k / 1000 + 6);      // LATERAL: broad
         rs.rz = fxm(kBladeThick0 * k / 1000 + 3);  // VERTICAL: flat
-        rs.cx = fxm(bz);
+        const int root_spread = t < 200 ? t * 5 : 1000;
+        rs.cx = fxm((bz * root_spread) / 1000);
         rs.cz = -fxm(kBodyY);
-        // root half on the root bone, tip half on the tip bone, blended
-        const int wroot = t < 500 ? 64 - (t * 64) / 500 : 0;
-        rs.b0 = btip;
-        rs.b1 = broot;
-        rs.w0 = static_cast<uint8_t>(64 - wroot);
+        // The first ring belongs to the fork itself and the shoulder blends
+        // into the blade root before normal root-to-tip flex begins. Rotation
+        // can therefore animate the leaf without pulling its planted edge out
+        // of the body shell.
+        if (i == 0) {
+          rs.b0 = kBFork;
+          rs.b1 = kBFork;
+          rs.w0 = 64;
+        } else if (i == 1) {
+          rs.b0 = broot;
+          rs.b1 = kBFork;
+          rs.w0 = 40;
+        } else {
+          // Root half on the root bone, tip half on the tip bone, blended.
+          const int wroot = t < 500 ? 64 - (t * 64) / 500 : 0;
+          rs.b0 = btip;
+          rs.b1 = broot;
+          rs.w0 = static_cast<uint8_t>(64 - wroot);
+        }
         p.rings.push_back(rs);
       }
       // BOTH faces of each fin carry BOTH colours (Fabian, 2026-08-27

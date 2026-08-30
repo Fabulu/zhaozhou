@@ -770,9 +770,9 @@ A_EYE_COL_A = EYE_COL_A * 2 - 8      # 66: judged on the head-on still --
 # at 70 the discs still rode high and the ball read mushroom-topped;
 # Front.png centres the eyes at the head's midline
 A_EYE_COL_B = EYE_COL_B * 2 + 8      # 126 (mirror)
-A_EYE_ROW = 12                       # V9: move the atlas eye disc noseward;
-                                     # judged with the local 3..6 geometry
-                                     # swelling in fixed front and side views.
+A_EYE_ROW = 8                        # v10: both complete eye discs move
+                                     # noseward together; the model's local
+                                     # support and moving-pupil pivot follow.
 A_EYE_U = 24                         # 12 tile texels of angle -> 24 atlas cols
 A_EYE_V = 19                         # 24 head rows -> 19 atlas rows
 A_EYE_RING = 3                       # orange surround, atlas texels of U --
@@ -944,16 +944,19 @@ def build_atlas():
                     rgb[ty, tx] = rgb[ty, tx] * (1 - w) + er[j, i] * w
                     tooth[ty, tx] = 1.0
 
-    # the mouth, small weird slit on the dome rows near the belly line
-    mouth = [(1, 26, 41), (2, 24, 43), (3, 27, 42)]
+    # the mouth: v10 moderately enlarges the small weird slit without
+    # returning to the historical quarter-head grin. Four unequal rows keep
+    # the hand-drawn outline; white remains inset from the ink boundary.
+    mouth = [(1, 25, 42), (2, 22, 45), (3, 23, 45), (4, 25, 43)]
     for y, x0, x1 in mouth:
         for yy in range(y * ESC, (y + 1) * ESC):
             for x in range(x0 * ESC, (x1 + 1) * ESC):
                 rgb[yy, x] = INK
                 tooth[yy, x] = 1.0
-    for yy in range(2 * ESC, 3 * ESC):
-        for x in range((mouth[1][1] + 2) * ESC, (mouth[1][2] - 1) * ESC):
-            rgb[yy, x] = WHITE
+    for y, x0, x1 in mouth[1:3]:
+        for yy in range(y * ESC, (y + 1) * ESC):
+            for x in range((x0 + 2) * ESC, (x1 - 1) * ESC):
+                rgb[yy, x] = WHITE
 
     # cap sample rows: flat pigment so the fans read solid
     rgb[0, :] = BLUE

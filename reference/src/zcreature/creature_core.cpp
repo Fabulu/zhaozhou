@@ -408,6 +408,52 @@ void skin_vertex(const mat3x4fx* palette, const SkinVertex& v, int32_t& ox, int3
   }
 }
 
+int32_t skin_normal_lambert(const mat3x4fx* palette, const SkinVertex& v, int32_t lx,
+                            int32_t ly, int32_t lz) {
+  if (v.nx == 0 && v.ny == 0 && v.nz == 0) return 0;
+  const mat3x4fx& A = palette[v.b0];
+  const mat3x4fx& B = palette[v.b1];
+  const int32_t w0 = v.w0;
+  const int32_t w1 = 64 - w0;
+  int64_t n[3] = {};
+  for (int row = 0; row < 3; ++row) {
+    const int r = row * 4;
+    const int64_t na = static_cast<int64_t>(A.m[r]) * v.nx +
+                       static_cast<int64_t>(A.m[r + 1]) * v.ny +
+                       static_cast<int64_t>(A.m[r + 2]) * v.nz;
+    const int64_t nb = static_cast<int64_t>(B.m[r]) * v.nx +
+                       static_cast<int64_t>(B.m[r + 1]) * v.ny +
+                       static_cast<int64_t>(B.m[r + 2]) * v.nz;
+    // Keep the full weighted direction. Its common 1/64 and uniform-bulk
+    // factors cancel in the normalisation below, so no pre-normalise rounding
+    // is introduced.
+    n[row] = static_cast<int64_t>(w0) * na + static_cast<int64_t>(w1) * nb;
+  }
+
+  // Range-reduce before squaring. The same shift is applied to every lane, so
+  // direction is unchanged; this only protects the fixed-width magnitude.
+  int64_t mx = std::max({n[0] < 0 ? -n[0] : n[0], n[1] < 0 ? -n[1] : n[1],
+                         n[2] < 0 ? -n[2] : n[2]});
+  while (mx >= (int64_t{1} << 30)) {
+    n[0] >>= 1;
+    n[1] >>= 1;
+    n[2] >>= 1;
+    mx >>= 1;
+  }
+  const uint64_t mag2 = static_cast<uint64_t>(n[0] * n[0]) +
+                        static_cast<uint64_t>(n[1] * n[1]) +
+                        static_cast<uint64_t>(n[2] * n[2]);
+  if (mag2 == 0) return 0;
+  const int64_t mag = static_cast<int64_t>(isqrt_u64(mag2));
+  const __int128 dot = static_cast<__int128>(n[0]) * lx +
+                       static_cast<__int128>(n[1]) * ly +
+                       static_cast<__int128>(n[2]) * lz;
+  if (dot <= 0) return 0;
+  int64_t lam = static_cast<int64_t>((dot + mag / 2) / mag);
+  if (lam > 65536) lam = 65536;
+  return static_cast<int32_t>(lam);
+}
+
 // ----------------------------------------------------------- ring builder --
 
 namespace {
@@ -857,10 +903,11 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
     RingPart d = p;
     d.rings.clear();
     for (size_t ri = 0; ri < p.rings.size(); ++ri) {
-      const bool keep = (ri % 2 == 0) || ri + 1 == p.rings.size();
+      const bool keep = p.micro_keep_rings || (ri % 2 == 0) || ri + 1 == p.rings.size();
       if (!keep) continue;
       RingSpec rs = p.rings[ri];
-      rs.segments = static_cast<uint8_t>(rs.segments / 2 < 3 ? 3 : rs.segments / 2);
+      if (!p.micro_keep_segments)
+        rs.segments = static_cast<uint8_t>(rs.segments / 2 < 3 ? 3 : rs.segments / 2);
       d.rings.push_back(rs);
     }
     for (Meshlet& m : build_ring_part(d)) {
@@ -881,27 +928,31 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
 
     // error term 1: dropped rings — radius deviation from the linear blend
     // of the kept neighbours (lattice_lerp: the ONE shared lerp, 29-6)
-    for (size_t ri = 1; ri + 1 < p.rings.size(); ri += 2) {
-      const RingSpec& a = p.rings[ri - 1];
-      const RingSpec& b = p.rings[ri + 1];
-      const RingSpec& mid = p.rings[ri];
-      int32_t dev = 0;
-      const int32_t den = b.y - a.y;
-      if (den != 0) {
-        const int32_t lerp = terrain::lattice_lerp(a.radius, b.radius, mid.y - a.y, den);
-        dev = mid.radius > lerp ? mid.radius - lerp : lerp - mid.radius;
-      } else {
-        dev = mid.radius > a.radius ? mid.radius - a.radius : a.radius - mid.radius;
+    if (!p.micro_keep_rings) {
+      for (size_t ri = 1; ri + 1 < p.rings.size(); ri += 2) {
+        const RingSpec& a = p.rings[ri - 1];
+        const RingSpec& b = p.rings[ri + 1];
+        const RingSpec& mid = p.rings[ri];
+        int32_t dev = 0;
+        const int32_t den = b.y - a.y;
+        if (den != 0) {
+          const int32_t lerp = terrain::lattice_lerp(a.radius, b.radius, mid.y - a.y, den);
+          dev = mid.radius > lerp ? mid.radius - lerp : lerp - mid.radius;
+        } else {
+          dev = mid.radius > a.radius ? mid.radius - a.radius : a.radius - mid.radius;
+        }
+        if (dev > micro_err) micro_err = dev;
       }
-      if (dev > micro_err) micro_err = dev;
     }
     // error term 2: segment halving — chord vs arc: r * (1 - cos(pi/seg_new))
-    for (const RingSpec& rs : p.rings) {
-      if (rs.segments < 6) continue;  // already coarse
-      const uint8_t half = static_cast<uint8_t>(rs.segments / 2 < 3 ? 3 : rs.segments / 2);
-      const int32_t c = fx_cos(angle16{static_cast<uint16_t>(0x8000 / half)}).raw;
-      const int32_t dev = rescale_s32(static_cast<int64_t>(rs.radius) * (65536 - c), 16, nullptr);
-      if (dev > micro_err) micro_err = dev;
+    if (!p.micro_keep_segments) {
+      for (const RingSpec& rs : p.rings) {
+        if (rs.segments < 6) continue;  // already coarse
+        const uint8_t half = static_cast<uint8_t>(rs.segments / 2 < 3 ? 3 : rs.segments / 2);
+        const int32_t c = fx_cos(angle16{static_cast<uint16_t>(0x8000 / half)}).raw;
+        const int32_t dev = rescale_s32(static_cast<int64_t>(rs.radius) * (65536 - c), 16, nullptr);
+        if (dev > micro_err) micro_err = dev;
+      }
     }
   }
   // N2: micro-rung normals recomputed from MICRO topology, never copied

@@ -53,10 +53,157 @@ int64_t d2_mm(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_
   const int64_t dz = to_mm(az) - to_mm(bz);
   return dx * dx + dy * dy + dz * dz;
 }
+
+int32_t legacy_clamped_response(const zc::mat3x4fx* pose, const zc::SkinVertex& v,
+                                int32_t lx, int32_t ly, int32_t lz) {
+  // The pre-v10 law: transform/clamp each influence independently, then blend
+  // the two scalar answers. Making each temporary vertex rigid lets the probe
+  // reuse the production normal transform instead of copying its arithmetic.
+  zc::SkinVertex a = v, b = v;
+  a.b1 = a.b0;
+  a.w0 = 64;
+  b.b0 = b.b1;
+  b.w0 = 64;
+  const int32_t la = zc::skin_normal_lambert(pose, a, lx, ly, lz);
+  const int32_t lb = zc::skin_normal_lambert(pose, b, lx, ly, lz);
+  return static_cast<int32_t>((static_cast<int64_t>(v.w0) * la +
+                               static_cast<int64_t>(64 - v.w0) * lb + 32) >> 6);
+}
 }  // namespace
 
 int main(int argc, char** argv) {
   const zc::CreatureType& T = zixx::type();
+
+  // Exact ownership companion for the triangle-ID render. It turns a rendered
+  // meshlet/triangle ID into bind position, UV and skin data, avoiding visual
+  // guesses about whether a shard belongs to the shell or an eye decal.
+  if (argc == 4 && (std::string_view(argv[1]) == "--triangle" ||
+                    std::string_view(argv[1]) == "--triangle-micro")) {
+    const bool micro = std::string_view(argv[1]) == "--triangle-micro";
+    const auto& rung = micro ? T.micro : T.mesh;
+    const int mi = std::atoi(argv[2]);
+    const int ti = std::atoi(argv[3]);
+    if (mi < 0 || mi >= static_cast<int>(rung.size()) || ti < 0 ||
+        3 * ti + 2 >= static_cast<int>(rung[mi].idx.size())) {
+      std::printf("triangle %s %d/%d out of range\n", micro ? "micro" : "full", mi,
+                  ti);
+      return 2;
+    }
+    const auto& mesh = rung[mi];
+    std::printf("triangle rung=%s mesh=%d tri=%d page=%u\n", micro ? "micro" : "full",
+                mi, ti, mesh.page);
+    for (int corner = 0; corner < 3; ++corner) {
+      const int vi = mesh.idx[3 * ti + corner];
+      const auto& v = mesh.verts[vi];
+      std::printf("corner=%d vi=%d xyz_mm=%d,%d,%d uv=%u,%u bind=%u/%u/%u\n",
+                  corner, vi, to_mm(v.x), to_mm(v.y), to_mm(v.z), v.u, v.v,
+                  v.b0, v.b1, v.w0);
+    }
+    return 0;
+  }
+
+  // ---- V10 lighting root diagnostic: --light-trace <slot> ---------------
+  // Badness-rank mixed-influence vertices in one bounded deforming clip,
+  // choose the surface point where the old pre-clamped scalar blend disagrees
+  // most with the normalised deformed normal, then print its 60 Hz temporal
+  // trace alongside one incident posed face. This answers one acceptance
+  // question without rerendering the catalogue.
+  if (argc == 3 && std::string_view(argv[1]) == "--light-trace") {
+    const int slot = std::atoi(argv[2]);
+    const zc::Clip* clip = nullptr;
+    for (const zc::Clip& c : T.bank.clips)
+      if (c.slot_id == slot) clip = &c;
+    if (clip == nullptr) {
+      std::printf("slot %d not found\n", slot);
+      return 2;
+    }
+    struct Pick {
+      int m = -1, v = -1, tri = -1;
+      int32_t max_diff = -1, old_jump = 0, new_jump = 0;
+      int64_t score = -1;
+    } best;
+    const int ticks = static_cast<int>(clip->frame_count) * 2;
+    for (int mi = 0; mi < static_cast<int>(T.mesh.size()); ++mi) {
+      const auto& mesh = T.mesh[mi];
+      for (int vi = 0; vi < static_cast<int>(mesh.verts.size()); ++vi) {
+        const auto& v = mesh.verts[vi];
+        if ((v.nx == 0 && v.ny == 0 && v.nz == 0) || v.b0 == v.b1 || v.w0 == 0 ||
+            v.w0 == 64)
+          continue;
+        int32_t max_diff = 0, old_jump = 0, new_jump = 0;
+        int32_t prev_old = 0, prev_new = 0;
+        bool have_prev = false;
+        for (int tick = 0; tick < ticks; ++tick) {
+          std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+          zc::decode_pose(T, *clip, static_cast<uint16_t>(tick / 2), pose, nullptr,
+                          static_cast<uint8_t>(tick & 1));
+          const int32_t old_l = legacy_clamped_response(
+              pose.data(), v, zref::render::kLightX, zref::render::kLightY,
+              zref::render::kLightZ);
+          const int32_t new_l = zc::skin_normal_lambert(
+              pose.data(), v, zref::render::kLightX, zref::render::kLightY,
+              zref::render::kLightZ);
+          max_diff = std::max(max_diff, std::abs(old_l - new_l));
+          if (have_prev) {
+            old_jump = std::max(old_jump, std::abs(old_l - prev_old));
+            new_jump = std::max(new_jump, std::abs(new_l - prev_new));
+          }
+          prev_old = old_l;
+          prev_new = new_l;
+          have_prev = true;
+        }
+        // Disagreement proves the laws differ; excess old temporal jump ranks
+        // the visible weight-following failure without requiring it to exist at
+        // every sample.
+        const int64_t score = static_cast<int64_t>(max_diff) * 4 +
+                              std::max(0, old_jump - new_jump);
+        if (score <= best.score) continue;
+        int tri = -1;
+        for (size_t ti = 0; ti + 2 < mesh.idx.size(); ti += 3)
+          if (mesh.idx[ti] == vi || mesh.idx[ti + 1] == vi || mesh.idx[ti + 2] == vi) {
+            tri = static_cast<int>(ti);
+            break;
+          }
+        best = Pick{mi, vi, tri, max_diff, old_jump, new_jump, score};
+      }
+    }
+    if (best.m < 0 || best.tri < 0) {
+      std::printf("slot %d has no traceable mixed-influence surface\n", slot);
+      return 2;
+    }
+    const auto& mesh = T.mesh[best.m];
+    const auto& v = mesh.verts[best.v];
+    std::printf("light-trace slot=%d ticks=%d m=%d v=%d b=%d/%d w=%d "
+                "max_old_new=%d max_jump_old=%d max_jump_new=%d\n",
+                slot, ticks, best.m, best.v, v.b0, v.b1, v.w0, best.max_diff,
+                best.old_jump, best.new_jump);
+    std::printf("tick,key,sub,legacy,normalised,face_inward,face_outward\n");
+    for (int tick = 0; tick < ticks; ++tick) {
+      std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+      zc::decode_pose(T, *clip, static_cast<uint16_t>(tick / 2), pose, nullptr,
+                      static_cast<uint8_t>(tick & 1));
+      const int32_t old_l = legacy_clamped_response(
+          pose.data(), v, zref::render::kLightX, zref::render::kLightY,
+          zref::render::kLightZ);
+      const int32_t new_l = zc::skin_normal_lambert(
+          pose.data(), v, zref::render::kLightX, zref::render::kLightY,
+          zref::render::kLightZ);
+      int32_t xyz[3][3] = {};
+      for (int k = 0; k < 3; ++k) {
+        const auto& tv = mesh.verts[mesh.idx[static_cast<size_t>(best.tri + k)]];
+        zc::skin_vertex(pose.data(), tv, xyz[k][0], xyz[k][1], xyz[k][2], nullptr);
+      }
+      const int32_t face_inward = zref::render::shade_flat_tri(
+          xyz[0][0], xyz[0][1], xyz[0][2], xyz[1][0], xyz[1][1], xyz[1][2],
+          xyz[2][0], xyz[2][1], xyz[2][2], nullptr);
+      const int32_t face_outward = zref::render::shade_flat_tri(
+          xyz[0][0], xyz[0][1], xyz[0][2], xyz[2][0], xyz[2][1], xyz[2][2],
+          xyz[1][0], xyz[1][1], xyz[1][2], nullptr);
+      std::printf("%d,%d,%d,%d,%d,%d,%d\n", tick, tick / 2, tick & 1, old_l,
+                  new_l, face_inward, face_outward);
+    }
+    return 0;
+  }
 
   // ---- hunt mode: --hunt <slot> <key> prints the top stretched edges of
   // BOTH rungs at one pose, so a visible spike can be named instead of

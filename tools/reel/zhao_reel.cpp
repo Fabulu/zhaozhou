@@ -4450,6 +4450,17 @@ SceneSubject subject_zixx_knockdown() {
 }
 
 // The HITFLOOR chain: the landing that ends `falling`, then the get-up.
+// V10 structural eye-artifact diagnostic: the named knockdown reproduction
+// through the exact same camera and clip, changing only the renderer shade
+// mode. This keeps geometry-vs-light-vs-topology comparisons pose-identical.
+SceneSubject subject_zixx_knockdown_mode(const char* name, int shade) {
+  SceneSubject s = subject_zixx_knockdown();
+  s.name = name;
+  s.creature_shade = shade;
+  s.note = "DIAGNOSTIC: knockdown eye-artifact root isolation";
+  return s;
+}
+
 SceneSubject subject_zixx_hitfloor() {
   SceneSubject s;
   s.name = "zixxtrixx-hitfloor";
@@ -5423,6 +5434,10 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-pupil-proof-other")) rc |= render_scene(subject_zixx_pupil_proof_other(false));
   if (wanted("zixxtrixx-pupil-proof-other-game")) rc |= render_scene(subject_zixx_pupil_proof_other(true));
   if (wanted("zixxtrixx-knockdown")) rc |= render_scene(subject_zixx_knockdown());
+  if (wanted("zixxtrixx-knockdown-unlit")) rc |= render_scene(subject_zixx_knockdown_mode("zixxtrixx-knockdown-unlit", 1));
+  if (wanted("zixxtrixx-knockdown-normviz")) rc |= render_scene(subject_zixx_knockdown_mode("zixxtrixx-knockdown-normviz", 2));
+  if (wanted("zixxtrixx-knockdown-wire")) rc |= render_scene(subject_zixx_knockdown_mode("zixxtrixx-knockdown-wire", 3));
+  if (wanted("zixxtrixx-knockdown-triids")) rc |= render_scene(subject_zixx_knockdown_mode("zixxtrixx-knockdown-triids", 4));
   if (wanted("zixxtrixx-hitfloor")) rc |= render_scene(subject_zixx_hitfloor());
   if (wanted("zixxtrixx-damage")) rc |= render_scene(subject_zixx_damage());
   if (wanted("zixxtrixx-run")) rc |= render_scene(subject_zixx_run());

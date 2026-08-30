@@ -712,7 +712,9 @@ int main() {
           {"middle", 21, 32}, {"grounded run", 33, 44},
           {"taper", 45, 51}, {"tail", 52, 56}};
       int32_t center_lo = INT32_MAX, center_hi = INT32_MIN;
+      int32_t lateral_lo = INT32_MAX, lateral_hi = INT32_MIN;
       int64_t whole_rest_y = 0, whole_deep_y = 0;
+      int32_t region_delta[7] = {};
       std::printf("SPRING regions (deep minus rest centre Y):");
       int region_index = 0;
       for (const Region& r : regions) {
@@ -725,41 +727,69 @@ int main() {
         whole_deep_y += b;
         const int32_t delta = static_cast<int32_t>(
             (b - a) / (r.hi - r.lo + 1));
+        region_delta[region_index++] = delta;
         std::printf(" %s=%d", r.name, delta);
-        // Compression participation is motion into the shared concertina, not
-        // a forced sign for every point.  The raised front must come down; rear
-        // troughs rise into the same nearly-flat silhouette.  Requiring every
-        // region to lower contradicted the accepted complete-animal pose and
-        // merely measured which side of the original S each region occupied.
-        require(delta <= -250 || region_index >= 3,
-                "a raised front spring region failed to descend strongly");
-        require(delta <= -100 || delta >= 100,
-                "a spring region stopped participating in whole-body compression");
-        ++region_index;
       }
+      // Raised regions must visibly descend; the already-grounded run and
+      // taper are allowed to move little while the radius-aware final profile
+      // settles onto terrain. The tail still comes down rather than rolling up.
+      require(region_delta[0] <= -700 && region_delta[1] <= -600 &&
+                  region_delta[2] <= -450 && region_delta[3] <= -100,
+              "raised spring regions no longer descend from above");
+      require(region_delta[6] <= -50,
+              "spring tail has started rolling upward during compression");
       require(whole_deep_y < whole_rest_y,
               "the complete spring no longer descends overall");
       std::printf(" mm\n");
       for (int i = 0; i < zixx::kProfileStations; ++i) {
         center_lo = std::min(center_lo, deep.y_mm[i]);
         center_hi = std::max(center_hi, deep.y_mm[i]);
+        lateral_lo = std::min(lateral_lo, deep.z_mm[i]);
+        lateral_hi = std::max(lateral_hi, deep.z_mm[i]);
       }
       const int32_t center_span = center_hi - center_lo;
+      const int32_t lateral_span = lateral_hi - lateral_lo;
       const int32_t mesh_span = to_mm(deep.max_y_fx - deep.min_y_fx);
-      std::printf("SPRING deepest: centre span %d mm, mesh span %d mm, "
-                  "minY %d mm\n",
-                  center_span, mesh_span, to_mm(deep.min_y_fx));
-      require(center_span <= 520,
+      const int32_t head_surface_y = to_mm(deep.bone_min_y_fx[zixx::kBHead]);
+      const int32_t rear_surface_y = to_mm(
+          std::min(deep.bone_min_y_fx[zixx::kBSpine0 + 16],
+                   deep.bone_min_y_fx[zixx::kBSpine0 + 17]));
+      std::printf("SPRING deepest: centre/lateral span %d/%d mm, mesh span "
+                  "%d mm, minY %d mm at bones %d/%d; head/rear surface "
+                  "%d/%d mm\n",
+                  center_span, lateral_span, mesh_span, to_mm(deep.min_y_fx),
+                  deep.min_b0, deep.min_b1, head_surface_y, rear_surface_y);
+      std::printf("SPRING deepest centre Y (each fourth station):");
+      for (int i = 0; i < zixx::kProfileStations; i += 4)
+        std::printf(" %d:%d", i, deep.y_mm[i]);
+      std::printf(" %d:%d mm\n", zixx::kProfileStations - 1,
+                  deep.y_mm[zixx::kProfileStations - 1]);
+      require(center_span <= 150,
               "deepest spring no longer has the accepted almost-flat silhouette");
+      require(lateral_span <= 15,
+              "spring centreline left the side plane and regained a concertina");
+      require(head_surface_y >= -15 && head_surface_y <= 5,
+              "compressed spring head no longer meets its authored contact band");
+      require(rear_surface_y >= -15,
+              "compressed spring rear penetrates terrain instead of staying rigid");
       require(mesh_span >= 150,
               "deepest spring lost the tube's volumetric cross-section");
       int32_t spring_worst = INT32_MAX;
+      int spring_worst_tick = -1;
       for (int t = 0; t <= 2 * ph.hold_end &&
-                      t < static_cast<int>(spring->samples.size()); ++t)
-        spring_worst = std::min(spring_worst,
-                                to_mm(spring->samples[t].min_y_fx));
-      std::printf("SPRING declared terrain bite: %d mm (law -40..-15)\n",
-                  spring_worst);
+                      t < static_cast<int>(spring->samples.size()); ++t) {
+        const int32_t min_y = to_mm(spring->samples[t].min_y_fx);
+        if (min_y < spring_worst) {
+          spring_worst = min_y;
+          spring_worst_tick = t;
+        }
+      }
+      const PosedSample& worst_pose = spring->samples[spring_worst_tick];
+      std::printf("SPRING declared terrain bite: %d mm at %d%s, bones %d/%d "
+                  "(law -40..-15)\n", spring_worst,
+                  spring_worst_tick / 2,
+                  (spring_worst_tick & 1) ? ".5" : "",
+                  worst_pose.min_b0, worst_pose.min_b1);
       require(spring_worst >= -zixx::kSpringDeclaredBiteMm &&
                   spring_worst <= -15,
               "shared spring terrain bite left its authored declaration");
@@ -810,8 +840,14 @@ int main() {
                            type.bank.bone_count, true),
             "jump does not recover bit-exactly to its starting rest pose");
     int32_t contact_worst = INT32_MAX;
-    for (const PosedSample& s : scan->samples)
-      contact_worst = std::min(contact_worst, to_mm(s.min_y_fx));
+    int contact_worst_tick = -1;
+    for (const PosedSample& s : scan->samples) {
+      const int32_t min_y = to_mm(s.min_y_fx);
+      if (min_y < contact_worst) {
+        contact_worst = min_y;
+        contact_worst_tick = s.tick;
+      }
+    }
     require(contact_worst >= -zixx::kSpringDeclaredBiteMm &&
                 contact_worst <= -15,
             "jump ground contact left the declared spring/absorption band");
@@ -822,10 +858,12 @@ int main() {
       if (to_mm(scan->samples[t].min_y_fx) <= 0) clear_flight = false;
     require(clear_flight, "jump touches terrain in the undeclared flight core");
     std::printf("JUMP slot %d: apex %d mm, turns %d, landing key %d, "
-                "contact %d mm, max 60 Hz station step %d mm at %d%s "
+                "contact %d mm at %d%s, max 60 Hz station step %d mm at %d%s "
                 "station %d\n",
                 spec.first, apex, spec.second, ph.landing_key, contact_worst,
-                continuity.mm, continuity.tick / 2,
+                contact_worst_tick / 2,
+                (contact_worst_tick & 1) ? ".5" : "", continuity.mm,
+                continuity.tick / 2,
                 (continuity.tick & 1) ? ".5" : "", continuity.station);
   }
 

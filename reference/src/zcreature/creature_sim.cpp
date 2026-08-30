@@ -572,51 +572,15 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
       mat3x4_mul(world, pose[b], worldm[b], L);
     }
 
-    // ---- PER-VERTEX LIGHTING (N3): pull each light back into BIND space,
-    // once per bone, instead of rotating every normal into the world.
-    //   N · (R_b^T L) == (R_b N) · L, and worldm's rotation block is the
-    // pose rotation TIMES the uniform bulk scale, so each pulled-back
-    // component is divided by the scale to restore a unit direction — one
-    // §4 round-half-up division per component, 6 per bone, per light.
-    // The per-vertex Lambert is then the SKIN-WEIGHT BLEND OF THE TWO
-    // BONES' CLAMPED RESPONSES (the N5 probe's option (b), chosen as the
-    // law: no renormalisation, no normal lane through the skin datapath —
-    // the cheap form the silicon increment would build).
-    struct BoneLight {
-      int32_t kx, ky, kz;  // key dir in bone bind space, Q16.16
-      int32_t fx, fy, fz;  // fill dir likewise
-    };
-    std::array<BoneLight, kMaxBones> blight{};
-    const int32_t bulk = ci.bulk.scale > 0 ? ci.bulk.scale : 1 << 16;
-    for (int b = 0; b < T.bank.bone_count; ++b) {
-      const mat3x4fx& M = worldm[b];
-      const auto pull = [&](int32_t lx, int32_t ly, int32_t lz, int col) {
-        const __int128 p = static_cast<__int128>(M.m[col]) * lx +
-                           static_cast<__int128>(M.m[col + 4]) * ly +
-                           static_cast<__int128>(M.m[col + 8]) * lz;
-        // rescale(.,16) puts the transpose product back in Q16.16 (times the
-        // bulk scale); the division removes the scale. Two roundings total,
-        // each a §4 round-half-up.
-        const int32_t scaled = rescale_s32(p, 16, L, &SatLedger::mul);
-        return render::div_rhu_s128(static_cast<__int128>(scaled) << 16, bulk);
-      };
-      blight[b].kx = pull(render::kLightX, render::kLightY, render::kLightZ, 0);
-      blight[b].ky = pull(render::kLightX, render::kLightY, render::kLightZ, 1);
-      blight[b].kz = pull(render::kLightX, render::kLightY, render::kLightZ, 2);
-      blight[b].fx = pull(kFillX, kFillY, kFillZ, 0);
-      blight[b].fy = pull(kFillX, kFillY, kFillZ, 1);
-      blight[b].fz = pull(kFillX, kFillY, kFillZ, 2);
-    }
-    // one bone's clamped Lambert of a packed S1.7 normal: dot in s64,
-    // /127 with ONE round-half-up, clamp to [0, 1<<16]
-    const auto bone_lambert = [](const int8_t nx, const int8_t ny, const int8_t nz,
-                                 const int32_t lx, const int32_t ly, const int32_t lz) {
-      const int64_t dot = static_cast<int64_t>(nx) * lx + static_cast<int64_t>(ny) * ly +
-                          static_cast<int64_t>(nz) * lz;
-      if (dot <= 0) return 0;
-      int32_t lam = static_cast<int32_t>((dot + 63) / 127);
-      return lam > 65536 ? 65536 : lam;
-    };
+    // ---- PER-VERTEX LIGHTING (V10 structural repair) --------------------
+    // Skin each packed bind normal through the SAME weighted rotation blend as
+    // its vertex, normalise that blended direction, then take ONE Lambert.
+    // The former path took max(0,N·L) independently per bone and blended those
+    // already-clamped scalars without renormalising. On mixed-weight rings that
+    // is not the deformed surface normal: illumination followed influence
+    // weights, and pure/near-pure regions appeared as arbitrary bright patches
+    // that changed as neighbouring bones disagreed. The shared helper is used
+    // here and by the committed Zixxtrixx temporal diagnostic.
     const std::vector<Meshlet>& mset = ci.lod.rung == LodRung::kMicro ? T.micro : T.mesh;
     for (const Meshlet& m : mset) {
       struct PV {
@@ -639,27 +603,17 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         pvs[vi].s.u = static_cast<int32_t>(sv.u) << 8;
         pvs[vi].s.v = static_cast<int32_t>(sv.v) << 8;
         pvs[vi].in = po.in;
-        // N3: per-vertex Lambert = skin-weight blend of the two bones'
-        // clamped responses (see the law at blight above); (0,0,0) = the
-        // vertex predates normals -> flat fallback for its triangles
+        // V10: transformed-normal blend -> normalise -> one clamp. (0,0,0)
+        // still means flat fallback for legacy meshes.
         pvs[vi].lit = sv.nx != 0 || sv.ny != 0 || sv.nz != 0;
         pvs[vi].nx = sv.nx;
         pvs[vi].ny = sv.ny;
         pvs[vi].nz = sv.nz;
         if (pvs[vi].lit) {
-          const BoneLight& A = blight[sv.b0];
-          const BoneLight& B = blight[sv.b1];
-          const int32_t w0 = sv.w0, w1 = 64 - sv.w0;
-          pvs[vi].lam_k = static_cast<int32_t>(
-              (static_cast<int64_t>(w0) * bone_lambert(sv.nx, sv.ny, sv.nz, A.kx, A.ky, A.kz) +
-               static_cast<int64_t>(w1) * bone_lambert(sv.nx, sv.ny, sv.nz, B.kx, B.ky, B.kz) +
-               32) >>
-              6);
-          pvs[vi].lam_f = static_cast<int32_t>(
-              (static_cast<int64_t>(w0) * bone_lambert(sv.nx, sv.ny, sv.nz, A.fx, A.fy, A.fz) +
-               static_cast<int64_t>(w1) * bone_lambert(sv.nx, sv.ny, sv.nz, B.fx, B.fy, B.fz) +
-               32) >>
-              6);
+          pvs[vi].lam_k = skin_normal_lambert(worldm.data(), sv, render::kLightX,
+                                              render::kLightY, render::kLightZ);
+          pvs[vi].lam_f =
+              skin_normal_lambert(worldm.data(), sv, kFillX, kFillY, kFillZ);
         } else {
           pvs[vi].lam_k = pvs[vi].lam_f = 0;
         }
@@ -669,10 +623,16 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         const PV& b = pvs[m.idx[ti + 1]];
         const PV& c = pvs[m.idx[ti + 2]];
         if (!a.in || !b.in || !c.in) continue;  // Phase-3 near-plane law
+        // build_ring_part's zipper is deliberately inward-wound under the
+        // double-sided raster (the smooth-normal compiler negates the same
+        // cross). Flat response must use that SAME outward orientation. V9
+        // passed the inward index order here, so the 20% face lane opposed the
+        // 80% smooth lane: it suppressed real highlights and injected light on
+        // back-facing patches as triangles deformed across toon thresholds.
         const int32_t lam_key =
-            render::shade_flat_tri(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz, L);
+            render::shade_flat_tri(a.wx, a.wy, a.wz, c.wx, c.wy, c.wz, b.wx, b.wy, b.wz, L);
         const int32_t lam_fill = render::shade_flat_tri_dir(
-            a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz, kFillX, kFillY, kFillZ, L);
+            a.wx, a.wy, a.wz, c.wx, c.wy, c.wz, b.wx, b.wy, b.wz, kFillX, kFillY, kFillZ, L);
         render::TriMode tm;  // opaque: depth test + write
         // GOURAUD (N3): when the compiled mesh carries normals, each corner
         // gets its own Lambert — kSmoothMixNum parts the per-vertex smooth
@@ -731,6 +691,16 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                        (corner[k]->nz + 128) * 65536 / 255};
           }
           tm.gouraud = gouraud;
+        } else if (g_debug_shade == DebugShade::kTriangleIds) {
+          // Topology ownership view: exact, reversible meshlet/triangle ID in
+          // R/G and a blue marker. This maps a visible shard to its source
+          // triangle without guessing from a wireframe at 240p.
+          const uint32_t id = static_cast<uint32_t>(&m - mset.data()) * 128u +
+                              static_cast<uint32_t>(ti / 3) + 1u;
+          const Shade3 tag{static_cast<int32_t>((id & 255u) * 65536u / 255u),
+                           static_cast<int32_t>(((id >> 8) & 255u) * 65536u / 255u), 65536};
+          shc[0] = shc[1] = shc[2] = tag;
+          tm.gouraud = false;
         } else if (g_debug_shade == DebugShade::kWire) {
           // wireframe: the triangle's three edges, Bresenham, no fill --
           // the mesh structure itself, see-through on purpose
@@ -768,10 +738,13 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         // lanes (Gouraud): texel colour TIMES the per-channel rig, one
         // multiply, no second shading model.
         const bool want_tex = (T.page_direct != nullptr || T.page_set != nullptr) &&
-                              m.page != 255 && g_debug_shade != DebugShade::kNormals;
-        const uint8_t em_r = g_debug_shade == DebugShade::kNormals ? 255 : m.r;
-        const uint8_t em_g = g_debug_shade == DebugShade::kNormals ? 255 : m.g;
-        const uint8_t em_b = g_debug_shade == DebugShade::kNormals ? 255 : m.b;
+                              m.page != 255 && g_debug_shade != DebugShade::kNormals &&
+                              g_debug_shade != DebugShade::kTriangleIds;
+        const bool diagnostic_colour = g_debug_shade == DebugShade::kNormals ||
+                                       g_debug_shade == DebugShade::kTriangleIds;
+        const uint8_t em_r = diagnostic_colour ? 255 : m.r;
+        const uint8_t em_g = diagnostic_colour ? 255 : m.g;
+        const uint8_t em_b = diagnostic_colour ? 255 : m.b;
         if (want_tex) {
           render::TextureSpan tex;
           tex.ts = T.page_set;
