@@ -32,6 +32,15 @@ Complete Task #28 from accepted V14 as a deliberately small head/neck/colour adj
 
 ---
 
+### 2026-08-30 - Immutable V14 before evidence captured
+
+- Performed a fresh clean direct build with `tools/reel/build-direct.sh --clean all`; no CMake/Ninja/Verilator path was invoked.
+- Rendered the unmodified V14 held pose under `ZIXX_EXP=celmain` and `ZIXX_LIGHT=diagonal-cool-cross` through the established fixed side, fixed face-height front and 600-frame orbit subjects.
+- Committed 3x nearest-neighbour native-view evidence for side/front and all four orbit quarter-turns in `evidence/before-v14-*.png`; raw RGB sequences remain lane-local under `build/before-v14`.
+- Visual baseline: the accepted body/signature-S remains strong; the side head reads noticeably slab-flat, while end-on/orbit views establish the narrow bounds needed to avoid another oversized head or neck.
+
+---
+
 ## Subagent Spawns
 
 No subagents. This run has one implementation/modelling agent.
