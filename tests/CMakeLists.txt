@@ -1866,6 +1866,15 @@ verilate(test_render_fb_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv)
+add_executable(test_geom_attrsetup_directed geometry/geom_attrsetup_directed.cpp)
+target_link_libraries(test_geom_attrsetup_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_attrsetup_directed
+  PREFIX Vzhao_geom_attrsetup
+  TOP_MODULE zhao_geom_attrsetup
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_attrsetup.sv)
+add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
+set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
