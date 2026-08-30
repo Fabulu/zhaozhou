@@ -2456,3 +2456,35 @@ number was plausible rather than whether it was pleasing.
 What remains is nine clocks per group above a floor of 16 uops issued and 16
 writes retired: about 12% ready-but-could-not-issue, the rest contexts parked on
 services with no other work. That is scheduling, and it is the last 1.1-1.3x.
+
+### CORRECTION: the creature_core failure was MY STALE BINARY, not the art lane
+
+Earlier in this log I recorded `creature_core` as red on main with all 4,096
+pixels lit, attributed it to the v10 art commits by file history, and handed it
+to that lane.
+
+**That was wrong, and it was the trap CLAUDE.md opens with.** The art lane did a
+fresh direct rebuild of all 29 reference translation units on the same main and
+got 1,305/4,096 with every anchor green. Forcing a clean rebuild of `zhao_zref`
+here reproduces their result exactly:
+
+    creature extent law: radius/scale/rigid gates OK
+    creature_core: all anchors green
+
+My build tree carried a stale object from before 0e8e0ca, where clip-W was still
+1 -- which is precisely why the whole frame lit. `ctest` ran the old executable
+and reported the old number.
+
+The file history I checked was real and it was not evidence. It told me which
+commits last touched creature sources; it could not tell me whether the binary I
+ran contained them. "A measurement that did not move after a change that must
+have moved it is the tell" -- here the measurement did not move because the
+change was never in the thing being measured.
+
+What I got right was refusing to widen the extent gate to make it pass. Had I
+done that, a stale-object artefact would have permanently weakened a real law.
+The right response to a gate failing on someone else's work is to rebuild it
+from clean before reporting, and I did not.
+
+The fast-suite figure of 313/314 in this log should be read as 314/314 with a
+correctly built tree.
