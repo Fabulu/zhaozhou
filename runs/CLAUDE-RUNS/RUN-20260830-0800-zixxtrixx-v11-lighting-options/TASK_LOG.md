@@ -39,14 +39,24 @@ Diagnose residual lighting machinery versus artistic-rig insufficiency, author a
 - Fresh `creature_core` is green. An instrumented clean binary reports clip W = 4 and 1,305/4,096 lit pixels, proving the relayed 4,096-pixel failure was stale pre-camera-fix executable state, not a source regression.
 - Preserved the corrected camera, approved extent and existing gate unchanged.
 
+### 2026-08-30 - Bounded structural verdict and lighting choice set
+
+- Rendered exactly one matched native-resolution structural set: current cel-main baseline, unlit and normal visualisation.
+- Unlit form is intact and bright; normal colours travel smoothly around the complete tube without an isolated flip or meshlet/bone seam. A minimal +/-Z axis probe showed coherent hemisphere response and located the baseline's key on the back/side-weighted hemisphere for the fixed comparison.
+- Concluded no residual transform, normal-blend, winding, interpolation, state or light-space defect survives v10. The current artistic key/fill/ambient arrangement causes the shadow-clad read.
+- Added generic named `CreatureLightRig` controls and a reversible `ZIXX_LIGHT` selector. Default baseline is byte-identical (`zixxtrixx-still` cel-main CRC32C remains `F0DA9F88`).
+- Authored by eye three restrained and materially distinct alternatives: A Front Soft, B High Open and C Crossfill. Model, pigments, texture, crayon, smooth/face mix, cel thresholds, pose, animation and camera remain identical.
+- Rendered one four-still native comparison and one 24-frame fixed-camera idle excerpt per rig, assembled as a single 2x2 motion comparison. Each comparison cell remains native 384x240; frame 0 matches its still byte-for-byte.
+- Bounded review found coherent moving light and no state bleed. No catalogue, spring or broad regression campaign was run.
+
 ---
 
 ## Validation Ledger — `V11-LIGHT-BUDGET-1`
 
 | ID | Acceptance question | Bounded input | Status / decision |
 |---|---|---|---|
-| L11-S | Does any normal/transform/winding/light-space/state defect survive v10? | One source/state audit; one identical-pose unlit/normals/baseline set; smallest existing normal/temporal probe | Pending |
-| L11-A | Do named alternatives differ only in lighting and remain stable/readable at native resolution? | One identical 384×240 baseline-plus-options set; one short deforming sample only if needed | Pending |
+| L11-S | Does any normal/transform/winding/light-space/state defect survive v10? | One source/state audit; one identical-pose unlit/normals/baseline set; smallest existing normal/temporal probe | **PASS** — machinery coherent; baseline rig is back/side-weighted for the fixed native shot |
+| L11-A | Do named alternatives differ only in lighting and remain stable/readable at native resolution? | One identical 384×240 baseline-plus-options set; one short deforming sample only if needed | **PASS** — baseline + three named rigs, one 24-frame 2x2 comparison, no state bleed |
 | L11-W | Does comparison media load with exact noindex on local and production site? | Media existence/decode; desktop+narrow section check; bounded cache-bypassed production bytes | Pending |
 
 No catalogue rerender/redecode or spring checks unless a concrete regression signal triggers escalation.
@@ -68,6 +78,11 @@ None. This remains the sole implementation/modelling lane.
 - `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/current-main-fresh-direct-build.txt`
 - `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/current-main-camera-diagnostic.txt`
 - `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/current-main-camera-conclusion.txt`
+- `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/structural-{render,verdict}.txt`
+- `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/structural-{baseline,unlit,normviz}.png`
+- `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/lighting-options-values.txt`
+- `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/lighting-options-{contact,motion-check}.png`
+- `runs/CLAUDE-RUNS/RUN-20260830-0800-zixxtrixx-v11-lighting-options/evidence/option-{render-final,motion-render}.txt`
 
 ---
 
@@ -82,6 +97,5 @@ None. This remains the sole implementation/modelling lane.
 
 ## Next Steps
 
-1. Audit v10 lighting state flow and render the bounded identical-pose diagnostic set.
-2. Conclude machinery defect versus artistic rig, then author and compare the smallest useful named option set by eye.
-3. Build the choice section/media, integrate both current mains, deploy exactly once, verify production and stop all jobs.
+1. Encode only the four matched stills and one short 2x2 motion comparison for the noindex choice section.
+2. Integrate both current mains without overwriting concurrent work, deploy exactly once, verify production and stop all jobs.
