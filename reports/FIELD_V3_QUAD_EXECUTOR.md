@@ -43,9 +43,20 @@ The executor is **scalar**. One context, one instruction, one ALU result, one
 write per clock.
 
 So the machine is a four-wide back end fed by a one-wide front end, and the
-front end is where every uop's result has to land. Roughly 13 of `impact_wave`'s
-16 uops are ALU ops, so widening only the drain would move almost nothing — the
-ALU is the majority of the traffic.
+front end is where every uop's result has to land.
+
+**Widening only the drain would move almost nothing**, and the split is
+measured rather than assumed:
+
+| program | uops | long | ALU | writes per four-point group |
+|---|---|---|---|---|
+| crater_ring | 13 | 2 | 11 | 52 |
+| impact_wave | 16 | 2 | 14 | 64 |
+| wave_pool | 17 | 3 | 14 | 68 |
+
+The ALU is **85% of the write traffic**. A four-wide drain with a scalar ALU
+addresses about 15% of the problem, which is why the executor and not the drain
+is the thing to widen.
 
 **The fix is a quad-wide executor: four contexts advancing in lockstep through
 one pipeline, with four ALUs and four register-file write ports.**
