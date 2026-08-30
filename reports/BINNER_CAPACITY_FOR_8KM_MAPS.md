@@ -179,9 +179,54 @@ Two things that change and must be designed rather than assumed:
   semantically observable, so a flush boundary must not reorder two triangles
   that land in the same tile.
 
-**This is an owner-level decision and the numbers are the input to it, not a
-substitute for it.** What is no longer open is whether a bigger constant would
-do: it would not, and the reason is 49% of the device for one army.
+### CORRECTION, same day: naive flush-and-continue does NOT work
+
+Checked against the tile lifecycle landed in `da6ca7a` before recommending it
+further, and it fails on a concrete mechanism.
+
+After a tile resolves, RASTER.TILESTORE has SWAPPED: the tile's pixels are in
+the back bank being streamed to the framebuffer, and the front bank holds
+whatever comes next. A second pass over that tile would walk into the front bank
+with `job_first` low — so it would neither clear nor find its own earlier
+pixels. It would composite onto a stranger.
+
+Making that work needs the tile's pixels read BACK from the framebuffer at the
+start of the second pass, i.e. RASTER.FBWRITE becomes read-modify-write and the
+guard has to grant the engine reads as well as writes. That is a much larger
+change than "drain and keep going", and it puts a VRAM read on the critical path
+of every multi-pass tile.
+
+**So the constraint is sharper than the previous paragraph said: a tile must be
+drained exactly ONCE per frame.** Which means a flush can only happen when every
+reference for the tiles being flushed is already known — and that cannot be
+known until the frame's geometry has all been submitted.
+
+### What that leaves
+
+* **Band passes with geometry RE-SUBMISSION.** Bin only into a band of tiles,
+  drain the band, then re-submit all geometry for the next band. Each tile is
+  drained once and the arena holds one band's references. The cost is that
+  geometry is transformed N times, or that post-transform vertices are cached
+  somewhere that is itself large. This is the classic sort-middle answer and it
+  is a real option with a real price.
+* **A cheaper triangle record — MEASURED, and it does not exist.** The obvious
+  idea is to store what RASTER.EDGEWALK consumes rather than what the front end
+  produced. Costed: the three edge functions are `kx` and `ky` at 23 bits and
+  `kc` at 48, so 94 bits an edge and **282 bits a triangle** — twice the 142 the
+  record costs now. Storing coefficients makes it WORSE, which is the same
+  conclusion the TriangleContext appendix reaches from the other direction.
+  Six 21-bit screen coordinates is already close to minimal for the §8 ±2048 px
+  guard band. **There is no narrower record to find, so the 49% is real and the
+  answer is architectural.**
+* **MEASURE.TOKENS deciding submission.** If the governor bounds what is
+  submitted per frame to what the arena can hold, the wall never fires. That is
+  a game-design answer as much as a hardware one, and it is the block's stated
+  job.
+
+**This is an owner-level decision and the numbers are its input, not a
+substitute for it.** What is no longer open: a bigger constant will not do (49%
+of the device for one army), and flush-and-continue will not do either without
+framebuffer read-back.
 
 ## What this does NOT block
 

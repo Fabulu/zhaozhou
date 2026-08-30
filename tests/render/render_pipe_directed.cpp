@@ -419,6 +419,17 @@ int main(int argc, char** argv) {
     zhao::check(top.overflow_o == 0, "the arena did not overflow", 0, (uint32_t)top.overflow_o);
     printf("   MEASURED: %zu tiles in %ld clocks, %u job stalls\n", d.tiles.size(), d.clocks,
            (uint32_t)top.job_stall_clocks_o);
+    // THE ARENA, WHICH NOTHING WAS READING. GEOM.BINNER reports its own
+    // high-water marks and every one of them was tied off. The measured frame
+    // in reports/BINNER_CAPACITY_FOR_8KM_MAPS.md is 150x the triangle budget
+    // and 25x the reference arena, so these stop being trivia the moment the
+    // capacities move -- and a capacity change nobody measures here is a
+    // capacity change nobody checked.
+    printf("   ARENA: %u references, deepest tile list %u, %u triangles culled\n",
+           (uint32_t)top.tile_references_o, (uint32_t)top.max_tile_list_depth_o,
+           (uint32_t)top.triangles_culled_o);
+    zhao::check(top.triangles_culled_o == 0, "no triangle was culled, so the arena held this frame",
+                0, (uint32_t)top.triangles_culled_o);
   }
 
   printf("== section 2: overlapping triangles share tiles, and ORDER decides the picture ==\n");
