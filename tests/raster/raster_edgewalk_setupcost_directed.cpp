@@ -9,41 +9,48 @@
 // TriangleContext: GEOM.SETUP writes the coefficients once, the binner stores a
 // context id, and the drain fetches them instead of re-deriving them.
 //
-// That is a real cost and the fix is sound. What nobody has measured is HOW BIG
-// -- and the fix is not free: the binner's per-triangle record would have to
-// carry three edge equations (3 x (23 + 23 + 48) bits) plus the top-left flags,
-// roughly TRIPLING it.
+// The fix is sound. What matters is HOW BIG, because it is not free -- the
+// binner's per-triangle record would have to carry three edge equations
+// (3 x (23 + 23 + 48) bits) plus the top-left flags, roughly tripling it.
 //
-// I ESTIMATED THIS WRONG BEFORE MEASURING IT, which is why the file exists.
-// Counting the setup states in the RTL suggests about four clocks, and four
-// clocks against a 16-row walk is a rounding error nobody should restructure a
-// binner for. The measurement says TWENTY-ONE, and for a thin sliver that is 21
-// of the job's 26 clocks. Setup is not a preamble to the walk; on small
-// triangles it IS the job.
+// ---------------------------------------------------------------------------
+// I MEASURED THE WRONG THING FIRST, AND IT LOOKED LIKE EVIDENCE
+// ---------------------------------------------------------------------------
+// The obvious probe is "clocks from job accept to the first coverage beat", and
+// it reports a confident, stable 21. It is wrong, and its stability is what
+// makes it convincing rather than what makes it right.
 //
-// So this file measures the two numbers the decision needs and refuses to make
-// the decision:
+// `zhao_raster_edgewalk` walks ALL SIXTEEN ROWS into registers in S_WALK before
+// S_DRAIN emits a single beat. So that 21 is setup PLUS the whole row walk --
+// and the row walk is per-tile work that a context cache does not remove. Worse,
+// my "self-check" was that the figure is identical for a full tile, a thin
+// sliver and a small patch, which I read as proof it was setup alone. It is
+// identical because THE WALK IS ALWAYS 16 ROWS regardless of coverage. The
+// check could not have failed, so it confirmed nothing.
 //
-//   1. The SETUP COST: clocks from a job being accepted to its first coverage
-//      beat. That is what a context cache would remove, and only that -- the
-//      row walk is per-tile work either way.
+// That first version priced ruling 4 at up to 32% of a frame. The real figure
+// is a quarter of that. Same block, same clocks, a probe pointed at the wrong
+// interval.
 //
-//   2. The TOTAL per job, so the setup can be read as a fraction rather than as
-//      a scary-looking absolute.
+// ---------------------------------------------------------------------------
+// WHAT THIS VERSION DOES INSTEAD
+// ---------------------------------------------------------------------------
+// Setup is not directly observable from the ports -- there is no signal that
+// says "coefficients ready". So it is DERIVED and the derivation is made to
+// carry risk:
 //
-// Then it prices ruling 4 against the four scenes tools/render/count_bin_load
-// measures, whose references-per-triangle span two orders of magnitude:
+//     total = accept + SETUP + 16 (the walk) + drain_beats + 1
+//     =>  SETUP = total - 16 - drain_beats - 1
 //
-//      sky backdrop        2 tris,  396 refs  -> 198.0 refs/tri
-//      terrain patch    2,048 tris, 4,080 refs ->   2.0 refs/tri
-//      creature army   19,200 tris, 23,912 refs ->   1.2 refs/tri
-//      giant near camera  126 tris, 25,704 refs -> 204.0 refs/tri
+// `drain_beats` varies from 4 to 16 across the cases, so if the model were
+// wrong the derived SETUP would move with coverage. It does not, and that is a
+// check that could have failed.
 //
-// A cache saves setup on every reference AFTER the first, so the saving is
-// (refs - tris) x setup_clocks. On the army that is almost nothing; on the
-// giant it is almost everything. An optimisation whose value swings by two
-// orders of magnitude between two scenes in the same game is a decision, not a
-// conclusion.
+// It is then cross-checked against a completely different path: a DEGENERATE
+// triangle leaves at S_W0, as soon as the area is known, and never walks at
+// all. Its total is a direct, walk-free measurement of the front of the same
+// setup sequence, and it must be smaller than the derived SETUP and larger than
+// zero. Two independent routes to one number.
 
 #include <cstdint>
 #include <cstdio>
@@ -57,6 +64,8 @@
 namespace {
 
 constexpr int64_t kClocksPerFrame = 1666667;
+// S_WALK always runs the full 16 rows into registers before S_DRAIN emits.
+constexpr int kWalkRows = 16;
 
 struct Job {
   int32_t ax, ay, bx, by, cx, cy;
@@ -64,10 +73,11 @@ struct Job {
 };
 
 struct Timing {
-  int to_first;  // accept -> first coverage beat: the setup
+  int to_first;  // accept -> first coverage beat: setup AND the walk
   int total;     // accept -> job_done
-  int rows;
+  int rows;      // coverage beats actually drained
   int covered;
+  bool degenerate;
 };
 
 Timing measure(Vzhao_raster_edgewalk& t, const Job& j) {
@@ -100,7 +110,7 @@ Timing measure(Vzhao_raster_edgewalk& t, const Job& j) {
   }
   t.job_valid_i = 0;
 
-  Timing r{-1, -1, 0, 0};
+  Timing r{-1, -1, 0, 0, false};
   int clocks = 0;
   for (; clocks < 2000; ++clocks) {
     t.eval();
@@ -115,6 +125,7 @@ Timing measure(Vzhao_raster_edgewalk& t, const Job& j) {
     }
     if (t.job_done_o) {
       r.total = clocks + 1;
+      r.degenerate = t.job_degenerate_o != 0;
       zhao::tick(t);
       return r;
     }
@@ -132,14 +143,12 @@ int main(int argc, char** argv) {
   auto px = [](int v) { return v * 256; };
 
   // ------------------------------------------------------------------ 1 ---
-  printf("== section 1: what setup costs, isolated from the row walk ==\n");
+  printf("== section 1: setup, DERIVED, with the derivation carrying risk ==\n");
   int setup_clocks = -1;
   {
-    // Three triangles over the SAME tile with very different coverage. Setup is
-    // tile-independent and coverage-independent, so if the accept-to-first-beat
-    // figure is the setup, it must be IDENTICAL across all three while the
-    // totals differ. That is the measurement being self-checking rather than
-    // just a number I labelled.
+    // Three triangles over the same tile with very different coverage, so
+    // `drain_beats` moves from 4 to 16. If the model total = setup + 16 + beats
+    // + 1 were wrong, the derived setup would move with it.
     const struct {
       Job j;
       const char* what;
@@ -149,49 +158,69 @@ int main(int argc, char** argv) {
         {{px(4), px(4), px(12), px(4), px(4), px(12), 0, 0}, "a small patch"},
     };
 
-    int firsts[3] = {-1, -1, -1};
+    int derived[3] = {-1, -1, -1};
     int idx = 0;
     for (const auto& c : cases) {
       const Timing t = measure(top, c.j);
-      printf("   %-24s setup %2d, total %3d, rows %2d, covered %3d\n", c.what, t.to_first, t.total,
-             t.rows, t.covered);
-      firsts[idx++] = t.to_first;
+      const int setup = t.total - kWalkRows - t.rows - 1;
+      printf("   %-24s total %3d, beats %2d, to-first %2d  ->  setup %2d\n", c.what, t.total,
+             t.rows, t.to_first, setup);
+      derived[idx++] = setup;
       zhao::check(t.total > 0, "the job completes", 1, t.total > 0 ? 1 : 0);
       zhao::check(t.covered > 0, "and covers something, so the walk really ran", 1,
                   t.covered > 0 ? 1 : 0);
     }
-    setup_clocks = firsts[0];
-    zhao::check(firsts[0] == firsts[1] && firsts[1] == firsts[2],
-                "setup costs the same regardless of coverage, so it IS the setup", 1,
-                (firsts[0] == firsts[1] && firsts[1] == firsts[2]) ? 1 : 0);
-    printf("   MEASURED: setup = %d clocks a job\n", setup_clocks);
+    setup_clocks = derived[0];
+    zhao::check(derived[0] == derived[1] && derived[1] == derived[2],
+                "the derived setup is the same though the drain length is not", 1,
+                (derived[0] == derived[1] && derived[1] == derived[2]) ? 1 : 0);
+    printf("   MEASURED: setup = %d clocks a job (NOT the 21 that accept-to-first-beat\n",
+           setup_clocks);
+    printf("             reports -- that figure contains the whole 16-row walk)\n");
   }
 
   // ------------------------------------------------------------------ 2 ---
-  printf("== section 2: and it is the same at any tile, which is the whole point ==\n");
+  printf("== section 2: cross-checked on a path that never walks at all ==\n");
   {
-    // Ruling 4's claim is that the coefficients are TILE-INDEPENDENT. If the
-    // setup cost varied with the tile, caching it would be wrong as well as
-    // expensive. Same triangle, four different tiles.
+    // A zero-area triangle is rejected at S_W0, the moment the area lands, and
+    // never enters S_WALK. Its total is a direct measurement of the front of the
+    // setup sequence with no walk in it -- a completely different route to the
+    // same region of the state machine.
+    const Job degen = {px(10), px(10), px(40), px(10), px(70), px(10), 0, 0};
+    const Timing d = measure(top, degen);
+    printf("   MEASURED: a degenerate triangle retires in %d clocks, no walk\n", d.total);
+    zhao::check(d.degenerate, "the degenerate case really was rejected as degenerate", 1,
+                d.degenerate ? 1 : 0);
+    zhao::check(d.rows == 0, "and emitted no coverage", 0, (uint32_t)d.rows);
+    zhao::check(d.total > 0 && d.total <= setup_clocks,
+                "and its cost sits inside the derived setup, as the state order says", 1,
+                (d.total > 0 && d.total <= setup_clocks) ? 1 : 0);
+  }
+
+  // ------------------------------------------------------------------ 3 ---
+  printf("== section 3: and the setup really is tile-independent ==\n");
+  {
+    // Ruling 4's premise. If it varied with the tile, caching would be wrong as
+    // well as expensive.
     const Job base = {px(0), px(0), px(200), px(8), px(8), px(200), 0, 0};
-    int firsts[4];
+    int derived[4];
     for (int k = 0; k < 4; ++k) {
       Job j = base;
       j.tile_x = k * 4;
       j.tile_y = k * 3;
       const Timing t = measure(top, j);
-      firsts[k] = t.to_first;
+      derived[k] = t.total - kWalkRows - t.rows - 1;
     }
     bool same = true;
     for (int k = 1; k < 4; ++k)
-      if (firsts[k] != firsts[0]) same = false;
-    zhao::check(same && firsts[0] == setup_clocks,
+      if (derived[k] != derived[0]) same = false;
+    zhao::check(same && derived[0] == setup_clocks,
                 "the same triangle pays the same setup at every tile", 1,
-                (same && firsts[0] == setup_clocks) ? 1 : 0);
+                (same && derived[0] == setup_clocks) ? 1 : 0);
   }
 
-  // ------------------------------------------------------------------ 3 ---
-  printf("== section 3: pricing ruling 4 against the four measured scenes ==\n");
+  // ------------------------------------------------------------------ 4 ---
+  printf("== section 4: pricing ruling 4 against the four measured scenes ==\n");
   {
     // A context cache removes setup on every reference AFTER the first, so the
     // saving is (refs - tris) * setup. These four scenes are
@@ -219,10 +248,12 @@ int main(int argc, char** argv) {
     printf("         At the ~19,200 a real army needs it is 8.2 Mbit against 2.7 --\n");
     printf("         so the cost is trivial at the capacity we have and severe at\n");
     printf("         the capacity we do not, which is the arena decision again.\n");
+    printf("   NOTE: the 16-row walk is per-tile work no cache removes, and at %d\n",
+           kWalkRows);
+    printf("         clocks it is larger than the setup. If the drain is ever the\n");
+    printf("         thing to shorten, THAT is where the clocks are.\n");
 
-    // The finding this file exists to make checkable: the value of ruling 4
-    // swings by orders of magnitude between scenes in the same game, so it
-    // cannot be settled by reasoning about one of them.
+    // The finding that makes this undecidable from any one scene.
     const double army = (double)(23912 - 19200) / 19200.0;
     const double giant = (double)(25704 - 126) / 126.0;
     zhao::check(giant > army * 100,
