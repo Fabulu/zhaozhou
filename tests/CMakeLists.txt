@@ -1655,6 +1655,50 @@ add_test(NAME field_v3_earth_wide COMMAND test_field_v3_earth_wide --points 256
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/wave_pool.zprog)
 set_tests_properties(field_v3_earth_wide PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
 
+# THE QUAD MACHINE. A context is FOUR POINTS: one instruction, four ALUs, and
+# one register write carrying all four results. CTX=8 therefore holds the same
+# 32 points in flight as the CTX=32 scalar target above, which is what makes
+# the two comparable -- the difference between them is the WIDTH, not the
+# occupancy.
+add_executable(test_field_v3_earth_quad differential/field_v3_earth_directed.cpp)
+target_link_libraries(test_field_v3_earth_quad PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_earth_quad
+  PREFIX Vzhao_probe_v3_full
+  TOP_MODULE zhao_probe_v3_full
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_full.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rot.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_sbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_trig.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+  VERILATOR_ARGS -GCTX=8 -GOUTSTANDING=12 -GLANES=4)
+target_compile_definitions(test_field_v3_earth_quad PRIVATE ZHAO_EARTH_CTX=8 ZHAO_EARTH_LANES=4)
+add_test(NAME field_v3_earth_quad COMMAND test_field_v3_earth_quad --points 256
+         ${CMAKE_SOURCE_DIR}/compiler/tests/generated/impact_wave.zprog
+         ${CMAKE_SOURCE_DIR}/compiler/tests/generated/wave_pool.zprog)
+set_tests_properties(field_v3_earth_quad PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
 add_executable(test_field_alu_vec_directed differential/field_alu_vec_directed.cpp)
 target_link_libraries(test_field_alu_vec_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_alu_vec_directed
