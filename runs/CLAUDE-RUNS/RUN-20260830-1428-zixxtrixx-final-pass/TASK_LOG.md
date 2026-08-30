@@ -96,8 +96,9 @@ Complete Task #28 from accepted V14 as a deliberately small head/neck/colour adj
 - Invoked the guarded publisher exactly once from Upheaval main with explicit `-Project upheaval -Branch main`. Wrangler uploaded the changed site and returned `https://d9d91e35.upheaval.pages.dev`; the stable production address is `https://upheaval.pages.dev`.
 - Fetched both deployed addresses with a browser user agent. Each returned HTTP 200, the exact noindex tag once, the final Cool Cross text, moving-light tab, retained V14 study and eight-generation archive. The deployed moving-light WebM returned HTTP 200 with the expected EBML signature.
 - Restored only the deploy-time generated footer minute after the guarded script reran the assembler, leaving the committed Upheaval tree clean without changing site content.
-- The render, encoder and Wrangler jobs all exited successfully. A lane-local process sweep found no remaining renderer, mesh/probe, ffmpeg/ffprobe, compiler, Python encoder, PowerShell deployer, Wrangler/Node, browser or server child.
-- This completed run record is the final zhaozhou feature change; zhaozhou main is fast-forwarded and pushed immediately after this commit.
+- The renderer, encoder and Wrangler jobs all exited successfully. A lane-local process sweep found no remaining renderer, mesh/probe, ffmpeg/ffprobe, compiler, Python encoder, PowerShell deployer, Wrangler/Node, browser or server child.
+- Current zhaozhou main had advanced by eighteen independent hardware-lane commits after this feature's base. Merged the completed feature without changing that unrelated work; the only conflict was clang-format layout around the new point-response calls in `creature_sim.cpp`, resolved by retaining both current-main formatting and the complete point-light behaviour.
+- Rebuilt every reel consumer from clean source through `tools/reel/build-direct.sh --clean all` after the merge. Integrated `zixx-meshcheck` still reports 1774 vertices, zero disagreeing binds and zero seam splits, and the ordinary Cool Cross still remains exactly CRC32C `0x5681FDF9`. Integration commit `334708f` was pushed to zhaozhou main before this final closeout record.
 
 ---
 
@@ -126,4 +127,4 @@ No subagents. This run has one implementation/modelling agent.
 
 ## Next Steps
 
-Run complete. No implementation or publication steps remain; only the immediate feature-to-main fast-forward/push and final clean/stopped-state report follow this committed record.
+Run complete. Both repositories are integrated and pushed and the finished pass was published exactly once. Only the final clean/stopped-state report follows this committed record.
