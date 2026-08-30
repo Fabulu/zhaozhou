@@ -55,6 +55,14 @@ Establish the renderer's executable directional-light, normal and space conventi
 - Traced a +Y dorsal sample through production arithmetic: key/fill Lambert `59000/56000`, pre-toon gain mean `65536`, frozen bright toon level `82000` (1.2512). Native frame-0 dorsal pixel `(240,96)` is RGB `(255,105,206)`, proving the direct term survives to a visibly bright top pixel.
 - Source and executable transform trace confirms `worldm = world * pose` feeds both vertices and normals, while the rig vectors bypass `vp`; the orbit mutates only `view_projection`.
 
+### 2026-08-30 - Single-Candidate Website Assembled and Checked Locally
+
+- Encoded the one 600-frame render as VP9 CRF16 `yuv444p` at 384x240, 60 Hz and exactly 10 seconds, plus its exact 3x nearest-neighbour poster. `ffprobe` counted 600 frames and the complete stream decoded without error.
+- Added one standalone prominent `Corrected Toplight 1` website experiment. V10 Idle remains initially selected; v12 remains present but is explicitly labelled rejected historical evidence, with v11 references and every archive retained.
+- Regenerated `website/public/index.html`; exact `<meta name="robots" content="noindex, nofollow">` occurs once.
+- Bounded local Edge checks passed at 1280x900 and exact 390x844: the single candidate loads at 384x240/10 seconds, selects correctly, is 324 px wide at the narrow viewport, and neither viewport has horizontal overflow.
+- Committed and pushed the Upheaval website/media milestone as `f8e639c`.
+
 ---
 
 ## Subagent Spawns
@@ -81,7 +89,7 @@ None. This run is intentionally single-agent.
 
 ## Next Steps
 
-1. Trace flat shading, composition, world/view transform and cel/material response implementations.
-2. Add and run the committed synthetic and actual-posed-normal fixtures.
-3. Repair only the proven generic sign/space/orientation defect and direct-build dependent translation units.
-4. Render, inspect, encode and publish exactly one `Corrected Toplight 1` orbit.
+1. Fetch and inspect the latest main in both isolated clones, then merge only non-overlapping concurrent work.
+2. Push both mains without force.
+3. Deploy exactly once from Upheaval main and verify review/production noindex, media bytes and bounded layout.
+4. Remove temporary raw frames, stop child processes, close the run and await owner feedback.
