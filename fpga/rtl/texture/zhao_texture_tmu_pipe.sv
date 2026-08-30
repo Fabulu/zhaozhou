@@ -347,6 +347,10 @@ module zhao_texture_tmu_pipe #(
   // a source id can repeat on adjacent requests and this project has shipped
   // that bug before.
   logic [$clog2(ROB_N)-1:0] tagq   [ROB_N];
+  // Which KIND of access each outstanding response belongs to. A CLUT sample
+  // whose page is not resident makes a SECOND access for the palette entry, and
+  // the two come back through the same port in the same order.
+  logic                     tagp   [ROB_N];
   logic [$clog2(ROB_N):0]   tag_wp, tag_rp;
   logic                     tag_ne;
   assign tag_ne = (tag_wp != tag_rp);
@@ -367,6 +371,18 @@ module zhao_texture_tmu_pipe #(
   localparam int RW = (ROB_N <= 1) ? 1 : $clog2(ROB_N);
   logic         rb_used [ROB_N];
   logic         rb_done [ROB_N];
+  // THE RECORD CARRIES ITS OWN PLAN. A response must be steered by the plan of
+  // the request that caused it, and the single `c_*` issue register has moved
+  // on by then -- that is the whole reason a pipelined sampler needs a record
+  // and a serial one does not.
+  logic [ 2:0]  rb_fmt  [ROB_N];
+  logic         rb_clut [ROB_N];
+  logic         rb_filt [ROB_N];
+  logic         rb_bsel [ROB_N];
+  logic         rb_nib  [ROB_N];
+  logic [31:0]  rb_pal  [ROB_N];
+  logic [ 7:0]  rb_fu   [ROB_N];
+  logic [ 7:0]  rb_fv   [ROB_N];
   logic [23:0]  rb_rgb  [ROB_N];
   logic [ 7:0]  rb_a    [ROB_N];
   logic [ 7:0]  rb_idx  [ROB_N];
@@ -381,7 +397,10 @@ module zhao_texture_tmu_pipe #(
   // A REQUEST IS ACCEPTED EVERY CLOCK THERE IS ROOM. That is the whole point
   // of the rebuild: the serial block's `req_ready_o = (st_r == ST_IDLE)` is
   // what held CLUT to five clocks a sample however fast its arithmetic was.
-  assign req_ready_o = !rob_full_c && (!a0_v || !c_v || cac_ready_i);
+  // Refused while a cold palette fetch is pending, because that fetch owns the
+  // cache issue register, and while the single filter lane is busy, because a
+  // second footprint would have nowhere to sit.
+  assign req_ready_o = !rob_full_c && !pf_v && (!a0_v || !c_v || cac_ready_i);
   assign accept_c    = req_valid_i && req_ready_o;
 
   assign idle_o = (rb_occ == '0) && !a0_v && !c_v;
@@ -398,9 +417,69 @@ module zhao_texture_tmu_pipe #(
   // ==========================================================================
   // sequential
   // ==========================================================================
-  logic [15:0] rsp_hw [0:3];
-  logic [ 7:0] rsp_idx;
+  // ---- the cold palette fetch -------------------------------------------
+  // A CLUT sample whose page is resident completes in the response clock. One
+  // whose page is not takes the second access the serial block always took,
+  // and fills the page on the way past, so the next sample on that page is
+  // free. `pf_v` holds that fetch; new requests are refused while it is
+  // pending, which is what keeps the tag FIFO's order meaning what it says.
+  logic        pf_v;
+  logic [31:0] pf_addr;
+  logic [ 7:0] pf_idx;
+  logic [$clog2(ROB_N)-1:0] pf_rec;
+
+  // ---- the filter lane ---------------------------------------------------
+  // ONE channel per clock, which is what the workload asks for: 45,000 cloud
+  // fragments x 4 channels is 180,000 channel jobs against 541,640 cache
+  // accesses, so the filter is the smallest term in the resource maximum.
+  logic        fl_v;
+  logic [ 1:0] fl_ch;
+  logic [ 7:0] fl_t [0:3][0:3];   // [channel][tap]
+  logic [ 7:0] fl_fu, fl_fv;
+  logic [ 7:0] fl_res [0:3];
+  logic [$clog2(ROB_N)-1:0] fl_rec;
+  logic        fl_argb;
+
+  logic [7:0] bl_out;
+  zhao_texture_bilerp u_bl (.t00_i(fl_t[fl_ch][0]),
+                            .t10_i(fl_t[fl_ch][1]),
+                            .t01_i(fl_t[fl_ch][2]),
+                            .t11_i(fl_t[fl_ch][3]),
+                            .fu_i (fl_fu),
+                            .fv_i (fl_fv),
+                            .out_o(bl_out));
+
+  // ---- what the response means -------------------------------------------
   logic [$clog2(ROB_N)-1:0] rsp_rec;
+  logic                     rsp_is_pal;
+  assign rsp_rec    = tagq[tag_rp[RW-1:0]];
+  assign rsp_is_pal = tagp[tag_rp[RW-1:0]];
+
+  // The CLUT index the returned byte names, and where its palette entry lives.
+  logic [7:0]  rsp_byte, rsp_idx;
+  logic [31:0] rsp_pal_addr;
+  always_comb begin
+    rsp_byte = rb_bsel[rsp_rec] ? cac_data_i[15:8] : cac_data_i[7:0];
+    rsp_idx  = (rb_fmt[rsp_rec] == FMT_CLUT4)
+             ? (rb_nib[rsp_rec] ? {4'd0, rsp_byte[7:4]} : {4'd0, rsp_byte[3:0]})
+             : rsp_byte;
+    rsp_pal_addr = rb_pal[rsp_rec] + {23'd0, rsp_idx, 1'b0};
+  end
+
+  // Is this record's palette page resident, and where?
+  logic pal_hit_c, pal_ent_c;
+  logic [PW-1:0] pal_way_c;
+  always_comb begin
+    pal_hit_c = 1'b0;
+    pal_ent_c = 1'b0;
+    pal_way_c = '0;
+    for (int unsigned w = 0; w < PAL_SLOTS; w++)
+      if (pal_ten_r[w] && (pal_tag_r[w] == rb_pal[rsp_rec])) begin
+        pal_hit_c = 1'b1;
+        pal_way_c = PW'(w);
+        pal_ent_c = pal_val_r[w][rsp_idx];
+      end
+  end
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -412,6 +491,9 @@ module zhao_texture_tmu_pipe #(
       rb_wp <= '0;
       rb_rp <= '0;
       pal_vic_r <= '0;
+      pf_v <= 1'b0;
+      fl_v <= 1'b0;
+      fl_ch <= 2'd0;
       mode_error_o <= 1'b0;
       texture_samples_o <= 32'd0;
       rob_full_clocks_o <= 32'd0;
@@ -462,8 +544,22 @@ module zhao_texture_tmu_pipe #(
 
       // ---- A1 -> the cache issue register ---------------------------------
       if (!c_v || cac_ready_i) begin
+        // THE COLD PALETTE FETCH OUTRANKS A NEW REQUEST. It belongs to a record
+        // that is already in the ROB and ahead of anything still being
+        // accepted, and leaving it behind a stream of new texel accesses would
+        // let the head of the ROB wait on the one access nobody is issuing.
+        if (pf_v) begin
+          c_v    <= 1'b1;
+          c_en   <= 4'b0001;
+          c_addr <= {96'd0, pf_addr};
+          c_src  <= rb_src[pf_rec];
+          tagq[tag_wp[RW-1:0]] <= pf_rec;
+          tagp[tag_wp[RW-1:0]] <= 1'b1;
+          tag_wp <= tag_wp + (RW+1)'(1);
+          pf_v   <= 1'b0;
+        end else
         c_v <= a0_v;
-        if (a0_v) begin
+        if (a0_v && !pf_v) begin
           c_en      <= filter_eff ? 4'b1111 : 4'b0001;
           c_addr    <= {addr[3], addr[2], addr[1], addr[0]};
           c_src     <= a0_src;
@@ -478,13 +574,109 @@ module zhao_texture_tmu_pipe #(
           c_rec     <= a0_rec;
           c_err     <= err_c;
           tagq[tag_wp[RW-1:0]] <= a0_rec;
+          tagp[tag_wp[RW-1:0]] <= 1'b0;
           tag_wp <= tag_wp + (RW+1)'(1);
+          // The plan travels with the record, not with the issue register.
+          rb_fmt [a0_rec] <= fmt_bad ? FMT_RGB565 : m_fmt;
+          rb_clut[a0_rec] <= is_clut;
+          rb_filt[a0_rec] <= filter_eff;
+          rb_bsel[a0_rec] <= addr[0][0];
+          rb_nib [a0_rec] <= total[0][0];
+          rb_pal [a0_rec] <= a0_pal;
+          rb_fu  [a0_rec] <= fu;
+          rb_fv  [a0_rec] <= fv;
+          rb_idx [a0_rec] <= 8'd0;
+          rb_a   [a0_rec] <= 8'd0;
+          rb_rgb [a0_rec] <= 24'd0;
         end
       end
 
       // ---- the cache response ---------------------------------------------
       if (cac_valid_i && tag_ne) begin
         tag_rp <= tag_rp + (RW+1)'(1);
+
+        if (rsp_is_pal) begin
+          // The cold fetch came back. Complete the record and FILL the page, so
+          // the next sample on this index never makes this access again.
+          rb_rgb [rsp_rec] <= decode16(cac_data_i[15:0], FMT_RGB565)[23:0];
+          rb_a   [rsp_rec] <= 8'd255;
+          rb_done[rsp_rec] <= 1'b1;
+          if (pal_hit_c) begin
+            pal_dat_r[pal_way_c][rb_idx[rsp_rec]] <= cac_data_i[15:0];
+            pal_val_r[pal_way_c][rb_idx[rsp_rec]] <= 1'b1;
+          end else begin
+            // A slot holds ONE page, so claiming it clears the previous
+            // occupant's entries -- a stale bit would be served as this page's
+            // colour.
+            pal_tag_r[pal_vic_r]                     <= rb_pal[rsp_rec];
+            pal_ten_r[pal_vic_r]                     <= 1'b1;
+            pal_val_r[pal_vic_r]                     <= 256'd0;
+            pal_val_r[pal_vic_r][rb_idx[rsp_rec]]    <= 1'b1;
+            pal_dat_r[pal_vic_r][rb_idx[rsp_rec]]    <= cac_data_i[15:0];
+            pal_vic_r <= (PAL_SLOTS == 1) ? '0
+                       : ((pal_vic_r == PW'(PAL_SLOTS - 1)) ? '0 : pal_vic_r + PW'(1));
+          end
+        end else if (rb_clut[rsp_rec]) begin
+          // A CLUT texel. The raw index is reported whatever happens next: the
+          // fragment's alpha test is an INDEX test and its glow strength is the
+          // texel's CLUT intensity, so the palette colour alone answers neither.
+          rb_idx[rsp_rec] <= rsp_idx;
+          rb_a  [rsp_rec] <= 8'd255;
+          if (pal_hit_c && pal_ent_c) begin
+            rb_rgb [rsp_rec] <= decode16(pal_dat_r[pal_way_c][rsp_idx], FMT_RGB565)[23:0];
+            rb_done[rsp_rec] <= 1'b1;
+          end else begin
+            pf_v    <= 1'b1;
+            pf_addr <= rsp_pal_addr;
+            pf_idx  <= rsp_idx;
+            pf_rec  <= rsp_rec;
+            pal_fallback_o <= pal_fallback_o + 32'd1;
+          end
+        end else if (!rb_filt[rsp_rec]) begin
+          // Direct nearest: the texel is the answer. No filter pass, no DSP.
+          rb_rgb [rsp_rec] <= decode16(cac_data_i[15:0], rb_fmt[rsp_rec])[23:0];
+          rb_a   [rsp_rec] <= decode16(cac_data_i[15:0], rb_fmt[rsp_rec])[31:24];
+          rb_done[rsp_rec] <= 1'b1;
+        end else begin
+          // Direct bilinear: hand the four decoded taps to the channel lane.
+          for (int unsigned k = 0; k < 4; k++) begin
+            fl_t[0][k] <= decode16(cac_data_i[16*k +: 16], rb_fmt[rsp_rec])[23:16];
+            fl_t[1][k] <= decode16(cac_data_i[16*k +: 16], rb_fmt[rsp_rec])[15:8];
+            fl_t[2][k] <= decode16(cac_data_i[16*k +: 16], rb_fmt[rsp_rec])[7:0];
+            fl_t[3][k] <= decode16(cac_data_i[16*k +: 16], rb_fmt[rsp_rec])[31:24];
+          end
+          fl_fu   <= rb_fu[rsp_rec];
+          fl_fv   <= rb_fv[rsp_rec];
+          fl_rec  <= rsp_rec;
+          fl_argb <= (rb_fmt[rsp_rec] == FMT_ARGB1555) || (rb_fmt[rsp_rec] == FMT_ARGB4444);
+          fl_ch   <= 2'd0;
+          fl_v    <= 1'b1;
+        end
+      end
+
+      // ---- the filter lane, one channel a clock ---------------------------
+      // RGB565's alpha is always exactly 255, so filtering four identical 255
+      // taps to prove it is a job this lane does not run.
+      if (fl_v) begin
+        filter_busy_clocks_o <= filter_busy_clocks_o + 32'd1;
+        fl_res[fl_ch] <= bl_out;
+        if (fl_ch == 2'd2) begin
+          if (fl_argb) begin
+            fl_ch <= 2'd3;
+          end else begin
+            rb_rgb [fl_rec] <= {fl_res[0], fl_res[1], bl_out};
+            rb_a   [fl_rec] <= 8'd255;
+            rb_done[fl_rec] <= 1'b1;
+            fl_v <= 1'b0;
+          end
+        end else if (fl_ch == 2'd3) begin
+          rb_rgb [fl_rec] <= {fl_res[0], fl_res[1], fl_res[2]};
+          rb_a   [fl_rec] <= bl_out;
+          rb_done[fl_rec] <= 1'b1;
+          fl_v <= 1'b0;
+        end else begin
+          fl_ch <= fl_ch + 2'd1;
+        end
       end
 
       // ---- palette invalidate, last so it beats a fill in the same clock --
@@ -506,9 +698,11 @@ module zhao_texture_tmu_pipe #(
   end
 
   logic unused_ok;
-  assign unused_ok = |{size_u, rsp_hw[0], rsp_idx, rsp_rec, c_bytesel, c_nib, c_fmt,
-                       c_clut, c_filt, c_fu, c_fv, c_pal, c_rec, c_err, cac_data_i,
-                       filter_busy_clocks_o, pal_fallback_o, 1'b0};
+  // The issue register's plan copies are dead now that the RECORD carries the
+  // plan; they are kept because the cache bundle is formed from them and the
+  // linter should say so rather than be waived.
+  assign unused_ok = |{size_u, c_bytesel, c_nib, c_fmt, c_clut, c_filt,
+                       c_fu, c_fv, c_pal, c_rec, c_err, pf_idx, 1'b0};
 
 endmodule : zhao_texture_tmu_pipe
 
