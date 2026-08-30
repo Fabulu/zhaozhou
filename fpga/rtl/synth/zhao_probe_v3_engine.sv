@@ -47,7 +47,11 @@
 module zhao_probe_v3_engine #(
     parameter int CTX  = 8,
     parameter int REGS = 32,
-    parameter int PLAN = 32
+    parameter int PLAN = 32,
+    // Points per context. The bank below has always computed FOUR lanes per
+    // grant with three of them tied off, so widening the executor costs the
+    // engine only the wires that were already there.
+    parameter int LANES = 1
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -67,7 +71,7 @@ module zhao_probe_v3_engine #(
     input var logic                    pre_we_i,
     input var logic [$clog2(CTX)-1:0]  pre_ctx_i,
     input var logic [$clog2(REGS)-1:0] pre_reg_i,
-    input var logic signed [31:0]      pre_data_i,
+    input var logic signed [32*LANES-1:0] pre_data_i,
 
     // ---- run control -------------------------------------------------------
     input var logic                   start_i,
@@ -99,7 +103,7 @@ module zhao_probe_v3_engine #(
     input  var logic                    wr_en_i,
     input  var logic [$clog2(CTX)-1:0]  wr_ctx_i,
     input  var logic [$clog2(REGS)-1:0] wr_reg_i,
-    input  var logic signed [31:0]      wr_data_i,
+    input  var logic signed [32*LANES-1:0] wr_data_i,
     // The register file's own write count, so a test can check that the file
     // was written exactly as often as the port was asked -- see the port's
     // comment in zhao_probe_v3_exec.
@@ -109,7 +113,7 @@ module zhao_probe_v3_engine #(
     output var logic                    sk_overflow_o,
     output var logic [$clog2(CTX)-1:0]  wb_ctx_o,
     output var logic [$clog2(REGS)-1:0] wb_reg_o,
-    output var logic signed [31:0]      wb_data_o,
+    output var logic signed [32*LANES-1:0] wb_data_o,
     output var logic                    done_valid_o,
     output var logic [$clog2(CTX)-1:0]  done_ctx_o,
     output var logic [CTX-1:0]          active_o,
@@ -154,11 +158,11 @@ module zhao_probe_v3_engine #(
     output var logic signed [31:0]      dbg_use_a0_o,
     output var logic signed [31:0]      dbg_rf_a0_o,
     output var logic [$clog2(REGS)-1:0] long_dst_o,
-    output var logic signed [31:0]      long_s0_o,
-    output var logic signed [31:0]      long_s1_o,
-    output var logic signed [31:0]      long_s2_o,
-    output var logic signed [31:0]      long_s3_o,
-    output var logic signed [31:0]      long_s4_o,
+    output var logic signed [32*LANES-1:0] long_s0_o,
+    output var logic signed [32*LANES-1:0] long_s1_o,
+    output var logic signed [32*LANES-1:0] long_s2_o,
+    output var logic signed [32*LANES-1:0] long_s3_o,
+    output var logic signed [32*LANES-1:0] long_s4_o,
     output var logic [31:0]             long_imm_o,
     output var logic                    long_flush_o,
     input  var logic                    rel_valid_i,
@@ -168,9 +172,9 @@ module zhao_probe_v3_engine #(
   localparam int CLAIMANTS = 2;  // 0 = this executor lane, 1 = the rival
 
   logic               ex_req_valid, ex_req_ready;
-  logic signed [32:0] ex_req_a, ex_req_b;
+  logic signed [33*LANES-1:0] ex_req_a, ex_req_b;
   logic               ex_rsp_valid;
-  logic signed [65:0] ex_rsp_p;
+  logic signed [66*LANES-1:0] ex_rsp_p;
 
   logic [CLAIMANTS-1:0] bank_req_valid, bank_req_ready, bank_rsp_valid;
   logic signed [32:0]   bank_a[CLAIMANTS][4];
@@ -195,8 +199,12 @@ module zhao_probe_v3_engine #(
   always_comb begin
     for (int c = 0; c < CLAIMANTS; c++) begin
       for (int l = 0; l < 4; l++) begin
-        bank_a[c][l] = (c == 0) ? ex_req_a : 33'sd3;
-        bank_b[c][l] = (c == 0) ? ex_req_b : 33'sd5;
+        // LANE l OF THE EXECUTOR GOES TO LANE l OF THE BANK. Lanes past
+        // LANES carry the recognisable padding the rival uses, so a routing
+        // bug reads as obviously-not-a-coordinate rather than as a plausible
+        // number belonging to a neighbouring point.
+        bank_a[c][l] = (c == 0 && l < LANES) ? signed'(ex_req_a[33*l+:33]) : 33'sd3;
+        bank_b[c][l] = (c == 0 && l < LANES) ? signed'(ex_req_b[33*l+:33]) : 33'sd5;
       end
       bank_tag[c] = 8'(c);
     end
@@ -209,7 +217,8 @@ module zhao_probe_v3_engine #(
 
   assign ex_req_ready = bank_req_ready[0];
   assign ex_rsp_valid = bank_rsp_valid[0];
-  assign ex_rsp_p     = bank_p[0];
+  always_comb
+    for (int l = 0; l < LANES; l++) ex_rsp_p[66*l+:66] = bank_p[l];
 
   zhao_field_v3_mulbank #(
       .CLAIMANTS(CLAIMANTS),
@@ -232,6 +241,7 @@ module zhao_probe_v3_engine #(
   );
 
   zhao_probe_v3_exec #(
+      .LANES(LANES),
       .CTX (CTX),
       .REGS(REGS),
       .PLAN(PLAN)

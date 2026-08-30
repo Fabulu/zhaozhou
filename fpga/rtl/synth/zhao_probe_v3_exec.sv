@@ -63,7 +63,29 @@
 
 `default_nettype none
 
+// ---------------------------------------------------------------------------
+// LANES: ONE INSTRUCTION, FOUR POINTS
+// ---------------------------------------------------------------------------
+// The service path is four points wide and this block is one point wide, so
+// every uop's result lands through a single register write. The composed Earth
+// gate measured 92% occupancy on that one port, and 16 uops per point means a
+// four-point group needs 64 writes against a budget of 24.3 clocks -- 2.6x over
+// the frame budget on writes alone, whatever the services do.
+//
+// LANES widens the DATAPATH and nothing else. The four contexts of a quad run
+// the same program at the same pc, so the pc file, the issue arbiter, the
+// hazard interlocks, the skid bookkeeping and every state machine below are
+// shared exactly as they are; only operands, results and products carry four
+// values instead of one. That is why this is a width change rather than a
+// second executor.
+//
+// The multiplier bank needed nothing: `zhao_field_v3_mulbank` has always
+// computed FOUR lanes per grant and the engine tied three of them off.
+//
+// LANES = 1 is the scalar machine this grew from, bit for bit, which is what
+// the executor, full and Earth differentials check today.
 module zhao_probe_v3_exec #(
+    parameter int LANES = 1,
     parameter int CTX  = 8,   // contexts in flight
     parameter int REGS = 32,  // vector registers per context
     parameter int PLAN = 32   // uops per context
@@ -86,7 +108,7 @@ module zhao_probe_v3_exec #(
     input var logic                    pre_we_i,
     input var logic [$clog2(CTX)-1:0]  pre_ctx_i,
     input var logic [$clog2(REGS)-1:0] pre_reg_i,
-    input var logic signed [31:0]      pre_data_i,
+    input var logic signed [32*LANES-1:0] pre_data_i,
 
     // ---- run control -------------------------------------------------------
     input var logic                   start_i,
@@ -150,7 +172,7 @@ module zhao_probe_v3_exec #(
     input  var logic                    wr_en_i,
     input  var logic [$clog2(CTX)-1:0]  wr_ctx_i,
     input  var logic [$clog2(REGS)-1:0] wr_reg_i,
-    input  var logic signed [31:0]      wr_data_i,
+    input  var logic signed [32*LANES-1:0] wr_data_i,
 
     // THE SKID OVERFLOWED: a write was dropped for want of room. Sticky, and
     // an output rather than an assertion, because the depth is DERIVED and a
@@ -160,7 +182,7 @@ module zhao_probe_v3_exec #(
     output var logic                    sk_overflow_o,
     output var logic [$clog2(CTX)-1:0]  wb_ctx_o,
     output var logic [$clog2(REGS)-1:0] wb_reg_o,
-    output var logic signed [31:0]      wb_data_o,
+    output var logic signed [32*LANES-1:0] wb_data_o,
 
     output var logic                   done_valid_o,  // a context hit END
     output var logic [$clog2(CTX)-1:0] done_ctx_o,
@@ -188,10 +210,10 @@ module zhao_probe_v3_exec #(
     output var logic signed [31:0]        dbg_use_a0_o,
     output var logic signed [31:0]        dbg_rf_a0_o,
     output var logic [RW-1:0]             long_dst_o,
-    output var logic signed [31:0]        long_s0_o,
-    output var logic signed [31:0]        long_s1_o,
-    output var logic signed [31:0]        long_s2_o,
-    output var logic signed [31:0]        long_s3_o,
+    output var logic signed [32*LANES-1:0] long_s0_o,
+    output var logic signed [32*LANES-1:0] long_s1_o,
+    output var logic signed [32*LANES-1:0] long_s2_o,
+    output var logic signed [32*LANES-1:0] long_s3_o,
     // OPERAND B'S SECOND MEMBER. Added 2026-08-29 for DIST2, which is the last
     // opcode the shipped Earth programs need and this machine did not serve.
     //
@@ -200,7 +222,7 @@ module zhao_probe_v3_exec #(
     // three ports for a and one for b covered them all -- and DIST2 simply
     // could not be expressed. The register already existed here; it was feeding
     // the DOT sequencer and was never exported.
-    output var logic signed [31:0]        long_s4_o,
+    output var logic signed [32*LANES-1:0] long_s4_o,
     output var logic [31:0]               long_imm_o,
     // "No further context can join this group." See the comment at its
     // assignment: an EAGER flush costs group size, a LATE one deadlocks.
@@ -225,10 +247,10 @@ module zhao_probe_v3_exec #(
     // points of a vector group, which are replicas of this datapath.
     output var logic               mul_req_valid_o,
     input  var logic               mul_req_ready_i,
-    output var logic signed [32:0] mul_req_a_o,
-    output var logic signed [32:0] mul_req_b_o,
+    output var logic signed [33*LANES-1:0] mul_req_a_o,
+    output var logic signed [33*LANES-1:0] mul_req_b_o,
     input  var logic               mul_rsp_valid_i,
-    input  var logic signed [65:0] mul_rsp_p_i,
+    input  var logic signed [66*LANES-1:0] mul_rsp_p_i,
 
     // The multiplier's own valid must arrive in the same clock as S3. If it
     // ever does not, the product being fed to the ALU belongs to a DIFFERENT
@@ -341,9 +363,14 @@ module zhao_probe_v3_exec #(
   logic [7:0]    s3_op_r;
   logic [RW-1:0] s3_dst_r;
   logic [31:0]   s3_imm_r;
-  logic signed [31:0] s3_a0_r, s3_a1_r, s3_a2_r;
-  logic signed [31:0] s3_b0_r, s3_b1_r, s3_b2_r;
-  logic signed [31:0] s3_c_r;
+  // One value per point of the quad, packed. Lane l is bits [32*l +: 32].
+  localparam int DW = 32 * LANES;   // a datum
+  localparam int MW = 33 * LANES;   // a multiplier operand, sign-extended
+  localparam int PDW = 66 * LANES;  // a product (PW is the pc width, above)
+
+  logic signed [DW-1:0] s3_a0_r, s3_a1_r, s3_a2_r;
+  logic signed [DW-1:0] s3_b0_r, s3_b1_r, s3_b2_r;
+  logic signed [DW-1:0] s3_c_r;
 
   // ---- S4: the product lands ----------------------------------------------
   // MEASURED, not assumed: zhao_field_mul is TWO clocks deep -- issue_i
@@ -357,17 +384,17 @@ module zhao_probe_v3_exec #(
   logic [7:0]    s4_op_r;
   logic [RW-1:0] s4_dst_r;
   logic [31:0]   s4_imm_r;
-  logic signed [31:0] s4_a0_r, s4_a1_r, s4_a2_r;
-  logic signed [31:0] s4_b0_r, s4_b1_r, s4_b2_r;
-  logic signed [31:0] s4_c_r;
+  logic signed [DW-1:0] s4_a0_r, s4_a1_r, s4_a2_r;
+  logic signed [DW-1:0] s4_b0_r, s4_b1_r, s4_b2_r;
+  logic signed [DW-1:0] s4_c_r;
 
   // ---- the register file, banked on register[1:0] -------------------------
-  logic signed [31:0] rf_a0, rf_a1, rf_a2, rf_b0, rf_b1, rf_b2, rf_c;
+  logic signed [DW-1:0] rf_a0, rf_a1, rf_a2, rf_b0, rf_b1, rf_b2, rf_c;
 
   logic          rf_we_c;
   logic [CW-1:0] rf_wctx_c;
   logic [RW-1:0] rf_wreg_c;
-  logic signed [31:0] rf_wdata_c;
+  logic signed [DW-1:0] rf_wdata_c;
 
   // THE FUNCTIONAL register file, not the fit probe. `zhao_probe_banked_rf`
   // measures the storage shape and says in its own header that it implements
@@ -378,7 +405,8 @@ module zhao_probe_v3_exec #(
   // on exactly the group starts that are 2 or 3 modulo 4.
   zhao_field_v3_rf #(
       .CONTEXTS(CTX),
-      .REGS    (REGS)
+      .REGS    (REGS),
+      .LANES   (LANES)
   ) u_rf (
       .clk    (clk),
       .wr_en_i(rf_we_c),
@@ -400,15 +428,15 @@ module zhao_probe_v3_exec #(
   // a1*b1 at S3 and, for DOT3, a2*b2 at S4 -- taking each pair from the
   // stage where it is still live, because the register file's outputs are
   // valid for exactly one clock.
-  logic signed [65:0] prod_ab;
+  logic signed [PDW-1:0] prod_ab;
   logic               prod_valid;
 
   logic               mul_issue_c;
-  logic signed [32:0] mul_a_c, mul_b_c;
+  logic signed [MW-1:0] mul_a_c, mul_b_c;
 
   // How many products this instruction still owes, counted down at S4.
   logic [1:0] dot_cnt_r;
-  logic signed [65:0] dot_acc_r;
+  logic signed [PDW-1:0] dot_acc_r;
 
   logic dot2_at_s4_c, dot3_at_s4_c, hold_c;
   logic dot_at_s4_c;
@@ -476,8 +504,9 @@ module zhao_probe_v3_exec #(
   assign dbg_s2_v_o   = s2_v_r;
   assign dbg_s2_ctx_o = s2_ctx_r;
   assign dbg_s2_op_o  = s2_op_r;
-  assign dbg_use_a0_o = use_a0_c;
-  assign dbg_rf_a0_o  = rf_a0;
+  // Lane 0, because these exist for a bench that reads one point at a time.
+  assign dbg_use_a0_o = use_a0_c[31:0];
+  assign dbg_rf_a0_o  = rf_a0[31:0];
 
   assign long_valid_o = long_at_s4_c;
   assign long_ctx_o   = s4_ctx_r;
@@ -526,8 +555,10 @@ module zhao_probe_v3_exec #(
     // after a denial would multiply the SUCCESSOR's numbers and hand the
     // product to the stalled instruction. Fixing only the S3 capture left 5
     // of 48 wrong; this is the other half of the same defect.
-    mul_a_c     = 33'(use_a0_c);
-    mul_b_c     = 33'(use_b0_c);
+    for (int l = 0; l < LANES; l++) begin
+      mul_a_c[33*l+:33] = 33'(signed'(use_a0_c[32*l+:32]));
+      mul_b_c[33*l+:33] = 33'(signed'(use_b0_c[32*l+:32]));
+    end
     // THE WHOLE DOT SEQUENCE IS ISSUED FROM S4, and that is the fix.
     //
     // An instruction CANNOT BE STALLED between its multiply issue and its
@@ -551,11 +582,22 @@ module zhao_probe_v3_exec #(
     // ENFORCED-BY: tests/differential/field_v3_exec_directed.cpp:test_results_survive_contention
     if (dot_at_s4_c && (dot_issue_r < dot_need_c)) begin
       mul_issue_c = 1'b1;
-      unique case (dot_issue_r)
-        2'd0:    begin mul_a_c = 33'(s4_a0_r); mul_b_c = 33'(s4_b0_r); end
-        2'd1:    begin mul_a_c = 33'(s4_a1_r); mul_b_c = 33'(s4_b1_r); end
-        default: begin mul_a_c = 33'(s4_a2_r); mul_b_c = 33'(s4_b2_r); end
-      endcase
+      for (int l = 0; l < LANES; l++) begin
+        unique case (dot_issue_r)
+          2'd0: begin
+            mul_a_c[33*l+:33] = 33'(signed'(s4_a0_r[32*l+:32]));
+            mul_b_c[33*l+:33] = 33'(signed'(s4_b0_r[32*l+:32]));
+          end
+          2'd1: begin
+            mul_a_c[33*l+:33] = 33'(signed'(s4_a1_r[32*l+:32]));
+            mul_b_c[33*l+:33] = 33'(signed'(s4_b1_r[32*l+:32]));
+          end
+          default: begin
+            mul_a_c[33*l+:33] = 33'(signed'(s4_a2_r[32*l+:32]));
+            mul_b_c[33*l+:33] = 33'(signed'(s4_b2_r[32*l+:32]));
+          end
+        endcase
+      end
     end
   end
 
@@ -575,20 +617,25 @@ module zhao_probe_v3_exec #(
   // The sum is formed at the FULL 66-bit product width and rescaled ONCE by
   // the ALU. Rescaling each product and adding is a different answer, and
   // zfield's dot2/dot3 are the single-rounding form.
-  logic signed [65:0] dot_sum_c;
-  logic signed [65:0] dot_total_c;
+  logic signed [PDW-1:0] dot_sum_c;
+  logic signed [PDW-1:0] dot_total_c;
   // The adder takes the product arriving this clock; the ALU takes the
   // finished total. Keeping these separate is what removes the old
   // requirement that the LAST product arrive on exactly the release clock.
-  assign dot_sum_c   = dot_acc_r + prod_ab;
+  always_comb
+    for (int l = 0; l < LANES; l++)
+      dot_sum_c[66*l+:66] = signed'(dot_acc_r[66*l+:66]) + signed'(prod_ab[66*l+:66]);
   assign dot_total_c = dot_acc_r;
 
   // ---- the op law, reused verbatim from the v2 engine ---------------------
-  logic signed [31:0] alu_result;
+  logic signed [DW-1:0] alu_result;
   logic               alu_is_end, alu_writes, alu_unsupported;
   logic               alu_sat_add, alu_sat_mul, alu_sat_rescale;
 
-  zhao_field_alu u_alu (
+  logic alu_lane_desync;
+  zhao_field_alu_vec #(
+      .LANES(LANES)
+  ) u_alu (
       .op_i  (s4_op_r),
       .imm_i (s4_imm_r),
       .a0_i  (s4_a0_r), .a1_i(s4_a1_r), .a2_i(s4_a2_r),
@@ -607,7 +654,12 @@ module zhao_probe_v3_exec #(
       .op_unsupported_o(alu_unsupported),
       .sat_add_o(alu_sat_add),
       .sat_mul_o(alu_sat_mul),
-      .sat_rescale_o(alu_sat_rescale)
+      .sat_rescale_o(alu_sat_rescale),
+      // Lanes cannot disagree about an opcode -- they all see the same one --
+      // so this is folded into the block's existing unsupported alarm rather
+      // than given a new port. A miswired slice says so instead of computing
+      // quietly.
+      .lane_desync_o(alu_lane_desync)
   );
 
   // A DOT op reaching this increment is unsupported even though the ALU could
@@ -664,9 +716,9 @@ module zhao_probe_v3_exec #(
   assign upstream_frozen_c = hold_c || mul_denied_c;
 
   logic               opnd_held_r;
-  logic signed [31:0] h_a0_r, h_a1_r, h_a2_r, h_b0_r, h_b1_r, h_b2_r, h_c_r;
+  logic signed [DW-1:0] h_a0_r, h_a1_r, h_a2_r, h_b0_r, h_b1_r, h_b2_r, h_c_r;
 
-  logic signed [31:0] use_a0_c, use_a1_c, use_a2_c, use_b0_c, use_b1_c, use_b2_c, use_c_c;
+  logic signed [DW-1:0] use_a0_c, use_a1_c, use_a2_c, use_b0_c, use_b1_c, use_b2_c, use_c_c;
   always_comb begin
     // On the denial clock the data IS the stalled instruction's, so take it
     // and remember it. On the clocks after, the file has moved on: use what
@@ -730,7 +782,7 @@ module zhao_probe_v3_exec #(
   logic [$clog2(SKD+1)-1:0] sk_n_r;
   logic [CW-1:0]            sk_ctx_r  [SKD];
   logic [RW-1:0]            sk_reg_r  [SKD];
-  logic signed [31:0]       sk_data_r [SKD];
+  logic signed [DW-1:0]     sk_data_r [SKD];
   logic [$clog2(SKD)-1:0]   sk_hd_r, sk_tl_r;
 
   logic sk_ne_c, sk_push_c, sk_pop_c, sk_busy_c;
@@ -1089,7 +1141,11 @@ module zhao_probe_v3_exec #(
         end else begin
           pc_r[s4_ctx_r] <= pc_r[s4_ctx_r] + PW'(1);
         end
-        if (alu_unsupported || dot_here_c) unsupported_o <= 1'b1;
+        // `alu_lane_desync` cannot fire while the lanes share an opcode, so it
+        // means the packed slices are miswired rather than that a program did
+        // something unusual. Same alarm, because both say the same thing: this
+        // block was asked for something it cannot honestly answer.
+        if (alu_unsupported || dot_here_c || alu_lane_desync) unsupported_o <= 1'b1;
         if (alu_sat_add) sat_add_o <= 1'b1;
         if (alu_sat_mul) sat_mul_o <= 1'b1;
         if (alu_sat_rescale) sat_rescale_o <= 1'b1;

@@ -58,6 +58,11 @@ module zhao_field_v3_svcpath #(
     // SIXTEEN points in flight no matter how many contexts exist, and covering
     // the services' latency is what the Earth budget turns on.
     parameter int OUTSTANDING = 4,
+    // Points per offer and per write. The services below are ALREADY four
+    // points wide and are untouched by this; LANES is about how many points
+    // the executor hands over at once and how many a single register write
+    // carries back.
+    parameter int LANES = 1,
     parameter int REGS     = 32,
     parameter int TAGW     = 8
 ) (
@@ -70,11 +75,11 @@ module zhao_field_v3_svcpath #(
     input  var logic [$clog2(CONTEXTS)-1:0]   long_ctx_i,
     input  var logic [7:0]                    long_op_i,
     input  var logic [$clog2(REGS)-1:0]       long_dst_i,
-    input  var logic signed [31:0]            long_s0_i,
-    input  var logic signed [31:0]            long_s1_i,
-    input  var logic signed [31:0]            long_s2_i,
-    input  var logic signed [31:0]            long_s3_i,
-    input  var logic signed [31:0]            long_s4_i,
+    input  var logic signed [32*LANES-1:0]    long_s0_i,
+    input  var logic signed [32*LANES-1:0]    long_s1_i,
+    input  var logic signed [32*LANES-1:0]    long_s2_i,
+    input  var logic signed [32*LANES-1:0]    long_s3_i,
+    input  var logic signed [32*LANES-1:0]    long_s4_i,
     input  var logic        [31:0]            long_imm_i,
     input  var logic                          flush_i,
 
@@ -83,7 +88,7 @@ module zhao_field_v3_svcpath #(
     output var logic                          alu_wb_ready_o,
     input  var logic [$clog2(CONTEXTS)-1:0]   alu_wb_ctx_i,
     input  var logic [$clog2(REGS)-1:0]       alu_wb_reg_i,
-    input  var logic signed [31:0]            alu_wb_data_i,
+    input  var logic signed [32*LANES-1:0]    alu_wb_data_i,
 
     // ---- a rival on the BANK, so the service can actually be refused -------
     // Without this the bank grants every request and the service's whole
@@ -106,7 +111,7 @@ module zhao_field_v3_svcpath #(
     output var logic                          wr_en_o,
     output var logic [$clog2(CONTEXTS)-1:0]   wr_ctx_o,
     output var logic [$clog2(REGS)-1:0]       wr_reg_o,
-    output var logic signed [31:0]            wr_data_o,
+    output var logic signed [32*LANES-1:0]    wr_data_o,
 
     // ---- a context comes back to the ready set -----------------------------
     output var logic                          rel_valid_o,
@@ -265,7 +270,8 @@ module zhao_field_v3_svcpath #(
   logic signed [31:0] drain_data;
 
   zhao_field_v3_dispatch #(
-      .CONTEXTS(CONTEXTS), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING)
+      .CONTEXTS(CONTEXTS), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING),
+      .LANES(LANES)
   ) u_dispatch (
       .clk(clk), .rst_n(rst_n),
       .long_valid_i(long_valid_i), .long_ready_o(long_ready_o),
@@ -726,7 +732,7 @@ module zhao_field_v3_svcpath #(
   logic [1:0]         wb_req_valid, wb_req_ready;
   logic [CTXW-1:0]    wb_ctx [2];
   logic [REGW-1:0]    wb_reg [2];
-  logic signed [31:0] wb_data [2];
+  logic signed [32*LANES-1:0] wb_data [2];
 
   always_comb begin
     wb_req_valid[0] = alu_wb_valid_i;
@@ -743,7 +749,7 @@ module zhao_field_v3_svcpath #(
   assign drain_ready    = wb_req_ready[1];
 
   zhao_field_v3_wbarb #(
-      .CLAIMANTS(2), .CONTEXTS(CONTEXTS), .REGS(REGS)
+      .CLAIMANTS(2), .CONTEXTS(CONTEXTS), .REGS(REGS), .LANES(LANES)
   ) u_wbarb (
       .clk(clk), .rst_n(rst_n),
       .policy_i(wb_policy_i),

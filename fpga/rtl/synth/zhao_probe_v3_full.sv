@@ -90,6 +90,8 @@
 module zhao_probe_v3_full #(
     parameter int CTX  = 8,
     parameter int OUTSTANDING = 4,
+    // Points per context. Everything below simply carries it.
+    parameter int LANES = 1,
     parameter int REGS = 32,
     parameter int PLAN = 32,
     parameter int TAGW = 8
@@ -111,7 +113,7 @@ module zhao_probe_v3_full #(
     input var logic                    pre_we_i,
     input var logic [$clog2(CTX)-1:0]  pre_ctx_i,
     input var logic [$clog2(REGS)-1:0] pre_reg_i,
-    input var logic signed [31:0]      pre_data_i,
+    input var logic signed [32*LANES-1:0] pre_data_i,
 
     input var logic                   start_i,
     input var logic [$clog2(CTX)-1:0] start_ctx_i,
@@ -142,7 +144,7 @@ module zhao_probe_v3_full #(
     output var logic                    wr_en_o,
     output var logic [$clog2(CTX)-1:0]  wr_ctx_o,
     output var logic [$clog2(REGS)-1:0] wr_reg_o,
-    output var logic signed [31:0]      wr_data_o,
+    output var logic signed [32*LANES-1:0] wr_data_o,
 
     // ---- evidence, per stage, so a number names its own stage --------------
     output var logic [31:0]             uops_issued_o,
@@ -221,7 +223,7 @@ module zhao_probe_v3_full #(
   logic [$clog2(CTX)-1:0]  long_ctx;
   logic [7:0]              long_op;
   logic [$clog2(REGS)-1:0] long_dst;
-  logic signed [31:0]      long_s0, long_s1, long_s2, long_s3, long_s4;
+  logic signed [32*LANES-1:0] long_s0, long_s1, long_s2, long_s3, long_s4;
   logic [31:0]             long_imm;
   logic                    long_flush;
 
@@ -233,7 +235,7 @@ module zhao_probe_v3_full #(
   logic                    alu_wb_valid, alu_wb_ready;
   logic [$clog2(CTX)-1:0]  alu_wb_ctx;
   logic [$clog2(REGS)-1:0] alu_wb_reg;
-  logic signed [31:0]      alu_wb_data;
+  logic signed [32*LANES-1:0]      alu_wb_data;
 
   /* verilator lint_off UNUSEDSIGNAL */
   logic [31:0] svc_bank_grants, svc_bank_stalls;
@@ -244,7 +246,7 @@ module zhao_probe_v3_full #(
   /* verilator lint_on UNUSEDSIGNAL */
 
   zhao_probe_v3_engine #(
-      .CTX(CTX), .REGS(REGS), .PLAN(PLAN)
+      .CTX(CTX), .REGS(REGS), .PLAN(PLAN), .LANES(LANES)
   ) u_engine (
       .clk(clk), .rst_n(rst_n),
       .up_we_i(up_we_i), .up_ctx_i(up_ctx_i), .up_pc_i(up_pc_i), .up_op_i(up_op_i),
@@ -286,7 +288,7 @@ module zhao_probe_v3_full #(
   );
 
   zhao_field_v3_svcpath #(
-      .CONTEXTS(CTX), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING)
+      .CONTEXTS(CTX), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING), .LANES(LANES)
   ) u_svc (
       .clk(clk), .rst_n(rst_n),
       .long_valid_i(long_valid), .long_ready_o(long_ready),

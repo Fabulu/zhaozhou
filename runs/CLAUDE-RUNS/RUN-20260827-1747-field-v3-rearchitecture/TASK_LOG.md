@@ -2370,3 +2370,27 @@ it should be settled before any RTL is cut.
 
     frame, impact_wave, CTX=32   4,368,000 -> 2,865,408   (5.1x -> 3.4x over)
     every measurement above is EXACT: 4,608 values against the oracle
+
+### Fast suite after all of the above: 313/314
+
+    99% tests passed, 1 failed out of 314      Total 864 s
+
+The one failure is **`creature_core`**, and it is NOT this lane's:
+
+    FAIL: creature does not fill the frame
+    tests/geometry/creature_core.cpp:838   check(lit < W * H, ...)
+
+The probe renders one creature into a 64x64 frame and requires it not to cover
+every pixel; `lit` has reached all 4,096. The creature sources were last touched
+by the art lane (`430fa10` shared spring and saltos, `65350e0` v9 presentation,
+`718da3a` cel-main), and the extent law itself arrived in `90bfa07`. No Field
+commit in this run touches creature code.
+
+LEFT FOR THE ART LANE ON PURPOSE. How large a creature should be in frame is an
+art judgement, and the working rule for this repo is that such a value is chosen
+by looking at the thing rather than by moving a threshold until a gate goes
+green. Silently widening the bound would erase the only signal that the v9
+presentation changed the creature's extent.
+
+Everything in the Field lane is green, including the composed Earth gate under
+all three drive patterns.

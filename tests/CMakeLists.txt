@@ -1178,6 +1178,7 @@ verilate(test_field_seq_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_exec_shared.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
@@ -1204,6 +1205,7 @@ add_test(NAME lint_zhao_field_seq
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_exec_shared.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
@@ -1444,6 +1446,7 @@ verilate(test_field_v3_exec_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv)
 add_test(NAME field_v3_exec_directed COMMAND test_field_v3_exec_directed)
 set_tests_properties(field_v3_exec_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
@@ -1563,6 +1566,7 @@ verilate(test_field_v3_full_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv)
 add_test(NAME field_v3_full_directed COMMAND test_field_v3_full_directed)
@@ -1597,6 +1601,7 @@ verilate(test_field_v3_earth_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv)
 add_test(NAME field_v3_earth_directed COMMAND test_field_v3_earth_directed --points 256
@@ -1640,6 +1645,7 @@ verilate(test_field_v3_earth_wide
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
   VERILATOR_ARGS -GCTX=32 -GOUTSTANDING=12)
@@ -1648,6 +1654,16 @@ add_test(NAME field_v3_earth_wide COMMAND test_field_v3_earth_wide --points 256
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/impact_wave.zprog
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/wave_pool.zprog)
 set_tests_properties(field_v3_earth_wide PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_executable(test_field_alu_vec_directed differential/field_alu_vec_directed.cpp)
+target_link_libraries(test_field_alu_vec_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_field_alu_vec_directed
+  PREFIX Vzhao_field_alu_vec
+  TOP_MODULE zhao_field_alu_vec
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv)
+add_test(NAME field_alu_vec_directed COMMAND test_field_alu_vec_directed)
+set_tests_properties(field_alu_vec_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 add_executable(test_field_v3_svcpath_directed differential/field_v3_svcpath_directed.cpp)
 target_link_libraries(test_field_v3_svcpath_directed PRIVATE zhao_harness zhao_zref)
@@ -1962,6 +1978,7 @@ verilate(test_field_alu_ops
   PREFIX Vzhao_field_alu_tb
   TOP_MODULE zhao_field_alu_tb
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
           ${CMAKE_SOURCE_DIR}/tests/rtl/zhao_field_alu_tb.sv)
 add_test(NAME field_alu_ops COMMAND test_field_alu_ops)
 set_tests_properties(field_alu_ops PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
@@ -1973,7 +1990,8 @@ set_tests_properties(field_alu_random_nightly PROPERTIES LABELS "nightly" TIMEOU
 add_test(NAME lint_zhao_field_alu
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_field_alu
-                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv)
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv)
 set_tests_properties(lint_zhao_field_alu PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
