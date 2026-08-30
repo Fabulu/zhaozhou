@@ -517,13 +517,14 @@ void generate_smooth_normals(std::vector<Meshlet>& mesh) {
       const int64_t e2x = (static_cast<int64_t>(c.x) - a.x) >> 8;
       const int64_t e2y = (static_cast<int64_t>(c.y) - a.y) >> 8;
       const int64_t e2z = (static_cast<int64_t>(c.z) - a.z) >> 8;
-      // The ring zipper winds its triangles INWARD under the double-sided
-      // Phase-3 raster (verified by render: the first smooth-lit frame was
-      // lit from inside the tube), so the accumulated cross is NEGATED to
-      // make the stored normal point OUT of the surface.
-      const int64_t nx = -(e1y * e2z - e1z * e2y);
-      const int64_t ny = -(e1z * e2x - e1x * e2z);
-      const int64_t nz = -(e1x * e2y - e1y * e2x);
+      // build_ring_part's ring zipper is OUTWARD wound: for an unrotated
+      // +Y-axis tube its first face has e1 along +Y and e2 around the ring,
+      // so e1 x e2 points radially away from the centreline. V13's committed
+      // synthetic and posed-ring fixture proved the old negation made every
+      // packed normal inward (dot(normal,outward) approximately -1).
+      const int64_t nx = e1y * e2z - e1z * e2y;
+      const int64_t ny = e1z * e2x - e1x * e2z;
+      const int64_t nz = e1x * e2y - e1y * e2x;
       for (const uint8_t vi : {m.idx[t], m.idx[t + 1], m.idx[t + 2]}) {
         const SkinVertex& v = m.verts[vi];
         auto& s = acc[{v.x, v.y, v.z}];

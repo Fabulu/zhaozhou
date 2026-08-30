@@ -1,0 +1,77 @@
+V13 LIGHT DIRECTION / SPACE / RESPONSE TRACE
+==============================================
+
+Synthetic executable convention fixture
+---------------------------------------
+Input source direction: (0,+65536,0), defined from surface toward source.
+Known +Y smooth top: 65536. Known -Y smooth underside: 0.
+Known +Y flat top winding: 65536. Reversed -Y underside: 0.
+Therefore both Lambert APIs consume surface-to-light, not incoming ray travel.
+
+Actual posed Zixxtrixx, idle slot 1 key 0
+----------------------------------------
+Before fix, six independently selected complete-ring dorsal/ventral samples:
+  packed smooth dot(normal,outward): -65374 .. -65532
+  compiled index-face dot(face,outward): +64711 .. +64837
+  historical reversed face dot(face,outward): -64711 .. -64837
+After fix, the identical samples:
+  packed smooth dot(normal,outward): +65374 .. +65532
+  compiled index-face dot(face,outward): +64711 .. +64837
+  obsolete reversed face dot(face,outward): -64711 .. -64837
+Exact sample rows are committed in light-sign-before.txt and light-sign-after.txt.
+
+Root cause
+----------
+The ring zipper was already outward-wound. Two historical assertions called it
+inward. generate_smooth_normals negated its already-correct cross product, and
+compose_creatures independently reversed B/C before flat Lambert. Smooth and
+flat agreed only because both had been made inward.
+
+World/view trace
+----------------
+1. compose_creatures constructs each instance world matrix from orientation,
+   tilt/bulk and translation, then forms worldm[b] = world * pose[b].
+2. Both skin_vertex and skin_normal_lambert consume worldm. The normal therefore
+   follows bone/model/instance rotation into world space; translation is absent
+   from the normal rows.
+3. The selected rig is read once. key_* and fill_* are passed unchanged directly
+   to smooth and flat world-space Lambert. No model or view matrix touches them.
+4. vp is passed separately only to project_vertex after world-space position and
+   Lambert are already known.
+5. The inspection orbit changes only SceneView.view_projection by multiplying
+   it by rot_world_yaw(theta). It never mutates the pose, instance world matrix,
+   or g_creature_light_rig.
+6. The 600-frame all-frame sheet shows a stationary held pose and a continuous
+   camera turn; illumination stays attached to the physical dorsal/top and fixed
+   world azimuth rather than following the camera.
+
+Corrected Toplight 1 named rig (Q16.16)
+---------------------------------------
+key direction:  (-18000, 59000, -22000)
+fill direction: ( 26000, 56000,  22000)
+ambient RGB:    ( 24904, 26214,  28180)
+key gain:         45875
+fill RGB:       (  6554,  7864,  11141)
+Both directions are in the upper world hemisphere. The dominant key has greater
+authority and a high crown; the weaker cool fill is above and opposite.
+
+High-dorsal material-response trace
+-----------------------------------
+For a +Y dorsal normal, the candidate produces key Lambert 59000 and fill
+Lambert 56000. creature_light applies ambient + key_gain*Lambert + channel
+fill*Lambert, then the existing 1/16 quantizer. The three resulting gains are
+(65536,65536,65536), mean 65536. The frozen smooth-cel-main thresholds
+(43000,57000) select the bright authored level 82000, or 1.2512 gain.
+rast.cpp applies that toon gain to the sampled texture channels and saturates
+only after multiplication. In rendered frame 0000, the visibly dorsal pink
+stripe at native pixel (240,96) is RGB (255,105,206): the high dorsal Lambert
+survives gain, cel quantisation, texture response and output clamping as a bright
+pixel. It is not inverted, lost to a wrong channel, or replaced by stale state.
+
+Bounded visual verdict
+----------------------
+Sequence: 600 frames at 60 Hz, CRC32C 0xCB8C0E8A.
+The four quarter-turns and every-frame sheet were inspected at 384x240. The
+pink/cyan dorsal crown is plainly the brightest surface, side planes retain
+blue/green form, and the underside stays darker but readable. No geometry,
+texture, pigment, pose, cel threshold, outline or camera framing was changed.

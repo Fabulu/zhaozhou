@@ -1,0 +1,9 @@
+fixture direction=surface_to_light source=(0,+1,0) smooth_top=65536 smooth_underside=0 flat_top=65536 flat_underside=0
+actual dorsal m=22 v=29 tri=56 radial_y=65516 dot(normal,outward)=65375 dot(index_face,outward)=64790 dot(reversed_face,outward)=-64790
+actual dorsal m=23 v=12 tri=22 radial_y=65469 dot(normal,outward)=65375 dot(index_face,outward)=64711 dot(reversed_face,outward)=-64711
+actual dorsal m=23 v=29 tri=23 radial_y=65394 dot(normal,outward)=65374 dot(index_face,outward)=64761 dot(reversed_face,outward)=-64761
+actual ventral m=22 v=21 tri=38 radial_y=-65516 dot(normal,outward)=65522 dot(index_face,outward)=64789 dot(reversed_face,outward)=-64789
+actual ventral m=23 v=4 tri=8 radial_y=-65469 dot(normal,outward)=65532 dot(index_face,outward)=64837 dot(reversed_face,outward)=-64837
+actual ventral m=23 v=21 tri=7 radial_y=-65394 dot(normal,outward)=65522 dot(index_face,outward)=64741 dot(reversed_face,outward)=-64741
+light-sign: OUTWARD PASS
+probe_exit=0

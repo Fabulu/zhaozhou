@@ -4192,6 +4192,20 @@ SceneSubject subject_zixx_overhead_orbit() {
   return s;
 }
 
+// V13's one-and-only post-correction animation. It deliberately inherits the
+// identical held key, framing, 600-frame duration and view-only orbit above;
+// only its subject name and selected generic world-space rig differ.
+SceneSubject subject_zixx_corrected_toplight_1() {
+  SceneSubject s = subject_zixx_still();
+  s.name = "zixxtrixx-corrected-toplight-1";
+  s.frames = 600;
+  s.orbit = true;
+  s.creature_hold = true;
+  s.note = "EXPERIMENTAL: v13 Corrected Toplight 1 after outward-normal repair; "
+           "held signature-S, slow 10-second orbit, fixed world-space light";
+  return s;
+}
+
 // Same pose, light and true-side camera as zixxtrixx-still, pulled back to a
 // real gameplay-scale read. Kept as a committed counterpart so smooth toon
 // topology comparisons cannot substitute an enlarged close crop for distance.
@@ -5432,11 +5446,14 @@ int main(int argc, char** argv) {
       zc::g_creature_light_rig = &zc::kCreatureLightSilverMoon;
     else if (name == "cloudbreak")
       zc::g_creature_light_rig = &zc::kCreatureLightCloudbreak;
+    else if (name == "corrected-toplight-1")
+      zc::g_creature_light_rig = &zc::kCreatureLightCorrectedToplight1;
     else {
       std::fprintf(stderr,
                    "unknown ZIXX_LIGHT=%s (expected baseline, front-soft, high-open, crossfill, "
                    "zenith-sun, morning-crown, evening-crown, north-skylight, south-skylight, "
-                   "open-overcast, hard-noon, veiled-sun, silver-moon, cloudbreak)\n",
+                   "open-overcast, hard-noon, veiled-sun, silver-moon, cloudbreak, "
+                   "corrected-toplight-1)\n",
                    light);
       return 2;
     }
@@ -5499,6 +5516,8 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-still")) rc |= render_scene(subject_zixx_still());
   if (wanted("zixxtrixx-light-choice")) rc |= render_scene(subject_zixx_light_choice());
   if (wanted("zixxtrixx-overhead-orbit")) rc |= render_scene(subject_zixx_overhead_orbit());
+  if (wanted("zixxtrixx-corrected-toplight-1"))
+    rc |= render_scene(subject_zixx_corrected_toplight_1());
   if (wanted("zixxtrixx-still-game")) rc |= render_scene(subject_zixx_still_game());
   if (wanted("zixxtrixx-still-front")) rc |= render_scene(subject_zixx_still_front());
   if (wanted("zixxtrixx-fall-side")) rc |= render_scene(subject_zixx_fall_side());

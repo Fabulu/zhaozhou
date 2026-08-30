@@ -1,0 +1,18 @@
+Review deployment: https://b18e01af.upheaval.pages.dev
+Production: https://upheaval.pages.dev
+review deployment: exact noindex once and complete v12 section present — PASS
+production: exact noindex once and complete v12 section present — PASS
+production bytes: zenith-sun WebM + poster HTTP 200 and local-identical — PASS
+production bytes: morning-crown WebM + poster HTTP 200 and local-identical — PASS
+production bytes: evening-crown WebM + poster HTTP 200 and local-identical — PASS
+production bytes: north-skylight WebM + poster HTTP 200 and local-identical — PASS
+production bytes: south-skylight WebM + poster HTTP 200 and local-identical — PASS
+production bytes: open-overcast WebM + poster HTTP 200 and local-identical — PASS
+production bytes: hard-noon WebM + poster HTTP 200 and local-identical — PASS
+production bytes: veiled-sun WebM + poster HTTP 200 and local-identical — PASS
+production bytes: silver-moon WebM + poster HTTP 200 and local-identical — PASS
+production bytes: cloudbreak WebM + poster HTTP 200 and local-identical — PASS
+production bytes: secondary v11 High Open and Crossfill references HTTP 200 and local-identical — PASS
+production desktop 1280: v10 Idle initially selected; v12 10-option panel visible at 384px minimum; two references; no overflow — PASS
+production narrow 390: v10 Idle initially selected; v12 10-option panel visible at 324px minimum; two references; no overflow — PASS
+production Edge browser closed — PASS

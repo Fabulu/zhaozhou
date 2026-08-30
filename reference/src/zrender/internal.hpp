@@ -233,8 +233,10 @@ inline constexpr int32_t kLightZ = 26758;
  * zrender/terrain.cpp, shared per charter 29-6.
  */
 /**
- * As shade_flat_tri, but against an ARBITRARY unit light (Q16.16 components).
- * Added 2026-08-26 for the creature fill light: the one-light model left half
+ * As shade_flat_tri, but against an ARBITRARY unit Q16.16 direction FROM the
+ * shaded surface TOWARD the light source (not incoming ray travel). A +Y top
+ * winding therefore returns unity under L=(0,+1,0), while the corresponding
+ * -Y underside returns zero. Added 2026-08-26 for the creature fill light: the one-light model left half
  * of a body of revolution at an identical flat ambient floor with no form and
  * no chroma (see RUN-20260826-1615 FINDINGS-R1 section D.3). The arithmetic is
  * verbatim shade_flat_tri; only the light is a parameter.

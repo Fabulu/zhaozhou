@@ -1,7 +1,7 @@
 # Task Log: RUN-20260830-0946 - Zixxtrixx v12 overhead lighting options
 
 **Created:** 2026-08-30 09:46 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** `runs/CLAUDE-RUNS/RUN-20260830-0946-zixxtrixx-v12-overhead-lighting-options/`
 
 ---
@@ -49,6 +49,17 @@ Author exactly ten physically coherent world-space overhead lighting options for
 - Committed and pushed Upheaval website/media milestone `8bfc1d4`.
 - Fetched both remotes immediately before integration. `origin/main` remained at recorded setup tips in both repositories, so both feature branches already contain the latest current mains and no concurrent merge is required.
 
+### 2026-08-30 - Integrated, deployed once, verified and stopped
+
+- Fast-forwarded and pushed Zhaozhou main to published implementation/evidence head `adcfaa0ff81c221cb5dd7d7dcd55c7d052d97c7d`; feature head is identical before this run-ledger-only closeout.
+- Fast-forwarded and pushed Upheaval feature/main to `8bfc1d4cee8d10df12ee485513808f0961dd88cc` without force.
+- Invoked `website/deploy.ps1 -Project upheaval -Branch main` exactly once. Wrangler reported one successful production-branch deployment: `https://b18e01af.upheaval.pages.dev`; production is `https://upheaval.pages.dev`.
+- Cache-bypassed review and production checks found exact noindex once. All ten new production WebMs and posters, plus the two v11 reference stills, returned HTTP 200 and matched local bytes. Production Edge desktop/narrow checks retained initial v10 Idle selection and no horizontal overflow.
+- Restored the deploy-time timestamp-only generated index change, removed the temporary 6,000-frame raw render trees and discarded the superseded pre-reauthoring Zenith sheet.
+- Verified no v12 renderer, ffmpeg, compiler, headless Edge, HTTP server, Wrangler, Node or deployment/build child remained running.
+- A final fetch found Zhaozhou `origin/main` had advanced to `fbf06cda38f69dbbb85fc5d64c612f81a043f48c` through unrelated field-v3 hardware commit `9ac8520`; its five RTL/test paths do not overlap this pass and are merged into the final closeout rather than overwritten.
+- Stopped with the ten lighting options live. No spring code, animation, probe or catalogue media was touched.
+
 ---
 
 ## Validation Ledger — `V12-OVERHEAD-BUDGET-1`
@@ -57,7 +68,7 @@ Author exactly ten physically coherent world-space overhead lighting options for
 |---|---|---|---|
 | O12-R | Are there exactly ten new named rigs, each with a dominant fixed world-space key from above and no underside pseudo-key? | Source/value audit plus one shared native orbit contact review | PASS — ten; every key/fill +Y |
 | O12-T | Does the dorsal/top read illuminated and does the lighting remain world-fixed around the orbit? | The common slow orbit only; representative quarter-turn stills/contact sheet per rig | PASS — native visual review plus view-only source audit |
-| O12-W | Do all ten published orbit assets load while exact noindex and selected v10 presentation remain? | Static manifest/media check; one bounded desktop/narrow browser pass; cache-bypassed production bytes | Pending |
+| O12-W | Do all ten published orbit assets load while exact noindex and selected v10 presentation remain? | Static manifest/media check; one bounded desktop/narrow browser pass; cache-bypassed production bytes | PASS — review + production bytes/layout |
 
 No catalogue suite, exhaustive clip campaign, broad regression suite or stale `creature_core` diagnosis unless a new concrete signal appears.
 
@@ -81,8 +92,10 @@ None. This is the sole modelling/art lane.
 - `runs/CLAUDE-RUNS/RUN-20260830-0946-zixxtrixx-v12-overhead-lighting-options/evidence/website-media-verification.txt`
 - `runs/CLAUDE-RUNS/RUN-20260830-0946-zixxtrixx-v12-overhead-lighting-options/evidence/website-local-verification.txt`
 - `runs/CLAUDE-RUNS/RUN-20260830-0946-zixxtrixx-v12-overhead-lighting-options/evidence/website-v12-desktop-panel.png`
+- `runs/CLAUDE-RUNS/RUN-20260830-0946-zixxtrixx-v12-overhead-lighting-options/evidence/deployment.txt`
+- `runs/CLAUDE-RUNS/RUN-20260830-0946-zixxtrixx-v12-overhead-lighting-options/evidence/production-verification.txt`
 - Ten final quarter-turn sheets, two review mosaics, direct-build evidence and ten render logs under the same `evidence/` directory.
-- Ten 600-frame raw orbit trees under `render/` are temporary, deliberately uncommitted production inputs.
+- The temporary ten 600-frame raw orbit trees were removed after verified website encoding.
 
 ---
 
@@ -98,6 +111,4 @@ None. This is the sole modelling/art lane.
 
 ## Next Steps
 
-1. Commit and push the website verification evidence, then fast-forward both isolated local mains to their completed feature heads and push without force.
-2. Deploy exactly once with the mandatory project and branch arguments.
-3. Perform only O12-W production verification, close the run, stop all jobs and do not begin spring work.
+None in this run. Await owner lighting selection; the recorded whole-body gummy spring direction remains queued and unimplemented.
