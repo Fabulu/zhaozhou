@@ -65,6 +65,10 @@ module zhao_field_v3_svcpath #(
     parameter int LANES = 1,
     // Gather slots, one per opcode in flight. Forwarded, not fixed here.
     parameter int GATHERS = 4,
+    // Root banks in the distance service. The single most expensive parameter
+    // in the engine -- each bank is four floor-exact roots -- and the one that
+    // decides whether DIST2 fits the admission budget at all.
+    parameter int DIST_BANKS = 2,
     parameter int REGS     = 32,
     parameter int TAGW     = 8
 ) (
@@ -561,10 +565,17 @@ module zhao_field_v3_svcpath #(
       .tag_o(tg_rsp_tag)
   );
 
-  // THE SLOWEST SERVICE ON THE PATH, and knowingly so: one exact root walked
-  // across four lanes at 32 iterations each. `len_of` is exact and an
-  // approximate root would be a different answer rather than a faster one.
-  zhao_field_v3_len u_len (
+  // THE SLOWEST SERVICE ON THE PATH, and knowingly so: the root is exact and
+  // 32 iterations, so throughput here is bought only by having more of them.
+  // `len_of` is floor-exact and an approximate root would be a different
+  // answer rather than a faster one.
+  //
+  // DIST_BANKS is what decides whether Earth fits: at 2 the initiation interval
+  // is 22 clocks against a 24.33 ceiling for the WHOLE program, so this service
+  // alone took 90% of the budget. At 4 it is 12.
+  zhao_field_v3_len #(
+      .BANKS(DIST_BANKS)
+  ) u_len (
       .clk(clk), .rst_n(rst_n),
       .v_valid_i(svc_valid && is_len_c), .v_ready_o(ln_v_ready),
       .mode_i((svc_op == OP_LEN3) ? 2'd1 : (svc_op == OP_DIST2) ? 2'd2 : 2'd0),

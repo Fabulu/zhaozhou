@@ -75,7 +75,21 @@
 // What is NOT negotiable is exactness. `len_of` is floor-exact and an
 // approximate root would be a different answer, not a faster one.
 module zhao_field_v3_len #(
-    parameter int LANES = 4
+    parameter int LANES = 4,
+    // ROOT BANKS. The root is 32 fixed iterations and cannot be pipelined, so
+    // throughput here is bought only by having more of them: while one bank
+    // roots, the others take the next groups.
+    //
+    // TWO WAS NOT ENOUGH, and the composed Earth gate is what says so rather
+    // than an argument. DIST2's initiation interval is 22 clocks against an
+    // admission ceiling of 24.33 for the WHOLE program, so the distance
+    // service alone was consuming 90% of the budget and every other op had to
+    // fit in the 2.3 clocks left. Both shipped Earth programs landed just above
+    // it -- 25 and 29 -- which is what a single binding constraint looks like.
+    //
+    // Each bank is LANES roots, so this is the expensive parameter in the whole
+    // engine. Raise it on evidence and re-fit; do not round it up for comfort.
+    parameter int BANKS = 2
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -142,19 +156,19 @@ module zhao_field_v3_len #(
   logic        [63:0] f_n2_r [LANES];
 
   // ---- the two root banks --------------------------------------------------
-  logic               bk_busy_r [2];
-  logic               bk_done_r [2];
-  logic        [ 7:0] bk_tag_r  [2];
-  logic signed [31:0] bk_res_r  [2][LANES];
-  logic        [ 3:0] bk_sat_r  [2];
-  logic [LANES-1:0]   bk_started_r [2];
-  logic [LANES-1:0]   bk_got_r     [2];
-  logic        [63:0] bk_n2_r   [2][LANES];
+  logic               bk_busy_r [BANKS];
+  logic               bk_done_r [BANKS];
+  logic        [ 7:0] bk_tag_r  [BANKS];
+  logic signed [31:0] bk_res_r  [BANKS][LANES];
+  logic        [ 3:0] bk_sat_r  [BANKS];
+  logic [LANES-1:0]   bk_started_r [BANKS];
+  logic [LANES-1:0]   bk_got_r     [BANKS];
+  logic        [63:0] bk_n2_r   [BANKS][LANES];
 
-  logic [LANES-1:0] rt_n_valid [2], rt_n_ready [2], rt_r_valid [2];
-  logic [63:0]      rt_r [2][LANES];
+  logic [LANES-1:0] rt_n_valid [BANKS], rt_n_ready [BANKS], rt_r_valid [BANKS];
+  logic [63:0]      rt_r [BANKS][LANES];
 
-  for (genvar bk = 0; bk < 2; bk++) begin : gen_bank
+  for (genvar bk = 0; bk < BANKS; bk++) begin : gen_bank
     for (genvar g = 0; g < LANES; g++) begin : gen_root
       zhao_field_isqrt u_isqrt (
           .clk(clk), .rst_n(rst_n),
@@ -179,22 +193,31 @@ module zhao_field_v3_len #(
   // Pointers cannot collide: a push writes [tail] and a retire advances head,
   // and the count is decided in ONE place from both. That is the same shape
   // the dispatcher's in-flight queue already uses, and for the same reason.
-  logic       oq_bk_r [2];
-  logic       oq_head_r, oq_tail_r;
-  logic [1:0] oq_count_r;
+  // Accept order, by pointer rather than by shifting -- a push and a retire on
+  // the same clock must not both write the same entry.
+  localparam int BW = (BANKS <= 2) ? 1 : ((BANKS <= 4) ? 2 : 3);
+  logic [BW-1:0]  oq_bk_r [BANKS];
+  logic [BW-1:0]  oq_head_r, oq_tail_r;
+  logic [BW:0]    oq_count_r;
 
-  logic free_bank_c, have_free_c;
+  logic [BW-1:0] free_bank_c;
+  logic          have_free_c;
   always_comb begin
     have_free_c = 1'b0;
-    free_bank_c = 1'b0;
-    if (!bk_busy_r[0]) begin
-      have_free_c = 1'b1;
-      free_bank_c = 1'b0;
-    end else if (!bk_busy_r[1]) begin
-      have_free_c = 1'b1;
-      free_bank_c = 1'b1;
-    end
+    free_bank_c = '0;
+    // Lowest free bank, scanned downwards so bank 0 wins -- an arbitrary but
+    // FIXED choice, because a rotating one would make the order queue's job
+    // harder for nothing.
+    for (int b = BANKS - 1; b >= 0; b--)
+      if (!bk_busy_r[b]) begin
+        have_free_c = 1'b1;
+        free_bank_c = BW'(b);
+      end
   end
+
+  function automatic logic [BW-1:0] next_bank(input logic [BW-1:0] p);
+    next_bank = (p == BW'(BANKS - 1)) ? BW'(0) : BW'(p + BW'(1));
+  endfunction
 
   assign mul_issue_o = (f_state_r == F_ISSUE);
   assign mul_a_0_o = 33'(f_v_r[f_comp_r][0]);
@@ -209,11 +232,11 @@ module zhao_field_v3_len #(
   // THE FRONT ACCEPTS WHENEVER IT IS FREE AND THE ORDER QUEUE HAS ROOM. It does
   // NOT wait for the roots, and that gate is the whole difference between II 42
   // and this file -- the same change the curve service made to reach 13.
-  assign v_ready_o = (f_state_r == F_IDLE) && (oq_count_r != 2'd2);
+  assign v_ready_o = (f_state_r == F_IDLE) && (oq_count_r != (BW+1)'(BANKS));
 
-  logic head_bk_c;
+  logic [BW-1:0] head_bk_c;
   assign head_bk_c = oq_bk_r[oq_head_r];
-  assign r_valid_o = (oq_count_r != 2'd0) && bk_busy_r[head_bk_c] && bk_done_r[head_bk_c];
+  assign r_valid_o = (oq_count_r != '0) && bk_busy_r[head_bk_c] && bk_done_r[head_bk_c];
   assign o0_0_o    = bk_res_r[head_bk_c][0];
   assign o0_1_o    = bk_res_r[head_bk_c][1];
   assign o0_2_o    = bk_res_r[head_bk_c][2];
@@ -227,20 +250,20 @@ module zhao_field_v3_len #(
       f_comp_r   <= 2'd0;
       f_ncomp_r  <= 2'd2;
       f_tag_r    <= 8'd0;
-      oq_count_r <= 2'd0;
-      oq_head_r  <= 1'b0;
-      oq_tail_r  <= 1'b0;
+      oq_count_r <= '0;
+      oq_head_r  <= '0;
+      oq_tail_r  <= '0;
       for (int c = 0; c < 3; c++)
         for (int l = 0; l < LANES; l++) f_v_r[c][l] <= '0;
       for (int l = 0; l < LANES; l++) f_n2_r[l] <= 64'd0;
-      for (int b = 0; b < 2; b++) begin
+      for (int b = 0; b < BANKS; b++) begin
         bk_busy_r[b]    <= 1'b0;
         bk_done_r[b]    <= 1'b0;
         bk_tag_r[b]     <= 8'd0;
         bk_sat_r[b]     <= 4'd0;
         bk_started_r[b] <= '0;
         bk_got_r[b]     <= '0;
-        oq_bk_r[b]      <= 1'b0;
+        oq_bk_r[b]      <= '0;
         for (int l = 0; l < LANES; l++) begin
           bk_res_r[b][l] <= '0;
           bk_n2_r[b][l]  <= 64'd0;
@@ -309,7 +332,7 @@ module zhao_field_v3_len #(
             bk_sat_r[free_bank_c]     <= 4'd0;
 
             oq_bk_r[oq_tail_r] <= free_bank_c;
-            oq_tail_r          <= ~oq_tail_r;
+            oq_tail_r          <= next_bank(oq_tail_r);
             f_state_r          <= F_IDLE;
           end
         end
@@ -318,7 +341,7 @@ module zhao_field_v3_len #(
       endcase
 
       // ---- the banks, independently ---------------------------------------
-      for (int b = 0; b < 2; b++) begin
+      for (int b = 0; b < BANKS; b++) begin
         if (bk_busy_r[b] && !bk_done_r[b]) begin
           for (int l = 0; l < LANES; l++) begin
             if (rt_n_valid[b][l] && rt_n_ready[b][l]) bk_started_r[b][l] <= 1'b1;
@@ -342,7 +365,7 @@ module zhao_field_v3_len #(
       if (r_valid_o && r_ready_i) begin
         bk_busy_r[head_bk_c] <= 1'b0;
         bk_done_r[head_bk_c] <= 1'b0;
-        oq_head_r            <= ~oq_head_r;
+        oq_head_r            <= next_bank(oq_head_r);
       end
 
       // ---- the occupancy, decided in ONE place -----------------------------
@@ -350,8 +373,8 @@ module zhao_field_v3_len #(
       begin
         automatic logic push = (f_state_r == F_HAND) && have_free_c;
         automatic logic pop  = r_valid_o && r_ready_i;
-        if (push && !pop)      oq_count_r <= oq_count_r + 2'd1;
-        else if (pop && !push) oq_count_r <= oq_count_r - 2'd1;
+        if (push && !pop)      oq_count_r <= oq_count_r + (BW+1)'(1);
+        else if (pop && !push) oq_count_r <= oq_count_r - (BW+1)'(1);
       end
     end
   end

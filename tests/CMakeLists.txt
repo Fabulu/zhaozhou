@@ -1692,7 +1692,7 @@ verilate(test_field_v3_earth_quad
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
-  VERILATOR_ARGS -GCTX=32 -GOUTSTANDING=16 -GGATHERS=8 -GLANES=4)
+  VERILATOR_ARGS -GCTX=32 -GOUTSTANDING=12 -GLANES=4 -GDIST_BANKS=4)
 target_compile_definitions(test_field_v3_earth_quad PRIVATE ZHAO_EARTH_CTX=32 ZHAO_EARTH_LANES=4)
 add_test(NAME field_v3_earth_quad COMMAND test_field_v3_earth_quad --points 256
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/impact_wave.zprog
@@ -1798,6 +1798,23 @@ verilate(test_field_v3_len_directed
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv)
 add_test(NAME field_v3_len_directed COMMAND test_field_v3_len_directed)
+
+# THE SAME SERVICE WITH FOUR ROOT BANKS. The root is 32 fixed iterations and
+# cannot be pipelined, so throughput is bought only by having more of them:
+# II 22 at two banks, 12 at four. At 2 the distance service alone consumed 90%
+# of the whole Earth admission budget. BOTH are tested, because the shipped
+# default is still 2 and a parameter nobody exercises is a parameter that
+# rots.
+add_executable(test_field_v3_len_banks4 differential/field_v3_len_directed.cpp)
+target_link_libraries(test_field_v3_len_banks4 PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_len_banks4
+  PREFIX Vzhao_field_v3_len
+  TOP_MODULE zhao_field_v3_len
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+  VERILATOR_ARGS -GBANKS=4)
+add_test(NAME field_v3_len_banks4 COMMAND test_field_v3_len_banks4)
+set_tests_properties(field_v3_len_banks4 PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 set_tests_properties(field_v3_len_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
 # ---- the uniform (scalar) bank -------------------------------------------

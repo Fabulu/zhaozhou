@@ -93,6 +93,7 @@ module zhao_probe_v3_full #(
     // Points per context. Everything below simply carries it.
     parameter int LANES = 1,
     parameter int GATHERS = 4,
+    parameter int DIST_BANKS = 2,
     parameter int REGS = 32,
     parameter int PLAN = 32,
     parameter int TAGW = 8
@@ -296,7 +297,7 @@ module zhao_probe_v3_full #(
 
   zhao_field_v3_svcpath #(
       .CONTEXTS(CTX), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING), .LANES(LANES),
-      .GATHERS(GATHERS)
+      .GATHERS(GATHERS), .DIST_BANKS(DIST_BANKS)
   ) u_svc (
       .clk(clk), .rst_n(rst_n),
       .long_valid_i(long_valid), .long_ready_o(long_ready),

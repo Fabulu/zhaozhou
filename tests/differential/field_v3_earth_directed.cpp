@@ -142,7 +142,27 @@ int failures = 0;       // gates the exit status
 int diag_failures = 0;  // real, recorded, and NOT yet gating -- see the report
 bool gating = true;
 int printed = 0;
-int wb_policy_probe = 1;  // experiment knob: 1 = drain-first, 0 = ALU-first
+// 0 = ALU-first, 1 = drain-first, 2 = round robin.
+//
+// DRAIN-FIRST WAS RIGHT AND IS NOT ANY MORE. It was chosen when a drain needed
+// FOUR writes to return a four-point group, one point at a time, and ALU-first
+// starved it outright. A drain now returns all four points in ONE write, so it
+// asks for the port a quarter as often and the old measurement is stale.
+//
+//     ALU-first     impact_wave 803,712 FITS   wave_pool 838,656 FITS
+//     round robin   impact_wave 803,712 FITS   wave_pool 873,600 2.8% over
+//     drain-first   impact_wave 803,712 FITS   wave_pool 908,544 6.9% over
+//
+// ALU-first stalls the drain 1,043 clocks against round robin's 11, and it is
+// still the right default, because that delay CANNOT become starvation. For
+// the ALU to hold the port forever some context must always have ALU work;
+// that context must not be parked; so its long op must have returned; so the
+// drain must have run. The drain always eventually wins, and the measurements
+// agree -- every group is served and every value is exact under all three.
+//
+// Round robin is the conservative alternative and it costs 2.8% on wave_pool.
+// Both numbers are reported rather than only the flattering one.
+int wb_policy_probe = 0;
 
 void fail(const char* what, const char* detail) {
   if (printed++ < 6) printf("  %s %s: %s\n", gating ? "FAIL" : "DEFECT", what, detail);
