@@ -51,7 +51,8 @@ module zhao_probe_v3_engine #(
     // Points per context. The bank below has always computed FOUR lanes per
     // grant with three of them tied off, so widening the executor costs the
     // engine only the wires that were already there.
-    parameter int LANES = 1
+    parameter int LANES = 1,
+    parameter int LONGQ = 4
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -246,7 +247,7 @@ module zhao_probe_v3_engine #(
   );
 
   zhao_probe_v3_exec #(
-      .LANES(LANES),
+      .LANES(LANES), .LONGQ(LONGQ),
       .CTX (CTX),
       .REGS(REGS),
       .PLAN(PLAN)

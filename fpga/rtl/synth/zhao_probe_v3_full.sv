@@ -92,6 +92,7 @@ module zhao_probe_v3_full #(
     parameter int OUTSTANDING = 4,
     // Points per context. Everything below simply carries it.
     parameter int LANES = 1,
+    parameter int LONGQ = 4,
     parameter int GATHERS = 4,
     parameter int DIST_BANKS = 2,
     parameter int RING_UNITS = 2,
@@ -257,7 +258,7 @@ module zhao_probe_v3_full #(
   /* verilator lint_on UNUSEDSIGNAL */
 
   zhao_probe_v3_engine #(
-      .CTX(CTX), .REGS(REGS), .PLAN(PLAN), .LANES(LANES)
+      .CTX(CTX), .REGS(REGS), .PLAN(PLAN), .LANES(LANES), .LONGQ(LONGQ)
   ) u_engine (
       .clk(clk), .rst_n(rst_n),
       .up_we_i(up_we_i), .up_ctx_i(up_ctx_i), .up_pc_i(up_pc_i), .up_op_i(up_op_i),

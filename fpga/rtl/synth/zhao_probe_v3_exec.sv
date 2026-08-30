@@ -86,6 +86,8 @@
 // the executor, full and Earth differentials check today.
 module zhao_probe_v3_exec #(
     parameter int LANES = 1,
+    // Depth of the long-op request queue. See LQD below.
+    parameter int LONGQ = 4,
     parameter int CTX  = 8,   // contexts in flight
     parameter int REGS = 32,  // vector registers per context
     parameter int PLAN = 32   // uops per context
@@ -514,8 +516,47 @@ module zhao_probe_v3_exec #(
   // so the alternative is a per-context parking copy of seven values. Holding
   // costs a clock or two and no state at all; the dispatcher accepts unless it
   // is mid-group with a different op.
+  // ---- THE LONG-OP REQUEST QUEUE ------------------------------------------
+  //
+  // S4 used to hold the whole pipe until the dispatcher took the request, and
+  // that freeze is EXECUTOR-WIDE: contexts with ordinary ALU work and no
+  // interest in that service stop as well. Measured with an exclusive per-clock
+  // classification it is 27-31% of every Earth run -- the largest single cost
+  // left, and the one an earlier counter of mine reported as ZERO because it
+  // sat inside the gate it was measuring.
+  //
+  // So S4 DEPOSITS AND CARRIES ON. The queue holds the request, the dispatcher
+  // drains it at its own pace, and the pipe stalls only when the queue is FULL,
+  // which is back-pressure rather than a freeze.
+  //
+  // DEPTH IS DERIVED, the same discipline the writeback skid states for itself.
+  // A context is PARKED the moment its request is queued, so it cannot produce
+  // a second one, and at most one long op reaches S4 per clock. The queue only
+  // has to absorb requests while the dispatcher is busy with a group, so four
+  // covers its OUTSTANDING depth without pretending to be unbounded.
+  // A PARAMETER, because four is a guess and the measurement disagreed with it:
+  // at four, crater_ring's hold went UP (398 -> 458) while the other two fell,
+  // because a queue that lets more contexts run also collects more requests and
+  // crater_ring issues two long ops per point.
+  localparam int LQD = LONGQ;
+
+  logic [$clog2(LQD+1)-1:0] lq_n_r;
+  logic [$clog2(LQD)-1:0]   lq_hd_r, lq_tl_r;
+  logic [CW-1:0]            lq_ctx_r [LQD];
+  logic [7:0]               lq_op_r  [LQD];
+  logic [RW-1:0]            lq_dst_r [LQD];
+  logic [31:0]              lq_imm_r [LQD];
+  logic signed [DW-1:0]     lq_s0_r [LQD], lq_s1_r [LQD], lq_s2_r [LQD];
+  logic signed [DW-1:0]     lq_s3_r [LQD], lq_s4_r [LQD];
+
+  logic lq_ne_c, lq_full_c, lq_push_c, lq_pop_c;
+  assign lq_ne_c   = (lq_n_r != '0);
+  assign lq_full_c = (lq_n_r == ($clog2(LQD+1))'(LQD));
+
   assign long_at_s4_c = s4_v_r && is_long(s4_op_r);
-  assign long_hold_c  = long_at_s4_c && !(long_valid_o && long_ready_i);
+  assign long_hold_c  = long_at_s4_c && lq_full_c;
+  assign lq_push_c    = long_at_s4_c && !lq_full_c;
+  assign lq_pop_c     = lq_ne_c && long_ready_i;
 
   assign dbg_s2_v_o   = s2_v_r;
   assign dbg_s2_ctx_o = s2_ctx_r;
@@ -524,16 +565,16 @@ module zhao_probe_v3_exec #(
   assign dbg_use_a0_o = use_a0_c[31:0];
   assign dbg_rf_a0_o  = rf_a0[31:0];
 
-  assign long_valid_o = long_at_s4_c;
-  assign long_ctx_o   = s4_ctx_r;
-  assign long_op_o    = s4_op_r;
-  assign long_dst_o   = s4_dst_r;
-  assign long_s0_o    = s4_a0_r;
-  assign long_s1_o    = s4_a1_r;
-  assign long_s2_o    = s4_a2_r;
-  assign long_s3_o    = s4_b0_r;
-  assign long_s4_o    = s4_b1_r;
-  assign long_imm_o   = s4_imm_r;
+  assign long_valid_o = lq_ne_c;
+  assign long_ctx_o   = lq_ctx_r[lq_hd_r];
+  assign long_op_o    = lq_op_r[lq_hd_r];
+  assign long_dst_o   = lq_dst_r[lq_hd_r];
+  assign long_s0_o    = lq_s0_r[lq_hd_r];
+  assign long_s1_o    = lq_s1_r[lq_hd_r];
+  assign long_s2_o    = lq_s2_r[lq_hd_r];
+  assign long_s3_o    = lq_s3_r[lq_hd_r];
+  assign long_s4_o    = lq_s4_r[lq_hd_r];
+  assign long_imm_o   = lq_imm_r[lq_hd_r];
 
   // AN EAGER FLUSH COSTS GROUP SIZE; A LATE ONE DEADLOCKS. The safe rule is
   // "no active context can still join", and a context can still join exactly
@@ -543,7 +584,11 @@ module zhao_probe_v3_exec #(
   // So flush when every active context is parked. With eight contexts the
   // group fills long before that; with one, it is the only thing that ever
   // issues the group at all.
-  assign flush_o = ~|(active_r & ~waiting_r);
+  // `lq_ne_c` IS PART OF FLUSH. "Nobody else can join" was true while a request
+  // reached the dispatcher the instant it left S4. With a queue in between, a
+  // context can be parked while its request has not been offered yet, so
+  // flushing on parked-alone would close a group that still has members coming.
+  assign flush_o = ~|(active_r & ~waiting_r) && !lq_ne_c;
 
   always_comb begin
     // `!hold_c` IS THE SAME LAW THE DOT SEQUENCE BELOW WAS REWRITTEN FOR,
@@ -921,6 +966,9 @@ module zhao_probe_v3_exec #(
       waiting_r     <= '0;
       sk_n_r        <= '0;
       sk_hd_r       <= '0;
+      lq_n_r        <= '0;
+      lq_hd_r       <= '0;
+      lq_tl_r       <= '0;
       sk_tl_r       <= '0;
       sk_overflow_o <= 1'b0;
       for (int i = 0; i < SKD; i++) begin
@@ -1094,6 +1142,24 @@ module zhao_probe_v3_exec #(
 
       end  // upstream: !hold_c && !mul_denied_c
 
+      // ---- the long-op queue ----------------------------------------------
+      if (lq_push_c) begin
+        lq_ctx_r[lq_tl_r] <= s4_ctx_r;
+        lq_op_r[lq_tl_r]  <= s4_op_r;
+        lq_dst_r[lq_tl_r] <= s4_dst_r;
+        lq_imm_r[lq_tl_r] <= s4_imm_r;
+        lq_s0_r[lq_tl_r]  <= s4_a0_r;
+        lq_s1_r[lq_tl_r]  <= s4_a1_r;
+        lq_s2_r[lq_tl_r]  <= s4_a2_r;
+        lq_s3_r[lq_tl_r]  <= s4_b0_r;
+        lq_s4_r[lq_tl_r]  <= s4_b1_r;
+        lq_tl_r <= (lq_tl_r == ($clog2(LQD))'(LQD - 1)) ? '0 : lq_tl_r + 1'b1;
+      end
+      if (lq_pop_c) lq_hd_r <= (lq_hd_r == ($clog2(LQD))'(LQD - 1)) ? '0 : lq_hd_r + 1'b1;
+      // Occupancy decided in ONE place.
+      if (lq_push_c && !lq_pop_c)      lq_n_r <= lq_n_r + 1'b1;
+      else if (lq_pop_c && !lq_push_c) lq_n_r <= lq_n_r - 1'b1;
+
       // ---- WHERE EVERY CLOCK WENT, EXACTLY ONCE ---------------------------
       //
       // These used to live inside `if (!hold_c && !mul_denied_c)` -- including
@@ -1170,8 +1236,11 @@ module zhao_probe_v3_exec #(
       // A parked context keeps `inflight_r` so it cannot re-issue, gains
       // `waiting_r` so the flush rule can see it, and does NOT advance its pc:
       // the instruction has not finished, it has been handed over.
+      // PARKED WHEN QUEUED. As far as this block is concerned the instruction
+      // has been handed over; the queue owns it now. Parking here is also what
+      // BOUNDS the queue -- a parked context cannot produce a second request.
       if (s4_v_r && long_at_s4_c) begin
-        if (long_ready_i) begin
+        if (lq_push_c) begin
           waiting_r[s4_ctx_r] <= 1'b1;
         end
       end else if (s4_v_r) begin

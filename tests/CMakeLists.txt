@@ -1692,7 +1692,7 @@ verilate(test_field_v3_earth_quad
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
-  VERILATOR_ARGS -GCTX=32 -GOUTSTANDING=12 -GLANES=4 -GDIST_BANKS=4 -GRING_UNITS=4 -GREGS=64)
+  VERILATOR_ARGS -GCTX=32 -GOUTSTANDING=12 -GLANES=4 -GLONGQ=16 -GDIST_BANKS=4 -GRING_UNITS=4 -GREGS=64)
 target_compile_definitions(test_field_v3_earth_quad PRIVATE ZHAO_EARTH_CTX=32 ZHAO_EARTH_LANES=4 ZHAO_EARTH_REGS=64)
 add_test(NAME field_v3_earth_quad COMMAND test_field_v3_earth_quad --points 256
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/crater_ring.zprog
