@@ -28,6 +28,15 @@ Establish the renderer's executable directional-light, normal and space conventi
 - Recorded the bounded six-question validation budget in `SPEC_v1.md` before tests.
 - Located the smooth Lambert, normal generator, flat Lambert and creature composition implementations; no convention change or rig tuning has been made yet.
 
+### 2026-08-30 - Root Cause Proven Before Fix
+
+- Added `--light-sign` to the committed mesh probe and fresh-built it directly in the run-local tree.
+- Synthetic identity fixture proved `skin_normal_lambert` and `shade_flat_tri_dir` both consume a surface-to-light direction: +Y top normals/winding returned 65536 under a +Y source and -Y undersides returned 0.
+- Six actual idle-key-0 body samples derived their outward vector from complete posed 3D ring centres. Packed smooth normals returned `dot(normal,outward)` from -65374 to -65532: consistently inward.
+- The compiled index winding returned outward face dots from +64711 to +64837. Reversing B/C, as the compositor currently does, returned the exact negative: the flat production lane is also inward.
+- Root cause: the ring zipper was already outward-wound. Two historical assertions said it was inward and independently inverted it: `generate_smooth_normals` negated the correct cross, and `compose_creatures` reversed each triangle before flat Lambert. Smooth/flat agreement therefore meant both lanes agreed inward.
+- Pre-fix executable evidence is `light-sign-before.txt`; expected exit was 1.
+
 ---
 
 ## Subagent Spawns

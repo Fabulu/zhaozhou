@@ -37,6 +37,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <map>
+#include <set>
 #include <vector>
 
 namespace zc = zref::creature;
@@ -69,10 +70,187 @@ int32_t legacy_clamped_response(const zc::mat3x4fx* pose, const zc::SkinVertex& 
   return static_cast<int32_t>((static_cast<int64_t>(v.w0) * la +
                                static_cast<int64_t>(64 - v.w0) * lb + 32) >> 6);
 }
+
+// A signed production-normal dot without copying its transform arithmetic:
+// max(0,N.L) - max(0,N.-L) == N.L. `L` is a unit Q16.16 direction FROM the
+// surface TOWARD the source, as independently pinned by the horizontal fixture.
+int32_t signed_skin_dot(const zc::mat3x4fx* pose, const zc::SkinVertex& v,
+                        int32_t lx, int32_t ly, int32_t lz) {
+  return zc::skin_normal_lambert(pose, v, lx, ly, lz) -
+         zc::skin_normal_lambert(pose, v, -lx, -ly, -lz);
+}
+
+void unit_q16(int64_t x, int64_t y, int64_t z, int32_t& ox, int32_t& oy, int32_t& oz) {
+  const uint64_t mag2 = static_cast<uint64_t>(x * x + y * y + z * z);
+  const int64_t mag = static_cast<int64_t>(zref::isqrt_u64(mag2));
+  if (mag == 0) {
+    ox = oy = oz = 0;
+    return;
+  }
+  ox = static_cast<int32_t>((x * 65536 + (x >= 0 ? mag / 2 : -mag / 2)) / mag);
+  oy = static_cast<int32_t>((y * 65536 + (y >= 0 ? mag / 2 : -mag / 2)) / mag);
+  oz = static_cast<int32_t>((z * 65536 + (z >= 0 ? mag / 2 : -mag / 2)) / mag);
+}
+
+int32_t signed_flat_dot(const int32_t p[3][3], int32_t lx, int32_t ly, int32_t lz,
+                        bool reverse) {
+  const int b = reverse ? 2 : 1;
+  const int c = reverse ? 1 : 2;
+  const int32_t pos = zref::render::shade_flat_tri_dir(
+      p[0][0], p[0][1], p[0][2], p[b][0], p[b][1], p[b][2],
+      p[c][0], p[c][1], p[c][2], lx, ly, lz, nullptr);
+  const int32_t neg = zref::render::shade_flat_tri_dir(
+      p[0][0], p[0][1], p[0][2], p[b][0], p[b][1], p[b][2],
+      p[c][0], p[c][1], p[c][2], -lx, -ly, -lz, nullptr);
+  return pos - neg;
+}
 }  // namespace
 
 int main(int argc, char** argv) {
   const zc::CreatureType& T = zixx::type();
+
+  // ---- V13 executable direction/orientation proof: --light-sign -----------
+  // This is deliberately bounded: one known horizontal fixture and six actual
+  // held-pose body vertices (three dorsal, three ventral). Ring centres are the
+  // posed average of one complete compiled body ring, so the comparison uses
+  // actual 3D geometry in the SAME pose rather than a rendered projection.
+  if (argc == 2 && std::string_view(argv[1]) == "--light-sign") {
+    std::array<zc::mat3x4fx, zc::kMaxBones> identity;
+    identity.fill(zc::mat3x4_identity());
+    zc::SkinVertex top{}, underside{};
+    top.ny = 127;
+    underside.ny = -127;
+    const int32_t smooth_top = zc::skin_normal_lambert(identity.data(), top, 0, 65536, 0);
+    const int32_t smooth_under =
+        zc::skin_normal_lambert(identity.data(), underside, 0, 65536, 0);
+    // Looking down from +Y: (0,0,0)->(0,0,+Z)->(+X,0,0) has +Y winding.
+    const int32_t horizontal_top[3][3] = {{0, 0, 0}, {0, 0, 65536}, {65536, 0, 0}};
+    const int32_t flat_top = zref::render::shade_flat_tri_dir(
+        0, 0, 0, 0, 0, 65536, 65536, 0, 0, 0, 65536, 0, nullptr);
+    const int32_t flat_under = zref::render::shade_flat_tri_dir(
+        0, 0, 0, 65536, 0, 0, 0, 0, 65536, 0, 65536, 0, nullptr);
+    (void)horizontal_top;
+    std::printf("fixture direction=surface_to_light source=(0,+1,0) ");
+    std::printf("smooth_top=%d smooth_underside=%d flat_top=%d flat_underside=%d\n",
+                smooth_top, smooth_under, flat_top, flat_under);
+    bool ok = smooth_top >= 65000 && smooth_under == 0 && flat_top >= 65000 && flat_under == 0;
+
+    const zc::Clip* idle = nullptr;
+    for (const zc::Clip& clip : T.bank.clips)
+      if (clip.slot_id == 1) idle = &clip;
+    if (idle == nullptr) {
+      std::printf("actual: idle slot 1 missing\n");
+      return 2;
+    }
+    std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+    zc::decode_pose(T, *idle, 0, pose, nullptr, 0);
+
+    struct Candidate {
+      int mi = -1, vi = -1, tri = -1;
+      int32_t radial_y = 0;
+      int32_t smooth = 0;
+      int32_t flat_index = 0;
+      int32_t flat_reversed = 0;
+      int32_t bx = 0, by = 0, bz = 0;
+    };
+    std::vector<Candidate> candidates;
+    for (int mi = 0; mi < static_cast<int>(T.mesh.size()); ++mi) {
+      const zc::Meshlet& mesh = T.mesh[mi];
+      if (mesh.page != zixx::kTileBody) continue;
+      std::map<uint8_t, std::vector<int>> rings;
+      for (int vi = 0; vi < static_cast<int>(mesh.verts.size()); ++vi) {
+        // Textured align-0 rings duplicate angular vertex 0 at u=255 solely to
+        // close the UV seam. Excluding it restores the exact complete-ring mean.
+        if (mesh.verts[vi].u != 255) rings[mesh.verts[vi].v].push_back(vi);
+      }
+      std::vector<std::array<int32_t, 3>> posed(mesh.verts.size());
+      for (size_t vi = 0; vi < mesh.verts.size(); ++vi)
+        zc::skin_vertex(pose.data(), mesh.verts[vi], posed[vi][0], posed[vi][1],
+                        posed[vi][2], nullptr);
+      for (const auto& [vlane, ids] : rings) {
+        if (vlane == 255) continue;  // the body fork cap apex shares this endpoint V
+        if (ids.size() < 8) continue;  // only complete authored body rings
+        int64_t cx = 0, cy = 0, cz = 0;
+        for (int vi : ids) {
+          cx += posed[vi][0];
+          cy += posed[vi][1];
+          cz += posed[vi][2];
+        }
+        cx /= static_cast<int64_t>(ids.size());
+        cy /= static_cast<int64_t>(ids.size());
+        cz /= static_cast<int64_t>(ids.size());
+        for (int vi : ids) {
+          const zc::SkinVertex& v = mesh.verts[vi];
+          int32_t rx, ry, rz;
+          unit_q16(static_cast<int64_t>(posed[vi][0]) - cx,
+                   static_cast<int64_t>(posed[vi][1]) - cy,
+                   static_cast<int64_t>(posed[vi][2]) - cz, rx, ry, rz);
+          if (ry > -32768 && ry < 32768) continue;  // top/bottom representatives only
+          Candidate c;
+          c.mi = mi;
+          c.vi = vi;
+          c.radial_y = ry;
+          c.smooth = signed_skin_dot(pose.data(), v, rx, ry, rz);
+          c.bx = v.x;
+          c.by = v.y;
+          c.bz = v.z;
+          int32_t best_abs = -1;
+          for (size_t ti = 0; ti + 2 < mesh.idx.size(); ti += 3) {
+            if (mesh.idx[ti] != vi && mesh.idx[ti + 1] != vi && mesh.idx[ti + 2] != vi)
+              continue;
+            int32_t p[3][3];
+            for (int k = 0; k < 3; ++k) {
+              const auto& q = posed[mesh.idx[ti + static_cast<size_t>(k)]];
+              p[k][0] = q[0];
+              p[k][1] = q[1];
+              p[k][2] = q[2];
+            }
+            const int32_t fi = signed_flat_dot(p, rx, ry, rz, false);
+            if (std::abs(fi) <= best_abs) continue;
+            best_abs = std::abs(fi);
+            c.tri = static_cast<int>(ti / 3);
+            c.flat_index = fi;
+            c.flat_reversed = signed_flat_dot(p, rx, ry, rz, true);
+          }
+          if (c.tri >= 0) candidates.push_back(c);
+        }
+      }
+    }
+    std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+      return a.radial_y > b.radial_y;
+    });
+    const auto emit_side = [&](const char* label, bool dorsal) {
+      int emitted = 0;
+      std::set<std::tuple<int32_t, int32_t, int32_t>> seen;
+      if (dorsal) {
+        for (const Candidate& c : candidates) {
+          if (c.radial_y <= 0 || !seen.insert({c.bx, c.by, c.bz}).second) continue;
+          std::printf("actual %s m=%d v=%d tri=%d radial_y=%d dot(normal,outward)=%d "
+                      "dot(index_face,outward)=%d dot(reversed_face,outward)=%d\n",
+                      label, c.mi, c.vi, c.tri, c.radial_y, c.smooth,
+                      c.flat_index, c.flat_reversed);
+          if (c.smooth <= 0 || c.flat_index <= 0) ok = false;
+          if (++emitted == 3) break;
+        }
+      } else {
+        for (auto it = candidates.rbegin(); it != candidates.rend(); ++it) {
+          const Candidate& c = *it;
+          if (c.radial_y >= 0 || !seen.insert({c.bx, c.by, c.bz}).second) continue;
+          std::printf("actual %s m=%d v=%d tri=%d radial_y=%d dot(normal,outward)=%d "
+                      "dot(index_face,outward)=%d dot(reversed_face,outward)=%d\n",
+                      label, c.mi, c.vi, c.tri, c.radial_y, c.smooth,
+                      c.flat_index, c.flat_reversed);
+          if (c.smooth <= 0 || c.flat_index <= 0) ok = false;
+          if (++emitted == 3) break;
+        }
+      }
+      if (emitted < 3) ok = false;
+    };
+    emit_side("dorsal", true);
+    emit_side("ventral", false);
+    std::printf("light-sign: %s\n", ok ? "OUTWARD PASS" : "INWARD/CONVENTION FAULT");
+    return ok ? 0 : 1;
+  }
 
   // Exact ownership companion for the triangle-ID render. It turns a rendered
   // meshlet/triangle ID into bind position, UV and skin data, avoiding visual
