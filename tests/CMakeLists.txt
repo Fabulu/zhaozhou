@@ -1872,6 +1872,15 @@ verilate(test_geom_attrsetup_directed
   PREFIX Vzhao_geom_attrsetup
   TOP_MODULE zhao_geom_attrsetup
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_attrsetup.sv)
+add_executable(test_raster_attrdiv_directed raster/raster_attrdiv_directed.cpp)
+target_link_libraries(test_raster_attrdiv_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_attrdiv_directed
+  PREFIX Vzhao_raster_attrdiv
+  TOP_MODULE zhao_raster_attrdiv
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv)
+add_test(NAME raster_attrdiv_directed COMMAND test_raster_attrdiv_directed)
+set_tests_properties(raster_attrdiv_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
 set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 

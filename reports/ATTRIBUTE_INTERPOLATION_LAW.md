@@ -42,6 +42,50 @@
 > **Nothing in `zref` has to change and no golden capture moves.** Options 1 and
 > 2 below are both withdrawn.
 
+## BUILT AND MEASURED, same day
+
+Both halves of the per-pixel law now exist and are exact against the oracle.
+
+| block | what it does | gate |
+|---|---|---|
+| `zhao_geom_attrsetup` | emits `{N0, dNdx, dNdy}`, no divide | 16/16, 2,880 pixel-attributes reconstructed |
+| `zhao_raster_attrdiv` | the divide, rounding exactly as `rast.cpp` | 7/7 |
+
+**And the divider measures 36 clocks.** That is the number the whole textured
+path now rests on:
+
+    1,666,667 clocks / 36 = 46,296 attribute-pixels per frame, per divider
+
+Against a terrain-primary component of 276,480 pixels needing at least `invw24`
+before early-Z, **one divider is 6x short for depth alone**, before `u`, `v`,
+colour or alpha, and before any other geometry in the frame.
+
+### What that means, and what it does not
+
+It does NOT mean the law is wrong -- the law is the reference's and it is now
+reproduced bit for bit. It means the divide is the throughput wall of the
+textured path, exactly where this file predicted it would be, and it is now a
+measured 36 rather than an estimate.
+
+The levers, in the order the Field engine's experience suggests trying them:
+
+1. **Fewer divides, not faster ones.** Early-Z before texture means only
+   survivors pay for `u` and `v`; a flat-shaded or untextured triangle pays for
+   none; `invw24` is the only one every covered pixel needs. Ruling 6's ordering
+   is worth more here than any arithmetic.
+2. **A shorter divider.** 36 clocks is 33 restoring-division iterations plus
+   handshake. A radix-4 divider halves the iterations for roughly double the
+   per-step logic; a fully pipelined array reaches one result per clock at 33
+   stages of area. Both are real options and both need a fit.
+3. **More dividers**, as a tagged service with the count a parameter -- the
+   shape the Field services ended up with, so throughput becomes a sweep rather
+   than a rewrite.
+
+**Do not pick one from this file.** The Field lane's lesson was that the wall is
+whichever resource refuses, and nothing has yet measured what a real frame asks
+of this divider once early-Z is in front of it. `busy_clocks_o` and `divides_o`
+are on the block for that measurement.
+
 ## The original analysis, kept for its reasoning
 
 
