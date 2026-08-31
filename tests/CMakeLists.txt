@@ -1900,6 +1900,15 @@ target_link_libraries(test_depth_profile_law PRIVATE zhao_zref)
 add_test(NAME depth_profile_law COMMAND test_depth_profile_law)
 set_tests_properties(depth_profile_law PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The depth ORACLE (DEPTH_PROFILE_NEXT_STEPS.md step 4). depth_profile_law
+# derives the constants; this proves zref::depth_of evaluates them correctly,
+# so RTL can be differentially tested against a reference instead of against a
+# restatement of the law inside its own test.
+add_executable(test_depth_oracle_directed proofs/depth_oracle_directed.cpp)
+target_link_libraries(test_depth_oracle_directed PRIVATE zhao_zref)
+add_test(NAME depth_oracle_directed COMMAND test_depth_oracle_directed)
+set_tests_properties(depth_oracle_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # RASTER.ATTRSTEP: the recurrence in RTL, checked against the divider it
 # replaces. The oracle is the shipped law, and the cases are the ones where a
 # two-branch recurrence can go wrong -- sign crossings inside a row and exact
