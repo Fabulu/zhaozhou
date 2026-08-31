@@ -183,8 +183,19 @@ quat16 quat_renorm(int64_t w, int64_t x, int64_t y, int64_t z) {
 void bake_presentation_midpoints(Clip& c, uint8_t bc) {
   if (!c.interpolate || c.frame_count < 2) return;
   const int n = c.frame_count;
-  c.mid_quats.assign(static_cast<size_t>(n) * bc, quat16_identity());
-  c.mid_root.assign(static_cast<size_t>(n) * 3, 0);
+  const size_t quat_count = static_cast<size_t>(n) * bc;
+  const size_t root_count = static_cast<size_t>(n) * 3;
+  const bool authored_deform =
+      c.deform.size() != static_cast<size_t>(n) ||
+      c.mid_deform.size() == static_cast<size_t>(n);
+  // A builder may author the existing companion at the true half-key when an
+  // articulated support follows a nonlinear path. Compile is allowed to fill
+  // an absent companion, never to overwrite an explicit deterministic one.
+  if (c.mid_quats.size() == quat_count &&
+      c.mid_root.size() == root_count && authored_deform)
+    return;
+  c.mid_quats.assign(quat_count, quat16_identity());
+  c.mid_root.assign(root_count, 0);
   if (c.deform.size() == static_cast<size_t>(n))
     c.mid_deform.assign(static_cast<size_t>(n), DeformSample{});
   else

@@ -74,7 +74,41 @@ Replace the rejected head-dip/rear-rail spring with a visually authored whole-fi
 - The true-side sheet passes the centreline acceptance boundary by eye: the head does not dip independently; the existing S travels backward while the coloured finless tube progressively replaces the rear run; key 6 is one enlarged whole-body S; keys 6–12 lower and retreat that same S; and key 12 retains three longitudinal runs plus two rounded alternating turns rather than becoming a rod, pill or hairpin.
 - Production and dark-fin side sheets agree that the detached-looking strokes are following blades, not excluded tail tube. High-three-quarter production and dark-fin sheets show no sideways concertina and no hidden rear body rail. The six-key compressed hold is exact, then the silhouettes reverse in the required collapsed→assembled→grounded order before intact lift and wheel gather.
 - Support remains fixed at named station 14. The visible retreat is supplied by the sampled collapsed profile and support compensation only; there is no independent root-X retreat or anticipation lift. Cross-section deformation and local skull attitude remained exactly neutral for this acceptance.
-- The sampler/profile/diagnostic source is ready for milestone-2 commit and push before positive-volume flatten/spread, terrain-bite and consumer/probe work.
+- The sampler/profile/diagnostic source was committed and pushed as milestone 2: `12bf8ca` (`Author whole-S groundspring centreline`).
+
+### 2026-08-31 - Visible-tail and positive-volume completion
+
+- Extended the committed posed-vertex probe to separate fins from the finless body, identify responsible bones, and report per-spine-bone terrain minima in full and micro rungs. This exposed that apparently safe blade contact could hide excluded-body burial or hover.
+- Rejected a strong terminal upturn because it reduced measured burial by turning the creature into the explicitly forbidden compact C. Rejected additional compact collapse experiments by looking before using probe values.
+- Accepted the complete visible-tail profiles under `evidence/whole-s-absorb-tail-iter07/`: the body/taper/tail tube remains readable through the enlarged assembled S and low alternating collapse; no fin is needed to counterfeit participation.
+- Restored subordinate positive-volume deformation only from assembled profile position `1000` toward collapsed `2000`: `kSpringBodyFlattenQ16=17000`, `kSpringBodySpreadQ16=5200`. Absorption and exact assembly remain radial identity, and release reverses deformation exactly before the grounded seam.
+- Kept local skull attitude optional and effectively nonessential: disabling it leaves the action unmistakable. Support remains named station 14; root X/Y compensation derives only from sampled profile/support, with no anticipation lift or independent retreat lane.
+- Re-authored timing as six keys of complete-body entry followed by six keys of drastic compression, then six held keys. `evidence/probe-six-six08.txt` records the accepted split.
+
+### 2026-08-31 - Ordered release and consumer parity
+
+- Routed golden, planned-attack and programmable-jump release through exact profile positions: collapsed `2000` at key 18, assembled `1000` at key 20, absorb `420` at key 21, exact grounded `0` at key 22.
+- Separated the planted reverse release from locomotion: exact grounded S lifts rigidly to 600 mm over keys 22–24, then gathers airborne into a mature wheel at 1500 mm over keys 24–28. Whole-turn spin begins only after that seam; no second S-to-wheel transition remains.
+- Updated `zixx_plan_sample()`, `build_attack_variant()`, and the one-/multi-jump builders to share this ordering. Programmable jumps now use ten release keys; ascent continues from the 1500 mm seam to the exact 4800 mm apex and retains the accepted parabolic descent.
+- Kept the wheel bit-stable throughout rotational flight. Increased only the landing gather from five to six keys after every-frame review; one- and three-turn maximum 60 Hz station steps both fell from the rejected/guard-exceeding 1171 mm to 1089 mm without loosening the 1150 mm gate.
+- Rendered one-/three-turn release and every-frame sheets under `evidence/consumer-release17/`, and primary/six-/nine-salto release sheets under `evidence/consumer-release19/`. They show collapsed→assembled→grounded, intact lift, mature wheel, shape-stable spin and coherent landing gather.
+
+### 2026-08-31 - Nonlinear planted midpoint correction
+
+- Probed every 60 Hz release midpoint from committed posed vertices. Endpoint quaternion/root interpolation buried the long articulated support by up to roughly 281 mm depending on easing, despite all relative-joint deltas remaining below half a turn.
+- Rejected quaternion wrapping, event-adjacent interpolation and alternate outer easing as diagnoses after bounded experiments. The actual issue was geometric: an articulated support follows a nonlinear path that endpoint root interpolation cannot keep planted.
+- Authored deterministic true half-key quaternion/root/deformation companions for only the nonlinear planted release, using existing `Clip::mid_quats`, `mid_root` and `mid_deform`; no field, mask, bone clock or deformation ABI was added.
+- Changed `bake_presentation_midpoints()` to fill absent companions but preserve a complete builder-authored companion. Added generic sidecar checks proving ordinary auto-baking remains complete and authored companions remain byte-exact; added compiled-bank checks proving all 45 interpolated clips have complete dimensions and slot 3 key 18.5 survives `compile_creature()` unchanged.
+- Final planted release samples are `-18,-21,-25,-26,-21,-8,+4,+6,-10 mm` from key 18 through 22 at half-key cadence. Jump and planned-attack outside-phase worst contact is `-45 mm`; no fake event remains.
+
+### 2026-08-31 - Fixed-side consumer evidence and focused gates
+
+- Added diagnostic-only fixed-side subjects for six-salto, nine-salto, one-turn jump and multi-turn jump consumers, reusing the primary 59-sample camera/window without adding them to the publication catalogue.
+- Rendered all five fixed-side sequences with explicit `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross` under `evidence/consumer-parity20/`. Corrected an evidence-only indexing mistake: these are half-key samples, so key 6 is frame 12. Correct phase and every-frame sheets show exact visual body parity through key 24 and the same mature finless wheel at key 28; only subordinate jump-fin attitude differs.
+- Replaced five obsolete pre-tail profile probe bands only after visual acceptance, with narrow regression envelopes around the accepted art. `evidence/probe-accepted-bands21.txt` passes unchanged geometry.
+- Clean direct `--clean all` rebuilt every reference object and linked reel, cel reel, meshcheck and probe. Full meshcheck passes all 45 clips with zero seam splits. `--deform-sidecar` passes identity, radial/follower, auto-midpoint and authored-midpoint checks.
+- Final animation probe `evidence/probe-midpoint-compile22.txt` passes every key and midpoint, declared 3D contact, full/micro deformation and normals, no real surface intersections, spring hold/release seams, one-/three-turn continuity, production attack limits and overlap guards.
+- No shared repository, prior read-only lane, worktree, CMake, Ninja, Verilator, website media, publication bank, deployment or integration was touched.
 
 ---
 
@@ -96,14 +130,17 @@ None. The owner requires one sole implementation agent and prohibits delegation.
 
 - Use current remote mains as immutable recorded bases and explicit feature branches in fresh normal clones.
 - Treat fixed orthographic side view as decisive; top view must independently prove the trailing tube joins the S.
-- Keep station 14 as provisional fixed support until a rendered accepted silhouette demonstrates that it pivots or slides.
-- Author centreline profiles with radial deformation at identity and skull brace neutral before tuning terrain/deformation/probes.
-- Validation budget is focused on the acceptance questions in `SPEC_v1.md`; no full bank or publication work in this implementation stage.
+- Keep station 14 as the fixed named support; the accepted silhouette demonstrates no need for a pivot or slide.
+- Author centreline profiles with radial deformation at identity first, then add positive volume only after the whole-body read is accepted.
+- Spend release time in three explicit phases—planted reverse absorption, intact-S lift, airborne wheel gather—instead of treating “release” as one interpolation.
+- Use existing midpoint companion channels to represent the nonlinear planted support path; preserve complete authored companions during compilation while retaining automatic baking for ordinary clips.
+- Retain the 1150 mm jump continuity guard and lengthen the landing gather rather than weakening the gate.
+- Validation remains bounded to the acceptance questions in `SPEC_v1.md`; no full publication bank or integration work belongs in this implementation stage.
 
 ---
 
 ## Next Steps
 
-1. Commit and push the visually accepted centreline/sampler/diagnostic milestone with explicit source and RUN-log paths.
-2. Tune positive-volume flatten/spread only over assembled→collapsed, retain or reject a tiny deepest-brace skull trim by looking, and author terrain bite against posed 3D contact.
-3. Validate attack/planned variants and one/three/six/nine jumps share the accepted silhouettes and exact reverse release before updating probe bands once.
+1. Inspect the exact animation/core/probe/reel diff, stage explicit paths only, commit and push the focused animation/consumer milestone.
+2. Tune the moving inspection source in the mandated order: path, inner/outer containment, proportional RGB gain, endpoint timing only if needed, and subject-only creature scale only if needed.
+3. Render marker-excluded source-off/on evidence over all four path legs and frame 599→0, rerun clean direct gates, update this log, then commit and push the final feature candidate without integrating or publishing.

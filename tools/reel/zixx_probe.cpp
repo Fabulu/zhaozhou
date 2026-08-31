@@ -67,6 +67,11 @@ struct PosedSample {
   int32_t min_y_fx = INT32_MAX;
   int32_t max_y_fx = INT32_MIN;
   std::array<int32_t, 2> rung_min_y_fx{INT32_MAX, INT32_MAX};
+  std::array<int32_t, 2> rung_body_min_y_fx{INT32_MAX, INT32_MAX};
+  std::array<int, 2> rung_body_min_b0{-1, -1};
+  std::array<int, 2> rung_body_min_b1{-1, -1};
+  std::array<std::array<int32_t, zc::kMaxBones>, 2>
+      rung_body_bone_min_y_fx{};
   std::array<int32_t, 2> rung_max_y_fx{INT32_MIN, INT32_MIN};
   std::array<uint64_t, 2> normal_faults{};
   std::array<int32_t, 2> normal_min_len2{INT32_MAX, INT32_MAX};
@@ -110,6 +115,8 @@ ClipScan scan_clip(const zc::CreatureType& type, const zc::Clip& clip,
     PosedSample s;
     s.tick = tick;
     s.bone_min_y_fx.fill(INT32_MAX);
+    for (auto& rung_min : s.rung_body_bone_min_y_fx)
+      rung_min.fill(INT32_MAX);
     const uint16_t key = static_cast<uint16_t>(tick / 2);
     const uint8_t sub = static_cast<uint8_t>(tick & 1);
     std::array<zc::mat3x4fx, zc::kMaxBones> pose;
@@ -128,6 +135,22 @@ ClipScan scan_clip(const zc::CreatureType& type, const zc::Clip& clip,
           int32_t x = 0, y = 0, z = 0;
           zc::skin_vertex(pose.data(), v, x, y, z, &ledger);
           s.rung_min_y_fx[rung] = std::min(s.rung_min_y_fx[rung], y);
+          const auto fin_bone = [](uint8_t b) {
+            return b >= zixx::kBBladeL && b <= zixx::kBSpike;
+          };
+          if (!fin_bone(v.b0) && !fin_bone(v.b1)) {
+            if (y < s.rung_body_min_y_fx[rung]) {
+              s.rung_body_min_y_fx[rung] = y;
+              s.rung_body_min_b0[rung] = v.b0;
+              s.rung_body_min_b1[rung] = v.b1;
+            }
+            if (v.b0 < zc::kMaxBones && v.w0 != 0)
+              s.rung_body_bone_min_y_fx[rung][v.b0] = std::min(
+                  s.rung_body_bone_min_y_fx[rung][v.b0], y);
+            if (v.b1 < zc::kMaxBones && v.w0 != 255)
+              s.rung_body_bone_min_y_fx[rung][v.b1] = std::min(
+                  s.rung_body_bone_min_y_fx[rung][v.b1], y);
+          }
           s.rung_max_y_fx[rung] = std::max(s.rung_max_y_fx[rung], y);
           // Keep actual LOD0 skinned-vertex minima per influencing bone. Balance
           // uses these to prove several body segments, rather than only blade
@@ -638,6 +661,23 @@ int main() {
       std::printf("  ** FAIL: %s\n", what);
     }
   };
+
+  int midpoint_clip_count = 0;
+  bool midpoint_dimensions = true;
+  for (const zc::Clip& clip : type.bank.clips) {
+    if (!clip.interpolate || clip.frame_count < 2) continue;
+    ++midpoint_clip_count;
+    const size_t n = static_cast<size_t>(clip.frame_count);
+    midpoint_dimensions = midpoint_dimensions &&
+        clip.mid_quats.size() == n * type.bank.bone_count &&
+        clip.mid_root.size() == n * 3 &&
+        ((clip.deform.size() == n && clip.mid_deform.size() == n) ||
+         (clip.deform.size() != n && clip.mid_deform.empty()));
+  }
+  std::printf("MIDPOINT compiled companions: %d clips, dimensions %s\n",
+              midpoint_clip_count, midpoint_dimensions ? "complete" : "INVALID");
+  require(midpoint_clip_count > 0 && midpoint_dimensions,
+          "compiled presentation companion dimensions are incomplete");
 
   // Tail-balance contact is proved from actual posed vertices at every key and
   // midpoint. The accepted art deliberately puts all six vertex regions across
@@ -1214,6 +1254,60 @@ int main() {
     const PosedSample& deep = spring->samples[deep_tick];
     const PosedSample& released = spring->samples[released_tick];
     const PosedSample& rigid_air = spring->samples[rigid_air_tick];
+
+    // Slot 3 authors nonlinear planted release midpoints before compilation.
+    // Reconstruct the first one independently and byte-check the compiled bank:
+    // compile_creature must preserve the builder's complete companion rather
+    // than replacing it with endpoint interpolation.
+    const int authored_mid_key = zixx::kSaltoCompressHoldEndKey;
+    const int32_t authored_mid_life =
+        (zixx::curve(zixx::kAtkPre, zixx::kAtkPreN, authored_mid_key) +
+         zixx::curve(zixx::kAtkPre, zixx::kAtkPreN,
+                     authored_mid_key + 1)) /
+        2;
+    zixx::Rig expected_mid;
+    expected_mid.reset();
+    zixx::apply_spring_stance(expected_mid, 1000, authored_mid_life,
+                              authored_mid_life);
+    expected_mid.q[zixx::kBHead] = zixx::quat_z(
+        zixx::spring_head_attitude(1000, authored_mid_life,
+                                   authored_mid_life));
+    expected_mid.tail_rest(
+        zixx::kBladeSplay + zixx::kBladeSplay / 5 +
+            (authored_mid_life * zixx::kSpringBladeFlare) / 1000,
+        zixx::kBladeRise, zixx::kBladeUpBias);
+    const size_t authored_qi =
+        static_cast<size_t>(authored_mid_key) * zixx::kBoneCount;
+    const size_t authored_ri = static_cast<size_t>(authored_mid_key) * 3;
+    bool authored_mid_preserved =
+        spring->clip->mid_quats.size() >= authored_qi + zixx::kBoneCount &&
+        spring->clip->mid_root.size() >= authored_ri + 3 &&
+        spring->clip->mid_deform.size() ==
+            static_cast<size_t>(spring->clip->frame_count);
+    for (int b = 0; b < zixx::kBoneCount && authored_mid_preserved; ++b)
+      authored_mid_preserved =
+          std::memcmp(&spring->clip->mid_quats[authored_qi + b],
+                      &expected_mid.q[b], sizeof(zc::quat16)) == 0;
+    const zc::DeformSample expected_mid_deform =
+        zixx::spring_deform_sample(authored_mid_life, authored_mid_life);
+    authored_mid_preserved = authored_mid_preserved &&
+        spring->clip->mid_root[authored_ri + 0] ==
+            fxm(zixx::spring_root_anchor_x(authored_mid_life,
+                                           authored_mid_life)) &&
+        spring->clip->mid_root[authored_ri + 1] ==
+            fxm(zixx::spring_root_offset(authored_mid_life,
+                                         authored_mid_life)) &&
+        spring->clip->mid_root[authored_ri + 2] == 0 &&
+        spring->clip->mid_deform[authored_mid_key].flatten ==
+            expected_mid_deform.flatten &&
+        spring->clip->mid_deform[authored_mid_key].spread ==
+            expected_mid_deform.spread;
+    std::printf("MIDPOINT compiled authored spring key %d.5: life=%d %s\n",
+                authored_mid_key, authored_mid_life,
+                authored_mid_preserved ? "preserved" : "OVERWRITTEN");
+    require(authored_mid_preserved,
+            "compile overwrote an authored nonlinear spring midpoint");
+
     struct Region { const char* name; int lo; int hi; };
     const Region regions[] = {
         {"head", 0, 5}, {"neck", 6, 12}, {"front", 13, 20},
@@ -1246,17 +1340,17 @@ int main() {
     std::printf(" mm\n");
     require(every_region_joins,
             "enlarged jump S stopped recruiting a body region");
-    // These bands surround the visually accepted iteration-15 motion. They are
-    // intentionally wider than fixed-point noise while narrow enough to catch a
-    // return to the rejected head-only/tail-led anticipation.
+    // These bands surround the visually accepted visible-tail whole-S motion.
+    // They are intentionally wider than fixed-point noise while narrow enough
+    // to catch a return to the rejected head-only/tail-led anticipation.
     constexpr std::array<int32_t, 7> kAcceptedEntryTravelMinMm = {
-        250, 215, 135, 105, 5, 12, 16};
+        1050, 1050, 1020, 900, 140, 80, 70};
     constexpr std::array<int32_t, 7> kAcceptedEntryTravelMaxMm = {
-        310, 275, 180, 145, 14, 28, 34};
+        1320, 1320, 1290, 1170, 210, 130, 120};
     constexpr std::array<int32_t, 7> kAcceptedCompressionDescentMinMm = {
-        -630, -350, -55, -15, -50, -30, -160};
+        -680, -620, -480, -250, -100, -90, -115};
     constexpr std::array<int32_t, 7> kAcceptedCompressionDescentMaxMm = {
-        -560, -285, -20, 4, -20, -6, -110};
+        -540, -480, -370, -160, -50, -45, -60};
     bool accepted_regional_motion = true;
     for (size_t ri = 0; ri < region_motion.size(); ++ri) {
       accepted_regional_motion = accepted_regional_motion &&
@@ -1321,9 +1415,9 @@ int main() {
     std::printf("SPRING real tail followers: %d vertices, entry travel mean/max "
                 "%d/%d mm\n", tail_follower_count, tail_follower_mean,
                 tail_follower_max);
-    require(tail_follower_count >= 150 && tail_follower_mean >= 155 &&
-                tail_follower_mean <= 205 && tail_follower_max >= 250 &&
-                tail_follower_max <= 315,
+    require(tail_follower_count >= 150 && tail_follower_mean >= 700 &&
+                tail_follower_mean <= 820 && tail_follower_max >= 1100 &&
+                tail_follower_max <= 1300,
             "real tail tips left the accepted enlarged-S travel envelope");
 
     auto centre_span = [](const PosedSample& s) {
@@ -1354,16 +1448,16 @@ int main() {
                 "mm; lateral span %d mm\n", entry_span, deep_span,
                 head_support_dx, head_support_dy, support_dx, support_dy,
                 lateral_hi - lateral_lo);
-    require(entry_span >= 1200 && entry_span <= 1360 &&
-                deep_span >= 890 && deep_span <= 1020 &&
-                entry_span - deep_span >= 250 &&
-                entry_span - deep_span <= 390,
+    require(entry_span >= 1130 && entry_span <= 1280 &&
+                deep_span >= 590 && deep_span <= 700 &&
+                entry_span - deep_span >= 500 &&
+                entry_span - deep_span <= 620,
             "whole-S silhouette left the accepted entry/compression span envelope");
-    require(head_support_dx >= -70 && head_support_dx <= -20 &&
-                head_support_dy >= -640 && head_support_dy <= -550,
+    require(head_support_dx >= -100 && head_support_dx <= -45 &&
+                head_support_dy >= -620 && head_support_dy <= -500,
             "spring head left the accepted backward/down support-relative brace");
-    require(std::abs(support_dx) <= 1 && support_dy >= -35 &&
-                support_dy <= -33 && lateral_hi - lateral_lo <= 30,
+    require(std::abs(support_dx) <= 1 && support_dy >= -75 &&
+                support_dy <= -45 && lateral_hi - lateral_lo <= 30,
             "spring planted support or planar brace left its accepted envelope");
 
     int32_t hold_shape_drift = 0;
@@ -1581,22 +1675,58 @@ int main() {
             "spring body runs intersect on the real full or micro surface");
 
     std::array<int32_t, 2> terrain_worst{INT32_MAX, INT32_MAX};
+    std::array<int32_t, 2> body_terrain_worst{INT32_MAX, INT32_MAX};
     std::array<int, 2> terrain_tick{-1, -1};
+    std::array<int, 2> body_terrain_tick{-1, -1};
+    std::array<int, 2> terrain_b0{-1, -1};
+    std::array<int, 2> terrain_b1{-1, -1};
+    std::array<int, 2> body_terrain_b0{-1, -1};
+    std::array<int, 2> body_terrain_b1{-1, -1};
     for (int t = 0; t <= hold_end_tick; ++t) {
       for (int rung = 0; rung < 2; ++rung) {
         const int32_t y = to_mm(spring->samples[t].rung_min_y_fx[rung]);
         if (y < terrain_worst[rung]) {
           terrain_worst[rung] = y;
           terrain_tick[rung] = t;
+          terrain_b0[rung] = spring->samples[t].min_b0;
+          terrain_b1[rung] = spring->samples[t].min_b1;
+        }
+        const int32_t body_y =
+            to_mm(spring->samples[t].rung_body_min_y_fx[rung]);
+        if (body_y < body_terrain_worst[rung]) {
+          body_terrain_worst[rung] = body_y;
+          body_terrain_tick[rung] = t;
+          body_terrain_b0[rung] = spring->samples[t].rung_body_min_b0[rung];
+          body_terrain_b1[rung] = spring->samples[t].rung_body_min_b1[rung];
         }
       }
     }
-    std::printf("SPRING terrain full/micro: %d mm at %d%s / %d mm at %d%s "
-                "(declared bite %d mm)\n", terrain_worst[0],
-                terrain_tick[0] / 2, (terrain_tick[0] & 1) ? ".5" : "",
-                terrain_worst[1], terrain_tick[1] / 2,
-                (terrain_tick[1] & 1) ? ".5" : "",
-                zixx::kSpringDeclaredBiteMm);
+    std::printf("SPRING terrain all full/micro: %d mm at %d%s bones %d/%d / "
+                "%d mm at %d%s bones %d/%d; finless body %d mm at %d%s "
+                "bones %d/%d / %d mm at %d%s bones %d/%d (declared bite "
+                "%d mm)\n",
+                terrain_worst[0], terrain_tick[0] / 2,
+                (terrain_tick[0] & 1) ? ".5" : "", terrain_b0[0],
+                terrain_b1[0], terrain_worst[1], terrain_tick[1] / 2,
+                (terrain_tick[1] & 1) ? ".5" : "", terrain_b0[1],
+                terrain_b1[1], body_terrain_worst[0],
+                body_terrain_tick[0] / 2,
+                (body_terrain_tick[0] & 1) ? ".5" : "", body_terrain_b0[0],
+                body_terrain_b1[0], body_terrain_worst[1],
+                body_terrain_tick[1] / 2,
+                (body_terrain_tick[1] & 1) ? ".5" : "", body_terrain_b0[1],
+                body_terrain_b1[1], zixx::kSpringDeclaredBiteMm);
+    for (int rung = 0; rung < 2; ++rung) {
+      std::printf("SPRING deepest finless %s spine minima:",
+                  rung == 0 ? "full" : "micro");
+      for (int b = 0; b < zixx::kSpineBones; ++b) {
+        const int32_t y_fx =
+            deep.rung_body_bone_min_y_fx[rung][zixx::kBSpine0 + b];
+        std::printf(" b%d=%d", b,
+                    y_fx == INT32_MAX ? 99999 : to_mm(y_fx));
+      }
+      std::printf(" mm\n");
+    }
     require(terrain_worst[0] >= -zixx::kSpringDeclaredBiteMm &&
                 terrain_worst[0] <= -28 && terrain_worst[1] >= -30 &&
                 terrain_worst[1] <= -20,
@@ -1618,12 +1748,26 @@ int main() {
                 scan->clip->events[0].frame == ph.landing_key &&
                 scan->clip->events[0].event == zc::kEvFoot,
             "jump landing event drifted from shared phase table");
+    const int release_pose = zixx::zixx_jump_release_pose_key(p);
+    const int rigid_end = zixx::zixx_jump_rigid_end_key(p);
+    const zixx::JumpMotionSample at_release =
+        zixx::zixx_jump_motion_sample(p, release_pose);
+    const zixx::JumpMotionSample at_rigid =
+        zixx::zixx_jump_motion_sample(p, rigid_end);
     const zixx::JumpMotionSample at_launch =
         zixx::zixx_jump_motion_sample(p, ph.launch_key);
     const zixx::JumpMotionSample after_launch =
         zixx::zixx_jump_motion_sample(p, ph.launch_key + 1);
-    require(at_launch.lift == 0 && after_launch.lift > 0,
-            "jump does not leave immediately after release");
+    require(at_release.entry == 0 && at_release.spring == 0 &&
+                at_release.curl == 0 && at_release.lift == 0 &&
+                at_rigid.entry == 0 && at_rigid.spring == 0 &&
+                at_rigid.curl == 0 &&
+                at_rigid.lift == zixx::kSaltoRigidReleaseLiftMm &&
+                at_launch.entry == 0 && at_launch.spring == 0 &&
+                at_launch.curl == 1000 &&
+                at_launch.lift == zixx::kSaltoWheelGatherLiftMm &&
+                after_launch.lift > at_launch.lift,
+            "jump release/lift/wheel seams left the shared authored order");
     int32_t apex = 0;
     int32_t prev_theta = 0;
     bool monotonic = true;
@@ -1664,13 +1808,26 @@ int main() {
     for (int t = clear_begin; t <= clear_end; ++t)
       if (to_mm(scan->samples[t].min_y_fx) <= 0) clear_flight = false;
     require(clear_flight, "jump touches terrain in the undeclared flight core");
+    if (spec.first == zixx::kSlotJumpOne) {
+      std::printf("JUMP release contact samples:");
+      for (int tick = 2 * ph.hold_end;
+           tick <= 2 * zixx::zixx_jump_release_pose_key(p); ++tick) {
+        const PosedSample& rs = scan->samples[tick];
+        std::printf(" %d%s=%d/support%d", tick / 2,
+                    (tick & 1) ? ".5" : "", to_mm(rs.min_y_fx),
+                    rs.support_y_mm);
+      }
+      std::printf(" mm\n");
+    }
+    const PosedSample& contact_sample = scan->samples[contact_worst_tick];
     std::printf("JUMP slot %d: apex %d mm, turns %d, landing key %d, "
-                "contact %d mm at %d%s, max 60 Hz station step %d mm at %d%s "
-                "station %d\n",
+                "contact %d mm at %d%s bones %d/%d support %d mm, max 60 Hz "
+                "station step %d mm at %d%s station %d\n",
                 spec.first, apex, spec.second, ph.landing_key, contact_worst,
                 contact_worst_tick / 2,
-                (contact_worst_tick & 1) ? ".5" : "", continuity.mm,
-                continuity.tick / 2,
+                (contact_worst_tick & 1) ? ".5" : "", contact_sample.min_b0,
+                contact_sample.min_b1, contact_sample.support_y_mm,
+                continuity.mm, continuity.tick / 2,
                 (continuity.tick & 1) ? ".5" : "", continuity.station);
   }
 

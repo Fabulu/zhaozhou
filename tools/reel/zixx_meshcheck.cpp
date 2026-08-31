@@ -144,15 +144,50 @@ int main(int argc, char** argv) {
     clip.quats.assign(2, zc::quat16_identity());
     clip.deform = {{0, 0}, {32768, 16384}};
     zc::bake_presentation_midpoints(clip, 1);
+    const bool auto_complete =
+        clip.mid_quats.size() == 2 && clip.mid_root.size() == 6 &&
+        clip.mid_deform.size() == 2;
+    ok = ok && auto_complete;
     fixture.bank.clips.push_back(clip);
     const zc::DeformSample mid = zc::deformation_sample(fixture, 7, 0, 1);
     ok = ok && mid.flatten == 16384 && mid.spread == 8192;
 
+    // A builder-authored true half-key companion is an existing clip channel,
+    // not a hint. Baking fills absent ordinary companions (above) but must not
+    // overwrite a complete deterministic companion supplied by the builder.
+    zc::Clip authored;
+    authored.slot_id = 8;
+    authored.frame_count = 2;
+    authored.interpolate = true;
+    authored.root.assign(6, 0);
+    authored.quats.assign(2, zc::quat16_identity());
+    authored.deform = {{0, 0}, {32768, 16384}};
+    authored.mid_quats.assign(2, zc::quat16_identity());
+    authored.mid_quats[0] = zc::quat16{{30000, 10000, 0, 0}};
+    authored.mid_root = {111, 222, 333, 444, 555, 666};
+    authored.mid_deform = {{123, 456}, {789, 1011}};
+    const std::vector<zc::quat16> authored_quats = authored.mid_quats;
+    const std::vector<int32_t> authored_root = authored.mid_root;
+    const std::vector<zc::DeformSample> authored_deform = authored.mid_deform;
+    zc::bake_presentation_midpoints(authored, 1);
+    const bool authored_preserved =
+        authored.mid_quats.size() == authored_quats.size() &&
+        authored.mid_root.size() == authored_root.size() &&
+        authored.mid_deform.size() == authored_deform.size() &&
+        std::memcmp(authored.mid_quats.data(), authored_quats.data(),
+                    authored_quats.size() * sizeof(zc::quat16)) == 0 &&
+        std::memcmp(authored.mid_root.data(), authored_root.data(),
+                    authored_root.size() * sizeof(int32_t)) == 0 &&
+        std::memcmp(authored.mid_deform.data(), authored_deform.data(),
+                    authored_deform.size() * sizeof(zc::DeformSample)) == 0;
+    ok = ok && authored_preserved;
+
     std::printf("deform-sidecar: identity=%s radial_mm=(%d,%d,%d) normal=(%d,%d,%d) "
-                "follower_y_mm=%d midpoint=(%u,%u)\n",
+                "follower_y_mm=%d midpoint=(%u,%u) auto=%s authored=%s\n",
                 std::memcmp(&identity, &v, sizeof(v)) == 0 ? "exact" : "CHANGED",
                 to_mm(d.x), to_mm(d.y), to_mm(d.z), d.nx, d.ny, d.nz, to_mm(f.y),
-                mid.flatten, mid.spread);
+                mid.flatten, mid.spread, auto_complete ? "complete" : "MISSING",
+                authored_preserved ? "preserved" : "OVERWRITTEN");
     std::printf("deform-sidecar: %s\n", ok ? "OK" : "FAIL");
     return ok ? 0 : 2;
   }

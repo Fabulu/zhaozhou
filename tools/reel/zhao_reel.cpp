@@ -4234,6 +4234,40 @@ SceneSubject subject_zixx_spring_top() {
   return s;
 }
 
+SceneSubject subject_zixx_spring_consumer(const char* name, uint16_t slot,
+                                          const char* note) {
+  SceneSubject s = subject_zixx_spring_side();
+  s.name = name;
+  s.creature = static_cast<int>(slot) + 2;
+  s.note = note;
+  return s;
+}
+
+SceneSubject subject_zixx_spring_consumer_six() {
+  return subject_zixx_spring_consumer(
+      "zixxtrixx-spring-consumer-six", zixx::kSlotAtkSix,
+      "DIAGNOSTIC: fixed true-side 59-sample spring parity for the planned "
+      "six-turn attack; camera matches the primary");
+}
+SceneSubject subject_zixx_spring_consumer_nine() {
+  return subject_zixx_spring_consumer(
+      "zixxtrixx-spring-consumer-nine", zixx::kSlotAtkNine,
+      "DIAGNOSTIC: fixed true-side 59-sample spring parity for the planned "
+      "nine-turn attack; camera matches the primary");
+}
+SceneSubject subject_zixx_spring_consumer_jump_one() {
+  return subject_zixx_spring_consumer(
+      "zixxtrixx-spring-consumer-jump-one", zixx::kSlotJumpOne,
+      "DIAGNOSTIC: fixed true-side 59-sample spring parity for the "
+      "programmable one-turn jump; camera matches the primary");
+}
+SceneSubject subject_zixx_spring_consumer_jump_multi() {
+  return subject_zixx_spring_consumer(
+      "zixxtrixx-spring-consumer-jump-multi", zixx::kSlotJumpMulti,
+      "DIAGNOSTIC: fixed true-side 59-sample spring parity for the "
+      "programmable three-turn jump; camera matches the primary");
+}
+
 SceneSubject subject_zixx_spring_centreline_side() {
   SceneSubject s = subject_zixx_spring_side();
   s.name = "zixxtrixx-spring-centreline-side";
@@ -5741,6 +5775,14 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-walk")) rc |= render_scene(subject_zixx_walk());
   if (wanted("zixxtrixx-attack")) rc |= render_scene(subject_zixx_attack());
   if (wanted("zixxtrixx-spring-side")) rc |= render_scene(subject_zixx_spring_side());
+  if (wanted("zixxtrixx-spring-consumer-six"))
+    rc |= render_scene(subject_zixx_spring_consumer_six());
+  if (wanted("zixxtrixx-spring-consumer-nine"))
+    rc |= render_scene(subject_zixx_spring_consumer_nine());
+  if (wanted("zixxtrixx-spring-consumer-jump-one"))
+    rc |= render_scene(subject_zixx_spring_consumer_jump_one());
+  if (wanted("zixxtrixx-spring-consumer-jump-multi"))
+    rc |= render_scene(subject_zixx_spring_consumer_jump_multi());
   if (wanted("zixxtrixx-spring-top")) rc |= render_scene(subject_zixx_spring_top());
   if (wanted("zixxtrixx-spring-centreline-side"))
     rc |= render_scene(subject_zixx_spring_centreline_side());
