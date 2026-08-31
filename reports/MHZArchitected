@@ -1,0 +1,360 @@
+Hi agen, please implement these architectural changes if you haven't already. They should do away with our low MHz woes.
+
+Verdict
+
+I read the RTL that was actually present at the reported fit commit, not merely the 53.48 MHz summary. There are several obvious timing offenders. The renderer was largely written with the assumption that one conceptual operation should happen in one clock. That is lovely for latency and simulation, but brutal for a 100 MHz Cyclone V composition.
+
+My present diagnosis is:
+
+Renderer datapaths are the primary cause of the collapse from “nearly 100 MHz” territory to 53.48 MHz.
+The shell contributes secondary timing debt and substantial fit distortion, but I would not redesign its memory arbiter or SDRAM controller.
+The worst-path report is still missing, so I cannot prove which of the renderer offenders is path number one. But there are at least four structures that are unambiguously unsuitable for 10 ns, regardless of which one TimeQuest ranked first.
+
+The shell’s own comments record an earlier genuine synchronous worst path of about −0.875 ns at a 10 ns constraint, after an unrelated CDC violation had hidden it. That is not the controlled shell-only baseline we still need, but it implies something around 92 MHz—not remotely 53 MHz. The render integration introduced much more severe combinational machinery.
+
+The source snapshot remains main at 73429c0a503bd6d1018bf12ab0151d7d9e060c18.
+
+The obvious offenders
+1. RASTER.EDGEWALK: probably the nastiest general timing cone
+
+One S_WALK clock currently does all of this:
+
+Recomputes six coordinate differences to obtain three X/Y edge steps.
+For each of 16 columns and each of three edges, constructs i × step from as many as four shifted terms.
+Adds those terms to the row-start edge value.
+Performs 48 top-left fill tests.
+ANDs the three tests into 16 coverage bits.
+Popcounts those 16 bits through a procedural accumulator.
+Adds the result to the total coverage count.
+Writes the selected mask row and advances all three row accumulators.
+
+So a plausible path to count_r is:
+
+vertex register
+  → coordinate subtract
+  → shifted-add multiplier
+  → row-start add
+  → fill test
+  → row coverage
+  → popcount
+  → count accumulator
+
+That can easily explain an 18.7 ns path. It also creates many failing endpoints: mask bits, count bits, pending-row bits and state decisions. The source itself describes the 16-wide evaluator and the repeated popcount in that single walk cycle. This code is unchanged between the fit commit and current HEAD.
+
+Its setup unit is another problem: each cross product is currently two combinational 23×23 multiplies followed by a wide subtract feeding one register. Operand differences are also formed in front of the multipliers.
+
+Architecture it into a streamed row pipeline
+
+Keep the valuable throughput property—one row per clock—but stop expecting the whole row to materialise combinationally.
+
+ROW-A: row start → group bases for columns 0, 4, 8, 12 → registers
+ROW-B: four columns per group → fill tests → 16-bit mask register
+ROW-C: balanced popcount → count/mask/pending commit
+
+For each edge, ROW-A computes only four group bases:
+
+base0  = e
+base4  = e + 4*s
+base8  = e + 8*s
+base12 = e + 8*s + 4*s
+
+ROW-B expands each base to four columns:
+
+base
+base + s
+base + 2*s
+base + 2*s + s
+
+That replaces the current wide monolithic array with two short, regular carry-chain stages. Rows remain pipelined at one per clock; the 16-row walk merely gains roughly two clocks of tail latency.
+
+The popcount should be an explicit balanced tree:
+
+16 bits → 8 two-bit sums → 4 three-bit sums → 2 four-bit sums → 1 five-bit sum
+
+Do not leave it as repeated row_pc = row_pc + ... and hope Quartus balances it optimally.
+
+The cross unit should become:
+
+X0: register operand differences
+X1: register both products
+X2: subtract products, register exact cross result
+
+Area and latency are cheap here. Initiation rate is what matters, and after the area dependency resolves, W0/W1/W2 can be issued one per clock through that same pipeline.
+
+2. RASTER.FRAGMENT: tile RAM → two dependent multiplier layers → tile RAM
+
+This is even more blatant.
+
+The fragment’s destination tile word arrives from RAM, and in the same cycle the block performs:
+
+state decode
+→ alpha/stencil/depth tests
+→ optional RGB and alpha modulation
+→ three blend calculations
+→ rounding
+→ addition
+→ saturation
+→ depth/tag/stencil selection
+→ 64-bit tile write
+
+The optional source modulation is itself an 8×8 multiply plus rounding. Each blend channel then selects a signed operand, performs another multiply, rounds, adds and clamps. Therefore legal paths can contain two dependent multiplier layers in one clock before the write-data register or RAM input.
+
+zhao_raster_blend explicitly performs its product, rounding, accumulator and final rail combinationally.
+
+That design was deliberately built around a clever write-first RAM trick to preserve back-to-back same-pixel behaviour. It is numerically excellent and timing-hostile.
+
+Replace it with a fixed-latency RMW pipeline
+F0 READ
+    Accept candidate, carry packet and issue tile read.
+
+F1 TEST/SHADE
+    Capture destination word.
+    Decode tests.
+    Compute and register source RGB/alpha modulation.
+    Carry live/dead bit.
+
+F2 BLEND PRODUCT
+    Register the three signed blend products and bypass values.
+
+F3 FINISH
+    Apply +128, shifts, accumulator, saturation.
+    Select depth, tag and stencil.
+    Register final 64-bit tile word.
+
+F4 COMMIT
+    Write tile store or hold in a one-entry commit skid.
+
+Every arithmetic operation stays in the same order and at the same width. Nothing about rounding or capture CRCs changes.
+
+For same-address correctness, use a tiny in-flight address CAM, not a 256-bit scoreboard:
+
+hazard =
+    (F0.valid && F0.addr == input.addr) ||
+    (F1.valid && F1.addr == input.addr) ||
+    (F2.valid && F2.addr == input.addr) ||
+    (F3.valid && F3.addr == input.addr);
+
+A conflicting input waits until the older write commits. Different pixels still enter at one fragment per clock.
+
+This does not harm the present production path in practice. RASTER.TILE_PIPE already refuses to accept the next triangle until the fragment pipeline is completely empty, and a triangle visits each covered pixel once. Thus the RAW hazard should never fire in the current composition; keep a counter/assertion to prove that.
+
+The standalone same-pixel test continues to work, but now demonstrates correct stalling rather than single-cycle write-first magic.
+
+3. RASTER.EARLYZ: a 256-bit global feedback cone
+
+The hierarchical-Z accumulator currently does this:
+
+acc_mask_next = acc_mask_r;
+acc_mask_next[frag_addr_i] = 1'b1;
+acc_full = &acc_mask_next;
+
+Then acc_full selects whether all 256 mask registers receive zero or receive acc_mask_next.
+
+That means:
+
+Every mask bit participates in a 256-input reduction.
+The reduction result fans back out to every mask bit’s next-state mux.
+A dynamic bit update is also inside the cone.
+The same decision reaches floor and minimum registers.
+
+That is almost a perfect machine for generating large total negative slack over hundreds of endpoints, even when it is not the single worst path.
+
+Replace the global reduction with exact unique-coverage counting
+
+Retain the mask for duplicate detection, but add an eight/nine-bit count:
+
+seen       = acc_mask[address]
+new_pixel  = qualify && !seen
+round_done = new_pixel && (seen_count == 255)
+
+On every qualifying write:
+
+Update acc_min regardless of whether the pixel was new.
+Set the selected mask bit.
+Increment seen_count only for a new pixel.
+When the 256th unique pixel arrives, promote the floor and reset mask/count/min.
+
+This is semantically identical to the present full-mask test, including the contribution of the 256th pixel in the same cycle. It replaces a 256-input reduction with one selected-bit lookup and an eight-bit comparison.
+
+Should the selected-bit mux itself remain problematic, bank the mask as sixteen 16-bit rows and maintain a 16-bit rows_full mask. Then no combinational reduction is wider than 16 bits.
+
+4. GEOM.BINNER: six products and wide additions in one setup state
+
+S_SETUP2 currently evaluates the first tile origin for three edges by forming, per edge:
+
+ep + kx*tile_x + ky*tile_y
+
+Both products and the wide three-term addition land in ep_r/epr_r on one edge. Across three edges, that is six signed multiplications and multiple wide additions in the same state.
+
+There is no throughput justification for that parallelism. The binner accepts one triangle, performs setup, then walks the triangle’s tile range. Six simultaneously active products buy one setup clock while making timing and placement far harder.
+
+Turn setup into a two-DSP sequenced service
+
+Use one X multiplier and one Y multiplier:
+
+B0: issue edge 0 products
+B1: issue edge 1 products; register edge 0 products
+B2: issue edge 2 products; register/sum edge 1
+B3: sum edge 2 and complete setup
+
+The product outputs are explicitly registered before the wide addition. The initial e0_base, mul15 offset and top-left metadata can be pipelined alongside this.
+
+This adds a handful of clocks per triangle but:
+
+Removes a large multiplier/adder cone.
+Reduces DSP placement pressure.
+May reduce DSP count.
+Does not alter tile-reference throughput once scanning begins.
+Leaves the future GEOM.PARAMBUF architecture free to replace this temporary frame-resident binner.
+5. RASTER.FBWRITE and its guard path
+
+The production resolver always emits full 16-pixel tile rows. Nevertheless, FBWRITE supports variable short rows and builds:
+
+be = (64'd1 << dynamic_byte_count) - 1;
+
+It also computes a row address with a 12×16 multiply followed by two additions in one cycle. The generic guard then independently regenerates a 64-bit contiguous mask from the dynamic length and compares it with the producer’s mask before latching the request.
+
+Make the renderer writer match its actual protocol
+
+For the production renderer:
+
+len = 32 bytes
+be  = 0x00000000_FFFFFFFF
+beats = 4
+pixels = 16
+
+A row that ends before pixel 16 is a protocol error, not a supported slow path. The debug blitter can remain generic.
+
+Compute the row address while the row is filling:
+
+first pixel:
+    capture x0/y
+
+next clock:
+    y_offset = y * stride              // registered DSP result
+
+next clock:
+    row_address = base + y_offset + 2*x0
+
+The writer then has another dozen pixel clocks before it needs the address. There is no reason to perform that calculation at the flush edge.
+
+Split the guard’s shape test by client. For ENGINE0, compare against the fixed 32-byte shape directly rather than invoking the generic 64-bit mask generator.
+
+Shell conclusions
+The memory arbiter is not the place to start
+
+The guard registers and holds a passing request. The arbiter then creates another registered and stable offer before the SDRAM controller accepts it. There is no single combinational chain running from the renderer through guard, arbitration and controller in one clock.
+
+So I would not redesign:
+
+Arbitration policy.
+SDRAM command timing.
+Credit accounting.
+Client scheduling.
+
+Not for this problem.
+
+The present fit top is a bad physical-characterisation top
+
+The composed fit carries 3,214 virtual pin bits, with 1,608 ALMs reportedly containing virtual pins. Those artificial sources and sinks consume area and can drag related logic around the device. The resulting fit is real evidence that the cone elaborates and routes, but it is not a clean characterisation of the future board machine.
+
+Split the current top into:
+
+zhao_shell_core
+    The real console composition.
+
+zhao_shell_sim_top
+    Existing wide Verilator/harness interface.
+
+zhao_shell_fit_top
+    Registered internal traffic generators.
+    Registered/chunked output signature.
+    Only clocks/reset and a tiny signature interface at top level.
+
+zhao_board_top
+    Actual framework, PLLs and board pins.
+
+The fit top should drive pseudo-inputs from registered LFSR/ROM state and consume outputs through a chunked sequential MISR, not one enormous XOR tree. This keeps all logic alive without surrounding the whole core with thousands of virtual pins.
+
+Then make four controlled fits with identical settings:
+
+shell core only
+shell + binner
+shell + binner/tile pipeline
+shell + full fitted renderer
+
+That gives actual attribution rather than one giant before/after mystery.
+
+Shell reductions should leave the hot path
+
+There are still avoidable shell cones:
+
+guard_violations_o is a combinational three-way 32-bit sum.
+vram_total and hps_total each sum five 32-bit values into 64 bits combinationally before the counter provider.
+The record framer has already required one timing fix after a subtract-plus-compare drove the write enable of a 144-bit queue.
+
+The guard aggregate should be a registered event counter or a two-stage balanced sum. The byte totals can be maintained directly by the owning arbiter/bridge or folded over several clocks after the frame tick. They are observability values sampled once per frame; paying a giant same-cycle adder tree is pointless.
+
+There is also a shell correctness bug
+
+The downstream route-integrity check still says:
+
+Any write whose client is not BLIT_DMA is illegal.
+
+But the guard now legitimately admits ENGINE0 as the selected framebuffer writer. Every real renderer burst therefore latches shell_err_route_o, despite being legal.
+
+The check should be:
+
+expected_writer =
+    fb_writer_i ? ENGINE0 : BLIT_DMA;
+
+write is legal iff ctrl_req.client == expected_writer
+
+That is not the 53 MHz cause, but it should be fixed in the same shell cleanup.
+
+The architecture rule I would adopt
+
+For the entire GPU domain:
+
+Latency may grow. Initiation rate and exact arithmetic may not regress.
+
+And physically:
+
+At most one multiplier layer per pipeline stage.
+Register multiplier outputs before feeding fabric adders.
+No wide global reduction may directly control a large register bank.
+No dynamic 64-bit barrel operation on a per-row/per-fragment hot path when the real protocol has a constant shape.
+Streamed blocks keep II=1 through pipelining.
+Setup blocks may take more clocks unless measured frame cost says otherwise.
+No false paths or multicycle constraints for logic genuinely sampled every clock.
+No seed fishing as the “fix.”
+
+Pipeline placement, ready/valid cuts and internal tags are explicitly Class A decisions under the owner rulings, so none of this requires changing game-visible behaviour, command ABI or numeric laws.
+
+Implementation order
+
+I would execute it in this order:
+
+Create the registered fit top and export the worst 100 setup paths. Preserve the existing result as the before measurement.
+Fix Early-Z full detection and Edgewalk’s registered steps/balanced popcount. These are low-semantic-risk and target broad TNS.
+Install the full streamed Edgewalk row and cross pipelines.
+Pipeline Fragment into read/shade/blend/finish/commit, with the small in-flight address CAM.
+Sequence and register Binner setup products.
+Make FBWRITE fixed-row and precompute addresses; specialise the ENGINE0 guard shape.
+Register the shell’s diagnostic reductions and fix the ENGINE0 route tripwire.
+Fit each major step rather than batching them.
+Require approximately 120 MHz on isolated hot blocks and at least 110–115 MHz on the composed provisional core, so the nominal 100 MHz board target is not balanced on one routing decision.
+Only then add the still-missing full Wave A cone—TMU v2, cache, TEXJOIN, AUX and Field/Earth—to the physical fit. The current 53 MHz fit does not contain those components.
+Bottom line
+
+The 53 MHz result does not look existential. It looks like first-composition timing debt.
+
+The renderer contains multiple textbook 18 ns structures:
+
+Wide edge generation plus popcount in one cycle.
+RAM read through two multiplier layers back into RAM.
+A 256-bit reduction feeding a 256-bit register bank.
+Parallel DSP products followed by wide addition.
+Dynamic address and byte-mask machinery for a protocol that is actually fixed-size.
+
+There is plenty of scope to exchange registers and a modest amount of latency for frequency. The current fit is only 30% ALMs and 14% DSPs, and several changes above reduce DSP/routing pressure rather than increasing it. The missing production capacities and full renderer components mean the eventual fit is still uncertain, but 100 MHz remains a credible target after this repipeline. I would be genuinely surprised if the architecture above remained anywhere near 53 MHz; whether it closes at 110–115 MHz is the part that still requires Quartus evidence.
