@@ -77,3 +77,60 @@ so the entries before it are reconstructed from the commits they produced.
 2. The binner arena capacity.
 3. What `276,480` counts — decides whether two per-pixel blocks need replicating.
 4. Seven contracts to write, or a ruling on who may write them.
+
+---
+
+## Wave A, after bro's second architecture pass (owner rulings 2026-08-31)
+
+Rulings recorded durably at `reports/OWNER-RULINGS-20260831.md`.
+
+### Landed
+
+| commit | what |
+|---|---|
+| `f8c2b32` | the rulings, and the fit project found STALE |
+| `3de0bc7` | PROOF: exact attribute stepping, 10x fewer divides -- and the ruling's stated formula is NOT the shipped law |
+| `fa5cbc5` | DEPTH PROFILES derived and proved; scale comes out 2^40 / 2^39 / 2^38 |
+| `7ca89bf` | fit: source list generated from CMake, 141 virtual pins |
+| `128dd36` | fit: the unpacked-array ports, element by element |
+| `a11c53c` | ATTRDIV publishes its Euclidean remainder |
+| `01e8ac4` | RASTER.ATTRSTEP: the recurrence in RTL, 15.1x fewer divides, not one bit moved |
+| `feca129` | the divide crisis superseded |
+
+### The fit, honestly
+
+Analysis & Elaboration and Analysis & Synthesis both pass, 0 errors -- **the
+shell plus the whole render path elaborates and synthesises, which had never
+been shown.** The FITTER does not yet complete:
+
+* first attempt: source parity refused it -- the QSF listed neither
+  `zhao_geom_bin_pipe` nor `zhao_raster_fbwrite` nor their closure, though
+  `zhao_shell_top` instantiates both. 28 -> 42 sources, generated from CMake so
+  parity holds by construction.
+* second: `742 IO input pads against 315 available` -- the 40 wide render ports
+  were not virtualised. Named explicitly, 101 -> 141.
+* third and fourth: `156 user-specified I/O pins against 145 available`, and
+  the count did NOT move when the ten unpacked-array ports were virtualised
+  element by element. **So the remaining 156 are something else and I have not
+  yet identified them.** A local fit is running to produce the I/O assignment
+  report rather than guess a fifth time.
+
+**742 -> 156 against a 145 limit is real progress and not a result.** The fit
+number this run owes is a completed fitter and a TimeQuest Fmax, and it does not
+have one yet.
+
+### Errors this wave, all mine
+
+1. **Ran the fit against uncommitted QSF edits** and read the unchanged 742 as
+   "the virtual pins do nothing". `run_shell_fit.ps1` snapshots from
+   `git archive HEAD` deliberately, so a fit names the exact commit it measured.
+2. **Generated 2,446 bogus virtual pins** from a regex that matched packed
+   vectors and captured the word `logic` as a port name.
+3. **Tracked the signed quotient in ATTRSTEP** and stepped the negative branch
+   backwards; the directed test caught it on the second pixel.
+4. **Left a refused ATTRSTEP job unable to emit**, so it hung instead of
+   flagging.
+5. **Built an exact-half test case with zero exact halves in it**; only the
+   anti-vacuity check noticed.
+6. **Asked ATTRSTEP for a quotient of 156 billion** against a stated 32-bit
+   precondition -- the block refused correctly and the test was wrong.

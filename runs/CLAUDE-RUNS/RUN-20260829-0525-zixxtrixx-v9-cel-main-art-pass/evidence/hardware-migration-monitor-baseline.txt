@@ -1,9 +1,10 @@
-Baseline refreshed 2026-08-31T02:30:20+02:00 after read-only creature-ownership migration check.
+Baseline refreshed 2026-08-31T04:56:19+02:00 after read-only creature-ownership migration check.
 === zhaozhou HEAD ===
-4d6c71f171de1e14aee56510919fb6ecf026973c
+3de0bc70bb3163cf662b6f424919e8f6272d9c36
 === zhaozhou branch ===
 zixxtrixx-v8-closeout
 === zhaozhou status --porcelain=v1 ===
+ M fpga/quartus/shell_fit/zhao_shell_fit.qsf
  M runs/CLAUDE-RUNS/RUN-20260829-0525-zixxtrixx-v9-cel-main-art-pass/evidence/hardware-migration-monitor-baseline.txt
  M runs/CLAUDE-RUNS/RUN-20260829-0525-zixxtrixx-v9-cel-main-art-pass/work/zhaozhou-v9
 ?? atmo-sun-donor/
@@ -100,7 +101,7 @@ zixxtrixx-v8-closeout
 ?? zixxtrixx-wire/
 === zhaozhou relevant remote tips (ls-remote) ===
 597df1a226e042d4544ee54c518f8c05bccf7a7f	refs/heads/creature-ownership-migration
-4d6c71f171de1e14aee56510919fb6ecf026973c	refs/heads/main
+3de0bc70bb3163cf662b6f424919e8f6272d9c36	refs/heads/main
 98ee417bbf377910447b84fa6f4c078733532a5a	refs/heads/zixxtrixx-coil-expression
 a5954073967e293923f9671d9de9e1ad1edbcbb1	refs/heads/zixxtrixx-final-pass
 === Upheaval HEAD ===
@@ -113,8 +114,10 @@ f80e70a4067f31a4deae80a47a55a62f8fbd94b4	refs/heads/main
 f80e70a4067f31a4deae80a47a55a62f8fbd94b4	refs/heads/zixxtrixx-coil-expression
 940a6440d4b575709c77b9e8ddea2e2cdd7bc443	refs/heads/zixxtrixx-final-pass
 === interpretation ===
-No creature-ownership migration progress. The zhaozhou migration branch remains documentation-only at 597df1a, Upheaval still has no migration branch, and Zixxtrixx deformation remains authored in zhaozhou reference/reel structures rather than an Upheaval-owned package compiled through cartridge/silicon contracts.
-The active-v9 freeze remains released because the modelling lane previously supplied final mains zhaozhou 85c0e8a and Upheaval f80e70a and explicitly confirmed its agent and background children stopped. No later freeze violation is visible.
-Commit 4d6c71f adds meaningful GEOM.WCACHE random-differential and ledger evidence: 8,726 lookups with 1,894 hits, 1,216 misses and 5,616 deterministic refusals, plus TERRAIN.PATCH/GEOM.WCACHE REFERENCE_COMPLETE ledger corrections.
-That same already-pushed main commit is a severe scope/repository-hygiene collision: 638 files changed with 77,699 insertions and 9 deletions, sweeping hundreds of unrelated historical run artifacts, Zixxtrixx images/logs/binary clips, the monitor baseline, and multiple nested repository gitlinks into remote main. The staging mechanism was not observed, so no claim is made about the exact command; the resulting scope is consistent with an indiscriminate staging sweep rather than the stated WCACHE milestone.
-The newly tracked nested zhaozhou-v9 repository path is currently dirty, and this authorized baseline refresh itself makes the newly tracked baseline file dirty. Upheaval remains unchanged and clean. No reset, clean, revert, stage, repair, edit outside this baseline, or job stop was attempted.
+No creature-ownership migration progress. The zhaozhou migration branch remains documentation-only at 597df1a, Upheaval still has no migration branch, and no Upheaval-owned creature package or cartridge/compiler/packer/silicon deformation contract landed.
+The active-v9 freeze remains released because the completed modelling lane previously supplied final mains zhaozhou 85c0e8a and Upheaval f80e70a and explicitly confirmed its agent and background children stopped. No shared-lane freeze violation is visible.
+Two architecture commits landed after f5d726f. Commit f8c2b32 records new owner rulings: named per-view depth profiles, a 320,000 pre-Z design target, external SDRAM GEOM.PARAMBUF owned by ENGINE1, versioned meshlet formats, and exact attribute stepping before any divider farm. These are meaningful architecture decisions, not ownership migration. Zixxtrixx is named as one bake-off asset alongside ten other creatures, but authorship and serialization ownership remain unresolved.
+Commit 3de0bc7 proves in C++ that the ruling's floor formula disagrees with the shipped signed half-away-from-zero law on 360/16,040 negative exact-half cases, and demonstrates a sign-aware quotient/remainder recurrence with zero mismatches over 640,000 pixel-attributes and 0.099 setup divides per pixel-attribute. This is strong arithmetic evidence and may remove the divider-farm pressure, but it is not yet RTL, composed-pipeline throughput, or Quartus fit evidence.
+The committed fit project was found stale and f8c2b32 adds the renderer source cone. Current dirty QSF work reorganizes that cone and adds 40 explicit virtual render ports after an attempted fit exposed 742 requested input pads against 315 available. This is active fit/project repair; it is not migration. Do not treat an eventual characterization fit as proof of the still-absent production attribute/TEXJOIN/AUX composition.
+The prior 4d6c71f bulk-scope collision, 4b8c5fe monitor-history collision, dirty nested zhaozhou-v9 repository, and architecture-report overstatement concerns remain unresolved. Upheaval remains unchanged and clean.
+No reset, clean, revert, stage, repair, edit outside this baseline, job stop, or interference with the active dirty QSF work was attempted.
