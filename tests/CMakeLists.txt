@@ -1900,6 +1900,20 @@ target_link_libraries(test_depth_profile_law PRIVATE zhao_zref)
 add_test(NAME depth_profile_law COMMAND test_depth_profile_law)
 set_tests_properties(depth_profile_law PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# RASTER.ATTRSTEP: the recurrence in RTL, checked against the divider it
+# replaces. The oracle is the shipped law, and the cases are the ones where a
+# two-branch recurrence can go wrong -- sign crossings inside a row and exact
+# halves.
+add_executable(test_raster_attrstep_directed raster/raster_attrstep_directed.cpp)
+target_link_libraries(test_raster_attrstep_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_attrstep_directed
+  PREFIX Vzhao_raster_attrstep
+  TOP_MODULE zhao_raster_attrstep
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrstep.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv)
+add_test(NAME raster_attrstep_directed COMMAND test_raster_attrstep_directed)
+set_tests_properties(raster_attrstep_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
 set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
