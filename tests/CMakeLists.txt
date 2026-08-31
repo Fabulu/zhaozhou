@@ -1890,6 +1890,16 @@ add_executable(test_attribute_step_equivalence proofs/attribute_step_equivalence
 add_test(NAME attribute_step_equivalence COMMAND test_attribute_step_equivalence)
 set_tests_properties(attribute_step_equivalence PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The depth-profile derivation (owner ruling 2026-08-31 #1). It derives `scale`
+# from wmin/wmax through the frozen rcp_u24 law and proves the four properties
+# the ruling demands: the pin at wmin, monotonicity, a non-zero floor at wmax,
+# and no intermediate wrap. A gate, because a depth mapping that stops being
+# monotonic swaps two surfaces and nothing else would notice.
+add_executable(test_depth_profile_law proofs/depth_profile_law.cpp)
+target_link_libraries(test_depth_profile_law PRIVATE zhao_zref)
+add_test(NAME depth_profile_law COMMAND test_depth_profile_law)
+set_tests_properties(depth_profile_law PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
 set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
