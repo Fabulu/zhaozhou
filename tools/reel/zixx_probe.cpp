@@ -62,11 +62,29 @@ std::vector<Station> make_stations() {
   return out;
 }
 
+bool primary_influence_active(const zc::SkinVertex& v) { return v.w0 != 0; }
+bool secondary_influence_active(const zc::SkinVertex& v) { return v.w0 != 64; }
+bool fin_bone(uint8_t b) {
+  return b >= zixx::kBBladeL && b <= zixx::kBSpike;
+}
+bool finless_vertex(const zc::SkinVertex& v) {
+  return !(primary_influence_active(v) && fin_bone(v.b0)) &&
+         !(secondary_influence_active(v) && fin_bone(v.b1));
+}
+int active_primary_bone(const zc::SkinVertex& v) {
+  return primary_influence_active(v) ? static_cast<int>(v.b0) : -1;
+}
+int active_secondary_bone(const zc::SkinVertex& v) {
+  return secondary_influence_active(v) ? static_cast<int>(v.b1) : -1;
+}
+
 struct PosedSample {
   int tick = 0;  // 60 Hz presentation tick; even=authored key, odd=midpoint
   int32_t min_y_fx = INT32_MAX;
   int32_t max_y_fx = INT32_MIN;
   std::array<int32_t, 2> rung_min_y_fx{INT32_MAX, INT32_MAX};
+  std::array<int, 2> rung_min_b0{-1, -1};
+  std::array<int, 2> rung_min_b1{-1, -1};
   std::array<int32_t, 2> rung_body_min_y_fx{INT32_MAX, INT32_MAX};
   std::array<int, 2> rung_body_min_b0{-1, -1};
   std::array<int, 2> rung_body_min_b1{-1, -1};
@@ -134,39 +152,43 @@ ClipScan scan_clip(const zc::CreatureType& type, const zc::Clip& clip,
             v = zc::deform_skin_vertex(bind, meshlet.deform[vi], deform);
           int32_t x = 0, y = 0, z = 0;
           zc::skin_vertex(pose.data(), v, x, y, z, &ledger);
-          s.rung_min_y_fx[rung] = std::min(s.rung_min_y_fx[rung], y);
-          const auto fin_bone = [](uint8_t b) {
-            return b >= zixx::kBBladeL && b <= zixx::kBSpike;
-          };
-          if (!fin_bone(v.b0) && !fin_bone(v.b1)) {
+          if (y < s.rung_min_y_fx[rung]) {
+            s.rung_min_y_fx[rung] = y;
+            s.rung_min_b0[rung] = active_primary_bone(v);
+            s.rung_min_b1[rung] = active_secondary_bone(v);
+          }
+          if (finless_vertex(v)) {
             if (y < s.rung_body_min_y_fx[rung]) {
               s.rung_body_min_y_fx[rung] = y;
-              s.rung_body_min_b0[rung] = v.b0;
-              s.rung_body_min_b1[rung] = v.b1;
+              s.rung_body_min_b0[rung] = active_primary_bone(v);
+              s.rung_body_min_b1[rung] = active_secondary_bone(v);
             }
-            if (v.b0 < zc::kMaxBones && v.w0 != 0)
+            if (v.b0 < zc::kMaxBones && primary_influence_active(v))
               s.rung_body_bone_min_y_fx[rung][v.b0] = std::min(
                   s.rung_body_bone_min_y_fx[rung][v.b0], y);
-            if (v.b1 < zc::kMaxBones && v.w0 != 255)
+            if (v.b1 < zc::kMaxBones && secondary_influence_active(v))
               s.rung_body_bone_min_y_fx[rung][v.b1] = std::min(
                   s.rung_body_bone_min_y_fx[rung][v.b1], y);
           }
           s.rung_max_y_fx[rung] = std::max(s.rung_max_y_fx[rung], y);
-          // Keep actual LOD0 skinned-vertex minima per influencing bone. Balance
-          // uses these to prove several body segments, rather than only blade
-          // tips, share the authored terrain support.
+          // Keep actual LOD0 skinned-vertex minima per active influencing bone.
+          // Balance uses these to prove several body segments, rather than only
+          // blade tips, share the authored terrain support.
           if (rung == 0) {
-            if (v.b0 < zc::kMaxBones && v.w0 != 0)
+            if (v.b0 < zc::kMaxBones && primary_influence_active(v))
               s.bone_min_y_fx[v.b0] = std::min(s.bone_min_y_fx[v.b0], y);
-            if (v.b1 < zc::kMaxBones && v.w0 != 255)
+            if (v.b1 < zc::kMaxBones && secondary_influence_active(v))
               s.bone_min_y_fx[v.b1] = std::min(s.bone_min_y_fx[v.b1], y);
-            if (v.b0 >= zixx::kBBladeL && v.b0 <= zixx::kBBladeR2)
+            if ((primary_influence_active(v) &&
+                 v.b0 >= zixx::kBBladeL && v.b0 <= zixx::kBBladeR2) ||
+                (secondary_influence_active(v) &&
+                 v.b1 >= zixx::kBBladeL && v.b1 <= zixx::kBBladeR2))
               s.blade_min_y_fx = std::min(s.blade_min_y_fx, y);
           }
           if (y < s.min_y_fx) {
             s.min_y_fx = y;
-            s.min_b0 = v.b0;
-            s.min_b1 = v.b1;
+            s.min_b0 = active_primary_bone(v);
+            s.min_b1 = active_secondary_bone(v);
           }
           s.max_y_fx = std::max(s.max_y_fx, y);
 
@@ -661,6 +683,41 @@ int main() {
       std::printf("  ** FAIL: %s\n", what);
     }
   };
+
+  // Weight endpoints are semantic, not sentinel values: w0=64 is rigid b0
+  // and w0=0 is rigid b1. Pin both production skinning and probe attribution.
+  std::array<zc::mat3x4fx, zc::kMaxBones> endpoint_pose;
+  endpoint_pose.fill(zc::mat3x4_identity());
+  endpoint_pose[0].m[3] = fxm(100);
+  endpoint_pose[1].m[3] = fxm(200);
+  zc::SkinVertex endpoint{};
+  endpoint.b0 = 0;
+  endpoint.b1 = 1;
+  int32_t endpoint_x64 = 0, endpoint_y = 0, endpoint_z = 0;
+  endpoint.w0 = 64;
+  zc::skin_vertex(endpoint_pose.data(), endpoint, endpoint_x64, endpoint_y,
+                  endpoint_z, nullptr);
+  int32_t endpoint_x0 = 0;
+  endpoint.w0 = 0;
+  zc::skin_vertex(endpoint_pose.data(), endpoint, endpoint_x0, endpoint_y,
+                  endpoint_z, nullptr);
+  zc::SkinVertex inactive_fin{};
+  inactive_fin.b0 = zixx::kBBladeL;
+  inactive_fin.b1 = zixx::kBSpine0;
+  inactive_fin.w0 = 0;
+  zc::SkinVertex active_fin = inactive_fin;
+  active_fin.w0 = 64;
+  const bool rigid_endpoints =
+      endpoint_x64 == fxm(100) && endpoint_x0 == fxm(200) &&
+      !primary_influence_active(endpoint) &&
+      secondary_influence_active(endpoint) && finless_vertex(inactive_fin) &&
+      !finless_vertex(active_fin);
+  std::printf("WEIGHTS rigid endpoints: w0=64 -> %d mm, w0=0 -> %d mm; "
+              "inactive/active fin attribution %s\n",
+              to_mm(endpoint_x64), to_mm(endpoint_x0),
+              rigid_endpoints ? "correct" : "WRONG");
+  require(rigid_endpoints,
+          "rigid endpoint skinning or active-influence attribution changed");
 
   int midpoint_clip_count = 0;
   bool midpoint_dimensions = true;
@@ -1688,8 +1745,8 @@ int main() {
         if (y < terrain_worst[rung]) {
           terrain_worst[rung] = y;
           terrain_tick[rung] = t;
-          terrain_b0[rung] = spring->samples[t].min_b0;
-          terrain_b1[rung] = spring->samples[t].min_b1;
+          terrain_b0[rung] = spring->samples[t].rung_min_b0[rung];
+          terrain_b1[rung] = spring->samples[t].rung_min_b1[rung];
         }
         const int32_t body_y =
             to_mm(spring->samples[t].rung_body_min_y_fx[rung]);
@@ -1716,6 +1773,36 @@ int main() {
                 body_terrain_tick[1] / 2,
                 (body_terrain_tick[1] & 1) ? ".5" : "", body_terrain_b0[1],
                 body_terrain_b1[1], zixx::kSpringDeclaredBiteMm);
+
+    // Contact is a per-sample, per-rung claim. Integer keys remain grounded
+    // through key 22; the nonlinear reverse-release half-keys are explicitly
+    // authored and therefore checked too. Fins/blades never satisfy this gate.
+    for (int t = 0; t <= released_tick; ++t) {
+      const bool integer_key = (t & 1) == 0;
+      const bool true_authored_midpoint =
+          (t & 1) != 0 && t >= hold_end_tick && t < released_tick;
+      if (!integer_key && !true_authored_midpoint) continue;
+      const PosedSample& sample = spring->samples[t];
+      const int32_t full_y = to_mm(sample.rung_body_min_y_fx[0]);
+      const int32_t micro_y = to_mm(sample.rung_body_min_y_fx[1]);
+      const bool full_contact =
+          full_y >= -zixx::kSpringDeclaredBiteMm && full_y <= 0;
+      const bool micro_contact =
+          micro_y >= -zixx::kSpringDeclaredBiteMm && micro_y <= 0;
+      std::printf("SPRING planted finless %d%s: full %d mm bones %d/%d %s; "
+                  "micro %d mm bones %d/%d %s\n",
+                  t / 2, (t & 1) ? ".5" : "", full_y,
+                  sample.rung_body_min_b0[0], sample.rung_body_min_b1[0],
+                  full_contact ? "contact" : "OUT",
+                  micro_y, sample.rung_body_min_b0[1],
+                  sample.rung_body_min_b1[1],
+                  micro_contact ? "contact" : "OUT");
+      require(full_contact,
+              "finless full rung lost authored contact at a grounded sample");
+      require(micro_contact,
+              "finless micro rung lost authored contact at a grounded sample");
+    }
+
     for (int rung = 0; rung < 2; ++rung) {
       std::printf("SPRING deepest finless %s spine minima:",
                   rung == 0 ? "full" : "micro");
@@ -1731,6 +1818,12 @@ int main() {
                 terrain_worst[0] <= -28 && terrain_worst[1] >= -30 &&
                 terrain_worst[1] <= -20,
             "spring left its accepted authored full/micro ground-bite envelope");
+    require(body_terrain_worst[0] >= -zixx::kSpringDeclaredBiteMm &&
+                body_terrain_worst[0] <= 0,
+            "finless full rung left the declared spring bite envelope");
+    require(body_terrain_worst[1] >= -zixx::kSpringDeclaredBiteMm &&
+                body_terrain_worst[1] <= 0,
+            "finless micro rung left the declared spring bite envelope");
   }
 
   // Immediate programmable jump family.

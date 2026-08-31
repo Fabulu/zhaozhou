@@ -746,7 +746,9 @@ constexpr int32_t kSpringProfileGrounded = 0;
 constexpr int32_t kSpringProfileAbsorb = 420;
 constexpr int32_t kSpringProfileAssembled = 1000;
 constexpr int32_t kSpringProfileCollapsed = 2000;
-constexpr int32_t kSpringDeclaredBiteMm = 60;      // planted support's authored bite
+constexpr int32_t kSpringDeclaredBiteMm = 60;      // deepest support bite
+constexpr int32_t kSpringAbsorbBiteMm = 30;        // early profile stays planted
+constexpr int32_t kSpringAssembledBiteMm = 30;     // enlarged S keeps body contact
 constexpr int kSpringPlantSegment = 14;            // support after this spine segment
 constexpr int32_t kSpringJumpRootLiftMm = 0;       // no clearance hop during entry
 // Cross-section response is subordinate to the accepted centreline and exists
@@ -1703,12 +1705,6 @@ inline zc::DeformSample spring_deform_sample(int32_t entry,
       static_cast<uint16_t>((static_cast<uint32_t>(kSpringBodySpreadQ16) * q) / 1000)};
 }
 
-inline int32_t spring_root_drop(int32_t amount) {
-  const int32_t q = spring_smooth_amount(amount);
-  return -static_cast<int32_t>(
-      (static_cast<int64_t>(kSpringDeclaredBiteMm) * q) / 1000);
-}
-
 inline int32_t spring_profile_position(int32_t entry, int32_t squash) {
   const int64_t p = static_cast<int64_t>(entry) +
                     (static_cast<int64_t>(squash) *
@@ -1717,6 +1713,32 @@ inline int32_t spring_profile_position(int32_t entry, int32_t squash) {
   if (p <= kSpringProfileGrounded) return kSpringProfileGrounded;
   if (p >= kSpringProfileCollapsed) return kSpringProfileCollapsed;
   return static_cast<int32_t>(p);
+}
+
+inline int32_t spring_root_drop(int32_t entry, int32_t squash) {
+  const int32_t p = spring_profile_position(entry, squash);
+  int32_t lower_knot = kSpringProfileGrounded;
+  int32_t upper_knot = kSpringProfileAbsorb;
+  int32_t lower_bite = 0;
+  int32_t upper_bite = kSpringAbsorbBiteMm;
+  if (p > kSpringProfileAbsorb && p <= kSpringProfileAssembled) {
+    lower_knot = kSpringProfileAbsorb;
+    upper_knot = kSpringProfileAssembled;
+    lower_bite = kSpringAbsorbBiteMm;
+    upper_bite = kSpringAssembledBiteMm;
+  } else if (p > kSpringProfileAssembled) {
+    lower_knot = kSpringProfileAssembled;
+    upper_knot = kSpringProfileCollapsed;
+    lower_bite = kSpringAssembledBiteMm;
+    upper_bite = kSpringDeclaredBiteMm;
+  }
+  const int32_t local = static_cast<int32_t>(
+      (static_cast<int64_t>(p - lower_knot) * 1000) /
+      (upper_knot - lower_knot));
+  const int32_t eased = spring_smooth_amount(local);
+  const int32_t bite = lower_bite + static_cast<int32_t>(
+      (static_cast<int64_t>(upper_bite - lower_bite) * eased) / 1000);
+  return -bite;
 }
 
 inline int32_t spring_profile_slope(int k, int32_t authority, int32_t entry,
@@ -1767,7 +1789,7 @@ inline void spring_anchor_offset(int32_t authority, int32_t entry,
     y += static_cast<int64_t>(seg) * (sp - sb);
   }
   out_x = static_cast<int32_t>(x >> 16);
-  out_y = static_cast<int32_t>(y >> 16) + spring_root_drop(squash);
+  out_y = static_cast<int32_t>(y >> 16) + spring_root_drop(entry, squash);
 }
 
 inline int32_t spring_root_offset(int32_t entry, int32_t squash) {

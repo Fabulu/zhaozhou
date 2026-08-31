@@ -167,6 +167,15 @@ Replace the rejected head-dip/rear-rail spring with a visually authored whole-fi
 - Routed provenance through golden attack, the sliced local release phase, all four planned attacks and one-/three-turn jump clips. The nonlinear station-14 planted half-keys remain explicitly authored; unrelated midpoint samples remain generated cache.
 - Extended `zixx_meshcheck --deform-sidecar` fixtures for channel-independent partial companions, stale complete companions after root/quaternion/deformation source edits, malformed no-deformation data, and preservation through the real compiled Zixxtrixx bank. No collapsed-profile art values or accepted moving-light controls changed in this chunk.
 - Clean direct command `tools/reel/build-direct.sh --output <RUN>/workbench/direct-repair --clean all` recompiled every reference object and all four consumers successfully. `zixx-meshcheck --deform-sidecar` reports `partial=preserved stale=regenerated malformed=cleared compiled=preserved` and `OK`; full meshcheck covers all 45 clips with zero disagreeing binds or seam splits.
+- Committed and pushed this self-contained repair as `0ecbe0a` (`Make midpoint ownership explicit`) on `origin/zixxtrixx-whole-s-groundspring` before beginning probe/contact work.
+
+### 2026-08-31 - Active influence attribution and grounded contact repair
+
+- Corrected posed-vertex ownership to the actual sixty-fourths law: primary is active iff `w0 != 0`, secondary iff `w0 != 64`. Finless classification now ignores inactive fin indices, and total plus finless minima each carry their own full/micro responsible-bone labels. Added rigid `w0=64`/`w0=0` production-skinning and fin-attribution fixtures.
+- Added independent full- and micro-rung finless assertions at every grounded integer key through 22 and every explicitly authored reverse-release midpoint 18.5–21.5. The corrected probe exposed previously hidden hover not only at 21/21.5 but keys 1–8; evidence is `evidence/probe-attribution-repair.txt`.
+- Replaced squash-only root bite with named profile-position bite controls at the existing `0/420/1000/2000` knots: `0/30/30/60 mm`. This remains part of station-14 support compensation and is sampled solely from `entry+squash`; no root-X lane, independent root-Y clock or anticipation lift was introduced.
+- `evidence/probe-contact-profile-bite01.txt` now reports full/micro contact independently at all required samples: key 0 `-10/-8`, key 1 `-1/0`, assembled key 6 `-21/-21`, collapsed/hold key 12–18 `-18/-18`, key 21 `-20/-19`, key 21.5 `-8/-7`, and exact grounded key 22 `-10/-8 mm`. Rung-specific owners differ where the micro decimation requires it.
+- The rigid endpoint fixture passes. The only three remaining comprehensive-probe failures are the deliberately not-yet-updated capsule-era visual/terrain envelopes (compression travel, support delta, and old aggregate full/micro bite); they will be replaced once, after the collapsed profile is visually accepted, rather than legitimising art numerically.
 
 ---
 
