@@ -8,7 +8,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import { buildSinTable, buildRcp24Table, buildFieldRcpTable } from "./fixp.js";
-import { renderCpp, renderTs, renderMem, RenderedFile } from "./emit.js";
+import { renderCpp, renderTs, renderMem, renderDepthCpp, renderDepthTs, RenderedFile } from "./emit.js";
+import { buildDepthProfiles } from "./depth.js";
 import { goldenSinCos, goldenUnit8, goldenRcp24, goldenNoise2, renderManifest } from "./golden.js";
 
 function repoRoot(): string {
@@ -25,10 +26,18 @@ function buildAll(): Artifact[] {
   const sinTab = buildSinTable();
   const t24 = buildRcp24Table();
   const tf = buildFieldRcpTable();
+  // Derived through the SAME rcp_u24 the tables above define, so a change to
+  // the reciprocal moves the profiles too instead of leaving them stale.
+  // buildDepthProfiles throws if wmin stops pinning to 0xFFFFFF exactly or the
+  // far floor reaches zero -- a generator that emits a table failing its own
+  // law is worse than no generator.
+  const depth = buildDepthProfiles(t24);
 
   const texts: RenderedFile[] = [
     renderCpp(sinTab, t24, tf),
     renderTs(sinTab, t24, tf),
+    renderDepthCpp(depth),
+    renderDepthTs(depth),
     renderMem("sin_q16.mem", sinTab, 5),
     renderMem("rcp24_t0.mem", t24, 8),
     renderMem("field_rcp_t0.mem", tf, 5),

@@ -3982,13 +3982,26 @@ SceneSubject subject_creaturewalk() {
       "tilt it through the crest; frames 48+ pull the camera back 8 m -> 300 m "
       "and the LOD ladder walks it down mesh -> micro-mesh -> splat -> glint "
       "(screen-space error, 10% hysteresis, 15-tick hold)";
-  s.expect_seq_crc = 0xF46B3B4Au;  // RE-PINNED 2026-08-27: GOURAUD. The
-  // compiler now generates smooth vertex normals and the compositor lights
-  // per vertex (per-bone Lambert blend, 0.8 smooth + 0.2 face), with the
-  // three colour lanes interpolated by the raster's per-row model — the
-  // reference model the GEOM.SETUP/RASTER.FRAGMENT interpolator increment
-  // will be verified against. Intentional; moves every creature render.
-  // Previous 0x4B8730D6 (2026-08-26, per-channel light rig).
+  s.expect_seq_crc = 0x1C1A15BAu;  // RE-PINNED 2026-08-31: the creature lane
+  // moved and the constant did not follow. TWENTY commits touched the creature
+  // reference between the Gouraud pin and today -- among them "Correct creature
+  // normal orientation" (5aff7ab), "Correct Zixxtrixx whole-body spring"
+  // (3ba4131), "Add rigid-safe deformation sidecar" (40c5136) and "Synchronize
+  // Zixxtrixx idle and inspection light" (a5a175f). Any one of those moves
+  // creature pixels; all of them together certainly do. CI has been red on this
+  // since, which is the cost of re-pinning late rather than in the commit that
+  // moved it: RE-PIN IN THE COMMIT THAT CAUSES THE DRIFT.
+  //
+  // Not taken on trust. Two independent process runs both produced
+  // 0x1C1A15BA, so it is deterministic and not a nondeterminism report. And a
+  // 96-frame contact sheet was LOOKED AT (tools/capture/rgb_contact_sheet.py):
+  // the walk reads cleanly, the camera pull-back at frame 48 walks the LOD
+  // ladder mesh -> micro-mesh -> splat -> glint without a pop or a dropped
+  // frame, and no stray geometry appears. What was NOT done is a pixel diff
+  // against the pre-drift render, so this says "coherent and explained", not
+  // "identical except for the intended change".
+  // Previous 0xF46B3B4A (2026-08-27, Gouraud: smooth vertex normals +
+  // per-vertex lighting), and 0x4B8730D6 before that (per-channel light rig).
   return s;
 }
 
@@ -5170,10 +5183,14 @@ SceneSubject subject_creaturepop() {
       "2.2 pop threshold removes the mesh and releases 18 detached rotating "
       "chunks, deterministically sampled from donor gibs, with integer "
       "ballistics, gravity, and damped ground bounce";
-  s.expect_seq_crc = 0x3D259C7Eu;  // RE-PINNED 2026-08-27: GOURAUD (see
-  // creature-wave-walk's note — smooth vertex normals + per-vertex rig,
-  // interpolated colour lanes). Intentional; moves every creature render.
-  // Previous 0xEDBA0DD2 (2026-08-26, per-channel light rig).
+  s.expect_seq_crc = 0x8554FF23u;  // RE-PINNED 2026-08-31: same cause as
+  // creature-wave-walk -- see the note there for the commits and the evidence.
+  // Deterministic across two runs; the 72-frame contact sheet shows the
+  // approach, the pop at frame 27 and the gib ballistics reading correctly,
+  // and this subject's OWN detached-piece invariant still passes (18 spawned,
+  // 12 early frames with >=10 in view, span 133018 -> 980452 raw), which is a
+  // stronger check than the eye for exactly the thing this clip is for.
+  // Previous 0x3D259C7E (2026-08-27, Gouraud), 0xEDBA0DD2 before that.
   return s;
 }
 
