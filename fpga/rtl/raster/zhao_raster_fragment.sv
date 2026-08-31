@@ -319,6 +319,57 @@ module zhao_raster_fragment (
 
   logic [7:0]  s1_tidx_r;
 
+  // ================================================= stages 2 and 3 =======
+  // THE RMW LOOP, SPLIT. reports/MHZArchitected, and the measurement at
+  // 49ad539 that says why. The whole loop -- RAM read, tests, blend product,
+  // accumulate, saturate, RAM write -- used to be ONE cycle: a 14.361 ns data
+  // path that must fall under 7.95.
+  //
+  // Measured element by element from the worst path, which is how the cut
+  // points were chosen rather than guessed:
+  //
+  //     RAM out -> rd_data_o        1.51      <-- F1 ends here
+  //     Add0 (src - dst)            1.94
+  //     mul_left select             0.97
+  //     Mult0~mac (the DSP)         4.58      <-- F2 ends here
+  //     Add2 accumulator chain      2.49
+  //     Mux0 rail + out_o           1.63
+  //     route to the RAM write      1.25      <-- F3 ends here
+  //
+  // A single cut at the product leaves the front at ~9.0 ns, still over. The
+  // three-way split lands at ~1.5 / ~7.5 / ~5.4.
+  //
+  // NOTHING ABOUT THE ARITHMETIC MOVES. Same operands, same order, same
+  // widths, same single rounding -- zhao_raster_blend is split into
+  // _prod and _fin halves whose wrapper is bit-identical, so the formal proof
+  // still targets shipping logic.
+  //
+  // STAGE 2 -- holds the captured destination, the tests' verdict, and the
+  // finish-side selections that do not depend on the blend.
+  logic        s2_v_r;
+  logic [7:0]  s2_addr_r;
+  logic        s2_live_r;
+  logic [23:0] s2_dst_rgb_r;
+  logic [23:0] s2_src_rgb_r;
+  logic [7:0]  s2_src_a_r;
+  logic [1:0]  s2_blend_r;
+  logic [23:0] s2_depth_r;
+  logic [7:0]  s2_tag_r;
+  logic [7:0]  s2_sten_r;
+
+  // STAGE 3 -- holds the three registered blend PRODUCTS and every bypass the
+  // finish half needs. This is the register the DSP drives.
+  logic        s3_v_r;
+  logic [7:0]  s3_addr_r;
+  logic        s3_live_r;
+  logic signed [17:0] s3_prod_r_r, s3_prod_g_r, s3_prod_b_r;
+  logic [23:0] s3_dst_rgb_r;
+  logic [23:0] s3_src_rgb_r;
+  logic [1:0]  s3_blend_r;
+  logic [23:0] s3_depth_r;
+  logic [7:0]  s3_tag_r;
+  logic [7:0]  s3_sten_r;
+
   // ---- the state word, decoded (stage 1) ---------------------------------
   logic       st_z_test_en, st_z_write_dis, st_z_force_far;
   logic       st_atest_en;
@@ -418,15 +469,35 @@ module zhao_raster_fragment (
   // The arithmetic, its rounding and its rail live in that module, which is a
   // separate file for the same reason zhao_raster_quant is: tests/formal/
   // raster_fragment_blend.sby proves the SHIPPING blend, not a copy of it.
+  // F2 -- the three products, from STAGE 2's registers. These feed the stage 3
+  // registers, so the DSP has a clock to itself and its own routing.
+  logic signed [17:0] prod_r_w, prod_g_w, prod_b_w;
+  zhao_raster_blend_prod u_pr (.mode_i(s2_blend_r), .dst_i(s2_dst_rgb_r[23:16]),
+                               .src_i(s2_src_rgb_r[23:16]), .a_i(s2_src_a_r),
+                               .prod_o(prod_r_w));
+  zhao_raster_blend_prod u_pg (.mode_i(s2_blend_r), .dst_i(s2_dst_rgb_r[15:8]),
+                               .src_i(s2_src_rgb_r[15:8]), .a_i(s2_src_a_r),
+                               .prod_o(prod_g_w));
+  zhao_raster_blend_prod u_pb (.mode_i(s2_blend_r), .dst_i(s2_dst_rgb_r[7:0]),
+                               .src_i(s2_src_rgb_r[7:0]), .a_i(s2_src_a_r),
+                               .prod_o(prod_b_w));
+
+  // F3 -- rounding, accumulator and rail, from STAGE 3's registers.
   logic [7:0] out_r8, out_g8, out_b8;
-  zhao_raster_blend u_br (.mode_i(st_blend), .dst_i(dst_r8), .src_i(src_r8), .a_i(src_a),
-                          .out_o(out_r8));
-  zhao_raster_blend u_bg (.mode_i(st_blend), .dst_i(dst_g8), .src_i(src_g8), .a_i(src_a),
-                          .out_o(out_g8));
-  zhao_raster_blend u_bb (.mode_i(st_blend), .dst_i(dst_b8), .src_i(src_b8), .a_i(src_a),
-                          .out_o(out_b8));
+  zhao_raster_blend_fin u_fr (.mode_i(s3_blend_r), .dst_i(s3_dst_rgb_r[23:16]),
+                              .src_i(s3_src_rgb_r[23:16]), .prod_i(s3_prod_r_r),
+                              .out_o(out_r8));
+  zhao_raster_blend_fin u_fg (.mode_i(s3_blend_r), .dst_i(s3_dst_rgb_r[15:8]),
+                              .src_i(s3_src_rgb_r[15:8]), .prod_i(s3_prod_g_r),
+                              .out_o(out_g8));
+  zhao_raster_blend_fin u_fb (.mode_i(s3_blend_r), .dst_i(s3_dst_rgb_r[7:0]),
+                              .src_i(s3_src_rgb_r[7:0]), .prod_i(s3_prod_b_r),
+                              .out_o(out_b8));
 
   // ---- DEPTH, TAG AND STENCIL OUT ----------------------------------------
+  // These depend only on the destination word and the fragment's own state,
+  // never on the blend, so they are computed in F1 and REGISTERED -- which is
+  // what keeps them off the stage-3 critical path entirely.
   logic [23:0] out_depth;
   logic [7:0]  out_tag, out_sten;
   always_comb begin
@@ -448,8 +519,8 @@ module zhao_raster_fragment (
     endcase
   end
 
-  assign wr_data_o = {out_r8, out_g8, out_b8, out_tag, out_depth, out_sten};
-  assign wr_addr_o = s1_addr_r;
+  assign wr_data_o = {out_r8, out_g8, out_b8, s3_tag_r, s3_depth_r, s3_sten_r};
+  assign wr_addr_o = s3_addr_r;
 
   // ---- flow control, and THE STALL THAT RE-ISSUES ITS OWN READ -----------
   // Stage 1 stands on `rd_data_i` COMBINATIONALLY — that is what collapses
@@ -473,16 +544,48 @@ module zhao_raster_fragment (
   // never of `wr_ready_i`. `frag_ready_o` and `rd_valid_o` DO depend on
   // `wr_ready_i` and `rd_ready_i`, which are OTHER channels' readies and
   // therefore the permitted direction; RASTER.TILESTORE closes no loop back.
+  //
+  // WITH THE LOOP SPLIT, the write moves to stage 3 and each stage retires
+  // into the next. Stage 1 still stands on `rd_data_i`, so it still re-issues
+  // its own read while it cannot advance -- that hack is unchanged and is
+  // still needed for exactly the reason above.
+  //
+  // THE SAME-ADDRESS HAZARD, and why the stall below costs nothing.
+  // A write is now three stages behind its read, so a second fragment at the
+  // same tile address could read a value an in-flight write has not committed.
+  // `hazard` stalls stage 0 until the older fragment commits -- always
+  // correct, whatever the traffic.
+  //
+  // In THIS composition it never fires, and that is a property of the caller,
+  // not luck. reports/MHZArchitected: "RASTER.TILE_PIPE already refuses to
+  // accept the next triangle until the fragment pipeline is completely empty,
+  // and a triangle visits each covered pixel once." Verified in
+  // zhao_raster_tile_pipe.sv: RS_WALK leaves only on `pipe_empty`. So no two
+  // fragments in flight can share an address, the stall is unreachable, and
+  // the initiation rate is one fragment per clock exactly as before.
+  //
+  // It is implemented anyway because "unreachable" is a claim about the
+  // caller, and a block that is only correct when its caller behaves is a trap
+  // for the next composition.
+  // ENFORCED-BY: tests/raster/raster_fragment_directed.cpp:test_write_stall
   logic s1_retire, s1_hold, s0_to_s1;
-  assign wr_valid_o  = s1_v_r && live;
-  assign s1_retire   = !s1_v_r || !live || wr_ready_i;
+  logic s2_retire, s3_retire, hazard;
+
+  assign hazard = (s1_v_r && (s1_addr_r == s0_addr_r))
+               || (s2_v_r && (s2_addr_r == s0_addr_r))
+               || (s3_v_r && (s3_addr_r == s0_addr_r));
+
+  assign wr_valid_o  = s3_v_r && s3_live_r;
+  assign s3_retire   = !s3_v_r || !s3_live_r || wr_ready_i;
+  assign s2_retire   = !s2_v_r || s3_retire;
+  assign s1_retire   = !s1_v_r || s2_retire;
   assign s1_hold     = !s1_retire;
   assign rd_valid_o  = s1_hold || s0_v_r;
   assign rd_addr_o   = s1_hold ? s1_addr_r : s0_addr_r;
   assign rd_src_id_o = s1_hold ? s1_src_r  : s0_src_r;
-  assign s0_to_s1    = !s1_hold && s0_v_r && rd_ready_i;
+  assign s0_to_s1    = !s1_hold && s0_v_r && rd_ready_i && !hazard;
   assign frag_ready_o = !s0_v_r || s0_to_s1;
-  assign idle_o       = !s0_v_r && !s1_v_r;
+  assign idle_o       = !s0_v_r && !s1_v_r && !s2_v_r && !s3_v_r;
 
   logic frag_acc;
   assign frag_acc = frag_valid_i && frag_ready_o;
@@ -516,19 +619,75 @@ module zhao_raster_fragment (
       s1_tag_r            <= 8'd0;
       s1_sref_r           <= 8'd0;
       s1_tidx_r           <= 8'd0;
+      s2_v_r              <= 1'b0;
+      s2_addr_r           <= 8'd0;
+      s2_live_r           <= 1'b0;
+      s2_dst_rgb_r        <= 24'd0;
+      s2_src_rgb_r        <= 24'd0;
+      s2_src_a_r          <= 8'd0;
+      s2_blend_r          <= 2'd0;
+      s2_depth_r          <= 24'd0;
+      s2_tag_r            <= 8'd0;
+      s2_sten_r           <= 8'd0;
+      s3_v_r              <= 1'b0;
+      s3_addr_r           <= 8'd0;
+      s3_live_r           <= 1'b0;
+      s3_prod_r_r         <= 18'sd0;
+      s3_prod_g_r         <= 18'sd0;
+      s3_prod_b_r         <= 18'sd0;
+      s3_dst_rgb_r        <= 24'd0;
+      s3_src_rgb_r        <= 24'd0;
+      s3_blend_r          <= 2'd0;
+      s3_depth_r          <= 24'd0;
+      s3_tag_r            <= 8'd0;
+      s3_sten_r           <= 8'd0;
       covered_fragments_o <= 32'd0;
       blended_fragments_o <= 32'd0;
     end else begin
-      // ---- stage 1 retires ---------------------------------------------
-      if (s1_retire) begin
-        s1_v_r <= 1'b0;
+      // ---- stage 3 retires (the write) ---------------------------------
+      if (s3_retire) begin
+        s3_v_r <= 1'b0;
         // `blended_fragments` counts fragments that SURVIVED and whose write
         // combined the source with the destination. A REPLACE write is not a
         // blend, and a fragment killed by any of the three tests is not one
-        // either — it wrote nothing at all.
-        if (s1_v_r && live && (st_blend != BL_REPLACE)) begin
+        // either — it wrote nothing at all. Counted HERE now, because this is
+        // where the write happens; counting it at stage 1 would count
+        // fragments that had not yet committed.
+        if (s3_v_r && s3_live_r && (s3_blend_r != BL_REPLACE)) begin
           if (blended_fragments_o != CNT_MAX) blended_fragments_o <= blended_fragments_o + 32'd1;
         end
+      end
+
+      // ---- stage 2 hands to stage 3: the PRODUCTS -----------------------
+      if (s2_retire) s2_v_r <= 1'b0;
+      if (s2_v_r && s2_retire) begin
+        s3_v_r       <= 1'b1;
+        s3_addr_r    <= s2_addr_r;
+        s3_live_r    <= s2_live_r;
+        s3_prod_r_r  <= prod_r_w;
+        s3_prod_g_r  <= prod_g_w;
+        s3_prod_b_r  <= prod_b_w;
+        s3_dst_rgb_r <= s2_dst_rgb_r;
+        s3_src_rgb_r <= s2_src_rgb_r;
+        s3_blend_r   <= s2_blend_r;
+        s3_depth_r   <= s2_depth_r;
+        s3_tag_r     <= s2_tag_r;
+        s3_sten_r    <= s2_sten_r;
+      end
+
+      // ---- stage 1 hands to stage 2: the CAPTURED DESTINATION -----------
+      if (s1_retire) s1_v_r <= 1'b0;
+      if (s1_v_r && s1_retire) begin
+        s2_v_r       <= 1'b1;
+        s2_addr_r    <= s1_addr_r;
+        s2_live_r    <= live;
+        s2_dst_rgb_r <= {dst_r8, dst_g8, dst_b8};
+        s2_src_rgb_r <= {src_r8, src_g8, src_b8};
+        s2_src_a_r   <= src_a;
+        s2_blend_r   <= st_blend;
+        s2_depth_r   <= out_depth;
+        s2_tag_r     <= out_tag;
+        s2_sten_r    <= out_sten;
       end
 
       // ---- stage 0 hands over ------------------------------------------
