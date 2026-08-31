@@ -1914,6 +1914,18 @@ verilate(test_raster_attrstep_directed
 add_test(NAME raster_attrstep_directed COMMAND test_raster_attrstep_directed)
 set_tests_properties(raster_attrstep_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# RASTER.TOON: the cel band. The oracle is rast.cpp's own apply_toon_ramp and
+# the constants are Zixxtrixx's shipped celmain presentation, so a change that
+# alters the creature's appearance fails here rather than in a screenshot.
+add_executable(test_raster_toon_directed raster/raster_toon_directed.cpp)
+target_link_libraries(test_raster_toon_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_toon_directed
+  PREFIX Vzhao_raster_toon
+  TOP_MODULE zhao_raster_toon
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_toon.sv)
+add_test(NAME raster_toon_directed COMMAND test_raster_toon_directed)
+set_tests_properties(raster_toon_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
 set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
