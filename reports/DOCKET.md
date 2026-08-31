@@ -4,8 +4,14 @@ Owner instructions arrive as files in `reports/` and are easy to lose between
 passes. **This is the index.** Before starting any wave, read this file, then
 read the documents it names.
 
-Last swept: 2026-08-31, after merging seven owner-instruction commits
-(`73429c0` … `f56e86e`) and adding **D17** (CI) and **D18** (mana territory).
+Last swept: 2026-08-31 **late** — after `reports/OWNER-RULINGS-COMPLETE-20260831.md`
+answered **all 28 open questions**. Read that file before this one; it is the
+authority and this is only the index.
+
+**The blocked list is no longer "zero of 92 buildable".** Three blocks gained
+complete contracts (`GEOM.MESHFETCH`, `GEOM.VDECODE`, `GEOM.LOOM`), three were
+closed by decision (`GEOM.WARP`, `INPUT.SNAC`, `MEASURE.HISTOGRAM`), and the ten
+behaviour blocks have their semantics.
 
 **Rule:** when an item is finished, move it to DONE with the commit that did it.
 When a new owner document lands, add it here in the same pass that reads it.
@@ -34,12 +40,35 @@ than batching**:
 9. **only then** add TMU v2 + cache + TEXJOIN + AUX + Field/Earth to the fit
 
 **Architecture rule adopted:** *latency may grow; initiation rate and exact
-arithmetic may not regress.* One multiplier layer per stage; register multiplier
+arithmetic may not regress.*
+
+### D1 progress, measured — and the note's ranking has been wrong three times
+
+| round | change | `gpu_clk` | worst path found |
+|---|---|---|---|
+| 0 | — | 53.48 MHz | **all 400** in `RASTER.FRAGMENT` |
+| 1 | modulation off the critical path (`c23a5ef`) | **62.89 MHz** | 90 of 100 in `RASTER.EARLYZ` |
+| 2 | Early-Z ready-path skid (`ce84b10`) | 60.92 MHz | the **RMW loop**, ending at the tile store |
+
+**Round 2 regressed and the skid was KEPT anyway** — reverting restores 62.89
+*and* restores Early-Z as the ceiling, so it is prepaid work. Full reasoning in
+`reports/composed/renderer-49ad539-.../RESULT.md`.
+
+**The next surgery is quantified.** Reading the path detail (not the block
+ranking) shows `RAM read -> blend -> DSP multiply (3.785 ns) -> carry chain ->
+RAM write` in ONE cycle. The data path must fall **14.361 -> under 7.95 ns**,
+i.e. be halved. That is `MHZArchitected` step 4 — Fragment split into
+read/shade/blend/finish/commit with an in-flight address CAM.
+
+**A sixth offender, not on the note's list at all:** `gpu_clk~CLKENA0` drives
+**13,682 fanout** with 1.995 ns of launch/latch skew. No datapath pipelining
+recovers skew. Measure it separately before assuming the gap to 100 MHz is all
+logic. One multiplier layer per stage; register multiplier
 outputs before fabric adders; no wide global reduction driving a large register
 bank; no dynamic 64-bit barrel op on a hot path with a fixed protocol; no false
 paths, no multicycle constraints, **no seed fishing**.
 
-### D2. Shell route-integrity bug  ·  `reports/MHZArchitected`
+### D2. Shell route-integrity bug — **DONE** (`c23a5ef`)  ·  `reports/MHZArchitected`
 The downstream check still rejects any write whose client is not `BLIT_DMA`, but
 the guard now legitimately admits `ENGINE0` as framebuffer writer — **so every
 real renderer burst latches `shell_err_route_o`**. Should be
@@ -205,6 +234,38 @@ only when the game needs a feature.
 | first completed composed fit + numbers | `1d229a9` |
 | virtual-pin parity check | `823e703` |
 | `terrain_project_chain` regression fixed | `4c76318` |
+| worst-path export — FRAGMENT named offender #1 | `78aee73` |
+| CI format tier + the exit-128 gitlinks | `fdc57ca`, `a9aeb07` |
+| cppcheck signed-overflow | `d93bf0b` |
+| reel re-pinned; **CI fully green** | `4a436a0` |
+| **D1 round 1 — 53.48 → 62.89 MHz** | `c23a5ef`, `6e549ef` |
+| **D2 route tripwire consults the lease** | `c23a5ef` |
+| D1 round 2 — skid, kept despite regression | `ce84b10`, `43bf8a0` |
+| the RMW-loop path analysis + the clock-skew finding | `adeaa52` |
+| **all 28 owner questions answered** | `f5d1653` |
+| **depth ABI — `SetView.flags[1:0]`** (D10 step 3) | `ca7b328` |
+| D10 steps 1, 2, 4 — generated table, spec §8, oracle | `4a436a0`, `fea3b3e`, `cc10167` |
+| `GEOM.MESHFETCH` contract | `16e8f44`, `eade724` |
+| `GEOM.VDECODE` contract | `d366654` |
+| `GEOM.LOOM` contract | `a4309b9` |
+| WARP / SNAC / HISTOGRAM closed by decision | `699daf3` |
+| `TERRAIN.PATCH` + `GEOM.WCACHE` → UNIT_VERIFIED | `2728467` |
+| mana territory recorded, rescued to Upheaval main | `450acc4`, `2ad25aa` |
+| active-v9 lane unblocked | `7c646b0` |
+
+## Still open after the ruling
+
+| | item |
+|---|---|
+| **D1** | the Fragment RMW split + address CAM; then the clock-enable fanout |
+| **D4** | the 8 km world — pager, residency, cache, command pipeline |
+| **D5/D6** | creature presentation lane; cape bones; per-instance pose overrides |
+| **D7/D8** | Sunder; the tornado (explicitly after D1) |
+| **D9** | PC/console parallel dev, ZEMU, the language |
+| **D11** | `GEOM.PARAMBUF` — now sizeable, the ruling gives 256 creatures |
+| **D14** | `TILESTORE.INK` + `POST.INK` |
+| — | contracts for the ten behaviour blocks (semantics now decided) |
+| — | RTL for the three blocks whose contracts are written |
 | worst-path export — FRAGMENT named as offender #1 | `78aee73` |
 | CI format tier + the exit-128 gitlinks | `fdc57ca` |
 | mana-territory design recorded (Upheaval) | `450acc4` |
