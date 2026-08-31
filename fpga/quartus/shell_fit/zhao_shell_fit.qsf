@@ -67,6 +67,8 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_frag
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_tilestore.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_resolve.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_blend.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_blend_prod.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_blend_fin.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_div255.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_quant.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fill.sv

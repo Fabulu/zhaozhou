@@ -85,100 +85,44 @@ module zhao_raster_blend (
   output logic [7:0] out_o
 );
 
-  localparam logic [1:0] BL_REPLACE = 2'd0;
-  localparam logic [1:0] BL_ALPHA   = 2'd1;
-  localparam logic [1:0] BL_ADD     = 2'd2;
-  localparam logic [1:0] BL_ADD_MOD = 2'd3;
+  // ---- SPLIT INTO TWO HALVES, 2026-08-31 ---------------------------------
+  // THIS WRAPPER IS BIT-IDENTICAL TO WHAT IT REPLACED. It wires the two halves
+  // together combinationally, so `zhao_raster_blend` still computes exactly
+  // what it always did and tests/formal/raster_fragment_blend.sby still proves
+  // the SHIPPING blend rather than a copy.
+  //
+  // The halves exist so RASTER.FRAGMENT can put a REGISTER between them.
+  // reports/MHZArchitected names the split point precisely:
+  //
+  //   F2 BLEND PRODUCT  Register the three signed blend products and bypass
+  //                     values.
+  //   F3 FINISH         Apply +128, shifts, accumulator, saturation.
+  //
+  // The measured worst path at 49ad539 ran RAM read -> tests -> THIS
+  // multiply (3.785 ns, the largest single element) -> the accumulator's carry
+  // chain -> RAM write, all in one clock, for a 14.361 ns data path that has
+  // to fall under 7.95. Splitting at the product is what halves it.
+  //
+  // "Every arithmetic operation stays in the same order and at the same
+  // width. Nothing about rounding or capture CRCs changes." -- and that is
+  // enforced by this wrapper existing: if the halves ever disagree with the
+  // original, the blend's own tests and formal proof fail here.
+  logic signed [17:0] prod_w;
 
-  // ---- ALPHA: dst + rescale_s((src − dst)·a, 8) --------------------------
-  // Exact widths: |src − dst| ≤ 255 and a ≤ 255, so |product| ≤ 65,025, which
-  // fits a signed 17-bit lane with room to spare. `>>> 8` is the arithmetic
-  // shift spec/qformats.md §4 asks for — and it MATTERS on the negative half:
-  // rescale_s rounds ties toward +infinity, so at an exact half a darkening
-  // lerp rounds toward zero. Splitting the sign off and rescaling the
-  // magnitude unsigned would round those ties the other way and differ by one
-  // LSB. That is the whole reason this is written signed.
-  // ---- ONE PRODUCT, NOT TWO ----------------------------------------------
-  // ALPHA needs (src - dst)*a and ADD_MOD needs src*a, and `mode_i` can select
-  // at most one of them per pixel. This used to compute BOTH unconditionally
-  // in two always_comb blocks, so every channel carried two multipliers to use
-  // one: 2 DSP per channel, 3 channels, 6 of RASTER.FRAGMENT's 10.
-  //
-  // The left operand is selected and ONE signed product is formed.
-  //
-  // THE SIGNED LANE IS LOAD-BEARING, BUT NOT FOR THE REASON IT LOOKS LIKE.
-  // What matters is that the +128 is applied to the SIGNED product, so ties
-  // round toward +infinity and a darkening lerp rounds toward zero. Splitting
-  // the sign off and rescaling the MAGNITUDE unsigned rounds those ties the
-  // other way: measured, 1,024 of 130,816 reachable (delta, alpha) pairs
-  // differ by one LSB. That is the original note below and it is correct.
-  //
-  // The SHIFT OPERATOR itself is not observable here, and an earlier version
-  // of this comment wrongly said it was. `>>` and `>>>` differ only above bit
-  // 9, and both consumers truncate below it -- ALPHA takes `mixed[9:0]`,
-  // ADD_MOD takes `mixed[7:0]`. For a negative sum the logical shift yields
-  // A + 1024 where A is the arithmetic result, and (A + 1024) mod 1024 == A
-  // mod 1024. Checked over all 130,816 ALPHA pairs, 64,380 of them with a
-  // negative sum: zero observable differences. The sweep's `logical_shift`
-  // mutant is therefore EQUIVALENT, recorded rather than left looking like a
-  // hole. `>>>` stays because it states the intent.
-  //
-  // ADD_MOD's product is NON-NEGATIVE for every input -- both operands are u8
-  // -- so on that branch the two shifts agree outright, which is the fact that
-  // lets one lane serve both modes.
-  //
-  // VERIFIED EXHAUSTIVELY before the RTL was touched: all 130,816 (delta,alpha)
-  // pairs reachable from two u8s, and all 65,536 (src,alpha) pairs, zero
-  // mismatches against the shipped forms; and zero negative ADD_MOD products,
-  // which is the fact the merge rests on.
-  //
-  // REPLACE and ADD consume no product at all, so the lane is a don't-care
-  // there. `mode_i` is 2 bits and all four codes are defined, which
-  // tests/formal/raster_fragment_blend_fv.sv proves by leaving the mode free.
-  // ENFORCED-BY: tests/raster/raster_fragment_directed.cpp
-  logic signed [17:0] mul_left, alpha_x, prod, mixed;
-  always_comb begin
-    mul_left = (mode_i == BL_ALPHA)
-                 ? ($signed({10'd0, src_i}) - $signed({10'd0, dst_i}))
-                 : $signed({10'd0, src_i});
-    alpha_x  = $signed({10'd0, a_i});
-    prod     = mul_left * alpha_x;
-    mixed    = (prod + 18'sd128) >>> 8;
-  end
+  zhao_raster_blend_prod u_prod (
+    .mode_i (mode_i),
+    .dst_i  (dst_i),
+    .src_i  (src_i),
+    .a_i    (a_i),
+    .prod_o (prod_w)
+  );
 
-  // ADD_MOD's rescaled value, bounded [0, 254] -- (255*255 + 128) >> 8 = 254 --
-  // so its low 8 bits ARE its value.
-  logic [7:0] modv;
-  assign modv = mixed[7:0];
-
-  // ---- the one accumulator and the one rail ------------------------------
-  logic signed [9:0] acc;
-  always_comb begin
-    case (mode_i)
-      // `mixed` is bounded to [−254, 254], so its low 10 bits ARE its value
-      // in two's complement; `$signed` is required because a part-select of a
-      // signed vector is unsigned and would make the whole sum unsigned.
-      BL_ALPHA:   acc = $signed({2'd0, dst_i}) + $signed(mixed[9:0]);
-      BL_ADD:     acc = $signed({2'd0, dst_i}) + $signed({2'd0, src_i});
-      BL_ADD_MOD: acc = $signed({2'd0, dst_i}) + $signed({2'd0, modv});
-      BL_REPLACE: acc = $signed({2'd0, src_i});
-      default:    acc = $signed({2'd0, src_i});  // unreachable: mode_i is 2 bits
-    endcase
-  end
-
-  // `mixed` is computed in an 18-bit lane so the exact product has room, but
-  // its VALUE is bounded to [-254, 254] (|src - dst| <= 255 and a <= 255 give
-  // |prod| <= 65,025, and one rescale by 8 divides that by 256). Bits [17:10]
-  // are therefore pure sign extension of bit 9 and carry no information. They
-  // are sunk explicitly rather than left to a lint waiver, in the style of
-  // zhao_raster_resolve's own `unused_ok`.
-  logic unused_ok;
-  assign unused_ok = &{1'b0, mixed[17:10]};
-
-  always_comb begin
-    if (acc[9])                     out_o = 8'd0;    // negative
-    else if (acc > 10'sd255)        out_o = 8'd255;  // the rail
-    else                            out_o = acc[7:0];
-  end
+  zhao_raster_blend_fin u_fin (
+    .mode_i (mode_i),
+    .dst_i  (dst_i),
+    .src_i  (src_i),
+    .prod_i (prod_w),
+    .out_o  (out_o)
+  );
 
 endmodule : zhao_raster_blend

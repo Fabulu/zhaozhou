@@ -1842,6 +1842,8 @@ verilate(test_render_pipe_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_prod.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_fin.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv)
@@ -1865,6 +1867,8 @@ verilate(test_render_fb_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_prod.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_fin.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv)
@@ -3406,6 +3410,8 @@ set_tests_properties(lint_raster_earlyz PROPERTIES
 # recipes those two specs ratified".
 set(ZHAO_RASTER_FRAGMENT_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_prod.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_fin.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv)
 
 add_executable(test_raster_fragment_directed raster/raster_fragment_directed.cpp)
@@ -4203,6 +4209,8 @@ set(ZHAO_GEOM_BIN_PIPE_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_prod.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_fin.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
@@ -4315,6 +4323,8 @@ set(ZHAO_RASTER_TILE_PIPE_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_prod.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_fin.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
@@ -4406,6 +4416,8 @@ set(ZHAO_SHELL_RTL
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_prod.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_blend_fin.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
