@@ -60,6 +60,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_bin_
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_binner.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_arena.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_tile_pipe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_skid2.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_edgewalk.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_earlyz.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fragment.sv
