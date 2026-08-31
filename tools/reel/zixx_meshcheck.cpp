@@ -152,42 +152,113 @@ int main(int argc, char** argv) {
     const zc::DeformSample mid = zc::deformation_sample(fixture, 7, 0, 1);
     ok = ok && mid.flatten == 16384 && mid.spread == 8192;
 
-    // A builder-authored true half-key companion is an existing clip channel,
-    // not a hint. Baking fills absent ordinary companions (above) but must not
-    // overwrite a complete deterministic companion supplied by the builder.
-    zc::Clip authored;
-    authored.slot_id = 8;
-    authored.frame_count = 2;
-    authored.interpolate = true;
-    authored.root.assign(6, 0);
-    authored.quats.assign(2, zc::quat16_identity());
-    authored.deform = {{0, 0}, {32768, 16384}};
-    authored.mid_quats.assign(2, zc::quat16_identity());
-    authored.mid_quats[0] = zc::quat16{{30000, 10000, 0, 0}};
-    authored.mid_root = {111, 222, 333, 444, 555, 666};
-    authored.mid_deform = {{123, 456}, {789, 1011}};
-    const std::vector<zc::quat16> authored_quats = authored.mid_quats;
-    const std::vector<int32_t> authored_root = authored.mid_root;
-    const std::vector<zc::DeformSample> authored_deform = authored.mid_deform;
-    zc::bake_presentation_midpoints(authored, 1);
-    const bool authored_preserved =
-        authored.mid_quats.size() == authored_quats.size() &&
-        authored.mid_root.size() == authored_root.size() &&
-        authored.mid_deform.size() == authored_deform.size() &&
-        std::memcmp(authored.mid_quats.data(), authored_quats.data(),
-                    authored_quats.size() * sizeof(zc::quat16)) == 0 &&
-        std::memcmp(authored.mid_root.data(), authored_root.data(),
-                    authored_root.size() * sizeof(int32_t)) == 0 &&
-        std::memcmp(authored.mid_deform.data(), authored_deform.data(),
-                    authored_deform.size() * sizeof(zc::DeformSample)) == 0;
-    ok = ok && authored_preserved;
+    // Generated companions are cache, never implicit authorship: changing the
+    // source keys must invalidate even complete arrays.
+    zc::Clip stale;
+    stale.slot_id = 8;
+    stale.frame_count = 2;
+    stale.interpolate = true;
+    stale.root.assign(6, 0);
+    stale.quats.assign(2, zc::quat16_identity());
+    stale.deform = {{0, 0}, {32768, 16384}};
+    zc::bake_presentation_midpoints(stale, 1);
+    const int32_t old_root_mid = stale.mid_root[0];
+    const zc::quat16 old_quat_mid = stale.mid_quats[0];
+    const zc::DeformSample old_deform_mid = stale.mid_deform[0];
+    stale.root[3] = fxm(1000);
+    stale.quats[1] = zc::quat16{{23170, 0, 0, 23170}};
+    stale.deform[1] = {16384, 8192};
+    zc::bake_presentation_midpoints(stale, 1);
+    const bool stale_regenerated =
+        stale.mid_root[0] != old_root_mid &&
+        std::memcmp(&stale.mid_quats[0], &old_quat_mid,
+                    sizeof(old_quat_mid)) != 0 &&
+        std::memcmp(&stale.mid_deform[0], &old_deform_mid,
+                    sizeof(old_deform_mid)) != 0;
+    ok = ok && stale_regenerated;
+
+    // Per-sample, per-channel provenance preserves valid PARTIAL companions
+    // independently. Unowned channels at the same sample regenerate.
+    zc::Clip expected = stale;
+    expected.mid_quats.clear();
+    expected.mid_root.clear();
+    expected.mid_deform.clear();
+    zc::bake_presentation_midpoints(expected, 1);
+    zc::Clip partial = stale;
+    const zc::quat16 owned_quat{{30000, 10000, 0, 0}};
+    partial.mid_quats = {owned_quat};                 // only sample 0 exists
+    partial.mid_root = expected.mid_root;
+    partial.mid_root[3] = 111;
+    partial.mid_root[4] = 222;
+    partial.mid_root[5] = 333;                        // sample 1 root only
+    const zc::DeformSample owned_deform{123, 456};
+    partial.mid_deform = {owned_deform};              // only sample 0 exists
+    std::vector<uint8_t> ownership(2, 0);
+    ownership[0] = zc::kMidpointQuatsAuthored |
+                   zc::kMidpointDeformAuthored;
+    ownership[1] = zc::kMidpointRootAuthored;
+    zc::bake_presentation_midpoints(partial, 1, ownership);
+    const bool partial_preserved =
+        partial.mid_quats.size() == 2 && partial.mid_root.size() == 6 &&
+        partial.mid_deform.size() == 2 &&
+        std::memcmp(&partial.mid_quats[0], &owned_quat,
+                    sizeof(owned_quat)) == 0 &&
+        std::memcmp(&partial.mid_quats[1], &expected.mid_quats[1],
+                    sizeof(owned_quat)) == 0 &&
+        partial.mid_root[0] == expected.mid_root[0] &&
+        partial.mid_root[1] == expected.mid_root[1] &&
+        partial.mid_root[2] == expected.mid_root[2] &&
+        partial.mid_root[3] == 111 && partial.mid_root[4] == 222 &&
+        partial.mid_root[5] == 333 &&
+        std::memcmp(&partial.mid_deform[0], &owned_deform,
+                    sizeof(owned_deform)) == 0 &&
+        std::memcmp(&partial.mid_deform[1], &expected.mid_deform[1],
+                    sizeof(owned_deform)) == 0;
+    ok = ok && partial_preserved;
+
+    // No valid deformation source means no midpoint deformation channel,
+    // regardless of a stale or malformed nonempty companion.
+    zc::Clip malformed = stale;
+    malformed.deform.clear();
+    malformed.mid_deform = {{9, 10}};
+    zc::bake_presentation_midpoints(malformed, 1);
+    const bool malformed_cleared = malformed.mid_deform.empty();
+    ok = ok && malformed_cleared;
+
+    // The actual Zixxtrixx compile path supplies explicit provenance beside
+    // the ClipBank. Its nonlinear planted half-key survives the second bake.
+    const zc::Clip authored_attack = zixx::build_attack();
+    const zc::Clip* compiled_attack = nullptr;
+    for (const zc::Clip& candidate : T.bank.clips)
+      if (candidate.slot_id == 3) compiled_attack = &candidate;
+    bool compiled_preserved = compiled_attack != nullptr;
+    for (int key = zixx::kSaltoCompressHoldEndKey;
+         compiled_preserved && key < zixx::kSaltoSpringReleasePoseKey; ++key) {
+      const size_t qi = static_cast<size_t>(key) * zixx::kBoneCount;
+      const size_t ri = static_cast<size_t>(key) * 3;
+      compiled_preserved =
+          std::memcmp(compiled_attack->mid_quats.data() + qi,
+                      authored_attack.mid_quats.data() + qi,
+                      zixx::kBoneCount * sizeof(zc::quat16)) == 0 &&
+          std::memcmp(compiled_attack->mid_root.data() + ri,
+                      authored_attack.mid_root.data() + ri,
+                      3 * sizeof(int32_t)) == 0 &&
+          std::memcmp(compiled_attack->mid_deform.data() + key,
+                      authored_attack.mid_deform.data() + key,
+                      sizeof(zc::DeformSample)) == 0;
+    }
+    ok = ok && compiled_preserved;
 
     std::printf("deform-sidecar: identity=%s radial_mm=(%d,%d,%d) normal=(%d,%d,%d) "
-                "follower_y_mm=%d midpoint=(%u,%u) auto=%s authored=%s\n",
+                "follower_y_mm=%d midpoint=(%u,%u) auto=%s partial=%s "
+                "stale=%s malformed=%s compiled=%s\n",
                 std::memcmp(&identity, &v, sizeof(v)) == 0 ? "exact" : "CHANGED",
                 to_mm(d.x), to_mm(d.y), to_mm(d.z), d.nx, d.ny, d.nz, to_mm(f.y),
                 mid.flatten, mid.spread, auto_complete ? "complete" : "MISSING",
-                authored_preserved ? "preserved" : "OVERWRITTEN");
+                partial_preserved ? "preserved" : "OVERWRITTEN",
+                stale_regenerated ? "regenerated" : "STALE",
+                malformed_cleared ? "cleared" : "PRESENT",
+                compiled_preserved ? "preserved" : "OVERWRITTEN");
     std::printf("deform-sidecar: %s\n", ok ? "OK" : "FAIL");
     return ok ? 0 : 2;
   }

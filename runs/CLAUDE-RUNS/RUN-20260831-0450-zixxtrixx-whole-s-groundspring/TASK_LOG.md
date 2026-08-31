@@ -160,6 +160,14 @@ Replace the rejected head-dip/rear-rail spring with a visually authored whole-fi
 - EVIDENCE/PROVENANCE blockers: preserve consumer parity across golden/planned attack and 1/3/6/9-turn consumers; recheck but do not retune the accepted moving light absent a defect; correct SPEC/closure provenance, the commit-subject mismatch, marker-hidden light-on metadata, and the false head-attitude claim (remove/document unless a real tiny by-eye delta earns inclusion).
 - Repair validation budget: art iteration dominates. Use direct `build-direct.sh` targets only; inspect complete current every-sample side/top/micro evidence and all consumer release frames after visual acceptance; then run the focused midpoint/contact/mesh/probe regressions, one moving-light replay, and exact tracked-diff checks. No full catalogue/bank, publication, deployment, integration, archive or shared-repository action.
 
+### 2026-08-31 - Midpoint ownership repair
+
+- Replaced inferred all-or-nothing midpoint ownership with explicit compile-only per-sample/per-channel provenance beside `Clip`; no `Clip`, deformation, pose-bank or shipped ABI/layout field was added. Quaternion, root and deformation ownership are independent, and every unowned companion is regenerated from current keys even when a complete stale vector already exists.
+- Made malformed `mid_deform` impossible to preserve without one valid deformation source sample per key. Added compile-time validation for missing slots, duplicate provenance, wrong mask counts, unknown bits and marked-but-missing authored samples.
+- Routed provenance through golden attack, the sliced local release phase, all four planned attacks and one-/three-turn jump clips. The nonlinear station-14 planted half-keys remain explicitly authored; unrelated midpoint samples remain generated cache.
+- Extended `zixx_meshcheck --deform-sidecar` fixtures for channel-independent partial companions, stale complete companions after root/quaternion/deformation source edits, malformed no-deformation data, and preservation through the real compiled Zixxtrixx bank. No collapsed-profile art values or accepted moving-light controls changed in this chunk.
+- Clean direct command `tools/reel/build-direct.sh --output <RUN>/workbench/direct-repair --clean all` recompiled every reference object and all four consumers successfully. `zixx-meshcheck --deform-sidecar` reports `partial=preserved stale=regenerated malformed=cleared compiled=preserved` and `OK`; full meshcheck covers all 45 clips with zero disagreeing binds or seam splits.
+
 ---
 
 ## Subagent Spawns

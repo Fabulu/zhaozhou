@@ -270,6 +270,24 @@ struct Clip {
 };
 
 /**
+ * Explicit ownership for exceptional authored 60 Hz companion samples.
+ *
+ * This provenance deliberately lives BESIDE a Clip rather than inside it: it
+ * is compile-time builder information, not a shipped clip field or a generic
+ * animation control. One byte owns channels at one segment's true half-key;
+ * every unowned channel is regenerated from the current authored keys.
+ */
+enum PresentationMidpointChannel : uint8_t {
+  kMidpointQuatsAuthored = 1u << 0,
+  kMidpointRootAuthored = 1u << 1,
+  kMidpointDeformAuthored = 1u << 2,
+};
+struct PresentationMidpointAuthorship {
+  uint16_t slot_id = 0;
+  std::vector<uint8_t> channels;  // frame_count masks, indexed by segment key
+};
+
+/**
  * PHASE-SEAM DECLARATION (C2, 2026-08-28). The hard-cut law means clip
  * transitions blend nothing: a programmable choreography built from phase
  * clips (compress -> coil -> unroll -> spear -> ...) stays pop-free only if
@@ -621,11 +639,18 @@ struct CreatureType {
  * events/frame, frame-sorted events). Returns false + reason on a malformed
  * input (fail-safe: nothing compiled).
  */
-/** A1: fill Clip::mid_* for one clip (compile_creature calls it per bank). */
+/** A1: regenerate Clip::mid_*; preserve only explicitly owned channels. */
 void bake_presentation_midpoints(Clip& c, uint8_t bone_count);
+void bake_presentation_midpoints(
+    Clip& c, uint8_t bone_count,
+    const std::vector<uint8_t>& authored_channels);
 
 bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vector<RingPart>& parts,
                       CreatureType& out, const char** reason);
+bool compile_creature(
+    const Skeleton& sk, const ClipBank& bank,
+    const std::vector<RingPart>& parts, CreatureType& out, const char** reason,
+    const std::vector<PresentationMidpointAuthorship>& midpoint_authorship);
 
 /**
  * The decode itself (pure, order-independent): the per-bone chain

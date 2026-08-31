@@ -1815,10 +1815,10 @@ inline int32_t spring_head_attitude(int32_t authority, int32_t entry,
   return static_cast<int32_t>((static_cast<int64_t>(a) * authority) / 1000);
 }
 
-inline void author_spring_release_midpoint(zc::Clip& c, int key,
-                                             int32_t life,
-                                             int32_t blade_splay_bias,
-                                             bool write_profile_root) {
+inline void author_spring_release_midpoint(
+    zc::Clip& c, int key, int32_t life, int32_t blade_splay_bias,
+    bool write_profile_root,
+    zc::PresentationMidpointAuthorship* authorship = nullptr) {
   if (key < 0 || key + 1 >= c.frame_count) return;
   const size_t qi = static_cast<size_t>(key) * kBoneCount;
   const size_t ri = static_cast<size_t>(key) * 3;
@@ -1833,13 +1833,26 @@ inline void author_spring_release_midpoint(zc::Clip& c, int key,
               kBladeRise, kBladeUpBias);
   for (int b = 0; b < kBoneCount; ++b)
     c.mid_quats[qi + b] = g.q[b];
-  if (c.mid_deform.size() == static_cast<size_t>(c.frame_count))
+  const bool writes_deform =
+      c.mid_deform.size() == static_cast<size_t>(c.frame_count);
+  if (writes_deform)
     c.mid_deform[static_cast<size_t>(key)] =
         spring_deform_sample(life, life);
   if (write_profile_root) {
     c.mid_root[ri + 0] = fxm(spring_root_anchor_x(life, life));
     c.mid_root[ri + 1] = fxm(spring_root_offset(life, life));
     c.mid_root[ri + 2] = 0;
+  }
+  if (authorship != nullptr) {
+    if (authorship->slot_id != c.slot_id ||
+        authorship->channels.size() != static_cast<size_t>(c.frame_count)) {
+      authorship->slot_id = c.slot_id;
+      authorship->channels.assign(static_cast<size_t>(c.frame_count), 0);
+    }
+    uint8_t mask = zc::kMidpointQuatsAuthored;
+    if (write_profile_root) mask |= zc::kMidpointRootAuthored;
+    if (writes_deform) mask |= zc::kMidpointDeformAuthored;
+    authorship->channels[static_cast<size_t>(key)] |= mask;
   }
 }
 
@@ -2232,7 +2245,9 @@ inline zc::Clip build_walk() {
 // attack direction"). tools/reel/zixx_choreo.cpp proves the recomposition
 // reproduces the golden world-space result. Default false: the shipped
 // clip is bit-identical to the approved one.
-inline zc::Clip build_attack(bool choreo = false) {
+inline zc::Clip build_attack(
+    bool choreo = false,
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   zc::Clip c;
   c.slot_id = 3;
   // 60 Hz presentation interpolation. Keys stay authored at 30 Hz and every
@@ -2338,7 +2353,7 @@ inline zc::Clip build_attack(bool choreo = false) {
         (curve(kAtkPre, kAtkPreN, f) + curve(kAtkPre, kAtkPreN, f + 1)) /
         2;
     author_spring_release_midpoint(c, f, life, kBladeSplay / 5,
-                                   !choreo);
+                                   !choreo, midpoint_authorship);
   }
   return c;
 }
@@ -4758,7 +4773,33 @@ inline zc::Clip slice_clip(const zc::Clip& src, uint16_t slot, int k0, int k1) {
                  src.quats.begin() + (static_cast<size_t>(k1) + 1) * kBoneCount);
   if (!src.deform.empty())
     c.deform.assign(src.deform.begin() + k0, src.deform.begin() + k1 + 1);
+  // Carry candidate companions so explicitly owned source half-keys can be
+  // remapped beside the slice. Compile regenerates every unowned entry.
+  if (src.mid_root.size() >= (static_cast<size_t>(k1) + 1) * 3)
+    c.mid_root.assign(src.mid_root.begin() + static_cast<size_t>(k0) * 3,
+                      src.mid_root.begin() + (static_cast<size_t>(k1) + 1) * 3);
+  if (src.mid_quats.size() >=
+      (static_cast<size_t>(k1) + 1) * kBoneCount)
+    c.mid_quats.assign(
+        src.mid_quats.begin() + static_cast<size_t>(k0) * kBoneCount,
+        src.mid_quats.begin() +
+            (static_cast<size_t>(k1) + 1) * kBoneCount);
+  if (src.mid_deform.size() >= static_cast<size_t>(k1) + 1)
+    c.mid_deform.assign(src.mid_deform.begin() + k0,
+                        src.mid_deform.begin() + k1 + 1);
   return c;
+}
+
+inline zc::PresentationMidpointAuthorship slice_midpoint_authorship(
+    const zc::PresentationMidpointAuthorship& src, uint16_t slot, int k0,
+    int k1) {
+  zc::PresentationMidpointAuthorship out;
+  out.slot_id = slot;
+  out.channels.assign(static_cast<size_t>(k1 - k0 + 1), 0);
+  if (src.channels.size() > static_cast<size_t>(k1))
+    std::copy(src.channels.begin() + k0, src.channels.begin() + k1 + 1,
+              out.channels.begin());
+  return out;
 }
 
 inline zc::Clip duplicate_pose_clip(const zc::Clip& src, uint16_t slot,
@@ -5869,8 +5910,9 @@ inline zc::AttackPlan zixx_orient_variant_spin(zc::AttackPlan p) {
 // spin on bone 0 with the golden's own coil re-pivot law, and an authored
 // outcome tail (ground stick + recover, or mid-air hit + fall out of the
 // sky + settle). Pure integers; baked, replay-exact.
-inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
-                                     bool air_hit_outcome) {
+inline zc::Clip build_attack_variant(
+    uint16_t slot, zc::AttackPlan p, bool air_hit_outcome,
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   const zc::Clip local = build_attack(true);
   const zc::Clip recoil = build_air_hit();
   // orient the spear along the committed AIM line (apex -> intercept):
@@ -6078,7 +6120,8 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
         (zixx_plan_spring_amount(p, k) +
          zixx_plan_spring_amount(p, k + 1)) /
         2;
-    author_spring_release_midpoint(c, k, life, kBladeSplay / 5, true);
+    author_spring_release_midpoint(c, k, life, kBladeSplay / 5, true,
+                                   midpoint_authorship);
   }
   return c;
 }
@@ -6167,21 +6210,29 @@ inline void zixx_variant_track(uint16_t slot, int key,
   }
 }
 
-inline zc::Clip build_attack_dummy() {
+inline zc::Clip build_attack_dummy(
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   return build_attack_variant(kSlotAtkDummy, zixx_variant_plan(kSlotAtkDummy),
-                              zixx_variant_air_hit(kSlotAtkDummy));
+                              zixx_variant_air_hit(kSlotAtkDummy),
+                              midpoint_authorship);
 }
-inline zc::Clip build_attack_fly() {
+inline zc::Clip build_attack_fly(
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   return build_attack_variant(kSlotAtkFly, zixx_variant_plan(kSlotAtkFly),
-                              zixx_variant_air_hit(kSlotAtkFly));
+                              zixx_variant_air_hit(kSlotAtkFly),
+                              midpoint_authorship);
 }
-inline zc::Clip build_attack_six() {
+inline zc::Clip build_attack_six(
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   return build_attack_variant(kSlotAtkSix, zixx_variant_plan(kSlotAtkSix),
-                              zixx_variant_air_hit(kSlotAtkSix));
+                              zixx_variant_air_hit(kSlotAtkSix),
+                              midpoint_authorship);
 }
-inline zc::Clip build_attack_nine() {
+inline zc::Clip build_attack_nine(
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   return build_attack_variant(kSlotAtkNine, zixx_variant_plan(kSlotAtkNine),
-                              zixx_variant_air_hit(kSlotAtkNine));
+                              zixx_variant_air_hit(kSlotAtkNine),
+                              midpoint_authorship);
 }
 
 // PROGRAMMABLE IMMEDIATE JUMP FAMILY (direction #9). One builder owns the
@@ -6380,7 +6431,9 @@ inline void zixx_jump_track(const JumpPlan& p, int key,
   y_mm = m.lift + spring_root_offset(m.entry, m.spring);
 }
 
-inline zc::Clip build_jump(const JumpPlan& p) {
+inline zc::Clip build_jump(
+    const JumpPlan& p,
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   const JumpPhases phase = zixx_jump_phases(p);
   const int land = phase.landing_key;
   const int total = phase.frame_count;
@@ -6437,16 +6490,19 @@ inline zc::Clip build_jump(const JumpPlan& p) {
         (zixx_jump_motion_sample(p, f).spring +
          zixx_jump_motion_sample(p, f + 1).spring) /
         2;
-    author_spring_release_midpoint(c, f, life, 0, true);
+    author_spring_release_midpoint(c, f, life, 0, true,
+                                   midpoint_authorship);
   }
   return c;
 }
 
-inline zc::Clip build_jump_one() {
-  return build_jump(zixx_jump_plan(kSlotJumpOne, 1));
+inline zc::Clip build_jump_one(
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
+  return build_jump(zixx_jump_plan(kSlotJumpOne, 1), midpoint_authorship);
 }
-inline zc::Clip build_jump_multi() {
-  return build_jump(zixx_jump_plan(kSlotJumpMulti, 3));
+inline zc::Clip build_jump_multi(
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
+  return build_jump(zixx_jump_plan(kSlotJumpMulti, 3), midpoint_authorship);
 }
 
 // ------------------------------------------------------------ the build ----
@@ -6752,6 +6808,7 @@ inline const zc::CreatureType& type() {
     }
 
     zc::ClipBank bank;
+    std::vector<zc::PresentationMidpointAuthorship> midpoint_authorship;
     bank.bone_count = kBoneCount;
     // A1: Zixxtrixx is the hero tier -- bake the 60 Hz presentation
     // companion at compile (~doubles this bank's pose bytes; poses are
@@ -6759,7 +6816,11 @@ inline const zc::CreatureType& type() {
     bank.bake60 = true;
     bank.clips.push_back(build_idle());
     bank.clips.push_back(build_walk());
-    bank.clips.push_back(build_attack());
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_attack(false, &owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
     bank.clips.push_back(build_fall());
     bank.clips.push_back(build_hit());
     bank.clips.push_back(build_death());
@@ -6771,9 +6832,12 @@ inline const zc::CreatureType& type() {
     // declared seams below are ENFORCED by compile_creature -- a phase edit
     // that breaks a seam fails the whole creature compile.
     {
-      const zc::Clip atk_local = build_attack(true);
+      zc::PresentationMidpointAuthorship local_owned;
+      const zc::Clip atk_local = build_attack(true, &local_owned);
       bank.clips.push_back(slice_clip(atk_local, kSlotAtkCompress, 0, 17));
       bank.clips.push_back(slice_clip(atk_local, kSlotAtkRelease, 17, 29));
+      midpoint_authorship.push_back(slice_midpoint_authorship(
+          local_owned, kSlotAtkRelease, 17, 29));
       bank.clips.push_back(duplicate_pose_clip(atk_local, kSlotAtkCoil, 29));
       bank.clips.push_back(slice_clip(atk_local, kSlotAtkUnroll, 52, 60));
       bank.clips.push_back(build_spear_flex());
@@ -6816,12 +6880,36 @@ inline const zc::CreatureType& type() {
       bank.clips.push_back(corpse);
     }
     // run 0326: the salto variations (attack1/attack2 -- the planner's payoff)
-    bank.clips.push_back(build_attack_dummy());
-    bank.clips.push_back(build_attack_fly());
-    bank.clips.push_back(build_attack_six());
-    bank.clips.push_back(build_jump_one());
-    bank.clips.push_back(build_jump_multi());
-    bank.clips.push_back(build_attack_nine());
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_attack_dummy(&owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_attack_fly(&owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_attack_six(&owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_jump_one(&owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_jump_multi(&owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_attack_nine(&owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
     // RUN 0757: the vocabulary close-out (see the section above)
     bank.clips.push_back(build_stance2());
     bank.clips.push_back(build_tumble());
@@ -6855,7 +6943,8 @@ inline const zc::CreatureType& type() {
     zc::CreatureType type;
     type.type_id = 2;
     const char* reason = "";
-    if (!zc::compile_creature(sk, bank, parts, type, &reason)) {
+    if (!zc::compile_creature(sk, bank, parts, type, &reason,
+                              midpoint_authorship)) {
       std::fprintf(stderr, "zixxtrixx: compile failed: %s\n", reason);
     }
     type.page_set = &page();
