@@ -1603,6 +1603,312 @@ int main() {
             "spring left its accepted authored full/micro ground-bite envelope");
   }
 
+  // Direction #19's fixed support and ground-bite contract covers every real
+  // 60 Hz sample through exact grounded key 22, not only the deepest hold. The
+  // support path is measured from the posed station-14 joint; contact comes
+  // independently from every posed full/micro vertex.
+  if (spring) {
+    constexpr int kPreLiftEndTick = 2 * zixx::kSaltoSpringReleasePoseKey;
+    const PosedSample& support_rest = spring->samples[0];
+    int32_t support_x_drift = 0;
+    int support_x_tick = 0;
+    int32_t support_z_drift = 0;
+    int support_z_tick = 0;
+    int32_t support_y_low = INT32_MAX;
+    int support_y_low_tick = -1;
+    int32_t support_y_high = INT32_MIN;
+    int support_y_high_tick = -1;
+    std::array<int32_t, 2> contact_deepest{INT32_MAX, INT32_MAX};
+    std::array<int32_t, 2> contact_shallowest{INT32_MIN, INT32_MIN};
+    for (int t = 0; t <= kPreLiftEndTick; ++t) {
+      const PosedSample& s = spring->samples[t];
+      const int32_t dx = std::abs(
+          s.support_x_mm - support_rest.support_x_mm);
+      if (dx > support_x_drift) {
+        support_x_drift = dx;
+        support_x_tick = t;
+      }
+      const int32_t dz = std::abs(
+          s.support_z_mm - support_rest.support_z_mm);
+      if (dz > support_z_drift) {
+        support_z_drift = dz;
+        support_z_tick = t;
+      }
+      const int32_t support_dy = s.support_y_mm - support_rest.support_y_mm;
+      if (support_dy < support_y_low) {
+        support_y_low = support_dy;
+        support_y_low_tick = t;
+      }
+      if (support_dy > support_y_high) {
+        support_y_high = support_dy;
+        support_y_high_tick = t;
+      }
+      for (int rung = 0; rung < 2; ++rung) {
+        const int32_t y = to_mm(s.rung_min_y_fx[rung]);
+        contact_deepest[rung] = std::min(contact_deepest[rung], y);
+        contact_shallowest[rung] = std::max(contact_shallowest[rung], y);
+      }
+    }
+    std::printf("SPRING pre-lift station-14 support: X drift %d mm at %d%s, "
+                "Z drift %d mm at %d%s, Y delta %d at %d%s .. %d at "
+                "%d%s mm; full/micro surface bite %d..%d / %d..%d mm "
+                "through key 22 + half-keys\n",
+                support_x_drift, support_x_tick / 2,
+                (support_x_tick & 1) ? ".5" : "", support_z_drift,
+                support_z_tick / 2, (support_z_tick & 1) ? ".5" : "",
+                support_y_low, support_y_low_tick / 2,
+                (support_y_low_tick & 1) ? ".5" : "", support_y_high,
+                support_y_high_tick / 2,
+                (support_y_high_tick & 1) ? ".5" : "",
+                contact_deepest[0], contact_shallowest[0],
+                contact_deepest[1], contact_shallowest[1]);
+    require(support_x_drift <= 1 && support_z_drift <= 1 &&
+                support_y_low >= -zixx::kSpringDeclaredBiteMm - 1 &&
+                support_y_high <= 1,
+            "spring station-14 support moved outside its authored path");
+    require(contact_deepest[0] >= -zixx::kSpringDeclaredBiteMm &&
+                contact_shallowest[0] <= 0 &&
+                contact_deepest[1] >= -zixx::kSpringDeclaredBiteMm &&
+                contact_shallowest[1] <= 0,
+            "spring full/micro pre-lift samples left the declared ground bite");
+  }
+
+  // The representation exception owns four complete release half-poses per
+  // consumer. Provenance is compile-only, so rebuild the source clips here and
+  // verify the exact per-channel masks before comparing the compiled results.
+  constexpr uint8_t kOwnedQuatsDeform =
+      zc::kMidpointQuatsAuthored | zc::kMidpointDeformAuthored;
+  constexpr uint8_t kOwnedAll =
+      kOwnedQuatsDeform | zc::kMidpointRootAuthored;
+  auto check_midpoint_authorship = [&](const char* name,
+                                       const zc::PresentationMidpointAuthorship& a,
+                                       int first, uint8_t expected_mask) {
+    bool exact = a.channels.size() > static_cast<size_t>(first + 3);
+    int owned = 0;
+    for (size_t i = 0; i < a.channels.size(); ++i) {
+      const uint8_t expected =
+          i >= static_cast<size_t>(first) &&
+                  i < static_cast<size_t>(first + 4)
+              ? expected_mask
+              : 0;
+      if (a.channels[i] != expected) exact = false;
+      if (a.channels[i] != 0) ++owned;
+    }
+    std::printf("SPRING midpoint provenance %s: %d owned segments, "
+                "mask 0x%02X, exact=%d\n",
+                name, owned, expected_mask, exact ? 1 : 0);
+    require(exact && owned == 4,
+            "spring midpoint per-channel provenance drifted");
+  };
+
+  zc::PresentationMidpointAuthorship golden_owned;
+  const zc::Clip golden_source = zixx::build_attack(false, &golden_owned);
+  check_midpoint_authorship("golden", golden_owned,
+                            zixx::kSaltoCompressHoldEndKey, kOwnedAll);
+
+  zc::PresentationMidpointAuthorship local_owned;
+  const zc::Clip local_source = zixx::build_attack(true, &local_owned);
+  const zc::PresentationMidpointAuthorship release_owned =
+      zixx::slice_midpoint_authorship(
+          local_owned, zixx::kSlotAtkRelease, 17, 29);
+  check_midpoint_authorship("release slice", release_owned, 1,
+                            kOwnedQuatsDeform);
+
+  zc::PresentationMidpointAuthorship dummy_owned;
+  const zc::Clip dummy_source = zixx::build_attack_dummy(&dummy_owned);
+  const zixx::AttackVariantPhases dummy_phase =
+      zixx::zixx_attack_variant_phases(
+          zixx::zixx_variant_plan(zixx::kSlotAtkDummy),
+          zixx::zixx_variant_air_hit(zixx::kSlotAtkDummy));
+  check_midpoint_authorship("dummy attack", dummy_owned,
+                            dummy_phase.hold_end, kOwnedAll);
+
+  zc::PresentationMidpointAuthorship fly_owned;
+  const zc::Clip fly_source = zixx::build_attack_fly(&fly_owned);
+  const zixx::AttackVariantPhases fly_phase =
+      zixx::zixx_attack_variant_phases(
+          zixx::zixx_variant_plan(zixx::kSlotAtkFly),
+          zixx::zixx_variant_air_hit(zixx::kSlotAtkFly));
+  check_midpoint_authorship("flying attack", fly_owned,
+                            fly_phase.hold_end, kOwnedAll);
+
+  zc::PresentationMidpointAuthorship six_owned;
+  const zc::Clip six_source = zixx::build_attack_six(&six_owned);
+  const zixx::AttackVariantPhases six_phase =
+      zixx::zixx_attack_variant_phases(
+          zixx::zixx_variant_plan(zixx::kSlotAtkSix),
+          zixx::zixx_variant_air_hit(zixx::kSlotAtkSix));
+  check_midpoint_authorship("six-salto", six_owned,
+                            six_phase.hold_end, kOwnedAll);
+
+  zc::PresentationMidpointAuthorship jump_one_owned;
+  const zc::Clip jump_one_source = zixx::build_jump_one(&jump_one_owned);
+  const zixx::JumpPhases jump_one_phase = zixx::zixx_jump_phases(
+      zixx::zixx_jump_plan(zixx::kSlotJumpOne, 1));
+  check_midpoint_authorship("one-turn jump", jump_one_owned,
+                            jump_one_phase.hold_end, kOwnedAll);
+
+  zc::PresentationMidpointAuthorship jump_multi_owned;
+  const zc::Clip jump_multi_source = zixx::build_jump_multi(&jump_multi_owned);
+  const zixx::JumpPhases jump_multi_phase = zixx::zixx_jump_phases(
+      zixx::zixx_jump_plan(zixx::kSlotJumpMulti, 3));
+  check_midpoint_authorship("multi-turn jump", jump_multi_owned,
+                            jump_multi_phase.hold_end, kOwnedAll);
+
+  zc::PresentationMidpointAuthorship nine_owned;
+  const zc::Clip nine_source = zixx::build_attack_nine(&nine_owned);
+  const zixx::AttackVariantPhases nine_phase =
+      zixx::zixx_attack_variant_phases(
+          zixx::zixx_variant_plan(zixx::kSlotAtkNine),
+          zixx::zixx_variant_air_hit(zixx::kSlotAtkNine));
+  check_midpoint_authorship("nine-salto", nine_owned,
+                            nine_phase.hold_end, kOwnedAll);
+
+  (void)golden_source;
+  (void)local_source;
+  (void)dummy_source;
+  (void)fly_source;
+  (void)six_source;
+  (void)jump_one_source;
+  (void)jump_multi_source;
+  (void)nine_source;
+
+  struct ReleaseConsumer {
+    const char* name;
+    int slot;
+    int first;
+  };
+  const std::array<ReleaseConsumer, 8> release_consumers{{
+      {"golden", 3, zixx::kSaltoCompressHoldEndKey},
+      {"release slice", zixx::kSlotAtkRelease, 1},
+      {"dummy attack", zixx::kSlotAtkDummy, dummy_phase.hold_end},
+      {"flying attack", zixx::kSlotAtkFly, fly_phase.hold_end},
+      {"six-salto", zixx::kSlotAtkSix, six_phase.hold_end},
+      {"one-turn jump", zixx::kSlotJumpOne, jump_one_phase.hold_end},
+      {"multi-turn jump", zixx::kSlotJumpMulti, jump_multi_phase.hold_end},
+      {"nine-salto", zixx::kSlotAtkNine, nine_phase.hold_end},
+  }};
+  auto clip_for_slot = [&](int slot) -> const zc::Clip* {
+    for (const zc::Clip& c : type.bank.clips)
+      if (c.slot_id == slot) return &c;
+    return nullptr;
+  };
+  const zc::Clip* release_reference = clip_for_slot(3);
+  bool release_parity = release_reference != nullptr;
+  for (const ReleaseConsumer& consumer : release_consumers) {
+    const zc::Clip* candidate = clip_for_slot(consumer.slot);
+    bool exact = candidate != nullptr && release_reference != nullptr;
+    int fault_step = -1;
+    int fault_sub = -1;
+    int fault_bone = -1;
+    bool fault_deform = false;
+    if (exact) {
+      for (int step = 0; step < 5; ++step) {
+        const size_t ref_q = static_cast<size_t>(
+            zixx::kSaltoCompressHoldEndKey + step) * type.bank.bone_count;
+        const size_t got_q = static_cast<size_t>(consumer.first + step) *
+                             type.bank.bone_count;
+        for (int b = 0; b < zixx::kSpineBones; ++b) {
+          if (std::memcmp(&release_reference->quats[ref_q + b],
+                          &candidate->quats[got_q + b],
+                          sizeof(candidate->quats[0])) != 0) {
+            exact = false;
+            if (fault_step < 0) {
+              fault_step = step;
+              fault_sub = 0;
+              fault_bone = b;
+            }
+          }
+        }
+        if (std::memcmp(&release_reference->quats[ref_q + zixx::kBHead],
+                        &candidate->quats[got_q + zixx::kBHead],
+                        sizeof(candidate->quats[0])) != 0) {
+          exact = false;
+          if (fault_step < 0) {
+            fault_step = step;
+            fault_sub = 0;
+            fault_bone = zixx::kBHead;
+          }
+        }
+        const zc::DeformSample ref_d = zc::deformation_sample(
+            type, release_reference->slot_id,
+            zixx::kSaltoCompressHoldEndKey + step, 0);
+        const zc::DeformSample got_d = zc::deformation_sample(
+            type, candidate->slot_id, consumer.first + step, 0);
+        if (ref_d.flatten != got_d.flatten || ref_d.spread != got_d.spread) {
+          exact = false;
+          if (fault_step < 0) {
+            fault_step = step;
+            fault_sub = 0;
+            fault_deform = true;
+          }
+        }
+      }
+      for (int step = 0; step < 4; ++step) {
+        const size_t ref_q = static_cast<size_t>(
+            zixx::kSaltoCompressHoldEndKey + step) * type.bank.bone_count;
+        const size_t got_q = static_cast<size_t>(consumer.first + step) *
+                             type.bank.bone_count;
+        if (release_reference->mid_quats.size() <
+                ref_q + type.bank.bone_count ||
+            candidate->mid_quats.size() < got_q + type.bank.bone_count) {
+          exact = false;
+          if (fault_step < 0) {
+            fault_step = step;
+            fault_sub = 1;
+            fault_bone = -2;
+          }
+          continue;
+        }
+        for (int b = 0; b < zixx::kSpineBones; ++b) {
+          if (std::memcmp(&release_reference->mid_quats[ref_q + b],
+                          &candidate->mid_quats[got_q + b],
+                          sizeof(candidate->mid_quats[0])) != 0) {
+            exact = false;
+            if (fault_step < 0) {
+              fault_step = step;
+              fault_sub = 1;
+              fault_bone = b;
+            }
+          }
+        }
+        if (std::memcmp(&release_reference->mid_quats[ref_q + zixx::kBHead],
+                        &candidate->mid_quats[got_q + zixx::kBHead],
+                        sizeof(candidate->mid_quats[0])) != 0) {
+          exact = false;
+          if (fault_step < 0) {
+            fault_step = step;
+            fault_sub = 1;
+            fault_bone = zixx::kBHead;
+          }
+        }
+        const zc::DeformSample ref_d = zc::deformation_sample(
+            type, release_reference->slot_id,
+            zixx::kSaltoCompressHoldEndKey + step, 1);
+        const zc::DeformSample got_d = zc::deformation_sample(
+            type, candidate->slot_id, consumer.first + step, 1);
+        if (ref_d.flatten != got_d.flatten || ref_d.spread != got_d.spread) {
+          exact = false;
+          if (fault_step < 0) {
+            fault_step = step;
+            fault_sub = 1;
+            fault_deform = true;
+          }
+        }
+      }
+    }
+    std::printf("SPRING release parity %s: integer + midpoint finless "
+                "silhouette/deform exact=%d",
+                consumer.name, exact ? 1 : 0);
+    if (!exact)
+      std::printf(" (first fault step %d sub %d, %s %d)", fault_step,
+                  fault_sub, fault_deform ? "deform" : "bone", fault_bone);
+    std::printf("\n");
+    release_parity = release_parity && exact;
+  }
+  require(release_parity,
+          "spring release timing/silhouette drifted across consumers");
+
   // Immediate programmable jump family.
   for (const auto spec : {std::pair<int, int>{zixx::kSlotJumpOne, 1},
                           std::pair<int, int>{zixx::kSlotJumpMulti, 3}}) {

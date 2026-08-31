@@ -741,12 +741,18 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
 // eye as a broad low two-lobe S; interpolation/timing may only be built around a
 // collapsed pose that already reads correctly on its own.
 constexpr const auto& kSpringGroundedHeading = kStanceSlope;
+// Key 3 absorb: the front/middle S has travelled into rear-body space while
+// the final taper is only beginning to follow. It is a complete pose, not a
+// mask or per-region delay, so the chain remains one connected animal.
 constexpr int32_t kSpringAbsorbHeading[kStanceSlopes] = {
-    950, 1500, 3000, 5200, 8500, 14800, 21000, 24500, 21000, 13000,
-    3000, 500, 400, 600, 1200, 2000, 1000, -6000, -12000};
+    1000, 2200, 5000, 9000, 14000, 19000, 23500, 23500, 18000, 10000,
+    2500, -1200, -4000, -4500, -2500, 1000, 1800, -4500, -10000};
+// Key 6 assembled: one tall, broad, x-monotonic whole-body S. It uses the
+// same two-lobe topology that survives collapse, but opens both lobes upward
+// before the down/back action; no segment coils, crosses or becomes a rear rail.
 constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
-    1000, 1800, 3600, 6500, 10500, 15000, 20500, 24000, 22000, 15000,
-    6000, 1000, 500, 800, 1800, 2800, 600, -7000, -13000};
+    5000, 9000, 13000, 10000, -3000, -9000, -12000, -9000, -1500, 6000,
+    12000, 15000, 13500, 7500, -7500, -12000, -10500, -5000, -700};
 // Rung 3: station 14 is the unique deepest contact. Walking tailward, the
 // whole centreline descends from the raised head to a shallow first valley,
 // rises through the broad middle lobe, descends farther to the named support,
@@ -1205,12 +1211,14 @@ static const Key kAtkFwd[] = {
 // an intact S through key 24 while that lift takes the entire animal airborne;
 // only then does the wheel gather.
 static const Key kAtkSpringEntry[] = {
-    {0, 0}, {3, 420}, {kSaltoSpringEntryEndKey, 1000},
-    {kSaltoCompressHoldEndKey, 1000}, {kSaltoSpringReleasePoseKey, 0},
-    {kAttackKeys - 1, 0}};
+    {0, 0}, {3, kSpringAbsorbProfile}, {kSaltoSpringEntryEndKey, 1000},
+    {kSaltoCompressHoldEndKey + 1, 1000},
+    {kSaltoCompressHoldEndKey + 3, kSpringAbsorbProfile},
+    {kSaltoSpringReleasePoseKey, 0}, {kAttackKeys - 1, 0}};
 static const Key kAtkPre[] = {
     {0, 0}, {kSaltoSpringEntryEndKey, 0}, {9, 420},
     {kSaltoCompressEndKey, 1000}, {kSaltoCompressHoldEndKey, 1000},
+    {kSaltoCompressHoldEndKey + 1, 0},
     {kSaltoSpringReleasePoseKey, 0}, {kAttackKeys - 1, 0}};
 constexpr int kAtkSpringEntryN =
     static_cast<int>(sizeof(kAtkSpringEntry) / sizeof(Key));
@@ -1695,9 +1703,16 @@ inline int32_t spring_root_drop(int32_t amount) {
 }
 
 inline int32_t spring_lerp_heading(int32_t a, int32_t b, int32_t u) {
+  if (u <= 0) return a;
+  if (u >= 1000) return b;
   const int32_t eased = spring_smooth_amount(u);
+  // Absolute pose headings may be authored continuously through the angle16
+  // seam. Interpolate the physical shortest arc, never the raw integer route;
+  // named endpoints still return bit-exact above.
+  const int32_t delta = static_cast<int16_t>(
+      static_cast<uint16_t>((b - a) & 0xFFFF));
   return a + static_cast<int32_t>(
-                 (static_cast<int64_t>(b - a) * eased) / 1000);
+                 (static_cast<int64_t>(delta) * eased) / 1000);
 }
 
 inline int32_t spring_entry_heading(int k, int32_t entry) {
@@ -1803,6 +1818,90 @@ inline int32_t spring_head_attitude(int32_t authority, int32_t entry,
   const int32_t a = jump + static_cast<int32_t>(
       (static_cast<int64_t>(kSpringHeadAttitude - jump) * q) / 1000);
   return static_cast<int32_t>((static_cast<int64_t>(a) * authority) / 1000);
+}
+
+// Complete true-half-key release poses. These are named presentation controls,
+// not another heading family: each row samples the already accepted whole-body
+// route, rebuilds every bone, and derives root X/Y from station 14. Integer keys,
+// timing, deformation law and the four accepted heading tables stay untouched.
+struct SpringReleaseMidpointControl {
+  int32_t entry;
+  int32_t squash;
+};
+// Frozen integer route shared by golden/planned attacks and jumps: deepest,
+// assembled, support-compensated bridge, absorb, grounded.
+constexpr SpringReleaseMidpointControl kSpringReleaseIntegerControl[] = {
+    {1000, 1000}, {1000, 0}, {710, 0}, {kSpringAbsorbProfile, 0}, {0, 0}};
+constexpr int kSpringReleaseIntegerCount =
+    static_cast<int>(sizeof(kSpringReleaseIntegerControl) /
+                     sizeof(kSpringReleaseIntegerControl[0]));
+constexpr SpringReleaseMidpointControl kSpringReleaseMidpointControl[] = {
+    {1000, 500},  // 18.5: collapsed -> assembled, known mid-collapse route
+    {855, 0},     // 19.5: assembled -> support-compensated bridge
+    {565, 0},     // 20.5: bridge -> exact absorb
+    {210, 0},     // 21.5: absorb -> exact grounded S
+};
+constexpr int kSpringReleaseMidpointCount =
+    static_cast<int>(sizeof(kSpringReleaseMidpointControl) /
+                     sizeof(kSpringReleaseMidpointControl[0]));
+
+inline void author_spring_release_midpoint(
+    zc::Clip& c, int key, const SpringReleaseMidpointControl& control,
+    int32_t blade_splay_bias, bool write_root,
+    zc::PresentationMidpointAuthorship* authorship = nullptr) {
+  if (key < 0 || key + 1 >= c.frame_count) return;
+  const size_t qi = static_cast<size_t>(key) * kBoneCount;
+  const size_t ri = static_cast<size_t>(key) * 3;
+  if (c.mid_quats.size() < qi + kBoneCount ||
+      c.mid_root.size() < ri + 3)
+    return;
+
+  Rig g;
+  g.reset();
+  apply_spring_stance(g, 1000, control.entry, control.squash);
+  g.q[kBHead] =
+      quat_z(spring_head_attitude(1000, control.entry, control.squash));
+  g.tail_rest(kBladeSplay + blade_splay_bias +
+                  (control.squash * kSpringBladeFlare) / 1000,
+              kBladeRise, kBladeUpBias);
+  for (int b = 0; b < kBoneCount; ++b)
+    c.mid_quats[qi + b] = g.q[b];
+
+  const bool writes_deform =
+      c.mid_deform.size() == static_cast<size_t>(c.frame_count);
+  if (writes_deform)
+    c.mid_deform[static_cast<size_t>(key)] =
+        spring_deform_sample(control.squash);
+  if (write_root) {
+    c.mid_root[ri + 0] =
+        fxm(spring_root_anchor_x(control.entry, control.squash));
+    c.mid_root[ri + 1] =
+        fxm(spring_root_offset(control.entry, control.squash));
+    c.mid_root[ri + 2] = 0;
+  }
+
+  if (authorship != nullptr) {
+    if (authorship->slot_id != c.slot_id ||
+        authorship->channels.size() != static_cast<size_t>(c.frame_count)) {
+      authorship->slot_id = c.slot_id;
+      authorship->channels.assign(static_cast<size_t>(c.frame_count), 0);
+    }
+    uint8_t mask = zc::kMidpointQuatsAuthored;
+    if (write_root) mask |= zc::kMidpointRootAuthored;
+    if (writes_deform) mask |= zc::kMidpointDeformAuthored;
+    authorship->channels[static_cast<size_t>(key)] |= mask;
+  }
+}
+
+inline void author_shared_spring_release_midpoints(
+    zc::Clip& c, int hold_end, int32_t blade_splay_bias, bool write_root,
+    zc::PresentationMidpointAuthorship* authorship = nullptr) {
+  zc::bake_presentation_midpoints(c, kBoneCount);
+  for (int segment = 0; segment < kSpringReleaseMidpointCount; ++segment)
+    author_spring_release_midpoint(
+        c, hold_end + segment,
+        kSpringReleaseMidpointControl[segment], blade_splay_bias, write_root,
+        authorship);
 }
 
 // Slot 1 - IDLE. The canonical S, RELAXED. Fabian: "Like breathing, up and
@@ -2194,7 +2293,9 @@ inline zc::Clip build_walk() {
 // attack direction"). tools/reel/zixx_choreo.cpp proves the recomposition
 // reproduces the golden world-space result. Default false: the shipped
 // clip is bit-identical to the approved one.
-inline zc::Clip build_attack(bool choreo = false) {
+inline zc::Clip build_attack(
+    bool choreo = false,
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   zc::Clip c;
   c.slot_id = 3;
   // 60 Hz presentation interpolation. Keys stay authored at 30 Hz and every
@@ -2293,6 +2394,9 @@ inline zc::Clip build_attack(bool choreo = false) {
     }  // choreo: root channels stay ZERO -- trajectory is the instance's
   }
   c.events = {{kAtkImpactKey, zc::kEvAttack, 0}};  // contact: reel frame 112
+  author_shared_spring_release_midpoints(
+      c, kSaltoCompressHoldEndKey, kBladeSplay / 5, !choreo,
+      midpoint_authorship);
   return c;
 }
 
@@ -2493,15 +2597,61 @@ inline int zixx_plan_spring_entry_end(const zc::AttackPlan& p) {
   return te;
 }
 
-inline int32_t zixx_plan_spring_release_life(const zc::AttackPlan& p,
-                                             int key) {
+inline int zixx_plan_spring_release_assembled_key(
+    const zc::AttackPlan& p) {
   const int th = p.compress_keys + p.compress_hold_keys;
   const int t0 = th + p.release_keys;
-  const int release_end = t0 - 1;
-  if (key < th) return 1000;
-  if (p.release_keys <= 1 || key >= release_end) return 0;
+  if (p.release_keys <= 1) return th;
+  int key = th + (p.release_keys + 3) / 4;
+  if (key >= t0) key = t0 - 1;
+  return key;
+}
+
+inline int zixx_plan_spring_release_absorb_key(const zc::AttackPlan& p) {
+  const int th = p.compress_keys + p.compress_hold_keys;
+  const int t0 = th + p.release_keys;
+  const int ta = zixx_plan_spring_release_assembled_key(p);
+  if (p.release_keys <= 2) return ta;
+  // Keep a support-compensated integer bridge between assembled and absorb;
+  // with the shared four-key release this makes key 20 the 710-profile whole
+  // pose and key 21 the exact absorb before grounded key 22.
+  int key = th + (3 * p.release_keys + 3) / 4;
+  if (key <= ta) key = ta + 1;
+  if (key >= t0) key = t0 - 1;
+  return key;
+}
+
+inline int32_t zixx_plan_spring_release_entry(const zc::AttackPlan& p,
+                                               int key) {
+  const int th = p.compress_keys + p.compress_hold_keys;
+  const int t0 = th + p.release_keys;
+  if (key <= th) return 1000;
+  if (key >= t0 || p.release_keys <= 1) return 0;
+  const int ta = zixx_plan_spring_release_assembled_key(p);
+  const int tb = zixx_plan_spring_release_absorb_key(p);
+  if (key <= ta) return 1000;
+  if (key <= tb) {
+    const int32_t u = tb > ta ? static_cast<int32_t>(
+        (static_cast<int64_t>(key - ta) * 1000) / (tb - ta)) : 1000;
+    const int32_t q = spring_smooth_amount(u);
+    return 1000 + static_cast<int32_t>(
+        (static_cast<int64_t>(kSpringAbsorbProfile - 1000) * q) / 1000);
+  }
   const int32_t u = static_cast<int32_t>(
-      (static_cast<int64_t>(key - th) * 1000) / (release_end - th));
+      (static_cast<int64_t>(key - tb) * 1000) / (t0 - tb));
+  return static_cast<int32_t>(
+      (static_cast<int64_t>(kSpringAbsorbProfile) *
+       (1000 - spring_smooth_amount(u))) / 1000);
+}
+
+inline int32_t zixx_plan_spring_release_squash(const zc::AttackPlan& p,
+                                                int key) {
+  const int th = p.compress_keys + p.compress_hold_keys;
+  const int ta = zixx_plan_spring_release_assembled_key(p);
+  if (key <= th) return 1000;
+  if (key >= ta || ta <= th) return 0;
+  const int32_t u = static_cast<int32_t>(
+      (static_cast<int64_t>(key - th) * 1000) / (ta - th));
   return 1000 - spring_smooth_amount(u);
 }
 
@@ -2517,7 +2667,7 @@ inline int32_t zixx_plan_spring_entry_amount(const zc::AttackPlan& p,
         (static_cast<int64_t>(key) * 1000) / te));
   }
   if (key < th) return 1000;
-  return zixx_plan_spring_release_life(p, key);
+  return zixx_plan_spring_release_entry(p, key);
 }
 
 inline int32_t zixx_plan_spring_amount(const zc::AttackPlan& p, int key) {
@@ -2532,7 +2682,7 @@ inline int32_t zixx_plan_spring_amount(const zc::AttackPlan& p, int key) {
         (static_cast<int64_t>(key - te) * 1000) / (tc - te)));
   }
   if (key < th) return 1000;
-  return zixx_plan_spring_release_life(p, key);
+  return zixx_plan_spring_release_squash(p, key);
 }
 
 // the plan's per-key root sample -- the general form of
@@ -4616,7 +4766,34 @@ inline zc::Clip slice_clip(const zc::Clip& src, uint16_t slot, int k0, int k1) {
                  src.quats.begin() + (static_cast<size_t>(k1) + 1) * kBoneCount);
   if (!src.deform.empty())
     c.deform.assign(src.deform.begin() + k0, src.deform.begin() + k1 + 1);
+  // Carry candidate companions so explicitly owned source half-keys can be
+  // remapped beside the slice. Compile regenerates every unowned entry.
+  if (src.mid_root.size() >= (static_cast<size_t>(k1) + 1) * 3)
+    c.mid_root.assign(src.mid_root.begin() + static_cast<size_t>(k0) * 3,
+                      src.mid_root.begin() +
+                          (static_cast<size_t>(k1) + 1) * 3);
+  if (src.mid_quats.size() >=
+      (static_cast<size_t>(k1) + 1) * kBoneCount)
+    c.mid_quats.assign(
+        src.mid_quats.begin() + static_cast<size_t>(k0) * kBoneCount,
+        src.mid_quats.begin() +
+            (static_cast<size_t>(k1) + 1) * kBoneCount);
+  if (src.mid_deform.size() >= static_cast<size_t>(k1) + 1)
+    c.mid_deform.assign(src.mid_deform.begin() + k0,
+                        src.mid_deform.begin() + k1 + 1);
   return c;
+}
+
+inline zc::PresentationMidpointAuthorship slice_midpoint_authorship(
+    const zc::PresentationMidpointAuthorship& src, uint16_t slot, int k0,
+    int k1) {
+  zc::PresentationMidpointAuthorship out;
+  out.slot_id = slot;
+  out.channels.assign(static_cast<size_t>(k1 - k0 + 1), 0);
+  if (src.channels.size() > static_cast<size_t>(k1))
+    std::copy(src.channels.begin() + k0, src.channels.begin() + k1 + 1,
+              out.channels.begin());
+  return out;
 }
 
 inline zc::Clip duplicate_pose_clip(const zc::Clip& src, uint16_t slot,
@@ -5727,8 +5904,9 @@ inline zc::AttackPlan zixx_orient_variant_spin(zc::AttackPlan p) {
 // spin on bone 0 with the golden's own coil re-pivot law, and an authored
 // outcome tail (ground stick + recover, or mid-air hit + fall out of the
 // sky + settle). Pure integers; baked, replay-exact.
-inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
-                                     bool air_hit_outcome) {
+inline zc::Clip build_attack_variant(
+    uint16_t slot, zc::AttackPlan p, bool air_hit_outcome,
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   const zc::Clip local = build_attack(true);
   const zc::Clip recoil = build_air_hit();
   // orient the spear along the committed AIM line (apex -> intercept):
@@ -5911,6 +6089,10 @@ inline zc::Clip build_attack_variant(uint16_t slot, zc::AttackPlan p,
   // event: the strike lands at t3 (collision verdict in the sim; here the
   // baked showcase's own moment)
   c.events = {{static_cast<uint16_t>(t3), zc::kEvAttack, air_hit_outcome ? uint8_t{1} : uint8_t{0}}};
+  if (p.release_keys == kSpringReleaseMidpointCount)
+    author_shared_spring_release_midpoints(
+        c, phase.hold_end, kBladeSplay / 5, true,
+        midpoint_authorship);
   return c;
 }
 
@@ -5998,21 +6180,29 @@ inline void zixx_variant_track(uint16_t slot, int key,
   }
 }
 
-inline zc::Clip build_attack_dummy() {
+inline zc::Clip build_attack_dummy(
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   return build_attack_variant(kSlotAtkDummy, zixx_variant_plan(kSlotAtkDummy),
-                              zixx_variant_air_hit(kSlotAtkDummy));
+                              zixx_variant_air_hit(kSlotAtkDummy),
+                              midpoint_authorship);
 }
-inline zc::Clip build_attack_fly() {
+inline zc::Clip build_attack_fly(
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   return build_attack_variant(kSlotAtkFly, zixx_variant_plan(kSlotAtkFly),
-                              zixx_variant_air_hit(kSlotAtkFly));
+                              zixx_variant_air_hit(kSlotAtkFly),
+                              midpoint_authorship);
 }
-inline zc::Clip build_attack_six() {
+inline zc::Clip build_attack_six(
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   return build_attack_variant(kSlotAtkSix, zixx_variant_plan(kSlotAtkSix),
-                              zixx_variant_air_hit(kSlotAtkSix));
+                              zixx_variant_air_hit(kSlotAtkSix),
+                              midpoint_authorship);
 }
-inline zc::Clip build_attack_nine() {
+inline zc::Clip build_attack_nine(
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   return build_attack_variant(kSlotAtkNine, zixx_variant_plan(kSlotAtkNine),
-                              zixx_variant_air_hit(kSlotAtkNine));
+                              zixx_variant_air_hit(kSlotAtkNine),
+                              midpoint_authorship);
 }
 
 // PROGRAMMABLE IMMEDIATE JUMP FAMILY (direction #9). One builder owns the
@@ -6021,12 +6211,11 @@ inline zc::Clip build_attack_nine() {
 // is no unroll/spear/target branch.
 struct JumpPlan {
   uint16_t slot = 0;
-  // Immediate only in outcome, not in stiffness: the same 12-key anticipation
-  // gives the full-tail entry and squash six readable keys each, followed by a
-  // six-key theatrical hold and eight-key gummy release before lift.
+  // The same twelve-key entry/collapse, six-key hold and four-key exact reverse
+  // as every salto consumer. Key 22 is grounded before any flight begins.
   uint16_t compress_keys = 12;
   uint16_t compress_hold_keys = 6;
-  uint16_t release_keys = 8;
+  uint16_t release_keys = 4;
   uint16_t flight_keys = 38;
   uint16_t landing_keys = 6;
   uint16_t settle_keys = 14;
@@ -6110,11 +6299,14 @@ inline JumpMotionSample zixx_jump_motion_sample(const JumpPlan& p, int f) {
     m.entry = 1000;
     m.spring = 1000;
   } else if (f <= launch) {
-    // Release the loaded silhouette as one S while it is still grounded. Both
-    // squash and enlarged-entry authority clear before the root may lift.
-    const int32_t u = ss1000(f, th - 1, launch - 1);
-    m.entry = 1000 - u;
-    m.spring = 1000 - u;
+    // Exact frozen reverse: collapsed -> assembled -> bridge -> absorb ->
+    // grounded, all still rooted at station 14 before the flight parabola.
+    int release_key = f - th;
+    if (release_key < 0) release_key = 0;
+    if (release_key >= kSpringReleaseIntegerCount)
+      release_key = kSpringReleaseIntegerCount - 1;
+    m.entry = kSpringReleaseIntegerControl[release_key].entry;
+    m.spring = kSpringReleaseIntegerControl[release_key].squash;
   } else if (f <= land) {
     const int j = f - launch;
     const int32_t t = p.flight_keys > 0
@@ -6162,7 +6354,9 @@ inline void zixx_jump_track(const JumpPlan& p, int key,
   y_mm = m.lift + spring_root_offset(m.entry, m.spring);
 }
 
-inline zc::Clip build_jump(const JumpPlan& p) {
+inline zc::Clip build_jump(
+    const JumpPlan& p,
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
   const JumpPhases phase = zixx_jump_phases(p);
   const int land = phase.landing_key;
   const int total = phase.frame_count;
@@ -6212,14 +6406,19 @@ inline zc::Clip build_jump(const JumpPlan& p) {
     c.root[f * 3 + 1] = fxm(y);
   }
   c.events = {{static_cast<uint16_t>(land), zc::kEvFoot, 4}};
+  if (p.release_keys == kSpringReleaseMidpointCount)
+    author_shared_spring_release_midpoints(
+        c, phase.hold_end, 0, true, midpoint_authorship);
   return c;
 }
 
-inline zc::Clip build_jump_one() {
-  return build_jump(zixx_jump_plan(kSlotJumpOne, 1));
+inline zc::Clip build_jump_one(
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
+  return build_jump(zixx_jump_plan(kSlotJumpOne, 1), midpoint_authorship);
 }
-inline zc::Clip build_jump_multi() {
-  return build_jump(zixx_jump_plan(kSlotJumpMulti, 3));
+inline zc::Clip build_jump_multi(
+    zc::PresentationMidpointAuthorship* midpoint_authorship = nullptr) {
+  return build_jump(zixx_jump_plan(kSlotJumpMulti, 3), midpoint_authorship);
 }
 
 // ------------------------------------------------------------ the build ----
@@ -6525,6 +6724,7 @@ inline const zc::CreatureType& type() {
     }
 
     zc::ClipBank bank;
+    std::vector<zc::PresentationMidpointAuthorship> midpoint_authorship;
     bank.bone_count = kBoneCount;
     // A1: Zixxtrixx is the hero tier -- bake the 60 Hz presentation
     // companion at compile (~doubles this bank's pose bytes; poses are
@@ -6532,7 +6732,11 @@ inline const zc::CreatureType& type() {
     bank.bake60 = true;
     bank.clips.push_back(build_idle());
     bank.clips.push_back(build_walk());
-    bank.clips.push_back(build_attack());
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_attack(false, &owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
     bank.clips.push_back(build_fall());
     bank.clips.push_back(build_hit());
     bank.clips.push_back(build_death());
@@ -6544,9 +6748,12 @@ inline const zc::CreatureType& type() {
     // declared seams below are ENFORCED by compile_creature -- a phase edit
     // that breaks a seam fails the whole creature compile.
     {
-      const zc::Clip atk_local = build_attack(true);
+      zc::PresentationMidpointAuthorship local_owned;
+      const zc::Clip atk_local = build_attack(true, &local_owned);
       bank.clips.push_back(slice_clip(atk_local, kSlotAtkCompress, 0, 17));
       bank.clips.push_back(slice_clip(atk_local, kSlotAtkRelease, 17, 29));
+      midpoint_authorship.push_back(slice_midpoint_authorship(
+          local_owned, kSlotAtkRelease, 17, 29));
       bank.clips.push_back(duplicate_pose_clip(atk_local, kSlotAtkCoil, 29));
       bank.clips.push_back(slice_clip(atk_local, kSlotAtkUnroll, 52, 60));
       bank.clips.push_back(build_spear_flex());
@@ -6589,12 +6796,36 @@ inline const zc::CreatureType& type() {
       bank.clips.push_back(corpse);
     }
     // run 0326: the salto variations (attack1/attack2 -- the planner's payoff)
-    bank.clips.push_back(build_attack_dummy());
-    bank.clips.push_back(build_attack_fly());
-    bank.clips.push_back(build_attack_six());
-    bank.clips.push_back(build_jump_one());
-    bank.clips.push_back(build_jump_multi());
-    bank.clips.push_back(build_attack_nine());
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_attack_dummy(&owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_attack_fly(&owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_attack_six(&owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_jump_one(&owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_jump_multi(&owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
+    {
+      zc::PresentationMidpointAuthorship owned;
+      bank.clips.push_back(build_attack_nine(&owned));
+      midpoint_authorship.push_back(std::move(owned));
+    }
     // RUN 0757: the vocabulary close-out (see the section above)
     bank.clips.push_back(build_stance2());
     bank.clips.push_back(build_tumble());
@@ -6628,7 +6859,8 @@ inline const zc::CreatureType& type() {
     zc::CreatureType type;
     type.type_id = 2;
     const char* reason = "";
-    if (!zc::compile_creature(sk, bank, parts, type, &reason)) {
+    if (!zc::compile_creature(sk, bank, parts, type, &reason,
+                              midpoint_authorship)) {
       std::fprintf(stderr, "zixxtrixx: compile failed: %s\n", reason);
     }
     type.page_set = &page();
