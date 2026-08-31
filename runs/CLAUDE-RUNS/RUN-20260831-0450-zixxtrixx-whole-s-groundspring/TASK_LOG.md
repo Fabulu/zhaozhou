@@ -1,7 +1,7 @@
 # Task Log: RUN-20260831-0450 - Zixxtrixx whole-S groundspring correction
 
 **Created:** 2026-08-31 04:50 UTC+02:00
-**Status:** In Progress
+**Status:** Focused-tested candidate pushed; stopped before independent review/QA
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260831-0450-zixxtrixx-whole-s-groundspring/
 
 ---
@@ -108,7 +108,46 @@ Replace the rejected head-dip/rear-rail spring with a visually authored whole-fi
 - Replaced five obsolete pre-tail profile probe bands only after visual acceptance, with narrow regression envelopes around the accepted art. `evidence/probe-accepted-bands21.txt` passes unchanged geometry.
 - Clean direct `--clean all` rebuilt every reference object and linked reel, cel reel, meshcheck and probe. Full meshcheck passes all 45 clips with zero seam splits. `--deform-sidecar` passes identity, radial/follower, auto-midpoint and authored-midpoint checks.
 - Final animation probe `evidence/probe-midpoint-compile22.txt` passes every key and midpoint, declared 3D contact, full/micro deformation and normals, no real surface intersections, spring hold/release seams, one-/three-turn continuity, production attack limits and overlap guards.
+- Inspected the focused diff, staged explicit source/log paths only, and committed/pushed the complete animation milestone as `23c0642` (`Complete whole-S spring release`); no broad staging was used.
 - No shared repository, prior read-only lane, worktree, CMake, Ninja, Verilator, website media, publication bank, deployment or integration was touched.
+
+### 2026-08-31 - Moving-light baseline, path and contained pool
+
+- Rendered the untouched 600-frame moving-light subject under `evidence/moving-light-before23/`; sequence CRC32C was `0x79BF6815`. The existing source was too high/far and too weak, with a broad outer reach that diluted spatial attachment.
+- Followed the mandated tuning order. First lowered and brought in the world-space path: side offset `850→600 mm`, height `1400→950 mm`, high arch `1200→650 mm`, and return arch `900→450 mm`; `evidence/moving-light-path24/` shows the visible source travelling close enough to illuminate the creature rather than the sky.
+- Then broadened the useful inner pool while reducing near-global outer reach: inner radius `1100→1800 mm`, outer radius `5200→3400 mm`. Matched RGB evidence under `evidence/moving-light-pool25/` shows a broader local pool without a scene-wide wash. Rebuilt the comparison sheet after discovering an evidence-only RGB channel/order conversion mismatch; the renderer output was unchanged.
+- Kept the named path/radius values as owner-adjustable constants in the reel source. Cool Cross, pigments, cel thresholds, renderer, compositor and unrelated subject definitions remain unchanged.
+
+### 2026-08-31 - Stronger gain and visual acceptance
+
+- Increased point-source RGB gains proportionally. Rejected the first 2.5× baseline pass (`163840/111410/65535`) under `evidence/moving-light-gain26/` because its local response remained too incremental for “A LOT stronger still”.
+- Accepted exact 4× baseline gains `262144/178256/104856` under `evidence/moving-light-gain27/`. At native 384×240 the nearby creature bands now move decisively from dim to bright while distant creature portions and the environment stay subdued.
+- Did not reduce endpoint dwell or enlarge the creature: after the first three tuning stages, only a few quantised frames linger near eased endpoints and the subject remains clearly legible at its existing size. Avoiding those optional changes preserves the requested order and limits scope.
+- Added reel-only diagnostic controls for marker-hidden source-on and marker-hidden source-off rendering. Both modes retain the identical dim inspection rig; only the local point-source pointer is removed for the off control, so the paired evidence isolates lighting causality without marker pixels.
+
+### 2026-08-31 - LOD and closed-loop correction
+
+- Initial same-build source-off evidence had a false frames-0–14 preamble and failed frame `599→0`. Rejected an initial terrain-tilt-settling diagnosis after a moving-light-only pre-settle experiment made no byte difference; removed that experiment and its temporary constant completely.
+- Diagnosed the actual source-off seam as the existing 15-tick LOD minimum hold. Because this one diagnostic/delivered subject has a fixed camera and held pose, pre-qualified only its existing `LodState::hold` so frame zero immediately selects the same stationary rung as frames 15–599. Final source-off is one byte-identical image across all 600 frames, CRC32C `0x11389C10`.
+- Made each 150-frame path leg sample both endpoints over 149 intervals. This closed straight joins, but temporary descriptor tracing exposed reverse arched legs ending 1 mm short because a positive rounding bias was also applied to negative interpolation products.
+- Corrected the fixed-point lerp with sign-aware rounding (`+500` for nonnegative products, `-500` for negative products), then removed all trace instrumentation. Final marker-hidden source-on joins are byte-exact: frames `149=150`, `299=300`, `449=450`, and `599=0`.
+
+### 2026-08-31 - Final moving-light evidence
+
+- Rendered same-build marker-hidden off/on evidence under `evidence/moving-light-diagnostic34/`. `marker-hidden-source-off-on-four-legs.png` passes by eye: the off control stays uniformly dim, while each of the four source legs drives a broad, substantially stronger local band through a different part of head, body, taper and tail without sky/terrain wash.
+- Inspected `marker-hidden-source-on-seam-595-004.png`; the closing frames retain the same held pose and selected LOD and cross `599→0` without a visible illumination discontinuity. Byte comparison independently confirms exact closure.
+- Rendered the actual visible-source candidate under `evidence/moving-light-candidate35/`. `visible-source-four-legs.png` passes by eye: the marker follows the lowered/inward world-space route, the brightest response remains spatially attached to it, remote creature portions remain dim, and native subject scale is sufficient.
+- Froze the accepted path, pool, gain, timing and subject-scale values. Independent review/QA, integration, archive, publication-bank rendering, website-media edits and deployment remain outside this run stage.
+
+### 2026-08-31 - Final clean validation and candidate push
+
+- Ran `git diff --check` and reviewed the exact candidate diff; only the intended reel source and this RUN log were tracked changes. Evidence/workbench outputs remained untracked and unstaged.
+- Rebuilt every reference/render/creature object and all four targets from clean state via caller-owned `tools/reel/build-direct.sh --clean all`; no CMake, Ninja or Verilator path was used.
+- Fresh outputs under `evidence/final-validation36/` pass: full meshcheck covers all 45 clips with zero seam splits; `--deform-sidecar` reports exact identity exit plus complete/preserved midpoint channels; the comprehensive probe passes every key and midpoint, declared 3D contact, spring/jump/attack limits and overlap gates.
+- Re-rendered the ordinary `zixxtrixx-spring-side` control under accepted Cool Cross/celmain settings. All 59 raw frames are byte-identical to `evidence/consumer-parity20/`, proving moving-light changes do not alter the accepted ordinary spring subject.
+- Re-rendered fresh 600-frame marker-hidden source-off/on controls. Source-off has one unique frame; source-on joins `149=150`, `299=300`, `449=450`, and `599=0`; all four leg midpoints have nonzero source-on/off creature response with changed-pixel bounds confined to `(134,82)–(253,154)` across the checked frames.
+- Explicitly staged only `tools/reel/zhao_reel.cpp`, committed the focused-tested source candidate as `8e34f0392776dbd3191e89670c8bbc885092db07` (`Strengthen contained moving inspection light`), and pushed it to `origin/zixxtrixx-whole-s-groundspring`.
+- Upheaval direction remains independently pushed at `b3cc7e3c69e3f146c4656a4ab156c3ed7d01650a`. Stopped before independent review/QA, main integration, Generation Ten archive, full 22-subject rendering, website-media edits, publication or deployment.
 
 ---
 
@@ -135,12 +174,15 @@ None. The owner requires one sole implementation agent and prohibits delegation.
 - Spend release time in three explicit phases—planted reverse absorption, intact-S lift, airborne wheel gather—instead of treating “release” as one interpolation.
 - Use existing midpoint companion channels to represent the nonlinear planted support path; preserve complete authored companions during compilation while retaining automatic baking for ordinary clips.
 - Retain the 1150 mm jump continuity guard and lengthen the landing gather rather than weakening the gate.
+- Tune the inspection source strictly in path→pool→proportional-gain order; accept the exact 4× ratio only after the 2.5× result failed visually.
+- Keep endpoint timing and subject scale unchanged because the accepted first three stages already provide a strong, readable result.
+- Pre-qualify the existing LOD hold only for the fixed-camera held moving-light subject, rather than masking a deterministic presentation preamble in evidence.
+- Include both endpoints in each path leg and use sign-aware fixed-point rounding so shared descriptors and the full loop close exactly.
 - Validation remains bounded to the acceptance questions in `SPEC_v1.md`; no full publication bank or integration work belongs in this implementation stage.
 
 ---
 
 ## Next Steps
 
-1. Inspect the exact animation/core/probe/reel diff, stage explicit paths only, commit and push the focused animation/consumer milestone.
-2. Tune the moving inspection source in the mandated order: path, inner/outer containment, proportional RGB gain, endpoint timing only if needed, and subject-only creature scale only if needed.
-3. Render marker-excluded source-off/on evidence over all four path legs and frame 599→0, rerun clean direct gates, update this log, then commit and push the final feature candidate without integrating or publishing.
+1. Independent review and QA begin only after this implementation agent stops.
+2. Main integration, Generation Ten archive, full-bank rendering, website media and deployment require the later authorised lane; none was performed here.
