@@ -173,6 +173,10 @@ class ShellHarness {
     top.pad_present_i = 0;
     top.peek_en = 0;
     top.peek_waddr = 0;
+    // Default lease holder is the blit, which is what most benches drive.
+    // A bench that draws must set this to 1 BEFORE the renderer issues, or
+    // the shell's route tripwire will correctly reject an ENGINE0 burst.
+    top.fb_writer_i = 0;
     top.eval();
     for (int i = 0; i < cycles; ++i) {
       // clock all domains under reset

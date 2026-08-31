@@ -955,13 +955,29 @@ module zhao_shell_top
   end
 
   // burst-owner tracking (integrity tripwire, glue 2): reads must be
-  // scanout's, writes must be blit's — anything else is a routing bug
+  // scanout's, writes must be THE CURRENT FRAMEBUFFER-WRITE LEASE HOLDER'S --
+  // anything else is a routing bug.
+  //
+  // THIS CHECK USED TO SAY `!= ZHAO_CLIENT_BLIT_DMA` FLAT, and that was a real
+  // fault, not a strictness. `zhao_mem_guard` was taught the lease -- it admits
+  // BLIT_DMA when `fb_writer == 0` and ENGINE0 when `fb_writer == 1` -- but the
+  // tripwire below it was never updated. So every legal RASTER.FBWRITE burst
+  // passed the guard, reached the controller, and then latched
+  // `shell_err_route_o` on the way out. A renderer frame could not run without
+  // raising the shell's own corruption alarm.
+  //
+  // The tripwire must consult the SAME lease the guard does. One signal, and
+  // now three places agree on it (blit guard, render guard, this check) --
+  // which is the rule `fb_writer_i`'s comment above already states.
+  logic [2:0] expected_writer;
+  assign expected_writer = fb_writer_i ? ZHAO_CLIENT_ENGINE0 : ZHAO_CLIENT_BLIT_DMA;
+
   logic route_err;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       route_err <= 1'b0;
     end else if (ctrl_rsp.grant) begin
-      if (ctrl_req.write  && (ctrl_req.client != ZHAO_CLIENT_BLIT_DMA))
+      if (ctrl_req.write  && (ctrl_req.client != expected_writer))
         route_err <= 1'b1;
       if (!ctrl_req.write && (ctrl_req.client != ZHAO_CLIENT_SCANOUT))
         route_err <= 1'b1;

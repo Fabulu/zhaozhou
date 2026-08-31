@@ -122,6 +122,14 @@ module tb_zhao_shell (
   output logic        shell_err_cdc_o,
   output logic        shell_err_framer_o,
 
+  // WHO HOLDS THE FRAMEBUFFER-WRITE LEASE. Driveable, not tied.
+  //
+  // This was `1'b0` hardwired inside the instantiation below, and that is
+  // exactly why the shell's route tripwire could reject every legal ENGINE0
+  // burst without any test noticing: the bench could only ever be the blit.
+  // A lease with one reachable value is not a lease.
+  input  logic        fb_writer_i,
+
   // SDRAM model peek + errors
   input  logic        peek_en,
   input  logic [25:0] peek_waddr,
@@ -194,8 +202,8 @@ module tb_zhao_shell (
     .render_state_i(32'd0), .render_src_a_i(8'd0),
     .render_texel_rgb_i(24'd0), .render_texel_a_i(8'd0), .render_texel_idx_i(8'd0),
     .render_fb_base_i(27'd0), .render_fb_stride_i(16'd0),
-    // The lease names the blit, which is what this bench drives.
-    .fb_writer_i(1'b0),
+    // Driven by the bench now -- see the port comment above.
+    .fb_writer_i(fb_writer_i),
     .render_drain_done_o(), .render_busy_o(),
     .render_pixels_o(), .render_bursts_o(),
     .render_stream_error_o(), .render_overflow_o(), .render_fragment_error_o(),

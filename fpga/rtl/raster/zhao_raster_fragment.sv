@@ -303,19 +303,25 @@ module zhao_raster_fragment (
   logic        s1_v_r;
   logic [7:0]  s1_addr_r;
   logic [23:0] s1_depth_r;
+  // Bits 5 and 6 -- shade-modulate and alpha-modulate -- are consumed at the
+  // s0 -> s1 transfer now, not here, so they are legitimately dead in stage 1.
+  // The word is still carried whole because it IS the protocol state word.
+  /* verilator lint_off UNUSEDSIGNAL */
   logic [31:0] s1_state_r;
+  /* verilator lint_on UNUSEDSIGNAL */
   logic [15:0] s1_src_r;
-  logic [23:0] s1_vrgb_r;
-  logic [7:0]  s1_va_r;
+  // THE MODULATED SOURCE, not the raw lanes. See MOVING THE MODULATION below.
+  logic [23:0] s1_src_rgb_r;
+  logic [7:0]  s1_src_a_r;
   logic [7:0]  s1_tag_r;
   logic [7:0]  s1_sref_r;
-  logic [23:0] s1_trgb_r;
-  logic [7:0]  s1_ta_r;
+
+
   logic [7:0]  s1_tidx_r;
 
   // ---- the state word, decoded (stage 1) ---------------------------------
   logic       st_z_test_en, st_z_write_dis, st_z_force_far;
-  logic       st_shade_mod, st_alpha_mod, st_atest_en;
+  logic       st_atest_en;
   logic       st_tag_write_dis, st_tag_from_texel;
   logic [1:0] st_blend, st_sten_func, st_sten_op, st_tag_channel;
   logic [7:0] st_atest_ref, st_sten_mask;
@@ -324,8 +330,6 @@ module zhao_raster_fragment (
     st_z_write_dis    = s1_state_r[1];
     st_z_force_far    = s1_state_r[2];
     st_blend          = s1_state_r[4:3];
-    st_shade_mod      = s1_state_r[5];
-    st_alpha_mod      = s1_state_r[6];
     st_atest_en       = s1_state_r[7];
     st_atest_ref      = s1_state_r[15:8];
     st_sten_func      = s1_state_r[17:16];
@@ -361,12 +365,34 @@ module zhao_raster_fragment (
     unit_mul = 8'((p + 16'd128) >> 8);
   endfunction
 
+  // ---- MOVING THE MODULATION OFF THE CRITICAL PATH ------------------------
+  // The shipped fit measured gpu_clk at 53.48 MHz, and ALL 400 worst setup
+  // paths ran
+  //
+  //     s1_trgb_r / s1_vrgb_r  ->  ...  ->  zhao_raster_tilestore RAM datain
+  //
+  // because this stage held the RAW lanes and did TWO dependent multiplies in
+  // one clock: `unit_mul` here, then `zhao_raster_blend`'s own product, then
+  // rounding, accumulation, saturation and the 64-bit tile write.
+  //
+  // The modulation does not need to be here. It depends only on registers that
+  // are all written together in the s0 -> s1 transfer -- including
+  // `s1_state_r`, which is where `st_shade_mod` comes from -- so it can be
+  // computed AT that transfer and its RESULT registered instead of its
+  // operands. Stage 1 then holds `s1_src_rgb_r` and reads it directly, leaving
+  // the blend as the only multiplier layer in the cone.
+  //
+  // NOTHING ABOUT THE ARITHMETIC MOVES. Same `unit_mul`, same operands, same
+  // single rounding, same order, same widths, and NO added latency or pipeline
+  // stage -- the transfer already existed and was only copying registers.
+  //
+  // ENFORCED-BY: tests/raster/raster_fragment_directed.cpp:main
   logic [7:0] src_r8, src_g8, src_b8, src_a;
   always_comb begin
-    src_r8 = st_shade_mod ? unit_mul(s1_trgb_r[23:16], s1_vrgb_r[23:16]) : s1_vrgb_r[23:16];
-    src_g8 = st_shade_mod ? unit_mul(s1_trgb_r[15:8],  s1_vrgb_r[15:8])  : s1_vrgb_r[15:8];
-    src_b8 = st_shade_mod ? unit_mul(s1_trgb_r[7:0],   s1_vrgb_r[7:0])   : s1_vrgb_r[7:0];
-    src_a  = st_alpha_mod ? unit_mul(s1_ta_r, s1_va_r)                   : s1_va_r;
+    src_r8 = s1_src_rgb_r[23:16];
+    src_g8 = s1_src_rgb_r[15:8];
+    src_b8 = s1_src_rgb_r[7:0];
+    src_a  = s1_src_a_r;
   end
 
   // ---- THE THREE TESTS ---------------------------------------------------
@@ -485,12 +511,10 @@ module zhao_raster_fragment (
       s1_depth_r          <= 24'd0;
       s1_state_r          <= 32'd0;
       s1_src_r            <= 16'd0;
-      s1_vrgb_r           <= 24'd0;
-      s1_va_r             <= 8'd0;
+      s1_src_rgb_r        <= 24'd0;
+      s1_src_a_r          <= 8'd0;
       s1_tag_r            <= 8'd0;
       s1_sref_r           <= 8'd0;
-      s1_trgb_r           <= 24'd0;
-      s1_ta_r             <= 8'd0;
       s1_tidx_r           <= 8'd0;
       covered_fragments_o <= 32'd0;
       blended_fragments_o <= 32'd0;
@@ -514,12 +538,16 @@ module zhao_raster_fragment (
         s1_depth_r <= s0_depth_r;
         s1_state_r <= s0_state_r;
         s1_src_r   <= s0_src_r;
-        s1_vrgb_r  <= s0_vrgb_r;
-        s1_va_r    <= s0_va_r;
+        // The modulation happens HERE, from stage 0's lanes and stage 0's
+        // state bits, so stage 1 holds the finished source colour.
+        s1_src_rgb_r <= s0_state_r[5]
+            ? {unit_mul(s0_trgb_r[23:16], s0_vrgb_r[23:16]),
+               unit_mul(s0_trgb_r[15:8],  s0_vrgb_r[15:8]),
+               unit_mul(s0_trgb_r[7:0],   s0_vrgb_r[7:0])}
+            : s0_vrgb_r;
+        s1_src_a_r   <= s0_state_r[6] ? unit_mul(s0_ta_r, s0_va_r) : s0_va_r;
         s1_tag_r   <= s0_tag_r;
         s1_sref_r  <= s0_sref_r;
-        s1_trgb_r  <= s0_trgb_r;
-        s1_ta_r    <= s0_ta_r;
         s1_tidx_r  <= s0_tidx_r;
         s0_v_r     <= 1'b0;
       end
