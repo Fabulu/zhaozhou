@@ -522,7 +522,23 @@ void run_scene(Chain& ch, const zref::mat4fx& m, const std::vector<TriIn>& world
   check(ch.clip_submitted() - sub0 == world.size(), "GEOM.CLIP was offered every triangle",
         world.size(), ch.clip_submitted() - sub0);
 
-  // ---- 3. the (tile, triangle) pairs, tile-major -------------------------
+  // ---- 3. ONE RECORD PER TILE, tile-major --------------------------------
+  //
+  // This used to expect one record per (tile, triangle) reference, and that was
+  // right until ruling 2 of reports/RENDERER_ARCHITECTURE.md. The tile pipe now
+  // clears the bank on a tile's FIRST reference and resolves on its LAST, so a
+  // tile several triangles share is rendered ONCE with all of them in it --
+  // which is the whole point: under the old shape the second triangle's clear
+  // erased the first.
+  //
+  // So a tile produces one record, carrying the LAST referencing triangle's
+  // source id (the resolve fires on that job) and the coverage of the TILE,
+  // summed over its triangles rather than taken from whichever ran last.
+  //
+  // THIS TEST WAS MISSED WHEN THAT RULING LANDED. render_pipe_directed and
+  // render_fb_directed were updated in the same commit; this one was not, and
+  // nothing noticed because the scoped gates run during that work matched
+  // `raster_|render_|geom_` and this file is `terrain_`.
   struct Ref {
     int32_t tx, ty;
     uint16_t src;
@@ -533,20 +549,35 @@ void run_scene(Chain& ch, const zref::mat4fx& m, const std::vector<TriIn>& world
     refs[i] =
         Binner::bin(soft[i].s, soft[i].c.min_x, soft[i].c.max_x, soft[i].c.min_y, soft[i].c.max_y);
   }
+  // Per tile, the triangles that reference it, in the order the binner drains
+  // them -- tile list head to tail, which is submission order.
   std::vector<Ref> want;
+  std::vector<std::vector<size_t>> tile_tris;
+  long pair_refs = 0;
   for (int ty = 0; ty < kGridH; ++ty) {
     for (int tx = 0; tx < kGridW; ++tx) {
-      for (size_t i = 0; i < soft.size(); ++i) {
-        for (const Binner::Ref& r : refs[i]) {
-          if (r.tx == tx && r.ty == ty) want.push_back(Ref{tx, ty, world[i].src_id});
-        }
-      }
+      std::vector<size_t> mine;
+      for (size_t i = 0; i < soft.size(); ++i)
+        for (const Binner::Ref& r : refs[i])
+          if (r.tx == tx && r.ty == ty) mine.push_back(i);
+      if (mine.empty()) continue;
+      pair_refs += static_cast<long>(mine.size());
+      want.push_back(Ref{tx, ty, world[mine.back()].src_id});
+      tile_tris.push_back(mine);
     }
   }
-  check(got.size() == want.size(), "one rasterized record per (tile, triangle) reference",
+  check(got.size() == want.size(), "one rasterized record per TILE, not per triangle",
         want.size(), got.size());
-  check(want.size() >= min_refs, "the scene really does reference many tiles", min_refs,
-        want.size());
+  // The distinction only means something if some tile really is shared.
+  check(pair_refs > static_cast<long>(want.size()),
+        "and some tile really is referenced by more than one triangle", 1,
+        (pair_refs > static_cast<long>(want.size())) ? 1 : 0);
+  // `min_refs` was calibrated when a record WAS a (tile, triangle) pair, so it
+  // is checked against the pair count -- which the change above did not alter --
+  // rather than against the smaller per-tile record count. Comparing the new
+  // number to the old threshold would have quietly weakened the floor.
+  check(pair_refs >= static_cast<long>(min_refs), "the scene really does reference many tiles",
+        min_refs, static_cast<uint32_t>(pair_refs));
 
   bool tiles_ok = true;
   const size_t n = got.size() < want.size() ? got.size() : want.size();
@@ -568,17 +599,22 @@ void run_scene(Chain& ch, const zref::mat4fx& m, const std::vector<TriIn>& world
   bool cov_ok = true;
   bool px_ok = true;
   uint32_t total = 0;
-  for (const TileRecord& t : got) {
-    const size_t i = static_cast<size_t>(t.src_id) - world[0].src_id;
-    if (i >= soft.size()) {
-      check(false, "a record carried an unknown source id", 0, t.src_id);
-      cov_ok = false;
-      break;
+  for (size_t rec = 0; rec < got.size() && rec < tile_tris.size(); ++rec) {
+    const TileRecord& t = got[rec];
+    // The tile's coverage is the SUM over its triangles -- the same way the
+    // pipe accumulates it -- and its PICTURE is the union of their masks, since
+    // every covered pixel is written the same fill colour.
+    uint32_t summed = 0;
+    zref::EdgeWalk::Cov cov{};
+    for (size_t i : tile_tris[rec]) {
+      const Clip::Out& ci = soft[i].c;
+      const zref::EdgeWalk::Tri eti{ci.ax, ci.ay, ci.bx, ci.by, ci.cx, ci.cy};
+      const zref::EdgeWalk::Cov one = zref::EdgeWalk::tile(eti, t.tx * 16, t.ty * 16);
+      summed += one.count;
+      for (int row = 0; row < 16; ++row) cov.row[row] |= one.row[row];
     }
-    const Clip::Out& c = soft[i].c;
-    const zref::EdgeWalk::Tri et{c.ax, c.ay, c.bx, c.by, c.cx, c.cy};
-    const zref::EdgeWalk::Cov cov = zref::EdgeWalk::tile(et, t.tx * 16, t.ty * 16);
-    total += cov.count;
+    cov.count = summed;
+    total += summed;
     if (t.cov != cov.count) {
       char buf[192];
       std::snprintf(buf, sizeof(buf), "%s: tile (%d,%d)#%u coverage — oracle %u, chain %u", what,
@@ -622,9 +658,12 @@ void run_scene(Chain& ch, const zref::mat4fx& m, const std::vector<TriIn>& world
         const uint32_t cnt = zref::EdgeWalk::tile(et, tx * 16, ty * 16).count;
         if (cnt == 0) continue;
         oracle_total += cnt;
+        // A covered (tile, triangle) pair must reach the rasterizer, but it
+        // now arrives INSIDE its tile's single record rather than as a record
+        // of its own -- so the tile is what has to be present.
         bool seen = false;
         for (const TileRecord& t : got) {
-          if (t.tx == tx && t.ty == ty && t.src_id == world[i].src_id) {
+          if (t.tx == tx && t.ty == ty) {
             seen = true;
             break;
           }
