@@ -261,3 +261,51 @@ set_instance_assignment -name VIRTUAL_PIN ON -to render_issued_words_o
 set_instance_assignment -name VIRTUAL_PIN ON -to render_retired_words_o
 set_instance_assignment -name VIRTUAL_PIN ON -to render_overflow_o
 set_instance_assignment -name VIRTUAL_PIN ON -to render_fragment_error_o
+
+# ---- the UNPACKED ARRAY ports, element by element --------------------------
+# Ten of the shell's ports are arrays -- `input logic [1:0] hps_state_i [0:2]`
+# and friends. Quartus expands those into hps_state_i[0], [1], [2], and a
+# VIRTUAL_PIN written against the bare name does not match the expansion.
+#
+# With the bare names alone the fitter still reported
+#   Error (179000): Design requires 156 user-specified I/O pins -- too many
+#                   to fit in the 145 user I/O pin locations available
+# down from 742, so the bare names DID cover every ordinary port. These are the
+# remainder. Named per element, because the wildcard is forbidden.
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_state_i[0]
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_state_i[1]
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_state_i[2]
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_byte_len_i[0]
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_byte_len_i[1]
+set_instance_assignment -name VIRTUAL_PIN ON -to hps_byte_len_i[2]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_buttons_i[0]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_buttons_i[1]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_buttons_i[2]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_buttons_i[3]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_lx_i[0]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_lx_i[1]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_lx_i[2]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_lx_i[3]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_ly_i[0]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_ly_i[1]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_ly_i[2]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_ly_i[3]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_rx_i[0]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_rx_i[1]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_rx_i[2]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_rx_i[3]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_ry_i[0]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_ry_i[1]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_ry_i[2]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_ry_i[3]
+set_instance_assignment -name VIRTUAL_PIN ON -to slot_state_o[0]
+set_instance_assignment -name VIRTUAL_PIN ON -to slot_state_o[1]
+set_instance_assignment -name VIRTUAL_PIN ON -to slot_state_o[2]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_sequence_o[0]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_sequence_o[1]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_sequence_o[2]
+set_instance_assignment -name VIRTUAL_PIN ON -to pad_sequence_o[3]
+set_instance_assignment -name VIRTUAL_PIN ON -to rumble_duty_o[0]
+set_instance_assignment -name VIRTUAL_PIN ON -to rumble_duty_o[1]
+set_instance_assignment -name VIRTUAL_PIN ON -to rumble_duty_o[2]
+set_instance_assignment -name VIRTUAL_PIN ON -to rumble_duty_o[3]
