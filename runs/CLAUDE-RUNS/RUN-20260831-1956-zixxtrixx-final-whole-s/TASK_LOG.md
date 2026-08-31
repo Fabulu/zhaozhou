@@ -41,6 +41,14 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 - Initial representation assumption: four named absolute per-station heading arrays (grounded/absorb/assembled/collapsed), deterministic fixed-length chain reconstruction, station-14 support compensation derived from the sampled centreline. Switch once to direct fixed-length 2D chain targets if three rungs cannot create the deepest silhouette.
 - No art source has been edited yet.
 
+### 2026-08-31 - Deepest explicit whole-S pose accepted on visual rung 3
+
+- Built each rung through a separate clean lane-local direct cel output and rendered the 59-sample fixed-side diagnostic under explicit `ZIXX_EXP=celmain` / `ZIXX_LIGHT=diagonal-cool-cross`.
+- Rung 1 (`0x0EBB428B`) was a shallow ripple with its rear tube submerged; rung 2 (`0x4D8465FD`) became two disconnected terrain fragments. Both were rejected and retained as negative evidence.
+- Rung 3 (`0xAD81F5E2`) corrected the actual authored direction convention: positive headings descend walking tailward. It makes station 14 the unique lowest support, keeps both broad lobes connected above it and rises continuously through the finless taper.
+- Accepted key 12 by eye before reviewing timing. `evidence/rung3-explicit-headings/before-after-key12-2x.png` shows the current-main front hook/straight rear rail beside the accepted whole-body low S.
+- The exact collapsed control is now frozen for route work. Absorb/assembled controls and endpoint interpolation remain provisional and have not passed visual review.
+
 ---
 
 ## Commands and Results
@@ -59,7 +67,10 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 
 | Rung | Representation | Evidence | Verdict | Next |
 |---:|---|---|---|---|
-| 0 | current main untouched baseline | pending | pending | direct clean build and native fixed-side before |
+| 0 | current main untouched baseline | `evidence/baseline-main/side-every-frame.png`, CRC `0x5DB9B6F0` | Rejected baseline: front hook bends while rear/tail remains a long rail; complete body never becomes the S. | Replace endpoint slopes with named whole-centreline states. |
+| 1 | grounded/absorb/assembled/collapsed absolute-heading arrays; collapsed is one x-monotonic wave | `evidence/rung1-explicit-headings/key12-deepest-2x.png`, side sequence CRC `0x0EBB428B` | Rejected by eye at key 12: two middle humps read, but the rear finless tube disappears into terrain, fin/tail remnants read detached, and the result is a shallow ripple rather than one enlarged positive-volume whole-body S. | Retain explicit-pose representation; author rung 2 as one higher, deeper alternating whole silhouette while keeping station 14 support fixed. |
+| 2 | redrawn complete heading array with taller alternating lobes and tail rising after station 14 | `evidence/rung2-explicit-headings/key12-deepest-2x.png`, side sequence CRC `0x4D8465FD` | Rejected by eye at key 12: two terrain-separated capsule fragments replace one connected body; the head/eye and centre route are hidden, with only fins surviving at the rear. Greater amplitude drove both troughs below the planted support. | Final heading-array rung: make station 14 the silhouette's lowest contact and keep both connected lobes above it; switch to direct fixed-length 2D targets if that fails. |
+| 3 | redrawn complete heading array: raised head descends to shallow valley, broad middle lobe, deeper station-14 support, continuously rising taper | `evidence/rung3-explicit-headings/key12-deepest-2x.png`, side sequence CRC `0xAD81F5E2` | **Deepest pose accepted by eye at key 12.** Eye/head, neck, body, taper and tail tube form one connected low enlarged S; broad alternating lobes keep positive volume; station 14 is the settled low support and the tail rises visibly into its fan. Timing/route remains unaccepted. | Preserve this exact collapsed control; inspect every half-key route and replace endpoint interpolation with explicit whole-pose waypoints where needed. |
 
 Hard cap: eight total visual rungs. Representation must change once after at most three failed rungs rather than micro-tuning.
 

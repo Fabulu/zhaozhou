@@ -730,17 +730,31 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
     // the tail rises behind, short and steep
     -5600, -11400};
 
-// THE WHOLE-BODY GUMMY SPRING (owner directions #10/#13/#16). Two named SIDE
-// profiles make the ordering structural rather than a timing accident:
+// THE WHOLE-BODY GROUNDSPRING (owner directions #17/#19). These are complete
+// fixed-side centreline poses, not local slope gains. Each table owns the
+// absolute heading of every fixed-length spine segment from head through tail.
+// The sampler reconstructs the rigid chain deterministically from these whole
+// silhouettes; joints are adjacent heading differences.
 //
-//   grounded signature S -> enlarged jump S -> squat full S -> hold -> release.
-//
-// kSpringJumpSlope extends the second sweep progressively through the complete
-// taper and tail tip. kSpringCompressedSlope is still one continuous tube, but
-// its broad turns keep neighbouring runs apart instead of folding three centre
-// segments back through one another. There is deliberately NO yaw lane: spring
-// motion may not concertina sideways. These are absolute segment directions,
-// like kStanceSlope; joints are adjacent differences.
+// Grounded aliases the exact accepted signature S. Absorb and assembled are
+// separately editable whole-animal silhouettes. Collapsed is authored first by
+// eye as a broad low two-lobe S; interpolation/timing may only be built around a
+// collapsed pose that already reads correctly on its own.
+constexpr const auto& kSpringGroundedHeading = kStanceSlope;
+constexpr int32_t kSpringAbsorbHeading[kStanceSlopes] = {
+    950, 1500, 3000, 5200, 8500, 14800, 21000, 24500, 21000, 13000,
+    3000, 500, 400, 600, 1200, 2000, 1000, -6000, -12000};
+constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
+    1000, 1800, 3600, 6500, 10500, 15000, 20500, 24000, 22000, 15000,
+    6000, 1000, 500, 800, 1800, 2800, 600, -7000, -13000};
+// Rung 3: station 14 is the unique deepest contact. Walking tailward, the
+// whole centreline descends from the raised head to a shallow first valley,
+// rises through the broad middle lobe, descends farther to the named support,
+// then rises continuously through the taper and finless tail.
+constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
+    4000, 7000, 9000, 7000, -2000, -6000, -8000, -6000, -1000, 4000,
+    8000, 10000, 9000, 5000, -5000, -8000, -7000, -3500, -500};
+constexpr int32_t kSpringAbsorbProfile = 420;
 constexpr int32_t kSpringCompressionDepth = 1000;  // profile authority, 1/1000
 constexpr int32_t kSpringDeclaredBiteMm = 34;      // planted support's authored bite
 constexpr int kSpringPlantSegment = 14;            // support after this spine segment
@@ -754,12 +768,6 @@ constexpr uint8_t kSpringBodyDeformStrength = 255;
 constexpr uint8_t kSpringTailDeformStrength = 210;
 constexpr int kSpringBodyStrengthRampStations = 4;
 constexpr int kSpringTailStrengthRampStations = 6;
-constexpr int32_t kSpringJumpSlope[kStanceSlopes] = {
-    1000, 1800, 3600, 6500, 10500, 15000, 20500, 24000, 22000, 15000,
-    6000, 1000, 500, 800, 1800, 2800, 600, -7000, -13000};
-constexpr int32_t kSpringCompressedSlope[kStanceSlopes] = {
-    -5000, -7000, -7000, -4000, 3000, 11000, 19000, 25000, 25000, 19000,
-    10000, 1500, 500, 500, 1200, 1800, 1600, -1500, -4000};
 constexpr int32_t kSpringJumpHeadAttitude = 700;   // follows the taller entry arc
 constexpr int32_t kSpringHeadAttitude = 2200;      // a restrained brace, not a head crush
 constexpr int32_t kSpringBladeFlare = 900;         // fan braces during compression
@@ -1686,16 +1694,43 @@ inline int32_t spring_root_drop(int32_t amount) {
       (static_cast<int64_t>(kSpringDeclaredBiteMm) * q) / 1000);
 }
 
+inline int32_t spring_lerp_heading(int32_t a, int32_t b, int32_t u) {
+  const int32_t eased = spring_smooth_amount(u);
+  return a + static_cast<int32_t>(
+                 (static_cast<int64_t>(b - a) * eased) / 1000);
+}
+
+inline int32_t spring_entry_heading(int k, int32_t entry) {
+  if (entry <= 0) return kSpringGroundedHeading[k];
+  if (entry < kSpringAbsorbProfile) {
+    const int32_t u = static_cast<int32_t>(
+        (static_cast<int64_t>(entry) * 1000) / kSpringAbsorbProfile);
+    return spring_lerp_heading(kSpringGroundedHeading[k],
+                               kSpringAbsorbHeading[k], u);
+  }
+  if (entry == kSpringAbsorbProfile) return kSpringAbsorbHeading[k];
+  if (entry < 1000) {
+    const int32_t u = static_cast<int32_t>(
+        (static_cast<int64_t>(entry - kSpringAbsorbProfile) * 1000) /
+        (1000 - kSpringAbsorbProfile));
+    return spring_lerp_heading(kSpringAbsorbHeading[k],
+                               kSpringAssembledHeading[k], u);
+  }
+  return kSpringAssembledHeading[k];
+}
+
 inline int32_t spring_profile_slope(int k, int32_t authority, int32_t entry,
                                     int32_t squash) {
-  const int32_t e = spring_smooth_amount(entry);
-  const int32_t q = spring_smooth_amount(
-      (squash * kSpringCompressionDepth) / 1000);
-  const int32_t jump = kStanceSlope[k] + static_cast<int32_t>(
-      (static_cast<int64_t>(kSpringJumpSlope[k] - kStanceSlope[k]) * e) / 1000);
-  const int32_t compressed = jump + static_cast<int32_t>(
-      (static_cast<int64_t>(kSpringCompressedSlope[k] - jump) * q) / 1000);
-  return static_cast<int32_t>((static_cast<int64_t>(compressed) * authority) / 1000);
+  if (entry < 0) entry = 0;
+  if (entry > 1000) entry = 1000;
+  if (squash < 0) squash = 0;
+  if (squash > 1000) squash = 1000;
+  const int32_t assembled = spring_entry_heading(k, entry);
+  const int32_t q = (squash * kSpringCompressionDepth) / 1000;
+  const int32_t posed = spring_lerp_heading(
+      assembled, kSpringCollapsedHeading[k], q);
+  return static_cast<int32_t>(
+      (static_cast<int64_t>(posed) * authority) / 1000);
 }
 
 // The grounded support is an authored spine station, not the nose/root. Profile
