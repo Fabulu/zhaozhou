@@ -1,7 +1,7 @@
 # Task Log: RUN-20260831-1956 - Zixxtrixx final explicit whole-S animation candidate
 
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Spring and moving inspection light accepted; programmable-jump landing correction active
+**Status:** Implementation candidate accepted: whole-body spring, bounded secondary audit, moving inspection light and programmable-jump landings complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/
 
 ---
@@ -83,7 +83,19 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 - Kept the source path, depth-tested marker, dim Cool Cross-derived base rig and point-light response architecture exact. Changed only named local-source controls to a broad `2300 mm` full-strength core, `7000 mm` outer shoulder and warm `2.25/1.70/1.10` RGB gain.
 - Direct-built a fresh cel reel and looked at all 600 held-pose frames plus matched before/after landmarks. The source now paints broad, unmistakable warm illumination across complete torso/head phrases on every close pass while opposite-facing planes preserve spatial form and the base cool rig remains visible.
 - Explicit seam review of frames 598, 599, 0 and 1 shows continuous marker position and body response. Accepted moving-light CRC is `0xDE5D2626` (baseline `0x79BF6815`).
-- The only remaining bounded secondary source fault is the committed-probe landing penetration shared by programmable jumps in slots 46/47: `-272 mm` at key 70.
+- The only remaining bounded secondary source fault was the committed-probe landing penetration shared by programmable jumps in slots 46/47: `-272 mm` at key 70.
+
+### 2026-09-01 - Programmable-jump landings corrected and accepted
+
+- Localized the fault to the post-flight scalar `drop` approximation: it did not describe which elliptical face had rolled under station 14, so the recovery root eventually buried the animal by 272 mm.
+- Rejected focused landing rung 1 after applying full XYZ sampled-support compensation at impact. Contact recovered, but an unrelated sideways snap and 60 Hz station steps of 1289/1332 mm exceeded the accepted 1150 mm continuity guard.
+- Rejected rung 2 after preserving horizontal root and applying sampled vertical support immediately. It removed the sideways snap but retained discontinuous 1289/1335 mm impact steps.
+- Rung 3 preserved the old two-key impact root and eased into actual vertical support through key 65. Its original whole-clip probe appeared to pass at 1065/1111 mm, and every-frame sheets looked coherent, but the reported `-33 mm at key 2.5` came from the earlier spring. Landing-scoped posed-surface statistics exposed the real result: impact still hovered 438 mm above terrain and recovery hovered as high as 412 mm. This rung was rejected rather than accepting a masked gate.
+- The accepted route keeps wheel pose, pivot, turn count, horizontal trajectory and timing intact. Two named final-approach root-Y controls distribute the plant across keys 58–60; every integer landing root is reconstructed from its actual quaternion centreline; every true landing midpoint owns the corresponding reconstructed Y root; and a named editable recovery-weight curve holds station 14 through the low cradle before returning exactly to the accepted grounded root at relative key 16.
+- The committed probe now validates full and compiled-micro surfaces independently over impact keys 60–61, the 61.5–65 support handoff and every settle sample through key 80. Slots 46/47 report full impact `-33 mm`, micro impact `-30 mm`, full handoff `-33..-32 mm`, micro handoff `-29..-28 mm`, full settle `-33..-10 mm` and micro settle `-27..-8 mm`; no phase penetrates beyond the declared 34 mm bite or hovers.
+- One-/three-turn maximum 60 Hz station steps are 1108/1146 mm, under the 1150 mm guard. Both clips recover bit-exactly; all 45 pre-lift spring samples remain exact across every consumer; flight-core clearance, exact turn counts, fall hesitation, hit/death gates, intersections and mesh validation all pass.
+- Looked at all 161 frames of both clips under `ZIXX_EXP=celmain` / `ZIXX_LIGHT=diagonal-cool-cross`, then compared every frame 112–142 against the untouched baseline at native resolution. The final descent accelerates coherently into real low-S contact, the impact has no pop, recovery remains connected while opening, and one-/three-turn wheels stay visually distinct.
+- Final all-target direct build recompiled and linked all four native executables from current sources. No complete 22-subject bank, integration, archive, live-site media edit, deployment or publication was performed.
 
 ---
 
@@ -106,6 +118,10 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 | Secondary baseline | focused cel reel subjects under `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross` plus `rgb_contact_sheet.py` | all requested action/death/idle diagnostics reviewed; moving light alone required source work |
 | Moving-light direct build | `tools/reel/build-direct.sh --output <secondary-light-r1-lane> cel` | current sources compiled and linked without CMake/Ninja/Verilator/Sacengine |
 | Moving-light acceptance | same selectors, `zixxtrixx-moving-light`, then every-frame/before-after/seam sheets | 600 frames; accepted CRC `0xDE5D2626`; 599→0 loop continuous |
+| Landing-scoped posed geometry | final `zixx-probe.exe > evidence/secondary-landing-final/zixx-probe.txt` | **PASS:** independent full/micro impact, handoff and settle contact; 1108/1146 mm continuity; complete spring/secondary suite passes |
+| Landing visual acceptance | celmain/Cool Cross slots 46/47, `rgb_contact_sheet.py`, native baseline/final frames 112–142 | 161 frames per clip reviewed; coherent final descent, planted low-S impact, connected recovery, no visible pop |
+| Final direct rebuild | `tools/reel/build-direct.sh --output <final-lane-local> all` | all four current native executables rebuilt directly; no CMake/Ninja/Verilator/Sacengine |
+| Final mesh validation | final `zixx-meshcheck.exe > evidence/secondary-landing-final/zixx-meshcheck.txt` | PASS, exit 0 |
 
 ---
 
@@ -142,6 +158,15 @@ A later coordinator authorization superseded only the frozen pre-lift root/suppo
 | 10 | actual fixed-point centreline reconstruction and station-14 root derivation at every integer/half-key | `evidence/rung10-support-correction/` | Root X/Z fixed; visually connected; rejected mechanically for burial/hover and six full-surface crossings at 4.5. |
 | 11 | explicit named non-monotonic support route, key-4.5 bridge reduced from 710 to 650, identity-spin no-op and exact shared release control | `evidence/rung11-support-route/` | Visually accepted; contact nearly correct; probe exposes full-surface key-20 crossing and 2 mm micro hover. |
 | 12 | key-4 whole-centreline held at 4.5 and reused at key 20; key-5 support state lowered 4 mm | `evidence/rung12-final-contact/{side-0-22.png,high-three-quarter-0-22.png,micro-0-22.png,zixx-probe.txt,zixx-meshcheck.txt}` | **Accepted spring.** All 45 samples stay connected; no full/micro intersections; station target exact; contact inside authored bite; complete-consumer silhouette/deformation/root parity exact. |
+
+### Bounded programmable-jump landing correction
+
+| Landing rung | Change | Evidence | Verdict |
+|---:|---|---|---|
+| 1 | immediate full XYZ station-14 compensation | `evidence/secondary-landing-r1-zixx-probe.txt` | Rejected: contact fixed, but horizontal snap and 1289/1332 mm continuity failure. |
+| 2 | immediate Y-only station-14 compensation | `evidence/secondary-landing-r2-zixx-probe.txt` | Rejected: horizontal track preserved, but impact still jumps 1289/1335 mm. |
+| 3 | preserve two impact roots, ease Y support through key 65 | `evidence/secondary-landing-r3/`, `evidence/secondary-landing-r3-zixx-probe.txt` | Rejected after validation correction: a whole-clip minimum from pre-lift key 2.5 masked 438 mm impact hover and later hover. |
+| final | authored two-key descent plant, actual integer/midpoint Y support and named recovery-weight route | `evidence/secondary-landing-final/{zixx-probe.txt,zixx-meshcheck.txt,zixxtrixx-jump-one-all-frames.png,zixxtrixx-jump-multi-all-frames.png,*landing-baseline-final-0112-0142.png}` | **Accepted:** genuine full/micro bite through impact, handoff and settle; 1108/1146 mm continuity; every frame visually coherent. |
 
 
 ---
@@ -192,6 +217,7 @@ None. The owner requires one sole implementation agent and prohibits delegation.
 | zhaozhou | `d39d2dc` | `ANIMATION: author accepted deepest whole-S pose` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 | zhaozhou | `dceb28b` | `ANIMATION: preserve blocked authored release candidate` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 | zhaozhou | `3dd3208` | `ANIMATION: accept Zixxtrixx whole-body spring` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
+| zhaozhou | `3e0a958` | `LIGHTING: strengthen Zixxtrixx inspection source` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 
 ---
 
@@ -203,7 +229,6 @@ All intended direct compilers, linkers, renderers, focused probes and Python she
 
 ## Next Steps
 
-1. Commit and push the accepted moving-inspection-light milestone on the feature branch, staging only the renderer source and run log.
-2. Correct only the shared programmable-jump landing root/contact phrase that puts slots 46/47 at `-272 mm` on key 70; preserve keys 0–28 spring/wheel and all other accepted secondary clips.
-3. Validate slots 46/47 through the committed posed-surface probe and focused landing-interval renders, then rerun focused mesh/spring parity and falling-hesitation checks.
-4. Close the run with explicit feature heads, tracked-tree cleanliness, intentional untracked-evidence inventory and owned-process shutdown. Independent review, integration, archive, full bank, website media, deployment and publication remain parent-owned.
+1. Push the accepted programmable-jump landing milestone and record its exact feature commit.
+2. Confirm tracked-tree cleanliness, intentional untracked evidence/workbench inventory and that all owned synchronous tasks exited.
+3. Hand the isolated feature heads and focused evidence to the parent. Independent review, integration, archive, full bank, website media, deployment and publication remain parent-owned.

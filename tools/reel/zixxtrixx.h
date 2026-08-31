@@ -6489,15 +6489,42 @@ struct JumpPlan {
   int32_t apex_mm = 4800;
   int32_t salto_count = 1;
 };
-constexpr int32_t kJumpLandingBiteMm = 10;
+// The landing returns on the loaded collapsed S, whose named station-14 route
+// already authors the surface bite. This is the per-clip maximum accepted bite,
+// not another scalar to subtract after quaternion-derived root compensation.
+constexpr int32_t kJumpLandingBiteMm = kSpringDeclaredBiteMm;
 // The spring first releases into the intact signature S on the ground. During
 // these first airborne keys it gathers into the already-approved wheel; this
 // ordering makes rear/tail coiling during compression structurally impossible.
 constexpr int kJumpAirCoilKeys = 5;
 constexpr int kJumpLandingGatherKeys = 5;
-// Every native 60 Hz frame was reviewed after the six-key release was authored.
-// The fastest accepted sample is the intentional landing slam (1121 mm on the
-// three-salto take), not a launch reset; 1150 keeps a narrow regression guard.
+// The final two flight keys continue the existing accelerating descent while
+// the gathered S is still wholly clear. They distribute the plant over real
+// 60 Hz samples instead of asking the impact key to absorb a hidden root snap.
+constexpr int32_t kJumpLandingApproachBias2Mm = -140;
+constexpr int32_t kJumpLandingApproachBias1Mm = -400;
+// During recovery the diagonal entry/squash route rolls a different belly
+// phrase under station 14 than the outbound spring. This is a separate authored
+// weight curve: a firm loaded-S bite, a broad low cradle while the middle lobe
+// opens, then an exact return to the accepted grounded root at relative key 16.
+// These are visual knobs, not values generated from a projected render.
+constexpr int32_t kJumpLandingSurfaceBiasMm[] = {
+    -20, -20, -20, -20, -20, -20, -20, -20,
+    -30, -55, -60, -50, -30, -20, -15, -10, 0,
+};
+constexpr int kJumpLandingSurfaceBiasCount =
+    static_cast<int>(sizeof(kJumpLandingSurfaceBiasMm) /
+                     sizeof(kJumpLandingSurfaceBiasMm[0]));
+constexpr int kJumpLandingSupportHandoffEnd = 5;
+inline int32_t jump_landing_surface_bias_mm(int relative_key) {
+  if (relative_key <= 0) return kJumpLandingSurfaceBiasMm[0];
+  if (relative_key >= kJumpLandingSurfaceBiasCount)
+    return 0;
+  return kJumpLandingSurfaceBiasMm[relative_key];
+}
+// Every native 60 Hz frame was reviewed with the declared contact in place.
+// The fastest accepted sample is the intentional three-turn landing approach
+// (1146 mm at key 59.5); 1150 keeps a narrow regression guard.
 constexpr int32_t kJumpMaxStationStepMm = 1150;
 
 inline JumpPlan zixx_jump_plan(uint16_t slot, int32_t count) {
@@ -6682,18 +6709,61 @@ inline zc::Clip build_jump(
       c.root[f * 3 + 0] = rx;
       c.root[f * 3 + 1] = ry;
       c.root[f * 3 + 2] = rz;
+    } else if (f >= land) {
+      // Once the whole-turn wheel has returned to the loaded S, plant its actual
+      // sampled vertical support through the same fixed-point pose path as the
+      // accepted spring. Preserve the accepted horizontal landing track: using
+      // full XYZ station compensation here added an unrelated sideways snap.
+      // The former scalar `drop` Y approximation ignored which elliptical face
+      // rolled under the support and buried recovery key 70.
+      int32_t ignored_x = 0, ry = 0, ignored_z = 0;
+      const int relative_key = f - land;
+      spring_root_from_quats_raw(
+          g.q, spring_support_target_y(entry, spring) +
+                   jump_landing_surface_bias_mm(relative_key),
+          ignored_x, ry, ignored_z);
+      c.root[f * 3 + 0] = fxm(spring_root_anchor_x(entry, spring));
+      c.root[f * 3 + 1] = ry;
+      c.root[f * 3 + 2] = 0;
     } else {
+      // Airborne wheel keeps its accepted pivot, turn and body shape. Only the
+      // last two root-Y samples continue the descent into the declared plant.
       c.root[f * 3 + 0] = fxm((piv_x * curl) / 1000 +
                                   spring_root_anchor_x(entry, spring));
       int32_t y = lift + drop + (piv_y * curl) / 1000;
-      if (f == land || f == land + 1) y -= kJumpLandingBiteMm;
+      if (f == land - 2) y += kJumpLandingApproachBias2Mm;
+      if (f == land - 1) y += kJumpLandingApproachBias1Mm;
       c.root[f * 3 + 1] = fxm(y);
     }
   }
   c.events = {{static_cast<uint16_t>(land), zc::kEvFoot, 4}};
-  if (p.release_keys == kSpringReleaseMidpointCount)
+  if (p.release_keys == kSpringReleaseMidpointCount) {
     author_shared_spring_release_midpoints(
         c, phase.hold_end, 0, true, midpoint_authorship);
+    // Generic root interpolation cannot keep a bent, changing chain planted:
+    // reconstruct every landing half-key from its actual baked quaternion
+    // centreline, while retaining the accepted horizontal track.
+    for (int key = land; key < phase.last_key; ++key) {
+      const size_t qi = static_cast<size_t>(key) * kBoneCount;
+      const size_t ri = static_cast<size_t>(key) * 3;
+      const JumpMotionSample a = zixx_jump_motion_sample(p, key);
+      const JumpMotionSample b = zixx_jump_motion_sample(p, key + 1);
+      const int relative_key = key - land;
+      const int32_t target_y =
+          (spring_support_target_y(a.entry, a.spring) +
+           jump_landing_surface_bias_mm(relative_key) +
+           spring_support_target_y(b.entry, b.spring) +
+           jump_landing_surface_bias_mm(relative_key + 1)) / 2;
+      int32_t ignored_x = 0, ry = 0, ignored_z = 0;
+      spring_root_from_quats_raw(c.mid_quats.data() + qi, target_y,
+                                 ignored_x, ry, ignored_z);
+      c.mid_root[ri + 1] = ry;
+      if (midpoint_authorship != nullptr) {
+        midpoint_authorship->channels[static_cast<size_t>(key)] |=
+            zc::kMidpointRootAuthored;
+      }
+    }
+  }
   return c;
 }
 

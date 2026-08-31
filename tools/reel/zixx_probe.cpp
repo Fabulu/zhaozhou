@@ -1692,22 +1692,42 @@ int main() {
   }
 
   // Full consumers own station-derived roots on every pre-lift half-key.
-  // Only key 4.5 and the four release bridges replace the complete quaternion
-  // and deformation channels. The local-body release slice intentionally owns
-  // no root, because trajectory belongs to its ChoreoRoot consumer.
+  // Programmable jumps additionally own every landing/recovery midpoint root,
+  // because interpolation cannot keep a changing bent chain on its 3D support.
+  // Only key 4.5 and the four release bridges replace complete quaternion and
+  // deformation channels. The local-body release slice intentionally owns no
+  // root, because trajectory belongs to its ChoreoRoot consumer.
   constexpr uint8_t kOwnedQuatsDeform =
       zc::kMidpointQuatsAuthored | zc::kMidpointDeformAuthored;
   auto check_midpoint_authorship = [&](const char* name,
                                        const zc::PresentationMidpointAuthorship& a,
                                        int first, bool full_consumer) {
-    const int needed = full_consumer ? zixx::kSaltoSpringReleasePoseKey
-                                     : first + 4;
+    const bool landing_root_owner =
+        a.slot_id == zixx::kSlotJumpOne ||
+        a.slot_id == zixx::kSlotJumpMulti;
+    int landing_root_begin = -1;
+    int landing_root_end = -1;
+    if (landing_root_owner) {
+      const int turns = a.slot_id == zixx::kSlotJumpOne ? 1 : 3;
+      const zixx::JumpPhases phase = zixx::zixx_jump_phases(
+          zixx::zixx_jump_plan(a.slot_id, turns));
+      landing_root_begin = phase.landing_key;
+      landing_root_end = phase.last_key;
+    }
+    const int needed = landing_root_owner
+                           ? landing_root_end
+                           : (full_consumer
+                                  ? zixx::kSaltoSpringReleasePoseKey
+                                  : first + 4);
     bool exact = a.channels.size() > static_cast<size_t>(needed - 1);
     int owned = 0;
     for (size_t i = 0; i < a.channels.size(); ++i) {
       uint8_t expected = 0;
-      if (full_consumer &&
-          i < static_cast<size_t>(zixx::kSaltoSpringReleasePoseKey))
+      if ((full_consumer &&
+           i < static_cast<size_t>(zixx::kSaltoSpringReleasePoseKey)) ||
+          (landing_root_owner &&
+           i >= static_cast<size_t>(landing_root_begin) &&
+           i < static_cast<size_t>(landing_root_end)))
         expected = zc::kMidpointRootAuthored;
       if ((full_consumer &&
            i == static_cast<size_t>(zixx::kSpringEntryOwnedMidpointKey)) ||
@@ -1717,14 +1737,17 @@ int main() {
       if (a.channels[i] != expected) exact = false;
       if (a.channels[i] != 0) ++owned;
     }
-    const int expected_owned = full_consumer
-                                   ? zixx::kSaltoSpringReleasePoseKey
-                                   : 4;
-    std::printf("SPRING midpoint provenance %s: %d owned segments, "
-                "root-span %d, exact=%d\n",
-                name, owned, full_consumer ? 22 : 0, exact ? 1 : 0);
+    const int landing_owned =
+        landing_root_owner ? landing_root_end - landing_root_begin : 0;
+    const int expected_owned =
+        (full_consumer ? zixx::kSaltoSpringReleasePoseKey : 4) +
+        landing_owned;
+    std::printf("MIDPOINT provenance %s: %d owned segments, "
+                "pre-lift root span %d, landing root span %d, exact=%d\n",
+                name, owned, full_consumer ? 22 : 0, landing_owned,
+                exact ? 1 : 0);
     require(exact && owned == expected_owned,
-            "spring midpoint per-channel provenance drifted");
+            "midpoint per-channel provenance drifted");
   };
 
   zc::PresentationMidpointAuthorship golden_owned;
@@ -2076,31 +2099,86 @@ int main() {
     require(key_pose_equal(*scan->clip, 0, ph.last_key,
                            type.bank.bone_count, true),
             "jump does not recover bit-exactly to its starting rest pose");
-    int32_t contact_worst = INT32_MAX;
-    int contact_worst_tick = -1;
-    for (const PosedSample& s : scan->samples) {
-      const int32_t min_y = to_mm(s.min_y_fx);
-      if (min_y < contact_worst) {
-        contact_worst = min_y;
-        contact_worst_tick = s.tick;
+    struct ContactRange {
+      int32_t deepest_mm = INT32_MAX;
+      int deepest_tick = -1;
+      int32_t highest_mm = INT32_MIN;
+      int highest_tick = -1;
+    };
+    const auto contact_range = [&](int rung, int begin_tick, int end_tick) {
+      ContactRange out;
+      for (int tick = begin_tick; tick <= end_tick; ++tick) {
+        const int32_t min_y =
+            to_mm(scan->samples[tick].rung_min_y_fx[rung]);
+        if (min_y < out.deepest_mm) {
+          out.deepest_mm = min_y;
+          out.deepest_tick = tick;
+        }
+        if (min_y > out.highest_mm) {
+          out.highest_mm = min_y;
+          out.highest_tick = tick;
+        }
       }
+      return out;
+    };
+    std::array<ContactRange, 2> whole_clip;
+    std::array<ContactRange, 2> impact;
+    std::array<ContactRange, 2> handoff;
+    std::array<ContactRange, 2> settle;
+    for (int rung = 0; rung < 2; ++rung) {
+      whole_clip[rung] = contact_range(
+          rung, 0, static_cast<int>(scan->samples.size()) - 1);
+      impact[rung] = contact_range(
+          rung, 2 * ph.landing_key, 2 * (ph.landing_key + 1));
+      // Include the 61.5 ingress midpoint: it is where the two-key slam hands
+      // vertical support to the sampled loaded-S root.
+      handoff[rung] = contact_range(
+          rung, 2 * (ph.landing_key + 1) + 1,
+          2 * (ph.landing_key + zixx::kJumpLandingSupportHandoffEnd));
+      settle[rung] = contact_range(
+          rung,
+          2 * (ph.landing_key + zixx::kJumpLandingSupportHandoffEnd) + 1,
+          2 * ph.last_key);
+      require(whole_clip[rung].deepest_mm >= -zixx::kJumpLandingBiteMm,
+              "jump full/micro surface exceeds its declared maximum bite");
+      require(impact[rung].deepest_mm >= -zixx::kJumpLandingBiteMm &&
+                  impact[rung].highest_mm <= -15,
+              "jump full/micro impact lost its deliberate terrain bite");
+      require(handoff[rung].deepest_mm >= -zixx::kJumpLandingBiteMm &&
+                  handoff[rung].highest_mm <= 0,
+              "jump full/micro support handoff penetrates or hovers");
+      require(settle[rung].deepest_mm >= -zixx::kJumpLandingBiteMm &&
+                  settle[rung].highest_mm <= 0,
+              "jump full/micro settle penetrates or hovers");
     }
-    require(contact_worst >= -zixx::kSpringDeclaredBiteMm &&
-                contact_worst <= -15,
-            "jump ground contact left the declared spring/absorption band");
     const int clear_begin = 2 * (ph.launch_key + 2);
     const int clear_end = 2 * (ph.landing_key - 2);
     bool clear_flight = true;
     for (int t = clear_begin; t <= clear_end; ++t)
       if (to_mm(scan->samples[t].min_y_fx) <= 0) clear_flight = false;
     require(clear_flight, "jump touches terrain in the undeclared flight core");
-    std::printf("JUMP slot %d: apex %d mm, turns %d, landing key %d, "
-                "contact %d mm at %d%s, max 60 Hz station step %d mm at %d%s "
-                "station %d\n",
-                spec.first, apex, spec.second, ph.landing_key, contact_worst,
-                contact_worst_tick / 2,
-                (contact_worst_tick & 1) ? ".5" : "", continuity.mm,
-                continuity.tick / 2,
+    const auto print_contact_range = [](const char* rung, const char* name,
+                                        const ContactRange& range) {
+      std::printf("%s %s %d..%d mm (deepest %d%s, highest %d%s)", rung,
+                  name, range.deepest_mm, range.highest_mm,
+                  range.deepest_tick / 2,
+                  (range.deepest_tick & 1) ? ".5" : "",
+                  range.highest_tick / 2,
+                  (range.highest_tick & 1) ? ".5" : "");
+    };
+    std::printf("JUMP slot %d: apex %d mm, turns %d, landing key %d; ",
+                spec.first, apex, spec.second, ph.landing_key);
+    for (int rung = 0; rung < 2; ++rung) {
+      const char* rung_name = rung == 0 ? "full" : "micro";
+      if (rung != 0) std::printf("; ");
+      print_contact_range(rung_name, "impact", impact[rung]);
+      std::printf(", ");
+      print_contact_range(rung_name, "handoff", handoff[rung]);
+      std::printf(", ");
+      print_contact_range(rung_name, "settle", settle[rung]);
+    }
+    std::printf("; max 60 Hz station step %d mm at %d%s station %d\n",
+                continuity.mm, continuity.tick / 2,
                 (continuity.tick & 1) ? ".5" : "", continuity.station);
   }
 
