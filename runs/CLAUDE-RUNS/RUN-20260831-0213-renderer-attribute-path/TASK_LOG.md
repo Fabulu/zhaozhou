@@ -535,3 +535,80 @@ answer, rather than as a reference count, which he cannot.
   untouched; the prediction has now been wrong twice and the measurement right
   twice.
 * The clock-enable fanout, which no block-level surgery will fix.
+
+### Round 3: the RMW split, and the records had the answer
+
+**I escalated a blocker that did not exist.** I wrote that splitting the loop
+needed an owner ruling on stall-versus-forward, because
+`raster_fragment_random` reports 3,232 same-pixel chains. That number comes from
+a **random stress generator over 256 addresses** and I quoted it as production
+traffic. `reports/MHZArchitected` line 139 had already answered it:
+
+> RASTER.TILE_PIPE already refuses to accept the next triangle until the
+> fragment pipeline is completely empty, and a triangle visits each covered
+> pixel once. Thus the RAW hazard should never fire in the current composition.
+
+Verified in the RTL rather than taken on faith: `RS_WALK` leaves only on
+`pipe_empty`. **The stall costs nothing and there was never a tradeoff.** Fabian
+said it plainly — *"You have this in the records"* — and he was right. I had been
+working from my own summary of the note instead of the note.
+
+### The cut points came from the measured path
+
+    RAM out -> rd_data_o        1.51      F1 ends here
+    Add0 (src - dst)            1.94
+    mul_left select             0.97
+    Mult0~mac (the DSP)         4.58      F2 ends here
+    Add2 accumulator chain      2.49
+    Mux0 rail + out_o           1.63
+    route to the RAM write      1.25      F3 ends here
+
+A single cut at the product leaves the front at **~9.0 ns, still over 7.95**.
+That is why the note's three-way split is required and not an over-engineering:
+~1.5 / ~7.5 / ~5.4.
+
+`zhao_raster_blend` split into `_prod` and `_fin`, with the wrapper wiring both
+combinationally so it stays **bit-identical** and the formal proof still targets
+shipping logic. Depth/tag/stencil selects moved to F1 — they depend only on the
+destination word and the fragment's own state, never on the blend.
+
+The same-address stall is implemented anyway: **"unreachable" is a claim about
+the caller**, and a block that is only correct when its caller behaves is a trap
+for the next composition.
+
+### shell_golden went red, the fragment was innocent, and the cause was mine
+
+I stashed the RMW change and it still failed — so it was not the split.
+`reference/src/zref_frame.cpp:445` writes `ZHAO_ZIDL_SHA256` into every capture
+header, and documenting the depth-profile bits in `commands.zidl` moved that
+hash. Every committed capture went stale.
+
+**That is the reel-CRC lesson repeating, three hours later, by me.** *Re-pin in
+the commit that causes the drift.* After the depth-ABI commit I ran
+`render_golden` and `abi_golden` but **not** `shell_golden`, so it sat red across
+three commits.
+
+Proved the re-pin was provenance and not pixels rather than assuming: identical
+length, exactly two differing runs — **32 contiguous bytes at 824** (a SHA-256)
+and **4 bytes at 56** (its CRC). No frame or counter data moved.
+
+**The general rule, now paid for twice:** when a change moves a hash that
+anything embeds, find every gate that compares against it *in the same commit*.
+Grepping for the symbol would have taken a minute.
+
+### Verified before spending fitter time
+
+    fragment directed  97      tile_pipe directed  74      earlyz directed  67
+    fragment random     9      tile_pipe random    12      render_pipe      16
+    shell_golden      757
+
+1,032 checks through a pipeline three stages deeper.
+
+### Still owed
+
+* the round-3 number. Until it reports, **62.89 MHz** stands.
+* the skid buffer from round 2 is still in, and cost ~2 MHz on one sample. Early-Z
+  is no longer near the critical path, so a fit with it reverted is worth one
+  measurement — after this one.
+* `gpu_clk~CLKENA0` at 13,682 fanout with 1.995 ns of skew. **No datapath work
+  recovers it**, and it is not on the note's list of five offenders at all.
