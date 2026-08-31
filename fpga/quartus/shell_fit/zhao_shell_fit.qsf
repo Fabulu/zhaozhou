@@ -56,6 +56,31 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/zhao_debug_frameb
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_slotmgr.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_shell_top.sv
 
+# ---- the render path -------------------------------------------------------
+# zhao_shell_top instantiates zhao_geom_bin_pipe and zhao_raster_fbwrite (the
+# render client on client_req[2]). Until 2026-08-31 this project did not list
+# them or their closure, so the composed fit could not have elaborated -- it
+# would have failed on the first missing module. The shell cone gained the
+# render path when it was wired in; the fit project did not follow it.
+#
+# This is the closure of those two, taken from ZHAO_GEOM_BIN_PIPE_SV in
+# tests/CMakeLists.txt so the fit and the simulation lane compile the same
+# set rather than two lists that drift.
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_bin_pipe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_binner.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_arena.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_tile_pipe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_edgewalk.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_tilestore.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_earlyz.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fragment.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fill.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_blend.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_div255.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_quant.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_resolve.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fbwrite.sv
+
 # The simulation harness interface is intentionally virtual. This prevents the
 # characterization project from inventing a package pinout or exhausting I/O;
 # zhao_shell_top remains the top and its complete port/logic cone remains present.
