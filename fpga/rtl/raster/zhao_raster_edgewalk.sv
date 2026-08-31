@@ -248,10 +248,33 @@ module zhao_raster_edgewalk (
 
   // ---------------------------------- per-pixel steps and top-left bits ----
   // §8: one pixel of x steps E0 by −Δy·256 and one pixel of y by +Δx·256,
-  // i.e. E' steps by −Δy / +Δx exactly. Derived from the FLIPPED vertices,
-  // stable for the whole walk, so they need no registers of their own.
-  logic signed [ACC_W-1:0] sx0, sy0, sx1, sy1, sx2, sy2;
-  logic                    tl0, tl1, tl2;
+  // i.e. E' steps by −Δy / +Δx exactly. Derived from the FLIPPED vertices and
+  // stable for the whole walk.
+  //
+  // THEY NOW GET REGISTERS, AND THE OLD COMMENT SAID WHY THEY DID NOT: "stable
+  // for the whole walk, so they need no registers of their own." That is true
+  // about CORRECTNESS and wrong about TIMING. Stable and on the critical path
+  // is exactly the case that wants a register.
+  //
+  // The fit at fc6395f put ALL 100 worst gpu_clk paths inside this block:
+  //
+  //     cy_r[4] -> Add19 -> Add78 -> Add113 -> Add119 -> g_col[15].u_f1
+  //             -> row_cov[15] -> Equal8 -> pend_r[14]
+  //
+  // `Add19` is this subtract. The walk was recomputing a TRIANGLE-INVARIANT
+  // value from the vertex registers on every single row, and every column's
+  // shift-add tree hung off it. Latching the six steps and the three top-left
+  // bits once, during S_AREA, takes the vertex arithmetic off the row path
+  // entirely.
+  //
+  // reports/MHZArchitected step 2, in its own words: "Edgewalk registered
+  // steps / balanced popcount (low risk, broad TNS)".
+  //
+  // Nothing about the VALUES changes: the combinational forms below are
+  // unchanged and are simply sampled a cycle earlier, while the vertex
+  // registers already hold the accepted job and cannot move until it retires.
+  logic signed [ACC_W-1:0] sx0_r, sy0_r, sx1_r, sy1_r, sx2_r, sy2_r;
+  logic                    tl0_r, tl1_r, tl2_r;
 
   function automatic logic signed [ACC_W-1:0] ext(input logic signed [DIFF_W-1:0] d);
     ext = $signed({{(ACC_W-DIFF_W){d[DIFF_W-1]}}, d});
@@ -266,15 +289,6 @@ module zhao_raster_edgewalk (
     edge_top_left = (pyv == qyv) ? (pxv < qxv) : (pyv < qyv);
   endfunction
 
-  always_comb begin
-    sx0 = -ext(cy_r - by_r);  sy0 = ext(cx_r - bx_r);
-    sx1 = -ext(ay_r - cy_r);  sy1 = ext(ax_r - cx_r);
-    sx2 = -ext(by_r - ay_r);  sy2 = ext(bx_r - ax_r);
-    tl0 = edge_top_left(bx_r, by_r, cx_r, cy_r);
-    tl1 = edge_top_left(cx_r, cy_r, ax_r, ay_r);
-    tl2 = edge_top_left(ax_r, ay_r, bx_r, by_r);
-  end
-
   // ------------------------------------------- the 16-wide row evaluator ---
   // Column i of the current row is (row start + i·step_x) per edge. i is a
   // genvar, so i·step_x folds to at most three shifted adds.
@@ -285,18 +299,22 @@ module zhao_raster_edgewalk (
     for (gi = 0; gi < 16; gi = gi + 1) begin : g_col
       logic signed [ACC_W-1:0] o0, o1, o2, v0, v1, v2;
 
-      assign o0 = (((gi & 1) != 0) ? sx0        : ACC_ZERO) +
-                  (((gi & 2) != 0) ? (sx0 <<< 1) : ACC_ZERO) +
-                  (((gi & 4) != 0) ? (sx0 <<< 2) : ACC_ZERO) +
-                  (((gi & 8) != 0) ? (sx0 <<< 3) : ACC_ZERO);
-      assign o1 = (((gi & 1) != 0) ? sx1        : ACC_ZERO) +
-                  (((gi & 2) != 0) ? (sx1 <<< 1) : ACC_ZERO) +
-                  (((gi & 4) != 0) ? (sx1 <<< 2) : ACC_ZERO) +
-                  (((gi & 8) != 0) ? (sx1 <<< 3) : ACC_ZERO);
-      assign o2 = (((gi & 1) != 0) ? sx2        : ACC_ZERO) +
-                  (((gi & 2) != 0) ? (sx2 <<< 1) : ACC_ZERO) +
-                  (((gi & 4) != 0) ? (sx2 <<< 2) : ACC_ZERO) +
-                  (((gi & 8) != 0) ? (sx2 <<< 3) : ACC_ZERO);
+      // BALANCED, not a linear chain. `a + b + c + d` written flat elaborates
+      // as ((a+b)+c)+d -- three adder levels. Explicit pairing makes it two,
+      // and column 15 is the one the fit named because every bit of `gi` is
+      // set there, so it is the only column that pays all four terms.
+      assign o0 = ((((gi & 1) != 0) ? sx0_r        : ACC_ZERO) +
+                   (((gi & 2) != 0) ? (sx0_r <<< 1) : ACC_ZERO))
+                + ((((gi & 4) != 0) ? (sx0_r <<< 2) : ACC_ZERO) +
+                   (((gi & 8) != 0) ? (sx0_r <<< 3) : ACC_ZERO));
+      assign o1 = ((((gi & 1) != 0) ? sx1_r        : ACC_ZERO) +
+                   (((gi & 2) != 0) ? (sx1_r <<< 1) : ACC_ZERO))
+                + ((((gi & 4) != 0) ? (sx1_r <<< 2) : ACC_ZERO) +
+                   (((gi & 8) != 0) ? (sx1_r <<< 3) : ACC_ZERO));
+      assign o2 = ((((gi & 1) != 0) ? sx2_r        : ACC_ZERO) +
+                   (((gi & 2) != 0) ? (sx2_r <<< 1) : ACC_ZERO))
+                + ((((gi & 4) != 0) ? (sx2_r <<< 2) : ACC_ZERO) +
+                   (((gi & 8) != 0) ? (sx2_r <<< 3) : ACC_ZERO));
 
       assign v0 = e0_r + o0;
       assign v1 = e1_r + o1;
@@ -307,11 +325,11 @@ module zhao_raster_edgewalk (
       // proves — the proof and the silicon are the same bytes.
       logic a0, a1, a2;
       zhao_raster_fill #(.W(ACC_W)) u_f0 (
-        .e_i(v0), .rnz_i(rnz0_r), .tl_i(tl0), .accept_o(a0));
+        .e_i(v0), .rnz_i(rnz0_r), .tl_i(tl0_r), .accept_o(a0));
       zhao_raster_fill #(.W(ACC_W)) u_f1 (
-        .e_i(v1), .rnz_i(rnz1_r), .tl_i(tl1), .accept_o(a1));
+        .e_i(v1), .rnz_i(rnz1_r), .tl_i(tl1_r), .accept_o(a1));
       zhao_raster_fill #(.W(ACC_W)) u_f2 (
-        .e_i(v2), .rnz_i(rnz2_r), .tl_i(tl2), .accept_o(a2));
+        .e_i(v2), .rnz_i(rnz2_r), .tl_i(tl2_r), .accept_o(a2));
 
       assign row_cov[gi] = a0 && a1 && a2;
     end
@@ -355,6 +373,15 @@ module zhao_raster_edgewalk (
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       state    <= S_IDLE;
+      sx0_r    <= {ACC_W{1'b0}};
+      sy0_r    <= {ACC_W{1'b0}};
+      sx1_r    <= {ACC_W{1'b0}};
+      sy1_r    <= {ACC_W{1'b0}};
+      sx2_r    <= {ACC_W{1'b0}};
+      sy2_r    <= {ACC_W{1'b0}};
+      tl0_r    <= 1'b0;
+      tl1_r    <= 1'b0;
+      tl2_r    <= 1'b0;
       ax_r     <= {DIFF_W{1'b0}};
       ay_r     <= {DIFF_W{1'b0}};
       bx_r     <= {DIFF_W{1'b0}};
@@ -410,6 +437,24 @@ module zhao_raster_edgewalk (
           end else begin
             bx_r  <= bxf;  by_r <= byf;   // the double-sided winding flip
             cx_r  <= cxf;  cy_r <= cyf;
+            // THE STEPS ARE LATCHED HERE, FROM THE FLIPPED VERTICES, and the
+            // first draft got this wrong by latching them in S_AREA -- one
+            // state too early, before the flip commits. raster_edgewalk_directed
+            // caught it immediately and precisely: 6 of 146, every failure a
+            // WINDING case, because a pre-flip step is only wrong for the
+            // triangles the flip exists to fix. The block's own header says the
+            // steps are "derived from the FLIPPED vertices"; the flip lands in
+            // S_W0, so this is the earliest edge at which they are real.
+            //
+            // `bxf`/`cyf` are used rather than `bx_r`/`cy_r` for the same
+            // reason: the registers do not hold the flipped values until this
+            // edge completes.
+            sx0_r <= -ext(cyf - byf);   sy0_r <= ext(cxf - bxf);
+            sx1_r <= -ext(ay_r - cyf);  sy1_r <= ext(ax_r - cxf);
+            sx2_r <= -ext(byf - ay_r);  sy2_r <= ext(bxf - ax_r);
+            tl0_r <= edge_top_left(bxf, byf, cxf, cyf);
+            tl1_r <= edge_top_left(cxf, cyf, ax_r, ay_r);
+            tl2_r <= edge_top_left(ax_r, ay_r, bxf, byf);
             state <= S_W1;
           end
         end
@@ -440,9 +485,9 @@ module zhao_raster_edgewalk (
           mask_r[row_i[3:0]] <= row_cov;
           pend_r[row_i[3:0]] <= (row_cov != 16'd0);
           count_r            <= count_r + {4'd0, row_pc};
-          e0_r               <= e0_r + sy0;
-          e1_r               <= e1_r + sy1;
-          e2_r               <= e2_r + sy2;
+          e0_r               <= e0_r + sy0_r;
+          e1_r               <= e1_r + sy1_r;
+          e2_r               <= e2_r + sy2_r;
           if (row_i == 5'd15) begin
             // the LAST row's own pend bit is not yet in pend_r; a job whose
             // only covered row is row 15 must still drain.
