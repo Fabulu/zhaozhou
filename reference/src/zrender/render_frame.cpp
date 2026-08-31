@@ -146,6 +146,10 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
     bool active = false;
     mat4fx vp{};
     int32_t pixel_error = 0;
+    // Owner ruling 2026-08-31 section 1: SetView.flags[1:0]. Defaults to 0 =
+    // WORLD_LONG, which is what makes an existing zero-filled capture keep the
+    // profile it was recorded under.
+    uint8_t depth_profile = 0;
   } views[2];
   std::vector<FieldApp> fields;
   struct TerrainInst {
@@ -215,10 +219,30 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
       case zhao_abi::ZHAO_OP_SET_VIEW: {
         zhao_abi::ZhRecordSetView c;
         zhao_unpack_set_view(r, c);
-        if (c.payload.view_id < 2) {
-          views[c.payload.view_id].active = true;
-          views[c.payload.view_id].vp = from_abi_mat4(c.payload.view_projection);
-          views[c.payload.view_id].pixel_error = c.payload.pixel_error;
+        // SetView.flags[1:0] is the depth profile. Profile 3 is RESERVED and
+        // is REFUSED rather than aliased to a real profile -- the ruling is
+        // explicit that a fourth profile needs new evidence and an explicit
+        // ABI ruling, and silently accepting 11 is how one would get smuggled
+        // in.
+        //
+        // BITS [15:2] ARE NOT CHECKED HERE, DELIBERATELY. The ruling assigns
+        // [1:0] and says nothing about the rest, so they stay available for
+        // future view flags. An earlier draft of this code required them zero
+        // and would have refused every frame built from
+        // `zhao_sample_set_view()`, whose flags are 0x8261 -- inventing a rule
+        // the owner did not make, and breaking the render suite to enforce it.
+        {
+          const uint8_t prof = static_cast<uint8_t>(c.payload.flags & 0x3u);
+          if (prof == 3u) {
+            rr.status = zhao_abi::ZH_ABI_BAD_VALUE;
+            return rr;
+          }
+          if (c.payload.view_id < 2) {
+            views[c.payload.view_id].active = true;
+            views[c.payload.view_id].vp = from_abi_mat4(c.payload.view_projection);
+            views[c.payload.view_id].pixel_error = c.payload.pixel_error;
+            views[c.payload.view_id].depth_profile = prof;
+          }
         }
         break;
       }

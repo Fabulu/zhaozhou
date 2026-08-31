@@ -6,7 +6,7 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 
 ```
 abi_identity_sha256 = db6f6b2bbf7c3a383788d21fa594e09519ace1e90943d9d8ed2227f7b199db12
-zidl_sha256         = b9c5d806ef60c962de3205067d68d2c6a8409ac7cf836f19d3041a0f3488584d
+zidl_sha256         = e54f05d4dd1c15c29f5bedcefdb6da8c4f6cdf7ef44744801318e410909f1ae3
 ```
 
 ABI version **3**, little-endian, command alignment

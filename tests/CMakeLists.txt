@@ -1911,6 +1911,15 @@ target_link_libraries(test_depth_oracle_directed PRIVATE zhao_zref)
 add_test(NAME depth_oracle_directed COMMAND test_depth_oracle_directed)
 set_tests_properties(depth_oracle_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The depth-profile ABI (owner ruling 2026-08-31 section 1). Proves flags[1:0]
+# decodes, that 0 still means WORLD_LONG so archived captures keep their
+# meaning, and that profile 3 is refused rather than aliased.
+add_executable(test_depth_profile_abi_directed proofs/depth_profile_abi_directed.cpp)
+target_link_libraries(test_depth_profile_abi_directed PRIVATE zhao_zref)
+target_include_directories(test_depth_profile_abi_directed PRIVATE ${CMAKE_SOURCE_DIR}/runtime/include)
+add_test(NAME depth_profile_abi_directed COMMAND test_depth_profile_abi_directed)
+set_tests_properties(depth_profile_abi_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # RASTER.ATTRSTEP: the recurrence in RTL, checked against the divider it
 # replaces. The oracle is the shipped law, and the cases are the ones where a
 # two-branch recurrence can go wrong -- sign crossings inside a row and exact

@@ -88,7 +88,8 @@ enum zhao_abi_error : u32 {
   ZH_ABI_BAD_PAYLOAD_CRC = 6;        // payload_crc32c mismatch
   ZH_ABI_UNKNOWN_OPCODE = 7;         // opcode not in the generated table
   ZH_ABI_RESERVED_FIELD = 8;         // reserved/pad byte nonzero on the wire
-  ZH_ABI_BAD_VALUE = 9;              // enum/bitfield out of range (none in v1)
+  ZH_ABI_BAD_VALUE = 9;              // enum/bitfield out of range
+                                     // (first user: SetView depth_profile == 3)
   ZH_ABI_STALE_HANDLE = 10;          // handle generation mismatch (none in v1)
   ZH_ABI_TRUNCATED = 11;             // records end before command_bytes
   ZH_ABI_DEBUG_FLAG_REQUIRED = 12;   // 0xF00n opcode without header flags bit0
@@ -226,10 +227,34 @@ command EndFrame 0x0002 implemented {
 
 // ---- views / presentation --------------------------------------------------
 
+// SETVIEW FLAGS, owner ruling 2026-08-31 section 1 (FROZEN CONSOLE LAW).
+//
+//   bits [1:0]  depth_profile      00 WORLD_LONG      1.0  m .. 16384 m
+//                                  01 WORLD_STANDARD  0.5  m ..  8192 m
+//                                  10 CLOSE           0.25 m ..  2048 m
+//                                  11 RESERVED -- REFUSED, ZH_ABI_BAD_VALUE
+//   bits [15:2] UNASSIGNED -- available for future view flags. NOT required
+//               to be zero: the ruling assigns [1:0] and says nothing about
+//               the rest, and `zhao_sample_set_view()` already carries 0x8261.
+//
+// WIRE-IDENTICAL. `flags` already existed and was undefined; this assigns
+// meaning to two of its bits and changes no offset, size or CRC. That is why
+// the ruling chose it over a new opcode.
+//
+// ZERO KEEPS ITS MEANING. 00 is WORLD_LONG, so an existing zero-filled capture
+// still decodes to the profile it was recorded under. Had CLOSE been 00, every
+// archived capture would have silently changed depth.
+//
+// The profile travels WITH the view, is recorded in captures and is reproduced
+// in replay. Games do not upload near/far values -- scale and shift stay
+// generated from the frozen reciprocal law (spec/qformats.md 8). A fourth
+// profile needs new evidence, a new proof and an explicit ABI ruling; it may
+// not be smuggled in as custom numbers, which is what 11 being REFUSED rather
+// than aliased protects.
 command SetView 0x0010 implemented {
   u8 view_id;
   u8 viewport_id;
-  u16 flags;
+  u16 flags;      // [1:0] depth_profile; [15:2] unassigned
   mat4fx view_projection;
   fx16 pixel_error;
   u32 geometry_tokens;
