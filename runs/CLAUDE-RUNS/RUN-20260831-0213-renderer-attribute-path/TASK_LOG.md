@@ -419,3 +419,119 @@ Reading EDGEWALK closely also argues against touching it blind: its per-column
 `gi * sx` is already a 4-term shift-add over shared partial sums, roughly two
 levels, not the naive chain the phrase "wide row" suggests. A speculative
 rewrite could easily cost a day and buy nothing.
+
+### The number moved: 53.48 -> 62.89 MHz
+
+`6e549ef`. The first timing result this project has that moved on purpose.
+
+    gpu_clk Fmax     53.48 -> 62.89 MHz      +17.6%
+    worst setup      -8.697 -> -5.902 ns     2.795 ns recovered
+    setup TNS        -6566 -> -5215 ns       1352 ns recovered (20.6%)
+    ALMs             12,569 -> 12,532        -37
+    M10K / RAM / DSP unchanged
+    hold             positive everywhere
+
+From one change that added no latency, changed no arithmetic and cost no area.
+`audio_clk` fell 168 -> 145 MHz; recorded rather than omitted, and irrelevant —
+its target is 25 MHz and it closes with ~34 ns of slack.
+
+**The staged source was checked for the new registers before the number was
+believed.** A fit on a stale snapshot is indistinguishable from a fix that did
+nothing, and this project has a build note about exactly that confusion.
+
+### Round 2, and the architecture note is wrong about the structure
+
+The new worst 100: **90 end in `zhao_raster_earlyz | acc_mask_r[*]`**, each a
+different bit. Traced end to end, the chain is a combinational READY path:
+
+    tilestore RAM PORT_B_WRITE_ENABLE_REG
+      -> rd_ready_i -> s0_to_s1 -> frag_ready_o     [FRAGMENT]
+      -> ez_cand_ready -> frag_acc -> hiz_qualify   [EARLY-Z]
+      -> all 256 bits of acc_mask_next -> acc_mask_r[*]
+
+`reports/MHZArchitected` blames Early-Z's "256-bit global reduction".
+**`&acc_mask_next` is on the OUTPUT side of those registers and appears on NONE
+of these paths.** Rewriting it would have cost the effort and moved nothing.
+That note also ranked EDGEWALK first, and **EDGEWALK has now been absent from
+the worst paths in two consecutive fits.** Read the path before believing the
+label.
+
+Also recorded before acting on it: **~2.4 ns of the 5.9 ns violation is CLOCK
+SKEW**, not logic depth, with `gpu_clk~CLKENA0` driving 13,398 fanout. No logic
+restructuring recovers that portion, so 100 MHz will need the clocking
+addressed too.
+
+`ce84b10` — `zhao_skid2`, a 2-deep skid on the candidate channel, cutting the
+chain at `frag_ready_o -> ez_cand_ready`. Two deep and not one: a single
+register slice must drop ready whenever it holds a beat, so it would accept
+every OTHER cycle and halve the initiation rate. Latency +1, throughput
+unchanged, payload opaque so downstream values are bit-identical.
+
+### The test caught a real bug in it, and the weaker test did not
+
+`pipe_empty` gates the tile swap and read `!ez_cand_valid && fr_idle` — it
+enumerated the two places a fragment could stand. I added a third and did not
+add it, so the pipe claimed empty with a beat still in the buffer, the swap
+fired early, and `raster_tile_pipe_directed` lost the composed oracle
+(expected 0x1, got 0x0).
+
+**A buffer that holds state must be named in every emptiness test**, or "empty"
+quietly comes to mean "empty except for the part I forgot".
+
+`render_pipe_directed` passed BOTH before and after that bug, including its
+8,208-stall backpressure section. Only the directed test with the composed
+oracle caught it — and it would have reached silicon as a rendering artefact,
+not a timing failure.
+
+Proved before spending fitter time — **1,038 checks** across eight gates,
+including 757 in `shell_golden`. `raster_earlyz_directed` passing UNCHANGED is
+the property that matters: the ready path left Early-Z without altering one of
+its decisions.
+
+### CI is green, and the reason it stayed red for hours was mine
+
+`OVERALL: completed success` on run 33425278076 — npm tooling, format + static
+analysis, and cmake + ctest all passing. All four causes dead.
+
+Two self-inflicted delays worth keeping:
+
+* **Seven commits went to `zixxtrixx-v8-closeout`** via `git push origin HEAD`
+  while CI only runs on `main`, which sat at `78aee73` the whole time. None of
+  the repair was reaching the thing it was repairing.
+* **Every push cancelled the previous run** via workflow concurrency, so four
+  consecutive runs died before `ctest` could report. The fix was simply to stop
+  pushing and let one finish — the fit needs a COMMIT, not a push, so the two
+  lanes never actually conflicted.
+
+### The fit must be launched DETACHED
+
+`a86dae5`. The sixth fit died to a harness kill. The run log's earlier
+conclusion — "reports persist regardless of what happens to a wrapper" — is
+half right: the reports persist, **the Quartus process does not**, because it
+lives inside the backgrounded shell's tree. Recorded beside the fit project
+with the `Start-Process` form that works, the UTF-16LE log gotcha, and the
+check to make BEFORE restarting (if `tasklist` still shows Quartus, only the
+watcher died — poll the directory rather than discarding 40 minutes).
+
+### The owner's questions, on one page
+
+`351de78`. Fabian asked what he could do to make more of the console buildable
+and framed the block as his fault. `reports/OWNER-QUESTIONS.html` answers that
+it is not: zero of 92 blocks are buildable today, and ten are held by his own
+standing instruction not to invent game behaviour — the right instruction, for
+the reason `MEASURE.HISTOGRAM`'s contract already states.
+
+Ordered by what each answer unblocks, ranked at the end rather than left as a
+flat list of twenty. Question 1 (depth profile selection, two options) closes
+the renderer's last specified gap on its own. The binner question is asked as
+"what is the biggest battle that must never drop a triangle", which he can
+answer, rather than as a reference count, which he cannot.
+
+### Still owed
+
+* **The round-2 fit number.** Running detached. Until it reports, 62.89 MHz
+  stands.
+* Whatever the report names next. EDGEWALK, BINNER and FBWRITE remain read and
+  untouched; the prediction has now been wrong twice and the measurement right
+  twice.
+* The clock-enable fanout, which no block-level surgery will fix.
