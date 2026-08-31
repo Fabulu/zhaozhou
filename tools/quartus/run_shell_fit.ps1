@@ -81,9 +81,94 @@ function Assert-SourceParity {
     return $cmake
 }
 
+
+# ---------------------------------------------------------------------------
+# VIRTUAL-PIN PARITY, added 2026-08-31 after five attempts to reach the fitter.
+#
+# Every top-level port of zhao_shell_top must carry a VIRTUAL_PIN assignment or
+# Quartus makes it a real pad. The device has 145 user I/O and the shell has
+# thousands of port bits, so a single missed port fails the fit -- fifteen
+# minutes in, with a NUMBER and no name:
+#
+#   Error (179000): Design requires 156 user-specified I/O pins
+#
+# Three attempts were spent doing arithmetic on that 156. It was eight ports
+# declared TWO TO A LINE:
+#
+#   input logic signed [22:0] render_kx0_i, render_ky0_i,
+#
+# where a first-identifier-per-line scan virtualises the x half and leaves the y
+# half a pad. 3x23 + 3x21 + 2x12 = 156, exactly.
+#
+# So this check parses the ports the way the language actually declares them --
+# every identifier on the line, and unpacked arrays element by element -- and
+# refuses BEFORE Quartus starts, naming what is missing. See
+# fpga/quartus/FIT-PROJECT-STALENESS.md.
+# ---------------------------------------------------------------------------
+function Get-ShellPortNames {
+    $svPath = Join-Path $RepoRoot 'fpga\rtl\common\zhao_shell_top.sv'
+    $lines = [IO.File]::ReadAllLines($svPath)
+    $keywords = @('logic', 'wire', 'reg', 'signed', 'unsigned', 'var', 'input', 'output', 'inout')
+    $names = New-Object 'System.Collections.Generic.List[string]'
+    $inPorts = $false
+    foreach ($raw in $lines) {
+        $line = ($raw -split '//')[0]
+        if ($line -match '^\s*module\s+zhao_shell_top') { $inPorts = $true; continue }
+        if ($inPorts -and $line -match '^\s*\)\s*;') { break }
+        if (-not $inPorts) { continue }
+        if ($line -notmatch '^\s*(input|output|inout)\b') { continue }
+
+        # An unpacked array port ends with a range AFTER the identifier.
+        $unpacked = $null
+        if ($line -match '\b([A-Za-z_][A-Za-z_0-9]*)\s*\[\s*(\d+)\s*:\s*(\d+)\s*\]\s*,?\s*$') {
+            $cand = $Matches[1]
+            if ($keywords -notcontains $cand) {
+                $unpacked = @{ name = $cand; a = [int]$Matches[2]; b = [int]$Matches[3] }
+            }
+        }
+
+        $rest = $line -replace '^\s*(input|output|inout)\b', ''
+        $rest = $rest -replace '\b(var|logic|wire|reg|signed|unsigned)\b', ' '
+        $rest = $rest -replace '\[[^\]]*\]', ' '
+        foreach ($tok in ($rest -split '[,\s]+')) {
+            $t = $tok.Trim()
+            if ([string]::IsNullOrWhiteSpace($t)) { continue }
+            if ($keywords -contains $t) { continue }
+            if ($t -notmatch '^[A-Za-z_][A-Za-z_0-9]*$') { continue }
+            $names.Add($t) | Out-Null
+        }
+        if ($null -ne $unpacked) {
+            $lo = [Math]::Min($unpacked.a, $unpacked.b)
+            $hi = [Math]::Max($unpacked.a, $unpacked.b)
+            for ($i = $lo; $i -le $hi; ++$i) { $names.Add("$($unpacked.name)[$i]") | Out-Null }
+        }
+    }
+    return ($names | Select-Object -Unique)
+}
+
+function Assert-VirtualPinParity {
+    $ports = @(Get-ShellPortNames)
+    if ($ports.Count -lt 50) {
+        throw "Virtual-pin parity could not parse zhao_shell_top's ports (found $($ports.Count)); refusing rather than passing a check that did nothing."
+    }
+    $qsfText = [IO.File]::ReadAllText($QsfPath)
+    $assigned = @{}
+    foreach ($m in [regex]::Matches($qsfText, 'VIRTUAL_PIN\s+ON\s+-to\s+(\S+)')) {
+        $assigned[$m.Groups[1].Value] = $true
+    }
+    $missing = @($ports | Where-Object { -not $assigned.ContainsKey($_) })
+    if ($missing.Count -gt 0) {
+        Write-Host "MISSING VIRTUAL_PIN for $($missing.Count) port(s):" -ForegroundColor Red
+        foreach ($m in $missing) { Write-Host "    $m" -ForegroundColor Red }
+        throw "Virtual-pin parity failed. Every top-level port needs a VIRTUAL_PIN or the fitter runs out of I/O. See fpga/quartus/FIT-PROJECT-STALENESS.md."
+    }
+    Write-Host "PASS virtual-pin parity: $($ports.Count) shell ports all virtualised."
+}
+
 $SourceCone = @(Assert-SourceParity)
-if ($ParityOnly) {
-    exit 0
+Assert-VirtualPinParity
+if ($ParityOnly) {
+    exit 0
 }
 
 $QuartusSh = Join-Path $QuartusBin 'quartus_sh.exe'
