@@ -134,3 +134,40 @@ have one yet.
    anti-vacuity check noticed.
 6. **Asked ATTRSTEP for a quotient of 156 billion** against a stated 32-bit
    precondition -- the block refused correctly and the test was wrong.
+
+### The fit wall came down on the fifth attempt
+
+`156 user-specified I/O pins` was **eight ports declared two to a line**:
+
+```
+input logic signed [22:0] render_kx0_i, render_ky0_i,
+3 x 23 (ky0/1/2) + 3 x 21 (ay/by/cy) + 2 x 12 (max_x/max_y) = 156
+```
+
+A first-identifier-per-line scan virtualised every x half and left every y half a
+pad. **The names were in `output_files/zhao_shell_fit.fit.rpt` section 12 the
+whole time** -- I did arithmetic on the number three times instead of generating
+the report once.
+
+`823e703` makes that class of failure impossible: `run_shell_fit.ps1` now asserts
+virtual-pin parity BEFORE any Quartus stage and prints the offenders by name.
+Mutation-tested by deleting `render_ky0_i` alone, which is exactly the port that
+cost three attempts. It also refuses if it parses fewer than 50 ports, so a
+broken regex fails loudly rather than passing vacuously.
+
+```
+PASS source parity: 42 ordered shell sources match tests/CMakeLists.txt.
+PASS virtual-pin parity: 186 shell ports all virtualised.
+```
+
+`5393924` writes the whole staleness class down in
+`fpga/quartus/FIT-PROJECT-STALENESS.md`, beside the project rather than in this
+run folder, because it recurs whenever a block gains a top-level port.
+
+### Still owed
+
+The fit NUMBER. Elaboration and synthesis pass with 0 errors and the full render
+path; the fitter has run past the I/O wall but has not yet produced ALM, memory
+and Fmax. The flow is running locally so its reports persist on disk regardless
+of what happens to a wrapper process -- five background runs were killed by the
+harness during this wave.
