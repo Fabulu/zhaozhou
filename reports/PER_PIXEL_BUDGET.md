@@ -140,6 +140,49 @@ puts the frame over.
 
 ---
 
+## SUPERSEDED: the divide crisis was an implementation artefact
+
+**Everything below about the divide being 2-5x short is now historical.** It was
+correct for one divide per attribute per pixel, and that is no longer the
+architecture.
+
+`RASTER.ATTRSTEP` replaces the per-pixel divide with an exact quotient/remainder
+recurrence (owner ruling 2026-08-31 #2). Measured on a fully covered tile:
+
+    256 pixels cost 17 divides = 0.066 a pixel, against 1.000
+    = 15.1x fewer divides, and NOT ONE RENDERED BIT CHANGES
+
+Proved twice: `tests/proofs/attribute_step_equivalence.cpp` over 640,000
+pixel-attributes in arithmetic, and `raster_attrstep_directed` against the
+divider RTL itself over 1,536 more, including 69 sign crossings and 256 exact
+halves.
+
+### What that does to the demand table
+
+The worst column below -- textured + Gouraud at s = 1.0, 1,935,360 divides a
+frame -- becomes roughly **128,000 seed and step divides**, which radix-4
+`UNITS = 1` already covers four times over. The right question is no longer "how
+many dividers" but "how few".
+
+| | divides a frame | covered by |
+|---|---|---|
+| per-pixel, textured, s = 0.5 | 552,960 | radix-4 UNITS = 8, barely |
+| per-pixel, +Gouraud, s = 1.0 | 1,935,360 | nothing measured |
+| **stepped, +Gouraud, s = 1.0** | **~128,000** | **radix-4 UNITS = 1, 5x over** |
+
+And the second-order effect matters as much: **Gouraud RGB and alpha stop being
+four expensive divides a survivor and become four cheap accumulators.** Cutting
+vertex lighting to save divides is no longer a trade anyone has to consider.
+
+### What is still open
+
+The recurrence is a PROTOTYPE in the ruling's sense. Before `UNITS` is frozen it
+needs the composed tile test against the numerator-plane path, a resource and
+Fmax comparison against the divider farm, and the context-cache experiment. The
+divider path stays as oracle and fallback until those are green.
+
+---
+
 ## The 276,480 is ambiguous, and it changes three verdicts
 
 Every "SHORT" in this file and in three block tests is measured against ruling
