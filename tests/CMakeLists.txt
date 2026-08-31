@@ -1835,6 +1835,7 @@ verilate(test_render_pipe_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_skid2.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv
@@ -1857,6 +1858,7 @@ verilate(test_render_fb_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_skid2.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv
@@ -4198,6 +4200,7 @@ set(ZHAO_GEOM_BIN_PIPE_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_skid2.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_bin_pipe.sv)
@@ -4308,7 +4311,8 @@ set(ZHAO_RASTER_TILE_PIPE_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_resolve.sv
-    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe.sv)
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_skid2.sv)
 
 add_executable(test_raster_tile_pipe_directed raster/raster_tile_pipe_directed.cpp)
 target_link_libraries(test_raster_tile_pipe_directed PRIVATE zhao_harness zhao_zref)
@@ -4386,6 +4390,7 @@ set(ZHAO_SHELL_RTL
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_binner.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_arena.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tile_pipe.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_skid2.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_edgewalk.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_earlyz.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fragment.sv
