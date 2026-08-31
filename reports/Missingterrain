@@ -1,0 +1,183 @@
+We really need to get to implementing the main thing of our game at some point. Make sure you put it on the docket, write everything down and implement.
+
+I keep hearing we don't have the 8km islands set up hardware wise and only get this little spot. Why is that?
+The blunt answer
+
+Because two very different claims keep getting mashed together:
+
+Zhaozhou’s terrain format is architected for an 8 km-scale, sparse, streamed world.
+The current FPGA composition can only process terrain data that a test harness manually hands to its patch-local blocks.
+
+So the 8 km world is not blocked by coordinate range or by the terrain mathematics. It is blocked by the fact that the world pager, patch-residency manager, composed-height cache, and command-to-terrain pipeline have not been built and integrated yet.
+
+The repository itself effectively says: the capability is unbuilt, not unarchitected.
+
+Three different “small things” are being confused
+Thing	Size	Meaning
+Raster tile	16×16 pixels	Temporary on-chip framebuffer work area
+Terrain patch	32×32 world cells, 33×33 vertices	Reusable unit processed by the terrain engine
+Island/world	Sparse directory containing many patches	The actual large level
+
+The 16×16 pixel tile store has absolutely nothing to do with world extent. It holds one screen tile while it is rasterised, then is reused for the next one.
+
+A terrain patch is 32×32 cells. At the canonical two-metre pitch, that means one patch covers 64×64 metres. The island is meant to be an arbitrary sparse grid of those pages, placed inside an fx16 world with roughly ±32 km coordinate range. Entirely empty patches do not exist at all; an absent directory entry simply means open sky.
+
+So a patch-local block accepting one 64 m patch is not inherently limiting. It is supposed to be invoked over and over for all relevant patches.
+
+What has actually been built
+
+A surprisingly large amount of the inside of a patch exists in RTL:
+
+live terrain-field composition;
+persistent scar baking and breach/heal rules;
+projected-error LOD;
+crack-safe tessellation;
+top and underside generation;
+normals;
+projection;
+terrain velocity.
+
+The LOD block is explicitly designed to process many patch jobs: its estimate is around 784 clocks per patch, giving roughly 2,100 patch decisions per 100 MHz frame against the planned 256 live/visible patches. So it was not designed as a one-patch toy.
+
+Some terrain pairs are already properly composed in simulation, such as LOD→tessellation and tessellation→normals. The arithmetic and packet seams have received serious testing.
+
+The software reference renderer can also render multiple manually supplied patch commands in one frame: it gathers every DrawProcedural terrain record and loops over the resulting patch list. So even the reference path is not fundamentally restricted to one patch.
+
+What is missing
+
+This is the decisive part.
+
+1. No terrain-page residency machinery
+
+TERRAIN.PATCH currently has:
+
+no VRAM port;
+no page loader;
+no residency directory;
+no page CRC check;
+no composed-height-cache allocator.
+
+Its tests provide layer A/B/C data directly as though the test harness were memory. The contract explicitly says the residency and memory-grant machinery is not built.
+
+Likewise, TERRAIN.BAKE has no VRAM port. Its test harness answers its lattice reads and receives its scar writes. It demonstrates the deformation algorithm, but it does not yet mutate a resident island page inside the console’s actual memory system.
+
+2. The streaming system is literally still a stub
+
+SW.STREAM, the HPS-side block that should take world-streaming requests and turn packed cartridge assets into resident resources, is still SPECIFIED; its layouts, memory ownership, overflow behaviour, tests and integration captures are all TODO.
+
+That is the clearest answer to “why doesn’t it pull in the rest of the island?”
+
+There is currently no implemented thing whose job is to pull in the rest of the island.
+
+3. The composed terrain cache does not exist
+
+The intended design composes the live height lattice once per frame for up to 256 live or visible patches, using about 545 KiB for heights and another 545 KiB for terrain velocity. Both views should then reuse those results.
+
+But the cache sitting between TERRAIN.PATCH and TERRAIN.TESS has not been built. The tessellator’s own contract says the upstream patch chain is not composed because that cache does not exist.
+
+4. Terrain is not in the actual shell
+
+The fitted shell does not run:
+
+island directory
+→ patch residency
+→ TERRAIN.PATCH
+→ TERRAIN.LOD
+→ TERRAIN.TESS
+→ TERRAIN.NORMALS
+→ TERRAIN.PROJECT
+→ renderer
+
+Instead, the shell currently exposes a provisional top-level interface where the test harness supplies already prepared triangle coefficients. Its own comments say the triangle port is at the shell boundary because CMD.SCHEDULER does not have a draw path yet. The present path is flat-shaded and proves the renderer/memory seam, not the terrain system.
+
+Therefore the 53.48 MHz fit contained neither an 8 km island nor even the full terrain pipeline. It was a shell plus a provisional flat renderer.
+
+Why the current island looks like a little spot
+
+The Wound Lab-style command currently names one terrain-patch page per DrawProcedural command. The existing example island is consequently a manually registered patch resource, not the visible portion of a world selected by a world manager.
+
+Nothing currently does:
+
+camera moved
+→ inspect island directory
+→ determine visible patch coordinates
+→ union the two players’ working sets
+→ prefetch missing pages
+→ allocate local-SDRAM residency slots
+→ preserve dirty scars from evicted pages
+→ issue all visible patches to the terrain engine
+
+So the small spot is basically the unit under test made visible.
+
+It is not the maximum world the terrain formulas can address. It is the maximum world that the current harness happens to feed through the incomplete composition.
+
+What “8 km” can honestly mean
+
+This needs one important qualification.
+
+At the canonical two-metre pitch:
+
+one patch is 64×64 m;
+an 8 km span is 125 patches long;
+an entirely solid 8×8 km square would contain 125×125 = 15,625 patches.
+
+Each full terrain page is 21,376 bytes. A dense 8×8 km square at two-metre pitch would therefore require roughly 318.5 MiB of patch pages alone, before textures, geometry, framebuffers, caches and everything else. That obviously cannot remain entirely resident in the 128 MB local memory. The current plan is for 1,024 resident patches, not 15,625.
+
+Those 1,024 resident patches represent:
+
+4.19 km² of actual registered ground at 2 m pitch;
+16.8 km² at 4 m pitch.
+
+The terrain memory budget sets aside about 14.38 MiB for sheets/material state and 8.95 MiB for terrain heights, mips and hot caches at that 1,024-patch residency.
+
+Therefore:
+
+An 8 km-wide sparse floating-island world is absolutely compatible with the design.
+An 8 km-long but relatively narrow island can fit inside the 1,024-patch resident set.
+An 8×8 km densely solid, two-metre-resolution plate cannot all be resident and must stream as the camera moves.
+An 8 km world containing multiple scattered floating islands is precisely what sparse patch residency is good at.
+
+That distinction may be the source of some of the contradictory language you are hearing.
+
+Why this was done patch-first
+
+This was actually the right implementation order.
+
+The FPGA should not contain “an 8 km terrain circuit.” It should contain one efficient terrain engine that repeatedly processes patch jobs. World size then becomes mostly a question of:
+
+which pages are resident;
+which patches are visible;
+when they are prefetched;
+how far representations are reduced;
+how dirty deformation state survives eviction.
+
+Building the patch arithmetic first lets every difficult law—breaches, undersides, crack stitching, LOD and exact sim/render agreement—be tested without simultaneously debugging a world streamer.
+
+The mistake would be interpreting those strong patch-level tests as evidence that the streaming world already exists.
+
+How serious is the gap?
+
+It is not a fundamental hardware problem, but it is also not a tiny constant change.
+
+I would describe the situation as:
+
+The terrain engine’s organs exist. The circulatory system that feeds them an island does not.
+
+The missing world-scale slice includes:
+
+A real island directory and visible-patch builder on the HPS.
+A deterministic 1,024-slot residency manager.
+Prefetching from cartridge/HPS DDR into local SDRAM.
+Dirty-page writeback for permanent scars and breaches.
+Page generations, CRCs and stale-handle protection.
+The 256-patch composed-height/velocity cache.
+Command submission into the terrain pipeline.
+TERRAIN.PATCH → LOD → TESS → NORMALS → PROJECT → GEOM.PARAMBUF.
+Production-scale geometry/tile-reference storage.
+A real board-bandwidth test with two players moving in opposite directions.
+
+The crucial validation should be an 8 km traversal capture, not a static image: fly rapidly across the world, force residency churn, deform patches, leave them, return later, and verify that geometry, scars, breaches, LOD seams and both split-screen views remain exact.
+
+So yes: when someone says “the hardware only has the little spot right now,” they are substantially correct about the current integrated machine.
+
+When they imply “the architecture cannot support the 8 km world,” they are wrong. The format, coordinates, patch granularity and memory budget were designed for it. What is missing is the fairly large—but conventional—streaming and integration layer that turns the collection of patch processors into a world.
