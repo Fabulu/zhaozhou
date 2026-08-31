@@ -2125,11 +2125,15 @@ void sample_zixx_moving_source(uint32_t frame, uint32_t frames,
   constexpr int32_t kPathHeightMm = 1400;
   constexpr int32_t kHighArchMm = 1200;
   constexpr int32_t kReturnArchMm = 900;
-  constexpr int32_t kLightInnerRadiusMm = 1100;
-  constexpr int32_t kLightOuterRadiusMm = 5200;
-  constexpr int32_t kLightGainR = 65536;
-  constexpr int32_t kLightGainG = 44564;
-  constexpr int32_t kLightGainB = 26214;
+  // A broad, forceful inspection lamp rather than a small travelling glint.
+  // The core covers a substantial body phrase and the long shoulder keeps the
+  // source legible across the far flank; gains may exceed one because the
+  // compositor clamps only the final material response, preserving pigment.
+  constexpr int32_t kLightInnerRadiusMm = 2300;
+  constexpr int32_t kLightOuterRadiusMm = 7000;
+  constexpr int32_t kLightGainR = 147456;  // 2.25
+  constexpr int32_t kLightGainG = 111411;  // 1.70
+  constexpr int32_t kLightGainB = 72090;   // 1.10
   const uint32_t leg_frames = std::max<uint32_t>(1, frames / 4);
   const uint32_t leg = std::min<uint32_t>(3, frame / leg_frames);
   const uint32_t local = frame - leg * leg_frames;

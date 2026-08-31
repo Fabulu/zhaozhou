@@ -1,7 +1,7 @@
 # Task Log: RUN-20260831-1956 - Zixxtrixx final explicit whole-S animation candidate
 
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Spring accepted after bounded station-14 correction; secondary animation pass active
+**Status:** Spring and moving inspection light accepted; programmable-jump landing correction active
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/
 
 ---
@@ -74,6 +74,17 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 - Focused mesh validation exits zero. The complete probe exits nonzero only for the two already-scoped programmable-jump landing penetrations (`-272 mm` at key 70), which are secondary landing work rather than spring faults.
 - This is the accepted spring milestone. No full bank, integration, archive, live-media edit, deploy or publication was performed.
 
+### 2026-09-01 - Focused secondary audit and moving inspection light accepted
+
+- Rendered only the bounded secondary baseline under explicit `ZIXX_EXP=celmain` / `ZIXX_LIGHT=diagonal-cool-cross`: idle, moving light, fall, generic and directional hits, knockdown, hit-floor landing, three deaths, plus fixed-side/fixed-three-quarter idle and unlit/normal diagnostics.
+- Looked at numbered every-frame sheets rather than sparse samples. Selective clip-specific pupil acting is already restrained and sufficient; falling hesitation remains visibly monotonic; hit folds begin locally before propagation; landing, KO and all three deaths have distinct causes, phrases and final silhouettes. Those accepted controls were preserved.
+- Fixed-side and fixed-three-quarter views show controlled breath, head/arch settling and tail response without camera help. The unlit material retains authored pigment/grain and the normal field is continuous through the whole S, so neither idle, pigments, normals nor Cool Cross were changed.
+- The baseline moving source traversed its complete four-leg world path, but its `1100/5200 mm` core/outer radii and sub-one green/blue gain made most of the animal remain under unchanged Cool Cross bands; only a narrow late glint read strongly.
+- Kept the source path, depth-tested marker, dim Cool Cross-derived base rig and point-light response architecture exact. Changed only named local-source controls to a broad `2300 mm` full-strength core, `7000 mm` outer shoulder and warm `2.25/1.70/1.10` RGB gain.
+- Direct-built a fresh cel reel and looked at all 600 held-pose frames plus matched before/after landmarks. The source now paints broad, unmistakable warm illumination across complete torso/head phrases on every close pass while opposite-facing planes preserve spatial form and the base cool rig remains visible.
+- Explicit seam review of frames 598, 599, 0 and 1 shows continuous marker position and body response. Accepted moving-light CRC is `0xDE5D2626` (baseline `0x79BF6815`).
+- The only remaining bounded secondary source fault is the committed-probe landing penetration shared by programmable jumps in slots 46/47: `-272 mm` at key 70.
+
 ---
 
 ## Commands and Results
@@ -92,6 +103,9 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 | Final every-sample render | `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross zhao-reel-cel.exe <rung12-evidence> zixxtrixx-spring-{side,top,micro}` | 59 frames each; final CRCs `0x15E9ED2D` / `0x319460FE` / `0x3506CD43` |
 | Final posed geometry | `zixx-probe.exe > evidence/rung12-final-contact/zixx-probe.txt` | spring gates pass; complete process exits 1 only on two secondary jump-landing contact assertions |
 | Focused mesh validation | `zixx-meshcheck.exe > evidence/rung12-final-contact/zixx-meshcheck.txt` | PASS, exit 0 |
+| Secondary baseline | focused cel reel subjects under `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross` plus `rgb_contact_sheet.py` | all requested action/death/idle diagnostics reviewed; moving light alone required source work |
+| Moving-light direct build | `tools/reel/build-direct.sh --output <secondary-light-r1-lane> cel` | current sources compiled and linked without CMake/Ninja/Verilator/Sacengine |
+| Moving-light acceptance | same selectors, `zixxtrixx-moving-light`, then every-frame/before-after/seam sheets | 600 frames; accepted CRC `0xDE5D2626`; 599→0 loop continuous |
 
 ---
 
@@ -177,6 +191,7 @@ None. The owner requires one sole implementation agent and prohibits delegation.
 | Upheaval | `b1d3cd6` | `DIRECTION: preserve Zixxtrixx whole-S groundspring law` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 | zhaozhou | `d39d2dc` | `ANIMATION: author accepted deepest whole-S pose` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 | zhaozhou | `dceb28b` | `ANIMATION: preserve blocked authored release candidate` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
+| zhaozhou | `3dd3208` | `ANIMATION: accept Zixxtrixx whole-body spring` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 
 ---
 
@@ -188,8 +203,7 @@ All intended direct compilers, linkers, renderers, focused probes and Python she
 
 ## Next Steps
 
-1. Preserve and push this candidate explicitly as blocked; do not label it an accepted spring checkpoint.
-2. Parent/coordinator must decide whether a new authorization may alter the frozen root/support law. The actionable first fault is station-14 drift at keys 3.5–4.5, not release interpolation.
-3. If re-authorized, fix centreline-derived support compensation and shallow full/micro bite before any secondary animation; then eliminate the key-4.5 full-surface intersection and rerun the same focused probe.
-4. Treat planned key-20 bone-0 mismatch as a no-op identity-quaternion requantization bug; fix only after/rooted with any renewed authorization, then require exact consumer parity.
-5. Independent review, integration, archive, full bank, website media, deployment and publication remain parent-owned and were not performed here.
+1. Commit and push the accepted moving-inspection-light milestone on the feature branch, staging only the renderer source and run log.
+2. Correct only the shared programmable-jump landing root/contact phrase that puts slots 46/47 at `-272 mm` on key 70; preserve keys 0–28 spring/wheel and all other accepted secondary clips.
+3. Validate slots 46/47 through the committed posed-surface probe and focused landing-interval renders, then rerun focused mesh/spring parity and falling-hesitation checks.
+4. Close the run with explicit feature heads, tracked-tree cleanliness, intentional untracked-evidence inventory and owned-process shutdown. Independent review, integration, archive, full bank, website media, deployment and publication remain parent-owned.
