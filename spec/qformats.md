@@ -506,6 +506,63 @@ test: pass ⟺ d_new > d_old (strict; ties fail; decals use explicit bias); clea
 Depth is **defined as the rcp_u24 pipeline output** (§6.1) — that is what
 guarantees ZRef ≡ RTL bit-identity.
 
+**The three profiles, and where `scale` comes from.** *(Added 2026-08-31, from
+owner ruling 2026-08-31 #1. Until now this section named `wmin`, `wmax` and
+`scale` and defined none of them, which is what blocked the depth work for a
+whole wave — a formula whose constants are undefined is not a specification.)*
+
+| # | profile | `wmin` | `wmax` | `scale` | `d(wmax)` |
+|---|---|---|---|---|---|
+| 0 | `WORLD_LONG` | 1.0 m | 16,384 m | 1,099,511,627,776 = 2⁴⁰ | 1024 |
+| 1 | `WORLD_STANDARD` | 0.5 m | 8,192 m | 549,755,813,888 = 2³⁹ | 1024 |
+| 2 | `CLOSE` | 0.25 m | 2,048 m | 274,877,906,944 = 2³⁸ | 2048 |
+
+**`scale` is GENERATED, never hand-written.** `tools/fixgen` emits the table to
+`reference/include/zref/generated/zref_depth.hpp` and
+`compiler/src/generated/depth.ts`; `tests/proofs/depth_profile_law.cpp` derives
+the same values independently in C++ and proves the properties. A hand-copied
+constant here is how a wrong number becomes an unadjustable one.
+
+The generator solves, per profile:
+
+```
+s0     = smallest shift with (Wmin >> s0) < 2^24     // W = w in fx16 raw units
+{r0,k0}= rcp_u24(Wmin >> s0)
+scale  = round( 0xFFFFFF · 2^(48 + s0 - k0) / r0 )
+```
+
+then evaluates any `w` through the pipeline the block diagram above states:
+
+```
+s      = smallest shift with (W >> s) < 2^24
+{r, k} = rcp_u24(W >> s)
+d      = rescale(scale · r, 48 + s - k), round-half-up, saturate 0xFFFFFF
+```
+
+**`scale` is solved from the law's own OUTPUT at `wmin`, not from the ideal
+reciprocal.** The obvious `scale = 0xFFFFFF · Wmin` yields `0xFFFFFE` — one
+short of the pin — because `rcp_u24` carries up to 1 LSB and the pinned input is
+exactly where it saturates.
+
+**`scale` is a power of two in all three, and that is a coincidence of these
+near planes**, which are themselves powers of two in raw units. The multiply is
+therefore a shift *today*; a fourth profile with `wmin = 0.7 m` would not have
+that property, and **the generator must not assume it**.
+
+Proved for each profile over ~39,000 geometric samples and 200,000 consecutive
+raw units at the near plane: `d(wmin) = 0xFFFFFF` exactly, monotonic
+non-increasing, non-zero floor at `wmax`, no intermediate wrap.
+
+**`wmax` is a depth CLAMP, not a far-clip plane.** `GEOM.PROJECT` row 2 stays
+inert and the culler stays at five planes, so distant islands still draw — they
+simply share the floor depth.
+
+**Which profile a view uses is not yet decided.** Ruling #1 permits either two
+reserved bits of `SetView.flags` or a small additive view-depth command, and
+leaves the audit to decide. That is a permanent command ABI and therefore the
+owner's call (Class C); until it lands, nothing selects a profile at runtime and
+`WORLD_STANDARD` is the only one the reference uses.
+
 **Perspective UV:** interpolate `u_over_w`, `v_over_w` (S 8.24) and `invw24`
 by plane equation; per pixel `u = rescale((s64)u_over_w · rcp_u24(invw24_interp))`.
 Hecker's span-subdivision approximation is deliberately **not** used — the
