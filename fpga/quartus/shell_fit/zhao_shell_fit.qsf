@@ -18,6 +18,16 @@ set_global_assignment -name OPTIMIZATION_MODE "BALANCED"
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 
 # Exact ZHAO_SHELL_RTL cone from tests/CMakeLists.txt, in the same order.
+# ---- shell source cone -----------------------------------------------------
+# GENERATED FROM set(ZHAO_SHELL_RTL ...) in tests/CMakeLists.txt, IN ORDER.
+# run_shell_fit.ps1 asserts parity against that list element by element, so
+# the fit and the simulation lane cannot compile different sets -- and the
+# ORDER is part of the assertion, not a formatting preference.
+#
+# This list was 14 sources short until 2026-08-31: zhao_shell_top instantiates
+# zhao_geom_bin_pipe and zhao_raster_fbwrite, CMake had followed the render
+# path when it was wired in, and this project had not. The parity check is
+# exactly what caught it, on the first fit attempted since.
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/generated/zhao_abi_pkg.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_pkg.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_sdram_params_pkg.sv
@@ -42,6 +52,24 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_sdram_ctrl.
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_vram_arbiter.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_mem_guard.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_hps_bridge.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_hps_arbiter.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/zhao_debug_frameblit.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_slotmgr.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fbwrite.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_bin_pipe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_binner.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_arena.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_tile_pipe.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_edgewalk.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_earlyz.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fragment.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_tilestore.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_resolve.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_blend.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_div255.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_quant.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fill.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_shell_top.sv
 # Added 2026-08-21 with the DEBUG.FRAMEBLIT integration (steps 4-6). These three
 # were wired into zhao_shell_top and the CMake source list, and NOT here -- so
 # Verilator built the shell fine while Quartus could not resolve u_slotmgr at
@@ -51,12 +79,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_hps_bridge.
 # TWO SOURCE LISTS FOR ONE DESIGN is the defect. This QSF and the CMake
 # ZHAO_SHELL_RTL list must name the same files; nothing checks that they do,
 # which is why the drift went unnoticed until a fit was attempted.
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/memory/zhao_hps_arbiter.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/debug/zhao_debug_frameblit.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/video/zhao_video_slotmgr.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_shell_top.sv
 
-# ---- the render path -------------------------------------------------------
 # zhao_shell_top instantiates zhao_geom_bin_pipe and zhao_raster_fbwrite (the
 # render client on client_req[2]). Until 2026-08-31 this project did not list
 # them or their closure, so the composed fit could not have elaborated -- it
@@ -66,20 +89,6 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_shell_top.s
 # This is the closure of those two, taken from ZHAO_GEOM_BIN_PIPE_SV in
 # tests/CMakeLists.txt so the fit and the simulation lane compile the same
 # set rather than two lists that drift.
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_bin_pipe.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_binner.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_arena.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_tile_pipe.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_edgewalk.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_tilestore.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_earlyz.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fragment.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fill.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_blend.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_div255.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_quant.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_resolve.sv
-set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fbwrite.sv
 
 # The simulation harness interface is intentionally virtual. This prevents the
 # characterization project from inventing a package pinout or exhausting I/O;
@@ -201,3 +210,54 @@ set_instance_assignment -name VIRTUAL_PIN ON -to phy_dq_o
 set_instance_assignment -name VIRTUAL_PIN ON -to phy_dq_oe_o
 set_instance_assignment -name VIRTUAL_PIN ON -to phy_dqm_o
 set_instance_assignment -name VIRTUAL_PIN ON -to phy_dq_i
+
+# ---- the render path's ports ----------------------------------------------
+# Added 2026-08-31. zhao_shell_top gained 40 ports when the render client was
+# wired onto client_req[2], and this list did not follow. Without them Quartus
+# treats each as a real pad: the fitter reported 742 IO input pads against 315
+# available on the 5CSEBA6U23I7 and refused the design. They are wires in the
+# composed machine, not pins, exactly like the 101 already here.
+#
+# THE WILDCARD IS STILL FORBIDDEN. `-to *` matched every internal net and drove
+# the map to 28.4 GB (see the header). These are named explicitly for the same
+# reason the first 101 are.
+set_instance_assignment -name VIRTUAL_PIN ON -to render_frame_begin_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_frame_end_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_grid_w_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_grid_h_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_tri_valid_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_tri_ready_o
+set_instance_assignment -name VIRTUAL_PIN ON -to render_kx0_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_kc0_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_kx1_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_kc1_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_kx2_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_kc2_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_tl_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_ax_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_bx_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_cx_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_min_x_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_min_y_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_src_id_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_fill_word_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_clear_word_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_state_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_src_a_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_texel_rgb_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_texel_a_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_texel_idx_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_fb_base_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_fb_stride_i
+set_instance_assignment -name VIRTUAL_PIN ON -to fb_writer_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_drain_done_o
+set_instance_assignment -name VIRTUAL_PIN ON -to render_busy_o
+set_instance_assignment -name VIRTUAL_PIN ON -to render_pixels_o
+set_instance_assignment -name VIRTUAL_PIN ON -to render_bursts_o
+set_instance_assignment -name VIRTUAL_PIN ON -to render_stream_error_o
+set_instance_assignment -name VIRTUAL_PIN ON -to render_drained_o
+set_instance_assignment -name VIRTUAL_PIN ON -to render_fatal_o
+set_instance_assignment -name VIRTUAL_PIN ON -to render_issued_words_o
+set_instance_assignment -name VIRTUAL_PIN ON -to render_retired_words_o
+set_instance_assignment -name VIRTUAL_PIN ON -to render_overflow_o
+set_instance_assignment -name VIRTUAL_PIN ON -to render_fragment_error_o
