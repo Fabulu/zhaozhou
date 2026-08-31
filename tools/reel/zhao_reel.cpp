@@ -1053,6 +1053,10 @@ struct SceneSubject {
   // drives BOTH genuine spatial point lighting and its depth-tested marker.
   // All ordinary subjects leave this false and retain their selected rig.
   bool creature_moving_light = false;
+  // Diagnostic-only material override: keep the blades visible as followers,
+  // but flatten them to a dark neutral so they cannot be mistaken for body
+  // centreline participation in fixed spring sheets.
+  bool creature_deemphasize_fins = false;
   // FULL-COLOUR LANE (MODELINGGUIDE section 5). The 256-colour rule is a
   // GIF-EXPORT constraint, and it was allowed to redesign a creature: it
   // deleted an eye colour, a mouth and a throat transition, and it forced a
@@ -2622,6 +2626,7 @@ int render_scene(const SceneSubject& sub) {
 
   // creature subject state (zref::creature — the laws live there)
   const zc::CreatureType* dog = nullptr;
+  zc::CreatureType diagnostic_creature;
   zc::CreatureInstance dog_inst;
   zc::CreatureInstance dummy_inst;  // run 0326: the salto target dummy
   ZixxTargetDescriptor target_desc;
@@ -2641,6 +2646,32 @@ int render_scene(const SceneSubject& sub) {
     zc::g_debug_shade = static_cast<zc::DebugShade>(sub.creature_shade);
     const bool zixx_subject = sub.creature >= 3;
     dog = zixx_subject ? &zixx::type() : &watchdog_type();
+    if (zixx_subject && sub.creature_deemphasize_fins) {
+      diagnostic_creature = *dog;
+      const auto mute_fins = [](std::vector<zc::Meshlet>& rung) {
+        for (zc::Meshlet& m : rung) {
+          bool fin = false;
+          for (const zc::SkinVertex& v : m.verts) {
+            const auto fin_bone = [](uint8_t b) {
+              return b >= zixx::kBBladeL && b <= zixx::kBSpike;
+            };
+            if (fin_bone(v.b0) || fin_bone(v.b1)) {
+              fin = true;
+              break;
+            }
+          }
+          if (fin) {
+            m.page = 255;
+            m.r = 34;
+            m.g = 42;
+            m.b = 48;
+          }
+        }
+      };
+      mute_fins(diagnostic_creature.mesh);
+      mute_fins(diagnostic_creature.micro);
+      dog = &diagnostic_creature;
+    }
     dog_inst.type = dog;
     // A quadruped pitches and rolls with the ground under its feet. A 3.9 m
     // serpent lying ON the ground does not: tilting the whole animal off one
@@ -4203,6 +4234,25 @@ SceneSubject subject_zixx_spring_top() {
   return s;
 }
 
+SceneSubject subject_zixx_spring_centreline_side() {
+  SceneSubject s = subject_zixx_spring_side();
+  s.name = "zixxtrixx-spring-centreline-side";
+  s.creature_deemphasize_fins = true;
+  s.note = "DIAGNOSTIC: fixed true-side whole-S centreline read; tail blades "
+           "remain posed but use a dark neutral material so attachments cannot "
+           "stand in for finless-body participation";
+  return s;
+}
+
+SceneSubject subject_zixx_spring_centreline_top() {
+  SceneSubject s = subject_zixx_spring_top();
+  s.name = "zixxtrixx-spring-centreline-top";
+  s.creature_deemphasize_fins = true;
+  s.note = "DIAGNOSTIC: fixed high-three-quarter whole-S centreline read with "
+           "tail blades materially de-emphasized";
+  return s;
+}
+
 // DIAGNOSTIC (deliberately NOT in kLibrary, so it never ships to the site):
 // a near-LEVEL orbit for the Front.png acceptance test -- "a straight-on
 // view must look like the frontal sketch". The showcase camera looks down
@@ -5692,6 +5742,10 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-attack")) rc |= render_scene(subject_zixx_attack());
   if (wanted("zixxtrixx-spring-side")) rc |= render_scene(subject_zixx_spring_side());
   if (wanted("zixxtrixx-spring-top")) rc |= render_scene(subject_zixx_spring_top());
+  if (wanted("zixxtrixx-spring-centreline-side"))
+    rc |= render_scene(subject_zixx_spring_centreline_side());
+  if (wanted("zixxtrixx-spring-centreline-top"))
+    rc |= render_scene(subject_zixx_spring_centreline_top());
   if (wanted("zixxtrixx-fall")) rc |= render_scene(subject_zixx_fall());
   if (wanted("zixxtrixx-front")) rc |= render_scene(subject_zixx_front());
   if (wanted("zixxtrixx-side")) rc |= render_scene(subject_zixx_side());
