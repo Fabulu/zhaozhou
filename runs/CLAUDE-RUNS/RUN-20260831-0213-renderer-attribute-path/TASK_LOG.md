@@ -337,3 +337,85 @@ invented. Docketed **D18**; it does not reorder the 53 MHz work.
 * Early-Z / Edgewalk / Binner / FBWRITE — deliberately NOT touched yet. The
   owner's instruction is to fit each step rather than batch them, and the
   measurement decides the next target, not the prediction.
+
+### The other lane, unblocked
+
+The v9 / coil-motion session had posted two freeze notices holding until an
+explicit final-main handoff supplied both main SHAs. Fabian asked for it to be
+unblocked, so `reports/ACTIVE-V9-HANDOFF.md` supplies them.
+
+**Five `SendMessage` attempts failed to route** and `ListAgents` reported nothing
+reachable, while that session was demonstrably alive and reading git — it quoted
+this session's own SHAs back. **The repository was the working channel.** The
+file went in `reports/` rather than the v9 run folder because that folder was
+inside its declared freeze, and because a run folder orphans anything durable on
+the next pass.
+
+Chasing the SHAs found something it needed: **`450acc4` was not on Upheaval
+main.** It sat on `zixxtrixx-v9-cel-main` — 1 ahead of, 23 behind — and that
+session's notice said "Upheaval remains 450acc4", i.e. it was holding a branch
+tip as a main SHA. It then closed the old pass as **abandoned**, which would have
+deleted the only copy of the mana-territory document Fabian dictated that day.
+
+Cherry-picked onto Upheaval main on his instruction: `f80e70a -> 2ad25aa`.
+**Verified at the BLOB level (`1739ef96…` both sides), not by diffing text** — a
+text diff reported all 447 lines changed, which was purely a CRLF/LF checkout
+artifact and would have been misleading in either direction.
+
+**The lesson: `git checkout` of a shared repo puts new work on whatever branch
+HEAD happens to point at.** The design document landed on someone else's
+abandoned working branch by accident, and only survived because chasing an
+unrelated question exposed it.
+
+### Two blocks advanced, and one deliberately not over-claimed
+
+`CONSOLE_REMAINING.md`'s "already built, ledger stale" row is closed.
+`TERRAIN.PATCH` and `GEOM.WCACHE` move REFERENCE_COMPLETE -> UNIT_VERIFIED,
+verified by RUNNING the gates rather than reading the audit: 1,409 + 14,730 +
+73 + 7 checks.
+
+**Not RTL_VERIFIED, deliberately.** This ledger's convention is that
+RTL_VERIFIED carries composed-demo evidence, and neither block has been
+exercised in one. Claiming the higher state is exactly the status inflation the
+audit exists to correct.
+
+`GEOM.WCACHE`'s notes now record why an audit called it unbuilt: the RTL is
+`zhao_geom_wcache.sv` over `zhao_vertex_arena.sv`, and the arena implements the
+contract without citing it. **A block can be finished under any name — search
+for the TEST as well as the contract path.**
+
+### What "finish the console" actually means, per the audit
+
+`CONSOLE_REMAINING.md`: of 92 blocks, **the number buildable today from what is
+written down is zero.** Not because they are hard. Seven have contracts that are
+15 TODO sections; ten are the particle/2D/compositor blocks under standing
+instruction not to invent behaviour for; six wait on a physical board. **The
+console cannot be finished by writing RTL right now** — it is finished by
+closing timing, fixing correctness bugs, writing the missing laws, and
+correcting the ledger.
+
+### Still owed — the 53 MHz
+
+The re-fit is in the fitter (started 19:31; the previous fitter stage took 61
+minutes). Elaboration and synthesis both clean, 0 errors.
+
+**Until TimeQuest reports, 53.48 MHz stands and no better number is quoted.**
+
+The four remaining named offenders are READ but deliberately UNTOUCHED:
+
+| offender | structure |
+|---|---|
+| EDGEWALK | 16 columns x 3 edges of ACC_W shift-add + fill test, then a serial popcount and a 16-deep priority selector |
+| EARLY-Z | `&acc_mask_next`, a 256-input AND reduction combinational after the current fragment |
+| BINNER | `k_mul_tile`, 23x11 signed products |
+| FBWRITE | dynamic byte-mask on a fixed-protocol hot path |
+
+**They stay untouched until the fit names the next one.** The architecture note
+predicted EDGEWALK first; the measurement put FRAGMENT in all 400 worst paths
+and EDGEWALK nowhere in them. `tools/quartus/export_worst_paths.tcl` is already
+committed, so the next offender will be NAMED rather than guessed.
+
+Reading EDGEWALK closely also argues against touching it blind: its per-column
+`gi * sx` is already a 4-term shift-add over shared partial sums, roughly two
+levels, not the naive chain the phrase "wide row" suggests. A speculative
+rewrite could easily cost a day and buy nothing.
