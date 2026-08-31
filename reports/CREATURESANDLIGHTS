@@ -1,0 +1,607 @@
+After reading the other new files you need to read, read this one to fill holes, clarify, unify, and show you how it should be done:
+
+Verdict
+
+Keep all of it. The cape/hair motion, bounded creature deformation, multi-light cel shading, and proper exterior ink are compatible with Zhaozhou.
+
+They should not be implemented as four unrelated gimmicks. They belong in one creature-presentation lane that collapses expensive work at the right level:
+
+motion is solved per bone on the HPS;
+point-light geometry is reduced per creature or meshlet;
+lighting is accumulated per unique vertex;
+toon quantisation happens once per surviving cel fragment;
+outlines are generated once per view from an explicit visible-creature mask.
+
+The only genuinely awkward feature is the exact exterior outline. Even that is not a capacity crisis; it is a connected-component-processing problem that needs a purpose-built sequential algorithm rather than a dumb framebuffer edge filter.
+
+One large caveat: the current composed renderer only achieved 53.48 MHz, and the present skin block independently fits at 89.65 MHz, so these feature guarantees depend on first completing the timing surgery already placed in the repository. main remains at ea2df36c; none of the MHz, secondary-motion, or combined creature-presentation implementation has landed yet.
+
+What actually exists today
+
+The tree is further along conceptually than physically:
+
+Capability	Current state
+Smooth three-band toon	RTL exists; exact differential tests and streamed rate pass
+Ambient + key + fill lighting	Working reference implementation
+One dynamic point light	Working reference implementation, currently expensive per vertex
+Radial squash/spread deformation	Complete fixed-point reference and asset metadata
+Sparse cape/hair pose patch	Specification only
+Proper exterior-only ink	Exact software reference only
+Position skinning	RTL and provisional Quartus fit
+Normal skinning	Reference only; current RTL outputs positions, not normals
+Complete creature lane in shell	Not built or fitted
+
+The toon unit measures 4.11 clocks per surviving cel fragment, or approximately 405,515 fragments per 60 Hz frame, against a 320,000-fragment stress target. But that is a simulation throughput result: RASTER.TOON has not been entered into the committed per-block Quartus map/fit table and was not present in the 53.48 MHz composed fit. It is algorithmically fast enough, but not yet physically proven.
+
+GEOM.SKIN, with the intended three multiplier lanes, currently costs 2,225 ALMs, 1,696 registers and 9 DSP blocks, reaching 89.65 MHz in its provisional standalone fit. It issues one weighted vertex every 12 clocks. That rate is just sufficient for the 120,000-vertex target once the clock is near 100 MHz, but it is not yet a comfortable timing result and must not have more combinational logic bolted onto its output.
+
+There is also a specification inconsistency to repair before lighting RTL is frozen. The older creature law describes transforming each normal by each bone, taking two Lambert values, and blending those scalar results. The live reference has since been corrected: it transforms both normals, blends the normal vector, renormalises that result, and only then takes Lambert. That repair removed bright patches around mixed-weight joints. The live reference should become the law.
+
+The complete architecture
+HPS / authentic PC / ZEMU
+────────────────────────────────────────────────────────────
+game simulation
+  ├─ authored animation state
+  ├─ deterministic secondary-motion solver
+  ├─ spell-light spatial catalogue
+  ├─ stable top-K light selection per visible creature
+  └─ presentation-quality decisions from The Measure
+
+frame-local presentation records
+  ├─ pose handle
+  ├─ sparse secondary-bone patch
+  ├─ deformation sample
+  ├─ light-set handle
+  ├─ ink style / width
+  └─ representation rung
+
+FPGA geometry and raster
+────────────────────────────────────────────────────────────
+MESHFETCH
+  → VDECODE
+  → fixed CREATURE.DEFORM
+  → base-pose / sparse-patch matrix selection
+  → SKIN.POS + SKIN.NORM
+  → CREATURE.LIGHT
+  → PROJECT / CLIP
+  → PARAMBUF
+  → BINNER / EDGEWALK / INTERP
+  → Early-Z
+  → TEXJOIN / TMU / material combiner
+  → RASTER.TOON
+  → FRAGMENT / TILESTORE
+       └─ parallel INKSTORE metadata
+  → RESOLVE
+       ├─ RGB565 framebuffer stream
+       ├─ effect-tag gather
+       └─ full-resolution ink-seed stream
+  → POST.INK exterior classification and dilation
+  → POST.COMPOSITE / scanout
+
+The ordering matters:
+
+Fixed shape deformation happens in bind/model space.
+Secondary bones modify the pose.
+Position and normal are skinned once.
+All selected lights accumulate into vertex RGB.
+RGB is interpolated through the existing exact ATTRSTEP path.
+Toon bands quantise the interpolated light.
+The texture modulates that banded lighting.
+Fog is applied.
+Ink is overlaid at the end of the post chain.
+
+That reuses the renderer’s intended attribute-bearing vertex packet and bounded material path instead of inventing a creature shader. TEXJOIN continues to produce one final texel packet after its bounded zero-to-three samples, and RASTER.FRAGMENT remains ignorant of how the creature was animated or lit.
+
+1. Cape, hair and everything else wobbly
+Build secondary-motion bones, not cape support
+
+The runtime solver should support short chains and tiny lattices:
+
+cape
+ponytail or braid
+chunky hair strands
+coat tails
+belts and straps
+tails
+floppy ears
+antennae
+pendants and tassels
+creature tendrils
+
+The simulation runs at a deterministic fixed 60 Hz on the shared HPS/PC/ZEMU implementation. Its inputs are:
+
+authored target pose
+root linear acceleration
+root angular acceleration
+world wind
+gravity
+spring stiffness
+damping
+bend and twist limits
+simple body collision proxies
+
+The main cape could use two three- or four-bone columns, giving 6–8 cape bones. A ponytail generally needs three. Two larger loose strands might use two bones each.
+
+A sensible hero budget remains:
+
+body / weapon / face     20–22
+cape                       6
+hair                       3–4
+──────────────────────────────
+total                    29–32
+
+That stays inside the existing hard 32-bone limit and maps naturally to the existing two-influence vertex format.
+
+Use a sparse matrix patch in v1
+
+The shared pose cache must remain shared. It is keyed around {creature type, clip, frame}; mutating its cape bones would mutate every instance using that pose.
+
+For v1, the cleanest transport is a bounded sparse override:
+
+SecondaryPatch {
+    instance_id
+    bone_mask[32]
+    final_skin_matrix[patched_bone_count]
+}
+
+The HPS computes those few final matrices using the same fixed-point creature library used by authentic PC and ZEMU. The FPGA’s bone-matrix selector checks the patch mask first and otherwise uses the shared pose palette.
+
+This is not the rejected “upload 32 matrices for every creature” path. Even a maximal 12-bone patch is only:
+
+12 × 48 bytes = 576 bytes per hero per frame
+
+That is about 34.6 KB/s for the hero. A hundred creatures averaging four patched bones would be roughly 1.15 MB/s. The pose-cache economy remains intact because the unmodified body bones are still shared.
+
+When GEOM.LOOM eventually exists, it may generate those same sparse matrices from local quaternion overrides internally. The game-side semantic does not have to change. Loom is currently specified as a parent-before-child transform stream and should not become a cloth simulator.
+
+Bound it hard
+
+I would freeze these content limits:
+
+maximum bones per secondary group       8
+maximum groups on one hero              3
+maximum patched bones per instance     12
+maximum body collision proxies          6
+
+No self-collision. No triangle collision. No arbitrary world collision in v1. Use head, shoulder, torso, pelvis and thigh capsules or spheres.
+
+A hero cape should be modelled as a very thin closed shell, with separate outside and inside normals. That avoids needing special two-sided cel-lighting rules when it flips overhead.
+
+2. Fixed creature deformation
+
+This is not “general deformation.” The reference already defines a very narrow and useful machine:
+
+sample:
+    flatten
+    spread
+
+per-vertex metadata:
+    centre
+    carrier point
+    radial / follower / none
+    cardinal axis
+    strength
+
+A radial vertex contracts along one authored axis and expands across the perpendicular plane. A follower moves with the carrier contraction without having its own geometry crushed. Unmarked vertices and zero samples take an exact identity bypass. Normals receive the corresponding inverse-transpose correction and integer renormalisation.
+
+That should become a small registered stage before skinning:
+
+VDECODE → CREATURE.DEFORM → SKIN
+
+Do not fuse it into GEOM.SKIN’s current 89.65 MHz path. Give it its own ready/valid stage and internal tag. Because position skinning accepts a weighted vertex only every 12 clocks, the deform stage may take several cycles per affected vertex without limiting the complete lane, provided it is pipelined or bypasses ordinary vertices immediately.
+
+GEOM.WARP remains deferred and unnecessary. Arbitrary per-vertex programs sampling wind fields would be the genuinely expensive version; this bounded sidecar is not.
+
+3. Skin the normal once
+
+The current reference repeatedly calls skin_normal_lambert for key, fill and point light. That means it effectively repeats the transformed-normal work for each light. The hardware should not reproduce that structure.
+
+Build a parallel normal pipeline:
+
+SKIN.POS
+    exact existing position law
+
+SKIN.NORM
+    A.rotation × bind_normal
+    B.rotation × bind_normal
+    weight blend
+    one renormalisation
+    compact world-normal output
+
+Then every light performs only:
+
+lambert = max(0, dot(world_normal, light_direction))
+
+The bind normal is only signed 8-bit per component, so this path uses much narrower products than the 32×32 position skinning farm. It should run beside the position engine and join by sequence tag, rather than extending the position engine’s critical path.
+
+The resulting lit vertex is cached in GEOM.PARAMBUF and reused by all tile references. A triangle touching thirty tiles must not be relit thirty times.
+
+4. Spell-heavy multi-lighting
+Separate “number of lights in the world” from “lights evaluated on a creature”
+
+You may have hundreds of spell effects carrying light emitters. The FPGA must never loop over all of them.
+
+The shared runtime owns a spatial light catalogue:
+
+LightEmitter {
+    stable source_id
+    world position
+    inner radius
+    outer radius
+    RGB gain
+    authored priority
+    flags
+}
+
+A spatial grid finds nearby candidates. For every visible creature, the runtime deterministically selects the strongest relevant lights using:
+
+estimated intensity at the creature’s bound;
+projected importance;
+authored priority;
+stable source-ID tie-breaking;
+hysteresis and a minimum hold so light sets do not flicker between nearly equal candidates.
+
+Weak lights that did not win a slot are accumulated into a clamped coloured spill ambient. That preserves the impression of a battlefield full of magic without calculating a directional Lambert term for every spark.
+
+Large lightning or explosion flashes should use a global view/world flash envelope rather than consuming one slot on every creature.
+
+Particles, star sprites and magical glows already have an entirely different cheap path: their geometry writes the existing effect-tag channel and the post system blooms it. A hundred glowing sparks therefore do not imply a hundred diffuse lights. The effect-tag convention and undithered resolve path already exist for this type of use.
+
+Reduce point-light geometry before the vertex loop
+
+The current reference supports one exact point light, but it calculates vertex-to-light delta, integer square root, normalisation and attenuation separately at every vertex. That is an excellent quality oracle and a poor multi-light silicon architecture.
+
+For hardware, compute one light context per meshlet and selected light:
+
+meshlet centre → light delta
+              → distance
+              → normalised direction
+              → folded RGB × attenuation
+
+A meshlet has at most 64 unique vertices and a local bound sphere. Once the context exists, all its vertices use the same direction and attenuated colour. Hero meshlets should have a compiler-enforced radius ceiling so this approximation remains visually close even when a spell is near.
+
+The current exact one-point implementation remains the comparison oracle. A bake-off should compare:
+
+exact per-vertex point light;
+per-creature constant context;
+per-meshlet constant context.
+
+I expect the per-meshlet result to survive 240p very well. Should one extremely close light still show a visible difference, reserve an exact-near slot for the hero’s strongest light only; do not make every local light exact.
+
+Light-core structure
+
+For each light contribution:
+
+Stage L0: Nx×Lx, Ny×Ly, Nz×Lz
+Stage L1: add, clamp Lambert
+Stage L2: Lambert × RGB, accumulate
+
+A six-DSP implementation can accept one full coloured light contribution per clock after filling:
+
+three products for the dot;
+three products for RGB scaling.
+
+Accumulate all contributors in a widened lane, clamp once, and quantise each RGB channel to the existing 1/16 gain ladder once after the complete sum. Do not quantise separately after each light; the current reference sums ambient, key, fill and point contribution before quant_shade.
+
+How many lights?
+
+At the 120,000-vertex content target, with one coloured light accepted per clock:
+
+Creature tier	Local spell lights	Directional terms including key + fill	Light jobs/frame
+Far	0–1	2–3	240k–360k
+Mid	2	4	480k
+Near/full creature	4	6	720k
+Hero/boss target	6	8	960k
+Descriptor maximum	8	10	1.20m
+
+Ambient and coloured spill do not need dot products.
+
+At 100 MHz there are approximately 1.667 million clocks in a 60 Hz frame. The intended skin engine produces a weighted vertex every 12 clocks; a serial light accumulator can therefore process key, fill and up to eight local terms within roughly the same per-vertex interval. This is why an eight-slot descriptor is architecturally sensible.
+
+My commitment would be:
+
+Four local lights guaranteed for a full-detail near creature.
+Six local lights as the target for the main character and bosses.
+Eight local lights as the hard format ceiling, enabled only when measured room exists.
+Do not promise eight on every full-detail creature simultaneously.
+
+Including ambient, world key and world fill, the hero can therefore respond to approximately nine conceptual contributors:
+
+ambient + key + fill + 6 local spell lights
+
+The current 53.48 MHz machine cannot uphold this tier. At that clock, position skinning with II=12 would deliver only about 74,000 weighted vertices per frame, already below the 120,000 demand before lighting. The light architecture is not the reason for the problem; restoring the intended clock is the prerequisite.
+
+Preserve the low-poly face character
+
+The live reference blends approximately:
+
+80% smooth vertex Lambert
+20% triangle-face Lambert
+
+That stops coherent normals from making the hand-cut creature look like smooth plastic.
+
+Use the full 80/20 treatment for:
+
+world key;
+world fill;
+the strongest local light on near/hero creatures.
+
+The remaining local lights may use the smooth normal only. A higher hero tier can enable face response for two local lights if the measured triangle-light workload allows it. “Drop local face terms” should be the first lighting degradation step before removing an entire light.
+
+What these local lights do not include
+
+They are coloured diffuse illumination. They do not imply:
+
+shadow maps;
+per-pixel normals;
+normal maps;
+per-light specular highlights;
+arbitrary fragment shaders.
+
+Coarse light occlusion may be evaluated on the HPS for the selected top-K lights using terrain or room visibility, then folded into their intensity. The FPGA does not need to cast spell shadows.
+
+5. Toon shading after multiple lights
+
+Multiple lights do not multiply toon cost.
+
+All world and spell-light contributions become one RGB lighting value at each vertex. Those three RGB lanes are interpolated. RASTER.TOON then performs one ratio-preserving band operation on the surviving fragment, regardless of whether that colour came from two lights or eight.
+
+The existing law is the correct one:
+
+mean = (R + G + B) / 3
+q    = authored band selected from mean
+R'   = R × q / mean
+G'   = G × q / mean
+B'   = B × q / mean
+
+That changes intensity bands without turning coloured firelight, blue portals or green poison into grey. The current unit preserves C++ truncation toward zero and has exact tests around threshold and negative-rounding cases.
+
+The ordering should remain:
+
+selected diffuse lights
+→ per-vertex RGB
+→ interpolation
+→ toon ramp
+→ texture modulation
+→ fog
+
+Spell surfaces that are themselves emissive or additive do not pass through the creature’s diffuse toon ramp. They use their existing additive recipes and glow tags.
+
+Cel fog needs an explicit owner ruling
+
+The current general law applies fog to vertex colour before rasterisation. For cel material, that makes the toon ramp quantise the fog itself into hard bands.
+
+I recommend a cel-material exception:
+
+unfogged interpolated lighting
+→ toon
+→ texture modulation
+→ fog mix
+
+That needs one additional interpolated fog factor, which is now cheap because RASTER.ATTRSTEP has replaced the old per-pixel divide burden. It is still a visible semantic change and should be recorded explicitly rather than smuggled into the implementation. The cel report already flags this as Class C.
+
+6. Proper exterior ink
+What “proper” means here
+
+The current celmain reference does exactly this:
+
+Construct the visible creature mask.
+Flood the background from the viewport border using four-neighbour connectivity.
+Treat only reached background as exterior.
+Dilate the creature outward through that exterior using eight-neighbour connectivity.
+Never overwrite a creature pixel.
+Leave enclosed holes unoutlined.
+
+That is why the S-shaped enclosed opening remains clean.
+
+Its current adaptive line law is:
+
+projected radius ≤ 120 px      → 1 px
+120..200 px                    → transition toward 2 px
+200..360 px                    → transition toward 4 px
+projected radius ≥ 360 px      → 4 px
+
+with ink colour approximately {26,24,22}.
+
+This is not an inverted hull and should not become one. A mask-space outline automatically follows cape motion, hair motion, squash deformation and mesh silhouette without exposing meshlet seams.
+
+Do not widen the frozen tile word
+
+The tile word is already frozen at:
+
+24-bit RGB
+ 8-bit effect tag
+24-bit depth
+ 8-bit stencil
+
+Keep it that way. Add a parallel ping-pong RASTER.INKSTORE, indexed exactly like the colour tile store.
+
+A useful nibble per visible pixel is enough:
+
+bits 1:0   ink group
+bits 3:2   width code: none / 1 / 2 / 4
+
+On a depth-passing opaque fragment:
+
+an inked creature writes its group and width;
+a closer ordinary opaque surface writes zero and occludes the ink;
+translucent/additive depth-preserving effects leave the underlying ink metadata alone;
+an alpha-tested fragment writes only when it survives.
+
+At tile resolve, the metadata streams out beside RGB565 and the effect tag. RASTER.RESOLVE already emits one pixel per clock and already carries an undithered side channel, so this is the natural seam.
+
+Full-resolution ink-seed buffer
+
+Ink cannot use the planned quarter-resolution glow/distortion buffers; a 1 px outline requires full resolution.
+
+A packed four-bit seed map costs:
+
+Mode	Pixels	Four-bit ink seed
+Storm 320×240	76,800	37.5 KiB
+Z60 384×240	92,160	45 KiB
+Duo 512×240	122,880	60 KiB
+
+That is small. The hard part is connectivity, not storage.
+
+Use a scanline-span exterior engine
+
+Do not perform a CPU-style pixel queue in SDRAM and do not repeatedly sweep the whole screen until nothing changes.
+
+The recommended exact hardware algorithm is a scanline-span flood:
+
+Build a 1-bit subject mask from nonzero ink seeds.
+Keep subject and exterior bitsets in banked on-chip RAM.
+Seed every background run touching an active viewport border.
+Push horizontal spans {y, x0, x1} into a sequential FIFO in local SDRAM.
+Pop one span, scan the neighboring rows for new unvisited background runs, mark them exterior, and enqueue those spans.
+Continue until the span FIFO empties.
+
+Each background pixel is marked once. The queue is sequential rather than random and may be conservatively bounded. On overflow, suppress ink for that view and increment an error counter; never guess connectivity and accidentally fill an enclosed hole.
+
+Duo must be treated as two separate view rectangles. Each view seeds from its own border; the center boundary between views is not a route from one player’s exterior into the other’s.
+
+Variable-width dilation in four passes
+
+Once exterior is known, the 1/2/4 px ring needs no general flood.
+
+Treat each creature pixel as carrying a remaining radius. Run four bounded eight-neighbour max-propagation passes:
+
+next_radius = max(neighbour_radius - 1)
+
+but allow propagation only through exterior pixels. Carry ink group and priority with the winning radius. Four one-pixel-per-clock passes over Duo are approximately 492,000 pixel operations, and fewer in Z60 or Storm.
+
+The final ring condition is:
+
+exterior && propagated_radius > 0
+
+This exactly gives the union of adaptive Chebyshev-radius dilations while retaining the exterior-only rule.
+
+Creature-to-creature boundaries
+
+Running the flood independently for hundreds of objects would be wasteful. Use a few groups:
+
+0  no ink
+1  player / priority hero
+2  ordinary creature
+3  boss / special
+
+The exterior outline operates on the union. Touching ordinary creatures may merge into one silhouette, which is acceptable for an army. A simple one-pixel group-discontinuity rule can preserve the player’s boundary when the player overlaps an ordinary creature, drawing on the lower-priority side.
+
+Full eight-bit per-object outline ownership can be added later, but I would not make it a v1 requirement without a visual case proving that the four-group solution fails.
+
+Post ordering
+
+The full-resolution ink ring is part of the framebuffer slot bundle. During scanout/post:
+
+Compute any distortion/refraction source coordinate.
+Sample both colour and ink using that same displaced coordinate.
+Apply bloom, haze and colour grading to colour.
+Overlay ink last.
+
+That keeps the line crisp while still allowing shockwaves and refraction to bend it. A global white flash should normally happen before ink, preserving the dark drawn line; changing that is an art decision.
+
+The colour framebuffer, effect buffers and ink sidecars must share the same framebuffer lease and generation. A frame is publishable only after colour writes, ink classification, dilation and sidecar writes have all retired. The existing slot manager’s whole purpose is preventing a partially written presentation bundle from becoming visible.
+
+7. The Measure controls spectacle
+
+These features need per-view deterministic degradation rather than binary enable/disable.
+
+Under pressure, degrade in this order:
+
+Drop optional second/third material texture samples.
+Remove local-light face terms.
+Reduce local lights 6 → 4 → 2 → 0.
+Collapse omitted lights into coloured spill.
+Reduce ordinary-creature ink 4 → 2 → 1 px.
+Merge ordinary ink groups.
+Move creatures down mesh → micro-mesh → splat → glint.
+
+Protected properties:
+
+the player retains at least a 1 px outline;
+the player retains secondary motion at the hero rung;
+world ambient/key lighting remains;
+one view’s spell storm cannot consume the other view’s guaranteed tier;
+degradation never mutates gameplay state.
+
+The existing governor and token architecture already wants representation IDs and per-view accounting; light count, ink tier and material sample count should become explicit parts of that representation contract.
+
+Revised risk assessment
+
+The earlier single number mixed hardware capacity with engineering awkwardness. Separating them is more honest:
+
+Feature	Capacity pressure	Engineering / semantic difficulty
+Toon bands	1/10	3/10 — still needs physical fit/integration
+Secondary bones	1/10	3/10 — sparse pose override seam
+Fixed radial deform	2/10	3/10 — exact normals/followers/bypass
+Four local creature lights	3/10	4/10 — light sets, normal lane, fit
+Six hero lights	4–5/10	4/10
+Eight lights on every full creature	7/10	5/10 — do not guarantee it
+Proper exterior ink	2–3/10	5/10 — exact connectivity and transaction
+General cloth/per-vertex programs	8–9/10	9/10 — deliberately excluded
+
+So deformation is not kinda bad. The fixed version is cheap. Secondary-bone movement is cheaper still. Proper exterior ink is not especially large, but it is the feature most likely to be implemented incorrectly if it is treated casually.
+
+Verification gates
+
+The lane needs more than pretty screenshots.
+
+For secondary motion:
+
+replay-identical sparse patches;
+identical console/PC/ZEMU matrices;
+hard-cut clip transition continuity;
+bend-limit and collision-proxy extremes;
+maximum patch count and malformed mask refusal.
+
+For deformation:
+
+exact identity bypass;
+radial and follower cases;
+normal inverse-transpose cases;
+micro-mesh sidecars matching their own topology;
+zero and maximum legal flatten/spread.
+
+For lighting:
+
+exact one-light compatibility with the current point-light oracle;
+inner- and outer-radius boundaries;
+coloured overlapping lights;
+stable top-K ties and hysteresis;
+spill clamping;
+4/6/8-slot workload traces;
+local-light reduction independently in each Duo view.
+
+For ink:
+
+the existing S-shaped enclosed hole;
+a cavity connected to the viewport by one pixel;
+diagonal connectivity proving four-neighbour exterior;
+diagonal dilation proving eight-neighbour ring growth;
+exact projected-radius width thresholds;
+closer non-ink occluder clearing the seed;
+translucent spell effect preserving the underlying seed;
+hero-versus-normal group boundary;
+queue-overflow suppression rather than corrupt output.
+
+The flagship combined capture should contain:
+
+the player with cape and hair moving in wind, fixed body deformation active, six differently coloured spell lights, dozens or hundreds of glowing emitters, an enclosed silhouette hole, another creature crossing the player, refraction, bloom, and both Duo views under different load.
+
+Implementation order
+Finish the 53 MHz repipeline. Get a controlled shell baseline and conventional renderer composition near 100 MHz with reserve.
+Make the live blended-and-renormalised normal law authoritative.
+Refactor the reference to skin a normal once and reuse it for every light.
+Build and fit the parallel SKIN.NORM pipeline.
+Build the existing fixed CREATURE.DEFORM reference as an independent RTL stage.
+Prototype sparse secondary matrix patches in HPS, PC and ZEMU; add patch-first palette selection.
+Build one-light CREATURE.LIGHT, then add the 4/6/8-slot frontier and per-meshlet light setup.
+Put RASTER.TOON through standalone map/fit and integrate it after ATTRSTEP; do not treat 4.11 clocks as Fmax evidence.
+Add parallel INKSTORE metadata and full-resolution seed writes at resolve.
+Implement scanline-span exterior classification and four-pass adaptive dilation.
+Extend the framebuffer transaction so ink/post sidecars retire before publication.
+Run the complete physical fit: shell + renderer + TMU/cache/AUX + Field/Earth + creature deform/skin/light/toon + ink/post.
+
+Only after step 12 should “four lights guaranteed” and “six on the hero” graduate from a sound architecture target to a hardware-backed console promise.
+
+The important conclusion is that your art direction is not fighting the machine. It is unusually well aligned with it: a few expressive bones, bounded deformation, strong per-vertex coloured lighting, broad toon bands and screen-space silhouette ink buy far more visible character at 240p than expensive general-purpose shading would.
