@@ -283,7 +283,8 @@ Source ids propagate, so a refused descriptor is attributable to the command
 that introduced the instance.
 
 ## Scalar reference function
-`zref::meshfetch::decide(descriptor, instance, cameras, lod_target)`, returning
+`zref::MeshFetch` (ledger `reference_model`), whose entry point is
+`decide(descriptor, instance, cameras, lod_target)` returning
 `{ accepted, refusal_reason, visible_mask, rung, hold }`.
 
 It must **compose the two existing oracles rather than restate them**:
