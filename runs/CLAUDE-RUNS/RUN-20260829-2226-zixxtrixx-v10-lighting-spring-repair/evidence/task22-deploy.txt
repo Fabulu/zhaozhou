@@ -1,0 +1,13 @@
+assemble: wrote C:\programmieren\zencrifice\zhaozhou\runs\CLAUDE-RUNS\RUN-20260829-2226-zixxtrixx-v10-lighting-spring-repair\work\Upheaval-v10\website\public\index.html - 1 creature(s), 117 render(s)
+deploying C:\programmieren\zencrifice\zhaozhou\runs\CLAUDE-RUNS\RUN-20260829-2226-zixxtrixx-v10-lighting-spring-repair\work\Upheaval-v10\website\public -> project 'upheaval', branch 'main'
+
+ ⛅️ wrangler 4.86.0
+───────────────────
+Uploading... (193/236)
+Uploading... (207/236)
+Uploading... (221/236)
+Uploading... (236/236)
+✨ Success! Uploaded 43 files (193 already uploaded) (4.50 sec)
+
+🌎 Deploying...
+✨ Deployment complete! Take a peek over at https://606f25e1.upheaval.pages.dev

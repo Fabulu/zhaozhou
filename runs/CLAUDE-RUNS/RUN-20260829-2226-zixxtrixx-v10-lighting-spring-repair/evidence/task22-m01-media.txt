@@ -1,0 +1,9 @@
+Zixxtrixx v10 bounded M01 final media/site verdict
+first_verifier_bookkeeping_only=raw index hash included assemble.py intentional UTC-minute stamp; nested archived collection children do not inherit archive=true, so exact subject names are the correct live predicate
+first_media_checks=all 21 VP9/dimension/fps/frame/duration predicates, all 21 exact source posters, and all 63 bounded start/middle/end seek-decodes passed; hashes are preserved in task22-m01-media-first-verifier.txt
+assemble=assemble: wrote C:\programmieren\zencrifice\zhaozhou\runs\CLAUDE-RUNS\RUN-20260829-2226-zixxtrixx-v10-lighting-spring-repair\work\Upheaval-v10\website\public\index.html - 1 creature(s), 117 render(s)
+assembly_content_idempotent_ignoring_declared_stamp=True normalized_index_sha256=494010631bca5ac0384595ccecce358859383653b472c997c61ae72a31319443 final_index_sha256=14d00a1a21b6caafdae1d03e60a65955546cac774c55d3fa1540e702e7df15e0
+robots_exact_count=1 v10_copy=True archive_v9_copy=True
+declared_render_entries=117/117 exact_live_subject_webm=21/21 exact_v9_archive_webm=21/21 missing_media=0
+bounded_media_evidence_ok=True total_live_frames=5744 total_live_webm_bytes=9389494
+M01 MEDIA: PASS — no media/decode mismatch and therefore no exhaustive catalogue decode trigger

@@ -1,0 +1,5 @@
+salto-dummy: 122 keys/243 ticks; impact 61; root apex 3052 mm; 1 whole turns + aim fraction; max root step 475 mm; tip (4949,104), gap 427 mm; extract 1199 mm; final tip (4049,897)
+salto-fly: 123 keys/245 ticks; impact 62; root apex 6407 mm; 2 whole turns + aim fraction; max root step 656 mm; tip (4093,2890), gap 426 mm; extract 1199 mm; final tip (3349,3831)
+salto-six: 133 keys/265 ticks; impact 90; root apex 12000 mm; 6 whole turns + aim fraction; max root step 2130 mm; tip (5346,-399), gap 424 mm; extract 1199 mm; final tip (5013,753)
+salto-nine: 184 keys/367 ticks; impact 123; root apex 24000 mm; 9 whole turns + aim fraction; max root step 3042 mm; tip (8636,-54), gap 426 mm; extract 1198 mm; final tip (8357,1112)
+STRIKETIP: PASS — duration, apex, turns/wrap, continuity, hold, extraction, delayed recoil and recovery

@@ -1,0 +1,22 @@
+Zixxtrixx v10 production verification — corrected verdict
+
+First-verifier bookkeeping only
+- The first verifier incorrectly required 117 `<video>` elements.
+- The generated 117-entry site contains 115 videos plus 2 static render images, exactly 117 declared render entries.
+- This was a verifier classification error, not a site, media, deployment, or content failure.
+- The first cache-bypassed HTTP evidence is preserved in task22-production-verify.txt; no successful media requests were repeated.
+
+Facts already obtained from the deployment alias and production URL
+- https://606f25e1.upheaval.pages.dev: index HTTP 200 and exact local bytes.
+- https://upheaval.pages.dev: index HTTP 200 and exact local bytes.
+- Both indexes: 103157 bytes, SHA-256 c6b97182ca5c1c40aa175dc1a848277a89d332d963b5c440a4befa68a1e2ec69.
+- Both indexes contain exact `<meta name="robots" content="noindex, nofollow">` once.
+- Both indexes contain the v10 structural-lighting declaration and v9 archive declaration.
+- Both indexes contain 115 videos + 2 static render images = 117 render entries.
+- On both hosts, every bounded sample returned HTTP 200 and was byte-identical to local with cache-bypass:
+  - v10 knockdown WebM + PNG
+  - v10 jump-one WebM + PNG
+  - archived v9 knockdown WebM + PNG
+- Exact byte counts and SHA-256 values for all 12 remote media responses are preserved in task22-production-verify.txt.
+
+PRODUCTION VERIFY: PASS — deployment alias and production index/media are cache-bypassed and byte-identical to local; exact noindex,nofollow and v10/v9 declarations present.

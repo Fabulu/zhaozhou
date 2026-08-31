@@ -3684,6 +3684,20 @@ verilate(test_geom_wcache_directed
 add_test(NAME geom_wcache_directed COMMAND test_geom_wcache_directed)
 set_tests_properties(geom_wcache_directed PROPERTIES LABELS "fast;nightly")
 
+# The randomized half. design/blocks.yml has declared this path since the block
+# was registered and it had never been written -- the ledger's V6 check tolerates
+# that at SPECIFIED and refuses it from REFERENCE_COMPLETE up, so advancing the
+# maturity is what surfaced it.
+add_executable(test_geom_wcache_random geometry/geom_wcache_random.cpp)
+target_link_libraries(test_geom_wcache_random PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_wcache_random
+  PREFIX Vzhao_vertex_arena
+  TOP_MODULE zhao_vertex_arena
+  VERILATOR_ARGS -GARENAS=2 -GDEPTH=16 -GPAYLOAD_W=64 -GGEN_W=8
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_vertex_arena.sv)
+add_test(NAME geom_wcache_random COMMAND test_geom_wcache_random)
+set_tests_properties(geom_wcache_random PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # formal: the arena bounds law -- a lookup must never wrap into another vertex.
 # REGISTERED 2026-08-27, and it was deliberately unregistered before that: the
 # proof failed for three days and the notes in design/formal_runs.yml said so

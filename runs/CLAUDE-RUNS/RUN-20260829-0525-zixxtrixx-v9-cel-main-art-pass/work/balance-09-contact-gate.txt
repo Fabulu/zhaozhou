@@ -1,0 +1,83 @@
+bones=28 meshlets=37 verts=1776 tris=2188 | micro: 11 meshlets 606 tris, compiler micro_error=1048
+slot  1:  96 keys / 191 presentation samples; minY  -13 mm at 55; maxY  1406 mm; saturation 0
+slot  2:  40 keys /  79 presentation samples; minY  -19 mm at 18.5; maxY  1365 mm; saturation 0
+slot  3: 240 keys / 479 presentation samples; minY -547 mm at 74; maxY 14987 mm; saturation 0
+slot  4: 144 keys / 287 presentation samples; minY   66 mm at 2; maxY  4616 mm; saturation 0
+slot  5:  50 keys /  99 presentation samples; minY -222 mm at 12; maxY  1279 mm; saturation 0
+slot  6:  96 keys / 191 presentation samples; minY  -48 mm at 36; maxY  1310 mm; saturation 0
+slot  7: 224 keys / 447 presentation samples; minY  -66 mm at 162; maxY  2289 mm; saturation 0
+slot  8: 192 keys / 383 presentation samples; minY  -12 mm at 123; maxY  1361 mm; saturation 0
+slot 45:  64 keys / 127 presentation samples; minY   -7 mm at 0; maxY  1304 mm; saturation 0
+slot 10:  18 keys /  35 presentation samples; minY  -20 mm at 1.5; maxY  1410 mm; saturation 0
+slot 11:  13 keys /  25 presentation samples; minY  374 mm at 0.5; maxY  3513 mm; saturation 0
+slot 12:   2 keys /   3 presentation samples; minY  909 mm at 0; maxY  2152 mm; saturation 0
+slot 13:   9 keys /  17 presentation samples; minY  -50 mm at 7.5; maxY  3994 mm; saturation 0
+slot 14:  10 keys /  19 presentation samples; minY  150 mm at 2; maxY  2438 mm; saturation 0
+slot 15:   2 keys /   3 presentation samples; minY  918 mm at 0; maxY  1249 mm; saturation 0
+slot 16:  12 keys /  23 presentation samples; minY   50 mm at 4; maxY  1692 mm; saturation 0
+slot 17:  16 keys /  31 presentation samples; minY  -14 mm at 13.5; maxY  1249 mm; saturation 0
+slot 20:  26 keys /  51 presentation samples; minY  -57 mm at 13.5; maxY  1229 mm; saturation 0
+slot 21:  40 keys /  79 presentation samples; minY  -64 mm at 18; maxY  1237 mm; saturation 0
+slot 22:  26 keys /  51 presentation samples; minY  -81 mm at 9; maxY  1692 mm; saturation 0
+slot 23:  50 keys /  99 presentation samples; minY -245 mm at 12; maxY  1500 mm; saturation 0
+slot 24:  50 keys /  99 presentation samples; minY  -34 mm at 0.5; maxY  1282 mm; saturation 0
+slot 25:  50 keys /  99 presentation samples; minY  -12 mm at 10; maxY  1440 mm; saturation 0
+slot 26:  50 keys /  99 presentation samples; minY -120 mm at 0.5; maxY  1295 mm; saturation 0
+slot 27:  24 keys /  47 presentation samples; minY   -9 mm at 9.5; maxY  1412 mm; saturation 0
+slot 28:  96 keys / 191 presentation samples; minY  -60 mm at 46; maxY  1232 mm; saturation 0
+slot 30:  56 keys / 111 presentation samples; minY    1 mm at 32.5; maxY  1420 mm; saturation 0
+slot 31:  32 keys /  63 presentation samples; minY  -10 mm at 0; maxY   407 mm; saturation 0
+slot 33: 122 keys / 243 presentation samples; minY  -32 mm at 3; maxY  6295 mm; saturation 0
+slot 34: 123 keys / 245 presentation samples; minY  -32 mm at 3; maxY  9267 mm; saturation 0
+slot 35: 133 keys / 265 presentation samples; minY -439 mm at 90; maxY 15049 mm; saturation 0
+slot 46:  72 keys / 143 presentation samples; minY  -30 mm at 1.5; maxY  7508 mm; saturation 0
+slot 47:  72 keys / 143 presentation samples; minY  -30 mm at 1.5; maxY  7602 mm; saturation 0
+slot 48: 184 keys / 367 presentation samples; minY  -87 mm at 123; maxY 27068 mm; saturation 0
+slot 32:  62 keys / 123 presentation samples; minY   -7 mm at 37; maxY  1430 mm; saturation 0
+slot 36:  72 keys / 143 presentation samples; minY  991 mm at 3.5; maxY  3494 mm; saturation 0
+slot 29:  96 keys / 191 presentation samples; minY  -24 mm at 10.5; maxY  1362 mm; saturation 0
+slot 37:  98 keys / 195 presentation samples; minY   -8 mm at 60.5; maxY  1343 mm; saturation 0
+slot 38:  98 keys / 195 presentation samples; minY   -8 mm at 52.5; maxY  1361 mm; saturation 0
+slot 39:  45 keys /  89 presentation samples; minY  -15 mm at 14.5; maxY  1296 mm; saturation 0
+slot 40:  48 keys /  95 presentation samples; minY   -7 mm at 23.5; maxY  1319 mm; saturation 0
+slot 41:  72 keys / 143 presentation samples; minY   -8 mm at 38.5; maxY  1278 mm; saturation 0
+slot 42:  98 keys / 195 presentation samples; minY   -8 mm at 55.5; maxY  1357 mm; saturation 0
+slot 43:  98 keys / 195 presentation samples; minY   -6 mm at 53.5; maxY  1464 mm; saturation 0
+BALANCE support posed-vertex minima by bone: b14=-27..-25 b15=-27..-25 b16=-24..-22 b17=-16..-14 b18=-10..-8 b19=-3..-1 mm; least body regions=6 at 77; plateau all/blade -55/-55 mm
+BALANCE terrain: outside impact -55 mm at 97; declared impact -66 mm at 161 (bones 15/16)
+  ** FAIL: balance support phase exceeds its authored terrain bite
+  ** FAIL: balance has undeclared terrain penetration outside the flop
+slot  2 overlap: 90 samples/pairs, worst 103/300 mm at 18 (stations 37/45)
+slot  3 overlap: 1565 samples/pairs, worst 162/370 mm at 28.5 (stations 4/55)
+slot  5 overlap: 354 samples/pairs, worst 268/390 mm at 2 (stations 8/17)
+slot  6 overlap: 30 samples/pairs, worst 29/265 mm at 5 (stations 23/31)
+slot 11 overlap: 127 samples/pairs, worst 156/370 mm at 11 (stations 4/55)
+slot 12 overlap: 96 samples/pairs, worst 156/370 mm at 0 (stations 4/55)
+slot 13 overlap: 64 samples/pairs, worst 156/370 mm at 0 (stations 4/55)
+slot 24 overlap: 101 samples/pairs, worst 68/290 mm at 3 (stations 23/31)
+slot 26 overlap: 619 samples/pairs, worst 244/400 mm at 1 (stations 10/18)
+slot 27 overlap: 215 samples/pairs, worst 109/340 mm at 9 (stations 35/43)
+slot 28 overlap: 814 samples/pairs, worst 109/410 mm at 16 (stations 23/31)
+slot 33 overlap: 1245 samples/pairs, worst 157/370 mm at 39 (stations 4/55)
+slot 34 overlap: 1307 samples/pairs, worst 157/370 mm at 28.5 (stations 4/55)
+slot 35 overlap: 2872 samples/pairs, worst 157/370 mm at 43 (stations 4/55)
+slot 46 overlap: 2131 samples/pairs, worst 157/370 mm at 37 (stations 4/55)
+slot 47 overlap: 2122 samples/pairs, worst 157/370 mm at 21 (stations 4/55)
+slot 48 overlap: 4625 samples/pairs, worst 157/370 mm at 51.5 (stations 4/55)
+slot 36 overlap: 465 samples/pairs, worst 37/390 mm at 45.5 (stations 24/32)
+slot 29 overlap: 7 samples/pairs, worst 7/285 mm at 3.5 (stations 24/32)
+slot 39 overlap: 769 samples/pairs, worst 103/240 mm at 15 (stations 11/19)
+slot 41 overlap: 982 samples/pairs, worst 117/215 mm at 45 (stations 11/19)
+OVERLAP: 20600 sample/pair hits, all checked at keys + midpoints
+SPRING regions (deep minus rest centre Y): head=-595 neck=-551 front=-316 middle=141 grounded run=280 taper=333 tail=191 mm
+SPRING deepest: centre span 108 mm, mesh span 805 mm, minY 4 mm
+SPRING declared terrain bite: -32 mm (law -40..-15)
+JUMP slot 46: apex 4800 mm, turns 1, landing key 51, contact -30 mm, max 60 Hz station step 1080 mm at 50.5 station 56
+JUMP slot 47: apex 4800 mm, turns 3, landing key 51, contact -30 mm, max 60 Hz station step 1121 mm at 50.5 station 56
+HIT generic: front relative peak 255 mm at 2, tail relative peak 848 mm at 10, max 60 Hz step 265 mm at 8.5
+HIT sides: root shove R/L 229/230 mm, mirrored station error 80 mm
+HIT back/top: back root surge 259 mm; struck-length peaks 226/267 mm
+HIT air: whole-spear chord bow 181 mm at 6 station 27; max 60 Hz step 546 mm
+ATTACK slot 35: 133 keys / 265 samples, impact 90, contact committed -439 mm, outside -32 mm, max step 1182 mm at 89.5 station 3, saturation 0
+ATTACK slot 48: 184 keys / 367 samples, impact 123, contact committed -87 mm, outside -32 mm, max step 1695 mm at 122.5 station 1, saturation 0
+ZIXX PROBE: FAIL — 2 assertion(s)

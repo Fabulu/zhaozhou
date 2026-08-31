@@ -1,0 +1,57 @@
+=== Zhaozhou Effects Library ===
+
+ID                        Name                 Description                                        Status
+----------------------------------------------------------------------------------------------------
+star-s00-yellow           Yellow star          Classic main sequence star with full lens flare chain READY
+star-s03-red-giant        Red giant            Large cool star with boiling CLUT rotation         READY
+star-s11-pulsar           Pulsar               Compact neutron star with duty-cycle strobe        READY
+terrain-wave              Wave pool            Travelling radial wave, two full cycles per loop   READY
+terrain-impact            Impact wave          Expanding annular wave with debris and screen shake READY
+terrain-crater            Crater ring          Static crater with charred core and cracked ring   READY
+terrain-scars             Scars accumulation   Three strikes with persistent surface-sheet scars  READY
+terrain-orbit             Orbit                Textured deep-keel island, one 360-degree orbit    READY
+terrain-breach            Breach               Textured deep-keel island, 84 m pit punched through READY
+celestial-sky-sweep       Sky sweep            Camera pitch sweep horizon to zenith               READY
+celestial-flare-occlusion Flare occlusion      Sun crosses behind island with 15-frame fade       READY
+star-s01-blue-giant       Blue giant           Large hot star 15k radius, bright blue-white       READY
+star-s02-white-dwarf      White dwarf          Compact hot star 300 radius, fast spin             READY
+star-s04-orange-giant     Orange giant         Warm giant 15k radius, golden orange               READY
+star-s07-blue-dwarf       Blue dwarf           Compact hot star 2k radius, fast spin              READY
+star-s08-multiple         Multiple             Binary star system 4k radius                       READY
+star-s09-infant           Infant star          Young protostar with variable undertone            READY
+creature-wave-walk        Creature wave walk   Six-part quadruped strides through a wave, LOD ladder to glint READY
+creature-bulk-pop         Bulk inflate and pop Root-scale inflation releases 18 detached rotating chunks READY
+zixxtrixx-idle            Zixxtrixx idle       Relaxed S stance: breathing, bobbing, girth swell, lazy tail sway READY
+zixxtrixx-walk            Zixxtrixx walk       Caterpillar gait, vertical and longitudinal, fixed camera READY
+zixxtrixx-attack          Zixxtrixx triple salto Three somersaults, a diagonal javelin strike, 5 s planted; tracked READY
+zixxtrixx-fall            Zixxtrixx falling flail Panicked airborne corkscrew loop                   READY
+zixxtrixx-hit             Zixxtrixx hit flinch Damage recoil: the S snaps tighter, head whips, damped return READY
+zixxtrixx-death           Zixxtrixx death      Shudder, the S drains, keels onto its flank, one last tail curl READY
+zixxtrixx-balance         Zixxtrixx tail-balance Rears up on its tail toward an almost-spear, topples, gets back up READY
+zixxtrixx-look            Zixxtrixx look-around Curious head-aim idle: left, up, right, down, home READY
+zixxtrixx-knockdown       Zixxtrixx knockdown  Slammed onto its flank, held down, wakes and gathers back up READY
+zixxtrixx-hitfloor        Zixxtrixx landing    The fall's ending: flattens, slams with a bite, gets back up READY
+zixxtrixx-damage          Zixxtrixx directional hits Four flinches: off the blow right, back, left, and crushed from above READY
+zixxtrixx-run             Zixxtrixx run        The caterpillar gait at a hungry cadence, taller hump, nose in READY
+zixxtrixx-death2          Zixxtrixx death, second way Agony rear-up, forward collapse to prone, two tail slaps, still READY
+zixxtrixx-taunt           Zixxtrixx quick taunt Preserved fast cheeky head bobble over a loose body READY
+zixxtrixx-slow-taunt      Zixxtrixx slow taunt Neck-led left/right bends with a delayed funny head tilt READY
+zixxtrixx-salto-dummy     Zixxtrixx salto: grounded target The planner aims the spear at a standing dummy; mid-air hit, recoil READY
+zixxtrixx-salto-fly       Zixxtrixx salto: flying target The committed spear intercepts a hovering dummy at 3.2 m READY
+zixxtrixx-salto-six       Zixxtrixx salto: six somersaults The full apex earns six flips before the committed dive READY
+zixxtrixx-stance2         Zixxtrixx damaged stance Wounded with no HP bar: the S sags, weak breath, drooping fins READY
+zixxtrixx-tumble          Zixxtrixx tumble     Thrown: bunched around itself, end over end, hesitating as it tips READY
+zixxtrixx-death3          Zixxtrixx death, third way The S itself dies: unrolls forward into a line, nose sliding out READY
+zixxtrixx-stretch         Zixxtrixx stretch    A slow luxurious wave climbs the front; head back, fins flared READY
+zixxtrixx-forkwatch       Zixxtrixx fork-watch Looks back and watches its own tail fan open and shut, twice READY
+zixxtrixx-strike          Zixxtrixx quick strike The fast bite beside the salto: cock, snap forward, ring out READY
+zixxtrixx-notify          Zixxtrixx alert      Head up, fins flared, then listening stillness with slow scans READY
+zixxtrixx-bow             Zixxtrixx bow        One stately dip to the dirt, fins folded, and back up READY
+zixxtrixx-talk            Zixxtrixx talk       The head talks: irregular nods, phrase-turns, one emphatic dip READY
+zixxtrixx-sorrow          Zixxtrixx sorrow     The front sinks, one heavy sigh per loop, the tail-tip drags READY
+star-s05-brown-dwarf      Brown dwarf          Dim substellar object, no flare capability         TODO
+star-s06-grey-giant       Grey giant           Low luminosity giant, no flare                     TODO
+star-s10-runaway          Runaway              High-velocity star, no flare capability            TODO
+
+Render with: zhao-reel <output-dir> <subject-id>
+CRC check: zhao-reel --check

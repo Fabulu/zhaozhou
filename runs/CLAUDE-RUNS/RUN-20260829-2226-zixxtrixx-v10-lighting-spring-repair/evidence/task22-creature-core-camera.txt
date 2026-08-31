@@ -1,0 +1,30 @@
+Zixxtrixx v10 task #22 — current-main compositor gate resolution
+Date: 2026-08-30
+
+Reported gate
+- tests/geometry/creature_core.cpp compositor smoke check: `lit < W * H`
+- current-main run had reported fast suite 313/314.
+
+Structural diagnosis
+- zref::mat4fx is row-major and mat4_vec4 computes result row i as sum_j m[i][j] * v[j] (reference/include/zref/zref_fixp.hpp:342-370).
+- project_vertex divides clip X/Y by clip W (reference/src/zrender/rast.cpp:43-59).
+- The smoke-test comment declared `w = z + 4`, but the prior matrix encoded `z + 4` in row 2 (clip Z) and constant 1 in row 3 (clip W).
+- Therefore clip W at the creature was 1 m, not 4 m. The 8x scale projected the probe four times larger than declared.
+- Corrected the diagnostic projection matrix structurally: clip Z = z; clip W = z + 4. No renderer, creature, light, toon, or acceptance-threshold change was made.
+
+Bounded direct diagnostics (no cmake --build)
+- Prior camera: clip_w=65536/65536; lit=4096/4096; lit bbox=[0,0]-[63,63]; depth=[65536,65536]; gate fails exactly because every pixel meets the red+depth predicate.
+- Corrected camera: clip_w=262144/65536 (4 m); lit=1305/4096; lit bbox=[0,0]-[63,63] (cylinder extrema touch each edge without filling the frame); depth=[15547,18595].
+- Fresh direct g++ test after correction and after current-main integration:
+  `creature_core: all anchors green`
+
+Commits and integration
+- Camera fix: 0e8e0ca (pushed)
+- Integrated origin/main: 99fd53c3599022f60ae9c22aee06724b1499422a
+- Resulting feature head: 5dddb21d9d0170772bae47c560bcdddb9bd4e380 (pushed)
+- Immutable accepted source milestone 065b732 is an ancestor: true
+- origin/main 99fd53c is an ancestor: true
+- Current-main merge changed `reference/` or `tools/reel/` relative to pre-merge feature head: false
+
+Verdict
+PASS — the renderer repair exposed a long-standing invalid test camera; the production compositor and v10 art source did not regress.

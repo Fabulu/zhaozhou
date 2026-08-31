@@ -1,0 +1,12 @@
+LD zhao-reel
+LD zhao-reel-cel
+LD zhao-reel-cel-frozenpupil
+LD zixx-probe
+LD zixx-golden
+LD zixx-choreo
+LD zixx-planner
+LD zixx-headaim
+LD zixx-sideprofile
+LD zixx-meshcheck
+LD zixx-striketip
+build-direct: done (/c/programmieren/zencrifice/zhaozhou/runs/CLAUDE-RUNS/RUN-20260829-2226-zixxtrixx-v10-lighting-spring-repair/work/zhaozhou-v10/runs/CLAUDE-RUNS/RUN-20260829-2226-zixxtrixx-v10-lighting-spring-repair/bin)

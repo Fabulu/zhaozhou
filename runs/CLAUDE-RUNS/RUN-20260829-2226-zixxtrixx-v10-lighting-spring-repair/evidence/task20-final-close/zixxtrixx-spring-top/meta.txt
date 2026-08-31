@@ -1,0 +1,67 @@
+subject=zixxtrixx-spring-top
+mode=Z60 384x240 single view, reference oracle (zref::render)
+frames=59 step=1 ticks (frame f: tick = f*step)
+programs: wave_pool hash=0x8BDCEB63 (27 instrs), impact_wave hash=0x82F5F4E4 (30 instrs)
+field_apps=0 stamps=0 debris=0 shake_frames=0
+palette=1229 unique colours (palette-exact by construction, <=256 enforced)
+DIAGNOSTIC: every frame of the shared whole-body spring, fixed high three-quarter camera; exact rest through compression hold and release
+sequence_crc32c=0x7FF64B59
+frame_0000_crc32c=0x7A682DD0
+frame_0001_crc32c=0xF263CB67
+frame_0002_crc32c=0x6027C07C
+frame_0003_crc32c=0x0B7A6CAC
+frame_0004_crc32c=0x1ABA5562
+frame_0005_crc32c=0xDC52FC19
+frame_0006_crc32c=0x84A276F1
+frame_0007_crc32c=0x5FFCB983
+frame_0008_crc32c=0x9FB97303
+frame_0009_crc32c=0x28D64495
+frame_0010_crc32c=0x26F155A2
+frame_0011_crc32c=0xE64830C7
+frame_0012_crc32c=0x177DB1D1
+frame_0013_crc32c=0x616E77FB
+frame_0014_crc32c=0x959D636C
+frame_0015_crc32c=0xA33F560C
+frame_0016_crc32c=0x54670775
+frame_0017_crc32c=0x930C4723
+frame_0018_crc32c=0x56C5F740
+frame_0019_crc32c=0xFC97A076
+frame_0020_crc32c=0xDE87B05E
+frame_0021_crc32c=0xB7E96E72
+frame_0022_crc32c=0x1C04A104
+frame_0023_crc32c=0x1C04A104
+frame_0024_crc32c=0x1C04A104
+frame_0025_crc32c=0x1C04A104
+frame_0026_crc32c=0x1C04A104
+frame_0027_crc32c=0x1C04A104
+frame_0028_crc32c=0x1C04A104
+frame_0029_crc32c=0x1C04A104
+frame_0030_crc32c=0x1C04A104
+frame_0031_crc32c=0x1C04A104
+frame_0032_crc32c=0x1C04A104
+frame_0033_crc32c=0x1C04A104
+frame_0034_crc32c=0x1C04A104
+frame_0035_crc32c=0x0A30E8FE
+frame_0036_crc32c=0xA69BCB17
+frame_0037_crc32c=0x4143BA9C
+frame_0038_crc32c=0xCE71AA61
+frame_0039_crc32c=0xB15C9D33
+frame_0040_crc32c=0x0E586C4D
+frame_0041_crc32c=0x8D3834EB
+frame_0042_crc32c=0x86EDB7A4
+frame_0043_crc32c=0xF0D6DF4F
+frame_0044_crc32c=0xF545FE78
+frame_0045_crc32c=0xF543F553
+frame_0046_crc32c=0xDD3077B0
+frame_0047_crc32c=0xAFBEBC0B
+frame_0048_crc32c=0x2B6BE3BF
+frame_0049_crc32c=0x3ABBF580
+frame_0050_crc32c=0xD5ECD9B4
+frame_0051_crc32c=0xBE4A1685
+frame_0052_crc32c=0x0AC8A715
+frame_0053_crc32c=0x63358615
+frame_0054_crc32c=0x6C4B2436
+frame_0055_crc32c=0x5895BF7F
+frame_0056_crc32c=0x10F6DB27
+frame_0057_crc32c=0xFF2C85AD
+frame_0058_crc32c=0x020FC9C9

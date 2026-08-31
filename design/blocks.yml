@@ -1427,8 +1427,12 @@ blocks:
     counters: [terrain_samples_evaluated]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-16"
+        commit: "53b7b8a"
+        evidence: reference/include/zref/zref_terrain.hpp
 
     deferred: false
     cut_order: null
@@ -2040,8 +2044,12 @@ blocks:
     counters: [cache_hits, cache_misses, vertices_transformed]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-08-24"
+        commit: "2edbcc1"
+        evidence: reference/include/zref/zref_geom_wcache.hpp
     deferred: false
     cut_order: null
     superseded_by: null

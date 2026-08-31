@@ -1,0 +1,27 @@
+Zixxtrixx v10 immutable production render manifest
+source_milestone=065b732
+mode=ZIXX_EXP=celmain
+subjects=21 expected=21 extra=[] missing=[]
+zixxtrixx-attack: frames=480/480 contiguous=True raw=384x240:True size=True crc32=0x31F2B460 sha256=ec5497b544ebb60c7058d795545a03ca37970bff1d75f484ead54bf98ca0e82c
+zixxtrixx-balance: frames=447/447 contiguous=True raw=384x240:True size=True crc32=0xA501D166 sha256=47d43f69a7e7095e55ff80509000093911705618cb53374c2e7dcb96ca7d5042
+zixxtrixx-damage: frames=400/400 contiguous=True raw=384x240:True size=True crc32=0x20579F4B sha256=84810bb08da22219b35912facfd0bd599c65798826ec3d2429607eb7aee7c25a
+zixxtrixx-death: frames=192/192 contiguous=True raw=384x240:True size=True crc32=0x92DFDC92 sha256=8f2a010f07d67be17dc6c85e29667eb4822d7efa9146c17058b50e4c568ace5e
+zixxtrixx-death2: frames=192/192 contiguous=True raw=384x240:True size=True crc32=0x3AA61D03 sha256=8c497ab23c6cc903dbea6295885039ddc8bea9f6c52e0760cfe46899c73b7ef1
+zixxtrixx-fall: frames=288/288 contiguous=True raw=384x240:True size=True crc32=0x5E5A04AC sha256=346cc95e2c6535b588e1281606664ec6cb17829c58ce26898ce2c4c38ed73e49
+zixxtrixx-hit: frames=300/300 contiguous=True raw=384x240:True size=True crc32=0x6274F252 sha256=bc39eb08f3964890c2c7a4ab1a53016c7e333aa31258abafcc3d9895c68dc78c
+zixxtrixx-hitfloor: frames=176/176 contiguous=True raw=384x240:True size=True crc32=0xF7A2745D sha256=91ab0aa9e899378a359eb680a3b5f0e41a74ae7b628c3dccc94c40ac5234ce93
+zixxtrixx-idle: frames=576/576 contiguous=True raw=384x240:True size=True crc32=0xF8E633F1 sha256=2c53a1f3849cb55b50dad5c5cd9f8816d386bfd7f1794db0c453e82c1eff86e4
+zixxtrixx-jump-multi: frames=143/143 contiguous=True raw=384x240:True size=True crc32=0x2F89DF6B sha256=d4e913135235446be9a1d555be7765ad26ab968643d507427ca81acc5f4d949c
+zixxtrixx-jump-one: frames=143/143 contiguous=True raw=384x240:True size=True crc32=0xAC3B4BD3 sha256=df0265e5b165f28b15ebcc05f67696858e1b582beecfa5a9de4a9b2b87a17ed9
+zixxtrixx-knockdown: frames=184/184 contiguous=True raw=384x240:True size=True crc32=0xEBF37BB0 sha256=0b5c33d10b5d7d8ec9ca43eb29e59be3b3a2616205c659169f6a46312ad1f484
+zixxtrixx-look: frames=384/384 contiguous=True raw=384x240:True size=True crc32=0x59434A64 sha256=1e34c527c60dd45bb66d0e13db7c6d44aa198c832b8a478106aff31fcc8e7100
+zixxtrixx-run: frames=96/96 contiguous=True raw=384x240:True size=True crc32=0xE2EDA21F sha256=b9563360715a678ca3b10855472f048aff3cd1636426199ea1e20e46a8ce3bcc
+zixxtrixx-salto-dummy: frames=243/243 contiguous=True raw=384x240:True size=True crc32=0x866955F2 sha256=08d5a80389db9790f18c9625979491c06f8900aca71dd338953d0e167883ea77
+zixxtrixx-salto-fly: frames=245/245 contiguous=True raw=384x240:True size=True crc32=0x56010AE0 sha256=83712ef401e08e7b01704814d4f9c532159d229155f4e51c0a427d3512629305
+zixxtrixx-salto-nine: frames=367/367 contiguous=True raw=384x240:True size=True crc32=0x5CE4A91C sha256=51aaf12b92a897ca37ae987306a72f8b3519889b5e437dd28247e1c5af5a6571
+zixxtrixx-salto-six: frames=265/265 contiguous=True raw=384x240:True size=True crc32=0xAB465F76 sha256=1fa248abd2e7620072d1fec57d7365a98a3993bde91cc8ca6125bd3729549548
+zixxtrixx-slow-taunt: frames=239/239 contiguous=True raw=384x240:True size=True crc32=0xD4900775 sha256=790a3ab9a91bac6f6c5f26b6d55c8270614485acd050840ec1d07a0c8d5711fb
+zixxtrixx-taunt: frames=224/224 contiguous=True raw=384x240:True size=True crc32=0xA3411B4D sha256=aba108fa22f3ea7e20328aa5eca8142c015789697f95f72cd1090b098cdc4584
+zixxtrixx-walk: frames=160/160 contiguous=True raw=384x240:True size=True crc32=0x0A92E804 sha256=2b61aad62f8a19a4c2b4639dee29620f397c59eb3c7aa6c6382c60b7c4072a8e
+total_frames=5744/5744 aggregate_sha256=b6cf9417df9773d7705cf3ac06836cc36a5d749044d8a4c5e1e87936513799a8
+RENDER MANIFEST: PASS

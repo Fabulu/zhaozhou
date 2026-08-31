@@ -1,0 +1,11 @@
+Zixxtrixx taunt slot compatibility
+
+pre-edit slot 30 bytes: 13224
+post-edit slot 30 bytes: 13224
+pre-edit slot 30 SHA-256: 6823ae3a192915931e62617647b4f0daa472f0e48442fe6670512ca7e0c05f05
+post-edit slot 30 SHA-256: 6823ae3a192915931e62617647b4f0daa472f0e48442fe6670512ca7e0c05f05
+exact binary comparison: PASS
+
+new slot 44 bytes: 28328
+new slot 44 SHA-256: 3b20781f66e50235ce006c6a49db937875f2e3e1888ae744dd93e406f1e42730
+Slot 44 is separately present; slot 30 remains byte-for-byte unchanged.

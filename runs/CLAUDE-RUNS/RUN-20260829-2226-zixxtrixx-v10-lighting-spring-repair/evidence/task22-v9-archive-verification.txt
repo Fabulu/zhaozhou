@@ -1,0 +1,45 @@
+v9_source_commit=d97f7a424c9015c9ffc128406760fa5ccf370964
+archive_files=42/42
+archive-2026-08-29-v9-cel-main-attack.png: bytes=21989 sha256=c64f11487d7be68cde4470cdeca8b752dd65231a85eed4d0c0f665482abbf2c6 git_source=zixxtrixx-attack.png byte_identical=True
+archive-2026-08-29-v9-cel-main-attack.webm: bytes=657807 sha256=b0965c1aa1b0ebae0bab072fe7ecc95a7553de6d88e83107f83200035fa73a7e git_source=zixxtrixx-attack.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-balance.png: bytes=19893 sha256=6e50c2832e9c838ee15efb6ced4d5c683a65be0345b7b9cbd4dc1d7f37f85613 git_source=zixxtrixx-balance.png byte_identical=True
+archive-2026-08-29-v9-cel-main-balance.webm: bytes=427605 sha256=188320093c57124fbdea886d7ea868967fa5ab6000774a2326c3bf3d22382927 git_source=zixxtrixx-balance.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-damage.png: bytes=26868 sha256=dd7bbb589bcfde36f9a785a6c3227ba09a642654c0d722e0cee291d14f7af57c git_source=zixxtrixx-damage.png byte_identical=True
+archive-2026-08-29-v9-cel-main-damage.webm: bytes=733568 sha256=482608eabe998b7952b8298d0bbff4e03d025efaa7c9f4e79ed692802d3299ce git_source=zixxtrixx-damage.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-death.png: bytes=20712 sha256=25d33353f1b69552e08c6da30f867ff3b99569574ff2959f3eab1e9a0f8489ad git_source=zixxtrixx-death.png byte_identical=True
+archive-2026-08-29-v9-cel-main-death.webm: bytes=292146 sha256=99fd130927fedec2bdc7385693995a2d433c50642338fa0be9acc80504358914 git_source=zixxtrixx-death.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-death2.png: bytes=22995 sha256=1122245d3390e24112034dcc58f9bdfce465f918048540b1ed540f8838443cbe git_source=zixxtrixx-death2.png byte_identical=True
+archive-2026-08-29-v9-cel-main-death2.webm: bytes=256161 sha256=f496dc498d1f99194ad93ea8f8a1696b40a4bb68e1b93add84f627a3bb9fdb92 git_source=zixxtrixx-death2.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-fall.png: bytes=26037 sha256=77e41274eeacf3ae4f33999cae2aff43110aeb5b5a766cbce16e0eb59fd4d72e git_source=zixxtrixx-fall.png byte_identical=True
+archive-2026-08-29-v9-cel-main-fall.webm: bytes=426139 sha256=48d414ad639e4d3b15566f0e23d0c01f1afb02c359f35dab3dfa836f44166964 git_source=zixxtrixx-fall.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-hit.png: bytes=24627 sha256=e319999da45ff53dbeb2bd1fb1d7d0ec2392227548862edd780af59e55ea6069 git_source=zixxtrixx-hit.png byte_identical=True
+archive-2026-08-29-v9-cel-main-hit.webm: bytes=595072 sha256=eeb7e87ddf593d685b01fce82b60ccf064327fd5114ede86cceb2a7aae8f363d git_source=zixxtrixx-hit.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-hitfloor.png: bytes=20192 sha256=4f8c1bac821eb4eec34a2d3eb5a64466f2dea050f2128297910fa43b8bbbf5b3 git_source=zixxtrixx-hitfloor.png byte_identical=True
+archive-2026-08-29-v9-cel-main-hitfloor.webm: bytes=234135 sha256=c7300f91e1553dffedaedf4d2cc02f6fa173fbcd0f7883e8702a1ceeb5957878 git_source=zixxtrixx-hitfloor.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-idle.png: bytes=36890 sha256=6515a7b8be9302e9f8c93611abb7d1a40ba6f5eb69725ee9369967e16914118e git_source=zixxtrixx-idle.png byte_identical=True
+archive-2026-08-29-v9-cel-main-idle.webm: bytes=1946390 sha256=ea5226a477069d6eb45b5688b90341f164755ff807b026efe89ad50238e94c18 git_source=zixxtrixx-idle.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-jump-multi.png: bytes=22731 sha256=c9fa52cec892c0b4715591e66cdb26bdec33197110ceb3037f28a41d227bb619 git_source=zixxtrixx-jump-multi.png byte_identical=True
+archive-2026-08-29-v9-cel-main-jump-multi.webm: bytes=399631 sha256=0227dfed8ca1c666afc5f2bb8e92d1965eed6375f4877c40dd9d5c0db22003f6 git_source=zixxtrixx-jump-multi.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-jump-one.png: bytes=22754 sha256=7f5d9707b9b59754c9faf379add18bfc4aaef3f61cca61a5820f29dd66d836c2 git_source=zixxtrixx-jump-one.png byte_identical=True
+archive-2026-08-29-v9-cel-main-jump-one.webm: bytes=361717 sha256=86903c1c7eecbcdfd23726ddabe15a27169d2a8847de171228ed3d53bbc47ff6 git_source=zixxtrixx-jump-one.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-knockdown.png: bytes=20797 sha256=b257ab2aeb0cfc60ee53fd5b931ea65aaca6e32ce30495cdd6b0f02cf6a91cf4 git_source=zixxtrixx-knockdown.png byte_identical=True
+archive-2026-08-29-v9-cel-main-knockdown.webm: bytes=269096 sha256=09a1a350a342033999d26c80c6daf5d8c0b9d83dbea9cef38d8f03424f7b43a7 git_source=zixxtrixx-knockdown.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-look.png: bytes=24826 sha256=685e80b2661c584eb6015fab572460f3e96b06abf6f5168fb3622a4e2b0ede6a git_source=zixxtrixx-look.png byte_identical=True
+archive-2026-08-29-v9-cel-main-look.webm: bytes=585487 sha256=cce59c6966257c6f202f646efaf3f2181d909027d51e09c9bb0981510cb913bc git_source=zixxtrixx-look.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-run.png: bytes=26810 sha256=ddcd79f68c55df8782bbffc541b7d50fd1cbdb80bd6e9ddba552f7d07630d2b9 git_source=zixxtrixx-run.png byte_identical=True
+archive-2026-08-29-v9-cel-main-run.webm: bytes=298060 sha256=db1a91f135705dbeb92710d7b684ebeec14490461d70cee865a377577e786b17 git_source=zixxtrixx-run.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-salto-dummy.png: bytes=20179 sha256=d70c4f64c7f8e85929c215a4b5a6706b9263943664a075cfb3c98b6f2766312c git_source=zixxtrixx-salto-dummy.png byte_identical=True
+archive-2026-08-29-v9-cel-main-salto-dummy.webm: bytes=328909 sha256=afe01d7c5ea9b02f684655e766d47829726885c578d969fc62f768ab5af4ffaa git_source=zixxtrixx-salto-dummy.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-salto-fly.png: bytes=18901 sha256=800c6446ca5fe17675bb470e7b9c6154d8dee89a5aa02324005af116e5ea2eba git_source=zixxtrixx-salto-fly.png byte_identical=True
+archive-2026-08-29-v9-cel-main-salto-fly.webm: bytes=302739 sha256=94bad2f2c15c8affedb1719561c52f2f82cb5d5e973a6dd51d9c2f3b73daa989 git_source=zixxtrixx-salto-fly.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-salto-nine.png: bytes=11844 sha256=a3d135d4068f002d559261f49f0e3948b11e4eef95f668a25d4d2b202e32ef47 git_source=zixxtrixx-salto-nine.png byte_identical=True
+archive-2026-08-29-v9-cel-main-salto-nine.webm: bytes=317632 sha256=6f12460d0c99c35180fda3be0da4265fb10708be79b0a9de7b60af0a96eb16f5 git_source=zixxtrixx-salto-nine.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-salto-six.png: bytes=18518 sha256=1222afaeb398f5704a298df34ab44cc967192d4ae865c936e1e7082570d18716 git_source=zixxtrixx-salto-six.png byte_identical=True
+archive-2026-08-29-v9-cel-main-salto-six.webm: bytes=287720 sha256=20ab18d059398a3b0fbf8b53701b03cf09cef87a81dd892aec02f0f55a958b75 git_source=zixxtrixx-salto-six.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-slow-taunt.png: bytes=24599 sha256=2c2eb51f95fa0dd4465274cb3840c8595343e5913415daa2fd672b9ce38e99a7 git_source=zixxtrixx-slow-taunt.png byte_identical=True
+archive-2026-08-29-v9-cel-main-slow-taunt.webm: bytes=417364 sha256=d2716742464fab6026ae6adc419f13ba5d0c7528626c6764e77d0aed36fd8423 git_source=zixxtrixx-slow-taunt.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-taunt.png: bytes=24388 sha256=bb51760fbfdb0c71be5a0f95040f06ed50b16b31d1f9d87bc2391269811bde4d git_source=zixxtrixx-taunt.png byte_identical=True
+archive-2026-08-29-v9-cel-main-taunt.webm: bytes=526220 sha256=f28448795d185d9202cef660dc00541d6049ed9e99a4c8b371342a9ee0a42a20 git_source=zixxtrixx-taunt.webm byte_identical=True
+archive-2026-08-29-v9-cel-main-walk.png: bytes=26838 sha256=f9349af3d4735acb095a5515d12407b161fdb4573a6971b8dc3190f2b6dc45d1 git_source=zixxtrixx-walk.png byte_identical=True
+archive-2026-08-29-v9-cel-main-walk.webm: bytes=423001 sha256=c4efa256d458baff037e46cde3fa53c78f928f79bd8217015c930cac7d2e9390 git_source=zixxtrixx-walk.webm byte_identical=True
+V9 ARCHIVE: PASS

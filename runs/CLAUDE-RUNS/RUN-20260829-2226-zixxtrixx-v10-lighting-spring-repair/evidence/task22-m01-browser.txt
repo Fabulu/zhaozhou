@@ -1,0 +1,8 @@
+Zixxtrixx v10 local Edge browser M01 corrected verdict
+first_verifier_bookkeeping_only=it required clientWidth to equal device width, but the 15px vertical scrollbar correctly makes clientWidth 1395/375; horizontal overflow is scrollWidth == clientWidth
+desktop_current={"caption": "Slow neck-led left/right taunt, 120 keys / 239 canonical frames", "clientWidth": 1395, "innerWidth": 1410, "liveBehavior": true, "liveVideos": 21, "robots": "noindex, nofollow", "scrollWidth": 1395, "selected": "zixxtrixx-6", "visibleOuter": 1}
+desktop_archive={"archiveSelected": "zixxtrixx-archive-generation-0", "archiveVideos": 21, "clientWidth": 1395, "controls": true, "generationSelectors": 7, "heading": "v9 cel-main \u00b7 2026-08-29", "innerWidth": 1410, "noAutoplay": true, "preloadNone": true, "robots": "noindex, nofollow", "scrollWidth": 1395, "selected": "zixxtrixx-archive", "visibleGenerations": 1, "visibleOuter": 1}
+narrow_current={"caption": "Slow neck-led left/right taunt, 120 keys / 239 canonical frames", "clientWidth": 375, "innerWidth": 390, "liveBehavior": true, "liveVideos": 21, "robots": "noindex, nofollow", "scrollWidth": 375, "selected": "zixxtrixx-6", "visibleOuter": 1}
+narrow_archive={"archiveSelected": "zixxtrixx-archive-generation-0", "archiveVideos": 21, "clientWidth": 375, "controls": true, "generationSelectors": 7, "heading": "v9 cel-main \u00b7 2026-08-29", "innerWidth": 390, "noAutoplay": true, "preloadNone": true, "robots": "noindex, nofollow", "scrollWidth": 375, "selected": "zixxtrixx-archive", "visibleGenerations": 1, "visibleOuter": 1}
+cleanup_verified=True
+M01 BROWSER: PASS — exact 1410/390 inner viewports, zero horizontal overflow, one requested panel/generation, correct live/autoplay and archive/control behavior
