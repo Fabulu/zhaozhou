@@ -76,6 +76,10 @@ namespace {
 
 std::string g_out;
 bool g_write = true;  // --check: render + verify CRCs only, write nothing
+// Reel-only evidence switches. The default visible clip keeps both true;
+// diagnostic renders can hide the marker and, independently, the local source.
+bool g_zixx_moving_light_marker = true;
+bool g_zixx_moving_light_source = true;
 
 // ---------------------------------------------------------------- output ----
 
@@ -2121,29 +2125,39 @@ void sample_zixx_moving_source(uint32_t frame, uint32_t frames,
                                const zc::CreatureInstance& inst,
                                zc::CreaturePointLight& out) {
   constexpr int32_t kPathHalfMm = 1750;
-  constexpr int32_t kPathSideMm = 850;
-  constexpr int32_t kPathHeightMm = 1400;
-  constexpr int32_t kHighArchMm = 1200;
-  constexpr int32_t kReturnArchMm = 900;
-  constexpr int32_t kLightInnerRadiusMm = 1100;
-  constexpr int32_t kLightOuterRadiusMm = 5200;
-  constexpr int32_t kLightGainR = 65536;
-  constexpr int32_t kLightGainG = 44564;
-  constexpr int32_t kLightGainB = 26214;
+  constexpr int32_t kPathSideMm = 600;
+  constexpr int32_t kPathHeightMm = 950;
+  constexpr int32_t kHighArchMm = 650;
+  constexpr int32_t kReturnArchMm = 450;
+  constexpr int32_t kLightInnerRadiusMm = 1800;
+  constexpr int32_t kLightOuterRadiusMm = 3400;
+  constexpr int32_t kLightGainR = 262144;
+  constexpr int32_t kLightGainG = 178256;
+  constexpr int32_t kLightGainB = 104856;
   const uint32_t leg_frames = std::max<uint32_t>(1, frames / 4);
   const uint32_t leg = std::min<uint32_t>(3, frame / leg_frames);
   const uint32_t local = frame - leg * leg_frames;
+  // Include both endpoints. Consecutive legs therefore share one exact source
+  // descriptor, and the final authored frame closes exactly onto frame zero.
+  const uint32_t leg_span = std::max<uint32_t>(1, leg_frames - 1);
+  const uint32_t sample = std::min(local, leg_span);
   const int32_t linear = static_cast<int32_t>(
-      (static_cast<uint64_t>(local) * 1000u) / leg_frames);
+      (static_cast<uint64_t>(sample) * 1000u) / leg_span);
   const int32_t ease = static_cast<int32_t>(
       (static_cast<int64_t>(linear) * linear * (3000 - 2 * linear)) /
       1000000);
-  const int32_t arch = zref::fx_sin(zref::angle16{
-      static_cast<uint16_t>((static_cast<uint32_t>(linear) * 32768u) / 1000u)})
-                           .raw;
+  const int32_t arch =
+      (linear == 0 || linear == 1000)
+          ? 0
+          : zref::fx_sin(zref::angle16{
+                static_cast<uint16_t>((static_cast<uint32_t>(linear) *
+                                       32768u) /
+                                      1000u)})
+                .raw;
   const auto lerp_mm = [ease](int32_t a, int32_t b) {
-    return a + static_cast<int32_t>(
-                   (static_cast<int64_t>(b - a) * ease + 500) / 1000);
+    const int64_t p = static_cast<int64_t>(b - a) * ease;
+    const int64_t bias = p >= 0 ? 500 : -500;
+    return a + static_cast<int32_t>((p + bias) / 1000);
   };
 
   int32_t x_mm = 0, y_mm = kPathHeightMm, z_mm = 0;
@@ -2322,7 +2336,8 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     const zc::CreaturePointLight* const saved_point = zc::g_creature_point_light;
     if (c.moving_light) {
       zc::g_creature_light_rig = &zc::kCreatureLightMovingInspection;
-      zc::g_creature_point_light = &c.moving_source;
+      zc::g_creature_point_light =
+          g_zixx_moving_light_source ? &c.moving_source : nullptr;
     }
     zc::compose_creatures(rgb, depth, w, h, c.vp, insts,
                           c.dummy != nullptr ? 2 : 1, *c.poses, nullptr);
@@ -2473,7 +2488,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     }
     ++g_exp_frame;
   }
-  if (c.moving_light)
+  if (c.moving_light && g_zixx_moving_light_marker)
     draw_zixx_moving_source_marker(c, rgb, depth, w, h);
   c.gibs_in_view = 0;
   if (c.gibs == nullptr || c.gibs->empty()) return;
@@ -2700,6 +2715,13 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.inst = &dog_inst;
     cr_ctx.poses = &dog_poses;
     cr_ctx.moving_light = sub.creature_moving_light;
+    if (sub.creature_moving_light) {
+      // The camera and held pose never change, so the preview rung is known to
+      // be stationary. Let frame 0 select it immediately instead of rendering
+      // the default mesh for exactly the 15-tick minimum-hold preamble and
+      // creating a false 599 -> 0 loop seam.
+      dog_inst.lod.hold = zc::kLodHoldTicks;
+    }
     if (sub.dummy) {
       const uint16_t attack_slot = static_cast<uint16_t>(sub.creature - 2);
       target_desc = zixx_target_descriptor(attack_slot);
@@ -5627,6 +5649,24 @@ int main(int argc, char** argv) {
     return rc;
   }
   g_out = argc > 1 ? argv[1] : ".";
+  // Diagnostic evidence only. Both modes hide the visible marker so source-on
+  // and source-off frames compare actual illumination with an identical dim
+  // inspection rig, pose and camera. The ordinary clip leaves this unset.
+  if (const char* diag = std::getenv("ZIXX_MOVING_LIGHT_DIAGNOSTIC")) {
+    if (std::strcmp(diag, "marker-off") == 0) {
+      g_zixx_moving_light_marker = false;
+    } else if (std::strcmp(diag, "source-off") == 0) {
+      g_zixx_moving_light_marker = false;
+      g_zixx_moving_light_source = false;
+    } else {
+      std::fprintf(stderr,
+                   "unknown ZIXX_MOVING_LIGHT_DIAGNOSTIC=%s "
+                   "(expected marker-off or source-off)\n",
+                   diag);
+      return 2;
+    }
+    std::fprintf(stderr, "ZIXX_MOVING_LIGHT_DIAGNOSTIC=%s\n", diag);
+  }
   // RUN 1939/2234 experiment gate. Unset (the normal case) leaves every
   // render byte-identical. Faceted cel holds a face at one band; smoothcel3
   // thresholds interpolated light per fragment. Thick modes use the contour
