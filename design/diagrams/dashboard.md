@@ -260,7 +260,7 @@ Rule: `blocked_on: hardware` blocks never advance from SPECIFIED regardless of e
 | 5 | GEOM.WARP | yes |
 | 6 | POST.GATHER | no |
 
-Deferred without a cut slot: INPUT.SNAC.
+Deferred without a cut slot: INPUT.SNAC, MEASURE.HISTOGRAM.
 
 ## §25 counter coverage
 

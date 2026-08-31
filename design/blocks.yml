@@ -1395,7 +1395,7 @@ blocks:
     budget_group: geometry_mantle
     maturity: SPECIFIED
     maturity_log: []
-    deferred: false
+    deferred: true
     cut_order: null
     superseded_by: null
     notes: "Charter §12 calls this Version 2: registered now, built late."
