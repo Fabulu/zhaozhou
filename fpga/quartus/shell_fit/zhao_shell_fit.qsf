@@ -309,3 +309,23 @@ set_instance_assignment -name VIRTUAL_PIN ON -to rumble_duty_o[0]
 set_instance_assignment -name VIRTUAL_PIN ON -to rumble_duty_o[1]
 set_instance_assignment -name VIRTUAL_PIN ON -to rumble_duty_o[2]
 set_instance_assignment -name VIRTUAL_PIN ON -to rumble_duty_o[3]
+
+# ---- ports declared TWO TO A LINE ------------------------------------------
+# `input logic signed [22:0] render_kx0_i, render_ky0_i,` declares two ports.
+# The scan that produced the list above took only the first name on each line,
+# so render_ky0_i, render_ay_i, render_max_x_i and their kind were never
+# virtualised -- and they are exactly the 156 pins the fitter kept refusing:
+#
+#   ; render_max_x_i[0]  ; Incomplete set of assignments ;
+#   ; render_ky0_i[0]    ; Incomplete set of assignments ;
+#
+# Read out of the fitter's own I/O Assignment Warnings table, after three
+# rounds of guessing at the number failed to move it.
+set_instance_assignment -name VIRTUAL_PIN ON -to render_ky0_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_ky1_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_ky2_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_ay_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_by_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_cy_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_max_x_i
+set_instance_assignment -name VIRTUAL_PIN ON -to render_max_y_i
