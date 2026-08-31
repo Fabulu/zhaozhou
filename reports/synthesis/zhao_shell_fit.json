@@ -1,9 +1,9 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-shell-fit",
-    "sourceCommit":  "a9aeb07e490843975bc1f10c4b15b4ecccd55de0",
+    "sourceCommit":  "49ad5398271b3b84ccbfb77e8aa0d37bf49e75c9",
     "sourceConeParity":  true,
-    "sourceFileCount":  42,
+    "sourceFileCount":  43,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "Quartus Prime Shell"
@@ -20,9 +20,9 @@
                    "timequest":  "success"
                },
     "resources":  {
-                      "logicUtilizationAlms":  12532,
+                      "logicUtilizationAlms":  12640,
                       "combinationalFunctions":  null,
-                      "registers":  14276,
+                      "registers":  14565,
                       "blockMemoryBits":  184256,
                       "ramBlocks":  26,
                       "dspBlocks":  16,

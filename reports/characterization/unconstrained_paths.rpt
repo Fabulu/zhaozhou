@@ -9,7 +9,7 @@
 ; Illegal Clocks                  ; 0     ; 0     ;
 ; Unconstrained Clocks            ; 0     ; 0     ;
 ; Unconstrained Input Ports       ; 1287  ; 1287  ;
-; Unconstrained Input Port Paths  ; 23277 ; 23277 ;
+; Unconstrained Input Port Paths  ; 23502 ; 23502 ;
 ; Unconstrained Output Ports      ; 1556  ; 1556  ;
 ; Unconstrained Output Port Paths ; 5615  ; 5615  ;
 +---------------------------------+-------+-------+
