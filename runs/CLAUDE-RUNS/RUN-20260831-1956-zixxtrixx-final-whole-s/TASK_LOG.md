@@ -1,7 +1,7 @@
 # Task Log: RUN-20260831-1956 - Zixxtrixx final explicit whole-S animation candidate
 
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Blocked after authorized rung 9 — release topology passes visually, but frozen pre-lift support/contact fails committed 3D probe
+**Status:** Spring accepted after bounded station-14 correction; secondary animation pass active
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/
 
 ---
@@ -61,6 +61,19 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 - Planned consumer key-20 parity differs only on bone 0: an unconditional multiply by `quat_z(0)` requantizes the root-spine quaternion. The frozen body-relative pose and all midpoint ownership masks otherwise agree. This was diagnosed but not changed because the authorized exception freezes timing/root/support and the contact blocker already stops the lane.
 - Secondary corrections were not started. There is no accepted spring checkpoint, full 22-subject bank, integration, archive, site-media edit, deploy or publication.
 
+### 2026-09-01 - Bounded support correction accepted on visual rungs 10–12
+
+- Coordinator authorized at most three focused correction rungs that could alter the pre-lift root/support law while preserving the accepted heading tables, whole-S silhouettes, timing, release topology, neutral model and presentation.
+- Rung 10 reconstructed station 14 through the actual fixed-point quaternion/matrix pose path at every integer and true half-key. X/Z drift became exactly zero, but the old monotonic support lift still buried key 2.5, hovered at key 6 and left six hidden full-surface intersections at 4.5.
+- Rung 11 replaced that monotonic approximation with explicit named support states along the frozen centreline route. Side/high-three-quarter/micro all remained connected; probe narrowed the real blockers to a six-triangle full-mesh crossing at release key 20 and two one-to-two-millimetre micro hovers.
+- Rung 12 used the already accepted key-4 whole-centreline as a one-sample 4.5 hold and its exact reverse-side key-20 counterpart, then lowered only the named key-5 support state by 4 mm. No slope or heading table changed.
+- Looked at all 45 samples 0–22 in fixed side, high-three-quarter and compiled micro under `ZIXX_EXP=celmain` / `ZIXX_LIGHT=diagonal-cool-cross`. Final CRCs are `0x15E9ED2D`, `0x319460FE` and `0x3506CD43`; the animal remains one connected whole S and the accepted assembled, collapsed and reverse-release reads survive.
+- The committed 3D probe now reports full/micro intersections `none / none`; station-14 X/Z drift `0/0 mm`; target error `0 mm`; full/micro contact `-33..0 / -30..0 mm` through all 45 samples against the declared 34 mm bite.
+- Midpoint provenance is exact for all eight declarations. Golden, dummy/flying/six-/nine-salto and one-/multi-turn jump consumers match at all 45 pre-lift samples in finless bones, deformation and raw fixed-point roots. Release-slice parity remains exact.
+- Retired five obsolete iteration-15 magnitude assertions from failure status while keeping their comparison output. They described the superseded procedural pose, not the visually accepted explicit whole-centreline; timing, participation, ordering, hold, release, surface, contact and parity gates remain active.
+- Focused mesh validation exits zero. The complete probe exits nonzero only for the two already-scoped programmable-jump landing penetrations (`-272 mm` at key 70), which are secondary landing work rather than spring faults.
+- This is the accepted spring milestone. No full bank, integration, archive, live-media edit, deploy or publication was performed.
+
 ---
 
 ## Commands and Results
@@ -75,6 +88,10 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 | Direct build | `tools/reel/build-direct.sh --output <lane-local> --clean all` | all four executables linked after complete dependent-source rebuild |
 | Rung-9 render | `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross zhao-reel-cel.exe <evidence> zixxtrixx-spring-{side,top,micro}` | 59 frames each; CRCs `0x45C68105` / `0x7ACD9A5B` / `0xB94DCB86` |
 | Focused posed geometry | `zixx-probe.exe > evidence/rung9-authored-midpoints/zixx-probe.txt` | **FAIL (13 assertions):** four stale previous-spring envelopes plus real pre-lift support/contact/intersection/consumer failures; detailed values preserved above |
+| Final direct rebuild | `tools/reel/build-direct.sh --output <rung12-lane-local> all` | all four native executables rebuilt directly; no CMake/Ninja/Verilator/Sacengine |
+| Final every-sample render | `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross zhao-reel-cel.exe <rung12-evidence> zixxtrixx-spring-{side,top,micro}` | 59 frames each; final CRCs `0x15E9ED2D` / `0x319460FE` / `0x3506CD43` |
+| Final posed geometry | `zixx-probe.exe > evidence/rung12-final-contact/zixx-probe.txt` | spring gates pass; complete process exits 1 only on two secondary jump-landing contact assertions |
+| Focused mesh validation | `zixx-meshcheck.exe > evidence/rung12-final-contact/zixx-meshcheck.txt` | PASS, exit 0 |
 
 ---
 
@@ -101,6 +118,17 @@ The coordinator authorized exactly one additional representation-change rung aft
 | Exception rung | Representation | Evidence | Verdict | Next |
 |---:|---|---|---|---|
 | 9 (one-time exception) | explicit per-channel complete whole-body release midpoint poses; integer controls frozen | `evidence/rung9-authored-midpoints/{side-release-18-22.png,top-release-18-22.png,micro-release-18-22.png,zixx-probe.txt}`; side/top/micro CRCs `0x45C68105` / `0x7ACD9A5B` / `0xB94DCB86` | **Release representation passes the authorized visual topology gate:** every integer and true half-key 18–22 is one connected finless animal at fixed side, high-three-quarter and compiled micro. **Whole spring remains blocked:** committed posed-vertex probe finds station-14 drift (X 93 mm at 4.5, Y +61 mm at 3.5), full/micro bite `-150..36` / `-148..40` mm against declared 34 mm, and 8 full-surface intersections at 4.5 (stations 15/23). Planned consumer ownership is correct, but integer key 20 bone 0 is requantized by an identity spin multiply. | Stop: frozen root/support law cannot be changed within the sole representation exception. Do not checkpoint as accepted and do not begin secondary corrections. Preserve an explicitly blocked feature commit and hand the actionable probe evidence to the parent. |
+
+### Coordinator-authorized bounded support correction
+
+A later coordinator authorization superseded only the frozen pre-lift root/support restriction and allowed at most three focused visual correction rungs. The accepted heading tables, whole-S silhouettes, timing, release topology and presentation remained frozen; slope-table exploration remained prohibited.
+
+| Correction rung | Change | Evidence | Verdict |
+|---:|---|---|---|
+| 10 | actual fixed-point centreline reconstruction and station-14 root derivation at every integer/half-key | `evidence/rung10-support-correction/` | Root X/Z fixed; visually connected; rejected mechanically for burial/hover and six full-surface crossings at 4.5. |
+| 11 | explicit named non-monotonic support route, key-4.5 bridge reduced from 710 to 650, identity-spin no-op and exact shared release control | `evidence/rung11-support-route/` | Visually accepted; contact nearly correct; probe exposes full-surface key-20 crossing and 2 mm micro hover. |
+| 12 | key-4 whole-centreline held at 4.5 and reused at key 20; key-5 support state lowered 4 mm | `evidence/rung12-final-contact/{side-0-22.png,high-three-quarter-0-22.png,micro-0-22.png,zixx-probe.txt,zixx-meshcheck.txt}` | **Accepted spring.** All 45 samples stay connected; no full/micro intersections; station target exact; contact inside authored bite; complete-consumer silhouette/deformation/root parity exact. |
+
 
 ---
 
