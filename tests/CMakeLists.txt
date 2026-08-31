@@ -1881,6 +1881,15 @@ verilate(test_raster_attrdiv_directed
 add_test(NAME raster_attrdiv_directed COMMAND test_raster_attrdiv_directed)
 set_tests_properties(raster_attrdiv_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The exact quotient/remainder stepping proof (owner ruling 2026-08-31 #2).
+# Pure arithmetic, no RTL: it answers whether the per-pixel divide can be
+# replaced without moving a rendered bit, and whether the ruling's stated
+# formula is the shipped law. It is a GATE rather than a loose file because its
+# first finding is a rounding difference that would otherwise be rediscovered.
+add_executable(test_attribute_step_equivalence proofs/attribute_step_equivalence.cpp)
+add_test(NAME attribute_step_equivalence COMMAND test_attribute_step_equivalence)
+set_tests_properties(attribute_step_equivalence PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
 set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
