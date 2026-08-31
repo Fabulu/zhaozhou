@@ -1,7 +1,7 @@
 # Task Log: RUN-20260831-0450 - Zixxtrixx whole-S groundspring correction
 
 **Created:** 2026-08-31 04:50 UTC+02:00
-**Status:** Focused-tested candidate pushed; stopped before independent review/QA
+**Status:** Review Rejected — Repair In Progress
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260831-0450-zixxtrixx-whole-s-groundspring/
 
 ---
@@ -148,6 +148,17 @@ Replace the rejected head-dip/rear-rail spring with a visually authored whole-fi
 - Re-rendered fresh 600-frame marker-hidden source-off/on controls. Source-off has one unique frame; source-on joins `149=150`, `299=300`, `449=450`, and `599=0`; all four leg midpoints have nonzero source-on/off creature response with changed-pixel bounds confined to `(134,82)–(253,154)` across the checked frames.
 - Explicitly staged only `tools/reel/zhao_reel.cpp`, committed the focused-tested source candidate as `8e34f0392776dbd3191e89670c8bbc885092db07` (`Strengthen contained moving inspection light`), and pushed it to `origin/zixxtrixx-whole-s-groundspring`.
 - Upheaval direction remains independently pushed at `b3cc7e3c69e3f146c4656a4ab156c3ed7d01650a`. Stopped before independent review/QA, main integration, Generation Ten archive, full 22-subject rendering, website-media edits, publication or deployment.
+
+### 2026-08-31 - Independent review rejection and repair resumption
+
+- Independent review rejected the candidate and ordered repair in this same isolated lane before QA. All earlier local statements that iteration 6/7 or the pushed closure was visually accepted are superseded: recruitment and tail following are good, but the deepest pose reads as a compact horizontal capsule rather than a broad enlarged S bent drastically down and back.
+- Reopened this existing RUN rather than creating a second creature RUN. Reread `TASK_LOG.md`, `SPEC_v1.md`, both clone rules, and all nineteen durable `OWNER-DIRECTION-*.md` files before source work; no newer creature-local report exists. Marked both RUN documents truthfully as review-rejected/repair-active.
+- HIGH visual blocker: re-author only the collapsed complete-profile controls by eye, preserving grounded/absorb/assembled recruitment and tail following, named station-14 support compensation, no independent root retreat, no anticipation lift, and subordinate deformation. Compare the named assembled/deepest/iteration-7/consumer evidence and render fixed-side, high-three-quarter/top, and micro-rung every-sample evidence for the repaired profile.
+- HIGH contact blocker: key 21 and true midpoint 21.5 hover at `+4/+6 mm` while lift remains zero. Preserve authored finless full/micro terrain bite through key 22, start lift only after key 22, and assert every planted integer key and true authored midpoint independently for both rungs.
+- MEDIUM midpoint blocker: replace all-or-nothing companion ownership in `creature_core.cpp`; independently validate/preserve authored channels, regenerate absent/stale generated channels, and reject malformed no-deformation data without changing ABI/layout. Extend `zixx_meshcheck.cpp` for partial authored companions, stale complete generated companions after source changes, and malformed no-deformation samples.
+- MEDIUM probe blocker: terrain gates must use finless full and micro minima independently at every planted sample. Secondary skin influence exists iff `w0 != 64`, not `w0 != 255`; add rigid endpoint coverage and preserve rung-specific responsible-bone labels instead of sample-global attribution.
+- EVIDENCE/PROVENANCE blockers: preserve consumer parity across golden/planned attack and 1/3/6/9-turn consumers; recheck but do not retune the accepted moving light absent a defect; correct SPEC/closure provenance, the commit-subject mismatch, marker-hidden light-on metadata, and the false head-attitude claim (remove/document unless a real tiny by-eye delta earns inclusion).
+- Repair validation budget: art iteration dominates. Use direct `build-direct.sh` targets only; inspect complete current every-sample side/top/micro evidence and all consumer release frames after visual acceptance; then run the focused midpoint/contact/mesh/probe regressions, one moving-light replay, and exact tracked-diff checks. No full catalogue/bank, publication, deployment, integration, archive or shared-repository action.
 
 ---
 
