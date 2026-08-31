@@ -1,0 +1,22 @@
+Fitter Status : Successful - Mon Aug 31 07:24:23 2026
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : zhao_shell_fit
+Top-level Entity Name : zhao_shell_top
+Family : Cyclone V
+Device : 5CSEBA6U23I7
+Timing Models : Final
+Logic utilization (in ALMs) : 12,569 / 41,910 ( 30 % )
+  * Logic utilization warning : A large number of ALMs contain virtual pins and count towards logic utilization
+  * ALMs containing virtual pins : 1,608 / 41,910 ( 4 % )
+Total registers : 14252
+Total pins : 0 / 314 ( 0 % )
+Total virtual pins : 3,214
+Total block memory bits : 184,256 / 5,662,720 ( 3 % )
+Total RAM Blocks : 26 / 553 ( 5 % )
+Total DSP Blocks : 16 / 112 ( 14 % )
+Total HSSI RX PCSs : 0
+Total HSSI PMA RX Deserializers : 0
+Total HSSI TX PCSs : 0
+Total HSSI PMA TX Serializers : 0
+Total PLLs : 0 / 6 ( 0 % )
+Total DLLs : 0 / 4 ( 0 % )
