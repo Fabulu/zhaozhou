@@ -28,9 +28,14 @@
 // identical because THE WALK IS ALWAYS 16 ROWS regardless of coverage. The
 // check could not have failed, so it confirmed nothing.
 //
-// That first version priced ruling 4 at up to 32% of a frame. The real figure
-// is a quarter of that. Same block, same clocks, a probe pointed at the wrong
-// interval.
+// That first version priced ruling 4 at up to 32% of a frame by measuring the
+// wrong interval. Correcting the interval brought it to 7.67% -- and that was
+// STILL wrong, by another factor of five, because it assumed a context cache
+// removes the whole setup. It removes one clock of the five. Section 4 works
+// that out and section 2 measures the evidence for it.
+//
+// The real figure is ~1.5% on the pathological giant. Two corrections, both to
+// my own number, both found by looking at the block rather than at the report.
 //
 // ---------------------------------------------------------------------------
 // WHAT THIS VERSION DOES INSTEAD
@@ -189,6 +194,9 @@ int main(int argc, char** argv) {
     const Job degen = {px(10), px(10), px(40), px(10), px(70), px(10), 0, 0};
     const Timing d = measure(top, degen);
     printf("   MEASURED: a degenerate triangle retires in %d clocks, no walk\n", d.total);
+    printf("   WHICH MEANS: the area costs %d of the %d setup clocks -- it leaves at\n",
+           d.total - 1, setup_clocks);
+    printf("                S_W0, the moment the area lands.\n");
     zhao::check(d.degenerate, "the degenerate case really was rejected as degenerate", 1,
                 d.degenerate ? 1 : 0);
     zhao::check(d.rows == 0, "and emitted no coverage", 0, (uint32_t)d.rows);
@@ -222,9 +230,27 @@ int main(int argc, char** argv) {
   // ------------------------------------------------------------------ 4 ---
   printf("== section 4: pricing ruling 4 against the four measured scenes ==\n");
   {
-    // A context cache removes setup on every reference AFTER the first, so the
-    // saving is (refs - tris) * setup. These four scenes are
-    // tools/render/count_bin_load's output, not estimates.
+    // ---------------------------------------------------------------------
+    // A CONTEXT CACHE DOES NOT REMOVE THE SETUP. IT REMOVES ONE CLOCK OF IT.
+    // ---------------------------------------------------------------------
+    // I priced this at the FULL setup twice before getting it right, and the
+    // difference is a factor of five.
+    //
+    // The five setup clocks are five states: S_AREA drives the area operands,
+    // S_W0 lands the area AND drives w0, then S_W1/S_W2/S_W3 land w0/w1/w2.
+    // Prepared coefficients make the AREA free -- it is kc0 + kc1 + kc2 -- but
+    // each of the three edge values still needs one pass through the shared
+    // cross unit to evaluate kx*px0 + ky*py0 at the tile. So S_AREA disappears
+    // and the other four states do not.
+    //
+    //     removable = 1 clock of 5, not 5.
+    //
+    // Section 2's degenerate measurement is the independent evidence: a
+    // zero-area triangle leaves at S_W0 in 2 clocks, so the area accounts for
+    // exactly S_AREA + S_W0 -- and S_W0 is shared with driving w0, so only
+    // S_AREA is actually recoverable.
+    //
+    // These four scenes are tools/render/count_bin_load's output.
     const struct {
       const char* what;
       long tris, refs;
@@ -236,8 +262,10 @@ int main(int argc, char** argv) {
     };
     printf("   %-22s %8s %8s %8s %10s %8s\n", "scene", "tris", "refs", "refs/tri", "saved clk",
            "of frame");
+    // ONE clock a reference, for the reason above.
+    constexpr int kRemovablePerRef = 1;
     for (const auto& s : scenes) {
-      const long saved = (s.refs - s.tris) * setup_clocks;
+      const long saved = (s.refs - s.tris) * kRemovablePerRef;
       printf("   %-22s %8ld %8ld %8.1f %10ld %7.2f%%\n", s.what, s.tris, s.refs,
              (double)s.refs / (double)s.tris, saved,
              100.0 * (double)saved / (double)kClocksPerFrame);
@@ -250,8 +278,21 @@ int main(int argc, char** argv) {
     printf("         the capacity we do not, which is the arena decision again.\n");
     printf("   NOTE: the 16-row walk is per-tile work no cache removes, and at %d\n",
            kWalkRows);
-    printf("         clocks it is larger than the setup. If the drain is ever the\n");
-    printf("         thing to shorten, THAT is where the clocks are.\n");
+    printf("         clocks it is SIXTEEN TIMES the clock a context cache saves.\n");
+    printf("         If edgewalk is ever the thing to shorten, that is where the\n");
+    printf("         clocks are -- not in the setup ruling 4 is about.\n");
+    printf("   VERDICT: ruling 4 buys ~1.5%% of a frame on the pathological giant\n");
+    printf("            and ~0.3%% on an army, for 3x the per-triangle record.\n");
+
+    // The claim that makes the verdict checkable rather than a paragraph: the
+    // degenerate path must cost strictly less than the full setup, and the
+    // removable part must be strictly less than the whole.
+    zhao::check(kRemovablePerRef < setup_clocks,
+                "a context cache removes part of the setup, not all of it", 1,
+                (kRemovablePerRef < setup_clocks) ? 1 : 0);
+    zhao::check(kWalkRows > kRemovablePerRef * 8,
+                "and the per-tile walk dwarfs what it does remove", 1,
+                (kWalkRows > kRemovablePerRef * 8) ? 1 : 0);
 
     // The finding that makes this undecidable from any one scene.
     const double army = (double)(23912 - 19200) / 19200.0;

@@ -300,18 +300,26 @@ Ruling 4 is right that setup is repeated per tile reference. Measured:
 
 * **setup is 5 clocks a job** (`raster_edgewalk_setupcost`), derived so the
   derivation carries risk and cross-checked against the degenerate path;
-* the saving is `(refs - tris) x 5`, which is **0.12% of a frame on the sky,
-  1.41% on the army and 7.67% on the giant**;
+* **but a context cache removes ONE of those five, not five.** The five are five
+  states: `S_AREA` drives the area, `S_W0` lands it *and* drives w0, then
+  `S_W1/2/3` land the three edge values. Prepared coefficients make the area
+  free — it is `kc0 + kc1 + kc2` — but each edge value still needs its own pass
+  through the shared cross unit. Only `S_AREA` disappears;
+* so the saving is `(refs - tris) x 1`: **0.02% on the sky, 0.28% on an army,
+  1.53% on the giant**;
 * the cost is 3x the per-triangle record — 36 Kbit at the shipped `TRI_CAP`,
   8.2 Mbit at the capacity an army actually needs.
 
-Worth building for the giant. Not urgent, and its cost is entangled with the
-arena decision rather than separable from it.
+**Recommendation: do not build it.** 1.5% of a frame on a pathological scene,
+0.3% on a real one, for triple the structure that is already the frame's
+capacity wall. The 16-row walk is *sixteen times* what the cache saves; if
+edgewalk is ever the thing to shorten, that is where the clocks are.
 
-**A first probe of this got it four times too high**, by measuring accept-to-
-first-coverage-beat and not noticing the 16-row walk sits inside that window.
-The correction is in the test's own header, because the next person to reach for
-that interval will find the same convincing wrong number.
+**I priced this wrong twice, both times too high.** First at 32%, by measuring
+accept-to-first-coverage-beat without noticing the 16-row walk sits inside that
+window. Then at 7.67%, by assuming a cache removes the whole setup when it
+removes a fifth of it. Both corrections are in the test's own header and both
+were found by looking at the block rather than at the report.
 
 ### What the per-pixel path costs, all measured
 
