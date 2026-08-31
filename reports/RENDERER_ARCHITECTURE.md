@@ -260,6 +260,66 @@ correct frame renderer.**
 
 ---
 
+## STATUS, 2026-08-31 (second pass) — after bro's revised rulings
+
+`reports/OWNER-RULINGS-20260831.md` changed three things materially. What that
+did to this document:
+
+### Ruling 2 supersedes the divide crisis
+
+The per-pixel divide is no longer the wall. `RASTER.ATTRSTEP` replaces it with an
+exact quotient/remainder recurrence:
+
+    256 pixels cost 17 divides = 0.066 a pixel, against 1.000
+    = 15.1x fewer, and NOT ONE RENDERED BIT CHANGES
+
+Proved twice — 640,000 pixel-attributes in arithmetic
+(`attribute_step_equivalence`), then 1,536 against the divider RTL itself
+(`raster_attrstep_directed`) across 69 sign crossings and 256 exact halves.
+
+**The ruling's stated formula is not our law.** `floor((N + floor(A/2))/A)`
+rounds half UP; `rast.cpp` rounds half AWAY FROM ZERO. They disagree on every
+negative exact half — 360 of 16,040 in a small exhaustive domain — which would
+move every golden capture CRC. The block implements ours, via two floor
+divisions with a reseed at the zero crossing.
+
+Consequence: **Gouraud RGB and alpha stop being four expensive divides a
+survivor and become four cheap accumulators.** Cutting vertex lighting to save
+divides is no longer a trade anyone weighs.
+
+### Ruling 1 unblocks step 6's last piece
+
+Depth is per-view from three named profiles, and `scale` is generated. Derived
+and proved in `depth_profile_law`: `d(wmin) = 0xFFFFFF` exactly, monotonic over
+200,000 consecutive raw units, non-zero floors, no wrap. The scales come out
+2⁴⁰ / 2³⁹ / 2³⁸, so the multiply is a shift.
+
+Still to wire — see `reports/DEPTH_PROFILE_NEXT_STEPS.md`. Only the ABI question
+(two `SetView.flags` bits or an additive command) is a real decision.
+
+### Ruling 4 replaces the arena question
+
+`GEOM.PARAMBUF` in local SDRAM — unique projected vertices, compact triangle
+descriptors, external tile-reference chunks, small on-chip caches — supersedes
+both "grow the M10K arena" and "move today's arena to SDRAM". Not started.
+
+### Ruling 4 also settles ruling 4-of-the-first-pass
+
+The TriangleContext is **priced at ~1 clock a reference** (1.53% of a frame on
+the pathological giant, 0.28% on an army) for 3x the per-triangle record. The
+recommendation stands: do not build it. The opportunistic context cache inside
+`GEOM.PARAMBUF` is the version worth having.
+
+### The fit
+
+Elaboration and synthesis pass with the full render path, 0 errors. The fitter
+had never been reached; five attempts of QSF staleness are recorded in
+`fpga/quartus/FIT-PROJECT-STALENESS.md` and the class is now guarded by a
+virtual-pin parity check that names offenders before Quartus starts. **The ALM,
+memory and Fmax numbers do not exist yet.**
+
+---
+
 ## STATUS, 2026-08-31 — where the nine steps actually stand
 
 Written against the ordered list below, so the two can be read together. Every
