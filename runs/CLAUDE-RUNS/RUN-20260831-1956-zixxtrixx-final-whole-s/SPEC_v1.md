@@ -53,6 +53,7 @@ Produce a pushed implementation candidate, from fresh current-main clones, that 
 3. Render and look at native 384x240. Measurements may compare/protect the chosen art, never select the pose.
 4. Maximum three visual rungs with the first explicit representation. If it cannot produce the silhouette, change representation once rather than micro-tune.
 5. Hard cap eight visual rungs total. Preserve/report a blocker rather than silently continuing.
+   **Authorized representation exception (coordinator, after rung 8):** exactly one additional visual rung may replace failed interpolation topology with explicit complete whole-body presentation-midpoint poses through the existing per-channel authored-midpoint provenance. It may not retune any accepted integer heading table, timing, support, deformation or root law. First reuse coherent adjacent/bridge whole poses; inspect every key and true half-key 18–22 at side, high-three-quarter and micro. Any remaining fragment ends the pass with no further rung.
 6. Once deepest passes, author assembled and absorb complete poses and timing around it; inspect every spring sample at fixed side and high-three-quarter, then micro.
 7. Add subordinate flatten/spread only from assembled→collapsed, with exact reversal before the airborne seam. Local skull attitude is optional, tiny and nonessential.
 
