@@ -1427,12 +1427,16 @@ blocks:
     counters: [terrain_samples_evaluated]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-16"
         commit: "53b7b8a"
         evidence: reference/include/zref/zref_terrain.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-31"
+        commit: "cc10167"
+        evidence: tests/terrain/terrain_patch_directed.cpp
 
     deferred: false
     cut_order: null
@@ -2044,16 +2048,25 @@ blocks:
     counters: [cache_hits, cache_misses, vertices_transformed]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-08-24"
         commit: "2edbcc1"
         evidence: reference/include/zref/zref_geom_wcache.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-08-31"
+        commit: "cc10167"
+        evidence: tests/geometry/geom_wcache_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: Formal arena-bounds property candidate (P2 V-list).
+    notes: >-
+      Formal arena-bounds property candidate (P2 V-list). The RTL is
+      zhao_geom_wcache.sv over zhao_vertex_arena.sv, which is why a search for
+      the contract path reported this block unbuilt -- the arena implements it
+      without citing it. A block can be finished under any name; search for the
+      TEST as well as the contract.
 
   - id: GEOM.PROJECT
     name: Dual-view projection
