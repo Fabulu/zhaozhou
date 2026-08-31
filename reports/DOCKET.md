@@ -5,7 +5,7 @@ passes. **This is the index.** Before starting any wave, read this file, then
 read the documents it names.
 
 Last swept: 2026-08-31, after merging seven owner-instruction commits
-(`73429c0` … `f56e86e`).
+(`73429c0` … `f56e86e`) and adding **D17** (CI) and **D18** (mana territory).
 
 **Rule:** when an item is finished, move it to DONE with the commit that did it.
 When a new owner document lands, add it here in the same pass that reads it.
@@ -53,6 +53,26 @@ characterisation vehicle. Split into `zhao_shell_core` / `..._sim_top` /
 Then four controlled fits: core / +binner / +tile pipeline / +full renderer, for
 **attribution instead of one before-after mystery**.
 
+### D17. GitHub CI fails every push
+> *"github fails all tests right now, we should fix"* — Fabian, 2026-08-31.
+
+Run `33400920093`: **3 of 344 fast tests fail**, and a fourth problem warns on
+every job.
+
+| | failure | status |
+|---|---|---|
+| a | `format_check` — 17 files drifted from the pinned clang-format | **fixed** `fdc57ca` |
+| b | six stray gitlinks under `runs/*/work/` with no `.gitmodules`, so every checkout exits 128 | **fixed** `fdc57ca` |
+| c | `cppcheck_check` — signed-overflow finding in `render_pipe_directed.cpp` | in progress |
+| d | `reel_sequence_crc` — `zhao-reel --check` fails | reproducing |
+
+Note (b) is why the *passing* jobs also printed a red git warning; it is not
+cosmetic, it is a committed mistake.
+
+**cppcheck is not pinned as a devDependency** the way clang-format is, so the
+local gate can silently skip. That is exactly the failure the standing memory
+*"local gates must match CI"* records. Pin it — separate small item.
+
 ---
 
 ## P1 — the game's main thing
@@ -98,6 +118,23 @@ two columns × three or four rows so left and right react independently.
 **The one genuinely missing feature: per-instance pose overrides.** `GEOM.POSE`
 caches by `{type, clip, frame}`, which is right for armies and wrong for a cape
 in wind — a sparse per-instance patch over the shared palette's cape bones.
+
+### D18. Mana territory — the economy  ·  `Upheaval/docs/MANA-TERRITORY.md`
+Owner direction 2026-08-31, recorded in full in the **game** repo (`450acc4`).
+Wells are taps driven into the island; **claimed terrain conducts mana**;
+availability is a **local field**, not a global number; a cell only counts with
+a continuous claimed path to a well; **destroyed or newly created terrain begins
+neutral**; and spell tier bounds how economically consequential a wound is
+allowed to be while terrain decides where it lands.
+
+**Console-side consequence, and it is small:** the claim is *gameplay-grid*
+state (`owner_id` + `strength`, coarse, deterministic integer propagation) and
+its presentation is **one more terrain material input** — not a lighting model,
+not a renderer feature. Nothing here is authorised console work yet; it depends
+on **D4** and showcases with **D8**, and **it does not reorder D1.**
+
+Five numbers/questions in that document are explicitly the owner's and must not
+be invented.
 
 ---
 
@@ -168,3 +205,6 @@ only when the game needs a feature.
 | first completed composed fit + numbers | `1d229a9` |
 | virtual-pin parity check | `823e703` |
 | `terrain_project_chain` regression fixed | `4c76318` |
+| worst-path export — FRAGMENT named as offender #1 | `78aee73` |
+| CI format tier + the exit-128 gitlinks | `fdc57ca` |
+| mana-territory design recorded (Upheaval) | `450acc4` |

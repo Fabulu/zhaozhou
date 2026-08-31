@@ -487,7 +487,12 @@ int main(int argc, char** argv) {
     uint32_t lfsr = 0xACE1u;
     int guard = 0;
     for (;;) {
-      lfsr = (uint32_t)((lfsr >> 1) ^ (uint32_t)(-(int32_t)(lfsr & 1u) & 0xB400u));
+      // Unsigned negation of the tap bit, NOT `-(int32_t)(lfsr & 1u)`. The
+      // signed form makes 0 or -1 and then relies on the int32 bit pattern,
+      // which cppcheck flags as a signed overflow; `0u - bit` is defined
+      // wraparound and yields the identical 0x00000000 / 0xFFFFFFFF mask, so
+      // the sequence this drives is bit-for-bit the same.
+      lfsr = (uint32_t)((lfsr >> 1) ^ ((0u - (lfsr & 1u)) & 0xB400u));
       top.fb_ready_i = (lfsr & 3u) != 0;
       top.eval();
       const bool done = top.drain_done_o != 0;
