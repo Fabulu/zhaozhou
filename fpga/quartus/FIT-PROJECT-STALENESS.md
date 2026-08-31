@@ -122,3 +122,41 @@ the exact commit it measured. **Commit before running.**
 
 A generator for step 3 would remove this failure mode entirely, and is the
 obvious next improvement to this tooling.
+
+---
+
+## The fit must be launched DETACHED, or the harness takes it with the wrapper
+
+Added 2026-08-31, after the **sixth** fit in this project was killed the same
+way. The earlier run log recorded five and noted that "the flow is running
+locally so its reports persist on disk regardless of what happens to a wrapper
+process" — which was half right and cost an hour to correct.
+
+**The reports persist. The Quartus process does not.** When an agent harness
+kills a backgrounded shell, `quartus_fit.exe` is inside that process tree and
+dies with it, mid-fitter, forty minutes in. What survives on disk is whatever
+stage last completed — so a fit killed during the fitter leaves a `map.rpt` and
+no `fit.rpt`, and the numbers you wanted are simply not there.
+
+**Launch it out of the tree:**
+
+```powershell
+$log = "C:\programmieren\zencrifice\zhaozhou\fit-round2.log"
+Start-Process -FilePath "powershell.exe" -WindowStyle Hidden -PassThru `
+  -ArgumentList "-NoProfile","-NonInteractive","-Command",
+    "& { . '...\tools\env\zhao-env.ps1'; cd '...\zhaozhou';
+         .\tools\quartus\run_shell_fit.ps1 -Processors 2 *> '$log' }"
+```
+
+Then poll the log rather than holding a pipe to it. Two details that bite:
+
+* **The log is UTF-16LE.** `grep` reports "binary file matches" and finds
+  nothing. Read it with `iconv -f UTF-16LE -t UTF-8` first.
+* **`-PassThru` gives you the PID**, which is the only honest way to answer
+  "is it still running" — `tasklist | grep quartus` also works and is what to
+  check before concluding a fit died.
+
+**The tell that this happened:** the wrapper reports killed/failed, and
+`tasklist` shows **zero** Quartus processes. If Quartus is still there, the fit
+is fine and only the watcher died — reattach by polling the output directory
+instead of restarting, because restarting throws away however long it had run.
