@@ -287,5 +287,57 @@ int main(int argc, char** argv) {
                 (uint32_t)top.v_ready_o);
   }
 
+  // ------------------------------------------------------------------ 6 ---
+  printf("== section 6: the remainder, which the stepping path seeds from ==\n");
+  {
+    // tests/proofs/attribute_step_equivalence.cpp replaces the per-pixel divide
+    // with a quotient/remainder recurrence, and that recurrence SEEDS from this
+    // block's remainder. A port nobody checks is a port that will be wrong.
+    //
+    // The block divides (2|n| + d) by 2d, so the remainder must satisfy
+    //     2|n| + d  ==  q_mag * 2d + rem,   0 <= rem < 2d
+    // with q_mag the magnitude of the quotient. That identity is the whole
+    // contract, and it is checked rather than a recomputed expectation.
+    top.rst_n = 0;
+    top.v_valid_i = 0;
+    top.r_ready_i = 1;
+    top.eval();
+    for (int i = 0; i < 3; ++i) zhao::tick(top);
+    top.rst_n = 1;
+    top.eval();
+
+    uint64_t s = 0xBEEF77ull;
+    auto nxt = [&s]() {
+      s ^= s << 13;
+      s ^= s >> 7;
+      s ^= s << 17;
+      return s;
+    };
+    long bad = 0, range_bad = 0, cases = 0;
+    for (int i = 0; i < 300; ++i) {
+      const uint64_t d = (nxt() % 100000ull) + 1ull;
+      const __int128 qw = static_cast<int64_t>(nxt() % 2000000ull) - 1000000;
+      const __int128 n = qw * static_cast<__int128>(d) + static_cast<int64_t>(nxt() % d);
+      int64_t q = 0;
+      bool ovf = false;
+      if (run_one(top, n, d, &q, &ovf) < 0 || ovf) continue;
+      const __int128 rem = static_cast<__int128>(top.rem_o);
+      const __int128 D = 2 * static_cast<__int128>(d);
+      const __int128 an = (n < 0) ? -n : n;
+      const __int128 M = 2 * an + static_cast<__int128>(d);
+      const __int128 qmag = (q < 0) ? -static_cast<__int128>(q) : static_cast<__int128>(q);
+      if (rem < 0 || rem >= D) ++range_bad;
+      if (M != qmag * D + rem) {
+        if (bad < 3) printf("      d=%llu: M != q*D + rem\n", (unsigned long long)d);
+        ++bad;
+      }
+      ++cases;
+    }
+    printf("   MEASURED: %ld divides checked against M == q*D + rem\n", cases);
+    zhao::check(bad == 0, "the remainder closes the division identity exactly", 0, (uint32_t)bad);
+    zhao::check(range_bad == 0, "and it is Euclidean: 0 <= rem < 2*area", 0, (uint32_t)range_bad);
+    zhao::check(cases > 200, "over enough divides to mean something", 1, cases > 200 ? 1 : 0);
+  }
+
   return zhao::report_and_exit("raster_attrdiv_directed");
 }

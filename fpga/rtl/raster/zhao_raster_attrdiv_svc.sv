@@ -75,6 +75,11 @@ module zhao_raster_attrdiv_svc #(
     input  var logic                  r_ready_i,
     output var logic signed [31:0]    q_o,
     output var logic                  q_overflow_o,
+    // The unit's Euclidean remainder, forwarded with its answer. The stepping
+    // path seeds from it, so it has to survive the service rather than stop at
+    // the unit -- and a service that dropped it would force every caller back
+    // to a bare divider.
+    output var logic [47:0]           rem_o,
     output var logic [TAGW-1:0]       tag_o,
 
     // ---- evidence, so UNITS is chosen by measurement -------------------------
@@ -93,6 +98,7 @@ module zhao_raster_attrdiv_svc #(
   logic [UNITS-1:0]        u_vvalid, u_vready;
   logic [UNITS-1:0]        u_rvalid, u_rready;
   logic signed [31:0]      u_q       [UNITS];
+  logic [47:0]             u_rem     [UNITS];
   logic                    u_ovf     [UNITS];
   logic [TAGW-1:0]         u_tag_r   [UNITS];
 
@@ -119,6 +125,7 @@ module zhao_raster_attrdiv_svc #(
   assign r_valid_o    = u_rvalid[ret_r];
   assign q_o          = u_q[ret_r];
   assign q_overflow_o = u_ovf[ret_r];
+  assign rem_o        = u_rem[ret_r];
   assign tag_o        = u_tag_r[ret_r];
 
   generate
@@ -134,8 +141,15 @@ module zhao_raster_attrdiv_svc #(
           .r_ready_i    (u_rready[g]),
           .q_o          (u_q[g]),
           .q_overflow_o (u_ovf[g]),
+          .rem_o        (u_rem[g]),
+          // Sunk deliberately: the SERVICE counts accepted and retired for the
+          // whole pool, which is the number that sizes UNITS. A per-unit divide
+          // count would only re-derive it, and a per-unit busy count says
+          // nothing the pool's stall clocks do not.
+          /* verilator lint_off PINCONNECTEMPTY */
           .divides_o    (),
           .busy_clocks_o()
+          /* verilator lint_on PINCONNECTEMPTY */
       );
     end
   endgenerate

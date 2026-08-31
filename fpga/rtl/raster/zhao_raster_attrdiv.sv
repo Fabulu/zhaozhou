@@ -56,6 +56,24 @@
 // one that mostly agrees.
 //
 // ---------------------------------------------------------------------------
+// THE REMAINDER IS AN OUTPUT, BECAUSE THE STEPPING PATH NEEDS IT
+// ---------------------------------------------------------------------------
+// tests/proofs/attribute_step_equivalence.cpp proves the per-pixel divide can be
+// replaced by an exact quotient/remainder recurrence -- 10x fewer divides with
+// every rendered bit unchanged. That recurrence needs a SEED: the Euclidean
+// (q, r) pair of the numerator at one pixel, after which it advances by adds.
+//
+// A restoring divider already holds the remainder when it finishes; it is
+// `rem_r` at D_DONE and it was simply being discarded. Publishing it costs a
+// port, not an adder.
+//
+// AND IT IS ALREADY THE RIGHT REMAINDER. This block divides `2|n| + d` by `2d`,
+// so at completion `rem_r` is exactly `M mod D` for the positive branch and
+// `M' mod D` for the negative one -- the two branches the recurrence uses. No
+// conversion, no sign fixup: the value the stepping wants is the value the
+// division produced.
+//
+// ---------------------------------------------------------------------------
 // WIDTHS, AND WHY THE QUOTIENT IS SMALL
 // ---------------------------------------------------------------------------
 // The numerator reaches 2^78 and the area 2^46, but the QUOTIENT cannot exceed
@@ -92,6 +110,10 @@ module zhao_raster_attrdiv #(
     // The quotient did not fit 32 bits, or the area was zero. Either means the
     // caller broke a precondition, and a wrong attribute is worse than a stall.
     output var logic               q_overflow_o,
+    // The Euclidean remainder of the division this block just performed:
+    // 0 <= rem_o < 2*area. Meaningless when `q_overflow_o` is set, for the same
+    // reason `q_o` is. See THE REMAINDER IS AN OUTPUT above.
+    output var logic [47:0]        rem_o,
 
     // ---- evidence ------------------------------------------------------------
     output var logic [31:0] divides_o,
@@ -212,6 +234,7 @@ module zhao_raster_attrdiv #(
       r_valid_o     <= 1'b0;
       q_o           <= 32'sd0;
       q_overflow_o  <= 1'b0;
+      rem_o         <= 48'd0;
       divides_o     <= 32'd0;
       busy_clocks_o <= 32'd0;
     end else begin
@@ -252,6 +275,10 @@ module zhao_raster_attrdiv #(
           // at radix 2 and two at radix 4 -- written as a range so the two
           // builds cannot disagree about what "too big" means.
           q_overflow_o <= bad_r || (|q_r[QPOS-1:32]);
+          // rem_r is the remainder of the completed division. Bits above 47
+          // cannot be set for a legal area (the divisor is 2*area, 48 bits), and
+          // the unused-bit sink below still covers them.
+          rem_o        <= bad_r ? 48'd0 : rem_r[47:0];
           r_valid_o    <= 1'b1;
           divides_o    <= divides_o + 32'd1;
           st_r         <= D_IDLE;
