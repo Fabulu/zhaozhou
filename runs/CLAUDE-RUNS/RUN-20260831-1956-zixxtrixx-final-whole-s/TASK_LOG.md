@@ -1,7 +1,7 @@
 # Task Log: RUN-20260831-1956 - Zixxtrixx final explicit whole-S animation candidate
 
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Implementation candidate accepted: whole-body spring, bounded secondary audit, moving inspection light and programmable-jump landings complete
+**Status:** Closed: isolated implementation candidate accepted and pushed; parent owns review/integration/publication
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/
 
 ---
@@ -218,17 +218,17 @@ None. The owner requires one sole implementation agent and prohibits delegation.
 | zhaozhou | `dceb28b` | `ANIMATION: preserve blocked authored release candidate` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 | zhaozhou | `3dd3208` | `ANIMATION: accept Zixxtrixx whole-body spring` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 | zhaozhou | `3e0a958` | `LIGHTING: strengthen Zixxtrixx inspection source` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
+| zhaozhou | `8179d8e` | `ANIMATION: plant Zixxtrixx programmable landings` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 
 ---
 
 ## Owned Process Shutdown
 
-All intended direct compilers, linkers, renderers, focused probes and Python sheet builders completed synchronously and exited. One accidental `--help` invocation was recognized as a render and stopped immediately through owned task handle `buei6080i`; no owned background task handle remains. No encoder, PowerShell worker, browser or server was launched. Hardware-lane processes were neither inspected nor touched.
+All intended direct compilers, linkers, renderers, focused probes and Python sheet builders completed synchronously and exited, including the final all-target direct rebuild, final probe/meshcheck and two 161-frame renders. One accidental `--help` invocation was recognized as a render and stopped immediately through owned task handle `buei6080i`; no owned background task handle remains. No encoder, PowerShell worker, browser or server was launched. Hardware-lane processes were neither inspected nor touched.
 
 ---
 
 ## Next Steps
 
-1. Push the accepted programmable-jump landing milestone and record its exact feature commit.
-2. Confirm tracked-tree cleanliness, intentional untracked evidence/workbench inventory and that all owned synchronous tasks exited.
-3. Hand the isolated feature heads and focused evidence to the parent. Independent review, integration, archive, full bank, website media, deployment and publication remain parent-owned.
+1. Parent performs independent review/QA and decides integration.
+2. Parent owns the complete bank, archive, website media, noindex verification, deployment and publication. This implementation lane performs none of them.
