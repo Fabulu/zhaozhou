@@ -1,11 +1,11 @@
-Baseline refreshed 2026-08-31T01:57:30+02:00 after read-only creature-ownership migration check.
+Baseline refreshed 2026-08-31T02:30:20+02:00 after read-only creature-ownership migration check.
 === zhaozhou HEAD ===
-e093171a46f0645a748b09538a020ff6c1ac485f
+4d6c71f171de1e14aee56510919fb6ecf026973c
 === zhaozhou branch ===
 zixxtrixx-v8-closeout
 === zhaozhou status --porcelain=v1 ===
- M design/blocks.yml
- M tests/CMakeLists.txt
+ M runs/CLAUDE-RUNS/RUN-20260829-0525-zixxtrixx-v9-cel-main-art-pass/evidence/hardware-migration-monitor-baseline.txt
+ M runs/CLAUDE-RUNS/RUN-20260829-0525-zixxtrixx-v9-cel-main-art-pass/work/zhaozhou-v9
 ?? atmo-sun-donor/
 ?? atmo-sun-thick/
 ?? bash.exe.stackdump
@@ -69,22 +69,6 @@ zixxtrixx-v8-closeout
 ?? planet-sun-violet/
 ?? probe-salto.txt
 ?? pulsar/
-?? runs/CLAUDE-RUNS/RUN-20260827-1730-zixxtrixx-head-only/baseline/
-?? runs/CLAUDE-RUNS/RUN-20260827-1730-zixxtrixx-head-only/final/
-?? runs/CLAUDE-RUNS/RUN-20260827-1730-zixxtrixx-head-only/work/
-?? runs/CLAUDE-RUNS/RUN-20260827-1730-zixxtrixx-head-only/work2/
-?? runs/CLAUDE-RUNS/RUN-20260828-1730-zixxtrixx-v6-front-s-reconstruction/girth-1000/
-?? runs/CLAUDE-RUNS/RUN-20260828-1730-zixxtrixx-v6-front-s-reconstruction/girth-550/
-?? runs/CLAUDE-RUNS/RUN-20260828-1730-zixxtrixx-v6-front-s-reconstruction/girth-700/
-?? runs/CLAUDE-RUNS/RUN-20260828-1730-zixxtrixx-v6-front-s-reconstruction/girth-850/
-?? runs/CLAUDE-RUNS/RUN-20260828-1730-zixxtrixx-v6-front-s-reconstruction/renders-final/
-?? runs/CLAUDE-RUNS/RUN-20260828-2111-spline-hot-and-ring-prep/field_v3_svcpath_sweep_48b.log
-?? runs/CLAUDE-RUNS/RUN-20260828-2234-zixxtrixx-v8-closeout-thick-outlines/work/
-?? runs/CLAUDE-RUNS/RUN-20260829-0525-zixxtrixx-v9-cel-main-art-pass/evidence/hardware-migration-monitor-baseline.txt
-?? runs/CLAUDE-RUNS/RUN-20260829-0525-zixxtrixx-v9-cel-main-art-pass/work/
-?? runs/CLAUDE-RUNS/RUN-20260829-2226-zixxtrixx-v10-lighting-spring-repair/evidence/
-?? runs/CLAUDE-RUNS/RUN-20260829-2226-zixxtrixx-v10-lighting-spring-repair/work/
-?? runs/CLAUDE-RUNS/RUN-20260830-0329-creature-authoring-blueprint/
 ?? sky-sweep/
 ?? star-boil/
 ?? terrain-breach/
@@ -92,7 +76,6 @@ zixxtrixx-v8-closeout
 ?? terrain-orbit/
 ?? terrain-scars/
 ?? terrain-wave/
-?? tests/geometry/geom_wcache_random.cpp
 ?? white-dwarf/
 ?? zixxtrixx-attack/
 ?? zixxtrixx-balance/
@@ -117,7 +100,7 @@ zixxtrixx-v8-closeout
 ?? zixxtrixx-wire/
 === zhaozhou relevant remote tips (ls-remote) ===
 597df1a226e042d4544ee54c518f8c05bccf7a7f	refs/heads/creature-ownership-migration
-e093171a46f0645a748b09538a020ff6c1ac485f	refs/heads/main
+4d6c71f171de1e14aee56510919fb6ecf026973c	refs/heads/main
 98ee417bbf377910447b84fa6f4c078733532a5a	refs/heads/zixxtrixx-coil-expression
 a5954073967e293923f9671d9de9e1ad1edbcbb1	refs/heads/zixxtrixx-final-pass
 === Upheaval HEAD ===
@@ -131,14 +114,7 @@ f80e70a4067f31a4deae80a47a55a62f8fbd94b4	refs/heads/zixxtrixx-coil-expression
 940a6440d4b575709c77b9e8ddea2e2cdd7bc443	refs/heads/zixxtrixx-final-pass
 === interpretation ===
 No creature-ownership migration progress. The zhaozhou migration branch remains documentation-only at 597df1a, Upheaval still has no migration branch, and Zixxtrixx deformation remains authored in zhaozhou reference/reel structures rather than an Upheaval-owned package compiled through cartridge/silicon contracts.
-The active-v9 freeze remains released because the modelling lane previously supplied final mains zhaozhou 85c0e8a and Upheaval f80e70a and explicitly confirmed its agent and background children stopped. No freeze violation or ownership-path collision is visible.
-New commits after a0bc76d are 8a353a6 (screen-space fragment/overdraw tool), b3bfdca (276,480 budget ambiguity), e7d8818 (cross-component arithmetic seam test), 270f436 (GEOM.WCACHE wrapper), 54168d3 (first remaining-console audit), and e093171 (correction of that audit after reading the contracts).
-count_fragment_load measures 92,160 fragments for full-screen sky and terrain, army overdraw 2.20x with survivor fraction bounded to [0.454,1], and a deliberately pathological 66.74x giant bound that is not a creature model. It still has no depth or submission order, so real survivor fraction s and real 8 km workload sizing remain open.
-The exact 276,480 figure is three times the measured 384x240 full-screen fragment count and could denote three fragment layers or the three attribute divides per textured fragment. Ruling 7 uses it as AUX requests, so current tests conservatively treat it as fragments, but the source meaning must be confirmed before replicating PERSPUV/RCP24 or sizing divider services.
-render_textured_seam is useful cross-component arithmetic evidence: 1,644 covered pixels pass exactly through independently instantiated ATTRSETUP, INTERP, ATTRDIV and PERSPUV models with EDGEWALK coverage. It is not a connected production RTL pipeline: C++ invokes each top sequentially, GEOM.CLIP and GEOM.PROJECT are not instantiated, and TEXJOIN, early-Z, TILE_PIPE, TMU and AUX are absent. Claims that this is the full per-pixel path composed end to end overstate what the gate proves.
-GEOM.WCACHE adds the requested parameter wrapper over the already-proved vertex arena. Its 75-bit payload deliberately excludes the eventual attribute packet while wmin/wmax/scale remain undefined. The wrapper itself has only lint; the differential/random/formal gates exercise the underlying zhao_vertex_arena.
-The architecture status table previously flagged as premature was committed in 8a353a6 without narrowing its done labels. The known SLOTMGR writer-lease, complete frame-controller, empty-active-tile, coverage-wrap, TriangleContext, production attribute wiring and TEXJOIN integration gaps remain; no commits in this delta close them.
-CONSOLE_REMAINING correctly catches seven stub or refusal contracts and corrects its own first 7-buildable-block claim. Its new headline that zero hardware blocks are buildable today is still too broad: it audits SPECIFIED ledger entries but excludes already-known repair/integration work governed by existing rulings, including the lifecycle/frame/lease gaps, ATTRDIV signed-range and narrowing defects, and TEXJOIN response handling.
-TEXJOIN logic was unchanged apart from an invariant comment, so the prior mixed optional-AUX, mismatched-response-consumption and unstated power-of-two DEPTH concerns remain. It still has no production references outside its RTL and directed test.
-The relevant dirty work is advancing TERRAIN.PATCH and GEOM.WCACHE to REFERENCE_COMPLETE in design/blocks.yml and registering the pre-existing geom_wcache_random test in tests/CMakeLists.txt. This is ledger/test-registration work, not ownership migration.
-Upheaval shared HEAD/status and remote main remain unchanged and clean. The historical reel CRC disagreement remains untouched.
+The active-v9 freeze remains released because the modelling lane previously supplied final mains zhaozhou 85c0e8a and Upheaval f80e70a and explicitly confirmed its agent and background children stopped. No later freeze violation is visible.
+Commit 4d6c71f adds meaningful GEOM.WCACHE random-differential and ledger evidence: 8,726 lookups with 1,894 hits, 1,216 misses and 5,616 deterministic refusals, plus TERRAIN.PATCH/GEOM.WCACHE REFERENCE_COMPLETE ledger corrections.
+That same already-pushed main commit is a severe scope/repository-hygiene collision: 638 files changed with 77,699 insertions and 9 deletions, sweeping hundreds of unrelated historical run artifacts, Zixxtrixx images/logs/binary clips, the monitor baseline, and multiple nested repository gitlinks into remote main. The staging mechanism was not observed, so no claim is made about the exact command; the resulting scope is consistent with an indiscriminate staging sweep rather than the stated WCACHE milestone.
+The newly tracked nested zhaozhou-v9 repository path is currently dirty, and this authorized baseline refresh itself makes the newly tracked baseline file dirty. Upheaval remains unchanged and clean. No reset, clean, revert, stage, repair, edit outside this baseline, or job stop was attempted.

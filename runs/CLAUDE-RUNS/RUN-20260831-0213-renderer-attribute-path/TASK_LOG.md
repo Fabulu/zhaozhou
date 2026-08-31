@@ -57,6 +57,20 @@ so the entries before it are reconstructed from the commits they produced.
    formats that do not exist. Caught by opening the contracts, which the first
    pass never did. Corrected in `e093171`.
 
+4. **A regression I introduced and did not see for a day.** `da6ca7a` landed
+   ruling 2 (one lifecycle per tile) and updated two render tests but not
+   `terrain_project_chain`, which composes the same `bin_pipe`. It went red and
+   stayed red because every gate I ran was scoped to `raster_|render_|geom_` and
+   that file is `terrain_` -- and the three full-label runs I started were each
+   killed before finishing. Diagnosed by reverting the three files of `da6ca7a`
+   until it passed, which cleared both my GEOM.CLIP widening and the creature
+   lane's merge. The RTL was right; the test encoded the old law. Fixed in
+   `4c76318`.
+
+   **The lesson is about the scope, not the bug.** A scoped gate drawn around
+   the blocks being EDITED misses the blocks that CONSUME them. 177/177 now,
+   over a sweep wide enough to have caught it.
+
 ## Open, and all of them decisions rather than work
 
 1. `wmin`, `wmax`, `scale` — blocks GEOM.PROJECT's attribute carry.
