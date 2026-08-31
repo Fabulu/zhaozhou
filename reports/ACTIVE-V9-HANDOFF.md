@@ -26,6 +26,11 @@ quoted this session's own SHAs back — so the repository is the channel.
     zhaozhou   origin/main   2728467c37e6d6a4571e3703838ed52eeb048406
     Upheaval   origin/main   f80e70a4067f31a4deae80a47a55a62f8fbd94b4
 
+**Upheaval main has since MOVED to `2ad25aa`** — one commit, the rescued design
+document, added after this handoff was written. See the update at the end. The
+`f80e70a` above is what was current at handoff time and is kept for the record;
+**use `2ad25aa` for a fresh clone.**
+
 **Read the Upheaval line carefully — it is not what you may be expecting.**
 `450acc4` (the mana-territory design document) is **NOT on Upheaval main.** It
 sits on `zixxtrixx-v9-cel-main`, which is **1 ahead of and 23 behind**
@@ -129,11 +134,19 @@ dictated on 2026-08-31 -- **exists only on `zixxtrixx-v9-cel-main`**, the branch
 being abandoned. Upheaval main does not have it. It is unrelated to the creature
 repair and it is not reproducible from anywhere else.
 
-**If that branch is deleted, that document is gone.** It needs to reach Upheaval
-main. This session is not doing it: Upheaval is inside the agreed boundary, and
-a branch 23 commits behind main is not something to merge sideways to rescue one
-file. Cherry-picking `450acc4` onto Upheaval main is the clean way, and it is
-Fabian's call who does it.
+~~**If that branch is deleted, that document is gone.**~~ **RESOLVED** — Fabian
+asked for it to be rescued, so `450acc4` was cherry-picked onto Upheaval main:
+
+    Upheaval  origin/main   f80e70a -> 2ad25aa
+
+Verified identical at the blob level (`1739ef96…` on both), not by diffing text:
+a text diff reported all 447 lines changed, which was purely a CRLF/LF checkout
+artifact and would have been misleading in either direction. A clean cherry-pick
+onto current main, so it carries **none** of the abandoned branch's 23-commit
+staleness.
+
+**`zixxtrixx-v9-cel-main` can now be deleted without losing anything of
+Fabian's.** That was the only reason to keep it alive.
 
 ### And a note for anyone diffing against a fresh clone
 
