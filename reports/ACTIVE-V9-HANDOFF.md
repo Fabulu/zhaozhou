@@ -104,3 +104,40 @@ branch and you did not ask for it there.
 The 100 MHz timing surgery (docket D1), the shell route-integrity bug (D2), and
 the CI repair. **No reel, creature, active-v9, monitor-baseline or Upheaval
 paths** — that boundary is accepted and holds regardless of this handoff.
+
+---
+
+## Update — the freeze is closed (2026-08-31, later)
+
+The v9 session confirmed both SHAs against its own reading, stopped the old
+modelling agent and its children, **rejected the iteration-93 candidate and left
+it unintegrated**, and is closing the old pass as **abandoned rather than
+merged**. A completion pass will run from fresh isolated clones of the two mains
+above and will not touch this checkout or the running fit. No creature
+integration before independent review and a fresh handoff.
+
+**It did not ask for the reel CRC re-pin back, so `4a436a0` stands** -- it is
+what makes `reel_sequence_crc` pass. If the completion pass moves creature
+rendering again those constants will drift again, and the fix is to **re-pin in
+the same commit that causes the drift** rather than leave CI red for days, which
+is what happened here.
+
+### One thing the abandoned branch is carrying that nothing else has
+
+`450acc4` -- `Upheaval/docs/MANA-TERRITORY.md`, the mana-economy design Fabian
+dictated on 2026-08-31 -- **exists only on `zixxtrixx-v9-cel-main`**, the branch
+being abandoned. Upheaval main does not have it. It is unrelated to the creature
+repair and it is not reproducible from anywhere else.
+
+**If that branch is deleted, that document is gone.** It needs to reach Upheaval
+main. This session is not doing it: Upheaval is inside the agreed boundary, and
+a branch 23 commits behind main is not something to merge sideways to rescue one
+file. Cherry-picking `450acc4` onto Upheaval main is the clean way, and it is
+Fabian's call who does it.
+
+### And a note for anyone diffing against a fresh clone
+
+Fresh clones inherit the 17-file reformat, three of which are creature reference
+(`zref_creature.hpp`, `creature_core.cpp`, `creature_sim.cpp`). Token-identical,
+so behaviour cannot have changed, but line breaks moved. Reflow noise in those
+three is expected and is not a semantic change.
