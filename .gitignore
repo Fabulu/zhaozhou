@@ -76,3 +76,14 @@ runs/**/golden-verify/
 # scratch reel output, wherever a subject dir lands
 **/scratch-reel/
 tools/reel/exp/
+
+# Nested clones an agent made inside a run work dir. They were committed as
+# GITLINKS with no .gitmodules entry, so every CI checkout ran
+# `git submodule foreach` against them and exited 128 -- a warning on every
+# single job. They are working clones of sibling repos, never our content.
+runs/CLAUDE-RUNS/RUN-20260829-0525-zixxtrixx-v9-cel-main-art-pass/work/Upheaval/
+runs/CLAUDE-RUNS/RUN-20260829-0525-zixxtrixx-v9-cel-main-art-pass/work/zhaozhou-v9/
+runs/CLAUDE-RUNS/RUN-20260829-2226-zixxtrixx-v10-lighting-spring-repair/work/Upheaval-v10/
+runs/CLAUDE-RUNS/RUN-20260829-2226-zixxtrixx-v10-lighting-spring-repair/work/zhaozhou-v10/
+runs/CLAUDE-RUNS/RUN-20260830-0329-creature-authoring-blueprint/work/Upheaval-blueprint/
+runs/CLAUDE-RUNS/RUN-20260830-0329-creature-authoring-blueprint/work/zhaozhou-blueprint/
