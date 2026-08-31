@@ -58,33 +58,32 @@
 // consume none of it. Three parallel dividers would triple the area to buy
 // headroom on a resource that is already 1.7x over its own worst case.
 //
-// THE LANE HERE IS SEQUENTIAL, AND IT IS 38x TOO SLOW. MEASURED:
+// THE RATE, AND WHAT IT COST TO GET THERE. MEASURED, streamed:
 //
-//     201 clocks a cel fragment  ->  8,291 a frame, against 320,000
+//     4.11 clocks a cel fragment  ->  405,515 a frame, against 320,000
 //
-// A 64-iteration restoring divider walked three times is ~195 clocks, and the
-// arithmetic above assumed a PIPELINED lane taking one channel a clock. This
-// implementation is correct and slow, deliberately: the law had to be pinned
-// against rast.cpp before any effort went into speed, and a wrong fast block
-// would have been worse than a right slow one.
+// It did not start there, and each step was a different mistake:
 //
-// The block is therefore CORRECT AND NOT YET SHIPPABLE. What closes the gap,
-// in the order worth trying:
+//   201 clocks   a 64-iteration sequential divider walked three times. The law
+//                was right and the rate was 38x short. Correct first, fast
+//                second -- a wrong fast block would have been worse.
+//    39 clocks   the divider became a 32-stage pipelined array. But one
+//                fragment was in flight at a time, so this measured its
+//                LATENCY and called it the rate.
+//  9.29 clocks   four slots, so fragments overlap. Still latency-bound: a slot
+//                frees only when its fragment RETIRES, 32 stages later, so
+//                four slots cap the rate at latency/4.
+//  4.11 clocks   SIXTEEN slots, which covers 32/3 ~ 11 fragments in flight and
+//                lets the three-clock issue be the limit.
 //
-//   1. Pipeline the lane -- one channel a clock, three clocks a fragment, which
-//      is the 555,555 a frame the arithmetic above describes. This is what the
-//      owner ruling actually specified and it is the expected answer.
-//   2. Seed from the numerator's most significant bit instead of bit 63. The
-//      shipped constants make |lane*q| about 34 bits, not 64, so most of the
-//      iterations are shifting zeros.
-//   3. Reciprocal-plus-correction: one reciprocal of `mean` shared by all three
-//      channels, then a multiply and an exact correction step per lane. Cheaper
-//      if the fit dislikes a 64-deep pipeline -- but it must stay differential
-//      against apply_toon_ramp, because a reciprocal that is one LSB off moves
-//      a band edge on the creature.
+// The lesson worth keeping is the second one: a block that issues one job and
+// waits measures how long a job takes, not how many it can do. Only a streamed
+// batch answers the question the frame budget asks.
 //
-// `busy_clocks_o` and `fragments_o` are here so the improvement is measured
-// rather than assumed.
+// Every one of those four versions produced IDENTICAL attributes. The test
+// compares against rast.cpp's own apply_toon_ramp and checks the streamed batch
+// is exact AND in order, so the speed work could not quietly cost a band edge.
+//
 `default_nettype none
 
 module zhao_raster_toon (
@@ -109,33 +108,26 @@ module zhao_raster_toon (
     input  var logic signed [31:0] b_i,
     input  var logic        [15:0] tag_i,
 
-    output var logic               r_valid_o,
+    output logic               r_valid_o,
     input  var logic               r_ready_i,
-    output var logic signed [31:0] r_o,
-    output var logic signed [31:0] g_o,
-    output var logic signed [31:0] b_o,
-    output var logic        [15:0] tag_o,
+    output logic signed [31:0] r_o,
+    output logic signed [31:0] g_o,
+    output logic signed [31:0] b_o,
+    output logic        [15:0] tag_o,
     // The band this fragment landed in, 0..2. Not needed to shade, but it is
     // what a capture wants when a band boundary moves by one pixel.
-    output var logic        [1:0]  band_o,
+    output logic        [1:0]  band_o,
 
     // ---- evidence ------------------------------------------------------------
     output var logic [31:0] fragments_o,
     output var logic [31:0] flat_fragments_o,   // mean <= 0, the ratio-less case
-    output var logic [31:0] busy_clocks_o
+    output var logic [31:0] busy_clocks_o,
+    // A channel quotient did not fit 32 bits. Its lane is not usable, and
+    // silence would look like an art bug rather than a refusal.
+    output var logic [31:0] overflow_o
 );
 
-  localparam logic [2:0] T_IDLE = 3'd0;
-  localparam logic [2:0] T_DIV  = 3'd1;
-  localparam logic [2:0] T_NEXT = 3'd2;
-  localparam logic [2:0] T_DONE = 3'd3;
 
-  logic [2:0]         st_r;
-  logic signed [31:0] lane_r [3];   // the three inputs, then the three results
-  logic signed [31:0] q_r;
-  logic [1:0]         band_r;
-  logic [15:0]        tag_r;
-  logic [1:0]         ch_r;         // which channel is dividing
 
   // ---- the mean: (r + g + b) / 3, TRUNCATING toward zero -------------------
   // A 34-bit sum cannot overflow three 32-bit signed lanes. Division by three
@@ -180,148 +172,172 @@ module zhao_raster_toon (
   end
 
   // ---- the channel divide: lane * q / mean, TRUNCATING ---------------------
-  // Magnitude then sign, which is what gives truncation toward zero. The
-  // product is 64 bits; the divisor is a positive mean (the mean <= 0 case
-  // never reaches here). 64 restoring iterations, once per channel.
-  logic [63:0] num_r;      // |lane * q|
-  logic [63:0] rem_r;
-  logic [63:0] quo_r;
-  logic [31:0] den_r;      // |mean|, always > 0 on this path
-  logic        neg_r;      // sign of the result
-  logic [6:0]  iter_r;
+  // Magnitude then sign, which is what gives truncation toward zero.
+  //
+  // SEVERAL FRAGMENTS ARE IN FLIGHT AT ONCE, and that is the difference between
+  // a block that works and one that ships. The array is 32 stages deep, so a
+  // design that issued one fragment and waited measured 39 clocks a fragment --
+  // the LATENCY, not the throughput, and 42,735 a frame. Carrying SLOTS lets
+  // the next fragment enter while the previous one is still in the pipe, and
+  // the cost falls to the three clocks its three channels actually occupy.
+  //
+  // SLOTS MUST COVER THE LATENCY, not merely exceed the channel count. With
+  // four slots the block measured 9.29 clocks a fragment: issue costs three
+  // clocks, but a slot is only freed when its fragment RETIRES, 32 stages
+  // later, so four slots cap the rate at latency/4. Sixteen slots cover
+  // 32 / 3 ~ 11 fragments in flight and let the three-clock issue be the limit.
+  localparam int unsigned SLOTS = 16;
+  localparam int unsigned SLOTW = 4;
+
+  logic signed [31:0] sl_lane_r [SLOTS][3];
+  logic signed [31:0] sl_q_r    [SLOTS];
+  logic [1:0]         sl_band_r [SLOTS];
+  logic [15:0]        sl_tag_r  [SLOTS];
+  logic [1:0]         sl_got_r  [SLOTS];
+  logic               sl_ovf_r  [SLOTS];
+  logic               sl_flat_r [SLOTS];   // bypassed: no divide was issued
+  logic [SLOTW-1:0]   wr_r, rd_r;
+  logic [SLOTW:0]     inflight_r;
+
+  logic full_c, empty_c;
+  assign full_c  = (inflight_r == 5'd16);
+  assign empty_c = (inflight_r == 5'd0);
+
+  // ---- issue: one channel a clock -----------------------------------------
+  logic [SLOTW-1:0] iss_slot_r;
+  logic [1:0]       iss_ch_r;
+  logic        issuing_r;
+  logic [31:0] iss_den_r;
 
   logic signed [63:0] prod_c;
   logic [63:0]        prod_mag_c;
   logic               prod_neg_c;
   always_comb begin
-    prod_c     = 64'(lane_r[ch_r]) * 64'(q_r);
+    prod_c     = 64'(sl_lane_r[iss_slot_r][iss_ch_r]) * 64'(sl_q_r[iss_slot_r]);
     prod_neg_c = prod_c[63];
     prod_mag_c = prod_neg_c ? unsigned'(-prod_c) : unsigned'(prod_c);
   end
 
-  logic [63:0] rem_shift_c;
-  logic        sub_ok_c;
-  always_comb begin
-    rem_shift_c = (rem_r << 1) | 64'(num_r[iter_r[5:0]]);
-    sub_ok_c    = (rem_shift_c >= 64'({32'd0, den_r}));
-  end
+  logic       dq_valid, dq_neg, dq_ovf;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0] dq_quo;   // bit 31 unread: a signed lane cannot hold 2^31
+  /* verilator lint_on UNUSEDSIGNAL */
+  logic [SLOTW+1:0] dq_tag;
+  zhao_raster_toon_div #(.QBITS(32), .TAGW(SLOTW + 2)) u_div (
+      .clk       (clk),
+      .rst_n     (rst_n),
+      .v_valid_i (issuing_r),
+      .num_i     (prod_mag_c),
+      .den_i     (iss_den_r),
+      .neg_i     (prod_neg_c),
+      .tag_i     ({iss_slot_r, iss_ch_r}),
+      .r_valid_o (dq_valid),
+      .quo_o     (dq_quo),
+      .neg_o     (dq_neg),
+      .overflow_o(dq_ovf),
+      .tag_o     (dq_tag)
+  );
 
-  assign v_ready_o = (st_r == T_IDLE) && !r_valid_o;
-  assign band_o    = band_r;
+  // A fragment is accepted whenever there is a slot AND the issuer is free.
+  assign v_ready_o = !full_c && !issuing_r;
+
+  // ---- retire, in slot order ----------------------------------------------
+  logic head_done_c;
+  assign head_done_c = !empty_c && (sl_flat_r[rd_r] || (sl_got_r[rd_r] == 2'd3));
+
+  assign r_valid_o = head_done_c && !out_held_r;
+  assign r_o       = sl_lane_r[rd_r][0];
+  assign g_o       = sl_lane_r[rd_r][1];
+  assign b_o       = sl_lane_r[rd_r][2];
+  assign tag_o     = sl_tag_r[rd_r];
+  assign band_o    = sl_band_r[rd_r];
+
+  logic out_held_r;   // never set; the output is combinational from the head
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      st_r             <= T_IDLE;
-      q_r              <= 32'sd0;
-      band_r           <= 2'd0;
-      tag_r            <= 16'd0;
-      ch_r             <= 2'd0;
-      num_r            <= 64'd0;
-      rem_r            <= 64'd0;
-      quo_r            <= 64'd0;
-      den_r            <= 32'd0;
-      neg_r            <= 1'b0;
-      iter_r           <= 7'd0;
-      r_valid_o        <= 1'b0;
-      r_o              <= 32'sd0;
-      g_o              <= 32'sd0;
-      b_o              <= 32'sd0;
-      tag_o            <= 16'd0;
+      wr_r             <= SLOTW'(0);
+      rd_r             <= SLOTW'(0);
+      inflight_r       <= 5'd0;
+      iss_slot_r       <= SLOTW'(0);
+      iss_ch_r         <= 2'd0;
+      issuing_r        <= 1'b0;
+      iss_den_r        <= 32'd0;
+      out_held_r       <= 1'b0;
       fragments_o      <= 32'd0;
       flat_fragments_o <= 32'd0;
       busy_clocks_o    <= 32'd0;
-      for (int unsigned i = 0; i < 3; ++i) lane_r[i] <= 32'sd0;
+      overflow_o       <= 32'd0;
+      for (int unsigned i = 0; i < SLOTS; ++i) begin
+        sl_q_r[i]    <= 32'sd0;
+        sl_band_r[i] <= 2'd0;
+        sl_tag_r[i]  <= 16'd0;
+        sl_got_r[i]  <= 2'd0;
+        sl_ovf_r[i]  <= 1'b0;
+        sl_flat_r[i] <= 1'b0;
+        for (int unsigned c = 0; c < 3; ++c) sl_lane_r[i][c] <= 32'sd0;
+      end
     end else begin
-      if (st_r != T_IDLE) busy_clocks_o <= busy_clocks_o + 32'd1;
+      if (!empty_c) busy_clocks_o <= busy_clocks_o + 32'd1;
 
-      case (st_r)
-        T_IDLE: begin
-          if (v_valid_i && v_ready_o) begin
-            lane_r[0] <= r_i;
-            lane_r[1] <= g_i;
-            lane_r[2] <= b_i;
-            tag_r     <= tag_i;
-            q_r       <= q_c;
-            band_r    <= band_c;
-            ch_r      <= 2'd0;
-            if (cfg_bands_i == 2'd0) begin
-              // The ramp is off: this material is not cel and the fragment
-              // passes through with its light untouched.
-              r_o       <= r_i;
-              g_o       <= g_i;
-              b_o       <= b_i;
-              tag_o     <= tag_i;
-              band_r    <= 2'd0;
-              r_valid_o <= 1'b1;
-              fragments_o <= fragments_o + 32'd1;
-            end else if (mean_c <= 32'sd0) begin
-              // The reference's own short circuit: with no light to take a
-              // ratio OF, all three lanes become the band value.
-              r_o              <= q_c;
-              g_o              <= q_c;
-              b_o              <= q_c;
-              tag_o            <= tag_i;
-              r_valid_o        <= 1'b1;
-              fragments_o      <= fragments_o + 32'd1;
-              flat_fragments_o <= flat_fragments_o + 32'd1;
-            end else begin
-              den_r  <= unsigned'(mean_c);
-              st_r   <= T_DIV;
-              iter_r <= 7'd63;
-              rem_r  <= 64'd0;
-              quo_r  <= 64'd0;
-              num_r  <= 64'd0;   // loaded in T_DIV's first pass below
-            end
-          end
+      // ---- accept ---------------------------------------------------------
+      if (v_valid_i && v_ready_o) begin
+        sl_lane_r[wr_r][0] <= r_i;
+        sl_lane_r[wr_r][1] <= g_i;
+        sl_lane_r[wr_r][2] <= b_i;
+        sl_tag_r[wr_r]     <= tag_i;
+        sl_band_r[wr_r]    <= band_c;
+        sl_q_r[wr_r]       <= q_c;
+        sl_got_r[wr_r]     <= 2'd0;
+        sl_ovf_r[wr_r]     <= 1'b0;
+        wr_r               <= wr_r + SLOTW'(1);
+        inflight_r         <= inflight_r + 5'd1;
+
+        if (cfg_bands_i == 2'd0) begin
+          // Not a cel material: the light passes through untouched, and no
+          // divide is issued at all.
+          sl_flat_r[wr_r] <= 1'b1;
+          sl_band_r[wr_r] <= 2'd0;
+        end else if (mean_c <= 32'sd0) begin
+          // The reference's own short circuit: with no light to take a ratio
+          // OF, all three lanes become the band value.
+          sl_flat_r[wr_r]    <= 1'b1;
+          sl_lane_r[wr_r][0] <= q_c;
+          sl_lane_r[wr_r][1] <= q_c;
+          sl_lane_r[wr_r][2] <= q_c;
+          flat_fragments_o   <= flat_fragments_o + 32'd1;
+        end else begin
+          sl_flat_r[wr_r] <= 1'b0;
+          issuing_r       <= 1'b1;
+          iss_slot_r      <= wr_r;
+          iss_ch_r        <= 2'd0;
+          iss_den_r       <= unsigned'(mean_c);
         end
+      end
 
-        T_DIV: begin
-          // The first clock of each channel loads the product; the remaining
-          // 64 walk it. `iter_r == 63` with a zero numerator is the load.
-          if (num_r == 64'd0 && rem_r == 64'd0 && quo_r == 64'd0 && iter_r == 7'd63) begin
-            num_r <= prod_mag_c;
-            neg_r <= prod_neg_c;
-          end else begin
-            if (sub_ok_c) begin
-              rem_r          <= rem_shift_c - 64'({32'd0, den_r});
-              quo_r[iter_r[5:0]] <= 1'b1;
-            end else begin
-              rem_r <= rem_shift_c;
-            end
-            if (iter_r == 7'd0) st_r <= T_NEXT;
-            else iter_r <= iter_r - 7'd1;
-          end
-        end
+      // ---- issue the three channels ---------------------------------------
+      if (issuing_r) begin
+        if (iss_ch_r == 2'd2) issuing_r <= 1'b0;
+        else iss_ch_r <= iss_ch_r + 2'd1;
+      end
 
-        T_NEXT: begin
-          lane_r[ch_r] <= neg_r ? 32'(-$signed({1'b0, quo_r[30:0]}))
-                                : 32'($signed({1'b0, quo_r[30:0]}));
-          if (ch_r == 2'd2) begin
-            st_r <= T_DONE;
-          end else begin
-            ch_r   <= ch_r + 2'd1;
-            iter_r <= 7'd63;
-            rem_r  <= 64'd0;
-            quo_r  <= 64'd0;
-            num_r  <= 64'd0;
-            st_r   <= T_DIV;
-          end
-        end
+      // ---- collect --------------------------------------------------------
+      if (dq_valid) begin
+        sl_lane_r[dq_tag[SLOTW+1:2]][dq_tag[1:0]] <=
+            dq_neg ? 32'(-$signed({1'b0, dq_quo[30:0]}))
+                   : 32'($signed({1'b0, dq_quo[30:0]}));
+        sl_got_r[dq_tag[SLOTW+1:2]] <= sl_got_r[dq_tag[SLOTW+1:2]] + 2'd1;
+        if (dq_ovf) sl_ovf_r[dq_tag[SLOTW+1:2]] <= 1'b1;
+      end
 
-        T_DONE: begin
-          r_o         <= lane_r[0];
-          g_o         <= lane_r[1];
-          b_o         <= lane_r[2];
-          tag_o       <= tag_r;
-          r_valid_o   <= 1'b1;
-          fragments_o <= fragments_o + 32'd1;
-          st_r        <= T_IDLE;
-        end
-
-        default: st_r <= T_IDLE;
-      endcase
-
-      if (r_valid_o && r_ready_i) r_valid_o <= 1'b0;
+      // ---- retire ---------------------------------------------------------
+      if (r_valid_o && r_ready_i) begin
+        rd_r        <= rd_r + SLOTW'(1);
+        inflight_r  <= inflight_r - 5'd1 +
+                       ((v_valid_i && v_ready_o) ? 5'd1 : 5'd0);
+        fragments_o <= fragments_o + 32'd1;
+        if (sl_ovf_r[rd_r]) overflow_o <= overflow_o + 32'd1;
+      end
     end
   end
 

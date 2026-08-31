@@ -268,19 +268,63 @@ int main(int argc, char** argv) {
                 (got.v.r == in.r && got.v.g == in.g && got.v.b == in.b) ? 1 : 0);
     printf("   MEASURED: pass-through costs %d clocks\n", got.clocks);
 
+    // THROUGHPUT, not latency. run_one() issues one fragment and waits for it,
+    // which measures the 32-stage array's LATENCY -- the first version of this
+    // section reported 39 clocks and called it the rate. The block carries four
+    // fragments at once, so the number that matters is what a back-to-back
+    // stream costs.
     reset(top);
-    int worst = 0;
-    for (int i = 0; i < 200; ++i) {
-      const Rgb c{40000 + i * 37, 50000 - i * 11, 60000 + i * 53};
-      const Out o = run_one(top, c, 3, 0);
-      if (o.clocks > worst) worst = o.clocks;
+    const int kN = 300;
+    std::vector<Rgb> stream;
+    for (int i = 0; i < kN; ++i)
+      stream.push_back(Rgb{40000 + i * 37, 50000 - i * 11, 60000 + i * 53});
+
+    top.cfg_bands_i = 3;
+    top.cfg_thr0_i = static_cast<uint32_t>(kThr0);
+    top.cfg_thr1_i = static_cast<uint32_t>(kThr1);
+    top.cfg_lvl0_i = static_cast<uint32_t>(kLvl0);
+    top.cfg_lvl1_i = static_cast<uint32_t>(kLvl1);
+    top.cfg_lvl2_i = static_cast<uint32_t>(kLvl2);
+    size_t next = 0;
+    long done = 0, clocks = 0, wrong = 0;
+    while (done < kN && clocks < 200000) {
+      const bool offering = next < stream.size();
+      if (offering) {
+        top.r_i = static_cast<uint32_t>(stream[next].r);
+        top.g_i = static_cast<uint32_t>(stream[next].g);
+        top.b_i = static_cast<uint32_t>(stream[next].b);
+        top.tag_i = static_cast<uint16_t>(next & 0xFFFF);
+      }
+      top.v_valid_i = offering ? 1 : 0;
+      top.r_ready_i = 1;
+      top.eval();
+      const bool took = offering && top.v_ready_o;
+      if (top.r_valid_o && top.r_ready_i) {
+        const size_t idx = static_cast<size_t>(top.tag_o);
+        const Rgb want = toon_ref(stream[idx], 3);
+        if (static_cast<int32_t>(top.r_o) != want.r ||
+            static_cast<int32_t>(top.g_o) != want.g ||
+            static_cast<int32_t>(top.b_o) != want.b || idx != static_cast<size_t>(done))
+          ++wrong;
+        ++done;
+      }
+      zhao::tick(top);
+      ++clocks;
+      if (took) ++next;
     }
-    const int64_t per_frame = 1666667 / worst;
-    printf("   MEASURED: %d clocks a cel fragment -> %lld a frame\n", worst,
+    top.v_valid_i = 0;
+    top.eval();
+    zhao::check(done == kN, "the streamed batch completes", (uint32_t)kN, (uint32_t)done);
+    zhao::check(wrong == 0, "and every streamed fragment is exact AND in order", 0,
+                (uint32_t)wrong);
+    const double per_frag = static_cast<double>(clocks) / static_cast<double>(kN);
+    const int64_t per_frame = static_cast<int64_t>(1666667.0 / per_frag);
+    printf("   MEASURED: %.2f clocks a cel fragment streamed -> %lld a frame\n", per_frag,
            (long long)per_frame);
     printf("   AGAINST: 320000 pre-Early-Z stress, and only SURVIVING CEL fragments arrive\n");
     printf("   VERDICT: %s\n", per_frame >= 320000 ? "SUFFICIENT" : "SHORT -- needs pipelining");
-    zhao::check(worst > 0, "the rate was measured", 1, worst > 0 ? 1 : 0);
+    zhao::check(per_frag < 8.0, "and a streamed fragment costs under 8 clocks", 1,
+                per_frag < 8.0 ? 1 : 0);
   }
 
   return zhao::report_and_exit("raster_toon_directed");

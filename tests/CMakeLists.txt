@@ -1922,7 +1922,8 @@ target_link_libraries(test_raster_toon_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_raster_toon_directed
   PREFIX Vzhao_raster_toon
   TOP_MODULE zhao_raster_toon
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_toon.sv)
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_toon.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_toon_div.sv)
 add_test(NAME raster_toon_directed COMMAND test_raster_toon_directed)
 set_tests_properties(raster_toon_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
