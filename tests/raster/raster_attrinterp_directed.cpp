@@ -244,8 +244,7 @@ int main(int argc, char** argv) {
         ++cases;
       }
     }
-    zhao::check(bad == 0,
-                "every stepped numerator equals the oracle's at the PIXEL CENTRE", 0,
+    zhao::check(bad == 0, "every stepped numerator equals the oracle's at the PIXEL CENTRE", 0,
                 (uint32_t)bad);
     printf("   MEASURED: %ld pixels over %ld tile-jobs\n", total_pixels, cases);
   }
@@ -256,7 +255,7 @@ int main(int argc, char** argv) {
     // Masks chosen for the ways a column walk breaks: both end bits, a single
     // interior bit, alternating bits, and a full row.
     const std::vector<std::pair<int, uint16_t>> rows = {
-        {0, 0x0001}, {2, 0x8000}, {5, 0x8001}, {7, 0x0100},
+        {0, 0x0001}, {2, 0x8000},  {5, 0x8001},  {7, 0x0100},
         {9, 0xAAAA}, {11, 0x5555}, {13, 0xFFFF}, {15, 0x0FF0},
     };
     const Tri t = {px(3), px(5), px(90), px(7), px(11), px(60), 12345, -98765, 4242424, "stream"};
@@ -335,8 +334,8 @@ int main(int argc, char** argv) {
     // The direct statement of the trap: a corner-sampled plane differs from a
     // centre-sampled one by exactly (dNdx + dNdy)/2, and that quantity is not
     // zero for these triangles -- so a block that omitted it WOULD have failed.
-    const Tri t = {px(16), px(16), px(300), px(20), px(24), px(280), -(1 << 26), 1 << 26, 99,
-                   "steep"};
+    const Tri t = {px(16),  px(16),     px(300), px(20), px(24),
+                   px(280), -(1 << 26), 1 << 26, 99,     "steep"};
     const Plane p = setup_plane(t);
     const __int128 half = (p.dndx >> 1) + (p.dndy >> 1);
     zhao::check(half != 0, "the half-pixel term is non-zero, so omitting it is detectable", 1,

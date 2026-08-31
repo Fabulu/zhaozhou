@@ -223,8 +223,7 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc) {
       const DeformSample& d1 = c.deform[static_cast<size_t>(k1)];
       const DeformSample& d2 = c.deform[static_cast<size_t>(k2)];
       const DeformSample& d3 = c.deform[static_cast<size_t>(k3)];
-      const auto mid_lane = [&](uint16_t p0, uint16_t p1, uint16_t p2,
-                                uint16_t p3) {
+      const auto mid_lane = [&](uint16_t p0, uint16_t p1, uint16_t p2, uint16_t p3) {
         if (p1 == p2) return p1;  // a held deformation stays held
         int64_t m = plain[static_cast<size_t>(k)]
                         ? (static_cast<int64_t>(p1) + p2) / 2
@@ -396,17 +395,15 @@ const mat3x4fx* PoseBank::acquire(const CreatureType& type, uint16_t slot, uint1
 
 // ------------------------------------------------------------- skinning ----
 
-DeformSample deformation_sample(const CreatureType& type, uint16_t slot,
-                                uint16_t frame, uint8_t sub) {
+DeformSample deformation_sample(const CreatureType& type, uint16_t slot, uint16_t frame,
+                                uint8_t sub) {
   const Clip* clip = nullptr;
   for (const Clip& c : type.bank.clips)
     if (c.slot_id == slot) clip = &c;
-  if (clip == nullptr || frame >= clip->frame_count || clip->deform.empty())
-    return DeformSample{};
+  if (clip == nullptr || frame >= clip->frame_count || clip->deform.empty()) return DeformSample{};
   if (clip->deform.size() != clip->frame_count) return DeformSample{};
   if (clip->interpolate && sub != 0) {
-    if (clip->mid_deform.size() == clip->frame_count)
-      return clip->mid_deform[frame];
+    if (clip->mid_deform.size() == clip->frame_count) return clip->mid_deform[frame];
     const uint16_t nf = static_cast<uint16_t>(
         frame + 1 >= clip->frame_count ? (clip->hold_last ? frame : 0) : frame + 1);
     const DeformSample& a = clip->deform[frame];
@@ -426,10 +423,10 @@ SkinVertex deform_skin_vertex(const SkinVertex& v, const DeformVertex& meta,
     return v;
 
   SkinVertex out = v;
-  const int32_t flatten = static_cast<int32_t>(
-      (static_cast<uint32_t>(sample.flatten) * meta.strength + 127) / 255);
-  const int32_t spread = static_cast<int32_t>(
-      (static_cast<uint32_t>(sample.spread) * meta.strength + 127) / 255);
+  const int32_t flatten =
+      static_cast<int32_t>((static_cast<uint32_t>(sample.flatten) * meta.strength + 127) / 255);
+  const int32_t spread =
+      static_cast<int32_t>((static_cast<uint32_t>(sample.spread) * meta.strength + 127) / 255);
   if (flatten == 0 && spread == 0) return v;
   const int32_t squash_scale = 65536 - flatten;  // always positive: flatten is u16
   const int32_t spread_scale = 65536 + spread;
@@ -443,8 +440,7 @@ SkinVertex deform_skin_vertex(const SkinVertex& v, const DeformVertex& meta,
     for (uint8_t lane = 0; lane < 3; ++lane) {
       const int32_t scale = lane == axis ? squash_scale : spread_scale;
       *dst[lane] = center[lane] +
-                   rescale_s32(static_cast<int64_t>(src[lane] - center[lane]) * scale,
-                               16, nullptr);
+                   rescale_s32(static_cast<int64_t>(src[lane] - center[lane]) * scale, 16, nullptr);
     }
 
     // For diag(t,t,s), inverse-transpose is diag(1/t,1/t,1/s).
@@ -454,11 +450,9 @@ SkinVertex deform_skin_vertex(const SkinVertex& v, const DeformVertex& meta,
       const int32_t packed[3] = {v.nx, v.ny, v.nz};
       int64_t n[3];
       for (uint8_t lane = 0; lane < 3; ++lane)
-        n[lane] = static_cast<int64_t>(packed[lane]) *
-                  (lane == axis ? spread_scale : squash_scale);
+        n[lane] = static_cast<int64_t>(packed[lane]) * (lane == axis ? spread_scale : squash_scale);
       const uint64_t mag2 = static_cast<uint64_t>(n[0] * n[0]) +
-                            static_cast<uint64_t>(n[1] * n[1]) +
-                            static_cast<uint64_t>(n[2] * n[2]);
+                            static_cast<uint64_t>(n[1] * n[1]) + static_cast<uint64_t>(n[2] * n[2]);
       if (mag2 != 0) {
         const int64_t mag = static_cast<int64_t>(isqrt_u64(mag2));
         const auto pack = [mag](int64_t c) {
@@ -478,8 +472,7 @@ SkinVertex deform_skin_vertex(const SkinVertex& v, const DeformVertex& meta,
       const int32_t scale = lane == axis ? squash_scale : spread_scale;
       const int32_t moved =
           center[lane] +
-          rescale_s32(static_cast<int64_t>(carrier[lane] - center[lane]) * scale,
-                      16, nullptr);
+          rescale_s32(static_cast<int64_t>(carrier[lane] - center[lane]) * scale, 16, nullptr);
       *dst[lane] += moved - carrier[lane];
     }
   }
@@ -959,8 +952,7 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
         if (reason) *reason = "ring segments outside 3..32 (meshlet limit)";
         return false;
       }
-      if (static_cast<uint8_t>(rs.deform_role) >
-          static_cast<uint8_t>(DeformRole::kFollower)) {
+      if (static_cast<uint8_t>(rs.deform_role) > static_cast<uint8_t>(DeformRole::kFollower)) {
         if (reason) *reason = "unknown deformation role";
         return false;
       }

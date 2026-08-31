@@ -566,8 +566,8 @@ void run_scene(Chain& ch, const zref::mat4fx& m, const std::vector<TriIn>& world
       tile_tris.push_back(mine);
     }
   }
-  check(got.size() == want.size(), "one rasterized record per TILE, not per triangle",
-        want.size(), got.size());
+  check(got.size() == want.size(), "one rasterized record per TILE, not per triangle", want.size(),
+        got.size());
   // The distinction only means something if some tile really is shared.
   check(pair_refs > static_cast<long>(want.size()),
         "and some tile really is referenced by more than one triangle", 1,

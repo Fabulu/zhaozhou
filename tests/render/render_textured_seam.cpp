@@ -463,8 +463,7 @@ int main(int argc, char** argv) {
     printf("   MEASURED: invw24 spanned %lld..%lld over the pixels actually run\n",
            (long long)iw_lo, (long long)iw_hi);
     printf("   MEASURED: %zu distinct reciprocal exponents exercised\n", ks_seen.size());
-    zhao::check(iw_hi > iw_lo * 2,
-                "the depth varied by more than 2x over the covered pixels", 1,
+    zhao::check(iw_hi > iw_lo * 2, "the depth varied by more than 2x over the covered pixels", 1,
                 (iw_hi > iw_lo * 2) ? 1 : 0);
     zhao::check(ks_seen.size() >= 2,
                 "and more than one reciprocal exponent was exercised, so a fixed shift fails", 2,

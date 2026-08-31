@@ -77,8 +77,12 @@ Res one(Vzhao_raster_perspuv& t, int32_t uow, int32_t vow, uint32_t d, uint16_t 
   for (;;) {
     t.eval();
     if (t.r_valid_o) {
-      const Res r{static_cast<int32_t>(t.u_o), static_cast<int32_t>(t.v_o),
-                  static_cast<uint16_t>(t.tag_o), t.sat_o != 0, t.depth_zero_o != 0, clocks + 1};
+      const Res r{static_cast<int32_t>(t.u_o),
+                  static_cast<int32_t>(t.v_o),
+                  static_cast<uint16_t>(t.tag_o),
+                  t.sat_o != 0,
+                  t.depth_zero_o != 0,
+                  clocks + 1};
       zhao::tick(t);
       return r;
     }
@@ -213,8 +217,8 @@ int main(int argc, char** argv) {
     // S 15.16. Saturating means the texture stops moving; wrapping would tear
     // it across the whole surface, which is why this is a rail and not a mask.
     const Res hi = one(top, 2000000000, -2000000000, 1u, 0x7);
-    zhao::check(hi.u == INT32_MAX, "a huge positive coordinate rails to +max",
-                (uint32_t)INT32_MAX, (uint32_t)hi.u);
+    zhao::check(hi.u == INT32_MAX, "a huge positive coordinate rails to +max", (uint32_t)INT32_MAX,
+                (uint32_t)hi.u);
     zhao::check(hi.v == INT32_MIN, "and a huge negative one to -min", (uint32_t)INT32_MIN,
                 (uint32_t)hi.v);
     zhao::check(hi.sat, "and the rail is reported", 1, hi.sat ? 1 : 0);

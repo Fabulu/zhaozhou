@@ -276,8 +276,7 @@ int main(int argc, char** argv) {
     printf("         At the ~19,200 a real army needs it is 8.2 Mbit against 2.7 --\n");
     printf("         so the cost is trivial at the capacity we have and severe at\n");
     printf("         the capacity we do not, which is the arena decision again.\n");
-    printf("   NOTE: the 16-row walk is per-tile work no cache removes, and at %d\n",
-           kWalkRows);
+    printf("   NOTE: the 16-row walk is per-tile work no cache removes, and at %d\n", kWalkRows);
     printf("         clocks it is SIXTEEN TIMES the clock a context cache saves.\n");
     printf("         If edgewalk is ever the thing to shorten, that is where the\n");
     printf("         clocks are -- not in the setup ruling 4 is about.\n");

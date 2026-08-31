@@ -82,9 +82,7 @@ struct TmuModel {
     ++accepted;
   }
   bool offering() const { return !q.empty() && clock >= q.front().due; }
-  bool valid_now(int pat) const {
-    return offering() && ((ready_pattern >> (pat & 31)) & 1u) != 0;
-  }
+  bool valid_now(int pat) const { return offering() && ((ready_pattern >> (pat & 31)) & 1u) != 0; }
   uint32_t rgb() const { return texel_of(q.front().u, q.front().v); }
   uint16_t seq() const {
     return (accepted - static_cast<long>(q.size()) == corrupt_at)
@@ -175,14 +173,16 @@ Result run(Vzhao_raster_texjoin& t, const std::vector<Frag>& frags, TmuModel* pr
     const bool aux_rsp = t.aux_rvalid_i && t.aux_rready_o;
     if (t.o_valid_o && t.o_ready_i) {
       const uint64_t ctx = static_cast<uint64_t>(t.o_ctx_o);
-      r.outs.push_back({ctx, static_cast<uint32_t>(t.o_rgb_o),
-                        static_cast<uint32_t>(t.o_aux_rgb_o), t.o_has_aux_o != 0});
+      r.outs.push_back({ctx, static_cast<uint32_t>(t.o_rgb_o), static_cast<uint32_t>(t.o_aux_rgb_o),
+                        t.o_has_aux_o != 0});
     }
 
-    if (pri_req) pri->accept(static_cast<int32_t>(t.tmu_u_o), static_cast<int32_t>(t.tmu_v_o),
-                             static_cast<uint16_t>(t.tmu_seq_o));
-    if (aux_req) aux->accept(static_cast<int32_t>(t.aux_u_o), static_cast<int32_t>(t.aux_v_o),
-                             static_cast<uint16_t>(t.aux_seq_o));
+    if (pri_req)
+      pri->accept(static_cast<int32_t>(t.tmu_u_o), static_cast<int32_t>(t.tmu_v_o),
+                  static_cast<uint16_t>(t.tmu_seq_o));
+    if (aux_req)
+      aux->accept(static_cast<int32_t>(t.aux_u_o), static_cast<int32_t>(t.aux_v_o),
+                  static_cast<uint16_t>(t.aux_seq_o));
     if (pri_rsp) pri->pop();
     if (aux_rsp) aux->pop();
 
@@ -302,13 +302,12 @@ int main(int argc, char** argv) {
 
     printf("   MEASURED: %lld clocks without AUX, %lld with\n", (long long)noaux_clocks,
            (long long)r.clocks);
-    printf("   RATE: %.2f clocks a fragment without AUX, %.2f with\n",
-           (double)noaux_clocks / 120.0, (double)r.clocks / 120.0);
+    printf("   RATE: %.2f clocks a fragment without AUX, %.2f with\n", (double)noaux_clocks / 120.0,
+           (double)r.clocks / 120.0);
     // Serial issue would roughly double the request cost. A few clocks of
     // difference is the extra response to wait for; anything like a doubling is
     // the failure this check exists for.
-    zhao::check(r.clocks < noaux_clocks * 3 / 2,
-                "enabling AUX does not serialise the path", 1,
+    zhao::check(r.clocks < noaux_clocks * 3 / 2, "enabling AUX does not serialise the path", 1,
                 (r.clocks < noaux_clocks * 3 / 2) ? 1 : 0);
   }
 
@@ -329,8 +328,7 @@ int main(int argc, char** argv) {
     zhao::check(top.seq_error_o == 1, "a wrong tag raises the sticky error", 1,
                 (uint32_t)top.seq_error_o);
     zhao::check(top.seq_errors_o > 0, "and is counted", 1, top.seq_errors_o > 0 ? 1 : 0);
-    zhao::check(r.outs.size() <= 5,
-                "and no fragment past the corruption is retired on bad data", 5,
+    zhao::check(r.outs.size() <= 5, "and no fragment past the corruption is retired on bad data", 5,
                 (uint32_t)r.outs.size());
   }
 
@@ -360,8 +358,7 @@ int main(int argc, char** argv) {
           ++diff;
     printf("   MEASURED: %lld clocks unimpeded, %lld with mismatched latencies and stalls\n",
            (long long)fast.clocks, (long long)slow.clocks);
-    zhao::check(diff == 0,
-                "different latencies on the two ports produce an identical stream", 0,
+    zhao::check(diff == 0, "different latencies on the two ports produce an identical stream", 0,
                 (uint32_t)diff);
     zhao::check(slow.clocks > fast.clocks, "and the slow run really was slower", 1,
                 slow.clocks > fast.clocks ? 1 : 0);

@@ -103,14 +103,14 @@ int main(int argc, char** argv) {
     // Each of these is a place the law says something specific, so a block that
     // is merely close fails here before the sweep even starts.
     const uint32_t cases[] = {
-        1u,             // maximal normalisation shift, k = 24
-        2u,             //
-        0x7FFFFFu,      // just below the normalised range
-        0x800000u,      // m == 2^23: THE pinned input, the only one that saturates
-        0x800001u,      // one above the pin
-        0xFFFFFFu,      // no shift at all, k = 1
-        0xFFFFFEu,      //
-        0xABCDEFu,      // nothing special, which is also worth one case
+        1u,         // maximal normalisation shift, k = 24
+        2u,         //
+        0x7FFFFFu,  // just below the normalised range
+        0x800000u,  // m == 2^23: THE pinned input, the only one that saturates
+        0x800001u,  // one above the pin
+        0xFFFFFFu,  // no shift at all, k = 1
+        0xFFFFFEu,  //
+        0xABCDEFu,  // nothing special, which is also worth one case
     };
     long bad = 0;
     for (uint32_t d : cases) {
@@ -162,9 +162,8 @@ int main(int argc, char** argv) {
     if (first_bad_d >= 0) printf("      first divergence at d=%ld\n", first_bad_d);
     zhao::check(bad == 0, "the exponent k matches zref on every input", 0, (uint32_t)bad);
     printf("   MEASURED: hash over all 16777215 inputs = 0x%016llx\n", (unsigned long long)h);
-    zhao::check(h == zref::RCP24_FULL_HASH,
-                "and the mantissas hash to the frozen RCP24_FULL_HASH", 1,
-                h == zref::RCP24_FULL_HASH ? 1 : 0);
+    zhao::check(h == zref::RCP24_FULL_HASH, "and the mantissas hash to the frozen RCP24_FULL_HASH",
+                1, h == zref::RCP24_FULL_HASH ? 1 : 0);
   }
 
   // ------------------------------------------------------------------ 3 ---
@@ -209,9 +208,10 @@ int main(int argc, char** argv) {
     }
     printf("   MEASURED: max w over ALL 16777215 inputs = 0x%llx, 2^31 = 0x%llx\n",
            (unsigned long long)max_w, (unsigned long long)(1ull << 31));
-    printf("   %s\n", max_w <= (1ull << 31)
-                          ? "   w never exceeds 2^31: the 64-bit lanes are narrowable, with evidence"
-                          : "   w EXCEEDS 2^31: the 64-bit wrap is load-bearing, keep the width");
+    printf("   %s\n",
+           max_w <= (1ull << 31)
+               ? "   w never exceeds 2^31: the 64-bit lanes are narrowable, with evidence"
+               : "   w EXCEEDS 2^31: the 64-bit wrap is load-bearing, keep the width");
     zhao::check(max_w > 0, "the width measurement actually ran", 1, max_w > 0 ? 1 : 0);
   }
 
@@ -224,8 +224,7 @@ int main(int argc, char** argv) {
     reset(top);
     const Res z = one(top, 0);
     zhao::check(z.clocks > 0, "d == 0 terminates", 1, z.clocks > 0 ? 1 : 0);
-    zhao::check(z.zero, "and is reported as a caller bug rather than answered", 1,
-                z.zero ? 1 : 0);
+    zhao::check(z.zero, "and is reported as a caller bug rather than answered", 1, z.zero ? 1 : 0);
 
     // And the block still works afterwards, which a state machine that latched
     // an error state would fail.

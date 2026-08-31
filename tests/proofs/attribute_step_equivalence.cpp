@@ -201,9 +201,9 @@ int main() {
     long bad = 0, checked = 0;
     i128 out[16];
     for (int t = 0; t < 20000; ++t) {
-      const i128 A = rng.positive(46);   // 2A after winding normalisation
-      const i128 N0 = rng.wide(78);      // the numerator plane's origin
-      const i128 Dx = rng.wide(60);      // one pixel of step
+      const i128 A = rng.positive(46);  // 2A after winding normalisation
+      const i128 N0 = rng.wide(78);     // the numerator plane's origin
+      const i128 Dx = rng.wide(60);     // one pixel of step
       step_row(N0, Dx, A, 16, out, &st);
       for (int i = 0; i < 16; ++i) {
         const i128 want = div_rhu(N0 + static_cast<i128>(i) * Dx, A);

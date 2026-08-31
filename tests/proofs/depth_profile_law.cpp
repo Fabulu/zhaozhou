@@ -185,8 +185,7 @@ int main() {
       prev = d;
       ++steps;
     }
-    std::printf("   monotonic over %ld geometric samples: %s\n", steps,
-                breaks ? "NO" : "yes");
+    std::printf("   monotonic over %ld geometric samples: %s\n", steps, breaks ? "NO" : "yes");
     if (breaks) ++failures;
 
     // The near band, one raw unit at a time.
@@ -231,7 +230,7 @@ int main() {
     std::printf("\n");
   }
 
-  std::printf("\n%s\n", failures == 0 ? "depth_profile_law: PASS"
-                                      : "depth_profile_law: FAILURES ABOVE");
+  std::printf("\n%s\n",
+              failures == 0 ? "depth_profile_law: PASS" : "depth_profile_law: FAILURES ABOVE");
   return failures != 0;
 }

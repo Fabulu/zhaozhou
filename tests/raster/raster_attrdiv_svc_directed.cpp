@@ -150,8 +150,7 @@ int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
   Vzhao_raster_attrdiv_svc top;
   const int units = ZHAO_SVC_UNITS;
-  printf("== the attribute divide service, UNITS = %d, RADIX = %d ==\n", units,
-         ZHAO_SVC_RADIX);
+  printf("== the attribute divide service, UNITS = %d, RADIX = %d ==\n", units, ZHAO_SVC_RADIX);
 
   // ------------------------------------------------------------------ 1 ---
   printf("== section 1: distinct values come back in ISSUE ORDER ==\n");
@@ -166,7 +165,8 @@ int main(int argc, char** argv) {
     long out_of_order = 0, wrong = 0, ovf = 0;
     for (size_t i = 0; i < got.size(); ++i) {
       if (got[i].tag != static_cast<uint16_t>(i)) {
-        if (out_of_order < 3) printf("      position %zu carries tag %u\n", i, (unsigned)got[i].tag);
+        if (out_of_order < 3)
+          printf("      position %zu carries tag %u\n", i, (unsigned)got[i].tag);
         ++out_of_order;
       }
       // The value must belong to the tag it arrived with, which is what makes

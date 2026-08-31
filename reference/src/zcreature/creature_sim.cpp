@@ -831,8 +831,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
     for (int b = 0; b < T.bank.bone_count; ++b) {
       mat3x4_mul(world, pose[b], worldm[b], L);
     }
-    const DeformSample deform =
-        deformation_sample(T, ci.anim.slot, ci.anim.frame, ci.anim.sub);
+    const DeformSample deform = deformation_sample(T, ci.anim.slot, ci.anim.frame, ci.anim.sub);
 
     // ---- PER-VERTEX LIGHTING (V10 structural repair) --------------------
     // Skin each packed bind normal through the SAME weighted rotation blend as

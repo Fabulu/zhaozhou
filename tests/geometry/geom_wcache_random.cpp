@@ -170,10 +170,11 @@ struct Dut {
     }
     if (!ok) {
       if (*bad < 5)
-        std::printf("      step %d: lookup(a=%d gen=%u i=%d) RTL hit=%d ref=%d, "
-                    "oracle hit=%d ref=%d\n",
-                    step, arena, g, index, v->rep_hit_o, v->rep_refuse_o, r.hit() ? 1 : 0,
-                    r.refused() ? 1 : 0);
+        std::printf(
+            "      step %d: lookup(a=%d gen=%u i=%d) RTL hit=%d ref=%d, "
+            "oracle hit=%d ref=%d\n",
+            step, arena, g, index, v->rep_hit_o, v->rep_refuse_o, r.hit() ? 1 : 0,
+            r.refused() ? 1 : 0);
       ++*bad;
     }
     return r;
@@ -266,11 +267,20 @@ int main(int argc, char** argv) {
       // the half of this contract that can silently turn one vertex into
       // another, and all three outcomes still clear the anti-vacuity floors.
       switch (rng.below(6)) {
-        case 0: index = kDepth + static_cast<int>(rng.below(4)); break;   // kRefuseIndex
-        case 1: a = kArenas + static_cast<int>(rng.below(2)); break;      // kRefuseArena
-        case 2: g += 1 + rng.below(3); break;                            // future generation
-        case 3: g -= 1 + rng.below(3); break;                            // stale generation
-        default: break;                                                   // legal
+        case 0:
+          index = kDepth + static_cast<int>(rng.below(4));
+          break;  // kRefuseIndex
+        case 1:
+          a = kArenas + static_cast<int>(rng.below(2));
+          break;  // kRefuseArena
+        case 2:
+          g += 1 + rng.below(3);
+          break;  // future generation
+        case 3:
+          g -= 1 + rng.below(3);
+          break;  // stale generation
+        default:
+          break;  // legal
       }
 
       const LookupResult got = d.lookup(a, g, index, round * 1000 + k, &bad);
@@ -313,9 +323,8 @@ int main(int argc, char** argv) {
   check(n_hit > 200, "the sequence produced real hits", 1, n_hit > 200 ? 1 : 0);
   check(n_miss > 200, "and real misses", 1, n_miss > 200 ? 1 : 0);
   check(n_refuse > 200, "and real refusals", 1, n_refuse > 200 ? 1 : 0);
-  check(n_open > 100 && n_seal > 100,
-        "and the arenas were reopened and resealed many times over", 1,
-        (n_open > 100 && n_seal > 100) ? 1 : 0);
+  check(n_open > 100 && n_seal > 100, "and the arenas were reopened and resealed many times over",
+        1, (n_open > 100 && n_seal > 100) ? 1 : 0);
 
   // The sticky overflow, across the whole run. Random fills hit out-of-range
   // indices and sealed arenas constantly, so it must be set -- and once set it
@@ -324,10 +333,10 @@ int main(int argc, char** argv) {
   std::printf("   MEASURED: overflow RTL %d, oracle %d\n", top->arena_overflow_o,
               d.ref.overflow() ? 1 : 0);
   check(top->arena_overflow_o == (d.ref.overflow() ? 1 : 0),
-        "the sticky overflow agrees with the oracle across the whole run",
-        d.ref.overflow() ? 1 : 0, top->arena_overflow_o);
-  check(top->arena_overflow_o == 1,
-        "and it really was provoked, so the check is not vacuous", 1, top->arena_overflow_o);
+        "the sticky overflow agrees with the oracle across the whole run", d.ref.overflow() ? 1 : 0,
+        top->arena_overflow_o);
+  check(top->arena_overflow_o == 1, "and it really was provoked, so the check is not vacuous", 1,
+        top->arena_overflow_o);
 
   return zhao::report_and_exit("geom_wcache_random");
 }

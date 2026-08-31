@@ -264,8 +264,8 @@ struct Clip {
    * ordinary creatures keep the nlerp fallback (the pose-cache economy
    * is sized for armies, not for every creature carrying double frames).
    */
-  std::vector<quat16> mid_quats;       // frame_count * bone_count, or empty
-  std::vector<int32_t> mid_root;       // frame_count * 3, or empty
+  std::vector<quat16> mid_quats;         // frame_count * bone_count, or empty
+  std::vector<int32_t> mid_root;         // frame_count * 3, or empty
   std::vector<DeformSample> mid_deform;  // frame_count, or empty
 };
 
@@ -397,7 +397,7 @@ enum class DeformRole : uint8_t {
 };
 
 struct DeformVertex {
-  int32_t center_x = 0, center_y = 0, center_z = 0;    // fx16 bind-space centre
+  int32_t center_x = 0, center_y = 0, center_z = 0;     // fx16 bind-space centre
   int32_t carrier_x = 0, carrier_y = 0, carrier_z = 0;  // follower sample point
   DeformRole role = DeformRole::kNone;
   uint8_t axis = 0;      // bind-space cardinal axis: 0=x, 1=y, 2=z

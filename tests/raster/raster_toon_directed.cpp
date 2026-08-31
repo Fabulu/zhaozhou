@@ -59,11 +59,10 @@ struct Rgb {
 /** rast.cpp's apply_toon_ramp, restated. C++ division truncates toward zero. */
 Rgb toon_ref(Rgb v, int bands) {
   if (bands == 0) return v;
-  const int32_t mean = static_cast<int32_t>(
-      (static_cast<int64_t>(v.r) + static_cast<int64_t>(v.g) + v.b) / 3);
-  const int32_t q =
-      bands <= 2 ? (mean < kThr0 ? kLvl0 : kLvl1)
-                 : (mean < kThr0 ? kLvl0 : (mean < kThr1 ? kLvl1 : kLvl2));
+  const int32_t mean =
+      static_cast<int32_t>((static_cast<int64_t>(v.r) + static_cast<int64_t>(v.g) + v.b) / 3);
+  const int32_t q = bands <= 2 ? (mean < kThr0 ? kLvl0 : kLvl1)
+                               : (mean < kThr0 ? kLvl0 : (mean < kThr1 ? kLvl1 : kLvl2));
   if (mean <= 0) return Rgb{q, q, q};
   return Rgb{static_cast<int32_t>(static_cast<int64_t>(v.r) * q / mean),
              static_cast<int32_t>(static_cast<int64_t>(v.g) * q / mean),
@@ -102,9 +101,10 @@ Out run_one(Vzhao_raster_toon& t, Rgb in, int bands, uint16_t tag) {
   for (;;) {
     t.eval();
     if (t.r_valid_o) {
-      const Out o{{static_cast<int32_t>(t.r_o), static_cast<int32_t>(t.g_o),
-                   static_cast<int32_t>(t.b_o)},
-                  static_cast<int>(t.band_o), clocks + 1};
+      const Out o{
+          {static_cast<int32_t>(t.r_o), static_cast<int32_t>(t.g_o), static_cast<int32_t>(t.b_o)},
+          static_cast<int>(t.band_o),
+          clocks + 1};
       const bool tag_ok = (t.tag_o == tag);
       zhao::tick(t);
       if (!tag_ok) return {{0, 0, 0}, -2, o.clocks};
@@ -204,11 +204,11 @@ int main(int argc, char** argv) {
         {-5000, 20000, 40000},
         {-30000, -20000, 90000},
         {70000, -1, 65000},
-        {-1, -2, -3},          // mean < 0: the flat short circuit
-        {1, 1, 1},             // mean 0 by truncation: also flat
-        {0, 0, 0},             // mean exactly 0
-        {2, 0, 0},             // mean 0 by truncation from a positive sum
-        {-2, 0, 0},            // mean 0 by truncation from a negative sum
+        {-1, -2, -3},  // mean < 0: the flat short circuit
+        {1, 1, 1},     // mean 0 by truncation: also flat
+        {0, 0, 0},     // mean exactly 0
+        {2, 0, 0},     // mean 0 by truncation from a positive sum
+        {-2, 0, 0},    // mean 0 by truncation from a negative sum
     };
     long bad = 0, flats = 0;
     for (const Rgb& c : cases) {
@@ -302,8 +302,7 @@ int main(int argc, char** argv) {
       if (top.r_valid_o && top.r_ready_i) {
         const size_t idx = static_cast<size_t>(top.tag_o);
         const Rgb want = toon_ref(stream[idx], 3);
-        if (static_cast<int32_t>(top.r_o) != want.r ||
-            static_cast<int32_t>(top.g_o) != want.g ||
+        if (static_cast<int32_t>(top.r_o) != want.r || static_cast<int32_t>(top.g_o) != want.g ||
             static_cast<int32_t>(top.b_o) != want.b || idx != static_cast<size_t>(done))
           ++wrong;
         ++done;

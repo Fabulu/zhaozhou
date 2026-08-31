@@ -42,8 +42,7 @@ using i128 = __int128;
 
 /** The shipped law, restated only to build expectations the RTL is checked on. */
 int64_t div_rhu(i128 n, i128 A) {
-  return static_cast<int64_t>((n >= 0) ? ((2 * n + A) / (2 * A))
-                                       : -((-2 * n + A) / (2 * A)));
+  return static_cast<int64_t>((n >= 0) ? ((2 * n + A) / (2 * A)) : -((-2 * n + A) / (2 * A)));
 }
 
 void put_wide(uint32_t* w, int words, i128 v) {
@@ -200,11 +199,9 @@ int main(int argc, char** argv) {
            sign_changes);
     zhao::check(bad == 0, "every stepped attribute equals the shipped law exactly", 0,
                 (uint32_t)bad);
-    zhao::check(sign_changes > 20,
-                "and the plane really did change sign, so the reseed path ran", 1,
-                sign_changes > 20 ? 1 : 0);
-    zhao::check(checked > 1000, "over enough pixels to mean something", 1,
-                checked > 1000 ? 1 : 0);
+    zhao::check(sign_changes > 20, "and the plane really did change sign, so the reseed path ran",
+                1, sign_changes > 20 ? 1 : 0);
+    zhao::check(checked > 1000, "over enough pixels to mean something", 1, checked > 1000 ? 1 : 0);
   }
 
   // ------------------------------------------------------------------ 2 ---
@@ -262,9 +259,8 @@ int main(int argc, char** argv) {
     const Plane p{-(i128(1) << 38), i128(1) << 31, i128(1) << 30, 54321};
     std::vector<Out> got;
     run_job(top, p, 0, 0, full, &got);
-    const double per_px = top.pixels_o ? static_cast<double>(top.divides_o) /
-                                             static_cast<double>(top.pixels_o)
-                                       : 1.0;
+    const double per_px =
+        top.pixels_o ? static_cast<double>(top.divides_o) / static_cast<double>(top.pixels_o) : 1.0;
     printf("   MEASURED: %u pixels cost %u divides = %.3f per pixel\n", (unsigned)top.pixels_o,
            (unsigned)top.divides_o, per_px);
     printf("   AGAINST: 1.000 per pixel through RASTER.ATTRDIV\n");
@@ -288,8 +284,7 @@ int main(int argc, char** argv) {
     bool all_err = !got.empty();
     for (const Out& o : got)
       if (!o.err) all_err = false;
-    zhao::check(all_err, "and every pixel is flagged rather than truncated", 1,
-                all_err ? 1 : 0);
+    zhao::check(all_err, "and every pixel is flagged rather than truncated", 1, all_err ? 1 : 0);
   }
 
   return zhao::report_and_exit("raster_attrstep_directed");

@@ -251,13 +251,13 @@ int main(int argc, char** argv) {
       }
       for (int f = 0; f < kAttrs; ++f)
         if (!attrs_follow_vertices(o, f, cs.a, cs.b, cs.c)) {
-          if (bad < 4) printf("      %s: field %d does not interpolate to its vertex\n", cs.what, f);
+          if (bad < 4)
+            printf("      %s: field %d does not interpolate to its vertex\n", cs.what, f);
           ++bad;
         }
     }
-    zhao::check(bad == 0,
-                "the attribute at a screen position is the one that vertex arrived with", 0,
-                (uint32_t)bad);
+    zhao::check(bad == 0, "the attribute at a screen position is the one that vertex arrived with",
+                0, (uint32_t)bad);
   }
 
   // ------------------------------------------------------------------ 4 ---
