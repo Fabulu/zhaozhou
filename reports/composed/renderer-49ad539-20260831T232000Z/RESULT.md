@@ -84,3 +84,63 @@ previous round, and its critical path is now internal — RAM write-enable to RA
 write-enable and to the read-bypass register. That is a structure to READ before
 changing, because the last two rounds both found the architecture note naming a
 structure that was not on the failing paths.
+
+---
+
+## ADDENDUM — the path detail, read rather than inferred
+
+The block-level ranking above says "tilestore, 70 of 100". **Reading the actual
+path detail overturns that reading**, and it is the most informative measurement
+of the session.
+
+The path is **not tilestore-internal**. It is the read-modify-write loop:
+
+    ram1 portbdataout          (RAM read data out)        7.856 -> 8.009
+      -> tilestore | rd_data_o[41]                        +0.782
+      -> fragment | u_bb | Add0~5                         +0.842   INTO THE BLEND
+      -> mul_left[2] -> Mult0~mac        (DSP multiply)   +3.785   <-- largest
+      -> Add2~37 ... long carry chain                     ~+2.0
+      -> ram0 PORT_B_WRITE_ENABLE_REG
+
+    launch clock path    7.856 ns
+    latch  clock path    5.861 ns
+    skew                -1.995 ns   (destination clocked EARLIER)
+    data path           14.361 ns
+    data required       15.801 ns
+    slack               -6.416 ns
+
+So the tile store is the **endpoint of a loop**, not the offender. `RAM read ->
+blend -> multiply -> adder chain -> RAM write` happens **in one cycle**, and the
+single largest element is `zhao_raster_blend`'s DSP multiply at 3.785 ns.
+
+### What this means for the next surgery, quantitatively
+
+Arrival must fall from 22.217 to 15.801. The clock path contributes 7.856 of
+that arrival, so **the data path must go from 14.361 ns to under 7.95 ns — it
+must be roughly HALVED.**
+
+That is not a tweak. It is a pipeline split of the read-modify-write loop, which
+is exactly `reports/MHZArchitected` step 4:
+
+> Fragment -> read/shade/blend/finish/commit, with a small in-flight address CAM
+
+**The note's prescribed SURGERY was right all along; its RANKING was wrong three
+times.** It put EDGEWALK first (absent from two fits, 30 rows in the third) and
+Early-Z third (90 rows in round 1). Read the path; trust the note's remedies,
+not its order.
+
+The address CAM is not optional bookkeeping — it is the whole difficulty. Once
+the loop spans two cycles, a second fragment targeting the same tile address may
+enter before the first has written back, and the CAM is what forwards or stalls
+it. `raster_fragment_random` already exercises 3,232 same-pixel chains, so the
+hazard is real traffic, not a theoretical case.
+
+### And a second, independent problem this exposes
+
+`gpu_clk~CLKENA0` drives **13,682 fanout**, and the launch and latch clock paths
+differ by 1.995 ns. **No amount of datapath pipelining recovers skew.** Even a
+perfectly split RMW loop leaves ~2 ns of the budget spent before any logic runs.
+
+That is a clocking problem — a clock-enable network, not a block — and it is not
+on `MHZArchitected`'s list of five offenders at all. It should be measured
+separately before anyone assumes the remaining gap to 100 MHz is all datapath.
