@@ -115,3 +115,53 @@ every judgement below are reproducible. Then, by eye against the balance clip:
 Under `evidence/`: every-frame contact sheets of the spring before and after,
 the spring arming beside the balance rise, the landing before and after, the
 authored-route centreline plots, motion-energy traces, and the probe output.
+
+---
+
+## Outcome
+
+**Status:** Complete. Published.
+
+| | |
+|---|---|
+| zhaozhou main | `3ee3357` |
+| Upheaval main | `369fa1f` |
+| review deployment | https://11d7cd09.upheaval.pages.dev |
+| production | https://upheaval.pages.dev — HTTP 200, exactly one `noindex, nofollow`, 233 renders, eleven archive generations |
+
+Production was byte-compared against the local build: `zixxtrixx-jump-one.webm`
+(511,829 B) and `archive-2026-09-01-generation-eleven-jump-one.webm`
+(464,175 B) are both SHA-256 identical to what was encoded here. The archive
+file exists only in this deploy, so its presence is independent proof the new
+build is live and not a cached previous one.
+
+`ZIXX PROBE: PASS` after the merge of the hardware lane's main, and
+`zixxtrixx-jump-one` re-rendered to `sequence_crc32c=0xC372A9E0` — bit-identical
+to the pre-merge render, so the shipped media is exactly what the probe passed
+on. The hardware lane's main touched only `reports/`, one RTL file and one
+Quartus tool; nothing the reel builds from. Neither shared checkout was touched
+and no history was force-pushed.
+
+Twenty-two subjects rendered from ONE fresh direct build under explicit
+`ZIXX_EXP=celmain` and `ZIXX_LIGHT=diagonal-cool-cross`; encoded through
+`tovideo.py` at VP9 CRF 16 / yuv444p / 60 fps with exact 3x nearest-neighbour
+1152x720 posters; assembled from `creatures.json`. Hashes in
+`Upheaval/creature/Zixxtrixx/DIRECTION-20-SPRING-MEDIA-SHA256.txt`.
+
+### What to look at
+
+`zixxtrixx-jump-one` and the salto clips, beside the **Archive Generation
+Eleven** tab, which is the rejected bank preserved byte-for-byte. The
+tail-balance clip is the motion reference and is unchanged.
+
+### Not achieved / left open
+
+* The loaded S's peak reaches +1058 mm of head rise against the balance clip's
+  +1149 mm. It genuinely rises onto its tail, but the balance still stands a
+  little taller. `kSpringAssembledHeading` is the knob if the owner wants more.
+* The airborne wheel is looser and now reads as a spiral rather than a hoop, but
+  it is still the accepted wheel underneath. Its breathe is constrained by the
+  looping coil clip's seam contract to a 23-key period; a freer treatment would
+  need that phase clip rebuilt.
+* The historical three-way reel CRC disagreement was not investigated, as
+  instructed.
