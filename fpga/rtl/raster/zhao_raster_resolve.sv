@@ -153,13 +153,42 @@ module zhao_raster_resolve (
   // the low two bits of the tile origin can affect the Bayer phase. Both are
   // sunk explicitly rather than left to a lint waiver.
   logic unused_ok;
-  assign unused_ok = &{1'b0, tr_data_i[31:0], start_tile_x_i[11:2], start_tile_y_i[11:2]};
+  assign unused_ok = &{1'b0, tr_data_i[31:0], q_data_r[31:0],
+                       start_tile_x_i[11:2], start_tile_y_i[11:2]};
+
+  // ---- Q0: THE RESPONSE IS CAPTURED BEFORE IT IS QUANTISED ---------------
+  // The fit at 7a7265a (80.3 MHz) put the WORST path here:
+  //
+  //     tilestore ram0 ...PORT_B_WRITE_ENABLE_REG
+  //       -> tilestore res_data_o -> u_resolve|u_qb -> Add1 -> Add0
+  //       -> u_resolve|fifo_q[1][2]                          -2.453 ns
+  //
+  // RAM read -> three quantisers -> FIFO, all in one clock. That is the same
+  // RAM-LAUNCHED structure the RMW split removed from RASTER.FRAGMENT in round
+  // 3, and it is the structure that pays the skew: an M10K's register sits
+  // ~2 ns deeper inside the block than a fabric flip-flop, so 2.018 ns of the
+  // 2.453 ns violation on this path is skew rather than logic.
+  //
+  // Capturing the response first means the quantisers launch from FABRIC.
+  //
+  // SAFE AGAINST THE CREDIT RULE, which is the thing to check before adding a
+  // stage here. `occ` bounds reads issued-but-not-emitted at 2, and in-flight
+  // beats live in the RAM latency, this stage and the 2-entry FIFO. So `q_v_r`
+  // can never be high while `fcount == 2` -- that would be three in flight.
+  // The FIFO still cannot overflow.
+  //
+  // COMPLETION IS UNAFFECTED: it is driven by `pop` and `emit_n == 255`, both
+  // downstream of this stage, so the 256th pixel still has to flow through and
+  // be taken.
+  logic        q_v_r;
+  logic [63:0] q_data_r;
+  logic [7:0]  q_addr_r;
 
   always_comb begin
-    px_r   = tr_data_i[63:56];
-    px_g   = tr_data_i[55:48];
-    px_b   = tr_data_i[47:40];
-    px_tag = tr_data_i[39:32];
+    px_r   = q_data_r[63:56];
+    px_g   = q_data_r[55:48];
+    px_b   = q_data_r[47:40];
+    px_tag = q_data_r[39:32];
   end
 
   // ------------------------------------------------------------- job state --
@@ -169,7 +198,7 @@ module zhao_raster_resolve (
   logic [8:0]  iss_n;                  // reads issued,  0..256
   logic [7:0]  ret_addr;               // address of the NEXT response
   logic [8:0]  emit_n;                 // pixels accepted downstream, 0..256
-  logic [1:0]  occ;                    // issued-but-not-emitted, 0..2
+  logic [2:0]  occ;                    // issued-but-not-emitted, 0..3
   logic [31:0] crc_r;
   logic        crc_v_r;
   logic [31:0] crc_out_r;
@@ -202,8 +231,10 @@ module zhao_raster_resolve (
   logic [1:0] ph_y, ph_x;
   logic [3:0] bay;
   always_comb begin
-    ph_y = tile_yp_r + ret_addr[5:4];   // (tile_y + row) & 3
-    ph_x = tile_xp_r + ret_addr[1:0];   // (tile_x + col) & 3
+    // `q_addr_r`, not `ret_addr`: the phase must belong to the pixel being
+    // quantised, which is now one cycle behind the response counter.
+    ph_y = tile_yp_r + q_addr_r[5:4];   // (tile_y + row) & 3
+    ph_x = tile_xp_r + q_addr_r[1:0];   // (tile_x + col) & 3
     bay  = bayer4(ph_y, ph_x);
   end
 
@@ -231,16 +262,26 @@ module zhao_raster_resolve (
   // ------------------------------------------------------ the skid FIFO ----
   // 2 entries × {last, addr[7:0], tag[7:0], rgb565[15:0]}.
   localparam int unsigned FW = 1 + 8 + 8 + 16;
-  logic [FW-1:0] fifo_q [0:1];
-  logic          wptr, rptr;
-  logic [1:0]    fcount;
+  // FOUR ENTRIES AND THREE CREDITS, not two and two.
+  //
+  // The Q0 capture stage lengthened the issue -> response -> push -> pop round
+  // trip by one cycle, and with only two credits the pipeline could no longer
+  // stay full: a tile went from 259 cycles to 387. That is an INITIATION RATE
+  // regression, which the architecture rule forbids -- "latency may grow;
+  // initiation rate and exact arithmetic may not regress" -- so the credits
+  // grow to cover the deeper pipe rather than the rate being accepted as lost.
+  //
+  // Four entries rather than three keeps the pointers a clean power of two.
+  logic [FW-1:0] fifo_q [0:3];
+  logic [1:0]    wptr, rptr;
+  logic [2:0]    fcount;
 
   logic push, pop;
   logic [FW-1:0] push_d;
-  assign push   = tr_data_valid_i;
-  assign push_d = {(ret_addr == 8'd255), ret_addr, px_tag, px565};
+  assign push   = q_v_r;
+  assign push_d = {(q_addr_r == 8'd255), q_addr_r, px_tag, px565};
 
-  assign fb_valid_o  = (fcount != 2'd0);
+  assign fb_valid_o  = (fcount != 3'd0);
   assign fb_rgb565_o = fifo_q[rptr][15:0];
   assign fb_tag_o    = fifo_q[rptr][23:16];
   assign fb_addr_o   = fifo_q[rptr][31:24];
@@ -255,10 +296,10 @@ module zhao_raster_resolve (
   // the 2-entry FIFO can never overflow. `tr_valid_o` is a function of
   // registers and `fb_ready_i` only — it never depends on `tr_ready_i`.
   logic issue_acc;
-  logic [1:0] occ_free;
+  logic [2:0] occ_free;
   always_comb begin
-    occ_free   = occ - {1'b0, pop};
-    tr_valid_o = busy_r && (iss_n != 9'd256) && (occ_free < 2'd2);
+    occ_free   = occ - {2'b0, pop};
+    tr_valid_o = busy_r && (iss_n != 9'd256) && (occ_free < 3'd3);
     tr_addr_o  = iss_n[7:0];
   end
   assign issue_acc = tr_valid_o && tr_ready_i;
@@ -294,10 +335,13 @@ module zhao_raster_resolve (
       iss_n     <= 9'd0;
       ret_addr  <= 8'd0;
       emit_n    <= 9'd0;
-      occ       <= 2'd0;
-      fcount    <= 2'd0;
-      wptr      <= 1'b0;
-      rptr      <= 1'b0;
+      occ       <= 3'd0;
+      fcount    <= 3'd0;
+      q_v_r     <= 1'b0;
+      q_data_r  <= 64'd0;
+      q_addr_r  <= 8'd0;
+      wptr      <= 2'd0;
+      rptr      <= 2'd0;
       fifo_q[0] <= {FW{1'b0}};
       fifo_q[1] <= {FW{1'b0}};
       crc_r     <= CRC_INIT;
@@ -319,10 +363,11 @@ module zhao_raster_resolve (
           iss_n     <= 9'd0;
           ret_addr  <= 8'd0;
           emit_n    <= 9'd0;
-          occ       <= 2'd0;
-          fcount    <= 2'd0;
-          wptr      <= 1'b0;
-          rptr      <= 1'b0;
+          occ       <= 3'd0;
+          fcount    <= 3'd0;
+          q_v_r     <= 1'b0;
+          wptr      <= 2'd0;
+          rptr      <= 2'd0;
           crc_r     <= CRC_INIT;
         end
       end
@@ -333,13 +378,12 @@ module zhao_raster_resolve (
       // ---- response: dither and push --------------------------------------
       if (push) begin
         fifo_q[wptr] <= push_d;
-        wptr         <= !wptr;
-        ret_addr     <= ret_addr + 8'd1;
+        wptr         <= wptr + 2'd1;
       end
 
       // ---- emit: CRC and completion ----------------------------------------
       if (pop) begin
-        rptr   <= !rptr;
+        rptr   <= rptr + 2'd1;
         crc_r  <= crc_next;
         emit_n <= emit_n + 9'd1;
         if (emit_n == 9'd255) begin
@@ -352,15 +396,30 @@ module zhao_raster_resolve (
         end
       end
 
+      // ---- Q0 capture ------------------------------------------------------
+      // One response in, one push out, exactly one cycle later.
+      //
+      // `ret_addr` ADVANCES HERE, ON THE RESPONSE -- not on `push` as it used
+      // to. `push` is now a cycle behind the response, and leaving the counter
+      // on it made every address lag its own pixel: 7,038 of 7,115 checks
+      // failed, which is what a uniform off-by-one looks like rather than a
+      // corner case.
+      q_v_r    <= tr_data_valid_i;
+      q_data_r <= tr_data_i;
+      if (tr_data_valid_i) begin
+        q_addr_r <= ret_addr;
+        ret_addr <= ret_addr + 8'd1;
+      end
+
       // ---- occupancy / FIFO bookkeeping ------------------------------------
       case ({issue_acc, pop})
-        2'b10:   occ <= occ + 2'd1;
-        2'b01:   occ <= occ - 2'd1;
+        2'b10:   occ <= occ + 3'd1;
+        2'b01:   occ <= occ - 3'd1;
         default: ;
       endcase
       case ({push, pop})
-        2'b10:   fcount <= fcount + 2'd1;
-        2'b01:   fcount <= fcount - 2'd1;
+        2'b10:   fcount <= fcount + 3'd1;
+        2'b01:   fcount <= fcount - 3'd1;
         default: ;
       endcase
     end

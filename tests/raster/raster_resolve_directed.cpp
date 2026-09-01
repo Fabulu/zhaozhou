@@ -458,14 +458,31 @@ void test_backpressure() {
 
 // --------------------------------------------------------------------------
 void test_latency() {
-  // The contract's latency line, MEASURED — 259 cycles from the accepting
+  // The contract's latency line, MEASURED — 260 cycles from the accepting
   // edge to the tile_crc_valid_o pulse, not the 258 the arithmetic suggested
-  // (256 pixels + 2 cycles of pipeline fill + the finalize cycle). The extra
+  // (256 pixels + 2 cycles of pipeline fill + the finalize cycle). One extra
   // cycle is the first issue: `tr_valid_o` is a function of `busy_r`, which
   // is only set BY the accepting edge, so no read can be issued in the
   // accepting cycle itself. Under backpressure it may take longer and may
   // never take less; both halves are checked, because a block that is fast
   // because it skipped something is the failure mode worth catching.
+  //
+  // RE-PINNED 259 -> 260, and re-pinned IN the commit that moved it. The Q0
+  // capture stage registers the tile-store response before the quantisers, so
+  // the RAM no longer launches a combinational path into the FIFO -- the
+  // structure that carries ~2 ns of M10K clock skew and owned the worst path
+  // at 80.3 MHz.
+  //
+  // ONE CYCLE IS THE WHOLE COST, and this assertion is what proves that. The
+  // first attempt at the stage left the credit rule at two outstanding reads,
+  // and the pipeline STARVED: 387 cycles, a 50 % initiation-rate loss with
+  // every pixel still bit-exact. No correctness check would have seen it. The
+  // FIFO is now four deep with three credits, restoring one response per
+  // clock, and the residue is exactly the added stage.
+  //
+  //   "latency may grow; initiation rate and exact arithmetic may not
+  //    regress" — and an exact-cycle assertion is the only thing that
+  //    enforces the second half.
   uint64_t w[kPixels] = {};
   for (int i = 0; i < kPixels; ++i)
     w[i] = pack_px(static_cast<uint8_t>(i), static_cast<uint8_t>(i * 2),
@@ -474,7 +491,7 @@ void test_latency() {
   diff(w, 0, 0, "latency_full", 0, false);
   const uint32_t full = dev().last_cycles();
   std::printf("  latency: %u cycles at full readiness (256 px + fill + finalize)\n", full);
-  check(full == 259, "latency: a tile at full readiness costs exactly 259 cycles", 259, full);
+  check(full == 260, "latency: a tile at full readiness costs exactly 260 cycles", 260, full);
 
   uint32_t never_faster = 0;
   for (uint32_t s = 1; s <= 6; ++s) {
