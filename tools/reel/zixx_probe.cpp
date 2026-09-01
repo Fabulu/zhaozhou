@@ -1211,12 +1211,15 @@ int main() {
                 deep_tick < static_cast<int>(spring->samples.size()) &&
                 rigid_air_tick < static_cast<int>(spring->samples.size()),
             "spring phase sample outside primary clip");
-    require(zixx::curve(zixx::kAtkSpringEntry, zixx::kAtkSpringEntryN,
-                        zixx::kSaltoSpringEntryEndKey) == 1000 &&
-                zixx::curve(zixx::kAtkPre, zixx::kAtkPreN,
-                            zixx::kSaltoSpringEntryEndKey) == 0 &&
-                zixx::curve(zixx::kAtkPre, zixx::kAtkPreN,
-                            zixx::kSaltoSpringEntryEndKey + 1) > 0,
+    // The golden and planned paths now share ONE arming schedule, so the
+    // ordering law is checked on that schedule rather than on a parallel
+    // curve table that could silently drift away from the clip.
+    require(zixx::spring_shared_entry_amount(
+                zixx::kSaltoSpringEntryEndKey) == 1000 &&
+                zixx::spring_shared_squash_amount(
+                    zixx::kSaltoSpringEntryEndKey) == 0 &&
+                zixx::spring_shared_squash_amount(
+                    zixx::kSaltoSpringEntryEndKey + 1) > 0,
             "spring squash begins before full-tail entry is complete");
 
     const PosedSample& rest = spring->samples[0];
@@ -2445,22 +2448,31 @@ int main() {
     return std::abs(static_cast<int32_t>(static_cast<int16_t>(
         static_cast<uint16_t>((b - a) & 0xFFFF))));
   };
+  // OWNER DIRECTION 20 #1/#3. The rejected route interpolated the four authored
+  // poses as independent smoothstep legs, so every station's speed fell to ZERO
+  // at absorb and again at assembled, and one integer key was additionally
+  // snapped onto an off-route override table. That is a rigid, plate-snapping
+  // arming with a 30 Hz judder in it. The route is now one C1 spline, so the
+  // property worth protecting is no longer "the override table is exact" but
+  // "NOWHERE on the whole arming does a station jump or stall". Sweep it all.
   int32_t generic_seam_step = 0;
-  int authored_middle_differences = 0;
-  bool authored_middle_exact = true;
+  int32_t route_min_move = INT32_MAX;
+  int32_t route_max_move = 0;
   for (int station = 0; station < zixx::kStanceSlopes; ++station) {
-    const int32_t h279 = zixx::spring_entry_heading(station, 279);
-    const int32_t h280 = zixx::spring_entry_heading(station, 280);
-    const int32_t h281 = zixx::spring_entry_heading(station, 281);
-    generic_seam_step = std::max(
-        generic_seam_step,
-        std::max(angle_distance(h279, h280),
-                 angle_distance(h280, h281)));
-    if (h280 != zixx::spring_entry_heading(station, 280, true))
-      ++authored_middle_differences;
-    if (zixx::spring_entry_heading(station, 280, true) !=
-        zixx::kSpringMiddleHeading[station])
-      authored_middle_exact = false;
+    for (int arm = 1; arm <= 1000; ++arm) {
+      generic_seam_step = std::max(
+          generic_seam_step,
+          angle_distance(zixx::spring_route_heading(station, arm - 1),
+                         zixx::spring_route_heading(station, arm)));
+    }
+    const int32_t at_absorb = angle_distance(
+        zixx::spring_route_heading(station, zixx::kSpringArmAbsorbAt - 20),
+        zixx::spring_route_heading(station, zixx::kSpringArmAbsorbAt + 20));
+    const int32_t at_assembled = angle_distance(
+        zixx::spring_route_heading(station, zixx::kSpringArmAssembledAt - 20),
+        zixx::spring_route_heading(station, zixx::kSpringArmAssembledAt + 20));
+    route_min_move = std::min(route_min_move, std::min(at_absorb, at_assembled));
+    route_max_move = std::max(route_max_move, std::max(at_absorb, at_assembled));
   }
   int middle_region_key = -1;
   int32_t middle_region_entry = -1;
@@ -2485,20 +2497,17 @@ int main() {
         2 * middle_region_key + 1).mm;
   }
   const bool seam_context_exact = generic_seam_step <= 256 &&
-                                  authored_middle_differences > 0 &&
-                                  authored_middle_exact &&
-                                  std::abs(middle_region_entry -
-                                           zixx::kSpringMiddleEntryProfile) <= 1 &&
+                                  route_min_move > 0 &&
                                   compress48_step <=
                                       zixx::kJumpMaxStationStepMm;
-  std::printf("SPRING scalar seam 279/280/281: max generic heading step %d, "
-              "authored table differences %d, default exact=%d; "
-              "compress-48 reaches %d at key %d, compiled step %d mm\n",
-              generic_seam_step, authored_middle_differences,
-              authored_middle_exact ? 1 : 0, middle_region_entry,
-              middle_region_key, compress48_step);
+  std::printf("SPRING continuous route: max per-milli heading step %d, "
+              "slowest/fastest station turn across the two interior knots "
+              "%d/%d (zero would be a dead stop); compress-48 reaches %d at "
+              "key %d, compiled step %d mm\n",
+              generic_seam_step, route_min_move, route_max_move,
+              middle_region_entry, middle_region_key, compress48_step);
   require(seam_context_exact,
-          "generic spring scalar route snapped to the key-context middle table");
+          "spring route jumps, or a station stalls at an interior pose");
 
   zc::PresentationMidpointAuthorship dummy_owned;
   const zc::Clip dummy_source = zixx::build_attack_dummy(&dummy_owned);
