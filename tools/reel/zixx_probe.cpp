@@ -1838,6 +1838,8 @@ int main() {
   constexpr uint16_t kSyntheticJumpShortRecoverySlot = 56;
   constexpr uint16_t kSyntheticJumpLongRecoverySlot = 57;
   constexpr uint16_t kSyntheticCompress48Slot = 58;
+  constexpr uint16_t kSyntheticAttackRelease0Slot = 59;
+  constexpr uint16_t kSyntheticJumpRelease0Slot = 60;
 
   zc::AttackPlan retimed_attack =
       zixx::zixx_variant_plan(zixx::kSlotAtkDummy);
@@ -1926,6 +1928,32 @@ int main() {
       retimed_jump_phase.launch_key, retimed_jump_phase.hold_end,
       zixx::kSpringReleaseMidpointCount, retimed_jump_phase.landing_key,
       retimed_jump_phase.last_key, false);
+
+  zc::AttackPlan attack_release0 =
+      zixx::zixx_variant_plan(zixx::kSlotAtkDummy);
+  attack_release0.release_keys = 0;
+  const zixx::AttackVariantPhases attack_release0_phase =
+      zixx::zixx_attack_variant_phases(attack_release0, true);
+  zc::PresentationMidpointAuthorship attack_release0_owned;
+  const zc::Clip attack_release0_source = zixx::build_attack_variant(
+      kSyntheticAttackRelease0Slot, attack_release0, true,
+      &attack_release0_owned);
+  midpoint_contract_exact(
+      "attack release-0", attack_release0_source, attack_release0_owned,
+      attack_release0_phase.release_end, -1, 0, -1, -1, false);
+
+  zixx::JumpPlan jump_release0 = zixx::zixx_jump_plan(
+      kSyntheticJumpRelease0Slot, 1);
+  jump_release0.release_keys = 0;
+  const zixx::JumpPhases jump_release0_phase =
+      zixx::zixx_jump_phases(jump_release0);
+  zc::PresentationMidpointAuthorship jump_release0_owned;
+  const zc::Clip jump_release0_source =
+      zixx::build_jump(jump_release0, &jump_release0_owned);
+  midpoint_contract_exact(
+      "jump release-0", jump_release0_source, jump_release0_owned,
+      jump_release0_phase.launch_key, -1, 0,
+      jump_release0_phase.landing_key, jump_release0_phase.last_key, false);
 
   zc::AttackPlan attack_release2 =
       zixx::zixx_variant_plan(zixx::kSlotAtkDummy);
@@ -2032,6 +2060,8 @@ int main() {
   synthetic_bank.clips = {
       retimed_attack_source,
       retimed_jump_source,
+      attack_release0_source,
+      jump_release0_source,
       attack_release2_source,
       attack_release3_source,
       jump_release2_source,
@@ -2043,6 +2073,8 @@ int main() {
   const std::vector<zc::PresentationMidpointAuthorship> synthetic_owned = {
       retimed_attack_owned,
       retimed_jump_owned,
+      attack_release0_owned,
+      jump_release0_owned,
       attack_release2_owned,
       attack_release3_owned,
       jump_release2_owned,
@@ -2121,7 +2153,11 @@ int main() {
   require(compiled_owns_exact_bytes(retimed_attack_source,
                                     retimed_attack_owned) &&
               compiled_owns_exact_bytes(retimed_jump_source,
-                                        retimed_jump_owned),
+                                        retimed_jump_owned) &&
+              compiled_owns_exact_bytes(attack_release0_source,
+                                        attack_release0_owned) &&
+              compiled_owns_exact_bytes(jump_release0_source,
+                                        jump_release0_owned),
           "compiled retimed bank regenerated an explicitly owned channel");
 
   const auto exact_deform_endpoint = [](const zc::Clip& clip, int endpoint) {
@@ -2137,7 +2173,19 @@ int main() {
     int endpoint;
     bool motion_endpoint_exact;
   };
-  const std::array<ReleaseCase, 4> release_cases{{
+  const std::array<ReleaseCase, 6> release_cases{{
+      {"attack-0", &attack_release0_source, attack_release0_phase.hold_end,
+       attack_release0_phase.release_end,
+       zixx::zixx_plan_spring_entry_amount(
+           attack_release0, attack_release0_phase.release_end) == 0 &&
+           zixx::zixx_plan_spring_amount(
+               attack_release0, attack_release0_phase.release_end) == 0},
+      {"jump-0", &jump_release0_source, jump_release0_phase.hold_end,
+       jump_release0_phase.launch_key,
+       zixx::zixx_jump_motion_sample(
+           jump_release0, jump_release0_phase.launch_key).entry == 0 &&
+           zixx::zixx_jump_motion_sample(
+               jump_release0, jump_release0_phase.launch_key).spring == 0},
       {"attack-2", &attack_release2_source, attack_release2_phase.hold_end,
        attack_release2_phase.release_end,
        zixx::zixx_plan_spring_entry_amount(
@@ -2172,21 +2220,29 @@ int main() {
                                                 release.endpoint) &&
                           compiled != nullptr &&
                           key_pose_equal(*compiled, 0, release.endpoint,
-                                         type.bank.bone_count, true);
+                                         type.bank.bone_count, true) &&
+                          exact_deform_endpoint(*compiled,
+                                                release.endpoint);
     int32_t release_step_mm = INT32_MAX;
     int release_step_tick = -1;
     if (compiled != nullptr) {
       const ClipScan scan = scan_clip(synthetic_type, *compiled, stations);
+      // A zero-duration release has no tick after hold_end; scan its final
+      // half-segment into the aliased launch endpoint instead.
+      const int begin_tick = release.endpoint == release.hold_end
+                                 ? std::max(1, 2 * release.endpoint - 1)
+                                 : 2 * release.hold_end + 1;
       const StationStepMaximum step = station_step_max_mm(
-          scan, 2 * release.hold_end + 1, 2 * release.endpoint);
+          scan, begin_tick, 2 * release.endpoint);
       release_step_mm = step.mm;
       release_step_tick = step.tick;
       endpoint_exact = endpoint_exact &&
                        step.mm <= zixx::kJumpMaxStationStepMm;
     }
-    std::printf("RETIMED release %s: grounded endpoint exact=%d, "
-                "compiled max step %d mm at %d%s\n",
-                release.name, endpoint_exact ? 1 : 0, release_step_mm,
+    std::printf("RETIMED release %s: motion identity=%d, source+compiled "
+                "grounded endpoint exact=%d, compiled max step %d mm at %d%s\n",
+                release.name, release.motion_endpoint_exact ? 1 : 0,
+                endpoint_exact ? 1 : 0, release_step_mm,
                 release_step_tick / 2,
                 (release_step_tick & 1) ? ".5" : "");
     require(endpoint_exact,
@@ -2214,6 +2270,99 @@ int main() {
     }
     return range;
   };
+  const auto check_compiled_attack_grounding = [&] (
+      const char* name, const zc::AttackPlan& plan,
+      const zixx::AttackVariantPhases& phase) {
+    const zc::Clip* compiled = synthetic_clip(kSyntheticRetimedAttackSlot);
+    bool exact = compiled != nullptr &&
+                 plan.compress_keys == 12 &&
+                 plan.compress_hold_keys == 7 &&
+                 plan.release_keys == 4;
+    int32_t support_x_drift = 0;
+    int32_t support_z_drift = 0;
+    int32_t support_target_error = 0;
+    int32_t max_support_step = 0;
+    int32_t max_expected_support_step = 0;
+    int32_t max_station_step = INT32_MAX;
+    std::array<SyntheticContactRange, 2> contact{};
+    if (compiled != nullptr) {
+      const ClipScan scan = scan_clip(synthetic_type, *compiled, stations);
+      const PosedSample& rest = scan.samples[0];
+      int32_t previous_expected = 0;
+      for (int tick = 0; tick <= 2 * phase.release_end; ++tick) {
+        const PosedSample& sample = scan.samples[tick];
+        const int key = tick / 2;
+        int32_t expected_y = 0;
+        if ((tick & 1) == 0) {
+          expected_y = zixx::spring_support_target_y(
+              zixx::zixx_plan_spring_entry_amount(plan, key),
+              zixx::zixx_plan_spring_amount(plan, key));
+        } else {
+          expected_y = zixx::spring_plan_midpoint_target_y(
+              key, phase.hold_end, false,
+              plan.release_keys == zixx::kSpringReleaseMidpointCount,
+              zixx::zixx_plan_spring_entry_amount(plan, key),
+              zixx::zixx_plan_spring_amount(plan, key),
+              zixx::zixx_plan_spring_entry_amount(plan, key + 1),
+              zixx::zixx_plan_spring_amount(plan, key + 1));
+        }
+        support_x_drift = std::max(
+            support_x_drift,
+            std::abs(sample.support_x_mm - rest.support_x_mm));
+        support_z_drift = std::max(
+            support_z_drift,
+            std::abs(sample.support_z_mm - rest.support_z_mm));
+        support_target_error = std::max(
+            support_target_error,
+            std::abs((sample.support_y_mm - rest.support_y_mm) - expected_y));
+        if (tick > 0) {
+          const PosedSample& previous = scan.samples[tick - 1];
+          const int64_t dx = sample.support_x_mm - previous.support_x_mm;
+          const int64_t dy = sample.support_y_mm - previous.support_y_mm;
+          const int64_t dz = sample.support_z_mm - previous.support_z_mm;
+          max_support_step = std::max(
+              max_support_step,
+              static_cast<int32_t>(zref::isqrt_u64(
+                  static_cast<uint64_t>(dx * dx + dy * dy + dz * dz))));
+          max_expected_support_step = std::max(
+              max_expected_support_step,
+              std::abs(expected_y - previous_expected));
+        }
+        previous_expected = expected_y;
+      }
+      const StationStepMaximum continuity = station_step_max_mm(
+          scan, 1, 2 * phase.release_end);
+      max_station_step = continuity.mm;
+      for (int rung = 0; rung < 2; ++rung)
+        contact[rung] = synthetic_contact_range(
+            scan, rung, 0, 2 * phase.release_end);
+      exact = exact &&
+              key_pose_equal(*compiled, 0, phase.release_end,
+                             type.bank.bone_count, true) &&
+              exact_deform_endpoint(*compiled, phase.release_end) &&
+              support_x_drift <= 1 && support_z_drift <= 1 &&
+              support_target_error <= 1 &&
+              max_support_step <= max_expected_support_step + 3 &&
+              max_station_step <= zixx::kJumpMaxStationStepMm;
+      for (int rung = 0; rung < 2; ++rung)
+        exact = exact &&
+                contact[rung].deepest_mm >= -zixx::kSpringDeclaredBiteMm &&
+                contact[rung].highest_mm <= 0;
+    }
+    std::printf("RETIMED attack %s 12/7/4: exact=%d, station-14 X/Z drift "
+                "%d/%d mm, target error %d mm, support step %d/%d mm, "
+                "full/micro contact %d..%d/%d..%d mm, station step %d mm\n",
+                name, exact ? 1 : 0, support_x_drift, support_z_drift,
+                support_target_error, max_support_step,
+                max_expected_support_step, contact[0].deepest_mm,
+                contact[0].highest_mm, contact[1].deepest_mm,
+                contact[1].highest_mm, max_station_step);
+    require(exact,
+            "compiled retimed attack support/contact/continuity contract drifted");
+  };
+  check_compiled_attack_grounding(
+      "hold+1", retimed_attack, retimed_attack_phase);
+
   const auto check_compiled_jump_landing = [&] (
       const char* name, const zixx::JumpPlan& plan,
       const zixx::JumpPhases& phase) {
@@ -2501,7 +2650,148 @@ int main() {
               compiled_deform_exact && generic_quat_diffs > 0,
           "compiled compression slot lost authored key-4.5 midpoint data");
 
-  const zc::Clip* release_reference = clip_for_slot(3);
+  // Real ChoreoRoot composition at the authored 4.5 sample. The complete
+  // build_attack(choreo=true) clip owns the local body midpoint but intentionally
+  // owns no trajectory root. Supply the corresponding compiled monolithic
+  // midpoint root as the instance transform, exactly as compose_creatures
+  // left-multiplies ci.orient/ci.x/y/z with the palette returned for
+  // anim.frame=4, anim.sub=1. The slot-10 checks above independently prove that
+  // this same local midpoint survives production vocabulary compilation.
+  const zc::Clip* monolithic_attack = clip_for_slot(3);
+  bool half_choreo_exact = monolithic_attack != nullptr &&
+                           monolithic_attack->mid_root.size() >=
+                               source_root + 3 &&
+                           local_source.mid_root.size() >= source_root + 3;
+  int32_t half_world_vertex_delta_mm = INT32_MAX;
+  int32_t half_world_station_delta_mm = INT32_MAX;
+  int32_t half_support_delta_mm = INT32_MAX;
+  bool half_deform_exact = false;
+  bool half_local_root_zero = false;
+  bool half_spin_zero = false;
+  if (half_choreo_exact) {
+    half_local_root_zero =
+        local_source.mid_root[source_root] == 0 &&
+        local_source.mid_root[source_root + 1] == 0 &&
+        local_source.mid_root[source_root + 2] == 0;
+    half_spin_zero = zixx::attack_choreo_sample(4).theta == 0 &&
+                     zixx::attack_choreo_sample(5).theta == 0;
+    zc::CreatureType local_type = type;
+    bool installed_local_attack = false;
+    for (zc::Clip& clip : local_type.bank.clips) {
+      if (clip.slot_id == monolithic_attack->slot_id) {
+        clip = local_source;
+        installed_local_attack = true;
+        break;
+      }
+    }
+    half_choreo_exact = half_choreo_exact && installed_local_attack;
+    const zc::DeformSample monolithic_deform = zc::deformation_sample(
+        type, monolithic_attack->slot_id,
+        zixx::kSpringEntryOwnedMidpointKey, 1);
+    const zc::DeformSample local_deform = zc::deformation_sample(
+        local_type, local_source.slot_id,
+        zixx::kSpringEntryOwnedMidpointKey, 1);
+    half_deform_exact =
+        monolithic_deform.flatten == local_deform.flatten &&
+        monolithic_deform.spread == local_deform.spread;
+
+    zc::PoseBank monolithic_half_bank;
+    zc::PoseBank local_half_bank;
+    monolithic_half_bank.begin_frame();
+    local_half_bank.begin_frame();
+    const zc::mat3x4fx* monolithic_pose = monolithic_half_bank.acquire(
+        type, monolithic_attack->slot_id,
+        zixx::kSpringEntryOwnedMidpointKey, 1);
+    const zc::mat3x4fx* local_pose = local_half_bank.acquire(
+        local_type, local_source.slot_id,
+        zixx::kSpringEntryOwnedMidpointKey, 1);
+    zc::mat3x4fx instance_root;
+    zc::quat16_to_mat3(zixx::quat_z(0), instance_root, nullptr);
+    instance_root.m[3] = monolithic_attack->mid_root[source_root];
+    instance_root.m[7] = monolithic_attack->mid_root[source_root + 1];
+    instance_root.m[11] = monolithic_attack->mid_root[source_root + 2];
+    std::array<zc::mat3x4fx, zc::kMaxBones> local_world;
+    for (int bone = 0; bone < type.bank.bone_count; ++bone)
+      zc::mat3x4_mul(instance_root, local_pose[bone], local_world[bone], nullptr);
+
+    half_world_vertex_delta_mm = 0;
+    for (int rung = 0; rung < 2; ++rung) {
+      const auto& mesh = rung == 0 ? type.mesh : type.micro;
+      for (const zc::Meshlet& meshlet : mesh) {
+        for (size_t vertex = 0; vertex < meshlet.verts.size(); ++vertex) {
+          const zc::SkinVertex& bind = meshlet.verts[vertex];
+          zc::SkinVertex monolithic_vertex = bind;
+          zc::SkinVertex local_vertex = bind;
+          if (!meshlet.deform.empty()) {
+            monolithic_vertex = zc::deform_skin_vertex(
+                bind, meshlet.deform[vertex], monolithic_deform);
+            local_vertex = zc::deform_skin_vertex(
+                bind, meshlet.deform[vertex], local_deform);
+          }
+          int32_t mx = 0, my = 0, mz = 0;
+          int32_t lx = 0, ly = 0, lz = 0;
+          zc::skin_vertex(monolithic_pose, monolithic_vertex,
+                          mx, my, mz, nullptr);
+          zc::skin_vertex(local_world.data(), local_vertex,
+                          lx, ly, lz, nullptr);
+          const int64_t dx = to_mm(mx) - to_mm(lx);
+          const int64_t dy = to_mm(my) - to_mm(ly);
+          const int64_t dz = to_mm(mz) - to_mm(lz);
+          half_world_vertex_delta_mm = std::max(
+              half_world_vertex_delta_mm,
+              static_cast<int32_t>(zref::isqrt_u64(
+                  static_cast<uint64_t>(dx * dx + dy * dy + dz * dz))));
+        }
+      }
+    }
+
+    half_world_station_delta_mm = 0;
+    for (const Station& station : stations) {
+      int32_t mx = 0, my = 0, mz = 0;
+      int32_t lx = 0, ly = 0, lz = 0;
+      zc::skin_vertex(monolithic_pose, station.v, mx, my, mz, nullptr);
+      zc::skin_vertex(local_world.data(), station.v, lx, ly, lz, nullptr);
+      const int64_t dx = to_mm(mx) - to_mm(lx);
+      const int64_t dy = to_mm(my) - to_mm(ly);
+      const int64_t dz = to_mm(mz) - to_mm(lz);
+      half_world_station_delta_mm = std::max(
+          half_world_station_delta_mm,
+          static_cast<int32_t>(zref::isqrt_u64(
+              static_cast<uint64_t>(dx * dx + dy * dy + dz * dz))));
+    }
+    const uint8_t support_bone = static_cast<uint8_t>(
+        zixx::kBSpine0 + zixx::kSpringPlantSegment);
+    const zc::SkinVertex support{
+        type.baked.world_x[support_bone], type.baked.world_y[support_bone],
+        type.baked.world_z[support_bone], support_bone, support_bone,
+        64, 0, 0};
+    int32_t mx = 0, my = 0, mz = 0;
+    int32_t lx = 0, ly = 0, lz = 0;
+    zc::skin_vertex(monolithic_pose, support, mx, my, mz, nullptr);
+    zc::skin_vertex(local_world.data(), support, lx, ly, lz, nullptr);
+    const int64_t dx = to_mm(mx) - to_mm(lx);
+    const int64_t dy = to_mm(my) - to_mm(ly);
+    const int64_t dz = to_mm(mz) - to_mm(lz);
+    half_support_delta_mm = static_cast<int32_t>(zref::isqrt_u64(
+        static_cast<uint64_t>(dx * dx + dy * dy + dz * dz)));
+    half_choreo_exact = half_choreo_exact &&
+                        half_local_root_zero && half_spin_zero &&
+                        half_deform_exact &&
+                        half_world_vertex_delta_mm <= 1 &&
+                        half_world_station_delta_mm <= 1 &&
+                        half_support_delta_mm <= 1;
+  }
+  std::printf("CHOREO key 4.5 frame=4 sub=1: exact=%d, local root zero=%d, "
+              "half spin zero=%d, deform exact=%d, world full/micro max "
+              "delta=%d mm, stations=%d mm, station-14 support=%d mm\n",
+              half_choreo_exact ? 1 : 0, half_local_root_zero ? 1 : 0,
+              half_spin_zero ? 1 : 0, half_deform_exact ? 1 : 0,
+              half_world_vertex_delta_mm, half_world_station_delta_mm,
+              half_support_delta_mm);
+  require(half_choreo_exact,
+          "default local-body ChoreoRoot key-4.5 composition drifted");
+
+  const zc::Clip* release_reference = monolithic_attack;
   bool release_parity = release_reference != nullptr;
   for (const ReleaseConsumer& consumer : release_consumers) {
     const zc::Clip* candidate = clip_for_slot(consumer.slot);

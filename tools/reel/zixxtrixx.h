@@ -2966,8 +2966,12 @@ inline int32_t zixx_plan_spring_release_entry(const zc::AttackPlan& p,
                                                int key) {
   const int th = p.compress_keys + p.compress_hold_keys;
   const int t0 = th + p.release_keys;
+  // Launch is an authoritative grounded endpoint. In the contract-valid
+  // zero-duration case launch and hold_end are the same key, so endpoint
+  // authority must precede the inclusive hold branch.
+  if (key >= t0) return 0;
   if (key <= th) return 1000;
-  if (key >= t0 || p.release_keys <= 1) return 0;
+  if (p.release_keys <= 1) return 0;
   const int ta = zixx_plan_spring_release_assembled_key(p);
   const int tb = zixx_plan_spring_release_absorb_key(p);
   if (key <= ta) return 1000;
@@ -2988,7 +2992,9 @@ inline int32_t zixx_plan_spring_release_entry(const zc::AttackPlan& p,
 inline int32_t zixx_plan_spring_release_squash(const zc::AttackPlan& p,
                                                 int key) {
   const int th = p.compress_keys + p.compress_hold_keys;
+  const int t0 = th + p.release_keys;
   const int ta = zixx_plan_spring_release_assembled_key(p);
+  if (key >= t0) return 0;
   if (key <= th) return 1000;
   if (key >= ta || ta <= th) return 0;
   const int32_t u = static_cast<int32_t>(
@@ -6713,8 +6719,11 @@ inline int zixx_jump_release_absorb_key(const JumpPlan& p) {
 inline int32_t zixx_jump_release_entry(const JumpPlan& p, int key) {
   const int hold_end = p.compress_keys + p.compress_hold_keys;
   const int launch = hold_end + p.release_keys;
+  // A zero-duration release aliases launch with hold_end. Resolve that shared
+  // key as the exact grounded launch endpoint before considering the hold.
+  if (key >= launch) return 0;
   if (key <= hold_end) return 1000;
-  if (key >= launch || p.release_keys <= 1) return 0;
+  if (p.release_keys <= 1) return 0;
   const int assembled = zixx_jump_release_assembled_key(p);
   const int absorb = zixx_jump_release_absorb_key(p);
   if (key <= assembled) return 1000;
@@ -6739,7 +6748,9 @@ inline int32_t zixx_jump_release_entry(const JumpPlan& p, int key) {
 
 inline int32_t zixx_jump_release_squash(const JumpPlan& p, int key) {
   const int hold_end = p.compress_keys + p.compress_hold_keys;
+  const int launch = hold_end + p.release_keys;
   const int assembled = zixx_jump_release_assembled_key(p);
+  if (key >= launch) return 0;
   if (key <= hold_end) return 1000;
   if (key >= assembled || assembled <= hold_end) return 0;
   const int32_t u = static_cast<int32_t>(
