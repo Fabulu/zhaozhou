@@ -1045,6 +1045,9 @@ struct SceneSubject {
   // creature subjects (creature_rules.md lane): 1 = wave-walk (the identity
   // shot: walk + wave tilt + LOD pull-back), 2 = bulk-pop (inflate -> gibs)
   int creature = 0;
+  // Diagnostic-only override: pin the existing compiled micro mesh at readable
+  // framing. It never changes the creature asset or runtime LOD law.
+  bool creature_force_micro = false;
   // V12 inspection-only camera orbit: hold the selected creature key and bulk
   // exactly while the view turns around it. This is reel presentation state,
   // never an animation/asset change.
@@ -2104,6 +2107,7 @@ struct CreatureReelCtx {
   zref::mat4fx vp;
   std::vector<ReelGibPiece>* gibs = nullptr;
   uint32_t gibs_in_view = 0;
+  bool force_micro = false;
   bool moving_light = false;
   zc::CreaturePointLight moving_source{};
 };
@@ -2121,11 +2125,15 @@ void sample_zixx_moving_source(uint32_t frame, uint32_t frames,
   constexpr int32_t kPathHeightMm = 1400;
   constexpr int32_t kHighArchMm = 1200;
   constexpr int32_t kReturnArchMm = 900;
-  constexpr int32_t kLightInnerRadiusMm = 1100;
-  constexpr int32_t kLightOuterRadiusMm = 5200;
-  constexpr int32_t kLightGainR = 65536;
-  constexpr int32_t kLightGainG = 44564;
-  constexpr int32_t kLightGainB = 26214;
+  // A broad, forceful inspection lamp rather than a small travelling glint.
+  // The core covers a substantial body phrase and the long shoulder keeps the
+  // source legible across the far flank; gains may exceed one because the
+  // compositor clamps only the final material response, preserving pigment.
+  constexpr int32_t kLightInnerRadiusMm = 2300;
+  constexpr int32_t kLightOuterRadiusMm = 7000;
+  constexpr int32_t kLightGainR = 147456;  // 2.25
+  constexpr int32_t kLightGainG = 111411;  // 1.70
+  constexpr int32_t kLightGainB = 72090;   // 1.10
   const uint32_t leg_frames = std::max<uint32_t>(1, frames / 4);
   const uint32_t leg = std::min<uint32_t>(3, frame / leg_frames);
   const uint32_t local = frame - leg * leg_frames;
@@ -2314,6 +2322,10 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
 #endif
   {
     zc::CreatureInstance* insts[2] = {c.inst, c.dummy};
+    if (c.force_micro) {
+      c.inst->lod.rung = zc::LodRung::kMicro;
+      c.inst->lod.hold = 0;  // compose cannot refine during this diagnostic frame
+    }
     const zc::CreatureLightRig* const saved_rig = zc::g_creature_light_rig;
     const zc::CreaturePointLight* const saved_point = zc::g_creature_point_light;
     if (c.moving_light) {
@@ -2668,6 +2680,7 @@ int render_scene(const SceneSubject& sub) {
       dog_inst.x -= fxm(zixx::kRunSpeed * static_cast<int32_t>(sub.frames)) / 2;
     cr_ctx.inst = &dog_inst;
     cr_ctx.poses = &dog_poses;
+    cr_ctx.force_micro = sub.creature_force_micro;
     cr_ctx.moving_light = sub.creature_moving_light;
     if (sub.dummy) {
       const uint16_t attack_slot = static_cast<uint16_t>(sub.creature - 2);
@@ -4216,6 +4229,17 @@ SceneSubject subject_zixx_spring_top() {
   return s;
 }
 
+// Same fixed-side presentation cadence and framing, but explicitly draw the
+// compiled micro mesh. This diagnostic is not in the shipped/site library.
+SceneSubject subject_zixx_spring_micro() {
+  SceneSubject s = subject_zixx_spring_side();
+  s.name = "zixxtrixx-spring-micro";
+  s.creature_force_micro = true;
+  s.note = "DIAGNOSTIC: every frame of the shared whole-body spring on the "
+           "compiled micro mesh, fixed true-side camera";
+  return s;
+}
+
 // DIAGNOSTIC (deliberately NOT in kLibrary, so it never ships to the site):
 // a near-LEVEL orbit for the Front.png acceptance test -- "a straight-on
 // view must look like the frontal sketch". The showcase camera looks down
@@ -5709,6 +5733,7 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-attack")) rc |= render_scene(subject_zixx_attack());
   if (wanted("zixxtrixx-spring-side")) rc |= render_scene(subject_zixx_spring_side());
   if (wanted("zixxtrixx-spring-top")) rc |= render_scene(subject_zixx_spring_top());
+  if (wanted("zixxtrixx-spring-micro")) rc |= render_scene(subject_zixx_spring_micro());
   if (wanted("zixxtrixx-fall")) rc |= render_scene(subject_zixx_fall());
   if (wanted("zixxtrixx-front")) rc |= render_scene(subject_zixx_front());
   if (wanted("zixxtrixx-side")) rc |= render_scene(subject_zixx_side());

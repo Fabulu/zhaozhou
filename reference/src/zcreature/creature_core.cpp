@@ -181,11 +181,30 @@ quat16 quat_renorm(int64_t w, int64_t x, int64_t y, int64_t z) {
 }  // namespace
 
 void bake_presentation_midpoints(Clip& c, uint8_t bc) {
-  if (!c.interpolate || c.frame_count < 2) return;
+  static const std::vector<uint8_t> kNoAuthoredChannels;
+  bake_presentation_midpoints(c, bc, kNoAuthoredChannels);
+}
+
+void bake_presentation_midpoints(
+    Clip& c, uint8_t bc,
+    const std::vector<uint8_t>& authored_channels) {
   const int n = c.frame_count;
-  c.mid_quats.assign(static_cast<size_t>(n) * bc, quat16_identity());
-  c.mid_root.assign(static_cast<size_t>(n) * 3, 0);
-  if (c.deform.size() == static_cast<size_t>(n))
+  const bool has_deform = c.deform.size() == static_cast<size_t>(n);
+  // A midpoint deformation channel is meaningless without one valid source
+  // sample per key. Clear malformed/stale data even on a non-interpolated clip.
+  if (!has_deform) c.mid_deform.clear();
+  if (!c.interpolate || n < 2) return;
+  const size_t quat_count = static_cast<size_t>(n) * bc;
+  const size_t root_count = static_cast<size_t>(n) * 3;
+
+  // Preserve old storage only as a source for explicitly owned samples.
+  // Complete but unowned arrays are generated cache and are always rebuilt.
+  const std::vector<quat16> old_mid_quats = c.mid_quats;
+  const std::vector<int32_t> old_mid_root = c.mid_root;
+  const std::vector<DeformSample> old_mid_deform = c.mid_deform;
+  c.mid_quats.assign(quat_count, quat16_identity());
+  c.mid_root.assign(root_count, 0);
+  if (has_deform)
     c.mid_deform.assign(static_cast<size_t>(n), DeformSample{});
   else
     c.mid_deform.clear();
@@ -272,6 +291,24 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc) {
                       -q0.q[2] + 9 * q1.q[2] + 9 * q2.q[2] - q3.q[2],
                       -q0.q[3] + 9 * q1.q[3] + 9 * q2.q[3] - q3.q[3]);
     }
+
+    const uint8_t owned = static_cast<size_t>(k) < authored_channels.size()
+                              ? authored_channels[static_cast<size_t>(k)]
+                              : 0;
+    const size_t qi = static_cast<size_t>(k) * bc;
+    const size_t ri = static_cast<size_t>(k) * 3;
+    if ((owned & kMidpointQuatsAuthored) != 0 &&
+        old_mid_quats.size() >= qi + bc)
+      std::copy_n(old_mid_quats.begin() + qi, bc,
+                  c.mid_quats.begin() + qi);
+    if ((owned & kMidpointRootAuthored) != 0 &&
+        old_mid_root.size() >= ri + 3)
+      std::copy_n(old_mid_root.begin() + ri, 3,
+                  c.mid_root.begin() + ri);
+    if (has_deform && (owned & kMidpointDeformAuthored) != 0 &&
+        old_mid_deform.size() > static_cast<size_t>(k))
+      c.mid_deform[static_cast<size_t>(k)] =
+          old_mid_deform[static_cast<size_t>(k)];
   }
 }
 
@@ -878,8 +915,17 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
 
 // --------------------------------------------------------------- compile ---
 
-bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vector<RingPart>& parts,
-                      CreatureType& out, const char** reason) {
+bool compile_creature(const Skeleton& sk, const ClipBank& bank,
+                      const std::vector<RingPart>& parts, CreatureType& out,
+                      const char** reason) {
+  static const std::vector<PresentationMidpointAuthorship> kNoAuthorship;
+  return compile_creature(sk, bank, parts, out, reason, kNoAuthorship);
+}
+
+bool compile_creature(
+    const Skeleton& sk, const ClipBank& bank,
+    const std::vector<RingPart>& parts, CreatureType& out, const char** reason,
+    const std::vector<PresentationMidpointAuthorship>& midpoint_authorship) {
   if (reason) *reason = "ok";
   if (sk.bone_count == 0 || sk.bone_count > kMaxBones) {
     if (reason) *reason = "bone count";
@@ -894,10 +940,60 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
     return false;
   }
   out.skeleton = sk;
+
+  // Authorship is compile-only provenance beside the bank. Validate it before
+  // copying: missing slots, duplicate declarations, wrong counts and unknown
+  // bits must fail rather than silently preserving stale generated storage.
+  for (size_t ai = 0; ai < midpoint_authorship.size(); ++ai) {
+    const PresentationMidpointAuthorship& a = midpoint_authorship[ai];
+    const Clip* owned_clip = nullptr;
+    for (const Clip& c : bank.clips)
+      if (c.slot_id == a.slot_id) owned_clip = &c;
+    if (owned_clip == nullptr ||
+        a.channels.size() != static_cast<size_t>(owned_clip->frame_count)) {
+      if (reason)
+        *reason =
+            "midpoint authorship references a missing clip or has wrong count";
+      return false;
+    }
+    for (size_t aj = 0; aj < ai; ++aj)
+      if (midpoint_authorship[aj].slot_id == a.slot_id) {
+        if (reason) *reason = "duplicate midpoint authorship slot";
+        return false;
+      }
+    for (size_t k = 0; k < a.channels.size(); ++k) {
+      const uint8_t mask = a.channels[k];
+      if ((mask & ~(kMidpointQuatsAuthored | kMidpointRootAuthored |
+                    kMidpointDeformAuthored)) != 0) {
+        if (reason) *reason = "unknown midpoint authorship channel";
+        return false;
+      }
+      if (((mask & kMidpointQuatsAuthored) != 0 &&
+           owned_clip->mid_quats.size() < (k + 1) * bank.bone_count) ||
+          ((mask & kMidpointRootAuthored) != 0 &&
+           owned_clip->mid_root.size() < (k + 1) * 3) ||
+          ((mask & kMidpointDeformAuthored) != 0 &&
+           (owned_clip->deform.size() != owned_clip->frame_count ||
+            owned_clip->mid_deform.size() <= k))) {
+        if (reason) *reason = "owned midpoint channel is missing or malformed";
+        return false;
+      }
+    }
+  }
+
   out.bank = bank;
-  // A1: bake the presentation companion for hero banks (kind-9 unfrozen)
-  if (bank.bake60)
-    for (Clip& c : out.bank.clips) bake_presentation_midpoints(c, bank.bone_count);
+  // Regenerate every unowned presentation sample from current integer keys.
+  if (bank.bake60) {
+    for (Clip& c : out.bank.clips) {
+      const PresentationMidpointAuthorship* ownership = nullptr;
+      for (const PresentationMidpointAuthorship& a : midpoint_authorship)
+        if (a.slot_id == c.slot_id) ownership = &a;
+      if (ownership != nullptr)
+        bake_presentation_midpoints(c, bank.bone_count, ownership->channels);
+      else
+        bake_presentation_midpoints(c, bank.bone_count);
+    }
+  }
 
   // ---- C2: enforce the declared phase seams (bit-identical poses) --------
   for (const SeamPair& sp : bank.seams) {
