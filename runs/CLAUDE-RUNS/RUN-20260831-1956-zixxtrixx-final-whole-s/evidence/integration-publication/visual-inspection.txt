@@ -1,0 +1,14 @@
+Fresh integrated visual inspection — 2026-09-01
+
+Render source: integration-task46/bin/zhao-reel-cel.exe
+Environment: ZIXX_EXP=celmain; ZIXX_LIGHT=diagonal-cool-cross
+Method: native 384x240 frames, row-major every-frame contact sheets; inspection is visual, not a measurement gate.
+
+Reviewed every frame:
+- zixxtrixx-jump-one 0000..0160: complete shared spring, wheel, landing, absorption, settle and loop endpoint.
+- zixxtrixx-hitfloor 0000..0187: complete distinct downward landing, impact/hold and shared get-up.
+- zixxtrixx-attack 0000..0063: complete shared preload, release, rigid lift and wheel gather.
+
+Verdict: PASS. The enlarged two-lobe S remains one connected animal through entry, hold and exact reversed release; the tail follows rather than leading; lift starts only after grounded stance restoration; wheel gather is continuous. Jump landing and hit-floor landing remain visually distinct and continuous through impact, absorption/hold and recovery. No one-frame fragment, body crossing, terrain-hidden break, root-slide read, stray triangle or transient material defect appeared.
+
+Consumer parity beyond these visually reviewed representative sequences is covered by the accepted compiled midpoint/contact probes and integrated probe PASS; unchanged subjects receive bounded metadata/hash checks rather than a new art-tuning loop.
