@@ -253,6 +253,47 @@ only when the game needs a feature.
 | mana territory recorded, rescued to Upheaval main | `450acc4`, `2ad25aa` |
 | active-v9 lane unblocked | `7c646b0` |
 
+## THE AGREED SEQUENCE (Fabian, 2026-09-01)
+
+> *"After we finish bro's instructions and finish the 100 MHz target, finishing
+> the conventional renderer's timing closure, we should solve the external
+> parameter/binner capacity architecture against real 256-creature traces, that
+> comes before more hardware."*
+
+Same order the ruling itself sets. Written here because a sequence agreed in
+conversation is not a sequence anyone can find later.
+
+| # | | gate to the next |
+|---|---|---|
+| 1 | **finish `MHZArchitected` + close the conventional renderer's timing** | a composed fit at the note's 110–115 MHz target, not just 100 |
+| 2 | **`GEOM.PARAMBUF` + binner capacity, against REAL 256-creature traces** | the traces exist and the capacity is derived from them |
+| 3 | more hardware — the 8 km world, creature lane, spectacle | — |
+
+**Step 2 is blocked on a trace, not on a design.** The ruling is explicit that
+the external parameter buffer and tile-reference storage *"must be sized from
+real traces of this content tier"* — 256 creatures, 128 per player in Duo,
+32,768 particles, one Level-9 spectacle.
+
+**The analytic numbers already computed are NOT that trace** and must not be
+mistaken for it:
+
+* `GEOM.VDECODE` ~494,000 vertices ≈ 37 % of a frame, ~15.8 MB/frame at full mesh;
+* `PART.STATE` 1 MiB/tick ≈ 63 MB/s at 32,768 particles;
+* `POST.COMPOSITE` five full-screen passes ≈ 35 % of a frame.
+
+Those are arithmetic against stated capacities. They say what to *watch*; they
+do not say what a real frame *does*, and the binner's own study
+(`BINNER_CAPACITY_FOR_8KM_MAPS.md`) exists precisely because the shipped
+capacities — 128 triangles, 1,024 references — are two orders short of a game
+frame and nobody should discover that during an integration.
+
+**Note also what the current fit does NOT contain:** TMU v2, texture cache,
+TEXJOIN, AUX, Field/Earth. 45 sources in the QSF, zero for any of them. So a
+composed number today is the frequency of *part* of the machine, which is why
+the note's target is 110–115 rather than 100.
+
+---
+
 ## Still open after the ruling
 
 | | item |
