@@ -641,16 +641,14 @@ struct CreatureType {
  */
 /** A1: regenerate Clip::mid_*; preserve only explicitly owned channels. */
 void bake_presentation_midpoints(Clip& c, uint8_t bone_count);
-void bake_presentation_midpoints(
-    Clip& c, uint8_t bone_count,
-    const std::vector<uint8_t>& authored_channels);
+void bake_presentation_midpoints(Clip& c, uint8_t bone_count,
+                                 const std::vector<uint8_t>& authored_channels);
 
 bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vector<RingPart>& parts,
                       CreatureType& out, const char** reason);
-bool compile_creature(
-    const Skeleton& sk, const ClipBank& bank,
-    const std::vector<RingPart>& parts, CreatureType& out, const char** reason,
-    const std::vector<PresentationMidpointAuthorship>& midpoint_authorship);
+bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vector<RingPart>& parts,
+                      CreatureType& out, const char** reason,
+                      const std::vector<PresentationMidpointAuthorship>& midpoint_authorship);
 
 /**
  * The decode itself (pure, order-independent): the per-bone chain

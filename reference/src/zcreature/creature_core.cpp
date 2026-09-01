@@ -185,9 +185,8 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc) {
   bake_presentation_midpoints(c, bc, kNoAuthoredChannels);
 }
 
-void bake_presentation_midpoints(
-    Clip& c, uint8_t bc,
-    const std::vector<uint8_t>& authored_channels) {
+void bake_presentation_midpoints(Clip& c, uint8_t bc,
+                                 const std::vector<uint8_t>& authored_channels) {
   const int n = c.frame_count;
   const bool has_deform = c.deform.size() == static_cast<size_t>(n);
   // A midpoint deformation channel is meaningless without one valid source
@@ -297,18 +296,13 @@ void bake_presentation_midpoints(
                               : 0;
     const size_t qi = static_cast<size_t>(k) * bc;
     const size_t ri = static_cast<size_t>(k) * 3;
-    if ((owned & kMidpointQuatsAuthored) != 0 &&
-        old_mid_quats.size() >= qi + bc)
-      std::copy_n(old_mid_quats.begin() + qi, bc,
-                  c.mid_quats.begin() + qi);
-    if ((owned & kMidpointRootAuthored) != 0 &&
-        old_mid_root.size() >= ri + 3)
-      std::copy_n(old_mid_root.begin() + ri, 3,
-                  c.mid_root.begin() + ri);
+    if ((owned & kMidpointQuatsAuthored) != 0 && old_mid_quats.size() >= qi + bc)
+      std::copy_n(old_mid_quats.begin() + qi, bc, c.mid_quats.begin() + qi);
+    if ((owned & kMidpointRootAuthored) != 0 && old_mid_root.size() >= ri + 3)
+      std::copy_n(old_mid_root.begin() + ri, 3, c.mid_root.begin() + ri);
     if (has_deform && (owned & kMidpointDeformAuthored) != 0 &&
         old_mid_deform.size() > static_cast<size_t>(k))
-      c.mid_deform[static_cast<size_t>(k)] =
-          old_mid_deform[static_cast<size_t>(k)];
+      c.mid_deform[static_cast<size_t>(k)] = old_mid_deform[static_cast<size_t>(k)];
   }
 }
 
@@ -915,17 +909,15 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
 
 // --------------------------------------------------------------- compile ---
 
-bool compile_creature(const Skeleton& sk, const ClipBank& bank,
-                      const std::vector<RingPart>& parts, CreatureType& out,
-                      const char** reason) {
+bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vector<RingPart>& parts,
+                      CreatureType& out, const char** reason) {
   static const std::vector<PresentationMidpointAuthorship> kNoAuthorship;
   return compile_creature(sk, bank, parts, out, reason, kNoAuthorship);
 }
 
-bool compile_creature(
-    const Skeleton& sk, const ClipBank& bank,
-    const std::vector<RingPart>& parts, CreatureType& out, const char** reason,
-    const std::vector<PresentationMidpointAuthorship>& midpoint_authorship) {
+bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vector<RingPart>& parts,
+                      CreatureType& out, const char** reason,
+                      const std::vector<PresentationMidpointAuthorship>& midpoint_authorship) {
   if (reason) *reason = "ok";
   if (sk.bone_count == 0 || sk.bone_count > kMaxBones) {
     if (reason) *reason = "bone count";
@@ -951,9 +943,7 @@ bool compile_creature(
       if (c.slot_id == a.slot_id) owned_clip = &c;
     if (owned_clip == nullptr ||
         a.channels.size() != static_cast<size_t>(owned_clip->frame_count)) {
-      if (reason)
-        *reason =
-            "midpoint authorship references a missing clip or has wrong count";
+      if (reason) *reason = "midpoint authorship references a missing clip or has wrong count";
       return false;
     }
     for (size_t aj = 0; aj < ai; ++aj)
@@ -963,15 +953,14 @@ bool compile_creature(
       }
     for (size_t k = 0; k < a.channels.size(); ++k) {
       const uint8_t mask = a.channels[k];
-      if ((mask & ~(kMidpointQuatsAuthored | kMidpointRootAuthored |
-                    kMidpointDeformAuthored)) != 0) {
+      if ((mask & ~(kMidpointQuatsAuthored | kMidpointRootAuthored | kMidpointDeformAuthored)) !=
+          0) {
         if (reason) *reason = "unknown midpoint authorship channel";
         return false;
       }
       if (((mask & kMidpointQuatsAuthored) != 0 &&
            owned_clip->mid_quats.size() < (k + 1) * bank.bone_count) ||
-          ((mask & kMidpointRootAuthored) != 0 &&
-           owned_clip->mid_root.size() < (k + 1) * 3) ||
+          ((mask & kMidpointRootAuthored) != 0 && owned_clip->mid_root.size() < (k + 1) * 3) ||
           ((mask & kMidpointDeformAuthored) != 0 &&
            (owned_clip->deform.size() != owned_clip->frame_count ||
             owned_clip->mid_deform.size() <= k))) {
