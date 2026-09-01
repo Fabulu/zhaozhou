@@ -94,3 +94,59 @@ rejected live bank).
 
 - Website phase: preserve live bank as Archive Generation Twelve, render the
   22 subjects fresh, encode, assemble, merge mains, publish once, verify.
+
+---
+
+## Outcome
+
+**Status:** Complete. Published.
+
+| | |
+|---|---|
+| zhaozhou main | `3042cc04` (spring rework `a2f601e`) |
+| Upheaval main | `9c874e1` + worklog/assembly record |
+| review deployment | https://8cc7c9ee.upheaval.pages.dev |
+| production | https://upheaval.pages.dev — HTTP 200, byte-identical index, exactly one noindex meta, twelve archive generations |
+
+Production was byte-compared against the local build: `zixxtrixx-jump-one.webm`
+and `archive-2026-09-01-generation-twelve-jump-one.webm` are SHA-256 identical
+to what was encoded here; the Generation Twelve file exists only in this
+deploy, so its presence is independent proof the new build is live.
+
+`ZIXX PROBE: PASS` before and after merging the hardware lane's main (which
+touched only reports/RTL/Quartus, nothing the reel builds from), and the final
+fresh clean build re-rendered `zixxtrixx-jump-one` and `zixxtrixx-salto-dummy`
+to CRCs bit-identical to the judged iteration renders (0x37293039 /
+0x86E72EE8), so the shipped media is exactly what the probe passed on and the
+eye accepted.
+
+### Direction 21 acceptance, judged by eye on the every-frame sheets
+
+1. Nothing rotates through or past vertical during the spring: the fold grows
+   out of the idle dive; the neck lowers, the hook presses flat, the head
+   stays nose-forward throughout.
+2. The S is whole-body to the last tail segment: the assembled pose carries a
+   real rear curl (-80 deg at the tip) and the renders show it.
+3. A small aim (nose dip toward the target, ~55 mm forward head travel), then
+   the unmistakable 60%-of-the-arming squeeze.
+4. The deep pose reads as the same S pressed from the top: ~64% idle height,
+   broader footprint, the pressed loop still showing its light window.
+5. Zero real-surface self-intersections (committed probe, full and micro, at
+   every pre-lift tick including the living hold's wave peaks); contact
+   flattens 31% and spreads 12% instead of clipping; every ground bite inside
+   the declared band, never hovering.
+6. The release fires ~3x faster than any arming key and the launch carries
+   forward; motion energy shows exactly two impulses (release+launch, landing).
+7. The salto is the previously accepted wheel, restored bit-identically
+   (taper/breathe zeroed) and compared frame-by-frame against Archive
+   Generation Eleven.
+
+### Not achieved / left open
+
+* The deep squeeze stops at ~64% of idle height. Pressing lower is bounded by
+  the stacked tubes' flattened radii; the knobs are the collapsed table and
+  kSpringBodyFlattenQ16 if the owner wants it flatter still.
+* The aim is deliberately subtle (a few degrees). If the owner wants a more
+  theatrical aim, the nose-dip values in the three tables are the knob.
+* The historical reel CRC three-way disagreement was not investigated, as
+  standing instructions require.
