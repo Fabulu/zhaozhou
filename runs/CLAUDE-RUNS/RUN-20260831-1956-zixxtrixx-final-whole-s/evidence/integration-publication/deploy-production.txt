@@ -1,0 +1,13 @@
+assemble: wrote C:\programmieren\zencrifice\zixxtrixx-integration-publish-20260901\Upheaval\website\public\index.html - 1 creature(s), 211 render(s)
+deploying C:\programmieren\zencrifice\zixxtrixx-integration-publish-20260901\Upheaval\website\public -> project 'upheaval', branch 'main'
+
+ ⛅️ wrangler 4.86.0
+───────────────────
+Uploading... (385/416)
+Uploading... (395/416)
+Uploading... (405/416)
+Uploading... (416/416)
+✨ Success! Uploaded 31 files (385 already uploaded) (5.85 sec)
+
+🌎 Deploying...
+✨ Deployment complete! Take a peek over at https://4dba729e.upheaval.pages.dev
