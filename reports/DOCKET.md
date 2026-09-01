@@ -253,6 +253,44 @@ only when the game needs a feature.
 | mana territory recorded, rescued to Upheaval main | `450acc4`, `2ad25aa` |
 | active-v9 lane unblocked | `7c646b0` |
 
+## THE MHz WORK NEEDS **TWO** OF BRO'S PLANS, NOT ONE
+
+Found 2026-09-01 by reading `reports/` properly instead of working from one
+document. **`reports/ShellFixes.md` is a second, separate timing-closure plan**
+— "gimme your elaborate and full expert solution at fixing the shell MHz" — and
+it had never been read during this effort.
+
+It measures the SHELL, from the earlier shell-only fit at 83.4 MHz:
+
+| path | slack at 100 MHz | ceiling |
+|---|---|---|
+| raw starvation-counter CDC | −1.991 ns | misleading 83.4 MHz |
+| **CMD.DMA header-validation** | **−0.875 ns** | **~92 MHz** |
+| **record-framer wide-write** | **−0.765 ns** | **~93 MHz** |
+
+Its prescription: one CDC repair, one "nearly trivial" CMD.DMA dependency cut,
+and one proper rewrite of the record framer as streaming hardware rather than
+one giant expression. Plus process rules — refit before touching the next
+candidate, keep fitter settings boring, **no fake timing fixes**, and an
+acceptance bar higher than WNS = +0.001 ns.
+
+**Checked against the current composed fit: NONE of those three appear in the
+worst 100.** `starve_samp`, `starvation`, `cdc_err`, the DMA and the framer are
+all absent; the renderer owns every failing path.
+
+**That is exactly why this matters.** They are not binding *today* because the
+renderer is worse — but at ~92 MHz they cap the design well below the note's
+110–115 target. So:
+
+> **`MHZArchitected` alone cannot reach the target. Finishing the renderer
+> exposes the shell, and `ShellFixes.md` is required work, not optional.**
+
+Order follows from the measurements: finish the renderer first (it is worse),
+then the shell items, then re-fit. Bro's own rule — *refit before touching the
+next candidate* — is the method already being used.
+
+---
+
 ## THE AGREED SEQUENCE (Fabian, 2026-09-01)
 
 > *"After we finish bro's instructions and finish the 100 MHz target, finishing
