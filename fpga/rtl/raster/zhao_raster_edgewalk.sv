@@ -191,10 +191,32 @@ module zhao_raster_edgewalk (
   // ------------------------------------------- tile-start pixel centre -----
   // §8: the centre of pixel p sits at 256·p + 128 subpixels. The walk starts
   // at the tile's top-left pixel centre.
-  logic signed [DIFF_W-1:0] px0, py0;
+  // THEY GET REGISTERS, for the same reason the per-pixel steps did in the
+  // fit at fc6395f. Round 12 named this the design's worst path, EDGEWALK
+  // owning 48 of 100:
+  //
+  //     tile_y_r[5] -> cross_r[0]
+  //
+  // The cone is tile_y_r -> shift -> `+ 128` -> `py0 - by_r` -> a 23x23
+  // signed multiply. Two adder levels sat in front of the DSP, recomputing a
+  // value that CANNOT CHANGE for the whole job: the tile origin is fixed when
+  // the job is accepted.
+  //
+  // This is the third time this exact mistake has been found in this block --
+  // the steps, the top-left bits, and now the pixel centre. Each was
+  // "obviously" free because it is a couple of adds on a constant, and each
+  // was sitting on the critical path in front of a multiplier. STABLE AND ON
+  // THE CRITICAL PATH IS EXACTLY THE CASE THAT WANTS A REGISTER, however
+  // cheap the arithmetic looks.
+  //
+  // FREE IN CYCLES. They are latched in S_AREA and first read in S_W0B; the
+  // area operands S_AREA drives do not use them, so no state is added and no
+  // job is delayed.
+  logic signed [DIFF_W-1:0] px0_c, py0_c;   // combinational, S_AREA only
+  logic signed [DIFF_W-1:0] px0_r, py0_r;   // what the operand mux reads
   always_comb begin
-    px0 = ($signed({{(DIFF_W-12){tile_x_r[11]}}, tile_x_r}) <<< 8) + 23'sd128;
-    py0 = ($signed({{(DIFF_W-12){tile_y_r[11]}}, tile_y_r}) <<< 8) + 23'sd128;
+    px0_c = ($signed({{(DIFF_W-12){tile_x_r[11]}}, tile_x_r}) <<< 8) + 23'sd128;
+    py0_c = ($signed({{(DIFF_W-12){tile_y_r[11]}}, tile_y_r}) <<< 8) + 23'sd128;
   end
 
   // --------------------------------------------- the double-sided flip -----
@@ -242,18 +264,18 @@ module zhao_raster_edgewalk (
       // one state later costs ONE CYCLE PER TRIANGLE out of roughly twenty-five
       // and removes the sign bit from the multiplier's cone entirely.
       S_W0B: begin
-        m_p = cx_r - bx_r;  m_q = py0 - by_r;
-        m_u = cy_r - by_r;  m_v = px0 - bx_r;
+        m_p = cx_r - bx_r;  m_q = py0_r - by_r;
+        m_u = cy_r - by_r;  m_v = px0_r - bx_r;
       end
       // w1 = orient(C,A, px0,py0)
       S_W1: begin
-        m_p = ax_r - cx_r;  m_q = py0 - cy_r;
-        m_u = ay_r - cy_r;  m_v = px0 - cx_r;
+        m_p = ax_r - cx_r;  m_q = py0_r - cy_r;
+        m_u = ay_r - cy_r;  m_v = px0_r - cx_r;
       end
       // w2 = orient(A,B, px0,py0)
       S_W2: begin
-        m_p = bx_r - ax_r;  m_q = py0 - ay_r;
-        m_u = by_r - ay_r;  m_v = px0 - ax_r;
+        m_p = bx_r - ax_r;  m_q = py0_r - ay_r;
+        m_u = by_r - ay_r;  m_v = px0_r - ax_r;
       end
       default: ;
     endcase
@@ -487,6 +509,8 @@ module zhao_raster_edgewalk (
       degen_r  <= 1'b0;
       count_r  <= 9'd0;
       row_i    <= 5'd0;
+      px0_r    <= {DIFF_W{1'b0}};
+      py0_r    <= {DIFF_W{1'b0}};
       pend_r   <= 16'd0;
       rowb_cov_r <= 16'd0;
       rowb_idx_r <= 4'd0;
@@ -522,7 +546,14 @@ module zhao_raster_edgewalk (
           end
         end
 
-        S_AREA: state <= S_W0;  // operands driven by the mux; result next edge
+        // The tile-start pixel centre is latched here: tile_x_r/tile_y_r are
+        // valid from the accept edge, and nothing reads px0_r/py0_r until
+        // S_W0B. Costs no state and no cycle.
+        S_AREA: begin
+          px0_r <= px0_c;
+          py0_r <= py0_c;
+          state <= S_W0;  // operands driven by the mux; result next edge
+        end
 
         S_W0: begin
           // cross_r = 2A in subpixel² (the s64 setup). Zero area is rejected
