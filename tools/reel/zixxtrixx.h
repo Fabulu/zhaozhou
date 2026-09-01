@@ -741,49 +741,63 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
 // eye as a broad low two-lobe S; interpolation/timing may only be built around a
 // collapsed pose that already reads correctly on its own.
 constexpr const auto& kSpringGroundedHeading = kStanceSlope;
-// OWNER DIRECTION 20. The rejected tables authored a CORRUGATION: three small
-// bumps whose head sat 89 mm FORWARD of and 129 mm below its resting place, so
-// the loaded pose was a smaller, wigglier animal than the rest pose. The owner
-// read that exactly right -- "it leans FORWARD and destroys the S".
+// OWNER DIRECTION 21. The Direction 20 tables carried the front segments round
+// past vertical (segment 0 at ~165 deg) -- the owner's "you turned the front
+// part of the snake around by 180 degrees somehow" -- while the rear read
+// 2.7/-16.5/-38.5 deg, a straight rail: an S made by the partial body. Both are
+// rejected. The action Direction 21 asks for, in order:
 //
-// These three poses are re-authored by eye against the tail-balance clip, which
-// takes its head 803 mm BACK and 1149 mm UP as it rises. Their head travel is
-// monotone BACKWARD at every step of the route (0 -> -643 -> -1267 -> -1712 mm)
-// and the S grows into that lean instead of being flattened by it.
+//   1. AIM   -- a small angle toward the target. Not a lean-back stunt.
+//   2. WHOLE BODY -- the S is made by every station to the last tail station.
+//   3. SQUEEZE -- "the S becomes an S that has been squeezed from the top":
+//      the SAME S, pressed down, shorter and broader. Contact flattens and
+//      spreads sideways instead of clipping (the deform sidecar's job).
+//   4. EXPLODE forward.
+//
+// These three poses are authored by eye in a planted-frame centreline
+// sketchpad and then against the rendered clip. The collapsed fold GROWS OUT
+// OF THE IDLE'S OWN DIVE (stations 5-8), so every station morphs a short arc
+// and nothing swings through a gross rollover: the neck lowers, the hook
+// presses flat onto the belly, the tail curl sweeps down. The head never
+// pitches past vertical anywhere on the route.
 
-// ABSORB. The signature S has not unwound -- the FRONT HOOK ROTATES BACKWARD as
-// a hook, tipping the head back over the body while the flat ground run starts
-// to bend up out of the terrain and the tail begins to gather. Head at this
-// pose: 643 mm back, 952 mm up. Nothing pitches forward at any point.
+// ABSORB. The first beat: the nose dips a few degrees TOWARD THE TARGET (the
+// aim), and the tail begins to gather off the ground into the S's rear curl.
+// The signature front hook is untouched -- this reads as the idle animal
+// noticing its target and starting to load, not as a new shape.
 constexpr int32_t kSpringAbsorbHeading[kStanceSlopes] = {
-    19700, 18600, 16200, 13400, 11250, 12650, 15700, 19350, 18750, 15800,
-    9750, 8850, 7350, 5400, 3400, 2050, 1100, -4000, -8700};
-// ASSEMBLED. The whole-body S the owner asked for: the animal has genuinely
-// RISEN ONTO ITS TAIL -- rear stations lie along the terrain into the lower
-// lobe, the body climbs past vertical, and the upper lobe curls back so the
-// head rides 1267 mm behind and 1002 mm above its resting place. Every station
-// through the last tail station carries curvature; there is no straight rail.
+    -1300, 500, 1900, 3900, 6700, 14600, 21400, 25200, 20000, 11600,
+    150, 350, 450, 700, 1300, -1400, -4000, -9500, -13700};
+// ASSEMBLED. The whole-body S, aimed. The front hook is still exactly the
+// signature S's hook; the belly keeps its ground; the TAIL now carries a real
+// rear curl (to -80 deg at the tip -- deliberately short of vertical), so
+// every station from the nose to the last tail station is in the S. This is
+// the shape the squeeze presses; it is the idle S completed, not replaced.
 constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
-    26500, 25500, 22000, 17000, 12500, 9500, 10000, 13500, 17500, 20000,
-    19500, 17500, 14500, 10500, 5600, 2400, 700, -2400, -6000};
-// COLLAPSED, the loaded coil. A spring being armed packs its coils TIGHTER --
-// it does not straighten. Every lobe gains curvature while the reach shortens:
-// the head continues back to 1712 mm and settles ~160 mm down out of the
-// assembled peak, so the deepest pose is both the furthest BACK and the most
-// coiled. This is the pose the release fires from.
+    -1500, 400, 1700, 3800, 6800, 14600, 21400, 25200, 20000, 11600,
+    300, 500, 700, 1000, 1500, -4500, -9500, -13000, -14500};
+// COLLAPSED: THE S SQUEEZED FROM THE TOP. Three stacked near-level runs --
+// the pressed neck (top), the folded-flat return of the hook (middle), the
+// grounded belly (bottom) -- joined by two quick single-segment crossings that
+// are the descendants of the idle dive's own steep segments. The nose sits at
+// ~64% of its idle height, the footprint spreads, and the rear curl is pressed
+// into a low broad arc reaching back. The stacked runs are authored to TOUCH
+// at their radii: the flatten/spread deform takes the contact, so the packing
+// squeezes flatter instead of clipping. This is the pose the release fires
+// from, and the whole shape stays unmistakably the same S.
 constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
-    30000, 28500, 25000, 20000, 14500, 10500, 10500, 14500, 19500, 22500,
-    22500, 20500, 17000, 12000, 6500, 2500, 500, -3000, -7000};
+    -1500, 400, 900, 1100, 1400, 17000, 27500, 31000, 16500, 4500,
+    900, 900, 1000, 1200, 1700, -2800, -6200, -4800, -1600};
 // WHERE THE THREE AUTHORED POSES SIT ON THE ONE ARMING PARAMETER, in 1/1000 of
 // the complete arming. Grounded is 0 and collapsed is 1000. Moving these
-// reparameterises the build without touching a single shape value: they were
-// chosen by eye so the head's rise and its backward travel both come out EVEN
-// rather than front-loaded, which is what "slow and steady" actually looks
-// like. The route between them is C1-continuous (see spring_route_heading), so
-// no station stops dead at an interior pose the way the rejected piecewise
-// smoothstep did.
-constexpr int32_t kSpringArmAbsorbAt = 500;
-constexpr int32_t kSpringArmAssembledAt = 750;
+// reparameterises the build without touching a single shape value. Direction
+// 21's order is aim-then-compress, so the aim and the whole-body gather own
+// the FIRST half of the arming (small, calm motion) and the squeeze owns the
+// SECOND half -- the long, deliberate, unmistakable compression. The route
+// between the knots is C1-continuous (see spring_route_heading), so no station
+// stops dead at an interior pose.
+constexpr int32_t kSpringArmAbsorbAt = 220;
+constexpr int32_t kSpringArmAssembledAt = 400;
 // Entry completes at the assembled pose, so an entry profile of 1000 is
 // arm == kSpringArmAssembledAt and the absorb profile follows from the two
 // knots above rather than being a second, separately driftable number.
@@ -816,21 +830,20 @@ constexpr int32_t kSpringKey5EntryProfile = 850;
 // Station 14 carries the frozen whole-centreline route just below the real
 // terrain surface. These are direct authored support positions for the named
 // poses, not offsets inferred from the rendered projection.
-// THE SUPPORT ROUTE, re-authored because it had never actually run. Every value
-// here was tuned while spring_anchor_offset was discarding the compensation
-// entirely, so the whole route was decorative; with the plant honest for the
-// first time the old numbers buried the loaded animal 130 mm into the terrain
-// against a 34 mm declaration. These carry station 14 as the animal RISES onto
-// its tail: the contact patch migrates rearward off station 14 and spreads
-// along the ground, so the named lift rises with the load rather than sinking.
-// The authored result is kSpringDeclaredLoadedBiteMm of real bite at the
-// deepest pose -- weighted, not buried, and never hovering.
-constexpr int32_t kSpringEarlySupportLiftMm = -9;
-constexpr int32_t kSpringMiddleSupportLiftMm = -4;
-constexpr int32_t kSpringAbsorbSupportLiftMm = 17;
-constexpr int32_t kSpringKey5SupportLiftMm = 28;
-constexpr int32_t kSpringAssembledSupportLiftMm = 33;
-constexpr int32_t kSpringCollapsedSupportLiftMm = 43;
+// THE SUPPORT ROUTE, re-authored for Direction 21's squeeze. Station 14 is a
+// belly ground station in EVERY pose of this route -- nothing rises onto the
+// tail any more -- so the named lifts are small: a slight settle as the tail
+// curl transfers its weight onto the belly, then a deliberate press at the
+// deepest squeeze where the flattening cross-section (kSpringBodyFlattenQ16)
+// lowers the tube's underside and the loaded animal bears down. The authored
+// result is kSpringDeclaredLoadedBiteMm of real bite at the deepest pose --
+// weighted, not buried, and never hovering. Checked by the committed probe.
+constexpr int32_t kSpringEarlySupportLiftMm = -12;
+constexpr int32_t kSpringMiddleSupportLiftMm = -10;
+constexpr int32_t kSpringAbsorbSupportLiftMm = -5;
+constexpr int32_t kSpringKey5SupportLiftMm = -8;
+constexpr int32_t kSpringAssembledSupportLiftMm = -10;
+constexpr int32_t kSpringCollapsedSupportLiftMm = -26;
 // The loaded spring's declared terrain penetration, in mm. Ground contact is
 // AUTHORED here and checked by the committed pose probe; its absence would be
 // as much a fault as burying, because a body resting at exactly zero reads as
@@ -857,8 +870,14 @@ constexpr int kSpringOpenSupportLiftCount =
                      sizeof(kSpringOpenSupportLift[0]));
 constexpr int32_t kSpringJumpRootLiftMm = 0;       // no clearance hop during entry
 // Real cross-section controls (Q0.16 deltas from identity at full sample).
-constexpr uint16_t kSpringBodyFlattenQ16 = 17000;  // ~26% vertical contraction
-constexpr uint16_t kSpringBodySpreadQ16 = 5200;    // ~8% lateral/lengthwise bulge
+// OWNER DIRECTION 21 #3: where the squeezed body meets the ground or another
+// part of itself it must not intersect -- "it squeezes flatter and extends a
+// bit to the side". The collapsed pose's stacked runs are authored to touch at
+// their resting radii, so this flatten IS the contact relief, and it must be
+// VISIBLE at 240p, not merely mathematically present. Raised from 17000/5200
+// for this pass; chosen by looking at the deepest pose in the rendered clip.
+constexpr uint16_t kSpringBodyFlattenQ16 = 20000;  // ~31% vertical contraction
+constexpr uint16_t kSpringBodySpreadQ16 = 8000;    // ~12% lateral/lengthwise bulge
 constexpr uint8_t kSpringSkullDeformStrength = 64; // head only squashes slightly
 constexpr uint8_t kSpringThroatDeformStrength = 188;
 constexpr uint8_t kSpringBodyDeformStrength = 255;
@@ -866,7 +885,7 @@ constexpr uint8_t kSpringTailDeformStrength = 210;
 constexpr int kSpringBodyStrengthRampStations = 4;
 constexpr int kSpringTailStrengthRampStations = 6;
 constexpr int32_t kSpringJumpHeadAttitude = 700;   // follows the taller entry arc
-constexpr int32_t kSpringHeadAttitude = 2200;      // a restrained brace, not a head crush
+constexpr int32_t kSpringHeadAttitude = 600;       // restrained brace; must not lift the nose out of the aim
 constexpr int32_t kSpringBladeFlare = 900;         // fan braces during compression
 
 
@@ -1928,10 +1947,10 @@ constexpr int32_t kSpringChainLag = 165;
 constexpr int32_t kSpringChainLagPeak = 500;
 // The struggle waves. Periods are in KEYS and deliberately incommensurate, so
 // the pair never repeats inside one arming; amplitudes are in angle16.
-constexpr int32_t kSpringWobble = 1150;
+constexpr int32_t kSpringWobble = 750;
 constexpr int32_t kSpringWobblePeriodKeys = 23;
 constexpr int32_t kSpringWobbleStationPhase = -4200;
-constexpr int32_t kSpringWobble2 = 780;
+constexpr int32_t kSpringWobble2 = 520;
 constexpr int32_t kSpringWobble2PeriodKeys = 51;
 constexpr int32_t kSpringWobble2StationPhase = 2600;
 // The waves fade in over the first part of the arming and are held through the
@@ -2014,23 +2033,18 @@ inline int32_t spring_life_wave(int k, int32_t arm, int32_t life_key_mk) {
   return static_cast<int32_t>(w);
 }
 
-// THE AIRBORNE WHEEL (owner direction 20 #1: "The airborne somersault is TOO
-// RIGID TOO -- it goes spear-straight through the wheel instead of staying a
-// living, curving body"). The accepted wheel applied ONE identical pitch to
-// every spine joint, which is the definition of a perfect circle: a geometric
-// hoop with no animal in it. Two named corrections give it a body without
-// touching the trajectory, the spin count or the wheel's overall read.
-//
-// TAPER: the coil is tighter through the front of the body and opens toward the
-// tail, so the silhouette is a living spiral rather than a compass circle. In
-// 1/1000 of the base pitch, across the chain, added at the head and subtracted
-// at the tail.
-constexpr int32_t kSpringAirCoilTaper = 240;
-// BREATHE: one slow wave travelling down the coiled body through the flight, so
-// the wheel keeps changing shape while it turns instead of being a rigid object
-// that is merely rotated. Same device as the tail-balance clip's struggle, at a
-// flight-length period. Amplitude is angle16 on each joint.
-constexpr int32_t kSpringAirWobble = 520;
+// THE AIRBORNE WHEEL. OWNER DIRECTION 21 #5: "the previous salto was so much
+// better... Restore the previously accepted salto. Organic quality belongs in
+// the compression, not in the wheel." The Direction 20 pass turned the wheel
+// into a tapered spiral with a travelling breathe; that is REJECTED. Both
+// knobs are therefore ZERO, which makes spring_air_coil_pitch return exactly
+// (base_pitch * curl) / 1000 on every joint -- bit-identical to the accepted
+// uniform wheel. The knobs stay named and editable, but do not raise them
+// without new owner direction: nonzero values ARE the rejected look.
+constexpr int32_t kSpringAirCoilTaper = 0;
+// BREATHE amplitude, angle16 per joint. ZERO: see above -- the accepted wheel
+// does not breathe. (Its period below keeps the seam-contract documentation.)
+constexpr int32_t kSpringAirWobble = 0;
 // THE PERIOD IS NOT FREE. The gameplay bank splits the attack into phase clips,
 // and kSlotAtkCoil is a LOOPING two-frame hold duplicated from attack key 29
 // whose seam contract requires attack key 29 and attack key 52 to be the same
@@ -2274,18 +2288,30 @@ struct SpringReleaseMidpointControl {
 constexpr int32_t kSpringReleaseArm1 = 660;
 constexpr int32_t kSpringReleaseArm2 = 380;
 constexpr int32_t kSpringReleaseArm3 = 160;
-constexpr int32_t kSpringReleaseEntry1 =
-    (kSpringReleaseArm1 * 1000) / kSpringArmAssembledAt;
-constexpr int32_t kSpringReleaseEntry2 =
-    (kSpringReleaseArm2 * 1000) / kSpringArmAssembledAt;
-constexpr int32_t kSpringReleaseEntry3 =
-    (kSpringReleaseArm3 * 1000) / kSpringArmAssembledAt;
-constexpr int32_t kSpringBridgeEntryProfile = kSpringReleaseEntry1;
+// General arm -> (entry, squash) conversion. The old per-constant derivation
+// assumed every release arm sat below the assembled knot; with the squeeze
+// owning the route's second half that is no longer true (arm 660 is INSIDE the
+// squeeze), and the clamped result made key 19 slam 400 mm in one key -- the
+// exact stall-then-slam judder this release was authored to remove. These are
+// constexpr so the control tables stay compile-time frozen.
+constexpr int32_t spring_arm_entry(int32_t arm) {
+  return arm >= kSpringArmAssembledAt
+             ? 1000
+             : (arm * 1000) / kSpringArmAssembledAt;
+}
+constexpr int32_t spring_arm_squash(int32_t arm) {
+  return arm <= kSpringArmAssembledAt
+             ? 0
+             : ((arm - kSpringArmAssembledAt) * 1000) /
+                   (1000 - kSpringArmAssembledAt);
+}
+constexpr int32_t kSpringBridgeEntryProfile =
+    spring_arm_entry(kSpringReleaseArm1);
 constexpr SpringReleaseMidpointControl kSpringReleaseIntegerControl[] = {
     {1000, 1000},
-    {kSpringReleaseEntry1, 0},
-    {kSpringReleaseEntry2, 0},
-    {kSpringReleaseEntry3, 0},
+    {spring_arm_entry(kSpringReleaseArm1), spring_arm_squash(kSpringReleaseArm1)},
+    {spring_arm_entry(kSpringReleaseArm2), spring_arm_squash(kSpringReleaseArm2)},
+    {spring_arm_entry(kSpringReleaseArm3), spring_arm_squash(kSpringReleaseArm3)},
     {0, 0}};
 constexpr int kSpringReleaseIntegerCount =
     static_cast<int>(sizeof(kSpringReleaseIntegerControl) /
@@ -2294,16 +2320,14 @@ constexpr int kSpringReleaseIntegerCount =
 // integer keys, so every half key lies ON the route instead of pulling against
 // it. Off-route midpoints are what made the published release judder at 30 Hz.
 constexpr SpringReleaseMidpointControl kSpringReleaseMidpointControl[] = {
-    {1000,
-     ((1000 + kSpringReleaseArm1) / 2 - kSpringArmAssembledAt) * 1000 /
-         (1000 - kSpringArmAssembledAt)},                        // 18.5
-    {((kSpringReleaseArm1 + kSpringReleaseArm2) / 2) * 1000 /
-         kSpringArmAssembledAt,
-     0},                                                         // 19.5
-    {((kSpringReleaseArm2 + kSpringReleaseArm3) / 2) * 1000 /
-         kSpringArmAssembledAt,
-     0},                                                         // 20.5
-    {(kSpringReleaseArm3 / 2) * 1000 / kSpringArmAssembledAt, 0},  // 21.5
+    {spring_arm_entry((1000 + kSpringReleaseArm1) / 2),
+     spring_arm_squash((1000 + kSpringReleaseArm1) / 2)},              // 18.5
+    {spring_arm_entry((kSpringReleaseArm1 + kSpringReleaseArm2) / 2),
+     spring_arm_squash((kSpringReleaseArm1 + kSpringReleaseArm2) / 2)},  // 19.5
+    {spring_arm_entry((kSpringReleaseArm2 + kSpringReleaseArm3) / 2),
+     spring_arm_squash((kSpringReleaseArm2 + kSpringReleaseArm3) / 2)},  // 20.5
+    {spring_arm_entry(kSpringReleaseArm3 / 2),
+     spring_arm_squash(kSpringReleaseArm3 / 2)},                       // 21.5
 };
 constexpr int kSpringReleaseMidpointCount =
     static_cast<int>(sizeof(kSpringReleaseMidpointControl) /
@@ -7050,14 +7074,13 @@ constexpr int kJumpLandingSupportHandoffEnd = 5;
 // vibration. See zixx_jump_motion_sample for how they are damped to rest.
 constexpr int32_t kJumpLandingSettleBounce = 165;
 constexpr int kJumpLandingSettlePeriodKeys = 11;
-// A LANDING IS NOT AN ARMING. The old loaded spring was a low flat pose, so
-// reusing it as the landing cushion happened to read as absorbing. The loaded
-// coil is now tall and leaning back -- it is a WOUND SPRING -- and landing into
-// it made the animal REAR UP on impact, which is the opposite of taking weight.
-// The landing therefore rides the same authored route but only as far as this
-// arm value: low, gathered, visibly compressed under itself, and still on the
-// one continuous route so the recovery back to the grounded S is seamless.
-constexpr int32_t kJumpLandingAbsorbArm = 330;
+// THE LANDING SPEAKS THE SAME SQUEEZE LANGUAGE AS THE ARMING (owner direction
+// 21: "That's how all the saltos and jumps need to look"). The route's second
+// half IS the squeeze, so the landing cushion rides into it: at this arm value
+// the impact pose is the whole-body S pressed partway down, cross-sections
+// flattening under the load, and the recovery decompresses back along the one
+// continuous route so the return to the grounded S is seamless.
+constexpr int32_t kJumpLandingAbsorbArm = 700;
 
 // Convert a landing load (0 = grounded, 1000 = fully absorbed) into the
 // entry/squash pair the shared spring speaks. Because the landing never reaches
