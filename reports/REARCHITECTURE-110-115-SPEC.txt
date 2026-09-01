@@ -1,0 +1,1927 @@
+ZHAOZHOU FULL-COMPOSITION 110-115 MHz REARCHITECTURE SPECIFICATION
+================================================================
+
+Status: Emergency architecture and implementation contract
+Prepared: 2026-09-01, Europe/Zurich
+Repository: Fabulu/zhaozhou
+Measured timing baseline: 6f6042287c8d2f6015a877cbe0f4379bf406a54f
+Current un-fitted RTL HEAD: 7f95e5922a8e8ccfd28845fc6d3234c997bd1781
+
+Primary objective
+-----------------
+
+Close the intended composed machine at:
+
+  * 110 MHz minimum full-system target (9.091 ns)
+  * 115 MHz nominal target (8.696 ns)
+
+without reducing the promised steady-state throughput, hiding paths with false
+constraints, deleting intended hardware, or accepting a functionally incorrect
+image.
+
+This document uses the words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY as
+engineering requirements.
+
+IMPORTANT STATUS
+----------------
+
+The last measured result is still Round 9 at commit 6f60422:
+
+  * Fmax:                  85.62 MHz
+  * Critical period:      11.679 ns
+  * Slack at 100 MHz:     -1.679 ns
+  * Failing endpoints:    430
+  * DSPs:                 16
+  * Net ALM change across the timing work: +138
+
+The current HEAD, 7f95e59, contains a structural EDGEWALK ROW-B/ROW-C split and
+an explicit balanced popcount. It passed the listed simulations, but it has NOT
+yet been fitted. No frequency claim may be made for 7f95e59 until its archived
+Quartus result exists.
+
+At 11.679 ns, reaching 110 MHz requires removing 2.588 ns from the critical
+period. Reaching 115 MHz requires removing 2.983 ns. That cannot be treated as
+a promise that one final local Boolean rewrite will supply all the margin.
+
+EXECUTIVE VERDICT
+=================
+
+Bro does not need to capitulate. The evidence validates most of the earlier
+diagnosis.
+
+The 53.48 MHz result was not an existential architectural failure. It was the
+first composed timing result of a design whose independently satisfactory
+blocks had long inter-block and RAM-launched cones. Nine measured fits moved
+the same partial composition from 53.48 MHz to 85.62 MHz with only +138 ALMs
+and no added DSPs. That is strong evidence that the machine is pipelineable.
+
+The evidence also validates the main named structures:
+
+  * FRAGMENT's RAM -> two multiplier layers -> RAM path was real. The staged
+    read/shade/blend/finish/commit design and bounded address hazard handling
+    removed it from the worst paths.
+
+  * EARLY-Z's packed 256-bit feedback cone was real. Unique-coverage counting
+    and prior staging reduced its ownership from essentially the entire
+    worst-100 report to 19 of 100 in the cited fit.
+
+  * EDGEWALK's row-generation, fill, reduction, and commit work was real. Each
+    structural split removed the path it targeted. By the final pre-split fit,
+    EDGEWALK owned roughly seventy of the worst one hundred paths.
+
+The evidence invalidates only parts of the original priority list:
+
+  * Binner and FBWRITE never became worst-path owners in the ten observed fits.
+    They are not current timing targets.
+
+  * Moving the shell CRC payload seed to the end of M_HCRC measured worse. That
+    state performs the CRC fold; the measured alternative is the authority.
+
+  * A generic global ready skid was already tried and measured harmful. The
+    architecture MUST NOT become "insert FIFOs everywhere."
+
+The new risk is more important than the disagreement: the measured 85.62 MHz
+fit is not the whole intended machine. Its QSF contains 45 SystemVerilog
+sources but no source from the texture, field, or surface groups that contain
+TMU v2, cache, AUX, Field, and Earth/surface logic. TEXJOIN is likewise absent
+as an instantiated, measured integration seam.
+
+Therefore there are TWO closure campaigns:
+
+  A. Finish timing closure of the current renderer/shell composition.
+  B. Add the omitted hardware through a controlled composition staircase and
+     close every new subsystem boundary before adding the next one.
+
+The current machine is not dying. But 85.62 MHz is not yet evidence that the
+full machine will live at 110-115 MHz. This specification is designed to create
+that evidence.
+
+1. SOURCE-OF-TRUTH LEDGER
+=========================
+
+1.1 Measured baseline
+---------------------
+
+Commit:
+  6f6042287c8d2f6015a877cbe0f4379bf406a54f
+
+Primary archived evidence:
+  reports/composed/renderer-*/RESULT.md
+  reports/composed/renderer-*/setup_paths.rpt
+  reports/composed/renderer-*/timing.json
+  reports/DOCKET.md
+  reports/MHZArchitected
+  reports/ShellFixes.md
+
+1.2 Current unmeasured structural change
+----------------------------------------
+
+Commit:
+  7f95e5922a8e8ccfd28845fc6d3234c997bd1781
+
+File:
+  fpga/rtl/raster/zhao_raster_edgewalk.sv
+
+Change:
+  * ROW-B now ends at a registered 16-bit coverage mask.
+  * ROW-C performs nonzero reduction, balanced popcount, and row commit.
+  * Fill-test logic no longer shares a clock-to-clock path with both reductions
+    and the pending-row commit.
+  * One cycle of job-tail latency was added.
+  * Row issue throughput remains one row per clock.
+  * State width was corrected after the new state initially collided with an
+    existing encoding.
+  * Directed and randomized EDGEWALK/tile/render simulations passed.
+
+1.3 Current composition boundary
+--------------------------------
+
+The shell-fit QSF at the current baseline includes the renderer, shell, video,
+clock, Ethernet, and related sources. It does NOT include source paths under:
+
+  fpga/rtl/texture/
+  fpga/rtl/field/
+  fpga/rtl/surface/
+
+A future manifest MUST prove both source inclusion and elaborated instance
+presence. Merely listing a source in the QSF is insufficient because Quartus
+can optimize unconnected logic away.
+
+1.4 Historical risk evidence for omitted blocks
+------------------------------------------------
+
+The repository contains several materially different Field generations and
+composition probes. Historical measured points include:
+
+  * FIELD v2 architecture at approximately 51.71 MHz with a very large dense
+    implementation despite 16-cycle public latency and II=1.
+
+  * A quartic dense Horner core at approximately 81.84 MHz.
+
+  * A shared eight-lane v3 core at approximately 104.38 MHz and much lower area
+    than the three-core baseline.
+
+  * A composed Field + Earth probe with three parallel fields and a quintic
+    rational projector at approximately 42.89 MHz and approximately 66,409
+    ALMs.
+
+Those are not directly comparable to the current renderer fit, but they prove
+that Field/Earth can dominate both timing and area if reintroduced as a giant
+parallel cone. Full composition MUST use the shared, tokenized architecture,
+not the old "three full evaluators plus projector in one region" shape.
+
+2. NON-NEGOTIABLE ARCHITECTURE RULES
+====================================
+
+2.1 Latency is cheap; throughput is the contract
+------------------------------------------------
+
+A register stage MAY add latency. It MUST NOT silently reduce a required
+initiation interval.
+
+Every pipeline change MUST state:
+
+  * accepted transactions per cycle,
+  * produced transactions per cycle,
+  * maximum outstanding transactions,
+  * ordering contract,
+  * bounded or unbounded stalls,
+  * queue capacity,
+  * behavior under downstream backpressure.
+
+2.2 RAM outputs are not ordinary fabric-flop launches
+-----------------------------------------------------
+
+The measured design shows an important Cyclone V asymmetry: an M10K output
+register can begin materially deeper in the clock period than a nearby fabric
+flop. In the observed fits, removing RAM-launched combinational paths recovered
+large timing margin even when the logical operation looked modest.
+
+Therefore:
+
+  * An M10K output MUST first enter a local fabric register before it drives a
+    broad compare, reduction, arbitration, address calculation, global control
+    signal, or write commit.
+
+  * A packed RAM word SHOULD be narrowed immediately after capture. If only a
+    32-bit lane is needed, do not propagate a 256-bit line through the design.
+
+  * A RAM read result MUST NOT directly determine a RAM write address, write
+    data, write enable, global ready, or large FSM transition in the same
+    clock-to-clock path.
+
+  * Tag RAM, data RAM, coefficient ROM, z-buffer RAM, and AUX storage all obey
+    the same rule.
+
+2.3 Data, control, and commit are separate stages
+-------------------------------------------------
+
+The preferred shape is:
+
+  READ -> CAPTURE -> CALCULATE -> DECIDE -> QUEUE UPDATE -> COMMIT
+
+not:
+
+  RAM -> calculate -> decide -> update address/data/enable -> RAM
+
+in one period.
+
+2.4 Ready is local
+------------------
+
+A channel's ready signal MUST be derived from local queue capacity or a local
+one/two-entry elastic stage. Ready MUST NOT form a combinational chain through
+multiple subsystems.
+
+No path may run combinationally from:
+
+  raster consumer ready
+    through TEXJOIN
+    through TMU
+    through cache miss/refill arbitration
+    into a cache/AUX/field producer
+
+or the reverse.
+
+The previously measured harmful global skid MUST NOT be recreated under
+another name. Register slices are installed only at named subsystem seams or
+on measured paths.
+
+2.5 Variable latency is tokenized
+---------------------------------
+
+Cache misses, reciprocal/divide engines, Field evaluation, and multi-source
+joins MUST carry a finite token identifier. Returned work MUST update a
+direct-indexed table by token. The design MUST NOT search a large associative
+structure to rediscover context.
+
+Each token has at least:
+
+  token_id
+  generation/version bit or wider generation
+  valid/allocated bit
+  required-arrival mask
+  arrived mask
+  payload/context
+  status/fault bits
+
+A generation value prevents an old response from corrupting a newly reused
+token slot.
+
+2.6 Configuration is snapshotted
+--------------------------------
+
+Live global mode, material, epoch, format, and CSR signals SHOULD NOT fan out
+through deep datapaths. Relevant configuration MUST be captured into the job,
+primitive, fragment, or request descriptor at acceptance.
+
+2.7 Reset only what must be reset
+---------------------------------
+
+Reset valid bits, pointers, state, generations, and epochs. Do not reset wide
+payload arrays merely for visual cleanliness. Wide synchronous reset networks
+are a timing and routing tax.
+
+2.8 No fake closure
+-------------------
+
+The following do not count as timing closure:
+
+  * false-pathing a real synchronous path,
+  * applying a multicycle exception without an explicit protocol,
+  * omitting intended blocks from the QSF,
+  * including but not instantiating a block,
+  * allowing Quartus to optimize the measured workload away,
+  * changing a test so it no longer exercises the hardware,
+  * lowering throughput without documenting and accepting the new contract,
+  * accepting a black or incorrect frame because fMAX improved.
+
+3. IMMEDIATE ACTION: FIT 7f95e59 UNCHANGED
+==========================================
+
+This is the first mandatory action. Do not stack another EDGEWALK rewrite on
+top of an unmeasured structural split.
+
+3.1 Build requirements
+----------------------
+
+Fit exactly:
+  7f95e5922a8e8ccfd28845fc6d3234c997bd1781
+
+Use the same device, QSF, SDC, seed, effort, and report scripts as Round 9.
+
+Archive:
+
+  RESULT.md
+  setup_paths.rpt
+  timing.json
+  owner histogram for worst 100
+  all failing endpoint count
+  path startpoint-type histogram
+  M10K-launched path list
+  ALM/FF/DSP/M10K usage
+  seed and Quartus version
+  source and elaborated-instance manifest
+
+3.2 Decision tree
+-----------------
+
+CASE A: The old sx0/coverage -> pend_r tail is gone, and EDGEWALK is no longer a
+top-tier owner.
+
+  Action:
+    Freeze EDGEWALK. Do not improve it cosmetically. Move to the new top owner,
+    expected to be EARLY-Z or another RAM-launched seam.
+
+CASE B: The old logical tail is gone, but ROW-C now owns paths beginning at
+rowb_cov_r and ending in pend_r/count/commit.
+
+  Action:
+    Add one more explicit row-admission stage:
+
+      ROW-B: fill tests, register 16-bit mask
+      ROW-C: nonzero + balanced popcount, register admission descriptor
+      ROW-D: pending-row state/count commit
+
+    This adds latency only. It preserves one-row-per-cycle issue.
+
+CASE C: Candidate x/z/color materialization or selected-column arithmetic is
+now critical.
+
+  Action:
+    Do not widen the row state blindly. Store the row mask plus compact row-base
+    descriptors. Materialize only the selected column in a one-fragment-per-
+    cycle drain pipeline:
+
+      D0: select lowest pending bit and capture row/column descriptor
+      D1: calculate selected column attributes
+      D2: output hold
+
+    This is conditional. Implement it only if the path report identifies that
+    arithmetic.
+
+CASE D: EDGEWALK is still reported as the old fill-to-pending cone despite the
+register.
+
+  Action:
+    Inspect the actual post-fit register boundary and netlist. Confirm that
+    rowb_cov_r is a real retained register, that no bypass expression recreates
+    row_cov in ROW-C, and that synthesis did not replace the intended boundary.
+    A preserve/keep attribute MAY be used for one diagnostic fit, but SHOULD NOT
+    become the permanent substitute for clean RTL.
+
+3.3 EDGEWALK invariants
+-----------------------
+
+The implementation MUST prove:
+
+  * pend_r is row-level state; it is not sixteen independent column streams.
+  * Every covered bit is emitted exactly once unless the whole job is reset.
+  * No uncovered bit is emitted.
+  * Popcount equals the number of unique covered columns accepted.
+  * Row order and fragment order match the existing public contract.
+  * A permanently ready consumer receives one fragment per cycle during drain.
+  * Backpressure holds a fragment stable.
+  * The final in-flight ROW-B mask cannot be lost at flush.
+  * No row remains pending forever when the consumer resumes.
+
+4. CURRENT RENDERER CLOSURE PLAN
+================================
+
+4.1 Priority after the 7f95e59 fit
+----------------------------------
+
+Priority is determined by the new report, not by the old document's order.
+
+The expected priority is:
+
+  1. Any remaining EDGEWALK structural tail, only if measured.
+  2. EARLY-Z RAM launch/capture/merge architecture.
+  3. Any newly exposed M10K-launched cone.
+  4. A newly exposed shell/raster seam.
+  5. Fragment only if it reappears as a repeated owner.
+
+Binner and FBWRITE remain frozen until a report names them.
+
+4.2 Current-renderer gate before omitted-block integration
+----------------------------------------------------------
+
+Before adding real texture or Field logic, the current renderer/shell SHOULD
+meet:
+
+  * one-seed quick gate: at least 110 MHz,
+  * preferred one-seed margin: at least 115 MHz,
+  * major-gate result: at least 110 MHz across three selected seeds,
+  * no single repeated architecture cone dominating the worst 100,
+  * all functional regressions green.
+
+An individual subsystem SHOULD close at 120-125 MHz standalone where feasible.
+That is an engineering margin target, not a measured promise. Full composition
+usually consumes placement and routing margin.
+
+5. EARLY-Z REARCHITECTURE
+=========================
+
+5.1 Problem statement
+---------------------
+
+The current Early-Z design uses a packed 256-bit zram word containing eight
+32-bit tile entries. It has:
+
+  * command and fragment flows,
+  * a 16-entry direct-mapped command hazard/bypass front,
+  * epoch tags and a physical clear sweep,
+  * a RAM read/calculate/update pipeline,
+  * fragment reads and misses,
+  * unique-coverage counting.
+
+The earlier fix greatly reduced its timing ownership, but 19 of the cited worst
+100 paths remained. The dangerous shape is still a wide M10K result feeding
+selection, compare, update, and control.
+
+5.2 Required pipeline
+---------------------
+
+Implement the following conceptual stages. Exact names MAY differ.
+
+EZ0 - ACCEPT AND RESERVE
+
+  Inputs:
+    command or fragment descriptor
+
+  Work:
+    * snapshot mode/epoch/coverage metadata,
+    * calculate zword address and 3-bit lane index,
+    * reserve any bounded hazard/merge resource,
+    * allocate a response/update token.
+
+  Outputs:
+    registered read descriptor
+
+  Ready:
+    local queue/resource availability only.
+
+EZ1 - RAM READ
+
+  Work:
+    * issue zram read,
+    * issue epoch/tag read if stored separately.
+
+  No compare, reduction, acceptance decision, or global ready logic belongs in
+  this stage.
+
+EZ2 - FABRIC CAPTURE AND FORWARD OVERLAY
+
+  Work:
+    * capture the complete RAM output in fabric registers,
+    * capture address/lane/epoch metadata,
+    * overlay any newer same-word data from the bounded merge buffer,
+    * register either the overlaid word or the selected 32-bit lane.
+
+  Preferred shape:
+    narrow to the selected 32-bit lane here unless the following commit logic
+    truly requires the full 256-bit word.
+
+EZ3 - COMPARE AND DECIDE
+
+  Work:
+    * compare depth,
+    * apply unique-coverage count,
+    * decide accept/reject,
+    * create a response descriptor,
+    * create a lane-update descriptor if accepted.
+
+  Outputs:
+    response queue entry and optional update queue entry.
+
+  The decision MUST NOT directly write zram.
+
+EZ4 - WORD MERGE AND COMMIT
+
+  Work:
+    * merge one or more pending lane updates into a word entry,
+    * commit a completed/selected word to zram,
+    * retire or retain the merge entry,
+    * update forwarding state.
+
+5.3 Bounded word-merge buffer
+-----------------------------
+
+Use a small bounded structure, initially two to four entries, keyed by zword
+address. The final depth MUST be justified by randomized-stall simulation and
+the maximum supported overlap.
+
+Each entry contains conceptually:
+
+  valid
+  zword_addr
+  base_word_valid
+  base_word[255:0] or an equivalent banked representation
+  dirty_lane_mask[7:0]
+  lane_data[8][31:0]
+  epoch/generation metadata
+  age/commit-order metadata if required
+
+Rules:
+
+  * Same-word, different-lane updates SHOULD merge.
+  * A read matching a pending word MUST observe the newest pending lane value.
+  * Two updates to the same lane MUST preserve program order.
+  * A full merge buffer exerts local backpressure at EZ0; it does not create a
+    global combinational ready tree.
+  * Address comparison is allowed because the structure is small and bounded.
+    Do not grow it into a content-wide CAM.
+  * If zram is true dual-port, use one registered read port and one registered
+    commit port. If the inferred memory cannot support that mode, schedule the
+    ports explicitly and prove the resulting initiation interval.
+
+5.4 Alternative: bank the packed word
+-------------------------------------
+
+If the 256-bit capture/overlay remains critical or consumes excessive routing,
+reorganize zram as eight 32-bit lane banks sharing the word index.
+
+Benefits:
+
+  * Only the selected 32-bit bank result enters the compare path.
+  * Lane updates no longer require a 256-bit read-modify-write datapath.
+  * Same-word updates to different lanes are naturally independent if the
+    inferred ports permit them.
+
+Costs:
+
+  * More RAM blocks or less efficient packing may result.
+  * Eight-bank enables/addresses can create fanout.
+  * Clear/epoch behavior must be reverified.
+
+This is the preferred second-line structural fix if an explicit fabric capture
+does not close the path. It is not the first edit before measuring.
+
+5.5 Epoch and clear rules
+-------------------------
+
+Preserve the current logical-clear model.
+
+The design MUST prove:
+
+  * a stale epoch can never be observed as current data,
+  * epoch rollover cannot expose uncleared storage,
+  * the physical sweep and normal traffic cannot corrupt one another,
+  * forwarded pending data carries the correct epoch,
+  * a response accepted before a clear is not accidentally committed after it
+    under a new epoch unless the public ordering contract explicitly permits it.
+
+5.6 Early-Z verification matrix
+-------------------------------
+
+Required directed cases:
+
+  * same word, same lane, repeated writes,
+  * same word, different lanes in adjacent cycles,
+  * different words filling the merge buffer,
+  * merge buffer full under downstream stall,
+  * command/fragment collision,
+  * read during pending write,
+  * clear request during pending work,
+  * epoch rollover,
+  * last physical-clear word,
+  * randomized coverage masks and duplicate upper/lower coverage inputs,
+  * randomized backpressure at every response/commit seam.
+
+Assertions:
+
+  * no accepted request is dropped or answered twice,
+  * forwarded value is at least as new as RAM,
+  * dirty-lane mask exactly describes pending writes,
+  * commit never writes an uninitialized base lane,
+  * response order matches the documented contract,
+  * merge occupancy never exceeds its bound.
+
+6. FRAGMENT: PRESERVE THE SUCCESSFUL ARCHITECTURE
+=================================================
+
+The existing read/shade/blend/finish/commit split and bounded address hazard
+handling removed the previously dominant path. Treat it as a protected
+architecture.
+
+Do not reopen Fragment unless:
+
+  * it appears repeatedly in the new worst-path reports,
+  * the path is structurally the same across seeds,
+  * the proposed change names the exact register boundary it adds,
+  * forwarding and address hazard tests are extended first.
+
+Any future Fragment RAM must obey:
+
+  READ -> FABRIC CAPTURE -> ARITHMETIC -> RESULT REGISTER -> COMMIT QUEUE -> RAM
+
+No optimization may restore RAM -> two multiplier layers -> RAM in one path.
+
+7. GLOBAL M10K-LAUNCH AUDIT
+===========================
+
+7.1 Required report
+-------------------
+
+After every major fit, generate a machine-readable RAM-launch report. For each
+failing path and at least the worst 300 setup paths, record:
+
+  * startpoint hierarchy,
+  * startpoint physical resource type,
+  * logical RAM name,
+  * endpoint hierarchy,
+  * source/destination module owners,
+  * data width,
+  * logic levels,
+  * routing delay,
+  * cell delay,
+  * fanout,
+  * slack,
+  * whether a fabric capture exists immediately after RAM.
+
+Group by:
+
+  * EARLY-Z zram/epoch storage,
+  * Fragment/color/depth storage,
+  * texture tag/data RAM,
+  * AUX banks,
+  * Field coefficient ROM/RAM,
+  * Field state/result RAM,
+  * video/framebuffer memories,
+  * all other inferred altsyncram/M10K instances.
+
+7.2 Automatic design lint
+-------------------------
+
+Add a timing-architecture lint report, not necessarily a synthesis failure at
+first, that flags:
+
+  * RAM output feeding more than a configured fanout before capture,
+  * RAM output crossing a subsystem boundary before capture,
+  * RAM output driving a ready signal,
+  * RAM output reaching another RAM write port in the same stage,
+  * packed output wider than 64 bits entering broad logic before narrowing,
+  * read data and global FSM next-state in the same cone.
+
+7.3 Acceptance
+--------------
+
+A M10K fix is accepted when the target RAM-launched cone disappears from the
+post-fit report. A small Fmax change alone is not enough; seed noise can mask a
+real structural improvement.
+
+8. FULL-COMPOSITION TOP-LEVEL ARCHITECTURE
+==========================================
+
+8.1 Subsystem islands
+---------------------
+
+The intended machine is divided into registered islands:
+
+  RASTER/SHELL
+    EDGEWALK, binner, Early-Z, fragment, framebuffer-facing logic
+
+  TEXTURE
+    TMU coordinate/LOD/reciprocal pipeline, texture cache, AUX source
+
+  TEXTURE JOIN
+    fragment/context and texture-return reconciliation
+
+  FIELD
+    shared field execution and coefficient services
+
+  SURFACE/EARTH
+    field request scheduling, F0/F1/F2 collection, rational projection,
+    clip/depth/visibility/material work
+
+  MEMORY/SERVICES
+    external memory, refill/writeback, host/Ethernet staging, CSR/control
+
+Every inter-island channel is registered valid/ready or an explicit asynchronous
+FIFO. No live combinational control crosses more than one island boundary.
+
+8.2 Clocking policy
+-------------------
+
+Preferred first attempt:
+  Run renderer, texture, Field, and surface at the same 110-115 MHz clock with
+  registered seams.
+
+Permitted architectural fallback:
+  Put Field/Earth in a dedicated PLL clock domain if its required operation rate
+  can be met at a lower clock without reducing game-level throughput.
+
+This is legitimate architecture, not hidden timing, only if:
+
+  * every crossing uses a real async FIFO or proven CDC handshake,
+  * all clocks are constrained,
+  * no synchronous path is falsely cut,
+  * the required Field throughput is calculated and met,
+  * queue occupancy and worst-case latency are bounded or monitored,
+  * full-system stress testing proves no starvation.
+
+Capacity equation:
+
+  required_field_requests_per_second
+    = surface_points_per_second * field_evaluations_per_point
+
+  available_field_requests_per_second
+    = field_clock_hz * accepted_requests_per_cycle * engine_count
+
+Require engineering headroom over the measured peak workload. A starting
+planning factor of 1.25 is reasonable, but the final factor MUST come from the
+game workload and worst-case scene contract.
+
+If one surface point requires F0, F1, and F2, one II=1 field engine produces
+capacity for one completed three-field point every three issue cycles. Do not
+instantiate three giant engines merely to say "one point per cycle" unless the
+workload contract requires it and the area/timing evidence supports it.
+
+9. TEXTURE AUX ARCHITECTURE
+===========================
+
+9.1 Current role
+----------------
+
+zhao_texture_aux.sv is a two-bank custom texture staging store:
+
+  * host/Ethernet fill one bank,
+  * TMU reads the active bank,
+  * bank swap exchanges active/fill roles.
+
+It is both a memory structure and a CDC/integration boundary.
+
+9.2 Required structure
+----------------------
+
+Host/Ethernet ingress:
+  * convert each source into a registered local write command,
+  * use a real toggle handshake or async FIFO for asynchronous sources,
+  * capture payload only under a protocol that guarantees stability,
+  * return acknowledgement if the source can overwrite payload early.
+
+Bank state:
+  * active bank select is registered locally,
+  * fill-complete state is explicit,
+  * swap is atomic,
+  * swap occurs only at a documented safe boundary,
+  * requests carry a bank generation if an old read can return after a swap.
+
+TMU read:
+  AUX0 - capture request and bank/index
+  AUX1 - synchronous RAM read
+  AUX2 - fabric capture and response hold
+
+No AUX RAM output may feed the TMU's source-select mux in the same cycle as the
+RAM launch. Cache and AUX responses must both be registered before selection.
+
+9.3 Swap safety
+---------------
+
+The design MUST choose and document one of:
+
+  A. Drain all outstanding AUX reads before swap.
+  B. Tag each request with active-bank generation and route the response by that
+     captured generation.
+  C. Keep both banks readable until all old-generation tokens retire.
+
+A single unqualified live active_bank bit feeding read-return selection is not
+sufficient under stalls.
+
+10. TEXTURE CACHE REARCHITECTURE
+================================
+
+10.1 Current cache
+------------------
+
+zhao_texture_cache.sv is a simple blocking, four-way, 64-set, 32-byte-line,
+write-back/write-allocate cache with one outstanding request and states for
+lookup, writeback, refill, and response.
+
+That simplicity is useful. Preserve one outstanding miss during timing closure.
+Do not add nonblocking misses until the full machine is correct and timed.
+
+10.2 Data organization
+----------------------
+
+The hit path SHOULD NOT carry four complete 256-bit lines through a way-select
+mux.
+
+Preferred organization:
+
+  tag_ram[way][set]
+  valid/dirty metadata[way][set]
+  data_bank[way][word_in_line][set] -> 32-bit word
+
+For a request, read:
+
+  * four tags,
+  * four valid bits,
+  * the selected 32-bit word from each way.
+
+Writeback/refill traverses the eight 32-bit words over multiple cycles. This
+turns a wide 256-bit critical path into a narrow word path and a burst FSM.
+
+10.3 Hit pipeline
+-----------------
+
+TC0 - ACCEPT
+
+  Capture address, tag, set, word offset, byte enables, operation, token, and
+  source context.
+
+TC1 - ARRAY READ
+
+  Issue tag/metadata reads and selected-word reads for all ways.
+
+TC2 - FABRIC CAPTURE
+
+  Register all returned tags/valids and the four selected words.
+
+TC3 - COMPARE AND RESOLVE
+
+  Compare four tags, form one-hot hit, choose hit way, and register the result.
+  Detect multi-hit as an assertion/fault.
+
+TC4 - FORMAT/UPDATE/RESPOND
+
+  Select the 32-bit word, apply byte-write merge if needed, enqueue metadata or
+  data update, and place the response in a registered hold.
+
+PLRU update MUST be outside the response-critical compare/select path.
+
+10.4 Miss pipeline
+------------------
+
+A miss captures a victim descriptor:
+
+  request token/context
+  victim way/set/tag
+  dirty/valid
+  original operation
+  refill address
+  replay information
+
+Dirty victim:
+  Read and emit one 32-bit word per cycle into a registered writeback channel.
+  Do not assemble a 256-bit combinational line.
+
+Refill:
+  Accept one 32-bit word per beat into the selected bank. Mark tag/valid only
+  when the complete line has arrived.
+
+Replay:
+  Reissue the original request through the normal hit path after refill.
+
+External memory ready MUST terminate in a local memory-command FIFO. It MUST
+NOT propagate combinationally to raster or TMU acceptance.
+
+10.5 Cache correctness
+----------------------
+
+Required tests:
+
+  * hit in every way,
+  * clean and dirty victim,
+  * all byte-enable combinations,
+  * write hit and write allocate,
+  * refill with randomized memory stalls,
+  * writeback with randomized stalls,
+  * request stall throughout miss,
+  * reset with invalid arrays,
+  * PLRU evolution,
+  * cache/AUX source selection,
+  * no response before complete refill,
+  * no lost token on replay.
+
+11. TMU TOKEN PIPELINE
+======================
+
+11.1 Integration principle
+--------------------------
+
+The existing TMU already contains substantial pipelining, reciprocal work,
+context storage, and output hold behavior. Do not rewrite it wholesale before
+a staged fit. Instead enforce the following external and internal stage
+contract and fix only paths that violate it.
+
+11.2 Target stages
+------------------
+
+T0 - ACCEPT/ALLOCATE
+  Capture fragment attributes, lane mask, material snapshot, and allocate token.
+
+T1 - DERIVATIVE/LOD
+  Calculate and register LOD and coordinate setup.
+
+T2 - RECIPROCAL REQUEST
+  Submit q/denominator work to a bounded reciprocal engine. Store context by
+  direct token index.
+
+T3 - PERSPECTIVE RECOVERY
+  Join reciprocal response by token and register recovered coordinates.
+
+T4 - ADDRESS/TAP GENERATION
+  Generate texture address, source selection, format, and required sample taps.
+
+T5 - MEMORY REQUEST
+  Enqueue registered cache/AUX request(s). Do not drive their ready trees
+  combinationally from T4 arithmetic.
+
+T6 - SAMPLE RETURN
+  Capture registered sample return by token/lane.
+
+T7 - FILTER/FORMAT
+  Apply filtering/format conversion and register final sample payload.
+
+T8 - JOIN HANDOFF
+  Write the result into TEXJOIN or a registered output hold.
+
+11.3 Token context
+------------------
+
+Initial implementation SHOULD use 8 or 16 direct-indexed token entries. This is
+a starting point, not a magic constant. Final depth is selected from stress
+simulation and the maximum number of concurrent reciprocal/cache operations.
+
+A token entry conceptually contains:
+
+  allocated
+  generation
+  base fragment/context
+  active lane mask
+  material/format/source snapshot
+  outstanding reciprocal mask
+  outstanding sample mask
+  returned sample mask
+  status/faults
+
+No returned reciprocal or sample may be matched by an associative search across
+all fragment payloads.
+
+11.4 Throughput and stalls
+--------------------------
+
+The TMU MUST document:
+
+  * fragments accepted per cycle,
+  * texture samples requested per fragment,
+  * maximum outstanding cache requests,
+  * reciprocal initiation interval,
+  * behavior during a blocking cache miss,
+  * output ordering.
+
+If the cache remains one-miss blocking, the token table must absorb only the
+bounded work that the cache can actually service. Do not create unbounded
+in-flight requests behind a blocking endpoint.
+
+12. TEXJOIN CONTRACT
+====================
+
+"TEXJOIN" in this specification names the fragment/texture reconciliation
+function. The repository may use another module name. The behavior is
+mandatory even if the filename differs.
+
+12.1 Direct-index join table
+----------------------------
+
+On base-fragment acceptance:
+
+  * allocate token_id from a free-token FIFO,
+  * increment or assign its generation,
+  * store base fragment/context,
+  * calculate required texture/lane return mask,
+  * set arrived mask to zero,
+  * enqueue token_id in allocation order if strict output ordering is required.
+
+On texture return:
+
+  * index entry directly by token_id,
+  * verify allocated and generation match,
+  * store lane/sample payload,
+  * set the corresponding arrived bit,
+  * never scan all entries.
+
+Complete condition:
+
+  (arrived_mask & required_mask) == required_mask
+
+12.2 Retirement
+---------------
+
+Safe default:
+  Preserve fragment acceptance order.
+
+Use a retirement FIFO of token IDs. The head may retire when:
+
+  * the join entry is complete, and
+  * the downstream registered output can accept it.
+
+Only downstream acceptance frees the token.
+
+If later proof shows output order is irrelevant, an any-complete arbiter MAY be
+used. Do not assume reordering is legal.
+
+12.3 Backpressure
+-----------------
+
+TEXJOIN input ready depends only on:
+
+  * free token availability,
+  * local base-fragment input storage.
+
+TEXJOIN return acceptance depends only on:
+
+  * the addressed token being valid and not already holding that return, or
+  * a local return FIFO.
+
+TEXJOIN output ready terminates at its local output stage. It does not reach
+back into the cache or raster in the same cycle.
+
+12.4 Assertions
+---------------
+
+  * no response to a free token,
+  * generation matches,
+  * no required bit arrives twice unless explicitly idempotent,
+  * no token retires incomplete,
+  * no token frees before downstream acceptance,
+  * no token is allocated twice,
+  * allocation-order retirement is preserved,
+  * every accepted token eventually retires under fair downstream service.
+
+13. FIELD SHARED-EXECUTION ARCHITECTURE
+=======================================
+
+13.1 Selection
+--------------
+
+Use the shared v3 execution family as the baseline. Do NOT compose three old
+dense field evaluators in parallel.
+
+Candidate implementation points in the repository include:
+
+  fpga/rtl/field/zhao_field_shared_exec.sv
+  fpga/rtl/field/zhao_field_eval_v3.sv
+  associated coefficient ROM/RAM services and arbiters
+
+The exact variant is selected by measured throughput and area:
+
+  * Eight-lane II=1 shared pipeline when field-request bandwidth requires it.
+  * Four-lane x2 time-multiplexed alternative when workload allows the lower
+    physical lane count and area saving.
+
+The decision MUST use the capacity equation from section 8.2, not aesthetics.
+
+13.2 Field request descriptor
+-----------------------------
+
+A registered field request contains conceptually:
+
+  token_id
+  token_generation
+  field_id
+  point x/y/z or the actual coordinate representation
+  degree
+  coefficient base/index
+  evaluation mode
+  gradient request bits
+  integrity/special-mode bits
+  ordering metadata if needed
+
+13.3 Coefficient service
+------------------------
+
+Coefficient ROM/RAM is a prime M10K risk. Use:
+
+CF0 - REQUEST
+  Register field/stage/lane coefficient address.
+
+CF1 - MEMORY READ
+  Issue ROM/RAM read only.
+
+CF2 - FABRIC CAPTURE
+  Register coefficient data and associated tags.
+
+CF3 - DISTRIBUTE
+  Deliver the captured coefficient to the matching Horner stage/lane through
+  local registered routing.
+
+No coefficient RAM output may fan directly across all lanes and stages.
+
+If the service is shared:
+
+  * arbitration decision is registered,
+  * each grant carries a token/stage identity,
+  * response routing is direct-indexed,
+  * requesters queue locally,
+  * no requester ready signal traverses the whole service combinationally.
+
+13.4 Horner/shared pipeline
+---------------------------
+
+The field arithmetic pipeline MUST:
+
+  * have explicit stage registers,
+  * avoid a degree-dependent combinational bypass chain,
+  * carry token, field_id, lane-valid, and degree-valid metadata through every
+    stage,
+  * use DSPs deliberately for multiply-add work,
+  * register DSP inputs and outputs where the device permits,
+  * keep state/control outside the arithmetic critical path,
+  * preserve II=1 if that is the selected contract.
+
+Degree below the maximum is handled by valid/identity coefficients or stage
+enable metadata, not by bypassing multiple stages combinationally.
+
+13.5 Field response
+-------------------
+
+Return:
+
+  token_id
+  generation
+  field_id
+  value
+  optional gradient components
+  status/integrity bits
+
+Response enters a local FIFO or the surface join table. It does not directly
+drive surface projection arithmetic in the RAM/DSP return cycle.
+
+13.6 Standalone gate
+--------------------
+
+Before full integration, the chosen Field island MUST be measured with:
+
+  * realistic coefficient traffic,
+  * all intended lanes alive,
+  * outputs consumed so logic cannot optimize away,
+  * randomized request/response stalls,
+  * exact resource use,
+  * three fit seeds at the architecture gate.
+
+Preferred standalone timing is 120-125 MHz. If it cannot meet 110 MHz but meets
+the workload capacity at a lower independent clock, invoke the explicit
+multi-clock decision in section 8.2 rather than hiding the path.
+
+14. SURFACE/EARTH REARCHITECTURE
+================================
+
+14.1 Forbidden old shape
+------------------------
+
+Do not recreate:
+
+  three full Field networks in parallel
+    -> large rational numerator/denominator network
+    -> divide/project
+    -> clip/depth/visibility
+
+as one broad composed datapath.
+
+Historical fits show that shape can collapse to the low-40 MHz range and consume
+enormous area.
+
+14.2 Tokenized surface pipeline
+-------------------------------
+
+S0 - SURFACE ACCEPT
+  Allocate surface token and capture point/material/configuration.
+
+S1 - FIELD SCHEDULE
+  Generate F0, F1, and F2 requests over the available shared Field issue slots.
+  Record required field mask.
+
+S2 - FIELD JOIN
+  Direct-index surface entry by token. Store each returned field value/gradient
+  and set arrived bit.
+
+S3 - PROJECTION SETUP
+  Once required fields are complete, register numerator_u, numerator_v,
+  denominator, and any rational-net metadata.
+
+S4 - RECIPROCAL/DIVIDE REQUEST
+  Submit denominator to a pipelined reciprocal/divide service with token.
+
+S5 - PROJECT
+  Multiply registered numerators by the registered reciprocal in DSP stages.
+
+S6 - CLIP/DEPTH/VISIBILITY
+  Perform bounded, explicitly staged geometric decisions.
+
+S7 - MATERIAL/SHADE/PALETTE
+  Apply surface appearance work in one or more registered stages.
+
+S8 - OUTPUT HOLD
+  Emit registered surface result to its consumer.
+
+14.3 Surface join table
+-----------------------
+
+Each entry contains:
+
+  valid
+  generation
+  required_field_mask
+  arrived_field_mask
+  point/context
+  F0/F1/F2 values
+  optional gradients
+  projection status
+  reciprocal status
+
+Like TEXJOIN, it is direct indexed. Strict ordering, if required, uses a
+separate retirement FIFO.
+
+14.4 Reciprocal/divide
+----------------------
+
+A rational projection MUST use an explicit pipelined or iterative reciprocal
+service. No inferred broad combinational divider is permitted on the render
+clock.
+
+The service contract states:
+
+  * initiation interval,
+  * maximum latency,
+  * token width,
+  * zero/near-zero denominator behavior,
+  * saturation/rounding rules,
+  * output ordering,
+  * queue depth.
+
+If TMU and Earth share a reciprocal engine, arbitration and context queues must
+be registered and the combined capacity must satisfy both peak workloads. A
+small separate engine is preferable if sharing creates a global ready tree or
+starvation.
+
+14.5 Throughput decision
+------------------------
+
+Surface acceptance rate is derived from actual game workload. If a point needs
+three field evaluations and there is one II=1 engine, one point can enter the
+projection-complete stream every three field issue cycles after filling.
+
+Possible remedies, in order:
+
+  1. Confirm that one point per three cycles meets the real workload.
+  2. Raise Field island clock independently.
+  3. Add a second shared engine.
+  4. Add a third only if required and if full area/routing evidence remains
+     healthy.
+
+Do not start with three engines simply because the old probe had three fields.
+
+15. COMPOSITION STAIRCASE
+=========================
+
+Only one substantial previously omitted behavior is made real per step. Each
+step has a functional gate and a timing gate.
+
+STEP 0 - CURRENT RENDERER
+-------------------------
+
+Fit exact 7f95e59.
+Close any remaining renderer path to the section 4.2 gate.
+Freeze passing blocks.
+
+STEP 1 - INTERFACE HARNESS
+--------------------------
+
+Add registered raster <-> texture, texture <-> join, Field, and surface
+interfaces with deterministic stubs.
+
+Requirements:
+
+  * all token widths and ordering contracts compile,
+  * randomized backpressure tests pass,
+  * no combinational ready loop,
+  * source and instance manifest reports all harness blocks,
+  * timing regression is understood and small.
+
+STEP 2 - AUX REAL, CACHE STUB
+-----------------------------
+
+Enable real AUX storage, ingress CDC, bank swap, and registered TMU read return.
+Cache requests return a deterministic registered stub sample.
+
+Fit and archive.
+
+STEP 3 - TMU FRONT HALF
+-----------------------
+
+Enable real TMU acceptance, LOD/coordinate/reciprocal/context pipeline.
+Memory sample still comes from deterministic registered stub.
+
+Verify token/context preservation and image/reference coordinates.
+
+Fit and archive.
+
+STEP 4 - CACHE HIT PATH
+-----------------------
+
+Enable real cache tags/data banks and hit response. Keep all accesses resident
+or use a preload so miss machinery is not yet active.
+
+Fit and archive. This isolates the four-way compare and M10K capture cost.
+
+STEP 5 - CACHE MISS/WRITEBACK/REFILL
+------------------------------------
+
+Enable real external-memory miss path one outstanding miss at a time.
+
+Use randomized memory stalls. Verify no ready chain crosses the memory seam.
+
+Fit and archive.
+
+STEP 6 - REAL TEXJOIN AND TEXTURED OUTPUT
+-----------------------------------------
+
+Enable the indexed join table, allocation-order retirement, real TMU returns,
+and final textured fragment output.
+
+Functional gate includes a known non-black, non-placeholder image/hash and a
+cycle-insensitive reference comparison.
+
+Fit three seeds.
+
+STEP 7 - FIELD SHARED EXEC WITH SYNTHETIC COEFFICIENT SOURCE
+------------------------------------------------------------
+
+Instantiate the chosen real shared arithmetic engine. Feed registered synthetic
+coefficients so coefficient-memory timing is not mixed into the first Field
+measurement.
+
+Prove all lanes and outputs are alive.
+
+Fit and archive standalone and composed results.
+
+STEP 8 - REAL FIELD COEFFICIENT SERVICES
+----------------------------------------
+
+Enable coefficient ROM/RAM, arbitration, capture, and forwarding.
+
+Run the global M10K audit.
+
+Fit and archive.
+
+STEP 9 - SURFACE/EARTH JOIN AND PROJECTION
+------------------------------------------
+
+Enable real F0/F1/F2 scheduling and joining. Then enable the staged rational
+projection, clip/depth/visibility, and material output.
+
+Do not turn every surface sub-block on in one commit if they can be separated
+into projection, visibility, and shading fits.
+
+Fit and archive after each named boundary.
+
+STEP 10 - INTENDED FULL COMPOSITION
+-----------------------------------
+
+Enable all intended real traffic together.
+
+Requirements:
+
+  * no performance stubs,
+  * no optimized-away islands,
+  * complete source and elaborated-instance manifest,
+  * representative game workload,
+  * known-good image/reference output,
+  * all clocks constrained,
+  * three-seed timing campaign,
+  * resource and congestion report,
+  * deadlock stress test.
+
+16. MANIFEST AND "LOGIC IS REALLY PRESENT" PROOF
+=================================================
+
+Each fit MUST emit:
+
+  qsf_sources.txt
+    normalized list of compiled source files
+
+  required_groups.json
+    expected source groups and minimum/expected instance counts
+
+  elaborated_instances.txt
+    hierarchy paths for raster, TMU, cache, AUX, TEXJOIN, Field, surface/Earth
+
+  resource_by_hierarchy.txt
+    ALM/FF/DSP/M10K usage by subsystem
+
+  live_outputs.txt
+    checksums/status/output paths that keep each island observable
+
+CI fails when:
+
+  * a required source group is absent,
+  * a required instance is absent,
+  * a real block is still bound to a stub,
+  * an expected subsystem consumes zero resources,
+  * an intended output is constant or optimized away,
+  * an unconstrained clock/path exists.
+
+17. QUEUE AND TOKEN SIZING
+==========================
+
+Starting values:
+
+  * TMU token table:          8 or 16
+  * TEXJOIN entries:          same token space as TMU
+  * Surface join entries:     8 or 16
+  * Early-Z word merge:       2 to 4
+  * Subsystem output holds:   1 or 2
+  * Boundary command FIFOs:   2 to 4
+
+These are hypotheses, not fixed truth.
+
+Final sizing method:
+
+  1. Calculate the theoretical maximum outstanding operations from fixed
+     latency and issue rate.
+  2. Add bounded variable-latency occupancy: reciprocal queue, cache miss,
+     memory burst, field scheduling.
+  3. Run long randomized-stall simulations and record high-water marks.
+  4. Add explicit engineering margin.
+  5. Assert that allocation never exceeds capacity.
+  6. If backpressure is permitted at capacity, prove it cannot create a cycle
+     of mutually waiting resources.
+
+A queue must not be enlarged merely to suppress a deadlock symptom. Break the
+dependency cycle first.
+
+18. BACKPRESSURE AND DEADLOCK RULES
+===================================
+
+18.1 Local ready equation
+-------------------------
+
+A conventional one-entry elastic stage may use:
+
+  local_ready = !valid_r || local_downstream_accept
+
+But local_downstream_accept MUST terminate at the next local registered
+boundary. It may not be a many-module expression.
+
+18.2 Resource ordering
+----------------------
+
+Define a global acquisition order for scarce resources. A safe conceptual
+order is:
+
+  token -> local request queue -> memory/compute service -> response slot
+
+A transaction MUST NOT hold a later resource while waiting indefinitely to
+allocate an earlier one.
+
+Examples:
+
+  * Do not accept a cache response if the destination token slot was never
+    reserved.
+  * Do not hold a memory refill channel while waiting for a token allocation.
+  * Do not allocate a surface projection request before guaranteeing a result
+    slot.
+  * Do not let TEXJOIN hold a cache request resource while its own table is
+    full.
+
+18.3 Fairness
+-------------
+
+Arbiters shared by TMU, Field, host, and refill traffic MUST have a documented
+fairness rule. Fixed priority is acceptable only if starvation is impossible
+under the workload contract or bounded by explicit counters.
+
+19. ORDERING CONTRACTS
+======================
+
+For each channel, document one of:
+
+  * strict acceptance order,
+  * per-token order only,
+  * per-lane order,
+  * arbitrary completion order with ordered retirement.
+
+Safe defaults:
+
+  * Preserve raster fragment retirement order through TEXJOIN.
+  * Preserve updates to the same Early-Z word/lane.
+  * Cache may complete only one request at a time initially.
+  * Field responses may return by token, while surface retirement remains
+    allocation ordered if its consumer requires order.
+  * AUX bank swaps are ordered with respect to accepted read tokens.
+
+Never rely on "it usually returns in order" when a reciprocal or memory service
+can stall.
+
+20. CDC AND MULTI-CLOCK REQUIREMENTS
+====================================
+
+Any independent Field clock, memory clock, host clock, or Ethernet clock uses:
+
+  * asynchronous FIFO for streams, or
+  * two-phase/toggle handshake for low-rate events, with payload stability and
+    acknowledgement requirements documented.
+
+Do not synchronize a multi-bit payload by placing two flops on each bit.
+
+For every CDC:
+
+  * identify source and destination clocks,
+  * identify synchronizer/FIFO instance,
+  * constrain clocks correctly,
+  * mark synchronizer registers appropriately,
+  * run CDC lint if available,
+  * test burst, pause, reset, and independent reset release,
+  * prove no stale token generation crosses reset.
+
+21. PHYSICAL DESIGN AND FANOUT
+==============================
+
+Do logic architecture first. Floorplanning cannot repair a missing register.
+
+After structural closure:
+
+  * keep each M10K, its capture flops, and its immediate narrow compare/select
+    logic physically local,
+  * register interfaces crossing raster, texture, Field, and surface regions,
+  * replicate high-fanout mode/epoch/valid/config signals locally only after a
+    report identifies fanout as material,
+  * snapshot control at job acceptance,
+  * keep resets away from wide payload,
+  * use DSP input/output registers,
+  * inspect routing delay separately from logic delay,
+  * apply LogicLock or placement constraints only to a stable hierarchy and
+    only when three-seed evidence shows placement spread is the remaining
+    problem.
+
+A floorplan that improves one seed and harms the others is not closure.
+
+22. VERIFICATION PLAN
+=====================
+
+22.1 Global transaction scoreboard
+----------------------------------
+
+Use cycle-insensitive reference scoreboards keyed by transaction/token identity.
+Pipeline latency may change; functional meaning may not.
+
+Prove globally:
+
+  * no accepted transaction is dropped,
+  * no transaction is duplicated,
+  * no stale generation is accepted,
+  * required ordering is preserved,
+  * every transaction retires under fair service,
+  * payload remains stable while valid and not ready.
+
+22.2 Randomized backpressure
+----------------------------
+
+Randomly stall independently at:
+
+  * EDGEWALK output,
+  * Early-Z response and commit service,
+  * Fragment input/output,
+  * TMU reciprocal service,
+  * cache request and response,
+  * external memory writeback/refill,
+  * AUX read return,
+  * TEXJOIN output,
+  * Field request/response,
+  * surface projection and output.
+
+Run simultaneous stalls. Single-interface stall tests do not expose dependency
+cycles.
+
+22.3 Image correctness
+----------------------
+
+Timing and image correctness are separate gates.
+
+For texture/surface integration, retain:
+
+  * known command stream,
+  * known texture/AUX contents,
+  * deterministic camera/field data,
+  * exact or tolerance-defined reference pixels,
+  * frame hash plus localized diagnostics,
+  * explicit check that output is not a constant/black placeholder.
+
+A timing pass with a wrong frame fails.
+
+22.4 Formal/SVA priority assertions
+-----------------------------------
+
+Highest-value assertions:
+
+  * EDGEWALK mask conservation and progress,
+  * Early-Z merge/forward freshness,
+  * cache one-hot hit and complete refill,
+  * AUX swap generation safety,
+  * TMU token/context alignment,
+  * TEXJOIN completeness before retirement,
+  * Field coefficient/stage/token alignment,
+  * surface F0/F1/F2 completeness,
+  * reciprocal token alignment,
+  * no allocation/free double action,
+  * no valid payload change under stall,
+  * bounded FIFO occupancy.
+
+23. TIMING EXPERIMENT PROTOCOL
+==============================
+
+23.1 One structural hypothesis per fit
+--------------------------------------
+
+Each timing commit names:
+
+  * the exact pre-fit path,
+  * the proposed register boundary or data-width reduction,
+  * expected throughput effect,
+  * expected area effect,
+  * tests added,
+  * the commit fitted.
+
+Do not combine an EDGEWALK cut, cache rewrite, and Field integration in one fit.
+
+23.2 Same-seed A/B
+------------------
+
+For a local change:
+
+  * use the same seed and settings as the immediately preceding fit,
+  * compare path ownership and exact cone removal,
+  * archive both.
+
+23.3 Three-seed architecture gate
+---------------------------------
+
+For a major boundary or claimed closure:
+
+  * run at least three fixed seeds,
+  * report minimum, median, and maximum Fmax,
+  * report worst slack and owner for each,
+  * report owner stability,
+  * use the minimum as the gate.
+
+23.4 Change acceptance
+----------------------
+
+Accept a change when:
+
+  * target cone is absent or materially shortened,
+  * its replacement cone is architecturally cleaner,
+  * functional tests pass,
+  * throughput contract is unchanged or explicitly accepted,
+  * area/resource change is understood,
+  * no new global ready/fanout problem appears.
+
+Do not require a large immediate Fmax jump if the change deletes a repeated
+structural cone; another path can become the new maximum. Conversely, do not
+celebrate a one-seed Fmax jump if the original cone remains.
+
+23.5 Micro-tweak threshold
+--------------------------
+
+A Boolean expression rewrite, state recode, logic duplication, or placement
+hint is not promoted as architecture unless it either:
+
+  * removes a whole recurring cone, or
+  * improves repeated same-seed timing by a meaningful amount, approximately
+    0.2 ns or more, and holds across the architecture gate.
+
+24. REQUIRED REPORT PACKAGE
+===========================
+
+Every composed fit directory contains:
+
+  RESULT.md
+  setup_paths.rpt
+  timing.json
+  worst_300.csv
+  owners_worst_100.csv
+  failing_endpoints_by_owner.csv
+  ram_launch_paths.csv
+  high_fanout_nets.csv
+  resource_total.txt
+  resource_by_hierarchy.txt
+  qsf_sources.txt
+  elaborated_instances.txt
+  clocks_and_constraints.txt
+  unconstrained_paths.txt
+  seed.txt
+  quartus_version.txt
+  functional_test_summary.txt
+  image_reference_summary.txt where applicable
+  NOTES.md with hypothesis, outcome, and next decision
+
+RESULT.md begins with:
+
+  commit
+  exact tree cleanliness status
+  full or partial composition
+  real/stub status by subsystem
+  target clocks
+  achieved clocks
+  worst slack
+  failing endpoints
+  top owner
+  ALM/FF/DSP/M10K
+  source count
+  instance-presence result
+  functional gate
+  verdict: ACCEPT / REJECT / INFORMATIVE ONLY
+
+The words "full composition" are forbidden unless TMU, cache, AUX, texture join,
+Field, and intended surface/Earth logic are all real and elaborated.
+
+25. IMPLEMENTATION/COMMIT SEQUENCE
+==================================
+
+Recommended commit sequence:
+
+  1. FIT: exact 7f95e59 Round 10 archive.
+  2. EDGEWALK: conditional ROW-C/ROW-D split only if measured.
+  3. EARLY-Z: RAM output fabric capture.
+  4. EARLY-Z: narrow lane/forward overlay.
+  5. EARLY-Z: bounded word-merge commit queue.
+  6. REPORTING: automatic M10K-launch and source/instance manifests.
+  7. SHELL: registered omitted-subsystem interface harness with stubs.
+  8. AUX: real banked store and safe swap/CDC.
+  9. TMU: token/context seam with deterministic sample stub.
+ 10. CACHE: banked hit path.
+ 11. CACHE: miss/writeback/refill path.
+ 12. TEXJOIN: indexed join and ordered retirement.
+ 13. TEXTURE: real end-to-end reference image.
+ 14. FIELD: selected shared exec with synthetic coefficients.
+ 15. FIELD: real coefficient services and M10K capture.
+ 16. SURFACE: F0/F1/F2 scheduler and join.
+ 17. EARTH: staged reciprocal projection.
+ 18. SURFACE: clip/depth/visibility/material stages.
+ 19. FULL COMPOSITION: all real traffic, three-seed campaign.
+ 20. PHYSICAL: only then, measured placement/fanout refinement.
+
+Each commit should be independently testable. Timing archives belong to the
+exact commit they report.
+
+26. STOP/GO GATES
+=================
+
+GATE RENDERER
+-------------
+
+GO when:
+  current renderer/shell reaches at least 110 MHz across the selected seed set,
+  with the dominant old cones removed and tests green.
+
+STOP when:
+  a single uncut RAM or fill/reduction cone still dominates. Fix it before
+  adding real omitted blocks.
+
+GATE TEXTURE
+------------
+
+GO when:
+  real AUX, TMU, cache hit/miss, and TEXJOIN produce the known reference image,
+  all token/backpressure tests pass, and composed timing preserves enough
+  margin for Field integration.
+
+STOP when:
+  cache/AUX RAM outputs or a global ready chain dominate. Split the exact seam.
+
+GATE FIELD
+----------
+
+GO when:
+  chosen shared engine and coefficient service meet their clock/capacity
+  contract with realistic live traffic.
+
+STOP when:
+  the only way to meet one clock is the old three-parallel-engine area
+  explosion. Recalculate throughput and consider a separate Field clock.
+
+GATE SURFACE/EARTH
+------------------
+
+GO when:
+  field joins, reciprocal projection, visibility, and output are staged,
+  reference-correct, and meet their clock/capacity contracts.
+
+STOP when:
+  F0/F1/F2 and rational projection have re-formed one mega-cone.
+
+GATE FULL SYSTEM
+----------------
+
+GO only when:
+  all intended blocks are real, present, constrained, reference-correct,
+  deadlock-stable, and meet the full timing target.
+
+27. DEFINITION OF DONE
+======================
+
+The 110-115 MHz effort is complete only when all of the following are true:
+
+  * The intended full subsystem list is present in the QSF.
+  * The intended instances are present in elaboration and consume real
+    resources.
+  * No performance-critical block is still a stub.
+  * Every clock is constrained and meets its own requirement.
+  * Preferred result: full synchronous composition at 110 MHz minimum and
+    115 MHz nominal.
+  * Accepted multi-clock result: renderer/texture meet 110-115 MHz and any
+    separately clocked Field/Earth island meets a proved workload-capacity
+    contract, with clean CDC and no unconstrained path.
+  * The minimum selected-seed result meets the gate, not just the best seed.
+  * Required steady-state initiation intervals are preserved.
+  * Functional regressions, randomized stalls, assertions, and reference-image
+    tests pass.
+  * No stale token, dropped fragment, duplicate update, cache corruption, AUX
+    bank race, Field mismatch, or projection mismatch remains.
+  * ALM/FF/DSP/M10K use is documented by subsystem.
+  * No hidden inference or optimized-away logic invalidates the measurement.
+  * Every accepted timing change has an archived before/after path explanation.
+
+28. DO-NOT-DO LIST
+==================
+
+Do NOT:
+
+  * continue editing EDGEWALK before fitting 7f95e59,
+  * assume its new register guarantees 110 MHz,
+  * treat 85.62 MHz as a full-machine result,
+  * revive Binner or FBWRITE work without timing evidence,
+  * move M_HCRC state against the measured result,
+  * add a global ready skid,
+  * insert FIFOs indiscriminately,
+  * carry 256-bit RAM lines through broad logic when a 32-bit lane suffices,
+  * launch from M10K directly into compare/reduce/commit logic,
+  * instantiate three old dense Field evaluators in parallel,
+  * infer a combinational divider for Earth projection,
+  * build a large associative TEXJOIN,
+  * let cache miss ready propagate to raster,
+  * use live global CSR bits throughout deep pipelines,
+  * reset every payload register,
+  * use false paths or unjustified multicycle constraints,
+  * call a source-listed but optimized-away block "integrated,"
+  * accept a black/placeholder image as functional success,
+  * optimize all missing blocks in one commit,
+  * declare victory from one favorable seed.
+
+29. EMERGENCY PRIORITY ORDER
+============================
+
+P0. Fit 7f95e59 unchanged.
+
+P1. If EDGEWALK is no longer dominant, freeze it. Attack the new top owner.
+
+P2. Rebuild EARLY-Z around RAM capture, narrow selection, and a bounded
+    word-merge/forward commit path if its remaining 19-path tier rises.
+
+P3. Install automatic M10K-launch and composition-presence reporting.
+
+P4. Reach the current-renderer closure gate before adding real omitted blocks.
+
+P5. Integrate texture through AUX -> TMU stub -> cache hit -> cache miss ->
+    TEXJOIN, fitting each boundary.
+
+P6. Integrate the shared Field engine, never the three-dense-core probe shape.
+
+P7. Add coefficient memories with explicit fabric capture.
+
+P8. Add Earth/surface as a scheduler, token join, reciprocal pipeline, and
+    staged visibility/material path.
+
+P9. Run the real full-composition, real-image, three-seed campaign.
+
+30. FINAL ENGINEERING JUDGMENT
+==============================
+
+The measured work did not fail. It successfully converted a terrifying first
+53.48 MHz composition into an 85.62 MHz partial composition by removing exactly
+the structures the timing reports named. The latest EDGEWALK split is the
+correct type of change and deserves a clean fit before anything else touches
+that block.
+
+The emergency is not "we tried all the ideas and the hardware is impossible."
+The emergency is that the project is nearly out of prewritten local suggestions
+while the hardest omitted subsystem has never shared the fit.
+
+The route to another 20-30 MHz is therefore not a magic algebraic trick. It is:
+
+  * finish the last current-renderer RAM/fill boundaries,
+  * make M10K capture a machine-wide law,
+  * make variable-latency work tokenized and directly joined,
+  * stop combinational ready at every island,
+  * use the shared Field architecture,
+  * serialize/schedule the three Earth fields rather than duplicating giant
+    cores,
+  * pipeline rational projection,
+  * and add the missing machine one measured seam at a time.
+
+This architecture is designed to make 110-115 MHz plausible and measurable.
+It does not guarantee a number before Quartus proves it. The proof is the full,
+real, reference-correct, three-seed composition—not another partial-shell
+headline.

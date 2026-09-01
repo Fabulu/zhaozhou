@@ -137,16 +137,21 @@ module zhao_raster_edgewalk (
   // ------------------------------------------------------------- states ----
   // S_AREA..S_W2 drive the shared cross-product unit; the result of the
   // operands driven in state X is captured in cross_r and consumed in X+1.
-  localparam logic [2:0] S_IDLE  = 3'd0;
-  localparam logic [2:0] S_AREA  = 3'd1;  // drive area operands
-  localparam logic [2:0] S_W0    = 3'd2;  // area lands; flip; drive w0
-  localparam logic [2:0] S_W1    = 3'd3;  // w0 lands; drive w1
-  localparam logic [2:0] S_W2    = 3'd4;  // w1 lands; drive w2
-  localparam logic [2:0] S_W3    = 3'd5;  // w2 lands
-  localparam logic [2:0] S_WALK  = 3'd6;  // 16 row masks, one per cycle
-  localparam logic [2:0] S_DRAIN = 3'd7;  // stream non-empty rows
+  // FOUR BITS NOW, NOT THREE. The 3-bit field was fully allocated 0..7, so
+  // adding S_WFLUSH collided with S_WALK -- Verilator's CASEOVERLAP caught it
+  // before simulation could, which is the cheapest place to find a duplicate
+  // state encoding.
+  localparam logic [3:0] S_IDLE  = 4'd0;
+  localparam logic [3:0] S_AREA  = 4'd1;  // drive area operands
+  localparam logic [3:0] S_W0    = 4'd2;  // area lands; flip; drive w0
+  localparam logic [3:0] S_W1    = 4'd3;  // w0 lands; drive w1
+  localparam logic [3:0] S_W2    = 4'd4;  // w1 lands; drive w2
+  localparam logic [3:0] S_W3    = 4'd5;  // w2 lands
+  localparam logic [3:0] S_WALK  = 4'd6;  // 16 row masks, one per cycle
+  localparam logic [3:0] S_DRAIN = 4'd7;  // stream non-empty rows
+  localparam logic [3:0] S_WFLUSH= 4'd8;  // ROW-C drains the last row
 
-  logic [2:0] state;
+  logic [3:0] state;
 
   // ---------------------------------------------------------- job state ----
   // b/c hold the FLIPPED vertices from S_W1 onwards (the double-sided law).
@@ -369,11 +374,46 @@ module zhao_raster_edgewalk (
     end
   endgenerate
 
-  // popcount of the current row mask (0..16)
+  // ---- ROW-B / ROW-C: the row commit is its own stage ---------------------
+  // reports/MHZArchitected step 3, and the last item on its list the
+  // measurements still confirm. One S_WALK clock used to do the fill tests AND
+  // both reductions that follow them:
+  //
+  //     pend_r[row] <= (row_cov != 16'd0)      a 16-input OR
+  //     count_r     <= count_r + row_pc        a SERIAL popcount
+  //
+  // so the path ran vertex step -> column offset -> row-start add -> fill test
+  // -> 16-bit reduction -> commit, and the fit at b3bd69b named its tail:
+  // `sx0_r[7]~DUPLICATE -> pend_r[6]`, -1.679 ns, EDGEWALK owning 69 of the
+  // worst 100.
+  //
+  // ROW-B now ends at a registered 16-bit mask. ROW-C does the reductions and
+  // the commit from that register, so nothing downstream of a fill test is in
+  // the same clock as the fill test.
+  //
+  // Costs ONE cycle of tail latency per job and no throughput: rows still enter
+  // at one per clock, exactly as the note requires ("the 16-row walk merely
+  // gains roughly two clocks of tail latency").
+  logic [15:0] rowb_cov_r;
+  logic [3:0]  rowb_idx_r;
+  logic        rowb_v_r;
+
+  // EXPLICIT BALANCED TREE, from the registered row. The note is specific:
+  // "do not leave it as repeated row_pc = row_pc + ... and hope Quartus
+  // balances it optimally."
+  //   16 bits -> 8 two-bit -> 4 three-bit -> 2 four-bit -> 1 five-bit
+  logic [1:0] pc_a [0:7];
+  logic [2:0] pc_b [0:3];
+  logic [3:0] pc_c [0:1];
   logic [4:0] row_pc;
   always_comb begin
-    row_pc = 5'd0;
-    for (int i = 0; i < 16; i++) row_pc = row_pc + {4'd0, row_cov[i]};
+    for (int i = 0; i < 8; i++)
+      pc_a[i] = {1'b0, rowb_cov_r[2*i]} + {1'b0, rowb_cov_r[2*i + 1]};
+    for (int i = 0; i < 4; i++)
+      pc_b[i] = {1'b0, pc_a[2*i]} + {1'b0, pc_a[2*i + 1]};
+    for (int i = 0; i < 2; i++)
+      pc_c[i] = {1'b0, pc_b[2*i]} + {1'b0, pc_b[2*i + 1]};
+    row_pc = {1'b0, pc_c[0]} + {1'b0, pc_c[1]};
   end
 
   // ------------------------------------------------- drain row selector ----
@@ -429,6 +469,9 @@ module zhao_raster_edgewalk (
       count_r  <= 9'd0;
       row_i    <= 5'd0;
       pend_r   <= 16'd0;
+      rowb_cov_r <= 16'd0;
+      rowb_idx_r <= 4'd0;
+      rowb_v_r <= 1'b0;
       done_r   <= 1'b0;
       e0_r     <= ACC_ZERO;
       e1_r     <= ACC_ZERO;
@@ -454,6 +497,7 @@ module zhao_raster_edgewalk (
             degen_r  <= 1'b0;
             count_r  <= 9'd0;
             pend_r   <= 16'd0;
+            rowb_v_r <= 1'b0;
             row_i    <= 5'd0;
             state    <= S_AREA;
           end
@@ -513,25 +557,31 @@ module zhao_raster_edgewalk (
         end
 
         S_WALK: begin
-          // one 16-wide row mask per cycle; the row accumulators step by the
-          // exact per-row delta (§8). The walk never stalls: masks land in
-          // registers and only the drain phase carries backpressure.
-          mask_r[row_i[3:0]] <= row_cov;
-          pend_r[row_i[3:0]] <= (row_cov != 16'd0);
-          count_r            <= count_r + {4'd0, row_pc};
-          e0_r               <= e0_r + sy0_r;
-          e1_r               <= e1_r + sy1_r;
-          e2_r               <= e2_r + sy2_r;
-          if (row_i == 5'd15) begin
-            // the LAST row's own pend bit is not yet in pend_r; a job whose
-            // only covered row is row 15 must still drain.
-            if ((pend_r[14:0] != 15'd0) || (row_cov != 16'd0)) state <= S_DRAIN;
-            else begin
-              done_r <= 1'b1;
-              state  <= S_IDLE;
-            end
-          end else begin
-            row_i <= row_i + 5'd1;
+          // ROW-B: the row's coverage lands in a REGISTER. Nothing else happens
+          // to it this cycle -- the reductions and the commit are ROW-C's, in
+          // the block below. The row accumulators still step by the exact
+          // per-row delta (§8) and the walk still never stalls.
+          rowb_cov_r <= row_cov;
+          rowb_idx_r <= row_i[3:0];
+          rowb_v_r   <= 1'b1;
+          e0_r       <= e0_r + sy0_r;
+          e1_r       <= e1_r + sy1_r;
+          e2_r       <= e2_r + sy2_r;
+          if (row_i == 5'd15) state <= S_WFLUSH;
+          else                row_i <= row_i + 5'd1;
+        end
+
+        // ONE CYCLE, so row 15 commits before the drain decision is taken.
+        // The decision is the same one S_WALK used to make, moved a stage
+        // later: rows 0..14 are in `pend_r` by now and row 15 is in
+        // `rowb_cov_r`, committing at this very edge. Reading `pend_r[15]`
+        // instead would read the value BEFORE that commit.
+        S_WFLUSH: begin
+          rowb_v_r <= 1'b0;
+          if ((pend_r[14:0] != 15'd0) || (rowb_cov_r != 16'd0)) state <= S_DRAIN;
+          else begin
+            done_r <= 1'b1;
+            state  <= S_IDLE;
           end
         end
 
@@ -547,6 +597,16 @@ module zhao_raster_edgewalk (
 
         default: state <= S_IDLE;
       endcase
+
+      // ---- ROW-C: commit, entirely from ROW-B's registers ----------------
+      // Placed after the state machine so a same-cycle `rowb_v_r <= 1'b1` from
+      // S_WALK does not race it: this reads the REGISTER, which still holds the
+      // previous row until the edge completes.
+      if (rowb_v_r) begin
+        mask_r[rowb_idx_r] <= rowb_cov_r;
+        pend_r[rowb_idx_r] <= (rowb_cov_r != 16'd0);
+        count_r                 <= count_r + {4'd0, row_pc};
+      end
     end
   end
 
