@@ -1,7 +1,7 @@
 # Task Log: RUN-20260831-1956 - Zixxtrixx final explicit whole-S animation candidate
 
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Complete — independent-review correction accepted, validated and pushed as `270ac58`
+**Status:** Complete — retimed-plan midpoint, release, recovery and seam corrections validated and pushed
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/
 
 ---
@@ -133,6 +133,20 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 - A fresh direct all-target build in a new lane-local output compiled every dependency and linked reel, cel, meshcheck and probe without CMake/Ninja/Verilator/Sacengine. The resulting enhanced probe passes every key/midpoint, provenance, contact, consumer, landing, overlap and limit guard; meshcheck reports 1,774 vertices, 1,098 shared-position groups, zero bind disagreements and `OK`. Evidence: `evidence/review-final-validation/{zixx-probe.txt,zixx-meshcheck.txt}`.
 - No shared checkout write, hardware-process inspection, full subject bank, integration, archive, site-media edit, deployment or publication occurred.
 
+### 2026-09-01 - Retimed-plan midpoint, release and recovery regressions corrected
+
+- Reopened the accepted pass at zhaozhou `ffb6ba73c097b5cb0bfb1bd096975846dbbbc50a`; Upheaval stayed untouched at `b1d3cd6dd3947cc674212afd8fdcd52211a54c96`.
+- Split midpoint dependencies explicitly: exact-default entry poses at 1.5/4.5, plan-local four-key release poses, actual-quaternion pre-lift roots for every attack/jump, and jump-only landing/recovery roots at each plan's own landing timeline. Every builder now initializes midpoint slot/count metadata deterministically.
+- Removed scalar identity from the `entry == 280` seam override. The authored middle table is selected only by exact default route/key context; generic 279/280/281 headings remain continuous and a compiled `compress_keys = 48` plan reaches entry 281 without a snap.
+- Replaced nondefault jump release indexing into the fixed five-pose route with duration-aware release controls. Compiled attack/jump plans with two and three release keys now span their requested phase, return exactly to grounded rest at launch, and remain below the existing station-step bound.
+- Kept default landing bias indexing bit-identical. Nondefault timing resamples the same named curve against the pose's active recovery clock, returns exactly to zero for the rest hold, and preserves exact final rest.
+- The committed probe now builds one nine-clip synthetic `ClipBank`, compiles it through `compile_creature`, attaches the accepted full/micro mesh rungs, verifies every exact channel/timeline mask and owned byte, and scans retimed, short `3+5`, and long `10+22` recovery contact. Full/micro impact/handoff/settle remain grounded; maximum landing-region station step is 850 mm.
+- Investigated the requested local-body slot-10 key-4.5 ChoreoRoot composition claim in `zixx_choreo.cpp`. Existing proof composes integer `attack_choreo_sample(f)` roots only; no production half-key `ChoreoSample` path exists, and the compiled/local midpoint probe demonstrates no concrete pop. No speculative production abstraction or root change was made.
+- Behavior-neutral literals were named: compression slice bounds `0..17` and whole-tail lateral limit `45 mm`. No heading table, visual timing, geometry, pigment, light, or accepted art value changed; no rerender was triggered because all default probes stayed green.
+- A fresh lane-local direct all-target build recompiled every dependency and linked reel, cel, meshcheck and probe. Final probe is PASS; meshcheck reports 1,774 vertices, 1,098 shared-position groups, zero bind disagreements, zero seam splits and `OK`. Evidence: `evidence/retimed-correction-final/{probe.txt,meshcheck.txt}`.
+- Implementation commit `1fb1fcc3c9ce462660e4fe65eb455ebbcf264057` was pushed and verified at `origin/feature/zixxtrixx-whole-s-final` before RUN closure.
+- No shared checkout write, hardware-process inspection, CMake/Ninja/Verilator/Sacengine, full subject bank, integration, archive, site-media edit, deployment or publication occurred.
+
 ---
 
 ## Commands and Results
@@ -165,6 +179,9 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 | Final presentation render | direct cel side/top/micro plus slots 46/47 | spring CRCs `0xD4F67BEC` / `0x017AC6A9` / `0xA47E386D`; jump CRCs `0xF136B5C1` / `0x50A21A30`; every changed sample reviewed |
 | Fresh final direct build | `tools/reel/build-direct.sh --output <new-final-output> all` | all dependencies compiled and four binaries linked; no stale-object path |
 | Fresh final validation | final-output `zixx-probe` and `zixx-meshcheck` | **PASS / OK**; evidence in `evidence/review-final-validation/` |
+| Retimed correction development | fresh direct probe outputs `retimed-correction-r1` through `r7` | isolated obsolete assertion, empty-mesh compiler prerequisite and nondefault recovery phase alignment; no stale binary path |
+| Retimed final direct build | `tools/reel/build-direct.sh --output <retimed-correction-final> all` | every dependency compiled; reel, cel, meshcheck and probe linked |
+| Retimed final validation | final-output `zixx-probe` and `zixx-meshcheck` | **PASS / OK**; exact masks, synthetic compilation, release 2/3, short/long landing and seam regressions green; evidence in `evidence/retimed-correction-final/` |
 
 ---
 
@@ -275,12 +292,14 @@ None. The owner requires one sole implementation agent and prohibits delegation.
 | zhaozhou | `7fb06fb` | `RUN: close Zixxtrixx whole-S final pass` | pushed to `origin/feature/zixxtrixx-whole-s-final`; later rejected by independent review |
 | zhaozhou | `183b94b` | `ANIMATION: preserve compiled spring midpoints` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 | zhaozhou | `270ac58` | `ANIMATION: finish Zixxtrixx whole-S spring` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
+| zhaozhou | `ffb6ba7` | `RUN: close corrected Zixxtrixx whole-S pass` | pushed; later reopened for retimed-plan regressions |
+| zhaozhou | `1fb1fcc` | `ANIMATION: correct retimed spring plans` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 
 ---
 
 ## Owned Process Shutdown
 
-All intended direct compilers, linkers, renderers, focused probes and Python sheet builders completed synchronously and exited, including the final all-target direct rebuild, final probe/meshcheck and two 161-frame renders. One accidental `--help` invocation was recognized as a render and stopped immediately through owned task handle `buei6080i`; no owned background task handle remains. No encoder, PowerShell worker, browser or server was launched. Hardware-lane processes were neither inspected nor touched.
+All intended direct compilers, linkers, renderers, focused probes and Python sheet builders completed synchronously and exited, including the retimed-correction all-target direct rebuild and its final probe/meshcheck. One accidental `--help` invocation was recognized as a render and stopped immediately through owned task handle `buei6080i`; no owned background task handle remains. No encoder, PowerShell worker, browser or server was launched. Hardware-lane processes were neither inspected nor touched.
 
 ---
 
