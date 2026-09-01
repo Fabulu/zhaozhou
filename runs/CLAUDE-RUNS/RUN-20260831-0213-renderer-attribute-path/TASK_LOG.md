@@ -710,3 +710,111 @@ spent, and the remaining slack is logic depth and routing.
   the gate was simply run wrong. Source the env, always.
 * The Bash tool's shell has no `USERPROFILE`, so ccache hard-fails there. Build
   from PowerShell.
+
+---
+
+## Round 11: 88.80 MHz, and the evidence tool was lying
+
+    round 10   86.48 MHz   -1.563 ns   48 DSP-launched   EDGEWALK owns 48
+    round 11   88.80 MHz   -1.261 ns    0 DSP-launched   EDGEWALK owns 33
+
+    53.48 -> 88.80 MHz, +66.0%, +204 ALMs total, DSP flat at 16.
+
+S_W0B took the area's sign bit out of the multiplier's own cycle. All 48
+DSP-launched paths gone -- not reduced, eliminated -- for +2.32 MHz and +66 ALMs.
+
+### Bro found a bug in my evidence tool, and it was worse than he thought
+
+He challenged `startpoints: fabric_ff=200`. Both numbers in that line were wrong.
+
+**Wrong classification.** The tool matched the logical node NAME for `~mac` or
+`DSP_X`. But Quartus PACKS `cross_r` into the output register of the DSP feeding
+it, and the summary name is merely `cross_r[47]`. The detail says it outright:
+
+    6.394 ; 0.000 ; uTco ; DSP_X20_Y45_N0      ; ...u_edgewalk|cross_r
+    8.076 ; 0.977 ; IC   ; LABCELL_X23_Y45_N54 ; ...cxf[11]~4|datac
+
+True round-10 split: **52 fabric FF, 48 DSP** -- and the 48 are exactly the
+`cross_r -> cross_r` paths.
+
+**Wrong count, which he did not catch.** `^; -` also matched each path block's
+own `; Slack ; -1.563` row, so 100 paths were counted as 200, and the owners
+table carried a phantom `? 100` from the unparsed duplicates.
+
+**This is the art law in a domain it was not written for.** The node name is a
+PROJECTION of the placement, not the placement -- the same error as deriving a
+3D radius from a 2D drawing. And it was believed *because a tool produced it*,
+which is the exact failure mode the law describes. It now reads the fitter's own
+`Location` column, asserts against the report's stated total, and refuses to
+write a bundle that miscounts or that lacks `-detail full_path`.
+
+**It mattered immediately.** The old classifier would have said `fabric_ff` both
+before and after round 11 -- reporting NO CHANGE across the single most decisive
+structural fix of the pass.
+
+## Round 12 (fitting): EARLY-Z, and a wrong fix the reference caught
+
+Round 11's new top owner, 36 of 100 and the worst path in the design:
+
+    state_r[2] -> LessThan1~24/25/28 -> always2~1
+               -> LessThan2~10/11/13/25 -> floor_r[15]~0 -> floor_r[13]
+
+Two chained 24-bit compares in one cycle -- my own round-9 code. Closing the
+256-input reduction exposed what was sitting behind it.
+
+### The first attempt was sound and still wrong
+
+I split the floor promotion into its own cycle. The argument was good: `floor_r`
+is a LOWER BOUND on stored depth, `floor_r := max(floor_r, acc_min)` is what
+keeps it one, and raising it a cycle late leaves it valid -- momentarily less
+tight, never rejecting a fragment it should keep.
+
+`raster_earlyz_random` failed **8 decisions** against `zref::EarlyZ`, which
+promotes in the SAME cycle so the very next fragment sees the raised floor.
+
+**Keep this one: a change can be sound for the PIXELS and still wrong against
+the ORACLE.** "Less aggressive culling is safe" is an argument about
+correctness. The reference defines behaviour, and moving the oracle to match a
+hardware convenience is backwards. Sound is not the bar; identical is.
+
+### What shipped instead: parallel, not chained
+
+The second compare never needed the first's RESULT, only its CHOICE:
+
+    acc_min_next > floor_r == take_new ? (hiz_depth > floor_r)
+                                       : (acc_min_r  > floor_r)
+
+Both branches read registers and inputs only. Three compares start at the same
+instant; a 1-bit mux picks two. One compare plus a mux, instead of two in
+series. Zero cycles changed, zero decisions changed, 67 + 6 + 74 checks green.
+
+## Housekeeping done in the gaps
+
+* **CI's red format job is fixed.** Two creature-lane files from `dceb28b`
+  landed without the gate. Formatted with the PINNED clang-format 1.8.0 from
+  node_modules, proven whitespace-only by md5 of whitespace-stripped content,
+  and both confirmed CLEAN in the working tree first -- uncommitted work in this
+  repo has been destroyed once this session and must not be again.
+* **A wedged `ctest` was killed.** 48 minutes wall, 0.1 CPU-minutes, no child
+  process, nothing written. The cause was almost certainly the PowerShell
+  pipeline (`ctest | Select-Object -Last 12`) buffering a detached console. Run
+  it to a log file, not through a pipe.
+* **The round-12 fitter died at launch once**, exactly as round 10's did:
+  synthesis succeeded (16 DSP), `RUN fitter` logged, process gone, no error in
+  the log. Relaunched. The fit works from a temp source copy under AppData, so
+  a `git pull` during a fit is safe -- checked rather than assumed.
+* **`TIMING_HAZARD_SCAN.md` closed.** Its single candidate was the serial
+  popcount, fixed in round 10 under the condition the report itself set.
+
+## The debt, still open and still quantified
+
+S_W0B costs one clock per tile job: **+2.6% on a full tile, +3.7% on a sliver**,
+measured by `raster_edgewalk_setupcost` (setup 6 -> 7 clocks), not estimated.
+Slivers are the common case in a triangle-dense scene, so this is the worse end.
+
+The refund is designed and held at the ready: apply the flip to the subtraction
+ORDER after the multiply rather than the operands before it. `state` and
+`cross_r[47]` are both registers, so the select is stable long before the
+multiply lands -- same benefit, zero cycles, one extra 48-bit subtract and a
+mux. It waits because MHz is the goal right now and it would cost a fit to
+confirm. Recorded as a known debt with a known repayment.
