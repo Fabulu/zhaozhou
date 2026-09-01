@@ -1,0 +1,20 @@
+Zixxtrixx final whole-S production verification
+Deployment command: website/deploy.ps1 -Project upheaval -Branch main
+Wrangler: 4.86.0
+Production URL: https://upheaval.pages.dev
+Immutable URL: https://4dba729e.upheaval.pages.dev
+Expected assembled index SHA-256: 2854739489cfab76f88e75796bba565d0706fb4a74a86a438c904616cc280978
+
+production current: PASS — 44 files HTTP 200, exact local SHA-256 bytes, correct WebM/PNG MIME
+production generation-ten: PASS — 44 files HTTP 200, exact local SHA-256 bytes, correct WebM/PNG MIME
+production index: PASS — HTTP 200 text/html; exact index SHA-256; one exact noindex,nofollow; ten-generation archive
+production playback: PASS — remote ffprobe VP9 yuv444p 384x240 60/1 for zixxtrixx-jump-one.webm, archive-2026-09-01-generation-ten-jump-one.webm
+production verified payload bytes: 28765190
+
+immutable current: PASS — 44 files HTTP 200, exact local SHA-256 bytes, correct WebM/PNG MIME
+immutable generation-ten: PASS — 44 files HTTP 200, exact local SHA-256 bytes, correct WebM/PNG MIME
+immutable index: PASS — HTTP 200 text/html; exact index SHA-256; one exact noindex,nofollow; ten-generation archive
+immutable playback: PASS — remote ffprobe VP9 yuv444p 384x240 60/1 for zixxtrixx-jump-one.webm, archive-2026-09-01-generation-ten-jump-one.webm
+immutable verified payload bytes: 28765190
+
+Overall: PASS — production and immutable deployment are byte-exact; all 22 current subjects and all 22 Generation Ten subjects have exact poster/WebM pairs; noindex and archive UI are exact; representative current/archive WebMs play through remote ffprobe.

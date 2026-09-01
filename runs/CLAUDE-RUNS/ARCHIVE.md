@@ -49,8 +49,11 @@ Completed runs are logged here (newest first). Working directories remain in
 
 ### [RUN-20260831-1956] Zixxtrixx final explicit whole-S animation pass
 
-**Status:** QA COMPLETE — isolated main integration and publication closeout active
+**Status:** COMPLETE AND LIVE
+**Archived:** 2026-09-01 06:41 UTC+02:00
 **Created:** 2026-08-31 19:56 UTC+02:00
+**Completed:** 2026-09-01 06:41 UTC+02:00
+**Duration:** ~10 hours 45 minutes
 **Working Directory:** `runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/`
 **Branch:** `feature/zixxtrixx-whole-s-final` / `main`
 
@@ -66,12 +69,26 @@ composition at key 4.5.
 - Committed full/micro 3D probe in `tools/reel/zixx_probe.cpp`
 - Generic presentation/deformation support in `reference/include/zref/` and `reference/src/zcreature/`
 - QA evidence and complete task history in the RUN folder
+- Immutable Archive Generation Ten and its 44-copy SHA-256 proof under Upheaval `creature/Zixxtrixx/`
+- Final 22-subject audio-free VP9/yuv444p 60 Hz live bank, exact 3× posters and per-file checksum contract
+- Ten-generation manifest-generated bestiary with exact `noindex, nofollow`
 
-**Outcome:** Implementation and independent QA complete. Accepted feature heads
-were merged conflict-free into isolated current-main clones and passed a fresh
-direct all-target build, full probe and meshcheck. Immutable bank archival,
-complete 22-subject regeneration and the single authorized deployment are still
-in progress; this entry will be finalized only after production verification.
+**Notes:**
+The accepted feature heads were zhaozhou `65e9fefa3db672a5826981fd5c09aab351f8a137`
+and Upheaval `b1d3cd6dd3947cc674212afd8fdcd52211a54c96`. Fresh integrated direct
+all/probe/meshcheck passed. The exact render binary hash is
+`cd16ab93bb2c2164daa556d1f523e590882e4df99bb0d9a20b44d5d6d4107882`.
+All 6,450 fresh source frames were encoded and closed-file validated; every prior
+archive and V14 study retained its protected digest. Concurrent zhaozhou DOCKET
+history was merged normally; no force-push, worktree, CMake/Ninja/Verilator or
+accepted-art retuning entered integration.
+
+**Outcome:** Complete and live after exactly one authorized deployment. Upheaval
+main is `38efaadb9cfdc19dde2411f0b3a7ea82ea64b833`. Immutable deployment:
+`https://4dba729e.upheaval.pages.dev`; production: `https://upheaval.pages.dev`.
+Both serve byte-identical HTTP 200 HTML with exactly one `noindex, nofollow`, all
+ten archive generations and all current/Generation Ten media byte-exact with
+correct MIME; representative current/archive WebMs pass remote VP9 playback.
 
 ---
 

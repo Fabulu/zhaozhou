@@ -2,7 +2,7 @@
 
 **Run ID:** RUN-20260831-1956
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Active — QA accepted; task #46 isolated main integration and publication closeout
+**Status:** Complete — QA accepted, integrated to both mains, archived as Generation Ten, regenerated, published once and production-verified
 **Previous Version:** N/A
 
 ---
@@ -10,6 +10,24 @@
 ## Objective
 
 Produce a pushed implementation candidate, from fresh current-main clones, that finishes Zixxtrixx animation without integration or publication. First author one visually convincing deepest fixed-side pose as a broad enlarged two-lobe S moving strongly down and back, then build the exact required entry, hold and release around it using explicit owner-editable whole-centreline key poses rather than procedural slope/gain iteration. Only after the spring passes side, high-three-quarter and micro visual review may the bounded pupil, fall, hit, landing/KO/death, idle and moving-light corrections be finished.
+
+---
+
+## Authorized Task #46 Publication Extension
+
+After independent QA accepted zhaozhou `65e9fefa3db672a5826981fd5c09aab351f8a137`
+and Upheaval `b1d3cd6dd3947cc674212afd8fdcd52211a54c96`, task #46 explicitly
+superseded the implementation-only publication exclusions below. It authorized an
+isolated ordinary-clone merge into current mains, one fresh direct all/probe/meshcheck,
+immutable preservation of the complete then-live media bank, one 22-subject render and
+encode from the integrated binary, manifest-only assembly, normal non-force main pushes,
+and exactly one finished-pass bestiary deployment.
+
+That extension is complete. The prior live bank is immutable Archive Generation Ten;
+the new bank contains 22 audio-free VP9/yuv444p 60 Hz clips and exact 3× posters from
+6,450 integrated frames; both production and immutable deployment hosts were verified
+byte-for-byte with one exact `noindex, nofollow` meta and all ten archive generations.
+No accepted art value was retuned during integration/publication.
 
 ---
 

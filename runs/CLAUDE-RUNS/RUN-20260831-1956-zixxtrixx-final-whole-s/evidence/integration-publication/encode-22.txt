@@ -1,0 +1,23 @@
+tovideo: 22 subject(s)
+  zixxtrixx-idle: 576 frames, 9.6 s at 60 fps, 2,601,753 B webm (VP9 crf16 4:4:4), poster frame 40
+  zixxtrixx-moving-light: 600 frames, 10.0 s at 60 fps, 417,764 B webm (VP9 crf16 4:4:4), poster frame 412
+  zixxtrixx-walk: 160 frames, 2.7 s at 60 fps, 581,158 B webm (VP9 crf16 4:4:4), poster frame 18
+  zixxtrixx-run: 96 frames, 1.6 s at 60 fps, 411,124 B webm (VP9 crf16 4:4:4), poster frame 18
+  zixxtrixx-look: 384 frames, 6.4 s at 60 fps, 866,125 B webm (VP9 crf16 4:4:4), poster frame 56
+  zixxtrixx-balance: 493 frames, 8.2 s at 60 fps, 597,832 B webm (VP9 crf16 4:4:4), poster frame 130
+  zixxtrixx-taunt: 224 frames, 3.7 s at 60 fps, 748,859 B webm (VP9 crf16 4:4:4), poster frame 48
+  zixxtrixx-slow-taunt: 239 frames, 4.0 s at 60 fps, 610,421 B webm (VP9 crf16 4:4:4), poster frame 88
+  zixxtrixx-jump-one: 161 frames, 2.7 s at 60 fps, 464,175 B webm (VP9 crf16 4:4:4), poster frame 50
+  zixxtrixx-jump-multi: 161 frames, 2.7 s at 60 fps, 502,152 B webm (VP9 crf16 4:4:4), poster frame 50
+  zixxtrixx-attack: 480 frames, 8.0 s at 60 fps, 763,793 B webm (VP9 crf16 4:4:4), poster frame 118
+  zixxtrixx-hit: 300 frames, 5.0 s at 60 fps, 846,221 B webm (VP9 crf16 4:4:4), poster frame 6
+  zixxtrixx-damage: 400 frames, 6.7 s at 60 fps, 1,034,454 B webm (VP9 crf16 4:4:4), poster frame 6
+  zixxtrixx-knockdown: 196 frames, 3.3 s at 60 fps, 359,175 B webm (VP9 crf16 4:4:4), poster frame 24
+  zixxtrixx-fall: 288 frames, 4.8 s at 60 fps, 491,712 B webm (VP9 crf16 4:4:4), poster frame 26
+  zixxtrixx-hitfloor: 188 frames, 3.1 s at 60 fps, 324,548 B webm (VP9 crf16 4:4:4), poster frame 18
+  zixxtrixx-salto-dummy: 231 frames, 3.9 s at 60 fps, 353,971 B webm (VP9 crf16 4:4:4), poster frame 96
+  zixxtrixx-salto-fly: 233 frames, 3.9 s at 60 fps, 327,313 B webm (VP9 crf16 4:4:4), poster frame 100
+  zixxtrixx-salto-six: 253 frames, 4.2 s at 60 fps, 288,570 B webm (VP9 crf16 4:4:4), poster frame 60
+  zixxtrixx-salto-nine: 355 frames, 5.9 s at 60 fps, 356,119 B webm (VP9 crf16 4:4:4), poster frame 120
+  zixxtrixx-death: 192 frames, 3.2 s at 60 fps, 379,637 B webm (VP9 crf16 4:4:4), poster frame 150
+  zixxtrixx-death2: 240 frames, 4.0 s at 60 fps, 526,993 B webm (VP9 crf16 4:4:4), poster frame 28

@@ -1,7 +1,7 @@
 # Task Log: RUN-20260831-1956 - Zixxtrixx final explicit whole-S animation candidate
 
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Active — QA accepted; task #46 isolated main integration and publication closeout
+**Status:** Complete — QA accepted, integrated, archived, published once and production-verified
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/
 
 ---
@@ -163,7 +163,7 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 - Created fresh ordinary integration clones at `C:/programmieren/zencrifice/zixxtrixx-integration-publish-20260901/{zhaozhou,Upheaval}`. Shared checkouts remained read-only; no worktree was used.
 - Recorded live starting mains zhaozhou `60054ab61e7657c7f109d59ff2e584d5dc6ef1f9` and Upheaval `2ad25aac4c3edd4a8238880537ca00c235684923`. Merged the exact accepted feature refs conflict-free, preserving concurrent main ancestry, as local merge commits zhaozhou `717cea15b0bf619a96d3d5e6571b16925ea5b890` and Upheaval `4b98a0e37113c5a4976b912f0ec6a60d20a86951`.
 - Built one fresh integrated direct binary set with `tools/reel/build-direct.sh --clean all`; every dependency recompiled and reel, cel, meshcheck and probe linked. The integrated full probe is PASS and meshcheck is OK. This exact binary set is reserved for the complete 22-subject render.
-- Publication closeout advanced through immutable archive and fresh rendering; full-colour encoding, final assembly, main-drift checks and the single authorized production deployment remain active.
+- At this checkpoint publication closeout had advanced through immutable archive and fresh rendering; the then-pending full-colour encoding, final assembly, main-drift checks and single authorized production deployment were completed in the milestones below.
 
 ### 2026-09-01 - Immutable archive and integrated full-bank render
 
@@ -173,7 +173,25 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 - Committed and normally pushed the separate Upheaval archive milestone as `1de0d4d5863a35b56c53c117c394a284136a8995`; immediate pre-push fetch confirmed origin/main had not moved.
 - Reused only the fresh integrated direct cel binary reserved at `workbench/integration-task46/bin/zhao-reel-cel.exe`, with explicit `ZIXX_EXP=celmain` / `ZIXX_LIGHT=diagonal-cool-cross`, to render the exact 22-subject bank. A ten-minute shell ceiling stopped the combined invocation after the final nine-salto frame but before its metadata; no renderer survived. A bounded nine-salto-only rerun exited zero and produced its complete 355-frame sequence and metadata. The final bank contains 6,450 contiguous 384x240 RGB frames and complete `meta.txt` files for every subject.
 - Looked at every fresh frame of jump-one 0–160 and hitfloor 0–187, plus attack preload 0–63, in native-frame contact sheets. Shared entry/hold/release, lift, wheel, jump landing, distinct hit-floor impact/hold/recovery and endpoint all remain connected and visually coherent with no fragment, crossing, terrain-hidden break, root-slide read or stray triangle. Evidence: `evidence/integration-publication/visual-inspection.txt`.
-- Coordinator-resume inspection found both isolated clones on `main`, no orphaned compiler/reel/deploy process, and one healthy intentionally owned `tovideo.py`/ffmpeg chain encoding the complete bank. Encoding remains in progress; no deployment has started.
+- Coordinator-resume inspection found both isolated clones on `main`, no orphaned compiler/reel/deploy process, and one healthy intentionally owned `tovideo.py`/ffmpeg chain encoding the complete bank. The encoder was left undisturbed, completed all 22 subjects and exited zero; no owned encoder survived.
+
+### 2026-09-01 - Full-colour encode, assembly and closed-file media gate
+
+- Encoded all 22 named subjects only through `website/tools/tovideo.py`: audio-free VP9 at CRF16, `yuv444p`, 60 fps. Posters are exact 3× nearest-neighbour copies of their configured 384×240 source frames. Encoder evidence is `evidence/integration-publication/encode-22.txt`.
+- Regenerated `website/public/index.html` only through `website/tools/assemble.py`; assembly reports one creature and 211 declared renders.
+- Closed-file ffprobe/decode validation passed all 6,450 contiguous source frames and all 22 WebMs: one VP9 video stream, no audio, `yuv444p`, 384×240, `60/1`, and exact decoded counts. All 22 posters are 1152×720 and byte-identical to independently regenerated 3× nearest source frames.
+- Revalidated the immutable bank after live replacement: all 44 Generation Ten files match their recorded hashes; the 204 older archive files retain digest `d00464f33e5a23860f0b244eb81baaf3d35ee1bca4b50b117ccf18f7b3518139`; the 20 V14 studies retain digest `5d27ba6c5ea99c71590f48c6b6b1907a59d74eec79fe387d67ea2b2ff01b7334`.
+- The exact integrated cel binary hash is `cd16ab93bb2c2164daa556d1f523e590882e4df99bb0d9a20b44d5d6d4107882`. Per-subject CRCs, sizes and SHA-256 values are durable in `Upheaval/creature/Zixxtrixx/WHOLE-S-FINAL-MEDIA-SHA256.txt` and mirrored in `evidence/integration-publication/media-validation.txt`.
+- Explicit-path staging captured exactly the intended live working set: 22 changed WebMs, nine posters whose selected frame bytes changed, six timing captions, assembled index and the media manifest. No archive/V14 path changed. Committed as Upheaval `26b653189b7754e2b0be2361d6ec076cce0d4445`.
+
+### 2026-09-01 - Current-main reconciliation, single deployment and production proof
+
+- Immediate dual-main fetch found Upheaval unchanged and zhaozhou advanced by concurrent `43dc4f4`, which changes only `reports/DOCKET.md`. Merged it normally as zhaozhou `b478eb4c19b821b0698c09e85621a54e45a07cfd`, preserving the hardware/history ancestry. No direct gate rerun was warranted because no source, build or reel path moved.
+- Re-fetched immediately before each ordinary push. Zhaozhou and Upheaval pushed without force and were re-fetched remote-exact at `b478eb4c19b821b0698c09e85621a54e45a07cfd` and `26b653189b7754e2b0be2361d6ec076cce0d4445` respectively before deployment.
+- Rechecked both remote mains, a clean Upheaval tree and exactly one local `<meta name="robots" content="noindex, nofollow">`, then invoked the authorized deployment exactly once as `website/deploy.ps1 -Project upheaval -Branch main`. Pinned Wrangler 4.86.0 uploaded 31 changed files, reused 385 exact files and returned immutable URL `https://4dba729e.upheaval.pages.dev`.
+- Verified `https://upheaval.pages.dev` and the immutable URL independently. Both return HTTP 200 and an index byte-identical to local SHA-256 `2854739489cfab76f88e75796bba565d0706fb4a74a86a438c904616cc280978`, with one exact noindex meta and ten archive generations.
+- Downloaded every current and Generation Ten poster/WebM from both hosts: 88 files per host, 28,765,190 bytes per host, all byte-identical to local and served with correct PNG/WebM MIME. Remote ffprobe opened representative current and archived clips as VP9/yuv444p 384×240 at 60 Hz. Evidence is `evidence/integration-publication/{deploy-production.txt,production-verification.txt}`.
+- Deploy-time assembly changed only the generated footer timestamp from 04:29 to the already-live 04:36 UTC bytes. Committed that exact deployed index as Upheaval `38efaadb9cfdc19dde2411f0b3a7ea82ea64b833` and normally pushed after another immediate fetch. No second deployment occurred; final Upheaval main, local index and both verified hosts now carry identical assembled bytes.
 
 ---
 
@@ -213,6 +231,12 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 | Task #53 focused direct probe | fresh direct probe build and complete `zixx-probe` | **PASS:** compiled release 0 attack/jump, default local-body key-4.5 ChoreoRoot, and retimed slot-50 posed contact/support gates green |
 | Task #53 fresh direct build | `tools/reel/build-direct.sh --output <direct-task53-final> --clean all` | every dependency recompiled; reel, cel, meshcheck and probe linked without CMake/Ninja/Verilator/Sacengine |
 | Task #53 final validation | final task-53 `zixx-probe` and `zixx-meshcheck` | **PASS / OK**; committed text evidence refreshed in `evidence/retimed-correction-final/` |
+| Integrated direct rebuild | `tools/reel/build-direct.sh --output <integration-task46/bin> --clean all`, then integrated probe/meshcheck | **PASS / OK** from one complete dependent-source rebuild; no CMake/Ninja/Verilator |
+| Complete bank render | integrated `zhao-reel-cel.exe` under explicit celmain/Cool Cross for the exact 22 selectors | 6,450 contiguous 384×240 RGB frames; all metadata complete; every relevant spring/landing frame visually reviewed |
+| Full-colour encode | `python website/tools/tovideo.py website/scratch-reel website/public/renders <22 exact subjects>` | 22 audio-free VP9 CRF16/yuv444p 60 Hz WebMs and exact 3× posters; exit 0 |
+| Closed-file media/archive gate | `workbench/validate_media.py` using ffprobe, independent poster regeneration, hashes and assembled manifest | **PASS:** exact decode counts, no audio, 44 current files, Generation Ten exact, older 204 archives and 20 V14 studies unchanged, ten generations, one noindex |
+| Single production deployment | `website/deploy.ps1 -Project upheaval -Branch main` | Wrangler 4.86.0, exactly one invocation, immutable URL `https://4dba729e.upheaval.pages.dev` |
+| Remote production proof | `workbench/verify_production.py` | **PASS:** production + immutable HTTP 200/index exact; 88 files per host hash/MIME exact; remote current/archive VP9 playback; exact noindex and ten generations |
 
 ---
 
@@ -279,7 +303,8 @@ Named budget: **Final Whole-S Focused Candidate**.
 - Eight ordinary visual rungs plus the coordinator's single representation-only exception; deepest fixed-side pose first, then every-sample side/high-three-quarter/micro only after it passes.
 - One accepted integer/midpoint posed-vertex sweep, full/micro and finless independently; focused mesh/deformation/midpoint tests.
 - Focused attack/jump release and consumer parity evidence; targeted secondary-animation evidence only.
-- No full twenty-two-subject bank, archive, site, media, integration, deploy or publication.
+- No full twenty-two-subject bank, archive, site, media, integration, deploy or publication inside the implementation candidate budget.
+- After QA, authorized task #46 added exactly one fresh integrated gate set, immutable archive, full-bank render/encode, assembly, and one production deployment; that bounded extension is complete without art retuning.
 
 ---
 
@@ -295,6 +320,10 @@ None. The owner requires one sole implementation agent and prohibits delegation.
 - `runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/TASK_LOG.md`
 - `runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/evidence/retimed-correction-final/probe.txt`
 - `runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/evidence/retimed-correction-final/meshcheck.txt`
+- `runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/evidence/integration-publication/{render-22.txt,encode-22.txt,media-validation.txt,deploy-production.txt,production-verification.txt}`
+- Upheaval `creature/Zixxtrixx/ARCHIVE-GENERATION-TEN-SHA256.txt`
+- Upheaval `creature/Zixxtrixx/WHOLE-S-FINAL-MEDIA-SHA256.txt`
+- Upheaval `website/public/renders/archive-2026-09-01-generation-ten-*` and regenerated exact live 22-subject media
 
 ---
 
@@ -306,7 +335,9 @@ None. The owner requires one sole implementation agent and prohibits delegation.
 - Complete explicit pose arrays replace local procedural slope/gain chasing.
 - Station 14 remains the named support unless one visually justified representation change requires another fixed support.
 - Safe prior infrastructure is selected by semantic diff and reimplementation only; no branch merge/cherry-pick.
-- Parent owns independent review/QA, integration, archive, full bank, website assembly/noindex verification and deployment.
+- Independent QA owned feature acceptance. Authorized task #46 then owned isolated integration, collision-safe Archive Generation Ten, the complete integrated bank, exact noindex assembly and the single production deployment.
+- Live Generation Nine could not truthfully be reused: Git history proves it predates the bank being preserved. Generation Ten is the first collision-free immutable identity and every older archive/V14 path remains untouched.
+- Concurrent zhaozhou `43dc4f4` was reports-only, so normal ancestry merge was required while another expensive direct/render cycle was not.
 
 ---
 
@@ -328,16 +359,23 @@ None. The owner requires one sole implementation agent and prohibits delegation.
 | zhaozhou | `ffb6ba7` | `RUN: close corrected Zixxtrixx whole-S pass` | pushed; later reopened for retimed-plan regressions |
 | zhaozhou | `1fb1fcc` | `ANIMATION: correct retimed spring plans` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 | zhaozhou | `d499b0e` | `Fix zero-release endpoint authority` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
+| zhaozhou | `65e9fef` | `RUN: close task 53 release-zero proof` | pushed; exact QA-accepted feature head |
+| zhaozhou | `717cea1` | `Merge accepted Zixxtrixx whole-S feature` | merged into isolated main; later pushed as main ancestry |
+| Upheaval | `4b98a0e` | `Merge accepted Zixxtrixx whole-S direction` | merged into isolated main; later pushed as main ancestry |
+| Upheaval | `1de0d4d` | `Preserve Zixxtrixx Archive Generation Ten` | normally pushed to `origin/main` after immediate fetch |
+| zhaozhou | `4703862` | `RUN: record Zixxtrixx integration render` | normally pushed to `origin/main` |
+| Upheaval | `26b6531` | `Publish Zixxtrixx final whole-S media` | normally pushed to `origin/main` after immediate fetch; exact deployed media commit |
+| Upheaval | `38efaad` | `Record deployed bestiary assembly` | normally pushed after immediate fetch; records deploy-time generated footer bytes, with no second deployment |
+| zhaozhou | `b478eb4` | `Merge current main before Zixxtrixx publication` | normally pushed after immediate fetch; preserves concurrent `reports/DOCKET.md` ancestry |
 
 ---
 
 ## Owned Process Shutdown
 
-All intended direct compilers, linkers, renderers, focused probes and Python sheet builders completed synchronously and exited, including the task-53 fresh all-target direct rebuild and its final probe/meshcheck. One accidental `--help` invocation was recognized as a render and stopped immediately through owned task handle `buei6080i`; no owned background task handle remains. No encoder, PowerShell worker, browser or server was launched. Hardware-lane processes were neither inspected nor touched.
+All direct compilers/linkers, reel renders, probes, meshchecks, Python assemblers/verifiers, the complete `tovideo.py`/ffmpeg chain, deployment PowerShell/Wrangler/Node children and remote-verification ffprobe children exited normally. The exact lane-owned raw `website/scratch-reel` and RUN `workbench/` trees were removed after durable hashes/evidence were retained. A final WMI query filtered by the isolated integration root found zero owned compiler, reel, encoder, Python, PowerShell, Wrangler/Node, browser or server process. Hardware processes were neither returned by the root filter nor touched.
 
 ---
 
 ## Next Steps
 
-1. Parent performs independent review/QA and decides integration.
-2. Parent owns the complete bank, archive, website media, noindex verification, deployment and publication. This implementation lane performs none of them.
+No publication follow-up is required. Any future creature/art change begins a new RUN and a new finished-creature pass; Archive Generation Ten and every older archive/V14 study remain immutable.
