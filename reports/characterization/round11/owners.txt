@@ -1,0 +1,7 @@
+# worst-100 setup paths by DESTINATION block
+
+zhao_raster_earlyz             36
+zhao_raster_edgewalk           33
+zhao_cmd_dma                   23
+zhao_vram_arbiter               4
+zhao_mem_guard                  4

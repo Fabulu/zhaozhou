@@ -83,3 +83,55 @@ Order to re-measure in, by expected impact: the blocks already known to carry
 heavy arithmetic — `zhao_geom_skin`, `zhao_terrain_project`,
 `zhao_texture_tmu`, `zhao_surface_stamp` — then `zhao_raster_edgewalk` for the
 candidate above.
+
+---
+
+## RESOLVED 2026-09-01: the one candidate was real, and it was fixed on evidence
+
+`zhao_raster_edgewalk.sv:322`, the serial 16-bit popcount, **is now a balanced
+tree** (16 -> 8 two-bit -> 4 three-bit -> 2 four-bit -> 1 five-bit), fed from a
+registered row mask rather than from the fill tests in the same cycle.
+
+The scan's own condition for acting was met before it was touched. It says *"Do
+not rewrite it on suspicion... Fit the block, read the logic-level count, and
+only then decide."* The fit at `b3bd69b` named the tail explicitly --
+`sx0_r[7]~DUPLICATE -> pend_r[6]`, -1.679 ns, with EDGEWALK owning **69 of the
+worst 100 paths** -- and the reduction was on that path. It was rewritten
+because a measurement asked for it, not because the source looked wrong.
+
+    round  9   85.62 MHz   before
+    round 10   86.48 MHz   after the ROW-B/ROW-C split + balanced tree
+
+And the scan was right about the stakes: *"its Fmax bounds the whole
+rasteriser."* EDGEWALK has been the reported owner in four separate rounds
+(4, 8, 10, 11), each time with a DIFFERENT tail. Fixing one shape exposes the
+next.
+
+### What the scan could not see, and the fits found anyway
+
+The closing caveat -- *"a block can be nowhere in this table and still be 12x
+too slow"* -- was correct, and every remaining offender this pass has been of a
+kind no loop-trip-count scan can find:
+
+* a **read-modify-write loop** in FRAGMENT (rounds 1, 3)
+* a **RAM-launched** combinational path in RESOLVE (round 6), where an M10K's
+  register sits ~2 ns deeper than a fabric flop before any logic runs
+* a **256-input AND reduction** whose result fanned back to all 256 inputs'
+  next-state muxes, in EARLY-Z (round 9)
+* a **register bit steering a DSP's operands in the DSP's own cycle** --
+  `cross_r[47]`, the sign of the triangle area, in EDGEWALK (round 11)
+
+None is a `for` loop. The generalisable shape is not "long loop" but **anything
+that reaches a slow resource, or fans out widely, inside the cycle that consumes
+it.** A future scan should look for reductions wider than ~32 inputs, RAM
+outputs feeding combinational logic, and register bits in the cone of a DSP
+operand -- not trip counts.
+
+### Still un-measured, and still the right order
+
+The scan's re-measure list stands and none of it is done: `zhao_geom_skin`,
+`zhao_terrain_project`, `zhao_texture_tmu`, `zhao_surface_stamp`. None has
+appeared in any shell-fit worst-100, but the shell fit does not exercise all of
+them, so that is **absence of evidence, not evidence of absence** -- the same
+error that had BINNER and FBWRITE named as offenders for weeks without a single
+measurement putting them on a list.

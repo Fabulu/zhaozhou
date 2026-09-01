@@ -612,3 +612,101 @@ Grepping for the symbol would have taken a minute.
   measurement — after this one.
 * `gpu_clk~CLKENA0` at 13,682 fanout with 1.995 ns of skew. **No datapath work
   recovers it**, and it is not on the note's list of five offenders at all.
+
+---
+
+## Rounds 4-11: the whole sequence, recovered from the commit log
+
+This log stopped at round 3 while eight more fits happened. That is a process
+failure worth naming: the numbers survived only because **every fit was
+committed with its Fmax in the subject line**, so `git log --grep=MHz` rebuilt
+the history exactly. Had they been batched, they would be gone.
+
+    baseline                                             53.48 MHz
+    r1  6e549ef  FRAGMENT: modulation into the s0->s1 transfer   62.89   +17.6%
+    r2  43bf8a0  Early-Z skid buffer                            60.92   -1.97
+    r3  61717ef  FRAGMENT: RMW split three ways                 64.66
+    r4  4b0460d  EDGEWALK: steps + top-left latched in S_W0      79.22   LARGEST
+    r5  121befc  Early-Z skid REMOVED                           80.30
+    r6  6f4bf70  RESOLVE: Q0 capture before the quantisers       84.97
+    r7  12c957e  EDGEWALK: `gi * sx`                            (66.78)  REVERTED
+    r8  2f7e259  EDGEWALK: canonical signed-digit columns        81.00
+    r9  6f60422  EARLY-Z: unique-coverage counting               85.62
+    r10 7f95e59  EDGEWALK: ROW-B / ROW-C split                   86.48
+    r11 05cf5e8  EDGEWALK: S_W0B, flip out of the DSP cycle      in the fitter
+
+**53.48 -> 86.48 MHz, +61.7%**, for +138 ALMs (0.3% of the device) and DSP count
+flat at 16 across every successful fit.
+
+### Four things these rounds taught that no plan predicted
+
+**Round 2 and round 5 are the same experiment run twice, in opposite
+directions.** A skid buffer was added to break a ready path and cost 1.97 MHz;
+removing it later recovered it. The skid was not wrong -- it was a correct
+technique applied where the ready path was not the problem. Structural intuition
+proposes; only the fit decides.
+
+**Round 7 is the cautionary one.** `gi * sx` with `gi` a genvar is a CONSTANT
+multiply and reads as obviously cheaper. Quartus inferred **twelve DSP blocks**
+and 84.97 became 66.78 -- an 18 MHz loss from a change that looked like a
+simplification. Round 8 wrote the same arithmetic as explicit shifts and adds,
+which cannot be read as a multiplier. **DSP count is now checked on every fit**,
+and it is in the evidence bundle for that reason.
+
+**Round 8 measured LOWER than round 6 (81.0 against 84.97) while being
+strictly better.** It eliminated EDGEWALK from the worst-path list entirely and
+exposed Early-Z underneath. A round can improve the design and reduce the
+number, because the number reports whatever is now worst. Rounds are judged on
+the OWNER TABLE, not the headline alone -- and round 9 confirmed it, taking the
+newly-exposed Early-Z offender and reaching 85.62.
+
+**Placement noise is real and bounded.** `audio_clk` moved -27/+20 MHz across
+fits with no source changes at all. A gpu_clk delta under ~1.5 MHz is not
+evidence of anything.
+
+### Bro's five named offenders, final accounting
+
+    FRAGMENT   rounds 1, 3     fixed, and the largest single contributor
+    EDGEWALK   rounds 4, 8, 10, 11   fixed four times; kept re-entering with a NEW tail
+    EARLY-Z    round 9         fixed
+    BINNER     never appeared in any worst-100 across eleven fits
+    FBWRITE    never appeared in any worst-100 across eleven fits
+
+Two of the five were **predicted from reading the RTL and never confirmed by a
+single measurement**. Time spent on them would have bought nothing.
+
+### Round 10 -> 11: the decision, and what the spec's tree actually said
+
+Spec 3.2 CASE A ("the old sx0/coverage -> pend_r tail is gone") held: that tail
+is gone. But the tree's expectation that EDGEWALK would stop being a top-tier
+owner did NOT hold -- it still owned 48 of 200 with an unrelated structure:
+
+    cross_r[47] -> cross_r[*]      -1.563 ns
+
+cross_r[47] is the **sign bit of the triangle area**. It drove the winding flip,
+four vertex muxes and a subtract, straight into a 23x23 signed multiply (a DSP,
+~3.785 ns) and a 48-bit subtract, all in one cycle. Round 11 gives the flip its
+own state so the operand mux reads committed registers.
+
+**Stated as a cost, not hidden:** one cycle per tile job, ~3% of a typical
+partial tile. That regresses initiation rate against the standing rule,
+deliberately, and it is refundable -- w0 from the UNFLIPPED vertices is exactly
+-w0, so a conditional 48-bit negate at capture would buy the cycle back with no
+DSP in the path. Measure first.
+
+### The evidence bundle now exists (spec 3.1)
+
+`tools/quartus/fit_evidence.py` produces the startpoint-kind histogram, the
+owner table and the M10K-launched path list. First run already answered a
+standing question: **rounds 9 and 10 both have ZERO M10K-launched paths of 200.**
+Rounds 3 and 6 each won time by removing a RAM-launched path; that lever is
+spent, and the remaining slack is logic depth and routing.
+
+### Process notes
+
+* `ctest` run WITHOUT sourcing `tools/env/zhao-env.ps1` picks up the devkitPro
+  msys2 ctest, which reads `C:/...` as a relative path and reports every test as
+  BAD_COMMAND. The env script documents this in its header. Nothing was broken;
+  the gate was simply run wrong. Source the env, always.
+* The Bash tool's shell has no `USERPROFILE`, so ccache hard-fails there. Build
+  from PowerShell.

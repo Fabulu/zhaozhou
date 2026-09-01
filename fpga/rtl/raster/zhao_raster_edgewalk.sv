@@ -143,13 +143,14 @@ module zhao_raster_edgewalk (
   // state encoding.
   localparam logic [3:0] S_IDLE  = 4'd0;
   localparam logic [3:0] S_AREA  = 4'd1;  // drive area operands
-  localparam logic [3:0] S_W0    = 4'd2;  // area lands; flip; drive w0
+  localparam logic [3:0] S_W0    = 4'd2;  // area lands; flip commits
   localparam logic [3:0] S_W1    = 4'd3;  // w0 lands; drive w1
   localparam logic [3:0] S_W2    = 4'd4;  // w1 lands; drive w2
   localparam logic [3:0] S_W3    = 4'd5;  // w2 lands
   localparam logic [3:0] S_WALK  = 4'd6;  // 16 row masks, one per cycle
   localparam logic [3:0] S_DRAIN = 4'd7;  // stream non-empty rows
   localparam logic [3:0] S_WFLUSH= 4'd8;  // ROW-C drains the last row
+  localparam logic [3:0] S_W0B   = 4'd9;  // drive w0 from the COMMITTED flip
 
   logic [3:0] state;
 
@@ -221,10 +222,28 @@ module zhao_raster_edgewalk (
         m_p = bx_r - ax_r;  m_q = cy_r - ay_r;
         m_u = by_r - ay_r;  m_v = cx_r - ax_r;
       end
-      // w0 = orient(B,C, px0,py0) — the FLIPPED B/C, not yet registered
-      S_W0: begin
-        m_p = cxf - bxf;    m_q = py0 - byf;
-        m_u = cyf - byf;    m_v = px0 - bxf;
+      // w0 = orient(B,C, px0,py0) from the flipped B/C -- and it reads the
+      // REGISTERS, which is the whole point of S_W0B existing.
+      //
+      // This arm used to sit in S_W0 and read `bxf`/`cxf`, the COMBINATIONAL
+      // flip. That put the sign bit of the area inside the multiplier's own
+      // cycle, and the fit at 7f95e59 named the result as the worst path in
+      // the design:
+      //
+      //     cross_r[47] -> cross_r[*]   -1.563 ns, EDGEWALK owning 48 of 200
+      //
+      // cross_r[47] IS the area's sign. It drove `flip`, four vertex muxes, a
+      // subtract, then a 23x23 signed multiply (a DSP, ~3.785 ns) and a 48-bit
+      // subtract, all before the next edge. A register bit choosing a DSP's
+      // operands in the cycle the DSP runs is the same shape as every other
+      // offender this pass has removed, wearing different clothes.
+      //
+      // S_W0 already commits the flip into bx_r/cx_r at its edge. Reading it
+      // one state later costs ONE CYCLE PER TRIANGLE out of roughly twenty-five
+      // and removes the sign bit from the multiplier's cone entirely.
+      S_W0B: begin
+        m_p = cx_r - bx_r;  m_q = py0 - by_r;
+        m_u = cy_r - by_r;  m_v = px0 - bx_r;
       end
       // w1 = orient(C,A, px0,py0)
       S_W1: begin
@@ -533,9 +552,15 @@ module zhao_raster_edgewalk (
             tl0_r <= edge_top_left(bxf, byf, cxf, cyf);
             tl1_r <= edge_top_left(cxf, cyf, ax_r, ay_r);
             tl2_r <= edge_top_left(ax_r, ay_r, bxf, byf);
-            state <= S_W1;
+            // S_W0B, not S_W1: this edge COMMITS the flip, and the cross unit
+            // is driven from the committed registers in the state after it.
+            state <= S_W0B;
           end
         end
+
+        // Operands driven by the mux from bx_r/cx_r, which this edge's
+        // predecessor committed. Result lands next edge, exactly as S_AREA's does.
+        S_W0B: state <= S_W1;
 
         S_W1: begin  // cross_r = w0 at the tile-start pixel centre
           e0_r   <= sat_estart(cross_r);
