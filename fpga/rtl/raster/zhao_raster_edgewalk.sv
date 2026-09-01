@@ -303,18 +303,52 @@ module zhao_raster_edgewalk (
       // as ((a+b)+c)+d -- three adder levels. Explicit pairing makes it two,
       // and column 15 is the one the fit named because every bit of `gi` is
       // set there, so it is the only column that pays all four terms.
-      assign o0 = ((((gi & 1) != 0) ? sx0_r        : ACC_ZERO) +
-                   (((gi & 2) != 0) ? (sx0_r <<< 1) : ACC_ZERO))
-                + ((((gi & 4) != 0) ? (sx0_r <<< 2) : ACC_ZERO) +
-                   (((gi & 8) != 0) ? (sx0_r <<< 3) : ACC_ZERO));
-      assign o1 = ((((gi & 1) != 0) ? sx1_r        : ACC_ZERO) +
-                   (((gi & 2) != 0) ? (sx1_r <<< 1) : ACC_ZERO))
-                + ((((gi & 4) != 0) ? (sx1_r <<< 2) : ACC_ZERO) +
-                   (((gi & 8) != 0) ? (sx1_r <<< 3) : ACC_ZERO));
-      assign o2 = ((((gi & 1) != 0) ? sx2_r        : ACC_ZERO) +
-                   (((gi & 2) != 0) ? (sx2_r <<< 1) : ACC_ZERO))
-                + ((((gi & 4) != 0) ? (sx2_r <<< 2) : ACC_ZERO) +
-                   (((gi & 8) != 0) ? (sx2_r <<< 3) : ACC_ZERO));
+      // CANONICAL SIGNED-DIGIT, one explicit form per column.
+      //
+      // `gi` is a genvar, so gi*sx is a CONSTANT multiply and most columns
+      // need one operation rather than a four-term tree:
+      //
+      //     15*sx = (sx << 4) - sx        <-- the column the fit keeps naming
+      //     14*sx = (sx << 4) - (sx << 1)
+      //      7*sx = (sx << 3) - sx
+      //
+      // Only 11 and 13 need three terms; the rest need one or two, against
+      // two adder LEVELS for all sixteen columns before.
+      //
+      // WRITTEN AS EXPLICIT SHIFTS, WHICH IS THE WHOLE POINT. The first
+      // attempt wrote `gi * sx` and let the synthesiser choose: it inferred
+      // TWELVE DSP BLOCKS and 84.97 MHz became 66.78, because a DSP costs
+      // ~3.785 ns against ~0.5 for a LUT adder level. Shifts and adds cannot
+      // be read as a multiplier.
+      //
+      // Exact: computed in ACC_W and wrapping mod 2^ACC_W exactly as the
+      // four-term sum did, which the differential asserts rather than assumes.
+      // ONE PROCEDURAL CASE, not three generate cases. A generate case arm
+      // creates an unnamed generate block per column, and Verilator's
+      // GENUNNAMED rejected all 51 of them. `gi` is a constant, so a
+      // procedural case folds at elaboration to exactly the same logic with
+      // no generate blocks at all.
+      always_comb begin
+        case (gi)
+           0: begin o0 = ACC_ZERO; o1 = ACC_ZERO; o2 = ACC_ZERO; end
+           1: begin o0 = sx0_r; o1 = sx1_r; o2 = sx2_r; end
+           2: begin o0 = (sx0_r <<< 1); o1 = (sx1_r <<< 1); o2 = (sx2_r <<< 1); end
+           3: begin o0 = (sx0_r <<< 1) + sx0_r; o1 = (sx1_r <<< 1) + sx1_r; o2 = (sx2_r <<< 1) + sx2_r; end
+           4: begin o0 = (sx0_r <<< 2); o1 = (sx1_r <<< 2); o2 = (sx2_r <<< 2); end
+           5: begin o0 = (sx0_r <<< 2) + sx0_r; o1 = (sx1_r <<< 2) + sx1_r; o2 = (sx2_r <<< 2) + sx2_r; end
+           6: begin o0 = (sx0_r <<< 2) + (sx0_r <<< 1); o1 = (sx1_r <<< 2) + (sx1_r <<< 1); o2 = (sx2_r <<< 2) + (sx2_r <<< 1); end
+           7: begin o0 = (sx0_r <<< 3) - sx0_r; o1 = (sx1_r <<< 3) - sx1_r; o2 = (sx2_r <<< 3) - sx2_r; end
+           8: begin o0 = (sx0_r <<< 3); o1 = (sx1_r <<< 3); o2 = (sx2_r <<< 3); end
+           9: begin o0 = (sx0_r <<< 3) + sx0_r; o1 = (sx1_r <<< 3) + sx1_r; o2 = (sx2_r <<< 3) + sx2_r; end
+          10: begin o0 = (sx0_r <<< 3) + (sx0_r <<< 1); o1 = (sx1_r <<< 3) + (sx1_r <<< 1); o2 = (sx2_r <<< 3) + (sx2_r <<< 1); end
+          11: begin o0 = (sx0_r <<< 3) + (sx0_r <<< 1) + sx0_r; o1 = (sx1_r <<< 3) + (sx1_r <<< 1) + sx1_r; o2 = (sx2_r <<< 3) + (sx2_r <<< 1) + sx2_r; end
+          12: begin o0 = (sx0_r <<< 3) + (sx0_r <<< 2); o1 = (sx1_r <<< 3) + (sx1_r <<< 2); o2 = (sx2_r <<< 3) + (sx2_r <<< 2); end
+          13: begin o0 = (sx0_r <<< 4) - (sx0_r <<< 1) - sx0_r; o1 = (sx1_r <<< 4) - (sx1_r <<< 1) - sx1_r; o2 = (sx2_r <<< 4) - (sx2_r <<< 1) - sx2_r; end
+          14: begin o0 = (sx0_r <<< 4) - (sx0_r <<< 1); o1 = (sx1_r <<< 4) - (sx1_r <<< 1); o2 = (sx2_r <<< 4) - (sx2_r <<< 1); end
+          15: begin o0 = (sx0_r <<< 4) - sx0_r; o1 = (sx1_r <<< 4) - sx1_r; o2 = (sx2_r <<< 4) - sx2_r; end
+          default: begin o0 = ACC_ZERO; o1 = ACC_ZERO; o2 = ACC_ZERO; end
+        endcase
+      end
 
       assign v0 = e0_r + o0;
       assign v1 = e1_r + o1;
