@@ -31,6 +31,12 @@ namespace {
 
 int32_t to_mm(int64_t fx) { return static_cast<int32_t>(fx * 1000 >> 16); }
 
+constexpr int32_t kSpringTrunkLateralSpanMaxMm = 30;
+constexpr int32_t kSpringWholeTailLateralSpanMaxMm = 45;
+// Retiming samples the same named landing curve at new quantized body poses.
+// One millimetre bounds fixed-point/pose-clock rounding without changing art.
+constexpr int32_t kRetimedLandingContactRoundingMm = 1;
+
 int presentation_samples(const zc::Clip& c) {
   return c.frame_count == 0 ? 0 : 2 * (static_cast<int>(c.frame_count) - 1) + 1;
 }
@@ -1361,8 +1367,9 @@ int main() {
     // which shifts their skinned centres slightly in Z; guard that separately
     // rather than mistaking the intentional tail assembly for a crooked S.
     require(entry_span > deep_span && deep_span > 0 &&
-                head_support_dy < 0 && body_lateral_span <= 30 &&
-                whole_lateral_span <= 45,
+                head_support_dy < 0 &&
+                body_lateral_span <= kSpringTrunkLateralSpanMaxMm &&
+                whole_lateral_span <= kSpringWholeTailLateralSpanMaxMm,
             "explicit spring lost its ordered assembled-to-collapsed planar S");
     // Station 14's full per-sample authored route is checked independently
     // below from every integer and true half-key. A single entry-to-deep delta
@@ -1785,10 +1792,14 @@ int main() {
   const zc::Clip local_source = zixx::build_attack(true, &local_owned);
   const zc::PresentationMidpointAuthorship compression_owned =
       zixx::slice_midpoint_authorship(
-          local_owned, zixx::kSlotAtkCompress, 0, 17);
+          local_owned, zixx::kSlotAtkCompress,
+          zixx::kAtkCompressSliceFirstKey,
+          zixx::kAtkCompressSliceLastKey);
   bool compression_ownership_exact =
       compression_owned.slot_id == zixx::kSlotAtkCompress &&
-      compression_owned.channels.size() == 18;
+      compression_owned.channels.size() == static_cast<size_t>(
+          zixx::kAtkCompressSliceLastKey -
+          zixx::kAtkCompressSliceFirstKey + 1);
   int compression_owned_segments = 0;
   for (size_t key = 0; key < compression_owned.channels.size(); ++key) {
     const uint8_t expected =
@@ -1813,43 +1824,532 @@ int main() {
           local_owned, zixx::kSlotAtkRelease, 17, 29);
   check_midpoint_authorship("release slice", release_owned, 1, false);
 
-  // The explicit controls name the default 12/6/4 timeline. A plan that merely
-  // retains four release keys must stay on generic interpolation rather than
-  // inheriting default key 4.5/release/root authorship at wrong phase locations.
+  // Retiming changes phase locations, never support obligations. The default-only
+  // 1.5/4.5 complete poses stay absent, a four-key release owns its complete
+  // plan-local bridges, attacks own every pre-lift root, and jumps additionally
+  // own every landing/recovery root. Compile all adversarial plans together so
+  // malformed or uninitialized provenance cannot hide behind source-only checks.
+  constexpr uint16_t kSyntheticRetimedAttackSlot = 50;
+  constexpr uint16_t kSyntheticRetimedJumpSlot = 51;
+  constexpr uint16_t kSyntheticAttackRelease2Slot = 52;
+  constexpr uint16_t kSyntheticAttackRelease3Slot = 53;
+  constexpr uint16_t kSyntheticJumpRelease2Slot = 54;
+  constexpr uint16_t kSyntheticJumpRelease3Slot = 55;
+  constexpr uint16_t kSyntheticJumpShortRecoverySlot = 56;
+  constexpr uint16_t kSyntheticJumpLongRecoverySlot = 57;
+  constexpr uint16_t kSyntheticCompress48Slot = 58;
+
   zc::AttackPlan retimed_attack =
       zixx::zixx_variant_plan(zixx::kSlotAtkDummy);
-  retimed_attack.compress_keys = zixx::kSaltoCompressEndKey - 2;
+  retimed_attack.compress_hold_keys += 1;
+  const zixx::AttackVariantPhases retimed_attack_phase =
+      zixx::zixx_attack_variant_phases(retimed_attack, true);
   zc::PresentationMidpointAuthorship retimed_attack_owned;
   const zc::Clip retimed_attack_source = zixx::build_attack_variant(
-      zixx::kSlotAtkDummy, retimed_attack, false, &retimed_attack_owned);
-  zixx::JumpPlan retimed_jump =
-      zixx::zixx_jump_plan(zixx::kSlotJumpOne, 1);
+      kSyntheticRetimedAttackSlot, retimed_attack, true,
+      &retimed_attack_owned);
+
+  zixx::JumpPlan retimed_jump = zixx::zixx_jump_plan(
+      kSyntheticRetimedJumpSlot, 1);
   retimed_jump.compress_hold_keys += 1;
+  const zixx::JumpPhases retimed_jump_phase =
+      zixx::zixx_jump_phases(retimed_jump);
   zc::PresentationMidpointAuthorship retimed_jump_owned;
   const zc::Clip retimed_jump_source =
       zixx::build_jump(retimed_jump, &retimed_jump_owned);
-  const auto has_owned_channel = [](
-                                     const zc::PresentationMidpointAuthorship& a) {
-    for (uint8_t channels : a.channels)
-      if (channels != 0) return true;
-    return false;
+
+  auto midpoint_contract_exact = [&](
+      const char* name, const zc::Clip& clip,
+      const zc::PresentationMidpointAuthorship& owned, int pre_lift_end,
+      int release_pose_begin, int release_pose_count,
+      int landing_root_begin, int landing_root_end,
+      bool expect_default_entry_poses) {
+    bool exact = owned.slot_id == clip.slot_id &&
+                 owned.channels.size() ==
+                     static_cast<size_t>(clip.frame_count) &&
+                 clip.mid_quats.size() ==
+                     static_cast<size_t>(clip.frame_count) *
+                         type.bank.bone_count &&
+                 clip.mid_root.size() ==
+                     static_cast<size_t>(clip.frame_count) * 3 &&
+                 clip.mid_deform.size() ==
+                     static_cast<size_t>(clip.frame_count);
+    int root_segments = 0;
+    int pose_segments = 0;
+    for (size_t key = 0; key < owned.channels.size(); ++key) {
+      uint8_t expected = 0;
+      if (key < static_cast<size_t>(pre_lift_end) ||
+          (landing_root_begin >= 0 &&
+           key >= static_cast<size_t>(landing_root_begin) &&
+           key < static_cast<size_t>(landing_root_end)))
+        expected |= zc::kMidpointRootAuthored;
+      if ((expect_default_entry_poses &&
+           (key == static_cast<size_t>(
+                       zixx::kSpringEarlyEntryOwnedMidpointKey) ||
+            key == static_cast<size_t>(
+                       zixx::kSpringEntryOwnedMidpointKey))) ||
+          (release_pose_count > 0 &&
+           key >= static_cast<size_t>(release_pose_begin) &&
+           key < static_cast<size_t>(release_pose_begin + release_pose_count)))
+        expected |= kOwnedQuatsDeform;
+      if (owned.channels[key] != expected) exact = false;
+      if ((owned.channels[key] & zc::kMidpointRootAuthored) != 0)
+        ++root_segments;
+      if ((owned.channels[key] & kOwnedQuatsDeform) == kOwnedQuatsDeform)
+        ++pose_segments;
+    }
+    const bool default_entry_poses_exact =
+        owned.channels.size() > static_cast<size_t>(
+                                    zixx::kSpringEntryOwnedMidpointKey) &&
+        (((owned.channels[zixx::kSpringEarlyEntryOwnedMidpointKey] &
+           kOwnedQuatsDeform) == kOwnedQuatsDeform) ==
+         expect_default_entry_poses) &&
+        (((owned.channels[zixx::kSpringEntryOwnedMidpointKey] &
+           kOwnedQuatsDeform) == kOwnedQuatsDeform) ==
+         expect_default_entry_poses);
+    exact = exact && default_entry_poses_exact;
+    std::printf("MIDPOINT retimed %s: slot/count exact=%d, roots=%d, "
+                "plan-release poses=%d, default entry poses %s exact=%d\n",
+                name, exact ? 1 : 0, root_segments, pose_segments,
+                expect_default_entry_poses ? "present" : "absent",
+                default_entry_poses_exact ? 1 : 0);
+    require(exact, "retimed midpoint channel/timeline ownership drifted");
+    return exact;
   };
-  const bool retimed_attack_safe =
-      !zixx::uses_default_shared_spring_timing(retimed_attack) &&
-      !has_owned_channel(retimed_attack_owned) &&
-      retimed_attack_source.mid_quats.empty() &&
-      retimed_attack_source.mid_root.empty() &&
-      retimed_attack_source.mid_deform.empty();
-  const bool retimed_jump_safe =
-      !zixx::uses_default_shared_spring_timing(retimed_jump) &&
-      !has_owned_channel(retimed_jump_owned) &&
-      retimed_jump_source.mid_quats.empty() &&
-      retimed_jump_source.mid_root.empty() &&
-      retimed_jump_source.mid_deform.empty();
-  std::printf("MIDPOINT retimed four-release safety: attack=%d jump=%d\n",
-              retimed_attack_safe ? 1 : 0, retimed_jump_safe ? 1 : 0);
-  require(retimed_attack_safe && retimed_jump_safe,
-          "retimed four-release plan received default-timeline midpoint authorship");
+
+  midpoint_contract_exact(
+      "attack", retimed_attack_source, retimed_attack_owned,
+      retimed_attack_phase.release_end, retimed_attack_phase.hold_end,
+      zixx::kSpringReleaseMidpointCount, -1, -1, false);
+  midpoint_contract_exact(
+      "jump", retimed_jump_source, retimed_jump_owned,
+      retimed_jump_phase.launch_key, retimed_jump_phase.hold_end,
+      zixx::kSpringReleaseMidpointCount, retimed_jump_phase.landing_key,
+      retimed_jump_phase.last_key, false);
+
+  zc::AttackPlan attack_release2 =
+      zixx::zixx_variant_plan(zixx::kSlotAtkDummy);
+  attack_release2.release_keys = 2;
+  const zixx::AttackVariantPhases attack_release2_phase =
+      zixx::zixx_attack_variant_phases(attack_release2, true);
+  zc::PresentationMidpointAuthorship attack_release2_owned;
+  const zc::Clip attack_release2_source = zixx::build_attack_variant(
+      kSyntheticAttackRelease2Slot, attack_release2, true,
+      &attack_release2_owned);
+  midpoint_contract_exact(
+      "attack release-2", attack_release2_source, attack_release2_owned,
+      attack_release2_phase.release_end, -1, 0, -1, -1, false);
+
+  zc::AttackPlan attack_release3 =
+      zixx::zixx_variant_plan(zixx::kSlotAtkDummy);
+  attack_release3.release_keys = 3;
+  const zixx::AttackVariantPhases attack_release3_phase =
+      zixx::zixx_attack_variant_phases(attack_release3, true);
+  zc::PresentationMidpointAuthorship attack_release3_owned;
+  const zc::Clip attack_release3_source = zixx::build_attack_variant(
+      kSyntheticAttackRelease3Slot, attack_release3, true,
+      &attack_release3_owned);
+  midpoint_contract_exact(
+      "attack release-3", attack_release3_source, attack_release3_owned,
+      attack_release3_phase.release_end, -1, 0, -1, -1, false);
+
+  zixx::JumpPlan jump_release2 = zixx::zixx_jump_plan(
+      kSyntheticJumpRelease2Slot, 1);
+  jump_release2.release_keys = 2;
+  const zixx::JumpPhases jump_release2_phase =
+      zixx::zixx_jump_phases(jump_release2);
+  zc::PresentationMidpointAuthorship jump_release2_owned;
+  const zc::Clip jump_release2_source =
+      zixx::build_jump(jump_release2, &jump_release2_owned);
+  midpoint_contract_exact(
+      "jump release-2", jump_release2_source, jump_release2_owned,
+      jump_release2_phase.launch_key, -1, 0,
+      jump_release2_phase.landing_key, jump_release2_phase.last_key, false);
+
+  zixx::JumpPlan jump_release3 = zixx::zixx_jump_plan(
+      kSyntheticJumpRelease3Slot, 1);
+  jump_release3.release_keys = 3;
+  const zixx::JumpPhases jump_release3_phase =
+      zixx::zixx_jump_phases(jump_release3);
+  zc::PresentationMidpointAuthorship jump_release3_owned;
+  const zc::Clip jump_release3_source =
+      zixx::build_jump(jump_release3, &jump_release3_owned);
+  midpoint_contract_exact(
+      "jump release-3", jump_release3_source, jump_release3_owned,
+      jump_release3_phase.launch_key, -1, 0,
+      jump_release3_phase.landing_key, jump_release3_phase.last_key, false);
+
+  zixx::JumpPlan jump_short_recovery = zixx::zixx_jump_plan(
+      kSyntheticJumpShortRecoverySlot, 1);
+  jump_short_recovery.landing_keys = 3;
+  jump_short_recovery.settle_keys = 5;
+  const zixx::JumpPhases jump_short_recovery_phase =
+      zixx::zixx_jump_phases(jump_short_recovery);
+  zc::PresentationMidpointAuthorship jump_short_recovery_owned;
+  const zc::Clip jump_short_recovery_source =
+      zixx::build_jump(jump_short_recovery, &jump_short_recovery_owned);
+  midpoint_contract_exact(
+      "jump short recovery", jump_short_recovery_source,
+      jump_short_recovery_owned, jump_short_recovery_phase.launch_key,
+      jump_short_recovery_phase.hold_end,
+      zixx::kSpringReleaseMidpointCount,
+      jump_short_recovery_phase.landing_key,
+      jump_short_recovery_phase.last_key, true);
+
+  zixx::JumpPlan jump_long_recovery = zixx::zixx_jump_plan(
+      kSyntheticJumpLongRecoverySlot, 1);
+  jump_long_recovery.landing_keys = 10;
+  jump_long_recovery.settle_keys = 22;
+  const zixx::JumpPhases jump_long_recovery_phase =
+      zixx::zixx_jump_phases(jump_long_recovery);
+  zc::PresentationMidpointAuthorship jump_long_recovery_owned;
+  const zc::Clip jump_long_recovery_source =
+      zixx::build_jump(jump_long_recovery, &jump_long_recovery_owned);
+  midpoint_contract_exact(
+      "jump long recovery", jump_long_recovery_source,
+      jump_long_recovery_owned, jump_long_recovery_phase.launch_key,
+      jump_long_recovery_phase.hold_end,
+      zixx::kSpringReleaseMidpointCount,
+      jump_long_recovery_phase.landing_key,
+      jump_long_recovery_phase.last_key, true);
+
+  zc::AttackPlan compress48 =
+      zixx::zixx_variant_plan(zixx::kSlotAtkDummy);
+  compress48.compress_keys = 48;
+  const zixx::AttackVariantPhases compress48_phase =
+      zixx::zixx_attack_variant_phases(compress48, true);
+  zc::PresentationMidpointAuthorship compress48_owned;
+  const zc::Clip compress48_source = zixx::build_attack_variant(
+      kSyntheticCompress48Slot, compress48, true, &compress48_owned);
+  midpoint_contract_exact(
+      "compress-48 attack", compress48_source, compress48_owned,
+      compress48_phase.release_end, compress48_phase.hold_end,
+      zixx::kSpringReleaseMidpointCount, -1, -1, false);
+
+  zc::ClipBank synthetic_bank;
+  synthetic_bank.bone_count = type.bank.bone_count;
+  synthetic_bank.bake60 = true;
+  synthetic_bank.clips = {
+      retimed_attack_source,
+      retimed_jump_source,
+      attack_release2_source,
+      attack_release3_source,
+      jump_release2_source,
+      jump_release3_source,
+      jump_short_recovery_source,
+      jump_long_recovery_source,
+      compress48_source,
+  };
+  const std::vector<zc::PresentationMidpointAuthorship> synthetic_owned = {
+      retimed_attack_owned,
+      retimed_jump_owned,
+      attack_release2_owned,
+      attack_release3_owned,
+      jump_release2_owned,
+      jump_release3_owned,
+      jump_short_recovery_owned,
+      jump_long_recovery_owned,
+      compress48_owned,
+  };
+  zc::CreatureType synthetic_type;
+  const char* synthetic_reason = "";
+  // compile_creature requires at least one authoring meshlet even though this
+  // regression concerns only clips. Supply one inert compiler carrier, then
+  // replace its output with the registered full/micro rungs below.
+  std::vector<zc::RingPart> synthetic_parts(1);
+  synthetic_parts[0].bone = zixx::kBSpine0;
+  synthetic_parts[0].caps = zc::kCapTop | zc::kCapBot;
+  synthetic_parts[0].rings = {
+      {0, fxm(1), 3},
+      {fxm(2), fxm(1), 3},
+  };
+  const bool synthetic_compiled = zc::compile_creature(
+      type.skeleton, synthetic_bank, synthetic_parts, synthetic_type,
+      &synthetic_reason, synthetic_owned);
+  std::printf("RETIMED synthetic bank compile: %d (%s)\n",
+              synthetic_compiled ? 1 : 0,
+              synthetic_compiled ? "accepted" : synthetic_reason);
+  require(synthetic_compiled, "synthetic retimed clip bank did not compile");
+  if (synthetic_compiled) {
+    // Compilation validates/rebakes the synthetic bank; the real accepted mesh
+    // rungs are then attached so scans walk the same full/micro vertices as the
+    // registered creature without reconstructing a second authoring mesh.
+    synthetic_type.mesh = type.mesh;
+    synthetic_type.micro = type.micro;
+    synthetic_type.bound_radius = type.bound_radius;
+    synthetic_type.micro_error = type.micro_error;
+    synthetic_type.splat_error = type.splat_error;
+    synthetic_type.glint_error = type.glint_error;
+    synthetic_type.page_set = type.page_set;
+    synthetic_type.page_direct = type.page_direct;
+  }
+
+  const auto synthetic_clip = [&](int slot) -> const zc::Clip* {
+    if (!synthetic_compiled) return nullptr;
+    for (const zc::Clip& clip : synthetic_type.bank.clips)
+      if (clip.slot_id == slot) return &clip;
+    return nullptr;
+  };
+  const auto compiled_owns_exact_bytes = [&] (
+      const zc::Clip& source,
+      const zc::PresentationMidpointAuthorship& owned) {
+    const zc::Clip* compiled = synthetic_clip(source.slot_id);
+    bool exact = compiled != nullptr &&
+                 compiled->mid_quats.size() == source.mid_quats.size() &&
+                 compiled->mid_root.size() == source.mid_root.size() &&
+                 compiled->mid_deform.size() == source.mid_deform.size();
+    if (!exact) return false;
+    for (size_t key = 0; key < owned.channels.size(); ++key) {
+      const uint8_t channels = owned.channels[key];
+      if ((channels & zc::kMidpointQuatsAuthored) != 0 &&
+          std::memcmp(&compiled->mid_quats[key * type.bank.bone_count],
+                      &source.mid_quats[key * type.bank.bone_count],
+                      type.bank.bone_count * sizeof(zc::quat16)) != 0)
+        exact = false;
+      if ((channels & zc::kMidpointRootAuthored) != 0 &&
+          std::memcmp(&compiled->mid_root[key * 3],
+                      &source.mid_root[key * 3],
+                      3 * sizeof(int32_t)) != 0)
+        exact = false;
+      if ((channels & zc::kMidpointDeformAuthored) != 0 &&
+          std::memcmp(&compiled->mid_deform[key], &source.mid_deform[key],
+                      sizeof(zc::DeformSample)) != 0)
+        exact = false;
+    }
+    return exact;
+  };
+  require(compiled_owns_exact_bytes(retimed_attack_source,
+                                    retimed_attack_owned) &&
+              compiled_owns_exact_bytes(retimed_jump_source,
+                                        retimed_jump_owned),
+          "compiled retimed bank regenerated an explicitly owned channel");
+
+  const auto exact_deform_endpoint = [](const zc::Clip& clip, int endpoint) {
+    return endpoint >= 0 && endpoint < clip.frame_count &&
+           clip.deform.size() == static_cast<size_t>(clip.frame_count) &&
+           clip.deform[0].flatten == clip.deform[endpoint].flatten &&
+           clip.deform[0].spread == clip.deform[endpoint].spread;
+  };
+  struct ReleaseCase {
+    const char* name;
+    const zc::Clip* source;
+    int hold_end;
+    int endpoint;
+    bool motion_endpoint_exact;
+  };
+  const std::array<ReleaseCase, 4> release_cases{{
+      {"attack-2", &attack_release2_source, attack_release2_phase.hold_end,
+       attack_release2_phase.release_end,
+       zixx::zixx_plan_spring_entry_amount(
+           attack_release2, attack_release2_phase.release_end) == 0 &&
+           zixx::zixx_plan_spring_amount(
+               attack_release2, attack_release2_phase.release_end) == 0},
+      {"attack-3", &attack_release3_source, attack_release3_phase.hold_end,
+       attack_release3_phase.release_end,
+       zixx::zixx_plan_spring_entry_amount(
+           attack_release3, attack_release3_phase.release_end) == 0 &&
+           zixx::zixx_plan_spring_amount(
+               attack_release3, attack_release3_phase.release_end) == 0},
+      {"jump-2", &jump_release2_source, jump_release2_phase.hold_end,
+       jump_release2_phase.launch_key,
+       zixx::zixx_jump_motion_sample(
+           jump_release2, jump_release2_phase.launch_key).entry == 0 &&
+           zixx::zixx_jump_motion_sample(
+               jump_release2, jump_release2_phase.launch_key).spring == 0},
+      {"jump-3", &jump_release3_source, jump_release3_phase.hold_end,
+       jump_release3_phase.launch_key,
+       zixx::zixx_jump_motion_sample(
+           jump_release3, jump_release3_phase.launch_key).entry == 0 &&
+           zixx::zixx_jump_motion_sample(
+               jump_release3, jump_release3_phase.launch_key).spring == 0},
+  }};
+  for (const ReleaseCase& release : release_cases) {
+    const zc::Clip* compiled = synthetic_clip(release.source->slot_id);
+    bool endpoint_exact = release.motion_endpoint_exact &&
+                          key_pose_equal(*release.source, 0, release.endpoint,
+                                         type.bank.bone_count, true) &&
+                          exact_deform_endpoint(*release.source,
+                                                release.endpoint) &&
+                          compiled != nullptr &&
+                          key_pose_equal(*compiled, 0, release.endpoint,
+                                         type.bank.bone_count, true);
+    int32_t release_step_mm = INT32_MAX;
+    int release_step_tick = -1;
+    if (compiled != nullptr) {
+      const ClipScan scan = scan_clip(synthetic_type, *compiled, stations);
+      const StationStepMaximum step = station_step_max_mm(
+          scan, 2 * release.hold_end + 1, 2 * release.endpoint);
+      release_step_mm = step.mm;
+      release_step_tick = step.tick;
+      endpoint_exact = endpoint_exact &&
+                       step.mm <= zixx::kJumpMaxStationStepMm;
+    }
+    std::printf("RETIMED release %s: grounded endpoint exact=%d, "
+                "compiled max step %d mm at %d%s\n",
+                release.name, endpoint_exact ? 1 : 0, release_step_mm,
+                release_step_tick / 2,
+                (release_step_tick & 1) ? ".5" : "");
+    require(endpoint_exact,
+            "short release missed grounded endpoint or continuity bound");
+  }
+
+  struct SyntheticContactRange {
+    int32_t deepest_mm = INT32_MAX;
+    int deepest_tick = -1;
+    int32_t highest_mm = INT32_MIN;
+  };
+  const auto synthetic_contact_range = [](
+      const ClipScan& scan, int rung, int begin_tick, int end_tick) {
+    SyntheticContactRange range;
+    begin_tick = std::max(begin_tick, 0);
+    end_tick = std::min(end_tick,
+                        static_cast<int>(scan.samples.size()) - 1);
+    for (int tick = begin_tick; tick <= end_tick; ++tick) {
+      const int32_t y = to_mm(scan.samples[tick].rung_min_y_fx[rung]);
+      if (y < range.deepest_mm) {
+        range.deepest_mm = y;
+        range.deepest_tick = tick;
+      }
+      range.highest_mm = std::max(range.highest_mm, y);
+    }
+    return range;
+  };
+  const auto check_compiled_jump_landing = [&] (
+      const char* name, const zixx::JumpPlan& plan,
+      const zixx::JumpPhases& phase) {
+    const zc::Clip* compiled = synthetic_clip(plan.slot);
+    bool exact = compiled != nullptr;
+    int32_t max_step = INT32_MAX;
+    std::array<SyntheticContactRange, 2> impact{};
+    std::array<SyntheticContactRange, 2> handoff{};
+    std::array<SyntheticContactRange, 2> settle{};
+    if (compiled != nullptr) {
+      const ClipScan scan = scan_clip(synthetic_type, *compiled, stations);
+      const int recovery_keys = plan.landing_keys + plan.settle_keys;
+      const int handoff_relative =
+          std::min(zixx::kJumpLandingSupportHandoffEnd, recovery_keys);
+      const int handoff_end = 2 * (phase.landing_key + handoff_relative);
+      const int settle_begin = std::min(
+          handoff_end + 1, 2 * phase.last_key);
+      const StationStepMaximum continuity = station_step_max_mm(
+          scan, 2 * phase.landing_key, 2 * phase.last_key);
+      max_step = continuity.mm;
+      exact = exact &&
+              key_pose_equal(*compiled, 0, phase.last_key,
+                             type.bank.bone_count, true) &&
+              zixx::jump_landing_surface_bias_mm(plan, recovery_keys) == 0 &&
+              continuity.mm <= zixx::kJumpMaxStationStepMm;
+      for (int rung = 0; rung < 2; ++rung) {
+        impact[rung] = synthetic_contact_range(
+            scan, rung, 2 * phase.landing_key,
+            2 * (phase.landing_key + 1));
+        handoff[rung] = synthetic_contact_range(
+            scan, rung, 2 * (phase.landing_key + 1) + 1, handoff_end);
+        settle[rung] = synthetic_contact_range(
+            scan, rung, settle_begin, 2 * phase.last_key);
+        const SyntheticContactRange whole = synthetic_contact_range(
+            scan, rung, 2 * phase.landing_key, 2 * phase.last_key);
+        exact = exact &&
+                whole.deepest_mm >=
+                    -(zixx::kJumpLandingBiteMm +
+                      kRetimedLandingContactRoundingMm) &&
+                impact[rung].deepest_mm >=
+                    -(zixx::kJumpLandingBiteMm +
+                      kRetimedLandingContactRoundingMm) &&
+                impact[rung].highest_mm <= -15 &&
+                handoff[rung].deepest_mm >=
+                    -(zixx::kJumpLandingBiteMm +
+                      kRetimedLandingContactRoundingMm) &&
+                handoff[rung].highest_mm <= 0 &&
+                settle[rung].deepest_mm >=
+                    -(zixx::kJumpLandingBiteMm +
+                      kRetimedLandingContactRoundingMm) &&
+                settle[rung].highest_mm <= 0;
+      }
+    }
+    std::printf("RETIMED landing %s: exact=%d, full impact/handoff/settle "
+                "%d..%d/%d..%d/%d..%d mm, micro "
+                "%d..%d/%d..%d/%d..%d mm, max step=%d mm, "
+                "settle deepest ticks=%d%s/%d%s\n",
+                name, exact ? 1 : 0,
+                impact[0].deepest_mm, impact[0].highest_mm,
+                handoff[0].deepest_mm, handoff[0].highest_mm,
+                settle[0].deepest_mm, settle[0].highest_mm,
+                impact[1].deepest_mm, impact[1].highest_mm,
+                handoff[1].deepest_mm, handoff[1].highest_mm,
+                settle[1].deepest_mm, settle[1].highest_mm, max_step,
+                settle[0].deepest_tick / 2,
+                (settle[0].deepest_tick & 1) ? ".5" : "",
+                settle[1].deepest_tick / 2,
+                (settle[1].deepest_tick & 1) ? ".5" : "");
+    require(exact,
+            "compiled retimed jump landing/contact/recovery contract drifted");
+  };
+  check_compiled_jump_landing(
+      "hold+1", retimed_jump, retimed_jump_phase);
+  check_compiled_jump_landing(
+      "short 3+5", jump_short_recovery, jump_short_recovery_phase);
+  check_compiled_jump_landing(
+      "long 10+22", jump_long_recovery, jump_long_recovery_phase);
+
+  const auto angle_distance = [](int32_t a, int32_t b) {
+    return std::abs(static_cast<int32_t>(static_cast<int16_t>(
+        static_cast<uint16_t>((b - a) & 0xFFFF))));
+  };
+  int32_t generic_seam_step = 0;
+  int authored_middle_differences = 0;
+  bool authored_middle_exact = true;
+  for (int station = 0; station < zixx::kStanceSlopes; ++station) {
+    const int32_t h279 = zixx::spring_entry_heading(station, 279);
+    const int32_t h280 = zixx::spring_entry_heading(station, 280);
+    const int32_t h281 = zixx::spring_entry_heading(station, 281);
+    generic_seam_step = std::max(
+        generic_seam_step,
+        std::max(angle_distance(h279, h280),
+                 angle_distance(h280, h281)));
+    if (h280 != zixx::spring_entry_heading(station, 280, true))
+      ++authored_middle_differences;
+    if (zixx::spring_entry_heading(station, 280, true) !=
+        zixx::kSpringMiddleHeading[station])
+      authored_middle_exact = false;
+  }
+  int middle_region_key = -1;
+  int32_t middle_region_entry = -1;
+  for (int key = 0; key <= compress48.compress_keys; ++key) {
+    const int32_t entry =
+        zixx::zixx_plan_spring_entry_amount(compress48, key);
+    if (middle_region_key < 0 ||
+        std::abs(entry - zixx::kSpringMiddleEntryProfile) <
+            std::abs(middle_region_entry - zixx::kSpringMiddleEntryProfile)) {
+      middle_region_key = key;
+      middle_region_entry = entry;
+    }
+  }
+  const zc::Clip* compiled_compress48 =
+      synthetic_clip(kSyntheticCompress48Slot);
+  int32_t compress48_step = INT32_MAX;
+  if (compiled_compress48 != nullptr) {
+    const ClipScan scan = scan_clip(
+        synthetic_type, *compiled_compress48, stations);
+    compress48_step = station_step_max_mm(
+        scan, 2 * middle_region_key - 1,
+        2 * middle_region_key + 1).mm;
+  }
+  const bool seam_context_exact = generic_seam_step <= 256 &&
+                                  authored_middle_differences > 0 &&
+                                  authored_middle_exact &&
+                                  std::abs(middle_region_entry -
+                                           zixx::kSpringMiddleEntryProfile) <= 1 &&
+                                  compress48_step <=
+                                      zixx::kJumpMaxStationStepMm;
+  std::printf("SPRING scalar seam 279/280/281: max generic heading step %d, "
+              "authored table differences %d, default exact=%d; "
+              "compress-48 reaches %d at key %d, compiled step %d mm\n",
+              generic_seam_step, authored_middle_differences,
+              authored_middle_exact ? 1 : 0, middle_region_entry,
+              middle_region_key, compress48_step);
+  require(seam_context_exact,
+          "generic spring scalar route snapped to the key-context middle table");
 
   zc::PresentationMidpointAuthorship dummy_owned;
   const zc::Clip dummy_source = zixx::build_attack_dummy(&dummy_owned);
@@ -1937,7 +2437,9 @@ int main() {
   const zc::Clip* compiled_compression =
       clip_for_slot(zixx::kSlotAtkCompress);
   zc::Clip generic_compression = zixx::slice_clip(
-      local_source, zixx::kSlotAtkCompress, 0, 17);
+      local_source, zixx::kSlotAtkCompress,
+      zixx::kAtkCompressSliceFirstKey,
+      zixx::kAtkCompressSliceLastKey);
   zc::bake_presentation_midpoints(generic_compression, zixx::kBoneCount);
   const size_t compression_key =
       static_cast<size_t>(zixx::kSpringEntryOwnedMidpointKey);
