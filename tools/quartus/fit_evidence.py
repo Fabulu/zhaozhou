@@ -1,39 +1,60 @@
 #!/usr/bin/env python3
 """Build the fit-evidence bundle the 110-115 MHz spec section 3.1 requires.
 
-The spec lists what every fit MUST archive, and four of those items were not
-being produced:
+The spec lists what every fit MUST archive:
 
     path startpoint-type histogram
     M10K-launched path list
     seed and Quartus version
     source and elaborated-instance manifest
 
-All four are produced now. The last two are provenance rather than analysis,
-and they exist because a number without the RTL that produced it is not
-evidence -- round 7's 66.78 MHz only became a usable lesson once it could be
-tied to the exact source that inferred twelve DSPs.
-
-The first two matter most, and they are the systematic form of a finding that
-was made by hand twice. Rounds 3 and 6 both recovered time by removing a
-RAM-launched combinational path, and the reason is in spec section 2.2: an
-M10K's register sits about 2 ns deeper inside the block than a fabric flop, so
-a path that LAUNCHES at a RAM output pays that before any logic runs. Counting
-those paths by hand is how they get missed.
-
     python3 tools/quartus/fit_evidence.py <characterization-dir> <out-dir>
 
 Reads `setup_paths.rpt` and writes:
 
-    startpoint_types.txt   histogram by launch-register kind
-    m10k_launched.txt      every worst-100 path launching at an M10K
+    startpoint_types.txt   histogram by launch-register PHYSICAL resource
+    m10k_launched.txt      every path launching at an M10K
+    dsp_launched.txt       every path launching at a DSP output register
     owners.txt             destination-block histogram
-    manifest.txt           tool version, seed, device and a hash of every RTL
-                           source at fit time, so the number is reproducible
+    manifest.txt           tool version, seed, device, hash of every RTL source
     evidence.json          the same, machine-readable
 
-Exit 0 always unless the report is unreadable: this is evidence collection, not
-a gate. A gate that refuses to record is worse than no gate.
+--------------------------------------------------------------------------
+CLASSIFY BY THE `Location` COLUMN, NEVER BY THE REGISTER'S NAME.
+
+The first version matched the logical node name for substrings like `~mac` or
+`DSP_X`, and reported for both round 9 and round 10:
+
+    startpoints: fabric_ff=200
+
+Both numbers in that line are wrong, and bro caught it.
+
+WRONG CLASSIFICATION. Quartus packs `cross_r` into the output register of the
+DSP that feeds it, so its launch is a DSP register carrying a DSP's
+clock-to-out. The summary node name is merely `cross_r[47]` and carries no
+hint of that. The detail says it plainly:
+
+    6.394 ; 0.000 ; uTco ; DSP_X20_Y45_N0     ; ...u_edgewalk|cross_r
+    7.099 ; 0.705 ; CELL ; DSP_X20_Y45_N0     ; ...Mult1~mac|resulta[47]
+    8.076 ; 0.977 ; IC   ; LABCELL_X23_Y45_N54; ...cxf[11]~4|datac
+
+Round 10's true split is 52 fabric FF and 48 DSP, and those 48 are exactly the
+`cross_r -> cross_r` paths. Inferring a physical property from a logical name
+is the same error as deriving a 3D radius from a 2D drawing: the name is a
+projection of the placement, not the placement.
+
+WRONG COUNT. `^; -` also matched each path block's own `; Slack ; -1.563` row,
+so 100 paths were counted as 200. The report states its own total in the
+header -- "Found 100 setup paths" -- and that is now asserted against.
+
+Exactly one `uTco` row per path block IS the launch register, and its
+`Location` is physical fact from the fitter. That is what gets parsed.
+--------------------------------------------------------------------------
+
+Exit 0 unless the report is unreadable or self-inconsistent. This is evidence
+collection, not a gate -- but it FAILS LOUDLY on a parse mismatch, because an
+empty M10K list is the GOAL state and a silent parse failure looks identical
+to success.
 """
 import hashlib
 import io
@@ -42,21 +63,28 @@ import os
 import re
 import sys
 
-# A path's launch node tells you what KIND of register it started at, and the
-# kinds have very different clock-to-out costs on this device.
-KINDS = [
-    ("m10k",    re.compile(r"altsyncram|ram_block", re.I)),
-    ("dsp",     re.compile(r"~mac|DSP_X", re.I)),
-    ("mlab",    re.compile(r"MLABCELL|\bmlab\b", re.I)),
-    ("io",      re.compile(r"~padout|~IO_|IOIBUF|IOOBUF", re.I)),
+# Physical resource, from the fitter's own Location column. A Cyclone V launch
+# register lives in exactly one of these.
+LOCATION_KIND = [
+    ("m10k",      re.compile(r"^M10K", re.I)),
+    ("dsp",       re.compile(r"^DSP", re.I)),
+    ("mlab",      re.compile(r"^MLABCELL", re.I)),
+    ("io",        re.compile(r"^(IOIBUF|IOOBUF|DDIO|PLL)", re.I)),
+    ("fabric_ff", re.compile(r"^(FF|LABCELL)", re.I)),
 ]
 
+PATH_RE  = re.compile(r"^Path #(\d+): Setup slack is (-?[\d.]+)")
+FROM_RE  = re.compile(r"^;\s*From Node\s*;\s*(.+?)\s*;")
+TO_RE    = re.compile(r"^;\s*To Node\s*;\s*(.+?)\s*;")
+UTCO_RE  = re.compile(r"^;[^;]*;[^;]*;[^;]*;\s*uTco\s*;[^;]*;\s*(\S+)\s*;\s*(.+?)\s*;?\s*$")
+TOTAL_RE = re.compile(r"Found (\d+) setup paths")
 
-def classify(node):
-    for name, rx in KINDS:
-        if rx.search(node):
+
+def kind_of(location):
+    for name, rx in LOCATION_KIND:
+        if rx.match(location):
             return name
-    return "fabric_ff"
+    return "other:" + location.split("_")[0]
 
 
 def block_of(node):
@@ -64,12 +92,42 @@ def block_of(node):
     return m[-1] if m else "?"
 
 
+def parse_paths(text):
+    """One record per `Path #N` block, with the PHYSICAL launch resource."""
+    paths, cur = [], None
+    for line in text.splitlines():
+        m = PATH_RE.match(line)
+        if m:
+            if cur:
+                paths.append(cur)
+            cur = {"n": int(m.group(1)), "slack": float(m.group(2)),
+                   "from": "?", "to": "?", "loc": "", "launch": ""}
+            continue
+        if cur is None:
+            continue
+        m = FROM_RE.match(line)
+        if m and cur["from"] == "?":
+            cur["from"] = m.group(1)
+            continue
+        m = TO_RE.match(line)
+        if m and cur["to"] == "?":
+            cur["to"] = m.group(1)
+            continue
+        if not cur["loc"]:
+            m = UTCO_RE.match(line)
+            if m:
+                cur["loc"], cur["launch"] = m.group(1), m.group(2)
+    if cur:
+        paths.append(cur)
+    return paths
+
+
 def provenance(chdir, repo):
     """Tool version, seed, device and a hash per RTL source (spec 3.1).
 
-    The commit alone is not enough: a fit can be launched from a dirty tree, and
-    then the number belongs to sources no commit records. Hashing the actual
-    files is the only form of this that cannot lie.
+    The commit alone is not enough: a fit can be launched from a dirty tree,
+    and then the number belongs to sources no commit records. Hashing the
+    actual files is the only form of this that cannot lie.
     """
     p = {}
     try:
@@ -119,56 +177,73 @@ def main(argv):
         sys.stderr.write("zhao: cannot read %s: %s\n" % (src, e))
         return 2
 
-    rows = []
-    for line in text.splitlines():
-        if not line.startswith("; -") and not line.startswith("; 0"):
-            continue
-        parts = [p.strip() for p in line.split(" ; ")]
-        if len(parts) < 3:
-            continue
-        try:
-            slack = float(parts[0].lstrip("; ").strip())
-        except ValueError:
-            continue
-        rows.append({"slack": slack, "from": parts[1], "to": parts[2]})
-
-    if not rows:
-        sys.stderr.write("zhao: no summary rows parsed from %s -- the report "
+    paths = parse_paths(text)
+    if not paths:
+        sys.stderr.write("zhao: no path blocks parsed from %s -- the report "
                          "format may have changed, and a silent empty bundle "
                          "would look like a clean design\n" % src)
         return 2
 
-    starts, owners, m10k = {}, {}, []
-    for r in rows:
-        k = classify(r["from"])
-        starts[k] = starts.get(k, 0) + 1
-        b = block_of(r["to"])
+    # The report states its own total. Assert against it: the previous version
+    # silently counted 100 paths as 200 and nothing noticed.
+    m = TOTAL_RE.search(text)
+    if m and int(m.group(1)) != len(paths):
+        sys.stderr.write("zhao: report says %s setup paths, parsed %d -- "
+                         "refusing to write a bundle that miscounts\n"
+                         % (m.group(1), len(paths)))
+        return 2
+
+    unlocated = [p for p in paths if not p["loc"]]
+    if unlocated:
+        sys.stderr.write("zhao: %d of %d paths have no uTco launch row; the "
+                         "report needs `-detail full_path`\n"
+                         % (len(unlocated), len(paths)))
+        return 2
+
+    starts, owners = {}, {}
+    for p in paths:
+        p["kind"] = kind_of(p["loc"])
+        starts[p["kind"]] = starts.get(p["kind"], 0) + 1
+        b = block_of(p["to"])
         owners[b] = owners.get(b, 0) + 1
-        if k == "m10k":
-            m10k.append(r)
+
+    m10k = [p for p in paths if p["kind"] == "m10k"]
+    dsp = [p for p in paths if p["kind"] == "dsp"]
+    worst = min(p["slack"] for p in paths)
 
     def dump(name, lines):
         io.open(os.path.join(out, name), "w", encoding="utf-8",
                 newline="\n").write("\n".join(lines) + "\n")
 
+    def listing(head, rows):
+        return (head + ["# count: %d of %d" % (len(rows), len(paths)), ""] +
+                ["%8.3f  %-22s %s" % (r["slack"], r["loc"], r["launch"])
+                 for r in rows[:40]])
+
     dump("startpoint_types.txt",
-         ["# worst-%d setup paths by LAUNCH register kind" % len(rows),
-          "# spec 2.2: an M10K launch pays ~2 ns of clock-to-out that a",
-          "# fabric flop does not, so this histogram is the first thing to",
-          "# read after the Fmax.", ""] +
+         ["# worst-%d setup paths by launch-register PHYSICAL resource," % len(paths),
+          "# read from the fitter's own Location column -- NOT from the node",
+          "# name, which does not say where Quartus put the register.",
+          "#",
+          "# spec 2.2: an M10K launch pays ~2 ns of clock-to-out a fabric flop",
+          "# does not, and a DSP-packed launch pays its own. Read this right",
+          "# after the Fmax.", ""] +
          ["%-12s %4d" % (k, n) for k, n in sorted(starts.items(), key=lambda x: -x[1])])
 
     dump("owners.txt",
-         ["# worst-%d setup paths by DESTINATION block" % len(rows), ""] +
+         ["# worst-%d setup paths by DESTINATION block" % len(paths), ""] +
          ["%-28s %4d" % (b, n) for b, n in sorted(owners.items(), key=lambda x: -x[1])])
 
     dump("m10k_launched.txt",
-         ["# every worst-path launching at an M10K output.",
-          "# EMPTY IS THE GOAL. Rounds 3 and 6 each recovered time by removing",
-          "# one of these; if this file is long, that is the next lever.",
-          "# count: %d of %d" % (len(m10k), len(rows)), ""] +
-         ["%8.3f  %s\n          -> %s" % (r["slack"], r["from"], r["to"])
-          for r in m10k[:40]])
+         listing(["# paths launching at an M10K output.",
+                  "# EMPTY IS THE GOAL. Rounds 3 and 6 each recovered time by",
+                  "# removing one; a long list here is the next lever."], m10k))
+
+    dump("dsp_launched.txt",
+         listing(["# paths launching at a DSP output register.",
+                  "# Quartus packs a register into the DSP that feeds it, so",
+                  "# these do NOT look like DSPs by name -- which is exactly how",
+                  "# the first version of this tool missed all 48 of them."], dsp))
 
     repo = os.path.abspath(os.path.join(argv[1], os.pardir, os.pardir))
     prov = provenance(argv[1], repo)
@@ -187,11 +262,12 @@ def main(argv):
 
     io.open(os.path.join(out, "evidence.json"), "w", encoding="utf-8",
             newline="\n").write(json.dumps(
-                {"paths": len(rows),
-                 "worst_slack_ns": min(r["slack"] for r in rows),
+                {"paths": len(paths),
+                 "worst_slack_ns": worst,
                  "startpoint_types": starts,
                  "owners": owners,
                  "m10k_launched": len(m10k),
+                 "dsp_launched": len(dsp),
                  "quartus": prov.get("quartus"),
                  "device": prov.get("device"),
                  "seed": prov.get("seed"),
@@ -199,10 +275,10 @@ def main(argv):
                  "sources": dict((f, h) for f, h in prov["sources"])},
                 indent=2) + "\n")
 
-    print("paths %d   worst %.3f ns" % (len(rows), min(r["slack"] for r in rows)))
+    print("paths %d   worst %.3f ns" % (len(paths), worst))
     print("startpoints: " + ", ".join("%s=%d" % kv for kv in
                                       sorted(starts.items(), key=lambda x: -x[1])))
-    print("M10K-launched: %d of %d" % (len(m10k), len(rows)))
+    print("M10K-launched: %d   DSP-launched: %d" % (len(m10k), len(dsp)))
     print("quartus %s  device %s  seed %s  sources %d"
           % (prov.get("quartus", "?"), prov.get("device", "?"),
              prov.get("seed", "?"), len(prov["sources"])))
