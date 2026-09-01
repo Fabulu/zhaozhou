@@ -631,3 +631,49 @@ committed evidence stays overwritten by a contaminated partial run:
 
     git checkout -- reports/characterization reports/synthesis reports/timing
     rm -rf fpga/quartus/shell_fit/output_files fpga/quartus/shell_fit/db
+
+## The ~40 minutes before elaboration is the HEAD snapshot, not a hang
+
+Measured 2026-09-02, after twice suspecting a stalled fit.
+
+`run_shell_fit.ps1` guarantees the fit builds from committed HEAD rather than
+the working tree, by `git archive --format=zip HEAD` into a temp workspace and
+extracting it. That is the right guarantee -- a fit from a dirty tree produces a
+number belonging to sources no commit records -- but it is not free:
+
+    ~250 MB, ~3300 files extracted per run
+    repo pack is only 81.6 MiB, so the ZIP is not the cost
+    file-by-file creation on Windows (AV scanning each) is
+
+The script already replaced `Expand-Archive` with `System.IO.Compression.ZipFile`
+for this reason; its own comment says the cmdlet "takes tens of minutes on a tree
+this size". The remaining cost is the file writes themselves.
+
+**So a fit showing only the two parity PASS lines, with a live wrapper and no
+`quartus*` child, is NORMAL for the first ~40 minutes.** Check the workspace is
+growing before concluding anything:
+
+    Get-ChildItem $env:TEMP -Filter "zhao-shell-fit-*" -Directory |
+      Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+A recent `LastWriteTime` and a rising file count is a healthy extraction.
+
+### Stale workspaces accumulate when a fit is killed
+
+The cleanup is in a `finally`, so killing the wrapper skips it. Thirteen dead
+workspaces had accumulated -- 1.43 GB. Sweep them when a run is killed, keeping
+only the newest if one is live.
+
+### Not changing this mid-sequence, deliberately
+
+The obvious optimisation is to archive only the paths the fit reads (`fpga/`,
+`tests/CMakeLists.txt`, `tools/quartus/`) instead of the whole tree, which would
+cut the snapshot to a few MB.
+
+It is NOT being done during an active comparison sequence. Rounds 1-14 all used
+the same apparatus, and swapping the snapshot mechanism between rounds would put
+a methodology change inside a series whose whole value is that its numbers are
+comparable. A broken or subtly different fit also costs an hour to discover,
+against the ~40 minutes it saves. Do it between passes, then re-fit one
+unchanged commit to confirm the number is identical before trusting the series
+across the change.
