@@ -1,7 +1,7 @@
 # Task Log: RUN-20260831-1956 - Zixxtrixx final explicit whole-S animation candidate
 
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Closed: isolated implementation candidate accepted and pushed; parent owns review/integration/publication
+**Status:** Independent review rejected candidate; bounded correction active for compression provenance, two-stage spring read and retimed-plan safety
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/
 
 ---
@@ -97,6 +97,23 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 - Looked at all 161 frames of both clips under `ZIXX_EXP=celmain` / `ZIXX_LIGHT=diagonal-cool-cross`, then compared every frame 112–142 against the untouched baseline at native resolution. The final descent accelerates coherently into real low-S contact, the impact has no pop, recovery remains connected while opening, and one-/three-turn wheels stay visually distinct.
 - Final all-target direct build recompiled and linked all four native executables from current sources. No complete 22-subject bank, integration, archive, live-site media edit, deployment or publication was performed.
 
+### 2026-09-01 - Independent review rejection received; bounded correction resumed
+
+- Re-read durable Owner Direction 19 and the complete current `SPEC_v1.md` / `TASK_LOG.md` before editing. The reviewed feature heads are zhaozhou `7fb06fb571bb7f77af67b08d5fc31be47fad6888` and Upheaval `b1d3cd6dd3947cc674212afd8fdcd52211a54c96`.
+- Blocker 1: compiled local compression slot 10 receives only generic interpolation because midpoint provenance/remapping is applied to the release slice but not the compression slice. The critical authored key-4.5 whole pose therefore disappears in the actual compiled consumer, and the committed probe does not inspect it.
+- Blocker 2: the reviewed every-sample sheets retain too much upright hook/rear rail through key 4.5, concentrate conversion into 4.5→5, and make key 6 already terrain-hugging. The 6→12 phrase reads as modest lowering rather than distinct enlarged assembly followed by drastic whole-body down/back collapse. At most three focused authored-by-eye rungs are authorized; no procedural slope/gain iteration.
+- Blocker 3: midpoint authorship currently activates for any plan with `release_keys == 4`, even though its helper owns the default key-4 entry midpoint and pre-lift timeline through key 21 while integer motion uses that shared route only for exact default `12/6/4` phase durations. Retimed plans can therefore combine unrelated integer and midpoint timelines.
+- Frozen through this correction: accepted programmable landings and their scoped full/micro gates, support/contact/intersection/station protections, consumer parity, model, pigments, lighting and unrelated animation.
+
+### 2026-09-01 - Compression provenance and retimed-plan safety corrected
+
+- Added the missing per-channel ownership remap for compiled compression slot 10 beside the existing release-slice remap. The source mask now owns exactly key 4.5 quaternion/deformation data in slot-local coordinates.
+- Replaced the divergent timing conditions with one exact default `12/6/4` predicate for each programmable plan type. Integer spring sampling and authored midpoint/root generation now take the shared hard-coded route together; a retimed plan that merely keeps four release keys stays on generic interpolation.
+- Extended the committed probe to inspect compiled slot 10 itself. Its key-4.5 quaternion, root and deformation arrays exactly equal the authored local source; regenerating without provenance changes 20 quaternions, proving the check would catch the reviewed loss.
+- Added focused four-release-key retimed attack and jump cases. Both reject default-timeline authorship and leave generated midpoint arrays to the compiler.
+- Direct-built the probe and ran the complete suite. Compression source remapping, compiled retention and retimed safety all pass; the prior full/micro contact, intersection, station, release parity and accepted programmable-landing gates remain green. Evidence: `evidence/review-correction-correctness/zixx-probe.txt`.
+- No art control, landing, model, pigment, light or unrelated animation changed in this milestone.
+
 ---
 
 ## Commands and Results
@@ -122,6 +139,8 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 | Landing visual acceptance | celmain/Cool Cross slots 46/47, `rgb_contact_sheet.py`, native baseline/final frames 112–142 | 161 frames per clip reviewed; coherent final descent, planted low-S impact, connected recovery, no visible pop |
 | Final direct rebuild | `tools/reel/build-direct.sh --output <final-lane-local> all` | all four current native executables rebuilt directly; no CMake/Ninja/Verilator/Sacengine |
 | Final mesh validation | final `zixx-meshcheck.exe > evidence/secondary-landing-final/zixx-meshcheck.txt` | PASS, exit 0 |
+| Review-correction probe build | `tools/reel/build-direct.sh --output <final-lane-local> probe` | linked current enhanced probe directly; no CMake/Ninja/Verilator/Sacengine |
+| Compression/retiming proof | `zixx-probe.exe > evidence/review-correction-correctness/zixx-probe.txt` | **PASS:** slot-10 key 4.5 exact in compiled arrays, 20-quaternion generic discriminator, retimed attack/jump safety, all preserved gates green |
 
 ---
 

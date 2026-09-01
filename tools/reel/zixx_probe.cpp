@@ -1757,10 +1757,71 @@ int main() {
 
   zc::PresentationMidpointAuthorship local_owned;
   const zc::Clip local_source = zixx::build_attack(true, &local_owned);
+  const zc::PresentationMidpointAuthorship compression_owned =
+      zixx::slice_midpoint_authorship(
+          local_owned, zixx::kSlotAtkCompress, 0, 17);
+  bool compression_ownership_exact =
+      compression_owned.slot_id == zixx::kSlotAtkCompress &&
+      compression_owned.channels.size() == 18;
+  int compression_owned_segments = 0;
+  for (size_t key = 0; key < compression_owned.channels.size(); ++key) {
+    const uint8_t expected =
+        key == static_cast<size_t>(zixx::kSpringEntryOwnedMidpointKey)
+            ? kOwnedQuatsDeform
+            : 0;
+    if (compression_owned.channels[key] != expected)
+      compression_ownership_exact = false;
+    if (compression_owned.channels[key] != 0) ++compression_owned_segments;
+  }
+  std::printf("MIDPOINT provenance compression slice: %d owned segments, "
+              "key-4.5 quats/deform exact=%d\n",
+              compression_owned_segments,
+              compression_ownership_exact ? 1 : 0);
+  require(compression_ownership_exact && compression_owned_segments == 1,
+          "compression midpoint provenance did not remap into slot 10");
+
   const zc::PresentationMidpointAuthorship release_owned =
       zixx::slice_midpoint_authorship(
           local_owned, zixx::kSlotAtkRelease, 17, 29);
   check_midpoint_authorship("release slice", release_owned, 1, false);
+
+  // The explicit controls name the default 12/6/4 timeline. A plan that merely
+  // retains four release keys must stay on generic interpolation rather than
+  // inheriting default key 4.5/release/root authorship at wrong phase locations.
+  zc::AttackPlan retimed_attack =
+      zixx::zixx_variant_plan(zixx::kSlotAtkDummy);
+  retimed_attack.compress_keys = zixx::kSaltoCompressEndKey - 2;
+  zc::PresentationMidpointAuthorship retimed_attack_owned;
+  const zc::Clip retimed_attack_source = zixx::build_attack_variant(
+      zixx::kSlotAtkDummy, retimed_attack, false, &retimed_attack_owned);
+  zixx::JumpPlan retimed_jump =
+      zixx::zixx_jump_plan(zixx::kSlotJumpOne, 1);
+  retimed_jump.compress_hold_keys += 1;
+  zc::PresentationMidpointAuthorship retimed_jump_owned;
+  const zc::Clip retimed_jump_source =
+      zixx::build_jump(retimed_jump, &retimed_jump_owned);
+  const auto has_owned_channel = [](
+                                     const zc::PresentationMidpointAuthorship& a) {
+    for (uint8_t channels : a.channels)
+      if (channels != 0) return true;
+    return false;
+  };
+  const bool retimed_attack_safe =
+      !zixx::uses_default_shared_spring_timing(retimed_attack) &&
+      !has_owned_channel(retimed_attack_owned) &&
+      retimed_attack_source.mid_quats.empty() &&
+      retimed_attack_source.mid_root.empty() &&
+      retimed_attack_source.mid_deform.empty();
+  const bool retimed_jump_safe =
+      !zixx::uses_default_shared_spring_timing(retimed_jump) &&
+      !has_owned_channel(retimed_jump_owned) &&
+      retimed_jump_source.mid_quats.empty() &&
+      retimed_jump_source.mid_root.empty() &&
+      retimed_jump_source.mid_deform.empty();
+  std::printf("MIDPOINT retimed four-release safety: attack=%d jump=%d\n",
+              retimed_attack_safe ? 1 : 0, retimed_jump_safe ? 1 : 0);
+  require(retimed_attack_safe && retimed_jump_safe,
+          "retimed four-release plan received default-timeline midpoint authorship");
 
   zc::PresentationMidpointAuthorship dummy_owned;
   const zc::Clip dummy_source = zixx::build_attack_dummy(&dummy_owned);
@@ -1841,6 +1902,75 @@ int main() {
       if (c.slot_id == slot) return &c;
     return nullptr;
   };
+
+  // Probe the compiled vocabulary consumer, not only its pre-compile source.
+  // Without slot-10 provenance compile_creature legitimately regenerates this
+  // sample and erases the authored key-4.5 bridge while all source checks pass.
+  const zc::Clip* compiled_compression =
+      clip_for_slot(zixx::kSlotAtkCompress);
+  zc::Clip generic_compression = zixx::slice_clip(
+      local_source, zixx::kSlotAtkCompress, 0, 17);
+  zc::bake_presentation_midpoints(generic_compression, zixx::kBoneCount);
+  const size_t compression_key =
+      static_cast<size_t>(zixx::kSpringEntryOwnedMidpointKey);
+  const size_t source_q = compression_key * zixx::kBoneCount;
+  bool compiled_quats_exact =
+      compiled_compression != nullptr &&
+      compiled_compression->mid_quats.size() >= source_q + zixx::kBoneCount &&
+      local_source.mid_quats.size() >= source_q + zixx::kBoneCount;
+  int generic_quat_diffs = 0;
+  if (compiled_quats_exact) {
+    for (int bone = 0; bone < zixx::kBoneCount; ++bone) {
+      if (std::memcmp(&compiled_compression->mid_quats[source_q + bone],
+                      &local_source.mid_quats[source_q + bone],
+                      sizeof(zc::quat16)) != 0)
+        compiled_quats_exact = false;
+      if (std::memcmp(&generic_compression.mid_quats[source_q + bone],
+                      &local_source.mid_quats[source_q + bone],
+                      sizeof(zc::quat16)) != 0)
+        ++generic_quat_diffs;
+    }
+  }
+  const size_t source_root = compression_key * 3;
+  const bool compiled_root_exact =
+      compiled_compression != nullptr &&
+      compiled_compression->mid_root.size() >= source_root + 3 &&
+      local_source.mid_root.size() >= source_root + 3 &&
+      std::memcmp(&compiled_compression->mid_root[source_root],
+                  &local_source.mid_root[source_root],
+                  3 * sizeof(int32_t)) == 0;
+  const bool generic_root_differs =
+      generic_compression.mid_root.size() >= source_root + 3 &&
+      local_source.mid_root.size() >= source_root + 3 &&
+      std::memcmp(&generic_compression.mid_root[source_root],
+                  &local_source.mid_root[source_root],
+                  3 * sizeof(int32_t)) != 0;
+  const bool compiled_deform_exact =
+      compiled_compression != nullptr &&
+      compiled_compression->mid_deform.size() > compression_key &&
+      local_source.mid_deform.size() > compression_key &&
+      compiled_compression->mid_deform[compression_key].flatten ==
+          local_source.mid_deform[compression_key].flatten &&
+      compiled_compression->mid_deform[compression_key].spread ==
+          local_source.mid_deform[compression_key].spread;
+  const bool generic_deform_differs =
+      generic_compression.mid_deform.size() > compression_key &&
+      local_source.mid_deform.size() > compression_key &&
+      (generic_compression.mid_deform[compression_key].flatten !=
+           local_source.mid_deform[compression_key].flatten ||
+       generic_compression.mid_deform[compression_key].spread !=
+           local_source.mid_deform[compression_key].spread);
+  std::printf("MIDPOINT compiled compression key 4.5: "
+              "quats/root/deform exact=%d/%d/%d, generic differs "
+              "quats/root/deform=%d/%d/%d\n",
+              compiled_quats_exact ? 1 : 0, compiled_root_exact ? 1 : 0,
+              compiled_deform_exact ? 1 : 0, generic_quat_diffs,
+              generic_root_differs ? 1 : 0,
+              generic_deform_differs ? 1 : 0);
+  require(compiled_quats_exact && compiled_root_exact &&
+              compiled_deform_exact && generic_quat_diffs > 0,
+          "compiled compression slot lost authored key-4.5 midpoint data");
+
   const zc::Clip* release_reference = clip_for_slot(3);
   bool release_parity = release_reference != nullptr;
   for (const ReleaseConsumer& consumer : release_consumers) {

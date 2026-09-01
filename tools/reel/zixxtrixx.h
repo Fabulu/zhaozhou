@@ -2829,6 +2829,16 @@ inline zc::AttackPlan zixx_plan_attack(int32_t tgt_x_mm, int32_t tgt_y_mm,
   return p;
 }
 
+// The complete timeline is part of the authored spring vocabulary. Four release
+// keys alone are not enough: the midpoint controls below name default-timeline
+// locations (including key 4.5), so a retimed plan must use its generic route.
+inline bool uses_default_shared_spring_timing(const zc::AttackPlan& p) {
+  return p.compress_keys == kSaltoCompressEndKey &&
+         p.compress_hold_keys ==
+             kSaltoCompressHoldEndKey - kSaltoCompressEndKey &&
+         p.release_keys == kSpringReleaseMidpointCount;
+}
+
 // Planned variants retain AttackPlan's existing compact record: its
 // `compress_keys` interval is explicitly partitioned into full-tail entry first
 // and squash second. This avoids a parallel plan format while giving every
@@ -2903,10 +2913,7 @@ inline int32_t zixx_plan_spring_release_squash(const zc::AttackPlan& p,
 
 inline int32_t zixx_plan_spring_entry_amount(const zc::AttackPlan& p,
                                               int key) {
-  if (p.compress_keys == kSaltoCompressEndKey &&
-      p.compress_hold_keys ==
-          kSaltoCompressHoldEndKey - kSaltoCompressEndKey &&
-      p.release_keys == kSpringReleaseMidpointCount)
+  if (uses_default_shared_spring_timing(p))
     return spring_shared_entry_amount(key);
   const int te = zixx_plan_spring_entry_end(p);
   const int th = p.compress_keys + p.compress_hold_keys;
@@ -2922,10 +2929,7 @@ inline int32_t zixx_plan_spring_entry_amount(const zc::AttackPlan& p,
 }
 
 inline int32_t zixx_plan_spring_amount(const zc::AttackPlan& p, int key) {
-  if (p.compress_keys == kSaltoCompressEndKey &&
-      p.compress_hold_keys ==
-          kSaltoCompressHoldEndKey - kSaltoCompressEndKey &&
-      p.release_keys == kSpringReleaseMidpointCount)
+  if (uses_default_shared_spring_timing(p))
     return spring_shared_squash_amount(key);
   const int te = zixx_plan_spring_entry_end(p);
   const int tc = p.compress_keys;
@@ -6356,7 +6360,7 @@ inline zc::Clip build_attack_variant(
   // event: the strike lands at t3 (collision verdict in the sim; here the
   // baked showcase's own moment)
   c.events = {{static_cast<uint16_t>(t3), zc::kEvAttack, air_hit_outcome ? uint8_t{1} : uint8_t{0}}};
-  if (p.release_keys == kSpringReleaseMidpointCount)
+  if (uses_default_shared_spring_timing(p))
     author_shared_spring_release_midpoints(
         c, phase.hold_end, kBladeSplay / 5, true,
         midpoint_authorship);
@@ -6534,6 +6538,13 @@ inline JumpPlan zixx_jump_plan(uint16_t slot, int32_t count) {
   return p;
 }
 
+inline bool uses_default_shared_spring_timing(const JumpPlan& p) {
+  return p.compress_keys == kSaltoCompressEndKey &&
+         p.compress_hold_keys ==
+             kSaltoCompressHoldEndKey - kSaltoCompressEndKey &&
+         p.release_keys == kSpringReleaseMidpointCount;
+}
+
 struct JumpPhases {
   int entry_end = 0;
   int compress_end = 0;
@@ -6584,10 +6595,7 @@ inline JumpMotionSample zixx_jump_motion_sample(const JumpPlan& p, int f) {
   const int launch = phase.launch_key;
   const int land = phase.landing_key;
   JumpMotionSample m;
-  if (p.compress_keys == kSaltoCompressEndKey &&
-      p.compress_hold_keys ==
-          kSaltoCompressHoldEndKey - kSaltoCompressEndKey &&
-      p.release_keys == kSpringReleaseMidpointCount && f <= launch) {
+  if (uses_default_shared_spring_timing(p) && f <= launch) {
     // The shared spring is literal vocabulary, not merely similar timing:
     // grounded -> absorb -> assembled -> collapse/hold -> exact reverse.
     m.entry = spring_shared_entry_amount(f);
@@ -6737,7 +6745,7 @@ inline zc::Clip build_jump(
     }
   }
   c.events = {{static_cast<uint16_t>(land), zc::kEvFoot, 4}};
-  if (p.release_keys == kSpringReleaseMidpointCount) {
+  if (uses_default_shared_spring_timing(p)) {
     author_shared_spring_release_midpoints(
         c, phase.hold_end, 0, true, midpoint_authorship);
     // Generic root interpolation cannot keep a bent, changing chain planted:
@@ -7107,6 +7115,8 @@ inline const zc::CreatureType& type() {
       const zc::Clip atk_local = build_attack(true, &local_owned);
       bank.clips.push_back(slice_clip(atk_local, kSlotAtkCompress, 0, 17));
       bank.clips.push_back(slice_clip(atk_local, kSlotAtkRelease, 17, 29));
+      midpoint_authorship.push_back(slice_midpoint_authorship(
+          local_owned, kSlotAtkCompress, 0, 17));
       midpoint_authorship.push_back(slice_midpoint_authorship(
           local_owned, kSlotAtkRelease, 17, 29));
       bank.clips.push_back(duplicate_pose_clip(atk_local, kSlotAtkCoil, 29));
