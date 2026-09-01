@@ -9,6 +9,11 @@ being produced:
     seed and Quartus version
     source and elaborated-instance manifest
 
+All four are produced now. The last two are provenance rather than analysis,
+and they exist because a number without the RTL that produced it is not
+evidence -- round 7's 66.78 MHz only became a usable lesson once it could be
+tied to the exact source that inferred twelve DSPs.
+
 The first two matter most, and they are the systematic form of a finding that
 was made by hand twice. Rounds 3 and 6 both recovered time by removing a
 RAM-launched combinational path, and the reason is in spec section 2.2: an
@@ -23,11 +28,14 @@ Reads `setup_paths.rpt` and writes:
     startpoint_types.txt   histogram by launch-register kind
     m10k_launched.txt      every worst-100 path launching at an M10K
     owners.txt             destination-block histogram
+    manifest.txt           tool version, seed, device and a hash of every RTL
+                           source at fit time, so the number is reproducible
     evidence.json          the same, machine-readable
 
 Exit 0 always unless the report is unreadable: this is evidence collection, not
 a gate. A gate that refuses to record is worse than no gate.
 """
+import hashlib
 import io
 import json
 import os
@@ -54,6 +62,47 @@ def classify(node):
 def block_of(node):
     m = re.findall(r"(zhao_[a-z0-9_]+)", node)
     return m[-1] if m else "?"
+
+
+def provenance(chdir, repo):
+    """Tool version, seed, device and a hash per RTL source (spec 3.1).
+
+    The commit alone is not enough: a fit can be launched from a dirty tree, and
+    then the number belongs to sources no commit records. Hashing the actual
+    files is the only form of this that cannot lie.
+    """
+    p = {}
+    try:
+        head = io.open(os.path.join(chdir, "zhao_shell_fit.sta.rpt"),
+                       encoding="utf-8", errors="replace").read(4096)
+        m = re.search(r"Quartus Prime Version ([^\r\n]+)", head)
+        if m:
+            p["quartus"] = m.group(1).strip()
+    except OSError:
+        pass
+
+    qsf = os.path.join(repo, "fpga", "quartus", "shell_fit", "zhao_shell_fit.qsf")
+    try:
+        for line in io.open(qsf, encoding="utf-8", errors="replace"):
+            m = re.match(r"\s*set_global_assignment\s+-name\s+"
+                         r"(SEED|DEVICE|FAMILY)\s+(.+)", line)
+            if m:
+                p[m.group(1).lower()] = m.group(2).strip().strip('"')
+    except OSError:
+        pass
+
+    srcs = []
+    for root, _, files in os.walk(os.path.join(repo, "fpga", "rtl")):
+        for f in sorted(files):
+            if f.endswith((".sv", ".v", ".svh")):
+                full = os.path.join(root, f)
+                try:
+                    h = hashlib.sha256(io.open(full, "rb").read()).hexdigest()[:16]
+                except OSError:
+                    continue
+                srcs.append((os.path.relpath(full, repo).replace(os.sep, "/"), h))
+    p["sources"] = srcs
+    return p
 
 
 def main(argv):
@@ -121,18 +170,42 @@ def main(argv):
          ["%8.3f  %s\n          -> %s" % (r["slack"], r["from"], r["to"])
           for r in m10k[:40]])
 
+    repo = os.path.abspath(os.path.join(argv[1], os.pardir, os.pardir))
+    prov = provenance(argv[1], repo)
+    dump("manifest.txt",
+         ["# fit provenance (spec 3.1). A number without the RTL that produced",
+          "# it is not evidence.",
+          "",
+          "quartus  %s" % prov.get("quartus", "?"),
+          "family   %s" % prov.get("family", "?"),
+          "device   %s" % prov.get("device", "?"),
+          "seed     %s" % prov.get("seed", "?"),
+          "",
+          "# sha256[:16] of every RTL source in the tree at fit time",
+          ""] +
+         ["%s  %s" % (h, f) for f, h in prov["sources"]])
+
     io.open(os.path.join(out, "evidence.json"), "w", encoding="utf-8",
             newline="\n").write(json.dumps(
                 {"paths": len(rows),
                  "worst_slack_ns": min(r["slack"] for r in rows),
                  "startpoint_types": starts,
                  "owners": owners,
-                 "m10k_launched": len(m10k)}, indent=2) + "\n")
+                 "m10k_launched": len(m10k),
+                 "quartus": prov.get("quartus"),
+                 "device": prov.get("device"),
+                 "seed": prov.get("seed"),
+                 "source_count": len(prov["sources"]),
+                 "sources": dict((f, h) for f, h in prov["sources"])},
+                indent=2) + "\n")
 
     print("paths %d   worst %.3f ns" % (len(rows), min(r["slack"] for r in rows)))
     print("startpoints: " + ", ".join("%s=%d" % kv for kv in
                                       sorted(starts.items(), key=lambda x: -x[1])))
     print("M10K-launched: %d of %d" % (len(m10k), len(rows)))
+    print("quartus %s  device %s  seed %s  sources %d"
+          % (prov.get("quartus", "?"), prov.get("device", "?"),
+             prov.get("seed", "?"), len(prov["sources"])))
     return 0
 
 
