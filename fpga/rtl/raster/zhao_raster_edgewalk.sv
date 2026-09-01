@@ -299,31 +299,22 @@ module zhao_raster_edgewalk (
     for (gi = 0; gi < 16; gi = gi + 1) begin : g_col
       logic signed [ACC_W-1:0] o0, o1, o2, v0, v1, v2;
 
-      // A CONSTANT MULTIPLY, not a shift-add tree.
-      //
-      // Round 4 balanced this from three adder levels to two, and round 6
-      // named what was left: sx1_r -> Add106 (two levels) -> Add112 -> the
-      // fill test, -1.769 ns.
-      //
-      // But `gi` is a genvar -- a compile-time constant -- so `gi * sx` is a
-      // CONSTANT multiply, and the minimal form is usually ONE operation:
-      //
-      //     15*sx = (sx << 4) - sx        <-- column 15, the critical one
-      //     14*sx = (sx << 4) - (sx << 1)
-      //      7*sx = (sx << 3) - sx
-      //
-      // Only 11 and 13 need two. Writing the multiply directly lets the
-      // synthesiser pick that canonical signed-digit form per column instead
-      // of paying a four-term tree everywhere. Column 15 -- the one the fit
-      // keeps naming, because every bit of `gi` is set there -- drops from two
-      // adder levels to one subtract.
-      //
-      // EXACT, not approximate: the old sum was computed in ACC_W and wrapped
-      // mod 2^ACC_W, and so does this product truncated to ACC_W. Same value
-      // for every input, which the differential asserts rather than assumes.
-      assign o0 = ACC_W'($signed({{(ACC_W-5){1'b0}}, gi[4:0]}) * sx0_r);
-      assign o1 = ACC_W'($signed({{(ACC_W-5){1'b0}}, gi[4:0]}) * sx1_r);
-      assign o2 = ACC_W'($signed({{(ACC_W-5){1'b0}}, gi[4:0]}) * sx2_r);
+      // BALANCED, not a linear chain. `a + b + c + d` written flat elaborates
+      // as ((a+b)+c)+d -- three adder levels. Explicit pairing makes it two,
+      // and column 15 is the one the fit named because every bit of `gi` is
+      // set there, so it is the only column that pays all four terms.
+      assign o0 = ((((gi & 1) != 0) ? sx0_r        : ACC_ZERO) +
+                   (((gi & 2) != 0) ? (sx0_r <<< 1) : ACC_ZERO))
+                + ((((gi & 4) != 0) ? (sx0_r <<< 2) : ACC_ZERO) +
+                   (((gi & 8) != 0) ? (sx0_r <<< 3) : ACC_ZERO));
+      assign o1 = ((((gi & 1) != 0) ? sx1_r        : ACC_ZERO) +
+                   (((gi & 2) != 0) ? (sx1_r <<< 1) : ACC_ZERO))
+                + ((((gi & 4) != 0) ? (sx1_r <<< 2) : ACC_ZERO) +
+                   (((gi & 8) != 0) ? (sx1_r <<< 3) : ACC_ZERO));
+      assign o2 = ((((gi & 1) != 0) ? sx2_r        : ACC_ZERO) +
+                   (((gi & 2) != 0) ? (sx2_r <<< 1) : ACC_ZERO))
+                + ((((gi & 4) != 0) ? (sx2_r <<< 2) : ACC_ZERO) +
+                   (((gi & 8) != 0) ? (sx2_r <<< 3) : ACC_ZERO));
 
       assign v0 = e0_r + o0;
       assign v1 = e1_r + o1;
