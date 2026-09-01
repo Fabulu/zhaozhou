@@ -294,9 +294,42 @@ module zhao_raster_earlyz #(
   assign new_pixel  = hiz_qualify && !seen;
   assign round_done = new_pixel && (seen_count_r == 8'd255);
 
+  // ---- the two floor compares run in PARALLEL, not chained -------------
+  // Round 11's fit named this the design's worst path and new top owner,
+  // 36 of 100:
+  //
+  //     state_r[2] -> LessThan1~24/25/28 -> always2~1
+  //                -> LessThan2~10/11/13/25 -> floor_r[15]~0 -> floor_r[13]
+  //
+  // TWO CHAINED 24-BIT COMPARES IN ONE CYCLE. `acc_min_next` came out of the
+  // first (`hiz_depth < acc_min_r`) and went straight into the second
+  // (`acc_min_next > floor_r`) before the same edge -- eight levels of
+  // comparator in series, plus the state decode gating them.
+  //
+  // The second compare does NOT need the first one's result, only its choice.
+  // `acc_min_next` is one of exactly two values, so
+  //
+  //     acc_min_next > floor_r  ==  take_new ? (hiz_depth > floor_r)
+  //                                          : (acc_min_r  > floor_r)
+  //
+  // and BOTH branches read registers and inputs only. All three compares now
+  // start at the same instant and a 1-bit mux picks between two of them: the
+  // depth becomes one compare plus a mux instead of two compares in series.
+  //
+  // CYCLE-EXACT, WHICH THE FIRST ATTEMPT WAS NOT. Splitting the promotion
+  // into its own cycle was tried first and it looked sound -- `floor_r` is a
+  // lower bound and raising it late leaves it a valid one. The reference
+  // disagreed on 8 decisions, because zref::EarlyZ promotes in the SAME cycle
+  // and the very next fragment sees the raised floor. A late floor is safe
+  // for pixels and still WRONG against the oracle, which is the spec. This
+  // form changes no cycle and no decision.
+  logic take_new, gt_new, gt_acc, promote;
   always_comb begin
-    acc_min_next = acc_min_r;
-    if (hiz_qualify && (hiz_depth < acc_min_r)) acc_min_next = hiz_depth;
+    take_new     = hiz_qualify && (hiz_depth < acc_min_r);
+    gt_new       = (hiz_depth > floor_r);
+    gt_acc       = (acc_min_r  > floor_r);
+    promote      = take_new ? gt_new : gt_acc;
+    acc_min_next = take_new ? hiz_depth : acc_min_r;
   end
 
   // ---- sequential --------------------------------------------------------
@@ -347,7 +380,7 @@ module zhao_raster_earlyz #(
         if (round_done) begin
           // Every pixel has taken a depth write of at least `acc_min_next`.
           // The floor never moves backwards: `max`, not assignment.
-          if (acc_min_next > floor_r) floor_r <= acc_min_next;
+          if (promote) floor_r <= acc_min_next;
           acc_mask_r   <= 256'd0;
           acc_min_r    <= 24'hFFFFFF;
           seen_count_r <= 8'd0;
