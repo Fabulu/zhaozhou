@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-shell-fit",
-    "sourceCommit":  "b248b8bb926bbaa4f8e0901c4366bda25d9b7d12",
+    "sourceCommit":  "b3bd69b7f611c8799786a9f39169e64a9b4e84c7",
     "sourceConeParity":  true,
     "sourceFileCount":  45,
     "tool":  {
@@ -20,9 +20,9 @@
                    "timequest":  "success"
                },
     "resources":  {
-                      "logicUtilizationAlms":  12693,
+                      "logicUtilizationAlms":  12707,
                       "combinationalFunctions":  null,
-                      "registers":  14844,
+                      "registers":  14812,
                       "blockMemoryBits":  184256,
                       "ramBlocks":  26,
                       "dspBlocks":  16,
