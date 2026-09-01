@@ -64,3 +64,53 @@ Still open, and still not established as pure datapath:
 round 2 was 1.995 ns — **the same order as the entire remaining violation.**
 Before the next RTL surgery, the clock network deserves one measurement of its
 own.
+
+---
+
+## ADDENDUM — the remaining 2.453 ns is 82 % SKEW, and the skew is M10K silicon
+
+Measured on this fit's worst path, not inferred:
+
+    Data Arrival    18.355
+    Data Required   15.902
+    Slack           -2.453
+      Clock Skew    -2.018      <-- 82 % of the violation
+      Data Delay    10.375      <-- only 0.375 ns over a 10 ns period
+
+**The logic is essentially finished.** Another block surgery on Early-Z would
+attack the 0.375, not the 2.018.
+
+### Where the skew comes from — and it is not the clock tree
+
+| | launch (M10K write-enable reg) | latch (ordinary FF) |
+|---|---|---|
+| `gpu_clk` → CLKCTRL | 2.898 | 0.724 |
+| CLKCTRL cell | 0.298 | 0.272 |
+| route to the register | 2.321 | 1.905 |
+| **register's internal cell** | **2.463** | **0.495** |
+| **total** | **7.980** | **5.962** |
+
+The dominant term is **2.463 vs 0.495**: a RAM's write-enable register sits about
+2 ns deeper inside the M10K than a fabric flip-flop does. **That is silicon.** No
+floorplan, clock constraint or seed changes it.
+
+The 2.898-vs-0.724 difference into CLKCTRL looks alarming and is not — both
+paths cross the same buffer, and Quartus already credits **2.566 ns** back as
+common-path pessimism.
+
+### What this means for the last item
+
+The remaining violation is **structural**: it is the cost of any path that
+launches at an M10K output and lands in fabric inside one cycle.
+
+So Early-Z is **not** a "the 256-bit reduction is too wide" problem, which is how
+`MHZArchitected` frames offender 3. It is a **"this path launches from a RAM
+write-enable"** problem. The remedy is a register between the tile-store output
+and the mask update — the same shape of fix as the FRAGMENT RMW split, which is
+what removed this structure from the fragment path in round 3.
+
+**This also revises an earlier claim in this file, and in round 2's:** "no
+datapath work recovers skew" is wrong as stated. Datapath work that removes a
+RAM-launched path recovers it, because the skew is a property of *that
+structure*, not of the clock distribution. Round 3 already demonstrated this and
+it was not recognised at the time.
