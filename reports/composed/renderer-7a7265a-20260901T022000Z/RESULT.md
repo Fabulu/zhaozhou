@@ -114,3 +114,58 @@ datapath work recovers skew" is wrong as stated. Datapath work that removes a
 RAM-launched path recovers it, because the skew is a property of *that
 structure*, not of the clock distribution. Round 3 already demonstrated this and
 it was not recognised at the time.
+
+---
+
+## A failed attempt, recorded because the failure is the useful part
+
+The round-5 report above named paths 2 and 3 as
+`fragment | s1_addr_r -> earlyz | acc_mask_r` at −2.248 ns. That launch point is
+the **same-address hazard comparator added in the RMW split** — my own addition,
+placed directly on the ready chain feeding 256 mask bits.
+
+**Two attempts to register it off that path both failed, and it is reverted.**
+
+### Attempt 1 — wrong address
+
+Registered `hazard` computed against `s0_addr_r`. I argued it was safe because
+later stages only ever drain, so a stale verdict can only over-stall.
+
+That reasoning was **correct and irrelevant**. The bug was not staleness: on the
+cycle a NEW fragment loaded into s0, the registered verdict belonged to the
+PREVIOUS occupant. A verdict about the wrong fragment, not a conservative
+verdict about the right one. I proved safety for the case I was thinking about
+and never examined the load cycle.
+
+8 of 97 directed, 1 of 9 random, 1 of 74 tile-pipe.
+
+### Attempt 2 — right address, still wrong
+
+Compared against the incoming address at the accept edge and refreshed against
+`s0_addr_r` otherwise. That fixed the tile-pipe cases (74 and 12 green) and
+**still failed 8 of 97 in the fragment's own tests.**
+
+### Reverted, and why that is the right call rather than persistence
+
+* it is **not the worst path** — path 1 is `tilestore -> RESOLVE` at −2.453,
+  these are −2.248, so the whole prize is ~0.2 ns;
+* it is **my own regression**, so reverting restores a state that is measured,
+  not hoped for;
+* two failed attempts on a low-value change is the point to stop, not the point
+  to try a third variation.
+
+The combinational hazard stays. It costs ~0.2 ns on paths that are not
+currently binding.
+
+### The lesson, which is worth more than the 0.2 ns
+
+**"This cannot happen in the real system" is an argument about the CALLER, and
+unit tests are deliberately not the caller.**
+
+I justified the hazard check as unreachable — true, `RASTER.TILE_PIPE` drains
+between triangles. I then used that same fact to reason loosely about
+registering it. But `raster_fragment_random` drives the block **directly** and
+reports **3,232 same-pixel chains**: in the unit tests the hazard fires
+constantly. The gate I had twice described as unrepresentative of production
+traffic is the only thing that exercises this logic at all — and it caught both
+attempts immediately.
