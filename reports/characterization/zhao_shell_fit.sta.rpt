@@ -1,5 +1,5 @@
 TimeQuest Timing Analyzer report for zhao_shell_fit
-Tue Sep 01 05:20:19 2026
+Tue Sep 01 08:20:57 2026
 Quartus Prime Version 17.0.2 Build 602 07/19/2017 SJ Lite Edition
 
 
@@ -106,7 +106,7 @@ agreement for further details.
 ;                            ;             ;
 ; Usage by Processor         ; % Time Used ;
 ;     Processor 1            ; 100.0%      ;
-;     Processor 2            ;  75.7%      ;
+;     Processor 2            ;  75.8%      ;
 +----------------------------+-------------+
 
 
@@ -115,7 +115,7 @@ agreement for further details.
 +--------------------+--------+--------------------------+
 ; SDC File Path      ; Status ; Read at                  ;
 +--------------------+--------+--------------------------+
-; zhao_shell_fit.sdc ; OK     ; Tue Sep 01 05:17:15 2026 ;
+; zhao_shell_fit.sdc ; OK     ; Tue Sep 01 08:17:02 2026 ;
 +--------------------+--------+--------------------------+
 
 
@@ -135,9 +135,9 @@ agreement for further details.
 +------------+-----------------+------------+------+
 ; Fmax       ; Restricted Fmax ; Clock Name ; Note ;
 +------------+-----------------+------------+------+
-; 84.97 MHz  ; 84.97 MHz       ; gpu_clk    ;      ;
-; 100.88 MHz ; 100.88 MHz      ; vid_clk    ;      ;
-; 123.96 MHz ; 123.96 MHz      ; audio_clk  ;      ;
+; 81.0 MHz   ; 81.0 MHz        ; gpu_clk    ;      ;
+; 99.22 MHz  ; 99.22 MHz       ; vid_clk    ;      ;
+; 111.27 MHz ; 111.27 MHz      ; audio_clk  ;      ;
 +------------+-----------------+------------+------+
 This panel reports FMAX for every clock in the design, regardless of the user-specified clock periods.  FMAX is only computed for paths where the source and destination registers or ports are driven by the same clock.  Paths of different clocks, including generated clocks, are ignored.  For paths between a clock and its inversion, FMAX is computed as if the rising and falling edges are scaled along with FMAX, such that the duty cycle (in terms of a percentage) is maintained. Altera recommends that you always use clock constraints and other slack reports for sign-off analysis.
 
@@ -153,9 +153,9 @@ HTML report is unavailable in plain text report export.
 +-----------+--------+-----------------+
 ; Clock     ; Slack  ; End Point TNS   ;
 +-----------+--------+-----------------+
-; gpu_clk   ; -1.769 ; -549.358        ;
-; vid_clk   ; 1.130  ; 0.000           ;
-; audio_clk ; 31.933 ; 0.000           ;
+; gpu_clk   ; -2.345 ; -653.272        ;
+; vid_clk   ; 1.438  ; 0.000           ;
+; audio_clk ; 31.013 ; 0.000           ;
 +-----------+--------+-----------------+
 
 
@@ -164,9 +164,9 @@ HTML report is unavailable in plain text report export.
 +-----------+-------+-----------------+
 ; Clock     ; Slack ; End Point TNS   ;
 +-----------+-------+-----------------+
-; gpu_clk   ; 0.250 ; 0.000           ;
-; vid_clk   ; 0.256 ; 0.000           ;
-; audio_clk ; 0.420 ; 0.000           ;
+; gpu_clk   ; 0.252 ; 0.000           ;
+; vid_clk   ; 0.386 ; 0.000           ;
+; audio_clk ; 0.423 ; 0.000           ;
 +-----------+-------+-----------------+
 
 
@@ -187,9 +187,9 @@ No paths to report.
 +-----------+--------+-------------------------------+
 ; Clock     ; Slack  ; End Point TNS                 ;
 +-----------+--------+-------------------------------+
-; gpu_clk   ; 3.567  ; 0.000                         ;
-; vid_clk   ; 8.620  ; 0.000                         ;
-; audio_clk ; 18.605 ; 0.000                         ;
+; gpu_clk   ; 3.557  ; 0.000                         ;
+; vid_clk   ; 8.597  ; 0.000                         ;
+; audio_clk ; 18.584 ; 0.000                         ;
 +-----------+--------+-------------------------------+
 
 
@@ -205,9 +205,9 @@ Design MTBF is not calculated because the design doesn't meet its timing require
 +------------+-----------------+------------+------+
 ; Fmax       ; Restricted Fmax ; Clock Name ; Note ;
 +------------+-----------------+------------+------+
-; 82.86 MHz  ; 82.86 MHz       ; gpu_clk    ;      ;
-; 107.58 MHz ; 107.58 MHz      ; vid_clk    ;      ;
-; 130.01 MHz ; 130.01 MHz      ; audio_clk  ;      ;
+; 80.61 MHz  ; 80.61 MHz       ; gpu_clk    ;      ;
+; 99.9 MHz   ; 99.9 MHz        ; vid_clk    ;      ;
+; 116.13 MHz ; 116.13 MHz      ; audio_clk  ;      ;
 +------------+-----------------+------------+------+
 This panel reports FMAX for every clock in the design, regardless of the user-specified clock periods.  FMAX is only computed for paths where the source and destination registers or ports are driven by the same clock.  Paths of different clocks, including generated clocks, are ignored.  For paths between a clock and its inversion, FMAX is computed as if the rising and falling edges are scaled along with FMAX, such that the duty cycle (in terms of a percentage) is maintained. Altera recommends that you always use clock constraints and other slack reports for sign-off analysis.
 
@@ -217,9 +217,9 @@ This panel reports FMAX for every clock in the design, regardless of the user-sp
 +-----------+--------+-----------------+
 ; Clock     ; Slack  ; End Point TNS   ;
 +-----------+--------+-----------------+
-; gpu_clk   ; -2.068 ; -656.279        ;
-; vid_clk   ; 1.529  ; 0.000           ;
-; audio_clk ; 32.308 ; 0.000           ;
+; gpu_clk   ; -2.406 ; -743.365        ;
+; vid_clk   ; 1.800  ; 0.000           ;
+; audio_clk ; 31.389 ; 0.000           ;
 +-----------+--------+-----------------+
 
 
@@ -228,9 +228,9 @@ This panel reports FMAX for every clock in the design, regardless of the user-sp
 +-----------+-------+-----------------+
 ; Clock     ; Slack ; End Point TNS   ;
 +-----------+-------+-----------------+
-; gpu_clk   ; 0.114 ; 0.000           ;
-; vid_clk   ; 0.240 ; 0.000           ;
-; audio_clk ; 0.441 ; 0.000           ;
+; gpu_clk   ; 0.079 ; 0.000           ;
+; vid_clk   ; 0.360 ; 0.000           ;
+; audio_clk ; 0.435 ; 0.000           ;
 +-----------+-------+-----------------+
 
 
@@ -252,8 +252,8 @@ No paths to report.
 ; Clock     ; Slack  ; End Point TNS                 ;
 +-----------+--------+-------------------------------+
 ; gpu_clk   ; 3.522  ; 0.000                         ;
-; vid_clk   ; 8.569  ; 0.000                         ;
-; audio_clk ; 18.586 ; 0.000                         ;
+; vid_clk   ; 8.573  ; 0.000                         ;
+; audio_clk ; 18.553 ; 0.000                         ;
 +-----------+--------+-------------------------------+
 
 
@@ -269,9 +269,9 @@ Design MTBF is not calculated because the design doesn't meet its timing require
 +-----------+--------+-----------------+
 ; Clock     ; Slack  ; End Point TNS   ;
 +-----------+--------+-----------------+
-; gpu_clk   ; 3.971  ; 0.000           ;
-; vid_clk   ; 4.587  ; 0.000           ;
-; audio_clk ; 35.278 ; 0.000           ;
+; gpu_clk   ; 3.209  ; 0.000           ;
+; vid_clk   ; 4.902  ; 0.000           ;
+; audio_clk ; 34.738 ; 0.000           ;
 +-----------+--------+-----------------+
 
 
@@ -280,9 +280,9 @@ Design MTBF is not calculated because the design doesn't meet its timing require
 +-----------+-------+-----------------+
 ; Clock     ; Slack ; End Point TNS   ;
 +-----------+-------+-----------------+
-; gpu_clk   ; 0.136 ; 0.000           ;
-; vid_clk   ; 0.139 ; 0.000           ;
-; audio_clk ; 0.184 ; 0.000           ;
+; gpu_clk   ; 0.135 ; 0.000           ;
+; vid_clk   ; 0.181 ; 0.000           ;
+; audio_clk ; 0.186 ; 0.000           ;
 +-----------+-------+-----------------+
 
 
@@ -303,9 +303,9 @@ No paths to report.
 +-----------+--------+-------------------------------+
 ; Clock     ; Slack  ; End Point TNS                 ;
 +-----------+--------+-------------------------------+
-; gpu_clk   ; 3.903  ; 0.000                         ;
-; vid_clk   ; 8.920  ; 0.000                         ;
-; audio_clk ; 18.951 ; 0.000                         ;
+; gpu_clk   ; 3.905  ; 0.000                         ;
+; vid_clk   ; 8.915  ; 0.000                         ;
+; audio_clk ; 18.909 ; 0.000                         ;
 +-----------+--------+-------------------------------+
 
 
@@ -316,7 +316,7 @@ The design MTBF is not calculated because there are no specified synchronizers i
 Number of Synchronizer Chains Found: 341
 Shortest Synchronizer Chain: 2 Registers
 Fraction of Chains for which MTBFs Could Not be Calculated: 1.000
-Worst Case Available Settling Time: 7.848 ns
+Worst Case Available Settling Time: 8.261 ns
 
 
 
@@ -326,9 +326,9 @@ Worst Case Available Settling Time: 7.848 ns
 +-----------+--------+-----------------+
 ; Clock     ; Slack  ; End Point TNS   ;
 +-----------+--------+-----------------+
-; gpu_clk   ; 4.908  ; 0.000           ;
-; vid_clk   ; 5.509  ; 0.000           ;
-; audio_clk ; 36.142 ; 0.000           ;
+; gpu_clk   ; 4.419  ; 0.000           ;
+; vid_clk   ; 5.742  ; 0.000           ;
+; audio_clk ; 35.658 ; 0.000           ;
 +-----------+--------+-----------------+
 
 
@@ -337,9 +337,9 @@ Worst Case Available Settling Time: 7.848 ns
 +-----------+-------+-----------------+
 ; Clock     ; Slack ; End Point TNS   ;
 +-----------+-------+-----------------+
-; gpu_clk   ; 0.063 ; 0.000           ;
-; vid_clk   ; 0.121 ; 0.000           ;
-; audio_clk ; 0.171 ; 0.000           ;
+; gpu_clk   ; 0.111 ; 0.000           ;
+; vid_clk   ; 0.166 ; 0.000           ;
+; audio_clk ; 0.172 ; 0.000           ;
 +-----------+-------+-----------------+
 
 
@@ -360,9 +360,9 @@ No paths to report.
 +-----------+--------+-------------------------------+
 ; Clock     ; Slack  ; End Point TNS                 ;
 +-----------+--------+-------------------------------+
-; gpu_clk   ; 3.902  ; 0.000                         ;
-; vid_clk   ; 8.919  ; 0.000                         ;
-; audio_clk ; 18.947 ; 0.000                         ;
+; gpu_clk   ; 3.904  ; 0.000                         ;
+; vid_clk   ; 8.917  ; 0.000                         ;
+; audio_clk ; 18.911 ; 0.000                         ;
 +-----------+--------+-------------------------------+
 
 
@@ -373,7 +373,7 @@ The design MTBF is not calculated because there are no specified synchronizers i
 Number of Synchronizer Chains Found: 341
 Shortest Synchronizer Chain: 2 Registers
 Fraction of Chains for which MTBFs Could Not be Calculated: 1.000
-Worst Case Available Settling Time: 8.209 ns
+Worst Case Available Settling Time: 8.526 ns
 
 
 
@@ -383,13 +383,13 @@ Worst Case Available Settling Time: 8.209 ns
 +------------------+----------+-------+----------+---------+---------------------+
 ; Clock            ; Setup    ; Hold  ; Recovery ; Removal ; Minimum Pulse Width ;
 +------------------+----------+-------+----------+---------+---------------------+
-; Worst-case Slack ; -2.068   ; 0.063 ; N/A      ; N/A     ; 3.522               ;
-;  audio_clk       ; 31.933   ; 0.171 ; N/A      ; N/A     ; 18.586              ;
-;  gpu_clk         ; -2.068   ; 0.063 ; N/A      ; N/A     ; 3.522               ;
-;  vid_clk         ; 1.130    ; 0.121 ; N/A      ; N/A     ; 8.569               ;
-; Design-wide TNS  ; -656.279 ; 0.0   ; 0.0      ; 0.0     ; 0.0                 ;
+; Worst-case Slack ; -2.406   ; 0.079 ; N/A      ; N/A     ; 3.522               ;
+;  audio_clk       ; 31.013   ; 0.172 ; N/A      ; N/A     ; 18.553              ;
+;  gpu_clk         ; -2.406   ; 0.079 ; N/A      ; N/A     ; 3.522               ;
+;  vid_clk         ; 1.438    ; 0.166 ; N/A      ; N/A     ; 8.573               ;
+; Design-wide TNS  ; -743.365 ; 0.0   ; 0.0      ; 0.0     ; 0.0                 ;
 ;  audio_clk       ; 0.000    ; 0.000 ; N/A      ; N/A     ; 0.000               ;
-;  gpu_clk         ; -656.279 ; 0.000 ; N/A      ; N/A     ; 0.000               ;
+;  gpu_clk         ; -743.365 ; 0.000 ; N/A      ; N/A     ; 0.000               ;
 ;  vid_clk         ; 0.000    ; 0.000 ; N/A      ; N/A     ; 0.000               ;
 +------------------+----------+-------+----------+---------+---------------------+
 
@@ -441,13 +441,13 @@ Worst Case Available Settling Time: 8.209 ns
 +------------+-----------+------------+----------+----------+----------+
 ; From Clock ; To Clock  ; RR Paths   ; FR Paths ; RF Paths ; FF Paths ;
 +------------+-----------+------------+----------+----------+----------+
-; audio_clk  ; audio_clk ; 5539       ; 0        ; 0        ; 0        ;
+; audio_clk  ; audio_clk ; 5025       ; 0        ; 0        ; 0        ;
 ; gpu_clk    ; audio_clk ; false path ; 0        ; 0        ; 0        ;
 ; audio_clk  ; gpu_clk   ; false path ; 0        ; 0        ; 0        ;
-; gpu_clk    ; gpu_clk   ; 75618733   ; 0        ; 0        ; 0        ;
+; gpu_clk    ; gpu_clk   ; 63347202   ; 0        ; 0        ; 0        ;
 ; vid_clk    ; gpu_clk   ; 173        ; 0        ; 0        ; 0        ;
 ; gpu_clk    ; vid_clk   ; 20         ; 0        ; 0        ; 0        ;
-; vid_clk    ; vid_clk   ; 91664      ; 0        ; 0        ; 0        ;
+; vid_clk    ; vid_clk   ; 93511      ; 0        ; 0        ; 0        ;
 +------------+-----------+------------+----------+----------+----------+
 Entries labeled "false path" only account for clock-to-clock false paths and not path-based false paths. As a result, actual path counts may be lower than reported.
 
@@ -457,13 +457,13 @@ Entries labeled "false path" only account for clock-to-clock false paths and not
 +------------+-----------+------------+----------+----------+----------+
 ; From Clock ; To Clock  ; RR Paths   ; FR Paths ; RF Paths ; FF Paths ;
 +------------+-----------+------------+----------+----------+----------+
-; audio_clk  ; audio_clk ; 5539       ; 0        ; 0        ; 0        ;
+; audio_clk  ; audio_clk ; 5025       ; 0        ; 0        ; 0        ;
 ; gpu_clk    ; audio_clk ; false path ; 0        ; 0        ; 0        ;
 ; audio_clk  ; gpu_clk   ; false path ; 0        ; 0        ; 0        ;
-; gpu_clk    ; gpu_clk   ; 75618733   ; 0        ; 0        ; 0        ;
+; gpu_clk    ; gpu_clk   ; 63347202   ; 0        ; 0        ; 0        ;
 ; vid_clk    ; gpu_clk   ; 173        ; 0        ; 0        ; 0        ;
 ; gpu_clk    ; vid_clk   ; 20         ; 0        ; 0        ; 0        ;
-; vid_clk    ; vid_clk   ; 91664      ; 0        ; 0        ; 0        ;
+; vid_clk    ; vid_clk   ; 93511      ; 0        ; 0        ; 0        ;
 +------------+-----------+------------+----------+----------+----------+
 Entries labeled "false path" only account for clock-to-clock false paths and not path-based false paths. As a result, actual path counts may be lower than reported.
 
@@ -488,7 +488,7 @@ No non-DPA dedicated SERDES Receiver circuitry present in device or used in desi
 ; Illegal Clocks                  ; 0     ; 0     ;
 ; Unconstrained Clocks            ; 0     ; 0     ;
 ; Unconstrained Input Ports       ; 1287  ; 1287  ;
-; Unconstrained Input Port Paths  ; 23859 ; 23859 ;
+; Unconstrained Input Port Paths  ; 23902 ; 23902 ;
 ; Unconstrained Output Ports      ; 1556  ; 1556  ;
 ; Unconstrained Output Port Paths ; 5616  ; 5616  ;
 +---------------------------------+-------+-------+
@@ -6243,7 +6243,7 @@ Info: Running Quartus Prime TimeQuest Timing Analyzer
     Info: devices manufactured by Intel and sold by Intel or its 
     Info: authorized distributors.  Please refer to the applicable 
     Info: agreement for further details.
-    Info: Processing started: Tue Sep 01 05:17:03 2026
+    Info: Processing started: Tue Sep 01 08:16:26 2026
 Info: Command: quartus_sta zhao_shell_fit --report_script=report.tcl
 Info: qsta_default_script.tcl version: #1
 Info (20032): Parallel compilation is enabled and will use up to 2 processors
@@ -6257,26 +6257,26 @@ Info: Using custom scripts: report.tcl
 Info: Analyzing Slow 1100mV 100C Model
 Critical Warning (332148): Timing requirements not met
     Info (11105): For recommendations on closing timing, run Report Timing Closure Recommendations in the TimeQuest Timing Analyzer.
-Info (332146): Worst-case setup slack is -1.769
+Info (332146): Worst-case setup slack is -2.345
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):    -1.769            -549.358 gpu_clk 
-    Info (332119):     1.130               0.000 vid_clk 
-    Info (332119):    31.933               0.000 audio_clk 
-Info (332146): Worst-case hold slack is 0.250
+    Info (332119):    -2.345            -653.272 gpu_clk 
+    Info (332119):     1.438               0.000 vid_clk 
+    Info (332119):    31.013               0.000 audio_clk 
+Info (332146): Worst-case hold slack is 0.252
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     0.250               0.000 gpu_clk 
-    Info (332119):     0.256               0.000 vid_clk 
-    Info (332119):     0.420               0.000 audio_clk 
+    Info (332119):     0.252               0.000 gpu_clk 
+    Info (332119):     0.386               0.000 vid_clk 
+    Info (332119):     0.423               0.000 audio_clk 
 Info (332140): No Recovery paths to report
 Info (332140): No Removal paths to report
-Info (332146): Worst-case minimum pulse width slack is 3.567
+Info (332146): Worst-case minimum pulse width slack is 3.557
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     3.567               0.000 gpu_clk 
-    Info (332119):     8.620               0.000 vid_clk 
-    Info (332119):    18.605               0.000 audio_clk 
+    Info (332119):     3.557               0.000 gpu_clk 
+    Info (332119):     8.597               0.000 vid_clk 
+    Info (332119):    18.584               0.000 audio_clk 
 Info (332114): Report Metastability: Found 341 synchronizer chains.
     Info (332114): Design MTBF is not calculated because the design doesn't meet its timing requirements.
 Info: Analyzing Slow 1100mV -40C Model
@@ -6285,87 +6285,87 @@ Info (334004): Delay annotation completed successfully
 Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
 Critical Warning (332148): Timing requirements not met
     Info (11105): For recommendations on closing timing, run Report Timing Closure Recommendations in the TimeQuest Timing Analyzer.
-Info (332146): Worst-case setup slack is -2.068
+Info (332146): Worst-case setup slack is -2.406
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):    -2.068            -656.279 gpu_clk 
-    Info (332119):     1.529               0.000 vid_clk 
-    Info (332119):    32.308               0.000 audio_clk 
-Info (332146): Worst-case hold slack is 0.114
+    Info (332119):    -2.406            -743.365 gpu_clk 
+    Info (332119):     1.800               0.000 vid_clk 
+    Info (332119):    31.389               0.000 audio_clk 
+Info (332146): Worst-case hold slack is 0.079
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     0.114               0.000 gpu_clk 
-    Info (332119):     0.240               0.000 vid_clk 
-    Info (332119):     0.441               0.000 audio_clk 
+    Info (332119):     0.079               0.000 gpu_clk 
+    Info (332119):     0.360               0.000 vid_clk 
+    Info (332119):     0.435               0.000 audio_clk 
 Info (332140): No Recovery paths to report
 Info (332140): No Removal paths to report
 Info (332146): Worst-case minimum pulse width slack is 3.522
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
     Info (332119):     3.522               0.000 gpu_clk 
-    Info (332119):     8.569               0.000 vid_clk 
-    Info (332119):    18.586               0.000 audio_clk 
+    Info (332119):     8.573               0.000 vid_clk 
+    Info (332119):    18.553               0.000 audio_clk 
 Info (332114): Report Metastability: Found 341 synchronizer chains.
     Info (332114): Design MTBF is not calculated because the design doesn't meet its timing requirements.
 Info: Analyzing Fast 1100mV 100C Model
 Info (334003): Started post-fitting delay annotation
 Info (334004): Delay annotation completed successfully
 Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
-Info (332146): Worst-case setup slack is 3.971
+Info (332146): Worst-case setup slack is 3.209
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     3.971               0.000 gpu_clk 
-    Info (332119):     4.587               0.000 vid_clk 
-    Info (332119):    35.278               0.000 audio_clk 
-Info (332146): Worst-case hold slack is 0.136
+    Info (332119):     3.209               0.000 gpu_clk 
+    Info (332119):     4.902               0.000 vid_clk 
+    Info (332119):    34.738               0.000 audio_clk 
+Info (332146): Worst-case hold slack is 0.135
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     0.136               0.000 gpu_clk 
-    Info (332119):     0.139               0.000 vid_clk 
-    Info (332119):     0.184               0.000 audio_clk 
+    Info (332119):     0.135               0.000 gpu_clk 
+    Info (332119):     0.181               0.000 vid_clk 
+    Info (332119):     0.186               0.000 audio_clk 
 Info (332140): No Recovery paths to report
 Info (332140): No Removal paths to report
-Info (332146): Worst-case minimum pulse width slack is 3.903
+Info (332146): Worst-case minimum pulse width slack is 3.905
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     3.903               0.000 gpu_clk 
-    Info (332119):     8.920               0.000 vid_clk 
-    Info (332119):    18.951               0.000 audio_clk 
+    Info (332119):     3.905               0.000 gpu_clk 
+    Info (332119):     8.915               0.000 vid_clk 
+    Info (332119):    18.909               0.000 audio_clk 
 Info (332114): Report Metastability: Found 341 synchronizer chains.
     Info (332114): The design MTBF is not calculated because there are no specified synchronizers in the design.
     Info (332114): Number of Synchronizer Chains Found: 341
     Info (332114): Shortest Synchronizer Chain: 2 Registers
     Info (332114): Fraction of Chains for which MTBFs Could Not be Calculated: 1.000
-    Info (332114): Worst Case Available Settling Time: 7.848 ns
+    Info (332114): Worst Case Available Settling Time: 8.261 ns
     Info (332114): 
 Info: Analyzing Fast 1100mV -40C Model
 Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
-Info (332146): Worst-case setup slack is 4.908
+Info (332146): Worst-case setup slack is 4.419
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     4.908               0.000 gpu_clk 
-    Info (332119):     5.509               0.000 vid_clk 
-    Info (332119):    36.142               0.000 audio_clk 
-Info (332146): Worst-case hold slack is 0.063
+    Info (332119):     4.419               0.000 gpu_clk 
+    Info (332119):     5.742               0.000 vid_clk 
+    Info (332119):    35.658               0.000 audio_clk 
+Info (332146): Worst-case hold slack is 0.111
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     0.063               0.000 gpu_clk 
-    Info (332119):     0.121               0.000 vid_clk 
-    Info (332119):     0.171               0.000 audio_clk 
+    Info (332119):     0.111               0.000 gpu_clk 
+    Info (332119):     0.166               0.000 vid_clk 
+    Info (332119):     0.172               0.000 audio_clk 
 Info (332140): No Recovery paths to report
 Info (332140): No Removal paths to report
-Info (332146): Worst-case minimum pulse width slack is 3.902
+Info (332146): Worst-case minimum pulse width slack is 3.904
     Info (332119):     Slack       End Point TNS Clock 
     Info (332119): ========= =================== =====================
-    Info (332119):     3.902               0.000 gpu_clk 
-    Info (332119):     8.919               0.000 vid_clk 
-    Info (332119):    18.947               0.000 audio_clk 
+    Info (332119):     3.904               0.000 gpu_clk 
+    Info (332119):     8.917               0.000 vid_clk 
+    Info (332119):    18.911               0.000 audio_clk 
 Info (332114): Report Metastability: Found 341 synchronizer chains.
     Info (332114): The design MTBF is not calculated because there are no specified synchronizers in the design.
     Info (332114): Number of Synchronizer Chains Found: 341
     Info (332114): Shortest Synchronizer Chain: 2 Registers
     Info (332114): Fraction of Chains for which MTBFs Could Not be Calculated: 1.000
-    Info (332114): Worst Case Available Settling Time: 8.209 ns
+    Info (332114): Worst Case Available Settling Time: 8.526 ns
     Info (332114): 
 Info (332102): Design is not fully constrained for setup requirements
 Info (332102): Design is not fully constrained for hold requirements
@@ -6374,13 +6374,13 @@ Info (21076): Low junction temperature operating condition is not set. Assuming 
 Info (332123): Deriving Clock Uncertainty. Please refer to report_sdc in TimeQuest to see clock uncertainties.
 Info (332102): Design is not fully constrained for setup requirements
 Info (332102): Design is not fully constrained for hold requirements
-Info (332115): Report Timing: Found 100 setup paths (100 violated).  Worst case slack is -1.769
+Info (332115): Report Timing: Found 100 setup paths (100 violated).  Worst case slack is -2.345
     Info (332115): -setup
     Info (332115): -nworst 1
     Info (332115): -npaths 100
     Info (332115): -detail full_path
     Info (332115): -file {output_files/characterization/setup_paths.rpt}
-Info (332115): Report Timing: Found 100 hold paths (0 violated).  Worst case slack is 0.250
+Info (332115): Report Timing: Found 100 hold paths (0 violated).  Worst case slack is 0.252
     Info (332115): -hold
     Info (332115): -nworst 1
     Info (332115): -npaths 100
@@ -6400,9 +6400,9 @@ Info (332115): Report Timing: No removal paths were found
     Info (332115): -file {output_files/characterization/removal_paths.rpt}
 Info: Wrote deterministic shell characterization reports to output_files/characterization
 Info: Quartus Prime TimeQuest Timing Analyzer was successful. 0 errors, 2 warnings
-    Info: Peak virtual memory: 5595 megabytes
-    Info: Processing ended: Tue Sep 01 05:20:19 2026
-    Info: Elapsed time: 00:03:16
-    Info: Total CPU time (on all processors): 00:04:55
+    Info: Peak virtual memory: 5565 megabytes
+    Info: Processing ended: Tue Sep 01 08:20:57 2026
+    Info: Elapsed time: 00:04:31
+    Info: Total CPU time (on all processors): 00:06:29
 
 

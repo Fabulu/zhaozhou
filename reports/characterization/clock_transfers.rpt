@@ -3,13 +3,13 @@
 +------------+-----------+------------+----------+----------+----------+
 ; From Clock ; To Clock  ; RR Paths   ; FR Paths ; RF Paths ; FF Paths ;
 +------------+-----------+------------+----------+----------+----------+
-; audio_clk  ; audio_clk ; 5539       ; 0        ; 0        ; 0        ;
+; audio_clk  ; audio_clk ; 5025       ; 0        ; 0        ; 0        ;
 ; gpu_clk    ; audio_clk ; false path ; 0        ; 0        ; 0        ;
 ; audio_clk  ; gpu_clk   ; false path ; 0        ; 0        ; 0        ;
-; gpu_clk    ; gpu_clk   ; 75618733   ; 0        ; 0        ; 0        ;
+; gpu_clk    ; gpu_clk   ; 63347202   ; 0        ; 0        ; 0        ;
 ; vid_clk    ; gpu_clk   ; 173        ; 0        ; 0        ; 0        ;
 ; gpu_clk    ; vid_clk   ; 20         ; 0        ; 0        ; 0        ;
-; vid_clk    ; vid_clk   ; 91664      ; 0        ; 0        ; 0        ;
+; vid_clk    ; vid_clk   ; 93511      ; 0        ; 0        ; 0        ;
 +------------+-----------+------------+----------+----------+----------+
 Entries labeled "false path" only account for clock-to-clock false paths and not path-based false paths. As a result, actual path counts may be lower than reported.
 
@@ -18,13 +18,13 @@ Entries labeled "false path" only account for clock-to-clock false paths and not
 +------------+-----------+------------+----------+----------+----------+
 ; From Clock ; To Clock  ; RR Paths   ; FR Paths ; RF Paths ; FF Paths ;
 +------------+-----------+------------+----------+----------+----------+
-; audio_clk  ; audio_clk ; 5539       ; 0        ; 0        ; 0        ;
+; audio_clk  ; audio_clk ; 5025       ; 0        ; 0        ; 0        ;
 ; gpu_clk    ; audio_clk ; false path ; 0        ; 0        ; 0        ;
 ; audio_clk  ; gpu_clk   ; false path ; 0        ; 0        ; 0        ;
-; gpu_clk    ; gpu_clk   ; 75618733   ; 0        ; 0        ; 0        ;
+; gpu_clk    ; gpu_clk   ; 63347202   ; 0        ; 0        ; 0        ;
 ; vid_clk    ; gpu_clk   ; 173        ; 0        ; 0        ; 0        ;
 ; gpu_clk    ; vid_clk   ; 20         ; 0        ; 0        ; 0        ;
-; vid_clk    ; vid_clk   ; 91664      ; 0        ; 0        ; 0        ;
+; vid_clk    ; vid_clk   ; 93511      ; 0        ; 0        ; 0        ;
 +------------+-----------+------------+----------+----------+----------+
 Entries labeled "false path" only account for clock-to-clock false paths and not path-based false paths. As a result, actual path counts may be lower than reported.
 
