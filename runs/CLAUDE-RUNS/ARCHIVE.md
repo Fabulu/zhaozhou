@@ -47,6 +47,34 @@ Completed runs are logged here (newest first). Working directories remain in
 
 ---
 
+### [RUN-20260831-1956] Zixxtrixx final explicit whole-S animation pass
+
+**Status:** QA COMPLETE — isolated main integration and publication closeout active
+**Created:** 2026-08-31 19:56 UTC+02:00
+**Working Directory:** `runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/`
+**Branch:** `feature/zixxtrixx-whole-s-final` / `main`
+
+**Summary:**
+Authored and independently accepted the final complete-body spring, programmable
+landing, secondary performance and inspection-light pass. The accepted correction
+includes explicit true-half-key presentation ownership, committed posed-vertex
+contact validation, retimed-plan regressions and exact local-body ChoreoRoot
+composition at key 4.5.
+
+**Deliverables:**
+- Final creature/animation authority in `tools/reel/zixxtrixx.h`
+- Committed full/micro 3D probe in `tools/reel/zixx_probe.cpp`
+- Generic presentation/deformation support in `reference/include/zref/` and `reference/src/zcreature/`
+- QA evidence and complete task history in the RUN folder
+
+**Outcome:** Implementation and independent QA complete. Accepted feature heads
+were merged conflict-free into isolated current-main clones and passed a fresh
+direct all-target build, full probe and meshcheck. Immutable bank archival,
+complete 22-subject regeneration and the single authorized deployment are still
+in progress; this entry will be finalized only after production verification.
+
+---
+
 ### [RUN-20260830-1828] Zixxtrixx whole-body spring and expression correction
 
 **Archived:** 2026-08-31 01:01 UTC+02:00

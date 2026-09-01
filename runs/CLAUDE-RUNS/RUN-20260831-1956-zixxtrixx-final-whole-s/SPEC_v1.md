@@ -2,7 +2,7 @@
 
 **Run ID:** RUN-20260831-1956
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Closed — task #53 correction validated and pushed; independent acceptance pending
+**Status:** Active — QA accepted; task #46 isolated main integration and publication closeout
 **Previous Version:** N/A
 
 ---

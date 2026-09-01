@@ -1,7 +1,7 @@
 # Task Log: RUN-20260831-1956 - Zixxtrixx final explicit whole-S animation candidate
 
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Closed — task #53 zero-release, real half-key composition and retimed-attack contact correction validated and pushed
+**Status:** Active — QA accepted; task #46 isolated main integration and publication closeout
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/
 
 ---
@@ -156,6 +156,14 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 - Added a compiled posed-vertex contact/support scan for retimed attack slot 50 with exact `12/7/4` timing. Across every grounded integer and half-key, station 14 has 0/0 mm X/Z drift, 0 mm target error and an actual/declared 33/33 mm maximum support step; full/micro minima remain in contact at `-25..-10` / `-25..-8` mm, with a 719 mm maximum station step.
 - Fresh lane-local direct `all` rebuilt every dependency and linked reel, cel, meshcheck and probe. Final probe is PASS and meshcheck is OK; committed evidence is `evidence/retimed-correction-final/{probe.txt,meshcheck.txt}`.
 - Implementation commit `d499b0e` was pushed to `origin/feature/zixxtrixx-whole-s-final`. No shared-lane access, art edit, rerender, full bank, integration, archive, publication or deployment occurred.
+
+### 2026-09-01 05:37 UTC+02:00 - Task #46 QA acceptance and isolated main integration
+
+- Independent QA accepted exact feature heads zhaozhou `65e9fefa3db672a5826981fd5c09aab351f8a137` and Upheaval `b1d3cd6dd3947cc674212afd8fdcd52211a54c96`; accepted feature trees were clean, remote-exact and free of owned jobs.
+- Created fresh ordinary integration clones at `C:/programmieren/zencrifice/zixxtrixx-integration-publish-20260901/{zhaozhou,Upheaval}`. Shared checkouts remained read-only; no worktree was used.
+- Recorded live starting mains zhaozhou `60054ab61e7657c7f109d59ff2e584d5dc6ef1f9` and Upheaval `2ad25aac4c3edd4a8238880537ca00c235684923`. Merged the exact accepted feature refs conflict-free, preserving concurrent main ancestry, as local merge commits zhaozhou `717cea15b0bf619a96d3d5e6571b16925ea5b890` and Upheaval `4b98a0e37113c5a4976b912f0ec6a60d20a86951`.
+- Built one fresh integrated direct binary set with `tools/reel/build-direct.sh --clean all`; every dependency recompiled and reel, cel, meshcheck and probe linked. The integrated full probe is PASS and meshcheck is OK. This exact binary set is reserved for the complete 22-subject render.
+- Publication closeout remains active: immutable current-bank archive generation nine, complete full-colour bank regeneration, manifest assembly, final-main drift checks and one authorized production deployment are pending.
 
 ---
 
