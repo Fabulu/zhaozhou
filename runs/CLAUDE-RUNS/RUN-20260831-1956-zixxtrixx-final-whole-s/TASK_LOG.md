@@ -1,7 +1,7 @@
 # Task Log: RUN-20260831-1956 - Zixxtrixx final explicit whole-S animation candidate
 
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Independent review rejected candidate; bounded correction active for compression provenance, two-stage spring read and retimed-plan safety
+**Status:** Independent-review correction accepted; final source/probe/mesh/visual validation complete; feature commit pending
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/
 
 ---
@@ -114,6 +114,25 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 - Direct-built the probe and ran the complete suite. Compression source remapping, compiled retention and retimed safety all pass; the prior full/micro contact, intersection, station, release parity and accepted programmable-landing gates remain green. Evidence: `evidence/review-correction-correctness/zixx-probe.txt`.
 - No art control, landing, model, pigment, light or unrelated animation changed in this milestone.
 
+### 2026-09-01 - Independent-review whole-S art correction accepted
+
+- Used the coordinator-authorized maximum of three focused authored-by-eye rungs; no slope/gain loop or fourth art rung was started.
+- Review rung 1 removed the key-4.5 stall and rear-rail persistence, but the first assembled valley fell below station 14 and terrain hid the intended tall S. Side/high-three-quarter/micro CRCs: `0x76C643EA` / `0x7308F08C` / `0x4CCB74EC`. Rejected by eye.
+- Review rung 2 raised assembly and increased separation, but the assembled beat remained only moderately larger and collapse advanced rather than carrying the head clearly back. Side CRC: `0xA18D8528`. Rejected by eye.
+- Review rung 3 authored a complete smaller absorb S, a high open assembled S and a shorter lower rearward collapsed S. Every integer and true half-key 0–22 remained one connected animal in fixed side, high-three-quarter and compiled micro, with coherent reverse and no early lift. CRCs: `0xB9141B30` / `0x6FAD0156` / `0x2ADC2C6B`. This froze the visual route before mechanical probing.
+- The first probe of that frozen route correctly rejected obsolete support values: full/micro hovered up to 143 mm, full key 1.5 intersected between stations 18/26, jump settle rose to 32 mm, and the old all-station 30 mm planar comparison counted the intentionally rolled tail. Evidence: `evidence/review-art-r3/zixx-probe.txt`.
+
+### 2026-09-01 - Frozen visual route mechanically closed and revalidated
+
+- Re-authored only the named station-14 support route against actual posed 3D surfaces. Every pre-lift integer/half-key now has deliberate contact; full/micro span `-28..-10` / `-28..-8` mm through key 22, with X/Z support drift and target error all exactly zero.
+- Diagnosed the full-surface overlap as one independent shortest-arc angle-seam segment, not failed endpoint art. Added complete seam-coherent whole-centreline controls at entry 1.5/key 2 and the matching reverse 21.5 while leaving grounded/absorb/assembled/collapsed endpoint tables intact. Full/micro real-surface intersections are now `none / none`.
+- Split the stale lateral comparison by what it actually measures: the authored trunk centreline is exactly planar at 0 mm lateral span; preserved axial construction roll moves only final tail stations 51/56 across 42 mm, independently guarded below 45 mm.
+- Reconciled only the named landing recovery support-bias curve with the frozen new spring silhouette. Slots 46/47 retain full/micro impact `-34 mm`, handoff `-33..-32 mm`, settle `-34..-10` / `-34..-8` mm and 950/951 mm maximum station steps. Wheel, turn counts, horizontal track, timing and final rest remain unchanged.
+- Re-rendered all 45 pre-lift samples after mechanical correction. Side/high-three-quarter/compiled-micro CRCs are `0xD4F67BEC` / `0x017AC6A9` / `0xA47E386D`; every sample is connected, progressive and coherently reversed. Evidence: `evidence/review-mechanical-final-visual/{side-0-22.png,high-three-quarter-0-22.png,micro-0-22.png}`.
+- Re-rendered and inspected all 49 landing samples from keys 56–80 for both programmable jumps. Wheel descent, planted low-S impact/hold, connected recovery and exact rest remain visually coherent. CRCs: one-turn `0xF136B5C1`, three-turn `0x50A21A30`.
+- A fresh direct all-target build in a new lane-local output compiled every dependency and linked reel, cel, meshcheck and probe without CMake/Ninja/Verilator/Sacengine. The resulting enhanced probe passes every key/midpoint, provenance, contact, consumer, landing, overlap and limit guard; meshcheck reports 1,774 vertices, 1,098 shared-position groups, zero bind disagreements and `OK`. Evidence: `evidence/review-final-validation/{zixx-probe.txt,zixx-meshcheck.txt}`.
+- No shared checkout write, hardware-process inspection, full subject bank, integration, archive, site-media edit, deployment or publication occurred.
+
 ---
 
 ## Commands and Results
@@ -141,6 +160,11 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 | Final mesh validation | final `zixx-meshcheck.exe > evidence/secondary-landing-final/zixx-meshcheck.txt` | PASS, exit 0 |
 | Review-correction probe build | `tools/reel/build-direct.sh --output <final-lane-local> probe` | linked current enhanced probe directly; no CMake/Ninja/Verilator/Sacengine |
 | Compression/retiming proof | `zixx-probe.exe > evidence/review-correction-correctness/zixx-probe.txt` | **PASS:** slot-10 key 4.5 exact in compiled arrays, 20-quaternion generic discriminator, retimed attack/jump safety, all preserved gates green |
+| Review art rungs | direct cel side/top/micro under explicit celmain/Cool Cross, then numbered 0–22 sheets | three-rung budget exhausted; rung 3 visually accepted and frozen before probing |
+| Mechanical focused probe | direct probe rebuilds after seam/support/landing changes | final focused suite **PASS:** no intersections, all pre-lift contact, exact consumer parity and preserved landings |
+| Final presentation render | direct cel side/top/micro plus slots 46/47 | spring CRCs `0xD4F67BEC` / `0x017AC6A9` / `0xA47E386D`; jump CRCs `0xF136B5C1` / `0x50A21A30`; every changed sample reviewed |
+| Fresh final direct build | `tools/reel/build-direct.sh --output <new-final-output> all` | all dependencies compiled and four binaries linked; no stale-object path |
+| Fresh final validation | final-output `zixx-probe` and `zixx-meshcheck` | **PASS / OK**; evidence in `evidence/review-final-validation/` |
 
 ---
 
@@ -186,6 +210,15 @@ A later coordinator authorization superseded only the frozen pre-lift root/suppo
 | 2 | immediate Y-only station-14 compensation | `evidence/secondary-landing-r2-zixx-probe.txt` | Rejected: horizontal track preserved, but impact still jumps 1289/1335 mm. |
 | 3 | preserve two impact roots, ease Y support through key 65 | `evidence/secondary-landing-r3/`, `evidence/secondary-landing-r3-zixx-probe.txt` | Rejected after validation correction: a whole-clip minimum from pre-lift key 2.5 masked 438 mm impact hover and later hover. |
 | final | authored two-key descent plant, actual integer/midpoint Y support and named recovery-weight route | `evidence/secondary-landing-final/{zixx-probe.txt,zixx-meshcheck.txt,zixxtrixx-jump-one-all-frames.png,zixxtrixx-jump-multi-all-frames.png,*landing-baseline-final-0112-0142.png}` | **Accepted:** genuine full/micro bite through impact, handoff and settle; 1108/1146 mm continuity; every frame visually coherent. |
+
+### Independent-review correction rungs
+
+| Review rung | Authored visual change | Evidence | Verdict |
+|---:|---|---|---|
+| 1 | progressive key-4.5 bridge and stronger whole-body recruitment | `evidence/review-art-r1/` | Rejected: assembled first valley remained terrain-hidden. |
+| 2 | raised assembly and stronger collapse separation | `evidence/review-art-r2/` | Rejected: assembly only moderately larger; collapse moved forward. |
+| 3 | complete absorb S, high open assembled S, drastic shorter/lower/rearward collapsed S | `evidence/review-art-r3/{side-0-22.png,high-three-quarter-0-22.png,micro-0-22.png,zixx-probe.txt}` | **Visual route accepted and frozen:** all 45 samples connected in all views; probe then exposed stale support, one angle-seam overlap and landing recovery drift. |
+| mechanical final | seam-coherent complete samples, named planted support and recovered landing bias; endpoint art frozen | `evidence/review-mechanical-final-visual/*.png`, `evidence/review-final-validation/{zixx-probe.txt,zixx-meshcheck.txt}` | **Accepted:** final visuals remain coherent; probe PASS; meshcheck OK. |
 
 
 ---
@@ -238,6 +271,9 @@ None. The owner requires one sole implementation agent and prohibits delegation.
 | zhaozhou | `3dd3208` | `ANIMATION: accept Zixxtrixx whole-body spring` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 | zhaozhou | `3e0a958` | `LIGHTING: strengthen Zixxtrixx inspection source` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 | zhaozhou | `8179d8e` | `ANIMATION: plant Zixxtrixx programmable landings` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
+| zhaozhou | `735b686` | `RUN: record blocked Zixxtrixx spring verdict` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
+| zhaozhou | `7fb06fb` | `RUN: close Zixxtrixx whole-S final pass` | pushed to `origin/feature/zixxtrixx-whole-s-final`; later rejected by independent review |
+| zhaozhou | `183b94b` | `ANIMATION: preserve compiled spring midpoints` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 
 ---
 

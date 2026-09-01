@@ -548,6 +548,10 @@ IntersectionPeak spring_self_intersections(const zc::CreatureType& type,
         }
       }
     }
+    if (hits > 0)
+      std::printf("SPRING intersection sample %s %d%s: %d (%d/%d)\n",
+                  rung == 0 ? "full" : "micro", tick / 2,
+                  (tick & 1) ? ".5" : "", hits, hit_a, hit_b);
     if (hits > worst.count)
       worst = IntersectionPeak{hits, tick, hit_a, hit_b};
   }
@@ -1328,17 +1332,37 @@ int main() {
     const int32_t support_dx = deep.support_x_mm - entry.support_x_mm;
     const int32_t support_dy = deep.support_y_mm - entry.support_y_mm;
     int32_t lateral_lo = INT32_MAX, lateral_hi = INT32_MIN;
+    int32_t body_lateral_lo = INT32_MAX, body_lateral_hi = INT32_MIN;
+    int lateral_lo_station = -1, lateral_hi_station = -1;
     for (int i = 0; i < zixx::kProfileStations; ++i) {
-      lateral_lo = std::min(lateral_lo, deep.z_mm[i]);
-      lateral_hi = std::max(lateral_hi, deep.z_mm[i]);
+      if (deep.z_mm[i] < lateral_lo) {
+        lateral_lo = deep.z_mm[i];
+        lateral_lo_station = i;
+      }
+      if (deep.z_mm[i] > lateral_hi) {
+        lateral_hi = deep.z_mm[i];
+        lateral_hi_station = i;
+      }
+      if (i <= zixx::kTrunkEndStation) {
+        body_lateral_lo = std::min(body_lateral_lo, deep.z_mm[i]);
+        body_lateral_hi = std::max(body_lateral_hi, deep.z_mm[i]);
+      }
     }
+    const int32_t body_lateral_span = body_lateral_hi - body_lateral_lo;
+    const int32_t whole_lateral_span = lateral_hi - lateral_lo;
     std::printf("SPRING ordered pose: entry/deep centre span %d/%d mm; "
                 "head relative support dX/dY %d/%d mm; support dX/dY %d/%d "
-                "mm; lateral span %d mm\n", entry_span, deep_span,
-                head_support_dx, head_support_dy, support_dx, support_dy,
-                lateral_hi - lateral_lo);
+                "mm; body/whole lateral span %d/%d mm (whole extrema "
+                "stations %d/%d)\n", entry_span, deep_span, head_support_dx,
+                head_support_dy, support_dx, support_dy, body_lateral_span,
+                whole_lateral_span, lateral_lo_station, lateral_hi_station);
+    // The authored heading centreline through the trunk remains planar. The
+    // final tail stations inherit the model's preserved axial construction roll,
+    // which shifts their skinned centres slightly in Z; guard that separately
+    // rather than mistaking the intentional tail assembly for a crooked S.
     require(entry_span > deep_span && deep_span > 0 &&
-                head_support_dy < 0 && lateral_hi - lateral_lo <= 30,
+                head_support_dy < 0 && body_lateral_span <= 30 &&
+                whole_lateral_span <= 45,
             "explicit spring lost its ordered assembled-to-collapsed planar S");
     // Station 14's full per-sample authored route is checked independently
     // below from every integer and true half-key. A single entry-to-deep delta
@@ -1694,8 +1718,8 @@ int main() {
   // Full consumers own station-derived roots on every pre-lift half-key.
   // Programmable jumps additionally own every landing/recovery midpoint root,
   // because interpolation cannot keep a changing bent chain on its 3D support.
-  // Only key 4.5 and the four release bridges replace complete quaternion and
-  // deformation channels. The local-body release slice intentionally owns no
+  // Entry keys 1.5 and 4.5 plus the four release bridges replace complete
+  // quaternion and deformation channels. The local-body release slice owns no
   // root, because trajectory belongs to its ChoreoRoot consumer.
   constexpr uint8_t kOwnedQuatsDeform =
       zc::kMidpointQuatsAuthored | zc::kMidpointDeformAuthored;
@@ -1730,7 +1754,9 @@ int main() {
            i < static_cast<size_t>(landing_root_end)))
         expected = zc::kMidpointRootAuthored;
       if ((full_consumer &&
-           i == static_cast<size_t>(zixx::kSpringEntryOwnedMidpointKey)) ||
+           (i == static_cast<size_t>(
+                     zixx::kSpringEarlyEntryOwnedMidpointKey) ||
+            i == static_cast<size_t>(zixx::kSpringEntryOwnedMidpointKey))) ||
           (i >= static_cast<size_t>(first) &&
            i < static_cast<size_t>(first + 4)))
         expected |= kOwnedQuatsDeform;
@@ -1766,7 +1792,9 @@ int main() {
   int compression_owned_segments = 0;
   for (size_t key = 0; key < compression_owned.channels.size(); ++key) {
     const uint8_t expected =
-        key == static_cast<size_t>(zixx::kSpringEntryOwnedMidpointKey)
+        (key == static_cast<size_t>(
+                    zixx::kSpringEarlyEntryOwnedMidpointKey) ||
+         key == static_cast<size_t>(zixx::kSpringEntryOwnedMidpointKey))
             ? kOwnedQuatsDeform
             : 0;
     if (compression_owned.channels[key] != expected)
@@ -1774,10 +1802,10 @@ int main() {
     if (compression_owned.channels[key] != 0) ++compression_owned_segments;
   }
   std::printf("MIDPOINT provenance compression slice: %d owned segments, "
-              "key-4.5 quats/deform exact=%d\n",
+              "keys 1.5/4.5 quats/deform exact=%d\n",
               compression_owned_segments,
               compression_ownership_exact ? 1 : 0);
-  require(compression_ownership_exact && compression_owned_segments == 1,
+  require(compression_ownership_exact && compression_owned_segments == 2,
           "compression midpoint provenance did not remap into slot 10");
 
   const zc::PresentationMidpointAuthorship release_owned =
@@ -2310,6 +2338,15 @@ int main() {
     std::printf("; max 60 Hz station step %d mm at %d%s station %d\n",
                 continuity.mm, continuity.tick / 2,
                 (continuity.tick & 1) ? ".5" : "", continuity.station);
+    if (spec.first == zixx::kSlotJumpOne) {
+      for (int tick = 2 * ph.landing_key; tick <= 2 * ph.last_key; ++tick) {
+        const int relative_tick = tick - 2 * ph.landing_key;
+        std::printf("JUMP landing contact sample %d%s: full/micro %d/%d mm\n",
+                    relative_tick / 2, (relative_tick & 1) ? ".5" : "",
+                    to_mm(scan->samples[tick].rung_min_y_fx[0]),
+                    to_mm(scan->samples[tick].rung_min_y_fx[1]));
+      }
+    }
   }
 
   // Impact vocabulary acceptance. These envelopes surround the native 240p

@@ -741,25 +741,37 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
 // eye as a broad low two-lobe S; interpolation/timing may only be built around a
 // collapsed pose that already reads correctly on its own.
 constexpr const auto& kSpringGroundedHeading = kStanceSlope;
-// Key 3 absorb: the front/middle S has travelled into rear-body space while
-// the final taper is only beginning to follow. It is a complete pose, not a
-// mask or per-region delay, so the chain remains one connected animal.
+// Key 3 absorb: the grounded front S has already travelled into rear-body space
+// and recruited the taper into a smaller whole-body S. The final tail follows
+// the motion but does not lead it. This complete intermediate removes the old
+// upright hook plus straight rear rail before the assembled beat.
 constexpr int32_t kSpringAbsorbHeading[kStanceSlopes] = {
-    1000, 2200, 5000, 9000, 14000, 19000, 23500, 23500, 18000, 10000,
-    2500, -1200, -4000, -4500, -2500, 1000, 1800, -4500, -10000};
-// Key 6 assembled: one tall, broad, x-monotonic whole-body S. It uses the
-// same two-lobe topology that survives collapse, but opens both lobes upward
-// before the down/back action; no segment coils, crosses or becomes a rear rail.
+    3600, 6400, 9100, 10900, 10000, -2700, -7300, -10900, -10900, 5500,
+    9100, 11800, 12700, 10000, -3600, -7300, -10000, -7300, -2700};
+// Entry 1.5 and key 2 retain the accepted interpolated whole-body route at
+// every segment except the angle-seam segment. Its independent shortest-arc
+// choice folded between its two neighbours and crossed the full surface; these
+// complete poses carry that segment through the same in-plane turn as the rest
+// of the lobe. The endpoint heading tables remain untouched.
+constexpr int32_t kSpringEarlyBridgeHeading[kStanceSlopes] = {
+    2250, 3832, 5737, 7557, 8400, 5950, 7050, 7150, 4550, 8550,
+    4550, 6010, 6443, 5153, -1213, -2804, -4252, -6450, -7050};
+constexpr int32_t kSpringMiddleHeading[kStanceSlopes] = {
+    2895, 5059, 7344, 9155, 9164, 1816, 191, -1477, -2835, 7093,
+    6724, 8777, 9434, 7469, -2354, -4953, -6999, -6856, -4971};
+// Key 6 assembled: a high, open whole-body S with every finless section in
+// its two lobes. Station 14 is the deepest point; the long rear lobe is broad
+// enough to read as the swallowed body rather than a residual straight rail.
 constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
-    5000, 9000, 13000, 10000, -3000, -9000, -12000, -9000, -1500, 6000,
-    12000, 15000, 13500, 7500, -7500, -12000, -10500, -5000, -700};
-// Rung 3: station 14 is the unique deepest contact. Walking tailward, the
-// whole centreline descends from the raised head to a shallow first valley,
-// rises through the broad middle lobe, descends farther to the named support,
-// then rises continuously through the taper and finless tail.
+    4500, 8200, 10900, 12700, 10900, -2700, -6400, -10000, -11800, 5500,
+    10000, 12700, 13600, 10900, -4500, -9000, -11800, -8200, -2700};
+// Review correction rung 3: the entire high assembled S folds into this lower,
+// shorter two-lobe S around planted station 14. Every segment remains
+// x-monotonic, but the stronger distributed turns shorten the front projection,
+// carrying head, neck and body down and back together without a hairpin.
 constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
-    4000, 7000, 9000, 7000, -2000, -6000, -8000, -6000, -1000, 4000,
-    8000, 10000, 9000, 5000, -5000, -8000, -7000, -3500, -500};
+    0, 5500, 12700, 15450, 10000, -3600, -10900, -15450, -13600, 2700,
+    10000, 14550, 13600, 10000, -1800, -6000, -10000, -8000, -3000};
 constexpr int32_t kSpringAbsorbProfile = 420;
 constexpr int32_t kSpringCompressionDepth = 1000;  // profile authority, 1/1000
 constexpr int32_t kSpringDeclaredBiteMm = 34;      // planted support's authored bite
@@ -776,22 +788,23 @@ struct SpringSupportLiftKey {
 constexpr int32_t kSpringEarlyEntryProfile = 140;
 constexpr int32_t kSpringMiddleEntryProfile = 280;
 constexpr int32_t kSpringKey4EntryProfile = 613;
-// The owned half-key holds the accepted key-4 whole-centreline for one sample.
-// This is the last collision-free pose before the broad flank rolls underneath;
-// key 5 then continues directly toward the assembled S.
-constexpr int32_t kSpringEntryMidpointProfile = kSpringKey4EntryProfile;
-// Release key 20 uses that same explicit whole-centreline in reverse.
+// Key 4.5 advances evenly between keys 4 and 5. It is an authored complete
+// centreline rather than the old key-4 hold, so absorption cannot stall and
+// dump the entire assembled conversion into the next half-key.
+constexpr int32_t kSpringEntryMidpointProfile = 710;
+// Release key 20 remains the matching explicit whole-centreline in reverse.
 constexpr int32_t kSpringBridgeEntryProfile = kSpringEntryMidpointProfile;
 constexpr int32_t kSpringKey5EntryProfile = 807;
-constexpr int32_t kSpringEarlySupportLiftMm = 18;
-constexpr int32_t kSpringMiddleSupportLiftMm = 102;
-constexpr int32_t kSpringAbsorbSupportLiftMm = 126;
-constexpr int32_t kSpringKey4SupportLiftMm = 14;
-// Four millimetres of additional bite keeps both real LOD surfaces planted at
-// key 5 and its reverse-side companion without changing either centreline.
-constexpr int32_t kSpringKey5SupportLiftMm = -27;
-constexpr int32_t kSpringAssembledSupportLiftMm = -41;
-constexpr int32_t kSpringCollapsedSupportLiftMm = -26;
+// Station 14 carries the frozen whole-centreline route just below the real
+// terrain surface. These are direct authored support positions for the named
+// poses, not offsets inferred from the rendered projection.
+constexpr int32_t kSpringEarlySupportLiftMm = -34;
+constexpr int32_t kSpringMiddleSupportLiftMm = -32;
+constexpr int32_t kSpringAbsorbSupportLiftMm = -36;
+constexpr int32_t kSpringKey4SupportLiftMm = -38;
+constexpr int32_t kSpringKey5SupportLiftMm = -40;
+constexpr int32_t kSpringAssembledSupportLiftMm = -42;
+constexpr int32_t kSpringCollapsedSupportLiftMm = -32;
 constexpr SpringSupportLiftKey kSpringOpenSupportLift[] = {
     {0, 0},
     {kSpringEarlyEntryProfile, kSpringEarlySupportLiftMm},
@@ -1786,6 +1799,7 @@ inline int32_t spring_lerp_heading(int32_t a, int32_t b, int32_t u) {
 
 inline int32_t spring_entry_heading(int k, int32_t entry) {
   if (entry <= 0) return kSpringGroundedHeading[k];
+  if (entry == kSpringMiddleEntryProfile) return kSpringMiddleHeading[k];
   if (entry < kSpringAbsorbProfile) {
     const int32_t u = static_cast<int32_t>(
         (static_cast<int64_t>(entry) * 1000) / kSpringAbsorbProfile);
@@ -1957,6 +1971,7 @@ inline int32_t spring_head_attitude(int32_t authority, int32_t entry,
 struct SpringReleaseMidpointControl {
   int32_t entry;
   int32_t squash;
+  const int32_t* heading_override = nullptr;
 };
 // Frozen integer route shared by golden/planned attacks and jumps: deepest,
 // assembled, support-compensated bridge, absorb, grounded.
@@ -1970,17 +1985,20 @@ constexpr SpringReleaseMidpointControl kSpringReleaseMidpointControl[] = {
     {1000, 500},  // 18.5: collapsed -> assembled, known mid-collapse route
     {855, 0},     // 19.5: assembled -> support-compensated bridge
     {565, 0},     // 20.5: bridge -> exact absorb
-    {210, 0},     // 21.5: absorb -> exact grounded S
+    {210, 0, kSpringEarlyBridgeHeading},  // 21.5: seam-safe reverse bridge
 };
 constexpr int kSpringReleaseMidpointCount =
     static_cast<int>(sizeof(kSpringReleaseMidpointControl) /
                      sizeof(kSpringReleaseMidpointControl[0]));
-// The sole entry midpoint whose generic Catmull presentation pose folded the
-// full surface through itself. This is the coherent whole-centreline sample of
-// the already accepted absorb -> assembled route; no heading table changes.
+// The two entry midpoints whose generic Catmull presentation poses folded the
+// full surface through itself. Each uses a complete seam-coherent whole-body
+// route control; grounded/absorb/assembled/collapsed endpoints stay unchanged.
+constexpr int kSpringEarlyEntryOwnedMidpointKey = 1;
+constexpr SpringReleaseMidpointControl kSpringEarlyEntryOwnedMidpointControl =
+    {210, 0, kSpringEarlyBridgeHeading};  // 1.5, coherent seam-safe route
 constexpr int kSpringEntryOwnedMidpointKey = 4;
 constexpr SpringReleaseMidpointControl kSpringEntryOwnedMidpointControl =
-    {kSpringEntryMidpointProfile, 0};  // 4.5, collision-free complete bridge
+    {kSpringEntryMidpointProfile, 0};  // 4.5, complete progressive bridge
 
 inline int32_t spring_control_lerp(int key, int k0, int32_t a,
                                    int k1, int32_t b) {
@@ -2032,7 +2050,15 @@ inline void author_spring_midpoint_pose(
 
   Rig g;
   g.reset();
-  apply_spring_stance(g, 1000, control.entry, control.squash);
+  if (control.heading_override == nullptr) {
+    apply_spring_stance(g, 1000, control.entry, control.squash);
+  } else {
+    int32_t prev = 0;
+    for (int k = 0; k < kStanceSlopes; ++k) {
+      g.q[kBSpine0 + k] = quat_z(control.heading_override[k] - prev);
+      prev = control.heading_override[k];
+    }
+  }
   g.q[kBHead] =
       quat_z(spring_head_attitude(1000, control.entry, control.squash));
   g.tail_rest(kBladeSplay + blade_splay_bias +
@@ -2096,6 +2122,10 @@ inline void author_spring_midpoint_root_from_actual(
 }
 
 inline int32_t spring_shared_midpoint_target_y(int key, int hold_end) {
+  if (key == kSpringEarlyEntryOwnedMidpointKey)
+    return spring_support_target_y(
+        kSpringEarlyEntryOwnedMidpointControl.entry,
+        kSpringEarlyEntryOwnedMidpointControl.squash);
   if (key == kSpringEntryOwnedMidpointKey)
     return spring_support_target_y(kSpringEntryOwnedMidpointControl.entry,
                                    kSpringEntryOwnedMidpointControl.squash);
@@ -2122,6 +2152,10 @@ inline void author_shared_spring_release_midpoints(
     zc::Clip& c, int hold_end, int32_t blade_splay_bias, bool write_root,
     zc::PresentationMidpointAuthorship* authorship = nullptr) {
   zc::bake_presentation_midpoints(c, kBoneCount);
+  author_spring_midpoint_pose(
+      c, kSpringEarlyEntryOwnedMidpointKey,
+      kSpringEarlyEntryOwnedMidpointControl, blade_splay_bias, write_root,
+      authorship);
   author_spring_midpoint_pose(
       c, kSpringEntryOwnedMidpointKey, kSpringEntryOwnedMidpointControl,
       blade_splay_bias, write_root, authorship);
@@ -6513,8 +6547,8 @@ constexpr int32_t kJumpLandingApproachBias1Mm = -400;
 // opens, then an exact return to the accepted grounded root at relative key 16.
 // These are visual knobs, not values generated from a projected render.
 constexpr int32_t kJumpLandingSurfaceBiasMm[] = {
-    -20, -20, -20, -20, -20, -20, -20, -20,
-    -30, -55, -60, -50, -30, -20, -15, -10, 0,
+    -14, -14, -14, -14, -14, -14, -14, -14,
+    -10, -15, -16, 8, -10, -10, -15, -10, 0,
 };
 constexpr int kJumpLandingSurfaceBiasCount =
     static_cast<int>(sizeof(kJumpLandingSurfaceBiasMm) /

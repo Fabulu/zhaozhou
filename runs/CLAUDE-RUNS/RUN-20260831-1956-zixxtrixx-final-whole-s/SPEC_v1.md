@@ -2,7 +2,7 @@
 
 **Run ID:** RUN-20260831-1956
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Active
+**Status:** Complete — independent-review correction accepted; final direct probe and meshcheck pass
 **Previous Version:** N/A
 
 ---
