@@ -199,6 +199,7 @@ module zhao_raster_earlyz #(
   // ---- the conservative state -------------------------------------------
   logic [23:0]  floor_r;     // lower bound on the stored depth of EVERY pixel
   logic [255:0] acc_mask_r;  // pixels certain to have taken a depth write
+  logic [7:0]   seen_count_r;  // UNIQUE pixels in acc_mask_r, 0..255
   logic [23:0]  acc_min_r;   // the smallest depth among those writes
   logic [7:0]   bin_mask_r;
 
@@ -253,19 +254,49 @@ module zhao_raster_earlyz #(
     hiz_depth   = st_z_force_far ? 24'd0 : frag_depth_i;
   end
 
-  // The mask AFTER this cycle's contribution — the all-ones test must see the
-  // fragment that completes the cover, not lag it by a cycle.
-  logic [255:0] acc_mask_next;
+  // ---- EXACT UNIQUE-COVERAGE COUNTING, not a 256-input reduction ---------
+  // reports/MHZArchitected offender 3, and the last one on its list that any
+  // fit has ever confirmed. What used to be here:
+  //
+  //     acc_mask_next = acc_mask_r;
+  //     acc_mask_next[frag_addr_i] = 1'b1;
+  //     acc_full = &acc_mask_next;          <-- 256-input reduction
+  //
+  // and `acc_full` then chose whether all 256 mask registers took zero or took
+  // `acc_mask_next`. So every mask bit fed a 256-input reduction whose result
+  // fanned back out to every mask bit's next-state mux, with a dynamic bit
+  // update inside the same cone. The note's description is exact: "almost a
+  // perfect machine for generating large total negative slack over hundreds of
+  // endpoints."
+  //
+  // The fit at b248b8b agreed -- Early-Z owned ALL 100 worst paths,
+  // floor_r -> acc_mask_r, once EDGEWALK left the list.
+  //
+  // The replacement is the note's, unchanged:
+  //
+  //     seen       = acc_mask[address]
+  //     new_pixel  = qualify && !seen
+  //     round_done = new_pixel && (seen_count == 255)
+  //
+  // A 256-input reduction becomes ONE SELECTED-BIT LOOKUP and an eight-bit
+  // compare.
+  //
+  // SEMANTICALLY IDENTICAL, including the 256th pixel counting in the SAME
+  // cycle it arrives: the old test was true exactly when every one of the 256
+  // bits was set after this cycle's contribution, and 256 unique qualifying
+  // pixels is the only way to reach that. `acc_min` still updates on every
+  // qualifying fragment whether or not the pixel was new, which is what the
+  // note requires and what keeps the promoted floor identical.
+  logic         seen, new_pixel, round_done;
   logic [23:0]  acc_min_next;
-  logic         acc_full;
+
+  assign seen       = acc_mask_r[frag_addr_i];
+  assign new_pixel  = hiz_qualify && !seen;
+  assign round_done = new_pixel && (seen_count_r == 8'd255);
+
   always_comb begin
-    acc_mask_next = acc_mask_r;
-    acc_min_next  = acc_min_r;
-    if (hiz_qualify) begin
-      acc_mask_next[frag_addr_i] = 1'b1;
-      if (hiz_depth < acc_min_r) acc_min_next = hiz_depth;
-    end
-    acc_full = &acc_mask_next;
+    acc_min_next = acc_min_r;
+    if (hiz_qualify && (hiz_depth < acc_min_r)) acc_min_next = hiz_depth;
   end
 
   // ---- sequential --------------------------------------------------------
@@ -273,6 +304,7 @@ module zhao_raster_earlyz #(
     if (!rst_n) begin
       floor_r             <= 24'd0;
       acc_mask_r          <= 256'd0;
+      seen_count_r        <= 8'd0;
       acc_min_r           <= 24'hFFFFFF;
       bin_mask_r          <= 8'd0;
       out_v_r             <= 1'b0;
@@ -312,15 +344,18 @@ module zhao_raster_earlyz #(
         end
 
         // ---- the hierarchical-Z floor ----------------------------------
-        if (acc_full) begin
+        if (round_done) begin
           // Every pixel has taken a depth write of at least `acc_min_next`.
           // The floor never moves backwards: `max`, not assignment.
           if (acc_min_next > floor_r) floor_r <= acc_min_next;
-          acc_mask_r <= 256'd0;
-          acc_min_r  <= 24'hFFFFFF;
+          acc_mask_r   <= 256'd0;
+          acc_min_r    <= 24'hFFFFFF;
+          seen_count_r <= 8'd0;
         end else begin
-          acc_mask_r <= acc_mask_next;
-          acc_min_r  <= acc_min_next;
+          // Only the SELECTED bit is written, not all 256 from a reduction.
+          if (hiz_qualify) acc_mask_r[frag_addr_i] <= 1'b1;
+          acc_min_r <= acc_min_next;
+          if (new_pixel) seen_count_r <= seen_count_r + 8'd1;
         end
       end
 
@@ -332,7 +367,8 @@ module zhao_raster_earlyz #(
       // delivered.
       if (tile_begin_i) begin
         floor_r    <= tile_clear_depth_i;
-        acc_mask_r <= 256'd0;
+        acc_mask_r   <= 256'd0;
+        seen_count_r <= 8'd0;
         acc_min_r  <= 24'hFFFFFF;
         bin_mask_r <= 8'd0;
       end
