@@ -585,3 +585,49 @@ The audit asked for pair fits because leaf fits carry ~1,000 fictional virtual
 pins. That was right and the pairs did fix it — TESS+NORMALS went 1,045 pins to
 67. **It fixed the boundary problem and left the sprawl problem**, and I did not
 notice until I read a path.
+
+## A single "no quartus process" sample is a FALSE NEGATIVE
+
+2026-09-01, and it cost a fit.
+
+`tasklist | grep -ci quartus` returned **0** while `quartus_fit.exe` was alive
+and 30 minutes into its work. The run was declared dead and relaunched, giving
+**two concurrent fitters writing the same project directory**:
+
+    PID 17780  started 22:38:15  57.0 CPU-min   <- first launch, never died
+    PID  6616  started 22:49:40  43.4 CPU-min   <- the relaunch
+
+Both were killed and the round restarted clean, because a mixed `output_files/`
+is worse than no result: the reports would have been a blend of two placements
+with no way to tell which number came from which.
+
+**The window is real.** `run_shell_fit.ps1` runs several executables in
+sequence -- `quartus_map`, then `quartus_fit`, then `quartus_sta` -- and between
+any two there is a genuine interval with no `quartus*` process at all. Sampling
+inside that gap reports zero for a perfectly healthy run.
+
+### The rules
+
+* **Never act on one sample.** Require several consecutive misses. The automated
+  monitor already debounced 6; the MANUAL check did not, and that is what
+  failed. The discipline has to apply to both.
+* **Check identity, not just count.** `Get-Process quartus*` with `Id` and
+  `StartTime` distinguishes "dead" from "between stages" from "there are two of
+  them", which a count never can.
+* **Kill the WRAPPER too, not only the tool.** The `run_shell_fit.ps1` shell
+  outlives `quartus_fit` and launches the next stage the moment it exits.
+  Killing the fitter alone leaves a process that will start `quartus_sta` on a
+  half-finished database. This is CLAUDE.md's "stopping an agent does not stop
+  its background work", in the build lane.
+* **A `Get-CimInstance ... CommandLine -like "*run_shell_fit*"` query MATCHES
+  ITSELF**, because the pattern is in its own command line. It will kill its own
+  shell, return exit 255, and report a new PID every time it is run, which looks
+  exactly like a process respawning. Exclude `$PID`.
+
+### Recovering afterwards
+
+Restore the tracked reports before relaunching, or the previous round's
+committed evidence stays overwritten by a contaminated partial run:
+
+    git checkout -- reports/characterization reports/synthesis reports/timing
+    rm -rf fpga/quartus/shell_fit/output_files fpga/quartus/shell_fit/db
