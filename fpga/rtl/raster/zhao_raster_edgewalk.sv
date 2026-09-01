@@ -213,7 +213,42 @@ module zhao_raster_edgewalk (
   // area operands S_AREA drives do not use them, so no state is added and no
   // job is delayed.
   logic signed [DIFF_W-1:0] px0_c, py0_c;   // combinational, S_AREA only
-  logic signed [DIFF_W-1:0] px0_r, py0_r;   // what the operand mux reads
+  logic signed [DIFF_W-1:0] px0_r, py0_r;   // what the w-operand latch reads
+
+  // ---- the twelve w-operands are JOB-INVARIANT, so they are registered ----
+  // Round 13's worst path, EDGEWALK owning 48 of 100:
+  //
+  //     bx_r[1] -> Add5 chain  +2.17 ns   (a 23-bit subtract)
+  //             -> Selector16  +0.51      (the operand mux)
+  //             -> Mult0~mac   +4.21      (the DSP -- irreducible)
+  //             -> cross_r     +1.16
+  //
+  // The DSP's 4.21 ns cannot be removed without pipelining the multiplier,
+  // which would cost a cycle on every one of its four uses per job. The 2.17
+  // ns subtract in FRONT of it can: every operand of w0, w1 and w2 is a
+  // difference of values that are fixed once the winding flip commits.
+  //
+  //     w0: cx-bx, py0-by, cy-by, px0-bx
+  //     w1: ax-cx, py0-cy, ay-cy, px0-cx
+  //     w2: bx-ax, py0-ay, by-ay, px0-ax
+  //
+  // Twelve differences, none of which changes during the job. S_W0 already
+  // commits the flip and does NOT drive the cross unit, so they are latched
+  // there and the mux downstream selects among REGISTERS. No arithmetic
+  // remains between a register and the multiplier -- only a mux.
+  //
+  // FREE IN CYCLES, at about 138 ALMs for 276 flops. The same trade as the
+  // steps in round 4 and the pixel centre in round 13, and the fourth time
+  // this block has rewarded it.
+  //
+  // S_AREA's operands are deliberately NOT included: they are needed one
+  // state earlier than the flip exists, so registering them means either an
+  // extra state or reading the job FIFO's M10K output through a subtract.
+  // If S_AREA becomes the limiter, that is the next round's problem, decided
+  // by a fit rather than guessed at now.
+  logic signed [DIFF_W-1:0] o0p_r, o0q_r, o0u_r, o0v_r;
+  logic signed [DIFF_W-1:0] o1p_r, o1q_r, o1u_r, o1v_r;
+  logic signed [DIFF_W-1:0] o2p_r, o2q_r, o2u_r, o2v_r;
   always_comb begin
     px0_c = ($signed({{(DIFF_W-12){tile_x_r[11]}}, tile_x_r}) <<< 8) + 23'sd128;
     py0_c = ($signed({{(DIFF_W-12){tile_y_r[11]}}, tile_y_r}) <<< 8) + 23'sd128;
@@ -264,18 +299,18 @@ module zhao_raster_edgewalk (
       // one state later costs ONE CYCLE PER TRIANGLE out of roughly twenty-five
       // and removes the sign bit from the multiplier's cone entirely.
       S_W0B: begin
-        m_p = cx_r - bx_r;  m_q = py0_r - by_r;
-        m_u = cy_r - by_r;  m_v = px0_r - bx_r;
+        m_p = o0p_r;  m_q = o0q_r;
+        m_u = o0u_r;  m_v = o0v_r;
       end
       // w1 = orient(C,A, px0,py0)
       S_W1: begin
-        m_p = ax_r - cx_r;  m_q = py0_r - cy_r;
-        m_u = ay_r - cy_r;  m_v = px0_r - cx_r;
+        m_p = o1p_r;  m_q = o1q_r;
+        m_u = o1u_r;  m_v = o1v_r;
       end
       // w2 = orient(A,B, px0,py0)
       S_W2: begin
-        m_p = bx_r - ax_r;  m_q = py0_r - ay_r;
-        m_u = by_r - ay_r;  m_v = px0_r - ax_r;
+        m_p = o2p_r;  m_q = o2q_r;
+        m_u = o2u_r;  m_v = o2v_r;
       end
       default: ;
     endcase
@@ -511,6 +546,12 @@ module zhao_raster_edgewalk (
       row_i    <= 5'd0;
       px0_r    <= {DIFF_W{1'b0}};
       py0_r    <= {DIFF_W{1'b0}};
+      o0p_r <= {DIFF_W{1'b0}};  o0q_r <= {DIFF_W{1'b0}};
+      o0u_r <= {DIFF_W{1'b0}};  o0v_r <= {DIFF_W{1'b0}};
+      o1p_r <= {DIFF_W{1'b0}};  o1q_r <= {DIFF_W{1'b0}};
+      o1u_r <= {DIFF_W{1'b0}};  o1v_r <= {DIFF_W{1'b0}};
+      o2p_r <= {DIFF_W{1'b0}};  o2q_r <= {DIFF_W{1'b0}};
+      o2u_r <= {DIFF_W{1'b0}};  o2v_r <= {DIFF_W{1'b0}};
       pend_r   <= 16'd0;
       rowb_cov_r <= 16'd0;
       rowb_idx_r <= 4'd0;
@@ -583,6 +624,15 @@ module zhao_raster_edgewalk (
             tl0_r <= edge_top_left(bxf, byf, cxf, cyf);
             tl1_r <= edge_top_left(cxf, cyf, ax_r, ay_r);
             tl2_r <= edge_top_left(ax_r, ay_r, bxf, byf);
+            // The twelve multiplier operands, from the SAME flipped values
+            // the steps use and for the same reason: the registers do not
+            // hold the flipped vertices until this edge completes.
+            o0p_r <= cxf   - bxf;    o0q_r <= py0_r - byf;
+            o0u_r <= cyf   - byf;    o0v_r <= px0_r - bxf;
+            o1p_r <= ax_r  - cxf;    o1q_r <= py0_r - cyf;
+            o1u_r <= ay_r  - cyf;    o1v_r <= px0_r - cxf;
+            o2p_r <= bxf   - ax_r;   o2q_r <= py0_r - ay_r;
+            o2u_r <= byf   - ay_r;   o2v_r <= px0_r - ax_r;
             // S_W0B, not S_W1: this edge COMMITS the flip, and the cross unit
             // is driven from the committed registers in the state after it.
             state <= S_W0B;
