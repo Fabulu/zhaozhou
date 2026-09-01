@@ -2,7 +2,7 @@
 
 **Run ID:** RUN-20260831-1956
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Complete — retimed-plan correction validated and pushed for independent acceptance
+**Status:** Closed — task #53 correction validated and pushed; independent acceptance pending
 **Previous Version:** N/A
 
 ---

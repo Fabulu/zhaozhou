@@ -1,7 +1,7 @@
 # Task Log: RUN-20260831-1956 - Zixxtrixx final explicit whole-S animation candidate
 
 **Created:** 2026-08-31 19:56 UTC+02:00
-**Status:** Complete — retimed-plan midpoint, release, recovery and seam corrections validated and pushed
+**Status:** Closed — task #53 zero-release, real half-key composition and retimed-attack contact correction validated and pushed
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/
 
 ---
@@ -147,6 +147,16 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 - Implementation commit `1fb1fcc3c9ce462660e4fe65eb455ebbcf264057` was pushed and verified at `origin/feature/zixxtrixx-whole-s-final` before RUN closure.
 - No shared checkout write, hardware-process inspection, CMake/Ninja/Verilator/Sacengine, full subject bank, integration, archive, site-media edit, deployment or publication occurred.
 
+### 2026-09-01 - Task #53 endpoint, half-key composition and attack-contact correction
+
+- Reopened at zhaozhou `4867969964b5061c31af3dc19f19bbec4f72064c`; Upheaval remained untouched at `b1d3cd6dd3947cc674212afd8fdcd52211a54c96`.
+- Made launch authority precede the inclusive hold branch in attack and jump entry/squash release helpers. Contract-valid `release_keys = 0` now resolves the aliased hold/launch key to exact `entry = 0`, `spring/squash = 0`; all default branches and art values remain untouched.
+- Added compiled attack/jump release-0 clips in synthetic slots 59/60. Their exact midpoint masks own pre-launch roots only, no release poses or default-only entry poses; source and compiled launch pose/root/deformation equal grounded rest. The final half-segment station steps are 898/904 mm under the existing bound.
+- Added the real default local-body ChoreoRoot proof at `frame = 4`, `sub = 1`: the complete `build_attack(choreo=true)` midpoint is acquired through `PoseBank`, composed through the corresponding authored half-key instance root, and compared with compiled monolithic attack key 4.5. Full/micro world vertices, every profile station and station-14 support all differ by 0 mm; deformation is exact and local root ownership remains zero. No production choreography change was justified.
+- Added a compiled posed-vertex contact/support scan for retimed attack slot 50 with exact `12/7/4` timing. Across every grounded integer and half-key, station 14 has 0/0 mm X/Z drift, 0 mm target error and an actual/declared 33/33 mm maximum support step; full/micro minima remain in contact at `-25..-10` / `-25..-8` mm, with a 719 mm maximum station step.
+- Fresh lane-local direct `all` rebuilt every dependency and linked reel, cel, meshcheck and probe. Final probe is PASS and meshcheck is OK; committed evidence is `evidence/retimed-correction-final/{probe.txt,meshcheck.txt}`.
+- Implementation commit `d499b0e` was pushed to `origin/feature/zixxtrixx-whole-s-final`. No shared-lane access, art edit, rerender, full bank, integration, archive, publication or deployment occurred.
+
 ---
 
 ## Commands and Results
@@ -182,6 +192,9 @@ Finish Zixxtrixx animation as an isolated implementation candidate. Replace the 
 | Retimed correction development | fresh direct probe outputs `retimed-correction-r1` through `r7` | isolated obsolete assertion, empty-mesh compiler prerequisite and nondefault recovery phase alignment; no stale binary path |
 | Retimed final direct build | `tools/reel/build-direct.sh --output <retimed-correction-final> all` | every dependency compiled; reel, cel, meshcheck and probe linked |
 | Retimed final validation | final-output `zixx-probe` and `zixx-meshcheck` | **PASS / OK**; exact masks, synthetic compilation, release 2/3, short/long landing and seam regressions green; evidence in `evidence/retimed-correction-final/` |
+| Task #53 focused direct probe | fresh direct probe build and complete `zixx-probe` | **PASS:** compiled release 0 attack/jump, default local-body key-4.5 ChoreoRoot, and retimed slot-50 posed contact/support gates green |
+| Task #53 fresh direct build | `tools/reel/build-direct.sh --output <direct-task53-final> --clean all` | every dependency recompiled; reel, cel, meshcheck and probe linked without CMake/Ninja/Verilator/Sacengine |
+| Task #53 final validation | final task-53 `zixx-probe` and `zixx-meshcheck` | **PASS / OK**; committed text evidence refreshed in `evidence/retimed-correction-final/` |
 
 ---
 
@@ -262,6 +275,8 @@ None. The owner requires one sole implementation agent and prohibits delegation.
 
 - `runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/SPEC_v1.md`
 - `runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/TASK_LOG.md`
+- `runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/evidence/retimed-correction-final/probe.txt`
+- `runs/CLAUDE-RUNS/RUN-20260831-1956-zixxtrixx-final-whole-s/evidence/retimed-correction-final/meshcheck.txt`
 
 ---
 
@@ -294,12 +309,13 @@ None. The owner requires one sole implementation agent and prohibits delegation.
 | zhaozhou | `270ac58` | `ANIMATION: finish Zixxtrixx whole-S spring` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 | zhaozhou | `ffb6ba7` | `RUN: close corrected Zixxtrixx whole-S pass` | pushed; later reopened for retimed-plan regressions |
 | zhaozhou | `1fb1fcc` | `ANIMATION: correct retimed spring plans` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
+| zhaozhou | `d499b0e` | `Fix zero-release endpoint authority` | pushed to `origin/feature/zixxtrixx-whole-s-final` |
 
 ---
 
 ## Owned Process Shutdown
 
-All intended direct compilers, linkers, renderers, focused probes and Python sheet builders completed synchronously and exited, including the retimed-correction all-target direct rebuild and its final probe/meshcheck. One accidental `--help` invocation was recognized as a render and stopped immediately through owned task handle `buei6080i`; no owned background task handle remains. No encoder, PowerShell worker, browser or server was launched. Hardware-lane processes were neither inspected nor touched.
+All intended direct compilers, linkers, renderers, focused probes and Python sheet builders completed synchronously and exited, including the task-53 fresh all-target direct rebuild and its final probe/meshcheck. One accidental `--help` invocation was recognized as a render and stopped immediately through owned task handle `buei6080i`; no owned background task handle remains. No encoder, PowerShell worker, browser or server was launched. Hardware-lane processes were neither inspected nor touched.
 
 ---
 
