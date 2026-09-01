@@ -278,16 +278,40 @@ acceptance bar higher than WNS = +0.001 ns.
 worst 100.** `starve_samp`, `starvation`, `cdc_err`, the DMA and the framer are
 all absent; the renderer owns every failing path.
 
-**That is exactly why this matters.** They are not binding *today* because the
-renderer is worse — but at ~92 MHz they cap the design well below the note's
-110–115 target. So:
+### CORRECTION, same day: all three were ALREADY DONE
 
-> **`MHZArchitected` alone cannot reach the target. Finishing the renderer
-> exposes the shell, and `ShellFixes.md` is required work, not optional.**
+The paragraph above originally said this was "required work, not optional". That
+was written before checking the RTL, and it was wrong. Reading the source:
 
-Order follows from the measurements: finish the renderer first (it is worse),
-then the shell items, then re-fit. Bro's own rule — *refit before touching the
-next candidate* — is the method already being used.
+| item | status |
+|---|---|
+| 1 starvation-counter CDC | **done** — rewritten as a snapshot mailbox |
+| 2 CMD.DMA header → `crc_pay_r` | **done** — in `M_SEED_PREP`, NOT bro's suggested `M_HCRC` |
+| 3 record-framer wide-write | **partly** — `pkt_len − 4` hoisted to a registered copy; the streaming-parser rewrite is NOT done |
+
+**Two of them improved on the document rather than following it**, and both
+recorded why in the source:
+
+* **Item 2's suggested home measured worse.** Seeding at the end of `M_HCRC`
+  took −0.423 → −0.621 ns and 16 → 60 failing endpoints, because that state runs
+  `crc_hdr_r <= fold_o` and seeding there put the write in the CRC fold's
+  shadow — trading a ladder for a fold. `M_SEED_PREP` was chosen on the
+  measurement.
+* **Item 1's justification is stronger than the document's.** The crossing's
+  hold slack read **−0.952 / +0.254 / +0.259 / −0.728 across four fits that
+  touched nothing in that path** — 1.2 ns of swing on placement alone, making
+  the shell's verdict NONDETERMINISTIC. That is worse than permanently red: a
+  real regression arriving on a lucky fit is indistinguishable from luck. It had
+  already hidden the true −0.875 ns worst path behind its −1.991.
+
+**So the shell is in better shape than the document implies.** What remains open
+is item 3's full streaming-parser rewrite, and whether it is needed at all
+depends on where the shell lands once the renderer stops dominating — which is
+not measurable until the renderer does.
+
+The lesson for this docket: **check the RTL before recording a document's items
+as outstanding.** A plan written against an older fit may already have been
+answered, and in this case answered better than it asked.
 
 ---
 
