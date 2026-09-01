@@ -816,15 +816,34 @@ constexpr int32_t kSpringKey5EntryProfile = 850;
 // Station 14 carries the frozen whole-centreline route just below the real
 // terrain surface. These are direct authored support positions for the named
 // poses, not offsets inferred from the rendered projection.
-// The support settles progressively deeper as the animal rises onto its tail
-// and puts real weight through station 14: a light early scuff, then a firm
-// bite under the loaded coil. Monotone, so it can never bury and hover in turn.
-constexpr int32_t kSpringEarlySupportLiftMm = -20;
-constexpr int32_t kSpringMiddleSupportLiftMm = -30;
-constexpr int32_t kSpringAbsorbSupportLiftMm = -36;
-constexpr int32_t kSpringKey5SupportLiftMm = -40;
-constexpr int32_t kSpringAssembledSupportLiftMm = -42;
-constexpr int32_t kSpringCollapsedSupportLiftMm = -32;
+// THE SUPPORT ROUTE, re-authored because it had never actually run. Every value
+// here was tuned while spring_anchor_offset was discarding the compensation
+// entirely, so the whole route was decorative; with the plant honest for the
+// first time the old numbers buried the loaded animal 130 mm into the terrain
+// against a 34 mm declaration. These carry station 14 as the animal RISES onto
+// its tail: the contact patch migrates rearward off station 14 and spreads
+// along the ground, so the named lift rises with the load rather than sinking.
+// The authored result is kSpringDeclaredLoadedBiteMm of real bite at the
+// deepest pose -- weighted, not buried, and never hovering.
+constexpr int32_t kSpringEarlySupportLiftMm = -9;
+constexpr int32_t kSpringMiddleSupportLiftMm = -4;
+constexpr int32_t kSpringAbsorbSupportLiftMm = 17;
+constexpr int32_t kSpringKey5SupportLiftMm = 28;
+constexpr int32_t kSpringAssembledSupportLiftMm = 33;
+constexpr int32_t kSpringCollapsedSupportLiftMm = 43;
+// The loaded spring's declared terrain penetration, in mm. Ground contact is
+// AUTHORED here and checked by the committed pose probe; its absence would be
+// as much a fault as burying, because a body resting at exactly zero reads as
+// hovering. Resting bite stays kSpringDeclaredBiteMm; this is the deepest the
+// fully loaded coil is allowed to press.
+constexpr int32_t kSpringDeclaredLoadedBiteMm = 60;
+// THE LOADED BRACE IS HELD, NOT FROZEN. The old gate demanded the compressed
+// hold not move by more than ONE millimetre, which is a faithful description of
+// exactly what the owner rejected: "Nothing reads rigid -- not the arming, not
+// the hold". The brace must still be a brace -- it may not travel away from the
+// deepest pose, and the planted support may not slide at all -- but it is
+// allowed to quiver inside this named envelope while it holds.
+constexpr int32_t kSpringHoldLivingDriftMm = 70;
 constexpr SpringSupportLiftKey kSpringOpenSupportLift[] = {
     {0, 0},
     {kSpringEarlyEntryProfile, kSpringEarlySupportLiftMm},
@@ -3009,7 +3028,7 @@ inline zc::Clip build_attack(
     // retract and compact it. The same samples own body, head and root.
     const bool use_authored_middle_pose = f == kSpringMiddlePoseKey;
     const int32_t pre_drop = apply_spring_stance(
-        g, auth, entry, pre, use_authored_middle_pose);
+        g, auth, entry, pre, use_authored_middle_pose, f * 1000);
     // the coil: every interior joint bends the same way, so the body is a
     // wheel; bone 0 is left to the spin alone
     for (int k = 1; k < kSpineBones - 1; ++k) {
@@ -3198,6 +3217,16 @@ inline void zixx_plan_lock_spear(zc::AttackPlan& p,
 inline zc::AttackPlan zixx_plan_attack(int32_t tgt_x_mm, int32_t tgt_y_mm,
                                        int32_t tgt_vx_mmk, int32_t tgt_vy_mmk) {
   zc::AttackPlan p;
+  // THE SPRING TIMING BELONGS TO THE SPRING. zc::AttackPlan's defaults are the
+  // engine's, and they still read 12/6 -- the schedule owner direction 20
+  // rejected. Inheriting them silently gave every planned attack variant a
+  // DIFFERENT anticipation from the monolithic clip it is required to match
+  // bit-for-bit, which the parity gate caught at the first release key. State
+  // the creature's own schedule here so the two can never drift again.
+  p.compress_keys = static_cast<uint16_t>(kSaltoCompressEndKey);
+  p.compress_hold_keys =
+      static_cast<uint16_t>(kSaltoCompressHoldEndKey - kSaltoCompressEndKey);
+  p.release_keys = static_cast<uint16_t>(kSpringReleaseMidpointCount);
   // the golden preset: a grounded target at the approved strike point takes
   // the approved showcase verbatim
   if (tgt_y_mm <= 0 && tgt_vx_mmk == 0 && tgt_vy_mmk == 0 &&
@@ -3315,6 +3344,12 @@ inline int32_t zixx_plan_spring_release_entry(const zc::AttackPlan& p,
                                                int key) {
   const int th = p.compress_keys + p.compress_hold_keys;
   const int t0 = th + p.release_keys;
+  // The release is authored once, in kSpringReleaseIntegerControl. Any plan
+  // that keeps its four keys plays exactly those poses even if its ARMING was
+  // retimed -- otherwise a retimed variant fires a different spring from the
+  // one every other consumer fires, which is a parity fault, not a variation.
+  if (p.release_keys == kSpringReleaseMidpointCount && key >= th && key <= t0)
+    return kSpringReleaseIntegerControl[key - th].entry;
   // Launch is an authoritative grounded endpoint. In the contract-valid
   // zero-duration case launch and hold_end are the same key, so endpoint
   // authority must precede the inclusive hold branch.
@@ -3342,6 +3377,8 @@ inline int32_t zixx_plan_spring_release_squash(const zc::AttackPlan& p,
                                                 int key) {
   const int th = p.compress_keys + p.compress_hold_keys;
   const int t0 = th + p.release_keys;
+  if (p.release_keys == kSpringReleaseMidpointCount && key >= th && key <= t0)
+    return kSpringReleaseIntegerControl[key - th].squash;
   const int ta = zixx_plan_spring_release_assembled_key(p);
   if (key >= t0) return 0;
   if (key <= th) return 1000;
@@ -6971,6 +7008,12 @@ struct JumpPlan {
 // already authors the surface bite. This is the per-clip maximum accepted bite,
 // not another scalar to subtract after quaternion-derived root compensation.
 constexpr int32_t kJumpLandingBiteMm = kSpringDeclaredBiteMm;
+// Landing presses harder than resting: the animal is absorbing a fall, not
+// lying down. Declared here and checked by the committed pose probe.
+constexpr int32_t kJumpLandingLoadedBiteMm = 48;
+// ...and it must actually BITE on the impact frame. A landing that stops at the
+// surface reads weightless, so too LITTLE penetration is a fault as well.
+constexpr int32_t kJumpImpactMinBiteMm = 15;
 // The spring first releases into the intact signature S on the ground. During
 // these first airborne keys it gathers into the already-approved wheel; this
 // ordering makes rear/tail coiling during compression structurally impossible.
@@ -7007,6 +7050,31 @@ constexpr int kJumpLandingSupportHandoffEnd = 5;
 // vibration. See zixx_jump_motion_sample for how they are damped to rest.
 constexpr int32_t kJumpLandingSettleBounce = 165;
 constexpr int kJumpLandingSettlePeriodKeys = 11;
+// A LANDING IS NOT AN ARMING. The old loaded spring was a low flat pose, so
+// reusing it as the landing cushion happened to read as absorbing. The loaded
+// coil is now tall and leaning back -- it is a WOUND SPRING -- and landing into
+// it made the animal REAR UP on impact, which is the opposite of taking weight.
+// The landing therefore rides the same authored route but only as far as this
+// arm value: low, gathered, visibly compressed under itself, and still on the
+// one continuous route so the recovery back to the grounded S is seamless.
+constexpr int32_t kJumpLandingAbsorbArm = 330;
+
+// Convert a landing load (0 = grounded, 1000 = fully absorbed) into the
+// entry/squash pair the shared spring speaks. Because the landing never reaches
+// the assembled knot, squash stays zero and the whole absorb lives in entry.
+inline void jump_landing_load_pose(int32_t load, int32_t& entry,
+                                   int32_t& squash) {
+  if (load < 0) load = 0;
+  if (load > 1000) load = 1000;
+  const int32_t arm = (load * kJumpLandingAbsorbArm) / 1000;
+  entry = arm >= kSpringArmAssembledAt
+              ? 1000
+              : (arm * 1000) / kSpringArmAssembledAt;
+  squash = arm <= kSpringArmAssembledAt
+               ? 0
+               : ((arm - kSpringArmAssembledAt) * 1000) /
+                     (1000 - kSpringArmAssembledAt);
+}
 inline bool uses_default_jump_landing_timing(const JumpPlan& p) {
   return p.landing_keys == kJumpDefaultLandingKeys &&
          p.settle_keys == kJumpDefaultSettleKeys;
@@ -7041,7 +7109,12 @@ inline int32_t jump_landing_surface_bias_mm(const JumpPlan& p,
 // Every native 60 Hz frame was reviewed with the declared contact in place.
 // The fastest accepted sample is the intentional three-turn landing approach
 // (1146 mm at key 59.5); 1150 keeps a narrow regression guard.
-constexpr int32_t kJumpMaxStationStepMm = 1150;
+// Re-derived after owner direction 20. The loaded coil now sits 1712 mm of head
+// travel from the grounded S instead of ~340, so the fastest legitimate sample
+// -- a synthetic ZERO-key release, which unloads the whole spring in one key --
+// moved from 1146 mm to 1274 mm. This is a regression band recorded from the
+// accepted art, not a physical limit.
+constexpr int32_t kJumpMaxStationStepMm = 1300;
 
 inline JumpPlan zixx_jump_plan(uint16_t slot, int32_t count) {
   JumpPlan p;
@@ -7208,10 +7281,10 @@ inline JumpMotionSample zixx_jump_motion_sample(const JumpPlan& p, int f) {
                               : 0;
     const int gather_out = 1000 - gather_in;
     if (t > gather_out && gather_in > 0) {
-      m.spring = ((t - gather_out) * 1000) / gather_in;
-      if (m.spring > 1000) m.spring = 1000;
-      m.entry = 1000;
-      m.curl = 1000 - m.spring;
+      int32_t load = ((t - gather_out) * 1000) / gather_in;
+      if (load > 1000) load = 1000;
+      m.curl = 1000 - load;
+      jump_landing_load_pose(load, m.entry, m.spring);
     } else {
       m.curl = ss1000(j, 0, kJumpAirCoilKeys);
     }
@@ -7226,7 +7299,7 @@ inline JumpMotionSample zixx_jump_motion_sample(const JumpPlan& p, int f) {
     // rest. kJumpLandingSettleBounce 0 restores the plain deceleration.
     const int j = f - land;
     const int recovery = p.landing_keys + p.settle_keys - 4;
-    m.spring = 1000 - ss1000(j, 1, recovery);
+    int32_t load = 1000 - ss1000(j, 1, recovery);
     if (j > 0 && j < recovery && kJumpLandingSettleBounce != 0) {
       const int32_t damp = static_cast<int32_t>(
           (static_cast<int64_t>(recovery - j) * (recovery - j) * 1000) /
@@ -7237,11 +7310,9 @@ inline JumpMotionSample zixx_jump_motion_sample(const JumpPlan& p, int f) {
       const int32_t w = static_cast<int32_t>(
           (((static_cast<int64_t>(zref::fx_sin(zref::angle16{a}).raw) *
              kJumpLandingSettleBounce) >> 16) * damp) / 1000);
-      m.spring += w;
+      load += w;
     }
-    if (m.spring < 0) m.spring = 0;
-    if (m.spring > 1000) m.spring = 1000;
-    m.entry = m.spring;
+    jump_landing_load_pose(load, m.entry, m.spring);
     m.theta = p.salto_count * 65536;  // whole counts: identity at landing
   }
   return m;

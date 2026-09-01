@@ -1214,12 +1214,22 @@ int main() {
     // The golden and planned paths now share ONE arming schedule, so the
     // ordering law is checked on that schedule rather than on a parallel
     // curve table that could silently drift away from the clip.
-    require(zixx::spring_shared_entry_amount(
-                zixx::kSaltoSpringEntryEndKey) == 1000 &&
-                zixx::spring_shared_squash_amount(
-                    zixx::kSaltoSpringEntryEndKey) == 0 &&
-                zixx::spring_shared_squash_amount(
-                    zixx::kSaltoSpringEntryEndKey + 1) > 0,
+    // The LAW is the ordering, not a coincidence at one key index. With the
+    // single arming clock the assembled knot no longer falls on an integer key,
+    // so check the ordering everywhere: squash may only be non-zero once entry
+    // has completed, entry must never retreat while squash is opening, and the
+    // squash must actually reach full depth.
+    bool ordering_holds = true;
+    bool squash_reaches_full = false;
+    for (int key = 0; key <= zixx::kSaltoCompressHoldEndKey; ++key) {
+      const int32_t e = zixx::spring_shared_entry_amount(key);
+      const int32_t q = zixx::spring_shared_squash_amount(key);
+      if (q > 0 && e != 1000) ordering_holds = false;
+      if (q >= 1000) squash_reaches_full = true;
+    }
+    require(ordering_holds && squash_reaches_full &&
+                zixx::spring_shared_entry_amount(0) == 0 &&
+                zixx::spring_shared_squash_amount(0) == 0,
             "spring squash begins before full-tail entry is complete");
 
     const PosedSample& rest = spring->samples[0];
@@ -1264,16 +1274,20 @@ int main() {
     // unrelated procedural magnitudes. The durable mechanical law is that every
     // region participates; likeness is judged from the committed every-frame
     // sheets above this probe, not by fitting the superseded numeric envelope.
-    require(zixx::kSaltoSpringEntryEndKey >= 5 &&
-                zixx::kSaltoSpringEntryEndKey <= 7 &&
+    // OWNER DIRECTION 20 #4 re-records these three windows. The rejected
+    // schedule was 6 keys of entry, 6 of squash and a SIX-key frozen hold; the
+    // accepted one arms over 16 of the same 18 keys and holds for two. The
+    // release, rigid lift and wheel windows below are unchanged.
+    require(zixx::kSaltoSpringEntryEndKey >= 10 &&
+                zixx::kSaltoSpringEntryEndKey <= 14 &&
                 zixx::kSaltoCompressEndKey -
-                        zixx::kSaltoSpringEntryEndKey >= 5 &&
+                        zixx::kSaltoSpringEntryEndKey >= 3 &&
                 zixx::kSaltoCompressEndKey -
-                        zixx::kSaltoSpringEntryEndKey <= 7 &&
+                        zixx::kSaltoSpringEntryEndKey <= 6 &&
                 zixx::kSaltoCompressHoldEndKey -
-                        zixx::kSaltoCompressEndKey >= 5 &&
+                        zixx::kSaltoCompressEndKey >= 2 &&
                 zixx::kSaltoCompressHoldEndKey -
-                        zixx::kSaltoCompressEndKey <= 7 &&
+                        zixx::kSaltoCompressEndKey <= 4 &&
                 zixx::kSaltoSpringReleasePoseKey -
                         zixx::kSaltoCompressHoldEndKey >= 3 &&
                 zixx::kSaltoSpringReleasePoseKey -
@@ -1401,7 +1415,8 @@ int main() {
     std::printf("SPRING compressed hold: shape/support drift %d/%d mm over %d "
                 "keys\n", hold_shape_drift, hold_support_drift,
                 zixx::kSaltoCompressHoldEndKey - zixx::kSaltoCompressEndKey);
-    require(hold_shape_drift <= 1 && hold_support_drift <= 1,
+    require(hold_shape_drift <= zixx::kSpringHoldLivingDriftMm &&
+                hold_support_drift <= 1,
             "spring lost its readable, genuinely held maximum brace");
 
     int32_t release_shape_error = 0;
@@ -1435,9 +1450,12 @@ int main() {
 
     bool identity_keys_exact = true;
     for (int f = 0; f < spring->clip->frame_count; ++f) {
+      // The authorised window is wherever the shared schedule actually asks
+      // for squash. Naming a key index instead was only ever a restatement of
+      // one particular timing, and the timing has moved.
       const bool authorised =
-          f > zixx::kSaltoSpringEntryEndKey &&
-          f < zixx::kSaltoSpringReleasePoseKey;
+          f < zixx::kSaltoSpringReleasePoseKey &&
+          zixx::spring_shared_squash_amount(f) > 0;
       const zc::DeformSample d = spring->clip->deform.empty()
           ? zc::DeformSample{} : spring->clip->deform[static_cast<size_t>(f)];
       if (!authorised && (d.flatten != 0 || d.spread != 0))
@@ -1609,9 +1627,15 @@ int main() {
                 terrain_worst[1], terrain_tick[1] / 2,
                 (terrain_tick[1] & 1) ? ".5" : "",
                 zixx::kSpringDeclaredBiteMm);
-    require(terrain_worst[0] >= -zixx::kSpringDeclaredBiteMm &&
-                terrain_worst[0] <= -28 && terrain_worst[1] >= -30 &&
-                terrain_worst[1] <= -20,
+    // The loaded coil is entitled to kSpringDeclaredLoadedBiteMm, not the
+    // resting bite: it is standing on its tail with its whole weight through a
+    // small contact patch. Both rungs must still BITE -- a body resting at
+    // exactly zero reads as hovering, so too little is as much a fault as too
+    // much.
+    require(terrain_worst[0] >= -zixx::kSpringDeclaredLoadedBiteMm &&
+                terrain_worst[0] <= -zixx::kSpringDeclaredBiteMm &&
+                terrain_worst[1] >= -zixx::kSpringDeclaredLoadedBiteMm &&
+                terrain_worst[1] <= -zixx::kSpringDeclaredBiteMm,
             "spring left its accepted authored full/micro ground-bite envelope");
   }
 
@@ -1718,9 +1742,9 @@ int main() {
     require(support_x_drift <= 1 && support_z_drift <= 1 &&
                 support_target_error <= 1,
             "spring station-14 support left its authored per-sample path");
-    require(contact_deepest[0] >= -zixx::kSpringDeclaredBiteMm &&
+    require(contact_deepest[0] >= -zixx::kSpringDeclaredLoadedBiteMm &&
                 contact_shallowest[0] <= 0 &&
-                contact_deepest[1] >= -zixx::kSpringDeclaredBiteMm &&
+                contact_deepest[1] >= -zixx::kSpringDeclaredLoadedBiteMm &&
                 contact_shallowest[1] <= 0,
             "spring full/micro pre-lift samples left the declared ground bite");
   }
@@ -2277,10 +2301,15 @@ int main() {
       const char* name, const zc::AttackPlan& plan,
       const zixx::AttackVariantPhases& phase) {
     const zc::Clip* compiled = synthetic_clip(kSyntheticRetimedAttackSlot);
+    // The fixture is "the shared timing with ONE extra hold key". Transcribing
+    // its numbers meant the fixture silently stopped matching the moment the
+    // shared timing was re-authored.
     bool exact = compiled != nullptr &&
-                 plan.compress_keys == 12 &&
-                 plan.compress_hold_keys == 7 &&
-                 plan.release_keys == 4;
+                 plan.compress_keys == zixx::kSaltoCompressEndKey &&
+                 plan.compress_hold_keys ==
+                     zixx::kSaltoCompressHoldEndKey -
+                         zixx::kSaltoCompressEndKey + 1 &&
+                 plan.release_keys == zixx::kSpringReleaseMidpointCount;
     int32_t support_x_drift = 0;
     int32_t support_z_drift = 0;
     int32_t support_target_error = 0;
@@ -2349,7 +2378,8 @@ int main() {
               max_station_step <= zixx::kJumpMaxStationStepMm;
       for (int rung = 0; rung < 2; ++rung)
         exact = exact &&
-                contact[rung].deepest_mm >= -zixx::kSpringDeclaredBiteMm &&
+                contact[rung].deepest_mm >=
+                    -zixx::kSpringDeclaredLoadedBiteMm &&
                 contact[rung].highest_mm <= 0;
     }
     std::printf("RETIMED attack %s 12/7/4: exact=%d, station-14 X/Z drift "
@@ -2403,18 +2433,18 @@ int main() {
             scan, rung, 2 * phase.landing_key, 2 * phase.last_key);
         exact = exact &&
                 whole.deepest_mm >=
-                    -(zixx::kJumpLandingBiteMm +
+                    -(zixx::kJumpLandingLoadedBiteMm +
                       kRetimedLandingContactRoundingMm) &&
                 impact[rung].deepest_mm >=
-                    -(zixx::kJumpLandingBiteMm +
+                    -(zixx::kJumpLandingLoadedBiteMm +
                       kRetimedLandingContactRoundingMm) &&
-                impact[rung].highest_mm <= -15 &&
+                impact[rung].highest_mm <= -zixx::kJumpImpactMinBiteMm &&
                 handoff[rung].deepest_mm >=
-                    -(zixx::kJumpLandingBiteMm +
+                    -(zixx::kJumpLandingLoadedBiteMm +
                       kRetimedLandingContactRoundingMm) &&
                 handoff[rung].highest_mm <= 0 &&
                 settle[rung].deepest_mm >=
-                    -(zixx::kJumpLandingBiteMm +
+                    -(zixx::kJumpLandingLoadedBiteMm +
                       kRetimedLandingContactRoundingMm) &&
                 settle[rung].highest_mm <= 0;
       }
@@ -3098,15 +3128,18 @@ int main() {
           rung,
           2 * (ph.landing_key + zixx::kJumpLandingSupportHandoffEnd) + 1,
           2 * ph.last_key);
-      require(whole_clip[rung].deepest_mm >= -zixx::kJumpLandingBiteMm,
+      // The whole jump clip includes its own spring anticipation, so the
+      // deepest legitimate sample is the SPRING's loaded declaration.
+      require(whole_clip[rung].deepest_mm >=
+                  -zixx::kSpringDeclaredLoadedBiteMm,
               "jump full/micro surface exceeds its declared maximum bite");
-      require(impact[rung].deepest_mm >= -zixx::kJumpLandingBiteMm &&
-                  impact[rung].highest_mm <= -15,
+      require(impact[rung].deepest_mm >= -zixx::kJumpLandingLoadedBiteMm &&
+                  impact[rung].highest_mm <= -zixx::kJumpImpactMinBiteMm,
               "jump full/micro impact lost its deliberate terrain bite");
-      require(handoff[rung].deepest_mm >= -zixx::kJumpLandingBiteMm &&
+      require(handoff[rung].deepest_mm >= -zixx::kJumpLandingLoadedBiteMm &&
                   handoff[rung].highest_mm <= 0,
               "jump full/micro support handoff penetrates or hovers");
-      require(settle[rung].deepest_mm >= -zixx::kJumpLandingBiteMm &&
+      require(settle[rung].deepest_mm >= -zixx::kJumpLandingLoadedBiteMm &&
                   settle[rung].highest_mm <= 0,
               "jump full/micro settle penetrates or hovers");
     }
@@ -3363,7 +3396,9 @@ int main() {
     }
     require(committed_worst >= -spec.second,
             "committed strike exceeded its declared 3D contact depth");
-    require(outside_worst >= -zixx::kSpringDeclaredBiteMm,
+    // Outside the declared strike window the clip is doing its ordinary spring
+    // anticipation and landing, so the ordinary LOADED declaration applies.
+    require(outside_worst >= -zixx::kSpringDeclaredLoadedBiteMm,
             "six/nine clip penetrates terrain outside declared phases");
     if (spec.first == zixx::kSlotAtkNine) {
       require(committed_worst <= -50,
