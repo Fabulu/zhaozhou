@@ -1,0 +1,6 @@
+# paths launching at a DSP output register.
+# Quartus packs a register into the DSP that feeds it, so
+# these do NOT look like DSPs by name -- which is exactly how
+# the first version of this tool missed all 48 of them.
+# count: 0 of 100
+
