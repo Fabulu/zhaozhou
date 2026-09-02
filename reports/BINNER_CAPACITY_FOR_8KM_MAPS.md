@@ -262,3 +262,104 @@ job — not the "a 30-tile triangle pays setup 30 times" saving the ruling impli
 live**, which is the actual prerequisite for the attribute-bearing geometry seam
 (ruling 5) and therefore for anything textured. It should be built for that
 reason and costed as that, not sold as a throughput win.
+
+---
+
+# ADDENDUM 2026-09-02: the army numbers assumed NO LOD, and the console has one
+
+**A frame-resident arena IS buildable, at roughly 16-21% of the device's M10K.**
+The 49% figure above comes from drawing every creature at full mesh, and the
+shipped LOD ladder makes that impossible for a distant army.
+
+## What the ladder actually emits
+
+`zref::LodRung` is `{kMesh, kMicro, kSplat, kGlint}`, and
+`reference/src/zcreature/creature_sim.cpp:794` shows what the coarse rungs cost:
+a **billboard quad — two `raster_tri` calls, TWO TRIANGLES**.
+
+    kGlint   1 px half-extent        2 triangles
+    kSplat   >= 2 px half-extent     2 triangles
+    kMicro   decimated meshlets
+    kMesh    full meshlets, <= 126
+
+And the rung follows from projected size (`zref_creature.hpp`, "LOD ladder"):
+
+    err_px = proj_radius_q8 * e_r / bound_radius,  legal when err_px <= T
+      kGlint  e_r = bound_radius      ->  legal when proj_radius <=   T
+      kSplat  e_r = bound_radius / 2  ->  legal when proj_radius <= 2 T
+
+So a creature costs 96 triangles only when it is **near the camera**. On an 8 km
+map most of an army is far away and costs **two**.
+
+## Measured, same tool, same shipped `zref::Binner`
+
+Each row is 256 creatures. The mix is swept rather than derived from a camera,
+because the mix is what a governor controls and the distance distribution is a
+game-design input this tool has no business inventing.
+
+| 256-creature scene | triangles | references | deepest tile |
+|---|---:|---:|---:|
+| all kMesh — **the assumption above** | **24,576** | 30,609 | 215 |
+| 8 mesh, 24 micro, 96 splat, 128 glint | **1,792** | 2,259 | 33 |
+| 16 mesh, 32 micro, 96 splat, 112 glint | **2,720** | 3,426 | 38 |
+| 32 mesh, 64 micro, 96 splat, 64 glint | 4,928 | 6,220 | 55 |
+| 64 mesh, 64 micro, 64 splat, 64 glint | 7,936 | 9,948 | 106 |
+
+**A realistic mix is 9-14x cheaper than the no-LOD case.**
+
+## Which makes the arena affordable
+
+At `TRI_ENT_W = 142` bits and 4-reference chunks of 73 bits, against 553 M10K:
+
+| arena | M10K | share |
+|---|---:|---:|
+| 3,072 triangles + 26,624 references | 90 | **16.3%** |
+| 4,096 triangles + 32,768 references | 115 | **20.8%** |
+| 24,576 triangles (no-LOD army) alone | 341 | 61.6% |
+
+16-21% is a real cost that has to be argued against every other RAM in the
+console. It is not the 49% that made the question architectural.
+
+## What still stands, unchanged
+
+* **The giant is still the reference case, and LOD does not help it.** A giant
+  near the camera IS at kMesh by definition: 126 triangles, **25,704
+  references**, 25x the shipped arena. References must be sized for it, and that
+  is where most of the 16-21% goes.
+* **The two limits still fail independently.** The army stresses triangles, the
+  giant stresses references, and neither number predicts the other.
+* **`max_tile_list_depth_o` is still unread.** The no-LOD army's deepest tile is
+  215-341; a realistic mix is 33-38. That is the difference between an
+  86-chunk pointer chase and a 9-chunk one, per tile, and nothing reads it.
+
+## What this changes about the recommendation
+
+The section above concludes "the arena must stop being frame-resident" and that
+"a bigger constant will not do". **On these numbers a bigger constant is exactly
+what will do**, provided the governor bounds how many creatures are at kMesh.
+
+That is the third option the section already lists — MEASURE.TOKENS deciding
+submission — and it is now the cheapest of the three rather than the softest.
+Band passes with geometry re-submission, and the framebuffer read-back that
+flush-and-continue needs, are both avoidable.
+
+**The number the owner actually has to choose is the kMesh budget**, because
+that single figure sets the triangle arena:
+
+    8 near creatures at full mesh    1,792 tris    ~5% M10K
+    16                               2,720         ~7%
+    32                               4,928        ~12%
+    64                               7,936        ~19%
+
+## Honest limits of this addendum
+
+* The rung mix is **swept, not measured from a scene**. No camera, no visibility,
+  no terrain occlusion. A real frame also carries sky, stars, effects, objects.
+* `kMicro` is costed at 24 triangles — a quarter of kMesh, the stated intent of
+  a decimated rung, not a measured decimation of the shipped creature.
+* Screen positions are random, so tile spread is uniform where a real army
+  clusters. Clustering makes the deepest-tile figure worse and the totals
+  identical.
+
+None of that changes the finding, because the finding is a ratio: the coarse
+rungs cost two triangles instead of ninety-six, and most of an army is coarse.

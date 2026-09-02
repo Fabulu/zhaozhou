@@ -170,6 +170,79 @@ int main() {
     report("creature army, 200 x 96 triangles", L, kTriCap, kRefCap);
   }
 
+  // ------------------------------------------------------------- 3b ---
+  // THE SAME ARMY THROUGH THE SHIPPED LOD LADDER, which scene 3 does not use.
+  //
+  // Scene 3 draws every creature at full mesh. That is the NO-LOD cost, and
+  // the console has a LOD ladder: zref::LodRung is {kMesh, kMicro, kSplat,
+  // kGlint}, and creature_sim.cpp:794 shows what the coarse rungs actually
+  // emit -- a BILLBOARD QUAD, i.e. TWO TRIANGLES:
+  //
+  //     kGlint  1 px half-extent   2 triangles
+  //     kSplat  >= 2 px half-extent 2 triangles
+  //     kMicro  compiler-decimated meshlets
+  //     kMesh   full meshlets, <= 126 triangles
+  //
+  // And the rung is chosen by projected size (zref_creature.hpp, "LOD ladder"):
+  //     err_px = proj_radius_q8 * e_r / bound_radius,  legal when <= threshold
+  //     kGlint  e_r = bound_radius     -> legal when proj_radius <=   T
+  //     kSplat  e_r = bound_radius / 2 -> legal when proj_radius <= 2 T
+  // so a creature costs 96 triangles only when it is NEAR. On an 8 km map most
+  // of an army is far away and costs two.
+  //
+  // This sweeps the rung MIX rather than inventing a camera, because the mix is
+  // what a governor controls and the distance distribution is a game-design
+  // input this tool has no business guessing. Each row is 256 creatures.
+  {
+    struct Mix { const char* name; int mesh, micro, splat, glint; };
+    const Mix mixes[] = {
+        {"256 all kMesh (no LOD -- scene 3's assumption)", 256, 0, 0, 0},
+        {"256: 8 mesh, 24 micro, 96 splat, 128 glint", 8, 24, 96, 128},
+        {"256: 16 mesh, 32 micro, 96 splat, 112 glint", 16, 32, 96, 112},
+        {"256: 32 mesh, 64 micro, 96 splat, 64 glint", 32, 64, 96, 64},
+        {"256: 64 mesh, 64 micro, 64 splat, 64 glint", 64, 64, 64, 64},
+    };
+    constexpr int kMeshTris = 96;   // charter 15 band, as scene 3 uses
+    constexpr int kMicroTris = 24;  // decimated; a quarter is the stated intent
+    for (const Mix& mx : mixes) {
+      Load L;
+      std::vector<int> per(static_cast<size_t>(kGridW) * kGridH, 0);
+      uint32_t s2 = 0x2468acEu;
+      auto rnd2 = [&s2]() {
+        s2 = s2 * 1664525u + 1013904223u;
+        return static_cast<double>((s2 >> 16) & 0x7FFF) / 32768.0;
+      };
+      // A rung's screen footprint follows from the law above: coarse rungs are
+      // coarse BECAUSE they are small. Sizes in pixels, half-extent for quads.
+      auto emit_quad = [&](double cx_, double cy_, double r) {
+        add_tri(&L, &per, kGridW, vp, px(cx_ - r), px(cy_ - r), px(cx_ + r), px(cy_ - r),
+                px(cx_ + r), px(cy_ + r));
+        add_tri(&L, &per, kGridW, vp, px(cx_ - r), px(cy_ - r), px(cx_ + r), px(cy_ + r),
+                px(cx_ - r), px(cy_ + r));
+      };
+      auto emit_cluster = [&](double cx_, double cy_, double span, int tris) {
+        for (int t = 0; t < tris; ++t) {
+          const double jx = rnd2() * span, jy = rnd2() * span;
+          add_tri(&L, &per, kGridW, vp, px(cx_ + jx), px(cy_ + jy), px(cx_ + jx + 3),
+                  px(cy_ + jy), px(cx_ + jx), px(cy_ + jy + 3));
+        }
+      };
+      for (int n = 0; n < mx.mesh; ++n)
+        emit_cluster(rnd2() * (kW - 64), rnd2() * (kH - 64), 56.0, kMeshTris);
+      for (int n = 0; n < mx.micro; ++n)
+        emit_cluster(rnd2() * (kW - 28), rnd2() * (kH - 28), 24.0, kMicroTris);
+      for (int n = 0; n < mx.splat; ++n)
+        emit_quad(rnd2() * (kW - 8) + 4, rnd2() * (kH - 8) + 4, 3.0);
+      for (int n = 0; n < mx.glint; ++n)
+        emit_quad(rnd2() * (kW - 4) + 2, rnd2() * (kH - 4) + 2, 0.5);
+      for (int v : per) {
+        if (v > L.max_list) L.max_list = v;
+        if (v) ++L.tiles_touched;
+      }
+      report(mx.name, L, kTriCap, kRefCap);
+    }
+  }
+
   // --------------------------------------------------------------- 4 ---
   // A GIANT FILLING THE VIEW. Few triangles, each enormous: the other extreme,
   // where references explode and triangle count does not.
