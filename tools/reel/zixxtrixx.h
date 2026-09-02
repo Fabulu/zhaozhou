@@ -1036,17 +1036,39 @@ constexpr int32_t kSpringBladeSquashRise = 9500;
 constexpr int kSaltoSpringEntryEndKey = 12;
 constexpr int kSaltoCompressEndKey = 16;
 constexpr int kSaltoCompressHoldEndKey = 18;
-constexpr int kSaltoSpringReleasePoseKey = 22;  // exact grounded S before lift
-constexpr int kSaltoRigidReleaseEndKey = 24;    // whole S rises before wheel gather
-constexpr int kSaltoReleaseEndKey = 28;         // accepted airborne wheel is complete
+// Everything downstream of the loaded hold -- release, flight, spear, stick,
+// recovery -- keeps its ACCEPTED key spacing and merely SLIDES when the arming
+// grows. kAtkRetimeShift is that slide, derived from the hold end so a slower
+// arming moves the whole approved tail of the clip in one edit (Direction 23
+// retime scaffolding). Zero on the accepted 18-key-hold schedule, so today it
+// changes nothing; the bank is byte-identical with or without it.
+constexpr int kAtkRetimeShift = kSaltoCompressHoldEndKey - 18;
+constexpr int kSaltoSpringReleasePoseKey =
+    22 + kAtkRetimeShift;  // exact grounded S before lift
+constexpr int kSaltoRigidReleaseEndKey =
+    24 + kAtkRetimeShift;  // whole S rises before wheel gather
+constexpr int kSaltoReleaseEndKey =
+    28 + kAtkRetimeShift;  // accepted airborne wheel is complete
 // The local-body compression vocabulary ends one key before the hold/release
 // seam. Named bounds keep its compiled midpoint provenance owner-editable.
 constexpr int kAtkCompressSliceFirstKey = 0;
 constexpr int kAtkCompressSliceLastKey = kSaltoCompressHoldEndKey - 1;
 constexpr int kSaltoAirCoilKeys = 6;  // planned variants clear before wheel lock
 constexpr int kSaltoCoilPoseKey = kSaltoReleaseEndKey + 1;  // past signed-rounding residue
-constexpr int kSaltoUnrollStartKey = 52;
-constexpr int kSaltoUnrollEndKey = 60;
+// THE PRIME-NUMBER CONTRACT (see kSpringAirWobblePeriodKeys): the coil pose at
+// kSaltoCoilPoseKey and the unroll start must stay exactly one 23-key wobble
+// period apart or the compile-enforced coil/unroll seam fails. Deriving the
+// stride keeps the contract intact under any retime shift.
+constexpr int kSaltoUnrollStride = 23;
+constexpr int kSaltoUnrollStartKey = kSaltoCoilPoseKey + kSaltoUnrollStride;
+constexpr int kSaltoUnrollEndKey = kSaltoUnrollStartKey + 8;
+// The recovery ends the clip, so the clip grows with the shift. kAttackKeys is
+// declared long before this block; the assert keeps the two in step.
+static_assert(kAttackKeys == 240 + kAtkRetimeShift,
+              "kAttackKeys must be 240 + kAtkRetimeShift");
+static_assert(kSaltoUnrollStartKey == 52 + kAtkRetimeShift &&
+                  kSaltoUnrollEndKey == 60 + kAtkRetimeShift,
+              "unroll keys drifted off the accepted 52/60 + shift positions");
 
 // Slot 30 is an accepted quick taunt and remains a frozen animation. V9's
 // thicker weight-bearing run required new stance slopes for the living clips,
@@ -1221,8 +1243,16 @@ constexpr int32_t kAtkPlungeMinMm = 600; // the dive must exist: the commit
                                          // point sits at least reach+this
                                          // from the intercept
 constexpr int32_t kAtkStickLift = kAtkTipDrop - kBodyY - kAtkStickDepth;
-constexpr int kAtkImpactKey = 74;        // approved flight shifted by spring prep
-constexpr int kAtkStickEnd = 224;        // impact + 150 keys = 5.0 s stuck
+constexpr int kAtkImpactKey =
+    74 + kAtkRetimeShift;  // approved flight shifted by spring prep
+constexpr int kAtkStickEnd = kAtkImpactKey + 150;  // impact + 150 keys = 5.0 s stuck
+// Slice bounds for the phase vocabulary (previously raw literals in the
+// bank-assembly block): the stick loop is the impact pose and its neighbour;
+// the recovery runs from the extraction to the final key.
+constexpr int kAtkStickStartKey = kAtkImpactKey;
+constexpr int kAtkStickEndKey = kAtkImpactKey + 1;
+constexpr int kAtkRecoverStartKey = kAtkStickEnd;
+constexpr int kAtkRecoverEndKey = kAttackKeys - 1;
 
 // FALL: the slow distress tumble. The whole S rotates about its own centre
 // (re-pivoted off the nose exactly the way the salto re-pivots its spin to
@@ -1441,25 +1471,57 @@ inline int curve(const Key* k, int n, int f) {
 // 22..24; only then may the accepted airborne wheel gather. The accepted
 // climb, apex hang, plunge and extraction stay intact.
 static const Key kAtkLift[] = {
-    {0, 0},          {22, 0},        {23, 300},      {24, 600},
-    {26, 1100},      {28, 1500},     {32, 3200},     {38, 5600},
-    {44, 8200},      {50, 10600},    {55, 11700},
-    {59, kAtkApexLift}, {67, kAtkApexLift},   // approved eight-key apex hang
-    {68, 11803},     {69, 11213},    {70, 10228},    {71, 8851},
-    {72, 7079},      {73, 4914},
-    {kAtkImpactKey, kAtkStickLift},  {kAtkStickEnd, kAtkStickLift},
-    {226, 3200},     {228, 3400},    {231, 2200},     {234, 900},
-    {237, 200},      {kAttackKeys - 1, 0}};
+    {0, 0},
+    {kSaltoSpringReleasePoseKey, 0},
+    {23 + kAtkRetimeShift, 300},
+    {24 + kAtkRetimeShift, 600},
+    {26 + kAtkRetimeShift, 1100},
+    {28 + kAtkRetimeShift, 1500},
+    {32 + kAtkRetimeShift, 3200},
+    {38 + kAtkRetimeShift, 5600},
+    {44 + kAtkRetimeShift, 8200},
+    {50 + kAtkRetimeShift, 10600},
+    {55 + kAtkRetimeShift, 11700},
+    {59 + kAtkRetimeShift, kAtkApexLift},  // approved eight-key apex hang...
+    {67 + kAtkRetimeShift, kAtkApexLift},  // ...ends here
+    {68 + kAtkRetimeShift, 11803},
+    {69 + kAtkRetimeShift, 11213},
+    {70 + kAtkRetimeShift, 10228},
+    {71 + kAtkRetimeShift, 8851},
+    {72 + kAtkRetimeShift, 7079},
+    {73 + kAtkRetimeShift, 4914},
+    {kAtkImpactKey, kAtkStickLift},
+    {kAtkStickEnd, kAtkStickLift},
+    {226 + kAtkRetimeShift, 3200},
+    {228 + kAtkRetimeShift, 3400},
+    {231 + kAtkRetimeShift, 2200},
+    {234 + kAtkRetimeShift, 900},
+    {237 + kAtkRetimeShift, 200},
+    {kAttackKeys - 1, 0}};
 // forward drive in mm. THE PLUNGE IS THE STRAIGHT SHOT: over the dive keys
 // the drive is 1850 + t^2 * 5570 -- the SAME t^2 as the lift, so every dive
 // key sits exactly on the 30-degrees-from-vertical line the spear points
 // along. Held through the stick, returned across the landing for the loop.
 static const Key kAtkFwd[] = {
-    {0, 0},     {26, 0},    {30, 150},  {38, 500},  {46, 1000},
-    {54, 1550}, {61, 1850}, {67, 1850},  // drive hangs with the lift
-    {68, 1964}, {69, 2305}, {70, 2873}, {71, 3669}, {72, 4692}, {73, 5942},
+    {0, 0},
+    {26 + kAtkRetimeShift, 0},
+    {30 + kAtkRetimeShift, 150},
+    {38 + kAtkRetimeShift, 500},
+    {46 + kAtkRetimeShift, 1000},
+    {54 + kAtkRetimeShift, 1550},
+    {61 + kAtkRetimeShift, 1850},
+    {67 + kAtkRetimeShift, 1850},  // drive hangs with the lift
+    {68 + kAtkRetimeShift, 1964},
+    {69 + kAtkRetimeShift, 2305},
+    {70 + kAtkRetimeShift, 2873},
+    {71 + kAtkRetimeShift, 3669},
+    {72 + kAtkRetimeShift, 4692},
+    {73 + kAtkRetimeShift, 5942},
     {kAtkImpactKey, kAtkFwdMax},
-    {kAtkStickEnd, kAtkFwdMax}, {228, 5200}, {232, 2600}, {kAttackKeys - 1, 0}};
+    {kAtkStickEnd, kAtkFwdMax},
+    {228 + kAtkRetimeShift, 5200},
+    {232 + kAtkRetimeShift, 2600},
+    {kAttackKeys - 1, 0}};
 // TWO-STAGE PRELOAD. Entry reaches the enlarged full-tail S before squash
 // authority is allowed to move at all; both return to exact rest at key 22.
 // The golden attack used to carry its OWN copy of that schedule here as a pair
@@ -1475,7 +1537,12 @@ static const Key kAtkFwd[] = {
 // five-second stick -- the buried tail is the shot -- and released only as
 // the extraction re-gathers the S.
 static const Key kAtkAim[] = {
-    {0, 0}, {52, 0}, {59, 1000}, {226, 1000}, {232, 0}, {kAttackKeys - 1, 0}};
+    {0, 0},
+    {kSaltoUnrollStartKey, 0},
+    {59 + kAtkRetimeShift, 1000},
+    {226 + kAtkRetimeShift, 1000},
+    {232 + kAtkRetimeShift, 0},
+    {kAttackKeys - 1, 0}};
 constexpr int kAtkLiftN = static_cast<int>(sizeof(kAtkLift) / sizeof(Key));
 constexpr int kAtkFwdN = static_cast<int>(sizeof(kAtkFwd) / sizeof(Key));
 constexpr int kAtkAimN = static_cast<int>(sizeof(kAtkAim) / sizeof(Key));
@@ -1489,14 +1556,17 @@ constexpr int kAtkAimN = static_cast<int>(sizeof(kAtkAim) / sizeof(Key));
 // anticipation (keys 0..9 are the compress + hold).
 static const Key kAtkCurl[] = {
     {0, 0}, {kSaltoCompressHoldEndKey, 0}, {kSaltoRigidReleaseEndKey, 0},
-    {kSaltoReleaseEndKey, 1000}, {52, 1000}, {59, 0},
+    {kSaltoReleaseEndKey, 1000}, {kSaltoUnrollStartKey, 1000},
+    {59 + kAtkRetimeShift, 0},
     {kAttackKeys - 1, 0}};
 // how much of the canonical S remains -- the shared spring profile owns the
 // loaded pose, then the complete released S rises rigidly for two keys before
 // authority hands to the unchanged airborne wheel.
 static const Key kAtkAuth[] = {{0, 1000}, {kSaltoRigidReleaseEndKey, 1000},
-                               {kSaltoReleaseEndKey, 0}, {226, 0},
-                               {232, 650}, {kAttackKeys - 1, 1000}};
+                               {kSaltoReleaseEndKey, 0},
+                               {226 + kAtkRetimeShift, 0},
+                               {232 + kAtkRetimeShift, 650},
+                               {kAttackKeys - 1, 1000}};
 // accumulated turn of the WHOLE BODY in 1/1000 of a full rotation. 3000 =
 // the three somersaults; kAtkSpinStick (3333) = the DIAGONAL spear, tail
 // 60 deg below horizontal pointing down-and-forward, HELD from the apex
@@ -1506,11 +1576,17 @@ static const Key kAtkAuth[] = {{0, 1000}, {kSaltoRigidReleaseEndKey, 1000},
 // until the complete released S has risen through key 24; it never rotates
 // the planted compression or masquerades as lift.
 static const Key kAtkSpin[] = {{0, 0},          {kSaltoRigidReleaseEndKey, 0},
-                               {26, -40},        {29, 0},
-                               {32, 700},        {40, 1600},
-                               {48, 2600},      {55, 3050},       {59, kAtkSpinStick},
-                               {226, kAtkSpinStick},               {230, 3650},
-                               {233, 3900},     {kAttackKeys - 1, 4000}};
+                               {26 + kAtkRetimeShift, -40},
+                               {kSaltoCoilPoseKey, 0},
+                               {32 + kAtkRetimeShift, 700},
+                               {40 + kAtkRetimeShift, 1600},
+                               {48 + kAtkRetimeShift, 2600},
+                               {55 + kAtkRetimeShift, 3050},
+                               {59 + kAtkRetimeShift, kAtkSpinStick},
+                               {226 + kAtkRetimeShift, kAtkSpinStick},
+                               {230 + kAtkRetimeShift, 3650},
+                               {233 + kAtkRetimeShift, 3900},
+                               {kAttackKeys - 1, 4000}};
 constexpr int kAtkCurlN = static_cast<int>(sizeof(kAtkCurl) / sizeof(Key));
 constexpr int kAtkAuthN = static_cast<int>(sizeof(kAtkAuth) / sizeof(Key));
 constexpr int kAtkSpinN = static_cast<int>(sizeof(kAtkSpin) / sizeof(Key));
@@ -2217,7 +2293,7 @@ constexpr int32_t kSpringAirWobble = 0;
 // the clock below is taken modulo the period in exact milli-keys, so keys 29
 // and 52 land on the identical phase and the loop stays bit-exact. Change this
 // only to another divisor of 23 -- which, 23 being prime, means 23 or 1.
-constexpr int32_t kSpringAirWobblePeriodKeys = 23;
+constexpr int32_t kSpringAirWobblePeriodKeys = kSaltoUnrollStride;
 constexpr int32_t kSpringAirWobbleStationPhase = -5200;
 
 // The per-joint airborne coil pitch: base pitch, tapered along the chain, plus
@@ -7188,7 +7264,7 @@ struct JumpPlan {
   uint16_t compress_keys = kSaltoCompressEndKey;
   uint16_t compress_hold_keys =
       kSaltoCompressHoldEndKey - kSaltoCompressEndKey;
-  uint16_t release_keys = 4;
+  uint16_t release_keys = kSpringReleaseMidpointCount;
   uint16_t flight_keys = 38;
   uint16_t landing_keys = kJumpDefaultLandingKeys;
   uint16_t settle_keys = kJumpDefaultSettleKeys;
@@ -8011,31 +8087,41 @@ inline const zc::CreatureType& type() {
       bank.clips.push_back(slice_clip(
           atk_local, kSlotAtkCompress, kAtkCompressSliceFirstKey,
           kAtkCompressSliceLastKey));
-      bank.clips.push_back(slice_clip(atk_local, kSlotAtkRelease, 17, 29));
+      bank.clips.push_back(slice_clip(atk_local, kSlotAtkRelease,
+                                      kAtkCompressSliceLastKey,
+                                      kSaltoCoilPoseKey));
       midpoint_authorship.push_back(slice_midpoint_authorship(
           local_owned, kSlotAtkCompress, kAtkCompressSliceFirstKey,
           kAtkCompressSliceLastKey));
       midpoint_authorship.push_back(slice_midpoint_authorship(
-          local_owned, kSlotAtkRelease, 17, 29));
-      bank.clips.push_back(duplicate_pose_clip(atk_local, kSlotAtkCoil, 29));
-      bank.clips.push_back(slice_clip(atk_local, kSlotAtkUnroll, 52, 60));
+          local_owned, kSlotAtkRelease, kAtkCompressSliceLastKey,
+          kSaltoCoilPoseKey));
+      bank.clips.push_back(
+          duplicate_pose_clip(atk_local, kSlotAtkCoil, kSaltoCoilPoseKey));
+      bank.clips.push_back(slice_clip(atk_local, kSlotAtkUnroll,
+                                      kSaltoUnrollStartKey, kSaltoUnrollEndKey));
       bank.clips.push_back(build_spear_flex());
-      bank.clips.push_back(slice_clip(atk_local, kSlotAtkStick, 74, 75));
+      bank.clips.push_back(slice_clip(atk_local, kSlotAtkStick,
+                                      kAtkStickStartKey, kAtkStickEndKey));
       bank.clips.push_back(build_air_hit());
-      bank.clips.push_back(slice_clip(atk_local, kSlotAtkRecover, 224, 239));
+      bank.clips.push_back(slice_clip(atk_local, kSlotAtkRecover,
+                                      kAtkRecoverStartKey, kAtkRecoverEndKey));
       bank.seams = {
-          {kSlotAtkCompress, 17, kSlotAtkRelease, 0},
-          {kSlotAtkRelease, 12, kSlotAtkCoil, 0},
+          {kSlotAtkCompress, kAtkCompressSliceLastKey, kSlotAtkRelease, 0},
+          {kSlotAtkRelease, kSaltoCoilPoseKey - kAtkCompressSliceLastKey,
+           kSlotAtkCoil, 0},
           {kSlotAtkCoil, 0, kSlotAtkCoil, 1},
           {kSlotAtkCoil, 1, kSlotAtkUnroll, 0},
-          {kSlotAtkUnroll, 8, kSlotAtkSpearFlex, 0},
+          {kSlotAtkUnroll, kSaltoUnrollEndKey - kSaltoUnrollStartKey,
+           kSlotAtkSpearFlex, 0},
           {kSlotAtkSpearFlex, 0, kSlotAtkSpearFlex, 9},
           {kSlotAtkSpearFlex, 0, kSlotAtkStick, 0},
           {kSlotAtkStick, 0, kSlotAtkStick, 1},
           {kSlotAtkStick, 1, kSlotAtkAirHit, 0},
           {kSlotAtkAirHit, 0, kSlotAtkAirHit, 11},
           {kSlotAtkAirHit, 11, kSlotAtkRecover, 0},
-          {kSlotAtkRecover, 15, kSlotAtkCompress, 0},
+          {kSlotAtkRecover, kAtkRecoverEndKey - kAtkRecoverStartKey,
+           kSlotAtkCompress, 0},
       };
     }
     // run 0326: the vocabulary close-out (see ANIMATION-VOCABULARY.md)
