@@ -1,3 +1,32 @@
+> # SUPERSEDED — 2026-09-02
+>
+> **This question is closed, and asking it was itself the error.** Three depth
+> profiles were already ruled, generated and proved. Owner ruling R1, saved in
+> `reports/OWNER-RULINGS-BUILDABILITY-20260902.md`:
+>
+> ```
+> profile 0 WORLD_LONG      wmin 1.0 m     wmax 16,384 m  SCALE 2^40  d(wmax) 1024
+> profile 1 WORLD_STANDARD  wmin 0.5 m     wmax  8,192 m  SCALE 2^39  d(wmax) 1024
+> profile 2 CLOSE           wmin 0.25 m    wmax  2,048 m  SCALE 2^38  d(wmax) 2048
+> profile 3                 reserved and refused until re-proved
+> ```
+>
+> For all three: `d(wmin) = 0xFFFFFF` exactly; depth monotonic non-increasing;
+> far value non-zero; **`wmax` is a depth clamp, NOT a far clipping plane**;
+> scale generated from the reciprocal law, never hand-entered.
+> `SetView.flags[1:0]` selects. Zero remains `WORLD_LONG`.
+>
+> **What is left is mechanical, not a decision:** emit the constants from
+> fixgen; use `zref::depth_of` as the oracle; carry the profile through
+> capture/replay; wire GEOM.PROJECT; run the endpoint and monotonic proofs.
+>
+> The document is kept because the derivation below is still the reasoning that
+> the ruled numbers satisfy — but **nothing here is an open question**, and a
+> reader who treats it as one will re-ask something already answered. That is
+> the specific failure this banner exists to prevent: the question was carried
+> into a published spec-questions page and put in front of the owner a second
+> time.
+
 # Open spec question: `wmin`, `wmax` and `scale` for `invw24`
 
 **This is a decision request, not a proposal.** It blocks GEOM.PROJECT's

@@ -1,4 +1,25 @@
 <title>Zhaozhou — what is still unspecced</title>
+<div style="border:3px solid #b00; padding:1em; margin:0 0 2em 0; background:#fff4f4">
+<h2 style="margin-top:0; color:#b00">ANSWERED — 2026-09-02. This page is now a record, not a request.</h2>
+<p>Every question below was answered by the owner-relayed reviewer brief, saved as
+<code>reports/OWNER-RULINGS-BUILDABILITY-20260902.md</code>. That file is binding; this one is
+kept only so the questions and their answers sit together.</p>
+<p><b>Three of these questions should never have been asked, and that is the more useful thing on this page:</b></p>
+<ul>
+<li><b>D1 was already closed.</b> Three depth profiles were ruled, generated and proved before I asked.
+I asked for <code>wmin</code>/<code>wmax</code>/<code>scale</code> as if no one had chosen them.</li>
+<li><b>D4 already had one binding meaning.</b> <code>276,480</code> is conservative pre-Early-Z covered
+fragments in Z60 at 3.0&times; overdraw. I listed it as ambiguous.</li>
+<li><b>D2 asked the wrong question entirely.</b> "Choose a kMesh budget and grow the on-chip arena"
+contradicts the binding 2026-08-31 ruling. The production answer is an external local-SDRAM
+<code>GEOM.PARAMBUF</code> &mdash; which has no block, no contract and no ledger entry. A number
+would not have unblocked anything; it would have built the wrong thing faster.</li>
+</ul>
+<p><b>And one thing this page got wrong by omission:</b> it claimed zero contracts are unwritten by
+accident. <code>SW.STREAM</code> is a real stub with TODO sections, and it is on the critical path of
+the 8&nbsp;km world.</p>
+</div>
+
 <h1>Zhaozhou: every piece of hardware that is not buildable, and exactly why</h1>
 
 <p><b>Audited 2026-09-02</b> against <code>design/contracts/</code> (92 contracts),
@@ -77,9 +98,9 @@ descriptor fetch.</li>
 
 <hr>
 
-<h2>D. THE ACTUAL OPEN QUESTIONS — these are what I need from you</h2>
+<h2>D. THE QUESTIONS I ASKED — all five answered 2026-09-02</h2>
 
-<h3>D1. Depth quantisation: <code>wmin</code>, <code>wmax</code>, <code>scale</code></h3>
+<p style="color:#080;font-weight:bold;margin-bottom:0">ANSWERED &mdash; CLOSED BEFORE IT WAS ASKED</p><h3>D1. Depth quantisation: <code>wmin</code>, <code>wmax</code>, <code>scale</code></h3>
 <p>Source: <code>reports/OPEN-SPEC-DEPTH-QUANTISATION.md</code>.
 Blocks GEOM.PROJECT's attribute carry — the renderer's last step-6 piece.</p>
 <p><b>These three numbers are the depth range of the console.</b> Needed:</p>
@@ -94,7 +115,9 @@ gives a sensible non-zero floor.</li>
 <p>The third is constrained by the first two, so in practice this is two numbers
 and an arithmetic check.</p>
 
-<h3>D2. The kMesh budget — how many creatures at full mesh at once?</h3>
+<p style="border-left:4px solid #080;padding-left:1em"><b>Answer:</b> profile 0 WORLD_LONG: wmin 1.0 m, wmax 16,384 m, SCALE 2^40, d(wmax) 1024 &middot; profile 1 WORLD_STANDARD: wmin 0.5 m, wmax 8,192 m, SCALE 2^39, d(wmax) 1024 &middot; profile 2 CLOSE: wmin 0.25 m, wmax 2,048 m, SCALE 2^38, d(wmax) 2048 &middot; profile 3 reserved and refused until re-proved. For all three, d(wmin) = 0xFFFFFF exactly, depth monotonic non-increasing, far value non-zero, and <b>wmax is a depth clamp, not a far clipping plane</b>. <code>SetView.flags[1:0]</code> selects; zero stays WORLD_LONG. Remaining work is mechanical.</p>
+
+<p style="color:#080;font-weight:bold;margin-bottom:0">ANSWERED &mdash; WRONG QUESTION</p><h3>D2. The kMesh budget — how many creatures at full mesh at once?</h3>
 <p>Source: <code>reports/BINNER_CAPACITY_FOR_8KM_MAPS.md</code> and my addendum
 2026-09-02.</p>
 <p><b>This one is now much cheaper than the old report says.</b> That report
@@ -120,7 +143,9 @@ kMesh. <b>The single number I need is that budget:</b></p>
 <p><i>Note: a giant near the camera is unaffected by LOD and needs 25,704
 references on its own. Reference capacity must be sized for it regardless.</i></p>
 
-<h3>D3. MEASURE.HISTOGRAM — four laws, or leave it refused</h3>
+<p style="border-left:4px solid #080;padding-left:1em"><b>Answer:</b> <b>32 machine-wide, at least 16 per active Duo view, giants counted separately</b> &mdash; but the number is the smaller half of the answer. The production solution is an external local-SDRAM <code>GEOM.PARAMBUF</code>, <b>not</b> a grown on-chip arena; growing the arena contradicts the binding 2026-08-31 ruling. GEOM.PARAMBUF has no block, contract or ledger entry and needs all three. My LOD measurement stands as evidence that armies are cheap; evidence that a constant could work does not revoke a scalable architecture.</p>
+
+<p style="color:#080;font-weight:bold;margin-bottom:0">ANSWERED &mdash; REFUSED, AS IT ALREADY WAS</p><h3>D3. MEASURE.HISTOGRAM — four laws, or leave it refused</h3>
 <p>Its contract is a <i>reasoned refusal</i> and I agree with it: "a small block
 built on four invented laws is worse than no block, because the inventions
 become ratified by being built." To revive it you would have to rule on:</p>
@@ -138,12 +163,16 @@ Version 1.</li>
 <p><b>My recommendation: leave it refused.</b> It is the only block in the tree
 whose absence is itself documented reasoning.</p>
 
-<h3>D4. What does <code>276,480</code> actually count?</h3>
+<p style="border-left:4px solid #080;padding-left:1em"><b>Answer:</b> MEASURE.HISTOGRAM stays refused. The documented refusal holds.</p>
+
+<p style="color:#080;font-weight:bold;margin-bottom:0">ANSWERED &mdash; ALREADY HAD ONE MEANING</p><h3>D4. What does <code>276,480</code> actually count?</h3>
 <p>Source: <code>reports/PER_PIXEL_BUDGET.md</code>. Decides whether two
 per-pixel blocks need replicating at all — i.e. whether real work is being sized
 against a number that means something different from what it is used for.</p>
 
-<h3>D5. Three-sample material recipes — confirm the TMU is sized for it</h3>
+<p style="border-left:4px solid #080;padding-left:1em"><b>Answer:</b> 276,480 = 384 &times; 240 &times; 3.0, conservative <b>pre-Early-Z covered fragments</b>. Not a sample count, post-Z survivor count, divide count, AUX count or measured frame. The canonical pre-Z cross-mode design target is <b>320,000</b> covered fragments/frame, the design deadline is <b>1,333,333 clocks</b> and <b>1,666,667 is the fault boundary</b>. Separate units now exist for each thing that used to share the number.</p>
+
+<p style="color:#080;font-weight:bold;margin-bottom:0">ANSWERED &mdash; A CAPABILITY, NOT A GUARANTEE</p><h3>D5. Three-sample material recipes — confirm the TMU is sized for it</h3>
 <p><code>MATERIAL_ARCHITECTURE.md</code> ratifies bounded recipes of up to three
 samples and names a <code>sacrifice_terrain_3sample</code> profile at
 <b>1,094,600 samples a frame</b>. The rearchitecture brief sizes the TMU against
@@ -154,6 +183,8 @@ creatures, objects, cache misses, queue bubbles <i>and</i> integration cost.</p>
 held in reserve behind the degradation ladder?</p>
 
 <hr>
+
+<p style="border-left:4px solid #080;padding-left:1em"><b>Answer:</b> Three-sample materials are a capability the machine may spend, not a per-fragment guarantee. And the PERSPUV ~50% headroom claim is only true for <b>one</b> UV pair per fragment: three-sample materials need 2,189,200 products against a 1,333,333-clock budget, so production needs <b>two parallel product lanes</b>.</p>
 
 <h2>E. The 8 km terrain world — separate document, in progress</h2>
 
@@ -211,7 +242,7 @@ or does the directory need an invalidate port?</li>
 
 <hr>
 
-<h2>Summary of what I need</h2>
+<h2>Summary of what I asked for (superseded — see the banner)</h2>
 
 <ol>
 <li><b>Three particle/2D/compositor behaviour answers</b> (section B) — unblocks
