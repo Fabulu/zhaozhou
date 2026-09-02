@@ -80,7 +80,32 @@ set_global_assignment -name OPTIMIZATION_TECHNIQUE BALANCED
 # VERIFY IT IS HONOURED. Quartus Lite restricts some physical-synthesis
 # features, and an ignored assignment looks exactly like one that did
 # not help. Read it back from the fitter's own settings table.
-set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION ON
+# MEASURED AND REMOVED: it was honoured and it changed NOTHING.
+#
+#                     without        with
+#     Fmax            99.50 MHz      99.50 MHz
+#     worst slack     -0.050 ns      -0.050 ns
+#     endpoints               1              1
+#     ALMs                13146          13146
+#     limiter        earlyz -0.050   earlyz -0.050
+#
+# Bit-identical down to the ALM count, and the fitter DID report
+# `Perform Register Duplication for Performance : On`. The likely
+# reason is that OPTIMIZATION_MODE=HIGH PERFORMANCE EFFORT already
+# enables it -- that same report shows `Physical Synthesis for
+# Combinational Logic for Performance : On` against a default of Off,
+# and nothing here ever set that.
+#
+# Removed rather than left in. A setting that is reported On while
+# changing nothing is worse than no setting: it reads as a lever that
+# has already been pulled, and the next person to look for headroom
+# crosses it off without testing it.
+#
+# THIS CLOSES THE APPARATUS AUDIT. Every fitter and synthesis knob has
+# now been measured: OPTIMIZATION_MODE (+2.08 MHz, KEPT),
+# OPTIMIZATION_TECHNIQUE (-3.01, reverted), register duplication (nil).
+# PHYSICAL_SYNTHESIS_EFFORT stays NORMAL: it scales physical synthesis
+# that is already running and showed no headroom to scale.
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 
 # Exact ZHAO_SHELL_RTL cone from tests/CMakeLists.txt, in the same order.
