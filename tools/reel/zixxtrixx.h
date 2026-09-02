@@ -917,6 +917,53 @@ constexpr int kSpringSquashLiftRouteCount =
 // (~3-4 px at 240p, the anticipation dig) before the body climbs onto the
 // tail; the deep hold itself sits at ~-30..-55.
 constexpr int32_t kSpringDeclaredLoadedBiteMm = 160;
+// THE COIL-FORMATION PRESS -- a DECLARED self-contact (owner-ruled allowance,
+// 2026-09-02). While the coil FORMS, and again as it unwinds into the
+// release, the front of the body passes over the still-winding rear with
+// ~40 mm of press at the real deformed skin (roughly one flattened tube
+// radius of overlap across far-separated station pairs). Nineteen probe
+// rounds established that a planar wind of this depth cannot keep two tube
+// radii of clearance through that transit without either a per-station
+// clearance solve or giving up the tight coil. The owner was shown exactly
+// that trade and ruled: keep the tight coil, DECLARE the press, publish.
+// This is authored contact in the same spirit as the declared ground bites:
+// it names WHERE (body runs at least seven stations apart, the front
+// passing over the winding rear), WHEN (the two windows below -- the wind
+// and its unwind mirror, the two crossings of arm ~520-750), and HOW DEEP
+// (the press bound below, measured at the posed full/micro skin by the
+// committed probe). It covers the coil-formation transit and NOTHING else:
+// the loaded pose, the hold, the release pose and every airborne phase
+// remain zero-intersection law, and any self-intersection outside these
+// windows is still a fault. On screen the transit reads as the animal
+// coiling over itself (evidence/iter4-midwind-frames.png) and is invisible
+// at 240p; if the owner's eye later disagrees, that costs one more pass.
+// Windows are 60 Hz presentation ticks (even = authored key, odd =
+// midpoint), matching the probe's half-key walk.
+constexpr int kSpringCoilFormationWindBeginTick = 13;    // key 6.5 -- wind
+constexpr int kSpringCoilFormationWindEndTick = 21;      // key 10.5
+constexpr int kSpringCoilFormationUnwindBeginTick = 38;  // key 19 -- unwind
+constexpr int kSpringCoilFormationUnwindEndTick = 40;    // key 20
+// Deepest allowed press inside the declared windows, in mm, measured as
+// the probe's poke-through gauge on intersecting triangle pairs of the
+// posed surface. The micro rung's coarser triangles read the SAME physical
+// press larger than the full rung's (a bigger triangle crossing at the
+// same depth has bigger side excursions), so each rung hugs its own
+// measured value of the owner-ruled motion (full 50, micro 94 -- both the
+// ~40 mm skin press seen on screen). NOT a blanket permit; widen either
+// only on a new owner ruling.
+constexpr int32_t kSpringCoilFormationPressFullMm = 52;
+constexpr int32_t kSpringCoilFormationPressMicroMm = 96;
+// The same formation climb, sampled on the retimed (+1 hold key) grid,
+// momentarily lifts the lowest micro vertex a few mm clear of the ground
+// during the climb onto the coil (measured +5 mm at key 11.5) -- the hover
+// echo of the declared press, not a separate fault. Owner-ruled with the
+// press, 2026-09-02. Its window is the whole formation climb, from the
+// wind's first crossing through the bow onto the chin rest; outside it the
+// grounded pre-release still requires contact at or below zero, and the
+// deep hold keeps its own authored bite band.
+constexpr int kSpringCoilFormationEchoBeginTick = 13;  // key 6.5
+constexpr int kSpringCoilFormationEchoEndTick = 27;    // key 13.5 -- the bow
+constexpr int32_t kSpringCoilFormationHoverEchoMm = 8;
 // THE LOADED BRACE IS HELD, NOT FROZEN. The old gate demanded the compressed
 // hold not move by more than ONE millimetre, which is a faithful description of
 // exactly what the owner rejected: "Nothing reads rigid -- not the arming, not

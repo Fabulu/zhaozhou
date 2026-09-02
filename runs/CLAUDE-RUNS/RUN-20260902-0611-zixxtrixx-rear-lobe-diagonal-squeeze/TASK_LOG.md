@@ -304,3 +304,26 @@ Plan, in the spirit of the declared ground-bite law:
   per-station clearance solve that would restore zero intersections
   through the formation. Do not retry it this pass.
 - The experimental 3D-coil triple salto stays DROPPED.
+
+### 2026-09-02 — PROBE GREEN: the press is declared, not widened
+
+- The formation press is now DECLARED AUTHORED CONTACT (owner-ruled
+  2026-09-02): windows ticks 13-21 (keys 6.5-10.5, the wind) and 38-40
+  (keys 19-20, the unwind mirror); depth bounded by the new committed
+  poke-through gauge at the posed skin, hugging the ruled motion: full
+  50 mm measured / 52 bound, micro 94 measured / 96 bound (the micro
+  rung's coarser triangles read the same ~40 mm skin press larger).
+  Outside-window hits: 0/0 — the loaded pose, hold, release pose and all
+  airborne phases keep Direction 21 #3's zero law, asserted.
+- The +5 mm retimed hover echo instrumented to key 11.5 micro — the tail
+  of the formation climb, phase-shifted by the +1 hold key. Same cause
+  (the body climbing onto its own coil), declared the same way:
+  kSpringCoilFormationEchoBeginTick/EndTick 13..27 (keys 6.5-13.5,
+  wind through the bow), allowance kSpringCoilFormationHoverEchoMm = 8;
+  outside that window grounded pre-release contact still must be <= 0.
+- ZIXX PROBE: PASS, exit 0. Evidence:
+  evidence/probe-round20-GREEN-declared-press.txt.
+- KNOWN FOLLOW-UP (deferred by the same ruling, do not retry this pass):
+  a 6th authored mid-wind knot with per-station clearance solving would
+  restore zero intersections through the formation transit; hours of
+  work, risk to the accepted motion. Only on owner request.
