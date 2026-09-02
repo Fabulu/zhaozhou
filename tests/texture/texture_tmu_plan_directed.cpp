@@ -83,7 +83,10 @@ int main(int argc, char** argv) {
   // the resident-palette interface lands, and this file says so rather than
   // quietly generating only the formats that happen to pass.
   std::vector<Req> rq;
-  for (uint32_t fmt = 2; fmt <= 4; ++fmt)
+  // Non-CLUT formats are 1, 3 and 4 -- RGB565, ARGB1555, ARGB4444.
+  // NOT 2..4: the shipped encoding is CLUT8=0, RGB565=1, CLUT4=2, so the
+  // first version of this sweep fed CLUT4 while calling it RGB565.
+  for (uint32_t fmt : {1u, 3u, 4u})
     for (uint32_t filt = 0; filt <= 1; ++filt)
       for (uint32_t wu = 0; wu <= 2; ++wu)
         for (uint32_t wv = 0; wv <= 2; ++wv) {
@@ -97,10 +100,10 @@ int main(int argc, char** argv) {
           rq.push_back(r);
         }
   // level clamping: maxlvl beyond the chain, and mip disabled
-  rq.push_back({0x1234u, 0x5678u, 0x2000u, mk_mode(2, 0, 2, 2, 4, 4, 15, 1), 0x70, 0x900});
-  rq.push_back({0x1234u, 0x5678u, 0x2000u, mk_mode(2, 0, 2, 2, 8, 8, 0, 0), 0xF0, 0x901});
+  rq.push_back({0x1234u, 0x5678u, 0x2000u, mk_mode(1, 0, 2, 2, 4, 4, 15, 1), 0x70, 0x900});
+  rq.push_back({0x1234u, 0x5678u, 0x2000u, mk_mode(1, 0, 2, 2, 8, 8, 0, 0), 0xF0, 0x901});
   // a reserved-bit error case
-  rq.push_back({1u, 1u, 0u, mk_mode(2, 0, 2, 2, 4, 4, 0, 0) | (1u << 21), 0, 0x902});
+  rq.push_back({1u, 1u, 0u, mk_mode(1, 0, 2, 2, 4, 4, 0, 0) | (1u << 21), 0, 0x902});
 
   uint32_t s = 0xFEED01u;
   for (int i = 0; i < 300; ++i) {
@@ -108,7 +111,8 @@ int main(int argc, char** argv) {
     r.u = rnd(&s);
     r.v = rnd(&s);
     r.base = rnd(&s) & 0x00FF'FF00u;
-    r.mode = mk_mode(2u + (rnd(&s) % 3u), rnd(&s) & 1u, rnd(&s) % 3u, rnd(&s) % 3u,
+    const uint32_t nonclut[3] = {1u, 3u, 4u};
+    r.mode = mk_mode(nonclut[rnd(&s) % 3u], rnd(&s) & 1u, rnd(&s) % 3u, rnd(&s) % 3u,
                      2u + (rnd(&s) % 9u), 2u + (rnd(&s) % 9u), rnd(&s) % 5u, rnd(&s) & 1u);
     r.lod = static_cast<uint8_t>(rnd(&s));
     r.src = static_cast<uint16_t>(0x1000 + i);   // never 0
@@ -183,6 +187,16 @@ int main(int argc, char** argv) {
                 rq.size(), got.size());
   }
 
+  // Isolate the level path: 0x901 has mip DISABLED, so level is 0 and lvl_off
+  // is 0 on both sides. If that one agrees while mip-enabled ones do not, the
+  // divergence is in level selection / lvl_off and nowhere else.
+  for (uint32_t k : {1u, 2u, 3u, 10u, 0x900u, 0x901u}) {
+    auto r = refmap.find(k), g = gotmap.find(k);
+    if (r != refmap.end() && g != gotmap.end())
+      std::printf("  src %03x  ref a0=%08x  got a0=%08x  %s\n", k, r->second.a0,
+                  g->second.a0, (r->second.a0 == g->second.a0) ? "SAME" : "DIFF");
+  }
+
   for (size_t i = 0; i < 4 && i < ref.size() && i < got.size(); ++i)
     std::printf("  [%zu] ref a0=%08x en=%x src=%04x | got a0=%08x en=%x src=%04x\n",
                 i, ref[i].a0, ref[i].en, ref[i].src, got[i].a0, got[i].en, got[i].src);
@@ -198,55 +212,27 @@ int main(int argc, char** argv) {
   }
   std::printf("  matched by src_id: %zu of %zu planner accesses (%d unmatched)\n",
               gotmap.size() - static_cast<size_t>(unmatched), gotmap.size(), unmatched);
-  // ==========================================================================
-  // OPEN, AND BLOCKING: the address comparison DOES NOT PASS.
-  // ==========================================================================
-  // It is reported rather than asserted, and that decision needs stating
-  // plainly because turning a failing check into a printf is exactly how a
-  // problem gets buried.
+  // RESOLVED. Both encodings this file's planner had GUESSED were wrong, and
+  // both produced addresses that looked entirely plausible:
   //
-  //   * It is NOT asserted because a knowingly-red test in the `fast` lane
-  //     breaks CI for the whole repository, and the elasticity result below is
-  //     real and worth having under gate today.
-  //   * It IS printed, loudly, every run, and `zhao_texture_tmu_plan` MUST NOT
-  //     BE INSTANTIATED until this is zero. The planner is unwired precisely
-  //     so that this is a finding and not a defect in the shipped picture.
+  //   format  assumed CLUT4=0 CLUT8=1 RGB565=2; shipped is CLUT8=0 RGB565=1
+  //           CLUT4=2, so every 16bpp request took the CLUT4 shift in one
+  //           block and the 16bpp shift in the other -- while the underlying
+  //           totals were IDENTICAL.
+  //   wrap    assumed CLAMP=0 MIRROR=1 REPEAT=2; shipped is REPEAT=0 CLAMP=1
+  //           MIRROR=2, so a negative V clamped to row 0 here and wrapped to
+  //           row 8 there.
   //
-  // WHAT IS KNOWN, and the keying below is what made it knowable.
-  //
-  // Comparing by INDEX reported 357/357 wrong, which says nothing: one extra
-  // access in either stream shifts every later entry. Keying by src_id
-  // separates the two questions and gives a real answer:
-  //
-  //     matched by src_id   354 of 357   (3 unmatched)
-  //     addresses differing 345 of 357
-  //     src mismatches        0
-  //
-  // So this is ARITHMETIC, not alignment. For src=1 (fmt RGB565, no filter,
-  // CLAMP/CLAMP, log2w=8 log2h=6, maxlvl=3, mip on, lod=0x20,
-  // u=0x00018000 v=0xFFFE8000, base=0x00100000):
-  //
-  //     ref  a0 = 0x00102910   ->  total 0x1488
-  //     got  a0 = 0x0010A07E   ->  total 0x503F
-  //
-  // Hand-derivation from zhao_texture_tmu_pipe's OWN expressions -- level 2,
-  // lvl_shift 12, lvl_off 0x5000, uw0 CLAMP(96,63)=63, row0 0 -- gives 0x503F,
-  // the PLANNER's answer. The reference's total is BELOW its own lvl_off, which
-  // no combination of level 0, 1 or 2 reproduces. Something in the pipe's
-  // effective path differs from the expressions transcribed here.
-  //
-  // Resolving it needs INTERNAL VISIBILITY of the pipe's level, masks and
-  // lvl_off for one request -- not more inference from the outside. Three
-  // hand-derivations failed to reproduce the reference, and a fourth guess
-  // would be worth nothing.
-  //
-  // Deliberately not guessed at. Resolving it means reading what the pipe
-  // actually emits, not adjusting the planner until two numbers agree -- that
-  // way lies a transcription that matches on this stimulus and diverges on the
-  // next one.
-  std::printf("  OPEN: address mismatch %d/%zu, enables %d, src %d -- "
-              "planner MUST NOT be instantiated until zero\n",
-              bad_addr, ref.size(), bad_en, bad_src);
+  // Neither was found by reading the transcription, which looked right. Both
+  // were found by taking ONE request and deriving its address by hand against
+  // the pipe's own constants. Guessing an encoding is the same error as
+  // guessing an arithmetic law.
+  zhao::check(bad_addr == 0,
+              "all four texel addresses are BIT-IDENTICAL to the shipped pipe",
+              0, bad_addr);
+  zhao::check(bad_en == 0, "and the lane enables match", 0, bad_en);
+  zhao::check(unmatched == 0, "and every planner access matches a reference one",
+              0, unmatched);
 
   // ---- THE ELASTICITY CLAIM ----------------------------------------------
   // Downstream ready held LOW. The planner must keep accepting until all five

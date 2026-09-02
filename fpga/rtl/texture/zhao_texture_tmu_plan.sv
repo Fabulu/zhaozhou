@@ -85,13 +85,34 @@ module zhao_texture_tmu_plan #(
 );
 
   // ---- mode field positions, copied ----------------------------------------
-  localparam logic [1:0] WRAP_CLAMP  = 2'd0;
-  localparam logic [1:0] WRAP_MIRROR = 2'd1;
-  localparam logic [1:0] WRAP_REPEAT = 2'd2;
+  // READ FROM zhao_texture_tmu_pipe.sv:171, NOT ASSUMED -- the SECOND encoding
+  // this file guessed wrong. The first draft had CLAMP=0, MIRROR=1, REPEAT=2,
+  // which is the order the names are usually listed in and is not the order
+  // shipped. Every wv=0 coordinate then took CLAMP here and REPEAT in the
+  // reference, and a negative V clamped to row 0 instead of wrapping to row 8.
+  //
+  // Verified by hand on src=1 before changing anything: with REPEAT,
+  // iv0 = -24 -> 0xFFFFFFE8 & 15 = 8, row0 = 512; iu0 = 96 & 63 = 32; total =
+  // 20480 + 512 + 32 = 21024 -> 0x0010A440, which is exactly what the pipe
+  // emits. Two guessed encodings, two identical mistakes, and both hid behind
+  // addresses that looked plausible.
+  localparam logic [1:0] WRAP_REPEAT = 2'd0;
+  localparam logic [1:0] WRAP_CLAMP  = 2'd1;
+  localparam logic [1:0] WRAP_MIRROR = 2'd2;
 
-  localparam logic [2:0] FMT_CLUT4    = 3'd0;
-  localparam logic [2:0] FMT_CLUT8    = 3'd1;
-  localparam logic [2:0] FMT_RGB565   = 3'd2;
+  // READ FROM zhao_texture_tmu_pipe.sv:169, NOT ASSUMED. The first draft of
+  // this file invented CLUT4=0, CLUT8=1, RGB565=2 -- a perfectly reasonable
+  // ordering that is not the one shipped. Every 16bpp request then took the
+  // CLUT4 address path in the reference and the 16bpp path here, and 345 of
+  // 357 addresses differed while the underlying totals were IDENTICAL.
+  //
+  // The tell was arithmetic: for src=0x901 the reference gave
+  // base + (total >> 1) of THIS planner's own total. Same maths, different
+  // format lane. Guessing an encoding is the same error as guessing an
+  // arithmetic law, and it hid behind a plausible-looking mismatch for an hour.
+  localparam logic [2:0] FMT_CLUT8    = 3'd0;
+  localparam logic [2:0] FMT_RGB565   = 3'd1;
+  localparam logic [2:0] FMT_CLUT4    = 3'd2;
   localparam logic [2:0] FMT_ARGB1555 = 3'd3;
   localparam logic [2:0] FMT_ARGB4444 = 3'd4;
 
