@@ -20,6 +20,7 @@
 // ---------------------------------------------------------------------------
 #include <cstdint>
 #include <cstdio>
+#include <map>
 #include <vector>
 
 #include "verilated.h"
@@ -92,7 +93,7 @@ int main(int argc, char** argv) {
           r.base = 0x0010'0000u;
           r.mode = mk_mode(fmt, filt, wu, wv, 8, 6, 3, 1);
           r.lod = 0x20;
-          r.src = static_cast<uint16_t>(rq.size());
+          r.src = static_cast<uint16_t>(rq.size() + 1);   // never 0
           rq.push_back(r);
         }
   // level clamping: maxlvl beyond the chain, and mip disabled
@@ -110,13 +111,18 @@ int main(int argc, char** argv) {
     r.mode = mk_mode(2u + (rnd(&s) % 3u), rnd(&s) & 1u, rnd(&s) % 3u, rnd(&s) % 3u,
                      2u + (rnd(&s) % 9u), 2u + (rnd(&s) % 9u), rnd(&s) % 5u, rnd(&s) & 1u);
     r.lod = static_cast<uint8_t>(rnd(&s));
-    r.src = static_cast<uint16_t>(0x1000 + i);
+    r.src = static_cast<uint16_t>(0x1000 + i);   // never 0
     rq.push_back(r);
   }
 
   // ---- reference: the shipped pipe ---------------------------------------
   struct Acc { uint32_t a0, a1, a2, a3, en, filt, err, fu, fv, fmt, src; };
   std::vector<Acc> ref;
+  // KEYED BY src_id, which separates the ARITHMETIC question from the
+  // STREAMING one. Comparing by index conflates them: one extra access in
+  // either stream shifts every later entry and reports a total mismatch that
+  // says nothing about whether an address is right.
+  std::map<uint32_t, Acc> refmap, gotmap;
   {
     reset();
     size_t fed = 0;
@@ -135,6 +141,7 @@ int main(int argc, char** argv) {
         a.a2 = top.a_acc_addr_o[2]; a.a3 = top.a_acc_addr_o[3];
         a.en = top.a_acc_en_o; a.src = top.a_acc_src_id_o;
         ref.push_back(a);
+        if (a.src != 0 && refmap.find(a.src) == refmap.end()) refmap[a.src] = a;
       }
       const bool took = feeding && top.a_req_ready_o;
       zhao::tick(top);
@@ -165,6 +172,7 @@ int main(int argc, char** argv) {
         a.a2 = top.b_acc_addr_o[2]; a.a3 = top.b_acc_addr_o[3];
         a.en = top.b_acc_en_o; a.src = top.b_acc_src_id_o;
         got.push_back(a);
+        if (a.src != 0 && gotmap.find(a.src) == gotmap.end()) gotmap[a.src] = a;
       }
       const bool took = feeding && top.b_req_ready_o;
       zhao::tick(top);
@@ -179,14 +187,17 @@ int main(int argc, char** argv) {
     std::printf("  [%zu] ref a0=%08x en=%x src=%04x | got a0=%08x en=%x src=%04x\n",
                 i, ref[i].a0, ref[i].en, ref[i].src, got[i].a0, got[i].en, got[i].src);
 
-  int bad_addr = 0, bad_en = 0, bad_src = 0;
-  for (size_t i = 0; i < ref.size() && i < got.size(); ++i) {
-    if (ref[i].a0 != got[i].a0 || ref[i].a1 != got[i].a1 || ref[i].a2 != got[i].a2 ||
-        ref[i].a3 != got[i].a3)
-      ++bad_addr;
-    if (ref[i].en != got[i].en) ++bad_en;
-    if (ref[i].src != got[i].src) ++bad_src;
+  int bad_addr = 0, bad_en = 0, bad_src = 0, unmatched = 0;
+  for (const auto& kv : gotmap) {
+    auto it = refmap.find(kv.first);
+    if (it == refmap.end()) { ++unmatched; continue; }
+    const Acc& r = it->second;
+    const Acc& g = kv.second;
+    if (r.a0 != g.a0 || r.a1 != g.a1 || r.a2 != g.a2 || r.a3 != g.a3) ++bad_addr;
+    if (r.en != g.en) ++bad_en;
   }
+  std::printf("  matched by src_id: %zu of %zu planner accesses (%d unmatched)\n",
+              gotmap.size() - static_cast<size_t>(unmatched), gotmap.size(), unmatched);
   // ==========================================================================
   // OPEN, AND BLOCKING: the address comparison DOES NOT PASS.
   // ==========================================================================
@@ -201,18 +212,33 @@ int main(int argc, char** argv) {
   //     BE INSTANTIATED until this is zero. The planner is unwired precisely
   //     so that this is a finding and not a defect in the shipped picture.
   //
-  // What is known, from the diagnostic above:
+  // WHAT IS KNOWN, and the keying below is what made it knowable.
   //
-  //     [0] ref a0=00102910 src=0000 | got a0=0010a07e src=0000
-  //     [3] ref a0=00000000 src=0000 | got a0=0010a03e src=0003
+  // Comparing by INDEX reported 357/357 wrong, which says nothing: one extra
+  // access in either stream shifts every later entry. Keying by src_id
+  // separates the two questions and gives a real answer:
   //
-  // src_id agrees on the early entries, so this is not a simple stream offset.
-  // Hand-deriving request 0 from zhao_texture_tmu_pipe's own expressions gives
-  // 0x0010A07E -- the PLANNER's answer -- so either the pipe's effective
-  // address path differs from the expressions transcribed here, or the
-  // reference stream carries accesses this harness does not account for.
-  // Entry [3] with a zero address and a repeated src_id says the second is at
-  // least partly true.
+  //     matched by src_id   354 of 357   (3 unmatched)
+  //     addresses differing 345 of 357
+  //     src mismatches        0
+  //
+  // So this is ARITHMETIC, not alignment. For src=1 (fmt RGB565, no filter,
+  // CLAMP/CLAMP, log2w=8 log2h=6, maxlvl=3, mip on, lod=0x20,
+  // u=0x00018000 v=0xFFFE8000, base=0x00100000):
+  //
+  //     ref  a0 = 0x00102910   ->  total 0x1488
+  //     got  a0 = 0x0010A07E   ->  total 0x503F
+  //
+  // Hand-derivation from zhao_texture_tmu_pipe's OWN expressions -- level 2,
+  // lvl_shift 12, lvl_off 0x5000, uw0 CLAMP(96,63)=63, row0 0 -- gives 0x503F,
+  // the PLANNER's answer. The reference's total is BELOW its own lvl_off, which
+  // no combination of level 0, 1 or 2 reproduces. Something in the pipe's
+  // effective path differs from the expressions transcribed here.
+  //
+  // Resolving it needs INTERNAL VISIBILITY of the pipe's level, masks and
+  // lvl_off for one request -- not more inference from the outside. Three
+  // hand-derivations failed to reproduce the reference, and a fourth guess
+  // would be worth nothing.
   //
   // Deliberately not guessed at. Resolving it means reading what the pipe
   // actually emits, not adjusting the planner until two numbers agree -- that
