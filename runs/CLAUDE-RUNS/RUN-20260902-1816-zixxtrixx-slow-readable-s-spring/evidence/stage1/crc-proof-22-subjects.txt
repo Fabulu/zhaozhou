@@ -1,0 +1,25 @@
+done
+MATCH zixxtrixx-attack sequence_crc32c=0x33892BB3
+MATCH zixxtrixx-balance sequence_crc32c=0x7FC8F62E
+MATCH zixxtrixx-damage sequence_crc32c=0x0D8ECFB6
+MATCH zixxtrixx-death sequence_crc32c=0x4B7B3E3E
+MATCH zixxtrixx-death2 sequence_crc32c=0x9F659521
+MATCH zixxtrixx-fall sequence_crc32c=0xC4722098
+MATCH zixxtrixx-hit sequence_crc32c=0x6A33B878
+MATCH zixxtrixx-hitfloor sequence_crc32c=0xC8E9982F
+MATCH zixxtrixx-idle sequence_crc32c=0x25EE061F
+MATCH zixxtrixx-jump-multi sequence_crc32c=0x5E5258D0
+MATCH zixxtrixx-jump-one sequence_crc32c=0xF7020B2F
+MATCH zixxtrixx-knockdown sequence_crc32c=0xB36C148A
+MATCH zixxtrixx-look sequence_crc32c=0x5F193510
+MATCH zixxtrixx-moving-light sequence_crc32c=0xDE5D2626
+MATCH zixxtrixx-run sequence_crc32c=0x8E8D3179
+MATCH zixxtrixx-salto-dummy sequence_crc32c=0xE3C23422
+MATCH zixxtrixx-salto-fly sequence_crc32c=0x34AC6B2E
+MATCH zixxtrixx-salto-nine sequence_crc32c=0x640FC996
+MATCH zixxtrixx-salto-six sequence_crc32c=0xAEEA0511
+MATCH zixxtrixx-slow-taunt sequence_crc32c=0xBB66B5CE
+MATCH zixxtrixx-taunt sequence_crc32c=0x33BC0A56
+MATCH zixxtrixx-walk sequence_crc32c=0x86536E70
+
+[exited with code 0]

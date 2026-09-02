@@ -97,3 +97,11 @@ Rebuild the Zixxtrixx jump/salto spring per Owner Direction 23: four slow readab
   entire wired reel (suns/terrain too) and was killed - process verified dead.
 - Baseline zixx-springpose schedule saved (evidence/stage0/springpose-schedule-live.txt):
   live arming move_mm column peaks 528 mm at key 10, confirming Recon 1/3.
+
+### Stage 1 COMPLETE - provably byte-identical
+
+- Full 22-creature-subject bank rendered twice: pre-change (HEAD) and with the
+  stage-1 refactor. ALL 22 sequence CRCs MATCH (evidence/stage1/crc-proof-22-subjects.txt).
+- Probe green with the refactor. build-direct.sh note: tool .cpps are compiled
+  fresh at every link (only zref lib objects are cached, and they do not include
+  zixxtrixx.h), so the header edit cannot leave a stale reel.
