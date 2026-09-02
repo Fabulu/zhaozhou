@@ -30,6 +30,19 @@ set_global_assignment -name SEED 1
 # exactly like one that did not help, which is how `multstyle` was
 # believed for weeks.
 set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+
+# AND SYNTHESIS WAS NOT ASKED EITHER. OPTIMIZATION_TECHNIQUE is a
+# SEPARATE knob from OPTIMIZATION_MODE above -- that one steers the
+# fitter, this one steers quartus_map -- and a Tcl query showed it still
+# sitting at BALANCED after the fitter change landed.
+#
+# Queried rather than guessed, via get_global_assignment, because the
+# only reason the fitter setting was ever found is that the three-seed
+# result forced a look at the apparatus. The same query also reports
+# PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION OFF and PHYSICAL_SYNTHESIS_
+# EFFORT NORMAL, both untried and both left alone for now: ONE VARIABLE
+# AT A TIME, or the next measurement cannot be attributed to anything.
+set_global_assignment -name OPTIMIZATION_TECHNIQUE SPEED
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 
 # Exact ZHAO_SHELL_RTL cone from tests/CMakeLists.txt, in the same order.
