@@ -1,0 +1,34 @@
+QA region instrument -- springside-head  (191 frames, ground 0-168)
+
+RAW CHANGED PIXELS PER FRAME (no segmentation):
+  clip median 668/f   p90 1809/f   max 4437
+  byte-identical frames (vs previous): 0 -> []
+
+  settle  f  0- 12    321.0/f
+  beat1   f 12- 72    655.2/f
+  dwell   f 72- 82    485.4/f
+  beat2   f 82-144    784.6/f
+  hold    f144-168    558.2/f
+  launch  f169-172  2071 2230 1786 2206
+
+  centroid x |v| med   0.143  |v| max   0.927  jerk max   1.135
+  centroid y |v| med   0.051  |v| max   0.305  jerk max   0.373
+  area       |v| med   8.000  |v| max  64.000  jerk max  63.000
+  silhouette XOR med 1.71 %/f  max 4.36 %/f
+  30Hz staircase odd/even |step| ratio (cy): 0.98
+
+HEAD vs TAIL (rightmost / leftmost body pixel), ground phase:
+  nose tip x 231..244   rearmost x 109..132
+  min gap nose-rear: 109 px
+  nose tip travel f0->f168: -11 px x, +12.0 px y
+  nose max FORWARD excursion en route: -240 px
+
+WHERE THE MOTION LIVES (cumulative silhouette XOR share by screen region):
+  beat1 f12-72: tail<170  80.2%  mid170-210   7.7%  head>=210  12.1%
+  beat2 f82-144: tail<170  63.3%  mid170-210  13.8%  head>=210  23.0%
+
+REGION CENTROID Y (down is +) across the compression:
+  tail<170     f72->f168:  +2.54 px
+  mid170-210   f72->f168:  +3.07 px
+  head>=210    f72->f168:  +7.64 px
+

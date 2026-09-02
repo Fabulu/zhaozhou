@@ -1,0 +1,24 @@
+22-subject bank CRC, QA render at 48310d18 (ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross)
+
+zixxtrixx-attack 0x653B40FA frames=612
+zixxtrixx-balance 0x7FC8F62E frames=493
+zixxtrixx-damage 0x0D8ECFB6 frames=400
+zixxtrixx-death 0x4B7B3E3E frames=192
+zixxtrixx-death2 0x9F659521 frames=240
+zixxtrixx-fall 0xC4722098 frames=288
+zixxtrixx-hit 0x6A33B878 frames=300
+zixxtrixx-hitfloor 0xC8E9982F frames=188
+zixxtrixx-idle 0x25EE061F frames=576
+zixxtrixx-jump-multi 0xEC33913E frames=293
+zixxtrixx-jump-one 0x1CFCDC7C frames=293
+zixxtrixx-knockdown 0xB36C148A frames=196
+zixxtrixx-look 0x5F193510 frames=384
+zixxtrixx-moving-light 0xDE5D2626 frames=600
+zixxtrixx-run 0x8E8D3179 frames=96
+zixxtrixx-salto-dummy 0x070C83A8 frames=363
+zixxtrixx-salto-fly 0x7F9869E2 frames=365
+zixxtrixx-salto-nine 0x89BC54A8 frames=487
+zixxtrixx-salto-six 0x57A82576 frames=385
+zixxtrixx-slow-taunt 0xBB66B5CE frames=239
+zixxtrixx-taunt 0x33BC0A56 frames=224
+zixxtrixx-walk 0x86536E70 frames=160

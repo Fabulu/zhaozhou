@@ -1,0 +1,69 @@
+=== PREV ecf0e3ab  (183 frames)
+  beat1 f12-72 ABS px: tail   2150 (81.5%)  mid    193 ( 7.3%)  head    294 (11.1%)   total 2637
+  beat2 f82-144 ABS px: tail   1133 (44.3%)  mid    614 (24.0%)  head    809 (31.7%)   total 2556
+  centroid-y descent f72->f144: tail +0.05  mid +1.76  head +6.65
+  centroid-y descent f12->f72: tail -7.14  mid -0.63  head -0.46
+  centroid-y descent f72->f160: tail -0.29  mid +2.63  head +7.16
+  tail  y route: f12 136.01  f42 132.44  f72 128.86  f108 126.90  f144 128.91   (beat1 delta -7.14)
+  mid   y route: f12 133.91  f42 133.91  f72 133.29  f108 134.29  f144 135.05   (beat1 delta -0.63)
+  head  y route: f12 122.19  f42 121.91  f72 121.72  f108 123.76  f144 128.38   (beat1 delta -0.46)
+=== HEAD 48310d18  (191 frames)
+  beat1 f12-72 ABS px: tail   2194 (80.2%)  mid    211 ( 7.7%)  head    332 (12.1%)   total 2737
+  beat2 f82-144 ABS px: tail   2045 (63.3%)  mid    445 (13.8%)  head    743 (23.0%)   total 3233
+  centroid-y descent f72->f144: tail +3.23  mid +2.76  head +6.52
+  centroid-y descent f12->f72: tail -7.26  mid -1.08  head -0.20
+  centroid-y descent f72->f160: tail +2.68  mid +3.08  head +7.15
+  tail  y route: f12 135.82  f42 132.46  f72 128.56  f108 127.66  f144 131.79   (beat1 delta -7.26)
+  mid   y route: f12 134.14  f42 133.72  f72 133.06  f108 134.32  f144 135.82   (beat1 delta -1.08)
+  head  y route: f12 122.10  f42 121.91  f72 121.90  f108 123.28  f144 128.42   (beat1 delta -0.20)
+
+--- beat structure (silhouette XOR %/frame)
+=== HEAD silhouette XOR %/frame
+  settle  f  0- 12  mean  0.27  max  0.48
+  beat1   f 12- 72  mean  1.85  max  3.26
+  dwell   f 72- 82  mean  0.80  max  1.15
+  beat2   f 82-144  mean  2.27  max  4.36
+  hold    f144-168  mean  0.96  max  2.59
+  launch  f168-175  mean 22.57  max 29.33
+=== PREV silhouette XOR %/frame
+  settle  f  0- 12  mean  0.09  max  0.56
+  beat1   f 12- 72  mean  1.78  max  3.17
+  dwell   f 72- 82  mean  0.96  max  1.34
+  beat2   f 82-144  mean  1.75  max  3.54
+  hold    f144-160  mean  1.07  max  1.95
+  launch  f160-168  mean 17.81  max 26.38
+
+--- head/nose track, HEAD, fixed side camera
+nose x route (every 8 f): 242 243 243 242 242 243 243 243 241 239 239 241 241 240 238 236 235 234 234 234 232 231
+nose y route (every 8 f): 114.0 114.5 114.0 115.0 115.0 115.5 115.0 114.5 114.0 115.0 115.5 115.0 115.0 116.0 119.0 122.0 124.5 125.5 125.0 124.5 125.0 126.0
+nose-x steps nonzero: [(3, 1), (23, -1), (36, 1), (51, 1), (53, -1), (59, -1), (62, -1), (66, -1), (69, -1), (82, 1), (87, 1), (103, -1), (107, -1), (110, -1), (114, -1), (117, -1), (122, -1), (130, -1), (154, -1), (159, -1), (165, -1)]
+nose-y sign reversals over ground phase: 15; max |step| 1.00 px
+head-region centroid x: f0 221.84 -> f168 218.31 = -3.53px; max forward excursion +0.89px at f52
+head-region centroid y: +7.40px down
+total x path / net: 2.96x
+
+--- raw-pixel local spikes (the f15 pop question)
+spring-side HEAD: median 652  top local spikes (ratio, frame, px, local-median):
+     2.65x  f 15   1216 vs 458
+     1.37x  f 14    508 vs 372
+     1.37x  f 18    724 vs 530
+     1.36x  f  8    441 vs 324
+     1.36x  f 12    490 vs 360
+     1.33x  f  6    358 vs 270
+    f13-f18: [np.int64(290), np.int64(508), np.int64(1216), np.int64(316), np.int64(534), np.int64(724)]
+spring-side PREV: median 662  top local spikes (ratio, frame, px, local-median):
+     3.20x  f 15   1234 vs 386
+     2.07x  f 12    493 vs 238
+     1.64x  f 14    505 vs 308
+     1.62x  f 26    649 vs 402
+     1.55x  f161   1722 vs 1112
+     1.53x  f 23    649 vs 424
+    f13-f18: [np.int64(332), np.int64(505), np.int64(1234), np.int64(285), np.int64(440), np.int64(639)]
+balance: median 1231  top local spikes (ratio, frame, px, local-median):
+     3.28x  f 23   1688 vs 515
+     3.11x  f 15   1160 vs 374
+     2.92x  f 24   1675 vs 574
+     1.42x  f 26    849 vs 597
+     1.39x  f 21    607 vs 438
+     1.18x  f 54    745 vs 632
+    f13-f18: [np.int64(370), np.int64(372), np.int64(1160), np.int64(325), np.int64(392), np.int64(375)]

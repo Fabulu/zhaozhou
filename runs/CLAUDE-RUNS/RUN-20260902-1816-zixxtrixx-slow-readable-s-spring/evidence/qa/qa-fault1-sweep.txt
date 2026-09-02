@@ -1,0 +1,56 @@
+=== beat-1 region share: window/split variant sweep (both builds, same instrument)
+split(170, 210) win(12, 72): PREV 81.5/ 7.3/11.1   HEAD 80.2/ 7.7/12.1   
+split(170, 210) win(8, 72): PREV 81.5/ 7.4/11.1   HEAD 80.1/ 7.7/12.2   
+split(170, 210) win(0, 72): PREV 81.5/ 7.4/11.1   HEAD 79.2/ 8.2/12.6   
+split(170, 210) win(4, 72): PREV 81.5/ 7.4/11.1   HEAD 79.8/ 7.9/12.3   
+split(170, 210) win(12, 80): PREV 80.9/ 7.0/12.1   HEAD 80.2/ 7.4/12.4   
+split(165, 205) win(12, 72): PREV 81.0/ 7.0/11.9   HEAD 79.8/ 7.5/12.7   
+split(165, 205) win(8, 72): PREV 81.0/ 7.0/12.0   HEAD 79.7/ 7.6/12.8   
+split(165, 205) win(0, 72): PREV 81.0/ 7.0/12.0   HEAD 78.8/ 8.0/13.2   
+split(165, 205) win(4, 72): PREV 81.0/ 7.0/12.0   HEAD 79.4/ 7.7/12.9   
+split(165, 205) win(12, 80): PREV 80.3/ 6.9/12.9   HEAD 79.6/ 7.4/13.0   
+split(175, 215) win(12, 72): PREV 81.7/ 8.8/ 9.5   HEAD 80.3/ 9.1/10.5   
+split(175, 215) win(8, 72): PREV 81.7/ 8.8/ 9.5   HEAD 80.3/ 9.2/10.5   
+split(175, 215) win(0, 72): PREV 81.7/ 8.8/ 9.5   HEAD 79.4/ 9.6/11.0   
+split(175, 215) win(4, 72): PREV 81.7/ 8.8/ 9.5   HEAD 80.0/ 9.3/10.7   
+split(175, 215) win(12, 80): PREV 81.1/ 8.8/10.1   HEAD 80.3/ 8.9/10.8   
+split(160, 200) win(12, 72): PREV 79.2/ 8.2/12.7   HEAD 77.6/ 9.1/13.3   
+split(160, 200) win(8, 72): PREV 79.2/ 8.1/12.7   HEAD 77.5/ 9.1/13.4   
+split(160, 200) win(0, 72): PREV 79.2/ 8.1/12.7   HEAD 76.7/ 9.4/13.9   
+split(160, 200) win(4, 72): PREV 79.2/ 8.1/12.7   HEAD 77.3/ 9.2/13.5   
+split(160, 200) win(12, 80): PREV 77.6/ 8.9/13.5   HEAD 76.9/ 9.5/13.6   
+split(180, 220) win(12, 72): PREV 82.1/10.1/ 7.8   HEAD 80.7/10.9/ 8.4   
+split(180, 220) win(8, 72): PREV 82.1/10.1/ 7.7   HEAD 80.7/10.9/ 8.4   
+split(180, 220) win(0, 72): PREV 82.1/10.1/ 7.7   HEAD 79.8/11.5/ 8.7   
+split(180, 220) win(4, 72): PREV 82.1/10.1/ 7.7   HEAD 80.4/11.1/ 8.5   
+split(180, 220) win(12, 80): PREV 81.5/10.2/ 8.3   HEAD 80.7/10.8/ 8.6   
+
+=== mid-body ventral arch, column probe
+== PREV
+  f 12 ventral-run TOP y @x[160, 165, 170, 175, 180, 185, 190, 195, 200, 205, 210, 215]: [np.int64(139), np.int64(138), np.int64(138), np.int64(137), np.int64(137), np.int64(137), np.int64(119), np.int64(114), np.int64(112), np.int64(111), np.int64(109), np.int64(108)]
+       BOTTOM y: [np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(148)]
+  f 42 ventral-run TOP y @x[160, 165, 170, 175, 180, 185, 190, 195, 200, 205, 210, 215]: [np.int64(139), np.int64(139), np.int64(138), np.int64(138), np.int64(137), np.int64(137), np.int64(119), np.int64(114), np.int64(112), np.int64(110), np.int64(109), np.int64(108)]
+       BOTTOM y: [np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(147)]
+  f 72 ventral-run TOP y @x[160, 165, 170, 175, 180, 185, 190, 195, 200, 205, 210, 215]: [np.int64(107), np.int64(139), np.int64(139), np.int64(138), np.int64(138), np.int64(137), np.int64(118), np.int64(113), np.int64(111), np.int64(110), np.int64(108), np.int64(107)]
+       BOTTOM y: [np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(147)]
+  f108 ventral-run TOP y @x[160, 165, 170, 175, 180, 185, 190, 195, 200, 205, 210, 215]: [np.int64(113), np.int64(107), np.int64(104), np.int64(139), np.int64(138), np.int64(138), np.int64(121), np.int64(116), np.int64(114), np.int64(113), np.int64(112), np.int64(111)]
+       BOTTOM y: [np.int64(149), np.int64(150), np.int64(150), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(147)]
+  f144 ventral-run TOP y @x[160, 165, 170, 175, 180, 185, 190, 195, 200, 205, 210, 215]: [np.int64(116), np.int64(111), np.int64(106), np.int64(140), np.int64(139), np.int64(139), np.int64(121), np.int64(119), np.int64(119), np.int64(118), np.int64(118), np.int64(118)]
+       BOTTOM y: [np.int64(150), np.int64(150), np.int64(150), np.int64(150), np.int64(150), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(148), np.int64(148), np.int64(146)]
+  f 12 top-edge bow vs chord: max +5.3 px (up is +)
+  f 42 top-edge bow vs chord: max +5.3 px (up is +)
+  f 72 top-edge bow vs chord: max +0.0 px (up is +)
+== HEAD
+  f 12 ventral-run TOP y @x[160, 165, 170, 175, 180, 185, 190, 195, 200, 205, 210, 215]: [np.int64(139), np.int64(138), np.int64(138), np.int64(137), np.int64(137), np.int64(137), np.int64(121), np.int64(115), np.int64(112), np.int64(111), np.int64(109), np.int64(108)]
+       BOTTOM y: [np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(148)]
+  f 42 ventral-run TOP y @x[160, 165, 170, 175, 180, 185, 190, 195, 200, 205, 210, 215]: [np.int64(139), np.int64(139), np.int64(138), np.int64(137), np.int64(137), np.int64(136), np.int64(119), np.int64(114), np.int64(112), np.int64(110), np.int64(109), np.int64(108)]
+       BOTTOM y: [np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(148), np.int64(148), np.int64(149), np.int64(149), np.int64(149), np.int64(146)]
+  f 72 ventral-run TOP y @x[160, 165, 170, 175, 180, 185, 190, 195, 200, 205, 210, 215]: [np.int64(106), np.int64(139), np.int64(139), np.int64(137), np.int64(136), np.int64(136), np.int64(117), np.int64(113), np.int64(111), np.int64(110), np.int64(108), np.int64(108)]
+       BOTTOM y: [np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(148), np.int64(147), np.int64(148), np.int64(149), np.int64(149), np.int64(149), np.int64(146)]
+  f108 ventral-run TOP y @x[160, 165, 170, 175, 180, 185, 190, 195, 200, 205, 210, 215]: [np.int64(111), np.int64(106), np.int64(140), np.int64(138), np.int64(137), np.int64(136), np.int64(119), np.int64(116), np.int64(114), np.int64(113), np.int64(112), np.int64(111)]
+       BOTTOM y: [np.int64(149), np.int64(150), np.int64(150), np.int64(149), np.int64(149), np.int64(148), np.int64(147), np.int64(148), np.int64(149), np.int64(150), np.int64(149), np.int64(147)]
+  f144 ventral-run TOP y @x[160, 165, 170, 175, 180, 185, 190, 195, 200, 205, 210, 215]: [np.int64(139), np.int64(141), np.int64(141), np.int64(140), np.int64(139), np.int64(123), np.int64(120), np.int64(120), np.int64(119), np.int64(118), np.int64(118), np.int64(118)]
+       BOTTOM y: [np.int64(150), np.int64(150), np.int64(150), np.int64(150), np.int64(150), np.int64(149), np.int64(149), np.int64(149), np.int64(149), np.int64(148), np.int64(148), np.int64(145)]
+  f 12 top-edge bow vs chord: max +4.5 px (up is +)
+  f 42 top-edge bow vs chord: max +5.3 px (up is +)
+  f 72 top-edge bow vs chord: max +0.0 px (up is +)

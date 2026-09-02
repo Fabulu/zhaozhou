@@ -1,0 +1,16 @@
+== PREV
+  tail-third centroid y : f0:135.9 f12:136.0 f36:133.3 f48:131.7 f60:129.8 f72:128.9 f84:128.6 f108:126.9 f132:128.4 f160:128.6
+
+  tail-third area (apparent size): f0:754 f12:741 f36:734 f48:738 f60:748 f72:739 f84:740 f108:749 f132:717 f160:730
+  area min/max over ground 707/756 = 7% swing
+  fin-tip x: f0:110 f12:110 f36:114 f48:119 f60:122 f72:125 f84:127 f108:130 f132:129 f160:128
+  fin-tip y: f0:124 f12:124 f36:118 f48:115 f60:112 f72:110 f84:109 f108:106 f132:108 f160:110
+  tail bbox w 38..60  h 34..46
+== HEAD
+  tail-third centroid y : f0:135.9 f12:135.8 f36:133.2 f48:131.7 f60:129.8 f72:128.6 f84:128.3 f108:127.7 f132:130.7 f168:131.1
+  beat1 (f12->f72) -7.26 px   beat2 (f82->f168) +2.48 px   -> DIRECTION CHANGE
+  tail-third area (apparent size): f0:754 f12:759 f36:734 f48:738 f60:749 f72:747 f84:748 f108:734 f132:698 f168:685
+  area min/max over ground 668/760 = 14% swing
+  fin-tip x: f0:110 f12:109 f36:114 f48:119 f60:122 f72:125 f84:127 f108:129 f132:121 f168:120
+  fin-tip y: f0:124 f12:124 f36:118 f48:115 f60:112 f72:110 f84:109 f108:109 f132:117 f168:118
+  tail bbox w 37..60  h 35..45
