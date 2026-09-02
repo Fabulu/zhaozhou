@@ -1,5 +1,5 @@
 {
-  "qfmt_version": 2,
+  "qfmt_version": 3,
   "generator": "tools/fixgen",
   "spec": "spec/qformats.md 12",
   "files": [

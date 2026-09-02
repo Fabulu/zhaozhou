@@ -1,6 +1,6 @@
 # Zhaozhou Fixed-Point Q-Format Specification — v1
 
-**QFMT_VERSION = 2** (see §13 for change control)
+**QFMT_VERSION = 3** (see §13 for change control)
 
 This document is the single written law for every number the machine manipulates
 (charter §8, §29-7). The C++ reference library `reference/include/zref/*.hpp`,
@@ -25,6 +25,16 @@ No existing type, table, or golden changed — the bump travels so capture
 replay can refuse pre-C1 numerics if creature clip pages ever reach a
 capture)**. The fog law (§8, same wave) is prose + formula only and adds no
 type, so it rides the same bump without a second one.
+
+**C2 (2026-09-02, QFMT_VERSION 2 → 3):** the **particle128 v1 numeric law** of
+§10, ruled by the owner (R3 of
+`reports/OWNER-RULINGS-BUILDABILITY-20260902.md`). §10 was marked *provisional*
+and the layout it carried was not the ruled one — different widths on every
+field, `lifetime` stored per record rather than in the species descriptor, and
+positions declared S 5.13 where the ruling says S 9.8. It is replaced whole,
+and `PARTICLE_FORMAT_VERSION = 1` is introduced alongside. No table or golden
+of §6/§7/§12 changed; the bump travels so capture replay can refuse pre-C2
+particle numerics.
 
 ---
 
@@ -655,25 +665,89 @@ nothing here depends on that plane existing).
 math runs in fx16; height16 is the baked-cache/ABI storage. Conversions in
 §2. Re-freeze only at the Phase 6 gate with rendering evidence.
 
-## 10. particle128 (Q3, provisional)
+## 10. particle128 — v1 numeric law (C2, ruled)
 
-128-bit particle record, **provisional** (charter §13 "provisionally 128";
-Phase 10 revisits seed starvation; 160-bit alternative if seed quality
-insufficient):
+`PARTICLE_FORMAT_VERSION = 1`. **No longer provisional.** The layout below is
+the owner ruling R3 and is binding; the earlier §10 table was a sketch that
+summed to 128 and agreed with the ruling on nothing else.
 
-| Field | Bits | Format |
+### Bit layout — 128 bits, exactly
+
+| bits | field | format |
 |---|---|---|
-| pos (cell-relative) | 3 × 18 = 54 | S 5.13 |
-| vel | 3 × 11 = 33 | S 1.0.10 |
-| age | u7 | ticks |
-| lifetime | u7 | ticks |
-| species | u6 | — |
-| size | u8 | U 0.4.4 px |
-| spin | u6 | angle16 >> 10 |
-| seed/flags | u7 | — |
+| 0..17 | position X | **s18**, S 9.8 |
+| 18..35 | position Y | s18, S 9.8 |
+| 36..53 | position Z | s18, S 9.8 |
+| 54..64 | velocity X | **s11**, S 2.8 |
+| 65..75 | velocity Y | s11, S 2.8 |
+| 76..86 | velocity Z | s11, S 2.8 |
+| 87..96 | age | **u10** |
+| 97..103 | species | **u7** |
+| 104..109 | size | **u6**, U 2.4 |
+| 110..115 | spin | **u6**, U 0.6 turns |
+| 116..119 | flags | 4 bits |
+| 120..127 | variation | **u8** |
 
-(Sums to exactly 128; the P3 recon sketch's field list summed to 134 —
-corrected here. Nothing in wave 1 consumes particle128.)
+* **position s18** — S 9.8 m **relative to the population origin**; LSB
+  1/256 m; range −512.000 .. +511.99609375 m.
+* **velocity s11** — S 2.8 m/tick; LSB 1/256; −4.000 .. +3.99609375 m/tick,
+  which is about −240 .. +239.77 m/s at 60 Hz.
+* **age u10** — whole 60 Hz ticks, 0..1023. **Lifetime is not in the record**:
+  it lives in the species descriptor, is 1..1023, and `lifetime == 0` refuses
+  the descriptor.
+* **species u7** — table index 0..127.
+* **size u6** — U 2.4 relative radius multiplier;
+  `radius = base_radius_fx16 * size / 16` with **one** final round-half-up.
+  **World scale, never camera-space pixels.**
+* **spin u6** — U 0.6 turns; `angle16 = spin << 10`. The species carries a
+  signed spin rate in angle16/tick; the stored phase wraps mod 64.
+* **flags** — bit 0 `STUCK`, bit 1 `COLLIDED_THIS_TICK`, bit 2 `BORN_THIS_TICK`,
+  bit 3 RESERVED (zero in, preserved zero).
+* **variation u8** — a **stateless deterministic code** from frozen hash
+  inputs. **Not a mutable PRNG state**, which is the difference between a
+  record that replays and one that does not.
+
+### Population descriptor
+
+`population_id`; origin x/y/z as fx16 **on a 1/256-m grid**; `active_count` and
+`capacity`; species-table handle; tick index; capture source id.
+
+World position = origin + local. **HPS may rebase only between complete ticks**,
+by subtracting the same exact 1/256-m offset from every live record and adding
+it to the origin; **the rebase is captured**. If a population cannot stay inside
+the ±512 m cube, **split it** — do not silently saturate.
+
+### The tick — exactly 60 Hz, semi-implicit, ordered
+
+    validate
+      -> derive variation
+      -> evaluate frozen recipe
+      -> accumulate in wide lanes
+      -> round ONCE into S 2.8, saturate and count
+      -> position_next = sat_s18(position + velocity_next)
+      -> increment age
+      -> emit bounded events
+      -> collision response
+      -> survivors compact, THEN children append
+
+**One rounding**, into velocity, and the position update is exact-then-saturate.
+The order is part of the law, not an implementation choice: survivors compact
+before children append is what makes the ceiling behaviour deterministic.
+
+Twelve recipe IDs remain the vocabulary. **Hardware does not infer forces from
+colour, size or speed.**
+
+### Collision, v1
+
+FPGA sources are **live deformed terrain height/normal** and **explicit analytic
+planes**. Creature and unit gameplay collision remains HPS-authoritative.
+Responses: `IGNORE`, `DIE`, `STICK`, `SLIDE`, `BOUNCE`, selected by species.
+
+### Ceiling behaviour
+
+**Survivors are never evicted for children.** Earlier parents outrank later
+ones; later child groups are refused deterministically; there is **no same-tick
+recursive spawn.**
 
 ## 11. fixgen contract
 
@@ -718,7 +792,8 @@ is expected and asserted).
 
 ## 13. Change control
 
-`QFMT_VERSION` (currently **2**; 1 → 2 with amendment C1, §7.6) bumps on
+`QFMT_VERSION` (currently **3**; 1 → 2 with amendment C1, §7.6; 2 → 3 with
+amendment C2, §10) bumps on
 **any** change to: a type's width or
 format, the rounding/saturation laws (§3–§5), any frozen constant or table
 formula (§6–§7), a golden-vector layout (§12), or the fixgen output set (§11).

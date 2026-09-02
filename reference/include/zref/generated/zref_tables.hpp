@@ -1,12 +1,12 @@
 // GENERATED FILE - tools/fixgen (spec/qformats.md 11) - DO NOT EDIT.
-// QFMT_VERSION 2; regenerate with `npm run tables:gen` and commit.
+// QFMT_VERSION 3; regenerate with `npm run tables:gen` and commit.
 #pragma once
 #include <cstdint>
 
 namespace zref {
 namespace gen {
 
-inline constexpr uint32_t QFMT_VERSION = 2;
+inline constexpr uint32_t QFMT_VERSION = 3;
 
 // qformats.md 7.1: sin/cos quarter-wave, 257 x Q1.16 (s18 values stored u32),
 // T[i] = round_half_up(sin(pi/2 * i / 256) * 2^16).

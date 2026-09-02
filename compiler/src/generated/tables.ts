@@ -1,7 +1,7 @@
 // GENERATED FILE - tools/fixgen (spec/qformats.md 11) - DO NOT EDIT.
-// QFMT_VERSION 2; regenerate with `npm run tables:gen` and commit.
+// QFMT_VERSION 3; regenerate with `npm run tables:gen` and commit.
 
-export const QFMT_VERSION = 2;
+export const QFMT_VERSION = 3;
 
 /** qformats.md 7.1: sin/cos quarter-wave, 257 x Q1.16 (s18 values),
  * T[i] = round_half_up(sin(pi/2 * i / 256) * 2^16). */

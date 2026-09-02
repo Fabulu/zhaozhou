@@ -1,5 +1,5 @@
 // GENERATED FILE - tools/fixgen (spec/qformats.md 8) - DO NOT EDIT.
-// QFMT_VERSION 2; regenerate with `npm run tables:gen` and commit.
+// QFMT_VERSION 3; regenerate with `npm run tables:gen` and commit.
 
 export interface DepthProfile {
   readonly name: string;

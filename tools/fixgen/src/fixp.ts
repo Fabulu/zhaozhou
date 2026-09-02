@@ -1,9 +1,10 @@
 /**
  * fixgen numeric core — the single source of truth for every frozen constant
- * and table in spec/qformats.md (QFMT_VERSION 2: v1 + amendment C1, the
- * quat16 quaternion lane of §7.6 — carried here so the emitted table headers
- * agree with the ABI's QFMT_VERSION; no table or golden of §6/§7/§12 changed
- * with C1).
+ * and table in spec/qformats.md (QFMT_VERSION 3: v1 + amendment C1, the
+ * quat16 quaternion lane of §7.6, + amendment C2, the particle128 v1 numeric
+ * law of §10 — carried here so the emitted table headers agree with the ABI's
+ * QFMT_VERSION. Neither C1 nor C2 changed a table or golden of §6/§7/§12: the
+ * bump travels so capture replay can refuse pre-amendment numerics.)
  *
  * Spec citations: qformats.md sections 4 (rescale), 6 (reciprocals),
  * 7.1 (sin/cos), 7.5 (noise2 hash), and 12 (golden records).
@@ -17,7 +18,7 @@
  * same law (their agreement is the differential in tests/unit/test_fixp.cpp).
  */
 
-export const QFMT_VERSION = 2;
+export const QFMT_VERSION = 3;
 
 /** round_half_up(n / d) for non-negative BigInt n, d > 0 (qformats.md 4). */
 export function rhuDiv(n: bigint, d: bigint): bigint {
