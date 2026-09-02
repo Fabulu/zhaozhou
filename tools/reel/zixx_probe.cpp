@@ -32,7 +32,12 @@ namespace {
 int32_t to_mm(int64_t fx) { return static_cast<int32_t>(fx * 1000 >> 16); }
 
 constexpr int32_t kSpringTrunkLateralSpanMaxMm = 30;
-constexpr int32_t kSpringWholeTailLateralSpanMaxMm = 45;
+// Re-recorded for OWNER DIRECTION 24: the tail is PLANTED at its grounded
+// headings through the whole arming, so the deep pose now carries the rest
+// tail's own intentional construction roll (the fin assembly's authored Z
+// offsets), which the old curled-tail deep pose rotated mostly out of this
+// axis. The trunk gate above is unchanged -- the body itself stays planar.
+constexpr int32_t kSpringWholeTailLateralSpanMaxMm = 55;
 // Retiming samples the same named landing curve at new quantized body poses.
 // One millimetre bounds fixed-point/pose-clock rounding without changing art.
 constexpr int32_t kRetimedLandingContactRoundingMm = 1;
@@ -2505,6 +2510,18 @@ int main() {
           angle_distance(zixx::spring_route_heading(station, arm - 1),
                          zixx::spring_route_heading(station, arm)));
     }
+    // OWNER DIRECTION 24 #1: the tail stations are PLANTED -- all four knots
+    // authored identical, so their route is a constant. A planted station is
+    // an anchor, not a stall; only stations that are authored to move may be
+    // required to keep moving through the interior knots.
+    const bool authored_planted =
+        zixx::kSpringGroundedHeading[station] ==
+            zixx::kSpringAbsorbHeading[station] &&
+        zixx::kSpringGroundedHeading[station] ==
+            zixx::kSpringAssembledHeading[station] &&
+        zixx::kSpringGroundedHeading[station] ==
+            zixx::kSpringCollapsedHeading[station];
+    if (authored_planted) continue;
     const int32_t at_absorb = angle_distance(
         zixx::spring_route_heading(station, zixx::kSpringArmAbsorbAt - 20),
         zixx::spring_route_heading(station, zixx::kSpringArmAbsorbAt + 20));

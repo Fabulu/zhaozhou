@@ -763,41 +763,54 @@ constexpr const auto& kSpringGroundedHeading = kStanceSlope;
 // presses flat onto the belly, the tail curl sweeps down. The head never
 // pitches past vertical anywhere on the route.
 
-// ABSORB. The first beat: the nose dips a few degrees TOWARD THE TARGET (the
-// aim), and the tail begins to gather off the ground into the S's rear curl.
-// The signature front hook is untouched -- this reads as the idle animal
-// noticing its target and starting to load, not as a new shape.
+// OWNER DIRECTION 24: THE TAIL IS THE ANCHOR. "It's the one thing that stays
+// in place." Stations 15-18 in EVERY arming pose now alias the grounded
+// values verbatim, so the spline route through them is a constant and the
+// tail cannot change position, direction or apparent size by construction.
+// Directions 19-22's "the rear must join the S" is satisfied the way the
+// owner meant it: the rear participates by BEING THE FIXED END the S is
+// built against. The travel budget the tail gives back (258 mm) is spent on
+// stations 5-14 -- the hook and the mid-body -- so the S visibly GROWS
+// forward from the planted tail.
+
+// ABSORB. The first beat begins: the nose dips a few degrees TOWARD THE
+// TARGET (the aim), the hook starts to curl and the mid-body starts to
+// gather up into the S's rear lobe. Carries ~55% of the assembled deltas so
+// the Catmull-Rom route stays even through the knot. The tail is planted.
 constexpr int32_t kSpringAbsorbHeading[kStanceSlopes] = {
-    -1300, 500, 1900, 3900, 6700, 14600, 21400, 25200, 20000, 11600,
-    -950, -1250, 1600, 2100, 1300, -1400, -4000, -9500, -13700};
-// ASSEMBLED. The whole-body S, aimed. The front hook is still exactly the
-// signature S's hook; the belly keeps its ground; the TAIL now carries a real
-// rear curl (to -80 deg at the tip -- deliberately short of vertical), so
-// every station from the nose to the last tail station is in the S. This is
-// the shape the squeeze presses; it is the idle S completed, not replaced.
-// REVIEW FAULT 1 (this run): beat 1 was 82.5%% a tail action because the
-// middle stations went from flat to flat. The assembled S now carries a LOW
-// MID-BODY ARCH (stations 10-13 rise ~90 mm and return), so the middle
-// visibly joins the S in beat 1 and visibly PRESSES FLAT in beat 2 -- the
-// same station group both gathers and descends, which is what "the whole
-// body" and "everything descends together" ask for. Authored by eye against
-// the fixed-side render; the absorb row carries ~40%% of the arch so the
-// route stays even.
+    -1300, 500, 1900, 3900, 6700, 14650, 21550, 25400, 20150, 11800,
+    -1100, -4400, 1400, 5000, 1400,
+    kStanceSlope[15], kStanceSlope[16], kStanceSlope[17], kStanceSlope[18]};
+// ASSEMBLED. The GROWN whole-body S (Direction 24 acceptance 2): the front
+// hook keeps the signature silhouette but curls a few degrees deeper -- it
+// visibly changes without reading as an early squeeze -- and the mid-body,
+// which lay flat on the ground at rest, stands in a REAL BROAD REAR LOBE
+// (station 11 rises steeply, 12 crests nearly level, 13 returns), gathered
+// forward from the planted tail. Station 10 stays shallow so the lobe's
+// rising foot keeps clear of the dive's under-curl (draft 1 buried it in
+// the loop: 45-vertex self-intersections). The heading sine-sum across
+// 10-14 matches the grounded row, so the front keeps its height while the
+// body between loop and plant arches up. This is the idle S grown bigger,
+// not replaced; the squeeze presses THIS shape flat.
 constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
-    -1500, 400, 1700, 3800, 6800, 14600, 21400, 25200, 20000, 11600,
-    -2600, -3600, 3300, 4200, 1500, -4500, -9500, -13000, -14500};
+    -1500, 400, 1700, 3800, 6800, 14700, 21700, 25600, 20300, 12000,
+    -2000, -8200, 2400, 8800, 1600,
+    kStanceSlope[15], kStanceSlope[16], kStanceSlope[17], kStanceSlope[18]};
 // COLLAPSED: THE S SQUEEZED FROM THE TOP. Three stacked near-level runs --
 // the pressed neck (top), the folded-flat return of the hook (middle), the
 // grounded belly (bottom) -- joined by two quick single-segment crossings that
 // are the descendants of the idle dive's own steep segments. The nose sits at
-// ~64% of its idle height, the footprint spreads, and the rear curl is pressed
-// into a low broad arc reaching back. The stacked runs are authored to TOUCH
-// at their radii: the flatten/spread deform takes the contact, so the packing
-// squeezes flatter instead of clipping. This is the pose the release fires
-// from, and the whole shape stays unmistakably the same S.
+// ~64% of its idle height, the footprint spreads, and the grown rear lobe is
+// pressed back down into the ground line, so the mid-body descends WITH the
+// head (Direction 23 #5) while the planted tail holds still (Direction 24
+// #1). The stacked runs are authored to TOUCH at their radii: the
+// flatten/spread deform takes the contact, so the packing squeezes flatter
+// instead of clipping. This is the pose the release fires from, and the
+// whole shape stays unmistakably the same S.
 constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
     -1500, 400, 900, 1100, 1400, 17000, 27500, 31000, 24500, 12500,
-    900, 900, 1000, 1200, 1700, -3900, -8300, -11000, -11800};
+    900, 900, 1000, 1200, 1700,
+    kStanceSlope[15], kStanceSlope[16], kStanceSlope[17], kStanceSlope[18]};
 // WHERE THE THREE AUTHORED POSES SIT ON THE ONE ARMING PARAMETER, in 1/1000 of
 // the complete arming. Grounded is 0 and collapsed is 1000. Moving these
 // reparameterises the build without touching a single shape value. Direction
@@ -853,7 +866,13 @@ constexpr int32_t kSpringMiddleSupportLiftMm = -10;
 constexpr int32_t kSpringAbsorbSupportLiftMm = -5;
 constexpr int32_t kSpringKey5SupportLiftMm = -8;
 constexpr int32_t kSpringAssembledSupportLiftMm = -10;
-constexpr int32_t kSpringCollapsedSupportLiftMm = -26;
+// OWNER DIRECTION 24 #1: the tail is planted, and it hangs off the station-14
+// plant -- every millimetre the loaded press takes the plant down, the tail
+// now goes with it (it used to curl up out of the way). -26 pressed the flat
+// tail through the declared loaded bite on the terrain's upslope behind the
+// animal. -14 keeps a real bearing-down press (root drop still applies) while
+// the deepest tail sample stays inside kSpringDeclaredLoadedBiteMm.
+constexpr int32_t kSpringCollapsedSupportLiftMm = -14;
 // The loaded spring's declared terrain penetration, in mm. Ground contact is
 // AUTHORED here and checked by the committed pose probe; its absence would be
 // as much a fault as burying, because a body resting at exactly zero reads as
@@ -900,14 +919,15 @@ constexpr int kSpringBodyStrengthRampStations = 4;
 constexpr int kSpringTailStrengthRampStations = 6;
 constexpr int32_t kSpringJumpHeadAttitude = 700;   // follows the taller entry arc
 constexpr int32_t kSpringHeadAttitude = 600;       // restrained brace; must not lift the nose out of the aim
-constexpr int32_t kSpringBladeFlare = 900;         // fan braces during compression
-// REVIEW FAULT 1 (this run): "everything descends together" -- the tail V's
-// fins held their rest rise through the whole squash, so the tail region's
-// screen centroid never came down with the body. The fan now PRESSES DOWN
-// with the squash (about -19 deg at full), sweeping from its rest rise to
-// just below the tail line as the animal loads. Owner knob; authored by eye
-// on the fixed side view.
-constexpr int32_t kSpringBladeSquashRise = 3500;
+// OWNER DIRECTION 24 #1: the tail must not change apparent size. The fan's
+// splay during the compression was most of the previous build's 14% tail
+// area swing, so the brace is cut to a whisper -- present so the fins are
+// not dead, far too small to draw the eye. Owner knob.
+constexpr int32_t kSpringBladeFlare = 300;
+// OWNER DIRECTION 24 #1: the fan does not rise and press any more -- that
+// authored up-then-down was the tail "inverting itself". The fins hold their
+// rest rise for the whole ground phase; only the life wave touches them.
+constexpr int32_t kSpringBladeSquashRise = 0;
 
 
 // Named theatrical timing. The accepted attack still leaves the terrain at key
@@ -7201,7 +7221,11 @@ struct JumpPlan {
 constexpr int32_t kJumpLandingBiteMm = kSpringDeclaredBiteMm;
 // Landing presses harder than resting: the animal is absorbing a fall, not
 // lying down. Declared here and checked by the committed pose probe.
-constexpr int32_t kJumpLandingLoadedBiteMm = 48;
+// Re-recorded 48 -> 54 for OWNER DIRECTION 24: the planted tail lies flat
+// behind the plant through the landing slam (it used to curl up out of the
+// way), and on the scene's upslope its deepest sample reaches -53 mm. That
+// is ~1.3 px of authored, deliberate bite at the heaviest instant.
+constexpr int32_t kJumpLandingLoadedBiteMm = 54;
 // ...and it must actually BITE on the impact frame. A landing that stops at the
 // surface reads weightless, so too LITTLE penetration is a fault as well.
 constexpr int32_t kJumpImpactMinBiteMm = 15;
