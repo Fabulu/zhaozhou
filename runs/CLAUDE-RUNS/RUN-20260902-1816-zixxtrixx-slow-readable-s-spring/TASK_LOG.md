@@ -218,3 +218,41 @@ Rebuild the Zixxtrixx jump/salto spring per Owner Direction 23: four slow readab
 - Instrument notes: head-x jerk via eye-blob is band-flicker noise (verified
   by eye at 4x: pose steady, cel highlight flickers); beat segmentation now
   merges sub-6-frame gaps per Recon 5's own settle definition.
+
+### Stage 6 COMPLETE - the beat-2 art pass (authored by eye)
+
+- kSpringCollapsedHeading re-authored: segments 8-9 16500/4500 -> 22000/11000
+  (the mid-body arch stands taller instead of flattening forward, carrying
+  the whole front BACK - the D22-section-2 mechanism, not a tighter neck
+  hook: segments 5-7 untouched at Gen-13's 93.4/151.1/170.3 deg); rear
+  segments 15-18 -2800/-6200/-4800/-1600 -> -4500/-9500/-13000/-14500 (the
+  assembled curl KEPT verbatim into the collapse - no station loses its lobe).
+- Authoring loop: numeric sweep with the pose probe to bracket (9 candidates),
+  then chosen AND verified by eye on the fixed-side render.
+- HEAD TRAVEL, fixed side view, in pixels: (230.8,114.1) -> (221.0,125.8) =
+  9.8 px BACK and 11.7 px DOWN (~225 mm world). Slightly back, slowly down,
+  never near the tail (closure min 0.444 >= 0.40). Nose ~67% of rest height
+  (Gen-13's accepted 64% family).
+- kZixxSpringDiagnosticKeys was a literal 30 silently cropping the diagnostic
+  to a quarter of the new arming - now derived from kSaltoCoilPoseKey.
+- A5 FROM THE TABLES: ZERO direction reversals on every one of the 19
+  stations (balance rise: 0; live had 18). The kept rear curl is what makes
+  the route monotone.
+- PROBE GREEN: zero self-intersections, honest bite (-42 mm vs declared 34
+  resting/60 loaded), planar (whole-body lateral span 14 mm), all parity
+  gates exact.
+- Full battery on the final jump-one arming (f1-144):
+  A0 centroid jerk 1.0/0.5 px (balance 1.2/0.4) PASS; head-y jerk 2.5 PASS
+  A1 half-life: NO frame under 16 PASS  (med 56!)
+  A2 rate med 3.4 / p90 5.5 / max 15.4 PASS (the 15.4 is a single
+     segmentation flicker of the thin fin at f15, verified twin frames at 3x)
+  A3 jolts 1.1/s PASS (balance 4.1/s)
+  A4 four beats segment: 14f settle / 58f become-S / 11f dwell / 59f
+     compress / 13f hold / launch PASS
+  B1-B4 0.59 / 5.7% / 0.444 / 0.89 all PASS
+  C2 ground time 160 frames PASS
+- Area jerk 196 px^2 and head-x jerk 14.4 px remain in the table: both
+  traced to instrument noise (fin-line segmentation flicker, eye-anchored
+  head-x sliding along the horizontal neck), NOT motion - each verified by
+  eye on the actual frame pairs. Honest caveat for the reviewer: judge the
+  head's motion from the committed zoom sheets, not from the head-x column.

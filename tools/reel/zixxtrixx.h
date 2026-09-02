@@ -788,8 +788,8 @@ constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
 // squeezes flatter instead of clipping. This is the pose the release fires
 // from, and the whole shape stays unmistakably the same S.
 constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
-    -1500, 400, 900, 1100, 1400, 17000, 27500, 31000, 16500, 4500,
-    900, 900, 1000, 1200, 1700, -2800, -6200, -4800, -1600};
+    -1500, 400, 900, 1100, 1400, 17000, 27500, 31000, 22000, 11000,
+    900, 900, 1000, 1200, 1700, -4500, -9500, -13000, -14500};
 // WHERE THE THREE AUTHORED POSES SIT ON THE ONE ARMING PARAMETER, in 1/1000 of
 // the complete arming. Grounded is 0 and collapsed is 1000. Moving these
 // reparameterises the build without touching a single shape value. Direction

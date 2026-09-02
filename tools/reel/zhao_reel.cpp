@@ -4188,7 +4188,11 @@ SceneSubject subject_zixx_attack() {
 // DIAGNOSTIC: exact fixed-side comparison required by owner direction #9.
 // The short subject ends at the clean wheel key, keeping all anticipation
 // frames large enough to judge at native resolution.
-constexpr uint32_t kZixxSpringDiagnosticKeys = 30;
+// Through the whole arming, hold and release to the coil pose -- derived so
+// a retimed spring keeps its diagnostic coverage (it was a literal 30, which
+// silently cropped the Direction-23 arming to its first quarter).
+constexpr uint32_t kZixxSpringDiagnosticKeys =
+    static_cast<uint32_t>(zixx::kSaltoCoilPoseKey) + 1;
 constexpr uint32_t kZixxSpringDiagnosticSamples =
     2 * (kZixxSpringDiagnosticKeys - 1) + 1;
 SceneSubject subject_zixx_spring_side() {

@@ -1,0 +1,14 @@
+window [1,161) activity threshold 2.7 %/f (35th pct)
+gap f1-f15 (14 frames)
+RUN f15-f73 (58 frames)
+gap f73-f84 (11 frames)
+RUN f84-f143 (59 frames)
+gap f143-f156 (13 frames)
+RUN f156-f161 (5 frames)
+
+runs>=16f: 2  ([58, 59])
+all runs: [58, 59, 5]
+gaps: [14, 11, 13]
+
+jolts (prom>=4): 3 in 2.67s = 1.1/s at frames [15, 46, 48]
+min jolt gap: 2 frames
