@@ -42,7 +42,27 @@ set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
 # PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION OFF and PHYSICAL_SYNTHESIS_
 # EFFORT NORMAL, both untried and both left alone for now: ONE VARIABLE
 # AT A TIME, or the next measurement cannot be attributed to anything.
-set_global_assignment -name OPTIMIZATION_TECHNIQUE SPEED
+# MEASURED AND REVERTED, seed 3, paired against the perf-mode fit:
+#
+#                       BALANCED      SPEED
+#     gpu_clk Fmax      99.50 MHz     96.49 MHz    -3.01
+#     worst slack       -0.050 ns     -0.364 ns
+#     failing endpoints         1            35
+#     ALMs                  13146         13293    +147
+#
+# Worse on every metric. The likely mechanism is that SPEED synthesis
+# duplicates and flattens logic to shorten paths, handing the fitter a
+# LARGER netlist to place -- and the fitter is already at HIGH
+# PERFORMANCE EFFORT. The two work against each other rather than
+# compounding, which is not obvious in advance and is why it was
+# measured rather than assumed.
+#
+# CAVEAT, because it weakens the evidence and should be stated: changing
+# synthesis changes the NETLIST, so `same seed` is a weaker control here
+# than for the fitter-only change -- the placement problem itself is
+# different. One seed. But the result is negative on Fmax, endpoint
+# count AND area at once, and a change must earn its place.
+set_global_assignment -name OPTIMIZATION_TECHNIQUE BALANCED
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 
 # Exact ZHAO_SHELL_RTL cone from tests/CMakeLists.txt, in the same order.
