@@ -63,6 +63,24 @@ set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
 # different. One seed. But the result is negative on Fmax, endpoint
 # count AND area at once, and a change must earn its place.
 set_global_assignment -name OPTIMIZATION_TECHNIQUE BALANCED
+
+# The last apparatus knob with a plausible mechanism for the remaining
+# 0.050 ns. Physical-synthesis register duplication runs on the
+# POST-SYNTHESIS netlist during fitting and splits high-fanout
+# registers so copies sit near their loads -- a different lever from
+# OPTIMIZATION_TECHNIQUE=SPEED, which was measured at -3.01 MHz above
+# and reverted. Duplication adds registers rather than combinational
+# logic, so it does not enlarge the netlist the same way.
+#
+# Relevant here because the design has known wide-fanout control: the
+# gpu_clk enable drives 13933 loads, and `rs_state` and `ts_clear` reach
+# across module boundaries into EARLY-Z and TILESTORE -- both of which
+# have held the worst path at one seed or another.
+#
+# VERIFY IT IS HONOURED. Quartus Lite restricts some physical-synthesis
+# features, and an ignored assignment looks exactly like one that did
+# not help. Read it back from the fitter's own settings table.
+set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION ON
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 
 # Exact ZHAO_SHELL_RTL cone from tests/CMakeLists.txt, in the same order.
