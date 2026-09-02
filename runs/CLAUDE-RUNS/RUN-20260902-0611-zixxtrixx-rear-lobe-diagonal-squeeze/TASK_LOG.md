@@ -327,3 +327,28 @@ Plan, in the spirit of the declared ground-bite law:
   a 6th authored mid-wind knot with per-station clearance solving would
   restore zero intersections through the formation transit; hours of
   work, risk to the accepted motion. Only on owner request.
+
+### 2026-09-02 — Website leg underway
+
+- Archive Generation Thirteen preserved byte-for-byte (44 files: the 22
+  live Direction-21 clips + posters) BEFORE re-encoding; creatures.json
+  entry + generation order + archive note; assemble.py
+  MAX_ARCHIVE_GENERATIONS 12 -> 13; BOTH style.css archive selector
+  families extended together. Commit 6e26149.
+- The seven spring-family live notes re-authored for Direction 22: the
+  extreme coil, and the DECLARED owner-ruled formation press stated
+  plainly (superseding the zero-intersection claim). Commit a3587b7.
+- assemble.py validates: 277 renders, exactly one robots noindex meta.
+- 22-subject re-render running from ONE fresh explicit
+  ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross invocation of the
+  freshly built zhao-reel-cel (build-direct, cel target, one target per
+  call). Renderer code untouched this pass (constants + probe only), so
+  frames should match the judged iteration renders.
+- 22/22 subjects rendered, exit 0; LOOKED at the jump-one strip (frames
+  0/13/16/19/21/24/30/38/41/50/70, evidence/final-pass-jump-one-strip.png):
+  the wind gathers backward, the declared-window transit reads as the
+  animal coiling over itself (no clipping read at 240p), the coil sits
+  low and loaded, the release explodes forward into the accepted wheel.
+- zhaozhou origin/main merged into the branch (hardware lanes; zero
+  overlap with tools/reel, reference/src, runtime); probe rebuilt via
+  build-direct and rerun post-merge: PASS. Branch pushed.
