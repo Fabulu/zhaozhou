@@ -1,0 +1,76 @@
+Reviewer's own instrument — independent of tools/reel/zixx_legibility.py.
+
+Segmentation: colour classifier (ink lum<130 | G>R+18 | B>R+18 | lum>470 |
+yellow eye), 3x3 closing x2, fill holes, largest component. Verified by eye:
+evidence/review/segmentation-mask-check.png. NO median plate anywhere.
+Subject: zixxtrixx-spring-side (FIXED camera, 183 f, 2 samples/key, 60 fps).
+Ground phase = frames 0-160 (72-key arming + 8-key hold = 2.67 s).
+
+BEAT STRUCTURE (changed pixels per frame, raw pixels, no segmentation):
+  settle   f  0- 12    2.3 /f      f0-f10 are BYTE-IDENTICAL (0.18 s)
+  beat 1   f 12- 72   44.1 /f
+  dwell    f 72- 82   22.9 /f
+  beat 2   f 82-144   40.8 /f
+  hold     f144-160   23.3 /f
+  launch   f161-164   1435-1716 /f
+Clip median 150 /f, p90 297 /f. Balance clip (same instrument): median 480 /f,
+max 1917 /f (max/median 4.0).
+
+SMOOTHNESS, ground phase, per frame:
+                        spring arming        balance f75-234 (reference)
+  centroid x |v| med       0.131 px             0.358 px
+  centroid x |v| max       0.657 px             3.146 px
+  centroid x jerk max      1.060 px             1.495 px
+  centroid y |v| med       0.057 px             0.109 px
+  centroid y jerk max      0.381 px             0.427 px
+  area |v| med             7.5 px^2             9.0 px^2
+  silhouette XOR med       1.49 %/f             -
+30 Hz odd/even staircase: alternate-sample mean|step| ratios 1.05-1.37
+  (head y 1.09, body x 1.05) -> DEAD.
+Velocity lag-1 autocorrelation: head-region centroid y +0.544 (balance +0.662),
+body centroid x -0.360 (balance -0.338), area -0.280 (balance -0.338).
+Tracking camera (zixxtrixx-jump-one): horizon row moves 6 rows over f0-160,
+never more than 1 row in any frame.
+
+HEAD TRAVEL, fixed side camera, f0 -> f160:
+  nose tip                 -7.0 px back, +10.3 px down
+  head-region centroid     -2.18 px back, +6.75 px down
+  head-region centroid x: total path 9.70 px = 4.4x the net; +0.85 px FORWARD
+  excursion around f30-60 before it goes back.
+  Implementer's eye-anchored figure was 9.8 back / 11.7 down — same family.
+
+HEAD vs TAIL, every ground frame:
+  nose tip x            235 .. 244
+  rearmost body pixel x 109 .. 131
+  gap never below 104 px. The head never approaches the tail.
+
+WHERE THE MOTION LIVES (cumulative silhouette XOR by screen region):
+  region       x<170 (tail+fins)   170-210 (mid)   x>=210 (head/front)
+  beat 1          82.5 %              6.7 %            10.8 %
+  beat 2          45.3 %             23.9 %            30.8 %
+
+DESCENT DURING THE COMPRESSION (f72 -> f160, region centroid y):
+  head/front  +7.12 px down
+  mid body    +2.62 px down
+  tail/fins   -0.25 px  (net zero: rises 1.5 px to f100, falls 1.8 px after)
+Agreeing world-mm figures from the committed pose probe (zixx-probe):
+  "SPRING full-S entry mean station travel / compression descent:
+   head=51/-310 neck=47/-281 front=27/-124 middle=5/-7 grounded run=8/-37
+   taper=105/-33 tail=257/1 mm"
+
+THE f15 EVENT (jump-one AND spring-side, both cameras):
+  raw changed pixels: f14 = 54, f15 = 388, f16 = 66  (6-7x local spike)
+  spatial map: distributed over the WHOLE creature interior (316 of 388 changed
+  pixels inside the silhouette), not the fin, not the outline.
+  Present in raw pixel bytes, so not a segmentation artefact.
+  Silhouette area blip: 2523 -> 2455 -> 2471 px (spring-side); 195 px^2 in
+  jump-one, which is the implementer's "area jerk 196 px^2" column, same frame.
+
+f46 / f48 "prominence-4 jolts" (jump-one): silhouette change rate
+  2.12 %/f and 2.05 %/f against a 1.68 %/f median. At the instrument floor.
+  CONFIRMED as noise.
+
+PROBE at HEAD: PASS. body/whole lateral span 0/14 mm (planar);
+  "SPRING real surface intersections full/micro: none / none";
+  "SPRING terrain full/micro: -42 mm at 72 (declared bite 34 mm)";
+  "SPRING compressed hold: shape/support drift 59/0 mm over 8 keys".

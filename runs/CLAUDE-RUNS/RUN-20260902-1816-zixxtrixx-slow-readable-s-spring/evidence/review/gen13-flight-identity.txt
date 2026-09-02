@@ -1,0 +1,17 @@
+Reviewer proof: the accepted Generation Thirteen flight/salto survives the retime.
+
+Method: `git archive a2f601ef` extracted to a scratch tree, built with its own
+tools/reel/build-direct.sh, rendered with the same ZIXX_EXP/ZIXX_LIGHT. Frames
+compared HEAD[j + 124] against GEN13[j] (the +62-key retime = +124 frames).
+
+zixxtrixx-jump-one   HEAD 285 f, GEN13 161 f, offset 124
+  BYTE-IDENTICAL gen13 frame runs: 44, 46-108, 110, 144, 146-160
+  -> the whole flight (46-108) is byte-exact.
+  Differing landing frames 111-145, peak 5051 changed pixels at gen13 f128.
+  Cause measured: creature centroid offset up to (+7.4, +2.0) px and tail-fin
+  life-wave phase; poses otherwise the same (see landing-head-vs-gen13.png).
+
+zixxtrixx-salto-dummy HEAD 355 f, GEN13 231 f, offset 124
+  From gen13 frame 44 onward the two banks differ by AT MOST 22 changed pixels
+  in any frame (0.02 % of the 92 160-pixel frame); most frames 2-8 px.
+  -> the accepted salto is preserved.

@@ -1,0 +1,34 @@
+Reviewer bank CRC comparison — HEAD (ecf0e3ab) vs the pre-run (Direction-22 live)
+bank recorded in evidence/stage1/crc-proof-22-subjects.txt.
+
+Rendered with ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross, zhao-reel-cel
+built by tools/reel/build-direct.sh.
+
+UNCHANGED (byte-identical sequence CRC) — 15 of 22:
+  zixxtrixx-balance       0x7FC8F62E
+  zixxtrixx-damage        0x0D8ECFB6
+  zixxtrixx-death         0x4B7B3E3E
+  zixxtrixx-death2        0x9F659521
+  zixxtrixx-fall          0xC4722098
+  zixxtrixx-hit           0x6A33B878
+  zixxtrixx-hitfloor      0xC8E9982F
+  zixxtrixx-idle          0x25EE061F
+  zixxtrixx-knockdown     0xB36C148A
+  zixxtrixx-look          0x5F193510
+  zixxtrixx-moving-light  0xDE5D2626
+  zixxtrixx-run           0x8E8D3179
+  zixxtrixx-slow-taunt    0xBB66B5CE
+  zixxtrixx-taunt         0x33BC0A56
+  zixxtrixx-walk          0x86536E70
+
+CHANGED (the seven shared-spring consumers, expected):
+  subject             pre-run       ->  HEAD          frames
+  zixxtrixx-attack    0x33892BB3    ->  0xE99EBB2B    604
+  zixxtrixx-jump-one  0xF7020B2F    ->  0xB1D11BA6    161 -> 285
+  zixxtrixx-jump-multi0x5E5258D0    ->  0x1DCBE89C    285
+  zixxtrixx-salto-dummy 0xE3C23422  ->  0x59138550    231 -> 355
+  zixxtrixx-salto-fly 0x34AC6B2E    ->  0x5A0115A3    357
+  zixxtrixx-salto-nine 0x640FC996   ->  0x2D41187C    479
+  zixxtrixx-salto-six 0xAEEA0511    ->  0x90475D6F    377
+
+CONCLUSION: no accepted-vocabulary clip outside the shared spring moved.
