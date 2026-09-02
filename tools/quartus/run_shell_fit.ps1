@@ -12,6 +12,15 @@ param(
     # Results are identical either way: this changes how the work is divided,
     # not what is computed.
     [int]$Processors = 0,
+    # THE NOISE FLOOR IS A MEASUREMENT, NOT AN ASSUMPTION.
+    # The project QSF pins SEED 1 so rounds are comparable, which is right.
+    # But it also means the placement variance has never been measured, and a
+    # whole optimisation series was being read against a guessed "~1.5 MHz"
+    # figure. Re-fitting ONE UNCHANGED COMMIT at several seeds is the only way
+    # to know which round-to-round deltas were signal.
+    # Overrides the STAGED copy only, exactly as -Processors does, so the
+    # committed project keeps SEED 1 and normal rounds stay comparable.
+    [int]$Seed = 0,
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
     [string]$ReportRoot
 )
@@ -246,6 +255,15 @@ try {
         $qsfText += "set_global_assignment -name NUM_PARALLEL_PROCESSORS $Processors`n"
         [IO.File]::WriteAllText($stagedQsf, $qsfText, $Utf8NoBom)
         Write-Host "staged override: NUM_PARALLEL_PROCESSORS $Processors"
+    }
+
+    if ($Seed -gt 0) {
+        $stagedQsf = Join-Path $SnapshotProject 'zhao_shell_fit.qsf'
+        $qsfText = [IO.File]::ReadAllText($stagedQsf)
+        $qsfText += "`n# Overridden by run_shell_fit.ps1 -Seed (noise-floor measurement).`n"
+        $qsfText += "set_global_assignment -name SEED $Seed`n"
+        [IO.File]::WriteAllText($stagedQsf, $qsfText, $Utf8NoBom)
+        Write-Host "staged override: SEED $Seed  (committed project keeps SEED 1)"
     }
 
     $LogDir = Join-Path $Workspace 'logs'
