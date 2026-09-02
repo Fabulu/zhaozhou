@@ -4,7 +4,24 @@
 
 ## Purpose and exclusions
 
-Ribbons, tubes, radial shells, rings, chains, shard bursts, billboard sheets, spline walls, cones — bounded subdivision with screen-error LOD.
+**Six v1 families**, bounded subdivision with screen-error LOD:
+
+1. ribbon
+2. radial fan / ring
+3. tube
+4. radial shell
+5. billboard sheet
+6. terrain cliff / skirt
+
+**REMOVED from v1 by ruling R11 (2026-09-02): shard burst, chain, cone and
+spline wall.** They are not refused forever; they are not ratified, and they
+need separate ratification to return. **Shard burst in particular is a particle
+population**, not a Forge primitive — building it here would put a second
+particle system in the geometry path.
+
+The list above is a **ceiling, not a floor**. A broad purpose sentence is how
+extra generators get ratified without anyone deciding to ratify them, which is
+exactly what the previous version of this line did.
 
 ## Clock and reset semantics
 Single `gpu_clk`, synchronous active-low `rst_n`.

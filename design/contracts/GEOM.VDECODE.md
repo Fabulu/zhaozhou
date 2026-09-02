@@ -3,8 +3,19 @@
 > Ledger: `design/blocks.yml` · owner ZH-053 · phase 8 · maturity SPECIFIED
 
 ## Purpose and exclusions
-Fetch and decode compressed vertex data (positions/normals/UV) into the skinning
-format.
+Fetch and decode vertex data (positions/normals/UV) into the skinning format.
+
+**Format 0 — RAW/CANONICAL — is authorised now** and is buildable (ruling R11,
+2026-09-02). Build against it first.
+
+**Formats 1 and 2 (the packed encodings) are BAKE-OFF GATED.** They are not
+deferred and not refused: they are waiting on a measured comparison, and no RTL
+for them is authorised before that comparison exists.
+
+**Descriptor fetch stays separate from decode** (R11, via GEOM.MESHFETCH):
+MESHFETCH builds against the 64-byte-aligned versioned descriptor and the raw
+format first, and culls only outside **every** active camera — a vertex outside
+one Duo view may be inside the other.
 
 ### The ruling that unblocked this (owner, 2026-08-31 §6.2)
 

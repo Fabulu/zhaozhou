@@ -4,7 +4,19 @@
 
 ## Purpose and exclusions
 
-Bounded transform graph evaluation (orbit/aim/billboard/oscillator/spline/gait/formations) producing instance transforms; consumes formation-field samples.
+**It evaluates a parent-before-child transform stream.** That is the whole
+block: orbit, aim, billboard, oscillator and spline composition producing
+instance transforms.
+
+**Gait, formation and Form outputs are INPUT VALUES, not work this block does**
+(ruling R11, 2026-09-02). The purpose line used to list "gait/formations"
+alongside the transform primitives, which reads as though this block simulates
+them.
+
+**Specifically excluded:** gait simulation; recursion; cycle discovery; matrix
+inversion; gameplay event generation. A transform stream evaluated in
+parent-before-child order needs none of them, and a purpose sentence broad
+enough to admit one would silently ratify a different block.
 
 World-identity wave additions (spec/creature_rules.md §4.1 — SPECIFIED,
 built Phase 9):
