@@ -52,7 +52,33 @@
 `default_nettype none
 
 module zhao_texture_tmu_plan #(
-    parameter int unsigned SRCW = 16
+    parameter int unsigned SRCW = 16,
+    // ------------------------------------------------------------------------
+    // THE LARGEST TEXTURE DIMENSION THIS PLANNER ADDRESSES, as log2.
+    //
+    // MEASURED, NOT ASSUMED. The first fit of this block came back at
+    // 93.55 MHz -- below the shell's own 99.50 MHz and 56 MHz below the
+    // brief's 150 MHz leaf target -- and the setup report named the path:
+    //
+    //   t2_iv0[0] -> t3_row0[13]   data delay 10.121 ns, 200 paths, 12 violated
+    //
+    // That is a 32-bit wrap fold (a 32-bit magnitude compare and a 32-bit
+    // subtract) feeding a 32-bit barrel shift. None of those quantities is
+    // 32 bits wide. A wrapped texel coordinate is bounded by the texture, and
+    // TEXTURE.TMU.md records what the textures actually are:
+    //
+    //   > Everything else Sacrifice ships is strictly power-of-two and square,
+    //   > and nothing exceeds 256x256.
+    //
+    // 11 is 2048 -- EIGHT DOUBLINGS above the largest asset that exists. It is
+    // a parameter and not a literal because a bound chosen from today's assets
+    // must stay the owner's to move; see CLAUDE.md, "never remove the owner's
+    // control in the name of fidelity".
+    //
+    // A dimension ABOVE the bound is a DECLARED error, not a silent wrong
+    // address. That is the charter's phase-5 gate ("no unsupported state
+    // silently falls back") and it is the difference between a limit and a bug.
+    parameter int unsigned MAXLOG2 = 11
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -96,6 +122,13 @@ module zhao_texture_tmu_plan #(
   // 20480 + 512 + 32 = 21024 -> 0x0010A440, which is exactly what the pipe
   // emits. Two guessed encodings, two identical mistakes, and both hid behind
   // addresses that looked plausible.
+  // A coordinate inside a 2^MAXLOG2 texture needs MAXLOG2 bits; CW carries one
+  // spare so the MIRROR period (2*size) is representable without truncation.
+  localparam int unsigned CW = MAXLOG2 + 1;
+  // A texel index inside one level, plus the mip chain's 4/3 tail: 2*MAXLOG2
+  // for the level and 2 bits for the chain.
+  localparam int unsigned TW = 2 * MAXLOG2 + 2;
+
   localparam logic [1:0] WRAP_REPEAT = 2'd0;
   localparam logic [1:0] WRAP_CLAMP  = 2'd1;
   localparam logic [1:0] WRAP_MIRROR = 2'd2;
@@ -124,21 +157,34 @@ module zhao_texture_tmu_plan #(
       32'd21845,      32'd87381,      32'd349525,     32'd1398101,
       32'd5592405,    32'd22369621,   32'd89478485,   32'd357913941};
 
-  function automatic logic [31:0] wrap_coord(input logic signed [31:0] t,
-                                             input logic [1:0]         mode,
-                                             input logic [31:0]        mask);
-    logic [31:0] tu_, per, lo_;
+  // The fold, on CW bits instead of 32, with the two facts that make the
+  // narrowing EXACT rather than approximately right:
+  //
+  //   REPEAT is `t & mask` and MIRROR is `t & ((mask<<1)|1)`. Both masks are
+  //   below 2^CW, so discarding bits at or above CW changes neither -- and
+  //   because the masks are powers of two minus one, two's-complement
+  //   truncation is the mathematically correct floor-mod for negative t too.
+  //
+  //   CLAMP is the only mode that reads magnitude, so it is the only one that
+  //   needs the discarded bits. It gets them as two carried flags: `neg` (t was
+  //   negative) and `ovf` (any bit at or above CW was set, so t exceeds every
+  //   representable mask).
+  function automatic logic [CW-1:0] wrap_c(input logic [CW-1:0] lo,
+                                           input logic          neg,
+                                           input logic          ovf,
+                                           input logic [1:0]    mode,
+                                           input logic [CW-1:0] mask);
+    logic [CW-1:0] per, lo_;
     begin
-      tu_ = $unsigned(t);
       case (mode)
-        WRAP_CLAMP:  wrap_coord = t[31] ? 32'd0 : ((tu_ > mask) ? mask : tu_);
+        WRAP_CLAMP:  wrap_c = neg ? '0 : ((ovf || (lo > mask)) ? mask : lo);
         WRAP_MIRROR: begin
-          per = tu_ & ((mask << 1) | 32'd1);
-          lo_ = per & mask;
-          wrap_coord = (per > mask) ? (mask - lo_) : lo_;
+          per   = lo & ((mask << 1) | CW'(1));
+          lo_   = per & mask;
+          wrap_c = (per > mask) ? (mask - lo_) : lo_;
         end
-        WRAP_REPEAT: wrap_coord = tu_ & mask;
-        default:     wrap_coord = tu_ & mask;
+        WRAP_REPEAT: wrap_c = lo & mask;
+        default:     wrap_c = lo & mask;
       endcase
     end
   endfunction
@@ -217,8 +263,13 @@ module zhao_texture_tmu_plan #(
 
   // ---- T2: level dimensions, scale, half-texel bias ------------------------
   logic [3:0]  log2w_l, log2h_l;
-  logic [31:0] mask_u, mask_v, lvl_off_c;
+  logic [CW-1:0] mask_u, mask_v;
+  logic [TW-1:0] lvl_off_c;
   logic [5:0]  lvl_shift;
+  // Dimensions above the declared bound. Raised into the same `err` the block
+  // already carries for a malformed mode word, so an oversized texture is
+  // reported rather than addressed wrongly.
+  logic        dim_over_c;
   // The bottom 8 bits of the biased coordinate are DISCARDED BY LAW: the
   // filter fraction is [15:8] and anything below it is sub-fractional. The
   // serial block drops them the same way; saying so is the difference between
@@ -226,15 +277,15 @@ module zhao_texture_tmu_plan #(
   /* verilator lint_off UNUSEDSIGNAL */
   logic signed [47:0] tu_q, tv_q, tu_b, tv_b;
   /* verilator lint_on UNUSEDSIGNAL */
-  logic signed [31:0] iu0_c, iv0_c;
+  logic signed [31:0] iu0_c, iv0_c, iu1_c, iv1_c;
   logic [7:0]  fu_c, fv_c;
   always_comb begin
     log2w_l   = t1_log2w - t1_level;
     log2h_l   = t1_log2h - t1_level;
-    mask_u    = (32'd1 << log2w_l) - 32'd1;
-    mask_v    = (32'd1 << log2h_l) - 32'd1;
+    mask_u    = CW'((32'd1 << log2w_l) - 32'd1);
+    mask_v    = CW'((32'd1 << log2h_l) - 32'd1);
     lvl_shift = 6'({4'd0, t1_log2w} + {4'd0, t1_log2h}) - 6'({4'd0, (t1_level - 4'd1)} << 1);
-    lvl_off_c = (t1_level == 4'd0) ? 32'd0 : (REP4[t1_level] << lvl_shift);
+    lvl_off_c = (t1_level == 4'd0) ? TW'(0) : TW'(REP4[t1_level] << lvl_shift);
 
     tu_q = $signed({{16{t1_u[31]}}, t1_u}) <<< log2w_l;
     tv_q = $signed({{16{t1_vc[31]}}, t1_vc}) <<< log2h_l;
@@ -242,12 +293,24 @@ module zhao_texture_tmu_plan #(
     tv_b = t1_filt ? (tv_q - 48'sd32768) : tv_q;
     iu0_c = tu_b[47:16];
     iv0_c = tv_b[47:16];
+    // The +1 tap is formed HERE, in T2, not in T3. It used to be a 32-bit add
+    // sitting in front of the wrap fold on the block's worst path; here it is
+    // parallel to arithmetic that is already longer than it.
+    iu1_c = iu0_c + 32'sd1;
+    iv1_c = iv0_c + 32'sd1;
     fu_c  = t1_filt ? tu_b[15:8] : 8'd0;
     fv_c  = t1_filt ? tv_b[15:8] : 8'd0;
+    dim_over_c = (t1_log2w > 4'(MAXLOG2)) || (t1_log2h > 4'(MAXLOG2));
   end
 
-  logic [31:0]        t2_base, t2_masku, t2_maskv, t2_lvloff;
-  logic signed [31:0] t2_iu0, t2_iv0;
+  logic [31:0]        t2_base;
+  logic [CW-1:0]      t2_masku, t2_maskv;
+  logic [TW-1:0]      t2_lvloff;
+  // The coordinate, carried as the CW bits the fold reads plus the two flags
+  // CLAMP needs from the bits that were dropped.
+  logic [CW-1:0]      t2_iu0, t2_iv0, t2_iu1, t2_iv1;
+  logic               t2_iu0n, t2_iv0n, t2_iu1n, t2_iv1n;
+  logic               t2_iu0o, t2_iv0o, t2_iu1o, t2_iv1o;
   logic [7:0]         t2_fu, t2_fv;
   logic [3:0]         t2_log2w_l;
   logic [1:0]         t2_wu, t2_wv;
@@ -256,34 +319,39 @@ module zhao_texture_tmu_plan #(
   logic [SRCW-1:0]    t2_src;
 
   // ---- T3: wrap and row bases ---------------------------------------------
-  logic [31:0] uw0_c, uw1_c, vw0_c, vw1_c, row0_c, row1_c;
+  logic [CW-1:0] uw0_c, uw1_c, vw0_c, vw1_c;
+  logic [TW-1:0] row0_c, row1_c;
   always_comb begin
-    uw0_c  = wrap_coord(t2_iu0, t2_wu, t2_masku);
-    uw1_c  = wrap_coord(t2_iu0 + 32'sd1, t2_wu, t2_masku);
-    vw0_c  = wrap_coord(t2_iv0, t2_wv, t2_maskv);
-    vw1_c  = wrap_coord(t2_iv0 + 32'sd1, t2_wv, t2_maskv);
-    row0_c = vw0_c << t2_log2w_l;
-    row1_c = vw1_c << t2_log2w_l;
+    uw0_c  = wrap_c(t2_iu0, t2_iu0n, t2_iu0o, t2_wu, t2_masku);
+    uw1_c  = wrap_c(t2_iu1, t2_iu1n, t2_iu1o, t2_wu, t2_masku);
+    vw0_c  = wrap_c(t2_iv0, t2_iv0n, t2_iv0o, t2_wv, t2_maskv);
+    vw1_c  = wrap_c(t2_iv1, t2_iv1n, t2_iv1o, t2_wv, t2_maskv);
+    row0_c = TW'(vw0_c) << t2_log2w_l;
+    row1_c = TW'(vw1_c) << t2_log2w_l;
   end
 
-  logic [31:0]     t3_base, t3_lvloff, t3_uw0, t3_uw1, t3_row0, t3_row1;
+  logic [31:0]     t3_base;
+  logic [TW-1:0]   t3_lvloff, t3_row0, t3_row1;
+  logic [CW-1:0]   t3_uw0, t3_uw1;
   logic [7:0]      t3_fu, t3_fv;
   logic [2:0]      t3_fmt;
   logic            t3_filt, t3_err, t3_clut4, t3_16bpp;
   logic [SRCW-1:0] t3_src;
 
   // ---- T4: the four addresses ---------------------------------------------
-  logic [31:0] total_c [0:3];
+  // The texel index adds are TW wide, not 32. Only the final base add -- which
+  // genuinely is an address -- is.
+  logic [TW-1:0] total_c [0:3];
   logic [31:0] addr_c  [0:3];
   always_comb begin
-    total_c[0] = t3_lvloff + t3_row0 + t3_uw0;
-    total_c[1] = t3_lvloff + t3_row0 + t3_uw1;
-    total_c[2] = t3_lvloff + t3_row1 + t3_uw0;
-    total_c[3] = t3_lvloff + t3_row1 + t3_uw1;
+    total_c[0] = t3_lvloff + t3_row0 + TW'(t3_uw0);
+    total_c[1] = t3_lvloff + t3_row0 + TW'(t3_uw1);
+    total_c[2] = t3_lvloff + t3_row1 + TW'(t3_uw0);
+    total_c[3] = t3_lvloff + t3_row1 + TW'(t3_uw1);
     for (int unsigned k = 0; k < 4; k++)
-      addr_c[k] = t3_16bpp ? (t3_base + (total_c[k] << 1))
-                : t3_clut4 ? (t3_base + (total_c[k] >> 1))
-                : (t3_base + total_c[k]);
+      addr_c[k] = t3_16bpp ? (t3_base + 32'({1'b0, total_c[k]} << 1))
+                : t3_clut4 ? (t3_base + 32'(total_c[k] >> 1))
+                : (t3_base + 32'(total_c[k]));
   end
 
   assign acc_valid_o = t4_v;
@@ -341,8 +409,18 @@ module zhao_texture_tmu_plan #(
           t2_masku   <= mask_u;
           t2_maskv   <= mask_v;
           t2_lvloff  <= lvl_off_c;
-          t2_iu0     <= iu0_c;
-          t2_iv0     <= iv0_c;
+          t2_iu0     <= CW'(iu0_c);
+          t2_iv0     <= CW'(iv0_c);
+          t2_iu1     <= CW'(iu1_c);
+          t2_iv1     <= CW'(iv1_c);
+          t2_iu0n    <= iu0_c[31];
+          t2_iv0n    <= iv0_c[31];
+          t2_iu1n    <= iu1_c[31];
+          t2_iv1n    <= iv1_c[31];
+          t2_iu0o    <= |iu0_c[30:CW];
+          t2_iv0o    <= |iv0_c[30:CW];
+          t2_iu1o    <= |iu1_c[30:CW];
+          t2_iv1o    <= |iv1_c[30:CW];
           t2_fu      <= fu_c;
           t2_fv      <= fv_c;
           t2_log2w_l <= log2w_l;
@@ -350,7 +428,7 @@ module zhao_texture_tmu_plan #(
           t2_wv      <= t1_wv;
           t2_fmt     <= t1_fmt;
           t2_filt    <= t1_filt;
-          t2_err     <= t1_err;
+          t2_err     <= t1_err || dim_over_c;
           t2_clut4   <= t1_clut4;
           t2_16bpp   <= t1_16bpp;
           t2_src     <= t1_src;
