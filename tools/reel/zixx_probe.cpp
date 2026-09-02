@@ -1550,9 +1550,9 @@ int main() {
       // kSpringBodyFlattenQ16 rose ~31% -> ~43% (body retained ~557 per
       // mille, head ~888 at strength 64/255). Still positive volume, still
       // selective (the head barely squashes).
-      require(min_radial_ratio >= 530 && min_radial_ratio <= 610 &&
-                  body_radial_ratio >= 530 && body_radial_ratio <= 610 &&
-                  head_radial_ratio >= 860 && head_radial_ratio <= 930,
+      require(min_radial_ratio >= 490 && min_radial_ratio <= 570 &&
+                  body_radial_ratio >= 490 && body_radial_ratio <= 570 &&
+                  head_radial_ratio >= 850 && head_radial_ratio <= 925,
               "spring cross-sections left the accepted positive-volume, "
               "selective-squash envelope");
       require(follower_count >= (rung == 0 ? 160 : 70) &&
@@ -1749,10 +1749,22 @@ int main() {
                 (contact_shallowest_tick[1] & 1) ? ".5" : "");
     for (int t = 0; t <= kPreLiftEndTick; ++t) {
       const PosedSample& s = spring->samples[t];
-      std::printf("SPRING contact sample %d%s: support dY %d, full/micro %d/%d mm\n",
+      // The centreline's own minimum beside the vertex minimum separates a
+      // body bite from a follower (blade) bite at a glance.
+      int32_t centre_min = INT32_MAX;
+      int centre_min_station = -1;
+      for (int i = 0; i < zixx::kProfileStations; ++i) {
+        if (s.y_mm[i] < centre_min) {
+          centre_min = s.y_mm[i];
+          centre_min_station = i;
+        }
+      }
+      std::printf("SPRING contact sample %d%s: support dY %d, full/micro "
+                  "%d/%d mm, centre min %d@st%d\n",
                   t / 2, (t & 1) ? ".5" : "",
                   s.support_y_mm - support_rest.support_y_mm,
-                  to_mm(s.rung_min_y_fx[0]), to_mm(s.rung_min_y_fx[1]));
+                  to_mm(s.rung_min_y_fx[0]), to_mm(s.rung_min_y_fx[1]),
+                  centre_min, centre_min_station);
     }
     require(support_x_drift <= 1 && support_z_drift <= 1 &&
                 support_target_error <= 1,

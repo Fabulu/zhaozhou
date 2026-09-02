@@ -203,3 +203,39 @@ was comparing two mostly-pressed poses.
 - LOOKED at iter4 jump-one (161-frame sheet): gather -> wound coil ->
   explosive release -> accepted wheel -> landing press -> settle. The arc
   reads. Fins now rise with the squash (rooster-tail) instead of stabbing.
+### 2026-09-02 — Rounds 11-19: the mid-wind wall, and the honest stop
+
+Probe convergence 25 -> 9 -> 5 -> 4 -> 3 -> 2 assertions across rounds
+8-18. The last two do not yield to any dial this session owns:
+
+1. "spring body runs intersect on the real full or micro surface" —
+   ~330 triangle-pair hits peaking at ticks 9.5-10.5 and 18.5-19.5
+   (arm ~520-750): the coil's FORMATION passes the front over/through the
+   winding rear with ~40 mm of press at the real skin. Looked at on
+   screen (evidence/iter4-midwind-frames.png, iter4-release-transit.png):
+   reads as the animal coiling over itself, invisible at 240p. The
+   zero-intersection law is owner law (D21 #3), so this stays a FAIL, not
+   a widened gate.
+2. The retimed attack's grid catches a +5 mm hover echo of the same
+   window.
+
+Structural attempts, all recorded above: seating knot (works, kept),
+whip-side selection (kept), keyed lift route (kept), staggered roll,
+early-seat (V5: clears pairs but collapses the arming into 2 keys ✗ D20
+slow-arming), grounded-return mid knot (V4: -299 -> -104, insufficient),
+loop loosening to 300 deg and 250 deg (WORSE: 474 hits - the crossing
+driver is the nose-descent relation, not the wind tightness). Dead ends
+in SPEC.
+
+THE THEOREM that defeats zero tonight: with the support pinned at station
+14, the head's backward travel is locked to the wind's progress (the
+compensation), so the head is always above the rear DURING the wind; a
+planar wind of this depth must pass the front over the winding rear with
+less than two tube radii of clearance somewhere in arm 500-750, at
+sampled half-keys. Resolving it needs either a 6th authored mid-wind knot
+with per-station clearance solving (hours, risk to the motion), or an
+owner call on the wind-vs-press trade.
+
+DECISION: keep the tight coil (all four Direction-22 faults delivered at
+the pose; the best state), do NOT publish (the probe must pass to ship),
+report honestly with renders.

@@ -806,8 +806,8 @@ constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
 // the FRONT'S OWN FOLD closing -- the dive deepens back to idle curl,
 // pulling the head its last ~400 mm back and bowing it onto the coil.
 constexpr int32_t kSpringSeatingHeading[kStanceSlopes] = {
-    1820, 1092, 728, 1456, 4369, 11287, 15656, 19296, 32040, 37319,
-    52428, 39320, 33314, 32586, 26578, 22572, 19296, 2184, 1092};
+    5461, 1820, 728, 1456, 4369, 11287, 15656, 19296, 32040, 37319,
+    51063, 38865, 33132, 32768, 24576, 21481, 19296, 2184, 1092};
 // COLLAPSED (arm 1000): THE COIL AT ITS EXTREME. Head hung low-front over
 // the planted tail (nose ~47% of idle height, ~1.3 m behind its idle spot
 // -- the whole S has gathered backward onto the rear); crest at ~65% of
@@ -818,7 +818,7 @@ constexpr int32_t kSpringSeatingHeading[kStanceSlopes] = {
 // loop-bottom over pad); the flatten/spread deform takes every touch.
 constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
     -1820, -728, 0, 3277, 7646, 14199, 20025, 23848, 32040, 37319,
-    52428, 39320, 33314, 32586, 25848, 22572, 19296, 2184, 1092};
+    51063, 38865, 33132, 32768, 25848, 22572, 19296, 2184, 1092};
 // WHERE THE THREE AUTHORED POSES SIT ON THE ONE ARMING PARAMETER, in 1/1000 of
 // the complete arming. Grounded is 0 and collapsed is 1000. Moving these
 // reparameterises the build without touching a single shape value. Direction
@@ -857,6 +857,7 @@ struct SpringSupportLiftKey {
   int32_t entry;
   int32_t lift_mm;
 };
+constexpr int32_t kSpringVeryEarlyEntryProfile = 40;
 constexpr int32_t kSpringEarlyEntryProfile = 140;
 constexpr int32_t kSpringMiddleEntryProfile = 340;
 constexpr int kSpringMiddlePoseKey = 2;
@@ -873,7 +874,8 @@ constexpr int32_t kSpringKey5EntryProfile = 850;
 // pad with its biting tube tip, which the whole-body bite gate checks. The
 // lifts are deltas from the station's grounded baseline height; the x pin
 // is what gathers the entire animal backward as the coil forms.
-constexpr int32_t kSpringEarlySupportLiftMm = -8;
+constexpr int32_t kSpringVeryEarlySupportLiftMm = -6;
+constexpr int32_t kSpringEarlySupportLiftMm = -10;
 constexpr int32_t kSpringMiddleSupportLiftMm = -2;
 constexpr int32_t kSpringAbsorbSupportLiftMm = 52;
 constexpr int32_t kSpringKey5SupportLiftMm = 35;
@@ -896,11 +898,11 @@ struct SpringSquashLiftKey {
 constexpr SpringSquashLiftKey kSpringSquashLiftRoute[] = {
     {150, -40},   // the belly stays down while the rear starts to rise
     {300, 400},   // the press rolls forward; the body rocks onto the foot
-    {460, 515},   // the whip's apex -- the climb onto the forming coil
+    {460, 470},   // the whip's apex -- the climb onto the forming coil
     {620, 276},   // the whip lands; the pad takes the ground
-    {790, 335},   // the head travels back over the seated coil
-    {840, 390},   // the deepest transit press, held out of the dirt
-    {920, 295},   // easing toward the bow
+    {790, 300},   // the head travels back over the seated coil
+    {840, 365},   // the deepest transit press, held out of the dirt
+    {920, 282},   // easing toward the bow
     {1000, kSpringCollapsedSupportLiftMm},  // the bow onto the chin rest
 };
 constexpr int kSpringSquashLiftRouteCount =
@@ -929,6 +931,7 @@ constexpr int32_t kSpringDeclaredLoadedBiteMm = 160;
 constexpr int32_t kSpringHoldLivingDriftMm = 88;
 constexpr SpringSupportLiftKey kSpringOpenSupportLift[] = {
     {0, 0},
+    {kSpringVeryEarlyEntryProfile, kSpringVeryEarlySupportLiftMm},
     {kSpringEarlyEntryProfile, kSpringEarlySupportLiftMm},
     {kSpringMiddleEntryProfile, kSpringMiddleSupportLiftMm},
     {kSpringAbsorbProfile, kSpringAbsorbSupportLiftMm},
@@ -948,8 +951,8 @@ constexpr int32_t kSpringJumpRootLiftMm = 0;       // no clearance hop during en
 // spread beside it (8000 -> 11800, ~12% -> ~18%). The coil's tangent presses
 // (chin-over-tail, loop-over-pad, stacked runs) are authored at these
 // squeezed sections; chosen by looking at the deepest pose in the render.
-constexpr uint16_t kSpringBodyFlattenQ16 = 28500;  // ~43% vertical contraction
-constexpr uint16_t kSpringBodySpreadQ16 = 11800;   // ~18% lateral/lengthwise bulge
+constexpr uint16_t kSpringBodyFlattenQ16 = 31500;  // ~48% vertical contraction
+constexpr uint16_t kSpringBodySpreadQ16 = 13800;   // ~21% lateral/lengthwise bulge
 constexpr uint8_t kSpringSkullDeformStrength = 64; // head only squashes slightly
 constexpr uint8_t kSpringThroatDeformStrength = 188;
 constexpr uint8_t kSpringBodyDeformStrength = 255;
@@ -1883,8 +1886,21 @@ inline uint8_t spring_deform_strength(int station) {
   return kSpringBodyDeformStrength;
 }
 
+// THE SQUEEZE LEADS THE DEFORM (Direction 22 #4). The cross-section
+// flattens AHEAD of the squash and stays flat through the early release --
+// the body fires out of the coil still pressed and re-rounds as it
+// extends, which is both the contact relief where the unwinding neck
+// slides over the coil and the gummy, loaded read the owner asks for.
+// Zero stays exactly zero, full stays exactly full: the identity and
+// endpoint gates are untouched.
+constexpr int32_t kSpringSqueezeDeformLead = 340;
+inline int32_t spring_squeeze_deform_boost(int32_t squash) {
+  if (squash <= 0) return 0;
+  const int32_t led = squash + kSpringSqueezeDeformLead;
+  return led > 1000 ? 1000 : led;
+}
 inline zc::DeformSample spring_deform_sample(int32_t amount) {
-  const int32_t q = spring_smooth_amount(amount);
+  const int32_t q = spring_smooth_amount(spring_squeeze_deform_boost(amount));
   return zc::DeformSample{
       static_cast<uint16_t>((static_cast<uint32_t>(kSpringBodyFlattenQ16) * q) / 1000),
       static_cast<uint16_t>((static_cast<uint32_t>(kSpringBodySpreadQ16) * q) / 1000)};
@@ -2564,7 +2580,8 @@ inline void author_spring_midpoint_pose(
       quat_z(spring_head_attitude(1000, control.entry, control.squash));
   g.tail_rest(kBladeSplay + blade_splay_bias +
                   (control.squash * kSpringBladeFlare) / 1000,
-              kBladeRise, kBladeUpBias);
+              kBladeRise + (control.squash * kSpringBladeSquashRise) / 1000,
+              kBladeUpBias);
   for (int b = 0; b < kBoneCount; ++b)
     c.mid_quats[qi + b] = g.q[b];
 
@@ -6839,7 +6856,8 @@ inline zc::Clip build_attack_variant(
       g.q[kBHead] = quat_z(spring_head_attitude(1000, entry, amount));
       g.tail_rest(kBladeSplay + kBladeSplay / 5 +
                       (amount * kSpringBladeFlare) / 1000,
-                  kBladeRise, kBladeUpBias);
+                  kBladeRise + (amount * kSpringBladeSquashRise) / 1000,
+                  kBladeUpBias);
     } else if (k < t3) {
       int lk;
       if (k < t1) {
@@ -7505,7 +7523,8 @@ inline zc::Clip build_jump(
                           spring_air_coil_pitch(1, coil_pitch, curl,
                                                 f * 1000));
     g.tail_rest(kBladeSplay + (spring * kSpringBladeFlare) / 1000,
-                (kBladeRise * (1000 - curl)) / 1000,
+                ((kBladeRise + (spring * kSpringBladeSquashRise) / 1000) *
+                 (1000 - curl)) / 1000,
                 (kBladeUpBias * (1000 - curl)) / 1000);
     const uint16_t th16 = static_cast<uint16_t>(theta & 0xFFFF);
     if (th16 != 0)
