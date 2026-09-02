@@ -1,0 +1,274 @@
+bones=28 meshlets=37 verts=1774 tris=2176 | micro: 20 meshlets 963 tris, compiler micro_error=1048
+slot  1:  96 keys / 191 presentation samples; minY  -13 mm at 55 (bones 16/17); maxY  1407 mm; saturation 0
+slot  2:  40 keys /  79 presentation samples; minY  -19 mm at 18.5 (bones 16/17); maxY  1369 mm; saturation 0
+slot  3: 240 keys / 479 presentation samples; minY -1477 mm at 74 (bones 23/22); maxY 14029 mm; saturation 0
+slot  4: 144 keys / 288 presentation samples; minY   41 mm at 7 (bones 21/20); maxY  4752 mm; saturation 0
+slot  5:  50 keys /  99 presentation samples; minY -202 mm at 11 (bones 21/20); maxY  1270 mm; saturation 0
+slot  6:  96 keys / 191 presentation samples; minY  -48 mm at 36 (bones 10/11); maxY  1316 mm; saturation 0
+slot  7: 247 keys / 493 presentation samples; minY -131 mm at 174.5 (bones 9/10); maxY  2295 mm; saturation 0
+slot  8: 192 keys / 383 presentation samples; minY  -12 mm at 123 (bones 16/17); maxY  1368 mm; saturation 0
+slot 45:  64 keys / 127 presentation samples; minY   -7 mm at 0 (bones 16/17); maxY  1309 mm; saturation 0
+slot 10:  18 keys /  35 presentation samples; minY  -10 mm at 0 (bones 16/17); maxY  2034 mm; saturation 0
+slot 11:  13 keys /  25 presentation samples; minY  -10 mm at 5 (bones 16/17); maxY  2412 mm; saturation 0
+slot 12:   2 keys /   3 presentation samples; minY  904 mm at 0 (bones 25/1); maxY  2152 mm; saturation 0
+slot 13:   9 keys /  17 presentation samples; minY  -30 mm at 7.5 (bones 21/20); maxY  3990 mm; saturation 0
+slot 14:  10 keys /  19 presentation samples; minY  171 mm at 2 (bones 21/20); maxY  2419 mm; saturation 0
+slot 15:   2 keys /   3 presentation samples; minY  915 mm at 0 (bones 25/2); maxY  1252 mm; saturation 0
+slot 16:  12 keys /  23 presentation samples; minY   57 mm at 4 (bones 21/20); maxY  1684 mm; saturation 0
+slot 17:  16 keys /  31 presentation samples; minY  -14 mm at 13.5 (bones 16/17); maxY  1252 mm; saturation 0
+slot 20:  32 keys /  63 presentation samples; minY  -53 mm at 22 (bones 9/10); maxY  1253 mm; saturation 0
+slot 21:  40 keys /  79 presentation samples; minY  -64 mm at 18 (bones 9/10); maxY  1244 mm; saturation 0
+slot 22:  32 keys /  63 presentation samples; minY -101 mm at 9.5 (bones 9/10); maxY  1979 mm; saturation 0
+slot 23:  50 keys /  99 presentation samples; minY -142 mm at 8.5 (bones 21/20); maxY  1320 mm; saturation 0
+slot 24:  50 keys /  99 presentation samples; minY -166 mm at 2.5 (bones 16/17); maxY  1309 mm; saturation 0
+slot 25:  50 keys /  99 presentation samples; minY  -65 mm at 2.5 (bones 16/17); maxY  1320 mm; saturation 0
+slot 26:  50 keys /  99 presentation samples; minY -131 mm at 0.5 (bones 16/17); maxY  1322 mm; saturation 0
+slot 27:  24 keys /  47 presentation samples; minY   -9 mm at 9.5 (bones 16/17); maxY  1414 mm; saturation 0
+slot 28: 120 keys / 239 presentation samples; minY  -60 mm at 31 (bones 9/10); maxY  1336 mm; saturation 0
+slot 30:  56 keys / 111 presentation samples; minY    1 mm at 32.5 (bones 14/15); maxY  1425 mm; saturation 0
+slot 44: 120 keys / 239 presentation samples; minY  -14 mm at 57 (bones 16/17); maxY  1331 mm; saturation 0
+slot 31:  32 keys /  63 presentation samples; minY  -11 mm at 0 (bones 4/5); maxY   403 mm; saturation 0
+slot 33: 116 keys / 231 presentation samples; minY -137 mm at 12 (bones 20/19); maxY  6284 mm; saturation 0
+slot 34: 117 keys / 233 presentation samples; minY -137 mm at 12 (bones 20/19); maxY  9252 mm; saturation 0
+slot 35: 127 keys / 253 presentation samples; minY -434 mm at 84 (bones 23/22); maxY 15036 mm; saturation 0
+slot 46:  81 keys / 161 presentation samples; minY -135 mm at 12 (bones 20/19); maxY  6551 mm; saturation 0
+slot 47:  81 keys / 161 presentation samples; minY -135 mm at 12 (bones 20/19); maxY  6647 mm; saturation 0
+slot 48: 178 keys / 355 presentation samples; minY -137 mm at 12 (bones 20/19); maxY 27055 mm; saturation 0
+slot 32:  62 keys / 123 presentation samples; minY   -7 mm at 37 (bones 16/17); maxY  1436 mm; saturation 0
+slot 36:  72 keys / 143 presentation samples; minY 1010 mm at 3.5 (bones 21/20); maxY  3494 mm; saturation 0
+slot 29:  96 keys / 191 presentation samples; minY  -28 mm at 22 (bones 10/11); maxY  1440 mm; saturation 0
+slot 37:  98 keys / 195 presentation samples; minY   -8 mm at 60.5 (bones 16/17); maxY  1350 mm; saturation 0
+slot 38:  98 keys / 195 presentation samples; minY   -8 mm at 52.5 (bones 16/17); maxY  1366 mm; saturation 0
+slot 39:  45 keys /  89 presentation samples; minY  -15 mm at 14.5 (bones 16/17); maxY  1302 mm; saturation 0
+slot 40:  48 keys /  95 presentation samples; minY   -7 mm at 23.5 (bones 16/17); maxY  1324 mm; saturation 0
+slot 41:  72 keys / 143 presentation samples; minY   -8 mm at 38.5 (bones 16/17); maxY  1284 mm; saturation 0
+slot 42:  98 keys / 195 presentation samples; minY   -8 mm at 55.5 (bones 16/17); maxY  1362 mm; saturation 0
+slot 43:  98 keys / 195 presentation samples; minY   -6 mm at 53.5 (bones 16/17); maxY  1469 mm; saturation 0
+BALANCE support posed-vertex minima by bone: b14=-12..-10 b15=-12..-10 b16=-9..-7 b17=-1..1 b18=5..7 b19=3..5 mm; least body regions=6 at 77; plateau all/blade -12/3 mm
+BALANCE terrain: outside declared contact -38 mm at 166.5 (bones 15/16); impact -66 mm at 161 (bones 15/16); aftermath -131 mm at 174 (bones 7/8)
+BALANCE shape-travel chord ranges: 0-10=16 10-20=21 20-30=9 30-40=49 mm; max 60 Hz station step 263 mm at 151.5 station 48
+CONTACT knock head-led throw: deepest -22 mm at 9; shallowest -9 mm at 3.5
+CONTACT knock flank impact: deepest -53 mm at 22; shallowest -26 mm at 9.5
+CONTACT knock stunned hold: deepest -48 mm at 28.5; shallowest -48 mm at 28.5
+CONTACT get-up complete recovery: deepest -64 mm at 17.5; shallowest -10 mm at 30
+CONTACT landing clear approach: deepest 35 mm at 8; shallowest 798 mm at 0
+CONTACT landing impact bite: deepest -101 mm at 9.5; shallowest -45 mm at 8.5
+CONTACT landing rebound absorption: deepest -67 mm at 12.5; shallowest 24 mm at 14
+CONTACT landing stunned settle: deepest -48 mm at 24.5; shallowest -47 mm at 24
+CONTACT death0 shudder and give: deepest -14 mm at 0.5; shallowest -8 mm at 5.5
+CONTACT death0 flank collapse: deepest -48 mm at 36; shallowest -10 mm at 14
+CONTACT death0 corpse hold: deepest -11 mm at 62.5; shallowest -11 mm at 62.5
+CONTACT death1 whole-body fight: deepest -60 mm at 18.5; shallowest 147 mm at 14
+CONTACT death1 delayed collapse: deepest -59 mm at 66.5; shallowest -24 mm at 49.5
+CONTACT death1 tail slaps and hold: deepest -58 mm at 78.5; shallowest -58 mm at 78.5
+CONTACT death2 complaint phrases: deepest -28 mm at 10; shallowest 33 mm at 28
+CONTACT death2 loss of S: deepest -15 mm at 72; shallowest -5 mm at 48.5
+CONTACT death2 paid-out hold: deepest -15 mm at 72.5; shallowest -14 mm at 85.5
+TAUNT slow: 120 keys / 239 samples, neck lead 4 keys, max 60 Hz station step 20 mm at 75 station 56
+FALL tumble phase: exact unwrapped turn, step 48..408 angle16, slowest at 72.5
+FALL shape-travel chord ranges: 0-14=348 (lo 78 / hi 52.5) 14-28=203 (lo 63 / hi 95) 28-42=68 (lo 48.5 / hi 140.5) 42-56=177 (lo 5.5 / hi 116) mm; regional propagation lags 30/29 ticks; max 60 Hz station step 143 mm at 103 station 56; seam half-steps 116/113 mm
+slot  2 overlap: 90 samples/pairs, worst 103/300 mm at 18 (stations 37/45)
+slot  3 overlap: 3125 samples/pairs, worst 292/370 mm at 9.5 (stations 12/41)
+slot  5 overlap: 341 samples/pairs, worst 279/390 mm at 1 (stations 7/17)
+slot  6 overlap: 32 samples/pairs, worst 29/265 mm at 5 (stations 23/31)
+slot 10 overlap: 1191 samples/pairs, worst 291/370 mm at 9.5 (stations 12/41)
+slot 11 overlap: 652 samples/pairs, worst 285/370 mm at 2 (stations 9/40)
+slot 12 overlap: 96 samples/pairs, worst 163/370 mm at 0 (stations 4/55)
+slot 13 overlap: 64 samples/pairs, worst 163/370 mm at 0 (stations 4/55)
+slot 24 overlap: 152 samples/pairs, worst 67/290 mm at 3 (stations 23/31)
+slot 26 overlap: 456 samples/pairs, worst 159/400 mm at 3 (stations 12/20)
+slot 27 overlap: 215 samples/pairs, worst 109/340 mm at 9 (stations 35/43)
+slot 28 overlap: 2683 samples/pairs, worst 129/410 mm at 18.5 (stations 23/31)
+slot 33 overlap: 2494 samples/pairs, worst 292/370 mm at 9.5 (stations 12/41)
+slot 34 overlap: 2556 samples/pairs, worst 292/370 mm at 9.5 (stations 12/41)
+slot 35 overlap: 4119 samples/pairs, worst 292/370 mm at 9.5 (stations 12/41)
+slot 46 overlap: 3974 samples/pairs, worst 292/370 mm at 9.5 (stations 12/41)
+slot 47 overlap: 3965 samples/pairs, worst 292/370 mm at 9.5 (stations 12/41)
+slot 48 overlap: 5869 samples/pairs, worst 292/370 mm at 9.5 (stations 12/41)
+slot 36 overlap: 465 samples/pairs, worst 37/390 mm at 45.5 (stations 24/32)
+slot 29 overlap: 32 samples/pairs, worst 16/285 mm at 19 (stations 24/32)
+slot 39 overlap: 788 samples/pairs, worst 105/240 mm at 15 (stations 11/19)
+slot 41 overlap: 1010 samples/pairs, worst 119/215 mm at 45 (stations 11/19)
+OVERLAP: 34369 sample/pair hits, all checked at keys + midpoints
+SPRING full-S entry mean station travel / compression descent: head=242/-229 neck=216/-283 front=216/-244 middle=142/-100 grounded run=40/229 taper=368/-325 tail=505/-708 mm
+SPRING real tail followers: 166 vertices, entry travel mean/max 359/520 mm
+SPRING ordered pose: entry/deep centre span 865/784 mm; head relative support dX/dY -1170/-406 mm; support dX/dY 0/228 mm; body/whole lateral span 0/9 mm (whole extrema stations 51/56)
+SPRING compressed hold: shape/support drift 24/0 mm over 2 keys
+SPRING release: rest-shape error 0 mm, intact airborne-S error 1 mm, whole-support lift 600 mm
+SPRING rung full: radial retained min/body/head 512/512/875 per-mille; rigid followers 180, faults 0; normals len2 15944..19045 faults 0
+SPRING rung micro: radial retained min/body/head 513/513/875 per-mille; rigid followers 78, faults 0; normals len2 15965..17347 faults 0
+SPRING shared full/micro deform sources: 804 vertices, 0 metadata faults
+SPRING intersection sample full 6.5: 17 (23/33) [declared window] press 18.0 mm
+SPRING intersection sample full 7: 31 (22/35) [declared window] press 31.2 mm
+SPRING intersection sample full 7.5: 35 (22/35) [declared window] press 35.2 mm
+SPRING intersection sample full 8: 46 (21/36) [declared window] press 29.5 mm
+SPRING intersection sample full 8.5: 75 (19/39) [declared window] press 38.8 mm
+SPRING intersection sample full 9: 165 (13/43) [declared window] press 48.9 mm
+SPRING intersection sample full 9.5: 180 (9/42) [declared window] press 41.5 mm
+SPRING intersection sample full 10: 295 (4/43) [declared window] press 49.0 mm
+SPRING intersection sample full 10.5: 113 (4/41) [declared window] press 36.6 mm
+SPRING intersection sample full 19: 330 (4/43) [declared window] press 49.9 mm
+SPRING intersection sample full 19.5: 63 (20/38) [declared window] press 44.1 mm
+SPRING intersection sample full 20: 29 (22/35) [declared window] press 21.2 mm
+SPRING intersection sample micro 6.5: 5 (23/33) [declared window] press 13.0 mm
+SPRING intersection sample micro 7: 14 (21/35) [declared window] press 51.7 mm
+SPRING intersection sample micro 7.5: 14 (21/35) [declared window] press 47.7 mm
+SPRING intersection sample micro 8: 19 (21/35) [declared window] press 56.4 mm
+SPRING intersection sample micro 8.5: 31 (19/37) [declared window] press 71.2 mm
+SPRING intersection sample micro 9: 76 (13/41) [declared window] press 93.6 mm
+SPRING intersection sample micro 9.5: 103 (9/41) [declared window] press 69.6 mm
+SPRING intersection sample micro 10: 162 (4/41) [declared window] press 87.8 mm
+SPRING intersection sample micro 10.5: 83 (4/41) [declared window] press 91.3 mm
+SPRING intersection sample micro 19: 237 (4/41) [declared window] press 86.5 mm
+SPRING intersection sample micro 19.5: 30 (19/37) [declared window] press 57.2 mm
+SPRING intersection sample micro 20: 14 (21/35) [declared window] press 33.0 mm
+SPRING real surface intersections full/micro: 330@19 (4/43) / 237@19 (4/41)
+SPRING declared formation press: windows 13..21 + 38..40 ticks, bounds full/micro 52/96 mm; measured full 50 mm at 19, micro 94 mm at 9; outside-window hits full/micro 0/0
+SPRING terrain full/micro: -137 mm at 12 / -117 mm at 12 (declared bite 34 mm)
+SPRING pre-lift station-14 support: X drift 0 mm at 0, Z drift 0 mm at 0, Y delta -38 at 8 .. 445 at 19 mm, target error 0 at 0.5; full surface -137@12..-3@1, micro -117@12..-1@1 through key 22 + half-keys
+SPRING contact sample 0: support dY 0, full/micro -10/-8 mm, centre min 63@st49
+SPRING contact sample 0.5: support dY -1, full/micro -8/-6 mm, centre min 66@st49
+SPRING contact sample 1: support dY -3, full/micro -3/-1 mm, centre min 73@st49
+SPRING contact sample 1.5: support dY -7, full/micro -14/-13 mm, centre min 86@st49
+SPRING contact sample 2: support dY -8, full/micro -24/-22 mm, centre min 105@st49
+SPRING contact sample 2.5: support dY -8, full/micro -36/-33 mm, centre min 114@st30
+SPRING contact sample 3: support dY -8, full/micro -51/-48 mm, centre min 99@st30
+SPRING contact sample 3.5: support dY -2, full/micro -63/-60 mm, centre min 87@st30
+SPRING contact sample 4: support dY 3, full/micro -79/-74 mm, centre min 71@st29
+SPRING contact sample 4.5: support dY 29, full/micro -75/-70 mm, centre min 74@st29
+SPRING contact sample 5: support dY 51, full/micro -73/-67 mm, centre min 75@st29
+SPRING contact sample 5.5: support dY 45, full/micro -95/-88 mm, centre min 53@st29
+SPRING contact sample 6: support dY 39, full/micro -103/-96 mm, centre min 45@st29
+SPRING contact sample 6.5: support dY 32, full/micro -77/-73 mm, centre min 72@st29
+SPRING contact sample 7: support dY 25, full/micro -50/-47 mm, centre min 100@st30
+SPRING contact sample 7.5: support dY -6, full/micro -42/-38 mm, centre min 92@st29
+SPRING contact sample 8: support dY -38, full/micro -87/-81 mm, centre min 27@st29
+SPRING contact sample 8.5: support dY 157, full/micro -34/-20 mm, centre min 60@st29
+SPRING contact sample 9: support dY 353, full/micro -11/-3 mm, centre min 58@st29
+SPRING contact sample 9.5: support dY 398, full/micro -112/-109 mm, centre min -60@st28
+SPRING contact sample 10: support dY 444, full/micro -88/-84 mm, centre min -17@st28
+SPRING contact sample 10.5: support dY 377, full/micro -46/-46 mm, centre min 36@st25
+SPRING contact sample 11: support dY 311, full/micro -68/-50 mm, centre min 7@st56
+SPRING contact sample 11.5: support dY 287, full/micro -105/-82 mm, centre min -30@st56
+SPRING contact sample 12: support dY 264, full/micro -137/-117 mm, centre min -59@st56
+SPRING contact sample 12.5: support dY 297, full/micro -99/-74 mm, centre min -23@st56
+SPRING contact sample 13: support dY 331, full/micro -59/-30 mm, centre min 15@st56
+SPRING contact sample 13.5: support dY 290, full/micro -94/-61 mm, centre min -21@st56
+SPRING contact sample 14: support dY 250, full/micro -127/-91 mm, centre min -55@st56
+SPRING contact sample 14.5: support dY 251, full/micro -121/-84 mm, centre min -50@st56
+SPRING contact sample 15: support dY 253, full/micro -115/-77 mm, centre min -45@st56
+SPRING contact sample 15.5: support dY 253, full/micro -114/-75 mm, centre min -43@st56
+SPRING contact sample 16: support dY 253, full/micro -113/-74 mm, centre min -43@st56
+SPRING contact sample 16.5: support dY 253, full/micro -112/-74 mm, centre min -42@st56
+SPRING contact sample 17: support dY 253, full/micro -112/-74 mm, centre min -42@st56
+SPRING contact sample 17.5: support dY 253, full/micro -106/-73 mm, centre min -37@st56
+SPRING contact sample 18: support dY 253, full/micro -111/-73 mm, centre min -41@st56
+SPRING contact sample 18.5: support dY 263, full/micro -134/-112 mm, centre min -56@st56
+SPRING contact sample 19: support dY 445, full/micro -95/-94 mm, centre min -16@st28
+SPRING contact sample 19.5: support dY 104, full/micro -17/-9 mm, centre min 87@st29
+SPRING contact sample 20: support dY 28, full/micro -43/-43 mm, centre min 106@st30
+SPRING contact sample 20.5: support dY 45, full/micro -87/-81 mm, centre min 62@st30
+SPRING contact sample 21: support dY 13, full/micro -77/-73 mm, centre min 72@st30
+SPRING contact sample 21.5: support dY -8, full/micro -51/-48 mm, centre min 99@st30
+SPRING contact sample 22: support dY 0, full/micro -10/-8 mm, centre min 63@st49
+MIDPOINT provenance golden: 22 owned segments, pre-lift root span 22, landing root span 0, exact=1
+MIDPOINT provenance compression slice: 2 owned segments, keys 1.5/4.5 quats/deform exact=1
+MIDPOINT provenance release slice: 4 owned segments, pre-lift root span 0, landing root span 0, exact=1
+MIDPOINT retimed attack: slot/count exact=1, roots=23, plan-release poses=4, default entry poses absent exact=1
+MIDPOINT retimed jump: slot/count exact=1, roots=43, plan-release poses=4, default entry poses absent exact=1
+MIDPOINT retimed attack release-0: slot/count exact=1, roots=18, plan-release poses=0, default entry poses absent exact=1
+MIDPOINT retimed jump release-0: slot/count exact=1, roots=38, plan-release poses=0, default entry poses absent exact=1
+MIDPOINT retimed attack release-2: slot/count exact=1, roots=20, plan-release poses=0, default entry poses absent exact=1
+MIDPOINT retimed attack release-3: slot/count exact=1, roots=21, plan-release poses=0, default entry poses absent exact=1
+MIDPOINT retimed jump release-2: slot/count exact=1, roots=40, plan-release poses=0, default entry poses absent exact=1
+MIDPOINT retimed jump release-3: slot/count exact=1, roots=41, plan-release poses=0, default entry poses absent exact=1
+MIDPOINT retimed jump short recovery: slot/count exact=1, roots=30, plan-release poses=6, default entry poses present exact=1
+MIDPOINT retimed jump long recovery: slot/count exact=1, roots=54, plan-release poses=6, default entry poses present exact=1
+MIDPOINT retimed compress-48 attack: slot/count exact=1, roots=54, plan-release poses=4, default entry poses absent exact=1
+RETIMED synthetic bank compile: 1 (accepted)
+RETIMED release attack-0: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 1240 mm at 18
+RETIMED release jump-0: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 1256 mm at 18
+RETIMED release attack-2: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 1162 mm at 19
+RETIMED release attack-3: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 1161 mm at 19
+RETIMED release jump-2: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 1162 mm at 19
+RETIMED release jump-3: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 1161 mm at 19
+RETIMED attack contact detail rung 0: before-wind highest -3 mm at 0.5, after-wind highest -10 mm at 23
+RETIMED attack contact detail rung 1: before-wind highest -2 mm at 0.5, after-wind highest -7 mm at 20.5
+RETIMED attack hold+1 12/7/4: exact=1, station-14 X/Z drift 0/0 mm, target error 0 mm, support step 341/341 mm, full/micro contact -148..-3/-131..5 mm, wind-window echo -9 mm at 11.5 / 5 mm at 11.5 (allowed 8), station step 777 mm
+RETIMED landing hold+1: exact=1, full impact/handoff/settle -75..-73/-80..-26/-105..-5 mm, micro -70..-67/-77..-26/-100..-2 mm, max step=430 mm, settle deepest ticks=68/68
+RETIMED landing short 3+5: exact=1, full impact/handoff/settle -78..-75/-87..-10/-10..-10 mm, micro -72..-70/-83..-8/-8..-8 mm, max step=431 mm, settle deepest ticks=65.5/65.5
+RETIMED landing long 10+22: exact=1, full impact/handoff/settle -78..-75/-87..-67/-106..-6 mm, micro -72..-70/-84..-62/-101..-4 mm, max step=431 mm, settle deepest ticks=73.5/73.5
+SPRING continuous route: max per-milli heading step 190, slowest/fastest station turn across the two interior knots 8/2849 (zero would be a dead stop); compress-48 reaches 306 at key 7, compiled step 28 mm
+MIDPOINT provenance dummy attack: 22 owned segments, pre-lift root span 22, landing root span 0, exact=1
+MIDPOINT provenance flying attack: 22 owned segments, pre-lift root span 22, landing root span 0, exact=1
+MIDPOINT provenance six-salto: 22 owned segments, pre-lift root span 22, landing root span 0, exact=1
+MIDPOINT provenance one-turn jump: 42 owned segments, pre-lift root span 22, landing root span 20, exact=1
+MIDPOINT provenance multi-turn jump: 42 owned segments, pre-lift root span 22, landing root span 20, exact=1
+MIDPOINT provenance nine-salto: 22 owned segments, pre-lift root span 22, landing root span 0, exact=1
+MIDPOINT compiled compression key 4.5: quats/root/deform exact=1/1/1, generic differs quats/root/deform=20/0/0
+CHOREO key 4.5 frame=4 sub=1: exact=1, local root zero=1, half spin zero=1, deform exact=1, world full/micro max delta=0 mm, stations=0 mm, station-14 support=0 mm
+SPRING release parity golden: integer + midpoint finless silhouette/deform exact=1
+SPRING release parity release slice: integer + midpoint finless silhouette/deform exact=1
+SPRING release parity dummy attack: integer + midpoint finless silhouette/deform exact=1
+SPRING release parity flying attack: integer + midpoint finless silhouette/deform exact=1
+SPRING release parity six-salto: integer + midpoint finless silhouette/deform exact=1
+SPRING release parity one-turn jump: integer + midpoint finless silhouette/deform exact=1
+SPRING release parity multi-turn jump: integer + midpoint finless silhouette/deform exact=1
+SPRING release parity nine-salto: integer + midpoint finless silhouette/deform exact=1
+SPRING whole pre-lift parity golden: 45-sample finless silhouette/deform/root exact=1
+SPRING whole pre-lift parity dummy attack: 45-sample finless silhouette/deform/root exact=1
+SPRING whole pre-lift parity flying attack: 45-sample finless silhouette/deform/root exact=1
+SPRING whole pre-lift parity six-salto: 45-sample finless silhouette/deform/root exact=1
+SPRING whole pre-lift parity one-turn jump: 45-sample finless silhouette/deform/root exact=1
+SPRING whole pre-lift parity multi-turn jump: 45-sample finless silhouette/deform/root exact=1
+SPRING whole pre-lift parity nine-salto: 45-sample finless silhouette/deform/root exact=1
+JUMP slot 46: apex 4800 mm, turns 1, landing key 60; full impact -78..-75 mm (deepest 60, highest 61), full handoff -83..-29 mm (deepest 64, highest 65), full settle -106..-5 mm (deepest 67, highest 75); micro impact -72..-70 mm (deepest 60, highest 60.5), micro handoff -80..-28 mm (deepest 64, highest 65), micro settle -101..-2 mm (deepest 67, highest 75); max 60 Hz station step 893 mm at 24 station 52
+JUMP landing contact sample 0: full/micro -78/-72 mm
+JUMP landing contact sample 0.5: full/micro -76/-70 mm
+JUMP landing contact sample 1: full/micro -75/-70 mm
+JUMP landing contact sample 1.5: full/micro -73/-68 mm
+JUMP landing contact sample 2: full/micro -73/-67 mm
+JUMP landing contact sample 2.5: full/micro -73/-68 mm
+JUMP landing contact sample 3: full/micro -70/-65 mm
+JUMP landing contact sample 3.5: full/micro -77/-73 mm
+JUMP landing contact sample 4: full/micro -83/-80 mm
+JUMP landing contact sample 4.5: full/micro -50/-48 mm
+JUMP landing contact sample 5: full/micro -29/-28 mm
+JUMP landing contact sample 5.5: full/micro -49/-48 mm
+JUMP landing contact sample 6: full/micro -75/-72 mm
+JUMP landing contact sample 6.5: full/micro -93/-90 mm
+JUMP landing contact sample 7: full/micro -106/-101 mm
+JUMP landing contact sample 7.5: full/micro -103/-98 mm
+JUMP landing contact sample 8: full/micro -94/-88 mm
+JUMP landing contact sample 8.5: full/micro -87/-81 mm
+JUMP landing contact sample 9: full/micro -78/-73 mm
+JUMP landing contact sample 9.5: full/micro -82/-77 mm
+JUMP landing contact sample 10: full/micro -85/-80 mm
+JUMP landing contact sample 10.5: full/micro -85/-81 mm
+JUMP landing contact sample 11: full/micro -85/-81 mm
+JUMP landing contact sample 11.5: full/micro -74/-71 mm
+JUMP landing contact sample 12: full/micro -64/-61 mm
+JUMP landing contact sample 12.5: full/micro -52/-50 mm
+JUMP landing contact sample 13: full/micro -43/-40 mm
+JUMP landing contact sample 13.5: full/micro -31/-29 mm
+JUMP landing contact sample 14: full/micro -21/-20 mm
+JUMP landing contact sample 14.5: full/micro -11/-9 mm
+JUMP landing contact sample 15: full/micro -5/-2 mm
+JUMP landing contact sample 15.5: full/micro -9/-7 mm
+JUMP landing contact sample 16: full/micro -10/-8 mm
+JUMP landing contact sample 16.5: full/micro -10/-8 mm
+JUMP landing contact sample 17: full/micro -10/-8 mm
+JUMP landing contact sample 17.5: full/micro -10/-8 mm
+JUMP landing contact sample 18: full/micro -10/-8 mm
+JUMP landing contact sample 18.5: full/micro -10/-8 mm
+JUMP landing contact sample 19: full/micro -10/-8 mm
+JUMP landing contact sample 19.5: full/micro -10/-8 mm
+JUMP landing contact sample 20: full/micro -10/-8 mm
+JUMP slot 47: apex 4800 mm, turns 3, landing key 60; full impact -78..-75 mm (deepest 60, highest 61), full handoff -83..-29 mm (deepest 64, highest 65), full settle -106..-5 mm (deepest 67, highest 75); micro impact -72..-70 mm (deepest 60, highest 60.5), micro handoff -80..-28 mm (deepest 64, highest 65), micro settle -101..-2 mm (deepest 67, highest 75); max 60 Hz station step 866 mm at 58.5 station 34
+HIT generic front station 9: local peak 406 mm at 1; head-span 291 mm at 1; tail 831 mm at 8.5; max 60 Hz step 257 mm at 6; terrain -202 mm
+HIT sides middle station 24: local peaks R/L 128/128 mm at 1/1; root shove 229/230 mm; mirrored station error 81 mm; terrain -142/-65 mm
+HIT back rear station 41 / top middle station 24: local peaks 79/189 mm at 3.5/3; delayed head spans 120/187 mm; back surge 259 mm; terrain -166/-131 mm
+HIT air: whole-spear chord bow 181 mm at 6 station 27; max 60 Hz step 546 mm
+ATTACK slot 35: 127 keys / 253 samples, impact 84, contact committed -434 mm, outside -137 mm, max step 1182 mm at 83.5 station 3, saturation 0
+ATTACK slot 48: 178 keys / 355 samples, impact 117, contact committed -82 mm, outside -137 mm, max step 1695 mm at 116.5 station 1, saturation 0
+ZIXX PROBE: PASS — every key + midpoint, declared 3D contact, balance/taunt/fall/impact/spring/jump/limit/overlap gates

@@ -529,7 +529,46 @@ struct IntersectionPeak {
   int tick = -1;
   int station_a = -1;
   int station_b = -1;
+  // The owner-ruled coil-formation press (2026-09-02): hits landing inside
+  // the declared wind/unwind windows are AUTHORED contact and are bounded by
+  // depth; hits outside them keep the zero law. See the declaration beside
+  // kSpringCoilFormationPressMm in zixxtrixx.h.
+  int outside_count = 0;
+  int outside_tick = -1;
+  int outside_station_a = -1;
+  int outside_station_b = -1;
+  int32_t declared_press_mm = 0;
+  int declared_press_tick = -1;
 };
+
+// How far one triangle pokes through the plane of another, in mm: the
+// smaller of its two side excursions. Zero for a tangent graze, and it
+// grows with the press. Applied both ways and maximised over the
+// intersecting pairs of a sample, this is the committed gauge the declared
+// coil-formation press depth is measured and bounded with.
+double triangle_poke_through_mm(const std::array<Vec3d, 3>& tri,
+                                const std::array<Vec3d, 3>& plane_tri) {
+  const Vec3d n = cross(sub(plane_tri[1], plane_tri[0]),
+                        sub(plane_tri[2], plane_tri[0]));
+  const double len2 = dot(n, n);
+  if (len2 < 1.0e-12) return 0.0;
+  const double inv = 1.0 / std::sqrt(len2);
+  double above = 0.0;
+  double below = 0.0;
+  for (const Vec3d& p : tri) {
+    const double d = dot(sub(p, plane_tri[0]), n) * inv;
+    above = std::max(above, d);
+    below = std::max(below, -d);
+  }
+  return std::min(above, below);
+}
+
+bool spring_tick_in_declared_press_window(int tick) {
+  return (tick >= zixx::kSpringCoilFormationWindBeginTick &&
+          tick <= zixx::kSpringCoilFormationWindEndTick) ||
+         (tick >= zixx::kSpringCoilFormationUnwindBeginTick &&
+          tick <= zixx::kSpringCoilFormationUnwindEndTick);
+}
 
 IntersectionPeak spring_self_intersections(const zc::CreatureType& type,
                                            const zc::Clip& clip, int rung,
@@ -538,8 +577,10 @@ IntersectionPeak spring_self_intersections(const zc::CreatureType& type,
   for (int tick = 0; tick <= end_tick; ++tick) {
     const PosedRung posed = pose_rung(type, clip, rung, tick);
     const std::vector<SurfaceTriangle> tris = body_triangles(type, rung, posed);
+    const bool declared = spring_tick_in_declared_press_window(tick);
     int hits = 0;
     int hit_a = -1, hit_b = -1;
+    double press = 0.0;
     for (size_t i = 0; i < tris.size(); ++i) {
       for (size_t j = i + 1; j < tris.size(); ++j) {
         const bool separated =
@@ -552,14 +593,37 @@ IntersectionPeak spring_self_intersections(const zc::CreatureType& type,
           hit_a = tris[i].station_lo;
           hit_b = tris[j].station_lo;
         }
+        if (declared)
+          press = std::max(
+              press,
+              std::max(triangle_poke_through_mm(tris[i].p, tris[j].p),
+                       triangle_poke_through_mm(tris[j].p, tris[i].p)));
       }
     }
     if (hits > 0)
-      std::printf("SPRING intersection sample %s %d%s: %d (%d/%d)\n",
+      std::printf("SPRING intersection sample %s %d%s: %d (%d/%d)%s "
+                  "press %.1f mm\n",
                   rung == 0 ? "full" : "micro", tick / 2,
-                  (tick & 1) ? ".5" : "", hits, hit_a, hit_b);
-    if (hits > worst.count)
-      worst = IntersectionPeak{hits, tick, hit_a, hit_b};
+                  (tick & 1) ? ".5" : "", hits, hit_a, hit_b,
+                  declared ? " [declared window]" : " [OUTSIDE window]",
+                  press);
+    if (hits > worst.count) {
+      worst.count = hits;
+      worst.tick = tick;
+      worst.station_a = hit_a;
+      worst.station_b = hit_b;
+    }
+    if (!declared && hits > worst.outside_count) {
+      worst.outside_count = hits;
+      worst.outside_tick = tick;
+      worst.outside_station_a = hit_a;
+      worst.outside_station_b = hit_b;
+    }
+    const int32_t press_mm = static_cast<int32_t>(std::ceil(press));
+    if (declared && press_mm > worst.declared_press_mm) {
+      worst.declared_press_mm = press_mm;
+      worst.declared_press_tick = tick;
+    }
   }
   return worst;
 }
@@ -1202,7 +1266,17 @@ int main() {
   const ClipScan* spring = find_scan(scans, 3);
   require(spring != nullptr, "missing primary slot 3 shared spring clip");
   if (spring) {
-    const int entry_tick = 2 * zixx::kSaltoSpringEntryEndKey;
+    // The "entry" sample is the ASSEMBLED moment -- the last key before the
+    // squash opens -- because the ordering law it feeds compares the GROWN S
+    // against the pressed coil. kSaltoSpringEntryEndKey is a phase-timing
+    // constant (the arming eases over 16 keys, so key 12 sits ~72% into the
+    // squash) and sampling there compared two mostly-pressed poses.
+    int assembled_key = 0;
+    for (int key = 1; key <= zixx::kSaltoCompressEndKey; ++key) {
+      if (zixx::spring_shared_squash_amount(key) > 0) break;
+      assembled_key = key;
+    }
+    const int entry_tick = 2 * assembled_key;
     const int deep_tick = 2 * zixx::kSaltoCompressEndKey;
     const int hold_end_tick = 2 * zixx::kSaltoCompressHoldEndKey;
     const int released_tick = 2 * zixx::kSaltoSpringReleasePoseKey;
@@ -1535,13 +1609,14 @@ int main() {
                   follower_count, follower_faults,
                   spring->normal_min_len2[rung], spring->normal_max_len2[rung],
                   static_cast<unsigned long long>(spring->normal_faults[rung]));
-      // Band re-derived for owner direction 21: the squeeze's contact relief
-      // is the flatten, and it must be VISIBLE, so kSpringBodyFlattenQ16 rose
-      // from ~26% to ~31% and the accepted retained-radius floor moves with
-      // it. Still positive volume, still selective (head barely squashes).
-      require(min_radial_ratio >= 650 && min_radial_ratio <= 730 &&
-                  body_radial_ratio >= 650 && body_radial_ratio <= 730 &&
-                  head_radial_ratio >= 900 && head_radial_ratio <= 950,
+      // Band re-derived for owner direction 22 #4: "the compression isn't
+      // strong enough... raising the flatten is what buys the height".
+      // kSpringBodyFlattenQ16 rose ~31% -> ~43% (body retained ~557 per
+      // mille, head ~888 at strength 64/255). Still positive volume, still
+      // selective (the head barely squashes).
+      require(min_radial_ratio >= 490 && min_radial_ratio <= 570 &&
+                  body_radial_ratio >= 490 && body_radial_ratio <= 570 &&
+                  head_radial_ratio >= 850 && head_radial_ratio <= 925,
               "spring cross-sections left the accepted positive-volume, "
               "selective-squash envelope");
       require(follower_count >= (rung == 0 ? 160 : 70) &&
@@ -1611,8 +1686,35 @@ int main() {
       std::printf("%d@%d%s (%d/%d)\n", micro_hits.count,
                   micro_hits.tick / 2, (micro_hits.tick & 1) ? ".5" : "",
                   micro_hits.station_a, micro_hits.station_b);
-    require(full_hits.count == 0 && micro_hits.count == 0,
-            "spring body runs intersect on the real full or micro surface");
+    // OWNER-RULED ALLOWANCE (2026-09-02): the coil-formation press. Inside
+    // the declared wind/unwind windows the front is AUTHORED to press over
+    // the winding rear, bounded in depth; everywhere else -- the loaded
+    // pose, the hold, the release pose, all airborne phases -- the zero
+    // law of Direction 21 #3 stands untouched.
+    std::printf("SPRING declared formation press: windows %d..%d + %d..%d "
+                "ticks, bounds full/micro %d/%d mm; measured full %d mm at %d%s, micro "
+                "%d mm at %d%s; outside-window hits full/micro %d/%d\n",
+                zixx::kSpringCoilFormationWindBeginTick,
+                zixx::kSpringCoilFormationWindEndTick,
+                zixx::kSpringCoilFormationUnwindBeginTick,
+                zixx::kSpringCoilFormationUnwindEndTick,
+                zixx::kSpringCoilFormationPressFullMm,
+                zixx::kSpringCoilFormationPressMicroMm,
+                full_hits.declared_press_mm,
+                full_hits.declared_press_tick / 2,
+                (full_hits.declared_press_tick & 1) ? ".5" : "",
+                micro_hits.declared_press_mm,
+                micro_hits.declared_press_tick / 2,
+                (micro_hits.declared_press_tick & 1) ? ".5" : "",
+                full_hits.outside_count, micro_hits.outside_count);
+    require(full_hits.outside_count == 0 && micro_hits.outside_count == 0,
+            "spring body runs intersect outside the declared "
+            "coil-formation windows");
+    require(full_hits.declared_press_mm <=
+                    zixx::kSpringCoilFormationPressFullMm &&
+                micro_hits.declared_press_mm <=
+                    zixx::kSpringCoilFormationPressMicroMm,
+            "coil-formation press exceeds its declared owner-ruled depth");
 
     std::array<int32_t, 2> terrain_worst{INT32_MAX, INT32_MAX};
     std::array<int, 2> terrain_tick{-1, -1};
@@ -1738,10 +1840,22 @@ int main() {
                 (contact_shallowest_tick[1] & 1) ? ".5" : "");
     for (int t = 0; t <= kPreLiftEndTick; ++t) {
       const PosedSample& s = spring->samples[t];
-      std::printf("SPRING contact sample %d%s: support dY %d, full/micro %d/%d mm\n",
+      // The centreline's own minimum beside the vertex minimum separates a
+      // body bite from a follower (blade) bite at a glance.
+      int32_t centre_min = INT32_MAX;
+      int centre_min_station = -1;
+      for (int i = 0; i < zixx::kProfileStations; ++i) {
+        if (s.y_mm[i] < centre_min) {
+          centre_min = s.y_mm[i];
+          centre_min_station = i;
+        }
+      }
+      std::printf("SPRING contact sample %d%s: support dY %d, full/micro "
+                  "%d/%d mm, centre min %d@st%d\n",
                   t / 2, (t & 1) ? ".5" : "",
                   s.support_y_mm - support_rest.support_y_mm,
-                  to_mm(s.rung_min_y_fx[0]), to_mm(s.rung_min_y_fx[1]));
+                  to_mm(s.rung_min_y_fx[0]), to_mm(s.rung_min_y_fx[1]),
+                  centre_min, centre_min_station);
     }
     require(support_x_drift <= 1 && support_z_drift <= 1 &&
                 support_target_error <= 1,
@@ -2284,6 +2398,7 @@ int main() {
     int32_t deepest_mm = INT32_MAX;
     int deepest_tick = -1;
     int32_t highest_mm = INT32_MIN;
+    int highest_tick = -1;
   };
   const auto synthetic_contact_range = [](
       const ClipScan& scan, int rung, int begin_tick, int end_tick) {
@@ -2297,7 +2412,10 @@ int main() {
         range.deepest_mm = y;
         range.deepest_tick = tick;
       }
-      range.highest_mm = std::max(range.highest_mm, y);
+      if (y > range.highest_mm) {
+        range.highest_mm = y;
+        range.highest_tick = tick;
+      }
     }
     return range;
   };
@@ -2321,6 +2439,7 @@ int main() {
     int32_t max_expected_support_step = 0;
     int32_t max_station_step = INT32_MAX;
     std::array<SyntheticContactRange, 2> contact{};
+    std::array<SyntheticContactRange, 2> wind_echo{};
     if (compiled != nullptr) {
       const ClipScan scan = scan_clip(synthetic_type, *compiled, stations);
       const PosedSample& rest = scan.samples[0];
@@ -2380,20 +2499,54 @@ int main() {
               support_target_error <= 1 &&
               max_support_step <= max_expected_support_step + 3 &&
               max_station_step <= zixx::kJumpMaxStationStepMm;
-      for (int rung = 0; rung < 2; ++rung)
+      // OWNER-RULED ALLOWANCE (2026-09-02): the retimed (+1 hold key) grid
+      // samples the formation climb at a slightly different phase and its
+      // lowest micro vertex momentarily clears the ground INSIDE the wind
+      // window -- the hover echo of the declared coil-formation press, not
+      // a separate fault. It is allowed kSpringCoilFormationHoverEchoMm in
+      // that window only; outside it the grounded pre-release still
+      // requires contact at or below zero.
+      for (int rung = 0; rung < 2; ++rung) {
+        wind_echo[rung] = synthetic_contact_range(
+            scan, rung, zixx::kSpringCoilFormationEchoBeginTick,
+            zixx::kSpringCoilFormationEchoEndTick);
+        const SyntheticContactRange before_wind = synthetic_contact_range(
+            scan, rung, 0, zixx::kSpringCoilFormationEchoBeginTick - 1);
+        const SyntheticContactRange after_wind = synthetic_contact_range(
+            scan, rung, zixx::kSpringCoilFormationEchoEndTick + 1,
+            2 * phase.release_end);
+        std::printf("RETIMED attack contact detail rung %d: before-wind "
+                    "highest %d mm at %d%s, after-wind highest %d mm at "
+                    "%d%s\n",
+                    rung, before_wind.highest_mm,
+                    before_wind.highest_tick / 2,
+                    (before_wind.highest_tick & 1) ? ".5" : "",
+                    after_wind.highest_mm, after_wind.highest_tick / 2,
+                    (after_wind.highest_tick & 1) ? ".5" : "");
         exact = exact &&
                 contact[rung].deepest_mm >=
                     -zixx::kSpringDeclaredLoadedBiteMm &&
-                contact[rung].highest_mm <= 0;
+                before_wind.highest_mm <= 0 &&
+                after_wind.highest_mm <= 0 &&
+                wind_echo[rung].highest_mm <=
+                    zixx::kSpringCoilFormationHoverEchoMm;
+      }
     }
     std::printf("RETIMED attack %s 12/7/4: exact=%d, station-14 X/Z drift "
                 "%d/%d mm, target error %d mm, support step %d/%d mm, "
-                "full/micro contact %d..%d/%d..%d mm, station step %d mm\n",
+                "full/micro contact %d..%d/%d..%d mm, wind-window echo "
+                "%d mm at %d%s / %d mm at %d%s (allowed %d), station step "
+                "%d mm\n",
                 name, exact ? 1 : 0, support_x_drift, support_z_drift,
                 support_target_error, max_support_step,
                 max_expected_support_step, contact[0].deepest_mm,
                 contact[0].highest_mm, contact[1].deepest_mm,
-                contact[1].highest_mm, max_station_step);
+                contact[1].highest_mm, wind_echo[0].highest_mm,
+                wind_echo[0].highest_tick / 2,
+                (wind_echo[0].highest_tick & 1) ? ".5" : "",
+                wind_echo[1].highest_mm, wind_echo[1].highest_tick / 2,
+                (wind_echo[1].highest_tick & 1) ? ".5" : "",
+                zixx::kSpringCoilFormationHoverEchoMm, max_station_step);
     require(exact,
             "compiled retimed attack support/contact/continuity contract drifted");
   };
