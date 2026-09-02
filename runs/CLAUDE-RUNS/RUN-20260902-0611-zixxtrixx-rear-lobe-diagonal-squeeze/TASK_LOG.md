@@ -135,3 +135,48 @@ probe's "entry" sample to the actual assembled moment (the last key
 before squash opens): kSaltoSpringEntryEndKey is phase timing and sits
 ~72% into the squash under the 16-key eased arming, so the ordering gate
 was comparing two mostly-pressed poses.
+### 2026-09-02 — The climb and the declared loading press
+
+- The whip-side fix cleared the tail stab, but the interpolated FRONT
+  still sagged through the terrain mid-squash (foot stations -230).
+- kSpringSquashClimbBumpMm = 300, riding q*q*(1000-q) (peak at 2/3
+  squash, zero at both knots): the animal presses down as the wind loads
+  and CLIMBS onto its own coil as it seats. springpose sweep now shows
+  centreline minima +40..-11 through the squash.
+- kSpringDeclaredLoadedBiteMm 60 -> 100: the mid-gather press is authored
+  and declared (3-4 px at 240p); the deep hold itself stays -30..-55.
+- Probe round 5 running; the release-window head-vs-descent intersections
+  (233@18.5) are the open question.
+
+## Next Steps
+
+- Probe green, then: fresh cel render of spring-side + spring-top +
+  jump-one + salto-dummy + landing region; every-frame sheets;
+  before/after vs the live bank; the ortho collapsed-pose proof render
+  with the last five segments distinguishable (acceptance #1).
+- Then: 22-subject re-render (one fresh explicit Cool Cross invocation),
+  Archive Generation Thirteen (extend MAX_ARCHIVE_GENERATIONS + both CSS
+  selector families), encode via tovideo.py, assemble, merge mains, one
+  publish, verify production.
+- Parked: the EXPERIMENTAL 3D-coil triple salto (owner appendix,
+  low-ceremony) - only after the real spring is committed and only if
+  cheap; drop and say so otherwise.
+### 2026-09-02 — The seating knot, the keyed lift route, and two dead ends
+
+- Added the FIFTH KNOT (kSpringSeatingHeading, arm 700): the rear finishes
+  seating first (identical to collapsed, so it holds), the front stays
+  reaching with the dive OPENED, and the last leg is the front's own fold
+  closing -- the head travels back OVER the seated coil and bows on. This
+  structurally separates the whip from the head's arrival.
+- Replaced the climb parabola with kSpringSquashLiftRoute (named keys):
+  press down, rock onto the foot, climb to the whip's apex, land, travel,
+  bow. Values derived against springpose min-y sweeps.
+- Dead end #1: kSpringChainLag 320 (de-sync the wind) wrecked the tuned
+  route everywhere - reverted to 165.
+- Dead end #2: authoring assembled as the half-wound pose introduced a
+  hairpin at joint 9/10 and broke the entry side - reverted; the wind
+  keeps its v8 staging.
+- kSpringBladeSquashRise 3200 -> 6500 (probe terrain tell suggests the
+  blade fan digs at the seated tip; empirical check in round 7).
+- Round 7 runs with the COMPLETE output saved; remaining fails will be
+  attacked from its own per-tick contact dump, not proxies.

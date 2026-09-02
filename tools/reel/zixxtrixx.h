@@ -779,7 +779,7 @@ constexpr const auto& kSpringGroundedHeading = kStanceSlope;
 // target and starting to load.
 constexpr int32_t kSpringAbsorbHeading[kStanceSlopes] = {
     -728, 364, 1820, 4005, 6918, 14563, 21299, 25122, 21845, 14928,
-    -1092, -1820, -2549, -3641, -5461, -7282, -9830, -10922, -12379};
+    -1092, -1820, -2549, -3641, -5461, -7282, -10012, -6918, -8738};
 // ASSEMBLED (arm 400). The S GROWN AND TRAVELLING BACKWARD -- and grown
 // UP: the hook at idle curl, the dive extended, the belly long and
 // grounded, and the tail RAISED into a tall quill (to -95 deg at the
@@ -795,7 +795,19 @@ constexpr int32_t kSpringAbsorbHeading[kStanceSlopes] = {
 // intersection and bite walks are the arbiters.
 constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
     -2731, -910, 1092, 3823, 7282, 14382, 20753, 24576, 28217, 24576,
-    -728, -1456, -2184, -2913, -8192, -10922, -14563, -15474, -17294};
+    -728, -1456, -2184, -2913, -8192, -10922, -12743, -8192, -4551};
+// SEATING (arm 700). The whip has LANDED: the rear is already the finished
+// coil (identical values to collapsed, so the rear HOLDS through the last
+// leg), while the front is still reaching -- the hang not yet dropped, the
+// dive deliberately OPENED (62/86/106 deg, well under the idle cap). This
+// knot is the collision-breaker the probe demanded: the rear's whip and
+// the head's arrival cannot share the airspace, so the whip finishes
+// FIRST (arm 400-700, fast and whippy), and the final leg (700-1000) is
+// the FRONT'S OWN FOLD closing -- the dive deepens back to idle curl,
+// pulling the head its last ~400 mm back and bowing it onto the coil.
+constexpr int32_t kSpringSeatingHeading[kStanceSlopes] = {
+    1820, 1092, 728, 2549, 5825, 11287, 15656, 19296, 32040, 37319,
+    52428, 40412, 33860, 32950, 25848, 22572, 19296, 2184, 1092};
 // COLLAPSED (arm 1000): THE COIL AT ITS EXTREME. Head hung low-front over
 // the planted tail (nose ~47% of idle height, ~1.3 m behind its idle spot
 // -- the whole S has gathered backward onto the rear); crest at ~65% of
@@ -805,7 +817,7 @@ constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
 // pad. Contacts are authored tangent presses (chin-over-tail ~+28 mm,
 // loop-bottom over pad); the flatten/spread deform takes every touch.
 constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
-    -3641, -1092, 0, 3277, 7646, 14199, 20025, 23848, 32040, 37319,
+    -1820, -728, 0, 3277, 7646, 14199, 20025, 23848, 32040, 37319,
     52428, 40412, 33860, 32950, 25848, 22572, 19296, 2184, 1092};
 // WHERE THE THREE AUTHORED POSES SIT ON THE ONE ARMING PARAMETER, in 1/1000 of
 // the complete arming. Grounded is 0 and collapsed is 1000. Moving these
@@ -817,6 +829,9 @@ constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
 // stops dead at an interior pose.
 constexpr int32_t kSpringArmAbsorbAt = 220;
 constexpr int32_t kSpringArmAssembledAt = 400;
+// Where the rear finishes seating (the whip lands) and the final front-only
+// leg begins. See kSpringSeatingHeading.
+constexpr int32_t kSpringArmSeatingAt = 700;
 // Entry completes at the assembled pose, so an entry profile of 1000 is
 // arm == kSpringArmAssembledAt and the absorb profile follows from the two
 // knots above rather than being a second, separately driftable number.
@@ -864,15 +879,31 @@ constexpr int32_t kSpringAbsorbSupportLiftMm = 52;
 constexpr int32_t kSpringKey5SupportLiftMm = 35;
 constexpr int32_t kSpringAssembledSupportLiftMm = 25;
 constexpr int32_t kSpringCollapsedSupportLiftMm = 287;
-// THE CLIMB. Between the assembled S and the seated coil the interpolated
-// front sags: the hook deepens while the whole animal translates back, and
-// without extra height the foot stations dig ~230 mm underground half way
-// through the squash (springpose sweep, this run). The named bump rides a
-// parabola over the squash -- zero at both knots, peak in the middle -- so
-// the animal RISES as it gathers onto the coil and settles as it seats.
-// Authored, not derived: chosen so the deepest mid-squash bite stays inside
-// the declared loaded band, checked by the probe's per-tick contact walk.
-constexpr int32_t kSpringSquashClimbBumpMm = 300;
+// THE SQUASH LIFT ROUTE. The wind is a whole-body event: the belly lifts
+// as the rear coils (the animal rocks onto its foot), the front presses
+// down into the dirt as the wind loads, the body CLIMBS onto the forming
+// coil, and it settles as the head seats. One interpolated value cannot
+// carry that; these named keys can. Each key is the station-14 lift (mm
+// over its grounded baseline) at that squash amount; legs interpolate
+// linearly. Authored against the springpose min-y sweep so every tick
+// keeps a real bite inside the declared band -- never hovering, never
+// past kSpringDeclaredLoadedBiteMm. The entry-side route above feeds the
+// first key through spring_support_surface_lift.
+struct SpringSquashLiftKey {
+  int32_t squash;
+  int32_t lift_mm;
+};
+constexpr SpringSquashLiftKey kSpringSquashLiftRoute[] = {
+    {150, -40},   // the belly stays down while the rear starts to rise
+    {300, 400},   // the press rolls forward; the body rocks onto the foot
+    {460, 565},   // the whip's apex -- the climb onto the forming coil
+    {620, 285},   // the whip lands; the pad takes the ground
+    {800, 330},   // the head travels back over the seated coil
+    {1000, kSpringCollapsedSupportLiftMm},  // the bow onto the chin rest
+};
+constexpr int kSpringSquashLiftRouteCount =
+    static_cast<int>(sizeof(kSpringSquashLiftRoute) /
+                     sizeof(kSpringSquashLiftRoute[0]));
 // The loaded spring's declared terrain penetration, in mm. Ground contact is
 // AUTHORED here and checked by the committed pose probe; its absence would be
 // as much a fault as burying, because a body resting at exactly zero reads as
@@ -930,7 +961,12 @@ constexpr int32_t kSpringJumpHeadAttitude = 700;   // follows the taller entry a
 // level, target-forward aim at full squash (a16; ~32 deg). It braces the
 // AIM; it must not lift the nose into a skyward point.
 constexpr int32_t kSpringHeadAttitude = 7500;
-constexpr int32_t kSpringBladeFlare = 900;         // fan braces during compression
+constexpr int32_t kSpringBladeFlare = 400;         // fan braces during compression
+// Direction 22: at the seated coil the tail tube points backward-level, so
+// a level fan's lower leaf stabbed ~250 mm into the dirt (probe terrain
+// walk). The blades sweep UP with the squash instead -- the rooster-tail of
+// the wound spring; fins follow, they never carry the stand.
+constexpr int32_t kSpringBladeSquashRise = 6500;
 
 
 // Named theatrical timing. The accepted attack still leaves the terrain at key
@@ -1879,18 +1915,27 @@ inline int32_t spring_support_surface_lift(int32_t entry, int32_t squash) {
   if (entry >= kSpringOpenSupportLift[kSpringOpenSupportLiftCount - 1].entry)
     open_lift =
         kSpringOpenSupportLift[kSpringOpenSupportLiftCount - 1].lift_mm;
-  const int32_t q = spring_smooth_amount(squash);
-  // THE CLIMB (see kSpringSquashClimbBumpMm): zero at both squash knots,
-  // peaking at ~2/3 squash where the interpolated front sags deepest
-  // (q*q*(1000-q), normalised to its maximum at q=667), so the gather
-  // rises over its own forming coil instead of sagging through the dirt.
-  const int32_t climb = static_cast<int32_t>(
-      (static_cast<int64_t>(kSpringSquashClimbBumpMm) * q * q * (1000 - q)) /
-      148148148);
-  return climb + kSpringCollapsedSupportLiftMm + static_cast<int32_t>(
-      (static_cast<int64_t>(open_lift - kSpringCollapsedSupportLiftMm) *
-       (1000 - q)) /
-      1000);
+  // The squash side walks the authored keyed route (see
+  // kSpringSquashLiftRoute); the first leg runs from the entry side's
+  // open lift to the first key.
+  if (squash >= 1000) return kSpringCollapsedSupportLiftMm;
+  int32_t prev_q = 0;
+  int32_t prev_lift = open_lift;
+  for (int i = 0; i < kSpringSquashLiftRouteCount; ++i) {
+    const SpringSquashLiftKey& key = kSpringSquashLiftRoute[i];
+    if (squash <= key.squash) {
+      const int32_t span = key.squash - prev_q;
+      if (span <= 0) return key.lift_mm;
+      const int64_t numer =
+          static_cast<int64_t>(key.lift_mm - prev_lift) * (squash - prev_q);
+      const int64_t rounded =
+          numer >= 0 ? numer + span / 2 : numer - span / 2;
+      return prev_lift + static_cast<int32_t>(rounded / span);
+    }
+    prev_q = key.squash;
+    prev_lift = key.lift_mm;
+  }
+  return kSpringCollapsedSupportLiftMm;
 }
 
 inline int32_t spring_lerp_heading(int32_t a, int32_t b, int32_t u) {
@@ -1942,15 +1987,17 @@ inline int32_t spring_unwrap(int32_t a, int32_t b) {
 inline int32_t spring_route_heading(int k, int32_t arm) {
   if (arm <= 0) return kSpringGroundedHeading[k];
   if (arm >= 1000) return kSpringCollapsedHeading[k];
-  // The four knots, unwrapped along the chain so the spline turns the short way.
+  // The five knots, unwrapped along the chain so the spline turns the short way.
   const int32_t p0 = kSpringGroundedHeading[k];
   const int32_t p1 = spring_unwrap(p0, kSpringAbsorbHeading[k]);
   const int32_t p2 = spring_unwrap(p1, kSpringAssembledHeading[k]);
-  const int32_t p3 = spring_unwrap(p2, kSpringCollapsedHeading[k]);
-  const int32_t t[4] = {0, kSpringArmAbsorbAt, kSpringArmAssembledAt, 1000};
-  const int32_t p[4] = {p0, p1, p2, p3};
+  const int32_t p3 = spring_unwrap(p2, kSpringSeatingHeading[k]);
+  const int32_t p4 = spring_unwrap(p3, kSpringCollapsedHeading[k]);
+  const int32_t t[5] = {0, kSpringArmAbsorbAt, kSpringArmAssembledAt,
+                        kSpringArmSeatingAt, 1000};
+  const int32_t p[5] = {p0, p1, p2, p3, p4};
   int i = 0;
-  while (i < 2 && arm > t[i + 1]) ++i;
+  while (i < 3 && arm > t[i + 1]) ++i;
   const int32_t span = t[i + 1] - t[i];
   const int64_t u = span > 0 ? (static_cast<int64_t>(arm - t[i]) * 1000) / span
                              : 0;
@@ -1960,9 +2007,9 @@ inline int32_t spring_route_heading(int k, int32_t arm) {
                   (t[i + 1] - t[i - 1])
             : static_cast<int64_t>(p[1] - p[0]);
   const int64_t m2 =
-      i + 2 < 4 ? (static_cast<int64_t>(p[i + 2] - p[i]) * span) /
+      i + 2 < 5 ? (static_cast<int64_t>(p[i + 2] - p[i]) * span) /
                       (t[i + 2] - t[i])
-                : static_cast<int64_t>(p[3] - p[2]);
+                : static_cast<int64_t>(p[4] - p[3]);
   const int64_t u2 = (u * u) / 1000;
   const int64_t u3 = (u2 * u) / 1000;
   const int64_t h00 = 2 * u3 - 3 * u2 + 1000;
@@ -3138,7 +3185,9 @@ inline zc::Clip build_attack(
     // and flare as the S returns
     g.tail_rest((kBladeSplay * auth) / 1000 + kBladeSplay / 5 +
                     (pre * kSpringBladeFlare) / 1000,
-                (kBladeRise * auth) / 1000, (kBladeUpBias * auth) / 1000);
+                (kBladeRise * auth) / 1000 +
+                    (pre * kSpringBladeSquashRise) / 1000,
+                (kBladeUpBias * auth) / 1000);
     g.write(c, f);
     if (!choreo) {
       if (f <= kSaltoSpringReleasePoseKey) {
