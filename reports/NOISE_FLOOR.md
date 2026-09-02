@@ -90,3 +90,52 @@ right direction for real structural reasons -- which made the numbers feel
 trustworthy and stopped the question being asked. A measured number feels like
 evidence, so it stops getting questioned: the project's own art law, in the
 timing lane.
+
+
+---
+
+## Addendum, same night: the ENDPOINT COUNT is placement-noise too
+
+I recorded the rules above and then broke one of them within the hour.
+
+Round 16 (the vram_arbiter fix) was fitted at seed 2 and reported as *"failing
+endpoints 291 -> 6, a fiftyfold reduction, the most effective change of the
+pass"*. Seed 3 says otherwise:
+
+| | seed 2 | seed 3 |
+| --- | ---: | ---: |
+| baseline Fmax | 95.70 | 95.92 |
+| round 16 Fmax | 93.43 | **96.73** |
+| delta | **-2.27** | **+0.81** |
+| baseline failing endpoints | 291 | 43 |
+| round 16 failing endpoints | 6 | 46 |
+| limiter | tilestore -0.703 (3) | Early-Z -0.338 (41) |
+
+**The same commit has 291 failing endpoints at seed 2 and 43 at seed 3.** The
+"fiftyfold reduction" was comparing two placements, not two designs. And the
+`tilestore -0.703` cluster that looked like the last barrier -- *"three paths
+hold the entire violation"* -- does not appear at seed 3 at all.
+
+### So the rule is broader than it was written
+
+Not just "Fmax is noisy". **Every aggregate the STA report produces is a
+property of the placement**: worst slack, failing-endpoint count, owner table,
+which block appears at all. Any of them can move by a factor of fifty between
+seeds on identical RTL.
+
+What is actually placement-independent:
+
+* **A structural count with a stated mechanism.** "DSP-launched 48 -> 0" is
+  trustworthy because a specific edit provably removed `cross_r[47]` from the
+  multiplier's cone -- the number follows from the change, not from where the
+  fitter put things.
+* **Bit-exactness.** CRCs, oracle comparisons, formal proofs.
+* **Large differences.** 53.48 -> ~96 is far outside any noise band.
+
+### Round 16's honest verdict
+
+Averaged over two seeds the arbiter change is **inconclusive on Fmax**
+(-2.27 and +0.81). It is kept because it is architecturally right -- arithmetic
+that waited on an arbitration no longer does -- and because 96.73 MHz at seed 3
+is the best single measurement of the whole pass. Not because it "fixed" 285
+endpoints, which it did not.

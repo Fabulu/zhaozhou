@@ -1,0 +1,14 @@
+# worst-100 setup paths by DESTINATION block,
+# RANKED BY WORST SLACK -- count is a decoy. The block holding the
+# worst path sets Fmax however few paths it owns; a block owning
+# most of the list with slack in hand is not the limiter.
+
+# block                       worst  paths
+
+zhao_raster_earlyz           -0.338     41
+zhao_debug_frameblit         -0.335      2
+zhao_cmd_dma                 -0.284     45
+zhao_raster_edgewalk         -0.264      1
+zhao_raster_resolve          -0.251      4
+zhao_mem_guard                0.087      2
+zhao_geom_binner              0.090      5
