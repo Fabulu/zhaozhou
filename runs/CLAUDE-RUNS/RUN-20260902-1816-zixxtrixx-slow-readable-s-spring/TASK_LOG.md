@@ -309,3 +309,25 @@ What the reviewer should look at, in motion, beside the balance clip:
   jump-one - the spring-side webm is the honest view);
 - the hold's quiver amplitude - my eye says life, a second eye should agree;
 - beat 2's pace at native res (p90 5.5 %/f, half-life never under 16).
+
+### 2026-09-02 (reviewer) — REVIEW.md committed (3ad1b12f)
+
+- Judged by eye first on reviewer-owned renders (spring-side, spring-top,
+  jump-one, balance), then with an independent silhouette instrument, then
+  against the implementer's claims. Nothing authored was changed.
+- PASS: acceptance 1 (smooth — sub-pixel per frame and quieter than the
+  balance clip on every column; 30 Hz staircase dead; tracking camera
+  <=1 row/frame), 2 (beats legible), 6 (pace: 2.67 s ground time at 60 fps,
+  deliberate not draggy), 7 (launch). PASS on the standing laws: planar
+  (0/14 mm), no clips, tail-tube participation, salto byte-preserved,
+  15 of 22 bank subjects byte-identical CRCs.
+- FAIL: acceptance 3 and 5. Beat 1 is 82.5 % a tail action (middle station
+  travel 5 mm); the compression descends head -310 / neck -281 / front -124
+  mm against middle -7, taper -33, tail +1 mm.
+- NEEDS AN OWNER EYE: acceptance 4's "slightly" (head-region centroid moves
+  2.18 px back), and the hold's quiver (reads held-alive, not loaded).
+- Excused columns adjudicated: head-x 14.4 px = instrument (confirmed);
+  area 196 px^2 = NOT a motion fault but misattributed — it is one
+  whole-body shading pop at frame 15, present in the raw pixels;
+  f46/f48 at the instrument floor (confirmed).
+- Recommendation: do not publish; one authoring pass on two pose tables.
