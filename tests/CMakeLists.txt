@@ -2171,6 +2171,18 @@ verilate(test_texture_aux_pipe_directed
 add_test(NAME texture_aux_pipe_directed COMMAND test_texture_aux_pipe_directed)
 set_tests_properties(texture_aux_pipe_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The staged texture cache with same-line fill multicast: four taps inside
+# one line must cause ONE fetch, and the consumer's ready must not reach
+# the accept line.
+add_executable(test_texture_cache_pipe_directed texture/texture_cache_pipe_directed.cpp)
+target_link_libraries(test_texture_cache_pipe_directed PRIVATE zhao_harness)
+verilate(test_texture_cache_pipe_directed
+  PREFIX Vzhao_texture_cache_pipe
+  TOP_MODULE zhao_texture_cache_pipe
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv)
+add_test(NAME texture_cache_pipe_directed COMMAND test_texture_cache_pipe_directed)
+set_tests_properties(texture_cache_pipe_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
