@@ -235,3 +235,68 @@ maximum.** Do we need Sacrifice's exact three samples everywhere? **Probably
 not.** Do we need the ability to issue two or three bounded samples when the
 picture benefits? **Yes.** And this is the moment to correct it, because TEXJOIN
 and the production fragment-material packet have not been frozen.
+
+---
+
+# FROZEN — MATERIAL COMBINER V1 (owner ruling R9, 2026-09-02)
+
+`MATERIAL_RECIPE_VERSION = 1`.
+
+**These are Zhaozhou-native v1 recipes. Do NOT label them Sacrifice-exact.**
+The document above spent its length arguing that we should stop waiting for an
+unspecified donor law, and this section is that argument being closed: the
+recipes below are ours, chosen, and frozen.
+
+## The three primitives
+
+    unit_mul8(a,b)   = (a*b + 128) >> 8
+    modulate2x8(a,b) = sat_u8((a*b + 64) >> 7)
+    lerp8(a,b,w)     = sat_u8(a + rescale_s((b-a)*w, 8))     w unit8, raw/256
+
+## The eight recipes
+
+| id | name | samples | RGB | A |
+|---|---|---|---|---|
+| 0 | `PASSTHRU` | 0 or 1 | `s0.rgb` | `s0.a` |
+| 1 | `MODULATE` | 2 | `unit_mul8(s0, s1)` | `s0.a` |
+| 2 | `MODULATE2X` | 2 | `modulate2x8(s0, s1)` | `s0.a` |
+| 3 | `LERP` | 2 | `lerp8(s0, s1, recipe_weight)` | `s0.a` |
+| 4 | `ADD_SAT` | 2 | `sat_u8(s0 + s1)` | `s0.a` |
+| 5 | `MASK` | 2 | `s0.rgb` | `unit_mul8(s0.a, s1.a)` |
+| 6 | `TERRAIN_DETAIL_LIGHT` | 3 | `unit_mul8(modulate2x8(s0, s1), s2)` | `s0.a` |
+| 7 | `TERRAIN_DETAIL_MASK` | 3 | `modulate2x8(s0, s1)` | `unit_mul8(s0.a, s2.a)` |
+
+**Count 0 means `has_texture = 0` and no sample is read at all** — not a sample
+of a null texture.
+
+## The rules that travel with every multi-sample recipe
+
+* **Sample 0 is the base and owns alpha**, unless the recipe names a mask.
+* **The output palette index is `sample0.index`.**
+* **Error and status bits are ORed over all required samples.** A recipe is as
+  broken as its worst sample.
+* **`recipe_weight` is stored in the TEXJOIN record**, not re-derived.
+* **A sample-count mismatch or an unknown recipe is a material-asset error**,
+  not a mode to fall back from.
+
+## Malformed assets
+
+**Reject them before sealing.** If one reaches hardware: raise a **sticky frame
+fault** and repeat the previous complete frame. **Do not emit a plausible
+placeholder texel** — a plausible wrong texel is the failure this whole document
+exists to argue against, and it is invisible in exactly the way that costs days.
+
+## Where the combiner lives
+
+**Its own registered II = 1 pipeline.** Not a large combinational case on
+TEXJOIN's retirement path — which is what `zhao_raster_texjoin_v2.sv` currently
+has, deliberately marked unfrozen, and what must be replaced before that block
+is production.
+
+## Status of the RTL as of this freeze
+
+`zhao_raster_texjoin_v2.sv` declares recipes 0–5 with matching ids and returns
+sample 0 for every non-`PASSTHRU` one, raising `combiner_unfrozen_o`. That flag
+was the right call and is now discharged by this section: the arithmetic exists,
+so the block can implement it. **Recipes 6 and 7 do not exist in the RTL at all**
+and are the three-sample terrain cases the whole document was written for.
