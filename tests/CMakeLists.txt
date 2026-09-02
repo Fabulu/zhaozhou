@@ -2134,6 +2134,55 @@ verilate(test_texture_rsp_dispatch_directed
 add_test(NAME texture_rsp_dispatch_directed COMMAND test_texture_rsp_dispatch_directed)
 set_tests_properties(texture_rsp_dispatch_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# Resident palette slots with generations: removes the 16-way page search
+# from the hot path, and closes the reload-under-flight hole a valid bit
+# cannot express.
+add_executable(test_texture_palette_res_directed texture/texture_palette_res_directed.cpp)
+target_link_libraries(test_texture_palette_res_directed PRIVATE zhao_harness)
+verilate(test_texture_palette_res_directed
+  PREFIX Vzhao_texture_palette_res
+  TOP_MODULE zhao_texture_palette_res
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res.sv)
+add_test(NAME texture_palette_res_directed COMMAND test_texture_palette_res_directed)
+set_tests_properties(texture_palette_res_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# The bilinear channel lane: II=1, and bit-identical to the shipped
+# combinational bilerp, which tb_bilerp_pair instantiates as the oracle.
+add_executable(test_texture_bilerp_lane_directed texture/texture_bilerp_lane_directed.cpp)
+target_link_libraries(test_texture_bilerp_lane_directed PRIVATE zhao_harness)
+verilate(test_texture_bilerp_lane_directed
+  PREFIX Vtb_bilerp_pair
+  TOP_MODULE tb_bilerp_pair
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/texture/tb_bilerp_pair.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane.sv)
+add_test(NAME texture_bilerp_lane_directed COMMAND test_texture_bilerp_lane_directed)
+set_tests_properties(texture_bilerp_lane_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# AUX as a pipeline: II=1 acceptance, and a degenerate envelope keeps its
+# place in the ordering machinery without emitting a sheet read.
+add_executable(test_texture_aux_pipe_directed texture/texture_aux_pipe_directed.cpp)
+target_link_libraries(test_texture_aux_pipe_directed PRIVATE zhao_harness)
+verilate(test_texture_aux_pipe_directed
+  PREFIX Vzhao_texture_aux_pipe
+  TOP_MODULE zhao_texture_aux_pipe
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv)
+add_test(NAME texture_aux_pipe_directed COMMAND test_texture_aux_pipe_directed)
+set_tests_properties(texture_aux_pipe_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# The staged texture cache with same-line fill multicast: four taps inside
+# one line must cause ONE fetch, and the consumer's ready must not reach
+# the accept line.
+add_executable(test_texture_cache_pipe_directed texture/texture_cache_pipe_directed.cpp)
+target_link_libraries(test_texture_cache_pipe_directed PRIVATE zhao_harness)
+verilate(test_texture_cache_pipe_directed
+  PREFIX Vzhao_texture_cache_pipe
+  TOP_MODULE zhao_texture_cache_pipe
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv)
+add_test(NAME texture_cache_pipe_directed COMMAND test_texture_cache_pipe_directed)
+set_tests_properties(texture_cache_pipe_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
