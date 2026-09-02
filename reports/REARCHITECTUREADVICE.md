@@ -114,14 +114,35 @@ Start with 16 entries:
 
 valid
 generation
-required_mask       PRIMARY | AUX
-arrived_mask
+sample_count            0..3        (MATERIAL_ARCHITECTURE.md:131)
+sample_required_mask    [2:0]
+sample_arrived_mask     [2:0]
+sample_result[0..2]     RGB/A/index/status per sample
+binding/recipe snapshot the UV set and binding per sample
+aux_required, aux_arrived
 base fragment context
 material snapshot
 world position and AUX envelope
-primary RGB/A/index/status
 AUX tag/strength/miss/degenerate/status
 fault bits
+
+AMENDED 2026-09-02 (owner addendum, reports/Addendum). This entry previously
+read `required_mask PRIMARY | AUX` with a single `primary RGB/A/index/status`,
+which would have frozen TEXJOIN v2 around exactly ONE primary sample.
+
+MATERIAL_ARCHITECTURE.md has already ratified the opposite and is the senior
+document: `sample_count 0..3` at line 131, responses identified by
+`{record_id, sample_index}` at line 143, and a named three-sample terrain
+profile of **1,094,600 known samples a frame** at line 163 — against the
+541,640 this brief sizes the TMU with, which is the ONE-sample workload
+(276,480 terrain + 92,160 sky + 128,000 stars + 45,000 clouds).
+
+The architecture does not otherwise change. The TMU still services ONE sample
+request at a time at II=1; what changes is that a fragment may have 0-3
+outstanding sampler invocations, interleaved with other fragments' — which is
+the whole point of tokenising the join in the first place. The combiner is
+fixed and runs once `sample_arrived_mask == sample_required_mask` for the
+primary samples, with AUX joined as before.
 
 Also have:
 
@@ -259,6 +280,10 @@ Standalone three-seed Fmax target: 120 MHz minimum, 140–150 MHz desirable.
 TMU: retain the implementation, replace the single-file continent
 
 The current TMU pipe has the correct broad ideas—capture, ROB, internal record identity, resident palette storage and ordered output—but too much work remains grouped into a small number of elastic stages. Its measured resident intervals are still three clocks for CLUT and four for direct colour. The currently documented workload already totals 541,640 samples/frame before creatures and beams, so this has very little usable reserve.
+
+AMENDED 2026-09-02 (owner addendum, reports/Addendum). **541,640 is the ONE-SAMPLE workload** -- 276,480 terrain + 92,160 sky + 128,000 stars + 45,000 clouds. MATERIAL_ARCHITECTURE.md ratifies bounded recipes of up to THREE samples through the same TMU, and names a `sacrifice_terrain_3sample` profile at **1,094,600 known samples a frame** before creatures, objects and misses (line 163-176).
+
+So the reserve is not merely thin, it is **negative against the ratified material model** -- 1,094,600 samples against 1,666,667 raw clocks leaves 572,067, and that is before everything the 541,640 figure also excludes. The stress gate must run the 3-sample profile, not only the baseline; sizing II=1 against 541,640 and shipping would meet a target that the material ruling already superseded.
 
 Build zhao_texture_tmu_stream beside the current implementation and point the same differential suite at both.
 
@@ -451,13 +476,27 @@ First physical frontier
 
 Fit at least two exact configurations:
 
-A: current heavy gate
-   CTX=32 OUTSTANDING=16 LANES=4 LONGQ=16
-   DIST_BANKS=8 RING_UNITS=8 REGS=64
+A: the ACTUAL accepted functional configuration
+   CTX=32 LANES=4 OUTSTANDING=12 GATHERS=4
+   REGS=64 DIST_BANKS=4 RING_UNITS=4
 
-B: reduced physical point
+B: deliberately reduced physical candidate
    CTX=16 OUTSTANDING=8 LANES=4 LONGQ=8
    DIST_BANKS=4 RING_UNITS=4 REGS=64
+
+AMENDED 2026-09-02 (owner addendum, reports/Addendum). A previously read
+`OUTSTANDING=16 DIST_BANKS=8 RING_UNITS=8`, which is not the working
+configuration and is a point the Field optimisation record has already
+DISCREDITED: it specifically found OUTSTANDING=16 / GATHERS=8 bought nothing,
+and later sweeps found extra ring units bought nothing either.
+
+Fitting an already-rejected overbuilt point as the primary production candidate
+would measure a machine nobody intends to ship, and would make B look good
+against a straw man. A is now the configuration actually accepted on
+functional grounds; B is the honest reduction being tested against it.
+
+If the intent is instead to fit a deliberately fat worst case for headroom, that
+is a legitimate THIRD point and should say so rather than occupying A.
 
 Run the same 1,024-point crater-ring, impact-wave and wave-pool workloads through both. The current simulation gates establish throughput, but the area and composed Fmax of the selected configuration remain unmeasured.
 
@@ -574,8 +613,21 @@ New leaf datapath	150 MHz design budget	Missing 150 is acceptable when the islan
 Perspective/TMU/cache/AUX leaf island	120–125 MHz across three seeds	No structural path repeatedly below target
 Texture-survivor composition	115–120 MHz	Exact output and required sustained rates
 Field/Earth common-clock island	110–120 MHz	Or legitimate separate clock with ≥25% workload reserve
-Intended full composition	105 MHz hard target	110 MHz preferred margin
-Product clock	100–105 MHz	No lucky-seed dependency
+Intended full composition	105 MHz acceptance floor	110 MHz architecture objective
+Product clock	100 MHz	No lucky-seed dependency
+
+AMENDED 2026-09-02 (owner addendum, reports/Addendum). The 110-115 spec states
+a **110 MHz minimum full-system target, 115 MHz nominal**. This brief's numbers
+are the more realistic hierarchy and are adopted — but as an EXPLICIT
+restatement of an owner requirement, not a silent relaxation of one:
+
+    Acceptance floor     105 MHz full composition   do not reject at 109
+    Architecture objective 110 MHz                  what the design aims at
+    Stretch / headroom   115 MHz                    the old nominal, retained
+    Product clock        100 MHz                    what the board runs
+
+"Do not reject the whole machine at 109 MHz" and "the 110-115 design goal is
+abandoned" are different statements. Only the first is intended.
 
 Every fit must archive:
 
@@ -940,7 +992,10 @@ MEASUREMENT GATES
 
 New leaf datapaths are designed against a 6.667 ns / 150 MHz stage budget.
 Islands must close at 120-125 MHz across three seeds where stated.
-Full composition hard target is 105 MHz; 110 MHz is preferred margin.
+Full composition: 105 MHz ACCEPTANCE FLOOR, 110 MHz architecture
+objective, 115 MHz stretch (the 110-115 spec's nominal, retained), 100 MHz
+product clock. Amended 2026-09-02 per reports/Addendum -- an explicit
+restatement of the owner requirement, not a silent relaxation of it.
 
 Every fit archives:
 
