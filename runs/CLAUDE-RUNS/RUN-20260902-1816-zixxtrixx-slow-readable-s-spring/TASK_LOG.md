@@ -79,3 +79,21 @@ Rebuild the Zixxtrixx jump/salto spring per Owner Direction 23: four slow readab
   solidity max 0.82 (~0.85), jerk 22.7/31.3/1334 (Recon 2: 23/31/1168), closure min 0.09
   balance (f75-130): jerk 1.2/3.4/43 (Recon 2: 1.5/4.0/53), half-life med 19
 - Evidence: evidence/stage0/ (CSVs, jerk, beats, panels, contact/zoom/overlay sheets)
+
+### 2026-09-02 (implementer) — Stage 1 in progress: name the literals
+
+- Stage-1 edits authored (currently stashed for the byte-identity proof):
+  kAtkRetimeShift = kSaltoCompressHoldEndKey - 18 introduced; release/rigid/
+  release-end keys, kAtkImpactKey, kAtkStickEnd derived from it; every raw
+  key literal >= 22 in kAtkLift/Fwd/Aim/Curl/Auth/Spin expressed as
+  base + kAtkRetimeShift; kSaltoUnrollStartKey = kSaltoCoilPoseKey +
+  kSaltoUnrollStride (23, the prime contract, now structural);
+  kSpringAirWobblePeriodKeys = kSaltoUnrollStride; slice/seam literals
+  17/29/52/60/74/75/224/239 replaced with named constants;
+  JumpPlan::release_keys = kSpringReleaseMidpointCount; static_asserts pin
+  kAttackKeys == 240 + kAtkRetimeShift and the unroll keys.
+- Byte-identity proof method: full 22-creature-subject render pre-change
+  (stash) vs post-change, sequence CRC compare. First attempt rendered the
+  entire wired reel (suns/terrain too) and was killed - process verified dead.
+- Baseline zixx-springpose schedule saved (evidence/stage0/springpose-schedule-live.txt):
+  live arming move_mm column peaks 528 mm at key 10, confirming Recon 1/3.
