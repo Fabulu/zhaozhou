@@ -2077,6 +2077,21 @@ verilate(test_texture_aux_div6_directed
 add_test(NAME texture_aux_div6_directed COMMAND test_texture_aux_div6_directed)
 set_tests_properties(texture_aux_div6_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The scheduled reciprocal, checked against the SERIAL one in hardware.
+# tb_rcp24_pair instantiates both so 'keep the exact existing arithmetic'
+# is a comparison rather than a claim.
+add_executable(test_raster_rcp24_svc_directed raster/raster_rcp24_svc_directed.cpp)
+target_link_libraries(test_raster_rcp24_svc_directed PRIVATE zhao_harness)
+verilate(test_raster_rcp24_svc_directed
+  PREFIX Vtb_rcp24_pair
+  TOP_MODULE tb_rcp24_pair
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/raster/tb_rcp24_pair.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME raster_rcp24_svc_directed COMMAND test_raster_rcp24_svc_directed)
+set_tests_properties(raster_rcp24_svc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
