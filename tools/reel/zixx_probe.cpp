@@ -1535,13 +1535,14 @@ int main() {
                   follower_count, follower_faults,
                   spring->normal_min_len2[rung], spring->normal_max_len2[rung],
                   static_cast<unsigned long long>(spring->normal_faults[rung]));
-      // Band re-derived for owner direction 21: the squeeze's contact relief
-      // is the flatten, and it must be VISIBLE, so kSpringBodyFlattenQ16 rose
-      // from ~26% to ~31% and the accepted retained-radius floor moves with
-      // it. Still positive volume, still selective (head barely squashes).
-      require(min_radial_ratio >= 650 && min_radial_ratio <= 730 &&
-                  body_radial_ratio >= 650 && body_radial_ratio <= 730 &&
-                  head_radial_ratio >= 900 && head_radial_ratio <= 950,
+      // Band re-derived for owner direction 22 #4: "the compression isn't
+      // strong enough... raising the flatten is what buys the height".
+      // kSpringBodyFlattenQ16 rose ~31% -> ~43% (body retained ~557 per
+      // mille, head ~888 at strength 64/255). Still positive volume, still
+      // selective (the head barely squashes).
+      require(min_radial_ratio >= 530 && min_radial_ratio <= 610 &&
+                  body_radial_ratio >= 530 && body_radial_ratio <= 610 &&
+                  head_radial_ratio >= 860 && head_radial_ratio <= 930,
               "spring cross-sections left the accepted positive-volume, "
               "selective-squash envelope");
       require(follower_count >= (rung == 0 ? 160 : 70) &&

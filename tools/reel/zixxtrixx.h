@@ -779,16 +779,22 @@ constexpr const auto& kSpringGroundedHeading = kStanceSlope;
 // target and starting to load.
 constexpr int32_t kSpringAbsorbHeading[kStanceSlopes] = {
     -728, 364, 1820, 4005, 6918, 14563, 21299, 25122, 21845, 14928,
-    -2184, -4005, -2549, 1456, 4005, 5097, 2913, -2184, -6554};
-// ASSEMBLED (arm 400). The S GROWN AND TRAVELLING BACKWARD: the hook at
-// idle curl, the dive extended, a genuine broad REAR ARCH rising behind
-// the belly (the second lobe the owner has been asking for), and the tail
-// descending from the arch to a low reaching tip. From here to collapsed
-// every rear station keeps winding the same way -- the tail's curl only
-// deepens into the coil, never straightens.
+    -1092, -1820, -2549, -3641, -5461, -8738, -11833, -15474, -17294};
+// ASSEMBLED (arm 400). The S GROWN AND TRAVELLING BACKWARD -- and grown
+// UP: the hook at idle curl, the dive extended, the belly long and
+// grounded, and the tail RAISED into a tall quill whose top leans forward
+// (stations 17-18 curled past -168 deg). This is Direction 20's "leaning
+// back must make the S BIGGER" and it is load-bearing choreography twice
+// over: the front's grounded foot slides backward BENEATH the raised
+// rear during the squash, and the over-curled tip values put every rear
+// station's shortest unwrap on the over-the-top side, so the whole rear
+// WHIPS together over the top into the coil's descent and tail pad -- no
+// station tears against its neighbour, and the whip's arc stays below and
+// forward of the arriving head. The probe's per-tick intersection walk is
+// the arbiter that the passes clear.
 constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
     -2731, -910, 1092, 3823, 7282, 14382, 20753, 24576, 28217, 24576,
-    -910, -6372, -10012, -3641, 4551, 9102, 6372, 1092, -1092};
+    -728, -1456, -2184, -2913, -8192, -12743, -16384, -32404, -33314};
 // COLLAPSED (arm 1000): THE COIL AT ITS EXTREME. Head hung low-front over
 // the planted tail (nose ~47% of idle height, ~1.3 m behind its idle spot
 // -- the whole S has gathered backward onto the rear); crest at ~65% of
@@ -798,8 +804,8 @@ constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
 // pad. Contacts are authored tangent presses (chin-over-tail ~+28 mm,
 // loop-bottom over pad); the flatten/spread deform takes every touch.
 constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
-    -6372, -2913, 0, 3277, 7646, 14199, 20025, 23848, 32040, 37319,
-    52428, 42780, 33132, 26943, 25122, 23302, 6372, 1456, 728};
+    -3641, -1092, 0, 3277, 7646, 14199, 20025, 23848, 32040, 37319,
+    52428, 40412, 33860, 32950, 25848, 22572, 19296, 2184, 1092};
 // WHERE THE THREE AUTHORED POSES SIT ON THE ONE ARMING PARAMETER, in 1/1000 of
 // the complete arming. Grounded is 0 and collapsed is 1000. Moving these
 // reparameterises the build without touching a single shape value. Direction
@@ -853,10 +859,10 @@ constexpr int32_t kSpringKey5EntryProfile = 850;
 // is what gathers the entire animal backward as the coil forms.
 constexpr int32_t kSpringEarlySupportLiftMm = -8;
 constexpr int32_t kSpringMiddleSupportLiftMm = -2;
-constexpr int32_t kSpringAbsorbSupportLiftMm = 21;
-constexpr int32_t kSpringKey5SupportLiftMm = 55;
-constexpr int32_t kSpringAssembledSupportLiftMm = 101;
-constexpr int32_t kSpringCollapsedSupportLiftMm = 210;
+constexpr int32_t kSpringAbsorbSupportLiftMm = 52;
+constexpr int32_t kSpringKey5SupportLiftMm = 35;
+constexpr int32_t kSpringAssembledSupportLiftMm = 25;
+constexpr int32_t kSpringCollapsedSupportLiftMm = 287;
 // The loaded spring's declared terrain penetration, in mm. Ground contact is
 // AUTHORED here and checked by the committed pose probe; its absence would be
 // as much a fault as burying, because a body resting at exactly zero reads as
@@ -869,7 +875,12 @@ constexpr int32_t kSpringDeclaredLoadedBiteMm = 60;
 // the hold". The brace must still be a brace -- it may not travel away from the
 // deepest pose, and the planted support may not slide at all -- but it is
 // allowed to quiver inside this named envelope while it holds.
-constexpr int32_t kSpringHoldLivingDriftMm = 70;
+// Direction 22: the wound coil hangs its head and neck far from the planted
+// support, so the same life-wave amplitude travels further at the extremes;
+// the wobble amplitudes were damped (750/520 -> 500/360, a wound spring
+// quivers TIGHT) and the envelope re-authored to the measured quiver of the
+// damped coil rather than the old two-run stack.
+constexpr int32_t kSpringHoldLivingDriftMm = 88;
 constexpr SpringSupportLiftKey kSpringOpenSupportLift[] = {
     {0, 0},
     {kSpringEarlyEntryProfile, kSpringEarlySupportLiftMm},
@@ -900,7 +911,12 @@ constexpr uint8_t kSpringTailDeformStrength = 210;
 constexpr int kSpringBodyStrengthRampStations = 4;
 constexpr int kSpringTailStrengthRampStations = 6;
 constexpr int32_t kSpringJumpHeadAttitude = 700;   // follows the taller entry arc
-constexpr int32_t kSpringHeadAttitude = 600;       // restrained brace; must not lift the nose out of the aim
+// The collapsed coil hangs the head off a rising neck (segment 0 at -35
+// deg), and the skull continues the neck tangent at attitude 0 -- without a
+// brace the face aims 35 deg into the dirt. This lifts the face back to a
+// level, target-forward aim at full squash (a16; ~32 deg). It braces the
+// AIM; it must not lift the nose into a skyward point.
+constexpr int32_t kSpringHeadAttitude = 7500;
 constexpr int32_t kSpringBladeFlare = 900;         // fan braces during compression
 
 
@@ -1962,10 +1978,10 @@ constexpr int32_t kSpringChainLag = 165;
 constexpr int32_t kSpringChainLagPeak = 500;
 // The struggle waves. Periods are in KEYS and deliberately incommensurate, so
 // the pair never repeats inside one arming; amplitudes are in angle16.
-constexpr int32_t kSpringWobble = 750;
+constexpr int32_t kSpringWobble = 500;
 constexpr int32_t kSpringWobblePeriodKeys = 23;
 constexpr int32_t kSpringWobbleStationPhase = -4200;
-constexpr int32_t kSpringWobble2 = 520;
+constexpr int32_t kSpringWobble2 = 360;
 constexpr int32_t kSpringWobble2PeriodKeys = 51;
 constexpr int32_t kSpringWobble2StationPhase = 2600;
 // The waves fade in over the first part of the arming and are held through the
