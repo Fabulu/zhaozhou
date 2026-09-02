@@ -2092,6 +2092,22 @@ verilate(test_raster_rcp24_svc_directed
 add_test(NAME raster_rcp24_svc_directed COMMAND test_raster_rcp24_svc_directed)
 set_tests_properties(raster_rcp24_svc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The scheduled perspective multiply lane. tb_perspuv_pair carries a THIRD
+# instance -- a standalone rcp24 -- to derive the same mantissa/exponent the
+# reference computes internally, so the two scopes can be compared honestly.
+add_executable(test_raster_perspuv_svc_directed raster/raster_perspuv_svc_directed.cpp)
+target_link_libraries(test_raster_perspuv_svc_directed PRIVATE zhao_harness)
+verilate(test_raster_perspuv_svc_directed
+  PREFIX Vtb_perspuv_pair
+  TOP_MODULE tb_perspuv_pair
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/raster/tb_perspuv_pair.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME raster_perspuv_svc_directed COMMAND test_raster_perspuv_svc_directed)
+set_tests_properties(raster_perspuv_svc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
