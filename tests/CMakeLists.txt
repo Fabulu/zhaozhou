@@ -2146,6 +2146,19 @@ verilate(test_texture_palette_res_directed
 add_test(NAME texture_palette_res_directed COMMAND test_texture_palette_res_directed)
 set_tests_properties(texture_palette_res_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The bilinear channel lane: II=1, and bit-identical to the shipped
+# combinational bilerp, which tb_bilerp_pair instantiates as the oracle.
+add_executable(test_texture_bilerp_lane_directed texture/texture_bilerp_lane_directed.cpp)
+target_link_libraries(test_texture_bilerp_lane_directed PRIVATE zhao_harness)
+verilate(test_texture_bilerp_lane_directed
+  PREFIX Vtb_bilerp_pair
+  TOP_MODULE tb_bilerp_pair
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/texture/tb_bilerp_pair.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane.sv)
+add_test(NAME texture_bilerp_lane_directed COMMAND test_texture_bilerp_lane_directed)
+set_tests_properties(texture_bilerp_lane_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
