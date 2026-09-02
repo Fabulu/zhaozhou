@@ -280,3 +280,27 @@ authorisation covers finished passes only.
   per-station clearance solving, or an owner ruling on wind-vs-press.
 - The experimental 3D-coil triple salto: DROPPED (owner appendix allows
   it; the planar pass consumed the session).
+
+### 2026-09-02 — FINISHING PASS (new session): the owner has ruled
+
+The owner was shown the trade — the tight coil with a declared formation
+press, versus hours of per-station clearance solving — and chose: DECLARE
+THE PRESS AND PUBLISH NOW. If it reads as clipping on screen, that costs
+one more pass. This unblocks the two remaining probe assertions.
+
+Plan, in the spirit of the declared ground-bite law:
+- Name the coil-formation press as authored contact: where (front body
+  runs passing over the winding rear, station pairs >= 7 apart), when
+  (the wind window, printed keys 6.5-10.5 = ticks 13-21, and its unwind
+  mirror at keys 19-20 = ticks 38-40 — the two crossings of arm ~520-750),
+  and how deep (a real-skin press bound, constant derived by measuring).
+- Owner-ruled allowance dated 2026-09-02, named editable constants; the
+  loaded pose, hold, release and airborne phases stay at ZERO
+  intersections; anything outside the declared windows is still a fault.
+- The +5 mm retimed-grid hover echo: instrument its tick first; if it
+  rides the wind window (same formation-climb cause) declare it the same
+  way, scoped to the window only; otherwise fix it.
+- KNOWN FOLLOW-UP, deferred by owner ruling: the mid-wind knot /
+  per-station clearance solve that would restore zero intersections
+  through the formation. Do not retry it this pass.
+- The experimental 3D-coil triple salto stays DROPPED.
