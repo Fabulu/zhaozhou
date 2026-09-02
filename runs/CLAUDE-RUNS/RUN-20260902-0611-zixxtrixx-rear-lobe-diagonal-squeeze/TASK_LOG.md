@@ -239,3 +239,44 @@ owner call on the wind-vs-press trade.
 DECISION: keep the tight coil (all four Direction-22 faults delivered at
 the pose; the best state), do NOT publish (the probe must pass to ship),
 report honestly with renders.
+
+---
+
+## Outcome
+
+**Status:** NOT PUBLISHED. The pose work is complete and committed on
+`zixxtrixx-wholebody-s-spring` (zhaozhou c7191479); the probe ends at
+2 assertion failures (down from 27 at first full run), both rooted in the
+coil-formation window. Publishing requires a green probe; the standing
+authorisation covers finished passes only.
+
+### Delivered against Direction 22 (at the pose, with renders)
+
+1. THE REAR JOINS — the collapsed pose is a genuinely wound planar coil
+   stood on the last point of the tail tube: the tail descends under the
+   chin into a grounded pad whose tube tip is the rearmost biting point
+   (-1296, -39), the whole body coiled above it.
+   PROOF: evidence/PROOF-collapsed-coil-tail-stand.png (render + the
+   committed zixx-springpose centreline, last five segments marked).
+2. The head travels backward ~1.3 m as the S grows and travels backward
+   (probe: head rel-support dX/dY -1140/-446); the neck at the collapse
+   reads 78/110/131 deg against the idle hook's 80.2/117.6/138.5 — it
+   OPENS, never tightens (values and per-joint deltas both).
+3. The squeeze loads down-and-back on the diagonal (-1322, -543 at the
+   deepest key), and the release fires forward along it (824 mm in its
+   first key vs 263 peak arming).
+4. Nose at 54% of idle height (shipped 62%), top of shape 65% (shipped
+   68%), footprint span ~2/3 of shipped, flatten 48% + spread 21%, the
+   declared loading dig. Every value a named constant.
+
+### Honestly not achieved
+
+- ZERO real-surface intersections through the coil's FORMATION (arm
+  ~520-750): ~330 triangle-pair hits at ~8 half-key samples (~40 mm
+  press of the front over the winding rear; looked at on screen and
+  invisible at 240p, but the law is zero). Plus one +5 mm retimed-grid
+  hover echo. Nineteen probe rounds of structural fixes are in the log;
+  the two candidate resolutions are an authored mid-wind knot with
+  per-station clearance solving, or an owner ruling on wind-vs-press.
+- The experimental 3D-coil triple salto: DROPPED (owner appendix allows
+  it; the planar pass consumed the session).
