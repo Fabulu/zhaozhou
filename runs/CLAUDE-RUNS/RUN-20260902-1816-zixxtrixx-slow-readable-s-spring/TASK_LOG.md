@@ -105,3 +105,27 @@ Rebuild the Zixxtrixx jump/salto spring per Owner Direction 23: four slow readab
 - Probe green with the refactor. build-direct.sh note: tool .cpps are compiled
   fresh at every link (only zref lib objects are cached, and they do not include
   zixxtrixx.h), so the header edit cannot leave a stale reel.
+
+### Stage 2 COMPLETE - the surgical revert, verified
+
+- 2a: three-file checkout of a2f601ef; 2b: stage-1 naming replayed on top.
+  `git diff a2f601ef HEAD -- tools/reel/` = the naming refactor + the
+  legibility tool, nothing else. Probe GREEN.
+- "SPRING real surface intersections full/micro: none / none" - zero
+  self-intersections, and the declared coil-formation press windows no longer
+  exist (deleted with the revert, per the owner ruling being D22-scoped).
+- jump-one per-frame byte compare vs live (evidence/stage2/jump-one-frame-diff-vs-live.txt):
+  arming f1-43 differs (the coil is gone - intended); f44, f46-f110 BYTE-IDENTICAL
+  (the flight); f45 single-frame midpoint diff; f111-f152 differ.
+  DEVIATION FROM PLAN TEXT: the plan predicted frames 45+ identical. The
+  landing window differs because D22 commit e5402d7a ("landings ride the
+  press") also touched landing behaviour and the three-file revert discards
+  it with everything else - consistent with the architect's decision to take
+  the full-file revert over cherry-picks, and with D23 rejecting the D22 pass
+  wholesale. Gen Thirteen's landing is the owner-praised bank's landing.
+- Arming bbox matches Recon 2 section 3 REF column EXACTLY on all 11
+  checkpoint frames (186x61 -> 222x51 -> 186x61).
+- Support/root vertical route across the arming: monotone descent with ONE
+  ~5 mm reversal at the entry/squash handoff (plan criterion: <= 1). The
+  whip's six reversals are gone.
+- springpose schedule (gen13): arming move_mm max 80 mm/key vs live's 528.
