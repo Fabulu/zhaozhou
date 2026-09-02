@@ -54,9 +54,11 @@ Three details in it are decisions, not sequencing:
 **Quarter linear resolution**, frozen by the ruling.
 
 ## Backpressure rules
-Ready/valid to the framebuffer writer. The chain is a fixed sequence of
-full-screen passes; a stall holds the whole chain, which is safe because no
-stage holds state that expires.
+Ready/valid to the framebuffer writer. A stall holds the stream, which is safe
+because no stage holds state that expires — **but the line ring does hold
+state that must not be overwritten while it is still reachable**, so an
+in-place write is delayed until the old line can no longer be sampled (R6).
+That is a correctness rule, not a scheduling preference.
 
 ## Memory ownership
 Reads the resolved framebuffer and `POST.GATHER`'s three planes; writes the
@@ -79,16 +81,83 @@ Displacement sampling is **nearest**, with the same truncation as `TWOD.PLANE`,
 so a displaced sample cannot invent a colour that was not in the frame.
 
 ## Latency (fixed or variable)
-Fixed per pixel within each pass; the frame cost is the sum of the passes.
+Fixed per pixel through the stream, plus the line ring's fill latency (nine
+source lines) and the optional quarter-res glow prep. The frame cost is no
+longer a sum over passes — there is one pass.
 
 ## Target throughput
-One pixel per clock per pass. The chain is **five full-screen passes** over the
-world image (displaced sample, haze, bloom, grade+flash, ink).
 
-At Z60's 92,160 pixels that is ~461,000 clocks — **~35 % of a 1,333,333-clock
-frame.** That is the largest single consumer named in this contract set, and it
-is the number that decides whether passes must be fused. It should be measured
-before anyone assumes the renderer owns the frame.
+**REPLACED 2026-09-02 by ruling R6: this is ONE BOUNDED LINE STREAM, not five
+full passes.** The visible order above is unchanged and stays frozen; only the
+implementation changes — and it changes by a factor of four and a half.
+
+### A. Optional quarter-res glow prep
+
+A separable blur over the **compact glow plane**: one horizontal and one
+vertical **quarter-res** pass. **No full-resolution reread.**
+
+### B. One full-resolution streaming pass
+
+1. BACKDROP + unresolved world
+2. read the compact displacement cell
+3. sample world colour **through the displaced coordinate**
+4. sample blurred glow and ink **through that same coordinate**, at quarter res
+5. ATMOSPHERE / haze
+6. bloom / glow
+7. global colour transform
+8. flash / tint
+9. exterior ink
+10. HUD
+
+**One source framebuffer pixel is fetched into the line system once.** Do not
+resample the completed framebuffer separately for refraction, shockwave, haze,
+bloom and ink. That resampling is what made it five passes.
+
+### Line architecture
+
+Bounded by POST.GATHER's clamps: **±8 in X, ±4 in Y** (R5). Therefore:
+
+* keep **nine complete source lines** in a ring;
+* horizontal reach is ±8 **from those lines**;
+* **delay in-place writes until the old line can no longer be sampled**;
+* **clamp inside each Duo view before addressing** — a displaced sample must
+  never reach the other player's view;
+* a small output-line delay queue if needed.
+
+### The cost, restated
+
+| mode | pixel clocks | glow cells | work items |
+|---|---|---|---|
+| Z60 | 92,160 | 11,520 | **103,680** |
+| Duo | 98,304 | 15,360 | **113,664** |
+
+Against **~461,000** clocks for five full passes — which was ~35 % of a
+1,333,333-clock frame and the largest single consumer in this contract set.
+**It is now under 8 %.**
+
+The old number is kept above rather than deleted because it is what the
+five-pass shape actually costs, and someone proposing to go back to it should
+see the price.
+
+### Global colour transform, v1
+
+**Indexed palette cycling stays a TMU resident-palette operation**, not
+something reconstructed after RGB resolve.
+
+The post transform is: **generated per-channel curves R[32], G[64], B[32]**,
+then **one generated signed 3×3 Q2.14 matrix** plus a **signed colour8 bias**;
+**one wide sum and one round-half-up per channel**; saturate to colour8/RGB565.
+Nine products per pixel fits the 12-DSP post ceiling at one pixel per clock.
+
+**Do not instantiate a generic 65,536-entry RGB565 remap in M10K.** That is
+128 KiB before shape is even considered, and it contradicts the resource
+ceiling. Curve+matrix fusion is permitted **only** if fixgen produces an exact
+equivalent and the fit is measurably cheaper; **unfused is the default.**
+
+### The lease
+
+POST.COMPOSITE owns an **exclusive framebuffer read/write lease** after resolve
+and before publication. **HUD follows post and never forces another read.**
 
 ## Overflow and malformed-input behaviour
 | condition | behaviour |
@@ -149,8 +218,10 @@ its area — see the ~35 %-of-frame figure above.
 * **a Level-9 spell frame** — refraction, shockwave, bloom, flash and ink at
   once. The interaction case, and the ruling's stage order visible in a single
   image.
-* **the ~35 % measurement** — five passes at Z60, measured rather than computed,
-  because it decides whether passes must be fused.
+* **the work-item count** — 103,680 at Z60 and 113,664 in Duo, measured rather
+  than computed. The five-pass shape it replaces was ~461,000 clocks, ~35 % of
+  the frame; if a measurement comes back near that number, the stream has
+  quietly become passes again.
 * **Duo** — both views composited independently at 128 × 60 planes.
 * **a flash frame with HUD** — HUD after everything, legible, per §3.2.
 

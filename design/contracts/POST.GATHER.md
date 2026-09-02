@@ -49,20 +49,71 @@ average: a single very bright fragment should light the cell, and averaging
 would dilute it by however many neighbours happen to be dark.
 
 ## Backpressure rules
-Ready/valid from resolve. **This block must not stall tile resolve**, or it
-becomes part of the renderer's critical throughput rather than a side channel:
-its accumulation is a read-modify-write on a small on-chip buffer, one cell per
-fragment, and must keep up at resolve rate by construction.
+Ready/valid from resolve. **POST.GATHER must never backpressure
+RASTER.RESOLVE** — otherwise it becomes part of the renderer's critical
+throughput rather than a side channel. Its accumulation is a register-file
+update, one cell per fragment, and keeps up at resolve rate by construction.
+
+**If a fit cannot meet that with the double bank, add a small tile-summary
+FIFO — do not stall resolve** (R5). The escape hatch is named here so that a
+fit which comes back tight does not get resolved by quietly asserting
+backpressure.
 
 ## Memory ownership
-Owns the three effect buffers on chip.
 
-Sized: Duo 128 × 60 = 7,680 cells. Glow at RGB565 is 15 KB, displacement at two
-signed bytes is 15 KB, the mask is 960 B — about **31 KB total**, which is a
-real M10K cost and is the number to check against the renderer's own needs
-before this block is built.
+**REPLACED 2026-09-02 by ruling R5.** The storage arithmetic this section used
+to carry was internally contradictory: it named one accumulation format, one
+storage format and one ceiling that could not all be true together. The ruling
+separates the two levels that were being conflated.
 
-Writes them out for `POST.COMPOSITE`; reads no external memory.
+### Level 1 — tile-local accumulation, in registers
+
+A **16 × 16 pixel tile maps to exactly 4 × 4 effect cells.** Two ping-pong
+banks of **16 register cells**. Per cell:
+
+| field | format |
+|---|---|
+| `glow_r` / `glow_g` / `glow_b` | u16, **saturating** |
+| `displacement_x` / `displacement_y` | signed 8.8 in a **wide saturating s16** |
+| `ink` | 1 bit, OR |
+
+A resolved fragment updates **at most one cell per plane**.
+
+**No global M10K read-modify-write on the resolve path.** That is the clause
+that keeps this block a side channel: an M10K RMW at resolve rate would put the
+gather inside the renderer's throughput, which the Backpressure section already
+forbids and this now makes structurally impossible.
+
+### Level 2 — the global effect cell, 33 bits
+
+| field | width |
+|---|---|
+| glow | RGB565, 16 b |
+| displacement X | signed i8 |
+| displacement Y | signed i8 |
+| exterior ink | 1 b |
+
+**At tile flush:** glow rounds and clamps **once** into RGB565; displacement
+rounds **once** to integer pixels; **X clamps to [−8, +8]**, **Y clamps to
+[−4, +4]**; ink is copied.
+
+Those two clamps are not arbitrary — they are the bound POST.COMPOSITE's line
+ring is built against (R6: nine complete source lines, horizontal ±8).
+
+### The count
+
+Duo is **128 × 60 = 7,680 cells**. The compact total is **31,680 bytes**, but
+the physical count is set by shape, not by bytes: at the natural 256 × 40 M10K
+shape that is **thirty M10Ks**.
+
+**Every tile writes all sixteen cells including zeros**, so the frame overwrites
+the active plane and there is no giant reset loop.
+
+**Clamp separately at Duo view boundaries.** A displacement can never sample the
+other player's view — a refraction that reaches across the split is not a
+graphical artefact, it is one player seeing through the other's screen.
+
+Writes out for `POST.COMPOSITE`; reads no external memory.
 
 ## Q formats and rounding
 Glow accumulates in **u16 per channel, saturating**, then is packed to RGB565
@@ -132,10 +183,16 @@ accumulation order and saturation interact.
 * every fragment affects at most one cell per plane.
 
 ## Synthesis / resource ceiling
-Unbuilt. **Ceiling: 1,200 ALMs, 0 DSPs, ≤ 10 M10K.**
+Unbuilt. **Ceiling: 1,200 ALMs, 0 DSPs, ≤ 30 M10K.**
 
-Zero DSPs: accumulation is adds and clamps. The M10K figure is the ~31 KB of
-effect buffers and is the block's real cost.
+**The M10K ceiling was ≤ 10 and is wrong.** R5 raises it to **≤ 30**. The
+compact data is 31,680 bytes, which looks like ten M10Ks if you divide bytes by
+1,280 — but M10K count is set by the width/depth **shape** a buffer needs, not
+by its byte total, and at the natural 256 × 40 shape Duo's 7,680 cells take
+thirty. Dividing bytes by block size is exactly the kind of arithmetic that
+reads like a measurement and is not one.
+
+Zero DSPs: accumulation is adds and clamps.
 
 ## Integration capture cases
 * **a spell frame with glow, refraction and ink together** — all three planes

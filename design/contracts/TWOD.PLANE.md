@@ -4,7 +4,14 @@
 
 ## Purpose and exclusions
 
-Two scanout/tile-aware world planes (affine/scroll sky, water/lava, fog sheet, world-space depth plane).
+Two scanout/tile-aware world planes, in **two declared roles only**: a BACKDROP
+beneath the resolved world, and an ATMOSPHERE sheet over it in the post stream.
+
+**Not a "world-space depth plane".** The purpose line used to name one, and
+naming a typical use is how a restriction gets read as permission — ruling R4
+is explicit that there is **no arbitrary depth test and no depth write in v1**.
+Water, lava, a landscape, or any plane that must *intersect* ordinary geometry
+is **triangles through the main renderer**, not a plane.
 
 ## Clock and reset semantics
 Single `gpu_clk`, synchronous active-low `rst_n`. Reset abandons work in flight
@@ -25,7 +32,37 @@ engines would satisfy the first and violate the second.
 ### Plane descriptor
 
 `{ slot, enable, format, base, stride, width, height, wrap_u, wrap_v,
-   affine[6], line_scroll_base, view_mask, palette_id }`
+   affine[6], line_scroll_base, view_mask, palette_id,
+   role[1:0], blend_mode[1:0], opacity }`
+
+**`role`, `blend_mode` and `opacity` added 2026-09-02 by ruling R4.**
+
+### The two roles — and the two that are refused
+
+| role | when | blending | depth |
+|---|---|---|---|
+| **0 BACKDROP** | beneath the resolved 3D world | **must be REPLACE** | no test, no write |
+| **1 ATMOSPHERE** | post stage 4 — over the displaced world, **before** bloom/grade | ALPHA or ADD | no test, no write |
+| **2, 3** | — | — | **reserved; the descriptor is refused** |
+
+`opacity` is a **unit8** under the frozen unit8 law: its value is `raw/256`, so
+the complement of `opacity` is `256 − opacity` and needs nine bits.
+
+BACKDROP is sky and background only. Its blend **must** be REPLACE — an
+alpha-blended backdrop has nothing beneath it to blend with, so a descriptor
+asking for one is malformed rather than merely odd.
+
+### Composition order between the slots
+
+**Same role in both slots: slot 0 composites first.**
+
+**Different roles:** BACKDROP is composited in world setup and ATMOSPHERE in the
+post stream, so the ordering question does not arise — they are not in the same
+place in the pipeline at all.
+
+All existing restrictions remain: CLUT8/RGB565 only, **nearest only**,
+affine/line scroll, repeat/clamp, view mask, **one engine**, and **no private
+general TMU**.
 
 ### Required features — and this list is a ceiling, not a floor
 
@@ -86,6 +123,9 @@ that justifies the two-slot limit rather than a general plane count.
 | condition | behaviour |
 |---|---|
 | slot index > 1 | refuse the descriptor, count |
+| `role` 2 or 3 | refuse the descriptor, count (R4: reserved) |
+| BACKDROP with a blend other than REPLACE | refuse the descriptor, count |
+| any request for a depth test or depth write | refuse the descriptor, count — v1 has neither |
 | unknown format | refuse — never fall back to RGB565 |
 | stride/width inconsistent with the base allocation | refuse |
 | line-scroll table shorter than the view | refuse rather than reading past it |
