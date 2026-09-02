@@ -168,6 +168,47 @@ layer (island directory, prefetch, dirty writeback, the 256-patch composed-heigh
 cache, and the command path into the terrain pipeline) is being produced
 separately, and its open questions will follow in a second brief.</p>
 
+<h3>E1. The ten terrain world-layer questions</h3>
+
+<p>Architecture document: <code>reports/TERRAIN_WORLD_LAYER_ARCHITECTURE.md</code>.
+Chain: WORLD.DIRECTORY (HPS) &rarr; TERRAIN.RESIDENCY (<b>built</b>) &rarr;
+TERRAIN.PAGELOADER &rarr; TERRAIN.WRITEBACK &rarr; TERRAIN.COMPCACHE &rarr;
+TERRAIN.SEQ &rarr; the existing PATCH/LOD/TESS/NORMALS/PROJECT chain.</p>
+
+<p><b>One capacity finding, because it constrains several answers:</b> the
+256-patch composed height+velocity cache is 256 &times; 2,178 B &times; 2 =
+<b>8.92 Mbit = 161% of every M10K on the device</b>. It cannot be on-chip. The
+design stores it in SDRAM with a small on-chip patch front (~16 M10K) feeding
+TESS's registered port.</p>
+
+<ol>
+<li><b>Residency key law</b> &mdash; world-absolute patch coordinates at one
+canonical pitch, or <code>(island_id, ix, iz)</code>? <i>The block I already
+built tags only</i> <code>(px, py)</code> <i>&mdash; there is no island_id, so
+this one is an interface change if it goes the other way.</i></li>
+<li><b>Guard map</b> &mdash; what base and size does each terrain region get in
+<code>memory_rules</code> &sect;5?</li>
+<li><b>Memory client</b> &mdash; a new <code>zhao_client_e</code> id (SUNDER
+proposes client 6, TERRAIN_BUILD) or reuse ENGINE0? Guaranteed round-robin or
+best-effort?</li>
+<li><b>Writeback vs canonical mirror</b> &mdash; does the FPGA write layers B/D
+back, or is SW.CPUCOLL's canonical mirror the reload source? And must layer F
+(no CPU mirror) be written back?</li>
+<li><b>Command ABI</b> &mdash; one DrawProcedural-lineage record per visible
+patch, or a new set-of-patches command?</li>
+<li><b>Composed-cache overflow</b> &mdash; past 256 patches, what degrades and
+in what <i>deterministic</i> order?</li>
+<li><b>Prefetch policy</b> &mdash; what look-ahead ring, and what per-frame page
+budget? (provisional: 32 pages &asymp; 41 MB/s)</li>
+<li><b>Mip derivation side</b> &mdash; HPS into the staged page, or the FPGA
+loader at load time?</li>
+<li><b>Visible-set collision law</b> &mdash; is thrash merely counted, or must
+software guarantee it never submits a colliding pair? (the direct map has a
+2,048 m period)</li>
+<li><b>Level teardown</b> &mdash; is a full reset the ratified unload mechanism,
+or does the directory need an invalidate port?</li>
+</ol>
+
 <hr>
 
 <h2>Summary of what I need</h2>
@@ -181,5 +222,10 @@ unblocks the renderer's last piece.</li>
 which is now affordable.</li>
 <li><b>Is three-sample terrain a shipping target?</b> (D5).</li>
 <li><b>What 276,480 counts</b> (D4).</li>
+<li><b>The ten terrain world-layer answers</b> (E1) — unblocks the 8 km world, the biggest outstanding thing in the console.</li>
 <li><i>Optional:</i> revive MEASURE.HISTOGRAM (D3) — recommend not.</li>
 </ol>
+
+<p><b>Six answers and one number would make every remaining block in this
+console buildable.</b> Nothing left is blocked on effort, and nothing is
+waiting on hardware to arrive.</p>
