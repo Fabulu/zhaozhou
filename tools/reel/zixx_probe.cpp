@@ -1767,9 +1767,13 @@ int main() {
   // root, because trajectory belongs to its ChoreoRoot consumer.
   constexpr uint8_t kOwnedQuatsDeform =
       zc::kMidpointQuatsAuthored | zc::kMidpointDeformAuthored;
+  // entry_owned_end: exclusive upper bound of the schedule-authored arming
+  // half-keys (Direction 23 authors EVERY arming+hold midpoint; a slice that
+  // begins mid-arming carries the tail of that ownership).
   auto check_midpoint_authorship = [&](const char* name,
                                        const zc::PresentationMidpointAuthorship& a,
-                                       int first, bool full_consumer) {
+                                       int first, bool full_consumer,
+                                       int entry_owned_end) {
     const bool landing_root_owner =
         a.slot_id == zixx::kSlotJumpOne ||
         a.slot_id == zixx::kSlotJumpMulti;
@@ -1789,6 +1793,7 @@ int main() {
                                   : first + 4);
     bool exact = a.channels.size() > static_cast<size_t>(needed - 1);
     int owned = 0;
+    int expected_owned = 0;
     for (size_t i = 0; i < a.channels.size(); ++i) {
       uint8_t expected = 0;
       if ((full_consumer &&
@@ -1797,25 +1802,21 @@ int main() {
            i >= static_cast<size_t>(landing_root_begin) &&
            i < static_cast<size_t>(landing_root_end)))
         expected = zc::kMidpointRootAuthored;
-      if ((full_consumer &&
-           (i == static_cast<size_t>(
-                     zixx::kSpringEarlyEntryOwnedMidpointKey) ||
-            i == static_cast<size_t>(zixx::kSpringEntryOwnedMidpointKey))) ||
+      if (i < static_cast<size_t>(entry_owned_end) ||
           (i >= static_cast<size_t>(first) &&
            i < static_cast<size_t>(first + 4)))
         expected |= kOwnedQuatsDeform;
+      if (expected != 0) ++expected_owned;
       if (a.channels[i] != expected) exact = false;
       if (a.channels[i] != 0) ++owned;
     }
     const int landing_owned =
         landing_root_owner ? landing_root_end - landing_root_begin : 0;
-    const int expected_owned =
-        (full_consumer ? zixx::kSaltoSpringReleasePoseKey : 4) +
-        landing_owned;
     std::printf("MIDPOINT provenance %s: %d owned segments, "
                 "pre-lift root span %d, landing root span %d, exact=%d\n",
-                name, owned, full_consumer ? 22 : 0, landing_owned,
-                exact ? 1 : 0);
+                name, owned,
+                full_consumer ? zixx::kSaltoSpringReleasePoseKey : 0,
+                landing_owned, exact ? 1 : 0);
     require(exact && owned == expected_owned,
             "midpoint per-channel provenance drifted");
   };
@@ -1823,7 +1824,8 @@ int main() {
   zc::PresentationMidpointAuthorship golden_owned;
   const zc::Clip golden_source = zixx::build_attack(false, &golden_owned);
   check_midpoint_authorship("golden", golden_owned,
-                            zixx::kSaltoCompressHoldEndKey, true);
+                            zixx::kSaltoCompressHoldEndKey, true,
+                            zixx::kSaltoCompressHoldEndKey);
 
   zc::PresentationMidpointAuthorship local_owned;
   const zc::Clip local_source = zixx::build_attack(true, &local_owned);
@@ -1838,29 +1840,29 @@ int main() {
           zixx::kAtkCompressSliceLastKey -
           zixx::kAtkCompressSliceFirstKey + 1);
   int compression_owned_segments = 0;
+  // Direction 23: every arming half-key is schedule-authored, so the whole
+  // compression slice owns its quats/deform channels.
   for (size_t key = 0; key < compression_owned.channels.size(); ++key) {
-    const uint8_t expected =
-        (key == static_cast<size_t>(
-                    zixx::kSpringEarlyEntryOwnedMidpointKey) ||
-         key == static_cast<size_t>(zixx::kSpringEntryOwnedMidpointKey))
-            ? kOwnedQuatsDeform
-            : 0;
-    if (compression_owned.channels[key] != expected)
+    if (compression_owned.channels[key] != kOwnedQuatsDeform)
       compression_ownership_exact = false;
     if (compression_owned.channels[key] != 0) ++compression_owned_segments;
   }
   std::printf("MIDPOINT provenance compression slice: %d owned segments, "
-              "keys 1.5/4.5 quats/deform exact=%d\n",
+              "all schedule-authored exact=%d\n",
               compression_owned_segments,
               compression_ownership_exact ? 1 : 0);
-  require(compression_ownership_exact && compression_owned_segments == 2,
+  require(compression_ownership_exact &&
+              compression_owned_segments ==
+                  static_cast<int>(compression_owned.channels.size()),
           "compression midpoint provenance did not remap into slot 10");
 
   const zc::PresentationMidpointAuthorship release_owned =
       zixx::slice_midpoint_authorship(
           local_owned, zixx::kSlotAtkRelease,
           zixx::kAtkCompressSliceLastKey, zixx::kSaltoCoilPoseKey);
-  check_midpoint_authorship("release slice", release_owned, 1, false);
+  // The release slice begins at the last compression key, so its local
+  // half-key 0 is attack midpoint (hold_end - 1) + 0.5 -- schedule-authored.
+  check_midpoint_authorship("release slice", release_owned, 1, false, 1);
 
   // Retiming changes phase locations, never support obligations. The default-only
   // 1.5/4.5 complete poses stay absent, a four-key release owns its complete
@@ -1924,10 +1926,7 @@ int main() {
            key < static_cast<size_t>(landing_root_end)))
         expected |= zc::kMidpointRootAuthored;
       if ((expect_default_entry_poses &&
-           (key == static_cast<size_t>(
-                       zixx::kSpringEarlyEntryOwnedMidpointKey) ||
-            key == static_cast<size_t>(
-                       zixx::kSpringEntryOwnedMidpointKey))) ||
+           key < static_cast<size_t>(zixx::kSaltoCompressHoldEndKey)) ||
           (release_pose_count > 0 &&
            key >= static_cast<size_t>(release_pose_begin) &&
            key < static_cast<size_t>(release_pose_begin + release_pose_count)))
@@ -2557,7 +2556,8 @@ int main() {
           zixx::zixx_variant_plan(zixx::kSlotAtkDummy),
           zixx::zixx_variant_air_hit(zixx::kSlotAtkDummy));
   check_midpoint_authorship("dummy attack", dummy_owned,
-                            dummy_phase.hold_end, true);
+                            dummy_phase.hold_end, true,
+                            dummy_phase.hold_end);
 
   zc::PresentationMidpointAuthorship fly_owned;
   const zc::Clip fly_source = zixx::build_attack_fly(&fly_owned);
@@ -2566,7 +2566,7 @@ int main() {
           zixx::zixx_variant_plan(zixx::kSlotAtkFly),
           zixx::zixx_variant_air_hit(zixx::kSlotAtkFly));
   check_midpoint_authorship("flying attack", fly_owned,
-                            fly_phase.hold_end, true);
+                            fly_phase.hold_end, true, fly_phase.hold_end);
 
   zc::PresentationMidpointAuthorship six_owned;
   const zc::Clip six_source = zixx::build_attack_six(&six_owned);
@@ -2575,21 +2575,23 @@ int main() {
           zixx::zixx_variant_plan(zixx::kSlotAtkSix),
           zixx::zixx_variant_air_hit(zixx::kSlotAtkSix));
   check_midpoint_authorship("six-salto", six_owned,
-                            six_phase.hold_end, true);
+                            six_phase.hold_end, true, six_phase.hold_end);
 
   zc::PresentationMidpointAuthorship jump_one_owned;
   const zc::Clip jump_one_source = zixx::build_jump_one(&jump_one_owned);
   const zixx::JumpPhases jump_one_phase = zixx::zixx_jump_phases(
       zixx::zixx_jump_plan(zixx::kSlotJumpOne, 1));
   check_midpoint_authorship("one-turn jump", jump_one_owned,
-                            jump_one_phase.hold_end, true);
+                            jump_one_phase.hold_end, true,
+                            jump_one_phase.hold_end);
 
   zc::PresentationMidpointAuthorship jump_multi_owned;
   const zc::Clip jump_multi_source = zixx::build_jump_multi(&jump_multi_owned);
   const zixx::JumpPhases jump_multi_phase = zixx::zixx_jump_phases(
       zixx::zixx_jump_plan(zixx::kSlotJumpMulti, 3));
   check_midpoint_authorship("multi-turn jump", jump_multi_owned,
-                            jump_multi_phase.hold_end, true);
+                            jump_multi_phase.hold_end, true,
+                            jump_multi_phase.hold_end);
 
   zc::PresentationMidpointAuthorship nine_owned;
   const zc::Clip nine_source = zixx::build_attack_nine(&nine_owned);
@@ -2598,7 +2600,7 @@ int main() {
           zixx::zixx_variant_plan(zixx::kSlotAtkNine),
           zixx::zixx_variant_air_hit(zixx::kSlotAtkNine));
   check_midpoint_authorship("nine-salto", nine_owned,
-                            nine_phase.hold_end, true);
+                            nine_phase.hold_end, true, nine_phase.hold_end);
 
   (void)golden_source;
   (void)local_source;

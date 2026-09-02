@@ -175,3 +175,46 @@ Rebuild the Zixxtrixx jump/salto spring per Owner Direction 23: four slow readab
 - Eye check of the every-frame contact sheet: the animal is READABLE in
   every arming frame, the press is continuous and slow, no blob, no snap.
   It does not read hurried at 144 frames.
+
+### Stage 5 COMPLETE - the central fix: per-beat schedule at milli-keys
+
+- spring_arm_schedule_mk replaces the trapezoid: settle-in (4 keys), BEAT 1
+  smoothstep to assembled, 4-key dwell, BEAT 2 smoothstep to collapsed.
+  Every breakpoint a named owner knob. Dwells join C1 by construction.
+- EVERY arming+hold half-key now authored from the schedule at key+0.5
+  milli-keys (pose, deform, life clock, support target) - the generic chord
+  bake during the arming is gone. Probe provenance gates re-authored to
+  expect full ownership; the representative sample keys moved 1/4 -> 20/50
+  (the settle-in made 4.5 degenerate: chord == schedule at arm 0, so the
+  authored-differs-from-generic tripwire proved nothing there).
+- Knot re-spacing MEASURED with the pose probe: beat-1 legs 4.9 vs 4.3
+  mm/arm-unit; even-spacing absorbAt would be 231 vs current 220 - a 5%
+  bias, inside noise. DECISION: keep the restored Gen-13 value 220.
+- Beat split adjusted TWICE by measure-then-look: 64-key arming read fine
+  but beat 2 (4714 mm of shape-arc vs beat 1's 1845, measured) ran p90 13.1
+  and dug half-life to 8. Final: 72-key arming (160 frames of ground time,
+  inside Recon 5's 150-180 balance-pace band), beat 1 keys 4-36, dwell 4
+  keys, beat 2 keys 40-72, hold to 80. kAtkRetimeShift +62, kAttackKeys 302.
+  Jump-one 285 frames. PROBE GREEN.
+- Measured (evidence/stage5/jump-one-stage5c-*):
+  A0: centroid jerk 3.5/0.5 px (balance 1.2/0.4; the 3.5 is at beat-2
+      arrival f141-142) - centroid-y and area at balance level, centroid-x
+      slightly over the ~2 px target at one event.
+  A2: shape rate med 3.9 / p90 10.9 / max 15.4 PASS (limits 7/12/20).
+  A3: jolts 3.8/s PASS; two pairs closer than 8 frames (f46/48, f139/141),
+      both prominence-4 wiggles at the instrument's floor - borderline.
+  A4: FOUR BEATS SEGMENT: settle 14f / RUN 55f / dwell 13f / RUN 62f /
+      hold-quiet 13f / launch. First jump bank ever to do this.
+  A1: half-life med 36; a 21-frame dip to 11-12 mid-beat-2 remains (balance
+      floor on this instrument is 15). Much of beat-2's churn is the REAR
+      STRAIGHTENING - a Gen-13 fault stage 6 is scoped to fix; re-measure
+      after the art pass.
+  30 Hz staircase: DEAD - odd/even frame speed parity 1.16 (head-y
+      0.287/0.303) vs live's all-63-reversals-on-odd-frames.
+  B1-B4 all PASS (0.60 / 5.8% / 0.44 / 0.88).
+- Eye: beat 2 reads as a gentle continuous press; the dwell reads; the hold
+  quivers. CONFIRMED Gen-13 faults for stage 6: head drifts FORWARD on
+  screen during beat 2 (D23 wants slightly back), rear straightens to a rail.
+- Instrument notes: head-x jerk via eye-blob is band-flicker noise (verified
+  by eye at 4x: pose steady, cel highlight flickers); beat segmentation now
+  merges sub-6-frame gaps per Recon 5's own settle definition.

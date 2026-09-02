@@ -1,0 +1,12 @@
+window frames [1,161)
+centroid x max jerk : 3.5 px
+centroid y max jerk : 0.5 px
+area      max jerk : 196 px^2
+head x    max jerk : 17.9 px
+head y    max jerk : 3.3 px
+centroid y max speed: 0.5 px/f
+area      max speed: 201 px^2/f
+shape rate med/p90/max: 3.8 / 10.9 / 15.4 %/f
+half-life med/min: 36 / 1
+solidity max: 0.596  hole%% max: 6.0  closure min: 0.438
+spine min/median(clip): 686 / 783 (ratio 0.88)

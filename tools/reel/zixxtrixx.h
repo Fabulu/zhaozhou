@@ -557,9 +557,9 @@ constexpr int kWalkKeys = 40;
 // 18 keys to compress and hold, then releases over the next 10. Everything
 // from the approved flight is shifted by 12 keys, without changing its wheel,
 // apex hang, plunge, five-real-second planted-spear hold, or recovery timing.
-// 240 accepted keys + kAtkRetimeShift (54) of Direction-23 arming growth; a
+// 240 accepted keys + kAtkRetimeShift (62) of Direction-23 arming growth; a
 // static_assert beside the salto timeline keeps this in step with the shift.
-constexpr int kAttackKeys = 294;
+constexpr int kAttackKeys = 302;
 constexpr int kFallKeys = 144;  // SLOWER STILL (2026-08-27 pass 3, Fabian:
                                 // "When falling, the rotation is too
                                 // strong"): one tumble now takes 4.8 s, so
@@ -913,9 +913,19 @@ constexpr int32_t kSpringBladeFlare = 900;         // fan braces during compress
 // kAtkRetimeShift (+54), which the stage-1 naming made a single edit here.
 // kSaltoSpringEntryEndKey points at the end of beat 1 (it exists to feed the
 // probe's phase gate; the sampler runs on kSaltoCompressEndKey).
-constexpr int kSaltoSpringEntryEndKey = 36;
-constexpr int kSaltoCompressEndKey = 64;
-constexpr int kSaltoCompressHoldEndKey = 72;
+constexpr int kSpringSettleInKeys = 4;
+// Beat split adjusted after the first schedule render: beat 2 carries 4714 mm
+// of shape-arc against beat 1's 1845 mm (measured with the pose probe), so an
+// even READ needs beat 2 to own more of the arming than the first draft gave
+// it. Second adjustment: the arming grew 64 -> 72 keys (160 frames of ground
+// time, inside Recon 5's 150-180 balance-pace band) to buy beat 2 the pace
+// its 4714 mm need -- the owner has asked for a slower arming three
+// directions running. Beat 1: keys 4-36; dwell 4 keys; beat 2: keys 40-72.
+constexpr int kSpringBecomeSEndKey = 36;
+constexpr int kSpringBecomeSSettleKeys = 4;
+constexpr int kSaltoSpringEntryEndKey = kSpringBecomeSEndKey;
+constexpr int kSaltoCompressEndKey = 72;
+constexpr int kSaltoCompressHoldEndKey = 80;
 // Everything downstream of the loaded hold -- release, flight, spear, stick,
 // recovery -- keeps its ACCEPTED key spacing and merely SLIDES when the arming
 // grows. kAtkRetimeShift is that slide, derived from the hold end so a slower
@@ -2420,10 +2430,17 @@ constexpr SpringReleaseMidpointControl kSpringReleaseMidpointControl[] = {
 constexpr int kSpringReleaseMidpointCount =
     static_cast<int>(sizeof(kSpringReleaseMidpointControl) /
                      sizeof(kSpringReleaseMidpointControl[0]));
-// The two entry-side presentation midpoints. Their controls are defined just
-// after the shared arming clock, because they are now derived FROM it.
-constexpr int kSpringEarlyEntryOwnedMidpointKey = 1;
-constexpr int kSpringEntryOwnedMidpointKey = 4;
+// Direction 23: EVERY arming half-key is authored from the schedule (see
+// author_default_spring_entry_midpoint_poses), so these two keys no longer
+// name the only owned midpoints. They survive as the probe's REPRESENTATIVE
+// SAMPLE KEYS for the compiled-vocabulary and ChoreoRoot provenance checks,
+// which need a half-key where the authored pose provably DIFFERS from a
+// generic chord bake: one mid-beat-1 with the life waves open, one
+// mid-beat-2 with the deform live. (Their old values 1 and 4 fell in the
+// settle-in, where schedule and chord are identical and the checks would
+// prove nothing.) Both must stay inside the arming.
+constexpr int kSpringEarlyEntryOwnedMidpointKey = 20;
+constexpr int kSpringEntryOwnedMidpointKey = 50;
 
 inline int32_t spring_control_lerp(int key, int k0, int32_t a,
                                    int k1, int32_t b) {
@@ -2435,30 +2452,49 @@ inline int32_t spring_control_lerp(int key, int k0, int32_t a,
                  span);
 }
 
-// THE ARMING RAMP. A smoothstep is fastest exactly in the middle, which is the
-// opposite of "slow and steady": it lunges through the centre of the action and
-// creeps at the ends. This is a TRAPEZOIDAL SPEED profile instead -- accelerate
-// gently, hold ONE STEADY SPEED through the body of the build, decelerate
-// gently into the loaded pose. The soft ends are what make the idle-into-
-// compression seam continuous in velocity and not merely in position; the flat
-// middle is what reads as a spring being wound. Both fractions are 1/1000 of
-// the ramp and are owner knobs: raise them for a softer, lazier arm, drop them
-// toward zero for a linear crank.
-constexpr int32_t kSpringArmEaseInFrac = 300;
-constexpr int32_t kSpringArmEaseOutFrac = 260;
+// THE ARMING SCHEDULE (Direction 23). The trapezoidal ramp this replaces was
+// one beat-less speed profile; Direction 23 asks for FOUR beats that read in
+// order, each slow enough to register. This is the balance clip's own device
+// applied per beat: the balance rise is ONE smoothstep between two poses, so
+// each beat here is one smoothstep between two route stations, joined by
+// dwells. Smoothstep endpoints have zero velocity, so every dwell joins C1
+// by construction -- no seam engineering. The schedule takes MILLI-KEYS so
+// the 60 Hz presentation midpoints evaluate the same eased curve instead of
+// a linear chord between keys: the chord is why every rejected bank carried
+// a 30 Hz velocity staircase (Recon 3 J4). Every breakpoint is an owner knob.
+//
+//   keys 0..4      settle-in   arm 0     (grounded; the animal breathes)
+//   keys 4..36     BEAT 1      arm 0 -> kSpringArmAssembledAt: the whole
+//                              body slowly BECOMES the S
+//   keys 36..42    settle      arm holds (the beat reads because it ends)
+//   keys 42..64    BEAT 2      arm -> 1000: the S compresses, head slightly
+//                              back and slowly down, everything descending
+//   keys 64..72    BEAT 3      the loaded living hold (elsewhere)
+//   key 72         BEAT 4      the release (unchanged, fast by design)
 
-inline int32_t spring_arm_ease(int32_t u) {
-  if (u <= 0) return 0;
-  if (u >= 1000) return 1000;
-  const int64_t a = kSpringArmEaseInFrac;
-  const int64_t b = kSpringArmEaseOutFrac;
-  // peak speed so the three pieces integrate to exactly 1: v * (1 - a/2 - b/2)
-  const int64_t den = 2000 - a - b;  // 2 * (1000 - a/2 - b/2)
-  if (u < a) return static_cast<int32_t>((1000 * u * u) / (a * den));
-  if (u <= 1000 - b)
-    return static_cast<int32_t>((2000 * (u - a) + a * 1000) / den);
-  const int64_t r = 1000 - u;
-  return static_cast<int32_t>(1000 - (1000 * r * r) / (b * den));
+inline int32_t spring_arm_schedule_mk(int64_t key_mk) {
+  const int64_t b1_start = static_cast<int64_t>(kSpringSettleInKeys) * 1000;
+  const int64_t b1_end = static_cast<int64_t>(kSpringBecomeSEndKey) * 1000;
+  const int64_t b2_start =
+      b1_end + static_cast<int64_t>(kSpringBecomeSSettleKeys) * 1000;
+  const int64_t b2_end = static_cast<int64_t>(kSaltoCompressEndKey) * 1000;
+  if (key_mk <= b1_start) return 0;
+  if (key_mk < b1_end) {
+    const int32_t u = static_cast<int32_t>(
+        ((key_mk - b1_start) * 1000) / (b1_end - b1_start));
+    return static_cast<int32_t>(
+        (static_cast<int64_t>(kSpringArmAssembledAt) *
+         spring_smooth_amount(u)) / 1000);
+  }
+  if (key_mk < b2_start) return kSpringArmAssembledAt;
+  if (key_mk < b2_end) {
+    const int32_t u = static_cast<int32_t>(
+        ((key_mk - b2_start) * 1000) / (b2_end - b2_start));
+    return kSpringArmAssembledAt + static_cast<int32_t>(
+        (static_cast<int64_t>(1000 - kSpringArmAssembledAt) *
+         spring_smooth_amount(u)) / 1000);
+  }
+  return 1000;
 }
 
 // The shared arming clock: one monotone quantity for the whole anticipation.
@@ -2467,8 +2503,7 @@ inline int32_t spring_arm_ease(int32_t u) {
 inline int32_t spring_shared_arm_amount(int key) {
   if (key <= 0) return 0;
   if (key < kSaltoCompressEndKey)
-    return spring_arm_ease(static_cast<int32_t>(
-        (static_cast<int64_t>(key) * 1000) / kSaltoCompressEndKey));
+    return spring_arm_schedule_mk(static_cast<int64_t>(key) * 1000);
   if (key <= kSaltoCompressHoldEndKey) return 1000;
   if (key <= kSaltoSpringReleasePoseKey)
     return spring_arm_amount(
@@ -2504,13 +2539,15 @@ inline int32_t spring_shared_squash_amount(int key) {
   return 0;
 }
 
-// Halfway in ARM between the two integer keys either side, so these half keys
-// sit exactly ON the arming route. They used to carry hand-authored override
-// poses that patched a fold in the old piecewise route; the continuous spline
-// has no fold, and an off-route half key IS a 30 Hz judder.
+// The half key evaluates the SCHEDULE at key + 0.5 in milli-keys, so it sits
+// on the eased curve, not on the linear chord between its neighbours. The
+// chord midpoint is why the velocity profile was a 30 Hz staircase and why
+// every measured reversal landed on an odd frame (Recon 3 J4): halfway in
+// ARM is not halfway on the EASED clock. Any arm value is on the route, so
+// this is still exactly on-route -- just at the right time.
 inline SpringReleaseMidpointControl spring_owned_entry_midpoint(int key) {
   const int32_t arm =
-      (spring_shared_arm_amount(key) + spring_shared_arm_amount(key + 1)) / 2;
+      spring_arm_schedule_mk(static_cast<int64_t>(key) * 1000 + 500);
   SpringReleaseMidpointControl c;
   c.entry = arm >= kSpringArmAssembledAt
                 ? 1000
@@ -2622,15 +2659,15 @@ inline void prepare_spring_midpoints(
 inline void author_default_spring_entry_midpoint_poses(
     zc::Clip& c, int32_t blade_splay_bias,
     zc::PresentationMidpointAuthorship* authorship) {
-  author_spring_midpoint_pose(
-      c, kSpringEarlyEntryOwnedMidpointKey,
-      spring_owned_entry_midpoint(kSpringEarlyEntryOwnedMidpointKey),
-      blade_splay_bias, false,
-      authorship);
-  author_spring_midpoint_pose(
-      c, kSpringEntryOwnedMidpointKey,
-      spring_owned_entry_midpoint(kSpringEntryOwnedMidpointKey),
-      blade_splay_bias, false, authorship);
+  // Direction 23: author EVERY half-key of the arming and the hold from the
+  // milli-key schedule (pose, deform and life clock all at key + 0.5), so
+  // 60 Hz presentation sits on the eased curve throughout. The generic chord
+  // bake this replaces put every midpoint on a straight line between keys --
+  // the 30 Hz shimmer the owner reads as jitter. The release half-keys
+  // (kSpringReleaseMidpointControl) remain separately authored.
+  for (int key = 0; key < kSaltoCompressHoldEndKey; ++key)
+    author_spring_midpoint_pose(c, key, spring_owned_entry_midpoint(key),
+                                blade_splay_bias, false, authorship);
 }
 
 inline void author_four_key_spring_release_midpoint_poses(
@@ -2646,15 +2683,13 @@ inline int32_t spring_plan_midpoint_target_y(
     int key, int hold_end, bool has_default_entry_poses,
     bool has_four_key_release_poses, int32_t entry_a, int32_t squash_a,
     int32_t entry_b, int32_t squash_b) {
-  if (has_default_entry_poses &&
-      key == kSpringEarlyEntryOwnedMidpointKey)
-    return spring_support_target_y(
-        spring_owned_entry_midpoint(kSpringEarlyEntryOwnedMidpointKey).entry,
-        spring_owned_entry_midpoint(kSpringEarlyEntryOwnedMidpointKey).squash);
-  if (has_default_entry_poses && key == kSpringEntryOwnedMidpointKey)
-    return spring_support_target_y(
-        spring_owned_entry_midpoint(kSpringEntryOwnedMidpointKey).entry,
-        spring_owned_entry_midpoint(kSpringEntryOwnedMidpointKey).squash);
+  if (has_default_entry_poses && key < kSaltoCompressHoldEndKey) {
+    // Direction 23: every arming half-key is authored from the schedule, so
+    // its support target comes from the same schedule sample -- never from
+    // averaging the two neighbouring keys.
+    const SpringReleaseMidpointControl mid = spring_owned_entry_midpoint(key);
+    return spring_support_target_y(mid.entry, mid.squash);
+  }
   const int release_segment = key - hold_end;
   if (has_four_key_release_poses && release_segment >= 0 &&
       release_segment < kSpringReleaseMidpointCount) {

@@ -106,7 +106,13 @@ def segment(img):
 
 
 def head_blob(img, mask):
-    """The gold eye: bright warm yellow inside the silhouette."""
+    """Head centroid: silhouette pixels within 15 px of the gold eye.
+
+    The raw eye-blob centroid is NOISY: the eye's specular highlight flickers
+    frame to frame (visibly between keys and midpoints), moving the blob's
+    centroid several px while the head itself is still. Anchoring on the eye
+    but averaging the surrounding head region makes the track stable
+    (RUN-20260902-1816 stage 5 instrument hardening)."""
     r = img[:, :, 0].astype(np.int32)
     g = img[:, :, 1].astype(np.int32)
     b = img[:, :, 2].astype(np.int32)
@@ -115,7 +121,14 @@ def head_blob(img, mask):
     if not np.any(eye):
         return None
     ys, xs = np.nonzero(eye)
-    return float(xs.mean()), float(ys.mean())
+    ex, ey = float(xs.mean()), float(ys.mean())
+    h, w = mask.shape
+    yy, xx = np.mgrid[0:h, 0:w]
+    region = mask & ((xx - ex) ** 2 + (yy - ey) ** 2 <= 15 * 15)
+    if not np.any(region):
+        return ex, ey
+    rys, rxs = np.nonzero(region)
+    return float(rxs.mean()), float(rys.mean())
 
 
 # ---------------------------------------------------------------- geometry
@@ -360,7 +373,21 @@ def main():
 
     # beat segmentation: activity runs above the window's 35th percentile
     thresh = max(np.percentile(rate[win], 35), 1.0)
-    active = rate[win] > thresh
+    active = list(rate[win] > thresh)
+    # Recon 5's criterion defines a settle as >= 6 quiet frames, so activity
+    # runs separated by shorter gaps are ONE beat: merge them before printing.
+    i = 0
+    while i < len(active):
+        if not active[i]:
+            j = i
+            while j < len(active) and not active[j]:
+                j += 1
+            if 0 < i and j < len(active) and j - i < 6:
+                for k in range(i, j):
+                    active[k] = True
+            i = j
+        else:
+            i += 1
     runs, gaps = [], []
     i = 0
     seg = []
