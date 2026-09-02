@@ -1,0 +1,5 @@
+# worst-100 setup paths by DESTINATION block
+
+zhao_raster_earlyz             96
+zhao_cmd_dma                    2
+zhao_raster_tilestore           2
