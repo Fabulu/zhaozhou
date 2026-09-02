@@ -352,3 +352,41 @@ Plan, in the spirit of the declared ground-bite law:
 - zhaozhou origin/main merged into the branch (hardware lanes; zero
   overlap with tools/reel, reference/src, runtime); probe rebuilt via
   build-direct and rerun post-merge: PASS. Branch pushed.
+
+---
+
+## FINAL OUTCOME (supersedes the NOT PUBLISHED status above)
+
+**Status:** PUBLISHED. The owner ruled (2026-09-02): declare the
+coil-formation press and publish now; per-station clearance solving is
+deferred. Both probe assertions were re-authored into declared owner-ruled
+bands (never widened into blanket permits), the probe is GREEN, the 22
+subjects were re-rendered from one fresh explicit
+ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross invocation, encoded, the
+Direction-21 bank preserved as Archive Generation Thirteen, mains merged
+without force-push, and the site deployed ONCE via
+deploy.ps1 -Project upheaval -Branch main.
+
+**THE DECLARED FORMATION PRESS (owner-ruled allowance, 2026-09-02):**
+- WHERE: body runs >= 7 stations apart -- the front passing over the
+  still-winding rear during coil formation.
+- WHEN: presentation ticks 13-21 (keys 6.5-10.5, the wind) and 38-40
+  (keys 19-20, the unwind mirror); the retimed-grid hover echo rides the
+  formation climb, ticks 13-27, allowance 8 mm.
+- HOW DEEP: poke-through gauge bounds full/micro 52/96 mm (measured
+  50/94; both are the ~40 mm skin press seen on screen).
+- Everything else -- loaded pose, hold, release pose, all airborne
+  phases -- keeps the zero-intersection law, asserted; outside-window
+  hits are still a fault (currently 0/0).
+
+**Deployment:** https://0edabce8.upheaval.pages.dev -> production
+https://upheaval.pages.dev verified HTTP 200; exactly one robots noindex
+meta; new spring-family webms byte-identical to the committed bank;
+Archive Generation Thirteen tab serving the preserved Direction-21 files.
+
+**Final main SHAs:** zhaozhou ef7540363fd444f939e1adbadeeabc8a72d81b83
+(log commit follows), Upheaval ab0c222e72dda27bde19ab132535d0565345216c.
+
+**Deferred (owner ruling):** the 6th mid-wind knot / per-station
+clearance solve that would restore zero intersections through the
+formation transit. The experimental 3D-coil triple salto stays DROPPED.
