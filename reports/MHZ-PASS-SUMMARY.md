@@ -9,15 +9,33 @@ number below should be interpreted.
 | | |
 | --- | --- |
 | **Start** | 53.48 MHz, -8.7 ns worst slack |
-| **Best measured** | **96.73 MHz** (round 16, seed 3) |
-| **Typical** | ~95-96 MHz; roughly one seed in three draws ~91-93 |
+| **Best measured** | **99.50 MHz** — one failing endpoint, 0.050 ns from target |
+| **Typical** | **96.87 MHz** over three seeds (95.45 / 95.66 / 99.50) |
 | **Target** | 100 MHz |
-| **Cost** | +287 ALMs, 0.6% of the device |
-| **DSP** | 16, unchanged across all sixteen fits |
+| **Cost** | +797 ALMs, 1.9% of the device |
+| **DSP** | 16, unchanged across all nineteen fits |
 | **Correctness** | every gate green; all pixel CRCs bit-identical |
 
-Roughly **+81%**, closing about 92% of the original violation, without spending
-DSPs and without a single bit of output changing.
+**+81%**, closing about 99% of the original violation, without spending a single
+DSP and without one bit of output changing.
+
+### Two contributions, and the split is not what anyone would guess
+
+| | mean Fmax |
+| --- | ---: |
+| start | 53.48 |
+| after sixteen rounds of RTL surgery | 94.79 |
+| after **one line** of QSF | **96.87** |
+
+Sixteen rounds of RTL work bought +41.3 MHz and were real and necessary. Then
+**one fitter directive bought +2.08 MHz more** — measured paired, same seed and
+same RTL, gains of +1.24 / +2.23 / +2.77, all three positive:
+
+    OPTIMIZATION_MODE "BALANCED" -> "HIGH PERFORMANCE EFFORT"
+
+The fitter had never been asked to optimise for speed. That went unnoticed
+through every one of those sixteen rounds. Cost: ~+510 ALMs and roughly double
+the compile time, which Quartus states up front.
 
 ## What was actually wrong, in the order it was found
 
@@ -94,12 +112,40 @@ Placement-independent, and therefore what to argue from:
 
 ## What the last 4 MHz needs, and why it is not another round of this
 
-At ~96 MHz the limiter **changes with the placement** — seed 2 says TILESTORE,
-seed 3 says EARLY-Z, and neither appears in the other's list at all. That is the
-signature of many paths sitting at similar slack with no single dominant
-structure, and it means local surgery now has low and largely unmeasurable
-expected value: each candidate costs two fits (~3 hours) to distinguish from
-noise, and the honest answer will usually be "inconclusive".
+**Three seeds produce three different limiter blocks — before and after the
+fitter change.** Same commit, same sources, only the placement seed differing:
+
+    BALANCED
+    seed 1   94.21 MHz   zhao_cmd_dma          -0.615  (40 paths)
+    seed 2   93.43 MHz   zhao_raster_tilestore -0.703  ( 3 paths)
+    seed 3   96.73 MHz   zhao_raster_earlyz    -0.338  (41 paths)
+
+    HIGH PERFORMANCE EFFORT
+    seed 1   95.45 MHz   zhao_raster_tilestore -0.477  ( 2), binner -0.365 (81)
+    seed 2   95.66 MHz   zhao_cmd_dma          -0.454  (91)
+    seed 3   99.50 MHz   zhao_raster_earlyz    -0.050  (28), cmd_dma +0.042
+
+Four different blocks across six fits, and `zhao_geom_binner` is at -0.365 with
+81 paths at one seed and POSITIVE at another. The last ~3 MHz is spread thin
+across cmd_dma, binner, Early-Z and tilestore, with no block owning it.
+
+No single block limits this design. That is the signature of many paths sitting
+at similar slack with no dominant structure, and it settles the question: local
+surgery now has low and largely unmeasurable expected value. Each candidate
+costs two to three fits (3-5 hours) to distinguish from noise, the block it
+targets may not be the limiter at another placement, and the honest answer will
+usually be "inconclusive".
+
+**Round 16 is the worked example.** Three seeds before the arbiter fix and three
+after:
+
+    pre-arbiter   91.31 / 95.70 / 95.92   mean 94.31   sd 2.60
+    round 16      94.21 / 93.43 / 96.73   mean 94.79   sd 1.72
+
+A +0.48 MHz difference of means against sd ~2.2 with n=3. **Not resolvable.**
+The change is kept because it is architecturally right — arithmetic that waited
+on an arbitration no longer does — and not because the numbers show a gain. They
+do not.
 
 The remaining structural targets are real, and each costs a cycle somewhere:
 

@@ -1,0 +1,5 @@
+# paths launching at an M10K output.
+# EMPTY IS THE GOAL. Rounds 3 and 6 each recovered time by
+# removing one; a long list here is the next lever.
+# count: 0 of 100
+

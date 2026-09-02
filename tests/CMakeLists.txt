@@ -2055,6 +2055,17 @@ verilate(test_raster_texjoin_directed
 add_test(NAME raster_texjoin_directed COMMAND test_raster_texjoin_directed)
 set_tests_properties(raster_texjoin_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# TEXJOIN v2 lands BESIDE v1 (REARCHITECTUREADVICE.md), so it gets its own
+# executable and its own test rather than replacing the golden one.
+add_executable(test_raster_texjoin_v2_directed raster/raster_texjoin_v2_directed.cpp)
+target_link_libraries(test_raster_texjoin_v2_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_texjoin_v2_directed
+  PREFIX Vzhao_raster_texjoin_v2
+  TOP_MODULE zhao_raster_texjoin_v2
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_texjoin_v2.sv)
+add_test(NAME raster_texjoin_v2_directed COMMAND test_raster_texjoin_v2_directed)
+set_tests_properties(raster_texjoin_v2_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)

@@ -898,3 +898,75 @@ arbitration, waiting to learn which client won, though it is a pure function of
 one client's own state. All five are now computed in parallel and the winner
 selects among the ANSWERS. Same shape as the Early-Z floor fix: when a select
 feeds arithmetic, compute every branch and select the result.
+
+---
+
+## The finish: one line of QSF was worth more than the last eight rounds
+
+**53.48 -> 99.50 MHz best, 96.87 mean.** One failing endpoint at the best seed,
+0.050 ns from target. +797 ALMs (1.9%), DSP flat at 16 across twenty-one fits,
+every pixel CRC bit-identical.
+
+### The apparatus had never been asked for speed
+
+After the three-seed result proved no single BLOCK was the limiter, the only
+thing left to suspect was the flow itself. A Tcl query of the project's own
+assignments found:
+
+    OPTIMIZATION_MODE       BALANCED     the FITTER never asked for speed
+    OPTIMIZATION_TECHNIQUE  BALANCED     SYNTHESIS never asked either
+    REGISTER_DUPLICATION    OFF
+    PHYSICAL_SYNTHESIS_EFFORT NORMAL
+
+Sixteen rounds of RTL surgery had run against a balanced compile, and nobody
+looked. Measured, one at a time, each paired against the same seed:
+
+    OPTIMIZATION_MODE -> HIGH PERFORMANCE EFFORT   +2.08 MHz   KEPT
+        s1 94.21->95.45  s2 93.43->95.66  s3 96.73->99.50
+        all three positive, mean +2.08, sd 0.78
+    OPTIMIZATION_TECHNIQUE -> SPEED                -3.01 MHz   reverted
+        99.50 -> 96.49, endpoints 1 -> 35, ALMs +147
+    REGISTER_DUPLICATION -> ON                      nil        removed
+        bit-identical, ALM count included; already on via HIGH PERF EFFORT
+
+### Three things worth keeping from that
+
+**SPEED synthesis backfires when the fitter is already at high effort.** It
+duplicates and flattens logic to shorten paths, handing the fitter a LARGER
+netlist to place. The two fight rather than compound. Not obvious in advance,
+which is the argument for measuring a plausible setting instead of stacking it
+on because the previous one worked.
+
+**An honoured-but-inert setting is worse than no setting.** Register duplication
+reported `On` and changed nothing. Left in the QSF it would read as a lever
+already pulled, and the next person hunting headroom would cross it off without
+testing. Removed; the measurement kept as a comment.
+
+**Verify the setting was honoured, always.** `multstyle = "logic"` was applied,
+silently ignored and believed for weeks in this project. Every one of these was
+read back from the fitter's own settings table, and one of them -- register
+duplication -- would have been recorded as "tried, did not help" instead of
+"already on" without that check.
+
+### The split, which is the uncomfortable part
+
+    start                                    53.48
+    sixteen rounds of RTL surgery            94.79   (+41.3)
+    one line of QSF                          96.87   (+2.08)
+
+The RTL work was real and necessary -- nine genuine faults, six of them the same
+mistake, none findable by reading. But the last 2 MHz cost one line, and finding
+it required suspecting the measurement apparatus rather than the design. That
+only happened because a three-seed experiment made "which block is the limiter"
+unanswerable.
+
+### Where it stops, and why
+
+The limiter moves across FOUR blocks depending on placement -- tilestore,
+cmd_dma, Early-Z, binner -- with binner at -0.365/81 paths at one seed and
+POSITIVE at another. No block owns the last ~3 MHz. Local surgery is finished;
+what remains is the spec's sections 5 and 8-13, top-level islands and clocking.
+
+Consolidated for the owner in `reports/MHZ-PASS-SUMMARY.md`, with
+`NOISE_FLOOR.md` for how to read any of these numbers and `QUARTUS_GOTCHAS.md`
+for the traps that cost time.

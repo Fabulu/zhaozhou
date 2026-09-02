@@ -1,0 +1,124 @@
+Bro2 has to say something about Bro1's rearchitecture brief from just now:
+
+look at the rearchitectureadvice.md. Seems good?
+
+Yes. It’s good. Quite good, actually. I’d be comfortable letting the agent use it as the next architecture brief. It is much more grounded in the machine that exists today than the older 110–115 spec, and it has unusually good “don’t get clever without evidence” discipline.
+
+The strongest decision is the big one: freeze the 96.87/99.50-MHz flat raster rather than spending another week playing whack-a-mole with whichever block seed N dislikes. Then spend invasive architecture effort on the texture-survivor island, where there are actual measured throughput defects and likely timing problems: serial perspective recovery, not-really-streaming TMU, blocking interfaces, AUX at essentially zero reserve. That's exactly where a redesign can buy two things at once instead of chasing 0.05 ns for bragging rights.
+
+I also really like several implementation choices. texjoin_v2 beside the old implementation rather than replacing it; internal {slot,generation} identity; returns writing directly into token-indexed entries; retirement order separate from completion order; ready depending on local storage only; actual four-lane direct-mapped cache rather than the fictional generic write-back cache; no MSHRs until traces prove they're needed; preserve Field v3 instead of redesigning working arithmetic; and the explicit integration staircase with a physical fit after every added island. That's all excellent engineering hygiene.
+
+There are, however, two things I would actively fix, and one smaller nit.
+
+1. The biggest problem: it accidentally forgets your three-sample material architecture
+
+This is the one real architectural hole.
+
+REARCHITECTUREADVICE.md describes TEXJOIN state basically as:
+
+required_mask = PRIMARY | AUX
+
+with a singular primary result. The proposed flow is one perspective job → one TMU result → optional AUX → retire. It also motivates TMU throughput using 541,640 samples/frame.
+
+And I immediately recognized that number:
+
+276,480 terrain + 92,160 sky + 128,000 stars + 45,000 clouds = 541,640.
+
+That's the one-primary-sample workload.
+
+But MATERIAL_ARCHITECTURE.md has already explicitly ratified:
+
+baseline 1 sample, bounded recipes up to THREE samples through the same TMU,
+
+with TEXJOIN carrying sample_count 0..3, bindings/UV sets, and responses identified by {record_id, sample_index}. Its named three-sample terrain profile is 1,094,600 known samples/frame before creatures, objects, misses, etc.
+
+So the new architecture advice could accidentally build a beautifully tokenized, II=1 texture system that freezes TEXJOIN v2 around exactly one primary texture result.
+
+That's fixable without changing the architecture much. I would amend TEXJOIN v2 from something conceptually like:
+
+PRIMARY | AUX
+
+to:
+
+PRIMARY[0..2] | AUX
+
+or, cleaner:
+
+sample_count
+sample_required_mask[2:0]
+sample_arrived_mask[2:0]
+sample_result[3]
+binding/recipe snapshot
+AUX required/arrived
+fixed combiner after all required primary samples arrive.
+
+Then the TMU still handles one sample request at a time, II=1, while fragments can have 0–3 outstanding sampler invocations interleaved with other fragments. That's exactly what the material ruling wanted.
+
+And the stress gate should include the existing sacrifice_terrain_3sample / 1,094,600-sample profile, not just the 541,640 baseline.
+
+That is the one change I'd call necessary before implementation.
+
+2. It quietly relaxes the MHz contract
+
+The old spec says:
+
+110 MHz minimum full-system target, 115 MHz nominal.
+
+The new advice eventually says:
+
+texture island 115–120
+full composition 105 MHz hard
+110 MHz preferred
+product 100–105.
+
+Architecturally, I actually think that's a much more realistic hierarchy. If the finished entire console gives you robust 105–110 MHz and the board runs at 100, that's healthy.
+
+But it shouldn't silently redefine an owner requirement.
+
+I'd word it as:
+
+Acceptance floor: 105 MHz full composition
+Architecture objective: 110 MHz
+Stretch/headroom: 115 MHz
+Product clock: 100 MHz
+
+—or whatever you intend.
+
+That distinguishes “don't reject the whole machine at 109 MHz” from “we've abandoned the 110–115 design goal.” Right now the MD blurs those.
+
+3. Smaller: the Field comparison uses a weird “current heavy” configuration
+
+The advice asks to fit a “current heavy gate” with roughly:
+
+CTX32 / OUTSTANDING16 / DIST_BANKS8 / RING_UNITS8 ...
+
+and compare it with a smaller configuration.
+
+But the actual Field optimisation record's established working configuration is:
+
+CTX32 / LANES4 / OUTSTANDING12 / GATHERS4 / REGS64 / DIST_BANKS4 / RING_UNITS4
+
+and it specifically records that OUTSTANDING16/GATHERS8 did nothing, and later sweeps show adding ring units did nothing too.
+
+So I wouldn't use an already-discredited overbuilt configuration as the primary production physical point unless the explicit purpose is “fit an intentionally fat worst case.”
+
+Better:
+
+A = actual current accepted functional configuration.
+B = deliberately reduced physical candidate.
+
+Then compare timing/resources/workload.
+
+That's a fairly small correction.
+
+Everything else I read I basically approve of.
+
+The reciprocal scheduler is particularly sensible: don't clone reciprocal units; interleave dependent microjobs from multiple tokens so one multiplier stays occupied. Four multiplier launches per reciprocal gives a theoretical reciprocal every four clocks, while preserving the exact old arithmetic as the oracle. That is exactly the kind of “latency increases, throughput improves” architecture this machine needs.
+
+Likewise AUX becoming a literal six-stage restoring-divider pipeline is almost comically appropriate: the current thing already does six quotient bits; instead of doing them serially for one request, put one bit in each stage and have six requests walking through simultaneously. Same arithmetic, II=1. Lovely.
+
+And the TMU plan is the right flavor of “v3”: not new sampling semantics. Keep v2 as the golden implementation, but replace its coarse stateful continent with real elastic planner stages, decoupled response queues, resident palette binding, ROB, and independent return channels. That's exactly what I hoped a TMU v3 would turn out to mean.
+
+So my score would be roughly 9/10 architecture advice, with the missing multi-sample material contract being the one thing that prevents me from saying “ship the document untouched.”
+
+Fix that, clarify the 105/110/115 hierarchy, clean up the Field baseline, and I'd be very happy to sic the agent on it.

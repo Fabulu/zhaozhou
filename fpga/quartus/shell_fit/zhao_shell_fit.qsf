@@ -14,7 +14,98 @@ set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"
 # Reproducible fixed-seed characterization settings supported by Quartus 17.0.2.
 set_global_assignment -name NUM_PARALLEL_PROCESSORS 4
 set_global_assignment -name SEED 1
-set_global_assignment -name OPTIMIZATION_MODE "BALANCED"
+# THE FITTER WAS NEVER ASKED TO OPTIMISE FOR SPEED.
+# Sixteen rounds of RTL surgery ran against OPTIMIZATION_MODE
+# "BALANCED", which trades Fmax against area and compile time. Three
+# seeds on one commit gave three DIFFERENT limiter blocks (cmd_dma,
+# tilestore, Early-Z), which is the signature of many paths at similar
+# slack and no dominant structure -- exactly the case where a GLOBAL
+# fitter directive is worth more than another local rewrite.
+#
+# FITTER_EFFORT stays STANDARD FIT: that is already the full-effort
+# setting, and AUTO FIT would REDUCE effort once timing is met.
+#
+# Verify it was honoured, do not assume it: the fitter's own settings
+# table must echo it back. An assignment Quartus silently ignores looks
+# exactly like one that did not help, which is how `multstyle` was
+# believed for weeks.
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
+
+# AND SYNTHESIS WAS NOT ASKED EITHER. OPTIMIZATION_TECHNIQUE is a
+# SEPARATE knob from OPTIMIZATION_MODE above -- that one steers the
+# fitter, this one steers quartus_map -- and a Tcl query showed it still
+# sitting at BALANCED after the fitter change landed.
+#
+# Queried rather than guessed, via get_global_assignment, because the
+# only reason the fitter setting was ever found is that the three-seed
+# result forced a look at the apparatus. The same query also reports
+# PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION OFF and PHYSICAL_SYNTHESIS_
+# EFFORT NORMAL, both untried and both left alone for now: ONE VARIABLE
+# AT A TIME, or the next measurement cannot be attributed to anything.
+# MEASURED AND REVERTED, seed 3, paired against the perf-mode fit:
+#
+#                       BALANCED      SPEED
+#     gpu_clk Fmax      99.50 MHz     96.49 MHz    -3.01
+#     worst slack       -0.050 ns     -0.364 ns
+#     failing endpoints         1            35
+#     ALMs                  13146         13293    +147
+#
+# Worse on every metric. The likely mechanism is that SPEED synthesis
+# duplicates and flattens logic to shorten paths, handing the fitter a
+# LARGER netlist to place -- and the fitter is already at HIGH
+# PERFORMANCE EFFORT. The two work against each other rather than
+# compounding, which is not obvious in advance and is why it was
+# measured rather than assumed.
+#
+# CAVEAT, because it weakens the evidence and should be stated: changing
+# synthesis changes the NETLIST, so `same seed` is a weaker control here
+# than for the fitter-only change -- the placement problem itself is
+# different. One seed. But the result is negative on Fmax, endpoint
+# count AND area at once, and a change must earn its place.
+set_global_assignment -name OPTIMIZATION_TECHNIQUE BALANCED
+
+# The last apparatus knob with a plausible mechanism for the remaining
+# 0.050 ns. Physical-synthesis register duplication runs on the
+# POST-SYNTHESIS netlist during fitting and splits high-fanout
+# registers so copies sit near their loads -- a different lever from
+# OPTIMIZATION_TECHNIQUE=SPEED, which was measured at -3.01 MHz above
+# and reverted. Duplication adds registers rather than combinational
+# logic, so it does not enlarge the netlist the same way.
+#
+# Relevant here because the design has known wide-fanout control: the
+# gpu_clk enable drives 13933 loads, and `rs_state` and `ts_clear` reach
+# across module boundaries into EARLY-Z and TILESTORE -- both of which
+# have held the worst path at one seed or another.
+#
+# VERIFY IT IS HONOURED. Quartus Lite restricts some physical-synthesis
+# features, and an ignored assignment looks exactly like one that did
+# not help. Read it back from the fitter's own settings table.
+# MEASURED AND REMOVED: it was honoured and it changed NOTHING.
+#
+#                     without        with
+#     Fmax            99.50 MHz      99.50 MHz
+#     worst slack     -0.050 ns      -0.050 ns
+#     endpoints               1              1
+#     ALMs                13146          13146
+#     limiter        earlyz -0.050   earlyz -0.050
+#
+# Bit-identical down to the ALM count, and the fitter DID report
+# `Perform Register Duplication for Performance : On`. The likely
+# reason is that OPTIMIZATION_MODE=HIGH PERFORMANCE EFFORT already
+# enables it -- that same report shows `Physical Synthesis for
+# Combinational Logic for Performance : On` against a default of Off,
+# and nothing here ever set that.
+#
+# Removed rather than left in. A setting that is reported On while
+# changing nothing is worse than no setting: it reads as a lever that
+# has already been pulled, and the next person to look for headroom
+# crosses it off without testing it.
+#
+# THIS CLOSES THE APPARATUS AUDIT. Every fitter and synthesis knob has
+# now been measured: OPTIMIZATION_MODE (+2.08 MHz, KEPT),
+# OPTIMIZATION_TECHNIQUE (-3.01, reverted), register duplication (nil).
+# PHYSICAL_SYNTHESIS_EFFORT stays NORMAL: it scales physical synthesis
+# that is already running and showed no headroom to scale.
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 
 # Exact ZHAO_SHELL_RTL cone from tests/CMakeLists.txt, in the same order.
