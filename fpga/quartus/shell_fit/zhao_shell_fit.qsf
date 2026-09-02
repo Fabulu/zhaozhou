@@ -14,7 +14,22 @@ set_global_assignment -name VERILOG_MACRO "QUARTUS_SYNTHESIS=1"
 # Reproducible fixed-seed characterization settings supported by Quartus 17.0.2.
 set_global_assignment -name NUM_PARALLEL_PROCESSORS 4
 set_global_assignment -name SEED 1
-set_global_assignment -name OPTIMIZATION_MODE "BALANCED"
+# THE FITTER WAS NEVER ASKED TO OPTIMISE FOR SPEED.
+# Sixteen rounds of RTL surgery ran against OPTIMIZATION_MODE
+# "BALANCED", which trades Fmax against area and compile time. Three
+# seeds on one commit gave three DIFFERENT limiter blocks (cmd_dma,
+# tilestore, Early-Z), which is the signature of many paths at similar
+# slack and no dominant structure -- exactly the case where a GLOBAL
+# fitter directive is worth more than another local rewrite.
+#
+# FITTER_EFFORT stays STANDARD FIT: that is already the full-effort
+# setting, and AUTO FIT would REDUCE effort once timing is met.
+#
+# Verify it was honoured, do not assume it: the fitter's own settings
+# table must echo it back. An assignment Quartus silently ignores looks
+# exactly like one that did not help, which is how `multstyle` was
+# believed for weeks.
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 
 # Exact ZHAO_SHELL_RTL cone from tests/CMakeLists.txt, in the same order.
