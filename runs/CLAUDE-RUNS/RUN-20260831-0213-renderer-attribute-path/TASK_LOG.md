@@ -818,3 +818,83 @@ ORDER after the multiply rather than the operands before it. `state` and
 multiply lands -- same benefit, zero cycles, one extra 48-bit subtract and a
 mux. It waits because MHz is the goal right now and it would cost a fit to
 confirm. Recorded as a known debt with a known repayment.
+
+---
+
+## Rounds 13-15, and then the floor fell out of the method
+
+    round 13   95.47 MHz   -0.474    registered the tile-start pixel centre
+    round 14   95.29 MHz   -0.494    registered the twelve w-operands
+    round 15   91.31 MHz   -0.952    registered the scanout per-line base
+
+Round 15 looked like a 4.16 MHz REGRESSION from a change that only removed
+logic. Sources were verified against the manifest, so it was not a stale
+artifact. That forced the question I should have asked in round 1.
+
+### The noise floor was invented, and it is 3x what I claimed
+
+One commit, three fits, identical sources, only `SEED` differing:
+
+    seed 1   91.31 MHz   -0.952
+    seed 2   95.70 MHz   -0.449
+    seed 3   95.92 MHz   -0.425
+
+**4.61 MHz of spread.** Seeds 2 and 3 agree to 0.22; seed 1 is the outlier. So
+the design is at **~95.8 MHz** and round 15 never regressed -- it drew badly.
+
+I had quoted "~1.5 MHz noise" for fifteen rounds **without measuring it**,
+extrapolated from an `audio_clk` observation on a differently constrained
+domain. Every is-this-real judgement in the series rested on it:
+
+    round 11  "+2.32 MHz"                inside noise on the headline
+    round 13  "+5.85, well above noise"  MARGINAL, not the clean win claimed
+    round 15  "a 4.16 MHz regression"    not a regression at all
+
+And the owner table moves with placement too, which is worse: round 14's
+headline finding -- "EDGEWALK now passes, mem_guard is the limiter" -- was a
+property of that PLACEMENT. Same RTL at seed 2 puts Early-Z on 96 of 100 and
+EDGEWALK nowhere.
+
+### And the tool was ranking by the wrong column
+
+`owners.txt` sorted by path COUNT for fifteen rounds. Seed 3:
+
+    zhao_vram_arbiter    -0.425      4 paths   <- sets Fmax
+    zhao_cmd_dma         -0.349     18
+    zhao_raster_earlyz   -0.258     78 paths   <- 0.167 ns in hand
+
+Early-Z owned 78 of 100 and was not the limiter. By count it looked like the
+problem by twenty to one, and fixing it would have bought nothing.
+
+### Three times, one failure
+
+The DSP misclassification (bro caught it), the invented noise floor, and the
+owner ranking. Every one was a number that LOOKED like evidence while measuring
+something else, and every one was believed **because a tool produced it**. The
+art law says measurement can remove a bias but cannot choose a value. The
+corollary this run earned: **the tool itself is a thing to be audited, not a
+source of truth.** Component checks passing is not likeness evidence -- and a
+histogram printing is not the right histogram.
+
+### What survives all of it
+
+* **53.48 -> ~95.8 MHz.** Far outside any plausible noise band.
+* **Structural counts with a mechanism.** DSP-launched 48 -> 0 followed a change
+  that provably removed `cross_r[47]` from the multiplier's cone. A count that
+  collapses because its structure was deleted is not a placement artifact.
+* **Every bit-exactness result.** CRCs and reference checks do not move with
+  placement.
+
+### Method from here
+
+Two seeds minimum before any decision, three before a revert. Quote a range.
+Rank by slack. `SEED 1` stays pinned for comparability; `-Seed N` overrides the
+staged copy only. All of it in `reports/NOISE_FLOOR.md`.
+
+### In flight
+
+`zhao_vram_arbiter`, the real limiter at -0.425. `burst_words()` sat AFTER the
+arbitration, waiting to learn which client won, though it is a pure function of
+one client's own state. All five are now computed in parallel and the winner
+selects among the ANSWERS. Same shape as the Early-Z floor fix: when a select
+feeds arithmetic, compute every branch and select the result.
