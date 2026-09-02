@@ -283,6 +283,123 @@ SDRAM integration inherits "FB slots in distinct banks"):
   charter allocator); Phase 2 ships ONLY the two FB regions — everything
   else is a violation by construction.
 
+## 5b. Local-SDRAM bank 2 — the terrain world layer (ruling T2, 2026-09-02)
+
+The Phase-2 note above says "later phases extend the map (texture/terrain/
+particle pools per the charter allocator)". This is that extension for terrain,
+ruled rather than proposed.
+
+| Range | Region | Shape |
+|---|---|---|
+| `0x0400_0000` .. `0x054D_FFFF` | `TERRAIN.PAGE_POOL` | 1,024 × 21,376 B |
+| `0x054E_0000` .. `0x0565_FFFF` | `TERRAIN.RESIDENT_MIP_POOL` | 1,024 × 1,536 B |
+| `0x0566_0000` .. `0x056E_FFFF` | `TERRAIN.COMPOSED_HEIGHT` | 256 × 2,304 B |
+| `0x056F_0000` .. `0x0577_FFFF` | `TERRAIN.COMPOSED_VELOCITY` | 256 × 2,304 B |
+| `0x0578_0000` .. `0x057F_FFFF` | `TERRAIN.WRITEBACK_STAGING` / journal | 64 × 8 KiB |
+| `0x0580_0000` .. `0x0585_FFFF` | `TERRAIN.COMPOSED_MIP_POOL` | 256 × 1,536 B |
+| `0x0586_0000` .. `0x05FF_FFFF` | reserved / unmapped | until traces justify |
+
+**There are no separate permanent E/F/H pools** — those layers live *inside* the
+21,376-byte page. The two mip pools are **derived caches, not canonical
+assets**: losing one costs a regeneration, not data.
+
+**Every region starts DENY-BY-DEFAULT, with state-aware permissions.** This is
+stronger than the Phase-2 rule and the difference matters:
+
+* a loader may write **only a `LOADING` slot**;
+* active terrain may read **only a ready slot with matching epoch and
+  generation**;
+* bake and stamp write **only owned layer ranges**.
+
+A permission that depends on the slot's *state* cannot be checked once at
+configuration time, which is why the residency directory and the guard are
+coupled rather than independent.
+
+## 5c. Local-SDRAM bank 3 — GEOM.PARAMBUF (ruling R7)
+
+| Range | Region | Size |
+|---|---|---|
+| `0x0600_0000` .. `0x063F_FFFF` | PARAMBUF view 0 | 4 MiB |
+| `0x0640_0000` .. `0x067F_FFFF` | PARAMBUF view 1 | 4 MiB |
+| `0x0680_0000` .. `0x069F_FFFF` | shared prefetch / chunk scratch | 2 MiB |
+| `0x06A0_0000` .. `0x07FF_FFFF` | reserved / unmapped | pending evidence |
+
+See `design/contracts/GEOM.PARAMBUF.md`. ENGINE1 owns the render-geometry
+region; the two views are disjoint for the same reason the two FB slots are.
+
+## 5d. Memory clients — one addition (ruling T3)
+
+`ENGINE0` (framebuffer / render write) and `ENGINE1` (render-geometry domain,
+including GEOM.PARAMBUF and active terrain page/composed traffic behind a local
+arbiter) are **unchanged**.
+
+**Added: `ZHAO_CLIENT_TERRAIN_BUILD = 6`** — a **best-effort / background**
+client for HPS→local page loads, F-sheet writeback, prefetch, and staging or
+journal traffic.
+
+**It does not join guaranteed round-robin merely because a page is late.** When
+a page is not ready the renderer uses a declared proxy and records pressure,
+rather than stealing scanout or render service. A streaming miss is a picture
+problem for one frame; a starved scanout is a broken console.
+
+**Client ID 5 remains available** for a measured split if board evidence proves
+ENGINE1 arbitration is the limiter. **Do not spend it pre-emptively.**
+
+Re-run the MEM.ARBITER liveness and guard proofs after adding client 6.
+
+## 5e. The canonical terrain key (ruling T1)
+
+    { resource_epoch:u32, island_id:u32, patch_ix:i16, patch_iz:i16 }
+
+**Patch pitch is a property of the island table**, validated against the page
+header, and is **not part of the lookup key**. No global coordinate projection
+is identity.
+
+**Two islands may legally overlap in local patch coordinates.** That is the
+clause that makes `island_id` load-bearing rather than decorative, and any
+residency interface without it is **superseded** — including the direct-mapped
+prototype in `fpga/rtl/terrain/zhao_terrain_residency.sv`, which keys on
+`{px, py}` alone.
+
+Residency mapping is **256 sets × 4 ways** (T9), set index **CRC-8/ATM,
+polynomial `0x07`, initial 0**, over the little-endian bytes of
+`{island_id, patch_ix, patch_iz}`, with `resource_epoch[7:0]` xored into the
+final byte. The full key is stored in every way.
+
+## 5f. The permanent terrain command ABI (ruling T5)
+
+Two versioned commands. **Opcodes are confirmed by the ZIDL generator before
+commit**, not by this table.
+
+    TerrainEpoch @ 0x0220, size 16
+      epoch:u32; op:u8 (BEGIN=0, END_FLUSH=1, ABORT=2); flags:u8;
+      reserved:u16; island_table_handle:u32; source_id:u32
+
+    SubmitTerrainSet @ 0x0230, size 32
+      resource_epoch:u32; list_offset:u32; list_bytes:u32; list_crc32c:u32;
+      patch_count:u16; view_mask:u8; flags:u8; sequence:u32; reserved0:u32;
+      reserved1:u32
+
+    Patch-list record, 32 B
+      island_id:u32; patch_ix:i16; patch_iz:i16; hps_page_addr:u64;
+      expected_page_crc32c:u32;
+      flags:u16 (REQUIRED, PREFETCH, DYNAMIC, DUAL, HAS_SAVED_F);
+      view_mask:u8; priority:u8; source_id:u32; reserved:u32
+
+**One `SubmitTerrainSet` covers the whole required + prefetch set.** Do not emit
+one `DrawProcedural` per patch and do not overload an existing terrain field
+command.
+
+**Canonical order:** required before prefetch; smaller priority first;
+view-union key; `island_id` ascending; `patch_iz` ascending; `patch_ix`
+ascending; `source_id` ascending.
+
+**The sealed list is capture data — replay does not rerun the HPS visibility
+walk.** A replay that produces different list bytes has already failed before
+any pixel is compared.
+
+The software side of all of this is `design/contracts/SW.STREAM.md`.
+
 ## 6. Interface summary (frozen in zhao_pkg.sv)
 
 - `zhao_guard_req_t` / `zhao_guard_rsp_t` — client→guard request
