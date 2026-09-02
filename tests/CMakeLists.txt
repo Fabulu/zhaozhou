@@ -2195,6 +2195,20 @@ verilate(test_terrain_residency_directed
 add_test(NAME terrain_residency_directed COMMAND test_terrain_residency_directed)
 set_tests_properties(terrain_residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# Residency v2 -- the SET-ASSOCIATIVE directory of ruling T9/T10. Beside the
+# prototype, not replacing it: the prototype is what this is measured against.
+# Two of these cases cannot be written against the direct map at all, because
+# the thing they check is a distinction it does not have -- two islands at the
+# same local coordinates, and the journal writeback barrier.
+add_executable(test_terrain_residency_v2_directed terrain/terrain_residency_v2_directed.cpp)
+target_link_libraries(test_terrain_residency_v2_directed PRIVATE zhao_harness)
+verilate(test_terrain_residency_v2_directed
+  PREFIX Vzhao_terrain_residency_v2
+  TOP_MODULE zhao_terrain_residency_v2
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_residency_v2.sv)
+add_test(NAME terrain_residency_v2_directed COMMAND test_terrain_residency_v2_directed)
+set_tests_properties(terrain_residency_v2_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # Randomized traversal against an INDEPENDENT contract model. The property
 # worth the file is dirty eviction: a dirty page displaced without being
 # flagged means permanent scars silently heal, and no single-frame test
