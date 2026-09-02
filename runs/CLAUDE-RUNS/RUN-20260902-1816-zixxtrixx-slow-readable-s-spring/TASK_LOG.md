@@ -256,3 +256,56 @@ Rebuild the Zixxtrixx jump/salto spring per Owner Direction 23: four slow readab
   head-x sliding along the horizontal neck), NOT motion - each verified by
   eye on the actual frame pairs. Honest caveat for the reviewer: judge the
   head's motion from the committed zoom sheets, not from the head-x column.
+
+### Stage 7 COMPLETE - the life layer, judged by eye (zero edits)
+
+- Gen-13's restored amplitudes (kSpringWobble 750 / kSpringWobble2 520,
+  periods 23/51 keys = 46/102 frames, both clear A6's 12-frame floor by 4x)
+  were judged against the slow primary at native resolution: beat 1 carries a
+  gentle visible sway, the dwell breathes, and the HOLD VISIBLY QUIVERS
+  (~2 %/frame continuously, 1261 pixels changed across 8 hold frames, same
+  silhouette - held-alive, not frozen, not jittery). Recon 1's crayon-grain
+  diagnosis confirmed: the same amplitudes that vanished against a 71 deg/key
+  primary read as life against a <=6 deg/key one. No amplitude change needed.
+- Hold drift gate: 59/0 mm over the 8-key hold vs 70 allowed - the probe's
+  window derives from the timeline (the earlier "2 keys" label was the old
+  schedule's own count). Support drift 0: the plant never slides.
+- No per-station lag added to the rise (Gen-13's existing arm-domain chain
+  lag left as restored; Recon 3 J6 proved it innocent).
+
+### IMPLEMENTER CLOSE-OUT
+
+Done and verified: stages 0-7. NOT done, per the brief: stage 8's full
+22-subject bank re-render, encode, archive bump and publish - those belong
+to the reviewer/QA flow.
+
+For the reviewer, the honest deltas from the plan:
+1. The arming is 72 keys (160 frames ground time), not the plan's 64/144 -
+   chosen inside the plan's own 150-180 target band after measuring beat 2's
+   4714 mm shape-arc; beat split is 4/32/4/32/8. kAtkRetimeShift +62,
+   kAttackKeys 302, jump-one 285 frames.
+2. Landing pixels differ from live: the D22 landing-press commit died with
+   the revert (plan predicted frames 45+ identical; flight IS byte-identical,
+   the landing is Gen-13's own plus life-wave phase in the longer clip).
+3. Probe representative sample keys moved 1/4 -> 20/50 (settle-in made the
+   old ones degenerate for the authored-vs-generic tripwire).
+4. Knot re-spacing measured and DECLINED (5% bias, inside noise) - the
+   Gen-13 kSpringArmAbsorbAt=220 stands.
+5. kZixxSpringDiagnosticKeys and a probe-side 17,29 slice literal were
+   additional un-derived literals not on the plan's landmine list; both fixed.
+6. A0's head-x-jerk and area-jerk columns fail their thresholds ONLY through
+   instrument noise (eye-anchored head-x slides along the horizontal neck;
+   thin-fin segmentation flicker) - each verified against the actual frames
+   at zoom. Centroid (1.0/0.5 px) and head-y (2.5 px) are at balance level.
+   The reviewer should judge smoothness from the committed sheets + webms.
+7. kSaltoSpringEntryEndKey now derives from kSpringBecomeSEndKey.
+
+What the reviewer should look at, in motion, beside the balance clip:
+- do the four beats read in order (they segment cleanly on the plot);
+- does beat 1 read as the whole body BECOMING the S (by the tables, every
+  station moves monotonically into the assembled S; the rear gathers);
+- head slightly back and slowly down in the side view (9.8 px back, 11.7 px
+  down measured fixed-side; the tracking camera hides some of this in
+  jump-one - the spring-side webm is the honest view);
+- the hold's quiver amplitude - my eye says life, a second eye should agree;
+- beat 2's pace at native res (p90 5.5 %/f, half-life never under 16).
