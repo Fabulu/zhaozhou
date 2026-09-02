@@ -1,0 +1,185 @@
+<title>Zhaozhou — what is still unspecced</title>
+<h1>Zhaozhou: every piece of hardware that is not buildable, and exactly why</h1>
+
+<p><b>Audited 2026-09-02</b> against <code>design/contracts/</code> (92 contracts),
+<code>design/blocks.yml</code>, and the briefs in <code>reports/</code>.</p>
+
+<p><b>The headline is better than the last audit said.</b>
+<code>reports/CONSOLE_REMAINING.md</code> (2026-08-31) reported "seven contracts
+are stubs with 15 TODO sections each". That is <b>no longer true</b> — those
+sections were since filled in, or explicitly closed by the 2026-08-31 owner
+rulings. Re-reading them today, <b>zero contracts are unwritten by accident.</b></p>
+
+<p>What remains is four different kinds of blocked, and only two of them need
+anything from you.</p>
+
+<hr>
+
+<h2>A. Nothing needed — deliberately deferred by your own rulings</h2>
+
+<p>These read as gaps in the ledger but are closed decisions. Each contract says
+so in its own text. <b>No action unless you want to revive them.</b></p>
+
+<ul>
+<li><code>INPUT.SNAC</code> — deferred, ruling 2026-08-31 §6.6 (optional)</li>
+<li><code>GEOM.WARP</code> — deliberately unwritten</li>
+<li><code>POST.ECHO</code> — deliberately unwritten</li>
+<li><code>GEOM.VDECODE</code> — blocked by owner ruling 2026-08-31</li>
+<li><code>MEASURE.HISTOGRAM</code> — a <i>documented refusal</i>, not a gap (see D3)</li>
+</ul>
+
+<hr>
+
+<h2>B. Contracts are written — blocked on GAME BEHAVIOUR, not on specification</h2>
+
+<p>Nine blocks have substantially complete contracts (150–223 lines each: packet
+layouts, Q formats, counters, test plans). They are blocked by your standing
+direction:</p>
+
+<blockquote>"Do NOT invent game behaviour for the particle-simulation,
+compositor or 2D blocks."</blockquote>
+
+<p><code>PART.STATE</code>, <code>PART.UPDATE</code>, <code>PART.COLLIDE</code>,
+<code>PART.SPAWN</code>, <code>PART.LADDER</code>, <code>TWOD.PLANE</code>,
+<code>TWOD.SPRITE</code>, <code>POST.GATHER</code>, <code>POST.COMPOSITE</code></p>
+
+<p><b>What is needed is a design decision, not a contract.</b> Specifically:</p>
+
+<ol>
+<li>What does a particle <i>do</i>? Forces, lifetime, collision response against
+terrain and creatures, and what happens at the population ceiling — does it
+refuse to spawn, or evict the oldest?</li>
+<li>What is the 2D plane <i>for</i>? HUD only, or gameplay elements? Does it
+depth-test against the 3D scene or composite strictly on top?</li>
+<li>What does the compositor combine, in what order, and does anything read back
+the framebuffer?</li>
+</ol>
+
+<p>Answer those three and all nine unblock together.</p>
+
+<hr>
+
+<h2>C. Buildable today, no ruling needed</h2>
+
+<ul>
+<li><code>FORGE.PRIM</code> — contract complete (197 lines). Ribbons, tubes,
+shells, rings, chains, shard bursts, billboards, spline walls, cones with
+screen-error LOD.</li>
+<li><code>GEOM.LOOM</code> — contract complete (264 lines). <b>One caution:</b>
+its purpose line lists <i>gait</i> and <i>formations</i>, which are behaviours
+the particle rule above covers. Confirm those are transform-graph evaluation and
+not simulation, or it inherits B's block.</li>
+<li><code>GEOM.MESHFETCH</code> — contract complete (390 lines) with a real cull
+ruling and latency table. Two of its three thirds already exist
+(<code>zhao_geom_lod</code>, <code>zhao_geom_cull</code>); the third is a
+descriptor fetch.</li>
+</ul>
+
+<hr>
+
+<h2>D. THE ACTUAL OPEN QUESTIONS — these are what I need from you</h2>
+
+<h3>D1. Depth quantisation: <code>wmin</code>, <code>wmax</code>, <code>scale</code></h3>
+<p>Source: <code>reports/OPEN-SPEC-DEPTH-QUANTISATION.md</code>.
+Blocks GEOM.PROJECT's attribute carry — the renderer's last step-6 piece.</p>
+<p><b>These three numbers are the depth range of the console.</b> Needed:</p>
+<ol>
+<li><b><code>wmin</code></b> — fx16 view-space forward distance. The near plane.</li>
+<li><b><code>wmax</code></b> — fx16. The far plane. Should be at least the map
+diagonal if distant terrain is to depth-test correctly.</li>
+<li><b><code>scale</code></b> and the shift <code>rescale</code> uses, so that
+<code>w == wmin</code> gives exactly <code>0xFFFFFF</code> and <code>w == wmax</code>
+gives a sensible non-zero floor.</li>
+</ol>
+<p>The third is constrained by the first two, so in practice this is two numbers
+and an arithmetic check.</p>
+
+<h3>D2. The kMesh budget — how many creatures at full mesh at once?</h3>
+<p>Source: <code>reports/BINNER_CAPACITY_FOR_8KM_MAPS.md</code> and my addendum
+2026-09-02.</p>
+<p><b>This one is now much cheaper than the old report says.</b> That report
+concluded a frame-resident binner arena "cannot be built" (49% of the device's
+M10K for one army). That arithmetic assumed every creature at full mesh. The
+shipped LOD ladder makes that impossible — <code>kSplat</code> and
+<code>kGlint</code> emit a billboard quad, <b>two triangles, not ninety-six</b>.
+Measured through the shipped <code>zref::Binner</code>, 256 creatures:</p>
+<pre>
+  all kMesh (the old assumption)   24,576 tris   30,609 refs
+  8 mesh / 24 micro / 96 splat / 128 glint    1,792 tris    2,259 refs
+  16 / 32 / 96 / 112                          2,720 tris    3,426 refs
+</pre>
+<p>which makes a frame-resident arena <b>16–21% of M10K</b>, not 49%. So a bigger
+constant <i>will</i> do — provided the governor bounds how many creatures sit at
+kMesh. <b>The single number I need is that budget:</b></p>
+<pre>
+   8 near creatures at full mesh   1,792 tris    ~5% M10K
+  16                               2,720         ~7%
+  32                               4,928        ~12%
+  64                               7,936        ~19%
+</pre>
+<p><i>Note: a giant near the camera is unaffected by LOD and needs 25,704
+references on its own. Reference capacity must be sized for it regardless.</i></p>
+
+<h3>D3. MEASURE.HISTOGRAM — four laws, or leave it refused</h3>
+<p>Its contract is a <i>reasoned refusal</i> and I agree with it: "a small block
+built on four invented laws is worse than no block, because the inventions
+become ratified by being built." To revive it you would have to rule on:</p>
+<ol>
+<li><b>The error metric</b> — what number goes in a bucket? Projected screen
+error, per-fragment residual, or per-meshlet deviation? No spec names one, no Q
+format is declared, and no block currently produces one.</li>
+<li><b>The bucket boundaries</b> — how many, linear or logarithmic, over what
+range?</li>
+<li><b>The cutoff rule</b> — "a cutoff bucket is selected" is the entire current
+specification. Selected how, against what budget, with what hysteresis?</li>
+<li><b>A Version-2 input</b> to MEASURE.GOVERNOR, which was just built to
+Version 1.</li>
+</ol>
+<p><b>My recommendation: leave it refused.</b> It is the only block in the tree
+whose absence is itself documented reasoning.</p>
+
+<h3>D4. What does <code>276,480</code> actually count?</h3>
+<p>Source: <code>reports/PER_PIXEL_BUDGET.md</code>. Decides whether two
+per-pixel blocks need replicating at all — i.e. whether real work is being sized
+against a number that means something different from what it is used for.</p>
+
+<h3>D5. Three-sample material recipes — confirm the TMU is sized for it</h3>
+<p><code>MATERIAL_ARCHITECTURE.md</code> ratifies bounded recipes of up to three
+samples and names a <code>sacrifice_terrain_3sample</code> profile at
+<b>1,094,600 samples a frame</b>. The rearchitecture brief sizes the TMU against
+<b>541,640</b> — which is the <i>one-sample</i> workload. At 3-sample terrain
+only <b>238,733 samples</b> remain inside the 20% reserve, and that must cover
+creatures, objects, cache misses, queue bubbles <i>and</i> integration cost.</p>
+<p><b>Confirm:</b> is three-sample terrain a shipping target, or a capability
+held in reserve behind the degradation ladder?</p>
+
+<hr>
+
+<h2>E. The 8 km terrain world — separate document, in progress</h2>
+
+<p><code>reports/Missingterrain</code> is the brief and it is excellent. Its own
+summary: <i>"The terrain engine's organs exist. The circulatory system that
+feeds them an island does not."</i></p>
+
+<p>I have started building that layer — the deterministic 1,024-slot residency
+directory with page generations, dirty tracking and stale-handle protection is
+written and lint-clean. A full architecture document for the remaining world
+layer (island directory, prefetch, dirty writeback, the 256-patch composed-height
+cache, and the command path into the terrain pipeline) is being produced
+separately, and its open questions will follow in a second brief.</p>
+
+<hr>
+
+<h2>Summary of what I need</h2>
+
+<ol>
+<li><b>Three particle/2D/compositor behaviour answers</b> (section B) — unblocks
+nine blocks at once.</li>
+<li><b><code>wmin</code>, <code>wmax</code>, <code>scale</code></b> (D1) —
+unblocks the renderer's last piece.</li>
+<li><b>The kMesh budget: 8, 16, 32 or 64</b> (D2) — unblocks the binner arena,
+which is now affordable.</li>
+<li><b>Is three-sample terrain a shipping target?</b> (D5).</li>
+<li><b>What 276,480 counts</b> (D4).</li>
+<li><i>Optional:</i> revive MEASURE.HISTOGRAM (D3) — recommend not.</li>
+</ol>
