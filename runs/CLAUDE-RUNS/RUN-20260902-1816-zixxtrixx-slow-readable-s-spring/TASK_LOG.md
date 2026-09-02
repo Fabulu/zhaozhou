@@ -62,3 +62,20 @@ Rebuild the Zixxtrixx jump/salto spring per Owner Direction 23: four slow readab
 - Implementer executes PLAN.md stages 0-8
 - Reviewer: eye pass beside the balance clip + diff review of the provable no-op stages
 - QA: criteria table on the encoded webms, archive/CSS bump, production serving check
+
+### 2026-09-02 (implementer) — Stage 0: scaffold and baseline
+
+- SPEC_v1.md filled (objective, scope, constraints, don't-retry list)
+- Committed `tools/reel/zixx_legibility.py` (comparison-side legibility/smoothness
+  probe per Recon 5 §8: colour segmentation — NEVER a median plate — CSV, jerk
+  table, beat segmentation, four-panel plots, contact/zoom/overlay sheets).
+  Two bugs found while calibrating: reel .rgb frames carry an 8-byte w/h header,
+  and int16 luminance overflow selected the whole frame as mask.
+- Built cel + probe at HEAD via build-direct.sh (one target per call). Probe GREEN.
+- Rendered baselines (ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross):
+  jump-one 161f crc 0xF7020B2F, salto-dummy 231f crc 0xE3C23422, balance 493f crc 0x7FC8F62E
+- Baseline numbers REPRODUCE the recon instruments (calibration proof):
+  jump-one arming (f1-50): half-life med 5 (Recon 5: 5), shape p90 58.6 (~56),
+  solidity max 0.82 (~0.85), jerk 22.7/31.3/1334 (Recon 2: 23/31/1168), closure min 0.09
+  balance (f75-130): jerk 1.2/3.4/43 (Recon 2: 1.5/4.0/53), half-life med 19
+- Evidence: evidence/stage0/ (CSVs, jerk, beats, panels, contact/zoom/overlay sheets)
