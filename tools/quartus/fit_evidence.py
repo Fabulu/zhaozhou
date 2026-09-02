@@ -200,12 +200,14 @@ def main(argv):
                          % (len(unlocated), len(paths)))
         return 2
 
-    starts, owners = {}, {}
+    starts, owners, worst_by = {}, {}, {}
     for p in paths:
         p["kind"] = kind_of(p["loc"])
         starts[p["kind"]] = starts.get(p["kind"], 0) + 1
         b = block_of(p["to"])
         owners[b] = owners.get(b, 0) + 1
+        if b not in worst_by or p["slack"] < worst_by[b]:
+            worst_by[b] = p["slack"]
 
     m10k = [p for p in paths if p["kind"] == "m10k"]
     dsp = [p for p in paths if p["kind"] == "dsp"]
@@ -230,9 +232,22 @@ def main(argv):
           "# after the Fmax.", ""] +
          ["%-12s %4d" % (k, n) for k, n in sorted(starts.items(), key=lambda x: -x[1])])
 
+    # RANKED BY WORST SLACK, NOT BY COUNT. Count is what the eye reaches for
+    # and it is the wrong ranking: in the seed-3 fit Early-Z owned 78 of 100
+    # paths at -0.258 while zhao_vram_arbiter owned FOUR at -0.425. Early-Z
+    # looked like the limiter by a factor of twenty and had 0.167 ns of slack
+    # in hand -- fixing it would have bought nothing at all. The block that
+    # sets Fmax is the one holding the worst path, however few it owns.
     dump("owners.txt",
-         ["# worst-%d setup paths by DESTINATION block" % len(paths), ""] +
-         ["%-28s %4d" % (b, n) for b, n in sorted(owners.items(), key=lambda x: -x[1])])
+         ["# worst-%d setup paths by DESTINATION block," % len(paths),
+          "# RANKED BY WORST SLACK -- count is a decoy. The block holding the",
+          "# worst path sets Fmax however few paths it owns; a block owning",
+          "# most of the list with slack in hand is not the limiter.",
+          "",
+          "# %-26s %6s  %5s" % ("block", "worst", "paths"),
+          ""] +
+         ["%-28s %6.3f  %5d" % (b, worst_by[b], owners[b])
+          for b in sorted(owners, key=lambda x: worst_by[x])])
 
     dump("m10k_launched.txt",
          listing(["# paths launching at an M10K output.",
@@ -266,6 +281,7 @@ def main(argv):
                  "worst_slack_ns": worst,
                  "startpoint_types": starts,
                  "owners": owners,
+                 "worst_slack_by_owner": worst_by,
                  "m10k_launched": len(m10k),
                  "dsp_launched": len(dsp),
                  "quartus": prov.get("quartus"),
@@ -279,6 +295,9 @@ def main(argv):
     print("startpoints: " + ", ".join("%s=%d" % kv for kv in
                                       sorted(starts.items(), key=lambda x: -x[1])))
     print("M10K-launched: %d   DSP-launched: %d" % (len(m10k), len(dsp)))
+    lim = sorted(owners, key=lambda x: worst_by[x])[:3]
+    print("limiter: " + ", ".join("%s %.3f(%d)" % (b, worst_by[b], owners[b])
+                                  for b in lim))
     print("quartus %s  device %s  seed %s  sources %d"
           % (prov.get("quartus", "?"), prov.get("device", "?"),
              prov.get("seed", "?"), len(prov["sources"])))

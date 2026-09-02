@@ -9,13 +9,22 @@ One commit (`aa9aba2`, the scanout line-base change), fitted twice. Identical
 sources -- verified by the per-file sha256 manifest, not assumed -- identical
 device, QSF and SDC. The only difference is `SEED`:
 
-| seed | gpu_clk Fmax | worst slack | top path owner |
+| seed | gpu_clk Fmax | worst slack | dominant owner by count |
 | ---: | ---: | ---: | --- |
 | 1 | 91.31 MHz | -0.952 ns | EDGEWALK 49, mem_guard 21, Early-Z 19 |
-| 2 | **95.70 MHz** | -0.449 ns | **Early-Z 96**, cmd_dma 2, tilestore 2 |
+| 2 | 95.70 MHz | -0.449 ns | Early-Z 96 |
+| 3 | **95.92 MHz** | -0.425 ns | Early-Z 78, cmd_dma 18 |
 
-**Spread: 4.39 MHz / 0.503 ns.** And that is from two samples, so it is a LOWER
-BOUND on the true variance, not an estimate of it.
+**Spread 4.61 MHz / 0.527 ns across three samples.**
+
+Seeds 2 and 3 agree to within **0.22 MHz**; seed 1 sits 4.4 MHz below both.
+So the distribution is not symmetric noise around a mean -- it is a fairly
+repeatable result with an occasional bad draw. The commit's honest Fmax is
+**~95.8 MHz**, and round 15's 91.31 was one unlucky placement that I reported
+as a regression.
+
+Two samples would have been enough to know round 15 was a draw. Three were
+needed to know WHICH value is typical.
 
 ## What this invalidates
 
@@ -57,7 +66,19 @@ at seed 2 puts Early-Z on 96 of 100 paths and EDGEWALK nowhere.
 3. **Prefer structural evidence to the headline.** Owner tables move with
    placement; a path count that collapses because its structure was removed
    does not.
-4. **`SEED 1` stays pinned in the committed QSF.** Comparability across rounds
+4. **Rank owners by WORST SLACK, never by path count.** Seed 3 makes the case
+   on its own:
+
+       zhao_vram_arbiter    -0.425      4 paths   <- sets Fmax
+       zhao_cmd_dma         -0.349     18
+       zhao_raster_earlyz   -0.258     78 paths   <- 0.167 ns in hand
+
+   Early-Z owned 78 of 100 and was not the limiter at all; fixing it would
+   have bought nothing. `owners.txt` ranked by count for fifteen rounds and
+   pointed at the wrong block. It now ranks by worst slack and prints a
+   `limiter:` line. Count is a decoy -- the same failure as before, a number
+   that looks like evidence while measuring the wrong thing.
+5. **`SEED 1` stays pinned in the committed QSF.** Comparability across rounds
    is still worth having -- it just is not the same thing as accuracy.
    `run_shell_fit.ps1 -Seed N` overrides the staged copy only.
 
