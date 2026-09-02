@@ -55,7 +55,13 @@ module zhao_raster_texjoin_v2 #(
     parameter int unsigned DEPTH = 16,
     parameter int unsigned CTXW  = 64,
     parameter int unsigned BINDW = 8,
-    parameter int unsigned LODW  = 4
+    parameter int unsigned LODW  = 4,
+    // GENERATION WIDTH. Was 2. Ruled X5: a 2-bit generation wraps after four
+    // reuses of a slot, so a return delayed longer than four reuses matches the
+    // WRONG fragment and is silently accepted as correct -- worse than the
+    // stale return it was there to catch. 8 bits is the ruled width; it costs
+    // 6 flops a slot.
+    parameter int unsigned GENW  = 8
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -84,7 +90,7 @@ module zhao_raster_texjoin_v2 #(
     // through the TMU as its opaque src_id and echoed back untouched.
     output var logic [$clog2(DEPTH)-1:0] tmu_slot_o,
     output var logic [1:0]             tmu_sidx_o,
-    output var logic [1:0]             tmu_gen_o,
+    output var logic [GENW-1:0]             tmu_gen_o,
 
     input  var logic                   tmu_rvalid_i,
     output var logic                   tmu_rready_o,
@@ -92,7 +98,7 @@ module zhao_raster_texjoin_v2 #(
     input  var logic [7:0]             tmu_a_i,
     input  var logic [$clog2(DEPTH)-1:0] tmu_rslot_i,
     input  var logic [1:0]             tmu_rsidx_i,
-    input  var logic [1:0]             tmu_rgen_i,
+    input  var logic [GENW-1:0]             tmu_rgen_i,
 
     // ---- AUX, issued from the fragment context and NOT from perspective ------
     // v1's test modelled AUX as a second sampler taking perspective-correct U/V.
@@ -102,13 +108,13 @@ module zhao_raster_texjoin_v2 #(
     input  var logic                   aux_ready_i,
     output var logic [CTXW-1:0]        aux_ctx_o,
     output var logic [$clog2(DEPTH)-1:0] aux_slot_o,
-    output var logic [1:0]             aux_gen_o,
+    output var logic [GENW-1:0]             aux_gen_o,
     input  var logic                   aux_rvalid_i,
     output var logic                   aux_rready_o,
     input  var logic [23:0]            aux_rgb_i,
     input  var logic [7:0]             aux_a_i,
     input  var logic [$clog2(DEPTH)-1:0] aux_rslot_i,
-    input  var logic [1:0]             aux_rgen_i,
+    input  var logic [GENW-1:0]             aux_rgen_i,
 
     // ---- the joined fragment, IN ALLOCATION ORDER ---------------------------
     output var logic                   o_valid_o,
@@ -144,7 +150,7 @@ module zhao_raster_texjoin_v2 #(
 
   // ------------------------------------------------------------- entries ----
   logic            val_q  [DEPTH];
-  logic [1:0]      gen_q  [DEPTH];
+  logic [GENW-1:0] gen_q  [DEPTH];
   logic [2:0]      req_q  [DEPTH];   // sample_required_mask
   logic [2:0]      arr_q  [DEPTH];   // sample_arrived_mask
   logic [2:0]      iss_q  [DEPTH];   // already handed to the TMU
@@ -290,7 +296,7 @@ module zhao_raster_texjoin_v2 #(
       id_error_o  <= 1'b0;
       for (int i = 0; i < DEPTH; i++) begin
         val_q[i]    <= 1'b0;
-        gen_q[i]    <= 2'd0;
+        gen_q[i]    <= '0;
         req_q[i]    <= 3'd0;
         arr_q[i]    <= 3'd0;
         iss_q[i]    <= 3'd0;
@@ -304,7 +310,7 @@ module zhao_raster_texjoin_v2 #(
       // ---- allocate -------------------------------------------------------
       if (f_valid_i && f_ready_o) begin
         val_q[tail_q]    <= 1'b1;
-        gen_q[tail_q]    <= gen_q[tail_q] + 2'd1;   // {slot, generation}
+        gen_q[tail_q]    <= gen_q[tail_q] + GENW'(1);   // {slot, generation}
         req_q[tail_q]    <= (3'b111 >> (3 - f_sample_count_i)) & 3'b111;
         arr_q[tail_q]    <= 3'd0;
         iss_q[tail_q]    <= 3'd0;
@@ -321,7 +327,6 @@ module zhao_raster_texjoin_v2 #(
           slod_q[tail_q][j]  <= f_lod_i[j];
         end
         tail_q     <= (tail_q == SW'(DEPTH - 1)) ? '0 : tail_q + SW'(1);
-        free_cnt_q <= free_cnt_q - 1'b1;
         fragments_o <= fragments_o + 32'd1;
       end
 
@@ -360,7 +365,26 @@ module zhao_raster_texjoin_v2 #(
       if (head_done && o_ready_i) begin
         val_q[head_q] <= 1'b0;
         head_q     <= (head_q == SW'(DEPTH - 1)) ? '0 : head_q + SW'(1);
-        free_cnt_q <= free_cnt_q + 1'b1;
+      end
+
+      // ---- free count: ONE assignment, both directions ---------------------
+      // Ruled defect. The accept branch decremented and the retire branch
+      // incremented with SEPARATE nonblocking assignments to the same variable
+      // in the same always_ff. On a cycle that does both -- which is the steady
+      // state of a full elastic queue, not an edge case -- only the LAST
+      // assignment lands, so the count drifts up by one per such cycle and
+      // f_ready_o eventually admits fragments into occupied slots.
+      //
+      // This is the SAME fault already found and fixed in
+      // zhao_raster_perspuv_svc.sv, reproduced here in the next block written.
+      // The pattern, not the instance, is the thing to remember: any counter
+      // moved by two branches of one always_ff needs a single assignment fed by
+      // both conditions.
+      begin
+        automatic logic acc = f_valid_i && f_ready_o;
+        automatic logic ret = head_done && o_ready_i;
+        if (acc && !ret)      free_cnt_q <= free_cnt_q - 1'b1;
+        else if (!acc && ret) free_cnt_q <= free_cnt_q + 1'b1;
       end
     end
   end

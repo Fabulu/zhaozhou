@@ -287,5 +287,106 @@ int main(int argc, char** argv) {
                 (top.o_rgb_o == 0xABCDEFu && top.o_a_o == 0x42) ? 1 : 0);
   }
 
+  // --------------------------------------------------------------- 7 ---
+  // STEADY STATE: ACCEPT AND RETIRE ON THE SAME CLOCK, FOR A LONG TIME.
+  //
+  // This is the case the first six miss, and it is the one the owner's review
+  // named. Cases 1-6 accept a batch, then drain it. A full elastic queue does
+  // BOTH ON EVERY CLOCK, and the free counter was moved by two separate
+  // nonblocking assignments in one always_ff -- so on such a cycle only the
+  // last one landed and the count drifted UPWARD by one each time.
+  //
+  // The drift is invisible for a while. f_ready_o stays high past DEPTH, the
+  // block admits a fragment into a slot that is still live, and the symptom is
+  // an out-of-order or duplicated ctx hundreds of clocks after the fault. So
+  // the check is not "does it look right" -- it is: outstanding never exceeds
+  // DEPTH, every ctx comes out exactly once, in allocation order.
+  //
+  // Reverting the counter fix must make this FAIL. It does.
+  {
+    reset(top);
+    struct Ret { int slot, sidx, gen, due; };
+    std::deque<Ret> rets;
+    std::deque<uint64_t> expect;
+    uint64_t next_ctx = 0x9000;
+    int accepted = 0, retired = 0, outstanding = 0, worst_outstanding = 0;
+    int order_errors = 0, both_clocks = 0;
+    uint32_t rs = 0xC0FFEEu;
+    auto rnd = [&]() { rs = rs * 1664525u + 1013904223u; return rs >> 9; };
+
+    for (int c = 0; c < 4000; ++c) {
+      // offer a 1-sample PASSTHRU fragment every cycle
+      top.f_valid_i = 1;
+      top.f_sample_count_i = 1;
+      for (int j = 0; j < 3; ++j) {
+        top.f_u_i[j] = 0; top.f_v_i[j] = 0;
+        top.f_binding_i[j] = 1; top.f_lod_i[j] = 0;
+      }
+      top.f_recipe_i = 0;
+      top.f_ctx_i = next_ctx;
+      top.f_aux_i = 0;
+      top.f_uv_sat_i = 0;
+      top.tmu_ready_i = 1;
+      top.aux_ready_i = 1;
+      top.aux_rvalid_i = 0;
+      // stall the output sometimes, so the queue actually fills rather than
+      // running empty -- an empty queue never does both on one clock
+      top.o_ready_i = (rnd() % 4u) != 0u;
+
+      // a TMU return that came due
+      top.tmu_rvalid_i = 0;
+      if (!rets.empty() && rets.front().due <= c) {
+        const Ret r = rets.front();
+        top.tmu_rvalid_i = 1;
+        top.tmu_rslot_i = r.slot;
+        top.tmu_rsidx_i = r.sidx;
+        top.tmu_rgen_i = r.gen;
+        top.tmu_rgb_i = 0x101010u;
+        top.tmu_a_i = 0xFF;
+        rets.pop_front();
+      }
+
+      top.eval();
+      const bool acc = top.f_ready_o != 0;
+      const bool ret = top.o_valid_o != 0 && top.o_ready_i != 0;
+      if (acc && ret) ++both_clocks;
+      if (top.tmu_valid_o && top.tmu_ready_i)
+        rets.push_back({static_cast<int>(top.tmu_slot_o),
+                        static_cast<int>(top.tmu_sidx_o),
+                        static_cast<int>(top.tmu_gen_o),
+                        c + 1 + static_cast<int>(rnd() % 12u)});
+      if (ret) {
+        if (expect.empty() || expect.front() != top.o_ctx_o) ++order_errors;
+        else expect.pop_front();
+        ++retired;
+        --outstanding;
+      }
+      if (acc) {
+        expect.push_back(next_ctx);
+        ++next_ctx;
+        ++accepted;
+        ++outstanding;
+        if (outstanding > worst_outstanding) worst_outstanding = outstanding;
+      }
+      zhao::tick(top);
+    }
+
+    zhao::check(both_clocks > 200,
+                "the soak really did accept and retire on the same clock, often",
+                1, both_clocks > 200 ? 1 : 0);
+    zhao::check(worst_outstanding <= kDepth,
+                "outstanding fragments NEVER exceed DEPTH -- the free count does "
+                "not drift when accept and retire coincide",
+                kDepth, worst_outstanding);
+    zhao::check(order_errors == 0,
+                "and every fragment retires exactly once, in allocation order", 0,
+                order_errors);
+    zhao::check(top.id_errors_o == 0,
+                "with no return ever landing on a recycled slot", 0,
+                static_cast<int>(top.id_errors_o));
+    std::printf("  soak: %d accepted, %d retired, %d same-clock, worst outstanding %d\n",
+                accepted, retired, both_clocks, worst_outstanding);
+  }
+
   return zhao::report_and_exit("raster_texjoin_v2_directed");
 }
