@@ -1,0 +1,5 @@
+JUMP-ONE: gen13 161 frames vs HEAD 293 at offset +132
+   byte-identical: 74 frames -> [44, 46, 47, 48, 49, 50]...[155, 156, 157, 158, 159, 160]
+   changed: 87 frames, worst 16661 px at gen13 f3; top5 [16661, 16643, 16575, 16572, 16543]
+byte-identical gen13 frame ranges: 44, 46-108, 110, 152-160
+total 74

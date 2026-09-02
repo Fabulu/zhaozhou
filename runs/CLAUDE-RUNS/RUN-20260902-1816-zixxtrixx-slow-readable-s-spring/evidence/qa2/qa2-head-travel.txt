@@ -1,0 +1,2 @@
+PREV: nose f12 243 f168 231  back -12 px | min gap 109 px | max FORWARD excursion past f12 +1 px | rearmost range 109..132
+HEAD: nose f12 243 f168 231  back -12 px | min gap 122 px | max FORWARD excursion past f12 +0 px | rearmost range 107..111

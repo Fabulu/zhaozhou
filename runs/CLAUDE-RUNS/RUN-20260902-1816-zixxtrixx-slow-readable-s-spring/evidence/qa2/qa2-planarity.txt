@@ -1,0 +1,21 @@
+TOP VIEW lateral (perpendicular-to-long-axis) spread, creature only
+  PREV 48310d18
+   f  0  lateral span  35.22 px   sd  7.94   area  2269
+   f 12  lateral span  35.10 px   sd  7.92   area  2277
+   f 36  lateral span  34.72 px   sd  7.93   area  2194
+   f 60  lateral span  35.00 px   sd  8.19   area  2113
+   f 72  lateral span  35.22 px   sd  8.37   area  2103
+   f 96  lateral span  34.52 px   sd  8.27   area  2080
+   f120  lateral span  33.11 px   sd  7.76   area  2007
+   f144  lateral span  32.21 px   sd  7.21   area  2004
+   f168  lateral span  31.44 px   sd  7.27   area  1939
+  HEAD d5949320
+   f  0  lateral span  35.22 px   sd  7.94   area  2269
+   f 12  lateral span  35.10 px   sd  7.91   area  2281
+   f 36  lateral span  34.35 px   sd  7.64   area  2199
+   f 60  lateral span  34.59 px   sd  7.66   area  2118
+   f 72  lateral span  34.82 px   sd  7.79   area  2097
+   f 96  lateral span  34.16 px   sd  7.58   area  2080
+   f120  lateral span  33.22 px   sd  7.26   area  2047
+   f144  lateral span  32.27 px   sd  7.00   area  2001
+   f168  lateral span  31.88 px   sd  6.97   area  1978

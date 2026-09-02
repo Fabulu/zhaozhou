@@ -1,0 +1,24 @@
+spring-side HEAD: median 577  top local spikes (ratio, frame, px, local-median):
+     2.84x  f 15   1243 vs 438
+     1.78x  f 14    545 vs 307
+     1.63x  f 12    551 vs 338
+     1.42x  f 23    688 vs 484
+     1.39x  f  8    441 vs 318
+     1.34x  f  6    358 vs 268
+    f13-f18: [np.int64(272), np.int64(545), np.int64(1243), np.int64(242), np.int64(533), np.int64(679)]
+spring-side PREV: median 652  top local spikes (ratio, frame, px, local-median):
+     2.65x  f 15   1216 vs 458
+     1.37x  f 14    508 vs 372
+     1.37x  f 18    724 vs 530
+     1.36x  f  8    441 vs 324
+     1.36x  f 12    490 vs 360
+     1.33x  f  6    358 vs 270
+    f13-f18: [np.int64(290), np.int64(508), np.int64(1216), np.int64(316), np.int64(534), np.int64(724)]
+balance: median 1231  top local spikes (ratio, frame, px, local-median):
+     3.28x  f 23   1688 vs 515
+     3.11x  f 15   1160 vs 374
+     2.92x  f 24   1675 vs 574
+     1.42x  f 26    849 vs 597
+     1.39x  f 21    607 vs 438
+     1.18x  f 54    745 vs 632
+    f13-f18: [np.int64(370), np.int64(372), np.int64(1160), np.int64(325), np.int64(392), np.int64(375)]

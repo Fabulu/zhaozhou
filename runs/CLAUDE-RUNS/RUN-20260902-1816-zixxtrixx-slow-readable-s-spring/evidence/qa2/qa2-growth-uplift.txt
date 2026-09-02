@@ -1,0 +1,10 @@
+UPLIFT AREA = silhouette pixels ABOVE the f12 rest top-edge, per band (px)
+  a rising number IS the shape growing there; flat IS "it never grows"
+== PREV 48310d18
+  tail x105-169    f12:0 f24:69 f36:257 f48:364 f60:419 f72:443 f84:450 f96:451 f108:478 f120:455 f132:409 f144:384 f168:399
+  mid x170-209     f12:0 f24:1 f36:11 f48:24 f60:31 f72:80 f84:78 f96:52 f108:47 f120:83 f132:100 f144:98 f168:129
+  front x210-264   f12:0 f24:0 f36:0 f48:0 f60:10 f72:4 f84:2 f96:0 f108:0 f120:0 f132:0 f144:0 f168:0
+== HEAD d5949320
+  tail x105-169    f12:0 f24:0 f36:0 f48:0 f60:0 f72:0 f84:39 f96:9 f108:0 f120:5 f132:20 f144:15 f168:23
+  mid x170-209     f12:0 f24:1 f36:26 f48:66 f60:130 f72:195 f84:188 f96:184 f108:126 f120:108 f132:106 f144:101 f168:132
+  front x210-264   f12:0 f24:0 f36:0 f48:0 f60:6 f72:4 f84:0 f96:0 f108:0 f120:0 f132:0 f144:0 f168:0

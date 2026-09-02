@@ -1,0 +1,26 @@
+QA region instrument -- balance-head  (493 frames, ground 0-168)
+
+RAW CHANGED PIXELS PER FRAME (no segmentation):
+  clip median 1256/f   p90 2029/f   max 3385
+  byte-identical frames (vs previous): 54 -> [439, 440, 441, 442, 443, 444, 445, 446, 447, 448, 449, 450, 451, 452, 453, 454, 455, 456, 457, 458]
+
+  centroid x |v| med   0.307  |v| max   3.065  jerk max   1.549
+  centroid y |v| med   0.092  |v| max   0.585  jerk max   0.519
+  area       |v| med   8.000  |v| max  67.000  jerk max  68.000
+  silhouette XOR med 3.37 %/f  max 18.52 %/f
+  30Hz staircase odd/even |step| ratio (cy): 0.97
+
+HEAD vs TAIL (rightmost / leftmost body pixel), ground phase:
+  nose tip x 242..305   rearmost x 109..187
+  min gap nose-rear: 115 px
+  nose tip travel f0->f168: +52 px x, +9.5 px y
+  nose max FORWARD excursion en route: -179 px
+
+WHERE THE MOTION LIVES (cumulative silhouette XOR share by screen region):
+  ground f0-168: tail<170  19.5%  mid170-210  19.3%  head>=210  61.2%
+
+REGION CENTROID Y (down is +) across the compression:
+  tail<170     f0->f168:   +nan px
+  mid170-210   f0->f168:  +2.52 px
+  head>=210    f0->f168:  -0.92 px
+
