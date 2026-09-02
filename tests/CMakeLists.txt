@@ -2134,6 +2134,18 @@ verilate(test_texture_rsp_dispatch_directed
 add_test(NAME texture_rsp_dispatch_directed COMMAND test_texture_rsp_dispatch_directed)
 set_tests_properties(texture_rsp_dispatch_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# Resident palette slots with generations: removes the 16-way page search
+# from the hot path, and closes the reload-under-flight hole a valid bit
+# cannot express.
+add_executable(test_texture_palette_res_directed texture/texture_palette_res_directed.cpp)
+target_link_libraries(test_texture_palette_res_directed PRIVATE zhao_harness)
+verilate(test_texture_palette_res_directed
+  PREFIX Vzhao_texture_palette_res
+  TOP_MODULE zhao_texture_palette_res
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res.sv)
+add_test(NAME texture_palette_res_directed COMMAND test_texture_palette_res_directed)
+set_tests_properties(texture_palette_res_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
