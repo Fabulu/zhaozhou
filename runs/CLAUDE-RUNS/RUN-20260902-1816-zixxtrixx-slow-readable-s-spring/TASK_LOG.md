@@ -331,3 +331,74 @@ What the reviewer should look at, in motion, beside the balance clip:
   whole-body shading pop at frame 15, present in the raw pixels;
   f46/f48 at the instrument floor (confirmed).
 - Recommendation: do not publish; one authoring pass on two pose tables.
+
+### REVIEW-RESPONSE PASS (review at 3ad1b12f; all five faults addressed)
+
+Timing correction absorbed: playback is 60 fps; ground time is now 2.8 s
+(72-key arming + 12-key hold = 168 frames).
+
+FAULT 1 (middle does nothing) - FIXED, authored by eye:
+- The assembled S now carries a LOW MID-BODY ARCH (kSpringAssembledHeading
+  stations 10-13 -> -2600/-3600/3300/4200, absorb row carries ~40% of it):
+  the middle visibly RISES INTO the S in beat 1 and PRESSES FLAT in beat 2
+  (stations 11-13 descend 49/107/81 mm world, probe grounded-run descent
+  -37 -> -66 mm).
+- The tail curl is PRESSED LOWER in the collapse (collapsed 15-18
+  -4500/-9500/-13000/-14500 -> -3900/-8300/-11000/-11800): the curl keeps
+  its lobe and comes down with the head (probe tail descent +1 -> -38 mm,
+  taper -33 -> -46).
+- NEW kSpringBladeSquashRise = +3500 (all four spring consumers, parity
+  green): the fan rises with the beat-1 gather and PRESSES DOWN through the
+  compression (fin top edge: rest y112 -> assembled y106 -> loaded y110).
+  Sign found empirically; negative sweeps up in the rolled tail frame.
+- Fixed-camera region verification (reviewer's instrument): beat-1 change
+  share tail/mid/head 82.5/6.7/10.8 -> 64.6/17.1/18.3 %; beat-2 descent
+  head +6.6 px, mid +2.4 px down; probe station table: middle entry travel
+  5 -> 28 mm, every region's compression descent now negative except
+  probe-"middle" (+5 mm, straddles the arch's standing side which carries
+  the head's backward travel - its peak stations descend 107 mm).
+
+FAULT 2 (head-back too slight) - FIXED, bracketed and chosen by eye:
+- Collapsed segments 8-9 22000/11000 -> 24500/12500. NOSE TIP in the fixed
+  side view: -11 px back (was -7), monotone through beat 2 with only
+  +/-1 px single-pixel noise en route; head-region centroid -3.4 px (was
+  -2.18), max forward excursion +0.64 px (was 0.85) - at the sub-pixel
+  measurement floor, no readable en-route reversal. World route
+  0 -> -12 (assembled) -> -168 mm (loaded), monotone backward.
+
+FAULT 3 (f15 shading pop) - DIAGNOSED, no code change, evidence attached:
+- The pop is the 3-band cel quantizer crossing a band boundary on a slow
+  coherent surface (the reviewer's 8x pair shows the purple mid-tone band
+  widening across the neck in one frame). The ACCEPTED BALANCE CLIP shows
+  the same class of event at the same magnitude in its own quiet stretches:
+  raw-pixel spikes of 7.7-7.8x local median at its f15 (372 vs 48) and
+  f23/24 (1008 vs 129). It is a property of the shipped look exposed by
+  quiet, not a fault introduced by this pass; smoothing it would mean
+  changing the shipped cel shading. Recorded here with the balance numbers
+  as the comparison.
+
+FAULT 4 (frozen clip head) - FIXED:
+- kSpringLifeFloor = 300 (the balance clip's own never-off floor), ramped
+  open across the settle-in keys inside spring_life_wave: clip key 0 stays
+  the EXACT grounded pose (seams + deform identity intact, probe green),
+  and the creature is alive from the next presentation sample. Verified:
+  zero byte-identical frames at the clip head (was eleven).
+
+FAULT 5 (hold reads alive, not loaded) - EYE CALL, taken:
+- Hold lengthened 8 -> 12 keys (kSaltoCompressHoldEndKey 84; 0.4 s;
+  kAttackKeys 306; kAtkRetimeShift +66). kSpringHoldLivingDriftMm
+  re-recorded 70 -> 90: the 70 was recorded against a TWO-key hold; the
+  same wave amplitude over twelve keys sweeps more of its period. Support
+  drift stays 0 (the plant never slides).
+- THIS IS AN EYE CALL: with the longer hold the wave's swell makes the
+  second half of the hold read as visible strain (it now segments as its
+  own small activity run). If the owner wants more or less, the knobs are
+  kSaltoCompressHoldEndKey (length) and kSpringWobble/kSpringWobble2
+  (amplitude) - one edit each.
+
+Final state, measured (evidence/fixes/): A0 centroid 1.0/0.5 px; A1 no
+frame's half-life under 16 in f1-152; A2 3.4/5.3/10.2 %/f; A3 2.1 jolts/s;
+A4 beats segment (56f/60f runs, 12-14f gaps, hold split quiet+strain);
+A5 worst 1 reversal per station (the arch's own up-then-press, by design,
+separated by the dwell); B solidity 0.60 / hole 5.9 / closure 0.472 /
+spine 0.87; probe GREEN end to end. Jump-one now 293 frames.

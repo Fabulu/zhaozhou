@@ -557,9 +557,9 @@ constexpr int kWalkKeys = 40;
 // 18 keys to compress and hold, then releases over the next 10. Everything
 // from the approved flight is shifted by 12 keys, without changing its wheel,
 // apex hang, plunge, five-real-second planted-spear hold, or recovery timing.
-// 240 accepted keys + kAtkRetimeShift (62) of Direction-23 arming growth; a
+// 240 accepted keys + kAtkRetimeShift (66) of Direction-23 arming growth; a
 // static_assert beside the salto timeline keeps this in step with the shift.
-constexpr int kAttackKeys = 302;
+constexpr int kAttackKeys = 306;
 constexpr int kFallKeys = 144;  // SLOWER STILL (2026-08-27 pass 3, Fabian:
                                 // "When falling, the rotation is too
                                 // strong"): one tumble now takes 4.8 s, so
@@ -769,15 +769,23 @@ constexpr const auto& kSpringGroundedHeading = kStanceSlope;
 // noticing its target and starting to load, not as a new shape.
 constexpr int32_t kSpringAbsorbHeading[kStanceSlopes] = {
     -1300, 500, 1900, 3900, 6700, 14600, 21400, 25200, 20000, 11600,
-    150, 350, 450, 700, 1300, -1400, -4000, -9500, -13700};
+    -950, -1250, 1600, 2100, 1300, -1400, -4000, -9500, -13700};
 // ASSEMBLED. The whole-body S, aimed. The front hook is still exactly the
 // signature S's hook; the belly keeps its ground; the TAIL now carries a real
 // rear curl (to -80 deg at the tip -- deliberately short of vertical), so
 // every station from the nose to the last tail station is in the S. This is
 // the shape the squeeze presses; it is the idle S completed, not replaced.
+// REVIEW FAULT 1 (this run): beat 1 was 82.5%% a tail action because the
+// middle stations went from flat to flat. The assembled S now carries a LOW
+// MID-BODY ARCH (stations 10-13 rise ~90 mm and return), so the middle
+// visibly joins the S in beat 1 and visibly PRESSES FLAT in beat 2 -- the
+// same station group both gathers and descends, which is what "the whole
+// body" and "everything descends together" ask for. Authored by eye against
+// the fixed-side render; the absorb row carries ~40%% of the arch so the
+// route stays even.
 constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
     -1500, 400, 1700, 3800, 6800, 14600, 21400, 25200, 20000, 11600,
-    300, 500, 700, 1000, 1500, -4500, -9500, -13000, -14500};
+    -2600, -3600, 3300, 4200, 1500, -4500, -9500, -13000, -14500};
 // COLLAPSED: THE S SQUEEZED FROM THE TOP. Three stacked near-level runs --
 // the pressed neck (top), the folded-flat return of the hook (middle), the
 // grounded belly (bottom) -- joined by two quick single-segment crossings that
@@ -788,8 +796,8 @@ constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
 // squeezes flatter instead of clipping. This is the pose the release fires
 // from, and the whole shape stays unmistakably the same S.
 constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
-    -1500, 400, 900, 1100, 1400, 17000, 27500, 31000, 22000, 11000,
-    900, 900, 1000, 1200, 1700, -4500, -9500, -13000, -14500};
+    -1500, 400, 900, 1100, 1400, 17000, 27500, 31000, 24500, 12500,
+    900, 900, 1000, 1200, 1700, -3900, -8300, -11000, -11800};
 // WHERE THE THREE AUTHORED POSES SIT ON THE ONE ARMING PARAMETER, in 1/1000 of
 // the complete arming. Grounded is 0 and collapsed is 1000. Moving these
 // reparameterises the build without touching a single shape value. Direction
@@ -858,7 +866,11 @@ constexpr int32_t kSpringDeclaredLoadedBiteMm = 60;
 // the hold". The brace must still be a brace -- it may not travel away from the
 // deepest pose, and the planted support may not slide at all -- but it is
 // allowed to quiver inside this named envelope while it holds.
-constexpr int32_t kSpringHoldLivingDriftMm = 70;
+// 70 was recorded against a TWO-key hold; Direction 23's hold is twelve keys
+// (review fault 5: the compression is its own beat), so the same wave
+// amplitude sweeps more of its period and legitimately drifts further. Band
+// re-recorded for the longer hold; the plant itself still may not slide.
+constexpr int32_t kSpringHoldLivingDriftMm = 90;
 constexpr SpringSupportLiftKey kSpringOpenSupportLift[] = {
     {0, 0},
     {kSpringEarlyEntryProfile, kSpringEarlySupportLiftMm},
@@ -889,6 +901,13 @@ constexpr int kSpringTailStrengthRampStations = 6;
 constexpr int32_t kSpringJumpHeadAttitude = 700;   // follows the taller entry arc
 constexpr int32_t kSpringHeadAttitude = 600;       // restrained brace; must not lift the nose out of the aim
 constexpr int32_t kSpringBladeFlare = 900;         // fan braces during compression
+// REVIEW FAULT 1 (this run): "everything descends together" -- the tail V's
+// fins held their rest rise through the whole squash, so the tail region's
+// screen centroid never came down with the body. The fan now PRESSES DOWN
+// with the squash (about -19 deg at full), sweeping from its rest rise to
+// just below the tail line as the animal loads. Owner knob; authored by eye
+// on the fixed side view.
+constexpr int32_t kSpringBladeSquashRise = 3500;
 
 
 // Named theatrical timing. The accepted attack still leaves the terrain at key
@@ -925,7 +944,7 @@ constexpr int kSpringBecomeSEndKey = 36;
 constexpr int kSpringBecomeSSettleKeys = 4;
 constexpr int kSaltoSpringEntryEndKey = kSpringBecomeSEndKey;
 constexpr int kSaltoCompressEndKey = 72;
-constexpr int kSaltoCompressHoldEndKey = 80;
+constexpr int kSaltoCompressHoldEndKey = 84;
 // Everything downstream of the loaded hold -- release, flight, spear, stick,
 // recovery -- keeps its ACCEPTED key spacing and merely SLIDES when the arming
 // grows. kAtkRetimeShift is that slide, derived from the hold end so a slower
@@ -2098,9 +2117,30 @@ inline int32_t spring_station_arm(int k, int32_t arm) {
 // The travelling struggle, in angle16, added to the station's absolute heading.
 // life_key_mk is the clip key in 1/1000 key units; kSpringNoLife means the
 // caller has no clock and gets the plain route.
+// The balance clip's wave runs at a 30% floor before its stunt begins and is
+// never OFF -- "a device that switches on is a seam" (Recon 1 section 5.3).
+// The arm-gated envelope alone froze the settle-in solid: eleven
+// byte-identical frames at the head of the clip (review fault 4). This floor
+// ramps open across the settle-in keys, so clip key 0 stays the EXACT
+// grounded pose (the recover->compress seam and the deform identity gate
+// depend on it) and the creature is alive from the very next presentation
+// sample. It closes with the arming, so the release poses stay exact.
+constexpr int32_t kSpringLifeFloor = 300;
+
 inline int32_t spring_life_wave(int k, int32_t arm, int32_t life_key_mk) {
   if (life_key_mk == kSpringNoLife) return 0;
-  const int32_t env = spring_life_envelope(arm);
+  int32_t env = spring_life_envelope(arm);
+  if (life_key_mk > 0 &&
+      life_key_mk < static_cast<int32_t>(kSaltoCompressEndKey) * 1000) {
+    const int64_t ramp_end =
+        static_cast<int64_t>(kSpringSettleInKeys) * 1000;
+    const int32_t floor_env = static_cast<int32_t>(
+        life_key_mk >= ramp_end
+            ? kSpringLifeFloor
+            : (static_cast<int64_t>(kSpringLifeFloor) * life_key_mk) /
+                  ramp_end);
+    if (floor_env > env) env = floor_env;
+  }
   if (env <= 0) return 0;
   const int64_t turn1 = (static_cast<int64_t>(life_key_mk) * 65536) /
                         (kSpringWobblePeriodKeys * 1000);
@@ -2589,7 +2629,8 @@ inline void author_spring_midpoint_pose(
       quat_z(spring_head_attitude(1000, control.entry, control.squash));
   g.tail_rest(kBladeSplay + blade_splay_bias +
                   (control.squash * kSpringBladeFlare) / 1000,
-              kBladeRise, kBladeUpBias);
+              kBladeRise + (control.squash * kSpringBladeSquashRise) / 1000,
+              kBladeUpBias);
   for (int b = 0; b < kBoneCount; ++b)
     c.mid_quats[qi + b] = g.q[b];
 
@@ -3210,7 +3251,9 @@ inline zc::Clip build_attack(
     // and flare as the S returns
     g.tail_rest((kBladeSplay * auth) / 1000 + kBladeSplay / 5 +
                     (pre * kSpringBladeFlare) / 1000,
-                (kBladeRise * auth) / 1000, (kBladeUpBias * auth) / 1000);
+                (kBladeRise * auth) / 1000 +
+                    (pre * kSpringBladeSquashRise) / 1000,
+                (kBladeUpBias * auth) / 1000);
     g.write(c, f);
     if (!choreo) {
       if (f <= kSaltoSpringReleasePoseKey) {
@@ -6860,7 +6903,8 @@ inline zc::Clip build_attack_variant(
       g.q[kBHead] = quat_z(spring_head_attitude(1000, entry, amount));
       g.tail_rest(kBladeSplay + kBladeSplay / 5 +
                       (amount * kSpringBladeFlare) / 1000,
-                  kBladeRise, kBladeUpBias);
+                  kBladeRise + (amount * kSpringBladeSquashRise) / 1000,
+                  kBladeUpBias);
     } else if (k < t3) {
       int lk;
       if (k < t1) {
@@ -7526,7 +7570,8 @@ inline zc::Clip build_jump(
                           spring_air_coil_pitch(1, coil_pitch, curl,
                                                 f * 1000));
     g.tail_rest(kBladeSplay + (spring * kSpringBladeFlare) / 1000,
-                (kBladeRise * (1000 - curl)) / 1000,
+                (kBladeRise * (1000 - curl)) / 1000 +
+                    (spring * kSpringBladeSquashRise) / 1000,
                 (kBladeUpBias * (1000 - curl)) / 1000);
     const uint16_t th16 = static_cast<uint16_t>(theta & 0xFFFF);
     if (th16 != 0)
