@@ -2108,6 +2108,21 @@ verilate(test_raster_perspuv_svc_directed
 add_test(NAME raster_perspuv_svc_directed COMMAND test_raster_perspuv_svc_directed)
 set_tests_properties(raster_perspuv_svc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The TMU address planner as five ELASTIC stages, against the shipped pipe.
+# tb_tmu_plan_pair carries a one-deep cache model so the pipe keeps flowing;
+# the addresses do not depend on the data that comes back.
+add_executable(test_texture_tmu_plan_directed texture/texture_tmu_plan_directed.cpp)
+target_link_libraries(test_texture_tmu_plan_directed PRIVATE zhao_harness)
+verilate(test_texture_tmu_plan_directed
+  PREFIX Vtb_tmu_plan_pair
+  TOP_MODULE tb_tmu_plan_pair
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/texture/tb_tmu_plan_pair.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_pipe.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv)
+add_test(NAME texture_tmu_plan_directed COMMAND test_texture_tmu_plan_directed)
+set_tests_properties(texture_tmu_plan_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
