@@ -7417,6 +7417,13 @@ inline JumpMotionSample zixx_jump_motion_sample(const JumpPlan& p, int f) {
   return m;
 }
 
+// THE JUMP CAMERA'S TRACK (Direction 23, RUN-20260902-1816). The salto
+// variant camera learned in RUN 1939 that a camera welded to the baked root
+// shakes with everything the root carries; the jump camera never got that
+// fix and rode the raw root INCLUDING the life-wave clock, so every quiver
+// of the arming was also a whole-screen quiver (Recon 3 J2). Track the
+// PLAN's smooth trajectory instead: the same derived root, life clock
+// excluded (kSpringNoLife). Camera only -- the baked clip keeps its life.
 inline void zixx_jump_track(const JumpPlan& p, int key,
                             int32_t& x_mm, int32_t& y_mm) {
   if (key < 0) key = 0;
@@ -7427,9 +7434,9 @@ inline void zixx_jump_track(const JumpPlan& p, int key,
       uses_default_shared_spring_timing(p) &&
       key == kSpringMiddlePoseKey;
   x_mm = spring_root_anchor_x(m.entry, m.spring,
-                              use_authored_middle_pose, key * 1000);
+                              use_authored_middle_pose, kSpringNoLife);
   y_mm = m.lift + spring_root_offset(m.entry, m.spring,
-                                     use_authored_middle_pose, key * 1000);
+                                     use_authored_middle_pose, kSpringNoLife);
 }
 
 inline zc::Clip build_jump(

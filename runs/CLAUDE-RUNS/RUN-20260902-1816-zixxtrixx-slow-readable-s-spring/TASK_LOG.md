@@ -129,3 +129,14 @@ Rebuild the Zixxtrixx jump/salto spring per Owner Direction 23: four slow readab
   ~5 mm reversal at the entry/squash handoff (plan criterion: <= 1). The
   whip's six reversals are gone.
 - springpose schedule (gen13): arming move_mm max 80 mm/key vs live's 528.
+
+### Stage 3 COMPLETE - jump camera off the raw root's life clock
+
+- zixx_jump_track now derives its tracked point with kSpringNoLife (the salto
+  camera's RUN-1939 lesson). Camera only; probe green, all parity gates exact.
+- Measured on jump-one arming (f1-45): background churn mean 0.57 -> 0.49
+  (live was 0.89; balance is 0.00 with its fixed camera). Horizon row still
+  travels 12 rows with max 4 rows/frame - that is the camera TRACKING the
+  16-key descent, not jitter; the plan's "< 1 px/frame" target falls out of
+  the stage-4/5 retime (412 mm of descent over 144 frames instead of 33) and
+  will be re-measured there.
