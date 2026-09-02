@@ -40,7 +40,9 @@
 //
 // The caller still owns the two clamps the original documents: N < 0 answers 0,
 // and N >= 64*D answers 63. Inside this pipeline the quotient is in [0,63] by
-// construction, which is what makes six steps sufficient. Moving those clamps
+// construction, which is what makes six steps sufficient.
+// ENFORCED-BY: fpga/rtl/texture/zhao_texture_aux_pipe.sv
+// ENFORCED-BY: tests/texture/texture_aux_div6_directed.cpp Moving those clamps
 // in here would change where a decision lives without changing the answer, so
 // they stay where they are.
 // ---------------------------------------------------------------------------

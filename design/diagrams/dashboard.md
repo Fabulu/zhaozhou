@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **92** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **93** (73 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -15,7 +15,7 @@ Blocks: **92** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | debug | · | · | 1 | 3 | · | · | · | · | 4 |
 | field | 5 | · | 1 | 1 | · | · | · | · | 7 |
 | forge | 1 | · | 1 | · | · | · | · | · | 2 |
-| geometry | 4 | 1 | 6 | · | · | · | · | · | 11 |
+| geometry | 5 | 1 | 6 | · | · | · | · | · | 12 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 1 | · | 2 | · | · | · | · | · | 3 |
 | memory | 1 | · | 1 | 3 | · | · | · | 1 | 5 |
@@ -27,7 +27,7 @@ Blocks: **92** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | · | · | 7 | · | · | · | · | · | 7 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 35 | 4 | 37 | 16 | · | · | · | 6 | 92 |
+| **all** | 36 | 4 | 37 | 16 | · | · | · | 6 | 93 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -110,6 +110,7 @@ Blocks: **92** (72 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | GEOM.SKIN | UNIT_VERIFIED | 2026-08-21 | `c51d910` | tests/geometry/geom_skin_directed.cpp |
 | GEOM.WCACHE | REFERENCE_COMPLETE | 2026-08-24 | `2edbcc1` | reference/include/zref/zref_geom_wcache.hpp |
 | GEOM.WCACHE | UNIT_VERIFIED | 2026-08-31 | `cc10167` | tests/geometry/geom_wcache_directed.cpp |
+| GEOM.PARAMBUF | SPECIFIED | 2026-09-02 | `f8c9ebb` | design/contracts/GEOM.PARAMBUF.md |
 | GEOM.PROJECT | REFERENCE_COMPLETE | 2026-08-21 | `e0a7320` | reference/src/zrender/rast.cpp |
 | GEOM.PROJECT | UNIT_VERIFIED | 2026-08-21 | `21bc2cf` | tests/geometry/geom_project_directed.cpp |
 | GEOM.CLIP | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |
@@ -183,7 +184,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 | platform | 14% | 16 | 0% |
 | command_debug | 5% | 8 | 0% |
 | field | 6% | 2 | 0% |
-| geometry_mantle | 20% | 21 | 0% |
+| geometry_mantle | 20% | 22 | 0% |
 | tile | 30% | 11 | 0% |
 | myriad_forge | 9% | 9 | 0% |
 | twod_post | 6% | 5 | 0% |

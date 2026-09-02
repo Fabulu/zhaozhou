@@ -32,6 +32,11 @@ schema_version: 1
 # §25 mandatory counters (snake_case) plus the declared platform extensions.
 # Block `counters` must be a subset of this catalog (rule V12).
 counter_catalog:
+  # GEOM.PARAMBUF (ruling R7) -- the external geometry arena
+  - parambuf_records_written
+  - parambuf_chunks_allocated
+  - parambuf_stale_handles
+  - parambuf_overflow_frames
   # §25 minimum list
   - frame_cycles
   - deadline_faults
@@ -2068,6 +2073,39 @@ blocks:
       without citing it. A block can be finished under any name; search for the
       TEST as well as the contract.
 
+  - id: GEOM.PARAMBUF
+    name: External geometry parameter buffer
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: Projected vertices, compact triangle descriptors and tile-reference chunks in local SDRAM bank 3, owned by ENGINE1. The production answer to frame geometry capacity; replaces growing an on-chip triangle arena, per ruling R7.
+    contract: design/contracts/GEOM.PARAMBUF.md
+    phase: 8
+    owner_issue: ZH-121
+    inputs: [view_vertices, triangle_descriptors, tile_references]
+    outputs: [parambuf_records]
+    upstream: [GEOM.PROJECT, GEOM.BINNER]
+    downstream: [GEOM.BINNER]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: common renderer clock with registered SDRAM seams
+    reference_model: zref::GeomParamBuffer
+    tests:
+      directed: tests/geometry/geom_parambuf_directed.cpp
+      random: tests/geometry/geom_parambuf_random.cpp
+    counters: [parambuf_records_written, parambuf_chunks_allocated, parambuf_stale_handles, parambuf_overflow_frames]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-02"
+        commit: "f8c9ebb"
+        evidence: design/contracts/GEOM.PARAMBUF.md
+
+    deferred: false
+    superseded_by: null
+
   - id: GEOM.PROJECT
     name: Dual-view projection
     kind: rtl
@@ -2080,7 +2118,7 @@ blocks:
     inputs: [warped_vertices, cached_vertices, camera_pair]
     outputs: [view_vertices]
     upstream: [GEOM.WARP, GEOM.WCACHE]
-    downstream: [GEOM.CLIP]
+    downstream: [GEOM.CLIP, GEOM.PARAMBUF]
     backpressure: ready_valid
     latency: fixed:36
     target_throughput: 1 projected vertex per clock
@@ -2204,8 +2242,8 @@ blocks:
     owner_issue: ZH-058
     inputs: [setup_triangles, token_grant]
     outputs: [tile_lists]
-    upstream: [GEOM.SETUP, MEASURE.TOKENS]
-    downstream: [RASTER.EDGEWALK]
+    upstream: [GEOM.SETUP, MEASURE.TOKENS, GEOM.PARAMBUF]
+    downstream: [RASTER.EDGEWALK, GEOM.PARAMBUF]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 bin reference per clock

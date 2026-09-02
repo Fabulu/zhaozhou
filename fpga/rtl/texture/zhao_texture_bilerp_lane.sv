@@ -34,10 +34,12 @@
 // rather than by assertion: `a_s` and `b_s` are EXACT 18-bit intermediates, so
 // registering them cannot change a rounding. The only rounding in the whole
 // function is the final `(s_w + 32768) >>> 16`, and that is untouched.
+// ENFORCED-BY: tests/texture/texture_bilerp_lane_directed.cpp
 //
 // The paired test instantiates the shipped combinational block alongside and
 // compares every result, so "bit-identical by construction" is checked rather
 // than believed.
+// ENFORCED-BY: tests/texture/tb_bilerp_pair.sv
 // ---------------------------------------------------------------------------
 `default_nettype none
 

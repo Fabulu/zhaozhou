@@ -213,6 +213,7 @@ module zhao_vram_arbiter
   //
   // Identical by construction: bw_all[sel] IS burst_words(pend_words[sel],
   // pend_addr[sel][11:1]), evaluated for every k rather than just the winner.
+  // ENFORCED-BY: tests/memory/vram_arbiter_directed.cpp
   //
   // Costs five copies of a 12-bit subtract and two compares instead of one.
   // Same shape as the Early-Z floor fix in round 12 -- when a select feeds

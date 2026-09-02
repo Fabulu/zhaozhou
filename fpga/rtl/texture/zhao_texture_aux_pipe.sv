@@ -149,6 +149,7 @@ module zhao_texture_aux_pipe #(
       .in_valid_i (req_valid_i),
       // The clamps are applied HERE, outside the divider, so the quotient is
       // in [0,63] by construction and six steps suffice.
+      // ENFORCED-BY: tests/texture/texture_aux_pipe_directed.cpp
       .in_ru_i    ((negu_c || satu_c) ? {REM_W{1'b0}} : REM_W'($unsigned(nu_c))),
       .in_du_i    (du_c),
       .in_rv_i    ((negv_c || satv_c) ? {REM_W{1'b0}} : REM_W'($unsigned(nv_c))),
