@@ -741,53 +741,65 @@ constexpr int32_t kStanceSlope[kStanceSlopes] = {
 // eye as a broad low two-lobe S; interpolation/timing may only be built around a
 // collapsed pose that already reads correctly on its own.
 constexpr const auto& kSpringGroundedHeading = kStanceSlope;
-// OWNER DIRECTION 21. The Direction 20 tables carried the front segments round
-// past vertical (segment 0 at ~165 deg) -- the owner's "you turned the front
-// part of the snake around by 180 degrees somehow" -- while the rear read
-// 2.7/-16.5/-38.5 deg, a straight rail: an S made by the partial body. Both are
-// rejected. The action Direction 21 asks for, in order:
+// OWNER DIRECTION 22 (supersedes the Direction 21 tables that lived here).
+// The D21 collapsed pose straightened the tail at the deepest squeeze
+// (-15/-34/-26/-9 deg over segments 15-18), over-curled the capped neck
+// (93/151/170 vs the idle hook's 80/117/138), pressed straight down, and
+// bottomed at only ~64% of idle height. Direction 22 rules this pass:
 //
-//   1. AIM   -- a small angle toward the target. Not a lean-back stunt.
-//   2. WHOLE BODY -- the S is made by every station to the last tail station.
-//   3. SQUEEZE -- "the S becomes an S that has been squeezed from the top":
-//      the SAME S, pressed down, shorter and broader. Contact flattens and
-//      spreads sideways instead of clipping (the deform sidecar's job).
-//   4. EXPLODE forward.
+//   1. THE REAR JOINS THE COIL. "A coil taken to its extreme, standing on
+//      the last tail point" (tail TUBE, never the fins), planar -- "still
+//      more of a 2d S as we've been doing", wound tighter, pressed lower.
+//   2. THE HEAD TRAVELS BACKWARD because the whole S grows and travels
+//      backward; segments 5-7 never curl tighter than the idle hook --
+//      values AND per-joint deltas stay at or under idle's.
+//   3. THE SQUEEZE PRESSES DOWN-AND-BACK on a diagonal; the launch
+//      releases along that same diagonal, forward.
+//   4. COMPRESS MORE, the extra depth bought by flatten + sideways spread.
 //
-// These three poses are authored by eye in a planted-frame centreline
-// sketchpad and then against the rendered clip. The collapsed fold GROWS OUT
-// OF THE IDLE'S OWN DIVE (stations 5-8), so every station morphs a short arc
-// and nothing swings through a gross rollover: the neck lowers, the hook
-// presses flat onto the belly, the tail curl sweeps down. The head never
-// pitches past vertical anywhere on the route.
+// The collapsed pose is authored by eye in the committed centreline
+// sketchpad (runs/CLAUDE-RUNS/RUN-20260902-0611/coil_designer.py) and then
+// against the rendered clip: ONE INWARD-WOUND PLANAR COIL. Chain order:
+// the head hangs forward-low off a narrow crest (the chin hovering over
+// its own tail), the signature dive falls at idle curvature (5-7 at
+// 78/110/131 deg -- BELOW the idle hook's 80/117.6/138.5 in value and in
+// per-joint delta), the foot bites, the mid-body winds a pressed loop
+// (uncapped body joints), the exit arches forward over the loop, and the
+// thin tail descends the loop's front to a grounded pad running BACK
+// beneath the coil -- the tip is the rearmost biting point of that pad,
+// directly under the coiled mass: stood on the last tail point. Every
+// contact is a tangent press the flatten/spread deform owns; nothing
+// crosses. A capped-curvature front bounds how low the crest can sit
+// (~65% of idle top): pressing further REQUIRES the neck to curl tighter
+// than idle, which Direction 22 forbids -- that trade stays with the owner.
 
-// ABSORB. The first beat: the nose dips a few degrees TOWARD THE TARGET (the
-// aim), and the tail begins to gather off the ground into the S's rear curl.
-// The signature front hook is untouched -- this reads as the idle animal
-// noticing its target and starting to load, not as a new shape.
+// ABSORB (arm 220). The aim: the nose dips a few degrees toward the
+// target, the hook keeps its exact idle curl, the tail lowers and gathers,
+// and the mid-rear begins to swell off the ground -- the S noticing its
+// target and starting to load.
 constexpr int32_t kSpringAbsorbHeading[kStanceSlopes] = {
-    -1300, 500, 1900, 3900, 6700, 14600, 21400, 25200, 20000, 11600,
-    150, 350, 450, 700, 1300, -1400, -4000, -9500, -13700};
-// ASSEMBLED. The whole-body S, aimed. The front hook is still exactly the
-// signature S's hook; the belly keeps its ground; the TAIL now carries a real
-// rear curl (to -80 deg at the tip -- deliberately short of vertical), so
-// every station from the nose to the last tail station is in the S. This is
-// the shape the squeeze presses; it is the idle S completed, not replaced.
+    -728, 364, 1820, 4005, 6918, 14563, 21299, 25122, 21845, 14928,
+    -2184, -4005, -2549, 1456, 4005, 5097, 2913, -2184, -6554};
+// ASSEMBLED (arm 400). The S GROWN AND TRAVELLING BACKWARD: the hook at
+// idle curl, the dive extended, a genuine broad REAR ARCH rising behind
+// the belly (the second lobe the owner has been asking for), and the tail
+// descending from the arch to a low reaching tip. From here to collapsed
+// every rear station keeps winding the same way -- the tail's curl only
+// deepens into the coil, never straightens.
 constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
-    -1500, 400, 1700, 3800, 6800, 14600, 21400, 25200, 20000, 11600,
-    300, 500, 700, 1000, 1500, -4500, -9500, -13000, -14500};
-// COLLAPSED: THE S SQUEEZED FROM THE TOP. Three stacked near-level runs --
-// the pressed neck (top), the folded-flat return of the hook (middle), the
-// grounded belly (bottom) -- joined by two quick single-segment crossings that
-// are the descendants of the idle dive's own steep segments. The nose sits at
-// ~64% of its idle height, the footprint spreads, and the rear curl is pressed
-// into a low broad arc reaching back. The stacked runs are authored to TOUCH
-// at their radii: the flatten/spread deform takes the contact, so the packing
-// squeezes flatter instead of clipping. This is the pose the release fires
-// from, and the whole shape stays unmistakably the same S.
+    -2731, -910, 1092, 3823, 7282, 14382, 20753, 24576, 28217, 24576,
+    -910, -6372, -10012, -3641, 4551, 9102, 6372, 1092, -1092};
+// COLLAPSED (arm 1000): THE COIL AT ITS EXTREME. Head hung low-front over
+// the planted tail (nose ~47% of idle height, ~1.3 m behind its idle spot
+// -- the whole S has gathered backward onto the rear); crest at ~65% of
+// idle top; dive at idle curvature; foot biting; the mid-body loop wound
+// through segments 9-12; the exit arching forward; the tail pad grounded
+// under the coil with the tube tip biting deepest at the very back of the
+// pad. Contacts are authored tangent presses (chin-over-tail ~+28 mm,
+// loop-bottom over pad); the flatten/spread deform takes every touch.
 constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
-    -1500, 400, 900, 1100, 1400, 17000, 27500, 31000, 16500, 4500,
-    900, 900, 1000, 1200, 1700, -2800, -6200, -4800, -1600};
+    -6372, -2913, 0, 3277, 7646, 14199, 20025, 23848, 32040, 37319,
+    52428, 42780, 33132, 26943, 25122, 23302, 6372, 1456, 728};
 // WHERE THE THREE AUTHORED POSES SIT ON THE ONE ARMING PARAMETER, in 1/1000 of
 // the complete arming. Grounded is 0 and collapsed is 1000. Moving these
 // reparameterises the build without touching a single shape value. Direction
@@ -830,20 +842,21 @@ constexpr int32_t kSpringKey5EntryProfile = 850;
 // Station 14 carries the frozen whole-centreline route just below the real
 // terrain surface. These are direct authored support positions for the named
 // poses, not offsets inferred from the rendered projection.
-// THE SUPPORT ROUTE, re-authored for Direction 21's squeeze. Station 14 is a
-// belly ground station in EVERY pose of this route -- nothing rises onto the
-// tail any more -- so the named lifts are small: a slight settle as the tail
-// curl transfers its weight onto the belly, then a deliberate press at the
-// deepest squeeze where the flattening cross-section (kSpringBodyFlattenQ16)
-// lowers the tube's underside and the loaded animal bears down. The authored
-// result is kSpringDeclaredLoadedBiteMm of real bite at the deepest pose --
-// weighted, not buried, and never hovering. Checked by the committed probe.
-constexpr int32_t kSpringEarlySupportLiftMm = -12;
-constexpr int32_t kSpringMiddleSupportLiftMm = -10;
-constexpr int32_t kSpringAbsorbSupportLiftMm = -5;
-constexpr int32_t kSpringKey5SupportLiftMm = -8;
-constexpr int32_t kSpringAssembledSupportLiftMm = -10;
-constexpr int32_t kSpringCollapsedSupportLiftMm = -26;
+// THE SUPPORT ROUTE, re-authored for Direction 22's coil. Station 14 begins
+// as a grounded belly station and RISES with the gather: at absorb the
+// mid-rear starts to swell, at assembled it rides the growing rear arch,
+// and at the collapsed coil it sits on the wound loop's exit (~176 mm above
+// its grounded baseline). The ground contact of the loaded pose is NOT
+// station 14 any more -- it is the coil's foot (segments 8-9) and the tail
+// pad with its biting tube tip, which the whole-body bite gate checks. The
+// lifts are deltas from the station's grounded baseline height; the x pin
+// is what gathers the entire animal backward as the coil forms.
+constexpr int32_t kSpringEarlySupportLiftMm = -8;
+constexpr int32_t kSpringMiddleSupportLiftMm = -2;
+constexpr int32_t kSpringAbsorbSupportLiftMm = 21;
+constexpr int32_t kSpringKey5SupportLiftMm = 55;
+constexpr int32_t kSpringAssembledSupportLiftMm = 101;
+constexpr int32_t kSpringCollapsedSupportLiftMm = 210;
 // The loaded spring's declared terrain penetration, in mm. Ground contact is
 // AUTHORED here and checked by the committed pose probe; its absence would be
 // as much a fault as burying, because a body resting at exactly zero reads as
@@ -872,12 +885,14 @@ constexpr int32_t kSpringJumpRootLiftMm = 0;       // no clearance hop during en
 // Real cross-section controls (Q0.16 deltas from identity at full sample).
 // OWNER DIRECTION 21 #3: where the squeezed body meets the ground or another
 // part of itself it must not intersect -- "it squeezes flatter and extends a
-// bit to the side". The collapsed pose's stacked runs are authored to touch at
-// their resting radii, so this flatten IS the contact relief, and it must be
-// VISIBLE at 240p, not merely mathematically present. Raised from 17000/5200
-// for this pass; chosen by looking at the deepest pose in the rendered clip.
-constexpr uint16_t kSpringBodyFlattenQ16 = 20000;  // ~31% vertical contraction
-constexpr uint16_t kSpringBodySpreadQ16 = 8000;    // ~12% lateral/lengthwise bulge
+// bit to the side". OWNER DIRECTION 22 #4: "the compression isn't strong
+// enough... raising the flatten is what buys the height" -- so the flatten
+// rises again (20000 -> 28500, ~31% -> ~43% vertical contraction) with the
+// spread beside it (8000 -> 11800, ~12% -> ~18%). The coil's tangent presses
+// (chin-over-tail, loop-over-pad, stacked runs) are authored at these
+// squeezed sections; chosen by looking at the deepest pose in the render.
+constexpr uint16_t kSpringBodyFlattenQ16 = 28500;  // ~43% vertical contraction
+constexpr uint16_t kSpringBodySpreadQ16 = 11800;   // ~18% lateral/lengthwise bulge
 constexpr uint8_t kSpringSkullDeformStrength = 64; // head only squashes slightly
 constexpr uint8_t kSpringThroatDeformStrength = 188;
 constexpr uint8_t kSpringBodyDeformStrength = 255;
