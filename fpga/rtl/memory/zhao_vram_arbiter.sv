@@ -188,9 +188,44 @@ module zhao_vram_arbiter
                              // latched (a grant of it is a strict-priority
                              // violation; a stale pre-scanout offer is not)
 
+  // ---- every client's burst length, computed BEFORE the winner is known ---
+  // The seed-3 fit made this the design's worst path at -0.425 ns:
+  //
+  //     pend_words[1][2] -> eligible[1]  +0.587
+  //                      -> always1~2    +0.572   the override/RR/priority
+  //                      -> sel[0]~2     +0.413   arbitration
+  //                      -> Mux32~2/~3   +0.974   5-way mux of pend_words+addr
+  //                      -> Add2~29      +0.932   row_tail = 2048 - col
+  //                      -> LessThan4~2  +0.495   row_tail >= rem
+  //                      -> LessThan4~4  +0.560   row_tail >= 8
+  //                      -> sel_bw[0]~2  +0.503
+  //                      -> offer_words
+  //
+  // Eligibility, a three-way priority arbitration, a 5-way mux of 17 bits,
+  // a 12-bit subtract and two 12-bit compares, all in one cycle -- and the
+  // arithmetic sat AFTER the arbitration, waiting to learn which client won.
+  //
+  // It never needed to wait. `burst_words` is a pure function of ONE client's
+  // own `pend_words` and `pend_addr`, so all five results can be computed
+  // while the arbiter is still deciding, and the winner selects among the
+  // ANSWERS instead of among the inputs. A 17-bit mux feeding a subtract and
+  // two compares becomes a 4-bit mux fed by them.
+  //
+  // Identical by construction: bw_all[sel] IS burst_words(pend_words[sel],
+  // pend_addr[sel][11:1]), evaluated for every k rather than just the winner.
+  //
+  // Costs five copies of a 12-bit subtract and two compares instead of one.
+  // Same shape as the Early-Z floor fix in round 12 -- when a select feeds
+  // arithmetic, computing every branch and selecting the RESULT is shorter
+  // than selecting the operand and then computing.
+  logic [3:0] bw_all [0:4];
+  always_comb begin
+    for (int k = 0; k < 5; k++)
+      bw_all[k] = burst_words(pend_words[k], pend_addr[k][11:1]);
+  end
+
   logic [3:0] sel_bw;
-  assign sel_bw = sel_valid ? burst_words(pend_words[sel], pend_addr[sel][11:1])
-                            : 4'd0;
+  assign sel_bw = sel_valid ? bw_all[sel] : 4'd0;
 
   always_comb begin
     ctrl_req         = '0;
