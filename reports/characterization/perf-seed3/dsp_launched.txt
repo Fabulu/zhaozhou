@@ -1,0 +1,23 @@
+# paths launching at a DSP output register.
+# Quartus packs a register into the DSP that feeds it, so
+# these do NOT look like DSPs by name -- which is exactly how
+# the first version of this tool missed all 48 of them.
+# count: 17 of 100
+
+   0.314  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.314  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.314  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.314  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.314  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.315  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.315  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.315  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.315  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.315  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.316  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.316  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.316  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.316  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.316  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.316  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]
+   0.317  DSP_X20_Y33_N0         zhao_geom_bin_pipe:u_render_bin|zhao_raster_tile_pipe:u_pipe|zhao_raster_edgewalk:u_edgewalk|cross_r[26]

@@ -1,0 +1,4 @@
+; Router Timing Optimization Level                                           ; MAXIMUM                               ; Normal                                ;
+; Fitter Effort                                                              ; Standard Fit                          ; Auto Fit                              ;
+Info (16303): High Performance Effort optimization mode selected -- timing performance will be prioritized at the potential cost of increased compilation time
+Info (171004): Fitter is performing a Standard Fit compilation using maximum Fitter effort to optimize design performance

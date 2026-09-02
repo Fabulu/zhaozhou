@@ -1,0 +1,10 @@
+# worst-100 setup paths by launch-register PHYSICAL resource,
+# read from the fitter's own Location column -- NOT from the node
+# name, which does not say where Quartus put the register.
+#
+# spec 2.2: an M10K launch pays ~2 ns of clock-to-out a fabric flop
+# does not, and a DSP-packed launch pays its own. Read this right
+# after the Fmax.
+
+fabric_ff      83
+dsp            17
