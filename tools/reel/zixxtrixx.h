@@ -779,22 +779,23 @@ constexpr const auto& kSpringGroundedHeading = kStanceSlope;
 // target and starting to load.
 constexpr int32_t kSpringAbsorbHeading[kStanceSlopes] = {
     -728, 364, 1820, 4005, 6918, 14563, 21299, 25122, 21845, 14928,
-    -1092, -1820, -2549, -3641, -5461, -8738, -11833, -15474, -17294};
+    -1092, -1820, -2549, -3641, -5461, -7282, -9830, -10922, -12379};
 // ASSEMBLED (arm 400). The S GROWN AND TRAVELLING BACKWARD -- and grown
 // UP: the hook at idle curl, the dive extended, the belly long and
-// grounded, and the tail RAISED into a tall quill whose top leans forward
-// (stations 17-18 curled past -168 deg). This is Direction 20's "leaning
-// back must make the S BIGGER" and it is load-bearing choreography twice
-// over: the front's grounded foot slides backward BENEATH the raised
-// rear during the squash, and the over-curled tip values put every rear
-// station's shortest unwrap on the over-the-top side, so the whole rear
-// WHIPS together over the top into the coil's descent and tail pad -- no
-// station tears against its neighbour, and the whip's arc stays below and
-// forward of the arriving head. The probe's per-tick intersection walk is
-// the arbiter that the passes clear.
+// grounded, and the tail RAISED into a tall quill (to -95 deg at the
+// tip). This is Direction 20's "leaning back must make the S BIGGER" and
+// it is load-bearing choreography: the front's grounded foot slides
+// backward BENEATH the raised rear during the squash, and the quill's
+// values are placed so stations 14-16 unwrap over the top (rising
+// through the sweep) while the thin tip stations 17-18 take the normal
+// side and TRAIL the whip -- every interpolated tail pose keeps the tip
+// UP (the over-curled variant stabbed the ground 722 mm mid-route), the
+// only sharp mid-route bend lands on the thin tail where the flattened
+// radius allows it, and it reads as follow-through. The probe's per-tick
+// intersection and bite walks are the arbiters.
 constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
     -2731, -910, 1092, 3823, 7282, 14382, 20753, 24576, 28217, 24576,
-    -728, -1456, -2184, -2913, -8192, -12743, -16384, -32404, -33314};
+    -728, -1456, -2184, -2913, -8192, -10922, -14563, -15474, -17294};
 // COLLAPSED (arm 1000): THE COIL AT ITS EXTREME. Head hung low-front over
 // the planted tail (nose ~47% of idle height, ~1.3 m behind its idle spot
 // -- the whole S has gathered backward onto the rear); crest at ~65% of
@@ -863,12 +864,24 @@ constexpr int32_t kSpringAbsorbSupportLiftMm = 52;
 constexpr int32_t kSpringKey5SupportLiftMm = 35;
 constexpr int32_t kSpringAssembledSupportLiftMm = 25;
 constexpr int32_t kSpringCollapsedSupportLiftMm = 287;
+// THE CLIMB. Between the assembled S and the seated coil the interpolated
+// front sags: the hook deepens while the whole animal translates back, and
+// without extra height the foot stations dig ~230 mm underground half way
+// through the squash (springpose sweep, this run). The named bump rides a
+// parabola over the squash -- zero at both knots, peak in the middle -- so
+// the animal RISES as it gathers onto the coil and settles as it seats.
+// Authored, not derived: chosen so the deepest mid-squash bite stays inside
+// the declared loaded band, checked by the probe's per-tick contact walk.
+constexpr int32_t kSpringSquashClimbBumpMm = 300;
 // The loaded spring's declared terrain penetration, in mm. Ground contact is
 // AUTHORED here and checked by the committed pose probe; its absence would be
 // as much a fault as burying, because a body resting at exactly zero reads as
 // hovering. Resting bite stays kSpringDeclaredBiteMm; this is the deepest the
-// fully loaded coil is allowed to press.
-constexpr int32_t kSpringDeclaredLoadedBiteMm = 60;
+// loaded animal is allowed to press. Direction 22's coil raised it 60 -> 100:
+// mid-gather the foot deliberately PRESSES into the dirt as the wind loads
+// (~3-4 px at 240p, the anticipation dig) before the body climbs onto the
+// tail; the deep hold itself sits at ~-30..-55.
+constexpr int32_t kSpringDeclaredLoadedBiteMm = 100;
 // THE LOADED BRACE IS HELD, NOT FROZEN. The old gate demanded the compressed
 // hold not move by more than ONE millimetre, which is a faithful description of
 // exactly what the owner rejected: "Nothing reads rigid -- not the arming, not
@@ -1867,7 +1880,14 @@ inline int32_t spring_support_surface_lift(int32_t entry, int32_t squash) {
     open_lift =
         kSpringOpenSupportLift[kSpringOpenSupportLiftCount - 1].lift_mm;
   const int32_t q = spring_smooth_amount(squash);
-  return kSpringCollapsedSupportLiftMm + static_cast<int32_t>(
+  // THE CLIMB (see kSpringSquashClimbBumpMm): zero at both squash knots,
+  // peaking at ~2/3 squash where the interpolated front sags deepest
+  // (q*q*(1000-q), normalised to its maximum at q=667), so the gather
+  // rises over its own forming coil instead of sagging through the dirt.
+  const int32_t climb = static_cast<int32_t>(
+      (static_cast<int64_t>(kSpringSquashClimbBumpMm) * q * q * (1000 - q)) /
+      148148148);
+  return climb + kSpringCollapsedSupportLiftMm + static_cast<int32_t>(
       (static_cast<int64_t>(open_lift - kSpringCollapsedSupportLiftMm) *
        (1000 - q)) /
       1000);

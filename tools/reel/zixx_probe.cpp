@@ -1202,7 +1202,17 @@ int main() {
   const ClipScan* spring = find_scan(scans, 3);
   require(spring != nullptr, "missing primary slot 3 shared spring clip");
   if (spring) {
-    const int entry_tick = 2 * zixx::kSaltoSpringEntryEndKey;
+    // The "entry" sample is the ASSEMBLED moment -- the last key before the
+    // squash opens -- because the ordering law it feeds compares the GROWN S
+    // against the pressed coil. kSaltoSpringEntryEndKey is a phase-timing
+    // constant (the arming eases over 16 keys, so key 12 sits ~72% into the
+    // squash) and sampling there compared two mostly-pressed poses.
+    int assembled_key = 0;
+    for (int key = 1; key <= zixx::kSaltoCompressEndKey; ++key) {
+      if (zixx::spring_shared_squash_amount(key) > 0) break;
+      assembled_key = key;
+    }
+    const int entry_tick = 2 * assembled_key;
     const int deep_tick = 2 * zixx::kSaltoCompressEndKey;
     const int hold_end_tick = 2 * zixx::kSaltoCompressHoldEndKey;
     const int released_tick = 2 * zixx::kSaltoSpringReleasePoseKey;

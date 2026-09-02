@@ -121,3 +121,17 @@ designer with the tube-gap checker (v5/v6 plots in evidence/):
   287 (bone 14 rides the arch at the deep pose).
 iter3 render: the face now aims level-forward over the coil, the tail
 visibly passes under the chin. Probe round 3 running.
+### 2026-09-02 — Probe round 3 -> v8: the whip changes sides
+
+Round 3 caught the over-the-top whip stabbing the ground 722 mm mid-route
+(the last two tail stations point straight down halfway through a wrapped
+sweep). Re-derived the winding sides from the unwrap arithmetic: stations
+14-16 wrap (they RISE through the sweep), the thin tip stations 17-18 take
+the normal side and TRAIL the whip -- every interpolated pose keeps the
+tip up, and the one sharp mid-route bend lands on the thin tail (bend
+radius legal at its flattened radius; reads as follow-through). The
+assembled quill loses the past-vertical curl entirely. Also re-derived the
+probe's "entry" sample to the actual assembled moment (the last key
+before squash opens): kSaltoSpringEntryEndKey is phase timing and sits
+~72% into the squash under the 16-key eased arming, so the ordering gate
+was comparing two mostly-pressed poses.
