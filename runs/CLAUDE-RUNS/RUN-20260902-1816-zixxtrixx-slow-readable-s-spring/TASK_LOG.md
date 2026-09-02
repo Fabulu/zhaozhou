@@ -140,3 +140,38 @@ Rebuild the Zixxtrixx jump/salto spring per Owner Direction 23: four slow readab
   16-key descent, not jitter; the plan's "< 1 px/frame" target falls out of
   the stage-4/5 retime (412 mm of descent over 144 frames instead of 33) and
   will be re-measured there.
+
+### Stage 4 COMPLETE - the retime skeleton
+
+- kSaltoCompressEndKey 16 -> 64, kSaltoCompressHoldEndKey 18 -> 72,
+  kSaltoSpringEntryEndKey -> 36 (beat-1 end), kAttackKeys 240 -> 294.
+  kAtkRetimeShift derives +54 and slides the whole downstream attack; the
+  compile-enforced seam gates all pass (the shift is consistent).
+- Probe phase-envelope gate (zixx_probe.cpp:1303) re-authored as DERIVED
+  relationships citing Direction 23: beat 1 inside the arming and >= half of
+  it, beat 2 >= 8 keys, hold 4-12 keys, release deltas unchanged (D20 #4).
+- Found and fixed a probe-side raw slice literal the plan's landmine list
+  missed: zixx_probe.cpp:1861 sliced the release authorship at hard-coded
+  17,29 - now kAtkCompressSliceLastKey/kSaltoCoilPoseKey.
+- Left a warning comment on zc::AttackPlan's stale engine-side defaults
+  (zref_creature.hpp) per landmine 10.
+- PROBE GREEN end to end. Jump-one now 269 frames (plan predicted ~270),
+  144 frames of ground time.
+- springpose schedule: arming move_mm max 19 mm/key (gen13 80, live 528) -
+  the predicted ~4x scale-down.
+- Flight UNCHANGED: gen13 f46-110 byte-identical to stage4 at +108 frames
+  (65/65). Landing pixels differ only by the free-running 23-key life wave's
+  phase in the longer clip; side-by-side pairs are indistinguishable by eye
+  (evidence/stage4/landing-pairs-gen13-vs-stage4.png); final settle frames
+  byte-exact.
+- Legibility on the retimed arming (f1-144): centroid jerk 1.8/1.3 px and
+  shape rate 4.4/9.7/16.9 already at balance level (A0 centroid + A2 PASS);
+  solidity 0.59, hole 5.9, closure 0.45, spine 0.88 (B1-B4 PASS).
+  STILL FAILING, as the plan expects stage 5 to fix: head-x jerk 22.9 px -
+  the 30 Hz chord-midpoint shimmer is plainly visible in the head track
+  (head_x flip-flops +-6 px on alternating frames through the compression);
+  area jerk 230 px^2; A1 half-life dips mid-compression. A4 beats cannot
+  segment yet: the single trapezoid is beat-less by construction.
+- Eye check of the every-frame contact sheet: the animal is READABLE in
+  every arming frame, the press is continuous and slow, no blob, no snap.
+  It does not read hurried at 144 frames.
