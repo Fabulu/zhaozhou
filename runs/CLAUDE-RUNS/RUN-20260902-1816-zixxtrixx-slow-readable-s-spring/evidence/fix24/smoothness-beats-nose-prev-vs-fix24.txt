@@ -1,0 +1,20 @@
+PREV ground f1-168 sil-XOR med 1.72 max 4.47 %/f (argmax f119)
+   settle f1-12  0.27 %/f
+   beat1 f12-72  1.87 %/f
+   dwell f72-82  0.80 %/f
+   beat2 f82-144  2.30 %/f
+   hold f144-168  0.96 %/f
+   launch f168-175  25.39 %/f
+   nose x: f0:242 f12:243 f36:243 f72:239 f108:239 f144:234 f168:231  back=-12 px
+   nose y: f0:114 f12:114 f36:115 f72:115 f108:118 f144:125 f168:126  down=12 px
+   rearmost x min: 109  nose min: 231
+NEW ground f1-168 sil-XOR med 0.92 max 2.96 %/f (argmax f15)
+   settle f1-12  0.27 %/f
+   beat1 f12-72  0.83 %/f
+   dwell f72-82  0.94 %/f
+   beat2 f82-144  1.32 %/f
+   hold f144-168  0.98 %/f
+   launch f168-175  11.62 %/f
+   nose x: f0:242 f12:243 f36:242 f72:235 f108:236 f144:234 f168:231  back=-12 px
+   nose y: f0:114 f12:114 f36:116 f72:116 f108:118 f144:124 f168:126  down=11 px
+   rearmost x min: 107  nose min: 231

@@ -402,3 +402,59 @@ A4 beats segment (56f/60f runs, 12-14f gaps, hold split quiet+strain);
 A5 worst 1 reversal per station (the arch's own up-then-press, by design,
 separated by the dwell); B solidity 0.60 / hole 5.9 / closure 0.472 /
 spine 0.87; probe GREEN end to end. Jump-one now 293 frames.
+
+### 2026-09-03 (implementer, Direction-24 fix pass) — committed f5c0110c
+
+QA verdict absorbed (FAIL on D24 acceptance 1/2/3, one-line cause:
+kSpringAssembledHeading[5..9] byte-identical to kStanceSlope[5..9], and the
+whole travel budget in the tail). Direction 24 read: THE TAIL IS THE ANCHOR.
+
+WHAT CHANGED (tools/reel/zixxtrixx.h + two probe re-records):
+- Absorb/Assembled/Collapsed [15..18] now alias kStanceSlope[15..18]
+  verbatim — the tail's route is a constant by construction.
+- kSpringBladeSquashRise 3500 -> 0; kSpringBladeFlare 900 -> 300.
+- Assembled [10..14] = -2000,-8200,2400,8800,1600: a real broad rear lobe
+  (~4-5 px apex) gathered out of the flat run; [5..9] = 14700,21700,25600,
+  20300,12000 (hook a few degrees deeper — visibly changes, no early
+  squeeze). Absorb carries ~55%. Sine-sums balanced against grounded so
+  the front holds height.
+- kSpringCollapsedSupportLiftMm -26 -> -14 (planted tail rides the plant;
+  -26 buried it on the upslope). kJumpLandingLoadedBiteMm 48 -> 54
+  (declared: flat tail under the landing slam, ~1.3 px).
+- zixx_probe.cpp: interior-knot stall gate skips authored-planted stations
+  (an anchor is not a stall); kSpringWholeTailLateralSpanMaxMm 45 -> 55
+  (rest tail's construction roll now carried into the deep pose).
+
+AUTHORING LOOP: 8 drafts, each rendered on the fixed side camera and
+LOOKED AT. Draft 1 (measured-first, deep hook + tall arch) read as an
+early squeeze, dropped the crown, and self-intersected 45 verts — the
+art law's warning made flesh; reverted by eye. Growth ended up bounded by
+loop clearance (station-11 rise ~45 deg max before the under-curl kisses
+the lobe at the release bridge key 85.5).
+
+PIXEL-VERIFIED, QA's committed calibrated instruments, fixed camera:
+- Fin tip x 109-110 ALL 168 ground frames (was 109->125->120); y 123-127
+  (was 124->109->118). Tail bbox constant w58-62/h33-37 (was w37-60).
+  NO direction change (beat1 +0.14, beat2 +1.84 px, same sign).
+- Beat-1 share tail/mid/head 80.2/7.7/12.1 -> 41.3/25.1/33.6 %; residual
+  tail share is life wave + body pixels leaving x<170 as the animal
+  gathers, not fin motion.
+- Beat-2 descent tail/mid/head +1.85/+3.34/+7.80 px — together, planted
+  tail quietest.
+- Outline overlay (draft8-outline-overlay.png): the QA fault picture
+  INVERTED — three tail outlines trace one V; loop and mid-body separate.
+- Smoothness KEPT: sil-XOR med/max 0.92/2.96 %/f (prev 1.72/4.47), worst
+  frame still f15 quantizer. Nose -12 back / +11 down, monotone, gap >=
+  124 px. Probe PASS end to end at f5c0110c.
+
+HONEST FLAGS for QA:
+1. Whole-frame XOR beat contrast is REDUCED (beat1 0.83 vs dwell 0.94
+   %/f): the old contrast was the tail flailing; life wave ramps to full
+   through beat 1, so the dwell out-rates it. Beats separate spatially
+   and on region centroids; judge in motion.
+2. Launch rate 11.6 %/f vs prev 25.4 (still 12x the hold) — the planted
+   tail no longer whips during release.
+3. Gate re-records on the record: lateral span 45->55 (construction roll),
+   landing bite 48->54 (declared), stall gate skips planted stations.
+4. NOT re-verified here: full 22-subject bank, Gen-13 flight byte
+   identity, encode/publish — per the brief these belong to QA.

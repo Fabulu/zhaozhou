@@ -1,0 +1,18 @@
+=== PREV ecf0e3ab  (191 frames)
+  beat1 f12-72 ABS px: tail   2194 (80.2%)  mid    211 ( 7.7%)  head    332 (12.1%)   total 2737
+  beat2 f82-144 ABS px: tail   2045 (63.3%)  mid    445 (13.8%)  head    743 (23.0%)   total 3233
+  centroid-y descent f72->f144: tail +3.23  mid +2.76  head +6.52
+  centroid-y descent f12->f72: tail -7.26  mid -1.08  head -0.20
+  centroid-y descent f72->f160: tail +2.68  mid +3.08  head +7.15
+  tail  y route: f12 135.82  f42 132.46  f72 128.56  f108 127.66  f144 131.79   (beat1 delta -7.26)
+  mid   y route: f12 134.14  f42 133.72  f72 133.06  f108 134.32  f144 135.82   (beat1 delta -1.08)
+  head  y route: f12 122.10  f42 121.91  f72 121.90  f108 123.28  f144 128.42   (beat1 delta -0.20)
+=== HEAD 48310d18  (191 frames)
+  beat1 f12-72 ABS px: tail    494 (41.3%)  mid    301 (25.1%)  head    402 (33.6%)   total 1197
+  beat2 f82-144 ABS px: tail    765 (41.8%)  mid    397 (21.7%)  head    666 (36.4%)   total 1828
+  centroid-y descent f72->f144: tail +1.85  mid +3.34  head +7.80
+  centroid-y descent f12->f72: tail +0.14  mid -1.98  head -1.64
+  centroid-y descent f72->f160: tail +1.44  mid +3.70  head +8.26
+  tail  y route: f12 135.84  f42 136.04  f72 135.99  f108 136.88  f144 137.84   (beat1 delta +0.14)
+  mid   y route: f12 134.14  f42 133.41  f72 132.16  f108 133.36  f144 135.50   (beat1 delta -1.98)
+  head  y route: f12 122.11  f42 121.66  f72 120.46  f108 121.95  f144 128.26   (beat1 delta -1.64)
