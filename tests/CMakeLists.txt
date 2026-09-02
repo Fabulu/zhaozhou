@@ -2183,6 +2183,18 @@ verilate(test_texture_cache_pipe_directed
 add_test(NAME texture_cache_pipe_directed COMMAND test_texture_cache_pipe_directed)
 set_tests_properties(texture_cache_pipe_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The island page directory -- first block of the terrain world layer.
+# Covers the same-cycle fin+claim hazard that a generation guard alone
+# does NOT close, and stale-handle reporting under residency churn.
+add_executable(test_terrain_residency_directed terrain/terrain_residency_directed.cpp)
+target_link_libraries(test_terrain_residency_directed PRIVATE zhao_harness)
+verilate(test_terrain_residency_directed
+  PREFIX Vzhao_terrain_residency
+  TOP_MODULE zhao_terrain_residency
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_residency.sv)
+add_test(NAME terrain_residency_directed COMMAND test_terrain_residency_directed)
+set_tests_properties(terrain_residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)

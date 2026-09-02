@@ -243,9 +243,25 @@ module zhao_terrain_residency #(
       end
 
       // ---- the loader finished a page ------------------------------------
-      // Guarded by generation: a load that completes AFTER its slot was
-      // re-claimed must not mark the new occupant loaded.
-      if (fin_valid_i && res_r[fin_slot_i] && gen_r[fin_slot_i] == fin_gen_i)
+      // Guarded by generation AND by a same-cycle claim to the same slot.
+      //
+      // THE GENERATION ALONE IS NOT ENOUGH, and the first draft of this block
+      // had exactly that bug with a comment claiming otherwise. `gen_r` is a
+      // REGISTER: during the cycle a claim lands it still holds the OLD
+      // generation, so a stale `fin` carrying that old value MATCHES. And
+      // because this block sits after the claim block in the same always_ff,
+      // its `load_r <= 1'b1` overwrote the claim's `load_r <= 1'b0`.
+      //
+      // The result was a freshly claimed, UNFILLED page marked LOADED. A
+      // lookup then calls it resident and hands a patch job an unwritten
+      // height lattice -- terrain garbage that appears only when a load
+      // completes on the same clock as an eviction of its own slot, which is
+      // precisely what happens under prefetch churn during fast traversal.
+      //
+      // Found by inspection during the world-layer architecture pass, not by a
+      // test, because there was no test yet. There is one now.
+      if (fin_valid_i && res_r[fin_slot_i] && gen_r[fin_slot_i] == fin_gen_i
+          && !(cl_valid_i && cl_slot_c == fin_slot_i && !cl_same_c))
         load_r[fin_slot_i] <= 1'b1;
 
       // ---- deformation ----------------------------------------------------
