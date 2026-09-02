@@ -2195,6 +2195,19 @@ verilate(test_terrain_residency_directed
 add_test(NAME terrain_residency_directed COMMAND test_terrain_residency_directed)
 set_tests_properties(terrain_residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# Randomized traversal against an INDEPENDENT contract model. The property
+# worth the file is dirty eviction: a dirty page displaced without being
+# flagged means permanent scars silently heal, and no single-frame test
+# can see it.
+add_executable(test_terrain_residency_random terrain/terrain_residency_random.cpp)
+target_link_libraries(test_terrain_residency_random PRIVATE zhao_harness)
+verilate(test_terrain_residency_random
+  PREFIX Vzhao_terrain_residency
+  TOP_MODULE zhao_terrain_residency
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_residency.sv)
+add_test(NAME terrain_residency_random COMMAND test_terrain_residency_random)
+set_tests_properties(terrain_residency_random PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 
 add_test(NAME render_fb_directed COMMAND test_render_fb_directed)
 set_tests_properties(render_fb_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)

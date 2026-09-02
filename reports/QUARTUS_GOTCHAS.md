@@ -677,3 +677,30 @@ comparable. A broken or subtly different fit also costs an hour to discover,
 against the ~40 minutes it saves. Do it between passes, then re-fit one
 unchanged commit to confirm the number is identical before trusting the series
 across the change.
+
+## `run_block_fit -Module` alone cannot fit a NEW block
+
+2026-09-02, after a 139-second fit that reported `failed:quartus_map` and looked
+like a synthesis error in the design.
+
+It was not. The generated QSF is built from the **shell** project's source list
+with `../../rtl/` rewritten to an absolute path:
+
+    $qsf = $qsf -replace '\.\./\.\./rtl/', "$rtlAbs/"
+    $qsf = $qsf -replace '^set_global_assignment -name TOP_LEVEL_ENTITY.*', "... $mod"
+
+So `-Module zhao_texture_tmu_plan` set the top-level entity to a module that
+**no source file in the list defines**, and quartus_map failed with the block
+looking guilty. Any block outside the shell cone -- every new one -- needs its
+sources passed:
+
+    run_block_fit.ps1 -Module zhao_texture_tmu_plan `
+      -ExtraSources fpga/rtl/texture/zhao_texture_tmu_plan.sv
+
+and every sub-module it instantiates, in the same list. The parameter's own
+comment says this ("blocks that are NOT in the shell cone ... can be
+characterized with the same flow"); it just does not fail in a way that says so.
+
+**The tell:** a `failed:quartus_map` with no error text in the log, and no
+per-block workspace directory created under the temp workspace. A genuine
+synthesis error leaves both.
