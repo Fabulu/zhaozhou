@@ -1274,20 +1274,26 @@ int main() {
     // unrelated procedural magnitudes. The durable mechanical law is that every
     // region participates; likeness is judged from the committed every-frame
     // sheets above this probe, not by fitting the superseded numeric envelope.
-    // OWNER DIRECTION 20 #4 re-records these three windows. The rejected
-    // schedule was 6 keys of entry, 6 of squash and a SIX-key frozen hold; the
-    // accepted one arms over 16 of the same 18 keys and holds for two. The
-    // release, rigid lift and wheel windows below are unchanged.
-    require(zixx::kSaltoSpringEntryEndKey >= 10 &&
-                zixx::kSaltoSpringEntryEndKey <= 14 &&
+    // OWNER DIRECTION 23 (RUN-20260902-1816) re-authors this band. The old
+    // band pinned the arming to the rejected 16/18 schedule in absolute keys,
+    // which would forbid exactly the slower arming the owner has now asked
+    // for three directions running. It is a regression band, not a law, so
+    // it is re-recorded as DERIVED relationships: beat 1 (become the S) ends
+    // strictly inside the arming and carries at least half of it; beat 2
+    // (the compression) gets at least 16 frames; the loaded hold lives for
+    // 8-24 frames. The RELEASE deltas are unchanged from the accepted
+    // Direction-20 windows -- the release stays fast by design (D20 #4).
+    require(zixx::kSaltoSpringEntryEndKey > 0 &&
+                zixx::kSaltoSpringEntryEndKey <
+                        zixx::kSaltoCompressEndKey &&
+                2 * zixx::kSaltoSpringEntryEndKey >=
+                        zixx::kSaltoCompressEndKey &&
                 zixx::kSaltoCompressEndKey -
-                        zixx::kSaltoSpringEntryEndKey >= 3 &&
-                zixx::kSaltoCompressEndKey -
-                        zixx::kSaltoSpringEntryEndKey <= 6 &&
+                        zixx::kSaltoSpringEntryEndKey >= 8 &&
                 zixx::kSaltoCompressHoldEndKey -
-                        zixx::kSaltoCompressEndKey >= 2 &&
+                        zixx::kSaltoCompressEndKey >= 4 &&
                 zixx::kSaltoCompressHoldEndKey -
-                        zixx::kSaltoCompressEndKey <= 4 &&
+                        zixx::kSaltoCompressEndKey <= 12 &&
                 zixx::kSaltoSpringReleasePoseKey -
                         zixx::kSaltoCompressHoldEndKey >= 3 &&
                 zixx::kSaltoSpringReleasePoseKey -
@@ -1852,7 +1858,8 @@ int main() {
 
   const zc::PresentationMidpointAuthorship release_owned =
       zixx::slice_midpoint_authorship(
-          local_owned, zixx::kSlotAtkRelease, 17, 29);
+          local_owned, zixx::kSlotAtkRelease,
+          zixx::kAtkCompressSliceLastKey, zixx::kSaltoCoilPoseKey);
   check_midpoint_authorship("release slice", release_owned, 1, false);
 
   // Retiming changes phase locations, never support obligations. The default-only

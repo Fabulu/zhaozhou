@@ -557,7 +557,9 @@ constexpr int kWalkKeys = 40;
 // 18 keys to compress and hold, then releases over the next 10. Everything
 // from the approved flight is shifted by 12 keys, without changing its wheel,
 // apex hang, plunge, five-real-second planted-spear hold, or recovery timing.
-constexpr int kAttackKeys = 240;
+// 240 accepted keys + kAtkRetimeShift (54) of Direction-23 arming growth; a
+// static_assert beside the salto timeline keeps this in step with the shift.
+constexpr int kAttackKeys = 294;
 constexpr int kFallKeys = 144;  // SLOWER STILL (2026-08-27 pass 3, Fabian:
                                 // "When falling, the rotation is too
                                 // strong"): one tumble now takes 4.8 s, so
@@ -897,13 +899,23 @@ constexpr int32_t kSpringBladeFlare = 900;         // fan braces during compress
 // spring being armed." The rejected build spent 12 keys arming and then SIX
 // keys frozen at the bottom -- a third of the anticipation was a dead hold, and
 // the motion-energy trace of the published clip is literally flat across it.
-// The arming now takes 16 of the same 18 keys and the hold is a two-key beat.
-// Nothing after key 18 moves: the release, the rigid lift, the airborne wheel,
-// the spear, the impact and every kAtkLift/kAtkFwd/kAtkSpin table keep their
-// accepted keys, so this slows the anticipation without retiming the stunt.
-constexpr int kSaltoSpringEntryEndKey = 12;
-constexpr int kSaltoCompressEndKey = 16;
-constexpr int kSaltoCompressHoldEndKey = 18;
+// OWNER DIRECTION 23 (2026-09-02): "slowly, like the little balancing trick
+// example ... It's so jittery and fast there's no smoothness." The owner has
+// asked for a slower arming three directions running; 16 keys was 0.53 s
+// against the balance rise's 98 frames, and Recon 5 measured that no
+// four-beat read fits inside it. The arming becomes FOUR READABLE BEATS on a
+// 64-key line: settle-in (0-4, life only), become-the-S (4-36, the whole
+// body into the assembled S at balance-rise pace), a settle (36-42), the
+// compression (42-64, head slightly back and slowly down, everything
+// descending together), then an eight-key living hold to 72. 144 frames of
+// ground time before the launch. Everything downstream -- release, flight,
+// spear, stick, recovery -- keeps its ACCEPTED spacing and slides by
+// kAtkRetimeShift (+54), which the stage-1 naming made a single edit here.
+// kSaltoSpringEntryEndKey points at the end of beat 1 (it exists to feed the
+// probe's phase gate; the sampler runs on kSaltoCompressEndKey).
+constexpr int kSaltoSpringEntryEndKey = 36;
+constexpr int kSaltoCompressEndKey = 64;
+constexpr int kSaltoCompressHoldEndKey = 72;
 // Everything downstream of the loaded hold -- release, flight, spear, stick,
 // recovery -- keeps its ACCEPTED key spacing and merely SLIDES when the arming
 // grows. kAtkRetimeShift is that slide, derived from the hold end so a slower

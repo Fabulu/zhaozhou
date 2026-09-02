@@ -959,6 +959,10 @@ struct AttackPlan {
   // shared whole-S release is four keys: collapsed at 18, assembled at 19,
   // a support-compensated bridge at 20, absorb at 21, exact grounded at 22
   // before the rigid lift.
+  // NOTE (RUN-20260902-1816): these engine-side defaults still read a
+  // long-rejected schedule. Harmless only because zixx_plan_attack and
+  // zixx::JumpPlan overwrite all three from the kSalto* timeline -- do NOT
+  // default-construct an AttackPlan and expect the accepted timing.
   uint16_t compress_keys = 12, compress_hold_keys = 6, release_keys = 4;
   uint16_t coil_keys = 20, unroll_keys = 9, plunge_keys = 10;
   // trajectory
