@@ -372,3 +372,51 @@ the note's target is 110–115 rather than 100.
 | worst-path export — FRAGMENT named as offender #1 | `78aee73` |
 | CI format tier + the exit-128 gitlinks | `fdc57ca` |
 | mana-territory design recorded (Upheaval) | `450acc4` |
+
+---
+
+## PRIORITY CORRECTION 2026-09-02 (owner): fit the texture island first
+
+Owner, verbatim: *"the important bit is actually fitting all the texture stuff
+to see if the 99.5 MHz renderer and full fitted console actually holds up or if
+it needs more reingeneering. Keep your eyes on the prize. But work on terrain
+when you have time in between shell stuff."*
+
+**This is a correction and it is right.** Ten texture-island blocks were built,
+lint-clean and functionally verified against shipped oracles — and **not one of
+them has been fitted.** Their timing is entirely unmeasured. Everything claimed
+about them so far is throughput and exactness, never Fmax.
+
+That matters because the brief sets standalone targets they may not meet:
+
+    perspuv / rcp24 island        120 MHz min, 140-150 desirable
+    TMU / cache / AUX island      120-125 MHz min
+    texture cache                 125 MHz
+    full composition              105 acceptance floor, 110 objective
+
+If those do not close, the island needs re-architecting and any terrain work
+done first is spent on a machine that is about to change shape.
+
+### The order, and why
+
+Fits are SERIAL on this machine (one Quartus at a time) and cost ~1.5 h each
+including the clean-HEAD snapshot. Ten blocks at three seeds is not affordable,
+so the five substantial blocks are fitted first, one seed each, to find a
+disaster early:
+
+    1. zhao_texture_tmu_plan      five stages of mode decode, wrap, addressing
+    2. zhao_texture_cache_pipe    tag compare across four lanes + fill FSM
+    3. zhao_raster_rcp24_svc      a 32x64 multiply and eight contexts
+    4. zhao_raster_perspuv_svc    a VARIABLE shift, which is the expensive part
+    5. zhao_raster_texjoin_v2     16 entries x 3 samples of storage
+
+The small ones — aux_div6, bilerp_lane, rsp_dispatch, palette_res, aux_pipe —
+follow only if the big five behave.
+
+### Gap work rule, adopted
+
+Terrain work between fits must **not add unfitted RTL faster than it can be
+measured**. Building more hardware while ten blocks sit unmeasured is
+accumulating exactly the risk the owner just named. So gap work prefers:
+tests against RTL that already exists, architecture documents, and rulings —
+things that reduce uncertainty rather than add to it.
