@@ -62,6 +62,21 @@ discrepancy, ownership migration, FPGA/RTL, `sacengine`.
 
 ---
 
+## Don't Retry (route geometry, proven this run)
+
+- A planar chain cannot close a loop (Jordan): max winding < ~360, and the
+  entry/exit must diverge promptly.
+- With neck 5-7 capped at idle curl, any 180-deg reversal through the neck
+  costs ~400+ mm of height; the crest floor is ~600-650.
+- Over-the-top unwraps on the LAST TWO tail stations stab the ground
+  mid-sweep (-722); wrap 14-16, keep 17-18 normal-side.
+- kSpringChainLag 320 to de-sync the wind: wrecks everything, reverted.
+- Authoring assembled as the half-wound pose: hairpin at joint 9/10 and
+  the entry side dies; the wind must stay staged absorb(mild) ->
+  assembled(grown+quill) -> seating(rear done) -> collapsed.
+- The tail cannot pass behind the dive (leg+crest seal that side); the pad
+  must run under the coil, tip rearmost of the pad.
+
 ## Don't Retry
 
 - Proving the rear curl at the ASSEMBLED pose (the trap that produced three

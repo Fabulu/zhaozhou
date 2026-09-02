@@ -180,3 +180,26 @@ was comparing two mostly-pressed poses.
   blade fan digs at the seated tip; empirical check in round 7).
 - Round 7 runs with the COMPLETE output saved; remaining fails will be
   attacked from its own per-tick contact dump, not proxies.
+### 2026-09-02 — Round 7 read; blades, landing arm, apex
+
+- Blade crank moved the terrain tell (-255 -> -193): the FIN FAN was the
+  digger at the seated tip. Fan now CLOSES with the squash (flare -1500)
+  and rises hard (9000) - fins follow, they never carry the stand.
+- kJumpLandingAbsorbArm 700 -> 500: 700 rode the SEATED coil (body high,
+  impact bite 12-14 mm < the declared 15 minimum). The landing cushion now
+  rides the route's pressing phase; the coil belongs to takeoffs.
+- Whip apex key 565 -> 515 for the crown's crossing clearance; the
+  declared loading dig deepens to 130 mm (the press, ~5 px at 240p).
+### 2026-09-02 — Rounds 8-10: 25 -> 9 -> 5 assertions
+
+- Landings GREEN (arm-500 cushion + the deep declared press).
+- Blade fan closes+rises: terrain tell -297 -> -123.
+- Bands declared: spring loaded dig 160, landing press 125.
+- Remaining five: the release-transit graze (nose over the seated coil at
+  arm ~660-830, rides the head's life-wave), its bite twin, the retimed
+  attack's grid hitting the same window, six/nine's outside-window bound
+  (same root). Round 11: waves 380/280, seating descent a hair deeper,
+  late lift keys split {790,335}/{840,390}/{920,295}.
+- LOOKED at iter4 jump-one (161-frame sheet): gather -> wound coil ->
+  explosive release -> accepted wheel -> landing press -> settle. The arc
+  reads. Fins now rise with the squash (rooster-tail) instead of stabbing.

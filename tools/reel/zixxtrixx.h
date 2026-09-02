@@ -806,8 +806,8 @@ constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
 // the FRONT'S OWN FOLD closing -- the dive deepens back to idle curl,
 // pulling the head its last ~400 mm back and bowing it onto the coil.
 constexpr int32_t kSpringSeatingHeading[kStanceSlopes] = {
-    1820, 1092, 728, 2549, 5825, 11287, 15656, 19296, 32040, 37319,
-    52428, 40412, 33860, 32950, 25848, 22572, 19296, 2184, 1092};
+    1820, 1092, 728, 1456, 4369, 11287, 15656, 19296, 32040, 37319,
+    52428, 39320, 33314, 32586, 26578, 22572, 19296, 2184, 1092};
 // COLLAPSED (arm 1000): THE COIL AT ITS EXTREME. Head hung low-front over
 // the planted tail (nose ~47% of idle height, ~1.3 m behind its idle spot
 // -- the whole S has gathered backward onto the rear); crest at ~65% of
@@ -818,7 +818,7 @@ constexpr int32_t kSpringSeatingHeading[kStanceSlopes] = {
 // loop-bottom over pad); the flatten/spread deform takes every touch.
 constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
     -1820, -728, 0, 3277, 7646, 14199, 20025, 23848, 32040, 37319,
-    52428, 40412, 33860, 32950, 25848, 22572, 19296, 2184, 1092};
+    52428, 39320, 33314, 32586, 25848, 22572, 19296, 2184, 1092};
 // WHERE THE THREE AUTHORED POSES SIT ON THE ONE ARMING PARAMETER, in 1/1000 of
 // the complete arming. Grounded is 0 and collapsed is 1000. Moving these
 // reparameterises the build without touching a single shape value. Direction
@@ -896,9 +896,11 @@ struct SpringSquashLiftKey {
 constexpr SpringSquashLiftKey kSpringSquashLiftRoute[] = {
     {150, -40},   // the belly stays down while the rear starts to rise
     {300, 400},   // the press rolls forward; the body rocks onto the foot
-    {460, 565},   // the whip's apex -- the climb onto the forming coil
-    {620, 285},   // the whip lands; the pad takes the ground
-    {800, 330},   // the head travels back over the seated coil
+    {460, 515},   // the whip's apex -- the climb onto the forming coil
+    {620, 276},   // the whip lands; the pad takes the ground
+    {790, 335},   // the head travels back over the seated coil
+    {840, 390},   // the deepest transit press, held out of the dirt
+    {920, 295},   // easing toward the bow
     {1000, kSpringCollapsedSupportLiftMm},  // the bow onto the chin rest
 };
 constexpr int kSpringSquashLiftRouteCount =
@@ -912,7 +914,7 @@ constexpr int kSpringSquashLiftRouteCount =
 // mid-gather the foot deliberately PRESSES into the dirt as the wind loads
 // (~3-4 px at 240p, the anticipation dig) before the body climbs onto the
 // tail; the deep hold itself sits at ~-30..-55.
-constexpr int32_t kSpringDeclaredLoadedBiteMm = 100;
+constexpr int32_t kSpringDeclaredLoadedBiteMm = 160;
 // THE LOADED BRACE IS HELD, NOT FROZEN. The old gate demanded the compressed
 // hold not move by more than ONE millimetre, which is a faithful description of
 // exactly what the owner rejected: "Nothing reads rigid -- not the arming, not
@@ -961,12 +963,12 @@ constexpr int32_t kSpringJumpHeadAttitude = 700;   // follows the taller entry a
 // level, target-forward aim at full squash (a16; ~32 deg). It braces the
 // AIM; it must not lift the nose into a skyward point.
 constexpr int32_t kSpringHeadAttitude = 7500;
-constexpr int32_t kSpringBladeFlare = 400;         // fan braces during compression
+constexpr int32_t kSpringBladeFlare = -1500;       // the fan CLOSES as the coil seats
 // Direction 22: at the seated coil the tail tube points backward-level, so
 // a level fan's lower leaf stabbed ~250 mm into the dirt (probe terrain
 // walk). The blades sweep UP with the squash instead -- the rooster-tail of
 // the wound spring; fins follow, they never carry the stand.
-constexpr int32_t kSpringBladeSquashRise = 6500;
+constexpr int32_t kSpringBladeSquashRise = 9500;
 
 
 // Named theatrical timing. The accepted attack still leaves the terrain at key
@@ -2045,10 +2047,10 @@ constexpr int32_t kSpringChainLag = 165;
 constexpr int32_t kSpringChainLagPeak = 500;
 // The struggle waves. Periods are in KEYS and deliberately incommensurate, so
 // the pair never repeats inside one arming; amplitudes are in angle16.
-constexpr int32_t kSpringWobble = 500;
+constexpr int32_t kSpringWobble = 380;
 constexpr int32_t kSpringWobblePeriodKeys = 23;
 constexpr int32_t kSpringWobbleStationPhase = -4200;
-constexpr int32_t kSpringWobble2 = 360;
+constexpr int32_t kSpringWobble2 = 280;
 constexpr int32_t kSpringWobble2PeriodKeys = 51;
 constexpr int32_t kSpringWobble2StationPhase = 2600;
 // The waves fade in over the first part of the arming and are held through the
@@ -7134,7 +7136,10 @@ struct JumpPlan {
 constexpr int32_t kJumpLandingBiteMm = kSpringDeclaredBiteMm;
 // Landing presses harder than resting: the animal is absorbing a fall, not
 // lying down. Declared here and checked by the committed pose probe.
-constexpr int32_t kJumpLandingLoadedBiteMm = 48;
+// Direction 22: the landing cushion rides the route's pressing phase, so
+// the fall's press is genuinely deep now -- declared, checked, and looked
+// at in the render (a press, not a burial).
+constexpr int32_t kJumpLandingLoadedBiteMm = 125;
 // ...and it must actually BITE on the impact frame. A landing that stops at the
 // surface reads weightless, so too LITTLE penetration is a fault as well.
 constexpr int32_t kJumpImpactMinBiteMm = 15;
@@ -7180,7 +7185,11 @@ constexpr int kJumpLandingSettlePeriodKeys = 11;
 // the impact pose is the whole-body S pressed partway down, cross-sections
 // flattening under the load, and the recovery decompresses back along the one
 // continuous route so the return to the grounded S is seamless.
-constexpr int32_t kJumpLandingAbsorbArm = 700;
+// Direction 22 re-derivation: 700 rode into the SEATED coil (support up
+// ~330 mm, the body high, the impact bite gone). The landing cushion now
+// rides the route's PRESSING phase -- the S absorbing into its loading dig
+// -- which is what a fall-absorb is; the full coil belongs to takeoffs.
+constexpr int32_t kJumpLandingAbsorbArm = 500;
 
 // Convert a landing load (0 = grounded, 1000 = fully absorbed) into the
 // entry/squash pair the shared spring speaks. Because the landing never reaches
