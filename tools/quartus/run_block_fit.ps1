@@ -204,10 +204,94 @@ function Get-Field([string]$Text, [string[]]$Labels) {
     return $null
 }
 
+
+# ---------------------------------------------------------------------------
+# FIT TARGETS: the explicit source closure, and the preflight that uses it
+# ---------------------------------------------------------------------------
+# WHY. This flow builds its QSF from the SHELL project's source list. A block
+# outside that cone -- every raster, texture, geometry and terrain leaf -- is
+# not in it, so `-Module zhao_texture_tmu_plan` alone elaborates a top with no
+# source file and the row comes back
+#
+#     zhao_texture_tmu_plan   failed:quartus_map   -   ALM -
+#
+# which reads as "this block does not fit". It fits; nobody told the fitter
+# where it was. The closure used to live in whoever was typing -ExtraSources
+# from memory, and a forgotten submodule produced the same row as a real
+# failure. Phase 0 of the 2026-09-02 buildability ruling.
+#
+# -ExtraSources still wins when given, so an exploratory one-off needs no file
+# edit; design/fit_targets.yml is the fallback and the record.
+
+function Read-FitTargets([string]$Path) {
+    $map = @{}
+    if (-not (Test-Path -LiteralPath $Path)) { return $map }
+    $top = $null
+    foreach ($raw in (Get-Content -LiteralPath $Path)) {
+        $line = $raw -replace '#.*$', ''
+        if ($line -match '^\s*-\s*top:\s*(\S+)\s*$') {
+            $top = $Matches[1]
+            $map[$top] = New-Object System.Collections.Generic.List[string]
+            continue
+        }
+        if ($null -ne $top -and $line -match '^\s*-\s*(\S+\.sv)\s*$') {
+            $map[$top].Add($Matches[1])
+        }
+    }
+    return $map
+}
+
+# Does `module <name>` appear in a file the fit will actually compile? The
+# shell cone counts, and so does every extra source.
+function Test-TopDeclared([string]$Top, [string[]]$Extras, [string]$Root, [string]$ShellQsf) {
+    foreach ($f in $Extras) {
+        $abs = Join-Path $Root $f
+        if ((Test-Path -LiteralPath $abs) -and
+            ((Get-Content -LiteralPath $abs -Raw) -match ("(?m)^\s*module\s+" + [regex]::Escape($Top) + "\s*[#(\r\n]"))) {
+            return $true
+        }
+    }
+    foreach ($q in (Get-Content -LiteralPath $ShellQsf)) {
+        if ($q -match 'SYSTEMVERILOG_FILE\s+(\S+)') {
+            $rel = $Matches[1] -replace '^\.\./\.\./rtl/', 'fpga/rtl/'
+            $abs = Join-Path $Root $rel
+            if ((Test-Path -LiteralPath $abs) -and
+                ((Get-Content -LiteralPath $abs -Raw) -match ("(?m)^\s*module\s+" + [regex]::Escape($Top) + "\s*[#(\r\n]"))) {
+                return $true
+            }
+        }
+    }
+    return $false
+}
+
+$FitTargets = Read-FitTargets (Join-Path $RepoRoot 'design/fit_targets.yml')
+
 try {
     foreach ($mod in $Module) {
         $dir = Join-Path $Workspace $mod
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
+
+        # ---- source closure, then PREFLIGHT ---------------------------------
+        # A missing source and a genuinely unfittable block used to produce the
+        # same row. They now produce different messages, and only one of them
+        # costs an hour of fitter time to discover.
+        $sources = $ExtraSources
+        if (-not $sources -and $FitTargets.ContainsKey($mod)) {
+            $sources = $FitTargets[$mod].ToArray()
+            Write-Host ("preflight: " + $mod + " closure from design/fit_targets.yml (" + $sources.Count + " file(s))")
+        }
+        foreach ($src in $sources) {
+            if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot $src))) {
+                throw ("preflight: source '" + $src + "' for top '" + $mod + "' does not exist. " +
+                       "This is a missing file, NOT a block that does not fit.")
+            }
+        }
+        if (-not (Test-TopDeclared $mod $sources $RepoRoot $SrcQsf)) {
+            throw ("preflight: no source names ``module " + $mod + "``. Add it to " +
+                   "design/fit_targets.yml or pass -ExtraSources. Running anyway would " +
+                   "spend the fitter's time to report 'failed:quartus_map', which reads " +
+                   "in the report as 'this block does not fit'.")
+        }
         # ---- THE BLOCK SDC, WRITTEN RATHER THAN COPIED -----------------------
         #
         # This used to `Copy-Item $SrcSdc`, i.e. hand every leaf block the SHELL's
@@ -319,8 +403,8 @@ try {
         # composed cone where the same line became unaffordable.
         $qsf = $qsf | Where-Object { $_ -notmatch '^set_instance_assignment -name VIRTUAL_PIN' }
         $qsf += 'set_instance_assignment -name VIRTUAL_PIN ON -to *'
-        if ($ExtraSources) {
-            foreach ($extra in $ExtraSources) {
+        if ($sources) {
+            foreach ($extra in $sources) {
                 $abs = (Resolve-Path (Join-Path $RepoRoot $extra)).Path.Replace([char]92, [char]47)
                 $qsf += "set_global_assignment -name SYSTEMVERILOG_FILE $abs"
             }

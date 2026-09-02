@@ -1,0 +1,92 @@
+# fit_targets.yml — the explicit source closure for every per-block fit.
+#
+# ---------------------------------------------------------------------------
+# WHY THIS FILE EXISTS
+# ---------------------------------------------------------------------------
+# `tools/quartus/run_block_fit.ps1` builds its QSF from the SHELL project's
+# source list. A block outside that cone -- every raster, texture, geometry and
+# terrain leaf -- is not in it, so `-Module zhao_texture_tmu_plan` on its own
+# elaborates a top that has no source file, and the row comes back:
+#
+#     zhao_texture_tmu_plan   failed:quartus_map   -   ALM -
+#
+# which in the report reads as "this block does not fit". It fits perfectly
+# well; nobody told the fitter where it was. The closure lived in whoever
+# happened to be typing `-ExtraSources` from memory, and a forgotten submodule
+# produced the same row as a genuine failure.
+#
+# Ruling: Phase 0 of reports/OWNER-RULINGS-BUILDABILITY-20260902.md --
+# "repair the fit apparatus: design/fit_targets.yml; explicit source closure;
+# preflight top-module existence".
+#
+# ---------------------------------------------------------------------------
+# FORMAT -- deliberately a strict subset
+# ---------------------------------------------------------------------------
+# Windows PowerShell 5.1 has no YAML parser, and adding a dependency to run a
+# fit is worse than constraining the file. So: two-space indent, one target per
+# `- top:` entry, sources as a flat `- path` list, comments with `#`. No
+# anchors, no nesting beyond this, no flow sequences.
+#
+# Paths are repo-relative and forward-slashed. Order matters to Quartus for
+# packages; list a package before what imports it.
+
+targets:
+
+  # --- texture island -------------------------------------------------------
+
+  - top: zhao_texture_tmu_plan
+    sources:
+      - fpga/rtl/texture/zhao_texture_tmu_plan.sv
+
+  - top: zhao_texture_cache_pipe
+    sources:
+      - fpga/rtl/texture/zhao_texture_cache_pipe.sv
+
+  - top: zhao_texture_aux_pipe
+    sources:
+      - fpga/rtl/texture/zhao_texture_aux_div6.sv
+      - fpga/rtl/texture/zhao_texture_aux_pipe.sv
+
+  - top: zhao_texture_aux_div6
+    sources:
+      - fpga/rtl/texture/zhao_texture_aux_div6.sv
+
+  - top: zhao_texture_palette_res
+    sources:
+      - fpga/rtl/texture/zhao_texture_palette_res.sv
+
+  - top: zhao_texture_rsp_dispatch
+    sources:
+      - fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
+
+  - top: zhao_texture_bilerp_lane
+    sources:
+      - fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+
+  - top: zhao_texture_mosaic
+    sources:
+      - fpga/rtl/texture/zhao_texture_mod255.sv
+      - fpga/rtl/texture/zhao_texture_mosaic.sv
+
+  # --- raster leaves the texture island depends on --------------------------
+
+  - top: zhao_raster_perspuv_svc
+    sources:
+      - fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+
+  - top: zhao_raster_texjoin_v2
+    sources:
+      - fpga/rtl/raster/zhao_raster_texjoin_v2.sv
+
+  # zhao_field_rcp24_rom is the submodule that was forgotten from an
+  # -ExtraSources line once. It is why this file exists in its present form.
+  - top: zhao_raster_rcp24_svc
+    sources:
+      - fpga/rtl/field/zhao_field_rcp24_rom.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+
+  # --- terrain --------------------------------------------------------------
+
+  - top: zhao_terrain_residency
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_residency.sv
