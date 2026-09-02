@@ -9,8 +9,8 @@ number below should be interpreted.
 | | |
 | --- | --- |
 | **Start** | 53.48 MHz, -8.7 ns worst slack |
-| **Best measured** | **96.73 MHz** (round 16, seed 3) |
-| **Typical** | ~95-96 MHz; roughly one seed in three draws ~91-93 |
+| **Best measured** | **96.73 MHz** (seed 3) |
+| **Typical** | **94.8 MHz, sd 1.7** over three seeds (94.21 / 93.43 / 96.73) |
 | **Target** | 100 MHz |
 | **Cost** | +287 ALMs, 0.6% of the device |
 | **DSP** | 16, unchanged across all sixteen fits |
@@ -94,12 +94,30 @@ Placement-independent, and therefore what to argue from:
 
 ## What the last 4 MHz needs, and why it is not another round of this
 
-At ~96 MHz the limiter **changes with the placement** — seed 2 says TILESTORE,
-seed 3 says EARLY-Z, and neither appears in the other's list at all. That is the
-signature of many paths sitting at similar slack with no single dominant
-structure, and it means local surgery now has low and largely unmeasurable
-expected value: each candidate costs two fits (~3 hours) to distinguish from
-noise, and the honest answer will usually be "inconclusive".
+**Three seeds produced three different limiter blocks.** Same commit, same
+sources, only the placement seed differing:
+
+    seed 1   94.21 MHz   zhao_cmd_dma          -0.615  (40 paths)
+    seed 2   93.43 MHz   zhao_raster_tilestore -0.703  ( 3 paths)
+    seed 3   96.73 MHz   zhao_raster_earlyz    -0.338  (41 paths)
+
+No single block limits this design. That is the signature of many paths sitting
+at similar slack with no dominant structure, and it settles the question: local
+surgery now has low and largely unmeasurable expected value. Each candidate
+costs two to three fits (3-5 hours) to distinguish from noise, the block it
+targets may not be the limiter at another placement, and the honest answer will
+usually be "inconclusive".
+
+**Round 16 is the worked example.** Three seeds before the arbiter fix and three
+after:
+
+    pre-arbiter   91.31 / 95.70 / 95.92   mean 94.31   sd 2.60
+    round 16      94.21 / 93.43 / 96.73   mean 94.79   sd 1.72
+
+A +0.48 MHz difference of means against sd ~2.2 with n=3. **Not resolvable.**
+The change is kept because it is architecturally right — arithmetic that waited
+on an arbitration no longer does — and not because the numbers show a gain. They
+do not.
 
 The remaining structural targets are real, and each costs a cycle somewhere:
 
