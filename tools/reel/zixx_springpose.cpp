@@ -73,7 +73,7 @@ void dump_pose(int32_t entry, int32_t squash, bool middle) {
       "support_base=(%d,%d) support_posed=(%d,%d) raw_dx=%d raw_dy=%d\n",
       entry, squash, ax, ay, rox, roy, to_mm(bx), to_mm(by), to_mm(px),
       to_mm(py), to_mm(bx - px), to_mm(by - py));
-  std::printf("  seg     x_mm     y_mm   head_a16   r_mm\n");
+  std::printf("  seg     x_mm     y_mm   head_a16\n");
   for (int b = 0; b < zixx::kSpineBones; ++b) {
     zc::mat3x4fx local;
     zc::quat16_to_mat3(posed[zixx::kBSpine0 + b], local, nullptr);
@@ -90,12 +90,8 @@ void dump_pose(int32_t entry, int32_t squash, bool middle) {
                           ? zixx::spring_profile_slope(b, 1000, entry, squash,
                                                        middle)
                           : 0;
-    // the tube half-thickness at this bone's ring station, so stacking can
-    // be judged against the real radii (comparison side; the caller applies
-    // the flatten/spread deform if it wants the squeezed section)
-    const int st = (b * (zixx::kProfileStations - 1)) / (zixx::kSpineBones - 1);
-    std::printf("  %2d  %7d  %7d  %8d  %5d\n", b, to_mm(world.m[3]) + ax,
-                to_mm(world.m[7]) + ay, h, zixx::station_r(st));
+    std::printf("  %2d  %7d  %7d  %8d\n", b, to_mm(world.m[3]) + ax,
+                to_mm(world.m[7]) + ay, h);
   }
 }
 
