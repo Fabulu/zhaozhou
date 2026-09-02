@@ -97,27 +97,61 @@ module zhao_scanout_fetch
 
   // ------------------------------------------------------ geometry math ---
   logic [26:0] base_addr;
+  // ---- the per-line base is REGISTERED, because it changes ONCE A LINE ----
+  // Round 14's worst path, and the one bro predicted by name:
+  //
+  //     u_fetch|fetch_line[0] -> Add0  +1.27 ns   fetch_line * 768
+  //                           -> Sel5  +0.25
+  //                           -> Add6  +1.42      + req_idx * 64
+  //                           -> u_guard_scan|Add0 +1.33
+  //                           -> LessThan68 +0.59 -> fwd_active +0.51
+  //                           -> mem_guard|fwd_req.addr[11]
+  //
+  // Three adder chains and a compare, ACROSS TWO MODULES, in one cycle.
+  // `fetch_line * 768` sat at the head of it, recomputed every cycle from a
+  // value that changes once per SCANLINE -- roughly every 800 cycles.
+  //
+  // Same shape as the four EDGEWALK faults this pass: arithmetic on a value
+  // that is stable for the whole operation, left combinational because it
+  // looks too cheap to bother registering, and standing at the head of a long
+  // path.
+  //
+  // SAFE BY THE FSM, NOT BY ASSERTION. `line_base_r` lags `fetch_line` by one
+  // cycle, so it must not be read in the cycle after fetch_line moves.
+  // fetch_line is assigned in exactly two running states (the Duo border skip
+  // in F_ARM, and the last segment in F_BEATS) and BOTH set state <= F_ARM.
+  // The route to the next request is F_ARM -> F_WAIT -> F_REQ, so seg_addr is
+  // never consumed less than two cycles after the change. The reset paths
+  // also land in F_ARM.
+  //
+  // Only the constant multiply is registered. `base_addr` and the Duo
+  // `seg_idx` term stay combinational: they are an add and a mux, and seg_idx
+  // moves per segment rather than per line, so lagging it would NOT be safe.
+  logic [31:0] line_base_c, line_base_r;
   logic [31:0] seg_addr;
   logic [3:0]  seg_reqs;
   logic        line_real, line_last;
   logic [7:0]  line_next;
 
   always_comb begin
-    base_addr = 27'(fetch_slot ? ZHAO_FB_SLOT1_BASE : ZHAO_FB_SLOT0_BASE);
-    seg_addr  = 32'd0;
+    base_addr   = 27'(fetch_slot ? ZHAO_FB_SLOT1_BASE : ZHAO_FB_SLOT0_BASE);
+    line_base_c = 32'd0;
+    seg_addr    = 32'd0;
     seg_reqs  = 4'd0;
     line_real = 1'b1;
     line_last = 1'b0;
     line_next = 8'd0;
     unique case (fetch_mode)
       ZHAO_MODE_Z60: begin
-        seg_addr  = {5'b00000, base_addr} + 32'(fetch_line) * 32'd768;
+        line_base_c = 32'(fetch_line) * 32'd768;
+        seg_addr  = {5'b00000, base_addr} + line_base_r;
         seg_reqs  = 4'd12;
         line_last = (fetch_line == 8'd239);
         line_next = fetch_line + 8'd1;
       end
       ZHAO_MODE_STORM: begin
-        seg_addr  = {5'b00000, base_addr} + 32'(fetch_line) * 32'd640;
+        line_base_c = 32'(fetch_line) * 32'd640;
+        seg_addr  = {5'b00000, base_addr} + line_base_r;
         seg_reqs  = 4'd10;
         line_last = (fetch_line == 8'd239);
         line_next = fetch_line + 8'd1;
@@ -130,8 +164,9 @@ module zhao_scanout_fetch
           line_real = 1'b0;                 // bottom border (park path)
           line_next = 8'd24;
         end else begin
+          line_base_c = 32'(fetch_line - 8'd24) * 32'd512;
           seg_addr  = {5'b00000, base_addr}
-                    + 32'(fetch_line - 8'd24) * 32'd512
+                    + line_base_r
                     + (seg_idx ? 32'h0001_8000 : 32'd0);
           seg_reqs  = 4'd8;
           line_last = (fetch_line == 8'd215);
@@ -191,6 +226,7 @@ module zhao_scanout_fetch
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
+      line_base_r   <= 32'd0;
       state         <= F_ARM;
       fetch_mode    <= ZHAO_MODE_Z60;   // free-run from reset (contract:
       fetch_slot    <= 1'b0;            //  raster repeats black until the
@@ -201,6 +237,10 @@ module zhao_scanout_fetch
       fill_words    <= 8'd0;
       fill_line_buf <= 1'b0;
     end else begin
+      // Tracks fetch_line by one cycle, which the FSM makes safe: every
+      // assignment to fetch_line also sets state <= F_ARM, and the route
+      // to the next request is F_ARM -> F_WAIT -> F_REQ.
+      line_base_r <= line_base_c;
 
       if (dec_sync) begin
         // ---- frame re-arm at the swap decision (vswap_dec crossed) -----
