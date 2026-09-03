@@ -1071,10 +1071,24 @@ struct CreaturePointLight {
   int32_t world_x, world_y, world_z;
   int32_t inner_radius, outer_radius;
   int32_t gain_r, gain_g, gain_b;
+  // Direction 28 ADDITIVE prototype (evaluative; nothing ships by default).
+  // Per-channel additive light colour, Q16.16 where 1.0 adds the full 255
+  // pixel scale at lambert = 1, attenuation = 1. It is scaled by the SAME
+  // per-source lambert*attenuation response as the multiplicative gains --
+  // never a flat lift -- and lands AFTER the texel multiply, so a red source
+  // can show red on a pigment with no red (multiplicative transport cannot).
+  // Consumed only while g_creature_additive_light is true; zero otherwise
+  // and the render is byte-identical to the multiplicative-only path.
+  int32_t add_r = 0, add_g = 0, add_b = 0;
 };
 constexpr uint32_t kCreatureMaxPointLights = 4;
 extern const CreaturePointLight* g_creature_point_lights;
 extern uint32_t g_creature_point_light_count;
+// Direction 28 gate constant for the additive term above. Default OFF: the
+// compositor never reads add_* and never asks the raster for additive lanes,
+// so every existing subject renders byte-identically (proven by CRC, not
+// asserted). Reel tooling flips it per subject and restores it after.
+extern bool g_creature_additive_light;
 
 // RUN 1939/2234 texture-experiment lane. 0 = off (the shipping path,
 // bit-identical). g_cel_bands 2/3 selects constant-per-triangle FACETED cel.

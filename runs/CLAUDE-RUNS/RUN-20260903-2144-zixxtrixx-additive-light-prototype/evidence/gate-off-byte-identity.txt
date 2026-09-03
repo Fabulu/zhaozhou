@@ -1,0 +1,29 @@
+Direction 28 gate proof: the additive-light build with the gate OFF versus a
+pristine build of HEAD (5389ab56, worktree zhaozhou-pristine), both invoked
+ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross, per-subject sequence CRC32C.
+The published webm was separately shown to match this tree's render to encoder
+noise only (frame 400: mean |d| 1.1 counts, 107/111 big deltas on hard edges).
+
+zixxtrixx-attack           gateoff=0x5847782F pristine=0x5847782F f=560/560 IDENTICAL
+zixxtrixx-balance          gateoff=0xFB6C09CE pristine=0xFB6C09CE f=493/493 IDENTICAL
+zixxtrixx-damage           gateoff=0xEF59111D pristine=0xEF59111D f=400/400 IDENTICAL
+zixxtrixx-death            gateoff=0x221453EA pristine=0x221453EA f=192/192 IDENTICAL
+zixxtrixx-death2           gateoff=0x6E23F14F pristine=0x6E23F14F f=240/240 IDENTICAL
+zixxtrixx-fall             gateoff=0x57F8DCFF pristine=0x57F8DCFF f=288/288 IDENTICAL
+zixxtrixx-hit              gateoff=0xCA924AC2 pristine=0xCA924AC2 f=300/300 IDENTICAL
+zixxtrixx-hitfloor         gateoff=0x82C6237C pristine=0x82C6237C f=188/188 IDENTICAL
+zixxtrixx-idle             gateoff=0x5922C634 pristine=0x5922C634 f=576/576 IDENTICAL
+zixxtrixx-jump-multi       gateoff=0xC5CF3F90 pristine=0xC5CF3F90 f=241/241 IDENTICAL
+zixxtrixx-jump-one         gateoff=0x964AB1F6 pristine=0x964AB1F6 f=241/241 IDENTICAL
+zixxtrixx-knockdown        gateoff=0x4F5B59CE pristine=0x4F5B59CE f=196/196 IDENTICAL
+zixxtrixx-look             gateoff=0x10D281D6 pristine=0x10D281D6 f=384/384 IDENTICAL
+zixxtrixx-run              gateoff=0x5EB6CAC2 pristine=0x5EB6CAC2 f=96/96 IDENTICAL
+zixxtrixx-salto-dummy      gateoff=0x451B38E0 pristine=0x451B38E0 f=295/295 IDENTICAL
+zixxtrixx-salto-fly        gateoff=0xD23C17CB pristine=0xD23C17CB f=313/313 IDENTICAL
+zixxtrixx-salto-nine       gateoff=0xD1A76AC9 pristine=0xD1A76AC9 f=435/435 IDENTICAL
+zixxtrixx-salto-six        gateoff=0xD6EF6DB1 pristine=0xD6EF6DB1 f=333/333 IDENTICAL
+zixxtrixx-slow-taunt       gateoff=0xEEDA6F20 pristine=0xEEDA6F20 f=239/239 IDENTICAL
+zixxtrixx-taunt            gateoff=0xF1F6AC5F pristine=0xF1F6AC5F f=224/224 IDENTICAL
+zixxtrixx-walk             gateoff=0x53293D33 pristine=0x53293D33 f=160/160 IDENTICAL
+zixxtrixx-moving-light     gateoff=0x33B0876E pristine=0x33B0876E IDENTICAL
+RESULT: ALL-IDENTICAL (22 subjects)

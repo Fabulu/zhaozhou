@@ -213,6 +213,23 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                          static_cast<__int128>(dw2_dx) * C.cb,
                      area);
   }
+  // Direction 28 additive-light lane x-gradients: the same one-rounding plane
+  // setup, entered only when the caller asked for additive lanes.
+  int32_t ar_grad_x = 0, ag_grad_x = 0, ab_grad_x = 0;
+  if (m.add_lanes) {
+    ar_grad_x =
+        div_rhu_s128(static_cast<__int128>(dw0_dx) * A.ar + static_cast<__int128>(dw1_dx) * B.ar +
+                         static_cast<__int128>(dw2_dx) * C.ar,
+                     area);
+    ag_grad_x =
+        div_rhu_s128(static_cast<__int128>(dw0_dx) * A.ag + static_cast<__int128>(dw1_dx) * B.ag +
+                         static_cast<__int128>(dw2_dx) * C.ag,
+                     area);
+    ab_grad_x =
+        div_rhu_s128(static_cast<__int128>(dw0_dx) * A.ab + static_cast<__int128>(dw1_dx) * B.ab +
+                         static_cast<__int128>(dw2_dx) * C.ab,
+                     area);
+  }
 
   for (int32_t py = min_y; py <= max_y; ++py) {
     const int64_t cy = (static_cast<int64_t>(py) << 8) + 128;  // pixel centre
@@ -251,6 +268,18 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                         area);
       cb = div_rhu_s128(static_cast<__int128>(w0) * A.cb + static_cast<__int128>(w1) * B.cb +
                             static_cast<__int128>(w2) * C.cb,
+                        area);
+    }
+    int32_t ar = 0, ag = 0, ab = 0;
+    if (m.add_lanes) {  // additive lanes: identical row-start barycentric law
+      ar = div_rhu_s128(static_cast<__int128>(w0) * A.ar + static_cast<__int128>(w1) * B.ar +
+                            static_cast<__int128>(w2) * C.ar,
+                        area);
+      ag = div_rhu_s128(static_cast<__int128>(w0) * A.ag + static_cast<__int128>(w1) * B.ag +
+                            static_cast<__int128>(w2) * C.ag,
+                        area);
+      ab = div_rhu_s128(static_cast<__int128>(w0) * A.ab + static_cast<__int128>(w1) * B.ab +
+                            static_cast<__int128>(w2) * C.ab,
                         area);
     }
     for (int32_t px = min_x; px <= max_x; ++px) {
@@ -300,9 +329,17 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                 int32_t mg = m.gouraud ? cg : tex->mod_g;
                 int32_t mb = m.gouraud ? cb : tex->mod_b;
                 apply_toon_ramp(m.toon, mr, mg, mb);
-                dst[0] = sat_u8((smp.r * mr + 32768) >> 16);
-                dst[1] = sat_u8((smp.g * mg + 32768) >> 16);
-                dst[2] = sat_u8((smp.b * mb + 32768) >> 16);
+                int32_t pr = (smp.r * mr + 32768) >> 16;
+                int32_t pg = (smp.g * mg + 32768) >> 16;
+                int32_t pb = (smp.b * mb + 32768) >> 16;
+                if (m.add_lanes) {  // Direction 28: additive AFTER the multiply
+                  pr += (static_cast<int64_t>(ar) * 255 + 32768) >> 16;
+                  pg += (static_cast<int64_t>(ag) * 255 + 32768) >> 16;
+                  pb += (static_cast<int64_t>(ab) * 255 + 32768) >> 16;
+                }
+                dst[0] = sat_u8(pr);
+                dst[1] = sat_u8(pg);
+                dst[2] = sat_u8(pb);
               } else if (tex != nullptr && tex->ts != nullptr) {
                 // ONE primary sample (charter §15/§26): mirrored-repeat fold
                 // to the texel (zref::terrain::mirror_texel — the §6.2 frozen
@@ -327,17 +364,33 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
                 int32_t mg = m.gouraud ? cg : tex->mod_g;
                 int32_t mb = m.gouraud ? cb : tex->mod_b;
                 apply_toon_ramp(m.toon, mr, mg, mb);
-                dst[0] = sat_u8((((r5 * 255 + 15) / 31) * mr + 32768) >> 16);
-                dst[1] = sat_u8((((g6 * 255 + 31) / 63) * mg + 32768) >> 16);
-                dst[2] = sat_u8((((b5 * 255 + 15) / 31) * mb + 32768) >> 16);
+                int32_t pr = (((r5 * 255 + 15) / 31) * mr + 32768) >> 16;
+                int32_t pg = (((g6 * 255 + 31) / 63) * mg + 32768) >> 16;
+                int32_t pb = (((b5 * 255 + 15) / 31) * mb + 32768) >> 16;
+                if (m.add_lanes) {  // Direction 28: additive AFTER the multiply
+                  pr += (static_cast<int64_t>(ar) * 255 + 32768) >> 16;
+                  pg += (static_cast<int64_t>(ag) * 255 + 32768) >> 16;
+                  pb += (static_cast<int64_t>(ab) * 255 + 32768) >> 16;
+                }
+                dst[0] = sat_u8(pr);
+                dst[1] = sat_u8(pg);
+                dst[2] = sat_u8(pb);
               } else if (m.gouraud) {
                 // untextured Gouraud: the lanes carry pre-lit colour on the
                 // 255 scale; ONE rounding per channel
                 int32_t mr = cr, mg = cg, mb = cb;
                 apply_toon_ramp(m.toon, mr, mg, mb);
-                dst[0] = sat_u8((mr + 32768) >> 16);
-                dst[1] = sat_u8((mg + 32768) >> 16);
-                dst[2] = sat_u8((mb + 32768) >> 16);
+                int32_t pr = (mr + 32768) >> 16;
+                int32_t pg = (mg + 32768) >> 16;
+                int32_t pb = (mb + 32768) >> 16;
+                if (m.add_lanes) {  // Direction 28: additive AFTER the multiply
+                  pr += (static_cast<int64_t>(ar) * 255 + 32768) >> 16;
+                  pg += (static_cast<int64_t>(ag) * 255 + 32768) >> 16;
+                  pb += (static_cast<int64_t>(ab) * 255 + 32768) >> 16;
+                }
+                dst[0] = sat_u8(pr);
+                dst[1] = sat_u8(pg);
+                dst[2] = sat_u8(pb);
               } else {
                 dst[0] = r;
                 dst[1] = g;
@@ -377,6 +430,11 @@ void raster_tri(WorkSurface& s, const Viewport& vp, const ScreenV& A0, const Scr
         cr += cr_grad_x;
         cg += cg_grad_x;
         cb += cb_grad_x;
+      }
+      if (m.add_lanes) {
+        ar += ar_grad_x;
+        ag += ag_grad_x;
+        ab += ab_grad_x;
       }
     }
   }

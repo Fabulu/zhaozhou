@@ -84,6 +84,11 @@ struct ScreenV {
   //     1<<16 — the interpolated replacement for TextureSpan::mod_*.
   //   - untextured: pre-lit COLOUR on the 255 scale (material x gain).
   int32_t cr = 0, cg = 0, cb = 0;
+  // Direction 28 ADDITIVE-light lanes (evaluative prototype). Q16.16 fraction
+  // of the full 255 pixel scale, interpolated exactly like cr/cg/cb and added
+  // AFTER the texel multiply, before sat_u8. Read only when TriMode.add_lanes;
+  // default zero keeps every existing caller byte-identical.
+  int32_t ar = 0, ag = 0, ab = 0;
 };
 
 struct ProjOut {
@@ -141,6 +146,12 @@ struct TriMode {
   // caller renders bit-identically.
   bool gouraud = false;
   const ToonRamp* toon = nullptr;  // optional per-fragment light comparator/table
+  // Direction 28 ADDITIVE prototype: interpolate the ScreenV ar/ag/ab lanes
+  // (same per-row one-division model as the colour lanes) and ADD the result,
+  // scaled to the 255 pixel scale, after the texel/gain multiply. Independent
+  // of `gouraud` so the faceted-cel flat path can carry a face-constant
+  // additive on the same lanes. Default false: byte-identical raster.
+  bool add_lanes = false;
 };
 
 /**

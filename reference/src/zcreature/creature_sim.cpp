@@ -529,6 +529,9 @@ const CreatureLightRig kCreatureLightMovingInspection{
 const CreatureLightRig* g_creature_light_rig = &kCreatureLightBaseline;
 const CreaturePointLight* g_creature_point_lights = nullptr;
 uint32_t g_creature_point_light_count = 0;
+// Direction 28 additive-light gate. Default OFF: no additive lane is ever
+// requested from the raster and every subject renders byte-identically.
+bool g_creature_additive_light = false;
 
 namespace {
 
@@ -654,6 +657,11 @@ inline int32_t point_vertex_response(const CreaturePointLight& p, const mat3x4fx
 // to the exact pre-point-light arithmetic.
 struct PointShade3 {
   int32_t r = 0, g = 0, b = 0;
+  // Direction 28: the per-channel ADDITIVE sum (Q16.16 fraction of the 255
+  // pixel scale), fed by the SAME lambert*attenuation response as the gains
+  // above -- so the additive term shapes to the form by construction and a
+  // flat lift is impossible. Consumed only under g_creature_additive_light.
+  int32_t ar = 0, ag = 0, ab = 0;
 };
 
 inline void point_shade_accumulate(PointShade3& acc, const CreaturePointLight& p, int32_t lam) {
@@ -661,6 +669,9 @@ inline void point_shade_accumulate(PointShade3& acc, const CreaturePointLight& p
   acc.r += static_cast<int32_t>((static_cast<int64_t>(p.gain_r) * lam) >> 16);
   acc.g += static_cast<int32_t>((static_cast<int64_t>(p.gain_g) * lam) >> 16);
   acc.b += static_cast<int32_t>((static_cast<int64_t>(p.gain_b) * lam) >> 16);
+  acc.ar += static_cast<int32_t>((static_cast<int64_t>(p.add_r) * lam) >> 16);
+  acc.ag += static_cast<int32_t>((static_cast<int64_t>(p.add_g) * lam) >> 16);
+  acc.ab += static_cast<int32_t>((static_cast<int64_t>(p.add_b) * lam) >> 16);
 }
 
 inline PointShade3 point_vertex_shade(const CreaturePointLight* lights, uint32_t count,
@@ -932,6 +943,12 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                                  point_face_response(points[pi], a.wx, a.wy, a.wz, b.wx, b.wy,
                                                      b.wz, c.wx, c.wy, c.wz, L));
         const bool points_active = point_count != 0;
+        // Direction 28: additive lanes only when the gate is on, sources are
+        // active and no diagnostic shade mode owns the colour lanes.
+        const bool additive_on = points_active && g_creature_additive_light &&
+                                 g_debug_shade == DebugShade::kOff;
+        PointShade3 padd[3];  // per-corner blended additive (Q16.16 fraction)
+        padd[0] = padd[1] = padd[2] = face_pshade;
         render::TriMode tm;  // opaque: depth test + write
         // GOURAUD (N3): when the compiled mesh carries normals, each corner
         // gets its own Lambert — kSmoothMixNum parts the per-vertex smooth
@@ -960,8 +977,12 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
             };
             const PointShade3 lp{blend_p(corner[k]->pshade.r, face_pshade.r),
                                  blend_p(corner[k]->pshade.g, face_pshade.g),
-                                 blend_p(corner[k]->pshade.b, face_pshade.b)};
+                                 blend_p(corner[k]->pshade.b, face_pshade.b),
+                                 blend_p(corner[k]->pshade.ar, face_pshade.ar),
+                                 blend_p(corner[k]->pshade.ag, face_pshade.ag),
+                                 blend_p(corner[k]->pshade.ab, face_pshade.ab)};
             shc[k] = creature_light(rig, lk, lf, lp, points_active);
+            padd[k] = lp;
           }
           tm.gouraud = true;
         } else {
@@ -1114,6 +1135,18 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
             sc.cg = shc[2].g;
             sc.cb = shc[2].b;
           }
+          if (additive_on) {  // Direction 28: additive rides its own lanes
+            tm.add_lanes = true;
+            sa.ar = padd[0].ar;
+            sa.ag = padd[0].ag;
+            sa.ab = padd[0].ab;
+            sb.ar = padd[1].ar;
+            sb.ag = padd[1].ag;
+            sb.ab = padd[1].ab;
+            sc.ar = padd[2].ar;
+            sc.ag = padd[2].ag;
+            sc.ab = padd[2].ab;
+          }
           render::raster_tri(surf, vpp, sa, sb, sc, 255, 255, 255, tm, &tex);
         } else {
           render::ScreenV sa = a.s, sb = b.s, sc = c.s;
@@ -1129,6 +1162,18 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
             sc.cr = static_cast<int32_t>((static_cast<int64_t>(em_r) * shc[2].r));
             sc.cg = static_cast<int32_t>((static_cast<int64_t>(em_g) * shc[2].g));
             sc.cb = static_cast<int32_t>((static_cast<int64_t>(em_b) * shc[2].b));
+          }
+          if (additive_on && tm.gouraud) {  // Direction 28 (flat untextured
+            tm.add_lanes = true;            // triangles keep the plain path)
+            sa.ar = padd[0].ar;
+            sa.ag = padd[0].ag;
+            sa.ab = padd[0].ab;
+            sb.ar = padd[1].ar;
+            sb.ag = padd[1].ag;
+            sb.ab = padd[1].ab;
+            sc.ar = padd[2].ar;
+            sc.ag = padd[2].ag;
+            sc.ab = padd[2].ab;
           }
           render::raster_tri(surf, vpp, sa, sb, sc, sat_u8((em_r * sh.r + 32768) >> 16),
                              sat_u8((em_g * sh.g + 32768) >> 16),

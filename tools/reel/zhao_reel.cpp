@@ -1056,6 +1056,10 @@ struct SceneSubject {
   // drives BOTH genuine spatial point lighting and its depth-tested marker.
   // All ordinary subjects leave this false and retain their selected rig.
   bool creature_moving_light = false;
+  // Direction 28 ADDITIVE-light prototype subject flag. Sets the compositor's
+  // g_creature_additive_light gate (default OFF everywhere else) and gives the
+  // moving sources their authored additive colours for this subject only.
+  bool creature_additive_light = false;
   // FULL-COLOUR LANE (MODELINGGUIDE section 5). The 256-colour rule is a
   // GIF-EXPORT constraint, and it was allowed to redesign a creature: it
   // deleted an eye colour, a mouth and a throat transition, and it forced a
@@ -2109,6 +2113,7 @@ struct CreatureReelCtx {
   uint32_t gibs_in_view = 0;
   bool force_micro = false;
   bool moving_light = false;
+  bool additive_light = false;  // Direction 28 prototype gate, subject-scoped
   // Direction 26: the moving-light inspection carries FOUR world-space
   // sources -- the original warm lamp plus blue, orange and green. They are
   // one contiguous array so the compositor's point-light globals can name
@@ -2151,6 +2156,12 @@ void sample_zixx_moving_source(uint32_t frame, uint32_t frames,
   constexpr int32_t kLightGainR = 68813;   // 1.05 -- warm core, only R may clamp
   constexpr int32_t kLightGainG = 47186;   // 0.72
   constexpr int32_t kLightGainB = 19661;   // 0.30
+  // Direction 28: the warm inspection lamp carries NO additive term even in
+  // the additive prototype clip -- it already reads as light, and restraint
+  // is part of the shippable settings being demonstrated.
+  constexpr int32_t kLightAddR = 0;
+  constexpr int32_t kLightAddG = 0;
+  constexpr int32_t kLightAddB = 0;
   const uint32_t leg_frames = std::max<uint32_t>(1, frames / 4);
   const uint32_t leg = std::min<uint32_t>(3, frame / leg_frames);
   const uint32_t local = frame - leg * leg_frames;
@@ -2200,6 +2211,9 @@ void sample_zixx_moving_source(uint32_t frame, uint32_t frames,
   out.gain_r = kLightGainR;  // warm gummy-lamp source
   out.gain_g = kLightGainG;
   out.gain_b = kLightGainB;
+  out.add_r = kLightAddR;  // consumed only under the Direction 28 gate
+  out.add_g = kLightAddG;
+  out.add_b = kLightAddB;
 }
 
 // ---- Direction 26: three more coloured moving sources ----------------------
@@ -2231,6 +2245,12 @@ constexpr int32_t kBlueOuterRadiusMm = 2600;
 constexpr int32_t kBlueGainR = 5243;        // 0.08
 constexpr int32_t kBlueGainG = 19661;       // 0.30
 constexpr int32_t kBlueGainB = 111411;      // 1.70
+// Direction 28 additive colour (Q16.16 of the 255 pixel scale; consumed only
+// in the additive prototype subject): a restrained true-blue emission so the
+// pool reads blue even on pigments with little blue.
+constexpr int32_t kBlueAddR = 0;
+constexpr int32_t kBlueAddG = 1966;         // 0.03
+constexpr int32_t kBlueAddB = 13107;        // 0.20
 // ORANGE: a clockwise counter-orbit, three laps, bobbing as it goes.
 constexpr int32_t kOrangeOrbitXMm = 1550;
 constexpr int32_t kOrangeOrbitZMm = 820;
@@ -2243,6 +2263,25 @@ constexpr int32_t kOrangeOuterRadiusMm = 2600;
 constexpr int32_t kOrangeGainR = 131072;     // 2.00
 constexpr int32_t kOrangeGainG = 45875;      // 0.70 -- amber, not olive, on the body green
 constexpr int32_t kOrangeGainB = 2621;       // 0.04
+// Direction 28: THIS IS THE RED-ON-GREEN CASE. In the additive prototype the
+// third slot is not the orange lamp any more -- it is a RED lamp, the source
+// the owner asked for in the cancelled Direction-27 follow-up ("make one of
+// the orange ones a strong red") that multiplicative transport could not show
+// (red*green = olive). Two authored lessons from tuning by eye at native:
+//   * v1-v3 kept the orange MULTIPLICATIVE gains (G 0.70) and only added red;
+//     the pool's own green amplification folded every add into GOLD. A red
+//     emitter that also amplifies green is not a red lamp; under the additive
+//     model the shippable red source barely multiplies green at all.
+//   * The additive term carries the red READ on the green body (pigment has
+//     no red for a multiply to find); the multiplicative red still lights the
+//     red-rich eye, crown and pink stripe, which is exactly right.
+// Consumed only by the additive subject; the published clip keeps kOrange*.
+constexpr int32_t kRedGainR = 104858;        // 1.60 -- blazes the eye/pink/crown
+constexpr int32_t kRedGainG = 7864;          // 0.12 -- a red lamp must NOT pump green
+constexpr int32_t kRedGainB = 1966;          // 0.03
+constexpr int32_t kRedAddR = 36045;          // 0.55 true-red emission
+constexpr int32_t kRedAddG = 1311;           // 0.02
+constexpr int32_t kRedAddB = 0;
 // GREEN: a low near-side longitudinal shuttle, three round trips, with a
 // small depth ellipse so the travel stays alive at the turnarounds.
 constexpr int32_t kGreenSweepMm = 1700;      // longitudinal half-travel
@@ -2255,10 +2294,15 @@ constexpr int32_t kGreenOuterRadiusMm = 2600;
 constexpr int32_t kGreenGainR = 6554;        // 0.10
 constexpr int32_t kGreenGainG = 98304;       // 1.50
 constexpr int32_t kGreenGainB = 11796;       // 0.18
+// Direction 28 additive colour: modest true-green emission.
+constexpr int32_t kGreenAddR = 1311;         // 0.02
+constexpr int32_t kGreenAddG = 10486;        // 0.16
+constexpr int32_t kGreenAddB = 1966;         // 0.03
 
 void sample_zixx_moving_colour_sources(uint32_t frame, uint32_t frames,
                                        const zc::CreatureInstance& inst,
-                                       zc::CreaturePointLight* out) {
+                                       zc::CreaturePointLight* out,
+                                       bool additive) {
   const int32_t staged_centre_x = inst.x - fxm(zixx::kStageCentreMm);
   // angle16 that completes `turns` exact revolutions over the clip
   const auto path_angle = [frame, frames](uint32_t turns, uint16_t phase) {
@@ -2271,7 +2315,8 @@ void sample_zixx_moving_colour_sources(uint32_t frame, uint32_t frames,
   };
   const auto place = [&](zc::CreaturePointLight& s, int32_t x_mm, int32_t y_mm,
                          int32_t z_mm, int32_t inner_mm, int32_t outer_mm,
-                         int32_t gr, int32_t gg, int32_t gb) {
+                         int32_t gr, int32_t gg, int32_t gb, int32_t adr,
+                         int32_t adg, int32_t adb) {
     s.world_x = staged_centre_x + fxm(x_mm);
     s.world_y = inst.y + fxm(y_mm);
     s.world_z = inst.z + fxm(z_mm);
@@ -2280,13 +2325,16 @@ void sample_zixx_moving_colour_sources(uint32_t frame, uint32_t frames,
     s.gain_r = gr;
     s.gain_g = gg;
     s.gain_b = gb;
+    s.add_r = adr;  // consumed only under the Direction 28 gate
+    s.add_g = adg;
+    s.add_b = adb;
   };
 
   const zref::angle16 ab = path_angle(kBlueOrbitTurns, 0);
   place(out[kZixxMovingSourceBlue], scaled(kBlueOrbitXMm, zref::fx_cos(ab).raw),
         kBlueHeightMm, scaled(kBlueOrbitZMm, zref::fx_sin(ab).raw),
         kBlueInnerRadiusMm, kBlueOuterRadiusMm, kBlueGainR, kBlueGainG,
-        kBlueGainB);
+        kBlueGainB, kBlueAddR, kBlueAddG, kBlueAddB);
 
   const zref::angle16 ao = path_angle(kOrangeOrbitTurns, kOrangePhaseA16);
   const zref::angle16 ao2 = path_angle(kOrangeOrbitTurns * 2, 0);
@@ -2294,14 +2342,16 @@ void sample_zixx_moving_colour_sources(uint32_t frame, uint32_t frames,
         scaled(kOrangeOrbitXMm, zref::fx_cos(ao).raw),
         kOrangeHeightMm + scaled(kOrangeBobMm, zref::fx_sin(ao2).raw),
         -scaled(kOrangeOrbitZMm, zref::fx_sin(ao).raw),  // reversed: clockwise
-        kOrangeInnerRadiusMm, kOrangeOuterRadiusMm, kOrangeGainR, kOrangeGainG,
-        kOrangeGainB);
+        kOrangeInnerRadiusMm, kOrangeOuterRadiusMm,
+        additive ? kRedGainR : kOrangeGainR, additive ? kRedGainG : kOrangeGainG,
+        additive ? kRedGainB : kOrangeGainB, additive ? kRedAddR : 0,
+        additive ? kRedAddG : 0, additive ? kRedAddB : 0);
 
   const zref::angle16 ag = path_angle(kGreenSweepTurns, 0);
   place(out[kZixxMovingSourceGreen], scaled(kGreenSweepMm, zref::fx_sin(ag).raw),
         kGreenHeightMm, kGreenSideMm + scaled(kGreenSideDriftMm, zref::fx_cos(ag).raw),
         kGreenInnerRadiusMm, kGreenOuterRadiusMm, kGreenGainR, kGreenGainG,
-        kGreenGainB);
+        kGreenGainB, kGreenAddR, kGreenAddG, kGreenAddB);
 }
 
 // ---- Direction 27 committed diagnostic: solo one moving source ------------
@@ -2324,8 +2374,12 @@ void apply_zixx_ml_solo(zc::CreaturePointLight* s) {
       s[si].gain_r *= g_zixx_ml_boost;
       s[si].gain_g *= g_zixx_ml_boost;
       s[si].gain_b *= g_zixx_ml_boost;
+      s[si].add_r *= g_zixx_ml_boost;
+      s[si].add_g *= g_zixx_ml_boost;
+      s[si].add_b *= g_zixx_ml_boost;
     } else {
       s[si].gain_r = s[si].gain_g = s[si].gain_b = 0;
+      s[si].add_r = s[si].add_g = s[si].add_b = 0;
     }
   }
 }
@@ -2339,13 +2393,23 @@ constexpr uint8_t kZixxMovingSourceMarker[kZixxMovingSourceCount][6] = {
     {255, 220, 180, 255, 150, 60},   // orange
     {200, 255, 190, 110, 235, 110},  // green
 };
+// Direction 28: in the additive prototype the orange orbit EMITS true red, so
+// its visible orb must say so -- a marker whose colour disagrees with its
+// light is its own small lie (08-LIGHTING). Other slots keep their tints.
+constexpr uint8_t kZixxMovingSourceMarkerAdditive[kZixxMovingSourceCount][6] = {
+    {255, 232, 170, 255, 184, 92},   // warm (unchanged)
+    {190, 220, 255, 110, 160, 255},  // blue (unchanged)
+    {255, 120, 90, 255, 60, 40},     // RED: the additive red-on-green source
+    {200, 255, 190, 110, 235, 110},  // green (unchanged)
+};
 
 void draw_zixx_moving_source_markers(const CreatureReelCtx& c, uint8_t* rgb,
                                      int32_t* depth, uint32_t w, uint32_t h) {
   const zref::render::Viewport viewport{0, 0, w, h};
   for (uint32_t si = 0; si < kZixxMovingSourceCount; ++si) {
     const zc::CreaturePointLight& src = c.moving_sources[si];
-    const uint8_t* tint = kZixxMovingSourceMarker[si];
+    const uint8_t* tint = c.additive_light ? kZixxMovingSourceMarkerAdditive[si]
+                                           : kZixxMovingSourceMarker[si];
     const zref::render::ProjOut p = zref::render::project_vertex(
         c.vp, viewport, zref::fx16{src.world_x}, zref::fx16{src.world_y},
         zref::fx16{src.world_z}, nullptr);
@@ -2488,10 +2552,12 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     const zc::CreatureLightRig* const saved_rig = zc::g_creature_light_rig;
     const zc::CreaturePointLight* const saved_points = zc::g_creature_point_lights;
     const uint32_t saved_point_count = zc::g_creature_point_light_count;
+    const bool saved_additive = zc::g_creature_additive_light;
     if (c.moving_light) {
       zc::g_creature_light_rig = &zc::kCreatureLightMovingInspection;
       zc::g_creature_point_lights = c.moving_sources;
       zc::g_creature_point_light_count = kZixxMovingSourceCount;
+      zc::g_creature_additive_light = c.additive_light;  // Direction 28 gate
     }
     zc::compose_creatures(rgb, depth, w, h, c.vp, insts,
                           c.dummy != nullptr ? 2 : 1, *c.poses, nullptr);
@@ -2500,6 +2566,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     zc::g_creature_light_rig = saved_rig;
     zc::g_creature_point_lights = saved_points;
     zc::g_creature_point_light_count = saved_point_count;
+    zc::g_creature_additive_light = saved_additive;
   }
   // ---- RUN 1939 experiment post-pass (env-gated, default off). Placed
   // HERE because the hook returns early when there are no gibs -- the
@@ -2844,6 +2911,7 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.poses = &dog_poses;
     cr_ctx.force_micro = sub.creature_force_micro;
     cr_ctx.moving_light = sub.creature_moving_light;
+    cr_ctx.additive_light = sub.creature_additive_light;
     if (sub.dummy) {
       const uint16_t attack_slot = static_cast<uint16_t>(sub.creature - 2);
       target_desc = zixx_target_descriptor(attack_slot);
@@ -3179,7 +3247,8 @@ int render_scene(const SceneSubject& sub) {
         sample_zixx_moving_source(f, sub.frames, dog_inst,
                                   cr_ctx.moving_sources[kZixxMovingSourceWarm]);
         sample_zixx_moving_colour_sources(f, sub.frames, dog_inst,
-                                          cr_ctx.moving_sources);
+                                          cr_ctx.moving_sources,
+                                          sub.creature_additive_light);
         apply_zixx_ml_solo(cr_ctx.moving_sources);
       }
       // Detached-chunk ballistics advance at the start of subsequent frames,
@@ -4539,6 +4608,23 @@ SceneSubject subject_zixx_moving_light() {
            "world-space local sources -- the warm inspection lamp plus blue, "
            "orange and green -- move on their own authored paths, drive the real "
            "posed-vertex light, and mix where their pools intersect";
+  return s;
+}
+
+// Direction 28 ADDITIVE-light prototype: byte-for-byte the published
+// moving-light subject except that the additive gate is on, so each coloured
+// source also EMITS its authored additive colour scaled by its own
+// lambert*attenuation. The published clip is the side-by-side comparison; this
+// subject exists so the owner can judge whether an additive term reads as
+// light (and whether red can finally cross the green body as red).
+SceneSubject subject_zixx_moving_light_additive() {
+  SceneSubject s = subject_zixx_moving_light();
+  s.name = "zixxtrixx-moving-light-additive";
+  s.creature_additive_light = true;
+  s.note = "EXPERIMENTAL (Direction 28): the published moving-light inspection "
+           "with the prototype per-channel ADDITIVE point-light term enabled -- "
+           "the orange orbit emits true red across the green body, the case "
+           "multiplicative transport cannot show";
   return s;
 }
 
@@ -5917,6 +6003,8 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-idle")) rc |= render_scene(subject_zixx_idle());
   if (wanted("zixxtrixx-moving-light"))
     rc |= render_scene(subject_zixx_moving_light());
+  if (wanted("zixxtrixx-moving-light-additive"))
+    rc |= render_scene(subject_zixx_moving_light_additive());
   if (wanted("zixxtrixx-walk")) rc |= render_scene(subject_zixx_walk());
   if (wanted("zixxtrixx-attack")) rc |= render_scene(subject_zixx_attack());
   if (wanted("zixxtrixx-spring-side")) rc |= render_scene(subject_zixx_spring_side());
