@@ -140,10 +140,25 @@ committed:**
 3. **a single AUX pending register dropped the second request**, so the
    fragment that needed it could never complete — a deadlock, not a lost pixel.
 
-**Planned and not written:** a directed suite for the refusal paths
-(`wq_overflow_o`, `full_clocks_o` under a full slot table, `id_error_o` on a
-deliberately reused slot), and zero-sample fragments, which retire with no TMU
-traffic at all and are currently excluded from the random mix.
+**The refusal paths are also WRITTEN**, in the same file, because a
+differential cannot reach them: two blocks with the same blind spot would agree
+about being wrong.
+
+* the sixteen-cycle free-list sweep holds `f_ready_o` low, then raises it — a
+  block that accepted a fragment before its free list existed would allocate
+  slot garbage;
+* exactly `DEPTH` fragments are accepted while nothing retires, so allocation
+  **blocks** rather than overwriting a live slot, and `full_clocks_o` counts the
+  stall so a starved raster is visible rather than merely slow;
+* **a return whose generation matches no live slot is refused and counted** —
+  the property `GENW = 8` exists for;
+* a **zero-sample** fragment retires with no TMU request at all. It is excluded
+  from the random mix on purpose (it would be lost among fragments that do
+  request samples) and it is the one case with no TMU handshake to wait on, so
+  it is the one that can hang waiting for a sample it never asked for.
+
+**Still planned and not written:** `wq_overflow_o`, which needs a stimulus that
+offers more samples than the 64-entry work queue can hold.
 
 ## Randomized differential tests
 

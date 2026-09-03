@@ -306,5 +306,105 @@ int main(int argc, char** argv) {
   std::printf("  %d retired fragments compared across %d scenarios\n", compared,
               static_cast<int>(sizeof(cases) / sizeof(cases[0])));
 
+  // =========================================================================
+  // DIRECTED: the refusal paths, which a differential cannot reach
+  // =========================================================================
+  // v2 and fragrob agree on the happy path by construction now. These are the
+  // cases where the block is supposed to REFUSE something, and a differential
+  // against a block with the same blind spot would agree about being wrong.
+  {
+    Vzhao_texture_fragrob t;
+    t.f_valid_i = 0;
+    t.tmu_ready_i = 1;
+    t.tmu_rvalid_i = 0;
+    t.aux_ready_i = 1;
+    t.aux_rvalid_i = 0;
+    t.o_ready_i = 0;          // never retire: fills the slot table
+    t.rst_n = 0;
+    for (int i = 0; i < 8; ++i) zhao::tick(t);
+    t.rst_n = 1;
+    zhao::tick(t);
+
+    // ---- the sixteen-cycle init sweep holds f_ready low ------------------
+    // A block that accepted a fragment before its free list existed would
+    // allocate slot garbage. `f_ready_o` must be low until the sweep ends.
+    t.eval();
+    const int ready_at_reset = t.f_ready_o;
+    for (int i = 0; i < 20; ++i) zhao::tick(t);
+    t.eval();
+    zhao::check(ready_at_reset == 0 && t.f_ready_o == 1,
+                "the free-list sweep holds f_ready low until it has slots to "
+                "hand out, then raises it",
+                1, (ready_at_reset == 0 && t.f_ready_o == 1) ? 1 : 0);
+
+    // ---- allocation BLOCKS when full, and is counted --------------------
+    Frag f{};
+    f.count = 1;
+    f.ctx = 0xAAA;
+    int accepted = 0;
+    for (int i = 0; i < 40; ++i) {
+      t.f_valid_i = 1;
+      t.f_sample_count_i = f.count;
+      for (int j = 0; j < 3; ++j) { t.f_u_i[j] = 1; t.f_v_i[j] = 1;
+                                    t.f_binding_i[j] = 1; t.f_lod_i[j] = 0; }
+      t.f_recipe_i = 0;
+      t.f_ctx_i = f.ctx + i;
+      t.f_aux_i = 0;
+      t.f_uv_sat_i = 0;
+      t.eval();
+      if (t.f_ready_o) ++accepted;
+      zhao::tick(t);
+    }
+    t.f_valid_i = 0;
+    t.eval();
+    zhao::check(accepted == kDepth,
+                "exactly DEPTH fragments are accepted while nothing retires -- "
+                "allocation blocks rather than overwriting a live slot",
+                kDepth, accepted);
+    zhao::check(t.full_clocks_o > 0,
+                "and the clocks spent full are COUNTED, so a starved raster is "
+                "visible rather than merely slow",
+                1, t.full_clocks_o > 0 ? 1 : 0);
+
+    // ---- A STALE RETURN IS REFUSED BY IDENTITY, NOT POSITION ------------
+    // The property GENW=8 exists for. Ruling X5: a 2-bit generation wraps
+    // after four reuses, so a return delayed longer matches the WRONG fragment
+    // and is silently accepted -- worse than the stale return it was meant to
+    // catch. Here the generation is deliberately wrong for a live slot.
+    const uint32_t id_before = t.id_errors_o;
+    t.tmu_rvalid_i = 1;
+    t.tmu_rslot_i = 0;
+    t.tmu_rsidx_i = 0;
+    t.tmu_rgen_i = 0xEE;      // no slot ever had this generation
+    t.tmu_rgb_i = 0xBADBAD;
+    t.tmu_a_i = 0xFF;
+    t.eval();
+    zhao::tick(t);
+    t.tmu_rvalid_i = 0;
+    t.eval();
+    zhao::check(t.id_errors_o == id_before + 1,
+                "a return whose generation matches no live slot is REFUSED and "
+                "counted -- never applied to whatever now occupies that slot",
+                1, static_cast<int>(t.id_errors_o - id_before));
+  }
+
+  // ---- a zero-sample fragment retires with no TMU traffic at all --------
+  // Excluded from the random mix because it would be lost among fragments that
+  // do request samples, and it is the one case with no TMU handshake to wait
+  // on: it must not hang waiting for a sample it never asked for.
+  {
+    std::vector<Frag> zero;
+    Frag f{};
+    f.count = 0;
+    f.ctx = 0x5E70;
+    f.aux = false;
+    zero.push_back(f);
+    const auto out = run<Vzhao_texture_fragrob>(zero, 0x99u, false, 0);
+    zhao::check(out.size() == 1 && out[0].ctx == 0x5E70,
+                "a zero-sample fragment retires without a single TMU request, "
+                "rather than waiting forever for a sample it never asked for",
+                1, static_cast<int>(out.size()));
+  }
+
   return zhao::report_and_exit("fragrob_differential");
 }
