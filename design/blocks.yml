@@ -32,6 +32,14 @@ schema_version: 1
 # §25 mandatory counters (snake_case) plus the declared platform extensions.
 # Block `counters` must be a subset of this catalog (rule V12).
 counter_catalog:
+  # TEXTURE.FRAGROB -- the fragment transaction centre. `fragrob_id_errors`
+  # is the one that must never be silently zero: it counts returns whose
+  # {slot, generation} did not match a live slot, which is the property GENW=8
+  # exists to protect (ruling X5 -- a 2-bit generation wraps after four reuses
+  # and then matches the WRONG fragment silently).
+  - fragrob_fragments
+  - fragrob_samples
+  - fragrob_id_errors
   # MEM.UPLOAD -- the HPS->VRAM resource path (owner direction 2026-09-03).
   # crc_failures and guard_refusals are the two that must never be silently
   # zero: a refused upload means a resource is NOT resident, and a frame that
@@ -2506,7 +2514,7 @@ blocks:
     inputs: [covered_fragments]
     outputs: [shaded_candidates, z_reject]
     upstream: [RASTER.EDGEWALK]
-    downstream: [RASTER.FRAGMENT]
+    downstream: [RASTER.FRAGMENT, TEXTURE.FRAGROB]
     backpressure: ready_valid
     latency: fixed:1
     target_throughput: 1 reject decision per clock
@@ -2544,7 +2552,7 @@ blocks:
     owner_issue: ZH-025
     inputs: [shaded_candidates, tile_read, texture_samples, soft_particles]
     outputs: [tile_write, fragment_error]
-    upstream: [RASTER.TILESTORE, RASTER.EARLYZ, PART.SOFT, MEASURE.TOKENS]
+    upstream: [RASTER.TILESTORE, RASTER.EARLYZ, PART.SOFT, MEASURE.TOKENS, TEXTURE.FRAGROB]
     downstream: [RASTER.RESOLVE, TEXTURE.TMU, TEXTURE.AUX, MEASURE.HISTOGRAM]
     backpressure: ready_valid
     latency: variable
@@ -2634,7 +2642,7 @@ blocks:
     owner_issue: ZH-027
     inputs: [texture_requests, cached_texels, mosaic_pick]
     outputs: [texture_samples]
-    upstream: [RASTER.FRAGMENT, TEXTURE.CACHE, TEXTURE.MOSAIC]
+    upstream: [RASTER.FRAGMENT, TEXTURE.CACHE, TEXTURE.MOSAIC, TEXTURE.FRAGROB]
     downstream: []
     backpressure: ready_valid
     latency: variable_bounded:16
@@ -2685,7 +2693,7 @@ blocks:
     owner_issue: ZH-060
     inputs: [aux_requests]
     outputs: [aux_samples]
-    upstream: [RASTER.FRAGMENT]
+    upstream: [RASTER.FRAGMENT, TEXTURE.FRAGROB]
     downstream: []
     backpressure: ready_valid
     latency: variable_bounded:8
@@ -2756,6 +2764,56 @@ blocks:
       palette-page invalidate per upload, never a stale-frame paint (the
       palette-ordering capture tests are the tripwire).
 
+  - id: TEXTURE.FRAGROB
+    name: Fragment transaction centre
+    kind: rtl
+    subsystem: texture
+    clock_domain: gpu
+    purpose: "Owns a fragment's texture transaction from Early-Z survival to retirement: slot allocation, generation, sample descriptors, required/arrived bookkeeping, AUX identity and ORDERED retirement. Built beside zhao_raster_texjoin_v2 per islandrearchitecture5 S6.1, which keeps v2 as the behavioural oracle -- v2 is wrong about storage (7,151 registers holding a 7,056-bit table) and right about behaviour."
+    contract: design/contracts/TEXTURE.FRAGROB.md
+    phase: 5
+    owner_issue: ZH-080
+    inputs: [survivor_fragment, tmu_return, aux_return]
+    outputs: [tmu_request, aux_request, retired_fragment]
+    upstream: [RASTER.EARLYZ]
+    downstream: [TEXTURE.TMU, TEXTURE.AUX, RASTER.FRAGMENT]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: one fragment accepted per clock when the free list is non-empty
+    reference_model: rtl::zhao_raster_texjoin_v2
+    tests:
+      directed: tests/texture/fragrob_differential.cpp
+      random: tests/texture/fragrob_differential.cpp
+    counters: [fragrob_fragments, fragrob_samples, fragrob_id_errors]
+    source_ids: true
+    budget_group: tile
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-03"
+        commit: "5f4fec80"
+        evidence: tests/texture/fragrob_differential.cpp
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-03"
+        commit: "5f4fec80"
+        evidence: fpga/rtl/texture/zhao_texture_fragrob.sv
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      Control state (valid, generation, required/arrived masks, AUX flags)
+      stays in FLOPS on purpose per S6.3: TMU and AUX returns update
+      independent fields of independent slots on the same clock, which a RAM
+      would turn into a read-modify-write loop. Payload lives in banks keyed by
+      SAMPLE INDEX per S6.4, so a three-sample fragment writes all three
+      descriptors on one clock without a three-write-port memory. Every bank is
+      written and read only inside a clock-only process through registered
+      addresses -- the difference between an M10K and a flip-flop array, and
+      the entire reason the block exists. The price is one pipeline stage on
+      issue and one on retire.
+      NOT YET FITTED; the fit target carries S3.4's tripwires and the
+      acceptance question is M10K inference, not Fmax. v2 is not superseded
+      until that fit passes and the composed island is re-measured.
   - id: TEXTURE.MOSAIC
     name: Terrain Mosaic selector
     kind: rtl

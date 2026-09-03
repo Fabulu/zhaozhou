@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **96** (76 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **97** (77 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -25,9 +25,9 @@ Blocks: **96** (76 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | surface | · | · | 2 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
 | terrain | · | · | 9 | · | · | · | · | · | 9 |
-| texture | · | · | 4 | · | · | · | · | · | 4 |
+| texture | · | · | 5 | · | · | · | · | · | 5 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 31 | 9 | 40 | 16 | · | · | · | 6 | 96 |
+| **all** | 31 | 9 | 41 | 16 | · | · | · | 6 | 97 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -140,6 +140,8 @@ Blocks: **96** (76 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | TEXTURE.AUX | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/texture/texture_aux_directed.cpp |
 | TEXTURE.CACHE | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_texture.hpp |
 | TEXTURE.CACHE | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/texture/texture_cache_directed.cpp |
+| TEXTURE.FRAGROB | UNIT_VERIFIED | 2026-09-03 | `5f4fec80` | tests/texture/fragrob_differential.cpp |
+| TEXTURE.FRAGROB | REFERENCE_COMPLETE | 2026-09-03 | `5f4fec80` | fpga/rtl/texture/zhao_texture_fragrob.sv |
 | TEXTURE.MOSAIC | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/texture/texture_mosaic_directed.cpp |
 | TEXTURE.MOSAIC | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/texture/texture_mosaic_directed.cpp |
 | PART.LADDER | REFERENCE_COMPLETE | 2026-09-03 | `23396aeb` | fpga/rtl/particles/zhao_part_ladder.sv |
@@ -196,7 +198,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 | command_debug | 5% | 9 | 0% |
 | field | 6% | 2 | 0% |
 | geometry_mantle | 20% | 24 | 0% |
-| tile | 30% | 11 | 0% |
+| tile | 30% | 12 | 0% |
 | myriad_forge | 9% | 9 | 0% |
 | twod_post | 6% | 5 | 0% |
 | _reserve (untouchable)_ | 10% | — | — |
