@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "d6565215575af99a0460b2e46f0cd8ea1bfb013a",
+    "newestRunCommit":  "e85da61011d1a2b31be7affa34952ff8469fb195",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -640,10 +640,10 @@
                    {
                        "module":  "zhao_raster_rcp24_svc",
                        "status":  "ok",
-                       "sourceCommit":  "d6565215575af99a0460b2e46f0cd8ea1bfb013a",
+                       "sourceCommit":  "e85da61011d1a2b31be7affa34952ff8469fb195",
                        "rtlCleanAtHead":  true,
-                       "seconds":  2351.4,
-                       "sourcesHashed":  57,
+                       "seconds":  1943.1,
+                       "sourcesHashed":  47,
                        "alms":  1041,
                        "registers":  1101,
                        "blockMemoryBits":  0,

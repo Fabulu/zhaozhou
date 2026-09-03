@@ -28,6 +28,27 @@ param(
     # Suffix for the JSON row's `module` key, so parameter points do not
     # overwrite each other in a file that merges by module name.
     [string]$RowLabel = '',
+    # Fitter seed. 0 leaves the project's own SEED alone.
+    #
+    # WHY THIS EXISTS, added 2026-09-03. run_shell_fit.ps1 has had -Seed since
+    # the noise floor was measured; this lane never did, and the consequence
+    # was a wrong experiment run in earnest.
+    #
+    # zhao_raster_rcp24_svc fitted at 68.46 MHz failing on 5.951 ns of CLOCK
+    # SKEW with only 8.516 ns of data delay, which looks like a placement
+    # artefact rather than a logic problem. The block was re-fitted to test
+    # that -- and came back at 68.46 MHz, the same worst path and the same
+    # skew, to three decimal places.
+    #
+    # That confirmed nothing. Quartus is DETERMINISTIC for a given design and
+    # seed, so re-running it re-runs the same placement. "Is this number a
+    # draw from the placement distribution?" is a question only a SEED SWEEP
+    # can answer, which is exactly how reports/NOISE_FLOOR.md measured
+    # 4.61 MHz in the first place -- three seeds, identical RTL.
+    #
+    # Pair with -RowLabel so seed points do not overwrite each other in a
+    # report that merges by module name.
+    [int]$Seed = 0,
     [switch]$KeepWorkspace
 )
 
@@ -408,6 +429,10 @@ try {
                 $abs = (Resolve-Path (Join-Path $RepoRoot $extra)).Path.Replace([char]92, [char]47)
                 $qsf += "set_global_assignment -name SYSTEMVERILOG_FILE $abs"
             }
+        }
+        if ($Seed -gt 0) {
+            $qsf += "# Overridden by run_block_fit.ps1 -Seed (placement sweep)."
+            $qsf += "set_global_assignment -name SEED $Seed"
         }
         foreach ($tp in $TopParameters) {
             $kv = $tp -split '=', 2
