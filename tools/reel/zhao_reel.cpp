@@ -2289,6 +2289,32 @@ void sample_zixx_moving_colour_sources(uint32_t frame, uint32_t frames,
         kGreenGainB);
 }
 
+// ---- Direction 27 committed diagnostic: solo one moving source ------------
+// The owner could not see three of the four pools, and this creature has
+// already shipped one instrument-invisible light, so the proof tool is
+// committed rather than improvised. ZIXX_ML_SOLO=warm|blue|orange|green
+// isolates one source by zeroing every other source's gains;
+// ZIXX_ML_SOLO=none zeroes all four (the dark plate a solo render is
+// differenced against -- markers still draw, so they cancel in the diff).
+// ZIXX_ML_BOOST=<n> multiplies the solo source's gains n-fold for the
+// extreme-gain existence proof. Unset (the shipping case) leaves every byte
+// of every subject identical.
+int g_zixx_ml_solo = -2;      // -2 unset, -1 none, else source index
+int32_t g_zixx_ml_boost = 1;  // gain multiplier for the solo source
+
+void apply_zixx_ml_solo(zc::CreaturePointLight* s) {
+  if (g_zixx_ml_solo == -2) return;
+  for (uint32_t si = 0; si < kZixxMovingSourceCount; ++si) {
+    if (static_cast<int>(si) == g_zixx_ml_solo) {
+      s[si].gain_r *= g_zixx_ml_boost;
+      s[si].gain_g *= g_zixx_ml_boost;
+      s[si].gain_b *= g_zixx_ml_boost;
+    } else {
+      s[si].gain_r = s[si].gain_g = s[si].gain_b = 0;
+    }
+  }
+}
+
 // Per-source visible-orb tints (owner knobs): {core r,g,b, halo r,g,b}. The
 // core is the lamp itself; the halo blends toward its colour so each orb names
 // which pool it drives even when two sit close together.
@@ -3139,6 +3165,7 @@ int render_scene(const SceneSubject& sub) {
                                   cr_ctx.moving_sources[kZixxMovingSourceWarm]);
         sample_zixx_moving_colour_sources(f, sub.frames, dog_inst,
                                           cr_ctx.moving_sources);
+        apply_zixx_ml_solo(cr_ctx.moving_sources);
       }
       // Detached-chunk ballistics advance at the start of subsequent frames,
       // so the exact authored breakup pose is visible for one full frame.
@@ -5742,6 +5769,23 @@ int main(int argc, char** argv) {
     else if (e == "boil") g_exp_boil = 1;
     if (!e.empty())
       std::fprintf(stderr, "ZIXX_EXP=%s (experimental lane)\n", e.c_str());
+  }
+  // Direction 27 solo-source diagnostic (committed proof tool; default off).
+  if (const char* solo = std::getenv("ZIXX_ML_SOLO")) {
+    const std::string s = solo;
+    if (s == "none") g_zixx_ml_solo = -1;
+    else if (s == "warm") g_zixx_ml_solo = kZixxMovingSourceWarm;
+    else if (s == "blue") g_zixx_ml_solo = kZixxMovingSourceBlue;
+    else if (s == "orange") g_zixx_ml_solo = kZixxMovingSourceOrange;
+    else if (s == "green") g_zixx_ml_solo = kZixxMovingSourceGreen;
+    else {
+      std::fprintf(stderr, "ZIXX_ML_SOLO=%s unknown (none|warm|blue|orange|green)\n", solo);
+      return 2;
+    }
+    if (const char* boost = std::getenv("ZIXX_ML_BOOST"))
+      g_zixx_ml_boost = std::max(1, std::atoi(boost));
+    std::fprintf(stderr, "ZIXX_ML_SOLO=%s boost=%d (Direction 27 diagnostic lane)\n", solo,
+                 g_zixx_ml_boost);
   }
   // V11/V12 bounded owner-choice lane. The selector changes only the generic
   // creature preview rig; baseline is still the default when the variable is
