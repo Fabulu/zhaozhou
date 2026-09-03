@@ -431,11 +431,38 @@ try {
         # composed cone where the same line became unaffordable.
         $qsf = $qsf | Where-Object { $_ -notmatch '^set_instance_assignment -name VIRTUAL_PIN' }
         $qsf += 'set_instance_assignment -name VIRTUAL_PIN ON -to *'
+        # SNAPSHOT THE CLOSURE, and compile from the copy.
+        #
+        # The fit used to name the LIVE working-tree paths, so a fit read
+        # whatever the tree happened to contain at each moment. The provenance
+        # guard turned that into a loud failure rather than a silent wrong
+        # number, which was right -- but it still meant an edit during a fit
+        # DESTROYED the measurement.
+        #
+        # On 2026-09-03 that cost 115 minutes: a one-line comment was added to
+        # zhao_texture_cache_pipe.sv, 38 minutes into a fit measuring exactly
+        # that file, to satisfy an unrelated validator. CLAUDE.md's rule and a
+        # Stop hook both existed and neither could help -- the hook guards
+        # stopping, not editing, and the rule was prose at the moment it
+        # mattered.
+        #
+        # Copying is the structural answer, and it is what run_shell_fit.ps1
+        # already does with `git archive HEAD`: once the bytes are in the
+        # workspace, nothing anyone does to the tree can reach them. The
+        # provenance guard stays -- it now catches a change between the SNAPSHOT
+        # and the end, which is a much narrower and genuinely suspicious window.
+        $snapDir = Join-Path $dir 'src'
+        New-Item -ItemType Directory -Path $snapDir -Force | Out-Null
         if ($sources) {
             foreach ($extra in $sources) {
-                $abs = (Resolve-Path (Join-Path $RepoRoot $extra)).Path.Replace([char]92, [char]47)
-                $qsf += "set_global_assignment -name SYSTEMVERILOG_FILE $abs"
+                $srcAbs = (Resolve-Path (Join-Path $RepoRoot $extra)).Path
+                $leaf = Split-Path -Leaf $srcAbs
+                $snapAbs = Join-Path $snapDir $leaf
+                Copy-Item -LiteralPath $srcAbs -Destination $snapAbs -Force
+                $qsfPath = $snapAbs.Replace([char]92, [char]47)
+                $qsf += "set_global_assignment -name SYSTEMVERILOG_FILE $qsfPath"
             }
+            Write-Host ("snapshot: {0} source(s) copied into the workspace; the live tree cannot reach this fit" -f @($sources).Count)
         }
         if ($Seed -gt 0) {
             $qsf += "# Overridden by run_block_fit.ps1 -Seed (placement sweep)."
@@ -487,11 +514,16 @@ try {
         # guard beats no guard.
         $srcBefore = @{}
         $srcAfterMap = $null
+        # Hash the SNAPSHOT. A change here means something reached inside the
+        # workspace mid-fit, which is a real emergency rather than an ordinary
+        # edit -- and an ordinary edit to the live tree now cannot affect this
+        # run at all.
         $guardSet = $null
         if ($sources) {
             $guardSet = @()
             foreach ($rel in $sources) {
-                $abs = Join-Path $RepoRoot ($rel -replace '/', '\')
+                $leaf = Split-Path -Leaf $rel
+                $abs = Join-Path $snapDir $leaf
                 if (Test-Path -LiteralPath $abs) { $guardSet += $abs }
             }
         }
