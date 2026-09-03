@@ -141,3 +141,74 @@ outputs match, ledger 93 blocks.
 * PERSPUV two-lane rebuild (X2), TEXJOIN restructure (X3), cache synchronous
   seam (X7), palette protocol — all held until their rows land, so the
   reconnaissance measures what is committed.
+
+---
+
+## 2026-09-03 — the fit answered, and then the answer was wrong
+
+**All ten island blocks fitted.** First reported table: floor 54.95 MHz, eight
+of ten below the shell's 99.50. Committed as the answer to "does the renderer
+hold up".
+
+**Then `aux_pipe`'s path detail showed 9.985 ns of INTERCONNECT in the first
+hop from an input pin** — 900 ps short of the whole clock period, in one wire,
+before any logic. `tools/quartus/internal_paths.py` splits every archived
+report into register-to-register paths and paths touching a port. The picture
+changes completely:
+
+| block | reported | internal |
+|---|---:|---:|
+| `perspuv_svc` | 62.67 | **62.67** |
+| `rcp24_svc` | 68.5 | 73–80 |
+| `cache_pipe` | 81.06 | **81.06** |
+| `texjoin_v2` | 93.12 | **93.12** |
+| `tmu_plan` | 88.54 | 110.57 |
+| `aux_pipe` | 63.63 | 120.37 |
+| `palette_res` | 104.42 | 121.48 |
+| `mosaic` | 86.63 | 124.07 |
+| `bilerp_lane` | 99.69 | 125.88 |
+| `rsp_dispatch` | 110.90 | 126.06 |
+
+**Six of ten already meet the island target. Four are the work.** The floor is
+`perspuv_svc`, which R7 had already ordered rebuilt.
+
+## Corrections made, not dropped
+
+* **`tmu_plan` narrowing.** Reported as "no measurable change" on 93.55 → 88.54.
+  Internal-to-internal on the same cone: **−0.690 → +0.956 ns**. It worked.
+* **`aux_pipe`.** Called the island's slowest and rewritten. Its logic was
+  always at 120 MHz. The input register did shorten the boundary path (+8.68
+  reported, ~2× noise), which is what it targeted — but not 8.68 MHz of logic.
+* **The `rcp24_svc` re-fit was the wrong experiment**, run in earnest: Quartus
+  is deterministic at a fixed seed, so the second number was the first number.
+  `run_block_fit.ps1` had no `-Seed` at all; now it does. Sweep: 68.46 / 68.63
+  / 63.93, spread 4.70 against a 4.61 noise floor.
+* **The port classifier returned zero ports for `tmu_plan`** and would have
+  called every path internal. Anchored at the module declaration; refuses to
+  classify rather than guess when the port list is empty.
+
+## RTL changed today
+
+* `texjoin_v2`: 13-level priority scan → work FIFO; registered TMU/AUX/retire
+  packets; zero-sample path defined. **61.66 → 93.12.** 33 checks.
+* `aux_pipe`: input boundary registered; side channel moved to the new issue
+  clock. Coordinate check added — the suite never looked at the number the
+  block produces.
+* `tmu_plan`: coordinates 32 → 12 bits behind `MAXLOG2`. 357/357 addresses
+  bit-identical against the shipped oracle.
+* `zhao_terrain_residency_v2`: set-associative directory, 36 checks.
+
+## Tooling
+
+`design/fit_targets.yml` + preflight; `-Seed`; `internal_paths.py`; 200 full +
+2000 summary path reports (2000 full was 10–17 MB and the pre-commit hook
+refused it, correctly).
+
+## Still open
+
+* `perspuv_svc` two-lane rebuild — the island floor, and next.
+* `cache_pipe` C0–C4 synchronous seam — X7, and the 37.6 % area.
+* Three seeds on the survivors, then compose.
+* **ctest in `build/` is broken for every test in the tree** — MSYS working
+  directory concatenated with a Windows exe path. Executables run correctly
+  when invoked directly, which is how every result here was obtained.
