@@ -459,8 +459,22 @@ try {
                 $leaf = Split-Path -Leaf $srcAbs
                 $snapAbs = Join-Path $snapDir $leaf
                 Copy-Item -LiteralPath $srcAbs -Destination $snapAbs -Force
+                # QUOTE IT. The workspace lives under [IO.Path]::GetTempPath(),
+                # which on this machine sits under a user profile whose name
+                # contains a SPACE. An unquoted QSF path with a space is
+                # "Error (125048): Error reading Quartus Prime Settings File",
+                # and with it EVERY block fit failed at quartus_map in two
+                # seconds.
+                #
+                # The live-tree paths this replaced were all under
+                # C:/programmieren/, so moving the sources into the workspace
+                # put them in a spaced path for the first time and broke a flow
+                # that had never had to care. It went unnoticed because the run
+                # the snapshot was committed for had already started, and that
+                # run therefore still compiled the live tree -- which is also
+                # why its synthesis messages name C:/programmieren/ paths.
                 $qsfPath = $snapAbs.Replace([char]92, [char]47)
-                $qsf += "set_global_assignment -name SYSTEMVERILOG_FILE $qsfPath"
+                $qsf += ('set_global_assignment -name SYSTEMVERILOG_FILE "' + $qsfPath + '"')
             }
             Write-Host ("snapshot: {0} source(s) copied into the workspace; the live tree cannot reach this fit" -f @($sources).Count)
         }
