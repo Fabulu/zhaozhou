@@ -265,6 +265,38 @@ def check_file(path, sizes=None):
     return findings
 
 
+def effort(whys):
+    """MECHANICAL or DESIGN. The distinction that decides who does the work.
+
+    Added 2026-09-04 after the ranked report called `zhao_forge_cliff`
+    "single-reason ... should be mechanical" and it was not: its array is read
+    COMBINATIONALLY by a dozen same-cycle consumers, so registering that read
+    moves the whole state machine a cycle. Three arrays were fixed mechanically
+    in an hour that night and the fourth would have been a pipeline restructure
+    at two in the morning.
+
+    MECHANICAL means every reason is one of the two that a port move fixes on
+    its own -- an async-reset process, or a multidimensional shape -- with no
+    behaviour change and the block's own tests as the guard. Three such fixes
+    took 216,704 bits out of flip-flops without a single output byte moving.
+
+    DESIGN means at least one reason needs a decision:
+      * a COMBINATIONAL READ has to become a registered one, which adds a clock
+        that every consumer sees;
+      * MULTIPLE WRITE ADDRESSES may or may not be genuine. On
+        zhao_terrain_residency_v2 they turned out to be mutually exclusive per
+        way once the multidimensional shape was gone -- one defect producing
+        two findings -- so this tag says "look", not "rewrite".
+    """
+    design = False
+    for w in whys:
+        if "read COMBINATIONALLY" in w or "read at MODULE SCOPE" in w:
+            design = True
+        if "TWO OR MORE distinct write addresses" in w:
+            design = True
+    return "DESIGN" if design else "MECHANICAL"
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     rank = "--rank" in sys.argv
@@ -317,7 +349,8 @@ def main():
             if bits < 256:
                 continue
             shown += 1
-            print("%8d bits  %s  %s" % (bits, path.replace("fpga/rtl/", ""), name))
+            print("%8d bits  %s  %s  [%s]"
+                  % (bits, path.replace("fpga/rtl/", ""), name, effort(whys)))
             for w in whys:
                 print("               - %s" % w)
         small = sum(1 for b, _p, _n, _w in ranked if b < 256)
