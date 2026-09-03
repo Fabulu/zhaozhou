@@ -55,7 +55,8 @@ column says. Sorted by internal, slowest first.
 
 | block | internal | reported | ALM | reg | M10K | DSP | worst internal path |
 |---|---:|---:|---:|---:|---:|---:|---|
-| `perspuv_svc` | **62.67** | 62.67 | 1792 | 2827 | 2 | 3 | `p1_prod_q → e_q` |
+| `perspuv_svc` **rebuilt** | **99.14** | 82.00 | 2204 | 3293 | 1 | 6 | `pk_i → p1_prod_q` |
+| `perspuv_svc` *(one lane, before)* | *62.67* | *62.67* | *1792* | *2827* | *2* | *3* | *`p1_prod_q → e_q`* |
 | `rcp24_svc` | **73–80** | 68.5 | 1041 | 1101 | 0 | 6 | `m1_i_q → c_m.raddr_a` |
 | `cache_pipe` | **81.06** | 81.06 | 5634 | 10812 | 3 | 0 | `rq_rp → valid_r` |
 | `texjoin_v2` | **93.12** | 93.12 | 3824 | 7151 | 4 | 0 | `wq_rp → tmu_v_q` |
@@ -72,16 +73,36 @@ are limited by a boundary that will not exist once they have neighbours.
 
 ### The three real repairs
 
-1. **`perspuv_svc`, 62.67 MHz.** `p1_prod_q[36] → e_q[5][1][8]`: product
-   register through variable rescale and saturation into entry storage, one
-   cone. R7 already requires two parallel product lanes with *"variable
-   rescale/saturation pipelined after both products"* — the second half of that
-   sentence is exactly this path.
-2. **`cache_pipe`, 81.06 MHz.** `rq_rp[1] → valid_r[1][2]`, and the resource
-   columns say the same thing louder: **10,812 registers against 3 M10K.** A
-   texture cache keeping tags and lines in flip-flops did not infer as memory.
-   That is ruling X7 from two directions, and the C0–C4 synchronous seam
-   rebuild is the one repair that buys back both the clock and most of the area.
+1. **`perspuv_svc` — DONE, 62.67 → 99.14 MHz internal.** The old worst path
+   `p1_prod_q[36] → e_q[5][1][8]` was a product register through variable
+   rescale and saturation into entry storage, all one cone. Rebuilt per R7 as
+   two parallel product lanes with the rescale pipelined after them, in four
+   registered stages. **1.00 → 1.99 products per clock**, measured with the
+   input saturated, which is what carries three-sample materials past R7's
+   1.642 requirement.
+
+   Its new worst internal path is `pk_i~5 → p1_prod_q[0][36]` — **the 16-entry
+   priority scan feeding the multiplier**, which is the same class of structure
+   the TEXJOIN rebuild replaced with a work FIFO and which was deliberately
+   left alone here. It is the next thing to take, if 99.14 is not enough.
+
+   +412 ALM and 3 more DSP for the second lane, exactly as expected.
+2. **`cache_pipe`, 81.06 MHz — REBUILT, refit running.** `rq_rp[1] →
+   valid_r[1][2]`, and the resource columns said the same thing louder:
+   **10,812 registers against 3 M10K.** A texture cache keeping tags and lines
+   in flip-flops did not infer as memory.
+
+   Now C0–C4 with the arrays read through a registered address and an explicit
+   capture stage between the memory output and the compare. **The acceptance
+   question is inference, not Fmax** — X7 refuses a cache fit as closure "if
+   the RAMs become flops/MLABs or an M10K output launches a broad combinational
+   path", so the number to read on the refit is the M10K count, not the clock.
+
+   Two real bugs were caught by the existing suite while rebuilding it: the
+   memory output register is overwritten every clock and was being read two
+   stages later, and `valid` was sampled one clock after the tag — which during
+   a fill disagree by construction, so a probe could see the old tag with the
+   new valid and call a miss a hit.
 3. **`rcp24_svc`, 73–80 MHz.** Worst internal path ends at
    `c_m.raddr_a[...]` — a memory address register. Its ruling says **"no
    architectural rewrite justified"**, and the internal number is much better
@@ -89,6 +110,11 @@ are limited by a boundary that will not exist once they have neighbours.
 
 `texjoin_v2` at 93.12 is close enough to be a composition question rather than
 a rewrite.
+
+**The island's internal floor has moved twice today**: from `perspuv_svc` at
+62.67, to `cache_pipe` at 81.06, and — if the cache rebuild lands where its
+structure now says it should — to `texjoin_v2` at 93.12. That is the shape of
+progress here: each repair promotes the next block to being the problem.
 
 ### The area
 

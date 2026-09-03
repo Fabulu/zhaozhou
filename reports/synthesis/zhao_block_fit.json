@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "c2fbc31cff95f820228a7c0f7492e17bb3e552ab",
+    "newestRunCommit":  "056e37c74aee105a9b30c71d995a316c5711adc8",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -621,20 +621,20 @@
                    {
                        "module":  "zhao_raster_perspuv_svc",
                        "status":  "ok",
-                       "sourceCommit":  "c2fbc31cff95f820228a7c0f7492e17bb3e552ab",
+                       "sourceCommit":  "056e37c74aee105a9b30c71d995a316c5711adc8",
                        "rtlCleanAtHead":  true,
-                       "seconds":  2482.4,
+                       "seconds":  2844.3,
                        "sourcesHashed":  46,
-                       "alms":  1792,
-                       "registers":  2827,
-                       "blockMemoryBits":  352,
-                       "ramBlocks":  2,
-                       "dspBlocks":  3,
+                       "alms":  2204,
+                       "registers":  3293,
+                       "blockMemoryBits":  256,
+                       "ramBlocks":  1,
+                       "dspBlocks":  6,
                        "virtualPins":  267,
                        "almsAvailable":  41910,
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
-                       "fmaxMhz":  62.67,
+                       "fmaxMhz":  82,
                        "fmaxClock":  "clk"
                    },
                    {
