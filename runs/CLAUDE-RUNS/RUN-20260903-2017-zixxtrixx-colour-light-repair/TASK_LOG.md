@@ -190,3 +190,28 @@ zhaozhou knobs committed fb9cba41. Poster moved 412 -> 400
 (composition: all four colour reads in one still). Publication render: ONE
 fresh explicit celmain/diagonal-cool-cross invocation of the 22 names into
 a WIPED website scratch-reel. Probe building.
+
+## 2026-09-03 23:05 — probe PASS at the accepted state
+
+ZIXX PROBE: PASS (every key + midpoint, declared 3D contact,
+balance/taunt/fall/impact/spring/jump/limit/overlap gates) from the same
+build tree as the accepted v3 — the pass touches no animation and the
+committed gate agrees. Publication render running.
+
+## 2026-09-03 23:20 — determinism confirmed mid-render
+
+The publication render's moving-light (fresh invocation, different directory,
+same binary) reproduces the accepted v3 draft CRC 0x65A8D1E5 exactly.
+Remaining subjects rendering.
+
+## 2026-09-04 00:55 — CRC PROVEN, encoded, pushed
+
+Publication render (ONE fresh explicit celmain/diagonal-cool-cross
+invocation of the 22 names into a wiped scratch-reel) proven:
+21 subjects byte-identical to the live bank (CRC-32C + frame count +
+contiguity + per-frame 8+384*240*3 size), exactly one changed —
+zixxtrixx-moving-light 0x756E0BFF -> 0x65A8D1E5 (600f), equal to the
+accepted v3 draft from a different invocation (determinism).
+evidence/publication-crc-final.txt. Only the changed clip re-encoded:
+752,145 B VP9 crf16 4:4:4, decode-verified 600 frames, poster f400.
+Upheaval de38080 pushed (HEAD:main). Deploying once.
