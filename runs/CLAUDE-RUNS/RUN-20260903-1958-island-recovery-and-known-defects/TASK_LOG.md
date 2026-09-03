@@ -215,3 +215,38 @@ it.
 
 Reading the finished fit with `tools/quartus/check_fit_rules.ps1` is the next
 action; it applies all three tripwires at once.
+
+## 22:2x — the per-lane re-fit, synthesis evidence (fit still placing)
+
+| | previous fit (clock-only only) | this fit (per-lane flat arrays) |
+|---|---|---|
+| logic cells at synthesis | 15,961 | **4,438** |
+| RAM segments | 32 | **96** |
+| `cannot regroup multidimensional array` | **data_r AND tag_r** | **absent** |
+| fitter preparation | 4:34 | **2:14** |
+
+The "cannot regroup" message is **gone**, which was the actual blocker named in
+the last fit's synthesis log. Logic cells fell 3.6x, which is what an array
+leaving flip-flops looks like.
+
+**NOT a claim of success.** Last time synthesis also looked good -- 32 RAM
+segments -- and the fitter still returned 2 M10K and 128 memory bits. Synthesis
+saying an array became memory is not the fitter saying it stayed memory. The
+acceptance question is still `min_m10k: 8` on the finished row, answered by
+`tools/quartus/check_fit_rules.ps1`.
+
+The one remaining uninferred array is `rq_en`, "uninferred due to inappropriate
+RAM size" -- a small enable vector that is too small to be a memory, which is
+correct and expected.
+
+### Done while this fit ran: audit items 1-7 complete
+`e1bb06ff`. Five contracts (GEOM.ASSEMBLE, MATERIAL.RESOLVE, GEOM.LIGHT,
+GEOM.DEPTHQUANT, FORGE.SHADOW), two amendments (MEM.UPLOAD's coherence law;
+TERRAIN.SHADE's corrected citation), and eight owner decisions written to
+`reports/FUNDAMENTALS-DECISIONS-NEEDED.md` and `reports/decisions.html`.
+Ledger green at 104 blocks.
+
+### Next while it finishes
+`TEXTURE.COMBINE` -- the pair of MATERIAL.RESOLVE. Its own contract says
+shipping the resolver alone makes the machine fetch samples nothing combines,
+so the two are one piece of work in two contracts.
