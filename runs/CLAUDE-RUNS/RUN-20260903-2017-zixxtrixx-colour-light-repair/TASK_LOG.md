@@ -1,7 +1,7 @@
 # Task Log: RUN-20260903-2017 - Direction 27: prove the coloured lights work, then make them read
 
 **Created:** 2026-09-03 20:17 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260903-2017-zixxtrixx-colour-light-repair/
 
 ---
@@ -215,3 +215,16 @@ accepted v3 draft from a different invocation (determinism).
 evidence/publication-crc-final.txt. Only the changed clip re-encoded:
 752,145 B VP9 crf16 4:4:4, decode-verified 600 frames, poster f400.
 Upheaval de38080 pushed (HEAD:main). Deploying once.
+
+
+## 2026-09-04 01:05 — CLOSED. Deployed and verified.
+
+Deployed ONCE: deploy.ps1 -Project upheaval -Branch main (production, not a
+preview). Verified live: page HTTP 200; served moving-light webm SHA256-equal
+to the local 752,145 B encode (600 decoded frames); an Archive Generation
+Seventeen file serves 200; exactly ONE noindex META tag (the second textual
+occurrence is the footer prose, as on every accepted publish); the archive
+tab lists Seventeen. Background jobs all stopped; process sweep clean
+(no zhao/ffmpeg/wrangler/zixx).
+
+Final SHAs: zhaozhou 7fd98bf8 (main, pushed), Upheaval de38080 (main, pushed).
