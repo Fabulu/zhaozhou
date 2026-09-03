@@ -338,3 +338,70 @@ conversion sound. Recorded in the RTL.
    claim. Expect roughly 22 M10K; a fit reporting 0 has failed however good its
    Fmax.
 3. `zhao_forge_cliff` (12,288) is now the largest remaining single-reason item.
+
+---
+
+## 2026-09-04 01:40 — the 23:52 fit died, and what it left behind
+
+Both background watchers were stopped and `quartus_fit` went with them, 2h30m
+in, with **no fitter summary written**. The parent script had been killed hours
+earlier, so nothing was left to parse a result even if it had finished.
+
+### Synthesis DID complete, and it is worth reading
+`quartus_map` finished at 23:52:18 and its report survives:
+
+* **"cannot regroup" is GONE.** That message was the actual blocker named in
+  the previous fit's synthesis log, and the per-lane generate removed it.
+* **All four lanes' `data_r` became `altsyncram`** — `g_lane[0..3].data_r`,
+  Simple Dual Port, 128 x 16, 2,048 bits each.
+* One uninferred array, `rq_en`, "inappropriate RAM size" — a small enable
+  vector, correct and expected.
+* Total block memory bits **8,320**, against **128** on the last fit.
+
+### But `tag_r` did not infer, and min_m10k: 8 cannot be met
+`tag_r` is `[TAG_W-1:0] tag_r [LINES]` = **16 deep x 24 wide = 384 bits per
+lane**. That is far below the size Quartus will put in an M10K — it is the same
+"inappropriate RAM size" verdict `rq_en` gets, and 384 bits in flip-flops is
+the *correct* answer for it.
+
+So the block has **four** arrays worth being memory, not eight. `min_m10k: 8`
+from island brief S3.4 requires `tag_r` to be block RAM, which it structurally
+cannot be. **The tripwire will fail a correct design.**
+
+**Not changing it.** Lowering a gate so the thing passes is the failure this
+whole gate exists to prevent, and S3.4 is the owner's number. Recorded here for
+a decision. The defensible re-derivation by the same capacity-floor method used
+for tonight's other three blocks is **min_m10k: 4** — four `data_r` banks of
+2,048 bits, each of which needs its own block — with the note that 8 was
+presumably written expecting the tag array to be memory too.
+
+### My own snapshot change had broken every block fit
+Relaunching failed at `quartus_map` in 1.9 seconds:
+
+    Error (125048): Error reading Quartus Prime Settings File ... line 243
+
+The snapshot puts sources under `[IO.Path]::GetTempPath()`, which here sits
+below a profile whose name contains a **space**, and the QSF line was unquoted.
+The live-tree paths it replaced were all under `C:/programmieren/`, so the flow
+had never had to care.
+
+**Why it went unnoticed is the lesson.** The snapshot was committed at 23:50:35
+and the fit it was committed *for* started at 23:52 — but that run's synthesis
+messages name `C:/programmieren/` paths, so it **compiled the live tree and
+never exercised the new code at all**. A change made to protect a running fit
+was "validated" by watching that fit run, and the fit was not using it.
+Committing a change and observing the process it was meant to affect is not
+observing the change.
+
+Fixed by quoting; `quartus_map` now passes and the fitter is running again,
+launched **detached** so a task-stop cannot take it with it.
+
+### Still open
+1. The relaunched cache fit. Acceptance `min_m10k`, and see the tripwire note
+   above before reading a failure as an RTL failure.
+2. `zhao_terrain_residency_v2`, `zhao_raster_tilestore`, `zhao_texture_palette_res`
+   all now have capacity-floor tripwires and none has been fit.
+3. The local CMake tree is broken: `CMAKE_CACHEFILE_DIR` is
+   `/c/programmieren/...` while cmake now resolves `C:/Programmieren/...`, so
+   cache regeneration aborts and leaves a `.cmake` unwritten. Needs a full
+   reconfigure, deferred so it does not take CPU from the fit.
