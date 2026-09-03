@@ -248,6 +248,7 @@ module zhao_terrain_project (
   logic             s6_valid;
   logic signed [20:0] s6_px, s6_py;
   logic signed [31:0] s6_invw;
+  logic [30:0]          s6_clipw_unused;  // see the u_core comment
   logic             s6_behind;
   logic             s6_view;
   logic [PAY_W-1:0] s6_pay;
@@ -277,6 +278,17 @@ module zhao_terrain_project (
       .out_x_o      (s6_px),
       .out_y_o      (s6_py),
       .out_d_o      (s6_invw),
+      // clip.w, added to the core 2026-09-04 for GEOM.DEPTHQUANT. TERRAIN does
+      // not carry it YET and the pin is connected explicitly rather than left
+      // to default, so the seam is visible instead of silent.
+      //
+      // The gap is real and named: terrain writes s6_invw -- a Q16.16 quotient
+      // -- into a depth field that the rest of the console reads as invw24, so
+      // terrain depth is on a different scale from geometry depth until
+      // DEPTHQUANT is in this path too. Carrying w here costs THREE registers,
+      // not one, because this block accumulates a triangle's three corners. It
+      // is deliberately not paid before there is a consumer.
+      .out_w_o      (s6_clipw_unused),
       .out_behind_o (s6_behind),
       .out_view_o   (s6_view),
       .out_payload_o(s6_pay),

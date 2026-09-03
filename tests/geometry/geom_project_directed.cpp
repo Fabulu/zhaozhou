@@ -66,6 +66,7 @@ struct VtxIn {
 
 struct VtxOut {
   int32_t x, y, d;
+  uint32_t w;  // clip.w itself, for GEOM.DEPTHQUANT
   bool behind;
   uint16_t src;
 };
@@ -139,6 +140,7 @@ class Dut {
         o.x = sx21(dut_.out_x_o);
         o.y = sx21(dut_.out_y_o);
         o.d = static_cast<int32_t>(dut_.out_d_o);
+        o.w = static_cast<uint32_t>(dut_.out_w_o);
         o.behind = dut_.out_behind_o != 0;
         o.src = static_cast<uint16_t>(dut_.out_src_id_o);
         out.push_back(o);
@@ -341,6 +343,14 @@ int main(int argc, char** argv) {
     }
     check(got[1].behind, "w == 0 exactly is BEHIND the eye, not in front", 1,
           got[1].behind ? 1 : 0);
+    // Behind the eye the core forces its internal divisor to 1 rather than the
+    // real w, so a consumer that ignored out_behind_o would read a plausible
+    // NEAR value. out_w_o is zeroed instead, which makes that misuse land on
+    // the far floor -- the harmless direction -- rather than in front of
+    // everything else in the scene.
+    check(got[1].w == 0u,
+          "out_w_o is zero behind the eye, not the forced internal divisor of 1",
+          0, got[1].w);
     check(got[1].x == 0 && got[1].y == 0 && got[1].d == 0,
           "and a rejected vertex carries zeros, it is not dropped", 1,
           (got[1].x == 0 && got[1].y == 0 && got[1].d == 0) ? 1 : 0);
@@ -598,6 +608,25 @@ int main(int argc, char** argv) {
         check((got[0].d == INT32_MAX) == lane2_rails,
               "the 1/w lane rails exactly when (1<<32)/clip.w >= 2^31", lane2_rails ? 1 : 0,
               (got[0].d == INT32_MAX) ? 1 : 0);
+
+        // ---- out_w_o: clip.w itself, added 2026-09-04 for GEOM.DEPTHQUANT --
+        // This matrix makes clip.w EXACTLY `wraw` -- that is the whole point of
+        // its construction, stated above -- so the expected value is known
+        // outright and nothing here re-derives it. A port checked against a
+        // second computation of what it should hold would be checking two
+        // copies of one belief; this checks it against a number the case
+        // already had to be true for the rail sweep to mean anything.
+        //
+        // It matters because DEPTHQUANT consumes w and NOT out_d_o: the depth
+        // law runs its own rcp_u24 on w, and the quotient has already lost the
+        // precision that reconstruction would need. If out_w_o were misaligned
+        // by a pipeline stage every depth in the scene would be the depth of
+        // the PREVIOUS vertex -- coherent, plausible, and wrong.
+        bool w_ok = true;
+        for (const auto& g : got)
+          if (g.w != static_cast<uint32_t>(wraw)) w_ok = false;
+        check(w_ok, "out_w_o carries clip.w itself, aligned with the quotients",
+              static_cast<uint64_t>(wraw), static_cast<uint64_t>(got[0].w));
       }
     }
   }

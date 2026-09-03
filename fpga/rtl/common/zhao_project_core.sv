@@ -221,6 +221,18 @@ module zhao_project_core #(
     output logic signed [20:0]      out_x_o,      // S 12.8 canvas x, ±2048 px
     output logic signed [20:0]      out_y_o,      // S 12.8 canvas y, ±2048 px
     output logic signed [31:0]      out_d_o,      // Q16.16 1/w
+    // clip.w itself, fx16 raw, aligned with out_d_o. GEOM.DEPTHQUANT needs w
+    // and NOT the quotient: the ratified depth law performs its own rcp_u24 on
+    // w, and 1/w has already lost the precision that reconstruction would need.
+    // It is nearly free here -- the divider carries the divisor through every
+    // step because each step subtracts it -- so this is one register at s5 and
+    // one at the output, not a four-stage carry.
+    //
+    // Zero when out_behind_o, matching out_d_o's convention. Behind the eye the
+    // internal divisor is forced to 1 rather than the real w, so a consumer
+    // that ignored out_behind_o would read a plausible near value; zeroing here
+    // makes that misuse produce the far floor instead of the near plane.
+    output logic        [30:0]       out_w_o,
     output logic                    out_behind_o, // clip.w <= 0: vertex is zero
     output logic                    out_view_o,
     output logic [PAYLOAD_W-1:0]    out_payload_o,
@@ -522,6 +534,7 @@ module zhao_project_core #(
 
   logic                        s5_valid;
   logic signed [31:0]          s5_ndc_x, s5_ndc_y, s5_invw;
+  logic        [30:0]          s5_w;
   logic                        s5_behind;
   logic                        s5_view;
   logic        [PAYLOAD_W-1:0] s5_pay;
@@ -558,7 +571,8 @@ module zhao_project_core #(
       s2_valid <= 1'b0; s2_cx <= '0; s2_cy <= '0; s2_cw <= '0; s2_view <= 1'b0; s2_pay <= '0;
       s3_valid <= 1'b0; s3_d <= '0; s3_dv[0] <= '0; s3_dv[1] <= '0; s3_dv[2] <= '0;
       s3_neg <= '0; s3_sat <= '0; s3_behind <= 1'b0; s3_view <= 1'b0; s3_pay <= '0;
-      s5_valid <= 1'b0; s5_ndc_x <= '0; s5_ndc_y <= '0; s5_invw <= '0; s5_behind <= 1'b0;
+      s5_valid <= 1'b0; s5_ndc_x <= '0; s5_ndc_y <= '0; s5_invw <= '0; s5_w <= '0;
+      s5_behind <= 1'b0;
       s5_view <= 1'b0; s5_pay <= '0;
       out_valid_o <= 1'b0;
       out_x_o <= '0; out_y_o <= '0; out_d_o <= '0; out_behind_o <= 1'b0;
@@ -600,6 +614,9 @@ module zhao_project_core #(
       s5_ndc_x <= q_res[0];
       s5_ndc_y <= q_res[1];
       s5_invw <= q_res[2];
+      // The divisor at the END of the chain, so it is aligned with the
+      // quotients rather than with the vertex that entered five stages ago.
+      s5_w <= dstep_d[DIV_STEPS];
       s5_behind <= dstep_behind[DIV_STEPS];
       s5_view <= dstep_view[DIV_STEPS];
       s5_pay <= dstep_pay[DIV_STEPS];
@@ -611,6 +628,7 @@ module zhao_project_core #(
       out_x_o <= s5_behind ? 21'sd0 : to_screen_xy(scr_fx_x);
       out_y_o <= s5_behind ? 21'sd0 : to_screen_xy(scr_fx_y);
       out_d_o <= s5_behind ? 32'sd0 : s5_invw;
+      out_w_o <= s5_behind ? 31'd0 : s5_w;
       out_behind_o <= s5_behind;
       out_view_o <= s5_view;
       out_payload_o <= s5_pay;

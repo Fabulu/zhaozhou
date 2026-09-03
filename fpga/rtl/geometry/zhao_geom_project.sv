@@ -90,6 +90,11 @@ module zhao_geom_project (
     output logic signed [20:0] out_x_o,      // S 12.8 canvas x, clamped ±2048 px
     output logic signed [20:0] out_y_o,      // S 12.8 canvas y, clamped ±2048 px
     output logic signed [31:0] out_d_o,      // Q16.16 1/w
+    // clip.w itself, fx16 raw. GEOM.DEPTHQUANT consumes THIS and not out_d_o:
+    // the ratified depth law performs its own rcp_u24 on w, and the quotient
+    // has already lost the precision reconstruction would need. Zero when
+    // out_behind_o.
+    output logic        [30:0] out_w_o,
     output logic               out_behind_o, // clip.w <= 0: the vertex is zero
     output logic        [15:0] out_src_id_o,
 
@@ -142,6 +147,7 @@ module zhao_geom_project (
       .out_x_o      (out_x_o),
       .out_y_o      (out_y_o),
       .out_d_o      (out_d_o),
+      .out_w_o      (out_w_o),
       .out_behind_o (out_behind_o),
       .out_view_o   (core_view),
       .out_payload_o(out_src_id_o),
