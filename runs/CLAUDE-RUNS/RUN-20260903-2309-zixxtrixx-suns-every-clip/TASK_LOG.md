@@ -103,3 +103,19 @@ Plan for proof of "animation untouched", bounded to the question:
 3. Ink-mask equality per frame between sunless and sun renders (the cel ink
    hugs the silhouette; identical ink sets = identical silhouettes = the
    motion itself unchanged, frame by frame).
+
+## 2026-09-04 01:05 — bank rendered, looked at, and the revert path PROVEN
+
+Full 21-subject v5 render complete; contact sheets (render/contact-sheet-*.png)
+and direct pristine-vs-v5 pairs reviewed by eye: every clip visibly lit in its
+own mood, no sun from below or behind (salto-nine checked at altitude), form
+and pigment intact. The three subtle-looking thumbnails (balance, fall, attack)
+were paired directly against pristine and all three read clearly at 2x native:
+teal top and cyan head on balance, icy cyan coil on fall, blazing red eye ring
+and gold-olive flank on the attack's five-second spear hold.
+
+REVERT PATH PROOF (evidence-gateoff-identity.txt): suns build with
+ZIXX_SUNS=off vs pristine pre-suns build (c23c6a63), all 22 subjects:
+per-subject sequence CRC32C IDENTICAL, frame counts identical. Bonus
+provenance: pristine moving-light = 0x65A8D1E5, exactly the CRC logged for
+the PUBLISHED moving-light clip -- this tree is the published bank's source.

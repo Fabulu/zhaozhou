@@ -1,0 +1,28 @@
+Direction 29 revert-path proof: the suns build (6a464858 work tree) with
+ZIXX_SUNS=off versus a pristine build of pre-suns HEAD (c23c6a63), both
+ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross, per-subject sequence CRC32C
+as reported by the renderer.
+
+zixxtrixx-attack             sunsoff=0x2AED9D76 f=560  pristine=0x2AED9D76 f=560  IDENTICAL
+zixxtrixx-balance            sunsoff=0x7FC8F62E f=493  pristine=0x7FC8F62E f=493  IDENTICAL
+zixxtrixx-damage             sunsoff=0x0D8ECFB6 f=400  pristine=0x0D8ECFB6 f=400  IDENTICAL
+zixxtrixx-death              sunsoff=0x4B7B3E3E f=192  pristine=0x4B7B3E3E f=192  IDENTICAL
+zixxtrixx-death2             sunsoff=0x9F659521 f=240  pristine=0x9F659521 f=240  IDENTICAL
+zixxtrixx-fall               sunsoff=0xC4722098 f=288  pristine=0xC4722098 f=288  IDENTICAL
+zixxtrixx-hit                sunsoff=0x6A33B878 f=300  pristine=0x6A33B878 f=300  IDENTICAL
+zixxtrixx-hitfloor           sunsoff=0xC8E9982F f=188  pristine=0xC8E9982F f=188  IDENTICAL
+zixxtrixx-idle               sunsoff=0x25EE061F f=576  pristine=0x25EE061F f=576  IDENTICAL
+zixxtrixx-jump-multi         sunsoff=0x9E96F7F2 f=241  pristine=0x9E96F7F2 f=241  IDENTICAL
+zixxtrixx-jump-one           sunsoff=0xB11B7C7B f=241  pristine=0xB11B7C7B f=241  IDENTICAL
+zixxtrixx-knockdown          sunsoff=0xB36C148A f=196  pristine=0xB36C148A f=196  IDENTICAL
+zixxtrixx-look               sunsoff=0x5F193510 f=384  pristine=0x5F193510 f=384  IDENTICAL
+zixxtrixx-moving-light       sunsoff=0x65A8D1E5 f=600  pristine=0x65A8D1E5 f=600  IDENTICAL
+zixxtrixx-run                sunsoff=0x8E8D3179 f=96  pristine=0x8E8D3179 f=96  IDENTICAL
+zixxtrixx-salto-dummy        sunsoff=0x6D95E2FD f=295  pristine=0x6D95E2FD f=295  IDENTICAL
+zixxtrixx-salto-fly          sunsoff=0xE4332117 f=313  pristine=0xE4332117 f=313  IDENTICAL
+zixxtrixx-salto-nine         sunsoff=0x2E005FAD f=435  pristine=0x2E005FAD f=435  IDENTICAL
+zixxtrixx-salto-six          sunsoff=0x139F143B f=333  pristine=0x139F143B f=333  IDENTICAL
+zixxtrixx-slow-taunt         sunsoff=0xBB66B5CE f=239  pristine=0xBB66B5CE f=239  IDENTICAL
+zixxtrixx-taunt              sunsoff=0x33BC0A56 f=224  pristine=0x33BC0A56 f=224  IDENTICAL
+zixxtrixx-walk               sunsoff=0x86536E70 f=160  pristine=0x86536E70 f=160  IDENTICAL
+RESULT: ALL-IDENTICAL (22 subjects)
