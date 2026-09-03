@@ -2138,38 +2138,43 @@ struct ZixxSunSpec {
   int32_t gain_r, gain_g, gain_b;  // multiplicative, Q16.16 (fxm thousandths)
   int32_t add_r, add_g, add_b;     // additive emission, Q16.16 of 255 scale
 };
-// Shared geometry: ~64 deg elevation from the stage, still ~48 deg above an
-// airborne apex 4 m up; the 15 m inner radius keeps every body vertex AND the
-// salto target dummy (8.5 m out at the farthest) inside attenuation 1.
-constexpr int32_t kZixxSunHeightMm = 8600;
-constexpr int32_t kZixxSunInnerMm = 15000;
-constexpr int32_t kZixxSunOuterMm = 19000;
+// Shared geometry: a sun is FAR AWAY. 50 m up and 22 m to the side puts the
+// stage at ~66 deg elevation and the nine-salto's authored 24 m root apex --
+// the highest thing this creature ever does -- still ~50 deg BELOW the sun,
+// so no clip is ever lit from below or behind, and the 65 m inner radius
+// keeps every body vertex, every flight and the salto target dummy inside
+// attenuation 1: direction is the only thing the distance changes, which is
+// exactly a sun. (The first authoring at 8.6 m would have put the six- and
+// nine-salto apexes ABOVE the sun at their peaks -- caught before render.)
+constexpr int32_t kZixxSunHeightMm = 50000;
+constexpr int32_t kZixxSunInnerMm = 65000;
+constexpr int32_t kZixxSunOuterMm = 78000;
 // Per-clip suns. Azimuth is authored per camera (yaw 0 / 45 / 67.5 deg
 // subjects) so the sun always sits high on the camera side of the sky, offset
 // to one flank -- never behind the animal relative to the shot. Colour is the
 // clip's MOOD; dominant channel strong, complement suppressed, judged by eye
 // at native 384x240 (art law: these numbers are knobs, not derivations).
-constexpr ZixxSunSpec kZixxSunIdle       {2970,  kZixxSunHeightMm,  2970,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(775), fxm(500),  fxm(60), fxm(620), fxm(330), fxm(30)};   // golden morning
-constexpr ZixxSunSpec kZixxSunWalk       {-2409, kZixxSunHeightMm,  3440,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(60),  fxm(280),  fxm(900), fxm(45),  fxm(150), fxm(540)};  // azure day
-constexpr ZixxSunSpec kZixxSunRun        {2409,  kZixxSunHeightMm,  3440,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(900), fxm(340),  fxm(30), fxm(600), fxm(195), fxm(15)};   // hot orange
-constexpr ZixxSunSpec kZixxSunLook       {2409,  kZixxSunHeightMm,  3440,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(525), fxm(90),   fxm(840), fxm(360), fxm(45),  fxm(560)};  // violet
-constexpr ZixxSunSpec kZixxSunBalance    {2700,  kZixxSunHeightMm,  3217,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(50),  fxm(680),  fxm(650), fxm(30),  fxm(390), fxm(450)};  // teal
-constexpr ZixxSunSpec kZixxSunTaunt      {4136,  kZixxSunHeightMm,  -729,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(800), fxm(60),   fxm(680), fxm(560), fxm(25),  fxm(380)};  // magenta
-constexpr ZixxSunSpec kZixxSunSlowTaunt  {3866,  kZixxSunHeightMm,  1641,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(745), fxm(215),  fxm(340), fxm(450), fxm(120), fxm(210)};  // rose dusk
-constexpr ZixxSunSpec kZixxSunJumpOne    {2586,  kZixxSunHeightMm,  3310,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(340), fxm(840),  fxm(60), fxm(210), fxm(500), fxm(45)};   // spring lime
-constexpr ZixxSunSpec kZixxSunJumpMulti  {-2586, kZixxSunHeightMm,  3310,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(930), fxm(215),  fxm(25), fxm(620), fxm(150), fxm(15)};   // sunset red-orange
-constexpr ZixxSunSpec kZixxSunAttack     {2700,  kZixxSunHeightMm,  3217,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(960), fxm(60),   fxm(40), fxm(660), fxm(30),  fxm(30)};   // crimson
-constexpr ZixxSunSpec kZixxSunHit        {729,   kZixxSunHeightMm,  4136,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(90),  fxm(340),  fxm(800), fxm(60),  fxm(195), fxm(510)};  // steel blue
-constexpr ZixxSunSpec kZixxSunDamage     {4136,  kZixxSunHeightMm,  729,   kZixxSunInnerMm, kZixxSunOuterMm, fxm(840), fxm(400),  fxm(40), fxm(540), fxm(240), fxm(15)};   // ember amber
-constexpr ZixxSunSpec kZixxSunKnockdown  {873,   kZixxSunHeightMm,  4108,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(430), fxm(75),   fxm(775), fxm(270), fxm(45),  fxm(510)};  // bruise violet
-constexpr ZixxSunSpec kZixxSunFall       {-2700, kZixxSunHeightMm,  3217,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(185), fxm(495),  fxm(870), fxm(120), fxm(300), fxm(560)};  // ice blue
-constexpr ZixxSunSpec kZixxSunHitFloor   {4108,  kZixxSunHeightMm,  873,   kZixxSunInnerMm, kZixxSunOuterMm, fxm(800), fxm(430),  fxm(75), fxm(510), fxm(255), fxm(30)};   // dust orange
-constexpr ZixxSunSpec kZixxSunSaltoDummy {2100,  kZixxSunHeightMm,  3637,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(650), fxm(710),  fxm(50), fxm(390), fxm(420), fxm(30)};   // chartreuse gold
-constexpr ZixxSunSpec kZixxSunSaltoFly   {-2100, kZixxSunHeightMm,  3637,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(40),  fxm(215),  fxm(930), fxm(30),  fxm(120), fxm(630)};  // deep azure
-constexpr ZixxSunSpec kZixxSunSaltoSix   {3217,  kZixxSunHeightMm,  2700,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(840), fxm(620),  fxm(60), fxm(540), fxm(360), fxm(30)};   // gold
-constexpr ZixxSunSpec kZixxSunSaltoNine  {-3217, kZixxSunHeightMm,  2700,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(870), fxm(90),   fxm(465), fxm(600), fxm(45),  fxm(300)};  // hot pink
-constexpr ZixxSunSpec kZixxSunDeath      {4184,  kZixxSunHeightMm,  366,   kZixxSunInnerMm, kZixxSunOuterMm, fxm(900), fxm(40),   fxm(25), fxm(600), fxm(15),  fxm(15)};   // deep red
-constexpr ZixxSunSpec kZixxSunDeath2     {585,   kZixxSunHeightMm,  4159,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(340), fxm(370),  fxm(840), fxm(210), fxm(225), fxm(540)};  // moonlight
+constexpr ZixxSunSpec kZixxSunIdle       {15556,  kZixxSunHeightMm, 15556,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(775), fxm(500),  fxm(60), fxm(620), fxm(330), fxm(30)};   // golden morning
+constexpr ZixxSunSpec kZixxSunWalk       {-12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(60),  fxm(280),  fxm(900), fxm(45),  fxm(150), fxm(540)};  // azure day
+constexpr ZixxSunSpec kZixxSunRun        {12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(900), fxm(340),  fxm(30), fxm(600), fxm(195), fxm(15)};   // hot orange
+constexpr ZixxSunSpec kZixxSunLook       {12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(525), fxm(90),   fxm(840), fxm(360), fxm(45),  fxm(560)};  // violet
+constexpr ZixxSunSpec kZixxSunBalance    {14142,  kZixxSunHeightMm, 16853,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(50),  fxm(680),  fxm(650), fxm(30),  fxm(390), fxm(450)};  // teal
+constexpr ZixxSunSpec kZixxSunTaunt      {21666,  kZixxSunHeightMm, -3820,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(800), fxm(60),   fxm(680), fxm(560), fxm(25),  fxm(380)};  // magenta
+constexpr ZixxSunSpec kZixxSunSlowTaunt  {11000,  kZixxSunHeightMm, 19053,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(745), fxm(215),  fxm(340), fxm(450), fxm(120), fxm(210)};  // rose dusk
+constexpr ZixxSunSpec kZixxSunJumpOne    {13544,  kZixxSunHeightMm, 17336,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(340), fxm(840),  fxm(60), fxm(210), fxm(500), fxm(45)};   // spring lime
+constexpr ZixxSunSpec kZixxSunJumpMulti  {-13544,  kZixxSunHeightMm, 17336,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(930), fxm(215),  fxm(25), fxm(620), fxm(150), fxm(15)};   // sunset red-orange
+constexpr ZixxSunSpec kZixxSunAttack     {14142,  kZixxSunHeightMm, 16853,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(960), fxm(60),   fxm(40), fxm(660), fxm(30),  fxm(30)};   // crimson
+constexpr ZixxSunSpec kZixxSunHit        {3820,  kZixxSunHeightMm, 21666,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(90),  fxm(340),  fxm(800), fxm(60),  fxm(195), fxm(510)};  // steel blue
+constexpr ZixxSunSpec kZixxSunDamage     {21666,  kZixxSunHeightMm, 3820,   kZixxSunInnerMm, kZixxSunOuterMm, fxm(840), fxm(400),  fxm(40), fxm(540), fxm(240), fxm(15)};   // ember amber
+constexpr ZixxSunSpec kZixxSunKnockdown  {4574,  kZixxSunHeightMm, 21518,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(430), fxm(75),   fxm(775), fxm(270), fxm(45),  fxm(510)};  // bruise violet
+constexpr ZixxSunSpec kZixxSunFall       {-14142,  kZixxSunHeightMm, 16853,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(185), fxm(495),  fxm(870), fxm(120), fxm(300), fxm(560)};  // ice blue
+constexpr ZixxSunSpec kZixxSunHitFloor   {21518,  kZixxSunHeightMm, 4574,   kZixxSunInnerMm, kZixxSunOuterMm, fxm(800), fxm(430),  fxm(75), fxm(510), fxm(255), fxm(30)};   // dust orange
+constexpr ZixxSunSpec kZixxSunSaltoDummy {11000,  kZixxSunHeightMm, 19053,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(650), fxm(710),  fxm(50), fxm(390), fxm(420), fxm(30)};   // chartreuse gold
+constexpr ZixxSunSpec kZixxSunSaltoFly   {-11000,  kZixxSunHeightMm, 19053,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(40),  fxm(215),  fxm(930), fxm(30),  fxm(120), fxm(630)};  // deep azure
+constexpr ZixxSunSpec kZixxSunSaltoSix   {16853,  kZixxSunHeightMm, 14142,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(840), fxm(620),  fxm(60), fxm(540), fxm(360), fxm(30)};   // gold
+constexpr ZixxSunSpec kZixxSunSaltoNine  {-16853,  kZixxSunHeightMm, 14142,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(870), fxm(90),   fxm(465), fxm(600), fxm(45),  fxm(300)};  // hot pink
+constexpr ZixxSunSpec kZixxSunDeath      {21916,  kZixxSunHeightMm, 1917,   kZixxSunInnerMm, kZixxSunOuterMm, fxm(900), fxm(40),   fxm(25), fxm(600), fxm(15),  fxm(15)};   // deep red
+constexpr ZixxSunSpec kZixxSunDeath2     {3062,  kZixxSunHeightMm, 21785,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(340), fxm(370),  fxm(840), fxm(210), fxm(225), fxm(540)};  // moonlight
 
 // Direction 29 revert switch (reel-side; the silicon-side revert is the
 // g_creature_additive_light gate plus the CREATURE.LIGHT parameters).
