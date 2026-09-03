@@ -103,3 +103,34 @@ rather than fitting if the SDC substitution matched nothing.
    entry table is read COMBINATIONALLY through `head_q`, so no write change
    alone can make it memory
 4. the production resource count, last
+
+## IN PROGRESS at the moment the cache fit was due back
+
+**`zhao_texture_fragrob` is written and lints clean; its TEST IS NOT WRITTEN.**
+
+Per the brief S6.1 it is a NEW block beside v2, not an edit of it, and its port
+list is deliberately identical so **v2 is the behavioural oracle**. Structure
+per S6.3/S6.4: control state (valid, generation, required/arrived masks, aux
+flags) in flops on purpose; payload in banks keyed by SAMPLE INDEX
+(`desc_u_m[3]`, `desc_v_m[3]`, `desc_met_m[3]`, `res_rgb_m[3]`, `res_a_m[3]`,
+plus context and aux), every one written AND read only inside a clock-only
+process through registered addresses. Free-slot FIFO with a 16-cycle init
+sweep, no scan. Issue and retire are two-stage state machines because a banked
+descriptor cannot be picked combinationally -- that is the trade: latency for
+structure.
+
+Registered in `design/fit_targets.yml` with the S3.4 tripwires
+(`min_m10k: 6`, `max_registers: 2500`, `max_dsp: 0`). NOT yet in
+`design/blocks.yml` and it has no contract file.
+
+### NEXT STEPS, in order
+1. **the differential test** -- `tests/texture/fragrob_differential.cpp`:
+   drive fragrob and `zhao_raster_texjoin_v2` from identical stimulus with a
+   shared TMU/AUX responder, and compare the SEQUENCE of retired fragments.
+   NOT cycle-by-cycle: fragrob has extra pipeline stages by design, so the
+   contract being checked is same fragments, same order, same values.
+   Directed cases to add: generation rejection of a stale return, ordered
+   retire under out-of-order completion, allocation blocking when full.
+2. `design/contracts/TEXTURE.FRAGROB.md` + a `blocks.yml` entry.
+3. fit it against its tripwires; the acceptance question is **M10K, not Fmax**.
+4. only then consider retiring v2 from the production manifest.
