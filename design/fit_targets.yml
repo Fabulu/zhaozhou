@@ -29,6 +29,35 @@
 #
 # Paths are repo-relative and forward-slashed. Order matters to Quartus for
 # packages; list a package before what imports it.
+#
+# ---------------------------------------------------------------------------
+# `rules:` -- THE STRUCTURAL GATE (added 2026-09-03)
+# ---------------------------------------------------------------------------
+# reports/islandrearchitecture5.md S3.4 sets numeric tripwires per block and
+# says, in plain words:
+#
+#     A fit that meets Fmax while violating its memory/DSP structure is not a
+#     pass.
+#
+# Those tripwires existed only as prose. Nothing enforced them, so a cache
+# rebuild that put 9,728 bits of array into flip-flops -- 2 M10K where its own
+# predecessor had 4 -- was reported as a PASS on the strength of 98.66 MHz,
+# because Fmax was the only number the tooling produced. This section is that
+# gap closed.
+#
+#   rules:
+#     min_m10k: 8          require at least; the MINIMUM is the important half
+#     max_registers: 2000  reject above
+#     max_alms: 1500
+#     max_dsp: 4
+#
+# A maximum catches a block that grew. A MINIMUM catches a block whose storage
+# quietly stopped being storage -- the failure that looks like success.
+#
+# Only S3.4's explicit TRIPWIRES are encoded here. S3.3's per-component budgets
+# are architecture targets ("not predicted fit results", says the brief) and are
+# recorded as comments beside the rule so they are visible without failing a fit
+# that is legitimately mid-recovery.
 
 targets:
 
@@ -41,6 +70,14 @@ targets:
   - top: zhao_texture_cache_pipe
     sources:
       - fpga/rtl/texture/zhao_texture_cache_pipe.sv
+    rules:
+      # S3.4 verbatim: require M10K >= 8, reject registers > 2,000,
+      # reject ALMs > 1,500. S10 calls this block THE ALM RECOVERY CENTRE.
+      # Measured 2026-09-03 BEFORE the storage fix: 2 / 11,328 / 5,903 --
+      # all three violated, and it reported `ok` at 98.66 MHz.
+      min_m10k: 8
+      max_registers: 2000
+      max_alms: 1500
 
   - top: zhao_texture_aux_pipe
     sources:
@@ -69,6 +106,11 @@ targets:
       - fpga/rtl/texture/zhao_texture_mosaic.sv
 
   # --- raster leaves the texture island depends on --------------------------
+    rules:
+      # S3.4: require DSP == 0 for the CSD variant. Measured 4 today, so
+      # this rule FAILS on purpose until C21 lands -- an inferred multiplier
+      # is on the brief's REWRITE list.
+      max_dsp: 0
 
   - top: zhao_raster_perspuv_svc
     sources:
@@ -80,12 +122,23 @@ targets:
 
   # zhao_field_rcp24_rom is the submodule that was forgotten from an
   # -ExtraSources line once. It is why this file exists in its present form.
+    rules:
+      # S3.4 FRAGROB: reject registers > 2,500, and require the payload
+      # banks to infer as RAM. S3.3 budget: 900 ALM / 1,200 reg / 14-20 M10K.
+      # min_m10k is deliberately NOT set yet -- the banking rework (C6-C8)
+      # decides the count, and a guessed minimum would fail the very step
+      # that fixes it.
+      max_registers: 2500
+
   - top: zhao_raster_rcp24_svc
     sources:
       - fpga/rtl/field/zhao_field_rcp24_rom.sv
       - fpga/rtl/raster/zhao_raster_rcp24_svc.sv
 
   # --- terrain --------------------------------------------------------------
+    rules:
+      # S3.4: reject DSP > 4 after the 32x32 width proof. Measured 6.
+      max_dsp: 4
 
   - top: zhao_terrain_residency
     sources:

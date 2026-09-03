@@ -262,6 +262,11 @@ function Read-FitTargets([string]$Path) {
     return $map
 }
 
+# The structural gate lives in fit_rules.ps1 and is dot-sourced rather than
+# copied, because `check_fit_rules.ps1` applies the identical law to already
+# recorded rows without running Quartus, and two copies of a rule drift.
+. (Join-Path $PSScriptRoot 'fit_rules.ps1')
+
 # Does `module <name>` appear in a file the fit will actually compile? The
 # shell cone counts, and so does every extra source.
 function Test-TopDeclared([string]$Top, [string[]]$Extras, [string]$Root, [string]$ShellQsf) {
@@ -286,6 +291,8 @@ function Test-TopDeclared([string]$Top, [string[]]$Extras, [string]$Root, [strin
 }
 
 $FitTargets = Read-FitTargets (Join-Path $RepoRoot 'design/fit_targets.yml')
+
+$fitRules = Read-FitRules (Join-Path $RepoRoot 'design/fit_targets.yml')
 
 try {
     foreach ($mod in $Module) {
@@ -632,6 +639,21 @@ try {
             }
         } elseif ($row.status -eq 'unknown') {
             $row.status = 'no-summary'
+        }
+
+        # THE STRUCTURAL GATE. A block that met Fmax while putting its arrays
+        # in flip-flops used to report `ok`; now it reports the violation and
+        # the row is not a pass.
+        if ($row.status -eq 'ok') {
+            $ruleSet = $fitRules[$rowModule]
+            $violations = @(Test-FitRules $row $ruleSet)
+            if ($violations.Count -gt 0) {
+                $row.status = 'failed:structure'
+                $row.ruleViolations = @($violations)
+                foreach ($v in $violations) {
+                    Write-Host ("    RULE  {0}: {1}" -f $rowModule, $v) -ForegroundColor Red
+                }
+            }
         }
 
         $results.Add([pscustomobject]$row)
