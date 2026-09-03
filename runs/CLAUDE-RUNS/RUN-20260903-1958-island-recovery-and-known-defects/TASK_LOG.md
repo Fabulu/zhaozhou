@@ -250,3 +250,91 @@ Ledger green at 104 blocks.
 `TEXTURE.COMBINE` -- the pair of MATERIAL.RESOLVE. Its own contract says
 shipping the resolver alone makes the machine fetch samples nothing combines,
 so the two are one piece of work in two contracts.
+
+---
+
+## 2026-09-04, while the relaunched cache fit runs
+
+The fit relaunched at 23:52 from a **snapshot** copied into the workspace, so a
+live edit can no longer reach a running fit. `provenance guard: 1 declared
+source(s)` confirmed the scoping is right. At 02:00 it had 66 minutes of CPU,
+1.1 GB resident, and had not touched disk since 23:55 — normal for the
+placement phase, and the verilator builds below were competing for cores.
+
+### GEOM.DEPTHQUANT built and UNIT_VERIFIED — `39f68c04`, `5a984ed0`
+The block from audit R6. Checked against `zref::depth_of_raw`, the ratified law
+the golden captures already pin, and **not** against a second implementation of
+it — the mistake made and caught yesterday on the flat-shade law, where twelve
+checks passed because a duplicate was compared with itself.
+
+Three faults it found, all of which lint had passed:
+
+* the normalisation loop **descended**, so the lowest set bit above 23 won
+  instead of the highest. Depth at `wmax` came out exactly 2^5 too large;
+* a shift of **zero was refused** as out of range — and zero *is* the near pin.
+  The generator solves each profile's `SCALE` so the shift lands on exactly zero
+  at `wmin` and the depth IS the raw reciprocal, which is how `0xFFFFFF` is hit
+  exactly. Refusing it returned depth 0 — the value meaning "far" — for the
+  closest geometry in the scene;
+* the reciprocal handshake never consulted `rcp_ready_i`.
+
+7/7 checks, 0 refused. Ledger green at 105 blocks.
+
+### GEOM.PROJECT exposes clip.w — `475d0578`
+DEPTHQUANT had no producer without it. Nearly free: the restoring divider
+carries the divisor through every step, so `dstep_d[DIV_STEPS]` was already
+aligned with the quotients — one register at s5, one at the output.
+
+Verified against a **known** value rather than a re-derivation: the divider-rail
+case already builds a matrix whose `clip.w` is exactly `wraw`. Mutating the RTL
+to `s5_w + 1` fails exactly the four new checks. 756/756 restored.
+
+### The resource count the owner asked for — `19db1e2d`
+`check_ram_inference.py --rank`, filtered through `prod_manifest.yml`.
+
+**280,784 bits of declared array in the production top will not infer as
+memory.** At Cyclone V's best case of 4 reg/ALM that is 70,196 ALM; the device
+has 41,910. **1.7x over, on the generous bound.**
+
+The ranking was **wrong twice before it was right**, and both failures are the
+house error. Unranked, 898 findings was true and unusable. Ranked, it printed a
+confident "12 arrays worth looking at" while all five of the largest sat in a
+331-entry UNKNOWN pile — a heredoc had eaten `\b` into a literal `0x08` so the
+parameter matcher matched nothing. **The tell was 331 UNKNOWN against 12
+ranked**, a ratio a working sizer does not produce.
+
+### 280,784 -> 63,696 bits, a 77% reduction — `70f05f31`, `9304d668`
+All three mechanical items, each baselined before the edit and each proved to
+bite by a mutation:
+
+| | before | after |
+|---|---|---|
+| `zhao_terrain_residency_v2` | 168,876 | 940 |
+| `zhao_raster_tilestore` | 32,768 | 0 |
+| `zhao_texture_palette_res` | 16,384 | 0 |
+
+Behaviour byte-identical: 37 + 6 residency checks, 31 + 6 tilestore, 18
+palette, all with the same printed counters as the baseline.
+
+Two things learned that are worth more than the bits:
+
+* **The read counts as much as the write.** `ram0_q <= ram0[addr]` puts an
+  array inside an async-reset process just as surely as a write does. Both of
+  these blocks had their reads there, and `palette_res` had a comment claiming
+  the array was deliberately unreset — true, and the half that does not bite.
+* **One defect was producing two findings.** The report called residency_v2's
+  three write addresses a design question. They are mutually exclusive *per
+  way*; the `[WAYS][SETS]` shape was hiding the per-way view. Fixing the shape
+  dissolved the third finding entirely.
+
+`hazard_c` stopped being belt-and-braces in the process: in flip-flops a
+non-blocking read is always the old value, but in an M10K mixed-port
+read-during-write is device behaviour, so that guard is now what makes the
+conversion sound. Recorded in the RTL.
+
+### Next
+1. Read the cache fit. Acceptance is `min_m10k: 8`, **not** Fmax.
+2. Fit `zhao_terrain_residency_v2` — the only thing that closes tonight's
+   claim. Expect roughly 22 M10K; a fit reporting 0 has failed however good its
+   Fmax.
+3. `zhao_forge_cliff` (12,288) is now the largest remaining single-reason item.
