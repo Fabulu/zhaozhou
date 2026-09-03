@@ -97,6 +97,29 @@ The ledger says `variable`; it is **fixed at 3 cycles** at full downstream readi
 
 `triangles_submitted_o`, `triangles_clipped_o`, `triangles_culled_o`, all u32 and **saturating at `0xFFFF_FFFF`** per `spec/counters.md` §4 (never wrap). The event definitions are the CHOSEN split above. The catalog ids and the `frame_tick` shadow-latch (counters.md §3/§5) are NOT implemented here — this block has no snapshot channel, exactly as RASTER.EDGEWALK's contract records for `covered_fragments`; wiring the three into DEBUG.COUNTERS belongs with that integration wave. Trace: `ret_valid_o` + `ret_verdict_o` is a one-cycle-per-triangle verdict stream, which is what the differential lanes compare.
 
+## THE NEAR-PLANE OBLIGATION — 2026-09-03
+
+The near-plane law **drops an entire triangle when any vertex lies behind the
+eye**. That is a deliberate simplification, not an accidental omission — and
+the owner has attached an obligation to it.
+
+**The close-camera stress reel is MANDATORY before the v1 geometry path
+freezes.** It must include:
+
+* the camera entering or grazing Zixx's spring pose;
+* giant limbs and body geometry crossing the camera;
+* long beams passing through the near plane;
+* large terrain/cliff triangles;
+* water surfaces;
+* **fast camera motion through each case.**
+
+**The owner judges the moving footage at native 240p.** If whole-triangle
+rejection visibly removes unacceptable chunks, the response is either a
+**bounded proper near-plane clipper**, or a **proven content/tessellation
+restriction** that makes the pop acceptably small.
+
+> **"Documented simplification" is not itself an acceptable visual result.**
+
 ## Scalar reference function
 
 `zref::Clip` (`reference/include/zref/zref_geom.hpp`, `reference/src/zrender/geom.cpp`) — the ledger's declared `reference_model`.

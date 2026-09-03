@@ -126,13 +126,19 @@ none, depending on the scale widths.
 
 ## Notes
 
-**This block may instead be folded into `GEOM.PROJECT`**, which is the other
-legal answer and is arguably tidier since the reciprocal is produced there. The
-audit is indifferent between them and specific about the alternative: *"Just do
-not leave it in integration glue."*
+**RULED, D-4, 2026-09-03: a separate named block.**
 
-It is registered separately because `GEOM.PROJECT` is built and verified, and
-adding an unbuilt responsibility to a verified block hides an unbuilt thing
-inside a green row. If the owner prefers the merge, this contract becomes a
-section of `GEOM.PROJECT.md` and the ledger entry is superseded — a cheap and
-deliberate move, rather than an accident.
+> It may physically sit immediately beside — or eventually be instantiated
+> inside — the project wrapper. **It remains a separate ledger row, contract,
+> oracle and test target so unfinished depth work cannot hide inside an
+> otherwise green `GEOM.PROJECT`.**
+
+And the consumer rule that comes with it, which is the reason the block exists
+at all:
+
+> **All downstream consumers receive only the canonical `invw24`. No consumer
+> performs its own profile conversion.**
+
+The conversion happens **once per projected vertex, before the value enters
+clipping, parameter storage and rasterisation** — not at twelve call sites that
+would drift.

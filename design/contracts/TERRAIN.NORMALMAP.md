@@ -214,6 +214,39 @@ ambient is additive per §4a; the base light has moved out. What remains
 planned is `normalmap_apply` at the vertex-colour lanes — the application
 point — which needs the fragment seam that does not exist yet.
 
+## THIS BLOCK IS NOT PRECEDENT — D-8, RULED 2026-09-03
+
+**General tangent-space normal maps are REFUSED in v1.**
+
+This block is cheap for one reason and one reason only: **a heightfield's
+tangent frame is world-axis-aligned**, so a detail normal perturbs the surface
+normal in world XZ directly, with no frame to build and nothing extra to
+interpolate.
+
+**That does not generalise** to arbitrary props, skinned creatures or twisted
+surfaces, which would each need a real tangent basis per vertex.
+
+For v1:
+
+* terrain **may** use this specialised detail-normal path;
+* **creatures and props use authored/skinned vertex normals**;
+* fine appearance comes from geometry, textures, toon treatment and bounded
+  lighting;
+* **no tangent/bitangent vertex attributes**;
+* **no arbitrary mesh normal texture sample**;
+* **no tangent-frame reconstruction in the fragment path.**
+
+Reconsidering it requires an explicit later architecture with a tangent-basis
+format, skinning rules, interpolation cost, a sample budget and a measured
+visual case.
+
+> **The terrain block is not precedent.**
+
+The refusal is written here, in the file someone would read while reasoning
+"the terrain does it, so we can" — which is the inference the ruling exists to
+prevent, and the reason it was worth ruling explicitly rather than leaving
+unstated.
+
 ## Directed tests
 
 **PLANNED AND NOT WRITTEN** (`reports/PHANTOM-CITATIONS-AUDIT.md` — named

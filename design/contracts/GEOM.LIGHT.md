@@ -205,6 +205,83 @@ measures fine and pegs a channel is wrong.
 honestly rather than optimistically; and built so that the resource count
 deciding against it costs one deletion rather than a redesign.
 
+## FOG — RULED, D-5, 2026-09-03
+
+`SetEnvironment` is **promoted from reserved to implemented** when this path
+lands, and this block is where fog is computed.
+
+**Do not carry an already-fogged vertex colour.** Carry two things:
+
+* **unfogged lit RGB**
+* a **fog factor**, computed once per vertex from the frozen view/fog law
+
+The factor is transported through clipping and `GEOM.PARAMBUF` and interpolated
+through `ATTRSTEP`, exactly like any other attribute.
+
+### The one unified final ordering
+
+| step | ordinary material | cel material |
+|---|---|---|
+| 1 | lighting | lighting |
+| 2 | interpolate lighting + fog factor | interpolate lighting + fog factor |
+| 3 | — | **toon quantisation** |
+| 4 | texture/material combination | texture/material combination |
+| 5 | **fog the final source RGB** | **fog the final source RGB** |
+| 6 | framebuffer blend | framebuffer blend |
+
+**Fog is applied to the final source colour before alpha or additive
+framebuffer blending.** Fog-exempt classes — the sky family, HUD, and
+deliberately emissive or additive effects — take an **explicit bypass** rather
+than relying on a fog factor that happens to be zero.
+
+### The two errors this ordering exists to prevent
+
+1. **fog quantised into hard toon bands** — which is what fogging before toon
+   does, and it is wrong precisely at distance where fog matters most;
+2. **texture modulation multiplying the fog colour itself** — which is what
+   fogging before the material combine does.
+
+This closes a contradiction the audit found: the environment state and fog
+arithmetic were both specified, `RASTER.FRAGMENT` assumed colour arrived
+already fogged, and the actual projector had no colour input at all.
+
+## LOCAL SPELL LIGHTS — RULED, D-6, 2026-09-03
+
+**Yes.** *"A giant magical fireball does not illuminate only itself like a
+pasted-on billboard."*
+
+| receiver | v1 lighting |
+|---|---|
+| creatures and ordinary objects | deterministic bounded **top-K** coloured diffuse lights |
+| terrain | sun + **broad local spill and global flash** — not every point light per fragment |
+| particles and spell surfaces | emissive/additive materials + glow tags |
+
+**The HPS may hold arbitrarily many emitters** and deterministically selects the
+bounded set for visible receivers using intensity, projected importance,
+authored priority, **stable source-ID tie-breaking, hysteresis and minimum hold
+time**. Determinism is not decoration here — a light set that flickers between
+frames is a creature that strobes.
+
+For creatures and objects:
+
+* **4** local lights guaranteed for a near/full-detail receiver;
+* **6** targeted for hero and bosses;
+* **8** is the descriptor maximum;
+* ambient and broad coloured spill need **no** directional dot product;
+* **first degradation** is dropping the expensive face-normal response on weaker
+  lights, **then** dropping the weakest local light.
+
+**One sequenced accumulator evaluates the selected terms. K legal lights does
+not mean K permanently instantiated light engines** — that sentence is the
+difference between this being affordable and being a shader core.
+
+Terrain takes a **cheaper low-frequency representation**: broad spill around
+nearby major effects and global flash envelopes for explosions and lightning.
+**It does not evaluate every spark against every terrain fragment.**
+
+**No dynamic shadow casting from these lights in v1.** The diffuse colour
+response is the perceptual connection that matters.
+
 ## Input and output packet layouts
 
 **In**, per vertex, ready/valid: world normal (Q16.16), base colour, the
