@@ -149,3 +149,31 @@ Publication render (one fresh explicit invocation, all 22 named) vs baseline
   determinism across two build trees confirmed.
 * The 16 stale trailing salto-dummy frames from the previous longer clip were
   deleted after process exit and counts re-verified against fresh meta.txt.
+
+## THE RUN'S OWN INSTRUMENT WAS LYING — caught before publish
+
+The poster PNGs written by tovideo.py (which reads the 8-byte header
+correctly) did not match what my rgb2png.py had been showing me. Root cause:
+`%04d.rgb` carries a `u32 w | u32 h` header (zhao_reel.cpp:29) and my reader
+fed those 8 bytes into the pixel stream — 8 mod 3 = 2, so EVERY pixel's
+channels were rotated and the image shifted ~2.7 px. **Every colour judgement
+to that point — including the v1 "disco" verdict and the two gain-cut
+iterations it drove — was made through a psychedelic rotation of the real
+palette.** The project's signature failure, in this run's own comparison tool;
+the same class of fault peel-QA found in qa25_contactfront.py.
+
+Repaired (reader now verifies the header and asserts dimensions), then EVERY
+standing judgement re-made on true frames:
+
+* v3 in true colour was much subtler than the rotated reader had shown. Green
+  read; blue read as cyan on the green pigment (honest transport); ORANGE was
+  indistinguishable from the accepted warm lamp.
+* v4/v5: orange saturated to 2.50/0.85/0.08, pool 1700 mm, orbit 2000 mm.
+  Closest-approach frames were located by a comparison-side path calculator
+  (never used to author the paths) and looked at: f354 carries a distinct
+  orange band on the neck beside the blue crown and the green back pool, with
+  mixed boundaries. ACCEPTED by eye. The salto poster-frame choice (f176) was
+  composition-based and survives the colour repair.
+* zhaozhou `5f885a02`. Final clean-scratch 22-subject render invoked fresh
+  from build-lane at that SHA; expected CRCs: salto-dummy 0x6D95E2FD
+  (unchanged since 6a400759), moving-light 0x756E0BFF (v5 draft).
