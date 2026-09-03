@@ -5528,3 +5528,15 @@ add_test(NAME lint_measure_governor
 set_tests_properties(lint_measure_governor PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# GEOM.DEPTHQUANT — w to canonical invw24 under the selected depth profile.
+# Checked against `zref::depth_of_raw`, the ratified law the golden captures
+# already pin, rather than against a second implementation of it.
+add_executable(test_geom_depthquant_directed geometry/geom_depthquant_directed.cpp)
+target_link_libraries(test_geom_depthquant_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_depthquant_directed
+  PREFIX Vzhao_geom_depthquant
+  TOP_MODULE zhao_geom_depthquant
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv)
+add_test(NAME geom_depthquant_directed COMMAND test_geom_depthquant_directed)
+set_tests_properties(geom_depthquant_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
