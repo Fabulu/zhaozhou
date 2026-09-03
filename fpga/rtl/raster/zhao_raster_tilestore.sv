@@ -242,6 +242,27 @@ module zhao_raster_tilestore (
     refs_add = {2'd0, wr_acc} + {2'd0, rd_acc} + {2'd0, res_acc};
   end
 
+  // ------------------------------------------------------------ the RAMs ---
+  // Both banks, both ports, one clock, NO reset. 32,768 bits turn on this.
+  //
+  // These four lines used to sit at the top of the reset process below. An
+  // M10K has no reset port, so an array TOUCHED BY an asynchronously-reset
+  // process cannot be one -- and that is true of the read as much as the
+  // write, which is the part that is easy to miss: `ram0_q <= ram0[addr]` puts
+  // the array inside that process just as surely as a write does.
+  //
+  // `ram0_q` and `ram1_q` left the reset list with them, for the same reason
+  // one level down: a read register with a reset cannot be the M10K's own
+  // output register, so keeping it would have cost the block a pipeline stage
+  // of registers to save nothing. They power up to zero on the device, and the
+  // simulator zeroes them too, which is what the reset was asking for anyway.
+  always_ff @(posedge clk) begin
+    ram0_q <= ram0[b0_raddr];
+    ram1_q <= ram1[b1_raddr];
+    if (b0_we) ram0[wr_addr_i] <= wr_data_i;
+    if (b1_we) ram1[wr_addr_i] <= wr_data_i;
+  end
+
   // ---------------------------------------------------------- sequential ---
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -250,8 +271,6 @@ module zhao_raster_tilestore (
       present1       <= {WORDS{1'b0}};
       clear0         <= 64'd0;
       clear1         <= 64'd0;
-      ram0_q         <= 64'd0;
-      ram1_q         <= 64'd0;
       rd_v_q         <= 1'b0;
       res_v_q        <= 1'b0;
       rd_bank_q      <= 1'b0;
@@ -267,12 +286,6 @@ module zhao_raster_tilestore (
       rd_src_q       <= 16'd0;
       refs_r         <= 32'd0;
     end else begin
-      // ---- the two RAMs: one read address, one write enable each ---------
-      ram0_q <= ram0[b0_raddr];
-      ram1_q <= ram1[b1_raddr];
-      if (b0_we) ram0[wr_addr_i] <= wr_data_i;
-      if (b1_we) ram1[wr_addr_i] <= wr_data_i;
-
       // ---- 1. clear (front bank only) ------------------------------------
       if (clear_acc) begin
         if (front_r == 1'b0) begin

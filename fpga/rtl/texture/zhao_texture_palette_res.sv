@@ -114,6 +114,18 @@ module zhao_texture_palette_res #(
   // synchronously -- the shape an M10K infers from. Deliberately NOT reset: a
   // reset loop over the array is what stops M10K inference, and `res_r` gates
   // every read until a slot has been completely loaded.
+  //
+  // NOT RESETTING THE ARRAY WAS ONLY HALF THE RULE, and the half that was
+  // written down here was the half that does not bite. An M10K has no reset
+  // port, so an array touched by a process with an ASYNCHRONOUS RESET cannot
+  // be one -- whatever that process does or does not do to the array itself.
+  // Both ports lived in the module's `always_ff @(posedge clk or negedge
+  // rst_n)`, so all 16,384 bits sat in flip-flops behind a comment claiming
+  // the opposite. Corrected 2026-09-04; the same half-fix was made and caught
+  // on zhao_texture_cache_pipe the day before.
+  //
+  // The ports are therefore in their own clock-only process below. Nothing
+  // else may touch `mem_r`, and nothing else does.
   logic [15:0] mem_r [SLOTS * ENTRIES];
 
   // Per-slot generation and residency. These ARE reset: they are the guards.
@@ -143,6 +155,23 @@ module zhao_texture_palette_res #(
   logic            l1_stale_q;
   logic            l1_res_q;
   logic [15:0]     l1_data_q;
+
+  // ---- the two memory ports ------------------------------------------------
+  // One write, one read, one clock, NO reset. This is the whole reason the
+  // array can be an M10K; putting either port in the reset process below would
+  // put every bit of it back into flip-flops.
+  //
+  // `mem_wr_c` is a named signal rather than the condition spelled out twice,
+  // so the write here and the `seen_r` flag there cannot drift apart -- they
+  // are the same event and a palette whose coverage flag disagreed with its
+  // contents would fail the completeness check for a reason nothing pointed at.
+  logic mem_wr_c;
+  assign mem_wr_c = ld_valid_i && (ld_op_i == LD_WRITE) && loading_r;
+
+  always_ff @(posedge clk) begin
+    if (mem_wr_c) mem_r[{ld_slot_r, ld_idx_i}] <= ld_rgb565_i;
+    if (lu_valid_i) l1_data_q <= mem_r[{lu_slot_i, lu_idx_i}];
+  end
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -193,7 +222,8 @@ module zhao_texture_palette_res #(
             if (!loading_r) begin
               err_write_outside_o <= err_write_outside_o + 32'd1;
             end else begin
-              mem_r[{ld_slot_r, ld_idx_i}] <= ld_rgb565_i;
+              // The write itself is in the clock-only process below; only the
+              // coverage flag is set here.
               seen_r[ld_idx_i] <= 1'b1;
             end
           end
@@ -242,7 +272,6 @@ module zhao_texture_palette_res #(
         l1_v_q <= lu_valid_i;
         if (lu_valid_i) begin
           automatic logic st = (gen_r[lu_slot_i] != lu_gen_i) || begin_same_slot;
-          l1_data_q  <= mem_r[{lu_slot_i, lu_idx_i}];
           l1_stale_q <= st;
           l1_res_q   <= res_r[lu_slot_i] && !begin_same_slot;
           lookups_o  <= lookups_o + 32'd1;
