@@ -90,7 +90,7 @@ Blocks: **98** (78 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | MEASURE.TOKENS | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/measure/measure_tokens_directed.cpp |
 | TERRAIN.PATCH | REFERENCE_COMPLETE | 2026-08-16 | `53b7b8a` | reference/include/zref/zref_terrain.hpp |
 | TERRAIN.PATCH | UNIT_VERIFIED | 2026-08-31 | `cc10167` | tests/terrain/terrain_patch_directed.cpp |
-| TERRAIN.SHADE | REFERENCE_COMPLETE | 2026-09-03 | `eca81e6f` | reference/include/zref/zref_terrain_normalmap.hpp |
+| TERRAIN.SHADE | REFERENCE_COMPLETE | 2026-09-03 | `eca81e6f` | reference/include/zref/zref_terrain_shade.hpp |
 | TERRAIN.TESS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_terrain_tess.hpp |
 | TERRAIN.TESS | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/terrain/terrain_tess_directed.cpp |
 | TERRAIN.RESIDENCY | SPECIFIED | 2026-09-03 | `eadf1dfa` | design/contracts/TERRAIN.RESIDENCY.md |
