@@ -133,3 +133,42 @@ channel ratio) but the VALUES kill the read:
 Phase 2 therefore: no renderer bug fix needed; re-author the reel's named
 knobs (warm tamed below whiteout, coloured paths closer, radii broader,
 gains purer/stronger), by eye, at native resolution.
+
+## 2026-09-03 21:30 — Phase 2 v1 authored
+
+Warm: gains 2.25/1.70/1.10 -> 1.05/0.72/0.30, inner 2300->1200, outer
+7000->4500 (whiteout tamed; warmth below the ceiling on G/B).
+Blue: orbit (2600,1500,h950)->(2050,1050,h800), inner 350->900, outer
+1500->2600, gains (.18,.40,1.60)->(.08,.30,1.60).
+Orange: orbit (2000,1250)->(1750,950), bob 350->300, inner 900, outer 2600,
+gains (2.50,.85,.08)->(1.55,.55,.04).
+Green: sweep 1900->1700, side -1000->-800, h 480->520, inner 900, outer
+2600, gains (.25,1.35,.30)->(.10,1.50,.18).
+Path-separation table says blue-orange near f325/450/575, orange-green at
+f0/200/400, blue-green ~f150-250 — overlap events exist; judging by eye at
+native next.
+
+## 2026-09-03 21:50 — v1 looked at (native + 2x), v2 authored
+
+v1 by eye: GREEN reads as a bright green pool riding the body; BLUE reads —
+teal on the body green, violet-magenta where it crosses the dorsal pink
+(honest mixing, lovely at the tail bend f60); the warm lamp brightens
+without the old whiteout and the dorsal pink lights up hot pink under it.
+ORANGE only reads at close kisses (f100 head, f225 blade tip) — its 3 laps
+are phase-locked to green's 3 trips, so green upstages its every approach.
+
+v2: orange closer (1550/820, h640) and stronger (1.90/0.60/0.04); green
+3 -> 4 trips to break the phase lock; blue B 1.60 -> 1.70. New meeting
+frames predicted: blue-orange f211, blue-green f225/f525, orange-green f170.
+
+## 2026-09-03 22:10 — v2 looked at, v3 nudge
+
+v2 by eye at native/2x: the bank comes alive. f300 carries green pool,
+glowing pink dorsal, deep blue head and an orange-lit eye at once and the
+creature still reads; f400/f525 blaze the eye amber under the orange pool
+(the eye's red-rich pigments are orange's best canvas); f211's blue-orange
+meeting lands on the near flank and turns the dorsal a hot magenta bloom —
+genuine visible mixing. Physics note recorded: on the green body pigment a
+pure red-heavy orange can only produce olive (multiplicative transport), so
+orange must read via the pink stripe, the eye, and an amber body cast.
+v3 (final nudge): orange R 1.90->2.00, G 0.60->0.70 (amber not olive).

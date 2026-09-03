@@ -2140,11 +2140,17 @@ void sample_zixx_moving_source(uint32_t frame, uint32_t frames,
   // The core covers a substantial body phrase and the long shoulder keeps the
   // source legible across the far flank; gains may exceed one because the
   // compositor clamps only the final material response, preserving pigment.
-  constexpr int32_t kLightInnerRadiusMm = 2300;
-  constexpr int32_t kLightOuterRadiusMm = 7000;
-  constexpr int32_t kLightGainR = 147456;  // 2.25
-  constexpr int32_t kLightGainG = 111411;  // 1.70
-  constexpr int32_t kLightGainB = 72090;   // 1.10
+  // Direction 27: the previous 2.25/1.70/1.10 at inner radius 2300 put ALL
+  // THREE channels over quant_shade's 1.0 ceiling across the entire pool --
+  // the lamp read as a hue-neutral whiteout that flooded the animal and left
+  // the coloured sources nothing to read against (phase-1 evidence,
+  // RUN-20260903-2017). Tamed so its own warmth survives the clamp and its
+  // pool is a pool rather than the whole scene.
+  constexpr int32_t kLightInnerRadiusMm = 1200;
+  constexpr int32_t kLightOuterRadiusMm = 4500;
+  constexpr int32_t kLightGainR = 68813;   // 1.05 -- warm core, only R may clamp
+  constexpr int32_t kLightGainG = 47186;   // 0.72
+  constexpr int32_t kLightGainB = 19661;   // 0.30
   const uint32_t leg_frames = std::max<uint32_t>(1, frames / 4);
   const uint32_t leg = std::min<uint32_t>(3, frame / leg_frames);
   const uint32_t local = frame - leg * leg_frames;
@@ -2206,40 +2212,49 @@ void sample_zixx_moving_source(uint32_t frame, uint32_t frames,
 // not a permanent wash. All three paths close exactly over the clip's frame
 // count, so the loop stays clean.
 //
+// Direction 27 rebalance: the shipped orbits never entered their own 350mm
+// inner radius (closest approach ~1000-1200mm against outer 1500/1700, so
+// attenuation topped out near 0.4) and the peak colour event was +10..35
+// counts on dark-band pixels -- mathematically present, visually absent.
+// Each path now passes genuinely CLOSE, each inner radius covers that pass,
+// each outer radius makes the pool a readable body-phrase, and each gain
+// vector is PURE (one dominant channel; a clamped dominant keeps hue, three
+// clamped channels are white).
+//
 // BLUE: a level counter-clockwise orbit around the whole animal, two laps.
-constexpr int32_t kBlueOrbitXMm = 2600;      // orbit half-width along the body
-constexpr int32_t kBlueOrbitZMm = 1500;      // orbit half-depth across it
-constexpr int32_t kBlueHeightMm = 950;       // constant carry height
+constexpr int32_t kBlueOrbitXMm = 2050;      // orbit half-width along the body
+constexpr int32_t kBlueOrbitZMm = 1050;      // orbit half-depth across it
+constexpr int32_t kBlueHeightMm = 800;       // constant carry height
 constexpr uint32_t kBlueOrbitTurns = 2;      // laps per clip
-constexpr int32_t kBlueInnerRadiusMm = 350;
-constexpr int32_t kBlueOuterRadiusMm = 1500;
-constexpr int32_t kBlueGainR = 11796;       // 0.18
-constexpr int32_t kBlueGainG = 26214;       // 0.40 -- lifts blue off the dark pigment
-constexpr int32_t kBlueGainB = 104858;      // 1.60
+constexpr int32_t kBlueInnerRadiusMm = 900;
+constexpr int32_t kBlueOuterRadiusMm = 2600;
+constexpr int32_t kBlueGainR = 5243;        // 0.08
+constexpr int32_t kBlueGainG = 19661;       // 0.30
+constexpr int32_t kBlueGainB = 111411;      // 1.70
 // ORANGE: a clockwise counter-orbit, three laps, bobbing as it goes.
-constexpr int32_t kOrangeOrbitXMm = 2000;
-constexpr int32_t kOrangeOrbitZMm = 1250;
-constexpr int32_t kOrangeHeightMm = 700;
-constexpr int32_t kOrangeBobMm = 350;        // vertical bob amplitude
+constexpr int32_t kOrangeOrbitXMm = 1550;
+constexpr int32_t kOrangeOrbitZMm = 820;
+constexpr int32_t kOrangeHeightMm = 640;
+constexpr int32_t kOrangeBobMm = 300;        // vertical bob amplitude
 constexpr uint32_t kOrangeOrbitTurns = 3;
 constexpr uint16_t kOrangePhaseA16 = 16384;  // quarter-turn start offset
-constexpr int32_t kOrangeInnerRadiusMm = 350;
-constexpr int32_t kOrangeOuterRadiusMm = 1700;
-constexpr int32_t kOrangeGainR = 163840;     // 2.50
-constexpr int32_t kOrangeGainG = 55706;      // 0.85
-constexpr int32_t kOrangeGainB = 5243;       // 0.08
+constexpr int32_t kOrangeInnerRadiusMm = 900;
+constexpr int32_t kOrangeOuterRadiusMm = 2600;
+constexpr int32_t kOrangeGainR = 131072;     // 2.00
+constexpr int32_t kOrangeGainG = 45875;      // 0.70 -- amber, not olive, on the body green
+constexpr int32_t kOrangeGainB = 2621;       // 0.04
 // GREEN: a low near-side longitudinal shuttle, three round trips, with a
 // small depth ellipse so the travel stays alive at the turnarounds.
-constexpr int32_t kGreenSweepMm = 1900;      // longitudinal half-travel
-constexpr int32_t kGreenSideMm = -1000;       // carried on the camera side
+constexpr int32_t kGreenSweepMm = 1700;      // longitudinal half-travel
+constexpr int32_t kGreenSideMm = -800;       // carried on the camera side
 constexpr int32_t kGreenSideDriftMm = 250;   // depth ellipse half-extent
-constexpr int32_t kGreenHeightMm = 480;      // low, raking the flank
-constexpr uint32_t kGreenSweepTurns = 3;
-constexpr int32_t kGreenInnerRadiusMm = 350;
-constexpr int32_t kGreenOuterRadiusMm = 1500;
-constexpr int32_t kGreenGainR = 16384;       // 0.25
-constexpr int32_t kGreenGainG = 88474;       // 1.35
-constexpr int32_t kGreenGainB = 19661;       // 0.30
+constexpr int32_t kGreenHeightMm = 520;      // low, raking the flank
+constexpr uint32_t kGreenSweepTurns = 4;  // de-phased from orange's 3 laps so their meetings drift
+constexpr int32_t kGreenInnerRadiusMm = 900;
+constexpr int32_t kGreenOuterRadiusMm = 2600;
+constexpr int32_t kGreenGainR = 6554;        // 0.10
+constexpr int32_t kGreenGainG = 98304;       // 1.50
+constexpr int32_t kGreenGainB = 11796;       // 0.18
 
 void sample_zixx_moving_colour_sources(uint32_t frame, uint32_t frames,
                                        const zc::CreatureInstance& inst,
