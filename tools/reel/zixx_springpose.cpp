@@ -63,9 +63,10 @@ void dump_pose(int32_t entry, int32_t squash, bool middle) {
     base2[zixx::kBSpine0 + k] = zixx::quat_z(zixx::kStanceSlope[k] - pv);
     pv = zixx::kStanceSlope[k];
   }
+  const int32_t support_mk = zixx::spring_support_station_mk_for(entry, squash);
   int32_t bx = 0, by = 0, bz = 0, px = 0, py = 0, pz = 0;
-  zixx::spring_support_origin_raw(base2, bx, by, bz);
-  zixx::spring_support_origin_raw(posed, px, py, pz);
+  zixx::spring_support_origin_raw(base2, support_mk, bx, by, bz);
+  zixx::spring_support_origin_raw(posed, support_mk, px, py, pz);
   const int32_t rox = zixx::spring_root_anchor_x(entry, squash, middle);
   const int32_t roy = zixx::spring_root_offset(entry, squash, middle);
   std::printf(
@@ -128,27 +129,84 @@ int main(int argc, char** argv) {
               argc > 4 ? std::atoi(argv[4]) : 0);
     return 0;
   }
-  if (std::strcmp(mode, "schedule") == 0) {
+  if (std::strcmp(mode, "schedule") == 0 || std::strcmp(mode, "peel") == 0) {
     // The ARMING SCHEDULE in pose space: what the eye actually reads as speed
     // is how far the animal moves per key, not the parameter value. Prints the
     // shared clock and the head's travel per key so "slow and steady" can be
     // checked as an even column rather than asserted.
+    //
+    // Direction 25 columns: the support's milli-station, the support's
+    // grounded-baseline footprint position (where the plant IS on the dirt),
+    // the tail tip's posed world position, and the nose-to-tip margin. The
+    // `peel` mode samples every HALF key -- the real 60 Hz presentation grid
+    // -- so the travelling support's root velocity can be read for
+    // station-boundary kinks before anything renders (peel plan experiment 1).
+    const bool half_keys = std::strcmp(mode, "peel") == 0;
+    const int step_mk = half_keys ? 500 : 1000;
     int32_t px = 0, py = 0;
-    std::printf("key   arm  entry squash   head_x  head_y   move_mm\n");
-    for (int key = 0; key <= zixx::kSaltoSpringReleasePoseKey + 2; ++key) {
-      const int32_t arm = zixx::spring_shared_arm_amount(key);
-      const int32_t e = zixx::spring_shared_entry_amount(key);
-      const int32_t q = zixx::spring_shared_squash_amount(key);
-      const int32_t hx = zixx::spring_root_anchor_x(e, q, false, key * 1000);
-      const int32_t hy = zixx::spring_root_offset(e, q, false, key * 1000);
+    std::printf("key      arm entry squash  head_x  head_y move_mm "
+                "sup_mk  sup_bx  sup_by   tip_x   tip_y  nose_tip_dx\n");
+    const int last_mk = (zixx::kSaltoSpringReleasePoseKey + 2) * 1000;
+    for (int mk = 0; mk <= last_mk; mk += step_mk) {
+      const int key = mk / 1000;
+      int32_t e, q;
+      if (mk % 1000 == 0) {
+        e = zixx::spring_shared_entry_amount(key);
+        q = zixx::spring_shared_squash_amount(key);
+      } else if (key < zixx::kSaltoCompressHoldEndKey) {
+        const zixx::SpringReleaseMidpointControl c =
+            zixx::spring_owned_entry_midpoint(key);
+        e = c.entry;
+        q = c.squash;
+      } else {
+        const int seg = key - zixx::kSaltoCompressHoldEndKey;
+        if (seg < 0 || seg >= zixx::kSpringReleaseMidpointCount) continue;
+        e = zixx::kSpringReleaseMidpointControl[seg].entry;
+        q = zixx::kSpringReleaseMidpointControl[seg].squash;
+      }
+      const int32_t arm = zixx::spring_arm_amount(e, q);
+      const int32_t hx = zixx::spring_root_anchor_x(e, q, false, mk);
+      const int32_t hy = zixx::spring_root_offset(e, q, false, mk);
       const int32_t dx = hx - px, dy = hy - py;
       int32_t d = 0;
       for (int64_t g = 0; g * g <= static_cast<int64_t>(dx) * dx +
                                        static_cast<int64_t>(dy) * dy;
            ++g)
         d = static_cast<int32_t>(g);
-      std::printf("%3d  %4d   %4d   %4d   %6d  %6d    %6d\n", key, arm, e, q,
-                  hx, hy, key == 0 ? 0 : d);
+      const int32_t sup_mk = zixx::spring_support_station_mk_for(e, q);
+      // the grounded-baseline footprint point the root solve holds
+      zc::quat16 base2[zixx::kBoneCount];
+      for (int b = 0; b < zixx::kBoneCount; ++b)
+        base2[b] = zc::quat16_identity();
+      int32_t pv = 0;
+      for (int k = 0; k < zixx::kStanceSlopes; ++k) {
+        base2[zixx::kBSpine0 + k] = zixx::quat_z(zixx::kStanceSlope[k] - pv);
+        pv = zixx::kStanceSlope[k];
+      }
+      int32_t sbx = 0, sby = 0, sbz = 0;
+      zixx::spring_support_origin_raw(base2, sup_mk, sbx, sby, sbz);
+      // the posed tail tip, root-compensated like the rendered frame
+      zc::quat16 posed[zixx::kBoneCount];
+      for (int b = 0; b < zixx::kBoneCount; ++b)
+        posed[b] = zc::quat16_identity();
+      int32_t prev = 0;
+      for (int k = 0; k < zixx::kStanceSlopes; ++k) {
+        const int32_t h =
+            zixx::spring_profile_slope(k, 1000, e, q, false, mk);
+        posed[zixx::kBSpine0 + k] = zixx::quat_z(h - prev);
+        prev = h;
+      }
+      int32_t tx = 0, ty = 0, tz = 0;
+      zixx::spring_support_origin_raw(
+          posed, zixx::kSpringSupportTailTipStationMk, tx, ty, tz);
+      int32_t ax = 0, ay = 0;
+      zixx::spring_anchor_offset(1000, e, q, ax, ay, false, mk);
+      const int32_t tip_x = to_mm(tx) + ax;
+      const int32_t tip_y = to_mm(ty) + ay;
+      std::printf("%5.1f   %4d  %4d   %4d  %6d  %6d  %6d  %5d  %6d  %6d  "
+                  "%6d  %6d       %6d\n",
+                  mk / 1000.0, arm, e, q, hx, hy, mk == 0 ? 0 : d, sup_mk,
+                  to_mm(sbx), to_mm(sby), tip_x, tip_y, hx - tip_x);
       px = hx;
       py = hy;
     }

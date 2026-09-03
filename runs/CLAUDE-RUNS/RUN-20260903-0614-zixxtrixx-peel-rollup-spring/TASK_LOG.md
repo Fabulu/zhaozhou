@@ -101,3 +101,65 @@ relaxed-but-declared for this pass.
 - Stage-1 bank reference: previous run's committed
   `evidence/qa2/qa2-bank-crc.txt` (22 subjects, rendered at d5949320; the
   only commits since are documentation, proven by the two CRCs above).
+
+### 2026-09-03 (implementer) - Stage 1 in progress + two plan gaps found
+
+Machinery generalised (support_mk milli-station):
+- `spring_support_origin_raw(quats, support_mk, ...)` walks the prefix to
+  floor(mk/1000) and advances frac of one segment along that bone's own
+  axis; mk 14000 reproduces the old walk bit-exactly; 19000 = tail tip.
+- `spring_root_from_quats_raw(quats, support_mk, target_y, ...)` walks both
+  chains to the same mk.
+- New route `spring_support_station_mk(arm)` (stage 1: constant-returns
+  14000) + ONE derivation helper `spring_support_station_mk_for(entry,
+  squash)`; every consumer call site goes through it. Midpoint path gets
+  mirror derivations `spring_plan_midpoint_support_mk` /
+  `spring_shared_midpoint_support_mk` with the identical branch structure as
+  the target-y derivations, so a half-key can never disagree with its key
+  about which point is planted.
+- All 8 consumer call sites threaded (attack :3281-region, variant :7047,
+  jump grounded/landing/mid loops, shared release midpoints, midpoint pose,
+  anchor offset); zixx_springpose.cpp updated; probe untouched (it reaches
+  the walk only through these functions).
+- Probe: PASS after clean rebuild. Bank render for byte-identity running.
+
+**PLAN GAP 1 (jump landing).** `kJumpLandingAbsorbArm = 700` absorbs the
+landing INTO the route's second half (its comment "never reaches the
+assembled knot" is stale -- 700 > 400). Under Direction 25's re-authored
+route, arm 700 will be a compressed-on-tail-tip pose and the same-derivation
+support would put the landing plant at the TAIL TIP -- the landing would
+slam into a tail-stand. Decision for stage 4/5: cap the landing absorb at
+the grounded-contact stretch of the route (kJumpLandingAbsorbArm ->
+kSpringSupportPeelBeginArm, derived), keeping ONE support derivation
+everywhere. The cushion loses the deform flatten (squash stays 0); the
+bite bias route still gives the weight. Eye-check at stage 5; if the
+landing reads stiff, the remedy is a small dedicated landing-absorb pose,
+NOT a second support law.
+
+**PLAN GAP 2 (the stand hovers without a descent term).** The plan's
+"support rides the resting footprint at near-zero lift" is only true to
+station ~17: measured on the committed baseline chain (springpose pose 0 0),
+stations 10-16 rest at centreline y 155..100 mm, station 17 is the LAST and
+LOWEST footprint point (x -1714, y 77), and 18/19 CURL UP (159, 301 mm) --
+the stance tail tip is ~300 mm in the air. Holding the posed tip at its own
+baseline position would stand the animal on an invisible pedestal. Fix
+(stage 4): a named descent route `spring_support_descent_mm(support_mk)`
+added INSIDE spring_support_target_y (0 while the support is on the real
+footprint, authored down to plant the tip on the dirt as mk walks 17000 ->
+19000). No signature changes; the probe's expected-target formula follows
+automatically because it calls spring_support_target_y.
+
+Springpose extended (stage-2 instrument, comparison side only): schedule
+gains support_mk / support-baseline x,y / posed tail-tip x,y / nose-to-tip
+margin columns; new `peel` mode samples every half-key (the 60 Hz grid) for
+the station-boundary kink check (plan experiment 1). World orientation
+confirmed: +x = screen right = nose side; tail tip at x -1925.
+
+### 2026-09-03 (implementer) - Stage 1 PROVEN no-op, committed
+
+- Full 22-subject bank rendered from the generalised build (one explicit
+  ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross invocation naming all 22):
+  **every sequence CRC identical to the published bank** (qa2-bank-crc.txt),
+  all frame counts identical. `evidence/stage1-bank-crc.txt`.
+- Probe PASS on the same build. The travelling-support machinery is now a
+  constant edit away from the peel, exactly as the plan staged it.

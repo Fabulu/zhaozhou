@@ -829,6 +829,15 @@ constexpr int32_t kSpringAbsorbProfile =
 constexpr int32_t kSpringCompressionDepth = 1000;  // profile authority, 1/1000
 constexpr int32_t kSpringDeclaredBiteMm = 34;      // planted support's authored bite
 constexpr int kSpringPlantSegment = 14;            // support after this spine segment
+// THE TRAVELLING SUPPORT (Owner Direction 25, THE PEEL). The planted support
+// is no longer forever station 14: it is addressed as a MILLI-STATION along
+// the spine (1000 = one full segment), so the plant can walk rearward across
+// the peel until it stands on the far end of segment 18 -- the tail tip.
+// kSpringSupportStartStationMk is the classic station-14 belly plant;
+// kSpringSupportTailTipStationMk is the tail tip itself. The route between
+// them is spring_support_station_mk(arm) below.
+constexpr int32_t kSpringSupportStartStationMk = kSpringPlantSegment * 1000;
+constexpr int32_t kSpringSupportTailTipStationMk = kStanceSlopes * 1000;
 // How much of the planted-support correction reaches the root, 1/1000. 1000 is
 // the honest plant: station 14 stays where the authored lift route puts it and
 // the head is free to travel back over it. 0 reproduces the rejected published
@@ -2007,6 +2016,28 @@ inline int32_t spring_arm_amount(int32_t entry, int32_t squash) {
       (static_cast<int64_t>(squash) * (1000 - kSpringArmAssembledAt)) / 1000);
 }
 
+// THE SUPPORT'S OWN ROUTE ON THE ARMING (Owner Direction 25, THE PEEL). The
+// contact patch travelling progressively rearward IS the action, so WHICH
+// body point the root solve holds to the ground is authored here as a
+// function of the one arming parameter. Stage 1 of the peel run installs the
+// machinery as a provable no-op: the route constant-returns the classic
+// station-14 plant, and the full 22-subject bank must stay byte-identical.
+// The peel itself (station 14 -> tail tip across the arming) is authored in
+// a later stage by re-valuing this route, never by touching the walk.
+inline int32_t spring_support_station_mk(int32_t arm) {
+  (void)arm;
+  return kSpringSupportStartStationMk;
+}
+
+// The ONE derivation from a consumer's (entry, squash) to the support
+// milli-station. Every caller of the support walk must go through this (or
+// through the shared/plan midpoint mirrors that call it), so all seven
+// spring consumers derive identically and the bit-exact parity gates keep
+// meaning something.
+inline int32_t spring_support_station_mk_for(int32_t entry, int32_t squash) {
+  return spring_support_station_mk(spring_arm_amount(entry, squash));
+}
+
 // Shortest-arc unwrap of b relative to a. Absolute pose headings are authored
 // continuously through the angle16 seam, so every comparison between two pose
 // tables must be made on the physical turn, never the raw integer difference.
@@ -2268,17 +2299,34 @@ inline int32_t spring_profile_slope(int k, int32_t authority, int32_t entry,
       (static_cast<int64_t>(posed) * authority) / 1000);
 }
 
-// Walk the REAL quantized quaternion chain to the authored station-14 support.
+// Walk the REAL quantized quaternion chain to the authored support point.
 // This is deliberately the same fixed-point matrix path used by decode_pose,
 // reduced to the spine prefix whose final origin is the support. A trigonometric
 // heading sum is not sufficient at true half-keys: nlerp and quaternion
 // quantization make those samples their own complete centrelines.
+// Direction 25: the support is addressed as a MILLI-STATION (support_mk,
+// 1000 = one full segment) so the plant can travel rearward across the peel.
+// A fractional part advances that fraction of one segment length along the
+// reached bone's own axis -- the identical direction the next bone's
+// `local.m[3] -= fxm(seg)` step would take, scaled. support_mk ==
+// kSpringSupportStartStationMk reproduces the classic station-14 walk
+// bit-exactly; kSpringSupportTailTipStationMk is the far end of segment 18.
 inline void spring_support_origin_raw(const zc::quat16* quats,
+                                      int32_t support_mk,
                                       int32_t& out_x, int32_t& out_y,
                                       int32_t& out_z) {
   const int32_t seg = kBodyLenMm / (kSpineBones - 1);
+  if (support_mk < 0) support_mk = 0;
+  if (support_mk > kSpringSupportTailTipStationMk)
+    support_mk = kSpringSupportTailTipStationMk;
+  int whole = support_mk / 1000;
+  int32_t frac = support_mk - whole * 1000;
+  if (whole >= kStanceSlopes) {  // the tail tip: end of the last segment
+    whole = kStanceSlopes - 1;
+    frac = 1000;
+  }
   zc::mat3x4fx world = zc::mat3x4_identity();
-  for (int b = 0; b <= kSpringPlantSegment; ++b) {
+  for (int b = 0; b <= whole; ++b) {
     zc::mat3x4fx local;
     zc::quat16_to_mat3(quats[kBSpine0 + b], local, nullptr);
     if (b == 0) {
@@ -2294,6 +2342,16 @@ inline void spring_support_origin_raw(const zc::quat16* quats,
   out_x = world.m[3];
   out_y = world.m[7];
   out_z = world.m[11];
+  if (frac > 0) {
+    const int32_t adv = static_cast<int32_t>(
+        (static_cast<int64_t>(fxm(seg)) * frac) / 1000);
+    out_x -= static_cast<int32_t>(
+        (static_cast<int64_t>(world.m[0]) * adv) >> 16);
+    out_y -= static_cast<int32_t>(
+        (static_cast<int64_t>(world.m[4]) * adv) >> 16);
+    out_z -= static_cast<int32_t>(
+        (static_cast<int64_t>(world.m[8]) * adv) >> 16);
+  }
 }
 
 inline int32_t spring_support_target_y(int32_t entry, int32_t squash) {
@@ -2308,7 +2366,12 @@ inline int32_t spring_support_target_y(int32_t entry, int32_t squash) {
 // Root compensation is baseline support minus this SAMPLE'S actual support,
 // plus the named surface/bite target. Returning raw fx16 preserves the matrix
 // path's fractional millimetres instead of throwing them away and re-expanding.
+// Direction 25: both walks go to the SAME support_mk, so the posed support
+// point is held at the grounded baseline position of that same body point --
+// each successive contact of the peel is planted precisely where it was
+// already resting in the footprint, and contact can never slide.
 inline void spring_root_from_quats_raw(const zc::quat16* quats,
+                                       int32_t support_mk,
                                        int32_t target_y_mm,
                                        int32_t& out_x, int32_t& out_y,
                                        int32_t& out_z) {
@@ -2322,8 +2385,8 @@ inline void spring_root_from_quats_raw(const zc::quat16* quats,
   }
   int32_t bx = 0, by = 0, bz = 0;
   int32_t px = 0, py = 0, pz = 0;
-  spring_support_origin_raw(baseline, bx, by, bz);
-  spring_support_origin_raw(quats, px, py, pz);
+  spring_support_origin_raw(baseline, support_mk, bx, by, bz);
+  spring_support_origin_raw(quats, support_mk, px, py, pz);
   out_x = bx - px;
   out_y = by - py + fxm(target_y_mm);
   out_z = bz - pz;
@@ -2350,7 +2413,8 @@ inline void spring_anchor_offset(int32_t authority, int32_t entry,
   }
   int32_t rx = 0, ry = 0, rz = 0;
   spring_root_from_quats_raw(
-      posed, spring_support_target_y(entry, squash), rx, ry, rz);
+      posed, spring_support_station_mk_for(entry, squash),
+      spring_support_target_y(entry, squash), rx, ry, rz);
   // OWNER DIRECTION 20, THE PLANTED-SUPPORT UNIT BUG. These raw values are
   // fx16 in METRES (fxm(1000 mm) == 65536), and every consumer spends them as
   // MILLIMETRES. `rx / (1 << 16)` therefore threw the whole compensation away:
@@ -2662,7 +2726,8 @@ inline void author_spring_midpoint_pose(
   if (write_root) {
     int32_t rx = 0, ry = 0, rz = 0;
     spring_root_from_quats_raw(
-        g.q, spring_support_target_y(control.entry, control.squash),
+        g.q, spring_support_station_mk_for(control.entry, control.squash),
+        spring_support_target_y(control.entry, control.squash),
         rx, ry, rz);
     c.mid_root[ri + 0] = rx;
     c.mid_root[ri + 1] = ry;
@@ -2683,7 +2748,7 @@ inline void author_spring_midpoint_pose(
 }
 
 inline void author_spring_midpoint_root_from_actual(
-    zc::Clip& c, int key, int32_t target_y_mm,
+    zc::Clip& c, int key, int32_t support_mk, int32_t target_y_mm,
     zc::PresentationMidpointAuthorship* authorship) {
   if (key < 0 || key + 1 >= c.frame_count) return;
   const size_t qi = static_cast<size_t>(key) * kBoneCount;
@@ -2692,8 +2757,8 @@ inline void author_spring_midpoint_root_from_actual(
       c.mid_root.size() < ri + 3)
     return;
   int32_t rx = 0, ry = 0, rz = 0;
-  spring_root_from_quats_raw(c.mid_quats.data() + qi, target_y_mm,
-                             rx, ry, rz);
+  spring_root_from_quats_raw(c.mid_quats.data() + qi, support_mk,
+                             target_y_mm, rx, ry, rz);
   c.mid_root[ri + 0] = rx;
   c.mid_root[ri + 1] = ry;
   c.mid_root[ri + 2] = rz;
@@ -2763,8 +2828,41 @@ inline int32_t spring_plan_midpoint_target_y(
          2;
 }
 
+// The support-station mirror of spring_plan_midpoint_target_y: a half-key's
+// support point derives through the IDENTICAL branch structure as its support
+// target height, so the two can never disagree about which body point is
+// planted at that sample (Direction 25 machinery; landmine 14 of the peel
+// plan -- one derivation path for every consumer).
+inline int32_t spring_plan_midpoint_support_mk(
+    int key, int hold_end, bool has_default_entry_poses,
+    bool has_four_key_release_poses, int32_t entry_a, int32_t squash_a,
+    int32_t entry_b, int32_t squash_b) {
+  if (has_default_entry_poses && key < kSaltoCompressHoldEndKey) {
+    const SpringReleaseMidpointControl mid = spring_owned_entry_midpoint(key);
+    return spring_support_station_mk_for(mid.entry, mid.squash);
+  }
+  const int release_segment = key - hold_end;
+  if (has_four_key_release_poses && release_segment >= 0 &&
+      release_segment < kSpringReleaseMidpointCount) {
+    const SpringReleaseMidpointControl& control =
+        kSpringReleaseMidpointControl[release_segment];
+    return spring_support_station_mk_for(control.entry, control.squash);
+  }
+  return spring_support_station_mk(
+      (spring_arm_amount(entry_a, squash_a) +
+       spring_arm_amount(entry_b, squash_b)) /
+      2);
+}
+
 inline int32_t spring_shared_midpoint_target_y(int key, int hold_end) {
   return spring_plan_midpoint_target_y(
+      key, hold_end, true, true, spring_shared_entry_amount(key),
+      spring_shared_squash_amount(key), spring_shared_entry_amount(key + 1),
+      spring_shared_squash_amount(key + 1));
+}
+
+inline int32_t spring_shared_midpoint_support_mk(int key, int hold_end) {
+  return spring_plan_midpoint_support_mk(
       key, hold_end, true, true, spring_shared_entry_amount(key),
       spring_shared_squash_amount(key), spring_shared_entry_amount(key + 1),
       spring_shared_squash_amount(key + 1));
@@ -2782,7 +2880,8 @@ inline void author_shared_spring_release_midpoints(
   if (write_root) {
     for (int key = 0; key < kSaltoSpringReleasePoseKey; ++key)
       author_spring_midpoint_root_from_actual(
-          c, key, spring_shared_midpoint_target_y(key, hold_end), authorship);
+          c, key, spring_shared_midpoint_support_mk(key, hold_end),
+          spring_shared_midpoint_target_y(key, hold_end), authorship);
   }
 }
 
@@ -3279,7 +3378,8 @@ inline zc::Clip build_attack(
       if (f <= kSaltoSpringReleasePoseKey) {
         int32_t rx = 0, ry = 0, rz = 0;
         spring_root_from_quats_raw(
-            g.q, spring_support_target_y(entry, pre), rx, ry, rz);
+            g.q, spring_support_station_mk_for(entry, pre),
+            spring_support_target_y(entry, pre), rx, ry, rz);
         c.root[f * 3 + 0] =
             rx + fxm(fwd + (piv_x * curl) / 1000);
         c.root[f * 3 + 1] =
@@ -7045,7 +7145,8 @@ inline zc::Clip build_attack_variant(
       const int32_t amount = zixx_plan_spring_amount(p, k);
       int32_t rx = 0, ry = 0, rz = 0;
       spring_root_from_quats_raw(
-          g.q, spring_support_target_y(entry, amount), rx, ry, rz);
+          g.q, spring_support_station_mk_for(entry, amount),
+          spring_support_target_y(entry, amount), rx, ry, rz);
       c.root[k * 3 + 0] = rx;
       c.root[k * 3 + 1] = ry;
       c.root[k * 3 + 2] = rz;
@@ -7078,6 +7179,9 @@ inline zc::Clip build_attack_variant(
     const int32_t squash_b = zixx_plan_spring_amount(p, key + 1);
     author_spring_midpoint_root_from_actual(
         c, key,
+        spring_plan_midpoint_support_mk(
+            key, phase.hold_end, has_default_entry_poses,
+            has_four_key_release_poses, entry_a, squash_a, entry_b, squash_b),
         spring_plan_midpoint_target_y(
             key, phase.hold_end, has_default_entry_poses,
             has_four_key_release_poses, entry_a, squash_a, entry_b, squash_b),
@@ -7610,7 +7714,8 @@ inline zc::Clip build_jump(
     if (f <= phase.launch_key) {
       int32_t rx = 0, ry = 0, rz = 0;
       spring_root_from_quats_raw(
-          g.q, spring_support_target_y(entry, spring), rx, ry, rz);
+          g.q, spring_support_station_mk_for(entry, spring),
+          spring_support_target_y(entry, spring), rx, ry, rz);
       c.root[f * 3 + 0] = rx;
       c.root[f * 3 + 1] = ry;
       c.root[f * 3 + 2] = rz;
@@ -7624,8 +7729,9 @@ inline zc::Clip build_jump(
       int32_t ignored_x = 0, ry = 0, ignored_z = 0;
       const int relative_key = f - land;
       spring_root_from_quats_raw(
-          g.q, spring_support_target_y(entry, spring) +
-                   jump_landing_surface_bias_mm(p, relative_key),
+          g.q, spring_support_station_mk_for(entry, spring),
+          spring_support_target_y(entry, spring) +
+              jump_landing_surface_bias_mm(p, relative_key),
           ignored_x, ry, ignored_z);
       c.root[f * 3 + 0] =
           fxm(spring_root_anchor_x(entry, spring, false, f * 1000));
@@ -7662,6 +7768,9 @@ inline zc::Clip build_jump(
     const JumpMotionSample b = zixx_jump_motion_sample(p, key + 1);
     author_spring_midpoint_root_from_actual(
         c, key,
+        spring_plan_midpoint_support_mk(
+            key, phase.hold_end, has_default_entry_poses,
+            has_four_key_release_poses, a.entry, a.spring, b.entry, b.spring),
         spring_plan_midpoint_target_y(
             key, phase.hold_end, has_default_entry_poses,
             has_four_key_release_poses, a.entry, a.spring, b.entry, b.spring),
@@ -7684,8 +7793,13 @@ inline zc::Clip build_jump(
          jump_landing_surface_bias_mm(p, relative_key + 1)) /
         2;
     int32_t ignored_x = 0, ry = 0, ignored_z = 0;
-    spring_root_from_quats_raw(c.mid_quats.data() + qi, target_y,
-                               ignored_x, ry, ignored_z);
+    spring_root_from_quats_raw(
+        c.mid_quats.data() + qi,
+        spring_support_station_mk(
+            (spring_arm_amount(a.entry, a.spring) +
+             spring_arm_amount(b.entry, b.spring)) /
+            2),
+        target_y, ignored_x, ry, ignored_z);
     c.mid_root[ri + 1] = ry;
     if (midpoint_authorship != nullptr)
       midpoint_authorship->channels[static_cast<size_t>(key)] |=

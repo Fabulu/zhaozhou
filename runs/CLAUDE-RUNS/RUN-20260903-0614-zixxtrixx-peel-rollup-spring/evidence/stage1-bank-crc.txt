@@ -1,0 +1,26 @@
+stage-1 no-op proof: 22-subject bank CRC vs qa2-bank-crc.txt (published d5949320)
+
+OK   zixxtrixx-attack sequence_crc32c=0xEF626E4A frames=612
+OK   zixxtrixx-balance sequence_crc32c=0x7FC8F62E frames=493
+OK   zixxtrixx-damage sequence_crc32c=0x0D8ECFB6 frames=400
+OK   zixxtrixx-death sequence_crc32c=0x4B7B3E3E frames=192
+OK   zixxtrixx-death2 sequence_crc32c=0x9F659521 frames=240
+OK   zixxtrixx-fall sequence_crc32c=0xC4722098 frames=288
+OK   zixxtrixx-hit sequence_crc32c=0x6A33B878 frames=300
+OK   zixxtrixx-hitfloor sequence_crc32c=0xC8E9982F frames=188
+OK   zixxtrixx-idle sequence_crc32c=0x25EE061F frames=576
+OK   zixxtrixx-jump-multi sequence_crc32c=0xEC4FAB91 frames=293
+OK   zixxtrixx-jump-one sequence_crc32c=0x9829FF4A frames=293
+OK   zixxtrixx-knockdown sequence_crc32c=0xB36C148A frames=196
+OK   zixxtrixx-look sequence_crc32c=0x5F193510 frames=384
+OK   zixxtrixx-moving-light sequence_crc32c=0xDE5D2626 frames=600
+OK   zixxtrixx-run sequence_crc32c=0x8E8D3179 frames=96
+OK   zixxtrixx-salto-dummy sequence_crc32c=0x30E39024 frames=363
+OK   zixxtrixx-salto-fly sequence_crc32c=0x7B577591 frames=365
+OK   zixxtrixx-salto-nine sequence_crc32c=0xC244F239 frames=487
+OK   zixxtrixx-salto-six sequence_crc32c=0x01B1402F frames=385
+OK   zixxtrixx-slow-taunt sequence_crc32c=0xBB66B5CE frames=239
+OK   zixxtrixx-taunt sequence_crc32c=0x33BC0A56 frames=224
+OK   zixxtrixx-walk sequence_crc32c=0x86536E70 frames=160
+
+ALL 22 BYTE-IDENTICAL (sequence CRC-32C)
