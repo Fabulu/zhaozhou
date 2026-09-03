@@ -559,7 +559,7 @@ constexpr int kWalkKeys = 40;
 // apex hang, plunge, five-real-second planted-spear hold, or recovery timing.
 // 240 accepted keys + kAtkRetimeShift (66) of Direction-23 arming growth; a
 // static_assert beside the salto timeline keeps this in step with the shift.
-constexpr int kAttackKeys = 306;
+constexpr int kAttackKeys = 280;
 constexpr int kFallKeys = 144;  // SLOWER STILL (2026-08-27 pass 3, Fabian:
                                 // "When falling, the rotation is too
                                 // strong"): one tumble now takes 4.8 s, so
@@ -962,18 +962,21 @@ constexpr int32_t kSpringBladeSquashRise = 0;
 // kSaltoSpringEntryEndKey points at the end of beat 1 (it exists to feed the
 // probe's phase gate; the sampler runs on kSaltoCompressEndKey).
 constexpr int kSpringSettleInKeys = 4;
-// Beat split adjusted after the first schedule render: beat 2 carries 4714 mm
-// of shape-arc against beat 1's 1845 mm (measured with the pose probe), so an
-// even READ needs beat 2 to own more of the arming than the first draft gave
-// it. Second adjustment: the arming grew 64 -> 72 keys (160 frames of ground
-// time, inside Recon 5's 150-180 balance-pace band) to buy beat 2 the pace
-// its 4714 mm need -- the owner has asked for a slower arming three
-// directions running. Beat 1: keys 4-36; dwell 4 keys; beat 2: keys 40-72.
-constexpr int kSpringBecomeSEndKey = 36;
-constexpr int kSpringBecomeSSettleKeys = 4;
-constexpr int kSaltoSpringEntryEndKey = kSpringBecomeSEndKey;
-constexpr int kSaltoCompressEndKey = 72;
-constexpr int kSaltoCompressHoldEndKey = 84;
+// OWNER DIRECTION 25 (2026-09-03), THE PEEL: the published Direction-23 pace
+// was "too careful and slow", and the shape instruction it served is
+// withdrawn. The ground action is now TWO beats, not four: THE PEEL (the
+// grounded stretch lifts front-to-tail until the animal stands on its tail
+// tip -- "slowly, but not too slowly") and THE COMPRESSION ("then it
+// compresses. Very strongly" -- the quick, strong contrast). Ground time
+// drops 168 -> 116 frames (~31% faster): settle-in 4 keys, peel 28, gather
+// 2, compression 16, hold 8. Every beat still clears RECON-5's 16-frame
+// travel floor; Direction 23's smoothness machinery (the milli-key schedule
+// and authored half-keys) is untouched -- faster, not jerkier.
+constexpr int kSpringPeelEndKey = 32;
+constexpr int kSpringPeelSettleKeys = 2;
+constexpr int kSaltoSpringEntryEndKey = kSpringPeelEndKey;
+constexpr int kSaltoCompressEndKey = 50;
+constexpr int kSaltoCompressHoldEndKey = 58;
 // Everything downstream of the loaded hold -- release, flight, spear, stick,
 // recovery -- keeps its ACCEPTED key spacing and merely SLIDES when the arming
 // grows. kAtkRetimeShift is that slide, derived from the hold end so a slower
@@ -2564,7 +2567,7 @@ constexpr int kSpringReleaseMidpointCount =
 // settle-in, where schedule and chord are identical and the checks would
 // prove nothing.) Both must stay inside the arming.
 constexpr int kSpringEarlyEntryOwnedMidpointKey = 20;
-constexpr int kSpringEntryOwnedMidpointKey = 50;
+constexpr int kSpringEntryOwnedMidpointKey = 42;
 
 inline int32_t spring_control_lerp(int key, int k0, int32_t a,
                                    int k1, int32_t b) {
@@ -2588,19 +2591,21 @@ inline int32_t spring_control_lerp(int key, int k0, int32_t a,
 // a 30 Hz velocity staircase (Recon 3 J4). Every breakpoint is an owner knob.
 //
 //   keys 0..4      settle-in   arm 0     (grounded; the animal breathes)
-//   keys 4..36     BEAT 1      arm 0 -> kSpringArmAssembledAt: the whole
-//                              body slowly BECOMES the S
-//   keys 36..42    settle      arm holds (the beat reads because it ends)
-//   keys 42..64    BEAT 2      arm -> 1000: the S compresses, head slightly
-//                              back and slowly down, everything descending
-//   keys 64..72    BEAT 3      the loaded living hold (elsewhere)
-//   key 72         BEAT 4      the release (unchanged, fast by design)
+//   keys 4..32     THE PEEL    arm 0 -> kSpringArmAssembledAt: contact
+//                              leaves the ground at the front of the
+//                              grounded stretch and travels rearward until
+//                              only the tail tip touches (Direction 25)
+//   keys 32..34    gather      arm holds (arrival on the stand registers)
+//   keys 34..50    COMPRESSION arm -> 1000: strong and quick, head far
+//                              back -- never past the tail
+//   keys 50..58    loaded living hold (elsewhere)
+//   key 58         the release (unchanged 4-key structure)
 
 inline int32_t spring_arm_schedule_mk(int64_t key_mk) {
   const int64_t b1_start = static_cast<int64_t>(kSpringSettleInKeys) * 1000;
-  const int64_t b1_end = static_cast<int64_t>(kSpringBecomeSEndKey) * 1000;
+  const int64_t b1_end = static_cast<int64_t>(kSpringPeelEndKey) * 1000;
   const int64_t b2_start =
-      b1_end + static_cast<int64_t>(kSpringBecomeSSettleKeys) * 1000;
+      b1_end + static_cast<int64_t>(kSpringPeelSettleKeys) * 1000;
   const int64_t b2_end = static_cast<int64_t>(kSaltoCompressEndKey) * 1000;
   if (key_mk <= b1_start) return 0;
   if (key_mk < b1_end) {

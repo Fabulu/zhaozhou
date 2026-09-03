@@ -163,3 +163,43 @@ confirmed: +x = screen right = nose side; tail tip at x -1925.
   all frame counts identical. `evidence/stage1-bank-crc.txt`.
 - Probe PASS on the same build. The travelling-support machinery is now a
   constant edit away from the peel, exactly as the plan staged it.
+
+### 2026-09-03 (implementer) - Stage 2 (pose brackets by eye) + Stage 3 (retime)
+
+Stage 2, on the committed centreline sketchpad (evidence/stage2/, nine
+iterations cand-v1..v9, chosen BY EYE):
+- v1 spiral roll = unreadable knot; v2 tall diagonal = cobra tower, weak
+  compression; v3/v4 open loop but the planar chain CROSSING put station 6
+  coincident with 14 (full-tube interpenetration); v5 sweep chose the
+  "stand C" family; v6-v8 fixed the loop/column adjacency and peel-mid wave;
+  v8 peel-mid overshot (nose swung BEHIND the tail mid-route - rejected);
+  **v9 chosen**: C-loop stand (~225 deg sweep, gap on the left flank, dive
+  enters above the gap, column exits below), breaking-wave peel-mid (nose
+  monotone backward: 0 -> -267 -> -720 -> -1207 mm), collapsed pressed low
+  and flat with nose back to ~-1207 mm (~-29 px on the 41 mm/px camera; the
+  published pass's whole travel was -12 px). Every per-station spline leg
+  <= 165 deg (landmine 12 margin); station 9 is routed through peel-mid
+  ~195 deg because its direct stance->stand arc is exactly +182 deg - the
+  unwrap degeneracy the plan warned about, found and dodged.
+- Remaining adjacency: dive 5-6 brushes loop-closure/column-top 13-16 at the
+  stand, and the crown presses the coil top through the compression - this
+  is THE declared self-press of Direction 25's relaxed-clipping ruling,
+  bounded at stage 5.
+
+Stage 3 (retime skeleton, old knots still installed):
+- kSpringBecomeSEndKey 36 -> kSpringPeelEndKey 32; settle keys 4 -> 2
+  (kSpringPeelSettleKeys); kSaltoCompressEndKey 72 -> 50;
+  kSaltoCompressHoldEndKey 84 -> 58; kAtkRetimeShift derives 66 -> 40;
+  kAttackKeys 306 -> 280 (compile-asserted); probe representative key
+  50 -> 42 (must sit mid-beat-2 of the NEW schedule; 20 stays mid-peel).
+- Probe phase-envelope relationships verified against the new schedule
+  (64>=50, 18>=8, 8 in [4,12], release deltas 4/2/4 unchanged) and the
+  comment re-cited to Direction 25.
+- Schedule instrument (evidence/stage3-schedule.txt): ground time 116
+  frames; move_mm per key 5-11 mm through the peel (was 5-14 over 72 keys),
+  release unchanged.
+- **KNOWN RED, superseded by stage 4:** probe FAILS one gate -
+  "spring body runs intersect": 10 pairs at ticks 37.5-38.5 (key ~19,
+  arm ~210), stations 20/34. Cause: the retime shifts the life-wave phase
+  against the arm, and the OLD absorb-region pose was within a hair of
+  touching. Stage 4 deletes that pose; re-verified there.

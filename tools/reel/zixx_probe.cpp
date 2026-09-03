@@ -1279,15 +1279,16 @@ int main() {
     // unrelated procedural magnitudes. The durable mechanical law is that every
     // region participates; likeness is judged from the committed every-frame
     // sheets above this probe, not by fitting the superseded numeric envelope.
-    // OWNER DIRECTION 23 (RUN-20260902-1816) re-authors this band. The old
-    // band pinned the arming to the rejected 16/18 schedule in absolute keys,
-    // which would forbid exactly the slower arming the owner has now asked
-    // for three directions running. It is a regression band, not a law, so
-    // it is re-recorded as DERIVED relationships: beat 1 (become the S) ends
-    // strictly inside the arming and carries at least half of it; beat 2
-    // (the compression) gets at least 16 frames; the loaded hold lives for
-    // 8-24 frames. The RELEASE deltas are unchanged from the accepted
-    // Direction-20 windows -- the release stays fast by design (D20 #4).
+    // OWNER DIRECTION 23 (RUN-20260902-1816) re-authored this band as
+    // DERIVED relationships instead of absolute keys. OWNER DIRECTION 25
+    // (RUN-20260903-0614, THE PEEL) re-derives the same relationships for
+    // the two-beat motion: beat 1 is now THE PEEL (contact recedes
+    // front-to-tail to the tip) and still ends strictly inside the arming
+    // carrying at least half of it ("slowly -- but not too slowly"); beat 2
+    // is THE COMPRESSION, strong and quick but never under 16 frames; the
+    // loaded hold lives for 8-24 frames. The RELEASE deltas are unchanged
+    // from the accepted Direction-20 windows -- the release stays fast by
+    // design (D20 #4), and unrolling forward off the tail IS the jump.
     require(zixx::kSaltoSpringEntryEndKey > 0 &&
                 zixx::kSaltoSpringEntryEndKey <
                         zixx::kSaltoCompressEndKey &&
