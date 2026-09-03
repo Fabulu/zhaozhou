@@ -188,3 +188,30 @@ was broken three ways. A clean lint proved nothing.
 `REJECT: adding terrain/Field RTL faster than the texture fit can be closed.`
 That is why no new terrain RTL has been written this pass despite the contracts
 now existing for two terrain blocks.
+
+## 21:40 — INTERIM: the storage inferred at synthesis
+
+The fit is still routing (placement succeeded at 7:58; routing has been running
+~40 min), but **synthesis has already answered the acceptance question**, and
+that is the number the brief gates on:
+
+    Info (21064): Implemented 32 RAM segments
+
+Against the same block before the fix, whose completed fit reported
+`ramBlocks: 2` and `blockMemoryBits: 128` — 9,728 bits of array in flip-flops.
+
+So the clock-only process did what `zhao_texture_cache.sv:495-523` said it
+would, and **the static checker's prediction holds so far**:
+`check_ram_inference.py` said `data_r` and `tag_r` were structurally clean
+after the fix, and synthesis agrees.
+
+**Not yet proven, and not to be claimed:** the final `ramBlocks` count after
+fitting, which is what `min_m10k: 8` actually tests. Synthesis says the arrays
+became memory; only the fitter says how many M10Ks that packs into. Also
+unresolved: 15,961 logic cells at synthesis is still large, so the ALM tripwire
+(`max_alms: 1500`) may well still fail even with the storage fixed. That would
+be a DIFFERENT problem from the one just fixed and should not be confused with
+it.
+
+Reading the finished fit with `tools/quartus/check_fit_rules.ps1` is the next
+action; it applies all three tripwires at once.
