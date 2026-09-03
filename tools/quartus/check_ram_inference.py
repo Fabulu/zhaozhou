@@ -44,6 +44,24 @@ WHAT IT LOOKS FOR, and why each one
 It is deliberately CONSERVATIVE about what counts as an array: only unpacked
 declarations with a depth, since those are what become memories. A packed
 vector is a register file by construction and is not the subject.
+
+RANKING, and why an unranked list is nearly useless
+---------------------------------------------------
+`--rank` added 2026-09-04, after the first full-tree run returned 898 findings.
+That number is true and unusable: most of them are two-entry control arrays
+that are CORRECTLY in flops, and a `state [0:1]` sits in the list beside a
+9,728-bit cache line store looking exactly as important.
+
+So each finding is sized. The estimate resolves `localparam`s declared in the
+same file and simple arithmetic over them; anything it cannot resolve is
+reported as UNKNOWN and listed separately rather than guessed at, because a
+confident wrong size is worse than an admitted gap -- it would send the next
+pass at the wrong file.
+
+The size is on the COMPARISON side: it says which findings are worth looking
+at. It does not decide that an array should be a memory. A 4,096-bit array that
+is read on three ports every cycle belongs in flops and no ranking should
+suggest otherwise.
 """
 import io
 import os
@@ -83,10 +101,77 @@ def owner(procs, pos):
     return best
 
 
-def check_file(path):
+NUM = re.compile(r"^\s*-?\d+$")
+
+
+def local_params(text):
+    """{name: int} for localparams/parameters this file can resolve itself."""
+    vals = {}
+    pat = re.compile(
+        # Stop at a NEWLINE as well as at ; and , -- a module parameter has
+        # no terminator of its own, so `[^;,]+` swallowed the entire port
+        # list after it and every PARAMETERISED array came back UNKNOWN.
+        r"\b(?:localparam|parameter)\s+(?:\w+\s+)*?([A-Za-z_]\w*)\s*=\s*([^;,\n]+)")
+    # Two passes, so a localparam defined in terms of an earlier one resolves.
+    for _ in range(3):
+        for m in pat.finditer(text):
+            name, expr = m.group(1), m.group(2)
+            v = eval_expr(expr, vals)
+            if v is not None:
+                vals[name] = v
+    return vals
+
+
+def eval_expr(expr, vals):
+    """Evaluate a width/depth expression, or None. Deliberately narrow: only
+    integers, known identifiers, + - * / and parentheses. Anything else is
+    UNKNOWN rather than a guess."""
+    e = expr.strip()
+    e = re.sub(r"\b\d+'[sS]?[dD]([0-9_]+)", r"\1", e)   # 8'd12 -> 12
+    e = re.sub(r"\b(?:int|unsigned)'\s*\(", "(", e)      # int'(x) -> (x)
+    e = re.sub(r"\$clog2\s*\(", "clog2(", e)
+    if not re.fullmatch(r"[\w\s()+\-*/]*", e):
+        return None
+    def clog2(x):
+        n, r = 1, 0
+        while n < x:
+            n, r = n * 2, r + 1
+        return r
+    env = dict(vals)
+    env["clog2"] = clog2
+    try:
+        v = eval(e, {"__builtins__": {}}, env)
+    except Exception:
+        return None
+    return int(v) if isinstance(v, (int, float)) and v == int(v) else None
+
+
+def array_bits(decl_widths, decl_depths, vals):
+    """Total declared bits, or None if any dimension will not resolve."""
+    bits = 1
+    for d in decl_widths + decl_depths:
+        inner = d.strip()[1:-1]
+        if ":" in inner:
+            hi, lo = inner.split(":", 1)
+            h, l = eval_expr(hi, vals), eval_expr(lo, vals)
+            if h is None or l is None:
+                return None
+            n = abs(h - l) + 1
+        else:
+            n = eval_expr(inner, vals)
+            if n is None:
+                return None
+        if n <= 0:
+            return None
+        bits *= n
+    return bits
+
+
+def check_file(path, sizes=None):
     raw = io.open(path, encoding="utf-8", errors="replace").read()
     text = strip_comments(raw)
     procs = processes(text)
+    vals = local_params(text)
     findings = []
 
     arrays = {}
@@ -99,7 +184,11 @@ def check_file(path):
             # `logic arr_q [DEPTH];` looks exactly like a read indexed by
             # `DEPTH`. A tool with obvious false positives teaches people to
             # ignore its real findings.
-            arrays[name] = (m.start(), m.end())
+            widths = re.findall(r"\[[^\]]*\]", m.group(0)[:m.group(0).index(name)])
+            depths = re.findall(r"\[[^\]]*\]", m.group(2))
+            arrays[name] = (m.start(), m.end(), widths, depths)
+            if sizes is not None:
+                sizes[name] = array_bits(widths, depths, vals)
 
     for name in sorted(arrays):
         # Writes: `name [i] <=` or `name [i][j] <=`, whitespace tolerated,
@@ -129,7 +218,7 @@ def check_file(path):
 
         # Combinational read through a dynamic index.
         rpat = re.compile(r"\b" + name + r"\s*\[\s*([A-Za-z_]\w*)")
-        decl_lo, decl_hi = arrays[name]
+        decl_lo, decl_hi = arrays[name][0], arrays[name][1]
         for mm in rpat.finditer(text):
             if decl_lo <= mm.start() < decl_hi:
                 continue  # the declaration, not a read
@@ -177,7 +266,10 @@ def check_file(path):
 
 
 def main():
-    targets = sys.argv[1:]
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    rank = "--rank" in sys.argv
+
+    targets = args
     if not targets:
         targets = []
         for root, _d, names in os.walk("fpga/rtl"):
@@ -186,20 +278,68 @@ def main():
                     targets.append(os.path.join(root, n).replace(os.sep, "/"))
 
     total = 0
+    ranked = []      # (bits, path, name, [reasons])
+    unknown = []     # (path, name, [reasons])
     for path in sorted(targets):
-        found = check_file(path)
+        sizes = {}
+        found = check_file(path, sizes)
         if not found:
+            continue
+        total += len(found)
+        if rank:
+            byname = {}
+            for name, why in found:
+                byname.setdefault(name, []).append(why)
+            for name, whys in byname.items():
+                bits = sizes.get(name)
+                if bits is None:
+                    unknown.append((path, name, whys))
+                else:
+                    ranked.append((bits, path, name, whys))
             continue
         print(path.replace("fpga/rtl/", ""))
         for name, why in found:
             print("    %-16s %s" % (name, why))
-        total += len(found)
+
+    if rank:
+        # An M10K is 10,240 bits (8,192 usable at common widths). An array
+        # below a few hundred bits cannot pay for one however it is written,
+        # so the cut is where the finding starts being worth an edit.
+        ranked.sort(reverse=True)
+        print("ARRAYS THAT WILL NOT INFER AS MEMORY, LARGEST FIRST")
+        print("(size is DECLARED bits -- what an M10K would have to hold. It")
+        print(" says which findings are worth looking at, and nothing more:")
+        print(" a large array read on three ports every cycle belongs in flops")
+        print(" and no ranking should suggest otherwise.)")
+        print()
+        shown = 0
+        for bits, path, name, whys in ranked:
+            if bits < 256:
+                continue
+            shown += 1
+            print("%8d bits  %s  %s" % (bits, path.replace("fpga/rtl/", ""), name))
+            for w in whys:
+                print("               - %s" % w)
+        small = sum(1 for b, _p, _n, _w in ranked if b < 256)
+        print()
+        print("%d array(s) at or above 256 bits; %d below it, not shown -- those "
+              "are control state that is CORRECTLY in flops and would drown the "
+              "list." % (shown, small))
+        if unknown:
+            print()
+            print("%d array(s) whose size would not resolve from the file alone. "
+                  "Reported rather than guessed: a confident wrong size sends the "
+                  "next pass at the wrong file." % len(unknown))
+            for path, name, _w in unknown[:20]:
+                print("               ? %s  %s" % (path.replace("fpga/rtl/", ""), name))
+        return 0
 
     print()
     if total:
         print("%d structural finding(s). Not all are defects -- a small array "
               "in flops can be deliberate -- but each one is a reason an array "
-              "will NOT become an M10K." % total)
+              "will NOT become an M10K. Re-run with --rank to see them by SIZE, "
+              "which is the only way this list is actionable." % total)
     else:
         print("no structural obstacles to memory inference found")
     return 0
