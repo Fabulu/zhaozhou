@@ -2066,6 +2066,16 @@ verilate(test_raster_texjoin_v2_directed
 add_test(NAME raster_texjoin_v2_directed COMMAND test_raster_texjoin_v2_directed)
 set_tests_properties(raster_texjoin_v2_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The terrain light law, before any RTL. Owner brief 2026-09-03: put the law in
+# ZRef and LOOK at the island under a moving sun first. This cannot say whether
+# it looks right -- only the render can -- but it pins the ways the first draft
+# was wrong: an int64 overflow at the fx16 rail, a three-way rounding
+# disagreement, and ambient made a floor when ratified law makes it an addend.
+add_executable(test_terrain_shade_oracle terrain/terrain_shade_oracle.cpp)
+target_link_libraries(test_terrain_shade_oracle PRIVATE zhao_harness zhao_zref)
+add_test(NAME terrain_shade_oracle COMMAND test_terrain_shade_oracle)
+set_tests_properties(terrain_shade_oracle PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
+
 # TEX.FRAGROB against the block it replaces. Two DUTs, one stimulus, one model
 # of the outside world -- and the comparison is the SEQUENCE of retired
 # fragments, not cycle-by-cycle: fragrob has an extra stage on issue and one on
