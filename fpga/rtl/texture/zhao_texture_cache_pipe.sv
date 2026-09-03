@@ -1,53 +1,73 @@
-// zhao_texture_cache_pipe.sv — the texture cache, staged, with fill multicast.
+// zhao_texture_cache_pipe.sv — the texture cache probe, C0..C4, with the
+// arrays read SYNCHRONOUSLY so they can be memory.
 //
-// BESIDE `zhao_texture_cache.sv`, which stays the cache of record. Nothing
-// instantiates this yet.
-//
-// ---------------------------------------------------------------------------
-// TWO DEFECTS THE BRIEF NAMES
-// ---------------------------------------------------------------------------
-// 1. THE OUTPUT READY REACHES REQUEST ACCEPTANCE.
-//
-//        assign acc_ready_o = (need_c == 0) && !fill_busy_r
-//                          && (!s1_v_r || smp_ready_i);
-//
-//    `smp_ready_i` is the CONSUMER's ready and it lands on the accept line
-//    through one combinational path. The brief: "No cache output-ready signal
-//    reaches TMU request acceptance in one combinational path." Here the accept
-//    line reads a local request FIFO and nothing else.
-//
-// 2. FOUR LANES WANTING ONE LINE CAUSE FOUR FILLS.
-//
-//    The shipped `pick_lane` chooses the lowest-numbered needing lane, fills
-//    it, and re-checks -- so a four-tap footprint landing inside one physical
-//    line fetches that line FOUR TIMES. The brief:
-//
-//      > A miss should capture fill_lane_mask and line identity. Every returned
-//      > fill beat is written into every matching lane in the mask. Do not
-//      > fetch the same line separately for each lane.
-//
-//    That is not a small saving. A bilinear footprint on an interior texel has
-//    all four taps within one 16-byte line most of the time, so the common
-//    case is 4x the memory traffic it needs.
+// BESIDE `zhao_texture_cache.sv`, which stays the golden implementation.
+// Nothing instantiates this yet.
 //
 // ---------------------------------------------------------------------------
-// WHAT IS DELIBERATELY NOT DONE
+// WHAT WAS WRONG, MEASURED FROM TWO DIRECTIONS AT ONCE
 // ---------------------------------------------------------------------------
-//   > Keep one blocking miss initially. Do not add MSHRs or hit-under-miss
-//   > until real traces prove the blocking miss engine, rather than hit-path
-//   > timing, is the remaining limiter.
+// The previous version of this file called itself staged and read its tag,
+// valid and data arrays COMBINATIONALLY, classifying from those reads inside
+// one clock. Ruling X7:
 //
-// So one miss at a time, and the fill blocks. Adding hit-under-miss here would
-// be building for a bottleneck nobody has measured -- the same mistake as
-// four bilinear lanes, or BINNER being named an offender for eleven fits
-// without appearing in a single worst-100.
+//   > the source calls itself staged but reads tag/data arrays combinationally
+//   > and classifies from those reads; there is no explicit M10K output
+//   > capture stage before broad compare/select ... the expected M10K
+//   > inference and timing seam are unproved.
 //
-// The geometry is transcribed from the shipped cache, not chosen:
-//     tag  = addr[OFF_W+IDX_W +: TAG_W]      idx = addr[OFF_W +: IDX_W]
-//     beat = addr[1 +: BEAT_W]
-// with LANES=4, LINES=16, LINE_BYTES=16 giving OFF_W=4, IDX_W=4, BEAT_W=3,
-// TAG_W=24. Guessing any of those would produce plausible addresses that are
-// wrong, which this session has already done once.
+// The fit proved it, twice over:
+//
+//   81.06 MHz     worst internal path  rq_rp[1] -> valid_r[1][2]   12.159 ns
+//   5,634 ALM     10,812 REGISTERS     3 M10K
+//
+// Ten thousand registers is the data array. `data_r` is 4 lanes x 16 lines x
+// 8 halfwords x 16 bits = 8,192 bits, and an asynchronously-read array cannot
+// be a memory block, so every bit of it became a flip-flop with a 128-way
+// read mux hanging off it. That is why the block is both large and slow, and
+// it is one cause with two symptoms rather than two problems.
+//
+// X7 is explicit about what does NOT count as fixing it:
+//
+//   > Do not accept a cache fit as architectural closure if the RAMs become
+//   > flops/MLABs or an M10K output launches a broad combinational path.
+//
+// ---------------------------------------------------------------------------
+// THE STAGES, AS RULED
+// ---------------------------------------------------------------------------
+//   C0  local request FIFO                         `acc_ready_o` reads it alone
+//   C1  register lane tag/index/beat, issue the synchronous RAM addresses
+//   C2  capture the RAM outputs into fabric flops
+//   C3  compare, classify, choose ONE miss identity and `fill_lane_mask`
+//   C4  response FIFO / miss sequencer
+//
+// C2 exists solely so that nothing broad is computed from a memory output in
+// the same clock it appears. It looks like a wasted stage and it is the whole
+// point of the rebuild.
+//
+// ---------------------------------------------------------------------------
+// A PIPELINE NEEDS A REPLAY, AND THAT IS THE REAL COST
+// ---------------------------------------------------------------------------
+// The old design re-evaluated the FIFO head every clock, so a miss simply kept
+// looking until the fill landed. A pipeline cannot do that: by the time C3
+// says "miss", C1 and C2 already hold the two requests behind it.
+//
+// So there are TWO pointers into the request FIFO. `rq_ip` issues; `rq_rp`
+// retires. A miss at C3 rewinds `rq_ip` to `rq_rp` and squashes what is in
+// flight, and the fill engine then runs. Nothing is lost because nothing was
+// popped -- a request is only removed when it has fully hit.
+//
+// The all-hit path still accepts and retires ONE ACCESS PER CLOCK, which is
+// what TEXTURE.TMU's II=2 sample rate rests on. A miss costs the pipeline
+// depth on top of the fill, and misses were always the expensive case.
+//
+// ---------------------------------------------------------------------------
+// KEPT, BECAUSE THE RULING SAYS TO KEEP THEM
+// ---------------------------------------------------------------------------
+//   > Keep multicast and one blocking miss.
+//
+// One line is fetched once and written into EVERY lane that wanted it. One
+// miss is outstanding at a time.
 // ---------------------------------------------------------------------------
 `default_nettype none
 
@@ -55,7 +75,13 @@ module zhao_texture_cache_pipe #(
     parameter int unsigned LANES      = 4,
     parameter int unsigned LINES      = 16,
     parameter int unsigned LINE_BYTES = 16,
-    parameter int unsigned REQN       = 4    // local request FIFO
+    // Local request FIFO. Must be a power of two: the occupancy is a pointer
+    // subtraction with one spare bit, which only counts correctly if the
+    // pointers wrap at a multiple of the depth. The old file hard-coded
+    // `logic [1:0]` pointers and a `3'(REQN)` compare while calling REQN a
+    // parameter -- X7's "REQN is nominal while pointer/count widths are
+    // hard-coded for four entries". Every width below is derived.
+    parameter int unsigned REQN       = 4
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -84,7 +110,8 @@ module zhao_texture_cache_pipe #(
     output var logic [31:0]         cache_hits_o,
     output var logic [31:0]         cache_misses_o,
     output var logic [31:0]         fills_o,        // LINE fetches, not lane misses
-    output var logic [31:0]         multicast_o     // lanes served by one fill
+    output var logic [31:0]         multicast_o,    // lanes served by one fill
+    output var logic [31:0]         replays_o       // probes squashed by a miss
 );
 
   localparam int unsigned OFF_W  = $clog2(LINE_BYTES);   // 4
@@ -92,73 +119,142 @@ module zhao_texture_cache_pipe #(
   localparam int unsigned HW_PL  = LINE_BYTES / 2;       // 8
   localparam int unsigned BEAT_W = $clog2(HW_PL);        // 3
   localparam int unsigned TAG_W  = 32 - OFF_W - IDX_W;   // 24
+  localparam int unsigned DAW    = IDX_W + BEAT_W;       // data-array address
+  localparam int unsigned RQW    = $clog2(REQN);
 
-  // ---- storage, same shape as the shipped cache ---------------------------
+  // ==========================================================================
+  // STORAGE
+  // ==========================================================================
+  // `data_r` is READ ONLY THROUGH A REGISTERED ADDRESS, below, and never in a
+  // continuous assignment. That is the difference between an M10K and 8,192
+  // flip-flops, and it is the entire reason this file was rewritten.
+  //
+  // `tag_r` is read the same way. `valid_r` stays in flops on purpose: it is
+  // 4 x 16 = 64 bits, it needs a reset that a memory block cannot give it, and
+  // putting it in memory would mean a line could read valid before the fill
+  // engine had cleared it.
   logic [15:0]      data_r  [LANES][LINES * HW_PL];
   logic [TAG_W-1:0] tag_r   [LANES][LINES];
   logic             valid_r [LANES][LINES];
 
-  // ======================================================================= C0
-  // The local request FIFO. THIS is what acc_ready_o depends on -- nothing
-  // downstream, and never smp_ready_i.
+  // ==========================================================================
+  // C0 — the local request FIFO
+  // ==========================================================================
+  // `acc_ready_o` reads THIS and nothing else: not the consumer, not the fill
+  // engine. That is the property that lets the TMU issue without knowing
+  // anything about cache state.
   logic [LANES-1:0]    rq_en   [REQN];
   logic [LANES*32-1:0] rq_addr [REQN];
   logic [15:0]         rq_src  [REQN];
-  logic [1:0]          rq_wp, rq_rp;
-  logic [2:0]          rq_n;
+  logic [RQW:0]        rq_wp, rq_rp, rq_ip;   // write / retire / ISSUE
 
-  assign acc_ready_o = (rq_n != 3'(REQN));
+  logic [RQW:0] rq_n;
+  assign rq_n = rq_wp - rq_rp;
+  assign acc_ready_o = (rq_n != (RQW+1)'(REQN));
 
-  logic rq_head_v;
-  assign rq_head_v = (rq_n != 3'd0);
+  logic rq_issuable;
+  assign rq_issuable = (rq_wp != rq_ip);
 
-  // ======================================================================= C1
-  // Per-lane tag/index/beat from the head request.
-  logic [TAG_W-1:0]  h_tag  [LANES];
-  logic [IDX_W-1:0]  h_idx  [LANES];
-  logic [BEAT_W-1:0] h_beat [LANES];
-  logic [LANES-1:0]  h_hit, h_need;
+  // ==========================================================================
+  // C1 — decode the issued request, drive the RAM addresses
+  // ==========================================================================
+  logic [TAG_W-1:0]  i_tag  [LANES];
+  logic [IDX_W-1:0]  i_idx  [LANES];
+  logic [BEAT_W-1:0] i_beat [LANES];
   always_comb begin
     for (int unsigned k = 0; k < LANES; k++) begin
-      h_tag[k]  = rq_addr[rq_rp][32*k + OFF_W + IDX_W +: TAG_W];
-      h_idx[k]  = rq_addr[rq_rp][32*k + OFF_W +: IDX_W];
-      h_beat[k] = rq_addr[rq_rp][32*k + 1 +: BEAT_W];
-      h_hit[k]  = valid_r[k][h_idx[k]] && (tag_r[k][h_idx[k]] == h_tag[k]);
+      i_tag[k]  = rq_addr[rq_ip[RQW-1:0]][32*k + OFF_W + IDX_W +: TAG_W];
+      i_idx[k]  = rq_addr[rq_ip[RQW-1:0]][32*k + OFF_W +: IDX_W];
+      i_beat[k] = rq_addr[rq_ip[RQW-1:0]][32*k + 1 +: BEAT_W];
     end
-    h_need = rq_en[rq_rp] & ~h_hit;
   end
 
-  // ---- the miss engine: ONE line, and every lane that wants it -----------
-  // fill_lane_mask is the whole point. The lowest-numbered needing lane names
-  // the line; every OTHER needing lane whose (tag,idx) matches joins the mask
-  // and is written by the same beats.
-  logic [TAG_W-1:0]  m_tag_c;
-  logic [IDX_W-1:0]  m_idx_c;
-  logic [LANES-1:0]  m_mask_c;
-  logic              m_any_c;
+  logic              c1_v;
+  logic [LANES-1:0]  c1_en;
+  logic [15:0]       c1_src;
+  logic [TAG_W-1:0]  c1_tag  [LANES];
+  logic [IDX_W-1:0]  c1_idx  [LANES];
+
+  // ==========================================================================
+  // C2 — the RAM outputs, captured
+  // ==========================================================================
+  // The memory's OWN output register. It updates on every clock, because a
+  // synchronous RAM read cannot be conditional without becoming an enable that
+  // some devices will not infer -- so its contents are only meaningful for the
+  // address presented on the previous clock, and `c2_*` below is what holds
+  // them still.
+  logic [TAG_W-1:0]  ram_tag [LANES];
+  logic              ram_val [LANES];
+  logic [15:0]       ram_dat [LANES];
+
+  logic              c2_v;
+  logic [LANES-1:0]  c2_en;
+  logic [15:0]       c2_src;
+  logic [TAG_W-1:0]  c2_tag  [LANES];   // carried, to compare against
+  logic [IDX_W-1:0]  c2_idx  [LANES];
+  logic [TAG_W-1:0]  c2_rtag [LANES];   // captured FROM the tag array
+  logic              c2_rval [LANES];
+  logic [15:0]       c2_rdat [LANES];   // captured FROM the data array
+
+  // ==========================================================================
+  // C3 — compare and classify
+  // ==========================================================================
+  logic [LANES-1:0] c3_hit_c, c3_need_c;
+  always_comb begin
+    for (int unsigned k = 0; k < LANES; k++)
+      c3_hit_c[k] = c2_rval[k] && (c2_rtag[k] == c2_tag[k]);
+    c3_need_c = c2_en & ~c3_hit_c;
+  end
+
+  // ONE line, and every lane that wants it. The lowest-numbered needing lane
+  // names the line; every other needing lane whose (tag, idx) matches joins
+  // the mask and is written by the same beats.
+  logic [TAG_W-1:0] m_tag_c;
+  logic [IDX_W-1:0] m_idx_c;
+  logic [LANES-1:0] m_mask_c;
+  logic             m_any_c;
   always_comb begin
     m_any_c  = 1'b0;
     m_tag_c  = '0;
     m_idx_c  = '0;
     m_mask_c = '0;
-    for (int unsigned k = 0; k < LANES; k++) begin
-      if (!m_any_c && h_need[k]) begin
+    for (int unsigned k = 0; k < LANES; k++)
+      if (!m_any_c && c3_need_c[k]) begin
         m_any_c = 1'b1;
-        m_tag_c = h_tag[k];
-        m_idx_c = h_idx[k];
+        m_tag_c = c2_tag[k];
+        m_idx_c = c2_idx[k];
       end
-    end
-    if (m_any_c) begin
+    if (m_any_c)
       for (int unsigned k = 0; k < LANES; k++)
-        if (h_need[k] && h_tag[k] == m_tag_c && h_idx[k] == m_idx_c) m_mask_c[k] = 1'b1;
+        if (c3_need_c[k] && c2_tag[k] == m_tag_c && c2_idx[k] == m_idx_c)
+          m_mask_c[k] = 1'b1;
+  end
+
+  logic [RQW+1:0] mask_pop_c, en_pop_c;
+  always_comb begin
+    mask_pop_c = '0;
+    en_pop_c   = '0;
+    for (int unsigned k = 0; k < LANES; k++) begin
+      mask_pop_c = mask_pop_c + (RQW+2)'(m_mask_c[k]);
+      en_pop_c   = en_pop_c   + (RQW+2)'(c2_en[k]);
     end
   end
 
-  logic [2:0] mask_pop_c;
-  always_comb begin
-    mask_pop_c = 3'd0;
-    for (int unsigned k = 0; k < LANES; k++) mask_pop_c = mask_pop_c + 3'(m_mask_c[k]);
-  end
+  // ==========================================================================
+  // C4 — response FIFO and miss sequencer
+  // ==========================================================================
+  logic [LANES*16-1:0] rs_data [REQN];
+  logic [15:0]         rs_src  [REQN];
+  logic [RQW:0]        rs_wp, rs_rp;
+  logic [RQW:0]        rs_n;
+  assign rs_n = rs_wp - rs_rp;
+
+  assign smp_valid_o  = (rs_n != '0);
+  assign smp_data_o   = rs_data[rs_rp[RQW-1:0]];
+  assign smp_src_id_o = rs_src[rs_rp[RQW-1:0]];
+
+  logic rs_room;
+  assign rs_room = (rs_n != (RQW+1)'(REQN));
 
   logic              fb_busy_r, fb_req_r;
   logic [TAG_W-1:0]  fb_tag_r;
@@ -169,110 +265,145 @@ module zhao_texture_cache_pipe #(
   assign fill_valid_o = fb_req_r;
   assign fill_addr_o  = {fb_tag_r, fb_idx_r, {OFF_W{1'b0}}};
 
-  // ======================================================================= C4
-  // The local response FIFO. Output ready terminates HERE.
-  logic [LANES*16-1:0] rs_data [REQN];
-  logic [15:0]         rs_src  [REQN];
-  logic [1:0]          rs_wp, rs_rp;
-  logic [2:0]          rs_n;
+  // C3 resolves in order, so the request it describes is always `rq_rp`.
+  logic c3_all_hit, c3_retire, c3_miss;
+  assign c3_all_hit = c2_v && (c3_need_c == '0);
+  assign c3_retire  = c3_all_hit && rs_room;
+  assign c3_miss    = c2_v && m_any_c && !fb_busy_r;
 
-  assign smp_valid_o  = (rs_n != 3'd0);
-  assign smp_data_o   = rs_data[rs_rp];
-  assign smp_src_id_o = rs_src[rs_rp];
+  // A probe may issue when there is something to issue, no miss is being
+  // handled, and the response FIFO could take the result. Holding issue on
+  // `rs_room` keeps the pipe from producing results it cannot place.
+  logic c1_go;
+  assign c1_go = rq_issuable && !fb_busy_r && !c3_miss && rs_room;
 
-  logic rs_room;
-  assign rs_room = (rs_n != 3'(REQN));
-
-  // An all-hit head retires when the response FIFO has room. A head with a
-  // miss starts a fill instead and retires on a later pass.
-  logic head_all_hit, head_go;
-  assign head_all_hit = rq_head_v && (h_need == '0);
-  assign head_go      = head_all_hit && rs_room;
-
-  logic [2:0] en_pop_c;
+  // Read addresses. Registered, which is what makes the arrays memory.
+  logic [IDX_W-1:0] rd_idx  [LANES];
+  logic [DAW-1:0]   rd_daddr[LANES];
   always_comb begin
-    en_pop_c = 3'd0;
-    for (int unsigned k = 0; k < LANES; k++) en_pop_c = en_pop_c + 3'(rq_en[rq_rp][k]);
+    for (int unsigned k = 0; k < LANES; k++) begin
+      rd_idx[k]   = i_idx[k];
+      rd_daddr[k] = {i_idx[k], i_beat[k]};
+    end
   end
 
-  logic [LANES*16-1:0] head_data_c;
-  always_comb begin
-    for (int unsigned k = 0; k < LANES; k++)
-      head_data_c[16*k +: 16] = data_r[k][{h_idx[k], h_beat[k]}];
+  // ==========================================================================
+  always_ff @(posedge clk) begin
+    // ---- C1: THE SYNCHRONOUS READ ------------------------------------------
+    // No reset on these, deliberately: a memory block's output register cannot
+    // be asynchronously reset, and asking for one is how an inferred RAM
+    // quietly becomes flops. `c2_v` gates their use, and it IS reset.
+    //
+    // `valid_r` is read on the SAME edge as the tag. Reading it one stage
+    // later -- which the first version of this file did -- samples the tag at
+    // clock T and the valid bit at T+1, and during a fill those two disagree:
+    // the fill clears valid at the start and sets it at the last beat, so a
+    // probe could see the OLD tag with the NEW valid and call a miss a hit.
+    for (int unsigned k = 0; k < LANES; k++) begin
+      ram_tag[k] <= tag_r[k][rd_idx[k]];
+      ram_val[k] <= valid_r[k][rd_idx[k]];
+      ram_dat[k] <= data_r[k][rd_daddr[k]];
+    end
   end
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      rq_wp <= '0; rq_rp <= '0; rq_n <= '0;
-      rs_wp <= '0; rs_rp <= '0; rs_n <= '0;
+      rq_wp <= '0; rq_rp <= '0; rq_ip <= '0;
+      rs_wp <= '0; rs_rp <= '0;
+      c1_v <= 1'b0;
+      c2_v <= 1'b0;
       fb_busy_r <= 1'b0;
       fb_req_r  <= 1'b0;
       cache_hits_o   <= 32'd0;
       cache_misses_o <= 32'd0;
       fills_o        <= 32'd0;
       multicast_o    <= 32'd0;
+      replays_o      <= 32'd0;
       for (int unsigned k = 0; k < LANES; k++)
         for (int unsigned i = 0; i < LINES; i++) valid_r[k][i] <= 1'b0;
     end else begin
-      // ---- C0: accept; the count moves ONCE ------------------------------
-      begin
-        automatic logic psh = acc_valid_i && acc_ready_o;
-        automatic logic pop = head_go;
-        if (psh && !pop)      rq_n <= rq_n + 3'd1;
-        else if (!psh && pop) rq_n <= rq_n - 3'd1;
-        if (psh) begin
-          rq_en[rq_wp]   <= acc_en_i;
-          rq_addr[rq_wp] <= acc_addr_i;
-          rq_src[rq_wp]  <= acc_src_id_i;
-          rq_wp <= rq_wp + 2'd1;
-        end
-        if (pop) rq_rp <= rq_rp + 2'd1;
+      // ---- C0: accept ------------------------------------------------------
+      if (acc_valid_i && acc_ready_o) begin
+        rq_en[rq_wp[RQW-1:0]]   <= acc_en_i;
+        rq_addr[rq_wp[RQW-1:0]] <= acc_addr_i;
+        rq_src[rq_wp[RQW-1:0]]  <= acc_src_id_i;
+        rq_wp <= rq_wp + (RQW+1)'(1);
       end
 
-      // ---- C4: retire an all-hit access ----------------------------------
-      begin
-        automatic logic rpsh = head_go;
-        automatic logic rpop = smp_valid_o && smp_ready_i;
-        if (rpsh && !rpop)      rs_n <= rs_n + 3'd1;
-        else if (!rpsh && rpop) rs_n <= rs_n - 3'd1;
-        if (rpsh) begin
-          rs_data[rs_wp] <= head_data_c;
-          rs_src[rs_wp]  <= rq_src[rq_rp];
-          rs_wp <= rs_wp + 2'd1;
-          // Same fault, same fix: one add of the enabled-lane popcount.
-          cache_hits_o <= cache_hits_o + 32'(en_pop_c);
+      // ---- C1: issue -------------------------------------------------------
+      c1_v <= c1_go;
+      if (c1_go) begin
+        c1_en  <= rq_en[rq_ip[RQW-1:0]];
+        c1_src <= rq_src[rq_ip[RQW-1:0]];
+        for (int unsigned k = 0; k < LANES; k++) begin
+          c1_tag[k] <= i_tag[k];
+          c1_idx[k] <= i_idx[k];
         end
-        if (rpop) rs_rp <= rs_rp + 2'd1;
+        rq_ip <= rq_ip + (RQW+1)'(1);
       end
 
-      // ---- the miss engine -----------------------------------------------
-      if (!fb_busy_r) begin
-        if (rq_head_v && m_any_c) begin
-          fb_busy_r <= 1'b1;
-          fb_req_r  <= 1'b1;
-          fb_tag_r  <= m_tag_c;
-          fb_idx_r  <= m_idx_c;
-          fb_mask_r <= m_mask_c;
-          fb_beat_r <= '0;
-          fills_o   <= fills_o + 32'd1;
-          // COUNT ONCE, NOT PER LANE IN A LOOP. Four non-blocking
-          // `cache_misses_o <= cache_misses_o + 1` all read the SAME old value,
-          // so only one lands: the counter reported 1 lane miss for a
-          // four-lane miss. The popcount is computed and added once.
-          //
-          // Worth fixing rather than shrugging at, because this is an EVIDENCE
-          // output. A counter that silently under-reports is exactly the kind
-          // of number that gets trusted later precisely because a tool
-          // produced it.
-          cache_misses_o <= cache_misses_o + 32'(mask_pop_c);
-          // Lanes served by this ONE fetch beyond the first -- the multicast
-          // saving, which is zero when only one lane wanted the line.
-          multicast_o <= multicast_o + 32'(mask_pop_c) - 32'd1;
-          // The lines being filled are invalid until the last beat lands.
-          for (int unsigned k = 0; k < LANES; k++)
-            if (m_mask_c[k]) valid_r[k][m_idx_c] <= 1'b0;
+      // ---- C2: CAPTURE the memory outputs into fabric flops ----------------
+      // This is the stage X7 asks for by name, and it looks like a wasted
+      // clock until you notice what it prevents: without it the compare in C3
+      // hangs directly off a memory output, which is the "M10K output launches
+      // a broad combinational path" the ruling refuses.
+      //
+      // It is also a correctness requirement, not only a timing one. `ram_*`
+      // is overwritten on EVERY clock by whatever address C1 is presenting
+      // now; holding it still for one stage is the only reason C3 sees the
+      // request it thinks it sees.
+      c2_v <= c1_v;
+      if (c1_v) begin
+        c2_en  <= c1_en;
+        c2_src <= c1_src;
+        for (int unsigned k = 0; k < LANES; k++) begin
+          c2_tag[k]  <= c1_tag[k];
+          c2_idx[k]  <= c1_idx[k];
+          c2_rtag[k] <= ram_tag[k];
+          c2_rval[k] <= ram_val[k];
+          c2_rdat[k] <= ram_dat[k];
         end
-      end else begin
+      end
+
+      // ---- C3/C4: retire an all-hit probe ----------------------------------
+      if (c3_retire) begin
+        for (int unsigned k = 0; k < LANES; k++)
+          rs_data[rs_wp[RQW-1:0]][16*k +: 16] <= c2_rdat[k];
+        rs_src[rs_wp[RQW-1:0]] <= c2_src;
+        rs_wp <= rs_wp + (RQW+1)'(1);
+        rq_rp <= rq_rp + (RQW+1)'(1);
+        // ONE add of the enabled-lane popcount, never one per lane in a loop:
+        // four nonblocking increments all read the same old value and only the
+        // last lands.
+        cache_hits_o <= cache_hits_o + 32'(en_pop_c);
+      end
+      if (smp_valid_o && smp_ready_i) rs_rp <= rs_rp + (RQW+1)'(1);
+
+      // ---- C3: a miss REWINDS the issue pointer and squashes the pipe ------
+      // Nothing is lost: a request is only removed from the FIFO when it has
+      // fully hit, so rewinding to `rq_rp` re-probes exactly the requests that
+      // had not yet retired.
+      if (c3_miss) begin
+        fb_busy_r <= 1'b1;
+        fb_req_r  <= 1'b1;
+        fb_tag_r  <= m_tag_c;
+        fb_idx_r  <= m_idx_c;
+        fb_mask_r <= m_mask_c;
+        fb_beat_r <= '0;
+        fills_o   <= fills_o + 32'd1;
+        cache_misses_o <= cache_misses_o + 32'(mask_pop_c);
+        multicast_o    <= multicast_o + 32'(mask_pop_c) - 32'd1;
+        for (int unsigned k = 0; k < LANES; k++)
+          if (m_mask_c[k]) valid_r[k][m_idx_c] <= 1'b0;
+
+        rq_ip <= rq_rp;
+        c1_v  <= 1'b0;
+        c2_v  <= 1'b0;
+        replays_o <= replays_o + 32'd1;
+      end
+
+      // ---- the fill engine, unchanged in behaviour -------------------------
+      if (fb_busy_r) begin
         if (fb_req_r && fill_ready_i) fb_req_r <= 1'b0;
         if (fill_data_valid_i) begin
           // EVERY matching lane is written by the SAME beat. This loop is the

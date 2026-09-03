@@ -201,5 +201,76 @@ int main(int argc, char** argv) {
                 (top.smp_valid_o == 1 && data_ok) ? 1 : 0);
   }
 
+  // ---- SUSTAINED ALL-HIT THROUGHPUT: one access a clock -------------------
+  //
+  // The C0..C4 rebuild put three stages between a request and its answer, and
+  // a miss now REWINDS the issue pointer and squashes what is in flight. Both
+  // are new ways to lose throughput, and no earlier case here would notice:
+  // every one of them measures whether the right bytes come back, not how
+  // often they come back.
+  //
+  // TEXTURE.TMU's II = 2 sample rate rests on this cache taking one access a
+  // clock on the hit path. So warm one line, then hammer it with the consumer
+  // always ready.
+  {
+    reset();
+    // warm the line: one access, let the fill run
+    top.acc_valid_i = 1;
+    top.acc_en_i = 0xF;
+    top.acc_addr_i[0] = 0x5000;
+    top.acc_addr_i[1] = 0x5002;
+    top.acc_addr_i[2] = 0x5004;
+    top.acc_addr_i[3] = 0x5006;
+    top.acc_src_id_i = 0x55;
+    top.eval();
+    zhao::tick(top);
+    top.acc_valid_i = 0;
+    for (int c = 0; c < 400 && !top.smp_valid_o; ++c) step(false);
+    top.smp_ready_i = 1;
+    step(false);
+
+    const uint32_t fills_warm = top.fills_o;
+    const uint32_t replays_warm = top.replays_o;
+
+    // now the same line, over and over, nothing in the way
+    const int WANT = 256;
+    int accepted = 0, answered = 0, clocks = 0;
+    for (int c = 0; c < 4000 && answered < WANT; ++c) {
+      top.acc_valid_i = (accepted < WANT);
+      top.acc_en_i = 0xF;
+      top.acc_addr_i[0] = 0x5000;
+      top.acc_addr_i[1] = 0x5002;
+      top.acc_addr_i[2] = 0x5004;
+      top.acc_addr_i[3] = 0x5006;
+      top.acc_src_id_i = 0x56;
+      top.smp_ready_i = 1;
+      top.fill_data_valid_i = 0;
+      top.fill_ready_i = 1;
+      top.eval();
+      if (top.acc_valid_i && top.acc_ready_o) ++accepted;
+      if (top.smp_valid_o && top.smp_ready_i) ++answered;
+      zhao::tick(top);
+      ++clocks;
+    }
+    top.acc_valid_i = 0;
+
+    zhao::check(answered == WANT, "every warm access was answered", WANT, answered);
+    zhao::check(top.fills_o == fills_warm,
+                "a warm line is never refetched -- 256 accesses, no new fill",
+                fills_warm, top.fills_o);
+    zhao::check(top.replays_o == replays_warm,
+                "and nothing is replayed, because nothing missed", replays_warm,
+                top.replays_o);
+    // The pipeline depth is a fixed cost paid once; after that it is one a
+    // clock. Anything near 2x would mean the rebuild bought timing by
+    // spending throughput, which is not a trade this block may make.
+    zhao::check(clocks <= WANT + 16,
+                "256 all-hit accesses complete within 256 clocks plus the "
+                "pipeline depth -- the rebuild did not cost throughput",
+                1, clocks <= WANT + 16 ? 1 : 0);
+    std::printf("  sustained: %d answered in %d clocks (%.2f each)\n", answered,
+                clocks, static_cast<double>(clocks) / answered);
+  }
+
   return zhao::report_and_exit("texture_cache_pipe_directed");
 }
