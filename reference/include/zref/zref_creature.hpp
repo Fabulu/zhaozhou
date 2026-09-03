@@ -1054,18 +1054,27 @@ extern const CreatureLightRig kCreatureLightMovingInspection;
 extern const CreatureLightRig* g_creature_light_rig;
 
 /**
- * Optional reel-inspection point source. Position and falloff radii are raw
- * Q16.16 world coordinates; RGB gains are Q16.16. A null global is the shipping
- * default and leaves compose_creatures byte-identical. Reel tooling samples one
- * world-space position per frame and points this global at that SAME descriptor
- * while composing and drawing its visible marker.
+ * Optional reel-inspection point sources. Position and falloff radii are raw
+ * Q16.16 world coordinates; RGB gains are Q16.16. The globals name a
+ * contiguous ARRAY of descriptors and its count; a zero count (the shipping
+ * default) takes the exact pre-point-light code path and leaves
+ * compose_creatures byte-identical. Reel tooling samples the world-space
+ * positions per frame and points these globals at those SAME descriptors
+ * while composing and drawing the visible markers. Each source carries its
+ * own RGB gain, and overlapping pools SUM per channel before the shade
+ * quantiser -- linear transport, so intersecting coloured pools mix.
+ * Direction 26 sized the array for the moving-light inspection's four
+ * sources; kCreatureMaxPointLights only bounds reel-side storage, the
+ * compositor walks whatever count it is handed.
  */
 struct CreaturePointLight {
   int32_t world_x, world_y, world_z;
   int32_t inner_radius, outer_radius;
   int32_t gain_r, gain_g, gain_b;
 };
-extern const CreaturePointLight* g_creature_point_light;
+constexpr uint32_t kCreatureMaxPointLights = 4;
+extern const CreaturePointLight* g_creature_point_lights;
+extern uint32_t g_creature_point_light_count;
 
 // RUN 1939/2234 texture-experiment lane. 0 = off (the shipping path,
 // bit-identical). g_cel_bands 2/3 selects constant-per-triangle FACETED cel.

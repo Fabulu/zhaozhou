@@ -527,7 +527,8 @@ const CreatureLightRig kCreatureLightMovingInspection{
     4588,   6554,  9830};   // faint blue fill: .07, .10, .15
 
 const CreatureLightRig* g_creature_light_rig = &kCreatureLightBaseline;
-const CreaturePointLight* g_creature_point_light = nullptr;
+const CreaturePointLight* g_creature_point_lights = nullptr;
+uint32_t g_creature_point_light_count = 0;
 
 namespace {
 
@@ -645,6 +646,33 @@ inline int32_t point_vertex_response(const CreaturePointLight& p, const mat3x4fx
   return static_cast<int32_t>((static_cast<int64_t>(lam) * d.attenuation + 32768) >> 16);
 }
 
+// The gain-weighted per-channel SUM of every active point source at one
+// surface sample (Q16.16). Summing before the shade quantiser is what makes
+// two intersecting coloured pools MIX instead of one overwriting the other:
+// light transport is linear, and the single clamp stays where it always was,
+// in quant_shade. Zero active sources is all-zero and reduces creature_light
+// to the exact pre-point-light arithmetic.
+struct PointShade3 {
+  int32_t r = 0, g = 0, b = 0;
+};
+
+inline void point_shade_accumulate(PointShade3& acc, const CreaturePointLight& p, int32_t lam) {
+  if (lam == 0) return;
+  acc.r += static_cast<int32_t>((static_cast<int64_t>(p.gain_r) * lam) >> 16);
+  acc.g += static_cast<int32_t>((static_cast<int64_t>(p.gain_g) * lam) >> 16);
+  acc.b += static_cast<int32_t>((static_cast<int64_t>(p.gain_b) * lam) >> 16);
+}
+
+inline PointShade3 point_vertex_shade(const CreaturePointLight* lights, uint32_t count,
+                                      const mat3x4fx* palette, const SkinVertex& v, int32_t wx,
+                                      int32_t wy, int32_t wz) {
+  PointShade3 acc;
+  for (uint32_t i = 0; i < count; ++i)
+    point_shade_accumulate(acc, lights[i],
+                           point_vertex_response(lights[i], palette, v, wx, wy, wz));
+  return acc;
+}
+
 inline int32_t point_face_response(const CreaturePointLight& p, int32_t ax, int32_t ay, int32_t az,
                                    int32_t bx, int32_t by, int32_t bz, int32_t cx, int32_t cy,
                                    int32_t cz, SatLedger* L) {
@@ -659,20 +687,18 @@ inline int32_t point_face_response(const CreaturePointLight& p, int32_t ax, int3
 }
 
 inline Shade3 creature_light(const CreatureLightRig& rig, int32_t lam_key, int32_t lam_fill,
-                             int32_t lam_point, const CreaturePointLight* point) {
+                             const PointShade3& pt, bool points_active) {
   // The disabled default deliberately takes the old helper verbatim. This is
   // the byte-identity boundary for every ordinary subject and oracle call.
-  if (point == nullptr) return creature_light(rig, lam_key, lam_fill);
-  const auto mix = [lam_key, lam_fill, lam_point](int32_t amb, int32_t key, int32_t fill,
-                                                  int32_t local) {
+  if (!points_active) return creature_light(rig, lam_key, lam_fill);
+  const auto mix = [lam_key, lam_fill](int32_t amb, int32_t key, int32_t fill, int32_t local) {
     const int64_t k = (static_cast<int64_t>(key) * lam_key) >> 16;
     const int64_t f = (static_cast<int64_t>(fill) * lam_fill) >> 16;
-    const int64_t p = (static_cast<int64_t>(local) * lam_point) >> 16;
-    return quant_shade(static_cast<int32_t>(amb + k + f + p));
+    return quant_shade(static_cast<int32_t>(amb + k + f + local));
   };
-  return Shade3{mix(rig.ambient_r, rig.key_gain, rig.fill_r, point->gain_r),
-                mix(rig.ambient_g, rig.key_gain, rig.fill_g, point->gain_g),
-                mix(rig.ambient_b, rig.key_gain, rig.fill_b, point->gain_b)};
+  return Shade3{mix(rig.ambient_r, rig.key_gain, rig.fill_r, pt.r),
+                mix(rig.ambient_g, rig.key_gain, rig.fill_g, pt.g),
+                mix(rig.ambient_b, rig.key_gain, rig.fill_b, pt.b)};
 }
 
 // the ambient floor of the dual-terrain walls (0.25 + 0.75*lambert) -- kept
@@ -733,7 +759,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                        SatLedger* L) {
   if (count == 0) return;
   const CreatureLightRig& rig = *g_creature_light_rig;
-  const CreaturePointLight* const point = g_creature_point_light;
+  const CreaturePointLight* const points = g_creature_point_lights;
+  const uint32_t point_count = points != nullptr ? g_creature_point_light_count : 0;
   // deterministic order: sort the pointers (the ABI order is caller truth;
   // the compositor must not depend on it)
   std::vector<CreatureInstance*> inst(instances, instances + count);
@@ -849,7 +876,7 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         bool in;
         int32_t wx, wy, wz;
         int32_t lam_k, lam_f;  // directional clamped Lamberts (Q16.16)
-        int32_t lam_p;         // attenuated world-space point response (Q16.16)
+        PointShade3 pshade;    // summed gain-weighted point responses (Q16.16)
         bool lit;              // vertex carries a compiled normal
         int8_t nx, ny, nz;     // the packed bind normal (diagnostic viz)
       };
@@ -876,12 +903,11 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           pvs[vi].lam_k = skin_normal_lambert(worldm.data(), sv, rig.key_x, rig.key_y, rig.key_z);
           pvs[vi].lam_f =
               skin_normal_lambert(worldm.data(), sv, rig.fill_x, rig.fill_y, rig.fill_z);
-          pvs[vi].lam_p = point != nullptr
-                              ? point_vertex_response(*point, worldm.data(), sv, pvs[vi].wx,
-                                                      pvs[vi].wy, pvs[vi].wz)
-                              : 0;
+          pvs[vi].pshade = point_vertex_shade(points, point_count, worldm.data(), sv,
+                                              pvs[vi].wx, pvs[vi].wy, pvs[vi].wz);
         } else {
-          pvs[vi].lam_k = pvs[vi].lam_f = pvs[vi].lam_p = 0;
+          pvs[vi].lam_k = pvs[vi].lam_f = 0;
+          pvs[vi].pshade = PointShade3{};
         }
       }
       for (size_t ti = 0; ti + 2 < m.idx.size(); ti += 3) {
@@ -900,10 +926,12 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
         const int32_t lam_fill =
             render::shade_flat_tri_dir(a.wx, a.wy, a.wz, b.wx, b.wy, b.wz, c.wx, c.wy, c.wz,
                                        rig.fill_x, rig.fill_y, rig.fill_z, L);
-        const int32_t lam_point = point != nullptr
-                                      ? point_face_response(*point, a.wx, a.wy, a.wz, b.wx, b.wy,
-                                                            b.wz, c.wx, c.wy, c.wz, L)
-                                      : 0;
+        PointShade3 face_pshade;
+        for (uint32_t pi = 0; pi < point_count; ++pi)
+          point_shade_accumulate(face_pshade, points[pi],
+                                 point_face_response(points[pi], a.wx, a.wy, a.wz, b.wx, b.wy,
+                                                     b.wz, c.wx, c.wy, c.wz, L));
+        const bool points_active = point_count != 0;
         render::TriMode tm;  // opaque: depth test + write
         // GOURAUD (N3): when the compiled mesh carries normals, each corner
         // gets its own Lambert — kSmoothMixNum parts the per-vertex smooth
@@ -924,15 +952,21 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
                 (static_cast<int64_t>(kSmoothMixNum) * corner[k]->lam_f +
                  static_cast<int64_t>(1024 - kSmoothMixNum) * lam_fill + 512) >>
                 10);
-            const int32_t lp = static_cast<int32_t>(
-                (static_cast<int64_t>(kSmoothMixNum) * corner[k]->lam_p +
-                 static_cast<int64_t>(1024 - kSmoothMixNum) * lam_point + 512) >>
-                10);
-            shc[k] = creature_light(rig, lk, lf, lp, point);
+            const auto blend_p = [&](int32_t corner_c, int32_t face_c) {
+              return static_cast<int32_t>(
+                  (static_cast<int64_t>(kSmoothMixNum) * corner_c +
+                   static_cast<int64_t>(1024 - kSmoothMixNum) * face_c + 512) >>
+                  10);
+            };
+            const PointShade3 lp{blend_p(corner[k]->pshade.r, face_pshade.r),
+                                 blend_p(corner[k]->pshade.g, face_pshade.g),
+                                 blend_p(corner[k]->pshade.b, face_pshade.b)};
+            shc[k] = creature_light(rig, lk, lf, lp, points_active);
           }
           tm.gouraud = true;
         } else {
-          shc[0] = shc[1] = shc[2] = creature_light(rig, lam_key, lam_fill, lam_point, point);
+          shc[0] = shc[1] = shc[2] =
+              creature_light(rig, lam_key, lam_fill, face_pshade, points_active);
         }
         // RUN 1939/2234 cel experiment (default 0: this branch never runs on
         // the shipping path and the normal render stays bit-identical). Cel
@@ -947,7 +981,8 @@ void compose_creatures(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h, con
           // fragment in raster. This is deliberately separate from faceted cel.
           tm.toon = g_smooth_toon_bands <= 2 ? &kSmoothCel2Ramp : &kSmoothCel3Ramp;
         } else if (g_cel_bands != 0 && g_debug_shade == DebugShade::kOff) {
-          const Shade3 cel = cel_quantise(creature_light(rig, lam_key, lam_fill, lam_point, point));
+          const Shade3 cel =
+              cel_quantise(creature_light(rig, lam_key, lam_fill, face_pshade, points_active));
           shc[0] = shc[1] = shc[2] = cel;
           tm.gouraud = false;
         }

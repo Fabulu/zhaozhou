@@ -7395,8 +7395,26 @@ inline zc::Clip build_attack_variant(
 // make its own): the grounded dummy stands 4.6 m out; the flyer hovers at
 // 3.2 m; the six-salto dives on a far ground mark with its spin forced.
 // EXTRACTED (RUN 1939): the reel's tracking camera needs the same plan.
+// Owner Direction 26: "single salto should be faster. Only that one." The
+// grounded-mark plan sized its flight by straight-line distance (18 keys),
+// which spends 18 keys on ONE turn where the six and nine variants spend
+// 7.3 and 8.0 keys per turn -- the lone flip read slow next to them. This
+// owner knob times the single salto's whole coil wheel (rise + the one
+// turn); at 10 keys the flip matches the fast wheels' rotation rate while
+// staying readable. It touches NOTHING shared: zixx_plan_lock_spear never
+// reads coil_keys, the target is static (zero velocity, so the intercept
+// lead is inert), and the arming/hold/release schedule, spear, apex and
+// plunge are all inherited unchanged. The fly/six/nine plans keep their
+// own flight sizing exactly.
+constexpr int kSaltoSingleCoilKeys = 10;
+
 inline zc::AttackPlan zixx_variant_plan(uint16_t slot) {
-  if (slot == kSlotAtkDummy) return zixx_plan_attack(4600, 350, 0, 0);
+  if (slot == kSlotAtkDummy) {
+    zc::AttackPlan p = zixx_plan_attack(4600, 350, 0, 0);
+    // Direction 26: the one-turn salto is faster -- ONLY this consumer.
+    p.coil_keys = static_cast<uint16_t>(kSaltoSingleCoilKeys);
+    return p;
+  }
   if (slot == kSlotAtkFly) return zixx_plan_attack(3800, 3200, 0, 0);
   if (slot == kSlotAtkNine) {
     zc::AttackPlan p = zixx_plan_attack(8500, 350, 0, 0);

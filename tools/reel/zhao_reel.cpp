@@ -2109,8 +2109,19 @@ struct CreatureReelCtx {
   uint32_t gibs_in_view = 0;
   bool force_micro = false;
   bool moving_light = false;
-  zc::CreaturePointLight moving_source{};
+  // Direction 26: the moving-light inspection carries FOUR world-space
+  // sources -- the original warm lamp plus blue, orange and green. They are
+  // one contiguous array so the compositor's point-light globals can name
+  // them directly.
+  zc::CreaturePointLight moving_sources[zc::kCreatureMaxPointLights]{};
 };
+constexpr uint32_t kZixxMovingSourceCount = 4;
+constexpr uint32_t kZixxMovingSourceWarm = 0;
+constexpr uint32_t kZixxMovingSourceBlue = 1;
+constexpr uint32_t kZixxMovingSourceOrange = 2;
+constexpr uint32_t kZixxMovingSourceGreen = 3;
+static_assert(kZixxMovingSourceCount <= zc::kCreatureMaxPointLights,
+              "moving-light sources exceed the compositor's array bound");
 
 // Four slow, continuous world-space passes: along the camera-side flank, over
 // the whole animal, back along the far flank, then over and around to the start.
@@ -2185,43 +2196,150 @@ void sample_zixx_moving_source(uint32_t frame, uint32_t frames,
   out.gain_b = kLightGainB;
 }
 
-void draw_zixx_moving_source_marker(const CreatureReelCtx& c, uint8_t* rgb,
-                                    int32_t* depth, uint32_t w, uint32_t h) {
+// ---- Direction 26: three more coloured moving sources ----------------------
+// "the render with the moving light, there should be 3 more different color
+// lights. Blue, orange, and green. They should sometimes intersect and mix
+// colors." Each source moves on its own authored millimetre path about the
+// staged signature-S; every colour, radius, gain, path extent and period below
+// is a named owner knob. The pools are deliberately TIGHTER than the warm
+// lamp's so an overlap is an event that reads as mixed colour on the animal,
+// not a permanent wash. All three paths close exactly over the clip's frame
+// count, so the loop stays clean.
+//
+// BLUE: a level counter-clockwise orbit around the whole animal, two laps.
+constexpr int32_t kBlueOrbitXMm = 2600;      // orbit half-width along the body
+constexpr int32_t kBlueOrbitZMm = 1500;      // orbit half-depth across it
+constexpr int32_t kBlueHeightMm = 950;       // constant carry height
+constexpr uint32_t kBlueOrbitTurns = 2;      // laps per clip
+constexpr int32_t kBlueInnerRadiusMm = 350;
+constexpr int32_t kBlueOuterRadiusMm = 1500;
+constexpr int32_t kBlueGainR = 11796;       // 0.18
+constexpr int32_t kBlueGainG = 26214;       // 0.40 -- lifts blue off the dark pigment
+constexpr int32_t kBlueGainB = 85197;       // 1.30
+// ORANGE: a clockwise counter-orbit, three laps, bobbing as it goes.
+constexpr int32_t kOrangeOrbitXMm = 2200;
+constexpr int32_t kOrangeOrbitZMm = 1250;
+constexpr int32_t kOrangeHeightMm = 700;
+constexpr int32_t kOrangeBobMm = 350;        // vertical bob amplitude
+constexpr uint32_t kOrangeOrbitTurns = 3;
+constexpr uint16_t kOrangePhaseA16 = 16384;  // quarter-turn start offset
+constexpr int32_t kOrangeInnerRadiusMm = 350;
+constexpr int32_t kOrangeOuterRadiusMm = 1500;
+constexpr int32_t kOrangeGainR = 98304;      // 1.50
+constexpr int32_t kOrangeGainG = 45875;      // 0.70
+constexpr int32_t kOrangeGainB = 7864;       // 0.12
+// GREEN: a low near-side longitudinal shuttle, three round trips, with a
+// small depth ellipse so the travel stays alive at the turnarounds.
+constexpr int32_t kGreenSweepMm = 1900;      // longitudinal half-travel
+constexpr int32_t kGreenSideMm = -1000;       // carried on the camera side
+constexpr int32_t kGreenSideDriftMm = 250;   // depth ellipse half-extent
+constexpr int32_t kGreenHeightMm = 480;      // low, raking the flank
+constexpr uint32_t kGreenSweepTurns = 3;
+constexpr int32_t kGreenInnerRadiusMm = 350;
+constexpr int32_t kGreenOuterRadiusMm = 1500;
+constexpr int32_t kGreenGainR = 16384;       // 0.25
+constexpr int32_t kGreenGainG = 88474;       // 1.35
+constexpr int32_t kGreenGainB = 19661;       // 0.30
+
+void sample_zixx_moving_colour_sources(uint32_t frame, uint32_t frames,
+                                       const zc::CreatureInstance& inst,
+                                       zc::CreaturePointLight* out) {
+  const int32_t staged_centre_x = inst.x - fxm(zixx::kStageCentreMm);
+  // angle16 that completes `turns` exact revolutions over the clip
+  const auto path_angle = [frame, frames](uint32_t turns, uint16_t phase) {
+    return zref::angle16{static_cast<uint16_t>(
+        (static_cast<uint64_t>(frame) * turns * 65536u) / frames + phase)};
+  };
+  const auto scaled = [](int32_t mm, int32_t trig_raw) {
+    return static_cast<int32_t>(
+        (static_cast<int64_t>(mm) * trig_raw + 32768) >> 16);
+  };
+  const auto place = [&](zc::CreaturePointLight& s, int32_t x_mm, int32_t y_mm,
+                         int32_t z_mm, int32_t inner_mm, int32_t outer_mm,
+                         int32_t gr, int32_t gg, int32_t gb) {
+    s.world_x = staged_centre_x + fxm(x_mm);
+    s.world_y = inst.y + fxm(y_mm);
+    s.world_z = inst.z + fxm(z_mm);
+    s.inner_radius = fxm(inner_mm);
+    s.outer_radius = fxm(outer_mm);
+    s.gain_r = gr;
+    s.gain_g = gg;
+    s.gain_b = gb;
+  };
+
+  const zref::angle16 ab = path_angle(kBlueOrbitTurns, 0);
+  place(out[kZixxMovingSourceBlue], scaled(kBlueOrbitXMm, zref::fx_cos(ab).raw),
+        kBlueHeightMm, scaled(kBlueOrbitZMm, zref::fx_sin(ab).raw),
+        kBlueInnerRadiusMm, kBlueOuterRadiusMm, kBlueGainR, kBlueGainG,
+        kBlueGainB);
+
+  const zref::angle16 ao = path_angle(kOrangeOrbitTurns, kOrangePhaseA16);
+  const zref::angle16 ao2 = path_angle(kOrangeOrbitTurns * 2, 0);
+  place(out[kZixxMovingSourceOrange],
+        scaled(kOrangeOrbitXMm, zref::fx_cos(ao).raw),
+        kOrangeHeightMm + scaled(kOrangeBobMm, zref::fx_sin(ao2).raw),
+        -scaled(kOrangeOrbitZMm, zref::fx_sin(ao).raw),  // reversed: clockwise
+        kOrangeInnerRadiusMm, kOrangeOuterRadiusMm, kOrangeGainR, kOrangeGainG,
+        kOrangeGainB);
+
+  const zref::angle16 ag = path_angle(kGreenSweepTurns, 0);
+  place(out[kZixxMovingSourceGreen], scaled(kGreenSweepMm, zref::fx_sin(ag).raw),
+        kGreenHeightMm, kGreenSideMm + scaled(kGreenSideDriftMm, zref::fx_cos(ag).raw),
+        kGreenInnerRadiusMm, kGreenOuterRadiusMm, kGreenGainR, kGreenGainG,
+        kGreenGainB);
+}
+
+// Per-source visible-orb tints (owner knobs): {core r,g,b, halo r,g,b}. The
+// core is the lamp itself; the halo blends toward its colour so each orb names
+// which pool it drives even when two sit close together.
+constexpr uint8_t kZixxMovingSourceMarker[kZixxMovingSourceCount][6] = {
+    {255, 232, 170, 255, 184, 92},   // warm (unchanged)
+    {190, 220, 255, 110, 160, 255},  // blue
+    {255, 220, 180, 255, 150, 60},   // orange
+    {200, 255, 190, 110, 235, 110},  // green
+};
+
+void draw_zixx_moving_source_markers(const CreatureReelCtx& c, uint8_t* rgb,
+                                     int32_t* depth, uint32_t w, uint32_t h) {
   const zref::render::Viewport viewport{0, 0, w, h};
-  const zref::render::ProjOut p = zref::render::project_vertex(
-      c.vp, viewport, zref::fx16{c.moving_source.world_x},
-      zref::fx16{c.moving_source.world_y},
-      zref::fx16{c.moving_source.world_z}, nullptr);
-  if (!p.in) return;
-  const int32_t cx = p.s.x >> 8;
-  const int32_t cy = p.s.y >> 8;
-  constexpr int32_t kHaloRadiusPx = 7;
-  constexpr int32_t kCoreRadiusSq = 4;
-  for (int32_t dy = -kHaloRadiusPx; dy <= kHaloRadiusPx; ++dy) {
-    for (int32_t dx = -kHaloRadiusPx; dx <= kHaloRadiusPx; ++dx) {
-      const int32_t d2 = dx * dx + dy * dy;
-      if (d2 > kHaloRadiusPx * kHaloRadiusPx) continue;
-      const int32_t x = cx + dx;
-      const int32_t y = cy + dy;
-      if (x < 0 || y < 0 || x >= static_cast<int32_t>(w) ||
-          y >= static_cast<int32_t>(h))
-        continue;
-      const size_t i = static_cast<size_t>(y) * w + x;
-      // Q16.16 1/w: larger is closer. The orb therefore disappears honestly
-      // behind the creature or terrain instead of becoming an unrelated HUD dot.
-      if (p.s.d < depth[i]) continue;
-      uint8_t* px = &rgb[i * 3];
-      if (d2 <= kCoreRadiusSq) {
-        px[0] = 255;
-        px[1] = 232;
-        px[2] = 170;
-        depth[i] = p.s.d;
-      } else {
-        const int32_t a = ((kHaloRadiusPx * kHaloRadiusPx - d2) * 150) /
-                          (kHaloRadiusPx * kHaloRadiusPx);
-        px[0] = static_cast<uint8_t>(px[0] + ((255 - px[0]) * a + 127) / 255);
-        px[1] = static_cast<uint8_t>(px[1] + ((184 - px[1]) * a + 127) / 255);
-        px[2] = static_cast<uint8_t>(px[2] + ((92 - px[2]) * a + 127) / 255);
+  for (uint32_t si = 0; si < kZixxMovingSourceCount; ++si) {
+    const zc::CreaturePointLight& src = c.moving_sources[si];
+    const uint8_t* tint = kZixxMovingSourceMarker[si];
+    const zref::render::ProjOut p = zref::render::project_vertex(
+        c.vp, viewport, zref::fx16{src.world_x}, zref::fx16{src.world_y},
+        zref::fx16{src.world_z}, nullptr);
+    if (!p.in) continue;
+    const int32_t cx = p.s.x >> 8;
+    const int32_t cy = p.s.y >> 8;
+    constexpr int32_t kHaloRadiusPx = 7;
+    constexpr int32_t kCoreRadiusSq = 4;
+    for (int32_t dy = -kHaloRadiusPx; dy <= kHaloRadiusPx; ++dy) {
+      for (int32_t dx = -kHaloRadiusPx; dx <= kHaloRadiusPx; ++dx) {
+        const int32_t d2 = dx * dx + dy * dy;
+        if (d2 > kHaloRadiusPx * kHaloRadiusPx) continue;
+        const int32_t x = cx + dx;
+        const int32_t y = cy + dy;
+        if (x < 0 || y < 0 || x >= static_cast<int32_t>(w) ||
+            y >= static_cast<int32_t>(h))
+          continue;
+        const size_t i = static_cast<size_t>(y) * w + x;
+        // Q16.16 1/w: larger is closer. The orb therefore disappears honestly
+        // behind the creature or terrain instead of becoming an unrelated HUD
+        // dot.
+        if (p.s.d < depth[i]) continue;
+        uint8_t* px = &rgb[i * 3];
+        if (d2 <= kCoreRadiusSq) {
+          px[0] = tint[0];
+          px[1] = tint[1];
+          px[2] = tint[2];
+          depth[i] = p.s.d;
+        } else {
+          const int32_t a = ((kHaloRadiusPx * kHaloRadiusPx - d2) * 150) /
+                            (kHaloRadiusPx * kHaloRadiusPx);
+          px[0] = static_cast<uint8_t>(px[0] + ((tint[3] - px[0]) * a + 127) / 255);
+          px[1] = static_cast<uint8_t>(px[1] + ((tint[4] - px[1]) * a + 127) / 255);
+          px[2] = static_cast<uint8_t>(px[2] + ((tint[5] - px[2]) * a + 127) / 255);
+        }
       }
     }
   }
@@ -2327,17 +2445,20 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       c.inst->lod.hold = 0;  // compose cannot refine during this diagnostic frame
     }
     const zc::CreatureLightRig* const saved_rig = zc::g_creature_light_rig;
-    const zc::CreaturePointLight* const saved_point = zc::g_creature_point_light;
+    const zc::CreaturePointLight* const saved_points = zc::g_creature_point_lights;
+    const uint32_t saved_point_count = zc::g_creature_point_light_count;
     if (c.moving_light) {
       zc::g_creature_light_rig = &zc::kCreatureLightMovingInspection;
-      zc::g_creature_point_light = &c.moving_source;
+      zc::g_creature_point_lights = c.moving_sources;
+      zc::g_creature_point_light_count = kZixxMovingSourceCount;
     }
     zc::compose_creatures(rgb, depth, w, h, c.vp, insts,
                           c.dummy != nullptr ? 2 : 1, *c.poses, nullptr);
     // Subject-scoped by construction: a moving-light render cannot tint the
     // next requested subject in this one-binary catalogue process.
     zc::g_creature_light_rig = saved_rig;
-    zc::g_creature_point_light = saved_point;
+    zc::g_creature_point_lights = saved_points;
+    zc::g_creature_point_light_count = saved_point_count;
   }
   // ---- RUN 1939 experiment post-pass (env-gated, default off). Placed
   // HERE because the hook returns early when there are no gibs -- the
@@ -2482,7 +2603,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     ++g_exp_frame;
   }
   if (c.moving_light)
-    draw_zixx_moving_source_marker(c, rgb, depth, w, h);
+    draw_zixx_moving_source_markers(c, rgb, depth, w, h);
   c.gibs_in_view = 0;
   if (c.gibs == nullptr || c.gibs->empty()) return;
 
@@ -3011,11 +3132,14 @@ int render_scene(const SceneSubject& sub) {
           dummy_inst.y = dcol.top.raw + fxm(target_desc.y_mm);
       }
       // Sample exactly once, only after terrain snap. The resulting named
-      // world-space coordinates live in cr_ctx.moving_source and are consumed
-      // unchanged by both the compositor and the depth-tested visible marker.
-      if (sub.creature_moving_light)
+      // world-space coordinates live in cr_ctx.moving_sources and are consumed
+      // unchanged by both the compositor and the depth-tested visible markers.
+      if (sub.creature_moving_light) {
         sample_zixx_moving_source(f, sub.frames, dog_inst,
-                                  cr_ctx.moving_source);
+                                  cr_ctx.moving_sources[kZixxMovingSourceWarm]);
+        sample_zixx_moving_colour_sources(f, sub.frames, dog_inst,
+                                          cr_ctx.moving_sources);
+      }
       // Detached-chunk ballistics advance at the start of subsequent frames,
       // so the exact authored breakup pose is visible for one full frame.
       if (!gibs.empty()) {
@@ -4369,9 +4493,10 @@ SceneSubject subject_zixx_moving_light() {
   s.cam_yaw = 8192;  // fixed three-quarter view; the SOURCE moves, not the eye
   s.cam_k = 280000;
   s.cam_dist = 9;
-  s.note = "FINAL INSPECTION: held signature-S under dim sunlight; one visible "
-           "world-space local source makes four slow around-and-over passes and "
-           "drives the real posed-vertex light";
+  s.note = "FINAL INSPECTION: held signature-S under dim sunlight; four visible "
+           "world-space local sources -- the warm inspection lamp plus blue, "
+           "orange and green -- move on their own authored paths, drive the real "
+           "posed-vertex light, and mix where their pools intersect";
   return s;
 }
 
