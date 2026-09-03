@@ -32,6 +32,9 @@ schema_version: 1
 # §25 mandatory counters (snake_case) plus the declared platform extensions.
 # Block `counters` must be a subset of this catalog (rule V12).
 counter_catalog:
+  - combine_fragments
+  - combine_refused
+  - combine_saturated
   # The BORING_3D_FUNDAMENTALS_AUDIT blocks (2026-09-03). Each refusal
   # counter is the one that must never be silently zero: a refused
   # triangle, material or depth is a picture that is wrong rather than a
@@ -2779,7 +2782,7 @@ blocks:
     owner_issue: ZH-025
     inputs: [shaded_candidates, tile_read, texture_samples, soft_particles]
     outputs: [tile_write, fragment_error]
-    upstream: [RASTER.TILESTORE, RASTER.EARLYZ, PART.SOFT, MEASURE.TOKENS, TEXTURE.FRAGROB]
+    upstream: [RASTER.TILESTORE, RASTER.EARLYZ, PART.SOFT, MEASURE.TOKENS, TEXTURE.FRAGROB, TEXTURE.COMBINE]
     downstream: [RASTER.RESOLVE, TEXTURE.TMU, TEXTURE.AUX, MEASURE.HISTOGRAM]
     backpressure: ready_valid
     latency: variable
@@ -2991,6 +2994,50 @@ blocks:
       palette-page invalidate per upload, never a stale-frame paint (the
       palette-ordering capture tests are the tripwire).
 
+  - id: TEXTURE.COMBINE
+    name: Material combiner
+    kind: rtl
+    subsystem: texture
+    clock_domain: gpu
+    purpose: "Fixed recipe arithmetic over the zero-to-three samples a fragment asked for, producing the single RGB and alpha RASTER.FRAGMENT blends. TEXTURE.FRAGROB explicitly refuses to own this arithmetic and islandrearchitecture5 S3.3 already budgets it as its own registered II=1 pipeline."
+    contract: design/contracts/TEXTURE.COMBINE.md
+    phase: 5
+    owner_issue: ZH-088
+    inputs: [texture_samples]
+    outputs: [combined_fragment]
+    upstream: [TEXTURE.FRAGROB]
+    downstream: [RASTER.FRAGMENT]
+    backpressure: ready_valid
+    latency: fixed:0
+    target_throughput: one fragment per clock, II=1
+    reference_model: zref::material::combine
+    tests:
+      directed: "PLANNED -- NOT WRITTEN"
+      random: "PLANNED -- NOT WRITTEN"
+    counters: [combine_fragments, combine_refused, combine_saturated]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      The other half of MATERIAL.RESOLVE, and its contract says why they are one
+      piece of work in two files: the surviving TEXJOIN returns sample 0 for EVERY
+      recipe and the three-sample terrain recipes were absent from that RTL, so
+      shipping the resolver alone makes the machine confidently fetch samples nothing
+      combines.
+      A seventh recipe encoding is REFUSED and counted, not treated as passthrough --
+      the recipes are a closed set and quietly accepting an unknown one is how a
+      content bug becomes a shipped picture nobody questions. Likewise a recipe
+      demanding more samples than sample_count supplied is refused rather than
+      silently degraded, which is exactly what TEXJOIN does today.
+      unit8 is value = raw/256, so a modulate by 255 darkens very slightly. That is
+      ratified behaviour and must not be 'fixed'. Reuses zref::unit_mul rather than
+      defining a second multiply law.
+      Island budget S3.3: 650 ALM, 500 reg, 1-4 M10K, 0-2 DSP, with the S3.4
+      tripwire reject DSP > 2.
   - id: TEXTURE.FRAGROB
     name: Fragment transaction centre
     kind: rtl
@@ -3003,7 +3050,7 @@ blocks:
     inputs: [survivor_fragment, tmu_return, aux_return]
     outputs: [tmu_request, aux_request, retired_fragment]
     upstream: [RASTER.EARLYZ, MATERIAL.RESOLVE]
-    downstream: [TEXTURE.TMU, TEXTURE.AUX, RASTER.FRAGMENT]
+    downstream: [TEXTURE.TMU, TEXTURE.AUX, RASTER.FRAGMENT, TEXTURE.COMBINE]
     backpressure: ready_valid
     latency: variable
     target_throughput: one fragment accepted per clock when the free list is non-empty

@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **104** (84 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **105** (85 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -25,9 +25,9 @@ Blocks: **104** (84 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | surface | · | · | 2 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
 | terrain | · | 2 | 9 | · | · | · | · | · | 11 |
-| texture | 1 | · | 5 | · | · | · | · | · | 6 |
+| texture | 2 | · | 5 | · | · | · | · | · | 7 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 35 | 12 | 41 | 16 | · | · | · | 6 | 104 |
+| **all** | 36 | 12 | 41 | 16 | · | · | · | 6 | 105 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -201,7 +201,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 | command_debug | 5% | 9 | 0% |
 | field | 6% | 2 | 0% |
 | geometry_mantle | 20% | 29 | 0% |
-| tile | 30% | 13 | 0% |
+| tile | 30% | 14 | 0% |
 | myriad_forge | 9% | 10 | 0% |
 | twod_post | 6% | 5 | 0% |
 | _reserve (untouchable)_ | 10% | — | — |
