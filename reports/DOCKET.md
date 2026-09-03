@@ -369,6 +369,60 @@ sitting in `reports/` where the owner said it should not stay.
 
 ---
 
+## ISLAND RECOVERY PROGRESS — 2026-09-03 evening
+
+Against D21. The owner's sequence for the session was: fix what is known
+wrong, Save the Renderer, island recovery, resource count LAST.
+
+### The gate that makes every later fit honest — DONE `3bc25633`
+The brief's §3.4 tripwires existed only as prose, which is why a cache with
+2 M10K where its predecessor had 4 was reported as a pass at 98.66 MHz.
+`design/fit_targets.yml` now carries `rules:`, the runner enforces them, and
+`tools/quartus/check_fit_rules.ps1` audits every recorded row with no Quartus
+at all. It fails 4 of 4 on today's numbers, including the one that passed.
+
+### The root cause, fixed — `97d3b637`
+`zhao_texture_cache_pipe` reported `blockMemoryBits: 128` against its
+predecessor's 8,192. Reads were correctly synchronous; the **writes** sat in
+the async-reset process, and an M10K has no reset port. Moved to a clock-only
+process; behaviour identical, 10 checks, throughput unchanged at 1.02
+clocks/access. **The fit answering this is the session's open question.**
+
+### TEX.FRAGROB, the other half of step 1 — `5f4fec80` … `a6676536`
+Built **beside** v2 per §6.1 rather than editing it, so v2 stays the
+behavioural oracle. Control state in flops on purpose; payload in banks keyed
+by sample index; every bank written and read only in a clock-only process.
+
+The differential found **three real bugs in RTL that was already lint-clean and
+committed** — allocation order vs slot order, the lost-update fault for the
+fifth time in this repository, and a single AUX pending register that dropped
+the second request and deadlocked. 280 retirements compared, 0 divergence, plus
+five directed refusal cases a differential cannot reach.
+
+`wq_overflow_o` turned out to be **structurally unreachable** (16 slots × 3
+samples = 48 against WQN 64, and 64 is the smallest power of two above 48 that
+the pointer arithmetic allows). Recorded as a proof with an assertion rather
+than left as a planned test that could never pass or fail.
+
+### A static check for the whole defect class — `9159cb73`
+`tools/quartus/check_ram_inference.py` finds the three constructs that stop an
+array becoming memory, validated against the block known to be wrong before
+being trusted. **It predicts that cache_pipe's `data_r`/`tag_r` and all eight
+of FRAGROB's banks are now clean.** The fits will settle whether it is right.
+
+### Save the Renderer — `97d3b637`, `e814b772`
+TilePipe's cursor registered, removing the `column encode -> address -> 256:1
+presence` path that makes Early-Z critical; 74 + 12 + 16 checks including the
+pixel-CRC path. And `run_shell_fit.ps1 -GpuPeriodNs` so the 105 MHz experiment
+can be run at 9.52381 ns instead of deriving an Fmax from a 10 ns placement.
+
+### Still true
+`REJECT: adding terrain/Field RTL faster than the texture fit can be closed.`
+Two terrain blocks were CONTRACTED this evening (`TERRAIN.SHADE`,
+`TERRAIN.NORMALMAP`) and neither got RTL, deliberately.
+
+---
+
 ## RECON SWEEP 2026-09-03 — five lanes over the ~85 unread documents
 
 Five agents read disjoint slices of `reports/` in full and wrote digests to
