@@ -2195,6 +2195,20 @@ verilate(test_terrain_residency_directed
 add_test(NAME terrain_residency_directed COMMAND test_terrain_residency_directed)
 set_tests_properties(terrain_residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# PART.STATE's record codec -- the particle128 layout of qformats amendment C2.
+# Twelve fields at twelve offsets, written twice (pack and unpack), taken on
+# faith by every other particle block. A round trip cannot catch a wrong
+# offset: pack and unpack can agree with each other while both disagree with
+# the spec, so the suite checks against zref AND checks field isolation.
+add_executable(test_part_record_directed particles/part_record_directed.cpp)
+target_link_libraries(test_part_record_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_record_directed
+  PREFIX Vzhao_part_record
+  TOP_MODULE zhao_part_record
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv)
+add_test(NAME part_record_directed COMMAND test_part_record_directed)
+set_tests_properties(part_record_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # TERRAIN.MIPGEN -- the page height mips of ruling T8. The property worth the
 # file is EXACTNESS: nested decimation keeps shared vertices bit-identical, and
 # an averaging mip would crack every seam between two LODs. No tolerance

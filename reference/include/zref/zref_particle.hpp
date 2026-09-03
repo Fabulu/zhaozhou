@@ -137,5 +137,92 @@ inline PolyExpand expand_polygon(bool in, int32_t sx, int32_t sy, int32_t sd, ui
   return o;
 }
 
+// ---- particle128 v1 codec (qformats §10, amendment C2 / ruling R3) --------
+//
+//   bits   0..17   position X        18..35  position Y     36..53  position Z
+//         54..64   velocity X        65..75  velocity Y     76..86  velocity Z
+//         87..96   age               97..103 species       104..109 size
+//        110..115  spin             116..119 flags         120..127 variation
+//
+// This is the ORACLE for `zhao_part_record`. Written from the spec section,
+// not from the Verilog -- a codec verified against a transcription of itself
+// proves only that two copies agree.
+inline constexpr uint32_t kParticleFormatVersion = 1;
+
+// flags
+inline constexpr uint8_t kPartStuck            = 0x1;
+inline constexpr uint8_t kPartCollidedThisTick = 0x2;
+inline constexpr uint8_t kPartBornThisTick     = 0x4;
+inline constexpr uint8_t kPartFlagReserved     = 0x8;  // zero in, preserved zero
+
+struct Particle128 {
+  int32_t pos[3];     // s18, S 9.8 m relative to the population origin
+  int32_t vel[3];     // s11, S 2.8 m/tick
+  uint16_t age;       // u10, whole 60 Hz ticks
+  uint8_t species;    // u7
+  uint8_t size;       // u6, U 2.4 relative radius multiplier
+  uint8_t spin;       // u6, U 0.6 turns
+  uint8_t flags;      // 4 bits
+  uint8_t variation;  // u8, a stateless deterministic code -- NOT PRNG state
+};
+
+inline int32_t sign_extend(uint32_t v, int bits) {
+  const uint32_t m = 1u << (bits - 1);
+  return static_cast<int32_t>((v ^ m) - m);
+}
+
+inline void particle_unpack(uint64_t lo, uint64_t hi, Particle128* p) {
+  auto fld = [&](int off, int w) -> uint32_t {
+    if (off + w <= 64) return static_cast<uint32_t>((lo >> off) & ((1ull << w) - 1));
+    if (off >= 64) return static_cast<uint32_t>((hi >> (off - 64)) & ((1ull << w) - 1));
+    const int lowbits = 64 - off;
+    const uint64_t a = (lo >> off) & ((1ull << lowbits) - 1);
+    const uint64_t b = hi & ((1ull << (w - lowbits)) - 1);
+    return static_cast<uint32_t>(a | (b << lowbits));
+  };
+  for (int i = 0; i < 3; ++i) p->pos[i] = sign_extend(fld(i * 18, 18), 18);
+  for (int i = 0; i < 3; ++i) p->vel[i] = sign_extend(fld(54 + i * 11, 11), 11);
+  p->age       = static_cast<uint16_t>(fld(87, 10));
+  p->species   = static_cast<uint8_t>(fld(97, 7));
+  p->size      = static_cast<uint8_t>(fld(104, 6));
+  p->spin      = static_cast<uint8_t>(fld(110, 6));
+  p->flags     = static_cast<uint8_t>(fld(116, 4));
+  p->variation = static_cast<uint8_t>(fld(120, 8));
+}
+
+inline void particle_pack(const Particle128& p, uint64_t* lo, uint64_t* hi) {
+  *lo = 0;
+  *hi = 0;
+  auto put = [&](int off, int w, uint32_t v) {
+    const uint64_t m = (w == 64) ? ~0ull : ((1ull << w) - 1);
+    const uint64_t val = static_cast<uint64_t>(v) & m;
+    if (off + w <= 64) { *lo |= val << off; return; }
+    if (off >= 64) { *hi |= val << (off - 64); return; }
+    const int lowbits = 64 - off;
+    *lo |= (val & ((1ull << lowbits) - 1)) << off;
+    *hi |= val >> lowbits;
+  };
+  for (int i = 0; i < 3; ++i) put(i * 18, 18, static_cast<uint32_t>(p.pos[i]));
+  for (int i = 0; i < 3; ++i) put(54 + i * 11, 11, static_cast<uint32_t>(p.vel[i]));
+  put(87, 10, p.age);
+  put(97, 7, p.species);
+  put(104, 6, p.size);
+  put(110, 6, p.spin);
+  put(116, 4, p.flags);
+  put(120, 8, p.variation);
+}
+
+// radius = base_radius_fx16 * size / 16, ONE final round-half-up.
+// One rounding, on the whole product -- not a shift of a rounded multiply.
+inline int32_t particle_radius(int32_t base_radius_fx16, uint8_t size) {
+  const int64_t prod = static_cast<int64_t>(base_radius_fx16) * size;
+  return static_cast<int32_t>((prod + 8) >> 4);
+}
+
+// angle16 = spin << 10. The stored phase wraps mod 64.
+inline uint16_t particle_angle16(uint8_t spin) {
+  return static_cast<uint16_t>((spin & 0x3Fu) << 10);
+}
+
 }  // namespace part
 }  // namespace zref
