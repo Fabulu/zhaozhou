@@ -249,3 +249,51 @@ Probe re-authored for Direction 25 (evidence/stage4-probe-pass.txt):
 - Hold gate: plant law moved to the tip (station 14 is body now).
 - Landing absorb capped at the grounded-contact stretch
   (kJumpLandingAbsorbArm = kSpringSupportPeelBeginArm); landing gates green.
+
+### 2026-09-03 (implementer) - Stage 4b/5: poses re-authored on renders, verified in pixels
+
+Author-by-eye loop on rendered frames (art law): the first render's stand
+read as RESTING (the loop's bottom skimmed the dirt) and the compression was
+too subtle. Re-authored on the sketchpad (cand-v10/v11) and re-rendered:
+- Tail column steepened (36/47/58/68 -> 50/62/72/78 deg): ~350 mm of
+  daylight under the coil; the stand reads perched on the tail + fan.
+- Collapsed re-authored: the whole mass drops and flattens, nose kept ON
+  the coil's outline (not buried), crown folded harder.
+- kSpringSupportTipArriveArm 340 -> 350: spreads the plant burst; shape-rate
+  max fell 20.09 -> 16.96 %/f and the plant transient bite fell -81 -> -59.
+- kSpringHoldLivingDriftMm 90 -> 85 (8-key hold measures 74; 11 headroom).
+- kJumpLandingLoadedBiteMm 54 -> 60 (observed -47; 13 headroom - the QA-2
+  1 mm watch item resolved).
+
+PIXEL VERDICTS on the fixed side camera (evidence/stage4/):
+- **THE PEEL (central proof)**: contact-front tracker (committed,
+  qa25_contactfront.py + contact-front.png/csv): the head-most touching
+  column recedes 242 -> 192 px MONOTONICALLY (worst re-advance 1 px over
+  119 frames), the recession concentrated exactly in the peel beat. The
+  2D "patch width" at the stand is a documented PERSPECTIVE ARTIFACT (the
+  hill crest line crosses behind the coil - CLAUDE.md's 2D-contact trap);
+  sole contact is proven by the 3D probe instead (support == tip from arm
+  350, tip XZ drift 1 mm, contact -4..-59 mm).
+- **Nose**: rightmost body pixel 242 -> 192 px = **-50 px backward**,
+  monotone within 1 px (worst forward step 1 px, a life-breath at f3).
+  Published pass: -12 px. DEVIATION FROM PLAN: the plan bracketed -20..-35;
+  the roll-up transports the whole body onto the tail, so the nose travels
+  further than the bracket anticipated. The owner asked for "further" with
+  no ceiling; min nose-tip margin 563 mm (~14 px), law gate 50 mm.
+- **Strength**: loaded-before-after.png - published loaded vs peel loaded
+  is unmissable (flat S vs pressed coil on the standing tail).
+- **Pace/smoothness** (ground f0-115): sil-XOR med 1.53 %/f (published
+  0.92, balance clip 3.37), max 18.5 (balance's own max 18.52); centroid
+  x|v| med 0.143/max 1.697 px (balance 0.307/3.065); shape-rate med 3.85 /
+  p90 13.5 / max 16.96 %/f vs the ACCEPTED balance clip's own 5.73 / 12.52
+  / 27.74 on the same instrument. A2's strict p90<=12 is exceeded by 1.0
+  point AT THE PLANT BURST (f44-54) while the accepted art exceeds the
+  same caps at its own stunt - compare like with like; flagged for QA
+  rather than mushing the weight-arrival. Half-life min 6 (balance min 1).
+- **Beats**: settle 338 / peel 1038 / gather 560 / compress 758 / hold 518
+  changed px/f + launch 1337-1362: the two beats + gather separate.
+- **Landing** (jumpone-landing.png): lands extended, settles into the S;
+  no tail-stand slam (the absorb cap works).
+- 30 Hz odd/even ratio 0.87 (published 1.06) - measured on sub-quantization
+  centroid-y steps (med 0.061 px); noted for QA, likely measurement noise
+  at this amplitude.

@@ -1,0 +1,21 @@
+window [0,493) activity threshold 3.6 %/f (35th pct)
+gap f0-f15 (15 frames)
+RUN f15-f25 (10 frames)
+gap f25-f42 (17 frames)
+RUN f42-f43 (1 frames)
+gap f43-f49 (6 frames)
+RUN f49-f54 (5 frames)
+gap f54-f69 (15 frames)
+RUN f69-f202 (133 frames)
+gap f202-f220 (18 frames)
+RUN f220-f361 (141 frames)
+gap f361-f377 (16 frames)
+RUN f377-f436 (59 frames)
+gap f436-f493 (57 frames)
+
+runs>=16f: 3  ([133, 141, 59])
+all runs: [10, 1, 5, 133, 141, 59]
+gaps: [15, 17, 6, 15, 18, 16, 57]
+
+jolts (prom>=4): 41 in 8.22s = 5.0/s at frames [15, 17, 24, 42, 49, 70, 74, 80, 88, 96, 109, 116, 122, 128, 132, 134, 137, 140, 154, 179, 223, 226, 235, 239, 249, 257, 286, 288, 290, 304, 307, 309, 312, 314, 316, 324, 333, 338, 344, 360, 378]
+min jolt gap: 2 frames

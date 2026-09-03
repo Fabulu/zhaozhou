@@ -8,7 +8,7 @@ slot  6:  96 keys / 191 presentation samples; minY  -48 mm at 36 (bones 10/11); 
 slot  7: 247 keys / 493 presentation samples; minY -131 mm at 174.5 (bones 9/10); maxY  2295 mm; saturation 0
 slot  8: 192 keys / 383 presentation samples; minY  -12 mm at 123 (bones 16/17); maxY  1368 mm; saturation 0
 slot 45:  64 keys / 127 presentation samples; minY   -7 mm at 0 (bones 16/17); maxY  1309 mm; saturation 0
-slot 10:  58 keys / 115 presentation samples; minY  -23 mm at 5 (bones 16/17); maxY  1432 mm; saturation 0
+slot 10:  58 keys / 115 presentation samples; minY  -23 mm at 5 (bones 16/17); maxY  1298 mm; saturation 0
 slot 11:  13 keys /  25 presentation samples; minY  -10 mm at 5 (bones 16/17); maxY  2412 mm; saturation 0
 slot 12:   2 keys /   3 presentation samples; minY  904 mm at 0 (bones 25/1); maxY  2152 mm; saturation 0
 slot 13:   9 keys /  17 presentation samples; minY  -30 mm at 7.5 (bones 21/20); maxY  3990 mm; saturation 0
@@ -28,11 +28,11 @@ slot 28: 120 keys / 239 presentation samples; minY  -60 mm at 31 (bones 9/10); m
 slot 30:  56 keys / 111 presentation samples; minY    1 mm at 32.5 (bones 14/15); maxY  1425 mm; saturation 0
 slot 44: 120 keys / 239 presentation samples; minY  -14 mm at 57 (bones 16/17); maxY  1331 mm; saturation 0
 slot 31:  32 keys /  63 presentation samples; minY  -11 mm at 0 (bones 4/5); maxY   403 mm; saturation 0
-slot 33: 156 keys / 311 presentation samples; minY  -81 mm at 22.5 (bones 16/17); maxY  6284 mm; saturation 0
-slot 34: 157 keys / 313 presentation samples; minY  -81 mm at 22.5 (bones 16/17); maxY  9252 mm; saturation 0
+slot 33: 156 keys / 311 presentation samples; minY  -59 mm at 23 (bones 17/18); maxY  6284 mm; saturation 0
+slot 34: 157 keys / 313 presentation samples; minY  -59 mm at 23 (bones 17/18); maxY  9252 mm; saturation 0
 slot 35: 167 keys / 333 presentation samples; minY -434 mm at 124 (bones 23/22); maxY 15036 mm; saturation 0
-slot 46: 121 keys / 241 presentation samples; minY  -81 mm at 22.5 (bones 16/17); maxY  6551 mm; saturation 0
-slot 47: 121 keys / 241 presentation samples; minY  -81 mm at 22.5 (bones 16/17); maxY  6647 mm; saturation 0
+slot 46: 121 keys / 241 presentation samples; minY  -59 mm at 23 (bones 17/18); maxY  6551 mm; saturation 0
+slot 47: 121 keys / 241 presentation samples; minY  -59 mm at 23 (bones 17/18); maxY  6647 mm; saturation 0
 slot 48: 218 keys / 435 presentation samples; minY  -82 mm at 157 (bones 23/22); maxY 27055 mm; saturation 0
 slot 32:  62 keys / 123 presentation samples; minY   -7 mm at 37 (bones 16/17); maxY  1436 mm; saturation 0
 slot 36:  72 keys / 143 presentation samples; minY 1010 mm at 3.5 (bones 21/20); maxY  3494 mm; saturation 0
@@ -68,221 +68,222 @@ TAUNT slow: 120 keys / 239 samples, neck lead 4 keys, max 60 Hz station step 20 
 FALL tumble phase: exact unwrapped turn, step 48..408 angle16, slowest at 72.5
 FALL shape-travel chord ranges: 0-14=348 (lo 78 / hi 52.5) 14-28=203 (lo 63 / hi 95) 28-42=68 (lo 48.5 / hi 140.5) 42-56=177 (lo 5.5 / hi 116) mm; regional propagation lags 30/29 ticks; max 60 Hz station step 143 mm at 103 station 56; seam half-steps 116/113 mm
 slot  2 overlap: 90 samples/pairs, worst 103/300 mm at 18 (stations 37/45)
-slot  3 overlap: 13730 samples/pairs, worst 302/370 mm at 37 (stations 11/40)
+slot  3 overlap: 14027 samples/pairs, worst 295/370 mm at 22 (stations 23/36)
 slot  5 overlap: 341 samples/pairs, worst 279/390 mm at 1 (stations 7/17)
 slot  6 overlap: 32 samples/pairs, worst 29/265 mm at 5 (stations 23/31)
-slot 10 overlap: 11162 samples/pairs, worst 301/370 mm at 37 (stations 11/40)
-slot 11 overlap: 1292 samples/pairs, worst 302/370 mm at 2.5 (stations 10/39)
+slot 10 overlap: 11419 samples/pairs, worst 295/370 mm at 22 (stations 23/36)
+slot 11 overlap: 1345 samples/pairs, worst 282/370 mm at 2.5 (stations 16/43)
 slot 12 overlap: 96 samples/pairs, worst 163/370 mm at 0 (stations 4/55)
 slot 13 overlap: 64 samples/pairs, worst 163/370 mm at 0 (stations 4/55)
 slot 24 overlap: 152 samples/pairs, worst 67/290 mm at 3 (stations 23/31)
 slot 26 overlap: 456 samples/pairs, worst 159/400 mm at 3 (stations 12/20)
 slot 27 overlap: 215 samples/pairs, worst 109/340 mm at 9 (stations 35/43)
 slot 28 overlap: 2683 samples/pairs, worst 129/410 mm at 18.5 (stations 23/31)
-slot 33 overlap: 13099 samples/pairs, worst 302/370 mm at 37 (stations 11/40)
-slot 34 overlap: 13161 samples/pairs, worst 302/370 mm at 37 (stations 11/40)
-slot 35 overlap: 14724 samples/pairs, worst 302/370 mm at 37 (stations 11/40)
-slot 46 overlap: 14130 samples/pairs, worst 302/370 mm at 37 (stations 11/40)
-slot 47 overlap: 14122 samples/pairs, worst 302/370 mm at 37 (stations 11/40)
-slot 48 overlap: 16474 samples/pairs, worst 302/370 mm at 37 (stations 11/40)
+slot 33 overlap: 13396 samples/pairs, worst 295/370 mm at 22 (stations 23/36)
+slot 34 overlap: 13458 samples/pairs, worst 295/370 mm at 22 (stations 23/36)
+slot 35 overlap: 15021 samples/pairs, worst 295/370 mm at 22 (stations 23/36)
+slot 46 overlap: 14443 samples/pairs, worst 295/370 mm at 22 (stations 23/36)
+slot 47 overlap: 14435 samples/pairs, worst 295/370 mm at 22 (stations 23/36)
+slot 48 overlap: 16771 samples/pairs, worst 295/370 mm at 22 (stations 23/36)
 slot 36 overlap: 465 samples/pairs, worst 37/390 mm at 45.5 (stations 24/32)
 slot 29 overlap: 32 samples/pairs, worst 16/285 mm at 19 (stations 24/32)
 slot 39 overlap: 788 samples/pairs, worst 105/240 mm at 15 (stations 11/19)
 slot 41 overlap: 1010 samples/pairs, worst 119/215 mm at 45 (stations 11/19)
-OVERLAP: 118318 sample/pair hits, all checked at keys + midpoints
-SPRING full-S entry mean station travel / compression descent: head=793/-219 neck=795/-190 front=766/-229 middle=546/-39 grounded run=502/-53 taper=294/-37 tail=142/-38 mm
-SPRING real tail followers: 166 vertices, entry travel mean/max 528/796 mm
-SPRING ordered pose: entry/deep centre span 823/697 mm; head relative support dX/dY -471/-210 mm; support dX/dY 8/-49 mm; body/whole lateral span 0/15 mm (whole extrema stations 56/51)
-SPRING compressed hold: shape/station-14 drift 74/4 mm over 8 keys
+OVERLAP: 120739 sample/pair hits, all checked at keys + midpoints
+SPRING full-S entry mean station travel / compression descent: head=887/-180 neck=885/-199 front=845/-260 middle=735/-99 grounded run=716/-75 taper=366/-38 tail=150/-38 mm
+SPRING real tail followers: 166 vertices, entry travel mean/max 567/890 mm
+SPRING ordered pose: entry/deep centre span 1064/946 mm; head relative support dX/dY -459/-159 mm; support dX/dY 10/-47 mm; body/whole lateral span 0/9 mm (whole extrema stations 56/51)
+SPRING compressed hold: shape/station-14 drift 74/3 mm over 8 keys
 SPRING release: rest-shape error 0 mm, intact airborne-S error 1 mm, whole-support lift 600 mm
 SPRING rung full: radial retained min/body/head 685/685/921 per-mille; rigid followers 180, faults 0; normals len2 15954..19045 faults 0
 SPRING rung micro: radial retained min/body/head 687/687/921 per-mille; rigid followers 78, faults 0; normals len2 15955..17347 faults 0
 SPRING shared full/micro deform sources: 804 vertices, 0 metadata faults
-SPRING intersection sample full 16: 12 (23/33) [declared window] press 12.1 mm
-SPRING intersection sample full 16.5: 19 (23/33) [declared window] press 22.4 mm
-SPRING intersection sample full 17: 24 (22/33) [declared window] press 26.4 mm
-SPRING intersection sample full 17.5: 36 (20/34) [declared window] press 35.7 mm
-SPRING intersection sample full 18: 40 (20/34) [declared window] press 33.4 mm
-SPRING intersection sample full 18.5: 44 (20/35) [declared window] press 42.0 mm
+SPRING intersection sample full 15.5: 9 (24/32) [declared window] press 8.9 mm
+SPRING intersection sample full 16: 12 (23/33) [declared window] press 16.1 mm
+SPRING intersection sample full 16.5: 24 (22/33) [declared window] press 20.4 mm
+SPRING intersection sample full 17: 32 (20/34) [declared window] press 27.0 mm
+SPRING intersection sample full 17.5: 36 (20/34) [declared window] press 34.9 mm
+SPRING intersection sample full 18: 42 (20/35) [declared window] press 30.6 mm
+SPRING intersection sample full 18.5: 44 (20/35) [declared window] press 40.2 mm
 SPRING intersection sample full 19: 48 (19/36) [declared window] press 39.8 mm
-SPRING intersection sample full 19.5: 50 (19/36) [declared window] press 38.8 mm
-SPRING intersection sample full 20: 59 (19/36) [declared window] press 50.6 mm
-SPRING intersection sample full 20.5: 63 (19/37) [declared window] press 43.8 mm
-SPRING intersection sample full 21: 90 (19/37) [declared window] press 48.8 mm
-SPRING intersection sample full 21.5: 113 (19/38) [declared window] press 46.0 mm
-SPRING intersection sample full 22: 131 (18/41) [declared window] press 44.5 mm
-SPRING intersection sample full 22.5: 142 (18/41) [declared window] press 47.1 mm
-SPRING intersection sample full 23: 148 (17/42) [declared window] press 49.1 mm
-SPRING intersection sample full 23.5: 147 (17/42) [declared window] press 43.6 mm
-SPRING intersection sample full 24: 182 (9/35) [declared window] press 39.9 mm
-SPRING intersection sample full 24.5: 223 (8/34) [declared window] press 37.9 mm
-SPRING intersection sample full 25: 204 (7/33) [declared window] press 39.3 mm
-SPRING intersection sample full 25.5: 210 (6/33) [declared window] press 45.3 mm
-SPRING intersection sample full 26: 210 (6/33) [declared window] press 45.4 mm
-SPRING intersection sample full 26.5: 206 (5/32) [declared window] press 48.8 mm
-SPRING intersection sample full 27: 202 (5/32) [declared window] press 44.9 mm
-SPRING intersection sample full 27.5: 199 (5/32) [declared window] press 40.4 mm
-SPRING intersection sample full 28: 201 (5/32) [declared window] press 41.6 mm
-SPRING intersection sample full 28.5: 199 (5/32) [declared window] press 43.2 mm
-SPRING intersection sample full 29: 197 (4/32) [declared window] press 42.9 mm
-SPRING intersection sample full 29.5: 199 (4/32) [declared window] press 44.1 mm
-SPRING intersection sample full 30: 197 (4/32) [declared window] press 47.0 mm
-SPRING intersection sample full 30.5: 201 (4/32) [declared window] press 44.0 mm
-SPRING intersection sample full 31: 205 (4/32) [declared window] press 41.4 mm
-SPRING intersection sample full 31.5: 205 (4/32) [declared window] press 40.0 mm
-SPRING intersection sample full 32: 207 (4/32) [declared window] press 42.2 mm
-SPRING intersection sample full 32.5: 205 (4/32) [declared window] press 44.9 mm
-SPRING intersection sample full 33: 207 (3/32) [declared window] press 45.9 mm
-SPRING intersection sample full 33.5: 207 (3/32) [declared window] press 47.4 mm
-SPRING intersection sample full 34: 204 (3/31) [declared window] press 49.8 mm
-SPRING intersection sample full 34.5: 208 (3/31) [declared window] press 51.5 mm
-SPRING intersection sample full 35: 216 (3/32) [declared window] press 49.4 mm
-SPRING intersection sample full 35.5: 227 (3/31) [declared window] press 50.4 mm
-SPRING intersection sample full 36: 230 (3/31) [declared window] press 41.0 mm
-SPRING intersection sample full 36.5: 228 (2/31) [declared window] press 48.4 mm
-SPRING intersection sample full 37: 204 (2/31) [declared window] press 47.0 mm
-SPRING intersection sample full 37.5: 203 (2/31) [declared window] press 49.3 mm
-SPRING intersection sample full 38: 195 (2/31) [declared window] press 46.9 mm
-SPRING intersection sample full 38.5: 215 (1/31) [declared window] press 43.9 mm
-SPRING intersection sample full 39: 206 (1/31) [declared window] press 42.1 mm
-SPRING intersection sample full 39.5: 196 (1/31) [declared window] press 45.7 mm
-SPRING intersection sample full 40: 219 (0/31) [declared window] press 50.0 mm
-SPRING intersection sample full 40.5: 193 (0/31) [declared window] press 46.8 mm
-SPRING intersection sample full 41: 195 (0/31) [declared window] press 41.3 mm
-SPRING intersection sample full 41.5: 210 (0/32) [declared window] press 35.7 mm
-SPRING intersection sample full 42: 241 (0/32) [declared window] press 42.1 mm
-SPRING intersection sample full 42.5: 257 (0/32) [declared window] press 32.9 mm
-SPRING intersection sample full 43: 275 (0/33) [declared window] press 40.9 mm
-SPRING intersection sample full 43.5: 247 (0/33) [declared window] press 47.6 mm
-SPRING intersection sample full 44: 296 (0/33) [declared window] press 51.1 mm
-SPRING intersection sample full 44.5: 304 (0/34) [declared window] press 44.8 mm
-SPRING intersection sample full 45: 294 (1/35) [declared window] press 46.5 mm
-SPRING intersection sample full 45.5: 293 (1/36) [declared window] press 45.2 mm
-SPRING intersection sample full 46: 297 (1/36) [declared window] press 44.6 mm
-SPRING intersection sample full 46.5: 298 (1/37) [declared window] press 53.7 mm
-SPRING intersection sample full 47: 293 (1/37) [declared window] press 47.9 mm
-SPRING intersection sample full 47.5: 306 (1/37) [declared window] press 42.9 mm
-SPRING intersection sample full 48: 322 (0/38) [declared window] press 46.9 mm
-SPRING intersection sample full 48.5: 319 (0/38) [declared window] press 50.8 mm
-SPRING intersection sample full 49: 313 (0/38) [declared window] press 50.7 mm
-SPRING intersection sample full 49.5: 307 (0/38) [declared window] press 54.3 mm
-SPRING intersection sample full 50: 307 (0/38) [declared window] press 56.3 mm
-SPRING intersection sample full 50.5: 307 (0/38) [declared window] press 55.5 mm
-SPRING intersection sample full 51: 312 (0/38) [declared window] press 53.2 mm
-SPRING intersection sample full 51.5: 311 (0/38) [declared window] press 51.1 mm
-SPRING intersection sample full 52: 307 (0/39) [declared window] press 51.7 mm
-SPRING intersection sample full 52.5: 315 (0/39) [declared window] press 51.5 mm
-SPRING intersection sample full 53: 317 (0/39) [declared window] press 51.2 mm
-SPRING intersection sample full 53.5: 313 (0/39) [declared window] press 52.7 mm
-SPRING intersection sample full 54: 309 (0/39) [declared window] press 54.2 mm
-SPRING intersection sample full 54.5: 307 (0/39) [declared window] press 57.1 mm
-SPRING intersection sample full 55: 311 (0/39) [declared window] press 55.3 mm
-SPRING intersection sample full 55.5: 321 (0/38) [declared window] press 51.8 mm
-SPRING intersection sample full 56: 326 (0/38) [declared window] press 48.4 mm
-SPRING intersection sample full 56.5: 309 (0/38) [declared window] press 45.7 mm
-SPRING intersection sample full 57: 301 (0/38) [declared window] press 45.5 mm
-SPRING intersection sample full 57.5: 295 (0/38) [declared window] press 48.1 mm
-SPRING intersection sample full 58: 291 (0/38) [declared window] press 50.7 mm
-SPRING intersection sample full 58.5: 286 (0/35) [declared window] press 42.9 mm
-SPRING intersection sample full 59: 248 (0/32) [declared window] press 51.2 mm
-SPRING intersection sample full 59.5: 216 (2/31) [declared window] press 50.2 mm
-SPRING intersection sample full 60: 203 (4/32) [declared window] press 40.9 mm
-SPRING intersection sample full 60.5: 123 (19/38) [declared window] press 44.1 mm
-SPRING intersection sample full 61: 12 (23/33) [declared window] press 13.9 mm
-SPRING intersection sample micro 16: 5 (23/33) [declared window] press 17.2 mm
-SPRING intersection sample micro 16.5: 6 (23/33) [declared window] press 19.7 mm
-SPRING intersection sample micro 17: 10 (21/33) [declared window] press 39.7 mm
-SPRING intersection sample micro 17.5: 14 (19/33) [declared window] press 68.9 mm
-SPRING intersection sample micro 18: 22 (19/33) [declared window] press 66.9 mm
-SPRING intersection sample micro 18.5: 22 (19/35) [declared window] press 50.9 mm
+SPRING intersection sample full 19.5: 50 (19/36) [declared window] press 39.1 mm
+SPRING intersection sample full 20: 59 (19/36) [declared window] press 44.8 mm
+SPRING intersection sample full 20.5: 61 (19/37) [declared window] press 51.0 mm
+SPRING intersection sample full 21: 90 (19/37) [declared window] press 44.1 mm
+SPRING intersection sample full 21.5: 115 (19/38) [declared window] press 47.0 mm
+SPRING intersection sample full 22: 125 (19/39) [declared window] press 47.8 mm
+SPRING intersection sample full 22.5: 138 (19/40) [declared window] press 45.8 mm
+SPRING intersection sample full 23: 147 (18/41) [declared window] press 43.1 mm
+SPRING intersection sample full 23.5: 146 (18/42) [declared window] press 49.4 mm
+SPRING intersection sample full 24: 152 (18/37) [declared window] press 40.4 mm
+SPRING intersection sample full 24.5: 201 (9/34) [declared window] press 48.7 mm
+SPRING intersection sample full 25: 222 (8/33) [declared window] press 38.4 mm
+SPRING intersection sample full 25.5: 218 (6/32) [declared window] press 36.8 mm
+SPRING intersection sample full 26: 216 (6/32) [declared window] press 49.7 mm
+SPRING intersection sample full 26.5: 212 (5/32) [declared window] press 39.5 mm
+SPRING intersection sample full 27: 218 (5/31) [declared window] press 50.8 mm
+SPRING intersection sample full 27.5: 224 (5/31) [declared window] press 45.8 mm
+SPRING intersection sample full 28: 228 (5/31) [declared window] press 43.3 mm
+SPRING intersection sample full 28.5: 226 (5/31) [declared window] press 45.8 mm
+SPRING intersection sample full 29: 218 (5/31) [declared window] press 46.4 mm
+SPRING intersection sample full 29.5: 218 (5/31) [declared window] press 42.8 mm
+SPRING intersection sample full 30: 214 (5/31) [declared window] press 43.5 mm
+SPRING intersection sample full 30.5: 222 (4/31) [declared window] press 43.0 mm
+SPRING intersection sample full 31: 226 (4/31) [declared window] press 42.5 mm
+SPRING intersection sample full 31.5: 226 (4/31) [declared window] press 42.6 mm
+SPRING intersection sample full 32: 226 (4/31) [declared window] press 45.8 mm
+SPRING intersection sample full 32.5: 222 (4/31) [declared window] press 45.8 mm
+SPRING intersection sample full 33: 212 (4/31) [declared window] press 44.5 mm
+SPRING intersection sample full 33.5: 216 (4/31) [declared window] press 48.3 mm
+SPRING intersection sample full 34: 212 (4/31) [declared window] press 44.7 mm
+SPRING intersection sample full 34.5: 214 (4/31) [declared window] press 45.0 mm
+SPRING intersection sample full 35: 214 (3/31) [declared window] press 53.1 mm
+SPRING intersection sample full 35.5: 218 (3/31) [declared window] press 46.1 mm
+SPRING intersection sample full 36: 222 (3/31) [declared window] press 50.2 mm
+SPRING intersection sample full 36.5: 226 (3/31) [declared window] press 48.0 mm
+SPRING intersection sample full 37: 219 (3/30) [declared window] press 46.6 mm
+SPRING intersection sample full 37.5: 217 (3/30) [declared window] press 44.2 mm
+SPRING intersection sample full 38: 223 (2/30) [declared window] press 47.3 mm
+SPRING intersection sample full 38.5: 219 (2/30) [declared window] press 51.4 mm
+SPRING intersection sample full 39: 221 (2/30) [declared window] press 44.5 mm
+SPRING intersection sample full 39.5: 215 (2/30) [declared window] press 41.9 mm
+SPRING intersection sample full 40: 221 (1/30) [declared window] press 43.8 mm
+SPRING intersection sample full 40.5: 218 (1/30) [declared window] press 43.6 mm
+SPRING intersection sample full 41: 216 (1/31) [declared window] press 47.7 mm
+SPRING intersection sample full 41.5: 218 (0/31) [declared window] press 43.7 mm
+SPRING intersection sample full 42: 226 (0/31) [declared window] press 43.2 mm
+SPRING intersection sample full 42.5: 228 (0/31) [declared window] press 46.8 mm
+SPRING intersection sample full 43: 228 (0/32) [declared window] press 48.6 mm
+SPRING intersection sample full 43.5: 222 (0/32) [declared window] press 42.5 mm
+SPRING intersection sample full 44: 226 (0/32) [declared window] press 37.3 mm
+SPRING intersection sample full 44.5: 248 (0/33) [declared window] press 38.6 mm
+SPRING intersection sample full 45: 254 (0/33) [declared window] press 41.7 mm
+SPRING intersection sample full 45.5: 248 (0/34) [declared window] press 44.2 mm
+SPRING intersection sample full 46: 252 (0/34) [declared window] press 44.6 mm
+SPRING intersection sample full 46.5: 251 (0/34) [declared window] press 45.0 mm
+SPRING intersection sample full 47: 241 (0/35) [declared window] press 42.3 mm
+SPRING intersection sample full 47.5: 236 (0/35) [declared window] press 39.1 mm
+SPRING intersection sample full 48: 224 (0/35) [declared window] press 39.8 mm
+SPRING intersection sample full 48.5: 214 (0/35) [declared window] press 39.5 mm
+SPRING intersection sample full 49: 202 (0/36) [declared window] press 42.4 mm
+SPRING intersection sample full 49.5: 196 (0/36) [declared window] press 39.1 mm
+SPRING intersection sample full 50: 192 (0/36) [declared window] press 38.4 mm
+SPRING intersection sample full 50.5: 192 (0/36) [declared window] press 37.8 mm
+SPRING intersection sample full 51: 193 (0/36) [declared window] press 39.1 mm
+SPRING intersection sample full 51.5: 193 (0/36) [declared window] press 42.8 mm
+SPRING intersection sample full 52: 193 (0/36) [declared window] press 43.4 mm
+SPRING intersection sample full 52.5: 209 (0/36) [declared window] press 41.6 mm
+SPRING intersection sample full 53: 197 (0/36) [declared window] press 37.8 mm
+SPRING intersection sample full 53.5: 198 (0/36) [declared window] press 37.6 mm
+SPRING intersection sample full 54: 196 (0/36) [declared window] press 40.7 mm
+SPRING intersection sample full 54.5: 193 (0/37) [declared window] press 43.0 mm
+SPRING intersection sample full 55: 192 (0/37) [declared window] press 40.1 mm
+SPRING intersection sample full 55.5: 192 (0/36) [declared window] press 38.8 mm
+SPRING intersection sample full 56: 212 (0/36) [declared window] press 39.6 mm
+SPRING intersection sample full 56.5: 226 (0/37) [declared window] press 41.5 mm
+SPRING intersection sample full 57: 220 (0/36) [declared window] press 43.8 mm
+SPRING intersection sample full 57.5: 228 (0/36) [declared window] press 46.7 mm
+SPRING intersection sample full 58: 232 (0/36) [declared window] press 44.5 mm
+SPRING intersection sample full 58.5: 250 (0/34) [declared window] press 45.3 mm
+SPRING intersection sample full 59: 229 (1/31) [declared window] press 43.3 mm
+SPRING intersection sample full 59.5: 211 (3/31) [declared window] press 51.5 mm
+SPRING intersection sample full 60: 224 (4/31) [declared window] press 39.6 mm
+SPRING intersection sample full 60.5: 86 (19/38) [declared window] press 41.6 mm
+SPRING intersection sample full 61: 13 (23/33) [declared window] press 19.6 mm
+SPRING intersection sample micro 16: 5 (23/33) [declared window] press 13.4 mm
+SPRING intersection sample micro 16.5: 6 (23/33) [declared window] press 22.4 mm
+SPRING intersection sample micro 17: 10 (21/33) [declared window] press 44.9 mm
+SPRING intersection sample micro 17.5: 18 (19/33) [declared window] press 61.3 mm
+SPRING intersection sample micro 18: 20 (19/35) [declared window] press 61.5 mm
+SPRING intersection sample micro 18.5: 22 (19/35) [declared window] press 54.3 mm
 SPRING intersection sample micro 19: 22 (19/35) [declared window] press 58.9 mm
-SPRING intersection sample micro 19.5: 24 (19/35) [declared window] press 83.6 mm
-SPRING intersection sample micro 20: 26 (19/35) [declared window] press 84.9 mm
-SPRING intersection sample micro 20.5: 30 (19/35) [declared window] press 85.4 mm
-SPRING intersection sample micro 21: 46 (19/37) [declared window] press 76.9 mm
-SPRING intersection sample micro 21.5: 54 (19/37) [declared window] press 67.2 mm
-SPRING intersection sample micro 22: 68 (17/41) [declared window] press 60.9 mm
-SPRING intersection sample micro 22.5: 76 (17/41) [declared window] press 72.7 mm
-SPRING intersection sample micro 23: 67 (17/41) [declared window] press 78.1 mm
-SPRING intersection sample micro 23.5: 85 (17/37) [declared window] press 85.0 mm
-SPRING intersection sample micro 24: 88 (9/35) [declared window] press 63.7 mm
-SPRING intersection sample micro 24.5: 116 (8/33) [declared window] press 73.4 mm
-SPRING intersection sample micro 25: 116 (8/33) [declared window] press 93.9 mm
-SPRING intersection sample micro 25.5: 122 (6/33) [declared window] press 89.8 mm
-SPRING intersection sample micro 26: 117 (6/33) [declared window] press 79.5 mm
-SPRING intersection sample micro 26.5: 117 (5/31) [declared window] press 72.8 mm
-SPRING intersection sample micro 27: 115 (5/31) [declared window] press 89.0 mm
-SPRING intersection sample micro 27.5: 117 (5/31) [declared window] press 82.1 mm
-SPRING intersection sample micro 28: 120 (5/31) [declared window] press 92.1 mm
-SPRING intersection sample micro 28.5: 122 (5/31) [declared window] press 87.5 mm
-SPRING intersection sample micro 29: 123 (5/31) [declared window] press 82.7 mm
-SPRING intersection sample micro 29.5: 120 (4/31) [declared window] press 82.2 mm
-SPRING intersection sample micro 30: 121 (4/31) [declared window] press 83.5 mm
-SPRING intersection sample micro 30.5: 118 (4/31) [declared window] press 82.7 mm
-SPRING intersection sample micro 31: 120 (4/31) [declared window] press 81.8 mm
-SPRING intersection sample micro 31.5: 120 (4/31) [declared window] press 81.1 mm
-SPRING intersection sample micro 32: 120 (4/31) [declared window] press 82.1 mm
-SPRING intersection sample micro 32.5: 118 (4/31) [declared window] press 83.2 mm
-SPRING intersection sample micro 33: 118 (4/31) [declared window] press 84.5 mm
-SPRING intersection sample micro 33.5: 120 (4/31) [declared window] press 102.3 mm
-SPRING intersection sample micro 34: 120 (3/31) [declared window] press 104.6 mm
-SPRING intersection sample micro 34.5: 121 (3/31) [declared window] press 102.9 mm
-SPRING intersection sample micro 35: 139 (3/31) [declared window] press 99.2 mm
-SPRING intersection sample micro 35.5: 148 (3/31) [declared window] press 98.7 mm
-SPRING intersection sample micro 36: 148 (3/31) [declared window] press 98.9 mm
-SPRING intersection sample micro 36.5: 142 (3/31) [declared window] press 96.0 mm
-SPRING intersection sample micro 37: 130 (2/31) [declared window] press 79.9 mm
-SPRING intersection sample micro 37.5: 132 (2/31) [declared window] press 79.9 mm
-SPRING intersection sample micro 38: 124 (2/31) [declared window] press 87.1 mm
-SPRING intersection sample micro 38.5: 121 (2/31) [declared window] press 62.2 mm
-SPRING intersection sample micro 39: 126 (1/31) [declared window] press 74.9 mm
-SPRING intersection sample micro 39.5: 126 (1/31) [declared window] press 62.9 mm
-SPRING intersection sample micro 40: 136 (0/31) [declared window] press 75.0 mm
-SPRING intersection sample micro 40.5: 126 (0/31) [declared window] press 74.8 mm
-SPRING intersection sample micro 41: 134 (0/31) [declared window] press 96.9 mm
-SPRING intersection sample micro 41.5: 147 (0/31) [declared window] press 99.4 mm
-SPRING intersection sample micro 42: 162 (0/31) [declared window] press 91.8 mm
-SPRING intersection sample micro 42.5: 175 (0/31) [declared window] press 83.3 mm
-SPRING intersection sample micro 43: 181 (0/33) [declared window] press 80.4 mm
-SPRING intersection sample micro 43.5: 185 (0/33) [declared window] press 86.8 mm
-SPRING intersection sample micro 44: 199 (0/33) [declared window] press 91.1 mm
-SPRING intersection sample micro 44.5: 200 (0/33) [declared window] press 93.9 mm
-SPRING intersection sample micro 45: 198 (0/33) [declared window] press 99.6 mm
-SPRING intersection sample micro 45.5: 197 (1/35) [declared window] press 72.7 mm
-SPRING intersection sample micro 46: 199 (1/35) [declared window] press 70.8 mm
-SPRING intersection sample micro 46.5: 199 (1/35) [declared window] press 74.3 mm
-SPRING intersection sample micro 47: 211 (1/37) [declared window] press 77.8 mm
-SPRING intersection sample micro 47.5: 217 (0/37) [declared window] press 66.6 mm
-SPRING intersection sample micro 48: 231 (0/37) [declared window] press 69.9 mm
-SPRING intersection sample micro 48.5: 227 (0/37) [declared window] press 68.3 mm
-SPRING intersection sample micro 49: 210 (0/37) [declared window] press 64.4 mm
-SPRING intersection sample micro 49.5: 209 (0/37) [declared window] press 69.6 mm
-SPRING intersection sample micro 50: 209 (0/37) [declared window] press 70.4 mm
-SPRING intersection sample micro 50.5: 203 (0/37) [declared window] press 66.7 mm
-SPRING intersection sample micro 51: 210 (0/37) [declared window] press 63.9 mm
-SPRING intersection sample micro 51.5: 212 (0/37) [declared window] press 68.5 mm
-SPRING intersection sample micro 52: 208 (0/37) [declared window] press 65.6 mm
-SPRING intersection sample micro 52.5: 210 (0/37) [declared window] press 65.9 mm
-SPRING intersection sample micro 53: 214 (0/37) [declared window] press 63.6 mm
-SPRING intersection sample micro 53.5: 214 (0/37) [declared window] press 65.2 mm
-SPRING intersection sample micro 54: 214 (0/37) [declared window] press 67.5 mm
-SPRING intersection sample micro 54.5: 210 (0/37) [declared window] press 70.7 mm
-SPRING intersection sample micro 55: 218 (0/37) [declared window] press 74.0 mm
-SPRING intersection sample micro 55.5: 218 (0/37) [declared window] press 77.0 mm
-SPRING intersection sample micro 56: 218 (0/37) [declared window] press 80.0 mm
-SPRING intersection sample micro 56.5: 214 (0/37) [declared window] press 83.0 mm
-SPRING intersection sample micro 57: 220 (0/37) [declared window] press 82.4 mm
-SPRING intersection sample micro 57.5: 208 (0/37) [declared window] press 80.6 mm
-SPRING intersection sample micro 58: 210 (0/37) [declared window] press 83.1 mm
-SPRING intersection sample micro 58.5: 197 (0/35) [declared window] press 95.5 mm
-SPRING intersection sample micro 59: 162 (0/31) [declared window] press 77.0 mm
-SPRING intersection sample micro 59.5: 139 (2/31) [declared window] press 80.4 mm
-SPRING intersection sample micro 60: 126 (4/31) [declared window] press 77.3 mm
-SPRING intersection sample micro 60.5: 55 (19/37) [declared window] press 68.6 mm
-SPRING intersection sample micro 61: 5 (23/33) [declared window] press 14.9 mm
-SPRING real surface intersections full/micro: 326@56 (0/38) press 58 mm / 231@48 (0/37) press 105 mm
-SPRING terrain full/micro: -81 mm at 22.5 / -77 mm at 22.5 (declared bite 34 mm)
-SPRING travelling support: X/Y/Z error 1@16 / 0@0 / 1@21 mm, max forward step 0 mm at 0, tip XZ drift 1 mm at 26.5, min nose-tip margin 686 mm at 55.5; full surface -81@22.5..-9@28.5, micro -77@22.5..-8@0
+SPRING intersection sample micro 19.5: 24 (19/35) [declared window] press 81.5 mm
+SPRING intersection sample micro 20: 24 (19/35) [declared window] press 64.5 mm
+SPRING intersection sample micro 20.5: 28 (19/35) [declared window] press 82.0 mm
+SPRING intersection sample micro 21: 29 (19/35) [declared window] press 86.8 mm
+SPRING intersection sample micro 21.5: 50 (19/37) [declared window] press 85.6 mm
+SPRING intersection sample micro 22: 69 (19/37) [declared window] press 75.2 mm
+SPRING intersection sample micro 22.5: 69 (19/37) [declared window] press 70.7 mm
+SPRING intersection sample micro 23: 79 (17/41) [declared window] press 83.5 mm
+SPRING intersection sample micro 23.5: 70 (17/41) [declared window] press 61.1 mm
+SPRING intersection sample micro 24: 80 (17/37) [declared window] press 66.6 mm
+SPRING intersection sample micro 24.5: 101 (9/33) [declared window] press 71.6 mm
+SPRING intersection sample micro 25: 120 (8/33) [declared window] press 86.4 mm
+SPRING intersection sample micro 25.5: 121 (6/31) [declared window] press 82.2 mm
+SPRING intersection sample micro 26: 126 (6/31) [declared window] press 74.8 mm
+SPRING intersection sample micro 26.5: 124 (6/31) [declared window] press 77.3 mm
+SPRING intersection sample micro 27: 126 (5/31) [declared window] press 93.5 mm
+SPRING intersection sample micro 27.5: 130 (5/31) [declared window] press 103.0 mm
+SPRING intersection sample micro 28: 128 (5/31) [declared window] press 100.0 mm
+SPRING intersection sample micro 28.5: 128 (5/31) [declared window] press 95.8 mm
+SPRING intersection sample micro 29: 126 (5/31) [declared window] press 93.8 mm
+SPRING intersection sample micro 29.5: 126 (5/31) [declared window] press 94.2 mm
+SPRING intersection sample micro 30: 126 (5/31) [declared window] press 93.2 mm
+SPRING intersection sample micro 30.5: 126 (5/31) [declared window] press 94.7 mm
+SPRING intersection sample micro 31: 126 (5/31) [declared window] press 95.4 mm
+SPRING intersection sample micro 31.5: 126 (4/31) [declared window] press 95.6 mm
+SPRING intersection sample micro 32: 123 (4/31) [declared window] press 94.7 mm
+SPRING intersection sample micro 32.5: 125 (4/31) [declared window] press 93.8 mm
+SPRING intersection sample micro 33: 125 (4/31) [declared window] press 93.3 mm
+SPRING intersection sample micro 33.5: 125 (4/31) [declared window] press 90.6 mm
+SPRING intersection sample micro 34: 125 (4/31) [declared window] press 88.3 mm
+SPRING intersection sample micro 34.5: 129 (4/31) [declared window] press 85.0 mm
+SPRING intersection sample micro 35: 131 (3/31) [declared window] press 78.1 mm
+SPRING intersection sample micro 35.5: 137 (3/31) [declared window] press 77.6 mm
+SPRING intersection sample micro 36: 137 (3/31) [declared window] press 89.5 mm
+SPRING intersection sample micro 36.5: 134 (3/29) [declared window] press 78.1 mm
+SPRING intersection sample micro 37: 136 (3/31) [declared window] press 90.9 mm
+SPRING intersection sample micro 37.5: 136 (3/29) [declared window] press 86.9 mm
+SPRING intersection sample micro 38: 139 (2/29) [declared window] press 71.5 mm
+SPRING intersection sample micro 38.5: 136 (2/29) [declared window] press 73.3 mm
+SPRING intersection sample micro 39: 139 (2/29) [declared window] press 78.5 mm
+SPRING intersection sample micro 39.5: 133 (2/29) [declared window] press 78.2 mm
+SPRING intersection sample micro 40: 137 (1/29) [declared window] press 75.3 mm
+SPRING intersection sample micro 40.5: 147 (1/29) [declared window] press 63.8 mm
+SPRING intersection sample micro 41: 134 (1/31) [declared window] press 68.2 mm
+SPRING intersection sample micro 41.5: 136 (0/31) [declared window] press 84.5 mm
+SPRING intersection sample micro 42: 134 (0/31) [declared window] press 79.3 mm
+SPRING intersection sample micro 42.5: 134 (0/31) [declared window] press 92.3 mm
+SPRING intersection sample micro 43: 142 (0/31) [declared window] press 87.0 mm
+SPRING intersection sample micro 43.5: 148 (0/31) [declared window] press 82.8 mm
+SPRING intersection sample micro 44: 146 (0/33) [declared window] press 75.9 mm
+SPRING intersection sample micro 44.5: 160 (0/33) [declared window] press 74.7 mm
+SPRING intersection sample micro 45: 164 (0/33) [declared window] press 85.6 mm
+SPRING intersection sample micro 45.5: 158 (0/33) [declared window] press 80.8 mm
+SPRING intersection sample micro 46: 164 (0/33) [declared window] press 82.8 mm
+SPRING intersection sample micro 46.5: 159 (0/33) [declared window] press 84.1 mm
+SPRING intersection sample micro 47: 145 (0/35) [declared window] press 86.1 mm
+SPRING intersection sample micro 47.5: 139 (0/35) [declared window] press 86.8 mm
+SPRING intersection sample micro 48: 139 (0/35) [declared window] press 86.9 mm
+SPRING intersection sample micro 48.5: 129 (0/35) [declared window] press 87.0 mm
+SPRING intersection sample micro 49: 119 (0/35) [declared window] press 86.4 mm
+SPRING intersection sample micro 49.5: 115 (0/35) [declared window] press 87.7 mm
+SPRING intersection sample micro 50: 113 (0/35) [declared window] press 86.4 mm
+SPRING intersection sample micro 50.5: 113 (0/35) [declared window] press 88.4 mm
+SPRING intersection sample micro 51: 113 (0/35) [declared window] press 88.8 mm
+SPRING intersection sample micro 51.5: 113 (0/35) [declared window] press 88.9 mm
+SPRING intersection sample micro 52: 113 (0/35) [declared window] press 85.5 mm
+SPRING intersection sample micro 52.5: 117 (0/35) [declared window] press 82.4 mm
+SPRING intersection sample micro 53: 115 (0/35) [declared window] press 79.3 mm
+SPRING intersection sample micro 53.5: 121 (0/35) [declared window] press 82.6 mm
+SPRING intersection sample micro 54: 121 (0/35) [declared window] press 81.0 mm
+SPRING intersection sample micro 54.5: 119 (0/35) [declared window] press 77.2 mm
+SPRING intersection sample micro 55: 119 (0/37) [declared window] press 72.7 mm
+SPRING intersection sample micro 55.5: 121 (0/37) [declared window] press 71.7 mm
+SPRING intersection sample micro 56: 129 (0/35) [declared window] press 75.4 mm
+SPRING intersection sample micro 56.5: 135 (0/35) [declared window] press 78.4 mm
+SPRING intersection sample micro 57: 145 (0/37) [declared window] press 80.3 mm
+SPRING intersection sample micro 57.5: 153 (0/35) [declared window] press 81.7 mm
+SPRING intersection sample micro 58: 155 (0/35) [declared window] press 81.8 mm
+SPRING intersection sample micro 58.5: 163 (0/33) [declared window] press 75.7 mm
+SPRING intersection sample micro 59: 134 (1/31) [declared window] press 97.8 mm
+SPRING intersection sample micro 59.5: 143 (3/31) [declared window] press 85.9 mm
+SPRING intersection sample micro 60: 128 (4/31) [declared window] press 98.2 mm
+SPRING intersection sample micro 60.5: 44 (19/37) [declared window] press 76.0 mm
+SPRING intersection sample micro 61: 6 (23/33) [declared window] press 16.3 mm
+SPRING real surface intersections full/micro: 254@45 (0/33) press 54 mm / 164@45 (0/33) press 104 mm
+SPRING terrain full/micro: -59 mm at 23 / -57 mm at 24 (declared bite 34 mm)
+SPRING travelling support: X/Y/Z error 1@16 / 0@0 / 1@23.5 mm, max forward step 0 mm at 0, tip XZ drift 1 mm at 27, min nose-tip margin 563 mm at 54.5; full surface -59@23..-4@31, micro -57@24..-4@31
 SPRING contact sample 0: support mk 14000, full/micro -10/-8 mm
 SPRING contact sample 0.5: support mk 14000, full/micro -10/-8 mm
 SPRING contact sample 1: support mk 14000, full/micro -10/-8 mm
@@ -296,117 +297,117 @@ SPRING contact sample 4.5: support mk 14000, full/micro -11/-10 mm
 SPRING contact sample 5: support mk 14000, full/micro -11/-10 mm
 SPRING contact sample 5.5: support mk 14000, full/micro -12/-11 mm
 SPRING contact sample 6: support mk 14000, full/micro -12/-12 mm
-SPRING contact sample 6.5: support mk 14000, full/micro -13/-12 mm
+SPRING contact sample 6.5: support mk 14000, full/micro -13/-13 mm
 SPRING contact sample 7: support mk 14000, full/micro -14/-13 mm
 SPRING contact sample 7.5: support mk 14000, full/micro -14/-13 mm
 SPRING contact sample 8: support mk 14000, full/micro -15/-14 mm
-SPRING contact sample 8.5: support mk 14000, full/micro -16/-16 mm
-SPRING contact sample 9: support mk 14000, full/micro -17/-17 mm
-SPRING contact sample 9.5: support mk 14000, full/micro -19/-18 mm
-SPRING contact sample 10: support mk 14000, full/micro -20/-19 mm
-SPRING contact sample 10.5: support mk 14000, full/micro -22/-21 mm
-SPRING contact sample 11: support mk 14000, full/micro -22/-21 mm
-SPRING contact sample 11.5: support mk 14000, full/micro -21/-20 mm
-SPRING contact sample 12: support mk 14000, full/micro -20/-19 mm
-SPRING contact sample 12.5: support mk 14000, full/micro -20/-19 mm
-SPRING contact sample 13: support mk 14000, full/micro -20/-19 mm
-SPRING contact sample 13.5: support mk 14000, full/micro -20/-19 mm
-SPRING contact sample 14: support mk 14000, full/micro -19/-18 mm
-SPRING contact sample 14.5: support mk 14000, full/micro -19/-17 mm
-SPRING contact sample 15: support mk 14000, full/micro -19/-17 mm
-SPRING contact sample 15.5: support mk 14000, full/micro -18/-16 mm
-SPRING contact sample 16: support mk 14010, full/micro -18/-16 mm
-SPRING contact sample 16.5: support mk 14095, full/micro -17/-16 mm
-SPRING contact sample 17: support mk 14290, full/micro -16/-15 mm
-SPRING contact sample 17.5: support mk 14520, full/micro -16/-15 mm
-SPRING contact sample 18: support mk 14855, full/micro -15/-14 mm
-SPRING contact sample 18.5: support mk 15175, full/micro -16/-16 mm
-SPRING contact sample 19: support mk 15530, full/micro -16/-16 mm
-SPRING contact sample 19.5: support mk 15910, full/micro -17/-17 mm
-SPRING contact sample 20: support mk 16380, full/micro -16/-16 mm
-SPRING contact sample 20.5: support mk 16765, full/micro -14/-14 mm
-SPRING contact sample 21: support mk 17160, full/micro -10/-10 mm
-SPRING contact sample 21.5: support mk 17535, full/micro -32/-32 mm
-SPRING contact sample 22: support mk 17880, full/micro -63/-63 mm
-SPRING contact sample 22.5: support mk 18200, full/micro -81/-77 mm
-SPRING contact sample 23: support mk 18480, full/micro -76/-72 mm
-SPRING contact sample 23.5: support mk 18660, full/micro -57/-48 mm
-SPRING contact sample 24: support mk 18840, full/micro -38/-38 mm
-SPRING contact sample 24.5: support mk 18940, full/micro -26/-26 mm
-SPRING contact sample 25: support mk 18990, full/micro -16/-16 mm
-SPRING contact sample 25.5: support mk 19000, full/micro -14/-14 mm
-SPRING contact sample 26: support mk 19000, full/micro -13/-13 mm
-SPRING contact sample 26.5: support mk 19000, full/micro -13/-13 mm
-SPRING contact sample 27: support mk 19000, full/micro -11/-11 mm
-SPRING contact sample 27.5: support mk 19000, full/micro -10/-10 mm
-SPRING contact sample 28: support mk 19000, full/micro -10/-10 mm
-SPRING contact sample 28.5: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 29: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 29.5: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 30: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 30.5: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 31: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 31.5: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 32: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 32.5: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 33: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 33.5: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 34: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 34.5: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 35: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 35.5: support mk 19000, full/micro -10/-10 mm
-SPRING contact sample 36: support mk 19000, full/micro -10/-10 mm
-SPRING contact sample 36.5: support mk 19000, full/micro -10/-10 mm
-SPRING contact sample 37: support mk 19000, full/micro -10/-10 mm
-SPRING contact sample 37.5: support mk 19000, full/micro -11/-11 mm
-SPRING contact sample 38: support mk 19000, full/micro -12/-12 mm
-SPRING contact sample 38.5: support mk 19000, full/micro -13/-13 mm
-SPRING contact sample 39: support mk 19000, full/micro -14/-14 mm
-SPRING contact sample 39.5: support mk 19000, full/micro -16/-16 mm
-SPRING contact sample 40: support mk 19000, full/micro -17/-17 mm
-SPRING contact sample 40.5: support mk 19000, full/micro -21/-21 mm
-SPRING contact sample 41: support mk 19000, full/micro -23/-23 mm
-SPRING contact sample 41.5: support mk 19000, full/micro -25/-25 mm
-SPRING contact sample 42: support mk 19000, full/micro -28/-28 mm
-SPRING contact sample 42.5: support mk 19000, full/micro -31/-31 mm
-SPRING contact sample 43: support mk 19000, full/micro -33/-33 mm
-SPRING contact sample 43.5: support mk 19000, full/micro -35/-35 mm
-SPRING contact sample 44: support mk 19000, full/micro -38/-38 mm
-SPRING contact sample 44.5: support mk 19000, full/micro -41/-41 mm
-SPRING contact sample 45: support mk 19000, full/micro -43/-43 mm
-SPRING contact sample 45.5: support mk 19000, full/micro -44/-44 mm
-SPRING contact sample 46: support mk 19000, full/micro -45/-45 mm
-SPRING contact sample 46.5: support mk 19000, full/micro -46/-46 mm
-SPRING contact sample 47: support mk 19000, full/micro -47/-47 mm
-SPRING contact sample 47.5: support mk 19000, full/micro -47/-47 mm
-SPRING contact sample 48: support mk 19000, full/micro -47/-47 mm
-SPRING contact sample 48.5: support mk 19000, full/micro -47/-47 mm
-SPRING contact sample 49: support mk 19000, full/micro -47/-47 mm
-SPRING contact sample 49.5: support mk 19000, full/micro -47/-47 mm
-SPRING contact sample 50: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 50.5: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 51: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 51.5: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 52: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 52.5: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 53: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 53.5: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 54: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 54.5: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 55: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 55.5: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 56: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 56.5: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 57: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 57.5: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 58: support mk 19000, full/micro -48/-48 mm
-SPRING contact sample 58.5: support mk 19000, full/micro -41/-41 mm
-SPRING contact sample 59: support mk 19000, full/micro -24/-24 mm
-SPRING contact sample 59.5: support mk 19000, full/micro -13/-13 mm
-SPRING contact sample 60: support mk 19000, full/micro -9/-9 mm
-SPRING contact sample 60.5: support mk 17460, full/micro -26/-26 mm
-SPRING contact sample 61: support mk 14035, full/micro -18/-17 mm
-SPRING contact sample 61.5: support mk 14000, full/micro -21/-19 mm
+SPRING contact sample 8.5: support mk 14000, full/micro -17/-16 mm
+SPRING contact sample 9: support mk 14000, full/micro -18/-17 mm
+SPRING contact sample 9.5: support mk 14000, full/micro -20/-19 mm
+SPRING contact sample 10: support mk 14000, full/micro -22/-19 mm
+SPRING contact sample 10.5: support mk 14000, full/micro -26/-21 mm
+SPRING contact sample 11: support mk 14000, full/micro -28/-21 mm
+SPRING contact sample 11.5: support mk 14000, full/micro -29/-22 mm
+SPRING contact sample 12: support mk 14000, full/micro -30/-24 mm
+SPRING contact sample 12.5: support mk 14000, full/micro -31/-25 mm
+SPRING contact sample 13: support mk 14000, full/micro -33/-28 mm
+SPRING contact sample 13.5: support mk 14000, full/micro -34/-30 mm
+SPRING contact sample 14: support mk 14000, full/micro -33/-30 mm
+SPRING contact sample 14.5: support mk 14000, full/micro -34/-32 mm
+SPRING contact sample 15: support mk 14000, full/micro -34/-33 mm
+SPRING contact sample 15.5: support mk 14000, full/micro -33/-32 mm
+SPRING contact sample 16: support mk 14010, full/micro -33/-33 mm
+SPRING contact sample 16.5: support mk 14090, full/micro -31/-31 mm
+SPRING contact sample 17: support mk 14265, full/micro -29/-29 mm
+SPRING contact sample 17.5: support mk 14470, full/micro -28/-28 mm
+SPRING contact sample 18: support mk 14780, full/micro -24/-24 mm
+SPRING contact sample 18.5: support mk 15080, full/micro -21/-21 mm
+SPRING contact sample 19: support mk 15405, full/micro -16/-16 mm
+SPRING contact sample 19.5: support mk 15760, full/micro -15/-15 mm
+SPRING contact sample 20: support mk 16200, full/micro -18/-18 mm
+SPRING contact sample 20.5: support mk 16570, full/micro -17/-17 mm
+SPRING contact sample 21: support mk 16945, full/micro -10/-10 mm
+SPRING contact sample 21.5: support mk 17310, full/micro -6/-6 mm
+SPRING contact sample 22: support mk 17655, full/micro -25/-22 mm
+SPRING contact sample 22.5: support mk 17980, full/micro -47/-44 mm
+SPRING contact sample 23: support mk 18270, full/micro -59/-48 mm
+SPRING contact sample 23.5: support mk 18480, full/micro -52/-52 mm
+SPRING contact sample 24: support mk 18695, full/micro -57/-57 mm
+SPRING contact sample 24.5: support mk 18830, full/micro -46/-46 mm
+SPRING contact sample 25: support mk 18925, full/micro -30/-30 mm
+SPRING contact sample 25.5: support mk 18985, full/micro -15/-15 mm
+SPRING contact sample 26: support mk 19000, full/micro -11/-11 mm
+SPRING contact sample 26.5: support mk 19000, full/micro -10/-10 mm
+SPRING contact sample 27: support mk 19000, full/micro -8/-8 mm
+SPRING contact sample 27.5: support mk 19000, full/micro -7/-7 mm
+SPRING contact sample 28: support mk 19000, full/micro -6/-6 mm
+SPRING contact sample 28.5: support mk 19000, full/micro -5/-5 mm
+SPRING contact sample 29: support mk 19000, full/micro -5/-5 mm
+SPRING contact sample 29.5: support mk 19000, full/micro -5/-5 mm
+SPRING contact sample 30: support mk 19000, full/micro -5/-5 mm
+SPRING contact sample 30.5: support mk 19000, full/micro -5/-5 mm
+SPRING contact sample 31: support mk 19000, full/micro -4/-4 mm
+SPRING contact sample 31.5: support mk 19000, full/micro -4/-4 mm
+SPRING contact sample 32: support mk 19000, full/micro -5/-5 mm
+SPRING contact sample 32.5: support mk 19000, full/micro -4/-4 mm
+SPRING contact sample 33: support mk 19000, full/micro -4/-4 mm
+SPRING contact sample 33.5: support mk 19000, full/micro -4/-4 mm
+SPRING contact sample 34: support mk 19000, full/micro -4/-4 mm
+SPRING contact sample 34.5: support mk 19000, full/micro -4/-4 mm
+SPRING contact sample 35: support mk 19000, full/micro -4/-4 mm
+SPRING contact sample 35.5: support mk 19000, full/micro -5/-5 mm
+SPRING contact sample 36: support mk 19000, full/micro -6/-6 mm
+SPRING contact sample 36.5: support mk 19000, full/micro -6/-6 mm
+SPRING contact sample 37: support mk 19000, full/micro -6/-6 mm
+SPRING contact sample 37.5: support mk 19000, full/micro -7/-7 mm
+SPRING contact sample 38: support mk 19000, full/micro -8/-8 mm
+SPRING contact sample 38.5: support mk 19000, full/micro -9/-9 mm
+SPRING contact sample 39: support mk 19000, full/micro -10/-10 mm
+SPRING contact sample 39.5: support mk 19000, full/micro -12/-12 mm
+SPRING contact sample 40: support mk 19000, full/micro -13/-13 mm
+SPRING contact sample 40.5: support mk 19000, full/micro -17/-17 mm
+SPRING contact sample 41: support mk 19000, full/micro -19/-19 mm
+SPRING contact sample 41.5: support mk 19000, full/micro -21/-21 mm
+SPRING contact sample 42: support mk 19000, full/micro -24/-24 mm
+SPRING contact sample 42.5: support mk 19000, full/micro -27/-27 mm
+SPRING contact sample 43: support mk 19000, full/micro -29/-29 mm
+SPRING contact sample 43.5: support mk 19000, full/micro -31/-31 mm
+SPRING contact sample 44: support mk 19000, full/micro -34/-34 mm
+SPRING contact sample 44.5: support mk 19000, full/micro -36/-36 mm
+SPRING contact sample 45: support mk 19000, full/micro -38/-38 mm
+SPRING contact sample 45.5: support mk 19000, full/micro -39/-39 mm
+SPRING contact sample 46: support mk 19000, full/micro -40/-40 mm
+SPRING contact sample 46.5: support mk 19000, full/micro -41/-41 mm
+SPRING contact sample 47: support mk 19000, full/micro -42/-42 mm
+SPRING contact sample 47.5: support mk 19000, full/micro -42/-42 mm
+SPRING contact sample 48: support mk 19000, full/micro -42/-42 mm
+SPRING contact sample 48.5: support mk 19000, full/micro -42/-42 mm
+SPRING contact sample 49: support mk 19000, full/micro -42/-42 mm
+SPRING contact sample 49.5: support mk 19000, full/micro -42/-42 mm
+SPRING contact sample 50: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 50.5: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 51: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 51.5: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 52: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 52.5: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 53: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 53.5: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 54: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 54.5: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 55: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 55.5: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 56: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 56.5: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 57: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 57.5: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 58: support mk 19000, full/micro -43/-43 mm
+SPRING contact sample 58.5: support mk 19000, full/micro -36/-36 mm
+SPRING contact sample 59: support mk 19000, full/micro -20/-20 mm
+SPRING contact sample 59.5: support mk 19000, full/micro -9/-9 mm
+SPRING contact sample 60: support mk 19000, full/micro -5/-5 mm
+SPRING contact sample 60.5: support mk 17240, full/micro -4/-4 mm
+SPRING contact sample 61: support mk 14035, full/micro -33/-33 mm
+SPRING contact sample 61.5: support mk 14000, full/micro -25/-19 mm
 SPRING contact sample 62: support mk 14000, full/micro -10/-8 mm
 MIDPOINT provenance golden: 62 owned segments, pre-lift root span 62, landing root span 0, exact=1
 MIDPOINT provenance compression slice: 58 owned segments, all schedule-authored exact=1
@@ -423,24 +424,24 @@ MIDPOINT retimed jump short recovery: slot/count exact=1, roots=70, plan-release
 MIDPOINT retimed jump long recovery: slot/count exact=1, roots=94, plan-release poses=62, default entry poses present exact=1
 MIDPOINT retimed compress-48 attack: slot/count exact=1, roots=60, plan-release poses=4, default entry poses absent exact=1
 RETIMED synthetic bank compile: 1 (accepted)
-RETIMED release attack-0: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 3379 mm at 58
-RETIMED release jump-0: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 3395 mm at 58
-RETIMED release attack-2: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 1829 mm at 60
-RETIMED release attack-3: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 2654 mm at 60
-RETIMED release jump-2: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 1852 mm at 60
-RETIMED release jump-3: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 2654 mm at 60
-RETIMED attack hold+1 12/7/4: exact=1, travelling support X/Z error 0/1 mm, target error 1 mm, support step 536/536 mm, full/micro contact -73..-9/-72..-8 mm, station step 453 mm
-RETIMED landing hold+1: exact=1, full impact/handoff/settle -33..-32/-34..-32/-35..-10 mm, micro -32..-31/-32..-31/-33..-8 mm, max step=689 mm, settle deepest ticks=107/107
-RETIMED landing short 3+5: exact=1, full impact/handoff/settle -33..-32/-34..-10/-10..-10 mm, micro -32..-31/-33..-8/-8..-8 mm, max step=690 mm, settle deepest ticks=105.5/105.5
-RETIMED landing long 10+22: exact=1, full impact/handoff/settle -33..-32/-33..-32/-35..-10 mm, micro -32..-31/-32..-31/-33..-8 mm, max step=690 mm, settle deepest ticks=108/108
-SPRING continuous route: max per-milli heading step 261, slowest/fastest station turn across the two interior knots 9/3406 (zero would be a dead stop); compress-48 reaches 306 at key 7, compiled step 16 mm
+RETIMED release attack-0: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 3342 mm at 58
+RETIMED release jump-0: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 3356 mm at 58
+RETIMED release attack-2: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 1830 mm at 60
+RETIMED release attack-3: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 668 mm at 60
+RETIMED release jump-2: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 1851 mm at 60
+RETIMED release jump-3: motion identity=1, source+compiled grounded endpoint exact=1, compiled max step 668 mm at 60
+RETIMED attack hold+1 12/7/4: exact=1, travelling support X/Z error 1/1 mm, target error 1 mm, support step 505/505 mm, full/micro contact -56..-4/-56..-4 mm, station step 591 mm
+RETIMED landing hold+1: exact=1, full impact/handoff/settle -46..-46/-47..-45/-44..-10 mm, micro -46..-46/-46..-43/-41..-8 mm, max step=688 mm, settle deepest ticks=106.5/106.5
+RETIMED landing short 3+5: exact=1, full impact/handoff/settle -46..-46/-44..-10/-10..-10 mm, micro -46..-46/-43..-8/-8..-8 mm, max step=688 mm, settle deepest ticks=105.5/105.5
+RETIMED landing long 10+22: exact=1, full impact/handoff/settle -46..-46/-47..-46/-46..-10 mm, micro -46..-46/-47..-45/-44..-8 mm, max step=688 mm, settle deepest ticks=106/105.5
+SPRING continuous route: max per-milli heading step 282, slowest/fastest station turn across the two interior knots 12/3512 (zero would be a dead stop); compress-48 reaches 306 at key 7, compiled step 16 mm
 MIDPOINT provenance dummy attack: 62 owned segments, pre-lift root span 62, landing root span 0, exact=1
 MIDPOINT provenance flying attack: 62 owned segments, pre-lift root span 62, landing root span 0, exact=1
 MIDPOINT provenance six-salto: 62 owned segments, pre-lift root span 62, landing root span 0, exact=1
 MIDPOINT provenance one-turn jump: 82 owned segments, pre-lift root span 62, landing root span 20, exact=1
 MIDPOINT provenance multi-turn jump: 82 owned segments, pre-lift root span 62, landing root span 20, exact=1
 MIDPOINT provenance nine-salto: 62 owned segments, pre-lift root span 62, landing root span 0, exact=1
-MIDPOINT compiled compression key 4.5: quats/root/deform exact=1/1/1, generic differs quats/root/deform=16/0/1
+MIDPOINT compiled compression key 4.5: quats/root/deform exact=1/1/1, generic differs quats/root/deform=18/0/1
 CHOREO key 4.5 frame=4 sub=1: exact=1, local root zero=1, half spin zero=1, deform exact=1, world full/micro max delta=0 mm, stations=0 mm, station-14 support=0 mm
 SPRING release parity golden: integer + midpoint finless silhouette/deform exact=1
 SPRING release parity release slice: integer + midpoint finless silhouette/deform exact=1
@@ -457,29 +458,29 @@ SPRING whole pre-lift parity six-salto: 45-sample finless silhouette/deform/root
 SPRING whole pre-lift parity one-turn jump: 45-sample finless silhouette/deform/root exact=1
 SPRING whole pre-lift parity multi-turn jump: 45-sample finless silhouette/deform/root exact=1
 SPRING whole pre-lift parity nine-salto: 45-sample finless silhouette/deform/root exact=1
-JUMP slot 46: apex 4800 mm, turns 1, landing key 100; full impact -33..-32 mm (deepest 100.5, highest 100), full handoff -34..-32 mm (deepest 105, highest 102), full settle -35..-10 mm (deepest 106, highest 116); micro impact -32..-31 mm (deepest 100.5, highest 100), micro handoff -32..-31 mm (deepest 101.5, highest 102), micro settle -33..-8 mm (deepest 106, highest 116); max 60 Hz station step 893 mm at 64 station 52
-JUMP landing contact sample 0: full/micro -32/-31 mm
-JUMP landing contact sample 0.5: full/micro -33/-32 mm
-JUMP landing contact sample 1: full/micro -33/-31 mm
-JUMP landing contact sample 1.5: full/micro -33/-32 mm
-JUMP landing contact sample 2: full/micro -32/-31 mm
-JUMP landing contact sample 2.5: full/micro -32/-31 mm
-JUMP landing contact sample 3: full/micro -32/-31 mm
-JUMP landing contact sample 3.5: full/micro -32/-31 mm
-JUMP landing contact sample 4: full/micro -33/-32 mm
-JUMP landing contact sample 4.5: full/micro -33/-32 mm
-JUMP landing contact sample 5: full/micro -34/-32 mm
-JUMP landing contact sample 5.5: full/micro -34/-32 mm
-JUMP landing contact sample 6: full/micro -35/-33 mm
-JUMP landing contact sample 6.5: full/micro -34/-32 mm
-JUMP landing contact sample 7: full/micro -34/-32 mm
-JUMP landing contact sample 7.5: full/micro -33/-31 mm
-JUMP landing contact sample 8: full/micro -33/-31 mm
-JUMP landing contact sample 8.5: full/micro -33/-31 mm
-JUMP landing contact sample 9: full/micro -32/-31 mm
-JUMP landing contact sample 9.5: full/micro -31/-30 mm
+JUMP slot 46: apex 4800 mm, turns 1, landing key 100; full impact -46..-46 mm (deepest 100, highest 100), full handoff -47..-45 mm (deepest 102.5, highest 105), full settle -44..-10 mm (deepest 105.5, highest 116); micro impact -46..-46 mm (deepest 100, highest 100), micro handoff -47..-43 mm (deepest 102.5, highest 105), micro settle -41..-8 mm (deepest 105.5, highest 116); max 60 Hz station step 893 mm at 64 station 52
+JUMP landing contact sample 0: full/micro -46/-46 mm
+JUMP landing contact sample 0.5: full/micro -46/-46 mm
+JUMP landing contact sample 1: full/micro -46/-46 mm
+JUMP landing contact sample 1.5: full/micro -46/-46 mm
+JUMP landing contact sample 2: full/micro -46/-46 mm
+JUMP landing contact sample 2.5: full/micro -47/-47 mm
+JUMP landing contact sample 3: full/micro -46/-46 mm
+JUMP landing contact sample 3.5: full/micro -46/-46 mm
+JUMP landing contact sample 4: full/micro -47/-46 mm
+JUMP landing contact sample 4.5: full/micro -46/-45 mm
+JUMP landing contact sample 5: full/micro -45/-43 mm
+JUMP landing contact sample 5.5: full/micro -44/-41 mm
+JUMP landing contact sample 6: full/micro -44/-40 mm
+JUMP landing contact sample 6.5: full/micro -41/-36 mm
+JUMP landing contact sample 7: full/micro -40/-34 mm
+JUMP landing contact sample 7.5: full/micro -37/-31 mm
+JUMP landing contact sample 8: full/micro -36/-31 mm
+JUMP landing contact sample 8.5: full/micro -34/-31 mm
+JUMP landing contact sample 9: full/micro -33/-31 mm
+JUMP landing contact sample 9.5: full/micro -32/-30 mm
 JUMP landing contact sample 10: full/micro -31/-29 mm
-JUMP landing contact sample 10.5: full/micro -29/-27 mm
+JUMP landing contact sample 10.5: full/micro -28/-27 mm
 JUMP landing contact sample 11: full/micro -26/-25 mm
 JUMP landing contact sample 11.5: full/micro -25/-23 mm
 JUMP landing contact sample 12: full/micro -24/-22 mm
@@ -499,11 +500,11 @@ JUMP landing contact sample 18.5: full/micro -10/-8 mm
 JUMP landing contact sample 19: full/micro -10/-8 mm
 JUMP landing contact sample 19.5: full/micro -10/-8 mm
 JUMP landing contact sample 20: full/micro -10/-8 mm
-JUMP slot 47: apex 4800 mm, turns 3, landing key 100; full impact -33..-32 mm (deepest 100.5, highest 100), full handoff -34..-32 mm (deepest 105, highest 102), full settle -35..-10 mm (deepest 106, highest 116); micro impact -32..-31 mm (deepest 100.5, highest 100), micro handoff -32..-31 mm (deepest 101.5, highest 102), micro settle -33..-8 mm (deepest 106, highest 116); max 60 Hz station step 963 mm at 99 station 51
+JUMP slot 47: apex 4800 mm, turns 3, landing key 100; full impact -46..-46 mm (deepest 100, highest 100), full handoff -47..-45 mm (deepest 102.5, highest 105), full settle -44..-10 mm (deepest 105.5, highest 116); micro impact -46..-46 mm (deepest 100, highest 100), micro handoff -47..-43 mm (deepest 102.5, highest 105), micro settle -41..-8 mm (deepest 105.5, highest 116); max 60 Hz station step 959 mm at 99 station 51
 HIT generic front station 9: local peak 406 mm at 1; head-span 291 mm at 1; tail 831 mm at 8.5; max 60 Hz step 257 mm at 6; terrain -202 mm
 HIT sides middle station 24: local peaks R/L 128/128 mm at 1/1; root shove 229/230 mm; mirrored station error 81 mm; terrain -142/-65 mm
 HIT back rear station 41 / top middle station 24: local peaks 79/189 mm at 3.5/3; delayed head spans 120/187 mm; back surge 259 mm; terrain -166/-131 mm
 HIT air: whole-spear chord bow 181 mm at 6 station 27; max 60 Hz step 546 mm
-ATTACK slot 35: 167 keys / 333 samples, impact 124, contact committed -434 mm, outside -81 mm, max step 1182 mm at 123.5 station 3, saturation 0
-ATTACK slot 48: 218 keys / 435 samples, impact 157, contact committed -82 mm, outside -81 mm, max step 1695 mm at 156.5 station 1, saturation 0
+ATTACK slot 35: 167 keys / 333 samples, impact 124, contact committed -434 mm, outside -59 mm, max step 1182 mm at 123.5 station 3, saturation 0
+ATTACK slot 48: 218 keys / 435 samples, impact 157, contact committed -82 mm, outside -59 mm, max step 1695 mm at 156.5 station 1, saturation 0
 ZIXX PROBE: PASS — every key + midpoint, declared 3D contact, balance/taunt/fall/impact/spring/jump/limit/overlap gates

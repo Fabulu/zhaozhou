@@ -1,0 +1,26 @@
+QA region instrument -- peel-head  (139 frames, ground 0-138)
+
+RAW CHANGED PIXELS PER FRAME (no segmentation):
+  clip median 832/f   p90 2735/f   max 4437
+  byte-identical frames (vs previous): 0 -> []
+
+  centroid x |v| med   0.190  |v| max  13.698  jerk max  10.982
+  centroid y |v| med   0.072  |v| max  19.186  jerk max  10.045
+  area       |v| med   8.000  |v| max 865.000  jerk max 1254.000
+  silhouette XOR med 1.83 %/f  max 81.64 %/f
+  30Hz staircase odd/even |step| ratio (cy): 0.98
+
+HEAD vs TAIL (rightmost / leftmost body pixel), ground phase:
+  nose tip x 192..280   rearmost x 106..200
+  min gap nose-rear: 71 px
+  nose tip travel f0->f138: +38 px x, -51.0 px y
+  nose max FORWARD excursion en route: -204 px
+
+WHERE THE MOTION LIVES (cumulative silhouette XOR share by screen region):
+  ground f0-138: tail<170  34.0%  mid170-210  36.1%  head>=210  29.8%
+
+REGION CENTROID Y (down is +) across the compression:
+  tail<170     f0->f138:   +nan px
+  mid170-210   f0->f138: -53.31 px
+  head>=210    f0->f138: -57.38 px
+

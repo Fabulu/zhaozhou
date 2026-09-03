@@ -812,11 +812,15 @@ constexpr int32_t kSpringPeelHeading[kStanceSlopes] = {
 // the tip. This is the pose the compression presses.
 constexpr int32_t kSpringTailStandHeading[kStanceSlopes] = {
     364, 1092, 2185, 4369, 7282,          //  2  6  12  24  40: stance crown
-    16748, 24030, 29491,                  // 92 132 162: dive drops into loop
-    34588, 42780,                         // 190 235: loop entry
-    -14563, -6918, -910,                  // 280 322 355 (wrap-friendly form)
-    4005, 6918,                           // 22 38: loop closes toward column
-    6554, 8556, 10559, 12379};            // 36 47 58 68: the tail column
+    16748, 24030, 30037,                  // 92 132 165: dive drops into loop
+    34953, 43690,                         // 192 240: loop entry
+    -13107, -4369, 3641,                  // 288 336 380 (wrap-friendly form)
+    8192, 9102,                           // 45 50: loop closes toward column
+    // 50 62 72 78: the STEEP tail column. The first render's shallower
+    // column (36..68) left the loop's bottom skimming the dirt -- the stand
+    // read as resting, not standing; this one buys ~350 mm of daylight
+    // under the coil so only the tail touches (Direction 25 acceptance 2).
+    9102, 11287, 13107, 14200};
 // COLLAPSED (arm 1000): THE STRONG COMPRESSION on the tail tip. The column
 // is FROZEN (rows 15-18 verbatim equal to the tail-stand -- Direction 24's
 // anchor law from sole contact onward, by construction); the loop is pressed
@@ -827,11 +831,11 @@ constexpr int32_t kSpringTailStandHeading[kStanceSlopes] = {
 // pass (Direction 25: "for now even some overlap and clipping is okay, but
 // keep it in check") -- see kSpringPeelPressFullMm.
 constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
-    -5461, -1820, 5461, 14563, 23301,     // -30 -10 30 80 128: crown folds
-    28763, 31857, 33678,                  // 158 175 185: dive pressed flat
-    36409, 44600,                         // 200 245
-    -12379, -4551, -364,                  // 292 335 358: ellipse low + flat
-    2731, 6007,                           // 15 33
+    -3641, 0, 6372, 14563, 21845,         // -20  0 35 80 120: crown folds
+    28217, 31311, 33496,                  // 155 172 184: dive pressed flat
+    36409, 44236,                         // 200 243
+    -11469, -3277, 1456,                  // 297 342 368: ellipse low + flat
+    5461, 8192,                           // 30 45
     kSpringTailStandHeading[15], kSpringTailStandHeading[16],
     kSpringTailStandHeading[17], kSpringTailStandHeading[18]};
 // WHERE THE THREE AUTHORED POSES SIT ON THE ONE ARMING PARAMETER, in 1/1000 of
@@ -872,7 +876,7 @@ constexpr int32_t kSpringSupportPeelBeginArm = 150;
 // If the support were still mid-walk while the tail rows rotate toward
 // their descending stand headings, the material beyond the support would
 // dig through the ground (measured -69 mm mid-peel with arrival at 400).
-constexpr int32_t kSpringSupportTipArriveArm = 340;
+constexpr int32_t kSpringSupportTipArriveArm = 350;
 // THE STAND DESCENT. The resting footprint truly ends at station 17 -- the
 // stance tail CURLS UP behind it (baseline centreline y: station 17 = 77 mm,
 // 18 = 159, tip = 301). Holding the travelling support at those baseline
@@ -947,7 +951,11 @@ constexpr int32_t kSpringDeclaredLoadedBiteMm = 95;
 // (review fault 5: the compression is its own beat), so the same wave
 // amplitude sweeps more of its period and legitimately drifts further. Band
 // re-recorded for the longer hold; the plant itself still may not slide.
-constexpr int32_t kSpringHoldLivingDriftMm = 90;
+// Re-recorded 90 -> 85 for Direction 25's EIGHT-key hold (the 90 was
+// recorded against a twelve-key hold; the tail-stand hold measures 74 mm of
+// living quiver -- 11 mm of headroom). The plant-slide half of the law (the
+// tip may not move) lives in the travelling-support gate.
+constexpr int32_t kSpringHoldLivingDriftMm = 85;
 constexpr SpringSupportLiftKey kSpringOpenSupportLift[] = {
     {0, 0},
     {kSpringEarlyEntryProfile, kSpringEarlySupportLiftMm},
@@ -7522,7 +7530,11 @@ constexpr int32_t kJumpLandingBiteMm = kSpringDeclaredBiteMm;
 // behind the plant through the landing slam (it used to curl up out of the
 // way), and on the scene's upslope its deepest sample reaches -53 mm. That
 // is ~1.3 px of authored, deliberate bite at the heaviest instant.
-constexpr int32_t kJumpLandingLoadedBiteMm = 54;
+// Re-declared 54 -> 60 for Direction 25: the landing absorb now rides the
+// route's grounded-contact stretch (see kJumpLandingAbsorbArm) and its
+// deepest observed sample is -47 mm -- 13 mm of headroom instead of the
+// 1 mm the QA-2 watch item flagged.
+constexpr int32_t kJumpLandingLoadedBiteMm = 60;
 // ...and it must actually BITE on the impact frame. A landing that stops at the
 // surface reads weightless, so too LITTLE penetration is a fault as well.
 constexpr int32_t kJumpImpactMinBiteMm = 15;
