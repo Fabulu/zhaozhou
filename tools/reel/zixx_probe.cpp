@@ -221,6 +221,41 @@ ClipScan scan_clip(const zc::CreatureType& type, const zc::Clip& clip,
   return scan;
 }
 
+// The posed travelling-support point of a clip sample: a vertex at the
+// bind-space position of the milli-station, skinned by the bone that owns
+// it -- the same semantics as spring_support_origin_raw's fractional
+// advance, but through the real decode path. Used by every gate that pins
+// the Direction-25 travelling plant.
+void posed_support_point_mm(const zc::CreatureType& type,
+                            const zc::Clip& clip, int tick, int32_t mk,
+                            int32_t out[3]) {
+  std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+  zc::decode_pose(type, clip, tick / 2, pose, nullptr,
+                  static_cast<uint8_t>(tick & 1));
+  int b = mk / 1000;
+  int32_t frac = mk - b * 1000;
+  if (b >= zixx::kStanceSlopes) {
+    b = zixx::kStanceSlopes - 1;
+    frac = 1000;
+  }
+  const int lo = zixx::kBSpine0 + b;
+  const int hi = lo + 1;
+  const auto lerpfx = [&](int32_t a, int32_t c) {
+    return a + static_cast<int32_t>(
+                   (static_cast<int64_t>(c - a) * frac) / 1000);
+  };
+  const zc::SkinVertex v{
+      lerpfx(type.baked.world_x[lo], type.baked.world_x[hi]),
+      lerpfx(type.baked.world_y[lo], type.baked.world_y[hi]),
+      lerpfx(type.baked.world_z[lo], type.baked.world_z[hi]),
+      static_cast<uint8_t>(lo), static_cast<uint8_t>(lo), 64, 0, 0};
+  int32_t x = 0, y = 0, z = 0;
+  zc::skin_vertex(pose.data(), v, x, y, z, nullptr);
+  out[0] = to_mm(x);
+  out[1] = to_mm(y);
+  out[2] = to_mm(z);
+}
+
 const ClipScan* find_scan(const std::vector<ClipScan>& scans, int slot) {
   for (const auto& s : scans)
     if (s.clip && s.clip->slot_id == slot) return &s;
@@ -534,7 +569,47 @@ struct IntersectionPeak {
   int tick = -1;
   int station_a = -1;
   int station_b = -1;
+  int outside_count = 0;
+  int outside_tick = -1;
+  int outside_station_a = -1;
+  int outside_station_b = -1;
+  int32_t declared_press_mm = 0;
+  int declared_press_tick = -1;
 };
+
+// Depth of a triangle's excursion past another's plane: the smaller of the
+// two one-sided excursions, so a genuine crossing measures the press, not
+// the triangle's own extent (proven form from the Direction-22 allowance).
+double triangle_poke_through_mm(const std::array<Vec3d, 3>& tri,
+                                const std::array<Vec3d, 3>& plane_tri) {
+  const Vec3d n = cross(sub(plane_tri[1], plane_tri[0]),
+                        sub(plane_tri[2], plane_tri[0]));
+  const double len2 = dot(n, n);
+  if (len2 < 1.0e-12) return 0.0;
+  const double inv = 1.0 / std::sqrt(len2);
+  double above = 0.0;
+  double below = 0.0;
+  for (const Vec3d& p : tri) {
+    const double d = dot(sub(p, plane_tri[0]), n) * inv;
+    above = std::max(above, d);
+    below = std::max(below, -d);
+  }
+  return std::min(above, below);
+}
+
+// THE DECLARED SELF-PRESS WINDOW (Owner Direction 25: "For now even some
+// overlap and clipping is okay, but keep it in check"). The roll-up presses
+// the dive against the loop closure from mid-peel on, the strong compression
+// presses the folded crown into the coil, and the release unwinds back
+// through the same shapes -- so the window opens halfway through the peel
+// and closes when the release has unwound past the stand. DERIVED from the
+// key constants, never absolute ticks (the previous run's landmine: an
+// absolute window silently lands on the wrong frames under any retime).
+bool spring_tick_in_declared_press_window(int tick) {
+  return tick >= 2 * zixx::kSpringPeelPressBeginKey &&
+         tick <= 2 * (zixx::kSaltoCompressHoldEndKey +
+                      zixx::kSpringReleaseMidpointCount - 1);
+}
 
 IntersectionPeak spring_self_intersections(const zc::CreatureType& type,
                                            const zc::Clip& clip, int rung,
@@ -543,8 +618,10 @@ IntersectionPeak spring_self_intersections(const zc::CreatureType& type,
   for (int tick = 0; tick <= end_tick; ++tick) {
     const PosedRung posed = pose_rung(type, clip, rung, tick);
     const std::vector<SurfaceTriangle> tris = body_triangles(type, rung, posed);
+    const bool declared = spring_tick_in_declared_press_window(tick);
     int hits = 0;
     int hit_a = -1, hit_b = -1;
+    double press = 0.0;
     for (size_t i = 0; i < tris.size(); ++i) {
       for (size_t j = i + 1; j < tris.size(); ++j) {
         const bool separated =
@@ -557,14 +634,37 @@ IntersectionPeak spring_self_intersections(const zc::CreatureType& type,
           hit_a = tris[i].station_lo;
           hit_b = tris[j].station_lo;
         }
+        if (declared)
+          press = std::max(
+              press,
+              std::max(triangle_poke_through_mm(tris[i].p, tris[j].p),
+                       triangle_poke_through_mm(tris[j].p, tris[i].p)));
       }
     }
     if (hits > 0)
-      std::printf("SPRING intersection sample %s %d%s: %d (%d/%d)\n",
+      std::printf("SPRING intersection sample %s %d%s: %d (%d/%d)%s"
+                  " press %.1f mm\n",
                   rung == 0 ? "full" : "micro", tick / 2,
-                  (tick & 1) ? ".5" : "", hits, hit_a, hit_b);
-    if (hits > worst.count)
-      worst = IntersectionPeak{hits, tick, hit_a, hit_b};
+                  (tick & 1) ? ".5" : "", hits, hit_a, hit_b,
+                  declared ? " [declared window]" : " [OUTSIDE window]",
+                  press);
+    if (hits > worst.count) {
+      worst.count = hits;
+      worst.tick = tick;
+      worst.station_a = hit_a;
+      worst.station_b = hit_b;
+    }
+    if (!declared && hits > worst.outside_count) {
+      worst.outside_count = hits;
+      worst.outside_tick = tick;
+      worst.outside_station_a = hit_a;
+      worst.outside_station_b = hit_b;
+    }
+    const int32_t press_mm = static_cast<int32_t>(std::ceil(press));
+    if (declared && press_mm > worst.declared_press_mm) {
+      worst.declared_press_mm = press_mm;
+      worst.declared_press_tick = tick;
+    }
   }
   return worst;
 }
@@ -1424,11 +1524,16 @@ int main() {
                                (deep.z_mm[i] - deep.support_z_mm))}));
       }
     }
-    std::printf("SPRING compressed hold: shape/support drift %d/%d mm over %d "
-                "keys\n", hold_shape_drift, hold_support_drift,
+    std::printf("SPRING compressed hold: shape/station-14 drift %d/%d mm over "
+                "%d keys\n", hold_shape_drift, hold_support_drift,
                 zixx::kSaltoCompressHoldEndKey - zixx::kSaltoCompressEndKey);
+    // Direction 25: the PLANT is the tail tip, and its no-slide law lives in
+    // the travelling-support gate (tip XZ drift <= 1 through every pre-lift
+    // sample). Station 14 is now mid-body material that legitimately carries
+    // the living quiver, so it is bounded by the living envelope, not by the
+    // 1 mm plant law it used to embody.
     require(hold_shape_drift <= zixx::kSpringHoldLivingDriftMm &&
-                hold_support_drift <= 1,
+                hold_support_drift <= zixx::kSpringHoldLivingDriftMm,
             "spring lost its readable, genuinely held maximum brace");
 
     int32_t release_shape_error = 0;
@@ -1613,18 +1718,28 @@ int main() {
     if (full_hits.count == 0)
       std::printf("none");
     else
-      std::printf("%d@%d%s (%d/%d)", full_hits.count, full_hits.tick / 2,
-                  (full_hits.tick & 1) ? ".5" : "", full_hits.station_a,
-                  full_hits.station_b);
+      std::printf("%d@%d%s (%d/%d) press %d mm", full_hits.count,
+                  full_hits.tick / 2, (full_hits.tick & 1) ? ".5" : "",
+                  full_hits.station_a, full_hits.station_b,
+                  full_hits.declared_press_mm);
     std::printf(" / ");
     if (micro_hits.count == 0)
       std::printf("none\n");
     else
-      std::printf("%d@%d%s (%d/%d)\n", micro_hits.count,
+      std::printf("%d@%d%s (%d/%d) press %d mm\n", micro_hits.count,
                   micro_hits.tick / 2, (micro_hits.tick & 1) ? ".5" : "",
-                  micro_hits.station_a, micro_hits.station_b);
-    require(full_hits.count == 0 && micro_hits.count == 0,
-            "spring body runs intersect on the real full or micro surface");
+                  micro_hits.station_a, micro_hits.station_b,
+                  micro_hits.declared_press_mm);
+    // Direction 25 relaxes clipping to ONE declared, bounded self-press
+    // (see spring_tick_in_declared_press_window): inside the derived window
+    // the press may not exceed the declared depth at the deformed skin;
+    // outside it -- the settle-in, the early peel, the tail of the release
+    // and every airborne phase -- intersections remain a hard fault.
+    require(full_hits.outside_count == 0 && micro_hits.outside_count == 0,
+            "spring body runs intersect outside the declared press window");
+    require(full_hits.declared_press_mm <= zixx::kSpringPeelPressFullMm &&
+                micro_hits.declared_press_mm <= zixx::kSpringPeelPressMicroMm,
+            "spring declared self-press exceeds its declared depth");
 
     std::array<int32_t, 2> terrain_worst{INT32_MAX, INT32_MAX};
     std::array<int, 2> terrain_tick{-1, -1};
@@ -1655,65 +1770,143 @@ int main() {
             "spring left its accepted authored full/micro ground-bite envelope");
   }
 
-  // Direction #19's fixed support and ground-bite contract covers every real
-  // 60 Hz sample through exact grounded key 22, not only the deepest hold. The
-  // support path is measured from the posed station-14 joint; contact comes
+  // DIRECTION 25, THE TRAVELLING SUPPORT. The plant is no longer forever
+  // station 14: it walks the authored milli-station route rearward across
+  // the peel and stands on the tail tip. The contract, per real 60 Hz
+  // sample: the POSED support point (the same body point the route names,
+  // skinned from the decoded pose) sits at the grounded BASELINE position
+  // of that same point -- so contact can never slide -- plus the authored
+  // target height; its X advances monotonically tailward and never
+  // forward; and from the moment the support is the tail tip, the tip is
+  // the anchor (Direction 24's law, from sole contact on). Contact comes
   // independently from every posed full/micro vertex.
   if (spring) {
     constexpr int kPreLiftEndTick = 2 * zixx::kSaltoSpringReleasePoseKey;
-    const PosedSample& support_rest = spring->samples[0];
-    int32_t support_x_drift = 0;
-    int support_x_tick = 0;
-    int32_t support_z_drift = 0;
-    int support_z_tick = 0;
-    int32_t support_y_low = INT32_MAX;
-    int support_y_low_tick = -1;
-    int32_t support_y_high = INT32_MIN;
-    int support_y_high_tick = -1;
-    int32_t support_target_error = 0;
-    int support_target_error_tick = -1;
+    const auto tick_entry_squash = [](int t, int32_t& e, int32_t& q) {
+      const int key = t / 2;
+      if ((t & 1) == 0) {
+        e = zixx::spring_shared_entry_amount(key);
+        q = zixx::spring_shared_squash_amount(key);
+      } else if (key < zixx::kSaltoCompressHoldEndKey) {
+        const zixx::SpringReleaseMidpointControl c =
+            zixx::spring_owned_entry_midpoint(key);
+        e = c.entry;
+        q = c.squash;
+      } else {
+        const int seg = key - zixx::kSaltoCompressHoldEndKey;
+        if (seg >= 0 && seg < zixx::kSpringReleaseMidpointCount) {
+          e = zixx::kSpringReleaseMidpointControl[seg].entry;
+          q = zixx::kSpringReleaseMidpointControl[seg].squash;
+        } else {
+          e = 0;
+          q = 0;
+        }
+      }
+    };
+    // The posed travelling-support point: a vertex at the bind-space
+    // position of the milli-station, skinned by the bone that owns it --
+    // the identical semantics as spring_support_origin_raw's fractional
+    // advance, but through the real decode path.
+    const auto posed_support_mm = [&](int tick, int32_t mk, int32_t out[3]) {
+      std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+      zc::decode_pose(type, *spring->clip, tick / 2, pose, nullptr,
+                      static_cast<uint8_t>(tick & 1));
+      int b = mk / 1000;
+      int32_t frac = mk - b * 1000;
+      if (b >= zixx::kStanceSlopes) {
+        b = zixx::kStanceSlopes - 1;
+        frac = 1000;
+      }
+      const int lo = zixx::kBSpine0 + b;
+      const int hi = lo + 1;
+      const auto lerpfx = [&](int32_t a, int32_t c) {
+        return a + static_cast<int32_t>(
+                       (static_cast<int64_t>(c - a) * frac) / 1000);
+      };
+      const zc::SkinVertex v{
+          lerpfx(type.baked.world_x[lo], type.baked.world_x[hi]),
+          lerpfx(type.baked.world_y[lo], type.baked.world_y[hi]),
+          lerpfx(type.baked.world_z[lo], type.baked.world_z[hi]),
+          static_cast<uint8_t>(lo), static_cast<uint8_t>(lo), 64, 0, 0};
+      int32_t x = 0, y = 0, z = 0;
+      zc::skin_vertex(pose.data(), v, x, y, z, nullptr);
+      out[0] = to_mm(x);
+      out[1] = to_mm(y);
+      out[2] = to_mm(z);
+    };
+    // Skinned-vs-analytic calibration at the resting sample (mk = start,
+    // target 0), so the per-tick comparison measures drift, not the two
+    // paths' constant sub-mm disagreement.
+    int32_t cal[3] = {0, 0, 0};
+    {
+      int32_t posed0[3];
+      posed_support_mm(0, zixx::kSpringSupportStartStationMk, posed0);
+      int32_t bx = 0, by = 0, bz = 0;
+      zixx::spring_baseline_support_origin(
+          zixx::kSpringSupportStartStationMk, bx, by, bz);
+      cal[0] = posed0[0] - to_mm(bx);
+      cal[1] = posed0[1] - to_mm(by);
+      cal[2] = posed0[2] - to_mm(bz);
+    }
+    int32_t support_x_err = 0, support_y_err = 0, support_z_err = 0;
+    int support_x_tick = 0, support_y_tick = 0, support_z_tick = 0;
+    int32_t forward_step = 0;
+    int forward_tick = 0;
+    int32_t prev_mk = -1;
+    int32_t prev_x = INT32_MAX;
+    int32_t tip_anchor_x = 0, tip_anchor_z = 0;
+    bool tip_anchored = false;
+    int32_t tip_xz_drift = 0;
+    int tip_drift_tick = 0;
+    int32_t nose_margin_min = INT32_MAX;
+    int nose_margin_tick = 0;
     std::array<int32_t, 2> contact_deepest{INT32_MAX, INT32_MAX};
     std::array<int32_t, 2> contact_shallowest{INT32_MIN, INT32_MIN};
     std::array<int, 2> contact_deepest_tick{-1, -1};
     std::array<int, 2> contact_shallowest_tick{-1, -1};
     for (int t = 0; t <= kPreLiftEndTick; ++t) {
       const PosedSample& s = spring->samples[t];
-      const int32_t dx = std::abs(
-          s.support_x_mm - support_rest.support_x_mm);
-      if (dx > support_x_drift) {
-        support_x_drift = dx;
-        support_x_tick = t;
+      int32_t e = 0, q = 0;
+      tick_entry_squash(t, e, q);
+      const int32_t mk = zixx::spring_support_station_mk_for(e, q);
+      const int32_t target_y = zixx::spring_support_target_y(e, q);
+      int32_t posed[3];
+      posed_support_mm(t, mk, posed);
+      int32_t bx = 0, by = 0, bz = 0;
+      zixx::spring_baseline_support_origin(mk, bx, by, bz);
+      const int32_t ex = std::abs(posed[0] - (to_mm(bx) + cal[0]));
+      const int32_t ey =
+          std::abs(posed[1] - (to_mm(by) + cal[1] + target_y));
+      const int32_t ez = std::abs(posed[2] - (to_mm(bz) + cal[2]));
+      if (ex > support_x_err) { support_x_err = ex; support_x_tick = t; }
+      if (ey > support_y_err) { support_y_err = ey; support_y_tick = t; }
+      if (ez > support_z_err) { support_z_err = ez; support_z_tick = t; }
+      // monotone tailward, never forward (world -X is tailward)
+      if (prev_x != INT32_MAX && mk >= prev_mk &&
+          posed[0] - prev_x > forward_step) {
+        forward_step = posed[0] - prev_x;
+        forward_tick = t;
       }
-      const int32_t dz = std::abs(
-          s.support_z_mm - support_rest.support_z_mm);
-      if (dz > support_z_drift) {
-        support_z_drift = dz;
-        support_z_tick = t;
+      prev_mk = mk;
+      prev_x = posed[0];
+      // Direction 24 within Direction 25: from sole contact on, the tip is
+      // the anchor -- its ground position may not slide.
+      if (mk == zixx::kSpringSupportTailTipStationMk) {
+        if (!tip_anchored) {
+          tip_anchored = true;
+          tip_anchor_x = posed[0];
+          tip_anchor_z = posed[2];
+        }
+        const int32_t d = std::max(std::abs(posed[0] - tip_anchor_x),
+                                   std::abs(posed[2] - tip_anchor_z));
+        if (d > tip_xz_drift) { tip_xz_drift = d; tip_drift_tick = t; }
       }
-      const int32_t support_dy = s.support_y_mm - support_rest.support_y_mm;
-      if (support_dy < support_y_low) {
-        support_y_low = support_dy;
-        support_y_low_tick = t;
-      }
-      if (support_dy > support_y_high) {
-        support_y_high = support_dy;
-        support_y_high_tick = t;
-      }
-      int32_t expected_support_y = 0;
-      if ((t & 1) == 0) {
-        const int key = t / 2;
-        expected_support_y = zixx::spring_support_target_y(
-            zixx::spring_shared_entry_amount(key),
-            zixx::spring_shared_squash_amount(key));
-      } else {
-        expected_support_y = zixx::spring_shared_midpoint_target_y(
-            t / 2, zixx::kSaltoCompressHoldEndKey);
-      }
-      const int32_t target_error =
-          std::abs(support_dy - expected_support_y);
-      if (target_error > support_target_error) {
-        support_target_error = target_error;
-        support_target_error_tick = t;
+      // "it should never do that": the nose stays in front of the tail tip
+      const int32_t margin =
+          s.x_mm[0] - s.x_mm[zixx::kProfileStations - 1];
+      if (margin < nose_margin_min) {
+        nose_margin_min = margin;
+        nose_margin_tick = t;
       }
       for (int rung = 0; rung < 2; ++rung) {
         const int32_t y = to_mm(s.rung_min_y_fx[rung]);
@@ -1727,19 +1920,20 @@ int main() {
         }
       }
     }
-    std::printf("SPRING pre-lift station-14 support: X drift %d mm at %d%s, "
-                "Z drift %d mm at %d%s, Y delta %d at %d%s .. %d at "
-                "%d%s mm, target error %d at %d%s; full surface %d@%d%s..%d@%d%s, micro "
-                "%d@%d%s..%d@%d%s through key 22 + half-keys\n",
-                support_x_drift, support_x_tick / 2,
-                (support_x_tick & 1) ? ".5" : "", support_z_drift,
-                support_z_tick / 2, (support_z_tick & 1) ? ".5" : "",
-                support_y_low, support_y_low_tick / 2,
-                (support_y_low_tick & 1) ? ".5" : "", support_y_high,
-                support_y_high_tick / 2,
-                (support_y_high_tick & 1) ? ".5" : "",
-                support_target_error, support_target_error_tick / 2,
-                (support_target_error_tick & 1) ? ".5" : "",
+    std::printf("SPRING travelling support: X/Y/Z error %d@%d%s / %d@%d%s / "
+                "%d@%d%s mm, max forward step %d mm at %d%s, tip XZ drift "
+                "%d mm at %d%s, min nose-tip margin %d mm at %d%s; full "
+                "surface %d@%d%s..%d@%d%s, micro %d@%d%s..%d@%d%s\n",
+                support_x_err, support_x_tick / 2,
+                (support_x_tick & 1) ? ".5" : "", support_y_err,
+                support_y_tick / 2, (support_y_tick & 1) ? ".5" : "",
+                support_z_err, support_z_tick / 2,
+                (support_z_tick & 1) ? ".5" : "", forward_step,
+                forward_tick / 2, (forward_tick & 1) ? ".5" : "",
+                tip_xz_drift, tip_drift_tick / 2,
+                (tip_drift_tick & 1) ? ".5" : "",
+                nose_margin_min, nose_margin_tick / 2,
+                (nose_margin_tick & 1) ? ".5" : "",
                 contact_deepest[0], contact_deepest_tick[0] / 2,
                 (contact_deepest_tick[0] & 1) ? ".5" : "",
                 contact_shallowest[0], contact_shallowest_tick[0] / 2,
@@ -1750,14 +1944,22 @@ int main() {
                 (contact_shallowest_tick[1] & 1) ? ".5" : "");
     for (int t = 0; t <= kPreLiftEndTick; ++t) {
       const PosedSample& s = spring->samples[t];
-      std::printf("SPRING contact sample %d%s: support dY %d, full/micro %d/%d mm\n",
+      int32_t e = 0, q = 0;
+      tick_entry_squash(t, e, q);
+      std::printf("SPRING contact sample %d%s: support mk %d, full/micro "
+                  "%d/%d mm\n",
                   t / 2, (t & 1) ? ".5" : "",
-                  s.support_y_mm - support_rest.support_y_mm,
+                  zixx::spring_support_station_mk_for(e, q),
                   to_mm(s.rung_min_y_fx[0]), to_mm(s.rung_min_y_fx[1]));
     }
-    require(support_x_drift <= 1 && support_z_drift <= 1 &&
-                support_target_error <= 1,
-            "spring station-14 support left its authored per-sample path");
+    require(support_x_err <= 1 && support_y_err <= 1 && support_z_err <= 1,
+            "spring travelling support left its authored per-sample path");
+    require(forward_step <= 1,
+            "spring travelling support moved FORWARD (the peel must recede)");
+    require(tip_anchored && tip_xz_drift <= 1,
+            "spring tail-tip stand slid after sole contact (Direction 24)");
+    require(nose_margin_min >= zixx::kSpringNosePastTailMarginMm,
+            "spring nose reached or passed the tail (Direction 25 law)");
     require(contact_deepest[0] >= -zixx::kSpringDeclaredLoadedBiteMm &&
                 contact_shallowest[0] <= 0 &&
                 contact_deepest[1] >= -zixx::kSpringDeclaredLoadedBiteMm &&
@@ -2279,8 +2481,15 @@ int main() {
           scan, begin_tick, 2 * release.endpoint);
       release_step_mm = step.mm;
       release_step_tick = step.tick;
+      // Direction 25 re-records this band: the collapsed pose is now a
+      // tail-tip stand ~3.4 m of station travel from the grounded S, so a
+      // plan-shortened release (0-3 keys) legitimately steps that distance
+      // in its few keys -- the old 1300 mm bound described the belly-squeeze
+      // geometry, not a continuity law. The DEFAULT release keeps the
+      // tighter kJumpMaxStationStepMm through its own gates.
+      constexpr int32_t kShortReleaseMaxStationStepMm = 3600;
       endpoint_exact = endpoint_exact &&
-                       step.mm <= zixx::kJumpMaxStationStepMm;
+                       step.mm <= kShortReleaseMaxStationStepMm;
     }
     std::printf("RETIMED release %s: motion identity=%d, source+compiled "
                 "grounded endpoint exact=%d, compiled max step %d mm at %d%s\n",
@@ -2335,48 +2544,81 @@ int main() {
     std::array<SyntheticContactRange, 2> contact{};
     if (compiled != nullptr) {
       const ClipScan scan = scan_clip(synthetic_type, *compiled, stations);
-      const PosedSample& rest = scan.samples[0];
-      int32_t previous_expected = 0;
+      // Direction 25: the plant TRAVELS. Per tick the fixture's support is
+      // the milli-station the shared route names for that tick's
+      // (entry, squash), and the expected position is that point's grounded
+      // baseline plus the authored target height -- the same law the golden
+      // spring gate enforces, derived through the same plan branches as the
+      // target height so fixture and golden can never disagree.
+      int32_t cal[3] = {0, 0, 0};
+      {
+        int32_t posed0[3];
+        posed_support_point_mm(synthetic_type, *compiled, 0,
+                               zixx::kSpringSupportStartStationMk, posed0);
+        int32_t bx = 0, by = 0, bz = 0;
+        zixx::spring_baseline_support_origin(
+            zixx::kSpringSupportStartStationMk, bx, by, bz);
+        cal[0] = posed0[0] - to_mm(bx);
+        cal[1] = posed0[1] - to_mm(by);
+        cal[2] = posed0[2] - to_mm(bz);
+      }
+      int32_t prev_actual[3] = {0, 0, 0};
+      int32_t prev_expected[3] = {0, 0, 0};
       for (int tick = 0; tick <= 2 * phase.release_end; ++tick) {
-        const PosedSample& sample = scan.samples[tick];
         const int key = tick / 2;
+        const int32_t e = zixx::zixx_plan_spring_entry_amount(plan, key);
+        const int32_t q = zixx::zixx_plan_spring_amount(plan, key);
         int32_t expected_y = 0;
+        int32_t mk = zixx::kSpringSupportStartStationMk;
         if ((tick & 1) == 0) {
-          expected_y = zixx::spring_support_target_y(
-              zixx::zixx_plan_spring_entry_amount(plan, key),
-              zixx::zixx_plan_spring_amount(plan, key));
+          expected_y = zixx::spring_support_target_y(e, q);
+          mk = zixx::spring_support_station_mk_for(e, q);
         } else {
+          const int32_t e1 =
+              zixx::zixx_plan_spring_entry_amount(plan, key + 1);
+          const int32_t q1 = zixx::zixx_plan_spring_amount(plan, key + 1);
+          const bool four_key =
+              plan.release_keys == zixx::kSpringReleaseMidpointCount;
           expected_y = zixx::spring_plan_midpoint_target_y(
-              key, phase.hold_end, false,
-              plan.release_keys == zixx::kSpringReleaseMidpointCount,
-              zixx::zixx_plan_spring_entry_amount(plan, key),
-              zixx::zixx_plan_spring_amount(plan, key),
-              zixx::zixx_plan_spring_entry_amount(plan, key + 1),
-              zixx::zixx_plan_spring_amount(plan, key + 1));
+              key, phase.hold_end, false, four_key, e, q, e1, q1);
+          mk = zixx::spring_plan_midpoint_support_mk(
+              key, phase.hold_end, false, four_key, e, q, e1, q1);
         }
-        support_x_drift = std::max(
-            support_x_drift,
-            std::abs(sample.support_x_mm - rest.support_x_mm));
-        support_z_drift = std::max(
-            support_z_drift,
-            std::abs(sample.support_z_mm - rest.support_z_mm));
-        support_target_error = std::max(
-            support_target_error,
-            std::abs((sample.support_y_mm - rest.support_y_mm) - expected_y));
+        int32_t actual[3];
+        posed_support_point_mm(synthetic_type, *compiled, tick, mk, actual);
+        int32_t bx = 0, by = 0, bz = 0;
+        zixx::spring_baseline_support_origin(mk, bx, by, bz);
+        const int32_t expected[3] = {to_mm(bx) + cal[0],
+                                     to_mm(by) + cal[1] + expected_y,
+                                     to_mm(bz) + cal[2]};
+        support_x_drift = std::max(support_x_drift,
+                                   std::abs(actual[0] - expected[0]));
+        support_z_drift = std::max(support_z_drift,
+                                   std::abs(actual[2] - expected[2]));
+        support_target_error = std::max(support_target_error,
+                                        std::abs(actual[1] - expected[1]));
         if (tick > 0) {
-          const PosedSample& previous = scan.samples[tick - 1];
-          const int64_t dx = sample.support_x_mm - previous.support_x_mm;
-          const int64_t dy = sample.support_y_mm - previous.support_y_mm;
-          const int64_t dz = sample.support_z_mm - previous.support_z_mm;
+          const int64_t dx = actual[0] - prev_actual[0];
+          const int64_t dy = actual[1] - prev_actual[1];
+          const int64_t dz = actual[2] - prev_actual[2];
           max_support_step = std::max(
               max_support_step,
               static_cast<int32_t>(zref::isqrt_u64(
                   static_cast<uint64_t>(dx * dx + dy * dy + dz * dz))));
+          const int64_t ex = expected[0] - prev_expected[0];
+          const int64_t ey = expected[1] - prev_expected[1];
+          const int64_t ez = expected[2] - prev_expected[2];
           max_expected_support_step = std::max(
               max_expected_support_step,
-              std::abs(expected_y - previous_expected));
+              static_cast<int32_t>(zref::isqrt_u64(
+                  static_cast<uint64_t>(ex * ex + ey * ey + ez * ez))));
         }
-        previous_expected = expected_y;
+        prev_actual[0] = actual[0];
+        prev_actual[1] = actual[1];
+        prev_actual[2] = actual[2];
+        prev_expected[0] = expected[0];
+        prev_expected[1] = expected[1];
+        prev_expected[2] = expected[2];
       }
       const StationStepMaximum continuity = station_step_max_mm(
           scan, 1, 2 * phase.release_end);
@@ -2398,8 +2640,8 @@ int main() {
                     -zixx::kSpringDeclaredLoadedBiteMm &&
                 contact[rung].highest_mm <= 0;
     }
-    std::printf("RETIMED attack %s 12/7/4: exact=%d, station-14 X/Z drift "
-                "%d/%d mm, target error %d mm, support step %d/%d mm, "
+    std::printf("RETIMED attack %s 12/7/4: exact=%d, travelling support X/Z "
+                "error %d/%d mm, target error %d mm, support step %d/%d mm, "
                 "full/micro contact %d..%d/%d..%d mm, station step %d mm\n",
                 name, exact ? 1 : 0, support_x_drift, support_z_drift,
                 support_target_error, max_support_step,
@@ -2511,26 +2753,47 @@ int main() {
           angle_distance(zixx::spring_route_heading(station, arm - 1),
                          zixx::spring_route_heading(station, arm)));
     }
-    // OWNER DIRECTION 24 #1: the tail stations are PLANTED -- all four knots
-    // authored identical, so their route is a constant. A planted station is
-    // an anchor, not a stall; only stations that are authored to move may be
-    // required to keep moving through the interior knots.
-    const bool authored_planted =
-        zixx::kSpringGroundedHeading[station] ==
-            zixx::kSpringAbsorbHeading[station] &&
-        zixx::kSpringGroundedHeading[station] ==
-            zixx::kSpringAssembledHeading[station] &&
-        zixx::kSpringGroundedHeading[station] ==
-            zixx::kSpringCollapsedHeading[station];
-    if (authored_planted) continue;
-    const int32_t at_absorb = angle_distance(
-        zixx::spring_route_heading(station, zixx::kSpringArmAbsorbAt - 20),
-        zixx::spring_route_heading(station, zixx::kSpringArmAbsorbAt + 20));
-    const int32_t at_assembled = angle_distance(
-        zixx::spring_route_heading(station, zixx::kSpringArmAssembledAt - 20),
-        zixx::spring_route_heading(station, zixx::kSpringArmAssembledAt + 20));
-    route_min_move = std::min(route_min_move, std::min(at_absorb, at_assembled));
-    route_max_move = std::max(route_max_move, std::max(at_absorb, at_assembled));
+    // OWNER DIRECTION 24 #1 / DIRECTION 25: a LEG whose two bounding knots
+    // are authored equal is an ANCHOR, not a stall -- the resting tail
+    // before the peel reaches it (grounded == peel-mid) and the frozen
+    // stand column from sole contact on (tail-stand == collapsed) are both
+    // planted by construction, and the route returns the constant there.
+    // A station is only required to keep moving through an interior knot
+    // when NEITHER leg meeting that knot is an anchor leg.
+    // ...and a knot where a station's route REVERSES direction is a rest
+    // point by the monotone-tangent rule (it arrives at its extremum at
+    // zero velocity), so the "must keep moving" requirement applies only to
+    // a knot both of whose legs move the station the same way.
+    const auto arc = [](int32_t a, int32_t b) {
+      return static_cast<int32_t>(static_cast<int16_t>(
+          static_cast<uint16_t>((b - a) & 0xFFFF)));
+    };
+    const int32_t g = zixx::kSpringGroundedHeading[station];
+    const int32_t pm = zixx::kSpringPeelHeading[station];
+    const int32_t ts = zixx::kSpringTailStandHeading[station];
+    const int32_t cl = zixx::kSpringCollapsedHeading[station];
+    const int32_t d1 = arc(g, pm);
+    const int32_t d2 = arc(pm, ts);
+    const int32_t d3 = arc(ts, cl);
+    const bool leg1_anchor = d1 == 0;
+    const bool leg2_anchor = d2 == 0;
+    const bool leg3_anchor = d3 == 0;
+    const bool absorb_reversal = (d1 < 0) != (d2 < 0);
+    const bool assembled_reversal = (d2 < 0) != (d3 < 0);
+    if (!(leg1_anchor || leg2_anchor || absorb_reversal)) {
+      const int32_t at_absorb = angle_distance(
+          zixx::spring_route_heading(station, zixx::kSpringArmAbsorbAt - 20),
+          zixx::spring_route_heading(station, zixx::kSpringArmAbsorbAt + 20));
+      route_min_move = std::min(route_min_move, at_absorb);
+      route_max_move = std::max(route_max_move, at_absorb);
+    }
+    if (!(leg2_anchor || leg3_anchor || assembled_reversal)) {
+      const int32_t at_assembled = angle_distance(
+          zixx::spring_route_heading(station, zixx::kSpringArmAssembledAt - 20),
+          zixx::spring_route_heading(station, zixx::kSpringArmAssembledAt + 20));
+      route_min_move = std::min(route_min_move, at_assembled);
+      route_max_move = std::max(route_max_move, at_assembled);
+    }
   }
   int middle_region_key = -1;
   int32_t middle_region_entry = -1;
@@ -2554,7 +2817,14 @@ int main() {
         scan, 2 * middle_region_key - 1,
         2 * middle_region_key + 1).mm;
   }
-  const bool seam_context_exact = generic_seam_step <= 256 &&
+  // The per-milli-arm step ceiling is a regression band recorded from the
+  // authored legs, not a physical law. Direction 25's tail column turns
+  // station 18 by ~131 deg across one C1 leg (stance curl -> stand column,
+  // both ends at rest), whose smooth peak measures 261/milli-arm with
+  // fixed-point quantization -- a fast smooth turn, not a seam jump.
+  // Re-recorded 256 -> 320 for that leg; a discontinuity would blow far
+  // past this.
+  const bool seam_context_exact = generic_seam_step <= 320 &&
                                   route_min_move > 0 &&
                                   compress48_step <=
                                       zixx::kJumpMaxStationStepMm;

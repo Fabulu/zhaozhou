@@ -773,44 +773,67 @@ constexpr const auto& kSpringGroundedHeading = kStanceSlope;
 // stations 5-14 -- the hook and the mid-body -- so the S visibly GROWS
 // forward from the planted tail.
 
-// ABSORB. The first beat begins: the nose dips a few degrees TOWARD THE
-// TARGET (the aim), the hook starts to curl and the mid-body starts to
-// gather up into the S's rear lobe. Carries ~55% of the assembled deltas so
-// the Catmull-Rom route stays even through the knot. The tail is planted.
-constexpr int32_t kSpringAbsorbHeading[kStanceSlopes] = {
-    -1300, 500, 1900, 3900, 6700, 14650, 21550, 25400, 20150, 11800,
-    -1100, -4400, 1400, 5000, 1400,
+// OWNER DIRECTION 25: THE PEEL replaces the six-pass "become the S"
+// instruction. The three interior knots below were authored BY EYE on the
+// committed centreline sketchpad (RUN-20260903-0614 evidence/stage2/,
+// candidates v1-v9) and then adjusted against rendered frames. The action:
+// the grounded stretch lifts at its front and the lift rolls rearward until
+// the animal stands on the end of its tail, then compresses very strongly,
+// the head far back but never past the tail.
+//
+// PEEL-MID (arm 220): the breaking wave. The front of the grounded stretch
+// (stations 10-14) has lifted and arcs up while the dive bottom (8-9) starts
+// rolling over it; stations 16-18 still REST at their stance headings (the
+// support has not passed them -- their rows alias kStanceSlope verbatim, so
+// the spline's anchor-leg rule keeps the resting tail a constant until the
+// peel arrives). Station 9 is deliberately routed through ~100 deg here:
+// its direct stance->stand arc would be +182 deg -- the shortest-arc unwrap
+// degeneracy -- so the mid knot steers it.
+constexpr int32_t kSpringPeelHeading[kStanceSlopes] = {
+    546, 1183, 2276, 4369, 7100,          //  3.0  6.5  12.5  24  39 deg
+    14928, 21663, 25850,                  // 82  119  142: dive barely deepens
+    21845, 18204,                         // 120  100: dive bottom rolls
+    -6372, -5461, 1820, 6372,             // -35 -30 10 35: the lifted wave
+    // 14-18 rest at stance: a heading governs the SEGMENT BEHIND it, so any
+    // row from the plant rearward that rotates before the support passes it
+    // shoves the still-resting tail into the dirt (row 14 pre-rotated to 45
+    // deg here measured -101 mm under stations 16/17 mid-peel; pre-rotated
+    // 17/18 measured -97 mm under the tip). Their rotation lives entirely
+    // in the peel-mid -> tail-stand leg, whose zero-tangent start keeps it
+    // behind the fast support walk.
+    kStanceSlope[14],
     kStanceSlope[15], kStanceSlope[16], kStanceSlope[17], kStanceSlope[18]};
-// ASSEMBLED. The GROWN whole-body S (Direction 24 acceptance 2): the front
-// hook keeps the signature silhouette but curls a few degrees deeper -- it
-// visibly changes without reading as an early squeeze -- and the mid-body,
-// which lay flat on the ground at rest, stands in a REAL BROAD REAR LOBE
-// (station 11 rises steeply, 12 crests nearly level, 13 returns), gathered
-// forward from the planted tail. Station 10 stays shallow so the lobe's
-// rising foot keeps clear of the dive's under-curl (draft 1 buried it in
-// the loop: 45-vertex self-intersections). The heading sine-sum across
-// 10-14 matches the grounded row, so the front keeps its height while the
-// body between loop and plant arches up. This is the idle S grown bigger,
-// not replaced; the squeeze presses THIS shape flat.
-constexpr int32_t kSpringAssembledHeading[kStanceSlopes] = {
-    -1500, 400, 1700, 3800, 6800, 14700, 21700, 25600, 20300, 12000,
-    -2000, -8200, 2400, 8800, 1600,
-    kStanceSlope[15], kStanceSlope[16], kStanceSlope[17], kStanceSlope[18]};
-// COLLAPSED: THE S SQUEEZED FROM THE TOP. Three stacked near-level runs --
-// the pressed neck (top), the folded-flat return of the hook (middle), the
-// grounded belly (bottom) -- joined by two quick single-segment crossings that
-// are the descendants of the idle dive's own steep segments. The nose sits at
-// ~64% of its idle height, the footprint spreads, and the grown rear lobe is
-// pressed back down into the ground line, so the mid-body descends WITH the
-// head (Direction 23 #5) while the planted tail holds still (Direction 24
-// #1). The stacked runs are authored to TOUCH at their radii: the
-// flatten/spread deform takes the contact, so the packing squeezes flatter
-// instead of clipping. This is the pose the release fires from, and the
-// whole shape stays unmistakably the same S.
+// TAIL-STAND (arm 400): sole contact is the tail tip. A short steep tail
+// column (15-18, leaning forward -- "it might be at an angle") descends into
+// the planted tip; the former grounded run + taper (8-14) is rolled into ONE
+// open C-loop (~225 deg of sweep, its gap on the left flank so the dive
+// enters above the gap and the column exits below it -- no chain crossing);
+// the signature S front (0-7) rides on top, head high, nose well forward of
+// the tip. This is the pose the compression presses.
+constexpr int32_t kSpringTailStandHeading[kStanceSlopes] = {
+    364, 1092, 2185, 4369, 7282,          //  2  6  12  24  40: stance crown
+    16748, 24030, 29491,                  // 92 132 162: dive drops into loop
+    34588, 42780,                         // 190 235: loop entry
+    -14563, -6918, -910,                  // 280 322 355 (wrap-friendly form)
+    4005, 6918,                           // 22 38: loop closes toward column
+    6554, 8556, 10559, 12379};            // 36 47 58 68: the tail column
+// COLLAPSED (arm 1000): THE STRONG COMPRESSION on the tail tip. The column
+// is FROZEN (rows 15-18 verbatim equal to the tail-stand -- Direction 24's
+// anchor law from sole contact onward, by construction); the loop is pressed
+// into a low flat ellipse; the crown folds hard down-back so the nose drives
+// to ~-1207 mm world (~29 px back on the fixed side camera against the
+// published pass's -12 px) while staying far in front of the tip. The head
+// and neck pressing into the coil top is the ONE declared self-press of this
+// pass (Direction 25: "for now even some overlap and clipping is okay, but
+// keep it in check") -- see kSpringPeelPressFullMm.
 constexpr int32_t kSpringCollapsedHeading[kStanceSlopes] = {
-    -1500, 400, 900, 1100, 1400, 17000, 27500, 31000, 24500, 12500,
-    900, 900, 1000, 1200, 1700,
-    kStanceSlope[15], kStanceSlope[16], kStanceSlope[17], kStanceSlope[18]};
+    -5461, -1820, 5461, 14563, 23301,     // -30 -10 30 80 128: crown folds
+    28763, 31857, 33678,                  // 158 175 185: dive pressed flat
+    36409, 44600,                         // 200 245
+    -12379, -4551, -364,                  // 292 335 358: ellipse low + flat
+    2731, 6007,                           // 15 33
+    kSpringTailStandHeading[15], kSpringTailStandHeading[16],
+    kSpringTailStandHeading[17], kSpringTailStandHeading[18]};
 // WHERE THE THREE AUTHORED POSES SIT ON THE ONE ARMING PARAMETER, in 1/1000 of
 // the complete arming. Grounded is 0 and collapsed is 1000. Moving these
 // reparameterises the build without touching a single shape value. Direction
@@ -838,6 +861,28 @@ constexpr int kSpringPlantSegment = 14;            // support after this spine s
 // them is spring_support_station_mk(arm) below.
 constexpr int32_t kSpringSupportStartStationMk = kSpringPlantSegment * 1000;
 constexpr int32_t kSpringSupportTailTipStationMk = kStanceSlopes * 1000;
+// Where on the arming the support leaves station 14 (owner knob). Below this
+// arm the plant is the classic belly plant; from here it walks rearward and
+// arrives at the tail tip exactly when the peel completes (the tail-stand
+// knot at kSpringArmAssembledAt), so the stand is structural, not tuned.
+constexpr int32_t kSpringSupportPeelBeginArm = 150;
+// ...and where it ARRIVES at the tip -- deliberately BEFORE the tail-stand
+// knot. From this arm to the knot the plant IS the tip, held on the dirt,
+// while the aerial curl finishes unrolling above it into the stand column.
+// If the support were still mid-walk while the tail rows rotate toward
+// their descending stand headings, the material beyond the support would
+// dig through the ground (measured -69 mm mid-peel with arrival at 400).
+constexpr int32_t kSpringSupportTipArriveArm = 340;
+// THE STAND DESCENT. The resting footprint truly ends at station 17 -- the
+// stance tail CURLS UP behind it (baseline centreline y: station 17 = 77 mm,
+// 18 = 159, tip = 301). Holding the travelling support at those baseline
+// positions alone would stand the animal on an invisible pedestal, so as the
+// support crosses the aerial curl the plant is authored DOWN onto the dirt:
+// zero through station 17, easing to kSpringTailTipStandDropMm below the
+// tip's baseline as the tip plants. Both are owner knobs; the committed pose
+// probe checks the resulting bite.
+constexpr int32_t kSpringSupportDescentBeginMk = 17000;
+constexpr int32_t kSpringTailTipStandDropMm = 280;
 // How much of the planted-support correction reaches the root, 1/1000. 1000 is
 // the honest plant: station 14 stays where the authored lift route puts it and
 // the head is free to travel back over it. 0 reproduces the rejected published
@@ -885,9 +930,13 @@ constexpr int32_t kSpringCollapsedSupportLiftMm = -14;
 // The loaded spring's declared terrain penetration, in mm. Ground contact is
 // AUTHORED here and checked by the committed pose probe; its absence would be
 // as much a fault as burying, because a body resting at exactly zero reads as
-// hovering. Resting bite stays kSpringDeclaredBiteMm; this is the deepest the
-// fully loaded coil is allowed to press.
-constexpr int32_t kSpringDeclaredLoadedBiteMm = 60;
+// hovering. Resting bite stays kSpringDeclaredBiteMm; this is the deepest any
+// pre-lift sample is allowed to press. Re-declared 60 -> 95 for Direction 25:
+// the deepest sample is now the PLANT TRANSIENT -- the tail curl rolling
+// through its own footprint as the tip takes the weight (observed -81 mm for
+// ~5 frames at the plant moment, ~2 px on the fixed camera, reading as
+// weight arriving); the held stand itself bites ~-48. 14 mm of headroom.
+constexpr int32_t kSpringDeclaredLoadedBiteMm = 95;
 // THE LOADED BRACE IS HELD, NOT FROZEN. The old gate demanded the compressed
 // hold not move by more than ONE millimetre, which is a faithful description of
 // exactly what the owner rejected: "Nothing reads rigid -- not the arming, not
@@ -937,6 +986,13 @@ constexpr int32_t kSpringBladeFlare = 300;
 // authored up-then-down was the tail "inverting itself". The fins hold their
 // rest rise for the whole ground phase; only the life wave touches them.
 constexpr int32_t kSpringBladeSquashRise = 0;
+// DIRECTION 25: the tail column STANDS (station 18 rotates ~+131 deg), and a
+// fan riding that rotation swings from resting-behind to buried ~850 mm into
+// the terrain (measured by the committed probe). This counter-rotation holds
+// the fan's WORLD attitude as the column stands: at 1000 the fan keeps its
+// stance attitude exactly, lying flat behind the planted tip -- the stand's
+// visible foot. It follows the route, so it unwinds itself on release.
+constexpr int32_t kSpringBladeStandCounter = 1000;
 
 
 // Named theatrical timing. The accepted attack still leaves the terrain at key
@@ -977,6 +1033,27 @@ constexpr int kSpringPeelSettleKeys = 2;
 constexpr int kSaltoSpringEntryEndKey = kSpringPeelEndKey;
 constexpr int kSaltoCompressEndKey = 50;
 constexpr int kSaltoCompressHoldEndKey = 58;
+// THE DECLARED SELF-PRESS (Owner Direction 25, 2026-09-03: "For now even
+// some overlap and clipping is okay, but keep it in check"). The roll-up
+// presses the dive against the loop closure from mid-peel, and the strong
+// compression presses the folded crown into the coil top; the release then
+// unwinds back through the same shapes. One declared window covers it,
+// DERIVED from the key constants (an absolute tick window silently lands on
+// the wrong frames under any retime -- the previous run's landmine): it
+// opens halfway through the peel and closes when the release has unwound
+// past the stand (derived in the probe as hold-end + release keys - 1).
+// Depths are capped at the deformed skin; the coarser micro rung reads the
+// same press deeper (52/96 precedent). Ratchet kSpringPeelPressFullMm down
+// once the owner accepts the motion -- one constant, one probe re-run.
+// The wave crest grazes the dive bottom (0.0 mm depth pairs) almost as soon
+// as the peel is underway, so the window opens two keys into the beat; the
+// settle-in itself stays zero-intersection law.
+constexpr int kSpringPeelPressBeginKey = kSpringSettleInKeys + 2;
+constexpr int32_t kSpringPeelPressFullMm = 60;
+constexpr int32_t kSpringPeelPressMicroMm = 110;
+// "It should never do that" made checkable: at every pre-lift sample the
+// nose must stay this far (mm, world X) in front of the tail tip.
+constexpr int32_t kSpringNosePastTailMarginMm = 50;
 // Everything downstream of the loaded hold -- release, flight, spear, stick,
 // recovery -- keeps its ACCEPTED key spacing and merely SLIDES when the arming
 // grows. kAtkRetimeShift is that slide, derived from the hold end so a slower
@@ -2022,14 +2099,36 @@ inline int32_t spring_arm_amount(int32_t entry, int32_t squash) {
 // THE SUPPORT'S OWN ROUTE ON THE ARMING (Owner Direction 25, THE PEEL). The
 // contact patch travelling progressively rearward IS the action, so WHICH
 // body point the root solve holds to the ground is authored here as a
-// function of the one arming parameter. Stage 1 of the peel run installs the
-// machinery as a provable no-op: the route constant-returns the classic
-// station-14 plant, and the full 22-subject bank must stay byte-identical.
-// The peel itself (station 14 -> tail tip across the arming) is authored in
-// a later stage by re-valuing this route, never by touching the walk.
+// function of the one arming parameter. Stage 1 installed this as a proven
+// no-op (constant station 14, 22/22 bank CRCs identical); this stage arms
+// the peel: the plant holds station 14 through the early lift, then walks
+// smoothly rearward and stands on the tail tip from the tail-stand knot on.
+// Smoothstep ends have zero velocity, so the support leaves the belly and
+// arrives on the tip at rest -- no kick at either end. Monotone by
+// construction; the committed probe additionally enforces it per sample.
 inline int32_t spring_support_station_mk(int32_t arm) {
-  (void)arm;
-  return kSpringSupportStartStationMk;
+  if (arm <= kSpringSupportPeelBeginArm) return kSpringSupportStartStationMk;
+  if (arm >= kSpringSupportTipArriveArm) return kSpringSupportTailTipStationMk;
+  const int32_t u = static_cast<int32_t>(
+      (static_cast<int64_t>(arm - kSpringSupportPeelBeginArm) * 1000) /
+      (kSpringSupportTipArriveArm - kSpringSupportPeelBeginArm));
+  return kSpringSupportStartStationMk + static_cast<int32_t>(
+      (static_cast<int64_t>(kSpringSupportTailTipStationMk -
+                            kSpringSupportStartStationMk) *
+       spring_smooth_amount(u)) / 1000);
+}
+
+// The authored descent that plants the travelling support on the DIRT while
+// it crosses the stance tail's aerial curl (see kSpringTailTipStandDropMm).
+inline int32_t spring_support_descent_mm(int32_t support_mk) {
+  if (support_mk <= kSpringSupportDescentBeginMk) return 0;
+  const int32_t u = static_cast<int32_t>(
+      (static_cast<int64_t>(support_mk - kSpringSupportDescentBeginMk) *
+       1000) /
+      (kSpringSupportTailTipStationMk - kSpringSupportDescentBeginMk));
+  return -static_cast<int32_t>(
+      (static_cast<int64_t>(kSpringTailTipStandDropMm) *
+       spring_smooth_amount(u)) / 1000);
 }
 
 // The ONE derivation from a consumer's (entry, squash) to the support
@@ -2064,25 +2163,46 @@ inline int32_t spring_route_heading(int k, int32_t arm) {
   if (arm >= 1000) return kSpringCollapsedHeading[k];
   // The four knots, unwrapped along the chain so the spline turns the short way.
   const int32_t p0 = kSpringGroundedHeading[k];
-  const int32_t p1 = spring_unwrap(p0, kSpringAbsorbHeading[k]);
-  const int32_t p2 = spring_unwrap(p1, kSpringAssembledHeading[k]);
+  const int32_t p1 = spring_unwrap(p0, kSpringPeelHeading[k]);
+  const int32_t p2 = spring_unwrap(p1, kSpringTailStandHeading[k]);
   const int32_t p3 = spring_unwrap(p2, kSpringCollapsedHeading[k]);
   const int32_t t[4] = {0, kSpringArmAbsorbAt, kSpringArmAssembledAt, 1000};
   const int32_t p[4] = {p0, p1, p2, p3};
   int i = 0;
   while (i < 2 && arm > t[i + 1]) ++i;
+  // THE ANCHOR-LEG RULE (Direction 25 / Direction 24 by construction): a leg
+  // whose two bounding knots are authored EQUAL is an anchor, not a route --
+  // it returns the constant, and it pins its shared knots' tangents to zero
+  // so the neighbouring legs leave and arrive that anchor at rest. Without
+  // this, a Catmull-Rom tangent reaching across the equal pair makes a
+  // "planted" station dip mid-leg: the resting tail would wiggle BEFORE the
+  // peel reaches it and the stand would wiggle after -- exactly the glitch
+  // Direction 24 rejected. Rows with all-distinct knots are untouched.
+  if (p[i] == p[i + 1]) return p[i];
   const int32_t span = t[i + 1] - t[i];
   const int64_t u = span > 0 ? (static_cast<int64_t>(arm - t[i]) * 1000) / span
                              : 0;
-  // Centred tangents inside, one-sided at the ends, scaled into this span.
+  // Centred tangents inside, one-sided at the ends, scaled into this span --
+  // but MONOTONE (Fritsch-Carlson sign rule): a knot whose two secants
+  // disagree in sign is a local extremum, and a station arrives at an
+  // extremum at rest (tangent zero). Without this, the Direction-25 loop
+  // stations -- which roll out past their collapsed heading and return --
+  // overshoot around the tail-stand knot and the nose visibly bounces
+  // forward-and-up early in the compression (measured 185 mm/key on the
+  // schedule instrument before this rule). An anchor leg is the secant==0
+  // case of the same rule.
+  const auto knot_tangent = [&](int j) -> int64_t {
+    // tangent at knot j (1 or 2), scaled into this span
+    const int64_t sec_a = p[j] - p[j - 1];
+    const int64_t sec_b = p[j + 1] - p[j];
+    if (sec_a == 0 || sec_b == 0 || (sec_a < 0) != (sec_b < 0)) return 0;
+    return (static_cast<int64_t>(p[j + 1] - p[j - 1]) * span) /
+           (t[j + 1] - t[j - 1]);
+  };
   const int64_t m1 =
-      i > 0 ? (static_cast<int64_t>(p[i + 1] - p[i - 1]) * span) /
-                  (t[i + 1] - t[i - 1])
-            : static_cast<int64_t>(p[1] - p[0]);
+      i > 0 ? knot_tangent(i) : static_cast<int64_t>(p[1] - p[0]);
   const int64_t m2 =
-      i + 2 < 4 ? (static_cast<int64_t>(p[i + 2] - p[i]) * span) /
-                      (t[i + 2] - t[i])
-                : static_cast<int64_t>(p[3] - p[2]);
+      i + 2 < 4 ? knot_tangent(i + 1) : static_cast<int64_t>(p[3] - p[2]);
   const int64_t u2 = (u * u) / 1000;
   const int64_t u3 = (u2 * u) / 1000;
   const int64_t h00 = 2 * u3 - 3 * u2 + 1000;
@@ -2112,7 +2232,13 @@ inline int32_t spring_route_heading(int k, int32_t arm) {
 constexpr int32_t kSpringNoLife = -1000000;  // "this caller has no clock"
 // Per-station arrival lag, in 1/1000 of the arming, at its widest. The lag is
 // spatial: station 0 is on time and the last tail station is this far behind.
-constexpr int32_t kSpringChainLag = 165;
+// ZERO for Direction 25: the peel IS a travelling delay -- the support route
+// staggers the stations' lift-off structurally -- and a clock lag on top of
+// it made the tail column re-cross the tail-stand knot DURING the
+// compression (station 18's lagged arm at 500 was 335, before the stand):
+// the stand visibly un-stood and the nose spiked 183 mm/key on the schedule
+// instrument. The knob stays for motions whose travel is not authored.
+constexpr int32_t kSpringChainLag = 0;
 // The lag opens and closes across the arming so grounded and collapsed remain
 // exact whole-body poses. This is where its peak sits, in arm units.
 constexpr int32_t kSpringChainLagPeak = 500;
@@ -2215,6 +2341,20 @@ inline int32_t spring_life_wave(int k, int32_t arm, int32_t life_key_mk) {
   int32_t live = 1000;
   if (k >= kSpringLifeSupport0) {
     live = kSpringLifeTailShare;
+    // DIRECTION 25 / landmine 10: from the moment the tail becomes the
+    // support column the STAND must carry zero wave -- a wobbling stand
+    // reads as instability and would fight the travelling plant. The tail
+    // share fades out across the support's walk and is zero from the
+    // tail-stand knot on. The head end keeps its life; the root solve
+    // keeps the planted point exact regardless.
+    if (arm >= kSpringArmAssembledAt) {
+      live = 0;
+    } else if (arm > kSpringSupportPeelBeginArm) {
+      live = static_cast<int32_t>(
+          (static_cast<int64_t>(live) *
+           (kSpringArmAssembledAt - arm)) /
+          (kSpringArmAssembledAt - kSpringSupportPeelBeginArm));
+    }
   } else {
     live = kSpringLifeTailShare +
            ((1000 - kSpringLifeTailShare) * (kSpringLifeSupport0 - k)) /
@@ -2279,6 +2419,37 @@ inline int32_t spring_air_coil_pitch(int k, int32_t base_pitch, int32_t curl,
     pitch += (w * curl) / 1000;
   }
   return static_cast<int32_t>(pitch);
+}
+
+// The fan's stand counter (see kSpringBladeStandCounter): the tail tip
+// station's own route rotation, scaled by the knob. Derived from the route
+// itself so every consumer and every arm value agree, and so the release
+// unwinds it automatically.
+inline int32_t spring_fan_stand_turn(int32_t entry, int32_t squash) {
+  const int32_t arm = spring_arm_amount(entry, squash);
+  const int32_t turned =
+      spring_route_heading(kStanceSlopes - 1, arm) -
+      kSpringGroundedHeading[kStanceSlopes - 1];
+  return static_cast<int32_t>(
+      (static_cast<int64_t>(turned) * kSpringBladeStandCounter) / 1000);
+}
+
+// Rotate the fan bones (blades + spike; their tip children inherit) about
+// the WORLD Z axis by -turned, around their own attachment. A local `rise`
+// counter cannot do this exactly: the blades' local z is skewed by the
+// splay yaw and the tail-roll construction, so a rise-based counter left
+// the fan 160-330 mm underground mid-swing. Exact form: with W the fan
+// parent's accumulated world rotation, local' = (W* Rz(-turned) W) local.
+inline void spring_counter_fan_world_z(Rig& g, int32_t turned_a16) {
+  if (turned_a16 == 0) return;
+  zc::quat16 w = g.q[kBSpine0];
+  for (int b = 1; b < kSpineBones; ++b)
+    w = quat_mul(w, g.q[kBSpine0 + b]);
+  const zc::quat16 wz =
+      quat_mul(quat_conj(w), quat_mul(quat_z(-turned_a16), w));
+  g.q[kBBladeL] = quat_mul(wz, g.q[kBBladeL]);
+  g.q[kBBladeR] = quat_mul(wz, g.q[kBBladeR]);
+  g.q[kBSpike] = quat_mul(wz, g.q[kBSpike]);
 }
 
 inline int32_t spring_entry_heading(int k, int32_t entry,
@@ -2360,6 +2531,8 @@ inline void spring_support_origin_raw(const zc::quat16* quats,
 inline int32_t spring_support_target_y(int32_t entry, int32_t squash) {
   return spring_root_drop(squash) +
          spring_support_surface_lift(entry, squash) +
+         spring_support_descent_mm(spring_support_station_mk_for(entry,
+                                                                squash)) +
          static_cast<int32_t>(
              (static_cast<int64_t>(kSpringJumpRootLiftMm) *
               spring_smooth_amount(entry)) /
@@ -2373,11 +2546,12 @@ inline int32_t spring_support_target_y(int32_t entry, int32_t squash) {
 // point is held at the grounded baseline position of that same body point --
 // each successive contact of the peel is planted precisely where it was
 // already resting in the footprint, and contact can never slide.
-inline void spring_root_from_quats_raw(const zc::quat16* quats,
-                                       int32_t support_mk,
-                                       int32_t target_y_mm,
-                                       int32_t& out_x, int32_t& out_y,
-                                       int32_t& out_z) {
+// The grounded-baseline (stance) position of a support point, raw fx16.
+// Shared by the root solve, the springpose diagnostic and the committed
+// probe, so every side of a comparison walks the identical arithmetic.
+inline void spring_baseline_support_origin(int32_t support_mk,
+                                           int32_t& out_x, int32_t& out_y,
+                                           int32_t& out_z) {
   zc::quat16 baseline[kBoneCount];
   for (int b = 0; b < kBoneCount; ++b)
     baseline[b] = zc::quat16_identity();
@@ -2386,9 +2560,17 @@ inline void spring_root_from_quats_raw(const zc::quat16* quats,
     baseline[kBSpine0 + k] = quat_z(kStanceSlope[k] - prev);
     prev = kStanceSlope[k];
   }
+  spring_support_origin_raw(baseline, support_mk, out_x, out_y, out_z);
+}
+
+inline void spring_root_from_quats_raw(const zc::quat16* quats,
+                                       int32_t support_mk,
+                                       int32_t target_y_mm,
+                                       int32_t& out_x, int32_t& out_y,
+                                       int32_t& out_z) {
   int32_t bx = 0, by = 0, bz = 0;
   int32_t px = 0, py = 0, pz = 0;
-  spring_support_origin_raw(baseline, support_mk, bx, by, bz);
+  spring_baseline_support_origin(support_mk, bx, by, bz);
   spring_support_origin_raw(quats, support_mk, px, py, pz);
   out_x = bx - px;
   out_y = by - py + fxm(target_y_mm);
@@ -2720,6 +2902,8 @@ inline void author_spring_midpoint_pose(
                   (control.squash * kSpringBladeFlare) / 1000,
               kBladeRise + (control.squash * kSpringBladeSquashRise) / 1000,
               kBladeUpBias);
+  spring_counter_fan_world_z(
+      g, spring_fan_stand_turn(control.entry, control.squash));
   for (int b = 0; b < kBoneCount; ++b)
     c.mid_quats[qi + b] = g.q[b];
 
@@ -3378,6 +3562,8 @@ inline zc::Clip build_attack(
                 (kBladeRise * auth) / 1000 +
                     (pre * kSpringBladeSquashRise) / 1000,
                 (kBladeUpBias * auth) / 1000);
+    spring_counter_fan_world_z(
+        g, (spring_fan_stand_turn(entry, pre) * auth) / 1000);
     g.write(c, f);
     if (!choreo) {
       if (f <= kSaltoSpringReleasePoseKey) {
@@ -7030,6 +7216,8 @@ inline zc::Clip build_attack_variant(
                       (amount * kSpringBladeFlare) / 1000,
                   kBladeRise + (amount * kSpringBladeSquashRise) / 1000,
                   kBladeUpBias);
+      spring_counter_fan_world_z(
+          g, spring_fan_stand_turn(entry, amount));
     } else if (k < t3) {
       int lk;
       if (k < t1) {
@@ -7374,13 +7562,16 @@ constexpr int kJumpLandingSupportHandoffEnd = 5;
 // vibration. See zixx_jump_motion_sample for how they are damped to rest.
 constexpr int32_t kJumpLandingSettleBounce = 165;
 constexpr int kJumpLandingSettlePeriodKeys = 11;
-// THE LANDING SPEAKS THE SAME SQUEEZE LANGUAGE AS THE ARMING (owner direction
-// 21: "That's how all the saltos and jumps need to look"). The route's second
-// half IS the squeeze, so the landing cushion rides into it: at this arm value
-// the impact pose is the whole-body S pressed partway down, cross-sections
-// flattening under the load, and the recovery decompresses back along the one
-// continuous route so the return to the grounded S is seamless.
-constexpr int32_t kJumpLandingAbsorbArm = 700;
+// THE LANDING RIDES THE ROUTE'S GROUNDED-CONTACT STRETCH ONLY (Direction
+// 25). The route's second half is no longer a belly squeeze -- from the
+// peel-begin arm onward the support walks off station 14 toward the tail
+// tip, and an absorb past that arm would slam the landing INTO a tail-stand
+// (the old 700 predates the peel; its own comment had already gone stale --
+// 700 was past the assembled knot). Deriving the absorb ceiling from the
+// support route keeps ONE plant law everywhere: the landing cushion is the
+// deepest fully-grounded pose of the peel, the bite bias route still gives
+// the slam its weight, and the recovery unwinds along the same stretch.
+constexpr int32_t kJumpLandingAbsorbArm = kSpringSupportPeelBeginArm;
 
 // Convert a landing load (0 = grounded, 1000 = fully absorbed) into the
 // entry/squash pair the shared spring speaks. Because the landing never reaches
@@ -7706,6 +7897,8 @@ inline zc::Clip build_jump(
                 (kBladeRise * (1000 - curl)) / 1000 +
                     (spring * kSpringBladeSquashRise) / 1000,
                 (kBladeUpBias * (1000 - curl)) / 1000);
+    spring_counter_fan_world_z(
+        g, (spring_fan_stand_turn(entry, spring) * (1000 - curl)) / 1000);
     const uint16_t th16 = static_cast<uint16_t>(theta & 0xFFFF);
     if (th16 != 0)
       g.q[kBSpine0] = quat_mul(quat_z(theta), g.q[kBSpine0]);

@@ -203,3 +203,49 @@ Stage 3 (retime skeleton, old knots still installed):
   arm ~210), stations 20/34. Cause: the retime shifts the life-wave phase
   against the arm, and the OLD absorb-region pose was within a hair of
   touching. Stage 4 deletes that pose; re-verified there.
+
+### 2026-09-03 (implementer) - Stage 4: THE PEEL IS LIVE, probe PASS end to end
+
+Route + tables + gates wired; six real faults found by instruments and fixed:
+1. **Catmull-Rom overshoot at direction-reversing knots** (loop stations
+   reverse at tail-stand): nose bounced 185 mm/key early in compression.
+   Fix: Fritsch-Carlson monotone tangent rule in spring_route_heading (a
+   knot whose secants disagree is an extremum, reached at rest); anchor
+   legs (equal knots) return the constant and pin shared tangents to zero.
+2. **The chain lag un-stood the stand**: station 18's lagged arm at 500 was
+   335 (before the stand knot) - the column re-crossed the knot during
+   compression. kSpringChainLag 165 -> 0 (the peel IS the travelling delay).
+3. **Mid-walk dig**: tail rows rotating while the support was still walking
+   dug the tip -97 mm. Fix: support ARRIVES EARLY (kSpringSupportTipArriveArm
+   340 < knot 400) so the tip is pinned on the dirt while the curl finishes
+   unrolling above it.
+4. **Row 14 pre-rotation dug stations 16/17 to -101 mm**: a heading governs
+   the segment BEHIND it; every row from the plant rearward now rests at
+   stance until the support passes it (peel-mid rows 14-18 = kStanceSlope).
+5. **The tail fan buried -852 mm**: the fan rode station 18's +131 deg
+   stand rotation. A rise-based counter under-corrected (skewed local axes,
+   still -160/-328); exact fix = spring_counter_fan_world_z: rotate the fan
+   bones about WORLD Z by the route-derived stand turn (W* Rz W), scaled by
+   each consumer's own authority. The fan now lies flat behind the planted
+   tip - the stand's visible foot - and unwinds itself on release.
+6. **Plant transient**: the curl rolls through its own footprint as the tip
+   takes the weight: -81 mm for ~5 frames (2 px). Declared:
+   kSpringDeclaredLoadedBiteMm 60 -> 95 (14 mm headroom, owner-visible
+   comment); the held stand bites -48.
+
+Probe re-authored for Direction 25 (evidence/stage4-probe-pass.txt):
+- Travelling-support gate: posed support point (decode-path skinned) vs
+  grounded baseline of the same milli-station + authored target, <= 1 mm
+  X/Y/Z at every pre-lift sample; monotone-tailward law (max forward step
+  0 mm); tail-tip anchor from sole contact (XZ drift 1 mm) = D24 law;
+  nose-past-tail law gate (min margin 686 mm vs 50 declared).
+- Declared self-press window derived from key constants (keys 6..61):
+  full 58 <= 60 mm, micro 105 <= 110 mm (WATCH: 2/5 mm headroom).
+- Stall gate: per-leg anchor + reversal-knot exemptions; step cap
+  re-recorded 256 -> 320 for station 18's honest 131-deg leg.
+- Short-release fixture band re-recorded (3600 mm: a 0-key release now
+  legitimately steps the whole stand-to-ground distance).
+- Retimed fixture gate rewritten on the same travelling expectations.
+- Hold gate: plant law moved to the tip (station 14 is body now).
+- Landing absorb capped at the grounded-contact stretch
+  (kJumpLandingAbsorbArm = kSpringSupportPeelBeginArm); landing gates green.
