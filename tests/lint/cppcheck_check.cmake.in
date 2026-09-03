@@ -6,13 +6,62 @@
 # (npm test compiles first); clang-tidy is deliberately NOT wired per-commit
 # (optional nightly later) — scope recorded honestly.
 #
-# SKIP discipline: when cppcheck is not installed locally the test SKIPS;
-# the CI "format" job installs cppcheck on the runner and runs the same
-# command. Verified clean against cppcheck 2.20.0 (local) with the exact
-# flag set below.
+# -----------------------------------------------------------------------------
+# THE SKIP USED TO BE SILENT, AND THAT IS THE FAILURE THIS FILE RECORDS
+# -----------------------------------------------------------------------------
+# It read: if cppcheck is not found, print STATUS and `return()`. CTest was
+# configured to treat that line as a SKIP, so a developer without cppcheck saw
+# a green run, and CI — which installs a pinned cppcheck and runs this exact
+# command — saw a red one. Docket D17 records the result: `cppcheck_check`
+# among the failures on every push, found by CI rather than by anyone local.
+#
+# That is the standing rule "local gates must match CI" in its usual costume: a
+# gate that stands down when its tool is missing does not report "I did not
+# check", it reports nothing, and nothing reads as pass.
+#
+# So absence is now LOUD. It fails, and it says exactly how to install the
+# pinned version or how to opt out on purpose. `ZHAO_ALLOW_MISSING_CPPCHECK=1`
+# is the deliberate escape hatch — it still prints, so an opted-out run is
+# visibly an opted-out run and not a green one.
+#
+# The VERSION is checked too, because a gate that runs a different tool from
+# CI is the same defect one level down. cppcheck's warning set moves between
+# releases: docket D17(c) was a signed-overflow finding CI raised on 2.19.0,
+# and it does not reproduce on 2.20.0. Same command, same file, different
+# answer. A mismatch is a warning rather than an error — a newer cppcheck is
+# usually a better one — but it is never silent.
+set(ZHAO_CPPCHECK_PINNED "2.19.0")   # .github/workflows/ci.yml: choco install
+
 if("@ZHAO_CPPCHECK_BIN@" STREQUAL "" OR "@ZHAO_CPPCHECK_BIN@" MATCHES "NOTFOUND")
-  message(STATUS "cppcheck not found — static analysis tier SKIPPED")
-  return()
+  if(DEFINED ENV{ZHAO_ALLOW_MISSING_CPPCHECK})
+    message(STATUS
+      "static analysis tier SKIPPED by ZHAO_ALLOW_MISSING_CPPCHECK. "
+      "CI still runs it; this run has NOT checked what CI checks.")
+    return()
+  endif()
+  message(FATAL_ERROR
+    "static analysis tier: cppcheck not found, so this gate did not run.\n"
+    "CI installs cppcheck ${ZHAO_CPPCHECK_PINNED} and runs the same command, so a "
+    "missing local cppcheck means local green and CI red -- which is exactly "
+    "what docket D17 is.\n"
+    "  install:  choco install cppcheck --version=${ZHAO_CPPCHECK_PINNED}\n"
+    "            (or any cppcheck on PATH; a version mismatch only warns)\n"
+    "  opt out:  set ZHAO_ALLOW_MISSING_CPPCHECK=1\n"
+    "Re-run CMake configure after installing -- the path is cached by "
+    "find_program.")
+endif()
+
+execute_process(
+  COMMAND "@ZHAO_CPPCHECK_BIN@" --version
+  OUTPUT_VARIABLE _ver_out
+  ERROR_VARIABLE _ver_err
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" _ver "${_ver_out}")
+if(NOT _ver STREQUAL "" AND NOT _ver STREQUAL "${ZHAO_CPPCHECK_PINNED}")
+  message(WARNING
+    "static analysis tier: local cppcheck ${_ver} != CI's pinned "
+    "${ZHAO_CPPCHECK_PINNED}. The warning set moves between releases, so a "
+    "clean run here does not prove a clean run there.")
 endif()
 
 execute_process(
@@ -47,4 +96,4 @@ if(NOT _rc EQUAL 0)
           "static analysis tier: cppcheck findings (rc=${_rc}):\nstdout:\n${_out}\nstderr:\n${_err}")
 endif()
 list(LENGTH _files _n)
-message(STATUS "static analysis tier OK: ${_n} files, zero warnings")
+message(STATUS "static analysis tier OK: ${_n} files (cppcheck ${_ver}), zero warnings")
