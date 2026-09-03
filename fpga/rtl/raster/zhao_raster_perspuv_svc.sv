@@ -47,6 +47,42 @@
 // it with a fixed shift plus a correction would be a different function, and
 // the gate that would catch that is an exponent boundary nobody thinks to
 // write.
+//
+// ---------------------------------------------------------------------------
+// TWO LANES, AND THE RESCALE PIPELINED AFTER THEM (ruling R7, 2026-09-03)
+// ---------------------------------------------------------------------------
+// ONE PRODUCT A CLOCK IS NOT ENOUGH, and the ruling does the arithmetic:
+//
+//     1,094,600 samples x 2 products = 2,189,200 products
+//     design budget                  = 1,333,333 clocks
+//
+// The ~50% headroom this lane was written to claim is true for ONE UV pair per
+// fragment. Three-sample materials need two products per sample, and one
+// product a clock cannot deliver them. R7:
+//
+//   > instantiate two parallel product paths, U and V, so one complete pair
+//   > starts each clock; pipeline variable rescale/saturation after both
+//   > products
+//
+// Both halves are here, and the second half is also the timing fix. MEASURED
+// at 62.67 MHz -- the slowest INTERNAL path on the whole texture island:
+//
+//     p1_prod_q[36] -> e_q[5][1][8]     slack -5.957, data delay 15.0 ns
+//
+// That was one combinational cone containing a 64-bit add, a 64-bit variable
+// arithmetic shift, two 64-bit magnitude compares and a mux. It is now four
+// registered stages:
+//
+//     P1  the product                     (DSP)
+//     P2  + the round-half-up constant    (64-bit add)
+//     P3  >>> sh                          (64-bit variable shift)
+//     P4  saturate, select, write back    (compares and a mux)
+//
+// THE ARITHMETIC IS UNCHANGED. Every expression above is the same expression,
+// evaluated in the same order, with registers between. The paired test drives
+// this lane and the shipped `zhao_raster_perspuv` on identical stimulus and
+// compares every U, V and saturation flag, so a transcription slip fails
+// immediately rather than becoming a plausible wrong coordinate.
 // ---------------------------------------------------------------------------
 `default_nettype none
 
@@ -104,44 +140,65 @@ module zhao_raster_perspuv_svc #(
   assign v_ready_o = (free_cnt_q != '0);
 
   // -------------------------------------------------- product selection -----
-  // One launch per clock, walking from the retire head so the oldest fragment
-  // finishes first and the table does not fill with half-done pairs.
-  logic          pick_v;
-  logic [TW-1:0] pick_i;
-  logic          pick_axis;   // 0 = U, 1 = V
+  // ONE PICK PER AXIS, so a complete pair can start on one clock. Each walks
+  // from the retire head so the oldest fragment finishes first and the table
+  // does not fill with half-done pairs.
+  //
+  // The two picks may land on the SAME entry -- that is the normal case and
+  // the whole point. They may also land on different ones, which is what keeps
+  // the lane busy when a fragment is already half done.
+  logic          pk_v   [2];
+  logic [TW-1:0] pk_i   [2];
   always_comb begin
-    pick_v    = 1'b0;
-    pick_i    = head_q;
-    pick_axis = 1'b0;
-    for (int n = 0; n < NTOK; n++) begin
-      automatic logic [TW-1:0] s = TW'((int'(head_q) + n) % NTOK);
-      if (!pick_v && e_val[s]) begin
-        if (e_need[s][0]) begin
-          pick_v = 1'b1; pick_i = s; pick_axis = 1'b0;
-        end else if (e_need[s][1]) begin
-          pick_v = 1'b1; pick_i = s; pick_axis = 1'b1;
+    for (int unsigned ax = 0; ax < 2; ax++) begin
+      pk_v[ax] = 1'b0;
+      pk_i[ax] = head_q;
+      for (int n = 0; n < NTOK; n++) begin
+        automatic logic [TW-1:0] s = TW'((int'(head_q) + n) % NTOK);
+        if (!pk_v[ax] && e_val[s] && e_need[s][ax]) begin
+          pk_v[ax] = 1'b1;
+          pk_i[ax] = s;
         end
       end
     end
   end
 
-  // ---- P1: the registered product ------------------------------------------
-  logic               p1_v_q;
-  logic [TW-1:0]      p1_i_q;
-  logic               p1_ax_q;
-  logic signed [63:0] p1_prod_q;
-  logic [5:0]         p1_k_q;
+  // ---- P1..P4, one set per axis --------------------------------------------
+  // The stages are per-lane arrays rather than two copies of the same names,
+  // so the U and V paths cannot drift apart by an edit that touches one.
+  logic               p1_v_q [2];
+  logic [TW-1:0]      p1_i_q [2];
+  logic signed [63:0] p1_prod_q [2];
+  logic [5:0]         p1_k_q [2];
 
-  // ---- P2: rescale and saturate, exactly the original's expression ---------
-  logic [5:0]         sh_c;
-  logic signed [63:0] resc_c;
-  logic               sat_c;
-  logic signed [31:0] q_c;
+  logic               p2_v_q [2];
+  logic [TW-1:0]      p2_i_q [2];
+  logic signed [63:0] p2_sum_q [2];
+  logic [5:0]         p2_sh_q [2];
+
+  logic               p3_v_q [2];
+  logic [TW-1:0]      p3_i_q [2];
+  logic signed [63:0] p3_resc_q [2];
+
+  // ---- the combinational pieces, each now BETWEEN two registers ------------
+  logic [5:0]         sh_c   [2];
+  logic signed [63:0] sum_c  [2];
+  logic signed [63:0] resc_c [2];
+  logic               sat_c  [2];
+  logic signed [31:0] q_c    [2];
   always_comb begin
-    sh_c   = 6'd32 - p1_k_q;
-    resc_c = ($signed(p1_prod_q) + $signed(64'd1 <<< (sh_c - 6'd1))) >>> sh_c;
-    sat_c  = (resc_c > 64'sh0000_0000_7FFF_FFFF) || (resc_c < -64'sh0000_0000_8000_0000);
-    q_c    = sat_c ? (resc_c[63] ? 32'sh8000_0000 : 32'sh7FFF_FFFF) : resc_c[31:0];
+    for (int unsigned ax = 0; ax < 2; ax++) begin
+      // P2: the round-half-up constant, added where the original adds it.
+      sh_c[ax]  = 6'd32 - p1_k_q[ax];
+      sum_c[ax] = $signed(p1_prod_q[ax]) + $signed(64'd1 <<< (sh_c[ax] - 6'd1));
+      // P3: the variable arithmetic shift, still variable.
+      resc_c[ax] = $signed(p2_sum_q[ax]) >>> p2_sh_q[ax];
+      // P4: saturate and select, exactly the original's expression.
+      sat_c[ax] = (p3_resc_q[ax] > 64'sh0000_0000_7FFF_FFFF)
+               || (p3_resc_q[ax] < -64'sh0000_0000_8000_0000);
+      q_c[ax]   = sat_c[ax] ? (p3_resc_q[ax][63] ? 32'sh8000_0000 : 32'sh7FFF_FFFF)
+                            : p3_resc_q[ax][31:0];
+    end
   end
 
   // ---------------------------------------------------------- retirement ----
@@ -167,7 +224,11 @@ module zhao_raster_perspuv_svc #(
       head_q      <= '0;
       tail_q      <= '0;
       free_cnt_q  <= (TW + 1)'(NTOK);
-      p1_v_q      <= 1'b0;
+      for (int ax = 0; ax < 2; ax++) begin
+        p1_v_q[ax] <= 1'b0;
+        p2_v_q[ax] <= 1'b0;
+        p3_v_q[ax] <= 1'b0;
+      end
       fragments_o <= 32'd0;
       products_o  <= 32'd0;
       for (int i = 0; i < NTOK; i++) begin
@@ -215,22 +276,76 @@ module zhao_raster_perspuv_svc #(
         fragments_o       <= fragments_o + 32'd1;
       end
 
-      // ---- P0 launch ------------------------------------------------------
-      p1_v_q <= pick_v;
-      if (pick_v) begin
-        p1_i_q    <= pick_i;
-        p1_ax_q   <= pick_axis;
-        p1_k_q    <= e_k[pick_i];
-        p1_prod_q <= 64'(e_num[pick_i][pick_axis]) * $signed({40'd0, e_mant[pick_i]});
-        e_need[pick_i][pick_axis] <= 1'b0;
-        products_o <= products_o + 32'd1;
+      // ---- P0 launch: BOTH axes, independently -----------------------------
+      // `e_need[i][ax]` is cleared with a BIT-SELECT, never by writing the
+      // whole two-bit word. Two lanes clearing one bit each of the same entry
+      // on the same clock is the normal case; two nonblocking assignments to
+      // the same VARIABLE would keep only the last, and the fragment would sit
+      // in the table forever waiting for a product already issued. That is the
+      // free-count race in a new place, and it is why the width is spelled out
+      // rather than left to a read-modify-write.
+      for (int unsigned ax = 0; ax < 2; ax++) begin
+        p1_v_q[ax] <= pk_v[ax];
+        if (pk_v[ax]) begin
+          p1_i_q[ax]    <= pk_i[ax];
+          p1_k_q[ax]    <= e_k[pk_i[ax]];
+          p1_prod_q[ax] <= 64'(e_num[pk_i[ax]][ax]) * $signed({40'd0, e_mant[pk_i[ax]]});
+          e_need[pk_i[ax]][ax] <= 1'b0;
+        end
+      end
+      // ONE assignment, both lanes. The loop above once carried
+      // `products_o <= products_o + 1` inside it -- two nonblocking
+      // assignments to one counter in one always_ff, so a clock that launched
+      // both axes counted ONE. The paired suite caught it on the first run:
+      // 334 products where 668 were issued.
+      //
+      // Three lines above that line is a comment explaining why e_need is
+      // cleared with a bit-select and not a read-modify-write, for exactly
+      // this reason. Knowing the rule is not the same as applying it, which is
+      // why the counter is checked by a test rather than by care.
+      products_o <= products_o + 32'(pk_v[0]) + 32'(pk_v[1]);
+
+      // ---- P2: + the rounding constant -------------------------------------
+      for (int unsigned ax = 0; ax < 2; ax++) begin
+        p2_v_q[ax] <= p1_v_q[ax];
+        if (p1_v_q[ax]) begin
+          p2_i_q[ax]   <= p1_i_q[ax];
+          p2_sum_q[ax] <= sum_c[ax];
+          p2_sh_q[ax]  <= sh_c[ax];
+        end
       end
 
-      // ---- P2 writeback ---------------------------------------------------
-      if (p1_v_q) begin
-        e_q[p1_i_q][p1_ax_q]   <= q_c;
-        e_have[p1_i_q][p1_ax_q] <= 1'b1;
-        if (sat_c) e_sat[p1_i_q] <= 1'b1;
+      // ---- P3: the variable shift ------------------------------------------
+      for (int unsigned ax = 0; ax < 2; ax++) begin
+        p3_v_q[ax] <= p2_v_q[ax];
+        if (p2_v_q[ax]) begin
+          p3_i_q[ax]    <= p2_i_q[ax];
+          p3_resc_q[ax] <= resc_c[ax];
+        end
+      end
+
+      // ---- P4: saturate, select, write back ---------------------------------
+      // Same bit-select discipline as the launch: `e_have[i][ax]` and
+      // `e_q[i][ax]` are per-axis, so both lanes may complete the same
+      // fragment on one clock.
+      for (int unsigned ax = 0; ax < 2; ax++) begin
+        if (p3_v_q[ax]) begin
+          e_q[p3_i_q[ax]][ax]    <= q_c[ax];
+          e_have[p3_i_q[ax]][ax] <= 1'b1;
+        end
+      end
+      // `e_sat` is ONE bit for the pair, so it is written once from the OR of
+      // both lanes rather than from two branches -- two branches would be the
+      // same lost-update fault the launch comment describes, and here it would
+      // silently drop a saturation flag.
+      begin
+        automatic logic set_u = p3_v_q[0] && sat_c[0];
+        automatic logic set_v = p3_v_q[1] && sat_c[1];
+        if (set_u && set_v && (p3_i_q[0] == p3_i_q[1])) e_sat[p3_i_q[0]] <= 1'b1;
+        else begin
+          if (set_u) e_sat[p3_i_q[0]] <= 1'b1;
+          if (set_v) e_sat[p3_i_q[1]] <= 1'b1;
+        end
       end
 
       // ---- retire ---------------------------------------------------------

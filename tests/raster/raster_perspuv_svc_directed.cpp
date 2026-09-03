@@ -205,5 +205,78 @@ int main(int argc, char** argv) {
               got.size(), svc_clocks,
               static_cast<double>(svc_clocks) / static_cast<double>(got.size()));
 
+  // ---- SATURATED THROUGHPUT: products per clock, with nothing in the way ---
+  //
+  // THE STALLED RUN ABOVE CANNOT MEASURE THIS, and believing otherwise would
+  // have shipped an unmeasured claim. It reports 1.39 clocks a fragment for
+  // the ONE-lane block and 1.39 for the TWO-lane block -- identical, because
+  // its consumer is ready only three clocks in four and that, not the
+  // multiplier count, is what bounds it. A throughput number taken from a
+  // stalled run measures the stall.
+  //
+  // R7's requirement is arithmetic and specific:
+  //
+  //     1,094,600 samples x 2 products = 2,189,200 products
+  //     design budget                  = 1,333,333 clocks
+  //     therefore                        >= 1.642 products per clock
+  //
+  // So the measurement has to be products per clock with the input saturated
+  // and the output never blocking. One lane cannot exceed 1.0 by
+  // construction. Two lanes can reach 2.0.
+  {
+    reset();
+    size_t fed = 0;
+    int clocks = 0;
+    const uint32_t before = top.b_products_o;
+    uint32_t max_delta = 0, delta_sum = 0;
+    for (int c = 0; c < 200000 && fed < fr.size(); ++c) {
+      top.b_valid_i = 1;
+      top.b_uow_i = fr[fed].uow;
+      top.b_vow_i = fr[fed].vow;
+      top.b_mant_i = mk[fed].first;
+      top.b_k_i = mk[fed].second;
+      top.b_dz_i = (fr[fed].invw == 0);
+      top.b_tag_i = fr[fed].tag;
+      top.b_rready_i = 1;              // never block the output
+      top.eval();
+      const bool took = top.b_ready_o != 0;
+      const uint32_t p_before = top.b_products_o;
+      zhao::tick(top);
+      top.eval();
+      const uint32_t d = top.b_products_o - p_before;
+      if (d > max_delta) max_delta = d;
+      delta_sum += d;
+      if (took) ++fed;
+      ++clocks;
+    }
+    top.b_valid_i = 0;
+    // The window ENDS HERE. The first version of this case kept counting
+    // through a 4,000-clock drain and reported 0.15 products/clock -- a number
+    // about the drain, not about the lane. Products per clock is only
+    // meaningful while the input is saturated.
+    const uint32_t products = top.b_products_o - before;
+    for (int c = 0; c < 4000; ++c) { top.b_rready_i = 1; top.eval(); zhao::tick(top); }
+    const double per_clock = static_cast<double>(products) / clocks;
+    std::printf("  saturated: %u products in %d clocks = %.2f products/clock "
+                "(R7 needs >= 1.64)\n", products, clocks, per_clock);
+    zhao::check(per_clock > 1.0,
+                "TWO product lanes: more than one product a clock, which a "
+                "single shared multiplier cannot do by construction",
+                1, per_clock > 1.0 ? 1 : 0);
+    zhao::check(per_clock >= 1.642,
+                "and enough for three-sample materials: 2,189,200 products "
+                "inside a 1,333,333-clock budget",
+                1, per_clock >= 1.642 ? 1 : 0);
+    // The rate above is an average, and an average can be argued with. This is
+    // the STRUCTURAL claim: two launches landed on ONE clock, which a single
+    // shared multiplier cannot do however fast it runs. Measured 1 for the
+    // one-lane block and 2 for this one.
+    zhao::check(max_delta == 2,
+                "and both lanes launch on the SAME clock -- the structural "
+                "claim, not an average",
+                2, max_delta);
+    (void)delta_sum;
+  }
+
   return zhao::report_and_exit("raster_perspuv_svc_directed");
 }
