@@ -11,7 +11,7 @@ Blocks: **95** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | audio | · | · | · | 1 | · | · | · | · | 1 |
 | command | · | · | 1 | 2 | · | · | · | · | 3 |
-| compositor | 3 | 2 | · | · | · | · | · | · | 5 |
+| compositor | 2 | 3 | · | · | · | · | · | · | 5 |
 | debug | · | · | 1 | 3 | · | · | · | · | 4 |
 | field | 5 | · | 1 | 1 | · | · | · | · | 7 |
 | forge | 1 | · | 1 | · | · | · | · | · | 2 |
@@ -27,7 +27,7 @@ Blocks: **95** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | · | · | 9 | · | · | · | · | · | 9 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 33 | 7 | 39 | 16 | · | · | · | 6 | 95 |
+| **all** | 32 | 8 | 39 | 16 | · | · | · | 6 | 95 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -148,6 +148,7 @@ Blocks: **95** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | PART.SOFT | UNIT_VERIFIED | 2026-08-21 | `84cce0d` | tests/particles/part_soft_directed.cpp |
 | FORGE.CLIFF | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/forge/forge_cliff_directed.cpp |
 | FORGE.CLIFF | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/forge/forge_cliff_directed.cpp |
+| TWOD.PLANE | REFERENCE_COMPLETE | 2026-09-03 | `cc6b091c` | fpga/rtl/compositor/zhao_twod_plane.sv |
 | TWOD.SPRITE | REFERENCE_COMPLETE | 2026-09-03 | `9b8ce0d1` | fpga/rtl/compositor/zhao_twod_sprite.sv |
 | POST.GATHER | REFERENCE_COMPLETE | 2026-09-03 | `9ae86823` | fpga/rtl/compositor/zhao_post_gather.sv |
 | DEBUG.COUNTERS | REFERENCE_COMPLETE | 2026-08-15 | `38f9b96` | reference/include/zref/zref_cmd2.hpp |

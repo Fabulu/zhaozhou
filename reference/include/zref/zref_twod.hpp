@@ -53,5 +53,62 @@ inline bool sprite_for_view(uint8_t view_mask, uint8_t view_sel) {
   return (view_mask & view_sel) != 0;
 }
 
+// ---- the plane engine (owner ruling 2026-08-31 §3.1, roles by R4) ---------
+//
+// Two slots, ONE engine, and a feature list that is a ceiling: CLUT8/RGB565,
+// NEAREST only, affine, line scroll, repeat and clamp, view masks.
+//
+// Nearest is why there is no fractional output here either: the texel a
+// coordinate falls in IS the texel.
+inline constexpr uint8_t kRoleBackdrop   = 0;
+inline constexpr uint8_t kRoleAtmosphere = 1;
+inline constexpr uint8_t kBlendReplace   = 0;
+
+// Roles 2 and 3 are reserved and the descriptor is refused. A BACKDROP sits
+// beneath the resolved world, so an alpha-blended one has nothing under it to
+// blend with -- malformed rather than merely odd.
+inline bool plane_role_legal(uint8_t role) {
+  return role == kRoleBackdrop || role == kRoleAtmosphere;
+}
+inline bool plane_blend_legal(uint8_t role, uint8_t blend) {
+  return role != kRoleBackdrop || blend == kBlendReplace;
+}
+
+// u = u0 + a*x + b*y + line_scroll, in fx16; the texel is the integer part.
+inline int32_t plane_u(int32_t u0, int32_t a, int32_t b, int32_t line_scroll,
+                       int x, int y) {
+  const int64_t f = static_cast<int64_t>(u0) +
+                    static_cast<int64_t>(a) * x +
+                    static_cast<int64_t>(b) * y + line_scroll;
+  return static_cast<int32_t>(f >> 16);
+}
+
+inline int32_t plane_v(int32_t v0, int32_t c, int32_t d, int x, int y) {
+  const int64_t f = static_cast<int64_t>(v0) +
+                    static_cast<int64_t>(c) * x +
+                    static_cast<int64_t>(d) * y;
+  return static_cast<int32_t>(f >> 16);
+}
+
+// REPEAT by ONE conditional correction -- no divider. Exact while the
+// coordinate is out of range by at most one size; beyond that the caller has
+// asked for a step larger than the plane, and `failed` says so rather than the
+// picture tiling wrongly.
+inline uint16_t plane_wrap(int32_t t, uint16_t size, bool clamp_mode,
+                           bool* failed) {
+  if (failed != nullptr) *failed = false;
+  const int32_t sz = static_cast<int32_t>(size);
+  if (clamp_mode)
+    return static_cast<uint16_t>(t < 0 ? 0 : (t >= sz ? size - 1 : t));
+  int32_t r = t;
+  if (r < 0) r += sz;
+  else if (r >= sz) r -= sz;
+  if (r < 0 || r >= sz) {
+    if (failed != nullptr) *failed = true;
+    return 0;
+  }
+  return static_cast<uint16_t>(r);
+}
+
 }  // namespace twod
 }  // namespace zref

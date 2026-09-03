@@ -141,11 +141,11 @@ worse and unbounded.
 * `slots_enabled_histogram[3]` — how often 0, 1 or 2 planes are actually used
 
 ## Scalar reference function
-`zref::TwoPlanes` (ledger `reference_model`). Owns the affine walk, the nearest-sampling rounding, the wrap
+`zref::twod::plane_u` (ledger `reference_model`). Owns the affine walk, the nearest-sampling rounding, the wrap
 modes, the line-scroll application and the refusal taxonomy.
 
 ## Directed tests
-`tests/twod/twod_plane_directed.cpp`.
+`tests/compositor/twod_plane_directed.cpp`.
 
 * identity affine: the plane appears unrotated and unscaled, texel for pixel;
 * **the affine recurrence equals exact evaluation** at every pixel of a
@@ -161,14 +161,15 @@ modes, the line-scroll application and the refusal taxonomy.
 * every refusal condition.
 
 ## Randomized differential tests
-`tests/twod/twod_plane_random.cpp`, RTL against `zref::TwoPlanes`.
+`tests/compositor/twod_plane_random.cpp`, RTL against `zref::twod::plane_u`.
 
 Random affines biased toward **near-degenerate** ones — very large scales, near
 90-degree rotations, and steps close to a texel boundary — since those are where
 truncation and the recurrence disagree if they are going to.
 
 ## Formal properties
-`tests/formal/twod_plane_slots.sby`:
+**A formal lane is PLANNED and no file exists yet**, so it is named without
+a path -- see `reports/PHANTOM-CITATIONS-AUDIT.md`. Its properties:
 
 * **no state leaks between slots**: slot 0's output is a function of slot 0's
   descriptor alone. This is the property that makes one time-multiplexed engine

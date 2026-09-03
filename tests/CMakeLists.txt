@@ -2195,6 +2195,33 @@ verilate(test_terrain_residency_directed
 add_test(NAME terrain_residency_directed COMMAND test_terrain_residency_directed)
 set_tests_properties(terrain_residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# TWOD.PLANE -- two slots on ONE engine, and most of its contract is a list of
+# things it may not do. A restriction is not tested by exercising the allowed
+# path: it is tested by asking for the forbidden one and requiring a refusal,
+# and where the restriction is STRUCTURAL (no depth port, no fractional texel
+# port) by recording that there is no port with which to ask.
+add_executable(test_twod_plane_directed compositor/twod_plane_directed.cpp)
+target_link_libraries(test_twod_plane_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_twod_plane_directed
+  PREFIX Vzhao_twod_plane
+  TOP_MODULE zhao_twod_plane
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_plane.sv)
+add_test(NAME twod_plane_directed COMMAND test_twod_plane_directed)
+set_tests_properties(twod_plane_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# ...and the randomized lane. What it buys is the COORDINATE SPACE: negative
+# coordinates are where `r += size` is right for one size out and wrong for
+# two, and that does not appear until a plane scrolls left past its own origin
+# -- which every scrolling sky does, once.
+add_executable(test_twod_plane_random compositor/twod_plane_random.cpp)
+target_link_libraries(test_twod_plane_random PRIVATE zhao_harness zhao_zref)
+verilate(test_twod_plane_random
+  PREFIX Vzhao_twod_plane
+  TOP_MODULE zhao_twod_plane
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_plane.sv)
+add_test(NAME twod_plane_random COMMAND test_twod_plane_random)
+set_tests_properties(twod_plane_random PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # TWOD.SPRITE -- HUD sprites, a ruling that is mostly DELETIONS: no private
 # sampler, no text rasterizer, no glyph cache. The property that is easy to get
 # nearly right is the affine walk: stepping UV serpentine-style is also "just

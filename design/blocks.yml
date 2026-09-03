@@ -3082,15 +3082,19 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 plane texel per clock
-    reference_model: zref::TwoPlanes
+    reference_model: zref::twod::plane_u
     tests:
       directed: tests/compositor/twod_plane_directed.cpp
       random: tests/compositor/twod_plane_random.cpp
     counters: [blended_fragments]
     source_ids: true
     budget_group: twod_post
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-03"
+        commit: "cc6b091c"
+        evidence: fpga/rtl/compositor/zhao_twod_plane.sv
     deferred: false
     cut_order: 4
     superseded_by: null
