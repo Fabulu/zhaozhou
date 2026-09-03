@@ -1,7 +1,7 @@
 # Task Log: RUN-20260903-2309 - Direction 29: a sun in every clip, visibly lit, distinct colours; publish tonight
 
 **Created:** 2026-09-03 23:09 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260903-2309-zixxtrixx-suns-every-clip/
 
 ---
@@ -149,3 +149,22 @@ counts and fresh posters. Same family as the stale-binary trap: a measurement
 that did not move (the poster) after a change that must have moved it.
 
 Upheaval f0a2e65: all 21 webms + 18 changed posters committed and pushed.
+
+## 2026-09-04 02:20 — PUBLISHED and verified; run CLOSED
+
+Deployed ONCE: deploy.ps1 -Project upheaval -Branch main (production, 44 files
+uploaded). Verified live at https://upheaval.pages.dev: page 200 (264 KB);
+EXACTLY ONE robots noindex meta (the second grep hit is the footer prose); the
+archive tab carries Generation Eighteen (22 refs); the sun notes render; and
+seven served files SHA256-match the local tree byte-for-byte -- the new death,
+idle and salto-nine encodes, the UNTOUCHED moving-light and additive-
+experiment clips, and two generation-eighteen archive files.
+
+Final probe rerun: PASS. All background tasks stopped and verified none
+running (no zhao-reel/ffmpeg/zixx-probe processes).
+
+Final SHAs, both pushed HEAD:main, fast-forward, no force:
+  zhaozhou  a002f207d11a3d9f81b655bb9c7b7174b5a1154d
+  Upheaval  f0a2e6529ac4ca4ec49958f5684610731520200c
+
+Status: COMPLETE. Tomorrow starts the new creature.
