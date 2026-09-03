@@ -147,8 +147,44 @@ module zhao_texture_cache_pipe #(
   // 4 x 16 = 64 bits, it needs a reset that a memory block cannot give it, and
   // putting it in memory would mean a line could read valid before the fill
   // engine had cleared it.
-  logic [15:0]      data_r  [LANES][LINES * HW_PL];
-  logic [TAG_W-1:0] tag_r   [LANES][LINES];
+  // ONE FLAT ARRAY PER LANE, IN A GENERATE -- the OTHER half of the fix.
+  //
+  // Moving the writes to a clock-only process (2026-09-03) was necessary and
+  // NOT sufficient. The fit came back with 2 M10K and 128 memory bits again,
+  // and synthesis said why:
+  //
+  //     EDA Netlist Writer cannot regroup multidimensional array "data_r"
+  //     Found 1 instances of uninferred RAM logic
+  //
+  // with no "Inferred RAM" line for data_r or tag_r at all.
+  //
+  // A `[LANES][N]` unpacked array is not a memory Quartus can map. It has to
+  // build a mux across every lane, and the whole array falls into flip-flops
+  // however the writes are written.
+  //
+  // THE BLOCK THIS REPLACES SAYS EXACTLY THIS, at zhao_texture_cache.sv:237,
+  // with the measurement: "5,402 ALMs, 9,993 registers, ZERO M10K, zero memory
+  // bits -- a cache made entirely of flops". I read that file's SECOND
+  // explanation (the async reset, :495) and implemented only that one. The
+  // first explanation was thirty lines earlier.
+  //
+  // So the lane index becomes STATIC: a genvar picks the array and the write
+  // enable is decoded per lane. Same values, same cycle, same everything the
+  // differential checks -- only the inference changes.
+  genvar gl;
+  generate
+    for (gl = 0; gl < int'(LANES); gl++) begin : g_lane
+      // Deliberately NOT reset: a reset loop over the data array is itself a
+      // thing that stops M10K inference, and no read can reach it while
+      // `valid_r` is 0.
+      logic [15:0]      data_r [LINES * HW_PL];
+      logic [TAG_W-1:0] tag_r  [LINES];
+    end
+  endgenerate
+
+  // `valid_r` stays a flat flop array: 4 x 16 = 64 bits, it NEEDS the reset a
+  // memory cannot give, and putting it in memory would let a line read valid
+  // before the fill engine had cleared it.
   logic             valid_r [LANES][LINES];
 
   // ==========================================================================
@@ -302,40 +338,49 @@ module zhao_texture_cache_pipe #(
   end
 
   // ==========================================================================
-  always_ff @(posedge clk) begin
-    // ---- C1: THE SYNCHRONOUS READ ------------------------------------------
-    // No reset on these, deliberately: a memory block's output register cannot
-    // be asynchronously reset, and asking for one is how an inferred RAM
-    // quietly becomes flops. `c2_v` gates their use, and it IS reset.
-    //
-    // `valid_r` is read on the SAME edge as the tag. Reading it one stage
-    // later -- which the first version of this file did -- samples the tag at
-    // clock T and the valid bit at T+1, and during a fill those two disagree:
-    // the fill clears valid at the start and sets it at the last beat, so a
-    // probe could see the OLD tag with the NEW valid and call a miss a hit.
-    for (int unsigned k = 0; k < LANES; k++) begin
-      ram_tag[k] <= tag_r[k][rd_idx[k]];
-      ram_val[k] <= valid_r[k][rd_idx[k]];
-      ram_dat[k] <= data_r[k][rd_daddr[k]];
-    end
+  // THE BANK PORTS LIVE INSIDE THE GENERATE, one per lane.
+  //
+  // `g_lane[k]` with `k` a loop variable is not a constant selection -- a
+  // generate instance can only be picked by a genvar. That is not a syntax
+  // inconvenience, it IS the point: a lane chosen by a register is exactly the
+  // dynamic selection that forces the mux and kills inference. Putting the
+  // port inside the generate makes the lane static by construction.
+  //
+  // No reset on any of it, deliberately: a memory block's output register
+  // cannot be asynchronously reset, and asking for one is how an inferred RAM
+  // quietly becomes flops. `c2_v` gates their use and IS reset.
+  generate
+    for (gl = 0; gl < int'(LANES); gl++) begin : g_lane_port
+      always_ff @(posedge clk) begin
+        // Read through a REGISTERED address -- the other half of the M10K
+        // shape, and the half this file already had right.
+        ram_tag[gl] <= g_lane[gl].tag_r[rd_idx[gl]];
+        ram_dat[gl] <= g_lane[gl].data_r[rd_daddr[gl]];
 
-    // ---- THE ARRAY WRITES, in the SAME clock-only process ------------------
-    // Moved here 2026-09-03. Behaviour is identical: both were already
-    // non-blocking, so a read and a write to one address on one edge still
-    // returns the OLD contents -- the read-during-write mode an M10K provides.
-    // What changes is that the arrays are no longer touched by a process with
-    // an asynchronous reset, which is what lets them infer as memory.
-    //
-    // The conditions are exactly the fill engine's, read from its registers
-    // rather than restated: this is a relocation, not a redesign. `valid_r`
-    // deliberately does NOT move -- it needs the reset a memory cannot give.
-    if (fb_busy_r && fill_data_valid_i) begin
-      // EVERY matching lane is written by the SAME beat: the multicast.
-      for (int unsigned k = 0; k < LANES; k++)
-        if (fb_mask_r[k]) data_r[k][{fb_idx_r, fb_beat_r}] <= fill_data_i;
-      if (fb_beat_r == BEAT_W'(HW_PL - 1))
-        for (int unsigned k = 0; k < LANES; k++)
-          if (fb_mask_r[k]) tag_r[k][fb_idx_r] <= fb_tag_r;
+        // Write, with the lane DECODED rather than indexed. Behaviour is
+        // identical to the shared loop it replaces: still non-blocking, so a
+        // read and a write to one address on one edge still returns the OLD
+        // contents, which is the read-during-write mode an M10K provides.
+        if (fb_busy_r && fill_data_valid_i && fb_mask_r[gl]) begin
+          g_lane[gl].data_r[{fb_idx_r, fb_beat_r}] <= fill_data_i;
+          if (fb_beat_r == BEAT_W'(HW_PL - 1)) begin
+            g_lane[gl].tag_r[fb_idx_r] <= fb_tag_r;
+          end
+        end
+      end
+    end
+  endgenerate
+
+  // `valid_r` is a flat flop array and its read stays here: it is 64 bits, it
+  // needs the reset a memory cannot give, and it is read on the SAME edge as
+  // the tag. Reading it one stage later -- which the first version of this
+  // file did -- samples the tag at clock T and the valid bit at T+1, and
+  // during a fill those two disagree: the fill clears valid at the start and
+  // sets it at the last beat, so a probe could see the OLD tag with the NEW
+  // valid and call a miss a hit.
+  always_ff @(posedge clk) begin
+    for (int unsigned k = 0; k < LANES; k++) begin
+      ram_val[k] <= valid_r[k][rd_idx[k]];
     end
   end
 

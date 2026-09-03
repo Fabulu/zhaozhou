@@ -467,15 +467,49 @@ try {
         # contamination into a loud one. As with the ticks-suffixed workspace
         # above: it does not change what is measured, it changes whether the
         # measurement can be shown.
+        # SCOPE: the block's DECLARED CLOSURE, not every file in the QSF.
+        #
+        # A per-block QSF carries the whole shell source list while
+        # TOP_LEVEL_ENTITY names one block, so Quartus analyses many files and
+        # synthesises only the top's cone. Hashing all of them meant an edit to
+        # ANY unrelated RTL discarded a perfectly valid measurement -- which is
+        # what happened on 2026-09-03: an 88-minute cache fit was thrown away
+        # because `zhao_raster_tile_pipe.sv` and `zhao_abi_pkg.sv` changed,
+        # neither of which is in the cache's closure or its cone.
+        #
+        # That also made the standing rule unworkable -- CLAUDE.md says to work
+        # on things outside the running fit's closure, and with a whole-QSF
+        # guard there is no such thing.
+        #
+        # `design/fit_targets.yml` exists precisely to declare what a block
+        # actually needs, so it is the right scope. Falls back to the full QSF
+        # list when a target has no declared closure, because a wrong-but-loud
+        # guard beats no guard.
         $srcBefore = @{}
         $srcAfterMap = $null
-        foreach ($line in $qsf) {
-            if ($line -match '^set_global_assignment -name (?:SYSTEMVERILOG|VERILOG|VHDL)_FILE (.+)$') {
-                $sp = $Matches[1].Trim()
-                if (Test-Path -LiteralPath $sp) {
-                    $srcBefore[$sp] = (Get-FileHash -LiteralPath $sp -Algorithm SHA256).Hash
+        $guardSet = $null
+        if ($sources) {
+            $guardSet = @()
+            foreach ($rel in $sources) {
+                $abs = Join-Path $RepoRoot ($rel -replace '/', '')
+                if (Test-Path -LiteralPath $abs) { $guardSet += $abs }
+            }
+        }
+        if ($guardSet -and $guardSet.Count -gt 0) {
+            foreach ($sp in $guardSet) {
+                $srcBefore[$sp] = (Get-FileHash -LiteralPath $sp -Algorithm SHA256).Hash
+            }
+            Write-Host ("provenance guard: {0} declared source(s)" -f $srcBefore.Count)
+        } else {
+            foreach ($line in $qsf) {
+                if ($line -match '^set_global_assignment -name (?:SYSTEMVERILOG|VERILOG|VHDL)_FILE (.+)$') {
+                    $sp = $Matches[1].Trim()
+                    if (Test-Path -LiteralPath $sp) {
+                        $srcBefore[$sp] = (Get-FileHash -LiteralPath $sp -Algorithm SHA256).Hash
+                    }
                 }
             }
+            Write-Host ("provenance guard: no declared closure -- hashing all {0} QSF source(s)" -f $srcBefore.Count)
         }
 
         # PER-ROW PROVENANCE. This file MERGES rows across runs (see the merge

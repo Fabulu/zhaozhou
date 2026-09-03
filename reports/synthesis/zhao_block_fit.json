@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "0e8b1c9d1045fbb15d39759596d3f4f1bbcba42b",
-    "newestRunClean":  true,
+    "newestRunCommit":  "3bc25633d81b6523c4f2179ffb0acd8636618de8",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1047,7 +1047,10 @@
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  98.66,
-                       "fmaxClock":  "clk"
+                       "fmaxClock":  "clk",
+                       "lastAttemptStatus":  "contaminated:source-changed-during-fit",
+                       "lastAttemptSeconds":  5915,
+                       "lastAttemptCommit":  "3bc25633d81b6523c4f2179ffb0acd8636618de8"
                    },
                    {
                        "module":  "zhao_texture_mosaic",
