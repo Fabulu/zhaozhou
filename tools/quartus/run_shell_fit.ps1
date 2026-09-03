@@ -21,6 +21,31 @@ param(
     # Overrides the STAGED copy only, exactly as -Processors does, so the
     # committed project keeps SEED 1 and normal rounds stay comparable.
     [int]$Seed = 0,
+    # THE CONSTRAINT IS THE EXPERIMENT.
+    # SaveTheRendered.md, 2026-09-03: "Quartus was never told the real goal."
+    # The committed SDC says 10.000 ns, so the fitter has only ever solved a
+    # 100 MHz problem, and 99.50 MHz is the DERIVED Fmax of a placement that
+    # was never asked for more. At 10 ns only Early-Z is red and the other four
+    # near-critical owners read as passing, so timing-driven placement spends
+    # its effort on one 50 ps endpoint instead of the cluster.
+    #
+    # At 9.52381 ns (105 MHz) all five go negative and the fitter faces a
+    # materially different problem. That does not conjure 5.5 MHz; it makes the
+    # measurement answer the question actually being asked, which is "can
+    # Quartus place THIS design at 105 MHz", judged on zero WNS and zero TNS
+    # rather than on a derived Fmax borrowed from another target.
+    #
+    # Staged into the snapshot only, exactly as -Processors and -Seed are, so
+    # the committed SDC keeps 10.000 and ordinary rounds stay comparable.
+    [double]$GpuPeriodNs = 0,
+    # Quartus 17.0 effort levers the campaign never exhausted. Both are
+    # measured, not believed: PLACEMENT_EFFORT_MULTIPLIER above 1 spends longer
+    # seeking a placement, and register retiming is supported on Cyclone.
+    # NOT to be retried, both already measured and rejected:
+    # OPTIMIZATION_TECHNIQUE=SPEED (-3.01 MHz, +147 ALM) and explicit physical
+    # register duplication (exactly zero change, identical ALM and slack).
+    [double]$PlacementEffort = 0,
+    [switch]$Retiming,
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
     [string]$ReportRoot
 )
@@ -175,9 +200,12 @@ function Assert-VirtualPinParity {
 }
 
 $SourceCone = @(Assert-SourceParity)
-Assert-VirtualPinParity
-if ($ParityOnly) {
-    exit 0
+Assert-VirtualPinParity
+
+if ($ParityOnly) {
+
+    exit 0
+
 }
 
 $QuartusSh = Join-Path $QuartusBin 'quartus_sh.exe'
@@ -264,6 +292,46 @@ try {
         $qsfText += "set_global_assignment -name SEED $Seed`n"
         [IO.File]::WriteAllText($stagedQsf, $qsfText, $Utf8NoBom)
         Write-Host "staged override: SEED $Seed  (committed project keeps SEED 1)"
+    }
+
+    if ($GpuPeriodNs -gt 0) {
+        # The SDC is not a QSF: a later assignment does NOT win, so the
+        # create_clock line is REPLACED rather than appended to. Only gpu_clk
+        # moves; vid_clk and audio_clk are frozen ratios of the product clock
+        # and retargeting them would be measuring a different machine.
+        $stagedSdc = Join-Path $SnapshotProject 'zhao_shell_fit.sdc'
+        $sdcText = [IO.File]::ReadAllText($stagedSdc)
+        $periodText = $GpuPeriodNs.ToString('0.00000', [Globalization.CultureInfo]::InvariantCulture)
+        $before = $sdcText
+        $sdcText = [regex]::Replace(
+            $sdcText,
+            '(?m)^(create_clock\s+-name\s+gpu_clk\s+-period\s+)[0-9.]+',
+            ('${1}' + $periodText))
+        if ($sdcText -eq $before) {
+            throw "GpuPeriodNs: no gpu_clk create_clock line found in the staged SDC -- refusing to fit against an unchanged constraint."
+        }
+        $sdcText = "# gpu_clk period staged by run_shell_fit.ps1 -GpuPeriodNs.`n" + $sdcText
+        [IO.File]::WriteAllText($stagedSdc, $sdcText, $Utf8NoBom)
+        $mhz = 1000.0 / $GpuPeriodNs
+        Write-Host ("staged override: gpu_clk period {0} ns ({1:N2} MHz)  (committed SDC keeps 10.000)" -f $periodText, $mhz)
+    }
+
+    if ($PlacementEffort -gt 0) {
+        $stagedQsf = Join-Path $SnapshotProject 'zhao_shell_fit.qsf'
+        $qsfText = [IO.File]::ReadAllText($stagedQsf)
+        $qsfText += "`n# Overridden by run_shell_fit.ps1 -PlacementEffort.`n"
+        $qsfText += "set_global_assignment -name PLACEMENT_EFFORT_MULTIPLIER $PlacementEffort`n"
+        [IO.File]::WriteAllText($stagedQsf, $qsfText, $Utf8NoBom)
+        Write-Host "staged override: PLACEMENT_EFFORT_MULTIPLIER $PlacementEffort"
+    }
+
+    if ($Retiming) {
+        $stagedQsf = Join-Path $SnapshotProject 'zhao_shell_fit.qsf'
+        $qsfText = [IO.File]::ReadAllText($stagedQsf)
+        $qsfText += "`n# Overridden by run_shell_fit.ps1 -Retiming.`n"
+        $qsfText += "set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING ON`n"
+        [IO.File]::WriteAllText($stagedQsf, $qsfText, $Utf8NoBom)
+        Write-Host "staged override: PHYSICAL_SYNTHESIS_REGISTER_RETIMING ON"
     }
 
     $LogDir = Join-Path $Workspace 'logs'
