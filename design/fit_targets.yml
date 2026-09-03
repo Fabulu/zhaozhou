@@ -91,6 +91,13 @@ targets:
   - top: zhao_texture_palette_res
     sources:
       - fpga/rtl/texture/zhao_texture_palette_res.sv
+    rules:
+      # Added 2026-09-04 with the port move. `mem_r` is 16,384 bits, so at
+      # 10,240 bits per M10K it cannot be memory in fewer than 2 blocks.
+      # The block's own comment claimed the array was deliberately unreset and
+      # therefore inferrable; that was true of the ARRAY and false of the
+      # PROCESS, and nothing was measuring the difference.
+      min_m10k: 2
 
   - top: zhao_texture_rsp_dispatch
     sources:
@@ -130,6 +137,17 @@ targets:
       # that fixes it.
       max_registers: 2500
 
+  # RASTER.TILESTORE -- two 64-bit x 256 banks, the tile colour store.
+  - top: zhao_raster_tilestore
+    sources:
+      - fpga/rtl/raster/zhao_raster_tilestore.sv
+    rules:
+      # Added 2026-09-04 with the port move. ram0 and ram1 are 16,384 bits
+      # each; 32,768 bits cannot be memory in fewer than 4 M10K. Both banks
+      # have to infer -- 2 would mean one of them did not, and a half-inferred
+      # tile store is the shape that reads as a fit that nearly worked.
+      min_m10k: 4
+
   - top: zhao_raster_rcp24_svc
     sources:
       - fpga/rtl/field/zhao_field_rcp24_rom.sv
@@ -156,6 +174,24 @@ targets:
   - top: zhao_terrain_residency_v2
     sources:
       - fpga/rtl/terrain/zhao_terrain_residency_v2.sv
+    rules:
+      # Added 2026-09-04 with the storage rework. Without a min_m10k a fit that
+      # put all 167,936 bits back into flip-flops would report `ok`, which is
+      # the exact false-pass this gate exists to remove -- and this block was
+      # 60% of the console's whole overage.
+      #
+      # THE THRESHOLD IS A CAPACITY FLOOR, not an estimate. keyram and statram
+      # are 167,936 bits; an M10K holds 10,240, so if they are memory at all
+      # they cannot occupy fewer than 17 blocks. Width padding only ever costs
+      # MORE blocks (107 and 57 bits both exceed the 40-bit maximum port
+      # width), never fewer, so 17 cannot produce a false failure. A partial
+      # inference -- keyram memory, statram flops -- lands around 12 and fails,
+      # which is correct: half the fix is not the fix.
+      min_m10k: 17
+      # Control state only: rr_q (512), the four-way read registers (656), the
+      # s0 capture and the counters. Generous, and still four ORDERS below the
+      # ~168,000 that "the arrays stayed in flops" would show.
+      max_registers: 3000
 
   # TEX.FRAGROB -- the transaction centre that replaces the TEXJOIN monolith.
   # Built beside v2 per S6.1, with v2 kept as the behavioural oracle.
