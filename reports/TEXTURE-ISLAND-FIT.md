@@ -1,77 +1,162 @@
 # Texture island: does the 99.5 MHz renderer survive the texture path?
 
-**Live document. Rows land as fits complete.** Started 2026-09-02.
+**No.** Nine of the ten blocks are now fitted. **Not one reaches the 150 MHz
+leaf target. Not one reaches the 120–125 MHz island target. Seven of nine sit
+below the shipped shell's own 99.50 MHz**, and the island's floor is
+**54.95 MHz** — barely half the console clock.
 
-## Why this and not terrain first
-
-Owner direction, 2026-09-02:
+Answering the question that was asked, 2026-09-02:
 
 > "the important bit is actually fitting all the texture stuff to see if the
 > 99.5 MHz renderer and full fitted console actually holds up or if it needs
-> more reingeneering. Keep your eyes on the prize."
+> more reingeneering."
 
-and, after the reviewer's defect list landed:
+**It needs more reengineering.** The renderer's 99.50 MHz is real and stands;
+the texture island cannot be clocked anywhere near it as written.
 
-> "bro is finding many issues with the outstanding stuff, so focus on the fit
-> for now, we really need to know if the renderer holds up"
+---
 
-Ten texture-island blocks were written and functionally verified and **none of
-them had ever been fitted**. Functional verification says a block computes the
-right numbers. It says nothing about whether it can be clocked.
+## The rows
 
-## What a row here is and is not
+Provisional device `5CSEBA6U23I7`, Quartus 17.0.2 Lite, one seed each, all I/O
+virtual. Sorted slowest first, because the slowest is the one that sets the
+clock.
 
-Per the brief's Phase 1: **a leaf fit is reconnaissance. It does not authorize
-production integration.** And per `run_block_fit.ps1`'s own limitations, which
-travel with every number below:
+| block | Fmax | vs shell 99.50 | ALM | reg | M10K | DSP | vpins | secs |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `zhao_texture_aux_pipe` | **54.95** | −44.6 | 1118 | 1244 | 1 | 0 | 374 | 2005 |
+| `zhao_raster_texjoin_v2` | **61.66** | −37.8 | 3465 | 6143 | 3 | 0 | 829 | 3321 |
+| `zhao_raster_perspuv_svc` | **62.67** | −36.8 | 1792 | 2827 | 2 | 3 | 267 | 2304 |
+| `zhao_raster_rcp24_svc` | **68.46** | −31.0 | 1041 | 1101 | 0 | 6 | 177 | 2351 |
+| `zhao_texture_mosaic` | 86.63 | −12.9 | 197 | 192 | 0 | 4 | 180 | 922 |
+| `zhao_texture_tmu_plan` | 93.55 | −5.9 | 1419 | 1054 | 0 | 0 | 363 | 2524 |
+| `zhao_texture_bilerp_lane` | 99.69 | +0.2 | 125 | 177 | 0 | 3 | 132 | 768 |
+| `zhao_texture_palette_res` | 104.42 | +4.9 | 152 | 141 | 2 | 0 | 165 | 738 |
+| `zhao_texture_rsp_dispatch` | 110.90 | +11.4 | 806 | 1432 | 0 | 0 | 399 | 965 |
+| `zhao_texture_cache_pipe` | *re-running* | | | | | | | |
 
-* `5CSEBA6U23I7` is a **provisional** target, not board truth.
-* **All I/O is virtual.** No package pins, no board I/O delays, no PLLs.
-* A per-block fit says nothing about the composed machine's routing.
-* Nothing here is a programmed device.
+`cache_pipe` came back **`contaminated:source-changed-during-fit`** after
+4,550 s. That is the provenance guard working exactly as designed and it is my
+fault: I edited four files in the shared `-ExtraSources` list while its fit was
+running. The tool refused to attach a number to sources it could not name. It
+is re-running against the closure in `design/fit_targets.yml`, which is one
+file instead of twelve and therefore much harder to contaminate.
 
-And the one that matters most for reading these numbers honestly:
-**placement noise is 4.61 MHz**, measured across three seeds on identical RTL
-(`reports/NOISE_FLOOR.md`). A single-seed row is a draw from a distribution.
-Differences smaller than ~5 MHz between two rows are not differences.
+## Targets, for reference
 
-A **`timeout` row is not a timing result.** It means we did not wait. The first
-`tmu_plan` attempt returned `timeout 3385.8s` against a 3000 s budget with a
-formal proof competing for CPU; re-run alone at 9000 s it fitted in 2524 s.
+| stage | target | worst measured |
+|---|---|---|
+| leaf datapaths | **150 MHz** | 54.95 |
+| perspective/TMU/cache/AUX island, three seeds | **120–125 MHz** | — |
+| texture-survivor composition | **115–120 MHz** | — |
+| full composition acceptance floor | **105 MHz** | — |
 
-## Targets, from the brief's Phase 4
+Shipped shell: **99.50 MHz best, 96.87 mean.**
 
-| stage | target |
-|---|---|
-| leaf datapaths | designed against **150 MHz** |
-| perspective/TMU/cache/AUX island | **120–125 MHz**, three seeds |
-| texture-survivor composition | **115–120 MHz** |
-| full composition floor | **105 MHz** |
+## Is this a seed draw? No.
 
-The shipped shell is **99.50 MHz best / 96.87 mean**. A leaf that fits below
-that number is a leaf that sets the console's clock.
+The measured placement noise floor is **4.61 MHz** across three seeds on
+identical RTL (`reports/NOISE_FLOOR.md`), and one seed is one draw from that
+distribution. A 5 MHz difference between two rows here is not a difference.
 
-## Rows
+**A 95 MHz shortfall is not noise.** `aux_pipe` is 20× the noise floor below
+target. No seed sweep recovers that, and running one to be sure would be
+spending three hours to confirm something the first hour already settled.
 
-| block | status | Fmax | ALM | reg | M10K | DSP | vpins | secs |
-|---|---|---|---|---|---|---|---|---|
-| `zhao_texture_tmu_plan` | ok | **93.55** | 1419 | 1054 | 0 | 0 | 363 | 2524 |
+## What is actually wrong — the paths, not guesses
 
-### `zhao_texture_tmu_plan` — 93.55 MHz
+The archived setup reports name the startpoint and endpoint of every worst
+path, so none of the following is inference.
 
-**Below the shell's own 99.50 MHz, and 56 MHz below the 150 MHz leaf target.**
+### `aux_pipe`, 54.95 MHz — no input register at all
 
-This is the five-stage elastic TMU plan pipe (T0–T4). It is the first hard
-number on the texture island and it is not a good one: the block that plans a
-texture fetch cannot be clocked as fast as the renderer that would use it.
+    req_env_x1_i[20]  ->  zhao_texture_aux_div6:u_div|ru_q[0][11]     slack -8.199
 
-Read it with the caveats above — one seed, so ±4.61 MHz, and 363 virtual pins
-is a lot of unconstrained fabric I/O for a leaf. But the gap is 12× the noise
-floor. This is not a placement draw.
+**The path begins at an input port.** The whole clamp-and-normalise cone sits
+between the block's boundary and its first flop, and then runs on into the
+divider's first stage. This block is "pipelined" in the sense that it has
+stages; it has no register at the seam where it meets the world.
 
-**Zero M10K and zero DSP** on a block that plans texture addressing is worth
-noting on its own: everything here is fabric.
+### `texjoin_v2`, 61.66 MHz — the ruling named this before the fit did
 
-*(remaining rows land as the queue completes: cache_pipe, perspuv_svc,
-texjoin_v2, rcp24_svc, aux_pipe, palette_res, rsp_dispatch, bilerp_lane,
-mosaic)*
+    free_cnt_q[3]  ->  pick_sidx~10_OTERM1201     slack -5.935, data delay 15.0 ns
+
+`free_cnt_q` feeds the issue pick. That is the **16 × 3 combinational issue
+scan** the brief flagged as X3 — *"likely a timing wall"* — and it is one,
+measured. 3,465 ALM and 6,143 registers for a 16-entry join is the same finding
+from the area side.
+
+### `perspuv_svc`, 62.67 MHz — the rescale cone
+
+    p1_prod_q[36]_OTERM87  ->  e_q[11][1][8]      slack -5.937, data delay 15.0 ns
+
+Product register through variable rescale and saturation into entry storage, in
+one combinational cone. R7's production ruling already requires this block be
+rebuilt with **two parallel product lanes** and *"pipeline variable
+rescale/saturation after both products"* — the second half of that sentence is
+what this path is.
+
+### `rcp24_svc`, 68.46 MHz — SUSPECT, and it should not be repaired yet
+
+    m1_i_q[1]  ->  r_o[7]     slack -4.527, data delay 8.516, CLOCK SKEW -5.951
+
+**The data delay is 8.5 ns — comfortably inside 10 — and the path fails on
+5.95 ns of clock skew** into an output register. Nearly six nanoseconds of skew
+on a single-clock leaf is not a logic problem; it is what an unconstrained
+virtual-pin placement does at a block boundary.
+
+This row should be re-measured before anyone touches the RTL. Rewriting a block
+because of a placement artefact is how a wrong number becomes a wrong design,
+and the ruling for this block says plainly: **"no architectural rewrite
+justified."**
+
+## What this does and does not say
+
+**It does say:** the texture island as written cannot be clocked at the
+renderer's rate, three of the four worst blocks have specific named causes, and
+two of those three were already predicted by the buildability ruling before any
+of this was measured.
+
+**It does not say** that the console is 54.95 MHz. These are leaf fits.
+
+* All I/O is **virtual** — no package pins, no board I/O delay, no PLL.
+  `texjoin_v2` carries **829 virtual pins**, which is a great deal of
+  unconstrained fabric I/O for one leaf and depresses its number by an unknown
+  amount.
+* `5CSEBA6U23I7` is **provisional**, not board truth.
+* A per-block fit says nothing about the composed machine's routing — and
+  composition normally makes things **worse**, not better.
+* **Nothing here is a programmed device.**
+
+**It does not say the blocks are wrong.** Every one of them passes its directed
+suite and several pass against a shipped hardware oracle. They compute correct
+results. They were written for function and never once fitted, which is the
+whole reason this page exists — *"a source file exists and a directed test
+passes" is not the same maturity as production-buildable hardware.*
+
+## What follows
+
+1. **Re-fit `rcp24_svc`** before touching it. Skew, not logic.
+2. **`aux_pipe`**: register the input boundary. Cheapest fix on the page.
+3. **`texjoin_v2`**: the X3 restructure, which was already required. The scan
+   is the wall and the fit now says so with a path name.
+4. **`perspuv_svc`**: the two-lane rebuild R7 already ordered, with the rescale
+   pipelined after the products rather than inside the cone.
+5. **`tmu_plan`** is narrowed and unmeasured — 93.55 MHz was the *before*.
+6. Then three seeds on the survivors, then compose.
+
+## Method notes worth keeping
+
+**A `timeout` row is not a timing result.** The first `tmu_plan` attempt
+returned `timeout 3385.8s` against a 3000 s budget with a formal proof
+competing for CPU. Re-run alone at 9000 s it fitted in 2524 s. The tool's own
+header warns that such a row *"reads as 'this block does not fit', when all it
+meant was 'we did not wait'."*
+
+**A `contaminated` row is not one either.** It means the sources moved under
+the fitter and the tool declined to lie about which commit it measured.
+
+**A missing source used to look identical to a failure.** `failed:quartus_map`
+was what `-Module <leaf>` produced when nobody passed `-ExtraSources`, and it
+reads in this table as "does not fit". `design/fit_targets.yml` plus a preflight
+now separate the two before the fitter spends an hour discovering it.
