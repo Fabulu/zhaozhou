@@ -74,18 +74,136 @@ Two consequences of reading it properly, both of which nearly shipped wrong:
 
 1. **The light is Q16.16, not s1.15.** Assuming s1.15 is a factor of two in the
    result and looks like a tuning problem rather than a units problem.
-2. **The clamp to `[0, 0x10000]` is INSIDE the ratified function.** Any additive
-   term — a detail normal, a second sun, a spell light — must be summed
-   **before** that clamp. A face slightly turned from the sun has a small
-   negative base and relief on it should still catch light; adding to an
-   already-clamped zero can neither darken nor brighten from below.
+2. **The clamp to `[0, 0x10000]` was INSIDE the ratified function.**
+   **RULED AND IMPLEMENTED, D-1, 2026-09-03**
+   (`reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`):
+   `shade_flat_tri_dir_unclamped` is now the signed primitive and
+   `shade_flat_tri_dir` is a bit-identical `clamp01` wrapper around it. The
+   goldens are unmoved, which is how the refactor is known to be correct.
 
-   **THE OWNER DECISION THIS BLOCK IS BLOCKED ON:** either the ratified law
-   grows an **unclamped variant** that both it and the additive terms consume,
-   with the clamp moving to the single point where shade becomes colour — or
-   the additive term is passed **into** it so one function owns sum and clamp.
-   **(a) is recommended**: it keeps detail out of a function terrain and
-   creatures share, and it is a pure refactor whose golden CRCs must not move.
+   **AND THE REFINEMENT THAT CORRECTS AN EARLIER DRAFT OF THIS FILE.** It said
+   "additive terms must be summed before the clamp". **That is true only WITHIN
+   ONE LIGHT.** The ruled composition:
+
+       for each independent light i:
+           raw_i = shade_flat_tri_dir_unclamped(n, L_i)
+           ndl_i = clamp01(raw_i + normal_detail_i)   // detail is THIS light's
+           rgb  += light_colour_i * ndl_i
+       rgb += ambient + spill
+       final = saturate(rgb)
+
+   A detail normal may brighten a face turned slightly from **that same** sun,
+   so base and detail combine before clamping. But **a second sun or a fireball
+   is an INDEPENDENT light: its negative dot must become zero and must not
+   subtract illumination another light contributed.** So the clamp is **once
+   per light**, not once per fragment. Ambient, spill and global flash are
+   colour contributions, not signed directional terms.
+
+   The earlier phrasing would have been wrong the moment a second light
+   existed.
+
+## THE ADDITIVE EMISSION TERM — PROVISIONAL, 2026-09-03
+
+**Owner: *"It's fucking beautiful we must have it."* And, on the budget:
+*"Our budget is fucked but we can always go back on this and we might make a
+miracle happen."***
+
+So this is **written into the specification provisionally**, with the revert
+path designed in rather than discovered later. It is in the contract so nobody
+designs `CREATURE.LIGHT` around its absence; it is marked provisional so nobody
+treats it as load-bearing.
+
+### What it fixes
+
+Creature point lights were **multiplicative only** — texel colour times a
+per-channel gain — so **a coloured light could only ever subtract.** A red
+source on green pigment could only make olive. It could not make the pigment
+glow red, because there was no term capable of adding energy.
+
+### The law, and where it sits in the ruled order
+
+The emission is a **per-source term accumulated into `rgb`**, and it saturates
+**once at the end** with ambient and spill:
+
+    for each independent light i:
+        raw_i = shade_flat_tri_dir_unclamped(n, L_i)
+        ndl_i = clamp01(raw_i + normal_detail_i)
+        rgb  += light_colour_i * ndl_i          // multiplicative gain
+        rgb  += emission_i     * ndl_i          // ADDITIVE, same response
+    rgb += ambient + spill
+    final = saturate(rgb)                        // ONCE, at the end
+
+**Two things about that placement are not negotiable:**
+
+1. **The additive sum uses the SAME per-source lambert × attenuation response
+   as the multiplicative gain.** A flat additive lift raises lit and unlit
+   faces equally and **flattens form** — which is exactly the failure the
+   creature rig was rewritten to cure in August. The dot product and
+   attenuation are already computed for the multiplicative term and are
+   **shared**, which is also why the marginal cost is small.
+2. **Saturation happens once, at the end.** Saturating per source would clip
+   each contribution separately and **change the colour of an overlap** — two
+   lights meeting would produce a different hue than either implies.
+
+Bypassing the 1.0 gain ceiling **is the point**: a source strong enough to clamp
+all three channels becomes a hue-neutral floodlight that erases its own colour
+and everyone else's.
+
+### Cost, measured on the prototype
+
+**+3 MACs per source per evaluation** — the dot product and attenuation are
+shared with the multiplicative term — **plus one saturating 3-channel add.** At
+the ruled budget of four simultaneous sources with strongest-four selection,
+that is **twelve adds at the limit**.
+
+The application is **per fragment**, which costs **three extra interpolator
+lanes** carrying the accumulated emission.
+
+### Why per-fragment rather than per-face
+
+Judged in `reports/CREATURE-LIGHT-ADDITIVE-COST-JUDGEMENT.md`:
+
+* **timing is not the constraint.** `attrdiv_svc` is a shared tagged service, so
+  three more attributes are three more tagged requests, not three more
+  dividers, and nothing lengthens a combinational path. The critical path is
+  Early-Z's presence lookup, elsewhere.
+* **the real cost is ALM and M10K** — storage in `GEOM.PARAMBUF` and width in
+  the fragment packet — on the axis already over budget. Counted, not waved
+  through.
+* **per-face saves the interpolant lanes, which are the cheapest part**, and
+  pays with banding on triangle edges — a visible artefact on the exact feature
+  whose entire justification is that it looks beautiful.
+
+### THE CUT SEAM, so "going back on this" is cheap
+
+**`emission_i = 0` is a bit-exact no-op.** With every source's emission zero,
+the accumulated term contributes nothing and the result is identical to the
+multiplicative-only path — which the prototype demonstrates: **CRC-identical
+across all 22 subjects with the gate off.**
+
+So reverting means **removing three interpolant lanes and one saturating add**,
+and changes nothing else. No other block's behaviour depends on it, no packet
+field is repurposed, and no law is rewritten. **That is what makes this safe to
+adopt provisionally rather than a commitment that has to be honoured.**
+
+### The saturation constraint, which is an artist-visible design input
+
+From the prototype, and it is **not a tuning note**:
+
+> at the pool core a strong emission can peg a channel — the prototype pegs red
+> over a few hundred pixels at its strongest, where modelling survives only in
+> green and blue. It holds at 384×240, and a harder emission tips into neon.
+
+So emission strength is a **named, editable constant with a stated failure
+mode**, and its shipped value is chosen **by looking at it in scene, at final
+resolution, against what it sits on** — the art law, exactly. A value that
+measures fine and pegs a channel is wrong.
+
+### Status
+
+**PROVISIONAL.** Adopted because the owner has seen it and wants it; costed
+honestly rather than optimistically; and built so that the resource count
+deciding against it costs one deletion rather than a redesign.
 
 ## Input and output packet layouts
 
