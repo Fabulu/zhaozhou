@@ -76,3 +76,30 @@ Tuning by eye at native + 2x pairs (base over sun):
   rig-lit green pigment = gold: physics, same as RUN-2144's lesson).
 * v4: idle gold raised (620/330/30), taunt rebalanced rosier (560/25/380 --
   R+B adds on green were washing grey-pink).
+
+## 2026-09-04 00:25 — v5: a sun is FAR AWAY; probe PASS; archive gen 18 staged
+
+Caught before rendering: the probe's own apex figures (six-salto 12 m, the
+nine-salto's authored 24 m root apex) sat ABOVE the first 8.6 m sun height --
+the peak of those flights would have been lit from BELOW, the read the owner
+has rejected twice. v5 moves every sun to 50 m up / 22 m lateral (elevation
+~66 deg from the stage, the highest apex still ~50 deg below the sun) with a
+65 m inner radius: every vertex of every flight and the target dummy stay
+inside attenuation 1, so distance changes only direction -- a sun. Verified by
+eye on salto-nine f200/f300 (pink lights the LEFT rim from above-left at
+altitude) and salto-six f160 (gold on top of the wheel).
+
+zixx-probe: PASS (committed pose/contact probe, all gates).
+
+Site prep committed to Upheaval main (40e47dc): generation-eighteen archive
+copies (22 webm + 22 png, byte-for-byte), creatures.json (gen entry, per-clip
+sun notes, site note/tagline), style.css BOTH selector families 17 -> 18,
+assemble.py MAX_ARCHIVE_GENERATIONS 18.
+
+Plan for proof of "animation untouched", bounded to the question:
+1. zixx-probe PASS (above).
+2. ZIXX_SUNS=off full-22 render CRC == pristine-build (c23c6a63) full-22
+   render CRC (the change is inert when off).
+3. Ink-mask equality per frame between sunless and sun renders (the cel ink
+   hugs the silhouette; identical ink sets = identical silhouettes = the
+   motion itself unchanged, frame by frame).
