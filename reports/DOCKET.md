@@ -367,6 +367,52 @@ Sequenced by the owner behind the island work. Not yet read in detail.
 sitting in `reports/` where the owner said it should not stay.
 
 
+### D26. The boring 3D fundamentals audit  ·  `reports/BORING_3D_FUNDAMENTALS_AUDIT.md`  — P0
+> Owner, 2026-09-03: *"turns out we have some critical gaps man ... we forgot
+> normal maps. What other basic shit did we forget?"*
+
+**Ten gaps, and the pattern is one sentence:** *"we built impressive endpoints
+and sometimes forgot the boring organ connecting them."* Normal maps exposed it
+because terrain had a normal generator and nothing consumed the normals. The
+reassurance is equally specific: these are **connective tissue, not another
+giant computation island** — only lighting has real capacity teeth, and even
+there the answer is bounded per-vertex work, not a shader core.
+
+**The four with NO NAMED OWNER, which is worse than unfinished:**
+
+* **R1 mesh index → triangle assembly.** VERIFIED against the tree:
+  `zhao_geom_vdecode.sv` accepts neither `index_offset` nor `triangle_count`;
+  `zhao_geom_setup.sv` wants a complete triangle; `tri_ax_i` is driven only
+  from the shell harness; and the ledger has **zero** `GEOM.(ASSEMBLE|INDEX|TRI)`
+  blocks. Nobody turns a meshlet's index stream into triangles. **Must not be
+  allowed to emerge as miscellaneous logic inside `GEOM.PARAMBUF`.**
+* **R3 `MATERIAL.RESOLVE`.** All the nouns exist — `material_set` on DrawForm,
+  `material_id` on meshlets, FRAGROB expecting everything already resolved —
+  and no verb turns one into the other.
+* **R4 the cartridge has no generic texture/material kind**, while three
+  subsystems already assume one.
+* **R7 the fog carrier.** The arithmetic is specified; `RASTER.FRAGMENT` says
+  colour arrives already fogged; `GEOM.PROJECT` has no colour input to have
+  fogged it with.
+
+**The rest:** R2 the full lighting route (terrain caught this session,
+creatures/meshes still open — `GEOM.PROJECT` as "projection + lighting" is
+aspirational, the source does projection); R5 cache coherence as upload's
+missing second half; R6 the depth disagreement (verified: producer emits
+Q16.16 1/w, twelve files consume `invw24`, no `depth_profile` port exists);
+R8 a frozen cheap contact-shadow law, ~zero hardware and high visual return;
+R9 local spell lighting; R10 water/lava, or an explicit refusal.
+
+**The audit's own rule**, and the reason the file exists: every capability gets
+one row across the complete chain from authoring bytes to production manifest
+entry, and **a row is RED if even one arrow is `???`**. All six of today's
+discoveries would have been red rows.
+
+**Priority order is the owner's** and is in the file. Note that items 1–7 are
+almost entirely contract and format work, so they do **not** need the Quartus
+toolchain and can proceed alongside fits.
+
+
 ---
 
 ## ISLAND RECOVERY PROGRESS — 2026-09-03 evening
