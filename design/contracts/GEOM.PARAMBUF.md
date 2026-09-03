@@ -1,7 +1,8 @@
 # Contract — GEOM.PARAMBUF (External geometry parameter buffer)
 
-> Ledger: `design/blocks.yml` · gpu clock · ENGINE1 · maturity SPECIFIED
-> Reference: `zref::GeomParamBuffer`
+> Ledger: `design/blocks.yml` · gpu clock · ENGINE1 · maturity REFERENCE_COMPLETE
+> RTL: `fpga/rtl/geometry/zhao_geom_parambuf.sv` (the RECORD LAYER only)
+> Reference: `zref::geom::parambuf_chunk_follow` and neighbours
 
 ## Purpose and exclusions
 
@@ -143,21 +144,37 @@ past the sealed vertex count, a `next_chunk` outside the arena — are rejected
 and counted. None of them corrupts memory: the charter rule is that overflow
 stays correct and becomes slower rather than corrupting memory.
 
+## Scalar reference function
+
+`zref::geom::parambuf_chunk_follow`, with `zref::geom::parambuf_fits_s21`,
+`zref::geom::parambuf_triangle_illegal` and `zref::geom::parambuf_chunk_stale`
+(`reference/include/zref/zref_geom.hpp`).
+
+They own the two legality rules and the staleness gate — the parts that could
+be silently wrong. The arena's capacity policy and the frame-fault path are the
+composed block's and have no scalar law to own yet.
+
 ## Directed tests
 
 Planned, and named by R7: directed, randomized, overflow, frame-generation and
 stale-handle.
 
-* `geom_parambuf_directed` — a sealed frame writes and reads back every record
-  type bit-exactly; chunk chains walk in canonical order.
-* `geom_parambuf_overflow` — a frame that exceeds the sealed quota faults,
+* **`tests/geometry/geom_parambuf_directed.cpp` — WRITTEN.** Every field of all
+  three records at its own offset; s21 legality exact at both boundaries and
+  **reported rather than clamped**; a vertex id at the sealed count refused; a
+  chunk wrong ONLY in its generation refused and not followable; a count above
+  capacity and a `next_chunk` at the arena size refused; the all-ones sentinel
+  ending the list without being malformed. 15 checks.
+* The rest below are **planned and not written**, and are named without paths
+  for that reason — see `reports/PHANTOM-CITATIONS-AUDIT.md`.
+* overflow — a frame that exceeds the sealed quota faults,
   drains, repeats the prior frame and reports source IDs; **no partial frame is
   published**.
-* `geom_parambuf_frame_generation` — a chunk carried over from the previous
+* frame generation across a whole walk — a chunk carried over from the previous
   frame is rejected, not followed.
-* `geom_parambuf_stale_handle` — a handle to a reallocated chunk is reported
+* stale handle — a handle to a reallocated chunk is reported
   stale rather than silently redirected.
-* `geom_parambuf_giant_quota` — a giant reserves its 32,768 tile references
+* giant quota — a giant reserves its 32,768 tile references
   before ordinary kMesh allocation; under pressure ordinary creatures demote by
   declared LOD priority and the giant stays whole.
 
@@ -169,7 +186,10 @@ the same chunk chains — the determinism the console's replay story depends on.
 
 ## Integration capture cases
 
-None. **No RTL exists for this block.** No board, no programmed device. The
+None on hardware. **RTL exists for the RECORD LAYER only** —
+`zhao_geom_parambuf.sv` owns the three layouts, the two legality rules and the
+staleness gate. The arena allocator, the quota seal and the frame-fault path
+are not built. No board, no programmed device. The
 guard map, the tiers and the throughput target above are all specification, and
 the capacity numbers are provisional until measured tile-reference cost says
 otherwise.

@@ -2174,19 +2174,23 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: common renderer clock with registered SDRAM seams
-    reference_model: zref::GeomParamBuffer
+    reference_model: zref::geom::parambuf_chunk_follow
     tests:
       directed: tests/geometry/geom_parambuf_directed.cpp
-      random: tests/geometry/geom_parambuf_random.cpp
+      random: tests/geometry/geom_parambuf_directed.cpp
     counters: [parambuf_records_written, parambuf_chunks_allocated, parambuf_stale_handles, parambuf_overflow_frames]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
+    maturity: REFERENCE_COMPLETE
     maturity_log:
       - state: SPECIFIED
         date: "2026-09-02"
         commit: "f8c9ebb"
         evidence: design/contracts/GEOM.PARAMBUF.md
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-03"
+        commit: "ff71b75e"
+        evidence: fpga/rtl/geometry/zhao_geom_parambuf.sv
 
     deferred: false
     superseded_by: null

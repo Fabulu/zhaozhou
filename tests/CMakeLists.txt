@@ -2195,6 +2195,20 @@ verilate(test_terrain_residency_directed
 add_test(NAME terrain_residency_directed COMMAND test_terrain_residency_directed)
 set_tests_properties(terrain_residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# GEOM.PARAMBUF -- the external geometry arena's record layer (ruling R7). The
+# interesting field is frame_generation: a chunk from LAST frame is valid in
+# every other respect -- sane count, in-range next pointer, real triangle ids --
+# so the generation is the only thing that says it is old, which is why it is
+# per chunk and not per arena.
+add_executable(test_geom_parambuf_directed geometry/geom_parambuf_directed.cpp)
+target_link_libraries(test_geom_parambuf_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_parambuf_directed
+  PREFIX Vzhao_geom_parambuf
+  TOP_MODULE zhao_geom_parambuf
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_parambuf.sv)
+add_test(NAME geom_parambuf_directed COMMAND test_geom_parambuf_directed)
+set_tests_properties(geom_parambuf_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # TWOD.PLANE -- two slots on ONE engine, and most of its contract is a list of
 # things it may not do. A restriction is not tested by exercising the allowed
 # path: it is tested by asking for the forbidden one and requiring a refusal,

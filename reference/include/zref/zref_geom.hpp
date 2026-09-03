@@ -225,6 +225,61 @@ inline Vertex0 vdecode0(const uint8_t* b) {
 // between a bad file and a silently wrong skin.
 inline bool vdecode0_w0_legal(uint8_t w0) { return w0 <= 64; }
 
+// ---- GEOM.PARAMBUF record layer (ruling R7) --------------------------------
+//
+//   ProjectedVertex, 24 B     screen_x s32 (legal s21), screen_y s32 (legal
+//                             s21), invw24 + status byte, u_over_w s32,
+//                             v_over_w s32, rgba8 u32
+//   TriangleDescriptor, 16 B  vertex_id[3] u16, material_id u16,
+//                             raster_state u32, source_id u32
+//   Tile-reference chunk, 64B next_chunk u32, count u16, frame_generation u16,
+//                             fourteen triangle ids u32
+//
+// The two legality rules look like clamps and are NOT. A screen coordinate
+// outside s21 and a vertex id past the sealed count are MALFORMED, and
+// clamping either would place a triangle somewhere plausible drawn from
+// somebody else's data.
+inline constexpr int kChunkIds = 14;
+inline constexpr uint32_t kChunkNull = 0xFFFFFFFFu;
+
+// s21 fits when every bit above bit 20 equals bit 20. No comparison needed.
+inline bool parambuf_fits_s21(int32_t v) {
+  const uint32_t hi = static_cast<uint32_t>(v) >> 20;
+  return hi == 0x000u || hi == 0xFFFu;
+}
+
+inline bool parambuf_vertex_illegal(int32_t x, int32_t y) {
+  return !parambuf_fits_s21(x) || !parambuf_fits_s21(y);
+}
+
+inline bool parambuf_triangle_illegal(uint16_t v0, uint16_t v1, uint16_t v2,
+                                      uint16_t sealed_vertices) {
+  return v0 >= sealed_vertices || v1 >= sealed_vertices ||
+         v2 >= sealed_vertices;
+}
+
+// A chunk from last frame is valid in every other respect -- sane count,
+// in-range next pointer, real triangle ids. The generation is the ONLY thing
+// that says it is old, which is why it is per chunk and not per arena.
+inline bool parambuf_chunk_stale(uint16_t chunk_gen, uint16_t frame_gen) {
+  return chunk_gen != frame_gen;
+}
+
+inline bool parambuf_chunk_illegal(uint16_t count, uint32_t next,
+                                   uint32_t arena_chunks) {
+  return count > kChunkIds || (next != kChunkNull && next >= arena_chunks);
+}
+
+// Following a stale or malformed chunk is how one bad record becomes a walk
+// through arbitrary memory.
+inline bool parambuf_chunk_follow(uint16_t chunk_gen, uint16_t frame_gen,
+                                  uint16_t count, uint32_t next,
+                                  uint32_t arena_chunks) {
+  return !parambuf_chunk_stale(chunk_gen, frame_gen) &&
+         !parambuf_chunk_illegal(count, next, arena_chunks) &&
+         next != kChunkNull;
+}
+
 }  // namespace geom
 
 }  // namespace zref

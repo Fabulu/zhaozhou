@@ -15,7 +15,7 @@ Blocks: **95** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | debug | · | · | 1 | 3 | · | · | · | · | 4 |
 | field | 5 | · | 1 | 1 | · | · | · | · | 7 |
 | forge | 1 | · | 1 | · | · | · | · | · | 2 |
-| geometry | 5 | 1 | 6 | · | · | · | · | · | 12 |
+| geometry | 4 | 2 | 6 | · | · | · | · | · | 12 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 1 | · | 2 | · | · | · | · | · | 3 |
 | memory | 1 | · | 1 | 3 | · | · | · | 1 | 5 |
@@ -27,7 +27,7 @@ Blocks: **95** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | · | · | 9 | · | · | · | · | · | 9 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 32 | 8 | 39 | 16 | · | · | · | 6 | 95 |
+| **all** | 31 | 9 | 39 | 16 | · | · | · | 6 | 95 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -115,6 +115,7 @@ Blocks: **95** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | GEOM.WCACHE | REFERENCE_COMPLETE | 2026-08-24 | `2edbcc1` | reference/include/zref/zref_geom_wcache.hpp |
 | GEOM.WCACHE | UNIT_VERIFIED | 2026-08-31 | `cc10167` | tests/geometry/geom_wcache_directed.cpp |
 | GEOM.PARAMBUF | SPECIFIED | 2026-09-02 | `f8c9ebb` | design/contracts/GEOM.PARAMBUF.md |
+| GEOM.PARAMBUF | REFERENCE_COMPLETE | 2026-09-03 | `ff71b75e` | fpga/rtl/geometry/zhao_geom_parambuf.sv |
 | GEOM.PROJECT | REFERENCE_COMPLETE | 2026-08-21 | `e0a7320` | reference/src/zrender/rast.cpp |
 | GEOM.PROJECT | UNIT_VERIFIED | 2026-08-21 | `21bc2cf` | tests/geometry/geom_project_directed.cpp |
 | GEOM.CLIP | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |
