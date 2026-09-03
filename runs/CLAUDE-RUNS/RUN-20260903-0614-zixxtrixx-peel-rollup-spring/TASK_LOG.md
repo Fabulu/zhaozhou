@@ -88,3 +88,16 @@ relaxed-but-declared for this pass.
 ## Next Steps
 
 *Updated as progress is made*
+
+### 2026-09-03 (implementer) - Stage 0: baseline verified
+
+- Fetched origin main both repos; zhaozhou at 49672fba (= origin/main).
+- Built cel + probe into `build-peel/` (one target per call, fresh tree).
+- Probe at HEAD: `ZIXX PROBE: PASS` (evidence/stage0 . . . probe-head.txt).
+- Rendered zixxtrixx-spring-side + zixxtrixx-jump-one with explicit
+  ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross:
+  spring-side sequence CRC **0x1B1AEAB6** (== QA-2's published number),
+  jump-one **0x9829FF4A** (== QA-2's table). The build IS the published one.
+- Stage-1 bank reference: previous run's committed
+  `evidence/qa2/qa2-bank-crc.txt` (22 subjects, rendered at d5949320; the
+  only commits since are documentation, proven by the two CRCs above).
