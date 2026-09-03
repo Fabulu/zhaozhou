@@ -122,7 +122,6 @@ module zhao_raster_perspuv_svc #(
 
   // ------------------------------------------------------------- entries ----
   logic                  e_val  [NTOK];
-  logic [1:0]            e_need [NTOK];  // bit0 = U outstanding, bit1 = V
   logic [1:0]            e_have [NTOK];
   logic signed [31:0]    e_num  [NTOK][2];
   logic [23:0]           e_mant [NTOK];
@@ -139,27 +138,40 @@ module zhao_raster_perspuv_svc #(
   // reciprocal service and TEXJOIN v2 rest on.
   assign v_ready_o = (free_cnt_q != '0);
 
-  // -------------------------------------------------- product selection -----
-  // ONE PICK PER AXIS, so a complete pair can start on one clock. Each walks
-  // from the retire head so the oldest fragment finishes first and the table
-  // does not fill with half-done pairs.
+  // ------------------------------------------------------- WORK QUEUES ------
+  // ONE PER AXIS, so a complete pair can start on one clock.
   //
-  // The two picks may land on the SAME entry -- that is the normal case and
-  // the whole point. They may also land on different ones, which is what keeps
-  // the lane busy when a fragment is already half done.
-  logic          pk_v   [2];
-  logic [TW-1:0] pk_i   [2];
+  // MEASURED, 2026-09-03. The two-lane rebuild took this block from 62.67 to
+  // 99.14 MHz internal and its new worst path named what was left:
+  //
+  //     pk_i~5_OTERM777 -> p1_prod_q[0][36]_OTERM139
+  //
+  // That is the 16-entry PRIORITY SCAN feeding the multiplier. Each axis walked
+  // all sixteen entries from the retire head looking for one that still needed
+  // its product -- sixteen sequentially dependent comparisons whose result then
+  // selects a 32-bit numerator out of a sixteen-deep table.
+  //
+  // It is the same structure the TEXJOIN rebuild replaced, and it was left in
+  // place there deliberately: the measured wall was the rescale cone, and
+  // fixing the thing that is not the limiter is how a block gets rewritten for
+  // a wire. The rescale is fixed; this is now the limiter; so it goes.
+  //
+  // A scan asks "who still needs work?" every clock. A queue is told once, at
+  // accept, and never asks. The ORDER IS IDENTICAL -- allocation order, oldest
+  // first, because that is the order things are pushed in.
+  //
+  // Capacity is NTOK per axis and cannot overflow: one entry is pushed per
+  // accepted fragment per axis, and a fragment cannot be accepted without a
+  // free slot. NTOK is a power of two so the occupancy subtraction counts.
+  logic [TW-1:0] wq   [2][NTOK];
+  logic [TW:0]   wq_wp [2], wq_rp [2];
+
+  logic          pk_v [2];
+  logic [TW-1:0] pk_i [2];
   always_comb begin
     for (int unsigned ax = 0; ax < 2; ax++) begin
-      pk_v[ax] = 1'b0;
-      pk_i[ax] = head_q;
-      for (int n = 0; n < NTOK; n++) begin
-        automatic logic [TW-1:0] s = TW'((int'(head_q) + n) % NTOK);
-        if (!pk_v[ax] && e_val[s] && e_need[s][ax]) begin
-          pk_v[ax] = 1'b1;
-          pk_i[ax] = s;
-        end
-      end
+      pk_v[ax] = (wq_wp[ax] != wq_rp[ax]);
+      pk_i[ax] = wq[ax][wq_rp[ax][TW-1:0]];
     end
   end
 
@@ -225,6 +237,10 @@ module zhao_raster_perspuv_svc #(
       tail_q      <= '0;
       free_cnt_q  <= (TW + 1)'(NTOK);
       for (int ax = 0; ax < 2; ax++) begin
+        wq_wp[ax] <= '0;
+        wq_rp[ax] <= '0;
+      end
+      for (int ax = 0; ax < 2; ax++) begin
         p1_v_q[ax] <= 1'b0;
         p2_v_q[ax] <= 1'b0;
         p3_v_q[ax] <= 1'b0;
@@ -233,7 +249,6 @@ module zhao_raster_perspuv_svc #(
       products_o  <= 32'd0;
       for (int i = 0; i < NTOK; i++) begin
         e_val[i]  <= 1'b0;
-        e_need[i] <= 2'b00;
         e_have[i] <= 2'b00;
       end
     end else begin
@@ -261,7 +276,24 @@ module zhao_raster_perspuv_svc #(
         // A depth-zero fragment is a caller bug the original flags rather than
         // computes. It still occupies a slot and still retires, so the caller
         // sees one answer per request -- it simply produces no product.
-        e_need[tail_q]    <= depth_zero_i ? 2'b00 : 2'b11;
+        // The work QUEUE is the record of what is outstanding now, so the old
+        // `e_need` mask is state with no reader -- and state with no reader is
+        // where a stale bit hides. Removed, exactly as `iss_q` was in TEXJOIN
+        // when its scan went.
+        //
+        // Push the work, once, where the answer is already known. A depth-zero
+        // fragment produces no product and enqueues nothing.
+        if (!depth_zero_i)
+          for (int unsigned ax = 0; ax < 2; ax++) begin
+            // Indexed by the QUEUE's own write pointer, not by `tail_q`. The
+            // two look interchangeable and are not: a depth-zero fragment
+            // takes a table slot and pushes NO work, so the table pointer and
+            // the queue pointer diverge the first time one appears. Writing at
+            // `tail_q` then lands the entry in the wrong queue slot, and the
+            // suite caught it as one fragment of 335 that never retired.
+            wq[ax][wq_wp[ax][TW-1:0]] <= tail_q;
+            wq_wp[ax] <= wq_wp[ax] + (TW+1)'(1);
+          end
         e_have[tail_q]    <= depth_zero_i ? 2'b11 : 2'b00;
         e_num[tail_q][0]  <= u_over_w_i;
         e_num[tail_q][1]  <= v_over_w_i;
@@ -277,20 +309,18 @@ module zhao_raster_perspuv_svc #(
       end
 
       // ---- P0 launch: BOTH axes, independently -----------------------------
-      // `e_need[i][ax]` is cleared with a BIT-SELECT, never by writing the
-      // whole two-bit word. Two lanes clearing one bit each of the same entry
-      // on the same clock is the normal case; two nonblocking assignments to
-      // the same VARIABLE would keep only the last, and the fragment would sit
-      // in the table forever waiting for a product already issued. That is the
-      // free-count race in a new place, and it is why the width is spelled out
-      // rather than left to a read-modify-write.
+      // Each axis pops ITS OWN queue, so the two lanes touch no shared
+      // variable here at all. That is the strongest form of the rule the
+      // free-count race taught: the safest way not to lose one of two
+      // same-clock updates to a variable is for there to be no shared
+      // variable.
       for (int unsigned ax = 0; ax < 2; ax++) begin
         p1_v_q[ax] <= pk_v[ax];
         if (pk_v[ax]) begin
           p1_i_q[ax]    <= pk_i[ax];
           p1_k_q[ax]    <= e_k[pk_i[ax]];
           p1_prod_q[ax] <= 64'(e_num[pk_i[ax]][ax]) * $signed({40'd0, e_mant[pk_i[ax]]});
-          e_need[pk_i[ax]][ax] <= 1'b0;
+          wq_rp[ax] <= wq_rp[ax] + (TW+1)'(1);
         end
       end
       // ONE assignment, both lanes. The loop above once carried
@@ -299,10 +329,9 @@ module zhao_raster_perspuv_svc #(
       // both axes counted ONE. The paired suite caught it on the first run:
       // 334 products where 668 were issued.
       //
-      // Three lines above that line is a comment explaining why e_need is
-      // cleared with a bit-select and not a read-modify-write, for exactly
-      // this reason. Knowing the rule is not the same as applying it, which is
-      // why the counter is checked by a test rather than by care.
+      // A few lines above that line sat a comment explaining this very rule
+      // for a different signal. Knowing the rule is not the same as applying
+      // it, which is why the counter is checked by a test rather than by care.
       products_o <= products_o + 32'(pk_v[0]) + 32'(pk_v[1]);
 
       // ---- P2: + the rounding constant -------------------------------------
