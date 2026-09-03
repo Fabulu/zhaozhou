@@ -963,6 +963,10 @@ struct Debris {
   uint8_t size, r, g, b;
 };
 
+// Direction 29 clip suns: the full spec block lives beside the moving-light
+// authoring below (it needs the zc alias); SceneSubject only holds a pointer.
+struct ZixxSunSpec;
+
 struct SceneSubject {
   const char* name;
   uint32_t frames;
@@ -1060,6 +1064,10 @@ struct SceneSubject {
   // g_creature_additive_light gate (default OFF everywhere else) and gives the
   // moving sources their authored additive colours for this subject only.
   bool creature_additive_light = false;
+  // Direction 29: the clip's SUN -- one named, positioned, emitting point
+  // source above and to one side, tracking the creature. Null = no sun (the
+  // moving-light subjects keep their own four-source rigs).
+  const ZixxSunSpec* sun = nullptr;
   // FULL-COLOUR LANE (MODELINGGUIDE section 5). The 256-colour rule is a
   // GIF-EXPORT constraint, and it was allowed to redesign a creature: it
   // deleted an eye colour, a mouth and a throat transition, and it forced a
@@ -2104,6 +2112,85 @@ void advance_reel_gibs(std::vector<ReelGibPiece>& pieces, int32_t ground, int32_
   }
 }
 
+// ---- Owner Direction 29: A SUN IN EVERY CLIP -------------------------------
+// Twenty-one of the twenty-two bank clips carried no point source at all, so
+// the approved additive emission had nothing to emit. Each clip now declares
+// ONE named sun: a positioned point source that TRACKS the creature instance
+// at a fixed millimetre offset -- always ABOVE and to one side (the owner has
+// rejected lighting from below or behind more than once) -- with the whole
+// animal inside the sun's INNER radius by construction, so attenuation is 1
+// everywhere on the body and the source is a pure directional lambert light:
+// the never-enters-its-own-inner-radius trap (08-LIGHTING) cannot occur.
+// The accepted Cool Cross rig stays underneath untouched; the sun is ADDED
+// light. The additive emission (add_*) rides the SAME lambert*attenuation
+// response as the multiplicative gain (never a flat lift) and carries the
+// visible colour on pigments that lack the hue; each multiplicative gain
+// SUPPRESSES its complement (a red sun must not pump green -- the three
+// warming/amber/gold failures of RUN-2144). Everything accumulates and
+// saturates once at the end, in the existing shade path. Every value below
+// is an owner-editable named constant, per clip.
+// ZIXX_SUNS=off is the demonstrable revert path: with it set, every clip
+// renders byte-identically to the sunless bank (the g_creature_additive_light
+// gate itself stays default-OFF and is only raised subject-scoped).
+struct ZixxSunSpec {
+  int32_t x_mm, y_mm, z_mm;        // offset from the tracked staged centre
+  int32_t inner_mm, outer_mm;      // whole body INSIDE inner -> attenuation 1
+  int32_t gain_r, gain_g, gain_b;  // multiplicative, Q16.16 (fxm thousandths)
+  int32_t add_r, add_g, add_b;     // additive emission, Q16.16 of 255 scale
+};
+// Shared geometry: ~64 deg elevation from the stage, still ~48 deg above an
+// airborne apex 4 m up; the 15 m inner radius keeps every body vertex AND the
+// salto target dummy (8.5 m out at the farthest) inside attenuation 1.
+constexpr int32_t kZixxSunHeightMm = 8600;
+constexpr int32_t kZixxSunInnerMm = 15000;
+constexpr int32_t kZixxSunOuterMm = 19000;
+// Per-clip suns. Azimuth is authored per camera (yaw 0 / 45 / 67.5 deg
+// subjects) so the sun always sits high on the camera side of the sky, offset
+// to one flank -- never behind the animal relative to the shot. Colour is the
+// clip's MOOD; dominant channel strong, complement suppressed, judged by eye
+// at native 384x240 (art law: these numbers are knobs, not derivations).
+constexpr ZixxSunSpec kZixxSunIdle       {2970,  kZixxSunHeightMm,  2970,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(775), fxm(500),  fxm(60), fxm(620), fxm(330), fxm(30)};   // golden morning
+constexpr ZixxSunSpec kZixxSunWalk       {-2409, kZixxSunHeightMm,  3440,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(60),  fxm(280),  fxm(900), fxm(45),  fxm(150), fxm(540)};  // azure day
+constexpr ZixxSunSpec kZixxSunRun        {2409,  kZixxSunHeightMm,  3440,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(900), fxm(340),  fxm(30), fxm(600), fxm(195), fxm(15)};   // hot orange
+constexpr ZixxSunSpec kZixxSunLook       {2409,  kZixxSunHeightMm,  3440,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(525), fxm(90),   fxm(840), fxm(360), fxm(45),  fxm(560)};  // violet
+constexpr ZixxSunSpec kZixxSunBalance    {2700,  kZixxSunHeightMm,  3217,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(50),  fxm(680),  fxm(650), fxm(30),  fxm(390), fxm(450)};  // teal
+constexpr ZixxSunSpec kZixxSunTaunt      {4136,  kZixxSunHeightMm,  -729,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(800), fxm(60),   fxm(680), fxm(560), fxm(25),  fxm(380)};  // magenta
+constexpr ZixxSunSpec kZixxSunSlowTaunt  {3866,  kZixxSunHeightMm,  1641,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(745), fxm(215),  fxm(340), fxm(450), fxm(120), fxm(210)};  // rose dusk
+constexpr ZixxSunSpec kZixxSunJumpOne    {2586,  kZixxSunHeightMm,  3310,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(340), fxm(840),  fxm(60), fxm(210), fxm(500), fxm(45)};   // spring lime
+constexpr ZixxSunSpec kZixxSunJumpMulti  {-2586, kZixxSunHeightMm,  3310,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(930), fxm(215),  fxm(25), fxm(620), fxm(150), fxm(15)};   // sunset red-orange
+constexpr ZixxSunSpec kZixxSunAttack     {2700,  kZixxSunHeightMm,  3217,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(960), fxm(60),   fxm(40), fxm(660), fxm(30),  fxm(30)};   // crimson
+constexpr ZixxSunSpec kZixxSunHit        {729,   kZixxSunHeightMm,  4136,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(90),  fxm(340),  fxm(800), fxm(60),  fxm(195), fxm(510)};  // steel blue
+constexpr ZixxSunSpec kZixxSunDamage     {4136,  kZixxSunHeightMm,  729,   kZixxSunInnerMm, kZixxSunOuterMm, fxm(840), fxm(400),  fxm(40), fxm(540), fxm(240), fxm(15)};   // ember amber
+constexpr ZixxSunSpec kZixxSunKnockdown  {873,   kZixxSunHeightMm,  4108,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(430), fxm(75),   fxm(775), fxm(270), fxm(45),  fxm(510)};  // bruise violet
+constexpr ZixxSunSpec kZixxSunFall       {-2700, kZixxSunHeightMm,  3217,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(185), fxm(495),  fxm(870), fxm(120), fxm(300), fxm(560)};  // ice blue
+constexpr ZixxSunSpec kZixxSunHitFloor   {4108,  kZixxSunHeightMm,  873,   kZixxSunInnerMm, kZixxSunOuterMm, fxm(800), fxm(430),  fxm(75), fxm(510), fxm(255), fxm(30)};   // dust orange
+constexpr ZixxSunSpec kZixxSunSaltoDummy {2100,  kZixxSunHeightMm,  3637,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(650), fxm(710),  fxm(50), fxm(390), fxm(420), fxm(30)};   // chartreuse gold
+constexpr ZixxSunSpec kZixxSunSaltoFly   {-2100, kZixxSunHeightMm,  3637,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(40),  fxm(215),  fxm(930), fxm(30),  fxm(120), fxm(630)};  // deep azure
+constexpr ZixxSunSpec kZixxSunSaltoSix   {3217,  kZixxSunHeightMm,  2700,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(840), fxm(620),  fxm(60), fxm(540), fxm(360), fxm(30)};   // gold
+constexpr ZixxSunSpec kZixxSunSaltoNine  {-3217, kZixxSunHeightMm,  2700,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(870), fxm(90),   fxm(465), fxm(600), fxm(45),  fxm(300)};  // hot pink
+constexpr ZixxSunSpec kZixxSunDeath      {4184,  kZixxSunHeightMm,  366,   kZixxSunInnerMm, kZixxSunOuterMm, fxm(900), fxm(40),   fxm(25), fxm(600), fxm(15),  fxm(15)};   // deep red
+constexpr ZixxSunSpec kZixxSunDeath2     {585,   kZixxSunHeightMm,  4159,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(340), fxm(370),  fxm(840), fxm(210), fxm(225), fxm(540)};  // moonlight
+
+// Direction 29 revert switch (reel-side; the silicon-side revert is the
+// g_creature_additive_light gate plus the CREATURE.LIGHT parameters).
+bool g_zixx_suns_enabled = true;
+
+void sample_zixx_clip_sun(const ZixxSunSpec& sun, const zc::CreatureInstance& inst,
+                          zc::CreaturePointLight& out) {
+  const int32_t staged_centre_x = inst.x - fxm(zixx::kStageCentreMm);
+  out.world_x = staged_centre_x + fxm(sun.x_mm);
+  out.world_y = inst.y + fxm(sun.y_mm);
+  out.world_z = inst.z + fxm(sun.z_mm);
+  out.inner_radius = fxm(sun.inner_mm);
+  out.outer_radius = fxm(sun.outer_mm);
+  out.gain_r = sun.gain_r;
+  out.gain_g = sun.gain_g;
+  out.gain_b = sun.gain_b;
+  out.add_r = sun.add_r;  // consumed under the subject-scoped additive gate
+  out.add_g = sun.add_g;
+  out.add_b = sun.add_b;
+}
+
 struct CreatureReelCtx {
   zc::CreatureInstance* inst = nullptr;
   zc::CreatureInstance* dummy = nullptr;  // run 0326: the target dummy
@@ -2114,6 +2201,9 @@ struct CreatureReelCtx {
   bool force_micro = false;
   bool moving_light = false;
   bool additive_light = false;  // Direction 28 prototype gate, subject-scoped
+  // Direction 29 clip sun: when true, moving_sources[0] holds the subject's
+  // one sun and the additive gate is raised for this subject's compose only.
+  bool sun_light = false;
   // Direction 26: the moving-light inspection carries FOUR world-space
   // sources -- the original warm lamp plus blue, orange and green. They are
   // one contiguous array so the compositor's point-light globals can name
@@ -2558,6 +2648,12 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       zc::g_creature_point_lights = c.moving_sources;
       zc::g_creature_point_light_count = kZixxMovingSourceCount;
       zc::g_creature_additive_light = c.additive_light;  // Direction 28 gate
+    } else if (c.sun_light) {
+      // Direction 29: the clip's sun joins the selected rig (Cool Cross stays
+      // underneath); emission is ON through the same gate, scoped and restored.
+      zc::g_creature_point_lights = c.moving_sources;
+      zc::g_creature_point_light_count = 1;
+      zc::g_creature_additive_light = true;
     }
     zc::compose_creatures(rgb, depth, w, h, c.vp, insts,
                           c.dummy != nullptr ? 2 : 1, *c.poses, nullptr);
@@ -2912,6 +3008,8 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.force_micro = sub.creature_force_micro;
     cr_ctx.moving_light = sub.creature_moving_light;
     cr_ctx.additive_light = sub.creature_additive_light;
+    cr_ctx.sun_light =
+        sub.sun != nullptr && g_zixx_suns_enabled && !sub.creature_moving_light;
     if (sub.dummy) {
       const uint16_t attack_slot = static_cast<uint16_t>(sub.creature - 2);
       target_desc = zixx_target_descriptor(attack_slot);
@@ -3251,6 +3349,10 @@ int render_scene(const SceneSubject& sub) {
                                           sub.creature_additive_light);
         apply_zixx_ml_solo(cr_ctx.moving_sources);
       }
+      // Direction 29: the clip sun tracks the terrain-snapped instance, so
+      // its direction on the animal is constant over the whole clip -- a sun.
+      if (cr_ctx.sun_light)
+        sample_zixx_clip_sun(*sub.sun, dog_inst, cr_ctx.moving_sources[0]);
       // Detached-chunk ballistics advance at the start of subsequent frames,
       // so the exact authored breakup pose is visible for one full frame.
       if (!gibs.empty()) {
@@ -4302,6 +4404,7 @@ void zixx_common(SceneSubject& s) {
 SceneSubject subject_zixx_idle() {
   SceneSubject s;
   s.name = "zixxtrixx-idle";
+  s.sun = &kZixxSunIdle;  // Direction 29
   s.creature = 3;
   s.frames = zixx::kIdleKeys * 2 * 3;
   s.orbit = true;
@@ -4324,6 +4427,7 @@ SceneSubject subject_zixx_idle() {
 SceneSubject subject_zixx_walk() {
   SceneSubject s;
   s.name = "zixxtrixx-walk";
+  s.sun = &kZixxSunWalk;  // Direction 29
   s.creature = 4;
   s.frames = zixx::kWalkKeys * 2 * 2;  // two full gait cycles
   s.orbit = false;
@@ -4357,6 +4461,7 @@ SceneSubject subject_zixx_walk() {
 SceneSubject subject_zixx_attack() {
   SceneSubject s;
   s.name = "zixxtrixx-attack";
+  s.sun = &kZixxSunAttack;  // Direction 29
   s.creature = 5;
   s.frames = zixx::kAttackKeys * 2;
   s.orbit = false;
@@ -4730,6 +4835,7 @@ SceneSubject subject_zixx_fall_side() {
 SceneSubject subject_zixx_hit() {
   SceneSubject s;
   s.name = "zixxtrixx-hit";
+  s.sun = &kZixxSunHit;  // Direction 29
   s.creature = 7;  // clip slot 5
   s.frames = zixx::kHitKeys * 2 * 3;
   s.orbit = false;
@@ -4750,6 +4856,7 @@ SceneSubject subject_zixx_hit() {
 SceneSubject subject_zixx_death() {
   SceneSubject s;
   s.name = "zixxtrixx-death";
+  s.sun = &kZixxSunDeath;  // Direction 29
   s.creature = 8;  // clip slot 6
   s.frames = zixx::kDeathKeys * 2;
   s.orbit = false;
@@ -4770,6 +4877,7 @@ SceneSubject subject_zixx_death() {
 SceneSubject subject_zixx_balance() {
   SceneSubject s;
   s.name = "zixxtrixx-balance";
+  s.sun = &kZixxSunBalance;  // Direction 29
   s.creature = 9;  // clip slot 7
   s.frames = 2 * (zixx::kBalKeys - 1) + 1;
   s.canonical_creature_timeline = true;
@@ -4792,6 +4900,7 @@ SceneSubject subject_zixx_balance() {
 SceneSubject subject_zixx_look() {
   SceneSubject s;
   s.name = "zixxtrixx-look";
+  s.sun = &kZixxSunLook;  // Direction 29
   s.creature = 10;  // clip slot 8
   s.frames = zixx::kLookKeys * 2;
   s.orbit = false;
@@ -4933,6 +5042,7 @@ SceneSubject subject_zixx_lodsweep() {
 SceneSubject subject_zixx_knockdown() {
   SceneSubject s;
   s.name = "zixxtrixx-knockdown";
+  s.sun = &kZixxSunKnockdown;  // Direction 29
   s.creature = 22;  // clip slot 20
   s.frames = zixx::kKnockKeys * 2 + 28 + zixx::kGetUpKeys * 2 + 24;
   s.orbit = false;
@@ -4965,6 +5075,7 @@ SceneSubject subject_zixx_knockdown_mode(const char* name, int shade) {
 SceneSubject subject_zixx_hitfloor() {
   SceneSubject s;
   s.name = "zixxtrixx-hitfloor";
+  s.sun = &kZixxSunHitFloor;  // Direction 29
   s.creature = 24;  // clip slot 22
   s.frames = zixx::kHitFloorKeys * 2 + 20 + zixx::kGetUpKeys * 2 + 24;
   s.orbit = false;
@@ -4984,6 +5095,7 @@ SceneSubject subject_zixx_hitfloor() {
 SceneSubject subject_zixx_damage() {
   SceneSubject s;
   s.name = "zixxtrixx-damage";
+  s.sun = &kZixxSunDamage;  // Direction 29
   s.creature = 25;  // starts on slot 23 (damageRight)
   s.frames = zixx::kDmgKeys * 2 * 4;
   s.orbit = false;
@@ -5007,6 +5119,7 @@ SceneSubject subject_zixx_damage() {
 SceneSubject subject_zixx_run() {
   SceneSubject s;
   s.name = "zixxtrixx-run";
+  s.sun = &kZixxSunRun;  // Direction 29
   s.creature = 29;  // clip slot 27
   s.frames = zixx::kRunKeys * 2 * 2;  // 2 loops: 3 walked it out of frame
   s.orbit = false;
@@ -5024,6 +5137,7 @@ SceneSubject subject_zixx_run() {
 SceneSubject subject_zixx_death2() {
   SceneSubject s;
   s.name = "zixxtrixx-death2";
+  s.sun = &kZixxSunDeath2;  // Direction 29
   s.creature = 30;  // clip slot 28
   s.frames = zixx::kDeath1Keys * 2;
   s.orbit = false;
@@ -5051,6 +5165,7 @@ SceneSubject subject_zixx_death2_mode(const char* name, int shade) {
 SceneSubject subject_zixx_taunt() {
   SceneSubject s;
   s.name = "zixxtrixx-taunt";
+  s.sun = &kZixxSunTaunt;  // Direction 29
   s.creature = 32;  // clip slot 30
   s.frames = zixx::kTauntKeys * 2 * 2;
   s.orbit = false;
@@ -5071,6 +5186,7 @@ SceneSubject subject_zixx_taunt() {
 SceneSubject subject_zixx_slow_taunt() {
   SceneSubject s;
   s.name = "zixxtrixx-slow-taunt";
+  s.sun = &kZixxSunSlowTaunt;  // Direction 29
   s.creature = 46;  // clip slot 44
   s.frames = 2 * (zixx::kSlowTauntKeys - 1) + 1;
   s.canonical_creature_timeline = true;
@@ -5113,6 +5229,7 @@ uint32_t zixx_one_shot_presentation_frames(int keys) {
 SceneSubject subject_zixx_salto_dummy() {
   SceneSubject s;
   s.name = "zixxtrixx-salto-dummy";
+  s.sun = &kZixxSunSaltoDummy;  // Direction 29
   s.creature = 35;  // clip slot 33
   s.frames = zixx_one_shot_presentation_frames(
       zixx::zixx_attack_variant_key_count(
@@ -5140,6 +5257,7 @@ SceneSubject subject_zixx_salto_dummy() {
 SceneSubject subject_zixx_salto_fly() {
   SceneSubject s;
   s.name = "zixxtrixx-salto-fly";
+  s.sun = &kZixxSunSaltoFly;  // Direction 29
   s.creature = 36;  // clip slot 34
   s.frames = zixx_one_shot_presentation_frames(
       zixx::zixx_attack_variant_key_count(
@@ -5167,6 +5285,7 @@ SceneSubject subject_zixx_salto_fly() {
 SceneSubject subject_zixx_salto_six() {
   SceneSubject s;
   s.name = "zixxtrixx-salto-six";
+  s.sun = &kZixxSunSaltoSix;  // Direction 29
   s.creature = 37;  // clip slot 35
   s.frames = zixx_one_shot_presentation_frames(
       zixx::zixx_attack_variant_key_count(
@@ -5196,6 +5315,7 @@ SceneSubject subject_zixx_jump_one() {
   const zixx::JumpPlan p =
       zixx::zixx_jump_plan(zixx::kSlotJumpOne, 1);
   s.name = "zixxtrixx-jump-one";
+  s.sun = &kZixxSunJumpOne;  // Direction 29
   s.creature = zixx::kSlotJumpOne + 2;
   s.frames = zixx_one_shot_presentation_frames(zixx::zixx_jump_key_count(p));
   s.canonical_creature_timeline = true;
@@ -5216,6 +5336,7 @@ SceneSubject subject_zixx_jump_multi() {
   const zixx::JumpPlan p =
       zixx::zixx_jump_plan(zixx::kSlotJumpMulti, 3);
   s.name = "zixxtrixx-jump-multi";
+  s.sun = &kZixxSunJumpMulti;  // Direction 29
   s.creature = zixx::kSlotJumpMulti + 2;
   s.frames = zixx_one_shot_presentation_frames(zixx::zixx_jump_key_count(p));
   s.canonical_creature_timeline = true;
@@ -5233,6 +5354,7 @@ SceneSubject subject_zixx_salto_nine() {
   const zc::AttackPlan p =
       zixx::zixx_variant_plan(zixx::kSlotAtkNine);
   s.name = "zixxtrixx-salto-nine";
+  s.sun = &kZixxSunSaltoNine;  // Direction 29
   s.creature = zixx::kSlotAtkNine + 2;
   s.frames = zixx_one_shot_presentation_frames(
       zixx::zixx_attack_variant_key_count(p, true));
@@ -5261,6 +5383,7 @@ SceneSubject subject_zixx_salto_nine() {
 SceneSubject subject_zixx_fall() {
   SceneSubject s = subject_zixx_fall_side();
   s.name = "zixxtrixx-fall";
+  s.sun = &kZixxSunFall;  // Direction 29
   s.note =
       "One complete 4.8-second loose falling loop on the accepted fixed-side "
       "camera: nonuniform tumble and low stance authority let the signature S "
@@ -5887,6 +6010,14 @@ int main(int argc, char** argv) {
       g_zixx_ml_boost = std::max(1, std::atoi(boost));
     std::fprintf(stderr, "ZIXX_ML_SOLO=%s boost=%d (Direction 27 diagnostic lane)\n", solo,
                  g_zixx_ml_boost);
+  }
+  // Direction 29 revert path: ZIXX_SUNS=off renders the sunless bank
+  // byte-identically (proven by CRC in the suns run). Unset or any other
+  // value leaves the clip suns on -- the shipping default.
+  if (const char* suns = std::getenv("ZIXX_SUNS")) {
+    if (std::string(suns) == "off") g_zixx_suns_enabled = false;
+    std::fprintf(stderr, "ZIXX_SUNS=%s (Direction 29 clip suns %s)\n", suns,
+                 g_zixx_suns_enabled ? "on" : "OFF");
   }
   // V11/V12 bounded owner-choice lane. The selector changes only the generic
   // creature preview rig; baseline is still the default when the variable is
