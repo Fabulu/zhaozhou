@@ -32,6 +32,15 @@ schema_version: 1
 # §25 mandatory counters (snake_case) plus the declared platform extensions.
 # Block `counters` must be a subset of this catalog (rule V12).
 counter_catalog:
+  # MEM.UPLOAD -- the HPS->VRAM resource path (owner direction 2026-09-03).
+  # crc_failures and guard_refusals are the two that must never be silently
+  # zero: a refused upload means a resource is NOT resident, and a frame that
+  # references it will be withheld under the whole-frame law.
+  - upload_bytes
+  - uploads_completed
+  - crc_failures
+  - guard_refusals
+  - epoch_stale
   # TERRAIN.RESIDENCY (rulings T9/T10)
   - residency_hits
   - residency_misses
@@ -308,7 +317,7 @@ blocks:
     inputs: [decoded_records, frame_complete]
     outputs: [engine_dispatch, slot_state, guard_policy, fence]
     upstream: [CMD.DECODER, VIDEO.FRAMECTL]
-    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT]
+    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT, MEM.UPLOAD]
     backpressure: credit
     latency: variable
     target_throughput: 1 slot transition per clock
@@ -562,6 +571,47 @@ blocks:
       rejection, per-client byte accounting); the maturity_log evidence now
       points at files that actually exercise this block.
 
+  - id: MEM.UPLOAD
+    name: Resource upload engine
+    kind: rtl
+    subsystem: memory
+    clock_domain: gpu
+    purpose: "Move immutable resource bytes from HPS DDR into local SDRAM and declare them resident ATOMICALLY, with a generation that makes a stale copy detectable. The console has no such path today: CMD.DMA does no VRAM writes at all, SW.STREAM stages only into HPS DDR, and DEBUG.FRAMEBLIT is the right shape in the wrong block. Animation clip banks, 8 km terrain pages and Sunder all need it and were all claiming ENGINE client 6."
+    contract: design/contracts/MEM.UPLOAD.md
+    phase: 3
+    owner_issue: ZH-079
+    inputs: [upload_request]
+    outputs: [upload_complete, vram_write]
+    upstream: [CMD.SCHEDULER, SW.STREAM]
+    downstream: [MEM.GUARD]
+    backpressure: ready_valid
+    async_bridge: true
+    latency: variable
+    target_throughput: 64-byte bursts at the arbiter's granted rate; the required rate must come from a trace, not arithmetic
+    reference_model: zref::mem::upload_verdict
+    tests:
+      directed: "PLANNED tests/memory/mem_upload_directed.cpp -- NOT WRITTEN"
+      random: "PLANNED tests/memory/mem_upload_random.cpp -- NOT WRITTEN"
+    counters: [upload_bytes, uploads_completed, crc_failures, guard_refusals, epoch_stale]
+    source_ids: true
+    budget_group: command_debug
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      Written 2026-09-03 from owner direction: the animation ruling makes HPS
+      DDR the authoritative home of every clip bank because the animations do
+      not fit in local RAM, and that ruling assumes a mover that does not
+      exist. Deliberately GENERAL rather than an animation uploader, because
+      terrain streaming and Sunder need the identical service. Requires changes
+      to four other blocks, listed in the contract: MEM.HPS.ARBITER gains a
+      third client, MEM.GUARD gains generation rejection and an appended
+      region, CMD.SCHEDULER gains a resource-pin table, and
+      zhao_geom_pose_cache gains `sub` in its tag -- the last is a live defect
+      today, since a key and its 60 Hz midpoint alias and the cache returns the
+      wrong palette.
   - id: MEM.GUARD
     name: Memory guard
     kind: rtl
@@ -573,7 +623,7 @@ blocks:
     owner_issue: ZH-029
     inputs: [client_req, guard_policy]
     outputs: [arb_req, guard_violation]
-    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, GEOM.POSE, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT, DEBUG.FRAMEBLIT]
+    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, GEOM.POSE, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT, DEBUG.FRAMEBLIT, MEM.UPLOAD]
     downstream: [MEM.VRAM.ARBITER]
     backpressure: ready_valid
     latency: fixed:1
@@ -3608,7 +3658,7 @@ blocks:
     inputs: [stream_requests, packed_assets]
     outputs: [resident_assets]
     upstream: [SW.RUNTIME.HPS, SW.TOOLS.ASSET]
-    downstream: []
+    downstream: [MEM.UPLOAD]
     backpressure: none
     latency: variable
     target_throughput: deadline-driven

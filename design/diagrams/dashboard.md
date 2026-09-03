@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **95** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **96** (76 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -18,7 +18,7 @@ Blocks: **95** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | geometry | 4 | 2 | 6 | · | · | · | · | · | 12 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 1 | · | 2 | · | · | · | · | · | 3 |
-| memory | 1 | · | 1 | 3 | · | · | · | 1 | 5 |
+| memory | 2 | · | 1 | 3 | · | · | · | 1 | 6 |
 | particles | 4 | 1 | 2 | · | · | · | · | · | 7 |
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
 | raster | · | · | 5 | · | · | · | · | · | 5 |
@@ -27,7 +27,7 @@ Blocks: **95** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | · | · | 9 | · | · | · | · | · | 9 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 30 | 9 | 40 | 16 | · | · | · | 6 | 95 |
+| **all** | 31 | 9 | 40 | 16 | · | · | · | 6 | 96 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -193,7 +193,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 | §25 group | ceiling | rtl blocks | allocated ALM% |
 |---|---:|---:|---:|
 | platform | 14% | 16 | 0% |
-| command_debug | 5% | 8 | 0% |
+| command_debug | 5% | 9 | 0% |
 | field | 6% | 2 | 0% |
 | geometry_mantle | 20% | 24 | 0% |
 | tile | 30% | 11 | 0% |

@@ -128,8 +128,12 @@ module zhao_terrain_normalmap #(
 
   assign tri_ready_o = (t_st_q == T_IDLE);
 
-  // The squares are 64-bit by construction: a Q16.16 component near one world
-  // unit squares to 2^32, and three of those do not fit in 32 bits.
+  // ASSUMPTION, unenforced, and this file is a quarantined draft: the squares
+  // are taken in 64 bits because a Q16.16 component near one world unit squares
+  // to 2^32 and three of those do not fit in 32 bits. Nobody upholds this yet --
+  // the replacement block specified in reports/NORMALMAP-ARCHITECTURE.md owns
+  // it, and its oracle must be written before any RTL. Stated as an assumption
+  // rather than an invariant precisely because there is no enforcer.
   logic [63:0] sq_c;
   always_comb begin
     automatic logic signed [63:0] xx = 64'(n_x_i) * 64'(n_x_i);

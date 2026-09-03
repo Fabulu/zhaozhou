@@ -273,6 +273,8 @@ The FPGA never sees:
 
 A later content-declared visual fallback may be added, such as holding a previous resident pose, but it must be explicit, deterministic and capture-visible. The base architecture requires no such fallback and remains correct by repeating the previous complete frame.
 
+**OWNER RULING 2026-09-03.** The companion document's section 6.1 previously required a deterministic PER-INSTANCE degradation ladder chosen by the HPS before sealing, which contradicted this section. **This section is the law: whole-frame.** The frame is withheld, the previous complete frame repeats, the fault is counted. That needs no frame-packet field and gives the deadline path one behaviour instead of two. The companion has been amended to match.
+
 Malformed or corrupt animation data is rejected on the HPS side before residency. `GEOM.POSE` retains its safe identity-pose behaviour for invalid IDs as a last guard, not as the ordinary streaming mechanism.
 
 ---

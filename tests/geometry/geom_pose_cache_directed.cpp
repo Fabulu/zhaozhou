@@ -48,6 +48,7 @@ struct Req {
   uint16_t type;
   uint16_t clip;
   uint16_t frame;
+  uint8_t  sub = 0;   // the half-key phase; 1 is the baked 60 Hz midpoint
 };
 
 /** Creature types built so their clip tables are easy to reason about. */
@@ -126,6 +127,7 @@ int rtl_acquire(Vzhao_geom_pose_cache& dut, const Req& r, bool resolvable) {
   dut.acq_type_i = r.type;
   dut.acq_clip_i = r.clip;
   dut.acq_frame_i = r.frame;
+  dut.acq_sub_i = r.sub;
   dut.acq_resolvable_i = resolvable ? 1 : 0;
   dut.resp_ready_i = 1;
   dut.eval();
@@ -270,7 +272,45 @@ int main(int argc, char** argv) {
       replay(dut, bank, w, reqs, breaks, tag);
     }
     dut.final();
-    return zhao::report_and_exit("geom_pose_cache_random");
+    // ---- the half-key phase is part of the KEY -----------------------------
+  // Before 2026-09-03 the tag was {lru, frame, clip, type} with no `sub`,
+  // while the reference `PoseBank::acquire(type, slot, frame, sub)` always
+  // carried it. With baked 60 Hz presentation data a key and its midpoint
+  // differ in NOTHING ELSE, so the second one hit the first one's line and the
+  // cache handed back the wrong palette -- silently, with no counter moving.
+  //
+  // The animation ruling of 2026-09-03 permits baked 60 Hz for any creature,
+  // which is what turned a latent mismatch into a live defect.
+  {
+    Vzhao_geom_pose_cache dut2;
+    dut2.rst_n = 0;
+    for (int i = 0; i < 4; ++i) zhao::tick(dut2);
+    dut2.rst_n = 1;
+    zhao::tick(dut2);
+    rtl_begin_frame(dut2);
+
+    const Req key{7, 3, 11, 0};
+    const Req mid{7, 3, 11, 1};   // same key, the 60 Hz midpoint
+
+    const int a = rtl_acquire(dut2, key, true);
+    const int b = rtl_acquire(dut2, mid, true);
+
+    // The first is a miss that inserts. The second MUST also miss and insert:
+    // if it reports a hit it has been given the wrong pose.
+    zhao::check(a == 1 && b == 1,
+                "a key and its 60 Hz midpoint are DIFFERENT cache entries -- "
+                "`sub` is part of the key, and a hit here would hand back a "
+                "palette the animator never authored",
+                1, (a == 1 && b == 1) ? 1 : 0);
+
+    // And re-asking for the midpoint now hits, so the insert really happened
+    // rather than the entry being dropped.
+    const int c = rtl_acquire(dut2, mid, true);
+    zhao::check(c == 0,
+                "and the midpoint's own entry hits on the second ask", 0, c);
+  }
+
+  return zhao::report_and_exit("geom_pose_cache_random");
   }
 
   // ---- 1. cold miss, then a hit on the same tuple -------------------------

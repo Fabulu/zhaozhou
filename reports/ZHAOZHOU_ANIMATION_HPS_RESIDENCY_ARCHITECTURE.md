@@ -252,17 +252,48 @@ Consequences:
 
 ### 6.1 Missing-resource behaviour
 
+**OWNER RULING 2026-09-03: WHOLE-FRAME. This section previously required a
+per-instance degradation ladder and contradicted
+`ZHAOZHOU_ANIMATION_MEMORY_ARCHITECTURE.md` section 9, which requires the whole
+frame to be withheld. The whole-frame law wins and is restated here as the only
+v1 behaviour.**
+
 Simulation truth does not block on presentation streaming.
 
-If required animation pages are not resident by the presentation deadline, the HPS must choose a deterministic degradation before sealing the frame. Legal policies include:
+If any required animation page is not resident by the presentation deadline:
+
+1. the incomplete frame is **not published**;
+2. the previous complete frame repeats under the existing hard-60-Hz late-frame
+   law;
+3. an animation-residency deadline fault is recorded;
+4. simulation truth continues according to the normal runtime policy;
+5. the streamer continues preparing the missing resource for a later frame.
+
+The FPGA never guesses and never waits. It never sees a null local pointer, an
+HPS address masquerading as a VRAM address, a partially uploaded clip, a stale
+generation, or a request meaning "stall until Linux gives this to me."
+
+**Why whole-frame and not per-instance.** A per-instance ladder needs a
+per-instance decision carried in the frame packet, so it adds a field, a policy
+and a divergence risk between the HPS's choice and what the capture records —
+and it does all that to improve a case that is already a fault being counted.
+Repeating the previous complete frame needs **no frame-packet field at all** and
+is exactly what `CMD.SCHEDULER` already does for a late frame, so the deadline
+path has one behaviour rather than two.
+
+**What is deliberately NOT law.** The ladder below is retained only as a record
+of what a later content-declared fallback could contain. **None of it is v1
+behaviour, and no implementation may choose from it today:**
 
 - retain the previous valid visual pose for that instance;
 - select an always-resident rest/bind representation;
 - select a coarser creature representation such as splat or glint;
-- omit the visual instance while retaining simulation truth;
-- decline to publish the new frame, allowing the previous completed frame to repeat under the existing deadline law.
+- omit the visual instance while retaining simulation truth.
 
-The exact fallback ladder is a content-tier decision and remains to be frozen. What is not optional is that the choice occurs on the HPS before frame sealing and is explicit in the frame packet. The FPGA never guesses and never waits.
+If such a fallback is ever added it must be explicit, deterministic and
+capture-visible, and it must be ratified by the owner before implementation —
+the base architecture is correct without it, which is the reason it is not
+being built now.
 
 ---
 
