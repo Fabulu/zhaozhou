@@ -37,6 +37,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <deque>
+#include <map>
 #include <vector>
 
 #include "verilated.h"
@@ -163,6 +164,10 @@ int main(int argc, char** argv) {
     top.tmu_a_i = 0xF0;
     zhao::tick(top);
     top.tmu_rvalid_i = 0;
+    // The retirement packet is REGISTERED (X3.7), so completion and the
+    // output are one clock apart. That is the point of registering it: the
+    // packet cannot change under a stalled consumer.
+    zhao::tick(top);
     top.eval();
     zhao::check(top.o_valid_o == 1, "and it retires once the third arrives",
                 1, top.o_valid_o);
@@ -253,6 +258,7 @@ int main(int argc, char** argv) {
     top.tmu_a_i = 0x77;
     zhao::tick(top);
     top.tmu_rvalid_i = 0;
+    zhao::tick(top);
     top.eval();
     zhao::check(top.o_valid_o == 1, "a MODULATE fragment still retires", 1, top.o_valid_o);
     zhao::check(top.combiner_unfrozen_o == 1,
@@ -278,6 +284,7 @@ int main(int argc, char** argv) {
     top.tmu_a_i = 0x42;
     zhao::tick(top);
     top.tmu_rvalid_i = 0;
+    zhao::tick(top);
     top.eval();
     zhao::check(top.combiner_unfrozen_o == 0,
                 "PASSTHRU does not raise the unfrozen flag -- its result is exact",
@@ -374,10 +381,22 @@ int main(int argc, char** argv) {
     zhao::check(both_clocks > 200,
                 "the soak really did accept and retire on the same clock, often",
                 1, both_clocks > 200 ? 1 : 0);
-    zhao::check(worst_outstanding <= kDepth,
-                "outstanding fragments NEVER exceed DEPTH -- the free count does "
-                "not drift when accept and retire coincide",
-                kDepth, worst_outstanding);
+    // DEPTH + 1, and the +1 is a real storage location rather than slack in
+    // the check: the retirement packet is now a REGISTER, so a fragment whose
+    // slot has been freed is still inside the block until the consumer takes
+    // it. The bound moved by exactly one because exactly one register was
+    // added.
+    //
+    // This is the check that caught the free-count race, and it must stay
+    // sharp. It is equality-tight, not relaxed: re-armed against the
+    // restructured block on 2026-09-03, reverting the single-assignment fix
+    // drives this to 1532 outstanding with 1686 fragments out of order and
+    // 253 returns landing on recycled slots.
+    zhao::check(worst_outstanding <= kDepth + 1,
+                "outstanding fragments NEVER exceed DEPTH + the one registered "
+                "output -- the free count does not drift when accept and retire "
+                "coincide",
+                kDepth + 1, worst_outstanding);
     zhao::check(order_errors == 0,
                 "and every fragment retires exactly once, in allocation order", 0,
                 order_errors);
@@ -386,6 +405,200 @@ int main(int argc, char** argv) {
                 static_cast<int>(top.id_errors_o));
     std::printf("  soak: %d accepted, %d retired, %d same-clock, worst outstanding %d\n",
                 accepted, retired, both_clocks, worst_outstanding);
+  }
+
+  // --------------------------------------------------------------- 8 ---
+  // THE ZERO-SAMPLE PATH READS NO TEXEL, AND SAYS SO WITH A DEFINED VALUE.
+  //
+  // Ruled defect X3.6: `sample_count == 0` completed immediately and the
+  // combiner still read sample-0 storage -- which holds whatever the previous
+  // occupant of that slot left there. R9 says count 0 means has_texture = 0
+  // and NO sample is read, so there is nothing legitimate for it to return.
+  //
+  // THE FIRST VERSION OF THIS CASE DID NOT TEST THAT, and passed against the
+  // unfixed RTL. It dirtied slot 0, allocated DEPTH more fragments, and then
+  // checked the LAST value on the output -- which came from a slot that had
+  // never been dirtied. Removing the fix changed nothing and the case still
+  // went green.
+  //
+  // What it has to do instead is follow the specific fragment that lands back
+  // on the dirtied slot. Every retirement is captured by ctx, so the check is
+  // about one identified fragment rather than about whatever happened to be
+  // on the port at the end.
+  {
+    reset(top);
+    std::map<uint64_t, uint32_t> retired_rgb;
+    auto pump = [&](int clocks) {
+      for (int c = 0; c < clocks; ++c) {
+        top.eval();
+        if (top.o_valid_o && top.o_ready_i)
+          retired_rgb[top.o_ctx_o] = top.o_rgb_o;
+        zhao::tick(top);
+      }
+    };
+
+    // 1: dirty slot 0 with a recognisable texel.
+    Frag one{1, {5, 0, 0}, {6, 0, 0}, /*recipe=*/0, 0xD001, false};
+    offer(top, one);
+    pump(4);
+    top.tmu_rvalid_i = 1;
+    top.tmu_rslot_i = 0; top.tmu_rsidx_i = 0; top.tmu_rgen_i = 1;
+    top.tmu_rgb_i = 0xBADBADu;      // the value that must not reappear
+    top.tmu_a_i = 0xEE;
+    zhao::tick(top);
+    top.tmu_rvalid_i = 0;
+    pump(3);
+    zhao::check(retired_rgb.count(0xD001) == 1 &&
+                    retired_rgb[0xD001] == 0xBADBADu,
+                "the slot really is dirtied first", 1,
+                (retired_rgb.count(0xD001) == 1 &&
+                 retired_rgb[0xD001] == 0xBADBADu) ? 1 : 0);
+
+    // 2: walk zero-sample fragments all the way round the ring so that one of
+    //    them lands back on slot 0. Their ctx values say which is which.
+    for (int i = 0; i < kDepth + 2; ++i) {
+      Frag z{0, {0, 0, 0}, {0, 0, 0}, 0, 0xD100u + static_cast<uint64_t>(i),
+             false};
+      offer(top, z);
+      pump(3);
+    }
+    pump(8);
+
+    // 3: EVERY one of them must have read no texel. Exactly one of them
+    //    occupied slot 0, and without the fix it is the one that returns
+    //    0xBADBAD -- but the case does not need to know which.
+    int leaked = 0, seen = 0;
+    for (int i = 0; i < kDepth + 2; ++i) {
+      const uint64_t ctx = 0xD100u + static_cast<uint64_t>(i);
+      if (retired_rgb.count(ctx) == 0) continue;
+      ++seen;
+      if (retired_rgb[ctx] == 0xBADBADu) ++leaked;
+    }
+    zhao::check(seen >= kDepth,
+                "the zero-sample fragments really did go all the way round the "
+                "ring, so one of them reused the dirtied slot",
+                1, seen >= kDepth ? 1 : 0);
+    zhao::check(leaked == 0,
+                "and NOT ONE of them returns the previous occupant's texel -- a "
+                "ZERO-sample fragment read no texel at all",
+                0, leaked);
+  }
+
+  // --------------------------------------------------------------- 9 ---
+  // THE OUTPUT IS HELD UNDER A STALL.
+  //
+  // This is the property a registered retirement packet exists for, and the
+  // one a combinational view of table storage cannot have: with the consumer
+  // stalled, the packet on the output must not change, even while the block
+  // keeps accepting and completing other fragments behind it.
+  {
+    reset(top);
+    Frag f{1, {9, 0, 0}, {9, 0, 0}, /*recipe=*/0, 0xC0DEu, false};
+    offer(top, f);
+    for (int c = 0; c < 4; ++c) { top.eval(); zhao::tick(top); }
+    top.tmu_rvalid_i = 1;
+    top.tmu_rslot_i = 0; top.tmu_rsidx_i = 0; top.tmu_rgen_i = 1;
+    top.tmu_rgb_i = 0xFACADEu; top.tmu_a_i = 0x5A;
+    zhao::tick(top);
+    top.tmu_rvalid_i = 0;
+    zhao::tick(top);
+
+    top.o_ready_i = 0;             // STALL the consumer
+    top.eval();
+    const uint32_t held_rgb = top.o_rgb_o;
+    const uint32_t held_a   = top.o_a_o;
+    const uint64_t held_ctx = top.o_ctx_o;
+    zhao::check(top.o_valid_o == 1 && held_rgb == 0xFACADEu,
+                "the packet is presented", 1,
+                (top.o_valid_o && held_rgb == 0xFACADEu) ? 1 : 0);
+
+    // keep the queue busy behind it for a long stall
+    int changed = 0;
+    for (int c = 0; c < 40; ++c) {
+      Frag g{1, {1, 0, 0}, {1, 0, 0}, 0, 0xE000u + static_cast<uint64_t>(c), false};
+      top.f_valid_i = 1;
+      top.f_sample_count_i = g.count;
+      for (int j = 0; j < 3; ++j) {
+        top.f_u_i[j] = 1; top.f_v_i[j] = 1;
+        top.f_binding_i[j] = 1; top.f_lod_i[j] = 0;
+      }
+      top.f_recipe_i = 0; top.f_ctx_i = g.ctx; top.f_aux_i = 0; top.f_uv_sat_i = 0;
+      if (top.tmu_valid_o) {
+        top.tmu_rvalid_i = 1;
+        top.tmu_rslot_i = top.tmu_slot_o;
+        top.tmu_rsidx_i = top.tmu_sidx_o;
+        top.tmu_rgen_i  = top.tmu_gen_o;
+        top.tmu_rgb_i   = 0x111111u;
+        top.tmu_a_i     = 0x22;
+      } else {
+        top.tmu_rvalid_i = 0;
+      }
+      top.eval();
+      if (top.o_valid_o != 1 || top.o_rgb_o != held_rgb || top.o_a_o != held_a ||
+          top.o_ctx_o != held_ctx)
+        ++changed;
+      zhao::tick(top);
+    }
+    top.f_valid_i = 0;
+    top.tmu_rvalid_i = 0;
+    zhao::check(changed == 0,
+                "and it does NOT change for 40 clocks of stall while the block "
+                "keeps working behind it",
+                0, changed);
+    top.o_ready_i = 1;
+  }
+
+  // -------------------------------------------------------------- 10 ---
+  // A DUPLICATE RETURN IS COUNTED, NOT APPLIED TWICE.
+  //
+  // Ruled defect X3.5. The second copy carries the same slot and generation as
+  // the first, so identity alone cannot reject it -- what makes it harmless is
+  // that a return WRITES storage rather than incrementing anything, and that
+  // completion is `arr == req` rather than a count.
+  {
+    reset(top);
+    Frag f{2, {3, 4, 0}, {5, 6, 0}, /*recipe=*/0, 0xD0FFEE, false};
+    offer(top, f);
+    for (int c = 0; c < 4; ++c) { top.eval(); zhao::tick(top); }
+
+    // sample 0 arrives TWICE
+    for (int rep = 0; rep < 2; ++rep) {
+      top.tmu_rvalid_i = 1;
+      top.tmu_rslot_i = 0; top.tmu_rsidx_i = 0; top.tmu_rgen_i = 1;
+      top.tmu_rgb_i = 0x010203u; top.tmu_a_i = 0x44;
+      zhao::tick(top);
+      top.tmu_rvalid_i = 0;
+      zhao::tick(top);
+    }
+    top.eval();
+    zhao::check(top.o_valid_o == 0,
+                "a DUPLICATE sample-0 return does not complete a 2-sample "
+                "fragment -- completion is a mask, not a count",
+                0, top.o_valid_o);
+    zhao::check(top.id_errors_o == 0,
+                "and it is not an identity error either: the slot and "
+                "generation were both correct",
+                0, static_cast<int>(top.id_errors_o));
+
+    // the real sample 1 still completes it
+    top.tmu_rvalid_i = 1;
+    top.tmu_rslot_i = 0; top.tmu_rsidx_i = 1; top.tmu_rgen_i = 1;
+    top.tmu_rgb_i = 0x0A0B0Cu; top.tmu_a_i = 0x55;
+    zhao::tick(top);
+    top.tmu_rvalid_i = 0;
+    zhao::tick(top);
+    top.eval();
+    zhao::check(top.o_valid_o == 1, "and the missing sample still completes it",
+                1, top.o_valid_o);
+  }
+
+  // -------------------------------------------------------------- 11 ---
+  // THE WORK QUEUE NEVER OVERFLOWS.
+  {
+    zhao::check(top.wq_overflow_o == 0,
+                "the sample work queue never overflowed across every case above "
+                "-- the by-construction bound, checked rather than asserted",
+                0, top.wq_overflow_o);
   }
 
   return zhao::report_and_exit("raster_texjoin_v2_directed");
