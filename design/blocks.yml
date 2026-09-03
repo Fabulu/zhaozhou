@@ -1532,7 +1532,7 @@ blocks:
     inputs: [terrain_normals]
     outputs: [terrain_shade]
     upstream: [TERRAIN.NORMALS]
-    downstream: [TERRAIN.PROJECT]
+    downstream: [TERRAIN.PROJECT, TERRAIN.NORMALMAP]
     backpressure: ready_valid
     latency: fixed:0
     target_throughput: OPEN -- fit at II=1 and II=3 per the owner brief; the producer delivers ~1 triangle per 3 clocks
@@ -1681,6 +1681,56 @@ blocks:
     deferred: false
     superseded_by: null
 
+  - id: TERRAIN.NORMALMAP
+    name: Terrain detail normals
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "The per-fragment detail term s*dot(d,L) that rides on TERRAIN.SHADE's base light: high-frequency surface relief under a MOVING sun, which a baked highlight cannot do. A heightfield's tangent frame is axis-aligned in world space, so a detail normal perturbs the surface normal in world XZ directly -- no tangent frame, nothing extra interpolated."
+    contract: design/contracts/TERRAIN.NORMALMAP.md
+    phase: 6
+    owner_issue: ZH-082
+    inputs: [terrain_shade, detail_texel]
+    outputs: [terrain_shade]
+    upstream: [TERRAIN.SHADE]
+    downstream: [TERRAIN.PROJECT]
+    backpressure: ready_valid
+    latency: fixed:0
+    target_throughput: one fragment per clock
+    reference_model: zref::terrain::normalmap_decode
+    tests:
+      directed: tests/terrain/terrain_shade_oracle.cpp
+      random: tests/terrain/terrain_shade_oracle.cpp
+    counters: [terrain_samples_evaluated]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-03"
+        commit: "ca2fc653"
+        evidence: reference/include/zref/zref_terrain_normalmap.hpp
+    deferred: false
+    cut_order: 1
+    superseded_by: null
+    notes: >-
+      THE CUTTABLE ORGAN, and cut_order 1 says so. Estimated ~380 ALM / 2 DSP /
+      8 M10K, which the owner brief puts at about 4% of the ~9,000 ALM the
+      texture recovery is already targeting: "normal maps are not the thing
+      presently threatening it. The broken texture storage structures are."
+      Its cut seam is a PROPERTY, not a promise: strength 0 is a bit-exact
+      no-op (zref::terrain::normalmap_is_noop), so removing it changes nothing
+      else.
+      If DSPs get tight, lower TERRAIN.SHADE's throughput point instead of
+      cutting this -- this runs per fragment and needs the throughput; the
+      unused parallelism is in the base-light block.
+      The detail normal has NO Y component by construction, so under a sun at
+      the zenith the relief fades out. Declared, not discovered, and the reason
+      the look-gate is a MOVING sun at 240p rather than a still frame.
+      A DRAFT RTL EXISTS AND IS KNOWN WRONG: fpga/rtl/terrain/
+      zhao_terrain_normalmap.sv is quarantined out of prod_manifest.yml -- its
+      divide returns zero for every realistic triangle. It is not this entry's
+      implementation.
   - id: TERRAIN.NORMALS
     name: Deformed normals
     kind: rtl
@@ -1877,7 +1927,7 @@ blocks:
     owner_issue: ZH-051
     inputs: [lod_decisions, terrain_normals]
     outputs: [terrain_primitives, mosaic_candidates]
-    upstream: [TERRAIN.LOD, TERRAIN.NORMALS, TERRAIN.SHADE]
+    upstream: [TERRAIN.LOD, TERRAIN.NORMALS, TERRAIN.SHADE, TERRAIN.NORMALMAP]
     downstream: [GEOM.CLIP, TEXTURE.MOSAIC]
     backpressure: ready_valid
     latency: variable
