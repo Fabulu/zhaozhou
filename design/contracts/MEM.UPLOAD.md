@@ -62,7 +62,36 @@ with a tagged request queue resolves that contention instead of ratifying it.
 
 ## The two laws that are the whole point
 
-### 1. A page becomes resident ATOMICALLY
+### 1. A page becomes resident ATOMICALLY -- BY LANDING SOMEWHERE ELSE
+
+**CORRECTED 2026-09-03 by owner brief
+`reports/BRO-20260903-NORMALMAP-AND-ANIMATION-PATH.md` S3.1.** The first
+version of this section said a consumer sees the old generation and old page
+during an upload and the new generation on completion. **That only holds if the
+uploader does not overwrite the old page in place**, and as written it did:
+
+> Suppose it writes new bytes over the old slot while the slot still advertises
+> the old generation. A consumer holding the old generation can still read a
+> mixture of old and new bytes. The generation bit does not protect the
+> underlying memory.
+
+So the stated guarantee "on CRC failure the slot keeps its old bytes" was
+**not implementable** with one destination slot. The law is now:
+
+> **Upload into a FRESH, unpinned, unpublished destination slot. Verify the
+> complete copy and wait for every local-SDRAM write to retire. Then atomically
+> publish a new mapping. Keep the old slot intact until its final frame pin is
+> released.**
+
+On CRC failure the new slot holds garbage, is unpublished, and is discarded;
+the old mapping and old bytes were never touched. This is the transactional
+shape `DEBUG.FRAMEBLIT` already uses -- speculative writes are safe precisely
+because they target an inactive, invisible destination.
+
+Consequences that are now part of the contract rather than discovered later:
+the allocator must be able to hand out a spare slot, so the arena needs at
+least one free slot beyond the working set; and publication is a MAPPING
+update, not a byte copy.
 
 An upload in progress is invisible. The renderer either sees the previous state
 of that slot or the complete new page, never a mixture.
@@ -97,6 +126,7 @@ of this one.**
 ### `UploadRequest` — 32 bytes, from the sealed HPS list
 
     hps_addr      u64   source in HPS DDR, 64-byte aligned
+                        REQUIRES hps_addr[63:32] == 0 -- see below
     vram_addr     u32   destination in local SDRAM, 64-byte aligned
     length        u32   bytes, a multiple of 64
     resource_id   u16   what this is, for counters and faults
@@ -160,9 +190,13 @@ the Field core count as well.
 
 ## Overflow and malformed-input behaviour
 
-* **A CRC mismatch fails the upload.** The slot keeps its old generation and old
-  bytes, and the fault is counted with its `resource_id`. Bad bytes are never
-  published.
+* **A CRC mismatch fails the upload.** The garbage is in a fresh unpublished
+  slot which is discarded; the OLD mapping and old bytes were never written, so
+  they survive by construction rather than by promise. The fault is counted
+  with its `resource_id`.
+* **A source address outside the registered HPS staging arena for the active
+  epoch is REFUSED and counted**, as is any `hps_addr` with a non-zero upper
+  half.
 * **A destination outside the guard map is refused and counted.** It is not
   clamped into range: a clamped address writes real bytes into a real slot
   belonging to somebody else.

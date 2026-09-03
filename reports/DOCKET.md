@@ -530,6 +530,52 @@ the old cache's own lab note on M10K inference reintroduced as a defect by its
 replacement; and the T1–T12 terrain rulings sitting unread while D4 described
 those questions as open.
 
+### D25. Normal maps stay; the animation path is viable  ·  `reports/BRO-20260903-NORMALMAP-AND-ANIMATION-PATH.md`  — P1
+> Owner, relaying bro, 2026-09-03 late: *"Do you think we can squeeze the normal
+> map block in there? Our terrain desperately needs it ... check how viable the
+> planned path for animations going to the big RAM is. Right now we don't have a
+> connection. Can we make it?"*
+
+**Both answers are yes, with conditions.** Full text in the report; the parts
+that change work:
+
+* **Protect the feature, discard the draft.** The detail organ is ~380 ALM /
+  2 DSP / 8 M10K -- about **4% of the ~9,000 ALM the texture recovery is already
+  targeting**. TERRAIN.SHADE (~730 ALM, 10 DSP) is the terrain's missing
+  ORDINARY light and is needed with or without normal maps. *"Normal maps are
+  not the thing presently threatening it. The broken texture storage structures
+  are."*
+* **A Pareto test before accepting 10 DSP:** SHADE is specified at II=1 while
+  its producer delivers ~1 triangle per 3 clocks. Fit II=1 AND II=3. **Do not
+  cut the 2-DSP normal-map delta first** -- it runs per fragment and needs the
+  throughput; the base-light block has the unused parallelism.
+* **Order:** repair cache + TEXJOIN storage -> refit the island against its
+  tripwires -> put the terrain-light and normal-detail law in ZRef and **look at
+  it under a moving sun at 240p** -> fit SHADE at both points -> add NORMALMAP
+  separately so its delta cannot be confused with base lighting.
+* **The animation route is real, not speculative.** MiSTer's `DDRAM_*` interface
+  exposes HPS DDR to the core over the Cyclone V FPGA-to-HPS SDRAM ports;
+  `zhao_hps_bridge` already speaks the shape; `DEBUG.FRAMEBLIT` already
+  demonstrates burst read -> buffer -> guarded write -> CRC -> atomic publish.
+  Six finite pieces remain, listed in the report. **Linux is never in the frame
+  loop:** once a bank is resident, playback generates zero HPS traffic.
+
+**TWO CORRECTIONS to `MEM.UPLOAD`, both applied today:**
+
+1. **A generation bit does NOT make an in-place upload atomic.** Writing new
+   bytes over a slot that still advertises the old generation lets a consumer
+   read a MIXTURE -- so my "old bytes survive CRC failure" guarantee was not
+   implementable as written. The upload now lands in a **fresh unpinned
+   unpublished slot**, and publication is a MAPPING update.
+2. **The source address disagreed and was unguarded.** `hps_addr` was u64 while
+   the bridge exports 32 bits; the rule is now `hps_addr[63:32] == 0` or REFUSE
+   -- never truncate -- plus an **HPS source-arena guard**, because the first
+   version checked the destination only, which is a capability hole.
+
+**Unproven and flagged as unproven:** sustained board bandwidth, and the actual
+HPS-DDR capacity on this SuperStation One -- *"the board must be probed before
+the software commits to a numerical HPS arena size."*
+
 ---
 
 ## DONE
