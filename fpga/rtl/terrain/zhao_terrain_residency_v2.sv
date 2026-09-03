@@ -274,12 +274,66 @@ module zhao_terrain_residency_v2 #(
   localparam int unsigned KEYW  = 32 + 16 + 16 + 32 + GENW + 3;
   localparam int unsigned STATW = PINW + 3 + 32 + SEQW;
 
-  logic [KEYW-1:0]  keyram  [WAYS][SETS];
-  logic [STATW-1:0] statram [WAYS][SETS];
+  // ONE FLAT ARRAY PER WAY, INSIDE A GENERATE. These were `[WAYS][SETS]`, and
+  // that alone kept all 167,936 bits in flip-flops: Quartus says so in as many
+  // words -- "EDA Netlist Writer cannot regroup multidimensional array" -- and
+  // emits no "Inferred RAM" line at all. It muxes across the outer dimension
+  // because the outer selection is dynamic, and the whole array falls into
+  // flops however correct the writes are. The outer index has to be a genvar.
+  //
+  // At 167,936 bits this one pair of arrays was 60% of the entire production
+  // overage measured in reports/RAM-INFERENCE-RANKED-20260904.md.
+  genvar gw;
+  generate
+    for (gw = 0; gw < int'(WAYS); gw++) begin : g_bank
+      logic [KEYW-1:0]  keyram  [SETS];
+      logic [STATW-1:0] statram [SETS];
+    end
+  endgenerate
 
   // registered read data, one clock after the address
   logic [KEYW-1:0]  key_q  [WAYS];
   logic [STATW-1:0] stat_q [WAYS];
+
+  // ---- the write port, decided combinationally -----------------------------
+  // The three write addresses the checker flagged -- `[w][sweep_q]`,
+  // `[victim_c][s0_set]` and `[ev_way_c][s0_set]` -- are MUTUALLY EXCLUSIVE
+  // per way, which is not obvious from the list and is what makes this a
+  // single-port memory after all:
+  //
+  //   * the sweep is the `if (sweeping_q)` arm and the pipeline is the `else`,
+  //     so they cannot both write in a cycle;
+  //   * a claim and an event are different arms of the same `unique case`;
+  //   * and a claim and an event write the SAME address, `s0_set`.
+  //
+  // So per way there is one address and one enable. What looked like a design
+  // question -- "it asks for a memory shape the device does not have" -- was a
+  // consequence of the [WAYS][SETS] shape hiding the per-way view.
+  //
+  // READ-DURING-WRITE at one address never happens, and that is load-bearing
+  // rather than lucky: `hazard_c` already blocks an access whose `addr_c`
+  // equals `s0_set` for exactly the events that write. In flip-flops this
+  // decided nothing (a non-blocking read is always the old value); in an M10K
+  // mixed-port read-during-write is device behaviour, so the guard is now what
+  // makes the conversion sound.
+  logic [SETW-1:0]  wr_set_c;
+  logic [WAYS-1:0]  kwe_c, swe_c;
+  logic [KEYW-1:0]  kwd_c;
+  logic [STATW-1:0] swd_c;
+
+  generate
+    for (gw = 0; gw < int'(WAYS); gw++) begin : g_port
+      always_ff @(posedge clk) begin
+        // Read every cycle, no read enable: during the sweep `s0_v` is low so
+        // key_q/stat_q are not consulted, and an unconditional read is the
+        // shape that infers most cleanly.
+        key_q[gw]  <= g_bank[gw].keyram [addr_c];
+        stat_q[gw] <= g_bank[gw].statram[addr_c];
+        if (kwe_c[gw]) g_bank[gw].keyram [wr_set_c] <= kwd_c;
+        if (swe_c[gw]) g_bank[gw].statram[wr_set_c] <= swd_c;
+      end
+    end
+  endgenerate
 
   // field accessors, so no bit range is written twice. Each reads ONE field,
   // so Verilator correctly observes that the other bits of its argument are
@@ -422,6 +476,112 @@ module zhao_terrain_residency_v2 #(
   /* verilator lint_on UNUSEDSIGNAL */
 
   // =========================================================================
+  // THE BANK WRITE DECISION
+  // =========================================================================
+  // This mirrors the arm structure of the sequential block below, one arm for
+  // one arm, and produces {address, per-way enable, data} instead of writing
+  // the arrays directly. It has to be combinational: the writes it replaces
+  // were non-blocking assignments in that block, so registering the intent
+  // here would add a clock and change every latency the tests pin.
+  //
+  // IT IS A SECOND COPY OF THOSE CONDITIONS, and that is the cost of the
+  // conversion. It is paid deliberately: the alternative is 167,936 bits in
+  // flip-flops, which is 60% of the console's overage. The guard is the pair
+  // of tests -- 37 directed checks and a randomized run against the model --
+  // captured before this change and required to be identical after it. If a
+  // condition here ever drifts from the one below, a page loads into the wrong
+  // slot and those tests are what say so.
+  always_comb begin
+    wr_set_c = sweep_q;
+    kwe_c    = '0;
+    swe_c    = '0;
+    kwd_c    = k_pack('0, '0, '0, '0, '0, ST_INVALID);
+    swd_c    = s_pack('0, 1'b0, 1'b0, 1'b0, '0, '0);
+
+    if (sweeping_q) begin
+      // Every way, one set per clock: 256 clocks of ordinary synchronous
+      // writes instead of a 1,024-entry asynchronous reset.
+      kwe_c = {WAYS{1'b1}};
+      swe_c = {WAYS{1'b1}};
+    end else if (s0_v) begin
+      wr_set_c = s0_set;
+      if (s0_is_lookup || s0_is_check) begin
+        // A lookup and a handle check are questions, not edits.
+      end else if (s0_ev == EV_CLAIM) begin
+        // T9 rule 1 (a matching key) and rule 5 (all ways pinned) both answer
+        // without touching the banks.
+        if (!any_hit_c && victim_found_c) begin
+          kwe_c[victim_c] = 1'b1;
+          swe_c[victim_c] = 1'b1;
+          kwd_c = k_pack(s0_island, s0_ix, s0_iz, s0_epoch,
+                         k_gen(key_q[victim_c]) + GENW'(1),
+                         victim_dirty_c ? ST_EVICT_PENDING : ST_RESERVED);
+          swd_c = s_pack('0, 1'b0, victim_dirty_c, 1'b1, s0_crc, s0_seq);
+        end
+      end else begin
+        automatic logic [KEYW-1:0]  k = key_q[ev_way_c];
+        automatic logic [STATW-1:0] s = stat_q[ev_way_c];
+        // Identity first: a stale event is counted and changes nothing.
+        if (ident_ok(k, s0_gen, s0_epoch)) begin
+          unique case (s0_ev)
+            EV_WB: begin
+              kwe_c[ev_way_c] = 1'b1;
+              swe_c[ev_way_c] = 1'b1;
+              kwd_c = k_pack(k_island(k), k_ix(k), k_iz(k),
+                             k_epoch(k), k_gen(k), ST_RESERVED);
+              swd_c = s_pack(s_pin(s), s_bd(s), 1'b0,
+                             s_mips(s), s_crc(s), s_seq(s));
+            end
+            EV_FIN: begin
+              if (!s0_ok || s0_crc != s_crc(s)) begin
+                kwe_c[ev_way_c] = 1'b1;
+                kwd_c = k_pack(k_island(k), k_ix(k), k_iz(k),
+                               k_epoch(k), k_gen(k), ST_FAULTED);
+              end else if (k_state(k) == ST_RESERVED || k_state(k) == ST_LOADING) begin
+                kwe_c[ev_way_c] = 1'b1;
+                kwd_c = k_pack(k_island(k), k_ix(k), k_iz(k), k_epoch(k), k_gen(k),
+                               s_mips(s) ? ST_MIPGEN : ST_RESIDENT_CLEAN);
+              end else if (k_state(k) == ST_MIPGEN) begin
+                kwe_c[ev_way_c] = 1'b1;
+                swe_c[ev_way_c] = 1'b1;
+                kwd_c = k_pack(k_island(k), k_ix(k), k_iz(k),
+                               k_epoch(k), k_gen(k), ST_RESIDENT_CLEAN);
+                swd_c = s_pack(s_pin(s), s_bd(s), s_f(s), 1'b0,
+                               s_crc(s), s_seq(s));
+              end
+            end
+            EV_DIRTY: begin
+              swe_c[ev_way_c] = 1'b1;
+              swd_c = s_pack(s_pin(s), s_bd(s) | s0_bd, s_f(s) | s0_f,
+                             s_mips(s) | s0_mips, s_crc(s), s_seq(s));
+              if (s0_f && k_state(k) == ST_RESIDENT_CLEAN) begin
+                kwe_c[ev_way_c] = 1'b1;
+                kwd_c = k_pack(k_island(k), k_ix(k), k_iz(k),
+                               k_epoch(k), k_gen(k), ST_RESIDENT_DIRTY_F);
+              end
+            end
+            EV_PIN: begin
+              if (s_pin(s) != {PINW{1'b1}}) begin
+                swe_c[ev_way_c] = 1'b1;
+                swd_c = s_pack(s_pin(s) + PINW'(1), s_bd(s),
+                               s_f(s), s_mips(s), s_crc(s), s_seq(s));
+              end
+            end
+            EV_UNPIN: begin
+              if (s_pin(s) != '0) begin
+                swe_c[ev_way_c] = 1'b1;
+                swd_c = s_pack(s_pin(s) - PINW'(1), s_bd(s),
+                               s_f(s), s_mips(s), s_crc(s), s_seq(s));
+              end
+            end
+            default: ;
+          endcase
+        end
+      end
+    end
+  end
+
+  // =========================================================================
   // STAGE 1 — the banks answer, and the decision is made
   // =========================================================================
   logic [WAYS-1:0] hit_c;
@@ -535,10 +695,7 @@ module zhao_terrain_residency_v2 #(
       // 256 clocks of ordinary synchronous writes. No 1,024-entry asynchronous
       // reset, which is the thing that would refuse to infer as memory.
       if (sweeping_q) begin
-        for (int unsigned w = 0; w < WAYS; w++) begin
-          keyram[w][sweep_q]  <= k_pack('0, '0, '0, '0, '0, ST_INVALID);
-          statram[w][sweep_q] <= s_pack('0, 1'b0, 1'b0, 1'b0, '0, '0);
-        end
+        // The bank writes are in `wr_decide_c` below; only rr_q is here.
         rr_q[sweep_q] <= '0;
         if (sweep_q == SETW'(SETS - 1)) sweeping_q <= 1'b0;
         sweep_q <= sweep_q + SETW'(1);
@@ -549,10 +706,6 @@ module zhao_terrain_residency_v2 #(
         s0_is_lookup <= (ev_c == EV_NONE) && lu_valid_i;
         s0_is_check  <= (ev_c == EV_NONE) && !lu_valid_i && chk_valid_i;
         s0_set       <= addr_c;
-        for (int unsigned w = 0; w < WAYS; w++) begin
-          key_q[w]  <= keyram[w][addr_c];
-          stat_q[w] <= statram[w][addr_c];
-        end
         if (chk_valid_i) begin
           s0_chk_slot  <= chk_slot_i;
           s0_chk_gen   <= chk_gen_i;
@@ -627,11 +780,7 @@ module zhao_terrain_residency_v2 #(
               // A dirty_F victim goes to EVICT_PENDING and does NOT load until
               // the journal acknowledges (T4's barrier). Anything else is
               // RESERVED and may load at once.
-              keyram[victim_c][s0_set] <= k_pack(
-                  s0_island, s0_ix, s0_iz, s0_epoch, ng,
-                  victim_dirty_c ? ST_EVICT_PENDING : ST_RESERVED);
-              statram[victim_c][s0_set] <= s_pack(
-                  '0, 1'b0, victim_dirty_c, 1'b1, s0_crc, s0_seq);
+              // the bank writes for this arm are in `wr_decide_c`
               // Replacement state advances on CLAIM ACCEPTANCE, never on an
               // asynchronous fill completion (T9). That is what makes the
               // victim order a function of the canonical request order alone.
@@ -653,28 +802,15 @@ module zhao_terrain_residency_v2 #(
               unique case (s0_ev)
                 EV_WB: begin
                   // The journal has the scars. Now the slot may load.
-                  keyram[ev_way_c][s0_set]  <= k_pack(k_island(k), k_ix(k), k_iz(k),
-                                                      k_epoch(k), k_gen(k), ST_RESERVED);
-                  statram[ev_way_c][s0_set] <= s_pack(s_pin(s), s_bd(s), 1'b0,
-                                                      s_mips(s), s_crc(s), s_seq(s));
                 end
                 EV_FIN: begin
                   if (!s0_ok || s0_crc != s_crc(s)) begin
                     // "A half-loaded or CRC-failed page is never rendered."
                     crc_failures_o <= crc_failures_o + 32'd1;
-                    keyram[ev_way_c][s0_set] <= k_pack(k_island(k), k_ix(k), k_iz(k),
-                                                       k_epoch(k), k_gen(k), ST_FAULTED);
                   end else if (k_state(k) == ST_RESERVED || k_state(k) == ST_LOADING) begin
                     // Mips are still stale, so the page is not ground yet.
-                    keyram[ev_way_c][s0_set] <= k_pack(k_island(k), k_ix(k), k_iz(k),
-                                                       k_epoch(k), k_gen(k),
-                                                       s_mips(s) ? ST_MIPGEN : ST_RESIDENT_CLEAN);
                     if (!s_mips(s)) resident_o <= resident_o + 32'd1;
                   end else if (k_state(k) == ST_MIPGEN) begin
-                    keyram[ev_way_c][s0_set]  <= k_pack(k_island(k), k_ix(k), k_iz(k),
-                                                        k_epoch(k), k_gen(k), ST_RESIDENT_CLEAN);
-                    statram[ev_way_c][s0_set] <= s_pack(s_pin(s), s_bd(s), s_f(s), 1'b0,
-                                                        s_crc(s), s_seq(s));
                     resident_o <= resident_o + 32'd1;
                   end
                 end
@@ -682,23 +818,10 @@ module zhao_terrain_residency_v2 #(
                   // Three separate flags. `modified_BD` never causes a
                   // writeback; `dirty_F` is the barrier; `mips_stale` is the
                   // regeneration barrier.
-                  statram[ev_way_c][s0_set] <= s_pack(
-                      s_pin(s), s_bd(s) | s0_bd, s_f(s) | s0_f,
-                      s_mips(s) | s0_mips, s_crc(s), s_seq(s));
-                  if (s0_f && k_state(k) == ST_RESIDENT_CLEAN)
-                    keyram[ev_way_c][s0_set] <= k_pack(k_island(k), k_ix(k), k_iz(k),
-                                                       k_epoch(k), k_gen(k),
-                                                       ST_RESIDENT_DIRTY_F);
                 end
                 EV_PIN: begin
-                  if (s_pin(s) != {PINW{1'b1}})
-                    statram[ev_way_c][s0_set] <= s_pack(s_pin(s) + PINW'(1), s_bd(s),
-                                                        s_f(s), s_mips(s), s_crc(s), s_seq(s));
                 end
                 EV_UNPIN: begin
-                  if (s_pin(s) != '0)
-                    statram[ev_way_c][s0_set] <= s_pack(s_pin(s) - PINW'(1), s_bd(s),
-                                                        s_f(s), s_mips(s), s_crc(s), s_seq(s));
                 end
                 default: ;
               endcase
