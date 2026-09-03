@@ -4,7 +4,8 @@ Owner instructions arrive as files in `reports/` and are easy to lose between
 passes. **This is the index.** Before starting any wave, read this file, then
 read the documents it names.
 
-Last swept: 2026-08-31 **late** — after `reports/OWNER-RULINGS-COMPLETE-20260831.md`
+Last swept: **2026-09-03** — see *SWEEP 2026-09-03* below for what landed since.
+The 2026-08-31 sweep followed `reports/OWNER-RULINGS-COMPLETE-20260831.md`, which
 answered **all 28 open questions**. Read that file before this one; it is the
 authority and this is only the index.
 
@@ -224,6 +225,71 @@ only when the game needs a feature.
 
 ---
 
+## SWEEP 2026-09-03
+
+**Two new owner documents, both added here in the pass that read them, per the
+rule above.**
+
+### D19. The production-only resource count  ·  `reports/WeNeedSomeMeasurements.md`  — P0
+> *"The genuinely alarming thing would be continuing to build for several more
+> days without producing the production-only hierarchical resource report. That
+> report should now be treated as a near-term gate."*
+
+The repository-wide **185-DSP figure is a SOURCE INVENTORY, not the machine** —
+it adds every top-level `.sv`, so it counts old and new caches together, serial
+and scheduled reciprocals together, probes and leaf-fit wrappers. The owner's
+own verdict: DSP panic is a bookkeeping mirage (~41 of 112 estimated); **fabric
+is the real concern** (~30,141 ALM ≈ 72% before integration glue, against a
+practical ceiling of 37,719 with the charter's 10% reserve).
+
+Gates the owner set: **37,719 ALM / 100 DSP / ~497 M10K.**
+
+Built today: `design/prod_manifest.yml` (one chosen implementation per logical
+block; all 168 modules either counted, inside something counted, or excluded
+with a reason — enforced by `tools/quartus/check_prod_manifest.py`),
+`tools/quartus/gen_prod_top.py`, and the fit is running.
+
+### D20. Terrain detail normal maps  ·  `reports/NORMALMAP-ARCHITECTURE.md`  — P1
+> *"But we make it and see how bad it is. We'll optimize and cut after we have
+> the number anyway ... Normal maps would be a huge gain though."*
+
+Architected today. **The finding that reframes it: production terrain has no
+lighting at all** — `zhao_terrain_normals` is instantiated only by a leaf-fit
+probe, nothing in `prod_manifest.yml` consumes it, and `TERRAIN.PROJECT` carries
+no colour port. So the work splits:
+
+* **TERRAIN.SHADE** — the per-triangle base `dot(n,L)/|n|`. ~730 ALM, 10 DSP.
+  **Not cuttable: it is the terrain's light.** Needed with or without normal maps.
+* **TERRAIN.NORMALMAP** — the detail delta. ~380 ALM, 2 DSP, 8 M10K, and
+  cuttable cleanly. `RASTER.FRAGMENT`, `TEXJOIN` and the TMU are all untouched.
+
+Gate before RTL, per the art law: the amended oracle goes in the zref renderer
+and **the owner looks at the island under a moving sun first.**
+
+### Ten blocks built since the last sweep
+`TERRAIN.MIPGEN`, `TERRAIN.RESIDENCY` v2, `PART.RECORD`, `PART.LADDER`,
+`GEOM.VDECODE`, `GEOM.PARAMBUF`, `POST.GATHER`, `TWOD.SPRITE`, `TWOD.PLANE`,
+`FORGE.PRIM`. So D15's "seven stub contracts" and the docket's "zero of 92
+buildable" are both out of date; `tools/ledger/remaining.py` now derives the
+real list instead of it being audited by hand.
+
+### The texture island answered its fit question
+`reports/TEXTURE-ISLAND-FIT.md`: three or four blocks were genuinely limited by
+their own logic, not ten. `perspuv_svc` 62.67 → 99.14, `texjoin_v2` 61.66 →
+93.12, `cache_pipe` 98.66 reported / 109.05 internal **with the RAMs still RAMs**
+(2 M10K, 0 DSP) — which was X7's actual acceptance question, not Fmax.
+
+### Ten blocks could not be synthesised by the pinned toolchain at all
+60 Quartus 17.0.2 syntax errors across ten blocks that Verilator and slang both
+accept — every one "verified" in simulation and never through the fitter.
+**Three of the five causes were already written in `reports/QUARTUS_GOTCHAS.md`
+and were rediscovered anyway.** Two new ones (`foreach`; unary minus on a size
+cast) are now recorded there, with the meta-lesson: read that file before
+touching RTL only Verilator has ever seen.
+
+
+---
+
 ## DONE
 
 | item | commit |
@@ -252,6 +318,14 @@ only when the game needs a feature.
 | `TERRAIN.PATCH` + `GEOM.WCACHE` → UNIT_VERIFIED | `2728467` |
 | mana territory recorded, rescued to Upheaval main | `450acc4`, `2ad25aa` |
 | active-v9 lane unblocked | `7c646b0` |
+| `TERRAIN.MIPGEN`, `TERRAIN.RESIDENCY` v2 | 2026-09-03 |
+| `PART.RECORD`, `PART.LADDER` | 2026-09-03 |
+| `GEOM.VDECODE`, `GEOM.PARAMBUF` | 2026-09-03 |
+| `POST.GATHER`, `TWOD.SPRITE`, `TWOD.PLANE` | 2026-09-03 |
+| `FORGE.PRIM` — six families, oracle written | `c3dcd49e` |
+| texture island fit answered; `cache_pipe` keeps its M10Ks | `62467567` |
+| ten blocks made synthesisable by Quartus 17.0.2 | `62467567` |
+| production manifest + resource top | `0e8b1c9d` |
 
 ## THE MHz WORK NEEDS **TWO** OF BRO'S PLANS, NOT ONE
 

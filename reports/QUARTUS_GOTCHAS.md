@@ -66,6 +66,49 @@ between "one nonconstant `*` in the cone" and four blocks.
 
 Found in `zhao_geom_binner` (2026-08-19). Assign the call to a variable first.
 
+## 4a. `foreach` is rejected outright
+
+Measured 2026-09-03 with a probe module, while composing the production-only
+resource top. `foreach` is a reserved keyword the pinned parser does not
+implement:
+
+    always_comb foreach (arr[k]) arr[k] = src[k];
+    Error (10170): syntax error near text: "foreach"; expecting "@", or an
+    identifier ("foreach" is a reserved keyword)
+
+Verilator accepts it. Write the indices out, or drive the array from a
+generate loop. A GENERATOR that emits array drives must emit explicit indices
+-- `tools/quartus/gen_prod_top.py` does, for this reason.
+
+## 4b. A unary minus applied to a size cast is rejected
+
+Measured the same day, and this one is easy to write by accident because the
+cast itself is fine:
+
+    dndx_c = (-72'(cy_by)) * 72'(va_i);   // Error (10170) near "'"
+    dndx_c = ((-(72'(cy_by)))) * 72'(va_i);   // accepted
+
+The parser reads `-72` as the start of a sized literal and then chokes on the
+quote. **Parenthesise the cast, then negate.** Nine instances, in
+`zhao_post_gather`, `zhao_field_v3_spline`, `zhao_geom_attrsetup` and
+`zhao_raster_attrstep`.
+
+What IS accepted, so nobody "fixes" these: sized signed literals (`17'sd128`),
+size casts of arbitrary expressions (`17'(lim)`), functions with `output`
+arguments, and `'{default: ...}` assignment patterns. All four were suspected
+and all four are fine -- which is the argument for the probe rather than for
+theorising: two of my guesses were wrong.
+
+## THE META-LESSON, 2026-09-03
+
+Gotchas 1, 4 and 8 in this very file are three of the five faults that stopped
+the first production-only fit. **They were already written down here, and I
+rediscovered them with a synthesis probe anyway.** That is the CLAUDE.md rule
+about instructions not being delivered until they are read, costing an hour.
+
+**Read this file before touching RTL that has never been through the fitter.**
+The blocks that break are always the ones only Verilator has ever seen.
+
 ## 5. Operand slack is NOT free — it changes DSP decomposition
 
 Not an error; a cost. `zhao_geom_lod` carried 72-bit operands as "deliberate

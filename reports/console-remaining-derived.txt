@@ -1,0 +1,43 @@
+==========================================================================
+WHAT IS LEFT -- derived from ledger + RTL + manifest + contracts
+==========================================================================
+ledger: 95 blocks (75 rtl, 15 software, 5 profile)
+
+-- RTL BLOCKS WITH NO MODULE FOUND (14) --
+   the missing hardware, plus any id that breaks the naming convention
+   POST.COMPOSITE         SPECIFIED            compositor   
+   POST.ECHO              SPECIFIED            compositor   
+   GEOM.LOOM              SPECIFIED            geometry     
+   GEOM.MESHFETCH         SPECIFIED            geometry     
+   GEOM.WARP              SPECIFIED            geometry     
+   INPUT.SNAC             SPECIFIED            input        
+   MEASURE.HISTOGRAM      SPECIFIED            measure      
+   PART.COLLIDE           SPECIFIED            particles    
+   PART.SPAWN             SPECIFIED            particles    
+   PART.STATE             SPECIFIED            particles    
+   PART.UPDATE            SPECIFIED            particles    
+   SYS.CDC                SPECIFIED            platform     blocked_on:hardware
+   SYS.PLL                SPECIFIED            platform     blocked_on:hardware
+   SYS.RESET              SPECIFIED            platform     blocked_on:hardware
+
+-- LEDGER SAYS SPECIFIED BUT RTL EXISTS (2) --
+   either the field is stale or the module is somebody else's
+   GEOM.VDECODE           zhao_geom_vdecode                  in machine
+   MEM.SDRAM              zhao_sdram_ctrl                    in machine
+
+-- LEDGER SAYS VERIFIED BUT NO RTL FOUND (0) --
+
+-- BUILT AND VERIFIED BUT NOT IN THE PRODUCTION MACHINE (6) --
+   verified hardware nothing will instantiate: an unfinished seam
+   DEBUG.TRACE            zhao_debug_trace                   UNIT_VERIFIED
+   FIELD.SEQ.CORE         zhao_field_seq                     RTL_VERIFIED
+   TERRAIN.RESIDENCY      zhao_terrain_residency             UNIT_VERIFIED
+   TEXTURE.AUX            zhao_texture_aux                   UNIT_VERIFIED
+   TEXTURE.CACHE          zhao_texture_cache                 UNIT_VERIFIED
+   TEXTURE.TMU            zhao_texture_tmu                   UNIT_VERIFIED
+
+-- SUMMARY --
+   rtl blocks with RTL:            61
+   rtl blocks without RTL:         14
+   of those, blocked on hardware:  3
+   of those, with no contract:     0
