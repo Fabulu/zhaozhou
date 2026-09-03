@@ -3008,8 +3008,12 @@ blocks:
     counters: [triangles_submitted]
     source_ids: true
     budget_group: myriad_forge
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-03"
+        commit: "c3dcd49e"
+        evidence: tests/forge/forge_prim_directed.cpp
       - state: REFERENCE_COMPLETE
         date: "2026-09-03"
         commit: "de209ee5"
