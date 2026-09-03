@@ -320,18 +320,54 @@ module zhao_raster_tile_pipe (
   // Same idiom as zhao_raster_edgewalk's `drain_row`: the descending loop
   // leaves the SMALLEST set index in place, so columns are written left to
   // right and `ts_wr_addr` is a plain {row, col} concatenation.
-  logic [3:0]  wr_col;
-  logic [15:0] wr_hot;
-  always_comb begin
-    wr_col = 4'd0;
-    wr_hot = 16'd0;
-    for (int i = 15; i >= 0; i--) begin
-      if (pend_mask_r[i]) begin
-        wr_col = i[3:0];
-        wr_hot = 16'd1 << i;
+  //
+  // THE CURSOR IS REGISTERED, NOT THE FRAGMENT (SaveTheRendered.md, commit 1).
+  //
+  // This encoder used to run on `pend_mask_r` combinationally, and `wr_col`
+  // became `frag_addr` in the same period, which then entered RASTER.EARLYZ's
+  // dynamic 256-bit presence lookup. The measured shape was
+  //
+  //     column encode -> address -> 256:1 presence selection    ~2.6 ns
+  //
+  // and it is why Early-Z owns the critical path. An earlier attempt broke it
+  // with a boundary pipeline, which CHANGED EIGHT EARLY-Z DECISIONS, because
+  // the 256th qualifying unique pixel promotes the floor on its acceptance
+  // edge and the very next fragment must see the new floor.
+  //
+  // The free staging opportunity is already in the protocol: a coverage row is
+  // accepted only while `pend_mask_r == 0`, and a fragment is emitted only
+  // while `pend_mask_r != 0`, so the cycle that accepts `cov_mask` is ALWAYS
+  // one clock before that row's first fragment can issue. The encoder can
+  // therefore terminate at a register instead of at Early-Z, with no bubble.
+  //
+  // Preserved exactly: first-fragment timing, one accepted fragment per clock,
+  // lowest-column-first order, arbitrary Early-Z backpressure, every fragment
+  // address, every pixel CRC. The public interface timing does not move.
+  function automatic logic [19:0] first_set(input logic [15:0] m);
+    logic [3:0]  c;
+    logic [15:0] h;
+    begin
+      c = 4'd0;
+      h = 16'd0;
+      for (int i = 15; i >= 0; i--) begin
+        if (m[i]) begin
+          c = i[3:0];
+          h = 16'd1 << i;
+        end
       end
+      first_set = {h, c};
     end
-  end
+  endfunction
+
+  logic [3:0]  cur_col_r;    // the cursor: column of the next fragment
+  logic [15:0] cur_hot_r;    // and its one-hot, so the retire needs no encode
+
+  // Both candidate cursors are computed every cycle and only ever land in a
+  // register. Assigned to nets first because Quartus 17.0.2 cannot part-select
+  // a function call result (QUARTUS_GOTCHAS.md gotcha 4).
+  logic [19:0] nxt_on_cov_c, nxt_after_frag_c;
+  assign nxt_on_cov_c     = first_set(cov_mask);
+  assign nxt_after_frag_c = first_set(pend_mask_r & ~cur_hot_r);
 
   // ---------------------------------------------------------- handshakes ---
   // Hygiene: no `valid` here is a function of its own channel's `ready`.
@@ -370,7 +406,7 @@ module zhao_raster_tile_pipe (
   logic [7:0]  frag_addr;
   logic [23:0] frag_depth;
   logic [87:0] frag_payload;
-  assign frag_addr  = {pend_row_r, wr_col};
+  assign frag_addr  = {pend_row_r, cur_col_r};
   assign frag_depth = fill_r[31:8];
   assign frag_payload = {fill_r[63:40],  // vertex RGB
                          src_a_r,        // vertex alpha
@@ -611,6 +647,8 @@ module zhao_raster_tile_pipe (
       texel_idx_r <= 8'd0;
       pend_row_r  <= 4'd0;
       pend_mask_r <= 16'd0;
+      cur_col_r   <= 4'd0;
+      cur_hot_r   <= 16'd0;
       ew_done_r   <= 1'b0;
       ew_count_r  <= 9'd0;
       job_first_r <= 1'b1;
@@ -652,6 +690,8 @@ module zhao_raster_tile_pipe (
             texel_a_r   <= job_texel_a_i;
             texel_idx_r <= job_texel_idx_i;
             pend_mask_r <= 16'd0;
+            cur_col_r   <= 4'd0;
+            cur_hot_r   <= 16'd0;
             ew_done_r   <= 1'b0;
             ew_count_r  <= 9'd0;
             ew_degen_r  <= 1'b0;
@@ -678,10 +718,18 @@ module zhao_raster_tile_pipe (
         RS_WALK: begin
           // Law 2: one FRAGMENT per set column, lowest first; the next
           // coverage beat is accepted only once the current mask has drained.
-          if (frag_acc) pend_mask_r <= pend_mask_r & ~wr_hot;
+          // `cov_acc` and `frag_acc` are mutually exclusive by construction:
+          // one requires `pend_mask_r == 0` and the other `!= 0`.
+          if (frag_acc) begin
+            pend_mask_r <= pend_mask_r & ~cur_hot_r;
+            cur_col_r   <= nxt_after_frag_c[3:0];
+            cur_hot_r   <= nxt_after_frag_c[19:4];
+          end
           if (cov_acc) begin
             pend_row_r  <= cov_row;
             pend_mask_r <= cov_mask;
+            cur_col_r   <= nxt_on_cov_c[3:0];
+            cur_hot_r   <= nxt_on_cov_c[19:4];
           end
           // Law 1, the raster half of the swap gate — and the ONE term the
           // arrival of RASTER.EARLYZ and RASTER.FRAGMENT added. The walk has

@@ -126,8 +126,22 @@ module zhao_texture_cache_pipe #(
   // STORAGE
   // ==========================================================================
   // `data_r` is READ ONLY THROUGH A REGISTERED ADDRESS, below, and never in a
-  // continuous assignment. That is the difference between an M10K and 8,192
-  // flip-flops, and it is the entire reason this file was rewritten.
+  // continuous assignment. That is HALF the difference between an M10K and
+  // 8,192 flip-flops.
+  //
+  // THE OTHER HALF, and the one this file got wrong until 2026-09-03: the
+  // WRITE must also live in a CLOCK-ONLY process. An M10K has no reset port,
+  // so an array written from an `always_ff @(posedge clk or negedge rst_n)`
+  // cannot be one -- whether or not it appears in the reset branch. This file
+  // had correct synchronous reads and put both writes in the async-reset
+  // process, and measured `blockMemoryBits: 128` against the 8,192 of the
+  // block it replaced: 9,728 bits of array sitting in flip-flops.
+  //
+  // The block it replaced had already found this and written it down --
+  // `zhao_texture_cache.sv:495-523` records the A/B, including that making the
+  // lane index static changed NOTHING (5,402 -> 5,373 ALM, zero M10K both
+  // times) because the async reset was the real blocker. That note was not
+  // read. See reports/QUARTUS_GOTCHAS.md S10.
   //
   // `tag_r` is read the same way. `valid_r` stays in flops on purpose: it is
   // 4 x 16 = 64 bits, it needs a reset that a memory block cannot give it, and
@@ -304,6 +318,25 @@ module zhao_texture_cache_pipe #(
       ram_val[k] <= valid_r[k][rd_idx[k]];
       ram_dat[k] <= data_r[k][rd_daddr[k]];
     end
+
+    // ---- THE ARRAY WRITES, in the SAME clock-only process ------------------
+    // Moved here 2026-09-03. Behaviour is identical: both were already
+    // non-blocking, so a read and a write to one address on one edge still
+    // returns the OLD contents -- the read-during-write mode an M10K provides.
+    // What changes is that the arrays are no longer touched by a process with
+    // an asynchronous reset, which is what lets them infer as memory.
+    //
+    // The conditions are exactly the fill engine's, read from its registers
+    // rather than restated: this is a relocation, not a redesign. `valid_r`
+    // deliberately does NOT move -- it needs the reset a memory cannot give.
+    if (fb_busy_r && fill_data_valid_i) begin
+      // EVERY matching lane is written by the SAME beat: the multicast.
+      for (int unsigned k = 0; k < LANES; k++)
+        if (fb_mask_r[k]) data_r[k][{fb_idx_r, fb_beat_r}] <= fill_data_i;
+      if (fb_beat_r == BEAT_W'(HW_PL - 1))
+        for (int unsigned k = 0; k < LANES; k++)
+          if (fb_mask_r[k]) tag_r[k][fb_idx_r] <= fb_tag_r;
+    end
   end
 
   always_ff @(posedge clk or negedge rst_n) begin
@@ -406,16 +439,13 @@ module zhao_texture_cache_pipe #(
       if (fb_busy_r) begin
         if (fb_req_r && fill_ready_i) fb_req_r <= 1'b0;
         if (fill_data_valid_i) begin
-          // EVERY matching lane is written by the SAME beat. This loop is the
-          // multicast; the shipped cache writes one lane and refetches.
-          for (int unsigned k = 0; k < LANES; k++)
-            if (fb_mask_r[k]) data_r[k][{fb_idx_r, fb_beat_r}] <= fill_data_i;
+          // `data_r` and `tag_r` are written by the CLOCK-ONLY process above,
+          // under these same conditions. They are not written here because an
+          // array touched by an asynchronously-reset process cannot infer as
+          // an M10K. `valid_r` stays: it is 64 bits and it needs the reset.
           if (fb_beat_r == BEAT_W'(HW_PL - 1)) begin
             for (int unsigned k = 0; k < LANES; k++)
-              if (fb_mask_r[k]) begin
-                tag_r[k][fb_idx_r]   <= fb_tag_r;
-                valid_r[k][fb_idx_r] <= 1'b1;
-              end
+              if (fb_mask_r[k]) valid_r[k][fb_idx_r] <= 1'b1;
             fb_busy_r <= 1'b0;
           end
           fb_beat_r <= fb_beat_r + BEAT_W'(1);
