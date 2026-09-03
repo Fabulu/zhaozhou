@@ -297,3 +297,32 @@ PIXEL VERDICTS on the fixed side camera (evidence/stage4/):
 - 30 Hz odd/even ratio 0.87 (published 1.06) - measured on sub-quantization
   centroid-y steps (med 0.061 px); noted for QA, likely measurement noise
   at this amplitude.
+
+### 2026-09-03 (implementer) - Stage 6 + regression floor, implementation CLOSED
+
+- Life layer judged on the final render: settle-in alive (338 changed px/f,
+  zero byte-identical frames), hold quivers inside the re-recorded 85 mm
+  band (74 measured), wobble periods 23/51 read as ~2 visible cycles across
+  the 50-key arming; the chain lag is structurally zero (stage 4).
+- Sacred-subject spot check on the final build: idle 0x25EE061F, walk
+  0x86536E70, balance 0x7FC8F62E - all BYTE-IDENTICAL to the published
+  bank. The idle law holds; QA sweeps the full 22.
+- Bit-exact spring parity across all seven consumers: probe PASS.
+- Release reads as a launch (unrolling forward off the tail IS the jump) -
+  contact sheets f116-127; accepted salto wheel untouched in shape (flight
+  curves shifted by the derived retime only).
+- Per the run mandate: STOPPING here - no full-bank re-render, no encode,
+  no publish. QA runs next.
+
+**Watch items handed to QA, honestly:**
+1. Declared self-press headroom is thin: full 54/60 mm, micro 104/110 mm.
+2. Shape-rate p90 13.5 %/f exceeds RECON-5's strict 12 at the plant burst
+   (f44-54); the accepted balance clip measures 12.52 p90 / 27.74 max on
+   the same instrument. Max is under the <20 cap (16.96).
+3. Nose travel -50 px exceeds the plan's -20..-35 bracket (justified:
+   the roll-up transports the body; owner set no ceiling; margin gate 563mm).
+4. 30 Hz odd/even ratio 0.87 on sub-quantization centroid steps (published
+   1.06) - believed measurement noise at 0.06 px amplitude; verify.
+5. The 2D contact-front tracker's "patch width" at the stand is a
+   perspective artifact (documented in-tool); sole contact is proven by the
+   3D probe (support == tip, XZ drift 1 mm).

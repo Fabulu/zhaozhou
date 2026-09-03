@@ -2,7 +2,7 @@
 
 **Run ID:** RUN-20260903-0614
 **Created:** 2026-09-03 06:14 UTC+02:00
-**Status:** Active
+**Status:** Implementation complete, handed to QA (2026-09-03)
 **Previous Version:** N/A
 
 ---
