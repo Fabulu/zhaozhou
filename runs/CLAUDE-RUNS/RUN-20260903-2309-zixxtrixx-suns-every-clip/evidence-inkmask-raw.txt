@@ -1,0 +1,24 @@
+zixxtrixx-attack: 560 frames, ink-mask identical: 560/560, border-touch diffs: 28, changed px total 1640710 -> FAIL
+zixxtrixx-balance: 493 frames, ink-mask identical: 493/493, border-touch diffs: 57, changed px total 687007 -> FAIL
+zixxtrixx-damage: 400 frames, ink-mask identical: 400/400, border-touch diffs: 2, changed px total 1701300 -> FAIL
+zixxtrixx-death: 192 frames, ink-mask identical: 192/192, border-touch diffs: 0, changed px total 587553 -> OK
+zixxtrixx-death2: 240 frames, ink-mask identical: 240/240, border-touch diffs: 0, changed px total 821565 -> OK
+zixxtrixx-fall: 288 frames, ink-mask identical: 288/288, border-touch diffs: 0, changed px total 267568 -> OK
+zixxtrixx-hit: 300 frames, ink-mask identical: 300/300, border-touch diffs: 0, changed px total 1365747 -> OK
+zixxtrixx-hitfloor: 188 frames, ink-mask identical: 188/188, border-touch diffs: 0, changed px total 507551 -> OK
+zixxtrixx-idle: 576 frames, ink-mask identical: 576/576, border-touch diffs: 67, changed px total 3703027 -> FAIL
+zixxtrixx-jump-multi: 241 frames, ink-mask identical: 241/241, border-touch diffs: 0, changed px total 575606 -> OK
+zixxtrixx-jump-one: 241 frames, ink-mask identical: 241/241, border-touch diffs: 0, changed px total 586146 -> OK
+zixxtrixx-knockdown: 196 frames, ink-mask identical: 196/196, border-touch diffs: 0, changed px total 690892 -> OK
+zixxtrixx-look: 384 frames, ink-mask identical: 384/384, border-touch diffs: 0, changed px total 1445370 -> OK
+zixxtrixx-run: 96 frames, ink-mask identical: 96/96, border-touch diffs: 48, changed px total 520473 -> FAIL
+zixxtrixx-salto-dummy: 295 frames, ink-mask identical: 295/295, border-touch diffs: 121, changed px total 315491 -> FAIL
+zixxtrixx-salto-fly: 313 frames, ink-mask identical: 313/313, border-touch diffs: 85, changed px total 298518 -> FAIL
+zixxtrixx-salto-nine: 435 frames, ink-mask identical: 435/435, border-touch diffs: 31, changed px total 191485 -> FAIL
+zixxtrixx-salto-six: 333 frames, ink-mask identical: 333/333, border-touch diffs: 0, changed px total 149362 -> OK
+zixxtrixx-slow-taunt: 239 frames, ink-mask identical: 239/239, border-touch diffs: 0, changed px total 897997 -> OK
+zixxtrixx-taunt: 224 frames, ink-mask identical: 224/224, border-touch diffs: 0, changed px total 801469 -> OK
+zixxtrixx-walk: 160 frames, ink-mask identical: 160/160, border-touch diffs: 56, changed px total 858443 -> FAIL
+RESULT: FAILURES ABOVE
+
+[exited with code 0]
