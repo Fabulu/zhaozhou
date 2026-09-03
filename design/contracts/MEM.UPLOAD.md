@@ -233,7 +233,18 @@ running off the end of the arena would read as comfortably inside it.
 
 ## Directed tests
 
-**Planned and not written.** Named without paths for that reason:
+**`tests/memory/mem_upload_oracle.cpp` — WRITTEN**, 11 checks against the
+oracle. It pins the two corrections the owner brief forced before any RTL
+exists: the HPS source as a **capability** (only the epoch's registered staging
+arena, and an address with a non-zero upper half refused rather than narrowed),
+and the visible-generation law that only holds because publication is a mapping
+update rather than an in-place overwrite. Also the 64-bit containment on both
+sides — a `addr + length` that wraps past 2^32 compares as a small number and
+would otherwise read as comfortably inside the region — and the ordering rule
+that a request which is BOTH malformed and stale reports the malformation, so a
+producer bug never hides behind a closed epoch.
+
+**Planned and not written**, and needing the RTL to exist first:
 
 * atomicity — a consumer reading a slot on every clock of an upload sees the old
   generation until the completion beat, and never a mixed page;

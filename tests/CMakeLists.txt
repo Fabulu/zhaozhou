@@ -2066,6 +2066,16 @@ verilate(test_raster_texjoin_v2_directed
 add_test(NAME raster_texjoin_v2_directed COMMAND test_raster_texjoin_v2_directed)
 set_tests_properties(raster_texjoin_v2_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# MEM.UPLOAD's acceptance law, before its RTL. The contract was written first
+# and the owner brief then found two holes in it -- a generation bit does not
+# make an IN-PLACE upload atomic, and the HPS source was unguarded while its
+# width disagreed with the bridge. Both corrections are pinned here so the RTL
+# is written against them rather than around them.
+add_executable(test_mem_upload_oracle memory/mem_upload_oracle.cpp)
+target_link_libraries(test_mem_upload_oracle PRIVATE zhao_harness zhao_zref)
+add_test(NAME mem_upload_oracle COMMAND test_mem_upload_oracle)
+set_tests_properties(mem_upload_oracle PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
+
 # The terrain light law, before any RTL. Owner brief 2026-09-03: put the law in
 # ZRef and LOOK at the island under a moving sun first. This cannot say whether
 # it looks right -- only the render can -- but it pins the ways the first draft

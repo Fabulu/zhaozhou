@@ -18,7 +18,7 @@ Blocks: **97** (77 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | geometry | 4 | 2 | 6 | · | · | · | · | · | 12 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 1 | · | 2 | · | · | · | · | · | 3 |
-| memory | 2 | · | 1 | 3 | · | · | · | 1 | 6 |
+| memory | 1 | 1 | 1 | 3 | · | · | · | 1 | 6 |
 | particles | 4 | 1 | 2 | · | · | · | · | · | 7 |
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
 | raster | · | · | 5 | · | · | · | · | · | 5 |
@@ -27,7 +27,7 @@ Blocks: **97** (77 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | · | · | 9 | · | · | · | · | · | 9 |
 | texture | · | · | 5 | · | · | · | · | · | 5 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 31 | 9 | 41 | 16 | · | · | · | 6 | 97 |
+| **all** | 30 | 10 | 41 | 16 | · | · | · | 6 | 97 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -51,6 +51,7 @@ Blocks: **97** (77 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | MEM.HPS.BRIDGE | REFERENCE_COMPLETE | 2026-08-15 | `6bcc4e9` | reference/include/zref/zref_mem.hpp |
 | MEM.HPS.BRIDGE | UNIT_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/hps_bridge_directed.cpp |
 | MEM.HPS.BRIDGE | RTL_VERIFIED | 2026-08-15 | `b8db7e8` | tests/memory/hps_bridge_random.cpp |
+| MEM.UPLOAD | REFERENCE_COMPLETE | 2026-09-03 | `eca81e6f` | reference/include/zref/zref_mem_upload.hpp |
 | MEM.GUARD | REFERENCE_COMPLETE | 2026-08-15 | `6bcc4e9` | reference/include/zref/zref_mem.hpp |
 | MEM.GUARD | UNIT_VERIFIED | 2026-08-15 | `6bcc4e9` | tests/memory/mem_guard_directed.cpp |
 | MEM.GUARD | RTL_VERIFIED | 2026-08-15 | `b8db7e8` | tests/formal/formal_mem_guard.sv |

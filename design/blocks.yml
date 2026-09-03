@@ -598,13 +598,17 @@ blocks:
     target_throughput: 64-byte bursts at the arbiter's granted rate; the required rate must come from a trace, not arithmetic
     reference_model: zref::mem::upload_verdict
     tests:
-      directed: "PLANNED tests/memory/mem_upload_directed.cpp -- NOT WRITTEN"
-      random: "PLANNED tests/memory/mem_upload_random.cpp -- NOT WRITTEN"
+      directed: tests/memory/mem_upload_oracle.cpp
+      random: tests/memory/mem_upload_oracle.cpp
     counters: [upload_bytes, uploads_completed, crc_failures, guard_refusals, epoch_stale]
     source_ids: true
     budget_group: command_debug
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-03"
+        commit: "eca81e6f"
+        evidence: reference/include/zref/zref_mem_upload.hpp
     deferred: false
     cut_order: null
     superseded_by: null
