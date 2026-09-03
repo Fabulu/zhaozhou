@@ -219,6 +219,44 @@ inline uint8_t mosaic_pick(uint8_t mat_a, uint8_t mat_b, uint8_t weight, int32_t
   return (h % 255u) < static_cast<uint32_t>(weight) ? mat_a : mat_b;
 }
 
+// ---- page height mips: NESTED DECIMATION (ruling T8) -----------------------
+//
+//     mip17[i,j] = fine33[2*i, 2*j]   i,j in 0..16
+//     mip9 [i,j] = fine33[4*i, 4*j]   i,j in 0..8
+//
+// NOT an average. A coarse vertex IS a fine vertex, bit for bit, and that is
+// the whole point: two neighbouring patches drawn at different LOD share an
+// edge, and an averaged coarse edge disagrees with the fine one by a fraction
+// of a metre, so the ground cracks open along a line the player can walk to.
+//
+// Nested decimation also makes every mip9 vertex a mip17 vertex, so the two
+// levels agree with each other and not merely with the source.
+//
+// This is the ORACLE for `zhao_terrain_mipgen`. HPS does not implement a
+// second mip law (T8), so it is also the only implementation the software
+// side may use.
+inline constexpr int kMipFine = 33;
+inline constexpr int kMip17 = 17;
+inline constexpr int kMip9 = 9;
+
+// `fine` is row-major, kMipFine*kMipFine, one surface.
+inline uint16_t mip17_at(const uint16_t* fine, int i, int j) {
+  return fine[(2 * i) * kMipFine + (2 * j)];
+}
+
+inline uint16_t mip9_at(const uint16_t* fine, int i, int j) {
+  return fine[(4 * i) * kMipFine + (4 * j)];
+}
+
+// Fill both levels for ONE surface. `out17` holds kMip17*kMip17 and `out9`
+// holds kMip9*kMip9, both row-major.
+inline void mipgen(const uint16_t* fine, uint16_t* out17, uint16_t* out9) {
+  for (int i = 0; i < kMip17; ++i)
+    for (int j = 0; j < kMip17; ++j) out17[i * kMip17 + j] = mip17_at(fine, i, j);
+  for (int i = 0; i < kMip9; ++i)
+    for (int j = 0; j < kMip9; ++j) out9[i * kMip9 + j] = mip9_at(fine, i, j);
+}
+
 }  // namespace terrain
 
 // ---- FORGE.CLIFF reference (terrain_rules.md §5, frozen degrade order) ------

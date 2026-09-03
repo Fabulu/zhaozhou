@@ -2195,6 +2195,19 @@ verilate(test_terrain_residency_directed
 add_test(NAME terrain_residency_directed COMMAND test_terrain_residency_directed)
 set_tests_properties(terrain_residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# TERRAIN.MIPGEN -- the page height mips of ruling T8. The property worth the
+# file is EXACTNESS: nested decimation keeps shared vertices bit-identical, and
+# an averaging mip would crack every seam between two LODs. No tolerance
+# appears anywhere in that test, because the law admits none.
+add_executable(test_terrain_mipgen_directed terrain/terrain_mipgen_directed.cpp)
+target_link_libraries(test_terrain_mipgen_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_mipgen_directed
+  PREFIX Vzhao_terrain_mipgen
+  TOP_MODULE zhao_terrain_mipgen
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_mipgen.sv)
+add_test(NAME terrain_mipgen_directed COMMAND test_terrain_mipgen_directed)
+set_tests_properties(terrain_mipgen_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # Residency v2 -- the SET-ASSOCIATIVE directory of ruling T9/T10. Beside the
 # prototype, not replacing it: the prototype is what this is measured against.
 # Two of these cases cannot be written against the direct map at all, because

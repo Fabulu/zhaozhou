@@ -135,6 +135,7 @@ module zhao_raster_texjoin_v2 #(
     // The work queue cannot overflow BY CONSTRUCTION -- a fragment pushes at
     // most three entries and cannot be allocated without a free slot. Sticky,
     // and out loud, because "by construction" is a claim and not a proof.
+    // ENFORCED-BY: tests/raster/raster_texjoin_v2_directed.cpp
     output var logic                   wq_overflow_o,
     output var logic                   id_error_o,
     // Sample 0 was returned for a recipe whose blend is not yet frozen.
@@ -264,6 +265,7 @@ module zhao_raster_texjoin_v2 #(
   // entries and cannot be allocated unless a slot is free, so entries in
   // flight are bounded by the same DEPTH the slots are. That is asserted
   // rather than assumed -- see `wq_overflow_o`.
+  // ENFORCED-BY: tests/raster/raster_texjoin_v2_directed.cpp
   localparam int unsigned WQN = 1 << $clog2(DEPTH * 3);
   localparam int unsigned WQW = $clog2(WQN);
 
@@ -455,6 +457,7 @@ module zhao_raster_texjoin_v2 #(
       // BY CONSTRUCTION the work queue cannot overflow: a fragment pushes at
       // most three entries and cannot be allocated without a free slot. Said
       // out loud, with a sticky flag, because "by construction" is a claim.
+      // ENFORCED-BY: tests/raster/raster_texjoin_v2_directed.cpp
       if (wq_cnt > (WQW+1)'(WQN)) wq_overflow_o <= 1'b1;
 
       // ---- returns write TOKEN-INDEXED entries ----------------------------

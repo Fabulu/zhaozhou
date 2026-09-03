@@ -32,6 +32,10 @@ schema_version: 1
 # §25 mandatory counters (snake_case) plus the declared platform extensions.
 # Block `counters` must be a subset of this catalog (rule V12).
 counter_catalog:
+  # TERRAIN.MIPGEN (ruling T8)
+  - mipgen_samples
+  - mipgen_writes
+  - mipgen_aborts
   # GEOM.PARAMBUF (ruling R7) -- the external geometry arena
   - parambuf_records_written
   - parambuf_chunks_allocated
@@ -1421,7 +1425,7 @@ blocks:
     inputs: [dispatch, field_results, baked_scars]
     outputs: [patch_state, subpatch_requests]
     upstream: [CMD.SCHEDULER, FIELD.SEQ.EARTH, TERRAIN.BAKE]
-    downstream: [TERRAIN.TESS, TERRAIN.LOD, TERRAIN.VELOCITY, PART.COLLIDE, MEM.GUARD]
+    downstream: [TERRAIN.TESS, TERRAIN.LOD, TERRAIN.VELOCITY, PART.COLLIDE, MEM.GUARD, TERRAIN.MIPGEN]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 patch-layer update per clock
@@ -1486,6 +1490,43 @@ blocks:
     cut_order: null
     superseded_by: null
     notes: Crack-safety is a formal candidate (stitch invariants).
+
+  - id: TERRAIN.MIPGEN
+    name: Page height mips
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Generates a resident page 17x17 and 9x9 height mips by NESTED DECIMATION -- mip17[i,j] = fine33[2i,2j], mip9[i,j] = fine33[4i,4j], top and bottom surfaces. No averaging, so a coarse vertex IS a fine vertex bit for bit, which is what stops an LOD seam from cracking. Ruling T8."
+    contract: design/contracts/TERRAIN.MIPGEN.md
+    phase: 6
+    owner_issue: ZH-122
+    inputs: [page_height_lattice]
+    outputs: [page_height_mips]
+    upstream: [TERRAIN.PATCH]
+    downstream: [TERRAIN.LOD]
+    backpressure: ready_valid
+    latency: fixed:1
+    target_throughput: 1 fine sample per clock
+    reference_model: zref::terrain::mipgen
+    tests:
+      directed: tests/terrain/terrain_mipgen_directed.cpp
+      random: tests/terrain/terrain_mipgen_directed.cpp
+    counters: [mipgen_samples, mipgen_writes, mipgen_aborts]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-03"
+        commit: "bb46109b"
+        evidence: design/contracts/TERRAIN.MIPGEN.md
+      - state: UNIT_VERIFIED
+        date: "2026-09-03"
+        commit: "bb46109b"
+        evidence: tests/terrain/terrain_mipgen_directed.cpp
+
+    deferred: false
+    superseded_by: null
 
   - id: TERRAIN.NORMALS
     name: Deformed normals
@@ -1644,7 +1685,7 @@ blocks:
     owner_issue: ZH-050
     inputs: [patch_state, lod_targets]
     outputs: [lod_decisions]
-    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR]
+    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR, TERRAIN.MIPGEN]
     downstream: [TERRAIN.PROJECT]
     backpressure: ready_valid
     latency: variable
