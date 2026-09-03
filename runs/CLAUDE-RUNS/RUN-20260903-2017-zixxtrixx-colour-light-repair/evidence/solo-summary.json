@@ -1,0 +1,86 @@
+{
+ "warm1": {
+  "peak_frame": 419,
+  "peak_px": 3356,
+  "peak_maxdelta": [
+   189,
+   174,
+   165
+  ],
+  "frames_active(>50px)": 600,
+  "of": 600,
+  "mean_px": 1925.3
+ },
+ "blue1": {
+  "peak_frame": 62,
+  "peak_px": 1471,
+  "peak_maxdelta": [
+   25,
+   16,
+   33
+  ],
+  "frames_active(>50px)": 292,
+  "of": 600,
+  "mean_px": 188.9
+ },
+ "orange1": {
+  "peak_frame": 114,
+  "peak_px": 2609,
+  "peak_maxdelta": [
+   173,
+   85,
+   66
+  ],
+  "frames_active(>50px)": 600,
+  "of": 600,
+  "mean_px": 1089.8
+ },
+ "green1": {
+  "peak_frame": 19,
+  "peak_px": 731,
+  "peak_maxdelta": [
+   16,
+   44,
+   41
+  ],
+  "frames_active(>50px)": 511,
+  "of": 600,
+  "mean_px": 223.2
+ },
+ "blue8": {
+  "peak_frame": 61,
+  "peak_px": 1937,
+  "peak_maxdelta": [
+   74,
+   178,
+   165
+  ],
+  "frames_active(>50px)": 422,
+  "of": 600,
+  "mean_px": 282.1
+ },
+ "orange8": {
+  "peak_frame": 96,
+  "peak_px": 2839,
+  "peak_maxdelta": [
+   189,
+   182,
+   91
+  ],
+  "frames_active(>50px)": 600,
+  "of": 600,
+  "mean_px": 1290.4
+ },
+ "green8": {
+  "peak_frame": 24,
+  "peak_px": 1018,
+  "peak_maxdelta": [
+   82,
+   158,
+   156
+  ],
+  "frames_active(>50px)": 546,
+  "of": 600,
+  "mean_px": 339.9
+ }
+}
