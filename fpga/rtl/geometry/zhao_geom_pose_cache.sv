@@ -91,6 +91,22 @@ module zhao_geom_pose_cache #(
     // animation ruling of 2026-09-03 permits baked 60 Hz for any creature,
     // which turned a latent mismatch into a live defect.
     input  logic [7:0]  acq_sub_i,
+    // THE CLIP-BANK GENERATION. Owner ruling D-3, 2026-09-03:
+    //
+    //     cache tag = physical line tag + residency generation
+    //
+    // and the ruling names this cache specifically -- it "must also
+    // distinguish the clip-bank generation in addition to
+    // {type, clip, frame, sub}".
+    //
+    // Why: animation banks live in HPS DDR and are uploaded into reusable
+    // local-SDRAM slots. A physical slot stopped being a sufficient identity
+    // the moment slots became reusable, so a pose cached from generation N and
+    // read after generation N+1 was published is a pose from bytes that are no
+    // longer there. It decodes, it looks like animation, and nothing reports
+    // an error -- the same silent-wrong-answer shape as the `sub` aliasing
+    // fixed earlier today, one level up.
+    input  logic [15:0] acq_gen_i,
     // The caller resolves the clip table and the frame bound; this block does
     // not own the clip bank. Low means "no such clip slot, or frame past the
     // end", which is rule 1.
@@ -119,10 +135,10 @@ module zhao_geom_pose_cache #(
   localparam logic [1:0] RESP_BAD_ID      = 2'd3;
 
   // ---- tag store ----------------------------------------------------------
-  // {lru, sub, frame, clip, type}. `valid` and `this_frame` stay as register vectors
+  // {lru, gen, sub, frame, clip, type}. `valid` and `this_frame` stay as register vectors
   // because both are needed combinationally during the scan and `this_frame`
   // must clear for every slot in a single cycle at the frame boundary.
-  localparam int TAGW = LRUW + 56;
+  localparam int TAGW = LRUW + 72;
 
   logic [TAGW-1:0] tags [0:TUPLES-1];
   logic [IDXW-1:0] tag_raddr, tag_waddr;
@@ -137,12 +153,14 @@ module zhao_geom_pose_cache #(
   end
 
   // Tag layout, named once so the slices below are readable:
-  //   [15:0] type  [31:16] clip  [47:32] frame  [55:48] sub  [TAGW-1:56] lru
+  //   [15:0] type  [31:16] clip  [47:32] frame  [55:48] sub
+  //   [71:56] gen   [TAGW-1:72] lru
   localparam int TYPE_LO  = 0;
   localparam int CLIP_LO  = 16;
   localparam int FRAME_LO = 32;
   localparam int SUB_LO   = 48;
-  localparam int LRU_LO   = 56;
+  localparam int GEN_LO   = 56;
+  localparam int LRU_LO   = 72;
 
   logic [TUPLES-1:0] valid_q;
   logic [TUPLES-1:0] this_frame_q;
@@ -168,6 +186,7 @@ module zhao_geom_pose_cache #(
 
   logic [15:0] q_type, q_clip, q_frame;
   logic [7:0]  q_sub;
+  logic [15:0] q_gen;
 
   logic            have_inv;
   logic [IDXW-1:0] inv_idx;
@@ -206,6 +225,7 @@ module zhao_geom_pose_cache #(
       best_idx <= '0;
       best_lru <= '0;
       q_type <= '0; q_clip <= '0; q_frame <= '0; q_sub <= '0;
+      q_gen <= '0;
       kind_q <= RESP_HIT;
       slot_q <= '0;
       resp_valid_o <= 1'b0;
@@ -234,6 +254,7 @@ module zhao_geom_pose_cache #(
             q_clip <= acq_clip_i;
             q_frame <= acq_frame_i;
             q_sub   <= acq_sub_i;
+            q_gen   <= acq_gen_i;
             if (!acq_resolvable_i) begin
               // Rule 1: no cache state is touched. A bad id must not be able to
               // evict a live palette.
@@ -265,13 +286,14 @@ module zhao_geom_pose_cache #(
           if (j_live && valid_q[j] && tag_rdata[TYPE_LO+:16] == q_type &&
               tag_rdata[CLIP_LO+:16] == q_clip &&
               tag_rdata[FRAME_LO+:16] == q_frame &&
-              tag_rdata[SUB_LO+:8] == q_sub) begin
+              tag_rdata[SUB_LO+:8] == q_sub &&
+              tag_rdata[GEN_LO+:16] == q_gen) begin
             hits_o <= hits_o + 32'd1;
             this_frame_q[j] <= 1'b1;
             lru_ctr <= lru_ctr + 1'b1;
             tag_we <= 1'b1;
             tag_waddr <= j;
-            tag_wdata <= {(lru_ctr + 1'b1), q_sub, q_frame, q_clip, q_type};
+            tag_wdata <= {(lru_ctr + 1'b1), q_gen, q_sub, q_frame, q_clip, q_type};
             kind_q <= RESP_HIT;
             slot_q <= j;
             state <= S_RESP;
@@ -323,7 +345,7 @@ module zhao_geom_pose_cache #(
             lru_ctr <= lru_ctr + 1'b1;
             tag_we <= 1'b1;
             tag_waddr <= victim;
-            tag_wdata <= {(lru_ctr + 1'b1), q_sub, q_frame, q_clip, q_type};
+            tag_wdata <= {(lru_ctr + 1'b1), q_gen, q_sub, q_frame, q_clip, q_type};
             kind_q <= RESP_MISS_INSERT;
             slot_q <= victim;
           end

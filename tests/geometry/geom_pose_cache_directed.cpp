@@ -49,6 +49,7 @@ struct Req {
   uint16_t clip;
   uint16_t frame;
   uint8_t  sub = 0;   // the half-key phase; 1 is the baked 60 Hz midpoint
+  uint16_t gen = 0;   // the clip-bank residency generation (D-3)
 };
 
 /** Creature types built so their clip tables are easy to reason about. */
@@ -128,6 +129,7 @@ int rtl_acquire(Vzhao_geom_pose_cache& dut, const Req& r, bool resolvable) {
   dut.acq_clip_i = r.clip;
   dut.acq_frame_i = r.frame;
   dut.acq_sub_i = r.sub;
+  dut.acq_gen_i = r.gen;
   dut.acq_resolvable_i = resolvable ? 1 : 0;
   dut.resp_ready_i = 1;
   dut.eval();
@@ -496,5 +498,44 @@ int main(int argc, char** argv) {
   }
 
   dut.final();
+  // ---- the clip-bank generation is part of the KEY (D-3) -----------------
+  // Owner ruling D-3: cache tag = physical line tag + residency generation,
+  // and the ruling names this cache. Animation banks are uploaded into
+  // REUSABLE local-SDRAM slots, so a pose cached from generation N and read
+  // after N+1 was published is a pose from bytes that are no longer there. It
+  // decodes, it looks like animation, and nothing reports an error.
+  //
+  // This is the same silent-wrong-answer shape as the `sub` aliasing fixed
+  // earlier today, one level up: an identity that is not unique returns the
+  // wrong entry confidently.
+  {
+    Vzhao_geom_pose_cache dut3;
+    dut3.rst_n = 0;
+    for (int i = 0; i < 4; ++i) zhao::tick(dut3);
+    dut3.rst_n = 1;
+    zhao::tick(dut3);
+    rtl_begin_frame(dut3);
+
+    const Req old_gen{5, 2, 9, 0, 1};   // generation 1
+    const Req new_gen{5, 2, 9, 0, 2};   // republished: same tuple, generation 2
+
+    const int a = rtl_acquire(dut3, old_gen, true);
+    const int b = rtl_acquire(dut3, new_gen, true);
+
+    zhao::check(a == 1 && b == 1,
+                "a pose from a REPUBLISHED clip bank is a different cache "
+                "entry -- the generation is part of the key, so a hit here "
+                "would hand back a pose decoded from bytes that have been "
+                "overwritten",
+                1, (a == 1 && b == 1) ? 1 : 0);
+
+    // and the old generation must NOT come back to life on a re-ask
+    const int c = rtl_acquire(dut3, new_gen, true);
+    zhao::check(c == 0,
+                "while the new generation's own entry hits, so the insert "
+                "really happened",
+                0, c);
+  }
+
   return zhao::report_and_exit("geom_pose_cache_directed");
 }
