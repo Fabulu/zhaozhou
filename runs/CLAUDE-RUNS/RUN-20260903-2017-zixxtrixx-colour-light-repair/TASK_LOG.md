@@ -172,3 +172,21 @@ genuine visible mixing. Physics note recorded: on the green body pigment a
 pure red-heavy orange can only produce olive (multiplicative transport), so
 orange must read via the pink stripe, the eye, and an amber body cast.
 v3 (final nudge): orange R 1.90->2.00, G 0.60->0.70 (amber not olive).
+
+## 2026-09-03 22:45 — v3 ACCEPTED; publication under way
+
+v3 by eye: f400 = amber-lit eye, violet dorsal, bright green flank pool and
+the blue orb in one still, and the creature is still itself. Whole-clip
+contact sheet (50 tiles): coloured light alive in every tile, calm tiles
+still exist, no broken frame. Seam 599->0 in family with the accepted bank
+(2415 changed px vs the shipped bank's own 2124). Per-frame trace vs the v3
+dark plate: blue-shifted pixels on 459/600 frames (peak 1216), warm/orange
+on 600/600 (peak 2320), green on 596/600 (peak 2029) — versus the shipped
+bank where blue's TOTAL footprint averaged 189 dark pixels/frame.
+
+Archive Generation Seventeen preserved and pushed (Upheaval 3f9aeab; local
+lane branch pushed as HEAD:main after a stale-local-main push rejection).
+zhaozhou knobs committed fb9cba41. Poster moved 412 -> 400
+(composition: all four colour reads in one still). Publication render: ONE
+fresh explicit celmain/diagonal-cool-cross invocation of the 22 names into
+a WIPED website scratch-reel. Probe building.
