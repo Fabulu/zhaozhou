@@ -125,14 +125,13 @@ class of bug to see and the easiest to write.
 
 ## Scalar reference function
 
-**PLANNED AND NOT WRITTEN**: `zref::geom::assemble_triangle` (local triplet plus
-`vertex_offset` to three global ids, with the legality rule) and
-`zref::geom::assemble_count` (triangles per meshlet). Named without paths
-because neither exists — see `reports/PHANTOM-CITATIONS-AUDIT.md`.
+`zref::geom::assemble_triangle`, with `assemble_index_legal`,
+`assemble_limits_legal`, `assemble_vertex_id` and `assemble_count`
+(`reference/include/zref/zref_geom.hpp`) — **written before the RTL.**
 
 ## Directed tests
 
-**PLANNED AND NOT WRITTEN.** Named without paths for that reason:
+**`tests/geometry/geom_assemble_directed.cpp` — WRITTEN**, 9 checks:
 
 * every triplet of a 126-triangle meshlet emitted, in index-stream order;
 * a local index at `vertex_count` refused (the count is a count, not a last

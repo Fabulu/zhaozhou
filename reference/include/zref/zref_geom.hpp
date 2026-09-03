@@ -280,6 +280,90 @@ inline bool parambuf_chunk_follow(uint16_t chunk_gen, uint16_t frame_gen,
          next != kChunkNull;
 }
 
+// ===========================================================================
+// GEOM.ASSEMBLE -- the index walk that turns a meshlet into triangles
+// ===========================================================================
+// Written 2026-09-03 from `BORING_3D_FUNDAMENTALS_AUDIT.md` R1, the most basic
+// omission the audit found: MESHFETCH emits `index_offset` and
+// `triangle_count`, GEOM.VDECODE accepts neither, GEOM.SETUP expects a
+// complete triangle, and `tri_ax_i` was driven only from a harness. Nothing
+// turned a meshlet's index stream into triangles.
+//
+// The arithmetic here is one addition. What it owns is the two rules that can
+// be silently wrong: which vertex a local index means, and which local indices
+// are legal at all.
+
+// The frozen meshlet limits, and they are limits rather than suggestions: a
+// `u8` local index cannot address past 255, and 126 triangles x 3 indices is
+// 378 bytes.
+inline constexpr unsigned kAssembleMaxVertices  = 64;
+inline constexpr unsigned kAssembleMaxTriangles = 126;
+
+inline bool assemble_limits_legal(unsigned vertex_count, unsigned triangle_count) {
+  return vertex_count >= 1 && vertex_count <= kAssembleMaxVertices &&
+         triangle_count <= kAssembleMaxTriangles;
+}
+
+// A local index is legal only BELOW the vertex count. The count is a count,
+// not a last index -- the same off-by-one that GEOM.PARAMBUF's triangle
+// descriptor already refuses.
+inline bool assemble_index_legal(unsigned local, unsigned vertex_count) {
+  return local < vertex_count;
+}
+
+// Local u8 -> global projected-vertex id.
+//
+// THE ONE ARITHMETIC ACT of this block, and the reason it is not folded into
+// the caller: `vertex_offset` is PER VIEW. The same local index resolves to a
+// different projected vertex in view 0 and view 1, because projection is per
+// view. A single walk emitting into both views gives view 1 the vertices of
+// view 0 -- a correct image in one eye and a subtly wrong one in the other,
+// which is the hardest class of bug to see and the easiest to write.
+inline unsigned assemble_vertex_id(unsigned vertex_offset, unsigned local) {
+  return vertex_offset + local;
+}
+
+// How many triangles a legal meshlet emits. Zero for an illegal one: the
+// meshlet is refused WHOLE, never as a truncated prefix, because a mesh
+// missing its tail looks like a modelling error rather than a fault.
+inline unsigned assemble_count(unsigned vertex_count, unsigned triangle_count) {
+  return assemble_limits_legal(vertex_count, triangle_count) ? triangle_count : 0u;
+}
+
+struct AssembledTriangle {
+  unsigned v[3];
+  bool legal;
+};
+
+// Triangle `n` of the walk, in index-stream order.
+//
+// The order IS the contract: two orderings of the same meshlet produce the
+// same picture and different capture CRCs.
+//
+// A triplet containing an out-of-range local index is REFUSED -- `legal` false
+// and no vertex ids to be used. It is not clamped: a clamped index draws a
+// triangle from a real vertex belonging to a different part of the mesh, which
+// is a visible corruption nothing downstream can detect.
+//
+// A DEGENERATE triplet -- two or three equal indices -- is legal here and is
+// emitted. GEOM.CULL already owns the zero-area decision, and refusing it here
+// would put two blocks in charge of one rule.
+inline AssembledTriangle assemble_triangle(const unsigned char* indices, unsigned n,
+                                           unsigned vertex_offset, unsigned vertex_count) {
+  AssembledTriangle t{};
+  t.legal = true;
+  for (unsigned i = 0; i < 3; ++i) {
+    const unsigned local = indices[n * 3 + i];
+    if (!assemble_index_legal(local, vertex_count)) {
+      t.legal = false;
+      t.v[0] = t.v[1] = t.v[2] = 0;
+      return t;
+    }
+    t.v[i] = assemble_vertex_id(vertex_offset, local);
+  }
+  return t;
+}
+
 }  // namespace geom
 
 }  // namespace zref

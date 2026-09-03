@@ -2516,13 +2516,17 @@ blocks:
     target_throughput: see contract
     reference_model: zref::geom::assemble_triangle
     tests:
-      directed: "PLANNED -- NOT WRITTEN"
-      random: "PLANNED -- NOT WRITTEN"
+      directed: tests/geometry/geom_assemble_directed.cpp
+      random: tests/geometry/geom_assemble_directed.cpp
     counters: [assemble_triangles, assemble_refused]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-03"
+        commit: "4ee79f90"
+        evidence: reference/include/zref/zref_geom.hpp
     deferred: false
     cut_order: null
     superseded_by: null

@@ -2076,6 +2076,21 @@ target_link_libraries(test_mem_upload_oracle PRIVATE zhao_harness zhao_zref)
 add_test(NAME mem_upload_oracle COMMAND test_mem_upload_oracle)
 set_tests_properties(mem_upload_oracle PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
 
+# GEOM.ASSEMBLE -- the arrow nothing owned. BORING_3D_FUNDAMENTALS_AUDIT R1:
+# MESHFETCH emits index_offset and triangle_count, VDECODE accepts neither,
+# SETUP expects a complete triangle, and tri_ax_i was driven only from a
+# harness. The arithmetic is one addition; what is worth testing is the Duo
+# per-view offset, the refusal of an index AT the vertex count, and that a
+# stalled consumer does not lose position mid-mesh.
+add_executable(test_geom_assemble_directed geometry/geom_assemble_directed.cpp)
+target_link_libraries(test_geom_assemble_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_assemble_directed
+  PREFIX Vzhao_geom_assemble
+  TOP_MODULE zhao_geom_assemble
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_assemble.sv)
+add_test(NAME geom_assemble_directed COMMAND test_geom_assemble_directed)
+set_tests_properties(geom_assemble_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # The terrain light law, before any RTL. Owner brief 2026-09-03: put the law in
 # ZRef and LOOK at the island under a moving sun first. This cannot say whether
 # it looks right -- only the render can -- but it pins the ways the first draft
