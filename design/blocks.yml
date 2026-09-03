@@ -48,6 +48,14 @@ counter_catalog:
   - degenerate_normals
   - depth_saturated
   - depth_refused
+  # GEOM.DEPTHQUANT. `depth_clamped_near` and `depth_clamped_far` are the pair
+  # that says a view is using the wrong PROFILE: wmax is a depth clamp rather
+  # than a far-clip plane, so geometry past it is drawn at the floor instead of
+  # disappearing. Without these two the symptom is a scene whose distances stop
+  # separating -- flat, correct-looking, and untraceable.
+  - depth_vertices
+  - depth_clamped_near
+  - depth_clamped_far
   - shadows_emitted
   - shadows_skipped
   # TEXTURE.FRAGROB -- the fragment transaction centre. `fragrob_id_errors`
@@ -2585,11 +2593,11 @@ blocks:
     kind: rtl
     subsystem: geometry
     clock_domain: gpu
-    purpose: "Q16.16 1/w to invw24 under the selected depth profile. BORING_3D_FUNDAMENTALS_AUDIT R6, verified: zhao_geom_project.sv emits out_d_o documented Q16.16 1/w, TWELVE RTL files consume invw24, and no depth_profile port exists anywhere in fpga/rtl. Not a capacity concern -- a correctness one."
+    purpose: "w to invw24 under the selected depth profile. BORING_3D_FUNDAMENTALS_AUDIT R6, verified: zhao_geom_project.sv emits out_d_o documented Q16.16 1/w, TWELVE RTL files consume invw24, and no depth_profile port existed anywhere in fpga/rtl. Not a capacity concern -- a correctness one. The input is w, NOT a reciprocal: the law performs its own rcp_u24, and the first draft of the contract said otherwise. A block built to that draft would have fetched the wrong quantity."
     contract: design/contracts/GEOM.DEPTHQUANT.md
     phase: 5
     owner_issue: ZH-086
-    inputs: [projected_w]
+    inputs: [projected_w, depth_profile]
     outputs: [invw24]
     upstream: [GEOM.PROJECT]
     downstream: [RASTER.EARLYZ]
@@ -2598,17 +2606,21 @@ blocks:
     target_throughput: see contract
     reference_model: zref::depth_of_raw
     tests:
-      directed: tests/proofs/depth_oracle_directed.cpp
-      random: tests/proofs/depth_profile_abi_directed.cpp
-    counters: [depth_saturated, depth_refused]
+      directed: tests/geometry/geom_depthquant_directed.cpp
+      random: tests/geometry/geom_depthquant_directed.cpp
+    counters: [depth_vertices, depth_clamped_near, depth_clamped_far, depth_saturated, depth_refused]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-09-03"
         commit: "85e6926f"
         evidence: reference/include/zref/zref_depth.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-09-04"
+        commit: "39f68c04"
+        evidence: tests/geometry/geom_depthquant_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -2620,6 +2632,28 @@ blocks:
       row. Saturation is REPORTED, not silently clamped. A negative reciprocal is
       refused rather than wrapped into a large unsigned depth that would read as
       very close and win every depth test.
+
+      BUILT 2026-09-04. It calls the existing rcp_u24 service rather than
+      carrying a second reciprocal ROM, because a second ROM would be a second
+      law. SCALE is a power of two for all three shipped profiles, so SCALE * r
+      collapses to a shift and the oracle's 128-bit intermediate is never
+      materialised -- the directed test ASSERTS that property rather than
+      assuming it, so a fourth profile whose SCALE is not a power of two fails
+      loudly instead of shifting wrongly.
+
+      REQUIRES A CHANGE TO GEOM.PROJECT: zhao_project_core has w -- "the three
+      quotients share the divisor clip.w" -- and does not expose it. Until that
+      port exists this block has no producer in the shell.
+
+      The directed test is 7/7 against zref::depth_of_raw across all three
+      profiles -- 32 vertices, 1 near-clamped, 1 far-clamped, 0 refused. It
+      found three faults that lint had passed: a DESCENDING normalisation loop
+      taking the lowest set bit above 23 rather than the highest, which made
+      depth at wmax exactly 2^5 too large; a shift of ZERO refused as out of
+      range when zero IS the near pin, which returned depth 0 -- the value
+      meaning "far" -- for the CLOSEST geometry in the scene; and a reciprocal
+      handshake that asserted valid and awaited the answer without ever
+      consulting rcp_ready_i, which deadlocks against a busy service.
   - id: GEOM.BINNER
     name: Tile binner
     kind: rtl

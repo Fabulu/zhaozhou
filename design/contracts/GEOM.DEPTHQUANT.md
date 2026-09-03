@@ -1,7 +1,7 @@
 # Contract — GEOM.DEPTHQUANT (Depth profile application)
 
-> Ledger: `design/blocks.yml` · gpu clock · maturity SPECIFIED
-> RTL: not built
+> Ledger: `design/blocks.yml` · gpu clock · maturity **UNIT_VERIFIED**
+> RTL: `fpga/rtl/geometry/zhao_geom_depthquant.sv` — **built 2026-09-04**
 > Reference: **`zref::depth_of_raw`** (`reference/include/zref/zref_depth.hpp`)
 > — it already exists and is complete, with the generated profile table in
 > `reference/include/zref/generated/zref_depth.hpp`
@@ -211,3 +211,63 @@ at all:
 The conversion happens **once per projected vertex, before the value enters
 clipping, parameter storage and rasterisation** — not at twelve call sites that
 would drift.
+
+## What building it found
+
+Three faults, all of which lint had passed, all found by the directed test
+rather than by reading the code back:
+
+* **The normalisation loop descended.** `s` is set by the HIGHEST set bit, and
+  an unrolled priority chain gives the LAST assignment. Descending picked the
+  *lowest* set bit above 23, so a `w` with a run of high bits under-shifted by
+  the width of that run. Depth at `wmax` came out exactly 2^5 too large — a
+  number that is plausible, monotonic, and wrong.
+* **A shift of zero was refused as out of range, and zero is the near pin.**
+  The generator SOLVES each profile's `SCALE` so the shift lands on exactly
+  zero at `wmin` and the depth *is* the raw reciprocal — which is how `0xFFFFFF`
+  is hit exactly rather than one short. Refusing it returned depth 0, the value
+  meaning "far", for the closest geometry in the scene. This holds for all three
+  profiles and is a property of the solve, not a coincidence.
+* **The reciprocal handshake never consulted `rcp_ready_i`.** Valid was asserted
+  and the response awaited without the request having been taken. Against the
+  free-running service in the testbench this works; against a busy one it
+  deadlocks. Split into `S_RCP` (issue, wait for accept) and `S_WAIT` (wait for
+  answer).
+
+The first two are the same class of fault: a value that is wrong by a clean
+power of two, in the direction that still sorts correctly. Nothing downstream
+could have detected either.
+
+## Implementation notes
+
+**It calls the existing `rcp_u24` service.** A second reciprocal ROM would be a
+second law, and the two would agree until they did not.
+
+**`SCALE` is a power of two for all three shipped profiles**, so `SCALE * r`
+collapses to a shift of `r` and the oracle's 128-bit intermediate is never
+materialised. The shift AMOUNT is still computed in a signed 9-bit width that
+cannot wrap. **The test asserts the power-of-two property** rather than assuming
+it, so a fourth profile whose `SCALE` is not a power of two fails loudly instead
+of shifting wrongly — the RTL says so in a comment and the test proves it.
+
+## Required change to GEOM.PROJECT
+
+`zhao_project_core` **has** `w` — "the three quotients share the divisor
+`clip.w`" — and does not expose it. **Until that port exists this block has no
+producer in the shell.** That is the one outstanding integration item.
+
+## Directed tests
+
+**`tests/geometry/geom_depthquant_directed.cpp` — WRITTEN**, 7 checks, against
+`zref::depth_of_raw` (the ratified law the golden captures already pin) rather
+than a second implementation of it:
+
+* the RTL's mirrored profile table matches the GENERATED table, and every
+  `SCALE` really is a power of two;
+* 24 comparisons — eight points across each of the three profiles' ranges;
+* a `w` outside `[wmin, wmax]` takes the boundary's depth, and each clamp is
+  counted;
+* every profile pins its near plane at exactly `0xFFFFFF`;
+* the far floor is the table's own non-zero value.
+
+Evidence: 32 vertices, 1 near-clamped, 1 far-clamped, 0 saturated, 0 refused.
