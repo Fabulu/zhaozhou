@@ -699,6 +699,18 @@ summed to 128 and agreed with the ruling on nothing else.
 * **size u6** — U 2.4 relative radius multiplier;
   `radius = base_radius_fx16 * size / 16` with **one** final round-half-up.
   **World scale, never camera-space pixels.**
+
+  > **This field changed meaning, and something already believed the old one.**
+  > `fpga/rtl/particles/zhao_part_expand.sv` and `zref::part::expand_polygon`
+  > were built against the pre-C2 §10, where size was **U 0.4.4 pixels** — an
+  > 8-bit byte of sixteenths of a pixel, turned into subpixels by `size << 4`.
+  > Under C2 it is six bits, a multiplier rather than a size, and a **world**
+  > length rather than a screen one, so `size << 4` is not a projection of it.
+  >
+  > Both files now carry a banner saying so. Neither is fixed, deliberately:
+  > turning a world radius into a screen half-side is a projection, and
+  > inventing one to make the amendment fit is how a plausible wrong number
+  > gets shipped. It needs a decision first.
 * **spin u6** — U 0.6 turns; `angle16 = spin << 10`. The species carries a
   signed spin rate in angle16/tick; the stored phase wraps mod 64.
 * **flags** — bit 0 `STUCK`, bit 1 `COLLIDED_THIS_TICK`, bit 2 `BORN_THIS_TICK`,

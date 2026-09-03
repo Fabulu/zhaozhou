@@ -1,5 +1,35 @@
 // zhao_part_expand.sv — PART.EXPAND: polygon particles into geometry packets.
 //
+// ---------------------------------------------------------------------------
+// SUPERSEDED ASSUMPTION — READ BEFORE TRUSTING `p_size_i` (2026-09-03)
+// ---------------------------------------------------------------------------
+// Everything below reads particle size as **U 0.4.4 PIXELS, an 8-bit byte of
+// sixteenths of a pixel**, and cites qformats §10 for it. That citation was
+// true when this block was written and is NOT true now.
+//
+// Amendment C2 (QFMT_VERSION 3, ruling R3) replaced §10 whole. Size is:
+//
+//     size u6 -- U 2.4 RELATIVE RADIUS MULTIPLIER
+//     radius = base_radius_fx16 * size / 16, ONE final round-half-up
+//     WORLD SCALE, NEVER CAMERA-SPACE PIXELS
+//
+// Three differences, each of which changes the picture:
+//   * SIX bits, not eight;
+//   * a MULTIPLIER on the species' base radius, not a size;
+//   * a WORLD length, not a screen length -- so it must be projected, and
+//     `size << 4` is not a projection.
+//
+// THIS BLOCK IS NOT FIXED HERE, deliberately. Turning a world-space radius into
+// a screen-space half-side is a projection, and inventing one to make an
+// amendment fit would be exactly the kind of plausible wrong number this
+// project has shipped before. It needs the same treatment GEOM.PROJECT's
+// attribute carry got: a decision, then an implementation.
+//
+// What IS fixed here is that the next reader is told. The amendment was
+// committed and nothing pointed at the block that had already believed the old
+// text -- "instructions are not delivered until they are read", in a new place.
+// ---------------------------------------------------------------------------
+//
 // Contract: design/contracts/PART.EXPAND.md
 // Reference: `zref::part::expand_polygon` (reference/include/zref/zref_particle.hpp),
 // which is the `tris` branch of `zref::render::draw_population`
