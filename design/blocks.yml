@@ -1548,7 +1548,7 @@ blocks:
       - state: REFERENCE_COMPLETE
         date: "2026-09-03"
         commit: "eca81e6f"
-        evidence: reference/include/zref/zref_terrain_normalmap.hpp
+        evidence: reference/include/zref/zref_terrain_shade.hpp
     deferred: false
     cut_order: null
     superseded_by: null

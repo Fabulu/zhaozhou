@@ -198,10 +198,21 @@ amendment before it is the law** — the required changes are recorded in
   moved to the vertex-colour lanes; both functions are superseded by
   `zref::terrain::normalmap_apply` (PLANNED AND NOT WRITTEN):
   `v'_c = clamp_u8(v_c + delta)`.
-* `zref::terrain::normalmap_length` / `normalmap_base` — belong to
-  TERRAIN.SHADE, not this block, and both carry defects (int64 overflow at
-  the legal fx16 rails; truncating division against the round-half-up law).
-  They move out of this header when TERRAIN.SHADE is contracted.
+* `zref::terrain::normalmap_length` / `normalmap_base` — **MOVED 2026-09-03**,
+  as this section required. TERRAIN.SHADE is now contracted
+  (`design/contracts/TERRAIN.SHADE.md`) and they live in
+  `reference/include/zref/zref_terrain_shade.hpp` as `shade_length` and
+  `shade_base`. Both defects are fixed there: the sum of squares accumulates in
+  **unsigned 64** (three Q16.16 components at the fx16 rail reach 1.38e19
+  against signed 64's 9.22e18 — undefined behaviour in C++, a silent wrap in
+  RTL giving a small length and therefore a huge wrong shade), and rounding is
+  round-half-up through the shared `rshift_round`.
+
+**Status of the amendments above, 2026-09-03:** `normalmap_detail` now rounds
+half-up rather than truncating; the ambient-FLOOR functions are gone and
+ambient is additive per §4a; the base light has moved out. What remains
+planned is `normalmap_apply` at the vertex-colour lanes — the application
+point — which needs the fragment seam that does not exist yet.
 
 ## Directed tests
 

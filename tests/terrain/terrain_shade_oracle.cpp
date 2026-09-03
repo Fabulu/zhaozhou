@@ -23,6 +23,7 @@
 
 #include "zhao_sim.hpp"
 #include "zref/zref_terrain_normalmap.hpp"
+#include "zref/zref_terrain_shade.hpp"
 
 using namespace zref::terrain;
 
@@ -36,7 +37,7 @@ int main() {
     n.x = 2147483647;
     n.y = 2147483647;
     n.z = 2147483647;
-    const int64_t len = normalmap_length(n);
+    const int64_t len = shade_length(n);
     // sqrt(3) * 2^31 ~= 3.72e9, and it must be positive and larger than any
     // single component: a wrap would come back small or negative.
     zhao::check(len > 3700000000LL && len < 3800000000LL,
@@ -48,9 +49,9 @@ int main() {
     m.x = -2147483647;
     m.y = -2147483647;
     m.z = -2147483647;
-    zhao::check(normalmap_length(m) == len,
+    zhao::check(shade_length(m) == len,
                 "and the negative rail gives the same length", 1,
-                normalmap_length(m) == len ? 1 : 0);
+                shade_length(m) == len ? 1 : 0);
   }
 
   // ---- 2: ROUNDING IS ROUND-HALF-UP, INCLUDING NEGATIVES ----------------
