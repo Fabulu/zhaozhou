@@ -2195,6 +2195,34 @@ verilate(test_terrain_residency_directed
 add_test(NAME terrain_residency_directed COMMAND test_terrain_residency_directed)
 set_tests_properties(terrain_residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# POST.GATHER -- the effect-plane gather of ruling R5. The clamps it enforces
+# are POST.COMPOSITE's bound, not its own: X to [-8,+8] and Y to [-4,+4] are
+# what the nine-line ring is built against, and nothing in the compositor can
+# detect a gather that exceeds them. So the bound is asserted here, at the only
+# place that could break it.
+add_executable(test_post_gather_directed compositor/post_gather_directed.cpp)
+target_link_libraries(test_post_gather_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_post_gather_directed
+  PREFIX Vzhao_post_gather
+  TOP_MODULE zhao_post_gather
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_gather.sv)
+add_test(NAME post_gather_directed COMMAND test_post_gather_directed)
+set_tests_properties(post_gather_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# ...and the randomized lane. What it buys over directed is ACCUMULATION over a
+# whole tile in an unpredictable order, and specifically the saturation cases:
+# a glow channel past 65,535 and a displacement past the s16 lane are both
+# reachable in one bright tile and both fail SILENTLY -- the picture is merely
+# dimmer or less displaced than it should be.
+add_executable(test_post_gather_random compositor/post_gather_random.cpp)
+target_link_libraries(test_post_gather_random PRIVATE zhao_harness zhao_zref)
+verilate(test_post_gather_random
+  PREFIX Vzhao_post_gather
+  TOP_MODULE zhao_post_gather
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_gather.sv)
+add_test(NAME post_gather_random COMMAND test_post_gather_random)
+set_tests_properties(post_gather_random PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # GEOM.VDECODE format 0 -- RAW/CANONICAL, authorised by ruling R11. Format 0
 # is the DIFFERENTIAL REFERENCE: packed formats 1 and 2 are bake-off gated and
 # must decode to bit-identical output, so an error here does not make one wrong

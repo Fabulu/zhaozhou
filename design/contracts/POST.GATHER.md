@@ -150,11 +150,16 @@ fragments that are already flowing. That is the second reason the ruling's
 * `unknown_tags`
 
 ## Scalar reference function
-`zref::PostGather` (ledger). Owns the tag→plane mapping, the accumulation
+`zref::post::glow_pack565`, with `zref::post::glow_accumulate` and
+`zref::post::disp_to_pixels` (`reference/include/zref/zref_post.hpp`).
+
+**This section used to cite `zref::PostGather`, and no such symbol had ever
+been written** — a phantom citation the ledger caught the moment the block
+gained evidence to check against. The law owns the accumulation
 arithmetic, the saturation and clamp rules, and the pack.
 
 ## Directed tests
-`tests/post/post_gather_directed.cpp`.
+`tests/compositor/post_gather_directed.cpp`.
 
 * one emissive fragment lights exactly one cell, at the right coordinate — the
   quarter-resolution mapping, at all four corners of the frame;
@@ -168,14 +173,16 @@ arithmetic, the saturation and clamp rules, and the pack.
 * unknown tag: ignored, counted, planes unchanged.
 
 ## Randomized differential tests
-`tests/post/post_gather_random.cpp`, RTL against `zref::PostGather`.
+`tests/compositor/post_gather_random.cpp`, RTL against `zref::post::*`.
 
 Random tagged fragment streams biased toward **cell collisions** — many
 fragments landing in the same quarter-resolution cell — since that is where
 accumulation order and saturation interact.
 
 ## Formal properties
-`tests/formal/post_gather_nostall.sby`:
+**A formal lane is PLANNED and no file exists yet**, so it is described here
+without a path -- citing one that has not been written is how a contract comes
+to promise evidence nobody produced. The properties it would carry:
 
 * **gather never asserts backpressure to resolve** — the property that keeps it
   a side channel rather than a throughput term;

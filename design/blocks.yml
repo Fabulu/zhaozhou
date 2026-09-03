@@ -3142,15 +3142,19 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 gather texel per clock
-    reference_model: zref::PostGather
+    reference_model: zref::post::glow_pack565
     tests:
       directed: tests/compositor/post_gather_directed.cpp
       random: tests/compositor/post_gather_random.cpp
     counters: [vram_bytes_by_client]
     source_ids: true
     budget_group: twod_post
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-03"
+        commit: "9ae86823"
+        evidence: fpga/rtl/compositor/zhao_post_gather.sv
     deferred: false
     cut_order: 6
     superseded_by: null
