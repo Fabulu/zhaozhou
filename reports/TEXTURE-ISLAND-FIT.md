@@ -1,9 +1,9 @@
 # Texture island: does the 99.5 MHz renderer survive the texture path?
 
-**No.** Nine of the ten blocks are now fitted. **Not one reaches the 150 MHz
-leaf target. Not one reaches the 120–125 MHz island target. Seven of nine sit
-below the shipped shell's own 99.50 MHz**, and the island's floor is
-**54.95 MHz** — barely half the console clock.
+**No.** All ten blocks are now fitted. **Not one reaches the 150 MHz leaf
+target. Not one reaches the 120–125 MHz island target. Eight of ten sit below
+the shipped shell's own 99.50 MHz**, and the island's floor is **54.95 MHz** —
+barely half the console clock.
 
 Answering the question that was asked, 2026-09-02:
 
@@ -28,19 +28,32 @@ clock.
 | `zhao_raster_texjoin_v2` | **61.66** | −37.8 | 3465 | 6143 | 3 | 0 | 829 | 3321 |
 | `zhao_raster_perspuv_svc` | **62.67** | −36.8 | 1792 | 2827 | 2 | 3 | 267 | 2304 |
 | `zhao_raster_rcp24_svc` | **68.46** | −31.0 | 1041 | 1101 | 0 | 6 | 177 | 2351 |
+| `zhao_texture_cache_pipe` | **81.06** | −18.4 | 5634 | 10812 | 3 | 0 | 413 | 2858 |
 | `zhao_texture_mosaic` | 86.63 | −12.9 | 197 | 192 | 0 | 4 | 180 | 922 |
 | `zhao_texture_tmu_plan` | 93.55 | −5.9 | 1419 | 1054 | 0 | 0 | 363 | 2524 |
 | `zhao_texture_bilerp_lane` | 99.69 | +0.2 | 125 | 177 | 0 | 3 | 132 | 768 |
 | `zhao_texture_palette_res` | 104.42 | +4.9 | 152 | 141 | 2 | 0 | 165 | 738 |
 | `zhao_texture_rsp_dispatch` | 110.90 | +11.4 | 806 | 1432 | 0 | 0 | 399 | 965 |
-| `zhao_texture_cache_pipe` | *re-running* | | | | | | | |
+| **island total** | | | **15,749** | **25,123** | **11** | **16** | | |
 
-`cache_pipe` came back **`contaminated:source-changed-during-fit`** after
-4,550 s. That is the provenance guard working exactly as designed and it is my
-fault: I edited four files in the shared `-ExtraSources` list while its fit was
-running. The tool refused to attach a number to sources it could not name. It
-is re-running against the closure in `design/fit_targets.yml`, which is one
-file instead of twelve and therefore much harder to contaminate.
+`cache_pipe`'s first attempt came back **`contaminated:source-changed-during-fit`**
+after 4,550 s. That is the provenance guard working exactly as designed and it
+was my fault: I edited four files in the shared `-ExtraSources` list while its
+fit was running, and the tool refused to attach a number to sources it could
+not name. Re-run against the one-file closure in `design/fit_targets.yml`, it
+fitted in 2,858 s with `rtlCleanAtHead = true`.
+
+### The area is its own finding, and it points at the same defect
+
+**15,749 ALMs is 37.6 % of the device** for the texture island alone — before
+geometry, terrain, particles, post or the existing shell.
+
+But the number that actually diagnoses something is the pair at the end:
+**25,123 registers against 11 M10K.** A texture cache that stores its tags and
+lines in *flip-flops* is a cache that did not infer as memory, and
+`cache_pipe` alone is 10,812 registers and 3 M10K. That is exactly ruling X7 —
+*"reads tag/data arrays combinationally, no M10K capture stage"* — showing up
+in the resource columns rather than in a code review.
 
 ## Targets, for reference
 
@@ -96,6 +109,17 @@ rebuilt with **two parallel product lanes** and *"pipeline variable
 rescale/saturation after both products"* — the second half of that sentence is
 what this path is.
 
+### `cache_pipe`, 81.06 MHz — the arrays are registers, not memory
+
+    rq_rp[1]~DUPLICATE  ->  valid_r[1][2]     slack -2.337, data delay 12.159 ns
+
+The return-queue read pointer runs through a combinational cone into the
+tag-valid array. Taken with 10,812 registers and 3 M10K, this is ruling X7
+measured from two directions at once: the arrays are read combinationally, so
+they cannot be inferred as M10K, so they become flip-flops, so the block is
+both large and slow. Rebuilding it around the C0–C4 synchronous seam is already
+required by Phase 2 and this is the evidence for why.
+
 ### `rcp24_svc`, 68.46 MHz — SUSPECT, and it should not be repaired yet
 
     m1_i_q[1]  ->  r_o[7]     slack -4.527, data delay 8.516, CLOCK SKEW -5.951
@@ -136,14 +160,18 @@ passes" is not the same maturity as production-buildable hardware.*
 
 ## What follows
 
-1. **Re-fit `rcp24_svc`** before touching it. Skew, not logic.
-2. **`aux_pipe`**: register the input boundary. Cheapest fix on the page.
-3. **`texjoin_v2`**: the X3 restructure, which was already required. The scan
+1. **Re-fit `rcp24_svc`** before touching it. Skew, not logic. *(running)*
+2. **`aux_pipe`**: input boundary registered 2026-09-03; re-fit pending.
+   54.95 MHz was the *before*. *(running)*
+3. **`tmu_plan`**: narrowed 2026-09-03; re-fit pending. 93.55 MHz was the
+   *before*. *(running)*
+4. **`texjoin_v2`**: the X3 restructure, which was already required. The scan
    is the wall and the fit now says so with a path name.
-4. **`perspuv_svc`**: the two-lane rebuild R7 already ordered, with the rescale
+5. **`perspuv_svc`**: the two-lane rebuild R7 already ordered, with the rescale
    pipelined after the products rather than inside the cone.
-5. **`tmu_plan`** is narrowed and unmeasured — 93.55 MHz was the *before*.
-6. Then three seeds on the survivors, then compose.
+6. **`cache_pipe`**: the C0–C4 synchronous seam, so the arrays become memory.
+   This is the one that also buys back most of the 37.6 % area.
+7. Then three seeds on the survivors, then compose.
 
 ## Method notes worth keeping
 

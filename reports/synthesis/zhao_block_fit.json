@@ -984,12 +984,22 @@
                    },
                    {
                        "module":  "zhao_texture_cache_pipe",
-                       "status":  "contaminated:source-changed-during-fit",
-                       "sourceCommit":  "1ebb4f4f948aba07aae807d51af7c261c93c6fb2",
+                       "status":  "ok",
+                       "sourceCommit":  "d6565215575af99a0460b2e46f0cd8ea1bfb013a",
                        "rtlCleanAtHead":  true,
-                       "seconds":  4550.7,
-                       "sourcesHashed":  57,
-                       "contaminatedSources":  "zhao_vram_arbiter.sv zhao_texture_bilerp_lane.sv zhao_raster_texjoin_v2.sv zhao_texture_aux_div6.sv zhao_texture_aux_pipe.sv"
+                       "seconds":  2857.7,
+                       "sourcesHashed":  46,
+                       "alms":  5634,
+                       "registers":  10812,
+                       "blockMemoryBits":  384,
+                       "ramBlocks":  3,
+                       "dspBlocks":  0,
+                       "virtualPins":  413,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  81.06,
+                       "fmaxClock":  "clk"
                    },
                    {
                        "module":  "zhao_texture_mosaic",

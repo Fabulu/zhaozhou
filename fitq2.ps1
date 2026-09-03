@@ -1,0 +1,1 @@
+﻿foreach ($m in @('zhao_raster_rcp24_svc','zhao_texture_aux_pipe','zhao_texture_tmu_plan')) { Write-Host ('=== REFIT ' + $m + ' ==='); & .\tools\quartus\run_block_fit.ps1 -Module $m -TimeoutSeconds 9000 }; Write-Host '=== REFIT QUEUE DONE ==='
