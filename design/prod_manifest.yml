@@ -1,0 +1,202 @@
+# design/prod_manifest.yml — ONE implementation of every intended production
+# block, and an explicit reason for every module that is left out.
+#
+# ---------------------------------------------------------------------------
+# WHY THIS FILE EXISTS
+# ---------------------------------------------------------------------------
+# reports/WeNeedSomeMeasurements.md, owner, 2026-09-03:
+#
+#   > Before adding many more blocks, it should build a production-only
+#   > resource top. Not a fully functional console fit yet. Just one hierarchy
+#   > that instantiates exactly one chosen implementation of every intended
+#   > production block ... What does the planned console cost when counted
+#   > once?
+#
+# The 185-DSP figure in the budget report is a SOURCE INVENTORY: it adds up
+# every top-level .sv in the repository, so it counts old and new caches
+# together, serial and scheduled reciprocals together, probes, leaf-fit
+# wrappers and blocks that will never coexist. It is not the console's number
+# and never claimed to be. This file is the list that makes a real number
+# possible.
+#
+# ---------------------------------------------------------------------------
+# THE RULE THE CHECKER ENFORCES
+# ---------------------------------------------------------------------------
+# EVERY module under fpga/rtl appears exactly once: as a `top` (instantiated by
+# the resource top), as `inside` (already instantiated by something that is),
+# or as `excluded` with a reason. A module that is in none of them is an error,
+# because the failure this file exists to prevent is a block that is silently
+# neither counted nor declared absent.
+#
+# `inside` entries are CHECKED against the real instantiation graph, not
+# trusted -- see tools/quartus/check_prod_manifest.py.
+#
+# reason codes for `excluded`:
+#   superseded   a newer implementation of the same logical block is chosen
+#   frozen       an owner ruling froze it as reference/fallback, not production
+#   probe        a synthesis probe or leaf-fit pair; never in the machine
+#   harness      a stub/blank top used by tooling
+#   unused       built, and nothing instantiates it yet
+
+top:
+  # --- the console shell, which is already an integrated hierarchy ----------
+  # This is not a block, it is the machine as far as it has been composed: the
+  # command front, the reduced renderer, memory, video and the debug counters.
+  # The 99.50 MHz / 13,146 ALM renderer figure lives in here.
+  - zhao_shell_top
+  - zhao_cmd_decoder
+
+  # --- texture island (the production rebuild) -----------------------------
+  - zhao_texture_tmu_pipe        # over zhao_texture_tmu
+  - zhao_texture_tmu_plan
+  - zhao_texture_cache_pipe      # over zhao_texture_cache: C0-C4, M10K-backed
+  - zhao_texture_aux_pipe        # over zhao_texture_aux
+  - zhao_texture_palette_res
+  - zhao_texture_rsp_dispatch
+  - zhao_texture_mosaic
+  - zhao_texture_bilerp_lane     # SEE the double-count note in the report
+
+  # --- the per-pixel texture path ------------------------------------------
+  - zhao_raster_texjoin_v2       # over zhao_raster_texjoin
+  - zhao_raster_perspuv_svc      # over zhao_raster_perspuv
+  - zhao_raster_rcp24_svc        # over zhao_raster_rcp24
+  - zhao_raster_attrdiv_svc
+  - zhao_raster_attrinterp
+  - zhao_raster_attrstep
+  - zhao_raster_toon
+
+  # --- geometry -------------------------------------------------------------
+  - zhao_geom_setup
+  - zhao_geom_clip
+  - zhao_geom_cull
+  - zhao_geom_lod
+  - zhao_geom_project
+  - zhao_geom_skin
+  - zhao_geom_pose_cache
+  - zhao_geom_pose_decode
+  - zhao_geom_vdecode
+  - zhao_geom_wcache
+  - zhao_geom_attrsetup
+  - zhao_geom_parambuf
+
+  # --- terrain (the 8 km island) -------------------------------------------
+  - zhao_terrain_patch
+  - zhao_terrain_tess
+  - zhao_terrain_normals
+  - zhao_terrain_lod
+  - zhao_terrain_project
+  - zhao_terrain_velocity
+  - zhao_terrain_bake
+  - zhao_terrain_mipgen
+  - zhao_terrain_residency_v2    # over zhao_terrain_residency
+
+  # --- forge, particles, compositor, surface, measure -----------------------
+  - zhao_forge_prim
+  - zhao_forge_cliff
+  - zhao_part_expand
+  - zhao_part_ladder
+  - zhao_part_record
+  - zhao_part_soft
+  - zhao_post_gather
+  - zhao_twod_plane
+  - zhao_twod_sprite
+  - zhao_surface_sheet
+  - zhao_surface_stamp
+  - zhao_measure_governor
+  - zhao_measure_tokens
+
+  # --- FIELD v3, which is the production generation -------------------------
+  # v1 is FROZEN by owner ruling 2026-08-25 and v2 is FROZEN as the exact
+  # differential fallback (reports/Fieldv3.md Phase 1). Neither is in the
+  # machine. The v3 EXECUTOR is not built yet -- see the report's hole list.
+  - zhao_field_progcache
+  # The long-op services are listed INDIVIDUALLY rather than through
+  # zhao_field_v3_svcpath. That composition exists to test wiring: it carries a
+  # deliberate RIVAL agent on the multiplier bank so refusal is reachable, and
+  # it instantiates zhao_probe_curve_svc. Counting the machine through it would
+  # bill the console for a probe and for a test rival.
+  - zhao_field_v3_dispatch
+  - zhao_field_v3_mulbank
+  - zhao_field_v3_wbarb
+  - zhao_field_v3_rf
+  - zhao_field_v3_ring_svc     # carries zhao_field_v3_ring inside it
+  - zhao_field_v3_len
+  - zhao_field_v3_noise
+  - zhao_field_v3_normalize
+  - zhao_field_v3_rot
+  - zhao_field_v3_trig
+  - zhao_field_v3_spline
+  - zhao_field_v3_sbank
+
+excluded:
+  # --- probes and leaf-fit pairs: never in the machine -----------------------
+  # These exist to put ONE block, or two adjacent blocks, in front of the
+  # fitter. Every one of them is a wrapper around production logic that is
+  # already counted above, which is exactly how the 185-DSP inventory total
+  # was reached.
+  - zhao_pair_fragment_tilestore: probe  a leaf-fit pair around FRAGMENT + TILESTORE
+  - zhao_pair_setup_binner: probe  a leaf-fit pair around SETUP + BINNER
+  - zhao_pair_tess_normals: probe  a leaf-fit pair around TESS + NORMALS
+  - zhao_pair_tmu_cache: probe  a leaf-fit pair around the OLD TMU + OLD cache
+  - zhao_probe_banked_rf: probe  register-file banking experiment
+  - zhao_probe_compose_pipe: probe  composition timing experiment
+  - zhao_probe_ctx_fifo: probe  context FIFO sizing experiment
+  - zhao_probe_dist_svc: probe  distance service fit probe
+  - zhao_probe_patch_acc: probe  patch accumulator fit probe
+  - zhao_probe_render_fb: probe  renderer+framebuffer fit probe
+  - zhao_probe_v3_engine: probe  FIELD v3 engine probe
+  - zhao_probe_v3_exec: probe  FIELD v3 executor probe -- the executor itself is NOT BUILT
+  - zhao_probe_v3_full: probe  FIELD v3 whole-engine probe
+  - zhao_probe_walk_earth: probe  Earth60 walk probe
+  - zhao_probe_curve_svc: probe  curve service probe, instantiated by the v3_svcpath HARNESS only
+  - zhao_field_v3_svcpath: harness  composes the v3 long-op path WITH a rival on the multiplier bank and a probe, to make refusal reachable; its services are counted individually above
+  - zhao_synth_probe: harness  the generic synthesis probe wrapper
+  - zhao_stub_top: harness  the blank top used to measure the fitter's own floor
+  - zhao_prod_top: harness  the GENERATED resource top itself; it holds the instances, it is not one
+  - zhao_debug_trace: probe  the trace port; a bring-up instrument, not shipped logic
+
+  # --- superseded implementations -------------------------------------------
+  # One newer implementation of the same logical block is chosen above. These
+  # are the pairs the source-inventory total counted twice.
+  - zhao_texture_cache: superseded  by zhao_texture_cache_pipe (C0-C4, M10K-backed)
+  - zhao_texture_tmu: superseded  by zhao_texture_tmu_pipe
+  - zhao_texture_aux: superseded  by zhao_texture_aux_pipe
+  - zhao_raster_texjoin: superseded  by zhao_raster_texjoin_v2
+  - zhao_raster_perspuv: superseded  by zhao_raster_perspuv_svc (two lanes)
+  - zhao_raster_rcp24: superseded  by zhao_raster_rcp24_svc (scheduled)
+  - zhao_terrain_residency: superseded  by zhao_terrain_residency_v2 (256x4 ways)
+  - zhao_raster_blend: superseded  split into blend_fin + blend_prod, which zhao_raster_fragment instantiates
+
+  # --- FIELD v1: FROZEN by owner ruling 2026-08-25 --------------------------
+  # v1 is kept as the exact reference the differential tests run against. It is
+  # not the production engine and no production path instantiates it.
+  - zhao_field_seq: frozen  FIELD v1 sequencer
+  - zhao_field_alu: frozen  FIELD v1
+  - zhao_field_alu_vec: frozen  FIELD v1
+  - zhao_field_curve: frozen  FIELD v1
+  - zhao_field_exec_shared: frozen  FIELD v1
+  - zhao_field_len: frozen  FIELD v1
+  - zhao_field_noise: frozen  FIELD v1
+  - zhao_field_normalize: frozen  FIELD v1
+  - zhao_field_rcp: frozen  FIELD v1
+  - zhao_field_rcp_rom: frozen  FIELD v1
+  - zhao_field_rf_ram: frozen  FIELD v1
+  - zhao_field_ring: frozen  FIELD v1
+  - zhao_field_rot: frozen  FIELD v1
+  - zhao_field_sinks: frozen  FIELD v1
+
+  # --- FIELD v2: FROZEN 2026-08-27 as the differential fallback -------------
+  # reports/Fieldv3.md Phase 1: v2 is "exact fallback and differential
+  # reference RTL, NOT the Earth60 production path" -- its point transport
+  # alone is 261% of the reserved frame before one instruction executes.
+  - zhao_field_v2_core: frozen  FIELD v2 core
+  - zhao_field_v2_front: frozen  FIELD v2 front end
+  - zhao_field_v2_lanemux: frozen  FIELD v2 lane mux
+
+  # FOUR v1 arithmetic leaves are NOT frozen out: isqrt, mul, sin and sin_rom
+  # are shared arithmetic that the v3 services instantiate directly, so they
+  # are inside the production path and counted there. "v1 is frozen" is a
+  # ruling about the ENGINE, not about every file with that vintage.
+
+  # --- built, nothing instantiates it yet ------------------------------------
+  - zhao_skid2: unused  a two-deep skid primitive nothing has picked up
