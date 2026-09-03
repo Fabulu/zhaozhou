@@ -2195,6 +2195,21 @@ verilate(test_terrain_residency_directed
 add_test(NAME terrain_residency_directed COMMAND test_terrain_residency_directed)
 set_tests_properties(terrain_residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# FORGE.PRIM -- six families, one bounded topology generator. The ruling's
+# interesting half is what it DELETED: shard burst is a particle population,
+# and building it here would put a second particle system in the geometry path.
+# The deleted four are not reserved for later, so a seventh family encoding is
+# refused -- the way a deleted feature comes back is a generator that quietly
+# accepts it.
+add_executable(test_forge_prim_directed forge/forge_prim_directed.cpp)
+target_link_libraries(test_forge_prim_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_forge_prim_directed
+  PREFIX Vzhao_forge_prim
+  TOP_MODULE zhao_forge_prim
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_prim.sv)
+add_test(NAME forge_prim_directed COMMAND test_forge_prim_directed)
+set_tests_properties(forge_prim_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # GEOM.PARAMBUF -- the external geometry arena's record layer (ruling R7). The
 # interesting field is frame_generation: a chunk from LAST frame is valid in
 # every other respect -- sane count, in-range next pointer, real triangle ids --

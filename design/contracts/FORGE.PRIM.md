@@ -139,15 +139,35 @@ vertices that cannot be recalled.
   for, which is how the 64/8 limits get validated or challenged with evidence
 
 ## Scalar reference function
-`zref::ForgePrim` (ledger). Owns the six families' topology, the emission order,
-the subdivision selection, the acceptance rule and the refusal taxonomy.
+
+`zref::forge::prim_triangle` and neighbours
+(`reference/include/zref/zref_forge.hpp`) — written 2026-09-03. This contract
+previously cited `zref::ForgePrim`, **a symbol nobody had ever defined**; see
+`reports/PHANTOM-CITATIONS-AUDIT.md`. The oracle is named for what it owns
+rather than for the block.
+
+It owns the six families' TOPOLOGY: the effective grid, whether a ring closes,
+the vertices per ring, the triangle count, the emission order and the refusal
+taxonomy. Positions are **not** here — the evaluator's `params` and `SIN_Q16`
+own those, and a topology that depended on a position would stop being bounded.
 
 It does **not** own setup, clipping or binning — it emits vertices into the
 existing geometry path and everything downstream is unchanged. A primitive from
 Forge and the same shape as a mesh must reach the rasteriser identically.
 
 ## Directed tests
-`tests/geometry/forge_prim_directed.cpp`.
+
+**`tests/forge/forge_prim_directed.cpp` — WRITTEN**, 11 checks. Every family's
+triangle count including the contract's own worst case `{tube, 64, 8}` = 1,024;
+a tube's ring closing where a ribbon's stays open; the order identical across
+two runs and under a stalling consumer; `last` marking exactly one triangle;
+the four deleted families refused with nothing emitted; 65 segments, 9 sides
+and zero refused; a job outside the view skipped rather than refused; and the
+whole legal space walked against `zref::forge::prim_triangle` position by
+position.
+
+The items below are **planned and not written**, and are named without paths
+for that reason:
 
 * each of the six families at minimum and maximum subdivision, against a
   hand-computed vertex list;
@@ -166,7 +186,8 @@ Forge and the same shape as a mesh must reach the rasteriser identically.
   capture-CRC property.
 
 ## Randomized differential tests
-`tests/geometry/forge_prim_random.cpp`, RTL against `zref::ForgePrim`.
+
+**Planned, not written.** RTL against `zref::forge::prim_triangle`.
 
 Random families and subdivisions across the whole legal range, plus a
 deliberate illegal fraction. **Bias toward maximal subdivision**, because a
@@ -177,7 +198,7 @@ downstream.
 Report the family and refusal mix.
 
 ## Formal properties
-`tests/formal/forge_prim_whole.sby`:
+**Planned, not written** — a formal whole-primitive proof:
 
 * **never a partial primitive** — for every input and every backpressure
   pattern, an accepted job emits exactly its computed vertex count, and a

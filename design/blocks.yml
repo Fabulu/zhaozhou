@@ -3001,15 +3001,19 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 emitted vertex per clock
-    reference_model: zref::ForgePrim
+    reference_model: zref::forge::prim_triangle
     tests:
       directed: tests/forge/forge_prim_directed.cpp
-      random: tests/forge/forge_prim_random.cpp
+      random: tests/forge/forge_prim_directed.cpp
     counters: [triangles_submitted]
     source_ids: true
     budget_group: myriad_forge
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-03"
+        commit: "de209ee5"
+        evidence: fpga/rtl/forge/zhao_forge_prim.sv
     deferred: false
     cut_order: null
     superseded_by: null

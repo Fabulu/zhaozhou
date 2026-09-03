@@ -1,0 +1,56 @@
+subject=planet-sun-redgiant
+mode=Z60 384x240 single view, reference oracle (zref::render)
+frames=48 step=8 ticks (frame f: tick = f*step)
+programs: wave_pool hash=0x8BDCEB63 (27 instrs), impact_wave hash=0x82F5F4E4 (30 instrs)
+field_apps=0 stamps=0 debris=0 shake_frames=0
+palette=93 unique colours (palette-exact by construction, <=256 enforced)
+a swollen red giant over a dim world, the largest sun in the set at 480 px. The peak entry is orange, so nothing on this world is ever white -- not the sun, not its glare, not the ground it lights
+sequence_crc32c=0xFDC57719
+frame_0000_crc32c=0x70680CA0
+frame_0001_crc32c=0xA0612D4F
+frame_0002_crc32c=0x6A1A800F
+frame_0003_crc32c=0xC508197A
+frame_0004_crc32c=0x92EA521A
+frame_0005_crc32c=0x1760A0C7
+frame_0006_crc32c=0xE2E5C661
+frame_0007_crc32c=0x3C1AF1D5
+frame_0008_crc32c=0xA1846787
+frame_0009_crc32c=0xDBF9618A
+frame_0010_crc32c=0xE52EFCCA
+frame_0011_crc32c=0xE621F496
+frame_0012_crc32c=0x9A3341F3
+frame_0013_crc32c=0x8809CC79
+frame_0014_crc32c=0x2A0A3B97
+frame_0015_crc32c=0xA54608BE
+frame_0016_crc32c=0x8DC3779F
+frame_0017_crc32c=0xA403C344
+frame_0018_crc32c=0x980D7AE0
+frame_0019_crc32c=0xBB176D65
+frame_0020_crc32c=0xCE4E89D0
+frame_0021_crc32c=0xF3D14626
+frame_0022_crc32c=0x80EEC352
+frame_0023_crc32c=0x48142492
+frame_0024_crc32c=0x48142492
+frame_0025_crc32c=0x80EEC352
+frame_0026_crc32c=0xF3D14626
+frame_0027_crc32c=0xCE4E89D0
+frame_0028_crc32c=0xBB176D65
+frame_0029_crc32c=0x980D7AE0
+frame_0030_crc32c=0xA403C344
+frame_0031_crc32c=0x8DC3779F
+frame_0032_crc32c=0xA54608BE
+frame_0033_crc32c=0x2A0A3B97
+frame_0034_crc32c=0x8809CC79
+frame_0035_crc32c=0x9A3341F3
+frame_0036_crc32c=0xE621F496
+frame_0037_crc32c=0xE52EFCCA
+frame_0038_crc32c=0xDBF9618A
+frame_0039_crc32c=0xA1846787
+frame_0040_crc32c=0x3C1AF1D5
+frame_0041_crc32c=0xE2E5C661
+frame_0042_crc32c=0x1760A0C7
+frame_0043_crc32c=0x92EA521A
+frame_0044_crc32c=0xC508197A
+frame_0045_crc32c=0x6A1A800F
+frame_0046_crc32c=0xA0612D4F
+frame_0047_crc32c=0x70680CA0

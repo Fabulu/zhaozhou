@@ -1,0 +1,56 @@
+subject=planet-sun-methane
+mode=Z60 384x240 single view, reference oracle (zref::render)
+frames=48 step=8 ticks (frame f: tick = f*step)
+programs: wave_pool hash=0x8BDCEB63 (27 instrs), impact_wave hash=0x82F5F4E4 (30 instrs)
+field_apps=0 stamps=0 debris=0 shake_frames=0
+palette=149 unique colours (palette-exact by construction, <=256 enforced)
+a methane sky. The ramp carries three control points, not two, so the world's identity lives in the mid body while the peak stays near white
+sequence_crc32c=0xFB3E3581
+frame_0000_crc32c=0x2849B74D
+frame_0001_crc32c=0x4861B6F6
+frame_0002_crc32c=0xEE7A1A49
+frame_0003_crc32c=0x6487E3BF
+frame_0004_crc32c=0xFE9BE689
+frame_0005_crc32c=0x3DF8E22F
+frame_0006_crc32c=0xD0A28137
+frame_0007_crc32c=0xB9228237
+frame_0008_crc32c=0xBAE99FB1
+frame_0009_crc32c=0x996E62A4
+frame_0010_crc32c=0xEC705171
+frame_0011_crc32c=0x5C1C618F
+frame_0012_crc32c=0x58929624
+frame_0013_crc32c=0x616B531A
+frame_0014_crc32c=0x99B54371
+frame_0015_crc32c=0xA1614598
+frame_0016_crc32c=0x6BD86E29
+frame_0017_crc32c=0x3C8B6273
+frame_0018_crc32c=0x6043D827
+frame_0019_crc32c=0x71A37262
+frame_0020_crc32c=0xFFF624B2
+frame_0021_crc32c=0x25464D42
+frame_0022_crc32c=0xF14FB05E
+frame_0023_crc32c=0xB0C09A11
+frame_0024_crc32c=0xB0C09A11
+frame_0025_crc32c=0xF14FB05E
+frame_0026_crc32c=0x25464D42
+frame_0027_crc32c=0xFFF624B2
+frame_0028_crc32c=0x71A37262
+frame_0029_crc32c=0x6043D827
+frame_0030_crc32c=0x3C8B6273
+frame_0031_crc32c=0x6BD86E29
+frame_0032_crc32c=0xA1614598
+frame_0033_crc32c=0x99B54371
+frame_0034_crc32c=0x616B531A
+frame_0035_crc32c=0x58929624
+frame_0036_crc32c=0x5C1C618F
+frame_0037_crc32c=0xEC705171
+frame_0038_crc32c=0x996E62A4
+frame_0039_crc32c=0xBAE99FB1
+frame_0040_crc32c=0xB9228237
+frame_0041_crc32c=0xD0A28137
+frame_0042_crc32c=0x3DF8E22F
+frame_0043_crc32c=0xFE9BE689
+frame_0044_crc32c=0x6487E3BF
+frame_0045_crc32c=0xEE7A1A49
+frame_0046_crc32c=0x4861B6F6
+frame_0047_crc32c=0x2849B74D

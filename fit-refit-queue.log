@@ -1,0 +1,6 @@
+﻿=== REFIT zhao_raster_rcp24_svc ===
+preflight: zhao_raster_rcp24_svc closure from design/fit_targets.yml (2 file(s))
+zhao_raster_rcp24_svc              ok                1943.1s   ALM 1041
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (79 block(s); 1 measured this run)
+=== REFIT zhao_texture_aux_pipe ===
+preflight: zhao_texture_aux_pipe closure from design/fit_targets.yml (2 file(s))

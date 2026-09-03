@@ -1,0 +1,56 @@
+subject=planet-sun-binary
+mode=Z60 384x240 single view, reference oracle (zref::render)
+frames=48 step=8 ticks (frame f: tick = f*step)
+programs: wave_pool hash=0x8BDCEB63 (27 instrs), impact_wave hash=0x82F5F4E4 (30 instrs)
+field_apps=0 stamps=0 debris=0 shake_frames=0
+palette=134 unique colours (palette-exact by construction, <=256 enforced)
+TWO suns. Both splats add into the same plane and the clamp resolves the overlap, so where the blooms meet the sum simply rails in the sky's own peak colour exactly as one bloom does against itself. A second star adds zero palette entries
+sequence_crc32c=0xA9D2C999
+frame_0000_crc32c=0x8E86F08B
+frame_0001_crc32c=0xD56DBCC3
+frame_0002_crc32c=0x105405AE
+frame_0003_crc32c=0x3DBCB00B
+frame_0004_crc32c=0x10955E80
+frame_0005_crc32c=0xB1465E57
+frame_0006_crc32c=0xCB4DD200
+frame_0007_crc32c=0xE0109E7D
+frame_0008_crc32c=0x86F9151A
+frame_0009_crc32c=0xBE511560
+frame_0010_crc32c=0xB7582213
+frame_0011_crc32c=0x5119B545
+frame_0012_crc32c=0x47ECD138
+frame_0013_crc32c=0xD6F46CC7
+frame_0014_crc32c=0x38674FF4
+frame_0015_crc32c=0x0175814C
+frame_0016_crc32c=0xCB7DC5DA
+frame_0017_crc32c=0x177693FB
+frame_0018_crc32c=0x3361E186
+frame_0019_crc32c=0xEAACB2F1
+frame_0020_crc32c=0xC5F60A97
+frame_0021_crc32c=0xD6932063
+frame_0022_crc32c=0x26D78925
+frame_0023_crc32c=0x62AE3541
+frame_0024_crc32c=0x62AE3541
+frame_0025_crc32c=0x26D78925
+frame_0026_crc32c=0xD6932063
+frame_0027_crc32c=0xC5F60A97
+frame_0028_crc32c=0xEAACB2F1
+frame_0029_crc32c=0x3361E186
+frame_0030_crc32c=0x177693FB
+frame_0031_crc32c=0xCB7DC5DA
+frame_0032_crc32c=0x0175814C
+frame_0033_crc32c=0x38674FF4
+frame_0034_crc32c=0xD6F46CC7
+frame_0035_crc32c=0x47ECD138
+frame_0036_crc32c=0x5119B545
+frame_0037_crc32c=0xB7582213
+frame_0038_crc32c=0xBE511560
+frame_0039_crc32c=0x86F9151A
+frame_0040_crc32c=0xE0109E7D
+frame_0041_crc32c=0xCB4DD200
+frame_0042_crc32c=0xB1465E57
+frame_0043_crc32c=0x10955E80
+frame_0044_crc32c=0x3DBCB00B
+frame_0045_crc32c=0x105405AE
+frame_0046_crc32c=0xD56DBCC3
+frame_0047_crc32c=0x8E86F08B

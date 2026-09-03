@@ -1,0 +1,18 @@
+# zhaozhou failing vector (charter 20.3)
+name: raster_edgewalk_winding_3
+input_bytes: 32
+input_hex: 25 02 00 00 C8 01 00 00 00 06 00 00 0D 0E 00 00 5B 0D 00 00 00 04 00 00 00 00 00 00 00 00 00 00
+expected: oracle
+actual: tri (549,456)(1536,3597)(3419,1024) tile (0,0)
+  row  2: oracle 003C rtl 0000
+  row  3: oracle 07F8 rtl 0000
+  row  4: oracle 1FF8 rtl 0000
+  row  5: oracle 0FF8 rtl 0000
+  row  6: oracle 0FF0 rtl 0000
+  row  7: oracle 07F0 rtl 0000
+  row  8: oracle 03F0 rtl 0000
+  row  9: oracle 01E0 rtl 0000
+  row 10: oracle 01E0 rtl 0000
+  row 11: oracle 00E0 rtl 0000
+  row 12: oracle 0040 rtl 0000
+  count oracle 64 rtl 0; degenerate 0/0

@@ -1,0 +1,1 @@
+/usr/bin/bash: line 9: /zixx-probe.exe: No such file or directory

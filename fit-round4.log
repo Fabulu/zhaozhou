@@ -1,0 +1,17 @@
+﻿=== FIT zhao_texture_aux_pipe ===
+preflight: zhao_texture_aux_pipe closure from design/fit_targets.yml (2 file(s))
+zhao_texture_aux_pipe              ok                  2188s   ALM 1182
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (81 block(s); 1 measured this run)
+=== DONE zhao_texture_aux_pipe ===
+=== FIT zhao_texture_rsp_dispatch ===
+preflight: zhao_texture_rsp_dispatch closure from design/fit_targets.yml (1 file(s))
+zhao_texture_rsp_dispatch          ok                1185.3s   ALM 806
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (81 block(s); 1 measured this run)
+=== DONE zhao_texture_rsp_dispatch ===
+=== FIT zhao_raster_perspuv_svc ===
+preflight: zhao_raster_perspuv_svc closure from design/fit_targets.yml (1 file(s))
+zhao_raster_perspuv_svc            ok                2482.4s   ALM 1792
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (81 block(s); 1 measured this run)
+=== DONE zhao_raster_perspuv_svc ===
+=== FIT zhao_texture_cache_pipe ===
+preflight: zhao_texture_cache_pipe closure from design/fit_targets.yml (1 file(s))

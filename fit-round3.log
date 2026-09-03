@@ -1,0 +1,26 @@
+﻿=== FIT zhao_raster_texjoin_v2 seed=0  ===
+preflight: zhao_raster_texjoin_v2 closure from design/fit_targets.yml (1 file(s))
+zhao_raster_texjoin_v2             ok                2924.9s   ALM 3824
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (79 block(s); 1 measured this run)
+=== DONE zhao_raster_texjoin_v2  ===
+=== FIT zhao_texture_aux_pipe seed=0  ===
+preflight: zhao_texture_aux_pipe closure from design/fit_targets.yml (2 file(s))
+zhao_texture_aux_pipe              ok                1959.3s   ALM 1182
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (79 block(s); 1 measured this run)
+=== DONE zhao_texture_aux_pipe  ===
+=== FIT zhao_texture_tmu_plan seed=0  ===
+preflight: zhao_texture_tmu_plan closure from design/fit_targets.yml (1 file(s))
+zhao_texture_tmu_plan              ok                2125.5s   ALM 1142
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (79 block(s); 1 measured this run)
+=== DONE zhao_texture_tmu_plan  ===
+=== FIT zhao_raster_rcp24_svc seed=2 seed2 ===
+preflight: zhao_raster_rcp24_svc closure from design/fit_targets.yml (2 file(s))
+zhao_raster_rcp24_svcseed2         ok                2270.6s   ALM 1037
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (80 block(s); 1 measured this run)
+=== DONE zhao_raster_rcp24_svc seed2 ===
+=== FIT zhao_raster_rcp24_svc seed=3 seed3 ===
+preflight: zhao_raster_rcp24_svc closure from design/fit_targets.yml (2 file(s))
+zhao_raster_rcp24_svcseed3         ok                2410.3s   ALM 1038
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (81 block(s); 1 measured this run)
+=== DONE zhao_raster_rcp24_svc seed3 ===
+=== ROUND 3 DONE ===

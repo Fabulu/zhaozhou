@@ -1,0 +1,15 @@
+# zhaozhou failing vector (charter 20.3)
+name: raster_tile_pipe_extremes_0
+input_bytes: 48
+input_hex: BC 24 00 00 BC 37 00 00 20 25 00 00 BC 37 00 00 BC 24 00 00 20 38 00 00 20 00 00 00 30 00 00 00 00 00 00 00 AA FF FF FF AB 62 F3 6E 85 6F 37 19
+expected: zref::EdgeWalk->TileStore->TileResolve
+actual: tri (9404,14268)(9504,14268)(9404,14368) tile (32,48)
+  px   1 (row  0 col  1): oracle 19CE/85 rtl 0000/00
+  px   3 (row  0 col  3): oracle 19CE/85 rtl 0000/00
+  px   5 (row  0 col  5): oracle 19CE/85 rtl 0000/00
+  px   7 (row  0 col  7): oracle 19CE/85 rtl 0000/00
+  px   9 (row  0 col  9): oracle 19CE/85 rtl 0000/00
+  px  11 (row  0 col 11): oracle 19CE/85 rtl 0000/00
+  px  13 (row  0 col 13): oracle 19CE/85 rtl 0000/00
+  px  15 (row  0 col 15): oracle 19CE/85 rtl 0000/00
+  crc oracle D629D649 rtl F03C1CFD; count 0/0; degenerate 0/0

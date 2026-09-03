@@ -1,0 +1,109 @@
+zhao: VERILATOR_ROOT=C:\programmieren\zencrifice\.tools\oss-cad-suite\share\verilator
+zhao: PATH prepended: oss-cad-suite bin+lib, winlibs cmake/ninja/g++
+LINT RC 0
+[1/27] Generating CMakeFiles/test_raster_edgewalk_setupcost.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk.cpp, CMakeFiles/test_raster_edgewalk_setupcost.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0.cpp, CMakeFiles/test_raster_edgewalk_setupcost.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__Slow.cpp, CMakeFiles/test_raster_edgewalk_setupcost.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0__Slow.cpp, CMakeFiles/test_raster_edgewalk_setupcost.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk__Syms__Slow.cpp, CMakeFiles/test_raster_edgewalk_setupcost.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 0.068 MB sources in 3 modules, into 0.192 MB in 5 C++ files needing 0.001 MB
+- Verilator: Walltime 2.245 s (elab=0.388, cvt=0.308, bld=0.000); cpu 0.000 s on 1 threads; allocated 17.836 MB
+[2/26] Generating CMakeFiles/test_render_textured_seam.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk.cpp, CMakeFiles/test_render_textured_seam.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0.cpp, CMakeFiles/test_render_textured_seam.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__Slow.cpp, CMakeFiles/test_render_textured_seam.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0__Slow.cpp, CMakeFiles/test_render_textured_seam.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk__Syms__Slow.cpp, CMakeFiles/test_render_textured_seam.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 0.068 MB sources in 3 modules, into 0.192 MB in 5 C++ files needing 0.001 MB
+- Verilator: Walltime 3.367 s (elab=0.416, cvt=1.411, bld=0.000); cpu 0.000 s on 1 threads; allocated 17.852 MB
+[3/25] Generating CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk.cpp, CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0.cpp, CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__Slow.cpp, CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0__Slow.cpp, CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk__Syms__Slow.cpp, CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 0.068 MB sources in 3 modules, into 0.192 MB in 5 C++ files needing 0.001 MB
+- Verilator: Walltime 3.520 s (elab=0.266, cvt=1.520, bld=0.000); cpu 0.312 s on 1 threads; allocated 17.793 MB
+[4/24] Generating CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk.cpp, CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0.cpp, CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__Slow.cpp, CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0__Slow.cpp, CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk__Syms__Slow.cpp, CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 0.068 MB sources in 3 modules, into 0.192 MB in 5 C++ files needing 0.001 MB
+- Verilator: Walltime 3.484 s (elab=0.295, cvt=1.313, bld=0.000); cpu 0.344 s on 1 threads; allocated 17.895 MB
+[5/23] Generating CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe.cpp, CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__0.cpp, CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe__ConstPool__0__Slow.cpp, CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__Slow.cpp, CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__0__Slow.cpp, CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe__Syms__Slow.cpp, CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 2.370 MB sources in 15 modules, into 0.443 MB in 6 C++ files needing 0.001 MB
+- Verilator: Walltime 6.201 s (elab=1.212, cvt=1.871, bld=0.000); cpu 0.000 s on 1 threads; allocated 26.598 MB
+[6/22] Generating CMakeFiles/test_geom_bin_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe.cpp, CMakeFiles/test_geom_bin_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__0.cpp, CMakeFiles/test_geom_bin_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe__ConstPool__0__Slow.cpp, CMakeFiles/test_geom_bin_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__Slow.cpp, CMakeFiles/test_geom_bin_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__0__Slow.cpp, CMakeFiles/test_geom_bin_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe__Syms__Slow.cpp, CMakeFiles/test_geom_bin_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 3.095 MB sources in 18 modules, into 0.625 MB in 6 C++ files needing 0.002 MB
+- Verilator: Walltime 5.578 s (elab=1.177, cvt=1.351, bld=0.000); cpu 1.078 s on 1 threads; allocated 29.285 MB
+[7/21] Generating CMakeFiles/test_terrain_project_chain.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe.cpp, CMakeFiles/test_terrain_project_chain.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__0.cpp, CMakeFiles/test_terrain_project_chain.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe__ConstPool__0__Slow.cpp, CMakeFiles/test_terrain_project_chain.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__Slow.cpp, CMakeFiles/test_terrain_project_chain.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__0__Slow.cpp, CMakeFiles/test_terrain_project_chain.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe__Syms__Slow.cpp, CMakeFiles/test_terrain_project_chain.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 3.095 MB sources in 18 modules, into 0.625 MB in 6 C++ files needing 0.002 MB
+- Verilator: Walltime 6.226 s (elab=0.842, cvt=1.022, bld=0.000); cpu 1.141 s on 1 threads; allocated 29.273 MB
+[8/20] Generating CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe.cpp, CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__0.cpp, CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe__ConstPool__0__Slow.cpp, CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__Slow.cpp, CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__0__Slow.cpp, CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe__Syms__Slow.cpp, CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 2.370 MB sources in 15 modules, into 0.443 MB in 6 C++ files needing 0.001 MB
+- Verilator: Walltime 6.228 s (elab=0.887, cvt=1.949, bld=0.000); cpu 0.000 s on 1 threads; allocated 26.707 MB
+[9/19] Generating CMakeFiles/test_render_fb_directed.dir/Vzhao_probe_render_fb.dir/Vzhao_probe_render_fb.cpp, CMakeFiles/test_render_fb_directed.dir/Vzhao_probe_render_fb.dir/Vzhao_probe_render_fb___024root__0.cpp, CMakeFiles/test_render_fb_directed.dir/Vzhao_probe_render_fb.dir/Vzhao_probe_render_fb__ConstPool__0__Slow.cpp, CMakeFiles/test_render_fb_directed.dir/Vzhao_probe_render_fb.dir/Vzhao_probe_render_fb___024root__Slow.cpp, CMakeFiles/test_render_fb_directed.dir/Vzhao_probe_render_fb.dir/Vzhao_probe_render_fb___024root__0__Slow.cpp, CMakeFiles/test_render_fb_directed.dir/Vzhao_probe_render_fb.dir/Vzhao_probe_render_fb__Syms__Slow.cpp, CMakeFiles/test_render_fb_directed.dir/Vzhao_probe_render_fb.dir/Vzhao_probe_render_fb.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 4.470 MB sources in 21 modules, into 0.719 MB in 6 C++ files needing 0.002 MB
+- Verilator: Walltime 6.478 s (elab=1.428, cvt=2.428, bld=0.000); cpu 0.000 s on 1 threads; allocated 30.988 MB
+[10/18] Generating CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe.cpp, CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__0.cpp, CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe__ConstPool__0__Slow.cpp, CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__Slow.cpp, CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__0__Slow.cpp, CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe__Syms__Slow.cpp, CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 3.561 MB sources in 18 modules, into 0.624 MB in 6 C++ files needing 0.002 MB
+- Verilator: Walltime 6.862 s (elab=0.831, cvt=2.203, bld=0.000); cpu 0.000 s on 1 threads; allocated 29.137 MB
+[11/17] Generating CMakeFiles/shell_golden.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell.cpp, CMakeFiles/shell_golden.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__0.cpp, CMakeFiles/shell_golden.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__1.cpp, CMakeFiles/shell_golden.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__2.cpp, CMakeFiles/shell_golden.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell__ConstPool__0__Slow.cpp, CMakeFiles/shell_golden.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__Slow.cpp, CMakeFiles/shell_golden.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__0__Slow.cpp, CMakeFiles/shell_golden.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__1__Slow.cpp, CMakeFiles/shell_golden.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell_zhao_pkg__Slow.cpp, CMakeFiles/shell_golden.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell__Syms__Slow.cpp, CMakeFiles/shell_golden.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 14.791 MB sources in 48 modules, into 3.385 MB in 10 C++ files needing 0.005 MB
+- Verilator: Walltime 52.359 s (elab=0.824, cvt=48.084, bld=0.000); cpu 0.000 s on 1 threads; allocated 837.703 MB
+[12/16] Generating CMakeFiles/demo_duo_markers.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell.cpp, CMakeFiles/demo_duo_markers.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__0.cpp, CMakeFiles/demo_duo_markers.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__1.cpp, CMakeFiles/demo_duo_markers.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__2.cpp, CMakeFiles/demo_duo_markers.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell__ConstPool__0__Slow.cpp, CMakeFiles/demo_duo_markers.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__Slow.cpp, CMakeFiles/demo_duo_markers.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__0__Slow.cpp, CMakeFiles/demo_duo_markers.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__1__Slow.cpp, CMakeFiles/demo_duo_markers.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell_zhao_pkg__Slow.cpp, CMakeFiles/demo_duo_markers.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell__Syms__Slow.cpp, CMakeFiles/demo_duo_markers.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 14.791 MB sources in 48 modules, into 3.385 MB in 10 C++ files needing 0.005 MB
+- Verilator: Walltime 52.621 s (elab=0.891, cvt=48.261, bld=0.000); cpu 0.000 s on 1 threads; allocated 838.684 MB
+[13/15] Generating CMakeFiles/shell_probe.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell.cpp, CMakeFiles/shell_probe.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__0.cpp, CMakeFiles/shell_probe.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__1.cpp, CMakeFiles/shell_probe.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__2.cpp, CMakeFiles/shell_probe.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell__ConstPool__0__Slow.cpp, CMakeFiles/shell_probe.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__Slow.cpp, CMakeFiles/shell_probe.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__0__Slow.cpp, CMakeFiles/shell_probe.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell___024root__1__Slow.cpp, CMakeFiles/shell_probe.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell_zhao_pkg__Slow.cpp, CMakeFiles/shell_probe.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell__Syms__Slow.cpp, CMakeFiles/shell_probe.dir/Vtb_zhao_shell.dir/Vtb_zhao_shell.cmake
+- V e r i l a t i o n   R e p o r t: Verilator 5.051 devel rev v5.050-176-g7da43d830 (mod)
+- Verilator: Built from 14.791 MB sources in 48 modules, into 3.385 MB in 10 C++ files needing 0.005 MB
+- Verilator: Walltime 52.910 s (elab=0.798, cvt=48.478, bld=0.000); cpu 29.969 s on 1 threads; allocated 832.992 MB
+[1/51] Building CXX object tests/CMakeFiles/test_raster_edgewalk_directed.dir/raster/raster_edgewalk_directed.cpp.obj
+[2/51] Building CXX object tests/CMakeFiles/test_render_pipe_directed.dir/render/render_pipe_directed.cpp.obj
+[3/51] Building CXX object tests/CMakeFiles/test_render_pipe_directed.dir/CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe__ConstPool__0__Slow.cpp.obj
+[4/51] Building CXX object tests/CMakeFiles/test_raster_edgewalk_directed.dir/CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk.cpp.obj
+[5/51] Building CXX object tests/CMakeFiles/test_render_pipe_directed.dir/CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__Slow.cpp.obj
+[6/51] Building CXX object tests/CMakeFiles/test_raster_edgewalk_random.dir/raster/raster_edgewalk_random.cpp.obj
+[7/51] Building CXX object tests/CMakeFiles/test_raster_edgewalk_directed.dir/CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__Slow.cpp.obj
+[8/51] Building CXX object tests/CMakeFiles/test_render_pipe_directed.dir/CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__0__Slow.cpp.obj
+[9/51] Building CXX object tests/CMakeFiles/test_render_pipe_directed.dir/CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe__Syms__Slow.cpp.obj
+[10/51] Building CXX object tests/CMakeFiles/test_render_pipe_directed.dir/CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe.cpp.obj
+[11/51] Building CXX object tests/CMakeFiles/test_raster_edgewalk_directed.dir/CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk__Syms__Slow.cpp.obj
+[12/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_directed.dir/raster/raster_tile_pipe_directed.cpp.obj
+[13/51] Building CXX object tests/CMakeFiles/test_raster_edgewalk_directed.dir/CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0.cpp.obj
+[14/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_directed.dir/CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe__ConstPool__0__Slow.cpp.obj
+[15/51] Building CXX object tests/CMakeFiles/test_raster_edgewalk_directed.dir/CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0__Slow.cpp.obj
+[16/51] Building CXX object tests/CMakeFiles/test_render_pipe_directed.dir/CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__0.cpp.obj
+[17/51] Building CXX object tests/CMakeFiles/test_raster_edgewalk_random.dir/CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk__Syms__Slow.cpp.obj
+[18/51] Building CXX object tests/CMakeFiles/test_raster_edgewalk_random.dir/CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk.cpp.obj
+[19/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_directed.dir/CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__Slow.cpp.obj
+[20/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/raster/raster_tile_pipe_random.cpp.obj
+[21/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe__ConstPool__0__Slow.cpp.obj
+[22/51] Building CXX object tests/CMakeFiles/test_raster_edgewalk_random.dir/CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0.cpp.obj
+[23/51] Building CXX object tests/CMakeFiles/test_raster_edgewalk_random.dir/CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__Slow.cpp.obj
+[24/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_directed.dir/CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe.cpp.obj
+[25/51] Building CXX object tests/CMakeFiles/test_raster_edgewalk_random.dir/CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0__Slow.cpp.obj
+[26/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_directed.dir/CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__0.cpp.obj
+[27/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_directed.dir/CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__0__Slow.cpp.obj
+[28/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_directed.dir/CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe__Syms__Slow.cpp.obj
+[29/51] Linking CXX executable tests\test_raster_edgewalk_directed.exe
+[30/51] Linking CXX executable tests\test_render_pipe_directed.exe
+[31/51] Linking CXX executable tests\test_raster_edgewalk_random.exe
+[32/51] Linking CXX executable tests\test_raster_tile_pipe_directed.exe
+[33/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe.cpp.obj
+[34/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__Slow.cpp.obj
+[35/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__0__Slow.cpp.obj
+[36/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe__Syms__Slow.cpp.obj
+[37/51] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__0.cpp.obj
+[38/51] Linking CXX executable tests\test_raster_tile_pipe_random.exe
+=== NINJA RC 0 ===
+--- test_raster_edgewalk_directed ---
+[raster_edgewalk_directed] 146 checks passed
+RC=0
+--- test_raster_edgewalk_random ---
+[raster_edgewalk_random] 6 checks passed
+RC=0
+--- test_raster_tile_pipe_directed ---
+[raster_tile_pipe_directed] 74 checks passed
+RC=0
+--- test_raster_tile_pipe_random ---
+[raster_tile_pipe_random] 12 checks passed
+RC=0
+--- test_render_pipe_directed ---
+[render_pipe_directed] 16 checks passed
+RC=0

@@ -1,0 +1,43 @@
+zhao: VERILATOR_ROOT=C:\programmieren\zencrifice\.tools\oss-cad-suite\share\verilator
+zhao: PATH prepended: oss-cad-suite bin+lib, winlibs cmake/ninja/g++
+[1/25] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_directed.dir/CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe__ConstPool__0__Slow.cpp.obj
+[2/25] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_directed.dir/CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__Slow.cpp.obj
+[3/25] Building CXX object tests/CMakeFiles/test_raster_edgewalk_random.dir/CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0__Slow.cpp.obj
+[4/25] Building CXX object tests/CMakeFiles/test_raster_edgewalk_directed.dir/CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0.cpp.obj
+[5/25] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/raster/raster_tile_pipe_random.cpp.obj
+[6/25] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe.cpp.obj
+[7/25] Building CXX object tests/CMakeFiles/test_raster_edgewalk_random.dir/CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk__Syms__Slow.cpp.obj
+[8/25] Building CXX object tests/CMakeFiles/test_render_pipe_directed.dir/CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__0__Slow.cpp.obj
+[9/25] Building CXX object tests/CMakeFiles/test_raster_edgewalk_random.dir/CMakeFiles/test_raster_edgewalk_random.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0.cpp.obj
+[10/25] Building CXX object tests/CMakeFiles/test_raster_edgewalk_directed.dir/CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk___024root__0__Slow.cpp.obj
+[11/25] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe__ConstPool__0__Slow.cpp.obj
+[12/25] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__Slow.cpp.obj
+[13/25] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_directed.dir/CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__0.cpp.obj
+[14/25] Building CXX object tests/CMakeFiles/test_raster_edgewalk_directed.dir/CMakeFiles/test_raster_edgewalk_directed.dir/Vzhao_raster_edgewalk.dir/Vzhao_raster_edgewalk__Syms__Slow.cpp.obj
+[15/25] Building CXX object tests/CMakeFiles/test_render_pipe_directed.dir/CMakeFiles/test_render_pipe_directed.dir/Vzhao_geom_bin_pipe.dir/Vzhao_geom_bin_pipe___024root__0.cpp.obj
+[16/25] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_directed.dir/CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__0__Slow.cpp.obj
+[17/25] Linking CXX executable tests\test_raster_edgewalk_directed.exe
+[18/25] Linking CXX executable tests\test_raster_edgewalk_random.exe
+[19/25] Linking CXX executable tests\test_render_pipe_directed.exe
+[20/25] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_directed.dir/CMakeFiles/test_raster_tile_pipe_directed.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe__Syms__Slow.cpp.obj
+[21/25] Linking CXX executable tests\test_raster_tile_pipe_directed.exe
+[22/25] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe__Syms__Slow.cpp.obj
+[23/25] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__0__Slow.cpp.obj
+[24/25] Building CXX object tests/CMakeFiles/test_raster_tile_pipe_random.dir/CMakeFiles/test_raster_tile_pipe_random.dir/Vzhao_raster_tile_pipe.dir/Vzhao_raster_tile_pipe___024root__0.cpp.obj
+[25/25] Linking CXX executable tests\test_raster_tile_pipe_random.exe
+=== NINJA RC 0 ===
+--- test_raster_edgewalk_directed ---
+[raster_edgewalk_directed] 146 checks passed
+RC=0
+--- test_raster_edgewalk_random ---
+[raster_edgewalk_random] 6 checks passed
+RC=0
+--- test_raster_tile_pipe_directed ---
+[raster_tile_pipe_directed] 74 checks passed
+RC=0
+--- test_raster_tile_pipe_random ---
+[raster_tile_pipe_random] 12 checks passed
+RC=0
+--- test_render_pipe_directed ---
+[render_pipe_directed] 16 checks passed
+RC=0

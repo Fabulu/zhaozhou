@@ -1,0 +1,19 @@
+# zhaozhou failing vector (charter 20.3)
+name: raster_edgewalk_laneA_11
+input_bytes: 32
+input_hex: E4 3E FF FF 2A 2B 07 00 B0 31 FF FF 81 36 07 00 C8 2D FF FF D7 3F 07 00 32 FF FF FF 2E 07 00 00
+expected: rast.cpp
+actual: tri (-49436,469802)(-52816,472705)(-53816,475095) tile (-206,1838)
+  row  0: oracle 0200 rtl 0000
+  row  1: oracle 0100 rtl 0000
+  row  2: oracle 0080 rtl 0000
+  row  3: oracle 00C0 rtl 0000
+  row  4: oracle 0070 rtl 0000
+  row  5: oracle 0038 rtl 0000
+  row  6: oracle 001C rtl 0000
+  row  7: oracle 000E rtl 0000
+  row  8: oracle 000F rtl 0000
+  row  9: oracle 0007 rtl 0000
+  row 10: oracle 0003 rtl 0000
+  row 11: oracle 0001 rtl 0000
+  count oracle 27 rtl 0; degenerate 0/0

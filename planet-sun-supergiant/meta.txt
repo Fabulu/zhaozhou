@@ -1,0 +1,56 @@
+subject=planet-sun-supergiant
+mode=Z60 384x240 single view, reference oracle (zref::render)
+frames=48 step=8 ticks (frame f: tick = f*step)
+programs: wave_pool hash=0x8BDCEB63 (27 instrs), impact_wave hash=0x82F5F4E4 (30 instrs)
+field_apps=0 stamps=0 debris=0 shake_frames=0
+palette=156 unique colours (palette-exact by construction, <=256 enforced)
+a blue supergiant. The ramp's peak is near white, so the core reads as glare rather than as a coloured object, while the sky it saturates into stays unmistakably blue
+sequence_crc32c=0x2514843B
+frame_0000_crc32c=0x1A4CEFAD
+frame_0001_crc32c=0x1C946CF9
+frame_0002_crc32c=0x4C1BB303
+frame_0003_crc32c=0x22EF4CB7
+frame_0004_crc32c=0x27714DC1
+frame_0005_crc32c=0xD82479CA
+frame_0006_crc32c=0x28F82A66
+frame_0007_crc32c=0x03E8C792
+frame_0008_crc32c=0x4517683C
+frame_0009_crc32c=0x4816AC5E
+frame_0010_crc32c=0xF44E543C
+frame_0011_crc32c=0xF538F7BC
+frame_0012_crc32c=0x3973E74D
+frame_0013_crc32c=0x3392B8CF
+frame_0014_crc32c=0x7E247C26
+frame_0015_crc32c=0xFFA81D72
+frame_0016_crc32c=0x218DD735
+frame_0017_crc32c=0x64FB6464
+frame_0018_crc32c=0x90AC11AB
+frame_0019_crc32c=0x48531A7B
+frame_0020_crc32c=0xC6A881E1
+frame_0021_crc32c=0x06A7E734
+frame_0022_crc32c=0x523C85C8
+frame_0023_crc32c=0x40AEEE14
+frame_0024_crc32c=0x40AEEE14
+frame_0025_crc32c=0x523C85C8
+frame_0026_crc32c=0x06A7E734
+frame_0027_crc32c=0xC6A881E1
+frame_0028_crc32c=0x48531A7B
+frame_0029_crc32c=0x90AC11AB
+frame_0030_crc32c=0x64FB6464
+frame_0031_crc32c=0x218DD735
+frame_0032_crc32c=0xFFA81D72
+frame_0033_crc32c=0x7E247C26
+frame_0034_crc32c=0x3392B8CF
+frame_0035_crc32c=0x3973E74D
+frame_0036_crc32c=0xF538F7BC
+frame_0037_crc32c=0xF44E543C
+frame_0038_crc32c=0x4816AC5E
+frame_0039_crc32c=0x4517683C
+frame_0040_crc32c=0x03E8C792
+frame_0041_crc32c=0x28F82A66
+frame_0042_crc32c=0xD82479CA
+frame_0043_crc32c=0x27714DC1
+frame_0044_crc32c=0x22EF4CB7
+frame_0045_crc32c=0x4C1BB303
+frame_0046_crc32c=0x1C946CF9
+frame_0047_crc32c=0x1A4CEFAD

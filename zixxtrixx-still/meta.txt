@@ -1,0 +1,9 @@
+subject=zixxtrixx-still
+mode=Z60 384x240 single view, reference oracle (zref::render)
+frames=1 step=1 ticks (frame f: tick = f*step)
+programs: wave_pool hash=0x8BDCEB63 (27 instrs), impact_wave hash=0x82F5F4E4 (30 instrs)
+field_apps=0 stamps=0 debris=0 shake_frames=0
+palette=1226 unique colours (palette-exact by construction, <=256 enforced)
+DIAGNOSTIC: single idle key 0 frame, fixed side camera, for the head-attitude orientation sweep
+sequence_crc32c=0x430F34BA
+frame_0000_crc32c=0x430F34BA

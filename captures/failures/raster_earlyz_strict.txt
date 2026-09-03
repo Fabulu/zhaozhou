@@ -1,0 +1,6 @@
+# zhaozhou failing vector (charter 20.3)
+name: raster_earlyz_strict
+input_bytes: 48
+input_hex: 00 00 00 00 55 34 12 00 01 00 00 00 01 00 00 00 56 34 12 00 01 00 00 00 02 00 00 00 57 34 12 00 01 00 00 00 03 00 00 00 FF FF FF 00 01 00 00 00
+expected: zref::EarlyZ
+actual: fragment 2: oracle keep=1 addr=02 bin=0; rtl keep=1 addr=02 bin=1

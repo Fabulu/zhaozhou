@@ -1,0 +1,39 @@
+﻿=== FIT zhao_texture_cache_pipe ===
+WARNUNG: CONTAMINATED: zhao_vram_arbiter.sv, zhao_texture_bilerp_lane.sv, zhao_raster_texjoin_v2.sv, zhao_texture_aux_div6.sv, 
+zhao_texture_aux_pipe.sv changed while zhao_texture_cache_pipe was being measured. Row discarded.
+zhao_texture_cache_pipe            contaminated:source-changed-during-fit  4550.7s   ALM -
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (71 block(s); 1 measured this run)
+=== DONE zhao_texture_cache_pipe ===
+=== FIT zhao_raster_perspuv_svc ===
+zhao_raster_perspuv_svc            ok                2304.1s   ALM 1792
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (72 block(s); 1 measured this run)
+=== DONE zhao_raster_perspuv_svc ===
+=== FIT zhao_raster_texjoin_v2 ===
+zhao_raster_texjoin_v2             ok                3320.6s   ALM 3465
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (73 block(s); 1 measured this run)
+=== DONE zhao_raster_texjoin_v2 ===
+=== FIT zhao_raster_rcp24_svc ===
+zhao_raster_rcp24_svc              ok                2351.4s   ALM 1041
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (74 block(s); 1 measured this run)
+=== DONE zhao_raster_rcp24_svc ===
+=== FIT zhao_texture_aux_pipe ===
+zhao_texture_aux_pipe              ok                2004.8s   ALM 1118
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (75 block(s); 1 measured this run)
+=== DONE zhao_texture_aux_pipe ===
+=== FIT zhao_texture_palette_res ===
+zhao_texture_palette_res           ok                   738s   ALM 152
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (76 block(s); 1 measured this run)
+=== DONE zhao_texture_palette_res ===
+=== FIT zhao_texture_rsp_dispatch ===
+zhao_texture_rsp_dispatch          ok                   965s   ALM 806
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (77 block(s); 1 measured this run)
+=== DONE zhao_texture_rsp_dispatch ===
+=== FIT zhao_texture_bilerp_lane ===
+zhao_texture_bilerp_lane           ok                 768.4s   ALM 125
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (78 block(s); 1 measured this run)
+=== DONE zhao_texture_bilerp_lane ===
+=== FIT zhao_texture_mosaic ===
+zhao_texture_mosaic                ok                 921.8s   ALM 197
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (79 block(s); 1 measured this run)
+=== DONE zhao_texture_mosaic ===
+=== QUEUE DONE ===

@@ -1,11 +1,10 @@
-Baseline refreshed 2026-08-31T05:59:16+02:00 after read-only creature-ownership migration check.
+Baseline refreshed 2026-09-01T17:24:50+02:00 after read-only creature-ownership migration check.
 === zhaozhou HEAD ===
-823e70353eb132fc66bc23fdd479fd32db35484c
+2f7e259a5bed87b71b667b2b7edbc91df03520ef
 === zhaozhou branch ===
 zixxtrixx-v8-closeout
 === zhaozhou status --porcelain=v1 ===
  M runs/CLAUDE-RUNS/RUN-20260829-0525-zixxtrixx-v9-cel-main-art-pass/evidence/hardware-migration-monitor-baseline.txt
- M runs/CLAUDE-RUNS/RUN-20260829-0525-zixxtrixx-v9-cel-main-art-pass/work/zhaozhou-v9
 ?? atmo-sun-donor/
 ?? atmo-sun-thick/
 ?? bash.exe.stackdump
@@ -22,6 +21,19 @@ zixxtrixx-v8-closeout
 ?? captures/failures/raster_earlyz_star-vs-sky.txt
 ?? captures/failures/raster_earlyz_strict.txt
 ?? captures/failures/raster_earlyz_test-off.txt
+?? captures/failures/raster_edgewalk_laneA_0.txt
+?? captures/failures/raster_edgewalk_laneA_1.txt
+?? captures/failures/raster_edgewalk_laneA_11.txt
+?? captures/failures/raster_edgewalk_laneA_18.txt
+?? captures/failures/raster_edgewalk_laneA_23.txt
+?? captures/failures/raster_edgewalk_laneA_24.txt
+?? captures/failures/raster_edgewalk_laneA_6.txt
+?? captures/failures/raster_edgewalk_laneA_8.txt
+?? captures/failures/raster_edgewalk_winding_3.txt
+?? captures/failures/raster_edgewalk_winding_4.txt
+?? captures/failures/raster_edgewalk_winding_5.txt
+?? captures/failures/raster_fragment_random.txt
+?? captures/failures/raster_fragment_same-pixel.txt
 ?? captures/failures/raster_resolve_aligned.txt
 ?? captures/failures/raster_resolve_b2b.txt
 ?? captures/failures/raster_resolve_black.txt
@@ -50,9 +62,19 @@ zixxtrixx-v8-closeout
 ?? captures/failures/raster_tile_pipe_extremes_3.txt
 ?? captures/failures/raster_tile_pipe_extremes_4.txt
 ?? captures/failures/raster_tile_pipe_single_0.txt
+?? captures/failures/raster_tile_pipe_status_0.txt
 ?? creature-bulk-pop/
 ?? creature-wave-walk/
+?? csd-verify.log
+?? ew-verify.log
+?? fit-round3.log
+?? fit-round4.log
+?? fit-round5.log
+?? fit-round6.log
+?? fit-round7.log
+?? fit-round8.log
 ?? flare-occlusion/
+?? fpga/quartus/shell_fit/worst.tcl
 ?? infant/
 ?? multiple/
 ?? noctis-flare/
@@ -100,23 +122,30 @@ zixxtrixx-v8-closeout
 ?? zixxtrixx-wire/
 === zhaozhou relevant remote tips (ls-remote) ===
 597df1a226e042d4544ee54c518f8c05bccf7a7f	refs/heads/creature-ownership-migration
-823e70353eb132fc66bc23fdd479fd32db35484c	refs/heads/main
+65e9fefa3db672a5826981fd5c09aab351f8a137	refs/heads/feature/zixxtrixx-whole-s-final
+2f7e259a5bed87b71b667b2b7edbc91df03520ef	refs/heads/main
 98ee417bbf377910447b84fa6f4c078733532a5a	refs/heads/zixxtrixx-coil-expression
 a5954073967e293923f9671d9de9e1ad1edbcbb1	refs/heads/zixxtrixx-final-pass
+f412fca97290e80a59b048fdb01c1415f1ee5e73	refs/heads/zixxtrixx-whole-s-groundspring
 === Upheaval HEAD ===
-d97f7a424c9015c9ffc128406760fa5ccf370964
+2ad25aac4c3edd4a8238880537ca00c235684923
 === Upheaval branch ===
-zixxtrixx-v9-cel-main
+main
 === Upheaval status --porcelain=v1 ===
 
 === Upheaval relevant remote tips (ls-remote) ===
-f80e70a4067f31a4deae80a47a55a62f8fbd94b4	refs/heads/main
+b1d3cd6dd3947cc674212afd8fdcd52211a54c96	refs/heads/feature/zixxtrixx-whole-s-final
+38efaadb9cfdc19dde2411f0b3a7ea82ea64b833	refs/heads/main
 f80e70a4067f31a4deae80a47a55a62f8fbd94b4	refs/heads/zixxtrixx-coil-expression
 940a6440d4b575709c77b9e8ddea2e2cdd7bc443	refs/heads/zixxtrixx-final-pass
+b3cc7e3c69e3f146c4656a4ab156c3ed7d01650a	refs/heads/zixxtrixx-whole-s-groundspring
 === interpretation ===
-No creature-ownership migration progress. The zhaozhou migration branch remains documentation-only at 597df1a, Upheaval still has no migration branch, and no Upheaval-owned creature package or cartridge/compiler/packer/silicon deformation contract landed.
-No shared-lane freeze violation is visible. The current modelling correction remains isolated and has not supplied a new final-main handoff or shutdown confirmation; neither shared checkout contains a new modelling delta.
-Three zhaozhou commits landed after b7c1c88, all confined to the Quartus shell-fit QSF, fit-staleness documentation, and fit-script virtual-pin refusal. They do not alter migration, handoff, creature ownership, Zixxtrixx, reel, compiler/packer, probes, or the owner architecture report, so there is no new in-scope architecture change to assess.
-The current porcelain path sets match the prior baseline: Upheaval remains clean; zhaozhou retains the pre-existing dirty monitor baseline, nested zhaozhou-v9 gitlink, and unrelated untracked render/capture artifacts. No new relevant dirty path or new monitor-history collision appeared.
-Previously reported migration absence, ATTRDIV/ATTRSTEP correctness and budget concerns, incomplete physical fit, 4d6c71f bulk-scope collision, 4b8c5fe/b7c1c88 baseline-history collisions, and dirty nested zhaozhou-v9 repository remain unresolved but did not newly change in this interval.
-No reset, clean, stage, repair, edit outside this baseline, job stop, build, fit invocation, or interference with either lane was attempted.
+No creature-ownership migration landed. The migration branch remains unchanged and documentation-only at 597df1a; no Upheaval-owned creature package/serializer, compiler/packer/cartridge contract, or ownership implementation appeared.
+One new zhaozhou commit landed and was pushed: 2f7e259, `FIT round 8: 81.0 MHz. EDGEWALK eliminated; Early-Z is the last offender.` It commits the completed round-eight reports. This is conventional-renderer timing progress, not creature-ownership work.
+Round eight is a mixed but meaningful architecture result: gpu_clk measured 81.00 MHz versus round six's 84.97 MHz best; worst setup moved -1.769 to -2.345 ns; failing endpoints fell 808 to 586 (-27%); DSPs held at 16; ALMs moved 12,698 to 12,693. EDGEWALK fell from 71 of the worst 100 paths to zero, proving the CSD change removed its target. All 100 current worst paths are now Early-Z, specifically the 256-bit `floor_r` to `acc_mask_r` feedback cone. The lower headline Fmax is attributed by path evidence to Early-Z placement, not to EDGEWALK; 84.97 MHz remains the best measured composed figure. The CSD change was kept, and the next stated timing surgery is `MHZArchitected` step 2a, Early-Z full detection.
+The previously dirty generated characterization/synthesis/timing reports are now committed as round-eight evidence and no longer dirty. `fit-round8.log` remains an untracked local log; no new dirty source file appeared.
+The agreed sequence remains unchanged: close conventional-renderer timing at the composed 110–115 MHz target, then size GEOM.PARAMBUF/binner capacity from real 256-creature traces, then proceed to more hardware including the creature lane. Round eight advances the first gate but does not satisfy it.
+The modelling lane had already supplied both final main SHAs and confirmed its agent and all owned background jobs stopped; the independent process sweep was clear. The active-v9 freeze condition remains satisfied and the freeze remains lifted. No creature, reel, compiler/packer, probe, Zixxtrixx, migration, handoff, or Upheaval file changed in this delta, so there is no freeze violation or collision.
+Shared Upheaval remains clean and unchanged locally at 2ad25aac; its remote main remains the final published 38efaad. Zhaozhou local HEAD and remote main agree at 2f7e259.
+Creature-ownership architecture concerns remain unchanged: creature definitions/presentation remain in zhaozhou; there is no versioned Upheaval package, compiler/packer/cartridge contract, silicon CREATURE.LIGHT/CREATURE.DEFORM, or end-to-end depth-profile path. Fragment documentation remains stale and the requested production hazard counter/assertion remains absent.
+No reset, clean, fetch, stage, repair, edit outside this baseline, job stop, build, test, fit invocation, integration, archive operation, media edit, or deployment was attempted by this check.

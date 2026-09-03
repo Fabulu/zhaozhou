@@ -1,0 +1,56 @@
+subject=planet-sun-terran
+mode=Z60 384x240 single view, reference oracle (zref::render)
+frames=48 step=8 ticks (frame f: tick = f*step)
+programs: wave_pool hash=0x8BDCEB63 (27 instrs), impact_wave hash=0x82F5F4E4 (30 instrs)
+field_apps=0 stamps=0 debris=0 shake_frames=0
+palette=151 unique colours (palette-exact by construction, <=256 enforced)
+thinner air over a blue world: less mottling, a tighter bloom, and a sun that stays closer to white because the ramp's peak does
+sequence_crc32c=0x503D3FB9
+frame_0000_crc32c=0x111BC883
+frame_0001_crc32c=0xEC61A5D6
+frame_0002_crc32c=0x0F5AD853
+frame_0003_crc32c=0x86227BDE
+frame_0004_crc32c=0x0FE5FD70
+frame_0005_crc32c=0x2C973FC9
+frame_0006_crc32c=0x3E402053
+frame_0007_crc32c=0x32D76172
+frame_0008_crc32c=0xD8D3CAE0
+frame_0009_crc32c=0x752EC82D
+frame_0010_crc32c=0x20CD90D4
+frame_0011_crc32c=0x71032967
+frame_0012_crc32c=0x87FF0AB2
+frame_0013_crc32c=0x853B9EF3
+frame_0014_crc32c=0x25CDBDB4
+frame_0015_crc32c=0xB5152895
+frame_0016_crc32c=0xC804A6CF
+frame_0017_crc32c=0xF0F7FD69
+frame_0018_crc32c=0x1BCB723E
+frame_0019_crc32c=0x135D2F00
+frame_0020_crc32c=0xD95B778D
+frame_0021_crc32c=0x5ADE0375
+frame_0022_crc32c=0xB77ADA09
+frame_0023_crc32c=0xCAF9E36D
+frame_0024_crc32c=0xCAF9E36D
+frame_0025_crc32c=0xB77ADA09
+frame_0026_crc32c=0x5ADE0375
+frame_0027_crc32c=0xD95B778D
+frame_0028_crc32c=0x135D2F00
+frame_0029_crc32c=0x1BCB723E
+frame_0030_crc32c=0xF0F7FD69
+frame_0031_crc32c=0xC804A6CF
+frame_0032_crc32c=0xB5152895
+frame_0033_crc32c=0x25CDBDB4
+frame_0034_crc32c=0x853B9EF3
+frame_0035_crc32c=0x87FF0AB2
+frame_0036_crc32c=0x71032967
+frame_0037_crc32c=0x20CD90D4
+frame_0038_crc32c=0x752EC82D
+frame_0039_crc32c=0xD8D3CAE0
+frame_0040_crc32c=0x32D76172
+frame_0041_crc32c=0x3E402053
+frame_0042_crc32c=0x2C973FC9
+frame_0043_crc32c=0x0FE5FD70
+frame_0044_crc32c=0x86227BDE
+frame_0045_crc32c=0x0F5AD853
+frame_0046_crc32c=0xEC61A5D6
+frame_0047_crc32c=0x111BC883

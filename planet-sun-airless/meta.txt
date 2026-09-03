@@ -1,0 +1,56 @@
+subject=planet-sun-airless
+mode=Z60 384x240 single view, reference oracle (zref::render)
+frames=48 step=8 ticks (frame f: tick = f*step)
+programs: wave_pool hash=0x8BDCEB63 (27 instrs), impact_wave hash=0x82F5F4E4 (30 instrs)
+field_apps=0 stamps=0 debris=0 shake_frames=0
+palette=108 unique colours (palette-exact by construction, <=256 enforced)
+NO atmosphere, same machinery: one number gives the splat a hard saturated core and the sun becomes a disc with a short skirt against an almost black sky. The control that shows the others are doing something
+sequence_crc32c=0x921A069F
+frame_0000_crc32c=0x397F76EA
+frame_0001_crc32c=0x69B5F32C
+frame_0002_crc32c=0x68FC1458
+frame_0003_crc32c=0x0823E955
+frame_0004_crc32c=0x5C7472E3
+frame_0005_crc32c=0xC163C331
+frame_0006_crc32c=0xEC5A87AE
+frame_0007_crc32c=0xA1125284
+frame_0008_crc32c=0xC0B904C2
+frame_0009_crc32c=0x5B9DB538
+frame_0010_crc32c=0xA64BFD18
+frame_0011_crc32c=0x35C75021
+frame_0012_crc32c=0x300AB3F4
+frame_0013_crc32c=0x251E1A98
+frame_0014_crc32c=0x5427950F
+frame_0015_crc32c=0x5CAED97C
+frame_0016_crc32c=0xD4D19B4B
+frame_0017_crc32c=0xB1DD10AD
+frame_0018_crc32c=0x244578FC
+frame_0019_crc32c=0xE1B7DDCF
+frame_0020_crc32c=0x7C873BF0
+frame_0021_crc32c=0x391B857C
+frame_0022_crc32c=0x6A082F9C
+frame_0023_crc32c=0xD5873264
+frame_0024_crc32c=0xD5873264
+frame_0025_crc32c=0x6A082F9C
+frame_0026_crc32c=0x391B857C
+frame_0027_crc32c=0x7C873BF0
+frame_0028_crc32c=0xE1B7DDCF
+frame_0029_crc32c=0x244578FC
+frame_0030_crc32c=0xB1DD10AD
+frame_0031_crc32c=0xD4D19B4B
+frame_0032_crc32c=0x5CAED97C
+frame_0033_crc32c=0x5427950F
+frame_0034_crc32c=0x251E1A98
+frame_0035_crc32c=0x300AB3F4
+frame_0036_crc32c=0x35C75021
+frame_0037_crc32c=0xA64BFD18
+frame_0038_crc32c=0x5B9DB538
+frame_0039_crc32c=0xC0B904C2
+frame_0040_crc32c=0xA1125284
+frame_0041_crc32c=0xEC5A87AE
+frame_0042_crc32c=0xC163C331
+frame_0043_crc32c=0x5C7472E3
+frame_0044_crc32c=0x0823E955
+frame_0045_crc32c=0x68FC1458
+frame_0046_crc32c=0x69B5F32C
+frame_0047_crc32c=0x397F76EA
