@@ -1,0 +1,163 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Zhaozhou — 8 decisions waiting on you</title>
+<style>
+  body { background:#14161a; color:#dfe3e8; font:16px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;
+         max-width:980px; margin:0 auto; padding:40px 28px 120px; }
+  h1 { font-size:30px; margin:0 0 6px; letter-spacing:-.5px; }
+  .sub { color:#8b93a1; margin:0 0 34px; font-size:15px; }
+  .d { border:1px solid #2a2f38; border-left:4px solid #3d4553; border-radius:6px;
+       padding:20px 24px; margin:0 0 18px; background:#191c22; }
+  .d.blocking { border-left-color:#e0564a; }
+  .d.unsafe   { border-left-color:#d9922b; }
+  .d.safe     { border-left-color:#4f8f5a; }
+  .id { font:600 12px/1 ui-monospace,Consolas,monospace; letter-spacing:1.4px;
+        color:#7d8695; text-transform:uppercase; }
+  .q { font-size:20px; font-weight:650; margin:8px 0 4px; color:#fff; }
+  .blocks { font-size:13px; color:#e0564a; font-weight:600; margin:0 0 12px; }
+  .blocks.warn { color:#d9922b; }
+  .blocks.ok { color:#6a9d74; }
+  p { margin:10px 0; }
+  ul { margin:10px 0; padding-left:22px; }
+  li { margin:5px 0; }
+  code { background:#22262e; padding:1px 6px; border-radius:3px;
+         font:14px ui-monospace,Consolas,monospace; color:#a8d8b4; }
+  .rec { background:#1d2a20; border:1px solid #2f4a37; border-radius:5px;
+         padding:11px 15px; margin:13px 0 6px; }
+  .rec b { color:#8fd4a0; }
+  .def { color:#8b93a1; font-size:14px; margin-top:11px; font-style:italic; }
+  .why { color:#b9c0cb; font-size:14.5px; border-left:2px solid #333944;
+         padding-left:14px; margin:12px 0; }
+  footer { margin-top:46px; padding-top:22px; border-top:1px solid #2a2f38;
+           color:#7d8695; font-size:14px; }
+  .key { display:flex; gap:20px; margin:0 0 30px; font-size:13px; color:#8b93a1; }
+  .key span::before { content:'\25A0'; margin-right:6px; }
+  .k1::before { color:#e0564a; } .k2::before { color:#d9922b; } .k3::before { color:#4f8f5a; }
+</style>
+
+<h1>8 decisions waiting on you</h1>
+<p class="sub">From the boring-3D-fundamentals audit, 2026-09-03. Each has a recommendation
+and a default. Answer <b>D-1</b> and <b>D-2</b> first — everything else can wait.</p>
+
+<div class="key">
+  <span class="k1">blocks work now</span>
+  <span class="k2">default is unsafe</span>
+  <span class="k3">default is safe</span>
+</div>
+
+<div class="d blocking">
+  <div class="id">D-1 · the clamp in the flat-shade law</div>
+  <div class="q">Where does the shade get clamped?</div>
+  <div class="blocks">BLOCKS: TERRAIN.SHADE and TERRAIN.NORMALMAP RTL — nothing gets built until this is answered</div>
+  <p><code>shade_flat_tri_dir</code> clamps to <code>[0, 0x10000]</code> <b>inside</b> the function.
+  Any additive term — detail normals, a second sun, a spell light — has to be summed
+  <b>before</b> that clamp, or it can't brighten a face that's slightly turned away.</p>
+  <ul>
+    <li><b>(a)</b> the law grows an <b>unclamped variant</b>; the clamp moves to where shade becomes colour</li>
+    <li><b>(b)</b> the additive term is passed <b>into</b> the function, so one function owns sum and clamp</li>
+  </ul>
+  <div class="rec"><b>Recommend (a).</b> Keeps detail out of a function terrain and creatures share,
+  and it's a pure refactor — <b>the golden CRCs must not move</b>, which is also how you'd know it was done right.</div>
+</div>
+
+<div class="d unsafe">
+  <div class="id">D-2 · cartridge resource kinds</div>
+  <div class="q">Where do texture and material bytes live?</div>
+  <div class="blocks">BLOCKS: MATERIAL.RESOLVE, and generic upload for everything</div>
+  <p><code>.zpak</code> has no generic texture-page or material-set kind — while creature parts claim
+  texture pages, terrain names tilesets, and <code>DrawForm</code> takes a material-set handle.</p>
+  <ul>
+    <li><b>(A)</b> generic <code>TEXTURE_PAGE</code> + <code>MATERIAL_SET</code> + <code>MESH_STREAM</code></li>
+    <li><b>(B)</b> every family page carries its own subpages, one nested layout</li>
+    <li><b>(C)</b> generic immutable <code>RESOURCE_BLOB</code> + typed manifests</li>
+  </ul>
+  <div class="rec"><b>Recommend A.</b> Only A lets <code>MEM.UPLOAD</code> be one general mover for all
+  immutable assets, and only A gives the texture cache's invalidate one obvious publisher.
+  B needs three family loaders to agree forever; C adds indirection this console has refused elsewhere.</div>
+  <p class="def">Default if unruled: every asset compiler invents its own layout — the thing the audit
+  names as what cannot work.</p>
+</div>
+
+<div class="d unsafe">
+  <div class="id">D-3 · cache coherence</div>
+  <div class="q">How does a new upload stop the old bytes being served?</div>
+  <div class="blocks warn">Invisible when wrong: correct memory, wrong picture, no counter moves</div>
+  <p>The texture cache already <b>has</b> invalidate inputs and notes that an uploaded palette page
+  otherwise leaves stale data. <b>Nothing drives them.</b></p>
+  <ul>
+    <li><b>(a)</b> drive an explicit <b>invalidate</b> at the caches holding that resource</li>
+    <li><b>(b)</b> <b>bind the cache tag to the resource generation</b>, so an old line can't match a new request</li>
+  </ul>
+  <div class="rec"><b>Recommend (b).</b> Structural rather than procedural, needs no list of who caches what,
+  and the generation is already carried for staleness.</div>
+</div>
+
+<div class="d unsafe">
+  <div class="id">D-4 · depth quantisation</div>
+  <div class="q">Separate block, or a stage inside GEOM.PROJECT?</div>
+  <div class="blocks warn">Twelve files consume <code>invw24</code>; the producer emits Q16.16 1/w</div>
+  <p>Either is fine. The audit is specific only about the alternative:
+  <i>"just do not leave it in integration glue."</i></p>
+  <div class="rec"><b>Either — (b) is arguably tidier</b> since the reciprocal is produced there.
+  I registered it separately only because adding unbuilt work to a built, verified block
+  hides that work inside a green row.</div>
+  <p class="def">Default if unruled: it stays glue, differently in each of the twelve places.</p>
+</div>
+
+<div class="d safe">
+  <div class="id">D-5 · fog</div>
+  <div class="q">Who carries fog, and does cel fog before or after toon?</div>
+  <p>The arithmetic is specified. <code>RASTER.FRAGMENT</code> says colour arrives already fogged —
+  and <code>GEOM.PROJECT</code> has no colour input to have fogged it with. <code>SetEnvironment</code>
+  is still a <b>reserved</b> command.</p>
+  <ul>
+    <li>general law today: <code>lighting → fog → interpolate → toon</code></li>
+    <li>cel probably wants: <code>unfogged lighting → interpolate → toon → texture → fog</code></li>
+  </ul>
+  <div class="rec"><b>Recommend GEOM.LIGHT carries it</b>, and <b>rule the cel ordering as the second one</b> —
+  fogging before toon <b>quantises fog into hard bands</b>. Do it before the colour packet freezes;
+  afterwards it's an ABI change rather than a wiring choice.</div>
+  <p class="def">Default if unruled: fog is never carried at all. Nothing breaks; the game just has no distance haze.</p>
+</div>
+
+<div class="d safe">
+  <div class="id">D-6 · local spell lighting</div>
+  <div class="q">Do fireballs light the world?</div>
+  <p>Prose today, not a format. The failure mode is specific: <i>if giant magical fireballs bloom but cast
+  no coloured light onto nearby creatures, terrain or structures, the effects look pasted onto the world.</i></p>
+  <div class="rec"><b>Recommend this table as v1:</b>
+  creatures/objects → bounded <b>top-K</b> diffuse lights ·
+  terrain → sun + <b>broad spill / global flash</b>, not every point light ·
+  particles/spells → emissive/additive + existing glow tags.
+  <br><br>And: the accumulator does <b>not</b> need K permanent engines merely because K terms are legal.</div>
+  <p class="def">Default if unruled: no dynamic lights. Safe for the machine, costly for the look.</p>
+</div>
+
+<div class="d safe">
+  <div class="id">D-7 · water and lava</div>
+  <div class="q">Does the game want liquid surfaces — yes or no?</div>
+  <p><code>TWOD.PLANE</code> explicitly refuses to be a general world-depth plane; intersecting liquid
+  must be triangles through the main renderer. That's fine and needs no hardware.</p>
+  <div class="rec"><b>Recommend: answer it either way.</b> If yes, freeze the cheap v1 (low-poly surface,
+  scrolling texture, alpha or additive, optional vertex waves, explicit depth-write policy, no reflection,
+  no refraction, explicit sorting). If no, <b>delete the phrase from the ledger.</b>
+  <br><br>The danger is neither option — it's the stale phrase <i>"water/lava"</i> making someone assume a
+  solution exists when the plane engine refuses the relevant depth behaviour.</div>
+</div>
+
+<div class="d unsafe">
+  <div class="id">D-8 · normal maps beyond terrain</div>
+  <div class="q">Refuse general tangent-space normal maps in v1?</div>
+  <p>The terrain normal-map unit is cheap <b>precisely because a heightfield's tangent frame is
+  world-axis-aligned</b>. It does not generalise to creatures or props, which need a real tangent frame per vertex.</p>
+  <div class="rec"><b>Recommend: refuse explicitly, in writing.</b> The danger is someone inferring that
+  the terrain block generalises and budgeting as if it does. Cheap to prevent now.</div>
+</div>
+
+<footer>
+  <p><b>Not a decision, but owed:</b> the near-plane law drops an entire triangle when any vertex is behind
+  the eye. Deliberate and documented — but it needs a <b>close-camera stress reel</b> (giants, Zixx, beams,
+  large terrain triangles) because it can visibly pop geometry, and only watching it tells you how badly.</p>
+  <p>Full detail: <code>reports/FUNDAMENTALS-DECISIONS-NEEDED.md</code> ·
+  <code>reports/BORING_3D_FUNDAMENTALS_AUDIT.md</code></p>
+</footer>

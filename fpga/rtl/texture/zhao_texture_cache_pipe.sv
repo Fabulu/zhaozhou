@@ -346,6 +346,12 @@ module zhao_texture_cache_pipe #(
   // dynamic selection that forces the mux and kills inference. Putting the
   // port inside the generate makes the lane static by construction.
   //
+  // ENFORCED-BY: tools/quartus/check_ram_inference.py
+  // That checker gained this exact rule on 2026-09-03, after it called the
+  // half-fixed version of this file CLEAN and an 88-minute fit came back with
+  // 2 M10K anyway. It is validated by flagging the version the fitter rejected
+  // while staying quiet on this one.
+  //
   // No reset on any of it, deliberately: a memory block's output register
   // cannot be asynchronously reset, and asking for one is how an inferred RAM
   // quietly becomes flops. `c2_v` gates their use and IS reset.

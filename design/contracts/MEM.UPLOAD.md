@@ -121,6 +121,54 @@ owns.
 region bounds only. **That is a required change to an existing block, not part
 of this one.**
 
+## 3. PUBLICATION MUST MAKE EVERY CACHE INCAPABLE OF RETURNING THE OLD BYTES
+
+**Added 2026-09-03 from `BORING_3D_FUNDAMENTALS_AUDIT.md` R5, which calls cache
+coherence "the missing second half".**
+
+`TEXTURE.CACHE` already has invalidate inputs, and its own contract notes that
+an uploaded palette page otherwise leaves stale cached data. **Nothing drove
+that invalidate.** An upload that lands correctly and publishes atomically can
+still be served from a cache line holding the previous generation's bytes —
+correct memory, wrong picture, and no counter moves.
+
+So the complete transaction is:
+
+    allocate a FRESH unpinned destination slot
+        -> copy the HPS bytes
+        -> wait for every VRAM write to RETIRE
+        -> verify the CRC
+        -> invalidate the old physical cache lines,
+           OR bind cache identity to the new generation
+        -> publish the new mapping atomically
+        -> pin for READY frames
+
+The invalidate step is **not optional and not the consumer's problem**. Two
+implementations are legal and the choice is an owner decision:
+
+* **drive an explicit invalidate** at the caches holding that resource — simple,
+  and it needs a list of who caches what;
+* **bind the cache tag to the resource generation**, so an old line cannot match
+  a new request at all — no list, no broadcast, and the generation is already
+  carried for staleness. **Recommended**, because it makes the guarantee
+  structural rather than procedural, and this block already carries the
+  generation for a different reason.
+
+## 4. THIS IS THE PATH FOR EVERY IMMUTABLE RENDER ASSET, NOT AN ANIMATION PIPE
+
+Also R5. The block was written from the animation ruling and must not stay
+animation-shaped. The same mover carries:
+
+animation banks · texture pages · palette pages · material tables · mesh
+descriptors · vertex and index streams · terrain pages · sky assets · Sunder
+resources.
+
+That is what makes the cartridge decision in `MATERIAL.RESOLVE.md` (audit R4)
+this block's business too: **a generic uploader needs a generic resource kind.**
+If every family page invents its own layout, this block acquires a decoder per
+family and stops being general.
+
+
 ## Input and output packet layouts
 
 ### `UploadRequest` — 32 bytes, from the sealed HPS list

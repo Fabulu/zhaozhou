@@ -2,8 +2,10 @@
 
 > Ledger: `design/blocks.yml` · gpu clock · maturity REFERENCE_COMPLETE
 > RTL: not built
-> Reference: `zref::terrain::shade_base`
-> (`reference/include/zref/zref_terrain_normalmap.hpp`)
+> Reference: **`zref::render::shade_flat_tri_dir`** — the ratified law.
+> `reference/include/zref/zref_terrain_shade.hpp` is a THIN VIEW onto it,
+> exposing only what that function does not (squared norm, dot product,
+> degeneracy predicate, light constants).
 
 ## Purpose and exclusions
 
@@ -111,9 +113,14 @@ half of what this block produces. The oracle owns the rounding in
 
 ## Scalar reference function
 
-`zref::terrain::shade_base`, with `normalmap_length` and `rshift_round`
-(`reference/include/zref/zref_terrain_normalmap.hpp`) — **written before the
-RTL**, deliberately.
+**`zref::render::shade_flat_tri_dir`** is the law, and it already existed.
+`reference/include/zref/zref_terrain_shade.hpp` is a thin view onto it.
+
+The first version of this contract cited a `zref::terrain::shade_base` that
+**re-implemented** the law with a different square root, divide, Q format and
+clamping — and its tests passed because they compared the duplicate against
+itself. The ledger's V17 check then caught the citation when the duplicate was
+removed, which is the drift guard working twice over.
 
 ## Directed tests
 

@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **99** (79 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **104** (84 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -14,8 +14,8 @@ Blocks: **99** (79 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | compositor | 2 | 3 | · | · | · | · | · | · | 5 |
 | debug | · | · | 1 | 3 | · | · | · | · | 4 |
 | field | 5 | · | 1 | 1 | · | · | · | · | 7 |
-| forge | · | · | 2 | · | · | · | · | · | 2 |
-| geometry | 4 | 2 | 6 | · | · | · | · | · | 12 |
+| forge | 1 | · | 2 | · | · | · | · | · | 3 |
+| geometry | 7 | 2 | 6 | · | · | · | · | · | 15 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 1 | · | 2 | · | · | · | · | · | 3 |
 | memory | 1 | 1 | 1 | 3 | · | · | · | 1 | 6 |
@@ -25,9 +25,9 @@ Blocks: **99** (79 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | surface | · | · | 2 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
 | terrain | · | 2 | 9 | · | · | · | · | · | 11 |
-| texture | · | · | 5 | · | · | · | · | · | 5 |
+| texture | 1 | · | 5 | · | · | · | · | · | 6 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 30 | 12 | 41 | 16 | · | · | · | 6 | 99 |
+| **all** | 35 | 12 | 41 | 16 | · | · | · | 6 | 104 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -200,9 +200,9 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 | platform | 14% | 16 | 0% |
 | command_debug | 5% | 9 | 0% |
 | field | 6% | 2 | 0% |
-| geometry_mantle | 20% | 26 | 0% |
-| tile | 30% | 12 | 0% |
-| myriad_forge | 9% | 9 | 0% |
+| geometry_mantle | 20% | 29 | 0% |
+| tile | 30% | 13 | 0% |
+| myriad_forge | 9% | 10 | 0% |
 | twod_post | 6% | 5 | 0% |
 | _reserve (untouchable)_ | 10% | — | — |
 

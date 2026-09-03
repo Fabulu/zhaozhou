@@ -32,6 +32,21 @@ schema_version: 1
 # §25 mandatory counters (snake_case) plus the declared platform extensions.
 # Block `counters` must be a subset of this catalog (rule V12).
 counter_catalog:
+  # The BORING_3D_FUNDAMENTALS_AUDIT blocks (2026-09-03). Each refusal
+  # counter is the one that must never be silently zero: a refused
+  # triangle, material or depth is a picture that is wrong rather than a
+  # machine that is slow.
+  - assemble_triangles
+  - assemble_refused
+  - material_hits
+  - material_misses
+  - material_refused
+  - lit_vertices
+  - degenerate_normals
+  - depth_saturated
+  - depth_refused
+  - shadows_emitted
+  - shadows_skipped
   # TEXTURE.FRAGROB -- the fragment transaction centre. `fragrob_id_errors`
   # is the one that must never be silently zero: it counts returns whose
   # {slot, generation} did not match a live slot, which is the property GENW=8
@@ -325,7 +340,7 @@ blocks:
     inputs: [decoded_records, frame_complete]
     outputs: [engine_dispatch, slot_state, guard_policy, fence]
     upstream: [CMD.DECODER, VIDEO.FRAMECTL]
-    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT, MEM.UPLOAD]
+    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT, MEM.UPLOAD, MATERIAL.RESOLVE, FORGE.SHADOW]
     backpressure: credit
     latency: variable
     target_throughput: 1 slot transition per clock
@@ -1536,7 +1551,7 @@ blocks:
     backpressure: ready_valid
     latency: fixed:0
     target_throughput: OPEN -- fit at II=1 and II=3 per the owner brief; the producer delivers ~1 triangle per 3 clocks
-    reference_model: zref::terrain::shade_base
+    reference_model: zref::render::shade_flat_tri_dir
     tests:
       directed: tests/terrain/terrain_shade_oracle.cpp
       random: tests/terrain/terrain_shade_oracle.cpp
@@ -2091,7 +2106,7 @@ blocks:
     inputs: [dispatch, lod_targets]
     outputs: [meshlet_stream]
     upstream: [CMD.SCHEDULER, MEASURE.GOVERNOR]
-    downstream: [GEOM.VDECODE, GEOM.POSE, MEM.GUARD]
+    downstream: [GEOM.VDECODE, GEOM.POSE, MEM.GUARD, GEOM.ASSEMBLE]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 meshlet descriptor per clock
@@ -2186,7 +2201,7 @@ blocks:
     inputs: [vertex_batch, bone_palette]
     outputs: [skinned_vertices]
     upstream: [GEOM.VDECODE, GEOM.POSE]
-    downstream: [GEOM.LOOM, GEOM.WCACHE]
+    downstream: [GEOM.LOOM, GEOM.WCACHE, GEOM.LIGHT]
     backpressure: ready_valid
     latency: variable
     target_throughput: 120,000 skinned vertex instances per 60 Hz frame (owner ruling 2026-08-23); 166,666 sustained at MUL_LANES=3, 100 MHz
@@ -2366,8 +2381,8 @@ blocks:
     owner_issue: ZH-055
     inputs: [warped_vertices, cached_vertices, camera_pair]
     outputs: [view_vertices]
-    upstream: [GEOM.WARP, GEOM.WCACHE]
-    downstream: [GEOM.CLIP, GEOM.PARAMBUF]
+    upstream: [GEOM.WARP, GEOM.WCACHE, GEOM.LIGHT]
+    downstream: [GEOM.CLIP, GEOM.PARAMBUF, GEOM.DEPTHQUANT]
     backpressure: ready_valid
     latency: fixed:36
     target_throughput: 1 projected vertex per clock
@@ -2413,7 +2428,7 @@ blocks:
     owner_issue: ZH-056
     inputs: [view_vertices]
     outputs: [clipped_triangles]
-    upstream: [GEOM.PROJECT, TERRAIN.PROJECT]
+    upstream: [GEOM.PROJECT, TERRAIN.PROJECT, GEOM.ASSEMBLE]
     downstream: [GEOM.SETUP]
     backpressure: ready_valid
     latency: variable
@@ -2452,7 +2467,7 @@ blocks:
     owner_issue: ZH-057
     inputs: [clipped_triangles, forge_primitives, expanded_particles]
     outputs: [setup_triangles]
-    upstream: [GEOM.CLIP, FORGE.PRIM, FORGE.CLIFF, PART.EXPAND]
+    upstream: [GEOM.CLIP, FORGE.PRIM, FORGE.CLIFF, PART.EXPAND, FORGE.SHADOW]
     downstream: [GEOM.BINNER]
     backpressure: ready_valid
     latency: variable
@@ -2480,6 +2495,116 @@ blocks:
     superseded_by: null
     notes: In-tile stepping s32, edge setup s64 (A3c).
 
+  - id: GEOM.ASSEMBLE
+    name: Index walk and triangle assembly
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: "Walks a meshlet's u8 local index stream and emits one TriangleDescriptor per triplet by selecting three already-projected vertices. BORING_3D_FUNDAMENTALS_AUDIT R1: verified that VDECODE accepts neither index_offset nor triangle_count, SETUP expects a complete triangle, tri_ax_i is driven only from a harness, and NO ledger block owned the arrow between them."
+    contract: design/contracts/GEOM.ASSEMBLE.md
+    phase: 5
+    owner_issue: ZH-083
+    inputs: [meshlet_descriptor, index_stream]
+    outputs: [triangle_descriptor]
+    upstream: [GEOM.MESHFETCH]
+    downstream: [GEOM.CLIP]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: see contract
+    reference_model: zref::geom::assemble_triangle
+    tests:
+      directed: "PLANNED -- NOT WRITTEN"
+      random: "PLANNED -- NOT WRITTEN"
+    counters: [assemble_triangles, assemble_refused]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      The audit's instruction is explicit: do NOT let this emerge accidentally
+      as miscellaneous logic inside GEOM.PARAMBUF. A local index >= vertex_count is
+      REFUSED not clamped -- a clamped index draws a triangle from a real vertex
+      belonging to a different part of the mesh. Duo is the subtle part: the same
+      local index resolves to a DIFFERENT projected vertex per view, so the walk
+      runs once per visible view. May alternatively be folded into GEOM.MESHFETCH;
+      what is not optional is that one named block owns it.
+  - id: GEOM.LIGHT
+    name: Vertex lighting
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: "World normal plus environment to vertex RGB. ONE vocabulary, three normal producers (rigid transform, SKIN.NORM, TERRAIN.NORMALS). BORING_3D_FUNDAMENTALS_AUDIT R2: GEOM.SKIN transforms positions only, zhao_geom_project.sv takes no normal/colour/light/tint/fog, and the ledger's description of GEOM.PROJECT as projection-plus-lighting is aspirational -- the source implements projection."
+    contract: design/contracts/GEOM.LIGHT.md
+    phase: 5
+    owner_issue: ZH-085
+    inputs: [world_normal, environment]
+    outputs: [vertex_rgb]
+    upstream: [GEOM.SKIN]
+    downstream: [GEOM.PROJECT]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: see contract
+    reference_model: zref::render::shade_flat_tri_dir
+    tests:
+      directed: "PLANNED -- NOT WRITTEN"
+      random: "PLANNED -- NOT WRITTEN"
+    counters: [lit_vertices, degenerate_normals]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      THE LAW ALREADY EXISTS and must not be re-implemented:
+      shade_flat_tri_dir is 'The ONE flat-shade law' and the goldens pin it. A
+      second implementation was written by accident on 2026-09-03 and its twelve
+      checks passed because they compared the duplicate against itself. The light is
+      Q16.16 (26758/53521/26758), NOT s1.15. BLOCKED on the clamp decision: the
+      clamp is inside the ratified function and additive terms must be summed before
+      it. The accumulator does NOT need ten permanent light engines merely because
+      ten light terms are legal -- sequenced accumulation at the skinner's own rate
+      (one weighted vertex per 12 clocks) is the default and the DSP lever.
+  - id: GEOM.DEPTHQUANT
+    name: Depth profile application
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: "Q16.16 1/w to invw24 under the selected depth profile. BORING_3D_FUNDAMENTALS_AUDIT R6, verified: zhao_geom_project.sv emits out_d_o documented Q16.16 1/w, TWELVE RTL files consume invw24, and no depth_profile port exists anywhere in fpga/rtl. Not a capacity concern -- a correctness one."
+    contract: design/contracts/GEOM.DEPTHQUANT.md
+    phase: 5
+    owner_issue: ZH-086
+    inputs: [projected_depth]
+    outputs: [invw24]
+    upstream: [GEOM.PROJECT]
+    downstream: [RASTER.EARLYZ]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: see contract
+    reference_model: zref::geom::depth_quant
+    tests:
+      directed: "PLANNED -- NOT WRITTEN"
+      random: "PLANNED -- NOT WRITTEN"
+    counters: [depth_saturated, depth_refused]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      May instead be folded into GEOM.PROJECT, which is the other legal answer.
+      The audit is indifferent and specific about the alternative: just do not leave
+      it in integration glue. Registered separately because adding an unbuilt
+      responsibility to a built, verified block hides unbuilt work inside a green
+      row. Saturation is REPORTED, not silently clamped. A negative reciprocal is
+      refused rather than wrapped into a large unsigned depth that would read as
+      very close and win every depth test.
   - id: GEOM.BINNER
     name: Tile binner
     kind: rtl
@@ -2615,7 +2740,7 @@ blocks:
     owner_issue: ZH-059
     inputs: [covered_fragments]
     outputs: [shaded_candidates, z_reject]
-    upstream: [RASTER.EDGEWALK]
+    upstream: [RASTER.EDGEWALK, GEOM.DEPTHQUANT]
     downstream: [RASTER.FRAGMENT, TEXTURE.FRAGROB]
     backpressure: ready_valid
     latency: fixed:1
@@ -2877,7 +3002,7 @@ blocks:
     owner_issue: ZH-080
     inputs: [survivor_fragment, tmu_return, aux_return]
     outputs: [tmu_request, aux_request, retired_fragment]
-    upstream: [RASTER.EARLYZ]
+    upstream: [RASTER.EARLYZ, MATERIAL.RESOLVE]
     downstream: [TEXTURE.TMU, TEXTURE.AUX, RASTER.FRAGMENT]
     backpressure: ready_valid
     latency: variable
@@ -2916,6 +3041,42 @@ blocks:
       NOT YET FITTED; the fit target carries S3.4's tripwires and the
       acceptance question is M10K inference, not Fmax. v2 is not superseded
       until that fit passes and the composed island is re-measured.
+  - id: MATERIAL.RESOLVE
+    name: Material record resolution
+    kind: rtl
+    subsystem: texture
+    clock_domain: gpu
+    purpose: "Turns {material_set, material_id, quality_tier} into the concrete sample_count, recipe, bindings, TMU modes, wrap/filter/mips, raster state and flags that TEXTURE.FRAGROB expects ALREADY RESOLVED. BORING_3D_FUNDAMENTALS_AUDIT R3: all the nouns exist -- DrawForm carries material_set, meshlets carry material_id -- and nothing performed the lookup."
+    contract: design/contracts/MATERIAL.RESOLVE.md
+    phase: 5
+    owner_issue: ZH-084
+    inputs: [material_handle]
+    outputs: [material_record]
+    upstream: [CMD.SCHEDULER]
+    downstream: [TEXTURE.FRAGROB]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: see contract
+    reference_model: zref::material::resolve
+    tests:
+      directed: "PLANNED -- NOT WRITTEN"
+      random: "PLANNED -- NOT WRITTEN"
+    counters: [material_hits, material_misses, material_refused]
+    source_ids: true
+    budget_group: tile
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      BLOCKED ON A CARTRIDGE DECISION (audit R4): .zpak has no generic
+      texture-page or material-set kind while three subsystems assume one.
+      Recommendation A -- generic TEXTURE_PAGE + MATERIAL_SET + MESH_STREAM --
+      because only that lets MEM.UPLOAD be one general mover. A miss STALLS rather
+      than returning a default: there is no sensible default material, and a
+      guessed one draws the wrong surface confidently. Pairs with TEXTURE.COMBINE;
+      shipping the resolver alone makes the machine fetch samples nothing combines.
   - id: TEXTURE.MOSAIC
     name: Terrain Mosaic selector
     kind: rtl
@@ -3195,6 +3356,44 @@ blocks:
       starfield ride PART.SOFT as additive 1-2 px points with glow-tag write,
       Z-tested against the sky far constant (occlusion for free); cap 2744
       glints/view.
+  - id: FORGE.SHADOW
+    name: Contact shadows
+    kind: rtl
+    subsystem: forge
+    clock_domain: gpu
+    purpose: "A small terrain-conforming transparent hull under a creature or object, so it looks ATTACHED to the ground. BORING_3D_FUNDAMENTALS_AUDIT R8. No shadow map, no shadow buffer, no new raster hardware -- ordinary transparent geometry through the main renderer."
+    contract: design/contracts/FORGE.SHADOW.md
+    phase: 5
+    owner_issue: ZH-087
+    inputs: [shadow_caster, terrain_height]
+    outputs: [forge_primitives]
+    upstream: [CMD.SCHEDULER]
+    downstream: [GEOM.SETUP]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: see contract
+    reference_model: zref::forge::shadow_hull
+    tests:
+      directed: "PLANNED -- NOT WRITTEN"
+      random: "PLANNED -- NOT WRITTEN"
+    counters: [shadows_emitted, shadows_skipped]
+    source_ids: true
+    budget_group: myriad_forge
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      For a game of floating islands and airborne creatures, 'is that touching
+      the ground' is legibility, not refinement. The audit: very small if done as
+      geometry, and can make more perceptual difference than several expensive
+      material effects. Ladder by rung -- hull, blob, splat, none -- selected as a
+      COARSENESS FLOOR by the governor, reusing the PART.LADDER idea.
+      DEPTH BIAS IS AUTHORED, NEVER ACCIDENTAL, per the CLAUDE.md ground-contact
+      law: at exactly terrain height it z-fights, biased too far it reads detached.
+      A named editable constant per rung, decided BY LOOKING.
+      A caster over a void emits NO shadow, and that is correct rather than a fault.
   - id: FORGE.PRIM
     name: Procedural primitives
     kind: rtl
