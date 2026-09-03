@@ -36,10 +36,14 @@
 #include "Vzhao_terrain_residency_v2.h"
 
 #include "zhao_sim.hpp"
+#include "zref/zref_terrain.hpp"
 
 namespace {
 
 constexpr uint32_t kEpoch = 7u;
+
+template <typename T>
+inline void zho_unused(const T&) {}
 
 struct Handle {
   uint32_t slot = 0;
@@ -214,6 +218,34 @@ int main(int argc, char** argv) {
                 "of an inferred RAM",
                 1, d.sweep_clocks() >= 256 ? 1 : 0);
     std::printf("  sweep took %d clocks\n", d.sweep_clocks());
+  }
+
+  // ---- 0b: THE SET INDEX IS THE COMMITTED HASH ----------------------------
+  // The RTL defines CRC-8/ATM over {island_id, patch_ix, patch_iz} with the
+  // epoch byte xored in. A hash defined ONLY by the RTL that implements it
+  // cannot be wrong, which is exactly the problem with it -- and T9's last
+  // clause has two readings, so a silent choice here would be unquestionable
+  // by being invisible.
+  //
+  // `zref::terrain::residency_set_index` is that hash written down separately.
+  // The slot a claim returns must land in the set it names.
+  {
+    d.reset();
+    int bad_set = 0, checked = 0;
+    for (uint32_t isl = 1; isl <= 40; ++isl)
+      for (int ix = -3; ix <= 3; ++ix) {
+        const Handle h = d.claim(isl, ix, ix * 7);
+        const uint32_t got_set = h.slot >> 2;   // slot = {set, way}
+        const uint8_t want_set = zref::terrain::residency_set_index(
+            isl, static_cast<int16_t>(ix), static_cast<int16_t>(ix * 7), kEpoch);
+        if (got_set != want_set) ++bad_set;
+        ++checked;
+      }
+    zho_unused(checked);
+    zhao::check(bad_set == 0,
+                "every claim lands in the set zref::terrain::residency_set_index "
+                "names -- the hash has a definition outside the RTL",
+                0, bad_set);
   }
 
   // ---- 1: a claimed page is not resident until loaded AND mipped ----------

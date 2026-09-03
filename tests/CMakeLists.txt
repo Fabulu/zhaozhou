@@ -2214,13 +2214,28 @@ set_tests_properties(terrain_mipgen_directed PROPERTIES LABELS "fast;nightly" TI
 # the thing they check is a distinction it does not have -- two islands at the
 # same local coordinates, and the journal writeback barrier.
 add_executable(test_terrain_residency_v2_directed terrain/terrain_residency_v2_directed.cpp)
-target_link_libraries(test_terrain_residency_v2_directed PRIVATE zhao_harness)
+target_link_libraries(test_terrain_residency_v2_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_terrain_residency_v2_directed
   PREFIX Vzhao_terrain_residency_v2
   TOP_MODULE zhao_terrain_residency_v2
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_residency_v2.sv)
 add_test(NAME terrain_residency_v2_directed COMMAND test_terrain_residency_v2_directed)
 set_tests_properties(terrain_residency_v2_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# Residency v2, RANDOMIZED. A multi-island traversal against a model written
+# from the CONTRACT and from zref::terrain::residency_set_index -- not from the
+# RTL, which would agree with it about the same mistakes. The property worth
+# the file is dirty eviction: layer F has no canonical HPS mirror, so a dirty
+# page displaced without being flagged means the player returns to a crater
+# they made and finds it gone.
+add_executable(test_terrain_residency_v2_random terrain/terrain_residency_v2_random.cpp)
+target_link_libraries(test_terrain_residency_v2_random PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_residency_v2_random
+  PREFIX Vzhao_terrain_residency_v2
+  TOP_MODULE zhao_terrain_residency_v2
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_residency_v2.sv)
+add_test(NAME terrain_residency_v2_random COMMAND test_terrain_residency_v2_random)
+set_tests_properties(terrain_residency_v2_random PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
 # Randomized traversal against an INDEPENDENT contract model. The property
 # worth the file is dirty eviction: a dirty page displaced without being

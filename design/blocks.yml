@@ -32,6 +32,12 @@ schema_version: 1
 # §25 mandatory counters (snake_case) plus the declared platform extensions.
 # Block `counters` must be a subset of this catalog (rule V12).
 counter_catalog:
+  # TERRAIN.RESIDENCY (rulings T9/T10)
+  - residency_hits
+  - residency_misses
+  - residency_evictions
+  - residency_dirty_evictions
+  - residency_stale_events
   # TERRAIN.MIPGEN (ruling T8)
   - mipgen_samples
   - mipgen_writes
@@ -1425,7 +1431,7 @@ blocks:
     inputs: [dispatch, field_results, baked_scars]
     outputs: [patch_state, subpatch_requests]
     upstream: [CMD.SCHEDULER, FIELD.SEQ.EARTH, TERRAIN.BAKE]
-    downstream: [TERRAIN.TESS, TERRAIN.LOD, TERRAIN.VELOCITY, PART.COLLIDE, MEM.GUARD, TERRAIN.MIPGEN]
+    downstream: [TERRAIN.TESS, TERRAIN.LOD, TERRAIN.VELOCITY, PART.COLLIDE, MEM.GUARD, TERRAIN.MIPGEN, TERRAIN.RESIDENCY]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 patch-layer update per clock
@@ -1491,6 +1497,43 @@ blocks:
     superseded_by: null
     notes: Crack-safety is a formal candidate (stitch invariants).
 
+  - id: TERRAIN.RESIDENCY
+    name: Page residency directory
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "256 sets x 4 ways over the canonical key {resource_epoch, island_id, patch_ix, patch_iz}. Answers whether a patch's ground is in local SDRAM and whether an in-flight handle is still its own page. Rulings T1/T9/T10; the direct-mapped prototype is superseded because two islands may legally overlap in local patch coordinates."
+    contract: design/contracts/TERRAIN.RESIDENCY.md
+    phase: 6
+    owner_issue: ZH-123
+    inputs: [patch_claims, loader_completions, deformation_marks]
+    outputs: [residency_answers, eviction_writebacks]
+    upstream: [TERRAIN.PATCH]
+    downstream: [TERRAIN.MIPGEN, TERRAIN.LOD]
+    backpressure: ready_valid
+    latency: fixed:2
+    target_throughput: one mutation or one query per clock
+    reference_model: zref::terrain::residency_set_index
+    tests:
+      directed: tests/terrain/terrain_residency_v2_directed.cpp
+      random: tests/terrain/terrain_residency_v2_random.cpp
+    counters: [residency_hits, residency_misses, residency_evictions, residency_dirty_evictions, residency_stale_events]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-03"
+        commit: "eadf1dfa"
+        evidence: design/contracts/TERRAIN.RESIDENCY.md
+      - state: UNIT_VERIFIED
+        date: "2026-09-03"
+        commit: "eadf1dfa"
+        evidence: tests/terrain/terrain_residency_v2_directed.cpp
+
+    deferred: false
+    superseded_by: null
+
   - id: TERRAIN.MIPGEN
     name: Page height mips
     kind: rtl
@@ -1502,7 +1545,7 @@ blocks:
     owner_issue: ZH-122
     inputs: [page_height_lattice]
     outputs: [page_height_mips]
-    upstream: [TERRAIN.PATCH]
+    upstream: [TERRAIN.PATCH, TERRAIN.RESIDENCY]
     downstream: [TERRAIN.LOD]
     backpressure: ready_valid
     latency: fixed:1
@@ -1685,7 +1728,7 @@ blocks:
     owner_issue: ZH-050
     inputs: [patch_state, lod_targets]
     outputs: [lod_decisions]
-    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR, TERRAIN.MIPGEN]
+    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR, TERRAIN.MIPGEN, TERRAIN.RESIDENCY]
     downstream: [TERRAIN.PROJECT]
     backpressure: ready_valid
     latency: variable

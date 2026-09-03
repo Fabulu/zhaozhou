@@ -257,6 +257,52 @@ inline void mipgen(const uint16_t* fine, uint16_t* out17, uint16_t* out9) {
     for (int j = 0; j < kMip9; ++j) out9[i * kMip9 + j] = mip9_at(fine, i, j);
 }
 
+// ---- residency set index: CRC-8/ATM (ruling T9) ---------------------------
+//
+//   > Set index: CRC-8/ATM, polynomial 0x07, initial 0, over the little-endian
+//   > bytes of {island_id, patch_ix, patch_iz}; xor resource_epoch[7:0] into
+//   > the final byte.
+//
+// THE LAST CLAUSE HAS TWO READINGS and this is the committed one: the epoch
+// byte is xored into the final byte OF THE MESSAGE, before the CRC. The other
+// reading -- xor it into the CRC's single output byte, after -- is equally
+// defensible from the sentence, and `zhao_terrain_residency_v2` carries a
+// `SET_EPOCH_IN_MESSAGE` parameter so the choice is one line either way.
+//
+// It lives here, in the reference, so the hash has a definition outside the
+// RTL that implements it. A hash defined only by its implementation cannot be
+// wrong, which is the problem with it.
+inline uint8_t crc8_atm_byte(uint8_t crc, uint8_t data) {
+  uint8_t c = static_cast<uint8_t>(crc ^ data);
+  for (int b = 0; b < 8; ++b)
+    c = (c & 0x80u) ? static_cast<uint8_t>(static_cast<uint8_t>(c << 1) ^ 0x07u)
+                    : static_cast<uint8_t>(c << 1);
+  return c;
+}
+
+inline uint8_t residency_set_index(uint32_t island_id, int16_t patch_ix,
+                                   int16_t patch_iz, uint32_t resource_epoch,
+                                   bool epoch_in_message = true) {
+  const uint16_t ux = static_cast<uint16_t>(patch_ix);
+  const uint16_t uz = static_cast<uint16_t>(patch_iz);
+  uint8_t msg[8] = {
+      static_cast<uint8_t>(island_id & 0xFFu),
+      static_cast<uint8_t>((island_id >> 8) & 0xFFu),
+      static_cast<uint8_t>((island_id >> 16) & 0xFFu),
+      static_cast<uint8_t>((island_id >> 24) & 0xFFu),
+      static_cast<uint8_t>(ux & 0xFFu),
+      static_cast<uint8_t>((ux >> 8) & 0xFFu),
+      static_cast<uint8_t>(uz & 0xFFu),
+      static_cast<uint8_t>((uz >> 8) & 0xFFu),
+  };
+  if (epoch_in_message)
+    msg[7] = static_cast<uint8_t>(msg[7] ^ (resource_epoch & 0xFFu));
+  uint8_t c = 0;
+  for (int i = 0; i < 8; ++i) c = crc8_atm_byte(c, msg[i]);
+  if (!epoch_in_message) c = static_cast<uint8_t>(c ^ (resource_epoch & 0xFFu));
+  return c;
+}
+
 }  // namespace terrain
 
 // ---- FORGE.CLIFF reference (terrain_rules.md §5, frozen degrade order) ------
