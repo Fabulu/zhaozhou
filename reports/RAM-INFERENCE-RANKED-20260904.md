@@ -125,14 +125,78 @@ one was ranking almost nothing.
 The fix is committed with the tool, and the file is now asserted free of control
 characters so the same corruption cannot return silently.
 
+## RESULT, same night
+
+All three mechanical items done, each verified against a baseline captured
+before the edit and each proved to bite by a mutation.
+
+| | before | after |
+|---|---|---|
+| `terrain/zhao_terrain_residency_v2` | 168,876 | **940** |
+| `raster/zhao_raster_tilestore` | 32,768 | **0** |
+| `texture/zhao_texture_palette_res` | 16,384 | **0** |
+| **production total** | **280,784** | **63,696** |
+
+**A 77% reduction, with byte-identical behaviour.** The bound that mattered:
+
+| bound | before | after | device |
+|---|---|---|---|
+| best case, 4 reg/ALM | 70,196 ALM | **15,924 ALM** | 41,910 |
+| this design's measured 1.17 | 240,881 ALM | 54,441 ALM | 41,910 |
+
+The generous bound now fits with room. The pessimistic one no longer applies to
+the fixed arrays at all — the point of the change is that those 216,704 bits
+become roughly 22 M10K out of 553 rather than ALM registers of any density.
+
+### The third reason was not a design question
+
+The report above said `zhao_terrain_residency_v2`'s three distinct write
+addresses needed "a design change, because the sweep walks ways independently
+of the lookup path". **That was wrong, and the mistake is instructive.**
+
+`[w][sweep_q]`, `[victim_c][s0_set]` and `[ev_way_c][s0_set]` are mutually
+exclusive **per way**: the sweep is the `if` arm and the pipeline the `else`; a
+claim and an event are different arms of one `unique case`; and a claim and an
+event write the *same* address. Per way there is one address and one enable.
+
+The `[WAYS][SETS]` shape was hiding the per-way view, so **one defect was
+producing two findings** and the second one looked like a wall. Fixing the shape
+dissolved it. Worth remembering the next time the checker reports "a memory
+shape the device does not have": check whether the shape is the reason.
+
+### What the conversion cost
+
+The write decision moved into an `always_comb` producing
+`{address, per-way enable, data}`. It has to be combinational — registering the
+intent would add a clock and change every latency the tests pin — so it is a
+**second copy of the arm conditions**, and that is a real maintenance cost paid
+deliberately against 167,936 bits.
+
+It is guarded rather than trusted: changing the claim's `kwe_c[victim_c]` to
+`kwe_c[0]`, exactly the drift this duplication risks, fails 7 of 37 directed
+checks and 3 of 6 random ones.
+
+### One property became load-bearing
+
+`hazard_c` blocks an access whose `addr_c` equals `s0_set` for exactly the
+events that write. In flip-flops that decided nothing — a non-blocking read is
+always the old value. **In an M10K, mixed-port read-during-write is device
+behaviour**, so an existing guard that used to be belt-and-braces is now what
+makes the conversion sound. It is recorded as such in the RTL, because the next
+person to relax it would have no way to know.
+
 ## What to do next, in order
 
-1. **`zhao_terrain_residency_v2`**: reasons 1 and 2, using the
-   `zhao_texture_cache_pipe` pattern already in the tree. Then fit it against
-   its own tripwires — `min_m10k` is the important half, as always.
-2. **Reason 3** needs a decision about the sweep, not an edit. It is the only
-   item here that is a design question.
-3. `zhao_raster_tilestore` (32,768) and `zhao_texture_palette_res` (16,384) are
-   both single-reason (async reset only) and should be mechanical.
-4. Re-run `--rank` after each and put the delta in the run log. The tool is
+1. **Fit `zhao_terrain_residency_v2`.** This is the only thing that closes the
+   claim. `min_m10k` is the acceptance criterion and the important half — a fit
+   that reports 0 M10K has failed however good its Fmax is. Expect roughly 22.
+2. `forge/zhao_forge_cliff` (12,288) is now the largest remaining, and it is
+   single-reason: async reset, plus a module-scope read through a dynamic index
+   that has to move into the port process with it.
+3. `raster/zhao_raster_texjoin_v2` (6,400) and `texture/zhao_texture_tmu_pipe`
+   (5,504) are the C6–C8 banking work already scheduled.
+4. Everything below 2,700 bits is control state. Leave it alone unless a fit
+   says otherwise: an array that small cannot pay for an M10K however it is
+   written, and rewriting it would trade clarity for nothing.
+5. Re-run `--rank` after each and put the delta in the run log. The tool is
    cheap enough to run every time; the fit is not.
