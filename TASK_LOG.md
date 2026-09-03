@@ -1927,3 +1927,73 @@ added to the random pool with its `imm` mode selected in range.
 `opsIssued()` legitimately exceeds the required set — some cases issue a
 deliberately invalid opcode to prove the unsupported path. Noted in the code so
 it does not read as a discrepancy.
+
+---
+
+## 2026-09-03 — the production-only resource count, and three corrections
+
+### What the session was for
+
+`reports/WeNeedSomeMeasurements.md` (owner, 14:58): the repository-wide 185-DSP
+figure is a SOURCE INVENTORY, not the machine, and the real question is *"what
+does the planned console cost when counted ONCE?"* Treated as a near-term gate.
+
+### Built
+
+* `design/prod_manifest.yml` — one chosen implementation per logical block. All
+  168 modules under `fpga/rtl` are either counted (64 tops), inside something
+  counted (57), or excluded with a reason (47). A module in none of those is an
+  ERROR: the failure being guarded is not a wrong total but a block silently
+  neither counted nor declared missing, which reads as a healthy number.
+* `tools/quartus/check_prod_manifest.py` — verifies `inside` against the real
+  instantiation graph rather than trusting it, and refuses a top already
+  instantiated by another top.
+* `tools/quartus/module_graph.py`, `tools/quartus/gen_prod_top.py` —
+  the graph and the generated resource top (one seeded LFSR per instance, so
+  the fitter can neither constant-fold a block away nor merge logic across
+  blocks).
+* `tools/ledger/remaining.py` — what is left, derived from ledger + RTL tree +
+  manifest + contracts instead of hand-audited.
+* `FORGE.PRIM` — six families, one bounded topology generator, 11 checks,
+  advanced to UNIT_VERIFIED.
+
+### Three corrections I had to make to my own reporting
+
+1. **`cache_pipe`'s fit was NOT a pass.** Reported at 98.66 MHz with "the RAMs
+   stayed RAMs, 2 M10K". `reports/islandrearchitecture5.md` requires M10K >= 8,
+   registers <= 2,000 and ALM <= 1,500 for that block; measured 5,903 / 11,328 /
+   2, against a predecessor at 1,087 / 1,737 / 4. The brief's own rule: "a fit
+   that meets Fmax while violating its memory/DSP structure is not a pass."
+2. **The island as a whole is a regression**: 18,497 ALM / 28,143 reg / 10 M10K
+   against a 7,500 / 9,000 / 64 redline, and worse than the 15,749 / 25,123 / 11
+   prototype it was written to replace.
+3. **My terrain normal-map draft was fatally wrong** — a 32-step divide over a
+   64-bit numerator yields quotient bits 63..32 while the true quotient is under
+   2^15, so every triangle would have shaded to ambient. Found by a fable agent;
+   the file is quarantined out of the manifest and says so at the top.
+
+### Ten blocks could not be synthesised by the pinned toolchain
+
+60 Quartus 17.0.2 syntax errors across ten blocks that Verilator and slang both
+accept. Three of the five causes were ALREADY in `reports/QUARTUS_GOTCHAS.md`
+and were rediscovered with a probe anyway — the CLAUDE.md rule about
+instructions not being delivered until read, costing about an hour. Two new
+entries added (4a `foreach`, 4b unary minus on a size cast) plus the list of
+constructs that ARE accepted, so nobody "fixes" them.
+
+All ten repaired; 16 affected test executables re-run green, including
+`terrain_tess_normals` at 41,731 checks.
+
+### Owner briefs swept into the docket
+
+D19 the resource count · D20 terrain normal maps · D21 the island recovery spec
+(with its five-document supersession chain recorded, and the note that "island"
+there means the TEXTURE-survivor island, not the 8 km terrain island) ·
+D22 animation banks live in HPS DDR · D23 `SaveTheRendered.md`, sequenced after
+the islands · D24 ZEMU, whose placement instruction is still outstanding.
+
+### Open at the end of the entry
+
+The `zhao_prod_top` fit is still in analysis & synthesis. Five recon agents are
+reading the ~85 unread documents in `reports/` on disjoint lanes, writing
+digests to `reports/digests/`.
