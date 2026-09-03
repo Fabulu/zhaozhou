@@ -2066,6 +2066,24 @@ verilate(test_raster_texjoin_v2_directed
 add_test(NAME raster_texjoin_v2_directed COMMAND test_raster_texjoin_v2_directed)
 set_tests_properties(raster_texjoin_v2_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# TEX.FRAGROB against the block it replaces. Two DUTs, one stimulus, one model
+# of the outside world -- and the comparison is the SEQUENCE of retired
+# fragments, not cycle-by-cycle: fragrob has an extra stage on issue and one on
+# retire because a banked descriptor cannot be picked combinationally, and that
+# latency is the price of the storage being memory rather than flip-flops.
+add_executable(test_fragrob_differential texture/fragrob_differential.cpp)
+target_link_libraries(test_fragrob_differential PRIVATE zhao_harness)
+verilate(test_fragrob_differential
+  PREFIX Vzhao_raster_texjoin_v2
+  TOP_MODULE zhao_raster_texjoin_v2
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_texjoin_v2.sv)
+verilate(test_fragrob_differential
+  PREFIX Vzhao_texture_fragrob
+  TOP_MODULE zhao_texture_fragrob
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_fragrob.sv)
+add_test(NAME fragrob_differential COMMAND test_fragrob_differential)
+set_tests_properties(fragrob_differential PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # The AUX divide as a six-stage pipeline (reports/Addendum). Standalone and
 # verified before it is swapped into zhao_texture_aux.sv.
 add_executable(test_texture_aux_div6_directed texture/texture_aux_div6_directed.cpp)

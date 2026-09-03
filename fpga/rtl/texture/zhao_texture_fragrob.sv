@@ -206,6 +206,30 @@ module zhao_texture_fragrob #(
   logic free_empty_c;
   assign free_empty_c = (free_cnt_q == '0);
 
+  // THE LOST-UPDATE FAULT, which this block had and which CLAUDE.md names.
+  // `free_cnt_q` and `live_cnt_q` are each touched by allocation AND by
+  // retirement. Written as two separate `if` blocks in one always_ff, only the
+  // LAST assignment lands, so an accept and a retire on the same clock produce
+  // +1 or -1 instead of a net zero -- the count drifts, the free list
+  // eventually reports empty while holding slots, and allocation wedges.
+  //
+  // The differential caught it as exactly DEPTH fragments never retiring. The
+  // fix is to compute each net delta ONCE and assign once.
+  logic alloc_ev_c, retire_ev_c;
+  logic [SW:0] free_cnt_n_c, live_cnt_n_c;
+  always_comb begin
+    free_cnt_n_c = free_cnt_q;
+    live_cnt_n_c = live_cnt_q;
+    if (alloc_ev_c && !retire_ev_c) begin
+      free_cnt_n_c = free_cnt_q - 1;
+      live_cnt_n_c = live_cnt_q + 1;
+    end else if (!alloc_ev_c && retire_ev_c) begin
+      free_cnt_n_c = free_cnt_q + 1;
+      live_cnt_n_c = live_cnt_q - 1;
+    end
+    // both, or neither: the counts do not move.
+  end
+
   // ==========================================================================
   // WORK QUEUE: samples that still need issuing to the TMU
   // ==========================================================================
@@ -243,6 +267,7 @@ module zhao_texture_fragrob #(
   logic accept_c;
   assign f_ready_o = !init_q && !free_empty_c;
   assign accept_c  = f_valid_i && f_ready_o;
+  assign alloc_ev_c = accept_c;
 
   logic [2:0] req_mask_c;
   always_comb begin
@@ -299,6 +324,16 @@ module zhao_texture_fragrob #(
   // ==========================================================================
   // AUX ISSUE
   // ==========================================================================
+  // A QUEUE, not a single pending register. Sixteen fragments may be live and
+  // every one of them may want AUX, so a single register silently DROPS the
+  // second request and the fragment that needed it never completes -- a
+  // deadlock, not a dropped pixel. Found by the differential.
+  logic [SW-1:0]   axq_m   [DEPTH];
+  logic [GENW-1:0] axg_m   [DEPTH];
+  logic [SW:0]     axq_wp_q, axq_rp_q;
+  logic            axq_empty_c;
+  assign axq_empty_c = (axq_wp_q == axq_rp_q);
+
   logic          ax_pend_q;
   logic [SW-1:0] ax_slot_q;
   logic [GENW-1:0] ax_gen_q;
@@ -320,6 +355,20 @@ module zhao_texture_fragrob #(
   logic [SW-1:0] head_q, tail_q;
   logic [SW:0]   live_cnt_q;
 
+  // ALLOCATION ORDER IS NOT SLOT ORDER. Slots come from a free list, so the
+  // order they are handed out in is the order they were RETURNED in, which
+  // after the first recycle has nothing to do with their index. The first
+  // version used `head_q` directly as the slot and retired the wrong entries
+  // the moment the free list wrapped -- the differential caught it as exactly
+  // DEPTH fragments never retiring.
+  //
+  // `order_m` is the allocation-order ring: written at `tail_q` when a slot is
+  // handed out, read at `head_q` when one retires. It is 16 x 4 bits, so it is
+  // control state and belongs in flops with the rest.
+  logic [SW-1:0]   order_m [DEPTH];
+  logic [SW-1:0]   head_slot_c;
+  assign head_slot_c = order_m[head_q];
+
   logic [23:0]     out_rgb_r, out_aux_rgb_r;
   logic [7:0]      out_a_r, out_aux_a_r;
   logic [CTXW-1:0] out_ctx_r;
@@ -327,6 +376,7 @@ module zhao_texture_fragrob #(
   logic [SW-1:0]   r_slot_q;
 
   assign o_valid_o   = (r_st_q == R_HOLD);
+  assign retire_ev_c = o_valid_o && o_ready_i;
   assign o_ctx_o     = out_ctx_r;
   assign o_rgb_o     = out_rgb_r;
   assign o_a_o       = out_a_r;
@@ -337,9 +387,9 @@ module zhao_texture_fragrob #(
 
   // Is the head fragment finished?
   logic head_done_c;
-  assign head_done_c = val_q[head_q] &&
-                       (arr_q[head_q] == req_q[head_q]) &&
-                       (!auxreq_q[head_q] || auxarr_q[head_q]);
+  assign head_done_c = val_q[head_slot_c] &&
+                       (arr_q[head_slot_c] == req_q[head_slot_c]) &&
+                       (!auxreq_q[head_slot_c] || auxarr_q[head_slot_c]);
 
   // THE COMBINER IS NOT FROZEN. Every recipe currently returns sample 0, which
   // is v2's behaviour and is why this signal exists: a gate that ignores it is
@@ -381,11 +431,11 @@ module zhao_texture_fragrob #(
     end
 
     // ---- the retire read, and the AUX context read ------------------------
-    out_rgb_r     <= res_rgb_m[0][head_q];
-    out_a_r       <= res_a_m[0][head_q];
-    out_aux_rgb_r <= auxrgb_m[head_q];
-    out_aux_a_r   <= auxa_m[head_q];
-    out_ctx_r     <= ctx_m[head_q];
+    out_rgb_r     <= res_rgb_m[0][head_slot_c];
+    out_a_r       <= res_a_m[0][head_slot_c];
+    out_aux_rgb_r <= auxrgb_m[head_slot_c];
+    out_aux_a_r   <= auxa_m[head_slot_c];
+    out_ctx_r     <= ctx_m[head_slot_c];
     ax_ctx_r      <= ctx_m[ax_slot_q];
   end
 
@@ -407,6 +457,8 @@ module zhao_texture_fragrob #(
       i_st_q      <= I_IDLE;
       r_st_q      <= R_IDLE;
       ax_pend_q   <= 1'b0;
+      axq_wp_q    <= '0;
+      axq_rp_q    <= '0;
       rd_slot_q   <= '0;
       rd_sidx_q   <= '0;
       fragments_o <= '0;
@@ -427,6 +479,12 @@ module zhao_texture_fragrob #(
       end
     end else begin
       id_error_o <= 1'b0;
+
+      // The counts move here and ONLY here.
+      if (!init_q) begin
+        free_cnt_q <= free_cnt_n_c;
+        live_cnt_q <= live_cnt_n_c;
+      end
 
       // ---- the sixteen-cycle free-list sweep ------------------------------
       if (init_q) begin
@@ -454,9 +512,8 @@ module zhao_texture_fragrob #(
         recipe_q[alloc_slot_c] <= f_recipe_i;
         sat_q[alloc_slot_c]    <= f_uv_sat_i;
         free_rp_q   <= free_rp_q + 1;
-        free_cnt_q  <= free_cnt_q - 1;
+        order_m[tail_q] <= alloc_slot_c;
         tail_q      <= tail_q + SW'(1);
-        live_cnt_q  <= live_cnt_q + 1;
         fragments_o <= fragments_o + 32'd1;
 
         // queue every required sample
@@ -495,10 +552,18 @@ module zhao_texture_fragrob #(
       endcase
 
       // ---- AUX issue -------------------------------------------------------
+      // enqueue on allocation; the generation is the one just committed
+      if (accept_c && f_aux_i) begin
+        axq_m[axq_wp_q[SW-1:0]] <= alloc_slot_c;
+        axg_m[axq_wp_q[SW-1:0]] <= gen_q[alloc_slot_c] + GENW'(1);
+        axq_wp_q <= axq_wp_q + 1;
+      end
+      // present one at a time
       if (!ax_pend_q) begin
-        if (accept_c && f_aux_i) begin
-          ax_slot_q <= alloc_slot_c;
-          ax_gen_q  <= gen_q[alloc_slot_c] + GENW'(1);
+        if (!axq_empty_c) begin
+          ax_slot_q <= axq_m[axq_rp_q[SW-1:0]];
+          ax_gen_q  <= axg_m[axq_rp_q[SW-1:0]];
+          axq_rp_q  <= axq_rp_q + 1;
           ax_pend_q <= 1'b1;
         end
       end else if (aux_ready_i) begin
@@ -527,9 +592,9 @@ module zhao_texture_fragrob #(
       case (r_st_q)
         R_IDLE: begin
           if (head_done_c && (live_cnt_q != '0)) begin
-            r_slot_q <= head_q;
-            out_hasaux_r <= auxreq_q[head_q];
-            out_sat_r    <= sat_q[head_q];
+            r_slot_q <= head_slot_c;
+            out_hasaux_r <= auxreq_q[head_slot_c];
+            out_sat_r    <= sat_q[head_slot_c];
             r_st_q       <= R_READ;
           end
         end
@@ -538,11 +603,9 @@ module zhao_texture_fragrob #(
           if (o_ready_i) begin
             val_q[r_slot_q] <= 1'b0;
             head_q     <= head_q + SW'(1);
-            live_cnt_q <= live_cnt_q - 1;
             // final acceptance returns the slot to the free list
             free_m[free_wp_q[SW-1:0]] <= r_slot_q;
             free_wp_q  <= free_wp_q + 1;
-            free_cnt_q <= free_cnt_q + 1;
             r_st_q     <= R_IDLE;
           end
         end
