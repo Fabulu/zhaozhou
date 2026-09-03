@@ -282,3 +282,70 @@ quantified 11,000-ALM recovery target sitting inside it. The 72% fabric figure
 in that brief was computed from a ~17,000-ALM island estimate; the measured
 island is 18,497, so the honest number is slightly worse than the owner feared
 — and the recovery specification for it already exists and is unimplemented.
+
+## CORRECTION to the addendum above, and the root cause
+
+**My island total double-counted `zhao_texture_tmu`**, which
+`design/prod_manifest.yml:162` marks superseded by `zhao_texture_tmu_pipe`.
+Production blocks only:
+
+| | ALM | registers | M10K | DSP |
+|---|---|---|---|---|
+| island, like-for-like | **16,576** | **27,793** | 10 | 19 |
+| hard redline | 7,500 | 9,000 | 64 | 14 |
+
+**2.21x / 3.09x / 1.36x** rather than 2.47x / 3.13x / 1.79x. The verdict is
+unchanged and the DSP overage is much smaller than I said — and +3 of it is
+PERSPUV's authorised second lane, which `WeNeedSomeMeasurements.md` blesses
+explicitly. **And even this total is incomplete**: `zhao_texture_tmu_pipe`, the
+actual production sampler, is committed INCOMPLETE and has never been fitted,
+and §3.3 of the brief has no budget line for the sampler datapath at all.
+
+### The root cause is one construct, and the fix is written in the file being replaced
+
+`zhao_texture_cache_pipe` reports **`blockMemoryBits: 128`**. The old
+`zhao_texture_cache` reports **8,192**. The arithmetic closes exactly:
+`data_r` 8,192 bits + `tag_r` 1,536 = 9,728, and 11,328 measured registers
+minus 9,728 leaves 1,600 for the rest of the block. The storage did not
+"fail to optimise" -- it became flip-flops, all of it.
+
+The reads at `zhao_texture_cache_pipe.sv:302-306` are correctly synchronous.
+**The writes are not**: `:412` (`data_r`) and `:416` (`tag_r`) sit inside the
+async-reset process opened at `:309`:
+
+    always_ff @(posedge clk or negedge rst_n)
+
+**An M10K has no reset port.** An array written from an asynchronously-reset
+process cannot be one, whether or not it appears in the reset branch.
+
+This was already known, measured, and written down **in the block this one
+replaces**. `zhao_texture_cache.sv:495-523`:
+
+> ATTEMPT 1 made the lane index static (a genvar picks the array instead of a
+> register indexing it) and MEASURED NO CHANGE AT ALL: 5,402 ALMs before,
+> 5,373 after, zero M10K both times. The dynamic outer index was real but it
+> was not the blocker.
+>
+> The blocker is the ASYNCHRONOUS RESET. An M10K has no reset port ... The
+> array has to live in a clock-only process.
+
+That block, with the clock-only process and per-lane flat arrays in a
+`generate`: 8,192 memory bits, 4 M10K, 1,087 ALM, 1,737 registers.
+
+**So the rebuild reintroduced the exact defect its predecessor had diagnosed,
+measured and documented in a comment.** The same failure shape as
+`QUARTUS_GOTCHAS.md` gotchas 1/4/8 being rediscovered by probe the same day:
+the answer was written down and was not read.
+
+TEXJOIN has the same disease plus two more -- entry table 7,056 bits against
+7,151 measured registers, written in the async-reset process at `:350`, read
+combinationally at `:332-341`, and two dynamic write addresses into one array
+(`:390` and `:468`), which the brief's §5.3 forbids by name.
+
+### Why this was reportable as a pass
+
+`design/fit_targets.yml` has **no `min_m10k` and no `max_registers`** for
+`cache_pipe`. The brief's tripwires exist only as prose in
+`islandrearchitecture5.md`; nothing mechanical enforced them, so 98.66 MHz was
+the only number the tooling produced and the storage law went unchecked. That
+gap is the first thing to close, and it costs no fit and no RTL.

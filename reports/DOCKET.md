@@ -303,13 +303,19 @@ Measured against it today (see `reports/TEXTURE-ISLAND-FIT.md` addendum):
 
 | | ALM | reg | M10K | DSP |
 |---|---|---|---|---|
-| island as built | **18,497** | **28,143** | 10 | 25 |
+| island as built | **16,576** | **27,793** | 10 | 19 |
 | hard redline | 7,500 | 9,000 | 64 | 14 |
 | the prototype it replaces | 15,749 | 25,123 | 11 | 16 |
 
 **The rebuild is worse than the prototype on every axis except DSP.** The
 prototype's diagnosis was state in flip-flops instead of memories; the rebuild
 took registers from 25,123 to 28,143 with M10Ks from 11 to 10.
+(Corrected: an earlier total of 18,497/28,143/25 double-counted
+`zhao_texture_tmu`, superseded at `prod_manifest.yml:162`. Even the corrected
+total is INCOMPLETE -- `zhao_texture_tmu_pipe`, the production sampler, is
+committed unfinished and has never been fitted, and the brief's S3.3 has no
+budget line for the sampler datapath at all.)
+
 `zhao_texture_cache_pipe` -- the brief's "ALM RECOVERY CENTRE" -- is 5,903 ALM
 / 11,328 reg / 2 M10K against tripwires of 1,500 / 2,000 / >=8, and against a
 predecessor that was 1,087 / 1,737 / 4. **Its 98.66 MHz was reported as a pass
@@ -360,6 +366,169 @@ Sequenced by the owner behind the island work. Not yet read in detail.
 **Placement is an explicit instruction and is still outstanding** -- it is
 sitting in `reports/` where the owner said it should not stay.
 
+
+---
+
+## RECON SWEEP 2026-09-03 — five lanes over the ~85 unread documents
+
+Five agents read disjoint slices of `reports/` in full and wrote digests to
+`reports/digests/`. What follows is the cross-lane integration; the digests
+carry the detail. Every claim below was verified against the tree before being
+written here.
+
+### The senior document was not the one being followed
+
+`reports/OWNER-RULINGS-BUILDABILITY-20260902.md` (09-02 21:44) is the senior
+ruling set of its group, and it contains a section **"THE 8 KM TERRAIN WORLD —
+BINDING RULINGS" (T1–T12) that answers all ten open questions** the terrain
+architecture document left hanging. **D4 above is therefore two documents out of
+date and must be re-swept.** `reports/bandwidth`, cited as a brief, is an empty
+directory containing a `.gitkeep` — a phantom citation.
+
+### The root cause of the island regression is ONE construct
+
+`zhao_texture_cache_pipe` reports `blockMemoryBits: 128`; the block it replaces
+reports **8,192**. Its reads at `:302-306` are correctly synchronous. Its
+**writes** at `:412` and `:416` sit inside the async-reset process opened at
+`:309`. **An M10K has no reset port**, so an array written from an
+asynchronously-reset process cannot be one — whether or not it appears in the
+reset branch.
+
+**This was already diagnosed, measured and written down in the file being
+replaced.** `zhao_texture_cache.sv:495-523` records the A/B: making the lane
+index static changed nothing (5,402 → 5,373 ALM, zero M10K both times), and the
+clock-only process with per-lane flat arrays inferred 4 M10K at 1,087 ALM /
+1,737 registers. The rebuild reintroduced the exact defect its predecessor had
+documented in a comment.
+
+TEXJOIN has the same disease plus a combinational read at `:332-341` and two
+dynamic write addresses into one array (`:390`, `:468`), which the brief's §5.3
+forbids by name.
+
+**Why it was reportable as a pass:** `design/fit_targets.yml` carries no
+`min_m10k` and no `max_registers` for the block. The brief's tripwires exist
+only as prose, so the tooling produced a frequency and nothing checked the
+storage law.
+
+**DO FIRST, and it costs no fit and no RTL:** put the resource rules into
+`fit_targets.yml`. Then the cache storage port — a coding-style change, not a
+rewrite; C0–C4, the replay, the multicast and the counters all stay. Then
+FRAGROB banking. Those two alone are ~79% of the ALM and ~75% of the register
+recovery, and the full ordered ledger lands on §3.3's nominal 6,600 / 6,050.
+
+### Timing is essentially done; the island is the whole remaining job
+
+`MHZArchitected` and `ShellFixes.md` are substantially complete and do not
+conflict: 53.48 → 96.87 MHz, all three ShellFixes items answered and two
+improved on the document. **At 96.9 ± 4.6 MHz no block limits the renderer**, so
+further local timing surgery has unmeasurable expected value. The texture island
+is absent from the composed fit entirely.
+
+### The animation ruling's hardware impact is NOT zero
+
+"No new arithmetic, no new render-time path" holds for the **datapath**. The
+**control plane** needs five things, none of which exist:
+
+* **`zhao_geom_pose_cache.sv` has no `sub` in its tag.** The tag is
+  `{lru, frame, clip, type}` and `acquire` matches three fields, while the
+  reference `zref::creature` carries `uint8_t sub` — the half-key phase. With
+  baked 60 Hz data, which the ruling permits for any creature, **a key and its
+  midpoint alias and the cache returns the wrong palette.** Mandatory RTL edit.
+* **No HPS→VRAM upload path exists.** `CMD.DMA` does "no VRAM writes at all";
+  the only block that reads HPS and writes SDRAM is `DEBUG.FRAMEBLIT` — right
+  shape (64 B bursts, CRC, guarded writes), wrong block (debug, canvas-length
+  locked, holds the framebuffer lease).
+* `MEM.HPS.ARBITER` is two-client over a one-burst bridge; the uploader is a
+  third.
+* `MEM.GUARD` needs an appended region **and** generation rejection.
+* `CMD.SCHEDULER` needs a resource-pin table.
+
+Client 6 `TERRAIN_BUILD` is reserved for exactly this — and SUNDER claims it too.
+
+**The two animation documents differ in one place, and it needs an owner
+ruling.** On a residency miss, MEMORY §9 says the frame is simply not published
+and the previous repeats ("the base architecture requires no such fallback").
+RESIDENCY §6.1 requires the HPS to pick a deterministic **per-instance**
+degradation before sealing, from a ladder (hold previous pose / bind pose /
+splat / glint / omit instance / decline). Whole-frame versus per-instance.
+Recommendation: MEMORY's as v1 law — it needs no frame-packet field and matches
+what `CMD.SCHEDULER` already does.
+
+### ZEMU belongs in `emulator/`
+
+The directory already exists (root README line 31, a `zemu` CMake target) and
+holds two files. `reports/` is a 90-file pile, and CLAUDE.md's own durability
+law says durable direction belongs beside what it governs. Recommended:
+`emulator/ZEMU_OMNISCIENT_DEVELOPMENT_MACHINE.md`, plus a pointer line in
+`design/contracts/SW.ZEMU.md` (ZH-078) and the root README. **Not yet moved —
+the owner's placement instruction is still outstanding.**
+
+ZEMU is not a debugger with windows: it is a whole-machine executable oracle
+intended to become the place the game is normally developed. "Omniscient" is six
+concrete mechanisms, of which the load-bearing one is **component substitution**
+— any block swappable between optimised software, ZRef, Verilated RTL and
+physical FPGA, which is what makes automatic blame-bisection possible. It keeps
+ZRef as semantic authority and never redefines a scalar law. Its own §103 warns
+against itself: build observability in response to real active lanes.
+
+### PC/console parity is compiler-enforced, not conventional
+
+Shared truth core plus a semantic command ABI, with every platform difference
+confined to the `present` domain and gated by a cross-target conformance suite
+on sim-hash-chain and frame-CRC identity. Form's truth/form split type-checks the
+rule, so higher resolution, ultrawide and extra effects are **form** and are
+divergence-free by construction. Three of the four gates already have contract
+text. **Online multiplayer is the one feature that does not fit** — remote pads
+as journal entries is the recommendation, and rollback needs a ruling.
+
+### Four things found rotten in the tree
+
+* **the compiler has FORKED** between `zhaozhou/compiler/src` and `nanquan/src`
+* no `.zpak` exists anywhere
+* `runtime/mister/` is a `.gitkeep`
+* `demos/wound_lab/` — frozen decision 18's permanent integration test — is one
+  marker file
+
+### Blockers, and two version skews
+
+`REMAINING_BLOCKERS.md` stopped on 08-28 and two ruling sets landed after it, so
+its "six blocks blocked on specification" wall is largely demolished:
+`GEOM.MESHFETCH`, `GEOM.VDECODE` format 0, `GEOM.LOOM` and `FORGE.PRIM` are
+buildable now, and `MEASURE.HISTOGRAM` is closed-as-refused. **25 blockers still
+real, 25 fixed or superseded.**
+
+**`QFMT_VERSION` disagrees with itself**, split cleanly along generator lines:
+**3** in `zref_tables.hpp`, `tools/fixgen/src/fixp.ts` and
+`compiler/src/generated/tables.ts`; **2** in `runtime/include/zhao_abi.h`,
+`fpga/rtl/generated/zhao_abi_pkg.sv` and `compiler/src/generated/abi.ts`. R3
+ordered the 2→3 bump and the `abi` generator never got it. This is a
+capture-visible numeric law disagreeing across the hardware/software boundary.
+
+**`MATERIAL_RECIPE_VERSION = 1` (R9) exists only in prose** — no header, no
+package, no table.
+
+### The smallest high-value unbuilt piece is depth
+
+Depth is ruled, generated, proved and oracle'd, and **twelve RTL files consume
+`invw24`** — while `zhao_geom_project.sv` emits `out_d_o`, "Q16.16 1/w", and
+**no `depth_profile` port exists anywhere in the RTL tree**.
+`DEPTH_PROFILE_NEXT_STEPS` steps 5–6 are open and step 5 is described there as
+"the only thing that was ever actually blocked". The docket lists steps 1–4 DONE
+and is silent on 5–6, so it reads closed. It is not.
+
+### A scheduling conflict that is the owner's to resolve
+
+**Three 09-03 briefs now compete for one Quartus toolchain with no stated
+order**: the island recovery (D21), `SaveTheRendered.md` (D23 — it is "Save the
+Renderer", 99.50 → 105 MHz), and the production resource count (D19).
+
+### The pattern of the day
+
+Three separate times today, the answer was already written down and was not
+read: `QUARTUS_GOTCHAS.md` gotchas 1/4/8 rediscovered with a synthesis probe;
+the old cache's own lab note on M10K inference reintroduced as a defect by its
+replacement; and the T1–T12 terrain rulings sitting unread while D4 described
+those questions as open.
 
 ---
 
