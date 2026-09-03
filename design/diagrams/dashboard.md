@@ -19,7 +19,7 @@ Blocks: **95** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 1 | · | 2 | · | · | · | · | · | 3 |
 | memory | 1 | · | 1 | 3 | · | · | · | 1 | 5 |
-| particles | 5 | · | 2 | · | · | · | · | · | 7 |
+| particles | 4 | 1 | 2 | · | · | · | · | · | 7 |
 | platform | 3 | · | · | · | · | · | · | 3 | 3 |
 | raster | · | · | 5 | · | · | · | · | · | 5 |
 | surface | · | · | 2 | · | · | · | · | · | 2 |
@@ -27,7 +27,7 @@ Blocks: **95** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | terrain | · | · | 9 | · | · | · | · | · | 9 |
 | texture | · | · | 4 | · | · | · | · | · | 4 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 35 | 5 | 39 | 16 | · | · | · | 6 | 95 |
+| **all** | 34 | 6 | 39 | 16 | · | · | · | 6 | 95 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -141,6 +141,7 @@ Blocks: **95** (75 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | TEXTURE.CACHE | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/texture/texture_cache_directed.cpp |
 | TEXTURE.MOSAIC | REFERENCE_COMPLETE | 2026-08-17 | `3bb36c1` | tests/texture/texture_mosaic_directed.cpp |
 | TEXTURE.MOSAIC | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/texture/texture_mosaic_directed.cpp |
+| PART.LADDER | REFERENCE_COMPLETE | 2026-09-03 | `23396aeb` | fpga/rtl/particles/zhao_part_ladder.sv |
 | PART.EXPAND | REFERENCE_COMPLETE | 2026-08-21 | `986d3ef` | reference/include/zref/zref_particle.hpp |
 | PART.EXPAND | UNIT_VERIFIED | 2026-08-21 | `0877f21` | tests/particles/part_expand_directed.cpp |
 | PART.SOFT | REFERENCE_COMPLETE | 2026-08-21 | `5ccc2fe` | reference/include/zref/zref_particle_soft.hpp |

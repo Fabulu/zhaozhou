@@ -114,7 +114,9 @@ The worst this block does is show it differently for one frame.
 * `semantically_protected_kept`
 
 ## Scalar reference function
-`zref::RepresentationLadder` (ledger). Owns the six rungs, the thresholds, the
+`zref::part::ladder_want` and `zref::part::ladder_step`
+(`reference/include/zref/zref_particle.hpp`) -- this section cited
+`zref::part::ladder_want`, which was never written (ledger). Owns the six rungs, the thresholds, the
 hysteresis and hold rules, and the per-camera independence.
 
 Shares nothing with `zref::creature::lod_*` beyond technique: creature LOD picks
@@ -142,7 +144,7 @@ ladders that the ruling deliberately keeps separate.
 * a bad `projected_size`: culled this frame, hold state unchanged.
 
 ## Randomized differential tests
-`tests/particles/part_ladder_random.cpp`, RTL against `zref::RepresentationLadder`.
+`tests/particles/part_ladder_random.cpp`, RTL against `zref::part::ladder_want`.
 
 Random size trajectories — including deliberately adversarial ones that hover on
 a boundary and that cross several bands in one frame. Uniform random sizes
@@ -151,7 +153,8 @@ almost never sit on a boundary, which is the only place this block is hard.
 Report the transition matrix. Run twice for determinism.
 
 ## Formal properties
-`tests/formal/part_ladder_stability.sby`:
+**A formal lane is PLANNED and no file exists yet**, so it is named here
+without a path -- see `reports/PHANTOM-CITATIONS-AUDIT.md`. Its properties:
 
 * **no transition within the hold window** — for any input sequence, a rung
   change is followed by at least four frames without another for that

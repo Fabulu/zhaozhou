@@ -224,5 +224,58 @@ inline uint16_t particle_angle16(uint8_t spin) {
   return static_cast<uint16_t>((spin & 0x3Fu) << 10);
 }
 
+// ---- the representation ladder (owner ruling 2026-08-31 §2.5) -------------
+//
+//     meshlet -> triangle/shard -> ribbon/streak -> soft sprite -> glint
+//             -> culled
+//
+// The bands OVERLAP on purpose -- triangle is ~6-18 px and soft sprite ~2-8 --
+// so a 7 px particle satisfies both. The ladder is an ORDER, and the
+// resolution is the first rung that fits, walking coarse to fine.
+//
+// This is the ORACLE for `zhao_part_ladder`.
+enum Rung : uint8_t {
+  kMeshlet = 0, kShard = 1, kRibbon = 2, kSprite = 3, kGlint = 4, kCulled = 5
+};
+
+// Sizes are U 8.8 pixels, so 1.0 px is 256.
+inline constexpr uint16_t kMeshletMin = 18 * 256;
+inline constexpr uint16_t kShardMin   =  6 * 256;
+inline constexpr uint16_t kRibbonMin  =  4 * 256;
+inline constexpr uint16_t kSpriteMin  =  2 * 256;
+inline constexpr uint16_t kGlintMin   =      128;
+inline constexpr int kHoldFrames = 3;
+
+inline uint8_t ladder_raw(uint16_t size, uint16_t trail, bool narrow) {
+  if (size >= kMeshletMin) return kMeshlet;
+  if (size >= kShardMin) return kShard;
+  if (narrow && trail >= kRibbonMin) return kRibbon;
+  if (size >= kSpriteMin) return kSprite;
+  if (size >= kGlintMin) return kGlint;
+  return kCulled;
+}
+
+// The governor is a FLOOR on coarseness -- it may force a particle coarser and
+// never finer. Protection is applied AFTER it, so a governor cannot cull a
+// protected particle: otherwise the species flag would be a suggestion.
+inline uint8_t ladder_want(uint16_t size, uint16_t trail, bool narrow,
+                           bool protected_, uint8_t gov_floor) {
+  uint8_t r = ladder_raw(size, trail, narrow);
+  if (gov_floor > r) r = gov_floor;
+  if (protected_ && r == kCulled) r = kGlint;
+  return r;
+}
+
+struct LadderOut { uint8_t rung; uint8_t hold; bool changed; };
+
+inline LadderOut ladder_step(uint8_t want, uint8_t prev_rung, uint8_t hold,
+                             bool first) {
+  if (first) return LadderOut{want, 0, true};
+  if (want == prev_rung) return LadderOut{prev_rung, 0, false};
+  if (static_cast<int>(hold) + 1 >= kHoldFrames)
+    return LadderOut{want, 0, true};
+  return LadderOut{prev_rung, static_cast<uint8_t>(hold + 1), false};
+}
+
 }  // namespace part
 }  // namespace zref

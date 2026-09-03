@@ -2195,6 +2195,34 @@ verilate(test_terrain_residency_directed
 add_test(NAME terrain_residency_directed COMMAND test_terrain_residency_directed)
 set_tests_properties(terrain_residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# PART.LADDER -- the representation ladder of the 2026-08-31 ruling. Its two
+# halves pull against each other: a particle MAY change representation while
+# alive (so there is hysteresis) and the simulation NEVER changes because of it
+# (so the block has no feedback port at all). The interesting cases are the
+# OVERLAPPING bands -- 7 px is both a triangle and a sprite, and the ladder's
+# order is what resolves it.
+add_executable(test_part_ladder_directed particles/part_ladder_directed.cpp)
+target_link_libraries(test_part_ladder_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_ladder_directed
+  PREFIX Vzhao_part_ladder
+  TOP_MODULE zhao_part_ladder
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_ladder.sv)
+add_test(NAME part_ladder_directed COMMAND test_part_ladder_directed)
+set_tests_properties(part_ladder_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# ...and the randomized walk. Hysteresis is a STATE MACHINE, and a state
+# machine with one input pattern has been looked at, not tested. Sixty
+# particles walk across thresholds for 120 frames each, carrying prev_rung and
+# hold_count forward exactly as the real record would.
+add_executable(test_part_ladder_random particles/part_ladder_random.cpp)
+target_link_libraries(test_part_ladder_random PRIVATE zhao_harness zhao_zref)
+verilate(test_part_ladder_random
+  PREFIX Vzhao_part_ladder
+  TOP_MODULE zhao_part_ladder
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_ladder.sv)
+add_test(NAME part_ladder_random COMMAND test_part_ladder_random)
+set_tests_properties(part_ladder_random PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # POST.GATHER -- the effect-plane gather of ruling R5. The clamps it enforces
 # are POST.COMPOSITE's bound, not its own: X to [-8,+8] and Y to [-4,+4] are
 # what the nine-line ring is built against, and nothing in the compositor can

@@ -2880,15 +2880,19 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 ladder decision per clock
-    reference_model: zref::RepresentationLadder
+    reference_model: zref::part::ladder_want
     tests:
       directed: tests/particles/part_ladder_directed.cpp
       random: tests/particles/part_ladder_random.cpp
     counters: [lod_representation_counts, polygon_particles, soft_particles]
     source_ids: true
     budget_group: myriad_forge
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-03"
+        commit: "23396aeb"
+        evidence: fpga/rtl/particles/zhao_part_ladder.sv
     deferred: false
     cut_order: null
     superseded_by: null
