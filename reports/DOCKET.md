@@ -4,7 +4,7 @@ Owner instructions arrive as files in `reports/` and are easy to lose between
 passes. **This is the index.** Before starting any wave, read this file, then
 read the documents it names.
 
-Last swept: **2026-09-03** — see *SWEEP 2026-09-03* below for what landed since.
+Last swept: **2026-09-04** — see *SWEEP 2026-09-03* below for what landed since.
 The 2026-08-31 sweep followed `reports/OWNER-RULINGS-COMPLETE-20260831.md`, which
 answered **all 28 open questions**. Read that file before this one; it is the
 authority and this is only the index.
@@ -93,15 +93,24 @@ every job.
 |---|---|---|
 | a | `format_check` — 17 files drifted from the pinned clang-format | **fixed** `fdc57ca` |
 | b | six stray gitlinks under `runs/*/work/` with no `.gitmodules`, so every checkout exits 128 | **fixed** `fdc57ca` |
-| c | `cppcheck_check` — signed-overflow finding in `render_pipe_directed.cpp` | in progress |
+| c | `cppcheck_check` — signed-overflow finding in `render_pipe_directed.cpp` | **fixed** `d93bf0b3` |
 | d | `reel_sequence_crc` — `zhao-reel --check` fails | reproducing |
+| e | the gate itself SKIPPED silently when cppcheck was absent | **fixed** 2026-09-04 |
 
 Note (b) is why the *passing* jobs also printed a red git warning; it is not
 cosmetic, it is a committed mistake.
 
-**cppcheck is not pinned as a devDependency** the way clang-format is, so the
-local gate can silently skip. That is exactly the failure the standing memory
-*"local gates must match CI"* records. Pin it — separate small item.
+**(e) is why (c) was found by CI instead of locally.** `cppcheck_check` printed
+STATUS and returned when the tool was missing, and CTest was configured to read
+that as a SKIP — so local was green and CI red, which is exactly the standing
+memory *"local gates must match CI"*. Absence now fails loudly, with the choco
+line and an explicit `ZHAO_ALLOW_MISSING_CPPCHECK=1` opt-out that still prints.
+
+**There is no npm package to pin cppcheck with**, unlike clang-format, so the
+version is checked instead of pinned — and the drift is live: **CI pins 2.19.0,
+this machine has 2.20.0, and (c)'s finding does not reproduce on 2.20.0 at
+all.** Same command, same file, different answer. A mismatch warns rather than
+errors; a newer cppcheck is usually a better one, but it is never silent.
 
 ---
 
