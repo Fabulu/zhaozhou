@@ -491,7 +491,7 @@ try {
         if ($sources) {
             $guardSet = @()
             foreach ($rel in $sources) {
-                $abs = Join-Path $RepoRoot ($rel -replace '/', '')
+                $abs = Join-Path $RepoRoot ($rel -replace '/', '\')
                 if (Test-Path -LiteralPath $abs) { $guardSet += $abs }
             }
         }
