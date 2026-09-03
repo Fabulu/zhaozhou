@@ -46,26 +46,49 @@ Per source, per evaluation:
   multiplicative term and are shared.
 * **One saturating 3-channel add** after the texel multiply.
 
-Where it lands is the design decision with a real hardware consequence:
+### RULED, 2026-09-03, by the hardware lane: PER-FRAGMENT. Timing is the wrong worry.
 
-| landing | cost | look |
-| --- | --- | --- |
-| **per-fragment** (what the prototype does) | 3 extra interpolator lanes carrying the accumulated emission, plus the add per fragment | smooth pools; this is the approved look |
-| per-face | no extra lanes | **bands the pools on triangle edges** |
+The landing question is answered. **Per-fragment is taken; per-face is refused** —
+it saves the interpolant lanes, which are the cheapest part, and pays with banding
+on the exact feature whose justification is that it looks beautiful.
 
-The reference prototype interpolates three new Gouraud lanes
-(`ScreenV.ar/ag/ab`, `TriMode.add_lanes`).
+**Timing is not threatened.** `attrdiv_svc` is a shared *tagged* service — the tag
+exists so a caller can say which attribute and which pixel a request belongs to.
+Three more attributes are three more tagged requests, **not three more dividers**,
+and nothing lengthens a combinational path. The critical path is Early-Z's 256-bit
+presence lookup fed by TilePipe's column encoder (~2.6 ns), which the
+Save-the-Renderer work has already moved off. Per-pixel divides are a non-issue:
+ATTRSTEP measured 0.099 divides per pixel against a budget of 1.000.
 
-**The question for the hardware lane:** what do three additional per-fragment
-interpolated attributes cost in the raster pipeline as it stands, and does that
-change if they are added to the block contract before the block is built rather
-than after? This matters now because the conventional renderer is mid timing
-closure and the fragment path is where the remaining slack lives.
+**The cost lands on a different axis: ALM and M10K** — three more planes in
+`GEOM.PARAMBUF` and three more values in the fragment packet — which is exactly
+the axis the island is currently 2.2x over on. Not fatal, but **counted, not waved
+through.**
 
-An acceptable answer is "per-fragment costs X and we should take it", or
-"per-fragment is unaffordable at the target clock, here is what per-face would
-look like and what the owner would lose". Both are useful. What is not useful is
-discovering the constraint after `CREATURE.LIGHT` is designed.
+The honest form of the answer is a measurement the service was built to give:
+raise the attribute count, run the existing u1/u2/u4/u8 sweep, and read
+`stall_clocks_o`. The wall is whichever resource refuses, and a service that
+cannot report its refusals cannot be sized.
+
+**Deciding before the block is designed matters decisively.** `ATTRS`, `UNITS`,
+`RADIX` and the packet width are all still parameters, so deciding now means the
+sizing sweep includes it. Deciding later means retrofitting into a closed budget.
+
+## Saturate ONCE, at the end — not per source
+
+**Contract refinement from the hardware lane, and it is load-bearing.**
+
+The emission is a per-source term **accumulated into rgb**, and the result
+saturates **once at the end**, alongside ambient and spill. Saturating per source
+would clip each contribution separately and **change the colour of an overlap** —
+which would silently destroy the mixing that motivated the feature.
+
+This interacts with the D-1 ruling (`shade_flat_tri_dir_unclamped` holds the
+arithmetic verbatim; `shade_flat_tri_dir` became `clamp01` of it). Note the
+distinction the hardware lane drew, correcting its own earlier wording: additive
+terms sum before the clamp **within one light**. Across lights they do not — a
+second source's negative dot must clamp to zero **independently**, or it would
+subtract another light's illumination.
 
 ## Constraints that come with it
 
