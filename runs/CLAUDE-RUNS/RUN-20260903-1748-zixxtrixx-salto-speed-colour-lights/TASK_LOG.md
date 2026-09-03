@@ -177,3 +177,26 @@ standing judgement re-made on true frames:
 * zhaozhou `5f885a02`. Final clean-scratch 22-subject render invoked fresh
   from build-lane at that SHA; expected CRCs: salto-dummy 0x6D95E2FD
   (unchanged since 6a400759), moving-light 0x756E0BFF (v5 draft).
+
+## Close-out — published
+
+* A launched background render silently died once (only a partial idle dir; an
+  independent sweep confirmed nothing running) and a second attempt raced my
+  own scratch-reel wipe — that renderer was killed deliberately, scratch-reel
+  wiped, and ONE final fresh explicit invocation rendered all 22 subjects into
+  clean directories. Completeness verified per subject against its own fresh
+  meta.txt: contiguous 0..N-1, every frame 8+384*240*3 bytes, no stale files.
+* **Final CRC proof** (`evidence/publication-crc-final.txt`): 20 subjects
+  byte-identical to baseline; exactly two changed — salto-dummy
+  0x652E456A/311f -> 0x6D95E2FD/295f, moving-light 0xDE5D2626 -> 0x756E0BFF/600f.
+  Both reproduce their accepted draft CRCs from a different build tree.
+* Only the two changed subjects re-encoded (VP9 nondeterminism would otherwise
+  churn 20 byte-identical clips); decoded frame counts verified 295/600.
+* Probe: `ZIXX PROBE: PASS` at the final merged state. Mains merged without
+  force; pushed.
+* Deployed ONCE: `deploy.ps1 -Project upheaval -Branch main`. Production
+  verified: HTTP 200 on page + both new webms + a Sixteen archive file; the
+  served webm byte sizes equal the local encodes (606160 / 406407); exactly
+  one noindex meta; archive tab lists 16 generations with Sixteen present.
+* Background jobs stopped; process sweep clean (no zhao/ffmpeg/wrangler).
+* Final SHAs: zhaozhou `5a6cd428`, Upheaval `84d89fa`.
