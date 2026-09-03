@@ -1,0 +1,34 @@
+QA region instrument -- HEAD e78f28e1 PEEL  (139 frames, ground 0-115)
+
+RAW CHANGED PIXELS PER FRAME (no segmentation):
+  clip median 832/f   p90 2734/f   max 4437
+  byte-identical frames (vs previous): 0 -> []
+
+  settle  f  0-  2    247.0/f
+  beat1   f  2- 44    855.7/f
+  dwell   f 44- 50   1620.8/f
+  beat2   f 50-106    791.7/f
+  hold    f106-115    521.8/f
+  launch  f116-119  502 1337 1352 1304
+
+  centroid x |v| med   0.148  |v| max   1.618  jerk max   1.395
+  centroid y |v| med   0.059  |v| max   1.182  jerk max   0.902
+  area       |v| med   5.000  |v| max  67.000  jerk max  62.000
+  silhouette XOR med 1.53 %/f  max 16.12 %/f
+  30Hz staircase odd/even |step| ratio (cy): 0.85
+
+HEAD vs TAIL (rightmost / leftmost body pixel), ground phase:
+  nose tip x 192..243   rearmost x 106..117
+  min gap nose-rear: 76 px
+  nose tip travel f0->f115: -50 px x, +17.0 px y
+  nose max FORWARD excursion en route: -241 px
+
+WHERE THE MOTION LIVES (cumulative silhouette XOR share by screen region):
+  beat1 f2-44: tail<170  37.4%  mid170-210  33.6%  head>=210  29.1%
+  beat2 f50-106: tail<170  54.6%  mid170-210  45.1%  head>=210   0.3%
+
+REGION CENTROID Y (down is +) across the compression:
+  tail<170     f44->f115:  -6.81 px
+  mid170-210   f44->f115:  +1.23 px
+  head>=210    f44->f115:   +nan px
+

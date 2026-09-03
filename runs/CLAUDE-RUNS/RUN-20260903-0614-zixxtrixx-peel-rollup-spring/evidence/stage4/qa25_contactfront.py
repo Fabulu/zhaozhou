@@ -42,23 +42,49 @@ def creature_mask(f):
     return lab == int(np.argmax(s)) + 1
 
 def terrain_top(f):
-    # terrain = the dark brown ground; its top edge per column. Use the sky/
-    # ground luminance boundary on a creature-free frame region: compute on
-    # the whole frame but only outside the creature mask.
-    fi = f.astype(np.int16)
-    ground = (fi[:, :, 0] < 190) & (fi[:, :, 1] < 150) & (fi[:, :, 2] < 130)
-    h, w = ground.shape
-    top = np.full(w, h - 1, dtype=int)
+    """Ground line at the CREATURE's depth plane, per column.
+
+    QA 2026-09-03 FAULT AND FIX. The original body of this function was
+
+        ground = (R < 190) & (G < 150) & (B < 130)
+
+    which the SKY satisfies -- this reel's sky is RGB ~(165,97,107) at the
+    top of the frame -- so `top` came back as row 0 in EVERY column, the
+    touch test `bottom >= top[x] - BAND` was true for every occupied column,
+    and "contact front" silently degenerated into the creature's right-hand
+    BOUNDING BOX.  That is why the pass reported the contact front and the
+    nose as the same number (242 -> 192 px): they were the same number.
+
+    A far-horizon sky/ground boundary would have been wrong too: it lies ~55
+    px above the creature's own contact line, because the animal stands in
+    FRONT of the crest (CLAUDE.md's 2D-contact trap).  The sound calibration
+    is the creature itself: at rest the body demonstrably lies on the dirt,
+    so its own bottom edge over the grounded stretch IS the ground line at
+    its depth plane, and the model is planar (probe: body lateral span 0 mm)
+    so that plane is the only one there is.  Columns outside the rest
+    footprint inherit the nearest calibrated value.
+
+    Takes the REST frame, not an arbitrary one.
+    """
+    m = creature_mask(f)
+    h, w = m.shape
+    bottom = np.full(w, -1, dtype=int)
     for x in range(w):
-        col = np.nonzero(ground[:, x])[0]
+        col = np.nonzero(m[:, x])[0]
         if len(col):
-            top[x] = col[0]
+            bottom[x] = col[-1]
+    lowest = bottom.max()
+    footprint = np.nonzero(bottom >= lowest - 1)[0]
+    g0, g1 = footprint.min(), footprint.max()
+    top = np.empty(w, dtype=int)
+    for x in range(w):
+        top[x] = bottom[min(max(x, g0), g1)]
     return top
 
 def main():
     d, out_csv, out_png = sys.argv[1], sys.argv[2], sys.argv[3]
     last = int(sys.argv[4]) if len(sys.argv) > 4 else 120
-    top = terrain_top(load(d, 0))  # camera + terrain are FIXED
+    top = terrain_top(load(d, 0))  # calibrated on the REST frame; camera fixed
     rows = []
     for i in range(last + 1):
         f = load(d, i)

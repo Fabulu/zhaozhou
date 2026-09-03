@@ -1,0 +1,26 @@
+QA region instrument -- BALANCE (accepted art)  (493 frames, ground 0-492)
+
+RAW CHANGED PIXELS PER FRAME (no segmentation):
+  clip median 1256/f   p90 2029/f   max 3385
+  byte-identical frames (vs previous): 54 -> [439, 440, 441, 442, 443, 444, 445, 446, 447, 448, 449, 450, 451, 452, 453, 454, 455, 456, 457, 458]
+
+  centroid x |v| med   0.387  |v| max  11.938  jerk max   2.483
+  centroid y |v| med   0.066  |v| max   1.442  jerk max   0.830
+  area       |v| med   7.000  |v| max  76.000  jerk max  68.000
+  silhouette XOR med 3.55 %/f  max 55.37 %/f
+  30Hz staircase odd/even |step| ratio (cy): 1.02
+
+HEAD vs TAIL (rightmost / leftmost body pixel), ground phase:
+  nose tip x 183..305   rearmost x 1..193
+  min gap nose-rear: 111 px
+  nose tip travel f0->f492: +0 px x, +0.0 px y
+  nose max FORWARD excursion en route: -179 px
+
+WHERE THE MOTION LIVES (cumulative silhouette XOR share by screen region):
+  ground f0-492: tail<170  41.6%  mid170-210  20.3%  head>=210  38.0%
+
+REGION CENTROID Y (down is +) across the compression:
+  tail<170     f0->f492:  +0.46 px
+  mid170-210   f0->f492:  +0.14 px
+  head>=210    f0->f492:  -0.33 px
+
