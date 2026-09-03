@@ -455,9 +455,65 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
 
   // flat shading per triangle: the ONE shared law (shade_flat_tri above —
   // hoisted 2026-08-16 for the creature lane; arithmetic verbatim).
+  //
+  // ---------------------------------------------------------------------
+  // THE DETAIL-NORMAL LOOK GATE (owner ruling D-1, 2026-09-03)
+  // ---------------------------------------------------------------------
+  // TERRAIN.NORMALMAP has a contract, an oracle and a cut seam, and NO RTL —
+  // deliberately, because the art law puts a look before the build:
+  //
+  //   "Put the new terrain-light and normal-detail law into ZRef and look at
+  //    the island under a moving sun at 240p."
+  //
+  // This is that path, and it is GATED OFF by default. With
+  // `kTerrainDetailStrength == 0` the arithmetic below is a bit-exact no-op —
+  // `normalmap_detail` returns exactly 0, the sum is `raw + 0`, and
+  // `clamp01(raw)` is precisely what `shade_flat_tri` already computed. So
+  // every golden CRC is unchanged while the gate is shut, which is the same
+  // discipline the additive-light prototype used and the reason it could be
+  // judged on sight without risking the captures.
+  //
+  // The composition follows the ruled per-light order exactly:
+  //
+  //     raw  = shade_flat_tri_dir_unclamped(n, L)
+  //     ndl  = clamp01(raw + detail)     // detail belongs to THIS light
+  //
+  // Detail is added BEFORE the clamp because a face turned slightly from the
+  // sun has a small negative base and relief on it should still catch light.
+  // It is inside this one light's clamp because an independent light must not
+  // subtract another's contribution.
+  //
+  // TO OPEN THE GATE: raise `kTerrainDetailStrength` (u8, value = raw/256) and
+  // render the island with a MOVING sun. A still frame will not do — the
+  // detail normal has no Y component by construction, so under a sun at the
+  // zenith the relief fades to nothing. That fade is declared behaviour, not a
+  // bug, and it is exactly why the judgement needs motion.
+  //
+  // The strength that ships is chosen BY LOOKING, at 240p, against what it
+  // sits on. A value that measures fine and pegs a channel is wrong.
+  static constexpr int kTerrainDetailStrength = 0;  // GATE: 0 = bit-exact off
+
   const auto shade_points = [&](int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by,
                                 int32_t bz, int32_t cx, int32_t cy, int32_t cz) -> int32_t {
-    return shade_flat_tri(ax, ay, az, bx, by, bz, cx, cy, cz, L);
+    if (kTerrainDetailStrength == 0) {
+      return shade_flat_tri(ax, ay, az, bx, by, bz, cx, cy, cz, L);
+    }
+    // A placeholder detail source until the world-anchored tile exists: a
+    // cheap deterministic perturbation from the triangle's own world position,
+    // so the LOOK can be judged before the texture path is built. It is not
+    // the shipping texel source and is not a second law — the arithmetic below
+    // is `zref::terrain::normalmap_detail`'s, and the tile replaces only where
+    // `dx`/`dz` come from.
+    const int32_t seed = (ax >> 12) * 37 + (cz >> 12) * 61;
+    const int dx = static_cast<int8_t>((seed * 17) & 0xFF);
+    const int dz = static_cast<int8_t>((seed * 29) & 0xFF);
+    const int64_t dot = static_cast<int64_t>(dx) * kLightX + static_cast<int64_t>(dz) * kLightZ;
+    const int32_t detail = static_cast<int32_t>((dot * kTerrainDetailStrength + (1 << 14)) >> 15);
+
+    const int32_t raw =
+        shade_flat_tri_dir_unclamped(ax, ay, az, bx, by, bz, cx, cy, cz, kLightX, kLightY, kLightZ, L);
+    const int32_t sum = raw + detail;
+    return sum < 0 ? 0 : (sum > 0x10000 ? 0x10000 : sum);
   };
   // top-surface shading — the pre-migration arithmetic verbatim
   const auto shade_tri = [&](const std::vector<int32_t>& hgt, size_t ia, size_t ib,
