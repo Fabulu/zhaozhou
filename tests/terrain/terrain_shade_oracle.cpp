@@ -1,23 +1,32 @@
-// terrain_shade_oracle.cpp — the terrain light law, before any RTL exists.
+// terrain_shade_oracle.cpp — the terrain light law, checked against the law
+// that already exists rather than against a second one.
 //
 // ---------------------------------------------------------------------------
-// WHY A TEST WITH NO DUT
+// WHY THIS FILE WAS REWRITTEN
 // ---------------------------------------------------------------------------
-// Owner brief 2026-09-03, the recommended order: put the terrain-light and
-// normal-detail law into ZRef and LOOK at the island under a moving sun BEFORE
-// fitting anything. The art law says the same thing from the other side —
-// measurement belongs on the comparison side, and the shipped value is chosen
-// by looking.
+// Its first version tested a `shade_base` that re-implemented the terrain
+// light: its own restoring square root, its own divide, s1.15 output, sign
+// preserved. All twelve checks passed, and the thing they were checking was a
+// SECOND IMPLEMENTATION of a ratified law — `zref::render::shade_flat_tri_dir`,
+// which `reference/src/zrender/internal.hpp` calls "The ONE flat-shade law" and
+// which the golden captures pin.
 //
-// So this exercises the law itself. It cannot tell anyone whether the terrain
-// looks right; only the render can. What it CAN do is stop the law being wrong
-// in the ways it was already wrong once, which is what the four cases below
-// are for.
+// A passing test against a duplicate law is worse than no test. It says "RTL
+// == oracle" while the oracle has quietly stopped meaning "what the captures
+// already pin". The sibling header states the discipline plainly:
+// zref_terrain_normals.hpp is "a THIN view onto an existing ratified law, not
+// a second implementation of it."
 //
-// The draft this replaces had a divider that returned zero for every realistic
-// triangle. Nothing here would have caught that — it was an RTL fault — but
-// the overflow and the rounding disagreement below were real oracle faults and
-// these are the checks that pin them.
+// So the oracle now exposes only what the ratified function does not, and this
+// file checks THOSE pieces plus the format agreement between them.
+//
+// ---------------------------------------------------------------------------
+// THE FORMAT ERROR IT WOULD HAVE SHIPPED
+// ---------------------------------------------------------------------------
+// The first version assumed the light was s1.15. Reading the source, the
+// renderer's light is Q16.16 — hand-normalised unit (1,2,1)/sqrt(6), 26758 /
+// 53521 / 26758. That is a factor of two in the relief, and it would have
+// looked like a tuning problem rather than a units problem.
 #include <cstdint>
 #include <cstdio>
 
@@ -28,146 +37,156 @@
 using namespace zref::terrain;
 
 int main() {
-  // ---- 1: THE RAIL DOES NOT OVERFLOW ------------------------------------
-  // A Q16.16 component at the fx16 rail squares to 2^62, and three of those is
-  // 1.38e19 against int64's 9.22e18. The first version added them in int64 and
-  // was undefined behaviour on input the contract says is reachable.
+  // ---- 1: THE LIGHT IS THE RENDERER'S, AND IT IS A UNIT VECTOR ----------
+  // If these drift from reference/src/zrender/internal.hpp the hardware is
+  // lit by a different sun than the reference, and every capture disagrees
+  // for a reason no pixel diff explains.
   {
-    FaceNormal n{};
-    n.x = 2147483647;
-    n.y = 2147483647;
-    n.z = 2147483647;
-    const int64_t len = shade_length(n);
-    // sqrt(3) * 2^31 ~= 3.72e9, and it must be positive and larger than any
-    // single component: a wrap would come back small or negative.
-    zhao::check(len > 3700000000LL && len < 3800000000LL,
-                "the sum of squares at the fx16 rail does not overflow -- "
-                "three components at 2^62 need unsigned 64, not signed",
-                1, (len > 3700000000LL && len < 3800000000LL) ? 1 : 0);
-
-    FaceNormal m{};
-    m.x = -2147483647;
-    m.y = -2147483647;
-    m.z = -2147483647;
-    zhao::check(shade_length(m) == len,
-                "and the negative rail gives the same length", 1,
-                shade_length(m) == len ? 1 : 0);
+    const int64_t x = kShadeLightX, y = kShadeLightY, z = kShadeLightZ;
+    const int64_t mag2 = x * x + y * y + z * z;
+    const int64_t one = int64_t(kShadeOne) * kShadeOne;
+    // |L|^2 within 0.2% of 1.0 in Q32.32 — it is hand-normalised, not exact.
+    const int64_t err = (mag2 > one) ? (mag2 - one) : (one - mag2);
+    zhao::check(err * 500 < one,
+                "the key light is the renderer's own hand-normalised unit "
+                "(1,2,1)/sqrt(6) in Q16.16 -- not s1.15, which the first "
+                "version of this oracle assumed",
+                1, (err * 500 < one) ? 1 : 0);
+    // NOT exactly 2x. The source says "hand-normalized to Q16.16 (0.40825 ->
+    // 26758, 0.81650 -> 53521)" -- two components rounded INDEPENDENTLY, so
+    // 53521 is five off the 53516 that doubling 26758 would give. This check
+    // asserted the exact relationship first and failed, which is the test
+    // working: a plausible invariant that the constants do not actually have.
+    // What is true, and what the hardware must reproduce, is the ratio within
+    // rounding.
+    const int64_t ratio_err = kShadeLightY - 2 * static_cast<int64_t>(kShadeLightX);
+    zhao::check(ratio_err > -16 && ratio_err < 16,
+                "and its Y is twice its X to within hand-rounding -- the two "
+                "components were normalised independently, so the hardware "
+                "must take these exact integers rather than derive one from "
+                "the other",
+                0, static_cast<int>(ratio_err));
   }
 
-  // ---- 2: ROUNDING IS ROUND-HALF-UP, INCLUDING NEGATIVES ----------------
-  // qformats §3 is round-half-up. A shift FLOORS, so the two disagree on every
-  // negative value -- which is exactly half of what a detail normal produces.
+  // ---- 2: THE SQUARED NORM DOES NOT OVERFLOW AT THE RAIL ----------------
+  // A Q16.16 component at the fx16 rail squares to 2^62; three of those reach
+  // 1.38e19 against signed 64's 9.22e18. The ratified law accumulates in
+  // uint64 and so must this. In RTL the same mistake is a silent wrap giving a
+  // SMALL norm and therefore a huge, wrong shade.
+  {
+    FaceNormal n{};
+    n.x = 2147483647; n.y = 2147483647; n.z = 2147483647;
+    const uint64_t sq = shade_nmag2(n);
+    // 3 * (2^31-1)^2 ~= 1.383e19, which only fits unsigned.
+    zhao::check(sq > 13000000000000000000ull,
+                "three components at the fx16 rail need UNSIGNED 64 -- signed "
+                "accumulation is undefined behaviour here and a wrap in RTL",
+                1, sq > 13000000000000000000ull ? 1 : 0);
+
+    FaceNormal m{};
+    m.x = -2147483647; m.y = -2147483647; m.z = -2147483647;
+    zhao::check(shade_nmag2(m) == sq,
+                "and the negative rail gives the same squared norm", 1,
+                shade_nmag2(m) == sq ? 1 : 0);
+  }
+
+  // ---- 3: A DEGENERATE TRIANGLE IS RECOGNISED, NOT DIVIDED BY ------------
+  // The ratified law returns 0 for zero area. The hardware must agree rather
+  // than dividing by zero, and it must decide it from the same quantity.
+  {
+    FaceNormal zero{};
+    zero.x = 0; zero.y = 0; zero.z = 0;
+    zhao::check(shade_degenerate(zero),
+                "a zero-area triangle is degenerate and shades to ambient, "
+                "matching the ratified law's nmag2 == 0 guard",
+                1, shade_degenerate(zero) ? 1 : 0);
+    FaceNormal up{};
+    up.x = 0; up.y = 65536; up.z = 0;
+    zhao::check(!shade_degenerate(up),
+                "and a real one is not", 0, shade_degenerate(up) ? 1 : 0);
+  }
+
+  // ---- 4: THE DOT PRODUCT AGREES WITH THE LAW'S SHAPE -------------------
+  // dot(n, L) widened to __int128, exactly as the ratified law does. A flat
+  // face under this light is dominated by the Y term.
+  {
+    FaceNormal up{};
+    up.x = 0; up.y = 65536; up.z = 0;
+    const __int128 d = shade_ndot(up, kShadeLightX, kShadeLightY, kShadeLightZ);
+    const __int128 want = static_cast<__int128>(65536) * kShadeLightY;
+    zhao::check(d == want,
+                "dot(n, L) for a flat face is exactly its Y component times "
+                "the light's Y, in the same Q16.16 pair the law uses",
+                1, (d == want) ? 1 : 0);
+
+    // A face turned away gives a NEGATIVE dot. The ratified law clamps that to
+    // zero AFTER the divide -- which is why the detail term has to be added
+    // before the clamp, and why TERRAIN.SHADE cannot simply call the existing
+    // function and hand the result on.
+    FaceNormal down{};
+    down.x = 0; down.y = -65536; down.z = 0;
+    zhao::check(shade_ndot(down, kShadeLightX, kShadeLightY, kShadeLightZ) < 0,
+                "a face turned from the sun has a NEGATIVE dot before the "
+                "clamp -- relief on it must still be able to catch light, so "
+                "the detail is added before the clamp, not after",
+                1, shade_ndot(down, kShadeLightX, kShadeLightY, kShadeLightZ) < 0 ? 1 : 0);
+  }
+
+  // ---- 5: ROUNDING IS ROUND-HALF-UP AT BOTH SIGNS ------------------------
   {
     struct C { int64_t v; int sh; int64_t want; const char* why; };
     const C cases[] = {
         { 100, 1,  50, "exact" },
         { 101, 1,  51, "positive half rounds up" },
         {-100, 1, -50, "exact, negative" },
-        {-101, 1, -50, "negative half rounds UP, toward zero -- a shift would "
-                       "floor to -51" },
+        {-101, 1, -50, "negative half rounds UP -- a shift would floor to -51" },
         {  -1, 1,   0, "and minus one half is zero, not minus one" },
     };
     int bad = 0;
     for (const C& c : cases) {
-      const int64_t got = rshift_round(c.v, c.sh);
-      if (got != c.want) {
+      if (rshift_round(c.v, c.sh) != c.want) {
         ++bad;
-        std::printf("    rshift_round(%lld,%d) = %lld, wanted %lld (%s)\n",
-                    (long long)c.v, c.sh, (long long)got, (long long)c.want,
-                    c.why);
+        std::printf("    rshift_round(%lld,%d) wrong (%s)\n",
+                    (long long)c.v, c.sh, c.why);
       }
     }
     zhao::check(bad == 0,
-                "rounding is round-half-up at every sign -- a `>>` floors and "
-                "disagrees on exactly the negative half of the detail term",
+                "rounding is round-half-up at every sign -- qformats §3, one "
+                "rounding per result, and a shift is not it",
                 0, bad);
   }
 
-  // ---- 3: A FLAT FACE UNDER AN OVERHEAD SUN IS FULLY LIT -----------------
-  // The case the draft RTL got wrong: its divider produced quotient bits 63..32
-  // while the true quotient is under 2^15, so this returned ZERO and every
-  // triangle shaded to ambient. The oracle must say 32767.
-  {
-    FaceNormal up{};
-    up.x = 0;
-    up.y = 65536;  // one world unit, Q16.16
-    up.z = 0;
-    const int base = shade_base(up, 0, 32767, 0);
-    zhao::check(base > 32000,
-                "a flat face under a sun straight overhead is fully lit -- the "
-                "draft RTL returned 0 here and shaded the whole island to "
-                "ambient",
-                32767, base);
-
-    // and facing away is negative, not clamped: the detail term is added to it
-    const int away = shade_base(up, 0, -32767, 0);
-    zhao::check(away < -32000,
-                "a face turned away keeps its SIGN, because the per-fragment "
-                "detail is added to this and a clamp would discard what the "
-                "addition needs",
-                -32767, away);
-  }
-
-  // ---- 4: A DEGENERATE TRIANGLE HAS NO DIRECTION TO BE LIT FROM ---------
-  {
-    FaceNormal zero{};
-    zero.x = 0; zero.y = 0; zero.z = 0;
-    zhao::check(shade_base(zero, 0, 32767, 0) == 0,
-                "a degenerate triangle shades to ambient rather than dividing "
-                "by zero",
-                0, shade_base(zero, 0, 32767, 0));
-  }
-
-  // ---- 5: AMBIENT IS ADDED, NOT A FLOOR ---------------------------------
-  // The draft made ambient a floor and argued for it. That re-legislated
-  // `SetEnvironment 0x0311`, which carries ambient as a COLOUR beside the sun.
-  {
-    const uint8_t lit_no_amb  = shade_pack(32767, 0, 0);
-    const uint8_t lit_amb     = shade_pack(16384, 0, 40);
-    const uint8_t unlit_amb   = shade_pack(-32768, 0, 40);
-    zhao::check(lit_no_amb == 255,
-                "a fully lit face with no ambient saturates at unit8 255, "
-                "which is the largest representable and not 1.0",
-                255, lit_no_amb);
-    zhao::check(unlit_amb == 40,
-                "an unlit face receives exactly ambient -- the lit term is "
-                "clamped at zero first, because a surface facing away gets no "
-                "sun rather than negative sun that eats the ambient",
-                40, unlit_amb);
-    zhao::check(lit_amb > 40 + 100,
-                "and a half-lit face is ambient PLUS its light, which is what "
-                "an addend means", 1, lit_amb > 140 ? 1 : 0);
-  }
-
-  // ---- 6: THE DETAIL TERM, AND ITS DECLARED ZENITH FADE ------------------
-  // d has no Y by construction, so under a sun at the zenith dot(d, L) is zero
-  // and the relief fades out. Declared, not discovered -- and the reason the
-  // look-gate is a MOVING sun rather than a still frame.
+  // ---- 6: THE DETAIL TERM IS IN THE BASE'S OWN FORMAT --------------------
+  // The two are added before the clamp, so they must share a scale. The first
+  // version had the detail in s1.15 against a base it believed was s1.15 --
+  // both wrong, and consistently wrong, which is how a units error survives a
+  // green test.
   {
     const DetailNormal d = normalmap_decode(0x2040);  // dx=0x40, dz=0x20
-    const int low  = normalmap_detail(d, 32767, 0, 255);   // sun near horizon
-    const int high = normalmap_detail(d, 0, 0, 255);       // sun at zenith
-    zhao::check(low > 0 && high == 0,
-                "detail responds to a low sun and fades to nothing at the "
-                "zenith -- there is no Y component, on purpose, and that fade "
-                "is the declared behaviour",
-                1, (low > 0 && high == 0) ? 1 : 0);
+    const int32_t low = normalmap_detail(d, kShadeLightX, kShadeLightZ, 255);
 
-    zhao::check(normalmap_detail(d, 32767, 0, 0) == 0,
-                "and strength 0 is exactly no detail, so the cut seam is a "
-                "bit-exact no-op",
-                0, normalmap_detail(d, 32767, 0, 0));
-  }
+    // A full-strength detail must be a visible fraction of full scale, and
+    // must not swamp it: relief modulates the light, it does not replace it.
+    zhao::check(low > 0 && low < kShadeOne / 2,
+                "a full-strength detail term is a real fraction of Q16.16 full "
+                "scale and does not swamp the base -- relief modulates the "
+                "light rather than replacing it",
+                1, (low > 0 && low < kShadeOne / 2) ? 1 : 0);
 
-  // ---- 7: MULTIPLE SUNS SATURATE RATHER THAN WRAP -----------------------
-  {
-    const int bases[3]   = {32767, 32767, 32767};
-    const int details[3] = {0, 0, 0};
-    const uint8_t three = shade_pack_multi(bases, details, 3, 0);
-    zhao::check(three == 255,
-                "three suns on one face is brighter, never darker -- the "
-                "accumulator saturates instead of wrapping",
-                255, three);
+    // THE ZENITH FADE, declared rather than discovered: d has no Y component
+    // by construction, so a sun straight overhead produces no relief at all.
+    zhao::check(normalmap_detail(d, 0, 0, 255) == 0,
+                "detail fades to nothing under a sun at the zenith -- there is "
+                "no Y component, on purpose, which is why the look-gate is a "
+                "MOVING sun and not a still frame",
+                0, normalmap_detail(d, 0, 0, 255));
+
+    // THE CUT SEAM: strength 0 is bit-exact nothing.
+    zhao::check(normalmap_detail(d, kShadeLightX, kShadeLightZ, 0) == 0 &&
+                    normalmap_is_noop(0),
+                "and strength 0 is a bit-exact no-op, so cutting the detail "
+                "organ changes nothing else",
+                0, normalmap_detail(d, kShadeLightX, kShadeLightZ, 0));
   }
 
   return zhao::report_and_exit("terrain_shade_oracle");

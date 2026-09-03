@@ -28,9 +28,13 @@
 // Q FORMATS (spec/qformats.md)
 // ---------------------------------------------------------------------------
 //   detail texel   two s8 — value = raw / 128, packed {dz, dx}
-//   sun direction  s1.15 unit
+//   sun direction  **Q16.16 unit**, the same light the ratified flat-shade law
+//                  uses (kShadeLightX/Y/Z). The first version of this file said
+//                  s1.15, which was an assumption rather than a reading — the
+//                  renderer's light is Q16.16 and getting that wrong is a
+//                  factor of two in the relief.
 //   strength       u8     — value = raw / 256
-//   detail out     s1.15, to be added to TERRAIN.SHADE's base
+//   detail out     Q16.16, added to the base BEFORE the ratified clamp
 #pragma once
 
 #include <cstdint>
@@ -63,18 +67,21 @@ inline DetailNormal normalmap_decode(uint16_t texel) {
 
 // strength * dot(d, L), in s1.15. Two multiplies and an add, per fragment.
 //
-// The format scaling is exact and free: strength/256 * d/128 expressed in
-// s1.15 is strength*d*32768/(256*128), and 32768/(256*128) is 1. That the
-// three Q formats cancel to a bare product is why they were chosen.
+// The detail is `strength * dot(d, L)` in the SAME Q16.16 scale the base uses,
+// so the two can be added before the clamp.
 //
-// Rounding is round-half-up via `rshift_round`, NOT a shift. A shift floors,
-// and floors disagree on every negative product — which is half of what a
-// detail normal produces.
-inline int normalmap_detail(const DetailNormal& d, int lx, int lz,
-                            int strength) {
+// Scaling, stated rather than assumed: `d` is s8 with value raw/128 and
+// `strength` is u8 with value raw/256, so the product carries 15 fraction bits
+// beyond the light's own 16. `rshift_round(., 15)` removes exactly those and
+// leaves Q16.16.
+//
+// Rounding is round-half-up, NOT a shift. A shift floors, and floors disagree
+// on every negative product — which is half of what a detail normal produces.
+inline int32_t normalmap_detail(const DetailNormal& d, int32_t lx, int32_t lz,
+                                int strength) {
   const int64_t dot = static_cast<int64_t>(d.nx) * lx +
                       static_cast<int64_t>(d.nz) * lz;
-  return static_cast<int>(rshift_round(dot * strength, 15));
+  return static_cast<int32_t>(rshift_round(dot * strength, 15));
 }
 
 // THE CUT SEAM, as a property a test can hold: strength 0 is a bit-exact
