@@ -81,12 +81,12 @@ game side knows the contract it is relying on.
 * `descriptors_refused_by_reason[2]`
 
 ## Scalar reference function
-`zref::HudSprites` (ledger `reference_model`). Owns descriptor interpretation, ordering, the drop rule and
+`zref::twod::sprite_u` (ledger `reference_model`). Owns descriptor interpretation, ordering, the drop rule and
 the refusal taxonomy. It does **not** own sampling or blending — those are the
 TMU's and the blend's, already frozen and proved.
 
 ## Directed tests
-`tests/twod/twod_sprite_directed.cpp`.
+`tests/compositor/twod_sprite_directed.cpp`.
 
 * ordering: overlapping sprites composite strictly by `order`, and a stall
   mid-list does not reorder them;
@@ -99,13 +99,14 @@ TMU's and the blend's, already frozen and proved.
 * both HUD regions in Duo, with a view-masked sprite in one only.
 
 ## Randomized differential tests
-`tests/twod/twod_sprite_random.cpp`, RTL against `zref::HudSprites`.
+`tests/compositor/twod_sprite_random.cpp`, RTL against `zref::twod::sprite_u`.
 
 Random descriptor sets with heavy overlap and deliberate budget overruns.
 Report the drop mix; a sprite test that never overflows is testing half of it.
 
 ## Formal properties
-`tests/formal/twod_sprite_order.sby`:
+**A formal lane is PLANNED and no file exists yet**, so it is named without
+a path -- see `reports/PHANTOM-CITATIONS-AUDIT.md`. Its properties:
 
 * **composited output order equals descriptor `order`** under arbitrary
   backpressure;

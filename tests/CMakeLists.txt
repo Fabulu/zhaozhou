@@ -2195,6 +2195,35 @@ verilate(test_terrain_residency_directed
 add_test(NAME terrain_residency_directed COMMAND test_terrain_residency_directed)
 set_tests_properties(terrain_residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# TWOD.SPRITE -- HUD sprites, a ruling that is mostly DELETIONS: no private
+# sampler, no text rasterizer, no glyph cache. The property that is easy to get
+# nearly right is the affine walk: stepping UV serpentine-style is also "just
+# adds", also looks correct on a 1xN sprite, and is wrong for every sprite
+# wider than one pixel. So the check is every pixel against the closed form
+# with a NON-ZERO cross term.
+add_executable(test_twod_sprite_directed compositor/twod_sprite_directed.cpp)
+target_link_libraries(test_twod_sprite_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_twod_sprite_directed
+  PREFIX Vzhao_twod_sprite
+  TOP_MODULE zhao_twod_sprite
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_sprite.sv)
+add_test(NAME twod_sprite_directed COMMAND test_twod_sprite_directed)
+set_tests_properties(twod_sprite_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# ...and the randomized lane. What it buys is SHAPE: the affine stepper's
+# failure modes live at 1-pixel-wide and 1-pixel-tall sprites, where a
+# serpentine accumulation and a row-origin off-by-one are each invisible. The
+# shapes are drawn to include them on purpose, and the coverage guard requires
+# that they were.
+add_executable(test_twod_sprite_random compositor/twod_sprite_random.cpp)
+target_link_libraries(test_twod_sprite_random PRIVATE zhao_harness zhao_zref)
+verilate(test_twod_sprite_random
+  PREFIX Vzhao_twod_sprite
+  TOP_MODULE zhao_twod_sprite
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_sprite.sv)
+add_test(NAME twod_sprite_random COMMAND test_twod_sprite_random)
+set_tests_properties(twod_sprite_random PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # PART.LADDER -- the representation ladder of the 2026-08-31 ruling. Its two
 # halves pull against each other: a particle MAY change representation while
 # alive (so there is hysteresis) and the simulation NEVER changes because of it
