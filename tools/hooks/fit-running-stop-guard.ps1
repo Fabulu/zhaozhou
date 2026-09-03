@@ -13,41 +13,51 @@
 # Quartus fits in this project run 20-90 minutes. Waiting one out is the single
 # most expensive habit available here.
 #
-# WHAT IT DOES
-# ------------
-# On a stop attempt, if a quartus process is alive, it blocks once and hands
-# back the specific next question -- what is OUTSIDE the running fit's source
-# closure -- rather than a vague "keep going".
+# WHY IT DOES NOT USE `stop_hook_active`
+# --------------------------------------
+# The first version bypassed itself whenever `stop_hook_active` was set, as a
+# loop guard. That is wrong when ANOTHER Stop hook exists: the session's goal
+# hook blocked first, which sets the flag, and this hook then stood down for
+# the rest of the session. Fabian caught it on the first fit after installing
+# it -- "so uh... your hook didn't fire" -- and he was right.
 #
-# `stop_hook_active` is honoured as the loop guard: it blocks at most once per
-# stop sequence, so a genuine "there is nothing left to do" still terminates.
+# The loop guard is now a BUDGET PER FIT instead. It blocks up to
+# $MaxBlocks times for a given fit process, then allows the stop. That cannot
+# loop forever, it is unaffected by other hooks, and every new fit gets a fresh
+# budget. State lives beside the temp workspaces and is keyed on the fit's
+# start time, so a new fit resets it automatically.
 #
-# THIS FILE IS THE AUTHORITATIVE COPY. It lives in the repo so it is version
-# controlled and survives a machine; ~/.claude/settings.json points at this
-# path. A hook kept only in a home directory is a rule that vanishes with the
-# laptop -- the same failure as direction kept only in a run folder.
+# ASCII ONLY. Windows PowerShell 5.1 reads a UTF-8 script as ANSI, so an
+# em-dash in a comment becomes a parse error forty lines later.
 $ErrorActionPreference = 'Stop'
+$MaxBlocks = 4
 
-$raw = [Console]::In.ReadToEnd()
-$active = $false
-if ($raw) {
-    try {
-        $payload = $raw | ConvertFrom-Json
-        if ($payload.PSObject.Properties['stop_hook_active']) {
-            $active = [bool]$payload.stop_hook_active
-        }
-    } catch {
-        # A hook that dies on unexpected input would block every stop forever.
-        $active = $false
-    }
-}
-
-# Already blocked once in this stop sequence: let it go, or this loops.
-if ($active) { exit 0 }
+# Read and discard stdin: the payload is not consulted any more, but a hook
+# that leaves it unread can wedge the caller's pipe.
+try { [Console]::In.ReadToEnd() | Out-Null } catch { }
 
 $fit = @(Get-Process -ErrorAction SilentlyContinue |
          Where-Object { $_.ProcessName -like 'quartus*' })
 if ($fit.Count -eq 0) { exit 0 }
+
+# Key on the OLDEST running quartus process's start time: stable for the life
+# of one fit, different for the next.
+$oldest = $fit | Sort-Object StartTime | Select-Object -First 1
+$key = '{0}-{1}' -f $oldest.ProcessName, $oldest.StartTime.Ticks
+
+$stateFile = Join-Path $env:TEMP 'zhao-fit-stop-guard.state'
+$count = 0
+if (Test-Path -LiteralPath $stateFile) {
+    try {
+        $parts = (Get-Content -LiteralPath $stateFile -Raw).Trim() -split '\s+'
+        if ($parts.Count -ge 2 -and $parts[0] -eq $key) { $count = [int]$parts[1] }
+    } catch { $count = 0 }
+}
+
+if ($count -ge $MaxBlocks) { exit 0 }
+
+$count++
+try { Set-Content -LiteralPath $stateFile -Value ("{0} {1}" -f $key, $count) -Encoding ascii } catch { }
 
 $names = ($fit | ForEach-Object {
     '{0} ({1:N0} min elapsed)' -f $_.ProcessName,
@@ -56,6 +66,7 @@ $names = ($fit | ForEach-Object {
 
 $reason = @"
 A Quartus fit is still running: $names.
+(guard $count of $MaxBlocks for this fit)
 
 Do not idle and do not stop here to report status. Per CLAUDE.md, a running fit
 is not a reason to wait -- find work that does not touch its sources and do it.
@@ -68,7 +79,8 @@ the working tree.
 
 Pick the next item off reports/DOCKET.md or the run's TASK_LOG.md and continue.
 If the honest answer is that every remaining task genuinely requires this
-toolchain, say exactly that and which tasks they are -- then stopping is fine.
+toolchain, say exactly that and which tasks they are -- then stopping is fine,
+and this guard will stand down after $MaxBlocks attempts regardless.
 "@
 
 @{ decision = 'block'; reason = $reason } | ConvertTo-Json -Compress
