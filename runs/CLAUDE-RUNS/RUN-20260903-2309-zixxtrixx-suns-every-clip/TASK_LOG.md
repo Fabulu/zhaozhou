@@ -119,3 +119,17 @@ ZIXX_SUNS=off vs pristine pre-suns build (c23c6a63), all 22 subjects:
 per-subject sequence CRC32C IDENTICAL, frame counts identical. Bonus
 provenance: pristine moving-light = 0x65A8D1E5, exactly the CRC logged for
 the PUBLISHED moving-light clip -- this tree is the published bank's source.
+
+## 2026-09-04 01:30 — verification complete; encoding in progress
+
+Motion-untouched evidence committed (evidence-motion-untouched.md): probe PASS,
+22/22 ZIXX_SUNS=off CRC identity, ink-mask silhouette identity 6674/6674 frames
+across all 21 subjects. The checker's border-touch column was its own false
+positive (travel/flight clips legitimately reach the viewport edge; walk f0's
+left-column diffs are hot-pink TAIL pigment re-shaded by the azure sun --
+verified by pixel inspection, not assumed).
+
+Bank accepted by eye: contact sheets of all 21 + direct pristine pairs for
+balance/fall/attack (the three weakest thumbnails) -- all read clearly.
+08-LIGHTING.md gains the Direction 29 section (four authored lessons).
+tovideo.py encoding all 21 subjects.
