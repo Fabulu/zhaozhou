@@ -26,6 +26,20 @@ WHAT IT LOOKS FOR, and why each one
 3. TWO DYNAMIC WRITE ADDRESSES into one array, which the island brief's S5.3
    forbids by name -- it asks for a two-write-port memory, which the device
    does not have at that shape.
+4. A MULTIDIMENSIONAL unpacked array, `[LANES][N]`. Added 2026-09-03 after this
+   checker called `zhao_texture_cache_pipe` clean and an 88-minute fit came
+   back with 2 M10K and 128 memory bits anyway. Synthesis was explicit:
+
+       EDA Netlist Writer cannot regroup multidimensional array "data_r"
+
+   with no "Inferred RAM" line for it at all. Quartus cannot map a memory whose
+   OUTER selection is dynamic; it builds a mux across every element of the
+   outer dimension and the whole array falls into flip-flops, however correct
+   the writes are. The fix is one flat array per lane inside a `generate`, with
+   the outer index a genvar.
+
+   This rule is the reason the checker exists at all: it was blind to the exact
+   construct that cost the fit it was written to prevent.
 
 It is deliberately CONSERVATIVE about what counts as an array: only unpacked
 declarations with a depth, since those are what become memories. A packed
@@ -136,6 +150,21 @@ def check_file(path):
                            "(a continuous assignment is combinational)"
                      % mm.group(1)))
                 break
+
+        # 4. Multidimensional unpacked array.
+        #
+        # Read from the DECLARATION rather than from use, because that is where
+        # the shape is: `logic [15:0] m [LANES][N];` has two unpacked
+        # dimensions and cannot be a memory whatever the accesses look like.
+        decl_text = text[arrays[name][0]:arrays[name][1]]
+        unpacked_dims = re.findall(r"\[[^\]]*\]", decl_text[decl_text.index(name) + len(name):])
+        if len(unpacked_dims) > 1:
+            findings.append(
+                (name, "MULTIDIMENSIONAL unpacked array %s -- Quartus cannot "
+                       "regroup this into a memory; it muxes across the outer "
+                       "dimension and the whole array becomes flip-flops. One "
+                       "flat array per element inside a generate, outer index a "
+                       "genvar." % "".join(unpacked_dims)))
 
         if len(write_addrs) > 1:
             findings.append(

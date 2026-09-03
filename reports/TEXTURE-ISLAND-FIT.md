@@ -349,3 +349,70 @@ combinationally at `:332-341`, and two dynamic write addresses into one array
 `islandrearchitecture5.md`; nothing mechanical enforced them, so 98.66 MHz was
 the only number the tooling produced and the storage law went unchecked. That
 gap is the first thing to close, and it costs no fit and no RTL.
+
+---
+
+# THE FIT SAID NO, AND THE CHECKER HAD THE SAME BLIND SPOT
+
+The clock-only-process fix was measured on 2026-09-03 and **did not work**:
+
+| | ALM | registers | M10K | memory bits |
+|---|---|---|---|---|
+| before the fix | 5,903 | 11,328 | 2 | 128 |
+| after the clock-only fix | **5,854** | **11,305** | **2** | **128** |
+
+Synthesis said why, and there was no `Inferred RAM` line for either array:
+
+    EDA Netlist Writer cannot regroup multidimensional array "data_r"
+    EDA Netlist Writer cannot regroup multidimensional array "tag_r"
+
+**A `[LANES][N]` unpacked array is not a memory Quartus can map.** It muxes
+across the outer dimension and the whole array falls into flip-flops however
+correct the writes are. Moving the writes out of the async-reset process was
+necessary and **not sufficient**.
+
+## The answer was thirty lines above the passage that was read
+
+`zhao_texture_cache.sv:237` names the multidimensional array as the PRIMARY
+cause and carries its own measurement — *"5,402 ALMs, 9,993 registers, zero
+M10K, zero memory bits — a cache made entirely of flops"*. The async-reset
+explanation at `:495` is the SECOND one. Only the second was implemented.
+
+That is the third time in one day that the answer was already written down and
+partially read: `QUARTUS_GOTCHAS.md` gotchas 1/4/8 rediscovered by probe, this,
+and the T1–T12 terrain rulings sitting unread while the docket called those
+questions open.
+
+## An interim reading that was wrong, and why it looked right
+
+Mid-fit, synthesis reported `Implemented 32 RAM segments` and that was reported
+here as "the storage inferred". It was not. **Synthesis saying an array became
+memory is not the fitter saying it stayed memory** — the final report shows 2
+M10K and `Total MLAB memory bits: 0`, so they went to neither.
+
+## A repo-wide inventory, from a tool that had missed it
+
+`tools/quartus/check_ram_inference.py` called the half-fixed block CLEAN. It now
+carries a fourth rule for exactly this construct, validated by flagging the
+version the fitter rejected while staying quiet on the fix.
+
+Scanning the tree finds **52 multidimensional unpacked arrays across 14 files**
+(`reports/synthesis/RAM-INFERENCE-SCAN.txt`), including production-island blocks
+— `zhao_raster_perspuv_svc`, `zhao_raster_texjoin_v2` — and most of FIELD v3.
+
+**These are CANDIDATES, not confirmed defects.** A small array is often
+deliberately flops: `zhao_texture_cache_pipe`'s own `valid_r [LANES][LINES]` is
+64 bits that *needs* the reset a memory cannot give, and it should stay exactly
+as it is. What the list is good for is knowing where to look when a block
+misses its M10K tripwire, instead of spending 88 minutes finding out.
+
+## The provenance guard was also over-broad
+
+The fit was recorded `contaminated:source-changed-during-fit`, naming
+`zhao_abi_pkg.sv` and `zhao_raster_tile_pipe.sv` — **neither in the cache's
+declared closure nor its cone**. A per-block QSF carries the whole shell source
+list while `TOP_LEVEL_ENTITY` names one block, so hashing every QSF file threw
+away a valid measurement because unrelated RTL changed. It now hashes
+`design/fit_targets.yml`'s declared closure. Without that, the standing rule to
+work outside a running fit's closure is unworkable, because there is no such
+thing as outside.

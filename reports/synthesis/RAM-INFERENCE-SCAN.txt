@@ -1,0 +1,972 @@
+command/zhao_cmd_dma.sv
+    hdr_win          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    hdr_win          read at MODULE SCOPE through dynamic index `off` (a continuous assignment is combinational)
+common/zhao_project_core.sv
+    mat              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    mat              read COMBINATIONALLY through dynamic index `view_i` -- forces a per-bit mux the width of the array
+    mat              MULTIDIMENSIONAL unpacked array [0:1][0:15] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    mat              TWO OR MORE distinct write addresses ['[0][ci]', '[1][ci]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s3_dv            written from an ASYNC-RESET process (6 sites) -- an M10K has no reset port, so this array cannot be one
+    s3_dv            TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    vp_h             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    vp_h             read COMBINATIONALLY through dynamic index `s5_view` -- forces a per-bit mux the width of the array
+    vp_h             TWO OR MORE distinct write addresses ['[0]', '[1]', '[cfg_view_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    vp_w             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    vp_w             read COMBINATIONALLY through dynamic index `s5_view` -- forces a per-bit mux the width of the array
+    vp_w             TWO OR MORE distinct write addresses ['[0]', '[1]', '[cfg_view_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    vp_x0            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    vp_x0            read COMBINATIONALLY through dynamic index `s5_view` -- forces a per-bit mux the width of the array
+    vp_x0            TWO OR MORE distinct write addresses ['[0]', '[1]', '[cfg_view_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    vp_y0            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    vp_y0            read COMBINATIONALLY through dynamic index `s5_view` -- forces a per-bit mux the width of the array
+    vp_y0            TWO OR MORE distinct write addresses ['[0]', '[1]', '[cfg_view_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+common/zhao_shell_top.sv
+    wfifo            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    wfifo            read COMBINATIONALLY through dynamic index `wf_rp` -- forces a per-bit mux the width of the array
+common/zhao_skid2.sv
+    mem              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    mem              read at MODULE SCOPE through dynamic index `rptr` (a continuous assignment is combinational)
+    mem              TWO OR MORE distinct write addresses ['[0]', '[1]', '[wptr]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+common/zhao_stub_top.sv
+    slot             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    slot             read at MODULE SCOPE through dynamic index `ZHAO_OFF_MAGIC` (a continuous assignment is combinational)
+common/zhao_synth_probe.sv
+    window           written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    window           TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+compositor/zhao_post_gather.sv
+    d_x              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    d_x              MULTIDIMENSIONAL unpacked array [2][NCELL] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    d_x              TWO OR MORE distinct write addresses ['[b][i]', '[bank_q][cell_c]', '[~bank_q][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    d_y              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    d_y              MULTIDIMENSIONAL unpacked array [2][NCELL] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    d_y              TWO OR MORE distinct write addresses ['[b][i]', '[bank_q][cell_c]', '[~bank_q][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    g_b              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    g_b              MULTIDIMENSIONAL unpacked array [2][NCELL] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    g_b              TWO OR MORE distinct write addresses ['[b][i]', '[bank_q][cell_c]', '[~bank_q][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    g_g              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    g_g              MULTIDIMENSIONAL unpacked array [2][NCELL] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    g_g              TWO OR MORE distinct write addresses ['[b][i]', '[bank_q][cell_c]', '[~bank_q][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    g_r              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    g_r              MULTIDIMENSIONAL unpacked array [2][NCELL] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    g_r              TWO OR MORE distinct write addresses ['[b][i]', '[bank_q][cell_c]', '[~bank_q][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    ink              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    ink              MULTIDIMENSIONAL unpacked array [2][NCELL] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    ink              TWO OR MORE distinct write addresses ['[b][i]', '[bank_q][cell_c]', '[~bank_q][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+compositor/zhao_twod_plane.sv
+    blend_q          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    en_q             written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    en_q             read COMBINATIONALLY through dynamic index `sl` -- forces a per-bit mux the width of the array
+    en_q             TWO OR MORE distinct write addresses ['[d_slot_i]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    fmt_q            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    h_q              written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    h_q              read COMBINATIONALLY through dynamic index `sl` -- forces a per-bit mux the width of the array
+    opac_q           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    pal_q            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    role_q           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    vmask_q          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    vmask_q          read COMBINATIONALLY through dynamic index `sl` -- forces a per-bit mux the width of the array
+    w_q              written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    w_q              read COMBINATIONALLY through dynamic index `sl` -- forces a per-bit mux the width of the array
+    wrapu_q          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    wrapu_q          read COMBINATIONALLY through dynamic index `sl` -- forces a per-bit mux the width of the array
+    wrapv_q          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    wrapv_q          read COMBINATIONALLY through dynamic index `sl` -- forces a per-bit mux the width of the array
+debug/zhao_debug_frameblit.sv
+    chunk            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    chunk            read COMBINATIONALLY through dynamic index `beat` -- forces a per-bit mux the width of the array
+    chunk            TWO OR MORE distinct write addresses ['[beat]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+field/zhao_field_progcache.sv
+    ent_hash         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    ent_hash         read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    ent_hash         TWO OR MORE distinct write addresses ['[k]', '[victim]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    ent_lru          written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    ent_lru          read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    ent_lru          TWO OR MORE distinct write addresses ['[hit_idx]', '[i]', '[k]', '[victim]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+field/zhao_field_seq.sv
+    rf_a             TWO OR MORE distinct write addresses ['[rf_waddr_i]', '[walk_waddr_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rf_b             TWO OR MORE distinct write addresses ['[rf_waddr_i]', '[walk_waddr_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rf_c             TWO OR MORE distinct write addresses ['[rf_waddr_i]', '[walk_waddr_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rf_h             TWO OR MORE distinct write addresses ['[rf_waddr_i]', '[walk_waddr_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+field/zhao_field_v2_core.sv
+    lq_a             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    lq_a             TWO OR MORE distinct write addresses ['[i]', '[l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    lq_a1            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    lq_a1            TWO OR MORE distinct write addresses ['[i]', '[l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    lq_a2            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    lq_a2            TWO OR MORE distinct write addresses ['[i]', '[l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    lq_b0            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    lq_b0            TWO OR MORE distinct write addresses ['[i]', '[l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    lq_b1            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    lq_b1            TWO OR MORE distinct write addresses ['[i]', '[l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    pc               written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    pc               read COMBINATIONALLY through dynamic index `sel` -- forces a per-bit mux the width of the array
+    pc               TWO OR MORE distinct write addresses ['[i]', '[sel]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s2_a0            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    s2_a0            TWO OR MORE distinct write addresses ['[i]', '[l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s2_b0            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    s2_b0            TWO OR MORE distinct write addresses ['[i]', '[l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s2_c             written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    s2_c             read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    s2_pre           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    s2_pre           read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    wbq_y            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    wbq_y            read COMBINATIONALLY through dynamic index `wl` -- forces a per-bit mux the width of the array
+    wbq_y            MULTIDIMENSIONAL unpacked array [LANES][0:2] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    wbq_y            TWO OR MORE distinct write addresses ['[l][0]', '[l][1]', '[l][2]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+field/zhao_field_v2_front.sv
+    res_hold         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    res_hold         read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    res_hold         TWO OR MORE distinct write addresses ['[i]', '[rd_idx]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+field/zhao_field_v2_lanemux.sv
+    a1_q             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    a1_q             read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+    a2_q             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    a2_q             read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+    a_q              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    a_q              read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+    b0_q             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    b0_q             read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+    b1_q             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    b1_q             read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+    y1_q             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    y1_q             read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    y1_q             TWO OR MORE distinct write addresses ['[l]', '[lane]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    y2_q             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    y2_q             read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    y2_q             TWO OR MORE distinct write addresses ['[l]', '[lane]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    y_q              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    y_q              read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    y_q              TWO OR MORE distinct write addresses ['[l]', '[lane]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+field/zhao_field_v3_dispatch.sv
+    g_ctx_r          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    g_ctx_r          MULTIDIMENSIONAL unpacked array [GATHERS][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    g_ctx_r          TWO OR MORE distinct write addresses ['[acc_slot_c][pt]', '[i][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    g_dst_r          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    g_dst_r          read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    g_dst_r          TWO OR MORE distinct write addresses ['[acc_slot_c]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    g_fill_r         written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    g_fill_r         read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    g_fill_r         TWO OR MORE distinct write addresses ['[acc_slot_c]', '[i]', '[iss_slot_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    g_imm_r          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    g_imm_r          read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    g_imm_r          TWO OR MORE distinct write addresses ['[acc_slot_c]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    g_op_r           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    g_op_r           read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    g_op_r           TWO OR MORE distinct write addresses ['[acc_slot_c]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    g_s4_r           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    g_s4_r           read COMBINATIONALLY through dynamic index `iss_slot_r` -- forces a per-bit mux the width of the array
+    g_s4_r           MULTIDIMENSIONAL unpacked array [GATHERS][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    g_s4_r           TWO OR MORE distinct write addresses ['[acc_slot_c][pt]', '[i][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    g_v_r            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    g_v_r            read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    g_v_r            TWO OR MORE distinct write addresses ['[acc_slot_c]', '[i]', '[iss_slot_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    r0_r             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    r0_r             read COMBINATIONALLY through dynamic index `head_r` -- forces a per-bit mux the width of the array
+    r0_r             MULTIDIMENSIONAL unpacked array [OUTSTANDING][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    r0_r             TWO OR MORE distinct write addresses ['[i][l]', '[rsp_slot_c][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    r1_r             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    r1_r             read COMBINATIONALLY through dynamic index `head_r` -- forces a per-bit mux the width of the array
+    r1_r             MULTIDIMENSIONAL unpacked array [OUTSTANDING][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    r1_r             TWO OR MORE distinct write addresses ['[i][l]', '[rsp_slot_c][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    r2_r             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    r2_r             read COMBINATIONALLY through dynamic index `head_r` -- forces a per-bit mux the width of the array
+    r2_r             MULTIDIMENSIONAL unpacked array [OUTSTANDING][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    r2_r             TWO OR MORE distinct write addresses ['[i][l]', '[rsp_slot_c][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s_ctx_r          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    s_ctx_r          read COMBINATIONALLY through dynamic index `head_r` -- forces a per-bit mux the width of the array
+    s_ctx_r          MULTIDIMENSIONAL unpacked array [OUTSTANDING][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    s_ctx_r          TWO OR MORE distinct write addresses ['[i][l]', '[tail_r][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s_done_r         written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    s_done_r         read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    s_done_r         TWO OR MORE distinct write addresses ['[head_r]', '[i]', '[rsp_slot_c]', '[tail_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s_dst_r          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    s_dst_r          read COMBINATIONALLY through dynamic index `head_r` -- forces a per-bit mux the width of the array
+    s_dst_r          TWO OR MORE distinct write addresses ['[i]', '[tail_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s_imm_r          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    s_imm_r          read COMBINATIONALLY through dynamic index `tail_r` -- forces a per-bit mux the width of the array
+    s_imm_r          TWO OR MORE distinct write addresses ['[i]', '[tail_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s_op_r           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    s_op_r           read COMBINATIONALLY through dynamic index `tail_r` -- forces a per-bit mux the width of the array
+    s_op_r           TWO OR MORE distinct write addresses ['[i]', '[tail_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s_tag_r          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    s_tag_r          read COMBINATIONALLY through dynamic index `tail_r` -- forces a per-bit mux the width of the array
+    s_tag_r          TWO OR MORE distinct write addresses ['[i]', '[tail_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s_used_r         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    s_used_r         read COMBINATIONALLY through dynamic index `tail_r` -- forces a per-bit mux the width of the array
+    s_used_r         TWO OR MORE distinct write addresses ['[i]', '[tail_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s_width_r        written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    s_width_r        read COMBINATIONALLY through dynamic index `head_r` -- forces a per-bit mux the width of the array
+    s_width_r        TWO OR MORE distinct write addresses ['[i]', '[tail_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+field/zhao_field_v3_len.sv
+    bk_busy_r        written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    bk_busy_r        read at MODULE SCOPE through dynamic index `bk` (a continuous assignment is combinational)
+    bk_busy_r        TWO OR MORE distinct write addresses ['[b]', '[free_bank_c]', '[head_bk_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    bk_done_r        written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    bk_done_r        read at MODULE SCOPE through dynamic index `bk` (a continuous assignment is combinational)
+    bk_done_r        TWO OR MORE distinct write addresses ['[b]', '[free_bank_c]', '[head_bk_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    bk_got_r         written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    bk_got_r         TWO OR MORE distinct write addresses ['[b]', '[b][l]', '[free_bank_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    bk_n2_r          written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    bk_n2_r          read at MODULE SCOPE through dynamic index `bk` (a continuous assignment is combinational)
+    bk_n2_r          MULTIDIMENSIONAL unpacked array [BANKS][LANES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    bk_n2_r          TWO OR MORE distinct write addresses ['[b][l]', '[free_bank_c][0]', '[free_bank_c][1]', '[free_bank_c][2]', '[free_bank_c][3]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    bk_res_r         written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    bk_res_r         read COMBINATIONALLY through dynamic index `head_bk_c` -- forces a per-bit mux the width of the array
+    bk_res_r         MULTIDIMENSIONAL unpacked array [BANKS][LANES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    bk_sat_r         written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    bk_sat_r         read COMBINATIONALLY through dynamic index `head_bk_c` -- forces a per-bit mux the width of the array
+    bk_sat_r         TWO OR MORE distinct write addresses ['[b]', '[b][l]', '[free_bank_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    bk_started_r     written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    bk_started_r     read at MODULE SCOPE through dynamic index `bk` (a continuous assignment is combinational)
+    bk_started_r     TWO OR MORE distinct write addresses ['[b]', '[b][l]', '[free_bank_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    bk_tag_r         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    bk_tag_r         read COMBINATIONALLY through dynamic index `head_bk_c` -- forces a per-bit mux the width of the array
+    bk_tag_r         TWO OR MORE distinct write addresses ['[b]', '[free_bank_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    f_n2_r           written from an ASYNC-RESET process (6 sites) -- an M10K has no reset port, so this array cannot be one
+    f_n2_r           TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', '[l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    f_v_r            written from an ASYNC-RESET process (21 sites) -- an M10K has no reset port, so this array cannot be one
+    f_v_r            read COMBINATIONALLY through dynamic index `f_comp_r` -- forces a per-bit mux the width of the array
+    f_v_r            MULTIDIMENSIONAL unpacked array [3][LANES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    f_v_r            TWO OR MORE distinct write addresses ['[0][0]', '[0][1]', '[0][2]', '[0][3]', '[1][0]', '[1][1]', '[1][2]', '[1][3]', '[2][0]', '[2][1]', '[2][2]', '[2][3]', '[c][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    oq_bk_r          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    oq_bk_r          read COMBINATIONALLY through dynamic index `oq_head_r` -- forces a per-bit mux the width of the array
+    oq_bk_r          TWO OR MORE distinct write addresses ['[b]', '[oq_tail_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+field/zhao_field_v3_noise.sv
+    h_a0             written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    h_a0             read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    h_a0             TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', '[l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    h_a1             written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    h_a1             read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    h_a1             TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', '[l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    lane0            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    lane0            read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    mix_x            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    s_mix            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    s_reg            written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    s_reg            read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+field/zhao_field_v3_normalize.sv
+    expo             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    expo             read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    expo             TWO OR MORE distinct write addresses ['[l]', '[root_lane]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    h_a              written from an ASYNC-RESET process (13 sites) -- an M10K has no reset port, so this array cannot be one
+    h_a              MULTIDIMENSIONAL unpacked array [3][LANES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    h_a              TWO OR MORE distinct write addresses ['[0][0]', '[0][1]', '[0][2]', '[0][3]', '[1][0]', '[1][1]', '[1][2]', '[1][3]', '[2][0]', '[2][1]', '[2][2]', '[2][3]', '[c][l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    mant             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    mant             read at MODULE SCOPE through dynamic index `g` (a continuous assignment is combinational)
+    mant             TWO OR MORE distinct write addresses ['[l]', '[root_lane]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    n2               written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    n2               read at MODULE SCOPE through dynamic index `root_lane` (a continuous assignment is combinational)
+    rx               written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    rx               read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    rx               TWO OR MORE distinct write addresses ['[l]', '[root_lane]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    zero             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    zero             TWO OR MORE distinct write addresses ['[l]', '[root_lane]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+field/zhao_field_v3_rf.sv
+    q                MULTIDIMENSIONAL unpacked array [BANKS][COPIES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+field/zhao_field_v3_ring.sv
+    h_d              written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    h_d              read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    h_d              TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', '[l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+field/zhao_field_v3_ring_svc.sv
+    dc_dat_r         written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    dc_dat_r         MULTIDIMENSIONAL unpacked array [DESC][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    dc_dat_r         TWO OR MORE distinct write addresses ['[dc_vic_r][0]', '[dc_vic_r][1]', '[dc_vic_r][2]', '[dc_vic_r][3]', '[w][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    dc_key_r         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    dc_key_r         read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+    dc_key_r         TWO OR MORE distinct write addresses ['[dc_vic_r]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    dc_val_r         written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    dc_val_r         read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+    dc_val_r         TWO OR MORE distinct write addresses ['[dc_vic_r]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    f_d_r            written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    f_d_r            TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    f_slot_r         written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    f_slot_r         read at MODULE SCOPE through dynamic index `f_cyc_r` (a continuous assignment is combinational)
+    f_slot_r         TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    f_uni_r          written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    f_uni_r          TWO OR MORE distinct write addresses ['[cap]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    oq_u_r           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    oq_u_r           read COMBINATIONALLY through dynamic index `oq_head_r` -- forces a per-bit mux the width of the array
+    oq_u_r           TWO OR MORE distinct write addresses ['[oq_tail_r]', '[u]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sh_u_r           written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    sh_u_r           TWO OR MORE distinct write addresses ['[0]', '[1]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sh_v_r           written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    sh_v_r           TWO OR MORE distinct write addresses ['[0]', '[1]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    u_busy_r         written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    u_busy_r         read COMBINATIONALLY through dynamic index `u` -- forces a per-bit mux the width of the array
+    u_busy_r         TWO OR MORE distinct write addresses ['[free_u_c]', '[head_u_c]', '[u]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    u_d_r            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    u_d_r            read COMBINATIONALLY through dynamic index `u` -- forces a per-bit mux the width of the array
+    u_d_r            MULTIDIMENSIONAL unpacked array [UNITS][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    u_d_r            TWO OR MORE distinct write addresses ['[free_u_c][i]', '[u][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    u_off_r          written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    u_off_r          read COMBINATIONALLY through dynamic index `u` -- forces a per-bit mux the width of the array
+    u_off_r          TWO OR MORE distinct write addresses ['[free_u_c]', '[head_u_c]', '[u]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    u_smooth_r       written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    u_smooth_r       read COMBINATIONALLY through dynamic index `u` -- forces a per-bit mux the width of the array
+    u_tag_r          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    u_tag_r          read COMBINATIONALLY through dynamic index `u` -- forces a per-bit mux the width of the array
+    u_tag_r          TWO OR MORE distinct write addresses ['[free_u_c]', '[u]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    u_uni_r          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    u_uni_r          read COMBINATIONALLY through dynamic index `u` -- forces a per-bit mux the width of the array
+    u_uni_r          MULTIDIMENSIONAL unpacked array [UNITS][4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    u_uni_r          TWO OR MORE distinct write addresses ['[free_u_c][i]', '[u][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+field/zhao_field_v3_rot.sv
+    h_ang            written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    h_ang            read at MODULE SCOPE through dynamic index `trig_k` (a continuous assignment is combinational)
+    h_ang            TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', '[l]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+field/zhao_field_v3_spline.sv
+    u                written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    u                read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+field/zhao_field_v3_trig.sv
+    oq_slot_r        written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    oq_slot_r        read COMBINATIONALLY through dynamic index `oq_head_r` -- forces a per-bit mux the width of the array
+    oq_slot_r        TWO OR MORE distinct write addresses ['[b]', '[oq_tail_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sh_lane_r        written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    sh_lane_r        TWO OR MORE distinct write addresses ['[0]', '[1]', '[b]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sh_slot_r        written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    sh_slot_r        TWO OR MORE distinct write addresses ['[0]', '[1]', '[b]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sh_v_r           written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    sh_v_r           TWO OR MORE distinct write addresses ['[0]', '[1]', '[b]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sl_addr_r        written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_addr_r        read COMBINATIONALLY through dynamic index `sl` -- forces a per-bit mux the width of the array
+    sl_addr_r        TWO OR MORE distinct write addresses ['[b]', '[fire_slot_c]', '[free_slot_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sl_ang_r         written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_ang_r         read COMBINATIONALLY through dynamic index `fire_slot_c` -- forces a per-bit mux the width of the array
+    sl_ang_r         MULTIDIMENSIONAL unpacked array [2][LANES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    sl_ang_r         TWO OR MORE distinct write addresses ['[b][l]', '[free_slot_c][0]', '[free_slot_c][1]', '[free_slot_c][2]', '[free_slot_c][3]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sl_busy_r        written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_busy_r        read COMBINATIONALLY through dynamic index `sl` -- forces a per-bit mux the width of the array
+    sl_busy_r        TWO OR MORE distinct write addresses ['[b]', '[free_slot_c]', '[head_sl_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sl_cos_r         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_cos_r         read COMBINATIONALLY through dynamic index `fire_slot_c` -- forces a per-bit mux the width of the array
+    sl_cos_r         TWO OR MORE distinct write addresses ['[b]', '[free_slot_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sl_got_r         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_got_r         read COMBINATIONALLY through dynamic index `head_sl_c` -- forces a per-bit mux the width of the array
+    sl_got_r         TWO OR MORE distinct write addresses ['[b]', '[free_slot_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sl_res_r         written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    sl_res_r         read COMBINATIONALLY through dynamic index `head_sl_c` -- forces a per-bit mux the width of the array
+    sl_res_r         MULTIDIMENSIONAL unpacked array [2][LANES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    sl_tag_r         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_tag_r         read COMBINATIONALLY through dynamic index `head_sl_c` -- forces a per-bit mux the width of the array
+    sl_tag_r         TWO OR MORE distinct write addresses ['[b]', '[free_slot_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+forge/zhao_forge_cliff.sv
+    edge_span_r      written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    edge_span_r      read at MODULE SCOPE through dynamic index `idx_r` (a continuous assignment is combinational)
+geometry/zhao_geom_binner.sv
+    ep_r             written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    epr_r            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    kc_r             written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    kc_r             TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    kx_r             written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    kx_r             TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    ky_r             written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    ky_r             TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    off_r            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+geometry/zhao_geom_cull.sv
+    len_ceil         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    len_ceil         read COMBINATIONALLY through dynamic index `ev_view` -- forces a per-bit mux the width of the array
+    len_ceil         MULTIDIMENSIONAL unpacked array [0:1][0:4] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    len_ceil         TWO OR MORE distinct write addresses ['[prep_view][prep_plane]', '[vi][pi]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    mat              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    mat              read COMBINATIONALLY through dynamic index `sel_view` -- forces a per-bit mux the width of the array
+    mat              MULTIDIMENSIONAL unpacked array [0:1][0:15] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    mat              TWO OR MORE distinct write addresses ['[0][ci]', '[1][ci]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+geometry/zhao_geom_mat3x4_mul.sv
+    a_q              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    b_q              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+geometry/zhao_geom_pose_decode.sv
+    acur             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    acur             read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    invq             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    invq             read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    lr               written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    lr               read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    lr               TWO OR MORE distinct write addresses ['[11]', '[3]', '[7]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    pa               written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    pa               read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    pa               TWO OR MORE distinct write addresses ['[i]', '[k - 1]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    res              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+geometry/zhao_geom_skin.sv
+    a_q              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    acc              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    acc              TWO OR MORE distinct write addresses ['[i]', '[rp + 3]', '[rp]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    acc_done         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    acc_done         read COMBINATIONALLY through dynamic index `br_a` -- forces a per-bit mux the width of the array
+    b_q              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    m_q              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    m_q              read COMBINATIONALLY through dynamic index `idx` -- forces a per-bit mux the width of the array
+    m_q              TWO OR MORE distinct write addresses ['[12 + i]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    p_q              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    p_q              read COMBINATIONALLY through dynamic index `r` -- forces a per-bit mux the width of the array
+geometry/zhao_vertex_arena.sv
+    gen_q            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    gen_q            read at MODULE SCOPE through dynamic index `look_arena_i` (a continuous assignment is combinational)
+    org_x_q          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    org_y_q          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    org_z_q          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    sealed_q         written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    sealed_q         read at MODULE SCOPE through dynamic index `fill_arena_i` (a continuous assignment is combinational)
+input/zhao_input_rumble.sv
+    duty             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    duty             read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    pend_strength    written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+measure/zhao_measure_governor.sv
+    rep_cnt_r        written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    rep_cnt_r        TWO OR MORE distinct write addresses ['[i]', '[nd0_r]', '[nd1_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+measure/zhao_measure_tokens.sv
+    rep_cnt_r        written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    rep_cnt_r        TWO OR MORE distinct write addresses ['[i]', '[req_rep_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+memory/zhao_sdram_ctrl.sv
+    open_row         written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    open_row         read at MODULE SCOPE through dynamic index `req_bank` (a continuous assignment is combinational)
+    open_row         TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', '[cur_bank]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+memory/zhao_vram_arbiter.sv
+    age              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    age              read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    credits          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    credits          read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    pend_addr        written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    pend_addr        read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    pend_words       written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    pend_words       read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+raster/zhao_raster_attrdiv_svc.sv
+    u_tag_r          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    u_tag_r          read COMBINATIONALLY through dynamic index `ret_r` -- forces a per-bit mux the width of the array
+    u_tag_r          TWO OR MORE distinct write addresses ['[iss_r]', '[u]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+raster/zhao_raster_edgewalk.sv
+    mask_r           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    mask_r           read COMBINATIONALLY through dynamic index `drain_row` -- forces a per-bit mux the width of the array
+    mask_r           TWO OR MORE distinct write addresses ['[i]', '[rowb_idx_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+raster/zhao_raster_fbwrite.sv
+    out_r            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    out_r            read COMBINATIONALLY through dynamic index `idx` -- forces a per-bit mux the width of the array
+    row_r            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+raster/zhao_raster_perspuv_svc.sv
+    e_dz             written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    e_dz             read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+    e_have           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    e_have           read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+    e_have           TWO OR MORE distinct write addresses ['[i]', '[tail_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    e_k              written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    e_mant           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    e_num            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    e_num            MULTIDIMENSIONAL unpacked array [NTOK][2] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    e_num            TWO OR MORE distinct write addresses ['[tail_q][0]', '[tail_q][1]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    e_q              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    e_q              read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+    e_q              MULTIDIMENSIONAL unpacked array [NTOK][2] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    e_q              TWO OR MORE distinct write addresses ['[tail_q][0]', '[tail_q][1]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    e_sat            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    e_sat            read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+    e_tag            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    e_tag            read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+    e_val            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    e_val            read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+    e_val            TWO OR MORE distinct write addresses ['[head_q]', '[i]', '[tail_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    p1_i_q           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    p1_k_q           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    p1_k_q           read COMBINATIONALLY through dynamic index `ax` -- forces a per-bit mux the width of the array
+    p1_prod_q        written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    p1_prod_q        read COMBINATIONALLY through dynamic index `ax` -- forces a per-bit mux the width of the array
+    p1_v_q           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    p2_i_q           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    p2_sh_q          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    p2_sh_q          read COMBINATIONALLY through dynamic index `ax` -- forces a per-bit mux the width of the array
+    p2_sum_q         written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    p2_sum_q         read COMBINATIONALLY through dynamic index `ax` -- forces a per-bit mux the width of the array
+    p2_v_q           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    p3_i_q           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    p3_resc_q        written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    p3_resc_q        read COMBINATIONALLY through dynamic index `ax` -- forces a per-bit mux the width of the array
+    p3_v_q           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+raster/zhao_raster_rcp24_svc.sv
+    c_k              written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    c_k              read COMBINATIONALLY through dynamic index `done_i` -- forces a per-bit mux the width of the array
+    c_m              written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    c_m              read COMBINATIONALLY through dynamic index `pick_i` -- forces a per-bit mux the width of the array
+    c_pend           written from an ASYNC-RESET process (7 sites) -- an M10K has no reset port, so this array cannot be one
+    c_pend           read COMBINATIONALLY through dynamic index `idx` -- forces a per-bit mux the width of the array
+    c_pend           TWO OR MORE distinct write addresses ['[free_i]', '[i]', '[m1_i_q]', '[pick_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    c_ph             written from an ASYNC-RESET process (6 sites) -- an M10K has no reset port, so this array cannot be one
+    c_ph             read COMBINATIONALLY through dynamic index `pick_i` -- forces a per-bit mux the width of the array
+    c_ph             TWO OR MORE distinct write addresses ['[free_i]', '[i]', '[m1_i_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    c_tok            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    c_tok            read COMBINATIONALLY through dynamic index `done_i` -- forces a per-bit mux the width of the array
+    c_val            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    c_val            read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    c_val            TWO OR MORE distinct write addresses ['[done_i]', '[free_i]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    c_w              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    c_w              read COMBINATIONALLY through dynamic index `pick_i` -- forces a per-bit mux the width of the array
+    c_w              TWO OR MORE distinct write addresses ['[free_i]', '[m1_i_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    c_x              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    c_x              read COMBINATIONALLY through dynamic index `pick_i` -- forces a per-bit mux the width of the array
+    c_x              TWO OR MORE distinct write addresses ['[free_i]', '[m1_i_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    c_zero           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    c_zero           read COMBINATIONALLY through dynamic index `done_i` -- forces a per-bit mux the width of the array
+raster/zhao_raster_resolve.sv
+    fifo_q           written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    fifo_q           read COMBINATIONALLY through dynamic index `rptr` -- forces a per-bit mux the width of the array
+    fifo_q           TWO OR MORE distinct write addresses ['[0]', '[1]', '[wptr]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+raster/zhao_raster_texjoin.sv
+    aux_q            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    aux_q            read at MODULE SCOPE through dynamic index `head_c` (a continuous assignment is combinational)
+    ctx_q            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    ctx_q            read at MODULE SCOPE through dynamic index `head_c` (a continuous assignment is combinational)
+    sat_q            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sat_q            read at MODULE SCOPE through dynamic index `head_c` (a continuous assignment is combinational)
+    sat_q            TWO OR MORE distinct write addresses ['[i]', '[inflight_slot_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    seq_q            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    seq_q            read at MODULE SCOPE through dynamic index `head_c` (a continuous assignment is combinational)
+raster/zhao_raster_texjoin_v2.sv
+    arr_q            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    arr_q            read at MODULE SCOPE through dynamic index `head_q` (a continuous assignment is combinational)
+    arr_q            TWO OR MORE distinct write addresses ['[i]', '[tail_q]', '[tmu_rslot_i][tmu_rsidx_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    auxa_q           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    auxarr_q         written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    auxarr_q         read at MODULE SCOPE through dynamic index `head_q` (a continuous assignment is combinational)
+    auxarr_q         TWO OR MORE distinct write addresses ['[aux_rslot_i]', '[i]', '[tail_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    auxreq_q         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    auxreq_q         read at MODULE SCOPE through dynamic index `head_q` (a continuous assignment is combinational)
+    auxreq_q         TWO OR MORE distinct write addresses ['[i]', '[tail_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    auxrgb_q         written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    ctx_q            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    gen_q            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    gen_q            TWO OR MORE distinct write addresses ['[i]', '[tail_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    recipe_q         written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    recipe_q         read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+    req_q            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    req_q            read at MODULE SCOPE through dynamic index `head_q` (a continuous assignment is combinational)
+    req_q            TWO OR MORE distinct write addresses ['[i]', '[tail_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sa_q             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sa_q             read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+    sa_q             MULTIDIMENSIONAL unpacked array [DEPTH][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    sa_q             TWO OR MORE distinct write addresses ['[tail_q][0]', '[tmu_rslot_i][tmu_rsidx_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sat_q            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    sbind_q          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    sbind_q          MULTIDIMENSIONAL unpacked array [DEPTH][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    slod_q           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    slod_q           MULTIDIMENSIONAL unpacked array [DEPTH][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    srgb_q           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    srgb_q           read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+    srgb_q           MULTIDIMENSIONAL unpacked array [DEPTH][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    srgb_q           TWO OR MORE distinct write addresses ['[tail_q][0]', '[tmu_rslot_i][tmu_rsidx_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    su_q             written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    su_q             MULTIDIMENSIONAL unpacked array [DEPTH][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    sv_q             written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    sv_q             MULTIDIMENSIONAL unpacked array [DEPTH][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    val_q            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    val_q            read at MODULE SCOPE through dynamic index `head_q` (a continuous assignment is combinational)
+    val_q            TWO OR MORE distinct write addresses ['[head_q]', '[i]', '[tail_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    wq               written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    wq               read at MODULE SCOPE through dynamic index `wq_rp` (a continuous assignment is combinational)
+raster/zhao_raster_tilestore.sv
+    ram0             written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    ram1             written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+raster/zhao_raster_toon.sv
+    sl_band_r        written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_band_r        read COMBINATIONALLY through dynamic index `rd_r` -- forces a per-bit mux the width of the array
+    sl_band_r        TWO OR MORE distinct write addresses ['[i]', '[wr_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sl_flat_r        written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_flat_r        read COMBINATIONALLY through dynamic index `rd_r` -- forces a per-bit mux the width of the array
+    sl_flat_r        TWO OR MORE distinct write addresses ['[i]', '[wr_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sl_got_r         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_got_r         read COMBINATIONALLY through dynamic index `rd_r` -- forces a per-bit mux the width of the array
+    sl_got_r         TWO OR MORE distinct write addresses ['[i]', '[wr_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sl_lane_r        written from an ASYNC-RESET process (7 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_lane_r        read COMBINATIONALLY through dynamic index `iss_slot_r` -- forces a per-bit mux the width of the array
+    sl_lane_r        MULTIDIMENSIONAL unpacked array [SLOTS][3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    sl_lane_r        TWO OR MORE distinct write addresses ['[i][c]', '[wr_r][0]', '[wr_r][1]', '[wr_r][2]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sl_ovf_r         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_ovf_r         TWO OR MORE distinct write addresses ['[i]', '[wr_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sl_q_r           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_q_r           read COMBINATIONALLY through dynamic index `iss_slot_r` -- forces a per-bit mux the width of the array
+    sl_q_r           TWO OR MORE distinct write addresses ['[i]', '[wr_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sl_tag_r         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sl_tag_r         read COMBINATIONALLY through dynamic index `rd_r` -- forces a per-bit mux the width of the array
+    sl_tag_r         TWO OR MORE distinct write addresses ['[i]', '[wr_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+raster/zhao_raster_toon_div.sv
+    den_s            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    den_s            read COMBINATIONALLY through dynamic index `st` -- forces a per-bit mux the width of the array
+    low_s            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    low_s            read COMBINATIONALLY through dynamic index `st` -- forces a per-bit mux the width of the array
+    neg_s            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    ovf_s            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    quo_s            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    rem_s            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    rem_s            read COMBINATIONALLY through dynamic index `st` -- forces a per-bit mux the width of the array
+    tag_s            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    vld_s            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+surface/zhao_surface_sheet.sv
+    dir_handle       written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    dir_handle       read at MODULE SCOPE through dynamic index `s` (a continuous assignment is combinational)
+    dir_handle       TWO OR MORE distinct write addresses ['[req_free_slot]', '[s]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+synth/zhao_probe_banked_rf.sv
+    q                MULTIDIMENSIONAL unpacked array [BANKS][COPIES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+synth/zhao_probe_compose_pipe.sv
+    acc              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    acc              read COMBINATIONALLY through dynamic index `s` -- forces a per-bit mux the width of the array
+    bot              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    cov              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    dual             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sat              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    vld              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+synth/zhao_probe_curve_svc.sv
+    f_doff           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    f_dye            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    f_p0             written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    f_p1             written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    f_p2             written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    f_p3             written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    f_res            written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    f_seg            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    f_t              written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    f_ye             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    f_ye             read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    meta_dy0         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    meta_dy0         TWO OR MORE distinct write addresses ['[t]', '[tl_tbl_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    meta_n           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    meta_n           TWO OR MORE distinct write addresses ['[t]', '[tl_tbl_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    meta_x0          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    meta_x0          read COMBINATIONALLY through dynamic index `req_tbl_i` -- forces a per-bit mux the width of the array
+    meta_x0          TWO OR MORE distinct write addresses ['[t]', '[tl_tbl_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    meta_xn1         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    meta_xn1         read COMBINATIONALLY through dynamic index `req_tbl_i` -- forces a per-bit mux the width of the array
+    meta_xn1         TWO OR MORE distinct write addresses ['[t]', '[tl_tbl_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    meta_y0          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    meta_y0          TWO OR MORE distinct write addresses ['[t]', '[tl_tbl_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rd_x             read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    rsp_r            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    s_clamped        written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    s_clamped        read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    s_dye            written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    s_dye            read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    s_k              written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    s_k              read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    s_lo             written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    s_lo             read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    s_mid            read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    s_p0             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    s_p0             TWO OR MORE distinct write addresses ['[l]', '[la]', '[lb]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s_p2             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    s_p2             TWO OR MORE distinct write addresses ['[l]', '[la]', '[lb]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s_p3             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    s_p3             TWO OR MORE distinct write addresses ['[l]', '[la]', '[lb]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    s_xe             written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    s_xe             read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    s_ye             written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    s_ye             read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    st_clamped       written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+synth/zhao_probe_patch_acc.sv
+    by_addr          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    by_addr          read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    by_h             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    by_h             read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    by_n             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    by_n             read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    by_v             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    by_v             read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    by_valid         written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    by_valid         read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    by_wh            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    by_wh            read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    by_wn            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    by_wn            read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    by_wv            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    by_wv            read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    d1_base          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    d1_bot           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    d1_bot           read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    m_act            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    m_addr           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    m_addr           read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    m_h              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    m_h              read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    m_m              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    m_m              read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    m_n              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    m_n              read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    m_v              written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    m_v              read COMBINATIONALLY through dynamic index `b` -- forces a per-bit mux the width of the array
+    out_bot          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    out_mat          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    out_nav          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    out_top          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    out_vel          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    ram_h            MULTIDIMENSIONAL unpacked array [BANKS][0:272] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    ram_m            MULTIDIMENSIONAL unpacked array [BANKS][0:272] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    ram_n            MULTIDIMENSIONAL unpacked array [BANKS][0:272] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    ram_v            MULTIDIMENSIONAL unpacked array [BANKS][0:272] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+synth/zhao_probe_v3_exec.sv
+    lq_ctx_r         written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    lq_ctx_r         read COMBINATIONALLY through dynamic index `lq_hd_r` -- forces a per-bit mux the width of the array
+    lq_dst_r         written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    lq_dst_r         read COMBINATIONALLY through dynamic index `lq_hd_r` -- forces a per-bit mux the width of the array
+    lq_imm_r         written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    lq_imm_r         read COMBINATIONALLY through dynamic index `lq_hd_r` -- forces a per-bit mux the width of the array
+    lq_op_r          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    lq_op_r          read COMBINATIONALLY through dynamic index `lq_hd_r` -- forces a per-bit mux the width of the array
+    pc_r             written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    pc_r             TWO OR MORE distinct write addresses ['[i]', '[rel_ctx_i]', '[s4_ctx_r]', '[start_ctx_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sk_ctx_r         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sk_ctx_r         read COMBINATIONALLY through dynamic index `sk_hd_r` -- forces a per-bit mux the width of the array
+    sk_ctx_r         TWO OR MORE distinct write addresses ['[i]', '[sk_tl_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sk_data_r        written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sk_data_r        read COMBINATIONALLY through dynamic index `sk_hd_r` -- forces a per-bit mux the width of the array
+    sk_data_r        TWO OR MORE distinct write addresses ['[i]', '[sk_tl_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sk_reg_r         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sk_reg_r         read COMBINATIONALLY through dynamic index `sk_hd_r` -- forces a per-bit mux the width of the array
+    sk_reg_r         TWO OR MORE distinct write addresses ['[i]', '[sk_tl_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+synth/zhao_probe_walk_earth.sv
+    lx_c             read COMBINATIONALLY through dynamic index `l` -- forces a per-bit mux the width of the array
+    wx               read COMBINATIONALLY through dynamic index `li_c` -- forces a per-bit mux the width of the array
+    wz               read COMBINATIONALLY through dynamic index `cur_j_r` -- forces a per-bit mux the width of the array
+    wz               TWO OR MORE distinct write addresses ['[cur_j_r]', '[lt_idx_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+terrain/zhao_terrain_bake.sv
+    meets_row        written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    meets_row        read at MODULE SCOPE through dynamic index `cj` (a continuous assignment is combinational)
+    meets_row        TWO OR MORE distinct write addresses ['[k]', '[vj]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+terrain/zhao_terrain_lod.sv
+    hld              written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    lvl              written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    mrp              written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    sid              written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+terrain/zhao_terrain_patch.sv
+    fp_x0            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    fp_x0            read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+    fp_x0            TWO OR MORE distinct write addresses ['[add_slot]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    fp_x1            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    fp_x1            read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+    fp_x1            TWO OR MORE distinct write addresses ['[add_slot]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    fp_z0            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    fp_z0            read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+    fp_z0            TWO OR MORE distinct write addresses ['[add_slot]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    fp_z1            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    fp_z1            read at MODULE SCOPE through dynamic index `lane` (a continuous assignment is combinational)
+    fp_z1            TWO OR MORE distinct write addresses ['[add_slot]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+terrain/zhao_terrain_project.sv
+    acc_d            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    acc_d            TWO OR MORE distinct write addresses ['[k4]', '[s6_k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    acc_x            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    acc_x            TWO OR MORE distinct write addresses ['[k4]', '[s6_k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    acc_y            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    acc_y            TWO OR MORE distinct write addresses ['[k4]', '[s6_k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    job_x            written from an ASYNC-RESET process (6 sites) -- an M10K has no reset port, so this array cannot be one
+    job_x            read COMBINATIONALLY through dynamic index `job_k` -- forces a per-bit mux the width of the array
+    job_x            TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    job_y            written from an ASYNC-RESET process (6 sites) -- an M10K has no reset port, so this array cannot be one
+    job_y            read COMBINATIONALLY through dynamic index `job_k` -- forces a per-bit mux the width of the array
+    job_y            TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    job_z            written from an ASYNC-RESET process (6 sites) -- an M10K has no reset port, so this array cannot be one
+    job_z            read COMBINATIONALLY through dynamic index `job_k` -- forces a per-bit mux the width of the array
+    job_z            TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+terrain/zhao_terrain_residency.sv
+    dirty_r          written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    dirty_r          TWO OR MORE distinct write addresses ['[cl_slot_c]', '[dirty_slot_i]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    gen_r            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    gen_r            TWO OR MORE distinct write addresses ['[cl_slot_c]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    load_r           written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    load_r           read at MODULE SCOPE through dynamic index `lu_slot_c` (a continuous assignment is combinational)
+    load_r           TWO OR MORE distinct write addresses ['[cl_slot_c]', '[fin_slot_i]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    px_r             written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    px_r             read at MODULE SCOPE through dynamic index `lu_slot_c` (a continuous assignment is combinational)
+    py_r             written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    py_r             read at MODULE SCOPE through dynamic index `lu_slot_c` (a continuous assignment is combinational)
+    res_r            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    res_r            read at MODULE SCOPE through dynamic index `lu_slot_c` (a continuous assignment is combinational)
+    res_r            TWO OR MORE distinct write addresses ['[cl_slot_c]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+terrain/zhao_terrain_residency_v2.sv
+    key_q            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    key_q            read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+    keyram           written from an ASYNC-RESET process (7 sites) -- an M10K has no reset port, so this array cannot be one
+    keyram           MULTIDIMENSIONAL unpacked array [WAYS][SETS] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    keyram           TWO OR MORE distinct write addresses ['[ev_way_c][s0_set]', '[victim_c][s0_set]', '[w][sweep_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rr_q             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    rr_q             read COMBINATIONALLY through dynamic index `s0_set` -- forces a per-bit mux the width of the array
+    rr_q             TWO OR MORE distinct write addresses ['[s0_set]', '[sweep_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    stat_q           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    stat_q           read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+    statram          written from an ASYNC-RESET process (7 sites) -- an M10K has no reset port, so this array cannot be one
+    statram          MULTIDIMENSIONAL unpacked array [WAYS][SETS] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    statram          TWO OR MORE distinct write addresses ['[ev_way_c][s0_set]', '[victim_c][s0_set]', '[w][sweep_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+terrain/zhao_terrain_tess.sv
+    j_lvl_ord        written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    j_lvl_ord        read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    j_lvl_ord        TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    j_m_ord          written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    j_m_ord          read COMBINATIONALLY through dynamic index `eside` -- forces a per-bit mux the width of the array
+    j_m_ord          TWO OR MORE distinct write addresses ['[0]', '[1]', '[2]', '[3]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+texture/zhao_texture_aux_div6.sv
+    du_q             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    du_q             TWO OR MORE distinct write addresses ['[0]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    dv_q             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    dv_q             TWO OR MORE distinct write addresses ['[0]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    qu_q             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    qu_q             TWO OR MORE distinct write addresses ['[0]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    qv_q             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    qv_q             TWO OR MORE distinct write addresses ['[0]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    ru_q             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    ru_q             TWO OR MORE distinct write addresses ['[0]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rv_q             written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    rv_q             TWO OR MORE distinct write addresses ['[0]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    tag_q            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    tag_q            TWO OR MORE distinct write addresses ['[0]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    v_q              written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    v_q              read COMBINATIONALLY through dynamic index `i` -- forces a per-bit mux the width of the array
+    v_q              TWO OR MORE distinct write addresses ['[0]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+texture/zhao_texture_aux_pipe.sv
+    rq_deg           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    rq_deg           read COMBINATIONALLY through dynamic index `rq_rp` -- forces a per-bit mux the width of the array
+    rq_deg           TWO OR MORE distinct write addresses ['[rq_wp]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rq_str           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    rq_str           read COMBINATIONALLY through dynamic index `rq_rp` -- forces a per-bit mux the width of the array
+    rq_str           TWO OR MORE distinct write addresses ['[rq_wp]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rq_tag           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    rq_tag           read COMBINATIONALLY through dynamic index `rq_rp` -- forces a per-bit mux the width of the array
+    rq_tag           TWO OR MORE distinct write addresses ['[rq_wp]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rq_tok           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    rq_tok           read COMBINATIONALLY through dynamic index `rq_rp` -- forces a per-bit mux the width of the array
+    rq_tok           TWO OR MORE distinct write addresses ['[rq_wp]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    sd_degen         written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    sd_satu          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    sd_satu          read COMBINATIONALLY through dynamic index `div_tag` -- forces a per-bit mux the width of the array
+    sd_satv          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    sd_satv          read COMBINATIONALLY through dynamic index `div_tag` -- forces a per-bit mux the width of the array
+    sd_tok           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+texture/zhao_texture_cache.sv
+    s1_hw_r          read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    tag_r            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    tag_r            read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    tag_r            MULTIDIMENSIONAL unpacked array [LANES][LINES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    tag_r            TWO OR MORE distinct write addresses ['[fill_lane_r][fill_idx_r]', '[k][i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    valid_r          written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    valid_r          read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    valid_r          MULTIDIMENSIONAL unpacked array [LANES][LINES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    valid_r          TWO OR MORE distinct write addresses ['[fill_lane_r][fill_idx_r]', '[k][i]', '[k][inv_idx]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+texture/zhao_texture_cache_pipe.sv
+    c1_idx           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    c1_tag           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    c2_idx           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    c2_idx           read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    c2_rdat          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    c2_rtag          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    c2_rtag          read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    c2_rval          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    c2_rval          read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    c2_tag           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    c2_tag           read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    valid_r          written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    valid_r          MULTIDIMENSIONAL unpacked array [LANES][LINES] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    valid_r          TWO OR MORE distinct write addresses ['[k][fb_idx_r]', '[k][i]', '[k][m_idx_c]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+texture/zhao_texture_fragrob.sv
+    arr_q            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    arr_q            read COMBINATIONALLY through dynamic index `head_slot_c` -- forces a per-bit mux the width of the array
+    arr_q            TWO OR MORE distinct write addresses ['[alloc_slot_c]', '[k]', '[tmu_rslot_i][tmu_rsidx_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    auxarr_q         written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    auxarr_q         read COMBINATIONALLY through dynamic index `head_slot_c` -- forces a per-bit mux the width of the array
+    auxarr_q         TWO OR MORE distinct write addresses ['[alloc_slot_c]', '[aux_rslot_i]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    auxreq_q         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    auxreq_q         read COMBINATIONALLY through dynamic index `aux_rslot_i` -- forces a per-bit mux the width of the array
+    auxreq_q         TWO OR MORE distinct write addresses ['[alloc_slot_c]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    desc_met_m       MULTIDIMENSIONAL unpacked array [3][DEPTH] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    desc_u_m         MULTIDIMENSIONAL unpacked array [3][DEPTH] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    desc_v_m         MULTIDIMENSIONAL unpacked array [3][DEPTH] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    gen_q            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    gen_q            read COMBINATIONALLY through dynamic index `tmu_rslot_i` -- forces a per-bit mux the width of the array
+    gen_q            TWO OR MORE distinct write addresses ['[alloc_slot_c]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    order_m          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    order_m          read COMBINATIONALLY through dynamic index `head_q` -- forces a per-bit mux the width of the array
+    recipe_q         written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    recipe_q         TWO OR MORE distinct write addresses ['[alloc_slot_c]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    req_q            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    req_q            read COMBINATIONALLY through dynamic index `head_slot_c` -- forces a per-bit mux the width of the array
+    req_q            TWO OR MORE distinct write addresses ['[alloc_slot_c]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    res_a_m          MULTIDIMENSIONAL unpacked array [3][DEPTH] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    res_rgb_m        MULTIDIMENSIONAL unpacked array [3][DEPTH] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    sat_q            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    sat_q            TWO OR MORE distinct write addresses ['[alloc_slot_c]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    val_q            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    val_q            read COMBINATIONALLY through dynamic index `tmu_rslot_i` -- forces a per-bit mux the width of the array
+    val_q            TWO OR MORE distinct write addresses ['[alloc_slot_c]', '[k]', '[r_slot_q]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+texture/zhao_texture_palette_res.sv
+    gen_r            written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    gen_r            TWO OR MORE distinct write addresses ['[i]', '[ld_slot_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    mem_r            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    res_r            written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    res_r            TWO OR MORE distinct write addresses ['[i]', '[ld_slot_i]', '[ld_slot_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+texture/zhao_texture_rsp_dispatch.sv
+    cq_n             written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    raw_c            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    raw_c            read at MODULE SCOPE through dynamic index `raw_rp` (a continuous assignment is combinational)
+    raw_d            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    raw_t            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+texture/zhao_texture_tmu.sv
+    hw_r             written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    hw_r             read COMBINATIONALLY through dynamic index `k` -- forces a per-bit mux the width of the array
+    hw_r             TWO OR MORE distinct write addresses ['[0]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    pal_dat_r        written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    pal_dat_r        MULTIDIMENSIONAL unpacked array [PAL_SLOTS][256] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    pal_dat_r        TWO OR MORE distinct write addresses ['[pal_vic_r][idx_r]', '[pal_way_c][idx_r]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    pal_tag_r        written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    pal_tag_r        read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+    pal_tag_r        TWO OR MORE distinct write addresses ['[pal_vic_r]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    pal_ten_r        written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    pal_ten_r        read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+    pal_ten_r        TWO OR MORE distinct write addresses ['[pal_vic_r]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    pal_val_r        written from an ASYNC-RESET process (5 sites) -- an M10K has no reset port, so this array cannot be one
+    pal_val_r        read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+    pal_val_r        TWO OR MORE distinct write addresses ['[pal_vic_r]', '[pal_vic_r][idx_r]', '[pal_way_c][idx_r]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+texture/zhao_texture_tmu_pipe.sv
+    fl_res           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    fl_t             written from an ASYNC-RESET process (4 sites) -- an M10K has no reset port, so this array cannot be one
+    fl_t             read COMBINATIONALLY through dynamic index `fl_ch` -- forces a per-bit mux the width of the array
+    fl_t             MULTIDIMENSIONAL unpacked array [0:3][0:3] -- Quartus cannot regroup this into a memory; it muxes across the outer dimension and the whole array becomes flip-flops. One flat array per element inside a generate, outer index a genvar.
+    fl_t             TWO OR MORE distinct write addresses ['[0][k]', '[1][k]', '[2][k]', '[3][k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    pal_tag_r        written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    pal_tag_r        read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+    pal_tag_r        TWO OR MORE distinct write addresses ['[pal_vic_r]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    pal_ten_r        written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    pal_ten_r        read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+    pal_ten_r        TWO OR MORE distinct write addresses ['[pal_vic_r]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    pal_val_r        written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    pal_val_r        read COMBINATIONALLY through dynamic index `w` -- forces a per-bit mux the width of the array
+    pal_val_r        TWO OR MORE distinct write addresses ['[pal_vic_r]', '[w]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rb_a             written from an ASYNC-RESET process (6 sites) -- an M10K has no reset port, so this array cannot be one
+    rb_a             read COMBINATIONALLY through dynamic index `head_c` -- forces a per-bit mux the width of the array
+    rb_a             TWO OR MORE distinct write addresses ['[a0_rec]', '[fl_rec]', '[rsp_rec]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rb_bsel          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    rb_bsel          read COMBINATIONALLY through dynamic index `rsp_rec` -- forces a per-bit mux the width of the array
+    rb_clut          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    rb_done          written from an ASYNC-RESET process (7 sites) -- an M10K has no reset port, so this array cannot be one
+    rb_done          read COMBINATIONALLY through dynamic index `head_c` -- forces a per-bit mux the width of the array
+    rb_done          TWO OR MORE distinct write addresses ['[fl_rec]', '[head_c]', '[k]', '[rsp_rec]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rb_filt          written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    rb_fmt           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    rb_fmt           read COMBINATIONALLY through dynamic index `rsp_rec` -- forces a per-bit mux the width of the array
+    rb_fu            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    rb_fv            written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    rb_idx           written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    rb_idx           read COMBINATIONALLY through dynamic index `head_c` -- forces a per-bit mux the width of the array
+    rb_idx           TWO OR MORE distinct write addresses ['[a0_rec]', '[rsp_rec]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rb_nib           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    rb_nib           read COMBINATIONALLY through dynamic index `rsp_rec` -- forces a per-bit mux the width of the array
+    rb_pal           written from an ASYNC-RESET process (1 site) -- an M10K has no reset port, so this array cannot be one
+    rb_pal           read COMBINATIONALLY through dynamic index `rsp_rec` -- forces a per-bit mux the width of the array
+    rb_rgb           written from an ASYNC-RESET process (6 sites) -- an M10K has no reset port, so this array cannot be one
+    rb_rgb           read COMBINATIONALLY through dynamic index `head_c` -- forces a per-bit mux the width of the array
+    rb_rgb           TWO OR MORE distinct write addresses ['[a0_rec]', '[fl_rec]', '[rsp_rec]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    rb_used          written from an ASYNC-RESET process (2 sites) -- an M10K has no reset port, so this array cannot be one
+    rb_used          read COMBINATIONALLY through dynamic index `head_c` -- forces a per-bit mux the width of the array
+    rb_used          TWO OR MORE distinct write addresses ['[head_c]', '[k]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+video/zhao_scanout_linebuf.sv
+    bstate           written from an ASYNC-RESET process (6 sites) -- an M10K has no reset port, so this array cannot be one
+    bstate           read at MODULE SCOPE through dynamic index `fill_buf` (a continuous assignment is combinational)
+    bstate           TWO OR MORE distinct write addresses ['[0]', '[1]', '[i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+video/zhao_video_slotmgr.sv
+    generation       written from an ASYNC-RESET process (3 sites) -- an M10K has no reset port, so this array cannot be one
+    generation       read at MODULE SCOPE through dynamic index `slot` (a continuous assignment is combinational)
+    generation       TWO OR MORE distinct write addresses ['[0]', '[1]', '[lease_req_slot_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+    state            written from an ASYNC-RESET process (7 sites) -- an M10K has no reset port, so this array cannot be one
+    state            read at MODULE SCOPE through dynamic index `slot` (a continuous assignment is combinational)
+    state            TWO OR MORE distinct write addresses ['[0]', '[1]', '[displayed_s]', '[lease_req_slot_i]', '[publish_slot_i]', '[release_slot_i]', '[swap_slot_i]'] -- island brief S5.3 forbids this by name; it asks for a memory shape the device does not have
+
+898 structural finding(s). Not all are defects -- a small array in flops can be deliberate -- but each one is a reason an array will NOT become an M10K.
