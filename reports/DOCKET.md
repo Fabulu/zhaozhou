@@ -288,6 +288,79 @@ cast) are now recorded there, with the meta-lesson: read that file before
 touching RTL only Verilator has ever seen.
 
 
+### D21. The texture island is 2.5x its own redline  ·  `reports/islandrearchitecture5.md`  — P0
+> *"Agent please read, full brief!"* (2026-09-03 08:04)
+
+**Supersession chain, recorded so it is not re-read in the wrong order:**
+`Islandrearchitect.md` (06:53) -> `Islandrearchitect2.md` (07:19) ->
+`Islandrearchitect3.md` (07:24) -> `islandrearchitecture4.md` (07:56, since
+replaced) -> **`islandrearchitecture5.md` (08:04, THE LIVE ONE)**. Later
+supersedes earlier, per owner. Note "island" here is the **texture-survivor
+island**, NOT the 8 km terrain island -- two different things with one word.
+
+It is a **resource recovery specification** with numeric tripwires, not advice.
+Measured against it today (see `reports/TEXTURE-ISLAND-FIT.md` addendum):
+
+| | ALM | reg | M10K | DSP |
+|---|---|---|---|---|
+| island as built | **18,497** | **28,143** | 10 | 25 |
+| hard redline | 7,500 | 9,000 | 64 | 14 |
+| the prototype it replaces | 15,749 | 25,123 | 11 | 16 |
+
+**The rebuild is worse than the prototype on every axis except DSP.** The
+prototype's diagnosis was state in flip-flops instead of memories; the rebuild
+took registers from 25,123 to 28,143 with M10Ks from 11 to 10.
+`zhao_texture_cache_pipe` -- the brief's "ALM RECOVERY CENTRE" -- is 5,903 ALM
+/ 11,328 reg / 2 M10K against tripwires of 1,500 / 2,000 / >=8, and against a
+predecessor that was 1,087 / 1,737 / 4. **Its 98.66 MHz was reported as a pass
+this morning; by the brief's own rule it is not one.**
+
+The brief's REWRITE BEFORE INTEGRATION list already named `cache_pipe` storage
+and hit path, TEXJOIN wide storage, PERSPUV's token table and RCP's scans. The
+fits confirm all four. Phases and per-component budgets are in the brief; the
+C-numbered acceptance gates (C1-C26) are its checklist.
+
+**Standing constraint from the same brief:** *"REJECT: adding terrain/Field RTL
+faster than the texture fit can be closed."*
+
+### D22. Animation banks live in HPS DDR  ·  `ZHAOZHOU_ANIMATION_MEMORY_ARCHITECTURE.md` + `..._HPS_RESIDENCY_ARCHITECTURE.md`  — P1
+> *"These are two important files for animation architecture ... add them to the
+> queue at least what hardware is concerned."* (2026-09-03 14:13)
+
+**Binding.** Too much high-quality animation to fit local RAM, and demand is
+known far enough ahead to stream it. So: cartridge is cold; **HPS/ARM DDR owns
+the loaded animation library**; local 128 MB SDRAM holds only a pinned render
+working set; `GEOM.POSE` sees only complete, immutable, locally resident clip
+pages. Supersedes the old wording *"VRAM stores clips compressed."*
+
+**Hardware consequence is deliberately near-zero:** no new render-time hardware
+path, `GEOM.POSE` gains no dependency on HPS latency or Linux scheduling, and
+the FPGA never sees a null pointer, an HPS address posing as a VRAM address, a
+partial upload, a stale generation, or a request meaning "stall until Linux
+answers". A residency miss must never become a blocking FPGA fetch: the frame
+is not published, the previous complete frame repeats under the hard-60-Hz
+late-frame law, and a deadline fault is recorded. Unchanged: 30 Hz keys, hard
+cuts, event tags, quantized quaternions, the decoded-pose cache, pose sharing,
+no per-limb upload.
+
+Prefetch policy freezes **who guarantees residency**, not an algorithm, and
+explicitly prefers whole-bank residency first -- pages only after traces show a
+real local-SDRAM cost.
+
+### D23. `SaveTheRendered.md` (repo root)  — P1, explicitly AFTER the islands
+> *"Agent please read. After the islands, this is next."* (2026-09-03 10:23)
+
+Sequenced by the owner behind the island work. Not yet read in detail.
+
+### D24. ZEMU, the omniscient development machine  ·  `reports/ZEMU_OMNISCIENT_DEVELOPMENT_MACHINE.md`  — P3
+> *"Put this jewel where it belongs and make sure it never gets forgotten.
+> Emulator directory or something, I think we already have one."* (2026-09-03 09:44)
+
+3,027 lines. Pairs with D9/`Future.md` (ZEMU running and playing the game).
+**Placement is an explicit instruction and is still outstanding** -- it is
+sitting in `reports/` where the owner said it should not stay.
+
+
 ---
 
 ## DONE

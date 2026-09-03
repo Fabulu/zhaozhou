@@ -200,3 +200,85 @@ seed of `rcp24_svc`, **all 200 worst paths touched a port**, so the report
 contained no register-to-register path at all. A leaf with hundreds of virtual
 pins fills its worst-path list with its boundary before reaching its
 arithmetic. `block_paths.tcl` now asks for 2000.
+
+---
+
+# ADDENDUM 2026-09-03 — MEASURED AGAINST THE SPECIFICATION, THE REBUILD IS A REGRESSION
+
+The fit numbers above were reported without comparing them to
+`reports/islandrearchitecture5.md`, the owner brief committed today at 08:04
+("Agent please read, full brief!") which supersedes `Islandrearchitect{,2,3}.md`
+and `islandrearchitecture4.md`. That document is not advice; it is the
+**ALM / DSP / REGISTER RECOVERY SPECIFICATION** this rebuild exists to satisfy,
+and it carries explicit numeric tripwires. Comparing:
+
+|                          | ALM | registers | M10K | DSP |
+|---|---|---|---|---|
+| island **as built today** | **18,497** | **28,143** | **10** | **25** |
+| spec target | 6,600 | 6,050 | 37-64 | 11-13 |
+| spec **hard redline** | 7,500 | 9,000 | 64 | 14 |
+| the prototype it replaces | 15,749 | 25,123 | 11 | 16 |
+
+**2.47x the ALM redline, 3.13x the register redline, 1.79x the DSP redline —
+and worse than the prototype on every axis except DSP.** The prototype's
+diagnosis was "25,123 registers against only 11 M10Ks: state that belongs in
+memories was implemented as wide flip-flop arrays". The rebuild moved that
+number to 28,143 registers against 10 M10Ks. It went the wrong way.
+
+## The specific failure: TEXTURE.CACHE.V2
+
+Section 10 of the brief names this block "THE ALM RECOVERY CENTRE" and sets:
+
+    cache v2:  require M10K >= 8    reject registers > 2,000    reject ALMs > 1,500
+
+Measured, and set beside the block it was written to replace:
+
+| | ALM | registers | M10K |
+|---|---|---|---|
+| `zhao_texture_cache_pipe` (the C0-C4 rebuild) | 5,903 | 11,328 | **2** |
+| `zhao_texture_cache` (what it replaces) | 1,087 | 1,737 | **4** |
+| tripwire | <= 1,500 | <= 2,000 | >= 8 |
+
+The rebuild is **5.4x the ALMs, 6.5x the registers and HALF the M10Ks** of the
+block it supersedes, and it fails all three tripwires — the M10K one by being
+below a *minimum*, which is the tell that the storage never became storage.
+
+**This corrects a claim made earlier today.** The C0-C4 result was reported as
+a pass on the grounds that "the acceptance question was M10K inference, not
+Fmax, and the RAMs stayed RAMs: 2 M10K, 0 DSP". Two M10Ks is not the RAMs
+staying RAMs. The requirement is eight, the predecessor already had four, and
+11,328 registers is where the array actually went. The brief legislates against
+exactly this reading:
+
+> A fit that meets Fmax while violating its memory/DSP structure is not a pass.
+
+98.66 MHz was true and is not the point.
+
+## This was already the owner's instruction
+
+The brief's own KEEP / REWRITE / DEFER table lists under **REWRITE BEFORE
+INTEGRATION**:
+
+    current cache_pipe storage and hit path
+    current TEXJOIN wide storage organization
+    current PERSPUV token table and one-product lane
+    current RCP scans and 32x64 product expression
+
+So three of the four blocks reported as fit victories this morning are on the
+brief's rewrite list, and the fits confirm why: `texjoin_v2` at 3,824 ALM /
+7,151 reg against a 900 / 1,200 budget, `perspuv_svc` at 2,204 / 3,293 against
+900 / 700.
+
+The brief also states the constraint that governs the rest of the session:
+
+> REJECT: adding terrain/Field RTL faster than the texture fit can be closed.
+
+## What this does NOT change
+
+The `zhao_prod_top` production-only resource fit still answers the owner's
+question in `WeNeedSomeMeasurements.md` and is still worth finishing: it
+measures the machine as it stands, and "as it stands" now has a known,
+quantified 11,000-ALM recovery target sitting inside it. The 72% fabric figure
+in that brief was computed from a ~17,000-ALM island estimate; the measured
+island is 18,497, so the honest number is slightly worse than the owner feared
+— and the recovery specification for it already exists and is unimplemented.
