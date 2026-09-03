@@ -46,18 +46,33 @@ int main(int argc, char** argv) {
     zhao::tick(top);
   };
 
+  // ---- the ruled protocol: BEGIN / WRITE / END (X6) ------------------------
+  constexpr int kBEGIN = 0, kWRITE = 1, kEND = 2;
+
+  auto op = [&](int o, int slot, int gen, int idx, uint16_t val, bool crc_ok) {
+    top.ld_valid_i = 1;
+    top.ld_op_i = o;
+    top.ld_slot_i = slot;
+    top.ld_gen_i = gen;
+    top.ld_idx_i = idx;
+    top.ld_rgb565_i = val;
+    top.ld_crc_ok_i = crc_ok ? 1 : 0;
+    zhao::tick(top);
+    top.ld_valid_i = 0;
+  };
+
+  auto begin_load = [&](int slot, int gen) { op(kBEGIN, slot, gen, 0, 0, true); };
+  auto write_e = [&](int idx, uint16_t v) { op(kWRITE, 0, 0, idx, v, true); };
+  auto end_load = [&](int slot, int gen, bool crc_ok = true) {
+    op(kEND, slot, gen, 0, 0, crc_ok);
+  };
+
   // Load one whole slot with a known pattern at a given generation.
   auto load_slot = [&](int slot, int gen, uint32_t seed) {
-    for (int e = 0; e < 256; ++e) {
-      top.ld_valid_i = 1;
-      top.ld_slot_i = slot;
-      top.ld_gen_i = gen;
-      top.ld_idx_i = e;
-      top.ld_rgb565_i = static_cast<uint16_t>(seed + e);
-      top.ld_last_i = (e == 255);
-      zhao::tick(top);
-    }
-    top.ld_valid_i = 0;
+    begin_load(slot, gen);
+    for (int e = 0; e < 256; ++e)
+      write_e(e, static_cast<uint16_t>(seed + e));
+    end_load(slot, gen);
     zhao::tick(top);
   };
 
@@ -117,12 +132,21 @@ int main(int argc, char** argv) {
     for (int c = 0; c < 40; ++c) {
       // The reload starts at c == 10 and runs concurrently with lookups.
       if (c >= 10 && c < 20) {
+        // BEGIN first, then writes. The generation moves on at BEGIN, which
+        // is what makes the interleaved lookups stale from the FIRST clock of
+        // the reload rather than from the last -- the window this case exists
+        // to close.
         top.ld_valid_i = 1;
+        top.ld_crc_ok_i = 1;
         top.ld_slot_i = 0;
         top.ld_gen_i = 2;
-        top.ld_idx_i = c - 10;
-        top.ld_rgb565_i = static_cast<uint16_t>(0x9000 + (c - 10));
-        top.ld_last_i = (c == 19);
+        if (c == 10) {
+          top.ld_op_i = kBEGIN;
+        } else {
+          top.ld_op_i = kWRITE;
+          top.ld_idx_i = c - 11;
+          top.ld_rgb565_i = static_cast<uint16_t>(0x9000 + (c - 11));
+        }
       } else {
         top.ld_valid_i = 0;
       }
@@ -162,16 +186,10 @@ int main(int argc, char** argv) {
     reset();
     load_slot(0, 1, 0x3000);
     // begin a reload but do NOT finish it
+    begin_load(0, 2);
     for (int e = 0; e < 8; ++e) {
-      top.ld_valid_i = 1;
-      top.ld_slot_i = 0;
-      top.ld_gen_i = 2;
-      top.ld_idx_i = e;
-      top.ld_rgb565_i = static_cast<uint16_t>(0x4000 + e);
-      top.ld_last_i = 0;
-      zhao::tick(top);
+      write_e(e, static_cast<uint16_t>(0x4000 + e));
     }
-    top.ld_valid_i = 0;
     // a lookup at the NEW generation, mid-load
     top.lu_valid_i = 1;
     top.lu_slot_i = 0;
@@ -204,6 +222,137 @@ int main(int argc, char** argv) {
     zhao::check(top.lu_stale_o == 0 && top.lu_resident_o == 1,
                 "reloading one slot does not disturb another", 1,
                 (top.lu_stale_o == 0 && top.lu_resident_o == 1) ? 1 : 0);
+  }
+
+
+  // ---- X6: THE PROTOCOL'S OWN FAILURE MODES -------------------------------
+  // The implicit protocol this replaced could not express any of these. It had
+  // no way to say a load FAILED, no way to notice one was INCOMPLETE, and no
+  // opinion about a reload that did not move the generation on.
+
+  // A CRC failure leaves the slot NONRESIDENT.
+  {
+    reset();
+    load_slot(1, 1, 0x1000u);            // a good load first
+    const uint32_t crc_before = top.err_crc_o;
+    begin_load(1, 2);
+    for (int e = 0; e < 256; ++e) write_e(e, static_cast<uint16_t>(0xBEEF + e));
+    end_load(1, 2, /*crc_ok=*/false);
+    zhao::tick(top);
+
+    top.lu_valid_i = 1; top.lu_slot_i = 1; top.lu_gen_i = 2; top.lu_idx_i = 3;
+    zhao::tick(top);
+    top.lu_valid_i = 0;
+    zhao::tick(top);
+    top.eval();
+    zhao::check(top.lu_resident_o == 0,
+                "a CRC-failed load leaves the slot NONRESIDENT -- the caller "
+                "takes the cold path, which is slower and correct",
+                0, top.lu_resident_o);
+    zhao::check(top.err_crc_o == crc_before + 1, "and the failure is counted", 1,
+                static_cast<int>(top.err_crc_o - crc_before));
+  }
+
+  // An INCOMPLETE load leaves the slot nonresident, even with a good CRC.
+  // A palette that is 255 entries of new data and one of old is the kind of
+  // wrong that looks right on most pixels.
+  {
+    reset();
+    const uint32_t inc_before = top.err_incomplete_o;
+    begin_load(2, 1);
+    for (int e = 0; e < 255; ++e) write_e(e, static_cast<uint16_t>(0x2000 + e));
+    end_load(2, 1, /*crc_ok=*/true);
+    zhao::tick(top);
+    top.lu_valid_i = 1; top.lu_slot_i = 2; top.lu_gen_i = 1; top.lu_idx_i = 0;
+    zhao::tick(top);
+    top.lu_valid_i = 0;
+    zhao::tick(top);
+    top.eval();
+    zhao::check(top.lu_resident_o == 0,
+                "ONE missing entry out of 256 leaves the slot nonresident", 0,
+                top.lu_resident_o);
+    zhao::check(top.err_incomplete_o == inc_before + 1,
+                "and the incompleteness is counted separately from a CRC "
+                "failure -- one is a bad cartridge, the other a bad loader",
+                1, static_cast<int>(top.err_incomplete_o - inc_before));
+  }
+
+  // A DUPLICATE entry does not fill the hole left by a missing one. This is
+  // why presence is a bit per entry and not a counter: a counter cannot tell
+  // 256 distinct writes from 255 plus a repeat.
+  {
+    reset();
+    const uint32_t inc_before = top.err_incomplete_o;
+    begin_load(3, 1);
+    for (int e = 0; e < 255; ++e) write_e(e, static_cast<uint16_t>(0x3000 + e));
+    write_e(0, 0x1234);                   // 256 writes, 255 distinct entries
+    end_load(3, 1, true);
+    zhao::tick(top);
+    zhao::check(top.err_incomplete_o == inc_before + 1,
+                "256 writes with a DUPLICATE is still an incomplete load", 1,
+                static_cast<int>(top.err_incomplete_o - inc_before));
+  }
+
+  // NEVER RELOAD A SLOT WITH THE SAME GENERATION.
+  {
+    reset();
+    load_slot(0, 5, 0x4000u);
+    const uint32_t same_before = top.err_same_gen_o;
+    begin_load(0, 5);                     // same generation again
+    zhao::tick(top);
+    zhao::check(top.err_same_gen_o == same_before + 1,
+                "BEGIN reusing a slot's current generation is REFUSED -- every "
+                "handle to the old palette would still match the new one",
+                1, static_cast<int>(top.err_same_gen_o - same_before));
+    // and the refusal did not disturb the resident palette
+    top.lu_valid_i = 1; top.lu_slot_i = 0; top.lu_gen_i = 5; top.lu_idx_i = 9;
+    zhao::tick(top);
+    top.lu_valid_i = 0;
+    zhao::tick(top);
+    top.eval();
+    zhao::check(top.lu_resident_o == 1 && top.lu_stale_o == 0,
+                "and the slot it refused to reload is untouched", 1,
+                (top.lu_resident_o && !top.lu_stale_o) ? 1 : 0);
+  }
+
+  // A WRITE outside a load is refused, not applied to a live palette.
+  {
+    reset();
+    load_slot(0, 1, 0x5000u);
+    const uint32_t out_before = top.err_write_outside_o;
+    write_e(4, 0xDEAD);                   // no BEGIN
+    zhao::tick(top);
+    zhao::check(top.err_write_outside_o == out_before + 1,
+                "a WRITE with no open load is refused and counted", 1,
+                static_cast<int>(top.err_write_outside_o - out_before));
+    top.lu_valid_i = 1; top.lu_slot_i = 0; top.lu_gen_i = 1; top.lu_idx_i = 4;
+    zhao::tick(top);
+    top.lu_valid_i = 0;
+    zhao::tick(top);
+    top.eval();
+    zhao::check(top.lu_rgb565_o == static_cast<uint16_t>(0x5000u + 4),
+                "and the resident palette still holds its own value", 1,
+                top.lu_rgb565_o == static_cast<uint16_t>(0x5000u + 4) ? 1 : 0);
+  }
+
+  // A LOOKUP ON THE SAME CLOCK AS BEGIN reports nonresident. X6 is explicit
+  // that this must not rely on read-during-write behaviour.
+  {
+    reset();
+    load_slot(0, 1, 0x6000u);
+    top.lu_valid_i = 1; top.lu_slot_i = 0; top.lu_gen_i = 1; top.lu_idx_i = 2;
+    top.ld_valid_i = 1; top.ld_op_i = kBEGIN; top.ld_slot_i = 0; top.ld_gen_i = 2;
+    top.ld_crc_ok_i = 1;
+    zhao::tick(top);
+    top.lu_valid_i = 0;
+    top.ld_valid_i = 0;
+    zhao::tick(top);
+    top.eval();
+    zhao::check(top.lu_resident_o == 0 || top.lu_stale_o == 1,
+                "a lookup accepted on the SAME CLOCK as BEGIN reports "
+                "nonresident or stale, never a colour from the slot being "
+                "overwritten",
+                1, (top.lu_resident_o == 0 || top.lu_stale_o == 1) ? 1 : 0);
   }
 
   return zhao::report_and_exit("texture_palette_res_directed");
