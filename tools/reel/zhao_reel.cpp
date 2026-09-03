@@ -2215,19 +2215,19 @@ constexpr int32_t kBlueInnerRadiusMm = 350;
 constexpr int32_t kBlueOuterRadiusMm = 1500;
 constexpr int32_t kBlueGainR = 11796;       // 0.18
 constexpr int32_t kBlueGainG = 26214;       // 0.40 -- lifts blue off the dark pigment
-constexpr int32_t kBlueGainB = 85197;       // 1.30
+constexpr int32_t kBlueGainB = 104858;      // 1.60
 // ORANGE: a clockwise counter-orbit, three laps, bobbing as it goes.
-constexpr int32_t kOrangeOrbitXMm = 2200;
+constexpr int32_t kOrangeOrbitXMm = 2000;
 constexpr int32_t kOrangeOrbitZMm = 1250;
 constexpr int32_t kOrangeHeightMm = 700;
 constexpr int32_t kOrangeBobMm = 350;        // vertical bob amplitude
 constexpr uint32_t kOrangeOrbitTurns = 3;
 constexpr uint16_t kOrangePhaseA16 = 16384;  // quarter-turn start offset
 constexpr int32_t kOrangeInnerRadiusMm = 350;
-constexpr int32_t kOrangeOuterRadiusMm = 1500;
-constexpr int32_t kOrangeGainR = 98304;      // 1.50
-constexpr int32_t kOrangeGainG = 45875;      // 0.70
-constexpr int32_t kOrangeGainB = 7864;       // 0.12
+constexpr int32_t kOrangeOuterRadiusMm = 1700;
+constexpr int32_t kOrangeGainR = 163840;     // 2.50
+constexpr int32_t kOrangeGainG = 55706;      // 0.85
+constexpr int32_t kOrangeGainB = 5243;       // 0.08
 // GREEN: a low near-side longitudinal shuttle, three round trips, with a
 // small depth ellipse so the travel stays alive at the turnarounds.
 constexpr int32_t kGreenSweepMm = 1900;      // longitudinal half-travel

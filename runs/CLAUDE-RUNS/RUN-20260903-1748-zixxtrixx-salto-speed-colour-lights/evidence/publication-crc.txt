@@ -1,0 +1,23 @@
+zixxtrixx-attack           base 0x2AED9D76 f= 560 | now 0x2AED9D76 f= 560  IDENTICAL
+zixxtrixx-balance          base 0x7FC8F62E f= 493 | now 0x7FC8F62E f= 493  IDENTICAL
+zixxtrixx-damage           base 0x0D8ECFB6 f= 400 | now 0x0D8ECFB6 f= 400  IDENTICAL
+zixxtrixx-death            base 0x4B7B3E3E f= 192 | now 0x4B7B3E3E f= 192  IDENTICAL
+zixxtrixx-death2           base 0x9F659521 f= 240 | now 0x9F659521 f= 240  IDENTICAL
+zixxtrixx-fall             base 0xC4722098 f= 288 | now 0xC4722098 f= 288  IDENTICAL
+zixxtrixx-hit              base 0x6A33B878 f= 300 | now 0x6A33B878 f= 300  IDENTICAL
+zixxtrixx-hitfloor         base 0xC8E9982F f= 188 | now 0xC8E9982F f= 188  IDENTICAL
+zixxtrixx-idle             base 0x25EE061F f= 576 | now 0x25EE061F f= 576  IDENTICAL
+zixxtrixx-jump-multi       base 0x9E96F7F2 f= 241 | now 0x9E96F7F2 f= 241  IDENTICAL
+zixxtrixx-jump-one         base 0xB11B7C7B f= 241 | now 0xB11B7C7B f= 241  IDENTICAL
+zixxtrixx-knockdown        base 0xB36C148A f= 196 | now 0xB36C148A f= 196  IDENTICAL
+zixxtrixx-look             base 0x5F193510 f= 384 | now 0x5F193510 f= 384  IDENTICAL
+zixxtrixx-moving-light     base 0xDE5D2626 f= 600 | now 0xC4C83E50 f= 600  CHANGED
+zixxtrixx-run              base 0x8E8D3179 f=  96 | now 0x8E8D3179 f=  96  IDENTICAL
+zixxtrixx-salto-dummy      base 0x652E456A f= 311 | now 0x6D95E2FD f= 295  CHANGED
+zixxtrixx-salto-fly        base 0xE4332117 f= 313 | now 0xE4332117 f= 313  IDENTICAL
+zixxtrixx-salto-nine       base 0x2E005FAD f= 435 | now 0x2E005FAD f= 435  IDENTICAL
+zixxtrixx-salto-six        base 0x139F143B f= 333 | now 0x139F143B f= 333  IDENTICAL
+zixxtrixx-slow-taunt       base 0xBB66B5CE f= 239 | now 0xBB66B5CE f= 239  IDENTICAL
+zixxtrixx-taunt            base 0x33BC0A56 f= 224 | now 0x33BC0A56 f= 224  IDENTICAL
+zixxtrixx-walk             base 0x86536E70 f= 160 | now 0x86536E70 f= 160  IDENTICAL
+changed: zixxtrixx-moving-light, zixxtrixx-salto-dummy

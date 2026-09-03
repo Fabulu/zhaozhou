@@ -101,3 +101,51 @@ invocation. All 22 sequence CRCs reproduce the peel-run QA table exactly
     happen and read as mixed colour (magenta where warm+blue meet, the green
     pool riding the crown). Pigment and form read. ACCEPTED by eye.
     Evidence: ml-v3-sheet.png, ml-v3-f000/150/330/510.png vs ml-base-*.png.
+
+## Publication prep (while the 22-subject render runs)
+
+* zhaozhou committed + pushed: `6a400759` (both asks). Probe PASS from the
+  clean build-lane rebuild at that SHA.
+* **Generation Sixteen preserved BEFORE any encode**: 44 files copied `cp -p`
+  from the committed live bank, SHA256 manifest at
+  `Upheaval/creature/Zixxtrixx/ARCHIVE-GENERATION-SIXTEEN-SHA256.txt`.
+  creatures.json: Sixteen entry + order slot; assemble.py
+  MAX_ARCHIVE_GENERATIONS 15→16 and BOTH style.css selector families extended
+  in the same edit. Live moving-light and salto-dummy notes updated to describe
+  Direction 26. Upheaval committed + pushed: `c3809ca` (atop two doc commits
+  another session pushed to origin — merged by fast-forward, no force).
+* **TRAP FOUND before it fired**: scratch-reel still held the peel pass's
+  frames; the renderer overwrites %04d.rgb but never deletes stale trailing
+  frames, and tovideo.py encodes every NNNN.rgb it finds. salto-dummy shrank
+  311→295, so 16 stale frames would have been glued onto the new clip's webm.
+  Plan: let the running invocation exit (verified by PROCESS EXIT, not
+  directory contents — every meta.txt already existed from the prior pass,
+  so file checks prove nothing), then wipe scratch-reel and re-run the one
+  fresh explicit invocation into clean directories.
+* Plan refined: the running invocation IS the one fresh explicit invocation;
+  every frame it writes is fresh, and only salto-dummy's trailing 16 frames
+  (0295-0310, from the longer previous clip) are stale. After PROCESS EXIT,
+  delete every NNNN.rgb with index >= that subject's fresh meta.txt frame
+  count, verify by mtime, then CRC-sweep and encode. Poster index for
+  salto-dummy moved 96 -> 176 in tovideo.py (the dict's stated intent is "the
+  spear meets the dummy"; 96 had silently become mid-compression when the peel
+  grew the ground phase, and the fast flip moves impact earlier still).
+  Moving-light poster 412 re-checked by eye: warm-over-head with pink mixing
+  on the neck, blue tail, green orb visible -- kept.
+
+## The CRC proof
+
+Publication render (one fresh explicit invocation, all 22 named) vs baseline
+(`evidence/publication-crc.txt`):
+
+* **20 subjects byte-identical** — sequence CRC-32C and frame count equal to
+  the baseline that itself reproduced the peel QA's table exactly. This
+  includes salto-fly (the stated assumption: it also computes one turn but the
+  owner said "Only that one"), both jumps, the attack, six, nine, and the
+  entire non-spring bank.
+* **Exactly two changed**: salto-dummy `0x652E456A`/311f → `0x6D95E2FD`/295f
+  (the 8-key coil cut), moving-light `0xDE5D2626` → `0xC4C83E50`/600f (the
+  three added sources). Both new CRCs equal the build-work draft renders —
+  determinism across two build trees confirmed.
+* The 16 stale trailing salto-dummy frames from the previous longer clip were
+  deleted after process exit and counts re-verified against fresh meta.txt.

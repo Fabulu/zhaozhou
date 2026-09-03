@@ -3,8 +3,17 @@ import sys, os
 from PIL import Image
 W, H = 384, 240
 def load(p):
+    # THE FAULT THIS RUN NEARLY SHIPPED ON: %04d.rgb carries an 8-byte
+    # u32 w | u32 h header (zhao_reel.cpp:29). Reading raw pixels without
+    # skipping it rotates every pixel's channels (8 mod 3 = 2) and shifts the
+    # image ~2.7 px: every colour judgement made through the unfixed reader saw
+    # a psychedelic rotation of the real palette. Skip and VERIFY the header.
+    import struct
     with open(p, 'rb') as f:
-        return Image.frombytes('RGB', (W, H), f.read(W*H*3))
+        b = f.read()
+    w, h = struct.unpack('<II', b[:8])
+    assert (w, h) == (W, H) and len(b) == 8 + W*H*3, (p, w, h, len(b))
+    return Image.frombytes('RGB', (W, H), b[8:])
 def main():
     src = sys.argv[1]; out = sys.argv[2]
     frames = sorted(f for f in os.listdir(src) if f.endswith('.rgb') and f[0].isdigit())
