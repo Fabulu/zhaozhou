@@ -5,8 +5,8 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = db6f6b2bbf7c3a383788d21fa594e09519ace1e90943d9d8ed2227f7b199db12
-zidl_sha256         = e54f05d4dd1c15c29f5bedcefdb6da8c4f6cdf7ef44744801318e410909f1ae3
+abi_identity_sha256 = 6b95fe820b7f9f545f1e553820208fe02e28ca77066b1df55f6af5625023373f
+zidl_sha256         = a2198a6e55f7547754d5d9801a450f473609c97738e4e98684bed303988ca7b1
 ```
 
 ABI version **3**, little-endian, command alignment

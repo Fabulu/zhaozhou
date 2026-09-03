@@ -72,7 +72,19 @@ const u32 FRAME_SLOT_BYTES = 1048576;
 // amendment C1 froze the quat16 lane (qformats §7.6). The `abi version`
 // itself stays 2 for this bump — a numeric-law constant change is not a
 // command-surface change (no opcode, field set, or size moved).
-const u16 QFMT_VERSION = 2;
+//
+// = 3 since ruling R3, PARTICLE128 V1 NUMERIC LAW
+// (reports/OWNER-RULINGS-BUILDABILITY-20260902.md): "PARTICLE_FORMAT_VERSION
+// = 1; bump QFMT_VERSION 2 -> 3 on commit."
+//
+// THE BUMP LANDED IN ONE GENERATOR AND NOT THE OTHER. `tools/fixgen` emitted 3
+// into zref_tables.hpp and compiler/src/generated/tables.ts, while this file
+// still said 2 and carried it into zhao_abi.h, zhao_abi_pkg.sv and
+// compiler/src/generated/abi.ts. A capture-visible numeric law disagreed with
+// itself across the hardware/software boundary for a day, which is exactly the
+// class of skew this constant exists to catch. The `abi version` still does
+// not move: no opcode, field set or size changed.
+const u16 QFMT_VERSION = 3;
 
 // Error codes — generated verbatim into C++/TS/SV and shared by the frame
 // validator (spec/capture_format.md 4.2), the .zcap tools, and the stub RTL.

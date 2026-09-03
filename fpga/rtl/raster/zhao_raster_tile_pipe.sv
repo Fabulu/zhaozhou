@@ -397,6 +397,20 @@ module zhao_raster_tile_pipe (
   assign frag_acc = ez_frag_valid && ez_frag_ready;
   assign swap_acc = ts_swap && ts_swap_ready;
 
+  // ---- SELF-ASSERTING CURSOR GUARD (the idiom of zhao_cmd_scheduler's
+  // ---- a_mode_act_in_range: the comment claims it, this enforces it) ------
+  // RS_WALK's cursor update relies on cov_acc and frag_acc never firing on the
+  // same edge -- `cov_ready` requires `pend_mask_r == 0` and `ez_frag_valid`
+  // requires it non-zero. If a future change to either ever broke that, the
+  // two `if`s would race and the registered cursor could follow the drained
+  // mask instead of the newly accepted row: a wrong fragment ADDRESS, which is
+  // a wrong pixel and not a crash.
+  always_ff @(posedge clk) begin
+    if (rst_n) begin
+      a_cursor_no_double_accept : assert (!(cov_acc && frag_acc));
+    end
+  end
+
   // ------------------------------------------------- the fragment packet ---
   // Law 2: the job's flat source, replicated at every covered pixel. The
   // `fill_r` word is decoded HERE and nowhere else in this file, in
@@ -719,7 +733,11 @@ module zhao_raster_tile_pipe (
           // Law 2: one FRAGMENT per set column, lowest first; the next
           // coverage beat is accepted only once the current mask has drained.
           // `cov_acc` and `frag_acc` are mutually exclusive by construction:
-          // one requires `pend_mask_r == 0` and the other `!= 0`.
+          // one requires `pend_mask_r == 0` and the other `!= 0`. That is what
+          // makes the cursor update unambiguous -- if both could fire on one
+          // edge, the two `if`s below would race and the cursor could follow
+          // the drained mask instead of the newly accepted row.
+          // ENFORCED-BY: fpga/rtl/raster/zhao_raster_tile_pipe.sv:a_cursor_no_double_accept
           if (frag_acc) begin
             pend_mask_r <= pend_mask_r & ~cur_hot_r;
             cur_col_r   <= nxt_after_frag_c[3:0];
