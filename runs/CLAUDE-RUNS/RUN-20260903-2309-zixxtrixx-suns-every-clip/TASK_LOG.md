@@ -133,3 +133,19 @@ Bank accepted by eye: contact sheets of all 21 + direct pristine pairs for
 balance/fall/attack (the three weakest thumbnails) -- all read clearly.
 08-LIGHTING.md gains the Direction 29 section (four authored lessons).
 tovideo.py encoding all 21 subjects.
+
+## 2026-09-04 02:05 — STALE-FRAME TRAP caught before publish; media pushed
+
+The 5-minute-timeout kill of the scratch-reel copy loop left its last three
+subjects (salto-nine, death, death2) with the OLD bank's frames -- same frame
+counts, so the count audit passed and the first encode produced three webms of
+the sunless bank. THE TELL: their regenerated posters were byte-identical to
+the Archive Generation Eighteen copies while their frames provably differed
+from pristine. (The poster is written from the same in-memory array the
+encoder consumes, so poster identity == encode content identity.) Re-mirrored
+all 21 via robocopy /MIR, audited first/middle/last frame + meta byte-equal to
+the v5 render for every subject, re-encoded the three, re-verified decode
+counts and fresh posters. Same family as the stale-binary trap: a measurement
+that did not move (the poster) after a change that must have moved it.
+
+Upheaval f0a2e65: all 21 webms + 18 changed posters committed and pushed.
