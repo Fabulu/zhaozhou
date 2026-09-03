@@ -212,3 +212,64 @@ refused it, correctly).
 * **ctest in `build/` is broken for every test in the tree** — MSYS working
   directory concatenated with a Windows exe path. Executables run correctly
   when invoked directly, which is how every result here was obtained.
+
+---
+
+## 2026-09-03, later — repairs measured, terrain advanced
+
+### The three texture repairs, and what each bought
+
+| block | before | after | note |
+|---|---:|---:|---|
+| `texjoin_v2` | 61.66 | **93.12** | 13-level scan → work FIFO, registered outputs |
+| `perspuv_svc` | 62.67 | **99.14** internal | two lanes, rescale pipelined; 1.00 → 1.99 products/clock |
+| `cache_pipe` | 81.06 | *fitting* | C0–C4, arrays read synchronously |
+
+`aux_pipe` needed no repair at all: its logic was always at **120.37 MHz** and
+its 54.95 was the virtual-pin boundary end to end.
+
+Each repair promoted the next block to being the limiter. `perspuv`'s new worst
+internal path is `pk_i → p1_prod_q` — the 16-entry priority scan, the same
+structure the TEXJOIN rebuild replaced, deliberately left alone because the
+measured wall was the rescale cone.
+
+### Terrain
+
+* **`TERRAIN.MIPGEN` built.** T8 specified it completely; there was no RTL, no
+  contract, no ledger entry. Nested decimation, no storage, no DSP, 12 checks.
+* **`TERRAIN.RESIDENCY` registered** with a contract, and its random lane
+  written against `zref::terrain::residency_set_index`.
+* **The set-index hash now has a definition outside the RTL.** T9's last clause
+  has two readings; the choice is behind a parameter and checked against the
+  reference in both suites.
+
+### What the ledger caught that I would not have
+
+* `reference_model: zref::terrain::mipgen` — **the symbol did not exist**. V17:
+  "a symbol nobody defined is a phantom citation."
+* `terrain_residency_random.cpp` cited as v2's evidence — it tests the
+  **prototype**. "An existing file that is not about the cited reference model
+  is an alias, not evidence."
+
+### What I got wrong and corrected
+
+* The `rcp24_svc` re-fit was **the wrong experiment**, run in earnest: Quartus
+  is deterministic at a fixed seed, so the second number was the first number.
+  `run_block_fit.ps1` had no `-Seed`; it does now.
+* The `perspuv` before/after showed no change for several rounds. **Copy-Item
+  preserves timestamps**, so swapping the file never triggered a rebuild —
+  the stale-binary trap, in a new form.
+* `build/` has a corrupted CMake cache (`CMAKE_CXX_COMPILER` = `C`) and mangled
+  ctest commands, both from being configured without `tools/env/zhao-env.ps1`.
+  **`build-lane/` is configured with it and ctest works there** — which retires
+  the "ctest is broken" caveat on every earlier result.
+* The `products_o` counter was incremented twice in one `always_ff` — the
+  fourth instance of that pattern this session, three lines below my own
+  comment warning about it.
+
+## Still open
+
+* `cache_pipe` refit — the acceptance question is **M10K inference**, not Fmax.
+* The 16-entry picks in `perspuv_svc` (and the same shape elsewhere).
+* Three seeds on the survivors, then compose the island.
+* `TERRAIN.MIPGEN` and `TERRAIN.RESIDENCY` are unfitted.
