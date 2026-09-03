@@ -158,4 +158,73 @@ struct Binner {
   static int64_t ep_base(const Setup::Edge& e) { return e0_base(e) >> 8; }
 };
 
+// ---- GEOM.VDECODE format 0 — RAW / CANONICAL (ruling R11) -----------------
+//
+// 32 bytes per vertex, naturally aligned, no bit-packing:
+//
+//   off  0  12  position s32 x3, fx16
+//   off 12   3  normal s8 x3, the packed bind normal the cel path uses
+//   off 15   1  w0 in 1/64 quanta (64 = rigid)
+//   off 16   4  UV, 2 x s16 fx16
+//   off 20   2  bone0
+//   off 22   2  bone1
+//   off 24   8  reserved, MUST BE ZERO
+//
+// Format 0 is NOT a placeholder. It is the permanent fallback and the
+// differential reference: every later format must decode to bit-identical
+// output for the same source mesh, and this is what "the same" is measured
+// against. The reserved eight bytes are what formats 1 and 2 grow into without
+// changing the stride, and requiring them zero is what stops an older decoder
+// silently reading a newer file.
+//
+// This is the ORACLE for `zhao_geom_vdecode`.
+namespace geom {
+
+struct Vertex0 {
+  int32_t x, y, z;      // fx16 S15.16
+  int8_t nx, ny, nz;    // packed bind normal
+  uint8_t w0;           // 1/64 quanta, 64 == rigid
+  int16_t u, v;         // fx16 s16
+  uint16_t bone0, bone1;
+  bool rigid;           // bone1 == bone0
+  bool reserved_nonzero;  // the malformed case, reported not corrected
+};
+
+inline Vertex0 vdecode0(const uint8_t* b) {
+  auto s32 = [&](int o) {
+    return static_cast<int32_t>(static_cast<uint32_t>(b[o]) |
+                                (static_cast<uint32_t>(b[o + 1]) << 8) |
+                                (static_cast<uint32_t>(b[o + 2]) << 16) |
+                                (static_cast<uint32_t>(b[o + 3]) << 24));
+  };
+  auto u16 = [&](int o) {
+    return static_cast<uint16_t>(static_cast<uint16_t>(b[o]) |
+                                 (static_cast<uint16_t>(b[o + 1]) << 8));
+  };
+  Vertex0 v{};
+  v.x = s32(0);
+  v.y = s32(4);
+  v.z = s32(8);
+  v.nx = static_cast<int8_t>(b[12]);
+  v.ny = static_cast<int8_t>(b[13]);
+  v.nz = static_cast<int8_t>(b[14]);
+  v.w0 = b[15];
+  v.u = static_cast<int16_t>(u16(16));
+  v.v = static_cast<int16_t>(u16(18));
+  v.bone0 = u16(20);
+  v.bone1 = u16(22);
+  v.rigid = (v.bone1 == v.bone0);
+  v.reserved_nonzero = false;
+  for (int i = 24; i < 32; ++i)
+    if (b[i] != 0) v.reserved_nonzero = true;
+  return v;
+}
+
+// `w0` is legal in [0, 64]. 64 means rigid; anything above it is a malformed
+// asset rather than a saturating weight, and saying so is the difference
+// between a bad file and a silently wrong skin.
+inline bool vdecode0_w0_legal(uint8_t w0) { return w0 <= 64; }
+
+}  // namespace geom
+
 }  // namespace zref

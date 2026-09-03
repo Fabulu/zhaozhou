@@ -121,6 +121,7 @@ module zhao_part_record (
   // ---- angle16 = spin << 10 -----------------------------------------------
   // Six bits shifted left ten fills sixteen exactly, so the phase wraps mod 64
   // by construction rather than by a mask.
+  // ENFORCED-BY: tests/particles/part_record_directed.cpp
   assign angle16_o = {spin_i, 10'd0};
 
 endmodule : zhao_part_record

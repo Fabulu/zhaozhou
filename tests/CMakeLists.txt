@@ -2195,6 +2195,20 @@ verilate(test_terrain_residency_directed
 add_test(NAME terrain_residency_directed COMMAND test_terrain_residency_directed)
 set_tests_properties(terrain_residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# GEOM.VDECODE format 0 -- RAW/CANONICAL, authorised by ruling R11. Format 0
+# is the DIFFERENTIAL REFERENCE: packed formats 1 and 2 are bake-off gated and
+# must decode to bit-identical output, so an error here does not make one wrong
+# mesh, it makes a wrong definition of correct that the later formats are then
+# built to match.
+add_executable(test_geom_vdecode_directed geometry/geom_vdecode_directed.cpp)
+target_link_libraries(test_geom_vdecode_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_vdecode_directed
+  PREFIX Vzhao_geom_vdecode
+  TOP_MODULE zhao_geom_vdecode
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_vdecode.sv)
+add_test(NAME geom_vdecode_directed COMMAND test_geom_vdecode_directed)
+set_tests_properties(geom_vdecode_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # PART.STATE's record codec -- the particle128 layout of qformats amendment C2.
 # Twelve fields at twelve offsets, written twice (pack and unpack), taken on
 # faith by every other particle block. A round trip cannot catch a wrong

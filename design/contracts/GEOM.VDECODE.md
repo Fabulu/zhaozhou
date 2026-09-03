@@ -190,8 +190,14 @@ Source ids propagate so a refused batch is attributable to the command that
 introduced the instance.
 
 ## Scalar reference function
-`zref::VertexDecode` (ledger `reference_model`), entry point
-`decode(bytes, format_id, count) -> std::vector<SkinVertex>`.
+**The RECORD law:** `zref::geom::vdecode0`
+(`reference/include/zref/zref_geom.hpp`), which decodes one 32-byte format-0
+record, plus `zref::geom::vdecode0_w0_legal`.
+
+**The BATCH engine's oracle is not yet written.** This section used to cite
+`zref::VertexDecode` with an entry point `decode(bytes, format_id, count)`, and
+no such symbol has ever existed -- a phantom citation the ledger's V17 caught
+once this block gained real evidence to check it against.
 
 It owns the byte-level layout and the refusal taxonomy, and nothing else —
 format 0 computes nothing, so there is no arithmetic law here to own yet.
@@ -202,7 +208,13 @@ bit-identical in position and within a declared bound in normal and UV. That
 comparison is only meaningful because format 0 is exact.
 
 ## Directed tests
-`tests/geometry/geom_vdecode_directed.cpp`.
+`tests/geometry/geom_vdecode_directed.cpp` covers the RECORD law:
+field-by-field against `zref::geom::vdecode0` over 1,500 random records, field
+isolation byte by byte, `rigid == (bone1 == bone0)`, and each refusal reason
+emitting NO vertex.
+
+The batch-level cases below are **planned and not yet written** -- they need
+the batch engine, which does not exist:
 
 * every field at its extremes — position at ±32767.99998, `w0` at 0, 1, 63, 64,
   bone indices at 0 and max;
@@ -218,7 +230,8 @@ comparison is only meaningful because format 0 is exact.
   started computing that should not.
 
 ## Randomized differential tests
-`tests/geometry/geom_vdecode_random.cpp`, RTL against `zref::VertexDecode`.
+**PLANNED, not written.** `tests/geometry/geom_vdecode_random.cpp`, RTL against
+`zref::geom::vdecode0`.
 
 Random meshes with random valid batches, plus a deliberate corruption fraction,
 with the generator **reporting its refusal mix** so a change that makes
@@ -229,7 +242,7 @@ Mutation sweep expected to the standard the geometry blocks already meet
 (`zhao_geom_lod` 26/25/1 proved, `zhao_geom_cull` 32/30/2 proved).
 
 ## Formal properties
-`tests/formal/geom_vdecode_batch.sby`:
+**PLANNED, not written.** `tests/formal/geom_vdecode_batch.sby`:
 
 * **no partial batch** — a batch either emits `vertex_count` vertices or none.
   This is the safety property: a torn batch would reach `GEOM.SKIN` as a mesh

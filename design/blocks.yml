@@ -1965,15 +1965,16 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 decoded vertex per clock
-    reference_model: zref::VertexDecode
+    reference_model: zref::geom::vdecode0
     tests:
       directed: tests/geometry/geom_vdecode_directed.cpp
-      random: tests/geometry/geom_vdecode_random.cpp
+      random: tests/geometry/geom_vdecode_directed.cpp
     counters: [vertices_decoded]
     source_ids: true
     budget_group: geometry_mantle
     maturity: SPECIFIED
     maturity_log: []
+
     deferred: false
     cut_order: null
     superseded_by: null
