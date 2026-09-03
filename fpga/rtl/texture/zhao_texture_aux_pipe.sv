@@ -94,10 +94,32 @@ module zhao_texture_aux_pipe #(
 );
 
   // ======================================================================= A0
+  // ---- WHY THERE IS A REGISTER HERE THAT WAS NOT HERE BEFORE ---------------
+  // MEASURED, 2026-09-03. This block fitted at 54.95 MHz -- the slowest thing
+  // on the texture island by 7 MHz and 95 MHz below the 150 MHz leaf target --
+  // and the setup report named the path rather than leaving it to be guessed:
+  //
+  //   req_env_x1_i[20] -> zhao_texture_aux_div6:u_div|ru_q[0][11]   -8.199 ns
+  //
+  // THE PATH STARTS AT AN INPUT PORT. Everything below used to be one
+  // combinational cone from this block's boundary into the divider's first
+  // flop: two 32-bit subtracts, a widening shift, a wide unsigned magnitude
+  // compare and a mux. The block had five stages and no register at the seam
+  // where it meets the world, which is the one place a leaf cannot control
+  // what it is handed.
+  //
+  // The cone is now split in two by a register:
+  //
+  //   A0   ports -> subtract and shift        -> a0_* registers
+  //   A0b  a0_*  -> clamp compare and mux     -> the divider's input flop
+  //
+  // It costs ONE clock of latency and nothing else: `req_ready_o` is still
+  // constant 1 because the divider is a fixed-latency pipeline that never
+  // stalls, so this is a pipeline stage rather than a skid buffer, and II
+  // stays 1.
   logic                     degen_c;
   logic [DEN_W-1:0]         du_c, dv_c;
   logic signed [NUM_W-1:0]  nu_c, nv_c;
-  logic                     negu_c, negv_c, satu_c, satv_c;
 
   always_comb begin
     degen_c = (req_env_x1_i <= req_env_x0_i) || (req_env_z1_i <= req_env_z0_i);
@@ -107,11 +129,24 @@ module zhao_texture_aux_pipe #(
 
     nu_c = (NUM_W'($signed(req_wx_i)) - NUM_W'($signed(req_env_x0_i))) <<< 6;
     nv_c = (NUM_W'($signed(req_wz_i)) - NUM_W'($signed(req_env_z0_i))) <<< 6;
+  end
 
-    negu_c = nu_c[NUM_W-1];
-    negv_c = nv_c[NUM_W-1];
-    satu_c = !negu_c && ($unsigned(nu_c) >= {2'b00, du_c, 6'b000000});
-    satv_c = !negv_c && ($unsigned(nv_c) >= {2'b00, dv_c, 6'b000000});
+  logic                     a0_v_q, a0_degen_q;
+  logic [DEN_W-1:0]         a0_du_q, a0_dv_q;
+  logic signed [NUM_W-1:0]  a0_nu_q, a0_nv_q;
+  logic [TOKW-1:0]          a0_tok_q;
+
+  // ====================================================================== A0b
+  // The clamps the divider relies on. Applied HERE, outside the divider, so
+  // the quotient is in [0,63] by construction and six steps suffice -- the
+  // rule is unchanged, only which side of a register it sits on.
+  // ENFORCED-BY: tests/texture/texture_aux_pipe_directed.cpp
+  logic negu_c, negv_c, satu_c, satv_c;
+  always_comb begin
+    negu_c = a0_nu_q[NUM_W-1];
+    negv_c = a0_nv_q[NUM_W-1];
+    satu_c = !negu_c && ($unsigned(a0_nu_q) >= {2'b00, a0_du_q, 6'b000000});
+    satv_c = !negv_c && ($unsigned(a0_nv_q) >= {2'b00, a0_dv_q, 6'b000000});
   end
 
   // A side channel carries what the divider does not need. It is indexed by
@@ -146,14 +181,11 @@ module zhao_texture_aux_pipe #(
   ) u_div (
       .clk        (clk),
       .rst_n      (rst_n),
-      .in_valid_i (req_valid_i),
-      // The clamps are applied HERE, outside the divider, so the quotient is
-      // in [0,63] by construction and six steps suffice.
-      // ENFORCED-BY: tests/texture/texture_aux_pipe_directed.cpp
-      .in_ru_i    ((negu_c || satu_c) ? {REM_W{1'b0}} : REM_W'($unsigned(nu_c))),
-      .in_du_i    (du_c),
-      .in_rv_i    ((negv_c || satv_c) ? {REM_W{1'b0}} : REM_W'($unsigned(nv_c))),
-      .in_dv_i    (dv_c),
+      .in_valid_i (a0_v_q),
+      .in_ru_i    ((negu_c || satu_c) ? {REM_W{1'b0}} : REM_W'($unsigned(a0_nu_q))),
+      .in_du_i    (a0_du_q),
+      .in_rv_i    ((negv_c || satv_c) ? {REM_W{1'b0}} : REM_W'($unsigned(a0_nv_q))),
+      .in_dv_i    (a0_dv_q),
       .in_tag_i   (sd_wp),
       .out_valid_o(div_ov),
       .out_qu_o   (div_qu),
@@ -199,6 +231,7 @@ module zhao_texture_aux_pipe #(
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       sd_wp         <= 4'd0;
+      a0_v_q        <= 1'b0;
       a7_v_q        <= 1'b0;
       rq_wp         <= 3'd0;
       rq_rp         <= 3'd0;
@@ -207,15 +240,32 @@ module zhao_texture_aux_pipe #(
       sheet_reads_o <= 32'd0;
       degenerate_o  <= 32'd0;
     end else begin
-      // ---- A0 capture ---------------------------------------------------
+      // ---- A0 capture: the ports, one subtract deep ----------------------
+      a0_v_q <= req_valid_i && req_ready_o;
       if (req_valid_i && req_ready_o) begin
-        sd_degen[sd_wp] <= degen_c;
+        a0_degen_q <= degen_c;
+        a0_du_q    <= du_c;
+        a0_dv_q    <= dv_c;
+        a0_nu_q    <= nu_c;
+        a0_nv_q    <= nv_c;
+        a0_tok_q   <= req_tok_i;
+        accepted_o <= accepted_o + 32'd1;
+        if (degen_c) degenerate_o <= degenerate_o + 32'd1;
+      end
+
+      // ---- A0b: the side channel, written where the divider is ISSUED -----
+      // `sd_wp` is the divider's tag, so this write has to happen on the same
+      // clock the divider takes the job -- which is now A0b, not A0. Splitting
+      // the input cone moved the issue point by one clock and this moved with
+      // it; leaving it at A0 would have written slot N's flags under slot
+      // N+1's tag, and every saturated envelope would have come back clamped
+      // on the wrong axis of the wrong request.
+      if (a0_v_q) begin
+        sd_degen[sd_wp] <= a0_degen_q;
         sd_satu[sd_wp]  <= satu_c;
         sd_satv[sd_wp]  <= satv_c;
-        sd_tok[sd_wp]   <= req_tok_i;
+        sd_tok[sd_wp]   <= a0_tok_q;
         sd_wp           <= sd_wp + 4'd1;
-        accepted_o      <= accepted_o + 32'd1;
-        if (degen_c) degenerate_o <= degenerate_o + 32'd1;
       end
 
       // ---- A7 ------------------------------------------------------------

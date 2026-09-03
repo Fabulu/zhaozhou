@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <deque>
+#include <map>
 #include <vector>
 
 #include "verilated.h"
@@ -88,6 +89,7 @@ int main(int argc, char** argv) {
   std::deque<uint8_t> sheet_q;      // tokens with a read outstanding
   std::vector<uint8_t> out_tok;
   std::vector<int>     out_deg;
+  std::map<int, int>   got_u, got_v;
   size_t fed = 0;
   int accept_clocks = 0, sheet_reads = 0;
 
@@ -121,6 +123,8 @@ int main(int argc, char** argv) {
     }
     if (top.sheet_valid_o && top.sheet_ready_i) {
       sheet_q.push_back(top.sheet_tok_o);
+      got_u[top.sheet_tok_o] = top.sheet_u_o;
+      got_v[top.sheet_tok_o] = top.sheet_v_o;
       ++sheet_reads;
     }
     if (feeding && top.req_ready_o) ++accept_clocks;
@@ -157,6 +161,53 @@ int main(int argc, char** argv) {
   zhao::check(order_bad == 0,
               "returns come back in SUBMISSION order -- degenerate ones keep their place",
               0, order_bad);
+  // ---- THE TEXEL COORDINATE, WHICH NOTHING HERE USED TO CHECK ------------
+  // Everything above tests the handshake, the counts, the ordering and the
+  // degenerate flag. None of it looks at the number the block exists to
+  // produce, and a whole class of fault is invisible to all of it: the
+  // saturation flags travel on a SIDE CHANNEL indexed by the divider's tag,
+  // and if that write lands one clock away from the divider's issue, slot N's
+  // clamp flags are stored under slot N+1's tag. Every count still balances,
+  // every request still returns exactly once, in order, flagged correctly --
+  // and the clamped envelopes come back clamped on the wrong request.
+  //
+  // That is not hypothetical. Splitting this block's input cone (2026-09-03,
+  // to fix a 54.95 MHz fit whose worst path started at an input PORT) moved
+  // the divider's issue point by one clock, and the side-channel write had to
+  // move with it. This case is what makes that provable rather than argued.
+  //
+  // The model is the contract's law, written from the contract: the texel is
+  // floor(((w - e0) << 6) / (e1 - e0)), below the envelope clamps to 0 and at
+  // or above it clamps to 63.
+  int uv_bad = 0, uv_checked = 0, uv_saturated = 0;
+  for (const Req& r : rq) {
+    if (r.degen) continue;              // a degenerate envelope reads no texel
+    if (got_u.find(r.tok) == got_u.end()) { ++uv_bad; continue; }
+    auto texel = [](int32_t w, int32_t e0, int32_t e1) {
+      const int64_t d = static_cast<int64_t>(e1) - e0;
+      const int64_t n = (static_cast<int64_t>(w) - e0) * 64;
+      if (n < 0) return 0;
+      const int64_t q = n / d;
+      return static_cast<int>(q > 63 ? 63 : q);
+    };
+    const int wu = texel(r.wx, r.x0, r.x1);
+    const int wv = texel(r.wz, r.z0, r.z1);
+    if (wu == 63 || wv == 63) ++uv_saturated;
+    if (got_u[r.tok] != wu || got_v[r.tok] != wv) ++uv_bad;
+    ++uv_checked;
+  }
+  zhao::check(uv_bad == 0,
+              "every non-degenerate request reads the texel its own envelope "
+              "and world point imply -- the side channel is indexed by the "
+              "divider's tag, and this is what proves it stays aligned",
+              0, uv_bad);
+  zhao::check(uv_saturated > 0,
+              "and the stimulus really does saturate the clamp, so the flags "
+              "being checked are not all zero",
+              1, uv_saturated > 0 ? 1 : 0);
+  std::printf("  %d texel coordinates checked, %d saturated\n", uv_checked,
+              uv_saturated);
+
   zhao::check(flag_bad == 0, "and each is flagged degenerate or not, correctly", 0,
               flag_bad);
 
