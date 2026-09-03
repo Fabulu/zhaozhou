@@ -57,6 +57,73 @@ import sys
 PERIOD_NS = 10.0
 
 
+PORT_RE = re.compile(r"^\s*(?:input|output|inout)\s+(?:var\s+)?(?:logic|wire|reg)?\s*"
+                     r"(?:signed\s*)?(?:\[[^\]]*\]\s*)*([A-Za-z_]\w*)", re.M)
+
+
+def module_ports(module, rtl_root="fpga/rtl"):
+    """Top-level port names of `module`, from its own .sv.
+
+    The summary report gives node names and no path types, so a summary row is
+    classified by whether its endpoint IS a port. That is a name match, which
+    is the classification `fit_evidence` once got wrong by matching substrings
+    -- so this matches the WHOLE identifier, with an optional bit index, and
+    nothing else.
+    """
+    base = module.split("@")[0]
+    for suffix in ("", "seed2", "seed3"):
+        if suffix and base.endswith(suffix):
+            base = base[: -len(suffix)]
+            break
+    for dirpath, _dirs, files in os.walk(rtl_root):
+        if base + ".sv" in files:
+            txt = io.open(os.path.join(dirpath, base + ".sv"),
+                          encoding="utf-8", errors="replace").read()
+            # Anchor at the MODULE, not at the start of the file. Cutting at
+            # the first ");" found anywhere returned ZERO ports for
+            # zhao_texture_tmu_plan, because its header comment quotes a line
+            # of SystemVerilog that contains one -- and a classifier that
+            # silently finds no ports calls every path internal.
+            mstart = txt.find("module " + base)
+            if mstart < 0:
+                mstart = 0
+            tail = txt[mstart:]
+            end = tail.find(");")
+            head = tail[:end] if end > 0 else tail
+            return set(PORT_RE.findall(head))
+    return set()
+
+
+def strip_index(node):
+    """`req_wx_i[3]` -> `req_wx_i`; leaves hierarchical names alone."""
+    n = node.split("|")[-1]
+    if "[" in n:
+        n = n[: n.index("[")]
+    return n
+
+
+def parse_summary(path, ports):
+    """Classify the 2000-path summary rows by whether an endpoint is a port."""
+    internal, inb, outb = [], [], []
+    for line in io.open(path, encoding="utf-8", errors="replace"):
+        m = re.match(r"^;\s*(-?[\d.]+)\s*;\s*([^;]+?)\s*;\s*([^;]+?)\s*;", line)
+        if not m:
+            continue
+        try:
+            slack = float(m.group(1))
+        except ValueError:
+            continue
+        frm, to = m.group(2).strip(), m.group(3).strip()
+        rec = (slack, frm, to)
+        if strip_index(to) in ports:
+            outb.append(rec)
+        elif strip_index(frm) in ports:
+            inb.append(rec)
+        else:
+            internal.append(rec)
+    return internal, inb, outb
+
+
 def parse_report(path):
     """Return (internal, in_boundary, out_boundary) lists of (slack, frm, to)."""
     text = io.open(path, encoding="utf-8", errors="replace").read()
@@ -91,7 +158,8 @@ def fmax(slack):
 
 def main(argv):
     d = argv[1] if len(argv) > 1 else "reports/synthesis/blockpaths"
-    files = sorted(f for f in os.listdir(d) if f.endswith(".setup.rpt"))
+    files = sorted(f for f in os.listdir(d)
+                if f.endswith(".setup.rpt") and not f.endswith(".setup.summary.rpt"))
     if not files:
         print("no .setup.rpt found in " + d)
         return 1
@@ -99,7 +167,22 @@ def main(argv):
     rows = []
     for f in files:
         mod = f[: -len(".setup.rpt")]
-        internal, inb, outb = parse_report(os.path.join(d, f))
+        # Prefer the 2000-path SUMMARY when one exists: the 200-path detailed
+        # report is often entirely boundary for a leaf with many virtual pins,
+        # and an absent internal path is not a fast internal path.
+        summary = os.path.join(d, mod + ".setup.summary.rpt")
+        if os.path.exists(summary):
+            ports = module_ports(mod)
+            if not ports:
+                # A classifier that finds no ports calls EVERY path internal,
+                # which is the most flattering possible answer and completely
+                # wrong. Refuse rather than report it.
+                print("%-34s   PORT LIST NOT FOUND -- refusing to classify. "
+                      "Every path would read as internal." % mod)
+                continue
+            internal, inb, outb = parse_summary(summary, ports)
+        else:
+            internal, inb, outb = parse_report(os.path.join(d, f))
         wi = min((x[0] for x in internal), default=None)
         wb = min((x[0] for x in inb + outb), default=None)
         rows.append((mod, wi, wb, len(internal), len(inb), len(outb),

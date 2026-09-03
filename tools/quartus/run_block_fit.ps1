@@ -616,6 +616,13 @@ try {
                         Copy-Item -LiteralPath $prSrc -Destination (Join-Path $pathDir ($rowModule + '.' + $pr + '.rpt')) -Force
                     }
                 }
+                # The 2000-path SUMMARY report. Small enough to archive, and the
+                # only one deep enough to contain a leaf's internal paths at all
+                # once its virtual pins have filled the worst-path list.
+                $sumSrc = Join-Path $dir 'output_files/blockfit_setup_summary.rpt'
+                if (Test-Path -LiteralPath $sumSrc) {
+                    Copy-Item -LiteralPath $sumSrc -Destination (Join-Path $pathDir ($rowModule + '.setup.summary.rpt')) -Force
+                }
 
                 $hold = Get-StaSummary $s 'Hold Summary'
                 if ($null -ne $hold) {

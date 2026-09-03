@@ -1,4 +1,4 @@
-﻿module                              internal  boundary  int Fmax  rpt Fmax   worst internal path
+module                              internal  boundary  int Fmax  rpt Fmax   worst internal path
 ----------------------------------------------------------------------------------------------------------------------------------
 zhao_pair_tess_normals               -22.153      none     31.10     31.10   altsyncram:lat_mem_rtl_0|altsyncram_a3n1:auto_generated|ram_block1a0~PORT_B_WRITE_ENABLE_REG -> zhao_terrain_tess:u_tess|vy[0][3]
 zhao_field_seq                        -6.951    -4.546     58.99     58.99   zhao_field_exec_shared:u_exec|zhao_field_ring:u_ring|e1[4] -> zhao_field_exec_shared:u_exec|zhao_field_mul:u_mul|b_q[0]

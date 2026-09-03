@@ -21,15 +21,28 @@ update_timing_netlist
 # `-nworst 1` keeps one path per ENDPOINT, so 200 rows are 200 different
 # endpoints rather than 200 bits of one bus -- which is what makes the grouping
 # meaningful. full_path detail carries the module hierarchy the census groups on.
-# 2000, not 200. MEASURED 2026-09-03: tools/quartus/internal_paths.py found
-# that for zhao_texture_aux_pipe, zhao_texture_rsp_dispatch and one seed of
+# TWO REPORTS, AND THE SECOND ONE EXISTS BECAUSE OF A SIZE LIMIT.
+#
+# MEASURED 2026-09-03: tools/quartus/internal_paths.py found that for
+# zhao_texture_aux_pipe, zhao_texture_rsp_dispatch and one seed of
 # zhao_raster_rcp24_svc, ALL 200 worst paths touched a top-level port -- so the
 # report contained no register-to-register path at all and could say nothing
-# about the block's own logic. A leaf with hundreds of virtual pins fills the
+# about the block's own logic. A leaf with hundreds of virtual pins fills its
 # worst-path list with its boundary before reaching its arithmetic.
-report_timing -setup -npaths 2000 -nworst 1 -detail full_path \
+#
+# Raising the FULL-DETAIL report to 2000 paths fixed the blindness and made the
+# archive uncommittable: 1.7 MB became 10-17 MB a block, and the repository's
+# pre-commit hook refused it, correctly. Large files are almost never evidence.
+#
+# So: 200 paths at full detail, which is what diagnosing a cone needs and what
+# the 2026-08-25 census directive asked for, plus 2000 paths at SUMMARY detail,
+# which is one line each and is all the internal/boundary split needs. The
+# summary report is about 300 KB.
+report_timing -setup -npaths 200 -nworst 1 -detail full_path \
     -file output_files/blockfit_setup_paths.rpt
-report_timing -hold  -npaths 2000 -nworst 1 -detail full_path \
+report_timing -hold  -npaths 200 -nworst 1 -detail full_path \
     -file output_files/blockfit_hold_paths.rpt
+report_timing -setup -npaths 2000 -nworst 1 -detail summary \
+    -file output_files/blockfit_setup_summary.rpt
 delete_timing_netlist
 project_close
