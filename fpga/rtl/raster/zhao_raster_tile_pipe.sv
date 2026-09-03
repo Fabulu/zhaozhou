@@ -397,6 +397,18 @@ module zhao_raster_tile_pipe (
   assign frag_acc = ez_frag_valid && ez_frag_ready;
   assign swap_acc = ts_swap && ts_swap_ready;
 
+  // `rst_n` must not be read SYNCHRONOUSLY in a block while it is also an
+  // asynchronous reset elsewhere -- Verilator's SYNCASYNCNET, and it is a real
+  // caution rather than a style note: a net used both ways is a net whose
+  // timing closure is being asked for twice. `assert_armed_q` is a plain
+  // synchronous flag that says "reset has released", which is what the
+  // assertions actually want.
+  logic assert_armed_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) assert_armed_q <= 1'b0;
+    else        assert_armed_q <= 1'b1;
+  end
+
   // ---- SELF-ASSERTING CURSOR GUARD (the idiom of zhao_cmd_scheduler's
   // ---- a_mode_act_in_range: the comment claims it, this enforces it) ------
   // RS_WALK's cursor update relies on cov_acc and frag_acc never firing on the
@@ -406,7 +418,7 @@ module zhao_raster_tile_pipe (
   // mask instead of the newly accepted row: a wrong fragment ADDRESS, which is
   // a wrong pixel and not a crash.
   always_ff @(posedge clk) begin
-    if (rst_n) begin
+    if (assert_armed_q) begin
       a_cursor_no_double_accept : assert (!(cov_acc && frag_acc));
     end
   end

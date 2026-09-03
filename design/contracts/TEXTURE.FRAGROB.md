@@ -101,7 +101,8 @@ may depend on — the ordered-retirement contract is what is promised.
   accepted — worse than the stale return it exists to catch.
 * **Allocation blocks when the free list is empty**, counted as
   `full_clocks_o`. It does not overwrite a live slot.
-* **The work queue asserts `wq_overflow_o`** rather than wrapping silently.
+* **The work queue asserts `wq_overflow_o`** rather than wrapping silently —
+  though at the shipped parameters it cannot be reached; see Directed tests.
 
 ## Scalar reference function
 
@@ -157,8 +158,18 @@ about being wrong.
   request samples) and it is the one case with no TMU handshake to wait on, so
   it is the one that can hang waiting for a sample it never asked for.
 
-**Still planned and not written:** `wq_overflow_o`, which needs a stimulus that
-offers more samples than the 64-entry work queue can hold.
+**`wq_overflow_o` is STRUCTURALLY UNREACHABLE and has no test, on purpose.**
+At most `DEPTH` slots are live and each contributes at most three samples, so
+the work queue never holds more than 16 × 3 = 48 entries. `WQN` must be a power
+of two — the occupancy is a pointer subtraction that only counts correctly if
+the pointers wrap at a multiple of the depth — and 64 is the smallest power of
+two at or above 48. The sizing is exactly right and the signal is defensive.
+
+A test for an unreachable case can never pass or fail, and listing one as
+"planned" would leave permanent phantom work in this contract. The enforcement
+is an assertion instead — `a_wq_never_overflows` — which costs nothing in
+synthesis and fires in simulation if a future `DEPTH` or sample-count change
+quietly invalidates the sizing.
 
 ## Randomized differential tests
 
