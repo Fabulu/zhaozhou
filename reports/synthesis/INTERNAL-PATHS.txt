@@ -1,0 +1,37 @@
+﻿module                              internal  boundary  int Fmax  rpt Fmax   worst internal path
+----------------------------------------------------------------------------------------------------------------------------------
+zhao_pair_tess_normals               -22.153      none     31.10     31.10   altsyncram:lat_mem_rtl_0|altsyncram_a3n1:auto_generated|ram_block1a0~PORT_B_WRITE_ENABLE_REG -> zhao_terrain_tess:u_tess|vy[0][3]
+zhao_field_seq                        -6.951    -4.546     58.99     58.99   zhao_field_exec_shared:u_exec|zhao_field_ring:u_ring|e1[4] -> zhao_field_exec_shared:u_exec|zhao_field_mul:u_mul|b_q[0]
+zhao_field_v2_front                   -6.886      none     59.22     59.22   zhao_field_v2_core:u_core|finished[5] -> zhao_field_v2_core:u_core|finished[2]
+zhao_raster_perspuv_svc               -5.957    -1.170     62.67     62.67   p1_prod_q[36]_OTERM87 -> e_q[5][1][8]
+zhao_raster_rcp24_svcseed2            -3.626    -4.571     73.39     68.63   c_val[4] -> c_m.raddr_a[2]~3_OTERM417
+zhao_raster_rcp24_svc                 -2.448    -4.607     80.33     68.46   m1_i_q[1] -> c_m.raddr_a[0]~7_OTERM421
+zhao_texture_cache_pipe               -2.337    -1.008     81.06     81.06   rq_rp[1]~DUPLICATE -> valid_r[1][2]
+zhao_probe_dist_svc                   -1.038      none     90.60     90.60   zhao_field_isqrt:g_bank[0].g_lane[0].u_root|bitp[2]~DUPLICATE -> zhao_field_isqrt:g_bank[0].g_lane[0].u_root|res[0]
+zhao_raster_texjoin_v2                -0.739    -0.248     93.12     93.12   wq_rp[3]~DUPLICATE -> tmu_v_q[11]_OTERM1037
+zhao_texture_tmu_plan                  0.956    -1.294    110.57     88.54   t2_iv1[9] -> t3_row1[4]
+zhao_probe_ctx_fifo                    1.011    -0.225    111.25     97.80   svc_busy[5] -> rq[0][1]
+zhao_probe_compose_pipe_s16            1.368    -1.276    115.85     88.68   acc[15][7] -> acc[16][7]
+zhao_texture_aux_pipe                  1.692    -5.715    120.37     63.63   zhao_texture_aux_div6:u_div|rv_q[0][35]_OTERM369~DUPLICATE -> zhao_texture_aux_div6:u_div|ru_q[1][36]~DUPLICATE
+zhao_probe_compose_pipe_s8             1.718    -1.526    120.74     86.76   acc[6][1] -> acc[7][2]
+zhao_texture_palette_res               1.768     0.423    121.48    104.42   gen_r[3][2]~DUPLICATE -> gen_r[1][0]
+zhao_texture_mosaic                    1.940    -1.544    124.07     86.63   texture_samples_o[7]~reg0DUPLICATE -> texture_samples_o[21]~reg0
+zhao_texture_bilerp_lane               2.056    -0.031    125.88     99.69   Add1~1_OTERM1_Duplicate_1 -> b1_b_q[16]
+zhao_texture_rsp_dispatch              2.067     0.983    126.06    110.90   raw_n[0] -> cq_d[1][0][0]
+zhao_probe_banked_rf                    none    -0.358         -     96.54   - -> -
+                                     NO INTERNAL PATH IN THE TOP 200. Every timed path in this report touches a port,
+                                     so the reported Fmax says nothing about the block's own logic.
+zhao_probe_banked_rf@v3hot              none    -0.736         -     93.14   - -> -
+                                     NO INTERNAL PATH IN THE TOP 200. Every timed path in this report touches a port,
+                                     so the reported Fmax says nothing about the block's own logic.
+zhao_probe_compose_pipe_s4              none    -1.220         -     89.13   - -> -
+                                     NO INTERNAL PATH IN THE TOP 200. Every timed path in this report touches a port,
+                                     so the reported Fmax says nothing about the block's own logic.
+zhao_raster_rcp24_svcseed3              none    -5.642         -     63.93   - -> -
+                                     NO INTERNAL PATH IN THE TOP 200. Every timed path in this report touches a port,
+                                     so the reported Fmax says nothing about the block's own logic.
+
+internal = worst register-to-register slack, ns, against a 10.0 ns period
+boundary = worst slack on a path launched by an input or captured by an output
+A report only samples its top 200 paths, so 'none' means no internal path was
+among the worst 200 -- not that the block has none.
