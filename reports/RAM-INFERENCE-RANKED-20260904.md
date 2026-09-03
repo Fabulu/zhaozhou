@@ -200,3 +200,59 @@ person to relax it would have no way to know.
    written, and rewriting it would trade clarity for nothing.
 5. Re-run `--rank` after each and put the delta in the run log. The tool is
    cheap enough to run every time; the fit is not.
+
+
+---
+
+# OWNER DECISION: `min_m10k: 8` on TEXTURE.CACHE cannot be met
+
+**Not changed. Recorded for a ruling**, because lowering a gate so the thing
+passes is the exact failure the gate exists to prevent, and the number is from
+island brief S3.4.
+
+The 23:52 fit was killed before the fitter finished, but **its synthesis
+completed and is decisive**:
+
+* `"cannot regroup"` — the message that was the actual blocker last time — is
+  **gone**;
+* all four lanes' `data_r` became `altsyncram`, Simple Dual Port, 128 x 16,
+  **2,048 bits each**;
+* total block memory bits **8,320**, against **128** on the previous fit.
+
+The storage fix worked. But `tag_r` is not in that list, and it will never be:
+
+    logic [TAG_W-1:0] tag_r [LINES];   // 16 deep x 24 wide = 384 bits per lane
+
+**384 bits, 16 deep, is below the size Quartus will put in an M10K at all.** It
+is the same "uninferred due to inappropriate RAM size" verdict `rq_en` gets in
+this very report, and flip-flops are the *correct* answer for an array that
+shape — forcing it would burn four M10Ks to hold 1,536 bits.
+
+So the block has **four** arrays worth being memory, not eight:
+
+| array | per lane | x4 lanes | can it be an M10K? |
+|---|---|---|---|
+| `data_r` | 2,048 bits (128 x 16) | 8,192 | **yes — and it is** |
+| `tag_r` | 384 bits (16 x 24) | 1,536 | no, too shallow |
+
+9,728 bits total, which is exactly the "9,728 bits of array in flip-flops"
+figure this whole rework started from.
+
+`zhao_prod_top` instantiates the block with **no parameter override**, so
+`LANES=4, LINES=16, LINE_BYTES=16` are the shipping numbers, not placeholders
+that a bigger production config would replace. Checked, because the entire
+argument turns on it.
+
+### The two possible rulings
+
+1. **The tripwire is wrong.** By the same capacity-floor method used for
+   tonight's other three blocks, the defensible number is **`min_m10k: 4`** —
+   four `data_r` banks of 2,048 bits, each needing its own block. S3.4's 8 was
+   presumably written expecting the tag array to be memory too.
+2. **The cache is wrong.** If 8 blocks of storage was the architectural intent,
+   the block is half the size it was meant to be and `LINES` should grow. That
+   is a cache-capacity decision with a hit-rate consequence, not a syntax one.
+
+**Until this is ruled, a failing `min_m10k` on this block is not evidence of an
+RTL defect.** That is the thing most likely to be misread from a red fit
+summary, which is why it is written down here rather than left in a run log.
