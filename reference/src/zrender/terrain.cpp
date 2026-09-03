@@ -58,9 +58,13 @@ namespace render {
 // The ONE flat-shade law (hoisted verbatim from the draw_heightfield lambda
 // 2026-08-16 when the creature lane needed the identical arithmetic —
 // charter 29-6; the golden CRCs pin that nothing changed but the address).
-int32_t shade_flat_tri_dir(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_t bz,
-                           int32_t cx, int32_t cy, int32_t cz, int32_t lx, int32_t ly, int32_t lz,
-                           SatLedger* L) {
+// THE SIGNED UNCLAMPED FORM (owner ruling D-1, 2026-09-03). The body below is
+// the arithmetic that was already here, verbatim; only the final clamp moved
+// out, into the wrapper. `shade_flat_tri_dir` is therefore bit-identical and
+// the golden CRCs are the proof.
+int32_t shade_flat_tri_dir_unclamped(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by,
+                                     int32_t bz, int32_t cx, int32_t cy, int32_t cz, int32_t lx,
+                                     int32_t ly, int32_t lz, SatLedger* L) {
   const int64_t e1x = static_cast<int64_t>(bx) - ax;
   const int64_t e1y = static_cast<int64_t>(by) - ay;
   const int64_t e1z = static_cast<int64_t>(bz) - az;
@@ -96,7 +100,17 @@ int32_t shade_flat_tri_dir(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32
   // nmag2 = |n_fx|^2 is Q32.32 raw, hence isqrt_u64(nmag2) = |n_fx| is
   // Q16.16 raw — ndot/nmag is exactly (nhat.L) in Q16.16 (§4 one
   // rounding). No extra shift.
-  const int32_t shade = div_rhu_s128(ndot, static_cast<__int128>(isqrt_u64(nmag2)));
+  return div_rhu_s128(ndot, static_cast<__int128>(isqrt_u64(nmag2)));
+}
+
+// The clamped form, unchanged in behaviour: clamp01 of the signed primitive.
+// Every existing caller keeps calling this and every golden CRC must stay
+// exactly where it was -- that is the acceptance test for the refactor.
+int32_t shade_flat_tri_dir(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_t bz,
+                           int32_t cx, int32_t cy, int32_t cz, int32_t lx, int32_t ly, int32_t lz,
+                           SatLedger* L) {
+  const int32_t shade =
+      shade_flat_tri_dir_unclamped(ax, ay, az, bx, by, bz, cx, cy, cz, lx, ly, lz, L);
   return shade < 0 ? 0 : (shade > 0x10000 ? 0x10000 : shade);
 }
 

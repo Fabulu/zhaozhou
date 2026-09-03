@@ -241,6 +241,34 @@ inline constexpr int32_t kLightZ = 26758;
  * RUN-20260826-1615 FINDINGS-R1 section D.3). The arithmetic is verbatim shade_flat_tri; only the
  * light is a parameter.
  */
+/**
+ * THE SIGNED UNCLAMPED FORM (owner ruling D-1, 2026-09-03).
+ *
+ * Identical arithmetic to `shade_flat_tri_dir`, without the final clamp to
+ * [0, 0x10000]. Returns Q16.16, which may be NEGATIVE for a face turned away
+ * from the light. A zero-area triangle still returns 0.
+ *
+ * WHY IT EXISTS, and the distinction the ruling is careful about:
+ *
+ *   for each independent light i:
+ *       raw_i = shade_flat_tri_dir_unclamped(n, L_i)
+ *       ndl_i = clamp01(raw_i + normal_detail_i)   // detail is THIS light's
+ *       rgb  += light_colour_i * ndl_i
+ *   rgb += ambient + spill;  final = saturate(rgb)
+ *
+ * A terrain detail normal may brighten a face whose base normal is slightly
+ * turned away from THAT SAME sun, so base and detail combine before clamping.
+ * But a second sun or a fireball is an INDEPENDENT light: its negative dot
+ * must become zero and must not subtract illumination another light
+ * contributed. So the clamp is once PER LIGHT, not once per fragment.
+ *
+ * `shade_flat_tri_dir` below is now a bit-identical wrapper around this, and
+ * the golden CRCs are what prove it.
+ */
+int32_t shade_flat_tri_dir_unclamped(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by,
+                                     int32_t bz, int32_t cx, int32_t cy, int32_t cz, int32_t lx,
+                                     int32_t ly, int32_t lz, SatLedger* L);
+
 int32_t shade_flat_tri_dir(int32_t ax, int32_t ay, int32_t az, int32_t bx, int32_t by, int32_t bz,
                            int32_t cx, int32_t cy, int32_t cz, int32_t lx, int32_t ly, int32_t lz,
                            SatLedger* L);
