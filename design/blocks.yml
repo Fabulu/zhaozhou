@@ -1520,6 +1520,54 @@ blocks:
     superseded_by: null
     notes: "Overflow policy is reject, never silently drop (§11.4). Format law: spec/terrain_rules.md (Island Patch v1 — dual heightfield + void mask + breach law, world-identity wave)."
 
+  - id: TERRAIN.SHADE
+    name: Terrain base light
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "dot(n,L)/|n| per TRIANGLE, reused by every fragment of it. Exists because production terrain has NO lighting path: TERRAIN.NORMALS is UNIT_VERIFIED at 41,731 checks and nothing consumes its output, TERRAIN.PROJECT has no colour port, and the composed shell contains no terrain at all. Needed with or without normal maps, so its cost must be measured SEPARATELY from TERRAIN.NORMALMAP."
+    contract: design/contracts/TERRAIN.SHADE.md
+    phase: 6
+    owner_issue: ZH-081
+    inputs: [terrain_normals]
+    outputs: [terrain_shade]
+    upstream: [TERRAIN.NORMALS]
+    downstream: [TERRAIN.PROJECT]
+    backpressure: ready_valid
+    latency: fixed:0
+    target_throughput: OPEN -- fit at II=1 and II=3 per the owner brief; the producer delivers ~1 triangle per 3 clocks
+    reference_model: zref::terrain::shade_base
+    tests:
+      directed: tests/terrain/terrain_shade_oracle.cpp
+      random: tests/terrain/terrain_shade_oracle.cpp
+    counters: [terrain_samples_evaluated]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-03"
+        commit: "eca81e6f"
+        evidence: reference/include/zref/zref_terrain_normalmap.hpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      NOT part of the normal-map cost. The owner brief: "the 10-DSP piece is
+      not really a normal-map expense ... TERRAIN.SHADE is necessary whether
+      you use normal maps or not." Estimated ~730 ALM / 10 DSP / 1 M10K at
+      II=1, and that estimate is CHALLENGED: the producer delivers roughly one
+      triangle every three clocks, so fit II=1 and II=3 and record both. If
+      DSPs get tight, lower THIS block's throughput point rather than cutting
+      TERRAIN.NORMALMAP's 2-DSP per-fragment delta.
+      The sign of base_o is preserved rather than clamped, because the detail
+      term is added to it. The sum of squares must accumulate in UNSIGNED 64:
+      three Q16.16 components at the fx16 rail reach 1.38e19 against signed
+      64's 9.22e18, and in RTL that wrap gives a small length and therefore a
+      huge wrong shade.
+      GATE BEFORE RTL, and it is the art law: the amended oracle goes into the
+      ZRef renderer and the owner LOOKS at the island under a MOVING sun at
+      240p first.
   - id: TERRAIN.TESS
     name: Crack-safe tessellator
     kind: rtl
@@ -1645,7 +1693,7 @@ blocks:
     inputs: [terrain_mesh]
     outputs: [terrain_normals]
     upstream: [TERRAIN.TESS]
-    downstream: [TERRAIN.PROJECT]
+    downstream: [TERRAIN.PROJECT, TERRAIN.SHADE]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 normal per vertex per clock
@@ -1829,7 +1877,7 @@ blocks:
     owner_issue: ZH-051
     inputs: [lod_decisions, terrain_normals]
     outputs: [terrain_primitives, mosaic_candidates]
-    upstream: [TERRAIN.LOD, TERRAIN.NORMALS]
+    upstream: [TERRAIN.LOD, TERRAIN.NORMALS, TERRAIN.SHADE]
     downstream: [GEOM.CLIP, TEXTURE.MOSAIC]
     backpressure: ready_valid
     latency: variable

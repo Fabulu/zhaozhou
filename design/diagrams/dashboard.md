@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **97** (77 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **98** (78 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -24,10 +24,10 @@ Blocks: **97** (77 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | raster | · | · | 5 | · | · | · | · | · | 5 |
 | surface | · | · | 2 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
-| terrain | · | · | 9 | · | · | · | · | · | 9 |
+| terrain | · | 1 | 9 | · | · | · | · | · | 10 |
 | texture | · | · | 5 | · | · | · | · | · | 5 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 30 | 10 | 41 | 16 | · | · | · | 6 | 97 |
+| **all** | 30 | 11 | 41 | 16 | · | · | · | 6 | 98 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -90,6 +90,7 @@ Blocks: **97** (77 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 si
 | MEASURE.TOKENS | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/measure/measure_tokens_directed.cpp |
 | TERRAIN.PATCH | REFERENCE_COMPLETE | 2026-08-16 | `53b7b8a` | reference/include/zref/zref_terrain.hpp |
 | TERRAIN.PATCH | UNIT_VERIFIED | 2026-08-31 | `cc10167` | tests/terrain/terrain_patch_directed.cpp |
+| TERRAIN.SHADE | REFERENCE_COMPLETE | 2026-09-03 | `eca81e6f` | reference/include/zref/zref_terrain_normalmap.hpp |
 | TERRAIN.TESS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_terrain_tess.hpp |
 | TERRAIN.TESS | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/terrain/terrain_tess_directed.cpp |
 | TERRAIN.RESIDENCY | SPECIFIED | 2026-09-03 | `eadf1dfa` | design/contracts/TERRAIN.RESIDENCY.md |
@@ -198,7 +199,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 | platform | 14% | 16 | 0% |
 | command_debug | 5% | 9 | 0% |
 | field | 6% | 2 | 0% |
-| geometry_mantle | 20% | 24 | 0% |
+| geometry_mantle | 20% | 25 | 0% |
 | tile | 30% | 12 | 0% |
 | myriad_forge | 9% | 9 | 0% |
 | twod_post | 6% | 5 | 0% |
