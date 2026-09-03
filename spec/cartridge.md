@@ -62,6 +62,9 @@ body is trusted, mirroring the fail-safe order of capture_format §3.2).
 | 0x000B | ISLAND_TABLE | island directory (§4; spec/terrain_rules.md §1.5) |
 | 0x000C | CREATURE_FORM | compiled creature form page (§4; spec/creature_rules.md §5 kind 8) |
 | 0x000D | CLIP_BANK | animation clip bank page (§4; spec/creature_rules.md §5 kind 9) |
+| 0x000E | TEXTURE_PAGE | generic sampled bytes + interpretation (§4a; owner ruling D-2, 2026-09-03) |
+| 0x000F | MATERIAL_SET | generic immutable material table indexed by `material_id` (§4a) |
+| 0x0010 | MESH_STREAM | generic meshlet descriptors + vertex + local-index streams (§4a) |
 | 0x8000-0xFFFF | tool namespace | tools may add private sections; readers MUST skip (capture_format §4.3-1) |
 
 FRAME_PACKET sections do not belong in a cartridge (a cartridge is not a
@@ -96,8 +99,12 @@ page-id constant (language-semantics §5); `kind` selects the page family:
 | 7 | island table | ISLAND_TABLE | island directory: datum, pitch_log2, grid extent, tileset, sparse patch map (spec/terrain_rules.md §1.5) |
 | 8 | creature form | CREATURE_FORM | compiled parts→meshlets, bones ≤32, attachments, hitboxes, ladder refs (spec/creature_rules.md §5) |
 | 9 | clip bank | CLIP_BANK | 30 Hz quantized-quat clips + keyframe event tags (spec/creature_rules.md §2.1) |
+| 10 | texture page | TEXTURE_PAGE | immutable sampled bytes: dimensions, format, mip count/offsets, strides, texel payload, integrity identity, optional palette subtype (§4a) |
+| 11 | material set | MATERIAL_SET | immutable table indexed by `material_id`: 0–3 sample bindings, page handles, TMU state, combiner recipe/weight, raster state, cel/ink participation, fog exemption, AUX use (§4a) |
+| 12 | mesh stream | MESH_STREAM | immutable geometry: meshlet descriptors, vertex stream, local-index stream, offsets/counts, format + generation metadata (§4a) |
 
-~~Kinds 6-255 reserved~~ ~~Kinds 8-255 reserved~~ Kinds 10-255 reserved
+~~Kinds 6-255 reserved~~ ~~Kinds 8-255 reserved~~ ~~Kinds 10-255 reserved~~
+Kinds 13-255 reserved
 (world-identity wave, RUN-20260816-0046, added kinds 6/7 then 8/9); a reader
 that meets an unknown kind skips the page
 (fail-safe, never guesses). The packer cross-checks every Form page-id
@@ -105,6 +112,52 @@ constant against this table at pack time (FORM-E-830/831,
 language-semantics §8).
 
 ## 4. Page families
+
+
+## §4a — The three generic resource families (owner ruling D-2, 2026-09-03)
+
+**Ruled after `reports/BORING_3D_FUNDAMENTALS_AUDIT.md` R4 found that this
+registry had no generic texture-page or material-set kind while three
+subsystems already assumed one**: creature parts claim texture pages, terrain
+names tilesets, and `DrawForm` carries a `material_set` handle.
+
+Three options were considered (per-family embedding; a generic blob plus typed
+manifests; generic families). **Generic families was ruled**, because it is the
+only one under which `MEM.UPLOAD` can be a single general mover for every
+immutable render asset, and the only one where the texture cache's invalidate
+has one obvious publisher.
+
+### The ownership rule, which is the point of the ruling
+
+    family resource
+       |- references MESH_STREAM
+       |- references MATERIAL_SET
+       '- MATERIAL_SET references TEXTURE_PAGE
+
+**`CREATURE_FORM`, `SKY_SET`, terrain tilesets and future object-form pages MAY
+reference these, and MAY NOT embed a second family-specific interpretation of
+the same texture, material or mesh concepts.** Family pages become
+**manifests, not private loaders**.
+
+`MEM.UPLOAD` copies all three as **opaque immutable bytes** under one residency,
+generation, integrity and publication law. **It does not need to know whether
+the bytes depict Zixx, a cliff, a water surface or a fireball** — and that is
+the property that makes one uploader sufficient.
+
+### Palettes
+
+Palette data is a **subtype of `TEXTURE_PAGE`**, not a separate family. It uses
+the same publication and generation machinery rather than growing an unrelated
+loader path — which is also what lets D-3's generation-tagged cache coherence
+cover palettes without a special case.
+
+### What is NOT frozen here
+
+The **record layouts** inside each family. `MATERIAL_SET`'s entry shape is
+drafted in `design/contracts/MATERIAL.RESOLVE.md` and is explicitly not frozen
+by that file either. **The ABI generator owns the final emitted constants and
+regeneration**; these table rows allocate the kinds and section types, which is
+what unblocks the loader and the uploader.
 
 - **Field programs (kind 0):** the compiled `.zprog` bytes (field-ir §5:
   header, tables, code, map — byte-stable, hash-asserted). The program hash

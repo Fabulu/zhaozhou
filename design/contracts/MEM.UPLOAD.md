@@ -143,16 +143,38 @@ So the complete transaction is:
         -> publish the new mapping atomically
         -> pin for READY frames
 
-The invalidate step is **not optional and not the consumer's problem**. Two
-implementations are legal and the choice is an owner decision:
+**RULED, D-3, 2026-09-03** (`reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`):
+**generation-tagged caches.**
 
-* **drive an explicit invalidate** at the caches holding that resource — simple,
-  and it needs a list of who caches what;
-* **bind the cache tag to the resource generation**, so an old line cannot match
-  a new request at all — no list, no broadcast, and the generation is already
-  carried for staleness. **Recommended**, because it makes the guarantee
-  structural rather than procedural, and this block already carries the
-  generation for a different reason.
+    cache tag = physical line tag + residency generation
+
+Publishing a new mapping makes every old entry **structurally unable to match**.
+A physical address alone stopped being a sufficient identity the moment
+local-SDRAM slots became reusable.
+
+It applies to **every cache derived from a resident resource**:
+
+* texture and palette cache lines;
+* material-record caches (`MATERIAL.RESOLVE`);
+* mesh and descriptor caches added later;
+* **the decoded pose cache, which must distinguish the CLIP-BANK GENERATION in
+  addition to `{type, clip, frame, sub}`.** That block's tag gained `sub`
+  earlier today, after a key and its 60 Hz midpoint were found to alias; the
+  generation is the second field it still needs, for the same class of reason —
+  an identity that is not unique returns the wrong answer silently.
+
+**The texture cache's explicit invalidate port stays**, but its role changes: it
+is for **reclaiming space and improving hit rate**, and *"correctness may not
+depend on an uploader remembering an ad hoc invalidate list."*
+
+**Width and wrap:** use the existing **16-bit residency generation**. Before
+wrapping and reusing one, perform an **epoch transition and global cache
+invalidation**. **Silent generation wrap is forbidden** — a wrapped generation
+is an identity collision, which is exactly what ruling X5 found when a 2-bit
+generation wrapped after four slot reuses and matched the wrong fragment.
+
+> Generation tags provide coherence; explicit invalidation is an optimisation
+> and a wrap-management tool.
 
 ## 4. THIS IS THE PATH FOR EVERY IMMUTABLE RENDER ASSET, NOT AN ANIMATION PIPE
 

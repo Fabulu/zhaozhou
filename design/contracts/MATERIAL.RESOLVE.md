@@ -61,7 +61,7 @@ it is step 2 of the owner's priority order and belongs with the cartridge
 decision below, because a record that the asset compiler cannot emit is not a
 record.
 
-## THE CARTRIDGE QUESTION THIS BLOCK IS BLOCKED ON (audit R4)
+## THE CARTRIDGE QUESTION — RULED, D-2, 2026-09-03
 
 The `.zpak` resource-kind registry has programs, source maps, sky sets, terrain
 pages, tone banks, island pages/tables, creature forms and clip banks. It has
@@ -76,17 +76,22 @@ Three options, any of which can work:
   under one common nested-resource layout
 * **C** — a generic immutable `RESOURCE_BLOB` plus typed manifests
 
-**Recommendation: A.** It is the only one that lets `MEM.UPLOAD` be a single
-general mover for all immutable render assets — which audit R5 requires — and
-the only one where `TEXTURE.CACHE`'s invalidate has one obvious publisher. B
-spreads the same bytes across three family loaders that must then agree; C adds
-a manifest indirection that buys flexibility this console has already refused
-elsewhere.
+**RULED: A.** `spec/cartridge.md` §4a now allocates them:
 
-**This is an owner decision.** What cannot work, in the audit's words, is
-*"allowing every asset compiler to invent where its texture bytes live and
-expecting `MEM.UPLOAD`, `MATERIAL.RESOLVE` and `TEXTURE.CACHE` to somehow
-agree."*
+| kind | resource | section type |
+|---|---|---|
+| **10** | `TEXTURE_PAGE` | `0x000E` |
+| **11** | `MATERIAL_SET` | `0x000F` |
+| **12** | `MESH_STREAM` | `0x0010` |
+
+**So this block's input is no longer hypothetical.** A `MATERIAL_SET` is an
+immutable table indexed by `material_id`, uploaded like every other resource,
+and family pages **reference** it rather than embedding their own
+interpretation. Palettes are a **subtype of `TEXTURE_PAGE`**, inheriting the
+same publication and generation machinery instead of a private loader.
+
+**The record layout inside `MATERIAL_SET` is still not frozen** — the draft
+above is a draft, and the ABI generator owns the emitted constants.
 
 ## Input and output packet layouts
 
@@ -105,10 +110,15 @@ Reads material records from **local SDRAM**, in a region owned by the render
 resource arena and uploaded through `MEM.UPLOAD` like every other immutable
 asset. Owns a **small direct-mapped cache** of recently resolved records.
 
-**The cache must obey audit R5's coherence law**: when a new material table is
-published, the cache must be incapable of returning the old record. Binding the
-cache tag to the resource generation is the cheap way; a flush input is the
-other. **Not decided here.**
+**RULED, D-3, 2026-09-03: the cache tag includes the residency generation.**
+
+    cache tag = physical line tag + residency generation
+
+Publishing a new material table therefore makes every cached record from the
+old one **structurally unable to match**. No flush is required for correctness;
+an invalidate input remains legal for reclaiming space. The generation is the
+existing **16-bit** residency generation, and **silent wrap is forbidden** — a
+wrap requires an epoch transition and global invalidation.
 
 ## Q formats and rounding
 
