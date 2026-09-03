@@ -134,3 +134,57 @@ Registered in `design/fit_targets.yml` with the S3.4 tripwires
 2. `design/contracts/TEXTURE.FRAGROB.md` + a `blocks.yml` entry.
 3. fit it against its tripwires; the acceptance question is **M10K, not Fmax**.
 4. only then consider retiring v2 from the production manifest.
+
+## 2026-09-03 21:2x — state while the cache fit finishes (75 min in, ~85 expected)
+
+### Done since the last entry, none of it touching the fit's closure
+
+| | |
+|---|---|
+| `5f4fec80` | FRAGROB differential vs v2: 280 retirements, 0 divergence, **3 real RTL bugs found** |
+| `62a892d8` | `TEXTURE.FRAGROB.md` + ledger entry |
+| `eca81e6f` | the terrain light law in ZRef, 3 oracle faults fixed, 12 checks |
+| `05ce5529` | `MEM.UPLOAD` acceptance law pinned, 11 checks, -> REFERENCE_COMPLETE |
+| `ebf1921c` | **the Stop hook**, because the CLAUDE.md rule was violated twice |
+| `bb8a9f35` | `TERRAIN.SHADE.md` + ledger entry |
+| `ca2fc653` | oracle split into shade/normalmap, matching the block split |
+| `224f4736` | `TERRAIN.NORMALMAP` registered -- it had a contract and NO ledger entry |
+
+Ledger 99 blocks, green.
+
+### The three FRAGROB bugs, because they are the useful part
+
+The block was lint-clean and COMMITTED before the differential existed, and it
+was broken three ways. A clean lint proved nothing.
+
+1. **allocation order is not slot order** -- slots come from a free list, so
+   after the first recycle the hand-out order has nothing to do with the index,
+   and the retire path used `head_q` directly as the slot.
+2. **the lost-update fault, for the fifth time in this repository** --
+   `free_cnt_q` and `live_cnt_q` each written from two `if` blocks in one
+   `always_ff`, so a coincident accept and retire gave +/-1 instead of net zero.
+3. **a single AUX pending register dropped the second request**, so the
+   fragment that needed it could never complete. A deadlock, not a lost pixel.
+
+### NEXT, in order
+
+1. **read the cache fit.** The acceptance question is **M10K >= 8, not Fmax**.
+   `tools/quartus/check_fit_rules.ps1` answers it in a second. Brief S25: if
+   M10K does not infer, STOP.
+2. **fit FRAGROB** against its tripwires (`min_m10k: 6`, `max_registers: 2500`,
+   `max_dsp: 0`). Its RTL and test are done; only the measurement is missing.
+3. **the 105 MHz experiment** -- `run_shell_fit.ps1 -GpuPeriodNs 9.52381`,
+   five seeds, judged on zero WNS and zero TNS. The tooling is committed and
+   the SDC substitution is verified; it needs the toolchain free.
+4. **the look-gate**, which is the art law and blocks TERRAIN.SHADE's RTL: the
+   amended oracle into the ZRef renderer, island under a MOVING sun at 240p,
+   owner looks. A still frame will not do -- the detail has no Y component, so
+   at the zenith the relief fades out by construction.
+5. then TERRAIN.SHADE at **II=1 and II=3**, two rows, per bro's Pareto
+   challenge -- the producer delivers ~1 triangle per 3 clocks and the block is
+   specified at 1 per clock.
+
+### Still true and still blocking
+`REJECT: adding terrain/Field RTL faster than the texture fit can be closed.`
+That is why no new terrain RTL has been written this pass despite the contracts
+now existing for two terrain blocks.
