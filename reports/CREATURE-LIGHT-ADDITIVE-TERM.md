@@ -90,6 +90,38 @@ terms sum before the clamp **within one light**. Across lights they do not — a
 second source's negative dot must clamp to zero **independently**, or it would
 subtract another light's illumination.
 
+## OWNER RULING, 2026-09-03: provisionally IN, with a revert path
+
+> "we'll provisionally put it in with a revert path should we be short on ALMs"
+
+The term goes into the sizing sweep and the block contract **now**, so the budget
+is measured with it rather than around it. It is **provisional**: if the ALM/M10K
+measurement says the island cannot carry three more PARAMBUF planes and three more
+fragment-packet values, it comes back out.
+
+**What the revert path requires, and it must be preserved deliberately:**
+
+* Keep `ATTRS`, `UNITS`, `RADIX` and the packet width **parameters**, so the three
+  planes can be dropped by parameter rather than by surgery.
+* Keep the reference-side gate (`g_creature_additive_light`, default OFF). It is
+  already the byte-identity boundary — gate-off renders are CRC-identical to the
+  multiplicative bank across all 22 subjects.
+* Report the sweep result against the decision, not just against the budget: the
+  question is not only "does it fit" but "what else would have to give if it
+  does".
+
+If it is reverted, the reference implementation and the published experimental
+clip stay as the record of what was given up, and `08-LIGHTING.md` records the
+reason.
+
+## Already true, and worth not re-deriving
+
+The multiplicative path **already** accumulates every point source into one
+`PointShade3` and quantises **once**, in `creature_light`'s `mix()`:
+`ambient + key + fill + local`, then `quant_shade`. So "saturate once at the end"
+describes existing behaviour rather than changing it — the additive term joins the
+same accumulation. Adopting the rule does **not** move any current output.
+
 ## Constraints that come with it
 
 * **Four simultaneous sources is the budget**, with the strongest four selected
