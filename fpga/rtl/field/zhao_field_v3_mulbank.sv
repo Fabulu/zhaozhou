@@ -146,8 +146,14 @@ module zhao_field_v3_mulbank #(
   logic signed [65:0] p_lane [4];
   logic [3:0]         p_valid_lane;
 
+  // The genvar is declared SEPARATELY and the loop is wrapped in an
+  // explicit generate block. Quartus 17.0.2's parser rejects both
+  // `for (genvar N = ...)` and a loop generate at module level, while
+  // both Verilator and slang accept them, so it only ever surfaces in a
+  // composed fit. See zhao_crc32c_fold.sv, which hit it first.
+  genvar l;
   generate
-    for (genvar l = 0; l < 4; l++) begin : g_lane
+    for (l = 0; l < 4; l++) begin : g_lane
       zhao_field_mul u_mul (
           .clk      (clk),
           .rst_n    (rst_n),

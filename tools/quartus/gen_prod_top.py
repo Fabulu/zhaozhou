@@ -224,6 +224,21 @@ def width_expr(widths, params=None):
     return str(total)
 
 
+
+def index_of(flat, counts):
+    """`[i][j]` for the flat element number `flat` of an array of `counts`.
+
+    Quartus 17.0.2 has no `foreach`, so every element of every array port is
+    driven or folded by an explicit index. Verilator accepts foreach, which is
+    exactly why this only showed up in the fit.
+    """
+    parts = []
+    for c in reversed(counts):
+        parts.append(flat % c)
+        flat //= c
+    return "".join("[%d]" % k for k in reversed(parts))
+
+
 def is_clock(name):
     return re.search(r"(^|_)clk", name) is not None
 
@@ -288,12 +303,15 @@ def main():
                 # and the top has no such parameter in scope. Resolve them to
                 # counts the same way the packed widths are resolved.
                 try:
-                    dims = "".join(
-                        "[%d]" % (
-                            abs(eval_sv(d[1:-1].split(":")[0], params)
-                                - eval_sv(d[1:-1].split(":")[1], params)) + 1
-                            if ":" in d else eval_sv(d[1:-1], params))
-                        for d in unpacked)
+                    counts = [(
+                        abs(eval_sv(d[1:-1].split(":")[0], params)
+                            - eval_sv(d[1:-1].split(":")[1], params)) + 1
+                        if ":" in d else eval_sv(d[1:-1], params))
+                        for d in unpacked]
+                    dims = "".join("[%d]" % c for c in counts)
+                    count = 1
+                    for c in counts:
+                        count *= c
                 except Exception as exc:
                     skipped.append((mod, "unpacked %s unresolved (%s)" % (name, exc)))
                     ports = None
@@ -304,23 +322,25 @@ def main():
                 lines.append("  logic%s [%s-1:0] %s %s;" % (sgn, w, wire, dims))
                 conns.append(".%s(%s)" % (name, wire))
                 if d == "input":
-                    lines.append("  always_comb")
-                    lines.append("    foreach (%s[%s])" % (wire, ",".join(idx)))
-                    # XOR by the index so the elements differ: identical drives
-                    # would let the fitter collapse the block's own comparisons.
-                    lines.append(
-                        "      %s%s = %s_src[%d +: %s] ^ (%s)'(%s);"
-                        % (wire, sel, pre, off % (SRCW // 2), w, w,
-                           "+".join(idx))
-                    )
+                    lines.append("  always_comb begin")
+                    for flat in range(count):
+                        lines.append(
+                            "    %s%s = %s_src[%d +: %s] ^ (%s)'(%d);"
+                            % (wire, index_of(flat, counts), pre,
+                               off % (SRCW // 2), w, w, flat)
+                        )
+                    lines.append("  end")
                     off += 7
                 else:
                     fold = "%s_fold" % wire
                     lines.append("  logic %s;" % fold)
                     lines.append("  always_comb begin")
                     lines.append("    %s = 1'b0;" % fold)
-                    lines.append("    foreach (%s[%s])" % (wire, ",".join(idx)))
-                    lines.append("      %s = %s ^ (^%s%s);" % (fold, fold, wire, sel))
+                    for flat in range(count):
+                        lines.append(
+                            "    %s = %s ^ (^%s%s);"
+                            % (fold, fold, wire, index_of(flat, counts))
+                        )
                     lines.append("  end")
                     folds.append("(%s)" % fold)
                 continue

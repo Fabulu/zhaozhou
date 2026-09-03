@@ -191,8 +191,15 @@ module zhao_field_v3_len #(
   logic [LANES-1:0] rt_n_valid [BANKS], rt_n_ready [BANKS], rt_r_valid [BANKS];
   logic [63:0]      rt_r [BANKS][LANES];
 
-  for (genvar bk = 0; bk < BANKS; bk++) begin : gen_bank
-    for (genvar g = 0; g < LANES; g++) begin : gen_root
+  // The genvar is declared SEPARATELY and the loop is wrapped in an
+  // explicit generate block. Quartus 17.0.2's parser rejects both
+  // `for (genvar N = ...)` and a loop generate at module level, while
+  // both Verilator and slang accept them, so it only ever surfaces in a
+  // composed fit. See zhao_crc32c_fold.sv, which hit it first.
+  genvar bk, g;
+  generate
+  for (bk = 0; bk < BANKS; bk++) begin : gen_bank
+    for (g = 0; g < LANES; g++) begin : gen_root
       zhao_field_isqrt u_isqrt (
           .clk(clk), .rst_n(rst_n),
           .n_valid_i(rt_n_valid[bk][g]), .n_ready_o(rt_n_ready[bk][g]),
@@ -203,6 +210,7 @@ module zhao_field_v3_len #(
       assign rt_n_valid[bk][g] = bk_busy_r[bk] && !bk_done_r[bk] && !bk_started_r[bk][g];
     end
   end
+  endgenerate
 
   // ---- the order queue: two entries, one bit each -------------------------
   // Replies leave in ACCEPT ORDER, so a bank that finishes early cannot

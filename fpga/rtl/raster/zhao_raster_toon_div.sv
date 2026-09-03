@@ -98,8 +98,14 @@ module zhao_raster_toon_div #(
     tag_s[0] = tag_i;
   end
 
+  // The genvar is declared SEPARATELY and the loop is wrapped in an
+  // explicit generate block. Quartus 17.0.2's parser rejects both
+  // `for (genvar N = ...)` and a loop generate at module level, while
+  // both Verilator and slang accept them, so it only ever surfaces in a
+  // composed fit. See zhao_crc32c_fold.sv, which hit it first.
+  genvar st;
   generate
-    for (genvar st = 0; st < int'(QBITS); ++st) begin : g_stage
+    for (st = 0; st < int'(QBITS); ++st) begin : g_stage
       // One restoring step, most significant quotient bit first.
       logic [32:0] shifted;
       logic        fits;

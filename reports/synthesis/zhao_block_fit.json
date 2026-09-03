@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "8faaa2405641916b558e671e2fe1c1710ab89af3",
+    "newestRunCommit":  "0e8b1c9d1045fbb15d39759596d3f4f1bbcba42b",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -565,6 +565,14 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  90.6,
                        "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_prod_top",
+                       "status":  "failed:quartus_map.exe",
+                       "sourceCommit":  "0e8b1c9d1045fbb15d39759596d3f4f1bbcba42b",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  59.9,
+                       "sourcesHashed":  128
                    },
                    {
                        "module":  "zhao_raster_blend",

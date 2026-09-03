@@ -128,8 +128,14 @@ module zhao_raster_attrdiv_svc #(
   assign rem_o        = u_rem[ret_r];
   assign tag_o        = u_tag_r[ret_r];
 
+  // The genvar is declared SEPARATELY and the loop is wrapped in an
+  // explicit generate block. Quartus 17.0.2's parser rejects both
+  // `for (genvar N = ...)` and a loop generate at module level, while
+  // both Verilator and slang accept them, so it only ever surfaces in a
+  // composed fit. See zhao_crc32c_fold.sv, which hit it first.
+  genvar g;
   generate
-    for (genvar g = 0; g < int'(UNITS); ++g) begin : g_unit
+    for (g = 0; g < int'(UNITS); ++g) begin : g_unit
       zhao_raster_attrdiv #(.RADIX(RADIX)) u_div (
           .clk          (clk),
           .rst_n        (rst_n),

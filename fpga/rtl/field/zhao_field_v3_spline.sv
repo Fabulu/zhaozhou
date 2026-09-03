@@ -300,12 +300,12 @@ module zhao_field_v3_spline (
               c1[l] <= sat32(64'(h_p2[l]) - 64'(h_p0[l]));
               c2[l] <= sat32(64'sd2 * 64'(h_p0[l]) - 64'sd5 * 64'(h_p1[l]) +
                              64'sd4 * 64'(h_p2[l]) - 64'(h_p3[l]));
-              c3[l] <= sat32(-64'(h_p0[l]) + 64'sd3 * 64'(h_p1[l]) -
+              c3[l] <= sat32((-(64'(h_p0[l]))) + 64'sd3 * 64'(h_p1[l]) -
                              64'sd3 * 64'(h_p2[l]) + 64'(h_p3[l]));
               if (sat32_fired(64'(h_p2[l]) - 64'(h_p0[l])) ||
                   sat32_fired(64'sd2 * 64'(h_p0[l]) - 64'sd5 * 64'(h_p1[l]) +
                               64'sd4 * 64'(h_p2[l]) - 64'(h_p3[l])) ||
-                  sat32_fired(-64'(h_p0[l]) + 64'sd3 * 64'(h_p1[l]) -
+                  sat32_fired((-(64'(h_p0[l]))) + 64'sd3 * 64'(h_p1[l]) -
                               64'sd3 * 64'(h_p2[l]) + 64'(h_p3[l])))
                 fired_resc[l] <= 1'b1;
             end

@@ -544,6 +544,24 @@ module zhao_texture_tmu_pipe #(
       end
   end
 
+  // ---- the decodes, NAMED ---------------------------------------------------
+  // Quartus 17.0.2 cannot part-select a FUNCTION CALL RESULT:
+  // `decode16(h, fmt)[23:0]` is a syntax error there while Verilator and slang
+  // both accept it, so it only surfaced in the composed fit. Naming the decodes
+  // is the fix and also stops the identical call being written twice for the
+  // colour and the alpha of the same texel.
+  logic [31:0] dec_pal565_c;      // a palette page word, always RGB565
+  logic [31:0] dec_clut565_c;     // a CLUT entry from the resident page
+  logic [31:0] dec_direct_c;      // direct nearest, in the record's own format
+  logic [31:0] dec_tap_c [0:3];   // the four bilinear taps
+  always_comb begin
+    dec_pal565_c  = decode16(cac_data_i[15:0], FMT_RGB565);
+    dec_clut565_c = decode16(pal_dat_r[pal_way_c][rsp_idx], FMT_RGB565);
+    dec_direct_c  = decode16(cac_data_i[15:0], rb_fmt[rsp_rec]);
+    for (int unsigned k = 0; k < 4; k++)
+      dec_tap_c[k] = decode16(cac_data_i[16*k +: 16], rb_fmt[rsp_rec]);
+  end
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       a0_v <= 1'b0;
@@ -673,7 +691,7 @@ module zhao_texture_tmu_pipe #(
         if (rsp_is_pal) begin
           // The cold fetch came back. Complete the record and FILL the page, so
           // the next sample on this index never makes this access again.
-          rb_rgb [rsp_rec] <= decode16(cac_data_i[15:0], FMT_RGB565)[23:0];
+          rb_rgb [rsp_rec] <= dec_pal565_c[23:0];
           rb_a   [rsp_rec] <= 8'd255;
           rb_done[rsp_rec] <= 1'b1;
           if (pal_hit_c) begin
@@ -698,7 +716,7 @@ module zhao_texture_tmu_pipe #(
           rb_idx[rsp_rec] <= rsp_idx;
           rb_a  [rsp_rec] <= 8'd255;
           if (pal_hit_c && pal_ent_c) begin
-            rb_rgb [rsp_rec] <= decode16(pal_dat_r[pal_way_c][rsp_idx], FMT_RGB565)[23:0];
+            rb_rgb [rsp_rec] <= dec_clut565_c[23:0];
             rb_done[rsp_rec] <= 1'b1;
           end else begin
             pf_v    <= 1'b1;
@@ -709,16 +727,16 @@ module zhao_texture_tmu_pipe #(
           end
         end else if (!rb_filt[rsp_rec]) begin
           // Direct nearest: the texel is the answer. No filter pass, no DSP.
-          rb_rgb [rsp_rec] <= decode16(cac_data_i[15:0], rb_fmt[rsp_rec])[23:0];
-          rb_a   [rsp_rec] <= decode16(cac_data_i[15:0], rb_fmt[rsp_rec])[31:24];
+          rb_rgb [rsp_rec] <= dec_direct_c[23:0];
+          rb_a   [rsp_rec] <= dec_direct_c[31:24];
           rb_done[rsp_rec] <= 1'b1;
         end else begin
           // Direct bilinear: hand the four decoded taps to the channel lane.
           for (int unsigned k = 0; k < 4; k++) begin
-            fl_t[0][k] <= decode16(cac_data_i[16*k +: 16], rb_fmt[rsp_rec])[23:16];
-            fl_t[1][k] <= decode16(cac_data_i[16*k +: 16], rb_fmt[rsp_rec])[15:8];
-            fl_t[2][k] <= decode16(cac_data_i[16*k +: 16], rb_fmt[rsp_rec])[7:0];
-            fl_t[3][k] <= decode16(cac_data_i[16*k +: 16], rb_fmt[rsp_rec])[31:24];
+            fl_t[0][k] <= dec_tap_c[k][23:16];
+            fl_t[1][k] <= dec_tap_c[k][15:8];
+            fl_t[2][k] <= dec_tap_c[k][7:0];
+            fl_t[3][k] <= dec_tap_c[k][31:24];
           end
           fl_fu   <= rb_fu[rsp_rec];
           fl_fv   <= rb_fv[rsp_rec];

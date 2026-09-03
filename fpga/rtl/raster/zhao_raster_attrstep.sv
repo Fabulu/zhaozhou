@@ -205,7 +205,7 @@ module zhao_raster_attrstep (
   logic [47:0]        f_g_c;      // g, the magnitude remainder
   logic signed [95:0] f_c;        // f, the magnitude quotient
   always_comb begin
-    mag_q_c = (dv_q[31]) ? -96'(dv_q) : 96'(dv_q);
+    mag_q_c = (dv_q[31]) ? (-(96'(dv_q))) : 96'(dv_q);
     if (dv_rem >= 48'({1'b0, job_area_r})) begin
       f_c   = mag_q_c;
       f_g_c = (dv_rem - 48'({1'b0, job_area_r})) >> 1;
@@ -377,7 +377,7 @@ module zhao_raster_attrstep (
               err_r <= 1'b1;
             end else begin
               // |dv_q| is exactly floor(M/D) for the branch acc_n_r is in.
-              p_r    <= dv_q[31] ? -96'(dv_q) : 96'(dv_q);
+              p_r    <= dv_q[31] ? (-(96'(dv_q))) : 96'(dv_q);
               r_r    <= 49'({1'b0, dv_rem});
               sign_r <= acc_n_r[95];
             end

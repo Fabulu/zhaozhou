@@ -183,8 +183,8 @@ module zhao_post_gather #(
     logic signed [16:0] r;
     begin
       r = ($signed({v[15], v}) + 17'sd128) >>> 8;
-      clamped = (r > 17'(lim)) || (r < -17'(lim));
-      to_px = (r > 17'(lim)) ? 8'(lim) : (r < -17'(lim)) ? 8'(-lim) : r[7:0];
+      clamped = (r > 17'(lim)) || (r < (-(17'(lim))));
+      to_px = (r > 17'(lim)) ? 8'(lim) : (r < (-(17'(lim)))) ? 8'(-lim) : r[7:0];
     end
   endfunction
 

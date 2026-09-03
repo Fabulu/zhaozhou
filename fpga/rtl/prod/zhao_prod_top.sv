@@ -123,52 +123,71 @@ module zhao_prod_top (
   logic u02_svc_s0_o_fold;
   always_comb begin
     u02_svc_s0_o_fold = 1'b0;
-    foreach (u02_svc_s0_o[k0])
-      u02_svc_s0_o_fold = u02_svc_s0_o_fold ^ (^u02_svc_s0_o[k0]);
+    u02_svc_s0_o_fold = u02_svc_s0_o_fold ^ (^u02_svc_s0_o[0]);
+    u02_svc_s0_o_fold = u02_svc_s0_o_fold ^ (^u02_svc_s0_o[1]);
+    u02_svc_s0_o_fold = u02_svc_s0_o_fold ^ (^u02_svc_s0_o[2]);
+    u02_svc_s0_o_fold = u02_svc_s0_o_fold ^ (^u02_svc_s0_o[3]);
   end
   logic signed [32-1:0] u02_svc_s1_o [4];
   logic u02_svc_s1_o_fold;
   always_comb begin
     u02_svc_s1_o_fold = 1'b0;
-    foreach (u02_svc_s1_o[k0])
-      u02_svc_s1_o_fold = u02_svc_s1_o_fold ^ (^u02_svc_s1_o[k0]);
+    u02_svc_s1_o_fold = u02_svc_s1_o_fold ^ (^u02_svc_s1_o[0]);
+    u02_svc_s1_o_fold = u02_svc_s1_o_fold ^ (^u02_svc_s1_o[1]);
+    u02_svc_s1_o_fold = u02_svc_s1_o_fold ^ (^u02_svc_s1_o[2]);
+    u02_svc_s1_o_fold = u02_svc_s1_o_fold ^ (^u02_svc_s1_o[3]);
   end
   logic signed [32-1:0] u02_svc_s2_o [4];
   logic u02_svc_s2_o_fold;
   always_comb begin
     u02_svc_s2_o_fold = 1'b0;
-    foreach (u02_svc_s2_o[k0])
-      u02_svc_s2_o_fold = u02_svc_s2_o_fold ^ (^u02_svc_s2_o[k0]);
+    u02_svc_s2_o_fold = u02_svc_s2_o_fold ^ (^u02_svc_s2_o[0]);
+    u02_svc_s2_o_fold = u02_svc_s2_o_fold ^ (^u02_svc_s2_o[1]);
+    u02_svc_s2_o_fold = u02_svc_s2_o_fold ^ (^u02_svc_s2_o[2]);
+    u02_svc_s2_o_fold = u02_svc_s2_o_fold ^ (^u02_svc_s2_o[3]);
   end
   logic signed [32-1:0] u02_svc_s3_o [4];
   logic u02_svc_s3_o_fold;
   always_comb begin
     u02_svc_s3_o_fold = 1'b0;
-    foreach (u02_svc_s3_o[k0])
-      u02_svc_s3_o_fold = u02_svc_s3_o_fold ^ (^u02_svc_s3_o[k0]);
+    u02_svc_s3_o_fold = u02_svc_s3_o_fold ^ (^u02_svc_s3_o[0]);
+    u02_svc_s3_o_fold = u02_svc_s3_o_fold ^ (^u02_svc_s3_o[1]);
+    u02_svc_s3_o_fold = u02_svc_s3_o_fold ^ (^u02_svc_s3_o[2]);
+    u02_svc_s3_o_fold = u02_svc_s3_o_fold ^ (^u02_svc_s3_o[3]);
   end
   logic signed [32-1:0] u02_svc_s4_o [4];
   logic u02_svc_s4_o_fold;
   always_comb begin
     u02_svc_s4_o_fold = 1'b0;
-    foreach (u02_svc_s4_o[k0])
-      u02_svc_s4_o_fold = u02_svc_s4_o_fold ^ (^u02_svc_s4_o[k0]);
+    u02_svc_s4_o_fold = u02_svc_s4_o_fold ^ (^u02_svc_s4_o[0]);
+    u02_svc_s4_o_fold = u02_svc_s4_o_fold ^ (^u02_svc_s4_o[1]);
+    u02_svc_s4_o_fold = u02_svc_s4_o_fold ^ (^u02_svc_s4_o[2]);
+    u02_svc_s4_o_fold = u02_svc_s4_o_fold ^ (^u02_svc_s4_o[3]);
   end
   logic [32-1:0] u02_svc_imm_o;
   logic [8-1:0] u02_svc_tag_o;
   logic [1-1:0] u02_rsp_ready_o;
   logic signed [32-1:0] u02_rsp_r0_i [4];
-  always_comb
-    foreach (u02_rsp_r0_i[k0])
-      u02_rsp_r0_i[k0] = u02_src[98 +: 32] ^ (32)'(k0);
+  always_comb begin
+    u02_rsp_r0_i[0] = u02_src[98 +: 32] ^ (32)'(0);
+    u02_rsp_r0_i[1] = u02_src[98 +: 32] ^ (32)'(1);
+    u02_rsp_r0_i[2] = u02_src[98 +: 32] ^ (32)'(2);
+    u02_rsp_r0_i[3] = u02_src[98 +: 32] ^ (32)'(3);
+  end
   logic signed [32-1:0] u02_rsp_r1_i [4];
-  always_comb
-    foreach (u02_rsp_r1_i[k0])
-      u02_rsp_r1_i[k0] = u02_src[105 +: 32] ^ (32)'(k0);
+  always_comb begin
+    u02_rsp_r1_i[0] = u02_src[105 +: 32] ^ (32)'(0);
+    u02_rsp_r1_i[1] = u02_src[105 +: 32] ^ (32)'(1);
+    u02_rsp_r1_i[2] = u02_src[105 +: 32] ^ (32)'(2);
+    u02_rsp_r1_i[3] = u02_src[105 +: 32] ^ (32)'(3);
+  end
   logic signed [32-1:0] u02_rsp_r2_i [4];
-  always_comb
-    foreach (u02_rsp_r2_i[k0])
-      u02_rsp_r2_i[k0] = u02_src[112 +: 32] ^ (32)'(k0);
+  always_comb begin
+    u02_rsp_r2_i[0] = u02_src[112 +: 32] ^ (32)'(0);
+    u02_rsp_r2_i[1] = u02_src[112 +: 32] ^ (32)'(1);
+    u02_rsp_r2_i[2] = u02_src[112 +: 32] ^ (32)'(2);
+    u02_rsp_r2_i[3] = u02_src[112 +: 32] ^ (32)'(3);
+  end
   logic [1-1:0] u02_wb_valid_o;
   logic [3-1:0] u02_wb_ctx_o;
   logic [5-1:0] u02_wb_reg_o;
@@ -316,24 +335,50 @@ module zhao_prod_top (
     else u04_lfsr_q <= {u04_lfsr_q[62:0], (^(u04_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [3-1:0] u04_req_ready_o;
   logic signed [33-1:0] u04_req_a_i [3][4];
-  always_comb
-    foreach (u04_req_a_i[k0,k1])
-      u04_req_a_i[k0][k1] = u04_src[7 +: 33] ^ (33)'(k0+k1);
+  always_comb begin
+    u04_req_a_i[0][0] = u04_src[7 +: 33] ^ (33)'(0);
+    u04_req_a_i[0][1] = u04_src[7 +: 33] ^ (33)'(1);
+    u04_req_a_i[0][2] = u04_src[7 +: 33] ^ (33)'(2);
+    u04_req_a_i[0][3] = u04_src[7 +: 33] ^ (33)'(3);
+    u04_req_a_i[1][0] = u04_src[7 +: 33] ^ (33)'(4);
+    u04_req_a_i[1][1] = u04_src[7 +: 33] ^ (33)'(5);
+    u04_req_a_i[1][2] = u04_src[7 +: 33] ^ (33)'(6);
+    u04_req_a_i[1][3] = u04_src[7 +: 33] ^ (33)'(7);
+    u04_req_a_i[2][0] = u04_src[7 +: 33] ^ (33)'(8);
+    u04_req_a_i[2][1] = u04_src[7 +: 33] ^ (33)'(9);
+    u04_req_a_i[2][2] = u04_src[7 +: 33] ^ (33)'(10);
+    u04_req_a_i[2][3] = u04_src[7 +: 33] ^ (33)'(11);
+  end
   logic signed [33-1:0] u04_req_b_i [3][4];
-  always_comb
-    foreach (u04_req_b_i[k0,k1])
-      u04_req_b_i[k0][k1] = u04_src[14 +: 33] ^ (33)'(k0+k1);
+  always_comb begin
+    u04_req_b_i[0][0] = u04_src[14 +: 33] ^ (33)'(0);
+    u04_req_b_i[0][1] = u04_src[14 +: 33] ^ (33)'(1);
+    u04_req_b_i[0][2] = u04_src[14 +: 33] ^ (33)'(2);
+    u04_req_b_i[0][3] = u04_src[14 +: 33] ^ (33)'(3);
+    u04_req_b_i[1][0] = u04_src[14 +: 33] ^ (33)'(4);
+    u04_req_b_i[1][1] = u04_src[14 +: 33] ^ (33)'(5);
+    u04_req_b_i[1][2] = u04_src[14 +: 33] ^ (33)'(6);
+    u04_req_b_i[1][3] = u04_src[14 +: 33] ^ (33)'(7);
+    u04_req_b_i[2][0] = u04_src[14 +: 33] ^ (33)'(8);
+    u04_req_b_i[2][1] = u04_src[14 +: 33] ^ (33)'(9);
+    u04_req_b_i[2][2] = u04_src[14 +: 33] ^ (33)'(10);
+    u04_req_b_i[2][3] = u04_src[14 +: 33] ^ (33)'(11);
+  end
   logic [8-1:0] u04_req_tag_i [3];
-  always_comb
-    foreach (u04_req_tag_i[k0])
-      u04_req_tag_i[k0] = u04_src[21 +: 8] ^ (8)'(k0);
+  always_comb begin
+    u04_req_tag_i[0] = u04_src[21 +: 8] ^ (8)'(0);
+    u04_req_tag_i[1] = u04_src[21 +: 8] ^ (8)'(1);
+    u04_req_tag_i[2] = u04_src[21 +: 8] ^ (8)'(2);
+  end
   logic [3-1:0] u04_rsp_valid_o;
   logic signed [66-1:0] u04_rsp_p_o [4];
   logic u04_rsp_p_o_fold;
   always_comb begin
     u04_rsp_p_o_fold = 1'b0;
-    foreach (u04_rsp_p_o[k0])
-      u04_rsp_p_o_fold = u04_rsp_p_o_fold ^ (^u04_rsp_p_o[k0]);
+    u04_rsp_p_o_fold = u04_rsp_p_o_fold ^ (^u04_rsp_p_o[0]);
+    u04_rsp_p_o_fold = u04_rsp_p_o_fold ^ (^u04_rsp_p_o[1]);
+    u04_rsp_p_o_fold = u04_rsp_p_o_fold ^ (^u04_rsp_p_o[2]);
+    u04_rsp_p_o_fold = u04_rsp_p_o_fold ^ (^u04_rsp_p_o[3]);
   end
   logic [8-1:0] u04_rsp_tag_o;
   logic [32-1:0] u04_grants_o;
@@ -896,17 +941,23 @@ module zhao_prod_top (
     else u13_lfsr_q <= {u13_lfsr_q[62:0], (^(u13_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [3-1:0] u13_req_ready_o;
   logic [3-1:0] u13_req_ctx_i [3];
-  always_comb
-    foreach (u13_req_ctx_i[k0])
-      u13_req_ctx_i[k0] = u13_src[14 +: 3] ^ (3)'(k0);
+  always_comb begin
+    u13_req_ctx_i[0] = u13_src[14 +: 3] ^ (3)'(0);
+    u13_req_ctx_i[1] = u13_src[14 +: 3] ^ (3)'(1);
+    u13_req_ctx_i[2] = u13_src[14 +: 3] ^ (3)'(2);
+  end
   logic [5-1:0] u13_req_reg_i [3];
-  always_comb
-    foreach (u13_req_reg_i[k0])
-      u13_req_reg_i[k0] = u13_src[21 +: 5] ^ (5)'(k0);
+  always_comb begin
+    u13_req_reg_i[0] = u13_src[21 +: 5] ^ (5)'(0);
+    u13_req_reg_i[1] = u13_src[21 +: 5] ^ (5)'(1);
+    u13_req_reg_i[2] = u13_src[21 +: 5] ^ (5)'(2);
+  end
   logic signed [32-1:0] u13_req_data_i [3];
-  always_comb
-    foreach (u13_req_data_i[k0])
-      u13_req_data_i[k0] = u13_src[28 +: 32] ^ (32)'(k0);
+  always_comb begin
+    u13_req_data_i[0] = u13_src[28 +: 32] ^ (32)'(0);
+    u13_req_data_i[1] = u13_src[28 +: 32] ^ (32)'(1);
+    u13_req_data_i[2] = u13_src[28 +: 32] ^ (32)'(2);
+  end
   logic [1-1:0] u13_wr_en_o;
   logic [3-1:0] u13_wr_ctx_o;
   logic [5-1:0] u13_wr_reg_o;
@@ -915,15 +966,17 @@ module zhao_prod_top (
   logic u13_served_o_fold;
   always_comb begin
     u13_served_o_fold = 1'b0;
-    foreach (u13_served_o[k0])
-      u13_served_o_fold = u13_served_o_fold ^ (^u13_served_o[k0]);
+    u13_served_o_fold = u13_served_o_fold ^ (^u13_served_o[0]);
+    u13_served_o_fold = u13_served_o_fold ^ (^u13_served_o[1]);
+    u13_served_o_fold = u13_served_o_fold ^ (^u13_served_o[2]);
   end
   logic [32-1:0] u13_stalled_o [3];
   logic u13_stalled_o_fold;
   always_comb begin
     u13_stalled_o_fold = 1'b0;
-    foreach (u13_stalled_o[k0])
-      u13_stalled_o_fold = u13_stalled_o_fold ^ (^u13_stalled_o[k0]);
+    u13_stalled_o_fold = u13_stalled_o_fold ^ (^u13_stalled_o[0]);
+    u13_stalled_o_fold = u13_stalled_o_fold ^ (^u13_stalled_o[1]);
+    u13_stalled_o_fold = u13_stalled_o_fold ^ (^u13_stalled_o[2]);
   end
   zhao_field_v3_wbarb u13_i (
       .clk(clk),
@@ -1366,17 +1419,38 @@ module zhao_prod_top (
   logic [1-1:0] u22_busy_o;
   logic [5-1:0] u22_bone_idx_o;
   logic signed [32-1:0] u22_inv_rest_i [12];
-  always_comb
-    foreach (u22_inv_rest_i[k0])
-      u22_inv_rest_i[k0] = u22_src[91 +: 32] ^ (32)'(k0);
+  always_comb begin
+    u22_inv_rest_i[0] = u22_src[91 +: 32] ^ (32)'(0);
+    u22_inv_rest_i[1] = u22_src[91 +: 32] ^ (32)'(1);
+    u22_inv_rest_i[2] = u22_src[91 +: 32] ^ (32)'(2);
+    u22_inv_rest_i[3] = u22_src[91 +: 32] ^ (32)'(3);
+    u22_inv_rest_i[4] = u22_src[91 +: 32] ^ (32)'(4);
+    u22_inv_rest_i[5] = u22_src[91 +: 32] ^ (32)'(5);
+    u22_inv_rest_i[6] = u22_src[91 +: 32] ^ (32)'(6);
+    u22_inv_rest_i[7] = u22_src[91 +: 32] ^ (32)'(7);
+    u22_inv_rest_i[8] = u22_src[91 +: 32] ^ (32)'(8);
+    u22_inv_rest_i[9] = u22_src[91 +: 32] ^ (32)'(9);
+    u22_inv_rest_i[10] = u22_src[91 +: 32] ^ (32)'(10);
+    u22_inv_rest_i[11] = u22_src[91 +: 32] ^ (32)'(11);
+  end
   logic [1-1:0] u22_out_valid_o;
   logic [5-1:0] u22_out_bone_o;
   logic signed [32-1:0] u22_out_m_o [12];
   logic u22_out_m_o_fold;
   always_comb begin
     u22_out_m_o_fold = 1'b0;
-    foreach (u22_out_m_o[k0])
-      u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[k0]);
+    u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[0]);
+    u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[1]);
+    u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[2]);
+    u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[3]);
+    u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[4]);
+    u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[5]);
+    u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[6]);
+    u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[7]);
+    u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[8]);
+    u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[9]);
+    u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[10]);
+    u22_out_m_o_fold = u22_out_m_o_fold ^ (^u22_out_m_o[11]);
   end
   logic [1-1:0] u22_done_o;
   logic [32-1:0] u22_palettes_decoded_o;
@@ -1543,13 +1617,35 @@ module zhao_prod_top (
     else u25_lfsr_q <= {u25_lfsr_q[62:0], (^(u25_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [1-1:0] u25_v_ready_o;
   logic signed [32-1:0] u25_a_m_i [12];
-  always_comb
-    foreach (u25_a_m_i[k0])
-      u25_a_m_i[k0] = u25_src[49 +: 32] ^ (32)'(k0);
+  always_comb begin
+    u25_a_m_i[0] = u25_src[49 +: 32] ^ (32)'(0);
+    u25_a_m_i[1] = u25_src[49 +: 32] ^ (32)'(1);
+    u25_a_m_i[2] = u25_src[49 +: 32] ^ (32)'(2);
+    u25_a_m_i[3] = u25_src[49 +: 32] ^ (32)'(3);
+    u25_a_m_i[4] = u25_src[49 +: 32] ^ (32)'(4);
+    u25_a_m_i[5] = u25_src[49 +: 32] ^ (32)'(5);
+    u25_a_m_i[6] = u25_src[49 +: 32] ^ (32)'(6);
+    u25_a_m_i[7] = u25_src[49 +: 32] ^ (32)'(7);
+    u25_a_m_i[8] = u25_src[49 +: 32] ^ (32)'(8);
+    u25_a_m_i[9] = u25_src[49 +: 32] ^ (32)'(9);
+    u25_a_m_i[10] = u25_src[49 +: 32] ^ (32)'(10);
+    u25_a_m_i[11] = u25_src[49 +: 32] ^ (32)'(11);
+  end
   logic signed [32-1:0] u25_b_m_i [12];
-  always_comb
-    foreach (u25_b_m_i[k0])
-      u25_b_m_i[k0] = u25_src[56 +: 32] ^ (32)'(k0);
+  always_comb begin
+    u25_b_m_i[0] = u25_src[56 +: 32] ^ (32)'(0);
+    u25_b_m_i[1] = u25_src[56 +: 32] ^ (32)'(1);
+    u25_b_m_i[2] = u25_src[56 +: 32] ^ (32)'(2);
+    u25_b_m_i[3] = u25_src[56 +: 32] ^ (32)'(3);
+    u25_b_m_i[4] = u25_src[56 +: 32] ^ (32)'(4);
+    u25_b_m_i[5] = u25_src[56 +: 32] ^ (32)'(5);
+    u25_b_m_i[6] = u25_src[56 +: 32] ^ (32)'(6);
+    u25_b_m_i[7] = u25_src[56 +: 32] ^ (32)'(7);
+    u25_b_m_i[8] = u25_src[56 +: 32] ^ (32)'(8);
+    u25_b_m_i[9] = u25_src[56 +: 32] ^ (32)'(9);
+    u25_b_m_i[10] = u25_src[56 +: 32] ^ (32)'(10);
+    u25_b_m_i[11] = u25_src[56 +: 32] ^ (32)'(11);
+  end
   logic [1-1:0] u25_o_valid_o;
   logic signed [32-1:0] u25_o_x_o;
   logic signed [32-1:0] u25_o_y_o;
@@ -2341,21 +2437,29 @@ module zhao_prod_top (
     else u40_lfsr_q <= {u40_lfsr_q[62:0], (^(u40_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [1-1:0] u40_f_ready_o;
   logic signed [32-1:0] u40_f_u_i [3];
-  always_comb
-    foreach (u40_f_u_i[k0])
-      u40_f_u_i[k0] = u40_src[14 +: 32] ^ (32)'(k0);
+  always_comb begin
+    u40_f_u_i[0] = u40_src[14 +: 32] ^ (32)'(0);
+    u40_f_u_i[1] = u40_src[14 +: 32] ^ (32)'(1);
+    u40_f_u_i[2] = u40_src[14 +: 32] ^ (32)'(2);
+  end
   logic signed [32-1:0] u40_f_v_i [3];
-  always_comb
-    foreach (u40_f_v_i[k0])
-      u40_f_v_i[k0] = u40_src[21 +: 32] ^ (32)'(k0);
+  always_comb begin
+    u40_f_v_i[0] = u40_src[21 +: 32] ^ (32)'(0);
+    u40_f_v_i[1] = u40_src[21 +: 32] ^ (32)'(1);
+    u40_f_v_i[2] = u40_src[21 +: 32] ^ (32)'(2);
+  end
   logic [8-1:0] u40_f_binding_i [3];
-  always_comb
-    foreach (u40_f_binding_i[k0])
-      u40_f_binding_i[k0] = u40_src[28 +: 8] ^ (8)'(k0);
+  always_comb begin
+    u40_f_binding_i[0] = u40_src[28 +: 8] ^ (8)'(0);
+    u40_f_binding_i[1] = u40_src[28 +: 8] ^ (8)'(1);
+    u40_f_binding_i[2] = u40_src[28 +: 8] ^ (8)'(2);
+  end
   logic [4-1:0] u40_f_lod_i [3];
-  always_comb
-    foreach (u40_f_lod_i[k0])
-      u40_f_lod_i[k0] = u40_src[35 +: 4] ^ (4)'(k0);
+  always_comb begin
+    u40_f_lod_i[0] = u40_src[35 +: 4] ^ (4)'(0);
+    u40_f_lod_i[1] = u40_src[35 +: 4] ^ (4)'(1);
+    u40_f_lod_i[2] = u40_src[35 +: 4] ^ (4)'(2);
+  end
   logic [1-1:0] u40_tmu_valid_o;
   logic signed [32-1:0] u40_tmu_u_o;
   logic signed [32-1:0] u40_tmu_v_o;
@@ -2506,13 +2610,17 @@ module zhao_prod_top (
     if (!rst_n) u42_lfsr_q <= 64'h00000019F51B1A4F;
     else u42_lfsr_q <= {u42_lfsr_q[62:0], (^(u42_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [2-1:0] u42_hps_state_i [3];
-  always_comb
-    foreach (u42_hps_state_i[k0])
-      u42_hps_state_i[k0] = u42_src[0 +: 2] ^ (2)'(k0);
+  always_comb begin
+    u42_hps_state_i[0] = u42_src[0 +: 2] ^ (2)'(0);
+    u42_hps_state_i[1] = u42_src[0 +: 2] ^ (2)'(1);
+    u42_hps_state_i[2] = u42_src[0 +: 2] ^ (2)'(2);
+  end
   logic [32-1:0] u42_hps_byte_len_i [3];
-  always_comb
-    foreach (u42_hps_byte_len_i[k0])
-      u42_hps_byte_len_i[k0] = u42_src[7 +: 32] ^ (32)'(k0);
+  always_comb begin
+    u42_hps_byte_len_i[0] = u42_src[7 +: 32] ^ (32)'(0);
+    u42_hps_byte_len_i[1] = u42_src[7 +: 32] ^ (32)'(1);
+    u42_hps_byte_len_i[2] = u42_src[7 +: 32] ^ (32)'(2);
+  end
   logic [1-1:0] u42_ring_wr_valid_o;
   logic [2-1:0] u42_ring_wr_slot_o;
   logic [2-1:0] u42_ring_wr_state_o;
@@ -2524,25 +2632,40 @@ module zhao_prod_top (
   logic [64-1:0] u42_hps_wr_data_o;
   logic [1-1:0] u42_hps_wr_last_o;
   logic [32-1:0] u42_pad_buttons_i [4];
-  always_comb
-    foreach (u42_pad_buttons_i[k0])
-      u42_pad_buttons_i[k0] = u42_src[56 +: 32] ^ (32)'(k0);
+  always_comb begin
+    u42_pad_buttons_i[0] = u42_src[56 +: 32] ^ (32)'(0);
+    u42_pad_buttons_i[1] = u42_src[56 +: 32] ^ (32)'(1);
+    u42_pad_buttons_i[2] = u42_src[56 +: 32] ^ (32)'(2);
+    u42_pad_buttons_i[3] = u42_src[56 +: 32] ^ (32)'(3);
+  end
   logic [16-1:0] u42_pad_lx_i [4];
-  always_comb
-    foreach (u42_pad_lx_i[k0])
-      u42_pad_lx_i[k0] = u42_src[63 +: 16] ^ (16)'(k0);
+  always_comb begin
+    u42_pad_lx_i[0] = u42_src[63 +: 16] ^ (16)'(0);
+    u42_pad_lx_i[1] = u42_src[63 +: 16] ^ (16)'(1);
+    u42_pad_lx_i[2] = u42_src[63 +: 16] ^ (16)'(2);
+    u42_pad_lx_i[3] = u42_src[63 +: 16] ^ (16)'(3);
+  end
   logic [16-1:0] u42_pad_ly_i [4];
-  always_comb
-    foreach (u42_pad_ly_i[k0])
-      u42_pad_ly_i[k0] = u42_src[70 +: 16] ^ (16)'(k0);
+  always_comb begin
+    u42_pad_ly_i[0] = u42_src[70 +: 16] ^ (16)'(0);
+    u42_pad_ly_i[1] = u42_src[70 +: 16] ^ (16)'(1);
+    u42_pad_ly_i[2] = u42_src[70 +: 16] ^ (16)'(2);
+    u42_pad_ly_i[3] = u42_src[70 +: 16] ^ (16)'(3);
+  end
   logic [16-1:0] u42_pad_rx_i [4];
-  always_comb
-    foreach (u42_pad_rx_i[k0])
-      u42_pad_rx_i[k0] = u42_src[77 +: 16] ^ (16)'(k0);
+  always_comb begin
+    u42_pad_rx_i[0] = u42_src[77 +: 16] ^ (16)'(0);
+    u42_pad_rx_i[1] = u42_src[77 +: 16] ^ (16)'(1);
+    u42_pad_rx_i[2] = u42_src[77 +: 16] ^ (16)'(2);
+    u42_pad_rx_i[3] = u42_src[77 +: 16] ^ (16)'(3);
+  end
   logic [16-1:0] u42_pad_ry_i [4];
-  always_comb
-    foreach (u42_pad_ry_i[k0])
-      u42_pad_ry_i[k0] = u42_src[84 +: 16] ^ (16)'(k0);
+  always_comb begin
+    u42_pad_ry_i[0] = u42_src[84 +: 16] ^ (16)'(0);
+    u42_pad_ry_i[1] = u42_src[84 +: 16] ^ (16)'(1);
+    u42_pad_ry_i[2] = u42_src[84 +: 16] ^ (16)'(2);
+    u42_pad_ry_i[3] = u42_src[84 +: 16] ^ (16)'(3);
+  end
   logic [1-1:0] u42_aud_wr_ready_o;
   logic [1-1:0] u42_aud_refill_req_o;
   logic [12-1:0] u42_aud_occupancy_o;
@@ -2574,8 +2697,9 @@ module zhao_prod_top (
   logic u42_slot_state_o_fold;
   always_comb begin
     u42_slot_state_o_fold = 1'b0;
-    foreach (u42_slot_state_o[k0])
-      u42_slot_state_o_fold = u42_slot_state_o_fold ^ (^u42_slot_state_o[k0]);
+    u42_slot_state_o_fold = u42_slot_state_o_fold ^ (^u42_slot_state_o[0]);
+    u42_slot_state_o_fold = u42_slot_state_o_fold ^ (^u42_slot_state_o[1]);
+    u42_slot_state_o_fold = u42_slot_state_o_fold ^ (^u42_slot_state_o[2]);
   end
   logic [1-1:0] u42_fence_valid_o;
   logic [2-1:0] u42_fence_slot_o;
@@ -2591,16 +2715,20 @@ module zhao_prod_top (
   logic u42_pad_sequence_o_fold;
   always_comb begin
     u42_pad_sequence_o_fold = 1'b0;
-    foreach (u42_pad_sequence_o[k0])
-      u42_pad_sequence_o_fold = u42_pad_sequence_o_fold ^ (^u42_pad_sequence_o[k0]);
+    u42_pad_sequence_o_fold = u42_pad_sequence_o_fold ^ (^u42_pad_sequence_o[0]);
+    u42_pad_sequence_o_fold = u42_pad_sequence_o_fold ^ (^u42_pad_sequence_o[1]);
+    u42_pad_sequence_o_fold = u42_pad_sequence_o_fold ^ (^u42_pad_sequence_o[2]);
+    u42_pad_sequence_o_fold = u42_pad_sequence_o_fold ^ (^u42_pad_sequence_o[3]);
   end
   logic [64-1:0] u42_input_gaps_o;
   logic [8-1:0] u42_rumble_duty_o [4];
   logic u42_rumble_duty_o_fold;
   always_comb begin
     u42_rumble_duty_o_fold = 1'b0;
-    foreach (u42_rumble_duty_o[k0])
-      u42_rumble_duty_o_fold = u42_rumble_duty_o_fold ^ (^u42_rumble_duty_o[k0]);
+    u42_rumble_duty_o_fold = u42_rumble_duty_o_fold ^ (^u42_rumble_duty_o[0]);
+    u42_rumble_duty_o_fold = u42_rumble_duty_o_fold ^ (^u42_rumble_duty_o[1]);
+    u42_rumble_duty_o_fold = u42_rumble_duty_o_fold ^ (^u42_rumble_duty_o[2]);
+    u42_rumble_duty_o_fold = u42_rumble_duty_o_fold ^ (^u42_rumble_duty_o[3]);
   end
   logic [4-1:0] u42_rumble_active_o;
   logic [4-1:0] u42_rumble_pwm_o;

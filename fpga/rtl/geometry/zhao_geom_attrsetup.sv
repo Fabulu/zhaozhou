@@ -131,8 +131,8 @@ module zhao_geom_attrsetup (
     n0_c = 96'(w0_0) * 96'(va_i) + 96'(w1_0) * 96'(vb_i) + 96'(w2_0) * 96'(vc_i);
     // The x partial of w is the NEGATED y difference, and the y partial is the
     // x difference -- the asymmetry is orient's, not a transcription slip.
-    dndx_c = ((-72'(cy_by)) * 72'(va_i) + (-72'(ay_cy)) * 72'(vb_i) +
-              (-72'(by_ay)) * 72'(vc_i)) <<< PIXEL_SHIFT;
+    dndx_c = (((-(72'(cy_by)))) * 72'(va_i) + ((-(72'(ay_cy)))) * 72'(vb_i) +
+              ((-(72'(by_ay)))) * 72'(vc_i)) <<< PIXEL_SHIFT;
     dndy_c = (72'(cx_bx) * 72'(va_i) + 72'(ax_cx) * 72'(vb_i) +
               72'(bx_ax) * 72'(vc_i)) <<< PIXEL_SHIFT;
   end

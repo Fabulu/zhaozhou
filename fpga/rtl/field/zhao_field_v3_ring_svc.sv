@@ -197,7 +197,14 @@ module zhao_field_v3_ring_svc #(
   end
   logic               f_smooth_r;
 
-  for (genvar u = 0; u < UNITS; u++) begin : gen_unit
+  // The genvar is declared SEPARATELY and the loop is wrapped in an
+  // explicit generate block. Quartus 17.0.2's parser rejects both
+  // `for (genvar N = ...)` and a loop generate at module level, while
+  // both Verilator and slang accept them, so it only ever surfaces in a
+  // composed fit. See zhao_crc32c_fold.sv, which hit it first.
+  genvar u;
+  generate
+  for (u = 0; u < UNITS; u++) begin : gen_unit
     assign rg_v_valid[u] = u_busy_r[u] && !u_off_r[u];
     zhao_field_v3_ring u_ring (
         .clk(clk), .rst_n(rst_n),
@@ -222,6 +229,7 @@ module zhao_field_v3_ring_svc #(
         .mul_p_2_i(mul_p_2_i), .mul_p_3_i(mul_p_3_i)
     );
   end
+  endgenerate
 
   // ---- the order queue -----------------------------------------------------
   // WIDTH FROM THE PARAMETER, NOT FROM A LADDER. This was a hand-written
@@ -309,10 +317,12 @@ module zhao_field_v3_ring_svc #(
   // three clocks forever with no reply ever arriving.
   logic          sh_v_r [2];
   logic [UW-1:0] sh_u_r [2];
-  for (genvar u = 0; u < UNITS; u++) begin : gen_grant
+  generate
+  for (u = 0; u < UNITS; u++) begin : gen_grant
     assign rg_mul_ready[u] = mul_ready_i && (bank_u_c == UW'(u));
     assign rg_mul_valid[u] = mul_valid_i && sh_v_r[1] && (sh_u_r[1] == UW'(u));
   end
+  endgenerate
 
   assign req_ready_o = (f_state_r == F_IDLE) && (oq_count_r != (UW+1)'(UNITS));
 

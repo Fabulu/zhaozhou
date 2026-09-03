@@ -200,3 +200,10 @@ excluded:
 
   # --- built, nothing instantiates it yet ------------------------------------
   - zhao_skid2: unused  a two-deep skid primitive nothing has picked up
+  # A DRAFT, and a wrong one: its 32-step divide over a 64-bit numerator yields
+  # quotient bits 63..32, and the real quotient is always below 2^15, so every
+  # triangle's base term would have come out ZERO -- normal maps that silently
+  # do nothing. Excluded until the architecture in
+  # reports/NORMALMAP-ARCHITECTURE.md is built. It is deliberately NOT in the
+  # running fit, so the normal-map cost stays a clean measured delta.
+  - zhao_terrain_normalmap: unused  draft pending TERRAIN.SHADE / TERRAIN.NORMALMAP split

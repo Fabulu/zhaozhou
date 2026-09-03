@@ -171,10 +171,18 @@ module zhao_field_v3_normalize (
   // entries and the same scarcity argument as ROT's sine table applies.
   logic [7:0]  seed_idx [LANES];
   logic [30:0] seed_val [LANES];
-  for (genvar g = 0; g < LANES; g++) begin : g_seed
+  // The genvar is declared SEPARATELY and the loop is wrapped in an
+  // explicit generate block. Quartus 17.0.2's parser rejects both
+  // `for (genvar N = ...)` and a loop generate at module level, while
+  // both Verilator and slang accept them, so it only ever surfaces in a
+  // composed fit. See zhao_crc32c_fold.sv, which hit it first.
+  genvar g;
+  generate
+  for (g = 0; g < LANES; g++) begin : g_seed
     assign seed_idx[g] = mant[g][22:15];
     zhao_field_rcp24_rom u_rom (.idx_i(seed_idx[g]), .seed_o(seed_val[g]));
   end
+  endgenerate
 
   // ---- the bank's operands ------------------------------------------------
   logic signed [32:0] mul_a [LANES], mul_b [LANES];
