@@ -2,8 +2,9 @@
 
 > Ledger: `design/blocks.yml` · gpu clock · maturity SPECIFIED
 > RTL: not built
-> Reference: the depth-profile table is generated; the applying function is
-> PLANNED AND NOT WRITTEN
+> Reference: **`zref::depth_of_raw`** (`reference/include/zref/zref_depth.hpp`)
+> — it already exists and is complete, with the generated profile table in
+> `reference/include/zref/generated/zref_depth.hpp`
 
 ## Purpose and exclusions
 
@@ -38,9 +39,47 @@ DONE and is silent on 5–6, so it reads closed. It is not.
   only says what depth value a behind vertex carries.
 * **No new profiles.** The profiles are ruled and generated; this applies them.
 
+## CORRECTION, 2026-09-03: THE INPUT IS `w`, NOT `1/w`
+
+The first draft of this contract said the input was the projector's Q16.16
+`1/w` and the job was a multiply and a shift. **Both were wrong, and reading
+`reference/include/zref/zref_depth.hpp` is what corrected them.**
+
+The ratified law (`spec/qformats.md` §8, owner ruling 2026-08-31 #1) is:
+
+    s      = smallest shift with (W >> s) < 2^24     -- W is w in fx16 raw
+    {r, k} = rcp_u24(W >> s)
+    d      = rescale(SCALE * r, 48 + s - k), round-half-up, saturate 0xFFFFFF
+
+**It consumes `w` and performs its OWN reciprocal.** It is not a rescale of a
+reciprocal somebody else computed.
+
+### And the projector does not expose `w`
+
+* `zhao_geom_project.sv` outputs `out_d_o`, documented **"Q16.16 1/w"**;
+* `zhao_project_core.sv`'s output list is `out_valid_o`, `out_d_o`,
+  `out_behind_o`, `out_view_o`, `out_payload_o` — **no `w`**;
+* yet the core *has* it: *"The three quotients share the divisor `clip.w`"*.
+
+**So `w` exists one wire away from where it is needed and is discarded.**
+
+### The resolution, and it is cheap
+
+**Expose `clip.w` from `zhao_project_core` as an additional output and feed
+this block with it.** It is a wire, not arithmetic — the core already holds the
+value because it divides by it. The alternatives are worse: reciprocating
+`1/w` back to `w` loses precision to answer a question the projector could
+have answered exactly, and re-expressing the ruled law in terms of `1/w` means
+a second depth law, which is the defect class this repository found twice
+today already.
+
+**This is a required change to `GEOM.PROJECT`/`zhao_project_core`**, named here
+rather than assumed, and it is the kind of thing worth discovering while
+writing a contract instead of while writing RTL.
+
 ## Input and output packet layouts
 
-**In:** `{ d_q16 (signed 32, Q16.16 1/w), behind (1), profile[1:0], src_id }`.
+**In:** `{ w_fx16 (u32 or wider, fx16 raw), behind (1), profile[1:0], src_id }`.
 **Out:** `{ invw24 (u24), saturated (1), src_id }`.
 
 `profile[1:0]` comes from `SetView`'s ratified field. **It is carried per
@@ -50,11 +89,22 @@ legally differ.
 
 ## The one job, stated so it cannot be reinvented
 
-    invw24 = saturate_u24( round( d_q16 * scale(profile) >> shift(profile) ) )
+The law above, verbatim from `zref::depth_of_raw`, with **every constant taken
+from the generated table** (`gen::DEPTH_PROFILES`) rather than restated.
+Restating them is how a table and its user drift — the `QFMT_VERSION` failure
+in a different costume, and that one actually happened this morning.
 
-with `scale` and `shift` taken from the **generated** profile table, not
-restated here. Restating them is how a table and its user drift, which is the
-`QFMT_VERSION` failure in a different costume.
+Three details the oracle makes explicit and the RTL must copy:
+
+* **the clamp to `[wmin, wmax]` is part of the LAW, not a caller courtesy.**
+  `wmax` is a depth **clamp**, not a far-clip plane, so a `w` beyond it is
+  legal geometry sharing the floor depth rather than being culled;
+* **the product reaches ~2^80**, so the intermediate is 128-bit. A 64-bit
+  accumulator *"would truncate silently and produce a plausible wrong depth"*;
+* **an out-of-range shift returns 0 rather than a wrong number.** The three
+  shipped profiles never produce it; a fourth that did would be unusable, and
+  *"returning a wrong number quietly is worse than clamping loudly at the
+  floor."*
 
 ## Backpressure rules
 
@@ -92,13 +142,25 @@ None. The profile table is small enough to be constants selected by
 
 ## Scalar reference function
 
-**PLANNED AND NOT WRITTEN**: `zref::geom::depth_quant(d_q16, profile)`, which
-must be **generated from or checked against the same profile table the RTL
-uses**, never a second copy of the numbers.
+`zref::depth_of_raw` — **ALREADY WRITTEN AND COMPLETE**
+(`reference/include/zref/zref_depth.hpp`), over the generated table in
+`reference/include/zref/generated/zref_depth.hpp`.
+
+**So this block needs no new oracle at all**, which is the happiest form this
+section can take. The RTL is checked against the existing law, and "RTL ==
+oracle" already means "RTL == what `spec/qformats.md` §8 ratified".
 
 ## Directed tests
 
-**PLANNED AND NOT WRITTEN**:
+**THE LAW IS ALREADY TESTED**, and this block inherits those proofs rather than
+restating them:
+
+* `tests/proofs/depth_oracle_directed.cpp` — the oracle against the law;
+* `tests/proofs/depth_profile_law.cpp` — the profile law itself;
+* `tests/proofs/depth_profile_abi_directed.cpp` — the ABI carrying the profile.
+
+**What is NOT yet tested is RTL**, because there is none. The cases that will
+matter when there is, none of which the proofs above can cover:
 
 * each profile's exact `wmin`/`wmax` boundary, both sides;
 * saturation reported rather than clamped silently;
@@ -121,8 +183,15 @@ called `invw24` currently comes from a producer that emits Q16.16.
 
 ## Synthesis / resource ceiling
 
-Small: one multiplier, a shift, a rounding adder, a saturate. Likely 1 DSP or
-none, depending on the scale widths.
+**Larger than the first draft assumed**, because the job is a reciprocal and a
+128-bit-intermediate multiply, not a rescale. It needs an `rcp_u24` — and the
+console already has one: `zhao_field_rcp24_rom` backs both
+`zhao_raster_rcp24_svc` and `zhao_raster_rcp24.sv`. **Reuse it.** A second
+reciprocal ROM would be a second law.
+
+The `SCALE * r` product is ~2^80, so the multiply is wide. Whether that is one
+DSP cascade or several is a fit question; what is not negotiable is that the
+intermediate cannot be 64-bit.
 
 ## Notes
 

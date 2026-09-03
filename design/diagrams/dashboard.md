@@ -15,7 +15,7 @@ Blocks: **105** (85 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | debug | · | · | 1 | 3 | · | · | · | · | 4 |
 | field | 5 | · | 1 | 1 | · | · | · | · | 7 |
 | forge | 1 | · | 2 | · | · | · | · | · | 3 |
-| geometry | 7 | 2 | 6 | · | · | · | · | · | 15 |
+| geometry | 6 | 3 | 6 | · | · | · | · | · | 15 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 1 | · | 2 | · | · | · | · | · | 3 |
 | memory | 1 | 1 | 1 | 3 | · | · | · | 1 | 6 |
@@ -27,7 +27,7 @@ Blocks: **105** (85 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | terrain | · | 2 | 9 | · | · | · | · | · | 11 |
 | texture | 2 | · | 5 | · | · | · | · | · | 7 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 36 | 12 | 41 | 16 | · | · | · | 6 | 105 |
+| **all** | 35 | 13 | 41 | 16 | · | · | · | 6 | 105 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -125,6 +125,7 @@ Blocks: **105** (85 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | GEOM.CLIP | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/geometry/geom_clip_directed.cpp |
 | GEOM.SETUP | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |
 | GEOM.SETUP | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/geometry/geom_setup_directed.cpp |
+| GEOM.DEPTHQUANT | REFERENCE_COMPLETE | 2026-09-03 | `85e6926f` | reference/include/zref/zref_depth.hpp |
 | GEOM.BINNER | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_geom.hpp |
 | GEOM.BINNER | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/geometry/geom_binner_directed.cpp |
 | RASTER.TILESTORE | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_tilestore.hpp |

@@ -2581,22 +2581,26 @@ blocks:
     contract: design/contracts/GEOM.DEPTHQUANT.md
     phase: 5
     owner_issue: ZH-086
-    inputs: [projected_depth]
+    inputs: [projected_w]
     outputs: [invw24]
     upstream: [GEOM.PROJECT]
     downstream: [RASTER.EARLYZ]
     backpressure: ready_valid
     latency: variable
     target_throughput: see contract
-    reference_model: zref::geom::depth_quant
+    reference_model: zref::depth_of_raw
     tests:
-      directed: "PLANNED -- NOT WRITTEN"
-      random: "PLANNED -- NOT WRITTEN"
+      directed: tests/proofs/depth_oracle_directed.cpp
+      random: tests/proofs/depth_profile_abi_directed.cpp
     counters: [depth_saturated, depth_refused]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-03"
+        commit: "85e6926f"
+        evidence: reference/include/zref/zref_depth.hpp
     deferred: false
     cut_order: null
     superseded_by: null
