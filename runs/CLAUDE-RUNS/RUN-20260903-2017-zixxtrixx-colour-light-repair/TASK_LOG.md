@@ -228,3 +228,47 @@ tab lists Seventeen. Background jobs all stopped; process sweep clean
 (no zhao/ffmpeg/wrangler/zixx).
 
 Final SHAs: zhaozhou 7fd98bf8 (main, pushed), Upheaval de38080 (main, pushed).
+
+## 2026-09-04 — REOPENED: owner follow-up ("colors can be stronger. Make one
+## of the orange ones a strong red")
+
+ASSUMPTION (stated, cheap to reverse): "one of the orange ones" = the ADDED
+ORANGE ORBIT becomes strong red, not the original warm inspection lamp —
+red/blue/green plus the accepted warm lamp buys the most colour separation.
+If the owner meant the warm lamp, it is one constant family to flip
+(kLightGain* vs kRedGain*). The source constants are renamed kOrange* ->
+kRed* and the orb marker tint turns red so the visible marker and its light
+agree. All three coloured gains pushed further; warm lamp untouched.
+
+## 2026-09-04 — CANCELLED by the owner; lane restored to the published state
+
+The follow-up pass ("colors can be stronger. Make one of the orange ones a
+strong red") was cancelled mid-flight: "stop the turning of the orange
+source red, I understand now it's a renderer issue." The owner has
+identified the real limit this run documented from its own transport
+analysis: coloured creature light is MULTIPLICATIVE against pigment, so a
+red light on the green body can only darken it toward olive/russet — it can
+never SHOW red there. Making a light display its true colour on any pigment
+needs an additive/emissive term in the shade path (a renderer change), not
+stronger gains.
+
+What had been changed and was rolled back or stopped:
+* zhao_reel.cpp working-tree edits (kOrange* renamed kRed* with gains
+  2.60/0.20/0.08, blue pushed to 2.10, green to 1.90, red orb marker tint,
+  comment/note updates) — REVERTED via git checkout; never committed. The
+  rebuild+draft-render they triggered was killed during compile; process
+  sweep confirms no zhao-reel/compiler/ffmpeg/wrangler running; the partial
+  v4 scratch dir was deleted.
+* Upheaval commit 56b6c0f (PUSHED to origin main, NOT deployed): Archive
+  Generation Eighteen preservation (44 byte-identical copies + SHA256
+  manifest — valid preservation of the live Direction-27 bank, harmless),
+  plus a creatures.json live-note/caption and index.html that DESCRIBE the
+  cancelled red bank, and the CSS/MAX 17->18 extension. Production still
+  serves the Direction-27 bank (Upheaval de38080's encode) and is
+  unaffected; the repo's main carries the un-deployed description of a bank
+  that will not ship. Left as-is per the stop instruction (no force-push);
+  the next real pass should either publish over it or forward-revert the
+  note portion of 56b6c0f.
+
+The published state stands: zhaozhou eb341058, Upheaval de38080's bank live
+at upheaval.pages.dev.
