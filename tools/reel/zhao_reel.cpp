@@ -4465,7 +4465,7 @@ SceneSubject subject_u02_s4(int view) {
            : view == 4 ? "u02-s4-ids"
            : view == 5 ? "u02-s4-stage"
                        : "u02-s4-unlit";
-  s.creature = 2;  // slot 0 (the S4 still hover)
+  s.creature = 9;  // slot 7: the still form-diagnostic pose
   s.frames = 4;
   s.orbit = false;
   u02_common(s);
@@ -4476,6 +4476,18 @@ SceneSubject subject_u02_s4(int view) {
   if (view == 5) s.creature = 0;  // stage only: isolates non-creature artifacts
   if (view == 6) s.creature_shade = 1;  // unlit fullbright
   s.note = "S4 spike: the grey ball(s) from a fixed diagnostic camera";
+  return s;
+}
+
+// ---- creature 02 showcase subjects: one per clip -------------------------
+SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool orbit) {
+  SceneSubject s;
+  s.name = name;
+  s.creature = slot + 2;
+  s.frames = keys * 2;  // one full loop at presentation rate
+  s.orbit = orbit;
+  u02_common(s);
+  if (!orbit) s.cam_yaw = 0x2000;  // three-quarter: the face and the loop both read
   return s;
 }
 
@@ -6404,6 +6416,13 @@ int main(int argc, char** argv) {
   if (wanted("planet-sun-redgiant")) rc |= render_scene(subject_planet_redgiant());
   if (wanted("planet-sun-binary")) rc |= render_scene(subject_planet_binary());
   if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
+  if (wanted("unnamed02-hover")) rc |= render_scene(subject_u02_clip(0, "unnamed02-hover", u02::kIdleKeys, true));
+  if (wanted("unnamed02-drift")) rc |= render_scene(subject_u02_clip(1, "unnamed02-drift", u02::kDriftKeys, false));
+  if (wanted("unnamed02-channel")) rc |= render_scene(subject_u02_clip(2, "unnamed02-channel", u02::kChannelKeys, false));
+  if (wanted("unnamed02-curious")) rc |= render_scene(subject_u02_clip(3, "unnamed02-curious", u02::kCuriousKeys, false));
+  if (wanted("unnamed02-startle")) rc |= render_scene(subject_u02_clip(4, "unnamed02-startle", u02::kStartleKeys, false));
+  if (wanted("unnamed02-rest")) rc |= render_scene(subject_u02_clip(5, "unnamed02-rest", u02::kRestKeys, false));
+  if (wanted("unnamed02-pirouette")) rc |= render_scene(subject_u02_clip(6, "unnamed02-pirouette", u02::kPirouetteKeys, false));
   if (wanted("u02-s5-glow")) rc |= render_scene(subject_u02_s5());
   if (wanted("u02-s4-side")) rc |= render_scene(subject_u02_s4(0));
   if (wanted("u02-s4-front")) rc |= render_scene(subject_u02_s4(1));

@@ -101,7 +101,14 @@ inline const zc::CreatureType& type() {
 
     zc::ClipBank bank;
     bank.bone_count = kBoneCount;
-    bank.clips.push_back(build_still());
+    bank.clips.push_back(build_hover_idle());  // slot 0
+    bank.clips.push_back(build_drift());       // slot 1
+    bank.clips.push_back(build_channel());     // slot 2
+    bank.clips.push_back(build_curious());     // slot 3
+    bank.clips.push_back(build_startle());     // slot 4
+    bank.clips.push_back(build_rest());        // slot 5
+    bank.clips.push_back(build_pirouette());   // slot 6
+    bank.clips.push_back(build_still());       // slot 7 (form diagnostics)
 
     zc::CreatureType type;
     type.type_id = 3;  // 1 watchdog, 2 zixxtrixx, 3 unnamed02

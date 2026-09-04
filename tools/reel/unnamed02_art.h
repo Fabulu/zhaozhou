@@ -110,11 +110,54 @@ constexpr int32_t kPupilStarWideMm = 30;  // blade width
 constexpr uint8_t kLensR = 116, kLensG = 58, kLensB = 178;   // purple (grey pass)
 constexpr uint8_t kStarR = 64, kStarG = 220, kStarB = 240;   // cyan
 
+// ============================== MOTION =====================================
+// keys are 30 Hz, held 2 sim ticks; a clip's frames on screen = keys * 2.
+constexpr int kIdleKeys = 300;      // 600 frames, 10 s loop
+constexpr int kDriftKeys = 150;
+constexpr int kChannelKeys = 210;
+constexpr int kCuriousKeys = 90;
+constexpr int kStartleKeys = 80;
+constexpr int kRestKeys = 200;
+constexpr int kPirouetteKeys = 120;
+// the hover: two incommensurate bobs (periods in keys; integer cycles/loop)
+constexpr int32_t kBobAmpAMm = 26, kBobAmpBMm = 11;
+constexpr int kBobPeriodAKeys = 25, kBobPeriodBKeys = 60;
+// the constant compression (Q0.16 flatten peak; slight but UNMISTAKABLE)
+constexpr int32_t kCompressAmpPm = 3300;   // ~5% vertical at the equator
+constexpr int32_t kSpreadRatioPm = 550;    // the positive-volume partner
+constexpr int kCompressPeriodKeys = 30;
+constexpr int32_t kCompressLoopCouplePm = 14;  // sympathetic hinge-root bob
+// the antenna's life
+constexpr int32_t kAntennaSwayPm = 45;
+constexpr int kAntennaLagKeys = 4;
+constexpr int32_t kAntennaTiltA16 = 700;
+// the gaze (the pupil pivots sweep the stars across the lenses)
+constexpr int32_t kGazeMaxA16 = 5000;
+constexpr int32_t kGazeLiftMaxA16 = 3200;
+constexpr int32_t kSquintMaxA16 = 9000;    // 1000pm = mostly closed
+constexpr int32_t kBlazeTwinkleA16 = 10923;  // the channel's slow star spin
+// per-clip character
+constexpr int32_t kDriftLeanA16 = 1300;
+constexpr int32_t kDriftRadiusMm = 600;
+constexpr int kDriftSwayPeriodKeys = 25;
+constexpr int kDriftCompressPeriodKeys = 25;
+constexpr int kChannelCompressPeriodKeys = 42;
+constexpr int32_t kCuriousYawA16 = 4500;   // ~25 deg body yaw after the eyes
+constexpr int32_t kStartleJumpMm = 520;
+constexpr int32_t kStartleLiftMm = 300;
+constexpr int kRestSwayPeriodKeys = 50;
+constexpr int kRestCompressPeriodKeys = 50;
+constexpr int kRestBobPeriodKeys = 40;
+constexpr int32_t kRestSquintPm = 520;
+constexpr int32_t kPirouetteFlarePm = 90;
+
 // ============================== STAGE ======================================
 
 constexpr int32_t kStageCentreMm = 0;     // the fixed camera aims at world x=0
 constexpr int32_t kHoverHeightMm = 900;   // body CENTRE above terrain
-constexpr int32_t kRestHeightMm = 640;    // the rest clip's lower hover
+constexpr int32_t kRestHeightMm = 845;    // the rest clip lower hover (the body
+                                          // half-height is ~747 stretched: 640
+                                          // would have SUNK the belly 107 mm)
 
 // ============================== PAGE =======================================
 // tiles: 0 = the atlas (body/loop/hinge V row bands), 1 = the eye page.

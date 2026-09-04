@@ -42,8 +42,12 @@ inline zc::Skeleton build_skeleton() {
   sk.bones[kBHingeC] = zc::Bone{kBHingeB, 0, fxu(kLoopArcMm[2]), 0};
   sk.bones[kBEyeL] = zc::Bone{kBRoot, fxu(kEyeXMm), fxu(vmm(kEyeYMm)), fxu(kEyeZMm)};
   sk.bones[kBEyeR] = zc::Bone{kBRoot, fxu(kEyeXMm), fxu(vmm(kEyeYMm)), -fxu(kEyeZMm)};
-  sk.bones[kBPupilL] = zc::Bone{kBEyeL, fxu(kEyeBulgeMm), 0, 0};
-  sk.bones[kBPupilR] = zc::Bone{kBEyeR, fxu(kEyeBulgeMm), 0, 0};
+  // Pupil pivots sit AT the lens centre; the star GEOMETRY is offset
+  // outward (+X) in the part, so pupil-bone rotations sweep the star
+  // across the lens face like an eyeball turning (the zixx gaze mechanism,
+  // pivot radius = the bulge).
+  sk.bones[kBPupilL] = zc::Bone{kBEyeL, 0, 0, 0};
+  sk.bones[kBPupilR] = zc::Bone{kBEyeR, 0, 0, 0};
   return sk;
 }
 

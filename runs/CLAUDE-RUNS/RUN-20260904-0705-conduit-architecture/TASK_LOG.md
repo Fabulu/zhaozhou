@@ -287,3 +287,30 @@ yet. Specs are." Read in full. Taken as binding for this pass:
 - unnamed02_page.h is GENERATED and gitignored; unnamed02.h guards with
   __has_include and falls back to flat grey — CI and fresh clones build.
 - Pigments authored by eye (saturated on purpose), never sampled from scans.
+
+## MOTION MILESTONE — seven clips, the hover IS the idle
+
+- All seven clips authored (hover-idle 300k / drift 150k / channel 210k /
+  react-curious 90k / react-startle 80k / rest 200k / pirouette 120k) plus
+  the still diagnostic (slot 7). Every periodic term completes integer
+  cycles per clip (seamless loops); hard cuts; interpolation on.
+- The constant compression: deform sidecar on the body ball (kRadial,
+  vertical), kCompressAmpPm one knob driving the wave AND the sympathetic
+  hinge-root bob (kCompressLoopCouplePm). Channel deepens it (the inhale),
+  startle spikes it (the squash), rest slows it.
+- MEASURED on the hover (evidence/hover-extents.png): vertical extent
+  oscillates 17 px at native (unmistakable), bob band ~10 px, max centroid
+  step 0.58 px (the style band allows ~1.5) — organic, never twitchy.
+  ZERO byte-identical adjacent frames in 600 (the never-off floor).
+- Gaze mechanics: pupil pivots at the lens centres, star geometry offset by
+  the bulge — rotations sweep the stars across the lenses (the zixx
+  mechanism). Idle carries a glance schedule; curious leads with the eyes;
+  channel spins the stars through the blaze (dilation-as-motion); rest
+  half-squints; startle shutters the faceted lenses.
+- THE PROBE CAUGHT A REAL FAULT BY ARITHMETIC before any render: the rest
+  hover at 640 mm would have sunk the belly 107 mm into terrain (the body's
+  stretched half-height is ~747). kRestHeightMm now 845.
+- u02_probe.cpp COMMITTED: every clip, every key AND 60 Hz midpoint, every
+  vertex: min clearance 88 mm (rest), gate 40 mm — CLEARANCE CONTRACT HOLDS.
+- Contact sheets of EVERY frame for all seven clips
+  (evidence/sheet-startle.png, sheet-channel.png in the run).

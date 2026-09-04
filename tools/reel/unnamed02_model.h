@@ -214,6 +214,7 @@ inline zc::RingPart make_star_blade(uint8_t bone, bool crossed) {
     rs.rx = static_cast<int32_t>((static_cast<int64_t>(fxu(kPupilStarThinMm)) * sn) >> 16);
     rs.rz = static_cast<int32_t>((static_cast<int64_t>(fxu(kPupilStarWideMm)) * sn) >> 16);
     rs.segments = 4;
+    rs.cx = fxu(kEyeBulgeMm);  // proud of the lens; the gaze pivot radius
     p.rings.push_back(rs);
   }
   p.r = kStarR;

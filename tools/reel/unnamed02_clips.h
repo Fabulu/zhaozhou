@@ -4,6 +4,13 @@
 // zixxtrixx.h (pure quat/curve maths, no anatomy). Everything else is this
 // creature's own authoring: deterministic integer clip builders, the deform
 // sidecar (the constant compression), the hover.
+//
+// MOTION LAWS OBSERVED (07-MOTION-STYLE):
+//  - 30 Hz keys held 2 ticks, presentation interpolation on, hard cuts.
+//  - every periodic term completes INTEGER cycles per clip (seamless loops).
+//  - the life layer is seasoning and NEVER off (no byte-identical frames).
+//  - one thing at a time, each beat >= 8 keys (16 frames) to register.
+//  - speed spent on payoffs; wind-ups still >= 8 keys.
 
 #ifndef ZHAO_REEL_UNNAMED02_CLIPS_H
 #define ZHAO_REEL_UNNAMED02_CLIPS_H
@@ -95,6 +102,13 @@ inline int curve(const Key* k, int n, int f) {
 }
 // ---- end of the sanctioned copy -------------------------------------------
 
+/** sin of (f/keys)*cycles turns, Q16.16 — integer cycles keep loops seamless. */
+inline int32_t sinp(int f, int keys, int cycles, int32_t phase16 = 0) {
+  const uint16_t a = static_cast<uint16_t>(
+      ((static_cast<int64_t>(f) * cycles * 65536) / keys + phase16) & 0xFFFF);
+  return zref::fx_sin(zref::angle16{a}).raw;
+}
+
 /** The per-key quat accumulator (mirrors zixx's Rig; bodies differ). */
 struct Rig {
   zc::quat16 q[kBoneCount];
@@ -108,22 +122,24 @@ struct Rig {
 };
 
 /**
- * The constant loop fold (the drawn shape as a POSE — zixx's tail_rest
- * pattern). Every clip builder calls it on every key; articulation clips
- * modulate the same four angles.
+ * The loop pose: the constant drawn-shape fold (all scales 1000), and the
+ * articulation vocabulary — per-hinge per-mille scaling of the same four
+ * fold angles, plus an out-of-plane tilt. Every clip speaks through these.
  */
-inline void loop_rest(Rig& g, int32_t scale_pm = 1000) {
-  const auto a = [&](int32_t base) {
-    return static_cast<int32_t>((static_cast<int64_t>(base) * scale_pm) / 1000);
+inline void loop_pose(Rig& g, int32_t root_pm, int32_t a_pm, int32_t b_pm, int32_t c_pm,
+                      int32_t tilt_a16 = 0) {
+  const auto a = [](int32_t base, int32_t pm) {
+    return static_cast<int32_t>((static_cast<int64_t>(base) * pm) / 1000);
   };
-  g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_z(a(kLoopFoldRootA16)));
-  g.q[kBHingeA] = quat_mul(g.q[kBHingeA], quat_z(a(kLoopFoldAA16)));
-  g.q[kBHingeB] = quat_mul(g.q[kBHingeB], quat_z(a(kLoopFoldBA16)));
-  g.q[kBHingeC] = quat_mul(g.q[kBHingeC], quat_z(a(kLoopFoldCA16)));
+  g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_z(a(kLoopFoldRootA16, root_pm)));
+  g.q[kBHingeA] = quat_mul(g.q[kBHingeA], quat_z(a(kLoopFoldAA16, a_pm)));
+  g.q[kBHingeB] = quat_mul(g.q[kBHingeB], quat_z(a(kLoopFoldBA16, b_pm)));
+  g.q[kBHingeC] = quat_mul(g.q[kBHingeC], quat_z(a(kLoopFoldCA16, c_pm)));
+  if (tilt_a16 != 0) g.q[kBHingeA] = quat_mul(g.q[kBHingeA], quat_x(tilt_a16));
 }
+inline void loop_rest(Rig& g) { loop_pose(g, 1000, 1000, 1000, 1000); }
 
-/** The face at rest: lenses rolled into their outward V and leaned back.
- *  Every clip calls it; gaze/aim/squint modulate on top. */
+/** The face at rest: lenses rolled into their outward V and leaned back. */
 inline void face_rest(Rig& g) {
   g.q[kBEyeL] = quat_mul(quat_y(kEyeYawOutA16),
                          quat_mul(quat_x(kEyeVAngleA16), quat_z(-kEyeTiltA16)));
@@ -131,24 +147,319 @@ inline void face_rest(Rig& g) {
                          quat_mul(quat_x(-kEyeVAngleA16), quat_z(-kEyeTiltA16)));
 }
 
-/** Start a clip: slot, key count, identity quats, root at the hover height. */
+/** One apparent gaze on both pupil pivots: +side sweeps the stars toward the
+ *  creature's left (+z), +lift sweeps them up. The pivot radius is the bulge. */
+inline void apply_gaze(Rig& g, int32_t side_a16, int32_t lift_a16) {
+  const int32_t side = side_a16 < -kGazeMaxA16   ? -kGazeMaxA16
+                       : side_a16 > kGazeMaxA16  ? kGazeMaxA16
+                                                 : side_a16;
+  const int32_t lift = lift_a16 < -kGazeLiftMaxA16  ? -kGazeLiftMaxA16
+                       : lift_a16 > kGazeLiftMaxA16 ? kGazeLiftMaxA16
+                                                    : lift_a16;
+  g.q[kBPupilL] = quat_mul(quat_y(-side), quat_z(lift));
+  g.q[kBPupilR] = quat_mul(quat_y(-side), quat_z(lift));
+}
+
+/** Star twinkle: spin the four-point star about its outward axis. */
+inline void apply_twinkle(Rig& g, int32_t spin_a16) {
+  g.q[kBPupilL] = quat_mul(g.q[kBPupilL], quat_x(spin_a16));
+  g.q[kBPupilR] = quat_mul(g.q[kBPupilR], quat_x(spin_a16));
+}
+
+/** Squint 0..1000: the faceted lenses rotate toward edge-on (a shutter). */
+inline void apply_squint(Rig& g, int32_t amount_pm) {
+  const int32_t a = static_cast<int32_t>(
+      (static_cast<int64_t>(kSquintMaxA16) * amount_pm) / 1000);
+  g.q[kBEyeL] = quat_mul(g.q[kBEyeL], quat_y(a));
+  g.q[kBEyeR] = quat_mul(g.q[kBEyeR], quat_y(-a));
+}
+
+/** Start a clip: slot, key count, identity quats, root at the hover height,
+ *  deform sidecar allocated (identity samples). */
 inline zc::Clip clip_shell(uint16_t slot, int keys, int32_t hover_mm) {
   zc::Clip c;
   c.slot_id = slot;
   c.frame_count = static_cast<uint16_t>(keys);
   c.root.assign(static_cast<size_t>(keys) * 3, 0);
   c.quats.assign(static_cast<size_t>(keys) * kBoneCount, zc::quat16_identity());
+  c.deform.assign(static_cast<size_t>(keys), zc::DeformSample{});
   for (int f = 0; f < keys; ++f) c.root[static_cast<size_t>(f) * 3 + 1] = fxu(hover_mm);
   c.interpolate = true;
   return c;
 }
 
-/**
- * S4 placeholder: a still hover at slot 0 (2 keys, identity pose). Replaced
- * by the real hover-idle at the motion milestone.
- */
+/** The compression wave sample at key f: flatten = amp * (0.5 + 0.5 sin),
+ *  spread the positive-volume partner. amp/period per clip. */
+inline zc::DeformSample compress_at(int f, int keys, int cycles, int32_t amp,
+                                    int32_t phase16 = 0) {
+  const int32_t w = (65536 + sinp(f, keys, cycles, phase16)) / 2;  // 0..65536
+  const int32_t flat = static_cast<int32_t>((static_cast<int64_t>(amp) * w) >> 16);
+  const int32_t spread = static_cast<int32_t>(
+      (static_cast<int64_t>(flat) * kSpreadRatioPm) / 1000);
+  return zc::DeformSample{static_cast<uint16_t>(flat), static_cast<uint16_t>(spread)};
+}
+
+/** The hover: base height + two incommensurate bobs (integer cycles). */
+inline int32_t hover_at(int f, int keys, int32_t base_mm, int32_t amp_a_mm,
+                        int32_t amp_b_mm, int cyc_a, int cyc_b) {
+  const int32_t a = static_cast<int32_t>(
+      (static_cast<int64_t>(fxu(amp_a_mm)) * sinp(f, keys, cyc_a)) >> 16);
+  const int32_t b = static_cast<int32_t>(
+      (static_cast<int64_t>(fxu(amp_b_mm)) * sinp(f, keys, cyc_b, 0x3000)) >> 16);
+  return fxu(base_mm) + a + b;
+}
+
+/** The antenna's living sway: per-hinge fold-scale modulation with cumulative
+ *  phase lag (the front leads, the rear follows) + slow out-of-plane tilt +
+ *  the sympathetic compression coupling (one amplitude knob: kCompressAmpPm). */
+inline void loop_alive(Rig& g, int f, int keys, int cyc, int32_t amp_pm,
+                       int32_t compress_amp, int comp_cyc) {
+  if (cyc < 1) cyc = 1;
+  if (comp_cyc < 1) comp_cyc = 1;
+  const int32_t lag = static_cast<int32_t>((65536LL * kAntennaLagKeys * cyc) / keys);
+  const int32_t sa = static_cast<int32_t>(
+      (static_cast<int64_t>(amp_pm) * sinp(f, keys, cyc)) >> 16);
+  const int32_t sb = static_cast<int32_t>(
+      (static_cast<int64_t>(amp_pm) * sinp(f, keys, cyc, -lag)) >> 16);
+  const int32_t sc = static_cast<int32_t>(
+      (static_cast<int64_t>(amp_pm) * sinp(f, keys, cyc, -2 * lag)) >> 16);
+  const int32_t couple = static_cast<int32_t>(
+      (static_cast<int64_t>(kCompressLoopCouplePm) * compress_amp / kCompressAmpPm *
+       sinp(f, keys, comp_cyc)) >>
+      16);
+  const int32_t tilt = static_cast<int32_t>(
+      (static_cast<int64_t>(kAntennaTiltA16) * sinp(f, keys, cyc / 2 > 0 ? cyc / 2 : 1, 0x5000)) >>
+      16);
+  loop_pose(g, 1000 + couple, 1000 + sa, 1000 + sb, 1000 + sc, tilt);
+}
+
+// ---------------------------------------------------------------- clips ----
+
+/** hover-idle, slot 0: the baseline. The hover IS the idle. */
+inline zc::Clip build_hover_idle() {
+  const int K = kIdleKeys;
+  zc::Clip c = clip_shell(0, K, kHoverHeightMm);
+  Rig g;
+  // the idle glance schedule (thousandths of the gaze clamps)
+  static const Key kSide[] = {{0, 0},    {70, 0},   {90, 900},  {150, 900},
+                              {170, 0},  {195, 0},  {215, -550}, {245, -550},
+                              {265, 0},  {299, 0}};
+  static const Key kLift[] = {{0, 0},   {70, 0},   {90, 150},  {150, 150},
+                              {170, 0}, {215, -400}, {245, -400}, {265, 0},
+                              {299, 0}};
+  for (int f = 0; f < K; ++f) {
+    g.reset();
+    loop_alive(g, f, K, K / (2 * kBobPeriodAKeys), kAntennaSwayPm, kCompressAmpPm,
+               K / kCompressPeriodKeys);
+    face_rest(g);
+    apply_gaze(g,
+               static_cast<int32_t>((static_cast<int64_t>(kGazeMaxA16) *
+                                     curve(kSide, 10, f)) / 1000),
+               static_cast<int32_t>((static_cast<int64_t>(kGazeLiftMaxA16) *
+                                     curve(kLift, 9, f)) / 1000));
+    g.write(c, f);
+    c.root[static_cast<size_t>(f) * 3 + 1] = hover_at(
+        f, K, kHoverHeightMm, kBobAmpAMm, kBobAmpBMm, K / kBobPeriodAKeys, K / kBobPeriodBKeys);
+    c.deform[static_cast<size_t>(f)] =
+        compress_at(f, K, K / kCompressPeriodKeys, kCompressAmpPm);
+  }
+  return c;
+}
+
+/** drift, slot 1: the locomotion-analogue — a slow circling drift. */
+inline zc::Clip build_drift() {
+  const int K = kDriftKeys;
+  zc::Clip c = clip_shell(1, K, kHoverHeightMm);
+  Rig g;
+  for (int f = 0; f < K; ++f) {
+    g.reset();
+    const uint16_t ph = static_cast<uint16_t>((static_cast<int64_t>(f) * 65536) / K);
+    g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_y(static_cast<int32_t>(ph)));
+    g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_x(kDriftLeanA16));
+    loop_alive(g, f, K, K / kDriftSwayPeriodKeys, kAntennaSwayPm * 3 / 2, kCompressAmpPm,
+               K / kDriftCompressPeriodKeys);
+    face_rest(g);
+    apply_gaze(g, 0, 0);  // eyes forward: it follows something
+    g.write(c, f);
+    c.root[static_cast<size_t>(f) * 3 + 0] = static_cast<int32_t>(
+        (static_cast<int64_t>(fxu(kDriftRadiusMm)) *
+         zref::fx_cos(zref::angle16{ph}).raw) >> 16);
+    c.root[static_cast<size_t>(f) * 3 + 2] = static_cast<int32_t>(
+        (static_cast<int64_t>(fxu(kDriftRadiusMm)) * zref::fx_sin(zref::angle16{ph}).raw) >>
+        16);
+    c.root[static_cast<size_t>(f) * 3 + 1] =
+        hover_at(f, K, kHoverHeightMm, kBobAmpAMm * 2 / 3, kBobAmpBMm * 2 / 3, K / 10, K / 25);
+    c.deform[static_cast<size_t>(f)] =
+        compress_at(f, K, K / kDriftCompressPeriodKeys, kCompressAmpPm);
+  }
+  return c;
+}
+
+/** channel, slot 2: the conduit at work. Three beats: draw-in (the inhale),
+ *  blaze (bolts + twinkle), release (the exhale). One thing at a time. */
+inline zc::Clip build_channel() {
+  const int K = kChannelKeys;
+  zc::Clip c = clip_shell(2, K, kHoverHeightMm);
+  Rig g;
+  static const Key kDepth[] = {{0, 1000},  {24, 1400}, {56, 2200}, {130, 2200},
+                               {150, 2600}, {170, 1300}, {195, 1000}, {209, 1000}};
+  static const Key kLoopOpen[] = {{0, 1000}, {30, 1060}, {56, 1085}, {140, 1085},
+                                  {158, 940}, {180, 1015}, {200, 1000}, {209, 1000}};
+  static const Key kLift2[] = {{0, 0}, {20, -600}, {56, -600}, {140, -350},
+                               {170, 300}, {200, 0}, {209, 0}};
+  for (int f = 0; f < K; ++f) {
+    g.reset();
+    const int open = curve(kLoopOpen, 8, f);
+    loop_pose(g, 1000, open, open, open,
+              static_cast<int32_t>((static_cast<int64_t>(kAntennaTiltA16) *
+                                    sinp(f, K, 3, 0x5000)) >> 16));
+    face_rest(g);
+    apply_gaze(g, 0,
+               static_cast<int32_t>((static_cast<int64_t>(kGazeLiftMaxA16) *
+                                     curve(kLift2, 7, f)) / 1000));
+    if (f >= 56 && f < 140) {  // the blaze: the stars spin slowly — dilation-as-motion
+      const int32_t spin = static_cast<int32_t>(
+          (static_cast<int64_t>(f - 56) * kBlazeTwinkleA16 * 2) / 84);
+      apply_twinkle(g, spin);
+    }
+    g.write(c, f);
+    c.root[static_cast<size_t>(f) * 3 + 1] =
+        hover_at(f, K, kHoverHeightMm, kBobAmpAMm / 2, kBobAmpBMm / 2, K / 42, K / 70);
+    const int32_t amp = static_cast<int32_t>(
+        (static_cast<int64_t>(kCompressAmpPm) * curve(kDepth, 8, f)) / 1000);
+    c.deform[static_cast<size_t>(f)] = compress_at(f, K, K / kChannelCompressPeriodKeys, amp);
+  }
+  return c;
+}
+
+/** react-curious, slot 3: the gaze snaps FIRST, the body yaws after with lag,
+ *  the antenna perks. Settle back. */
+inline zc::Clip build_curious() {
+  const int K = kCuriousKeys;
+  zc::Clip c = clip_shell(3, K, kHoverHeightMm);
+  Rig g;
+  static const Key kSide[] = {{0, 0}, {4, 0}, {8, 1000}, {58, 1000}, {72, 0}, {89, 0}};
+  static const Key kYaw[] = {{0, 0}, {8, 0}, {16, 200}, {36, 1000}, {60, 1000},
+                             {78, 0}, {89, 0}};
+  static const Key kPerk[] = {{0, 1000}, {12, 1000}, {26, 880}, {58, 880},
+                              {76, 1000}, {89, 1000}};
+  for (int f = 0; f < K; ++f) {
+    g.reset();
+    const int perk = curve(kPerk, 6, f);
+    loop_pose(g, 1000, perk, perk, perk, 0);
+    g.q[kBRoot] = quat_mul(
+        g.q[kBRoot],
+        quat_y(static_cast<int32_t>((static_cast<int64_t>(kCuriousYawA16) *
+                                     curve(kYaw, 7, f)) / 1000)));
+    face_rest(g);
+    apply_gaze(g,
+               static_cast<int32_t>((static_cast<int64_t>(kGazeMaxA16) *
+                                     curve(kSide, 6, f)) / 1000),
+               kGazeLiftMaxA16 / 4);
+    g.write(c, f);
+    c.root[static_cast<size_t>(f) * 3 + 1] =
+        hover_at(f, K, kHoverHeightMm, kBobAmpAMm * 2 / 3, kBobAmpBMm / 2, K / 30, K / 45);
+    c.deform[static_cast<size_t>(f)] = compress_at(f, K, K / 30, kCompressAmpPm);
+  }
+  return c;
+}
+
+/** react-startle, slot 4: wind-up dip, the recoil payoff, deep squash on the
+ *  re-entry, antenna whip with a damped settle, hard squint reopening. */
+inline zc::Clip build_startle() {
+  const int K = kStartleKeys;
+  zc::Clip c = clip_shell(4, K, kHoverHeightMm);
+  Rig g;
+  static const Key kBack[] = {{0, 0},  {8, 80},  {12, -1000}, {26, -1000},
+                              {48, -700}, {79, 0}};
+  static const Key kUp[] = {{0, 0}, {8, -60}, {13, 1000}, {24, 500},
+                            {40, 150}, {60, 0}, {79, 0}};
+  static const Key kWhip[] = {{0, 1000},  {8, 1030},  {14, 780},  {22, 1160},
+                              {30, 920},  {40, 1050}, {52, 980},  {64, 1000},
+                              {79, 1000}};
+  static const Key kSquint[] = {{0, 0}, {8, 0}, {12, 850}, {30, 850}, {48, 200},
+                                {62, 0}, {79, 0}};
+  static const Key kSquash[] = {{0, 1000}, {12, 1000}, {16, 2600}, {30, 2600},
+                                {52, 1400}, {70, 1000}, {79, 1000}};
+  for (int f = 0; f < K; ++f) {
+    g.reset();
+    const int whip = curve(kWhip, 9, f);
+    loop_pose(g, 1000, whip, whip, whip, 0);
+    face_rest(g);
+    apply_squint(g, curve(kSquint, 7, f));
+    apply_gaze(g, 0, 0);
+    g.write(c, f);
+    c.root[static_cast<size_t>(f) * 3 + 0] = static_cast<int32_t>(
+        (static_cast<int64_t>(fxu(kStartleJumpMm)) * curve(kBack, 6, f)) / 1000);
+    c.root[static_cast<size_t>(f) * 3 + 1] =
+        fxu(kHoverHeightMm) +
+        static_cast<int32_t>((static_cast<int64_t>(fxu(kStartleLiftMm)) * curve(kUp, 7, f)) /
+                             1000) +
+        static_cast<int32_t>((static_cast<int64_t>(fxu(kBobAmpBMm)) * sinp(f, K, 2)) >> 16);
+    const int32_t amp = static_cast<int32_t>(
+        (static_cast<int64_t>(kCompressAmpPm) * curve(kSquash, 7, f)) / 1000);
+    c.deform[static_cast<size_t>(f)] = compress_at(f, K, K / 20, amp);
+  }
+  return c;
+}
+
+/** rest, slot 5: the lower hover; almost-sleep. The life clock NEVER stops. */
+inline zc::Clip build_rest() {
+  const int K = kRestKeys;
+  zc::Clip c = clip_shell(5, K, kRestHeightMm);
+  Rig g;
+  for (int f = 0; f < K; ++f) {
+    g.reset();
+    loop_alive(g, f, K, K / kRestSwayPeriodKeys, kAntennaSwayPm / 2, kCompressAmpPm,
+               K / kRestCompressPeriodKeys);
+    face_rest(g);
+    apply_squint(g, kRestSquintPm);
+    apply_gaze(g,
+               static_cast<int32_t>((static_cast<int64_t>(kGazeMaxA16 / 4) *
+                                     sinp(f, K, 2)) >> 16),
+               -kGazeLiftMaxA16 * 2 / 3);
+    g.write(c, f);
+    c.root[static_cast<size_t>(f) * 3 + 1] =
+        hover_at(f, K, kRestHeightMm, kBobAmpAMm * 2 / 5, kBobAmpBMm / 2,
+                 K / kRestBobPeriodKeys, K / (2 * kRestBobPeriodKeys));
+    c.deform[static_cast<size_t>(f)] =
+        compress_at(f, K, K / kRestCompressPeriodKeys, kCompressAmpPm * 4 / 5);
+  }
+  return c;
+}
+
+/** pirouette, slot 6 (the stretch): one slow full yaw, antenna flaring under
+ *  the turn, the gaze holding then whipping round. */
+inline zc::Clip build_pirouette() {
+  const int K = kPirouetteKeys;
+  zc::Clip c = clip_shell(6, K, kHoverHeightMm);
+  Rig g;
+  for (int f = 0; f < K; ++f) {
+    g.reset();
+    const uint16_t ph = static_cast<uint16_t>((static_cast<int64_t>(f) * 65536) / K);
+    g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_y(static_cast<int32_t>(ph)));
+    const int32_t flare = 1000 + static_cast<int32_t>(
+        (static_cast<int64_t>(kPirouetteFlarePm) *
+         ((65536 - zref::fx_cos(zref::angle16{ph}).raw) / 2)) >> 16);
+    loop_pose(g, 1000, flare, flare, flare,
+              static_cast<int32_t>((static_cast<int64_t>(2 * kAntennaTiltA16) *
+                                    sinp(f, K, 2)) >> 16));
+    face_rest(g);
+    const int32_t counter = static_cast<int32_t>(ph) < 32768
+                                ? -static_cast<int32_t>(ph) / 8
+                                : (65536 - static_cast<int32_t>(ph)) / 8;
+    apply_gaze(g, counter, 0);
+    g.write(c, f);
+    c.root[static_cast<size_t>(f) * 3 + 1] =
+        hover_at(f, K, kHoverHeightMm, kBobAmpAMm * 3 / 4, kBobAmpBMm, K / 24, K / 40);
+    c.deform[static_cast<size_t>(f)] = compress_at(f, K, K / 24, kCompressAmpPm);
+  }
+  return c;
+}
+
+/** the still hover, slot 7: the fixed-camera form diagnostic pose. */
 inline zc::Clip build_still() {
-  zc::Clip c = clip_shell(0, 2, kHoverHeightMm);
+  zc::Clip c = clip_shell(7, 2, kHoverHeightMm);
   Rig g;
   for (int f = 0; f < 2; ++f) {
     g.reset();
