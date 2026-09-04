@@ -810,3 +810,44 @@ to be differential against — which is the order this project works in. It is a
 memory client with a validation pipeline, a bound transform, and calls out to
 cull and the LOD ladder, so it is a fresh-start piece rather than an end-of-run
 one.
+
+## 06:20 — both jobs detached, and two more contract gaps closed
+
+**The task kills took the build but not the fit.** `Start-Process` detachment
+worked: `quartus_fit` survived at 3,641 s CPU while the build — a direct
+background command — died with its launcher. The build is relaunched the same
+detached way and resumes incrementally, so the 554 steps were not lost.
+
+**A defect in the oracle I wrote an hour ago.** `world_bound` cast the scaled
+radius to `uint32_t` with no saturation. `bound_radius` is fx16 UNSIGNED, so a
+legal descriptor may carry a radius near 2^32 and a legal instance may scale it;
+the product overflows after the shift and the cast **wraps a huge bound into a
+small one** — exactly the geometry-deleting direction the round-outward ruling
+exists to prevent. The randomized suite missed it because its generator uses
+bounded scales. Found by reading the contract's Q-format table against the code,
+which is the only way this class shows up. 20 directed + 5 random now pass.
+
+**Two gaps in a contract described as complete**, both found by building against
+it rather than reading it:
+
+* the Q-format table gives `bound_centre` *"none — carried, not computed"*,
+  which is true of the DESCRIPTOR field and silent about the world centre the
+  transform produces. That value IS computed and must round somehow. An RTL
+  author could reasonably have truncated, and then oracle and RTL agree
+  everywhere except on TIES — rare enough to survive a directed test, common
+  enough to appear in a long capture. Now pinned as round-half-up.
+* *"reads through MEM.GUARD as an ordinary client"* is not buildable.
+  `MEM.GUARD`'s response is `{ready, ok, violation}` with **no data**, so a read
+  client needs a return channel the contract never named. It exists —
+  `zhao_scanout_fetch.sv` is the tree's only guarded read client and the shape
+  `zhao_mem_guard.sv` is written against. Now named, with the consequence that
+  a 64-byte descriptor is one `len=64` request and exactly eight 64-bit beats:
+  **the 64-byte alignment ruling and the burst shape are the same fact**, which
+  neither the contract nor the ruling had said.
+
+### The RTL now has nothing left to discover
+`zhao_geom_meshfetch.sv` needs: the guard read port above, a validation pipeline
+in the oracle's refusal ORDER, the bound transform, and handshakes to two blocks
+that already exist — `zhao_geom_cull.sv` and `zhao_geom_lod.sv` (sequenced,
+`ready`/`tick`/`valid`, 5 clocks, documented in this contract). It is a
+fresh-start piece, and it is now a mechanical one.
