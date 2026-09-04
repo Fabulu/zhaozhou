@@ -91,6 +91,12 @@ struct SheetResponse {
   uint8_t strength = 0;
   uint16_t src_id = 0;
   bool got = false;
+  // `res_overflow_o` is a ONE-CYCLE pulse, so a caller that reads it after the
+  // response has already missed it. Counted across the whole request window
+  // instead. Counting rather than latching is deliberate: it distinguishes "did
+  // not fire" from "fired twice", and a fault line stuck HIGH is exactly as
+  // broken as one stuck low.
+  uint32_t overflow_pulses = 0;
 };
 
 /**
@@ -110,6 +116,7 @@ SheetResponse sheet_request(Top& top, uint8_t op, uint32_t handle, uint16_t texe
   bool sent = false;
   for (int c = 0; c < max_cycles; ++c) {
     top.eval();
+    if (top.res_overflow_o) r.overflow_pulses++;
     if (!sent && top.req_ready_o) sent = true;
     if (top.pg_valid_o && sent) {
       r.op = static_cast<uint8_t>(top.pg_op_o);
@@ -121,6 +128,7 @@ SheetResponse sheet_request(Top& top, uint8_t op, uint32_t handle, uint16_t texe
       zhao::tick(top);
       top.req_valid_i = 0;
       top.eval();
+      if (top.res_overflow_o) r.overflow_pulses++;
       return r;
     }
     zhao::tick(top);

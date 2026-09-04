@@ -94,6 +94,7 @@ void test_write_readback_and_byte_enables(Vzhao_surface_sheet& dut) {
 void test_reacquire_persists(Vzhao_surface_sheet& dut) {
   const SheetResponse r = sdev::sheet_request(dut, sdev::kOpAcquire, kHandleA, 0, 0);
   check(r.status == sdev::kStHit, "re-acquiring a resident handle HITS", sdev::kStHit, r.status);
+  check(r.overflow_pulses == 0, "a HIT never raises res_overflow_o", 0, r.overflow_pulses);
   const SheetResponse q = sdev::sheet_request(dut, sdev::kOpRead, kHandleA, 100, 0);
   check(q.tag == 0x22 && q.strength == 0x11,
         "a re-acquire does NOT clear — this line is persistence", 0x2211,
@@ -104,6 +105,11 @@ void test_second_slot_and_isolation(Vzhao_surface_sheet& dut) {
   const SheetResponse r = sdev::sheet_request(dut, sdev::kOpAcquire, kHandleB, 0, 0);
   check(r.status == sdev::kStAllocated, "a second handle takes the free slot", sdev::kStAllocated,
         r.status);
+  // The other half of D19b, and the half that a latch-and-check would miss: an
+  // ACCEPTED acquire must leave the fault line alone. Without this, a
+  // res_overflow_o tied high passes the overflow case above.
+  check(r.overflow_pulses == 0, "an accepted acquire never raises res_overflow_o", 0,
+        r.overflow_pulses);
   dut.eval();
   check(dut.res_occupancy_o == 3, "both slots are occupied", 3, dut.res_occupancy_o);
 
@@ -125,6 +131,14 @@ void test_overflow_rejects_and_never_evicts(Vzhao_surface_sheet& dut) {
   const uint32_t occ_before = dut.res_occupancy_o;
   const SheetResponse r = sdev::sheet_request(dut, sdev::kOpAcquire, kHandleC, 0, 0x55);
   check(r.status == sdev::kStOverflow, "a third handle OVERFLOWS", sdev::kStOverflow, r.status);
+
+  // D19b: `res_overflow_o` had never been read by any test. The overflow
+  // CONDITION was already exercised here -- only the port went unobserved, so
+  // a line stuck at zero would have passed this suite. Exactly one pulse: the
+  // status field says the request was refused, this says the block ANNOUNCED
+  // the refusal, and those are two different promises.
+  check(r.overflow_pulses == 1, "the refusal raises res_overflow_o exactly once", 1,
+        r.overflow_pulses);
   dut.eval();
   check(dut.res_occupancy_o == occ_before, "overflow evicts NOTHING", occ_before,
         dut.res_occupancy_o);
