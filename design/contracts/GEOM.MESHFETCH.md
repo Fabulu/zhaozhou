@@ -388,3 +388,39 @@ regress.*
 ## Notes
 
 Meshlet limits are Phase-0 data (P2 risk 1) — schema fields stay unfrozen.
+
+## REFERENCE_COMPLETE is blocked, and the blocker is in this file
+
+**2026-09-04.** `zref::MeshFetch` now exists
+(`reference/include/zref/zref_meshfetch.hpp`) with 19 directed checks passing,
+so the reference model is written. The ledger row is nevertheless still
+`SPECIFIED`, and the attempt to advance it is what found the reason.
+
+The ledger's V17 rule rejected the advance for **two citations in this
+contract that name files nobody wrote**:
+
+* `tests/geometry/geom_meshfetch_random.cpp` — §"Randomized differential
+  tests", described as *"RTL against `zref::meshfetch`"*;
+* `tests/formal/geom_meshfetch_refuse.sby` — §"Formal properties".
+
+Both were written when this block was SPECIFIED, when V17 does not run. Neither
+is a mistake in intent: **both genuinely require the RTL**, because a
+*differential* needs two implementations and a formal property needs a module
+to bind to. There is nothing to write them against yet.
+
+**So the ladder as configured cannot mark this reference model complete until
+its RTL exists**, which is worth stating plainly rather than working around.
+The options, none of them taken here:
+
+1. Write the randomized test against the ORACLE ALONE — fuzz descriptors and
+   assert taxonomy invariants rather than differ two implementations. That
+   satisfies V6 honestly and leaves only the `.sby`.
+2. Let the contract mark RTL-era artifacts as planned in a form V17 can tell
+   apart from a claim. That is a change to the rule, not to this block.
+3. Leave it `SPECIFIED` until the RTL lands, which is what is done for now —
+   the oracle's value does not depend on the row, and forcing the row would
+   have meant editing a contract to satisfy a grep.
+
+**The oracle is committed and tested regardless**; only the maturity label is
+waiting. That distinction is the whole point of recording it here instead of
+advancing the row and leaving two dead citations behind it.

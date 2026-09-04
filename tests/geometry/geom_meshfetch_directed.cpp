@@ -33,7 +33,14 @@
 #include "zhao_sim.hpp"
 #include "zref/zref_meshfetch.hpp"
 
-namespace mf = zref::meshfetch;
+// `zref::MeshFetch` is the name design/blocks.yml cites as the reference model,
+// so the test exercises THAT and not the namespace behind it. The ledger's V17
+// rule rejected the first version for using the namespace alias only: "an
+// existing file that is not about the cited reference model is an alias, not
+// evidence". A test that never names its oracle cannot be that oracle's
+// evidence, however much of its behaviour it happens to cover.
+using MF = zref::MeshFetch;
+namespace mf = zref::meshfetch;  // for the frozen layout constants
 namespace zc = zref::cull;
 
 namespace {
@@ -98,8 +105,8 @@ struct Desc {
   void stamp() { wr32(b + mf::kCrcOff, zhao_abi::zhao_crc32c(0, b, mf::kCrcCovered)); }
 };
 
-mf::InstanceXform identity_xform() {
-  mf::InstanceXform x{};
+MF::InstanceXform identity_xform() {
+  MF::InstanceXform x{};
   x.m[0] = ONE;
   x.m[5] = ONE;
   x.m[10] = ONE;
@@ -124,12 +131,12 @@ int main(int argc, char** argv) {
   views[0] = zc::make_view(front);
   views[1] = zc::make_view(back);
 
-  const mf::InstanceXform ident = identity_xform();
+  const MF::InstanceXform ident = identity_xform();
 
   // ---- 1: a clean descriptor is accepted, and the counts at their limits ---
   {
     Desc d;
-    zhao::check(mf::validate(d.b, kFormat, kGeneration) == mf::Refusal::kNone,
+    zhao::check(MF::validate(d.b, kFormat, kGeneration) == mf::Refusal::kNone,
                 "a clean descriptor passes validation", 1, 1);
 
     int bad = 0;
@@ -138,7 +145,7 @@ int main(int argc, char** argv) {
       a.b[2] = mf::kMaxVertexCount;  // 64 -- AT the limit, legal
       a.b[3] = mf::kMaxTriangleCount;
       a.stamp();
-      if (mf::validate(a.b, kFormat, kGeneration) != mf::Refusal::kNone) ++bad;
+      if (MF::validate(a.b, kFormat, kGeneration) != mf::Refusal::kNone) ++bad;
     }
     zhao::check(bad == 0,
                 "vertex_count 64 and triangle_count 126 are ACCEPTED -- the "
@@ -149,14 +156,14 @@ int main(int argc, char** argv) {
     Desc v65;
     v65.b[2] = 65;
     v65.stamp();
-    zhao::check(mf::validate(v65.b, kFormat, kGeneration) == mf::Refusal::kVertexCount,
+    zhao::check(MF::validate(v65.b, kFormat, kGeneration) == mf::Refusal::kVertexCount,
                 "vertex_count 65 is refused, and refused for the RIGHT reason -- "
                 "a u8 local index cannot address it", 1, 1);
 
     Desc t127;
     t127.b[3] = 127;
     t127.stamp();
-    zhao::check(mf::validate(t127.b, kFormat, kGeneration) == mf::Refusal::kTriangleCount,
+    zhao::check(MF::validate(t127.b, kFormat, kGeneration) == mf::Refusal::kTriangleCount,
                 "triangle_count 127 is refused", 1, 1);
   }
 
@@ -168,7 +175,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < mf::kCrcCovered; ++i) {
       Desc d;
       d.b[i] ^= 0x01;  // corrupt AFTER the CRC was stamped
-      const mf::Refusal r = mf::validate(d.b, kFormat, kGeneration);
+      const mf::Refusal r = MF::validate(d.b, kFormat, kGeneration);
       if (r == mf::Refusal::kNone) {
         ++accepted;
       } else {
@@ -197,7 +204,7 @@ int main(int argc, char** argv) {
       Desc d;
       d.b[mf::kReservedOff + i] = 0xA5;
       d.stamp();  // a VALID descriptor that merely uses a future field
-      const mf::Refusal r = mf::validate(d.b, kFormat, kGeneration);
+      const mf::Refusal r = MF::validate(d.b, kFormat, kGeneration);
       if (r != mf::Refusal::kNone) ++refused;
       if (r != mf::Refusal::kReserved) ++wrong_reason;
     }
@@ -211,14 +218,14 @@ int main(int argc, char** argv) {
   // ---- 4: generation off by one, and a zero bound -------------------------
   {
     Desc d;
-    zhao::check(mf::validate(d.b, kFormat, kGeneration + 1) == mf::Refusal::kGeneration,
+    zhao::check(MF::validate(d.b, kFormat, kGeneration + 1) == mf::Refusal::kGeneration,
                 "generation off by one is refused -- the asset moved under a "
                 "live instance", 1, 1);
 
     Desc z;
     wr32(z.b + 20, 0);
     z.stamp();
-    zhao::check(mf::validate(z.b, kFormat, kGeneration) == mf::Refusal::kZeroBound,
+    zhao::check(MF::validate(z.b, kFormat, kGeneration) == mf::Refusal::kZeroBound,
                 "bound_radius 0 on a non-empty meshlet is refused -- a zero "
                 "bound culls everything, silently", 1, 1);
 
@@ -226,14 +233,14 @@ int main(int argc, char** argv) {
     wr32(e.b + 20, 0);
     e.b[3] = 0;  // an EMPTY meshlet has nothing to bound
     e.stamp();
-    zhao::check(mf::validate(e.b, kFormat, kGeneration) == mf::Refusal::kNone,
+    zhao::check(MF::validate(e.b, kFormat, kGeneration) == mf::Refusal::kNone,
                 "but a zero bound on an EMPTY meshlet is legal -- refusing it "
                 "would turn a degenerate case into a fault", 1, 1);
 
     Desc f;
     f.b[0] = 0xEE;
     f.stamp();
-    zhao::check(mf::validate(f.b, kFormat, kGeneration) == mf::Refusal::kFormat,
+    zhao::check(MF::validate(f.b, kFormat, kGeneration) == mf::Refusal::kFormat,
                 "an unknown format_id is refused, never guessed", 1, 1);
   }
 
@@ -250,7 +257,7 @@ int main(int argc, char** argv) {
     wr32(d.b + 16, static_cast<uint32_t>(100 * ONE));  // bound_centre.z
     d.stamp();
 
-    const mf::Result r = mf::decide(d.b, kFormat, kGeneration, ident, views, 0b11);
+    const MF::Result r = MF::decide(d.b, kFormat, kGeneration, ident, views, 0b11);
     zhao::check(r.accepted && r.visible_mask == 0b10,
                 "a meshlet outside camera 0 and inside camera 1 is ACCEPTED with "
                 "visible_mask 0b10 -- a block that emitted one mask for both eyes "
@@ -271,7 +278,7 @@ int main(int argc, char** argv) {
     wr32(d.b + 8, static_cast<uint32_t>(10000 * ONE));  // bound_centre.x
     d.stamp();
 
-    const mf::Result r = mf::decide(d.b, kFormat, kGeneration, ident, views, 0b11);
+    const MF::Result r = MF::decide(d.b, kFormat, kGeneration, ident, views, 0b11);
     zhao::check(!r.accepted && r.visible_mask == 0,
                 "geometry outside every camera is not accepted", 0, r.visible_mask);
     zhao::check(r.refusal == mf::Refusal::kNone,
@@ -284,7 +291,7 @@ int main(int argc, char** argv) {
     // With no active camera the verdict is reject, and that is correct rather
     // than a special case: nothing is drawn, so rejecting deletes nothing.
     Desc c;
-    const mf::Result none = mf::decide(c.b, kFormat, kGeneration, ident, views, 0b00);
+    const MF::Result none = MF::decide(c.b, kFormat, kGeneration, ident, views, 0b00);
     zhao::check(!none.accepted && none.refusal == mf::Refusal::kNone,
                 "active_camera_mask 0 rejects without refusing", 1, 1);
   }
@@ -294,7 +301,7 @@ int main(int argc, char** argv) {
   // OUTWARD, and that is the ruling's choice: a loose bound costs decode work,
   // a tight one deletes geometry.
   {
-    mf::InstanceXform x{};
+    MF::InstanceXform x{};
     x.m[0] = 3 * ONE;  // x scaled 3x
     x.m[5] = ONE;      // y unscaled
     x.m[10] = 2 * ONE; // z scaled 2x
@@ -326,7 +333,7 @@ int main(int argc, char** argv) {
   {
     Desc d;
     d.b[10] ^= 0x80;  // corrupt a bound byte, CRC not restamped
-    const mf::Result r = mf::decide(d.b, kFormat, kGeneration, ident, views, 0b11);
+    const MF::Result r = MF::decide(d.b, kFormat, kGeneration, ident, views, 0b11);
     zhao::check(r.refusal == mf::Refusal::kCrc && !r.accepted && r.visible_mask == 0,
                 "a refused descriptor emits no meshlet and no visibility -- it is "
                 "not trustworthy in ANY field, including the bound the cull would "
