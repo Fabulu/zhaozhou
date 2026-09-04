@@ -102,6 +102,49 @@ Two consequences of reading it properly, both of which nearly shipped wrong:
    The earlier phrasing would have been wrong the moment a second light
    existed.
 
+## THE LAW HAS NO ENTRY POINT THIS BLOCK CAN CALL (found 2026-09-04)
+
+The section above says the law exists and must not be re-implemented. Both true.
+**But its signature does not accept a normal:**
+
+    int32_t shade_flat_tri_dir_unclamped(ax,ay,az, bx,by,bz, cx,cy,cz,
+                                         lx,ly,lz, SatLedger*)
+
+It takes **three vertices** and derives the face normal itself. `GEOM.LIGHT` is
+*given* a world normal — that is the entire premise of the split, since its three
+producers (`SKIN.NORM`, the rigid transform, `TERRAIN.NORMALS`) each make one a
+different way and none of them has a triangle to offer.
+
+**So there is nothing for this block's oracle to call, and the contract's
+instruction cannot currently be obeyed.** Writing the oracle as
+`normal -> ndot -> isqrt -> divide` would be a second implementation of the
+ratified arithmetic — the exact failure this contract was written to prevent,
+and the one that shipped in September's terrain shade header.
+
+### The fix is the D-1 refactor again, one level down
+
+D-1 made `shade_flat_tri_dir` a bit-identical wrapper around an unclamped
+primitive, and **the goldens not moving is how it was known to be correct**. The
+same move works here:
+
+    shade_from_world_normal_unclamped(nx,ny,nz, lx,ly,lz, SatLedger*)   <-- NEW core
+    shade_flat_tri_dir_unclamped(a,b,c, l, L)
+        = shade_from_world_normal_unclamped(face_normal(a,b,c), l, L)   <-- wrapper
+
+Nothing about the arithmetic changes: the face-normal computation moves to the
+wrapper, and `ndot`/`nmag2`/`div_rhu_s128(ndot, isqrt_u64(nmag2))` move to the
+core untouched. `zref::creature::skin_normal_lambert` was split the same way on
+2026-09-04, for the same reason, and proved by 200,000 comparisons against the
+pre-refactor code lifted from git.
+
+**This is a golden-pinned refactor, so it is gated on a clean golden run**, and
+it is the first action for `GEOM.LIGHT` — before any RTL, and before the
+multi-light and emission structure above, both of which sit on top of this core.
+
+**Recorded rather than done** because it was found while three fits held the
+build and the working tree, and a refactor whose whole proof is "the golden CRCs
+did not move" must not be attempted without the ability to run them.
+
 ## THE ADDITIVE EMISSION TERM — PROVISIONAL, 2026-09-03
 
 **Owner: *"It's fucking beautiful we must have it."* And, on the budget:
