@@ -74,3 +74,71 @@ the tree cannot lose this again. **Neither is done in this pass**, because
 editing a file a live fit is reading is the live-tree trap (`QUARTUS_GOTCHAS.md`
 §11). It waits for the fit to finish, which is also when the routed numbers
 arrive to confirm or refute the register count above.
+
+---
+
+# The fix, designed from every access site (not from the sizes)
+
+Written while the fit was still routing, by reading all fourteen references to
+the three palette arrays. **Only ONE of them should move to memory**, and a
+naive "put the palette in RAM" would break the block.
+
+## `pal_dat_r [PAL_SLOTS][256]` of 16 bits — 65,536 bits — MOVE IT
+
+Every access is a single address per cycle:
+
+    read   dec_clut565_c = decode16(pal_dat_r[pal_way_c][rsp_idx], FMT_RGB565);
+    write  pal_dat_r[pal_way_c][rb_idx[rsp_rec]] <= cac_data_i[15:0];
+    write  pal_dat_r[pal_vic_r][rb_idx[rsp_rec]] <= cac_data_i[15:0];
+
+One read port, one write port, both fully addressed. That is a textbook **1R1W
+memory**. Flattening the two dimensions into one array indexed by
+`{way, entry}` — 4,096 entries x 16 bits — is inferrable, and 65,536 bits is
+**7 M10K out of 553 available**.
+
+The two writes are mutually exclusive branches of the same `if`, so they remain
+one write port after flattening. The read address `{pal_way_c, rsp_idx}` is
+already computed a cycle earlier for the tag compare, so this does not add a
+stage.
+
+## `pal_val_r [PAL_SLOTS]` of 256 bits — 4,096 bits — LEAVE IT IN FLOPS
+
+This is the one that makes the naive fix wrong:
+
+    for (int unsigned w = 0; w < PAL_SLOTS; w++)
+      if (pal_ten_r[w] && (pal_tag_r[w] == rb_pal[rsp_rec]))
+        pal_ent_c = pal_val_r[w][rsp_idx];
+
+`pal_val_r` is read on **all sixteen ways in the same cycle** — it is the
+associative half of a 16-way lookup — and it is cleared sixteen-ways-at-once by
+`pal_val_r[w] <= 256'd0`. A memory cannot do either. **4,096 bits in flip-flops
+is the CORRECT implementation for that access pattern**, not a defect that
+happens to be smaller.
+
+## `pal_tag_r [PAL_SLOTS]` of 32 bits — 512 bits — LEAVE IT IN FLOPS
+
+Same reason: compared on all sixteen ways simultaneously in the loop above.
+
+## Expected result
+
+    registers   72,824  ->  about 7,300     (-90%)
+    M10K             2  ->  about 9
+    block memory   256  ->  about 65,800 bits
+
+The remaining ~7,300 registers are the ROB, the pipeline, and the 4,608 bits of
+tag/valid state that are correctly flops.
+
+## Why this is written down before it is applied
+
+`zhao_texture_tmu_pipe.sv` is inside the RUNNING fit's source closure, and the
+fit reads the working tree (`QUARTUS_GOTCHAS.md` §11). Editing it now would
+corrupt a measurement that has already cost 45 minutes of placement
+preparation and 25 of placement.
+
+It is also written down because **the design is the part worth reviewing, and
+it came from reading access sites rather than from the sizes.** The sizes say
+"69,632 bits are in the wrong place"; only the access patterns say *which*
+69,632 — and they say 65,536 of them, with the other 4,608 staying exactly where
+they are. A fix driven by the byte count alone would have moved all three arrays
+and broken the associative lookup, which is the kind of error that passes a
+resource gate and fails a picture.
