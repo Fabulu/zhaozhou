@@ -590,6 +590,33 @@ try {
             # the SDC (see the block-SDC comment above) made the fitter OPTIMISE
             # for a clock; this is what makes the answer visible. Before both
             # changes there was no Fmax for any of 47 rows, and no way to get one.
+            # ---- REAL PROCESS SUPERVISION (G0) ------------------------------
+            # The budget used to be checked BETWEEN invocations, i.e. after the
+            # tool it was meant to bound had already finished. That cannot
+            # interrupt anything: on 2026-09-04 a 150-minute budget watched
+            # quartus_fit run for 213 minutes and would then have blanked the
+            # row. A timeout that cannot interrupt is an epitaph.
+            #
+            # The watchdog is deliberately OUTSIDE the invocation. The direct
+            # call stays exactly as it is, because $LASTEXITCODE from it is
+            # authoritative and Start-Process -PassThru is documented above to
+            # read ExitCode back EMPTY here. Supervising from outside keeps that
+            # property and still enforces the deadline.
+            #
+            # It only kills Quartus processes started AFTER this run began, so a
+            # concurrent fit in another workspace is never touched.
+            $runStart = Get-Date
+            $deadline = $runStart.AddSeconds($TimeoutSeconds)
+            $watchdog = Start-Job -ScriptBlock {
+                param($deadline, $startedAfter)
+                while ((Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
+                foreach ($n in 'quartus_map', 'quartus_fit', 'quartus_sta') {
+                    Get-Process -Name $n -ErrorAction SilentlyContinue |
+                        Where-Object { $_.StartTime -ge $startedAfter } |
+                        Stop-Process -Force -ErrorAction SilentlyContinue
+                }
+            } -ArgumentList $deadline, $runStart
+
             foreach ($exe in @('quartus_map.exe', 'quartus_fit.exe', 'quartus_sta.exe')) {
                 & (Join-Path $QuartusBin $exe) 'blockfit' *> (Join-Path $dir "$exe.log")
                 if ($LASTEXITCODE -ne 0) { $row.status = "failed:$exe"; $ok = $false; break }
@@ -620,6 +647,11 @@ try {
                 }
             }
         } finally {
+            if ($watchdog) {
+                Stop-Job $watchdog -ErrorAction SilentlyContinue
+                Remove-Job $watchdog -Force -ErrorAction SilentlyContinue
+                $watchdog = $null
+            }
             Pop-Location
         }
         $sw.Stop()
@@ -646,6 +678,37 @@ try {
             $row.contaminatedSources = ($srcChanged -join ' ')
             $ok = $false
             Write-Warning ("CONTAMINATED: {0} changed while {1} was being measured. Row discarded." -f ($srcChanged -join ', '), $mod)
+        }
+
+        # ---- A FAILED RUN KEEPS WHAT IT MEASURED (G0) -----------------------
+        # A killed, timed-out or errored fit used to write a row with every
+        # resource field null. That is worse than useless twice over: the
+        # measurement is thrown away after being paid for in full, and
+        # check_fit_rules.ps1 reported PASS on it, because every rule there is
+        # guarded by `$null -ne $x`. On 2026-09-04 the block holding a
+        # 65,536-bit palette cache in flip-flops passed its brand-new register
+        # gate in green, on no data.
+        #
+        # Analysis & Synthesis finishes long before the fitter and writes its
+        # own summary. Those numbers -- registers, memory bits, DSPs -- are
+        # exactly what diagnosed that block (D19m), and they had to be recovered
+        # BY HAND from the workspace afterwards. Harvest them here instead, and
+        # mark the row INCOMPLETE so nothing mistakes it for a pass.
+        $mapSummary = Join-Path $dir 'output_files\blockfit.map.summary'
+        if (-not $ok -and (Test-Path -LiteralPath $mapSummary)) {
+            $mt = [IO.File]::ReadAllText($mapSummary)
+            $row.status = 'incomplete:' + $row.status
+            $row.partial = $true
+            $row.partialStage = 'analysis_and_synthesis'
+            $row.registers = Get-Field $mt @('Total registers')
+            $row.blockMemoryBits = Get-Field $mt @('Total block memory bits', 'Total memory bits')
+            $row.dspBlocks = Get-Field $mt @('Total DSP Blocks')
+            $row.virtualPins = Get-Field $mt @('Total virtual pins')
+            # NO alms and NO fmax, on purpose: Analysis & Synthesis reports
+            # "Logic utilization (in ALMs) : N/A" because ALMs are a FITTER
+            # result. Copying that N/A, or leaving the field to be read as zero,
+            # would be inventing a measurement that was never made.
+            Write-Warning ("INCOMPLETE: {0} kept its synthesis numbers ({1} registers, {2} memory bits); ALMs and Fmax were never produced." -f $mod, $row.registers, $row.blockMemoryBits)
         }
 
         $summary = Join-Path $dir 'output_files\blockfit.fit.summary'
