@@ -276,6 +276,14 @@ blocks:
       random: tests/command/cmd_dma_directed.cpp
       formal: tests/formal/cmd_dma_crc_gate.sby
     counters: [commands, hps_ddr_bytes_by_client, deadline_faults]
+    # D19c. These are the D9 SNAP-CHANNEL form (spec/counters.md 3): the
+    # block owns the counter locally and presents it as a
+    # zhao_counter_snap_t, so there is no <counter>_o port and there is
+    # not meant to be one. The mapping is what makes that legible.
+    counter_ports:
+      commands: snap_cmds_o
+      hps_ddr_bytes_by_client: snap_bytes_o
+      deadline_faults: snap_drops_o
     source_ids: true
     async_bridge: true
     budget_group: command_debug
@@ -371,6 +379,14 @@ blocks:
       random: tests/command/cmd_random.cpp
       formal: tests/formal/cmd_scheduler_slot_fsm.sby
     counters: [frame_cycles, deadline_faults, commands]
+    # D19c. These are the D9 SNAP-CHANNEL form (spec/counters.md 3): the
+    # block owns the counter locally and presents it as a
+    # zhao_counter_snap_t, so there is no <counter>_o port and there is
+    # not meant to be one. The mapping is what makes that legible.
+    counter_ports:
+      frame_cycles: snap_cycles_o
+      deadline_faults: snap_faults_o
+      commands: snap_cmds_o
     source_ids: true
     budget_group: command_debug
     maturity: RTL_VERIFIED
@@ -1090,6 +1106,12 @@ blocks:
       directed: tests/audio/audio_fifo_directed.cpp
       random: tests/audio/audio_fifo_random.cpp
     counters: [audio_underruns]
+    # D19c. These are the D9 SNAP-CHANNEL form (spec/counters.md 3): the
+    # block owns the counter locally and presents it as a
+    # zhao_counter_snap_t, so there is no <counter>_o port and there is
+    # not meant to be one. The mapping is what makes that legible.
+    counter_ports:
+      audio_underruns: cnt_snap_o
     source_ids: true
     async_bridge: true
     budget_group: platform

@@ -43,7 +43,7 @@ import os
 import re
 import sys
 
-PORT_RE = re.compile(r"^\s*output\s+(?:var\s+)?(?:\w+\s+)*?(?:\[[^\]]*\]\s*)*(\w+)\s*(?:,|\)|;)\s*(?://.*)?$")
+PORT_RE = re.compile(r"^\s*output\s+(?:var\s+)?(?:[\w:]+\s+)*?(?:\[[^\]]*\]\s*)*(\w+)\s*(?:\[[^\]]*\]\s*)*(?:,|\)|;)?\s*(?://.*)?$")
 
 
 def read(p):
@@ -59,8 +59,31 @@ def modules():
     return out
 
 
+# Every line that declares an output, however it is written. If PORT_RE matches
+# fewer lines than this does, the parser is DROPPING ports -- which is exactly
+# how this tool reported "0 counters match their port" three separate times.
+OUTPUT_LINE_RE = re.compile(r"^\s*output\s")
+
+# The self-check has to be self-checked. Its first version was written with a
+# `\b` that a shell heredoc turned into a literal BACKSPACE (0x08), so the
+# pattern demanded a backspace after "output", matched nothing, and cheerfully
+# printed "no silent drops" while the parser was dropping 17 ports. A check
+# that can never fire is worse than no check, because it reassures. This
+# asserts at import that the pattern still matches an ordinary declaration.
+assert OUTPUT_LINE_RE.match("    output var logic [31:0] x_o,"), "dead self-check"
+
+UNPARSED = []
+
+
 def outputs_of(path):
-    """Every output port of the FIRST module in the file."""
+    """Every output port of the FIRST module in the file.
+
+    Also records any line that declares an output but that PORT_RE could not
+    read. Three bugs -- width brackets `[31:0]`, scoped types `pkg::type_t`,
+    and the final port carrying no trailing comma -- each silently dropped
+    ports and each made this tool report a SMALLER, more alarming number. A
+    parser that drops what it cannot match will always report progress, so it
+    has to say out loud how much it dropped."""
     names, started = [], False
     for line in read(path).splitlines():
         if not started:
@@ -70,6 +93,8 @@ def outputs_of(path):
         m = PORT_RE.match(line)
         if m:
             names.append(m.group(1))
+        elif OUTPUT_LINE_RE.match(line):
+            UNPARSED.append((path, line.strip()))
         if re.match(r"^\s*\);\s*$", line):
             break
     return names
@@ -136,6 +161,18 @@ def main() -> int:
         print("\nRESOLVED BY EXPLICIT MAPPING (%d):" % len(by_mapping))
         for bid, n, p in by_mapping:
             print("  %-22s %-28s -> %s" % (bid, n, p))
+
+    if UNPARSED:
+        print("\nPARSER DROPPED %d OUTPUT DECLARATION(S) it could not read. "
+              "Every one is a port this tool is BLIND to, so every number above "
+              "is a LOWER BOUND. Fix the pattern before believing them:"
+              % len(UNPARSED))
+        for path, line in UNPARSED[:12]:
+            print("  %-30s %s" % (os.path.basename(path), line[:64]))
+        if len(UNPARSED) > 12:
+            print("  ... and %d more" % (len(UNPARSED) - 12))
+    else:
+        print("\nparser read every `output` line it met -- no silent drops.")
 
     print("\nNOTE: this checks that a PORT EXISTS. It does not check that the "
           "counter counts the right thing (spec/counters.md) or that anything "

@@ -725,9 +725,34 @@ that precise should have been read as a broken measurement, not a finding.**
 `tools/design/check_counters.py` now measures it properly:
 
     108 declared on blocks with a module
-     23 resolve by the default <name>_o
-     85 UNRESOLVED
+     40 resolve by the default <name>_o
+     10 by an explicit counter_ports mapping
+     58 UNRESOLVED
      30 further blocks declare counters but have no module file yet
+
+**The number was corrected THREE times before it settled: 0 -> 23 -> 40.** Four
+separate parser defects, each of which silently dropped ports and so made the
+figure smaller and more alarming:
+
+    width brackets      output var logic [31:0] x_o,
+    scoped types        output zhao_pkg::zhao_counter_snap_t x_o,
+    the final port      output logic x_o          <- no trailing comma
+    unpacked arrays     output var logic [31:0] refused_o [7]
+
+The tool now REPORTS how many `output` lines it failed to read, so a fifth form
+shows up as a number instead of as a smaller answer. **That self-check was
+itself broken on its first version** -- written with a `` that a shell heredoc
+turned into a literal backspace (0x08), so it matched nothing and printed "no
+silent drops" while 17 ports were being dropped. It is now asserted at import.
+
+**And a second reading error, worth more than the count.** Many unresolved rows
+are the D9 SNAP-CHANNEL form (`spec/counters.md` §3): the block owns the counter
+locally and presents it as a `zhao_counter_snap_t`, so there is no `<counter>_o`
+port and **there is not meant to be one**. CMD.SCHEDULER, CMD.DMA and AUDIO.FIFO
+are all correctly implemented this way and were all reported as gaps. The
+original framing -- "documentation that reads like a claim" -- was too harsh for
+those rows; a mapping makes the snap form legible without pretending it is
+missing.
 
 **The ruling below is unchanged, and the corrected number strengthens it.**
 Twenty-three blocks already follow `<counter>_o`, so that is the established

@@ -119,7 +119,7 @@ TEST_DIRS = ["tests"]
 
 # `output var logic [30:0] out_w_o,` / `output logic out_behind_o,` / trailing `)`
 PORT_RE = re.compile(
-    r"^\s*output\s+(?:var\s+)?(?:\w+\s+)*?(?:\[[^\]]*\]\s*)*(\w+)\s*(?:,|\)|;)\s*(?://.*)?$"
+    r"^\s*output\s+(?:var\s+)?(?:[\w:]+\s+)*?(?:\[[^\]]*\]\s*)*(\w+)\s*(?:\[[^\]]*\]\s*)*(?:,|\)|;)?\s*(?://.*)?$"
 )
 MODULE_RE = re.compile(r"^\s*module\s+(\w+)")
 
