@@ -360,3 +360,17 @@ yet. Specs are." Read in full. Taken as binding for this pass:
 - Ten webms encoded (VP9 crf16 yuv444p 60fps) with posters beside each;
   unnamed02 spliced as creatures[0] by TEXT (zixxtrixx byte-untouched at
   [1]); assemble: 2 creatures, 420 renders; exactly one noindex meta.
+
+## PUBLISHED — 2026-09-04
+
+- deploy.ps1 -Project upheaval -Branch main: production deploy complete.
+- Verified live: index HTTP 200; exactly one noindex META (plus the footer
+  text mention); unnamed02 is the FIRST card, zixxtrixx below with its
+  archive tab; all ten webms + posters 200; the served hover.webm is
+  byte-identical to the local encode (2,013,081 B, EBML magic).
+- All background jobs completed and verified stopped; scratch bank/spike
+  render dirs cleaned (evidence lives in the run folder).
+- Final SHAs: zhaozhou main = the commit after this one; Upheaval main
+  40a46da (site) — the definitive pair is recorded by the pushes.
+
+**Run status: creature pass FINISHED and PUBLISHED.**
