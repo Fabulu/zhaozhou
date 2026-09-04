@@ -204,3 +204,50 @@ descriptor is genuinely captured rather than dropped until the combiner exists.
 v2 is **not** retired from `design/prod_manifest.yml` by this block's
 existence. It is superseded only once FRAGROB has been fitted against its
 tripwires and the composed island has been re-measured.
+
+## `min_m10k: 6` IS IMPOSSIBLE, AND THE REASON IS BIGGER THAN THE TRIPWIRE
+
+**Recorded 2026-09-04, BEFORE the fit lands, so its result is not misread.**
+
+The block's entire declared payload storage, at the shipped `DEPTH = 16`:
+
+| array | shape | bits |
+|---|---|---|
+| `desc_u_m` | `[3][16] x 32` | 1,536 |
+| `desc_v_m` | `[3][16] x 32` | 1,536 |
+| `desc_met_m` | `[3][16] x 12` | 576 |
+| `res_rgb_m` | `[3][16] x 24` | 1,152 |
+| `res_a_m` | `[3][16] x 8` | 384 |
+| **total** | | **5,184 bits** |
+
+**An M10K holds 10,240 bits.** `min_m10k: 6` asks for 61,440 bits of capacity
+from a block that declares 5,184 — impossible by a factor of twelve, before
+even reaching the second objection, which is that a **16-deep** array is far too
+shallow for Quartus to put in block RAM at all. That is the same reason
+`TEXTURE.CACHE`'s `tag_r` cannot be memory (docket D19).
+
+This is the THIRD tripwire today derived as a capacity floor and wrong:
+`cache_pipe` asked 8 and got 6, `residency_v2` asked 17 and got 16, and this one
+asks 6 from a block that could not reach 1. `min_memory_bits` is the sound form
+and is added below.
+
+### The real finding is the 28x
+
+S3.3's budget for this block is *"900 ALM / 1,200 reg / 14–20 M10K / 0 DSP"*.
+**14 M10K is 143,360 bits. The block declares 5,184.** The budget expects
+twenty-eight times the storage that exists.
+
+So one of two things is true, and it is not a tripwire question:
+
+* **the block is under-built** — `DEPTH = 16` is a placeholder and the real
+  transaction centre holds far more in flight; or
+* **the budget was written for a different scope** — perhaps counting the
+  texture payload itself rather than the fragment descriptors.
+
+`design/blocks.yml` gives FRAGROB `DEPTH` as a parameter with default 16, and
+the fit measures the default. **Nothing in the tree says which of the two is
+intended**, and the answer changes whether this block is finished.
+
+**The tripwire is not adjusted to match.** `min_m10k: 6` stays as the record of
+what S3.3 expected; the bits floor beside it measures what the block as built
+can actually be asked for.

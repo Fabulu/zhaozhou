@@ -228,6 +228,17 @@ targets:
       # v2 measured 4 M10K against 7,151 registers, which is the entry table
       # in flip-flops. A pass here REQUIRES the banks to be memory.
       min_m10k: 6
+      # KEPT as the record of what S3.3 expected, and it is impossible: the
+      # block declares 5,184 bits of payload at DEPTH=16 and six M10K is 61,440
+      # bits of capacity. See the contract -- the 28x gap between the budget's
+      # 14-20 M10K and the storage that exists is a scope question, not a
+      # tripwire question.
+      #
+      # DERIVED floor for the block as built: every payload array is 16 DEEP,
+      # which Quartus will not put in block RAM, so the honest expectation is
+      # ZERO block memory bits and the useful gates are the register and DSP
+      # ceilings. min_memory_bits is deliberately NOT set rather than set to a
+      # number that would pass by construction.
       max_registers: 2500
       max_dsp: 0
 
