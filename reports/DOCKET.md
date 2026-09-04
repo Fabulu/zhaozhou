@@ -1187,44 +1187,55 @@ is a statement about fbwrite's bookkeeping and not yet about VRAM.
 
 </details>
 
-### D19i. The island fit queue **STOPPED at the first `failed:structure`**
-Found 2026-09-04 while waiting for blocks that were never going to arrive.
+### D19i. The island queue died on a preflight throw — **and I probably caused it**
+Found 2026-09-04, and the first version of this entry blamed the wrong thing.
 
-`../.tmp/texisland.log` ends like this:
+`../.tmp/texisland.err` has the actual cause, which the stdout log does not:
 
-        RULE  zhao_texture_mosaic: DSP 4 > allowed 0
-    zhao_texture_mosaic   failed:structure   1926.7s   ALM 197
+    preflight: no source names `module zhao_texture_tmu_pipe`.
+    Add it to design/fit_targets.yml or pass -ExtraSources.
 
-and then **nothing**. No further `preflight:` line, no further block. The queue
-was launched with nine modules and attempted six; `tmu_pipe`, `fragrob` and
-`cache_pipe` never ran.
+`run_block_fit.ps1:297` wraps the whole module loop in ONE `try`, so that throw
+ended the run: `tmu_pipe`, `fragrob` and `cache_pipe` never started. Six
+preflights out of nine.
 
-**The session had already recorded this hazard and it still happened.** An
-earlier note in this run observed that a preflight throw "is caught by the
-loop's outer `try`, which would have ENDED the queue and skipped fragrob and
-cache_pipe". That was written about a different block and the queue died the
-same way at mosaic.
+### The first version of this entry was wrong
 
-### Why it matters more than a lost hour
+It said the queue "stopped at the first `failed:structure`", i.e. that mosaic's
+designed rule failure ended it. **That is not what happened** — a
+`failed:structure` is a normal return and the loop survives it. The evidence was
+in a file I had not read, and the story was assembled from the stdout log alone.
 
-**A `failed:structure` is a MEASUREMENT.** Mosaic's rule was designed to fail —
-`fit_targets.yml` says so in the file — and the run treated a designed failure
-as a reason to stop measuring everything after it. The report then showed six
-rows, which reads as "six blocks measured" and not as "three blocks never
-attempted". **Silence and absence look identical in that file.**
+### And the throw was almost certainly self-inflicted
 
-### What was done
+`zhao_texture_tmu_pipe` **is** a declared target and
+`fpga/rtl/texture/zhao_texture_tmu_pipe.sv` **does** declare that module, so the
+preflight's complaint was true only momentarily. What was happening at 11:49:
+**I was rewriting `design/fit_targets.yml` in place**, repeatedly, while the
+queue re-read it once per block.
 
-The remaining four (`mosaic` for C21, plus the three that never ran) are
-relaunched as **separate invocations**, so one block's rule failure cannot end
-the run. That is the fix regardless of what the queue script does internally:
-a per-block fit is independent by construction, and chaining them in one
-process gave that up for nothing.
+`io.open(path, 'w')` TRUNCATES before it writes. A reader that opens the file in
+that window sees an empty or partial one — and this reader's parser simply finds
+no sources for the target and throws.
 
-**Worth changing in `run_block_fit.ps1`** so the next campaign does not need a
-person to notice: a non-`ok` status should advance the queue, not end it. Filed
-rather than done because that script is the fit lane's own tooling and was not
-touched while two fits were running through it.
+**Not proven**, and it is written as inference: no timestamp ties a specific
+write to the read. But it is the only explanation consistent with a target that
+is present before and after, and I had already noted the risk in this run
+("editing fit_targets.yml while the queue runs … Risky") and done it anyway.
+
+### Two things to change, both real
+
+1. **`run_block_fit.ps1`'s outer `try` is too broad.** One block's throw should
+   skip that block, not the rest of the campaign. The report then shows six rows
+   where nine were asked for, and **silence and absence look identical in it.**
+2. **Never rewrite a config in place while a process polls it.** Write a
+   temporary file and rename — rename is atomic, truncate-then-write is not.
+   This session's own live-tree discipline covers Quartus SOURCES and said
+   nothing about the fit lane's own CONFIG.
+
+The remaining four blocks were relaunched as **separate invocations**, which
+makes point 1 moot for this campaign: a per-block fit is independent by
+construction and chaining them gave that up for nothing.
 
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
