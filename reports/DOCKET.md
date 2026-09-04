@@ -2540,3 +2540,37 @@ campaign-sized job already docketed under the Fmax re-measurement entry.
 **Not a defect in the harness** — it records `sourceCommit` faithfully, which is
 exactly what made this checkable. The defect is that nothing compared it to
 anything until now.
+
+### D19p. `terrain_residency_v2` fails a memory floor, and the message misdiagnoses it
+Found 2026-09-04 running `check_fit_rules.ps1` after fixing its blanked-row bug.
+
+    FAIL  zhao_terrain_residency_v2
+            block memory 150528 bits < required 167936 -- the storage did not
+            infer as memory
+
+**The row is current** — measured 2026-09-04 04:00 against source last changed
+02:54 — so unlike two of D19l's three, this failure is real and not a staleness
+artefact.
+
+**But the attached diagnosis does not survive the row's own numbers.** The block
+measured **1,243 registers**. The shortfall is **17,408 bits**. 1,243 flip-flops
+cannot hold 17,408 bits, so *"the storage did not infer as memory"* is false in
+the direction it implies: the missing storage is **not in flip-flops**. It is
+either in MLAB (LUT-based memory, which counts in neither `blockMemoryBits` nor
+`ramBlocks`), or the required figure is an over-estimate of what the design
+declares.
+
+That is the same failure as `fragrob`'s gate message, which fired correctly and
+explained itself wrongly while 13 M10Ks held the payload — and it is why
+`CLAUDE.md` now says **when a tool explains itself, the explanation is a claim
+too**.
+
+**What settles it** is the fit's `Analysis & Synthesis RAM Summary`, which names
+every array that inferred and its depth and width. That is one file in the fit
+workspace, and reading it is how D19m was pinned. It was not read here because
+that workspace is from an earlier run and is not the one still on disk.
+
+**Two candidate actions, both cheap, and the choice needs the RAM summary
+first:** widen the rule's floor if 167,936 over-counts, or name the specific
+array that went to MLAB. Guessing between them from the numbers alone is exactly
+what this docket entry is complaining about.
