@@ -4886,7 +4886,8 @@ verilate(demo_duo_markers
 add_executable(test_shell_draw_directed shell/shell_draw_directed.cpp)
 target_link_libraries(test_shell_draw_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_shell_draw_directed PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/shell)
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry)
 verilate(test_shell_draw_directed
   PREFIX Vtb_zhao_shell TOP_MODULE tb_zhao_shell
   INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common

@@ -68,6 +68,12 @@
 
 #include "Vtb_zhao_shell.h"
 
+// Oracle-only mode: the CLIP+SETUP views without the Verilated DUTs that
+// geom_dev.hpp otherwise pulls in. Same three defines render_pipe_directed uses.
+#define ZHAO_GEOM_DEV_ORACLE_ONLY
+#define ZHAO_GEOM_DEV_BINNER
+
+#include "geom_dev.hpp"
 #include "shell_harness.hpp"
 #include "zhao_sim.hpp"
 
@@ -86,54 +92,60 @@ uint16_t peek(ShellHarness& h, uint32_t waddr) {
   return d;
 }
 
-// A triangle that covers a comfortable area of tile (0,0). The edge functions
-// are the binner's own convention: E(x,y) = kx*x + ky*y + kc, accepted where
-// every edge is >= 0 (with the top-left rule for the == 0 case), and the
-// vertices are S 12.8 screen subpixels.
+// The triangle comes from THE ORACLE, via zhao_geom::make_bin_tri -- the same
+// GEOM.CLIP + GEOM.SETUP path `render_pipe_directed` uses.
 //
-// These are computed here rather than taken from `zref` ON PURPOSE. The claim
-// is not "the arithmetic is right" -- that is `render_pipe_directed`'s job and
-// it is already proved. The claim is "a triangle put in at the shell's edge
-// comes out in memory", and for that a hand-made covering triangle is a
-// cleaner stimulus than a generated one: if this fails, the failure is wiring
-// and not a disagreement about a rounding rule.
-ShellHarness::RenderTri covering_triangle() {
+// THE FIRST VERSION HAND-ROLLED THE EDGE FUNCTIONS. It looked like the cleaner
+// stimulus -- fewer moving parts, and a failure would have to be wiring rather
+// than a rounding rule -- and it was wrong twice over:
+//
+//   * `kc = 64` against S 12.8 vertices makes edge 1 go negative a quarter of a
+//     pixel in. A real units bug, and worth fixing;
+//   * but it was NOT the cause of the `pixels=0` that prompted the hunt.
+//     `render_pixels_o` is `zhao_raster_fbwrite`'s `pixels_written_o` -- pixels
+//     WRITTEN, not pixels covered -- and the write was refused by the guard, so
+//     zero is what it must read whatever the triangle does.
+//
+// The second half is the part worth keeping: **a number that agrees with your
+// hypothesis is not evidence until you know what it counts.** Two rounds were
+// spent on stimulus because a counter was read as coverage.
+//
+// The oracle is used now regardless. **Hand-rolled stimulus is not simpler, it
+// is unverified**, and the oracle already knows the convention.
+// S 12.8 screen subpixels, the coordinate the whole chain speaks. Same one line
+// as `zhao_raster::px` in tests/raster/raster_tile_pipe_dev.hpp; repeated here
+// rather than included, because that header pulls a Verilated model this target
+// does not build.
+inline int32_t px(int32_t p) { return p * 256; }
+
+bool build_triangle(int grid_w, int grid_h, zhao_geom::BinTri* out) {
+  zref::Clip::Viewport vp;
+  vp.w = grid_w * 16;
+  vp.h = grid_h * 16;
+  return zhao_geom::make_bin_tri(px(4), px(4), px(grid_w * 16 - 4), px(8), px(8),
+                                 px(grid_h * 16 - 4), vp, 0x2A2A, out);
+}
+
+/** The oracle's packet, in the shape the shell's render port takes. */
+ShellHarness::RenderTri from_bin_tri(const zhao_geom::BinTri& b) {
   ShellHarness::RenderTri t;
-  // A right triangle with vertices at (0,0), (64,0), (0,64) in whole pixels,
-  // expressed in S 12.8 subpixels.
-  const int32_t S = 256;  // one pixel
-  t.ax = 0 * S;
-  t.ay = 0 * S;
-  t.bx = 64 * S;
-  t.by = 0 * S;
-  t.cx = 0 * S;
-  t.cy = 64 * S;
-
-  // Edge 0: a->b is the top edge, inside is y >= 0  ->  E = y
-  t.kx[0] = 0;
-  t.ky[0] = 1;
-  t.kc[0] = 0;
-  // Edge 1: b->c, inside is x + y <= 64 px  ->  E = 64*S - x - y
-  //
-  // THE CONSTANT IS IN SUBPIXELS, and the first version of this test wrote 64.
-  // With x and y in S 12.8, `E = 64 - x - y` goes negative a quarter of a pixel
-  // in, so the "covering" triangle covered nothing and the test reported an
-  // empty framebuffer as though the path were dead. A units error in the
-  // STIMULUS looks exactly like a defect in the thing being tested.
-  t.kx[1] = -1;
-  t.ky[1] = -1;
-  t.kc[1] = 64 * S;
-  // Edge 2: c->a is the left edge, inside is x >= 0  ->  E = x
-  t.kx[2] = 1;
-  t.ky[2] = 0;
-  t.kc[2] = 0;
-
-  t.tl = 0x7;  // treat all three as top-left; a covering triangle either way
-  t.min_x = 0;
-  t.max_x = 63;
-  t.min_y = 0;
-  t.max_y = 63;
-  t.src_id = 0x2A2A;
+  for (int e = 0; e < 3; ++e) {
+    t.kx[e] = b.s.e[e].kx;
+    t.ky[e] = b.s.e[e].ky;
+    t.kc[e] = b.s.e[e].kc;
+  }
+  t.tl = (uint8_t)((b.s.e[0].tl ? 1u : 0u) | (b.s.e[1].tl ? 2u : 0u) | (b.s.e[2].tl ? 4u : 0u));
+  t.ax = b.ax;
+  t.ay = b.ay;
+  t.bx = b.bx;
+  t.by = b.by;
+  t.cx = b.cx;
+  t.cy = b.cy;
+  t.min_x = b.min_x;
+  t.max_x = b.max_x;
+  t.min_y = b.min_y;
+  t.max_y = b.max_y;
+  t.src_id = b.src_id;
   return t;
 }
 
@@ -177,7 +189,11 @@ int main(int argc, char** argv) {
   // One 4x4 tile grid; the triangle covers tile (0,0) generously.
   h.render_frame_begin(4, 4);
 
-  const bool took = h.render_offer(covering_triangle());
+  zhao_geom::BinTri bt;
+  const bool built = build_triangle(4, 4, &bt);
+  zhao::check(built, "the oracle accepts the triangle through CLIP + SETUP", 1, built ? 1 : 0);
+
+  const bool took = h.render_offer(from_bin_tri(bt));
   zhao::check(took, "the shell's render port ACCEPTS a triangle", 1, took ? 1 : 0);
 
   h.render_frame_end();
