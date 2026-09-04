@@ -45,6 +45,36 @@
 version: 1
 
 runs:
+  - property: tests/formal/geom_meshfetch_refuse.sby
+    status: green
+    date: "2026-09-04"
+    commit: 19facf9f
+    lane: formal_geom_meshfetch_refuse
+    tasks: [bmc, cover]
+    covers: true
+    notes: >-
+      GEOM.MESHFETCH's refusal law -- the contract's table ends "emits no
+      meshlet", and this proves it for every input sequence rather than the
+      descriptors a directed test thought of. bmc and cover both return in
+      under two seconds at depth 24.
+
+      IT FOUND A REAL DEFECT, which is the reason it is worth its lane. The
+      block recomputed its refusal from the LIVE `crc_ok_i` instead of latching
+      the verdict, so the input could be high when it decided "not refused" and
+      drop afterwards -- offering a refused descriptor's bound to the cull
+      service. BMC found it at step 15 of a properly reset design. A directed
+      test could not: it needs an input that changes at a specific cycle after
+      a decision, and a testbench author holds that wire steady.
+
+      The FIRST failure was the harness's, not the block's -- assertions
+      guarded on `rst_n` alone let BMC start mid-flight in S_CULL at step 1
+      with no reset ever applied. A true statement about an unreachable state,
+      fixed by stating the precondition rather than weakening the property.
+
+      Depth 24 is pinned by `a_scope_bmc_window` in the DUT (rule V19): it
+      fires if the depth is raised, so the bound cannot silently change
+      meaning.
+
   - property: tests/formal/mem_vram_arbiter_liveness.sby
     status: green
     date: "2026-08-16"

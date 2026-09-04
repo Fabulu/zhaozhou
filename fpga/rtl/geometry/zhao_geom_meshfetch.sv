@@ -63,7 +63,10 @@
 //     by construction.
 //
 // So the guard is doing exactly what it was specified to do, and this block
-// needs the PHASE-3 REGION MAP rather than a fix. That distinction decides who
+// needs the PHASE-3 REGION MAP rather than a fix. That the guard admits no
+// region outside the two FB slots is not an assumption made here -- it is
+// proved.
+// ENFORCED-BY: tests/formal/mem_guard_no_escape.sby That distinction decides who
 // owns the next move: extending the map is a charter-allocator decision with a
 // formal proof attached (`tests/formal/mem_guard_no_escape.sby`), not a line
 // this file may add.
@@ -421,6 +424,22 @@ module zhao_geom_meshfetch
   always_ff @(posedge clk) begin
     if (!f_past_valid) assume (!rst_n);
     if (f_past_valid && $past(rst_n)) assume (rst_n);
+  end
+
+  // ---- SELF-ASSERTING SCOPE GUARD (ledger rule V19) ----------------------
+  // The refusal law is proven at bmc depth 24, which is the full path from job
+  // accept through the guard grant, eight beats, validation, the nine bound
+  // steps and the cull handshake to the one state where it could fail. This
+  // PINS that window: raising `depth` makes the assertion FIRE, so the bound
+  // cannot silently change meaning. A deeper proof has to re-justify what the
+  // extra cycles are covering rather than re-run with a bigger number and
+  // believe more was proved than was.
+  logic [6:0] f_scope_cyc = 7'd0;
+  always_ff @(posedge clk) begin
+    if (f_scope_cyc != 7'h7F) f_scope_cyc <= f_scope_cyc + 7'd1;
+  end
+  always_comb begin
+    a_scope_bmc_window : assert (f_scope_cyc <= 7'd24);
   end
 
   always @(posedge clk) begin
