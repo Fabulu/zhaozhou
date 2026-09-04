@@ -10,9 +10,17 @@ in 10 minutes and was already on disk while placement ran for another 71.
     Total DSP Blocks         : 3
     Analysis & Synthesis      : Successful, 0 errors, 109,800 warnings
 
-**72,824 registers.** The provisional device (5CSEBA6U23I7) has 41,910 ALMs, so
-roughly 84,000 flip-flops in total: **one block is asking for about 87% of every
-register on the part**, while using 256 bits of the 553 available M10Ks.
+**72,824 registers.** **CORRECTED 2026-09-04.** A first version of this line said "about 87% of every
+register on the part", from 41,910 ALMs x 2 flops. **Cyclone V ALMs carry FOUR
+registers**, so the part holds ~167,640 — the arithmetic was wrong and the unit
+was the wrong one anyway, because what a block actually consumes is ALMs.
+
+Stated properly: 72,824 registers need **18,206 ALMs at best-case packing (4 per
+ALM), and about 38,300 at the ~1.9 registers/ALM this tree actually achieves** —
+**43% to 91% of the whole device, for one block**, while it uses 256 bits of the
+553 available M10Ks. The range is wide because packing depends on how much
+combinational logic rides along; the low end is already serious and the high end
+is most of the part.
 
 ## The cause is two declarations
 

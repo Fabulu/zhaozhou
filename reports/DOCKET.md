@@ -924,9 +924,11 @@ minutes before the fitter did. Full write-up:
 
     Total registers : 72824      Total block memory bits : 256
 
-The provisional part has 41,910 ALMs — roughly 84,000 flip-flops — so **one
-block asks for about 87% of every register on the device** while using 256 bits
-of the 553 available M10Ks. The cause is two declarations:
+**CORRECTED:** 72,824 registers need **18,206 ALMs at 4 per ALM, ~38,300 at the
+~1.9/ALM this tree achieves — 43% to 91% of the device for one block**, while
+using 256 bits of the 553 available M10Ks. (An earlier line said "87% of every
+register", from a wrong 2-flops-per-ALM figure; Cyclone V ALMs carry four, and
+the meaningful unit is ALMs rather than registers.) The cause is two declarations:
 
     logic [255:0] pal_val_r [PAL_SLOTS];        //  16 x 256      =  4,096 bits
     logic [15:0]  pal_dat_r [PAL_SLOTS][256];   //  16 x 256 x 16 = 65,536 bits
@@ -2361,3 +2363,43 @@ measured**. Building more hardware while ten blocks sit unmeasured is
 accumulating exactly the risk the owner just named. So gap work prefers:
 tests against RTL that already exists, architecture documents, and rulings —
 things that reduce uncertainty rather than add to it.
+
+### D19n. `zhao_forge_cliff` cannot fit the part, which is why it always times out
+Found 2026-09-04 by applying `QUARTUS_GOTCHAS.md` §14 to the one block in the
+census whose row reads `status: timeout` with no numbers at all.
+
+It declares, with `MaxEdges = 2048` and `MaxRuns = 1024`:
+
+    prio_mem_r  [0:MaxEdges-1] x 32b  =  65,536 bits
+    edge_key_r  [0:MaxEdges-1] x 12b  =  24,576
+    run_mem_r   [0:MaxRuns-1]  x 17b  =  17,408
+    edge_span_r [0:MaxEdges-1] x  6b  =  12,288
+    alive_r                    2048b  =   2,048
+                                        --------
+                                        121,856 bits
+
+**And §14 says none of it will infer.** Every array is read by an `assign` into
+a combinational signal, and every one of those signals then passes through logic
+before reaching a register:
+
+    prio_rd_c  ->  assign prio_key_c = prio_rd_c ^ 32'h8000_0000;   an XOR
+    edge_rd_c  ->  c_cj_c = edge_rd_c[17:13];                       into always_comb
+    run_rd_c   ->  if (run_rd_c[5:0] == mlen_r)                     a comparison
+
+That is the `tmu_pipe` shape, not the `audio_fifo` shape, on all three.
+
+**As flip-flops, 121,856 registers need about 30,500 ALMs at best-case packing
+(4 per ALM) and roughly 64,000 at the ~1.9 registers/ALM this tree actually
+achieves — against 41,910 available.** The upper estimate is 153% of the device.
+
+So the `timeout` is very likely **not a tooling flake**: the fitter is being
+asked to place a design that may not fit at all, and a fitter that cannot
+converge runs until something stops it. That reading is consistent with
+`tmu_pipe`, which is smaller, placed successfully, and then spent over two hours
+in routing.
+
+**Not proven** — nobody has seen a resource line for this block, because the
+harness blanks a timed-out row (D19l's sibling defect,
+`reports/FIT-TIMEOUT-CANNOT-FIRE-20260904.md`). The cheap test is to fit it with
+the timeout raised and **keep whatever numbers synthesis produces**, which is
+exactly the harness change already recommended there.
