@@ -457,6 +457,38 @@ void skin_vertex(const mat3x4fx* palette, const SkinVertex& v, int32_t& ox, int3
 int32_t skin_normal_lambert(const mat3x4fx* palette, const SkinVertex& v, int32_t lx, int32_t ly,
                             int32_t lz);
 
+/**
+ * THE SAME LAW, SPLIT AT THE ONE PLACE THE HARDWARE MUST SPLIT IT.
+ *
+ * `reports/CREATURESANDLIGHTS` (docket D5): "The current reference repeatedly
+ * calls skin_normal_lambert for key, fill and point light. That means it
+ * effectively repeats the transformed-normal work for each light. The hardware
+ * should not reproduce that structure."
+ *
+ * Everything up to and including the normalisation is light-INDEPENDENT, so
+ * `SKIN.NORM` does it once per vertex and each light then costs one dot and
+ * one divide. These two functions are that boundary, and
+ * `skin_normal_lambert` is now literally their composition -- so the split is
+ * true by construction rather than by a second implementation that agrees
+ * until it doesn't.
+ *
+ * `skin_world_normal` returns false for a degenerate vertex (a zero packed
+ * normal, or a blend that cancels to zero length), which is the same condition
+ * under which the combined function returns 0.
+ *
+ * The returned `n` is NOT unit-length -- it is the raw blended direction, and
+ * `mag` is its `isqrt_u64` length. Handing back the pair rather than a
+ * normalised vector is deliberate: normalising here would round twice, once
+ * into the unit vector and again in the Lambert quotient, and the law has
+ * exactly ONE rounding.
+ */
+bool skin_world_normal(const mat3x4fx* palette, const SkinVertex& v, int64_t n_out[3],
+                       int64_t* mag_out);
+
+/** The per-light half: one dot, one round-half-up divide, clamped at 0x10000. */
+int32_t lambert_from_world_normal(const int64_t n[3], int64_t mag, int32_t lx, int32_t ly,
+                                  int32_t lz);
+
 // -------------------------------------------------------------- meshlets ---
 
 inline constexpr int kMeshletMaxVerts = 64;  // charter 10

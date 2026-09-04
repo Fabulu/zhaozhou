@@ -547,9 +547,11 @@ void skin_vertex(const mat3x4fx* palette, const SkinVertex& v, int32_t& ox, int3
   }
 }
 
-int32_t skin_normal_lambert(const mat3x4fx* palette, const SkinVertex& v, int32_t lx, int32_t ly,
-                            int32_t lz) {
-  if (v.nx == 0 && v.ny == 0 && v.nz == 0) return 0;
+// The light-independent half. See the header for why the boundary is here and
+// not somewhere more convenient.
+bool skin_world_normal(const mat3x4fx* palette, const SkinVertex& v, int64_t n_out[3],
+                       int64_t* mag_out) {
+  if (v.nx == 0 && v.ny == 0 && v.nz == 0) return false;
   const mat3x4fx& A = palette[v.b0];
   const mat3x4fx& B = palette[v.b1];
   const int32_t w0 = v.w0;
@@ -581,14 +583,34 @@ int32_t skin_normal_lambert(const mat3x4fx* palette, const SkinVertex& v, int32_
   }
   const uint64_t mag2 = static_cast<uint64_t>(n[0] * n[0]) + static_cast<uint64_t>(n[1] * n[1]) +
                         static_cast<uint64_t>(n[2] * n[2]);
-  if (mag2 == 0) return 0;
-  const int64_t mag = static_cast<int64_t>(isqrt_u64(mag2));
+  if (mag2 == 0) return false;
+  n_out[0] = n[0];
+  n_out[1] = n[1];
+  n_out[2] = n[2];
+  *mag_out = static_cast<int64_t>(isqrt_u64(mag2));
+  return true;
+}
+
+// The per-light half. One dot, one round-half-up divide, one clamp.
+int32_t lambert_from_world_normal(const int64_t n[3], int64_t mag, int32_t lx, int32_t ly,
+                                  int32_t lz) {
   const __int128 dot = static_cast<__int128>(n[0]) * lx + static_cast<__int128>(n[1]) * ly +
                        static_cast<__int128>(n[2]) * lz;
   if (dot <= 0) return 0;
   int64_t lam = static_cast<int64_t>((dot + mag / 2) / mag);
   if (lam > 65536) lam = 65536;
   return static_cast<int32_t>(lam);
+}
+
+// AND THE ORIGINAL IS NOW THEIR COMPOSITION. Every existing caller and every
+// golden capture keeps the same answer because this is the same arithmetic in
+// the same order -- the only change is where the boundary is drawn.
+int32_t skin_normal_lambert(const mat3x4fx* palette, const SkinVertex& v, int32_t lx, int32_t ly,
+                            int32_t lz) {
+  int64_t n[3];
+  int64_t mag;
+  if (!skin_world_normal(palette, v, n, &mag)) return 0;
+  return lambert_from_world_normal(n, mag, lx, ly, lz);
 }
 
 // ----------------------------------------------------------- ring builder --

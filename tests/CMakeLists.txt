@@ -5584,3 +5584,12 @@ verilate(test_geom_meshfetch_rtl_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_meshfetch.sv)
 add_test(NAME geom_meshfetch_rtl_directed COMMAND test_geom_meshfetch_rtl_directed)
 set_tests_properties(geom_meshfetch_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# SKIN.NORM's licence: one transformed-and-renormalised normal reused across
+# N lights agrees with N independent skin_normal_lambert calls. That is the
+# equivalence docket D5 asserts when it rules the hardware must not repeat the
+# normal work per light, and nothing checked it before.
+add_executable(test_skin_norm_split_directed geometry/skin_norm_split_directed.cpp)
+target_link_libraries(test_skin_norm_split_directed PRIVATE zhao_harness zhao_zref)
+add_test(NAME skin_norm_split_directed COMMAND test_skin_norm_split_directed)
+set_tests_properties(skin_norm_split_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
