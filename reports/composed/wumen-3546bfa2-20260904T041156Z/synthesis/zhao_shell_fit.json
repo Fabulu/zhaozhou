@@ -1,0 +1,48 @@
+{
+    "schemaVersion":  1,
+    "characterization":  "provisional-shell-fit",
+    "sourceCommit":  "3546bfa2fa60008bb43b0a81889177996b0f1e75",
+    "sourceConeParity":  true,
+    "sourceFileCount":  45,
+    "tool":  {
+                 "name":  "Quartus Prime Lite",
+                 "version":  "Quartus Prime Shell"
+             },
+    "design":  {
+                   "top":  "zhao_shell_top",
+                   "device":  "5CSEBA6U23I7",
+                   "frameworkTopModified":  false
+               },
+    "stages":  {
+                   "analysisAndElaboration":  "success",
+                   "synthesis":  "success",
+                   "fitter":  "success",
+                   "timequest":  "success"
+               },
+    "resources":  {
+                      "logicUtilizationAlms":  13301,
+                      "combinationalFunctions":  null,
+                      "registers":  15928,
+                      "blockMemoryBits":  184256,
+                      "ramBlocks":  26,
+                      "dspBlocks":  16,
+                      "pins":  0,
+                      "virtualPins":  3214
+                  },
+    "criticalWarningCount":  5,
+    "criticalWarnings":  [
+                             "Critical Warning (15725): clock port is fed by virtual pin \"audio_clk~input\"; timing analysis treats input to the clock port as a ripple clock",
+                             "Critical Warning (15725): clock port is fed by virtual pin \"gpu_clk~input\"; timing analysis treats input to the clock port as a ripple clock",
+                             "Critical Warning (15725): clock port is fed by virtual pin \"vid_clk~input\"; timing analysis treats input to the clock port as a ripple clock",
+                             "Critical Warning (18061): Ignored Power-Up Level option on the following registers",
+                             "Critical Warning (332148): Timing requirements not met"
+                         ],
+    "limitations":  [
+                        "5CSEBA6U23I7 is a provisional capacity/timing target, not frozen board truth.",
+                        "All harness I/O is virtual; no package pins, board I/O delays, PLLs, or physical clocks are claimed.",
+                        "gpu_clk and vid_clk remain timing-related so the known phase-dependent displayed-byte crossing is not waived.",
+                        "Only audio_clk is grouped asynchronous against GPU/video, matching the dual-clock FIFO boundary.",
+                        "Harness data/reset paths have no invented I/O delays or reset exceptions; unconstrained and recovery/removal limitations remain reportable.",
+                        "The result does not characterize a physical SDRAM interface, framework integration, or fabricated hardware."
+                    ]
+}
