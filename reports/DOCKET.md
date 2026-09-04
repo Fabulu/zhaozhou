@@ -748,8 +748,31 @@ and the same for `ay bx by cx cy` — **six coordinate lanes, 22 bits into 21.**
 
 **A signed narrowing does not clip, it wraps.** A particle quad vertex beyond
 `2^20` would arrive at `GEOM.SETUP` with the opposite sign — a triangle folded
-across the origin rather than one pushed to the edge of the screen. Whether that
-range is reachable is the question; the narrowing being silent is the defect.
+across the origin rather than one pushed to the edge of the screen.
+
+### And the producer contradicts its OWN header
+
+    zhao_part_expand.sv:87    // Screen coordinates are S 12.8 in 21 bits,
+                              //   already inside the +/-2048 px guard
+    zhao_part_expand.sv:106   input  logic signed [20:0] p_x_i,   // S 12.8
+    zhao_part_expand.sv:118   output logic signed [21:0] t_ax_o
+
+**It takes 21 bits in, states in its own comment that screen coordinates ARE 21
+bits, and emits 22.** `GEOM.SETUP`'s side is not arbitrary either — its input
+comment says *"S 12.8 screen subpixels"*, and S12.8 is exactly 1 + 12 + 8 = 21
+bits. So the whole pipeline agrees on the format and this block's output ports
+are the one place that does not.
+
+`±2048 px` in S12.8 is `±524,288`, which needs 20 bits plus a sign — **21**. So
+the 22nd bit looks like a computation guard on `centre ± half_side` that reached
+the port instead of being dropped after the range was established.
+
+**That makes the fix cheap and the risk real:** cheap because the values
+provably fit 21 bits if the ±2048 guard holds; real because if the guard does
+NOT hold, narrowing silently wraps and widening the rest of the pipeline is the
+answer instead. **The guard must be checked before either.** What must not
+happen is the seam being wired as-is, which truncates without anyone choosing
+to.
 
 **The seam is DECLARED but not yet wired** — neither block is in
 `zhao_shell_top` — which is precisely when this is cheap. It wants one of: the
