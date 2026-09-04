@@ -314,6 +314,31 @@ not invent an order; it reads back the one the contracts agreed to:
 | 12 | `GEOM.DEPTHQUANT` | UNIT_VERIFIED |
 | 13 | `GEOM.SETUP` | UNIT_VERIFIED |
 
+### The probe now finds this class mechanically
+
+`compose_order.py` reported *"every declared seam agrees"* for an edge that was
+wrong, because **symmetry is not agreement**: both rows named each other, and no
+signal travels across. It now also checks that every edge is justified by a
+shared signal name, and that every declared input has a declared producer.
+
+Run on geometry it finds **14 inputs with no upstream producer**. Some are
+legitimately external (`camera_pair` from the command stream, `dispatch` from
+the caller) — the check is a warning, not a verdict, because the vocabularies
+are prose and two rows may name one thing differently. What it buys is that such
+a pair gets looked at once instead of being derived into an order and believed.
+
+**A second real edge error, found immediately.** `GEOM.PARAMBUF` takes
+`triangle_descriptors` and nothing in the ledger emits it — while
+`GEOM.ASSEMBLE` emits `triangle_descriptor` and its contract says that output is
+*"Exactly `GEOM.PARAMBUF`'s 16-byte layout, so nothing is invented here"*.
+So `ASSEMBLE -> PARAMBUF` is a real edge that is missing, and the declared
+`ASSEMBLE -> CLIP` is suspect: ASSEMBLE emits triangle descriptors, CLIP takes
+`view_vertices`.
+
+**Not bulk-edited.** Two wrong edges found in one evening from one subsystem is
+a reason to review the whole graph deliberately, not to patch the two that
+happen to have been noticed.
+
 **THE ORDER ABOVE IS WRONG AT POSITION 2, and the ledger is where it is wrong.**
 Corrected 2026-09-04, hours after publishing it — recorded rather than quietly
 edited, because I derived it mechanically and presented it as authoritative.
