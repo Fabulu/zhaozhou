@@ -45,9 +45,20 @@ import re
 import sys
 
 PORT_RE = re.compile(
-    r"^\s*(input|output)\s+(?:var\s+)?(?:logic|wire|reg)?\s*(?:signed\s*)?"
-    r"(\[[^\]]*\]\s*)?(\w+)\s*[,)]"
+    r"^\s*(input|output)\s+(?:var\s+)?(?:[\w:]+\s+)*?(?:signed\s*)?"
+    r"((?:\[[^\]]*\]\s*)*)(\w+)\s*(?:\[[^\]]*\]\s*)*\s*(?:[,);])?\s*(?://.*)?$"
 )
+
+# Any line that declares a port, however it is written. If PORT_RE reads fewer
+# of these than this finds, the parser is DROPPING ports -- and a dropped port
+# is a seam this tool silently calls "fits exactly". Three sibling tools each
+# carried a version of that bug (scoped types `pkg::t`, unpacked arrays
+# `x_o [7]`, and a final port with no trailing comma), and every one of them
+# made the answer look BETTER than it was.
+PORT_LINE_RE = re.compile(r"^\s*(?:input|output)\s")
+assert PORT_LINE_RE.match("    output var logic [31:0] x_o,"), "dead self-check"
+
+UNPARSED = []
 
 
 def read(p):
@@ -76,6 +87,8 @@ def ports_of(path, module):
     for line in seg.splitlines():
         m = PORT_RE.match(line)
         if not m:
+            if PORT_LINE_RE.match(line):
+                UNPARSED.append((path, line.strip()))
             continue
         direction, width, name = m.group(1), (m.group(2) or "").strip(), m.group(3)
         (ins if direction == "input" else outs).append((name, width or "logic"))
@@ -223,6 +236,18 @@ def main() -> int:
         print("\nNO SHARED STEM (%d) -- the two ends use unrelated port "
               "vocabularies, so this tool cannot check them. Not a defect."
               % len(unpaired))
+
+    if UNPARSED:
+        print("\nPARSER DROPPED %d PORT DECLARATION(S) it could not read. A "
+              "dropped port is a signal this tool cannot compare, and a seam "
+              "missing half its signals is reported as FITTING. Every number "
+              "above is therefore optimistic until this is zero:" % len(UNPARSED))
+        for path, line in UNPARSED[:10]:
+            print("  %-30s %s" % (os.path.basename(path), line[:64]))
+        if len(UNPARSED) > 10:
+            print("  ... and %d more" % (len(UNPARSED) - 10))
+    else:
+        print("\nparser read every port line it met -- no silent drops.")
 
     print("\nHEURISTIC: stems are guessed by stripping a direction suffix and a "
           "short role prefix. A missed match is far likelier than an absent "
