@@ -68,3 +68,47 @@ each refuted by a counterexample already in the tree. The cheapest way to stop
 that pattern is to state what a rule predicts **before** the measurement rather
 than after, so the rule can fail visibly instead of being quietly reshaped to
 fit whatever arrives.
+
+---
+
+# OUTCOME: confirmed, on both halves
+
+Synthesis completed 18:14:27, about twelve minutes after the prediction was
+committed.
+
+    predicted   registers far below 11,328, roughly 2,000-3,500
+    measured    Total registers        : 3097
+                Total block memory bits: 8,320   (was 128)
+                Total DSP Blocks       : 0
+
+**3,097 registers** — inside the predicted range, a 73% fall from the recorded
+11,328. And the memory half landed too, which the caveat allowed to fail:
+
+    altsyncram:g_lane[0].data_r  Simple Dual Port  128 deep x 16 wide
+    altsyncram:g_lane[1].data_r  Simple Dual Port  128 deep x 16 wide
+    altsyncram:g_lane[2].data_r  Simple Dual Port  128 deep x 16 wide
+    altsyncram:g_lane[3].data_r  Simple Dual Port  128 deep x 16 wide
+    altsyncram:rq_src_rtl_0      Simple Dual Port    4 deep x 16 wide
+    altsyncram:rs_src_rtl_0      Simple Dual Port    4 deep x 16 wide
+
+Four lanes x 128 x 16 = **8,192 bits**, which is the figure computed from the
+source declaration before the fit ran, plus 128 for the two small ones = 8,320.
+It went to real block memory, not the MLAB fallback the caveat warned about.
+
+## What this establishes, and what it does not
+
+**§14 works forward.** The rule was derived from four blocks after the fact;
+this is the first time it was used to state an outcome *before* a measurement,
+and the outcome matched in registers, in destination, and in exact bit count.
+That is a stronger claim than "consistent with the cases it was built from".
+
+**D19l is confirmed in the concrete.** The `ok` row saying 11,328 registers and
+128 memory bits was stale — the block had been restructured under a later commit
+whose only trace was `lastAttemptStatus`. A reader trusting `status` would have
+gone looking for a defect that had already been fixed. **The third-worst ALM
+figure in the census belonged to code that no longer exists.**
+
+**It does not establish that §14 is complete.** One correct prediction on a
+block whose read shape was already the good one is weak evidence about the cases
+where the rule is hard. The test that matters is `tmu_pipe` after its palette
+read is registered, and that has not been run.
