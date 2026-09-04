@@ -661,3 +661,56 @@ Three carry decisions and are now indexed as D19–D21.
 cannot be met, and it was sitting in a report nothing pointed at. A red
 `min_m10k` on that block is the single thing most likely to be misread as an RTL
 defect when the running fit returns.
+
+## 04:30 — D1 was stale in three layers, and the console's speed is unknown
+
+Picked D1 because it is P0 and the RTL work is free of the running fit's
+closure. It turned out not to need RTL at all.
+
+**Layer 1.** The headline said `gpu_clk` 53.48 MHz and named the Fragment RMW
+split as *"the next surgery"*. That split is `fc6395fd`, round 3, three days
+old. The newest composed fit reports **85.62 MHz — +60 %, 81 % of the original
+violation closed, for +138 ALMs and not one extra DSP across nine fits.**
+
+**Layer 2.** Two of the five "textbook 18 ns structures" the note named —
+BINNER's six parallel products and FBWRITE's dynamic byte-mask — **never
+appeared in a single worst-100 across nine consecutive fits.** Steps 5 and 6 are
+now struck, on the note's own instruction to let the report decide. Worth
+remembering the next time a list of named offenders reads as authoritative
+before it has been measured.
+
+**Layer 3, found by reading the RTL rather than the report.** The refresh I had
+just written said step 3 — the streamed Edgewalk row — was the one step left.
+It landed the *next day* in `7f95e592`, with three more EDGEWALK commits behind
+it, and the block's own comments now say *"nothing downstream of a fill test is
+in the same clock as the fill test"*.
+
+**So every step of MHZArchitected is written, and none of it is measured.**
+`renderer-b3bd69b-20260901T090000Z` is still the newest composed fit and more
+than twelve commits have touched `fpga/rtl/raster` and `fpga/rtl/geometry` since
+it ran. **85.62 MHz predates all of them. Nobody knows what the console runs at
+right now.**
+
+The composed-fit README also names `zhao_cmd_dma|blit_buf` as an RTL blocker —
+checked, and `blit_buf` no longer exists; the file mentions it only in a
+comment. The README is already marked SUPERSEDED at the top, which is why it was
+safe to trust the code over it.
+
+### The fit queue, in order, with commands
+
+Everything below needs the toolchain and nothing else does. `-Module` is
+`[string[]]`, so the three block fits are one invocation.
+
+    1. RUNNING   run_block_fit.ps1 -Module zhao_texture_cache_pipe -TimeoutSeconds 10800
+                 Read D19 in DOCKET.md BEFORE reading a red min_m10k as an RTL fault.
+
+    2. run_block_fit.ps1 -Module zhao_terrain_residency_v2,zhao_raster_tilestore,`
+                                 zhao_texture_palette_res -TimeoutSeconds 10800
+       Acceptance is min_m10k 17 / 4 / 2. These close tonight's 77 % claim.
+
+    3. run_block_fit.ps1 -Module zhao_prod_top -TimeoutSeconds 10800
+       The owner's question in WeNeedSomeMeasurements.md. Could NOT have
+       elaborated before tonight -- two blocks were missing from its source list.
+
+    4. run_composed_fit.ps1
+       The D1 answer. 85.62 MHz is three days and twelve commits old.
