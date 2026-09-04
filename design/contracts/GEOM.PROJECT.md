@@ -293,3 +293,48 @@ reason it should wait for the projected-vertex cache.
 shared core instance, then the 27-bit width narrowing. They compose, only the
 first two are order-dependent, and all three now land in one file instead of
 two.
+
+## DEFECT — `out_w_o` HAS NO ORACLE (found 2026-09-04, by cppcheck)
+
+`out_w_o` was added to this block earlier the same day so `GEOM.DEPTHQUANT`
+could take `clip.w` from the projection rather than recomputing it. **The port
+was added and never differentially verified**, and the way it surfaced is worth
+recording:
+
+    tests/geometry/geom_project_directed.cpp:172:10: error:
+      Uninitialized variable: o.w [uninitvar]
+
+`VtxOut` grew a `uint32_t w` for the DUT to read into, and the **oracle function
+never sets it**. It has been returning an uninitialised member ever since.
+
+**It did not produce a wrong answer, and that is the actual problem.**
+`compare()` does not check `w`, so the garbage was never read — the port's only
+coverage is one directed case asserting a behind-the-eye vertex carries zero.
+A whole output lane went in with no differential, and the test could not fail.
+
+### Why the oracle cannot simply be fixed in the test
+
+`zref::render::ProjOut` (`reference/src/zrender/internal.hpp`) is
+`{bool in; ScreenV s;}` — **it does not expose `clip.w` at all.** `project_vertex`
+computes it internally as the divisor and discards it. So there is nothing for
+the test to compare against, and computing the expectation in the test would be
+a second implementation of the row sum, which this repository forbids.
+
+### The fix, and it is additive
+
+Expose the divisor: `ProjOut` gains `w`, `project_vertex` fills it from the value
+it already computes, and `compare()` checks it. **Nothing existing changes
+value**, so the golden CRCs must not move — which is how the change is known to
+be safe, the same proof the D-1 clamp refactor used.
+
+**NOT DONE YET**: a full build was in flight when this was found, and editing a
+header mid-compile is the `build.ninja` race `CLAUDE.md` warns about. Queued.
+
+### The lesson, which is not about `w`
+
+**A new port is not delivered until something compares it.** The port was
+correct, the RTL was correct, the contract was updated — and the verification
+was skipped in a way that no test failure could reveal, because the missing
+check and the missing expectation cancelled out. **A static analyser found what
+488 tests could not**, which is an argument for keeping the lint tier green
+rather than treating it as noise beside the differentials.
