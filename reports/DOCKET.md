@@ -703,6 +703,51 @@ weak heuristic summarised rather than listed. It exists because `out_w_o` went
 into `GEOM.PROJECT` the same day with no differential and **no test could fail**
 — the missing expectation and the missing check cancelled out.
 
+**RESOLVED 2026-09-04, same day. Of the nine, THREE were real and six were
+the tool's own blindness.** Each disposition was checked individually, because
+the first attempt to explain the six named the wrong mechanism.
+
+**Real, and fixed:**
+
+* `zhao_raster_fbwrite.fatal_error_o` — closed by the W_VERD fix, which the
+  shell suite now exercises (`fatal=0` is asserted on a run that writes 3,328
+  pixels).
+* `zhao_surface_sheet.res_overflow_o` — three checks added, in BOTH directions
+  (pulses once on refusal, silent on allocate, silent on hit). Mutation-proven:
+  forcing the assert low fails the first, forcing the default clear high fails
+  all three.
+* the three `o_uv_sat_o` ports — **and these were worse than filed.** Not merely
+  unread: their cause `f_uv_sat_i` is set in five places across the whole test
+  tree and *all five write 0*. The flag had never been high in any simulation.
+  `raster_texjoin_v2_directed` case 3b now drives it, with an irregular pattern
+  and backwards returns so a desynchronised flag is caught, plus a non-vacuity
+  check that it was seen high at all. Mutation-proven with `sat_q[head_q ^ 1]`.
+
+**Not real — covered by COMPOSITION:** the four `zhao_field_exec_shared`
+reporters. No testbench instantiates that module. `zhao_field_seq.sv` consumes
+them and accumulates across a whole program exactly as the reference's single
+`SatLedger` does (`sat_add_o <= sat_add_o || exec_sat_add;`), and
+`field_curve_svc_directed` compares the resulting `rsp_sat_add_o` per lane
+against that reference. **The behaviour is checked while the name appears
+nowhere.**
+
+*(An earlier disposition said these were compared through a testbench wrapper
+that renames ports, citing `zhao_field_alu_tb.sv`. That was wrong — those are
+`zhao_field_alu`'s own ports, a different module's signals sharing a stem. The
+verdict held; the reason did not, and the reason is what the next reader uses.)*
+
+**And the tool that found them was itself wrong five ways**, all fixed and all
+recorded in its docstring: it could not read width brackets, scoped types, final
+ports without a comma, or unpacked arrays, and it never opened a `.sby` — so a
+formally proven module counted as untested. Its numbers moved 29 → 107
+unmentioned and 313 → 987 read-only. **Every one of those defects made the
+answer look better than it was**, which is the property that keeps a broken
+instrument in service.
+
+**The one row still standing** is `zhao_raster_texjoin.uv_sat_fragments_o`,
+invisible until the width-bracket fix — filed separately as D19k, because texjoin
+v1 is instantiated nowhere and the production path has no equivalent counter.
+
 ### D19c. The ledger's `counters:` field is not checkable — **needs a convention**
 Measured 2026-09-04 over the 62 blocks whose module name is derivable from their id.
 
