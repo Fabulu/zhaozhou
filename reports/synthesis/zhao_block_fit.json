@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "180544142353b157638a287d4cf153c10db1bd6c",
+    "newestRunCommit":  "3ddc2e6417d72236f735cbad79cbbd5d424d4f7c",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1083,20 +1083,20 @@
                    {
                        "module":  "zhao_texture_mosaic",
                        "status":  "ok",
-                       "sourceCommit":  "d6565215575af99a0460b2e46f0cd8ea1bfb013a",
+                       "sourceCommit":  "3ddc2e6417d72236f735cbad79cbbd5d424d4f7c",
                        "rtlCleanAtHead":  true,
-                       "seconds":  921.8,
-                       "sourcesHashed":  57,
-                       "alms":  197,
-                       "registers":  192,
+                       "seconds":  1560,
+                       "sourcesHashed":  2,
+                       "alms":  310,
+                       "registers":  200,
                        "blockMemoryBits":  0,
                        "ramBlocks":  0,
-                       "dspBlocks":  4,
+                       "dspBlocks":  0,
                        "virtualPins":  180,
                        "almsAvailable":  41910,
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
-                       "fmaxMhz":  86.63,
+                       "fmaxMhz":  79.22,
                        "fmaxClock":  "clk"
                    },
                    {

@@ -1,3 +1,58 @@
+# C21 MEASURED — **310 ALM, 0 DSP** — and my estimate was 45% too high
+
+**2026-09-04, after the fit.** C21 landed and passes:
+
+    zhao_texture_mosaic   ok   1560s
+    alms 310   registers 200   dspBlocks 0   ramBlocks 0
+
+| | before | after | gate |
+|---|---|---|---|
+| DSP | **4** | **0** | 0 |
+| ALM | 197 | **310** | <= 500 |
+| registers | — | 200 | <= 350 |
+| M10K | 0 | 0 | 0 |
+| status | `failed:structure` | **`ok`** | |
+
+**The block that was failing its fit now passes it**, and the two 32x32 wrapping
+multiplies by the ratified hash primes are gone.
+
+## THE ESTIMATE BELOW WAS WRONG, AND WRONG IN A WAY THAT MATTERED
+
+It predicted **450-520 ALM** against a 500 gate, called C21 *"on its own
+limit"*, and on that basis recommended a **two-cycle shared adder tree** to
+halve the cost — a real increase in complexity, a pipeline stage, and a new
+`II = 1` argument to make.
+
+The measurement is **310**. The naive combinational CSD was never in danger.
+
+**Why the estimate was high:** it costed 17 independent 32-bit adders at 16-20
+ALM each. Quartus does not build them independently — it shares sub-expressions
+between the two trees (both shift the same operands), packs carry chains, and
+prunes bits that cannot affect the 32-bit result. **A per-adder unit cost is the
+wrong model for a constant-multiplier tree.**
+
+## The lesson, which is this repository's own
+
+*"Measurement can remove a BIAS; it cannot choose a VALUE."* The estimate was
+useful for deciding the rewrite was **plausible**; it was not evidence about
+what to build, and it nearly bought an extra pipeline stage nobody needed.
+
+**An estimate wrong in the safe direction is still wrong** — it just fails by
+adding complexity instead of by falling over.
+
+## One number NOT claimed
+
+`fmaxMhz: 79.22`. That is **not** a verdict on the block: QUARTUS_GOTCHAS §12
+records that a leaf fit in a mostly-empty device measures ROUTING rather than
+the design, and 180 of this fit's pins are virtual. The declared rules for this
+target carry no fmax floor, which is why the row is `ok`. The number that will
+matter is the composed one.
+
+---
+
+<details>
+<summary>The pre-measurement costing, kept because the reasoning is the lesson</summary>
+
 # C21 (the MOSAIC CSD rewrite) costs ~17 adders and lands close to its own gate
 
 **2026-09-04.** `zhao_texture_mosaic` is the one island block whose fit came back
@@ -73,3 +128,5 @@ fitter shares logic this estimate cannot predict, and the existing 197 includes
 control the rewrite does not touch. **The number that matters is the fit**, and
 the point of this file is that the fit is worth running against option 1 rather
 than option 0.
+
+</details>
