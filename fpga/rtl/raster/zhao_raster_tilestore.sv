@@ -188,14 +188,31 @@ module zhao_raster_tilestore (
   // resolve pass by construction — `clear_acc` reaches neither res_pres_eff
   // nor res_clr_eff below.
   // ENFORCED-BY: tests/raster/raster_tilestore_directed.cpp:test_pingpong_isolation
+  //
+  // THESE INDEX BY PORT ADDRESS, NOT BY BANK ADDRESS, AND THAT IS A TIMING
+  // FIX rather than a style choice (2026-09-04). `b0_raddr`/`b1_raddr` are
+  // muxes of BOTH port addresses; but whichever bank a role reads, it reads it
+  // at that role's OWN address -- `present1[b1_raddr]` under `front_r == 0`
+  // is `present1[res_addr_i]` and nothing else. Writing it through the shared
+  // bank mux let Quartus feed the 256:1 present lookup from the RAM's address
+  // node, which also carries `rd_addr_i` -- so RASTER.FRAGMENT's retire chain
+  // reached `res_pres_q` through an address it can never actually supply.
+  //
+  // That was the composed fit's WORST path at commit 3546bfa2 (-0.198 ns):
+  //   rs_state.RS_CLEAR -> ts_clear -> u_fragment|s1_retire
+  //     -> u_tilestore|ram1.raddr_a[3]~3 -> Mux1~15/19/20/84 -> res_pres_eff
+  // Six point three of its 9.58 ns were that multiplexer. Substituting the
+  // provably-selected address is exactly equivalent and removes the port from
+  // the cone. The RAM reads below still use the bank addresses, because those
+  // ARE dual-role: one memory port serves both.
   logic        rd_pres_eff,  res_pres_eff;
   logic [63:0] rd_clr_eff,   res_clr_eff;
   always_comb begin
     rd_pres_eff  = clear_acc ? 1'b0
-                             : ((front_r == 1'b0) ? present0[b0_raddr] : present1[b1_raddr]);
+                             : ((front_r == 1'b0) ? present0[rd_addr_i] : present1[rd_addr_i]);
     rd_clr_eff   = clear_acc ? clear_data_i
                              : ((front_r == 1'b0) ? clear0 : clear1);
-    res_pres_eff = (front_r == 1'b0) ? present1[b1_raddr] : present0[b0_raddr];
+    res_pres_eff = (front_r == 1'b0) ? present1[res_addr_i] : present0[res_addr_i];
     res_clr_eff  = (front_r == 1'b0) ? clear1 : clear0;
   end
 

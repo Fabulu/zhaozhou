@@ -82,36 +82,48 @@ That changes what the next step should be. A single surgery buys at most the
 gap between the worst path and the second — here about 0.07 ns — so closing the
 last 0.198 ns needs **all four** touched, or the target reconsidered.
 
-### The worst path is ANOTHER cross-block ready chain
+### The worst path, traced from the NODES this time -- and the first trace was wrong
 
-Traced, and it is structurally the same defect the skid just fixed:
+    rs_state.RS_CLEAR -> ts_clear                     1.4 ns   ready chain
+      -> u_fragment|s1_retire
+      -> u_tilestore|ram1.raddr_a[3]~3                         the READ ADDRESS
+      -> Mux1~15 -> Mux1~19 -> Mux1~20 -> Mux1~84     6.3 ns   <-- THE COST
+      -> res_pres_eff~0 -> res_pres_q                -0.198 ns
 
-    tile_pipe  rs_state == RS_CLEAR
-      -> ts_clear -> tilestore.clear_valid_i
-      -> tilestore.wr_ready_o = !clear_valid_i        <-- the escape
-      -> ts_wr_ready -> fragment.wr_ready_i
-      -> fragment's s3/s2/s1 retire chain
-      -> back into the pipe -> res_pres_q enable      -0.198 ns
+**This file first said the path ran through `wr_ready_o = !clear_valid_i` into
+Fragment's retire chain and back into a register enable, and recommended
+registering the clear.** That was reasoned from module names and it was wrong in
+the part that decides the fix. `res_pres_eff` does not depend on `clear_acc` at
+all -- the code says so and a comment above it says so. Reading
+`characterization/setup_paths.rpt` node by node shows the truth:
 
-`zhao_raster_tilestore.sv:150` is the single line that creates it:
+* the ready chain is real but contributes **1.4 of the 9.58 ns**;
+* **6.3 ns are the `present[...]` 256:1 multiplexer** -- four LUT levels and
+  **4.4 ns of pure routing**;
+* the ready chain reaches that mux through its **ADDRESS**, not its enable.
 
-    assign wr_ready_o = !clear_valid_i;
+Which is a different defect with a different, cheaper fix.
 
-The block's own comment three lines above says *"Nothing here reads a downstream
-ready, so there is no valid<-ready path"*, and that is true **within** the
-block. But `wr_ready_o` depends on `clear_valid_i`, which is an INPUT — so a
-ready depends on another channel's valid, and because both come from the same
-upstream state machine the comparator lands in Fragment's retire chain.
+### And the address it arrives on is one the port cannot supply
 
-**A valid→ready dependency inside one block becomes a cross-block combinational
-path once two of its channels share an upstream.** That is the same shape as the
-Early-Z chain and it is the reason this one was invisible until Early-Z was
-fixed.
+`b0_raddr`/`b1_raddr` mux *both* port addresses, because one memory port serves
+both roles. But `present1[b1_raddr]` is only ever evaluated under `front_r == 0`,
+where `b1_raddr` **is** `res_addr_i`. The bank mux was therefore carrying
+`rd_addr_i` into a lookup that can never select it, and Quartus fed the present
+mux from the RAM's shared address node -- so Fragment's retire chain reached
+`res_pres_q` down a path that is unreachable in the design's own semantics.
 
-The clear and the write are genuinely mutually exclusive — both target the front
-bank — so the dependency is not gratuitous. Breaking it means either registering
-the clear request or giving the write its own acceptance, and that is a
-one-change, one-fit step like the skid was.
+Substituting the provably-selected address:
+
+    res_pres_eff = (front_r == 1'b0) ? present1[res_addr_i] : present0[res_addr_i];
+    rd_pres_eff  = ... ? present0[rd_addr_i] : present1[rd_addr_i];
+
+**Exactly equivalent by case analysis**, and it removes the port from the cone.
+The RAM reads keep the bank addresses, because those genuinely are dual-role.
+
+**This is the third time this effort that reading the paths beat reasoning about
+the blocks**, and the first two were also recorded here. The rule earned another
+line: *a trace is not traced until it names nodes.*
 
 ### The binner's four: a multiply-add in the register-to-register path
 
