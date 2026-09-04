@@ -314,6 +314,40 @@ not invent an order; it reads back the one the contracts agreed to:
 | 12 | `GEOM.DEPTHQUANT` | UNIT_VERIFIED |
 | 13 | `GEOM.SETUP` | UNIT_VERIFIED |
 
+**THE ORDER ABOVE IS WRONG AT POSITION 2, and the ledger is where it is wrong.**
+Corrected 2026-09-04, hours after publishing it — recorded rather than quietly
+edited, because I derived it mechanically and presented it as authoritative.
+
+`GEOM.ASSEMBLE` declares `upstream: [GEOM.MESHFETCH]` and nothing else, which is
+what puts it at position 2. But its own RTL header says what it actually
+consumes:
+
+> *"`vertex_offset` is PER VIEW, so the same local index resolves to a different
+> **projected vertex** in view 0 and view 1."*
+
+and its port is `m_vertex_offset_i [VIDW-1:0]` — **16 bits, a per-view
+projected-vertex id base**. `GEOM.MESHFETCH` emits `vertex_offset [31:0]`, a
+**byte offset into the mesh's vertex stream**. Different quantity, different
+width, different address space.
+
+**A projected-vertex id does not exist until after `GEOM.PROJECT`.** So
+`ASSEMBLE` cannot run at position 2, before `VDECODE`, `SKIN` and `PROJECT` —
+its input would not have been created yet. What it takes from MESHFETCH is
+`index_offset`; the vertex base comes from whatever allocates arena slots after
+projection.
+
+**The missing edge is not added here**, because which block assigns the id is a
+real question — `GEOM.PROJECT` or `GEOM.WCACHE`/`zhao_vertex_arena` — and
+guessing it would put a wrong edge into the file everything else derives from.
+What is certain is the constraint: **ASSEMBLE is after projection, not before
+decode.**
+
+This is the whole value of deriving the order mechanically and then checking it
+against the RTL: the probe faithfully reported what the ledger said, and the
+ledger was wrong. A composition built to that order would have wired a byte
+offset into a vertex-id port — same signal name, same-looking wire, silently
+wrong geometry.
+
 **Every declared seam agrees.** The probe also checks for edges where A names B
 downstream while B does not name A upstream, and there are **none** across all
 fifteen geometry rows. The contracts are consistent with each other; what is
