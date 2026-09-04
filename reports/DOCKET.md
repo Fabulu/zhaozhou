@@ -1237,6 +1237,66 @@ The remaining four blocks were relaunched as **separate invocations**, which
 makes point 1 moot for this campaign: a per-block fit is independent by
 construction and chaining them gave that up for nothing.
 
+### D19j. D1's top offender needs a CONTRACT change — **owner call**
+Traced 2026-09-04 from r13's node list.
+
+The path that reopens D1 at −0.066 ns runs:
+
+    job_first_r -> ts_clear -> u_fragment|s1_retire -> rd_addr_o[3]
+                -> tilestore Mux0 (256:1 present) -> rd_pres_q
+
+`ts_clear` enters Fragment's retire chain through one line:
+
+    zhao_raster_tilestore.sv:150   assign wr_ready_o = !clear_valid_i;
+
+Removing it takes 2.7 ns out of the path and is the named next step. **But it
+cannot be done as an implementation fix**, because `RASTER.TILESTORE.md` makes
+it normative:
+
+> *In-cycle ordering (normative) … 2. then **write** (front bank only) — a write
+> is NOT accepted in a cycle where a clear is accepted*
+>
+> *The single cross-port rule is `wr_ready_o = !clear_valid_i` — a clear locks
+> the write port for that cycle, **which is what makes ordering rule 2 sound**.*
+
+Rule 2 has its own directed case, and rule 3 ("a read returns NEW data for a
+same-cycle write") makes the difference **observable**: with the lock removed a
+read in a clear cycle would see that cycle's write, and today it cannot.
+
+### The alternative, and why it is not obviously wrong
+
+The lock is not needed to keep the DATA right. Clear-then-write in one
+`always_ff` is well defined — `present <= '0` followed by
+`present[wr_addr] <= 1'b1` leaves exactly the written bit set — so a write
+accepted during a clear lands correctly. What changes is the HANDSHAKE and the
+same-cycle read, which is precisely what rules 2 and 3 pin.
+
+So the options are:
+
+1. **Amend rules 2 and 3** to allow a write in a clear cycle. Buys 2.7 ns on
+   D1's worst path and removes the only cross-port ready dependency in the
+   block. Costs a normative change with two directed cases behind it.
+2. **Register the clear inside tilestore.** Keeps the rules but blocks the write
+   one cycle LATE, which is a different violation of rule 2, not a fix.
+3. **Break the chain at Fragment** so `rd_addr_o` does not depend on
+   `wr_ready_i`. Leaves the contract alone; costs a change in the block whose
+   retire chain has already been the subject of two rounds.
+
+### And the contract carries a claim that composition falsifies
+
+> *"Nothing in the block reads a downstream ready, so there is no combinational
+> valid←ready path anywhere."*
+
+True **within** the block, and false in the machine: `wr_ready_o` depends on
+`clear_valid_i`, and both channels come from the same upstream state machine, so
+in `zhao_shell_top` it is a cross-block combinational path. r11 wrote this up in
+its own words — *"a valid→ready dependency inside one block becomes a
+cross-block combinational path once two of its channels share an upstream"* —
+and the contract's sentence has not caught up.
+
+**Filed rather than decided.** Option 1 is the one that pays, and amending a
+normative ordering rule to buy timing is an owner's call, not an implementer's.
+
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
 `reports/FUNDAMENTALS-DECISIONS-NEEDED.md`. All eight are ruled and each is
