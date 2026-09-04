@@ -185,7 +185,12 @@ def module_outputs(path: str):
 
 
 def main() -> int:
-    tests = {p: read(p) for p in walk(TEST_DIRS, (".cpp", ".hpp", ".sv"))}
+    # `.sby` too: a formally verified module is verified. Leaving SymbiYosys
+    # scripts out of the corpus reported zhao_raster_div255 as having no
+    # test, when tests/formal/raster_resolve_div255.sby discharges
+    # `q*255 <= n < (q+1)*255` for EVERY n at the shipping width -- a
+    # stronger statement than any directed suite makes.
+    tests = {p: read(p) for p in walk(TEST_DIRS, (".cpp", ".hpp", ".sv", ".sby"))}
     blob = "\n".join(tests.values())
 
     unmentioned, readonly, no_test = [], [], []
