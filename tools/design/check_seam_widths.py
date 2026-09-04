@@ -95,6 +95,18 @@ def parameterised(width: str) -> bool:
     return bool(re.search(r"[A-Za-z_]", width.replace("logic", "")))
 
 
+def bits(width: str):
+    """Bit count of a simple `[hi:lo]`, or 1 for a bare `logic`. None if it
+    cannot be read literally."""
+    w = norm(width)
+    if w in ("", "logic"):
+        return 1
+    m = re.match(r"^\[(\d+):(\d+)\]$", w)
+    if not m:
+        return None
+    return int(m.group(1)) - int(m.group(2)) + 1
+
+
 def stem(name: str) -> str:
     n = name
     if n.endswith("_o") or n.endswith("_i"):
@@ -128,7 +140,7 @@ def module_for(bid, mods):
 def main() -> int:
     only = [a for a in sys.argv[1:] if not a.startswith("-")]
     mods = find_modules()
-    fits, mismatches, unpaired, unresolved, skipped = [], [], [], [], 0
+    fits, mismatches, unpaired, unresolved, widenings, skipped = [], [], [], [], [], 0
 
     for up, dn in edges_from_ledger():
         if only and up not in only and dn not in only:
@@ -157,7 +169,15 @@ def main() -> int:
             if parameterised(pw) or parameterised(cw):
                 para.append((s, prod[s], cons[s]))
             else:
-                bad.append((s, prod[s], cons[s]))
+                pb, cb = bits(pw), bits(cw)
+                # A WIDENING cannot lose data. Only a narrowing can, and for a
+                # SIGNED port it does not even clip -- it wraps. Reporting the
+                # two together is what made the first run of this tool look
+                # like nine findings when it had one.
+                if pb is not None and cb is not None and pb < cb:
+                    widenings.append((up, dn, s, prod[s], cons[s]))
+                else:
+                    bad.append((s, prod[s], cons[s]))
         if para:
             unresolved.append((up, dn, para))
         if bad:
@@ -166,13 +186,18 @@ def main() -> int:
             fits.append((up, dn, len(shared)))
 
     print("seam widths: %d seam(s) fit exactly, %d with a REAL width "
-          "difference, %d with a parameterised width this tool cannot compare, "
-          "%d share no recognisable stem, %d skipped (no module file)"
-          % (len(fits), len(mismatches), len(unresolved), len(unpaired), skipped))
+          "NARROWING, %d harmless widening(s), %d with a parameterised width "
+          "this tool cannot compare, %d share no recognisable stem, %d skipped "
+          "(no module file)"
+          % (len(fits), len(mismatches), len(widenings), len(unresolved),
+             len(unpaired), skipped))
 
     if mismatches:
-        print("\nWIDTH DIFFERENCES -- a real cast or a real bug, and both want "
-              "deciding BEFORE the seam is wired:")
+        print("\nNARROWING -- the producer is WIDER than the consumer, so bits "
+              "are lost. For a SIGNED port that does not clip, it WRAPS.\n"
+              "BEWARE STEM COLLISION: two unrelated signals can share a stem "
+              "(`status`, `slot`, `w`), and most rows below are exactly that. "
+              "Read the port NAMES before believing a row:")
         for up, dn, bad, n in mismatches:
             print("  %s -> %s  (%d stems shared)" % (up, dn, n))
             for s, (pn, pw), (cn, cw) in bad:

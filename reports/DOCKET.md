@@ -756,10 +756,31 @@ range is reachable is the question; the narrowing being silent is the defect.
 setup inputs widened to 22, the expander's outputs proven to fit 21, or an
 explicit saturating narrow at the seam. **Not a truncation nobody chose.**
 
-Eight further seams differ in width; the rest of that list is in the tool's
-output and includes at least two false positives from stem collision
-(`GEOM.PROJECT out_w_o` vs `GEOM.CLIP vp_w_i`, which is a **viewport** width,
-and `out_behind_o` vs a three-vertex `tri_behind_i`). **79 seams fit exactly.**
+### The other eight were triaged, and **seven are noise**
+
+The tool's first run said "nine width differences", which was a raw output and
+not a finding list. Every one was then read at source:
+
+| seam | verdict |
+|---|---|
+| `PART.EXPAND -> GEOM.SETUP` (x6 lanes) | **REAL** — same signal, 22 into 21, signed |
+| `MEASURE.GOVERNOR min_hold_o [7:0] -> PART.LADDER p_hold_i [3:0]` | **worth a look** — same concept, and `min_hold_o` is a constant `8'(MIN_HOLD)` that probably fits 4 bits |
+| `CMD.SCHEDULER fence_status_o [7:0] -> SURFACE.STAMP pg_status_i [1:0]` | noise — a FRAME FENCE status against a PAGE status (`StOverflow`) |
+| `CMD.SCHEDULER fetch_slot_o [1:0] -> MEM.GUARD blit_slot` | noise — a command-ring slot against an FB slot |
+| `CMD.SCHEDULER fetch_slot_o [1:0] -> TWOD.PLANE d_slot_i` | noise — same collision |
+| `GEOM.PROJECT out_w_o [30:0] -> GEOM.CLIP vp_w_i [11:0]` | noise — `vp_w_i` is a **VIEWPORT** width |
+| `GEOM.PROJECT out_behind_o -> GEOM.CLIP tri_behind_i [2:0]` | noise — one per-vertex flag against three vertices' worth |
+| `SURFACE.SHEET pg_strength_o [7:0] -> cmd_strength_i [15:0]` | widening, cannot lose data |
+| `VIDEO.FRAMECTL swap_slot -> CMD.SCHEDULER dma_slot_i [1:0]` | widening, cannot lose data |
+
+**Six of the nine are STEM COLLISIONS** — `status`, `slot` and `w` are generic
+enough that two unrelated signals share one. The tool now separates narrowing
+from widening and prints the collision warning above its own list, because a
+tool whose output must be triaged by hand and does not say so is a tool that
+will be believed once and ignored after.
+
+**82 seams fit exactly.** That is the number that matters for D22: the wiring is
+mostly a matter of connecting ports that already agree.
 
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
