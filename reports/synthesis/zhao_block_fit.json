@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "802365f55596d71f9be7e30f02a363a0c8e09dbf",
+    "newestRunCommit":  "1b16923576eba4fa094524b25dada1ab5e6e193d",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1048,9 +1048,9 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  98.66,
                        "fmaxClock":  "clk",
-                       "lastAttemptStatus":  "contaminated:source-changed-during-fit",
-                       "lastAttemptSeconds":  6871.7,
-                       "lastAttemptCommit":  "802365f55596d71f9be7e30f02a363a0c8e09dbf"
+                       "lastAttemptStatus":  "failed:structure",
+                       "lastAttemptSeconds":  4553,
+                       "lastAttemptCommit":  "1b16923576eba4fa094524b25dada1ab5e6e193d"
                    },
                    {
                        "module":  "zhao_texture_mosaic",
