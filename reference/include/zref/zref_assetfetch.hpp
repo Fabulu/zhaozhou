@@ -50,6 +50,24 @@ inline constexpr int kLineBytes             = 64;   // one aligned burst
 inline constexpr int kMaxVertices  = 64;
 inline constexpr int kMaxTriangles = 126;
 
+// ---------------------------------------------------------------------------
+// ALIGNMENT, and it is an ENFORCEMENT of an existing ruling rather than a new
+// one. GEOM.VDECODE's contract already says vertex records are "32 bytes per
+// vertex, NATURALLY ALIGNED"; requiring `vertex_offset % 32 == 0` is that
+// sentence, checked. `index_offset % 8 == 0` is the same idea one size down.
+//
+// It was found by laying out the RTL's buffers, and it is worth the note:
+// an unaligned 32-byte record spans five 64-bit words, so serving it needs a
+// 320-to-256 funnel shifter PER VERTEX. Aligned, a record is exactly four
+// consecutive words and the shifter disappears. A triplet still straddles --
+// 3 bytes at byte 3n cannot be helped -- so that one reads two words and
+// selects, which is cheap.
+//
+// The asset builder pays nothing for this; padding a stream to 32 bytes is
+// free at authoring time and the silicon is not.
+inline constexpr uint32_t kVertexAlign = 32;
+inline constexpr uint32_t kIndexAlign  = 8;
+
 // spec/memory_rules.md 5f. Named, not inlined: the pool is a knob and a moved
 // pool must not require finding a hex literal in an oracle.
 inline constexpr uint32_t kAssetPoolBase = 0x06A00000u;
@@ -72,6 +90,7 @@ enum class Refusal : uint8_t {
   kVertexCount,     // vertex_count   > kMaxVertices
   kTriangleCount,   // triangle_count > kMaxTriangles
   kOutsidePool,     // the footprint leaves the pool -- refused BEFORE any beat
+  kMisaligned,      // an offset violates kVertexAlign / kIndexAlign
 };
 
 struct Request {
@@ -120,6 +139,13 @@ inline Plan plan(const Request& r) {
   }
   if (r.triangle_count > kMaxTriangles) {
     p.refusal = Refusal::kTriangleCount;
+    return p;
+  }
+
+  // Alignment before arithmetic: a misaligned offset is a malformed asset, and
+  // saying so is more useful than reporting where its unaligned footprint fell.
+  if ((r.vertex_offset % kVertexAlign) != 0 || (r.index_offset % kIndexAlign) != 0) {
+    p.refusal = Refusal::kMisaligned;
     return p;
   }
 

@@ -76,10 +76,13 @@ static void test_pool_edges() {
   check(flush.admitted,
         "a footprint ending exactly at the pool's last byte is admitted");
 
-  // One byte further and it leaves the pool.
-  const af::Plan over = af::plan(req(af::kAssetPoolSpan - vbytes + 1, 0, 64, 0));
+  // One ALIGNED step further and it leaves the pool. The step is kVertexAlign
+  // rather than 1 on purpose: at +1 the refusal would be kMisaligned and this
+  // check would pass for the wrong reason, proving nothing about the bound.
+  const af::Plan over =
+      af::plan(req(af::kAssetPoolSpan - vbytes + af::kVertexAlign, 0, 64, 0));
   check(!over.admitted && over.refusal == af::Refusal::kOutsidePool,
-        "one byte past the pool end is refused as kOutsidePool");
+        "one aligned step past the pool end is refused as kOutsidePool");
 
   // THE WRAP CASE. An offset near 2^32 makes base+offset wrap to a small
   // address, which lands INSIDE the pool if you only test the end. This is the
@@ -92,9 +95,42 @@ static void test_pool_edges() {
 
   // The index stream is checked independently of the vertex stream: a legal
   // vertex block must not launder an illegal index block.
-  const af::Plan idx_bad = af::plan(req(0, af::kAssetPoolSpan - 2, 1, 1));
+  // 8-aligned so this tests the BOUND, not the alignment: 4 triangles = 12
+  // bytes starting 8 before the end runs 4 bytes past it.
+  const af::Plan idx_bad = af::plan(req(0, af::kAssetPoolSpan - 8, 1, 4));
   check(!idx_bad.admitted && idx_bad.refusal == af::Refusal::kOutsidePool,
         "an out-of-pool INDEX stream is refused even when the vertices fit");
+}
+
+// --------------------------------------------------------------------------
+// 2b. Alignment. GEOM.VDECODE's contract already says vertex records are
+// "naturally aligned"; these check that the block ENFORCES that sentence
+// rather than hoping for it, because the RTL's buffer layout depends on it.
+// --------------------------------------------------------------------------
+static void test_alignment() {
+  check(af::plan(req(32, 8, 1, 1)).admitted,
+        "the minimum legal alignments (32 / 8) are admitted");
+
+  const af::Plan vbad = af::plan(req(16, 0, 1, 1));
+  check(!vbad.admitted && vbad.refusal == af::Refusal::kMisaligned,
+        "a 16-byte-aligned vertex offset is refused as kMisaligned");
+
+  const af::Plan ibad = af::plan(req(0, 4, 1, 1));
+  check(!ibad.admitted && ibad.refusal == af::Refusal::kMisaligned,
+        "a 4-byte-aligned index offset is refused as kMisaligned");
+
+  // Ordering again: over-count outranks misalignment, for the same reason it
+  // outranks out-of-pool -- the count is the fault an author can act on.
+  const af::Plan both = af::plan(req(16, 4, 65, 1));
+  check(both.refusal == af::Refusal::kVertexCount,
+        "over-count outranks misalignment: the taxonomy stays ORDERED");
+
+  // An UNUSED stream must still be aligned. A meshlet with no triangles still
+  // carries an index_offset, and admitting a malformed one because it happens
+  // to be unread would let a corrupt descriptor through on a technicality.
+  const af::Plan unused = af::plan(req(0, 4, 1, 0));
+  check(!unused.admitted && unused.refusal == af::Refusal::kMisaligned,
+        "a misaligned offset is refused even when that stream is never read");
 }
 
 // --------------------------------------------------------------------------
@@ -113,8 +149,10 @@ static void test_line_counting() {
   check(af::lines_covering(63, 2) == 2,
         "two bytes straddling a line boundary spans two lines");
 
-  // And the same at pool scale, through plan().
-  const af::Plan p = af::plan(req(1, 0, 2, 0));   // 64 bytes at pool_base+1
+  // And the same at pool scale, through plan(). The pool base is 64-aligned and
+  // vertex offsets are 32-aligned, so a vertex block sits at byte 0 or byte 32
+  // of a line -- at 32, two records straddle into a second line.
+  const af::Plan p = af::plan(req(32, 0, 2, 0));   // 64 bytes at pool_base+32
   check(p.beats == 2, "plan() counts a straddling vertex block as two beats");
 }
 
@@ -179,6 +217,7 @@ static void test_serving() {
 int main() {
   test_limits();
   test_pool_edges();
+  test_alignment();
   test_line_counting();
   test_serving();
 

@@ -80,10 +80,36 @@ absolute VRAM address and a pool move stays a one-constant edit.
 **The local `u8` index becomes a global vertex id by `vertex_offset + local`,
 and that is `GEOM.ASSEMBLE`'s arithmetic, not ours.** We serve bytes.
 
+## Alignment — an existing ruling ENFORCED, not a new one
+
+    vertex_offset % 32 == 0        index_offset % 8 == 0
+
+`GEOM.VDECODE`'s contract already says vertex records are *"32 bytes per vertex,
+**naturally aligned**"*. This is that sentence checked rather than hoped for,
+and the reason it is checked here is that **the buffer layout depends on it**:
+
+* an **unaligned** 32-byte record spans five 64-bit words, so serving one needs
+  a **320-to-256 funnel shifter, per vertex**;
+* **aligned**, a record is exactly four consecutive words and the shifter does
+  not exist. The pool base is 64-byte aligned, so a record sits at byte 0 or
+  byte 32 of a line and never at an odd place.
+
+A triplet still straddles — 3 bytes at byte `3n` cannot be helped — so that path
+reads two words and selects three bytes from sixteen, which is cheap.
+
+**The asset builder pays nothing for this.** Padding a stream to 32 bytes is
+free at authoring time; the shifter is not free in silicon.
+
+**A misaligned offset is refused even when its stream is never read.** A meshlet
+with no triangles still carries an `index_offset`, and admitting a malformed one
+because it happens to be unused would let a corrupt descriptor through on a
+technicality.
+
 ## Refusals, each counted, none silent
 
 | condition | why |
 |---|---|
+| `vertex_offset % 32` or `index_offset % 8` | malformed asset — see above |
 | `vertex_count > MAX_VERTICES` | footprint exceeds the buffer |
 | `triangle_count > MAX_TRIANGLES` | ditto |
 | any beat's guard request denied | the pool bounds are the guard's to enforce |
