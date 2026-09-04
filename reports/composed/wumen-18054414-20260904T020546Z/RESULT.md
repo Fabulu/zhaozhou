@@ -42,14 +42,36 @@ written; it had never been fitted. **This run is the difference between 85.62 an
 in `zhao_cmd_dma`. Every one is a FRAGMENT → EARLY-Z crossing into the coverage
 accumulator mask.
 
-That is worth stating plainly because Early-Z was supposed to be *finished*.
-Round 9 replaced its 256-input `acc_full` reduction with unique-coverage
-counting and took it from 100 of 100 worst paths to 19. What remains is not that
-structure returning — it is the **fragment's stage-3 address arriving late at the
-mask**, which is the seam between two blocks that were each optimised alone.
+**IT IS A READY PATH, NOT A DATA PATH**, and that distinction decides the fix.
+Traced through the RTL rather than inferred from the endpoint names:
 
-`s3_addr_r` is a register from the RMW split (`fc6395fd`, round 3). So the
-remaining path is between two of the fixes, not inside either.
+    fragment.s3_addr_r
+      -> (s3_addr_r == s0_addr_r)   the same-address hazard comparator
+      -> s0_to_s1 -> fragment.frag_ready_o
+      -> earlyz.cand_ready_i
+      -> out_free = !out_v_r || cand_ready_i
+      -> earlyz.frag_ready_o -> frag_acc -> hiz_qualify
+      -> acc_mask_r[frag_addr_i] write enable
+
+**A combinational backpressure chain spanning two blocks and ending in a 256-bit
+masked write.** `s3_addr_r` reaches Early-Z by travelling *backwards* through
+the ready signals, not forwards as data.
+
+The first version of this file said "the fragment's stage-3 address arriving
+late at the mask", which reads as a data path. **It is corrected here because
+the two have opposite fixes**: pipelining the address would do nothing at all,
+since the address is not what arrives.
+
+Early-Z was supposed to be finished — round 9 replaced its 256-input `acc_full`
+reduction with unique-coverage counting and took it from 100 of 100 worst paths
+to 19. This is not that structure returning. It is the seam between two blocks
+each optimised alone, and `s3_addr_r` is a register from the RMW split
+(`fc6395fd`, round 3), so the path runs *between* two of the fixes.
+
+**And this class has a regression history.** `MHZArchitected` round 2 added an
+Early-Z ready-path skid: `gpu_clk` fell 62.89 -> 60.92 and it was KEPT anyway as
+prepaid work. Whoever breaks this chain should expect the same shape and fit it
+alone.
 
 ## What is NOT claimed
 
@@ -67,9 +89,10 @@ remaining path is between two of the fixes, not inside either.
 
 The shortfall is 0.28 ns on a single cross-block seam with seventeen siblings.
 That is a smaller and more specific problem than any round in this effort has
-started with, and it does not need another sweep: it needs a register between
-`zhao_raster_fragment`'s stage-3 address and `zhao_raster_earlyz`'s mask, or the
-mask write moved a stage later.
+started with, and it does not need another sweep: it needs the READY chain broken -- a skid on
+`earlyz.cand_ready_i`, or the hazard comparator taken off
+`fragment.frag_ready_o` -- and it needs its own fit, because the last attempt at
+this class cost 2 MHz before it paid.
 
 **Architecture rule still applies:** latency may grow; initiation rate and exact
 arithmetic may not regress.

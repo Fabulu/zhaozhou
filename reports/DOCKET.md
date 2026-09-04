@@ -105,12 +105,23 @@ this docket was describing them as pending.
     to    zhao_raster_earlyz   | acc_mask_r[115]        −0.280 ns
 
 17 of the 18 violations end in `zhao_raster_earlyz` and the eighteenth is in
-`zhao_cmd_dma`. Early-Z's own structure was fixed in round 9 — this is the
-**fragment's stage-3 address arriving late at the mask**, a path *between* two
-fixes rather than inside either. `s3_addr_r` is a register from the RMW split.
+`zhao_cmd_dma`.
 
-So the next step is a register on that crossing, or the mask write moved a stage
-later — not another round of search.
+**It is a READY path, not a data path** — traced through the RTL, not inferred
+from the endpoints:
+
+    fragment.s3_addr_r -> hazard comparator -> fragment.frag_ready_o
+      -> earlyz.cand_ready_i -> out_free -> frag_acc -> hiz_qualify
+      -> acc_mask_r write enable
+
+`s3_addr_r` reaches Early-Z by travelling **backwards through the ready
+signals**. Pipelining the address would do nothing, because the address is not
+what arrives late.
+
+So the fix is a skid on `earlyz.cand_ready_i`, or the hazard comparator taken
+off `fragment.frag_ready_o`. **Fit it alone:** round 2 added an Early-Z
+ready-path skid and `gpu_clk` fell 62.89 → 60.92, kept anyway as prepaid work.
+This class has cost 2 MHz before it paid.
 
 **Still not the finished console's number:** this is the shell without the
 geometry front end (D22), on a provisional device, with virtual I/O.
