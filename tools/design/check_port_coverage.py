@@ -62,6 +62,36 @@ tool cannot see it at all: an output nothing reads is a gap, but an output whose
 CAUSE never occurs is a bigger gap wearing the same clothes. Reading the flagged
 port's own input is the manual step this tool does not replace.
 
+IT COULD NOT SEE THE PORT IT WAS WRITTEN FOR
+---------------------------------------------
+The worst of the three, found 2026-09-04 while writing `check_counters.py`
+against the same regex. `PORT_RE` had no provision for a WIDTH BRACKET:
+
+    output var logic        exec_sat_add_o,       <- matched
+    output var logic [31:0] meshlets_fetched_o,   <- SILENTLY SKIPPED
+
+So every port with a declared width was invisible, and the tool reported
+confidently on a subset it never disclosed. Including, exactly:
+
+    output var logic [30:0] out_w_o,
+
+`out_w_o` is the port whose missing differential motivated this file and is
+named in the section above as the founding example. **The tool written to catch
+it could not see it.**
+
+Fixing the bracket moved every number this tool produces:
+
+    output ports named by no test    29  ->  95
+    read but never obviously compared 313 -> 936
+    unmentioned FAULT reporters        4  ->   5
+
+and the new fault reporter, `zhao_raster_texjoin.uv_sat_fragments_o`, is a
+counter of saturated fragments -- width-bearing, therefore previously invisible.
+
+The lesson is not "regexes are hard". It is that a tool reporting a SMALL number
+looks like good news and is the one result nobody audits. A parser that silently
+drops what it cannot match will always report progress.
+
 AND THE COUNT GOING DOWN CAN MEAN IT WENT BLIND
 ------------------------------------------------
 Same afternoon, the nastier version. Adding a `o_uv_sat_o` check to
@@ -89,7 +119,7 @@ TEST_DIRS = ["tests"]
 
 # `output var logic [30:0] out_w_o,` / `output logic out_behind_o,` / trailing `)`
 PORT_RE = re.compile(
-    r"^\s*output\s+(?:var\s+)?(?:\w+\s+)*?(\w+)\s*(?:,|\)|;)\s*(?://.*)?$"
+    r"^\s*output\s+(?:var\s+)?(?:\w+\s+)*?(?:\[[^\]]*\]\s*)*(\w+)\s*(?:,|\)|;)\s*(?://.*)?$"
 )
 MODULE_RE = re.compile(r"^\s*module\s+(\w+)")
 

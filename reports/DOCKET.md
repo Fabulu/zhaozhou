@@ -714,7 +714,28 @@ governs their behaviour, and V12 checks each name is in `counter_catalog`.
     present in the module text some other way   :  54   (comments included)
     absent from the module entirely             :  54
 
-**Zero.** The ledger's counter names and the RTL's port names are two separate
+**CORRECTED 2026-09-04, later the same day. That zero was a measurement
+artefact, and the real figure is 23 of 108.** The port-scanning regex shared by
+these tools had no provision for a WIDTH BRACKET, so `output var logic [31:0]
+meshlets_fetched_o` was silently skipped while `output var logic
+exec_sat_add_o` matched. Every counter port in the tree is width-bearing, which
+is why the count came out at exactly zero rather than merely low -- **a zero
+that precise should have been read as a broken measurement, not a finding.**
+
+`tools/design/check_counters.py` now measures it properly:
+
+    108 declared on blocks with a module
+     23 resolve by the default <name>_o
+     85 UNRESOLVED
+     30 further blocks declare counters but have no module file yet
+
+**The ruling below is unchanged, and the corrected number strengthens it.**
+Twenty-three blocks already follow `<counter>_o`, so that is the established
+default rather than a new imposition -- and a block already conforming needs no
+mapping entry at all, so adopting the rename later simply deletes entries rather
+than rewriting them.
+
+**Original (wrong) reading follows.** Zero. The ledger's counter names and the RTL's port names are two separate
 vocabularies with no mechanical link, so `counters: [meshlets_fetched,
 triangles_culled]` on `GEOM.MESHFETCH` — whose ports are
 `meshlets_considered_o` and `descriptors_fetched_o` — is documentation that
