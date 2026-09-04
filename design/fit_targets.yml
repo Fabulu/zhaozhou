@@ -151,6 +151,19 @@ targets:
   - top: zhao_raster_perspuv_svc
     sources:
       - fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+    rules:
+      # THE BRIEF'S OWN NUMBERS, islandrearchitecture5.md 8.8: "<= 900 ALMs /
+      # <= 700 registers / <= 1 M10K / 6 DSP hard initial budget / II = 1
+      # pair/clock / >= 125 MHz across three seeds".
+      #
+      # This block had NO RULES, so it reported `ok` while measuring 2,204 ALM
+      # and 3,293 registers -- 145% and 370% over. A green row that cannot go
+      # red is not evidence of anything, and this is the clearest example of it
+      # in the file.
+      max_alms: 900
+      max_registers: 700
+      max_m10k: 1
+      max_dsp: 6
 
   - top: zhao_raster_texjoin_v2
     sources:
@@ -186,6 +199,14 @@ targets:
     rules:
       # S3.4: reject DSP > 4 after the 32x32 width proof. Measured 6.
       max_dsp: 4
+      # THE BRIEF'S OWN NUMBERS, islandrearchitecture5.md 7.7: "<= 650 ALMs /
+      # <= 600 registers / <= 1 M10K / 3 DSP preferred, 4 DSP hard ceiling".
+      # Only the DSP ceiling was gated, and the block VIOLATES it at 6.
+      # Measured 1041 ALM / 1101 reg -- 60% and 84% over. These gates make the
+      # report say so instead of leaving two of the three numbers unwatched.
+      max_alms: 650
+      max_registers: 600
+      max_m10k: 1
 
   - top: zhao_terrain_residency
     sources:

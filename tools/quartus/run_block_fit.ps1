@@ -809,7 +809,21 @@ try {
     # re-running a block actually means.
     foreach ($row in $results) {
         $prior = $merged[$row.module]
-        if ($row.status -ne 'ok' -and $null -ne $prior -and $prior.status -eq 'ok') {
+        # 'failed:structure' MEANS MEASURED, and that distinction was lost.
+        #
+        # This guard exists for runs that produced NO numbers -- a timeout, a
+        # quartus_map failure -- where keeping the prior row is obviously right.
+        # But a structure failure is a COMPLETED fit whose numbers violated a
+        # tripwire, and treating it the same way threw the measurement away.
+        #
+        # On 2026-09-04 zhao_texture_cache_pipe fitted at 1,633 ALM / 3,033 reg
+        # / 6 M10K / 8,320 memory bits -- a 73% register reduction -- failed
+        # min_m10k 8, and the report kept the PREVIOUS row: 5,903 ALM / 11,328
+        # reg / 128 bits. The committed record showed the design four times
+        # worse than it is, and the whole point of the rework was invisible in
+        # it. The tripwire had done its job; the bookkeeping undid it.
+        $measured = ($row.status -eq 'failed:structure')
+        if (-not $measured -and $row.status -ne 'ok' -and $null -ne $prior -and $prior.status -eq 'ok') {
             $kept = $prior | Select-Object *
             $kept | Add-Member -NotePropertyName 'lastAttemptStatus'  -NotePropertyValue $row.status  -Force
             $kept | Add-Member -NotePropertyName 'lastAttemptSeconds' -NotePropertyValue $row.seconds -Force
