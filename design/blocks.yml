@@ -2151,7 +2151,7 @@ blocks:
     inputs: [meshlet_stream]
     outputs: [vertex_batch]
     upstream: [GEOM.MESHFETCH]
-    downstream: [GEOM.SKIN]
+    downstream: [GEOM.SKIN, GEOM.SKIN.NORM]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 decoded vertex per clock
@@ -2182,7 +2182,7 @@ blocks:
     inputs: [pose_requests, clip_pages]
     outputs: [bone_matrices]
     upstream: [GEOM.MESHFETCH]
-    downstream: [GEOM.SKIN, MEM.GUARD]
+    downstream: [GEOM.SKIN, MEM.GUARD, GEOM.SKIN.NORM]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 decoded bone per clock on miss; 1 palette handle per request on hit
@@ -2203,6 +2203,60 @@ blocks:
     cut_order: null
     superseded_by: null
     notes: "World-identity wave (RUN-20260816-0046); promoted by the lighting & pose consolidation wave (2026-08-17) once the quat lane froze: qformats 7.6 (amendment C1, QFMT_VERSION 2). Evidence: the creature reference core at bd1c733 (zref::PoseBank decode-on-fetch, 3,600-rotation sweep vs a double oracle, cache determinism/eviction/bad-id anchors in tests/geometry/creature_core.cpp). The original geom_pose_directed/random.cpp reservations were never written; the creature core suite carries both roles (one file, MEM.GUARD precedent)."
+
+  - id: GEOM.SKIN.NORM
+    name: Blended world normal
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: >-
+      Transform a packed bind-space normal through the same two-bone blend as
+      its vertex, blend the VECTORS, and renormalise ONCE -- the light-independent
+      half of the creature lighting law. GEOM.LIGHT's contract named it as a
+      prerequisite that is not itself, and compose_order.py reported the
+      consequence: world_normal had no producer, the last unexplained input in
+      the geometry subsystem. It cannot be a widening of GEOM.SKIN, which fits at
+      89.65 MHz with 9 DSPs and whose output "nothing more may be bolted onto".
+    contract: design/contracts/GEOM.SKIN.NORM.md
+    phase: 9
+    owner_issue: ZH-054
+    inputs: [vertex_batch, bone_matrices]
+    outputs: [world_normal]
+    upstream: [GEOM.VDECODE, GEOM.POSE]
+    downstream: [GEOM.LIGHT]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: one vertex per isqrt service turn; behind GEOM.SKIN's one per twelve clocks
+    reference_model: zref::creature::skin_world_normal
+    tests:
+      directed: tests/geometry/skin_norm_rtl_directed.cpp
+      random: tests/geometry/skin_norm_split_directed.cpp
+    counters: [vertices_transformed]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-04"
+        commit: 87e63ff3
+        evidence: reference/src/zcreature/creature_core.cpp
+      - state: UNIT_VERIFIED
+        date: "2026-09-04"
+        commit: 87e63ff3
+        evidence: tests/geometry/skin_norm_rtl_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      Runs ONCE PER VERTEX and not once per light. The reference calls
+      skin_normal_lambert separately for key, fill and point light, and the owner
+      is explicit that the hardware must not reproduce that structure; the
+      equivalence was proved in skin_norm_split_directed.cpp BEFORE this block
+      existed. The output is {direction, magnitude} rather than a unit vector,
+      because normalising here would round twice and the law has exactly one
+      rounding. The square root is zhao_field_isqrt driven as a service, since it
+      already cites zref::isqrt_u64 and a second implementation would be a second
+      law.
 
   - id: GEOM.SKIN
     name: Skinning stage
@@ -2565,7 +2619,7 @@ blocks:
     owner_issue: ZH-085
     inputs: [world_normal, environment]
     outputs: [vertex_rgb]
-    upstream: [GEOM.SKIN]
+    upstream: [GEOM.SKIN, GEOM.SKIN.NORM]
     downstream: [GEOM.PROJECT]
     backpressure: ready_valid
     latency: variable
