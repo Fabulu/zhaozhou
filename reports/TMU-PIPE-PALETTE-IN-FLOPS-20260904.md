@@ -270,3 +270,34 @@ directed suite for a baseline and reading the line it prints on a green run.
 is a larger job than reshaping an array, and whether the register cost is
 tolerable until then is the owner's call. The point is that doing D19m *first
 and separately* is the one ordering that makes both problems worse.
+
+---
+
+# The defect costs FIT TIME too, measured against a sibling
+
+Both blocks are texture-island leaves fitted the same day, by the same harness,
+onto the same device. The only large difference is where their storage went.
+
+    stage                    tmu_pipe            cache_pipe
+                             72,824 registers    3,097 registers
+                             256 memory bits     8,320 memory bits
+
+    placement preparation    45 min 39 s          6 min 42 s
+    placement                25 min 38 s          5 min 16 s
+    routing                  >2 h, never finished  in progress
+
+A **7x** difference in the placement stages, tracking a **23x** difference in
+registers. `tmu_pipe`'s routing had not converged after two hours and was
+stopped; `cache_pipe` reached routing in twelve minutes.
+
+**This is worth stating because it changes who should care.** A resource
+overrun reads as a budget problem for whoever owns the device totals. A block
+that cannot be *fitted in reasonable time* is everybody's problem: it blocks the
+queue, it eats the machine, and — through the harness's timeout defect
+(`FIT-TIMEOUT-CANNOT-FIRE-20260904.md`) — it discards its own measurement after
+paying for it in full.
+
+`zhao_forge_cliff` is the same story one step further along (D19n): more declared
+bits than `tmu_pipe`, all three arrays in the non-inferring read shape, and a
+permanent `timeout` row with no numbers at all. **A design whose storage is in
+the wrong place stops being measurable before it stops being buildable.**
