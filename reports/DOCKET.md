@@ -877,6 +877,75 @@ ledger row declares THREE. `full_clocks_o` is implemented and undeclared, which
 is the D19c vocabulary problem running in the opposite direction — the ledger
 under-claiming rather than over-claiming.
 
+### D19l. Eight fit rules have NEVER been evaluated — and three blocks breach one
+Found 2026-09-04 while sweeping for D19m's defect.
+`tools/quartus/check_rule_freshness.py`.
+
+Three blocks in `reports/synthesis/zhao_block_fit.json` read `status: ok` while
+measuring far past a ceiling their own `fit_targets.yml` entry declares:
+
+    zhao_raster_texjoin_v2    registers 7151 > 2500
+    zhao_raster_perspuv_svc   registers 3293 >  700 ; alms 2204 > 900
+    zhao_raster_rcp24_svc     registers 1101 >  600 ; alms 1041 > 650 ; dsp 6 > 4
+
+**The evaluator is not broken.** `zhao_texture_fragrob` carries the same
+`max_registers: 2500` and failed it correctly at 2,631 today. The cause is
+duller: **the rules were written AFTER those blocks were last fitted.**
+
+    perspuv_svc   row's sources 2026-09-03 11:47   its rule 2026-09-04 07:36
+    texjoin_v2    row's sources 2026-09-03 04:31   its rule 2026-09-03 17:29
+
+All eight resource rules on the four blocks not fitted today postdate the
+measurement that governs them. A rule declared after the last fit **has never
+run**, and nothing in either file distinguishes it from one that was evaluated
+and passed.
+
+**This is the third instance of one failure mode**, and the reason it is now a
+tool rather than a third anecdote: the Stop hook that bypassed itself and fired
+exactly once (`CLAUDE.md`), and a port-coverage self-check written with a ``
+that a heredoc turned into a literal backspace, so it matched nothing and
+printed *"no silent drops"* while 17 ports were dropped. **A check that has
+never fired is worse than no check, because it reassures.**
+
+Also reported: the `status` / `lastAttemptStatus` split. `status` holds the last
+GOOD run, so a block whose rules now fail still reads `ok` — `cache_pipe` is
+exactly that today.
+
+*(A first draft of this entry named `cache_pipe` as the worst breach at 11,328
+registers against `max_registers: 2000`. **Wrong.** Those gates were removed
+earlier the same day and survive only as quoted text inside the comment
+explaining the removal — a loose regex read the retraction as the rule. The
+tool now matches whole lines only.)*
+
+### D19m. tmu_pipe holds a 64 Kbit palette cache in flip-flops — 72,824 registers
+Found 2026-09-04 by reading the LIVE fit's synthesis stage, which finished 71
+minutes before the fitter did. Full write-up:
+`reports/TMU-PIPE-PALETTE-IN-FLOPS-20260904.md`.
+
+    Total registers : 72824      Total block memory bits : 256
+
+The provisional part has 41,910 ALMs — roughly 84,000 flip-flops — so **one
+block asks for about 87% of every register on the device** while using 256 bits
+of the 553 available M10Ks. The cause is two declarations:
+
+    logic [255:0] pal_val_r [PAL_SLOTS];        //  16 x 256      =  4,096 bits
+    logic [15:0]  pal_dat_r [PAL_SLOTS][256];   //  16 x 256 x 16 = 65,536 bits
+
+As memory that is **7 M10K out of 553**. `pal_dat_r` is multidimensional, the
+shape Quartus 17.0.2 declines to infer.
+
+**Nothing caught it because nothing was watching**: `tmu_pipe` has a `sources:`
+list and no rules at all — see D19l. A gate absent is not a gate passing.
+
+This also refines a prediction I got wrong this morning. I expected `fragrob` to
+fail on this very mechanism; it did not (13 M10K inferred), and I recorded that
+the blocker "is real for some shapes and was not fragrob's". **This is one of
+the shapes.** Multidimensional alone is not sufficient — multidimensional AND
+large AND indexed on both axes is what breaks inference.
+
+No fix in this pass: the file is inside the running fit's closure (live-tree
+trap, `QUARTUS_GOTCHAS.md` §11).
+
 ### D19d. `PART.EXPAND -> GEOM.SETUP` narrows six SIGNED coordinates by a bit
 `tools/design/check_seam_widths.py`, first run. **Verified at source:**
 
