@@ -69,10 +69,17 @@ Where they disagree, the manifest wins and this file is stale.
 | Capability | Implementation | Status |
 |---|---|---|
 | Texture cache | `zhao_texture_cache_pipe` | SELECTED, MEASURED (1,633 ALM / 3,033 reg / 6 M10K / 101.69 MHz, 2026-09-04) |
-| Sampler | `zhao_texture_tmu_pipe` | SELECTED, **not measured** — see below |
+| Sampler | `zhao_texture_tmu_pipe` | SELECTED by the manifest, **but NOT in the approved architecture at all** — see `reports/G1-ISLAND-SURVIVORS-20260905.md`. Its functions are split across five approved blocks and its palette becomes `zhao_texture_palette_res`. **Do not repair its palette.** It also has no valid fit. |
 | Fragment transaction | `zhao_raster_texjoin_v2` | SELECTED, MEASURED, and known "wrong about storage" per its own ledger row |
 | Fragment transaction (replacement) | `zhao_texture_fragrob` | BUILT, **not-yet-adopted**, fails its register gate at 2,631 > 2,500 |
 | Material combiner | — | **NOT BUILT.** TEXJOIN returns sample zero for every recipe; three-sample material support does not exist |
+
+**The island as implemented is far over its own envelope.** Nine current leaf
+rows of the eleven approved components sum to **8,455 ALM against a 7,500 hard
+redline**, before the stale perspective-pair row and before the unbuilt material
+combiner. Full table and caveats: `reports/G1-ISLAND-SURVIVORS-20260905.md`.
+It is an upper bound (virtual pins, no sharing, one stale row) — and no
+composed fit of the eleven exists.
 
 **Two honest statements this table exists to prevent being blurred:**
 
