@@ -1388,3 +1388,75 @@ The rule fires with *"state that belongs in memories is in flip-flops"*, and
 **here that diagnosis is wrong** — the payload is in the 13 M10Ks. The overrun
 is 131 registers, 5%, of control and pipeline state. Worth rewording: a gate
 that explains itself beats one that does not, until the explanation is wrong.
+
+---
+
+## 14:xx — work done alongside the tmu_pipe fit, and one bad instrument found
+
+Four items, all outside the running fit's closure (`tmu_pipe` compiles
+`zhao_texture_bilerp.sv` + `zhao_texture_tmu_pipe.sv`, nothing else).
+
+### D19b: two fault reporters closed, both mutation-proven
+
+`zhao_surface_sheet.res_overflow_o` — a one-cycle pulse announcing a **rejected
+acquire**. The overflow CONDITION was already exercised; only the port was
+unobserved, which is the `out_w_o` shape exactly. `SheetResponse` now COUNTS
+assertions across the request window, because a caller reading a one-cycle pulse
+after the response has already missed it, and counting separates "never fired"
+from "fired twice". Three checks, both directions.
+
+The `o_uv_sat_o` group turned out to be **larger than filed**. The ports were not
+merely unread — `f_uv_sat_i`, their cause, is set in five places across the whole
+test tree and **all five write 0**. The flag had never been high in simulation.
+New case 3b in `raster_texjoin_v2_directed` drives it with an irregular pattern
+(0,1,1,0), returns arriving backwards, plus a non-vacuity check that the flag was
+seen high twice.
+
+**Both mutation-proven**, because a passing check proves nothing until it can
+fail. `res_overflow_o` forced low → the refusal check fails; forced high → all
+three fail, the allocate reporting 4,100 pulses (which incidentally confirms the
+window spans the 4,096-cycle clear sweep). `sat_q[head_q]` → `sat_q[head_q ^ 1]`
+→ 4 wrong, and **only** the sat check fails while ctx ordering stays green.
+
+### The QFMT goldens: regenerating PROVED what withholding was protecting
+
+Held back earlier on the reasoning that regenerating "destroys the record of what
+changed". Record taken first (`reports/QFMT-V3-GOLDEN-PROVENANCE-20260904.md`),
+then regenerated, and the diff is:
+
+    z60 / storm / duo_10frame:  68 bytes, 2 runs, 56..59 (4) and 792..855 (64)
+
+Identical in all three. CRC + the two contiguous SHAs. **Not one content byte
+moved.** There was nothing in the content to destroy. The record also shows the
+four wave2 goldens were **never one vintage** — `duo_markers` carries a different
+zidl SHA — and that `zcap_minimal` was already current, which is the control that
+rules out "the generator stopped stamping".
+
+### D19c ruled — and the headline "Zero" was a broken instrument
+
+Ruling: **explicit `counter_ports:` mapping, not a rename sweep.** A port-rename
+across 60+ blocks during an active fit campaign is how a `PINMISSING` turns up at
+hour three. Schema extended, `check_counters.py` written, `TEXTURE.FRAGROB`
+mapped, `ledger:check` green.
+
+**But D19c's measured "0 counters match `<counter>_o`" was wrong.** The shared
+port regex had no provision for a WIDTH BRACKET, so every `output var logic
+[31:0] ...` was silently skipped. Every counter port is width-bearing, which is
+why the answer came out at *exactly* zero. **A zero that precise is a broken
+instrument, not a finding** — and I read it as a finding this morning. Real
+figure: 23 of 108.
+
+Worse, `check_port_coverage.py` shares that regex, so **it could not see
+`out_w_o`** — the width-bearing port that motivated its existence and is named in
+its own docstring. Its numbers moved 29→95, 313→936, 4→5.
+
+### D19k filed
+
+The fifth fault reporter, visible only after the fix: `uv_sat_fragments_o` counts
+railed-UV fragments in texjoin v1 — **which is instantiated nowhere**. v2 has the
+flag and no counter; production `fragrob` has neither. The shipped path can flag
+a railed UV and cannot count one. Owner call; one accumulator to restore.
+
+**In flight:** `tmu_pipe` fitting (~85 min), `cache_pipe` queued, `duo_markers`
+regenerating detached (killed twice by tool timeouts first — it needs
+`Start-Process`, not a foreground run).
