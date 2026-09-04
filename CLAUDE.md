@@ -101,8 +101,10 @@ that reports too few is trusted for weeks. So:
 2. **A detector that has not been shown to FIRE has not been tested.** Break it
    on purpose, watch the alarm go off, put it back. Three tools here now assert
    at import that their own pattern still matches a known-good example, because
-   one self-check was written with a `` that a heredoc turned into a literal
-   backspace — it matched nothing and printed reassurance for its whole life.
+   one self-check was written with a word-boundary escape that a shell heredoc
+   turned into a literal backspace character — so it matched nothing and
+   printed reassurance for its whole life. (This sentence lost its own escape
+   the same way on first writing, which is either evidence or comedy.)
 3. **Check the heuristic against a case you can verify by hand before believing
    the total.** A block-id-to-module rule said 25 blocks were unbuilt; three of
    them existed under a name the rule did not construct.
