@@ -1285,3 +1285,56 @@ the stimulus looks exactly like a defect in the thing being tested.**
 
 Next: drive the command path alongside the render port so a region map is
 granted, and the picture becomes assertable.
+
+## 2026-09-04 12:1x — the console could not draw, and now does
+
+**In flight:** composed re-fit `wumen-e6f31aa6` (fitter) measuring the fbwrite
+fix; island queue on `tmu_pipe` (7th of 9); a mutation test of the new mosaic
+constant-authority check.
+
+### THE DEFECT: `RASTER.FBWRITE` read the guard's verdict one cycle early
+
+The first test ever to drive the shell's render path found that the console
+**could not write a single framebuffer row.**
+
+    guard:185  rsp.ready = !fwd_active;   // a LEVEL, high before any request
+    guard:186  rsp.ok    = rsp_ok_q;      // "verdict 1 cycle after accept"
+    guard:202  rsp_ok_q <= 1'b0;          // default every cycle
+
+`W_REQ` sampled both together, so the first burst read `ready=1, ok=0` — the
+reset value — took the "guard REFUSED" branch, latched `fatal_error_o` and
+dropped the row. **Every frame unpublishable, against a guard that had refused
+nothing.** `zhao_debug_frameblit` has always been correct; fbwrite now has the
+same `W_VERD` shape.
+
+    before   pixels=0     bursts=0    issued=0     fatal=1
+    after    pixels=3328  bursts=208  issued=3328  retired=3328  fatal=0
+
+**Why nothing caught it:** `render_fb_directed` played a guard answering `ready`
+and `ok` in the same cycle. **The model and the DUT shared one wrong
+assumption**, so the block passed its own differential with thousands of pixels
+and could not write a byte through the real guard. *A played interface that is
+easier than the real one is not a simplification, it is a different interface.*
+
+### C21: the MOSAIC multipliers are gone
+
+`zhao_texture_mosaic` was the one island block failing its fit, on
+`DSP 4 > allowed 0` — **exactly as its rule predicted**. The two 32x32 wrapping
+multiplies by the ratified hash primes are now explicit CSD shift-add:
+
+    73,856,093  binary weight 15 -> CSD 11 (6 add, 5 sub)
+    19,349,663  binary weight 12 -> CSD  8 (6 add, 2 sub)
+
+`(* multstyle = "logic" *)` is NOT the fix — QUARTUS_GOTCHAS §3: Quartus 17.0.2
+accepts it and **silently ignores** it. Equality checked over 200,009 operands
+per constant, zero mismatches; `texture_mosaic_directed`/`_random` and
+`lint_texture_mosaic` all green.
+
+**And the named constants stay the authority.** Hard-coding digit positions
+would duplicate them in a form nobody can read, so a later edit would change
+nothing while looking as though it had. The tree is a sum of signed shifts and
+therefore LINEAR, so `mul_cx(1) == MOSAIC_CX` proves `mul_cx(m) == m * CX` for
+**every** m — one comparison, checked at elaboration, not a sweep.
+
+**Costed before written**, and honestly: ~17 adders, 272-340 ALM of tree,
+landing at roughly 450-520 against a <= 500 gate. The fit decides.
