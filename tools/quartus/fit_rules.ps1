@@ -96,7 +96,19 @@ function Test-FitRules($Row, $Rules) {
         $bad.Add(("M10K {0} > allowed {1}" -f $m10k, $Rules['max_m10k']))
     }
     if ($Rules.ContainsKey('max_registers') -and $null -ne $reg -and $reg -gt $Rules['max_registers']) {
-        $bad.Add(("registers {0} > allowed {1} -- state that belongs in memories is in flip-flops" -f $reg, $Rules['max_registers']))
+        # The message used to assert WHY: "state that belongs in memories is in
+        # flip-flops". It has now been wrong twice. zhao_texture_fragrob fired
+        # this rule at 2,631 while holding 96% of its wide payload (6,464 of
+        # 6,720 declared bits) in 13 M10Ks -- its overrun is control state, not
+        # misplaced payload. zhao_terrain_residency_v2 fired the memory-floor
+        # rule with only 1,243 registers, which cannot hold the missing 17,408
+        # bits either.
+        #
+        # A gate that explains itself is better than one that does not, right up
+        # until the explanation is wrong -- then it sends the next reader to
+        # reshape arrays that are already RAM. So state the MEASUREMENT and name
+        # where the answer lives, rather than asserting a cause.
+        $bad.Add(("registers {0} > allowed {1} -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit's RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)" -f $reg, $Rules['max_registers']))
     }
     if ($Rules.ContainsKey('max_alms') -and $null -ne $alm -and $alm -gt $Rules['max_alms']) {
         $bad.Add(("ALM {0} > allowed {1}" -f $alm, $Rules['max_alms']))

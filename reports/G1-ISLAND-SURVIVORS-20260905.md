@@ -118,3 +118,62 @@ needs re-stating against measured leaves. **Deciding that from a sum of stale
 and virtual-pinned leaf fits would be exactly the mistake this repository keeps
 recording**, which is why the next concrete step is a composed measurement, not
 another round of leaf tuning.
+
+---
+
+## 5. G1-B — FRAGROB already satisfies the structural rule; its overrun is elsewhere
+
+The roadmap's requirement for the tokenized fragment path is explicit:
+
+> Wide fragment data should live in RAM-backed records rather than repeatedly
+> circulating through control queues.
+
+**FRAGROB already does this.** Computed from its declarations at `DEPTH = 16`:
+
+| array | bits | role |
+|---|---:|---|
+| `desc_u_m` / `desc_v_m` | 1,536 + 1,536 | wide payload |
+| `res_rgb_m` / `res_a_m` | 1,152 + 384 | wide payload |
+| `ctx_m` | 1,024 | wide payload |
+| `desc_met_m` | 576 | wide payload |
+| `auxrgb_m` / `auxa_m` | 384 + 128 | wide payload |
+| **wide payload total** | **6,720** | |
+| nine small control arrays | 976 | correctly flops |
+
+Measured `blockMemoryBits` = **6,464** across **13 M10K**. That is **96% of the
+declared wide payload already in memory.** The records are RAM-backed; the queues
+carry slot indices, not payload.
+
+**So the 2,631 vs 2,500 overrun is 131 registers — 5.2% — of CONTROL state**, not
+misplaced payload. The gate's message said otherwise ("state that belongs in
+memories is in flip-flops"), which is the second time that canned diagnosis has
+been wrong; `tools/quartus/fit_rules.ps1` now reports the measurement and points
+at the RAM Summary instead of asserting a cause.
+
+### The recommendation is NOT to re-budget it
+
+The roadmap permits "optimized **or** explicitly re-budgeted with whole-island
+evidence". The whole-island evidence now exists (§2 above) and it argues the
+opposite way: **the island is roughly 1.7× its envelope, so no gate should be
+loosened.**
+
+And FRAGROB is the wrong place to spend reduction effort. Ranked by overrun
+against target:
+
+    perspuv_svc     2,204 / 900   +145%   (stale row, re-measuring now)
+    rsp_dispatch      806 / 350   +130%
+    palette_res       540 / 250   +116%
+    aux_pipe        1,182 / 550   +115%
+    cache_pipe      1,633 / 900    +81%
+    fragrob         1,676 / 900    +86%   <- registers 5% over; ALMs 86% over
+    tmu_plan        1,142 / 700    +63%
+    rcp24_svc       1,041 / 650    +60%
+
+**FRAGROB's register gate is the smallest miss in the island and its structure is
+correct.** Its *ALM* figure is 86% over target, which is the same broad problem
+every other block has — and that is an island-level conversation, not a
+FRAGROB-level one.
+
+**Left as a failing gate deliberately.** It fails honestly, it costs nothing to
+leave failing, and lowering the bar while the island is 1.7× over would be
+exactly the "green box" management the roadmap warns against.
