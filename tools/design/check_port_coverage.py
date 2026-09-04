@@ -35,24 +35,35 @@ The second tier is a prompt to go and look, never a verdict. Reporting it as
 one would be the "gate passing is not the thing looking right" failure with the
 sign flipped.
 
-THE KNOWN FALSE POSITIVE: A TESTBENCH WRAPPER THAT RENAMES
-----------------------------------------------------------
+THE KNOWN FALSE POSITIVE: A PORT OBSERVED THROUGH ITS CONSUMER
+---------------------------------------------------------------
 Measured 2026-09-04, working the first list this tool produced. It named four
 `zhao_field_exec_shared` fault reporters as UNMENTIONED:
 
     exec_unsupported_o  exec_sat_add_o  exec_sat_mul_o  exec_sat_rescale_o
 
-All four are thoroughly compared -- by `field_alu_ops`, `field_alu_vec_directed`,
-`field_curve_directed` and `field_curve_svc_directed`. What defeated the search
-is that `zhao_field_alu_tb.sv` WRAPS the module and re-exports the ports under
-shorter names:
+They are covered. Not by any test naming them -- no testbench instantiates
+`zhao_field_exec_shared` at all -- but by COMPOSITION. `zhao_field_seq.sv`
+consumes them, accumulates them across a whole program exactly as the
+reference's single `SatLedger` does:
 
-    .sat_add_o (sat_add_o)   <- the tb's port, and what C++ actually reads
+    sat_add_o <= sat_add_o || exec_sat_add;
 
-So the RTL string `exec_sat_add_o` appears in no test, while the signal is one
-of the better-checked in the repository. **UNMENTIONED is therefore evidence
-about NAMES, not about coverage**, and the earlier claim above that it is
-"close to proof" was too strong for any module reached through a wrapper.
+and `field_curve_svc_directed` compares the resulting `rsp_sat_add_o` per lane
+against that reference. So the port's BEHAVIOUR is checked while its NAME
+appears nowhere.
+
+(An earlier version of this note said these were compared through a testbench
+wrapper that re-exports ports under shorter names, citing `zhao_field_alu_tb.sv`
+and its `.sat_add_o (sat_add_o)`. **That was wrong.** Those are
+`zhao_field_alu`'s own ports -- a different module's signals that happen to
+share a stem. The conclusion "these four are covered" survived; the mechanism
+given for it did not, and a wrong mechanism is how the next person mis-triages
+the next row.)
+
+**So UNMENTIONED is evidence about NAMES, not about coverage.** The claim above
+that it is "close to proof" is too strong wherever a port feeds another RTL
+module rather than a testbench.
 
 That does not make the tier useless -- the very same list found
 `zhao_surface_sheet.res_overflow_o`, a genuine unobserved fault line, and the
