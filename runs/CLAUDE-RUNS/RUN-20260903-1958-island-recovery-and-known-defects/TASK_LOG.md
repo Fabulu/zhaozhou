@@ -1158,3 +1158,51 @@ my own arithmetic and wrote a report about a 10x-28x gap that does not exist.
 exists in this design — the cache is direct-mapped over flat 32-bit byte
 addresses. **That number was imported from general knowledge, never measured,
 and it felt like evidence purely because it was a number.**
+
+## 2026-09-04 09:40 — everything remaining is behind the toolchain
+
+**In flight:** composed fit `wumen-5d5b1b16` (fitter, 69 min — prior runs took
+72–91); island queue on `aux_div6` (3 of 9); full `cmake --build` running because
+the fast lane revealed **18 tests that never ran** for want of executables.
+
+**Landed since the last entry, none of it needing a fit:**
+
+* the island "storage gap" **retracted twice and then resolved** — the brief
+  counts MEMORIES, not bits (§C3: *"four static data banks + four static tag
+  banks"*), D19 closed without a ruling, cache_pipe's gates removed as
+  misfiled onto an oracle block;
+* `fragrob`'s gate reading corrected **and then corrected again** —
+  `max_registers: 2500` is what enforces §6.13, because neither `ramBlocks` nor
+  `blockMemoryBits` can tell MLAB from flops;
+* `GEOM.ASSETFETCH` finished: early-release stale-valid bug found by re-reading
+  the RTL, fixed, regression-tested; random differential added
+  (240 meshlets, 211 admitted / 29 refused / 4 empty, beats exact);
+  25 + 56 + 9 checks green;
+* the local fast lane's true state reported — 4 failures and 18 not-run.
+
+### The defect this stretch found in my own earlier work
+
+`cppcheck` flagged `geom_project_directed.cpp:172` uninitialised `o.w`.
+**`out_w_o` was added to `GEOM.PROJECT` this session and never differentially
+verified.** `VtxOut` grew a `w`, the oracle never set it, `compare()` never
+checked it — the missing expectation and the missing check cancelled, so no test
+failure could reveal it. `zref::render::ProjOut` does not expose `clip.w` at
+all, so the fix is additive: `ProjOut` gains `w`, `project_vertex` fills it from
+line 46's `clip.w.raw`, `compare()` checks it, goldens must not move.
+
+**A new port is not delivered until something compares it.**
+
+### Blocked, and on what
+
+| task | blocked on |
+|---|---|
+| `ProjOut.w` + the `out_w_o` differential | the running build (editing a header mid-compile is the `build.ninja` race) |
+| the mechanical clang-format sweep, ~40 files | same |
+| re-running the fast lane to a true verdict | the build finishing |
+| D1's next timing move | composed fit `wumen-5d5b1b16` |
+| the island's remaining 6 blocks | the queue, hours out |
+| `GEOM.LIGHT`'s `shade_from_world_normal` extraction | a clean golden run, i.e. the build |
+| wiring the geometry front end (D22) | D1 first, by the docket's own rule |
+
+Everything above genuinely needs the toolchain. Nothing else is being deferred
+by choice.
