@@ -1,0 +1,275 @@
+// zref_material.hpp — TEXTURE.COMBINE's oracle (`zref::material::combine`),
+// authored 2026-09-05 for roadmap gate G1-C.
+//
+// ---------------------------------------------------------------------------
+// WHY THIS EXISTS, AND WHY IT IS THE BLOCKING PIECE
+// ---------------------------------------------------------------------------
+// `design/contracts/TEXTURE.COMBINE.md` has said since 2026-09-03:
+//
+//     Reference: `zref::material::combine` — PLANNED AND NOT WRITTEN
+//
+// and `MATERIAL.RESOLVE.md` says why that matters more than a missing block
+// usually does:
+//
+//   > The surviving TEXJOIN behaviour returns **sample 0 for every recipe**,
+//   > and the three-sample terrain recipes were absent from that RTL entirely.
+//   > So when this block starts returning real `sample_count` and `recipe`
+//   > values, the combiner must exist to consume them — shipping the resolver
+//   > alone would make the machine confidently fetch samples nothing combines.
+//
+// The texture island therefore fetches up to three samples per fragment today
+// and combines none of them. Fetching three textures without implementing
+// their combination is not three-sample material support, and terrain material
+// work has been blocked on an organ nobody had written.
+//
+// This file is the scalar law. The RTL is still not built; when it is, it is
+// differentiated against this.
+//
+// ---------------------------------------------------------------------------
+// THE ONE ARITHMETIC RULE THAT MATTERS
+// ---------------------------------------------------------------------------
+// unit8 semantics, `spec/qformats.md` §2/§3: **value = raw/256, so 255 is the
+// largest representable value and NOT 1.0.** A modulate by 255 therefore
+// darkens very slightly. That is ratified behaviour and must not be "fixed".
+//
+// The product is `zref::unit_mul` — `((u32)a*b + 128) >> 8`, clamp 255 — and it
+// is CALLED, never restated. The contract is explicit about why:
+//
+//   > A second unit8 multiply is the same defect class as the duplicated
+//   > flat-shade law found earlier: two arithmetics that agree until they do
+//   > not, with nothing to say which is right.
+//
+// ---------------------------------------------------------------------------
+// WHAT THIS FILE DOES NOT DECIDE
+// ---------------------------------------------------------------------------
+// * **No fog.** Owner ruling D-5 places fog on the FINAL SOURCE COLOUR after
+//   material combination — i.e. downstream of here — and the contract forbids
+//   this block from pre-empting that ordering.
+// * **No toon quantisation** (RASTER.TOON), **no framebuffer blend**
+//   (RASTER.FRAGMENT: that combines the result with what is already there;
+//   this combines sources with each other), **no sampling**, **no resolution**.
+//
+// ---------------------------------------------------------------------------
+// ONE THING THE CONTRACT LEAVES OPEN, STATED RATHER THAN INVENTED
+// ---------------------------------------------------------------------------
+// The contract's overflow section says `sample_count == 0` "produces the
+// fragment's vertex colour unchanged", but its In-packet list carries no
+// vertex-colour field — the only non-sample colour in the packet is
+// `has_aux / aux_rgb / aux_a`.
+//
+// This model therefore takes the untextured colour as an EXPLICIT parameter
+// (`base`) rather than guessing which packet field carries it. When the RTL is
+// written, whichever field it turns out to be is passed here and the two agree
+// by construction. Inventing the binding in the oracle would hard-code a guess
+// into the thing that is supposed to arbitrate.
+
+#ifndef ZREF_MATERIAL_HPP
+#define ZREF_MATERIAL_HPP
+
+#include <cstdint>
+
+#include "zref_fixp.hpp"
+
+namespace zref {
+namespace material {
+
+// The six ratified encodings. The numbering matches the constants already in
+// `zhao_raster_texjoin_v2.sv` and `zhao_texture_fragrob.sv` so nothing is
+// renumbered by this file's existence.
+enum Recipe : uint8_t {
+  kPassthru = 0,    // sample 0 unchanged
+  kModulate = 1,    // s0 * s1
+  kModulate2x = 2,  // s0 * s1 * 2, saturating
+  kLerp = 3,        // lerp(s0, s1, weight)
+  kAddSat = 4,      // s0 + s1, saturating
+  kMask = 5,        // s0 where s1 passes, else transparent
+  kRecipeCount = 6
+};
+
+struct Sample {
+  uint8_t r = 0, g = 0, b = 0, a = 0;
+};
+
+// Every refusal and every saturation is COUNTED. The contract's reasoning:
+// "quietly accepting an unknown one is how a content bug becomes a shipped
+// picture nobody questions", and the saturation counts "tell content authors
+// when a recipe is clipping constantly".
+struct Ledger {
+  uint32_t refused_unknown_recipe = 0;
+  uint32_t refused_missing_sample = 0;
+  uint32_t saturated_add = 0;
+  uint32_t saturated_mul2x = 0;
+};
+
+struct Out {
+  uint8_t r = 0, g = 0, b = 0, a = 0;
+  uint16_t frag_tag = 0;
+  bool refused = false;  // the fragment was malformed; see the Ledger for which
+};
+
+// How many samples each recipe REQUIRES. A recipe naming more samples than
+// `count` supplied is malformed and refused -- not silently degraded to
+// passthrough, which is exactly what the surviving TEXJOIN does today and why a
+// wrong material looks plausible.
+constexpr uint8_t samples_required(uint8_t recipe) {
+  return recipe == kPassthru ? 1 : 2;
+}
+
+namespace detail {
+
+// unit8 saturating add. Saturation is a real event, so it is reported.
+constexpr uint8_t add_sat(uint8_t a, uint8_t b, bool* saturated) {
+  const uint32_t s = static_cast<uint32_t>(a) + b;
+  if (s > 255) {
+    *saturated = true;
+    return 255;
+  }
+  return static_cast<uint8_t>(s);
+}
+
+// s0*s1*2 with ONE rounding, then saturate. Doubling AFTER the frozen product
+// keeps a single rounding per result: `unit_mul` already rounds half-up, and
+// rounding twice would drift from the RTL by a least-significant bit on exactly
+// the values a directed test is least likely to try.
+constexpr uint8_t mul2x(uint8_t a, uint8_t b, bool* saturated) {
+  const uint32_t p = static_cast<uint32_t>(unit_mul(unit8{a}, unit8{b})) * 2u;
+  if (p > 255) {
+    *saturated = true;
+    return 255;
+  }
+  return static_cast<uint8_t>(p);
+}
+
+// lerp(a, b, w) in unit8. w == 0 gives a, w == 255 gives *almost* b -- which is
+// the unit8 law showing through and is correct: 255 is not 1.0. Written as
+// a + (b-a)*w on a SIGNED difference, matching the architecture's
+// "3 signed difference x weight products" for LERP, with one rounding.
+constexpr uint8_t lerp8(uint8_t a, uint8_t b, uint8_t w) {
+  const int32_t d = static_cast<int32_t>(b) - static_cast<int32_t>(a);
+  // (|d| * w + 128) >> 8 is unit_mul's law on a magnitude; the sign is
+  // reapplied afterwards so the rounding is symmetric about zero rather than
+  // biased toward +inf on darkening lerps.
+  const uint32_t mag = static_cast<uint32_t>(d < 0 ? -d : d);
+  const uint32_t scaled = (mag * static_cast<uint32_t>(w) + 128u) >> 8;
+  const int32_t r = static_cast<int32_t>(a) + (d < 0 ? -static_cast<int32_t>(scaled)
+                                                     : static_cast<int32_t>(scaled));
+  return static_cast<uint8_t>(r < 0 ? 0 : (r > 255 ? 255 : r));
+}
+
+}  // namespace detail
+
+/**
+ * The scalar law for TEXTURE.COMBINE.
+ *
+ * @param recipe     one of the six ratified encodings; anything else is refused
+ * @param weight     unit8 blend weight, used by kLerp only
+ * @param s          up to three samples, index 0 first
+ * @param count      how many of `s` are valid (0..3)
+ * @param base       the untextured colour used when `count == 0` (see header)
+ * @param frag_tag   rides through UNTOUCHED; retirement order depends on it
+ * @param L          optional ledger; refusals and saturations are counted here
+ */
+inline Out combine(uint8_t recipe, uint8_t weight, const Sample* s, uint8_t count,
+                   Sample base, uint16_t frag_tag, Ledger* L = nullptr) {
+  Out o;
+  o.frag_tag = frag_tag;  // set FIRST, so every early return preserves it
+
+  // An untextured surface is legal and common, and must not require a dummy
+  // sample. This is checked before the recipe, because a fragment with no
+  // samples has nothing for any recipe to act on.
+  if (count == 0) {
+    o.r = base.r;
+    o.g = base.g;
+    o.b = base.b;
+    o.a = base.a;
+    return o;
+  }
+
+  if (recipe >= kRecipeCount) {
+    if (L) L->refused_unknown_recipe++;
+    o.refused = true;
+    return o;
+  }
+
+  if (count < samples_required(recipe)) {
+    if (L) L->refused_missing_sample++;
+    o.refused = true;
+    return o;
+  }
+
+  const Sample& s0 = s[0];
+  const Sample& s1 = (count > 1) ? s[1] : s[0];
+
+  switch (recipe) {
+    case kPassthru:
+      o.r = s0.r;
+      o.g = s0.g;
+      o.b = s0.b;
+      o.a = s0.a;
+      break;
+
+    case kModulate:
+      o.r = unit_mul(unit8{s0.r}, unit8{s1.r});
+      o.g = unit_mul(unit8{s0.g}, unit8{s1.g});
+      o.b = unit_mul(unit8{s0.b}, unit8{s1.b});
+      o.a = unit_mul(unit8{s0.a}, unit8{s1.a});
+      break;
+
+    case kModulate2x: {
+      bool sat = false;
+      o.r = detail::mul2x(s0.r, s1.r, &sat);
+      o.g = detail::mul2x(s0.g, s1.g, &sat);
+      o.b = detail::mul2x(s0.b, s1.b, &sat);
+      o.a = detail::mul2x(s0.a, s1.a, &sat);
+      if (sat && L) L->saturated_mul2x++;  // once per FRAGMENT, not per channel
+      break;
+    }
+
+    case kLerp:
+      o.r = detail::lerp8(s0.r, s1.r, weight);
+      o.g = detail::lerp8(s0.g, s1.g, weight);
+      o.b = detail::lerp8(s0.b, s1.b, weight);
+      o.a = detail::lerp8(s0.a, s1.a, weight);
+      break;
+
+    case kAddSat: {
+      bool sat = false;
+      o.r = detail::add_sat(s0.r, s1.r, &sat);
+      o.g = detail::add_sat(s0.g, s1.g, &sat);
+      o.b = detail::add_sat(s0.b, s1.b, &sat);
+      o.a = detail::add_sat(s0.a, s1.a, &sat);
+      if (sat && L) L->saturated_add++;
+      break;
+    }
+
+    case kMask:
+      // "s0 where s1 passes, else transparent". The pass test is s1's ALPHA
+      // being non-zero: MASK exists so a shape's alpha can cut a colour, and
+      // testing the RGB instead would make a black-but-opaque mask erase what
+      // it was meant to keep.
+      if (s1.a != 0) {
+        o.r = s0.r;
+        o.g = s0.g;
+        o.b = s0.b;
+        o.a = s0.a;
+      } else {
+        o.r = o.g = o.b = 0;
+        o.a = 0;
+      }
+      break;
+
+    default:
+      // Unreachable: the range check above already refused everything else.
+      // Present so a future added encoding cannot fall through silently.
+      if (L) L->refused_unknown_recipe++;
+      o.refused = true;
+      break;
+  }
+
+  return o;
+}
+
+}  // namespace material
+}  // namespace zref
+
+#endif  // ZREF_MATERIAL_HPP

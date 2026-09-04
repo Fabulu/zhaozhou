@@ -2,7 +2,7 @@
 
 > Ledger: `design/blocks.yml` · gpu clock · maturity SPECIFIED
 > RTL: not built
-> Reference: `zref::material::combine` — PLANNED AND NOT WRITTEN
+> Reference: `zref::material::combine` — **WRITTEN 2026-09-05**, `reference/include/zref/zref_material.hpp`
 
 ## Purpose and exclusions
 
@@ -104,15 +104,35 @@ None. It is arithmetic on values handed to it.
 
 ## Scalar reference function
 
-**PLANNED AND NOT WRITTEN**: `zref::material::combine(recipe, weight,
-samples[], count)`.
+**WRITTEN 2026-09-05** — `zref::material::combine(recipe, weight, samples,
+count, base, frag_tag, ledger)` in `reference/include/zref/zref_material.hpp`.
+It calls `zref::unit_mul` rather than restating the unit8 product, as this
+contract requires.
+
+**One thing this contract leaves open, and the oracle refuses to guess.** The
+overflow section says `sample_count == 0` returns "the fragment's vertex
+colour", but the In-packet list has no vertex-colour field — the only
+non-sample colour in it is `has_aux / aux_rgb / aux_a`. The reference therefore
+takes that colour as an explicit `base` parameter instead of binding it to a
+packet field. When the RTL is written, whichever field carries it is passed in
+and the two agree by construction; hard-coding a guess into the arbiter would
+be the worse error.
 
 ## Directed tests
 
-**PLANNED AND NOT WRITTEN**:
+**WRITTEN 2026-09-05** — `tests/texture/material_combine_directed.cpp`,
+35 checks, green. Every case this section asked for, plus one the writing of it
+turned up:
 
 * each of the six recipes against hand-computed values at the unit8 corners
   (0, 1, 128, 255) — including that modulate by 255 is **not** identity;
+* **and the exact boundary of that, swept across all 256 inputs.**
+  `unit_mul(a,255) = floor((255a+128)/256)`, which equals `a` precisely when
+  `a <= 128`. So modulate by 255 is **identity for every a ≤ 128 and `a-1`
+  above it** — it does not "always darken", it darkens for less than half the
+  range. Two drafts of that comment were wrong before the sweep was written;
+  a test comment that misstates the law it pins is worse than none, because the
+  assertion still passes and nothing ever contradicts it;
 * `sample_count == 0` returning vertex colour unchanged;
 * a recipe demanding more samples than supplied, refused and counted;
 * a seventh recipe encoding refused;
