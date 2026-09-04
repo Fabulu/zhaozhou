@@ -3098,7 +3098,7 @@ blocks:
     phase: 5
     owner_issue: ZH-080
     inputs: [survivor_fragment, tmu_return, aux_return]
-    outputs: [tmu_request, aux_request, retired_fragment]
+    outputs: [tmu_request, aux_requests, retired_fragment]
     upstream: [RASTER.EARLYZ, MATERIAL.RESOLVE]
     downstream: [TEXTURE.TMU, TEXTURE.AUX, RASTER.FRAGMENT, TEXTURE.COMBINE]
     backpressure: ready_valid
