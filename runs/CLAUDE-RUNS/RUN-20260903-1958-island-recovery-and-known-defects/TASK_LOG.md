@@ -891,3 +891,49 @@ a 5,027 MB peak, now in synthesis.
 **So the two toolchain items are in flight:** the three reworked blocks against
 their capacity-floor tripwires (17 / 4 / 2 M10K), and **D1's composed timing,
 unmeasured across twelve commits to raster and geometry.**
+
+## 05:00 — the list, worked while the fits run
+
+**A. My own refactor, verified rather than argued.** Splitting
+`skin_normal_lambert` touched `reference/src/zcreature/creature_core.cpp`, which
+the reel lane depends on. "Same operations in the same order" is a structural
+argument, so I lifted the pre-refactor function verbatim out of `git HEAD~1`,
+compiled both into one binary and compared: **200,000 comparisons, 0
+mismatches, 50.2% lit.** `creature_core` passes too, though it does not
+reference the function at all — which is why the differential was needed.
+
+**B. The probe now walks the whole ledger.** `compose_order.py --all` over all
+105 blocks:
+
+    asymmetric seams                   0
+    edges carrying no named signal    81
+    inputs with no declared producer 102
+
+**The graph is symmetric everywhere and semantically unchecked everywhere.**
+Nobody has ever mistyped an edge; nobody has ever verified one carries
+anything. That is a precise statement about what the current review process
+catches and what it does not.
+
+**E. The vocabulary, shortlisted from evidence.**
+`tools/design/propose_signal_vocab.py` scores each unproduced input against
+what its declared upstreams emit. **17 pairs explain 28 of the 102**, and
+`engine_dispatch` == `dispatch` alone explains **twelve** — one rename fixes
+12% of the orphans.
+
+It is wrong in places on purpose: it offers `meshlet_stream == index_stream`
+(the index stream is asset memory) and `tile_write == tile_read` (opposite
+directions). A tool that DECIDED this would be deciding architecture from
+string similarity. Shortlisting turns a 102-line problem into seventeen
+judgements, and `aux_request`/`aux_requests` is a judgement that takes a
+second.
+
+**D. `GEOM.LIGHT` updated.** `SKIN.NORM` was a prerequisite with no oracle;
+half of it exists now, and the contract records what this block actually
+receives — the pair `{direction, magnitude}` rather than a normalised vector,
+because normalising at the boundary rounds twice and the law has one rounding.
+
+**C is deliberately still open.** The `ASSEMBLE -> PARAMBUF` edge has contract
+evidence behind it ("Exactly `GEOM.PARAMBUF`'s 16-byte layout"), but bulk-fixing
+edges off a string-similarity shortlist is the thing I have said three times
+tonight not to do, and I have already published one wrong order by trusting
+this file.
