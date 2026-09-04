@@ -937,3 +937,54 @@ evidence behind it ("Exactly `GEOM.PARAMBUF`'s 16-byte layout"), but bulk-fixing
 edges off a string-similarity shortlist is the thing I have said three times
 tonight not to do, and I have already published one wrong order by trusting
 this file.
+
+## 05:50 — geometry's graph closes, and SKIN.NORM is built
+
+**0 unexplained inputs in the geometry subsystem, from 14 this morning.**
+
+The route there, all of it evidence-driven rather than similarity-driven:
+
+* `ASSEMBLE -> PARAMBUF` added — ASSEMBLE's contract says its output is
+  *"Exactly `GEOM.PARAMBUF`'s 16-byte layout"*;
+* `GEOM.PROJECT` declares `projected_w` — the port added for DEPTHQUANT existed
+  in RTL while the ledger described the design as it stood before;
+* four outliers aligned to names that already had producers, including
+  `tile_references` which turned out to be a **counter** in the catalog used by
+  four blocks, so listing it as a data input was a collision rather than a
+  signal;
+* `engine_dispatch -> dispatch` — one spelling, twelve consumers, one rename;
+* `SKIN.NORM` **built**, because the last one was not a naming problem.
+
+### The count stopped being the goal, deliberately
+I began classifying the remaining pairs by occurrence count, and the tool's own
+output showed the test was wrong: it tags `meshlet_stream == index_stream` safe
+when the index stream is asset memory. **A name used once is not thereby the
+wrong name.** The sweep stopped at 77 whole-ledger orphans rather than being
+driven down, and the tool now prints that caveat itself.
+
+### `design/external_inputs.yml` caught its own first rot
+`GEOM.MESHFETCH.dispatch` was declared external in the morning and acquired a
+real producer by the afternoon. The probe distinguishes RESOLVED from EXPLAINED
+precisely so that shows up as a count moving; the stale entry is gone and the
+reason is recorded in its place.
+
+### GEOM.SKIN.NORM — `87e63ff3`
+5 differential checks against `zref::creature::skin_world_normal`, 402 vertices,
+39 exercising the range reduction. **Mutation tested on that branch** because it
+fires 10% of the time: disabling it fails 38 comparisons at exactly **2x** the
+oracle's values, a missing single shift.
+
+The equivalence licensing its structure — one normal across N lights — was
+proved BEFORE the block existed, and the refactor that created the boundary was
+proved behaviour-identical against the pre-refactor code from git, 200,000
+comparisons.
+
+**The gate I wrote this morning caught the real case.** Registering the block
+tripped `check_prod_manifest`'s new second half: both new blocks were missing
+from `zhao_prod_top`'s source list and it said what that costs — *"the fit would
+die at elaboration"*. This morning I found that same two-step gap by hand; this
+time the tooling found it before a fit was spent.
+
+### Fit status
+The composed fit's FITTER finished — 1:30:42 elapsed, 8:46:21 CPU — and it is in
+TimeQuest. **D1's first measured timing in twelve commits is minutes away.**
