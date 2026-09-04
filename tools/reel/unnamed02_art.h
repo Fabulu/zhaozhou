@@ -108,6 +108,9 @@ constexpr int32_t kPupilStarArmMm = 78;   // star arm half-length (inside the ri
 constexpr int32_t kPupilStarThinMm = 16;  // blade thinness
 constexpr int32_t kPupilStarWideMm = 30;  // blade width
 constexpr uint8_t kLensR = 116, kLensG = 58, kLensB = 178;   // purple (grey pass)
+// The star's SHIPPED pigment lives in mku02page.py (STAR_CYAN, same value):
+// the star must carry a page because untextured parts render black under
+// celmain (09-ENGINE-GOTCHAS.md §7). These stay as the pageless fallback.
 constexpr uint8_t kStarR = 64, kStarG = 220, kStarB = 240;   // cyan
 
 // ============================== MOTION =====================================
@@ -160,10 +163,13 @@ constexpr int32_t kRestHeightMm = 845;    // the rest clip lower hover (the body
                                           // would have SUNK the belly 107 mm)
 
 // ============================== PAGE =======================================
-// tiles: 0 = the atlas (body/loop/hinge V row bands), 1 = the eye page.
+// tiles: 0 = the atlas (body/loop/hinge V row bands), 1 = the eye page,
+// 2 = the pupil-star page (flat cyan; exists because untextured parts render
+// black under celmain — 09-ENGINE-GOTCHAS.md §7).
 // Rows here must match mku02page.py's band layout.
 constexpr uint8_t kPageAtlasTile = 0;
 constexpr uint8_t kPageEyeTile = 1;
+constexpr uint8_t kPageStarTile = 2;
 constexpr uint8_t kBodyV0 = 8, kBodyV1 = 120;
 constexpr uint8_t kLoopV0 = 136, kLoopV1 = 200;
 constexpr uint8_t kHingeV0 = 208, kHingeV1 = 248;

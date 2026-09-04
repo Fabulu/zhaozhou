@@ -374,3 +374,47 @@ yet. Specs are." Read in full. Taken as binding for this pass:
   40a46da (site) — the definitive pair is recorded by the pushes.
 
 **Run status: creature pass FINISHED and PUBLISHED.**
+
+---
+
+## FIX PASS — 2026-09-04, after QA (the black pupil star + the cost figure)
+
+Bounded fix pass on the published creature. Scope: QA fault 1 (the pupil star
+renders black on the shipped celmain path) and fault 2 (the published cost
+figure is ~1.4-2x optimistic). NOT in scope, recorded as the known follow-up
+for the owner's-eye pass: the loop's angular/short read vs the drawing's round
+teardrop, the front-view uniform-rod antenna, the sphere-vs-teardrop body, the
+eye size. All are named knobs (QA.md lists them).
+
+### Fault 1 — mechanism CONFIRMED from source, and it is gotcha §7 exactly
+
+The star blades are the creature's only untextured parts (page 255 = flat
+colour). Under `ZIXX_EXP=celmain` (`g_smooth_toon_bands = 3`) every triangle
+gets `tm.toon = &kSmoothCel3Ramp`, and in `rast.cpp` `apply_toon_ramp`
+normalises the colour lanes so their MEAN becomes a ramp level q — a value on
+the LIGHT-GAIN scale (0..65536).
+
+- TEXTURED path: the lanes carry the gain alone (0..65536). Ramp in, gain out,
+  texel x gain — correct. This is why the lens (eye page) lights fine.
+- UNTEXTURED Gouraud path (`creature_sim.cpp` ~1156): the lanes carry
+  PRE-LIT COLOUR x GAIN (scale 255*65536). The ramp normalises that mean down
+  to q <= ~65536 — i.e. divides the colour by ~its mean, ~175 for the cyan —
+  and the raster then still does `(mr + 32768) >> 16` expecting the big scale.
+  Cyan (64,220,240) comes out (0,~2,~2). Black.
+- QA's "half-lit exception" confirmed too: `gouraud = a.lit && b.lit && c.lit`
+  per triangle; a star triangle with an unlit corner takes the FLAT untextured
+  path, which the raster writes directly WITHOUT the toon ramp — those pixels
+  are the correctly lit cyan ones ((33,121,148) in hover f0102).
+
+### The fix — give the star a page (gotcha §7's own instruction)
+
+Data fix, zero engine surface, zero Zixxtrixx risk: a third 64x64 direct-colour
+tile, flat cyan in the house crayon treatment, and `make_star_blade` sets
+`p.page = kPageStarTile`. The star then rides the proven textured path like the
+lens. `kStarR/G/B` remain the flat-material fallback for a pageless build.
+Files: tools/pack/mku02page.py (STAR pigments + build_star + kU02Star),
+unnamed02.h page_direct() third tile, unnamed02_art.h kPageStarTile,
+unnamed02_model.h make_star_blade.
+
+Judgement standard for the fix, per QA: the SHIPPED LIT PATH (celmain +
+diagonal-cool-cross), native 384x240, face close-up, before/after.

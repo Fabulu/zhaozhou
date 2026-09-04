@@ -37,14 +37,17 @@ namespace u02 {
 #ifdef U02_HAVE_PAGE
 // Direct-colour page set: page 0 = the 256x256 atlas (body/loop/hinge row
 // bands selected per part via v0/v1), page 1 = the separate 64x64 eye tile
-// (bilinear + mips bleed across atlas neighbours; the lens shares nothing).
+// (bilinear + mips bleed across atlas neighbours; the lens shares nothing),
+// page 2 = the 64x64 flat-cyan pupil-star tile (the star must be textured:
+// untextured parts render black under celmain — 09-ENGINE-GOTCHAS.md §7).
 inline const zref::DirectPageSet& page_direct() {
   static const zref::DirectPageSet ps = [] {
     zref::DirectPageSet p;
     p.mem.base = 0;
     const uint32_t atlas_bytes = static_cast<uint32_t>(kU02AtlasWords) * 2;
     const uint32_t eye_bytes = static_cast<uint32_t>(kU02EyeWords) * 2;
-    p.mem.bytes.resize(atlas_bytes + eye_bytes);
+    const uint32_t star_bytes = static_cast<uint32_t>(kU02StarWords) * 2;
+    p.mem.bytes.resize(atlas_bytes + eye_bytes + star_bytes);
     for (int i = 0; i < kU02AtlasWords; ++i) {
       p.mem.bytes[static_cast<size_t>(i) * 2] = static_cast<uint8_t>(kU02Atlas[i] & 0xFF);
       p.mem.bytes[static_cast<size_t>(i) * 2 + 1] = static_cast<uint8_t>(kU02Atlas[i] >> 8);
@@ -54,6 +57,12 @@ inline const zref::DirectPageSet& page_direct() {
           static_cast<uint8_t>(kU02Eye[i] & 0xFF);
       p.mem.bytes[atlas_bytes + static_cast<size_t>(i) * 2 + 1] =
           static_cast<uint8_t>(kU02Eye[i] >> 8);
+    }
+    for (int i = 0; i < kU02StarWords; ++i) {
+      p.mem.bytes[atlas_bytes + eye_bytes + static_cast<size_t>(i) * 2] =
+          static_cast<uint8_t>(kU02Star[i] & 0xFF);
+      p.mem.bytes[atlas_bytes + eye_bytes + static_cast<size_t>(i) * 2 + 1] =
+          static_cast<uint8_t>(kU02Star[i] >> 8);
     }
     zref::Tmu::Mode ma;  // the atlas
     ma.fmt = zref::Tmu::kRgb565;
@@ -68,9 +77,10 @@ inline const zref::DirectPageSet& page_direct() {
     me.log2w = 6;
     me.log2h = 6;
     me.max_level = 6;
+    const zref::Tmu::Mode ms = me;  // the star page: same 64x64 shape
     p.mode = ma.pack();
-    p.tile_base = {0, atlas_bytes};
-    p.tile_mode = {ma.pack(), me.pack()};
+    p.tile_base = {0, atlas_bytes, atlas_bytes + eye_bytes};
+    p.tile_mode = {ma.pack(), me.pack(), ms.pack()};
     return p;
   }();
   return ps;

@@ -220,6 +220,10 @@ inline zc::RingPart make_star_blade(uint8_t bone, bool crossed) {
   p.r = kStarR;
   p.g = kStarG;
   p.b = kStarB;
+  // The page is REQUIRED, not decoration: an untextured part renders black
+  // under celmain (09-ENGINE-GOTCHAS.md §7 — the toon ramp and the pre-lit
+  // lanes disagree). The tile is flat cyan; kStar* stay as the fallback.
+  p.page = kPageStarTile;
   return p;
 }
 
