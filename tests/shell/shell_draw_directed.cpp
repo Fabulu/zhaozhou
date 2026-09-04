@@ -53,13 +53,18 @@
 //   * the binner ACCEPTS a triangle offered at the shell boundary;
 //   * a blit packet GRANTS a lease, span 245,760 = `ZHAO_FB_SLOT_SPAN`;
 //   * fbwrite does NOT latch fatal and the guard refuses nothing;
-//   * THE RENDER PATH WRITES PIXELS -- 3,328 of them in 208 bursts;
+//   * THE RENDER PATH WRITES EXACTLY THE ORACLE'S EXTENT -- `zref::Binner`
+//     says the triangle touches 13 tiles, the pipeline resolves whole tiles,
+//     and the hardware wrote 13 x 16 x 16 = 3,328 pixels in 208 bursts;
 //   * issued and retired words BALANCE, which is why both are counted in words;
 //   * the frame DRAINS, and the framebuffer slot changes.
 //
-// STILL NOT PROVED: that the pixels are the RIGHT ones. This is not a picture
-// test -- `render_pipe_directed` owns the arithmetic. It proves the composed
-// shell can render at all, which until 2026-09-04 nothing had ever checked.
+// STILL NOT PROVED: that each pixel holds the right COLOUR. The extent is
+// checked against `zref::Binner`; the shading is `render_pipe_directed`'s, and
+// re-proving it here would duplicate a law rather than test the composition.
+// What this file establishes is that the composed shell renders the right
+// TILES to memory -- which until 2026-09-04 nothing had ever checked, because
+// until then it rendered nothing at all.
 //
 #include <cstdint>
 #include <cstdio>
@@ -346,8 +351,23 @@ int main(int argc, char** argv) {
               h.top.render_fatal_o ? 1 : 0);
   zhao::check(h.top.dbg_render_gv_cnt_o == 0, "and the guard refused nothing", 0,
               (unsigned)h.top.dbg_render_gv_cnt_o);
-  zhao::check(h.top.render_pixels_o > 0, "THE RENDER PATH WROTE PIXELS", 1,
-              h.top.render_pixels_o > 0 ? 1 : 0);
+  // NOT JUST "SOME" PIXELS -- exactly the ones the binner oracle names.
+  //
+  // `zref::Binner::bin` returns the tiles an accepted, set-up triangle touches.
+  // The tile pipeline resolves a WHOLE tile once, so a frame that rendered
+  // correctly writes `tiles x 16 x 16` pixels and nothing else. That turns a
+  // liveness check into a claim about the picture's EXTENT, using the same
+  // oracle `render_pipe_directed` bins against -- without re-proving the
+  // arithmetic it already owns.
+  const std::vector<zref::Binner::Ref> want_tiles =
+      zref::Binner::bin(bt.s, bt.min_x, bt.max_x, bt.min_y, bt.max_y);
+  const uint32_t want_px =
+      (uint32_t)want_tiles.size() * (uint32_t)(zref::Binner::kTile * zref::Binner::kTile);
+  std::printf("[shell_draw] oracle: %zu tiles -> %u pixels\n", want_tiles.size(),
+              (unsigned)want_px);
+  zhao::check(h.top.render_pixels_o == want_px,
+              "the render path wrote EXACTLY the oracle's tiles x 256 pixels", want_px,
+              (unsigned)h.top.render_pixels_o);
   zhao::check(h.top.render_issued_words_o == h.top.render_retired_words_o,
               "issued and retired words balance", (unsigned)h.top.render_issued_words_o,
               (unsigned)h.top.render_retired_words_o);
