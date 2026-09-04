@@ -103,9 +103,29 @@ back-facing triangles — so the harness has it in hand.
 
 ## What each stage must produce, or it does not count
 
-1. **The picture does not change.** Every stage replaces harness-supplied values
-   with computed ones that must be identical. `render_golden` and
-   `reel_sequence_crc` are the evidence, and they are already passing.
+1. **The picture does not change** — but **NOT proved the way this file first
+   said.** The original text named `render_golden` and `reel_sequence_crc` as
+   the evidence "and they are already passing". Both are **pure reference
+   tests**: neither is verilated, and `reel_sequence_crc` runs `zhao-reel
+   --check` against the C++ renderer. They say nothing about RTL.
+
+   Worse, **the shell bench never draws.** `tests/shell/tb_zhao_shell.sv:185`
+   states it outright — *"This bench drives the shell CMD/MEM/VIDEO path and
+   does not draw. The render port is held quiet rather than left dangling"* —
+   and ties `render_tri_valid_i` to `1'b0` with every triangle input at zero.
+   **So a shell-level "the picture is unchanged" claim is not available**, and
+   would have been vacuous if asserted.
+
+   The real evidence per stage is therefore **block-level and composed**:
+
+   * the added block's own differential (`geom_setup_directed`,
+     `geom_setup_random` already exist and pass); and
+   * a **new composed test** driving `zhao_geom_setup` into
+     `zhao_geom_bin_pipe` and comparing the binned tiles against the bin pipe
+     fed the harness's own edge functions — which is the actual claim being
+     made, that computing the setup gives what supplying it did.
+
+   Writing that test is part of stage 1, not a follow-up.
 2. **A composed fit.** Each stage costs ALMs and some of 0.057 ns. Stage N's fit
    is what says whether stage N+1 is affordable — the whole reason for staging.
 3. **The harness boundary named in the commit.** "The shell now computes X and
