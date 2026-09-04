@@ -988,3 +988,60 @@ time the tooling found it before a fit was spent.
 ### Fit status
 The composed fit's FITTER finished — 1:30:42 elapsed, 8:46:21 CPU — and it is in
 TimeQuest. **D1's first measured timing in twelve commits is minutes away.**
+
+## 06:40 — A HEADLINE CLAIM OF MINE WAS WRONG, and a question found it
+
+Fabian asked how many components the texture island has. I had been saying "the
+texture island fit" while having fitted **one** of its **eight** declared
+targets. Checking that led to `reports/synthesis/zhao_block_fit.json`, which
+contradicts the report I wrote this morning.
+
+**Two of the three blocks I "fixed" were already inferring**, from before any
+change today:
+
+| block | commit | date | M10K | block memory bits |
+|---|---|---|---|---|
+| `zhao_texture_palette_res` | `d656521` | 2026-09-02 | **2** | **16,384** |
+| `zhao_raster_tilestore` | `96c0394a` | 2026-08-20 | **4** | **32,768** |
+
+16,384 is exactly `mem_r`; 32,768 is exactly `ram0 + ram1`. The `palette_res`
+row is `clean=True`, so it is not in doubt.
+
+**So "280,784 bits will not infer" over-counted by at least 49,152, and the "77%
+reduction" counted bits that were never in flip-flops.**
+
+### The checker's async-reset rule is too strong
+It says *"an M10K has no reset port, so this array cannot be one"*. Quartus 17
+**will** infer a RAM from an async-reset process provided the ARRAY itself is
+never reset — which is exactly what both those blocks do.
+
+I wrote that rule from the texture cache, where inference genuinely failed. But
+that block was **also multidimensional**, and that is what blocked it: 128 bits
+of block memory, with Quartus saying *"cannot regroup multidimensional array"*
+outright. **The async reset was correlated, and I generalised a cause from a
+single case where two defects appeared together.**
+
+### What survives, and it is still substantial
+* `zhao_texture_cache_pipe`: **128 bits → 6 M10K**, registers 11,328 → 3,033,
+  ALM 5,903 → 1,633. The blocker was the multidimensional shape.
+* `zhao_terrain_residency_v2`: **no prior fit row at all**; 167,936 bits now in
+  **16 M10K** at 2,229 ALM.
+* The two port moves remain correct — they let the M10K's own output register be
+  used — but they are not what put those arrays into memory.
+
+### My own tripwire was also wrong
+`residency_v2` failed `min_m10k: 17` at **16**. I asserted a capacity floor
+"cannot produce a false failure". 16 x 10,240 = 163,840 < 167,936, so some bits
+are elsewhere — MLAB is the likely home, and my floor ignored that Quartus has a
+second memory primitive. **Not adjusting the tripwire to match a result**; the
+tilestore fit running now tests the same question directly.
+
+## PRIORITY, per Fabian: THE TEXTURE ISLAND, ALL OF IT
+
+Nine blocks queued in one run: `tmu_plan`, `aux_pipe`, `aux_div6`,
+`rsp_dispatch`, `bilerp_lane`, `mosaic`, `tmu_pipe`, **`fragrob`** (built
+2026-09-03, never fit, tripwires `min_m10k 6 / max_registers 2500 / max_dsp 0`),
+and `cache_pipe`.
+
+Three fits in flight: texture island, the tilestore/palette_res queue, and
+composed #2 measuring the restored Early-Z skid.
