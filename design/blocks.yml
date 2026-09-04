@@ -95,6 +95,16 @@ counter_catalog:
   - deadline_faults
   - commands
   - meshlets_fetched
+  # GEOM.ASSETFETCH (2026-09-04). `prefetch_stall_cycles` is the load-bearing
+  # one: the contract's double buffering is an ASSUMPTION that one meshlet of
+  # lookahead hides the fetch, and this counter is what turns it into a
+  # measurement instead. `refused_footprint` must never be silently zero --
+  # a refused meshlet emits no triangles, so a picture missing geometry has
+  # exactly one place to look.
+  - beats_read
+  - guard_denied
+  - refused_footprint
+  - prefetch_stall_cycles
   - vertices_decoded
   - vertices_transformed
   - triangles_submitted
@@ -661,7 +671,7 @@ blocks:
     owner_issue: ZH-029
     inputs: [client_req, guard_policy]
     outputs: [arb_req, guard_violation]
-    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, GEOM.POSE, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT, DEBUG.FRAMEBLIT, MEM.UPLOAD]
+    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, GEOM.POSE, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT, DEBUG.FRAMEBLIT, MEM.UPLOAD, GEOM.ASSETFETCH]
     downstream: [MEM.VRAM.ARBITER]
     backpressure: ready_valid
     latency: fixed:1
@@ -2117,7 +2127,7 @@ blocks:
     inputs: [dispatch, lod_targets]
     outputs: [meshlet_stream, pose_requests]
     upstream: [CMD.SCHEDULER, MEASURE.GOVERNOR]
-    downstream: [GEOM.VDECODE, GEOM.POSE, MEM.GUARD, GEOM.ASSEMBLE]
+    downstream: [GEOM.VDECODE, GEOM.POSE, MEM.GUARD, GEOM.ASSEMBLE, GEOM.ASSETFETCH]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 meshlet descriptor per clock
@@ -2139,6 +2149,40 @@ blocks:
     superseded_by: null
     notes: Meshlet limits are Phase-0 data (P2 risk 1) — schema fields stay unfrozen.
 
+  - id: GEOM.ASSETFETCH
+    name: Meshlet asset reader
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: "Read a meshlet's whole asset footprint through MEM.GUARD's Phase-3 pool as one sequential burst and serve GEOM.ASSEMBLE's u8 index triplets and GEOM.VDECODE's 32-byte vertex records from a private double buffer."
+    contract: design/contracts/GEOM.ASSETFETCH.md
+    phase: 8
+    owner_issue: ZH-037
+    inputs: [meshlet_stream]
+    outputs: [index_triplets, vertex_records]
+    upstream: [GEOM.MESHFETCH]
+    downstream: [GEOM.ASSEMBLE, GEOM.VDECODE, MEM.GUARD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: one meshlet footprint per 38 beats, double buffered
+    reference_model: zref::assetfetch::plan
+    tests:
+      directed: tests/geometry/assetfetch_directed.cpp
+      random: tests/geometry/assetfetch_directed.cpp
+    counters: [meshlets_fetched, beats_read, guard_denied, refused_footprint, prefetch_stall_cycles]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-04"
+        commit: 62dd33fb
+        evidence: reference/include/zref/zref_assetfetch.hpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: "DOCKET D22's other half. The Phase-3 region (spec/memory_rules.md 5f) landed 2026-09-04; this is the block that reads through it. RTL not yet written."
+
   - id: GEOM.VDECODE
     name: Vertex decode
     kind: rtl
@@ -2150,7 +2194,7 @@ blocks:
     owner_issue: ZH-053
     inputs: [meshlet_stream]
     outputs: [vertex_batch]
-    upstream: [GEOM.MESHFETCH]
+    upstream: [GEOM.MESHFETCH, GEOM.ASSETFETCH]
     downstream: [GEOM.SKIN, GEOM.SKIN.NORM]
     backpressure: ready_valid
     latency: variable
@@ -2575,7 +2619,7 @@ blocks:
     owner_issue: ZH-083
     inputs: [meshlet_stream, index_stream]
     outputs: [triangle_descriptors]
-    upstream: [GEOM.MESHFETCH]
+    upstream: [GEOM.MESHFETCH, GEOM.ASSETFETCH]
     downstream: [GEOM.CLIP, GEOM.PARAMBUF]
     backpressure: ready_valid
     latency: variable

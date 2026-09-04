@@ -113,3 +113,29 @@ buffering is enough, rather than an assumption that it is.
   wants a measurement, and the `prefetch_stall_cycles` counter is what will
   produce it.
 * **Whether 22 MiB is the right pool size.** Wants a real asset set.
+
+## Scalar reference function
+
+`zref::assetfetch::plan` (`reference/include/zref/zref_assetfetch.hpp`), with
+`zref::assetfetch::triplet` and `zref::assetfetch::vertex_record` serving the
+two consumers and `zref::assetfetch::lines_covering` counting beats.
+
+`plan` is the one the ledger cites because it is the one that DECIDES: the
+admission test and the refusal taxonomy are the block's own law, while the two
+serving functions are address arithmetic over an already-admitted plan.
+
+## Directed tests
+
+`tests/geometry/assetfetch_directed.cpp` — **20 checks, passing.** Edges rather
+than a sweep, because `plan()` is short enough that a random sweep would pass on
+the first attempt and prove nothing: 64 vs 65 vertices, 126 vs 127 triangles, a
+footprint ending exactly on the pool's last byte, an offset that wraps 32 bits,
+a 64-byte block starting mid-line so the beat count is not `bytes/64`, and the
+empty meshlet, which is legal and must not be refused.
+
+**One check failed on its first run against a correct oracle**, and the fixture
+was at fault: the pool pattern was `i*31+7`, which is constant modulo 256 at
+every 256-aligned offset, so the two streams at 1024 and 8192 held the same byte
+and "the streams are read from distinct addresses" could not see a difference.
+The high byte is now in the mix. **A pattern that cannot distinguish positions
+cannot prove positions are distinct.**

@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **106** (86 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **107** (87 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -15,7 +15,7 @@ Blocks: **106** (86 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | debug | · | · | 1 | 3 | · | · | · | · | 4 |
 | field | 5 | · | 1 | 1 | · | · | · | · | 7 |
 | forge | 1 | · | 2 | · | · | · | · | · | 3 |
-| geometry | 4 | 3 | 9 | · | · | · | · | · | 16 |
+| geometry | 4 | 4 | 9 | · | · | · | · | · | 17 |
 | input | 1 | · | · | 2 | · | · | · | · | 3 |
 | measure | 1 | · | 2 | · | · | · | · | · | 3 |
 | memory | 1 | 1 | 1 | 3 | · | · | · | 1 | 6 |
@@ -27,7 +27,7 @@ Blocks: **106** (86 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | terrain | · | 2 | 9 | · | · | · | · | · | 11 |
 | texture | 2 | · | 5 | · | · | · | · | · | 7 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 33 | 13 | 44 | 16 | · | · | · | 6 | 106 |
+| **all** | 33 | 14 | 44 | 16 | · | · | · | 6 | 107 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -113,6 +113,7 @@ Blocks: **106** (86 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | SURFACE.STAMP | REFERENCE_COMPLETE | 2026-08-21 | `175c004` | reference/include/zref/zref_surface.hpp |
 | SURFACE.STAMP | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/surface/surface_stamp_directed.cpp |
 | GEOM.MESHFETCH | REFERENCE_COMPLETE | 2026-09-04 | `19facf9f` | reference/include/zref/zref_meshfetch.hpp |
+| GEOM.ASSETFETCH | REFERENCE_COMPLETE | 2026-09-04 | `62dd33fb` | reference/include/zref/zref_assetfetch.hpp |
 | GEOM.POSE | REFERENCE_COMPLETE | 2026-08-17 | `bd1c733` | tests/geometry/creature_core.cpp |
 | GEOM.SKIN.NORM | REFERENCE_COMPLETE | 2026-09-04 | `87e63ff3` | reference/src/zcreature/creature_core.cpp |
 | GEOM.SKIN.NORM | UNIT_VERIFIED | 2026-09-04 | `87e63ff3` | tests/geometry/skin_norm_rtl_directed.cpp |
@@ -207,7 +208,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 | platform | 14% | 16 | 0% |
 | command_debug | 5% | 9 | 0% |
 | field | 6% | 2 | 0% |
-| geometry_mantle | 20% | 30 | 0% |
+| geometry_mantle | 20% | 31 | 0% |
 | tile | 30% | 14 | 0% |
 | myriad_forge | 9% | 10 | 0% |
 | twod_post | 6% | 5 | 0% |
