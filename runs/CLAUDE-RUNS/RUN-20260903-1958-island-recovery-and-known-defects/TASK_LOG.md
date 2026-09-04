@@ -1338,3 +1338,53 @@ therefore LINEAR, so `mul_cx(1) == MOSAIC_CX` proves `mul_cx(m) == m * CX` for
 
 **Costed before written**, and honestly: ~17 adders, 272-340 ALM of tree,
 landing at roughly 450-520 against a <= 500 gate. The fit decides.
+
+---
+
+## 13:0x — where the work stood, written down BEFORE reading the next fit
+
+CLAUDE.md says to record the in-flight state before fit results redirect it.
+`tmu_pipe` is fitting; `cache_pipe` follows. In progress when it started, and
+what comes next for each:
+
+* **D19j** — D1's reopening. Waiting on an owner call, no code in flight.
+* **D19b** — nine unchecked fault outputs from `check_port_coverage.py`. Not
+  begun. Next step is to read the nine and separate real gaps from debug shrugs.
+* **QFMT_VERSION goldens** — diagnosed, not regenerated. Next step is a
+  regeneration commit that states the 68-byte provenance delta.
+
+### C21 measured, and my estimate was 45% too high
+
+    zhao_texture_mosaic   ok   alms 310   registers 200   dspBlocks 0
+
+Estimated "roughly 450-520 against a <= 500 gate" one entry above. **Measured
+310.** Quartus shares subexpressions across the two trees and drops the shifts
+whose bits are never read; the pencil estimate summed adders as though each were
+whole. That error was in the *expensive* direction — I nearly bought a pipeline
+stage the design did not need. **Estimate to decide whether to try; never to
+decide it will not fit.**
+
+### D1 reopened, and the margin was never a margin
+
+r12 closed D1 at 100 MHz: **+0.057 ns, 0 failing endpoints**. The mandatory
+`fbwrite` W_VERD fix — without which the block wrote zero pixels and raised
+`fatal` — added 34 registers, and r13 came back at **-0.066 ns**. `fbwrite`
+appears in **none** of the worst 100 paths; three unrelated near-critical paths
+simply tipped. **+0.057 ns was never a margin, it was a coincidence.** The fix
+stands; a correct block that misses 100 MHz beats a fast block that writes
+nothing.
+
+### fragrob's first-ever fit kills the storage gap in measurement
+
+    registers 2631 (> 2500, the ONLY violation)   ramBlocks 13
+    blockMemoryBits 6464   alms 1676   dsp 0   fmax 103.1
+
+**13 M10K**, against a brief expecting 14-20 and a tripwire asking for >= 6.
+Both satisfied. The corrected reading — that the brief counts MEMORIES, not
+bits — is now measured, not just argued. The multidimensional-array inference
+blocker I warned about **did not bite**: thirteen arrays inferred.
+
+The rule fires with *"state that belongs in memories is in flip-flops"*, and
+**here that diagnosis is wrong** — the payload is in the 13 M10Ks. The overrun
+is 131 registers, 5%, of control and pipeline state. Worth rewording: a gate
+that explains itself beats one that does not, until the explanation is wrong.
