@@ -839,6 +839,51 @@ will be believed once and ignored after.
 **82 seams fit exactly.** That is the number that matters for D22: the wiring is
 mostly a matter of connecting ports that already agree.
 
+### D19e. **The shell's render path has never been simulated** — found 2026-09-04
+Grepped tree-wide: `render_tri_valid_i` is driven to `1'b0` and nothing else.
+
+    tests/shell/tb_zhao_shell.sv:190   .render_tri_valid_i(1'b0)
+
+and that is the **only** testbench that instantiates `zhao_shell_top`. The bench
+says so itself at line 185:
+
+> *"This bench drives the shell CMD/MEM/VIDEO path and **does not draw**. The
+> render port is held quiet rather than left dangling, so a future bench that
+> DOES draw has to name every pin it uses instead of inheriting an X."*
+
+The other references are the port declaration, the instantiation, a QSF virtual
+pin, and `zhao_prod_top` — a resource top where **nothing is wired to
+anything**.
+
+**So `zhao_shell_top`'s composition of geometry and raster is elaborated,
+fitted and timed, but has never been RUN.** The blocks inside it are well
+tested — `render_pipe_directed` drives `zhao_geom_bin_pipe` and the whole raster
+chain against `zref` — but that test instantiates the bin pipe **directly**. It
+does not go through the shell, so the shell's own wiring of it is unexercised.
+
+### What this does and does not mean for D1
+
+**It does not invalidate the 100 MHz result.** Timing is structural: the fitter
+analysed the real elaborated netlist, and a path's delay does not depend on
+whether a testbench ever toggled it.
+
+**It does mean the machine that closed timing has never drawn a triangle
+through the port it closed timing on.** That is worth saying plainly next to
+the number.
+
+### And it is the true cost of D22 stage 1
+
+`reports/D22-WIRING-PLAN-20260904.md` already carries the correction that
+"the picture does not change" is unavailable as evidence. This is why. Stage 1
+introduces exactly one new risk — **wiring** — because `geom_setup_directed`
+already proves `zhao_geom_setup` equals `zref` bit for bit, so a side-by-side
+composed test would pass trivially and prove nothing about the connection.
+
+**A wiring error can only be caught in the wired shell.** So stage 1's real
+scope includes **giving `tb_zhao_shell` a drawing path**, which is a
+pre-existing gap it inherits rather than creates. Adding nineteen blocks to a
+composition no simulation drives would compound the problem rather than find it.
+
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
 `reports/FUNDAMENTALS-DECISIONS-NEEDED.md`. All eight are ruled and each is
