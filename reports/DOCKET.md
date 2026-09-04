@@ -335,6 +335,37 @@ So `ASSEMBLE -> PARAMBUF` is a real edge that is missing, and the declared
 `ASSEMBLE -> CLIP` is suspect: ASSEMBLE emits triangle descriptors, CLIP takes
 `view_vertices`.
 
+**The deliberate review, for geometry, done.** All fourteen orphans triaged
+against the contracts and RTL rather than left as a list:
+
+| input | verdict |
+|---|---|
+| `ASSEMBLE.meshlet_descriptor` | **vocabulary** — MESHFETCH emits `meshlet_stream` |
+| `ASSEMBLE.index_stream` | **external** — asset memory, caller-answered `ix` port |
+| `DEPTHQUANT.projected_w` | **vocabulary** — PROJECT emits `view_vertices`, and `out_w_o` was added to it on 2026-09-04 |
+| `DEPTHQUANT.depth_profile` | **external** — the two-bit profile in SetView |
+| `LIGHT.world_normal` | **real gap** — `SKIN.NORM` is a prerequisite that does not exist |
+| `LIGHT.environment` | **external** — rig state |
+| `LOOM.transform_graph` | **external** |
+| `MESHFETCH.dispatch` | **external** — the caller's instance walk |
+| `PARAMBUF.triangle_descriptors` | **REAL MISSING EDGE** — ASSEMBLE emits it |
+| `PARAMBUF.tile_references` | **vocabulary** — BINNER emits `tile_lists` |
+| `POSE.pose_requests` | **vocabulary** — MESHFETCH's instance walk, per POSE's own contract |
+| `POSE.clip_pages` | **external** — asset memory |
+| `PROJECT.camera_pair` | **external** — SetView |
+| `SKIN.bone_palette` | **vocabulary** — POSE emits `bone_matrices` |
+
+**Six of fourteen are one thing named twice.** That is the finding worth more
+than any individual edge: the ledger's signal vocabulary is not normalised, so
+the graph cannot be checked mechanically without a human deciding each time
+whether `bone_matrices` and `bone_palette` are the same wire. They are.
+
+So the choice is explicit and belongs to the owner: **normalise the vocabulary
+and the graph becomes machine-checkable**, or leave it prose and accept that the
+probe's edge checks stay advisory forever. What must not happen is the third
+thing, which is what happened tonight — a graph nobody can check being derived
+into an order and believed.
+
 **Not bulk-edited.** Two wrong edges found in one evening from one subsystem is
 a reason to review the whole graph deliberately, not to patch the two that
 happen to have been noticed.
