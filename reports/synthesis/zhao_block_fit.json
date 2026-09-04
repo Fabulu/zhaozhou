@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "1cb661e09e276ade5a783022ffcbf5a293957b1c",
+    "newestRunCommit":  "b34b3c06905beac0015bf40fc6375a0e6416bd36",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1061,24 +1061,21 @@
                    {
                        "module":  "zhao_texture_cache_pipe",
                        "status":  "ok",
-                       "sourceCommit":  "8faaa2405641916b558e671e2fe1c1710ab89af3",
+                       "sourceCommit":  "b34b3c06905beac0015bf40fc6375a0e6416bd36",
                        "rtlCleanAtHead":  true,
-                       "seconds":  5121.2,
-                       "sourcesHashed":  46,
-                       "alms":  5903,
-                       "registers":  11328,
-                       "blockMemoryBits":  128,
-                       "ramBlocks":  2,
+                       "seconds":  3292,
+                       "sourcesHashed":  1,
+                       "alms":  1633,
+                       "registers":  3033,
+                       "blockMemoryBits":  8320,
+                       "ramBlocks":  6,
                        "dspBlocks":  0,
                        "virtualPins":  445,
                        "almsAvailable":  41910,
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
-                       "fmaxMhz":  98.66,
-                       "fmaxClock":  "clk",
-                       "lastAttemptStatus":  "failed:structure",
-                       "lastAttemptSeconds":  4553,
-                       "lastAttemptCommit":  "1b16923576eba4fa094524b25dada1ab5e6e193d"
+                       "fmaxMhz":  101.69,
+                       "fmaxClock":  "clk"
                    },
                    {
                        "module":  "zhao_texture_fragrob",
