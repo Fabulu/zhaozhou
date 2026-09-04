@@ -1,0 +1,10 @@
+{
+    "runId":  "wumen-e6f31aa6-20260904T100232Z",
+    "sourceCommit":  "e6f31aa6bffd3308e8941334626ae994fbb2bb7d",
+    "exitCode":  0,
+    "completed":  true,
+    "seconds":  5238.5,
+    "finishedUtc":  "2026-09-04T11:29:58.2689061Z",
+    "ramFreeBytesAtEnd":  8197226496,
+    "note":  "composed fit completed"
+}
