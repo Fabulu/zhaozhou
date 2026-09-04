@@ -5562,3 +5562,18 @@ add_executable(test_geom_meshfetch_random geometry/geom_meshfetch_random.cpp)
 target_link_libraries(test_geom_meshfetch_random PRIVATE zhao_harness)
 add_test(NAME geom_meshfetch_random COMMAND test_geom_meshfetch_random)
 set_tests_properties(geom_meshfetch_random PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
+
+# GEOM.MESHFETCH RTL against zref::MeshFetch. The testbench PLAYS the cull
+# service rather than instantiating zhao_geom_cull: that block has its own
+# differential, and instantiating it here would re-prove the frustum test while
+# hiding whether THIS block presented the right sphere to it.
+add_executable(test_geom_meshfetch_rtl_directed geometry/geom_meshfetch_rtl_directed.cpp)
+target_link_libraries(test_geom_meshfetch_rtl_directed PRIVATE zhao_harness)
+verilate(test_geom_meshfetch_rtl_directed
+  PREFIX Vzhao_geom_meshfetch
+  TOP_MODULE zhao_geom_meshfetch
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_meshfetch.sv)
+add_test(NAME geom_meshfetch_rtl_directed COMMAND test_geom_meshfetch_rtl_directed)
+set_tests_properties(geom_meshfetch_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
