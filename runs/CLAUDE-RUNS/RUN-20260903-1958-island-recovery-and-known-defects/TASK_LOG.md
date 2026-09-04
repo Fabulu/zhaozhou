@@ -1460,3 +1460,78 @@ a railed UV and cannot count one. Owner call; one accumulator to restore.
 **In flight:** `tmu_pipe` fitting (~85 min), `cache_pipe` queued, `duo_markers`
 regenerating detached (killed twice by tool timeouts first — it needs
 `Start-Process`, not a foreground run).
+
+---
+
+## 18:xx — tmu_pipe stopped deliberately; the island is on its last block
+
+### The decision to stop a 213-minute fit
+
+`zhao_texture_tmu_pipe` was killed at 213 minutes / 22,180 s CPU, on criteria
+stated one turn *before* acting rather than after:
+
+* **42% over its own budget.** Launched with `-TimeoutSeconds 9000`; the harness
+  was going to mark the row `timeout` and blank it the moment the tool exited,
+  so the run's recorded value was already zero.
+* **Routing was single-threaded and stalled-ish** — 460 s CPU over 480 s wall,
+  no `routing.rdb` write in 28 minutes.
+* **The routed numbers describe a design D19m says must change.** Measuring the
+  ALM cost of a palette cache that belongs in M10K measures something already
+  decided against.
+* **`cache_pipe`, the last of the nine, was blocked behind it.** It started
+  within seconds of the kill.
+
+**Nothing was lost.** Synthesis finished at 14:39 and was extracted first:
+`reports/synthesis/tmu_pipe_partial/` holds the RAM Summary, register
+statistics and DSP usage.
+
+### The harness defect that made the run worthless before it began
+
+`run_block_fit.ps1` checks elapsed time **between** tool invocations, so the
+check sits after the tool it bounds. It cannot interrupt a running
+`quartus_fit.exe`; it can only observe, once that process exits, that the budget
+was blown — then blanks the row. **A timeout that cannot interrupt is an
+epitaph.** `zhao_forge_cliff`'s existing `timeout` row, carrying no numbers at
+all, is very likely this having already happened once.
+`reports/FIT-TIMEOUT-CANNOT-FIRE-20260904.md`.
+
+### D19m, and two wrong mechanisms before the right one
+
+`tmu_pipe`: **72,824 registers against 256 block-memory bits** — ~87% of every
+flip-flop on the device, for a 16 x 256 x 16 palette cache that is 7 M10K of 553.
+
+I proposed three mechanisms and **two were wrong**, each refuted by a
+counterexample already in this tree:
+
+* *"it is multidimensional"* — `fragrob`'s `desc_u_m[3][DEPTH]` inferred 13 M10K.
+* *"the read is asynchronous"* — `audio_fifo` reads 65,536 bits through a bare
+  `assign` and inferred 7 M10K.
+* **Right:** what sits between the array read and the first register. An M10K
+  has an output register and inference works by absorbing the consumer's flop
+  into it; `decode16()` in the path blocks that. Now `QUARTUS_GOTCHAS.md` §14.
+
+The synthesis RAM Summary is the proof: **exactly one array inferred**
+(`rb_src`, 16x16, 256 bits), and 68,539 of 72,824 registers carry a clock enable.
+
+### D19l: eight fit rules that have never been evaluated
+
+Three blocks read `status: ok` while breaching a declared ceiling — `texjoin_v2`
+7151>2500, `perspuv_svc` 3293>700, `rcp24_svc` 1101>600. The evaluator is fine;
+**the rules postdate the fits they govern**, by 13 and 20 hours. Third instance
+of "a check that has never fired", so it is now a tool rather than a third
+anecdote: `tools/quartus/check_rule_freshness.py`.
+
+*(And I first named `cache_pipe` as the worst breach. Wrong — its gates were
+removed the same day and survive only as text inside the comment explaining the
+removal. My regex read the retraction as the rule.)*
+
+### Where cache_pipe stands, with a prediction on the record
+
+`quartus_map` running. `reports/CACHE-PIPE-PREDICTION-20260904.md` commits, before
+the answer arrives, to **registers far below the recorded 11,328** — because its
+read is `ram_dat[gl] <= data_r[rd_daddr[gl]]`, the good shape, and its `ok` row
+is stale by construction (D19l). Falsifiable half is registers, not memory bits;
+four 2,048-bit arrays may land in MLAB rather than M10K.
+
+**In flight:** `cache_pipe` fitting; `demo_duo_markers --write` at ~50 min of a
+600-frame shell sim, output buffered to completion.
