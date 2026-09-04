@@ -168,6 +168,12 @@ VtxOut oracle(const zref::mat4fx& m, const zr::Viewport& vp, const VtxIn& v) {
   o.x = p.s.x;
   o.y = p.s.y;
   o.d = p.s.d;
+  // `w` was NOT set here until 2026-09-04, and nothing noticed for a day:
+  // `compare()` did not read it, so the missing expectation and the missing
+  // check cancelled and no test could fail. cppcheck found the uninitialised
+  // member; 488 tests could not. A new port is not delivered until something
+  // compares it.
+  o.w = static_cast<uint32_t>(p.w);
   o.src = v.src;
   return o;
 }
@@ -182,6 +188,7 @@ void compare(const VtxOut& want, const VtxOut& got, const char* what) {
         static_cast<uint32_t>(got.y));
   check(got.d == want.d, (t + ": the 1/w depth word").c_str(), static_cast<uint32_t>(want.d),
         static_cast<uint32_t>(got.d));
+  check(got.w == want.w, (t + ": clip.w itself, for GEOM.DEPTHQUANT").c_str(), want.w, got.w);
   check(got.src == want.src, (t + ": src_id rides its own vertex").c_str(), want.src, got.src);
 }
 

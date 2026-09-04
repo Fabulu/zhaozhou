@@ -56,6 +56,10 @@ ProjOut project_vertex(const mat4fx& vp, const Viewport& vp_px, fx16 x, fx16 y, 
   o.s.x = to_screen_xy(fx_mad(ndc_x, fx16{hw}, fx16{cx}, L), L);
   o.s.y = to_screen_xy(fx_mad(ndc_y, fx16{hh}, fx16{cy}, L), L);
   o.s.d = fx_div_exact(fx16{1 << 16}, clip.w, L).raw;  // Q16.16 1/w (D7)
+  // The divisor itself, carried rather than recomputed: GEOM.DEPTHQUANT needs
+  // w and not 1/w, because the ratified depth law does its own rcp_u24 and the
+  // quotient above has already lost the precision that reconstruction wants.
+  o.w = clip.w.raw;
   o.in = true;
   return o;
 }

@@ -90,6 +90,17 @@ struct ProjOut {
   bool in = false;  // false: w <= 0 (behind the eye) — Phase-3 near-plane
                     // rejection culls the whole primitive (documented)
   ScreenV s;
+  // clip.w itself, fx16 raw, and ZERO when !in. Added 2026-09-04 because
+  // GEOM.PROJECT grew an `out_w_o` port that GEOM.DEPTHQUANT consumes, and the
+  // port had NO ORACLE: `project_vertex` computed w as the divisor and
+  // discarded it, so the differential had nothing to compare against and the
+  // test's expectation was an uninitialised member for a day.
+  //
+  // ADDITIVE ONLY. Every existing field keeps its value and the early return
+  // for a behind-the-eye vertex leaves this at 0, which is exactly what the
+  // RTL emits. The golden CRCs must not move, and that is how the change is
+  // known to be safe -- the same proof the D-1 clamp refactor used.
+  int32_t w = 0;
 };
 
 /**
