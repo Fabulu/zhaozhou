@@ -145,6 +145,35 @@ module zhao_raster_fbwrite
   localparam logic [1:0] W_IDLE = 2'd0;
   localparam logic [1:0] W_REQ  = 2'd1;
   localparam logic [1:0] W_DATA = 2'd2;
+  // W_VERD added 2026-09-04. THE GUARD'S VERDICT ARRIVES ONE CYCLE AFTER THE
+  // ACCEPT, and this block used to read it in the accepting cycle.
+  //
+  //   zhao_mem_guard.sv:185   rsp.ready = !fwd_active;  // level
+  //   zhao_mem_guard.sv:186   rsp.ok    = rsp_ok_q;     // "verdict 1 cycle
+  //                                                     //  after accept"
+  //   zhao_mem_guard.sv:202   rsp_ok_q <= 1'b0;         // default each cycle
+  //   zhao_mem_guard.sv:231   if (req.valid && !fwd_active)
+  //                             if (pass_ok) rsp_ok_q <= 1'b1;
+  //
+  // `ready` is a LEVEL that is high before any request; `ok` is a ONE-CYCLE
+  // PULSE that appears the cycle after. Sampling both together in W_REQ read
+  // the previous request's verdict -- on the first burst, the reset value 0 --
+  // so the block declared "the guard REFUSED", latched `fatal_error_o` and
+  // dropped the row. **Every frame was unpublishable and nothing was ever
+  // written**, against a guard that had refused nothing: the composed shell
+  // measured `fatal=1` with the render guard's violation counter at ZERO.
+  //
+  // `zhao_debug_frameblit` -- the other guard client -- has always done this
+  // correctly, with B_GUARD_REQUEST waiting for `ready` and a separate
+  // B_GUARD_VERDICT reading the answer. This is that shape.
+  //
+  // WHY NO TEST CAUGHT IT: tests/render/render_fb_directed.cpp plays a guard
+  // that answers `ready` and `ok` in the SAME cycle (`rsp = 4u | (ok ? 2u : 1u)`).
+  // The model and the DUT shared one wrong assumption, so the block passed
+  // alone and failed the moment it met the real guard. Found by
+  // tests/shell/shell_draw_directed.cpp, the first test ever to drive the
+  // shell's render path (docket D19e/D19g).
+  localparam logic [1:0] W_VERD = 2'd3;
 
   logic [1:0]  w_state_r;
   logic [2:0]  beat_r;
@@ -288,24 +317,28 @@ module zhao_raster_fbwrite
 
       // ---- the burst -------------------------------------------------------
       case (w_state_r)
+        // The guard ACCEPTS here (ready is its level). The verdict is next
+        // cycle, so this state does not read it -- see W_VERD's note above.
         W_REQ: begin
-          if (guard_rsp_i.ready) begin
-            if (guard_rsp_i.ok) begin
-              w_state_r <= W_DATA;
-              beat_r    <= 3'd0;
-              bursts_issued_o <= bursts_issued_o + 32'd1;
-              // Words, not bytes: the arbiter's credits are 16-bit words and
-              // the two ledgers have to be in the same unit to balance.
-              issued_words_o  <= issued_words_o + 32'({27'd0, out_n_r});
-            end else begin
-              // The guard REFUSED: the write is outside the leased region and
-              // nothing was written. Dropping the row is still correct -- the
-              // guard has counted and latched the violation, and a retry would
-              // write it somewhere it does not belong -- but the FRAME is now
-              // unpublishable, and that is what the latch below says.
-              w_state_r     <= W_IDLE;
-              fatal_error_o <= 1'b1;
-            end
+          if (guard_rsp_i.ready) w_state_r <= W_VERD;
+        end
+
+        W_VERD: begin
+          if (guard_rsp_i.ok) begin
+            w_state_r <= W_DATA;
+            beat_r    <= 3'd0;
+            bursts_issued_o <= bursts_issued_o + 32'd1;
+            // Words, not bytes: the arbiter's credits are 16-bit words and
+            // the two ledgers have to be in the same unit to balance.
+            issued_words_o  <= issued_words_o + 32'({27'd0, out_n_r});
+          end else begin
+            // The guard REFUSED: the write is outside the leased region and
+            // nothing was written. Dropping the row is still correct -- the
+            // guard has counted and latched the violation, and a retry would
+            // write it somewhere it does not belong -- but the FRAME is now
+            // unpublishable, and that is what the latch below says.
+            w_state_r     <= W_IDLE;
+            fatal_error_o <= 1'b1;
           end
         end
 

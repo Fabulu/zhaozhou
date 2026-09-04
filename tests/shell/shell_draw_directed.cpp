@@ -27,35 +27,40 @@
 // is invisible to every block-level test and invisible to the fitter, which
 // analyses delay and not meaning.
 //
-// The assertions are about LIVENESS AND REACH, and each is chosen so that a
-// plausible wiring break fails it:
+// WHAT IT FOUND, on the first run: **zhao_raster_fbwrite could not write a
+// single row through the real guard.** It read the guard's verdict in the
+// accepting cycle, but `zhao_mem_guard` delivers `ok` as a ONE-CYCLE PULSE the
+// cycle after (guard:186, *"verdict 1 cycle after accept"*, and guard:202 sets
+// the default back to 0 every cycle). So the first burst saw `ready=1, ok=0` --
+// the reset value -- declared "the guard REFUSED", latched `fatal_error_o` and
+// dropped the row. **Every frame was unpublishable and nothing was ever
+// written, against a guard that had refused nothing.**
 //
-//   * the binner ACCEPTS a triangle offered at the shell boundary
-//     — fails if `render_tri_valid_i`/`ready_o` are crossed or unconnected;
-//   * the SDRAM model reports no protocol error throughout
-//     — fails if the renderer's bursts are malformed rather than merely absent;
-//   * a blit packet GRANTS a framebuffer lease, span 245,760 — exactly
-//     `ZHAO_FB_SLOT_SPAN`, so the command path and the guard agree;
-//   * `zhao_raster_fbwrite` latches `fatal_error_o`, which is recorded as an
-//     OBSERVATION rather than explained (see below);
-//   * and nothing lands in memory.
+// `zhao_debug_frameblit`, the other guard client, has always done it correctly:
+// `B_GUARD_REQUEST` waits for `ready`, and a separate `B_GUARD_VERDICT` reads
+// the answer. fbwrite now has the same shape (`W_VERD`).
 //
-// WHAT IS NOT PROVED, and this file will not imply otherwise:
+// WHY NOTHING CAUGHT IT: `tests/render/render_fb_directed.cpp` played a guard
+// that answered `ready` and `ok` in the same cycle. **The model and the DUT
+// shared one wrong assumption**, so the block passed alone and failed the
+// moment it met the real guard. That model now delivers the real one-cycle
+// pulse, which is what makes it able to fail. **A played interface that is
+// easier than the real one is not a simplification, it is a different
+// interface.**
 //
-//   * that a granted frame produces the RIGHT pixels — nothing here is a
-//     picture test;
-//   * WHY fbwrite latches fatal. The render guard reports **zero** violations
-//     and no stream error was seen across the whole drain, and those are its
-//     two documented setters. **Docket D19g.**
+// The assertions, after the fix:
 //
-// An earlier version of this header explained the fatal as a guard refusal for
-// want of a region map and called it "the proof of reach". That was written
-// before the guard's own violation counter was read, and the counter says
-// zero. The explanation is withdrawn; the observation stands.
+//   * the binner ACCEPTS a triangle offered at the shell boundary;
+//   * a blit packet GRANTS a lease, span 245,760 = `ZHAO_FB_SLOT_SPAN`;
+//   * fbwrite does NOT latch fatal and the guard refuses nothing;
+//   * THE RENDER PATH WRITES PIXELS -- 3,328 of them in 208 bursts;
+//   * issued and retired words BALANCE, which is why both are counted in words;
+//   * the frame DRAINS, and the framebuffer slot changes.
 //
-// It did find `render_fatal_o` firing — one of the nine fault outputs docket
-// D19b reports that no test names. The first test to watch one found it
-// asserting, which is exactly why the nine are worth watching.
+// STILL NOT PROVED: that the pixels are the RIGHT ones. This is not a picture
+// test -- `render_pipe_directed` owns the arithmetic. It proves the composed
+// shell can render at all, which until 2026-09-04 nothing had ever checked.
+//
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -326,14 +331,28 @@ int main(int argc, char** argv) {
   zhao::check(h.top.render_overflow_o == 0, "no arena overflow", 0,
               h.top.render_overflow_o ? 1 : 0);
 
-  // OBSERVED, not diagnosed: fbwrite latches fatal, with the render guard
-  // reporting zero violations and no stream error. See D19g.
-  zhao::check(h.top.render_fatal_o == 1,
-              "fbwrite latches fatal (cause OPEN -- guard reports no violation)", 1,
+  // THE DEFECT THIS TEST FOUND, NOW FIXED (docket D19g).
+  //
+  // zhao_raster_fbwrite read the guard's verdict in the ACCEPTING cycle, but
+  // zhao_mem_guard delivers `ok` as a one-cycle pulse the cycle AFTER
+  // (guard:186, "verdict 1 cycle after accept"). So on its first burst fbwrite
+  // saw ready=1, ok=0 -- the reset value -- declared "the guard REFUSED",
+  // latched fatal and dropped the row. Every frame was unpublishable and
+  // nothing was ever written, against a guard that had refused NOTHING.
+  //
+  // fbwrite now has a W_VERD state, the shape zhao_debug_frameblit has always
+  // used. These checks are what changed when it landed.
+  zhao::check(h.top.render_fatal_o == 0, "fbwrite does NOT latch fatal", 0,
               h.top.render_fatal_o ? 1 : 0);
-  zhao::check(h.top.dbg_render_gv_cnt_o == 0,
-              "and the render guard refused nothing, which is the open part", 0,
+  zhao::check(h.top.dbg_render_gv_cnt_o == 0, "and the guard refused nothing", 0,
               (unsigned)h.top.dbg_render_gv_cnt_o);
+  zhao::check(h.top.render_pixels_o > 0, "THE RENDER PATH WROTE PIXELS", 1,
+              h.top.render_pixels_o > 0 ? 1 : 0);
+  zhao::check(h.top.render_issued_words_o == h.top.render_retired_words_o,
+              "issued and retired words balance", (unsigned)h.top.render_issued_words_o,
+              (unsigned)h.top.render_retired_words_o);
+  zhao::check(h.top.render_drained_o == 1, "and the frame DRAINED", 1,
+              h.top.render_drained_o ? 1 : 0);
 
   // Nothing was written, which is the same fact from memory's side.
   bool wrote = false;
@@ -341,7 +360,7 @@ int main(int argc, char** argv) {
   for (uint32_t w = 0; w < 4096 && !wrote; ++w) {
     if (peek(h, w) != first) wrote = true;
   }
-  zhao::check(!wrote, "and NOTHING was written, as a refused write requires", 1, wrote ? 0 : 1);
+  zhao::check(wrote, "and the framebuffer CHANGED -- the picture reached memory", 1, wrote ? 1 : 0);
 
   // ---- WHAT IS STILL NOT PROVED -------------------------------------------
   // That a granted frame produces the RIGHT pixels. That needs the command path

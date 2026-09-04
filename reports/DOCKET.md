@@ -955,6 +955,65 @@ architecture decision rather than a wiring one.
 **ENFORCED-BY:** `tests/shell/shell_draw_directed.cpp` asserts the refusal, so
 the day this coupling changes, that test says so.
 
+### D19g. **FIXED — `RASTER.FBWRITE` read the guard's verdict a cycle early**
+**The console could not write a single framebuffer row.** Found and fixed
+2026-09-04 by `tests/shell/shell_draw_directed.cpp`, the first test ever to
+drive the shell's render path.
+
+    zhao_mem_guard.sv:185   rsp.ready = !fwd_active;   // a LEVEL
+    zhao_mem_guard.sv:186   rsp.ok    = rsp_ok_q;      // "verdict 1 cycle
+                                                       //  after accept"
+    zhao_mem_guard.sv:202   rsp_ok_q <= 1'b0;          // default every cycle
+    zhao_mem_guard.sv:231   if (req.valid && !fwd_active)
+                              if (pass_ok) rsp_ok_q <= 1'b1;
+
+`ready` is high before any request; `ok` is a **one-cycle pulse the cycle
+after**. `zhao_raster_fbwrite`'s `W_REQ` sampled both together, so its first
+burst read `ready=1, ok=0` — the reset value — took the "guard REFUSED" branch,
+latched `fatal_error_o` and dropped the row. **Every frame unpublishable,
+nothing ever written, against a guard that had refused nothing.**
+
+`zhao_debug_frameblit` — the only other guard client — has always been correct:
+`B_GUARD_REQUEST` waits for `ready`, and a separate `B_GUARD_VERDICT` reads the
+answer one cycle later. **fbwrite now has that shape (`W_VERD`).**
+
+### Why nothing caught it, and this is the part worth keeping
+
+`tests/render/render_fb_directed.cpp` played a guard that answered `ready` and
+`ok` in the **same cycle**:
+
+    rsp = (uint8_t)(4u | (ok ? 2u : 1u));   // ready | ok, together
+
+**The model and the DUT shared one wrong assumption.** The block passed its own
+differential — 24 checks, thousands of pixels — and could not write a byte
+through the real guard. The model now delivers the true one-cycle pulse, which
+is what makes it able to fail.
+
+**A played interface that is easier than the real one is not a simplification,
+it is a different interface.** This is the same family as the terrain shade
+oracle that was verified against its own duplicate, and as `min_m10k` measured
+against a brief that counted something else.
+
+### The result
+
+    before   pixels=0     bursts=0    issued=0     fatal=1
+    after    pixels=3328  bursts=208  issued=3328  retired=3328  fatal=0
+
+Issued and retired balance, the frame drains, the framebuffer slot changes.
+**A triangle offered at the console's edge is rendered into memory** — the first
+time that has happened in simulation.
+
+`shell_draw_directed` 16 checks, `render_fb_directed` 24 checks.
+
+**NOT claimed:** that the pixels are the right ones. That is
+`render_pipe_directed`'s job and this is not a picture test.
+
+**Needs a composed fit**: `zhao_raster_fbwrite.sv` is a shell source and D1
+closed at +0.057 ns, so the extra state must be re-measured.
+
+<details>
+<summary>The original OPEN entry</summary>
+
 ### D19g. `fbwrite` latches `fatal_error_o` with NO guard violation — **OPEN**
 `tests/shell/shell_draw_directed.cpp`, measured 2026-09-04.
 
@@ -992,6 +1051,8 @@ read. **An explanation that was not measured is worse than an open question.**
 Read the fatal's third path, or instrument fbwrite's two known ones directly.
 `shell_draw_directed` asserts the latch as an OBSERVATION, so whatever the cause
 turns out to be, the test moves when it is fixed.
+
+</details>
 
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in

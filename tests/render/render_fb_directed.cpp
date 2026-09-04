@@ -202,25 +202,52 @@ struct Dut {
     clocks = 0;
   }
 
+  // The guard's verdict is a one-cycle pulse delivered AFTER the accept.
+  bool verdict_pending = false;
+  bool verdict_ok = false;
+
   /** One clock, with the modelled guard and VRAM answering. */
   void step() {
     // ---- the guard's request port ----------------------------------------
-    // `ready` is asserted whenever no burst is in flight; `ok` is the region
-    // check. A refused request is DROPPED and nothing is written, exactly as
-    // zhao_mem_guard's contract states.
+    // `ready` is a LEVEL, high whenever no burst is in flight. THE VERDICT IS
+    // A ONE-CYCLE PULSE THE CYCLE AFTER THE ACCEPT, which is what
+    // zhao_mem_guard actually does:
+    //
+    //   guard:185  rsp.ready = !fwd_active;   // level
+    //   guard:186  rsp.ok    = rsp_ok_q;      // "verdict 1 cycle after accept"
+    //   guard:202  rsp_ok_q <= 1'b0;          // default every cycle
+    //   guard:231  if (req.valid && !fwd_active) if (pass_ok) rsp_ok_q <= 1'b1;
+    //
+    // THIS MODEL USED TO ANSWER BOTH IN THE SAME CYCLE -- `4u | (ok ? 2u : 1u)`
+    // -- and zhao_raster_fbwrite read them together, so the model and the DUT
+    // shared one wrong assumption and this test passed on a block that could
+    // not write a single row through the real guard. It declared "the guard
+    // REFUSED" on its first burst and latched fatal_error_o, which
+    // tests/shell/shell_draw_directed.cpp measured in the composed shell as
+    // `fatal=1` with the guard's violation counter at ZERO (docket D19g).
+    //
+    // Modelling the real one-cycle verdict is what makes this test able to
+    // fail. A played interface that is easier than the real one is not a
+    // simplification, it is a different interface.
     uint8_t rsp = 0;
     t.eval();
     const bool req_v = field(t.guard_req_o, kReqValidLsb, 1) != 0;
-    if (req_v && !active) {
+    // zhao_guard_rsp_t is {ready, ok, violation} declared MSB-first, so ready
+    // is bit 2, ok is bit 1 and violation is bit 0. An earlier version put
+    // ready at bit 0 and the render path was never told its request had been
+    // accepted: zero bursts, zero pixels, and a frame that compared equal to
+    // an all-black expectation.
+    if (verdict_pending) {
+      rsp |= verdict_ok ? 2u : 1u;  // the PULSE, one cycle late
+      verdict_pending = false;
+    }
+    if (!active) rsp |= 4u;  // ready: the level
+    if (req_v && !active && !verdict_pending) {
       const uint32_t a = (uint32_t)field(t.guard_req_o, kReqAddrLsb, 27);
       const uint32_t l = (uint32_t)field(t.guard_req_o, kReqLenLsb, 7);
       const bool ok = mem.in_region(a, l);
-      // zhao_guard_rsp_t is {ready, ok, violation} declared MSB-first, so
-      // ready is bit 2, ok is bit 1 and violation is bit 0. The first version
-      // of this line put ready at bit 0 and the render path was never told its
-      // request had been accepted: zero bursts, zero pixels, and a frame that
-      // compared equal to an all-black expectation.
-      rsp = (uint8_t)(4u | (ok ? 2u : 1u));
+      verdict_pending = true;
+      verdict_ok = ok;
       if (ok) {
         active = true;
         base = a;
