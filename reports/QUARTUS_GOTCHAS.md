@@ -799,3 +799,59 @@ nothing says "three were never attempted".
 4. **A per-block fit is independent by construction.** Chaining blocks inside
    one process gives that up for nothing; invoking the script once per module
    makes one block's failure cost exactly one block.
+
+---
+
+## 14. What actually decides whether an array becomes an M10K
+
+Measured 2026-09-04, after **two** plausible explanations for D19m turned out to
+be wrong. Both had a counterexample sitting in this repository, and finding each
+one took a single grep.
+
+### The two wrong answers, recorded because they are the obvious ones
+
+**"It is multidimensional."** `zhao_texture_fragrob` declares
+`desc_u_m [3][DEPTH]` and friends and measured **13 M10K, 6,464 memory bits**.
+Multidimensional arrays infer here. Quartus's *"cannot regroup multidimensional
+array"* message is real but is not this.
+
+**"The read is asynchronous."** `zhao_audio_fifo` reads its 65,536-bit `mem`
+through a bare `assign rd_word = mem[rd_ptr];` and measured **7 M10K with 292
+registers**. Asynchronously-read arrays infer here too.
+
+### What separates them
+
+An M10K has an **output register**, and inference works by absorbing the
+consumer's flop into it. That absorption needs the read to reach a register with
+nothing but wiring in between:
+
+    zhao_raster_tilestore   ram0_q  <= ram0[b0_raddr];        -> M10K
+    zhao_audio_fifo         pcm_l_o <= rd_word[15:0];         -> 7 M10K
+                                       (assign rd_word = mem[addr])
+
+    zhao_texture_tmu_pipe   dec_clut565_c =
+                              decode16(pal_dat_r[way][idx], FMT_RGB565);
+                              ^^^^^^^^ a function, then a mux, THEN a flop
+                                                              -> 65,536 FLOPS
+
+**Combinational logic between the array read and the first register blocks the
+absorption**, and the array falls back to flip-flops. That is the discriminator
+that survives all four blocks above.
+
+`zhao_raster_tilestore.sv`'s own comment names the working idiom in passing --
+*"`ram0_q <= ram0[addr]` puts…"* -- which is what the pattern looks like when
+somebody got it right on purpose.
+
+### Why it matters more than the folklore
+
+The cost of believing either wrong answer is a redesign aimed at the wrong
+property: reshaping an array that was never the problem, or adding a pipeline
+stage where a register move would do. In `tmu_pipe` the fix is to **register the
+raw word out of the array and decode on the next cycle** — the register being
+added is the one the M10K supplies for free.
+
+**Stated as a limit, not a law.** Four blocks agree with it; that is consistent,
+not proven. Quartus's inference has more conditions than this (write-port count,
+reset style, initial values), and the honest use of the rule is *"check what sits
+between the read and the flop FIRST, because it is cheap and it explained every
+case here"* — not *"this is the only thing that can matter."*
