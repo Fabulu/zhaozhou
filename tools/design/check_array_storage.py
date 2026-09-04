@@ -53,6 +53,22 @@ in memory and the same declared total predicts the MEMORY BIT count to 2%. The
 arithmetic is reading real storage in both cases; only its destination differs,
 which is exactly the question this tool asks.
 
+**AND IT MUST NOT COMPARE ACROSS TIME.** The first version reported
+`zhao_texture_tmu` as 9,762 declared bits against 0 memory and only 350
+registers, with a note guessing "deleted by a leaf fit whose outputs are
+unconnected". That was wrong twice over: the block's current source reads its
+array straight into a flop -- the shape that DOES infer -- and the row it was
+compared against was measured 2026-08-23 against source last changed 2026-08-30.
+
+**Declared bits come from today's file; measured bits come from whenever the fit
+ran.** When those differ, the subtraction is not a weaker check, it is a
+different question. Rows older than their source are now reported separately and
+never as gaps.
+
+I walked into that trap while writing this tool, and the trap is filed as D19o
+-- which was itself found from this tool's output. A finding and its own
+counterexample can come from the same afternoon.
+
 **Its weakness is UNDER-counting**, visible in `zhao_field_v2_front`: 2,688
 declared against 266,513 measured, because most of that block's arrays are sized
 by expressions this cannot resolve and are skipped rather than guessed. That is
@@ -74,6 +90,7 @@ import io
 import json
 import os
 import re
+import subprocess
 import sys
 
 RESULTS = "reports/synthesis/zhao_block_fit.json"
@@ -102,6 +119,34 @@ assert ARRAY_RE.search("  logic [15:0]  pal_dat_r [PAL_SLOTS][256];"), (
 
 def read(p):
     return io.open(p, encoding="utf-8", errors="replace").read()
+
+
+def _git_date(*args):
+    r = subprocess.run(["git", "log", "-1", "--format=%cI"] + list(args),
+                       capture_output=True, text=True)
+    return r.stdout.strip() or None
+
+
+def row_predates_source(row, path):
+    """Is the measurement OLDER than the file it is being compared against?
+
+    This tool compares bits declared in TODAY'S source against memory measured
+    in some past fit. When the source has changed since, that comparison is
+    meaningless -- and it produces confident nonsense: `zhao_texture_tmu` was
+    reported as having 9,762 declared bits against 0 memory and only 350
+    registers, and the note attached to it guessed "deleted by a leaf fit".
+    Wrong. The row was measured 2026-08-23 against source last changed
+    2026-08-30, and the current code reads the array straight into a flop --
+    the shape that DOES infer (QUARTUS_GOTCHAS 14).
+
+    I walked into exactly the trap that is filed as D19o, while writing the
+    tool whose output produced D19o. Comparing a current file to a stale
+    measurement is not a weaker version of the check; it is a different
+    question with the same shape.
+    """
+    measured = _git_date(row.get("sourceCommit") or "HEAD")
+    changed = _git_date("--", path)
+    return bool(measured and changed and changed > measured)
 
 
 def dim_size(expr, params):
@@ -184,7 +229,7 @@ def main() -> int:
             rs = list(rs.values())
         rows = {r.get("module"): r for r in rs if r.get("module")}
 
-    found, unmeasured, skipped_total = [], [], 0
+    found, unmeasured, outdated, skipped_total = [], [], [], 0
     for root, _dirs, files in os.walk("fpga/rtl"):
         for f in files:
             if not f.endswith(".sv"):
@@ -207,6 +252,11 @@ def main() -> int:
             if mem is None or reg is None:
                 unmeasured.append((total, mod, biggest))
                 continue
+            # A measurement older than the file it is compared against answers
+            # a different question. See row_predates_source().
+            if row_predates_source(row, os.path.join(root, f)):
+                outdated.append((total, mod, biggest))
+                continue
             if mem < total // 2:
                 # A leaf fit with unconnected outputs lets synthesis DELETE
                 # storage nothing observes, so few registers and no memory can
@@ -220,11 +270,12 @@ def main() -> int:
     found.sort(reverse=True)
     unmeasured.sort(reverse=True)
 
+    outdated.sort(reverse=True)
     print("array storage: %d measured block(s) declare >= %d array bits with "
           "less than half of it in block memory; %d further block(s) declare "
-          "that much but have no fit row yet; %d declaration(s) skipped as "
-          "unresolvable"
-          % (len(found), thresh, len(unmeasured), skipped_total))
+          "that much but have no fit row yet; %d whose row PREDATES the source "
+          "and cannot be compared; %d declaration(s) skipped as unresolvable"
+          % (len(found), thresh, len(unmeasured), len(outdated), skipped_total))
 
     if found:
         print("\nDECLARED BUT NOT IN MEMORY -- largest gap first. A gap is a "
