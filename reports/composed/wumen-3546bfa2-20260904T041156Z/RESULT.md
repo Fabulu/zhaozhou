@@ -113,6 +113,28 @@ bank — so the dependency is not gratuitous. Breaking it means either registeri
 the clear request or giving the write its own acceptance, and that is a
 one-change, one-fit step like the skid was.
 
+### The binner's four: a multiply-add in the register-to-register path
+
+`zhao_geom_binner.sv:755-757` computes both edge accumulators in one cycle from
+the same register:
+
+    ep_r[k]  <= ep_r[k] + k_mul_tile(kx_r[k][22:0], {tx0_r,4'd0}) + ...
+    epr_r[k] <= ep_r[k] + k_mul_tile(kx_r[k][22:0], {tx0_r,4'd0}) + ...
+
+`k_mul_tile` is an inlined 23x11 product, so the path is
+**register -> multiply -> two adds -> register**, which is the textbook thing to
+pipeline and is the only one of the four offenders that is ordinary datapath
+rather than control.
+
+**One thing NOT claimed:** the fit names the path `ep_r[2][3] -> epr_r[0][22]`,
+crossing lanes and running low bit to high. Nothing in the source shares a
+multiplier between lanes -- `k_mul_tile` is a function, inlined per call -- so
+that naming is most likely a synthesis artefact of merged arithmetic rather than
+real cross-lane sharing. **It was not chased further**, because the structural
+answer (a multiply-add between two registers) does not depend on which lane the
+tool decided to name, and inventing a sharing story from a node name is how the
+last three wrong diagnoses started.
+
 ### One of them should not be there at all
 
 Six of the twelve violations run from `zhao_debug_frameblit`'s state comparator
