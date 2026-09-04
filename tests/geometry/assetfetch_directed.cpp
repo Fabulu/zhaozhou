@@ -62,8 +62,7 @@ static void test_limits() {
   // "no triangles" is a valid meshlet, and refusing it would count a fault
   // where there is none.
   const af::Plan empty = af::plan(req(0, 0, 0, 0));
-  check(empty.admitted && empty.beats == 0,
-        "an empty meshlet is admitted and asks for zero beats");
+  check(empty.admitted && empty.beats == 0, "an empty meshlet is admitted and asks for zero beats");
 }
 
 // --------------------------------------------------------------------------
@@ -71,16 +70,14 @@ static void test_limits() {
 // --------------------------------------------------------------------------
 static void test_pool_edges() {
   // A vertex block whose LAST byte is the pool's last byte. Exactly legal.
-  const uint32_t vbytes = 64u * af::kVertexRecordBytes;   // 2048
+  const uint32_t vbytes = 64u * af::kVertexRecordBytes;  // 2048
   const af::Plan flush = af::plan(req(af::kAssetPoolSpan - vbytes, 0, 64, 0));
-  check(flush.admitted,
-        "a footprint ending exactly at the pool's last byte is admitted");
+  check(flush.admitted, "a footprint ending exactly at the pool's last byte is admitted");
 
   // One ALIGNED step further and it leaves the pool. The step is kVertexAlign
   // rather than 1 on purpose: at +1 the refusal would be kMisaligned and this
   // check would pass for the wrong reason, proving nothing about the bound.
-  const af::Plan over =
-      af::plan(req(af::kAssetPoolSpan - vbytes + af::kVertexAlign, 0, 64, 0));
+  const af::Plan over = af::plan(req(af::kAssetPoolSpan - vbytes + af::kVertexAlign, 0, 64, 0));
   check(!over.admitted && over.refusal == af::Refusal::kOutsidePool,
         "one aligned step past the pool end is refused as kOutsidePool");
 
@@ -88,7 +85,7 @@ static void test_pool_edges() {
   // address, which lands INSIDE the pool if you only test the end. This is the
   // same shape as the guard's blit-wrap defect, and it is the reason the start
   // is compared against the base at all.
-  const uint32_t wrapping = 0u - af::kAssetPoolBase;   // base + this == 0
+  const uint32_t wrapping = 0u - af::kAssetPoolBase;  // base + this == 0
   const af::Plan wrapped = af::plan(req(wrapping, 0, 1, 0));
   check(!wrapped.admitted && wrapped.refusal == af::Refusal::kOutsidePool,
         "an offset that wraps 32 bits is refused, not silently admitted at 0");
@@ -108,8 +105,7 @@ static void test_pool_edges() {
 // rather than hoping for it, because the RTL's buffer layout depends on it.
 // --------------------------------------------------------------------------
 static void test_alignment() {
-  check(af::plan(req(32, 8, 1, 1)).admitted,
-        "the minimum legal alignments (32 / 8) are admitted");
+  check(af::plan(req(32, 8, 1, 1)).admitted, "the minimum legal alignments (32 / 8) are admitted");
 
   const af::Plan vbad = af::plan(req(16, 0, 1, 1));
   check(!vbad.admitted && vbad.refusal == af::Refusal::kMisaligned,
@@ -144,15 +140,13 @@ static void test_line_counting() {
 
   // The case a bytes/64 implementation gets wrong: 64 bytes starting at offset
   // 1 spans TWO lines.
-  check(af::lines_covering(1, 64) == 2,
-        "64 bytes starting mid-line spans two lines, not one");
-  check(af::lines_covering(63, 2) == 2,
-        "two bytes straddling a line boundary spans two lines");
+  check(af::lines_covering(1, 64) == 2, "64 bytes starting mid-line spans two lines, not one");
+  check(af::lines_covering(63, 2) == 2, "two bytes straddling a line boundary spans two lines");
 
   // And the same at pool scale, through plan(). The pool base is 64-aligned and
   // vertex offsets are 32-aligned, so a vertex block sits at byte 0 or byte 32
   // of a line -- at 32, two records straddle into a second line.
-  const af::Plan p = af::plan(req(32, 0, 2, 0));   // 64 bytes at pool_base+32
+  const af::Plan p = af::plan(req(32, 0, 2, 0));  // 64 bytes at pool_base+32
   check(p.beats == 2, "plan() counts a straddling vertex block as two beats");
 }
 
@@ -172,8 +166,7 @@ static void test_serving() {
   const uint32_t kImage = 1u << 16;
   std::vector<uint8_t> pool(af::kAssetPoolBase + kImage, 0);
   for (uint32_t i = 0; i < kImage; ++i) {
-    pool[af::kAssetPoolBase + i] =
-        static_cast<uint8_t>((i * 31u + (i >> 8) * 131u + 7u) & 0xFFu);
+    pool[af::kAssetPoolBase + i] = static_cast<uint8_t>((i * 31u + (i >> 8) * 131u + 7u) & 0xFFu);
   }
 
   const uint32_t voff = 1024, ioff = 8192;

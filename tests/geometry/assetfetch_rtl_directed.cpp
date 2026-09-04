@@ -39,9 +39,9 @@ namespace af = zref::assetfetch;
 
 namespace {
 
-constexpr uint32_t kPoolImage    = 1u << 17;   // 128 KiB of the pool modelled
-constexpr uint8_t  kClientEngine1 = 3;         // ZHAO_CLIENT_ENGINE1
-constexpr uint16_t kSrcId        = 0x5A5A;
+constexpr uint32_t kPoolImage = 1u << 17;  // 128 KiB of the pool modelled
+constexpr uint8_t kClientEngine1 = 3;      // ZHAO_CLIENT_ENGINE1
+constexpr uint16_t kSrcId = 0x5A5A;
 
 int g_checks = 0;
 int g_fail = 0;
@@ -73,20 +73,20 @@ uint8_t pool_abs_byte(uint32_t abs) { return g_pool[abs - af::kAssetPoolBase]; }
 // ---------------------------------------------------------------------------
 struct Guard {
   Vtb_assetfetch& d;
-  std::vector<uint32_t> asked;    // every line address, IN ORDER
-  bool deny = false;              // deny the next accepted request
-  bool shape_error = false;       // the block asked for something illegal
+  std::vector<uint32_t> asked;  // every line address, IN ORDER
+  bool deny = false;            // deny the next accepted request
+  bool shape_error = false;     // the block asked for something illegal
 
   // Beat delivery state for the line currently in flight.
-  bool     streaming = false;
+  bool streaming = false;
   uint32_t line_addr = 0;
-  int      beat = 0;
+  int beat = 0;
   // Whether a beat was actually PRESENTED this cycle. The first version
   // advanced `beat` in post_edge whenever `streaming` was set -- including on
   // the acceptance cycle, where no beat is driven -- so beat 0 was never
   // delivered and every buffer held its line shifted by one word. The
   // differential caught it as an exact 8-byte offset in both streams.
-  bool     drove = false;
+  bool drove = false;
 
   explicit Guard(Vtb_assetfetch& dut) : d(dut) {}
 
@@ -111,7 +111,7 @@ struct Guard {
       }();
       d.beat_last = (beat == 7);
       drove = true;
-      return;   // one line at a time; no new request while beats flow
+      return;  // one line at a time; no new request while beats flow
     }
 
     if (d.g_valid) {
@@ -134,7 +134,7 @@ struct Guard {
         asked.push_back(d.g_addr);
         line_addr = d.g_addr;
         beat = 0;
-        streaming = true;   // beats begin the cycle after acceptance
+        streaming = true;  // beats begin the cycle after acceptance
       }
     }
   }
@@ -199,7 +199,7 @@ struct Sim {
 
     int waited = 0;
     while (!d.m_ready && waited++ < 200) step();
-    step();                 // the accepting edge
+    step();  // the accepting edge
     d.m_valid = 0;
 
     // Admitted meshlets leave S_IDLE, so m_ready falls; a refusal never
@@ -207,11 +207,11 @@ struct Sim {
     d.s_ready = 1;
     for (int i = 0; i < budget; ++i) {
       if (d.s_valid) {
-        step();             // s_ready is high, so this accepts it
+        step();  // s_ready is high, so this accepts it
         d.s_ready = 0;
         return true;
       }
-      if (d.m_ready) {      // back to idle with nothing to show
+      if (d.m_ready) {  // back to idle with nothing to show
         d.s_ready = 0;
         return false;
       }
@@ -229,13 +229,12 @@ struct Sim {
     d.ix_req = 0;
     for (int i = 0; i < budget; ++i) {
       if (d.ix_valid) {
-        return af::Triplet{static_cast<uint8_t>(d.ix_a),
-                           static_cast<uint8_t>(d.ix_b),
+        return af::Triplet{static_cast<uint8_t>(d.ix_a), static_cast<uint8_t>(d.ix_b),
                            static_cast<uint8_t>(d.ix_c)};
       }
       step();
     }
-    return af::Triplet{0xFF, 0xFF, 0xFF};   // a hang, reported by the compare
+    return af::Triplet{0xFF, 0xFF, 0xFF};  // a hang, reported by the compare
   }
 
   // Consume the next vertex record. Returns false on timeout.
@@ -277,7 +276,7 @@ std::vector<uint32_t> expected_lines(const af::Plan& p) {
     const uint32_t n = af::lines_covering(addr, bytes);
     for (uint32_t i = 0; i < n; ++i) v.push_back(first + i * af::kLineBytes);
   };
-  run(p.index_addr, p.index_bytes);     // index stream FIRST
+  run(p.index_addr, p.index_bytes);  // index stream FIRST
   run(p.vertex_addr, p.vertex_bytes);
   return v;
 }
@@ -285,8 +284,7 @@ std::vector<uint32_t> expected_lines(const af::Plan& p) {
 // ---------------------------------------------------------------------------
 // One admitted meshlet, end to end.
 // ---------------------------------------------------------------------------
-void serve_case(Sim& s, uint32_t voff, uint32_t ioff, int vc, int tc,
-                const char* label) {
+void serve_case(Sim& s, uint32_t voff, uint32_t ioff, int vc, int tc, const char* label) {
   af::Request r;
   r.vertex_offset = voff;
   r.index_offset = ioff;
@@ -320,9 +318,9 @@ void serve_case(Sim& s, uint32_t voff, uint32_t ioff, int vc, int tc,
     if (got.a != pool_abs_byte(at) || got.b != pool_abs_byte(at + 1) ||
         got.c != pool_abs_byte(at + 2)) {
       trips_ok = false;
-      std::printf("      triplet %d at %08x: got %02x %02x %02x want %02x %02x %02x\n",
-                  n, at, got.a, got.b, got.c, pool_abs_byte(at),
-                  pool_abs_byte(at + 1), pool_abs_byte(at + 2));
+      std::printf("      triplet %d at %08x: got %02x %02x %02x want %02x %02x %02x\n", n, at,
+                  got.a, got.b, got.c, pool_abs_byte(at), pool_abs_byte(at + 1),
+                  pool_abs_byte(at + 2));
     }
   }
   std::snprintf(what, sizeof what, "%s: all %d triplets byte-exact", label, tc);
@@ -353,8 +351,7 @@ void serve_case(Sim& s, uint32_t voff, uint32_t ioff, int vc, int tc,
   s.release();
 }
 
-void refuse_case(Sim& s, uint32_t voff, uint32_t ioff, int vc, int tc,
-                 const char* label) {
+void refuse_case(Sim& s, uint32_t voff, uint32_t ioff, int vc, int tc, const char* label) {
   af::Request r;
   r.vertex_offset = voff;
   r.index_offset = ioff;

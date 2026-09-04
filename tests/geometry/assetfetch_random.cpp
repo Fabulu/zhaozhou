@@ -40,10 +40,10 @@ namespace af = zref::assetfetch;
 
 namespace {
 
-constexpr uint32_t kPoolImage     = 1u << 17;
-constexpr uint8_t  kClientEngine1 = 3;
-constexpr uint16_t kSrcId         = 0x1234;
-constexpr int      kMeshlets      = 240;
+constexpr uint32_t kPoolImage = 1u << 17;
+constexpr uint8_t kClientEngine1 = 3;
+constexpr uint16_t kSrcId = 0x1234;
+constexpr int kMeshlets = 240;
 
 int g_checks = 0;
 int g_fail = 0;
@@ -107,7 +107,7 @@ struct Guard {
     d.beat_data = 0;
 
     if (streaming) {
-      if (stall_enabled && rng.chance(20)) return;   // a beat-less cycle
+      if (stall_enabled && rng.chance(20)) return;  // a beat-less cycle
       uint64_t w = 0;
       const uint32_t at = line_addr + static_cast<uint32_t>(beat) * 8;
       for (int b = 0; b < 8; ++b) {
@@ -121,7 +121,7 @@ struct Guard {
     }
 
     if (d.g_valid) {
-      if (stall_enabled && rng.chance(25)) return;   // hold the request off
+      if (stall_enabled && rng.chance(25)) return;  // hold the request off
       if (d.g_write != 0) shape_error = true;
       if (d.g_len != 64) shape_error = true;
       if (d.g_client != kClientEngine1) shape_error = true;
@@ -141,8 +141,10 @@ struct Guard {
 
   void post_edge() {
     if (streaming && drove) {
-      if (beat == 7) streaming = false;
-      else ++beat;
+      if (beat == 7)
+        streaming = false;
+      else
+        ++beat;
     }
   }
 };
@@ -217,8 +219,7 @@ struct Sim {
     d.ix_req = 0;
     for (int i = 0; i < 500; ++i) {
       if (d.ix_valid) {
-        return af::Triplet{static_cast<uint8_t>(d.ix_a),
-                           static_cast<uint8_t>(d.ix_b),
+        return af::Triplet{static_cast<uint8_t>(d.ix_a), static_cast<uint8_t>(d.ix_b),
                            static_cast<uint8_t>(d.ix_c)};
       }
       step();
@@ -257,8 +258,7 @@ struct Sim {
 int main(int argc, char** argv) {
   uint64_t seed = 0xC0FFEEull;
   if (argc > 1) seed = std::strtoull(argv[1], nullptr, 0);
-  std::printf("assetfetch_random: seed %llu\n",
-              static_cast<unsigned long long>(seed));
+  std::printf("assetfetch_random: seed %llu\n", static_cast<unsigned long long>(seed));
 
   build_pool();
   Rng rng(seed);
@@ -284,9 +284,15 @@ int main(int argc, char** argv) {
 
     if (rng.chance(12)) {
       switch (rng.below(3)) {
-        case 0: r.vertex_count = 65; break;
-        case 1: r.triangle_count = 127; break;
-        default: r.vertex_offset += 8; break;    // misaligned
+        case 0:
+          r.vertex_count = 65;
+          break;
+        case 1:
+          r.triangle_count = 127;
+          break;
+        default:
+          r.vertex_offset += 8;
+          break;  // misaligned
       }
     }
 
@@ -296,10 +302,9 @@ int main(int argc, char** argv) {
 
     if (servable != p.admitted) {
       all_verdicts_ok = false;
-      std::printf("  meshlet %d: RTL %s, oracle %s (v=%u t=%u voff=%u ioff=%u)\n",
-                  m, servable ? "admitted" : "refused",
-                  p.admitted ? "admitted" : "refused", r.vertex_count,
-                  r.triangle_count, r.vertex_offset, r.index_offset);
+      std::printf("  meshlet %d: RTL %s, oracle %s (v=%u t=%u voff=%u ioff=%u)\n", m,
+                  servable ? "admitted" : "refused", p.admitted ? "admitted" : "refused",
+                  r.vertex_count, r.triangle_count, r.vertex_offset, r.index_offset);
       break;
     }
 
@@ -307,8 +312,7 @@ int main(int argc, char** argv) {
       ++refused;
       if (!s.g.asked.empty()) {
         all_verdicts_ok = false;
-        std::printf("  meshlet %d: refused but asked for %zu line(s)\n", m,
-                    s.g.asked.size());
+        std::printf("  meshlet %d: refused but asked for %zu line(s)\n", m, s.g.asked.size());
       }
       continue;
     }
@@ -323,8 +327,8 @@ int main(int argc, char** argv) {
       if (got.a != pool_abs_byte(at) || got.b != pool_abs_byte(at + 1) ||
           got.c != pool_abs_byte(at + 2)) {
         all_bytes_ok = false;
-        std::printf("  meshlet %d triplet %u at %08x: got %02x %02x %02x\n", m, n,
-                    at, got.a, got.b, got.c);
+        std::printf("  meshlet %d triplet %u at %08x: got %02x %02x %02x\n", m, n, at, got.a, got.b,
+                    got.c);
       }
     }
 
@@ -339,8 +343,8 @@ int main(int argc, char** argv) {
       for (int b = 0; b < af::kVertexRecordBytes; ++b) {
         if (got[b] != pool_abs_byte(at + static_cast<uint32_t>(b))) {
           all_bytes_ok = false;
-          std::printf("  meshlet %d vertex %u byte %d: got %02x want %02x\n", m, v,
-                      b, got[b], pool_abs_byte(at + static_cast<uint32_t>(b)));
+          std::printf("  meshlet %d vertex %u byte %d: got %02x want %02x\n", m, v, b, got[b],
+                      pool_abs_byte(at + static_cast<uint32_t>(b)));
           break;
         }
       }
@@ -366,13 +370,12 @@ int main(int argc, char** argv) {
   ck(dut.refused_footprint == refused, "refused_footprint counted every refusal");
   ck(dut.beats_read == expect_beats, "beats_read matches the oracle's line count x8");
 
-  std::printf("assetfetch_random: %u admitted, %u refused, %u empty, %llu beats\n",
-              admitted, refused, empty_meshlets,
-              static_cast<unsigned long long>(expect_beats));
+  std::printf("assetfetch_random: %u admitted, %u refused, %u empty, %llu beats\n", admitted,
+              refused, empty_meshlets, static_cast<unsigned long long>(expect_beats));
 
   if (g_fail != 0) {
-    std::printf("[assetfetch_random] %d of %d checks FAILED (seed %llu)\n", g_fail,
-                g_checks, static_cast<unsigned long long>(seed));
+    std::printf("[assetfetch_random] %d of %d checks FAILED (seed %llu)\n", g_fail, g_checks,
+                static_cast<unsigned long long>(seed));
     zhao::exit_hard(1);
   }
   std::printf("[assetfetch_random] %d checks passed\n", g_checks);
