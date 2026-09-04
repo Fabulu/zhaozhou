@@ -5575,6 +5575,27 @@ target_link_libraries(test_assetfetch_directed PRIVATE zhao_harness zhao_zref)
 add_test(NAME assetfetch_directed COMMAND test_assetfetch_directed)
 set_tests_properties(assetfetch_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
 
+# GEOM.ASSETFETCH RTL against zref::assetfetch. The testbench PLAYS MEM.GUARD
+# rather than instantiating it -- that block has its own differential and a
+# formal no-escape proof, and instantiating it here would re-prove the region
+# check while hiding whether THIS block asked for the right addresses. The
+# played guard is deliberately STRICTER than the real one: it fails the test on
+# any request that is not an aligned 64-byte read inside the pool, because a
+# denial is easy to mistake for correct behaviour when the block should never
+# have asked. tb_assetfetch.sv flattens the struct ports so the harness never
+# guesses at Verilator's packing.
+add_executable(test_assetfetch_rtl_directed geometry/assetfetch_rtl_directed.cpp)
+target_link_libraries(test_assetfetch_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_assetfetch_rtl_directed
+  PREFIX Vtb_assetfetch
+  TOP_MODULE tb_assetfetch
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_assetfetch.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_assetfetch.sv)
+add_test(NAME assetfetch_rtl_directed COMMAND test_assetfetch_rtl_directed)
+set_tests_properties(assetfetch_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # GEOM.MESHFETCH -- randomized PROPERTIES, not a differential.
 # There is one implementation, so there is nothing to differ against yet. When
 # the RTL lands the DUT goes in beside these generators and the properties
