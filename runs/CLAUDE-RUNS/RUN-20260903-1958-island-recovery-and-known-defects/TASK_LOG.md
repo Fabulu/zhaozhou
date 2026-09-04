@@ -447,3 +447,43 @@ cannot be the M10K's own output register, so a fabric flop at the end of that
 path may now be inside the block. Done for AREA; the timing effect is **not
 measured** and is in the docket so the next composed fit is read with it in
 mind, not as a claim.
+
+
+## 02:40 — the build tree, diagnosed properly on the third try
+
+I got this wrong twice before getting it right, and both wrong answers were
+written down, so both are corrected here rather than deleted.
+
+**Wrong answer 1: "the tree is broken, needs a full reconfigure."** Based on a
+`CMAKE_CACHEFILE_DIR` casing mismatch in the error text.
+
+**Wrong answer 2: "the tree is fine, it was my invocation casing."** Based on a
+build that appeared to succeed — `BUILD_RC=0`. That zero came from `tail`, not
+from cmake. **The same masking trap as the stale-binary note in CLAUDE.md**, in
+a new costume: a pipeline's exit status is the last command's, and I read it as
+the build's.
+
+**The actual fault.** `build.ninja` was stale AND self-inconsistent. The rule
+for `Vtb_perspuv_pair` declares `Vtb_perspuv_pair.cmake` among its outputs, but
+the command it runs passes **`--make json`**, which produces the `.json` that is
+in fact there. So a `copy_if_different` of a file nothing ever writes failed on
+every build — and because that rule is part of `build.ninja`'s own regeneration,
+**ninja could not rebuild the graph that would have fixed it.** A deadlock:
+255 of 256 verilate directories have their `.cmake`; the one that does not is
+the one blocking regeneration.
+
+**The fix is to regenerate through cmake rather than through ninja** — and to do
+it the documented way, which I had not been. `CMakePresets.json` gates
+`windows-base` on `${hostSystemName} equals Windows`, so invoking `cmake` from
+Git Bash picks up the MSYS cmake, reports a non-Windows host, and disables the
+preset — *"Could not use disabled preset"*. The preset's own `ZHAO_NOTE` says
+to source `tools/env/zhao-env.ps1` first and warns about exactly this
+("the broken devkitPro msys2 cmake"). From PowerShell with the env sourced:
+
+    Configuring done (19.8s) / Generating done (7.8s) / Build files written
+
+**All of tonight's scratchpad compiling was a workaround for a documented setup
+step I skipped.** The direct-compile script was not wasted — it is what let the
+three RAM fixes be baselined and mutation-tested while the graph was jammed —
+but the tree never needed a reconfigure for the reason I first gave, and it was
+never "fine" for the reason I gave second.
