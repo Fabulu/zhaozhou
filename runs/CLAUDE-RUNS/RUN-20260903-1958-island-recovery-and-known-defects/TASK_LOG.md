@@ -761,3 +761,52 @@ Everything still open needs either Quartus or the test suite that is mid-build:
 3. D3's fit-top split, whose entire purpose is to make fits attributable — doing
    it without being able to fit would violate the note's own "fit each step
    rather than batching".
+
+## 05:40 — GEOM.MESHFETCH: the oracle the whole front end waits on
+
+D22 named the blocker and `compose_order.py` put it at position 1 with nothing
+behind it. `zref_cull.hpp` had said so plainly: *"`zref::MeshFetch` stays
+unresolved"*.
+
+`reference/include/zref/zref_meshfetch.hpp` — **19 directed checks, 5
+randomized properties at 20,000 iterations each.** It COMPOSES rather than
+restates, which is the contract's own instruction: the frustum test is a call
+to `zref::cull::cull_instance`, the CRC a call to `zhao_abi::zhao_crc32c`. It
+owns only descriptor validation, the local→world bound with maximum-absolute
+scale, and the refusal taxonomy.
+
+### Three things caught me, and all three were the tooling working
+
+**The directed test caught my own sign error.** The Duo case is the contract's
+*"single most valuable case in the file"* and I wrote it backwards: `front` has
+`w = eye_z - z`, so a sphere at `z = -100` is in FRONT of camera 0. The case
+silently became `0b01` — the exact opposite of the property it exists to pin,
+and still a pass for any assertion that only checked "accepted".
+
+**V17 rejected the test for using a namespace alias**: *"an existing file that
+is not about the cited reference model is an alias, not evidence"*. Fair — a
+test that never names its oracle cannot be that oracle's evidence.
+
+**V17 also found two phantom citations that predate me.** Advancing the row to
+REFERENCE_COMPLETE exposed `geom_meshfetch_random.cpp` and
+`tests/formal/geom_meshfetch_refuse.sby`, both cited by the contract and
+neither written. They were added while the block was SPECIFIED, where V17 does
+not run.
+
+**I reverted the advance rather than forcing it.** One of the three options I
+recorded is now done — the randomized file exists — and the `.sby` genuinely
+cannot: a formal property needs a module to bind to. So the ladder as
+configured cannot mark this reference model complete until its RTL exists, and
+that is written into the contract as a statement rather than worked around. No
+contract was edited to satisfy a grep.
+
+Mutation tested both ways: the Duo sign, and widening the CRC window from 60 to
+64 bytes — which would make the CRC cover itself — fails 2 of the 5 properties
+with all 20,000 legal descriptors refused.
+
+### Next, and it is large
+`zhao_geom_meshfetch.sv`. The contract is complete, and there is now an oracle
+to be differential against — which is the order this project works in. It is a
+memory client with a validation pipeline, a bound transform, and calls out to
+cull and the LOD ladder, so it is a fresh-start piece rather than an end-of-run
+one.
