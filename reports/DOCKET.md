@@ -22,44 +22,86 @@ When a new owner document lands, add it here in the same pass that reads it.
 ## P0 — the console cannot ship without these
 
 ### D1. The 100 MHz timing surgery  ·  `reports/MHZArchitected`
-**Measured:** `gpu_clk` 53.48 MHz against 100, TNS −6,566 ns
-(`reports/composed/renderer-f8c2b32-.../RESULT.md`).
+**Measured, and this line was three days stale:** `gpu_clk` is **85.62 MHz**
+against 100 (`reports/composed/renderer-b3bd69b-20260901T090000Z/RESULT.md`,
+round 9). It opened at 53.48 MHz with TNS −6,566 ns.
 
 Owner's diagnosis: first-composition timing debt, not existential. Five textbook
 18 ns structures named. Execution order is **his**, and it is deliberate —
 measure, then cheap broad fixes, then the deep ones, **fitting each step rather
 than batching**:
 
-1. registered fit top; export the worst 100 setup paths; keep today's fit as the *before*
-2. Early-Z full detection + Edgewalk registered steps / balanced popcount *(low risk, broad TNS)*
-3. streamed Edgewalk row + cross pipelines
-4. Fragment → read/shade/blend/finish/commit, with a small in-flight address CAM
-5. Binner setup sequenced onto two DSPs
-6. FBWRITE fixed 32-byte rows, precomputed addresses, ENGINE0-specialised guard
-7. shell diagnostic reductions registered; **ENGINE0 route tripwire fixed**
-8. targets: ~120 MHz isolated blocks, 110–115 MHz composed
+1. ~~registered fit top; export the worst 100 setup paths~~ — **done**
+2. ~~Early-Z full detection + Edgewalk registered steps / balanced popcount~~ — **done (r4, r8, r9)**
+3. **streamed Edgewalk row + cross pipelines — THE ONE STEP LEFT**
+4. ~~Fragment → read/shade/blend/finish/commit + in-flight address CAM~~ — **done (r3, `fc6395fd`)**
+5. ~~Binner setup sequenced onto two DSPs~~ — **DO NOT DO.** Never appeared in nine fits.
+6. ~~FBWRITE fixed 32-byte rows~~ — **DO NOT DO.** Never appeared in nine fits.
+7. ~~shell diagnostic reductions; ENGINE0 route tripwire~~ — **done (`c23a5ef`, D2)**
+8. targets: ~120 MHz isolated blocks, 110–115 MHz composed — **at 85.62**
 9. **only then** add TMU v2 + cache + TEXJOIN + AUX + Field/Earth to the fit
+
+Items 5 and 6 are struck on the note's **own** instruction to let the report
+decide, not against it. Two of the five "textbook 18 ns structures" it named
+turned out never to appear in a worst-100 at all — which is the note working as
+intended, and worth remembering the next time a list of named offenders looks
+authoritative before it is measured.
 
 **Architecture rule adopted:** *latency may grow; initiation rate and exact
 arithmetic may not regress.*
 
-### D1 progress, measured — and the note's ranking has been wrong three times
+### D1 progress, measured — **NINE ROUNDS DONE, and this section was six behind**
 
-| round | change | `gpu_clk` | worst path found |
-|---|---|---|---|
-| 0 | — | 53.48 MHz | **all 400** in `RASTER.FRAGMENT` |
-| 1 | modulation off the critical path (`c23a5ef`) | **62.89 MHz** | 90 of 100 in `RASTER.EARLYZ` |
-| 2 | Early-Z ready-path skid (`ce84b10`) | 60.92 MHz | the **RMW loop**, ending at the tile store |
+**Refreshed 2026-09-04 from `reports/composed/renderer-b3bd69b-20260901T090000Z`,
+which is the newest composed fit in the tree.** The table here stopped at round
+2 and still named the Fragment RMW split as "the next surgery" — it landed in
+round 3, three days ago. Anyone reading this docket to choose the next surgery
+was being sent at finished work.
 
-**Round 2 regressed and the skid was KEPT anyway** — reverting restores 62.89
-*and* restores Early-Z as the ceiling, so it is prepaid work. Full reasoning in
-`reports/composed/renderer-49ad539-.../RESULT.md`.
+| | r0 | r3 | r4 | r6 | r8 | **r9** |
+|---|---|---|---|---|---|---|
+| **`gpu_clk`** | 53.48 | 64.66 | 79.22 | 84.97 | 81.00 | **85.62 MHz** |
+| worst setup | −8.697 | −5.466 | −2.623 | −1.769 | −2.345 | **−1.679 ns** |
+| endpoints | — | 1,673 | 984 | 808 | 586 | **430** |
+| ALMs | 12,569 | 12,755 | 12,794 | 12,698 | 12,693 | **12,707** |
+| DSPs | 16 | 16 | 16 | 16 | 16 | **16** |
 
-**The next surgery is quantified.** Reading the path detail (not the block
-ranking) shows `RAM read -> blend -> DSP multiply (3.785 ns) -> carry chain ->
-RAM write` in ONE cycle. The data path must fall **14.361 -> under 7.95 ns**,
-i.e. be halved. That is `MHZArchitected` step 4 — Fragment split into
-read/shade/blend/finish/commit with an in-flight address CAM.
+**+60 % overall, 81 % of the original violation closed, for +138 ALMs — 0.3 % of
+the device — and not one extra DSP across nine fits.**
+
+### Every named offender is accounted for, and two of them never appeared
+
+| offender | outcome |
+|---|---|
+| 1 EDGEWALK wide row + popcount | registered steps (r4) + CSD columns (r8) |
+| 2 FRAGMENT RAM→2 multiplier layers→RAM | RMW split three ways (r3, `fc6395fd`) |
+| 3 EARLY-Z 256-bit feedback cone | unique-coverage counting (r9) |
+| 4 BINNER six parallel products | **never appeared in nine fits** |
+| 5 FBWRITE dynamic byte-mask | **never appeared in nine fits** |
+
+### ONE step of the plan remains, and the measurements still confirm it
+
+    edgewalk | sx0_r[7]~DUPLICATE  ->  edgewalk | pend_r[6]     −1.679 ns
+
+    zhao_raster_edgewalk   69 rows in the worst 100
+    zhao_raster_earlyz     19
+
+`sx0_r` is round 4's step register and round 8's CSD columns are already in
+front of it, so what is left is the **fill test → `row_cov` → `pend_r` tail**
+rather than the arithmetic. That is **`MHZArchitected` step 3 — "install the
+full streamed Edgewalk row and cross pipelines"**, and it is the only step of
+the original six that the evidence still supports.
+
+**Steps 5 and 6 are explicitly NOT the answer.** Binner and FBWRITE have not
+appeared in a single worst-100 across nine consecutive fits; doing them would be
+following the note against its own instruction to let the report decide. The
+shell is not the answer either — `ShellFixes.md`'s three items are done and none
+of `starve_samp`, `starvation`, `cdc_err`, the DMA or the framer appears either.
+
+**A sixth offender named in the note and still not measured:** `gpu_clk~CLKENA0`
+drives **13,682 fanout** with 1.995 ns of launch/latch skew. No datapath
+pipelining recovers skew, so the remaining 14 MHz should not be assumed to be
+all logic until this is measured separately.
 
 **A possible free win on the RMW loop, to MEASURE at the next composed fit.**
 The path ends at `RASTER.TILESTORE`'s RAM write, and on 2026-09-04 that block's
@@ -69,13 +111,8 @@ so the fabric flop that used to sit at the end of this path may now be inside
 the block. That was done for AREA and its timing effect is unmeasured — it is
 listed here so the next fit is read with it in mind, not as a claim.
 
-**A sixth offender, not on the note's list at all:** `gpu_clk~CLKENA0` drives
-**13,682 fanout** with 1.995 ns of launch/latch skew. No datapath pipelining
-recovers skew. Measure it separately before assuming the gap to 100 MHz is all
-logic. One multiplier layer per stage; register multiplier
-outputs before fabric adders; no wide global reduction driving a large register
-bank; no dynamic 64-bit barrel op on a hot path with a fixed protocol; no false
-paths, no multicycle constraints, **no seed fishing**.
+**Architecture rule adopted:** *latency may grow; initiation rate and exact
+arithmetic may not regress.*
 
 ### D2. Shell route-integrity bug — **DONE** (`c23a5ef`)  ·  `reports/MHZArchitected`
 The downstream check still rejects any write whose client is not `BLIT_DMA`, but
