@@ -600,3 +600,39 @@ memories take a block each rather than sharing one.
 Then `zhao_prod_top`, which is the fit that answers the owner's actual question
 in `reports/WeNeedSomeMeasurements.md` — and which could not have elaborated
 before tonight, because two of its blocks were missing from its source list.
+
+## 03:50 — docket D5: a ratified law the oracle never implemented
+
+Picked because it is P1, needs no toolchain, and the owner scoped it as *"repair
+before lighting RTL freezes"* — so it has a deadline that the fit queue does not
+move.
+
+`spec/creature_rules.md` §2.x carried, as adopted LAW:
+
+    lam = (w0·clamp(N·L_b0) + w1·clamp(N·L_b1) + 32) >> 6
+    ... no renormalisation anywhere, which is the cheap form the
+    silicon increment would build
+
+`reference/src/zcreature/creature_core.cpp::skin_normal_lambert` does something
+else entirely: it blends the normal **vector**, range-reduces, renormalises once
+through `isqrt_u64`, and takes Lambert **last**. Read the function rather than
+trusting the owner's summary of it, because "the spec is wrong" is a claim that
+should be checked against the code and not against a second document.
+
+**Nothing had been built to the struck law** — no RTL in the tree does normal
+skinning, and `GEOM.SKIN` outputs positions only. So the repair landed before
+the freeze, which is the whole reason the entry exists.
+
+**Recosted, because the struck law was chosen for being CHEAP** and the cost
+bullet in the same section still priced it. Counted off the reference:
+~27 multiplies and **one square root per vertex** plus 3 multiplies and a divide
+per light, against six multiplies per light and no per-vertex work at all. A
+real increase, and the owner's call with the reason stated — the cheap form
+produced bright patches at mixed-weight joints.
+
+**One thing recorded that is easy to get backwards:** the reference calls
+`skin_normal_lambert` once per LIGHT, and the owner says explicitly the hardware
+must not copy that. The transform, blend and renormalisation are once per
+VERTEX. Bit-exactness is owed to the reference's **result** for a given light,
+not to the number of times it recomputes the normal — the one place in this
+codebase where matching the oracle's structure would be the wrong instinct.

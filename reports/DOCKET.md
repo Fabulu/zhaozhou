@@ -157,11 +157,29 @@ geometry reduced per creature/meshlet; lighting accumulated per unique vertex;
 toon quantisation once per surviving cel fragment; outlines once per view from an
 explicit mask.
 
-**A specification inconsistency to repair before lighting RTL freezes:** the old
-law transformed each normal by each bone and blended the scalar Lambert results.
-The live reference blends the *normal vector*, renormalises, **then** takes
-Lambert — which removed bright patches at mixed-weight joints. **The live
-reference becomes the law.**
+**A specification inconsistency to repair before lighting RTL freezes** —
+**DONE 2026-09-04.** `spec/creature_rules.md` §2.x carried
+`lam = (w0·clamp(N·L_b0) + w1·clamp(N·L_b1) + 32) >> 6` as adopted LAW, with the
+note *"no renormalisation anywhere, which is the cheap form the silicon
+increment would build"*. Verified against the code, not the summary:
+`skin_normal_lambert` blends the normal VECTOR, renormalises once via
+`isqrt_u64`, and takes Lambert last. **The spec had a ratified law its own
+oracle never implemented.**
+
+Repaired in new §2.x.1, old text struck rather than deleted. **Nothing had been
+built to it** — no RTL in the tree does normal skinning — so this landed before
+the freeze rather than after.
+
+**And it was RECOSTED**, because the struck law was chosen for being cheap and
+the cost bullet still priced it: ~27 multiplies and **one square root per
+vertex**, plus 3 multiplies and a divide per light, against six multiplies per
+light and no per-vertex work before.
+
+**The reference's per-light repetition is explicitly NOT law** (owner: *"the
+hardware should not reproduce that structure"*). Transform, blend and
+renormalise once per VERTEX; each light is then one dot and one divide. That is
+the one place where being bit-exact with the reference's *structure* would be
+wrong — bit-exactness is owed to its result.
 
 Also: `GEOM.SKIN` outputs positions, **not normals** — normal skinning is
 reference-only. And `GEOM.SKIN` fits at 89.65 MHz with 9 DSPs and one weighted
