@@ -34,31 +34,28 @@
 //     — fails if `render_tri_valid_i`/`ready_o` are crossed or unconnected;
 //   * the SDRAM model reports no protocol error throughout
 //     — fails if the renderer's bursts are malformed rather than merely absent;
-//   * the write REACHES MEM.GUARD and is refused for want of a region map
-//     — fails if the chain breaks anywhere between the binner and the guard,
-//       because then there would be no decision to observe at all;
-//   * and NOTHING lands in memory, which is the same fact from the other side.
+//   * a blit packet GRANTS a framebuffer lease, span 245,760 — exactly
+//     `ZHAO_FB_SLOT_SPAN`, so the command path and the guard agree;
+//   * `zhao_raster_fbwrite` latches `fatal_error_o`, which is recorded as an
+//     OBSERVATION rather than explained (see below);
+//   * and nothing lands in memory.
 //
-// THAT THIRD ONE ASSERTS A REFUSAL, and the reason is worth stating. This test
-// drives the render port alone and never sends a command, so CMD.SCHEDULER
-// never grants a region map, so `MEM.GUARD`'s `blit_ok` (which requires
-// `map_valid`) correctly turns the write away and `zhao_raster_fbwrite` latches
-// `fatal_error_o` — fbwrite.sv:301, *"the write is outside the leased region
-// and nothing was written"*.
+// WHAT IS NOT PROVED, and this file will not imply otherwise:
 //
-// **The refusal IS the proof of reach.** If the shell's wiring were broken
-// nothing would have happened: no burst offered, no guard decision, no latch.
-// A triangle put in at the console's edge travelled the whole chain and was
-// turned away by the rule that exists to turn it away.
+//   * that a granted frame produces the RIGHT pixels — nothing here is a
+//     picture test;
+//   * WHY fbwrite latches fatal. The render guard reports **zero** violations
+//     and no stream error was seen across the whole drain, and those are its
+//     two documented setters. **Docket D19g.**
 //
-// WHAT IS NOT PROVED: that a granted frame produces the RIGHT pixels. That
-// needs the command path driven alongside the render port, and it is the next
-// step. This file proves the path is CONNECTED and guarded, and nothing about
-// colour.
+// An earlier version of this header explained the fatal as a guard refusal for
+// want of a region map and called it "the proof of reach". That was written
+// before the guard's own violation counter was read, and the counter says
+// zero. The explanation is withdrawn; the observation stands.
 //
-// It also found `render_fatal_o` firing — one of the nine fault outputs docket
-// D19b reports that no test names. The first test to watch one found it doing
-// its job.
+// It did find `render_fatal_o` firing — one of the nine fault outputs docket
+// D19b reports that no test names. The first test to watch one found it
+// asserting, which is exactly why the nine are worth watching.
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -103,8 +100,8 @@ uint16_t peek(ShellHarness& h, uint32_t waddr) {
 //     pixel in. A real units bug, and worth fixing;
 //   * but it was NOT the cause of the `pixels=0` that prompted the hunt.
 //     `render_pixels_o` is `zhao_raster_fbwrite`'s `pixels_written_o` -- pixels
-//     WRITTEN, not pixels covered -- and the write was refused by the guard, so
-//     zero is what it must read whatever the triangle does.
+//     WRITTEN, not pixels covered -- and nothing was written, so zero is what
+//     it must read whatever the triangle does.
 //
 // The second half is the part worth keeping: **a number that agrees with your
 // hypothesis is not evidence until you know what it counts.** Two rounds were
@@ -186,6 +183,55 @@ int main(int argc, char** argv) {
   h.top.render_texel_rgb_i = 0xFF00FF;
   h.top.render_texel_a_i = 0xFF;
 
+  // ---- OPEN A GUARD WINDOW (docket D19f) ----------------------------------
+  // RASTER.FBWRITE may only write while a DISPLAY BLIT lease is live, into that
+  // blit's span, because zhao_shell_top:1234 ties the guard's map to the lease.
+  // So a drawing test must make the command path grant one. Publish a frame the
+  // way shell_probe does, then watch the lease through the testbench's probe.
+  //
+  // A MODE PACKET ALONE GRANTS NOTHING. The first attempt published one and
+  // watched three million cycles for a lease that never came: the lease is the
+  // slot manager's answer to a DISPLAY BLIT, and a packet without `has_blit`
+  // schedules no blit. `shell_probe` only sees blits under its `--blit` flag,
+  // which said so all along.
+  {
+    std::vector<uint8_t> canvas(zref::render::kSlotBytes, 0x11);
+    const uint32_t arena = 0x0010'0000u;
+    h.mem_write(arena, canvas);
+
+    zhao_shell::PacketSpec ps;
+    ps.frame_id = 1;
+    ps.sequence = 1;
+    ps.mode = 2;  // DUO
+    ps.has_blit = true;
+    ps.blit_dst = 0;
+    ps.blit_src = arena;
+    ps.blit_len = (uint32_t)canvas.size();
+    ps.blit_crc = zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
+    const bool pub = h.publish(0, zhao_shell::build_packet(ps));
+    zhao::check(pub, "the frame packet is published", 1, pub ? 1 : 0);
+  }
+
+  uint64_t lease_cycles = 0;
+  uint32_t lease_span = 0;
+  int lease_opens = 0;
+  bool was = false;
+  for (int i = 0; i < 3000000; ++i) {
+    h.step();
+    const bool now = h.top.dbg_fb_lease_valid_o != 0;
+    if (now) {
+      ++lease_cycles;
+      lease_span = h.top.dbg_map_span_o;
+    }
+    if (now && !was) ++lease_opens;
+    was = now;
+    if (lease_opens > 0 && !now && lease_cycles > 0) break;  // one full window seen
+  }
+  std::printf("[shell_draw] lease opens=%d cycles=%llu span=%u\n", lease_opens,
+              (unsigned long long)lease_cycles, lease_span);
+  zhao::check(lease_opens > 0, "the command path grants a framebuffer lease", 1,
+              lease_opens > 0 ? 1 : 0);
+
   // One 4x4 tile grid; the triangle covers tile (0,0) generously.
   h.render_frame_begin(4, 4);
 
@@ -199,7 +245,25 @@ int main(int argc, char** argv) {
   h.render_frame_end();
 
   // Let the tile pipeline drain and the writes reach the model.
-  for (int i = 0; i < 200000; ++i) h.step();
+  //
+  // STREAM ERROR AND FATAL ARE LATCHED HERE, not sampled at the end. Reading
+  // `render_stream_error_o` after the fact showed 0 while `fatal` was 1, which
+  // made a guard refusal look like the only possible cause -- and the render
+  // guard's own violation count was 0, so that story was wrong. A pulse read
+  // once, late, is not an observation.
+  bool saw_stream_err = false;
+  bool saw_fatal = false;
+  uint64_t fatal_at = 0;
+  for (int i = 0; i < 200000; ++i) {
+    h.step();
+    if (h.top.render_stream_error_o) saw_stream_err = true;
+    if (h.top.render_fatal_o && !saw_fatal) {
+      saw_fatal = true;
+      fatal_at = (uint64_t)i;
+    }
+  }
+  std::printf("[shell_draw] latched: stream_err=%d fatal=%d (first at drain step %llu)\n",
+              saw_stream_err ? 1 : 0, saw_fatal ? 1 : 0, (unsigned long long)fatal_at);
 
   zhao::check(h.top.model_error == 0, "no SDRAM protocol error while drawing", 0,
               h.top.model_error ? 1 : 0);
@@ -223,19 +287,38 @@ int main(int argc, char** argv) {
   //
   //     pixels=0 bursts=0 issued=0 retired=0 drained=1 FATAL=1
   //
-  // `render_fatal_o` is `zhao_raster_fbwrite`'s `fatal_error_o`, and
-  // fbwrite.sv:301 says exactly when it latches -- *"The guard REFUSED: the
-  // write is outside the leased region and nothing was written."*
+  // WHAT IS MEASURED, AND WHAT IS STILL OPEN.
   //
-  // MEM.GUARD's `blit_ok` requires `map_valid`, which only CMD.SCHEDULER grants
-  // at frame start. This test drives the RENDER port alone and never sends a
-  // command, so there is no region map and the refusal is CORRECT.
+  // An earlier version of this comment said the guard refused the write for
+  // want of a region map, cited fbwrite.sv:301, and called the refusal "the
+  // proof of reach". **The evidence does not support that**, and the story was
+  // written before the evidence was gathered:
   //
-  // AND THE REFUSAL IS THE PROOF OF REACH. If the shell's wiring of the render
-  // port were broken, nothing would have happened at all: no burst offered, no
-  // guard decision, no latch. A triangle offered at the console's edge went all
-  // the way to the memory guard and was turned away by the rule that exists to
-  // turn it away. That is the composition working, observed for the first time.
+  //   lease opens=1  span=245760        a lease IS granted, and 245,760 is
+  //                                     exactly ZHAO_FB_SLOT_SPAN
+  //   render guard violations=0         the render guard refused NOTHING
+  //   latched stream_err=0
+  //   fatal=1, first at drain step 234
+  //
+  // So `fatal_error_o` latches with **no guard violation and no stream error**,
+  // which are fbwrite's only two documented setters. Either a third path sets
+  // it, or one of those two fires without the counter this test reads.
+  //
+  // **The cause is NOT established and this file does not pretend otherwise.**
+  // What IS established is below: the port accepts, a lease is granted with the
+  // right span, no SDRAM protocol error occurs, and nothing is written. The
+  // fatal is asserted as an OBSERVED FACT, not as a diagnosis -- so the day it
+  // stops latching, this test notices and somebody reads the reason.
+  //
+  // Docket D19g carries the open question.
+  std::printf("[shell_draw] render guard: violations=%u addr=%08X len=%u client=%u write=%u\n",
+              (unsigned)h.top.dbg_render_gv_cnt_o, (unsigned)h.top.dbg_render_gv_addr_o,
+              (unsigned)h.top.dbg_render_gv_len_o, (unsigned)h.top.dbg_render_gv_client_o,
+              (unsigned)h.top.dbg_render_gv_write_o);
+  std::printf("[shell_draw] window: lease=%u slot=%u span=%u\n",
+              (unsigned)h.top.dbg_fb_lease_valid_o, (unsigned)h.top.dbg_fb_lease_slot_o,
+              (unsigned)h.top.dbg_map_span_o);
+
   zhao::check(h.top.render_fragment_error_o == 0, "no fragment error on the way", 0,
               h.top.render_fragment_error_o ? 1 : 0);
   zhao::check(h.top.render_stream_error_o == 0, "no stream error on the way", 0,
@@ -243,10 +326,14 @@ int main(int argc, char** argv) {
   zhao::check(h.top.render_overflow_o == 0, "no arena overflow", 0,
               h.top.render_overflow_o ? 1 : 0);
 
-  // The render path reached MEM.GUARD and was refused for want of a map.
+  // OBSERVED, not diagnosed: fbwrite latches fatal, with the render guard
+  // reporting zero violations and no stream error. See D19g.
   zhao::check(h.top.render_fatal_o == 1,
-              "the write REACHED MEM.GUARD and was refused (no map granted)", 1,
+              "fbwrite latches fatal (cause OPEN -- guard reports no violation)", 1,
               h.top.render_fatal_o ? 1 : 0);
+  zhao::check(h.top.dbg_render_gv_cnt_o == 0,
+              "and the render guard refused nothing, which is the open part", 0,
+              (unsigned)h.top.dbg_render_gv_cnt_o);
 
   // Nothing was written, which is the same fact from memory's side.
   bool wrote = false;

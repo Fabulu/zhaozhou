@@ -202,13 +202,44 @@ module tb_zhao_shell (
   output logic        render_fatal_o,
   output logic        render_stream_error_o,
   output logic        render_overflow_o,
-  output logic        render_fragment_error_o
+  output logic        render_fragment_error_o,
+
+  // ---- THE GUARD WINDOW, probed hierarchically ---------------------------
+  // `fb_lease_valid` and `map_span_q` are internal to zhao_shell_top and there
+  // is no reason to give production RTL a debug port for them. This is a
+  // TESTBENCH -- never linted, never synthesised -- so a cross-module reference
+  // here costs nothing in silicon and is the honest place for it.
+  //
+  // A drawing test needs them because docket D19f: RASTER.FBWRITE may only
+  // write while a DISPLAY BLIT lease is live, into that blit's span. Without
+  // seeing the window, a test can only offer a triangle and hope it lands
+  // inside one.
+  output logic        dbg_fb_lease_valid_o,
+  output logic        dbg_fb_lease_slot_o,
+  output logic [31:0] dbg_map_span_o,
+  // The RENDER guard's latched violating request. `fatal` says a write was
+  // refused; this says which one, which is the difference between "the path is
+  // dead" and "the path aimed somewhere the window does not cover".
+  output logic [26:0] dbg_render_gv_addr_o,
+  output logic [6:0]  dbg_render_gv_len_o,
+  output logic [2:0]  dbg_render_gv_client_o,
+  output logic        dbg_render_gv_write_o,
+  output logic [31:0] dbg_render_gv_cnt_o
 );
 
   logic        phy_cs_n, phy_ras_n, phy_cas_n, phy_we_n, phy_dq_oe;
   logic [12:0] phy_a;
   logic [1:0]  phy_ba, phy_dqm;
   logic [15:0] phy_dq_o, phy_dq_i;
+
+  assign dbg_fb_lease_valid_o = u_shell.fb_lease_valid;
+  assign dbg_fb_lease_slot_o  = u_shell.fb_lease_slot;
+  assign dbg_map_span_o       = u_shell.map_span_q;
+  assign dbg_render_gv_addr_o   = u_shell.render_gv_req.addr;
+  assign dbg_render_gv_len_o    = u_shell.render_gv_req.len;
+  assign dbg_render_gv_client_o = u_shell.render_gv_req.client;
+  assign dbg_render_gv_write_o  = u_shell.render_gv_req.write;
+  assign dbg_render_gv_cnt_o    = u_shell.render_gv_cnt;
 
   zhao_shell_top u_shell (
     .gpu_clk, .vid_clk, .audio_clk, .rst_n,

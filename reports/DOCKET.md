@@ -955,6 +955,44 @@ architecture decision rather than a wiring one.
 **ENFORCED-BY:** `tests/shell/shell_draw_directed.cpp` asserts the refusal, so
 the day this coupling changes, that test says so.
 
+### D19g. `fbwrite` latches `fatal_error_o` with NO guard violation — **OPEN**
+`tests/shell/shell_draw_directed.cpp`, measured 2026-09-04.
+
+Driving the shell's render port with a granted framebuffer lease:
+
+    lease opens=1  slot=0  span=245760      <- exactly ZHAO_FB_SLOT_SPAN
+    render guard violations=0               <- the guard refused NOTHING
+    latched stream_err=0  (whole drain)
+    fatal=1, first at drain step 234
+    pixels=0 bursts=0 issued=0 retired=3328
+
+`zhao_raster_fbwrite` has **two** documented setters for `fatal_error_o`:
+`stream_error_o` (fbwrite.sv:254) and the guard-refused branch (:307). **Neither
+is evidenced here.** The render guard's own violation counter reads zero, and
+`stream_error_o` was sampled on every cycle of the drain and never seen.
+
+**So either a third path sets it, or one of those two fires without the counter
+this test reads.** `retired=3328` against `issued=0` is the other half of the
+oddity: words retiring that were never issued, on the same block's counters.
+
+### What this is NOT
+
+**Not a claim that the console is broken.** Nothing renders in Phase 2, this is
+the first time anything has driven the port, and the stimulus may still be
+incomplete (the render's target address and the canvas geometry come from a
+frame setup this test does not perform). **A first-ever exercise finding an
+unexplained latch is the expected outcome, not an alarming one.**
+
+It is filed because the alternative is a comment in a test saying "probably the
+guard", which is what the first draft of that file said before the counter was
+read. **An explanation that was not measured is worse than an open question.**
+
+### The next step
+
+Read the fatal's third path, or instrument fbwrite's two known ones directly.
+`shell_draw_directed` asserts the latch as an OBSERVATION, so whatever the cause
+turns out to be, the test moves when it is fixed.
+
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
 `reports/FUNDAMENTALS-DECISIONS-NEEDED.md`. All eight are ruled and each is
