@@ -257,11 +257,13 @@ targets:
       - fpga/rtl/forge/zhao_forge_cliff.sv
       - fpga/rtl/forge/zhao_forge_prim.sv
       - fpga/rtl/geometry/zhao_geom_arena.sv
+      - fpga/rtl/geometry/zhao_geom_assemble.sv
       - fpga/rtl/geometry/zhao_geom_attrsetup.sv
       - fpga/rtl/geometry/zhao_geom_bin_pipe.sv
       - fpga/rtl/geometry/zhao_geom_binner.sv
       - fpga/rtl/geometry/zhao_geom_clip.sv
       - fpga/rtl/geometry/zhao_geom_cull.sv
+      - fpga/rtl/geometry/zhao_geom_depthquant.sv
       - fpga/rtl/geometry/zhao_geom_lod.sv
       - fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
       - fpga/rtl/geometry/zhao_geom_parambuf.sv
