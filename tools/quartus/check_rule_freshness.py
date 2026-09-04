@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check_rule_freshness.py -- has each fit rule ever actually been EVALUATED?
+r"""check_rule_freshness.py -- has each fit rule ever actually been EVALUATED?
 
 WHY THIS EXISTS
 ---------------
