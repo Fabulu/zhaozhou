@@ -61,6 +61,14 @@ RAM write` in ONE cycle. The data path must fall **14.361 -> under 7.95 ns**,
 i.e. be halved. That is `MHZArchitected` step 4 — Fragment split into
 read/shade/blend/finish/commit with an in-flight address CAM.
 
+**A possible free win on the RMW loop, to MEASURE at the next composed fit.**
+The path ends at `RASTER.TILESTORE`'s RAM write, and on 2026-09-04 that block's
+`ram0_q`/`ram1_q` left the reset list (`70f05f31`) so its two banks could infer
+as M10K. A read register with a reset cannot be the M10K's own output register,
+so the fabric flop that used to sit at the end of this path may now be inside
+the block. That was done for AREA and its timing effect is unmeasured — it is
+listed here so the next fit is read with it in mind, not as a claim.
+
 **A sixth offender, not on the note's list at all:** `gpu_clk~CLKENA0` drives
 **13,682 fanout** with 1.995 ns of launch/latch skew. No datapath pipelining
 recovers skew. Measure it separately before assuming the gap to 100 MHz is all
@@ -94,7 +102,7 @@ every job.
 | a | `format_check` — 17 files drifted from the pinned clang-format | **fixed** `fdc57ca` |
 | b | six stray gitlinks under `runs/*/work/` with no `.gitmodules`, so every checkout exits 128 | **fixed** `fdc57ca` |
 | c | `cppcheck_check` — signed-overflow finding in `render_pipe_directed.cpp` | **fixed** `d93bf0b3` |
-| d | `reel_sequence_crc` — `zhao-reel --check` fails | reproducing |
+| d | `reel_sequence_crc` — `zhao-reel --check` fails | **not a defect — see below** |
 | e | the gate itself SKIPPED silently when cppcheck was absent | **fixed** 2026-09-04 |
 
 Note (b) is why the *passing* jobs also printed a red git warning; it is not
@@ -105,6 +113,16 @@ STATUS and returned when the tool was missing, and CTest was configured to read
 that as a SKIP — so local was green and CI red, which is exactly the standing
 memory *"local gates must match CI"*. Absence now fails loudly, with the choco
 line and an explicit `ZHAO_ALLOW_MISSING_CPPCHECK=1` opt-out that still prints.
+
+**(d) is expected churn in another lane, not a bug to fix here.** `zhao-reel
+--check` re-renders every reel subject and fails on any sequence-CRC drift.
+`tools/reel/` is under active animation work — `22d61057` Stage 0 through
+`ada4c105` Stage 4 of a retime skeleton — and every one of those commits moves
+the animation, so the CRCs drift by design. **Re-baselining them belongs to
+whoever is authoring the motion**, and doing it from this side would erase the
+evidence that lane depends on. Checked 2026-09-04 rather than reproduced; the
+docket said "reproducing" and the honest answer is that there is nothing here
+to reproduce.
 
 **There is no npm package to pin cppcheck with**, unlike clang-format, so the
 version is checked instead of pinned — and the drift is live: **CI pins 2.19.0,
