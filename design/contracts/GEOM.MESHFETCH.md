@@ -412,9 +412,19 @@ to bind to. There is nothing to write them against yet.
 its RTL exists**, which is worth stating plainly rather than working around.
 The options, none of them taken here:
 
-1. Write the randomized test against the ORACLE ALONE — fuzz descriptors and
-   assert taxonomy invariants rather than differ two implementations. That
-   satisfies V6 honestly and leaves only the `.sby`.
+1. ~~Write the randomized test against the ORACLE ALONE~~ — **DONE**,
+   `tests/geometry/geom_meshfetch_random.cpp`, 5 properties over 20,000
+   iterations each on a named seed. It fuzzes invariants rather than differing
+   two implementations, and says so in its own header: it cannot catch an
+   oracle confidently wrong the same way everywhere, but it catches the class a
+   directed test structurally cannot — a rule that holds on the eight
+   descriptors someone thought of and fails on the ninth.
+
+   Mutation tested: widening the CRC window from 60 to 64 bytes — which would
+   make the CRC cover itself and never match — fails 2 of the 5 properties with
+   all 20,000 legal descriptors refused.
+
+   **Only the `.sby` remains**, and it needs a module to bind to.
 2. Let the contract mark RTL-era artifacts as planned in a form V17 can tell
    apart from a claim. That is a change to the rule, not to this block.
 3. Leave it `SPECIFIED` until the RTL lands, which is what is done for now —

@@ -5553,3 +5553,12 @@ add_executable(test_geom_meshfetch_directed geometry/geom_meshfetch_directed.cpp
 target_link_libraries(test_geom_meshfetch_directed PRIVATE zhao_harness)
 add_test(NAME geom_meshfetch_directed COMMAND test_geom_meshfetch_directed)
 set_tests_properties(geom_meshfetch_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
+
+# GEOM.MESHFETCH -- randomized PROPERTIES, not a differential.
+# There is one implementation, so there is nothing to differ against yet. When
+# the RTL lands the DUT goes in beside these generators and the properties
+# become the differential's coverage guard.
+add_executable(test_geom_meshfetch_random geometry/geom_meshfetch_random.cpp)
+target_link_libraries(test_geom_meshfetch_random PRIVATE zhao_harness)
+add_test(NAME geom_meshfetch_random COMMAND test_geom_meshfetch_random)
+set_tests_properties(geom_meshfetch_random PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
