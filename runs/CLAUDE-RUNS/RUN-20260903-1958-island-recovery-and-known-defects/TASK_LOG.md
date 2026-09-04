@@ -714,3 +714,50 @@ Everything below needs the toolchain and nothing else does. `-Module` is
 
     4. run_composed_fit.ps1
        The D1 answer. 85.62 MHz is three days and twelve commits old.
+
+## 04:55 — D22: the geometry front end is not wired into the console
+
+Traced from "why does GEOM.DEPTHQUANT have no consumer". The answer is not that
+one block was forgotten.
+
+`zhao_shell_top.sv` instantiates **one** of the twenty blocks in
+`fpga/rtl/geometry`: `zhao_geom_bin_pipe`. Not wired: arena, assemble,
+attrsetup, binner, clip, cull, depthquant, lod, mat3x4_mul, parambuf,
+pose_cache, pose_decode, project, quat2mat, setup, skin, vdecode, wcache,
+vertex_arena.
+
+`zhao_geom_project` appears in exactly two files in the tree — a mention in
+`zhao_geom_cull.sv`, and `zhao_prod_top.sv`, which is a **resource** top where
+no block is connected to any other. The shell's `tri_ax_i` comes from
+`render_ax_i`, a shell **input**.
+
+**The console renders from screen-space triangles handed to it from outside.**
+
+Two consequences worth stating plainly:
+
+* `GEOM.ASSEMBLE` and `GEOM.DEPTHQUANT` are not two loose ends. They are two of
+  nineteen, and wiring either alone connects it to nothing. Tonight's instinct
+  to "integrate DEPTHQUANT next" would have been an hour spent on a seam with
+  no other side.
+* **D1's 85.62 MHz measured a shell with no geometry front end in it.** Honest
+  for what it measured; not the console's number. Every composed fit so far has
+  the same property.
+
+The audit recorded "`tri_ax_i` is driven only from a harness" per block. Stated
+once at the top level it is a different and much larger fact, and it now has a
+docket entry so it stops being rediscovered one unwired block at a time.
+
+**Deliberately does not reorder anything.** D1 first — adding nineteen blocks to
+a shell 14 MHz short of target would make attribution impossible, which is
+exactly what D3's fit-top split exists to prevent.
+
+## Toolchain boundary
+
+Everything still open needs either Quartus or the test suite that is mid-build:
+
+1. the four queued fits (section above has the commands);
+2. wiring anything into the shell, which needs the fast suite to validate and
+   is D22-sized rather than block-sized;
+3. D3's fit-top split, whose entire purpose is to make fits attributable — doing
+   it without being able to fit would violate the note's own "fit each step
+   rather than batching".
