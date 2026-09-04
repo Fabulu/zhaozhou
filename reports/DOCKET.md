@@ -243,6 +243,52 @@ controlled steps rather than as one before-after mystery.
 **It is here so that "finish the console" has a name for the largest thing still
 missing**, instead of that fact being rediscovered one unwired block at a time.
 
+### The order is already decided, and it is the ledger's own
+
+`tools/design/compose_order.py` (committed) topologically sorts the geometry
+blocks over the `upstream`/`downstream` edges each row already declares. It does
+not invent an order; it reads back the one the contracts agreed to:
+
+| | block | maturity |
+|---|---|---|
+| 1 | **`GEOM.MESHFETCH`** | **SPECIFIED — no RTL exists** |
+| 2 | `GEOM.ASSEMBLE` | UNIT_VERIFIED |
+| 3 | `GEOM.POSE` | REFERENCE_COMPLETE |
+| 4 | `GEOM.VDECODE` | SPECIFIED (RTL exists) |
+| 5 | `GEOM.SKIN` | UNIT_VERIFIED |
+| 6 | `GEOM.LIGHT` | SPECIFIED |
+| 7 | `GEOM.LOOM` | SPECIFIED |
+| 8 | `GEOM.WARP` | SPECIFIED |
+| 9 | `GEOM.WCACHE` | UNIT_VERIFIED |
+| 10 | `GEOM.PROJECT` | UNIT_VERIFIED |
+| 11 | `GEOM.CLIP` | UNIT_VERIFIED |
+| 12 | `GEOM.DEPTHQUANT` | UNIT_VERIFIED |
+| 13 | `GEOM.SETUP` | UNIT_VERIFIED |
+
+**Every declared seam agrees.** The probe also checks for edges where A names B
+downstream while B does not name A upstream, and there are **none** across all
+fifteen geometry rows. The contracts are consistent with each other; what is
+missing is wire, not agreement.
+
+**The blocker is position 1.** `GEOM.MESHFETCH` has **no RTL** —
+`fpga/rtl/geometry/` has twenty files and `zhao_geom_meshfetch.sv` is not one of
+them. It is the entry point: nothing downstream of it can be fed by anything but
+a harness until it exists. That is the single concrete thing standing between
+the console and a composed front end, and it was previously visible only as
+"MESHFETCH is SPECIFIED" in a row nobody reads next to the shell.
+
+**`GEOM.BINNER` and `GEOM.PARAMBUF` declare a mutual edge** and are therefore
+not orderable. That is not an error — the binner writes triangle records into
+the parameter buffer and reads them back per tile, so the cycle is the real
+dataflow. It is recorded because the composition order cannot be derived
+mechanically across that pair and someone will otherwise try.
+
+**Two maturities may understate what is built**, and the evidence is a test run
+away: `GEOM.VDECODE` (SPECIFIED) and `GEOM.PARAMBUF` (REFERENCE_COMPLETE) both
+have RTL *and* directed tests that are registered in CMake. If those pass, the
+rows are stale. Not advanced here — a maturity moves on evidence, and the test
+binaries were not built at the time of writing.
+
 ---
 
 ## SWEEP 2026-09-04 — decision-bearing documents that were not indexed
