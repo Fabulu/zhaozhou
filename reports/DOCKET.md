@@ -790,6 +790,31 @@ itself broken on its first version** -- written with a `` that a shell heredoc
 turned into a literal backspace (0x08), so it matched nothing and printed "no
 silent drops" while 17 ports were being dropped. It is now asserted at import.
 
+**CLOSED 2026-09-04. The residue is genuinely unimplemented, and that is now
+measured rather than assumed.** `check_counters.py --suggest` lists, for each
+unresolved counter, the `[31:0]` output ports its block actually has — the shape
+a counter takes here. The result:
+
+    54 of 54 remaining unresolved counters are on blocks with
+    NO 32-bit output port at all.
+
+So there is no candidate to map any of them to. The mapping convention has
+extracted everything a naming difference can explain; what is left is **not a
+vocabulary problem, it is missing work**. Final:
+
+    40  resolve by the default <counter>_o
+    13  by an explicit counter_ports mapping
+     1  on a snap-channel block, wants a mapping
+    54  no port, no snap channel, no candidate -- unimplemented
+    30  further blocks declare counters but have no module file yet
+
+One counter is deliberately left unmapped and is the useful example:
+`VIDEO.SLOTMGR.slot_leases_granted`. The nearest port is `lease_grant_o`, whose
+own comment calls it *"one pulse"* — an EVENT, not a count. Mapping it would
+make the row read implemented while nothing accumulates, which is the original
+complaint wearing the checker's approval. **Map a counter to a port that COUNTS;
+a pulse needs an accumulator written first, and its absence is the finding.**
+
 **FINAL TALLY, with the two piles separated.** The checker now asks whether an
 unresolved counter's block has a snap channel at all, because the answer changes
 what the row means:

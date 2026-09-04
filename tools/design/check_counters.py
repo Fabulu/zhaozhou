@@ -100,6 +100,20 @@ def outputs_of(path):
     return names
 
 
+COUNTER_SHAPE = re.compile(r"^\s*output\s+(?:var\s+)?(?:[\w:]+\s+)*?\[31:0\]\s*(\w+)")
+
+
+def counter_shaped_ports(path):
+    """Output ports declared `[31:0]` -- the shape a counter has here.
+
+    Suggestion material only. spec/counters.md 3 makes a counter a 32-bit local
+    register presented on request, so a 32-bit output is a CANDIDATE and nothing
+    more: `dma_bytes_consumed_o` is 32 bits and is a payload, not a counter.
+    Offered so the remaining rows can be worked by eye instead of by grep.
+    """
+    return [m.group(1) for m in COUNTER_SHAPE.finditer(read(path))]
+
+
 def blocks():
     s = read("design/blocks.yml")
     out = []
@@ -129,6 +143,7 @@ def main() -> int:
             no_module.append((bid, len(names)))
             continue
         ports = set(outputs_of(mods[mod]))
+        cand = counter_shaped_ports(mods[mod])
         # spec/counters.md 3: a block may instead own its counters locally and
         # present them on a D9 SNAP CHANNEL as a zhao_counter_snap_t. Those have
         # no <counter>_o port and are not supposed to -- so an unresolved row on
@@ -146,7 +161,10 @@ def main() -> int:
             elif n + "_o" in ports:
                 by_default.append((bid, n))
             else:
-                unresolved.append((bid, n, "no %s_o and no mapping" % n, has_snap))
+                why = "no %s_o and no mapping" % n
+                if cand and "--suggest" in sys.argv:
+                    why += "   candidates: " + " ".join(sorted(set(cand))[:6])
+                unresolved.append((bid, n, why, has_snap))
 
     total = len(by_default) + len(by_mapping) + len(unresolved)
     print("counters: %d declared on blocks with a module; %d resolve by the "
