@@ -641,6 +641,38 @@ arrays to be RAM and expects fifteen-odd small ones. So a low count from
 multidimensional array"*. **`min_m10k: 6` stays, and a failure means reshape the
 arrays — not lower the number.**
 
+### D19b. **Nine FAULT OUTPUTS that no test ever names** — found 2026-09-04
+`tools/design/check_port_coverage.py`, first run.
+
+    zhao_raster_fbwrite      fatal_error_o
+    zhao_surface_sheet       res_overflow_o
+    zhao_raster_texjoin      o_uv_sat_o
+    zhao_raster_texjoin_v2   o_uv_sat_o
+    zhao_texture_fragrob     o_uv_sat_o
+    zhao_field_exec_shared   exec_unsupported_o exec_sat_add_o
+                             exec_sat_mul_o exec_sat_rescale_o
+
+**Verified, not inferred**, for the headline at least: `fatal_error_o` is
+asserted on two distinct fault paths in `zhao_raster_fbwrite.sv` and the string
+`fatal_error` does not occur anywhere under `tests/`.
+
+**Why this is its own docket entry rather than a lint note.** These are not
+unchecked data outputs. `spec/counters.md`'s argument about counters applies
+exactly: the whole purpose of the signal is to be non-zero when something has
+gone wrong, so **a fault output nothing reads is a fault that has never once
+been observed**. Three of them are saturation flags on the texture path, which
+is the block family currently being fitted.
+
+Twenty-two further outputs are unmentioned without being fault reporters —
+including two from blocks built this session (`geom_depthquant d_behind_o`,
+`geom_skin_norm sq_rready_o`), so the tool indicts its author first.
+
+**The tool reports and does not gate**, deliberately: an absence is not always a
+defect, and its second tier (317 ports named but not obviously compared) is a
+weak heuristic summarised rather than listed. It exists because `out_w_o` went
+into `GEOM.PROJECT` the same day with no differential and **no test could fail**
+— the missing expectation and the missing check cancelled out.
+
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
 `reports/FUNDAMENTALS-DECISIONS-NEEDED.md`. All eight are ruled and each is
