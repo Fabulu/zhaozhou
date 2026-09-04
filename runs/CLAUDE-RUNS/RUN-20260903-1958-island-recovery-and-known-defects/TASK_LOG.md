@@ -1206,3 +1206,58 @@ line 46's `clip.w.raw`, `compare()` checks it, goldens must not move.
 
 Everything above genuinely needs the toolchain. Nothing else is being deferred
 by choice.
+
+## 2026-09-04 10:5x — D1 CLOSED at 100 MHz; the local lane is honest again
+
+**Still running:** island queue on `zhao_texture_rsp_dispatch` (4 of 9).
+Done and `ok`: `tmu_plan` 1142, `aux_pipe` 1182, `aux_div6` 865 ALM.
+
+### D1 is closed
+
+`wumen-5d5b1b16`: **100.00 MHz, worst setup +0.057 ns, 0 failing endpoints,
+hold +0.245 ns, `timingPassed: true`.** From 53.48 MHz and TNS −6,566 ns over
+eleven rounds — **+87% for +844 ALMs and not one extra DSP.**
+
+**One change closed all twelve remaining violations**, and it was not the one
+round 11 recommended: tilestore's present bit indexed by PORT address rather
+than BANK address, cutting a path unreachable in the design's own semantics.
+`mem_guard` ×6, `binner` ×4 and `cmd_dma` ×1 then closed on placement alone.
+**A flat tail cuts both ways** — the binner rework costed last round was never
+needed.
+
+### The fast lane, before and after
+
+    at the start   4 failed, 18 NOT RUN   (executables missing)
+    now            2 failed,  0 not run   (after the fixp fix)
+
+`format_check` and `cppcheck_check` are green. The 18 that never ran now run.
+
+### The migration nobody finished, and the stale binaries hiding it
+
+`QFMT_VERSION` 2 → 3 (amendment C2) left **five** marks, and **two were
+invisible because their executables predated the bump**:
+
+* `shell_golden_replay` — looked exactly like a regression I had caused
+  (passed 08:48, failed 09:59, my `ProjOut` change sitting between). It was
+  not: byte-diffing the `z60` golden gives **68 bytes = 32 generator SHA + 32
+  zidl SHA + 4 file CRC**, and nothing else. `shell_golden.exe` had been built
+  before the ABI regeneration and agreed with the old golden. **A right number
+  from a machine nobody had rebuilt.**
+* `fixp` — the `QFMT_VERSION` pin, 1 failure in 29,385,065 checks. **Fixed**,
+  on the amendment's own sentence: C2 records that no table or golden of
+  §6/§7/§12 changed, and those are exactly this file's laws.
+
+The remaining two are golden captures. **Not regenerated deliberately** —
+that turns them green and destroys the record of what changed.
+
+### Two method errors of mine, both recorded where they happened
+
+1. **"The goldens did not move"** was claimed from a run's PASS list while
+   `shell_golden_replay` was failing in the same run. The conclusion survived
+   the diff; the method did not.
+2. **`PART.EXPAND` "contradicts its own header"** — it does not. Its WIDTHS
+   section had already argued for 22 bits and refused clamping, and I diagnosed
+   it from the port declarations without reading it.
+
+**Both are the same failure as diagnosing timing from module names.** Read the
+thing before diagnosing the thing.
