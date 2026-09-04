@@ -2167,21 +2167,25 @@ blocks:
     target_throughput: one meshlet footprint per 38 beats, double buffered
     reference_model: zref::assetfetch::plan
     tests:
-      directed: tests/geometry/assetfetch_directed.cpp
+      directed: tests/geometry/assetfetch_rtl_directed.cpp
       random: tests/geometry/assetfetch_directed.cpp
     counters: [meshlets_fetched, beats_read, guard_denied, refused_footprint, prefetch_stall_cycles]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-09-04"
         commit: 62dd33fb
         evidence: reference/include/zref/zref_assetfetch.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-09-04"
+        commit: 682dcb79
+        evidence: tests/geometry/assetfetch_rtl_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: "DOCKET D22's other half. The Phase-3 region (spec/memory_rules.md 5f) landed 2026-09-04; this is the block that reads through it. RTL not yet written."
+    notes: "DOCKET D22's other half. Buffers rather than caches because GEOM.ASSEMBLE's index port has no ready and cannot stall. SINGLE buffered on purpose: the contract's double buffering is an unmeasured optimisation and prefetch_stall_cycles is what will decide it."
 
   - id: GEOM.VDECODE
     name: Vertex decode
