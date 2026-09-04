@@ -452,3 +452,24 @@ diagonal-cool-cross), native 384x240, face close-up, before/after.
 Loop character (angular bent-wire vs the drawing's rounded teardrop, ~27%
 short), front-view uniform-rod antenna, sphere-vs-teardrop body, eye size.
 All named knobs; recorded in UNNAMED02-INDEX §7.
+
+### PUBLISHED — the fix pass, 2026-09-04
+
+- Ten clips re-encoded (same frame counts, only the star changed); posters
+  regenerated (drift + pirouette posters byte-identical — no star visible at
+  those frames). Upheaval 9665dcb.
+- deploy.ps1 -Project upheaval -Branch main: production deploy complete
+  (19 files uploaded: 18 media + index).
+- Verified LIVE: index HTTP 200, byte-identical to the local build (Built
+  2026-09-04 12:00 UTC), EXACTLY ONE noindex meta, Unnamed 02 the first card
+  (article at 1746) with Zixxtrixx and its archive (23 generation headings)
+  below; served hover.webm HTTP 200 and byte-identical to the fixed encode;
+  the LIVE video's frame 160 decodes with 78 cyan star pixels where the
+  shipped build had zero. The corrected cost note is live.
+- Concurrent lane note: another session promoted the gotcha to §0 and
+  repaired the race with this pass's §7 mechanism text (Upheaval a331649,
+  a21e374); merged cleanly, both texts live.
+- All four background jobs (bank render, clip render, staging, encode)
+  completed exit 0; nothing left running. Scratch-reel staging cleaned.
+
+**Fix pass status: FINISHED and PUBLISHED.**
