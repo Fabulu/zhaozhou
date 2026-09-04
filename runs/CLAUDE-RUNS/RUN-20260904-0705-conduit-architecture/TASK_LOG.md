@@ -418,3 +418,37 @@ unnamed02_model.h make_star_blade.
 
 Judgement standard for the fix, per QA: the SHIPPED LIT PATH (celmain +
 diagonal-cool-cross), native 384x240, face close-up, before/after.
+
+### Fix verified on the shipped lit path (the judgement standard)
+
+- Page regen DETERMINISTIC (two regens cmp-identical, now with the star tile:
+  atlas 87380 + eye 5461 + star 5461 words).
+- u02-s4-front (celmain + diagonal-cool-cross), at the 72 native star
+  coordinates from the front form evidence:
+    BEFORE (rebuilt pre-fix binary): mean RGB (0.0, 1.6, 2.1), max (0, 4, 8),
+    100% near-black — reproduces QA's shipped numbers exactly.
+    AFTER:  mean RGB (45.4, 165.7, 192.7), max (82, 255, 255), 0% near-black,
+    79% strictly cyan-family (the rest are ink/edge pixels).
+- LOOKED AT, not just measured: evidence/fix-star-before-after.png (native
+  5x nearest crop, black star silhouettes -> cyan stars) and
+  evidence/fix-star-hover-f160-face.png (the hover clip's poster frame on the
+  full shipped path with fx + sun: both stars read as drawn).
+- u02-probe: CLEARANCE CONTRACT HOLDS, min 88 mm (unchanged).
+  u02-meshcheck: CLEAN, 22 meshlets / 1444 tris / 740 groups (unchanged —
+  the fix moves no geometry).
+- Bank identity RE-PROVEN with the fixed binary: all 22 zixxtrixx subjects
+  CRC- and frame-identical to the pristine a311faf6 baseline values
+  (evidence-fixpass-bank-identity.txt).
+
+### Fault 2 corrected
+
+- Site trio note + UNNAMED02-INDEX §6 now state QA's arithmetic: ~10.3%
+  scanned / ~7.4% blended per conduit worst case (outer aura alone ~6.4%
+  blended), ~31% / ~22% for three, still labelled arithmetic (no fragment
+  counters). Upheaval 4dcc4a8.
+
+### Known follow-up (NOT this pass — the owner's eye)
+
+Loop character (angular bent-wire vs the drawing's rounded teardrop, ~27%
+short), front-view uniform-rod antenna, sphere-vs-teardrop body, eye size.
+All named knobs; recorded in UNNAMED02-INDEX §7.

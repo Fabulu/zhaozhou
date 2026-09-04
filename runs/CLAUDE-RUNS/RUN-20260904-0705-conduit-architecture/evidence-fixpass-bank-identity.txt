@@ -1,0 +1,28 @@
+Bank identity re-proof AFTER the star-page fix (binary at cd3f4c7f).
+ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross; baseline = pristine a311faf6 values
+from evidence-final-bank-identity.txt (independently confirmed by QA).
+
+zixxtrixx-attack             baseline=0x86A2B30B f=560  fixed=0x86A2B30B f=560  IDENTICAL
+zixxtrixx-balance            baseline=0x301EFBA6 f=493  fixed=0x301EFBA6 f=493  IDENTICAL
+zixxtrixx-damage             baseline=0x6C224D56 f=400  fixed=0x6C224D56 f=400  IDENTICAL
+zixxtrixx-death              baseline=0x2E8755B3 f=192  fixed=0x2E8755B3 f=192  IDENTICAL
+zixxtrixx-death2             baseline=0x18F0AF79 f=240  fixed=0x18F0AF79 f=240  IDENTICAL
+zixxtrixx-fall               baseline=0xD18D3D3C f=288  fixed=0xD18D3D3C f=288  IDENTICAL
+zixxtrixx-hit                baseline=0x116F3C2E f=300  fixed=0x116F3C2E f=300  IDENTICAL
+zixxtrixx-hitfloor           baseline=0x11DADB9E f=188  fixed=0x11DADB9E f=188  IDENTICAL
+zixxtrixx-idle               baseline=0x1408F885 f=576  fixed=0x1408F885 f=576  IDENTICAL
+zixxtrixx-jump-multi         baseline=0xF58DE5AD f=241  fixed=0xF58DE5AD f=241  IDENTICAL
+zixxtrixx-jump-one           baseline=0x5303C5C0 f=241  fixed=0x5303C5C0 f=241  IDENTICAL
+zixxtrixx-knockdown          baseline=0x1EB29988 f=196  fixed=0x1EB29988 f=196  IDENTICAL
+zixxtrixx-look               baseline=0x28D476AA f=384  fixed=0x28D476AA f=384  IDENTICAL
+zixxtrixx-moving-light       baseline=0xC0DE226E f=600  fixed=0xC0DE226E f=600  IDENTICAL
+zixxtrixx-run                baseline=0x45A4E913 f=96  fixed=0x45A4E913 f=96  IDENTICAL
+zixxtrixx-salto-dummy        baseline=0x654D7708 f=295  fixed=0x654D7708 f=295  IDENTICAL
+zixxtrixx-salto-fly          baseline=0x4FE70E0C f=313  fixed=0x4FE70E0C f=313  IDENTICAL
+zixxtrixx-salto-nine         baseline=0xC96C63F5 f=435  fixed=0xC96C63F5 f=435  IDENTICAL
+zixxtrixx-salto-six          baseline=0x456D82CE f=333  fixed=0x456D82CE f=333  IDENTICAL
+zixxtrixx-slow-taunt         baseline=0x1F35917E f=239  fixed=0x1F35917E f=239  IDENTICAL
+zixxtrixx-taunt              baseline=0xD79D55E2 f=224  fixed=0xD79D55E2 f=224  IDENTICAL
+zixxtrixx-walk               baseline=0xF06EF66B f=160  fixed=0xF06EF66B f=160  IDENTICAL
+
+RESULT: ALL-IDENTICAL (22 subjects) - Zixxtrixx untouched by the fix pass
