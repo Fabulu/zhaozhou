@@ -129,16 +129,24 @@ def main() -> int:
             no_module.append((bid, len(names)))
             continue
         ports = set(outputs_of(mods[mod]))
+        # spec/counters.md 3: a block may instead own its counters locally and
+        # present them on a D9 SNAP CHANNEL as a zhao_counter_snap_t. Those have
+        # no <counter>_o port and are not supposed to -- so an unresolved row on
+        # such a block wants a MAPPING, while an unresolved row on a block with
+        # neither form is a counter with no visible presentation path at all.
+        # Reporting the two as one list is what made this look like 82 defects.
+        has_snap = "zhao_counter_snap_t" in read(mods[mod])
         for n in names:
             if n in mapping:
                 if mapping[n] in ports:
                     by_mapping.append((bid, n, mapping[n]))
                 else:
-                    unresolved.append((bid, n, "mapped to %s, which is not a port" % mapping[n]))
+                    unresolved.append((bid, n, "mapped to %s, which is not a port" % mapping[n],
+                                       has_snap))
             elif n + "_o" in ports:
                 by_default.append((bid, n))
             else:
-                unresolved.append((bid, n, "no %s_o and no mapping" % n))
+                unresolved.append((bid, n, "no %s_o and no mapping" % n, has_snap))
 
     total = len(by_default) + len(by_mapping) + len(unresolved)
     print("counters: %d declared on blocks with a module; %d resolve by the "
@@ -146,12 +154,29 @@ def main() -> int:
           "(%d block(s) have counters but no module file yet.)"
           % (total, len(by_default), len(by_mapping), len(unresolved), len(no_module)))
 
-    if unresolved:
-        print("\nUNRESOLVED -- the ledger names a counter the RTL does not have "
-              "under that name. Either the port is named differently (add a "
-              "`counter_ports:` entry) or the counter is not implemented:")
+    snapped = [u for u in unresolved if u[3]]
+    bare = [u for u in unresolved if not u[3]]
+
+    if snapped:
+        print("\nUNRESOLVED, BUT THE BLOCK HAS A SNAP CHANNEL (%d) -- the D9 "
+              "form (spec/counters.md 3). The counter is owned locally and "
+              "presented as a zhao_counter_snap_t, so there is no <counter>_o "
+              "port and there is NOT MEANT TO BE ONE. These want a "
+              "`counter_ports:` entry, not an implementation:" % len(snapped))
         cur = None
-        for bid, n, why in unresolved:
+        for bid, n, why, _ in snapped:
+            if bid != cur:
+                print("  %s" % bid)
+                cur = bid
+            print("      %-28s %s" % (n, why))
+
+    if bare:
+        print("\nUNRESOLVED, AND NO SNAP CHANNEL EITHER (%d) -- the block has "
+              "neither a <counter>_o port nor a zhao_counter_snap_t, so this "
+              "counter has no visible presentation path at all. THIS is the "
+              "list that is about missing work:" % len(bare))
+        cur = None
+        for bid, n, why, _ in bare:
             if bid != cur:
                 print("  %s" % bid)
                 cur = bid

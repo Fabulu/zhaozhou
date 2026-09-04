@@ -745,6 +745,24 @@ itself broken on its first version** -- written with a `` that a shell heredoc
 turned into a literal backspace (0x08), so it matched nothing and printed "no
 silent drops" while 17 ports were being dropped. It is now asserted at import.
 
+**FINAL TALLY, with the two piles separated.** The checker now asks whether an
+unresolved counter's block has a snap channel at all, because the answer changes
+what the row means:
+
+    40  resolve by the default <counter>_o
+    10  by an explicit counter_ports mapping
+     1  unresolved on a block that HAS a snap channel -> wants a mapping
+    57  unresolved with NO snap channel and no port -> no visible
+        presentation path at all
+    30  further blocks declare counters but have no module file yet
+
+Only **four** blocks in the tree carry a `zhao_counter_snap_t` (AUDIO.FIFO,
+CMD.DMA, CMD.SCHEDULER, DEBUG.COUNTERS), so the snap-channel explanation covers
+almost nothing. **The real finding is the 57**: counters declared in the ledger
+that the RTL presents by neither mechanism the spec defines. That is a much
+smaller and much sharper claim than "the field is not checkable", and it is the
+one worth acting on.
+
 **And a second reading error, worth more than the count.** Many unresolved rows
 are the D9 SNAP-CHANNEL form (`spec/counters.md` §3): the block owns the counter
 locally and presents it as a `zhao_counter_snap_t`, so there is no `<counter>_o`
