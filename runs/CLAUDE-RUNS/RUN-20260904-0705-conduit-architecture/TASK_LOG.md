@@ -166,3 +166,95 @@ silently wins. Building the chained dispatcher next.
   world x -700..+100, and the S bows in x-z, so "in front of the body" needs
   z <= -900 mm. Two mote fans burned an hour learning this; authored fans
   are the fast instrument.
+
+## Spike S4 — VERDICT: PASS (with two real discoveries)
+
+- `make_ball()` written in `unnamed02_model.h` (UV sphere at half-step cosine
+  ring spacing, both caps); 8-bone rig in `unnamed02_rig.h`; maths helpers
+  (the one sanctioned copy) + Rig + still clip in `unnamed02_clips.h`;
+  composition in `unnamed02.h`; species/tilt/facing/slot wiring for
+  kUnnamed02 through render_scene (floats: TiltMode::kNone, no travel,
+  no bulk, no gibs). Diagnostic subjects u02-s4-{side,front,tq,wire,ids,
+  stage,unlit}.
+- DISCOVERY 1 — THE PROJECTION IS ANISOTROPIC: isotropic NDC through the
+  384x240 viewport paints 1 m of world X across ~1.66x the pixels of 1 m of
+  world Y (project_vertex maps +-1 NDC to 192 px x 120 px). Every world
+  sphere renders as a 1.66:1 wide ellipse; Zixxtrixx (a long tube authored
+  by eye under this projection) never showed it. Countered with the
+  `kVStretchPm` knob (1660): vertical form dimensions are authored in
+  on-screen proportions and stretched at build. The balls now READ as balls
+  from side/front/tq (evidence/s4-{side,front}-balls.png).
+- DISCOVERY 2 — A LATENT ENGINE BUG in build_ring_part: a bottom cap's apex
+  vertex sits between two rings in the vertex list, and the next band derived
+  its lower-ring base as `hi - (n + dup)` — off by one whenever a capped part
+  kept a second band in the same meshlet. Zixxtrixx's 28-side rings always
+  split first (masked); the watchdog's low-segment capped parts hit it from
+  day one (a stray wedge at the rear hip — evidence/s4-watchdog-cap-
+  before-after.png); creature 02's 16-seg ball opened 4 edges per bottom cap.
+  FIXED by tracking the base explicitly; the two watchdog CRC pins re-pinned
+  loudly (0xE47538C1 / 0xC06ACA1B); zixx bank identity proof in
+  evidence-s4-bank-identity.txt (render in flight as this is written).
+- u02_meshcheck.cpp COMMITTED (manifold edges position-keyed, seam law,
+  degenerate faces): CLEAN — 10 meshlets, 772 tris.
+- Segment taper to the poles produced a visible zipper sliver on the face at
+  240p; segments are now uniform (352-tri body ball; the ~80-tri saving was
+  not worth a facial blemish).
+- Also observed: ZIXX_EXP=celmain renders any UNTEXTURED creature black
+  (the untextured-gouraud toon path rescales pre-lit 255-scale lanes to a
+  65536-scale band level then >>16 -> ~1 count). Latent engine defect, not
+  fixed here (creature 02 ships textured; grey form iteration uses
+  ZIXX_LIGHT only). Logged for the hardware/reference lane.
+- A recurring "beam" artifact chased for over an hour turned out to be the
+  documented STALE-ARTIFACT traps (stale frame dirs + stale binaries) plus
+  the REAL cap bug above. New personal law: `rm -rf` the subject dir before
+  every re-render, and never judge a fresh question on an old directory.
+
+## Spike S5 — VERDICT: PASS
+
+- `unnamed02_fx.h`: the centre glow as a TWO-LAYER shared-ramp splat over
+  the engine's own §4 halo_atmo corona bake — outer aura (46 px, gain 380pm)
+  drawn BEFORE the compose, depth-tested against the conduit centre's own
+  1/w (paints over sky AND the terrain behind it — the star path's
+  kStarDepth law could not); inner core (13 px, gain 420pm) drawn AFTER the
+  compose with no depth test — the light shines through the belly.
+- Three glows (one real + two phantom conduit centres), exactly ONE 64-entry
+  ramp build per frame by construction; zero interaction with the <=2
+  sun/flare caps (never a ComposeLight, never a flare slot).
+- Read at 2x: a soft pink aura rimming the grey body with a violet core
+  inside it — the light lives in the belly (evidence/s5-glow-trio.png).
+  Radius/gain are knobs; final values chosen in scene against pink pigment
+  at the fx milestone.
+
+## S4 aftermath — the identity gate caught two of my own mistakes
+
+1. The UNGATED cap fix moved all 22 zixx bank CRCs (the tapered nose rings
+   hit the same latent bug): approved art does not change silently, so the
+   fix became OPT-IN (`RingPart::cap_base_fix`, default false = legacy
+   bit-frozen layout; only creature-02 parts set it). Watchdog pins reverted
+   with a NOTE. The ungated fix (and the watchdog's stray hip wedge it cures)
+   is reported to the owner as an available improvement.
+2. A careless sed for the u02 camera changed EVERY `cam_k = 300000` in
+   zhao_reel.cpp — ten subjects, five of them bank clips (damage, hit, look,
+   taunt, slow-taunt). Caught by the bank comparison, restored, re-verified:
+   all five back to baseline CRCs exactly. Lesson: never sed a value that is
+   not unique to the thing being edited.
+   Final proof: evidence-s4-bank-identity.txt (17 IDENTICAL from the gated
+   bank render + the five re-verified against baseline after the cam_k
+   restore; one full ALL-IDENTICAL bank run gates the publish).
+
+## FORM MILESTONE — the grey creature stands (evidence/form-*.png)
+
+- Teardrop body (taper + lean knobs), the flat antenna loop as ONE
+  straight-bound chain FOLDED by pose (loop_rest, the zixx tail_rest pattern
+  — the drawn loop shape is a stance, per the house law), corners at the
+  three hinge balls, both tube ends capped and buried in the body.
+- The face: two faceted purple almond lenses (real geometry, 8-seg facets)
+  angled outward in the front sheet's V, cyan four-point star pupils (two
+  crossed blades on the pupil bones) standing proud of the lens.
+- Side view shows the lens bulging OFF the body silhouette — the
+  description sheet's "abstehendes Auge" oblique sketch read.
+- u02-meshcheck CLEAN: 20 meshlets, 1444 tris (budget ~1300; the loop caps
+  and uniform segments spent a little up — the read earns it).
+- Upheaval package scaffolded-and-merged: CREATURE.json (clearance
+  contract, projection note, honest source pointers), SPEC.md (the plan
+  distilled + spike verdicts).

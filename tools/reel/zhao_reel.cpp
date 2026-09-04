@@ -1016,6 +1016,8 @@ struct SceneSubject {
                                    // sets this BELOW the island so debris
                                    // visibly falls through the hole
   std::vector<Debris> debris;
+  // S5 (creature 02): draw the shared-ramp centre glow(s) for this subject.
+  bool u02_glow = false;
   // S3 (creature 02): DRAW_POPULATION flags. b0 points, b1 tris, b2 additive
   // (RASTER.FRAGMENT ADD). Default is the historical 0x0003 -- byte-identical.
   uint16_t pop_flags = 0x0003;
@@ -1441,6 +1443,7 @@ namespace zc = zref::creature;
 // Zixxtrixx (Upheaval's first creature) is authored in its own header so every
 // knob Fabian might turn sits in one findable place.
 #include "zixxtrixx.h"
+#include "unnamed02.h"
 
 // The demo subject: a watchdog quadruped. Ring parts are rigid per bone
 // (donor law). Its authored forward axis is +X: pitch maps each body/head ring
@@ -2239,6 +2242,8 @@ struct CreatureReelCtx {
   // one contiguous array so the compositor's point-light globals can name
   // them directly.
   zc::CreaturePointLight moving_sources[zc::kCreatureMaxPointLights]{};
+  // S5 (creature 02): splat the centre glow(s) before the compose
+  bool u02_glow = false;
 };
 constexpr uint32_t kZixxMovingSourceCount = 4;
 constexpr uint32_t kZixxMovingSourceWarm = 0;
@@ -2667,6 +2672,35 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
                  pc.in ? pc.s.x >> 8 : -1, pc.in ? pc.s.y >> 8 : -1, clip.w.raw);
   }
 #endif
+  // ---- S5: the creature-02 centre glow, BEFORE the compose so the body
+  // occludes its own core (the light lives in the belly). One baked sprite
+  // per process, ONE ramp per frame, one cheap splat per conduit; the
+  // splat depth-tests against the conduit centre's own 1/w so it paints
+  // over the terrain behind the creature but never over anything nearer.
+  int32_t cr_glow_px[3][2];
+  int cr_glow_n = 0;
+  static u02::GlowAssets s_glow_assets;
+  u02::GlowFrame s_glow_frame;
+  if (c.u02_glow) {
+    u02::glow_bake(s_glow_assets);
+    u02::GlowFrame& gf = s_glow_frame;  // the one per-frame ramp build
+    u02::glow_build_ramp(gf, u02::kGlowLo, u02::kGlowMid, u02::kGlowHi,
+                         u02::kCentreGlowGainPm);
+    const zref::render::Viewport vpp_g{0, 0, w, h};
+    for (int gi = 0; gi < 3; ++gi) {
+      const int32_t gx = c.inst->x + fxm(u02::kS5PhantomOffsMm[gi][0]);
+      const int32_t gz = c.inst->z + fxm(u02::kS5PhantomOffsMm[gi][1]);
+      const int32_t gy = c.inst->y + u02::fxu(u02::kHoverHeightMm);
+      const zref::render::ProjOut pc = zref::render::project_vertex(
+          c.vp, vpp_g, zref::fx16{gx}, zref::fx16{gy}, zref::fx16{gz}, nullptr);
+      if (!pc.in) continue;
+      u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf, pc.s.x >> 8, pc.s.y >> 8,
+                      u02::kCentreGlowRadiusPx, pc.s.d);
+      cr_glow_px[cr_glow_n][0] = pc.s.x >> 8;
+      cr_glow_px[cr_glow_n][1] = pc.s.y >> 8;
+      ++cr_glow_n;
+    }
+  }
   {
     zc::CreatureInstance* insts[2] = {c.inst, c.dummy};
     if (c.force_micro) {
@@ -2697,6 +2731,17 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     zc::g_creature_point_lights = saved_points;
     zc::g_creature_point_light_count = saved_point_count;
     zc::g_creature_additive_light = saved_additive;
+  }
+  // S5 layer two: the small core drawn OVER the composed body, no depth
+  // test -- the belly-light shining through the skin. Same frame ramp,
+  // scaled by its own calm gain.
+  if (c.u02_glow && cr_glow_n > 0) {
+    u02::GlowFrame core;
+    u02::glow_build_ramp(core, u02::kGlowLo, u02::kGlowMid, u02::kGlowHi,
+                         u02::kCentreGlowCoreGainPm);
+    for (int gi = 0; gi < cr_glow_n; ++gi)
+      u02::glow_splat(rgb, depth, w, h, s_glow_assets, core, cr_glow_px[gi][0],
+                      cr_glow_px[gi][1], u02::kCentreGlowCorePx, 0, false);
   }
   // ---- RUN 1939 experiment post-pass (env-gated, default off). Placed
   // HERE because the hook returns early when there are no gibs -- the
@@ -2937,6 +2982,12 @@ void chained_pre_resolve(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, u
 
 int render_scene(const SceneSubject& sub) {
   const uint32_t W = 384, H = 240;
+  // S2: resolve the species once for the whole subject. kAuto reproduces the
+  // pre-enum binary rule exactly, so every existing subject selects as it
+  // always did; creature-02 subjects set kUnnamed02 explicitly.
+  const Species species = sub.species != Species::kAuto
+                              ? sub.species
+                              : (sub.creature >= 3 ? Species::kZixxtrixx : Species::kWatchdog);
   zref::render::TerrainPatch patch =
       sub.island ? dual_island_patch() : rtest::bump_patch(161, 161, sub.bump_ext, 8);
   if (sub.island_flat) {  // keep the deep keel, drop the texture lane
@@ -3039,38 +3090,38 @@ int render_scene(const SceneSubject& sub) {
     // 1,2 = the watchdog (wave-walk, bulk-pop). 3,4 = Zixxtrixx (slither,
     // tail-strike) — the Upheaval bestiary lane.
     zc::g_debug_shade = static_cast<zc::DebugShade>(sub.creature_shade);
-    // S2: resolve the species. kAuto reproduces the pre-enum binary rule
-    // exactly, so every existing subject selects as it always did.
-    const Species species = sub.species != Species::kAuto
-                                ? sub.species
-                                : (sub.creature >= 3 ? Species::kZixxtrixx : Species::kWatchdog);
     const bool zixx_subject = species == Species::kZixxtrixx;
-    // The kUnnamed02 arm is wired when unnamed02::type() lands (form pass).
-    dog = zixx_subject ? &zixx::type() : &watchdog_type();
+    dog = zixx_subject ? &zixx::type()
+                       : (species == Species::kUnnamed02 ? &u02::type() : &watchdog_type());
     dog_inst.type = dog;
     // A quadruped pitches and rolls with the ground under its feet. A 3.9 m
     // serpent lying ON the ground does not: tilting the whole animal off one
     // column sample lifted its tail a metre into the air over a crest. Roll
     // only for Zixxtrixx.
-    dog_inst.tilt_mode = zixx_subject ? zc::TiltMode::kSideways : zc::TiltMode::kCompletely;
+    dog_inst.tilt_mode = species == Species::kUnnamed02
+                             ? zc::TiltMode::kNone  // it FLOATS; terrain never tilts it
+                             : (zixx_subject ? zc::TiltMode::kSideways : zc::TiltMode::kCompletely);
     // Zixxtrixx is shot on an orbit, so its facing only has to look right at
     // frame 0; the watchdog keeps its authored front-quarter read.
     // Facing 0 is already side-on to the orbit camera at frame 0 -- a quarter
     // turn puts us END-ON, which is worse. Kept at 0; the salto's dive reading
     // small is NOT a staging problem, see the run log.
-    dog_inst.facing = zref::angle16{zixx_subject ? uint16_t{0} : uint16_t{0x1000}};
+    dog_inst.facing = zref::angle16{
+        (zixx_subject || species == Species::kUnnamed02) ? uint16_t{0} : uint16_t{0x1000}};
     // Zixxtrixx clip slots: 3 = idle, 4 = caterpillar walk, 5 = triple salto,
     // 6 = falling flail. The watchdog keeps its own two.
-    dog_inst.anim.cut(zixx_subject ? static_cast<uint16_t>(sub.creature - 2)
-                                   : (sub.creature == 1 ? 2 : 1));
+    dog_inst.anim.cut((zixx_subject || species == Species::kUnnamed02)
+                          ? static_cast<uint16_t>(sub.creature - 2)
+                          : (sub.creature == 1 ? 2 : 1));
     dog_inst.anim.frozen = sub.creature_hold;
     // Stand the animal on its OWN centre, not its root bone, or the orbit
     // swings its body out of frame. The walk starts half its travel back
     // from there so it crosses through the middle of the shot.
     if (zixx_subject) dog_inst.x = fxm(zixx::kStageCentreMm);
-    if (sub.creature == 4)
+    if (species == Species::kUnnamed02) dog_inst.x = fxm(u02::kStageCentreMm);
+    if (zixx_subject && sub.creature == 4)
       dog_inst.x -= fxm(zixx::kWalkSpeed * static_cast<int32_t>(sub.frames)) / 2;
-    if (sub.creature == 29)
+    if (zixx_subject && sub.creature == 29)
       dog_inst.x -= fxm(zixx::kRunSpeed * static_cast<int32_t>(sub.frames)) / 2;
     cr_ctx.inst = &dog_inst;
     cr_ctx.poses = &dog_poses;
@@ -3090,6 +3141,7 @@ int render_scene(const SceneSubject& sub) {
       cr_ctx.dummy = &dummy_inst;
     }
     cr_ctx.gibs = &gibs;
+    cr_ctx.u02_glow = sub.u02_glow;
     pop_threshold = 22 * (1 << 16) / 10;  // bulk 2.2 pops (species constant)
     gib_gravity = fxm(18);                // per frame^2
     hook_chain.install(HookChain::kCreature, &creature_hook, &cr_ctx);
@@ -3251,7 +3303,16 @@ int render_scene(const SceneSubject& sub) {
       const zref::terrain::ComposedLattice lat = zref::render::compose_lattice(
           patch, rtest::xform_identity(), fapps, tick, nullptr, nullptr);
 
-      if (sub.creature >= 3) {
+      if (species == Species::kUnnamed02) {
+        // creature 02 FLOATS: advance the clip on the sim clock and nothing
+        // else -- no ground tilt (kNone), no travel (drift authors its own
+        // root XZ in the clip), no gibs, no bulk.
+        for (uint32_t t = 0; t < sub.step; ++t) {
+          const zc::ClipEvent* fired = nullptr;
+          uint8_t nf = 0;
+          zc::anim_advance(dog_inst.anim, dog->bank, &fired, nf);
+        }
+      } else if (sub.creature >= 3) {
         // run 0326: scripted state cuts (knockdown -> getUp chains, the
         // directional-damage tour) -- the game's own hard cut, on a frame
         for (const auto& cc : sub.clip_cuts)
@@ -3616,7 +3677,7 @@ int render_scene(const SceneSubject& sub) {
     }
   }
 
-  if (sub.creature == 2) {
+  if (species == Species::kWatchdog && sub.creature == 2) {
     const int32_t required_growth = fxm(500);
     if (gib_spawn_count < 12 || gib_visible_frames < 8 ||
         gib_max_span < gib_initial_span + required_growth) {
@@ -4375,6 +4436,65 @@ SceneSubject s1_chain_subject(int mode) {
   return s;
 }
 
+// ---- creature 02 diagnostic stage ----------------------------------------
+// Fixed cameras, no orbit. The creature floats at kHoverHeightMm over the
+// same bump crown the zixx stage uses; the camera aims at the whole form
+// (body + loop), not the crown.
+void u02_common(SceneSubject& s) {
+  s.species = Species::kUnnamed02;
+  s.step = 1;
+  s.full_colour = true;
+  s.bump_ext = 6;
+  s.cam_k = 240000;
+  s.cam_ps = 16962;  // ~15 deg down, the showcase pitch
+  s.cam_pc = 63313;
+  s.cam_eye = 12;
+  s.cam_dist = 8;
+  s.cam_bias = 0;
+  s.mat_r = 104;  // the dry-ground stage material (the zixx lesson: green
+  s.mat_g = 78;   // creature on green ground vanished; grey on brown reads)
+  s.mat_b = 58;
+}
+
+SceneSubject subject_u02_s4(int view) {
+  SceneSubject s;
+  s.name = view == 0   ? "u02-s4-side"
+           : view == 1 ? "u02-s4-front"
+           : view == 2 ? "u02-s4-tq"
+           : view == 3 ? "u02-s4-wire"
+           : view == 4 ? "u02-s4-ids"
+           : view == 5 ? "u02-s4-stage"
+                       : "u02-s4-unlit";
+  s.creature = 2;  // slot 0 (the S4 still hover)
+  s.frames = 4;
+  s.orbit = false;
+  u02_common(s);
+  if (view == 1 || view == 4) s.cam_yaw = 0x4000;  // quarter turn: the front view
+  if (view == 2 || view == 3 || view == 5 || view == 6) s.cam_yaw = 0x2000;
+  if (view == 3) s.creature_shade = 3;  // wireframe diagnostic
+  if (view == 4) s.creature_shade = 4;  // triangle-id diagnostic
+  if (view == 5) s.creature = 0;  // stage only: isolates non-creature artifacts
+  if (view == 6) s.creature_shade = 1;  // unlit fullbright
+  s.note = "S4 spike: the grey ball(s) from a fixed diagnostic camera";
+  return s;
+}
+
+// ---- S5 spike (creature 02): the shared-ramp centre glow -----------------
+SceneSubject subject_u02_s5() {
+  SceneSubject s;
+  s.name = "u02-s5-glow";
+  s.creature = 2;
+  s.frames = 4;
+  s.orbit = false;
+  u02_common(s);
+  s.u02_glow = true;
+  s.note =
+      "S5 spike: three conduit centre glows (one real body + two phantom "
+      "centres) through ONE per-frame ramp build; occlusion by the body and "
+      "by near terrain judged by eye";
+  return s;
+}
+
 SceneSubject subject_creaturewalk() {
   SceneSubject s;
   s.name = "creature-wave-walk";
@@ -4434,7 +4554,12 @@ SceneSubject subject_creaturewalk() {
       "tilt it through the crest; frames 48+ pull the camera back 8 m -> 300 m "
       "and the LOD ladder walks it down mesh -> micro-mesh -> splat -> glint "
       "(screen-space error, 10% hysteresis, 15-tick hold)";
-  s.expect_seq_crc = 0x1C1A15BAu;  // RE-PINNED 2026-08-31: the creature lane
+  s.expect_seq_crc = 0x1C1A15BAu;  // NOTE 2026-09-04 (creature 02, S4): the
+  // build_ring_part bottom-cap band bug (RingPart::cap_base_fix) puts a
+  // stray wedge at this watchdog's rear hip. The fix exists but is OPT-IN;
+  // the legacy mesh (and this pin) stay frozen because Zixxtrixx's approved
+  // bank shares the buggy layout. Evidence pair in the S4 run.
+  // RE-PINNED 2026-08-31: the creature lane
   // moved and the constant did not follow. TWENTY commits touched the creature
   // reference between the Gouraud pin and today -- among them "Correct creature
   // normal orientation" (5aff7ab), "Correct Zixxtrixx whole-body spring"
@@ -5730,7 +5855,9 @@ SceneSubject subject_creaturepop() {
       "2.2 pop threshold removes the mesh and releases 18 detached rotating "
       "chunks, deterministically sampled from donor gibs, with integer "
       "ballistics, gravity, and damped ground bounce";
-  s.expect_seq_crc = 0x8554FF23u;  // RE-PINNED 2026-08-31: same cause as
+  s.expect_seq_crc = 0x8554FF23u;  // NOTE 2026-09-04: see the wave-walk pin --
+  // the legacy cap layout stays frozen (cap_base_fix is opt-in).
+  // RE-PINNED 2026-08-31: same cause as
   // creature-wave-walk -- see the note there for the commits and the evidence.
   // Deterministic across two runs; the 72-frame contact sheet shows the
   // approach, the pop at frame 27 and the gib ballistics reading correctly,
@@ -6277,6 +6404,14 @@ int main(int argc, char** argv) {
   if (wanted("planet-sun-redgiant")) rc |= render_scene(subject_planet_redgiant());
   if (wanted("planet-sun-binary")) rc |= render_scene(subject_planet_binary());
   if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
+  if (wanted("u02-s5-glow")) rc |= render_scene(subject_u02_s5());
+  if (wanted("u02-s4-side")) rc |= render_scene(subject_u02_s4(0));
+  if (wanted("u02-s4-front")) rc |= render_scene(subject_u02_s4(1));
+  if (wanted("u02-s4-tq")) rc |= render_scene(subject_u02_s4(2));
+  if (wanted("u02-s4-wire")) rc |= render_scene(subject_u02_s4(3));
+  if (wanted("u02-s4-ids")) rc |= render_scene(subject_u02_s4(4));
+  if (wanted("u02-s4-stage")) rc |= render_scene(subject_u02_s4(5));
+  if (wanted("u02-s4-unlit")) rc |= render_scene(subject_u02_s4(6));
   if (wanted("u02-s3-motes")) rc |= render_scene(s3_mote_subject(false));
   if (wanted("u02-s3-motes-add")) rc |= render_scene(s3_mote_subject(true));
   if (wanted("u02-s1-bloom")) rc |= render_scene(s1_chain_subject(0));

@@ -560,6 +560,19 @@ struct RingPart {
    */
   bool micro_keep_rings = false;
   bool micro_keep_segments = false;
+  /**
+   * BOTTOM-CAP BAND FIX (2026-09-04, creature 02 S4). The band zipper used
+   * to derive its lower ring's vertex base as `hi - (n + dup)`, which is
+   * wrong by one when a bottom cap's apex vertex sits between the rings —
+   * i.e. whenever a capped part keeps a second band in the same meshlet.
+   * Low-segment capped parts (the watchdog's legs, creature 02's balls, and
+   * Zixxtrixx's tapered nose rings) hit it; the result is a mis-stitched
+   * band sewn to the cap apex (a stray wedge in the skin). The tracked-base
+   * fix is CORRECT but changes every affected compiled mesh, and Zixxtrixx's
+   * published bank is approved art — so the fix is OPT-IN per part. Default
+   * false reproduces the legacy layout bit-for-bit; new creatures set it.
+   */
+  bool cap_base_fix = false;
   uint8_t pitch_q = 0;  // quarter turns about X applied at build
   uint8_t yaw_q = 0;    // quarter turns about Y applied at build
   uint8_t r = 128, g = 128, b = 128;

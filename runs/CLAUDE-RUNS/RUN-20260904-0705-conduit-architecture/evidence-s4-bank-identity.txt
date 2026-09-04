@@ -1,0 +1,31 @@
+S4 FINAL identity proof: pristine a311faf6 baseline vs the tree with
+S1-S5 and the build_ring_part bottom-cap fix GATED behind the opt-in
+RingPart::cap_base_fix (default false = legacy layout, bit-frozen;
+only creature 02's parts set it). An earlier ungated fix moved every
+zixx bank CRC (its tapered nose rings hit the same latent bug), so
+the fix became opt-in: approved art does not change silently.
+ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross.
+
+zixxtrixx-attack             baseline=0x86A2B30B f=560  gated=0x86A2B30B f=560  IDENTICAL
+zixxtrixx-balance            baseline=0x301EFBA6 f=493  gated=0x301EFBA6 f=493  IDENTICAL
+zixxtrixx-damage             baseline=0x6C224D56 f=400  gated=0xD17D4D27 f=400  MISMATCH
+zixxtrixx-death              baseline=0x2E8755B3 f=192  gated=0x2E8755B3 f=192  IDENTICAL
+zixxtrixx-death2             baseline=0x18F0AF79 f=240  gated=0x18F0AF79 f=240  IDENTICAL
+zixxtrixx-fall               baseline=0xD18D3D3C f=288  gated=0xD18D3D3C f=288  IDENTICAL
+zixxtrixx-hit                baseline=0x116F3C2E f=300  gated=0x9927F152 f=300  MISMATCH
+zixxtrixx-hitfloor           baseline=0x11DADB9E f=188  gated=0x11DADB9E f=188  IDENTICAL
+zixxtrixx-idle               baseline=0x1408F885 f=576  gated=0x1408F885 f=576  IDENTICAL
+zixxtrixx-jump-multi         baseline=0xF58DE5AD f=241  gated=0xF58DE5AD f=241  IDENTICAL
+zixxtrixx-jump-one           baseline=0x5303C5C0 f=241  gated=0x5303C5C0 f=241  IDENTICAL
+zixxtrixx-knockdown          baseline=0x1EB29988 f=196  gated=0x1EB29988 f=196  IDENTICAL
+zixxtrixx-look               baseline=0x28D476AA f=384  gated=0xBDF6203F f=384  MISMATCH
+zixxtrixx-moving-light       baseline=0xC0DE226E f=600  gated=0xC0DE226E f=600  IDENTICAL
+zixxtrixx-run                baseline=0x45A4E913 f=96  gated=0x45A4E913 f=96  IDENTICAL
+zixxtrixx-salto-dummy        baseline=0x654D7708 f=295  gated=0x654D7708 f=295  IDENTICAL
+zixxtrixx-salto-fly          baseline=0x4FE70E0C f=313  gated=0x4FE70E0C f=313  IDENTICAL
+zixxtrixx-salto-nine         baseline=0xC96C63F5 f=435  gated=0xC96C63F5 f=435  IDENTICAL
+zixxtrixx-salto-six          baseline=0x456D82CE f=333  gated=0x456D82CE f=333  IDENTICAL
+zixxtrixx-slow-taunt         baseline=0x1F35917E f=239  gated=0x9C3DE546 f=239  MISMATCH
+zixxtrixx-taunt              baseline=0xD79D55E2 f=224  gated=0xDCA9841A f=224  MISMATCH
+zixxtrixx-walk               baseline=0xF06EF66B f=160  gated=0xF06EF66B f=160  IDENTICAL
+RESULT: MISMATCH

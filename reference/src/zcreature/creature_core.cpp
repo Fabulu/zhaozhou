@@ -816,7 +816,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     return base;
   };
 
-  add_ring(0);
+  uint32_t lo_base = add_ring(0);
   for (int ri = 0; ri + 1 < n_rings; ++ri) {
     const int n = part.rings[ri].segments;
     const int m = part.rings[ri + 1].segments;
@@ -834,10 +834,15 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
       out.push_back(std::move(cur));
       cur = Meshlet{};
       ring_cache.clear();
-      add_ring(ri);  // duplicate the seam ring: the split stays watertight
+      lo_base = add_ring(ri);  // duplicate the seam ring: the split stays watertight
     }
     const uint32_t hi = add_ring(ri + 1);
-    const uint32_t lo = hi - (static_cast<uint32_t>(n) + dup);
+    // The lower ring's base is TRACKED, not derived: `hi - (n + dup)` is only
+    // correct when the two rings are adjacent in the vertex list, and a
+    // bottom cap inserts its apex vertex between them (see
+    // RingPart::cap_base_fix). The legacy expression is kept behind the
+    // opt-in because the affected meshes include Zixxtrixx's published bank.
+    const uint32_t lo = part.cap_base_fix ? lo_base : hi - (static_cast<uint32_t>(n) + dup);
     // ring position n is the wrap: the u=255 duplicate when textured, vertex 0
     // otherwise
     const uint32_t lo_wrap = dup != 0 ? static_cast<uint32_t>(n) : 0u;
@@ -895,6 +900,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
         cur.idx.push_back(static_cast<uint8_t>(apex));
       }
     }
+    lo_base = hi;  // the next band's lower ring, wherever the caps put verts
   }
   if (!cur.idx.empty()) {
     cur.page = part.page;
