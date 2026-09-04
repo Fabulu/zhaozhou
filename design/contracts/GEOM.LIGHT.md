@@ -365,7 +365,30 @@ escalation, not a starting point.
 
 `GEOM.SKIN` outputs positions and not normals; normal skinning is
 reference-only today. **`SKIN.NORM` is a prerequisite for the creature path**
-and is not this block. The specification inconsistency noted in the docket
-applies to it: the old law transformed each normal by each bone and blended
-scalar Lambert results, while the live reference blends the normal *vector*,
-renormalises, then takes Lambert — and **the live reference becomes the law.**
+and is not this block.
+
+**The law it must implement was repaired on 2026-09-04** and now lives in
+`spec/creature_rules.md` §2.x.1 rather than in a docket entry. The spec had
+carried a *different* law as ratified — blend the two bones' clamped scalar
+Lambert responses, no renormalisation — which its own oracle never implemented.
+`skin_normal_lambert` blends the normal **vector**, renormalises once through
+`isqrt_u64`, and takes Lambert last.
+
+**Two consequences land on this contract:**
+
+* **`SKIN.NORM` cannot be a widening of `GEOM.SKIN`.** The new law needs the
+  normal transformed by both bones and renormalised — roughly 27 multiplies and
+  a square root per vertex. `CREATURESANDLIGHTS` states that `GEOM.SKIN` fits at
+  89.65 MHz with 9 DSPs and one weighted vertex per 12 clocks, and that
+  **"nothing more may be bolted onto its output"**. So it is a separate block,
+  and the struck law's whole appeal was that it required no such block at all.
+
+* **This block receives an ALREADY-NORMALISED world normal, and that is what
+  keeps its per-light cost at one dot.** The transform, blend and
+  renormalisation happen once per vertex in `SKIN.NORM`; `GEOM.LIGHT` then
+  spends three multiplies and one division per light. The reference calls
+  `skin_normal_lambert` once per *light*, and the owner is explicit that
+  **the hardware must not reproduce that structure** — copying it would put
+  three square roots per vertex behind this block for no change in the answer.
+  Bit-exactness is owed to the reference's **result**, not to how many times it
+  recomputes the normal.
