@@ -76,6 +76,17 @@ targets:
       # Measured 2026-09-03 BEFORE the storage fix: 2 / 11,328 / 5,903 --
       # all three violated, and it reported `ok` at 98.66 MHz.
       min_m10k: 8
+      # ADDED 2026-09-04 ALONGSIDE min_m10k, not instead of it. S3.4's "8" is
+      # the owner's number and stays; D19 records that it is unreachable
+      # because tag_r is 16 deep x 24 wide and no M10K will hold an array that
+      # shallow. This is the same question asked in a unit that does not depend
+      # on how Quartus packed it.
+      #
+      # DERIVED, NOT TUNED: data_r is 4 lanes x 128 entries x 16 bits = 8,192
+      # bits, and those are the bits that must be memory. tag_r's 1,536 are
+      # deliberately excluded -- they are correctly in flip-flops. The fit
+      # measured 128 bits before the rework and 8,320 after.
+      min_memory_bits: 8192
       max_registers: 2000
       max_alms: 1500
 
@@ -187,7 +198,19 @@ targets:
       # width), never fewer, so 17 cannot produce a false failure. A partial
       # inference -- keyram memory, statram flops -- lands around 12 and fails,
       # which is correct: half the fix is not the fix.
-      min_m10k: 17
+      # min_m10k 17 WAS WRONG AND IS KEPT AS THE RECORD OF WHY. It was derived
+      # as 167,936 bits / 10,240 per M10K and asserted to be a floor that
+      # "cannot produce a false failure". It produced one: the fit came back at
+      # 16 and reported failed:structure on a block whose storage had inferred.
+      #
+      # A COUNT OF M10K IS NOT BOUNDED BELOW BY CAPACITY. Quartus has a second
+      # memory primitive -- bits can land in MLAB -- and a wide array can be
+      # packed in shapes a capacity argument does not predict. The floor
+      # ignored that the device has more than one kind of memory.
+      min_m10k: 16
+      # The sound form of the same question, derived from the declared arrays:
+      # keyram 107 x 256 x 4 = 109,568 and statram 57 x 256 x 4 = 58,368.
+      min_memory_bits: 167936
       # Control state only: rr_q (512), the four-way read registers (656), the
       # s0 capture and the counters. Generous, and still four ORDERS below the
       # ~168,000 that "the arrays stayed in flops" would show.

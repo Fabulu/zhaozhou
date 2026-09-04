@@ -44,7 +44,7 @@ function Read-FitRules([string]$Path) {
         if ($line -match '^\s*rules:\s*$')   { $inRules = $true;  continue }
         if ($line -match '^\s*sources:\s*$') { $inRules = $false; continue }
         if ($inRules -and $null -ne $top -and
-            $line -match '^\s*(min_m10k|max_m10k|max_registers|max_alms|max_dsp|min_dsp):\s*(\d+)\s*$') {
+            $line -match '^\s*(min_m10k|max_m10k|min_memory_bits|max_registers|max_alms|max_dsp|min_dsp):\s*(\d+)\s*$') {
             if (-not $map.ContainsKey($top)) { $map[$top] = @{} }
             $map[$top][$Matches[1]] = [int]$Matches[2]
         }
@@ -68,8 +68,29 @@ function Test-FitRules($Row, $Rules) {
     # The MINIMUM is the important half. A maximum catches a block that grew; a
     # minimum catches a block whose storage quietly stopped being storage,
     # which is the failure that looks like success.
+    # min_memory_bits -- THE SOUND WAY TO ASK "DID THE STORAGE INFER".
+    #
+    # min_m10k is not, and it cost two false failures on 2026-09-04. A count of
+    # M10K blocks is NOT bounded below by declared_bits / 10240, because
+    # Quartus has a second memory primitive: bits can land in MLAB instead, and
+    # a wide array can be packed in shapes a capacity argument does not
+    # predict. zhao_terrain_residency_v2 declares 167,936 bits, "must therefore
+    # need 17 M10K", and fitted into 16.
+    #
+    # BITS are well defined and are what the question actually means. The
+    # fitter reports blockMemoryBits directly; an array that stayed in
+    # flip-flops contributes nothing to it, whichever primitive the rest chose.
+    # zhao_texture_cache_pipe measured 128 bits before its rework and 8,320
+    # after -- the same fact min_m10k was groping at, stated in the unit that
+    # does not depend on how the tool packed it.
+    $bits = Get-FitMetric $Row 'blockMemoryBits'
+    if ($Rules.ContainsKey('min_memory_bits') -and $null -ne $bits -and
+        $bits -lt $Rules['min_memory_bits']) {
+        $bad.Add(("block memory {0} bits < required {1} -- the storage did not infer as memory" -f $bits, $Rules['min_memory_bits']))
+    }
+
     if ($Rules.ContainsKey('min_m10k') -and $null -ne $m10k -and $m10k -lt $Rules['min_m10k']) {
-        $bad.Add(("M10K {0} < required {1} -- the storage did not infer as memory" -f $m10k, $Rules['min_m10k']))
+        $bad.Add(("M10K {0} < required {1} -- NOTE: an M10K COUNT is not a sound floor, see min_memory_bits" -f $m10k, $Rules['min_m10k']))
     }
     if ($Rules.ContainsKey('max_m10k') -and $null -ne $m10k -and $m10k -gt $Rules['max_m10k']) {
         $bad.Add(("M10K {0} > allowed {1}" -f $m10k, $Rules['max_m10k']))
