@@ -204,6 +204,42 @@ person to relax it would have no way to know.
 
 ---
 
+# THE FIT CAME BACK: 6 M10K, 3,033 registers, 1,633 ALM
+
+**2026-09-04, 4,553 s of quartus_fit.** The storage rework is measured, and the
+prediction below was right to the block.
+
+| | before | after | |
+|---|---|---|---|
+| **M10K** | 2 | **6** | +200% |
+| **registers** | 11,328 | **3,033** | **−73%** |
+| **ALM** | 5,903 | **1,633** | **−72%** |
+
+**Roughly 8,300 registers left flip-flops and became memory.** That is the whole
+claim of the rework, and it is now a fitter number rather than a synthesis
+promise.
+
+**It still reports `failed:structure`, on all three tripwires:**
+
+    M10K 6 < required 8        -- see the ruling below; this one is EXPECTED
+    registers 3033 > 2000      -- a genuine miss
+    ALM 1633 > 1500            -- a genuine miss
+
+**The M10K failure is exactly the case documented below and predicted at 4–6.**
+It came in at 6. That is not a defect and must not be read as one — the block
+has four `data_r` banks plus two small FIFOs worth being memory, and `tag_r` is
+16 deep, which no M10K will ever hold. **`min_m10k: 8` is unreachable and the
+ruling below is still open.**
+
+**The other two are real and are now small.** 3,033 against 2,000 and 1,633
+against 1,500 are misses of 52% and 9%, against the 466% and 294% they were
+before. What remains in flip-flops is the block's control state plus `tag_r`'s
+1,536 bits, and S3.4's ALM and register ceilings were written for a block whose
+storage was assumed to be entirely in memory — the same assumption that produced
+`min_m10k: 8`. **All three numbers are probably one question, not three.**
+
+---
+
 # OWNER DECISION: `min_m10k: 8` on TEXTURE.CACHE cannot be met
 
 **Not changed. Recorded for a ruling**, because lowering a gate so the thing
