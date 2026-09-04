@@ -5557,7 +5557,7 @@ set_tests_properties(geom_depthquant_directed PROPERTIES LABELS "fast;nightly" T
 # RTL lands it gains a DUT in this same file and these cases become the
 # differential. No verilate() call because there is nothing to verilate.
 add_executable(test_geom_meshfetch_directed geometry/geom_meshfetch_directed.cpp)
-target_link_libraries(test_geom_meshfetch_directed PRIVATE zhao_harness)
+target_link_libraries(test_geom_meshfetch_directed PRIVATE zhao_harness zhao_zref)
 add_test(NAME geom_meshfetch_directed COMMAND test_geom_meshfetch_directed)
 set_tests_properties(geom_meshfetch_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
 
@@ -5566,7 +5566,7 @@ set_tests_properties(geom_meshfetch_directed PROPERTIES LABELS "fast;nightly" TI
 # the RTL lands the DUT goes in beside these generators and the properties
 # become the differential's coverage guard.
 add_executable(test_geom_meshfetch_random geometry/geom_meshfetch_random.cpp)
-target_link_libraries(test_geom_meshfetch_random PRIVATE zhao_harness)
+target_link_libraries(test_geom_meshfetch_random PRIVATE zhao_harness zhao_zref)
 add_test(NAME geom_meshfetch_random COMMAND test_geom_meshfetch_random)
 set_tests_properties(geom_meshfetch_random PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
 
@@ -5575,7 +5575,7 @@ set_tests_properties(geom_meshfetch_random PROPERTIES LABELS "fast;nightly" TIME
 # differential, and instantiating it here would re-prove the frustum test while
 # hiding whether THIS block presented the right sphere to it.
 add_executable(test_geom_meshfetch_rtl_directed geometry/geom_meshfetch_rtl_directed.cpp)
-target_link_libraries(test_geom_meshfetch_rtl_directed PRIVATE zhao_harness)
+target_link_libraries(test_geom_meshfetch_rtl_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_geom_meshfetch_rtl_directed
   PREFIX Vzhao_geom_meshfetch
   TOP_MODULE zhao_geom_meshfetch
