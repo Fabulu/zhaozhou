@@ -195,6 +195,56 @@ errors; a newer cppcheck is usually a better one, but it is never silent.
 
 ---
 
+## D22 — **THE GEOMETRY FRONT END IS NOT WIRED INTO THE CONSOLE**
+
+**Found 2026-09-04 while tracing why `GEOM.DEPTHQUANT` has no consumer.** The
+answer is not that one block was forgotten. It is that **nineteen of the twenty
+geometry blocks are not in the shell at all.**
+
+`zhao_shell_top.sv` instantiates exactly one of them:
+
+    WIRED:      zhao_geom_bin_pipe
+
+    NOT WIRED:  arena  assemble  attrsetup  binner  clip  cull  depthquant
+                lod  mat3x4_mul  parambuf  pose_cache  pose_decode  project
+                quat2mat  setup  skin  vdecode  wcache  vertex_arena
+
+`zhao_geom_project` appears in only two files in the whole tree:
+`zhao_geom_cull.sv` (a mention) and `zhao_prod_top.sv` — and the production top
+is a **resource** top where no block is connected to any other. The shell's
+`tri_ax_i` comes from `render_ax_i`, a shell **input**.
+
+**So the console today renders from screen-space triangles handed to it from
+outside.** command → (external triangles) → binner → tile pipeline → raster →
+framebuffer → video. Everything from a vertex to a triangle is a set of verified
+blocks sitting beside the machine rather than in it.
+
+### Why this matters more than any single block
+
+* It is why `GEOM.ASSEMBLE` (audit R1) and `GEOM.DEPTHQUANT` (audit R6) have no
+  consumers. They are not two loose ends — they are two of nineteen, and
+  wiring either one alone would connect it to nothing.
+* **D1's 85.62 MHz is a measurement of the back end only.** Every composed fit
+  so far has fitted a shell with no geometry front end in it. The number is
+  honest for what it measured and it is not the console's number.
+* The audit's finding that "`tri_ax_i` is driven only from a harness" was
+  recorded per-block. Stated once, at the top level, it is a different and
+  larger fact.
+
+### What this entry does NOT claim
+
+It does not say the blocks are wrong — most are UNIT_VERIFIED against oracles.
+It does not say the composition is hard; the seams are contracted. And it does
+not set a priority: **D1 still comes first**, because adding nineteen blocks to
+a shell that is 14 MHz short of target would make attribution impossible, and
+D3's fit-top split exists precisely so that composition can be measured in
+controlled steps rather than as one before-after mystery.
+
+**It is here so that "finish the console" has a name for the largest thing still
+missing**, instead of that fact being rediscovered one unwired block at a time.
+
+---
+
 ## SWEEP 2026-09-04 — decision-bearing documents that were not indexed
 
 A sweep of `reports/` against this file found **70 of 98 files unindexed**. Most
