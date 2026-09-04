@@ -77,6 +77,48 @@ turn a spin into an elegant wheel, because the fault was the shape changing duri
 the rotation, not the interpolation. Gates catch regressions; only looking catches
 wrongness.
 
+## A broken instrument lies in ONE direction
+
+Added 2026-09-04, after nine separate measuring tools were found wrong in a
+single session. Every one of them had the same property, and it is the reason
+none had been caught:
+
+**The defect always made the answer look BETTER, SMALLER or SIMPLER than the
+truth.** A parser that silently drops what it cannot match reports fewer
+problems. A self-check whose pattern matches nothing reports "no silent drops".
+A rule written after the fit it governs reports a pass. A `status` field holding
+the last *good* run reports `ok`. A count compared against a stale measurement
+reports no change.
+
+That asymmetry is the whole lesson. **Nobody audits good news.** A tool that
+reported too many problems would have been fixed the first afternoon; a tool
+that reports too few is trusted for weeks. So:
+
+1. **A number that is exactly zero is a broken instrument until proven
+   otherwise.** "0 counters match their port" was a regex with no provision for
+   a width bracket. "0 arrays declared" was `^` without `re.MULTILINE`. Precision
+   at zero is a tell, not a result.
+2. **A detector that has not been shown to FIRE has not been tested.** Break it
+   on purpose, watch the alarm go off, put it back. Three tools here now assert
+   at import that their own pattern still matches a known-good example, because
+   one self-check was written with a `` that a heredoc turned into a literal
+   backspace — it matched nothing and printed reassurance for its whole life.
+3. **Check the heuristic against a case you can verify by hand before believing
+   the total.** A block-id-to-module rule said 25 blocks were unbuilt; three of
+   them existed under a name the rule did not construct.
+4. **Never compare a current file to an old measurement.** Declared-versus-
+   measured is a real check; declared-today versus measured-a-week-ago is a
+   different question wearing the same shape, and it produces confident
+   nonsense.
+5. **When a tool explains itself, the explanation is a claim too.** A rule that
+   fired saying "state that belongs in memories is in flip-flops" was right that
+   the ceiling was breached and wrong about why — the payload was already in 13
+   M10Ks. A wrong diagnosis attached to a right alarm sends the next person to
+   reshape something that is already correct.
+
+This is the same law as *measurement never trumps looking*, one level up: the
+tool that does the measuring is itself a thing that has to be looked at.
+
 ## Instructions are not delivered until they are read
 
 Owner direction was posted four times because it kept not reaching the working
