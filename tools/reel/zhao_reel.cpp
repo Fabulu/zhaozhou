@@ -1060,10 +1060,6 @@ struct SceneSubject {
   // drives BOTH genuine spatial point lighting and its depth-tested marker.
   // All ordinary subjects leave this false and retain their selected rig.
   bool creature_moving_light = false;
-  // Direction 28 ADDITIVE-light prototype subject flag. Sets the compositor's
-  // g_creature_additive_light gate (default OFF everywhere else) and gives the
-  // moving sources their authored additive colours for this subject only.
-  bool creature_additive_light = false;
   // Direction 29: the clip's SUN -- one named, positioned, emitting point
   // source above and to one side, tracking the creature. Null = no sun (the
   // moving-light subjects keep their own four-source rigs).
@@ -2154,31 +2150,48 @@ constexpr int32_t kZixxSunOuterMm = 78000;
 // to one flank -- never behind the animal relative to the shot. Colour is the
 // clip's MOOD; dominant channel strong, complement suppressed, judged by eye
 // at native 384x240 (art law: these numbers are knobs, not derivations).
-constexpr ZixxSunSpec kZixxSunIdle       {15556,  kZixxSunHeightMm, 15556,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(775), fxm(500),  fxm(60), fxm(620), fxm(330), fxm(30)};   // golden morning
-constexpr ZixxSunSpec kZixxSunWalk       {-12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(60),  fxm(280),  fxm(900), fxm(45),  fxm(150), fxm(540)};  // azure day
-constexpr ZixxSunSpec kZixxSunRun        {12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(900), fxm(340),  fxm(30), fxm(600), fxm(195), fxm(15)};   // hot orange
-constexpr ZixxSunSpec kZixxSunLook       {12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(525), fxm(90),   fxm(840), fxm(360), fxm(45),  fxm(560)};  // violet
-constexpr ZixxSunSpec kZixxSunBalance    {14142,  kZixxSunHeightMm, 16853,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(50),  fxm(680),  fxm(650), fxm(30),  fxm(390), fxm(450)};  // teal
-constexpr ZixxSunSpec kZixxSunTaunt      {21666,  kZixxSunHeightMm, -3820,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(800), fxm(60),   fxm(680), fxm(560), fxm(25),  fxm(380)};  // magenta
-constexpr ZixxSunSpec kZixxSunSlowTaunt  {11000,  kZixxSunHeightMm, 19053,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(745), fxm(215),  fxm(340), fxm(450), fxm(120), fxm(210)};  // rose dusk
-constexpr ZixxSunSpec kZixxSunJumpOne    {13544,  kZixxSunHeightMm, 17336,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(340), fxm(840),  fxm(60), fxm(210), fxm(500), fxm(45)};   // spring lime
-constexpr ZixxSunSpec kZixxSunJumpMulti  {-13544,  kZixxSunHeightMm, 17336,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(930), fxm(215),  fxm(25), fxm(620), fxm(150), fxm(15)};   // sunset red-orange
-constexpr ZixxSunSpec kZixxSunAttack     {14142,  kZixxSunHeightMm, 16853,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(960), fxm(60),   fxm(40), fxm(660), fxm(30),  fxm(30)};   // crimson
-constexpr ZixxSunSpec kZixxSunHit        {3820,  kZixxSunHeightMm, 21666,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(90),  fxm(340),  fxm(800), fxm(60),  fxm(195), fxm(510)};  // steel blue
-constexpr ZixxSunSpec kZixxSunDamage     {21666,  kZixxSunHeightMm, 3820,   kZixxSunInnerMm, kZixxSunOuterMm, fxm(840), fxm(400),  fxm(40), fxm(540), fxm(240), fxm(15)};   // ember amber
-constexpr ZixxSunSpec kZixxSunKnockdown  {4574,  kZixxSunHeightMm, 21518,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(430), fxm(75),   fxm(775), fxm(270), fxm(45),  fxm(510)};  // bruise violet
-constexpr ZixxSunSpec kZixxSunFall       {-14142,  kZixxSunHeightMm, 16853,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(185), fxm(495),  fxm(870), fxm(120), fxm(300), fxm(560)};  // ice blue
-constexpr ZixxSunSpec kZixxSunHitFloor   {21518,  kZixxSunHeightMm, 4574,   kZixxSunInnerMm, kZixxSunOuterMm, fxm(800), fxm(430),  fxm(75), fxm(510), fxm(255), fxm(30)};   // dust orange
-constexpr ZixxSunSpec kZixxSunSaltoDummy {11000,  kZixxSunHeightMm, 19053,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(650), fxm(710),  fxm(50), fxm(390), fxm(420), fxm(30)};   // chartreuse gold
-constexpr ZixxSunSpec kZixxSunSaltoFly   {-11000,  kZixxSunHeightMm, 19053,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(40),  fxm(215),  fxm(930), fxm(30),  fxm(120), fxm(630)};  // deep azure
-constexpr ZixxSunSpec kZixxSunSaltoSix   {16853,  kZixxSunHeightMm, 14142,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(840), fxm(620),  fxm(60), fxm(540), fxm(360), fxm(30)};   // gold
-constexpr ZixxSunSpec kZixxSunSaltoNine  {-16853,  kZixxSunHeightMm, 14142,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(870), fxm(90),   fxm(465), fxm(600), fxm(45),  fxm(300)};  // hot pink
-constexpr ZixxSunSpec kZixxSunDeath      {21916,  kZixxSunHeightMm, 1917,   kZixxSunInnerMm, kZixxSunOuterMm, fxm(900), fxm(40),   fxm(25), fxm(600), fxm(15),  fxm(15)};   // deep red
-constexpr ZixxSunSpec kZixxSunDeath2     {3062,  kZixxSunHeightMm, 21785,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(340), fxm(370),  fxm(840), fxm(210), fxm(225), fxm(540)};  // moonlight
+// Direction 30 calmed the whole table: the first authoring lifted the animal
+// +60..+85 mean counts with near-equal R/G on warm suns (the mult gains rode
+// the green-rich pigment and diluted every hue toward white -- the owner saw
+// "one super bright normal sun, no color"). Adds are cut to ~40% and mults to
+// ~50% of Direction 29, complements near zero, so the ADD carries a nameable
+// hue and pigment/form dominate again (reference: Archive Generation 18).
+constexpr ZixxSunSpec kZixxSunIdle       {15556,  kZixxSunHeightMm, 15556,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(240), fxm(70), fxm(12), fxm(150), fxm(65), fxm(5)};  // golden morning
+constexpr ZixxSunSpec kZixxSunWalk       {-12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(18), fxm(80), fxm(280), fxm(10), fxm(35), fxm(135)};  // azure day
+constexpr ZixxSunSpec kZixxSunRun        {12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(280), fxm(90), fxm(10), fxm(150), fxm(42), fxm(3)};  // hot orange
+constexpr ZixxSunSpec kZixxSunLook       {12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(160), fxm(25), fxm(260), fxm(85), fxm(10), fxm(140)};  // violet
+constexpr ZixxSunSpec kZixxSunBalance    {14142,  kZixxSunHeightMm, 16853,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(18), fxm(250), fxm(240), fxm(8), fxm(115), fxm(140)};  // teal
+constexpr ZixxSunSpec kZixxSunTaunt      {21666,  kZixxSunHeightMm, -3820,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(250), fxm(18), fxm(210), fxm(140), fxm(6), fxm(95)};  // magenta
+constexpr ZixxSunSpec kZixxSunSlowTaunt  {11000,  kZixxSunHeightMm, 19053,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(230), fxm(60), fxm(105), fxm(110), fxm(27), fxm(50)};  // rose dusk
+constexpr ZixxSunSpec kZixxSunJumpOne    {13544,  kZixxSunHeightMm, 17336,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(105), fxm(260), fxm(18), fxm(48), fxm(125), fxm(9)};  // spring lime
+constexpr ZixxSunSpec kZixxSunJumpMulti  {-13544,  kZixxSunHeightMm, 17336,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(290), fxm(60), fxm(8), fxm(155), fxm(33), fxm(3)};  // sunset red-orange
+constexpr ZixxSunSpec kZixxSunAttack     {14142,  kZixxSunHeightMm, 16853,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(300), fxm(18), fxm(12), fxm(160), fxm(6), fxm(6)};  // crimson
+constexpr ZixxSunSpec kZixxSunHit        {3820,  kZixxSunHeightMm, 21666,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(28), fxm(100), fxm(250), fxm(12), fxm(45), fxm(125)};  // steel blue
+constexpr ZixxSunSpec kZixxSunDamage     {21666,  kZixxSunHeightMm, 3820,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(260), fxm(115), fxm(12), fxm(130), fxm(55), fxm(3)};  // ember amber
+constexpr ZixxSunSpec kZixxSunKnockdown  {4574,  kZixxSunHeightMm, 21518,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(130), fxm(20), fxm(240), fxm(63), fxm(9), fxm(125)};  // bruise violet
+constexpr ZixxSunSpec kZixxSunFall       {-14142,  kZixxSunHeightMm, 16853,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(55), fxm(150), fxm(270), fxm(27), fxm(70), fxm(135)};  // ice blue
+constexpr ZixxSunSpec kZixxSunHitFloor   {21518,  kZixxSunHeightMm, 4574,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(250), fxm(125), fxm(20), fxm(125), fxm(57), fxm(6)};  // dust orange
+constexpr ZixxSunSpec kZixxSunSaltoDummy {11000,  kZixxSunHeightMm, 19053,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(200), fxm(220), fxm(15), fxm(90), fxm(100), fxm(6)};  // chartreuse gold
+constexpr ZixxSunSpec kZixxSunSaltoFly   {-11000,  kZixxSunHeightMm, 19053,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(12), fxm(63), fxm(290), fxm(6), fxm(27), fxm(155)};  // deep azure
+constexpr ZixxSunSpec kZixxSunSaltoSix   {16853,  kZixxSunHeightMm, 14142,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(260), fxm(185), fxm(18), fxm(135), fxm(78), fxm(6)};  // gold
+constexpr ZixxSunSpec kZixxSunSaltoNine  {-16853,  kZixxSunHeightMm, 14142,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(270), fxm(27), fxm(140), fxm(145), fxm(11), fxm(72)};  // hot pink
+constexpr ZixxSunSpec kZixxSunDeath      {21916,  kZixxSunHeightMm, 1917,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(280), fxm(12), fxm(8), fxm(150), fxm(4), fxm(4)};  // deep red
+constexpr ZixxSunSpec kZixxSunDeath2     {3062,  kZixxSunHeightMm, 21785,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(105), fxm(115), fxm(260), fxm(48), fxm(51), fxm(130)};  // moonlight
 
-// Direction 29 revert switch (reel-side; the silicon-side revert is the
+// Direction 29/30 revert switch (reel-side; the silicon-side revert is the
 // g_creature_additive_light gate plus the CREATURE.LIGHT parameters).
+// ZIXX_SUNS=off restores the PRE-SUNS bank byte-identically: the clip suns go
+// dark AND additive-normal mode drops, so the moving-light clip renders its
+// original multiplicative-only form (proof: evidence-gateoff-identity in the
+// suns-calmed run).
 bool g_zixx_suns_enabled = true;
+// Direction 30: the additive term is the NORMAL lighting mode for every
+// animation -- not a per-subject experiment a future pass must remember to
+// raise. The library gate zc::g_creature_additive_light itself stays
+// default-OFF (the silicon-cost revert path, pending the ALM/M10K sweep);
+// the reel raises it around every creature compose that carries point
+// sources. Cleared together with the suns by ZIXX_SUNS=off.
+bool g_zixx_additive_normal = true;
 
 void sample_zixx_clip_sun(const ZixxSunSpec& sun, const zc::CreatureInstance& inst,
                           zc::CreaturePointLight& out) {
@@ -2205,7 +2218,6 @@ struct CreatureReelCtx {
   uint32_t gibs_in_view = 0;
   bool force_micro = false;
   bool moving_light = false;
-  bool additive_light = false;  // Direction 28 prototype gate, subject-scoped
   // Direction 29 clip sun: when true, moving_sources[0] holds the subject's
   // one sun and the additive gate is raised for this subject's compose only.
   bool sun_light = false;
@@ -2370,7 +2382,8 @@ constexpr int32_t kOrangeGainB = 2621;       // 0.04
 //   * The additive term carries the red READ on the green body (pigment has
 //     no red for a multiply to find); the multiplicative red still lights the
 //     red-rich eye, crown and pink stripe, which is exactly right.
-// Consumed only by the additive subject; the published clip keeps kOrange*.
+// Direction 30: additive is normal, so the moving-light clip carries the
+// red source; ZIXX_SUNS=off reverts it to kOrange* (the pre-suns clip).
 constexpr int32_t kRedGainR = 104858;        // 1.60 -- blazes the eye/pink/crown
 constexpr int32_t kRedGainG = 7864;          // 0.12 -- a red lamp must NOT pump green
 constexpr int32_t kRedGainB = 1966;          // 0.03
@@ -2503,8 +2516,11 @@ void draw_zixx_moving_source_markers(const CreatureReelCtx& c, uint8_t* rgb,
   const zref::render::Viewport viewport{0, 0, w, h};
   for (uint32_t si = 0; si < kZixxMovingSourceCount; ++si) {
     const zc::CreaturePointLight& src = c.moving_sources[si];
-    const uint8_t* tint = c.additive_light ? kZixxMovingSourceMarkerAdditive[si]
-                                           : kZixxMovingSourceMarker[si];
+    // Direction 30: additive is the normal mode, so the orbs wear the
+    // additive palette (the red orb for the red-emitting orbit) unless the
+    // whole look is reverted to the pre-suns bank.
+    const uint8_t* tint = g_zixx_additive_normal ? kZixxMovingSourceMarkerAdditive[si]
+                                                 : kZixxMovingSourceMarker[si];
     const zref::render::ProjOut p = zref::render::project_vertex(
         c.vp, viewport, zref::fx16{src.world_x}, zref::fx16{src.world_y},
         zref::fx16{src.world_z}, nullptr);
@@ -2652,13 +2668,13 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       zc::g_creature_light_rig = &zc::kCreatureLightMovingInspection;
       zc::g_creature_point_lights = c.moving_sources;
       zc::g_creature_point_light_count = kZixxMovingSourceCount;
-      zc::g_creature_additive_light = c.additive_light;  // Direction 28 gate
+      zc::g_creature_additive_light = g_zixx_additive_normal;  // Direction 30
     } else if (c.sun_light) {
       // Direction 29: the clip's sun joins the selected rig (Cool Cross stays
       // underneath); emission is ON through the same gate, scoped and restored.
       zc::g_creature_point_lights = c.moving_sources;
       zc::g_creature_point_light_count = 1;
-      zc::g_creature_additive_light = true;
+      zc::g_creature_additive_light = g_zixx_additive_normal;
     }
     zc::compose_creatures(rgb, depth, w, h, c.vp, insts,
                           c.dummy != nullptr ? 2 : 1, *c.poses, nullptr);
@@ -3012,7 +3028,6 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.poses = &dog_poses;
     cr_ctx.force_micro = sub.creature_force_micro;
     cr_ctx.moving_light = sub.creature_moving_light;
-    cr_ctx.additive_light = sub.creature_additive_light;
     cr_ctx.sun_light =
         sub.sun != nullptr && g_zixx_suns_enabled && !sub.creature_moving_light;
     if (sub.dummy) {
@@ -3351,7 +3366,7 @@ int render_scene(const SceneSubject& sub) {
                                   cr_ctx.moving_sources[kZixxMovingSourceWarm]);
         sample_zixx_moving_colour_sources(f, sub.frames, dog_inst,
                                           cr_ctx.moving_sources,
-                                          sub.creature_additive_light);
+                                          g_zixx_additive_normal);
         apply_zixx_ml_solo(cr_ctx.moving_sources);
       }
       // Direction 29: the clip sun tracks the terrain-snapped instance, so
@@ -4715,26 +4730,10 @@ SceneSubject subject_zixx_moving_light() {
   s.cam_k = 280000;
   s.cam_dist = 9;
   s.note = "FINAL INSPECTION: held signature-S under dim sunlight; four visible "
-           "world-space local sources -- the warm inspection lamp plus blue, "
-           "orange and green -- move on their own authored paths, drive the real "
-           "posed-vertex light, and mix where their pools intersect";
-  return s;
-}
-
-// Direction 28 ADDITIVE-light prototype: byte-for-byte the published
-// moving-light subject except that the additive gate is on, so each coloured
-// source also EMITS its authored additive colour scaled by its own
-// lambert*attenuation. The published clip is the side-by-side comparison; this
-// subject exists so the owner can judge whether an additive term reads as
-// light (and whether red can finally cross the green body as red).
-SceneSubject subject_zixx_moving_light_additive() {
-  SceneSubject s = subject_zixx_moving_light();
-  s.name = "zixxtrixx-moving-light-additive";
-  s.creature_additive_light = true;
-  s.note = "EXPERIMENTAL (Direction 28): the published moving-light inspection "
-           "with the prototype per-channel ADDITIVE point-light term enabled -- "
-           "the orange orbit emits true red across the green body, the case "
-           "multiplicative transport cannot show";
+           "world-space local sources -- the warm inspection lamp plus blue, red "
+           "and green -- move on their own authored paths, drive the real "
+           "posed-vertex light with the normal per-channel additive emission "
+           "(Direction 30), and mix where their pools intersect";
   return s;
 }
 
@@ -6020,9 +6019,13 @@ int main(int argc, char** argv) {
   // byte-identically (proven by CRC in the suns run). Unset or any other
   // value leaves the clip suns on -- the shipping default.
   if (const char* suns = std::getenv("ZIXX_SUNS")) {
-    if (std::string(suns) == "off") g_zixx_suns_enabled = false;
-    std::fprintf(stderr, "ZIXX_SUNS=%s (Direction 29 clip suns %s)\n", suns,
-                 g_zixx_suns_enabled ? "on" : "OFF");
+    if (std::string(suns) == "off") {
+      g_zixx_suns_enabled = false;
+      g_zixx_additive_normal = false;  // Direction 30: one switch, whole revert
+    }
+    std::fprintf(stderr,
+                 "ZIXX_SUNS=%s (Direction 29/30 clip suns + additive-normal %s)\n",
+                 suns, g_zixx_suns_enabled ? "on" : "OFF");
   }
   // V11/V12 bounded owner-choice lane. The selector changes only the generic
   // creature preview rig; baseline is still the default when the variable is
@@ -6139,8 +6142,6 @@ int main(int argc, char** argv) {
   if (wanted("zixxtrixx-idle")) rc |= render_scene(subject_zixx_idle());
   if (wanted("zixxtrixx-moving-light"))
     rc |= render_scene(subject_zixx_moving_light());
-  if (wanted("zixxtrixx-moving-light-additive"))
-    rc |= render_scene(subject_zixx_moving_light_additive());
   if (wanted("zixxtrixx-walk")) rc |= render_scene(subject_zixx_walk());
   if (wanted("zixxtrixx-attack")) rc |= render_scene(subject_zixx_attack());
   if (wanted("zixxtrixx-spring-side")) rc |= render_scene(subject_zixx_spring_side());
