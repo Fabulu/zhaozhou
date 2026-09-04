@@ -135,7 +135,74 @@ module tb_zhao_shell (
   input  logic [25:0] peek_waddr,
   output logic [15:0] peek_data,
   output logic        model_error,
-  output logic [5:0]  model_err_kind   // {mrs,protocol,refresh,trc,trp,trcd}
+  output logic [5:0]  model_err_kind,  // {mrs,protocol,refresh,trc,trp,trcd}
+
+  // ---- THE RENDER PORT, EXPOSED 2026-09-04 (docket D19e) ------------------
+  // Until now every one of these was tied to a constant here and the bench's
+  // own header said it "does not draw". That made zhao_shell_top's composition
+  // of geometry and raster the only part of the console that was elaborated,
+  // fitted and timed but NEVER SIMULATED -- and it is the part D1 spent eleven
+  // rounds closing timing on.
+  //
+  // They are exposed rather than driven from inside, so a bench that does not
+  // draw still names every pin (the discipline the tie-offs were protecting)
+  // and a bench that does draw gets them without a second wrapper.
+  input  logic               render_frame_begin_i,
+  input  logic               render_frame_end_i,
+  input  logic [5:0]         render_grid_w_i,
+  input  logic [5:0]         render_grid_h_i,
+  input  logic               render_tri_valid_i,
+  output logic               render_tri_ready_o,
+  input  logic signed [22:0] render_kx0_i,
+  input  logic signed [22:0] render_ky0_i,
+  input  logic signed [47:0] render_kc0_i,
+  input  logic signed [22:0] render_kx1_i,
+  input  logic signed [22:0] render_ky1_i,
+  input  logic signed [47:0] render_kc1_i,
+  input  logic signed [22:0] render_kx2_i,
+  input  logic signed [22:0] render_ky2_i,
+  input  logic signed [47:0] render_kc2_i,
+  input  logic [2:0]         render_tl_i,
+  input  logic signed [20:0] render_ax_i,
+  input  logic signed [20:0] render_ay_i,
+  input  logic signed [20:0] render_bx_i,
+  input  logic signed [20:0] render_by_i,
+  input  logic signed [20:0] render_cx_i,
+  input  logic signed [20:0] render_cy_i,
+  input  logic signed [11:0] render_min_x_i,
+  input  logic signed [11:0] render_max_x_i,
+  input  logic signed [11:0] render_min_y_i,
+  input  logic signed [11:0] render_max_y_i,
+  input  logic [15:0]        render_src_id_i,
+
+  // The JOB words that say what a covered fragment becomes. Tied to zero here
+  // until 2026-09-04 alongside the triangle port, which made "the tile was
+  // written" indistinguishable from "the tile was untouched" -- a fill of zero
+  // into memory that is already zero writes nothing observable.
+  input  logic [63:0]        render_fill_word_i,
+  input  logic [63:0]        render_clear_word_i,
+  input  logic [31:0]        render_state_i,
+  input  logic [7:0]         render_src_a_i,
+  input  logic [23:0]        render_texel_rgb_i,
+  input  logic [7:0]         render_texel_a_i,
+  input  logic [7:0]         render_texel_idx_i,
+
+  // ---- render OBSERVABLES ------------------------------------------------
+  // The shell has always emitted these and the wrapper has always discarded
+  // them with `()`. Bringing them out is what turns "nothing landed in memory"
+  // from a guess into a measurement: a triangle that produced zero pixels and
+  // one that produced pixels nobody wrote are different faults with the same
+  // symptom.
+  output logic        render_busy_o,
+  output logic [31:0] render_pixels_o,
+  output logic [31:0] render_bursts_o,
+  output logic [31:0] render_issued_words_o,
+  output logic [31:0] render_retired_words_o,
+  output logic        render_drained_o,
+  output logic        render_fatal_o,
+  output logic        render_stream_error_o,
+  output logic        render_overflow_o,
+  output logic        render_fragment_error_o
 );
 
   logic        phy_cs_n, phy_ras_n, phy_cas_n, phy_we_n, phy_dq_oe;
@@ -182,33 +249,38 @@ module tb_zhao_shell (
     .phy_dq_oe_o(phy_dq_oe),
     .phy_dqm_o  (phy_dqm),
     // ---- RENDER, tied off ------------------------------------------------
-    // This bench drives the shell CMD/MEM/VIDEO path and does not draw. The
-    // render port is held quiet rather than left dangling, so a future bench
-    // that DOES draw has to name every pin it uses instead of inheriting an X.
-    .render_frame_begin_i(1'b0), .render_frame_end_i(1'b0),
-    .render_grid_w_i(6'd0), .render_grid_h_i(6'd0),
-    .render_tri_valid_i(1'b0), .render_tri_ready_o(),
-    .render_kx0_i(23'sd0), .render_ky0_i(23'sd0), .render_kc0_i(48'sd0),
-    .render_kx1_i(23'sd0), .render_ky1_i(23'sd0), .render_kc1_i(48'sd0),
-    .render_kx2_i(23'sd0), .render_ky2_i(23'sd0), .render_kc2_i(48'sd0),
-    .render_tl_i(3'd0),
-    .render_ax_i(21'sd0), .render_ay_i(21'sd0),
-    .render_bx_i(21'sd0), .render_by_i(21'sd0),
-    .render_cx_i(21'sd0), .render_cy_i(21'sd0),
-    .render_min_x_i(12'sd0), .render_max_x_i(12'sd0),
-    .render_min_y_i(12'sd0), .render_max_y_i(12'sd0),
-    .render_src_id_i(16'd0),
-    .render_fill_word_i(64'd0), .render_clear_word_i(64'd0),
-    .render_state_i(32'd0), .render_src_a_i(8'd0),
-    .render_texel_rgb_i(24'd0), .render_texel_a_i(8'd0), .render_texel_idx_i(8'd0),
+    // The render port is now BROUGHT OUT (docket D19e) rather than tied to
+    // zero here. A bench that does not draw holds these quiet from the C++
+    // side, which keeps the original discipline -- every pin named, none left
+    // dangling to inherit an X -- while making the shell's geometry/raster
+    // composition simulable for the first time.
+    .render_frame_begin_i(render_frame_begin_i), .render_frame_end_i(render_frame_end_i),
+    .render_grid_w_i(render_grid_w_i), .render_grid_h_i(render_grid_h_i),
+    .render_tri_valid_i(render_tri_valid_i), .render_tri_ready_o(render_tri_ready_o),
+    .render_kx0_i(render_kx0_i), .render_ky0_i(render_ky0_i), .render_kc0_i(render_kc0_i),
+    .render_kx1_i(render_kx1_i), .render_ky1_i(render_ky1_i), .render_kc1_i(render_kc1_i),
+    .render_kx2_i(render_kx2_i), .render_ky2_i(render_ky2_i), .render_kc2_i(render_kc2_i),
+    .render_tl_i(render_tl_i),
+    .render_ax_i(render_ax_i), .render_ay_i(render_ay_i),
+    .render_bx_i(render_bx_i), .render_by_i(render_by_i),
+    .render_cx_i(render_cx_i), .render_cy_i(render_cy_i),
+    .render_min_x_i(render_min_x_i), .render_max_x_i(render_max_x_i),
+    .render_min_y_i(render_min_y_i), .render_max_y_i(render_max_y_i),
+    .render_src_id_i(render_src_id_i),
+    .render_fill_word_i(render_fill_word_i), .render_clear_word_i(render_clear_word_i),
+    .render_state_i(render_state_i), .render_src_a_i(render_src_a_i),
+    .render_texel_rgb_i(render_texel_rgb_i), .render_texel_a_i(render_texel_a_i),
+    .render_texel_idx_i(render_texel_idx_i),
     .render_fb_base_i(27'd0), .render_fb_stride_i(16'd0),
     // Driven by the bench now -- see the port comment above.
     .fb_writer_i(fb_writer_i),
-    .render_drain_done_o(), .render_busy_o(),
-    .render_pixels_o(), .render_bursts_o(),
-    .render_stream_error_o(), .render_overflow_o(), .render_fragment_error_o(),
-    .render_drained_o(), .render_fatal_o(),
-    .render_issued_words_o(), .render_retired_words_o(),
+    .render_drain_done_o(), .render_busy_o(render_busy_o),
+    .render_pixels_o(render_pixels_o), .render_bursts_o(render_bursts_o),
+    .render_stream_error_o(render_stream_error_o), .render_overflow_o(render_overflow_o),
+    .render_fragment_error_o(render_fragment_error_o),
+    .render_drained_o(render_drained_o), .render_fatal_o(render_fatal_o),
+    .render_issued_words_o(render_issued_words_o),
+    .render_retired_words_o(render_retired_words_o),
 
     .phy_dq_i   (phy_dq_i)
   );

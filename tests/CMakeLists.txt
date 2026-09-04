@@ -4873,6 +4873,32 @@ verilate(demo_duo_markers
           ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
           ${CMAKE_CURRENT_SOURCE_DIR}/shell/tb_zhao_shell.sv)
 
+# THE FIRST TEST THAT DRAWS THROUGH zhao_shell_top (docket D19e, 2026-09-04).
+# Until this file existed, `render_tri_valid_i` was driven to 1'b0 tree-wide
+# and the shell's composition of geometry and raster -- the path D1 spent
+# eleven rounds closing 100 MHz on -- was elaborated, fitted and timed but
+# never once simulated.
+#
+# NOT a picture test: render_pipe_directed already drives zhao_geom_bin_pipe
+# and the whole raster chain against zref and proves the arithmetic. What only
+# this path can see is the SHELL'S OWN WIRING, which is invisible to every
+# block-level test and to the fitter, which analyses delay and not meaning.
+add_executable(test_shell_draw_directed shell/shell_draw_directed.cpp)
+target_link_libraries(test_shell_draw_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_shell_draw_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell)
+verilate(test_shell_draw_directed
+  PREFIX Vtb_zhao_shell TOP_MODULE tb_zhao_shell
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_SHELL_RTL}
+          ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/shell/tb_zhao_shell.sv)
+add_test(NAME shell_draw_directed COMMAND test_shell_draw_directed)
+set_tests_properties(shell_draw_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # THE PHASE-2 GATE: two controllers move independent 2D markers in Duo,
 # 600 capture-exact marker frames (1,202 displayed frames at the machine's
 # sustainable cadence) on the full machine — an executable ctest. ~30 min

@@ -177,6 +177,12 @@ class ShellHarness {
     // A bench that draws must set this to 1 BEFORE the renderer issues, or
     // the shell's route tripwire will correctly reject an ENGINE0 burst.
     top.fb_writer_i = 0;
+    // The render port, brought out of tb_zhao_shell on 2026-09-04 (docket
+    // D19e). Held quiet HERE rather than tied to zero in the wrapper, so a
+    // bench that does not draw still names every pin -- the discipline the old
+    // tie-offs existed for -- and a bench that does draw simply stops calling
+    // this and uses the helpers below.
+    render_quiet();
     top.eval();
     for (int i = 0; i < cycles; ++i) {
       // clock all domains under reset
@@ -217,6 +223,120 @@ class ShellHarness {
   // Post-step, the collectors hold everything observed so far; tick_seen()
   // reports a tick observed in the LAST step (the scenario pumps on it).
   bool tick_seen_last_step = false;
+
+  // -------------------------------------------------------- the render port --
+  // Docket D19e: until 2026-09-04 nothing in the tree drove `render_tri_valid_i`
+  // to anything but zero, so zhao_shell_top's composition of geometry and
+  // raster was elaborated, fitted and TIMED but never simulated. These helpers
+  // exist so that stops being true.
+  //
+  // They drive the shell's OWN port, not the bin pipe's -- `render_pipe_directed`
+  // already exercises `zhao_geom_bin_pipe` directly and proves the arithmetic.
+  // What only this path can catch is the SHELL'S WIRING of it.
+
+  /** Every render input at its idle value. The state a non-drawing bench sits in. */
+  void render_quiet() {
+    top.render_frame_begin_i = 0;
+    top.render_frame_end_i = 0;
+    top.render_grid_w_i = 0;
+    top.render_grid_h_i = 0;
+    top.render_tri_valid_i = 0;
+    top.render_kx0_i = 0;
+    top.render_ky0_i = 0;
+    top.render_kc0_i = 0;
+    top.render_kx1_i = 0;
+    top.render_ky1_i = 0;
+    top.render_kc1_i = 0;
+    top.render_kx2_i = 0;
+    top.render_ky2_i = 0;
+    top.render_kc2_i = 0;
+    top.render_tl_i = 0;
+    top.render_ax_i = 0;
+    top.render_ay_i = 0;
+    top.render_bx_i = 0;
+    top.render_by_i = 0;
+    top.render_cx_i = 0;
+    top.render_cy_i = 0;
+    top.render_min_x_i = 0;
+    top.render_max_x_i = 0;
+    top.render_min_y_i = 0;
+    top.render_max_y_i = 0;
+    top.render_src_id_i = 0;
+    top.render_fill_word_i = 0;
+    top.render_clear_word_i = 0;
+    top.render_state_i = 0;
+    top.render_src_a_i = 0;
+    top.render_texel_rgb_i = 0;
+    top.render_texel_a_i = 0;
+    top.render_texel_idx_i = 0;
+  }
+
+  /** One triangle, in exactly the shape GEOM.SETUP emits and the binner reads. */
+  struct RenderTri {
+    int32_t kx[3] = {0, 0, 0};
+    int32_t ky[3] = {0, 0, 0};
+    int64_t kc[3] = {0, 0, 0};
+    uint8_t tl = 0;  // bit i = edge i is top-left, same order as the binner
+    int32_t ax = 0, ay = 0, bx = 0, by = 0, cx = 0, cy = 0;
+    int32_t min_x = 0, max_x = 0, min_y = 0, max_y = 0;
+    uint16_t src_id = 0;
+  };
+
+  /** Open a render frame over a grid_w x grid_h tile grid. */
+  void render_frame_begin(uint8_t grid_w, uint8_t grid_h) {
+    top.render_grid_w_i = grid_w;
+    top.render_grid_h_i = grid_h;
+    top.render_frame_begin_i = 1;
+    step();
+    top.render_frame_begin_i = 0;
+  }
+
+  void render_frame_end() {
+    top.render_frame_end_i = 1;
+    step();
+    top.render_frame_end_i = 0;
+  }
+
+  /**
+   * Offer one triangle and hold it until the binner accepts.
+   * Returns false if it never does -- a HANG, which is a different failure
+   * from a wrong picture and is reported as one.
+   */
+  bool render_offer(const RenderTri& t, int guard_max = 200000) {
+    top.render_kx0_i = (uint32_t)t.kx[0];
+    top.render_ky0_i = (uint32_t)t.ky[0];
+    top.render_kc0_i = (uint64_t)t.kc[0];
+    top.render_kx1_i = (uint32_t)t.kx[1];
+    top.render_ky1_i = (uint32_t)t.ky[1];
+    top.render_kc1_i = (uint64_t)t.kc[1];
+    top.render_kx2_i = (uint32_t)t.kx[2];
+    top.render_ky2_i = (uint32_t)t.ky[2];
+    top.render_kc2_i = (uint64_t)t.kc[2];
+    top.render_tl_i = t.tl;
+    top.render_ax_i = (uint32_t)t.ax;
+    top.render_ay_i = (uint32_t)t.ay;
+    top.render_bx_i = (uint32_t)t.bx;
+    top.render_by_i = (uint32_t)t.by;
+    top.render_cx_i = (uint32_t)t.cx;
+    top.render_cy_i = (uint32_t)t.cy;
+    top.render_min_x_i = (uint32_t)t.min_x;
+    top.render_max_x_i = (uint32_t)t.max_x;
+    top.render_min_y_i = (uint32_t)t.min_y;
+    top.render_max_y_i = (uint32_t)t.max_y;
+    top.render_src_id_i = t.src_id;
+    top.render_tri_valid_i = 1;
+    for (int g = 0; g < guard_max; ++g) {
+      top.eval();
+      const bool took = top.render_tri_ready_o != 0;
+      step();
+      if (took) {
+        top.render_tri_valid_i = 0;
+        return true;
+      }
+    }
+    top.render_tri_valid_i = 0;
+    return false;
+  }
 
   void step() {
     tick_seen_last_step = false;
