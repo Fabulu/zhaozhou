@@ -324,9 +324,20 @@ module zhao_terrain_residency_v2 #(
   generate
     for (gw = 0; gw < int'(WAYS); gw++) begin : g_port
       always_ff @(posedge clk) begin
-        // Read every cycle, no read enable: during the sweep `s0_v` is low so
-        // key_q/stat_q are not consulted, and an unconditional read is the
-        // shape that infers most cleanly.
+        // Read every cycle, no read enable: an unconditional read is the shape
+        // that infers most cleanly, and during the sweep the values it lands
+        // are never consulted.
+        //
+        // That is provable rather than observed. Reset sets `sweeping_q <= 1`
+        // and `s0_v <= 0`; `s0_v` is assigned ONLY inside the non-sweep arm of
+        // the process below, and `sweeping_q` clears only on the sweep's last
+        // set. So `s0_v` holds 0 for every cycle of the sweep, and stage 1 --
+        // the only reader of key_q/stat_q -- is gated on `s0_v`. The garbage
+        // read at whatever `addr_c` happens to be during the sweep cannot
+        // reach an output.
+        //
+        // The old code read only inside that same arm, so this is a change in
+        // when the registers are WRITTEN and not in what is ever observed.
         key_q[gw]  <= g_bank[gw].keyram [addr_c];
         stat_q[gw] <= g_bank[gw].statram[addr_c];
         if (kwe_c[gw]) g_bank[gw].keyram [wr_set_c] <= kwd_c;
