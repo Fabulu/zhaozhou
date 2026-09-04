@@ -110,11 +110,48 @@ check the one property that decides whether a memory can exist at all.
 
     dec_clut565_c = decode16(pal_dat_r[pal_way_c][rsp_idx], FMT_RGB565);
 
-An M10K cannot be read asynchronously. Block RAM inference requires the read
-data to come out of a register, so a flattened `pal_dat_r[{way, idx}]` read in
-`always_comb` **stays in flip-flops** — Quartus will do exactly what it is doing
-now, and the 65,536 registers will not move. Flattening is necessary and not
-sufficient.
+**A first version of this paragraph said "an M10K cannot be read
+asynchronously". That is FALSE, and the counterexample is in this same tree.**
+`zhao_audio_fifo` reads its 65,536-bit `mem` through a bare `assign`:
+
+    assign rd_word = mem[rd_ptr[ADDR_BITS-1:0]];
+
+and measures **7 M10K, 292 registers**. An asynchronously-read array inferred as
+block RAM. So the rule I was about to build a tool on does not hold.
+
+### The actual discriminator: what sits between the read and the first register
+
+Look at what each block does with the value it read.
+
+    audio_fifo   assign rd_word = mem[addr];
+                 ...
+                 pcm_l_o <= rd_word[15:0];      <- register, only a bit-select between
+
+    tmu_pipe     dec_clut565_c = decode16(pal_dat_r[way][idx], FMT_RGB565);
+                                 ^^^^^^^^ a function call, then a mux, THEN a register
+
+An M10K has an **output register**, and Quartus infers block RAM by absorbing the
+consumer's flop into it. That absorption works when the read feeds a register
+with nothing but wiring in between, and fails when combinational logic sits in
+the path. `audio_fifo` hands its read straight to a flop; `tmu_pipe` runs it
+through `decode16()` and a mux first.
+
+**So the blocker is not the `always_comb`, and not the multidimensional shape
+either** — fragrob's multidimensional arrays inferred 13 M10K. It is the
+DECODE between the array and the flop.
+
+### What that changes about the fix, and what it does not
+
+The fix is now specific: **register the raw 16-bit word coming out of
+`pal_dat_r`, and move `decode16` to the cycle after.** That is a smaller and
+better-founded change than "add a pipeline stage", because the register being
+added is the one the M10K provides for free.
+
+**The cost is unchanged, though.** That output register is still a cycle, and it
+still lands on the CLUT path, so everything below about sequencing this with the
+II = 2 work stands exactly as written. Flattening remains necessary — the
+multidimensional shape is a separate risk even if it was not the active blocker
+here.
 
 The real fix therefore has two parts, and the second one costs something:
 
