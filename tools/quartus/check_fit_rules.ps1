@@ -50,6 +50,33 @@ foreach ($name in ($rules.Keys | Sort-Object)) {
         $unmeasured++
         continue
     }
+    # A row can EXIST and carry no numbers. A fit that failed, timed out, or was
+    # killed writes its row with every resource field null, and every rule in
+    # Test-FitRules is guarded by `$null -ne $x` -- so all of them silently pass
+    # and the block is reported PASS in green.
+    #
+    # Measured 2026-09-04: zhao_texture_tmu_pipe reported PASS against a fresh
+    # `max_registers: 12000` while being the one block in the tree holding a
+    # 65,536-bit palette cache in flip-flops (72,824 registers, D19m). Its row
+    # said `status: failed:quartus_fit.exe` with registers null. The gate was
+    # green on the worst block it had.
+    #
+    # A missing measurement is not a pass. It is the same fact as "no recorded
+    # fit" and is now counted with it.
+    # StrictMode rejects reading a property that is ABSENT (not merely null), and
+    # rows differ in which fields they carry, so ask the object rather than the
+    # dot-accessor.
+    $hasNumbers = $false
+    foreach ($f in 'registers', 'alms', 'blockMemoryBits', 'ramBlocks') {
+        $prop = $row.PSObject.Properties[$f]
+        if ($null -ne $prop -and $null -ne $prop.Value) { $hasNumbers = $true; break }
+    }
+    $rowStatus = if ($row.PSObject.Properties['status']) { $row.status } else { '?' }
+    if (-not $hasNumbers) {
+        Write-Host ("  ----  {0}   (row exists but carries NO resource numbers, status '{1}' -- not measured, not passed)" -f $name, $rowStatus) -ForegroundColor DarkGray
+        $unmeasured++
+        continue
+    }
     # @() so an EMPTY result is still countable: PowerShell unrolls a
     # zero-item List to $null and StrictMode then rejects .Count.
     $violations = @(Test-FitRules $row $rules[$name])

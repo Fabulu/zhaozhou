@@ -969,6 +969,31 @@ surprise — but the number itself is still older than the file. A rule declared
 run**, and nothing in either file distinguishes it from one that was evaluated
 and passed.
 
+**CREDIT WHERE IT IS DUE, AND A CORRECTION TO THIS ENTRY'S CLAIM.**
+`tools/quartus/check_fit_rules.ps1` already existed and already reports every
+breach listed above — it reads the same two files, runs no Quartus, and exits 1
+as a gate. **The breaches were not hidden; nobody had run the tool.** What
+`check_rule_freshness.py` adds is only the TIME dimension: a rule newer than the
+fit it governs, and a row older than its own RTL. I should have looked for an
+existing tool before writing half of one.
+
+**And running it found something worse than any breach.** With a fresh
+`max_registers: 12000` added for `zhao_texture_tmu_pipe` (D19m), the gate
+reported:
+
+    PASS  zhao_texture_tmu_pipe
+
+on the one block in the tree holding a 65,536-bit palette cache in flip-flops.
+Its row exists but every resource field is null — `status:
+failed:quartus_fit.exe` — and every rule in `Test-FitRules` is guarded by
+`$null -ne $x`, so all of them passed vacuously. The summary said *"0
+unmeasured"*, because its notion of unmeasured was *no row* rather than *a row
+with no numbers*.
+
+**A gate absent is not a gate passing; neither is a gate with no data.** Fixed:
+a row carrying no resource numbers is now counted as unmeasured and printed with
+its status. 4 pass / 5 FAIL / 0 unmeasured became 3 / 5 / 1.
+
 **This is the third instance of one failure mode**, and the reason it is now a
 tool rather than a third anecdote: the Stop hook that bypassed itself and fired
 exactly once (`CLAUDE.md`), and a port-coverage self-check written with a ``

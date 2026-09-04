@@ -117,6 +117,26 @@ targets:
     sources:
       - fpga/rtl/texture/zhao_texture_bilerp.sv
       - fpga/rtl/texture/zhao_texture_tmu_pipe.sv
+    rules:
+      # D19m, added 2026-09-04. This target had NO rules at all, and the block
+      # measured 72,824 registers against 256 block-memory bits -- a 16 x 256
+      # x 16 palette cache (65,536 bits) sitting in flip-flops, which as memory
+      # is 7 M10K of 553. Nothing caught it because nothing was watching: a
+      # gate absent is not a gate passing.
+      #
+      # 12,000 is chosen to FAIL TODAY ON PURPOSE, the way fragrob's gate did.
+      # The block's legitimate state is the ROB, the pipeline, and the 4,608
+      # bits of tag/valid that are correctly flops -- roughly 7,300. Anything
+      # near 12,000 means the palette is back in registers.
+      max_registers: 12000
+      #
+      # NOT a min_m10k rule. The fix is not "put the arrays in memory": two of
+      # the three MUST stay in flops. `pal_val_r` is read on all sixteen ways in
+      # one cycle as the associative half of the lookup and cleared sixteen at
+      # once; a memory can do neither. Only `pal_dat_r` moves, and it moves by
+      # registering the read so Quartus can absorb the flop into the M10K's
+      # output register (QUARTUS_GOTCHAS 14) -- `decode16()` in that path is
+      # what blocks inference today, not the array's shape.
 
   - top: zhao_texture_palette_res
     sources:
