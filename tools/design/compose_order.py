@@ -125,8 +125,36 @@ for k, v in sorted(geo.items()):
 if not unjustified:
     print("    none")
 
+# Inputs that legitimately arrive from outside the block graph. See
+# design/external_inputs.yml for why the file exists and why every entry needs
+# a reason: without it the orphan count can never reach zero, and a number that
+# can never be zero is a number nobody drives down.
+def _load_external():
+    out = {}
+    try:
+        txt = io.open("design/external_inputs.yml", encoding="utf-8").read()
+    except OSError:
+        return out
+    blk, key = None, None
+    for line in txt.split(chr(10)):
+        if line.startswith("#") or not line.strip():
+            continue
+        m = re.match(r"^  ([A-Z][\w.]*):\s*$", line)
+        if m:
+            blk = m.group(1)
+            out.setdefault(blk, set())
+            continue
+        m = re.match(r"^    (\w+):", line)
+        if m and blk:
+            out[blk].add(m.group(1))
+    return out
+
+
+EXTERNAL = _load_external()
+
 print()
 print("DECLARED INPUTS WITH NO DECLARED PRODUCER UPSTREAM:")
+explained = 0
 orphan = 0
 for k, v in sorted(geo.items()):
     produced = set()
@@ -135,10 +163,15 @@ for k, v in sorted(geo.items()):
             produced |= set(blocks[u]["out_sig"])
     for sig in v["in_sig"]:
         if sig not in produced:
+            if sig in EXTERNAL.get(k, ()):
+                explained += 1
+                continue
             orphan += 1
             print("    %-22s takes %-22s no upstream emits it" % (k, sig))
 if not orphan:
     print("    none")
+print("    (%d unexplained; %d declared external in design/external_inputs.yml)"
+      % (orphan, explained))
 
 print()
 print("SEAMS THAT DO NOT AGREE (A names B downstream, B does not name A upstream):")

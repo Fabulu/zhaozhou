@@ -1,0 +1,64 @@
+# design/external_inputs.yml — inputs that legitimately have no producer BLOCK.
+#
+# ---------------------------------------------------------------------------
+# WHY THIS FILE EXISTS
+# ---------------------------------------------------------------------------
+# `tools/design/compose_order.py` reports every declared input with no declared
+# producer among its upstreams. Across the whole ledger that is 102 inputs, and
+# the number can never reach zero, because some inputs genuinely come from
+# OUTSIDE the block graph: a command word, a register write, asset memory, a
+# clock. The ledger has no vocabulary for that -- `inputs: string[]` and nothing
+# more -- so an honest check had no way to distinguish "nobody wired this" from
+# "this arrives from the world".
+#
+# That is why the check was advisory. A number that can never be zero is a
+# number nobody drives down.
+#
+# So: an input listed here with a REASON is explained, and the probe stops
+# reporting it. Everything else is an unexplained orphan and the count is
+# meaningful. The list starts deliberately short -- only the geometry ones
+# triaged against their contracts on 2026-09-04 -- so the residue is honest
+# rather than silenced.
+#
+# A reason is required and is not decoration. "external" alone would let this
+# file become the place orphans go to be forgotten; naming WHERE the value
+# comes from is what makes a wrong entry visible to the next reader.
+external:
+  GEOM.MESHFETCH:
+    dispatch: >-
+      The caller's instance walk. GEOM.MESHFETCH's contract job packet is
+      { instance_id, mesh_id, descriptor_base, instance_transform_id,
+      lod_target, active_camera_mask } and every field is presented by whoever
+      is walking the visible set -- there is no block upstream of the walk.
+
+  GEOM.ASSEMBLE:
+    index_stream: >-
+      Asset memory. The block answers its own `ix_req_o` through a caller-fed
+      port, and the fetch is subject to the Phase-3 region map (D22). It is not
+      produced by a block and will not be.
+
+  GEOM.POSE:
+    clip_pages: >-
+      Asset memory -- animation clip pages, read through the same path as any
+      other asset.
+
+  GEOM.PROJECT:
+    camera_pair: >-
+      The SetView command. Register state written by the command stream, not a
+      dataflow input.
+
+  GEOM.DEPTHQUANT:
+    depth_profile: >-
+      The two-bit profile in SetView. It travels PER VERTEX rather than as
+      latched state -- see the block's RTL header -- but it originates in a
+      command word.
+
+  GEOM.LIGHT:
+    environment: >-
+      Rig state: the key/fill/ambient colours and directions, written by the
+      command stream per frame.
+
+  GEOM.LOOM:
+    transform_graph: >-
+      The instance transform hierarchy, supplied by the caller rather than
+      computed by an upstream block.
