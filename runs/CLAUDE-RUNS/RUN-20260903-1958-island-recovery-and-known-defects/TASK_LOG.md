@@ -558,3 +558,45 @@ quoting bug, and before that `contaminated:source-changed-during-fit` from the
 destroyed fit. The running fit overwrites it, so committing either intermediate
 would put a self-inflicted status into the record as though it were a
 measurement.
+
+## 03:30 — gates green, and the tripwire floors re-checked against WIDTH
+
+All four non-Quartus gates pass after the night's changes:
+
+    ledger:check   OK -- 105 blocks / 40 ops, V1-V17 + V19-V23 + staleness
+    tables:check   all 12 generated files byte-identical
+    abi:check      clean (26 outputs match)
+    ctest (6)      100% passed
+
+### The floors were derived from CAPACITY; WIDTH is the binding constraint
+
+The `min_m10k` numbers added earlier came from bits / 10,240. That is a real
+floor, but it is not the tight one — an M10K's maximum port width is 40 bits in
+simple dual port, so a wide array needs `ceil(width/40)` blocks per bank
+regardless of how few bits it holds. Re-checked, because a floor that is too
+HIGH would fail a correct design and I asserted three of them:
+
+| block | shape | width floor | capacity floor | tripwire |
+|---|---|---|---|---|
+| `residency_v2` keyram | 256 x 107, x4 ways | 3 x 4 = 12 | — | |
+| `residency_v2` statram | 256 x 57, x4 ways | 2 x 4 = 8 | — | |
+| **residency_v2 total** | | **20** | 17 | **17** — safe |
+| `tilestore` | 256 x 64, x2 banks | 2 x 2 = 4 | 4 | **4** — safe |
+| `palette_res` | 1024 x 16 | 2 | 2 | **2** — safe |
+
+Every tripwire sits at or below the width floor, so none of them can fail a
+design whose storage did infer. The evidence that Quartus behaves this way is
+the cache's own synthesis report from tonight: four `data_r` arrays of 2,048
+bits each became four separate `altsyncram` instances, one per lane — small
+memories take a block each rather than sharing one.
+
+### The three pending fits queue in one command
+
+`run_block_fit.ps1 -Module` is already `[string[]]`, so no tooling is needed:
+
+    run_block_fit.ps1 -Module zhao_terrain_residency_v2,zhao_raster_tilestore,`
+                              zhao_texture_palette_res -TimeoutSeconds 10800
+
+Then `zhao_prod_top`, which is the fit that answers the owner's actual question
+in `reports/WeNeedSomeMeasurements.md` — and which could not have elaborated
+before tonight, because two of its blocks were missing from its source list.
