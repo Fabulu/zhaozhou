@@ -420,14 +420,71 @@ records the gap: *"until that exists there is nothing to be bit-exact
 against."* The reference model now exists, in
 `reference/src/zcreature/creature_sim.cpp` + `zrender/rast.cpp`:
 
-1. **Light pullback, per bone**: `L_b = R_b^T · L / bulk_scale` for the key
-   and the fill (6 round-half-up divisions per bone per light). The normal
-   never leaves bind space and GEOM.SKIN's datapath is untouched.
-2. **Per-vertex Lambert = the skin-weight blend of the two bones' CLAMPED
-   responses**: `lam = (w0·clamp(N·L_b0) + w1·clamp(N·L_b1) + 32) >> 6`,
-   each dot divided by 127 with one rounding. This is the N5 probe's
-   option (b), adopted as LAW: no renormalisation anywhere, which is the
-   cheap form the silicon increment would build.
+1. ~~**Light pullback, per bone**~~ and
+2. ~~**Lambert = the blend of the two bones' CLAMPED responses**~~ --
+   **BOTH SUPERSEDED 2026-09-04.** See *2.x.1* immediately below. The text
+   is struck rather than deleted because RTL and contracts were written
+   against it and a reader needs to recognise the old shape to know they
+   are looking at it.
+
+   The superseded law was: `L_b = R_b^T · L / bulk_scale` per bone, then
+   `lam = (w0·clamp(N·L_b0) + w1·clamp(N·L_b1) + 32) >> 6` -- the N5
+   probe's option (b), adopted with the note *"no renormalisation
+   anywhere, which is the cheap form the silicon increment would build."*
+### 2.x.1 -- the normal law, corrected against the live reference
+
+**Owner, `reports/CREATURESANDLIGHTS`:** *"The live reference has since been
+corrected: it transforms both normals, blends the normal vector, renormalises
+that result, and only then takes Lambert. That repair removed bright patches
+around mixed-weight joints. The live reference should become the law."* And at
+the close: *"Make the live blended-and-renormalised normal law authoritative."*
+
+**Verified against the code, not taken from the summary.**
+`reference/src/zcreature/creature_core.cpp::skin_normal_lambert` does exactly
+this and the superseded text above describes something it does not do:
+
+    n[row] = w0 * (A_row . N) + w1 * (B_row . N)     // blend the VECTOR
+    range-reduce until max|n| < 2^30                 // direction preserved
+    mag    = isqrt_u64(n.n)                          // ONE renormalisation
+    dot    = n . L                                   // Lambert AFTER the blend
+    lam    = dot <= 0 ? 0 : min(65536, (dot + mag/2) / mag)
+
+So the spec had a ratified law its own oracle did not implement. Anything built
+to the struck text would have been bit-wrong against every golden capture, and
+would have shown the bright patches at mixed-weight joints that the reference
+change removed.
+
+**THE LAW IS NOW:**
+
+1. **Transform the normal by BOTH bones and blend the VECTORS**, keeping the
+   full weighted direction. The common `1/64` and uniform-bulk factors cancel
+   in the normalisation, so no pre-normalise rounding is introduced.
+2. **Range-reduce, then renormalise ONCE** -- `isqrt_u64` of the sum of
+   squares. The shift is applied to every lane equally, so it changes the
+   magnitude guard and not the direction.
+3. **Lambert last**, `dot <= 0` clamping to zero and the quotient saturating at
+   `0x10000`.
+
+**What this costs, stated plainly, because the struck law was chosen for being
+cheap.** The old form needed two dots and a clamp per light and left
+`GEOM.SKIN`'s datapath untouched. This one needs the normal transformed by two
+bones -- 18 multiplies -- plus a square root, per vertex. That is a real
+increase and it was the owner's call with the reason given: the cheap form
+produced visible bright patches.
+
+**The per-light repetition in the reference is NOT law.** Owner, same document:
+*"The current reference repeatedly calls `skin_normal_lambert` for key, fill and
+point light. That means it effectively repeats the transformed-normal work for
+each light. The hardware should not reproduce that structure."* The transform,
+blend and renormalisation happen **once per vertex**; each light then costs only
+
+    lambert = max(0, dot(world_normal, light_direction))
+
+This distinction is the difference between one square root per vertex and three,
+and it is the one place where being bit-exact with the reference's *structure*
+would be wrong. Bit-exactness is owed to the reference's **result** for a given
+light, not to the number of times it recomputes the normal.
+
 3. **Smooth/face blend knob**: `kSmoothMixNum`/1024 (currently 819) parts
    smooth, remainder the face Lambert — the owner's control over how much
    hand-cut read survives.
@@ -443,10 +500,35 @@ against."* The reference model now exists, in
 
 * **GEOM.VDECODE**: unpack s8×3 → fx (a shift; the block is a stub and
   gains the lane when designed at all).
-* **GEOM.PROJECT lighting stage**: per vertex, 2×2 fixed-point dots
-  (key+fill × two bones' pulled-back dirs are per-INSTANCE constants
-  computed once, 12 multiplies per bone per frame) + the w0/w1 blend + the
-  rig's 3 saturating mul-adds — small beside its 31-stage divider.
+* **GEOM.PROJECT lighting stage — RECOSTED 2026-09-04**, because the bullet
+  that stood here priced the law struck in 2.x.1 and is no longer the
+  design. It read: *"per vertex, 2x2 fixed-point dots (key+fill x two
+  bones' pulled-back dirs are per-INSTANCE constants computed once, 12
+  multiplies per bone per frame) + the w0/w1 blend + the rig's 3 saturating
+  mul-adds — small beside its 31-stage divider."* That is the pullback
+  form: the normal never moved, so nothing per-vertex was transformed.
+
+  The blended-and-renormalised law moves the normal, and the cost moves with
+  it. Counted off `skin_normal_lambert` rather than estimated:
+
+  | | per vertex | per light |
+  |---|---|---|
+  | transform N by both bones (two 3x3 mat-vecs) | 18 mul | — |
+  | blend the vectors (`w0·na + w1·nb`, 3 lanes) | 6 mul | — |
+  | sum of squares | 3 mul | — |
+  | renormalise | **1 isqrt** | — |
+  | `dot(n, L)` | — | 3 mul |
+  | `dot / mag`, round-half-up, saturate | — | **1 divide** |
+
+  So roughly **27 multiplies and one square root per vertex**, plus three
+  multiplies and one division per light, against the struck law's six
+  multiplies per light and no per-vertex work at all. It is a real
+  increase and it was the owner's call, with the reason given: the cheap
+  form produced bright patches at mixed-weight joints.
+
+  **The square root is per VERTEX, not per light** — see 2.x.1. Copying the
+  reference's structure, which calls `skin_normal_lambert` once per light,
+  would triple it for no change in the answer.
 * **GEOM.SETUP + RASTER.FRAGMENT**: three more interpolated attributes on
   the row-walker division the contract already names as "what lands it";
   `frag_vert_rgb_i` and SHADE_MOD are already built and verified.
