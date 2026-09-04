@@ -1,0 +1,115 @@
+# Contract — GEOM.ASSETFETCH (the meshlet asset reader)
+
+> Ledger: `design/blocks.yml` · gpu clock · maturity **SPECIFIED**
+> RTL: *not yet written*
+> Reference: **`zref::AssetFetch`** (`reference/include/zref/zref_assetfetch.hpp`)
+
+## Why it exists
+
+Docket **D22** says nineteen of twenty geometry blocks are not in the console,
+and then says the honest form of that fact:
+
+> *composing the front end needs **one asset fetcher serving three consumers** —
+> descriptors, the `u8` index stream, and vertex records — and that fetcher
+> needs a region `MEM.GUARD` does not yet have.*
+
+The region landed 2026-09-04 (`spec/memory_rules.md` §5f, `ZHAO_GEOM_ASSET_BASE`).
+**This block is the other half.** Until it exists, `GEOM.ASSEMBLE`'s `ix_req_o`
+and `GEOM.VDECODE`'s `v_bytes_i` are ports with nothing on the other side, and
+every block behind them is unreachable no matter how well it is verified.
+
+## What it is NOT
+
+* **Not a cache.** See below — the sizes make a cache the wrong shape.
+* **Not a descriptor reader.** `GEOM.MESHFETCH` already owns a
+  `zhao_guard_req_t` port and reads its own 64-byte descriptor. Routing it
+  through here would re-implement a verified block to save one arbiter input.
+  The "three consumers" of D22 are three *streams*; two of them are ours.
+* **Not a decoder.** 32 bytes go to `GEOM.VDECODE` exactly as they lay in
+  memory. This block never interprets a vertex.
+* **Not an index validator.** `GEOM.ASSEMBLE` already refuses a triplet that
+  addresses past `vertex_count` and counts it (`refused_index_o`). A second
+  opinion here would be a second law.
+
+## THE SIZES DECIDE THE ARCHITECTURE, AND THEY SAY "BUFFER", NOT "CACHE"
+
+The frozen ruling limits (`GEOM.MESHFETCH.md`: `vertex_count ≤ 64`,
+`triangle_count ≤ 126`) bound a meshlet's whole asset footprint:
+
+| stream | record | worst case | bytes | 64-B lines |
+|---|---|---|---|---|
+| `u8` indices | 3 B / triangle | 126 triangles | **378** | 6 |
+| vertex records | 32 B / vertex | 64 vertices | **2,048** | 32 |
+| | | **total** | **2,426** | **38** |
+
+A whole meshlet is **38 lines**. So the block reads the entire footprint into a
+private buffer and then serves both consumers out of it. That choice is not
+about simplicity, it is about three specific properties a cache would not have:
+
+1. **The guard traffic becomes ONE SEQUENTIAL BURST per meshlet.** Banks come
+   from address bits `[26:25]` and W2.7 measured ~82 of 192 Duo lines starved
+   from row thrash; a strided cache miss stream re-opens rows, a linear
+   prefetch keeps one open. **This is the W2.7 lesson applied at a third site.**
+2. **`GEOM.ASSEMBLE` and `GEOM.VDECODE` never see a miss.** `ix_req_o` is a
+   combinational request with no ready signal at all — the port has no way to
+   express "wait". A cache behind it would have to stall a port that cannot be
+   stalled. **The buffer is not a performance choice; the consumer's interface
+   requires it.**
+3. **Determinism.** Same meshlet, same beats, same order, every run — so the
+   differential test is exact rather than statistical.
+
+**Double-buffered**: meshlet *N+1* is fetched while *N* is served, so the
+prefetch latency is paid once rather than per meshlet. Cost is ~4.8 KB of block
+memory (≈5 M10K).
+
+**THE LIMITS ARE KNOBS.** `MAX_VERTICES`, `MAX_TRIANGLES` and the buffer depth
+are named parameters. If a later ruling raises `vertex_count`, this block gets
+bigger — it does not silently truncate. A footprint that does not fit is
+**refused and counted**, never wrapped.
+
+## The law
+
+    index triplet n:   3 bytes at  asset_base + index_offset  + 3*n
+    vertex record v:  32 bytes at  asset_base + vertex_offset + 32*v
+
+Both offsets come from `GEOM.MESHFETCH`'s result record and are **byte offsets
+into the asset pool**, not absolute addresses. The absolute address is
+`ZHAO_GEOM_ASSET_BASE + offset`, formed here, so that no upstream block holds an
+absolute VRAM address and a pool move stays a one-constant edit.
+
+**The local `u8` index becomes a global vertex id by `vertex_offset + local`,
+and that is `GEOM.ASSEMBLE`'s arithmetic, not ours.** We serve bytes.
+
+## Refusals, each counted, none silent
+
+| condition | why |
+|---|---|
+| `vertex_count > MAX_VERTICES` | footprint exceeds the buffer |
+| `triangle_count > MAX_TRIANGLES` | ditto |
+| any beat's guard request denied | the pool bounds are the guard's to enforce |
+| footprint crosses the pool's end | refused **before** the first beat |
+
+A refused meshlet emits **no triangles** — it does not emit the part that fit.
+Partial geometry is worse than absent geometry, because it looks like a
+modelling error rather than a fault.
+
+## Backpressure
+
+Ready/valid on the meshlet input. `ix_*` is answered combinationally from the
+buffer, which is the only shape `GEOM.ASSEMBLE`'s port permits. `v_*` is
+ready/valid because `GEOM.VDECODE` has a `v_ready_o`.
+
+## Counters
+
+`meshlets_fetched`, `beats_read`, `guard_denied`, `refused_footprint`,
+`prefetch_stall_cycles` — the last one is the evidence for whether double
+buffering is enough, rather than an assumption that it is.
+
+## Open, and deliberately not decided here
+
+* **The pool's internal layout.** §5f left it open on purpose; this block takes
+  offsets from a descriptor and does not care how the pool is carved.
+* **Whether PARAMBUF and assets need distinct local-arbiter priorities.** That
+  wants a measurement, and the `prefetch_stall_cycles` counter is what will
+  produce it.
+* **Whether 22 MiB is the right pool size.** Wants a real asset set.
