@@ -21,7 +21,37 @@ When a new owner document lands, add it here in the same pass that reads it.
 
 ## P0 — the console cannot ship without these
 
-### D1. The 100 MHz timing surgery  ·  `reports/MHZArchitected`
+### D1. The 100 MHz timing surgery — **CLOSED 2026-09-04**
+`reports/composed/wumen-5d5b1b16-20260904T061710Z/RESULT.md`.
+
+    gpu_clk            100.00 MHz (target met)
+    worst setup        +0.057 ns
+    failing endpoints  0
+    hold               +0.245 ns, 0 failing
+    timingPassed       TRUE
+
+Eleven rounds from 53.48 MHz, **+87%**, the entire original violation closed,
+**+844 ALMs and not one extra DSP.**
+
+**The closing change was one line's worth of indexing** in
+`zhao_raster_tilestore.sv` — the present bit read by PORT address rather than by
+BANK address, cutting a path that was **unreachable in the design's own
+semantics**. It closed all twelve remaining violations, not just its own: the
+other three structures (`mem_guard` x6, `binner` x4, `cmd_dma` x1) went away on
+placement once the last structural offender did. Round 11 concluded the opposite
+— *"closing the last 0.198 ns needs all four touched"* — so **a flat tail cuts
+both ways**, and the costed binner rework was never needed.
+
+**THE MARGIN IS 0.057 ns, 0.57% of the period.** A pass, not comfort, on a
+provisional device with virtual I/O. And it is still the shell **without** the
+geometry front end (D22) — wiring nineteen blocks into this will move it.
+
+**What it unblocks:** D1's own rule was *"D1 still comes first, because adding
+nineteen blocks to a shell that is 14 MHz short would make attribution
+impossible."* That constraint is gone, and both of D22's blockers were cleared
+the same morning. **D22 is now the active P0.**
+
+### D1 (superseded status, kept for the record)  ·  `reports/MHZArchitected`
 **Measured, and this line was three days stale:** `gpu_clk` is **85.62 MHz**
 against 100 (`reports/composed/renderer-b3bd69b-20260901T090000Z/RESULT.md`,
 round 9). It opened at 53.48 MHz with TNS −6,566 ns.
