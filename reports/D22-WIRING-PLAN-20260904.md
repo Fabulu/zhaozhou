@@ -22,6 +22,21 @@ exactly why this is staged rather than done in one commit.
 | `out_src_id_o` | `tri_src_id_i` |
 | `out_valid_o` / `tri_ready_o` | `tri_valid_i` / `tri_ready_o` |
 
+**Checked mechanically, not by eye** (2026-09-04) — the port lists were parsed
+out of both modules and diffed by name AND width:
+
+    SETUP  out_*_o   23
+    BINPIPE tri_*_i  22
+    matched           22   -- every name, every width identical
+    SETUP emits but BINPIPE does not take:  ['area2']
+    BINPIPE takes but SETUP does not emit:  []
+
+**Nothing `zhao_geom_bin_pipe` consumes is unsatisfied, and no width needs a
+cast.** `out_area2_o` is a passthrough of SETUP's own `tri_area2_i` that the bin
+pipe does not want; it is left unconnected. This paragraph originally said "port
+for port" from reading two lists side by side, which is the kind of claim that
+is usually right and occasionally expensive — so it was measured.
+
 Today `zhao_shell_top.sv:766` drives every one of those from a **shell input**
 (`render_kx0_i`, `render_ax_i`, …). So the front end does not need a new
 interface: it needs `GEOM.SETUP` instantiated and the multiplexer moved back one
