@@ -85,6 +85,17 @@ top:
   # twelve RTL files consume invw24 and nothing produced it.
   - zhao_geom_assemble
   - zhao_geom_depthquant
+  # Both built 2026-09-04. MESHFETCH is position 1 of the composition order --
+  # the geometry front end's entry point, which nothing downstream could be fed
+  # by until it existed. It cannot pass MEM.GUARD yet and that is a PHASE
+  # boundary rather than a defect (memory_rules.md 5), so it is counted: the
+  # console intends to have it.
+  #
+  # SKIN.NORM produces the world normal GEOM.LIGHT consumes -- the last
+  # unexplained input in the geometry graph, and a missing block rather than a
+  # naming collision.
+  - zhao_geom_meshfetch
+  - zhao_geom_skin_norm
 
   # --- terrain (the 8 km island) -------------------------------------------
   - zhao_terrain_patch

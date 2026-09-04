@@ -265,6 +265,7 @@ targets:
       - fpga/rtl/geometry/zhao_geom_cull.sv
       - fpga/rtl/geometry/zhao_geom_depthquant.sv
       - fpga/rtl/geometry/zhao_geom_lod.sv
+      - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       - fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
       - fpga/rtl/geometry/zhao_geom_parambuf.sv
       - fpga/rtl/geometry/zhao_geom_pose_cache.sv
@@ -273,6 +274,7 @@ targets:
       - fpga/rtl/geometry/zhao_geom_quat2mat.sv
       - fpga/rtl/geometry/zhao_geom_setup.sv
       - fpga/rtl/geometry/zhao_geom_skin.sv
+      - fpga/rtl/geometry/zhao_geom_skin_norm.sv
       - fpga/rtl/geometry/zhao_geom_vdecode.sv
       - fpga/rtl/geometry/zhao_geom_wcache.sv
       - fpga/rtl/geometry/zhao_vertex_arena.sv
