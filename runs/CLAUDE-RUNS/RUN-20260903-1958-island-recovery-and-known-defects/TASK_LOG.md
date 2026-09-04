@@ -1045,3 +1045,43 @@ and `cache_pipe`.
 
 Three fits in flight: texture island, the tilestore/palette_res queue, and
 composed #2 measuring the restored Early-Z skid.
+
+---
+
+## 2026-09-04 08:1x — D22's blocker cleared; three timing traces corrected
+
+**IN PROGRESS WHEN THIS WAS WRITTEN** (the fit-results rule: write down where
+you were BEFORE reading them):
+
+* **composed fit `wumen-5d5b1b16`** launched 06:17Z on a clean tree, measuring
+  the tilestore present-lookup fix and the Phase-3 guard region. Previous:
+  98.06 MHz, 12 failing endpoints.
+* **texture island queue** still on `zhao_texture_aux_pipe` (block 2 of 9).
+  Done: `tmu_plan` ok ALM 1142. Remaining: aux_div6, rsp_dispatch, bilerp_lane,
+  mosaic, tmu_pipe, **fragrob** (never fitted), cache_pipe (re-fit).
+  Recorded already: fragrob's `min_m10k: 6` failure will NOT be an RTL defect.
+* **Next step when the composed fit lands:** compare the offender list. If
+  tilestore is gone and the binner leads, the binner's speculative-`emax` rework
+  becomes worth its cost; if the tail is still flat at ~0.13, it is not.
+
+**Landed this stretch:**
+
+1. `MEM.GUARD` Phase-3 GEOM asset region (`0x06A0_0000`, 22 MiB, ENGINE1,
+   read-only) — **docket D22's stated blocker**. bmc + cover pass, mutation
+   caught, spec ruling §5f.
+2. `RASTER.TILESTORE` present bit indexed by port address, not bank address —
+   the composed fit's worst path.
+3. Three timing traces corrected against the actual node lists.
+
+**The lesson of the stretch, and it cost three wrong diagnoses:** every offender
+was first diagnosed by reading RTL and module names, and three of the four were
+wrong in the part that picks the fix. `characterization/setup_paths.rpt` had the
+nodes the whole time. **A trace is not traced until it names nodes.**
+
+**Machine-local, worth knowing:** `run_composed_fit.ps1`'s cleanliness gate
+refused three times on a peer session's nested Upheaval clone. `.gitignore:84`
+names that exact path *with a trailing slash*, which does NOT match it — the
+nested `.git` makes git report `?? .../work/Upheaval` as a gitlink-like entry
+rather than a directory. Excluded in `.git/info/exclude` without the slash,
+locally, because it is another lane's scratch. **A shared ignore rule that looks
+like it covers a nested clone does not.**
