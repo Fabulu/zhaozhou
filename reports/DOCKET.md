@@ -80,7 +80,42 @@ the device — and not one extra DSP across nine fits.**
 | 4 BINNER six parallel products | **never appeared in nine fits** |
 | 5 FBWRITE dynamic byte-mask | **never appeared in nine fits** |
 
-### THE PLAN IS RTL-COMPLETE. WHAT IS OWED IS A FIT.
+### MEASURED 2026-09-04: **97.28 MHz, 18 failing endpoints**
+
+`reports/composed/wumen-18054414-20260904T020546Z/RESULT.md`.
+
+| | r0 | r9 | **now** |
+|---|---|---|---|
+| **`gpu_clk`** | 53.48 | 85.62 | **97.28 MHz** |
+| worst setup | −8.697 | −1.679 | **−0.280 ns** |
+| failing endpoints | — | 430 | **18** |
+| ALMs | 12,569 | 12,707 | 13,031 |
+| DSPs | 16 | 16 | **16** |
+
+**+82% over the effort, 97% of the original violation closed, +462 ALMs, zero
+extra DSPs across ten rounds.** Hold passes with 0.244 ns of margin.
+
+**The fit was the whole remaining action and it cost nothing but running it.**
+The four EDGEWALK commits had been written for three days and never measured;
+this docket was describing them as pending.
+
+**The last 0.28 ns is one seam, not a sweep:**
+
+    from  zhao_raster_fragment | s3_addr_r[3]~DUPLICATE
+    to    zhao_raster_earlyz   | acc_mask_r[115]        −0.280 ns
+
+17 of the 18 violations end in `zhao_raster_earlyz` and the eighteenth is in
+`zhao_cmd_dma`. Early-Z's own structure was fixed in round 9 — this is the
+**fragment's stage-3 address arriving late at the mask**, a path *between* two
+fixes rather than inside either. `s3_addr_r` is a register from the RMW split.
+
+So the next step is a register on that crossing, or the mask write moved a stage
+later — not another round of search.
+
+**Still not the finished console's number:** this is the shell without the
+geometry front end (D22), on a provisional device, with virtual I/O.
+
+### The history: the plan was RTL-complete and the fit was owed
 
 **Corrected again 2026-09-04, one layer deeper than the refresh above.** The
 section below was written from `b3bd69b` (2026-09-01 17:33) and named step 3 as
