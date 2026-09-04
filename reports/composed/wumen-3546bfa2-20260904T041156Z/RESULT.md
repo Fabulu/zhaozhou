@@ -65,3 +65,31 @@ does not make the first one wrong.
 paths. `zhao_geom_binner` follows with 4. Neither is on `MHZArchitected`'s list
 at all — which is the fourth time this effort the report has named a structure
 the note did not predict. **Read the paths, not the note.**
+
+### Traced, and the tail is now FLAT
+
+    -0.198  tile_pipe | rs_state.RS_CLEAR      -> tilestore | res_pres_q
+    -0.133  debug_frameblit | Equal1~3         -> mem_guard | fwd_req.len[0..5]   x6
+    -0.132  geom_binner | ep_r[2][3]           -> geom_binner | epr_r[0][22]      x4
+    -0.10x  cmd_dma                                                              x1
+
+**Four unrelated structures, every one inside 0.2 ns.** There is no dominant
+offender left. Ten rounds of this effort each began with one structure owning
+most of the worst 100; this one begins with the deepest violation being 0.065 ns
+worse than the shallowest.
+
+That changes what the next step should be. A single surgery buys at most the
+gap between the worst path and the second — here about 0.07 ns — so closing the
+last 0.198 ns needs **all four** touched, or the target reconsidered.
+
+### One of them should not be there at all
+
+Six of the twelve violations run from `zhao_debug_frameblit`'s state comparator
+into `zhao_mem_guard`'s forwarded request length. **A DEBUG block is on the
+console's critical path.** `hps_req_o.valid = (state == B_READ_REQUEST)` gates
+the guard's accept, and the guard captures `fwd_req.len` behind it.
+
+Whether a debug blitter should be allowed to constrain production timing is a
+scope question rather than a timing one, and it is the cheapest of the four to
+answer: if that path can be registered, or the block excluded from the
+production top, six of the twelve violations go with it.
