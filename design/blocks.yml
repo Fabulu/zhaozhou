@@ -2359,7 +2359,7 @@ blocks:
     owner_issue: ZH-121
     inputs: [view_vertices, triangle_descriptors, tile_references]
     outputs: [parambuf_records]
-    upstream: [GEOM.PROJECT, GEOM.BINNER]
+    upstream: [GEOM.PROJECT, GEOM.BINNER, GEOM.ASSEMBLE]
     downstream: [GEOM.BINNER]
     backpressure: ready_valid
     latency: variable
@@ -2520,9 +2520,9 @@ blocks:
     phase: 5
     owner_issue: ZH-083
     inputs: [meshlet_descriptor, index_stream]
-    outputs: [triangle_descriptor]
+    outputs: [triangle_descriptors]
     upstream: [GEOM.MESHFETCH]
-    downstream: [GEOM.CLIP]
+    downstream: [GEOM.CLIP, GEOM.PARAMBUF]
     backpressure: ready_valid
     latency: variable
     target_throughput: see contract
