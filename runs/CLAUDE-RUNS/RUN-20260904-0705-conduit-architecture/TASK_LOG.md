@@ -344,3 +344,19 @@ yet. Specs are." Read in full. Taken as binding for this pass:
   ADDLIGHTNING lightning-version: bolts + sparks continuously), u02-trio
   (THREE phase-offset conduits, one bloom, all effects — the budget proof,
   evidence/trio3.png).
+
+## FINAL GATES + PUBLISH
+
+- u02-probe: CLEARANCE CONTRACT HOLDS (>= 40 mm everywhere; worst 88 mm on
+  rest). u02-meshcheck: CLEAN (22 meshlets, 1444 tris, freshly rebuilt).
+- zhao-reel --check to file: all sequence CRCs match
+  (evidence-final-check.txt).
+- FINAL 22-bank identity vs the pristine a311faf6 baseline: ALL-IDENTICAL —
+  Zixxtrixx untouched by the entire creature-02 tree
+  (evidence-final-bank-identity.txt).
+- Cost, arithmetic (no fragment counters exist): worst case per conduit
+  (channel blaze) ~5.2% of frame in effect fill; idle ~4.7%; the trio
+  ~15.5% + one shared sky-only bloom + ONE glow-ramp rebuild per frame.
+- Ten webms encoded (VP9 crf16 yuv444p 60fps) with posters beside each;
+  unnamed02 spliced as creatures[0] by TEXT (zixxtrixx byte-untouched at
+  [1]); assemble: 2 creatures, 420 renders; exactly one noindex meta.

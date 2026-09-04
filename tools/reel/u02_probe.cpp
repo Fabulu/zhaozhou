@@ -30,6 +30,7 @@
 #include "zref/zref_trig.hpp"
 #include "zref/zref_creature.hpp"
 #include "zref/zref_star.hpp"
+#include "zref/zref_render.hpp"
 #include "zref/zref_texture.hpp"
 
 namespace zc = zref::creature;
