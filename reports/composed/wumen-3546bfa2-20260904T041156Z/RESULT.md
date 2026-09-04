@@ -125,27 +125,54 @@ The RAM reads keep the bank addresses, because those genuinely are dual-role.
 the blocks**, and the first two were also recorded here. The rule earned another
 line: *a trace is not traced until it names nodes.*
 
-### The binner's four: a multiply-add in the register-to-register path
+### The binner's four: an accept decision inside its own advance
 
-`zhao_geom_binner.sv:755-757` computes both edge accumulators in one cycle from
-the same register:
+Traced from the nodes, and **this one was wrong in the file too** -- it said a
+multiply-add between two registers, reasoned from lines 755-757. The report:
 
-    ep_r[k]  <= ep_r[k] + k_mul_tile(kx_r[k][22:0], {tx0_r,4'd0}) + ...
-    epr_r[k] <= ep_r[k] + k_mul_tile(kx_r[k][22:0], {tx0_r,4'd0}) + ...
+    ep_r[2][3]
+      -> Add2~69                                    emax[2] = ep_r[2] + off_r[2]
+      -> g_edge[2].u_fill|accept_o~5 -> ~6 -> ~7    zhao_raster_fill's predicate
+      -> Equal0~2                                   tile_keep = (accept == 3'b111)
+      -> ty_r~0                    fanout 109
+      -> epr_r[0][22]|sload                         the LOAD ENABLE  -0.132 ns
 
-`k_mul_tile` is an inlined 23x11 product, so the path is
-**register -> multiply -> two adds -> register**, which is the textbook thing to
-pipeline and is the only one of the four offenders that is ordinary datapath
-rather than control.
+Six logic levels, no multiplier on the path at all. The structure is
 
-**One thing NOT claimed:** the fit names the path `ep_r[2][3] -> epr_r[0][22]`,
-crossing lanes and running low bit to high. Nothing in the source shares a
-multiplier between lanes -- `k_mul_tile` is a function, inlined per call -- so
-that naming is most likely a synthesis artefact of merged arithmetic rather than
-real cross-lane sharing. **It was not chased further**, because the structural
-answer (a multiply-add between two registers) does not depend on which lane the
-tool decided to name, and inventing a sharing story from a node name is how the
-last three wrong diagnoses started.
+    the accumulator decides ACCEPTANCE,
+    acceptance decides ADVANCEMENT,
+    advancement updates the ACCUMULATOR
+
+-- all in one cycle. And the cross-lane naming that the previous note flagged as
+"most likely a synthesis artefact" is **not an artefact**: `tile_keep` is a
+three-lane AND, so lane 2's accept genuinely gates every lane's `epr_r` load.
+The caution was right; the guess behind it was not.
+
+**The fix costs more than 0.132 ns is worth today.** Preserving the initiation
+rate means speculating the next tile's `emax` for both advance directions -- six
+extra adders and six extra `fill` predicates -- so that `tile_keep` is registered
+when the cursor moves. Simply registering the accept would cost a cycle per tile,
+which the architecture rule forbids. That is a real rework of a verified block,
+and round 2 of this effort is the standing reminder that an unmeasured
+restructure can cost 2 MHz. It waits for a fit that shows where the tail sits
+after the tilestore change.
+
+### Three traces, three corrections, one rule
+
+Every one of the four offenders was first diagnosed from module names and RTL
+reading, and **three of the four diagnoses were wrong in the part that picks the
+fix**:
+
+| offender | first diagnosis | what the nodes said |
+|---|---|---|
+| tilestore | ready chain into a register enable | a 256:1 mux fed by an unreachable address |
+| binner | multiply-add between registers | an accept predicate inside its own advance |
+| binner lanes | "probably a synthesis artefact" | a real three-lane AND |
+| frameblit | debug block on the critical path | **correct** -- a wide lease equality |
+
+The one that survived is the one whose claim was about *scope* rather than about
+structure. **A trace is not traced until it names nodes**, and
+`characterization/setup_paths.rpt` has had those nodes all along.
 
 ### One of them should not be there at all
 
