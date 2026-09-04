@@ -756,15 +756,16 @@ range is reachable is the question; the narrowing being silent is the defect.
 setup inputs widened to 22, the expander's outputs proven to fit 21, or an
 explicit saturating narrow at the seam. **Not a truncation nobody chose.**
 
-### The other eight were triaged, and **seven are noise**
+### The other eight were triaged, and **every one is noise**
 
 The tool's first run said "nine width differences", which was a raw output and
-not a finding list. Every one was then read at source:
+not a finding list. Every one was read at source, and **exactly one is a
+defect** — the other eight are stem collisions or harmless widenings:
 
 | seam | verdict |
 |---|---|
 | `PART.EXPAND -> GEOM.SETUP` (x6 lanes) | **REAL** — same signal, 22 into 21, signed |
-| `MEASURE.GOVERNOR min_hold_o [7:0] -> PART.LADDER p_hold_i [3:0]` | **worth a look** — same concept, and `min_hold_o` is a constant `8'(MIN_HOLD)` that probably fits 4 bits |
+| `MEASURE.GOVERNOR min_hold_o [7:0] -> PART.LADDER p_hold_i [3:0]` | noise, **checked** — a THRESHOLD constant against a running COUNTER, and benign either way: `MIN_HOLD = 6`, `DEG_HOLD = 12`, both inside 4 bits |
 | `CMD.SCHEDULER fence_status_o [7:0] -> SURFACE.STAMP pg_status_i [1:0]` | noise — a FRAME FENCE status against a PAGE status (`StOverflow`) |
 | `CMD.SCHEDULER fetch_slot_o [1:0] -> MEM.GUARD blit_slot` | noise — a command-ring slot against an FB slot |
 | `CMD.SCHEDULER fetch_slot_o [1:0] -> TWOD.PLANE d_slot_i` | noise — same collision |
@@ -773,7 +774,7 @@ not a finding list. Every one was then read at source:
 | `SURFACE.SHEET pg_strength_o [7:0] -> cmd_strength_i [15:0]` | widening, cannot lose data |
 | `VIDEO.FRAMECTL swap_slot -> CMD.SCHEDULER dma_slot_i [1:0]` | widening, cannot lose data |
 
-**Six of the nine are STEM COLLISIONS** — `status`, `slot` and `w` are generic
+**Seven of the nine are STEM COLLISIONS** — `status`, `slot` and `w` are generic
 enough that two unrelated signals share one. The tool now separates narrowing
 from widening and prints the collision warning above its own list, because a
 tool whose output must be triaged by hand and does not say so is a tool that
