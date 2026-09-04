@@ -39,8 +39,26 @@ for line in txt.split("\n"):
     if m:
         blocks[cur]["sub"] = m.group(1)
 
-geo = {k: v for k, v in blocks.items() if v["sub"] == "geometry"}
-print("geometry blocks in the ledger:", len(geo))
+# Which subsystem to walk. Geometry is the default because D22 is about the
+# geometry front end, but the edge checks below are not geometry-specific and
+# the same vocabulary drift exists everywhere -- `--all` says so out loud
+# instead of leaving the rest of the graph unexamined because one probe
+# happened to be written for one subsystem.
+import sys as _sys
+_want = None
+for _a in _sys.argv[1:]:
+    if _a == "--all":
+        _want = None
+        break
+    if not _a.startswith("-"):
+        _want = _a
+else:
+    if "--all" not in _sys.argv:
+        _want = "geometry"
+
+geo = {k: v for k, v in blocks.items() if _want is None or v["sub"] == _want}
+print("subsystem:", _want if _want else "ALL")
+print("blocks examined:", len(geo))
 print()
 
 # Topological order over the declared edges, restricted to geometry.

@@ -366,6 +366,42 @@ probe's edge checks stay advisory forever. What must not happen is the third
 thing, which is what happened tonight — a graph nobody can check being derived
 into an order and believed.
 
+### The whole ledger, measured
+
+`compose_order.py --all` over all 105 blocks:
+
+    asymmetric seams              0
+    edges carrying no named signal   81
+    inputs with no declared producer  102
+
+**The graph is symmetric everywhere and semantically unchecked everywhere.**
+Nobody has ever mistyped an edge; nobody has ever verified one carries anything.
+
+**`tools/design/propose_signal_vocab.py`** (committed) scores each unproduced
+input against what its declared upstreams actually emit. **17 name pairs
+explain 28 of the 102**, and one pair explains twelve:
+
+| producer emits | consumer takes | rows fixed |
+|---|---|---|
+| `engine_dispatch` | `dispatch` | **12** |
+| `bone_matrices` | `bone_palette` | 1 |
+| `tile_lists` | `tile_references` | 1 |
+| `aux_request` | `aux_requests` | 1 |
+| `meshlet_stream` | `meshlet_descriptor` | 1 |
+| …12 more | | |
+
+**It is a shortlist, not an oracle, and it is wrong in places** — it offers
+`meshlet_stream == index_stream` (no: the index stream is asset memory) and
+`tile_write == tile_read` (no: opposite directions). That is the intended
+failure mode. A tool that decided this would be deciding architecture from
+string similarity; a tool that shortlists it turns a 102-line problem into
+seventeen judgements, and `aux_request`/`aux_requests` is a judgement that
+takes one second.
+
+**Renaming `engine_dispatch` to `dispatch`, or the reverse, would fix 12% of
+the orphans in one edit.** That single decision is the cheapest available
+improvement to whether this graph can ever be machine-checked.
+
 **Not bulk-edited.** Two wrong edges found in one evening from one subsystem is
 a reason to review the whole graph deliberately, not to patch the two that
 happen to have been noticed.
