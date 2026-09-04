@@ -1535,3 +1535,62 @@ four 2,048-bit arrays may land in MLAB rather than M10K.
 
 **In flight:** `cache_pipe` fitting; `demo_duo_markers --write` at ~50 min of a
 600-frame shell sim, output buffered to completion.
+
+---
+
+## 19:xx — cache_pipe's prediction lands; five more docket entries; one gate fixed
+
+### The prediction held, and D19o came out of it
+
+`cache_pipe` synthesis: **3,097 registers, 8,320 memory bits** against a
+committed prediction of "far below 11,328, roughly 2,000-3,500". Both halves
+landed — four `altsyncram`s of 128 x 16, exactly the 8,192 bits computed from
+source before the fit ran. **`QUARTUS_GOTCHAS` §14 works forward**, which is a
+stronger claim than the four cases it was derived from.
+
+That immediately produced **D19o**: comparing every row's `sourceCommit` against
+its own `.sv`, **34 of 85 census rows describe RTL that has changed since**.
+`cache_pipe`'s stale row was the third-worst ALM figure in the census and
+described code that no longer exists.
+
+### Filed today
+
+* **D19l** — 8 fit rules never evaluated; refined later to note that only ONE of
+  three breaches (`rcp24_svc`) sits on a current row, and that its breach is a
+  **wrong rule**: a 32x64 multiply costs 6 DSPs and `max_dsp: 4` was an estimate.
+* **D19m** — tmu_pipe's 65,536-bit palette in flops. Two proposed mechanisms
+  were wrong before the right one; now §14.
+* **D19n** — `forge_cliff` declares 121,856 bits with all three arrays in the
+  bad read shape; as flops that is up to 153% of the device, which is a better
+  explanation of its permanent `timeout` than tooling flakiness.
+* **D19o** — the 34 stale rows.
+* **D19p** — `terrain_residency_v2` fails a memory floor for real (row checked
+  current first), but its message misdiagnoses: 1,243 registers cannot hold the
+  17,408 missing bits, so the storage is not in flops.
+
+### The gate that passed the worst block in the tree
+
+Added the `max_registers` rule tmu_pipe never had, then ran
+`check_fit_rules.ps1` to confirm it — and got **`PASS zhao_texture_tmu_pipe`**.
+Its row exists with every resource field null (the killed 213-minute run), and
+every rule is guarded by `$null -ne $x`. **A gate with no data passes.** Fixed;
+`4 pass / 5 FAIL / 0 unmeasured` became `3 / 5 / 1`.
+
+**And a correction owed:** `check_fit_rules.ps1` already existed and already
+reported every breach D19l lists. Nobody had run it. My tool's real contribution
+is the freshness dimension only.
+
+### The blast radius I owed
+
+`surface_dev.hpp` is shared by seven tests and I had built three. All seven now
+build and pass — **357 checks** — `field_write_tag` 14, sheet 70/13/99, stamp
+34/107/20.
+
+### CLAUDE.md gained the session's lesson
+
+*"A broken instrument lies in ONE direction."* Ten tool defects today, every one
+making the answer look better, smaller or simpler. Writing rule 2 through a
+heredoc put a literal backspace into the file — the sentence about a heredoc
+eating an escape had its escape eaten.
+
+**In flight:** `cache_pipe` fitter ~30 min; `demo_duo_markers` ~82 min.
