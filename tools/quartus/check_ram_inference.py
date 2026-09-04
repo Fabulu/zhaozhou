@@ -6,8 +6,9 @@ WHY THIS EXISTS
 On 2026-09-03 a texture cache rebuild was reported as a PASS at 98.66 MHz while
 9,728 bits of array sat in flip-flops. The cause was one construct: the arrays
 were written from an `always_ff @(posedge clk or negedge rst_n)`, and an M10K
-has no reset port, so an array touched by an asynchronously-reset process
-cannot be one.
+has no reset port. That diagnosis was RIGHT for that block and the rule
+drawn from it was too strong -- see rule 1 below, downgraded 2026-09-04
+against two fits that infer perfectly well from an async-reset process.
 
 It cost an 85-minute fit to find, and the same defect was already documented in
 a comment inside the block being replaced -- `zhao_texture_cache.sv:495-523`,
@@ -19,7 +20,29 @@ hour discovering something a grep can see.
 
 WHAT IT LOOKS FOR, and why each one
 -----------------------------------
-1. AN ARRAY WRITTEN FROM AN ASYNC-RESET PROCESS. The killer above.
+1. AN ARRAY WRITTEN FROM AN ASYNC-RESET PROCESS.
+   **DOWNGRADED 2026-09-04 -- THIS RULE HAS MEASURED FALSE POSITIVES.**
+
+   It used to say "an M10K has no reset port, so this array cannot be one",
+   and two recorded fits say otherwise:
+
+       zhao_texture_palette_res  d656521  M10K 2  16,384 bits  (clean=True)
+       zhao_raster_tilestore     96c0394a M10K 4  32,768 bits
+
+   16,384 is exactly `mem_r`; 32,768 is exactly `ram0 + ram1`. Both arrays
+   were fully in block memory while being written from an async-reset
+   process, because the ARRAY itself was never reset. Quartus 17 infers
+   that fine.
+
+   The rule was generalised from the texture cache, where inference DID
+   fail -- but that block was ALSO multidimensional, and rule 4 is what
+   actually blocked it: 128 bits of block memory and an explicit "cannot
+   regroup multidimensional array". Two defects appeared together and the
+   wrong one was blamed.
+
+   It is kept because it is still worth LOOKING at -- a reset process is
+   where the fatal cases have been found -- but it is a hint, not a
+   verdict, and on its own it does not predict failure.
 2. AN ARRAY READ COMBINATIONALLY through a dynamic index. Forces a per-bit mux
    the width of the array and pins it in flops whatever the writes do. This is
    TEXJOIN's second defect: `srgb_q[head_q][0]` in an `always_comb`.
@@ -212,8 +235,8 @@ def check_file(path, sizes=None):
 
         if async_writes:
             findings.append(
-                (name, "written from an ASYNC-RESET process (%d site%s) -- an "
-                       "M10K has no reset port, so this array cannot be one"
+                (name, "written from an ASYNC-RESET process (%d site%s) -- WEAK "
+                       "SIGNAL, measured false positives; see the header"
                  % (async_writes, "" if async_writes == 1 else "s")))
 
         # Combinational read through a dynamic index.
@@ -288,6 +311,10 @@ def effort(whys):
         way once the multidimensional shape was gone -- one defect producing
         two findings -- so this tag says "look", not "rewrite".
     """
+    # An async reset ALONE no longer implies anything is wrong: two blocks
+    # flagged only for it were measured fully in block memory on 2026-09-04.
+    if len(whys) == 1 and "ASYNC-RESET" in whys[0]:
+        return "UNPROVEN"
     design = False
     for w in whys:
         if "read COMBINATIONALLY" in w or "read at MODULE SCOPE" in w:
