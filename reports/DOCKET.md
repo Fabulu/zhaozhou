@@ -921,7 +921,27 @@ duller: **the rules were written AFTER those blocks were last fitted.**
     texjoin_v2    row's sources 2026-09-03 04:31   its rule 2026-09-03 17:29
 
 All eight resource rules on the four blocks not fitted today postdate the
-measurement that governs them. A rule declared after the last fit **has never
+measurement that governs them.
+
+**REFINED 2026-09-04, after `cache_pipe` showed what a stale row is worth.** Of
+the three blocks reported as breaching, only ONE sits on a row that is current
+with its own source:
+
+    zhao_raster_perspuv_svc   row 2026-09-03, rtl changed LATER same day  -> STALE
+    zhao_raster_texjoin_v2    row 2026-09-03, rtl changed LATER same day  -> STALE
+    zhao_raster_rcp24_svc     row 2026-09-03, rtl last changed 2026-09-02 -> CURRENT
+
+So **`zhao_raster_rcp24_svc` is the only confirmed breach**: 1,101 registers
+against 600, 1,041 ALMs against 650, and **6 DSPs against 4** — measured on the
+source that is still checked out. The DSP overrun matters beyond its own rule:
+the census already totals 196 DSPs against the part's 112.
+
+The other two are **questions, not findings.** `cache_pipe` read 11,328
+registers on a stale row and measured 3,097 when re-fitted; a breach on a stale
+row carries exactly that much weight. `texjoin_v2`'s figure is separately
+documented in the ledger ("v2 is wrong about storage, 7,151 registers holding a
+7,056-bit table"), so it is at least a deliberate known state rather than a
+surprise — but the number itself is still older than the file. A rule declared after the last fit **has never
 run**, and nothing in either file distinguishes it from one that was evaluated
 and passed.
 
