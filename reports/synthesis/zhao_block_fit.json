@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "3ddc2e6417d72236f735cbad79cbbd5d424d4f7c",
+    "newestRunCommit":  "11edddca77a27a84f9739589f2e755eaf920f9e7",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1079,6 +1079,28 @@
                        "lastAttemptStatus":  "failed:structure",
                        "lastAttemptSeconds":  4553,
                        "lastAttemptCommit":  "1b16923576eba4fa094524b25dada1ab5e6e193d"
+                   },
+                   {
+                       "module":  "zhao_texture_fragrob",
+                       "status":  "failed:structure",
+                       "sourceCommit":  "11edddca77a27a84f9739589f2e755eaf920f9e7",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  3448.4,
+                       "sourcesHashed":  1,
+                       "alms":  1676,
+                       "registers":  2631,
+                       "blockMemoryBits":  6464,
+                       "ramBlocks":  13,
+                       "dspBlocks":  0,
+                       "virtualPins":  830,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  103.1,
+                       "fmaxClock":  "clk",
+                       "ruleViolations":  [
+                                              "registers 2631 \u003e allowed 2500 -- state that belongs in memories is in flip-flops"
+                                          ]
                    },
                    {
                        "module":  "zhao_texture_mosaic",

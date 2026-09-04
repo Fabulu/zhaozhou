@@ -27,6 +27,49 @@ Five per-sample arrays across three samples, plus three per-slot arrays —
 
 **The numbers agree. They always did.** Nothing is 28x too small.
 
+## MEASURED: fragrob's first-ever fit confirms the memories-not-bits reading
+
+`zhao_texture_fragrob` had never been fitted. It has now:
+
+    status           failed:structure    <- ONE violated rule
+    registers        2631                <- vs 2500, the only failure
+    ramBlocks        13                  <- the brief expected 14-20
+    blockMemoryBits  6464
+    alms             1676
+    dspBlocks        0
+    fmaxMhz          103.1
+
+**Thirteen M10K.** The brief's §3.3 budget said *14-20 M10K expected*, and the
+tripwire asked for at least 6. **Both are satisfied** — `min_m10k: 6` passes
+comfortably, and 13 sits at the edge of the expected band.
+
+**So the "28x storage gap" is finally dead in measurement as well as in
+argument.** 6,464 block-memory bits across 13 M10Ks is exactly the shape the
+corrected reading predicted: **a dozen-odd small, mostly-empty memories**, which
+is what a brief counting RAMs rather than capacity was always describing.
+
+### And one worry did NOT materialise
+
+The corrected entry warned that `desc_u_m[3][DEPTH]` is **multidimensional**,
+and that Quartus reports *"cannot regroup multidimensional array"* — the blocker
+measured on the texture cache. **It did not bite here.** Thirteen arrays
+inferred. The blocker is real for some shapes and was not the shape fragrob has.
+
+### The one real failure, and the rule's message is misleading
+
+    RULE  registers 2631 > allowed 2500
+          -- state that belongs in memories is in flip-flops
+
+That message is the rule's canned text, and **here it is wrong**: with 13 M10Ks
+holding the payload, the state that belongs in memories **is** in memories. The
+overrun is 131 registers, **5%**, and it is control and pipeline state rather
+than the entry table the message imagines.
+
+**A gate that fires with a diagnosis attached is more useful than one that does
+not — until the diagnosis is wrong**, and then it sends the next person to
+re-shape arrays that are already RAM. Worth rewording to state the measurement
+(`registers over ceiling`) and let the reader look at `ramBlocks` next to it.
+
 ## Two claims retracted
 
 1. **"The blocks are built ~10-28x smaller than the brief."** No. The brief
