@@ -248,9 +248,29 @@ and the checker generalised from one case where two defects appeared together.
   be used — but they were **not** what put those arrays into memory, and this
   report said they were.
 
-**The running `zhao_raster_tilestore` fit will settle it directly:** if it comes
-back at 4 M10K again, the change was a no-op for inference and this correction
-is confirmed by measurement rather than by reading a stale row.
+## CONFIRMED BY MEASUREMENT
+
+`zhao_raster_tilestore` came back **`ok`, 3,394 s, ALM 859**. `ok` means it
+passed its tripwires, `min_m10k: 4` among them, so it has at least 4 M10K —
+**the same as it had at `96c0394a` before any change today.**
+
+**The change was a no-op for inference, exactly as the stale row predicted.**
+That is now measured rather than deduced.
+
+**But it was not worthless:** ALM fell **929 → 859**, a saving of 70. That is
+consistent with what the port move actually does — a read register carrying a
+reset cannot be the M10K's own output register, so removing the reset let those
+registers move inside the block. The benefit is real and it is 70 ALMs, not
+32,768 bits.
+
+So the honest ledger for the three blocks:
+
+| block | claimed this morning | measured |
+|---|---|---|
+| `zhao_texture_cache_pipe` | bits out of flops | **true** — 128 bits → 6 M10K, registers 11,328 → 3,033 |
+| `zhao_terrain_residency_v2` | bits out of flops | **true** — no prior fit; 167,936 bits in 16 M10K |
+| `zhao_raster_tilestore` | bits out of flops | **false** — already inferring; −70 ALM |
+| `zhao_texture_palette_res` | bits out of flops | **false** — already inferring at 2 M10K |
 
 ---
 
