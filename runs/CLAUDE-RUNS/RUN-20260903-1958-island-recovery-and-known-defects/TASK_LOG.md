@@ -532,3 +532,29 @@ with a message naming the file; restoring it passes.
 the counted implementation until FRAGROB is fit against its own tripwires.
 Counting both would break the one-implementation rule the file exists to
 enforce; counting FRAGROB instead would claim an adoption with no fit behind it.
+
+## 03:20 — the fit timed out, and the runner warned about this in its own header
+
+`zhao_texture_cache_pipe` ended `timeout` at **3543.8 s** against the runner's
+3000 s default. `run_block_fit.ps1`'s own parameter comment says exactly what
+that means:
+
+> *A "timeout" row in the report reads as "this block does not fit", when all
+> it meant was "we did not wait". Ten rows in the committed report carry that
+> status and every one of them is suspect for the same reason.*
+
+**This also explains the 2h30m run.** The timeout is enforced by the parent
+script polling — and that parent had been killed hours earlier, so nothing was
+enforcing anything and quartus_fit ran unbounded until the task stop took it.
+The long run was not evidence that the block needs 2.5 hours; it was evidence
+that nobody was holding the clock.
+
+Relaunched detached with `-TimeoutSeconds 10800`. Whatever it returns will be a
+real number rather than a budget.
+
+**`reports/synthesis/zhao_block_fit.json` is deliberately left uncommitted**
+while this runs: it currently records `failed:quartus_map.exe` from my own QSF
+quoting bug, and before that `contaminated:source-changed-during-fit` from the
+destroyed fit. The running fit overwrites it, so committing either intermediate
+would put a self-inflicted status into the record as though it were a
+measurement.
