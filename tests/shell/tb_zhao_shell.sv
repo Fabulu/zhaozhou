@@ -224,7 +224,15 @@ module tb_zhao_shell (
   output logic [6:0]  dbg_render_gv_len_o,
   output logic [2:0]  dbg_render_gv_client_o,
   output logic        dbg_render_gv_write_o,
-  output logic [31:0] dbg_render_gv_cnt_o
+  output logic [31:0] dbg_render_gv_cnt_o,
+  // Where fbwrite actually ADDRESSES. D19h: the counter says 3,328 pixels and
+  // memory shows 64 changed halfwords, and "the writes land somewhere the peek
+  // does not cover" is one of the three unevidenced candidates. This settles it
+  // by watching the request rather than inferring from the result.
+  output logic        dbg_render_req_valid_o,
+  output logic [26:0] dbg_render_req_addr_o,
+  output logic [6:0]  dbg_render_req_len_o,
+  output logic        dbg_render_req_write_o
 );
 
   logic        phy_cs_n, phy_ras_n, phy_cas_n, phy_we_n, phy_dq_oe;
@@ -240,6 +248,10 @@ module tb_zhao_shell (
   assign dbg_render_gv_client_o = u_shell.render_gv_req.client;
   assign dbg_render_gv_write_o  = u_shell.render_gv_req.write;
   assign dbg_render_gv_cnt_o    = u_shell.render_gv_cnt;
+  assign dbg_render_req_valid_o = u_shell.render_guard_req.valid;
+  assign dbg_render_req_addr_o  = u_shell.render_guard_req.addr;
+  assign dbg_render_req_len_o   = u_shell.render_guard_req.len;
+  assign dbg_render_req_write_o = u_shell.render_guard_req.write;
 
   zhao_shell_top u_shell (
     .gpu_clk, .vid_clk, .audio_clk, .rst_n,

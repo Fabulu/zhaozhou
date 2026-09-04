@@ -271,11 +271,21 @@ int main(int argc, char** argv) {
   // made a guard refusal look like the only possible cause -- and the render
   // guard's own violation count was 0, so that story was wrong. A pulse read
   // once, late, is not an observation.
+  // D19h: record the address range fbwrite actually asks the guard for, so
+  // "the writes land outside the peek range" stops being a guess.
+  uint32_t req_lo = 0xFFFFFFFFu, req_hi = 0, req_n = 0, req_len = 0;
   bool saw_stream_err = false;
   bool saw_fatal = false;
   uint64_t fatal_at = 0;
   for (int i = 0; i < 200000; ++i) {
     h.step();
+    if (h.top.dbg_render_req_valid_o && h.top.dbg_render_req_write_o) {
+      const uint32_t a = (uint32_t)h.top.dbg_render_req_addr_o;
+      if (a < req_lo) req_lo = a;
+      if (a > req_hi) req_hi = a;
+      req_len = (uint32_t)h.top.dbg_render_req_len_o;
+      ++req_n;
+    }
     if (h.top.render_stream_error_o) saw_stream_err = true;
     if (h.top.render_fatal_o && !saw_fatal) {
       saw_fatal = true;
@@ -397,6 +407,8 @@ int main(int argc, char** argv) {
   // CONSTRUCTION -- the renderer may only write while a blit is in flight into
   // the same slot. If the blit overwrote the render's pixels, the counter and
   // memory disagree for a reason that is architectural, not a wiring fault.
+  std::printf("[shell_draw] fbwrite asked: %u cycles, byte addr %08X..%08X, len %u\n", req_n,
+              req_lo, req_hi, req_len);
   std::printf("[shell_draw] blits completed=%zu, lease still live=%u\n", h.blit_log.size(),
               (unsigned)h.top.dbg_fb_lease_valid_o);
   // THE COUNTER AND THE MEMORY DISAGREE, AND THAT IS DOCKET D19h.

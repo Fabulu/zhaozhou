@@ -1054,6 +1054,46 @@ turns out to be, the test moves when it is fixed.
 
 </details>
 
+### D19h. **NARROWED: fbwrite's write ADDRESS does not advance** — still open
+Measured 2026-09-04 by probing the render guard's request from the testbench.
+
+    fbwrite asked: 4826 cycles, byte addr 00000000..00000060, len 32
+    memory:        64 halfwords changed
+    counter:       render_pixels_o = 3328   over 208 bursts
+
+**Memory and the requests agree exactly.** Four distinct 32-byte requests span
+`0x00..0x60`, which is 128 bytes = **64 halfwords** — precisely what changed.
+The peek range was never the problem: the SDRAM model indexes
+`mem[{bank,row,col}]` and the controller decodes `bank=waddr[25:24]`,
+`row=waddr[23:11]`, `col=waddr[10:0]`, so that concatenation **is** the linear
+word address.
+
+**So one of the three candidates is confirmed and two are dead.** The writes are
+not landing elsewhere, and they are not coincidentally equal to the blit's fill.
+`fbwrite` issued 208 bursts at four addresses: **the address does not advance.**
+
+### The question that replaces it
+
+Is that a defect, or a frame this test never configured?
+
+`shell_draw_directed` sets the job words and a tile grid, but **nothing tells
+the render path where the canvas is or how wide a row is.** The resolve's
+address generator needs a base and a stride; with neither supplied, an address
+that stays near zero is what an unconfigured frame would produce. That is the
+likelier reading and it is **not yet evidenced either**.
+
+**Next:** find what supplies the render frame's base/stride in `zhao_shell_top`
+and drive it, then re-measure. If the address still does not advance with a
+configured frame, it is a defect in the resolve's address generator.
+
+**What this does NOT change:** the extent claim (13 tiles x 256 = 3,328) rests
+on `render_pixels_o`, which is now known to over-count relative to what landed.
+**Until the address advances, "the console renders the right tiles" remains a
+statement about fbwrite's bookkeeping.**
+
+<details>
+<summary>The original entry, before the address was measured</summary>
+
 ### D19h. `render_pixels_o` counts 3,328; memory shows 64 — **OPEN**
 `tests/shell/shell_draw_directed.cpp`, measured 2026-09-04 after the fbwrite fix.
 
@@ -1097,6 +1137,8 @@ render path, and it is now the only thing that would notice this. The extent
 claim (13 tiles) rests on the counter; **the memory-side confirmation of that
 claim is what D19h is.** Until it closes, "the console renders the right tiles"
 is a statement about fbwrite's bookkeeping and not yet about VRAM.
+
+</details>
 
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
