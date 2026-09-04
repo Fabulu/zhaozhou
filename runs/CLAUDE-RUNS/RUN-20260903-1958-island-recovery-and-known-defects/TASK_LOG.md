@@ -1128,3 +1128,33 @@ cross-checks instantiation against the exclusion list rather than trusting
 either alone. The same gate then caught `assetfetch` missing from the fit source
 list — but only on the re-run, because the first run happened **before**
 `gen_prod_top.py`. Ordering, not a hole.
+
+## 2026-09-04 09:2x — CORRECTION: the island "storage gap" never existed
+
+**Reversing something this log recorded earlier today.** It said *"fragrob's
+`min_m10k: 6` failure will NOT be an RTL defect"*. That is backwards, and the
+reasoning behind it was wrong at the root.
+
+**The brief counts MEMORIES, not bits.** `islandrearchitecture5.md` §C3:
+*"CACHE V2 STORAGE: four static data banks + four static tag banks"* — four plus
+four is the "8-10 M10Ks" of §10.11. FRAGROB's "14-20 M10K" is likewise its
+fifteen-to-eighteen payload arrays, and §6.1 says *"sixteen fragment slots"*, so
+`DEPTH = 16` is the brief's own number rather than a placeholder.
+
+I had converted M10K counts into bits by multiplying by 10,240, then argued with
+my own arithmetic and wrote a report about a 10x-28x gap that does not exist.
+
+**Two consequences, both acted on:**
+
+* **`cache_pipe`'s gates were on the wrong block.** §10.1: *"Replace, do not
+  patch. Create `zhao_texture_cache_v2`. Keep ... `cache_pipe` as behavioral
+  oracles."* All four resource rules removed; D19 closed without a ruling.
+* **`fragrob`'s `min_m10k: 6` is a REAL gate.** §6.13 hard-rejects payload
+  arrays in flops. A low count means the multidimensional-array inference
+  blocker, and the fix is to reshape the arrays.
+
+**And an intermediate claim was retracted within the hour of committing it:**
+"one 16x16 RGB565 tile is 512 B, so a lane cannot hold one tile". No such tile
+exists in this design — the cache is direct-mapped over flat 32-bit byte
+addresses. **That number was imported from general knowledge, never measured,
+and it felt like evidence purely because it was a number.**

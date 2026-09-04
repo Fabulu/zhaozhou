@@ -602,21 +602,44 @@ are creature-lane working notes and belong to that lane, not here. **Three carry
 decisions**, and one of those is still open — which is the failure this index
 exists to prevent, since an unindexed decision is an undelivered one.
 
-### D19. `min_m10k: 8` on TEXTURE.CACHE cannot be met — **OPEN, needs a ruling**
-`reports/RAM-INFERENCE-RANKED-20260904.md`, final section.
+### D19. `min_m10k: 8` on TEXTURE.CACHE — **CLOSED 2026-09-04: the gate was on the wrong block**
+`reports/TEXTURE-ISLAND-STORAGE-GAP-20260904.md`.
 
-The storage rework worked: `"cannot regroup"` is gone and all four lanes'
-`data_r` became `altsyncram` at 2,048 bits each, against 128 block memory bits
-on the previous fit. But `tag_r` is **16 deep x 24 wide = 384 bits per lane**,
-below the size Quartus will ever put in an M10K — flip-flops are the correct
-answer for it. So the block has **four** arrays worth being memory, not eight,
-and island brief S3.4's `min_m10k: 8` will fail a correct design.
+This entry asked for a ruling on whether the tripwire was wrong or the cache was
+half its intended size. **It was neither. The gate belongs to a different
+block, and the "8" was never a bit budget.**
 
-**Not changed**, because lowering a gate so the thing passes is the failure the
-gate exists to prevent. Two possible rulings: the tripwire is wrong (capacity
-floor says 4), or the cache is half the size it was meant to be and `LINES`
-should grow — a hit-rate decision, not a syntax one. **Until this is ruled, a
-failing `min_m10k` on this block is not evidence of an RTL defect.**
+`reports/islandrearchitecture5.md` §10.1:
+
+> **Replace, do not patch.** Create `zhao_texture_cache_v2`. Keep
+> `zhao_texture_cache` and `zhao_texture_cache_pipe` as **behavioral oracles**.
+
+And §3.3's budget row is named **"synchronous texture cache v2"**, under a
+heading that says *"These are architecture budgets, not predicted fit results."*
+So `zhao_texture_cache_pipe` is the ORACLE, and §10.11's gate — 900 ALM,
+900 registers, 8-10 M10K, 125 MHz — is `zhao_texture_cache_v2`'s. That block
+has not been written.
+
+**And the count is of MEMORIES, not bits.** §C3: *"CACHE V2 STORAGE: four static
+data banks + four static tag banks."* Four plus four is eight. An M10K holding
+1,024 bits is still an M10K, so `min_memory_bits: 8192` — added to interrogate
+this failure — was answering a question the brief never asked.
+
+**Resolved without a ruling**, because the disagreement was between this
+docket and the brief rather than between the brief and the RTL. All four
+resource rules removed from `cache_pipe` in `design/fit_targets.yml`; they move
+to `zhao_texture_cache_v2` when it is written. The fit stays — what the oracle
+costs is worth knowing.
+
+**A caveat recorded earlier the same day is REVERSED by this.** The run log said
+*"fragrob's `min_m10k: 6` failure will NOT be an RTL defect"*, on the same
+count-as-capacity reasoning. §6.13 hard-rejects *"any sample/context payload
+array **in flops** above the explicit control bits"* — the brief REQUIRES those
+arrays to be RAM and expects fifteen-odd small ones. So a low count from
+`fragrob` is evidence of exactly the defect §6.13 names, with a known cause:
+`desc_u_m[3][DEPTH]` is multidimensional and Quartus reports *"cannot regroup
+multidimensional array"*. **`min_m10k: 6` stays, and a failure means reshape the
+arrays — not lower the number.**
 
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
