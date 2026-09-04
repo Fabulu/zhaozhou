@@ -192,7 +192,28 @@ ready reached 256 register inputs in one clock.
 ## Memory ownership
 Reads only. This block **never writes memory.**
 
-It reads meshlet descriptors through `MEM.GUARD` as an ordinary client. It does
+It reads meshlet descriptors through `MEM.GUARD` as an ordinary client.
+
+**The client port shape, named 2026-09-04 because "an ordinary client" is not
+enough to build from.** `MEM.GUARD`'s response carries `{ready, ok, violation}`
+and **no data**, so a read client needs a separate return channel. The one that
+exists is `zhao_scanout_fetch.sv`'s — the tree's only guarded READ client, and
+the shape `zhao_mem_guard.sv` itself is written against (`scan_ok = !req.write`):
+
+    output zhao_guard_req_t guard_req,   // write=0, addr, len, be
+    input  zhao_guard_rsp_t guard_rsp,   // {ready, ok, violation}
+    input  logic            beat_valid,
+    input  logic [63:0]     beat_data,
+    input  logic            beat_last    // conformance: 8 beats per request
+
+A 64-byte descriptor is therefore **one request at `len = 64` and exactly eight
+64-bit beats**, which is why the descriptor is 64-byte aligned in the first
+place — the alignment ruling and the burst shape are the same fact.
+
+Reusing this port rather than inventing one matters beyond tidiness: `MEM.GUARD`
+distinguishes read clients from write clients by `req.write` and checks a
+different region for each, so a read client that arrived with a novel port shape
+would also need a new region rule. There is nothing to design here. It does
 not own the vertex or index streams — it emits *offsets into them*, and
 `GEOM.VDECODE` performs those reads. That split is deliberate: it keeps one
 block per memory concern and it means a descriptor-fetch stall cannot hold a
