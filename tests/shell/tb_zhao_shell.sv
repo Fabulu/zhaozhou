@@ -232,7 +232,14 @@ module tb_zhao_shell (
   output logic        dbg_render_req_valid_o,
   output logic [26:0] dbg_render_req_addr_o,
   output logic [6:0]  dbg_render_req_len_o,
-  output logic        dbg_render_req_write_o
+  output logic        dbg_render_req_write_o,
+
+  // WHERE THE CANVAS IS. Tied to zero here until 2026-09-04, which is why the
+  // first drawing test saw fbwrite's address never advance: with stride 0 every
+  // row of every tile resolves to the same address, so 208 bursts hammered 128
+  // bytes. Not a defect -- an unconfigured frame (docket D19h).
+  input  logic [26:0] render_fb_base_i,
+  input  logic [15:0] render_fb_stride_i
 );
 
   logic        phy_cs_n, phy_ras_n, phy_cas_n, phy_we_n, phy_dq_oe;
@@ -314,7 +321,7 @@ module tb_zhao_shell (
     .render_state_i(render_state_i), .render_src_a_i(render_src_a_i),
     .render_texel_rgb_i(render_texel_rgb_i), .render_texel_a_i(render_texel_a_i),
     .render_texel_idx_i(render_texel_idx_i),
-    .render_fb_base_i(27'd0), .render_fb_stride_i(16'd0),
+    .render_fb_base_i(render_fb_base_i), .render_fb_stride_i(render_fb_stride_i),
     // Driven by the bench now -- see the port comment above.
     .fb_writer_i(fb_writer_i),
     .render_drain_done_o(), .render_busy_o(render_busy_o),

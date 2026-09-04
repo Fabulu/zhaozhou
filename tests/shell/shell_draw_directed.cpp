@@ -59,12 +59,17 @@
 //   * issued and retired words BALANCE, which is why both are counted in words;
 //   * the frame DRAINS, and the framebuffer slot changes.
 //
+// AND THE EXTENT IS CONFIRMED IN VRAM, not just in a counter:
+//
+//   oracle 3328 = counter 3328 = memory 3328 halfwords changed
+//
 // STILL NOT PROVED: that each pixel holds the right COLOUR. The extent is
-// checked against `zref::Binner`; the shading is `render_pipe_directed`'s, and
-// re-proving it here would duplicate a law rather than test the composition.
-// What this file establishes is that the composed shell renders the right
-// TILES to memory -- which until 2026-09-04 nothing had ever checked, because
-// until then it rendered nothing at all.
+// checked against `zref::Binner` and against memory; the shading is
+// `render_pipe_directed`'s law, and re-proving it here would duplicate a law
+// rather than test a composition. What this file establishes is that the
+// composed shell renders the right TILES to the right ADDRESSES -- which until
+// 2026-09-04 nothing had ever checked, because until then it rendered nothing
+// at all.
 //
 #include <cstdint>
 #include <cstdio>
@@ -187,6 +192,17 @@ int main(int argc, char** argv) {
   // zeros into memory that is already zero, and "was the framebuffer written?"
   // cannot tell success from a dead path. A distinctive fill makes the question
   // answerable.
+  // WHERE THE CANVAS IS. Without these the resolve's address generator has no
+  // base and no row pitch, so every tile row resolves to the same address --
+  // which is exactly what the first version measured: 208 bursts at four
+  // addresses, 128 bytes touched, and a counter claiming 3,328 pixels (D19h).
+  // An unconfigured frame, not a defect.
+  //
+  // The grid is 4x4 tiles = 64 pixels wide, and a pixel is one RGB565 halfword,
+  // so a row is 64 * 2 = 128 bytes.
+  h.top.render_fb_base_i = 0;
+  h.top.render_fb_stride_i = 4 * 16 * 2;
+
   h.top.render_fill_word_i = 0xA5A5A5A5A5A5A5A5ull;
   h.top.render_clear_word_i = 0x5A5A5A5A5A5A5A5Aull;
   h.top.render_src_a_i = 0xFF;
@@ -411,28 +427,27 @@ int main(int argc, char** argv) {
               req_lo, req_hi, req_len);
   std::printf("[shell_draw] blits completed=%zu, lease still live=%u\n", h.blit_log.size(),
               (unsigned)h.top.dbg_fb_lease_valid_o);
-  // THE COUNTER AND THE MEMORY DISAGREE, AND THAT IS DOCKET D19h.
+  // THE COUNTER, THE ORACLE AND MEMORY ALL AGREE (D19h, closed 2026-09-04).
   //
-  //   counter  render_pixels_o = 3328     (fbwrite's own tally)
-  //   memory   64 halfwords changed       (what the SDRAM model actually holds)
-  //   blits completed = 1, lease still live = 1
+  //   oracle   zref::Binner  13 tiles x 16 x 16 = 3328
+  //   counter  render_pixels_o                  = 3328
+  //   memory   halfwords changed in the slot    = 3328
   //
-  // The obvious explanation -- that the blit was overwriting the render -- is
-  // MEASURED FALSE: the blit had already completed when the snapshot was taken.
-  // So either fbwrite counts words it did not land, or the writes go somewhere
-  // this peek range does not cover, or most of them wrote a value equal to what
-  // the blit had left. **None of those is established**, and an unmeasured
-  // explanation is worse than an open question -- which is the lesson this file
-  // already carries twice.
+  // They did not, at first: memory showed 64. Probing the guard request showed
+  // fbwrite asking for four addresses spanning 0x00..0x60 -- 128 bytes, exactly
+  // the 64 halfwords -- so memory and the requests always agreed and the ADDRESS
+  // was not advancing. The cause was this test, not the hardware:
+  // `render_fb_base_i` and `render_fb_stride_i` were tied to zero in the bench,
+  // so the resolve's address generator had no row pitch and every tile row
+  // landed on the same bytes.
   //
-  // So the equality is REPORTED, not asserted. What is asserted below is the
-  // part that is certain: memory changed, so the picture reached it. The day
-  // D19h is understood, this becomes an equality.
-  if (changed != h.top.render_pixels_o) {
-    std::printf("[shell_draw] D19h: counter %u != memory %u -- OPEN\n",
-                (unsigned)h.top.render_pixels_o, changed);
-  }
-  zhao::check(wrote, "and the framebuffer CHANGED -- the picture reached memory", 1, wrote ? 1 : 0);
+  // **A test that does not configure the frame measures an unconfigured frame.**
+  // The three candidates were: fbwrite over-counts, the writes land outside the
+  // peek range, or they coincidentally match the blit's fill. Measuring the
+  // request killed two and pointed at the third thing nobody had listed.
+  zhao::check(changed == h.top.render_pixels_o,
+              "memory changed in exactly as many halfwords as pixels written",
+              (unsigned)h.top.render_pixels_o, changed);
 
   // ---- WHAT IS STILL NOT PROVED -------------------------------------------
   // That a granted frame produces the RIGHT pixels. That needs the command path

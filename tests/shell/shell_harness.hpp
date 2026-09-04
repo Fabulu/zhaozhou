@@ -269,6 +269,8 @@ class ShellHarness {
     top.render_texel_rgb_i = 0;
     top.render_texel_a_i = 0;
     top.render_texel_idx_i = 0;
+    top.render_fb_base_i = 0;
+    top.render_fb_stride_i = 0;
   }
 
   /** One triangle, in exactly the shape GEOM.SETUP emits and the binner reads. */

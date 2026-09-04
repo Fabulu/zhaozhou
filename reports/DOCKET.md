@@ -1054,6 +1054,41 @@ turns out to be, the test moves when it is fixed.
 
 </details>
 
+### D19h. **CLOSED — it was the test's unconfigured frame, not the hardware**
+2026-09-04, same day. Final state:
+
+    oracle   zref::Binner  13 tiles x 16 x 16 = 3328
+    counter  render_pixels_o                  = 3328
+    memory   halfwords changed in the slot    = 3328
+    fbwrite asked: byte addr 00000000..00001FA0
+
+**All three agree.** `zhao_shell_top:810` takes `render_fb_base_i` and
+`render_fb_stride_i` as shell inputs, and `tb_zhao_shell` tied both to zero. With
+no row pitch the resolve's address generator put every tile row on the same
+bytes — 208 bursts at four addresses, 128 bytes touched, and a counter that was
+telling the truth about a frame nobody had configured.
+
+Both are now brought out of the bench and driven (`stride = 4 tiles x 16 px x 2
+bytes = 128`).
+
+**A test that does not configure the frame measures an unconfigured frame** —
+and it looks exactly like a hardware fault while doing it.
+
+### How it was found, which is the transferable part
+
+The three candidates were: fbwrite over-counts, the writes land outside the peek
+range, or they coincidentally match the blit's fill. **All three were wrong**,
+and the answer came from probing the guard REQUEST rather than reasoning about
+the result: four addresses spanning `0x00..0x60` is 128 bytes, which is exactly
+the 64 halfwords that changed — so memory and the requests had agreed all along
+and the question was never "where did the writes go" but "why is the address
+constant".
+
+**Measure the thing that decides, not the thing that disappoints.**
+
+<details>
+<summary>The narrowing step and the original entry</summary>
+
 ### D19h. **NARROWED: fbwrite's write ADDRESS does not advance** — still open
 Measured 2026-09-04 by probing the render guard's request from the testbench.
 
