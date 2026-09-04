@@ -916,6 +916,45 @@ scope includes **giving `tb_zhao_shell` a drawing path**, which is a
 pre-existing gap it inherits rather than creates. Adding nineteen blocks to a
 composition no simulation drives would compound the problem rather than find it.
 
+### D19f. **The renderer writes under the BLIT'S lease and the BLIT'S span**
+Traced 2026-09-04 while making the shell draw. `zhao_shell_top.sv:1234`:
+
+    assign map_valid_q = fb_lease_valid;   // from VIDEO.SLOTMGR
+    assign map_slot_q  = fb_lease_slot;
+    assign map_span_q  = r_blit_len;       // latched from dpy_blit_len
+
+and those three feed **both** `zhao_mem_guard:u_guard_blit` **and**
+`u_guard_render` (lines 676-678 and 837-839). The shell's own comment states the
+intent — *"THE GUARD WINDOW IS THE LEASE... while a lease is live the guard
+admits writes to that slot, and when it ends the window shuts with it"* — and
+that is a good rule. The consequence is the part nobody has written down:
+
+**`RASTER.FBWRITE` (ENGINE0) can only write while a DISPLAY BLIT lease is live,
+into a window whose length is that blit's `len`.**
+
+This is why `shell_draw_directed` sees `fatal=1`: a render-only frame has no
+lease, so `blit_ok` is false, so the guard refuses and `fbwrite` latches
+`fatal_error_o`. **Correct behaviour, and the first observation of it.**
+
+### The question it raises for D22
+
+For Phase 2 the coupling is harmless — the blit's `len` is `canvas_bytes(mode)`,
+which is exactly the canvas the renderer fills, so the two windows coincide.
+
+**But the geometry front end is what makes the console draw its own frames.**
+When geometry produces the picture, is a display blit still the thing that opens
+the guard window? If a frame is rendered and never blitted — or blitted with a
+different length — the renderer has either no window or the wrong one.
+
+**Not a defect today**, and deliberately not filed as one: nothing renders in
+Phase 2, so nothing has ever needed the window without a blit. It is filed
+because **D22 is the change that makes it matter**, and because the answer
+("the renderer gets its own lease" vs "a frame always carries a blit") is an
+architecture decision rather than a wiring one.
+
+**ENFORCED-BY:** `tests/shell/shell_draw_directed.cpp` asserts the refusal, so
+the day this coupling changes, that test says so.
+
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
 `reports/FUNDAMENTALS-DECISIONS-NEEDED.md`. All eight are ruled and each is
