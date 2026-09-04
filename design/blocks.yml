@@ -2115,7 +2115,7 @@ blocks:
     phase: 8
     owner_issue: ZH-037
     inputs: [dispatch, lod_targets]
-    outputs: [meshlet_stream]
+    outputs: [meshlet_stream, pose_requests]
     upstream: [CMD.SCHEDULER, MEASURE.GOVERNOR]
     downstream: [GEOM.VDECODE, GEOM.POSE, MEM.GUARD, GEOM.ASSEMBLE]
     backpressure: ready_valid
@@ -2213,7 +2213,7 @@ blocks:
     contract: design/contracts/GEOM.SKIN.md
     phase: 9
     owner_issue: ZH-054
-    inputs: [vertex_batch, bone_palette]
+    inputs: [vertex_batch, bone_matrices]
     outputs: [skinned_vertices]
     upstream: [GEOM.VDECODE, GEOM.POSE]
     downstream: [GEOM.LOOM, GEOM.WCACHE, GEOM.LIGHT]
@@ -2357,7 +2357,7 @@ blocks:
     contract: design/contracts/GEOM.PARAMBUF.md
     phase: 8
     owner_issue: ZH-121
-    inputs: [view_vertices, triangle_descriptors, tile_references]
+    inputs: [view_vertices, triangle_descriptors, tile_lists]
     outputs: [parambuf_records]
     upstream: [GEOM.PROJECT, GEOM.BINNER, GEOM.ASSEMBLE]
     downstream: [GEOM.BINNER]
@@ -2519,7 +2519,7 @@ blocks:
     contract: design/contracts/GEOM.ASSEMBLE.md
     phase: 5
     owner_issue: ZH-083
-    inputs: [meshlet_descriptor, index_stream]
+    inputs: [meshlet_stream, index_stream]
     outputs: [triangle_descriptors]
     upstream: [GEOM.MESHFETCH]
     downstream: [GEOM.CLIP, GEOM.PARAMBUF]
