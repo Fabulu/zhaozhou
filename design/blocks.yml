@@ -766,6 +766,10 @@ blocks:
       directed: tests/field/field_progcache_directed.cpp
       random: tests/field/field_progcache_directed.cpp
     counters: [progcach_hits, progcach_misses, programs_rejected]
+    # D19c. The ledger prefixes these `progcach_`; the ports do not.
+    counter_ports:
+      progcach_hits: hits_o
+      progcach_misses: misses_o
     source_ids: true
     budget_group: field
     maturity: UNIT_VERIFIED
@@ -1306,6 +1310,13 @@ blocks:
       random: tests/video/video_slotmgr_directed.cpp
       formal: tests/formal/video_slotmgr_invariants.sby
     counters: [slot_leases_granted, slot_stale_events]
+    # D19c. `slot_stale_events` is `stale_events_o`. NOTE that
+    # `slot_leases_granted` is deliberately NOT mapped: the nearest port is
+    # `lease_grant_o`, which its own comment calls "one pulse" -- an EVENT,
+    # not a count. Mapping a counter to a pulse would make the row look
+    # implemented while nothing accumulates.
+    counter_ports:
+      slot_stale_events: stale_events_o
     source_ids: true
     budget_group: platform
     maturity: UNIT_VERIFIED
