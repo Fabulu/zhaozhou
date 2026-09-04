@@ -33,6 +33,7 @@
 // Everything else here is plumbing between two laws that already exist.
 #pragma once
 
+#include <climits>
 #include <cstdint>
 #include <cstring>
 
@@ -195,7 +196,21 @@ inline void world_bound(const InstanceXform& x, const int32_t local_centre[3],
 
   const int64_t scaled = static_cast<int64_t>(local_radius) * max_abs;
   // Round the radius UP, never down, for the same directional reason.
-  *out_radius = static_cast<uint32_t>((scaled + ((int64_t{1} << 16) - 1)) >> 16);
+  const int64_t up = (scaled + ((int64_t{1} << 16) - 1)) >> 16;
+
+  // SATURATE, and this is not defensive padding. `bound_radius` is fx16
+  // unsigned, so a legal descriptor may carry a radius near 2^32, and a legal
+  // instance may scale it. The product then exceeds a u32 after the shift and
+  // the cast WRAPS -- turning a huge bound into a small one, which is the
+  // geometry-deleting direction the ruling's round-outward rule exists to
+  // avoid. fx16's house behaviour is "saturate + record" (qformats §3), and a
+  // saturated bound is merely loose: it costs decode work and draws everything.
+  //
+  // The randomized suite did not catch this because its generator used bounded
+  // scales. Found by reading the contract's Q-format table against the code
+  // rather than by a failing test, which is the only way this class shows up.
+  *out_radius = (up > static_cast<int64_t>(UINT32_MAX)) ? UINT32_MAX
+                                                        : static_cast<uint32_t>(up);
 }
 
 // ---------------------------------------------------------------------------
@@ -241,4 +256,38 @@ inline Result decide(const uint8_t* descriptor_bytes, uint8_t expect_format,
 }
 
 }  // namespace meshfetch
+
+// ---------------------------------------------------------------------------
+// `zref::MeshFetch` — the name the ledger and the contract both cite
+// ---------------------------------------------------------------------------
+// The implementation above is a namespace of free functions, which is how the
+// rest of zref is written. But `design/blocks.yml` names the reference model
+// `zref::MeshFetch` and the contract says "whose entry point is
+// `decide(...)`", so a file that only offered `zref::meshfetch::decide` would
+// leave that citation pointing at a symbol nobody defined.
+//
+// The ledger's V17 rule caught exactly that on the first attempt, naming the
+// precedent it was written for: "a symbol nobody defined is a phantom citation
+// (the zref::CmdDma failure)". This alias is the cheap half of the fix; the
+// expensive half would have been discovering it from a contract review months
+// later.
+struct MeshFetch {
+  using Descriptor = meshfetch::Descriptor;
+  using Refusal = meshfetch::Refusal;
+  using Result = meshfetch::Result;
+  using InstanceXform = meshfetch::InstanceXform;
+
+  static Refusal validate(const uint8_t* bytes, uint8_t expect_format,
+                          uint16_t expect_generation) {
+    return meshfetch::validate(bytes, expect_format, expect_generation);
+  }
+
+  static Result decide(const uint8_t* descriptor_bytes, uint8_t expect_format,
+                       uint16_t expect_generation, const InstanceXform& instance,
+                       const cull::View views[cull::kViewCount], uint8_t active_camera_mask) {
+    return meshfetch::decide(descriptor_bytes, expect_format, expect_generation, instance, views,
+                             active_camera_mask);
+  }
+};
+
 }  // namespace zref

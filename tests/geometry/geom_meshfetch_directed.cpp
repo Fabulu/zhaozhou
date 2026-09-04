@@ -327,6 +327,26 @@ int main(int argc, char** argv) {
                 (wc[0] == 3 * ONE && wc[1] == 2 * ONE && wc[2] == -2 * ONE) ? 1 : 0);
   }
 
+  // ---- 7b: the world radius SATURATES rather than wrapping ----------------
+  // `bound_radius` is fx16 unsigned, so a legal descriptor may carry a radius
+  // near 2^32 and a legal instance may scale it. Without saturation the cast
+  // wraps and a huge bound becomes a SMALL one -- the geometry-deleting
+  // direction the round-outward rule exists to avoid.
+  {
+    MF::InstanceXform x{};
+    x.m[0] = 64 * ONE;  // a 64x scale, legal and extreme
+    x.m[5] = ONE;
+    x.m[10] = ONE;
+    const int32_t c[3] = {0, 0, 0};
+    int32_t wc[3];
+    uint32_t wr;
+    mf::world_bound(x, c, 0xFFFFFFFFu, wc, &wr);
+    zhao::check(wr == 0xFFFFFFFFu,
+                "a radius that would overflow u32 saturates instead of wrapping "
+                "-- a wrapped bound is a SMALL bound, and small deletes geometry",
+                1, (wr == 0xFFFFFFFFu) ? 1 : 0);
+  }
+
   // ---- 8: a refused descriptor never reports visibility -------------------
   // The ordering property: validation runs first, so a corrupt descriptor
   // cannot produce a mask that looks like a real answer.

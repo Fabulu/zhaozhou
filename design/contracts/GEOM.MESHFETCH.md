@@ -206,14 +206,39 @@ descriptor cache is a Class-B evidence question (measure the hit rate on a real
 | value | format | rounding |
 |---|---|---|
 | `bound_centre` | fx16 S15.16 | none — carried, not computed |
-| `bound_radius` | fx16 unsigned | scaled by max abs instance scale, **rounded UP** |
+| `bound_radius` | fx16 unsigned | scaled by max abs instance scale, **rounded UP**, and **SATURATED at `0xFFFFFFFF`** |
+| world centre | fx16 S15.16 | `rescale(.,16)` per lane, **round-half-up** |
 | `lod_error` | fx16 | none |
 | plane tests | as `zhao_geom_cull` | `isqrt_u64`, exact floor, **used as a ceiling** |
+
+**The WORLD CENTRE's rounding was not in this table and now is: `rescale(.,16)`
+per lane, fx16 round-half-up, ties toward +infinity (`qformats.md` §3/§4).**
+Added 2026-09-04 while writing the oracle against this contract. The row above
+says `bound_centre` takes "none — carried, not computed", which is true of the
+DESCRIPTOR field and says nothing about the world centre the instance transform
+produces — and that value *is* computed, once per lane, with a rescale that has
+to round somehow.
+
+An RTL author reading this table could reasonably have truncated. Oracle and
+RTL would then agree everywhere except on ties, which is the worst possible
+place to disagree: rare enough to survive a directed test, common enough to
+appear in a long capture. The oracle uses round-half-up because that is the
+house rule for fx16; this line exists so the RTL is not free to choose.
 
 **The radius rounds up and the plane length bound rounds up.** Both directions
 are chosen so error costs work rather than geometry. `zhao_geom_cull`'s existing
 differential already measures that this matters: 1,015 of 1,775 boundary probes
 answer differently under a floor.
+
+**The radius SATURATES.** `bound_radius` is fx16 unsigned, so a legal
+descriptor may carry a radius near 2^32 and a legal instance may scale it; the
+product overflows a u32 after the shift. Wrapping would turn a huge bound into a
+SMALL one, which is exactly the geometry-deleting direction the round-outward
+rule exists to prevent, and fx16's house behaviour is "saturate + record"
+anyway. A saturated bound is merely loose — it costs decode work and draws
+everything. The oracle had this defect on its first version and the randomized
+suite did not catch it, because that generator used bounded scales; it was found
+by reading this table against the code.
 
 No new arithmetic law is introduced by this block. The cull maths is
 `zref::cull`'s and is already proved; the LOD ladder is `zref::creature::lod_*`
