@@ -266,6 +266,32 @@ session touched it. Until it exists, every geometry descriptor read is denied
 by design — and `zhao_geom_meshfetch.sv`'s `guard_denied_o` is the counter that
 says whether that is still true.
 
+### The blocker is ONE asset-memory path, not eighteen wiring jobs
+
+**Checked 2026-09-04 by reading every port in `fpga/rtl/geometry/`.** D22 reads
+as eighteen separate pieces of work. It is not.
+
+**`zhao_geom_meshfetch.sv` is the only `zhao_guard_req_t` client in the whole
+subsystem.** Every other block that consumes asset bytes takes them through a
+generic caller-fed port:
+
+| block | how it gets its bytes |
+|---|---|
+| `GEOM.MESHFETCH` | `guard_req_o` / `beat_data_i` — **a real memory client** |
+| `GEOM.VDECODE` | `v_bytes_i[255:0]` — 32 bytes, caller-fed |
+| `GEOM.ASSEMBLE` | `ix_req_o` → `ix_valid_i/ix_a_i/…` — caller-answered |
+
+So composing the front end needs **one asset fetcher serving three consumers**
+— descriptors, the `u8` index stream, and vertex records — and that fetcher
+needs a region `MEM.GUARD` does not yet have. Everything downstream of it is
+ready-made ports waiting to be joined.
+
+**That is why the honest next item is the Phase-3 region map and not "wire
+eighteen blocks".** The wiring is glue over one memory path; the memory path is
+a charter-allocator decision carrying a formal proof. Getting this the wrong way
+round would mean eighteen people's worth of integration work queued behind a
+question nobody had asked yet.
+
 ### The order is already decided, and it is the ledger's own
 
 `tools/design/compose_order.py` (committed) topologically sorts the geometry
