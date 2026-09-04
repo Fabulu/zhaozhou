@@ -1,0 +1,17 @@
+Analysis & Synthesis Status : Successful - Fri Sep 04 14:39:28 2026
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : blockfit
+Top-level Entity Name : zhao_texture_tmu_pipe
+Family : Cyclone V
+Logic utilization (in ALMs) : N/A
+Total registers : 72824
+Total pins : 0
+Total virtual pins : 657
+Total block memory bits : 256
+Total DSP Blocks : 3
+Total HSSI RX PCSs : 0
+Total HSSI PMA RX Deserializers : 0
+Total HSSI TX PCSs : 0
+Total HSSI PMA TX Serializers : 0
+Total PLLs : 0
+Total DLLs : 0

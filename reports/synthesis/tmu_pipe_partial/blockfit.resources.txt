@@ -1,0 +1,84 @@
+zhao_texture_tmu_pipe -- Analysis & Synthesis evidence for D19m
+Extracted 2026-09-04 from the live fit workspace while the fitter was still
+routing. The harness will discard this run (see FIT-TIMEOUT-CANNOT-FIRE),
+so these are the numbers, kept by hand.
+
+======================================================================
+Analysis & Synthesis RAM Summary
+======================================================================
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Analysis & Synthesis RAM Summary                                                                                                                                      ;
++-------------------------------------------------------------------+------+------------------+--------------+--------------+--------------+--------------+------+------+
+; Name                                                              ; Type ; Mode             ; Port A Depth ; Port A Width ; Port B Depth ; Port B Width ; Size ; MIF  ;
++-------------------------------------------------------------------+------+------------------+--------------+--------------+--------------+--------------+------+------+
+; altsyncram:rb_src_rtl_0|altsyncram_j2k1:auto_generated|ALTSYNCRAM ; AUTO ; Simple Dual Port ; 16           ; 16           ; 16           ; 16           ; 256  ; None ;
++-------------------------------------------------------------------+------+------------------+--------------+--------------+--------------+--------------+------+------+
+
+
++-------------------------------------------------+
+; Analysis & Synthesis DSP Block Usage Summary    ;
++-----------------------------------+-------------+
+; Statistic                         ; Nu
+
+======================================================================
+General Register Statistics
+======================================================================
++----------------------------------------+----------------------------------------+
+
+
++------------------------------------------------------+
+; General Register Statistics                          ;
++----------------------------------------------+-------+
+; Statistic                                    ; Value ;
++----------------------------------------------+-------+
+; Total registers                              ; 72824 ;
+; Number of registers using Synchronous Clear  ; 4336  ;
+; Number of registers using Synchronous Load   ; 68    ;
+; Number of registers using Asynchronous Clear ; 4888  ;
+; Number of registers using Asynchronous Load  ; 0     ;
+; Number of registers using Clock Enable       ; 68539 ;
+; Number of registers using Preset             ; 0     ;
++----------------------------------------------+-------+
+
+
++--------------------------------------------+
+; Registers Added for RAM Pass-Through Logic ;
++-------------------------+------------------+
+; Register Name           ; RAM Name         ;
++-------------------------+------------------+
+; rb_src_rtl_0_bypass[0]  ; rb_src_rtl_0     ;
+; rb_src_rtl_0_bypass[1]  ; rb_src_rtl_0     ;
+; rb_src_rtl_0_bypass[2]  ; rb_src_rtl_0     ;
+; rb_src_rtl_0_bypass[3]  ; rb_src_rtl_0     ;
+; rb_src_rtl_0_bypass[4]  ; rb_src_rtl_0     ;
+; rb_src_rtl_0_bypass[5]  ; rb_src_rtl_0     ;
+; rb_src_rtl_0_bypass[6] 
+
+======================================================================
+Analysis & Synthesis DSP Block Usage Summary
+======================================================================
++------+------------------+--------------+--------------+--------------+--------------+------+------+
+
+
++-------------------------------------------------+
+; Analysis & Synthesis DSP Block Usage Summary    ;
++-----------------------------------+-------------+
+; Statistic                         ; Number Used ;
++-----------------------------------+-------------+
+; Independent 9x9                   ; 2           ;
+; Two Independent 18x18             ; 1           ;
+; Total number of DSP blocks        ; 3           ;
+;                                   ;             ;
+; Fixed Point Mixed Sign Multiplier ; 3           ;
++-----------------------------------+-------------+
+
+
++---------------------------------------------------------------------------------+
+; Registers Removed During Synthesis                                              ;
++----------------------------------------+----------------------------------------+
+; Register name                          ; Reason for Removal                     ;
++----------------------------------------+----------------------------------------+
+; c_en[2,3]                              ; Merged with c_en[1]                    ;
+; fl_t[3][0][7]                          ; Merged with fl_t[3][0][3]              ;
+; fl_t[3][0][6]                          ; Merged with fl_t[3][0][2]              ;
+; fl_t[3][0][5]           
