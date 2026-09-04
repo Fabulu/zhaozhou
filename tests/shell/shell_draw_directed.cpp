@@ -63,13 +63,23 @@
 //
 //   oracle 3328 = counter 3328 = memory 3328 halfwords changed
 //
-// STILL NOT PROVED: that each pixel holds the right COLOUR. The extent is
-// checked against `zref::Binner` and against memory; the shading is
-// `render_pipe_directed`'s law, and re-proving it here would duplicate a law
-// rather than test a composition. What this file establishes is that the
-// composed shell renders the right TILES to the right ADDRESSES -- which until
-// 2026-09-04 nothing had ever checked, because until then it rendered nothing
-// at all.
+// AND THE COLOURS ARE THE RESOLVE'S TWO, DITHERED:
+//
+//     52CA 5ACB 5AEB   r=10-11 g=22-23 b=10-11   the CLEAR
+//     A514 A534 AD35   r=20-21 g=40-41 b=20-21   the FILL
+//
+// Two clusters, each channel spanning one LSB -- exactly an ordered dither's
+// range, from the block that is named after it. Checked as CLUSTERS rather
+// than values, because asserting "at most two values" failed on six and the
+// hardware was right: **a check that contradicts a documented law is a wrong
+// check.**
+//
+// STILL NOT PROVED: that each individual pixel holds the value the shading law
+// says for ITS position. That is `render_pipe_directed`'s differential and
+// duplicating it here would test a law rather than a composition. What this
+// file establishes is that the composed shell renders the right TILES, to the
+// right ADDRESSES, in the right two COLOURS -- which until 2026-09-04 nothing
+// had ever checked, because until then it rendered nothing at all.
 //
 #include <cstdint>
 #include <cstdio>
@@ -448,6 +458,75 @@ int main(int argc, char** argv) {
   zhao::check(changed == h.top.render_pixels_o,
               "memory changed in exactly as many halfwords as pixels written",
               (unsigned)h.top.render_pixels_o, changed);
+
+  // WHAT COLOUR DID IT WRITE? Not the shading law -- `render_pipe_directed`
+  // owns that -- but a claim this composition can make cheaply and that a
+  // broken resolve would fail.
+  //
+  // The job words are constant and `render_state_i` is 0, so a resolved tile
+  // holds at most TWO values: the fill where the triangle covers, the clear
+  // where it does not. Anything else -- three values, or the blit's own
+  // halfword surviving inside a resolved tile -- means the resolve wrote
+  // something nobody asked for.
+  std::vector<uint16_t> distinct;
+  for (uint32_t w = 0; w < kSlotHalfwords; ++w) {
+    const uint16_t v = peek(h, w);
+    if (v == before[w]) continue;
+    bool seen = false;
+    for (uint16_t d : distinct) {
+      if (d == v) {
+        seen = true;
+        break;
+      }
+    }
+    if (!seen && distinct.size() < 8) distinct.push_back(v);
+  }
+  std::printf("[shell_draw] written values: %zu distinct ->", distinct.size());
+  for (uint16_t d : distinct) std::printf(" %04X", d);
+  std::printf("  (blit left %04X)\n", before[0]);
+
+  // TWO SOURCE COLOURS, EACH DITHERED -- not two values.
+  //
+  // The first version of this check asserted "at most two values" and failed on
+  // six. The hardware was right and the check was wrong: `zhao_raster_resolve`
+  // is *the ordered-dither resolve* and `zhao_raster_quant` is *one
+  // ordered-dither channel quantiser*, so one source colour becomes several
+  // adjacent RGB565 values by design. The six decode cleanly:
+  //
+  //     52CA 5ACB 5AEB   r=10-11 g=22-23 b=10-11   the CLEAR, dithered
+  //     A514 A534 AD35   r=20-21 g=40-41 b=20-21   the FILL,  dithered
+  //
+  // Each channel spans one LSB, which is exactly a dither's range. So the claim
+  // is about CLUSTERS: every written value belongs to one of two groups, and
+  // within a group no channel varies by more than 1.
+  //
+  // **A check that contradicts a documented law is a wrong check.** This one
+  // ignored the dither the resolve is named after.
+  int lo_n = 0, hi_n = 0;
+  int lo_min_r = 63, lo_max_r = 0, hi_min_r = 63, hi_max_r = 0;
+  for (uint16_t d : distinct) {
+    const int r = (d >> 11) & 31;
+    if (r < 16) {
+      ++lo_n;
+      if (r < lo_min_r) lo_min_r = r;
+      if (r > lo_max_r) lo_max_r = r;
+    } else {
+      ++hi_n;
+      if (r < hi_min_r) hi_min_r = r;
+      if (r > hi_max_r) hi_max_r = r;
+    }
+  }
+  zhao::check(lo_n > 0 && hi_n > 0, "the written values form TWO clusters (clear and fill)", 1,
+              (lo_n > 0 && hi_n > 0) ? 1 : 0);
+  zhao::check(lo_max_r - lo_min_r <= 1 && hi_max_r - hi_min_r <= 1,
+              "and each cluster's red spans at most one LSB -- the dither's range", 1,
+              (lo_max_r - lo_min_r <= 1 && hi_max_r - hi_min_r <= 1) ? 1 : 0);
+  bool none_is_blit = true;
+  for (uint16_t d : distinct) {
+    if (d == before[0]) none_is_blit = false;
+  }
+  zhao::check(none_is_blit, "and neither is the blit's halfword -- the render owns them", 1,
+              none_is_blit ? 1 : 0);
 
   // ---- WHAT IS STILL NOT PROVED -------------------------------------------
   // That a granted frame produces the RIGHT pixels. That needs the command path
