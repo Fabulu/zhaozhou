@@ -75,6 +75,21 @@ surgery indicated.
 * `gpu_clk` and `vid_clk` remain timing-related, so the known phase-dependent
   displayed-byte crossing is not waived. 5 critical warnings, all the virtual
   clock-port class.
+* **THE RENDER PATH THIS NUMBER WAS CLOSED ON HAS NEVER BEEN SIMULATED**
+  (docket D19e, found the same day). `render_tri_valid_i` is driven to `1'b0`
+  by the only bench that instantiates `zhao_shell_top`, which states outright
+  that it *"does not draw"*. The blocks inside are well tested —
+  `render_pipe_directed` drives `zhao_geom_bin_pipe` and the whole raster chain
+  against `zref` — but it instantiates the bin pipe **directly**, not through
+  the shell.
+
+  **This does not invalidate the result.** Timing is structural: the fitter
+  analysed the real elaborated netlist, and a path's delay does not depend on
+  whether a testbench toggled it. Every number above stands.
+
+  It does mean **the machine that closed timing has never drawn a triangle
+  through the port it closed timing on**, and that belongs beside the number
+  rather than three files away.
 
 ## The rule this effort kept re-learning
 
