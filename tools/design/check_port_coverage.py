@@ -34,6 +34,48 @@ reports two tiers:
 The second tier is a prompt to go and look, never a verdict. Reporting it as
 one would be the "gate passing is not the thing looking right" failure with the
 sign flipped.
+
+THE KNOWN FALSE POSITIVE: A TESTBENCH WRAPPER THAT RENAMES
+----------------------------------------------------------
+Measured 2026-09-04, working the first list this tool produced. It named four
+`zhao_field_exec_shared` fault reporters as UNMENTIONED:
+
+    exec_unsupported_o  exec_sat_add_o  exec_sat_mul_o  exec_sat_rescale_o
+
+All four are thoroughly compared -- by `field_alu_ops`, `field_alu_vec_directed`,
+`field_curve_directed` and `field_curve_svc_directed`. What defeated the search
+is that `zhao_field_alu_tb.sv` WRAPS the module and re-exports the ports under
+shorter names:
+
+    .sat_add_o (sat_add_o)   <- the tb's port, and what C++ actually reads
+
+So the RTL string `exec_sat_add_o` appears in no test, while the signal is one
+of the better-checked in the repository. **UNMENTIONED is therefore evidence
+about NAMES, not about coverage**, and the earlier claim above that it is
+"close to proof" was too strong for any module reached through a wrapper.
+
+That does not make the tier useless -- the very same list found
+`zhao_surface_sheet.res_overflow_o`, a genuine unobserved fault line, and the
+three `o_uv_sat_o` ports whose INPUT `f_uv_sat_i` was hard-wired to 0 in all
+five places any test set it. That second finding is the stronger one and the
+tool cannot see it at all: an output nothing reads is a gap, but an output whose
+CAUSE never occurs is a bigger gap wearing the same clothes. Reading the flagged
+port's own input is the manual step this tool does not replace.
+
+AND THE COUNT GOING DOWN CAN MEAN IT WENT BLIND
+------------------------------------------------
+Same afternoon, the nastier version. Adding a `o_uv_sat_o` check to
+`raster_texjoin_v2_directed` took the FAULT REPORTER count from 8 to 4 -- but
+only ONE of the four that vanished was actually tested. `zhao_raster_texjoin`
+and `zhao_texture_fragrob` export a port of the SAME NAME, the name now appears
+somewhere in the test blob, and all three rows disappeared together.
+
+The search is global by port name and has no notion of which module a mention
+belongs to. So a shrinking count is not progress on its own: **a port can leave
+this list because it got checked, or because a namesake elsewhere did.** Treat
+the number as a worklist, never as a score. Making it module-aware would fix
+this and is worth doing; until then the docstring is the warning.
+
 """
 from __future__ import annotations
 
@@ -178,7 +220,8 @@ def main() -> int:
     print("\nNOTE: this tool REPORTS, it does not gate. A mention is not a "
           "comparison and an absence is not always a defect -- a debug counter "
           "may legitimately go unchecked. Read the two lists differently: "
-          "UNMENTIONED is close to proof, READ-ONLY is a prompt.")
+          "UNMENTIONED is evidence about NAMES (a tb wrapper that renames "
+          "defeats it -- see the docstring), READ-ONLY is a prompt.")
     return 0
 
 

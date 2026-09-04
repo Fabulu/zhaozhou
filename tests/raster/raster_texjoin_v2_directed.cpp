@@ -38,6 +38,7 @@
 #include <cstdio>
 #include <deque>
 #include <map>
+#include <utility>
 #include <vector>
 
 #include "verilated.h"
@@ -56,6 +57,10 @@ struct Frag {
   int recipe;
   uint64_t ctx;
   bool aux;
+  // D19b: the PERSPUV saturation flag. Every earlier case leaves this false --
+  // which is how `o_uv_sat_o` came to be a port no test had ever seen carry a
+  // one. An output cannot be observed while its cause never happens.
+  bool uv_sat = false;
 };
 
 void idle_inputs(Vzhao_raster_texjoin_v2& t) {
@@ -88,7 +93,7 @@ bool offer(Vzhao_raster_texjoin_v2& t, const Frag& f) {
   t.f_recipe_i = f.recipe;
   t.f_ctx_i = f.ctx;
   t.f_aux_i = f.aux;
-  t.f_uv_sat_i = 0;
+  t.f_uv_sat_i = f.uv_sat ? 1 : 0;
   t.eval();
   const bool took = t.f_ready_o != 0;
   zhao::tick(t);
@@ -210,6 +215,66 @@ int main(int argc, char** argv) {
       if (got[i] != 0xC000u + i) in_order = false;
     zhao::check(in_order, "returns arriving backwards still retire in ALLOCATION order", 1,
                 in_order ? 1 : 0);
+  }
+
+  // -------------------------------------------------------------- 3b ---
+  // THE SATURATION FLAG RIDES ITS OWN FRAGMENT.
+  //
+  // `o_uv_sat_o` reports that PERSPUV railed on THIS fragment, so the useful
+  // question is not "does the bit survive the FIFO" -- a tied-high wire would
+  // pass that -- but "does it stay attached to the fragment it arrived with".
+  // A side-channel bit indexed by the wrong pointer desynchronises silently and
+  // blames the wrong pixel, so the pattern here is deliberately IRREGULAR
+  // (0,1,1,0) rather than alternating: an off-by-one on an alternating pattern
+  // reproduces the pattern inverted and can be mistaken for a polarity error,
+  // while an off-by-one on this one is unmistakable.
+  //
+  // Returns arrive BACKWARDS, as in case 3, so a flag that followed COMPLETION
+  // order instead of allocation order comes out reversed and is caught.
+  {
+    reset(top);
+    constexpr int kN = 4;
+    const bool kSat[kN] = {false, true, true, false};
+    for (int i = 0; i < kN; ++i) {
+      Frag f{1, {static_cast<uint32_t>(i), 0, 0},   {0, 0, 0},
+             0, 0xE000u + static_cast<uint64_t>(i), false, kSat[i]};
+      zhao::check(offer(top, f), "sat-pattern fragment accepted", 1, 1);
+    }
+    for (int c = 0; c < 32; ++c) {
+      top.eval();
+      zhao::tick(top);
+    }
+    for (int i = kN - 1; i >= 0; --i) {
+      top.tmu_rvalid_i = 1;
+      top.tmu_rslot_i = i;
+      top.tmu_rsidx_i = 0;
+      top.tmu_rgen_i = 1;
+      top.tmu_rgb_i = 0x020000u * static_cast<uint32_t>(i + 1);
+      top.tmu_a_i = 0x40;
+      zhao::tick(top);
+      top.tmu_rvalid_i = 0;
+    }
+
+    std::vector<std::pair<uint64_t, int>> got;
+    top.o_ready_i = 1;
+    for (int c = 0; c < 64 && static_cast<int>(got.size()) < kN; ++c) {
+      top.eval();
+      if (top.o_valid_o)
+        got.emplace_back(top.o_ctx_o, top.o_uv_sat_o ? 1 : 0);
+      zhao::tick(top);
+    }
+    zhao::check(static_cast<int>(got.size()) == kN, "all four sat-pattern fragments retired", kN,
+                static_cast<int>(got.size()));
+    int wrong = 0, ones = 0;
+    for (size_t i = 0; i < got.size(); ++i) {
+      if (got[i].first != 0xE000u + i) ++wrong;
+      if (got[i].second != (kSat[i] ? 1 : 0)) ++wrong;
+      ones += got[i].second;
+    }
+    zhao::check(wrong == 0, "each fragment retires with ITS OWN uv_sat flag, in order", 0, wrong);
+    // Non-vacuity: without this, a tied-LOW o_uv_sat_o and a kSat of all-false
+    // would agree perfectly and the case above would prove nothing.
+    zhao::check(ones == 2, "and the flag was actually SEEN high -- twice, not zero times", 2, ones);
   }
 
   // --------------------------------------------------------------- 4 ---
