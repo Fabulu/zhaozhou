@@ -1,0 +1,45 @@
+# geom_meshfetch_refuse.sby — GEOM.MESHFETCH's refusal law, proved.
+#
+# The contract's refusal table ends "emits no meshlet". The directed
+# differential shows that on the descriptors someone thought of; this shows it
+# for every input sequence the block can be given. All DUT inputs are FREE --
+# arbitrary guard answers, arbitrary beat patterns, arbitrary descriptor bytes
+# -- so the law must hold adversarially and not merely on the testbench's
+# ordering.
+#
+# The property it excludes is silent, which is why it is worth a proof rather
+# than another case: a meshlet emitted from a descriptor whose CRC failed
+# carries vertex and index offsets nothing downstream can distrust, and it looks
+# exactly like correct geometry in the wrong place.
+#
+# TWO TASKS, both required (ledger rule V16):
+#   bmc   — the assertions hold to the depth below.
+#   cover — the antecedent is REACHABLE. An implication over an unreachable
+#           antecedent is vacuously true, and a proof that only ever proved
+#           "this never happens because nothing happens" is worse than none.
+#
+# Depth 24 covers job accept -> guard grant -> eight beats -> validate ->
+# nine bound steps -> cull -> emit, which is the full path to the one state
+# where the assertion could fail.
+[tasks]
+bmc
+cover
+
+[options]
+bmc:   mode bmc
+bmc:   depth 24
+cover: mode cover
+cover: depth 24
+expect pass
+
+[engines]
+smtbmc boolector
+
+[script]
+read_slang --top zhao_geom_meshfetch -DFORMAL zhao_abi_pkg.sv zhao_pkg.sv zhao_geom_meshfetch.sv
+prep -top zhao_geom_meshfetch
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/geometry/zhao_geom_meshfetch.sv

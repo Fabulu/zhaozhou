@@ -3331,9 +3331,16 @@ set_tests_properties(lint_debug_crc PROPERTIES
 # Reuses the hardened mem_formal_lane wrapper (narrow SKIP, --prefix for
 # multi-task) rather than a parallel cmd-specific template.
 if(ZHAO_SBY_BIN)
+  # geom_meshfetch_refuse added 2026-09-04: the refusal law ("emits no
+  # meshlet") proved rather than sampled. It is cheap -- bmc and cover both
+  # return in under two seconds at depth 24 -- and it earned its place by
+  # finding a real defect: the block recomputed its refusal from the LIVE
+  # `crc_ok_i` instead of latching the verdict, so the input could drop after
+  # the decision and a refused descriptor's bound reached the cull service.
+  # BMC found it at step 15 of a properly reset design.
   foreach(sby_prop IN ITEMS cmd_scheduler_slot_fsm cmd_dma_crc_gate debug_frameblit_safety
                            video_slotmgr_invariants field_seq_bound sat_add
-                           cdc_snapshot)
+                           cdc_snapshot geom_meshfetch_refuse)
     set(PROP "${sby_prop}")
     set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
     set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")

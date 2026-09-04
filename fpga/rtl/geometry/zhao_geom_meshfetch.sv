@@ -166,6 +166,16 @@ module zhao_geom_meshfetch
   logic [63:0] d_q [8];
   logic [2:0]  beat_q;
 
+  // The CRC verdict is LATCHED when the last beat lands, and this is a formal
+  // finding rather than a precaution. `crc_ok_i` is a live input; recomputing
+  // the refusal from it combinationally meant the block could decide "not
+  // refused", enter S_CULL, and then see the input drop -- offering a refused
+  // descriptor's bound to the cull service. BMC found it at step 15 of a
+  // properly reset design.
+  //
+  // The fold completes with the last beat, so that edge is exactly when the
+  // verdict becomes meaningful and exactly when it should stop being a wire.
+  logic               crc_ok_q;
   logic [15:0]        inst_q;
   logic [7:0]         fmt_q;
   logic [15:0]        gen_q;
@@ -203,7 +213,7 @@ module zhao_geom_meshfetch
     for (int unsigned i = 36; i < 60; i++) if (db(i) != 8'd0) resv_nz_c = 1'b1;
 
     if      (db(0) != fmt_q)              refusal_c = 3'd1;  // format
-    else if (!crc_ok_i)                   refusal_c = 3'd2;  // crc
+    else if (!crc_ok_q)                   refusal_c = 3'd2;  // crc
     else if (dh(32) != gen_q)             refusal_c = 3'd3;  // generation
     else if (db(2) > 8'(MAX_VERTEX))      refusal_c = 3'd4;
     else if (db(3) > 8'(MAX_TRIANGLE))    refusal_c = 3'd5;
@@ -288,6 +298,7 @@ module zhao_geom_meshfetch
       st_q                  <= S_IDLE;
       beat_q                <= '0;
       mi_q                  <= '0;
+      crc_ok_q              <= 1'b0;
       r_visible_mask_o      <= '0;
       meshlets_considered_o <= '0;
       culled_all_cameras_o  <= '0;
@@ -327,6 +338,7 @@ module zhao_geom_meshfetch
           d_q[beat_q] <= beat_data_i;
           beat_q      <= beat_q + 3'd1;
           if (beat_last_i) begin
+            crc_ok_q <= crc_ok_i;
             descriptors_fetched_o <= descriptors_fetched_o + 32'd1;
             mi_q       <= '0;
             acc_q[0]   <= '0;
@@ -378,6 +390,50 @@ module zhao_geom_meshfetch
       endcase
     end
   end
+
+`ifdef FORMAL
+  // -------------------------------------------------------------------------
+  // THE REFUSAL LAW, AS A PROPERTY
+  // -------------------------------------------------------------------------
+  // The contract's refusal table ends "emits no meshlet". A directed test shows
+  // that on the descriptors someone thought of; this shows it on every input
+  // sequence the block can be given, including adversarial beat patterns and a
+  // guard that answers arbitrarily.
+  //
+  // It is the property most worth proving rather than testing, because the
+  // failure it excludes is silent: a meshlet emitted from a descriptor whose
+  // CRC failed carries offsets nothing downstream can distrust, and it looks
+  // exactly like correct geometry in the wrong place.
+  //
+  // ENFORCED-BY: tests/formal/geom_meshfetch_refuse.sby
+  //
+  // THE PRECONDITION IS THE DESIGN HAVING BEEN RESET, and saying so is not a
+  // formality. The first version guarded only on `rst_n`, and BMC returned a
+  // counterexample at step 1: with no reset ever applied the engine is free to
+  // START in S_CULL holding a refused descriptor. That is a true statement
+  // about an unreachable state, and the fix is to state the precondition rather
+  // than to weaken the property -- the same shape as every other harness in
+  // this directory.
+  logic f_past_valid = 1'b0;
+  always_ff @(posedge clk) f_past_valid <= 1'b1;
+
+  // reset is applied at time zero, and once released it stays released
+  always_ff @(posedge clk) begin
+    if (!f_past_valid) assume (!rst_n);
+    if (f_past_valid && $past(rst_n)) assume (rst_n);
+  end
+
+  always @(posedge clk) begin
+    if (f_past_valid && rst_n) begin
+      // 1. A result is never emitted for a descriptor that failed validation.
+      assert (!(r_valid_o && refused_c));
+      // 2. Nor is a refused descriptor's bound ever offered to the cull
+      //    service. "Not trustworthy in ANY field" includes the bound, and a
+      //    culled-but-refused meshlet would still spend the service's cycles.
+      assert (!(cull_tick_o && refused_c));
+    end
+  end
+`endif
 
 endmodule : zhao_geom_meshfetch
 
