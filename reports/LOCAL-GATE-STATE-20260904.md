@@ -35,6 +35,54 @@ it — additive, goldens must not move. Recorded in
 keeping the lint tier green instead of reading it as noise beside the
 differentials.
 
+### THE ROOT CAUSE, MEASURED — and a stale binary was hiding it
+
+**2026-09-04, later.** The three ABI failures are one cause, and a fourth test
+joined them the moment a full rebuild happened. Byte-diffed the `z60` golden
+against a freshly generated one:
+
+    committed 3,476 bytes, regenerated 3,476 bytes
+    68 bytes differ = 32 (generator SHA) + 32 (zidl SHA) + 4 (file CRC)
+
+    runtime/include/zhao_abi.h  ZHAO_GENERATOR_SHA256  6B 95 FE 82 0B 7F ...
+    captures/.../z60 @792                              DB 6F 6B 2B BF 7C ...
+
+    runtime/include/zhao_abi.h  ZHAO_ZIDL_SHA256       A2 19 8A 6E 55 F7 ...
+    captures/.../z60 @824                              E5 4F 05 D4 DD 1C ...
+
+**The golden captures carry the ABI SHAs from before the regeneration.** Nothing
+about the pictures, the counters or the frame packets differs — the two hash
+fields and the file CRC that covers them, and nothing else. Same size, same
+everything else.
+
+### AND `shell_golden_replay` ONLY STARTED FAILING WHEN THE BINARIES WERE REBUILT
+
+It passed in the 08:48 lane and failed in the 09:59 one. The tempting conclusion
+was that something between them broke it — the `ProjOut` change sits exactly
+there. **It did not.** `shell_golden.exe` had been built before the ABI
+regeneration reached it, so it embedded the OLD constants and matched the old
+golden. The full `cmake --build` at ~09:30 rebuilt it with the current
+`zhao_abi.h`, and the drift became visible.
+
+**A stale executable had been hiding a stale golden**, and the two agreed with
+each other. That is `CLAUDE.md`'s stale-binary trap in its purest form: not a
+wrong number, but a *right* number produced by a machine nobody had rebuilt.
+
+**It also means the "18 Not Run" finding was worse than it looked.** Those 18
+were visibly absent. This one was present, green, and wrong.
+
+### A claim of mine that was too fast
+
+When `ProjOut` gained `w`, this session recorded *"render_golden PASS,
+reel_sequence_crc PASS — the goldens not moving is the proof."* Those two did
+pass and the proof holds for them. But `shell_golden_replay` was **in the same
+run and failing**, and it was not noticed because only the pass list was read.
+
+The conclusion (the `ProjOut` change is safe) survives — the diff above shows
+the difference is two ABI hash fields that a struct field cannot touch. **The
+method did not.** Reading a test run's passes without reading its failures is
+not evidence, it is a preference.
+
 ### `golden_abi_info` + `zcap_roundtrip` — one cause, not two
 
 Both are downstream of the **QFMT_VERSION 2 -> 3 migration**
