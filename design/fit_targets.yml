@@ -99,6 +99,18 @@ targets:
     sources:
       - fpga/rtl/texture/zhao_texture_aux_div6.sv
 
+  # TEXTURE.TMU v2, the production sampler. Added 2026-09-04: it was NOT a fit
+  # target, which is worse than it sounds -- run_block_fit's preflight THROWS on
+  # an unknown module, and that throw is caught by the loop's outer try, so it
+  # ends the whole queue. A run asked for nine blocks would have fitted six and
+  # silently skipped fragrob and cache_pipe behind it.
+  #
+  # The closure is the sampler plus zhao_texture_bilerp, which it instantiates.
+  - top: zhao_texture_tmu_pipe
+    sources:
+      - fpga/rtl/texture/zhao_texture_bilerp.sv
+      - fpga/rtl/texture/zhao_texture_tmu_pipe.sv
+
   - top: zhao_texture_palette_res
     sources:
       - fpga/rtl/texture/zhao_texture_palette_res.sv
