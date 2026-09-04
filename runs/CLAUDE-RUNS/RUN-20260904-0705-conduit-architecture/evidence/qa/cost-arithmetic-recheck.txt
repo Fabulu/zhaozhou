@@ -1,0 +1,49 @@
+COST ARITHMETIC RE-CHECK (there are no fragment counters; this is arithmetic).
+QA pass, 2026-09-04. Frame = 384 x 240 = 92160 px.
+
+THE CLAIM (TASK_LOG line 357-359 / UNNAMED02-INDEX section 6):
+  channel (worst) ~5.2% of frame   idle ~4.7%   three conduits ~15.5%
+
+WHAT THE CODE ACTUALLY DOES:
+  unnamed02_art.h  kCentreGlowRadiusPx = 46   (outer aura, depth-tested)
+                   kCentreGlowCorePx   = 13   (inner core, NO depth test)
+  unnamed02_fx.h   glow_splat() scans the SQUARE box [cx-r, cx+r) x [cy-r, cy+r)
+                   = (2r)^2 pixels, and skips a pixel only after a depth compare
+                   and a sprite-texel test. One splat per conduit, per frame.
+  star_bake.cpp    corona_sprite(0) is 128x128 with a non-zero disc of half-texel
+                   radius 120 out of a half-extent of 127, so 70.1% of the box
+                   carries a non-zero texel.
+
+PER CONDUIT:
+  outer aura  box (2*46)^2 =   8464 px =  9.18% of frame   blended <=   5935 px =  6.44%
+  inner core  box (2*13)^2 =    676 px =  0.73% of frame   blended <=    474 px =  0.51%
+  glow total               =   9140 px =  9.92% scanned    blended <=   6409 px =  6.95%
+  particles: ~130 live sprites worst case (channel runs all ten kinds);
+             measured blob sizes at native res are median 1 px, p75 2, p95 9,
+             so ~0.4%% of frame. Not the driver.
+
+  => scanned  ~10.3% per conduit;  blended ~7.4% per conduit.
+
+RECONCILIATION: the stated 5.2%/4.7% is reachable only if pixels that are
+scanned but then rejected by the depth test are counted as free. The outer
+aura is depth-tested against the conduit centre, and the body (~64 px across)
+plus the terrain occlude a large share of its box -- reject ~35% of the outer
+aura and you land almost exactly on the quoted 4.7% idle. That is a fair
+BLEND-cost number and an optimistic FILL-cost number: the loop still visits
+every pixel in the box and performs the compare.
+
+VERDICT: the arithmetic is internally consistent for blend cost but understates
+the work per conduit by roughly 1.4x (blended, before depth rejection) to 2x
+(scanned). Honest figures:
+  one conduit    ~7.4%% blended / ~10.3%% scanned   (claimed 5.2%%)
+  three conduits ~22%%  blended / ~31%%   scanned   (claimed 15.5%%)
+                 + one SHARED sky bloom + ONE glow-ramp rebuild per frame
+                   (both of those claims are correct and verified in code:
+                    the bloom is scene-level, the 64-entry ramp is per frame,
+                    not per instance).
+
+This does not by itself fail 'cheap enough for several on screen' -- ~31% of the
+frame in a simple add-with-early-out loop may well be affordable -- but the
+owner asked for the cost to be STATED, and the stated number is optimistic.
+The knobs that move it are kCentreGlowRadiusPx (quadratic: 46 -> 36 would cut
+the outer box by 39%) and kCentreGlowCorePx.

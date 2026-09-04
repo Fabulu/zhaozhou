@@ -1,0 +1,55 @@
+FAULT EVIDENCE: the four-pointed pupil star renders BLACK, not cyan.
+QA pass, 2026-09-04. Lossless .rgb frames read with tools/reel/rgbframe.py.
+
+THE SHEET: all three concept sheets (Side.png, Front.png, and the oblique eye
+detail on Description.png) draw the pupil as a CYAN four-pointed star on a
+white rim inside a purple almond. It is the single most distinctive graphic
+element of a creature that has neither nose nor mouth.
+
+THE AUTHORED VALUE IS CORRECT:
+  unnamed02_art.h:111  kStarR = 64, kStarG = 220, kStarB = 240   // cyan
+  unnamed02_model.h    make_star_blade() leaves p.page at its default 255
+                       (= untextured, flat r/g/b), so no texture is involved.
+
+SO IT IS THE LIGHTING, NOT THE COLOUR OR THE TEXTURE:
+
+  subject                     cyan-family px    near-black px
+  u02-s4-unlit (flat colour)       194                0
+  u02-s4-front (shipped lit path)    0              288
+
+THE SAME PIXELS, BEFORE AND AFTER. The implementer's own evidence file
+evidence/form-front.png contains 288 cyan pixels (72 at native 384x240).
+Taking those 72 coordinates and reading them out of the shipped lit render
+of the same view:
+
+  n = 72,  mean RGB = (0.0, 1.6, 2.1),  max RGB = (0, 4, 8)
+  fraction near-black = 100%
+
+Every pixel that is cyan in the evidence the creature was judged by is pure
+black in the render that shipped. This is not a darkened cyan (a shaded cyan
+keeps G,B above R); it is zero light.
+
+CONFIRMED IN EVERY SHIPPED CLIP: see look-eyes-allclips.png -- eye crops from
+hover, channel, crackle, drift, curious, startle, rest, pirouette and fx-tour.
+The star is black in all of them. The teal specks visible nearby are separate
+cyan mana motes, not the pupil.
+
+A partial exception: at some orientations part of the star does light (hover
+frame 0102 shows star pixels at (33,121,148) beside others at (0,0,0)), so the
+star is roughly half-lit-half-black rather than uniformly dead. The dominant
+read is still black.
+
+WHY IT SURVIVED TO PUBLISH: the form evidence the eyes were judged against was
+rendered on a flat/unlit path, where the star IS cyan. The fault is invisible
+in that evidence and visible in every shipped frame. This is the house law's
+own failure mode -- a component check passing is not likeness evidence.
+
+OWNER KNOBS THAT MOVE IT (all in unnamed02_art.h):
+  kStarR/kStarG/kStarB   the colour -- already correct, changing it will not help
+  kPupilStarArmMm  78    star arm half-length
+  kPupilStarWideMm 30    blade width      } a larger star presents more lit area
+  kPupilStarThinMm 16    blade thinness   } and is the cheapest partial mitigation
+  kEyeBulgeMm      88    how proud the star stands off the lens
+A proper fix is a lighting/emissive treatment for the star part; zref::creature
+RingPart has no emission field today, so that is an implementation change and
+not a knob.

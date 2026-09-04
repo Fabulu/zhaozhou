@@ -1,0 +1,53 @@
+INDEPENDENT REPRODUCTION of the "Zixxtrixx untouched" claim.
+QA pass, 2026-09-04. Performed by the reviewer, not inherited.
+
+METHOD (nothing reused from the implementer's run):
+  1. `git archive a311faf6 | tar -x` into a scratch tree -- a pristine
+     baseline extraction that never touches the lane repo's .git.
+  2. tools/reel/build-direct.sh --output <scratch>/build-base cel
+  3. tools/reel/build-direct.sh --output <scratch>/build-cur  cel   (tree at 2acab260)
+  4. Each of the 22 bank subjects rendered by BOTH binaries with
+     ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross, capturing the reel's
+     own printed `sequence_crc32c` and frame count.
+
+RESULT: ALL 22 SUBJECTS IDENTICAL (baseline CRC == current CRC, frame counts equal).
+Every CRC also equals the value in the implementer's evidence-final-bank-identity.txt,
+so that file is confirmed rather than merely believed.
+
+subject                  pristine a311faf6   current 2acab260   frames  verdict
+zixxtrixx-attack         0x86A2B30B          0x86A2B30B         560     IDENTICAL
+zixxtrixx-balance        0x301EFBA6          0x301EFBA6         493     IDENTICAL
+zixxtrixx-damage         0x6C224D56          0x6C224D56         400     IDENTICAL
+zixxtrixx-death          0x2E8755B3          0x2E8755B3         192     IDENTICAL
+zixxtrixx-death2         0x18F0AF79          0x18F0AF79         240     IDENTICAL
+zixxtrixx-fall           0xD18D3D3C          0xD18D3D3C         288     IDENTICAL
+zixxtrixx-hit            0x116F3C2E          0x116F3C2E         300     IDENTICAL
+zixxtrixx-hitfloor       0x11DADB9E          0x11DADB9E         188     IDENTICAL
+zixxtrixx-idle           0x1408F885          0x1408F885         576     IDENTICAL
+zixxtrixx-jump-multi     0xF58DE5AD          0xF58DE5AD         241     IDENTICAL
+zixxtrixx-jump-one       0x5303C5C0          0x5303C5C0         241     IDENTICAL
+zixxtrixx-knockdown      0x1EB29988          0x1EB29988         196     IDENTICAL
+zixxtrixx-look           0x28D476AA          0x28D476AA         384     IDENTICAL
+zixxtrixx-moving-light   0xC0DE226E          0xC0DE226E         600     IDENTICAL
+zixxtrixx-run            0x45A4E913          0x45A4E913          96     IDENTICAL
+zixxtrixx-salto-dummy    0x654D7708          0x654D7708         295     IDENTICAL
+zixxtrixx-salto-fly      0x4FE70E0C          0x4FE70E0C         313     IDENTICAL
+zixxtrixx-salto-nine     0xC96C63F5          0xC96C63F5         435     IDENTICAL
+zixxtrixx-salto-six      0x456D82CE          0x456D82CE         333     IDENTICAL
+zixxtrixx-slow-taunt     0x1F35917E          0x1F35917E         239     IDENTICAL
+zixxtrixx-taunt          0xD79D55E2          0xD79D55E2         224     IDENTICAL
+zixxtrixx-walk           0xF06EF66B          0xF06EF66B         160     IDENTICAL
+
+SUPPORTING, on the Upheaval side (git, not rendering):
+  - The zixxtrixx entry in website/creatures.json is semantically identical
+    (JSON-normalised compare) between 8749a5a -- the last commit before any
+    creature-02 work -- and HEAD.
+  - Every one of the 11 creature-02 commits touches ZERO paths matching
+    zixxtrixx/Zixxtrixx.
+  - The 64 zixxtrixx media files that DID change since 8749a5a all changed in
+    bc72d89 "Direction 30 media: the calmed sun bank", a PRIOR and unrelated
+    lane. The creature-02 ship commit 40a46da touches none of them.
+  - All 420 declared media files in creatures.json exist and are non-empty
+    (79 archive-flagged; 92 zixxtrixx archive entries intact).
+
+CONCLUSION: the claim holds, independently reproduced.
