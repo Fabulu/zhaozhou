@@ -2,7 +2,7 @@
   "name": "zhaozhou",
   "version": "0.0.1",
   "private": true,
-  "description": "Zhaozhou FPGA game console — hardware and tooling workspaces; the Nanquan language/compiler is external (https://github.com/Fabulu/nanquan)",
+  "description": "Zhaozhou FPGA game console \u2014 hardware and tooling workspaces; the Nanquan language/compiler is external (https://github.com/Fabulu/nanquan)",
   "workspaces": [
     "tools/abi-gen",
     "tools/ledger",
@@ -15,7 +15,8 @@
     "tables:check": "npm run -w tools/fixgen check",
     "tables:gen": "npm run -w tools/fixgen gen",
     "abi:check": "npm run -w tools/abi-gen check",
-    "abi:gen": "npm run -w tools/abi-gen gen"
+    "abi:gen": "npm run -w tools/abi-gen gen",
+    "design:report": "python tools/design/check_port_coverage.py && python tools/design/check_counters.py --quiet && python tools/design/check_array_storage.py && python tools/design/check_seam_widths.py && python tools/quartus/check_rule_freshness.py"
   },
   "devDependencies": {
     "clang-format": "1.8.0"
