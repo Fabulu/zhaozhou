@@ -256,6 +256,18 @@ module zhao_raster_tilestore (
   // output register, so keeping it would have cost the block a pipeline stage
   // of registers to save nothing. They power up to zero on the device, and the
   // simulator zeroes them too, which is what the reset was asking for anyway.
+  //
+  // WHAT MAKES THAT SOUND is `present`, and it is worth stating because the
+  // next person to add a reset back will be looking for the reason it was safe
+  // to remove. `rd_data_o` selects `rd_base` -- the only consumer of these two
+  // registers -- ONLY when `rd_pres_q`, and `present0`/`present1` ARE reset to
+  // zero. So no word is readable until it has been written, and the contents
+  // of an uninitialised RAM word are never observable at the output. That is
+  // the same invariant that let the ARRAYS go unreset in the first place; the
+  // read registers simply inherit it.
+  //
+  // If `present` ever stops gating the read, these registers need their reset
+  // back and the block gives up its M10K output registers with them.
   always_ff @(posedge clk) begin
     ram0_q <= ram0[b0_raddr];
     ram1_q <= ram1[b1_raddr];
