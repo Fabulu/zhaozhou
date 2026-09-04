@@ -41,7 +41,7 @@
 // SMALL bound, and small deletes geometry.
 //
 // ---------------------------------------------------------------------------
-// THIS BLOCK CANNOT PASS MEM.GUARD TODAY, AND THAT IS NOT ITS BUG
+// THIS BLOCK CANNOT PASS MEM.GUARD TODAY, AND THE GUARD IS RIGHT
 // ---------------------------------------------------------------------------
 // `zhao_mem_guard.sv`'s client case is, in full:
 //
@@ -54,12 +54,23 @@
 // asset memory, so there is no client identity under which this read is
 // admitted -- the request below is correctly formed and would be denied.
 //
-// That is an architecture gap, not a defect here, and it is deliberately NOT
-// papered over: inventing a client id and a region would edit the block whose
-// entire contract is that nothing escapes it, and whose region rules carry a
-// formal proof (`tests/formal/mem_guard_no_escape.sby`). `j_client_i` is
-// therefore an INPUT -- the caller declares the identity these reads use -- and
-// the gap is filed rather than closed by this file.
+// AND THAT IS CORRECT BEHAVIOUR, not a gap. `spec/memory_rules.md` §5 says so
+// in as many words:
+//
+//     Phase 2 allocates exactly [the two FB regions] ... Later phases extend
+//     the map (texture/terrain/particle pools per the charter allocator);
+//     Phase 2 ships ONLY the two FB regions -- everything else is a violation
+//     by construction.
+//
+// So the guard is doing exactly what it was specified to do, and this block
+// needs the PHASE-3 REGION MAP rather than a fix. That distinction decides who
+// owns the next move: extending the map is a charter-allocator decision with a
+// formal proof attached (`tests/formal/mem_guard_no_escape.sby`), not a line
+// this file may add.
+//
+// `j_client_i` is therefore an INPUT -- the caller declares the identity these
+// reads use -- and `guard_denied_o` counts the denial, which makes that counter
+// the measurement for whether the map has been extended yet.
 //
 // ENFORCED-BY: tests/geometry/geom_meshfetch_rtl_directed.cpp:main
 `default_nettype none

@@ -243,6 +243,29 @@ controlled steps rather than as one before-after mystery.
 **It is here so that "finish the console" has a name for the largest thing still
 missing**, instead of that fact being rediscovered one unwired block at a time.
 
+### The first block is BUILT, and the next blocker is a PHASE, not a bug
+
+**2026-09-04.** `zhao_geom_meshfetch.sv` exists — oracle
+(`zref::MeshFetch`), 19 + 5 oracle checks, 7 RTL differential checks. Position 1
+of the order below is no longer empty.
+
+**It cannot read yet, and the reason is specified rather than broken.**
+`zhao_mem_guard.sv` admits SCANOUT reads inside the framebuffer slots, two
+writers inside the granted slot, and `default: pass_ok = 1'b0`. Every region it
+knows is a FRAMEBUFFER region, and a meshlet descriptor is in asset memory.
+`spec/memory_rules.md` §5 says that is deliberate:
+
+> *Phase 2 allocates exactly [the two FB regions] ... Later phases extend the
+> map (texture/terrain/particle pools per the charter allocator); Phase 2 ships
+> ONLY the two FB regions — everything else is a violation by construction.*
+
+**So the next item on the console's critical path is the Phase-3 region map.**
+It is a charter-allocator decision carrying a formal proof
+(`tests/formal/mem_guard_no_escape.sby`), which is why no RTL written this
+session touched it. Until it exists, every geometry descriptor read is denied
+by design — and `zhao_geom_meshfetch.sv`'s `guard_denied_o` is the counter that
+says whether that is still true.
+
 ### The order is already decided, and it is the ledger's own
 
 `tools/design/compose_order.py` (committed) topologically sorts the geometry
