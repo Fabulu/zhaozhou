@@ -52,6 +52,34 @@ what it looks like when the bill arrives.
 **Do not revert the fbwrite fix.** It buys 0.066 ns and a console that renders
 nothing. Timing on a machine that cannot draw is not a result.
 
+## The worst path, traced from the NODES
+
+    job_first_r                                   6.008
+      -> ts_clear                                 6.595   (= RS_CLEAR && job_first_r)
+      -> u_fragment | s1_retire                   8.503
+      -> u_fragment | rd_addr_o[3]                9.311
+      -> u_tilestore | Mux0~119 ~122 ~133 ~67    14.549+  <-- the 256:1 present mux
+      -> (rd_pres_q)                             -0.066 ns
+
+**This is the OTHER HALF of the path r12 fixed.** r12 removed the cross-port
+contamination — `res_pres_eff` was reading `present1[b1_raddr]`, a bank mux that
+also carried `rd_addr_i`. That fix stands and the RES port is gone from the
+list.
+
+What remains is the **RD port's own lookup**, and the reason `ts_clear` is in it
+at all is the dependency r11 named and this effort never fixed:
+
+    zhao_raster_tilestore.sv:150   assign wr_ready_o = !clear_valid_i;
+
+`ts_clear` -> `wr_ready_o` -> `fragment.wr_ready_i` -> its `s1_retire` chain ->
+`rd_addr_o` -> a 256:1 mux on the present bits. **A ready that depends on
+another channel's valid**, exactly as r11 wrote it up, still costing 2.7 ns
+before the mux even starts.
+
+**And the mux is again the dominant term**: ~5.2 ns of the ~8 ns after
+`ts_clear`. Unlike r12's, this one is not removable — the read address is
+genuinely `rd_addr_i` and it genuinely has to index 256 present bits.
+
 ## What the next round is
 
 The offender list is the same flat tail as r12, one place further along, and it
@@ -59,7 +87,12 @@ is now genuinely spread across four families. Options, in the order they should
 be tried:
 
 1. **`tile_pipe | job_first_r`** at −0.066 is the only one that needs to move to
-   pass. One path, one structure.
+   pass, and it now has a **named line**: `tilestore.sv:150`
+   `wr_ready_o = !clear_valid_i`. Breaking that valid→ready dependency — by
+   registering the clear request, or by giving the write its own acceptance —
+   takes `ts_clear` out of Fragment's retire chain and out of this path.
+   r11 proposed exactly this and r12 fixed the other half instead, because the
+   other half was worth 6.3 ns and this one is worth 2.7.
 2. **`cmd_dma`** at −0.042 has appeared in every round since r10 and has never
    been touched.
 3. **`edgewalk | pend_r`** at −0.029 is the shallowest and may go on placement
