@@ -234,12 +234,76 @@ module zhao_texture_mosaic (
 
   // h = (u32(m_u) * CX) XOR (u32(m_v) * CY). Both products are evaluated in a
   // 32-bit context and therefore WRAP (F2) — the law, not an overflow.
+  //
+  // WRITTEN AS EXPLICIT SHIFT-ADD, C21 (2026-09-04). The `*` form inferred four
+  // DSPs and `design/fit_targets.yml` fails this block on `DSP 4 > allowed 0`
+  // by design, because islandrearchitecture5.md §3.3 budgets MOSAIC at zero.
+  //
+  // `(* multstyle = "logic" *)` is NOT the fix: QUARTUS_GOTCHAS §3 records that
+  // Quartus 17.0.2 accepts it and SILENTLY IGNORES it — no warning, no error,
+  // only a DSP count that will not fall. `zhao_geom_skin` and
+  // `zhao_texture_tmu` carry the same note. A multiply that must not be a
+  // multiply has to be written as what it is.
+  //
+  // These are CONSTANT multiplies, so the tree is over the CONSTANT'S non-zero
+  // canonical-signed-digits and each term shifts the 32-bit operand. The
+  // canonical (non-adjacent) form is minimal-weight:
+  //
+  //   73,856,093 : binary weight 15 -> CSD weight 11 (6 add, 5 subtract)
+  //   19,349,663 : binary weight 12 -> CSD weight  8 (6 add, 2 subtract)
+  //
+  // Every shift and every sum stays 32 bits, so the wrap that IS the law
+  // happens exactly where it did before. The equality was checked over 200,009
+  // operands per constant — all-zeros, all-ones, both 2^31 boundaries and
+  // 200,000 random words — with zero mismatches, and `texture_mosaic_random`
+  // is the standing differential.
+  //
+  // THE CONSTANTS ARE NOT TUNABLE. Lower-weight primes would be cheaper and
+  // would be a different picture: the hash decides which mosaic cell a texel
+  // lands in. reports/MOSAIC-C21-CSD-COST-20260904.md carries the costing.
+  function automatic logic [31:0] mul_cx(input logic [31:0] m);
+    mul_cx = (m << 0) + (m << 7) + (m << 10) + (m << 19) + (m << 23) + (m << 26)
+           - (m << 2) - (m << 5) - (m << 12) - (m << 16) - (m << 21);
+  endfunction
+
+  function automatic logic [31:0] mul_cy(input logic [31:0] m);
+    mul_cy = (m << 5) + (m << 7) + (m << 14) + (m << 19) + (m << 21) + (m << 24)
+           - (m << 0) - (m << 16);
+  endfunction
+
+  // AND THE NAMED CONSTANTS STAY THE AUTHORITY.
+  //
+  // Hard-coding the digit positions duplicates `MOSAIC_CX`/`MOSAIC_CY` in a
+  // form nobody can read, and a later edit to either parameter would change
+  // NOTHING in the hardware while looking as though it had. That is the
+  // "generated from the reference, so it is not a knob" failure -- a wrong
+  // number made unadjustable.
+  //
+  // So the tree is checked against the parameter it implements, and the check
+  // is EXACT rather than sampled. `mul_cx` is a sum of signed shifts, hence
+  // LINEAR over the 32-bit ring:
+  //
+  //     mul_cx(m) = sum_k d_k * (m << k) = m * (sum_k d_k << k)   (mod 2^32)
+  //
+  // so `mul_cx(1) == MOSAIC_CX` proves `mul_cx(m) == m * MOSAIC_CX` for EVERY
+  // m. One comparison, not a sweep. Change a constant and elaboration stops.
+`ifndef SYNTHESIS
+  initial begin
+    if (mul_cx(32'd1) !== MOSAIC_CX) begin
+      $fatal(1, "mosaic C21: the CX shift-add tree does not implement MOSAIC_CX");
+    end
+    if (mul_cy(32'd1) !== MOSAIC_CY) begin
+      $fatal(1, "mosaic C21: the CY shift-add tree does not implement MOSAIC_CY");
+    end
+  end
+`endif
+
   logic [31:0] hx_c;
   logic [31:0] hy_c;
   logic [31:0] h_c;
   always_comb begin
-    hx_c = $unsigned(m_u) * MOSAIC_CX;
-    hy_c = $unsigned(m_v) * MOSAIC_CY;
+    hx_c = mul_cx($unsigned(m_u));
+    hy_c = mul_cy($unsigned(m_v));
     h_c  = hx_c ^ hy_c;
   end
 
