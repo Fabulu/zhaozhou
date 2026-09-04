@@ -376,6 +376,25 @@ Lambert responses, no renormalisation — which its own oracle never implemented
 
 **Two consequences land on this contract:**
 
+**`SKIN.NORM` NOW HAS AN ORACLE**, added 2026-09-04:
+`zref::creature::skin_world_normal` — the light-independent half of
+`skin_normal_lambert`, returning the blended direction and its `isqrt_u64`
+magnitude as a pair. Its partner `lambert_from_world_normal` is the per-light
+half, and `skin_normal_lambert` is now literally their composition, so the split
+is true by construction rather than by a second implementation.
+
+**The equivalence the owner's ruling asserts is now tested rather than assumed**
+(`tests/geometry/skin_norm_split_directed.cpp`): one normal reused across three
+lights against three independent `skin_normal_lambert` calls, 20,000 vertices,
+with a majority required to be LIT because two structures agreeing on darkness
+is not agreement. The refactor itself is proved behaviour-identical against the
+pre-refactor code lifted from git — 200,000 comparisons, zero mismatches.
+
+**The normal is handed over as `{direction, magnitude}`, not normalised.**
+Normalising at the boundary would round twice — once into a unit vector and
+again in the Lambert quotient — and the law has exactly ONE rounding. So this
+block receives the pair and spends one dot and one divide per light.
+
 * **`SKIN.NORM` cannot be a widening of `GEOM.SKIN`.** The new law needs the
   normal transformed by both bones and renormalised — roughly 27 multiplies and
   a square root per vertex. `CREATURESANDLIGHTS` states that `GEOM.SKIN` fits at
