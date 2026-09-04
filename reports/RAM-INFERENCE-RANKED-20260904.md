@@ -204,6 +204,56 @@ person to relax it would have no way to know.
 
 ---
 
+# CORRECTION — TWO OF THE THREE BLOCKS WERE ALREADY INFERRING
+
+**2026-09-04, found by checking the recorded fit rows against the claim.** The
+"280,784 bits will not infer" headline below **over-counted by at least 49,152
+bits**, and the "77% reduction" figure counted bits that were never in
+flip-flops.
+
+`reports/synthesis/zhao_block_fit.json` already held these rows, from before any
+change tonight:
+
+| block | commit | date | M10K | block memory bits |
+|---|---|---|---|---|
+| `zhao_texture_palette_res` | `d656521` | 2026-09-02 | **2** | **16,384** |
+| `zhao_raster_tilestore` | `96c0394a` | 2026-08-20 | **4** | **32,768** |
+| `zhao_texture_cache_pipe` | `8faaa240` | 2026-09-03 | 2 | **128** |
+
+**16,384 is exactly `mem_r`. 32,768 is exactly `ram0` + `ram1`.** Both arrays
+were already fully in block memory. The `palette_res` row is `clean=True`, so
+that one is not in doubt.
+
+## What was actually wrong with the checker
+
+Both blocks were flagged **only** for the async-reset rule — *"an M10K has no
+reset port, so this array cannot be one"*. That rule is **too strong**. Quartus
+17 will infer a RAM from a process with an asynchronous reset provided the ARRAY
+itself is never reset, which is exactly what those two blocks did.
+
+The rule was written from the texture-cache evidence, where inference genuinely
+failed — but that block was ALSO multidimensional, and **that** is what blocked
+it: 128 bits of block memory, and Quartus said so in as many words ("cannot
+regroup multidimensional array"). The async reset was correlated, not causal,
+and the checker generalised from one case where two defects appeared together.
+
+## What survives
+
+* **`zhao_texture_cache_pipe` is a real win.** 128 bits of block memory before,
+  6 M10K and 3,033 registers after — and the blocker was the MULTIDIMENSIONAL
+  shape, not the reset.
+* **`zhao_terrain_residency_v2` is a real win.** It had no prior fit row at all,
+  and 167,936 bits now sit in 16 M10K at 2,229 ALM.
+* The two port moves are still correct — they let the M10K's own output register
+  be used — but they were **not** what put those arrays into memory, and this
+  report said they were.
+
+**The running `zhao_raster_tilestore` fit will settle it directly:** if it comes
+back at 4 M10K again, the change was a no-op for inference and this correction
+is confirmed by measurement rather than by reading a stale row.
+
+---
+
 # THE FIT CAME BACK: 6 M10K, 3,033 registers, 1,633 ALM
 
 **2026-09-04, 4,553 s of quartus_fit.** The storage rework is measured, and the
