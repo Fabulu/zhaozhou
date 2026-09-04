@@ -294,6 +294,16 @@ module zhao_raster_tile_pipe (
   logic [15:0] ez_cand_src;
   logic [87:0] ez_cand_payload;
   logic [2:0]  ez_cand_bin;
+
+  // The SAME channel after the skid buffer. See the instantiation below for
+  // why it is there -- it is not decoration, it is 90 of the worst 100 paths.
+  logic        sk_cand_valid, sk_cand_ready;
+  logic [7:0]  sk_cand_addr;
+  logic [23:0] sk_cand_depth;
+  logic [31:0] sk_cand_state;
+  logic [15:0] sk_cand_src;
+  logic [87:0] sk_cand_payload;
+  logic [1:0]  sk_level;
   logic        ez_reject;
   logic [7:0]  ez_reject_addr;
 
@@ -444,20 +454,15 @@ module zhao_raster_tile_pipe (
   // needs this: `pend_mask_r == 0` now only means the last FRAGMENT was
   // handed over, not that its write has retired.
   //
-  // THE SKID BUFFER IS GONE, and its removal is a measurement, not a tidy-up.
-  // It was added at ce84b10 to cut a ready chain that owned 90 of the worst 100
-  // paths, and it cost ~2 MHz. By round 4 (9a9565f, 79.22 MHz) that chain no
-  // longer exists -- RASTER.FRAGMENT's RMW split shortened it, and Early-Z's
-  // new critical path is floor_r -> acc_mask_r, entirely internal. So the skid
-  // was still being paid for and no longer buying anything.
-  //
-  // `sk_level` left this expression with it. When it was added, forgetting it
-  // here made the pipe claim empty while a fragment still sat in the buffer and
-  // the tile swap fired early -- raster_tile_pipe_directed caught that at once,
-  // and the lesson stands even though the term is gone: A BUFFER THAT HOLDS
-  // STATE MUST BE NAMED IN EVERY EMPTINESS TEST.
+  // `sk_level` IS PART OF THIS. Adding the skid buffer without adding it here
+  // made the pipe claim empty while a fragment still sat in the buffer, and
+  // raster_tile_pipe_directed caught it immediately -- the batch stopped
+  // matching the composed oracle (expected 0x1, got 0x0) because the swap fired
+  // before that fragment's write retired. A buffer that holds state must be
+  // named in every emptiness test, or "empty" silently comes to mean "empty
+  // except for the part I forgot".
   logic pipe_empty;
-  assign pipe_empty = !ez_cand_valid && fr_idle;
+  assign pipe_empty = !ez_cand_valid && (sk_level == 2'd0) && fr_idle;
 
   // ------------------------------------------------- the surface address ---
   // Law 3: the resolving tile's origin plus the in-tile {row, col}. Signed
@@ -553,25 +558,96 @@ module zhao_raster_tile_pipe (
     .covered_fragments_o (ez_covered_o)
   );
 
+  // ======================================================= EARLYZ SKID ====
+  // BREAKS THE READY PATH, and the reason is measured, not stylistic.
+  //
+  // The composed fit at a9aeb07 (62.89 MHz) put 90 of the worst 100 gpu_clk
+  // setup paths on one chain:
+  //
+  //   tilestore RAM PORT_B_WRITE_ENABLE_REG -> rd_ready_i -> FRAGMENT's
+  //   s0_to_s1 -> frag_ready_o -> ez_cand_ready -> EARLYZ's frag_acc ->
+  //   hiz_qualify -> all 256 bits of acc_mask_next -> acc_mask_r[*]
+  //
+  // A downstream ready, born in a RAM write-enable register, was reaching 256
+  // register inputs in a single clock. With the skid in place `ez_cand_ready`
+  // is the skid's own occupancy and the chain stops here.
+  //
+  // NOTE WHAT THIS IS NOT. reports/MHZArchitected names Early-Z's "256-bit
+  // global reduction" as the offender. `&acc_mask_next` is on the OUTPUT side
+  // of those registers and appears on NONE of these paths. The note also
+  // ranked EDGEWALK first, and EDGEWALK has now been absent from the worst
+  // paths in two consecutive fits. The report decides; the prediction has been
+  // wrong twice.
+  //
+  // Costs one cycle of latency and no throughput -- a 2-deep skid accepts a
+  // beat every clock. Carries the payload opaquely, so every value downstream
+  // is bit-identical and merely one cycle later.
+  //
+  // -------------------------------------------------------------------------
+  // ADDED, REMOVED, AND BACK. THE MIDDLE STEP WAS RIGHT AT THE TIME.
+  // -------------------------------------------------------------------------
+  // `ce84b107` added it (round 2) and it cost ~2 MHz. `7a7265a6` removed it
+  // (round 4) with a measurement and a correct reason: RASTER.FRAGMENT's RMW
+  // split had shortened the chain, Early-Z's worst path had moved inside the
+  // block, and the skid "was still being paid for and no longer buying
+  // anything".
+  //
+  // The composed fit of 2026-09-04 (`wumen-18054414`) shows the chain is BACK.
+  // At 97.28 MHz, 17 of the 18 remaining failing endpoints land in Early-Z and
+  // the worst is:
+  //
+  //     fragment.s3_addr_r -> (== s0_addr_r) hazard -> fragment.frag_ready_o
+  //       -> earlyz.cand_ready_i -> out_free -> frag_acc -> hiz_qualify
+  //       -> acc_mask_r write enable                              -0.280 ns
+  //
+  // Nothing regressed. Everything ELSE got faster -- rounds 5 through 9 plus
+  // the four EDGEWALK commits -- so a chain that was comfortably slack at
+  // 79 MHz is the longest one at 97. The round-4 removal was right about the
+  // design it measured and stopped being right about the design that followed.
+  //
+  // That is the honest shape of this whole effort: a fix stops paying, gets
+  // removed on evidence, and earns its place back on later evidence. Both
+  // decisions were measurements; neither was a preference.
+  //
+  // ITS RETURN IS NOT YET MEASURED. `7a7265a6` proved the removal paid at
+  // 79 MHz and nothing yet proves the restoration pays at 97 -- the last time
+  // this skid went in it COST 2 MHz. It ships behind its own composed fit, and
+  // if that fit says no it comes out again with the number attached.
+  localparam int unsigned SKID_W = 8 + 24 + 32 + 16 + 88;   // 168
+
+  zhao_skid2 #(.W(SKID_W)) u_cand_skid (
+    .clk        (clk),
+    .rst_n      (rst_n),
+    .up_valid_i (ez_cand_valid),
+    .up_ready_o (ez_cand_ready),
+    .up_data_i  ({ez_cand_addr, ez_cand_depth, ez_cand_state,
+                  ez_cand_src, ez_cand_payload}),
+    .dn_valid_o (sk_cand_valid),
+    .dn_ready_i (sk_cand_ready),
+    .dn_data_o  ({sk_cand_addr, sk_cand_depth, sk_cand_state,
+                  sk_cand_src, sk_cand_payload}),
+    .level_o    (sk_level)
+  );
+
   // ============================================================ FRAGMENT ===
   // The read-modify-write on the tile store's port A. The payload is unpacked
   // here in exactly the order it was packed above.
   zhao_raster_fragment u_fragment (
     .clk                 (clk),
     .rst_n               (rst_n),
-    .frag_valid_i        (ez_cand_valid),
-    .frag_ready_o        (ez_cand_ready),
-    .frag_addr_i         (ez_cand_addr),
-    .frag_depth_i        (ez_cand_depth),
-    .frag_state_i        (ez_cand_state),
-    .frag_src_id_i       (ez_cand_src),
-    .frag_vert_rgb_i     (ez_cand_payload[87:64]),
-    .frag_vert_a_i       (ez_cand_payload[63:56]),
-    .frag_tag_i          (ez_cand_payload[55:48]),
-    .frag_sten_ref_i     (ez_cand_payload[47:40]),
-    .frag_texel_rgb_i    (ez_cand_payload[39:16]),
-    .frag_texel_a_i      (ez_cand_payload[15:8]),
-    .frag_texel_idx_i    (ez_cand_payload[7:0]),
+    .frag_valid_i        (sk_cand_valid),
+    .frag_ready_o        (sk_cand_ready),
+    .frag_addr_i         (sk_cand_addr),
+    .frag_depth_i        (sk_cand_depth),
+    .frag_state_i        (sk_cand_state),
+    .frag_src_id_i       (sk_cand_src),
+    .frag_vert_rgb_i     (sk_cand_payload[87:64]),
+    .frag_vert_a_i       (sk_cand_payload[63:56]),
+    .frag_tag_i          (sk_cand_payload[55:48]),
+    .frag_sten_ref_i     (sk_cand_payload[47:40]),
+    .frag_texel_rgb_i    (sk_cand_payload[39:16]),
+    .frag_texel_a_i      (sk_cand_payload[15:8]),
+    .frag_texel_idx_i    (sk_cand_payload[7:0]),
     .rd_valid_o          (ts_rd),
     .rd_ready_i          (ts_rd_ready),
     .rd_addr_o           (ts_rd_addr),
