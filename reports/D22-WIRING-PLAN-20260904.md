@@ -62,6 +62,30 @@ tiles. Skinning and lighting join later, at the `GEOM.SKIN` / `GEOM.SKIN.NORM` /
 `GEOM.LIGHT` branch, which is a *parallel* limb rather than a link in this
 chain. **Do not wait for lighting to start wiring.**
 
+## Stage 1, costed exactly
+
+`zhao_geom_setup` is a **leaf block** — it instantiates nothing — so stage 1 adds
+**one** file to the shell's ordered source list (45 -> 46, and
+`run_composed_fit.ps1`'s source-parity check will demand `tests/CMakeLists.txt`
+agree).
+
+**And the shell's interface gets SMALLER, not bigger.** SETUP consumes the three
+screen-space vertices, the doubled area, the bounding box and `src_id`, and
+computes the edge functions the shell is currently handed:
+
+    REMOVED (9 + 1 ports)  render_kx0_i ky0_i kc0_i  (x3 edges)  render_tl_i
+    ADDED   (1 port)       render_area2_i  [47:0]
+    UNCHANGED              render_ax_i .. render_cy_i, min/max x/y, src_id
+
+So the harness stops supplying **edge setup** and starts supplying **an area**.
+That is the single most contained step available, and it is the one whose
+"the picture must not change" claim is easiest to believe: the values SETUP
+computes are the values the harness was computing by the same law.
+
+**The area is not a new burden on the caller.** `zref` already computes it —
+it is the `orient`/`area2` term the reference uses to reject degenerate and
+back-facing triangles — so the harness has it in hand.
+
 ## What each stage must produce, or it does not count
 
 1. **The picture does not change.** Every stage replaces harness-supplied values
