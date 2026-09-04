@@ -71,6 +71,41 @@ wrong number, but a *right* number produced by a machine nobody had rebuilt.
 **It also means the "18 Not Run" finding was worse than it looked.** Those 18
 were visibly absent. This one was present, green, and wrong.
 
+### THE FULL REBUILD EXPOSED A SECOND HIDDEN FAILURE, from the same migration
+
+`fixp` — 1 failure in **29,385,065 checks**:
+
+    test_fixp.cpp:816: gen::QFMT_VERSION == 2u (got 3 vs 2)
+
+Commit `990de0d8` bumped `QFMT_VERSION` 2 -> 3 for amendment C2 (the particle128
+v1 numeric law), and this pin still asserted 2. Like `shell_golden_replay`, it
+had been **passing on a binary built before the bump reached it**.
+
+**Fixed, and the justification is the amendment's own sentence** rather than a
+shrug at a red test — `spec/qformats.md` C2 says *"No table or golden of §6/§7/§12
+changed; the bump travels so capture replay can refuse pre-C2 [captures]"*, and
+§6/§7/§12 are exactly the laws `test_fixp` covers. So C2 is a lane addition like
+C1 before it, the pin moves to 3, and the comment says why.
+
+**The pin is the point**: it does not track the version, it forces someone to
+read the amendment and state why the laws still hold. Bumping it without that
+sentence turns a gate into a formality.
+
+### So the migration left FIVE marks, and stale binaries hid two of them
+
+| test | mark |
+|---|---|
+| `golden_abi_info` | stale generator/zidl SHA in the captures |
+| `zcap_roundtrip` | same SHAs, via the writer |
+| `shell_golden_replay` | same SHAs — **hidden by a stale binary** |
+| `fixp` | the `QFMT_VERSION` pin — **hidden by a stale binary** |
+| `tables_tri` | `tables.ts` QFMT_VERSION marker (`qformats.md` §-bump requires "full regeneration + recommittance of tables") |
+
+`fixp` is fixed here because it is a source pin with a written justification.
+**The other four are the golden captures and the generated tables**, and those
+still want whoever ran the migration: regenerating them turns four tests green
+and destroys the only record of what changed.
+
 ### A claim of mine that was too fast
 
 When `ProjOut` gained `w`, this session recorded *"render_golden PASS,
