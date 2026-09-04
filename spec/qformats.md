@@ -611,7 +611,45 @@ f     = clamp(f_raw, 0, 0x10000)        // d ≥ far → 0 (full fog), d ≤ nea
 f8    = fx16 → unit8 (§2, round-half-up)
 ```
 
-**Mix (frozen):** fog is a vertex-colour operation in GEOM.PROJECT,
+> ### AMENDED BY OWNER RULING D-5 (2026-09-03) — READ BEFORE THE MIX BELOW
+>
+> **What survives:** the factor computation immediately above. D-5 says the fog
+> factor is *"computed once per vertex from the frozen view/fog law"* — that is
+> `f_raw` / `f` / `f8`, unchanged, still frozen.
+>
+> **What is REPLACED:** everything from "Mix (frozen)" to the end of this
+> subsection. D-5 rules **"do not carry an already-fogged vertex colour"**.
+> Carry **unfogged lit RGB and a fog factor**, transported through clipping and
+> `GEOM.PARAMBUF` and interpolated through `ATTRSTEP`. The unified ordering is:
+>
+> | | ordinary material | cel material |
+> |---|---|---|
+> | 1 | lighting | lighting |
+> | 2 | interpolate lighting + fog factor | interpolate lighting + fog factor |
+> | 3 | — | **toon quantisation** |
+> | 4 | texture/material combination | texture/material combination |
+> | 5 | **fog final source RGB** | **fog final source RGB** |
+> | 6 | framebuffer blend | framebuffer blend |
+>
+> Fog is applied to the **final source colour before alpha or additive
+> blending**. Fog-exempt classes — sky family, HUD, deliberately
+> emissive/additive effects — take an **explicit bypass**.
+>
+> **Three sentences below are now false and are kept only as the record of what
+> changed:** that fog is a vertex-colour operation in GEOM.PROJECT; that "the
+> factor is not a separate interpolant"; and that "there is no per-fragment fog
+> anywhere in v1". Under D-5 the factor **is** a separate interpolant and the
+> mix **is** per-fragment, at the final source colour.
+>
+> D-5's stated reason is that the old order produces two visible errors: **fog
+> quantised into hard toon bands**, and **texture modulation multiplying the fog
+> colour itself**.
+>
+> `design/contracts/GEOM.LIGHT.md` already carries the new rule. This section
+> did not, and it is the numeric law and said *frozen*, so a reader who opened
+> it first got the superseded route with the strongest possible warrant.
+
+**Mix (SUPERSEDED by D-5, retained as the record):** fog is a vertex-colour operation in GEOM.PROJECT,
 ordered AFTER lighting and AFTER the global tint (sky_and_beams §4a — the
 tint darkens the object; fog then pulls it toward the sky's own colour, so
 the fog colour is never itself tinted), per channel of the colour8 lanes:

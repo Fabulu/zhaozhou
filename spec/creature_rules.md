@@ -414,7 +414,11 @@ costs a spec edit and an asset-tool change, zero silicon TODAY.
 ## 2.x — the per-vertex lighting LAW (the missing reference model, now built)
 
 `spec/qformats.md` §8 (frozen) has the fogged colour "riding the ordinary
-Gouraud path"; `design/blocks.yml` gives GEOM.PROJECT "projection +
+Gouraud path"  *(**superseded by owner ruling D-5, 2026-09-03**: carry
+unfogged lit RGB and a fog factor, and apply fog to the FINAL SOURCE
+COLOUR after material combination. The §8 factor computation survives;
+the mix location does not. The sentence quoted here is retained because
+the paragraph is about what the lighting law was written against.)*; `design/blocks.yml` gives GEOM.PROJECT "projection +
 LIGHTING" and GEOM.SETUP "edge coefficients, GRADIENTS"; GEOM.SETUP.md
 records the gap: *"until that exists there is nothing to be bit-exact
 against."* The reference model now exists, in

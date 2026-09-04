@@ -8,7 +8,38 @@ Shade one covered fragment and perform the depth / stencil / blend work — the 
 
 Exclusions — none of these are in this block: coverage (RASTER.EDGEWALK); early-Z (RASTER.EARLYZ, by architect ruling 1.D); attribute interpolation — colour, alpha, depth and UV all arrive **already interpolated**, which is GEOM.SETUP's job; texture sampling of any kind (see *What is not built* below); ordered dither and the framebuffer write (RASTER.RESOLVE); tile memory (RASTER.TILESTORE — this block is a *master* on its ports, not an owner); tile scheduling; MSAA; and **fog** (see below — that is the spec's decision, not an omission).
 
-### Fog is not computed here
+### Fog is not computed here — **AND OWNER RULING D-5 REVERSES THIS**
+
+> **STOP. This section describes the pre-D-5 law and the block still implements
+> it. Owner ruling D-5 (2026-09-03, `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`)
+> replaced the fog route:**
+>
+> * The colour arriving here will be **unfogged lit RGB**, not "already fogged".
+> * A **fog factor** arrives as a separate interpolant, transported through
+>   `GEOM.PARAMBUF` and interpolated through `ATTRSTEP`.
+> * Fog is applied to the **final source colour after texture/material
+>   combination and before alpha or additive blending** — D-5's step 5, ahead of
+>   the framebuffer blend at step 6. **That is per-fragment work, in this block's
+>   cone.**
+> * Fog-exempt classes take an **explicit bypass**, replacing the "honoured by
+>   construction" argument below — a block that *can* fog must be *told* not to.
+>
+> **A GREEN TEST CURRENTLY DEFENDS THE SUPERSEDED LAW.**
+> `tests/raster/raster_fragment_directed.cpp:test_fog_is_a_vertex_operation`
+> requires the colour to reach the tile **unaltered**, and its own comment says
+> *"a block that grew a fog stage would double-apply it and that case would go
+> red."* Under D-5 that block **must** grow a fog stage, so **that test is
+> expected to go red, and the correct response is to rewrite the test, not to
+> revert the ruling.** It is the only test in the tree known to enforce a
+> decision that has been overruled.
+>
+> **Not implemented in this pass.** D-5 costs a per-fragment mix that the
+> contract below correctly records as "not costed"; costing and building it is
+> G4/G6 work. What is fixed here is that the contract no longer presents the
+> superseded route as current law.
+
+The text below is retained as the record of what changed.
+
 
 `design/blocks.yml`'s purpose line for this block reads "depth/stencil/blend/**fog**", and that line predates the ratified fog law. `spec/qformats.md` §8, added 2026-08-17, freezes fog as a **per-vertex** operation in GEOM.PROJECT and says so in as many words:
 

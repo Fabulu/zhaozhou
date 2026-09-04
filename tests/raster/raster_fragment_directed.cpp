@@ -665,6 +665,26 @@ void test_effect_tag() {
 // stage would double-apply it and this case would go red. The exempt list
 // (the sky family, additive emissive) is honoured by construction: a block
 // that cannot fog cannot fog the wrong thing.
+// ---------------------------------------------------------------------------
+// THIS TEST ENFORCES A DECISION THAT HAS BEEN OVERRULED.
+//
+// It pins spec/qformats.md section 8's pre-D-5 law: fog is a per-vertex mix in
+// GEOM.PROJECT, the colour arrives already fogged, and this block must pass it
+// through UNALTERED. Owner ruling D-5 (2026-09-03) reversed that. Under D-5 the
+// colour arrives UNFOGGED, a fog factor arrives as a separate interpolant, and
+// fog is applied to the FINAL SOURCE COLOUR after material combination and
+// before blending -- which is per-fragment work in this block's cone.
+//
+// So when D-5 is implemented THIS TEST IS EXPECTED TO GO RED, and the correct
+// response is to rewrite it against the new ordering, NOT to revert the ruling
+// to make it green again. A test that defends a superseded decision is the
+// hardest kind to argue with, because it fails honestly.
+//
+// Left passing deliberately: the block still implements the old law, so the
+// test still describes the machine. It is the CONTRACT that was wrong, and
+// design/contracts/RASTER.FRAGMENT.md now says so. Costing and building the
+// per-fragment mix is G4/G6 work.
+// ---------------------------------------------------------------------------
 void test_fog_is_a_vertex_operation() {
   // The frozen mix, qformats 8: `c' = sat_u8(c + rescale_s((fog_c - c)*f8, 8))`
   // - the identical shape as the blend's ALPHA lerp, which is why no new

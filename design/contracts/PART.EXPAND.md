@@ -2,6 +2,32 @@
 
 > Ledger: `design/blocks.yml` · owner ZH-065 · phase 10 · maturity SPECIFIED
 
+> ## SUPERSEDED NUMERIC LAW — READ BEFORE THE TABLE BELOW
+>
+> **The `size` field described in this contract is the PRE-C2 law and is no
+> longer what the record carries.** Amendment C2 (`QFMT_VERSION` 3, owner
+> ruling R3) replaced `spec/qformats.md` §10 whole:
+>
+> | | pre-C2 (what this contract still describes) | C2 (binding) |
+> |---|---|---|
+> | width | u8 | **u6** |
+> | format | U 0.4.4 | **U 2.4** |
+> | meaning | sixteenths of a **screen pixel** | **relative world-radius multiplier** |
+> | use | `size << 4` gives S 12.8 subpixels | `radius = base_radius_fx16 * size / 16`, **world scale, never camera-space pixels** |
+>
+> **`size << 4` is not a projection of the C2 field.** Turning a world radius
+> into a screen half-side requires a projection, and qformats §10 says
+> explicitly that inventing one to make the amendment fit is how a plausible
+> wrong number gets shipped — **it needs a decision first.**
+>
+> `fpga/rtl/particles/zhao_part_expand.sv` already carries this banner. This
+> contract did not, so an agent reading the contract met the dead law with an
+> authoritative citation to the very section that replaced it. That is the
+> failure this banner exists to stop.
+>
+> **Status: OPEN DECISION, tracked as G5's particle numeric migration.** Do not
+> resolve it by editing this table.
+
 ## Purpose and exclusions
 
 Expand polygon-particle instances into normal geometry packets for the setup stage.
