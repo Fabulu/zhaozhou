@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "11edddca77a27a84f9739589f2e755eaf920f9e7",
+    "newestRunCommit":  "1cb661e09e276ade5a783022ffcbf5a293957b1c",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1274,6 +1274,14 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  36.92,
                        "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_texture_tmu_pipe",
+                       "status":  "failed:quartus_fit.exe",
+                       "sourceCommit":  "1cb661e09e276ade5a783022ffcbf5a293957b1c",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  13358.3,
+                       "sourcesHashed":  2
                    },
                    {
                        "module":  "zhao_texture_tmu_plan",
