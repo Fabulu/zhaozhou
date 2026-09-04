@@ -80,7 +80,31 @@ the device — and not one extra DSP across nine fits.**
 | 4 BINNER six parallel products | **never appeared in nine fits** |
 | 5 FBWRITE dynamic byte-mask | **never appeared in nine fits** |
 
-### MEASURED 2026-09-04: **97.28 MHz, 18 failing endpoints**
+### MEASURED 2026-09-04, TWICE: **98.06 MHz, 12 failing endpoints**
+
+`reports/composed/wumen-3546bfa2-20260904T041156Z/RESULT.md`. The Early-Z skid
+was restored and **it paid**: 97.28 → 98.06 MHz, 18 → 12 failing endpoints, and
+**Early-Z appears in none of the violated paths**.
+
+| | r9 | r10 | **r11** |
+|---|---|---|---|
+| `gpu_clk` | 85.62 | 97.28 | **98.06 MHz** |
+| worst setup | −1.679 | −0.280 | **−0.198 ns** |
+| failing endpoints | 430 | 18 | **12** |
+
+The same skid COST 2 MHz at round 2 and was removed at round 4 on a correct
+measurement. Nothing regressed to bring it back — everything else got faster, so
+a chain that was slack at 79 MHz became the longest at 97. It costs the same
++270 ALMs; what changed is that it now buys something.
+
+**The offender list is new and nothing predicted it:** `zhao_mem_guard` 6,
+`zhao_geom_binner` 4, `zhao_raster_tilestore` 1, `zhao_cmd_dma` 1. Neither of
+the leaders is on `MHZArchitected`'s list. That is the fourth time this effort
+the report has named a structure the note did not. **Read the paths.**
+
+Worst path is now `tile_pipe | rs_state.RS_CLEAR` → `tilestore | res_pres_q`.
+
+### The previous round: **97.28 MHz, 18 failing endpoints**
 
 `reports/composed/wumen-18054414-20260904T020546Z/RESULT.md`.
 
