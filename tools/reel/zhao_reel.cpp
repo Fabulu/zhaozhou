@@ -1016,8 +1016,18 @@ struct SceneSubject {
                                    // sets this BELOW the island so debris
                                    // visibly falls through the hole
   std::vector<Debris> debris;
-  // S5 (creature 02): draw the shared-ramp centre glow(s) for this subject.
+  // S5 (creature 02): draw the shared-ramp centre glow for this subject.
   bool u02_glow = false;
+  // creature 02: run the ten-kind mana emitter tables + the bolt.
+  bool u02_fx = false;
+  // the S5 spike's three-glow staging (diagnostic only)
+  bool u02_glow_trio = false;
+  // the fx tour: cycle the ten kinds solo, 60 frames each
+  bool u02_fx_tour = false;
+  // the ADDLIGHTNING crackle variant: bolts + sparks every frame
+  bool u02_crackle = false;
+  // three phase-offset conduits sharing one stage (the budget proof)
+  bool u02_trio = false;
   // S3 (creature 02): DRAW_POPULATION flags. b0 points, b1 tris, b2 additive
   // (RASTER.FRAGMENT ADD). Default is the historical 0x0003 -- byte-identical.
   uint16_t pop_flags = 0x0003;
@@ -2172,6 +2182,12 @@ constexpr int32_t kZixxSunOuterMm = 78000;
 // "one super bright normal sun, no color"). Adds are cut to ~40% and mults to
 // ~50% of Direction 29, complements near zero, so the ADD carries a nameable
 // hue and pigment/form dominate again (reference: Archive Generation 18).
+// Creature 02 clip suns (the same far-sun law; a cool mana-violet family
+// authored CALM per Direction 30 -- the pink pigment is an amplifier).
+constexpr ZixxSunSpec kU02SunHover   {14000, kZixxSunHeightMm, 16000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(150), fxm(40), fxm(200), fxm(80), fxm(25), fxm(130)};
+constexpr ZixxSunSpec kU02SunDrift   {-13000, kZixxSunHeightMm, 17000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(120), fxm(55), fxm(170), fxm(55), fxm(35), fxm(110)};
+constexpr ZixxSunSpec kU02SunChannel {12000, kZixxSunHeightMm, 14000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(180), fxm(35), fxm(220), fxm(100), fxm(20), fxm(150)};
+constexpr ZixxSunSpec kU02SunCalm    {15000, kZixxSunHeightMm, 15000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(130), fxm(45), fxm(160), fxm(60), fxm(28), fxm(95)};
 constexpr ZixxSunSpec kZixxSunIdle       {15556,  kZixxSunHeightMm, 15556,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(240), fxm(70), fxm(12), fxm(150), fxm(65), fxm(5)};  // golden morning
 constexpr ZixxSunSpec kZixxSunWalk       {-12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(18), fxm(80), fxm(280), fxm(10), fxm(35), fxm(135)};  // azure day
 constexpr ZixxSunSpec kZixxSunRun        {12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(280), fxm(90), fxm(10), fxm(150), fxm(42), fxm(3)};  // hot orange
@@ -2242,8 +2258,21 @@ struct CreatureReelCtx {
   // one contiguous array so the compositor's point-light globals can name
   // them directly.
   zc::CreaturePointLight moving_sources[zc::kCreatureMaxPointLights]{};
-  // S5 (creature 02): splat the centre glow(s) before the compose
+  // S5 (creature 02): splat the centre glow before the compose
   bool u02_glow = false;
+  bool u02_glow_trio = false;         // the S5 spike's phantom neighbours
+  int32_t u02_body[3] = {0, 0, 0};    // posed body-centre world position
+  int32_t u02_glow_gain_pm = 1000;    // pulses with the compression wave
+  // the mana populations, drawn INSIDE this hook (after the chained sky /
+  // celestial passes, which repaint depth==0 and would otherwise eat every
+  // particle over sky — particles never write depth, charter pass 7)
+  zref::render::Population u02_add_pop;  // additive points (flags 0x0005)
+  zref::render::Population u02_tri_pop;  // additive tris (0x0006: glints, bolts)
+  zref::render::Population u02_opq_pop;  // opaque points (0x0001: droplets)
+  // the trio: two extra phase-offset instances composed with the primary
+  zc::CreatureInstance* u02_extra[2] = {nullptr, nullptr};
+  int32_t u02_glow_centres[3][3] = {};  // one glow per composed conduit
+  int u02_glow_count = 0;
 };
 constexpr uint32_t kZixxMovingSourceCount = 4;
 constexpr uint32_t kZixxMovingSourceWarm = 0;
@@ -2684,13 +2713,30 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   if (c.u02_glow) {
     u02::glow_bake(s_glow_assets);
     u02::GlowFrame& gf = s_glow_frame;  // the one per-frame ramp build
-    u02::glow_build_ramp(gf, u02::kGlowLo, u02::kGlowMid, u02::kGlowHi,
-                         u02::kCentreGlowGainPm);
+    const int32_t gain = static_cast<int32_t>(
+        (static_cast<int64_t>(u02::kCentreGlowGainPm) * c.u02_glow_gain_pm) / 1000);
+    u02::glow_build_ramp(gf, u02::kGlowLo, u02::kGlowMid, u02::kGlowHi, gain);
     const zref::render::Viewport vpp_g{0, 0, w, h};
-    for (int gi = 0; gi < 3; ++gi) {
-      const int32_t gx = c.inst->x + fxm(u02::kS5PhantomOffsMm[gi][0]);
-      const int32_t gz = c.inst->z + fxm(u02::kS5PhantomOffsMm[gi][1]);
-      const int32_t gy = c.inst->y + u02::fxu(u02::kHoverHeightMm);
+    // one glow per composed conduit (the trio subject), or the S5 spike's
+    // phantom staging when u02_glow_trio without real extras
+    const int n = c.u02_glow_count > 0 ? c.u02_glow_count : 1;
+    const int phantoms = c.u02_glow_trio && c.u02_extra[0] == nullptr ? 3 : n;
+    for (int gi = 0; gi < phantoms; ++gi) {
+      int32_t gx, gy, gz;
+      if (gi < n && c.u02_glow_count > 0) {
+        gx = c.u02_glow_centres[gi][0];
+        gy = c.u02_glow_centres[gi][1];
+        gz = c.u02_glow_centres[gi][2];
+      } else {
+        gx = c.u02_body[0] + fxm(u02::kS5PhantomOffsMm[gi][0]);
+        gy = c.u02_body[1];
+        gz = c.u02_body[2] + fxm(u02::kS5PhantomOffsMm[gi][1]);
+      }
+      if (c.u02_glow_trio && c.u02_extra[0] == nullptr) {
+        gx = c.u02_body[0] + fxm(u02::kS5PhantomOffsMm[gi][0]);
+        gy = c.u02_body[1];
+        gz = c.u02_body[2] + fxm(u02::kS5PhantomOffsMm[gi][1]);
+      }
       const zref::render::ProjOut pc = zref::render::project_vertex(
           c.vp, vpp_g, zref::fx16{gx}, zref::fx16{gy}, zref::fx16{gz}, nullptr);
       if (!pc.in) continue;
@@ -2698,11 +2744,11 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
                       u02::kCentreGlowRadiusPx, pc.s.d);
       cr_glow_px[cr_glow_n][0] = pc.s.x >> 8;
       cr_glow_px[cr_glow_n][1] = pc.s.y >> 8;
-      ++cr_glow_n;
+      if (cr_glow_n < 2) ++cr_glow_n;
     }
   }
   {
-    zc::CreatureInstance* insts[2] = {c.inst, c.dummy};
+    zc::CreatureInstance* insts[4] = {c.inst, c.dummy, c.u02_extra[0], c.u02_extra[1]};
     if (c.force_micro) {
       c.inst->lod.rung = zc::LodRung::kMicro;
       c.inst->lod.hold = 0;  // compose cannot refine during this diagnostic frame
@@ -2723,25 +2769,17 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       zc::g_creature_point_light_count = 1;
       zc::g_creature_additive_light = g_zixx_additive_normal;
     }
-    zc::compose_creatures(rgb, depth, w, h, c.vp, insts,
-                          c.dummy != nullptr ? 2 : 1, *c.poses, nullptr);
+    size_t inst_n = 0;
+    zc::CreatureInstance* live[4];
+    for (zc::CreatureInstance* ip : insts)
+      if (ip != nullptr) live[inst_n++] = ip;
+    zc::compose_creatures(rgb, depth, w, h, c.vp, live, inst_n, *c.poses, nullptr);
     // Subject-scoped by construction: a moving-light render cannot tint the
     // next requested subject in this one-binary catalogue process.
     zc::g_creature_light_rig = saved_rig;
     zc::g_creature_point_lights = saved_points;
     zc::g_creature_point_light_count = saved_point_count;
     zc::g_creature_additive_light = saved_additive;
-  }
-  // S5 layer two: the small core drawn OVER the composed body, no depth
-  // test -- the belly-light shining through the skin. Same frame ramp,
-  // scaled by its own calm gain.
-  if (c.u02_glow && cr_glow_n > 0) {
-    u02::GlowFrame core;
-    u02::glow_build_ramp(core, u02::kGlowLo, u02::kGlowMid, u02::kGlowHi,
-                         u02::kCentreGlowCoreGainPm);
-    for (int gi = 0; gi < cr_glow_n; ++gi)
-      u02::glow_splat(rgb, depth, w, h, s_glow_assets, core, cr_glow_px[gi][0],
-                      cr_glow_px[gi][1], u02::kCentreGlowCorePx, 0, false);
   }
   // ---- RUN 1939 experiment post-pass (env-gated, default off). Placed
   // HERE because the hook returns early when there are no gibs -- the
@@ -2887,6 +2925,40 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   }
   if (c.moving_light)
     draw_zixx_moving_source_markers(c, rgb, depth, w, h);
+  // creature 02: the mana and the belly core draw AFTER the cel ink pass —
+  // effects glow over the drawn creature, never inside its ink mask (each
+  // 2 px mote was getting its own black outline ring).
+  // The mana populations: drawn HERE so they land after the chained sky and
+  // celestial passes (which repaint depth==0). Depth-tested, never writing —
+  // the particle law — through the same draw_population the hardware previews.
+  if (!c.u02_add_pop.parts.empty() || !c.u02_tri_pop.parts.empty() ||
+      !c.u02_opq_pop.parts.empty()) {
+    zref::render::WorkSurface fsurf;
+    fsurf.w = w;
+    fsurf.h = h;
+    fsurf.rgb.assign(rgb, rgb + static_cast<size_t>(w) * h * 3);
+    fsurf.depth.assign(depth, depth + static_cast<size_t>(w) * h);
+    const zref::render::Viewport fvp{0, 0, w, h};
+    if (!c.u02_opq_pop.parts.empty())
+      zref::render::draw_population(fsurf, fvp, c.vp, c.u02_opq_pop, 0x0001, nullptr);
+    if (!c.u02_add_pop.parts.empty())
+      zref::render::draw_population(fsurf, fvp, c.vp, c.u02_add_pop, 0x0005, nullptr);
+    if (!c.u02_tri_pop.parts.empty())
+      zref::render::draw_population(fsurf, fvp, c.vp, c.u02_tri_pop, 0x0006, nullptr);
+    std::memcpy(rgb, fsurf.rgb.data(), fsurf.rgb.size());
+  }
+  // S5 layer two: the small core drawn OVER the composed body, no depth
+  // test -- the belly-light shining through the skin. Same frame ramp,
+  // scaled by its own calm gain.
+  if (c.u02_glow && cr_glow_n > 0) {
+    u02::GlowFrame core;
+    u02::glow_build_ramp(core, u02::kGlowLo, u02::kGlowMid, u02::kGlowHi,
+                         u02::kCentreGlowCoreGainPm);
+    for (int gi = 0; gi < cr_glow_n; ++gi)
+      u02::glow_splat(rgb, depth, w, h, s_glow_assets, core, cr_glow_px[gi][0],
+                      cr_glow_px[gi][1], u02::kCentreGlowCorePx, 0, false);
+  }
+
   c.gibs_in_view = 0;
   if (c.gibs == nullptr || c.gibs->empty()) return;
 
@@ -3075,6 +3147,7 @@ int render_scene(const SceneSubject& sub) {
   const zc::CreatureType* dog = nullptr;
   zc::CreatureInstance dog_inst;
   zc::CreatureInstance dummy_inst;  // run 0326: the salto target dummy
+  zc::CreatureInstance u02_extra_inst[2];  // the trio's phase-offset pair
   ZixxTargetDescriptor target_desc;
   zc::PoseBank dog_poses;
   std::vector<ReelGibPiece> gibs;
@@ -3142,6 +3215,26 @@ int render_scene(const SceneSubject& sub) {
     }
     cr_ctx.gibs = &gibs;
     cr_ctx.u02_glow = sub.u02_glow;
+    cr_ctx.u02_glow_trio = sub.u02_glow_trio;
+    if (species == Species::kUnnamed02 && sub.u02_trio) {
+      for (int e = 0; e < 2; ++e) {
+        u02_extra_inst[e].type = dog;
+        u02_extra_inst[e].tilt_mode = zc::TiltMode::kNone;
+        u02_extra_inst[e].facing = zref::angle16{0};
+        u02_extra_inst[e].anim.cut(static_cast<uint16_t>(sub.creature - 2));
+        // phase-offset a third of the loop each: variety costs pose decode,
+        // which is exactly what the trio subject exists to demonstrate
+        const zc::Clip* cl0 = nullptr;
+        for (const zc::Clip& cc : dog->bank.clips)
+          if (cc.slot_id == dog_inst.anim.slot) cl0 = &cc;
+        if (cl0 != nullptr)
+          u02_extra_inst[e].anim.frame = static_cast<uint16_t>(
+              (cl0->frame_count / 3) * (e + 1) % cl0->frame_count);
+        u02_extra_inst[e].x = dog_inst.x + fxm(e == 0 ? -2600 : 2000);
+        u02_extra_inst[e].z = dog_inst.z + fxm(e == 0 ? 1600 : -2200);
+        cr_ctx.u02_extra[e] = &u02_extra_inst[e];
+      }
+    }
     pop_threshold = 22 * (1 << 16) / 10;  // bulk 2.2 pops (species constant)
     gib_gravity = fxm(18);                // per frame^2
     hook_chain.install(HookChain::kCreature, &creature_hook, &cr_ctx);
@@ -3311,6 +3404,9 @@ int render_scene(const SceneSubject& sub) {
           const zc::ClipEvent* fired = nullptr;
           uint8_t nf = 0;
           zc::anim_advance(dog_inst.anim, dog->bank, &fired, nf);
+          for (int e = 0; e < 2; ++e)
+            if (cr_ctx.u02_extra[e] != nullptr)
+              zc::anim_advance(cr_ctx.u02_extra[e]->anim, dog->bank, &fired, nf);
         }
       } else if (sub.creature >= 3) {
         // run 0326: scripted state cuts (knockdown -> getUp chains, the
@@ -3461,6 +3557,74 @@ int render_scene(const SceneSubject& sub) {
       const zref::terrain::ColumnResult col =
           zref::terrain::column_query(lat, zref::fx16{dog_inst.x}, zref::fx16{dog_inst.z});
       if (col.cls == zref::terrain::ColumnClass::kSolid) dog_inst.y = col.top.raw;
+      for (int e = 0; e < 2; ++e) {
+        if (cr_ctx.u02_extra[e] == nullptr) continue;
+        const zref::terrain::ColumnResult ec = zref::terrain::column_query(
+            lat, zref::fx16{cr_ctx.u02_extra[e]->x}, zref::fx16{cr_ctx.u02_extra[e]->z});
+        if (ec.cls == zref::terrain::ColumnClass::kSolid) cr_ctx.u02_extra[e]->y = ec.top.raw;
+      }
+      // ---- creature 02: posed anchors + the mana emitter tables ----------
+      if (species == Species::kUnnamed02 && (sub.u02_fx || sub.u02_glow)) {
+        const zc::Clip* cl = nullptr;
+        for (const zc::Clip& cc : dog->bank.clips)
+          if (cc.slot_id == dog_inst.anim.slot) cl = &cc;
+        if (cl != nullptr) {
+          cr_ctx.u02_add_pop.parts.clear();
+          cr_ctx.u02_tri_pop.parts.clear();
+          cr_ctx.u02_opq_pop.parts.clear();
+          cr_ctx.u02_glow_count = 0;
+          zc::CreatureInstance* all[3] = {&dog_inst, cr_ctx.u02_extra[0],
+                                          cr_ctx.u02_extra[1]};
+          for (int ii = 0; ii < 3; ++ii) {
+            zc::CreatureInstance* ip = all[ii];
+            if (ip == nullptr) continue;
+            std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+            zc::decode_pose(*dog, *cl, ip->anim.frame, pose, nullptr, ip->anim.sub);
+            const auto anchor = [&](uint8_t b, int32_t out[3]) {
+              zc::SkinVertex sv{dog->baked.world_x[b], dog->baked.world_y[b],
+                                dog->baked.world_z[b], b, b, 64, 0, 0};
+              int32_t x, y, z;
+              zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
+              out[0] = ip->x + x;
+              out[1] = ip->y + y;
+              out[2] = ip->z + z;
+            };
+            u02::FxAnchors fa;
+            anchor(u02::kBRoot, fa.body);
+            anchor(u02::kBHingeA, fa.hinge_a);
+            anchor(u02::kBHingeB, fa.hinge_b);
+            anchor(u02::kBHingeC, fa.hinge_c);
+            fa.crown[0] = fa.body[0];
+            fa.crown[1] = fa.body[1] + u02::fxu(u02::vmm(u02::kBodyRadiusMm));
+            fa.crown[2] = fa.body[2];
+            cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][0] = fa.body[0];
+            cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][1] = fa.body[1];
+            cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][2] = fa.body[2];
+            ++cr_ctx.u02_glow_count;
+            if (ii == 0) {
+              cr_ctx.u02_body[0] = fa.body[0];
+              cr_ctx.u02_body[1] = fa.body[1];
+              cr_ctx.u02_body[2] = fa.body[2];
+              const zc::DeformSample ds = zc::deformation_sample(
+                  *dog, dog_inst.anim.slot, dog_inst.anim.frame, dog_inst.anim.sub);
+              cr_ctx.u02_glow_gain_pm =
+                  850 +
+                  static_cast<int32_t>((static_cast<int64_t>(ds.flatten) * 500) /
+                                       (u02::kCompressAmpPm > 0 ? u02::kCompressAmpPm : 1));
+            }
+            if (sub.u02_fx) {
+              const uint32_t loop_frames = static_cast<uint32_t>(cl->frame_count) * 2u;
+              const uint32_t lframe =
+                  (f + static_cast<uint32_t>(ii) * loop_frames / 3) %
+                  (loop_frames > 0 ? loop_frames : 1);
+              const int solo = sub.u02_fx_tour ? static_cast<int>((f / 60) % 10) : -1;
+              u02::fx_fill(dog_inst.anim.slot, lframe, loop_frames, fa,
+                           cr_ctx.u02_add_pop, cr_ctx.u02_tri_pop, cr_ctx.u02_opq_pop,
+                           solo, sub.u02_crackle);
+            }
+          }
+        }
+      }
       // the salto target dummy stands (or hovers) relative to the SAME
       // terrain surface -- run 0326: at y=0 it stood eight metres under
       // the crown and never rendered
@@ -4488,6 +4652,26 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   s.orbit = orbit;
   u02_common(s);
   if (!orbit) s.cam_yaw = 0x2000;  // three-quarter: the face and the loop both read
+  s.u02_fx = true;
+  s.u02_glow = true;
+  s.pop_flags = 0x0001;  // the droplets: opaque points (no tri cones)
+  // the clip's sun (the same far-sun law; additive rides the normal gate)
+  s.sun = slot == 0   ? &kU02SunHover
+          : slot == 1 ? &kU02SunDrift
+          : slot == 2 ? &kU02SunChannel
+                      : &kU02SunCalm;
+  // the skybox bloom serves the showcase clips where the sky is the backdrop
+  // (S1 made a creature + planet bloom lawful in one clip)
+  if (slot == 2) {  // fixed-camera subjects only: the bloom is painted in
+    // SCREEN space and must not sit frozen while an orbit spins the world
+    s.planet = 1;  // violet-thick: pure formless bloom, the mana mood
+    // the bloom sits OFF to the side: additive effects vanish over its
+    // near-white core (the S3 ceiling lesson at scene scale), so the loop
+    // window keeps dark violet sky behind it for the bolt to blaze against
+    s.planet_sun_x = 58;
+    s.planet_sun_y0 = 96;
+    s.planet_sun_y1 = 132;
+  }
   return s;
 }
 
@@ -4500,6 +4684,7 @@ SceneSubject subject_u02_s5() {
   s.orbit = false;
   u02_common(s);
   s.u02_glow = true;
+  s.u02_glow_trio = true;
   s.note =
       "S5 spike: three conduit centre glows (one real body + two phantom "
       "centres) through ONE per-frame ramp build; occlusion by the body and "
@@ -6423,6 +6608,30 @@ int main(int argc, char** argv) {
   if (wanted("unnamed02-startle")) rc |= render_scene(subject_u02_clip(4, "unnamed02-startle", u02::kStartleKeys, false));
   if (wanted("unnamed02-rest")) rc |= render_scene(subject_u02_clip(5, "unnamed02-rest", u02::kRestKeys, false));
   if (wanted("unnamed02-pirouette")) rc |= render_scene(subject_u02_clip(6, "unnamed02-pirouette", u02::kPirouetteKeys, false));
+  if (wanted("unnamed02-crackle")) {
+    SceneSubject s = subject_u02_clip(0, "unnamed02-crackle", u02::kIdleKeys, false);
+    s.u02_crackle = true;
+    s.planet = 1;  // fixed camera: the bloom may stage the crackle
+    s.planet_sun_x = 58;
+    s.planet_sun_y0 = 96;
+    s.planet_sun_y1 = 132;
+    s.note = "the ADDLIGHTNING variant: the conduit crackles continuously";
+    rc |= render_scene(s);
+  }
+  if (wanted("u02-fx-tour")) {
+    SceneSubject s = subject_u02_clip(0, "u02-fx-tour", 300, false);
+    s.u02_fx_tour = true;
+    s.planet = 0;  // the dusk sky: each kind read solo against the dark plate
+    s.note = "the ten mana kinds solo, 60 frames each, in kind order";
+    rc |= render_scene(s);
+  }
+  if (wanted("u02-trio")) {
+    SceneSubject s = subject_u02_clip(2, "u02-trio", u02::kChannelKeys, false);
+    s.u02_trio = true;
+    s.cam_k = 170000;  // pull back: three conduits share the frame
+    s.note = "THREE phase-offset conduits, one scene sun + bloom, all effects";
+    rc |= render_scene(s);
+  }
   if (wanted("u02-s5-glow")) rc |= render_scene(subject_u02_s5());
   if (wanted("u02-s4-side")) rc |= render_scene(subject_u02_s4(0));
   if (wanted("u02-s4-front")) rc |= render_scene(subject_u02_s4(1));

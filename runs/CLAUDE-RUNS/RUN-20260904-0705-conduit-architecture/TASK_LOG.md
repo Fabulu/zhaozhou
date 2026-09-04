@@ -314,3 +314,33 @@ yet. Specs are." Read in full. Taken as binding for this pass:
   vertex: min clearance 88 mm (rest), gate 40 mm — CLEARANCE CONTRACT HOLDS.
 - Contact sheets of EVERY frame for all seven clips
   (evidence/sheet-startle.png, sheet-channel.png in the run).
+
+## EFFECTS MILESTONE — ten kinds, the bolt, the glow, the bloom, the trio
+
+- unnamed02_fx.h IS the effects knob block: ten named kinds (motes, sparks,
+  wisps, ring-pulse, helix-stream, droplets [opaque], drain-streamers,
+  star-glints [tri], bolt-beads [tri], shield-orbit), closed-form
+  deterministic emitters reading POSED bone anchors; the bolt follows
+  ADDLIGHTNING's FX.LIGHTNING recurrence exactly (<=24 segs, <=2 branches,
+  rehash-every-3-frames strike clock) so it migrates onto FORGE.PRIM
+  ribbons unchanged.
+- TWO LESSONS THE RENDERS TAUGHT:
+  1. The pre-resolve sky/celestial hooks repaint depth==0 AFTER the raster
+     passes, and particles never write depth — every mana dot over sky was
+     being erased. The mana now draws INSIDE the creature hook, after the
+     chained passes and after the cel ink (each 2 px mote was getting its
+     own black outline ring from the ink mask).
+  2. The bloom's near-white core ate every additive effect over it (the S3
+     ceiling lesson at scene scale) — the bloom now stages OFF to the side
+     so the loop window keeps dark sky for the bolt to blaze against; and a
+     centre-aimed bolt hid behind the body's own depth, so the main bolt
+     arcs hinge B -> the CROWN with the branch crossing the loop window.
+- Suns: kU02Sun{Hover,Drift,Channel,Calm} — the same far-sun law, a calm
+  mana-violet family; the planet-sun-violet bloom serves the fixed-camera
+  showcases (screen-space bloom must not freeze under an orbit).
+- The glow pulses with the compression wave (one phase knob), one ramp
+  build per frame however many conduits.
+- u02-fx-tour (ten kinds solo, 60 frames each), unnamed02-crackle (the
+  ADDLIGHTNING lightning-version: bolts + sparks continuously), u02-trio
+  (THREE phase-offset conduits, one bloom, all effects — the budget proof,
+  evidence/trio3.png).
