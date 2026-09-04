@@ -63,6 +63,47 @@ def closure(edges, root):
     return seen
 
 
+
+def check_fit_sources(decl):
+    """Every module the GENERATED production top instantiates must appear in
+    zhao_prod_top's source list in design/fit_targets.yml."""
+    import os
+    import re
+
+    out = []
+    top_path = "fpga/rtl/prod/zhao_prod_top.sv"
+    yml = "design/fit_targets.yml"
+    if not (os.path.exists(top_path) and os.path.exists(yml)):
+        return out
+
+    y = io.open(yml, encoding="utf-8", errors="replace").read()
+    i = y.find("- top: zhao_prod_top")
+    if i < 0:
+        return ["design/fit_targets.yml has no zhao_prod_top target, so the "
+                "production fit cannot be run at all"]
+    seg = y[i:]
+    j = seg.find("\n  - top:")
+    if j > 0:
+        seg = seg[:j]
+    listed = set(re.findall(r"-\s+(fpga/rtl/\S+\.sv)", seg))
+
+    top = io.open(top_path, encoding="utf-8", errors="replace").read()
+    inst = set(re.findall(r"^\s{2}(zhao_\w+)\s+u\d+_i\s*\(", top, re.M))
+
+    for m in sorted(inst):
+        src = decl.get(m)
+        if src is None:
+            out.append(
+                "the generated production top instantiates '%s' and no such "
+                "module file exists" % m)
+        elif src not in listed:
+            out.append(
+                "'%s' (%s) is instantiated by the generated production top but "
+                "is NOT in zhao_prod_top's source list in design/fit_targets.yml "
+                "-- the fit would die at elaboration" % (m, src))
+    return out
+
+
 def main():
     decl, edges = module_edges()
     tops, excluded = read_manifest()
@@ -99,6 +140,19 @@ def main():
                 "in the machine whatever the manifest says"
                 % (e, reason, ", ".join(inside[e]))
             )
+
+    # ---- the SECOND place a new block has to be registered -----------------
+    # A block being in the manifest is not enough for the production fit to
+    # elaborate: design/fit_targets.yml carries zhao_prod_top's own flat source
+    # list, and nothing connected the two. On 2026-09-04 zhao_geom_assemble and
+    # zhao_geom_depthquant were caught here as UNACCOUNTED, added to the
+    # manifest, regenerated into the top -- and the fit would STILL have died at
+    # elaboration, because neither was in that source list.
+    #
+    # The manifest gate and the fit source list were one step apart and only
+    # the first of them was mechanical. This closes the gap: whatever the
+    # generated top instantiates must be compilable.
+    errors.extend(check_fit_sources(decl))
 
     accounted = set(tops) | set(inside) | set(excluded)
     for m in sorted(set(decl) - accounted):
