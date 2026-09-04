@@ -152,3 +152,28 @@ sun notes, gen19 with 23 items), CSS families + MAX_ARCHIVE_GENERATIONS ->
 vs their gen19 archive copies, page reassembled: exactly one noindex meta.
 scratch-reel mirrored via robocopy /MIR + first/middle/last+meta byte audit
 (clean). tovideo.py encoding all 22.
+
+## 2026-09-04 05:45 — PUBLISHED and verified; run CLOSED
+
+Encoded all 22 clips (tovideo.py), decode-verified every webm to its exact
+frame count, every poster fresh, and no live media byte-identical to its
+gen19 archive copy (the stale-frame trap inverted into a gate). Remote mains
+merged (both already current, no force anywhere). Final probe rerun: PASS.
+
+Deployed ONCE: deploy.ps1 -Project upheaval -Branch main (production, 46
+files uploaded). Verified live at https://upheaval.pages.dev: HTTP 200
+(280640 bytes); EXACTLY ONE robots-noindex meta; archive tab carries
+Generation Nineteen (46 media refs, 23 clips incl the retired additive
+entry) beside intact Generation Eighteen; ONE moving-light entry, zero
+live references to the retired additive webm; six served files SHA256-match
+local byte-for-byte (new moving-light/idle/death webms, salto-nine poster,
+the gen19 additive archive, a gen18 archive file).
+
+Final SHAs, both pushed HEAD:main, fast-forward, no force:
+  zhaozhou  ec2808e1 (+ this close commit)
+  Upheaval  a49f0f4
+
+Background tasks: all render/encode/wait tasks completed with exit 0; final
+sweep verified no zhao-reel/ffmpeg/zixx-probe processes remain.
+
+Status: COMPLETE.
