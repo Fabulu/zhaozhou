@@ -401,7 +401,49 @@ launched **detached** so a task-stop cannot take it with it.
    above before reading a failure as an RTL failure.
 2. `zhao_terrain_residency_v2`, `zhao_raster_tilestore`, `zhao_texture_palette_res`
    all now have capacity-floor tripwires and none has been fit.
-3. The local CMake tree is broken: `CMAKE_CACHEFILE_DIR` is
-   `/c/programmieren/...` while cmake now resolves `C:/Programmieren/...`, so
-   cache regeneration aborts and leaves a `.cmake` unwritten. Needs a full
-   reconfigure, deferred so it does not take CPU from the fit.
+3. ~~The local CMake tree is broken~~ — **wrong, corrected 02:20.** The tree is
+   fine. `CMAKE_CACHEFILE_DIR` is `/c/programmieren/...`, and every failure came
+   from invoking `cmake --build` after a `Set-Location C:\programmieren\...`
+   that cmake resolved as `C:/Programmieren/...` — a CASING mismatch in my own
+   invocation, not a broken tree. Built from the lowercase path it regenerates
+   and compiles normally. **No reconfigure needed.**
+
+   Recording the correction rather than quietly deleting the claim: "the build
+   tree is broken, needs a full reconfigure" is exactly the kind of confident
+   wrong diagnosis that sends the next pass at the wrong thing, and I had
+   already written it down and worked around it all night with a scratchpad
+   compile script.
+
+
+## 02:10 — docket sweep while the fit runs
+
+Nothing here touches `fpga/rtl/texture/zhao_texture_cache_pipe.sv`, the running
+fit's entire declared closure.
+
+**D17(e), new and it explains D17(c).** `tests/lint/cppcheck_check.cmake.in`
+printed STATUS and returned when cppcheck was absent, and CTest read that as a
+SKIP — so local was green and CI red. That is the standing memory *"local gates
+must match CI"* exactly. Absence now fails loudly with the install line and an
+explicit `ZHAO_ALLOW_MISSING_CPPCHECK=1` opt-out that still prints. All three
+paths exercised against generated template instances.
+
+There is **no npm package to pin cppcheck with** the way clang-format is
+pinned, so the version is CHECKED instead — and the drift is live: **CI pins
+2.19.0, this machine has 2.20.0, and D17(c)'s finding does not reproduce on
+2.20.0 at all.** Same command, same file, different answer.
+
+**D17(c) was already fixed** in `d93bf0b3`; the docket entry was stale.
+
+**D17(d) is not ours.** `zhao-reel --check` fails on any sequence-CRC drift and
+`tools/reel/` is mid-flight on a retime skeleton — Stage 0 `22d61057` through
+Stage 4 `ada4c105`. The CRCs drift by design and re-baselining belongs to
+whoever is authoring the motion. The entry said "reproducing"; there is nothing
+to reproduce.
+
+**A possible free win on D1, logged as unmeasured.** The RMW critical path ends
+at `RASTER.TILESTORE`'s RAM write, and that block's read registers left the
+reset list tonight so its banks could infer as M10K. A reset read register
+cannot be the M10K's own output register, so a fabric flop at the end of that
+path may now be inside the block. Done for AREA; the timing effect is **not
+measured** and is in the docket so the next composed fit is read with it in
+mind, not as a claim.
