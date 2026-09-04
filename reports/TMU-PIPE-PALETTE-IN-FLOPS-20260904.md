@@ -97,9 +97,50 @@ memory**. Flattening the two dimensions into one array indexed by
 **7 M10K out of 553 available**.
 
 The two writes are mutually exclusive branches of the same `if`, so they remain
-one write port after flattening. The read address `{pal_way_c, rsp_idx}` is
-already computed a cycle earlier for the tag compare, so this does not add a
-stage.
+one write port after flattening.
+
+### CORRECTION, before this was applied: flattening ALONE will not work
+
+The paragraph that stood here said the read address is already available a cycle
+early "so this does not add a stage". **That was wrong, and it was wrong in the
+way this repository keeps writing down**: I checked the access sites and did not
+check the one property that decides whether a memory can exist at all.
+
+**The read is COMBINATIONAL.** Line 557 opens an `always_comb`, and line 559 is
+
+    dec_clut565_c = decode16(pal_dat_r[pal_way_c][rsp_idx], FMT_RGB565);
+
+An M10K cannot be read asynchronously. Block RAM inference requires the read
+data to come out of a register, so a flattened `pal_dat_r[{way, idx}]` read in
+`always_comb` **stays in flip-flops** — Quartus will do exactly what it is doing
+now, and the 65,536 registers will not move. Flattening is necessary and not
+sufficient.
+
+The real fix therefore has two parts, and the second one costs something:
+
+1. flatten to `[4096]` indexed by `{way, entry}` — removes the multidimensional
+   shape;
+2. **register the read**, which puts `dec_clut565_c` one cycle later than
+   `dec_pal565_c` and `dec_direct_c` beside it, so the consumer's mux and the
+   retire path have to move with it.
+
+### And the cost lands on the path that is already the tightest
+
+The block's own directed suite prints, on a green run:
+
+    the demand-critical path is CLUT (terrain is CLUT8) at 0.65x the 850,000
+    demand and 0.67x the 829,440 it was rounded up from
+
+**The CLUT path is the palette path** — the one this fix touches — and it is
+already at 0.65x of demand. Adding a cycle to it without absorbing that cycle
+elsewhere makes a known shortfall worse. Whether 65,536 registers or CLUT
+throughput matters more is an owner call, not a tidy-up, and it is now a
+genuine trade rather than the free win the first draft described.
+
+**What does not change:** the block currently spends about 87% of the device's
+registers on this array, which is not survivable either. The choice is between
+paying a pipeline stage and paying the registers — not between fixing it and
+leaving it.
 
 ## `pal_val_r [PAL_SLOTS]` of 256 bits — 4,096 bits — LEAVE IT IN FLOPS
 
