@@ -813,6 +813,32 @@ set(ZHAO_TEXTURE_MOSAIC_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv)
 
+# ---------------------------------------------------------------------------
+# TEXTURE.COMBINE (G1-C, 2026-09-05). The material combiner did not exist: the
+# surviving TEXJOIN returns sample 0 for every recipe, so the island fetched up
+# to three samples per fragment and combined none of them.
+#
+# Two tests, because the oracle is the authority and the RTL is the claim:
+#   material_combine_directed -- the SCALAR law at the unit8 corners, incl. a
+#     sweep of the modulate-by-255 identity boundary across all 256 inputs;
+#   texture_combine_diff      -- the RTL against that oracle, with a coverage
+#     guard that every recipe and both refusal classes were actually reached.
+add_executable(test_material_combine_directed texture/material_combine_directed.cpp)
+target_link_libraries(test_material_combine_directed PRIVATE zhao_zref)
+add_test(NAME material_combine_directed COMMAND test_material_combine_directed)
+set_tests_properties(material_combine_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_executable(test_texture_combine_diff texture/texture_combine_diff.cpp)
+target_link_libraries(test_texture_combine_diff PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_texture_combine_diff PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture)
+verilate(test_texture_combine_diff
+  PREFIX Vzhao_texture_combine
+  TOP_MODULE zhao_texture_combine
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_combine.sv)
+add_test(NAME texture_combine_diff COMMAND test_texture_combine_diff)
+set_tests_properties(texture_combine_diff PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_executable(test_texture_mosaic_directed texture/texture_mosaic_directed.cpp)
 target_link_libraries(test_texture_mosaic_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_texture_mosaic_directed PRIVATE

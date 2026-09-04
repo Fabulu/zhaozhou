@@ -49,6 +49,7 @@ top:
   # --- texture island (the production rebuild) -----------------------------
   - zhao_texture_tmu_pipe        # over zhao_texture_tmu
   - zhao_texture_tmu_plan
+  - zhao_texture_combine       # TEXTURE.COMBINE, the material combiner (G1-C)
   - zhao_texture_cache_pipe      # over zhao_texture_cache: C0-C4, M10K-backed
   - zhao_texture_aux_pipe        # over zhao_texture_aux
   - zhao_texture_palette_res

@@ -157,6 +157,23 @@ targets:
     sources:
       - fpga/rtl/texture/zhao_texture_bilerp_lane.sv
 
+  - top: zhao_texture_combine
+    sources:
+      - fpga/rtl/texture/zhao_texture_combine.sv
+    rules:
+      # islandrearchitecture5.md 3.3's own line for the material combiner:
+      # 650 ALM / 500 registers / 1-4 M10K / 0-2 DSP, with the 3.4 tripwire
+      # "reject DSP > 2".
+      #
+      # The DSP rule is the interesting one. This implementation takes the
+      # CONTRACT's II=1 and spends four parallel byte products; the architecture
+      # instead describes two product lanes with queued continuations. If this
+      # fires, that IS the evidence for moving to the two-lane scheduled form --
+      # a decision made against a number rather than ahead of one.
+      max_alms: 650
+      max_registers: 500
+      max_dsp: 2
+
   - top: zhao_texture_mosaic
     sources:
       - fpga/rtl/texture/zhao_texture_mod255.sv
