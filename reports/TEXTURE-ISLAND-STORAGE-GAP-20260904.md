@@ -54,6 +54,70 @@ what I nearly did, and what `min_memory_bits` was added to avoid.
 finished or barely started, and no amount of fitting answers it — a fit measures
 what is written, and what is written is what is in doubt.
 
+## THE QUESTION IS NOW MOSTLY ANSWERED (2026-09-04, later)
+
+Both sizes are **parameters with small defaults**, which the first draft of this
+file suspected and did not check:
+
+    zhao_texture_cache_pipe:  LANES = 4, LINES = 16, LINE_BYTES = 16
+    zhao_texture_fragrob:     DEPTH = 16
+
+So possibility 1 — *the blocks are placeholders* — is structurally available.
+And for the cache, **one measurement settles it**:
+
+| | value |
+|---|---|
+| cache per lane, today | `16 lines x 16 B` = **256 B** |
+| one 16x16 RGB565 texture tile | **512 B** |
+
+**A lane's ENTIRE cache cannot hold one tile.** That is not a small cache or a
+conservative default; it is a cache that cannot do the thing a texture cache
+exists to do, and it means every hit rate the island has ever measured was
+measured on a machine that cannot keep a tile resident.
+
+At the brief's figure the numbers become ordinary:
+
+| block | to reach the brief | parameter | result |
+|---|---|---|---|
+| `cache_pipe` | 8 M10K (81,920 b) | `LINES` 16 -> **160** | 10 KB total, 2.5 KB/lane |
+| `cache_pipe` | 10 M10K (102,400 b) | `LINES` 16 -> **200** | 12.8 KB total |
+| `fragrob` | 14 M10K (143,360 b) | `DEPTH` 16 -> **442** | 442 in flight |
+| `fragrob` | 20 M10K (204,800 b) | `DEPTH` 16 -> **632** | 632 in flight |
+
+A 10 KB, 4-lane, 16-byte-line texture cache is an unremarkable design. **The
+brief is describing a plausible machine and the RTL is running a toy.**
+
+### What this changes about the fits
+
+**The island fit numbers now in the ledger are not the console's.** `cache_pipe`
+at ALM 1,633 and `fragrob` (unfitted) are measurements of `LINES = 16` and
+`DEPTH = 16`. Raising `LINES` tenfold moves the block from MLAB-and-registers
+into M10K, which is a *different* implementation with different ALM, different
+timing and different routing — not the same block with more storage.
+
+That is worth knowing **before** the remaining island fits are read as evidence
+about the design.
+
+### `fragrob` is LESS certain, and honestly so
+
+442-632 transactions in flight is a lot to have inferred from a brief. Two
+readings survive:
+
+* the transaction centre really is that deep, because a texture fetch's latency
+  is long and the pipeline must not drain; or
+* the brief counted the **returned texel payload** rather than the descriptors,
+  in which case 5,184 bits of descriptor is right and the M10K line is stale.
+
+**Nothing in the tree decides between those**, and unlike the cache there is no
+"cannot hold one tile" argument to force it. It stays an owner question.
+
+### The recommendation
+
+* **`cache_pipe`: raise `LINES`.** The evidence is a size comparison, not a
+  preference. Fit it again afterwards; expect a different block.
+* **`fragrob`: ask.** And do not raise `DEPTH` to make a tripwire pass — that is
+  the exact move `min_memory_bits` was added to prevent.
+
 ## What was done, and what deliberately was not
 
 * `min_memory_bits` added to the rule vocabulary — a sound floor, since bits do
