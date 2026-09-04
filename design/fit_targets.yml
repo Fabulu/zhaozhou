@@ -70,25 +70,32 @@ targets:
   - top: zhao_texture_cache_pipe
     sources:
       - fpga/rtl/texture/zhao_texture_cache_pipe.sv
-    rules:
-      # S3.4 verbatim: require M10K >= 8, reject registers > 2,000,
-      # reject ALMs > 1,500. S10 calls this block THE ALM RECOVERY CENTRE.
-      # Measured 2026-09-03 BEFORE the storage fix: 2 / 11,328 / 5,903 --
-      # all three violated, and it reported `ok` at 98.66 MHz.
-      min_m10k: 8
-      # ADDED 2026-09-04 ALONGSIDE min_m10k, not instead of it. S3.4's "8" is
-      # the owner's number and stays; D19 records that it is unreachable
-      # because tag_r is 16 deep x 24 wide and no M10K will hold an array that
-      # shallow. This is the same question asked in a unit that does not depend
-      # on how Quartus packed it.
-      #
-      # DERIVED, NOT TUNED: data_r is 4 lanes x 128 entries x 16 bits = 8,192
-      # bits, and those are the bits that must be memory. tag_r's 1,536 are
-      # deliberately excluded -- they are correctly in flip-flops. The fit
-      # measured 128 bits before the rework and 8,320 after.
-      min_memory_bits: 8192
-      max_registers: 2000
-      max_alms: 1500
+    # NO RESOURCE GATES, AND THAT IS A CORRECTION (2026-09-04).
+    #
+    # This target used to carry min_m10k: 8, min_memory_bits: 8192,
+    # max_registers: 2000 and max_alms: 1500, attributed to the brief. Every
+    # one of them belongs to a DIFFERENT BLOCK:
+    #
+    #   islandrearchitecture5.md 3.3 names the row "synchronous texture cache
+    #   v2" -- and prefaces the whole table with "These are architecture
+    #   budgets, not predicted fit results";
+    #
+    #   10.1 is explicit: "Replace, do not patch. Create
+    #   zhao_texture_cache_v2. Keep zhao_texture_cache and
+    #   zhao_texture_cache_pipe as BEHAVIORAL ORACLES."
+    #
+    # So cache_pipe is the oracle, not the shipping block, and 10.11's gate is
+    # zhao_texture_cache_v2's -- a block that does not exist yet. min_m10k: 8
+    # "failed" three times against a block that was never going to meet it, and
+    # min_memory_bits: 8192 was added to interrogate that failure rather than
+    # to check whether the gate belonged here at all.
+    #
+    # AND THE 8 WAS NEVER A BIT BUDGET. C3: "CACHE V2 STORAGE: four static data
+    # banks + four static tag banks" -- four plus four is EIGHT MEMORIES. The
+    # brief counts RAMs, not capacity. reports/TEXTURE-ISLAND-STORAGE-GAP.
+    #
+    # The fit stays: what the oracle costs is worth knowing. The gates move to
+    # zhao_texture_cache_v2 when it is written.
 
   - top: zhao_texture_aux_pipe
     sources:
@@ -267,17 +274,34 @@ targets:
       # v2 measured 4 M10K against 7,151 registers, which is the entry table
       # in flip-flops. A pass here REQUIRES the banks to be memory.
       min_m10k: 6
-      # KEPT as the record of what S3.3 expected, and it is impossible: the
-      # block declares 5,184 bits of payload at DEPTH=16 and six M10K is 61,440
-      # bits of capacity. See the contract -- the 28x gap between the budget's
-      # 14-20 M10K and the storage that exists is a scope question, not a
-      # tripwire question.
+      # min_m10k: 6 IS A REAL GATE, and the note that used to sit here saying
+      # otherwise was wrong (corrected 2026-09-04).
       #
-      # DERIVED floor for the block as built: every payload array is 16 DEEP,
-      # which Quartus will not put in block RAM, so the honest expectation is
-      # ZERO block memory bits and the useful gates are the register and DSP
-      # ceilings. min_memory_bits is deliberately NOT set rather than set to a
-      # number that would pass by construction.
+      # It read: "six M10K is 61,440 bits of capacity against 5,184 bits of
+      # payload, so the 28x gap is a scope question, not a tripwire question."
+      # That converted an M10K COUNT into a bit budget and then argued with its
+      # own arithmetic. The brief counts MEMORIES:
+      #
+      #   6.1   "The production FRAGROB owns: sixteen fragment slots"
+      #         -- so DEPTH=16 is the brief's own number, not a placeholder;
+      #   3.3   14-20 M10K, against the block's payload arrays:
+      #         desc_u_m/desc_v_m/desc_met_m/res_rgb_m/res_a_m each [3][16],
+      #         plus ctx_m/auxrgb_m/auxa_m [16] -- FIFTEEN TO EIGHTEEN
+      #         memories, which is the gate, near enough exactly;
+      #   6.13  hard rejection: "any sample/context payload array IN FLOPS
+      #         above the explicit control bits".
+      #
+      # The brief REQUIRES those arrays to be RAM and expects fifteen-odd small
+      # mostly-empty M10Ks. So a low count here is evidence of the defect 6.13
+      # names -- and there is a known cause: desc_u_m[3][DEPTH] is
+      # MULTIDIMENSIONAL, and Quartus reports "cannot regroup multidimensional
+      # array", the same blocker measured on the texture cache this session.
+      #
+      # If this gate fails, the fix is to give each payload array a shape
+      # Quartus can infer. It is NOT to lower the number.
+      #
+      # min_memory_bits stays unset: bits are the wrong unit for this gate, and
+      # a floor low enough to pass by construction would be theatre.
       max_registers: 2500
       max_dsp: 0
 

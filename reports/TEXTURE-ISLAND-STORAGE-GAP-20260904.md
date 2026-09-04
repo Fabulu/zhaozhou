@@ -1,3 +1,106 @@
+# THERE IS NO STORAGE GAP — the brief counts MEMORIES, not bits
+
+**2026-09-04, third and final revision.** This file has been wrong twice today
+in the same direction, and the correction is worth more than the original
+finding. The whole premise — that "8-10 M10K" and "14-20 M10K" are *capacity*
+figures that the RTL misses by 10x and 28x — **was a misreading**.
+
+## What the brief actually says
+
+`reports/islandrearchitecture5.md` §C3, in as many words:
+
+> **CACHE V2 STORAGE: four static data banks + four static tag banks**
+
+Four plus four is **eight memories**. That is the "8-10 M10Ks" of §10.11 — a
+count of the distinct RAMs the design is required to have, not a number of bits
+it must hold. An M10K holding 1,024 bits is still an M10K.
+
+The same reading fits FRAGROB exactly. §6.1: *"The production FRAGROB owns:
+**sixteen fragment slots**"* — so `DEPTH = 16` is not a placeholder, it is the
+brief's own number. And its payload arrays are:
+
+    desc_u_m[3][16]  desc_v_m[3][16]  desc_met_m[3][16]
+    res_rgb_m[3][16] res_a_m[3][16]   ctx_m[16] auxrgb_m[16] auxa_m[16]
+
+Five per-sample arrays across three samples, plus three per-slot arrays —
+**fifteen to eighteen memories**, against a gate of "14-20 M10Ks expected".
+
+**The numbers agree. They always did.** Nothing is 28x too small.
+
+## Two claims retracted
+
+1. **"The blocks are built ~10-28x smaller than the brief."** No. The brief
+   never stated a size in bits; this file converted M10K counts into bits by
+   multiplying by 10,240 and then treated its own arithmetic as the brief's
+   claim.
+2. **"One 16x16 RGB565 tile is 512 B, so a lane cannot hold one tile."** That
+   tile does not exist in this design — the cache is direct-mapped over flat
+   32-bit byte addresses and the brief never mentions tiles. The number was
+   imported from general knowledge of how texture caches are usually built.
+
+Both are the same error and it is the one `CLAUDE.md` opens with: *a number
+feels like evidence, so it stops getting questioned.* The second was worse,
+because it was never measured at all.
+
+## AND IT FLIPS A CAVEAT RECORDED EARLIER TODAY
+
+The run log says *"fragrob's `min_m10k: 6` failure will NOT be an RTL defect"*,
+on the reasoning that a 16-deep array cannot fill an M10K so expecting six was
+unreasonable. **On this reading it is exactly backwards.**
+
+§6.13's hard rejection list includes:
+
+> any sample/context payload array **in flops** above the explicit control bits
+
+The brief *requires* those arrays to be RAM. It expects 14-20 M10K because it
+expects fifteen-odd small memories, each inferred, each mostly empty — and it
+**rejects** the implementation where they sit in registers.
+
+And there is a known reason they might not infer: `desc_u_m[3][DEPTH]` is
+**multidimensional**, and Quartus reports *"cannot regroup multidimensional
+array"* — the exact blocker this session already measured on the texture cache.
+So a low M10K count from `fragrob` would be evidence of the defect §6.13 names,
+not evidence of an unreasonable gate.
+
+**`min_m10k: 6` on `fragrob` should therefore be treated as a REAL gate**, and
+if the fit comes back under it, the fix is to give each payload array a shape
+Quartus can infer — not to lower the number.
+
+## The cache tripwire is on the WRONG BLOCK
+
+§10.1 is explicit:
+
+> **Replace, do not patch.** Create `zhao_texture_cache_v2`. Keep
+> `zhao_texture_cache` and `zhao_texture_cache_pipe` as **behavioral oracles**
+> for line identity, fill order, counters, invalidation and same-line multicast.
+
+`zhao_texture_cache_pipe` is **not the shipping block**. §10.11's gate — 900 ALM,
+900 registers, 8-10 M10K, 125 MHz — belongs to `zhao_texture_cache_v2`, which
+**does not exist yet**. Applying it to `cache_pipe` is a category error, and
+that is why `min_m10k: 8` "failed" against a block that was never going to meet
+it.
+
+So today's cache_pipe fit (ALM 1,633, M10K 6) is a measurement of an oracle
+against its successor's gate. The measurement is fine; the gate is misfiled.
+
+## What to actually do
+
+* **`cache_pipe`: remove the §10.11 gates from it** and attach them to
+  `zhao_texture_cache_v2` when that block is written. Keep fitting cache_pipe
+  without them — it is still worth knowing what the oracle costs.
+* **`fragrob`: keep `min_m10k: 6`.** It is a real gate for a real requirement,
+  and a failure points at the multidimensional-array inference blocker.
+* **Nothing needs resizing.** `LINES = 16` and `DEPTH = 16` are not placeholders;
+  `DEPTH = 16` is quoted from the brief.
+* **`min_memory_bits` stays** — bits are still the sound way to state a capacity
+  floor. What was unsound was using it to audit a figure that was never a
+  capacity claim.
+
+---
+
+<details>
+<summary>The superseded original, kept because the reasoning is the lesson</summary>
+
 # The island's two storage blocks are built ~10–28x smaller than the brief
 
 **2026-09-04.** Found while giving the texture island fits gates that mean
@@ -132,3 +235,5 @@ as measurements of the committed parameters, which is all any fit ever is.
 * **No brief number was changed**, and no tripwire was relaxed to match a
   measurement. `min_m10k: 8` and `min_m10k: 6` stay exactly as the briefs set
   them, because they are the evidence that this question exists.
+
+</details>
