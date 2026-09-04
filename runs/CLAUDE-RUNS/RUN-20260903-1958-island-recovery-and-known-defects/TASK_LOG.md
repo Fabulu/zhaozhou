@@ -851,3 +851,43 @@ in the oracle's refusal ORDER, the bound transform, and handshakes to two blocks
 that already exist — `zhao_geom_cull.sv` and `zhao_geom_lod.sv` (sequenced,
 `ready`/`tick`/`valid`, 5 clocks, documented in this contract). It is a
 fresh-start piece, and it is now a mechanical one.
+
+## 04:10 — THE CACHE FIT LANDED, and both remaining fits are running
+
+**4,553 s of quartus_fit on `zhao_texture_cache_pipe`:**
+
+| | before | after | |
+|---|---|---|---|
+| M10K | 2 | **6** | +200% |
+| registers | 11,328 | **3,033** | **−73%** |
+| ALM | 5,903 | **1,633** | **−72%** |
+
+**~8,300 registers left flip-flops and became memory.** That is the night's
+whole claim, now a fitter number rather than a synthesis promise.
+
+`failed:structure` on all three tripwires. **The M10K one is D19 and was
+predicted at 4–6; it came in at 6.** The register and ALM misses are real and
+are now 52% and 9% over, against 466% and 294% before — and S3.4's ALM and
+register ceilings were written assuming the storage was *entirely* memory, the
+same assumption that produced `min_m10k: 8`. All three are probably one
+question.
+
+### Both remaining fits are now running, and three launch bugs were mine
+
+* `-Module a,b,c` through `Start-Process -ArgumentList` bound the whole string
+  as ONE module name. The preflight caught it and said so precisely rather than
+  spending the fitter's time to report a misleading `failed:quartus_map`.
+* Passing them as separate list elements then bound the third to
+  `-QuartusBin` — *"Required Quartus executable not found:
+  zhao_texture_palette_res\quartus_map.exe"*.
+* Fixed by launching through `-Command` so PowerShell parses the array itself.
+
+`run_composed_fit` then refused outright: **"working tree is not clean. A fit
+result is only worth anything if it names the exact commit it measured."** The
+finished cache fit had left its own report artifacts uncommitted. Committed
+them, and the composed fit started — analysis and elaboration clean at 1:52 and
+a 5,027 MB peak, now in synthesis.
+
+**So the two toolchain items are in flight:** the three reworked blocks against
+their capacity-floor tripwires (17 / 4 / 2 M10K), and **D1's composed timing,
+unmeasured across twelve commits to raster and geometry.**
