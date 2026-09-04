@@ -747,3 +747,55 @@ characterized with the same flow"); it just does not fail in a way that says so.
 **The tell:** a `failed:quartus_map` with no error text in the log, and no
 per-block workspace directory created under the temp workspace. A genuine
 synthesis error leaves both.
+
+---
+
+## 13. The live-tree rule covers Quartus SOURCES and says nothing about the fit lane's own CONFIG
+
+§11 is about `.sv` files: a running fit reads the working tree, so editing a
+source rewrites what was measured. **That rule has a blind spot, and it cost
+three block fits on 2026-09-04.**
+
+`run_block_fit.ps1` re-reads `design/fit_targets.yml` **once per block**, at each
+preflight. So the config is a live-tree file too — and it is one that gets
+edited far more casually than RTL, because editing a YAML "does not touch the
+design".
+
+### What happened
+
+The island campaign was launched with nine modules. `design/fit_targets.yml` was
+being edited in place during the run (rules rewritten, a new target added). At
+11:49 a preflight threw:
+
+    preflight: no source names `module zhao_texture_tmu_pipe`.
+
+`zhao_texture_tmu_pipe` **is** a declared target and its `.sv` **does** declare
+that module — before the run and after it. The complaint was true for the
+instant the reader saw the file.
+
+**`io.open(path, 'w')` truncates before it writes.** Any reader opening the file
+in that window gets an empty or partial one. The hand-rolled parser then finds
+no sources for the target, and the preflight refuses — correctly, on what it
+was shown.
+
+### And the blast radius was the whole campaign
+
+`run_block_fit.ps1:297` wraps the entire module loop in ONE `try`, so a throw in
+block seven ended blocks seven, eight and nine. The report then carried six rows
+where nine were asked for. **Silence and absence look identical in that file**:
+nothing says "three were never attempted".
+
+### The rules
+
+1. **Never rewrite a config in place while a process polls it.** Write a
+   temporary file and `rename` — rename is atomic, truncate-then-write is not.
+2. **Treat `design/fit_targets.yml` as inside the running fit's closure**, the
+   same as the `.sv` files it names. It is read later and more often than they
+   are.
+3. **Read the `.err` file.** The stdout log ended cleanly after the previous
+   block and looked like a queue that had finished its list. The cause was in
+   the stderr file, unread for an hour, and the first written diagnosis blamed
+   an unrelated `failed:structure` in the stdout log.
+4. **A per-block fit is independent by construction.** Chaining blocks inside
+   one process gives that up for nothing; invoking the script once per module
+   makes one block's failure cost exactly one block.
