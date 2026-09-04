@@ -132,6 +132,43 @@ errors; a newer cppcheck is usually a better one, but it is never silent.
 
 ---
 
+## SWEEP 2026-09-04 — decision-bearing documents that were not indexed
+
+A sweep of `reports/` against this file found **70 of 98 files unindexed**. Most
+are creature-lane working notes and belong to that lane, not here. **Three carry
+decisions**, and one of those is still open — which is the failure this index
+exists to prevent, since an unindexed decision is an undelivered one.
+
+### D19. `min_m10k: 8` on TEXTURE.CACHE cannot be met — **OPEN, needs a ruling**
+`reports/RAM-INFERENCE-RANKED-20260904.md`, final section.
+
+The storage rework worked: `"cannot regroup"` is gone and all four lanes'
+`data_r` became `altsyncram` at 2,048 bits each, against 128 block memory bits
+on the previous fit. But `tag_r` is **16 deep x 24 wide = 384 bits per lane**,
+below the size Quartus will ever put in an M10K — flip-flops are the correct
+answer for it. So the block has **four** arrays worth being memory, not eight,
+and island brief S3.4's `min_m10k: 8` will fail a correct design.
+
+**Not changed**, because lowering a gate so the thing passes is the failure the
+gate exists to prevent. Two possible rulings: the tripwire is wrong (capacity
+floor says 4), or the cache is half the size it was meant to be and `LINES`
+should grow — a hit-rate decision, not a syntax one. **Until this is ruled, a
+failing `min_m10k` on this block is not evidence of an RTL defect.**
+
+### D20. The eight fundamentals rulings — **answered, and the authority**
+`reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
+`reports/FUNDAMENTALS-DECISIONS-NEEDED.md`. All eight are ruled and each is
+recorded in the contract it governs. Indexed here because the rulings file is
+the authority and was reachable only by knowing it existed.
+
+### D21. CREATURE.LIGHT's additive term — **provisionally accepted**
+`reports/CREATURE-LIGHT-ADDITIVE-COST-JUDGEMENT.md`. Owner: *"We will
+provisionally try to make the light thing happen ... our budget is fucked but we
+can always go back on this."* Written into the specs on that basis; the
+reversal, if it comes, is a spec edit and not a rebuild.
+
+---
+
 ## P1 — the game's main thing
 
 ### D4. The 8 km world is unbuilt, not unarchitected  ·  `reports/Missingterrain`
