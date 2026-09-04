@@ -113,3 +113,42 @@ Upheaval: recovered the previous pass's uncommitted generated index.html
 (23 webm + 23 png, includes the retiring moving-light-additive entry --
 Gen 18 did not archive it, and Direction 30 removes it from the live page,
 so the archive is its only surviving home).
+
+## 2026-09-04 06:55 — v2 accepted by eye; code pushed; site prep pushed
+
+v1 (adds 40%, mults 50%): measured better but idle still yellow-white
+(delta R:G 1.2) and the stripe still glowing -- closer to v5 than to 18.
+v2 (adds ~24%, mults ~30% of D29, secondaries suppressed; balance trimmed
+less as the subtlest clip): triptychs (gen18/new/v5) judged by eye at native
+-- idle warm gold cast over intact green, walk nameable blue day, death a
+warm red-rose mood over the pigment, attack's coil green again with crimson
+rim, salto-nine's wheel green with hot-pink inner. All between 18 and v5,
+closer to 18. new-sat (newly pegged) drops to 3-20% of changed px (was up
+to 48% of a larger area). No all-three-channel pegging anywhere.
+Probe: PASS (committed zixx-probe, all gates). Ink-mask (committed
+inkmask.py, ink 26/24/22): identical on rendered subjects.
+zhaozhou d4127687 pushed. Upheaval b37b546 (recovered page), 8749a5a
+(gen19 archive + one moving-light clip + calmed notes + 08-LIGHTING D30).
+Gate-off render: 7 subjects already CRC-equal to the pristine table incl
+moving-light 0x65A8D1E5. Full table when render completes.
+
+## 2026-09-04 05:20 — full bank rendered, verified, measured; encoding
+
+(Note: two earlier entries carry drifted clock times; order is correct.)
+All 22 subjects rendered with the v2 table; frame counts match the published
+bank exactly. Ink-mask identity: 22/22 subjects, every frame -> the animation
+is untouched (evidence-motion-untouched.md). Gate-off CRC identity: 22/22
+IDENTICAL vs the pristine table incl moving-light 0x65A8D1E5
+(evidence-gateoff-identity.txt). Final measurements recorded
+(evidence-sunmeter-final.txt): dominant mean delta ~+20..+35 (was +60..+85),
+max all-three-white fraction 0.2% of changed px (eye highlights), per-channel
+new-pegging confined to the stripe under warm suns (~1% of frame, reads as a
+hot stripe highlight, judged by eye). Whole-bank pair montages
+(look/bank-pairs-*.png) reviewed by eye: every mood visible, distinct and
+calm; moving-light carries the red-on-green additive read.
+Site: creatures.json Direction 30 applied (one moving-light entry, 21 calmed
+sun notes, gen19 with 23 items), CSS families + MAX_ARCHIVE_GENERATIONS ->
+19 together, retired live additive files removed after byte-identity check
+vs their gen19 archive copies, page reassembled: exactly one noindex meta.
+scratch-reel mirrored via robocopy /MIR + first/middle/last+meta byte audit
+(clean). tovideo.py encoding all 22.

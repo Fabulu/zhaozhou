@@ -1,0 +1,31 @@
+Direction 30 revert-path re-proof: the calmed-suns build (d4127687 work tree)
+with ZIXX_SUNS=off (which now also drops additive-normal) versus the pristine
+pre-suns CRC table from RUN-20260903-2309/evidence-gateoff-identity.txt.
+Both ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross, per-subject sequence
+CRC32C as reported by the renderer. moving-light gate-off is the PUBLISHED
+multiplicative clip (0x65A8D1E5) even though the shipping default is now the
+additive render -- the one switch restores the whole pre-suns bank.
+
+zixxtrixx-attack             gateoff=0x2AED9D76 f=560  pristine=0x2AED9D76 f=560  IDENTICAL
+zixxtrixx-balance            gateoff=0x7FC8F62E f=493  pristine=0x7FC8F62E f=493  IDENTICAL
+zixxtrixx-damage             gateoff=0x0D8ECFB6 f=400  pristine=0x0D8ECFB6 f=400  IDENTICAL
+zixxtrixx-death              gateoff=0x4B7B3E3E f=192  pristine=0x4B7B3E3E f=192  IDENTICAL
+zixxtrixx-death2             gateoff=0x9F659521 f=240  pristine=0x9F659521 f=240  IDENTICAL
+zixxtrixx-fall               gateoff=0xC4722098 f=288  pristine=0xC4722098 f=288  IDENTICAL
+zixxtrixx-hit                gateoff=0x6A33B878 f=300  pristine=0x6A33B878 f=300  IDENTICAL
+zixxtrixx-hitfloor           gateoff=0xC8E9982F f=188  pristine=0xC8E9982F f=188  IDENTICAL
+zixxtrixx-idle               gateoff=0x25EE061F f=576  pristine=0x25EE061F f=576  IDENTICAL
+zixxtrixx-jump-multi         gateoff=0x9E96F7F2 f=241  pristine=0x9E96F7F2 f=241  IDENTICAL
+zixxtrixx-jump-one           gateoff=0xB11B7C7B f=241  pristine=0xB11B7C7B f=241  IDENTICAL
+zixxtrixx-knockdown          gateoff=0xB36C148A f=196  pristine=0xB36C148A f=196  IDENTICAL
+zixxtrixx-look               gateoff=0x5F193510 f=384  pristine=0x5F193510 f=384  IDENTICAL
+zixxtrixx-moving-light       gateoff=0x65A8D1E5 f=600  pristine=0x65A8D1E5 f=600  IDENTICAL
+zixxtrixx-run                gateoff=0x8E8D3179 f=96  pristine=0x8E8D3179 f=96  IDENTICAL
+zixxtrixx-salto-dummy        gateoff=0x6D95E2FD f=295  pristine=0x6D95E2FD f=295  IDENTICAL
+zixxtrixx-salto-fly          gateoff=0xE4332117 f=313  pristine=0xE4332117 f=313  IDENTICAL
+zixxtrixx-salto-nine         gateoff=0x2E005FAD f=435  pristine=0x2E005FAD f=435  IDENTICAL
+zixxtrixx-salto-six          gateoff=0x139F143B f=333  pristine=0x139F143B f=333  IDENTICAL
+zixxtrixx-slow-taunt         gateoff=0xBB66B5CE f=239  pristine=0xBB66B5CE f=239  IDENTICAL
+zixxtrixx-taunt              gateoff=0x33BC0A56 f=224  pristine=0x33BC0A56 f=224  IDENTICAL
+zixxtrixx-walk               gateoff=0x86536E70 f=160  pristine=0x86536E70 f=160  IDENTICAL
+RESULT: ALL-IDENTICAL (22 subjects)
