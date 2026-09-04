@@ -738,6 +738,29 @@ as blocks are next touched.
 deliberately — fixing one block to a convention that does not exist yet would
 make the tree less consistent, not more.
 
+### D19d. `PART.EXPAND -> GEOM.SETUP` narrows six SIGNED coordinates by a bit
+`tools/design/check_seam_widths.py`, first run. **Verified at source:**
+
+    zhao_part_expand.sv:118   output logic signed [21:0] t_ax_o
+    zhao_geom_setup.sv:139    input  logic signed [20:0] tri_ax_i
+
+and the same for `ay bx by cx cy` — **six coordinate lanes, 22 bits into 21.**
+
+**A signed narrowing does not clip, it wraps.** A particle quad vertex beyond
+`2^20` would arrive at `GEOM.SETUP` with the opposite sign — a triangle folded
+across the origin rather than one pushed to the edge of the screen. Whether that
+range is reachable is the question; the narrowing being silent is the defect.
+
+**The seam is DECLARED but not yet wired** — neither block is in
+`zhao_shell_top` — which is precisely when this is cheap. It wants one of: the
+setup inputs widened to 22, the expander's outputs proven to fit 21, or an
+explicit saturating narrow at the seam. **Not a truncation nobody chose.**
+
+Eight further seams differ in width; the rest of that list is in the tool's
+output and includes at least two false positives from stem collision
+(`GEOM.PROJECT out_w_o` vs `GEOM.CLIP vp_w_i`, which is a **viewport** width,
+and `out_behind_o` vs a three-vertex `tri_behind_i`). **79 seams fit exactly.**
+
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
 `reports/FUNDAMENTALS-DECISIONS-NEEDED.md`. All eight are ruled and each is

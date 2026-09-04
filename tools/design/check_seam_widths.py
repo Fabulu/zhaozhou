@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""check_seam_widths.py -- do the two ends of a declared seam actually fit?
+
+WHY THIS EXISTS
+---------------
+D22's remaining work is wiring eighteen geometry blocks together, and the first
+seam checked by hand -- GEOM.SETUP -> zhao_geom_bin_pipe -- turned out to match
+on every name AND every width, needing no glue at all. That was worth knowing
+before writing any RTL, and there are seventeen more seams nobody has looked at.
+
+`compose_order.py` already checks that a declared edge is JUSTIFIED: that the
+two rows name each other and share a signal name in the ledger's prose
+vocabulary. It says nothing about the RTL. Two blocks can agree in
+`design/blocks.yml` and disagree by a bit.
+
+WHAT IT MATCHES ON, AND WHY IT IS A HEURISTIC
+---------------------------------------------
+Port names carry a role prefix and a direction suffix that differ per block:
+
+    zhao_geom_setup     out_kx0_o
+    zhao_geom_bin_pipe  tri_kx0_i
+
+Both mean "kx0". So a port is reduced to its STEM by dropping the trailing
+`_o`/`_i` and, if what remains still has an underscore, an optional leading
+`<word>_`. Stems are then matched across the seam.
+
+That is a guess about naming, not a fact about the design, so:
+
+  * a matched stem with EQUAL widths is reported as a fit -- useful, and the
+    thing that made the SETUP seam a one-line job;
+  * a matched stem with DIFFERENT widths is the finding worth having, because
+    it is a real cast or a real bug and both want deciding before wiring;
+  * an unmatched stem is reported quietly, because the heuristic missing a
+    rename is far more likely than a genuinely absent signal.
+
+It REPORTS. It does not gate, and it never edits. A seam whose two ends use
+unrelated vocabularies is not thereby broken -- it just cannot be checked this
+way, which is itself worth printing.
+"""
+from __future__ import annotations
+
+import io
+import os
+import re
+import sys
+
+PORT_RE = re.compile(
+    r"^\s*(input|output)\s+(?:var\s+)?(?:logic|wire|reg)?\s*(?:signed\s*)?"
+    r"(\[[^\]]*\]\s*)?(\w+)\s*[,)]"
+)
+
+
+def read(p):
+    return io.open(p, encoding="utf-8", errors="replace").read()
+
+
+def find_modules():
+    mods = {}
+    for root, _d, files in os.walk("fpga/rtl"):
+        for f in files:
+            if f.endswith(".sv"):
+                mods[f[:-3]] = os.path.join(root, f)
+    return mods
+
+
+def ports_of(path, module):
+    s = read(path)
+    i = s.find("module " + module)
+    if i < 0:
+        return [], []
+    seg = s[i:]
+    j = seg.find("\n);")
+    if j > 0:
+        seg = seg[:j]
+    ins, outs = [], []
+    for line in seg.splitlines():
+        m = PORT_RE.match(line)
+        if not m:
+            continue
+        direction, width, name = m.group(1), (m.group(2) or "").strip(), m.group(3)
+        (ins if direction == "input" else outs).append((name, width or "logic"))
+    return ins, outs
+
+
+def norm(width: str) -> str:
+    """Whitespace inside a range is not a difference. `[ 7:0]` and `[7:0]` are
+    the same bus, and reporting them as a mismatch buries the real ones."""
+    return re.sub(r"\s+", "", width)
+
+
+def parameterised(width: str) -> bool:
+    """A width mentioning an identifier cannot be compared textually: SRCW-1:0
+    IS 15:0 when SRCW is 16, and calling that a mismatch is a false alarm of
+    exactly the kind that gets a tool ignored. Reported separately instead."""
+    return bool(re.search(r"[A-Za-z_]", width.replace("logic", "")))
+
+
+def stem(name: str) -> str:
+    n = name
+    if n.endswith("_o") or n.endswith("_i"):
+        n = n[:-2]
+    # Drop a role prefix only if something is left that still looks like a name.
+    if "_" in n:
+        head, rest = n.split("_", 1)
+        if rest and len(head) <= 6:
+            return rest
+    return n
+
+
+def edges_from_ledger():
+    s = read("design/blocks.yml")
+    out = []
+    for chunk in re.split(r"\n  - id: ", s)[1:]:
+        bid = chunk.split("\n", 1)[0].strip()
+        m = re.search(r"^    downstream: \[(.*?)\]", chunk, re.M)
+        if not m:
+            continue
+        for d in [x.strip() for x in m.group(1).split(",") if x.strip()]:
+            out.append((bid, d))
+    return out
+
+
+def module_for(bid, mods):
+    cand = "zhao_" + bid.lower().replace(".", "_")
+    return cand if cand in mods else None
+
+
+def main() -> int:
+    only = [a for a in sys.argv[1:] if not a.startswith("-")]
+    mods = find_modules()
+    fits, mismatches, unpaired, unresolved, skipped = [], [], [], [], 0
+
+    for up, dn in edges_from_ledger():
+        if only and up not in only and dn not in only:
+            continue
+        mu, md = module_for(up, mods), module_for(dn, mods)
+        if not mu or not md:
+            skipped += 1
+            continue
+        _ui, uo = ports_of(mods[mu], mu)
+        di, _do = ports_of(mods[md], md)
+        prod = {}
+        for n, w in uo:
+            prod.setdefault(stem(n), (n, w))
+        cons = {}
+        for n, w in di:
+            cons.setdefault(stem(n), (n, w))
+        shared = sorted(set(prod) & set(cons))
+        if not shared:
+            unpaired.append((up, dn, len(uo), len(di)))
+            continue
+        bad, para = [], []
+        for s in shared:
+            pw, cw = norm(prod[s][1]), norm(cons[s][1])
+            if pw == cw:
+                continue
+            if parameterised(pw) or parameterised(cw):
+                para.append((s, prod[s], cons[s]))
+            else:
+                bad.append((s, prod[s], cons[s]))
+        if para:
+            unresolved.append((up, dn, para))
+        if bad:
+            mismatches.append((up, dn, bad, len(shared)))
+        else:
+            fits.append((up, dn, len(shared)))
+
+    print("seam widths: %d seam(s) fit exactly, %d with a REAL width "
+          "difference, %d with a parameterised width this tool cannot compare, "
+          "%d share no recognisable stem, %d skipped (no module file)"
+          % (len(fits), len(mismatches), len(unresolved), len(unpaired), skipped))
+
+    if mismatches:
+        print("\nWIDTH DIFFERENCES -- a real cast or a real bug, and both want "
+              "deciding BEFORE the seam is wired:")
+        for up, dn, bad, n in mismatches:
+            print("  %s -> %s  (%d stems shared)" % (up, dn, n))
+            for s, (pn, pw), (cn, cw) in bad:
+                print("      %-12s %-22s %-10s  ->  %-22s %s"
+                      % (s, pn, pw, cn, cw))
+
+    if fits:
+        print("\nFIT EXACTLY -- every shared stem agrees on width. These seams "
+              "need no glue:")
+        for up, dn, n in fits:
+            print("  %-24s -> %-24s %d stem(s)" % (up, dn, n))
+
+    if unresolved:
+        print("\nPARAMETERISED, NOT COMPARABLE -- one side states its width "
+              "with an identifier. `[SRCW-1:0]` IS `[15:0]` when SRCW is 16, so "
+              "these are NOT reported as differences:")
+        for up, dn, para in unresolved:
+            for s, (pn, pw), (cn, cw) in para:
+                print("  %-22s -> %-22s %-10s %-20s -> %-20s %s"
+                      % (up, dn, s, pw, cn, cw))
+
+    if unpaired:
+        print("\nNO SHARED STEM (%d) -- the two ends use unrelated port "
+              "vocabularies, so this tool cannot check them. Not a defect."
+              % len(unpaired))
+
+    print("\nHEURISTIC: stems are guessed by stripping a direction suffix and a "
+          "short role prefix. A missed match is far likelier than an absent "
+          "signal. Reports; does not gate.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
