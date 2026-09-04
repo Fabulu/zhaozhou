@@ -6,9 +6,16 @@ WHY THIS EXISTS
 Found 2026-09-04. Three blocks in `reports/synthesis/zhao_block_fit.json` carry
 `status: ok` while measuring far past a declared ceiling:
 
-    zhao_texture_cache_pipe   11,328 registers   max_registers: 2000
     zhao_raster_texjoin_v2     7,151 registers   max_registers: 2500
     zhao_raster_perspuv_svc    3,293 registers   max_registers:  700
+    zhao_raster_rcp24_svc      1,101 registers   max_registers:  600
+
+(A first draft of this list also named `zhao_texture_cache_pipe`, whose 11,328
+registers against a `max_registers: 2000` looked like the worst case of all. It
+was wrong: that block's gates were deliberately REMOVED earlier the same day and
+survive only as quoted text inside the comment explaining the removal. See the
+hazard section below -- the file that documents a retraction is not a file
+stating a rule.)
 
 The evaluator is not broken. `zhao_texture_fragrob` has the same
 `max_registers: 2500` and failed it correctly at 2,631. What happened is duller
