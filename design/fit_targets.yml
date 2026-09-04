@@ -141,6 +141,12 @@ targets:
       # this rule FAILS on purpose until C21 lands -- an inferred multiplier
       # is on the brief's REWRITE list.
       max_dsp: 0
+      # THE OWNER'S NUMBERS, not mine. islandrearchitecture5.md 14.5 gates
+      # MOSAIC at "<= 500 ALMs / <= 350 registers / 0 M10K / 0 DSP / II = 1 /
+      # >= 125 MHz". The DSP ceiling was already here; the other two were not,
+      # so the block could have doubled in area and still reported ok.
+      max_alms: 500
+      max_registers: 350
 
   - top: zhao_raster_perspuv_svc
     sources:
