@@ -134,3 +134,34 @@ creature_rules §2.2; if Phase-9 evidence shows the miss economy failing
 (hit rate below ~90% under the content tier), the fallback is baking only
 the ACTIVE clip set per type at load — a software policy change, not a
 format change (clip pages already carry everything needed).
+
+### The known gap: per-instance pose overrides
+
+**Recorded 2026-09-04 from `reports/CapeProvisions.md` (docket D6), which calls
+this "the one genuinely missing feature".** The contract was silent on it, which
+is the wrong place for it to be silent: the cache key is this block's central
+decision and the gap is a property of that key.
+
+`(type, clip, frame)` is exactly right for an army — a hundred instances of one
+creature at one frame share one decoded pose, and that sharing is what makes the
+whole scheme affordable. **It is exactly wrong for a cape in wind.** Secondary
+motion is per instance by definition; two soldiers standing in the same frame of
+the same clip do not have the same cape, and under this key they are forced to.
+
+**What is wanted is a sparse per-instance PATCH over the shared palette**, not a
+second cache and not a wider key. Widening the key to `(type, clip, frame,
+instance)` would defeat the sharing entirely — every instance would miss, and
+the hit rate that the Phase-9 gate measures is the same number that makes the
+block worth building.
+
+`CapeProvisions` sizes the affected set deliberately small: **6 bones**
+(waist/thigh) or **8** for a long dramatic cape, two columns by three or four
+rows so left and right react independently, 150–300 triangles, two-weight
+skinning. So the patch is a handful of matrices over a ≤32-matrix palette, and
+the shared entry stays shared for every bone the patch does not name.
+
+**Not designed here, and deliberately not.** There is no cloth processor and the
+owner has not ruled on where the patch is produced or stored. What this note
+fixes is that the constraint now lives beside the cache key it constrains,
+rather than only in a report — so the next person to touch the key knows that
+one class of content cannot use it as it stands.
