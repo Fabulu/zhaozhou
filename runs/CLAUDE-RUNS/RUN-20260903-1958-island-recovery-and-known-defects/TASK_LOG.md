@@ -1085,3 +1085,46 @@ nested `.git` makes git report `?? .../work/Upheaval` as a gitlink-like entry
 rather than a directory. Excluded in `.git/info/exclude` without the slash,
 locally, because it is another lane's scratch. **A shared ignore rule that looks
 like it covers a nested clone does not.**
+
+## 2026-09-04 09:05 — D22's second blocker cleared: GEOM.ASSETFETCH
+
+**In flight while this was written:** composed fit `wumen-5d5b1b16` in the
+fitter (34 min); island queue on `zhao_texture_aux_div6` (block 3 of 9, after
+`tmu_plan` ALM 1142 and `aux_pipe` ALM 1182, both ok); `ctest -L fast` running.
+
+**Landed:** `zhao_geom_assetfetch.sv` at **UNIT_VERIFIED** — contract, oracle
+(`zref::assetfetch::plan`), 25 oracle-edge checks, 48 RTL differential checks,
+ledger row, production manifest, production top, fit source list.
+
+### Three things worth carrying forward
+
+**1. The consumer decided the architecture, not the performance.** The obvious
+design is a cache. `zhao_geom_assemble.sv`'s index port has `ix_req_o` and
+`ix_valid_i` and **no ready** — it cannot express "wait" — so a cache behind it
+would have to stall a port that cannot stall. That is a protocol violation
+waiting for a miss, not a slow path. **Read the consumer's ports before
+choosing a structure.**
+
+**2. Building the RTL produced a ruling the contract had missed.** Laying out
+the buffers showed an unaligned 32-byte record spans five 64-bit words and needs
+a 320-to-256 funnel shifter **per vertex**. `GEOM.VDECODE`'s contract already
+said records are *"naturally aligned"* — so the fix was to ENFORCE an existing
+sentence, not invent a constraint. Aligned, a record is four consecutive words
+and the shifter does not exist.
+
+**3. The differential's first run failed 15 of 44 and the DUT was right both
+times.** The played guard advanced its beat counter on the acceptance cycle
+(so beat 0 was never delivered — an exact 8-byte shift in both streams), and
+`offer()` held `m_valid` high (so the block re-accepted a refused meshlet every
+cycle it sat in `S_IDLE`). **A differential that only ever indicts the design is
+not being read carefully enough.**
+
+### And a stale exclusion the manifest gate caught
+
+`zhao_skid2` was listed excluded-because-unused, *"a two-deep skid primitive
+nothing has picked up"* — untrue since this session restored the Early-Z skid,
+the change that bought 98.06 MHz. `check_prod_manifest.py` found it because it
+cross-checks instantiation against the exclusion list rather than trusting
+either alone. The same gate then caught `assetfetch` missing from the fit source
+list — but only on the re-run, because the first run happened **before**
+`gen_prod_top.py`. Ordering, not a hole.
