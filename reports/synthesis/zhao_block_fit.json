@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "1b16923576eba4fa094524b25dada1ab5e6e193d",
+    "newestRunCommit":  "180544142353b157638a287d4cf153c10db1bd6c",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -738,16 +738,22 @@
                    },
                    {
                        "module":  "zhao_raster_tilestore",
-                       "sourceCommit":  "96c0394a768519453b80d68998a670dd59f9aeb5",
-                       "rtlCleanAtHead":  false,
                        "status":  "ok",
-                       "seconds":  855.5,
-                       "alms":  929,
-                       "registers":  891,
+                       "sourceCommit":  "180544142353b157638a287d4cf153c10db1bd6c",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  3394,
+                       "sourcesHashed":  1,
+                       "alms":  859,
+                       "registers":  933,
                        "blockMemoryBits":  32768,
                        "ramBlocks":  4,
                        "dspBlocks":  0,
-                       "virtualPins":  359
+                       "virtualPins":  359,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  96.12,
+                       "fmaxClock":  "clk"
                    },
                    {
                        "module":  "zhao_scanout_fetch",
@@ -948,6 +954,28 @@
                        "virtualPins":  673
                    },
                    {
+                       "module":  "zhao_terrain_residency_v2",
+                       "status":  "failed:structure",
+                       "sourceCommit":  "180544142353b157638a287d4cf153c10db1bd6c",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  8120.5,
+                       "sourcesHashed":  1,
+                       "alms":  2229,
+                       "registers":  1243,
+                       "blockMemoryBits":  150528,
+                       "ramBlocks":  16,
+                       "dspBlocks":  0,
+                       "virtualPins":  998,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  61.38,
+                       "fmaxClock":  "clk",
+                       "ruleViolations":  [
+                                              "M10K 16 \u003c required 17 -- the storage did not infer as memory"
+                                          ]
+                   },
+                   {
                        "module":  "zhao_terrain_tess",
                        "sourceCommit":  "96c0394a768519453b80d68998a670dd59f9aeb5",
                        "rtlCleanAtHead":  false,
@@ -1074,20 +1102,20 @@
                    {
                        "module":  "zhao_texture_palette_res",
                        "status":  "ok",
-                       "sourceCommit":  "d6565215575af99a0460b2e46f0cd8ea1bfb013a",
+                       "sourceCommit":  "180544142353b157638a287d4cf153c10db1bd6c",
                        "rtlCleanAtHead":  true,
-                       "seconds":  738,
-                       "sourcesHashed":  57,
-                       "alms":  152,
-                       "registers":  141,
+                       "seconds":  3448.9,
+                       "sourcesHashed":  1,
+                       "alms":  540,
+                       "registers":  628,
                        "blockMemoryBits":  16384,
                        "ramBlocks":  2,
                        "dspBlocks":  0,
-                       "virtualPins":  165,
+                       "virtualPins":  335,
                        "almsAvailable":  41910,
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
-                       "fmaxMhz":  104.42,
+                       "fmaxMhz":  98.06,
                        "fmaxClock":  "clk"
                    },
                    {
