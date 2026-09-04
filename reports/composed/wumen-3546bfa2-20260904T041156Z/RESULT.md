@@ -82,6 +82,37 @@ That changes what the next step should be. A single surgery buys at most the
 gap between the worst path and the second — here about 0.07 ns — so closing the
 last 0.198 ns needs **all four** touched, or the target reconsidered.
 
+### The worst path is ANOTHER cross-block ready chain
+
+Traced, and it is structurally the same defect the skid just fixed:
+
+    tile_pipe  rs_state == RS_CLEAR
+      -> ts_clear -> tilestore.clear_valid_i
+      -> tilestore.wr_ready_o = !clear_valid_i        <-- the escape
+      -> ts_wr_ready -> fragment.wr_ready_i
+      -> fragment's s3/s2/s1 retire chain
+      -> back into the pipe -> res_pres_q enable      -0.198 ns
+
+`zhao_raster_tilestore.sv:150` is the single line that creates it:
+
+    assign wr_ready_o = !clear_valid_i;
+
+The block's own comment three lines above says *"Nothing here reads a downstream
+ready, so there is no valid<-ready path"*, and that is true **within** the
+block. But `wr_ready_o` depends on `clear_valid_i`, which is an INPUT — so a
+ready depends on another channel's valid, and because both come from the same
+upstream state machine the comparator lands in Fragment's retire chain.
+
+**A valid→ready dependency inside one block becomes a cross-block combinational
+path once two of its channels share an upstream.** That is the same shape as the
+Early-Z chain and it is the reason this one was invisible until Early-Z was
+fixed.
+
+The clear and the write are genuinely mutually exclusive — both target the front
+bank — so the dependency is not gratuitous. Breaking it means either registering
+the clear request or giving the write its own acceptance, and that is a
+one-change, one-fit step like the skid was.
+
 ### One of them should not be there at all
 
 Six of the twelve violations run from `zhao_debug_frameblit`'s state comparator
