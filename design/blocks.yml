@@ -349,7 +349,7 @@ blocks:
     phase: 1
     owner_issue: ZH-009
     inputs: [decoded_records, frame_complete]
-    outputs: [engine_dispatch, slot_state, guard_policy, fence]
+    outputs: [dispatch, slot_state, guard_policy, fence]
     upstream: [CMD.DECODER, VIDEO.FRAMECTL]
     downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT, MEM.UPLOAD, MATERIAL.RESOLVE, FORGE.SHADOW]
     backpressure: credit

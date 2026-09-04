@@ -24,12 +24,13 @@
 # file become the place orphans go to be forgotten; naming WHERE the value
 # comes from is what makes a wrong entry visible to the next reader.
 external:
-  GEOM.MESHFETCH:
-    dispatch: >-
-      The caller's instance walk. GEOM.MESHFETCH's contract job packet is
-      { instance_id, mesh_id, descriptor_base, instance_transform_id,
-      lod_target, active_camera_mask } and every field is presented by whoever
-      is walking the visible set -- there is no block upstream of the walk.
+  # GEOM.MESHFETCH.dispatch WAS listed here and has been REMOVED. On
+  # 2026-09-04 CMD.SCHEDULER's output was renamed engine_dispatch ->
+  # dispatch, the name its twelve consumers already used, and MESHFETCH's
+  # `dispatch` acquired a real producer. An entry that survives its own
+  # justification is exactly the rot this file could accumulate, so it goes
+  # the moment the input is produced -- the probe reports it as resolved
+  # rather than explained, and that difference is the whole point.
 
   GEOM.ASSEMBLE:
     index_stream: >-
