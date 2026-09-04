@@ -862,9 +862,21 @@ turned away by the rule that exists to turn it away.
 It also caught **`render_fatal_o` firing — one of the nine outputs D19b reports
 that no test names.** The first test to watch one found it doing its job.
 
-**Still open:** that a GRANTED frame produces the right pixels. That needs the
-command path driven alongside the render port, and it is the next step. Until
-then the shell is simulated for CONNECTIVITY, not for picture.
+**CLOSED the same day.** The command path is driven alongside the render port,
+a blit packet grants the lease, and the composed shell is shown to render:
+
+| claim | evidence |
+|---|---|
+| the right **tiles** | 13, matching `zref::Binner` |
+| to the right **addresses** | `0x0000..0x1FA0`, advancing by the row pitch |
+| in the right **colours** | two clusters, each channel within one dither LSB |
+| with the right **silhouette** | **1,586 covered pixels — `zref::EdgeWalk`, exact** |
+| and the counters honest | oracle 3328 = counter 3328 = VRAM 3328 |
+
+**20 checks.** Per-pixel colour is NOT re-checked here and that is not a gap:
+`render_pipe_directed` already compares `fb_rgb565_o` against
+`zref::TileResolve`'s `rgb565[]` and a per-tile CRC-32C, dither phase included.
+**A composition test that re-proves its blocks' laws is a slower copy of them.**
 
 <details>
 <summary>The original entry</summary>

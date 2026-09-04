@@ -85,10 +85,25 @@
 // resolved tile takes the clear -- so the fill cluster's population IS the
 // coverage. The shell rasterised the right SHAPE, not merely the right area.
 //
-// STILL NOT PROVED, and deliberately: that each individual pixel holds the
-// value the shading law says for ITS position, dither phase included. That is
-// `render_pipe_directed`'s differential; duplicating it here would test a law
-// rather than a composition, and this file exists for the composition.
+// PER-PIXEL COLOUR IS PROVEN -- ELSEWHERE, AND ON PURPOSE.
+//
+// It would be easy to write "still not proved" here and leave the impression
+// of a gap. There is none. `tests/render/render_pipe_directed.cpp` captures
+// `fb_rgb565_o` for every pixel of every tile and compares it against
+// `zref::TileResolve`'s `rgb565[]` -- the ratified ordered-dither resolve,
+// Bayer phase included -- and against a per-tile CRC-32C:
+//
+//     render_pipe_directed.cpp:166   cur.rgb565[beat] = t.fb_rgb565_o;
+//     render_pipe_directed.cpp:349   pt.rgb565[p]     = e.res.rgb565[p];
+//     render_pipe_directed.cpp:352   pt.crc32c        = e.res.crc32c;
+//
+// So the shading law is differentially verified against its oracle, per pixel.
+// Repeating that here would need this file to model the fragment stage -- i.e.
+// to rebuild `expect_frame` -- and it would prove the law a second time while
+// proving nothing new about the SHELL.
+//
+// **A composition test that re-proves its blocks' laws is a slower copy of
+// them.** This file checks what only it can see, and cites what it does not.
 //
 // What it establishes is that the composed shell renders the right TILES, to
 // the right ADDRESSES, in the right two COLOURS, with the right SILHOUETTE --
