@@ -636,3 +636,28 @@ must not copy that. The transform, blend and renormalisation are once per
 VERTEX. Bit-exactness is owed to the reference's **result** for a given light,
 not to the number of times it recomputes the normal — the one place in this
 codebase where matching the oracle's structure would be the wrong instinct.
+
+## 04:05 — docket D6 and a docket sweep
+
+**D6, the cape.** `reports/CapeProvisions.md` calls per-instance pose overrides
+*"the one genuinely missing feature"*, and `design/contracts/GEOM.POSE.md` said
+nothing about it. That is the wrong place to be silent — the cache key is the
+block's central decision and the gap is a property of that key.
+
+`(type, clip, frame)` is right for an army and wrong for a cape in wind:
+secondary motion is per instance by definition, and two soldiers in the same
+frame of the same clip do not have the same cape. Recorded beside the key, along
+with why the obvious fix is not one — widening the key to include the instance
+would defeat the sharing entirely, and the hit rate that would collapse is the
+same number the Phase-9 gate measures to justify the block. Deliberately not
+designed: there is no cloth processor and the owner has not ruled on it.
+
+**The sweep.** `reports/` has 98 files and **70 were named nowhere in
+DOCKET.md**, against the docket's own rule that a new owner document is indexed
+in the pass that reads it. Most are creature-lane notes and belong to that lane.
+Three carry decisions and are now indexed as D19–D21.
+
+**D19 is open and is the one that matters**: `min_m10k: 8` on TEXTURE.CACHE
+cannot be met, and it was sitting in a report nothing pointed at. A red
+`min_m10k` on that block is the single thing most likely to be misread as an RTL
+defect when the running fit returns.
