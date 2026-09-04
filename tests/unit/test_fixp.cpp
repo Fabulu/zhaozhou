@@ -810,10 +810,21 @@ int main(int argc, char** argv) {
   const bool full = argc > 1 && 0 == std::strcmp(argv[1], "--rcp-full");
   std::printf("test_fixp (qformats.md QFMT_VERSION %u)%s\n", gen::QFMT_VERSION,
               full ? " [full rcp sweep]" : "");
-  // 2 since qformats amendment C1 froze the quat16 lane. C1 added a lane
-  // rather than changing a law this file covers, so every check below is
-  // unchanged; quat16 itself is exercised by tests/geometry/creature_core.cpp.
-  CHECK_EQ(gen::QFMT_VERSION, 2u);
+  // 3 since qformats amendment C2 (2026-09-02) ruled the particle128 v1
+  // numeric law. Moved from 2 on 2026-09-04, and the justification is the
+  // amendment's own sentence rather than a shrug at a red test:
+  //
+  //   spec/qformats.md C2: "No table or golden of section 6/7/12 changed; the
+  //   bump travels so capture replay can refuse pre-C2 [captures]."
+  //
+  // Sections 6, 7 and 12 are exactly the laws this file covers, so C2 is a
+  // LANE ADDITION like C1 before it and every check below is unchanged.
+  // particle128 itself is exercised by the particle tests.
+  //
+  // THE PIN IS THE POINT: it does not track the version, it forces someone to
+  // read the amendment and say why the laws here still hold. Bumping it
+  // without that sentence would turn a gate into a formality.
+  CHECK_EQ(gen::QFMT_VERSION, 3u);
 
   test_sin_cos();
   test_sin_table_endpoint();
