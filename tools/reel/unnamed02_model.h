@@ -80,6 +80,9 @@ inline zc::RingPart make_body(uint8_t bone) {
   p.r = kGreyR;
   p.g = kGreyG;
   p.b = kGreyB;
+  p.page = kPageAtlasTile;
+  p.v0 = kBodyV0;
+  p.v1 = kBodyV1;
   return p;
 }
 
@@ -140,6 +143,9 @@ inline zc::RingPart make_loop() {
   p.r = kGreyR;
   p.g = kGreyG;
   p.b = kGreyB;
+  p.page = kPageAtlasTile;
+  p.v0 = kLoopV0;
+  p.v1 = kLoopV1;
   return p;
 }
 
@@ -150,6 +156,9 @@ inline zc::RingPart make_hinge(uint8_t bone) {
   p.r = kHingeGreyR;
   p.g = kHingeGreyG;
   p.b = kHingeGreyB;
+  p.page = kPageAtlasTile;
+  p.v0 = kHingeV0;
+  p.v1 = kHingeV1;
   return p;
 }
 
@@ -179,6 +188,7 @@ inline zc::RingPart make_lens(uint8_t bone) {
   p.r = kLensR;
   p.g = kLensG;
   p.b = kLensB;
+  p.page = kPageEyeTile;
   return p;
 }
 

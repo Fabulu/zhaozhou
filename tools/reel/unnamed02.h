@@ -24,7 +24,58 @@
 #include "unnamed02_clips.h"
 #include "unnamed02_fx.h"
 
+// The GENERATED page (tools/pack/mku02page.py; gitignored, never tracked).
+// Absent, the creature falls back to its flat part materials and still
+// renders — CI and a fresh clone build grey rather than breaking.
+#if __has_include("unnamed02_page.h")
+#include "unnamed02_page.h"
+#define U02_HAVE_PAGE 1
+#endif
+
 namespace u02 {
+
+#ifdef U02_HAVE_PAGE
+// Direct-colour page set: page 0 = the 256x256 atlas (body/loop/hinge row
+// bands selected per part via v0/v1), page 1 = the separate 64x64 eye tile
+// (bilinear + mips bleed across atlas neighbours; the lens shares nothing).
+inline const zref::DirectPageSet& page_direct() {
+  static const zref::DirectPageSet ps = [] {
+    zref::DirectPageSet p;
+    p.mem.base = 0;
+    const uint32_t atlas_bytes = static_cast<uint32_t>(kU02AtlasWords) * 2;
+    const uint32_t eye_bytes = static_cast<uint32_t>(kU02EyeWords) * 2;
+    p.mem.bytes.resize(atlas_bytes + eye_bytes);
+    for (int i = 0; i < kU02AtlasWords; ++i) {
+      p.mem.bytes[static_cast<size_t>(i) * 2] = static_cast<uint8_t>(kU02Atlas[i] & 0xFF);
+      p.mem.bytes[static_cast<size_t>(i) * 2 + 1] = static_cast<uint8_t>(kU02Atlas[i] >> 8);
+    }
+    for (int i = 0; i < kU02EyeWords; ++i) {
+      p.mem.bytes[atlas_bytes + static_cast<size_t>(i) * 2] =
+          static_cast<uint8_t>(kU02Eye[i] & 0xFF);
+      p.mem.bytes[atlas_bytes + static_cast<size_t>(i) * 2 + 1] =
+          static_cast<uint8_t>(kU02Eye[i] >> 8);
+    }
+    zref::Tmu::Mode ma;  // the atlas
+    ma.fmt = zref::Tmu::kRgb565;
+    ma.bilinear = true;
+    ma.wrap_u = zref::Tmu::kRepeat;  // seamless around every ring
+    ma.wrap_v = zref::Tmu::kClamp;   // row bands must not bleed across parts
+    ma.log2w = 8;
+    ma.log2h = 8;
+    ma.max_level = 7;
+    ma.mip_en = true;
+    zref::Tmu::Mode me = ma;  // the eye page
+    me.log2w = 6;
+    me.log2h = 6;
+    me.max_level = 6;
+    p.mode = ma.pack();
+    p.tile_base = {0, atlas_bytes};
+    p.tile_mode = {ma.pack(), me.pack()};
+    return p;
+  }();
+  return ps;
+}
+#endif
 
 inline const zc::CreatureType& type() {
   static const zc::CreatureType t = [] {
@@ -58,6 +109,9 @@ inline const zc::CreatureType& type() {
     if (!zc::compile_creature(sk, bank, parts, type, &reason)) {
       std::fprintf(stderr, "unnamed02: compile failed: %s\n", reason);
     }
+#ifdef U02_HAVE_PAGE
+    type.page_direct = &page_direct();
+#endif
     return type;
   }();
   return t;

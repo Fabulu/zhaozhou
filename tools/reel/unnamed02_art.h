@@ -116,6 +116,15 @@ constexpr int32_t kStageCentreMm = 0;     // the fixed camera aims at world x=0
 constexpr int32_t kHoverHeightMm = 900;   // body CENTRE above terrain
 constexpr int32_t kRestHeightMm = 640;    // the rest clip's lower hover
 
+// ============================== PAGE =======================================
+// tiles: 0 = the atlas (body/loop/hinge V row bands), 1 = the eye page.
+// Rows here must match mku02page.py's band layout.
+constexpr uint8_t kPageAtlasTile = 0;
+constexpr uint8_t kPageEyeTile = 1;
+constexpr uint8_t kBodyV0 = 8, kBodyV1 = 120;
+constexpr uint8_t kLoopV0 = 136, kLoopV1 = 200;
+constexpr uint8_t kHingeV0 = 208, kHingeV1 = 248;
+
 // ============================== PALETTE ====================================
 // Grey until the texture pass; the pinks are chosen by eye in scene at 240p.
 constexpr uint8_t kGreyR = 150, kGreyG = 148, kGreyB = 152;

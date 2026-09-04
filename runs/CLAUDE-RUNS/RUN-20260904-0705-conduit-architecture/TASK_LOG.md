@@ -258,3 +258,32 @@ silently wins. Building the chained dispatcher next.
 - Upheaval package scaffolded-and-merged: CREATURE.json (clearance
   contract, projection note, honest source pointers), SPEC.md (the plan
   distilled + spike verdicts).
+
+## OWNER DIRECTION RECEIVED MID-RUN: reports/ADDLIGHTNING.md (merged from main)
+
+"Add some lightning versions of the creature even if hardware isn't there
+yet. Specs are." Read in full. Taken as binding for this pass:
+- The bead-chain stays the executable route for creature 02 (the direction
+  itself confirms this choice), BUT the polyline generator will follow the
+  FX.LIGHTNING contract's exact recurrence (P_i = lerp(start,end,i/N) +
+  perp1*jitter(seed,phase,i) + perp2*jitter(seed^2,phase,i), <=24 segments,
+  <=2 bounded branches) so the authoring migrates onto FORGE.PRIM ribbons
+  unchanged when the position evaluator lands.
+- The creature gets LIGHTNING-FORWARD showcase content beyond the channel
+  clip: a continuous-crackle variant (the artist's sheet gives the creature
+  crackling SOUNDS; a crackle idle is its visual voice) authored at the
+  effects milestone.
+
+## PAGE MILESTONE — the creature is PINK (evidence/tex2-front.png, tex-side.png)
+
+- mku02page.py: forked from mkcreaturepage.py's STRUCTURE (not the zixx
+  pigment recipe). One 256x256 RGB565 atlas — body/loop/hinge row bands
+  selected per part via v0/v1, all pink families so bilinear bleed stays
+  pink — plus a SEPARATE 64x64 eye page (purple border, white inner rim;
+  the star stays geometry). Full mip chains; zlib.crc32 seeds; two regens
+  cmp-identical (verified).
+- Grain authored at 26 percent value amplitude + stroke bands + paper-tooth
+  flecks — visible at native 240p (the +-16-percent-invisible lesson).
+- unnamed02_page.h is GENERATED and gitignored; unnamed02.h guards with
+  __has_include and falls back to flat grey — CI and fresh clones build.
+- Pigments authored by eye (saturated on purpose), never sampled from scans.
