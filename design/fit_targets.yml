@@ -297,8 +297,24 @@ targets:
       # MULTIDIMENSIONAL, and Quartus reports "cannot regroup multidimensional
       # array", the same blocker measured on the texture cache this session.
       #
-      # If this gate fails, the fix is to give each payload array a shape
-      # Quartus can infer. It is NOT to lower the number.
+      # AND THE GATE THAT ACTUALLY ENFORCES 6.13 IS max_registers, NOT THIS ONE.
+      # A 16-deep array is shallow enough that Quartus will reasonably choose
+      # MLAB over M10K, and neither recorded metric can tell MLAB from flops:
+      # `ramBlocks` counts M10K, and `blockMemoryBits` is Quartus's "Total
+      # block memory bits", which is also M10K. A correct implementation using
+      # MLAB therefore reports 0 and 0 -- identical to the defect.
+      #
+      # What payload-in-flops actually shows up as is a REGISTER EXPLOSION:
+      # texjoin v2 measured 4 M10K against 7,151 registers, and 7,151 is the
+      # entry table in flip-flops saying so out loud. 5,184 bits of payload
+      # cannot hide under a 2,500 ceiling.
+      #
+      # So: max_registers below is the enforcer. min_m10k stays as the BRIEF'S
+      # RECORDED EXPECTATION, and a failure is read together with the register
+      # count -- low M10K with low registers is MLAB and satisfies 6.13's
+      # intent; low M10K with high registers is the defect. If it is the
+      # defect, the fix is to give each payload array a shape Quartus can
+      # infer, not to lower the number.
       #
       # min_memory_bits stays unset: bits are the wrong unit for this gate, and
       # a floor low enough to pass by construction would be theatre.
