@@ -95,6 +95,7 @@ top:
   # unexplained input in the geometry graph, and a missing block rather than a
   # naming collision.
   - zhao_geom_meshfetch
+  - zhao_geom_assetfetch
   - zhao_geom_skin_norm
 
   # --- terrain (the 8 km island) -------------------------------------------
@@ -226,7 +227,13 @@ excluded:
   # ruling about the ENGINE, not about every file with that vintage.
 
   # --- built, nothing instantiates it yet ------------------------------------
-  - zhao_skid2: unused  a two-deep skid primitive nothing has picked up
+  # zhao_skid2 WAS here as "unused" and that stopped being true on 2026-09-04,
+  # when the Early-Z ready-path skid was restored (98.06 MHz, and Early-Z left
+  # the violation list entirely). The manifest said "nothing has picked it up"
+  # while zhao_shell_top instantiated it -- which check_prod_manifest.py caught
+  # only because it cross-checks instantiation against the exclusion list
+  # rather than trusting either alone. A block is in the machine whatever the
+  # manifest says about it.
   # A DRAFT, and a wrong one: its 32-step divide over a 64-bit numerator yields
   # quotient bits 63..32, and the real quotient is always below 2^15, so every
   # triangle's base term would have come out ZERO -- normal maps that silently
