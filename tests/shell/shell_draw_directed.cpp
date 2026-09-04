@@ -242,6 +242,16 @@ int main(int argc, char** argv) {
   zhao::check(lease_opens > 0, "the command path grants a framebuffer lease", 1,
               lease_opens > 0 ? 1 : 0);
 
+  // SNAPSHOT THE SLOT BEFORE RENDERING. The blit has already filled it, so
+  // "what the render changed" is the difference between two real states rather
+  // than a guess about power-on values. This makes the memory-side check
+  // ASSUMPTION-FREE: it needs no knowledge of the tile-to-address mapping, the
+  // canvas stride, or the fill-to-RGB565 conversion -- only that a written
+  // halfword differs from what was there before.
+  const uint32_t kSlotHalfwords = 245760u / 2u;
+  std::vector<uint16_t> before(kSlotHalfwords);
+  for (uint32_t w = 0; w < kSlotHalfwords; ++w) before[w] = peek(h, w);
+
   // One 4x4 tile grid; the triangle covers tile (0,0) generously.
   h.render_frame_begin(4, 4);
 
@@ -375,10 +385,40 @@ int main(int argc, char** argv) {
               h.top.render_drained_o ? 1 : 0);
 
   // Nothing was written, which is the same fact from memory's side.
-  bool wrote = false;
-  const uint16_t first = peek(h, 0);
-  for (uint32_t w = 0; w < 4096 && !wrote; ++w) {
-    if (peek(h, w) != first) wrote = true;
+  uint32_t changed = 0;
+  for (uint32_t w = 0; w < kSlotHalfwords; ++w) {
+    if (peek(h, w) != before[w]) ++changed;
+  }
+  const bool wrote = changed > 0;
+  std::printf("[shell_draw] memory: %u halfwords changed (counter said %u)\n", changed,
+              (unsigned)h.top.render_pixels_o);
+  // Was the BLIT still writing this slot while the render wrote it? D19f: the
+  // render's guard window IS the blit's lease, so the two are concurrent BY
+  // CONSTRUCTION -- the renderer may only write while a blit is in flight into
+  // the same slot. If the blit overwrote the render's pixels, the counter and
+  // memory disagree for a reason that is architectural, not a wiring fault.
+  std::printf("[shell_draw] blits completed=%zu, lease still live=%u\n", h.blit_log.size(),
+              (unsigned)h.top.dbg_fb_lease_valid_o);
+  // THE COUNTER AND THE MEMORY DISAGREE, AND THAT IS DOCKET D19h.
+  //
+  //   counter  render_pixels_o = 3328     (fbwrite's own tally)
+  //   memory   64 halfwords changed       (what the SDRAM model actually holds)
+  //   blits completed = 1, lease still live = 1
+  //
+  // The obvious explanation -- that the blit was overwriting the render -- is
+  // MEASURED FALSE: the blit had already completed when the snapshot was taken.
+  // So either fbwrite counts words it did not land, or the writes go somewhere
+  // this peek range does not cover, or most of them wrote a value equal to what
+  // the blit had left. **None of those is established**, and an unmeasured
+  // explanation is worse than an open question -- which is the lesson this file
+  // already carries twice.
+  //
+  // So the equality is REPORTED, not asserted. What is asserted below is the
+  // part that is certain: memory changed, so the picture reached it. The day
+  // D19h is understood, this becomes an equality.
+  if (changed != h.top.render_pixels_o) {
+    std::printf("[shell_draw] D19h: counter %u != memory %u -- OPEN\n",
+                (unsigned)h.top.render_pixels_o, changed);
   }
   zhao::check(wrote, "and the framebuffer CHANGED -- the picture reached memory", 1, wrote ? 1 : 0);
 

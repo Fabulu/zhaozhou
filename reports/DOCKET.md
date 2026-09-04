@@ -1054,6 +1054,50 @@ turns out to be, the test moves when it is fixed.
 
 </details>
 
+### D19h. `render_pixels_o` counts 3,328; memory shows 64 — **OPEN**
+`tests/shell/shell_draw_directed.cpp`, measured 2026-09-04 after the fbwrite fix.
+
+    counter   render_pixels_o = 3328     fbwrite's own tally
+    oracle    zref::Binner    = 3328     13 tiles x 16 x 16
+    memory    64 halfwords changed       snapshot before/after, whole slot
+    blits completed = 1, lease still live = 1
+
+**The counter and the oracle agree exactly.** What disagrees is the SDRAM
+model: a before/after snapshot of the entire 245,760-byte slot finds only 64
+halfwords different.
+
+### The obvious explanation is measured FALSE
+
+The natural guess is that the display blit overwrote the render — D19f says the
+render's guard window IS the blit's lease, so the two are concurrent by
+construction. **It is not that:** `blits completed = 1` before the snapshot was
+taken, so the blit had already finished.
+
+### What is NOT established
+
+Three candidates, none of them evidenced:
+
+* fbwrite counts words it did not land;
+* the writes go somewhere the peek range does not cover (the model's word
+  address space may not be the guard's byte space / 2);
+* most writes stored a value equal to what the blit had left, so a
+  value-compare cannot see them. The blit wrote `0x11` bytes and the render's
+  fill is `0xA5A5…`, which makes this the least likely of the three.
+
+**The test REPORTS this rather than asserting it**, and asserts only what is
+certain: memory changed, so the picture reached it. An unmeasured explanation
+committed as a comment is the failure this session has already made twice —
+once about a guard refusal that never happened, once about a counter read as
+coverage.
+
+### Why it matters
+
+`shell_draw_directed` is the only thing that has ever checked the composed
+render path, and it is now the only thing that would notice this. The extent
+claim (13 tiles) rests on the counter; **the memory-side confirmation of that
+claim is what D19h is.** Until it closes, "the console renders the right tiles"
+is a statement about fbwrite's bookkeeping and not yet about VRAM.
+
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
 `reports/FUNDAMENTALS-DECISIONS-NEEDED.md`. All eight are ruled and each is
