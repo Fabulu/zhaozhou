@@ -2395,7 +2395,7 @@ blocks:
     phase: 8
     owner_issue: ZH-055
     inputs: [warped_vertices, cached_vertices, camera_pair]
-    outputs: [view_vertices]
+    outputs: [view_vertices, projected_w]
     upstream: [GEOM.WARP, GEOM.WCACHE, GEOM.LIGHT]
     downstream: [GEOM.CLIP, GEOM.PARAMBUF, GEOM.DEPTHQUANT]
     backpressure: ready_valid
