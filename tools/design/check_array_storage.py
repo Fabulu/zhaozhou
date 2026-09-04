@@ -36,6 +36,30 @@ with N set by a `parameter` is read when the parameter has a literal default in
 the same file, and skipped otherwise -- skipped, not guessed. A guessed width
 would be a measurement that decides a value, which this repository does not do.
 
+HOW WELL IT ACTUALLY PREDICTS, MEASURED
+---------------------------------------
+Checked against blocks whose answer is already known, in both directions --
+because a detector that only ever fires is as useless as one that never does.
+
+    block                     declared    measured        verdict
+    zhao_texture_tmu_pipe       72,544    72,824 REGISTERS  flagged  (0.4% off)
+    zhao_texture_fragrob         6,608     6,464 MEM BITS   silent   (2% off)
+    zhao_texture_cache           2,304     8,192 MEM BITS   silent
+    zhao_field_v2_front          2,688   266,513 MEM BITS   silent
+
+The two that matter are the first two. `tmu_pipe` put its arrays in flops and
+the declared total predicts the REGISTER count to 0.4%. `fragrob` put its arrays
+in memory and the same declared total predicts the MEMORY BIT count to 2%. The
+arithmetic is reading real storage in both cases; only its destination differs,
+which is exactly the question this tool asks.
+
+**Its weakness is UNDER-counting**, visible in `zhao_field_v2_front`: 2,688
+declared against 266,513 measured, because most of that block's arrays are sized
+by expressions this cannot resolve and are skipped rather than guessed. That is
+the safe direction -- it misses defects, it does not invent them -- but it means
+a small declared total is not evidence of a small block. Read the `skipped`
+count in the header line.
+
 READ IT WITH THE FIT ROW, NOT INSTEAD OF IT
 --------------------------------------------
 A gap here is a QUESTION. The answer is in the fit: a block with 13 M10K and
