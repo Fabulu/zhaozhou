@@ -125,6 +125,35 @@ package zhao_pkg;
   localparam logic [31:0] ZHAO_FB_SLOT1_BASE      = 32'h0200_0000;
   localparam logic [31:0] ZHAO_FB_SLOT_SPAN       = 32'h0003_C000; // 245,760
 
+  // ---------------------------------------------------------------------
+  // GEOM asset pool -- the Phase-3 region (spec/memory_rules.md 5f, 2026-09-04)
+  //
+  // WHY IT EXISTS: GEOM.MESHFETCH is the only zhao_guard_req_t client in the
+  // whole geometry subsystem, and every region MEM.GUARD knew was a FRAME
+  // BUFFER region, so `default: pass_ok = 1'b0` denied every meshlet
+  // descriptor read BY DESIGN. That denial -- not eighteen wiring jobs -- is
+  // what has kept the geometry front end out of the console (docket D22).
+  //
+  // WHY BANK 3: banks come from byte-address bits [26:25], and W2.7 measured
+  // ~82 of 192 Duo lines starved when two streams shared a bank. Banks 0 and 1
+  // are the FB slots that scanout reads every frame; bank 2 is terrain
+  // (ruling T2). Bank 3 holds GEOM.PARAMBUF (ruling R7) and reserves
+  // 0x06A0_0000..0x07FF_FFFF "pending evidence". Mesh assets are ENGINE1
+  // render-geometry traffic exactly as PARAMBUF is -- same domain, same
+  // pipeline phase, already behind one local arbiter (spec 5d) -- so they
+  // serialize against each other rather than thrashing against scanout. That
+  // is the W2.7 lesson applied rather than re-learned.
+  //
+  // 22 MiB, ending exactly at the top of the 27-bit VRAM map, so
+  // BASE + SPAN cannot wrap 32 bits -- the defect the blit clamp exists for.
+  //
+  // READ-ONLY, and that is the safety argument: geometry never writes assets,
+  // so this region cannot corrupt a frame buffer no matter what it admits.
+  // IT IS A KNOB. Both constants are editable and the pool can move to any
+  // unmapped range if board evidence says otherwise; nothing derives them.
+  localparam logic [31:0] ZHAO_GEOM_ASSET_BASE    = 32'h06A0_0000;
+  localparam logic [31:0] ZHAO_GEOM_ASSET_SPAN    = 32'h0160_0000; // 23,068,672
+
   // Duo canvas map (spec/video_rules.md §3.1): two 256x192 views vertically
   // centered at x offsets 0 / 256, y offset 24; border rows are black and
   // part of the displayed stream.

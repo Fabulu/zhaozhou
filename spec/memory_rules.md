@@ -327,6 +327,70 @@ coupled rather than independent.
 See `design/contracts/GEOM.PARAMBUF.md`. ENGINE1 owns the render-geometry
 region; the two views are disjoint for the same reason the two FB slots are.
 
+## 5f. The GEOM asset pool — the Phase-3 region (2026-09-04)
+
+§5 promised that "later phases extend the map (texture/terrain/particle pools
+per the charter allocator)". **This is that extension for geometry, and it is
+the single thing that has kept the geometry front end out of the console.**
+
+| Range | Region | Size | Owner | Access |
+|---|---|---|---|---|
+| `0x06A0_0000` .. `0x07FF_FFFF` | `GEOM.ASSET_POOL` | 22 MiB | `ENGINE1` | **read-only** |
+
+### Why it was the blocker
+
+`zhao_geom_meshfetch.sv` is the **only** `zhao_guard_req_t` client in the whole
+geometry subsystem — every other block takes its bytes through a caller-fed
+port. Every region `MEM.GUARD` knew was a FRAME BUFFER region, and its client
+case ended `default: pass_ok = 1'b0`. So every meshlet descriptor read was
+denied **by design**, and docket D22's "nineteen unwired blocks" was one memory
+path wearing eighteen disguises.
+
+### Why bank 3
+
+Banks come from byte-address bits `[26:25]`, and W2.7 measured **~82 of 192 Duo
+lines starved** when two streams shared a bank. Banks 0 and 1 are the FB slots
+scanout reads every frame; bank 2 is terrain (ruling T2). Bank 3 holds
+`GEOM.PARAMBUF` (ruling R7) and reserved `0x06A0_0000..0x07FF_FFFF` "pending
+evidence".
+
+Mesh assets are `ENGINE1` render-geometry traffic **exactly as PARAMBUF is** —
+same domain, same pipeline phase, already behind one local arbiter (§5d) — so
+they serialise against each other rather than thrashing against scanout. That
+is the W2.7 lesson applied rather than re-learned.
+
+The pool ends at `0x0800_0000`, exactly the top of the 27-bit VRAM map, so
+`BASE + SPAN` cannot wrap 32 bits — the defect the blit clamp exists for.
+
+### What keeps the no-escape theorem intact
+
+This is a **third window**, not a third client admitted to an existing one — the
+ENGINE0 change was the latter and this is honestly not. Two things carry it:
+
+* **Read-only.** `!req.write`. Nothing forwarded into this region can alter a
+  frame buffer, whatever else is true.
+* **Constant bounds.** No map input is consulted, so unlike the blit window it
+  is not frame-scoped and cannot be moved by a grant.
+
+`tests/formal/formal_mem_guard.sv` widened **with** the region rather than
+around it: `a1_map` now reads `slot0 || slot1 || asset` instead of exempting
+ENGINE1 from a two-slot assertion, which is the shape that keeps a proof green
+by shrinking what it covers. Added: `a1_asset_ro` (no forward into the pool is
+ever a write) and `c_forward_asset` (non-vacuity — the exact failure this
+harness's own header records having shipped once). **bmc and cover both pass,
+and deleting `!req.write` fails `a1_asset_ro` and `a1_region` at step 4.**
+
+### It is a knob, and what is NOT decided here
+
+`ZHAO_GEOM_ASSET_BASE` / `ZHAO_GEOM_ASSET_SPAN` are named editable constants in
+`zhao_pkg`; nothing derives them and the pool can move to any unmapped range.
+
+**Not decided:** the pool's internal layout (descriptors vs index streams vs
+vertex records), whether PARAMBUF and assets need separate local arbiter
+priorities, and whether 22 MiB is the right size — that wants a real asset set,
+not a guess. The region admits reads; how it is carved up is the asset
+fetcher's business and is still open.
+
 ## 5d. Memory clients — one addition (ruling T3)
 
 `ENGINE0` (framebuffer / render write) and `ENGINE1` (render-geometry domain,

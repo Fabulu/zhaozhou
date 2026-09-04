@@ -86,7 +86,7 @@ module zhao_mem_guard
 
   logic [31:0] addr32, end32;
   logic        len_ok, be_ok, shape_ok;
-  logic        scan_ok, blit_ok;
+  logic        scan_ok, blit_ok, asset_ok;
   logic        pass_ok;
 
   assign addr32   = {5'b0, req.addr};
@@ -126,6 +126,24 @@ module zhao_mem_guard
   assign blit_ok       = req.write && map_valid
                          && (addr32 >= blit_base) && (end32 <= blit_end);
 
+  // asset pool: READ-ONLY, ENGINE1's geometry region (spec/memory_rules.md 5f).
+  // This is the Phase-3 extension the Phase-2 note promised, and it is the one
+  // thing standing between the console and its geometry front end: every
+  // MESHFETCH descriptor read was landing on `default: pass_ok = 1'b0`.
+  //
+  // A THIRD WINDOW IS OPENED HERE, unlike the ENGINE0 change which admitted a
+  // client to an existing one -- so it is stated plainly rather than folded in.
+  // What keeps the no-escape guarantee intact is that the window is
+  // READ-ONLY and its bounds are CONSTANTS: `!req.write` means nothing in this
+  // region can alter a frame buffer, and BASE + SPAN is 0x0800_0000 exactly,
+  // computed at elaboration, so the wrap the blit clamp exists to prevent
+  // cannot arise here. No map input is consulted, so unlike the blit window
+  // this one is not frame-scoped and does not depend on `map_valid`.
+  // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+  assign asset_ok = !req.write
+                  && (addr32 >= ZHAO_GEOM_ASSET_BASE)
+                  && (end32  <= ZHAO_GEOM_ASSET_BASE + ZHAO_GEOM_ASSET_SPAN);
+
   // ONE WINDOW, ONE OWNER AT A TIME. Both writers are checked against the same
   // clamped slot span; what separates them is which one the lease names. A
   // writer without the lease is refused exactly as a request outside the window
@@ -135,7 +153,8 @@ module zhao_mem_guard
       ZHAO_CLIENT_SCANOUT:  pass_ok = shape_ok && scan_ok;
       ZHAO_CLIENT_BLIT_DMA: pass_ok = shape_ok && blit_ok && (fb_writer == 1'b0);
       ZHAO_CLIENT_ENGINE0:  pass_ok = shape_ok && blit_ok && (fb_writer == 1'b1);
-      default: pass_ok = 1'b0;      // ENGINE1 and DEBUG own nothing
+      ZHAO_CLIENT_ENGINE1:  pass_ok = shape_ok && asset_ok;
+      default: pass_ok = 1'b0;      // DEBUG still owns nothing
     endcase
   end
 
