@@ -2403,3 +2403,46 @@ harness blanks a timed-out row (D19l's sibling defect,
 `reports/FIT-TIMEOUT-CANNOT-FIRE-20260904.md`). The cheap test is to fit it with
 the timeout raised and **keep whatever numbers synthesis produces**, which is
 exactly the harness change already recommended there.
+
+### D19o. 34 of 85 census rows describe RTL that has changed since
+Found 2026-09-04, immediately after `cache_pipe` proved the case concretely.
+`tools/quartus/check_rule_freshness.py` now reports it.
+
+Comparing each row's `sourceCommit` against the last commit touching that
+block's own `.sv` file: **34 of 85 rows were measured before their source
+changed** — 40% of the census.
+
+**`cache_pipe` is the proof, not the hypothesis.** Its row read
+
+    registers 11328   alms 5903   blockMemoryBits 128   status ok
+
+which made it the **third-worst ALM figure in the whole census**. Re-fitted
+today: **3,097 registers and 8,320 memory bits.** The number everyone could see
+described code that no longer existed, and the only trace of that was a
+`lastAttemptStatus` field nobody reads (D19l).
+
+Others carrying a wide gap between measurement and source:
+
+    rtl 2026-09-04  row 2026-08-20  zhao_terrain_project     regs 6685  alms 6068
+    rtl 2026-09-04  row 2026-08-20  zhao_mem_guard           regs  177  alms  302
+    rtl 2026-09-02  row 2026-08-20  zhao_raster_edgewalk     regs  579  alms 2286
+    rtl 2026-09-01  row 2026-08-20  zhao_raster_resolve      regs  248  alms  344
+
+`zhao_terrain_project` matters most of those: at 6,068 ALMs it is the **worst
+single entry in the ALM census**, and its numbers are fifteen days older than
+its source.
+
+**This is why the census total wants reading carefully.** `npm run
+ledger:check` prints *"ALM census 76,672 across 59 measured blocks against
+41,910 (183%)"*, and already labels itself an UPPER BOUND because per-block fits
+do not share. That caveat is about double-counting. **This is a second, separate
+caveat: some of the rows are simply out of date**, and `cache_pipe` alone moved
+by 2,806 ALMs' worth of registers.
+
+Neither caveat means the budget is fine. They mean the number is not evidence
+either way until the stale rows are re-measured, and that re-measuring is a
+campaign-sized job already docketed under the Fmax re-measurement entry.
+
+**Not a defect in the harness** — it records `sourceCommit` faithfully, which is
+exactly what made this checkable. The defect is that nothing compared it to
+anything until now.

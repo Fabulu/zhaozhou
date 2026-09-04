@@ -73,6 +73,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -110,6 +111,19 @@ def rule_commit_date(rule_key, value, target):
                         "--", FIT_TARGETS], capture_output=True, text=True)
     out = r.stdout.strip()
     return out or None
+
+
+def rtl_file_for(mod):
+    for root, _d, files in os.walk("fpga/rtl"):
+        if mod + ".sv" in files:
+            return os.path.join(root, mod + ".sv").replace(os.sep, "/")
+    return None
+
+
+def file_commit_date(path):
+    r = subprocess.run(["git", "log", "-1", "--format=%cI", "--", path],
+                       capture_output=True, text=True)
+    return r.stdout.strip() or None
 
 
 def targets_with_rules():
@@ -176,6 +190,23 @@ def main() -> int:
         if b and st == "ok":
             breached.append((mod, b))
 
+    # --- Is the MEASUREMENT itself current? -------------------------------
+    # A rule evaluated against code that has since changed is as unhelpful as a
+    # rule never evaluated. zhao_texture_cache_pipe proved this concretely: its
+    # row read 11,328 registers and 5,903 ALMs -- third-worst in the census --
+    # and a re-fit on 2026-09-04 measured 3,097 registers. The number described
+    # code that no longer existed.
+    outdated = []
+    for mod, row in sorted(rw.items()):
+        path = rtl_file_for(mod)
+        if not path:
+            continue
+        measured, changed = commit_date(row.get("sourceCommit")), file_commit_date(path)
+        if measured and changed and changed > measured:
+            outdated.append((changed[:10], measured[:10], mod,
+                             row.get("registers"), row.get("alms")))
+    outdated.sort(reverse=True)
+
     print("rule freshness: %d target(s) carry resource rules; %d rule(s) are "
           "NEWER than the measurement that governs them, %d row(s) show a "
           "status that is not the latest attempt, %d row(s) breach a rule while "
@@ -200,6 +231,17 @@ def main() -> int:
               "`lastAttemptStatus` beside it, always:")
         for mod, st, la in hidden:
             print("  %-30s status=%-6s lastAttemptStatus=%s" % (mod, st, la))
+
+    if outdated:
+        print("\nMEASUREMENT OLDER THAN ITS OWN RTL (%d of %d rows) -- the "
+              "block's source file has commits the fit never saw, so these "
+              "numbers describe code that may no longer exist. Newest change "
+              "first:" % (len(outdated), len(rw)))
+        for changed, measured, mod, reg, alm in outdated[:20]:
+            print("  rtl %s  row %s  %-30s regs %-7s alms %s"
+                  % (changed, measured, mod, reg, alm))
+        if len(outdated) > 20:
+            print("  ... and %d more" % (len(outdated) - 20))
 
     if unmeasured:
         print("\nRULES BUT NO RECORDED FIT (%d) -- nothing has measured these, "
