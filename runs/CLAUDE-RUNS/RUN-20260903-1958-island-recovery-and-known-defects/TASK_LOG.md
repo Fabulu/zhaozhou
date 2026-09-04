@@ -1261,3 +1261,27 @@ that turns them green and destroys the record of what changed.
 
 **Both are the same failure as diagnosing timing from module names.** Read the
 thing before diagnosing the thing.
+
+## 2026-09-04 11:3x — the shell draws for the first time
+
+`tests/shell/shell_draw_directed.cpp`, **9 checks**, 9.8 s, in the fast lane.
+`source_list_parity` still green, so the composed fit's gate is unaffected.
+
+Brought out of `tb_zhao_shell`: the 24-pin triangle port, seven job words, and
+**ten render observables the wrapper was discarding with `()`**.
+
+    pixels=0 bursts=0 issued=0 retired=0 drained=1 FATAL=1
+
+`render_fatal_o` is fbwrite's `fatal_error_o` — *"the guard REFUSED: the write
+is outside the leased region"* — because no `CMD.SCHEDULER` map is granted in a
+render-only test. Correct, **and it is the proof of reach**: a broken wiring
+produces no burst, no guard decision, no latch.
+
+**Two stimulus errors of mine before it stood up**, both now comments in the
+file: `kc = 64` against S 12.8 vertices (a quarter-pixel sliver that covered
+nothing), and job words left at zero (writing zeros into zeroed memory, so
+"was it written?" could not tell success from a dead path). **A units error in
+the stimulus looks exactly like a defect in the thing being tested.**
+
+Next: drive the command path alongside the render port so a region map is
+granted, and the picture becomes assertable.

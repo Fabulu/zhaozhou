@@ -839,6 +839,36 @@ will be believed once and ignored after.
 **82 seams fit exactly.** That is the number that matters for D22: the wiring is
 mostly a matter of connecting ports that already agree.
 
+### D19e. The shell's render path — **NOW SIMULATED, same day**
+`tests/shell/shell_draw_directed.cpp`, 9 checks passing.
+
+The render port, the seven job words and **ten render observables the wrapper
+had been discarding with `()`** are now brought out of `tb_zhao_shell`, and a
+triangle offered at the console's edge is driven through the shell for the first
+time. What it measured:
+
+    [shell_draw] pixels=0 bursts=0 issued=0 retired=0 drained=1 FATAL=1
+
+`render_fatal_o` is `zhao_raster_fbwrite`'s `fatal_error_o`, and fbwrite.sv:301
+says exactly when it latches — *"The guard REFUSED: the write is outside the
+leased region and nothing was written."* `MEM.GUARD`'s `blit_ok` requires
+`map_valid`, which only `CMD.SCHEDULER` grants at frame start, and this test
+sends no command. **The refusal is correct.**
+
+**And the refusal is the proof of reach.** A broken wiring produces no burst, no
+guard decision and no latch. The triangle travelled the whole chain and was
+turned away by the rule that exists to turn it away.
+
+It also caught **`render_fatal_o` firing — one of the nine outputs D19b reports
+that no test names.** The first test to watch one found it doing its job.
+
+**Still open:** that a GRANTED frame produces the right pixels. That needs the
+command path driven alongside the render port, and it is the next step. Until
+then the shell is simulated for CONNECTIVITY, not for picture.
+
+<details>
+<summary>The original entry</summary>
+
 ### D19e. **The shell's render path has never been simulated** — found 2026-09-04
 Grepped tree-wide: `render_tri_valid_i` is driven to `1'b0` and nothing else.
 
@@ -860,6 +890,8 @@ fitted and timed, but has never been RUN.** The blocks inside it are well
 tested — `render_pipe_directed` drives `zhao_geom_bin_pipe` and the whole raster
 chain against `zref` — but that test instantiates the bin pipe **directly**. It
 does not go through the shell, so the shell's own wiring of it is unexercised.
+
+</details>
 
 ### What this does and does not mean for D1
 
