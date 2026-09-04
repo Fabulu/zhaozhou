@@ -78,6 +78,13 @@ top:
   - zhao_geom_wcache
   - zhao_geom_attrsetup
   - zhao_geom_parambuf
+  # Both built 2026-09-03/04 from BORING_3D_FUNDAMENTALS_AUDIT. ASSEMBLE is R1,
+  # the index walk that turns a meshlet into triangles -- the arrow that was
+  # missing between MESHFETCH and SETUP, previously driven only by a harness.
+  # DEPTHQUANT is R6, w to canonical invw24 under the selected depth profile;
+  # twelve RTL files consume invw24 and nothing produced it.
+  - zhao_geom_assemble
+  - zhao_geom_depthquant
 
   # --- terrain (the 8 km island) -------------------------------------------
   - zhao_terrain_patch
@@ -162,6 +169,15 @@ excluded:
   - zhao_texture_tmu: superseded  by zhao_texture_tmu_pipe
   - zhao_texture_aux: superseded  by zhao_texture_aux_pipe
   - zhao_raster_texjoin: superseded  by zhao_raster_texjoin_v2
+  # TEXTURE.FRAGROB is the transaction centre INTENDED to replace the TEXJOIN
+  # monolith (S6.1), and it is deliberately not counted yet. It was built
+  # BESIDE zhao_raster_texjoin_v2 with v2 kept as the behavioural oracle -- the
+  # differential is 280 retirements with zero divergence -- but v2 is still the
+  # shipped implementation until FRAGROB is FIT against its own tripwires
+  # (min_m10k 6, max_registers 2500, max_dsp 0). Counting both would break the
+  # one-implementation rule this file exists to enforce, and counting FRAGROB
+  # instead of v2 would claim an adoption that has no fit behind it.
+  - zhao_texture_fragrob: not-yet-adopted  built beside zhao_raster_texjoin_v2 per S6.1; v2 stays counted until FRAGROB is fit
   - zhao_raster_perspuv: superseded  by zhao_raster_perspuv_svc (two lanes)
   - zhao_raster_rcp24: superseded  by zhao_raster_rcp24_svc (scheduled)
   - zhao_terrain_residency: superseded  by zhao_terrain_residency_v2 (256x4 ways)
