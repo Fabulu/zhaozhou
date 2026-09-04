@@ -750,7 +750,40 @@ and the same for `ay bx by cx cy` — **six coordinate lanes, 22 bits into 21.**
 `2^20` would arrive at `GEOM.SETUP` with the opposite sign — a triangle folded
 across the origin rather than one pushed to the edge of the screen.
 
-### And the producer contradicts its OWN header
+### CORRECTION — the producer is RIGHT, and had already argued the case
+
+**The paragraphs below were written before reading `zhao_part_expand.sv`'s own
+WIDTHS section, and they got the fix backwards.** That section says, in the
+file, before any of this was noticed:
+
+> *"A vertex is therefore at most 21 bits plus a twelve-bit offset: 22 bits
+> signed covers it with room, and **the output is widened to 22 rather than
+> silently wrapping a 21-bit port**."*
+>
+> *"**The expanded fan is NOT re-clamped to the guard band.** A large particle
+> near the edge can put a vertex outside ±2048 px, and that is correct: the
+> software does exactly the same and lets the rasteriser's scan box scissor it.
+> Clamping here would deform the triangle instead of clipping it, which moves
+> the particle rather than cropping it."*
+
+So **22 bits is deliberate, reasoned and documented**, and narrowing the
+expander is explicitly the wrong answer — it would move particles instead of
+cropping them. The `±2048 guard` question I posed below is already answered: the
+guard is `GEOM.PROJECT`'s, expanded particle vertices legitimately exceed it,
+and that is the design.
+
+**The seam is still a real problem, and now a sharper one.** It is not "a
+producer with a stray guard bit"; it is **two blocks that disagree about the
+coordinate range**, where the producer has written down why it needs the wider
+one. Wiring `PART.EXPAND -> GEOM.SETUP` therefore needs a decision — widen
+`GEOM.SETUP` and its downstream to 22, or scissor between them — and **must not
+narrow the expander.**
+
+**The lesson, and it is the session's recurring one:** the answer was in the
+file, in a section headed WIDTHS, and the entry below was written from the port
+declarations alone. *Read the block before diagnosing the block.*
+
+### What the entry below got wrong (kept, because the reasoning is the lesson)
 
     zhao_part_expand.sv:87    // Screen coordinates are S 12.8 in 21 bits,
                               //   already inside the +/-2048 px guard
