@@ -33,7 +33,8 @@ than batching**:
 
 1. ~~registered fit top; export the worst 100 setup paths~~ — **done**
 2. ~~Early-Z full detection + Edgewalk registered steps / balanced popcount~~ — **done (r4, r8, r9)**
-3. **streamed Edgewalk row + cross pipelines — THE ONE STEP LEFT**
+3. ~~streamed Edgewalk row + cross pipelines~~ — **WRITTEN, NOT MEASURED**
+   (`7f95e592`, ROW-B/ROW-C split + explicit balanced popcount)
 4. ~~Fragment → read/shade/blend/finish/commit + in-flight address CAM~~ — **done (r3, `fc6395fd`)**
 5. ~~Binner setup sequenced onto two DSPs~~ — **DO NOT DO.** Never appeared in nine fits.
 6. ~~FBWRITE fixed 32-byte rows~~ — **DO NOT DO.** Never appeared in nine fits.
@@ -79,7 +80,32 @@ the device — and not one extra DSP across nine fits.**
 | 4 BINNER six parallel products | **never appeared in nine fits** |
 | 5 FBWRITE dynamic byte-mask | **never appeared in nine fits** |
 
-### ONE step of the plan remains, and the measurements still confirm it
+### THE PLAN IS RTL-COMPLETE. WHAT IS OWED IS A FIT.
+
+**Corrected again 2026-09-04, one layer deeper than the refresh above.** The
+section below was written from `b3bd69b` (2026-09-01 17:33) and named step 3 as
+the last one outstanding. Step 3 landed **the next day**, in `7f95e592`, along
+with three more EDGEWALK commits:
+
+    7f95e592  ROW-B/ROW-C split + explicit balanced popcount   (step 3)
+    05cf5e8d  the area's sign bit no longer picks the multiplier's operands
+    8918a8f2  the tile-start pixel centre gets registers
+    15828e71  the twelve w-operands are job-invariant, so they get registers
+
+`zhao_raster_edgewalk.sv` now says in its own comments that *"nothing
+downstream of a fill test is in the same clock as the fill test"*.
+
+**`renderer-b3bd69b-20260901T090000Z` is still the newest composed fit in the
+tree, and more than twelve commits have touched `fpga/rtl/raster` and
+`fpga/rtl/geometry` since it ran** — the four above, the coverage-cursor
+registration (`97d3b637`), and 2026-09-04's `RASTER.TILESTORE` port move.
+
+**So the next D1 action is not a surgery. It is a composed fit.** 85.62 MHz is
+the last measured number and it predates every change listed here. Nobody knows
+what the console runs at right now, and the docket has been describing written
+work as pending for three days because nothing re-measured.
+
+### The path b3bd69b named, which step 3 was written to answer
 
     edgewalk | sx0_r[7]~DUPLICATE  ->  edgewalk | pend_r[6]     −1.679 ns
 
