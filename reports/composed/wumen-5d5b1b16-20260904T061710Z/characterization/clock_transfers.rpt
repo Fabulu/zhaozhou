@@ -1,0 +1,30 @@
++----------------------------------------------------------------------+
+; Setup Transfers                                                      ;
++------------+-----------+------------+----------+----------+----------+
+; From Clock ; To Clock  ; RR Paths   ; FR Paths ; RF Paths ; FF Paths ;
++------------+-----------+------------+----------+----------+----------+
+; audio_clk  ; audio_clk ; 5197       ; 0        ; 0        ; 0        ;
+; gpu_clk    ; audio_clk ; false path ; 0        ; 0        ; 0        ;
+; audio_clk  ; gpu_clk   ; false path ; 0        ; 0        ; 0        ;
+; gpu_clk    ; gpu_clk   ; 18632823   ; 0        ; 0        ; 0        ;
+; vid_clk    ; gpu_clk   ; 173        ; 0        ; 0        ; 0        ;
+; gpu_clk    ; vid_clk   ; 14         ; 0        ; 0        ; 0        ;
+; vid_clk    ; vid_clk   ; 89663      ; 0        ; 0        ; 0        ;
++------------+-----------+------------+----------+----------+----------+
+Entries labeled "false path" only account for clock-to-clock false paths and not path-based false paths. As a result, actual path counts may be lower than reported.
+
++----------------------------------------------------------------------+
+; Hold Transfers                                                       ;
++------------+-----------+------------+----------+----------+----------+
+; From Clock ; To Clock  ; RR Paths   ; FR Paths ; RF Paths ; FF Paths ;
++------------+-----------+------------+----------+----------+----------+
+; audio_clk  ; audio_clk ; 5197       ; 0        ; 0        ; 0        ;
+; gpu_clk    ; audio_clk ; false path ; 0        ; 0        ; 0        ;
+; audio_clk  ; gpu_clk   ; false path ; 0        ; 0        ; 0        ;
+; gpu_clk    ; gpu_clk   ; 18632823   ; 0        ; 0        ; 0        ;
+; vid_clk    ; gpu_clk   ; 173        ; 0        ; 0        ; 0        ;
+; gpu_clk    ; vid_clk   ; 14         ; 0        ; 0        ; 0        ;
+; vid_clk    ; vid_clk   ; 89663      ; 0        ; 0        ; 0        ;
++------------+-----------+------------+----------+----------+----------+
+Entries labeled "false path" only account for clock-to-clock false paths and not path-based false paths. As a result, actual path counts may be lower than reported.
+
