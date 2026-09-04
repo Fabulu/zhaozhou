@@ -44,9 +44,8 @@ struct Tri {
 };
 
 // Drive one meshlet through, answering the index port from `idx`.
-std::vector<Tri> run(Vzhao_geom_assemble& t, const std::vector<uint8_t>& idx,
-                     unsigned voff, unsigned vcount, unsigned tcount,
-                     bool stall) {
+std::vector<Tri> run(Vzhao_geom_assemble& t, const std::vector<uint8_t>& idx, unsigned voff,
+                     unsigned vcount, unsigned tcount, bool stall) {
   std::vector<Tri> out;
   t.m_valid_i = 1;
   t.m_vertex_offset_i = voff;
@@ -80,8 +79,7 @@ std::vector<Tri> run(Vzhao_geom_assemble& t, const std::vector<uint8_t>& idx,
     t.eval();
 
     if (t.t_valid_o && t.t_ready_i) {
-      out.push_back({{static_cast<unsigned>(t.t_v0_o),
-                      static_cast<unsigned>(t.t_v1_o),
+      out.push_back({{static_cast<unsigned>(t.t_v0_o), static_cast<unsigned>(t.t_v1_o),
                       static_cast<unsigned>(t.t_v2_o)},
                      static_cast<int>(t.t_last_o)});
     }
@@ -130,14 +128,12 @@ int main(int argc, char** argv) {
     if (out.size() != tcount) ++bad;
     for (size_t n = 0; n < out.size(); ++n) {
       const auto want =
-          zref::geom::assemble_triangle(idx.data(), static_cast<unsigned>(n),
-                                        voff, vcount);
+          zref::geom::assemble_triangle(idx.data(), static_cast<unsigned>(n), voff, vcount);
       if (!want.legal || out[n].v[0] != want.v[0] || out[n].v[1] != want.v[1] ||
           out[n].v[2] != want.v[2]) {
         if (bad < 3)
-          std::printf("    tri %zu: rtl (%u,%u,%u) oracle (%u,%u,%u)\n", n,
-                      out[n].v[0], out[n].v[1], out[n].v[2], want.v[0],
-                      want.v[1], want.v[2]);
+          std::printf("    tri %zu: rtl (%u,%u,%u) oracle (%u,%u,%u)\n", n, out[n].v[0],
+                      out[n].v[1], out[n].v[2], want.v[0], want.v[1], want.v[2]);
         ++bad;
       }
     }
@@ -150,11 +146,13 @@ int main(int argc, char** argv) {
 
     int lasts = 0, last_at = -1;
     for (size_t n = 0; n < out.size(); ++n)
-      if (out[n].last) { ++lasts; last_at = static_cast<int>(n); }
+      if (out[n].last) {
+        ++lasts;
+        last_at = static_cast<int>(n);
+      }
     zhao::check(lasts == 1 && last_at == static_cast<int>(out.size()) - 1,
                 "`last` marks exactly the final triangle, once", 1,
-                (lasts == 1 && last_at == static_cast<int>(out.size()) - 1) ? 1
-                                                                           : 0);
+                (lasts == 1 && last_at == static_cast<int>(out.size()) - 1) ? 1 : 0);
   }
 
   // ---- 2: DUO — the same local index is a DIFFERENT vertex per view ------
@@ -199,8 +197,7 @@ int main(int argc, char** argv) {
                 "and it is counted, so a corrupt mesh is visible rather than "
                 "merely smaller",
                 1, static_cast<int>(top.refused_index_o - before));
-    zhao::check(zref::geom::assemble_triangle(idx.data(), 1, 0, vcount).legal ==
-                    false,
+    zhao::check(zref::geom::assemble_triangle(idx.data(), 1, 0, vcount).legal == false,
                 "the oracle agrees that triplet is illegal", 1, 1);
   }
 
@@ -251,9 +248,8 @@ int main(int argc, char** argv) {
                 0, static_cast<int>(top.refused_limits_o - before));
   }
 
-  std::printf("  %u meshlets, %u triangles, %u limit-refused, %u index-refused\n",
-              top.meshlets_o, top.triangles_o, top.refused_limits_o,
-              top.refused_index_o);
+  std::printf("  %u meshlets, %u triangles, %u limit-refused, %u index-refused\n", top.meshlets_o,
+              top.triangles_o, top.refused_limits_o, top.refused_index_o);
 
   return zhao::report_and_exit("geom_assemble_directed");
 }

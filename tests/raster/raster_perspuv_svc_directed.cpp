@@ -50,9 +50,7 @@ struct Frag {
 struct Res {
   int32_t u, v;
   uint32_t sat, dz;
-  bool operator!=(const Res& o) const {
-    return u != o.u || v != o.v || sat != o.sat || dz != o.dz;
-  }
+  bool operator!=(const Res& o) const { return u != o.u || v != o.v || sat != o.sat || dz != o.dz; }
 };
 
 }  // namespace
@@ -86,8 +84,7 @@ int main(int argc, char** argv) {
   fr.push_back({static_cast<int32_t>(0x8000'0000), static_cast<int32_t>(0x8000'0000), 1u, 0x0201});
   // REPEATED TAG -- the brief's "repeated external src_id". Every fragment of
   // one triangle carries the same value, so identity must be internal.
-  for (int i = 0; i < 8; ++i)
-    fr.push_back({1000 + i, -2000 - i, 0x00A0'0000u, 0x0300});
+  for (int i = 0; i < 8; ++i) fr.push_back({1000 + i, -2000 - i, 0x00A0'0000u, 0x0300});
 
   uint32_t s = 0x2468ACu;
   for (int i = 0; i < 300; ++i) {
@@ -124,8 +121,8 @@ int main(int argc, char** argv) {
       ++serial_clocks;
     }
     top.a_valid_i = 0;
-    zhao::check(ref.size() == fr.size(), "the serial block answered every fragment",
-                fr.size(), ref.size());
+    zhao::check(ref.size() == fr.size(), "the serial block answered every fragment", fr.size(),
+                ref.size());
   }
 
   // ---- derive mant/k per fragment from a standalone rcp24 -----------------
@@ -144,8 +141,8 @@ int main(int argc, char** argv) {
       if (took) ++fed;
     }
     top.c_valid_i = 0;
-    zhao::check(mk.size() == fr.size(), "a reciprocal was derived for every fragment",
-                fr.size(), mk.size());
+    zhao::check(mk.size() == fr.size(), "a reciprocal was derived for every fragment", fr.size(),
+                mk.size());
   }
 
   // ---- run the SCHEDULED lane, WITH RANDOMISED OUTPUT STALLS --------------
@@ -182,28 +179,24 @@ int main(int argc, char** argv) {
     top.b_valid_i = 0;
   }
 
-  zhao::check(got.size() == fr.size(), "the scheduled lane answered every fragment",
-              fr.size(), got.size());
+  zhao::check(got.size() == fr.size(), "the scheduled lane answered every fragment", fr.size(),
+              got.size());
 
   int mism = 0;
   for (size_t i = 0; i < ref.size() && i < got.size(); ++i)
     if (got[i] != ref[i]) ++mism;
-  zhao::check(mism == 0,
-              "every scheduled answer is BIT-IDENTICAL to the serial block's",
-              0, mism);
+  zhao::check(mism == 0, "every scheduled answer is BIT-IDENTICAL to the serial block's", 0, mism);
 
   // TWO PRODUCTS PER FRAGMENT, except the depth-zero one which computes none.
   const uint32_t expect_prod = 2u * static_cast<uint32_t>(fr.size() - 1);
   zhao::check(top.b_products_o == expect_prod,
-              "exactly two multiplier launches per fragment (none for depth-zero)",
-              expect_prod, top.b_products_o);
+              "exactly two multiplier launches per fragment (none for depth-zero)", expect_prod,
+              top.b_products_o);
 
-  std::printf("  serial:    %zu fragments in %d clocks (%.2f each)\n", ref.size(),
-              serial_clocks,
+  std::printf("  serial:    %zu fragments in %d clocks (%.2f each)\n", ref.size(), serial_clocks,
               static_cast<double>(serial_clocks) / static_cast<double>(ref.size()));
-  std::printf("  scheduled: %zu fragments in %d clocks (%.2f each, WITH stalls)\n",
-              got.size(), svc_clocks,
-              static_cast<double>(svc_clocks) / static_cast<double>(got.size()));
+  std::printf("  scheduled: %zu fragments in %d clocks (%.2f each, WITH stalls)\n", got.size(),
+              svc_clocks, static_cast<double>(svc_clocks) / static_cast<double>(got.size()));
 
   // ---- SATURATED THROUGHPUT: products per clock, with nothing in the way ---
   //
@@ -237,7 +230,7 @@ int main(int argc, char** argv) {
       top.b_k_i = mk[fed].second;
       top.b_dz_i = (fr[fed].invw == 0);
       top.b_tag_i = fr[fed].tag;
-      top.b_rready_i = 1;              // never block the output
+      top.b_rready_i = 1;  // never block the output
       top.eval();
       const bool took = top.b_ready_o != 0;
       const uint32_t p_before = top.b_products_o;
@@ -255,10 +248,16 @@ int main(int argc, char** argv) {
     // about the drain, not about the lane. Products per clock is only
     // meaningful while the input is saturated.
     const uint32_t products = top.b_products_o - before;
-    for (int c = 0; c < 4000; ++c) { top.b_rready_i = 1; top.eval(); zhao::tick(top); }
+    for (int c = 0; c < 4000; ++c) {
+      top.b_rready_i = 1;
+      top.eval();
+      zhao::tick(top);
+    }
     const double per_clock = static_cast<double>(products) / clocks;
-    std::printf("  saturated: %u products in %d clocks = %.2f products/clock "
-                "(R7 needs >= 1.64)\n", products, clocks, per_clock);
+    std::printf(
+        "  saturated: %u products in %d clocks = %.2f products/clock "
+        "(R7 needs >= 1.64)\n",
+        products, clocks, per_clock);
     zhao::check(per_clock > 1.0,
                 "TWO product lanes: more than one product a clock, which a "
                 "single shared multiplier cannot do by construction",

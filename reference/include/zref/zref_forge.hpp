@@ -34,11 +34,11 @@ namespace forge {
 
 enum Family : int {
   kRibbon = 0,
-  kFan = 1,      // radial fan / ring
+  kFan = 1,  // radial fan / ring
   kTube = 2,
-  kShell = 3,    // radial shell
+  kShell = 3,  // radial shell
   kBillboard = 4,
-  kCliff = 5     // terrain cliff / skirt
+  kCliff = 5  // terrain cliff / skirt
 };
 
 constexpr int kMaxSegments = 64;
@@ -75,16 +75,13 @@ inline int prim_ring_vertices(int family, int sides) {
 }
 
 inline bool prim_limits_legal(int segments, int sides) {
-  return segments >= 1 && segments <= kMaxSegments && sides >= 1 &&
-         sides <= kMaxSides;
+  return segments >= 1 && segments <= kMaxSegments && sides >= 1 && sides <= kMaxSides;
 }
 
 // Two triangles per quad.
 inline int prim_triangles(int family, int segments, int sides) {
-  if (!prim_family_legal(family) || !prim_limits_legal(segments, sides))
-    return 0;
-  return 2 * prim_eff_segments(family, segments) *
-         prim_eff_sides(family, sides);
+  if (!prim_family_legal(family) || !prim_limits_legal(segments, sides)) return 0;
+  return 2 * prim_eff_segments(family, segments) * prim_eff_sides(family, sides);
 }
 
 // The index of vertex (segment s, ring position k), ring-major.
@@ -113,23 +110,16 @@ inline Tri prim_triangle(int family, int segments, int sides, int n) {
   if (!second)
     return {prim_vertex_index(seg, k0, ring), prim_vertex_index(seg, k1, ring),
             prim_vertex_index(seg + 1, k0, ring)};
-  return {prim_vertex_index(seg, k1, ring),
-          prim_vertex_index(seg + 1, k1, ring),
+  return {prim_vertex_index(seg, k1, ring), prim_vertex_index(seg + 1, k1, ring),
           prim_vertex_index(seg + 1, k0, ring)};
 }
 
 // The refusal taxonomy, in the order the block applies it. A job outside the
 // view is SKIPPED, not refused: it is a well-formed job for another view, and
 // counting it as a caller error would bury the real ones.
-enum Verdict : int {
-  kAccept = 0,
-  kRefusedFamily = 1,
-  kRefusedLimit = 2,
-  kSkippedView = 3
-};
+enum Verdict : int { kAccept = 0, kRefusedFamily = 1, kRefusedLimit = 2, kSkippedView = 3 };
 
-inline Verdict prim_verdict(int family, int segments, int sides, int view_mask,
-                            int view_sel) {
+inline Verdict prim_verdict(int family, int segments, int sides, int view_mask, int view_sel) {
   if (!prim_family_legal(family)) return kRefusedFamily;
   if (!prim_limits_legal(segments, sides)) return kRefusedLimit;
   if ((view_mask & view_sel) == 0) return kSkippedView;

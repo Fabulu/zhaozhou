@@ -44,10 +44,11 @@
 
 namespace {
 
-constexpr int RIBBON = 0, FAN = 1, TUBE = 2, SHELL = 3, BILLBOARD = 4,
-              CLIFF = 5;
+constexpr int RIBBON = 0, FAN = 1, TUBE = 2, SHELL = 3, BILLBOARD = 4, CLIFF = 5;
 
-struct Tri { int i0, i1, i2, last; };
+struct Tri {
+  int i0, i1, i2, last;
+};
 
 }  // namespace
 
@@ -85,8 +86,7 @@ int main(int argc, char** argv) {
       top.eval();
       if (top.t_valid_o && top.t_ready_i)
         out.push_back({static_cast<int>(top.t_i0_o), static_cast<int>(top.t_i1_o),
-                       static_cast<int>(top.t_i2_o),
-                       static_cast<int>(top.t_last_o)});
+                       static_cast<int>(top.t_i2_o), static_cast<int>(top.t_last_o)});
       const bool done = !top.t_valid_o;
       zhao::tick(top);
       if (done && !out.empty()) break;
@@ -99,24 +99,28 @@ int main(int argc, char** argv) {
 
   // ---- 1: the triangle count of every family ----------------------------
   {
-    struct C { int fam; int seg, sides; int want; const char* why; };
+    struct C {
+      int fam;
+      int seg, sides;
+      int want;
+      const char* why;
+    };
     const C cases[] = {
-        {RIBBON,    8, 5, 16,   "a ribbon collapses sides to 1: 8 quads"},
-        {CLIFF,     8, 5, 16,   "a cliff/skirt likewise"},
-        {FAN,       9, 6, 12,   "a fan collapses segments to 1: 6 quads"},
-        {TUBE,      8, 6, 96,   "a tube is the two-dimensional case"},
-        {SHELL,     4, 4, 32,   "and so is a shell"},
-        {BILLBOARD, 9, 7,  2,   "a billboard is one quad, whatever it is asked"},
-        {TUBE,     64, 8, 1024, "and the worst case is the contract's own"},
+        {RIBBON, 8, 5, 16, "a ribbon collapses sides to 1: 8 quads"},
+        {CLIFF, 8, 5, 16, "a cliff/skirt likewise"},
+        {FAN, 9, 6, 12, "a fan collapses segments to 1: 6 quads"},
+        {TUBE, 8, 6, 96, "a tube is the two-dimensional case"},
+        {SHELL, 4, 4, 32, "and so is a shell"},
+        {BILLBOARD, 9, 7, 2, "a billboard is one quad, whatever it is asked"},
+        {TUBE, 64, 8, 1024, "and the worst case is the contract's own"},
     };
     int bad = 0;
     for (const C& c : cases) {
       const auto out = run(c.fam, c.seg, c.sides, 1, false);
       if (static_cast<int>(out.size()) != c.want) {
         ++bad;
-        std::printf("    family %d %dx%d -> %d triangles, wanted %d (%s)\n",
-                    c.fam, c.seg, c.sides, static_cast<int>(out.size()), c.want,
-                    c.why);
+        std::printf("    family %d %dx%d -> %d triangles, wanted %d (%s)\n", c.fam, c.seg, c.sides,
+                    static_cast<int>(out.size()), c.want, c.why);
       }
     }
     zhao::check(bad == 0,
@@ -134,9 +138,8 @@ int main(int argc, char** argv) {
     bool wraps = false;
     for (const Tri& t : tube)
       if (t.i1 == 0 || t.i2 == 0) wraps = true;
-    zhao::check(wraps,
-                "a TUBE's ring closes -- the last side's edge is side 0 again",
-                1, wraps ? 1 : 0);
+    zhao::check(wraps, "a TUBE's ring closes -- the last side's edge is side 0 again", 1,
+                wraps ? 1 : 0);
 
     const auto ribbon = run(RIBBON, 4, 1, 1, false);
     int maxidx = 0;
@@ -180,11 +183,13 @@ int main(int argc, char** argv) {
     const auto out = run(SHELL, 3, 3, 1, false);
     int lasts = 0, last_at = -1;
     for (int i = 0; i < static_cast<int>(out.size()); ++i)
-      if (out[i].last) { ++lasts; last_at = i; }
+      if (out[i].last) {
+        ++lasts;
+        last_at = i;
+      }
     zhao::check(lasts == 1 && last_at == static_cast<int>(out.size()) - 1,
                 "`last` marks exactly the final triangle, once", 1,
-                (lasts == 1 && last_at == static_cast<int>(out.size()) - 1) ? 1
-                                                                           : 0);
+                (lasts == 1 && last_at == static_cast<int>(out.size()) - 1) ? 1 : 0);
   }
 
   // ---- 5: THE FOUR DELETED FAMILIES ARE REFUSED -------------------------
@@ -247,21 +252,18 @@ int main(int argc, char** argv) {
           const int want = zref::forge::prim_triangles(fam, seg, sides);
           if (static_cast<int>(out.size()) != want) {
             ++counts_wrong;
-            std::printf("    fam %d %dx%d: %d triangles, oracle says %d\n", fam,
-                        seg, sides, static_cast<int>(out.size()), want);
+            std::printf("    fam %d %dx%d: %d triangles, oracle says %d\n", fam, seg, sides,
+                        static_cast<int>(out.size()), want);
             continue;
           }
           if (want > biggest) biggest = want;
           for (int n = 0; n < want; ++n) {
-            const zref::forge::Tri t =
-                zref::forge::prim_triangle(fam, seg, sides, n);
+            const zref::forge::Tri t = zref::forge::prim_triangle(fam, seg, sides, n);
             ++compared;
             if (out[n].i0 != t.i0 || out[n].i1 != t.i1 || out[n].i2 != t.i2) {
               if (mismatched < 4)
-                std::printf(
-                    "    fam %d %dx%d tri %d: rtl (%d,%d,%d) oracle (%d,%d,%d)\n",
-                    fam, seg, sides, n, out[n].i0, out[n].i1, out[n].i2, t.i0,
-                    t.i1, t.i2);
+                std::printf("    fam %d %dx%d tri %d: rtl (%d,%d,%d) oracle (%d,%d,%d)\n", fam, seg,
+                            sides, n, out[n].i0, out[n].i1, out[n].i2, t.i0, t.i1, t.i2);
               ++mismatched;
             }
           }
@@ -284,10 +286,10 @@ int main(int argc, char** argv) {
                 0, mismatched + counts_wrong);
   }
 
-  std::printf("  %u jobs, %u triangles, %u family-refused, %u limit-refused, "
-              "%u view-skipped\n",
-              top.jobs_o, top.triangles_o, top.refused_family_o,
-              top.refused_limit_o, top.skipped_view_o);
+  std::printf(
+      "  %u jobs, %u triangles, %u family-refused, %u limit-refused, "
+      "%u view-skipped\n",
+      top.jobs_o, top.triangles_o, top.refused_family_o, top.refused_limit_o, top.skipped_view_o);
 
   return zhao::report_and_exit("forge_prim_directed");
 }

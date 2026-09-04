@@ -72,9 +72,7 @@ struct Desc {
 // be[63:0]} = 103 bits, so Verilator hands it over as a VlWide<4> and the
 // fields have to be picked out by position. `valid` is the MSB, bit 102, which
 // lives at offset 6 of word 3.
-bool guard_valid(const Vzhao_geom_meshfetch& t) {
-  return ((t.guard_req_o[3] >> 6) & 1u) != 0u;
-}
+bool guard_valid(const Vzhao_geom_meshfetch& t) { return ((t.guard_req_o[3] >> 6) & 1u) != 0u; }
 
 // What the RTL presented to the cull port, and what it emitted.
 struct Observed {
@@ -92,8 +90,8 @@ struct Observed {
 // `cull_verdict` is what the played cull answers; the caller supplies the
 // oracle's, so a block that presented the wrong sphere still gets the right
 // answer and the DIFFERENCE shows up in `Observed`, not in the verdict.
-Observed run(Vzhao_geom_meshfetch& t, const Desc& d, const MF::InstanceXform& x,
-             uint8_t active, const zc::Verdict& cull_verdict, bool crc_ok = true) {
+Observed run(Vzhao_geom_meshfetch& t, const Desc& d, const MF::InstanceXform& x, uint8_t active,
+             const zc::Verdict& cull_verdict, bool crc_ok = true) {
   Observed o;
 
   t.j_valid_i = 1;
@@ -130,8 +128,7 @@ Observed run(Vzhao_geom_meshfetch& t, const Desc& d, const MF::InstanceXform& x,
     t.beat_last_i = 0;
     if (granted && beat < 8) {
       uint64_t w = 0;
-      for (int k = 0; k < 8; ++k)
-        w |= static_cast<uint64_t>(d.b[beat * 8 + k]) << (8 * k);
+      for (int k = 0; k < 8; ++k) w |= static_cast<uint64_t>(d.b[beat * 8 + k]) << (8 * k);
       t.beat_valid_i = 1;
       t.beat_data_i = w;
       t.beat_last_i = (beat == 7) ? 1 : 0;
@@ -231,8 +228,7 @@ int main(int argc, char** argv) {
         //
         // 98304 * 65537 = 6,442,549,248, which is 98305.5 << 16 -- a remainder
         // of exactly 32768. Round-half-up gives 98306; truncation gives 98305.
-        for (int lane = 0; lane < 3; ++lane)
-          wr32(d.b + 8 + 4 * lane, static_cast<uint32_t>(98304));
+        for (int lane = 0; lane < 3; ++lane) wr32(d.b + 8 + 4 * lane, static_cast<uint32_t>(98304));
         d.stamp();
       }
       int32_t wc[3];
@@ -245,11 +241,10 @@ int main(int argc, char** argv) {
       v.reject = false;
       const Observed o = run(top, d, x, 0b01, v);
       ++compared;
-      if (!o.saw_cull || o.cx != wc[0] || o.cy != wc[1] || o.cz != wc[2] ||
-          o.radius != wr) {
+      if (!o.saw_cull || o.cx != wc[0] || o.cy != wc[1] || o.cz != wc[2] || o.radius != wr) {
         if (bad < 3)
-          std::printf("    rtl (%d,%d,%d) r=%u   oracle (%d,%d,%d) r=%u\n", o.cx, o.cy,
-                      o.cz, o.radius, wc[0], wc[1], wc[2], wr);
+          std::printf("    rtl (%d,%d,%d) r=%u   oracle (%d,%d,%d) r=%u\n", o.cx, o.cy, o.cz,
+                      o.radius, wc[0], wc[1], wc[2], wr);
         ++bad;
       }
     }
@@ -272,12 +267,36 @@ int main(int argc, char** argv) {
       void (*mutate)(Desc&);
     };
     const Case cases[] = {
-        {"format", 0, [](Desc& d) { d.b[0] = 0xEE; d.stamp(); }},
-        {"generation", 2, [](Desc& d) { wr16(d.b + 32, kGeneration + 1); d.stamp(); }},
-        {"vertex_count", 3, [](Desc& d) { d.b[2] = 65; d.stamp(); }},
-        {"triangle_count", 4, [](Desc& d) { d.b[3] = 127; d.stamp(); }},
-        {"reserved", 5, [](Desc& d) { d.b[40] = 0xA5; d.stamp(); }},
-        {"zero_bound", 6, [](Desc& d) { wr32(d.b + 20, 0); d.stamp(); }},
+        {"format", 0,
+         [](Desc& d) {
+           d.b[0] = 0xEE;
+           d.stamp();
+         }},
+        {"generation", 2,
+         [](Desc& d) {
+           wr16(d.b + 32, kGeneration + 1);
+           d.stamp();
+         }},
+        {"vertex_count", 3,
+         [](Desc& d) {
+           d.b[2] = 65;
+           d.stamp();
+         }},
+        {"triangle_count", 4,
+         [](Desc& d) {
+           d.b[3] = 127;
+           d.stamp();
+         }},
+        {"reserved", 5,
+         [](Desc& d) {
+           d.b[40] = 0xA5;
+           d.stamp();
+         }},
+        {"zero_bound", 6,
+         [](Desc& d) {
+           wr32(d.b + 20, 0);
+           d.stamp();
+         }},
     };
 
     int bad = 0;
@@ -293,9 +312,9 @@ int main(int argc, char** argv) {
       const mf::Refusal want = MF::validate(d.b, kFormat, kGeneration);
       const int want_index = static_cast<int>(want) - 1;
 
-      if (o.emitted || o.saw_cull) ++bad;                       // refused: no cull, no emit
-      if (want_index != c.reason_index) ++bad;                  // the oracle agrees
-      if (top.refused_o[c.reason_index] != before + 1) ++bad;   // the RTL's own counter
+      if (o.emitted || o.saw_cull) ++bad;                      // refused: no cull, no emit
+      if (want_index != c.reason_index) ++bad;                 // the oracle agrees
+      if (top.refused_o[c.reason_index] != before + 1) ++bad;  // the RTL's own counter
     }
     zhao::check(bad == 0,
                 "each of the six restampable refusals is counted in its OWN "
@@ -324,10 +343,9 @@ int main(int argc, char** argv) {
     v.reject = false;
     const Observed o = run(top, d, xform(ONE, ONE, ONE, 0), 0b11, v);
     zhao::check(o.emitted && o.vis == 0b10,
-                "a meshlet visible only in camera 1 emits with visible_mask 0b10",
-                0b10, o.vis);
-    zhao::check(o.vertex_offset == 0x1000 && o.index_offset == 0x2000 &&
-                    o.vcount == 32 && o.tcount == 40 && o.material == 0x0777,
+                "a meshlet visible only in camera 1 emits with visible_mask 0b10", 0b10, o.vis);
+    zhao::check(o.vertex_offset == 0x1000 && o.index_offset == 0x2000 && o.vcount == 32 &&
+                    o.tcount == 40 && o.material == 0x0777,
                 "and the carried fields arrive unchanged -- this block moves "
                 "them, it does not interpret them",
                 1, 1);
@@ -348,8 +366,7 @@ int main(int argc, char** argv) {
     uint32_t ref_after = 0;
     for (int i = 0; i < 7; ++i) ref_after += top.refused_o[i];
 
-    zhao::check(!o.emitted && top.culled_all_cameras_o == r_before + 1 &&
-                    ref_after == ref_before,
+    zhao::check(!o.emitted && top.culled_all_cameras_o == r_before + 1 && ref_after == ref_before,
                 "a meshlet no camera can see emits nothing and is counted as "
                 "CULLED, not refused -- a counter that conflated them would "
                 "report corruption every time the camera turned around",
@@ -357,8 +374,8 @@ int main(int argc, char** argv) {
   }
 
   std::printf("  %u considered, %u fetched, %u culled, %u guard-denied\n",
-              top.meshlets_considered_o, top.descriptors_fetched_o,
-              top.culled_all_cameras_o, top.guard_denied_o);
+              top.meshlets_considered_o, top.descriptors_fetched_o, top.culled_all_cameras_o,
+              top.guard_denied_o);
 
   return zhao::report_and_exit("geom_meshfetch_rtl_directed");
 }

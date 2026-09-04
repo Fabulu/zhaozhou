@@ -51,7 +51,7 @@ namespace {
 constexpr int kDepth = 16;
 
 struct Frag {
-  int count;              // sample_count 0..3
+  int count;  // sample_count 0..3
   uint32_t u[3], v[3];
   int recipe;
   uint64_t ctx;
@@ -107,21 +107,20 @@ int main(int argc, char** argv) {
   // that fragments are still accepted -- exactly DEPTH of them, then no more.
   {
     reset(top);
-    top.tmu_ready_i = 0;   // the TMU never accepts anything
+    top.tmu_ready_i = 0;  // the TMU never accepts anything
     top.o_ready_i = 1;
     int accepted = 0;
     for (int i = 0; i < kDepth + 4; ++i) {
       Frag f{1, {100u + i, 0, 0}, {200u + i, 0, 0}, 0, 0xA000u + i, false};
       if (offer(top, f)) ++accepted;
     }
-    zhao::check(accepted == kDepth,
-                "fragments are accepted with the TMU refusing (ready is local)",
+    zhao::check(accepted == kDepth, "fragments are accepted with the TMU refusing (ready is local)",
                 kDepth, accepted);
     top.eval();
-    zhao::check(top.f_ready_o == 0, "and the block goes full at DEPTH, not before",
-                0, top.f_ready_o);
-    zhao::check(top.full_clocks_o > 0, "full clocks are counted once storage runs out",
-                1, top.full_clocks_o > 0 ? 1 : 0);
+    zhao::check(top.f_ready_o == 0, "and the block goes full at DEPTH, not before", 0,
+                top.f_ready_o);
+    zhao::check(top.full_clocks_o > 0, "full clocks are counted once storage runs out", 1,
+                top.full_clocks_o > 0 ? 1 : 0);
   }
 
   // --------------------------------------------------------------- 2 ---
@@ -152,8 +151,7 @@ int main(int argc, char** argv) {
       top.tmu_rvalid_i = 0;
     }
     top.eval();
-    zhao::check(top.o_valid_o == 0, "it does NOT retire on two of three samples",
-                0, top.o_valid_o);
+    zhao::check(top.o_valid_o == 0, "it does NOT retire on two of three samples", 0, top.o_valid_o);
 
     // The third completes it.
     top.tmu_rvalid_i = 1;
@@ -169,8 +167,7 @@ int main(int argc, char** argv) {
     // packet cannot change under a stalled consumer.
     zhao::tick(top);
     top.eval();
-    zhao::check(top.o_valid_o == 1, "and it retires once the third arrives",
-                1, top.o_valid_o);
+    zhao::check(top.o_valid_o == 1, "and it retires once the third arrives", 1, top.o_valid_o);
   }
 
   // --------------------------------------------------------------- 3 ---
@@ -179,12 +176,15 @@ int main(int argc, char** argv) {
     reset(top);
     constexpr int kN = 4;
     for (int i = 0; i < kN; ++i) {
-      Frag f{1, {static_cast<uint32_t>(i), 0, 0}, {0, 0, 0}, 0,
-             0xC000u + static_cast<uint64_t>(i), false};
+      Frag f{1, {static_cast<uint32_t>(i), 0, 0},   {0, 0, 0},
+             0, 0xC000u + static_cast<uint64_t>(i), false};
       zhao::check(offer(top, f), "batch fragment accepted", 1, 1);
     }
     // Drain the issue side so every slot has a request outstanding.
-    for (int c = 0; c < 32; ++c) { top.eval(); zhao::tick(top); }
+    for (int c = 0; c < 32; ++c) {
+      top.eval();
+      zhao::tick(top);
+    }
 
     // Return them BACKWARDS.
     for (int i = kN - 1; i >= 0; --i) {
@@ -208,9 +208,8 @@ int main(int argc, char** argv) {
     bool in_order = got.size() == kN;
     for (size_t i = 0; i < got.size(); ++i)
       if (got[i] != 0xC000u + i) in_order = false;
-    zhao::check(in_order,
-                "returns arriving backwards still retire in ALLOCATION order",
-                1, in_order ? 1 : 0);
+    zhao::check(in_order, "returns arriving backwards still retire in ALLOCATION order", 1,
+                in_order ? 1 : 0);
   }
 
   // --------------------------------------------------------------- 4 ---
@@ -219,7 +218,10 @@ int main(int argc, char** argv) {
     reset(top);
     Frag f{1, {7, 0, 0}, {8, 0, 0}, 0, 0xD001, false};
     offer(top, f);
-    for (int c = 0; c < 8; ++c) { top.eval(); zhao::tick(top); }
+    for (int c = 0; c < 8; ++c) {
+      top.eval();
+      zhao::tick(top);
+    }
 
     const uint32_t before = top.id_errors_o;
     // Generation 2 when the live entry is generation 1: a response from a
@@ -238,8 +240,7 @@ int main(int argc, char** argv) {
                 "a stale-generation return is counted as an identity error",
                 static_cast<int>(before + 1), static_cast<int>(top.id_errors_o));
     zhao::check(top.id_error_o == 1, "and the sticky flag latches", 1, top.id_error_o);
-    zhao::check(top.o_valid_o == 0,
-                "and it does NOT complete the live fragment it collided with",
+    zhao::check(top.o_valid_o == 0, "and it does NOT complete the live fragment it collided with",
                 0, top.o_valid_o);
   }
 
@@ -249,7 +250,10 @@ int main(int argc, char** argv) {
     reset(top);
     Frag f{1, {1, 0, 0}, {2, 0, 0}, /*recipe=*/1 /* MODULATE */, 0xE001, false};
     offer(top, f);
-    for (int c = 0; c < 8; ++c) { top.eval(); zhao::tick(top); }
+    for (int c = 0; c < 8; ++c) {
+      top.eval();
+      zhao::tick(top);
+    }
     top.tmu_rvalid_i = 1;
     top.tmu_rslot_i = 0;
     top.tmu_rsidx_i = 0;
@@ -262,10 +266,9 @@ int main(int argc, char** argv) {
     top.eval();
     zhao::check(top.o_valid_o == 1, "a MODULATE fragment still retires", 1, top.o_valid_o);
     zhao::check(top.combiner_unfrozen_o == 1,
-                "but combiner_unfrozen_o is RAISED -- the blend is not frozen yet",
-                1, top.combiner_unfrozen_o);
-    zhao::check(top.o_rgb_o == 0x123456u,
-                "and it returns sample 0 rather than invented arithmetic",
+                "but combiner_unfrozen_o is RAISED -- the blend is not frozen yet", 1,
+                top.combiner_unfrozen_o);
+    zhao::check(top.o_rgb_o == 0x123456u, "and it returns sample 0 rather than invented arithmetic",
                 0x123456, static_cast<int>(top.o_rgb_o));
   }
 
@@ -275,7 +278,10 @@ int main(int argc, char** argv) {
     reset(top);
     Frag f{1, {1, 0, 0}, {2, 0, 0}, /*recipe=*/0 /* PASSTHRU */, 0xF001, false};
     offer(top, f);
-    for (int c = 0; c < 8; ++c) { top.eval(); zhao::tick(top); }
+    for (int c = 0; c < 8; ++c) {
+      top.eval();
+      zhao::tick(top);
+    }
     top.tmu_rvalid_i = 1;
     top.tmu_rslot_i = 0;
     top.tmu_rsidx_i = 0;
@@ -287,8 +293,8 @@ int main(int argc, char** argv) {
     zhao::tick(top);
     top.eval();
     zhao::check(top.combiner_unfrozen_o == 0,
-                "PASSTHRU does not raise the unfrozen flag -- its result is exact",
-                0, top.combiner_unfrozen_o);
+                "PASSTHRU does not raise the unfrozen flag -- its result is exact", 0,
+                top.combiner_unfrozen_o);
     zhao::check(top.o_rgb_o == 0xABCDEFu && top.o_a_o == 0x42,
                 "and passes the sample through unchanged", 1,
                 (top.o_rgb_o == 0xABCDEFu && top.o_a_o == 0x42) ? 1 : 0);
@@ -312,22 +318,29 @@ int main(int argc, char** argv) {
   // Reverting the counter fix must make this FAIL. It does.
   {
     reset(top);
-    struct Ret { int slot, sidx, gen, due; };
+    struct Ret {
+      int slot, sidx, gen, due;
+    };
     std::deque<Ret> rets;
     std::deque<uint64_t> expect;
     uint64_t next_ctx = 0x9000;
     int accepted = 0, retired = 0, outstanding = 0, worst_outstanding = 0;
     int order_errors = 0, both_clocks = 0;
     uint32_t rs = 0xC0FFEEu;
-    auto rnd = [&]() { rs = rs * 1664525u + 1013904223u; return rs >> 9; };
+    auto rnd = [&]() {
+      rs = rs * 1664525u + 1013904223u;
+      return rs >> 9;
+    };
 
     for (int c = 0; c < 4000; ++c) {
       // offer a 1-sample PASSTHRU fragment every cycle
       top.f_valid_i = 1;
       top.f_sample_count_i = 1;
       for (int j = 0; j < 3; ++j) {
-        top.f_u_i[j] = 0; top.f_v_i[j] = 0;
-        top.f_binding_i[j] = 1; top.f_lod_i[j] = 0;
+        top.f_u_i[j] = 0;
+        top.f_v_i[j] = 0;
+        top.f_binding_i[j] = 1;
+        top.f_lod_i[j] = 0;
       }
       top.f_recipe_i = 0;
       top.f_ctx_i = next_ctx;
@@ -358,13 +371,13 @@ int main(int argc, char** argv) {
       const bool ret = top.o_valid_o != 0 && top.o_ready_i != 0;
       if (acc && ret) ++both_clocks;
       if (top.tmu_valid_o && top.tmu_ready_i)
-        rets.push_back({static_cast<int>(top.tmu_slot_o),
-                        static_cast<int>(top.tmu_sidx_o),
-                        static_cast<int>(top.tmu_gen_o),
-                        c + 1 + static_cast<int>(rnd() % 12u)});
+        rets.push_back({static_cast<int>(top.tmu_slot_o), static_cast<int>(top.tmu_sidx_o),
+                        static_cast<int>(top.tmu_gen_o), c + 1 + static_cast<int>(rnd() % 12u)});
       if (ret) {
-        if (expect.empty() || expect.front() != top.o_ctx_o) ++order_errors;
-        else expect.pop_front();
+        if (expect.empty() || expect.front() != top.o_ctx_o)
+          ++order_errors;
+        else
+          expect.pop_front();
         ++retired;
         --outstanding;
       }
@@ -378,8 +391,7 @@ int main(int argc, char** argv) {
       zhao::tick(top);
     }
 
-    zhao::check(both_clocks > 200,
-                "the soak really did accept and retire on the same clock, often",
+    zhao::check(both_clocks > 200, "the soak really did accept and retire on the same clock, often",
                 1, both_clocks > 200 ? 1 : 0);
     // DEPTH + 1, and the +1 is a real storage location rather than slack in
     // the check: the retirement packet is now a REGISTER, so a fragment whose
@@ -397,14 +409,12 @@ int main(int argc, char** argv) {
                 "output -- the free count does not drift when accept and retire "
                 "coincide",
                 kDepth + 1, worst_outstanding);
-    zhao::check(order_errors == 0,
-                "and every fragment retires exactly once, in allocation order", 0,
-                order_errors);
-    zhao::check(top.id_errors_o == 0,
-                "with no return ever landing on a recycled slot", 0,
+    zhao::check(order_errors == 0, "and every fragment retires exactly once, in allocation order",
+                0, order_errors);
+    zhao::check(top.id_errors_o == 0, "with no return ever landing on a recycled slot", 0,
                 static_cast<int>(top.id_errors_o));
-    std::printf("  soak: %d accepted, %d retired, %d same-clock, worst outstanding %d\n",
-                accepted, retired, both_clocks, worst_outstanding);
+    std::printf("  soak: %d accepted, %d retired, %d same-clock, worst outstanding %d\n", accepted,
+                retired, both_clocks, worst_outstanding);
   }
 
   // --------------------------------------------------------------- 8 ---
@@ -431,8 +441,7 @@ int main(int argc, char** argv) {
     auto pump = [&](int clocks) {
       for (int c = 0; c < clocks; ++c) {
         top.eval();
-        if (top.o_valid_o && top.o_ready_i)
-          retired_rgb[top.o_ctx_o] = top.o_rgb_o;
+        if (top.o_valid_o && top.o_ready_i) retired_rgb[top.o_ctx_o] = top.o_rgb_o;
         zhao::tick(top);
       }
     };
@@ -442,23 +451,22 @@ int main(int argc, char** argv) {
     offer(top, one);
     pump(4);
     top.tmu_rvalid_i = 1;
-    top.tmu_rslot_i = 0; top.tmu_rsidx_i = 0; top.tmu_rgen_i = 1;
-    top.tmu_rgb_i = 0xBADBADu;      // the value that must not reappear
+    top.tmu_rslot_i = 0;
+    top.tmu_rsidx_i = 0;
+    top.tmu_rgen_i = 1;
+    top.tmu_rgb_i = 0xBADBADu;  // the value that must not reappear
     top.tmu_a_i = 0xEE;
     zhao::tick(top);
     top.tmu_rvalid_i = 0;
     pump(3);
-    zhao::check(retired_rgb.count(0xD001) == 1 &&
-                    retired_rgb[0xD001] == 0xBADBADu,
+    zhao::check(retired_rgb.count(0xD001) == 1 && retired_rgb[0xD001] == 0xBADBADu,
                 "the slot really is dirtied first", 1,
-                (retired_rgb.count(0xD001) == 1 &&
-                 retired_rgb[0xD001] == 0xBADBADu) ? 1 : 0);
+                (retired_rgb.count(0xD001) == 1 && retired_rgb[0xD001] == 0xBADBADu) ? 1 : 0);
 
     // 2: walk zero-sample fragments all the way round the ring so that one of
     //    them lands back on slot 0. Their ctx values say which is which.
     for (int i = 0; i < kDepth + 2; ++i) {
-      Frag z{0, {0, 0, 0}, {0, 0, 0}, 0, 0xD100u + static_cast<uint64_t>(i),
-             false};
+      Frag z{0, {0, 0, 0}, {0, 0, 0}, 0, 0xD100u + static_cast<uint64_t>(i), false};
       offer(top, z);
       pump(3);
     }
@@ -495,21 +503,26 @@ int main(int argc, char** argv) {
     reset(top);
     Frag f{1, {9, 0, 0}, {9, 0, 0}, /*recipe=*/0, 0xC0DEu, false};
     offer(top, f);
-    for (int c = 0; c < 4; ++c) { top.eval(); zhao::tick(top); }
+    for (int c = 0; c < 4; ++c) {
+      top.eval();
+      zhao::tick(top);
+    }
     top.tmu_rvalid_i = 1;
-    top.tmu_rslot_i = 0; top.tmu_rsidx_i = 0; top.tmu_rgen_i = 1;
-    top.tmu_rgb_i = 0xFACADEu; top.tmu_a_i = 0x5A;
+    top.tmu_rslot_i = 0;
+    top.tmu_rsidx_i = 0;
+    top.tmu_rgen_i = 1;
+    top.tmu_rgb_i = 0xFACADEu;
+    top.tmu_a_i = 0x5A;
     zhao::tick(top);
     top.tmu_rvalid_i = 0;
     zhao::tick(top);
 
-    top.o_ready_i = 0;             // STALL the consumer
+    top.o_ready_i = 0;  // STALL the consumer
     top.eval();
     const uint32_t held_rgb = top.o_rgb_o;
-    const uint32_t held_a   = top.o_a_o;
+    const uint32_t held_a = top.o_a_o;
     const uint64_t held_ctx = top.o_ctx_o;
-    zhao::check(top.o_valid_o == 1 && held_rgb == 0xFACADEu,
-                "the packet is presented", 1,
+    zhao::check(top.o_valid_o == 1 && held_rgb == 0xFACADEu, "the packet is presented", 1,
                 (top.o_valid_o && held_rgb == 0xFACADEu) ? 1 : 0);
 
     // keep the queue busy behind it for a long stall
@@ -519,17 +532,22 @@ int main(int argc, char** argv) {
       top.f_valid_i = 1;
       top.f_sample_count_i = g.count;
       for (int j = 0; j < 3; ++j) {
-        top.f_u_i[j] = 1; top.f_v_i[j] = 1;
-        top.f_binding_i[j] = 1; top.f_lod_i[j] = 0;
+        top.f_u_i[j] = 1;
+        top.f_v_i[j] = 1;
+        top.f_binding_i[j] = 1;
+        top.f_lod_i[j] = 0;
       }
-      top.f_recipe_i = 0; top.f_ctx_i = g.ctx; top.f_aux_i = 0; top.f_uv_sat_i = 0;
+      top.f_recipe_i = 0;
+      top.f_ctx_i = g.ctx;
+      top.f_aux_i = 0;
+      top.f_uv_sat_i = 0;
       if (top.tmu_valid_o) {
         top.tmu_rvalid_i = 1;
         top.tmu_rslot_i = top.tmu_slot_o;
         top.tmu_rsidx_i = top.tmu_sidx_o;
-        top.tmu_rgen_i  = top.tmu_gen_o;
-        top.tmu_rgb_i   = 0x111111u;
-        top.tmu_a_i     = 0x22;
+        top.tmu_rgen_i = top.tmu_gen_o;
+        top.tmu_rgb_i = 0x111111u;
+        top.tmu_a_i = 0x22;
       } else {
         top.tmu_rvalid_i = 0;
       }
@@ -559,13 +577,19 @@ int main(int argc, char** argv) {
     reset(top);
     Frag f{2, {3, 4, 0}, {5, 6, 0}, /*recipe=*/0, 0xD0FFEE, false};
     offer(top, f);
-    for (int c = 0; c < 4; ++c) { top.eval(); zhao::tick(top); }
+    for (int c = 0; c < 4; ++c) {
+      top.eval();
+      zhao::tick(top);
+    }
 
     // sample 0 arrives TWICE
     for (int rep = 0; rep < 2; ++rep) {
       top.tmu_rvalid_i = 1;
-      top.tmu_rslot_i = 0; top.tmu_rsidx_i = 0; top.tmu_rgen_i = 1;
-      top.tmu_rgb_i = 0x010203u; top.tmu_a_i = 0x44;
+      top.tmu_rslot_i = 0;
+      top.tmu_rsidx_i = 0;
+      top.tmu_rgen_i = 1;
+      top.tmu_rgb_i = 0x010203u;
+      top.tmu_a_i = 0x44;
       zhao::tick(top);
       top.tmu_rvalid_i = 0;
       zhao::tick(top);
@@ -582,14 +606,16 @@ int main(int argc, char** argv) {
 
     // the real sample 1 still completes it
     top.tmu_rvalid_i = 1;
-    top.tmu_rslot_i = 0; top.tmu_rsidx_i = 1; top.tmu_rgen_i = 1;
-    top.tmu_rgb_i = 0x0A0B0Cu; top.tmu_a_i = 0x55;
+    top.tmu_rslot_i = 0;
+    top.tmu_rsidx_i = 1;
+    top.tmu_rgen_i = 1;
+    top.tmu_rgb_i = 0x0A0B0Cu;
+    top.tmu_a_i = 0x55;
     zhao::tick(top);
     top.tmu_rvalid_i = 0;
     zhao::tick(top);
     top.eval();
-    zhao::check(top.o_valid_o == 1, "and the missing sample still completes it",
-                1, top.o_valid_o);
+    zhao::check(top.o_valid_o == 1, "and the missing sample still completes it", 1, top.o_valid_o);
   }
 
   // -------------------------------------------------------------- 11 ---

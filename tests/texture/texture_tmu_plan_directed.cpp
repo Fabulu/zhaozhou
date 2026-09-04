@@ -44,10 +44,10 @@ struct Req {
 
 // mode = fmt[2:0] filter[3] wrapU[5:4] wrapV[7:6] log2w[11:8] log2h[15:12]
 //        maxlvl[19:16] mip[20]
-uint32_t mk_mode(uint32_t fmt, uint32_t filt, uint32_t wu, uint32_t wv, uint32_t lw,
-                 uint32_t lh, uint32_t maxl, uint32_t mip) {
-  return (fmt & 7u) | ((filt & 1u) << 3) | ((wu & 3u) << 4) | ((wv & 3u) << 6) |
-         ((lw & 15u) << 8) | ((lh & 15u) << 12) | ((maxl & 15u) << 16) | ((mip & 1u) << 20);
+uint32_t mk_mode(uint32_t fmt, uint32_t filt, uint32_t wu, uint32_t wv, uint32_t lw, uint32_t lh,
+                 uint32_t maxl, uint32_t mip) {
+  return (fmt & 7u) | ((filt & 1u) << 3) | ((wu & 3u) << 4) | ((wv & 3u) << 6) | ((lw & 15u) << 8) |
+         ((lh & 15u) << 12) | ((maxl & 15u) << 16) | ((mip & 1u) << 20);
 }
 
 }  // namespace
@@ -91,12 +91,12 @@ int main(int argc, char** argv) {
       for (uint32_t wu = 0; wu <= 2; ++wu)
         for (uint32_t wv = 0; wv <= 2; ++wv) {
           Req r{};
-          r.u = 0x0001'8000u;   // 1.5 in the coordinate's fixed point
-          r.v = 0xFFFE'8000u;   // negative, to exercise CLAMP's sign path
+          r.u = 0x0001'8000u;  // 1.5 in the coordinate's fixed point
+          r.v = 0xFFFE'8000u;  // negative, to exercise CLAMP's sign path
           r.base = 0x0010'0000u;
           r.mode = mk_mode(fmt, filt, wu, wv, 8, 6, 3, 1);
           r.lod = 0x20;
-          r.src = static_cast<uint16_t>(rq.size() + 1);   // never 0
+          r.src = static_cast<uint16_t>(rq.size() + 1);  // never 0
           rq.push_back(r);
         }
   // level clamping: maxlvl beyond the chain, and mip disabled
@@ -115,12 +115,14 @@ int main(int argc, char** argv) {
     r.mode = mk_mode(nonclut[rnd(&s) % 3u], rnd(&s) & 1u, rnd(&s) % 3u, rnd(&s) % 3u,
                      2u + (rnd(&s) % 9u), 2u + (rnd(&s) % 9u), rnd(&s) % 5u, rnd(&s) & 1u);
     r.lod = static_cast<uint8_t>(rnd(&s));
-    r.src = static_cast<uint16_t>(0x1000 + i);   // never 0
+    r.src = static_cast<uint16_t>(0x1000 + i);  // never 0
     rq.push_back(r);
   }
 
   // ---- reference: the shipped pipe ---------------------------------------
-  struct Acc { uint32_t a0, a1, a2, a3, en, filt, err, fu, fv, fmt, src; };
+  struct Acc {
+    uint32_t a0, a1, a2, a3, en, filt, err, fu, fv, fmt, src;
+  };
   std::vector<Acc> ref;
   // KEYED BY src_id, which separates the ARITHMETIC question from the
   // STREAMING one. Comparing by index conflates them: one extra access in
@@ -134,16 +136,22 @@ int main(int argc, char** argv) {
       const bool feeding = fed < rq.size();
       top.a_valid_i = feeding;
       if (feeding) {
-        top.a_u_i = rq[fed].u;   top.a_v_i = rq[fed].v;
-        top.a_base_i = rq[fed].base; top.a_mode_i = rq[fed].mode;
-        top.a_lod_i = rq[fed].lod;   top.a_src_i = rq[fed].src;
+        top.a_u_i = rq[fed].u;
+        top.a_v_i = rq[fed].v;
+        top.a_base_i = rq[fed].base;
+        top.a_mode_i = rq[fed].mode;
+        top.a_lod_i = rq[fed].lod;
+        top.a_src_i = rq[fed].src;
       }
       top.eval();
       if (top.a_acc_valid_o) {
         Acc a{};
-        a.a0 = top.a_acc_addr_o[0]; a.a1 = top.a_acc_addr_o[1];
-        a.a2 = top.a_acc_addr_o[2]; a.a3 = top.a_acc_addr_o[3];
-        a.en = top.a_acc_en_o; a.src = top.a_acc_src_id_o;
+        a.a0 = top.a_acc_addr_o[0];
+        a.a1 = top.a_acc_addr_o[1];
+        a.a2 = top.a_acc_addr_o[2];
+        a.a3 = top.a_acc_addr_o[3];
+        a.en = top.a_acc_en_o;
+        a.src = top.a_acc_src_id_o;
         ref.push_back(a);
         if (a.src != 0 && refmap.find(a.src) == refmap.end()) refmap[a.src] = a;
       }
@@ -152,8 +160,8 @@ int main(int argc, char** argv) {
       if (took) ++fed;
     }
     top.a_valid_i = 0;
-    zhao::check(ref.size() == rq.size(), "the shipped pipe planned every request",
-                rq.size(), ref.size());
+    zhao::check(ref.size() == rq.size(), "the shipped pipe planned every request", rq.size(),
+                ref.size());
   }
 
   // ---- candidate: the elastic planner ------------------------------------
@@ -165,16 +173,22 @@ int main(int argc, char** argv) {
       const bool feeding = fed < rq.size();
       top.b_valid_i = feeding;
       if (feeding) {
-        top.b_u_i = rq[fed].u;   top.b_v_i = rq[fed].v;
-        top.b_base_i = rq[fed].base; top.b_mode_i = rq[fed].mode;
-        top.b_lod_i = rq[fed].lod;   top.b_src_i = rq[fed].src;
+        top.b_u_i = rq[fed].u;
+        top.b_v_i = rq[fed].v;
+        top.b_base_i = rq[fed].base;
+        top.b_mode_i = rq[fed].mode;
+        top.b_lod_i = rq[fed].lod;
+        top.b_src_i = rq[fed].src;
       }
       top.eval();
       if (top.b_acc_valid_o && top.b_acc_ready_i) {
         Acc a{};
-        a.a0 = top.b_acc_addr_o[0]; a.a1 = top.b_acc_addr_o[1];
-        a.a2 = top.b_acc_addr_o[2]; a.a3 = top.b_acc_addr_o[3];
-        a.en = top.b_acc_en_o; a.src = top.b_acc_src_id_o;
+        a.a0 = top.b_acc_addr_o[0];
+        a.a1 = top.b_acc_addr_o[1];
+        a.a2 = top.b_acc_addr_o[2];
+        a.a3 = top.b_acc_addr_o[3];
+        a.en = top.b_acc_en_o;
+        a.src = top.b_acc_src_id_o;
         got.push_back(a);
         if (a.src != 0 && gotmap.find(a.src) == gotmap.end()) gotmap[a.src] = a;
       }
@@ -183,8 +197,8 @@ int main(int argc, char** argv) {
       if (took) ++fed;
     }
     top.b_valid_i = 0;
-    zhao::check(got.size() == rq.size(), "the elastic planner planned every request",
-                rq.size(), got.size());
+    zhao::check(got.size() == rq.size(), "the elastic planner planned every request", rq.size(),
+                got.size());
   }
 
   // Isolate the level path: 0x901 has mip DISABLED, so level is 0 and lvl_off
@@ -193,18 +207,21 @@ int main(int argc, char** argv) {
   for (uint32_t k : {1u, 2u, 3u, 10u, 0x900u, 0x901u}) {
     auto r = refmap.find(k), g = gotmap.find(k);
     if (r != refmap.end() && g != gotmap.end())
-      std::printf("  src %03x  ref a0=%08x  got a0=%08x  %s\n", k, r->second.a0,
-                  g->second.a0, (r->second.a0 == g->second.a0) ? "SAME" : "DIFF");
+      std::printf("  src %03x  ref a0=%08x  got a0=%08x  %s\n", k, r->second.a0, g->second.a0,
+                  (r->second.a0 == g->second.a0) ? "SAME" : "DIFF");
   }
 
   for (size_t i = 0; i < 4 && i < ref.size() && i < got.size(); ++i)
-    std::printf("  [%zu] ref a0=%08x en=%x src=%04x | got a0=%08x en=%x src=%04x\n",
-                i, ref[i].a0, ref[i].en, ref[i].src, got[i].a0, got[i].en, got[i].src);
+    std::printf("  [%zu] ref a0=%08x en=%x src=%04x | got a0=%08x en=%x src=%04x\n", i, ref[i].a0,
+                ref[i].en, ref[i].src, got[i].a0, got[i].en, got[i].src);
 
   int bad_addr = 0, bad_en = 0, bad_src = 0, unmatched = 0;
   for (const auto& kv : gotmap) {
     auto it = refmap.find(kv.first);
-    if (it == refmap.end()) { ++unmatched; continue; }
+    if (it == refmap.end()) {
+      ++unmatched;
+      continue;
+    }
     const Acc& r = it->second;
     const Acc& g = kv.second;
     if (r.a0 != g.a0 || r.a1 != g.a1 || r.a2 != g.a2 || r.a3 != g.a3) ++bad_addr;
@@ -227,12 +244,10 @@ int main(int argc, char** argv) {
   // were found by taking ONE request and deriving its address by hand against
   // the pipe's own constants. Guessing an encoding is the same error as
   // guessing an arithmetic law.
-  zhao::check(bad_addr == 0,
-              "all four texel addresses are BIT-IDENTICAL to the shipped pipe",
-              0, bad_addr);
+  zhao::check(bad_addr == 0, "all four texel addresses are BIT-IDENTICAL to the shipped pipe", 0,
+              bad_addr);
   zhao::check(bad_en == 0, "and the lane enables match", 0, bad_en);
-  zhao::check(unmatched == 0, "and every planner access matches a reference one",
-              0, unmatched);
+  zhao::check(unmatched == 0, "and every planner access matches a reference one", 0, unmatched);
 
   // ---- THE ELASTICITY CLAIM ----------------------------------------------
   // Downstream ready held LOW. The planner must keep accepting until all five
@@ -243,9 +258,12 @@ int main(int argc, char** argv) {
     int accepted = 0;
     for (int c = 0; c < 40; ++c) {
       top.b_valid_i = 1;
-      top.b_u_i = 0x8000u; top.b_v_i = 0x8000u;
-      top.b_base_i = 0; top.b_mode_i = mk_mode(2, 0, 2, 2, 4, 4, 0, 0);
-      top.b_lod_i = 0; top.b_src_i = static_cast<uint16_t>(c);
+      top.b_u_i = 0x8000u;
+      top.b_v_i = 0x8000u;
+      top.b_base_i = 0;
+      top.b_mode_i = mk_mode(2, 0, 2, 2, 4, 4, 0, 0);
+      top.b_lod_i = 0;
+      top.b_src_i = static_cast<uint16_t>(c);
       top.eval();
       if (top.b_req_ready_o) ++accepted;
       zhao::tick(top);
@@ -255,8 +273,7 @@ int main(int argc, char** argv) {
                 "(no single a0_v)",
                 5, accepted);
     top.eval();
-    zhao::check(top.b_occupancy_o == 5, "and all five stages are occupied", 5,
-                top.b_occupancy_o);
+    zhao::check(top.b_occupancy_o == 5, "and all five stages are occupied", 5, top.b_occupancy_o);
 
     // The same stimulus against the shipped pipe, to show the difference is
     // real rather than a property of the stimulus.
@@ -265,9 +282,12 @@ int main(int argc, char** argv) {
     int a_accepted = 0;
     for (int c = 0; c < 40; ++c) {
       top.a_valid_i = 1;
-      top.a_u_i = 0x8000u; top.a_v_i = 0x8000u;
-      top.a_base_i = 0; top.a_mode_i = mk_mode(2, 0, 2, 2, 4, 4, 0, 0);
-      top.a_lod_i = 0; top.a_src_i = static_cast<uint16_t>(c);
+      top.a_u_i = 0x8000u;
+      top.a_v_i = 0x8000u;
+      top.a_base_i = 0;
+      top.a_mode_i = mk_mode(2, 0, 2, 2, 4, 4, 0, 0);
+      top.a_lod_i = 0;
+      top.a_src_i = static_cast<uint16_t>(c);
       top.eval();
       if (top.a_req_ready_o) ++a_accepted;
       zhao::tick(top);
@@ -275,8 +295,8 @@ int main(int argc, char** argv) {
     std::printf("  with the sink stalled: shipped pipe accepted %d, elastic planner %d\n",
                 a_accepted, accepted);
     zhao::check(accepted > a_accepted,
-                "the elastic planner accepts strictly more than the shipped pipe",
-                1, accepted > a_accepted ? 1 : 0);
+                "the elastic planner accepts strictly more than the shipped pipe", 1,
+                accepted > a_accepted ? 1 : 0);
   }
 
   return zhao::report_and_exit("texture_tmu_plan_directed");

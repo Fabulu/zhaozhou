@@ -69,27 +69,19 @@ struct Retired {
 };
 
 bool operator!=(const Retired& x, const Retired& y) {
-  return x.ctx != y.ctx || x.rgb != y.rgb || x.a != y.a ||
-         x.aux_rgb != y.aux_rgb || x.aux_a != y.aux_a ||
-         x.has_aux != y.has_aux;
+  return x.ctx != y.ctx || x.rgb != y.rgb || x.a != y.a || x.aux_rgb != y.aux_rgb ||
+         x.aux_a != y.aux_a || x.has_aux != y.has_aux;
 }
 
 // The world both blocks see. A sample's colour is a pure function of the
 // request, so latency cannot change an answer -- only when it arrives.
 uint32_t sample_rgb(int slot, int sidx) {
-  return static_cast<uint32_t>(((slot * 7 + sidx * 3) & 0xFF) |
-                               ((slot * 11) & 0xFF) << 8 |
+  return static_cast<uint32_t>(((slot * 7 + sidx * 3) & 0xFF) | ((slot * 11) & 0xFF) << 8 |
                                ((sidx * 37) & 0xFF) << 16);
 }
-uint32_t sample_a(int slot, int sidx) {
-  return static_cast<uint32_t>((slot * 5 + sidx) & 0xFF);
-}
-uint32_t aux_rgb_of(int slot) {
-  return static_cast<uint32_t>(((slot * 13) & 0xFF) | 0x5A00);
-}
-uint32_t aux_a_of(int slot) {
-  return static_cast<uint32_t>((slot * 3 + 1) & 0xFF);
-}
+uint32_t sample_a(int slot, int sidx) { return static_cast<uint32_t>((slot * 5 + sidx) & 0xFF); }
+uint32_t aux_rgb_of(int slot) { return static_cast<uint32_t>(((slot * 13) & 0xFF) | 0x5A00); }
+uint32_t aux_a_of(int slot) { return static_cast<uint32_t>((slot * 3 + 1) & 0xFF); }
 
 // One in-flight TMU or AUX return, held so it can be delivered LATE. Delay is
 // what exercises the identity check: a return that arrives after its slot was
@@ -105,13 +97,16 @@ struct Pending {
 // Templated on the DUT because the two have identical port lists by design --
 // which is itself part of the contract, and would stop compiling if it broke.
 template <typename Dut>
-std::vector<Retired> run(const std::vector<Frag>& frags, unsigned seed,
-                         bool stall_out, int rsp_delay) {
+std::vector<Retired> run(const std::vector<Frag>& frags, unsigned seed, bool stall_out,
+                         int rsp_delay) {
   Dut t;
   std::vector<Retired> out;
   std::deque<Pending> inflight;
   uint32_t g = seed;
-  auto rnd = [&]() { g = g * 1664525u + 1013904223u; return g; };
+  auto rnd = [&]() {
+    g = g * 1664525u + 1013904223u;
+    return g;
+  };
 
   t.f_valid_i = 0;
   t.tmu_ready_i = 1;
@@ -181,21 +176,17 @@ std::vector<Retired> run(const std::vector<Frag>& frags, unsigned seed,
 
     const bool took_frag = t.f_valid_i && t.f_ready_o;
     if (t.tmu_valid_o && t.tmu_ready_i) {
-      inflight.push_back({rsp_delay, static_cast<int>(t.tmu_slot_o),
-                          static_cast<int>(t.tmu_sidx_o),
+      inflight.push_back({rsp_delay, static_cast<int>(t.tmu_slot_o), static_cast<int>(t.tmu_sidx_o),
                           static_cast<int>(t.tmu_gen_o), false});
     }
     if (t.aux_valid_o && t.aux_ready_i) {
-      inflight.push_back({rsp_delay, static_cast<int>(t.aux_slot_o), 0,
-                          static_cast<int>(t.aux_gen_o), true});
+      inflight.push_back(
+          {rsp_delay, static_cast<int>(t.aux_slot_o), 0, static_cast<int>(t.aux_gen_o), true});
     }
     if (t.o_valid_o && t.o_ready_i) {
-      out.push_back({static_cast<uint64_t>(t.o_ctx_o),
-                     static_cast<uint32_t>(t.o_rgb_o),
-                     static_cast<uint32_t>(t.o_a_o),
-                     static_cast<uint32_t>(t.o_aux_rgb_o),
-                     static_cast<uint32_t>(t.o_aux_a_o),
-                     static_cast<int>(t.o_has_aux_o)});
+      out.push_back({static_cast<uint64_t>(t.o_ctx_o), static_cast<uint32_t>(t.o_rgb_o),
+                     static_cast<uint32_t>(t.o_a_o), static_cast<uint32_t>(t.o_aux_rgb_o),
+                     static_cast<uint32_t>(t.o_aux_a_o), static_cast<int>(t.o_has_aux_o)});
     }
 
     zhao::tick(t);
@@ -207,8 +198,10 @@ std::vector<Retired> run(const std::vector<Frag>& frags, unsigned seed,
     while (!inflight.empty() && inflight.front().delay < 0) inflight.pop_front();
     // and drop delivered entries that are not at the front
     for (size_t i = 0; i < inflight.size();) {
-      if (inflight[i].delay < 0) inflight.erase(inflight.begin() + static_cast<long>(i));
-      else ++i;
+      if (inflight[i].delay < 0)
+        inflight.erase(inflight.begin() + static_cast<long>(i));
+      else
+        ++i;
     }
 
     if (next >= frags.size() && out.size() >= frags.size()) break;
@@ -219,7 +212,10 @@ std::vector<Retired> run(const std::vector<Frag>& frags, unsigned seed,
 std::vector<Frag> make_frags(int n, unsigned seed) {
   std::vector<Frag> v;
   uint32_t g = seed;
-  auto rnd = [&]() { g = g * 1103515245u + 12345u; return g; };
+  auto rnd = [&]() {
+    g = g * 1103515245u + 12345u;
+    return g;
+  };
   for (int i = 0; i < n; ++i) {
     Frag f{};
     // 1..3 samples. Zero-sample fragments are a separate directed case: they
@@ -269,8 +265,7 @@ int main(int argc, char** argv) {
     const auto b = run<Vzhao_texture_fragrob>(frags, c.seed, c.stall, c.delay);
 
     if (a.size() != b.size()) {
-      std::printf("    %-34s v2 retired %zu, fragrob %zu\n", c.name, a.size(),
-                  b.size());
+      std::printf("    %-34s v2 retired %zu, fragrob %zu\n", c.name, a.size(), b.size());
       ++diverged;
       continue;
     }
@@ -281,9 +276,8 @@ int main(int argc, char** argv) {
           std::printf(
               "    %-30s #%zu  v2 ctx=%llu rgb=%06X a=%02X aux=%d | "
               "fragrob ctx=%llu rgb=%06X a=%02X aux=%d\n",
-              c.name, i, (unsigned long long)a[i].ctx, a[i].rgb, a[i].a,
-              a[i].has_aux, (unsigned long long)b[i].ctx, b[i].rgb, b[i].a,
-              b[i].has_aux);
+              c.name, i, (unsigned long long)a[i].ctx, a[i].rgb, a[i].a, a[i].has_aux,
+              (unsigned long long)b[i].ctx, b[i].rgb, b[i].a, b[i].has_aux);
         }
         ++diverged;
       }
@@ -319,7 +313,7 @@ int main(int argc, char** argv) {
     t.tmu_rvalid_i = 0;
     t.aux_ready_i = 1;
     t.aux_rvalid_i = 0;
-    t.o_ready_i = 0;          // never retire: fills the slot table
+    t.o_ready_i = 0;  // never retire: fills the slot table
     t.rst_n = 0;
     for (int i = 0; i < 8; ++i) zhao::tick(t);
     t.rst_n = 1;
@@ -345,8 +339,12 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 40; ++i) {
       t.f_valid_i = 1;
       t.f_sample_count_i = f.count;
-      for (int j = 0; j < 3; ++j) { t.f_u_i[j] = 1; t.f_v_i[j] = 1;
-                                    t.f_binding_i[j] = 1; t.f_lod_i[j] = 0; }
+      for (int j = 0; j < 3; ++j) {
+        t.f_u_i[j] = 1;
+        t.f_v_i[j] = 1;
+        t.f_binding_i[j] = 1;
+        t.f_lod_i[j] = 0;
+      }
       t.f_recipe_i = 0;
       t.f_ctx_i = f.ctx + i;
       t.f_aux_i = 0;
@@ -375,7 +373,7 @@ int main(int argc, char** argv) {
     t.tmu_rvalid_i = 1;
     t.tmu_rslot_i = 0;
     t.tmu_rsidx_i = 0;
-    t.tmu_rgen_i = 0xEE;      // no slot ever had this generation
+    t.tmu_rgen_i = 0xEE;  // no slot ever had this generation
     t.tmu_rgb_i = 0xBADBAD;
     t.tmu_a_i = 0xFF;
     t.eval();

@@ -280,9 +280,8 @@ inline uint8_t crc8_atm_byte(uint8_t crc, uint8_t data) {
   return c;
 }
 
-inline uint8_t residency_set_index(uint32_t island_id, int16_t patch_ix,
-                                   int16_t patch_iz, uint32_t resource_epoch,
-                                   bool epoch_in_message = true) {
+inline uint8_t residency_set_index(uint32_t island_id, int16_t patch_ix, int16_t patch_iz,
+                                   uint32_t resource_epoch, bool epoch_in_message = true) {
   const uint16_t ux = static_cast<uint16_t>(patch_ix);
   const uint16_t uz = static_cast<uint16_t>(patch_iz);
   uint8_t msg[8] = {
@@ -295,8 +294,7 @@ inline uint8_t residency_set_index(uint32_t island_id, int16_t patch_ix,
       static_cast<uint8_t>(uz & 0xFFu),
       static_cast<uint8_t>((uz >> 8) & 0xFFu),
   };
-  if (epoch_in_message)
-    msg[7] = static_cast<uint8_t>(msg[7] ^ (resource_epoch & 0xFFu));
+  if (epoch_in_message) msg[7] = static_cast<uint8_t>(msg[7] ^ (resource_epoch & 0xFFu));
   uint8_t c = 0;
   for (int i = 0; i < 8; ++i) c = crc8_atm_byte(c, msg[i]);
   if (!epoch_in_message) c = static_cast<uint8_t>(c ^ (resource_epoch & 0xFFu));

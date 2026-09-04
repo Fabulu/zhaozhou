@@ -41,11 +41,11 @@ constexpr uint32_t kUploadBurstBytes = 64;
 
 enum UploadVerdict : int {
   kUploadOk = 0,
-  kUploadUnaligned = 1,      // address or length not a multiple of the burst
-  kUploadZeroLength = 2,     // not a transfer
-  kUploadOutsideGuard = 3,   // destination not inside the declared region
-  kUploadEpochStale = 4,     // the epoch this belonged to has closed
-  kUploadCrcFail = 5,        // decided after the bytes arrive, not here
+  kUploadUnaligned = 1,     // address or length not a multiple of the burst
+  kUploadZeroLength = 2,    // not a transfer
+  kUploadOutsideGuard = 3,  // destination not inside the declared region
+  kUploadEpochStale = 4,    // the epoch this belonged to has closed
+  kUploadCrcFail = 5,       // decided after the bytes arrive, not here
   // Added 2026-09-03 from the owner brief: the first version checked the
   // DESTINATION and not the source, which is a capability hole rather than a
   // missing bounds check. The bridge can see a broad HPS range; a descriptor
@@ -63,10 +63,8 @@ struct GuardRegion {
   uint32_t bytes;
 };
 
-inline bool upload_aligned(uint64_t hps_addr, uint32_t vram_addr,
-                           uint32_t length) {
-  return (hps_addr % kUploadBurstBytes) == 0 &&
-         (vram_addr % kUploadBurstBytes) == 0 &&
+inline bool upload_aligned(uint64_t hps_addr, uint32_t vram_addr, uint32_t length) {
+  return (hps_addr % kUploadBurstBytes) == 0 && (vram_addr % kUploadBurstBytes) == 0 &&
          (length % kUploadBurstBytes) == 0;
 }
 
@@ -74,8 +72,7 @@ inline bool upload_aligned(uint64_t hps_addr, uint32_t vram_addr,
 // bits can WRAP, and a wrapped sum compares as a small number — so a request
 // that runs off the end of the arena would read as comfortably inside it.
 // That is the specific arithmetic accident this function exists to refuse.
-inline bool upload_in_guard(const GuardRegion& r, uint32_t vram_addr,
-                            uint32_t length) {
+inline bool upload_in_guard(const GuardRegion& r, uint32_t vram_addr, uint32_t length) {
   const uint64_t lo = vram_addr;
   const uint64_t hi = lo + static_cast<uint64_t>(length);
   const uint64_t rlo = r.base;
@@ -85,8 +82,7 @@ inline bool upload_in_guard(const GuardRegion& r, uint32_t vram_addr,
 
 // The HPS staging arena the active epoch registered. Same 64-bit containment
 // arithmetic and the same reason: a 32-bit sum can wrap and read as small.
-inline bool upload_source_in_arena(const GuardRegion& arena, uint64_t hps_addr,
-                                   uint32_t length) {
+inline bool upload_source_in_arena(const GuardRegion& arena, uint64_t hps_addr, uint32_t length) {
   const uint64_t lo = hps_addr;
   const uint64_t hi = lo + static_cast<uint64_t>(length);
   const uint64_t alo = arena.base;
@@ -97,19 +93,16 @@ inline bool upload_source_in_arena(const GuardRegion& arena, uint64_t hps_addr,
 // The order of these tests is part of the law: a malformed request is reported
 // as malformed even when it is ALSO stale, so a producer bug is never hidden
 // behind an epoch that happened to close.
-inline UploadVerdict upload_verdict(const GuardRegion& region,
-                                    const GuardRegion& hps_arena,
-                                    uint64_t hps_addr, uint32_t vram_addr,
-                                    uint32_t length, uint16_t request_epoch,
-                                    uint16_t current_epoch) {
+inline UploadVerdict upload_verdict(const GuardRegion& region, const GuardRegion& hps_arena,
+                                    uint64_t hps_addr, uint32_t vram_addr, uint32_t length,
+                                    uint16_t request_epoch, uint16_t current_epoch) {
   if (length == 0) return kUploadZeroLength;
   if (!upload_aligned(hps_addr, vram_addr, length)) return kUploadUnaligned;
   // The upper half must be zero BEFORE anything else looks at the address, so
   // a 64-bit descriptor can never be quietly narrowed into a legal-looking
   // 32-bit one.
   if ((hps_addr >> 32) != 0) return kUploadSourceUnreachable;
-  if (!upload_source_in_arena(hps_arena, hps_addr, length))
-    return kUploadSourceOutsideArena;
+  if (!upload_source_in_arena(hps_arena, hps_addr, length)) return kUploadSourceOutsideArena;
   if (!upload_in_guard(region, vram_addr, length)) return kUploadOutsideGuard;
   if (request_epoch != current_epoch) return kUploadEpochStale;
   return kUploadOk;
@@ -118,9 +111,7 @@ inline UploadVerdict upload_verdict(const GuardRegion& region,
 // How many bursts a legal request becomes. Exact, not rounded up: an unaligned
 // length is refused above rather than padded, because padding would write
 // bytes the producer never staged.
-inline uint32_t upload_bursts(uint32_t length) {
-  return length / kUploadBurstBytes;
-}
+inline uint32_t upload_bursts(uint32_t length) { return length / kUploadBurstBytes; }
 
 // The address of burst `n`. Kept as a function rather than left to the caller
 // because a stride computed at each call site is a stride that can disagree
@@ -148,8 +139,7 @@ inline uint32_t upload_dst_of(uint32_t vram_addr, uint32_t n) {
 // A half-uploaded clip page is bytes that LOOK like animation: the decoder
 // would read them, produce a pose, and draw a creature bent into a shape no
 // artist authored, with nothing reporting an error anywhere.
-inline uint16_t upload_visible_generation(uint16_t old_generation,
-                                          uint16_t new_generation,
+inline uint16_t upload_visible_generation(uint16_t old_generation, uint16_t new_generation,
                                           bool complete) {
   return complete ? new_generation : old_generation;
 }

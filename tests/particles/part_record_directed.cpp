@@ -119,14 +119,10 @@ int main(int argc, char** argv) {
     // negative int32. Comparing it raw makes -5 read as 262,139.
     const auto sx18 = [](uint32_t v) { return zref::part::sign_extend(v, 18); };
     const auto sx11 = [](uint32_t v) { return zref::part::sign_extend(v, 11); };
-    if (sx18(top.pos_x_o) != p.pos[0] ||
-        sx18(top.pos_y_o) != p.pos[1] ||
-        sx18(top.pos_z_o) != p.pos[2] ||
-        sx11(top.vel_x_o) != p.vel[0] ||
-        sx11(top.vel_y_o) != p.vel[1] ||
-        sx11(top.vel_z_o) != p.vel[2] ||
-        top.age_o != p.age || top.species_o != p.species ||
-        top.size_o != p.size || top.spin_o != p.spin ||
+    if (sx18(top.pos_x_o) != p.pos[0] || sx18(top.pos_y_o) != p.pos[1] ||
+        sx18(top.pos_z_o) != p.pos[2] || sx11(top.vel_x_o) != p.vel[0] ||
+        sx11(top.vel_y_o) != p.vel[1] || sx11(top.vel_z_o) != p.vel[2] || top.age_o != p.age ||
+        top.species_o != p.species || top.size_o != p.size || top.spin_o != p.spin ||
         top.flags_o != p.flags || top.variation_o != p.variation)
       ++unpack_bad;
 
@@ -139,9 +135,12 @@ int main(int argc, char** argv) {
     top.vel_x_i = top.vel_x_o & 0x7FFu;
     top.vel_y_i = top.vel_y_o & 0x7FFu;
     top.vel_z_i = top.vel_z_o & 0x7FFu;
-    top.age_i = top.age_o; top.species_i = top.species_o;
-    top.size_i = top.size_o; top.spin_i = top.spin_o;
-    top.flags_i = top.flags_o; top.variation_i = top.variation_o;
+    top.age_i = top.age_o;
+    top.species_i = top.species_o;
+    top.size_i = top.size_o;
+    top.spin_i = top.spin_o;
+    top.flags_i = top.flags_o;
+    top.variation_i = top.variation_o;
     top.eval();
     const auto again = rec_out();
     if (again != got) ++roundtrip_bad;
@@ -151,8 +150,7 @@ int main(int argc, char** argv) {
               "the packed record is bit-identical to zref::part::particle_pack "
               "over 2,000 random particles",
               0, pack_bad);
-  zhao::check(unpack_bad == 0,
-              "and unpacking the SPEC's bytes returns the spec's fields", 0,
+  zhao::check(unpack_bad == 0, "and unpacking the SPEC's bytes returns the spec's fields", 0,
               unpack_bad);
   zhao::check(roundtrip_bad == 0, "and pack(unpack(r)) == r", 0, roundtrip_bad);
 
@@ -160,12 +158,14 @@ int main(int argc, char** argv) {
   // Round trip and reference agreement both survive two fields overlapping by
   // a bit. This does not: change one field, and exactly its own bits move.
   {
-    struct F { const char* name; int off, width; };
+    struct F {
+      const char* name;
+      int off, width;
+    };
     const F fields[] = {
-        {"pos_x", 0, 18},   {"pos_y", 18, 18},  {"pos_z", 36, 18},
-        {"vel_x", 54, 11},  {"vel_y", 65, 11},  {"vel_z", 76, 11},
-        {"age", 87, 10},    {"species", 97, 7}, {"size", 104, 6},
-        {"spin", 110, 6},   {"flags", 116, 4},  {"variation", 120, 8},
+        {"pos_x", 0, 18},  {"pos_y", 18, 18}, {"pos_z", 36, 18}, {"vel_x", 54, 11},
+        {"vel_y", 65, 11}, {"vel_z", 76, 11}, {"age", 87, 10},   {"species", 97, 7},
+        {"size", 104, 6},  {"spin", 110, 6},  {"flags", 116, 4}, {"variation", 120, 8},
     };
     zref::part::Particle128 zero{};
     uint64_t zlo = 0, zhi = 0;
@@ -180,18 +180,30 @@ int main(int argc, char** argv) {
       zref::part::Particle128 p{};
       // all ones in this field only
       const uint32_t all = (f.width >= 32) ? 0xFFFFFFFFu : ((1u << f.width) - 1u);
-      if (f.off == 0) p.pos[0] = zref::part::sign_extend(all, 18);
-      else if (f.off == 18) p.pos[1] = zref::part::sign_extend(all, 18);
-      else if (f.off == 36) p.pos[2] = zref::part::sign_extend(all, 18);
-      else if (f.off == 54) p.vel[0] = zref::part::sign_extend(all, 11);
-      else if (f.off == 65) p.vel[1] = zref::part::sign_extend(all, 11);
-      else if (f.off == 76) p.vel[2] = zref::part::sign_extend(all, 11);
-      else if (f.off == 87) p.age = static_cast<uint16_t>(all);
-      else if (f.off == 97) p.species = static_cast<uint8_t>(all);
-      else if (f.off == 104) p.size = static_cast<uint8_t>(all);
-      else if (f.off == 110) p.spin = static_cast<uint8_t>(all);
-      else if (f.off == 116) p.flags = static_cast<uint8_t>(all);
-      else p.variation = static_cast<uint8_t>(all);
+      if (f.off == 0)
+        p.pos[0] = zref::part::sign_extend(all, 18);
+      else if (f.off == 18)
+        p.pos[1] = zref::part::sign_extend(all, 18);
+      else if (f.off == 36)
+        p.pos[2] = zref::part::sign_extend(all, 18);
+      else if (f.off == 54)
+        p.vel[0] = zref::part::sign_extend(all, 11);
+      else if (f.off == 65)
+        p.vel[1] = zref::part::sign_extend(all, 11);
+      else if (f.off == 76)
+        p.vel[2] = zref::part::sign_extend(all, 11);
+      else if (f.off == 87)
+        p.age = static_cast<uint16_t>(all);
+      else if (f.off == 97)
+        p.species = static_cast<uint8_t>(all);
+      else if (f.off == 104)
+        p.size = static_cast<uint8_t>(all);
+      else if (f.off == 110)
+        p.spin = static_cast<uint8_t>(all);
+      else if (f.off == 116)
+        p.flags = static_cast<uint8_t>(all);
+      else
+        p.variation = static_cast<uint8_t>(all);
 
       set_fields(p);
       top.eval();
@@ -236,15 +248,13 @@ int main(int argc, char** argv) {
         if (static_cast<int32_t>(top.radius_o) !=
             zref::part::particle_radius(base, static_cast<uint8_t>(sz)))
           ++radius_bad;
-        if (top.angle16_o != zref::part::particle_angle16(static_cast<uint8_t>(sz)))
-          ++angle_bad;
+        if (top.angle16_o != zref::part::particle_angle16(static_cast<uint8_t>(sz))) ++angle_bad;
       }
     zhao::check(radius_bad == 0,
                 "radius = base * size / 16 with ONE round-half-up, over every "
                 "size 0..63 and nine bases",
                 0, radius_bad);
-    zhao::check(angle_bad == 0, "angle16 = spin << 10, and the phase wraps mod 64",
-                0, angle_bad);
+    zhao::check(angle_bad == 0, "angle16 = spin << 10, and the phase wraps mod 64", 0, angle_bad);
   }
 
   std::printf("  particle128 v%u: 2,000 records, 12 fields, 128 bits accounted\n",

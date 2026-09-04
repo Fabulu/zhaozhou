@@ -85,10 +85,10 @@ int main(int argc, char** argv) {
       ++serial_clocks;
     }
     top.a_valid_i = 0;
-    zhao::check(ref.size() == ds.size(), "the serial block answered every request",
-                ds.size(), ref.size());
-    std::printf("  serial: %zu reciprocals in %d clocks (%.2f clocks each)\n",
-                ref.size(), serial_clocks,
+    zhao::check(ref.size() == ds.size(), "the serial block answered every request", ds.size(),
+                ref.size());
+    std::printf("  serial: %zu reciprocals in %d clocks (%.2f clocks each)\n", ref.size(),
+                serial_clocks,
                 static_cast<double>(serial_clocks) / static_cast<double>(ref.size()));
   }
 
@@ -125,25 +125,24 @@ int main(int argc, char** argv) {
     top.b_valid_i = 0;
   }
 
-  zhao::check(got.size() == ds.size(),
-              "the scheduled block answered every request too", ds.size(), got.size());
+  zhao::check(got.size() == ds.size(), "the scheduled block answered every request too", ds.size(),
+              got.size());
 
   int mism = 0;
   for (size_t i = 0; i < ds.size() && i < ref.size(); ++i) {
     auto it = got.find(static_cast<uint32_t>(i));
-    if (it == got.end()) { ++mism; continue; }
+    if (it == got.end()) {
+      ++mism;
+      continue;
+    }
     if (it->second != ref[i]) ++mism;
   }
-  zhao::check(mism == 0,
-              "every scheduled answer is BIT-IDENTICAL to the serial block's",
-              0, mism);
+  zhao::check(mism == 0, "every scheduled answer is BIT-IDENTICAL to the serial block's", 0, mism);
 
-  std::printf("  scheduled: %zu reciprocals in %d clocks (%.2f clocks each)\n",
-              got.size(), svc_clocks,
-              static_cast<double>(svc_clocks) / static_cast<double>(got.size()));
-  std::printf("  multiplier launches: %u for %zu reciprocals (%.2f each)\n",
-              top.b_mul_busy_o, got.size(),
-              static_cast<double>(top.b_mul_busy_o) / static_cast<double>(got.size()));
+  std::printf("  scheduled: %zu reciprocals in %d clocks (%.2f clocks each)\n", got.size(),
+              svc_clocks, static_cast<double>(svc_clocks) / static_cast<double>(got.size()));
+  std::printf("  multiplier launches: %u for %zu reciprocals (%.2f each)\n", top.b_mul_busy_o,
+              got.size(), static_cast<double>(top.b_mul_busy_o) / static_cast<double>(got.size()));
 
   // FOUR MICRO-JOBS PER RECIPROCAL, exactly as the brief specifies. More would
   // mean work is being repeated; fewer would mean an iteration was skipped.
@@ -153,8 +152,8 @@ int main(int argc, char** argv) {
 
   // AND IT IS GENUINELY INTERLEAVED. A serial implementation would never hold
   // more than one live context.
-  zhao::check(top.b_occupancy_o <= 8, "occupancy stays within the context table",
-              1, top.b_occupancy_o <= 8 ? 1 : 0);
+  zhao::check(top.b_occupancy_o <= 8, "occupancy stays within the context table", 1,
+              top.b_occupancy_o <= 8 ? 1 : 0);
 
   return zhao::report_and_exit("raster_rcp24_svc_directed");
 }

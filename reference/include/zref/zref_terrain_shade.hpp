@@ -105,17 +105,14 @@ inline uint64_t shade_nmag2(const FaceNormal& n) {
 // dot(n, L) for a Q16.16 normal and Q16.16 light. Widened to __int128 exactly
 // as the ratified law does; the division that follows is the law's and is NOT
 // duplicated here.
-inline __int128 shade_ndot(const FaceNormal& n, int32_t lx, int32_t ly,
-                           int32_t lz) {
+inline __int128 shade_ndot(const FaceNormal& n, int32_t lx, int32_t ly, int32_t lz) {
   return static_cast<__int128>(n.x) * lx + static_cast<__int128>(n.y) * ly +
          static_cast<__int128>(n.z) * lz;
 }
 
 // Is this triangle lightable at all? Zero-area returns 0 from the ratified
 // law, and the hardware must agree rather than dividing by zero.
-inline bool shade_degenerate(const FaceNormal& n) {
-  return shade_nmag2(n) == 0;
-}
+inline bool shade_degenerate(const FaceNormal& n) { return shade_nmag2(n) == 0; }
 
 }  // namespace terrain
 }  // namespace zref

@@ -99,8 +99,7 @@ int main(int argc, char** argv) {
     int bad = 0;
     const uint64_t wmin[3] = {65536ull, 32768ull, 16384ull};
     const uint64_t wmax[3] = {1073741824ull, 536870912ull, 134217728ull};
-    const unsigned long long scale[3] = {1099511627776ull, 549755813888ull,
-                                         274877906944ull};
+    const unsigned long long scale[3] = {1099511627776ull, 549755813888ull, 274877906944ull};
     for (int p = 0; p < 3; ++p) {
       const auto& g = zref::gen::DEPTH_PROFILES[p];
       if (g.wmin_raw != wmin[p]) ++bad;
@@ -111,8 +110,10 @@ int main(int argc, char** argv) {
       // need real hardware, and the RTL says so.
       if ((g.scale & (g.scale - 1ull)) != 0ull) {
         ++bad;
-        std::printf("    profile %d SCALE %llu is not a power of two -- the "
-                    "RTL's shift is invalid for it\n", p, g.scale);
+        std::printf(
+            "    profile %d SCALE %llu is not a power of two -- the "
+            "RTL's shift is invalid for it\n",
+            p, g.scale);
       }
     }
     zhao::check(bad == 0,
@@ -128,14 +129,10 @@ int main(int argc, char** argv) {
     for (unsigned p = 0; p < 3; ++p) {
       const auto& g = zref::gen::DEPTH_PROFILES[p];
       const uint64_t pts[] = {
-          g.wmin_raw,                    // the near pin
-          g.wmin_raw + 1,
-          g.wmin_raw * 3,
-          g.wmin_raw * 17,
-          (g.wmin_raw + g.wmax_raw) / 2,
-          g.wmax_raw / 4,
-          g.wmax_raw - 1,
-          g.wmax_raw,                    // the far floor
+          g.wmin_raw,  // the near pin
+          g.wmin_raw + 1, g.wmin_raw * 3, g.wmin_raw * 17, (g.wmin_raw + g.wmax_raw) / 2,
+          g.wmax_raw / 4, g.wmax_raw - 1,
+          g.wmax_raw,  // the far floor
       };
       for (uint64_t w : pts) {
         const uint32_t want = zref::depth_of_raw(w, p);
@@ -143,8 +140,8 @@ int main(int argc, char** argv) {
         ++compared;
         if (got != want) {
           if (bad < 5)
-            std::printf("    profile %u w=%llu: rtl %06X, law %06X\n", p,
-                        (unsigned long long)w, got, want);
+            std::printf("    profile %u w=%llu: rtl %06X, law %06X\n", p, (unsigned long long)w,
+                        got, want);
           ++bad;
         }
       }
@@ -176,15 +173,11 @@ int main(int argc, char** argv) {
                 "a w outside [wmin, wmax] takes the boundary's depth -- geometry "
                 "beyond the far clamp is drawn at the floor, not culled",
                 1, (near_got == near_want && far_got == far_want) ? 1 : 0);
-    zhao::check(top.clamped_near_o == before_near + 1 &&
-                    top.clamped_far_o == before_far + 1,
-                "and each clamp is COUNTED, so a profile wrong for the content "
-                "is visible rather than merely dim",
-                1,
-                (top.clamped_near_o == before_near + 1 &&
-                 top.clamped_far_o == before_far + 1)
-                    ? 1
-                    : 0);
+    zhao::check(
+        top.clamped_near_o == before_near + 1 && top.clamped_far_o == before_far + 1,
+        "and each clamp is COUNTED, so a profile wrong for the content "
+        "is visible rather than merely dim",
+        1, (top.clamped_near_o == before_near + 1 && top.clamped_far_o == before_far + 1) ? 1 : 0);
   }
 
   // ---- 4: the near pin really is 0xFFFFFF --------------------------------
@@ -217,10 +210,10 @@ int main(int argc, char** argv) {
                 0, bad);
   }
 
-  std::printf("  %u vertices, %u near-clamped, %u far-clamped, %u saturated, "
-              "%u refused\n",
-              top.vertices_o, top.clamped_near_o, top.clamped_far_o,
-              top.saturated_o, top.refused_o);
+  std::printf(
+      "  %u vertices, %u near-clamped, %u far-clamped, %u saturated, "
+      "%u refused\n",
+      top.vertices_o, top.clamped_near_o, top.clamped_far_o, top.saturated_o, top.refused_o);
 
   return zhao::report_and_exit("geom_depthquant_directed");
 }

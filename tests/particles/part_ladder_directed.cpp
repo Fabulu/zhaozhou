@@ -38,8 +38,7 @@
 
 namespace {
 
-constexpr int MESHLET = 0, SHARD = 1, RIBBON = 2, SPRITE = 3, GLINT = 4,
-              CULLED = 5;
+constexpr int MESHLET = 0, SHARD = 1, RIBBON = 2, SPRITE = 3, GLINT = 4, CULLED = 5;
 
 constexpr int px(double v) { return static_cast<int>(v * 256.0); }
 
@@ -58,10 +57,12 @@ int main(int argc, char** argv) {
     zhao::tick(top);
   };
 
-  struct Out { int rung, hold, changed; };
+  struct Out {
+    int rung, hold, changed;
+  };
 
-  auto decide = [&](int size, int trail, bool narrow, bool prot, int gov,
-                    int prev, int hold, bool first) {
+  auto decide = [&](int size, int trail, bool narrow, bool prot, int gov, int prev, int hold,
+                    bool first) {
     top.v_valid_i = 1;
     top.p_size_i = size;
     top.p_trail_i = trail;
@@ -83,17 +84,21 @@ int main(int argc, char** argv) {
 
   // ---- 1: each band picks its own rung on a first decision ---------------
   {
-    struct C { double size; int want; const char* why; };
+    struct C {
+      double size;
+      int want;
+      const char* why;
+    };
     const C cases[] = {
         {40.0, MESHLET, "far above the meshlet threshold"},
         {18.0, MESHLET, "exactly at it"},
-        {17.9, SHARD,   "just below it"},
-        {6.0,  SHARD,   "at the shard threshold"},
-        {5.9,  SPRITE,  "below shard, above sprite"},
-        {2.0,  SPRITE,  "at the sprite threshold"},
-        {1.9,  GLINT,   "below sprite, above glint"},
-        {0.5,  GLINT,   "at the glint threshold"},
-        {0.4,  CULLED,  "below every threshold"},
+        {17.9, SHARD, "just below it"},
+        {6.0, SHARD, "at the shard threshold"},
+        {5.9, SPRITE, "below shard, above sprite"},
+        {2.0, SPRITE, "at the sprite threshold"},
+        {1.9, GLINT, "below sprite, above glint"},
+        {0.5, GLINT, "at the glint threshold"},
+        {0.4, CULLED, "below every threshold"},
     };
     // A THREE-WAY check, and the third way is the point. The `want` column is
     // the contract's table as I read it; `zref::part::ladder_want` is the same
@@ -103,17 +108,18 @@ int main(int argc, char** argv) {
     int bad = 0, oracle_disagrees = 0;
     for (const C& c : cases) {
       const Out o = decide(px(c.size), 0, false, false, 0, MESHLET, 0, true);
-      const uint8_t oracle = zref::part::ladder_want(
-          static_cast<uint16_t>(px(c.size)), 0, false, false, 0);
+      const uint8_t oracle =
+          zref::part::ladder_want(static_cast<uint16_t>(px(c.size)), 0, false, false, 0);
       if (o.rung != c.want) {
         ++bad;
-        std::printf("    band: %.1f px -> %d, wanted %d (%s)\n", c.size, o.rung,
-                    c.want, c.why);
+        std::printf("    band: %.1f px -> %d, wanted %d (%s)\n", c.size, o.rung, c.want, c.why);
       }
       if (static_cast<int>(oracle) != c.want) ++oracle_disagrees;
     }
-    zhao::check(bad == 0, "every band picks its own rung, at and either side of "
-                          "each threshold", 0, bad);
+    zhao::check(bad == 0,
+                "every band picks its own rung, at and either side of "
+                "each threshold",
+                0, bad);
     zhao::check(oracle_disagrees == 0,
                 "and zref::part::ladder_want agrees with the same table, so the "
                 "RTL and the oracle are not merely agreeing with each other",
@@ -188,7 +194,7 @@ int main(int argc, char** argv) {
   {
     int rung = MESHLET, hold = 0, flips = 0;
     for (int f = 0; f < 40; ++f) {
-      const double size = (f % 2 == 0) ? 18.1 : 17.9;   // a hair either side
+      const double size = (f % 2 == 0) ? 18.1 : 17.9;  // a hair either side
       const Out o = decide(px(size), 0, false, false, 0, rung, hold, false);
       if (o.rung != rung) ++flips;
       rung = o.rung;
@@ -199,8 +205,7 @@ int main(int argc, char** argv) {
                 "changes rung -- the hold count resets each time the choice "
                 "agrees again, so it never reaches HOLD_FRAMES",
                 0, flips);
-    zhao::check(top.held_o > 0, "and the suppressions are counted", 1,
-                top.held_o > 0 ? 1 : 0);
+    zhao::check(top.held_o > 0, "and the suppressions are counted", 1, top.held_o > 0 ? 1 : 0);
   }
 
   // ---- 7: ...but a REAL change still happens, after the hold ------------
@@ -245,8 +250,8 @@ int main(int argc, char** argv) {
                 1, (a.rung == MESHLET && b.rung == GLINT) ? 1 : 0);
   }
 
-  std::printf("  %u decisions, %u changes, %u held, %u governor-forced\n",
-              top.decisions_o, top.changes_o, top.held_o, top.gov_forced_o);
+  std::printf("  %u decisions, %u changes, %u held, %u governor-forced\n", top.decisions_o,
+              top.changes_o, top.held_o, top.gov_forced_o);
 
   return zhao::report_and_exit("part_ladder_directed");
 }

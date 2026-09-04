@@ -75,10 +75,8 @@ int main(int argc, char** argv) {
       const uint16_t trail = static_cast<uint16_t>((rnd(&s) % 4000u));
       const uint8_t gov = static_cast<uint8_t>(rnd(&s) % 6u);
 
-      const uint8_t want =
-          zref::part::ladder_want(usize, trail, narrow, prot, gov);
-      const zref::part::LadderOut w =
-          zref::part::ladder_step(want, prev, hold, first);
+      const uint8_t want = zref::part::ladder_want(usize, trail, narrow, prot, gov);
+      const zref::part::LadderOut w = zref::part::ladder_step(want, prev, hold, first);
 
       top.v_valid_i = 1;
       top.p_size_i = usize;
@@ -102,8 +100,7 @@ int main(int argc, char** argv) {
       if (!first && want != prev) ++crossings;
       if (!first && want != prev && !w.changed) ++holds;
       if (gov > zref::part::ladder_raw(usize, trail, narrow)) ++gov_bites;
-      if (prot && zref::part::ladder_raw(usize, trail, narrow) ==
-                      zref::part::kCulled)
+      if (prot && zref::part::ladder_raw(usize, trail, narrow) == zref::part::kCulled)
         ++protections;
 
       prev = w.rung;
@@ -117,16 +114,14 @@ int main(int argc, char** argv) {
               "every rung matches zref::part::ladder_want + ladder_step across "
               "60 particles x 120 frames",
               0, bad_rung);
-  zhao::check(bad_hold == 0, "and the hold count carried forward matches", 0,
-              bad_hold);
+  zhao::check(bad_hold == 0, "and the hold count carried forward matches", 0, bad_hold);
   zhao::check(bad_changed == 0, "and the `changed` flag matches", 0, bad_changed);
 
   // The walk has to have REACHED the cases it exists for. A random walk that
   // never crossed a threshold would agree with the model perfectly and say
   // nothing about hysteresis at all.
-  zhao::check(crossings > 100,
-              "the walk really did cross thresholds, hundreds of times",
-              1, crossings > 100 ? 1 : 0);
+  zhao::check(crossings > 100, "the walk really did cross thresholds, hundreds of times", 1,
+              crossings > 100 ? 1 : 0);
   zhao::check(holds > 50,
               "and the hysteresis really did suppress changes -- without this "
               "the agreement above is about a state machine that never left "
@@ -134,13 +129,13 @@ int main(int argc, char** argv) {
               1, holds > 50 ? 1 : 0);
   zhao::check(gov_bites > 50, "and the governor really did coarsen decisions", 1,
               gov_bites > 50 ? 1 : 0);
-  zhao::check(protections > 0,
-              "and a protected particle really did get rescued from the cull",
-              1, protections > 0 ? 1 : 0);
+  zhao::check(protections > 0, "and a protected particle really did get rescued from the cull", 1,
+              protections > 0 ? 1 : 0);
 
-  std::printf("  %d steps: %d threshold crossings, %d held, %d governor bites, "
-              "%d protections\n",
-              steps, crossings, holds, gov_bites, protections);
+  std::printf(
+      "  %d steps: %d threshold crossings, %d held, %d governor bites, "
+      "%d protections\n",
+      steps, crossings, holds, gov_bites, protections);
 
   return zhao::report_and_exit("part_ladder_random");
 }

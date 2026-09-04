@@ -175,8 +175,7 @@ int main(int argc, char** argv) {
           want = mf::Refusal::kTriangleCount;
           break;
         case 5:
-          b[mf::kReservedOff + r.below(mf::kReservedLen)] =
-              static_cast<uint8_t>(1 + r.below(255));
+          b[mf::kReservedOff + r.below(mf::kReservedLen)] = static_cast<uint8_t>(1 + r.below(255));
           wr32(b + mf::kCrcOff, zhao_abi::zhao_crc32c(0, b, mf::kCrcCovered));
           want = mf::Refusal::kReserved;
           break;
@@ -187,8 +186,10 @@ int main(int argc, char** argv) {
           break;
       }
       const mf::Refusal got = MF::validate(b, kFormat, kGeneration);
-      if (got == want) seen[static_cast<int>(want)]++;
-      else seen[0]++;  // a wrong reason lands in the kNone slot and fails below
+      if (got == want)
+        seen[static_cast<int>(want)]++;
+      else
+        seen[0]++;  // a wrong reason lands in the kNone slot and fails below
     }
     int unreached = 0;
     for (int k = 1; k <= mf::kRefusalCount; ++k)

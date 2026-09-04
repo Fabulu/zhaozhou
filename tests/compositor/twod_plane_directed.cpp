@@ -51,28 +51,41 @@ int main(int argc, char** argv) {
     zhao::tick(top);
   };
 
-  auto program = [&](int slot, int role, int blend, int fmt, int w, int h,
-                     int wrap_u, int wrap_v, int32_t a, int32_t b, int32_t c,
-                     int32_t d, int32_t u0, int32_t v0, int mask) {
+  auto program = [&](int slot, int role, int blend, int fmt, int w, int h, int wrap_u, int wrap_v,
+                     int32_t a, int32_t b, int32_t c, int32_t d, int32_t u0, int32_t v0, int mask) {
     top.d_valid_i = 1;
-    top.d_slot_i = slot; top.d_role_i = role; top.d_blend_i = blend;
-    top.d_opacity_i = 128; top.d_format_i = fmt;
-    top.d_width_i = w; top.d_height_i = h;
-    top.d_wrap_u_i = wrap_u; top.d_wrap_v_i = wrap_v;
-    top.d_a_i = a; top.d_b_i = b; top.d_c_i = c; top.d_d_i = d;
-    top.d_u0_i = u0; top.d_v0_i = v0;
-    top.d_view_mask_i = mask; top.d_palette_i = 5;
+    top.d_slot_i = slot;
+    top.d_role_i = role;
+    top.d_blend_i = blend;
+    top.d_opacity_i = 128;
+    top.d_format_i = fmt;
+    top.d_width_i = w;
+    top.d_height_i = h;
+    top.d_wrap_u_i = wrap_u;
+    top.d_wrap_v_i = wrap_v;
+    top.d_a_i = a;
+    top.d_b_i = b;
+    top.d_c_i = c;
+    top.d_d_i = d;
+    top.d_u0_i = u0;
+    top.d_v0_i = v0;
+    top.d_view_mask_i = mask;
+    top.d_palette_i = 5;
     zhao::tick(top);
     top.d_valid_i = 0;
   };
 
-  struct S { bool valid; int u, v, role, blend; };
+  struct S {
+    bool valid;
+    int u, v, role, blend;
+  };
 
   auto pixel = [&](int slot, int x, int y, int32_t scroll, int view) {
     top.view_sel_i = view;
     top.p_valid_i = 1;
     top.p_slot_i = slot;
-    top.p_x_i = x; top.p_y_i = y;
+    top.p_x_i = x;
+    top.p_y_i = y;
     top.p_line_scroll_i = scroll;
     top.s_ready_i = 1;
     top.eval();
@@ -89,8 +102,8 @@ int main(int argc, char** argv) {
   // ---- 1: the affine, against the closed form ---------------------------
   {
     // identity-ish: u = x, v = y, on a 256x128 repeating plane
-    program(0, /*BACKDROP*/ 0, /*REPLACE*/ 0, /*RGB565*/ 1, 256, 128, 0, 0,
-            fx(1.0), 0, 0, fx(1.0), 0, 0, 3);
+    program(0, /*BACKDROP*/ 0, /*REPLACE*/ 0, /*RGB565*/ 1, 256, 128, 0, 0, fx(1.0), 0, 0, fx(1.0),
+            0, 0, 3);
     int bad = 0;
     for (int y = 0; y < 20; ++y)
       for (int x = 0; x < 20; ++x) {
@@ -100,24 +113,22 @@ int main(int argc, char** argv) {
     zhao::check(bad == 0, "an identity plane samples texel (x, y)", 0, bad);
 
     // a scaled and sheared one
-    program(0, 0, 0, 1, 256, 128, 0, 0, fx(2.0), fx(0.5), fx(0.25), fx(3.0),
-            fx(10.0), fx(20.0), 3);
+    program(0, 0, 0, 1, 256, 128, 0, 0, fx(2.0), fx(0.5), fx(0.25), fx(3.0), fx(10.0), fx(20.0), 3);
     int bad2 = 0;
     for (int y = 0; y < 10; ++y)
       for (int x = 0; x < 10; ++x) {
         const S s = pixel(0, x, y, 0, 1);
         bool fu = false, fv = false;
         const int wu = zref::twod::plane_wrap(
-            zref::twod::plane_u(fx(10.0), fx(2.0), fx(0.5), 0, x, y), 256,
-            false, &fu);
+            zref::twod::plane_u(fx(10.0), fx(2.0), fx(0.5), 0, x, y), 256, false, &fu);
         const int wv = zref::twod::plane_wrap(
-            zref::twod::plane_v(fx(20.0), fx(0.25), fx(3.0), x, y), 128, false,
-            &fv);
+            zref::twod::plane_v(fx(20.0), fx(0.25), fx(3.0), x, y), 128, false, &fv);
         if (!s.valid || s.u != wu || s.v != wv) ++bad2;
       }
     zhao::check(bad2 == 0,
                 "and a scaled, sheared one samples the affine's own texel, "
-                "wrapped", 0, bad2);
+                "wrapped",
+                0, bad2);
   }
 
   // ---- 2: LINE SCROLL adds to u, and only to u --------------------------
@@ -125,20 +136,17 @@ int main(int argc, char** argv) {
     program(0, 0, 0, 1, 256, 128, 0, 0, fx(1.0), 0, 0, fx(1.0), 0, 0, 3);
     const S a = pixel(0, 4, 6, 0, 1);
     const S b = pixel(0, 4, 6, fx(40.0), 1);
-    zhao::check(a.u == 4 && b.u == 44 && a.v == b.v,
-                "line scroll shifts U and leaves V alone", 1,
+    zhao::check(a.u == 4 && b.u == 44 && a.v == b.v, "line scroll shifts U and leaves V alone", 1,
                 (a.u == 4 && b.u == 44 && a.v == b.v) ? 1 : 0);
   }
 
   // ---- 3: REPEAT and CLAMP --------------------------------------------
   {
     // repeat: u = -1 on a 256-wide plane wraps to 255
-    program(0, 0, 0, 1, 256, 128, /*repeat*/ 0, 0, fx(1.0), 0, 0, fx(1.0),
-            fx(-1.0), 0, 3);
+    program(0, 0, 0, 1, 256, 128, /*repeat*/ 0, 0, fx(1.0), 0, 0, fx(1.0), fx(-1.0), 0, 3);
     const S r = pixel(0, 0, 0, 0, 1);
     // clamp: the same coordinate clamps to 0
-    program(1, 1, 1, 1, 256, 128, /*clamp*/ 1, 1, fx(1.0), 0, 0, fx(1.0),
-            fx(-1.0), 0, 3);
+    program(1, 1, 1, 1, 256, 128, /*clamp*/ 1, 1, fx(1.0), 0, 0, fx(1.0), fx(-1.0), 0, 3);
     const S c = pixel(1, 0, 0, 0, 1);
     zhao::check(r.u == 255, "REPEAT wraps -1 to size-1", 255, r.u);
     zhao::check(c.u == 0, "and CLAMP pins it to 0", 0, c.u);
@@ -150,8 +158,7 @@ int main(int argc, char** argv) {
   // steppers -- so what is testable is that the two slots do not bleed.
   {
     program(0, 0, 0, /*CLUT8*/ 0, 64, 64, 0, 0, fx(1.0), 0, 0, fx(1.0), 0, 0, 3);
-    program(1, 1, /*ALPHA*/ 1, /*RGB565*/ 1, 256, 128, 0, 0, fx(4.0), 0, 0,
-            fx(4.0), 0, 0, 3);
+    program(1, 1, /*ALPHA*/ 1, /*RGB565*/ 1, 256, 128, 0, 0, fx(4.0), 0, 0, fx(4.0), 0, 0, 3);
     const S a = pixel(0, 3, 3, 0, 1);
     const S b = pixel(1, 3, 3, 0, 1);
     zhao::check(a.u == 3 && b.u == 12,
@@ -159,15 +166,13 @@ int main(int argc, char** argv) {
                 "different planes, different texels",
                 1, (a.u == 3 && b.u == 12) ? 1 : 0);
     zhao::check(a.role == 0 && b.role == 1 && a.blend == 0 && b.blend == 1,
-                "and each carries its own role and blend", 1,
-                (a.role == 0 && b.role == 1) ? 1 : 0);
+                "and each carries its own role and blend", 1, (a.role == 0 && b.role == 1) ? 1 : 0);
   }
 
   // ---- 5: THE REFUSALS, which is most of this contract ------------------
   {
     const uint32_t role_before = top.refused_role_o;
-    program(0, /*role 2 -- reserved*/ 2, 0, 1, 64, 64, 0, 0, fx(1.0), 0, 0,
-            fx(1.0), 0, 0, 3);
+    program(0, /*role 2 -- reserved*/ 2, 0, 1, 64, 64, 0, 0, fx(1.0), 0, 0, fx(1.0), 0, 0, 3);
     const S s = pixel(0, 1, 1, 0, 1);
     zhao::check(top.refused_role_o == role_before + 1 && !s.valid,
                 "role 2 is RESERVED: the descriptor is refused and the slot "
@@ -176,8 +181,7 @@ int main(int argc, char** argv) {
                 1, (top.refused_role_o == role_before + 1 && !s.valid) ? 1 : 0);
 
     const uint32_t blend_before = top.refused_blend_o;
-    program(0, /*BACKDROP*/ 0, /*ALPHA*/ 1, 1, 64, 64, 0, 0, fx(1.0), 0, 0,
-            fx(1.0), 0, 0, 3);
+    program(0, /*BACKDROP*/ 0, /*ALPHA*/ 1, 1, 64, 64, 0, 0, fx(1.0), 0, 0, fx(1.0), 0, 0, 3);
     const S t = pixel(0, 1, 1, 0, 1);
     zhao::check(top.refused_blend_o == blend_before + 1 && !t.valid,
                 "a BACKDROP with a blend other than REPLACE is refused -- it "
@@ -220,8 +224,7 @@ int main(int argc, char** argv) {
   // is the enforcement. Asserted here so the absence is recorded as a decision
   // rather than as something nobody checked.
   {
-    program(0, 0, 0, 1, 256, 128, 0, 0, fx(1.0), 0, 0, fx(1.0), fx(0.5), fx(0.5),
-            3);
+    program(0, 0, 0, 1, 256, 128, 0, 0, fx(1.0), 0, 0, fx(1.0), fx(0.5), fx(0.5), 3);
     const S s = pixel(0, 0, 0, 0, 1);
     zhao::check(s.u == 0 && s.v == 0,
                 "a coordinate halfway between texels resolves to ONE texel -- "
@@ -230,10 +233,10 @@ int main(int argc, char** argv) {
                 1, (s.u == 0 && s.v == 0) ? 1 : 0);
   }
 
-  std::printf("  %u pixels, %u role-refused, %u blend-refused, %u view-skipped, "
-              "%u wrap failures\n",
-              top.pixels_o, top.refused_role_o, top.refused_blend_o,
-              top.skipped_view_o, top.wrap_fail_o);
+  std::printf(
+      "  %u pixels, %u role-refused, %u blend-refused, %u view-skipped, "
+      "%u wrap failures\n",
+      top.pixels_o, top.refused_role_o, top.refused_blend_o, top.skipped_view_o, top.wrap_fail_o);
 
   return zhao::report_and_exit("twod_plane_directed");
 }

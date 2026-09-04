@@ -123,32 +123,47 @@ class Dir {
     return h;
   }
 
-  void event(int which, uint32_t slot, uint32_t gen, uint32_t epoch = kEpoch,
-             bool ok = true, uint32_t crc = 0xABCD1234u, bool bd = false,
-             bool f = false, bool mips = false) {
+  void event(int which, uint32_t slot, uint32_t gen, uint32_t epoch = kEpoch, bool ok = true,
+             uint32_t crc = 0xABCD1234u, bool bd = false, bool f = false, bool mips = false) {
     idle();
     switch (which) {
       case 0:  // fin
-        t_.fin_valid_i = 1; t_.fin_slot_i = slot; t_.fin_gen_i = gen;
-        t_.fin_epoch_i = epoch; t_.fin_ok_i = ok; t_.fin_crc_i = crc;
+        t_.fin_valid_i = 1;
+        t_.fin_slot_i = slot;
+        t_.fin_gen_i = gen;
+        t_.fin_epoch_i = epoch;
+        t_.fin_ok_i = ok;
+        t_.fin_crc_i = crc;
         break;
       case 1:  // dirty
-        t_.dm_valid_i = 1; t_.dm_slot_i = slot; t_.dm_gen_i = gen;
-        t_.dm_epoch_i = epoch; t_.dm_bd_i = bd; t_.dm_f_i = f; t_.dm_mips_i = mips;
+        t_.dm_valid_i = 1;
+        t_.dm_slot_i = slot;
+        t_.dm_gen_i = gen;
+        t_.dm_epoch_i = epoch;
+        t_.dm_bd_i = bd;
+        t_.dm_f_i = f;
+        t_.dm_mips_i = mips;
         break;
       case 2:  // pin
-        t_.pin_valid_i = 1; t_.pin_slot_i = slot; t_.pin_gen_i = gen;
+        t_.pin_valid_i = 1;
+        t_.pin_slot_i = slot;
+        t_.pin_gen_i = gen;
         t_.pin_epoch_i = epoch;
         break;
       case 3:  // unpin
-        t_.unpin_valid_i = 1; t_.unpin_slot_i = slot; t_.unpin_gen_i = gen;
+        t_.unpin_valid_i = 1;
+        t_.unpin_slot_i = slot;
+        t_.unpin_gen_i = gen;
         t_.unpin_epoch_i = epoch;
         break;
       case 4:  // writeback ack
-        t_.wb_valid_i = 1; t_.wb_slot_i = slot; t_.wb_gen_i = gen;
+        t_.wb_valid_i = 1;
+        t_.wb_slot_i = slot;
+        t_.wb_gen_i = gen;
         t_.wb_epoch_i = epoch;
         break;
-      default: break;
+      default:
+        break;
     }
     for (int i = 0; i < 64; ++i) {
       t_.eval();
@@ -166,8 +181,8 @@ class Dir {
   // The loader finishes a page: mips are stale after a claim, so a page needs
   // a load completion AND a mip completion before it is ground.
   void load_and_mip(uint32_t slot, uint32_t gen, uint32_t crc = 0xABCD1234u) {
-    event(0, slot, gen, kEpoch, true, crc);   // -> MIPGEN
-    event(0, slot, gen, kEpoch, true, crc);   // -> RESIDENT_CLEAN
+    event(0, slot, gen, kEpoch, true, crc);  // -> MIPGEN
+    event(0, slot, gen, kEpoch, true, crc);  // -> RESIDENT_CLEAN
   }
 
   bool lookup(uint32_t island, int ix, int iz, uint32_t epoch = kEpoch) {
@@ -235,7 +250,7 @@ int main(int argc, char** argv) {
     for (uint32_t isl = 1; isl <= 40; ++isl)
       for (int ix = -3; ix <= 3; ++ix) {
         const Handle h = d.claim(isl, ix, ix * 7);
-        const uint32_t got_set = h.slot >> 2;   // slot = {set, way}
+        const uint32_t got_set = h.slot >> 2;  // slot = {set, way}
         const uint8_t want_set = zref::terrain::residency_set_index(
             isl, static_cast<int16_t>(ix), static_cast<int16_t>(ix * 7), kEpoch);
         if (got_set != want_set) ++bad_set;
@@ -252,12 +267,11 @@ int main(int argc, char** argv) {
   {
     d.reset();
     const Handle h = d.claim(1, 10, 20);
-    zhao::check(!d.lookup(1, 10, 20),
-                "a claimed page is NOT resident until the loader finishes it", 0, 1);
-    d.event(0, h.slot, h.gen);   // load done -> MIPGEN, mips still stale
-    zhao::check(!d.lookup(1, 10, 20),
-                "and NOT resident while its mips are still stale", 0, 1);
-    d.event(0, h.slot, h.gen);   // mipgen done
+    zhao::check(!d.lookup(1, 10, 20), "a claimed page is NOT resident until the loader finishes it",
+                0, 1);
+    d.event(0, h.slot, h.gen);  // load done -> MIPGEN, mips still stale
+    zhao::check(!d.lookup(1, 10, 20), "and NOT resident while its mips are still stale", 0, 1);
+    d.event(0, h.slot, h.gen);  // mipgen done
     zhao::check(d.lookup(1, 10, 20), "and IS resident once both complete", 1, 1);
   }
 
@@ -267,18 +281,15 @@ int main(int argc, char** argv) {
     d.reset();
     const Handle a = d.claim(1, 5, 6);
     d.load_and_mip(a.slot, a.gen);
-    const Handle b = d.claim(2, 5, 6);   // SAME local coordinates, other island
+    const Handle b = d.claim(2, 5, 6);  // SAME local coordinates, other island
     d.load_and_mip(b.slot, b.gen);
 
-    zhao::check(a.slot != b.slot,
-                "two islands at the same local coordinates take DIFFERENT slots",
+    zhao::check(a.slot != b.slot, "two islands at the same local coordinates take DIFFERENT slots",
                 1, a.slot != b.slot ? 1 : 0);
     zhao::check(d.lookup(1, 5, 6) && d.lookup(2, 5, 6),
                 "and both stay resident and separately findable", 1,
                 (d.lookup(1, 5, 6) && d.lookup(2, 5, 6)) ? 1 : 0);
-    zhao::check(!b.evicted,
-                "the second island does not displace the first", 0,
-                b.evicted ? 1 : 0);
+    zhao::check(!b.evicted, "the second island does not displace the first", 0, b.evicted ? 1 : 0);
   }
 
   // ---- 3: re-claiming the SAME patch does not advance the generation ------
@@ -305,11 +316,13 @@ int main(int argc, char** argv) {
     for (uint32_t isl = 1; isl < 4000 && same_set.size() < 5; ++isl) {
       const Handle h = d.claim(isl, 0, 0);
       const uint32_t set = h.slot >> 2;
-      if (same_set.empty()) { set0 = set; same_set.push_back(isl); }
-      else if (set == set0) same_set.push_back(isl);
+      if (same_set.empty()) {
+        set0 = set;
+        same_set.push_back(isl);
+      } else if (set == set0)
+        same_set.push_back(isl);
     }
-    zhao::check(same_set.size() >= 5,
-                "five adversarial keys colliding in one set were found", 1,
+    zhao::check(same_set.size() >= 5, "five adversarial keys colliding in one set were found", 1,
                 same_set.size() >= 5 ? 1 : 0);
 
     // fresh: fill the set, pin every way, then try a fifth
@@ -318,7 +331,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 4; ++i) {
       Handle h = d.claim(same_set[i], 0, 0);
       d.load_and_mip(h.slot, h.gen);
-      d.event(2, h.slot, h.gen);   // pin
+      d.event(2, h.slot, h.gen);  // pin
       hs.push_back(h);
     }
     const Handle fifth = d.claim(same_set[4], 0, 0);
@@ -332,10 +345,9 @@ int main(int argc, char** argv) {
     // unpin one; the fifth now fits
     d.event(3, hs[0].slot, hs[0].gen);
     const Handle again = d.claim(same_set[4], 0, 0);
-    zhao::check(!again.refused, "unpinning one way admits it", 0,
-                again.refused ? 1 : 0);
-    zhao::check(again.slot == hs[0].slot,
-                "and it takes the way that was released", hs[0].slot, again.slot);
+    zhao::check(!again.refused, "unpinning one way admits it", 0, again.refused ? 1 : 0);
+    zhao::check(again.slot == hs[0].slot, "and it takes the way that was released", hs[0].slot,
+                again.slot);
   }
 
   // ---- 5: THE BARRIER -- a dirty victim with a delayed writeback ACK ------
@@ -346,8 +358,11 @@ int main(int argc, char** argv) {
     for (uint32_t isl = 1; isl < 4000 && same_set.size() < 5; ++isl) {
       const Handle h = d.claim(isl, 0, 0);
       const uint32_t set = h.slot >> 2;
-      if (same_set.empty()) { set0 = set; same_set.push_back(isl); }
-      else if (set == set0) same_set.push_back(isl);
+      if (same_set.empty()) {
+        set0 = set;
+        same_set.push_back(isl);
+      } else if (set == set0)
+        same_set.push_back(isl);
     }
 
     d.reset();
@@ -359,15 +374,13 @@ int main(int argc, char** argv) {
     }
     // scar the first one
     d.event(1, hs[0].slot, hs[0].gen, kEpoch, true, 0, false, /*f=*/true, false);
-    zhao::check(d.lookup(same_set[0], 0, 0),
-                "a scarred page is still resident (RESIDENT_DIRTY_F)", 1, 1);
+    zhao::check(d.lookup(same_set[0], 0, 0), "a scarred page is still resident (RESIDENT_DIRTY_F)",
+                1, 1);
 
     // a fifth claim must displace something; every clean way goes first
     const Handle fifth = d.claim(same_set[4], 0, 0);
-    zhao::check(fifth.evicted, "the fifth claim displaces a page", 1,
-                fifth.evicted ? 1 : 0);
-    zhao::check(!fifth.evicted_dirty,
-                "and it takes a CLEAN way first -- rule 3 before rule 4", 0,
+    zhao::check(fifth.evicted, "the fifth claim displaces a page", 1, fifth.evicted ? 1 : 0);
+    zhao::check(!fifth.evicted_dirty, "and it takes a CLEAN way first -- rule 3 before rule 4", 0,
                 fifth.evicted_dirty ? 1 : 0);
 
     // now force the dirty one out: fill the rest again
@@ -382,10 +395,9 @@ int main(int argc, char** argv) {
       d.event(1, hs[i].slot, hs[i].gen, kEpoch, true, 0, false, true, false);
     const Handle dirty_evict = d.claim(same_set[4], 0, 0);
     zhao::check(dirty_evict.evicted_dirty,
-                "with every way DIRTY, the eviction is flagged for writeback",
-                1, dirty_evict.evicted_dirty ? 1 : 0);
-    zhao::check(top.dirty_evictions_o >= 1,
-                "NO dirty page is displaced without being flagged", 1,
+                "with every way DIRTY, the eviction is flagged for writeback", 1,
+                dirty_evict.evicted_dirty ? 1 : 0);
+    zhao::check(top.dirty_evictions_o >= 1, "NO dirty page is displaced without being flagged", 1,
                 top.dirty_evictions_o >= 1 ? 1 : 0);
 
     // THE BARRIER: the loader may not complete this slot before the ACK.
@@ -396,20 +408,18 @@ int main(int argc, char** argv) {
                 "journal acknowledges -- the scars are not safe yet",
                 0, 1);
 
-    d.event(4, dirty_evict.slot, dirty_evict.gen);   // writeback ACK
+    d.event(4, dirty_evict.slot, dirty_evict.gen);  // writeback ACK
     d.event(0, dirty_evict.slot, dirty_evict.gen);
     d.event(0, dirty_evict.slot, dirty_evict.gen);
-    zhao::check(d.lookup(same_set[4], 0, 0),
-                "and DOES once the ACK arrives", 1, 1);
+    zhao::check(d.lookup(same_set[4], 0, 0), "and DOES once the ACK arrives", 1, 1);
   }
 
   // ---- 6: a CRC failure faults the page, it never becomes ground ----------
   {
     d.reset();
     const Handle h = d.claim(11, 3, 4, 0xDEADBEEFu);
-    d.event(0, h.slot, h.gen, kEpoch, true, 0x00000000u);   // wrong CRC
-    zhao::check(!d.lookup(11, 3, 4),
-                "a CRC-failed page is FAULTED and never rendered", 0, 1);
+    d.event(0, h.slot, h.gen, kEpoch, true, 0x00000000u);  // wrong CRC
+    zhao::check(!d.lookup(11, 3, 4), "a CRC-failed page is FAULTED and never rendered", 0, 1);
     zhao::check(top.crc_failures_o == 1, "and the failure is counted", 1,
                 static_cast<int>(top.crc_failures_o));
   }
@@ -419,8 +429,7 @@ int main(int argc, char** argv) {
     d.reset();
     const Handle h = d.claim(12, 3, 4);
     d.event(0, h.slot, h.gen, kEpoch, /*ok=*/false);
-    zhao::check(!d.lookup(12, 3, 4), "an aborted load is FAULTED, not resident",
-                0, 1);
+    zhao::check(!d.lookup(12, 3, 4), "an aborted load is FAULTED, not resident", 0, 1);
   }
 
   // ---- 8: stale events are rejected on IDENTITY, not beaten on timing ----
@@ -431,8 +440,11 @@ int main(int argc, char** argv) {
     for (uint32_t isl = 1; isl < 4000 && same_set.size() < 5; ++isl) {
       const Handle h = d.claim(isl, 0, 0);
       const uint32_t set = h.slot >> 2;
-      if (same_set.empty()) { set0 = set; same_set.push_back(isl); }
-      else if (set == set0) same_set.push_back(isl);
+      if (same_set.empty()) {
+        set0 = set;
+        same_set.push_back(isl);
+      } else if (set == set0)
+        same_set.push_back(isl);
     }
     d.reset();
     std::vector<Handle> hs;
@@ -441,7 +453,7 @@ int main(int argc, char** argv) {
       d.load_and_mip(h.slot, h.gen);
       hs.push_back(h);
     }
-    const Handle fresh = d.claim(same_set[4], 0, 0);   // reuses one of them
+    const Handle fresh = d.claim(same_set[4], 0, 0);  // reuses one of them
     const uint32_t before = top.stale_events_o;
 
     // the OLD occupant's loader finishes, late
@@ -450,12 +462,11 @@ int main(int argc, char** argv) {
                 "a late FIN on a re-claimed slot is rejected on identity and "
                 "counted",
                 1, static_cast<int>(top.stale_events_o - before));
-    zhao::check(!d.lookup(same_set[4], 0, 0),
-                "and does NOT mark the fresh page loaded", 0, 1);
+    zhao::check(!d.lookup(same_set[4], 0, 0), "and does NOT mark the fresh page loaded", 0, 1);
 
     // the old occupant's deformation, late
-    d.event(1, fresh.slot, static_cast<uint32_t>(fresh.gen - 1), kEpoch, true, 0,
-            false, true, false);
+    d.event(1, fresh.slot, static_cast<uint32_t>(fresh.gen - 1), kEpoch, true, 0, false, true,
+            false);
     zhao::check(top.stale_events_o == before + 2,
                 "a late DIRTY on a re-claimed slot is rejected too", 2,
                 static_cast<int>(top.stale_events_o - before));
@@ -495,8 +506,8 @@ int main(int argc, char** argv) {
     const Handle h = d.claim(41, 1, 1);
     d.load_and_mip(h.slot, h.gen);
     for (int i = 0; i < 255; ++i) d.claim(1000u + static_cast<uint32_t>(i), 9, 9);
-    zhao::check(!d.stale(h.slot, h.gen),
-                "a handle survives 255 intervening claims elsewhere", 0, 1);
+    zhao::check(!d.stale(h.slot, h.gen), "a handle survives 255 intervening claims elsewhere", 0,
+                1);
   }
 
   // ---- 12: deterministic repeat of the same claim stream ------------------
@@ -508,8 +519,7 @@ int main(int argc, char** argv) {
       d.reset();
       auto& out = (pass == 0) ? first : second;
       for (uint32_t i = 0; i < 200; ++i) {
-        const Handle h = d.claim(i % 7u, static_cast<int>(i % 13u),
-                                 static_cast<int>(i % 11u));
+        const Handle h = d.claim(i % 7u, static_cast<int>(i % 13u), static_cast<int>(i % 11u));
         out.push_back(h.slot);
         if (!h.same && !h.refused) d.load_and_mip(h.slot, h.gen);
       }
@@ -523,11 +533,11 @@ int main(int argc, char** argv) {
                 1, identical ? 1 : 0);
   }
 
-  std::printf("  hits %u misses %u claims %u evictions %u (%u dirty) refused %u "
-              "stale %u crcfail %u\n",
-              top.hits_o, top.misses_o, top.claims_o, top.evictions_o,
-              top.dirty_evictions_o, top.refused_all_pinned_o, top.stale_events_o,
-              top.crc_failures_o);
+  std::printf(
+      "  hits %u misses %u claims %u evictions %u (%u dirty) refused %u "
+      "stale %u crcfail %u\n",
+      top.hits_o, top.misses_o, top.claims_o, top.evictions_o, top.dirty_evictions_o,
+      top.refused_all_pinned_o, top.stale_events_o, top.crc_failures_o);
 
   return zhao::report_and_exit("terrain_residency_v2_directed");
 }

@@ -63,15 +63,12 @@ int main(int argc, char** argv) {
 
   auto begin_load = [&](int slot, int gen) { op(kBEGIN, slot, gen, 0, 0, true); };
   auto write_e = [&](int idx, uint16_t v) { op(kWRITE, 0, 0, idx, v, true); };
-  auto end_load = [&](int slot, int gen, bool crc_ok = true) {
-    op(kEND, slot, gen, 0, 0, crc_ok);
-  };
+  auto end_load = [&](int slot, int gen, bool crc_ok = true) { op(kEND, slot, gen, 0, 0, crc_ok); };
 
   // Load one whole slot with a known pattern at a given generation.
   auto load_slot = [&](int slot, int gen, uint32_t seed) {
     begin_load(slot, gen);
-    for (int e = 0; e < 256; ++e)
-      write_e(e, static_cast<uint16_t>(seed + e));
+    for (int e = 0; e < 256; ++e) write_e(e, static_cast<uint16_t>(seed + e));
     end_load(slot, gen);
     zhao::tick(top);
   };
@@ -87,8 +84,7 @@ int main(int argc, char** argv) {
     top.lu_valid_i = 0;
     top.eval();
     zhao::check(top.lu_valid_o == 1, "a lookup answers", 1, top.lu_valid_o);
-    zhao::check(top.lu_resident_o == 0,
-                "a slot that was never loaded reports NOT resident", 0,
+    zhao::check(top.lu_resident_o == 0, "a slot that was never loaded reports NOT resident", 0,
                 top.lu_resident_o);
   }
 
@@ -115,8 +111,7 @@ int main(int argc, char** argv) {
       }
     }
     top.lu_valid_i = 0;
-    zhao::check(bad == 0, "every entry reads back its loaded value, resident and fresh",
-                0, bad);
+    zhao::check(bad == 0, "every entry reads back its loaded value, resident and fresh", 0, bad);
   }
 
   // ---- 3: THE GATE -- reload under requests in flight ---------------------
@@ -153,7 +148,7 @@ int main(int argc, char** argv) {
 
       top.lu_valid_i = 1;
       top.lu_slot_i = 0;
-      top.lu_gen_i = 1;          // the OLD binding
+      top.lu_gen_i = 1;  // the OLD binding
       top.lu_idx_i = 5;
       top.eval();
       if (top.lu_valid_o) {
@@ -161,8 +156,10 @@ int main(int argc, char** argv) {
           ++stale_seen;
         } else {
           // Answered as fresh. Only legitimate BEFORE the reload started.
-          if (c > 12) ++answered_wrong;
-          else ++fresh_before;
+          if (c > 12)
+            ++answered_wrong;
+          else
+            ++fresh_before;
         }
       }
       zhao::tick(top);
@@ -171,12 +168,12 @@ int main(int argc, char** argv) {
     top.ld_valid_i = 0;
 
     zhao::check(answered_wrong == 0,
-                "no gen-1 lookup is answered as fresh once the slot moved to gen 2",
-                0, answered_wrong);
+                "no gen-1 lookup is answered as fresh once the slot moved to gen 2", 0,
+                answered_wrong);
     zhao::check(stale_seen > 0, "and the affected lookups ARE flagged stale", 1,
                 stale_seen > 0 ? 1 : 0);
-    std::printf("  reload under flight: %d stale, %d fresh-before, %d wrong\n",
-                stale_seen, fresh_before, answered_wrong);
+    std::printf("  reload under flight: %d stale, %d fresh-before, %d wrong\n", stale_seen,
+                fresh_before, answered_wrong);
   }
 
   // ---- 4: a mid-load slot is not resident ---------------------------------
@@ -198,10 +195,9 @@ int main(int argc, char** argv) {
     zhao::tick(top);
     top.lu_valid_i = 0;
     top.eval();
-    zhao::check(top.lu_stale_o == 0, "a mid-load lookup at the NEW generation is not stale",
-                0, top.lu_stale_o);
-    zhao::check(top.lu_resident_o == 0,
-                "but it is NOT resident until the load completes", 0,
+    zhao::check(top.lu_stale_o == 0, "a mid-load lookup at the NEW generation is not stale", 0,
+                top.lu_stale_o);
+    zhao::check(top.lu_resident_o == 0, "but it is NOT resident until the load completes", 0,
                 top.lu_resident_o);
   }
 
@@ -210,7 +206,7 @@ int main(int argc, char** argv) {
     reset();
     load_slot(0, 1, 0x5000);
     load_slot(1, 1, 0x6000);
-    load_slot(0, 2, 0x7000);   // reload slot 0 only
+    load_slot(0, 2, 0x7000);  // reload slot 0 only
 
     top.lu_valid_i = 1;
     top.lu_slot_i = 1;
@@ -224,7 +220,6 @@ int main(int argc, char** argv) {
                 (top.lu_stale_o == 0 && top.lu_resident_o == 1) ? 1 : 0);
   }
 
-
   // ---- X6: THE PROTOCOL'S OWN FAILURE MODES -------------------------------
   // The implicit protocol this replaced could not express any of these. It had
   // no way to say a load FAILED, no way to notice one was INCOMPLETE, and no
@@ -233,14 +228,17 @@ int main(int argc, char** argv) {
   // A CRC failure leaves the slot NONRESIDENT.
   {
     reset();
-    load_slot(1, 1, 0x1000u);            // a good load first
+    load_slot(1, 1, 0x1000u);  // a good load first
     const uint32_t crc_before = top.err_crc_o;
     begin_load(1, 2);
     for (int e = 0; e < 256; ++e) write_e(e, static_cast<uint16_t>(0xBEEF + e));
     end_load(1, 2, /*crc_ok=*/false);
     zhao::tick(top);
 
-    top.lu_valid_i = 1; top.lu_slot_i = 1; top.lu_gen_i = 2; top.lu_idx_i = 3;
+    top.lu_valid_i = 1;
+    top.lu_slot_i = 1;
+    top.lu_gen_i = 2;
+    top.lu_idx_i = 3;
     zhao::tick(top);
     top.lu_valid_i = 0;
     zhao::tick(top);
@@ -263,14 +261,16 @@ int main(int argc, char** argv) {
     for (int e = 0; e < 255; ++e) write_e(e, static_cast<uint16_t>(0x2000 + e));
     end_load(2, 1, /*crc_ok=*/true);
     zhao::tick(top);
-    top.lu_valid_i = 1; top.lu_slot_i = 2; top.lu_gen_i = 1; top.lu_idx_i = 0;
+    top.lu_valid_i = 1;
+    top.lu_slot_i = 2;
+    top.lu_gen_i = 1;
+    top.lu_idx_i = 0;
     zhao::tick(top);
     top.lu_valid_i = 0;
     zhao::tick(top);
     top.eval();
-    zhao::check(top.lu_resident_o == 0,
-                "ONE missing entry out of 256 leaves the slot nonresident", 0,
-                top.lu_resident_o);
+    zhao::check(top.lu_resident_o == 0, "ONE missing entry out of 256 leaves the slot nonresident",
+                0, top.lu_resident_o);
     zhao::check(top.err_incomplete_o == inc_before + 1,
                 "and the incompleteness is counted separately from a CRC "
                 "failure -- one is a bad cartridge, the other a bad loader",
@@ -285,7 +285,7 @@ int main(int argc, char** argv) {
     const uint32_t inc_before = top.err_incomplete_o;
     begin_load(3, 1);
     for (int e = 0; e < 255; ++e) write_e(e, static_cast<uint16_t>(0x3000 + e));
-    write_e(0, 0x1234);                   // 256 writes, 255 distinct entries
+    write_e(0, 0x1234);  // 256 writes, 255 distinct entries
     end_load(3, 1, true);
     zhao::tick(top);
     zhao::check(top.err_incomplete_o == inc_before + 1,
@@ -298,14 +298,17 @@ int main(int argc, char** argv) {
     reset();
     load_slot(0, 5, 0x4000u);
     const uint32_t same_before = top.err_same_gen_o;
-    begin_load(0, 5);                     // same generation again
+    begin_load(0, 5);  // same generation again
     zhao::tick(top);
     zhao::check(top.err_same_gen_o == same_before + 1,
                 "BEGIN reusing a slot's current generation is REFUSED -- every "
                 "handle to the old palette would still match the new one",
                 1, static_cast<int>(top.err_same_gen_o - same_before));
     // and the refusal did not disturb the resident palette
-    top.lu_valid_i = 1; top.lu_slot_i = 0; top.lu_gen_i = 5; top.lu_idx_i = 9;
+    top.lu_valid_i = 1;
+    top.lu_slot_i = 0;
+    top.lu_gen_i = 5;
+    top.lu_idx_i = 9;
     zhao::tick(top);
     top.lu_valid_i = 0;
     zhao::tick(top);
@@ -320,12 +323,15 @@ int main(int argc, char** argv) {
     reset();
     load_slot(0, 1, 0x5000u);
     const uint32_t out_before = top.err_write_outside_o;
-    write_e(4, 0xDEAD);                   // no BEGIN
+    write_e(4, 0xDEAD);  // no BEGIN
     zhao::tick(top);
     zhao::check(top.err_write_outside_o == out_before + 1,
                 "a WRITE with no open load is refused and counted", 1,
                 static_cast<int>(top.err_write_outside_o - out_before));
-    top.lu_valid_i = 1; top.lu_slot_i = 0; top.lu_gen_i = 1; top.lu_idx_i = 4;
+    top.lu_valid_i = 1;
+    top.lu_slot_i = 0;
+    top.lu_gen_i = 1;
+    top.lu_idx_i = 4;
     zhao::tick(top);
     top.lu_valid_i = 0;
     zhao::tick(top);
@@ -340,8 +346,14 @@ int main(int argc, char** argv) {
   {
     reset();
     load_slot(0, 1, 0x6000u);
-    top.lu_valid_i = 1; top.lu_slot_i = 0; top.lu_gen_i = 1; top.lu_idx_i = 2;
-    top.ld_valid_i = 1; top.ld_op_i = kBEGIN; top.ld_slot_i = 0; top.ld_gen_i = 2;
+    top.lu_valid_i = 1;
+    top.lu_slot_i = 0;
+    top.lu_gen_i = 1;
+    top.lu_idx_i = 2;
+    top.ld_valid_i = 1;
+    top.ld_op_i = kBEGIN;
+    top.ld_slot_i = 0;
+    top.ld_gen_i = 2;
     top.ld_crc_ok_i = 1;
     zhao::tick(top);
     top.lu_valid_i = 0;

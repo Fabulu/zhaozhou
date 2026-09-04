@@ -86,10 +86,10 @@ int main(int argc, char** argv) {
 
   // ---- run: accept one per clock, model the sheet as a 1-clock echo -------
   reset();
-  std::deque<uint8_t> sheet_q;      // tokens with a read outstanding
+  std::deque<uint8_t> sheet_q;  // tokens with a read outstanding
   std::vector<uint8_t> out_tok;
-  std::vector<int>     out_deg;
-  std::map<int, int>   got_u, got_v;
+  std::vector<int> out_deg;
+  std::map<int, int> got_u, got_v;
   size_t fed = 0;
   int accept_clocks = 0, sheet_reads = 0;
 
@@ -98,9 +98,12 @@ int main(int argc, char** argv) {
     top.req_valid_i = feeding;
     if (feeding) {
       const Req& r = rq[fed];
-      top.req_wx_i = r.wx;   top.req_wz_i = r.wz;
-      top.req_env_x0_i = r.x0; top.req_env_x1_i = r.x1;
-      top.req_env_z0_i = r.z0; top.req_env_z1_i = r.z1;
+      top.req_wx_i = r.wx;
+      top.req_wz_i = r.wz;
+      top.req_env_x0_i = r.x0;
+      top.req_env_x1_i = r.x1;
+      top.req_env_z0_i = r.z0;
+      top.req_env_z1_i = r.z1;
       top.req_tok_i = r.tok;
     }
 
@@ -138,19 +141,19 @@ int main(int argc, char** argv) {
 
   zhao::check(fed == rq.size(), "every request was accepted", rq.size(), fed);
   zhao::check(accept_clocks == static_cast<int>(rq.size()),
-              "AUX acceptance is II=1 -- one per clock, no refusals",
-              static_cast<int>(rq.size()), accept_clocks);
+              "AUX acceptance is II=1 -- one per clock, no refusals", static_cast<int>(rq.size()),
+              accept_clocks);
 
   const int want_reads = static_cast<int>(rq.size()) - static_cast<int>(rq.size() + 1) / 3;
   zhao::check(sheet_reads == want_reads,
-              "a sheet read is issued for every NON-degenerate request only",
-              want_reads, sheet_reads);
+              "a sheet read is issued for every NON-degenerate request only", want_reads,
+              sheet_reads);
   zhao::check(top.degenerate_o == static_cast<uint32_t>((rq.size() + 1) / 3),
-              "and the degenerate ones are counted",
-              static_cast<uint32_t>((rq.size() + 1) / 3), top.degenerate_o);
+              "and the degenerate ones are counted", static_cast<uint32_t>((rq.size() + 1) / 3),
+              top.degenerate_o);
 
-  zhao::check(out_tok.size() == rq.size(), "every request returns exactly once",
-              rq.size(), out_tok.size());
+  zhao::check(out_tok.size() == rq.size(), "every request returns exactly once", rq.size(),
+              out_tok.size());
 
   // THE ORDERING RULE. Degenerate requests must keep their place.
   int order_bad = 0, flag_bad = 0;
@@ -159,8 +162,8 @@ int main(int argc, char** argv) {
     if (static_cast<bool>(out_deg[i]) != rq[i].degen) ++flag_bad;
   }
   zhao::check(order_bad == 0,
-              "returns come back in SUBMISSION order -- degenerate ones keep their place",
-              0, order_bad);
+              "returns come back in SUBMISSION order -- degenerate ones keep their place", 0,
+              order_bad);
   // ---- THE TEXEL COORDINATE, WHICH NOTHING HERE USED TO CHECK ------------
   // Everything above tests the handshake, the counts, the ordering and the
   // degenerate flag. None of it looks at the number the block exists to
@@ -181,8 +184,11 @@ int main(int argc, char** argv) {
   // or above it clamps to 63.
   int uv_bad = 0, uv_checked = 0, uv_saturated = 0;
   for (const Req& r : rq) {
-    if (r.degen) continue;              // a degenerate envelope reads no texel
-    if (got_u.find(r.tok) == got_u.end()) { ++uv_bad; continue; }
+    if (r.degen) continue;  // a degenerate envelope reads no texel
+    if (got_u.find(r.tok) == got_u.end()) {
+      ++uv_bad;
+      continue;
+    }
     auto texel = [](int32_t w, int32_t e0, int32_t e1) {
       const int64_t d = static_cast<int64_t>(e1) - e0;
       const int64_t n = (static_cast<int64_t>(w) - e0) * 64;
@@ -205,14 +211,12 @@ int main(int argc, char** argv) {
               "and the stimulus really does saturate the clamp, so the flags "
               "being checked are not all zero",
               1, uv_saturated > 0 ? 1 : 0);
-  std::printf("  %d texel coordinates checked, %d saturated\n", uv_checked,
-              uv_saturated);
+  std::printf("  %d texel coordinates checked, %d saturated\n", uv_checked, uv_saturated);
 
-  zhao::check(flag_bad == 0, "and each is flagged degenerate or not, correctly", 0,
-              flag_bad);
+  zhao::check(flag_bad == 0, "and each is flagged degenerate or not, correctly", 0, flag_bad);
 
-  std::printf("  %zu requests, %d accept clocks, %d sheet reads, %u degenerate\n",
-              rq.size(), accept_clocks, sheet_reads, top.degenerate_o);
+  std::printf("  %zu requests, %d accept clocks, %d sheet reads, %u degenerate\n", rq.size(),
+              accept_clocks, sheet_reads, top.degenerate_o);
 
   return zhao::report_and_exit("texture_aux_pipe_directed");
 }

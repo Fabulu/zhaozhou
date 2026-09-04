@@ -150,10 +150,10 @@ inline PolyExpand expand_polygon(bool in, int32_t sx, int32_t sy, int32_t sd, ui
 inline constexpr uint32_t kParticleFormatVersion = 1;
 
 // flags
-inline constexpr uint8_t kPartStuck            = 0x1;
+inline constexpr uint8_t kPartStuck = 0x1;
 inline constexpr uint8_t kPartCollidedThisTick = 0x2;
-inline constexpr uint8_t kPartBornThisTick     = 0x4;
-inline constexpr uint8_t kPartFlagReserved     = 0x8;  // zero in, preserved zero
+inline constexpr uint8_t kPartBornThisTick = 0x4;
+inline constexpr uint8_t kPartFlagReserved = 0x8;  // zero in, preserved zero
 
 struct Particle128 {
   int32_t pos[3];     // s18, S 9.8 m relative to the population origin
@@ -182,11 +182,11 @@ inline void particle_unpack(uint64_t lo, uint64_t hi, Particle128* p) {
   };
   for (int i = 0; i < 3; ++i) p->pos[i] = sign_extend(fld(i * 18, 18), 18);
   for (int i = 0; i < 3; ++i) p->vel[i] = sign_extend(fld(54 + i * 11, 11), 11);
-  p->age       = static_cast<uint16_t>(fld(87, 10));
-  p->species   = static_cast<uint8_t>(fld(97, 7));
-  p->size      = static_cast<uint8_t>(fld(104, 6));
-  p->spin      = static_cast<uint8_t>(fld(110, 6));
-  p->flags     = static_cast<uint8_t>(fld(116, 4));
+  p->age = static_cast<uint16_t>(fld(87, 10));
+  p->species = static_cast<uint8_t>(fld(97, 7));
+  p->size = static_cast<uint8_t>(fld(104, 6));
+  p->spin = static_cast<uint8_t>(fld(110, 6));
+  p->flags = static_cast<uint8_t>(fld(116, 4));
   p->variation = static_cast<uint8_t>(fld(120, 8));
 }
 
@@ -196,8 +196,14 @@ inline void particle_pack(const Particle128& p, uint64_t* lo, uint64_t* hi) {
   auto put = [&](int off, int w, uint32_t v) {
     const uint64_t m = (w == 64) ? ~0ull : ((1ull << w) - 1);
     const uint64_t val = static_cast<uint64_t>(v) & m;
-    if (off + w <= 64) { *lo |= val << off; return; }
-    if (off >= 64) { *hi |= val << (off - 64); return; }
+    if (off + w <= 64) {
+      *lo |= val << off;
+      return;
+    }
+    if (off >= 64) {
+      *hi |= val << (off - 64);
+      return;
+    }
     const int lowbits = 64 - off;
     *lo |= (val & ((1ull << lowbits) - 1)) << off;
     *hi |= val >> lowbits;
@@ -234,16 +240,14 @@ inline uint16_t particle_angle16(uint8_t spin) {
 // resolution is the first rung that fits, walking coarse to fine.
 //
 // This is the ORACLE for `zhao_part_ladder`.
-enum Rung : uint8_t {
-  kMeshlet = 0, kShard = 1, kRibbon = 2, kSprite = 3, kGlint = 4, kCulled = 5
-};
+enum Rung : uint8_t { kMeshlet = 0, kShard = 1, kRibbon = 2, kSprite = 3, kGlint = 4, kCulled = 5 };
 
 // Sizes are U 8.8 pixels, so 1.0 px is 256.
 inline constexpr uint16_t kMeshletMin = 18 * 256;
-inline constexpr uint16_t kShardMin   =  6 * 256;
-inline constexpr uint16_t kRibbonMin  =  4 * 256;
-inline constexpr uint16_t kSpriteMin  =  2 * 256;
-inline constexpr uint16_t kGlintMin   =      128;
+inline constexpr uint16_t kShardMin = 6 * 256;
+inline constexpr uint16_t kRibbonMin = 4 * 256;
+inline constexpr uint16_t kSpriteMin = 2 * 256;
+inline constexpr uint16_t kGlintMin = 128;
 inline constexpr int kHoldFrames = 3;
 
 inline uint8_t ladder_raw(uint16_t size, uint16_t trail, bool narrow) {
@@ -258,22 +262,24 @@ inline uint8_t ladder_raw(uint16_t size, uint16_t trail, bool narrow) {
 // The governor is a FLOOR on coarseness -- it may force a particle coarser and
 // never finer. Protection is applied AFTER it, so a governor cannot cull a
 // protected particle: otherwise the species flag would be a suggestion.
-inline uint8_t ladder_want(uint16_t size, uint16_t trail, bool narrow,
-                           bool protected_, uint8_t gov_floor) {
+inline uint8_t ladder_want(uint16_t size, uint16_t trail, bool narrow, bool protected_,
+                           uint8_t gov_floor) {
   uint8_t r = ladder_raw(size, trail, narrow);
   if (gov_floor > r) r = gov_floor;
   if (protected_ && r == kCulled) r = kGlint;
   return r;
 }
 
-struct LadderOut { uint8_t rung; uint8_t hold; bool changed; };
+struct LadderOut {
+  uint8_t rung;
+  uint8_t hold;
+  bool changed;
+};
 
-inline LadderOut ladder_step(uint8_t want, uint8_t prev_rung, uint8_t hold,
-                             bool first) {
+inline LadderOut ladder_step(uint8_t want, uint8_t prev_rung, uint8_t hold, bool first) {
   if (first) return LadderOut{want, 0, true};
   if (want == prev_rung) return LadderOut{prev_rung, 0, false};
-  if (static_cast<int>(hold) + 1 >= kHoldFrames)
-    return LadderOut{want, 0, true};
+  if (static_cast<int>(hold) + 1 >= kHoldFrames) return LadderOut{want, 0, true};
   return LadderOut{prev_rung, static_cast<uint8_t>(hold + 1), false};
 }
 

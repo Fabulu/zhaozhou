@@ -103,8 +103,7 @@ int main(int argc, char** argv) {
         const int32_t got = live ? zc::lambert_from_world_normal(n, mag, L[0], L[1], L[2]) : 0;
         ++compared;
         if (got != want) {
-          if (bad < 4)
-            std::printf("    w0=%u  reused %d  per-light %d\n", v.w0, got, want);
+          if (bad < 4) std::printf("    w0=%u  reused %d  per-light %d\n", v.w0, got, want);
           ++bad;
         }
         if (want != 0) ++nonzero;
@@ -118,8 +117,8 @@ int main(int argc, char** argv) {
                 "when it says the hardware must not repeat the normal work per "
                 "light",
                 0, bad);
-    zhao::check(compared == kIters * 3,
-                "every vertex was checked against every light", kIters * 3, compared);
+    zhao::check(compared == kIters * 3, "every vertex was checked against every light", kIters * 3,
+                compared);
     // A sweep where the answer is always zero would pass the check above while
     // proving nothing: two structures agreeing on "no light" is not agreement.
     zhao::check(nonzero > kIters,

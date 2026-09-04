@@ -510,8 +510,8 @@ void draw_heightfield(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
     const int64_t dot = static_cast<int64_t>(dx) * kLightX + static_cast<int64_t>(dz) * kLightZ;
     const int32_t detail = static_cast<int32_t>((dot * kTerrainDetailStrength + (1 << 14)) >> 15);
 
-    const int32_t raw =
-        shade_flat_tri_dir_unclamped(ax, ay, az, bx, by, bz, cx, cy, cz, kLightX, kLightY, kLightZ, L);
+    const int32_t raw = shade_flat_tri_dir_unclamped(ax, ay, az, bx, by, bz, cx, cy, cz, kLightX,
+                                                     kLightY, kLightZ, L);
     const int32_t sum = raw + detail;
     return sum < 0 ? 0 : (sum > 0x10000 ? 0x10000 : sum);
   };

@@ -51,7 +51,7 @@ namespace meshfetch {
 // bytes 0..59 and a field that moved without the CRC window moving would be a
 // silent disagreement between this oracle and the RTL.
 inline constexpr int kDescBytes = 64;
-inline constexpr int kCrcCovered = 60;   // bytes 0..59
+inline constexpr int kCrcCovered = 60;  // bytes 0..59
 inline constexpr int kReservedOff = 36;
 inline constexpr int kReservedLen = 24;
 inline constexpr int kCrcOff = 60;
@@ -68,25 +68,25 @@ inline constexpr uint8_t kMaxTriangleCount = 126;
 // the ruling's hard-overflow law, which governs capacity exhaustion.
 enum class Refusal : uint8_t {
   kNone = 0,
-  kFormat,          // a future format read as this one produces plausible garbage
-  kCrc,             // the descriptor is not trustworthy in ANY field
-  kGeneration,      // the asset moved under a live instance
-  kVertexCount,     // u8 local indices cannot address it
-  kTriangleCount,   // exceeds the frozen limit
-  kReserved,        // a future field is being used by an older reader
-  kZeroBound,       // a zero bound culls everything, silently
+  kFormat,         // a future format read as this one produces plausible garbage
+  kCrc,            // the descriptor is not trustworthy in ANY field
+  kGeneration,     // the asset moved under a live instance
+  kVertexCount,    // u8 local indices cannot address it
+  kTriangleCount,  // exceeds the frozen limit
+  kReserved,       // a future field is being used by an older reader
+  kZeroBound,      // a zero bound culls everything, silently
 };
 inline constexpr int kRefusalCount = 7;  // excludes kNone
 
 struct Descriptor {
-  uint8_t  format_id;
-  uint8_t  flags;
-  uint8_t  vertex_count;
-  uint8_t  triangle_count;
+  uint8_t format_id;
+  uint8_t flags;
+  uint8_t vertex_count;
+  uint8_t triangle_count;
   uint16_t material_id;
-  int16_t  lod_error;
-  int32_t  bound_centre[3];  // fx16 S15.16, MESHLET-LOCAL by ruling
-  uint32_t bound_radius;     // fx16, unsigned
+  int16_t lod_error;
+  int32_t bound_centre[3];  // fx16 S15.16, MESHLET-LOCAL by ruling
+  uint32_t bound_radius;    // fx16, unsigned
   uint32_t vertex_offset;
   uint32_t index_offset;
   uint16_t generation;
@@ -170,9 +170,7 @@ struct InstanceXform {
 inline int64_t abs64(int64_t v) { return v < 0 ? -v : v; }
 
 // One fx16 rescale, round-half-up, matching qformats §4's single rounding.
-inline int32_t rescale16(int64_t v) {
-  return static_cast<int32_t>((v + (int64_t{1} << 15)) >> 16);
-}
+inline int32_t rescale16(int64_t v) { return static_cast<int32_t>((v + (int64_t{1} << 15)) >> 16); }
 
 inline void world_bound(const InstanceXform& x, const int32_t local_centre[3],
                         uint32_t local_radius, int32_t out_centre[3], uint32_t* out_radius) {
@@ -209,19 +207,18 @@ inline void world_bound(const InstanceXform& x, const int32_t local_centre[3],
   // The randomized suite did not catch this because its generator used bounded
   // scales. Found by reading the contract's Q-format table against the code
   // rather than by a failing test, which is the only way this class shows up.
-  *out_radius = (up > static_cast<int64_t>(UINT32_MAX)) ? UINT32_MAX
-                                                        : static_cast<uint32_t>(up);
+  *out_radius = (up > static_cast<int64_t>(UINT32_MAX)) ? UINT32_MAX : static_cast<uint32_t>(up);
 }
 
 // ---------------------------------------------------------------------------
 // decide() — the entry point the ledger names
 // ---------------------------------------------------------------------------
 struct Result {
-  bool accepted = false;              // descriptor trustworthy AND visible somewhere
-  Refusal refusal = Refusal::kNone;   // why not, if not
-  uint8_t visible_mask = 0;           // bit v: camera v may see it
-  int32_t rung = 0;                   // from zref::creature, when a ladder applies
-  bool hold = false;                  // ladder hysteresis
+  bool accepted = false;             // descriptor trustworthy AND visible somewhere
+  Refusal refusal = Refusal::kNone;  // why not, if not
+  uint8_t visible_mask = 0;          // bit v: camera v may see it
+  int32_t rung = 0;                  // from zref::creature, when a ladder applies
+  bool hold = false;                 // ladder hysteresis
 };
 
 // REJECTED IS NOT REFUSED, and the counters must not conflate them: one is
@@ -277,8 +274,7 @@ struct MeshFetch {
   using Result = meshfetch::Result;
   using InstanceXform = meshfetch::InstanceXform;
 
-  static Refusal validate(const uint8_t* bytes, uint8_t expect_format,
-                          uint16_t expect_generation) {
+  static Refusal validate(const uint8_t* bytes, uint8_t expect_format, uint16_t expect_generation) {
     return meshfetch::validate(bytes, expect_format, expect_generation);
   }
 

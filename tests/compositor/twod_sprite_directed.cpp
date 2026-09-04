@@ -63,18 +63,27 @@ int main(int argc, char** argv) {
   };
 
   // Offer a descriptor and collect every sample request it produces.
-  auto run = [&](int x, int y, int w, int h, int32_t u0, int32_t v0,
-                 int32_t a00, int32_t a01, int32_t a10, int32_t a11,
-                 int view_mask, int view_sel, bool stall) {
+  auto run = [&](int x, int y, int w, int h, int32_t u0, int32_t v0, int32_t a00, int32_t a01,
+                 int32_t a10, int32_t a11, int view_mask, int view_sel, bool stall) {
     std::vector<Px> out;
     top.view_sel_i = view_sel;
     top.d_valid_i = 1;
-    top.d_x_i = x; top.d_y_i = y; top.d_w_i = w; top.d_h_i = h;
-    top.d_u_i = u0; top.d_v_i = v0;
-    top.d_a00_i = a00; top.d_a01_i = a01;
-    top.d_a10_i = a10; top.d_a11_i = a11;
-    top.d_format_i = 1; top.d_palette_i = 7; top.d_tint_i = 0x1234;
-    top.d_blend_i = 2; top.d_view_mask_i = view_mask; top.d_order_i = 9;
+    top.d_x_i = x;
+    top.d_y_i = y;
+    top.d_w_i = w;
+    top.d_h_i = h;
+    top.d_u_i = u0;
+    top.d_v_i = v0;
+    top.d_a00_i = a00;
+    top.d_a01_i = a01;
+    top.d_a10_i = a10;
+    top.d_a11_i = a11;
+    top.d_format_i = 1;
+    top.d_palette_i = 7;
+    top.d_tint_i = 0x1234;
+    top.d_blend_i = 2;
+    top.d_view_mask_i = view_mask;
+    top.d_order_i = 9;
     top.d_src_id_i = 0x55AA;
     top.eval();
     zhao::tick(top);
@@ -88,10 +97,8 @@ int main(int argc, char** argv) {
       top.s_ready_i = stall ? (((g >> 27) & 3u) != 0u) : 1;
       top.eval();
       if (top.s_valid_o && top.s_ready_i) {
-        out.push_back({static_cast<int16_t>(top.s_x_o),
-                       static_cast<int16_t>(top.s_y_o),
-                       static_cast<int32_t>(top.s_u_o),
-                       static_cast<int32_t>(top.s_v_o),
+        out.push_back({static_cast<int16_t>(top.s_x_o), static_cast<int16_t>(top.s_y_o),
+                       static_cast<int32_t>(top.s_u_o), static_cast<int32_t>(top.s_v_o),
                        static_cast<int>(top.s_last_o)});
       }
       const bool done = !top.s_valid_o;
@@ -108,8 +115,8 @@ int main(int argc, char** argv) {
   {
     const int W = 7, H = 5;
     const int32_t u0 = 1000, v0 = -2000;
-    const int32_t a00 = 17, a01 = -5;     // du/dx, du/dy  -- NON-ZERO CROSS
-    const int32_t a10 = 3,  a11 = 29;     // dv/dx, dv/dy
+    const int32_t a00 = 17, a01 = -5;  // du/dx, du/dy  -- NON-ZERO CROSS
+    const int32_t a10 = 3, a11 = 29;   // dv/dx, dv/dy
     const auto out = run(100, 50, W, H, u0, v0, a00, a01, a10, a11, 1, 1, false);
 
     zhao::check(out.size() == static_cast<size_t>(W * H),
@@ -131,10 +138,11 @@ int main(int argc, char** argv) {
                 "with a NON-ZERO cross term, which is the only case where "
                 "serpentine stepping differs from plane stepping",
                 0, bad_uv);
-    zhao::check(bad_xy == 0, "and every screen position is row-major from the "
-                             "descriptor's origin", 0, bad_xy);
-    zhao::check(bad_order == 0,
-                "and `last` marks exactly the final pixel, once", 0, bad_order);
+    zhao::check(bad_xy == 0,
+                "and every screen position is row-major from the "
+                "descriptor's origin",
+                0, bad_xy);
+    zhao::check(bad_order == 0, "and `last` marks exactly the final pixel, once", 0, bad_order);
   }
 
   // ---- 2: the same, WITH a stalling consumer ----------------------------
@@ -176,9 +184,10 @@ int main(int argc, char** argv) {
     const uint32_t refused_before = top.refused_o;
     const auto a = run(0, 0, 0, 4, 0, 0, 1, 0, 0, 1, 1, 1, false);
     const auto b = run(0, 0, 4, 0, 0, 0, 1, 0, 0, 1, 1, 1, false);
-    zhao::check(a.empty() && b.empty(), "a zero-width or zero-height sprite "
-                                        "emits nothing", 0,
-                static_cast<int>(a.size() + b.size()));
+    zhao::check(a.empty() && b.empty(),
+                "a zero-width or zero-height sprite "
+                "emits nothing",
+                0, static_cast<int>(a.size() + b.size()));
     zhao::check(top.refused_o == refused_before + 2,
                 "and is REFUSED and counted -- walking it for zero pixels would "
                 "be indistinguishable downstream from a sprite that had nothing "
@@ -189,17 +198,15 @@ int main(int argc, char** argv) {
   // ---- 5: a single pixel, which is where an off-by-one lives -------------
   {
     const auto out = run(3, 4, 1, 1, 42, 43, 100, 200, 300, 400, 1, 1, false);
-    zhao::check(out.size() == 1 && out[0].u == 42 && out[0].v == 43 &&
-                    out[0].x == 3 && out[0].y == 4 && out[0].last == 1,
+    zhao::check(out.size() == 1 && out[0].u == 42 && out[0].v == 43 && out[0].x == 3 &&
+                    out[0].y == 4 && out[0].last == 1,
                 "a 1x1 sprite emits exactly one pixel, at the descriptor's own "
                 "UV, marked last",
-                1,
-                (out.size() == 1 && out[0].u == 42 && out[0].last == 1) ? 1 : 0);
+                1, (out.size() == 1 && out[0].u == 42 && out[0].last == 1) ? 1 : 0);
   }
 
-  std::printf("  %u descriptors, %u pixels, %u skipped for view, %u refused\n",
-              top.descriptors_o, top.pixels_o, top.skipped_view_o,
-              top.refused_o);
+  std::printf("  %u descriptors, %u pixels, %u skipped for view, %u refused\n", top.descriptors_o,
+              top.pixels_o, top.skipped_view_o, top.refused_o);
 
   return zhao::report_and_exit("twod_sprite_directed");
 }

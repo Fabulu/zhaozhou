@@ -131,19 +131,14 @@ int main(int argc, char** argv) {
   top.in_valid_i = 0;
 
   zhao::check(fed == jobs.size(), "every job was offered", jobs.size(), fed);
-  zhao::check(got == jobs.size(), "and every job came back exactly once",
-              jobs.size(), got);
-  zhao::check(bad_q == 0, "every quotient matches n/d computed independently",
-              0, bad_q);
-  zhao::check(bad_tag == 0, "and each answer carries its own request's tag", 0,
-              bad_tag);
+  zhao::check(got == jobs.size(), "and every job came back exactly once", jobs.size(), got);
+  zhao::check(bad_q == 0, "every quotient matches n/d computed independently", 0, bad_q);
+  zhao::check(bad_tag == 0, "and each answer carries its own request's tag", 0, bad_tag);
 
   // THE THROUGHPUT CLAIM, asserted rather than described.
-  zhao::check(max_occ == kLatency,
-              "six requests are in flight simultaneously (II=1, not serial)",
+  zhao::check(max_occ == kLatency, "six requests are in flight simultaneously (II=1, not serial)",
               kLatency, max_occ);
-  zhao::check(top.issued_o == jobs.size(), "the issue counter agrees",
-              jobs.size(), top.issued_o);
+  zhao::check(top.issued_o == jobs.size(), "the issue counter agrees", jobs.size(), top.issued_o);
 
   // ---- a bubble must not corrupt the pipe --------------------------------
   // Gaps in the input are normal; a stage that mistakes a bubble for data
@@ -176,8 +171,7 @@ int main(int argc, char** argv) {
       }
       zhao::tick(top);
     }
-    zhao::check(outs == 3, "three sparse requests produce exactly three answers",
-                3, outs);
+    zhao::check(outs == 3, "three sparse requests produce exactly three answers", 3, outs);
     zhao::check(bad_q == 0, "and bubbles between them produce none", 0, bad_q);
   }
 

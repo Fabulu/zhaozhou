@@ -355,9 +355,8 @@ int main(int argc, char** argv) {
     // NEAR value. out_w_o is zeroed instead, which makes that misuse land on
     // the far floor -- the harmless direction -- rather than in front of
     // everything else in the scene.
-    check(got[1].w == 0u,
-          "out_w_o is zero behind the eye, not the forced internal divisor of 1",
-          0, got[1].w);
+    check(got[1].w == 0u, "out_w_o is zero behind the eye, not the forced internal divisor of 1", 0,
+          got[1].w);
     check(got[1].x == 0 && got[1].y == 0 && got[1].d == 0,
           "and a rejected vertex carries zeros, it is not dropped", 1,
           (got[1].x == 0 && got[1].y == 0 && got[1].d == 0) ? 1 : 0);

@@ -75,7 +75,9 @@ int main() {
   // SMALL norm and therefore a huge, wrong shade.
   {
     FaceNormal n{};
-    n.x = 2147483647; n.y = 2147483647; n.z = 2147483647;
+    n.x = 2147483647;
+    n.y = 2147483647;
+    n.z = 2147483647;
     const uint64_t sq = shade_nmag2(n);
     // 3 * (2^31-1)^2 ~= 1.383e19, which only fits unsigned.
     zhao::check(sq > 13000000000000000000ull,
@@ -84,9 +86,10 @@ int main() {
                 1, sq > 13000000000000000000ull ? 1 : 0);
 
     FaceNormal m{};
-    m.x = -2147483647; m.y = -2147483647; m.z = -2147483647;
-    zhao::check(shade_nmag2(m) == sq,
-                "and the negative rail gives the same squared norm", 1,
+    m.x = -2147483647;
+    m.y = -2147483647;
+    m.z = -2147483647;
+    zhao::check(shade_nmag2(m) == sq, "and the negative rail gives the same squared norm", 1,
                 shade_nmag2(m) == sq ? 1 : 0);
   }
 
@@ -95,15 +98,18 @@ int main() {
   // than dividing by zero, and it must decide it from the same quantity.
   {
     FaceNormal zero{};
-    zero.x = 0; zero.y = 0; zero.z = 0;
+    zero.x = 0;
+    zero.y = 0;
+    zero.z = 0;
     zhao::check(shade_degenerate(zero),
                 "a zero-area triangle is degenerate and shades to ambient, "
                 "matching the ratified law's nmag2 == 0 guard",
                 1, shade_degenerate(zero) ? 1 : 0);
     FaceNormal up{};
-    up.x = 0; up.y = 65536; up.z = 0;
-    zhao::check(!shade_degenerate(up),
-                "and a real one is not", 0, shade_degenerate(up) ? 1 : 0);
+    up.x = 0;
+    up.y = 65536;
+    up.z = 0;
+    zhao::check(!shade_degenerate(up), "and a real one is not", 0, shade_degenerate(up) ? 1 : 0);
   }
 
   // ---- 4: THE DOT PRODUCT AGREES WITH THE LAW'S SHAPE -------------------
@@ -111,7 +117,9 @@ int main() {
   // face under this light is dominated by the Y term.
   {
     FaceNormal up{};
-    up.x = 0; up.y = 65536; up.z = 0;
+    up.x = 0;
+    up.y = 65536;
+    up.z = 0;
     const __int128 d = shade_ndot(up, kShadeLightX, kShadeLightY, kShadeLightZ);
     const __int128 want = static_cast<__int128>(65536) * kShadeLightY;
     zhao::check(d == want,
@@ -124,7 +132,9 @@ int main() {
     // before the clamp, and why TERRAIN.SHADE cannot simply call the existing
     // function and hand the result on.
     FaceNormal down{};
-    down.x = 0; down.y = -65536; down.z = 0;
+    down.x = 0;
+    down.y = -65536;
+    down.z = 0;
     zhao::check(shade_ndot(down, kShadeLightX, kShadeLightY, kShadeLightZ) < 0,
                 "a face turned from the sun has a NEGATIVE dot before the "
                 "clamp -- relief on it must still be able to catch light, so "
@@ -134,20 +144,24 @@ int main() {
 
   // ---- 5: ROUNDING IS ROUND-HALF-UP AT BOTH SIGNS ------------------------
   {
-    struct C { int64_t v; int sh; int64_t want; const char* why; };
+    struct C {
+      int64_t v;
+      int sh;
+      int64_t want;
+      const char* why;
+    };
     const C cases[] = {
-        { 100, 1,  50, "exact" },
-        { 101, 1,  51, "positive half rounds up" },
-        {-100, 1, -50, "exact, negative" },
-        {-101, 1, -50, "negative half rounds UP -- a shift would floor to -51" },
-        {  -1, 1,   0, "and minus one half is zero, not minus one" },
+        {100, 1, 50, "exact"},
+        {101, 1, 51, "positive half rounds up"},
+        {-100, 1, -50, "exact, negative"},
+        {-101, 1, -50, "negative half rounds UP -- a shift would floor to -51"},
+        {-1, 1, 0, "and minus one half is zero, not minus one"},
     };
     int bad = 0;
     for (const C& c : cases) {
       if (rshift_round(c.v, c.sh) != c.want) {
         ++bad;
-        std::printf("    rshift_round(%lld,%d) wrong (%s)\n",
-                    (long long)c.v, c.sh, c.why);
+        std::printf("    rshift_round(%lld,%d) wrong (%s)\n", (long long)c.v, c.sh, c.why);
       }
     }
     zhao::check(bad == 0,
@@ -182,8 +196,7 @@ int main() {
                 0, normalmap_detail(d, 0, 0, 255));
 
     // THE CUT SEAM: strength 0 is bit-exact nothing.
-    zhao::check(normalmap_detail(d, kShadeLightX, kShadeLightZ, 0) == 0 &&
-                    normalmap_is_noop(0),
+    zhao::check(normalmap_detail(d, kShadeLightX, kShadeLightZ, 0) == 0 && normalmap_is_noop(0),
                 "and strength 0 is a bit-exact no-op, so cutting the detail "
                 "organ changes nothing else",
                 0, normalmap_detail(d, kShadeLightX, kShadeLightZ, 0));

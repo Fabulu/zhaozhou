@@ -181,21 +181,20 @@ struct Binner {
 namespace geom {
 
 struct Vertex0 {
-  int32_t x, y, z;      // fx16 S15.16
-  int8_t nx, ny, nz;    // packed bind normal
-  uint8_t w0;           // 1/64 quanta, 64 == rigid
-  int16_t u, v;         // fx16 s16
+  int32_t x, y, z;    // fx16 S15.16
+  int8_t nx, ny, nz;  // packed bind normal
+  uint8_t w0;         // 1/64 quanta, 64 == rigid
+  int16_t u, v;       // fx16 s16
   uint16_t bone0, bone1;
-  bool rigid;           // bone1 == bone0
+  bool rigid;             // bone1 == bone0
   bool reserved_nonzero;  // the malformed case, reported not corrected
 };
 
 inline Vertex0 vdecode0(const uint8_t* b) {
   auto s32 = [&](int o) {
-    return static_cast<int32_t>(static_cast<uint32_t>(b[o]) |
-                                (static_cast<uint32_t>(b[o + 1]) << 8) |
-                                (static_cast<uint32_t>(b[o + 2]) << 16) |
-                                (static_cast<uint32_t>(b[o + 3]) << 24));
+    return static_cast<int32_t>(
+        static_cast<uint32_t>(b[o]) | (static_cast<uint32_t>(b[o + 1]) << 8) |
+        (static_cast<uint32_t>(b[o + 2]) << 16) | (static_cast<uint32_t>(b[o + 3]) << 24));
   };
   auto u16 = [&](int o) {
     return static_cast<uint16_t>(static_cast<uint16_t>(b[o]) |
@@ -254,8 +253,7 @@ inline bool parambuf_vertex_illegal(int32_t x, int32_t y) {
 
 inline bool parambuf_triangle_illegal(uint16_t v0, uint16_t v1, uint16_t v2,
                                       uint16_t sealed_vertices) {
-  return v0 >= sealed_vertices || v1 >= sealed_vertices ||
-         v2 >= sealed_vertices;
+  return v0 >= sealed_vertices || v1 >= sealed_vertices || v2 >= sealed_vertices;
 }
 
 // A chunk from last frame is valid in every other respect -- sane count,
@@ -265,19 +263,16 @@ inline bool parambuf_chunk_stale(uint16_t chunk_gen, uint16_t frame_gen) {
   return chunk_gen != frame_gen;
 }
 
-inline bool parambuf_chunk_illegal(uint16_t count, uint32_t next,
-                                   uint32_t arena_chunks) {
+inline bool parambuf_chunk_illegal(uint16_t count, uint32_t next, uint32_t arena_chunks) {
   return count > kChunkIds || (next != kChunkNull && next >= arena_chunks);
 }
 
 // Following a stale or malformed chunk is how one bad record becomes a walk
 // through arbitrary memory.
-inline bool parambuf_chunk_follow(uint16_t chunk_gen, uint16_t frame_gen,
-                                  uint16_t count, uint32_t next,
-                                  uint32_t arena_chunks) {
+inline bool parambuf_chunk_follow(uint16_t chunk_gen, uint16_t frame_gen, uint16_t count,
+                                  uint32_t next, uint32_t arena_chunks) {
   return !parambuf_chunk_stale(chunk_gen, frame_gen) &&
-         !parambuf_chunk_illegal(count, next, arena_chunks) &&
-         next != kChunkNull;
+         !parambuf_chunk_illegal(count, next, arena_chunks) && next != kChunkNull;
 }
 
 // ===========================================================================
@@ -296,7 +291,7 @@ inline bool parambuf_chunk_follow(uint16_t chunk_gen, uint16_t frame_gen,
 // The frozen meshlet limits, and they are limits rather than suggestions: a
 // `u8` local index cannot address past 255, and 126 triangles x 3 indices is
 // 378 bytes.
-inline constexpr unsigned kAssembleMaxVertices  = 64;
+inline constexpr unsigned kAssembleMaxVertices = 64;
 inline constexpr unsigned kAssembleMaxTriangles = 126;
 
 inline bool assemble_limits_legal(unsigned vertex_count, unsigned triangle_count) {

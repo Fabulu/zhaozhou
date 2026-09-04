@@ -57,11 +57,25 @@ int main(int argc, char** argv) {
     // Shapes that include the degenerate-adjacent ones on purpose.
     int w, h;
     switch (rnd(&s) % 5u) {
-      case 0: w = 1; h = 1 + static_cast<int>(rnd(&s) % 12u); break;  // 1 wide
-      case 1: w = 1 + static_cast<int>(rnd(&s) % 12u); h = 1; break;  // 1 tall
-      case 2: w = 1 + static_cast<int>(rnd(&s) % 20u); h = 1 + static_cast<int>(rnd(&s) % 3u); break;
-      case 3: w = 1 + static_cast<int>(rnd(&s) % 3u); h = 1 + static_cast<int>(rnd(&s) % 20u); break;
-      default: w = 1 + static_cast<int>(rnd(&s) % 9u); h = 1 + static_cast<int>(rnd(&s) % 9u);
+      case 0:
+        w = 1;
+        h = 1 + static_cast<int>(rnd(&s) % 12u);
+        break;  // 1 wide
+      case 1:
+        w = 1 + static_cast<int>(rnd(&s) % 12u);
+        h = 1;
+        break;  // 1 tall
+      case 2:
+        w = 1 + static_cast<int>(rnd(&s) % 20u);
+        h = 1 + static_cast<int>(rnd(&s) % 3u);
+        break;
+      case 3:
+        w = 1 + static_cast<int>(rnd(&s) % 3u);
+        h = 1 + static_cast<int>(rnd(&s) % 20u);
+        break;
+      default:
+        w = 1 + static_cast<int>(rnd(&s) % 9u);
+        h = 1 + static_cast<int>(rnd(&s) % 9u);
     }
     if (w == 1 || h == 1) ++thin;
     if (w >= 12 || h >= 12) ++wide;
@@ -76,12 +90,22 @@ int main(int argc, char** argv) {
     const int y = static_cast<int>(rnd(&s) % 400u);
 
     top.d_valid_i = 1;
-    top.d_x_i = x; top.d_y_i = y; top.d_w_i = w; top.d_h_i = h;
-    top.d_u_i = u0; top.d_v_i = v0;
-    top.d_a00_i = a00; top.d_a01_i = a01;
-    top.d_a10_i = a10; top.d_a11_i = a11;
-    top.d_format_i = 1; top.d_palette_i = 0; top.d_tint_i = 0;
-    top.d_blend_i = 0; top.d_view_mask_i = 1; top.d_order_i = 0;
+    top.d_x_i = x;
+    top.d_y_i = y;
+    top.d_w_i = w;
+    top.d_h_i = h;
+    top.d_u_i = u0;
+    top.d_v_i = v0;
+    top.d_a00_i = a00;
+    top.d_a01_i = a01;
+    top.d_a10_i = a10;
+    top.d_a11_i = a11;
+    top.d_format_i = 1;
+    top.d_palette_i = 0;
+    top.d_tint_i = 0;
+    top.d_blend_i = 0;
+    top.d_view_mask_i = 1;
+    top.d_order_i = 0;
     top.d_src_id_i = static_cast<uint16_t>(n);
     top.eval();
     zhao::tick(top);
@@ -89,14 +113,12 @@ int main(int argc, char** argv) {
 
     int got = 0, lasts = 0;
     for (int c = 0; c < 20000; ++c) {
-      top.s_ready_i = ((rnd(&s) >> 3) & 3u) != 0u;   // a stalling consumer
+      top.s_ready_i = ((rnd(&s) >> 3) & 3u) != 0u;  // a stalling consumer
       top.eval();
       if (top.s_valid_o && top.s_ready_i) {
         const int py = got / w, px = got % w;
-        if (static_cast<int32_t>(top.s_u_o) !=
-                zref::twod::sprite_u(u0, a00, a01, px, py) ||
-            static_cast<int32_t>(top.s_v_o) !=
-                zref::twod::sprite_v(v0, a10, a11, px, py))
+        if (static_cast<int32_t>(top.s_u_o) != zref::twod::sprite_u(u0, a00, a01, px, py) ||
+            static_cast<int32_t>(top.s_v_o) != zref::twod::sprite_v(v0, a10, a11, px, py))
           ++bad_uv;
         if (top.s_last_o) ++lasts;
         ++got;
@@ -117,8 +139,7 @@ int main(int argc, char** argv) {
               "every pixel of 300 sprites equals zref::twod::sprite_u/v -- the "
               "closed form, so a serpentine accumulation cannot hide",
               0, bad_uv);
-  zhao::check(bad_count == 0, "and each sprite emits exactly w*h pixels", 0,
-              bad_count);
+  zhao::check(bad_count == 0, "and each sprite emits exactly w*h pixels", 0, bad_count);
   zhao::check(bad_last == 0, "and raises `last` exactly once", 0, bad_last);
 
   // The shapes have to have INCLUDED the ones the stepper fails on. A run of
@@ -129,11 +150,9 @@ int main(int argc, char** argv) {
               "the shapes where a serpentine walk and a row-origin off-by-one "
               "are each invisible",
               1, thin > 50 ? 1 : 0);
-  zhao::check(wide > 20, "and many long ones, where they are not", 1,
-              wide > 20 ? 1 : 0);
+  zhao::check(wide > 20, "and many long ones, where they are not", 1, wide > 20 ? 1 : 0);
 
-  std::printf("  %d sprites, %d pixels, %d thin, %d long\n", sprites, pixels,
-              thin, wide);
+  std::printf("  %d sprites, %d pixels, %d thin, %d long\n", sprites, pixels, thin, wide);
 
   return zhao::report_and_exit("twod_sprite_random");
 }

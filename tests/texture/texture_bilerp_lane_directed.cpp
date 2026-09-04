@@ -41,7 +41,7 @@ struct Job {
   uint8_t t00, t10, t01, t11, fu, fv;
   uint16_t tok;
   uint8_t chan;
-  uint8_t expect;   // filled from the combinational reference
+  uint8_t expect;  // filled from the combinational reference
 };
 
 }  // namespace
@@ -61,9 +61,12 @@ int main(int argc, char** argv) {
   std::vector<Job> jobs;
   auto add = [&](int a, int b, int c, int d, int fu, int fv) {
     Job j{};
-    j.t00 = static_cast<uint8_t>(a); j.t10 = static_cast<uint8_t>(b);
-    j.t01 = static_cast<uint8_t>(c); j.t11 = static_cast<uint8_t>(d);
-    j.fu = static_cast<uint8_t>(fu); j.fv = static_cast<uint8_t>(fv);
+    j.t00 = static_cast<uint8_t>(a);
+    j.t10 = static_cast<uint8_t>(b);
+    j.t01 = static_cast<uint8_t>(c);
+    j.t11 = static_cast<uint8_t>(d);
+    j.fu = static_cast<uint8_t>(fu);
+    j.fv = static_cast<uint8_t>(fv);
     j.tok = static_cast<uint16_t>(jobs.size() + 1);
     j.chan = static_cast<uint8_t>(jobs.size() & 3);
     jobs.push_back(j);
@@ -81,15 +84,17 @@ int main(int argc, char** argv) {
 
   uint32_t s = 0x0BADF00Du;
   for (int i = 0; i < 400; ++i)
-    add(rnd(&s) & 255, rnd(&s) & 255, rnd(&s) & 255, rnd(&s) & 255, rnd(&s) & 255,
-        rnd(&s) & 255);
+    add(rnd(&s) & 255, rnd(&s) & 255, rnd(&s) & 255, rnd(&s) & 255, rnd(&s) & 255, rnd(&s) & 255);
 
   // ---- capture the combinational reference for each job -------------------
   // Purely combinational, so drive and read in the same evaluation.
   for (Job& j : jobs) {
-    top.t00_i = j.t00; top.t10_i = j.t10;
-    top.t01_i = j.t01; top.t11_i = j.t11;
-    top.fu_i = j.fu;   top.fv_i = j.fv;
+    top.t00_i = j.t00;
+    top.t10_i = j.t10;
+    top.t01_i = j.t01;
+    top.t11_i = j.t11;
+    top.fu_i = j.fu;
+    top.fv_i = j.fv;
     top.eval();
     j.expect = top.ref_o;
   }
@@ -104,9 +109,12 @@ int main(int argc, char** argv) {
     top.lane_valid_i = feeding;
     if (feeding) {
       const Job& j = jobs[fed];
-      top.t00_i = j.t00; top.t10_i = j.t10;
-      top.t01_i = j.t01; top.t11_i = j.t11;
-      top.fu_i = j.fu;   top.fv_i = j.fv;
+      top.t00_i = j.t00;
+      top.t10_i = j.t10;
+      top.t01_i = j.t01;
+      top.t11_i = j.t11;
+      top.fu_i = j.fu;
+      top.fv_i = j.fv;
       top.lane_tok_i = j.tok;
       top.lane_chan_i = j.chan;
     }
@@ -136,21 +144,17 @@ int main(int argc, char** argv) {
   top.lane_valid_i = 0;
 
   zhao::check(fed == jobs.size(), "every job was offered", jobs.size(), fed);
-  zhao::check(got == jobs.size(), "and every job came back exactly once", jobs.size(),
-              got);
-  zhao::check(bad_val == 0,
-              "every filtered byte is BIT-IDENTICAL to the shipped bilerp", 0,
+  zhao::check(got == jobs.size(), "and every job came back exactly once", jobs.size(), got);
+  zhao::check(bad_val == 0, "every filtered byte is BIT-IDENTICAL to the shipped bilerp", 0,
               bad_val);
   zhao::check(bad_tok == 0, "and carries its own job's token", 0, bad_tok);
   zhao::check(bad_chan == 0, "and its own channel", 0, bad_chan);
 
   // II=1: three stages must all be occupied under a steady feed. A filter that
   // took a job every third clock would pass every check above.
-  zhao::check(max_occ == 3, "three jobs are in flight at once (II=1, not 1-in-3)",
-              3, max_occ);
+  zhao::check(max_occ == 3, "three jobs are in flight at once (II=1, not 1-in-3)", 3, max_occ);
 
-  std::printf("  %zu jobs, max occupancy %d, %u accepted\n", jobs.size(), max_occ,
-              top.lane_jobs_o);
+  std::printf("  %zu jobs, max occupancy %d, %u accepted\n", jobs.size(), max_occ, top.lane_jobs_o);
 
   return zhao::report_and_exit("texture_bilerp_lane_directed");
 }

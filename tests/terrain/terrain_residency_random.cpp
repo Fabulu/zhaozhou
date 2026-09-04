@@ -62,9 +62,7 @@ struct Model {
   };
   Slot s[SLOTS];
 
-  static int slot_of(int px, int py) {
-    return ((py & 31) << 5) | (px & 31);
-  }
+  static int slot_of(int px, int py) { return ((py & 31) << 5) | (px & 31); }
 
   bool resident(int px, int py) const {
     const Slot& e = s[slot_of(px, py)];
@@ -97,7 +95,11 @@ int main(int argc, char** argv) {
   // A camera walking a path, with a working set around it. Patches are claimed
   // as they come into range and loads land a random number of clocks later --
   // which is what creates the churn the directed suite cannot produce.
-  struct Pending { int px, py; uint32_t slot, gen; int due; };
+  struct Pending {
+    int px, py;
+    uint32_t slot, gen;
+    int due;
+  };
   std::vector<Pending> pending;
 
   int cam_x = 0, cam_y = 0;
@@ -119,7 +121,7 @@ int main(int argc, char** argv) {
     // around, so slots are genuinely revisited by DIFFERENT patches.
     cam_x = (step / 12) % 200;
     cam_y = ((step / 40) % 70);
-    if (((step / 2400) & 1) != 0) cam_x = 199 - cam_x;   // and back again
+    if (((step / 2400) & 1) != 0) cam_x = 199 - cam_x;  // and back again
 
     // ---- one of: claim / finish / dirty / lookup / check ------------------
     const uint32_t act = rnd(&s) % 100u;
@@ -145,8 +147,7 @@ int main(int argc, char** argv) {
 
       if (top.cl_evicted_o != (will_evict ? 1 : 0)) ++bad_evict;
       if (top.cl_evicted_dirty_o != (will_evict_dirty ? 1 : 0)) ++bad_dirty_evict;
-      if (will_evict &&
-          (top.cl_evicted_px_o != evict_px || top.cl_evicted_py_o != evict_py))
+      if (will_evict && (top.cl_evicted_px_o != evict_px || top.cl_evicted_py_o != evict_py))
         ++bad_evict;
       if (will_evict) ++evictions_seen;
       if (will_evict_dirty) ++dirty_evictions_seen;
@@ -161,8 +162,8 @@ int main(int argc, char** argv) {
         e.present = true;
         // a load will land later; anything already pending for this slot is
         // now stale and must never mark the new page loaded
-        pending.push_back({px, py, static_cast<uint32_t>(sl), e.gen,
-                           step + 1 + static_cast<int>(rnd(&s) % 20u)});
+        pending.push_back(
+            {px, py, static_cast<uint32_t>(sl), e.gen, step + 1 + static_cast<int>(rnd(&s) % 20u)});
       }
     } else if (act < 45) {
       // FINISH the oldest due load, if any
@@ -222,30 +223,26 @@ int main(int argc, char** argv) {
     }
   }
 
-  zhao::check(bad_resident == 0,
-              "residency always matches the contract model across 4000 steps", 0,
+  zhao::check(bad_resident == 0, "residency always matches the contract model across 4000 steps", 0,
               bad_resident);
   zhao::check(bad_stale == 0, "and every handle check agrees", 0, bad_stale);
-  zhao::check(bad_evict == 0,
-              "every eviction is reported, and names the displaced patch", 0,
+  zhao::check(bad_evict == 0, "every eviction is reported, and names the displaced patch", 0,
               bad_evict);
 
   // THE ONE THAT MATTERS: a dirty page displaced without being reported means
   // permanent scars are silently lost.
   zhao::check(bad_dirty_evict == 0,
-              "NO dirty page is ever displaced without being flagged for writeback",
-              0, bad_dirty_evict);
+              "NO dirty page is ever displaced without being flagged for writeback", 0,
+              bad_dirty_evict);
 
   // and the traversal has to have actually exercised the interesting cases
   zhao::check(evictions_seen > 20, "the traversal forced real eviction churn", 1,
               evictions_seen > 20 ? 1 : 0);
-  zhao::check(dirty_evictions_seen > 0,
-              "including dirty pages being displaced", 1,
+  zhao::check(dirty_evictions_seen > 0, "including dirty pages being displaced", 1,
               dirty_evictions_seen > 0 ? 1 : 0);
 
-  std::printf("  %d claims, %d evictions (%d dirty), hw: %u hits %u misses %u collisions\n",
-              claims, evictions_seen, dirty_evictions_seen, top.hits_o, top.misses_o,
-              top.collisions_o);
+  std::printf("  %d claims, %d evictions (%d dirty), hw: %u hits %u misses %u collisions\n", claims,
+              evictions_seen, dirty_evictions_seen, top.hits_o, top.misses_o, top.collisions_o);
 
   return zhao::report_and_exit("terrain_residency_random");
 }

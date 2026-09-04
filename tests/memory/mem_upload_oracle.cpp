@@ -42,12 +42,12 @@ int main() {
 
   // ---- 1: the ordinary accept -------------------------------------------
   {
-    const UploadVerdict v =
-        upload_verdict(vram, hps, 0x3000'0000ull, 0x0800'0000u, 4096, 7, 7);
-    zhao::check(v == kUploadOk, "a well-formed request inside both regions is "
-                                "accepted", kUploadOk, v);
-    zhao::check(upload_bursts(4096) == 64,
-                "and decomposes into exact 64-byte bursts", 64,
+    const UploadVerdict v = upload_verdict(vram, hps, 0x3000'0000ull, 0x0800'0000u, 4096, 7, 7);
+    zhao::check(v == kUploadOk,
+                "a well-formed request inside both regions is "
+                "accepted",
+                kUploadOk, v);
+    zhao::check(upload_bursts(4096) == 64, "and decomposes into exact 64-byte bursts", 64,
                 static_cast<int>(upload_bursts(4096)));
   }
 
@@ -56,23 +56,28 @@ int main() {
   // the epoch's staging arena is not a bounds slip, it is a read of arbitrary
   // ARM or kernel memory, and it must be refused as such.
   {
-    struct C { uint64_t src; uint32_t len; UploadVerdict want; const char* why; };
+    struct C {
+      uint64_t src;
+      uint32_t len;
+      UploadVerdict want;
+      const char* why;
+    };
     const C cases[] = {
-      {0x3000'0000ull,          64, kUploadOk,                 "the arena's first burst"},
-      {0x300F'FFC0ull,          64, kUploadOk,                 "and its last"},
-      {0x3010'0000ull,          64, kUploadSourceOutsideArena, "one burst past the end"},
-      {0x2FFF'FFC0ull,          64, kUploadSourceOutsideArena, "one burst before the start"},
-      {0x300F'FFC0ull,         128, kUploadSourceOutsideArena, "starts inside and RUNS OFF the end"},
-      {0x0000'0001'0000'0000ull, 64, kUploadSourceUnreachable, "upper half set -- refused, never truncated"},
+        {0x3000'0000ull, 64, kUploadOk, "the arena's first burst"},
+        {0x300F'FFC0ull, 64, kUploadOk, "and its last"},
+        {0x3010'0000ull, 64, kUploadSourceOutsideArena, "one burst past the end"},
+        {0x2FFF'FFC0ull, 64, kUploadSourceOutsideArena, "one burst before the start"},
+        {0x300F'FFC0ull, 128, kUploadSourceOutsideArena, "starts inside and RUNS OFF the end"},
+        {0x0000'0001'0000'0000ull, 64, kUploadSourceUnreachable,
+         "upper half set -- refused, never truncated"},
     };
     int bad = 0;
     for (const C& c : cases) {
-      const UploadVerdict got =
-          upload_verdict(vram, hps, c.src, 0x0800'0000u, c.len, 3, 3);
+      const UploadVerdict got = upload_verdict(vram, hps, c.src, 0x0800'0000u, c.len, 3, 3);
       if (got != c.want) {
         ++bad;
-        std::printf("    src %016llx len %u -> %d, wanted %d (%s)\n",
-                    (unsigned long long)c.src, c.len, got, c.want, c.why);
+        std::printf("    src %016llx len %u -> %d, wanted %d (%s)\n", (unsigned long long)c.src,
+                    c.len, got, c.want, c.why);
       }
     }
     zhao::check(bad == 0,
@@ -102,14 +107,14 @@ int main() {
   // Padding an unaligned length would write bytes the producer never staged.
   {
     int bad = 0;
-    if (upload_verdict(vram, hps, 0x3000'0000ull, 0x0800'0000u, 0, 1, 1) !=
-        kUploadZeroLength) ++bad;
-    if (upload_verdict(vram, hps, 0x3000'0020ull, 0x0800'0000u, 64, 1, 1) !=
-        kUploadUnaligned) ++bad;
-    if (upload_verdict(vram, hps, 0x3000'0000ull, 0x0800'0020u, 64, 1, 1) !=
-        kUploadUnaligned) ++bad;
-    if (upload_verdict(vram, hps, 0x3000'0000ull, 0x0800'0000u, 65, 1, 1) !=
-        kUploadUnaligned) ++bad;
+    if (upload_verdict(vram, hps, 0x3000'0000ull, 0x0800'0000u, 0, 1, 1) != kUploadZeroLength)
+      ++bad;
+    if (upload_verdict(vram, hps, 0x3000'0020ull, 0x0800'0000u, 64, 1, 1) != kUploadUnaligned)
+      ++bad;
+    if (upload_verdict(vram, hps, 0x3000'0000ull, 0x0800'0020u, 64, 1, 1) != kUploadUnaligned)
+      ++bad;
+    if (upload_verdict(vram, hps, 0x3000'0000ull, 0x0800'0000u, 65, 1, 1) != kUploadUnaligned)
+      ++bad;
     zhao::check(bad == 0,
                 "zero length and every unaligned form are refused rather than "
                 "padded -- padding writes bytes nobody staged",
@@ -120,8 +125,7 @@ int main() {
   // A malformed request is reported as malformed even when it is ALSO stale,
   // so a producer bug is never hidden behind an epoch that happened to close.
   {
-    const UploadVerdict v =
-        upload_verdict(vram, hps, 0x3000'0020ull, 0x0800'0000u, 64, 2, 9);
+    const UploadVerdict v = upload_verdict(vram, hps, 0x3000'0020ull, 0x0800'0000u, 64, 2, 9);
     zhao::check(v == kUploadUnaligned,
                 "a request that is BOTH malformed and stale reports the "
                 "malformation -- otherwise a producer bug hides behind a "
@@ -131,8 +135,7 @@ int main() {
 
   // ---- 6: a stale epoch is refused --------------------------------------
   {
-    const UploadVerdict v =
-        upload_verdict(vram, hps, 0x3000'0000ull, 0x0800'0000u, 64, 4, 5);
+    const UploadVerdict v = upload_verdict(vram, hps, 0x3000'0000ull, 0x0800'0000u, 64, 4, 5);
     zhao::check(v == kUploadEpochStale,
                 "an upload belonging to a closed epoch is refused -- it would "
                 "write correct bytes into a slot somebody else now owns",
@@ -147,8 +150,7 @@ int main() {
     zhao::check(upload_visible_generation(4, 5, false) == 4,
                 "mid-upload a consumer sees the OLD generation", 4,
                 upload_visible_generation(4, 5, false));
-    zhao::check(upload_visible_generation(4, 5, true) == 5,
-                "and the new one only on completion", 5,
+    zhao::check(upload_visible_generation(4, 5, true) == 5, "and the new one only on completion", 5,
                 upload_visible_generation(4, 5, true));
   }
 

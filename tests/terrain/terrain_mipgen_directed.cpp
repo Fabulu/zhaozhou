@@ -49,8 +49,7 @@ constexpr int kSurfs = 2;
 
 // Every sample distinct, and distinct across surfaces too.
 uint16_t sample_of(int surf, int row, int col) {
-  const uint32_t v = static_cast<uint32_t>(surf) * 20011u +
-                     static_cast<uint32_t>(row) * 137u +
+  const uint32_t v = static_cast<uint32_t>(surf) * 20011u + static_cast<uint32_t>(row) * 137u +
                      static_cast<uint32_t>(col) * 7u + 0x1234u;
   return static_cast<uint16_t>(v ^ (v >> 7));
 }
@@ -88,7 +87,8 @@ int main(int argc, char** argv) {
     auto capture = [&]() {
       if (top.m17_valid_o) {
         const int a = static_cast<int>(top.m17_addr_o);
-        if (a >= kC17 * kC17) ++m17_oor;
+        if (a >= kC17 * kC17)
+          ++m17_oor;
         else {
           if (m17[top.m17_surf_o][a] >= 0) ++m17_double_write;
           m17[top.m17_surf_o][a] = top.m17_h_o;
@@ -96,7 +96,8 @@ int main(int argc, char** argv) {
       }
       if (top.m9_valid_o) {
         const int a = static_cast<int>(top.m9_addr_o);
-        if (a >= kC9 * kC9) ++m9_oor;
+        if (a >= kC9 * kC9)
+          ++m9_oor;
         else {
           if (m9[top.m9_surf_o][a] >= 0) ++m9_double_write;
           m9[top.m9_surf_o][a] = top.m9_h_o;
@@ -134,15 +135,18 @@ int main(int argc, char** argv) {
           capture();
         }
     // let the last write land
-    for (int c = 0; c < 4; ++c) { top.eval(); zhao::tick(top); }
+    for (int c = 0; c < 4; ++c) {
+      top.eval();
+      zhao::tick(top);
+    }
   }
 
   zhao::check(top.samples_o == static_cast<uint32_t>(kSurfs * kFine * kFine),
               "every fine sample was consumed", kSurfs * kFine * kFine,
               static_cast<int>(top.samples_o));
   zhao::check(top.m17_writes_o == static_cast<uint32_t>(kSurfs * kC17 * kC17),
-              "and exactly 17x17 per surface came out of the 17 port",
-              kSurfs * kC17 * kC17, static_cast<int>(top.m17_writes_o));
+              "and exactly 17x17 per surface came out of the 17 port", kSurfs * kC17 * kC17,
+              static_cast<int>(top.m17_writes_o));
   zhao::check(top.m9_writes_o == static_cast<uint32_t>(kSurfs * kC9 * kC9),
               "and exactly 9x9 per surface out of the 9 port", kSurfs * kC9 * kC9,
               static_cast<int>(top.m9_writes_o));
@@ -169,12 +173,18 @@ int main(int argc, char** argv) {
 
     for (int i = 0; i < kC17 * kC17; ++i) {
       const int32_t got = m17[s][i];
-      if (got < 0) { ++unfilled; continue; }
+      if (got < 0) {
+        ++unfilled;
+        continue;
+      }
       if (static_cast<uint16_t>(got) != want17[i]) ++bad17;
     }
     for (int i = 0; i < kC9 * kC9; ++i) {
       const int32_t got = m9[s][i];
-      if (got < 0) { ++unfilled; continue; }
+      if (got < 0) {
+        ++unfilled;
+        continue;
+      }
       if (static_cast<uint16_t>(got) != want9[i]) ++bad9;
     }
   }
@@ -201,9 +211,7 @@ int main(int argc, char** argv) {
   int cross = 0;
   for (int i = 0; i < kC17 * kC17; ++i)
     if (m17[0][i] == m17[1][i]) ++cross;
-  zhao::check(cross == 0,
-              "top and bottom are separate surfaces, not one written twice", 0,
-              cross);
+  zhao::check(cross == 0, "top and bottom are separate surfaces, not one written twice", 0, cross);
 
   // ---- 5: an aborted scan is abandoned and counted ------------------------
   // T11 makes an aborted load legal. What must not happen is a half-finished
@@ -232,8 +240,8 @@ int main(int argc, char** argv) {
     zhao::check(top.busy_o == 1, "and the new scan is running", 1, top.busy_o);
   }
 
-  std::printf("  %u samples -> %u mip17 + %u mip9 writes, %u aborts\n",
-              top.samples_o, top.m17_writes_o, top.m9_writes_o, top.aborts_o);
+  std::printf("  %u samples -> %u mip17 + %u mip9 writes, %u aborts\n", top.samples_o,
+              top.m17_writes_o, top.m9_writes_o, top.aborts_o);
 
   return zhao::report_and_exit("terrain_mipgen_directed");
 }

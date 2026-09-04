@@ -102,9 +102,7 @@ int main(int argc, char** argv) {
     claim(10, 20, &slot, &gen);
     int hit = 1;
     lookup(10, 20, &hit);
-    zhao::check(hit == 0,
-                "a claimed page is NOT resident until the loader finishes it", 0,
-                hit);
+    zhao::check(hit == 0, "a claimed page is NOT resident until the loader finishes it", 0, hit);
     finish(slot, gen);
     lookup(10, 20, &hit);
     zhao::check(hit == 1, "and IS resident once it does", 1, hit);
@@ -119,10 +117,8 @@ int main(int argc, char** argv) {
     claim(10, 20, &slot, &gen);
     finish(slot, gen);
     int hit = 1;
-    lookup(42, 52, &hit);   // same slot, different patch
-    zhao::check(hit == 0,
-                "a COLLIDING patch does not answer with the resident one's page",
-                0, hit);
+    lookup(42, 52, &hit);  // same slot, different patch
+    zhao::check(hit == 0, "a COLLIDING patch does not answer with the resident one's page", 0, hit);
   }
 
   // ---- 3: THE HAZARD -- fin and claim on the same slot, same clock --------
@@ -137,11 +133,11 @@ int main(int argc, char** argv) {
     // completes on that very clock.
     idle();
     top.cl_valid_i = 1;
-    top.cl_px_i = 3 + 32;    // collides with (3,4)
+    top.cl_px_i = 3 + 32;  // collides with (3,4)
     top.cl_py_i = 4 + 32;
-    top.fin_valid_i = 1;     // the previous page's loader, arriving late
+    top.fin_valid_i = 1;  // the previous page's loader, arriving late
     top.fin_slot_i = slot;
-    top.fin_gen_i = gen;     // the OLD generation
+    top.fin_gen_i = gen;  // the OLD generation
     zhao::tick(top);
     idle();
     top.eval();
@@ -164,19 +160,17 @@ int main(int argc, char** argv) {
     // an in-flight job holds {slot, gen}; the slot is re-claimed underneath it
     uint32_t slot2, gen2;
     claim(7 + 32, 8 + 32, &slot2, &gen2);
-    zhao::check(slot2 == slot, "the colliding patch takes the same slot", slot,
-                slot2);
+    zhao::check(slot2 == slot, "the colliding patch takes the same slot", slot, slot2);
 
     idle();
     top.chk_valid_i = 1;
     top.chk_slot_i = slot;
-    top.chk_gen_i = gen;    // the OLD handle
+    top.chk_gen_i = gen;  // the OLD handle
     zhao::tick(top);
     idle();
     top.eval();
-    zhao::check(top.chk_stale_o == 1,
-                "an in-flight handle to a re-claimed slot is reported STALE", 1,
-                top.chk_stale_o);
+    zhao::check(top.chk_stale_o == 1, "an in-flight handle to a re-claimed slot is reported STALE",
+                1, top.chk_stale_o);
 
     // and the new handle is not
     idle();
@@ -186,8 +180,7 @@ int main(int argc, char** argv) {
     zhao::tick(top);
     idle();
     top.eval();
-    zhao::check(top.chk_stale_o == 0, "while the current handle is not", 0,
-                top.chk_stale_o);
+    zhao::check(top.chk_stale_o == 0, "while the current handle is not", 0, top.chk_stale_o);
   }
 
   // ---- 5: re-claiming the SAME patch must not invalidate live handles ----
@@ -200,12 +193,10 @@ int main(int argc, char** argv) {
     claim(11, 12, &slot, &gen);
     finish(slot, gen);
     uint32_t slot2, gen2;
-    claim(11, 12, &slot2, &gen2);   // the same patch again
-    zhao::check(gen2 == gen,
-                "re-claiming the SAME patch does not advance the generation",
-                gen, gen2);
-    zhao::check(top.cl_evicted_o == 0, "and reports no eviction", 0,
-                top.cl_evicted_o);
+    claim(11, 12, &slot2, &gen2);  // the same patch again
+    zhao::check(gen2 == gen, "re-claiming the SAME patch does not advance the generation", gen,
+                gen2);
+    zhao::check(top.cl_evicted_o == 0, "and reports no eviction", 0, top.cl_evicted_o);
     int hit = 0;
     lookup(11, 12, &hit);
     zhao::check(hit == 1, "and the page stays resident", 1, hit);
@@ -226,11 +217,11 @@ int main(int argc, char** argv) {
 
     uint32_t s2, g2;
     claim(5 + 32, 6 + 32, &s2, &g2);
-    zhao::check(top.cl_evicted_o == 1, "displacing a live page reports an eviction",
-                1, top.cl_evicted_o);
+    zhao::check(top.cl_evicted_o == 1, "displacing a live page reports an eviction", 1,
+                top.cl_evicted_o);
     zhao::check(top.cl_evicted_dirty_o == 1,
-                "and flags it DIRTY so its scars are written back before reuse",
-                1, top.cl_evicted_dirty_o);
+                "and flags it DIRTY so its scars are written back before reuse", 1,
+                top.cl_evicted_dirty_o);
     zhao::check(top.cl_evicted_px_o == 5 && top.cl_evicted_py_o == 6,
                 "and names the patch that was displaced", 1,
                 (top.cl_evicted_px_o == 5 && top.cl_evicted_py_o == 6) ? 1 : 0);
@@ -251,14 +242,12 @@ int main(int argc, char** argv) {
       finish(slot, gen);
       int hit = 0;
       lookup(px, py, &hit);
-      if (!hit) ++bad;   // just claimed and finished: must be resident
+      if (!hit) ++bad;  // just claimed and finished: must be resident
     }
-    zhao::check(bad == 0,
-                "across a 300-patch sweep, every just-loaded patch reads resident",
-                0, bad);
+    zhao::check(bad == 0, "across a 300-patch sweep, every just-loaded patch reads resident", 0,
+                bad);
     std::printf("  sweep: %u hits, %u misses, %u evictions, %u collisions, %u resident\n",
-                top.hits_o, top.misses_o, top.evictions_o, top.collisions_o,
-                top.resident_o);
+                top.hits_o, top.misses_o, top.evictions_o, top.collisions_o, top.resident_o);
   }
 
   return zhao::report_and_exit("terrain_residency_directed");

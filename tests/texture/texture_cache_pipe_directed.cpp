@@ -75,7 +75,8 @@ int main(int argc, char** argv) {
     top.smp_ready_i = 1;
     top.fill_data_valid_i = 0;
     top.fill_ready_i = 1;
-    fill_beats_left = 0; fill_beat = 0;
+    fill_beats_left = 0;
+    fill_beat = 0;
     top.rst_n = 0;
     for (int i = 0; i < 8; ++i) zhao::tick(top);
     top.rst_n = 1;
@@ -99,8 +100,7 @@ int main(int argc, char** argv) {
 
     for (int c = 0; c < 200 && !top.smp_valid_o; ++c) step(false);
 
-    zhao::check(top.fills_o == 1,
-                "four lanes inside ONE line cause exactly ONE line fetch", 1,
+    zhao::check(top.fills_o == 1, "four lanes inside ONE line cause exactly ONE line fetch", 1,
                 top.fills_o);
     zhao::check(top.smp_valid_o == 1, "and the access completes", 1, top.smp_valid_o);
 
@@ -112,12 +112,10 @@ int main(int argc, char** argv) {
       // a word array. Indexing it like an array compiled as a pointer subscript
       // and failed loudly, which is the good case; a 128-bit port would have
       // been an array and the same code would have silently read lane 2.
-      const uint16_t got =
-          static_cast<uint16_t>((top.smp_data_o >> (16 * k)) & 0xFFFFu);
+      const uint16_t got = static_cast<uint16_t>((top.smp_data_o >> (16 * k)) & 0xFFFFu);
       if (got != want) data_ok = false;
     }
-    zhao::check(data_ok, "and every lane reads the byte the memory held", 1,
-                data_ok ? 1 : 0);
+    zhao::check(data_ok, "and every lane reads the byte the memory held", 1, data_ok ? 1 : 0);
     std::printf("  one line, four taps: %u fill(s), %u lane misses\n", top.fills_o,
                 top.cache_misses_o);
   }
@@ -130,7 +128,7 @@ int main(int argc, char** argv) {
     top.acc_valid_i = 1;
     top.acc_en_i = 0xF;
     top.acc_addr_i[0] = 0x3000;
-    top.acc_addr_i[1] = 0x3010;   // next line
+    top.acc_addr_i[1] = 0x3010;  // next line
     top.acc_addr_i[2] = 0x3020;
     top.acc_addr_i[3] = 0x3030;
     top.acc_src_id_i = 0x22;
@@ -139,8 +137,7 @@ int main(int argc, char** argv) {
     top.acc_valid_i = 0;
 
     for (int c = 0; c < 400 && !top.smp_valid_o; ++c) step(false);
-    zhao::check(top.fills_o == 4,
-                "four lanes in FOUR different lines cause four fetches", 4,
+    zhao::check(top.fills_o == 4, "four lanes in FOUR different lines cause four fetches", 4,
                 top.fills_o);
     std::printf("  four lines, four taps: %u fills\n", top.fills_o);
   }
@@ -150,7 +147,7 @@ int main(int argc, char** argv) {
   // local request FIFO fills, and then stop -- not stop immediately.
   {
     reset();
-    top.smp_ready_i = 0;      // the consumer never takes anything
+    top.smp_ready_i = 0;  // the consumer never takes anything
     int accepted = 0;
     for (int c = 0; c < 40; ++c) {
       top.acc_valid_i = 1;
@@ -183,7 +180,7 @@ int main(int argc, char** argv) {
     uint32_t s = 0x777u;
     for (int c = 0; c < 400 && !top.smp_valid_o; ++c) {
       s = s * 1664525u + 1013904223u;
-      step(((s >> 16) & 3u) == 0u);   // stall the memory a quarter of the time
+      step(((s >> 16) & 3u) == 0u);  // stall the memory a quarter of the time
     }
     bool data_ok = true;
     for (int k = 0; k < 4; ++k) {
@@ -192,8 +189,7 @@ int main(int argc, char** argv) {
       // a word array. Indexing it like an array compiled as a pointer subscript
       // and failed loudly, which is the good case; a 128-bit port would have
       // been an array and the same code would have silently read lane 2.
-      const uint16_t got =
-          static_cast<uint16_t>((top.smp_data_o >> (16 * k)) & 0xFFFFu);
+      const uint16_t got = static_cast<uint16_t>((top.smp_data_o >> (16 * k)) & 0xFFFFu);
       if (got != want) data_ok = false;
     }
     zhao::check(top.smp_valid_o == 1 && data_ok,
@@ -256,11 +252,10 @@ int main(int argc, char** argv) {
 
     zhao::check(answered == WANT, "every warm access was answered", WANT, answered);
     zhao::check(top.fills_o == fills_warm,
-                "a warm line is never refetched -- 256 accesses, no new fill",
-                fills_warm, top.fills_o);
-    zhao::check(top.replays_o == replays_warm,
-                "and nothing is replayed, because nothing missed", replays_warm,
-                top.replays_o);
+                "a warm line is never refetched -- 256 accesses, no new fill", fills_warm,
+                top.fills_o);
+    zhao::check(top.replays_o == replays_warm, "and nothing is replayed, because nothing missed",
+                replays_warm, top.replays_o);
     // The pipeline depth is a fixed cost paid once; after that it is one a
     // clock. Anything near 2x would mean the rebuild bought timing by
     // spending throughput, which is not a trade this block may make.
@@ -268,8 +263,8 @@ int main(int argc, char** argv) {
                 "256 all-hit accesses complete within 256 clocks plus the "
                 "pipeline depth -- the rebuild did not cost throughput",
                 1, clocks <= WANT + 16 ? 1 : 0);
-    std::printf("  sustained: %d answered in %d clocks (%.2f each)\n", answered,
-                clocks, static_cast<double>(clocks) / answered);
+    std::printf("  sustained: %d answered in %d clocks (%.2f each)\n", answered, clocks,
+                static_cast<double>(clocks) / answered);
   }
 
   return zhao::report_and_exit("texture_cache_pipe_directed");

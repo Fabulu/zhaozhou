@@ -38,7 +38,7 @@ uint32_t rnd(uint32_t* s) {
 
 struct ModelCell {
   uint16_t r = 0, g = 0, b = 0;
-  int32_t dx = 0, dy = 0;   // the RTL's wide saturating s16 lane
+  int32_t dx = 0, dy = 0;  // the RTL's wide saturating s16 lane
   bool ink = false;
 };
 
@@ -86,8 +86,7 @@ int main(int argc, char** argv) {
     // A u16 channel needs 257 maximum contributions to saturate, so a
     // saturating tile has to aim them at one cell.
     const bool concentrated = (tile % 3) == 0;
-    const int n = concentrated ? 1200
-                               : 200 + static_cast<int>(rnd(&s) % 400u);
+    const int n = concentrated ? 1200 : 200 + static_cast<int>(rnd(&s) % 400u);
     for (int i = 0; i < n; ++i) {
       const int x = concentrated ? 1 : static_cast<int>(rnd(&s) & 15u);
       const int y = concentrated ? 1 : static_cast<int>(rnd(&s) & 15u);
@@ -99,8 +98,11 @@ int main(int argc, char** argv) {
       const bool ink = (rnd(&s) & 7u) == 0u;
 
       top.f_valid_i = 1;
-      top.f_x_i = x; top.f_y_i = y;
-      top.f_glow_r_i = r; top.f_glow_g_i = g; top.f_glow_b_i = b;
+      top.f_x_i = x;
+      top.f_y_i = y;
+      top.f_glow_r_i = r;
+      top.f_glow_g_i = g;
+      top.f_glow_b_i = b;
       top.f_disp_x_i = static_cast<uint16_t>(dx);
       top.f_disp_y_i = static_cast<uint16_t>(dy);
       top.f_ink_i = ink ? 1 : 0;
@@ -131,19 +133,17 @@ int main(int argc, char** argv) {
       if (top.c_valid_o) {
         const int idx = top.c_index_o;
         const ModelCell& want = m[idx];
-        if (top.c_glow_o != zref::post::glow_pack565(want.r, want.g, want.b))
-          ++bad_glow;
+        if (top.c_glow_o != zref::post::glow_pack565(want.r, want.g, want.b)) ++bad_glow;
         bool cx = false, cy = false;
-        const int wx = zref::post::disp_to_pixels(static_cast<int16_t>(want.dx),
-                                                  zref::post::kDispMaxX, &cx);
-        const int wy = zref::post::disp_to_pixels(static_cast<int16_t>(want.dy),
-                                                  zref::post::kDispMaxY, &cy);
+        const int wx =
+            zref::post::disp_to_pixels(static_cast<int16_t>(want.dx), zref::post::kDispMaxX, &cx);
+        const int wy =
+            zref::post::disp_to_pixels(static_cast<int16_t>(want.dy), zref::post::kDispMaxY, &cy);
         if (static_cast<int8_t>(top.c_disp_x_o) != wx) ++bad_dx;
         if (static_cast<int8_t>(top.c_disp_y_o) != wy) ++bad_dy;
         if ((top.c_ink_o != 0) != want.ink) ++bad_ink;
         if (cx || cy) ++clamped_cells;
-        if (want.r == 0xFFFF || want.g == 0xFFFF || want.b == 0xFFFF)
-          ++saturated_channels;
+        if (want.r == 0xFFFF || want.g == 0xFFFF || want.b == 0xFFFF) ++saturated_channels;
       }
       zhao::tick(top);
     }
@@ -168,11 +168,10 @@ int main(int argc, char** argv) {
               "the tiles were bright enough to SATURATE a glow channel -- "
               "otherwise this agrees with the model about a case it never hit",
               1, saturated_channels > 0 ? 1 : 0);
-  zhao::check(clamped_cells > 0, "and to clamp a displacement", 1,
-              clamped_cells > 0 ? 1 : 0);
+  zhao::check(clamped_cells > 0, "and to clamp a displacement", 1, clamped_cells > 0 ? 1 : 0);
 
-  std::printf("  %d tiles, %d saturated channels, %d clamped cells\n", tiles,
-              saturated_channels, clamped_cells);
+  std::printf("  %d tiles, %d saturated channels, %d clamped cells\n", tiles, saturated_channels,
+              clamped_cells);
 
   return zhao::report_and_exit("post_gather_random");
 }

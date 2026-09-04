@@ -92,7 +92,7 @@ struct Desc {
     b[3] = 40;  // triangle_count
     wr16(b + 4, 7);
     wr16(b + 6, 0);
-    wr32(b + 8, 0);   // bound_centre, meshlet-local
+    wr32(b + 8, 0);  // bound_centre, meshlet-local
     wr32(b + 12, 0);
     wr32(b + 16, 0);
     wr32(b + 20, static_cast<uint32_t>(2 * ONE));  // bound_radius = 2.0
@@ -158,7 +158,8 @@ int main(int argc, char** argv) {
     v65.stamp();
     zhao::check(MF::validate(v65.b, kFormat, kGeneration) == mf::Refusal::kVertexCount,
                 "vertex_count 65 is refused, and refused for the RIGHT reason -- "
-                "a u8 local index cannot address it", 1, 1);
+                "a u8 local index cannot address it",
+                1, 1);
 
     Desc t127;
     t127.b[3] = 127;
@@ -189,7 +190,8 @@ int main(int argc, char** argv) {
     }
     zhao::check(refused == mf::kCrcCovered && accepted == 0,
                 "a single flipped bit in ANY of the 60 covered bytes is refused, "
-                "and none is accepted", mf::kCrcCovered, refused);
+                "and none is accepted",
+                mf::kCrcCovered, refused);
     zhao::check(wrong_reason == 0,
                 "and every one of them except byte 0 refuses as kCrc -- byte 0 is "
                 "format_id, checked first because an unknown format means the "
@@ -220,14 +222,16 @@ int main(int argc, char** argv) {
     Desc d;
     zhao::check(MF::validate(d.b, kFormat, kGeneration + 1) == mf::Refusal::kGeneration,
                 "generation off by one is refused -- the asset moved under a "
-                "live instance", 1, 1);
+                "live instance",
+                1, 1);
 
     Desc z;
     wr32(z.b + 20, 0);
     z.stamp();
     zhao::check(MF::validate(z.b, kFormat, kGeneration) == mf::Refusal::kZeroBound,
                 "bound_radius 0 on a non-empty meshlet is refused -- a zero "
-                "bound culls everything, silently", 1, 1);
+                "bound culls everything, silently",
+                1, 1);
 
     Desc e;
     wr32(e.b + 20, 0);
@@ -235,7 +239,8 @@ int main(int argc, char** argv) {
     e.stamp();
     zhao::check(MF::validate(e.b, kFormat, kGeneration) == mf::Refusal::kNone,
                 "but a zero bound on an EMPTY meshlet is legal -- refusing it "
-                "would turn a degenerate case into a fault", 1, 1);
+                "would turn a degenerate case into a fault",
+                1, 1);
 
     Desc f;
     f.b[0] = 0xEE;
@@ -263,9 +268,8 @@ int main(int argc, char** argv) {
                 "visible_mask 0b10 -- a block that emitted one mask for both eyes "
                 "would give the second eye the first eye's geometry",
                 0b10, r.visible_mask);
-    zhao::check(r.refusal == mf::Refusal::kNone,
-                "and it is not a refusal: the descriptor was fine", 0,
-                static_cast<int>(r.refusal));
+    zhao::check(r.refusal == mf::Refusal::kNone, "and it is not a refusal: the descriptor was fine",
+                0, static_cast<int>(r.refusal));
   }
 
   // ---- 6: REJECTED IS NOT REFUSED ----------------------------------------
@@ -279,8 +283,8 @@ int main(int argc, char** argv) {
     d.stamp();
 
     const MF::Result r = MF::decide(d.b, kFormat, kGeneration, ident, views, 0b11);
-    zhao::check(!r.accepted && r.visible_mask == 0,
-                "geometry outside every camera is not accepted", 0, r.visible_mask);
+    zhao::check(!r.accepted && r.visible_mask == 0, "geometry outside every camera is not accepted",
+                0, r.visible_mask);
     zhao::check(r.refusal == mf::Refusal::kNone,
                 "and it is REJECTED, not REFUSED -- one is geometry that is not "
                 "visible, the other is a descriptor that is not trustworthy, and "
@@ -302,9 +306,9 @@ int main(int argc, char** argv) {
   // a tight one deletes geometry.
   {
     MF::InstanceXform x{};
-    x.m[0] = 3 * ONE;  // x scaled 3x
-    x.m[5] = ONE;      // y unscaled
-    x.m[10] = 2 * ONE; // z scaled 2x
+    x.m[0] = 3 * ONE;   // x scaled 3x
+    x.m[5] = ONE;       // y unscaled
+    x.m[10] = 2 * ONE;  // z scaled 2x
 
     const int32_t local_c[3] = {ONE, 2 * ONE, -ONE};
     const uint32_t local_r = static_cast<uint32_t>(5 * ONE);

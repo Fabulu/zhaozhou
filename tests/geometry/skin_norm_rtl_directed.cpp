@@ -30,7 +30,10 @@ constexpr int32_t ONE = 65536;
 struct Rng {
   uint32_t s;
   explicit Rng(uint32_t x) : s(x) {}
-  uint32_t next() { s = s * 1664525u + 1013904223u; return s; }
+  uint32_t next() {
+    s = s * 1664525u + 1013904223u;
+    return s;
+  }
   int32_t sym(int32_t r) { return static_cast<int32_t>(next() % (2u * r + 1u)) - r; }
 };
 
@@ -146,10 +149,12 @@ int main(int argc, char** argv) {
                                  o.mag == static_cast<uint64_t>(wmag)));
       if (!ok) {
         if (bad < 3)
-          std::printf("    rtl (%lld,%lld,%lld) mag %llu deg %d | oracle (%lld,%lld,%lld) mag %lld live %d\n",
-                      (long long)o.n[0], (long long)o.n[1], (long long)o.n[2],
-                      (unsigned long long)o.mag, o.degenerate ? 1 : 0, (long long)wn[0],
-                      (long long)wn[1], (long long)wn[2], (long long)wmag, live ? 1 : 0);
+          std::printf(
+              "    rtl (%lld,%lld,%lld) mag %llu deg %d | oracle (%lld,%lld,%lld) mag %lld live "
+              "%d\n",
+              (long long)o.n[0], (long long)o.n[1], (long long)o.n[2], (unsigned long long)o.mag,
+              o.degenerate ? 1 : 0, (long long)wn[0], (long long)wn[1], (long long)wn[2],
+              (long long)wmag, live ? 1 : 0);
         ++bad;
       }
     }
@@ -172,13 +177,16 @@ int main(int argc, char** argv) {
     for (int k = 0; k < 12; ++k) A.m[k] = r.sym(2 * ONE);
     for (int k = 0; k < 12; ++k) B.m[k] = r.sym(2 * ONE);
     zc::SkinVertex v{};
-    v.nx = 0; v.ny = 0; v.nz = 0;
-    v.b0 = 0; v.b1 = 1; v.w0 = 32;
+    v.nx = 0;
+    v.ny = 0;
+    v.nz = 0;
+    v.b0 = 0;
+    v.b1 = 1;
+    v.w0 = 32;
 
     const uint32_t before = top.degenerate_o;
     const Observed o = run(top, A, B, v);
-    zhao::check(o.got && o.degenerate && o.mag == 0 &&
-                    top.degenerate_o == before + 1,
+    zhao::check(o.got && o.degenerate && o.mag == 0 && top.degenerate_o == before + 1,
                 "a zero packed normal is reported degenerate and counted -- the "
                 "surface has no direction and GEOM.LIGHT must leave it black "
                 "rather than receive a zero-length vector to divide by",
@@ -188,10 +196,16 @@ int main(int argc, char** argv) {
   // ---- 3: identity bones, +X normal -- a value that can be read by eye ----
   {
     zc::mat3x4fx I{};
-    I.m[0] = ONE; I.m[5] = ONE; I.m[10] = ONE;
+    I.m[0] = ONE;
+    I.m[5] = ONE;
+    I.m[10] = ONE;
     zc::SkinVertex v{};
-    v.nx = 127; v.ny = 0; v.nz = 0;
-    v.b0 = 0; v.b1 = 1; v.w0 = 32;
+    v.nx = 127;
+    v.ny = 0;
+    v.nz = 0;
+    v.b0 = 0;
+    v.b1 = 1;
+    v.w0 = 32;
 
     const zc::mat3x4fx pal[2] = {I, I};
     int64_t wn[3];
@@ -199,15 +213,15 @@ int main(int argc, char** argv) {
     zc::skin_world_normal(pal, v, wn, &wmag);
 
     const Observed o = run(top, I, I, v);
-    zhao::check(o.got && !o.degenerate && o.n[1] == 0 && o.n[2] == 0 &&
-                    o.n[0] == wn[0] && o.mag == static_cast<uint64_t>(wmag),
+    zhao::check(o.got && !o.degenerate && o.n[1] == 0 && o.n[2] == 0 && o.n[0] == wn[0] &&
+                    o.mag == static_cast<uint64_t>(wmag),
                 "identity bones and a +X normal give a pure +X direction, and "
                 "the magnitude is the oracle's -- a case whose answer can be "
                 "read without running anything",
                 1, 1);
   }
 
-  std::printf("  %u vertices, %u degenerate, %u range-reduced\n", top.vertices_o,
-              top.degenerate_o, top.reduced_o);
+  std::printf("  %u vertices, %u degenerate, %u range-reduced\n", top.vertices_o, top.degenerate_o,
+              top.reduced_o);
   return zhao::report_and_exit("skin_norm_rtl_directed");
 }

@@ -61,9 +61,7 @@ struct Key {
     if (ix != o.ix) return ix < o.ix;
     return iz < o.iz;
   }
-  bool operator==(const Key& o) const {
-    return island == o.island && ix == o.ix && iz == o.iz;
-  }
+  bool operator==(const Key& o) const { return island == o.island && ix == o.ix && iz == o.iz; }
 };
 
 }  // namespace
@@ -73,16 +71,24 @@ int main(int argc, char** argv) {
   Vzhao_terrain_residency_v2 top;
 
   auto idle = [&]() {
-    top.lu_valid_i = 0; top.cl_valid_i = 0; top.fin_valid_i = 0;
-    top.dm_valid_i = 0; top.pin_valid_i = 0; top.unpin_valid_i = 0;
-    top.wb_valid_i = 0; top.chk_valid_i = 0;
+    top.lu_valid_i = 0;
+    top.cl_valid_i = 0;
+    top.fin_valid_i = 0;
+    top.dm_valid_i = 0;
+    top.pin_valid_i = 0;
+    top.unpin_valid_i = 0;
+    top.wb_valid_i = 0;
+    top.chk_valid_i = 0;
   };
 
   idle();
   top.rst_n = 0;
   for (int i = 0; i < 4; ++i) zhao::tick(top);
   top.rst_n = 1;
-  for (int i = 0; i < 400 && top.ready_o == 0; ++i) { zhao::tick(top); top.eval(); }
+  for (int i = 0; i < 400 && top.ready_o == 0; ++i) {
+    zhao::tick(top);
+    top.eval();
+  }
 
   // ---- the model -----------------------------------------------------------
   struct Slot {
@@ -100,7 +106,10 @@ int main(int argc, char** argv) {
   int claims = 0, evictions = 0, dirty_evictions = 0, refusals = 0;
   int overlap_pairs = 0;
 
-  struct Pending { uint32_t slot, gen; int due; };
+  struct Pending {
+    uint32_t slot, gen;
+    int due;
+  };
   std::vector<Pending> pending;
 
   auto do_claim = [&](Key k) {
@@ -124,11 +133,13 @@ int main(int argc, char** argv) {
     ++claims;
 
     // THE MAPPING, against the committed hash rather than against the RTL.
-    const uint8_t want_set =
-        zref::terrain::residency_set_index(k.island, k.ix, k.iz, kEpoch);
+    const uint8_t want_set = zref::terrain::residency_set_index(k.island, k.ix, k.iz, kEpoch);
     if (!top.cl_refused_o && (top.cl_slot_o >> 2) != want_set) ++bad_set;
 
-    if (top.cl_refused_o) { ++refusals; return; }
+    if (top.cl_refused_o) {
+      ++refusals;
+      return;
+    }
 
     const uint32_t slot = top.cl_slot_o;
     if (top.cl_evicted_o) {
@@ -145,7 +156,7 @@ int main(int argc, char** argv) {
         ++bad_evict_flag;
     }
 
-    if (top.cl_same_o) return;   // already here: no new generation, no reset
+    if (top.cl_same_o) return;  // already here: no new generation, no reset
 
     model[slot].occupied = true;
     model[slot].key = k;
@@ -160,19 +171,29 @@ int main(int argc, char** argv) {
   auto do_event = [&](int which, uint32_t slot, uint32_t gen, bool f = false) {
     idle();
     if (which == 0) {
-      top.fin_valid_i = 1; top.fin_slot_i = slot; top.fin_gen_i = gen;
-      top.fin_epoch_i = kEpoch; top.fin_ok_i = 1; top.fin_crc_i = 0xA5A5A5A5u;
+      top.fin_valid_i = 1;
+      top.fin_slot_i = slot;
+      top.fin_gen_i = gen;
+      top.fin_epoch_i = kEpoch;
+      top.fin_ok_i = 1;
+      top.fin_crc_i = 0xA5A5A5A5u;
     } else if (which == 1) {
-      top.dm_valid_i = 1; top.dm_slot_i = slot; top.dm_gen_i = gen;
-      top.dm_epoch_i = kEpoch; top.dm_bd_i = 0; top.dm_f_i = f; top.dm_mips_i = 0;
+      top.dm_valid_i = 1;
+      top.dm_slot_i = slot;
+      top.dm_gen_i = gen;
+      top.dm_epoch_i = kEpoch;
+      top.dm_bd_i = 0;
+      top.dm_f_i = f;
+      top.dm_mips_i = 0;
     } else {
-      top.wb_valid_i = 1; top.wb_slot_i = slot; top.wb_gen_i = gen;
+      top.wb_valid_i = 1;
+      top.wb_slot_i = slot;
+      top.wb_gen_i = gen;
       top.wb_epoch_i = kEpoch;
     }
     for (int i = 0; i < 64; ++i) {
       top.eval();
-      const bool rdy = (which == 0 && top.fin_ready_o) ||
-                       (which == 1 && top.dm_ready_o) ||
+      const bool rdy = (which == 0 && top.fin_ready_o) || (which == 1 && top.dm_ready_o) ||
                        (which == 2 && top.wb_ready_o);
       if (rdy) break;
       zhao::tick(top);
@@ -197,9 +218,7 @@ int main(int argc, char** argv) {
 
     bool want = false;
     for (const Slot& sl : model)
-      if (sl.occupied && sl.key == k && sl.loaded && sl.mipped &&
-          !sl.evict_pending)
-        want = true;
+      if (sl.occupied && sl.key == k && sl.loaded && sl.mipped && !sl.evict_pending) want = true;
     if (got != want) ++bad_resident;
   };
 
@@ -221,7 +240,6 @@ int main(int argc, char** argv) {
     do_event(0, slot, sl.gen);
     sl.mipped = true;
   };
-
 
   // ---- the traversal -------------------------------------------------------
   // FOUR ISLANDS OVER THE SAME COORDINATES. T1 makes that legal, and it is the
@@ -254,8 +272,11 @@ int main(int argc, char** argv) {
           Slot& sl = model[p.slot];
           if (sl.occupied && sl.gen == p.gen && !sl.evict_pending) {
             do_event(0, p.slot, p.gen);
-            if (!sl.loaded) { sl.loaded = true; pending.push_back({p.slot, p.gen, 0}); }
-            else sl.mipped = true;
+            if (!sl.loaded) {
+              sl.loaded = true;
+              pending.push_back({p.slot, p.gen, 0});
+            } else
+              sl.mipped = true;
           }
           break;
         }
@@ -280,8 +301,8 @@ int main(int argc, char** argv) {
       const int set = zref::terrain::residency_set_index(k.island, k.ix, k.iz, kEpoch);
       for (int w = 0; w < kWays; ++w) {
         const size_t i = static_cast<size_t>(set * kWays + w);
-        if (model[i].occupied && model[i].loaded && model[i].mipped &&
-            !model[i].evict_pending && !model[i].dirty_f) {
+        if (model[i].occupied && model[i].loaded && model[i].mipped && !model[i].evict_pending &&
+            !model[i].dirty_f) {
           do_event(1, static_cast<uint32_t>(i), model[i].gen, true);
           model[i].dirty_f = true;
         }
@@ -304,7 +325,8 @@ int main(int argc, char** argv) {
     std::map<std::pair<int, int>, int> by_coord;
     for (const Slot& sl : model)
       if (sl.occupied) ++by_coord[{sl.key.ix, sl.key.iz}];
-    for (const auto& e : by_coord) if (e.second > 1) ++overlap_pairs;
+    for (const auto& e : by_coord)
+      if (e.second > 1) ++overlap_pairs;
   }
 
   zhao::check(bad_set == 0,
@@ -329,9 +351,10 @@ int main(int argc, char** argv) {
               "coordinates at once -- the case the direct map cannot express",
               1, overlap_pairs > 0 ? 1 : 0);
 
-  std::printf("  %d claims, %d evictions (%d dirty), %d refusals, %d overlapping "
-              "coordinate pairs resident\n",
-              claims, evictions, dirty_evictions, refusals, overlap_pairs);
+  std::printf(
+      "  %d claims, %d evictions (%d dirty), %d refusals, %d overlapping "
+      "coordinate pairs resident\n",
+      claims, evictions, dirty_evictions, refusals, overlap_pairs);
 
   return zhao::report_and_exit("terrain_residency_v2_random");
 }

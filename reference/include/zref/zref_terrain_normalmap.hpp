@@ -77,10 +77,8 @@ inline DetailNormal normalmap_decode(uint16_t texel) {
 //
 // Rounding is round-half-up, NOT a shift. A shift floors, and floors disagree
 // on every negative product — which is half of what a detail normal produces.
-inline int32_t normalmap_detail(const DetailNormal& d, int32_t lx, int32_t lz,
-                                int strength) {
-  const int64_t dot = static_cast<int64_t>(d.nx) * lx +
-                      static_cast<int64_t>(d.nz) * lz;
+inline int32_t normalmap_detail(const DetailNormal& d, int32_t lx, int32_t lz, int strength) {
+  const int64_t dot = static_cast<int64_t>(d.nx) * lx + static_cast<int64_t>(d.nz) * lz;
   return static_cast<int32_t>(rshift_round(dot * strength, 15));
 }
 

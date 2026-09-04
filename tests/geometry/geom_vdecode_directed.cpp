@@ -66,8 +66,7 @@ int main(int argc, char** argv) {
   auto set_bytes = [&](const uint8_t* b) {
     for (int w = 0; w < 8; ++w) {
       uint32_t word = 0;
-      for (int k = 0; k < 4; ++k)
-        word |= static_cast<uint32_t>(b[w * 4 + k]) << (8 * k);
+      for (int k = 0; k < 4; ++k) word |= static_cast<uint32_t>(b[w * 4 + k]) << (8 * k);
       top.v_bytes_i[w] = word;
     }
   };
@@ -93,23 +92,19 @@ int main(int argc, char** argv) {
   for (int i = 0; i < 1500; ++i) {
     uint8_t b[32];
     for (int k = 0; k < 24; ++k) b[k] = static_cast<uint8_t>(rnd(&s));
-    for (int k = 24; k < 32; ++k) b[k] = 0;      // reserved MUST be zero
+    for (int k = 24; k < 32; ++k) b[k] = 0;       // reserved MUST be zero
     b[15] = static_cast<uint8_t>(rnd(&s) % 65u);  // a legal w0
 
     const zref::geom::Vertex0 want = zref::geom::vdecode0(b);
     feed(b);
 
     const bool ok =
-        sx(top.d_x_o, 32) == want.x && sx(top.d_y_o, 32) == want.y &&
-        sx(top.d_z_o, 32) == want.z &&
-        static_cast<int8_t>(top.d_nx_o) == want.nx &&
-        static_cast<int8_t>(top.d_ny_o) == want.ny &&
-        static_cast<int8_t>(top.d_nz_o) == want.nz &&
-        top.d_w0_o == want.w0 && top.d_rigid_o == (want.rigid ? 1 : 0) &&
-        static_cast<int16_t>(top.d_u_o) == want.u &&
-        static_cast<int16_t>(top.d_v_o) == want.v &&
-        top.d_bone0_o == want.bone0 && top.d_bone1_o == want.bone1 &&
-        top.d_reserved_nz_o == 0 && top.d_w0_illegal_o == 0;
+        sx(top.d_x_o, 32) == want.x && sx(top.d_y_o, 32) == want.y && sx(top.d_z_o, 32) == want.z &&
+        static_cast<int8_t>(top.d_nx_o) == want.nx && static_cast<int8_t>(top.d_ny_o) == want.ny &&
+        static_cast<int8_t>(top.d_nz_o) == want.nz && top.d_w0_o == want.w0 &&
+        top.d_rigid_o == (want.rigid ? 1 : 0) && static_cast<int16_t>(top.d_u_o) == want.u &&
+        static_cast<int16_t>(top.d_v_o) == want.v && top.d_bone0_o == want.bone0 &&
+        top.d_bone1_o == want.bone1 && top.d_reserved_nz_o == 0 && top.d_w0_illegal_o == 0;
     if (!ok) ++bad;
     ++checked;
   }
@@ -124,10 +119,9 @@ int main(int argc, char** argv) {
   {
     uint8_t base[32];
     std::memset(base, 0, sizeof(base));
-    base[15] = 32;                            // a legal mid-range w0
+    base[15] = 32;  // a legal mid-range w0
     feed(base);
-    const int32_t bx = sx(top.d_x_o, 32), by = sx(top.d_y_o, 32),
-                  bz = sx(top.d_z_o, 32);
+    const int32_t bx = sx(top.d_x_o, 32), by = sx(top.d_y_o, 32), bz = sx(top.d_z_o, 32);
     const int bnx = static_cast<int8_t>(top.d_nx_o);
     const int bw0 = top.d_w0_o;
     const int bu = static_cast<int16_t>(top.d_u_o);
@@ -143,23 +137,23 @@ int main(int argc, char** argv) {
         static_cast<int8_t>(top.d_nx_o) != bnx || top.d_w0_o != bw0 ||
         static_cast<int16_t>(top.d_u_o) != bu || top.d_bone0_o != bb0)
       ++leak;
-    if (sx(top.d_x_o, 32) == bx) ++leak;      // and it must actually move x
+    if (sx(top.d_x_o, 32) == bx) ++leak;  // and it must actually move x
 
     // byte 12 belongs to nx alone
     std::memcpy(b, base, sizeof(b));
     b[12] = 0x80;
     feed(b);
-    if (sx(top.d_x_o, 32) != bx || top.d_w0_o != bw0 ||
-        static_cast<int16_t>(top.d_u_o) != bu)
+    if (sx(top.d_x_o, 32) != bx || top.d_w0_o != bw0 || static_cast<int16_t>(top.d_u_o) != bu)
       ++leak;
     if (static_cast<int8_t>(top.d_nx_o) != -128) ++leak;
 
     // bytes 20..23 are the two bones, and they are SEPARATE
     std::memcpy(b, base, sizeof(b));
-    b[20] = 0x34; b[21] = 0x12;
+    b[20] = 0x34;
+    b[21] = 0x12;
     feed(b);
     if (top.d_bone0_o != 0x1234 || top.d_bone1_o != bb1) ++leak;
-    if (top.d_rigid_o != 0) ++leak;           // bone0 != bone1 now
+    if (top.d_rigid_o != 0) ++leak;  // bone0 != bone1 now
 
     zhao::check(leak == 0,
                 "each byte moves only the fields that own it, and rigid "
@@ -171,13 +165,15 @@ int main(int argc, char** argv) {
   {
     uint8_t b[32];
     std::memset(b, 0, sizeof(b));
-    b[15] = 64;                               // 64 == rigid weight
-    b[20] = 0x07; b[21] = 0x00;               // bone0 = 7
-    b[22] = 0x07; b[23] = 0x00;               // bone1 = 7
+    b[15] = 64;  // 64 == rigid weight
+    b[20] = 0x07;
+    b[21] = 0x00;  // bone0 = 7
+    b[22] = 0x07;
+    b[23] = 0x00;  // bone1 = 7
     feed(b);
     zhao::check(top.d_rigid_o == 1 && top.d_w0_o == 64,
-                "equal bones decode as RIGID, and w0 == 64 is the rigid quanta",
-                1, (top.d_rigid_o == 1 && top.d_w0_o == 64) ? 1 : 0);
+                "equal bones decode as RIGID, and w0 == 64 is the rigid quanta", 1,
+                (top.d_rigid_o == 1 && top.d_w0_o == 64) ? 1 : 0);
   }
 
   // ---- 4: the malformed cases are REFUSED, and emit nothing --------------
@@ -186,8 +182,8 @@ int main(int argc, char** argv) {
     uint8_t b[32];
     std::memset(b, 0, sizeof(b));
     b[15] = 10;
-    b[0] = 0xAB;                              // a position we can look for
-    b[31] = 0x01;                             // ONE bit in the reserved field
+    b[0] = 0xAB;   // a position we can look for
+    b[31] = 0x01;  // ONE bit in the reserved field
     feed(b);
     zhao::check(top.d_reserved_nz_o == 1 && top.d_refused_o == 1,
                 "a single nonzero bit in the reserved eight bytes REFUSES the "
@@ -209,8 +205,7 @@ int main(int argc, char** argv) {
     std::memset(b, 0, sizeof(b));
     b[15] = 65;
     feed(b);
-    zhao::check(top.d_w0_illegal_o == 1 && top.w0_illegal_o == w_before + 1 &&
-                    top.d_valid_o == 0,
+    zhao::check(top.d_w0_illegal_o == 1 && top.w0_illegal_o == w_before + 1 && top.d_valid_o == 0,
                 "w0 above 64 REFUSES the record, and is not saturated -- "
                 "saturating turns a bad file into a silently wrong skin",
                 1, (top.d_w0_illegal_o == 1 && top.d_valid_o == 0) ? 1 : 0);
@@ -220,16 +215,15 @@ int main(int argc, char** argv) {
     std::memset(b, 0, sizeof(b));
     b[15] = 1;
     feed(b, /*format=*/1);
-    zhao::check(top.d_format_bad_o == 1 && top.format_bad_o == f_before + 1 &&
-                    top.d_valid_o == 0,
+    zhao::check(top.d_format_bad_o == 1 && top.format_bad_o == f_before + 1 && top.d_valid_o == 0,
                 "an unknown format id refuses and emits NO VERTEX -- the "
                 "contract's named safety case; formats 1 and 2 are bake-off "
                 "gated",
                 1, (top.d_format_bad_o == 1 && top.d_valid_o == 0) ? 1 : 0);
   }
 
-  std::printf("  %d records decoded, %u reserved-nonzero, %u illegal w0, %u bad format\n",
-              checked, top.reserved_nz_o, top.w0_illegal_o, top.format_bad_o);
+  std::printf("  %d records decoded, %u reserved-nonzero, %u illegal w0, %u bad format\n", checked,
+              top.reserved_nz_o, top.w0_illegal_o, top.format_bad_o);
 
   return zhao::report_and_exit("geom_vdecode_directed");
 }

@@ -55,7 +55,10 @@ int main(int argc, char** argv) {
   // ---- 1: routing is correct and order WITHIN a class is preserved --------
   {
     reset();
-    struct Exp { int cls; uint32_t tok; };
+    struct Exp {
+      int cls;
+      uint32_t tok;
+    };
     std::vector<Exp> seq;
     for (int i = 0; i < 24; ++i) seq.push_back({i % 3, static_cast<uint32_t>(100 + i)});
 
@@ -96,7 +99,7 @@ int main(int argc, char** argv) {
   // ---- 2: THE CLAIM -- a stalled bilinear lane must not block the others --
   {
     reset();
-    top.bil_ready_i = 0;   // the filter is busy, permanently
+    top.bil_ready_i = 0;  // the filter is busy, permanently
     top.clut_ready_i = 1;
     top.near_ready_i = 1;
 
@@ -117,14 +120,12 @@ int main(int argc, char** argv) {
     }
     top.rsp_valid_i = 0;
 
-    zhao::check(accepted > 150,
-                "with the BILINEAR lane stalled, responses are still accepted",
-                1, accepted > 150 ? 1 : 0);
-    zhao::check(clut_out > 50 && near_out > 50,
-                "and CLUT and NEAREST both keep draining", 1,
+    zhao::check(accepted > 150, "with the BILINEAR lane stalled, responses are still accepted", 1,
+                accepted > 150 ? 1 : 0);
+    zhao::check(clut_out > 50 && near_out > 50, "and CLUT and NEAREST both keep draining", 1,
                 (clut_out > 50 && near_out > 50) ? 1 : 0);
-    std::printf("  bilinear stalled: accepted %d, clut out %d, near out %d\n",
-                accepted, clut_out, near_out);
+    std::printf("  bilinear stalled: accepted %d, clut out %d, near out %d\n", accepted, clut_out,
+                near_out);
   }
 
   // ---- 3: the honest limit -- head-of-line IS possible, and is counted ----
@@ -142,8 +143,7 @@ int main(int argc, char** argv) {
     }
     top.rsp_valid_i = 0;
     top.eval();
-    zhao::check(top.hol_stall_o > 0,
-                "a full class queue DOES stall the shared head, and says so",
+    zhao::check(top.hol_stall_o > 0, "a full class queue DOES stall the shared head, and says so",
                 1, top.hol_stall_o > 0 ? 1 : 0);
     std::printf("  head-of-line stalls counted: %u\n", top.hol_stall_o);
   }
