@@ -759,6 +759,36 @@ as blocks are next touched.
 deliberately — fixing one block to a convention that does not exist yet would
 make the tree less consistent, not more.
 
+### D19k. The production texture path can FLAG a railed UV but cannot COUNT one
+Found 2026-09-04, by the port scan once its width-bracket blindness was fixed —
+`uv_sat_fragments_o` is `[31:0]` and had been invisible to every earlier run.
+
+`zhao_raster_texjoin` (v1) carries **`uv_sat_fragments_o`**, a running count of
+fragments on which PERSPUV railed. Three facts about it:
+
+* **v1 is instantiated nowhere.** Not in `zhao_prod_top.sv`, not in any other
+  RTL file. It is a leaf nothing builds on.
+* **v2, the behavioural oracle, has the per-fragment flag `o_uv_sat_o` and no
+  counter.**
+* **`zhao_texture_fragrob`, the production block, has neither.** Its four
+  counter ports are `fragments_o`, `samples_o`, `full_clocks_o`, `id_errors_o`.
+
+So the shipped path can say *this fragment railed* on a one-cycle flag and
+cannot answer *how many railed this frame*. UV saturation means a texture
+coordinate left the representable range, which is a visible-artefact signal, and
+the thing you want from it is a per-frame number you can watch move.
+
+**Not filed as a bug in fragrob** — S6.1 built it beside v2 deliberately and its
+counter set is its own. Filed because the capability existed in v1, is absent
+from the production path, and nothing recorded the trade. Whether to restore it
+is an owner call; the cost is one 32-bit accumulator on a flag fragrob already
+has to compute.
+
+**Also observed while checking**: fragrob's RTL has FOUR counter ports and its
+ledger row declares THREE. `full_clocks_o` is implemented and undeclared, which
+is the D19c vocabulary problem running in the opposite direction — the ledger
+under-claiming rather than over-claiming.
+
 ### D19d. `PART.EXPAND -> GEOM.SETUP` narrows six SIGNED coordinates by a bit
 `tools/design/check_seam_widths.py`, first run. **Verified at source:**
 

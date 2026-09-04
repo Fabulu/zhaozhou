@@ -3211,6 +3211,13 @@ blocks:
       directed: tests/texture/fragrob_differential.cpp
       random: tests/texture/fragrob_differential.cpp
     counters: [fragrob_fragments, fragrob_samples, fragrob_id_errors]
+    # D19c, first worked example. The ledger prefixes these `fragrob_` and the
+    # ports do not, so the default <name>_o resolves none of them. The mapping
+    # says so mechanically instead of leaving the reader to guess.
+    counter_ports:
+      fragrob_fragments: fragments_o
+      fragrob_samples: samples_o
+      fragrob_id_errors: id_errors_o
     source_ids: true
     budget_group: tile
     maturity: UNIT_VERIFIED

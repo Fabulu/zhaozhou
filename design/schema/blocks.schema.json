@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://zhaozhou.local/schemas/blocks.schema.json",
-  "title": "Zhaozhou Design Ledger — blocks.yml",
-  "description": "Structural schema for design/blocks.yml (charter §4). Relational rules V1-V14 live in tools/ledger (schema validates shape, the validator validates law).",
+  "title": "Zhaozhou Design Ledger \u2014 blocks.yml",
+  "description": "Structural schema for design/blocks.yml (charter \u00a74). Relational rules V1-V14 live in tools/ledger (schema validates shape, the validator validates law).",
   "type": "object",
   "required": [
     "schema_version",
@@ -256,6 +256,17 @@
             "$ref": "#/$defs/counterName"
           }
         },
+        "counter_ports": {
+          "type": "object",
+          "description": "D19c. Maps a declared counter name to the RTL output port that implements it, for blocks whose ports do not follow the default <counter>_o. A block already following the default needs no entry, so this shrinks as the convention spreads. Checked by tools/design/check_counters.py.",
+          "propertyNames": {
+            "$ref": "#/$defs/counterName"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*_o$"
+          }
+        },
         "memory": {
           "type": "array",
           "items": {
@@ -270,7 +281,7 @@
           "type": "boolean"
         },
         "budget_group": {
-          "description": "§25 budget table row. Per-block alm/dsp/m10k percentages stay optional until Phase 0 freezes them (V5).",
+          "description": "\u00a725 budget table row. Per-block alm/dsp/m10k percentages stay optional until Phase 0 freezes them (V5).",
           "enum": [
             "platform",
             "command_debug",
@@ -303,7 +314,7 @@
           }
         },
         "resource_actual": {
-          "description": "Filled ONLY by tools/report from reports/synthesis/*.json — never hand-typed (charter discipline).",
+          "description": "Filled ONLY by tools/report from reports/synthesis/*.json \u2014 never hand-typed (charter discipline).",
           "type": "object",
           "additionalProperties": false,
           "properties": {
