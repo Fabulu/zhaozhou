@@ -30,7 +30,16 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    # G0 (2026-09-05): main ALONE was wrong. Every hardware campaign lands on an
+    # integration branch -- the texture-island work, the fit harness fixes and
+    # the D19 docket all sit on `zixxtrixx-v8-closeout`, which never triggered
+    # this workflow. A green `main` badge said nothing about the branch the work
+    # was actually on, which is the same failure as a gate that cannot fire:
+    # it reassures without checking.
+    branches:
+      - main
+      - zixxtrixx-v8-closeout   # the current hardware integration branch
+      - 'hw/**'                 # future hardware lanes, by convention
   pull_request:
   schedule:
     - cron: '0 3 * * *'  # nightly (UTC): full nightly label
