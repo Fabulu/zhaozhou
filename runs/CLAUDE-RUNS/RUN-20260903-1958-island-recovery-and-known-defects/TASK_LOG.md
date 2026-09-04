@@ -487,3 +487,48 @@ step I skipped.** The direct-compile script was not wasted — it is what let th
 three RAM fixes be baselined and mutation-tested while the graph was jammed —
 but the tree never needed a reconfigure for the reason I first gave, and it was
 never "fine" for the reason I gave second.
+
+## 03:05 — tonight's work re-verified through the REAL gate
+
+With `build.ninja` regenerated, everything was rebuilt and run through CTest
+rather than the scratchpad harness:
+
+    render_pipe_directed .............   Passed
+    geom_project_directed ............   Passed
+    raster_tilestore_directed ........   Passed
+    terrain_residency_v2_directed ....   Passed
+    texture_palette_res_directed .....   Passed
+    geom_depthquant_directed .........   Passed
+    100% tests passed, 0 failed out of 6
+
+`geom_depthquant_directed` is test #482 — it only became visible to CTest once
+the configure actually re-ran, which is worth noting: for most of the night it
+existed, passed, and **was not in the suite**.
+
+### Two registration gaps found and one closed mechanically
+
+**`zhao_prod_top` was stale, and not only from last night.** Regenerating it
+picked up `out_w_o` on `zhao_geom_project` — a PINMISSING that would have failed
+the next production fit — *and* `acq_sub_i`/`acq_gen_i` on
+`zhao_geom_pose_cache`, from the generation-tagged coherence work EARLIER in the
+session. So the top was already stale before last night touched it. A generated
+file that nobody regenerates is a stale file with a reassuring provenance line
+at the top.
+
+**A new block has to be registered in more than one place**, and only the first
+was mechanical. `check_prod_manifest` caught `zhao_geom_assemble`,
+`zhao_geom_depthquant` and `zhao_texture_fragrob` as UNACCOUNTED; after adding
+them and regenerating, the production fit would **still** have died at
+elaboration, because two of them were absent from `zhao_prod_top`'s source list
+in `fit_targets.yml`. Two gates one step apart, and the second one was me
+noticing by hand.
+
+`check_prod_manifest` now verifies every module the generated top instantiates
+resolves to a listed source. Mutation tested: deleting one source line fails
+with a message naming the file; restoring it passes.
+
+**FRAGROB is deliberately NOT counted** in the manifest. It was built beside
+`zhao_raster_texjoin_v2` with v2 kept as the behavioural oracle, and v2 stays
+the counted implementation until FRAGROB is fit against its own tripwires.
+Counting both would break the one-implementation rule the file exists to
+enforce; counting FRAGROB instead would claim an adoption with no fit behind it.
