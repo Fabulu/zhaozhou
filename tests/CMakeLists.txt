@@ -5540,3 +5540,16 @@ verilate(test_geom_depthquant_directed
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv)
 add_test(NAME geom_depthquant_directed COMMAND test_geom_depthquant_directed)
 set_tests_properties(geom_depthquant_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# GEOM.MESHFETCH -- the ORACLE, with no DUT yet.
+#
+# zhao_geom_meshfetch.sv does not exist; compose_order.py puts this block at
+# position 1 of the declared geometry order with nothing built behind it, which
+# is why DOCKET D22 names it as the blocker for the whole front end. Maturity
+# advances one rung at a time, so this is REFERENCE_COMPLETE evidence: when the
+# RTL lands it gains a DUT in this same file and these cases become the
+# differential. No verilate() call because there is nothing to verilate.
+add_executable(test_geom_meshfetch_directed geometry/geom_meshfetch_directed.cpp)
+target_link_libraries(test_geom_meshfetch_directed PRIVATE zhao_harness)
+add_test(NAME geom_meshfetch_directed COMMAND test_geom_meshfetch_directed)
+set_tests_properties(geom_meshfetch_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
