@@ -943,6 +943,16 @@ the blocker "is real for some shapes and was not fragrob's". **This is one of
 the shapes.** Multidimensional alone is not sufficient — multidimensional AND
 large AND indexed on both axes is what breaks inference.
 
+**The fix needs more than flattening, and it should be built with the II = 2
+work.** An M10K cannot be read asynchronously, and the palette read is
+`always_comb` — so flattening alone leaves all 65,536 bits in flops. The read
+must be REGISTERED, which adds a cycle to the CLUT path that the block's own
+suite already measures at **0.65x of demand**. But `REMAINING_BLOCKERS.md`
+records an II = 2 redesign for exactly that path — a 2-entry in-flight record,
+an issue arbiter, in-order completion — and a pipeline with in-flight records is
+what absorbs a registered read for free. **Doing D19m first and separately is
+the one ordering that makes both problems worse.**
+
 No fix in this pass: the file is inside the running fit's closure (live-tree
 trap, `QUARTUS_GOTCHAS.md` §11).
 

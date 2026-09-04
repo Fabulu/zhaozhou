@@ -183,3 +183,45 @@ it came from reading access sites rather than from the sizes.** The sizes say
 they are. A fix driven by the byte count alone would have moved all three arrays
 and broken the associative lookup, which is the kind of error that passes a
 resource gate and fails a picture.
+
+---
+
+# Where the registered read should actually be built: with the II = 2 work
+
+The correction above leaves a trade — pay a pipeline stage on the CLUT path, or
+pay 87% of the device's registers. **There is a third option, and it is already
+designed and written down by somebody else.**
+
+`reports/REMAINING_BLOCKERS.md` records the CLUT throughput shortfall and its
+fix:
+
+> **6 clocks per CLUT sample = 277,778/frame against 850,000.** Terrain is
+> CLUT8, so that is the demand-critical figure. The fix is designed and written
+> into `design/contracts/TEXTURE.TMU.md` (II = 2 needs a 2-entry in-flight
+> record, an issue arbiter over the single cache port, and in-order completion;
+> II = 2 is the port's own floor because a CLUT sample needs two serial
+> accesses). **Not built.**
+
+That design **already** turns the CLUT path from a serial six-cycle walk into a
+pipeline with a 2-entry in-flight record and in-order completion. A registered
+palette read is a pipeline stage — and a pipeline with in-flight records is
+precisely the structure that absorbs one without adding to the sample interval.
+
+So the two items should be built together:
+
+* **alone**, the D19m fix adds a seventh cycle to a six-cycle serial path that
+  is already at 0.65x demand — it trades a resource problem for a throughput
+  problem;
+* **with II = 2**, the registered read lands inside a restructure that was going
+  to touch the same cone anyway, and the II the fix is aiming for is set by the
+  two serial cache accesses, not by the palette lookup.
+
+**Neither of these was found by looking at the other.** D19m came from a fit log
+and D19l from a JSON sweep; the II = 2 design has been sitting in the blockers
+report since 2026-08-23. What connected them was running the block's existing
+directed suite for a baseline and reading the line it prints on a green run.
+
+**This is a recommendation about sequencing, not a decision.** Building II = 2
+is a larger job than reshaping an array, and whether the register cost is
+tolerable until then is the owner's call. The point is that doing D19m *first
+and separately* is the one ordering that makes both problems worse.
