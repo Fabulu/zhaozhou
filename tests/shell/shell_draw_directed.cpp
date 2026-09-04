@@ -74,12 +74,26 @@
 // hardware was right: **a check that contradicts a documented law is a wrong
 // check.**
 //
-// STILL NOT PROVED: that each individual pixel holds the value the shading law
-// says for ITS position. That is `render_pipe_directed`'s differential and
-// duplicating it here would test a law rather than a composition. What this
-// file establishes is that the composed shell renders the right TILES, to the
-// right ADDRESSES, in the right two COLOURS -- which until 2026-09-04 nothing
-// had ever checked, because until then it rendered nothing at all.
+// AND THE SILHOUETTE IS EXACT:
+//
+//     zref::EdgeWalk coverage over the 13 tiles = 1586 covered pixels
+//     halfwords in the FILL cluster in VRAM     = 1586
+//
+// `zref::EdgeWalk::tile` is the ratified section-8 coverage of one 16x16 tile.
+// Summed over the oracle's tiles it gives the pixels the triangle actually
+// covers, and every covered pixel takes the fill while every other pixel in a
+// resolved tile takes the clear -- so the fill cluster's population IS the
+// coverage. The shell rasterised the right SHAPE, not merely the right area.
+//
+// STILL NOT PROVED, and deliberately: that each individual pixel holds the
+// value the shading law says for ITS position, dither phase included. That is
+// `render_pipe_directed`'s differential; duplicating it here would test a law
+// rather than a composition, and this file exists for the composition.
+//
+// What it establishes is that the composed shell renders the right TILES, to
+// the right ADDRESSES, in the right two COLOURS, with the right SILHOUETTE --
+// which until 2026-09-04 nothing had ever checked, because until then it
+// rendered nothing at all.
 //
 #include <cstdint>
 #include <cstdio>
@@ -96,6 +110,7 @@
 #define ZHAO_GEOM_DEV_BINNER
 
 #include "geom_dev.hpp"
+#include "zref/zref_edgewalk.hpp"
 #include "shell_harness.hpp"
 #include "zhao_sim.hpp"
 
@@ -521,6 +536,43 @@ int main(int argc, char** argv) {
   zhao::check(lo_max_r - lo_min_r <= 1 && hi_max_r - hi_min_r <= 1,
               "and each cluster's red spans at most one LSB -- the dither's range", 1,
               (lo_max_r - lo_min_r <= 1 && hi_max_r - hi_min_r <= 1) ? 1 : 0);
+
+  // ---- THE SHAPE, against the ratified coverage oracle ---------------------
+  //
+  // Extent said WHICH TILES. This says WHICH PIXELS INSIDE THEM.
+  // `zref::EdgeWalk::tile` is the exact section-8 coverage of one 16x16 tile
+  // and returns `count`, so summing it over the oracle's tiles gives the number
+  // of pixels the triangle actually covers. Every covered pixel takes the FILL
+  // and every other pixel in a resolved tile takes the CLEAR, so the fill
+  // cluster's population IS the coverage count.
+  //
+  // This is a COMPOSITION claim, not a shading one: it asks whether the shell
+  // rasterised the right silhouette, using the oracle that owns coverage rather
+  // than re-deriving a fill rule here.
+  zref::EdgeWalk::Tri etri;
+  etri.ax = bt.ax;
+  etri.ay = bt.ay;
+  etri.bx = bt.bx;
+  etri.by = bt.by;
+  etri.cx = bt.cx;
+  etri.cy = bt.cy;
+  uint32_t want_cov = 0;
+  for (const zref::Binner::Ref& r : want_tiles) {
+    want_cov +=
+        zref::EdgeWalk::tile(etri, r.tx * zref::EdgeWalk::kTile, r.ty * zref::EdgeWalk::kTile)
+            .count;
+  }
+  uint32_t fill_px = 0;
+  for (uint32_t w = 0; w < kSlotHalfwords; ++w) {
+    const uint16_t v = peek(h, w);
+    if (v == before[w]) continue;
+    if (((v >> 11) & 31) >= 16) ++fill_px;
+  }
+  std::printf("[shell_draw] coverage: oracle %u covered px, memory %u in the fill cluster\n",
+              want_cov, fill_px);
+  zhao::check(fill_px == want_cov,
+              "THE SILHOUETTE MATCHES: fill-cluster pixels == zref::EdgeWalk coverage", want_cov,
+              fill_px);
   bool none_is_blit = true;
   for (uint16_t d : distinct) {
     if (d == before[0]) none_is_blit = false;
