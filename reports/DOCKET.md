@@ -936,6 +936,30 @@ against 600, 1,041 ALMs against 650, and **6 DSPs against 4** — measured on th
 source that is still checked out. The DSP overrun matters beyond its own rule:
 the census already totals 196 DSPs against the part's 112.
 
+**And the one confirmed breach is a WRONG RULE, not a wrong design.**
+`zhao_raster_rcp24_svc` contains exactly one multiplier:
+
+    m1_p_q <= 64'(mul_a_c) * mul_b_c;      mul_a_c [31:0], mul_b_c [63:0]
+
+A **32 x 64** multiply. On Cyclone V that is four-plus 18x18 partial products
+whose weight falls below bit 64, which is where the measured **6 DSPs** comes
+from; `max_dsp: 4` was an estimate of a narrower multiply than the block has.
+
+**The width is not free to change.** The file's own header fixes it:
+`w = (m * x) >> 24` with a 64-bit product, and `t = 2^31 - w` *"WRAPS at 64
+bits, matching the reference's uint64"*. Narrowing the operand changes results
+and breaks parity with `zref`, so the arithmetic is doing what the reference
+requires and the rule is describing something else.
+
+So the correct edit is **the rule to 6**, with the 32x64 shape named in the
+comment beside it so the next reader does not re-estimate 4. Not made in this
+pass: `design/fit_targets.yml` is polled by the running fit queue, and a
+non-atomic rewrite of that file has already broken a campaign once.
+
+**It still costs 6 DSPs against a part with 112 and a census already totalling
+196**, so "the rule was wrong" removes a false alarm without removing the
+pressure. That is the DSP budget's problem, not this rule's.
+
 The other two are **questions, not findings.** `cache_pipe` read 11,328
 registers on a stale row and measured 3,097 when re-fitted; a breach on a stale
 row carries exactly that much weight. `texjoin_v2`'s figure is separately
