@@ -1279,8 +1279,45 @@ So the options are:
 2. **Register the clear inside tilestore.** Keeps the rules but blocks the write
    one cycle LATE, which is a different violation of rule 2, not a fix.
 3. **Break the chain at Fragment** so `rd_addr_o` does not depend on
-   `wr_ready_i`. Leaves the contract alone; costs a change in the block whose
-   retire chain has already been the subject of two rounds.
+   `wr_ready_i`. **CLOSED — checked, and it exists because of the line in
+   option 1.** `zhao_raster_fragment.sv:533`:
+
+   > *"The fix is to make the stall re-issue the read it is waiting on. While
+   > stage 1 cannot retire (**the store refuses the write — its
+   > `wr_ready_o = !clear_valid_i`**), the read port is pointed back at stage
+   > 1's own address instead of stage 0's … that hack is unchanged and is still
+   > needed for exactly the reason above."*
+   > `ENFORCED-BY: raster_fragment_directed.cpp:test_write_stall`
+
+   `rd_addr_o = s1_hold ? s1_addr_r : s0_addr_r` is the fix for a read lost
+   during a write stall — and the write stall is caused by the very line option
+   1 would remove. Breaking the dependency reintroduces that bug. The block's
+   own hygiene note even sanctions it: *"`frag_ready_o` and `rd_valid_o` DO
+   depend on `wr_ready_i` … the permitted direction."*
+
+### So there is no local fix, and that is the finding
+
+Three interlocking, tested laws hem this path in:
+
+| law | what it forbids |
+|---|---|
+| TILESTORE ordering rule 2 | accepting a write in a clear cycle |
+| TILESTORE ordering rule 3 | a same-cycle read not seeing that write — so the present lookup stays combinational, and the 256:1 mux stays on the path |
+| FRAGMENT's stall re-issue | `rd_addr_o` ignoring `s1_hold`, which exists *because of* rule 2 |
+
+**Every one has a directed case behind it.** The 5.2 ns mux and the 2.7 ns ready
+chain are both load-bearing, and option 2 (registering the clear) blocks the
+write a cycle LATE, which breaks rule 2 in the other direction.
+
+**So the real choice is two-way, not three:**
+
+* **amend TILESTORE rules 2 and 3** — the one change that pays, and a normative
+  edit with two directed cases behind it; or
+* **accept 99.34 MHz** on a provisional device with virtual I/O. 100 was chosen,
+  not derived.
+
+Both are owner calls. What an implementer can honestly report is that the path
+is not a defect and not an oversight — **it is three correct rules meeting.**
 
 ### And the contract carries a claim that composition falsifies
 
