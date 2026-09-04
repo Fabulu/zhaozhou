@@ -5561,6 +5561,20 @@ target_link_libraries(test_geom_meshfetch_directed PRIVATE zhao_harness zhao_zre
 add_test(NAME geom_meshfetch_directed COMMAND test_geom_meshfetch_directed)
 set_tests_properties(geom_meshfetch_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
 
+# GEOM.ASSETFETCH -- the oracle's EDGES, not a sweep.
+# design/contracts/GEOM.ASSETFETCH.md. plan() is short enough that a random
+# sweep would pass first try and prove nothing, so every case here is a
+# boundary a plausible wrong implementation sits on the far side of: 64 vs 65
+# vertices, a footprint ending on the pool's last byte, an offset that wraps
+# 32 bits (the guard's blit-wrap defect in a new place), and a record stream
+# starting mid-line so the beat count is not bytes/64. No verilate() call --
+# the RTL is not written yet, and this is the REFERENCE_COMPLETE evidence it
+# will become the differential for.
+add_executable(test_assetfetch_directed geometry/assetfetch_directed.cpp)
+target_link_libraries(test_assetfetch_directed PRIVATE zhao_harness zhao_zref)
+add_test(NAME assetfetch_directed COMMAND test_assetfetch_directed)
+set_tests_properties(assetfetch_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
+
 # GEOM.MESHFETCH -- randomized PROPERTIES, not a differential.
 # There is one implementation, so there is nothing to differ against yet. When
 # the RTL lands the DUT goes in beside these generators and the properties
