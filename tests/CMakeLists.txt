@@ -5593,3 +5593,16 @@ add_executable(test_skin_norm_split_directed geometry/skin_norm_split_directed.c
 target_link_libraries(test_skin_norm_split_directed PRIVATE zhao_harness zhao_zref)
 add_test(NAME skin_norm_split_directed COMMAND test_skin_norm_split_directed)
 set_tests_properties(skin_norm_split_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
+
+# SKIN.NORM against zref::creature::skin_world_normal. The testbench PLAYS
+# zhao_field_isqrt: that block has its own differential against zref::isqrt_u64,
+# and instantiating it here would re-prove the square root while hiding whether
+# THIS block handed it the right sum of squares.
+add_executable(test_skin_norm_rtl_directed geometry/skin_norm_rtl_directed.cpp)
+target_link_libraries(test_skin_norm_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_skin_norm_rtl_directed
+  PREFIX Vzhao_geom_skin_norm
+  TOP_MODULE zhao_geom_skin_norm
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_skin_norm.sv)
+add_test(NAME skin_norm_rtl_directed COMMAND test_skin_norm_rtl_directed)
+set_tests_properties(skin_norm_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
