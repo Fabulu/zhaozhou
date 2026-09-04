@@ -336,11 +336,21 @@ its input would not have been created yet. What it takes from MESHFETCH is
 `index_offset`; the vertex base comes from whatever allocates arena slots after
 projection.
 
-**The missing edge is not added here**, because which block assigns the id is a
-real question — `GEOM.PROJECT` or `GEOM.WCACHE`/`zhao_vertex_arena` — and
-guessing it would put a wrong edge into the file everything else derives from.
-What is certain is the constraint: **ASSEMBLE is after projection, not before
-decode.**
+**Which block assigns the id — answered by reading, not guessed.** Neither
+does. `zhao_geom_wcache`'s fill port takes `fill_index_i [INDEX_W-1:0]` from its
+**caller**; the arena stores a vertex where it is told to, it does not allocate.
+(`zhao_vertex_arena` has the same port shape and is the superseded twin — the
+ledger already rules "zhao_geom_wcache.sv over zhao_vertex_arena.sv", and the
+manifest counts only the former.)
+
+**So `m_vertex_offset_i` is assigned by the COMPOSITION, not by any leaf
+block** — whatever decides where a meshlet's projected vertices land in each
+view's arena. That is why no upstream edge was added: the producer is the
+pipeline that does not exist yet, and writing `upstream: [GEOM.PROJECT]` would
+have named a block that does not in fact hand out the number.
+
+The constraint that IS certain: **ASSEMBLE runs after projection, not before
+decode**, and the pipeline owes it a per-view base.
 
 This is the whole value of deriving the order mechanically and then checking it
 against the RTL: the probe faithfully reported what the ledger said, and the
