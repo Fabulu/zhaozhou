@@ -1175,6 +1175,45 @@ is a statement about fbwrite's bookkeeping and not yet about VRAM.
 
 </details>
 
+### D19i. The island fit queue **STOPPED at the first `failed:structure`**
+Found 2026-09-04 while waiting for blocks that were never going to arrive.
+
+`../.tmp/texisland.log` ends like this:
+
+        RULE  zhao_texture_mosaic: DSP 4 > allowed 0
+    zhao_texture_mosaic   failed:structure   1926.7s   ALM 197
+
+and then **nothing**. No further `preflight:` line, no further block. The queue
+was launched with nine modules and attempted six; `tmu_pipe`, `fragrob` and
+`cache_pipe` never ran.
+
+**The session had already recorded this hazard and it still happened.** An
+earlier note in this run observed that a preflight throw "is caught by the
+loop's outer `try`, which would have ENDED the queue and skipped fragrob and
+cache_pipe". That was written about a different block and the queue died the
+same way at mosaic.
+
+### Why it matters more than a lost hour
+
+**A `failed:structure` is a MEASUREMENT.** Mosaic's rule was designed to fail —
+`fit_targets.yml` says so in the file — and the run treated a designed failure
+as a reason to stop measuring everything after it. The report then showed six
+rows, which reads as "six blocks measured" and not as "three blocks never
+attempted". **Silence and absence look identical in that file.**
+
+### What was done
+
+The remaining four (`mosaic` for C21, plus the three that never ran) are
+relaunched as **separate invocations**, so one block's rule failure cannot end
+the run. That is the fix regardless of what the queue script does internally:
+a per-block fit is independent by construction, and chaining them in one
+process gave that up for nothing.
+
+**Worth changing in `run_block_fit.ps1`** so the next campaign does not need a
+person to notice: a non-`ok` status should advance the queue, not end it. Filed
+rather than done because that script is the fit lane's own tooling and was not
+touched while two fits were running through it.
+
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
 `reports/FUNDAMENTALS-DECISIONS-NEEDED.md`. All eight are ruled and each is
