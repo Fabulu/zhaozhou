@@ -336,6 +336,55 @@ session touched it. Until it exists, every geometry descriptor read is denied
 by design — and `zhao_geom_meshfetch.sv`'s `guard_denied_o` is the counter that
 says whether that is still true.
 
+### BOTH BLOCKERS ARE CLEARED (2026-09-04) — what is left is wiring
+
+The two entries below named the front end's blockers precisely, and both are
+now closed. **They were the hard part; what remains is glue.**
+
+**1. The Phase-3 region map — DONE.** `spec/memory_rules.md` §5f:
+
+    0x06A0_0000 .. 0x07FF_FFFF   GEOM.ASSET_POOL   22 MiB   ENGINE1   READ-ONLY
+
+Bank 3, beside `GEOM.PARAMBUF`, and that placement is the W2.7 lesson applied
+rather than re-learned: banks come from address bits `[26:25]`, sharing one cost
+~82 of 192 Duo lines to row thrash, and mesh assets are the same `ENGINE1`
+render-geometry traffic as PARAMBUF — same domain, same phase, one local
+arbiter — so they serialise against each other instead of against scanout.
+
+The no-escape proof **widened with the region rather than around it**: `a1_map`
+now reads `slot0 || slot1 || asset` instead of exempting ENGINE1 from a two-slot
+assertion, which is the shape that keeps a proof green by shrinking its scope.
+`a1_asset_ro` and the `c_forward_asset` non-vacuity cover were added; bmc and
+cover pass, and deleting `!req.write` fails two assertions at step 4.
+
+**2. The asset fetcher — DONE, `UNIT_VERIFIED`.**
+`fpga/rtl/geometry/zhao_geom_assetfetch.sv`, oracle `zref::assetfetch::plan`,
+48 differential checks plus 25 oracle-edge checks.
+
+It **buffers rather than caches**, and the reason is the consumer rather than
+speed: `zhao_geom_assemble.sv`'s index port is `ix_req_o` / `ix_valid_i` with
+**no ready** — it cannot say "wait" — and that block's own comment says it
+deliberately does not buffer. A cache behind a port that cannot stall is not an
+optimisation, it is a protocol violation waiting for a miss.
+
+It is **single buffered on purpose**. The contract describes double buffering;
+that is an optimisation whose value is unmeasured, and `prefetch_stall_cycles`
+is the counter that will decide it. Building it first and measuring afterwards
+is how a wrong number becomes an unadjustable wrong number.
+
+**One ruling came out of building it.** `vertex_offset % 32 == 0` and
+`index_offset % 8 == 0` are now refusals — which is `GEOM.VDECODE`'s own
+contract sentence ("32 bytes per vertex, **naturally aligned**") enforced rather
+than hoped for. Unaligned, a record spans five 64-bit words and needs a
+320-to-256 funnel shifter **per vertex**; aligned, it is four consecutive words
+and the shifter does not exist. The asset builder pays nothing for it.
+
+**So D22's remaining work is what this entry originally said it was not:
+wiring.** `zhao_shell_top.sv` still instantiates one of the twenty geometry
+blocks, and D1 still comes first — adding the front end to a shell that is
+0.198 ns short would make attribution impossible, which is exactly what D3's
+fit-top split exists to avoid.
+
 ### The blocker is ONE asset-memory path, not eighteen wiring jobs
 
 **Checked 2026-09-04 by reading every port in `fpga/rtl/geometry/`.** D22 reads
