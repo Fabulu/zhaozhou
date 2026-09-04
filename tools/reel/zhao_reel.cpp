@@ -967,6 +967,14 @@ struct Debris {
 // authoring below (it needs the zc alias); SceneSubject only holds a pointer.
 struct ZixxSunSpec;
 
+// S2 (creature 02): WHICH creature a subject stages. The old selector was the
+// binary expression `sub.creature >= 3` (watchdog below, Zixxtrixx above),
+// which a third creature cannot extend. kAuto preserves that legacy rule
+// bit-for-bit for every existing subject (none of them set the field);
+// creature-02 subjects set kUnnamed02 explicitly. `creature` itself stays
+// the clip slot + 2.
+enum class Species : uint8_t { kAuto = 0, kWatchdog, kZixxtrixx, kUnnamed02 };
+
 struct SceneSubject {
   const char* name;
   uint32_t frames;
@@ -1008,6 +1016,9 @@ struct SceneSubject {
                                    // sets this BELOW the island so debris
                                    // visibly falls through the hole
   std::vector<Debris> debris;
+  // S3 (creature 02): DRAW_POPULATION flags. b0 points, b1 tris, b2 additive
+  // (RASTER.FRAGMENT ADD). Default is the historical 0x0003 -- byte-identical.
+  uint16_t pop_flags = 0x0003;
   // screen shake: raw Y offsets per frame, starting at shake_frame.
   // SCALE NOTE (2026-08-27): these are added to the projection's y row
   // CONSTANT, so the on-screen shift is shake/w NDC -- and w for the
@@ -1049,6 +1060,8 @@ struct SceneSubject {
   // creature subjects (creature_rules.md lane): 1 = wave-walk (the identity
   // shot: walk + wave tilt + LOD pull-back), 2 = bulk-pop (inflate -> gibs)
   int creature = 0;
+  // S2: the species selector; kAuto = the legacy binary rule on `creature`.
+  Species species = Species::kAuto;
   // Diagnostic-only override: pin the existing compiled micro mesh at readable
   // framing. It never changes the creature asset or runtime LOD law.
   bool creature_force_micro = false;
@@ -2892,6 +2905,34 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   std::memcpy(depth, surf.depth.data(), surf.depth.size() * sizeof(int32_t));
 }
 
+// ---------------------------------------------------- chained pre-resolve --
+// S1 (creature 02): the renderer stores ONE pre-resolve (fn, ctx); the reel
+// used to overwrite it, which made sky / celestial / creature hooks mutually
+// exclusive claimants -- a creature subject could never carry a sun effect.
+// This dispatcher chains up to three hooks in the fixed compositing order
+// sky -> celestial -> creature (the sky splat touches only depth == 0 pixels,
+// the star compose depth-tests, the creature compose writes depth). With
+// exactly one hook registered it invokes that hook with the very arguments
+// the renderer would have handed it directly -- identity by construction,
+// CRC-proven against the existing bank at the S1 spike.
+struct HookChain {
+  enum Slot { kSky = 0, kCelestial = 1, kCreature = 2 };
+  zref::render::SoftwareRenderer::PreResolveFn fn[3] = {nullptr, nullptr, nullptr};
+  void* ctx[3] = {nullptr, nullptr, nullptr};
+  void install(int slot, zref::render::SoftwareRenderer::PreResolveFn f, void* c) {
+    fn[slot] = f;
+    ctx[slot] = c;
+  }
+  bool any() const { return fn[0] != nullptr || fn[1] != nullptr || fn[2] != nullptr; }
+};
+
+void chained_pre_resolve(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
+                         uint32_t tick) {
+  HookChain* c = static_cast<HookChain*>(vctx);
+  for (int i = 0; i < 3; ++i)
+    if (c->fn[i] != nullptr) c->fn[i](c->ctx[i], rgb, depth, w, h, tick);
+}
+
 // ------------------------------------------------------------ scene render --
 
 int render_scene(const SceneSubject& sub) {
@@ -2930,6 +2971,7 @@ int render_scene(const SceneSubject& sub) {
   res.sky_sets.push_back({2, sky});
 
   zref::render::SoftwareRenderer rend;  // ONE renderer: sheets persist
+  HookChain hook_chain;  // S1: outlives the frame loop; installed below if any slot fills
   zref::render::RenderCanvas canvas;
   PaletteSet pal;
   std::vector<uint32_t> frame_crcs;
@@ -2948,7 +2990,7 @@ int render_scene(const SceneSubject& sub) {
     // glow level by 15 alpha steps (the palette law; the fade-in itself is
     // the flare-occlusion subject's show)
     if (sub.celestial == 3 || sub.celestial == 4) cel_ctx.slots.fade_ctr[0] = 15;
-    rend.set_pre_resolve(&cel_hook, &cel_ctx);
+    hook_chain.install(HookChain::kCelestial, &cel_hook, &cel_ctx);
   }
 
   // Planetside sky: the six-bit intensity plane replaces the RGB dome outright,
@@ -2969,7 +3011,7 @@ int render_scene(const SceneSubject& sub) {
     psky.sun2_x = sub.planet_sun2_x;
     psky.sun2_y = sub.planet_sun2_y;
     psky.horizon_y = 150;
-    rend.set_pre_resolve(&planet_sky_hook, &psky);
+    hook_chain.install(HookChain::kSky, &planet_sky_hook, &psky);
   }
 
   const std::string dir = g_out + "/" + sub.name;
@@ -2997,7 +3039,13 @@ int render_scene(const SceneSubject& sub) {
     // 1,2 = the watchdog (wave-walk, bulk-pop). 3,4 = Zixxtrixx (slither,
     // tail-strike) — the Upheaval bestiary lane.
     zc::g_debug_shade = static_cast<zc::DebugShade>(sub.creature_shade);
-    const bool zixx_subject = sub.creature >= 3;
+    // S2: resolve the species. kAuto reproduces the pre-enum binary rule
+    // exactly, so every existing subject selects as it always did.
+    const Species species = sub.species != Species::kAuto
+                                ? sub.species
+                                : (sub.creature >= 3 ? Species::kZixxtrixx : Species::kWatchdog);
+    const bool zixx_subject = species == Species::kZixxtrixx;
+    // The kUnnamed02 arm is wired when unnamed02::type() lands (form pass).
     dog = zixx_subject ? &zixx::type() : &watchdog_type();
     dog_inst.type = dog;
     // A quadruped pitches and rolls with the ground under its feet. A 3.9 m
@@ -3044,8 +3092,11 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.gibs = &gibs;
     pop_threshold = 22 * (1 << 16) / 10;  // bulk 2.2 pops (species constant)
     gib_gravity = fxm(18);                // per frame^2
-    rend.set_pre_resolve(&creature_hook, &cr_ctx);
+    hook_chain.install(HookChain::kCreature, &creature_hook, &cr_ctx);
   }
+
+  // S1: one dispatcher serves every registered hook, in compositing order.
+  if (hook_chain.any()) rend.set_pre_resolve(&chained_pre_resolve, &hook_chain);
 
   uint32_t breach_total = 0;
   for (uint32_t f = 0; f < sub.frames; ++f) {
@@ -3534,7 +3585,7 @@ int render_scene(const SceneSubject& sub) {
         auto dpop = zhao_abi::zhao_sample_draw_population();
         dpop.payload.population = 3;
         dpop.payload.viewport_mask = 1;
-        dpop.payload.flags = 0x0003;
+        dpop.payload.flags = sub.pop_flags;
         std::vector<uint8_t> v6;
         zhao_abi::zhao_pack_draw_population(dpop, v6);
         b.append_record(v6);
@@ -4293,6 +4344,37 @@ SceneSubject subject_planet_binary() {
   return s;
 }
 
+// ---- S1 spike (creature 02): the chained pre-resolve proof --------------
+// One stage, three subjects: the planet bloom alone, the creature alone, and
+// all three hooks chained (sky bloom + celestial star/corona + creature) in a
+// single clip -- the composition the one-slot renderer could never draw.
+// mode: 0 = bloom only, 1 = creature only, 2 = chained.
+SceneSubject s1_chain_subject(int mode) {
+  SceneSubject s;
+  s.name = mode == 0 ? "u02-s1-bloom" : mode == 1 ? "u02-s1-creature" : "u02-s1-chained";
+  s.frames = 48;
+  s.step = 1;
+  s.full_colour = true;
+  s.bump_ext = 6;
+  s.cam_k = 320000;  // the creature-wave-walk near camera: watchdog ~70 px
+  s.cam_eye = 12;
+  s.cam_dist = 8;
+  s.cam_bias = 0;
+  if (mode != 1) {
+    s.planet = 1;  // violet-thick: no disc, pure bloom (the skybox-bloom read)
+    s.planet_sun_x = 192;
+    s.planet_sun_y0 = 60;
+    s.planet_sun_y1 = 60;  // parked high: the spike judges compositing, not a sunset
+  }
+  if (mode == 2) s.celestial = 5;  // S01 blue giant: disc + corona, depth-tested
+  if (mode != 0) s.creature = 1;   // the watchdog walk, unchanged
+  s.note =
+      "S1 spike subject: proves the chained pre-resolve dispatcher composites "
+      "sky bloom (depth==0 only), celestial corona (depth-tested) and creature "
+      "in order in one clip. Throwaway diagnostics; no CRC pin.";
+  return s;
+}
+
 SceneSubject subject_creaturewalk() {
   SceneSubject s;
   s.name = "creature-wave-walk";
@@ -4438,6 +4520,63 @@ SceneSubject subject_zixx_idle() {
       "the root rises to match, so the head and arch bob while the belly "
       "stays planted; girth swells through the instance bulk; the tail "
       "sways lazily on its own period. Three breaths per revolution";
+  return s;
+}
+
+// ---- S3 spike (creature 02): additive motes over pink pigment -----------
+// The same Zixxtrixx idle stage twice: a ring of static cyan 6 px motes
+// hung at flank height, once opaque (the confetti read) and once additive
+// (the mana read). Unpinned diagnostics; the acceptance question is answered
+// by LOOKING at the pair at native 384x240.
+SceneSubject s3_mote_subject(bool additive) {
+  SceneSubject s;
+  s.name = additive ? "u02-s3-motes-add" : "u02-s3-motes";
+  s.sun = &kZixxSunIdle;
+  s.creature = 3;  // the idle clip; unpinned copy of the showcase stage
+  s.frames = 48;
+  s.orbit = false;
+  zixx_common(s);
+  s.debris_spawn_frame = 0;
+  s.debris_gravity = 0;
+  // the zixx stage sits ON the bump-patch crown at ~8.8 m -- a mote authored
+  // near y=0 is INSIDE the mountain and depth-fails every pixel (found the
+  // hard way: the first pair rendered identical CRCs because no mote ever won
+  // a fragment). Park a 5x2 grid straight over the mid-body flank, just in
+  // front of the animal's plane, so the pair answers the actual question:
+  // cyan over PINK PIGMENT, opaque vs additive, at native 384x240.
+  s.debris_y0 = fxm(8900);  // rows offset via vy read at frame 12
+  s.debris_floor = fxm(8000);
+  // Placed with a two-fan diagnostic (see run log): the idle stage maps the
+  // body arch top to roughly world x -700..+100 at y ~8.2 m from this fixed
+  // camera. One row rides the dorsal pink stripe, one the green flank, one
+  // hangs in the sky as the control. Heights are encoded via vy so frame 12
+  // is the judging frame (y = y0 + vy*12).
+  for (int i = 0; i < 13; ++i) {
+    Debris d;
+    int32_t x_mm, y_mm;
+    if (i < 5) {          // stripe row
+      x_mm = -750 + i * 200;
+      y_mm = 8150;
+    } else if (i < 10) {  // flank row
+      x_mm = -650 + (i - 5) * 200;
+      y_mm = 7950;
+    } else {              // sky control row
+      x_mm = -500 + (i - 10) * 400;
+      y_mm = 9300;
+    }
+    d.x0 = fxm(x_mm);
+    d.z0 = fxm(-900);  // the S curves in x-z; clear the bow toward camera
+    d.vx = 0;
+    d.vy = fxm(y_mm - 8900) / 12;
+    d.vz = 0;
+    d.size = 96;  // U0.4.4: 6 px
+    d.r = 40;
+    d.g = 230;
+    d.b = 255;
+    s.debris.push_back(d);
+  }
+  s.pop_flags = additive ? 0x0007 : 0x0003;
+  s.note = "S3 spike: cyan motes over the pink stripe -- opaque vs additive pair";
   return s;
 }
 
@@ -6138,6 +6277,11 @@ int main(int argc, char** argv) {
   if (wanted("planet-sun-redgiant")) rc |= render_scene(subject_planet_redgiant());
   if (wanted("planet-sun-binary")) rc |= render_scene(subject_planet_binary());
   if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
+  if (wanted("u02-s3-motes")) rc |= render_scene(s3_mote_subject(false));
+  if (wanted("u02-s3-motes-add")) rc |= render_scene(s3_mote_subject(true));
+  if (wanted("u02-s1-bloom")) rc |= render_scene(s1_chain_subject(0));
+  if (wanted("u02-s1-creature")) rc |= render_scene(s1_chain_subject(1));
+  if (wanted("u02-s1-chained")) rc |= render_scene(s1_chain_subject(2));
   if (wanted("creature-bulk-pop")) rc |= render_scene(subject_creaturepop());
   if (wanted("zixxtrixx-idle")) rc |= render_scene(subject_zixx_idle());
   if (wanted("zixxtrixx-moving-light"))

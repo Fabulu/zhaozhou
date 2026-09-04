@@ -93,3 +93,76 @@ For the implementer, not this run:
    before the first edit (the file grew twice in one day).
 2. Run spikes S1–S5 in PLAN.md §2 order; log verdicts.
 3. Follow the build path in PLAN.md §3.2.
+
+---
+
+# IMPLEMENTATION (same run folder, implementer session, 2026-09-04)
+
+**Status: IN PROGRESS.** The architecture pass above delivered PLAN.md; this
+section logs the implementation that executes it. Serial, no helper agents.
+
+## 2026-09-04 - Implementation started
+
+- Fetched origin main both repos: zhaozhou `a311faf6`, Upheaval `223403bb`
+  (Upheaval moved past the plan's `1cb1ec5` — new HEAD is on origin/main,
+  lane branch `zixxtrixx-wholebody-s-spring` tracks it exactly).
+- Re-read OWNER-DIRECTION-1 (119 lines, FLOATS amendment present).
+  `Unnamed02/reports/` still does not exist. No newer direction.
+- LOOKED at all three concept sheets. Side: pink teardrop, loop with visible
+  drawn hinge nodes at the loop corners. Front: blade-like antenna, two eyes
+  in outward V. Description: oblique eye sketch shows the lens standing proud
+  of the silhouette.
+- Read both recons, 00/05/07/08 docs, CLAUDE.md, PLAN.md.
+
+## Spike S1 — chain the pre-resolve hooks (STARTING)
+
+Confirmed in this lane: `set_pre_resolve` stores one `(fn, ctx)`
+(`zref_render.hpp:326`); three exclusive installers in `zhao_reel.cpp` at
+2951 (cel_hook), 2972 (planet_sky_hook), 3047 (creature_hook) — creature
+silently wins. Building the chained dispatcher next.
+
+## Spike S1 — VERDICT: PASS
+
+- Chained dispatcher (`HookChain` + `chained_pre_resolve`, order sky ->
+  celestial -> creature) replaces the three exclusive `set_pre_resolve` calls.
+- Composite proof: `u02-s1-{bloom,creature,chained}` diagnostic subjects.
+  LOOKED at frames: bloom paints only depth==0 sky, starfield + S01 corona
+  ride over the bloomed sky and are depth-tested behind the hill, creature
+  composes over everything. `evidence/{bloom,creature,chained}-f24.png`.
+  (The watchdog renders as a black silhouette under celmain/cool-cross in
+  BOTH creature-only and chained — preexisting look of that subject under
+  the zixx env, not a chain artefact.)
+- `--check` all pinned CRCs match: `evidence-s1-check-chained.txt`.
+- 22-subject bank baseline (pristine a311faf6 binary) vs chained binary:
+  ALL-IDENTICAL — `evidence-s1-bank-identity.txt`.
+
+## Spike S2 — VERDICT: PASS
+
+- `Species` enum (`kAuto`,`kWatchdog`,`kZixxtrixx`,`kUnnamed02`) on
+  SceneSubject; kAuto resolves to the legacy `creature >= 3` rule so all 59
+  existing subject builders are untouched; u02 subjects will set it
+  explicitly. kUnnamed02 dog-type arm wires in at the form milestone.
+- `--check` green (`evidence-s2s3-check.txt`); bank ALL-IDENTICAL
+  (`evidence-s2s3-bank-identity.txt`, S2+S3 build vs pristine baseline).
+
+## Spike S3 — VERDICT: PASS (with a colour-calibration lesson)
+
+- `draw_population` flag b2 = additive: point path saturating per-channel add
+  in `blit_pattern_block`; tri path via existing `BlendMode::kAdditive` with
+  full vertex alpha (a=65536, interp_alpha on) = exactly RASTER.FRAGMENT ADD.
+  Reel knob `SceneSubject::pop_flags` (default 0x0003 = historic).
+- Identity: flag clear proven byte-identical — --check + full bank (above).
+- Look: `u02-s3-motes` vs `u02-s3-motes-add` (cyan 6 px motes on the zixx
+  idle stage). At native 240p the additive motes read as GLOW — they brighten
+  what they sit on (white tip over rose sky, luminous cyan over dark
+  terrain); opaque motes read as flat confetti everywhere.
+  `evidence/motes{,-add}-tailcrop.png` (6x nearest crops).
+- LESSON for the mana tables: full-brightness cyan ADDED over bright pink
+  saturates all three channels -> white. Additive kind colours must sit
+  UNDER the channel ceiling (Direction 30's law, now proven on particles).
+  The ten emitter tables will carry calm additive colours.
+- Placement lore for later diagnostics: the zixx idle stage sits on the
+  bump-crown at ~8.8 m; the fixed non-orbit camera maps the arch to roughly
+  world x -700..+100, and the S bows in x-z, so "in front of the body" needs
+  z <= -900 mm. Two mote fans burned an hour learning this; authored fans
+  are the fast instrument.

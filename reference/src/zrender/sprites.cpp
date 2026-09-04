@@ -7,7 +7,10 @@
 //                       screen-space size (marker law) vs world-space size;
 //                       semantic_weight feeds the Measure (recorded, no
 //                       degrade ladder at Phase 3). DrawPopulation 0x0301 —
-//                       flags b0 = point sprites, b1 = triangle sprites.
+//                       flags b0 = point sprites, b1 = triangle sprites,
+//                       b2 = additive blend (RASTER.FRAGMENT ADD:
+//                       dst = sat(dst + src); creature-02 mana lane, flag
+//                       clear is byte-identical to the opaque path).
 //   plan W3.5           "fixed 8x8 pattern scaled, wall-clamped per the demo
 //                       law lineage" — the wave-2 Duo marker trajectory law.
 //   charter §8          pass 3 (opaque forms) / pass 7 (particles: never
@@ -67,9 +70,14 @@ void blit_pattern_8x8(WorkSurface& surf, const Viewport& vp, int32_t x0_px, int3
 
 // solid subpixel-rect block blit (point sprites), depth TEST only —
 // particles never occlude (charter §8 pass 7). Scissored to the viewport.
+inline uint8_t sat_add_u8(uint8_t d, uint8_t s) {
+  const int32_t v = static_cast<int32_t>(d) + static_cast<int32_t>(s);
+  return static_cast<uint8_t>(v > 255 ? 255 : v);
+}
+
 void blit_pattern_block(WorkSurface& surf, const Viewport& vp, int32_t x0_sub, int32_t y0_sub,
                         int32_t w_sub, int32_t h_sub, uint8_t r, uint8_t g, uint8_t b,
-                        int32_t depth) {
+                        int32_t depth, bool additive) {
   if (w_sub <= 0 || h_sub <= 0) return;
   const int32_t min_x = std::max((x0_sub + 255) >> 8, static_cast<int32_t>(vp.x0));
   const int32_t max_x = std::min((x0_sub + w_sub) >> 8, static_cast<int32_t>(vp.x0 + vp.w) - 1);
@@ -79,9 +87,16 @@ void blit_pattern_block(WorkSurface& surf, const Viewport& vp, int32_t x0_sub, i
     for (int32_t px = min_x; px <= max_x; ++px) {
       const size_t idx = static_cast<size_t>(py) * surf.w + px;
       if (depth > surf.depth[idx]) {
-        surf.rgb[idx * 3 + 0] = r;
-        surf.rgb[idx * 3 + 1] = g;
-        surf.rgb[idx * 3 + 2] = b;
+        if (additive) {
+          // RASTER.FRAGMENT ADD: dst = sat_u8(dst + src), depth never written
+          surf.rgb[idx * 3 + 0] = sat_add_u8(surf.rgb[idx * 3 + 0], r);
+          surf.rgb[idx * 3 + 1] = sat_add_u8(surf.rgb[idx * 3 + 1], g);
+          surf.rgb[idx * 3 + 2] = sat_add_u8(surf.rgb[idx * 3 + 2], b);
+        } else {
+          surf.rgb[idx * 3 + 0] = r;
+          surf.rgb[idx * 3 + 1] = g;
+          surf.rgb[idx * 3 + 2] = b;
+        }
       }
     }
   }
@@ -140,6 +155,9 @@ void draw_population(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
                      const Population& pop, uint16_t flags, SatLedger* L) {
   const bool points = (flags & 0x0001) != 0;
   const bool tris = (flags & 0x0002) != 0;
+  // b2: additive blend per RASTER.FRAGMENT's ADD law (creature-02 mana lane).
+  // Clear (every existing caller) renders byte-identically.
+  const bool additive = (flags & 0x0004) != 0;
   if (!points && !tris) return;  // ladder-free L1 chooses statically (zidl)
   for (const Particle& p : pop.parts) {
     const ProjOut c = project_vertex(vp, vpp, fx16{p.x}, fx16{p.y}, fx16{p.z}, L);
@@ -149,16 +167,24 @@ void draw_population(WorkSurface& surf, const Viewport& vpp, const mat4fx& vp,
     const int32_t half_sub = side_sub >> 1;
     if (points) {
       blit_pattern_block(surf, vpp, c.s.x - half_sub, c.s.y - half_sub, side_sub, side_sub, p.r,
-                         p.g, p.b, c.s.d);
+                         p.g, p.b, c.s.d, additive);
     }
     if (tris) {
       // triangle sprite: equilateral-ish 3-vertex fan in screen space
-      const ScreenV a{c.s.x, c.s.y - side_sub, c.s.d, 0};
-      const ScreenV b{c.s.x - (side_sub * 3) / 4, c.s.y + side_sub / 2, c.s.d, 0};
-      const ScreenV cc{c.s.x + (side_sub * 3) / 4, c.s.y + side_sub / 2, c.s.d, 0};
+      // additive tris carry full alpha on every vertex: kAdditive computes
+      // dst = sat(dst + src*a) with a interpolated, so a == 1.0 everywhere
+      // gives exactly the ADD law. Opaque tris keep the 0 lane untouched.
+      const int32_t va = additive ? 65536 : 0;
+      const ScreenV a{c.s.x, c.s.y - side_sub, c.s.d, va};
+      const ScreenV b{c.s.x - (side_sub * 3) / 4, c.s.y + side_sub / 2, c.s.d, va};
+      const ScreenV cc{c.s.x + (side_sub * 3) / 4, c.s.y + side_sub / 2, c.s.d, va};
       const TriMode m;  // opaque fill, but pass-7 law: test only, no write
       TriMode tm = m;
       tm.depth_write = false;
+      if (additive) {
+        tm.blend = BlendMode::kAdditive;
+        tm.interp_alpha = true;
+      }
       raster_tri(surf, vpp, a, b, cc, p.r, p.g, p.b, tm);
     }
   }
