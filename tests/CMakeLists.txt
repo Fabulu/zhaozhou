@@ -5596,6 +5596,28 @@ verilate(test_assetfetch_rtl_directed
 add_test(NAME assetfetch_rtl_directed COMMAND test_assetfetch_rtl_directed)
 set_tests_properties(assetfetch_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# GEOM.ASSETFETCH -- randomized DIFFERENTIAL. Unlike the meshfetch random file
+# there IS something to differ against here, so this compares the RTL to the
+# oracle over 240 meshlets rather than checking properties.
+# What it buys that the directed files cannot: the block RE-ARMING (every
+# failure mode of a single-buffered fetcher is state that survives one meshlet
+# into the next), backpressure on the guard AND both service ports, and
+# counters that accumulate over a long run. The generator is biased small on
+# purpose -- uniform 0..64 draws would almost never produce the 0- and 1-vertex
+# cases where an off-by-one in the stream's end condition lives -- and it
+# asserts that it actually produced the mix it claims.
+add_executable(test_assetfetch_random geometry/assetfetch_random.cpp)
+target_link_libraries(test_assetfetch_random PRIVATE zhao_harness zhao_zref)
+verilate(test_assetfetch_random
+  PREFIX Vtb_assetfetch
+  TOP_MODULE tb_assetfetch
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_assetfetch.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_assetfetch.sv)
+add_test(NAME assetfetch_random COMMAND test_assetfetch_random)
+set_tests_properties(assetfetch_random PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # GEOM.MESHFETCH -- randomized PROPERTIES, not a differential.
 # There is one implementation, so there is nothing to differ against yet. When
 # the RTL lands the DUT goes in beside these generators and the properties

@@ -483,7 +483,22 @@ module zhao_geom_assetfetch
           // The consumer says when it is done. Not inferred: two consumers
           // finish independently, and a buffer released on a guess is a buffer
           // overwritten under a reader.
-          if (release_i) st_q <= S_IDLE;
+          //
+          // THE STREAM STATE IS TORN DOWN WITH IT, and this assignment is LAST
+          // on purpose so it overrides the vertex handshake above. A release
+          // that arrives before the stream is drained -- which is legal, since
+          // ASSEMBLE may refuse every triplet and want nothing more -- would
+          // otherwise leave `v_full_q` set, and `v_valid_o` would stay asserted
+          // over the next meshlet's buffer with the previous meshlet's record
+          // still on the wires. Stale valid is the worst kind of wrong: the
+          // consumer has no way to tell it from a fresh one.
+          if (release_i) begin
+            st_q      <= S_IDLE;
+            v_full_q  <= 1'b0;
+            v_stage_q <= 3'd0;
+            v_ix_q    <= '0;
+            v_word_q  <= '0;
+          end
         end
 
         default: st_q <= S_IDLE;

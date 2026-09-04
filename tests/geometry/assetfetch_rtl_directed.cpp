@@ -434,6 +434,32 @@ int main(int argc, char** argv) {
   // ---- the block recovers and serves the next meshlet --------------------
   serve_case(s, 128, 4096, 5, 3, "after a denial");
 
+  // ---- EARLY RELEASE: the stream state must be torn down with the buffer --
+  // A consumer may finish with a meshlet before its vertex stream is drained --
+  // GEOM.ASSEMBLE can refuse every triplet and want nothing more. The first
+  // version of the RTL returned to S_IDLE without clearing v_full_q, so
+  // v_valid_o stayed asserted over the NEXT meshlet's buffer while the
+  // PREVIOUS meshlet's record sat on the wires. Stale valid is the worst kind
+  // of wrong: the consumer cannot tell it from a fresh one.
+  {
+    af::Request r;
+    r.vertex_offset = 160;
+    r.index_offset = 4096;
+    r.vertex_count = 8;
+    r.triangle_count = 4;
+    ck(s.offer(r), "early-release fixture is servable");
+
+    // Take exactly one record of eight, then release.
+    uint8_t got[af::kVertexRecordBytes];
+    ck(s.next_record(got), "early release: the first record arrives");
+    s.release();
+
+    ck(dut.v_valid == 0, "early release: v_valid is DEASSERTED, not left standing");
+
+    // And the next meshlet is served correctly rather than inheriting state.
+    serve_case(s, 192, 4104, 6, 5, "after an early release");
+  }
+
   if (g_fail != 0) {
     std::printf("[assetfetch_rtl_directed] %d of %d checks FAILED\n", g_fail, g_checks);
     zhao::exit_hard(1);

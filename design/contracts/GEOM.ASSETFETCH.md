@@ -119,6 +119,26 @@ A refused meshlet emits **no triangles** — it does not emit the part that fit.
 Partial geometry is worse than absent geometry, because it looks like a
 modelling error rather than a fault.
 
+## The release handshake, and why it is explicit
+
+The buffer is handed downstream with `s_valid` / `s_ready`, and returned with a
+`release` pulse. **Release is EXPLICIT rather than inferred** from "all vertices
+streamed and the last triplet asked for", because the two consumers finish
+independently — and a buffer released on a guess is a buffer overwritten under
+a reader.
+
+**Early release is LEGAL and the block must survive it.** `GEOM.ASSEMBLE` can
+refuse every triplet in a meshlet (`refused_index_o`) and want nothing further,
+while vertex records are still queued. So release tears down the vertex stream
+state along with the buffer.
+
+The first RTL did not, and the failure is worth naming: `v_valid` stayed
+asserted into the next meshlet with the previous meshlet's record still on the
+wires. **Stale valid is the worst kind of wrong, because the consumer has no way
+to tell it from a fresh one** — every other bug in this block produces bytes
+that can be checked against an address.
+ENFORCED-BY: `tests/geometry/assetfetch_rtl_directed.cpp` (early release)
+
 ## Backpressure
 
 Ready/valid on the meshlet input. `ix_*` is answered combinationally from the
