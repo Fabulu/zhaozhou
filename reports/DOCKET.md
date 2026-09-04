@@ -673,6 +673,41 @@ weak heuristic summarised rather than listed. It exists because `out_w_o` went
 into `GEOM.PROJECT` the same day with no differential and **no test could fail**
 — the missing expectation and the missing check cancelled out.
 
+### D19c. The ledger's `counters:` field is not checkable — **needs a convention**
+Measured 2026-09-04 over the 62 blocks whose module name is derivable from their id.
+
+`design/blocks.yml` declares a `counters:` list per block, `spec/counters.md`
+governs their behaviour, and V12 checks each name is in `counter_catalog`.
+**Nothing checks that the RTL implements one.** Measured:
+
+    counters matching their port as <counter>_o :   0
+    present in the module text some other way   :  54   (comments included)
+    absent from the module entirely             :  54
+
+**Zero.** The ledger's counter names and the RTL's port names are two separate
+vocabularies with no mechanical link, so `counters: [meshlets_fetched,
+triangles_culled]` on `GEOM.MESHFETCH` — whose ports are
+`meshlets_considered_o` and `descriptors_fetched_o` — is documentation that
+reads like a claim.
+
+**This is NOT a report of 54 missing counters**, and the distinction matters:
+most are probably implemented under another name, and the "present some other
+way" figure is soft because a match can be a comment. What is established is
+that **the field cannot currently be verified**, which is the same class as the
+signal-vocabulary problem `compose_order.py` surfaced for `upstream`/`downstream`
+and which was worth fixing there.
+
+**It wants a ruling, not a sweep.** Either the ledger names become the port
+names (`<counter>_o`, mechanical but touching 60+ blocks), or each row carries
+an explicit port mapping. Renaming ports across the tree during an active fit
+campaign is the wrong move; choosing the convention is cheap and can be applied
+as blocks are next touched.
+
+**One of the 54 is this session's own**: `GEOM.ASSETFETCH` declares
+`prefetch_stall_cycles` and its port is `prefetch_stall_o`. Left as-is
+deliberately — fixing one block to a convention that does not exist yet would
+make the tree less consistent, not more.
+
 ### D20. The eight fundamentals rulings — **answered, and the authority**
 `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`, with the questions as posed in
 `reports/FUNDAMENTALS-DECISIONS-NEEDED.md`. All eight are ruled and each is
