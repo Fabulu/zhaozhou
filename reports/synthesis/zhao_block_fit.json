@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "5651d96c20b84d464fc7261e8a2daae47e585585",
+    "newestRunCommit":  "7d027c4196f16e85d941f6b806465d09b9c2bd29",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1147,26 +1147,17 @@
                    },
                    {
                        "module":  "zhao_texture_material_combine_v1",
-                       "status":  "failed:structure",
-                       "sourceCommit":  "4215c1c706896390211829b6cc26c03f4ded75bd",
+                       "status":  "incomplete:failed:quartus_fit.exe",
+                       "sourceCommit":  "7d027c4196f16e85d941f6b806465d09b9c2bd29",
                        "rtlCleanAtHead":  true,
-                       "seconds":  9417,
+                       "seconds":  3002.7,
                        "sourcesHashed":  1,
-                       "alms":  1994,
-                       "registers":  1383,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  744,
                        "blockMemoryBits":  0,
-                       "ramBlocks":  0,
                        "dspBlocks":  2,
-                       "virtualPins":  596,
-                       "almsAvailable":  41910,
-                       "ramBlocksAvailable":  553,
-                       "dspBlocksAvailable":  112,
-                       "fmaxMhz":  29.74,
-                       "fmaxClock":  "clk",
-                       "ruleViolations":  [
-                                              "registers 1383 \u003e allowed 500 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)",
-                                              "ALM 1994 \u003e allowed 800"
-                                          ]
+                       "virtualPins":  596
                    },
                    {
                        "module":  "zhao_texture_mosaic",
