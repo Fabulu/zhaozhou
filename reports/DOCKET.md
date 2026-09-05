@@ -3094,7 +3094,11 @@ level is always zero and enabling `MIP_EN` changes nothing. Everything the
 planner already implements — clamping, selected-level UV scaling, packed
 mip-chain offsets — is unreachable through this wiring.
 
-**FIXED in a4596338.** LODW is now 8 and the connection is direct. Inert at
+**FIXED in a4596338.** LODW is now 8 and the connection is direct.
+The oracle already declares this ABI -- zref_texture.hpp:151,
+ -- and the planner reads [7:4] as the integer
+level, so the oracle and the planner agreed and the ISLAND was the outlier.
+That settles which side was wrong rather than leaving it a judgement call. Inert at
 that commit and verified so: the composed test drives bind_mode_i = 0, so
 MIP_EN is low and lvl_req is 0 either way; every measured number is unchanged
 and 25 checks pass. Fixed separately from the two gated repairs because it
