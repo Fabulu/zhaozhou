@@ -386,6 +386,25 @@ int main(int argc, char** argv) {
   // each one EXACTLY ONCE, and -- because FRAGROB retires in allocation order
   // -- in submission order. That is the whole contract, and it is asserted
   // per fragment rather than as a population statistic.
+  // MUTATION EVIDENCE -- this gate is known to DETECT, not merely to pass.
+  // Two mutations were applied to zhao_texture_island_top.sv and the results
+  // recorded here, because a green check is not evidence until it has been
+  // shown to go red on the fault it claims to cover:
+  //
+  //   `fr_f_ctx = fr_f_ctx_in` -- the EXACT historical bug, reading the
+  //   boundary tap instead of the token-indexed store:
+  //       38 missing, 38 duplicated, 63 out of order
+  //       jobs by recipe 0 0 4 4 0 0 30 112
+  //
+  //   `fc_rp = fc_wp` -- reading live ingress at the second read point:
+  //       63 missing, 11 duplicated, 52 foreign
+  //       jobs by recipe all zero
+  //
+  // THE POINT: under the first mutation the OLD aggregate checks still pass.
+  // `moved >= 2` sees four counters moved and is satisfied; the old
+  // single-fragment colour check samples a fragment that happens to be
+  // non-zero. The identity gate fails immediately and unambiguously. That
+  // difference is the entire argument for it.
   {
     int missing = 0, duplicated = 0, out_of_order = 0, foreign = 0;
     std::vector<int> seen(kFrags, 0);
