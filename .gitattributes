@@ -86,3 +86,7 @@ compiler/tests/generated/** text eol=lf
 # by the corpus test; CRLF checkout would shift byte-offset spans)
 compiler/tests/frontend/corpus/positive/*.form text eol=lf
 compiler/tests/frontend/corpus/golden/*.json text eol=lf
+# The generated Manafold page is byte-stable generator output: keep it
+# exactly as committed (no CRLF translation), so "regenerate and diff"
+# stays a byte-for-byte check on every platform.
+tools/reel/manafold_page.h -text
