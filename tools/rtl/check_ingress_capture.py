@@ -111,6 +111,11 @@ CONTRACTS = [
         # a CLASS, not an instance: the next per-triangle field added here could
         # be read from a consumer further down the geometry chain, where the
         # latency is variable, and nothing would say so.
+        # MUTATION-VERIFIED: inserting a late read of render_kx0_i -- a
+        # genuine per-triangle input -- next to zhao_raster_fbwrite is
+        # caught; the unmutated tree is clean. A contract that has not been
+        # shown to go red is not evidence, and this one had to be narrowed
+        # once already before it stopped flagging frame-scoped signals.
         "path": "fpga/rtl/common/zhao_shell_top.sv",
         "prefix": "render_",
         "allow_regions": [
