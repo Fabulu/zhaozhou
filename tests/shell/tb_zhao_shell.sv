@@ -374,6 +374,13 @@ module tb_zhao_shell (
   output logic [31:0]        dbg_af_beats_o,
   output logic [31:0]        dbg_af_denied_o,
   output logic [31:0]        dbg_af_refused_o,
+  // EVERY CYCLE A CONSUMER WAITED ON A BUFFER STILL FILLING. The block's own
+  // header names this as the counter that will say whether double buffering is
+  // worth its ~2.4 KB -- it is single-buffered on purpose, and this number is
+  // the evidence that decides. It was tied off when ASSETFETCH was first
+  // composed, which is the "block whose evidence ports are dangling" pattern
+  // this bench criticises elsewhere in its own comments.
+  output logic [31:0]        dbg_af_stall_o,
   output logic               dbg_vd_have_o,
   output logic [31:0]        dbg_vd_vertices_o,
   output logic [31:0]        dbg_vd_format_bad_o,
@@ -977,7 +984,8 @@ module tb_zhao_shell (
       .v_bytes_o(af_v_bytes), .v_src_id_o(),
       .meshlets_fetched_o(dbg_af_meshlets_o), .beats_read_o(dbg_af_beats_o),
       .guard_denied_o(dbg_af_denied_o),
-      .refused_footprint_o(dbg_af_refused_o), .prefetch_stall_o());
+      .refused_footprint_o(dbg_af_refused_o),
+      .prefetch_stall_o(dbg_af_stall_o));
 
   // ==========================================================================
   // TREAD 7: the four records, decoded into the table PROJECT reads

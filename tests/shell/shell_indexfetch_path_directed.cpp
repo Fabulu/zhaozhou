@@ -165,6 +165,7 @@ struct Pass {
   bool refused = false;
   uint32_t format_bad = 0;
   uint32_t meshlets = 0, beats = 0, denied = 0, refused_fp = 0;
+  uint32_t stalls = 0;
 };
 
 void write_cfg(ShellHarness& h, uint8_t addr, uint32_t data) {
@@ -348,6 +349,7 @@ Pass draw_once(int mode, const uint8_t idx[3]) {
   r.beats = h.top.dbg_af_beats_o;
   r.denied = h.top.dbg_af_denied_o;
   r.refused_fp = h.top.dbg_af_refused_o;
+  r.stalls = h.top.dbg_af_stall_o;
   r.decoded = h.top.dbg_vd_have_o != 0;
   r.vertices = h.top.dbg_vd_vertices_o;
   r.refused = h.top.dbg_vd_refused_o != 0;
@@ -379,8 +381,13 @@ int main(int argc, char** argv) {
   const Pass pre = draw_once(/*mode=*/0, kTriIdx);
   const Pass via = draw_once(/*mode=*/1, kTriIdx);
 
-  std::printf("  assetfetch: meshlets %u, beats %u, denied %u, refused %u\n", via.meshlets,
-              via.beats, via.denied, via.refused_fp);
+  std::printf("  assetfetch: meshlets %u, beats %u, denied %u, refused %u, stalls %u\n",
+              via.meshlets, via.beats, via.denied, via.refused_fp, via.stalls);
+  // PREFETCH STALL is the UNCONTENDED BASELINE. The bench memory grants
+  // immediately and answers in one cycle, so any stall counted here is the
+  // consumer outrunning the fetch on its own -- not the memory. Tread 10
+  // puts both fetchers behind a real arbiter for the first time, and this
+  // number is what its result has to be read against.
   std::printf(
       "  vdecode: decoded %u vertices, have=%d, refused=%d, "
       "format_bad=%u; assemble named (%u, %u, %u)\n",
