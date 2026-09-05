@@ -184,6 +184,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_setu
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_meshfetch.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_assemble.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_vdecode.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_assetfetch.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_project.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_clip.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_depthquant.sv

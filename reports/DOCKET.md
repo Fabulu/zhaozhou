@@ -2803,6 +2803,7 @@ PRECOMPUTED EDGE EQUATIONS to A MESHLET DESCRIPTOR IN MEMORY:
 | 5 | GEOM.ASSEMBLE | which three vertices | 8 |
 | 6 | GEOM.MESHFETCH | the meshlet itself | 9 |
 | 7 | GEOM.VDECODE | the decoded coordinates | 12 |
+| 8 | GEOM.ASSETFETCH | the records themselves | 16 |
 
 Every step draws the SAME triangle both ways and requires a byte-identical
 framebuffer, and every step from 3 onward also MEASURES that its own comparison
@@ -2834,6 +2835,21 @@ advance the GEOM.VDECODE ledger entry, which stays SPECIFIED because
 `zhao_geom_vdecode`'s own header is explicit that it is the record leaf and not
 the batch engine.
 
+**Tread 8, added 2026-09-05.** The bench stops SYNTHESISING vertex records and
+supplies raw POOL BYTES. GEOM.ASSETFETCH reads the meshlet's footprint out of
+them as aligned 64-byte lines and streams each 32-byte record to GEOM.VDECODE,
+so the record port stops being a bench input and becomes an internal seam. The
+footprint is MESHFETCH's own descriptor answer, so this closes
+**MESHFETCH → ASSETFETCH → VDECODE** rather than only replacing one producer.
+
+Measured: `meshlets 1, beats 24, denied 0, refusedfp 0`, four records decoded,
+byte-identical framebuffer, sensitivity 1279 words. **24 beats is exactly three
+64-byte lines** — the index run of one followed by the vertex run of two —
+which is the phase structure the block implements and the reason a single-grant
+beat player could never have worked: the index phase would have swallowed the
+whole pool and the vertex phase never started. The bench's records are driven
+to POISON during the fetch pass.
+
 ### What this does NOT close
 
 **The asset fetcher.** `zhao_geom_meshfetch` is the only `zhao_guard_req_t`
@@ -2843,9 +2859,13 @@ service. Step 6 proves the descriptor path inside the composed shell; it does
 not prove the fetcher, and the cull answer is a constant "visible" precisely so
 a cull failure cannot pass as a descriptor success.
 
-The remaining work is what this entry has said since 2026-09-04: **one asset
+~~The remaining work is what this entry has said since 2026-09-04: **one asset
 fetcher over `GEOM.ASSET_POOL` serving three consumers** — descriptors, the u8
-index stream, and vertex records. `spec/memory_rules.md` §5f ruled the region
+index stream, and vertex records.~~ **Tread 8 serves the VERTEX RECORDS through
+it.** The u8 index stream is still the bench's: `ix_req_i` is tied off and
+GEOM.ASSEMBLE still reads `asm_index_stream_i`, because a tread moves one
+thing. That is the next tread, and it is small — the port already exists on
+the fetcher. `spec/memory_rules.md` §5f ruled the region
 (22 MiB, `ENGINE1`, read-only, bank 3). The wiring is glue over that one path.
 
 ~~**GEOM.VDECODE.** The bench holds the vertex TABLE and looks up the IDs

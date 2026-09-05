@@ -340,6 +340,28 @@ module tb_zhao_shell (
   //   * ANY FORMAT BUT 0. Formats 1 and 2 are bake-off gated.
   input  logic               vdecode_mode_i,
   input  logic [255:0]       vd_rec_i [4],
+  // ---- TREAD 8: GEOM.ASSETFETCH ---------------------------------------------
+  // The bench stops SYNTHESISING vertex records and supplies raw POOL BYTES.
+  // GEOM.ASSETFETCH reads the meshlet's footprint out of them as aligned
+  // 64-byte lines and streams each 32-byte record to GEOM.VDECODE, so the
+  // record port stops being a bench input and becomes an internal seam.
+  //
+  // Its footprint comes from GEOM.MESHFETCH's own descriptor outputs
+  // (`r_vertex_offset_o`, `r_vertex_count_o`), so this tread also closes the
+  // MESHFETCH -> ASSETFETCH -> VDECODE path rather than only replacing one
+  // producer.
+  //
+  // WHAT IT DOES NOT MOVE: the INDEX stream. GEOM.ASSEMBLE is still handed
+  // `asm_index_stream_i` by the bench even though ASSETFETCH can serve it,
+  // because a tread moves ONE thing and this one moves the vertex records.
+  // The bench also still plays the guard and the beats -- the boundary moves
+  // out by one block, not to zero.
+  input  logic               assetfetch_mode_i,
+  input  logic [63:0]        af_pool_i [32],
+  output logic [31:0]        dbg_af_meshlets_o,
+  output logic [31:0]        dbg_af_beats_o,
+  output logic [31:0]        dbg_af_denied_o,
+  output logic [31:0]        dbg_af_refused_o,
   output logic               dbg_vd_have_o,
   output logic [31:0]        dbg_vd_vertices_o,
   output logic [31:0]        dbg_vd_format_bad_o,
@@ -840,6 +862,93 @@ module tb_zhao_shell (
   logic               pj_tri_ready;
 
   // ==========================================================================
+  // TREAD 8: GEOM.ASSETFETCH over a bench-played pool
+  // ==========================================================================
+  // THE PLAYED POOL. GEOM.ASSETFETCH requests ONE 64-BYTE LINE AT A TIME --
+  // S_REQ, then eight beats ended by `beat_last_i`, then the next line, and a
+  // phase switch from the index run to the vertex run in between. So the player
+  // grants PER REQUEST and serves exactly eight beats from the line the guard
+  // request names; a single grant streaming the whole pool would feed the
+  // index phase everything and the vertex phase would never start.
+  //
+  // The address is pool-relative here because the bench IS the pool: line
+  // `addr >> 6`, beat `addr[5:3] + n`.
+  zhao_guard_req_t af_guard_req;
+  zhao_guard_rsp_t af_guard_rsp;
+  logic            af_serving_r;
+  logic [2:0]      af_beat_r;
+  logic [4:0]      af_line_r;
+  logic            af_m_ready, af_s_valid;
+  logic            af_v_valid, af_v_ready;
+  logic [255:0]    af_v_bytes;
+  logic            af_sent_r;
+
+  logic af_beat_valid, af_beat_last;
+  logic [63:0] af_beat_data;
+  assign af_beat_valid = af_serving_r;
+  assign af_beat_last  = af_serving_r && (af_beat_r == 3'd7);
+  assign af_beat_data  = af_pool_i[{af_line_r[1:0], af_beat_r}];
+
+  always_comb begin
+    af_guard_rsp = '0;
+    if (af_guard_req.valid && !af_serving_r) begin
+      af_guard_rsp.ready = 1'b1;
+      af_guard_rsp.ok    = 1'b1;
+    end
+  end
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      af_serving_r <= 1'b0;
+      af_beat_r    <= 3'd0;
+      af_line_r    <= 5'd0;
+      af_sent_r    <= 1'b0;
+    end else if (!render_tri_valid_i) begin
+      af_serving_r <= 1'b0;
+      af_beat_r    <= 3'd0;
+      af_line_r    <= 5'd0;
+      af_sent_r    <= 1'b0;
+    end else begin
+      if (assetfetch_mode_i && af_m_ready && !af_sent_r) af_sent_r <= 1'b1;
+      if (af_guard_req.valid && !af_serving_r) begin
+        af_serving_r <= 1'b1;
+        af_beat_r    <= 3'd0;
+        af_line_r    <= af_guard_req.addr[10:6];
+      end else if (af_serving_r) begin
+        if (af_beat_r == 3'd7) af_serving_r <= 1'b0;
+        af_beat_r <= af_beat_r + 3'd1;
+      end
+    end
+  end
+
+  zhao_geom_assetfetch #(.SRCW(16)) u_assetfetch (
+      .clk(gpu_clk), .rst_n(rst_n),
+      .m_valid_i(render_tri_valid_i & assetfetch_mode_i & ~af_sent_r
+                 & (~meshfetch_mode_i | mf_have_r)),
+      .m_ready_o(af_m_ready),
+      // The footprint is MESHFETCH's own answer when it is in the path, and the
+      // bench's fixed offsets otherwise. Pool-relative bytes.
+      .m_vertex_offset_i(32'd0),
+      .m_index_offset_i(32'd128),
+      .m_vertex_count_i(meshfetch_mode_i ? mf_vc_r : 8'd4),
+      .m_triangle_count_i(meshfetch_mode_i ? mf_tc_r : 8'd1),
+      .m_src_id_i(16'd0), .m_client_i(zhao_client_e'(0)),
+      .guard_req_o(af_guard_req), .guard_rsp_i(af_guard_rsp),
+      .beat_valid_i(af_beat_valid), .beat_data_i(af_beat_data),
+      .beat_last_i(af_beat_last),
+      .s_valid_o(af_s_valid), .s_ready_i(1'b1),
+      .s_vertex_count_o(), .s_triangle_count_o(), .s_src_id_o(),
+      .release_i(1'b0),
+      // The index port stays the bench's this tread; tied off, not wired.
+      .ix_req_i(1'b0), .ix_index_i(9'd0),
+      .ix_valid_o(), .ix_a_o(), .ix_b_o(), .ix_c_o(),
+      .v_valid_o(af_v_valid), .v_ready_i(af_v_ready),
+      .v_bytes_o(af_v_bytes), .v_src_id_o(),
+      .meshlets_fetched_o(dbg_af_meshlets_o), .beats_read_o(dbg_af_beats_o),
+      .guard_denied_o(dbg_af_denied_o),
+      .refused_footprint_o(dbg_af_refused_o), .prefetch_stall_o());
+
+  // ==========================================================================
   // TREAD 7: the four records, decoded into the table PROJECT reads
   // ==========================================================================
   // One record at a time through the leaf decoder, latched by arrival order.
@@ -857,7 +966,13 @@ module tb_zhao_shell (
   logic signed [31:0] vd_d_x, vd_d_y, vd_d_z;
   logic               vd_d_refused;
 
-  assign vd_v_valid = vdecode_mode_i && render_tri_valid_i && (vd_wp_r < 3'd4);
+  // THE RECORD SEAM. In tread-8 mode the records arrive from GEOM.ASSETFETCH
+  // and the bench's `vd_rec_i` is not read at all; otherwise the bench feeds
+  // them directly, which is tread 7.
+  assign vd_v_valid = assetfetch_mode_i
+                    ? af_v_valid
+                    : (vdecode_mode_i && render_tri_valid_i && (vd_wp_r < 3'd4));
+  assign af_v_ready = assetfetch_mode_i && vd_v_ready;
   // OBSERVATION IS NOT THE GATE. The gate must clear when the triangle goes
   // away, or the next one would draw from a stale table -- but a test reading
   // it after the frame drains then sees 0 and calls a working decode a failure,
@@ -869,7 +984,7 @@ module tb_zhao_shell (
   zhao_geom_vdecode #(.SRCW(16)) u_vdecode (
       .clk(gpu_clk), .rst_n(rst_n),
       .v_valid_i(vd_v_valid), .v_ready_o(vd_v_ready),
-      .v_bytes_i(vd_rec_i[vd_wp_r[1:0]]),
+      .v_bytes_i(assetfetch_mode_i ? af_v_bytes : vd_rec_i[vd_wp_r[1:0]]),
       .v_format_i(3'd0), .v_src_id_i({13'd0, vd_wp_r}),
       .d_valid_o(vd_d_valid), .d_ready_i(1'b1),
       .d_x_o(vd_d_x), .d_y_o(vd_d_y), .d_z_o(vd_d_z),
