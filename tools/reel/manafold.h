@@ -1,34 +1,34 @@
-// Unnamed02 — creature 02, the floating mana-conduit companion. COMPOSITION.
+// MANAFOLD (creature 02) — creature 02, the floating mana-conduit companion. COMPOSITION.
 //
 // The only header zhao_reel.cpp includes for this creature. It must sit
 // after `namespace zc = zref::creature;`, the same contract zixxtrixx.h
 // uses. The headers are split for the ownership migration: a later move
-// into Upheaval/creature/Unnamed02/source/ is a git mv, not a rewrite.
+// into Upheaval/creature/Manafold/source/ is a git mv, not a rewrite.
 //
-//   unnamed02_art.h    every named knob
-//   unnamed02_model.h  make_ball(), the body, the hinges (the loop + eyes
+//   manafold_art.h    every named knob
+//   manafold_model.h  make_ball(), the body, the hinges (the loop + eyes
 //                      land at the form milestone)
-//   unnamed02_rig.h    bone ids + skeleton
-//   unnamed02_clips.h  maths helpers (sanctioned copy) + clip builders
+//   manafold_rig.h    bone ids + skeleton
+//   manafold_clips.h  maths helpers (sanctioned copy) + clip builders
 //
 // The creature FLOATS (OWNER-DIRECTION-1): no gait, no attacks, no ground
 // contact — the probe asserts clearance, and Zixxtrixx's ground-contact law
 // is declared not applicable in CREATURE.json.
 
-#ifndef ZHAO_REEL_UNNAMED02_H
-#define ZHAO_REEL_UNNAMED02_H
+#ifndef ZHAO_REEL_MANAFOLD_H
+#define ZHAO_REEL_MANAFOLD_H
 
-#include "unnamed02_art.h"
-#include "unnamed02_model.h"
-#include "unnamed02_rig.h"
-#include "unnamed02_clips.h"
-#include "unnamed02_fx.h"
+#include "manafold_art.h"
+#include "manafold_model.h"
+#include "manafold_rig.h"
+#include "manafold_clips.h"
+#include "manafold_fx.h"
 
-// The GENERATED page (tools/pack/mku02page.py; gitignored, never tracked).
+// The GENERATED page (tools/pack/mkmanafoldpage.py; gitignored, never tracked).
 // Absent, the creature falls back to its flat part materials and still
 // renders — CI and a fresh clone build grey rather than breaking.
-#if __has_include("unnamed02_page.h")
-#include "unnamed02_page.h"
+#if __has_include("manafold_page.h")
+#include "manafold_page.h"
 #define U02_HAVE_PAGE 1
 #endif
 
@@ -132,10 +132,10 @@ inline const zc::CreatureType& type() {
     bank.clips.push_back(build_trick());       // slot 13 (pass 3: headstand)
 
     zc::CreatureType type;
-    type.type_id = 3;  // 1 watchdog, 2 zixxtrixx, 3 unnamed02
+    type.type_id = 3;  // 1 watchdog, 2 zixxtrixx, 3 manafold
     const char* reason = "";
     if (!zc::compile_creature(sk, bank, parts, type, &reason)) {
-      std::fprintf(stderr, "unnamed02: compile failed: %s\n", reason);
+      std::fprintf(stderr, "manafold: compile failed: %s\n", reason);
     }
 #ifdef U02_HAVE_PAGE
     type.page_direct = &page_direct();
@@ -147,4 +147,4 @@ inline const zc::CreatureType& type() {
 
 }  // namespace u02
 
-#endif  // ZHAO_REEL_UNNAMED02_H
+#endif  // ZHAO_REEL_MANAFOLD_H

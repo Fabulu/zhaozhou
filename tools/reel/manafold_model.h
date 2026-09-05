@@ -1,14 +1,14 @@
-// Unnamed02 — model builders: make_ball(), the body, the hinges.
+// MANAFOLD (creature 02) — model builders: make_ball(), the body, the hinges.
 //
 // The consumer (zhao_reel.cpp / the probe) provides `namespace zc =
 // zref::creature;` and the zref includes, the same contract zixxtrixx.h uses.
 // Everything here is integer-only authoring over the generic ring builder.
 
-#ifndef ZHAO_REEL_UNNAMED02_MODEL_H
-#define ZHAO_REEL_UNNAMED02_MODEL_H
+#ifndef ZHAO_REEL_MANAFOLD_MODEL_H
+#define ZHAO_REEL_MANAFOLD_MODEL_H
 
-#include "unnamed02_art.h"
-#include "unnamed02_rig.h"
+#include "manafold_art.h"
+#include "manafold_rig.h"
 
 namespace u02 {
 
@@ -273,4 +273,4 @@ inline zc::RingPart make_star_blade(uint8_t bone, bool crossed) {
 
 }  // namespace u02
 
-#endif  // ZHAO_REEL_UNNAMED02_MODEL_H
+#endif  // ZHAO_REEL_MANAFOLD_MODEL_H

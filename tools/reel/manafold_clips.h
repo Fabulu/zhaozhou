@@ -1,4 +1,4 @@
-// Unnamed02 — clip builders + the maths helpers.
+// MANAFOLD (creature 02) — clip builders + the maths helpers.
 //
 // The rotation/curve maths below is the ONE SANCTIONED COPY from
 // zixxtrixx.h (pure quat/curve maths, no anatomy). Everything else is this
@@ -12,11 +12,11 @@
 //  - one thing at a time, each beat >= 8 keys (16 frames) to register.
 //  - speed spent on payoffs; wind-ups still >= 8 keys.
 
-#ifndef ZHAO_REEL_UNNAMED02_CLIPS_H
-#define ZHAO_REEL_UNNAMED02_CLIPS_H
+#ifndef ZHAO_REEL_MANAFOLD_CLIPS_H
+#define ZHAO_REEL_MANAFOLD_CLIPS_H
 
-#include "unnamed02_art.h"
-#include "unnamed02_rig.h"
+#include "manafold_art.h"
+#include "manafold_rig.h"
 
 namespace u02 {
 
@@ -969,4 +969,4 @@ inline zc::Clip build_still() {
 
 }  // namespace u02
 
-#endif  // ZHAO_REEL_UNNAMED02_CLIPS_H
+#endif  // ZHAO_REEL_MANAFOLD_CLIPS_H

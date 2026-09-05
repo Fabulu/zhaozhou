@@ -1,4 +1,4 @@
-// Unnamed02 — the effects: THE MANA MENU (pass 2), the FX.LIGHTNING bolt,
+// MANAFOLD (creature 02) — the effects: THE MANA MENU (pass 2), the FX.LIGHTNING bolt,
 // the centre glow. This file IS the effects knob block: every rate, life,
 // size and colour below is an owner knob.
 //
@@ -39,12 +39,12 @@
 // this authoring migrates unchanged onto the FORGE.PRIM ribbon evaluator
 // the day it lands (the hardware ask is on the record in zhaozhou/reports/).
 
-#ifndef ZHAO_REEL_UNNAMED02_FX_H
-#define ZHAO_REEL_UNNAMED02_FX_H
+#ifndef ZHAO_REEL_MANAFOLD_FX_H
+#define ZHAO_REEL_MANAFOLD_FX_H
 
 #include <vector>
 
-#include "unnamed02_art.h"
+#include "manafold_art.h"
 
 namespace u02 {
 
@@ -704,4 +704,4 @@ inline void smear_composite(const uint8_t* buf, uint8_t* rgb, uint32_t w, uint32
 
 }  // namespace u02
 
-#endif  // ZHAO_REEL_UNNAMED02_FX_H
+#endif  // ZHAO_REEL_MANAFOLD_FX_H

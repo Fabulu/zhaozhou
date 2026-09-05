@@ -1,6 +1,14 @@
-// Unnamed02 — creature 02, the floating mana conduit. THE KNOBS.
+// MANAFOLD — creature 02, the floating mana conduit that FOLDS ITS MANA.
+// THE KNOBS.
 //
-// Built from S. Hofer's two concept sheets (Upheaval/creature/Unnamed02/
+// NAMING (pass 4, R13): the creature is Manafold on every owner-facing
+// surface — files, subjects, site, docs. The `u02::` namespace, `kU02*`
+// constants, `U02_*` env lanes, `u02-s*` diagnostic subjects and the
+// kUnnamed02 species enum are KEPT: they are creature-02 shorthand, not
+// the placeholder name, and churning them buys no owner-visible value
+// while risking the shared reel file.
+//
+// Built from S. Hofer's two concept sheets (Upheaval/creature/Manafold/
 // Concept/). Authored BY EYE per the art law: every value here is a starting
 // orientation and an owner knob, never a measurement. Nothing is sampled
 // from the scans.
@@ -13,8 +21,8 @@
 // +Y up, +Z the creature's left. The antenna loop lives in the X-Y plane
 // (flat in Z — the side sheet shows the broad loop, the front sheet a blade).
 
-#ifndef ZHAO_REEL_UNNAMED02_ART_H
-#define ZHAO_REEL_UNNAMED02_ART_H
+#ifndef ZHAO_REEL_MANAFOLD_ART_H
+#define ZHAO_REEL_MANAFOLD_ART_H
 
 namespace u02 {
 
@@ -185,7 +193,7 @@ constexpr int32_t kPupilStarArmMm = 185;  // star arm half-length (the sheet's
 constexpr int32_t kPupilStarThinMm = 26;  // fat organic star, not a thin cross)
 constexpr int32_t kPupilStarWideMm = 72;  // blade width
 constexpr uint8_t kLensR = 116, kLensG = 58, kLensB = 178;   // purple (grey pass)
-// The star's SHIPPED pigment lives in mku02page.py (STAR_CYAN, same value):
+// The star's SHIPPED pigment lives in mkmanafoldpage.py (STAR_CYAN, same value):
 // the star must carry a page because untextured parts render black under
 // celmain (09-ENGINE-GOTCHAS.md §7). These stay as the pageless fallback.
 constexpr uint8_t kStarR = 64, kStarG = 220, kStarB = 240;   // cyan
@@ -330,7 +338,7 @@ constexpr int32_t kRestHeightMm = 1130;   // the rest clip lower hover (body
 // tiles: 0 = the atlas (body/loop/hinge V row bands), 1 = the eye page,
 // 2 = the pupil-star page (flat cyan; exists because untextured parts render
 // black under celmain — 09-ENGINE-GOTCHAS.md §7).
-// Rows here must match mku02page.py's band layout.
+// Rows here must match mkmanafoldpage.py's band layout.
 constexpr uint8_t kPageAtlasTile = 0;
 constexpr uint8_t kPageEyeTile = 1;
 constexpr uint8_t kPageStarTile = 2;
@@ -364,4 +372,4 @@ constexpr int32_t kS5PhantomOffsMm[3][2] = {{0, 0}, {-2700, -1400}, {2500, -2000
 
 }  // namespace u02
 
-#endif  // ZHAO_REEL_UNNAMED02_ART_H
+#endif  // ZHAO_REEL_MANAFOLD_ART_H

@@ -34,7 +34,7 @@
 #include <vector>
 
 namespace zc = zref::creature;
-#include "unnamed02.h"
+#include "manafold.h"
 
 namespace {
 

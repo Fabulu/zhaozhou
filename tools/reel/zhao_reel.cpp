@@ -1454,7 +1454,7 @@ namespace zc = zref::creature;
 // Zixxtrixx (Upheaval's first creature) is authored in its own header so every
 // knob Fabian might turn sits in one findable place.
 #include "zixxtrixx.h"
-#include "unnamed02.h"
+#include "manafold.h"
 
 // The demo subject: a watchdog quadruped. Ring parts are rigid per bone
 // (donor law). Its authored forward axis is +X: pitch maps each body/head ring
@@ -4936,7 +4936,7 @@ void u02_common(SceneSubject& s) {
   // defaults to the SHIPPING presentation (a sun over kU02SunRig), so no
   // future by-eye plate can be judged under a rig the creature does not
   // ship with. Clips override with their own named suns; only
-  // unnamed02-inspect clears this and raises the four-light rig.
+  // manafold-inspect clears this and raises the four-light rig.
   s.sun = &kU02SunCalm;
 }
 
@@ -4987,7 +4987,7 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // Pass 3 (Direction 3 §1): the four-light-everywhere look was a
   // REGRESSION — "It should look just like Zixx' lighting with the
   // directional light from the sun." Every clip ships under its own named
-  // sun over kU02SunRig; only unnamed02-inspect raises the moving rig.
+  // sun over kU02SunRig; only manafold-inspect raises the moving rig.
   s.sun = sun;
   // the skybox bloom serves the showcase clips where the sky is the backdrop
   // (S1 made a creature + planet bloom lawful in one clip)
@@ -6964,30 +6964,30 @@ int main(int argc, char** argv) {
   if (wanted("planet-sun-redgiant")) rc |= render_scene(subject_planet_redgiant());
   if (wanted("planet-sun-binary")) rc |= render_scene(subject_planet_binary());
   if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
-  if (wanted("unnamed02-hover")) rc |= render_scene(subject_u02_clip(0, "unnamed02-hover", u02::kIdleKeys, true, &kU02SunHover));
-  if (wanted("unnamed02-inspect")) {
+  if (wanted("manafold-hover")) rc |= render_scene(subject_u02_clip(0, "manafold-hover", u02::kIdleKeys, true, &kU02SunHover));
+  if (wanted("manafold-inspect")) {
     // Direction 3 §1: EXACTLY ONE subject carries the four coloured moving
     // lights — this inspection showcase. Hover keys, orbit camera, the u02
     // moving rig and source paths from pass 2, and NO marker orbs
     // (moving_markers is cleared for the whole species).
-    SceneSubject s = subject_u02_clip(0, "unnamed02-inspect", u02::kIdleKeys, true, nullptr);
+    SceneSubject s = subject_u02_clip(0, "manafold-inspect", u02::kIdleKeys, true, nullptr);
     s.creature_moving_light = true;
     rc |= render_scene(s);
   }
-  if (wanted("unnamed02-drift")) rc |= render_scene(subject_u02_clip(1, "unnamed02-drift", u02::kDriftKeys, false, &kU02SunDrift));
-  if (wanted("unnamed02-channel")) rc |= render_scene(subject_u02_clip(2, "unnamed02-channel", u02::kChannelKeys, false, &kU02SunChannel));
-  if (wanted("unnamed02-curious")) rc |= render_scene(subject_u02_clip(3, "unnamed02-curious", u02::kCuriousKeys, false, &kU02SunCurious));
-  if (wanted("unnamed02-startle")) rc |= render_scene(subject_u02_clip(4, "unnamed02-startle", u02::kStartleKeys, false, &kU02SunStartle));
-  if (wanted("unnamed02-rest")) rc |= render_scene(subject_u02_clip(5, "unnamed02-rest", u02::kRestKeys, false, &kU02SunCalm));
-  if (wanted("unnamed02-pirouette")) rc |= render_scene(subject_u02_clip(6, "unnamed02-pirouette", u02::kPirouetteKeys, false, &kU02SunPirouette));
-  if (wanted("unnamed02-hasty")) rc |= render_scene(subject_u02_clip(8, "unnamed02-hasty", u02::kHastyKeys, false, &kU02SunHasty));
-  if (wanted("unnamed02-fall")) rc |= render_scene(subject_u02_clip(9, "unnamed02-fall", u02::kFallKeys, false, &kU02SunFall));
-  if (wanted("unnamed02-hit")) rc |= render_scene(subject_u02_clip(10, "unnamed02-hit", u02::kHitKeys, false, &kU02SunHit));
-  if (wanted("unnamed02-taunt")) rc |= render_scene(subject_u02_clip(11, "unnamed02-taunt", u02::kTauntKeys, false, &kU02SunTaunt));
-  if (wanted("unnamed02-taunt2")) rc |= render_scene(subject_u02_clip(12, "unnamed02-taunt2", u02::kTaunt2Keys, false, &kU02SunTaunt2));
-  if (wanted("unnamed02-trick")) rc |= render_scene(subject_u02_clip(13, "unnamed02-trick", u02::kTrickKeys, false, &kU02SunTrick));
-  if (wanted("unnamed02-crackle")) {
-    SceneSubject s = subject_u02_clip(0, "unnamed02-crackle", u02::kIdleKeys, false, &kU02SunChannel);
+  if (wanted("manafold-drift")) rc |= render_scene(subject_u02_clip(1, "manafold-drift", u02::kDriftKeys, false, &kU02SunDrift));
+  if (wanted("manafold-channel")) rc |= render_scene(subject_u02_clip(2, "manafold-channel", u02::kChannelKeys, false, &kU02SunChannel));
+  if (wanted("manafold-curious")) rc |= render_scene(subject_u02_clip(3, "manafold-curious", u02::kCuriousKeys, false, &kU02SunCurious));
+  if (wanted("manafold-startle")) rc |= render_scene(subject_u02_clip(4, "manafold-startle", u02::kStartleKeys, false, &kU02SunStartle));
+  if (wanted("manafold-rest")) rc |= render_scene(subject_u02_clip(5, "manafold-rest", u02::kRestKeys, false, &kU02SunCalm));
+  if (wanted("manafold-pirouette")) rc |= render_scene(subject_u02_clip(6, "manafold-pirouette", u02::kPirouetteKeys, false, &kU02SunPirouette));
+  if (wanted("manafold-hasty")) rc |= render_scene(subject_u02_clip(8, "manafold-hasty", u02::kHastyKeys, false, &kU02SunHasty));
+  if (wanted("manafold-fall")) rc |= render_scene(subject_u02_clip(9, "manafold-fall", u02::kFallKeys, false, &kU02SunFall));
+  if (wanted("manafold-hit")) rc |= render_scene(subject_u02_clip(10, "manafold-hit", u02::kHitKeys, false, &kU02SunHit));
+  if (wanted("manafold-taunt")) rc |= render_scene(subject_u02_clip(11, "manafold-taunt", u02::kTauntKeys, false, &kU02SunTaunt));
+  if (wanted("manafold-taunt2")) rc |= render_scene(subject_u02_clip(12, "manafold-taunt2", u02::kTaunt2Keys, false, &kU02SunTaunt2));
+  if (wanted("manafold-trick")) rc |= render_scene(subject_u02_clip(13, "manafold-trick", u02::kTrickKeys, false, &kU02SunTrick));
+  if (wanted("manafold-crackle")) {
+    SceneSubject s = subject_u02_clip(0, "manafold-crackle", u02::kIdleKeys, false, &kU02SunChannel);
     s.u02_mana = 4;  // the crackle IS the lightning candidate
     s.u02_smear = 1;  // pass 3: strikes ghost through the smear plane
     s.planet = 1;  // fixed camera: the bloom may stage the crackle
@@ -7004,12 +7004,12 @@ int main(int argc, char** argv) {
         // PASS 3 (R13): six variants, all alive; drip is CUT (dead in 579
         // of 600 frames — shipping it broken overstated the menu). The two
         // smear rungs double as the owner's decay/glitch picker.
-        {"unnamed02-mana-aqua", 3, 2},   // aquamarine smeared plasma — THE LEAD
-        {"unnamed02-mana-cyan", 6, 3},   // cyan, the long/glitchier smear rung
-        {"unnamed02-mana-blue", 2, 1},   // filled deep blue, minimal smear
-        {"unnamed02-mana-green", 7, 1},  // filled sea-green ("try greens")
-        {"unnamed02-mana-boil", 5, 1},   // the boil CENTRE, grown, outer gone
-        {"unnamed02-mana-stack", 8, 2},  // pulsar + strands + aqua smear
+        {"manafold-mana-aqua", 3, 2},   // aquamarine smeared plasma — THE LEAD
+        {"manafold-mana-cyan", 6, 3},   // cyan, the long/glitchier smear rung
+        {"manafold-mana-blue", 2, 1},   // filled deep blue, minimal smear
+        {"manafold-mana-green", 7, 1},  // filled sea-green ("try greens")
+        {"manafold-mana-boil", 5, 1},   // the boil CENTRE, grown, outer gone
+        {"manafold-mana-stack", 8, 2},  // pulsar + strands + aqua smear
     };
     for (const auto& m : kManaMenu) {
       if (!wanted(m.name)) continue;
@@ -7020,8 +7020,8 @@ int main(int argc, char** argv) {
       rc |= render_scene(s);
     }
   }
-  if (wanted("u02-trio")) {
-    SceneSubject s = subject_u02_clip(2, "u02-trio", u02::kChannelKeys, false, &kU02SunChannel);
+  if (wanted("manafold-trio")) {
+    SceneSubject s = subject_u02_clip(2, "manafold-trio", u02::kChannelKeys, false, &kU02SunChannel);
     s.u02_trio = true;
     s.cam_k = 170000;  // pull back: three conduits share the frame
     s.note = "THREE phase-offset conduits, one scene sun + bloom, all effects";

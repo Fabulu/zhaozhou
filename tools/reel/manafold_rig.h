@@ -1,14 +1,14 @@
-// Unnamed02 — the rig: bone ids + skeleton. 8 bones of the 32 allowed.
+// MANAFOLD (creature 02) — the rig: bone ids + skeleton. 8 bones of the 32 allowed.
 //
 // Parent-before-child, rest rotations identity, bind a pure translation
 // chain (the zref bind convention). The optional kBAttitude bone from the
 // plan's §4.4 is CUT for now — the root alone carries hover + attitude; add
 // it back only if clips want independent channels.
 
-#ifndef ZHAO_REEL_UNNAMED02_RIG_H
-#define ZHAO_REEL_UNNAMED02_RIG_H
+#ifndef ZHAO_REEL_MANAFOLD_RIG_H
+#define ZHAO_REEL_MANAFOLD_RIG_H
 
-#include "unnamed02_art.h"
+#include "manafold_art.h"
 
 namespace u02 {
 
@@ -47,7 +47,7 @@ inline zc::Skeleton build_skeleton() {
   sk.bone_count = kBoneCount;
   sk.bones[kBRoot] = zc::Bone{kBRoot, 0, 0, 0};
   // Hinge pivots sit ON the straight-bound tube at the fold stations (the
-  // fold is a pose; see the loop block in unnamed02_art.h). Pure +Y chain.
+  // fold is a pose; see the loop block in manafold_art.h). Pure +Y chain.
   sk.bones[kBNeck] = zc::Bone{kBRoot, fxu(kLoopTubeXMm), fxu(kLoopNeckExitYMm), 0};
   sk.bones[kBHingeA] = zc::Bone{kBNeck, 0, fxu(kLoopArcMm[0]), 0};
   sk.bones[kBHingeB] = zc::Bone{kBHingeA, 0, fxu(kLoopArcMm[1]), 0};
@@ -69,4 +69,4 @@ inline zc::Skeleton build_skeleton() {
 
 }  // namespace u02
 
-#endif  // ZHAO_REEL_UNNAMED02_RIG_H
+#endif  // ZHAO_REEL_MANAFOLD_RIG_H
