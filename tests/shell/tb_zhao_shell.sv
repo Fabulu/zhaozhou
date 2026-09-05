@@ -6,6 +6,17 @@
 // TESTBENCH COMPONENT — excluded from synthesis and from every lint target
 // (the model is non-synthesizable by design).
 
+// GEOM.MESHFETCH (D22 step 6) is the first block this bench composes whose
+// ports are PACKAGE TYPEDEFS -- zhao_guard_req_t and zhao_guard_rsp_t. Every
+// earlier step used plain vectors, so the bench had never needed an import,
+// and the message for the lack of one is "Can't find typedef/interface" --
+// which reads like a missing FILE rather than a missing IMPORT.
+//
+// (The first draft of this note began the line with the tool's name, which is
+// parsed as a lint pragma and fails the build with "Unknown verilator
+// comment". A comment that starts with that word is a directive, not prose.)
+import zhao_pkg::*;
+
 module tb_zhao_shell (
   // clocks + reset (harness-driven, fixed phase: vid=gpu/2, audio=gpu/4)
   input  logic gpu_clk,
@@ -251,6 +262,32 @@ module tb_zhao_shell (
   // pretended here -- step 5 moves the selection, not the decode.
   //
   // Defaults to 0, bit-identical to before.
+  // ---- D22 STEP 6: GEOM.MESHFETCH -------------------------------------------
+  // The last tread. Step 5 had the bench hand ASSEMBLE a meshlet -- a vertex
+  // count, a triangle count, a material. Step 6 stops supplying it: MESHFETCH
+  // reads a 64-byte meshlet DESCRIPTOR out of memory, validates it, culls it,
+  // and emits the meshlet ASSEMBLE consumes.
+  //
+  // WHAT THE BENCH PLAYS, SAID PLAINLY. MESHFETCH is the only zhao_guard_req_t
+  // client in the geometry subsystem, so this bench plays THREE interfaces on
+  // its behalf: the memory guard (grant), the beat stream (the descriptor
+  // bytes) and the cull service (a visibility verdict). That is a lot of
+  // played surface, and it means this step proves the DESCRIPTOR PATH inside
+  // the composed shell -- not the asset fetcher, and not culling.
+  //
+  // The real thing needs one asset fetcher over GEOM.ASSET_POOL serving three
+  // consumers (descriptors, the u8 index stream, vertex records), which is the
+  // memory path docket D22 identified as the single blocker and
+  // `spec/memory_rules.md` §5f ruled the region for. Playing it here is
+  // scaffolding with a name, not that fetcher.
+  input  logic               meshfetch_mode_i,
+  input  logic [63:0]        mf_desc_i [8],     // the 64-byte descriptor
+  input  logic               mf_crc_ok_i,
+  output logic               dbg_mf_valid_o,
+  output logic [7:0]         dbg_mf_vcount_o,
+  output logic [7:0]         dbg_mf_tcount_o,
+  output logic [15:0]        dbg_mf_material_o,
+  output logic [1:0]         dbg_mf_vis_o,
   input  logic               assemble_mode_i,
   input  logic [7:0]         asm_vertex_count_i,
   input  logic [7:0]         asm_triangle_count_i,
@@ -481,6 +518,134 @@ module tb_zhao_shell (
                              render_fill_word_i[7:0]}
                           : render_fill_word_i;
 
+  // ---- D22 step 6: GEOM.MESHFETCH, and the three interfaces the bench plays --
+  logic              mf_j_ready, mf_r_valid;
+  zhao_guard_req_t   mf_guard_req;
+  zhao_guard_rsp_t   mf_guard_rsp;
+  logic              mf_beat_valid, mf_beat_last;
+  logic [63:0]       mf_beat_data;
+  logic              mf_cull_tick, mf_cull_ready, mf_cull_valid, mf_cull_reject;
+  logic [1:0]        mf_cull_active, mf_cull_vis;
+  logic [31:0]       mf_r_voff, mf_r_ioff;
+  logic [7:0]        mf_r_vcount, mf_r_tcount, mf_r_flags;
+  logic [15:0]       mf_r_material, mf_r_instance;
+  logic [1:0]        mf_r_vis;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic signed [31:0] mf_cull_cx, mf_cull_cy, mf_cull_cz, mf_cull_radius;
+  logic [31:0] mf_considered, mf_culled, mf_fetched, mf_denied;
+  logic [31:0] mf_refused [7];
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  logic signed [31:0] mf_xform [12];
+  always_comb begin
+    for (int k = 0; k < 12; k++) mf_xform[k] = 32'sd0;
+    mf_xform[0] = 32'sd65536;   // identity 3x4, fx16
+    mf_xform[5] = 32'sd65536;
+    mf_xform[10] = 32'sd65536;
+  end
+
+  // THE PLAYED GUARD. Grant on the cycle the request is valid.
+  //
+  // The beats may only start AFTER the grant. Feeding them from cycle zero is
+  // the mistake the unit bench already paid for, and its comment is worth
+  // repeating because the symptom is so misleading: every bound read (0,0,0)
+  // r=0, "which looks like broken arithmetic and is actually a testbench that
+  // answered out of order".
+  logic       mf_granted_r, mf_sent_r;
+  logic [3:0] mf_beat_r;
+
+  always_comb begin
+    mf_guard_rsp = '0;
+    if (mf_guard_req.valid && !mf_granted_r) begin
+      mf_guard_rsp.ready = 1'b1;
+      mf_guard_rsp.ok    = 1'b1;
+    end
+  end
+
+  assign mf_beat_valid = mf_granted_r && (mf_beat_r < 4'd8);
+  assign mf_beat_last  = mf_granted_r && (mf_beat_r == 4'd7);
+  assign mf_beat_data  = mf_desc_i[mf_beat_r[2:0]];
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      mf_granted_r <= 1'b0;
+      mf_beat_r    <= 4'd0;
+      mf_sent_r    <= 1'b0;
+    end else if (!render_tri_valid_i) begin
+      mf_granted_r <= 1'b0;
+      mf_beat_r    <= 4'd0;
+      mf_sent_r    <= 1'b0;
+    end else begin
+      if (render_tri_valid_i && meshfetch_mode_i && mf_j_ready && !mf_sent_r)
+        mf_sent_r <= 1'b1;
+      if (mf_guard_req.valid && !mf_granted_r) mf_granted_r <= 1'b1;
+      if (mf_beat_valid && mf_beat_r < 4'd8)   mf_beat_r <= mf_beat_r + 4'd1;
+    end
+  end
+
+  // THE PLAYED CULL. Always ready, answers VISIBLE. Culling has its own unit
+  // evidence; answering "reject" here would make step 6 a test of the cull
+  // path with the descriptor path silently unexercised.
+  assign mf_cull_ready  = 1'b1;
+  assign mf_cull_valid  = mf_cull_tick;
+  assign mf_cull_vis    = 2'b01;
+  assign mf_cull_reject = 1'b0;
+
+  zhao_geom_meshfetch u_meshfetch (
+      .clk(gpu_clk), .rst_n(rst_n),
+      .j_valid_i(render_tri_valid_i & meshfetch_mode_i & ~mf_sent_r),
+      .j_ready_o(mf_j_ready),
+      .j_instance_id_i(16'h1234), .j_desc_addr_i(27'h40),
+      .j_format_i(8'd1), .j_generation_i(16'd1), .j_active_mask_i(2'b01),
+      .j_xform_i(mf_xform), .j_client_i(zhao_client_e'(0)),
+      .guard_req_o(mf_guard_req), .guard_rsp_i(mf_guard_rsp),
+      .beat_valid_i(mf_beat_valid), .beat_data_i(mf_beat_data),
+      .beat_last_i(mf_beat_last), .crc_ok_i(mf_crc_ok_i),
+      .cull_tick_o(mf_cull_tick), .cull_active_o(mf_cull_active),
+      .cull_cx_o(mf_cull_cx), .cull_cy_o(mf_cull_cy), .cull_cz_o(mf_cull_cz),
+      .cull_radius_o(mf_cull_radius),
+      .cull_ready_i(mf_cull_ready), .cull_valid_i(mf_cull_valid),
+      .cull_vis_i(mf_cull_vis), .cull_reject_i(mf_cull_reject),
+      .r_valid_o(mf_r_valid), .r_ready_i(1'b1),
+      .r_instance_id_o(mf_r_instance), .r_visible_mask_o(mf_r_vis),
+      .r_vertex_offset_o(mf_r_voff), .r_index_offset_o(mf_r_ioff),
+      .r_vertex_count_o(mf_r_vcount), .r_triangle_count_o(mf_r_tcount),
+      .r_material_id_o(mf_r_material), .r_flags_o(mf_r_flags),
+      // The evidence ports. Connected rather than left dangling: a block whose
+      // counters are unconnected still elaborates, and the missing-pin warning
+      // is the only thing that says the trace nobody is reading was never
+      // wired.
+      .meshlets_considered_o(mf_considered), .culled_all_cameras_o(mf_culled),
+      .descriptors_fetched_o(mf_fetched), .guard_denied_o(mf_denied),
+      .refused_o(mf_refused));
+
+  // The meshlet is LATCHED, for the same reason the descriptor was in step 5:
+  // ASSEMBLE walks it over many cycles and it must hold still.
+  logic [7:0]  mf_vc_r, mf_tc_r;
+  logic [15:0] mf_mat_r;
+  logic [1:0]  mf_vis_r;
+  logic        mf_have_r;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      mf_vc_r <= 8'd0; mf_tc_r <= 8'd0; mf_mat_r <= 16'd0; mf_vis_r <= 2'd0;
+      mf_have_r <= 1'b0;
+    end else if (!render_tri_valid_i) begin
+      mf_have_r <= 1'b0;
+    end else if (mf_r_valid && !mf_have_r) begin
+      mf_vc_r   <= mf_r_vcount;
+      mf_tc_r   <= mf_r_tcount;
+      mf_mat_r  <= mf_r_material;
+      mf_vis_r  <= mf_r_vis;
+      mf_have_r <= 1'b1;
+    end
+  end
+
+  assign dbg_mf_valid_o    = mf_have_r;
+  assign dbg_mf_vcount_o   = mf_vc_r;
+  assign dbg_mf_tcount_o   = mf_tc_r;
+  assign dbg_mf_material_o = mf_mat_r;
+  assign dbg_mf_vis_o      = mf_vis_r;
+
   // ---- D22 step 5: GEOM.ASSEMBLE --------------------------------------------
   logic        asm_m_ready, asm_ix_req, asm_t_valid, asm_t_last;
   logic [8:0]  asm_ix_index;
@@ -516,12 +681,16 @@ module tb_zhao_shell (
       // measured as `triangles = 15` for a one-triangle meshlet. The counter
       // caught it; the framebuffer could not, because every re-run produced
       // the identical triangle.
-      .m_valid_i(render_tri_valid_i & assemble_mode_i & ~asm_sent_r),
+      // In meshfetch mode the meshlet is MESHFETCH's, and ASSEMBLE may not be
+      // offered it until the descriptor has actually been read and validated.
+      .m_valid_i(render_tri_valid_i & assemble_mode_i & ~asm_sent_r
+                 & (~meshfetch_mode_i | mf_have_r)),
       .m_ready_o(asm_m_ready),
       .m_vertex_offset_i(16'd0),
-      .m_vertex_count_i(asm_vertex_count_i),
-      .m_triangle_count_i(asm_triangle_count_i),
-      .m_material_id_i(16'd1), .m_raster_state_i(32'd0),
+      .m_vertex_count_i(meshfetch_mode_i ? mf_vc_r : asm_vertex_count_i),
+      .m_triangle_count_i(meshfetch_mode_i ? mf_tc_r : asm_triangle_count_i),
+      .m_material_id_i(meshfetch_mode_i ? mf_mat_r : 16'd1),
+      .m_raster_state_i(32'd0),
       .m_src_id_i(render_src_id_i),
       .ix_req_o(asm_ix_req), .ix_index_o(asm_ix_index),
       .ix_valid_i(asm_ix_req), .ix_a_i(asm_ix_a), .ix_b_i(asm_ix_b),

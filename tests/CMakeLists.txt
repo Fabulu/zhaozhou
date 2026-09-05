@@ -4993,6 +4993,10 @@ set(ZHAO_SHELL_RTL
     # DEPTHQUANT does not own a reciprocal -- "the console already has ONE
     # rcp_u24 law; a second ROM would be a second law" -- so the service and
     # its ROM come with it.
+    # D22 step 6: GEOM.MESHFETCH, which reads the meshlet descriptor. The
+    # bench plays its guard, beat stream and cull service -- the real asset
+    # fetcher over GEOM.ASSET_POOL is D22's remaining work.
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_meshfetch.sv
     # D22 step 5: GEOM.ASSEMBLE, which names the three vertices PROJECT then
     # transforms. The bench still holds the vertex TABLE -- that is
     # GEOM.VDECODE's job and step 5 moves the SELECTION, not the decode.
@@ -5078,6 +5082,34 @@ verilate(demo_duo_markers
 # decoy at index 1) on purpose. With the identity triplet (0, 1, 2) a shell
 # that ignored ASSEMBLE entirely and used the first three vertices in order
 # would draw the same picture and the check would be green with the block dead.
+# D22 STEP 6, the last tread: GEOM.MESHFETCH reads the meshlet descriptor.
+#
+# The bench PLAYS three interfaces for it -- the memory guard, the beat stream
+# carrying the descriptor bytes, and the cull service -- because MESHFETCH is
+# the only zhao_guard_req_t client in the geometry subsystem. So this proves
+# the DESCRIPTOR PATH inside the composed shell, and not the asset fetcher over
+# GEOM.ASSET_POOL that D22 names as its remaining work.
+#
+# The sensitivity probe is the contract's own rule: a descriptor whose CRC does
+# not check must emit NO meshlet, so nothing is drawn from it.
+add_executable(test_shell_meshfetch_path_directed shell/shell_meshfetch_path_directed.cpp)
+target_link_libraries(test_shell_meshfetch_path_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_shell_meshfetch_path_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_shell_meshfetch_path_directed
+  PREFIX Vtb_zhao_shell TOP_MODULE tb_zhao_shell
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_SHELL_RTL}
+          ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/shell/tb_zhao_shell.sv)
+add_test(NAME shell_meshfetch_path_directed COMMAND test_shell_meshfetch_path_directed)
+set_tests_properties(shell_meshfetch_path_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)
+
 add_executable(test_shell_assemble_path_directed shell/shell_assemble_path_directed.cpp)
 target_link_libraries(test_shell_assemble_path_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_shell_assemble_path_directed PRIVATE
