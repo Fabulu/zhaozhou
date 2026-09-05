@@ -3066,7 +3066,7 @@ last obvious explanation was worth 4 MHz of 36. Per owner priority 5 the
 corrected **combiner** leaf fit is the next bounded attribution experiment, not
 a full island refit.
 
-## D23 — terrain mipmapping: two defects VERIFIED IN SOURCE before any of it can work
+## D23 — terrain mipmapping: three defects VERIFIED IN SOURCE before any of it can work
 
 **2026-09-05. Owner ruling landed, architecture delivered, and two blockers
 confirmed by inspection — not by a fit and not by simulation.**
@@ -3164,6 +3164,32 @@ that matters: **taking encoding 3 requires a fourth class queue**, with its own
 depth, its own occupancy counter and its own head-of-line consequences, not
 merely a spare number. Any cost estimate that treats the new class as free is
 short by that queue.
+
+### 3. The palette's 565 to 888 expansion ZERO-FILLS where the ABI replicates
+
+`zref_texture.hpp` line 15 names the expansion outright — *"the RGB565 -> RGB888
+expansion is zref::sky::rgb565::to_rgb888"* — and that function replicates the
+high bits:
+
+```cpp
+r = (r5 << 3) | (r5 >> 2);   //  31 -> 255
+g = (g6 << 2) | (g6 >> 4);
+b = (b5 << 3) | (b5 >> 2);
+```
+
+The island appends zeros instead:
+
+```systemverilog
+{pal_lu_rgb565[15:11], 3'b000, pal_lu_rgb565[10:5], 2'b00, pal_lu_rgb565[4:0], 3'b000}
+```
+
+So 31 becomes 248 rather than 255, and full white returns as 248, 252, 248 — a
+systematic darkening that is worst at the top of the range and exactly zero at
+the bottom, which is why it survives a "did anything paint" check.
+
+This is not a difference of opinion: the ABI is written down and the island
+disagrees with it. It compounds with defect 2 — the wrong byte is selected, and
+then the colour that byte names is expanded wrongly.
 
 ### Not fixed here, deliberately
 
