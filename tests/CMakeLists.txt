@@ -890,6 +890,15 @@ target_link_libraries(test_material_resolve_directed PRIVATE zhao_zref)
 add_test(NAME material_resolve_directed COMMAND test_material_resolve_directed)
 set_tests_properties(material_resolve_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# AUDIT R1/R2: the test that crosses the resolve/combine boundary. Both suites
+# above were green while a legal terrain-recipe record was refused before it
+# could reach the combiner, and no translation unit could include both headers
+# to notice. This file compiling AT ALL is the R2 proof.
+add_executable(test_material_resolve_combine_bridge texture/material_resolve_combine_bridge.cpp)
+target_link_libraries(test_material_resolve_combine_bridge PRIVATE zhao_zref)
+add_test(NAME material_resolve_combine_bridge COMMAND test_material_resolve_combine_bridge)
+set_tests_properties(material_resolve_combine_bridge PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_material_combine_directed texture/material_combine_directed.cpp)
 target_link_libraries(test_material_combine_directed PRIVATE zhao_zref)
 add_test(NAME material_combine_directed COMMAND test_material_combine_directed)

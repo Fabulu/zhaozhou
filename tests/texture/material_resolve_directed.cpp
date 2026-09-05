@@ -72,7 +72,7 @@ void test_every_field_survives_at_its_own_offset() {
   t.records[2] = make_record(3, 4);  // sample_count 3, recipe ADD_SAT
   R.publish(t);
 
-  mat::Ledger L;
+  mat::ResolveLedger L;
   const mat::Result r = R.resolve({handle32(5, 1), 2, 0}, &L);
   check(r.has_record, "a resident id resolves", 1, r.has_record ? 1 : 0);
   check(mat::sample_count_of(r.record) == 3, "sample_count unpacks from control", 3,
@@ -97,7 +97,7 @@ void test_every_field_survives_at_its_own_offset() {
 void test_id_past_the_count_is_refused_not_clamped() {
   mat::Resolver<> R;
   R.publish(make_table(1, 1, 4));
-  mat::Ledger L;
+  mat::ResolveLedger L;
 
   const mat::Result at = R.resolve({handle32(1, 1), 4, 0}, &L);  // count is 4
   check(at.status == mat::Status::kRefusedId, "material_id AT the count is refused", 2,
@@ -124,7 +124,7 @@ void test_sample_count_three_accepted_four_impossible_and_reserved_bits_refused(
   t.records[2].rsv1 = 0xFFFFFFFFu;  // a reserved word non-zero
   R.publish(t);
 
-  mat::Ledger L;
+  mat::ResolveLedger L;
   check(R.resolve({handle32(2, 1), 0, 0}, &L).has_record,
         "sample_count 3 is accepted -- it is the ruling limit", 1, 1);
   check(R.resolve({handle32(2, 1), 1, 0}, &L).status == mat::Status::kRefusedRecord,
@@ -137,7 +137,7 @@ void test_sample_count_three_accepted_four_impossible_and_reserved_bits_refused(
 void test_hit_and_miss_return_identical_records() {
   mat::Resolver<> R;
   R.publish(make_table(7, 3, 8));
-  mat::Ledger L;
+  mat::ResolveLedger L;
 
   const mat::Result first = R.resolve({handle32(7, 3), 5, 0}, &L);
   const mat::Result second = R.resolve({handle32(7, 3), 5, 0}, &L);
@@ -165,7 +165,7 @@ void test_a_resolve_after_republish_must_not_return_the_old_record() {
 
   // Publish generation 1, with recipe 1 everywhere, and warm the cache.
   R.publish(make_table(9, 1, 4, /*recipe=*/1));
-  mat::Ledger L;
+  mat::ResolveLedger L;
   const mat::Result before = R.resolve({handle32(9, 1), 2, 0}, &L);
   check(mat::recipe_of(before.record) == 1, "generation 1 gives recipe 1", 1,
         mat::recipe_of(before.record));
@@ -188,7 +188,7 @@ void test_a_resolve_after_republish_must_not_return_the_old_record() {
 void test_a_non_resident_set_is_a_residency_fault() {
   mat::Resolver<> R;
   R.publish(make_table(3, 1, 2));
-  mat::Ledger L;
+  mat::ResolveLedger L;
 
   const mat::Result r = R.resolve({handle32(99, 1), 0, 0}, &L);
   check(r.status == mat::Status::kNotResident, "an unknown set is not resident", 4,

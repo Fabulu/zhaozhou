@@ -39,6 +39,14 @@
 #include <cstdint>
 #include <vector>
 
+// For kRecipeCount. Including this was IMPOSSIBLE until the duplicate
+// `zref::material::Ledger` above was renamed: both headers defined that type
+// with different members, so any translation unit taking both failed to
+// compile. The recipe-ceiling drift below and the name clash were therefore
+// one problem wearing two hats -- the ceiling could not be tied to the enum
+// while the two headers could not be included together.
+#include "zref_material.hpp"
+
 #include "zhao_abi.h"
 
 namespace zref {
@@ -69,7 +77,13 @@ struct Result {
 // Counters. Every refusal is counted, per the contract's insistence that a
 // material_id past the count is "REFUSED and counted. Not clamped to zero:
 // material 0 is a real material and drawing with it hides the bug."
-struct Ledger {
+// RESOLVE counters. Named distinctly from the COMBINE ledger in
+// zref_material.hpp on purpose: both used to be `zref::material::Ledger` with
+// different members, so including both headers in one translation unit
+// redefined the same C++ type. They are different tallies of different events
+// -- lookups here, arithmetic there -- and sharing a name asserted a
+// relationship that does not exist.
+struct ResolveLedger {
   uint32_t hits = 0;
   uint32_t misses = 0;
   uint32_t refused_id = 0;
@@ -101,9 +115,20 @@ inline bool record_legal(const zhao_abi::ZhMaterialRecord& r) {
   // it is how a forward-compatibility bug becomes a wrong picture.
   if ((r.control & 0xE0u) != 0) return false;
 
-  // Six ratified recipes (TEXTURE.COMBINE). A seventh encoding is refused, not
-  // treated as passthrough.
-  if (recipe >= 6) return false;
+  // EVERY ratified recipe, taken from the combiner's own enum rather than
+  // restated as a literal here.
+  //
+  // This read `recipe >= 6` while zref_material.hpp had grown to
+  // kRecipeCount = 8 and implemented both three-sample terrain recipes. A
+  // zero-initialised, otherwise legal record naming kTerrainDetailLight or
+  // kTerrainDetailMask was therefore REFUSED before it ever reached the
+  // combiner that exists to execute it -- so eight-recipe support was true of
+  // the combiner and false of the route into it.
+  //
+  // The literal is what allowed the two to drift: nothing connected the number
+  // in this file to the enum in the other. Now the ceiling IS the enum, and
+  // adding a recipe cannot leave this behind.
+  if (recipe >= static_cast<uint8_t>(kRecipeCount)) return false;
 
   // flags bits 3-15 reserved 0.
   if ((r.flags & 0xFFF8u) != 0) return false;
@@ -166,7 +191,7 @@ class Resolver {
     return nullptr;
   }
 
-  Result resolve(const Request& q, Ledger* L = nullptr) {
+  Result resolve(const Request& q, ResolveLedger* L = nullptr) {
     Result out;
     const Table* t = find(q.material_set);
     if (t == nullptr) {
