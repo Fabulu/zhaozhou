@@ -2403,6 +2403,12 @@ set_tests_properties(texture_cache_pipe_directed PROPERTIES LABELS "fast;nightly
 # The 8 km floating island: representable AND resident-affordable, which are
 # different claims. 15,625 patches dense against a 1,024 residency -- only the
 # sparse directory makes the island possible at all.
+# The island STREAMED: eviction and return, which is the audit's closing ask.
+add_executable(test_island_stream_directed terrain/island_stream_directed.cpp)
+target_link_libraries(test_island_stream_directed PRIVATE zhao_zref)
+add_test(NAME island_stream_directed COMMAND test_island_stream_directed)
+set_tests_properties(island_stream_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_island_8km_directed terrain/island_8km_directed.cpp)
 target_link_libraries(test_island_8km_directed PRIVATE zhao_zref)
 add_test(NAME island_8km_directed COMMAND test_island_8km_directed)

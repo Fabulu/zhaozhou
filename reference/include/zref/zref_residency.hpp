@@ -255,6 +255,35 @@ class Arena {
 
   // Writing into a pinned page is the error the whole lifecycle exists to
   // prevent, so it is a refusal with a counter rather than an assertion.
+  // RELEASE A RESOURCE'S PAGE. The eviction MECHANISM; the policy that decides
+  // what to evict belongs to the caller and deliberately does not live here.
+  //
+  // Until this existed, a page could only be freed as a side effect of
+  // REPUBLISHING the same resource -- so a resource that simply stopped being
+  // wanted held its page forever. That is survivable while everything is
+  // resident and fatal the moment it is not: an 8 km island has 15,625 patches
+  // against 1,024 pages, so the camera moving is the ordinary case and letting
+  // go is as load-bearing as taking hold.
+  //
+  // A PINNED PAGE IS NOT RELEASED, and the refusal is counted rather than
+  // silent. A pin means a frame in flight is still reading it; dropping it
+  // would be the overlap `kRefusedOversize` exists to prevent, arriving by a
+  // different route.
+  bool release(uint32_t resource_index, Ledger* L = nullptr) {
+    for (std::size_t i = 0; i < mappings_.size(); ++i) {
+      if (mappings_[i].resource_index != resource_index) continue;
+      const int page = mappings_[i].page;
+      if (pages_[static_cast<std::size_t>(page)].pins > 0) {
+        if (L) L->reclaim_blocked_by_pin++;
+        return false;
+      }
+      try_reclaim(page, L);
+      mappings_.erase(mappings_.begin() + static_cast<std::ptrdiff_t>(i));
+      return true;
+    }
+    return false;  // not mapped: releasing what was never taken is not an error
+  }
+
   bool may_write(int page, Ledger* L = nullptr) const {
     if (page < 0 || page >= static_cast<int>(pages_.size())) return false;
     if (pages_[static_cast<std::size_t>(page)].pins > 0) {
