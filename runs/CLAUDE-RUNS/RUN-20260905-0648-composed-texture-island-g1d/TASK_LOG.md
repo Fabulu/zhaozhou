@@ -481,3 +481,33 @@ its entry in `zhao_prod_top`'s source list, and `texture_combine_diff.cpp`,
 together.
 
 **Then:** perspuv's per-axis array split. Its closure is free now.
+
+## 13:16 — G1 is briefed; consolidating
+
+Fit running (COMBINE.V1, 4 h budget). Nothing new landed. Not idle.
+
+**G1-D is written up and turned into a decision brief**
+(`reports/G1-CLOSEOUT-DECISION-BRIEF-20260905.md`, docket D19t): what the
+number settles, what it reopens, and what it deliberately does not touch.
+
+**perspuv's standing row is worth noting against the island's:**
+
+```
+zhao_raster_perspuv_svc   alms 2204  reg 3293  fmax 82.00 MHz
+zhao_texture_island_top   alms 7720  reg 11790 fmax 69.05 MHz
+```
+
+perspuv alone closes at 82 MHz; the island closes at 69.05. So perspuv is NOT
+the island's limit, which is consistent with the critical path naming
+`zhao_raster_rcp24_svc` and nothing else. That row is also the PRE-SPLIT
+figure — the chained fit is what will say whether the per-axis split moved
+3,293.
+
+**Now consolidating.** A full build is running before the full `fast` gate.
+Today changed FRAGROB's ports, the combiner twice, perspuv's storage, and
+`tb_zhao_shell.sv` six times; subsets have passed but the whole gate has not
+been run since, and it is what CI will run.
+
+**Deliberately NOT started:** an RCP24 registered-pick variant. It is the named
+cause of the island's fmax, and it spends throughput margin ruling R7
+constrains — an owner call, listed as question 3 in the brief.
