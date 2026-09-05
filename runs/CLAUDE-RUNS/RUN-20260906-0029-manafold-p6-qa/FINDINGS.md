@@ -97,6 +97,12 @@ Over the whole shipped bank - every clip, every key, 2204 frames:
 The closest any shipped frame comes is **1514 pm of the lens surface** (51%
 clear) with a **42 mm minimum vertex gap**. The reason is 1b.
 
+*Declared limit of my own scan:* I walked authored KEYS, not the 60 Hz
+presentation midpoints the clearance gate also walks. Immaterial here only
+because no clip drives the eye channels at all (1b), so there is nothing for
+interpolation to reach between keys - but a pass-7 version of this scan should
+cover both subs, like the clearance gate does.
+
 ### 1b. THE REASON - and it refutes a "WHAT SHIPPED" claim
 
 `apply_eye_roll()` has **zero callers in any clip builder**. Its only callers
