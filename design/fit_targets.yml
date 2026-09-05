@@ -412,6 +412,25 @@ targets:
       - fpga/rtl/texture/zhao_texture_aux_div6.sv
       - fpga/rtl/texture/zhao_texture_mod255.sv
       - fpga/rtl/field/zhao_field_rcp24_rom.sv
+    rules:
+      # THE BRIEF'S OWN NUMBERS, islandrearchitecture5.md line 2923:
+      #   "hard resources <= 7,500 ALMs, <= 9,000 regs, <= 64 M10Ks, <= 14 DSP".
+      # The HARD redline and not the 6,600 target, because the target is
+      # aspirational and the redline is the thing a gate is for.
+      #
+      # The M10K key is max_m10k and NOT max_ram_blocks: fit_rules.ps1 matches
+      # rule names against a fixed list, so an invented key is SILENTLY
+      # DROPPED and the budget it was meant to enforce simply is not.
+      #
+      # This target carried NO rules at all until now, so the redline was
+      # enforced by prose in a report and by whoever remembered to compare.
+      # G1-D measured 7,720 ALMs -- 2.9% over -- and nothing failed; it was
+      # caught by a human reading a table. A number that only a reader
+      # enforces is not a budget.
+      max_alms: 7500
+      max_registers: 9000
+      max_m10k: 64
+      max_dsp: 14
 
   - top: zhao_prod_top
     sources:
