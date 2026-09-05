@@ -2692,3 +2692,61 @@ rides the top two bits of the source id because `CACHE_PIPE` has no class lane �
 a real constraint on the id space that was nowhere written down.
 
 Full evidence: `reports/G1D-COMPOSED-ISLAND-20260905.md`.
+
+---
+
+## D19s — D22 step 2 has a prerequisite the staircase does not name
+
+**2026-09-05, found while the composed-island fit ran. Analysis only; no code
+changed.**
+
+D22's staircase moves the shell's input boundary backwards one geometry block at
+a time. Step 1 (GEOM.SETUP) landed on 2026-09-05. The declared order from
+`tools/design/compose_order.py` puts **GEOM.DEPTHQUANT** immediately before
+SETUP, so step 2 is depth.
+
+**It cannot be a boundary move yet, and the reason is one missing port.**
+
+`zhao_geom_depthquant` turns `v_w_i` into a canonical 24-bit `d_invw24_o`. For
+that to be a boundary move, the shell must already CONSUME a depth value that
+the bench currently supplies — exactly as step 1 replaced supplied edge
+coefficients with computed ones. Enumerating the shell's render port:
+
+```
+render_{ax,ay,bx,by,cx,cy}_i   render_{kx,ky,kc}{0,1,2}_i   render_tl_i
+render_{min,max}_{x,y}_i       render_src_{a,id}_i          render_state_i
+render_texel_{rgb,a,idx}_i     render_{fill,clear}_word_i    ...
+```
+
+**There is no `render_depth_i` and no `render_invw_i`.** So step 2 needs a small
+piece of work the staircase does not list: give the render port a depth value,
+prove the existing fragment pipe uses it, and only then move the boundary so
+DEPTHQUANT computes it.
+
+### My first reading of this was wrong, and the correction is the point
+
+I first grepped `zhao_shell_top.sv` and `tb_zhao_shell.sv` for `depth|invw`, got
+**zero matches in both**, and concluded "the shell has no depth path at all".
+
+That was wrong. The path exists three levels down:
+
+```
+zhao_shell_top -> zhao_geom_bin_pipe -> zhao_raster_tile_pipe
+                                          -> zhao_raster_fragment   (36 refs)
+                                          -> zhao_raster_tilestore
+```
+
+and `zhao_raster_tile_pipe`'s own header says fragments are *"rasterized,
+shaded, depth/stencil/blend-tested and resolved"*, with depth **flat across the
+triangle**. A grep of two files answered a question about a hierarchy — the same
+shape as measuring a projection instead of the thing.
+
+The corrected finding is narrower and more useful than the wrong one: the depth
+machinery is composed and working; only the **value** has no way in.
+
+### Consequence for sequencing
+
+Step 2 is: add `render_depth_i` (24-bit canonical), route it to the fragment
+job's flat depth, and check it draws — then move the boundary. That is two
+composed tests, not one, and neither is large. Recorded so the next pass does
+not discover mid-step that the staircase has an unlisted tread.
