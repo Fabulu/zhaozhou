@@ -146,3 +146,56 @@ cells at 384x240, one depth word per cell), or document FEED-TIME occlusion
 only — which cannot occlude a trail after the creature moves in front of
 it, and therefore does not meet the owner's ruling. Spec text only; costs
 nothing until POST.COMPOSITE is built.
+
+---
+
+## Amendment (pass 6 recon, 2026-09-05): the ROW TEAR is required, and the "seasoning" is the feature
+
+**Ask 3 currently demotes the per-cell jitter and the staggered hard clear to
+optional reel-side seasoning — *"if the block wants them"*. That is now wrong,
+and the row tear is missing from the ask entirely.**
+
+The owner has since seen the shipped clips and picked the smear he wants **by
+name**, from `manafold-hasty`:
+
+> "That one also has the perfect glitchy frame buffer looking thing the mana does
+> that leaves this weird trail behind. We want that. Makes our mana look unique."
+
+Engine recon then established what he actually pointed at. `hasty` runs
+`kSmearPresets` rung **3** — `{keep 900, step 6, jitter 160, hard_clear 430,
+gain 520, tear 1}`. `channel` runs rung **1**, with **`tear = 0`**. The
+distinguishing ingredient between the rung the owner called perfect and the one
+he did not is **`kSmearTear`**: 5 rows, 46 frames, ±2 cells of horizontal row
+displacement.
+
+**So the row tear is not a garnish on the smear. It is the thing that makes the
+smear read as a BROKEN FRAME BUFFER rather than as a motion blur.** A clean
+exponential trail — even a stuttering one — is a trail. Rows sliding sideways by
+a couple of cells is what makes it look like hardware failing, which is the
+entire aesthetic the owner asked for twice and has now confirmed on screen.
+
+**Revised ask, superseding the "if the block wants them" clause:**
+
+1. **Per-cell retention jitter** — REQUIRED, not optional. One LFSR against the
+   cell index, as already described.
+2. **Staggered hard clear** — REQUIRED, same reason.
+3. **Row tear** — NEW, and the most important of the three. A small number of
+   scanline rows (reel reference: 5) displaced horizontally by a small signed
+   cell offset (reel reference: ±2 cells), re-rolled on a slow period (reel
+   reference: 46 frames). All three want to be owner knobs, per the standing
+   rule that every shape, colour and timing value belongs in a named, editable
+   constant.
+
+Cost note: a row tear is an addressing offset on the persistence plane's read,
+not extra storage or extra arithmetic — it should be close to free in the block,
+and it is the highest-value single element in the whole smear.
+
+**Do not implement `glow_persist` as decay-plus-step only.** That was the pass-3
+reading, and it predates the owner choosing a rung. A block that ships smooth or
+merely-stuttering decay will not produce the look that has now been approved on
+screen, and the reel will keep emulating the tear in software at ~10% of a pass
+per conduit.
+
+**Evidence:** `runs/CLAUDE-RUNS/RUN-20260905-1910-manafold-p6-recon-engine/`
+(`FINDINGS.md`, plus `evidence/hasty-smear-zoom.png` — the 4x before-plate
+showing the chunky pale-cyan residue with its hard 4-px edges).
