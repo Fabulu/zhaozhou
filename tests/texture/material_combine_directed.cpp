@@ -311,9 +311,9 @@ void test_product_job_counts_match_the_architecture() {
       {mat::kPassthru, 0, "PASSTHRU bypasses the lanes"},
       {mat::kAddSat, 0, "ADD_SAT bypasses the lanes"},
       {mat::kMask, 1, "MASK is one alpha product"},
-      {mat::kModulate, 3, "MODULATE is three RGB products"},
-      {mat::kModulate2x, 3, "MODULATE2X is three RGB products"},
-      {mat::kLerp, 3, "LERP is three difference-by-weight products"},
+      {mat::kModulate, 4, "MODULATE is 3 RGB + 1 alpha"},
+      {mat::kModulate2x, 4, "MODULATE2X is 3 RGB + 1 alpha"},
+      {mat::kLerp, 4, "LERP is 3 RGB + 1 alpha, all difference-by-weight"},
       {mat::kTerrainDetailMask, 4, "DETAIL_MASK is 3 RGB + 1 alpha"},
       {mat::kTerrainDetailLight, 6, "DETAIL_LIGHT is 3 + 3 -- the worst case"},
   };

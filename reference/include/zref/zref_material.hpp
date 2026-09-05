@@ -173,7 +173,15 @@ constexpr uint8_t product_jobs(uint8_t recipe) {
     case kModulate:
     case kModulate2x:
     case kLerp:
-      return 3;  // three RGB (or three difference-by-weight) products
+      // FOUR, and §15.3's table says three. The table counts RGB only, but the
+      // ratified arithmetic multiplies ALPHA too -- so the fourth product
+      // exists whatever the table says, and the only question was whether it
+      // ran in a lane or in parallel silicon beside them. Computing it at
+      // acceptance is what kept the RTL over its DSP budget; as a microjob it
+      // shares a lane. §15.4 asks for ACTUAL jobs by recipe, so this reports
+      // what the hardware issues and the difference from §15.3 is visible
+      // rather than reconciled away.
+      return 4;
     case kTerrainDetailMask:
       return 4;  // 3 first-layer RGB + 1 alpha
     case kTerrainDetailLight:

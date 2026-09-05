@@ -198,6 +198,12 @@ module zhao_texture_material_combine_v1 #(
     // counter showed it -- and only after the counter's OWN double-issue bug
     // was fixed, which is the one that made 2,398 jobs read as 1,199.
     logic [6:0]  busy;                     // issued, result not yet back
+    // MODULATE2X's doubling now happens at write-back, so its saturation is
+    // a per-CHANNEL event arriving over several cycles. The oracle counts it
+    // ONCE PER FRAGMENT, so the flag is latched here and the counter fires
+    // at retirement. Counting at write-back instead would report up to four
+    // saturations for one fragment and quietly disagree with the oracle.
+    logic        sat2x;
   } rec_t;
 
   rec_t rec [RECS];
@@ -225,9 +231,16 @@ module zhao_texture_material_combine_v1 #(
   function automatic logic [6:0] req_mask(input logic [2:0] r);
     begin
       case (r)
+        // FOUR jobs, not three. S15.3's table says "MODULATE 3 RGB products"
+        // and counts no alpha -- but the ratified arithmetic multiplies alpha
+        // too, so the alpha product exists whatever the table says. Computing
+        // it at acceptance instead of as a job is what put a THIRD multiplier
+        // in the block; making it a job puts it through a lane. The per-recipe
+        // counter therefore reports 4 where S15.3 says 3, which is S15.4's
+        // "actual product jobs" doing its job.
         R_MODULATE,
         R_MODULATE2X,
-        R_LERP:          req_mask = 7'b000_0111;  // three first-layer
+        R_LERP:          req_mask = 7'b000_1111;  // three RGB + alpha
         R_DETAIL_MASK:   req_mask = 7'b000_1111;  // three first-layer + alpha
         R_DETAIL_LIGHT:  req_mask = 7'b111_0111;  // + three second-layer
         default:         req_mask = 7'b000_0000;  // PASSTHRU, ADD_SAT, MASK
@@ -264,16 +277,6 @@ module zhao_texture_material_combine_v1 #(
     end
   endfunction
 
-  // s0*s1*2 with ONE rounding: double AFTER the frozen product. Rounding twice
-  // would drift from the oracle by a least-significant bit on exactly the
-  // values a directed test is least likely to try.
-  function automatic logic [8:0] mul2x9(input logic [7:0] a, input logic [7:0] b);
-    logic [8:0] d;
-    begin
-      d = {1'b0, unit_mul_logic(a, b)} << 1;
-      mul2x9 = (d > 9'd255) ? 9'b1_11111111 : d;
-    end
-  endfunction
 
   // ==========================================================================
   // Allocation (C0)
@@ -357,8 +360,14 @@ module zhao_texture_material_combine_v1 #(
           b = chan_of(r, 1, int'(job));
         end
       end else if (job == 3'd3) begin              // the alpha product
-        a = r.s0_a;
-        b = (r.recipe == R_DETAIL_MASK) ? r.s2_a : r.s1_a;
+        if (r.recipe == R_LERP) begin
+          // LERP's alpha is the same magnitude-by-weight form as its RGB.
+          a = (r.s1_a >= r.s0_a) ? (r.s1_a - r.s0_a) : (r.s0_a - r.s1_a);
+          b = r.weight;
+        end else begin
+          a = r.s0_a;
+          b = (r.recipe == R_DETAIL_MASK) ? r.s2_a : r.s1_a;
+        end
       end else begin                               // second layer, R/G/B
         a = chan_of(r, 3, int'(job) - 4);          // the intermediate
         b = chan_of(r, 2, int'(job) - 4);          // s2
@@ -376,9 +385,16 @@ module zhao_texture_material_combine_v1 #(
     logic [7:0] s0c, s1c;
     logic signed [10:0] v;
     begin
-      if (r.recipe == R_LERP && job <= 3'd2) begin
-        s0c = chan_of(r, 0, int'(job));
-        s1c = chan_of(r, 1, int'(job));
+      if (r.recipe == R_MODULATE2X) begin
+        // The doubling and saturation live HERE, not in the lane: the lane's
+        // law is the frozen unit8 product and must stay one law. Doubling
+        // AFTER that product keeps a single rounding, which is what the oracle
+        // does and what a second rounding would drift from by an LSB.
+        v = $signed({2'b0, prod}) <<< 1;
+        writeback_val = (v > 11'sd255) ? 8'd255 : v[7:0];
+      end else if (r.recipe == R_LERP && job <= 3'd3) begin
+        s0c = chan_of(r, 0, (job == 3'd3) ? 3 : int'(job));
+        s1c = chan_of(r, 1, (job == 3'd3) ? 3 : int'(job));
         v = (s1c >= s0c) ? ($signed({3'b0, s0c}) + $signed({3'b0, prod}))
                          : ($signed({3'b0, s0c}) - $signed({3'b0, prod}));
         writeback_val = (v < 0) ? 8'd0 : ((v > 11'sd255) ? 8'd255 : v[7:0]);
@@ -388,22 +404,6 @@ module zhao_texture_material_combine_v1 #(
     end
   endfunction
 
-  // lerp8 for the ALPHA channel, which §15.3's three-product count for LERP
-  // does not cover -- the same shape as MODULATE, whose alpha product is also
-  // outside its three RGB jobs. Computed at acceptance rather than adding a
-  // fourth job the architecture's table does not name.
-  function automatic logic [7:0] lerp8(input logic [7:0] a, input logic [7:0] b,
-                                       input logic [7:0] w);
-    logic [7:0] mag, scaled;
-    logic signed [10:0] v;
-    begin
-      mag    = (b >= a) ? (b - a) : (a - b);
-      scaled = unit_mul_logic(mag, w);
-      v = (b >= a) ? ($signed({3'b0, a}) + $signed({3'b0, scaled}))
-                   : ($signed({3'b0, a}) - $signed({3'b0, scaled}));
-      lerp8 = (v < 0) ? 8'd0 : ((v > 11'sd255) ? 8'd255 : v[7:0]);
-    end
-  endfunction
 
   // ==========================================================================
   // Retirement (C4/C5)
@@ -448,9 +448,10 @@ module zhao_texture_material_combine_v1 #(
       automatic logic [6:0] pend0;
       automatic int         issued;
       automatic logic [8:0] t;
-      automatic logic       sat_add, sat_2x;
+      automatic logic       sat_add;
       automatic logic [15:0] ops;
       automatic logic [31:0] jobs_inc [8];
+      automatic logic [7:0]  prod0, prod1, wb0, wb1;
 
       // ---- lane results write back (C2: capture, round, enqueue) -----------
       // The rounding happened in the lane; here the result lands in the record
@@ -459,30 +460,68 @@ module zhao_texture_material_combine_v1 #(
       // separate queue exists, because one bit per job is cheaper than a queue
       // and expresses exactly the same dependency.
       if (lane0_q.valid) begin
+        // ONE PRODUCT PER LANE. The case selects a DESTINATION; it must not
+        // contain the multiply. Written the other way round -- a
+        // `unit_mul_logic(...)` inside each of seven arms -- it is seven
+        // independent `*` operators per lane, fourteen in the block, and the
+        // fitter gave them 7 DSP blocks. That is EXACTLY the failure S15.5
+        // closes with: "Do not write six independent `*` operators and assume
+        // they pack." Having quoted that line in this file's own header while
+        // writing fourteen of them is the reason it is quoted again here.
+        prod0 = unit_mul_logic(lane0_q.a, lane0_q.b);
+        wb0   = writeback_val(rec[lane0_q.slot], lane0_q.job, prod0);
         case (lane0_q.job)
-          3'd0: rec[lane0_q.slot].o_r <= writeback_val(rec[lane0_q.slot], lane0_q.job, unit_mul_logic(lane0_q.a, lane0_q.b));
-          3'd1: rec[lane0_q.slot].o_g <= writeback_val(rec[lane0_q.slot], lane0_q.job, unit_mul_logic(lane0_q.a, lane0_q.b));
-          3'd2: rec[lane0_q.slot].o_b <= writeback_val(rec[lane0_q.slot], lane0_q.job, unit_mul_logic(lane0_q.a, lane0_q.b));
-          3'd3: rec[lane0_q.slot].o_a <= unit_mul_logic(lane0_q.a, lane0_q.b);
-          3'd4: rec[lane0_q.slot].o_r <= unit_mul_logic(lane0_q.a, lane0_q.b);
-          3'd5: rec[lane0_q.slot].o_g <= unit_mul_logic(lane0_q.a, lane0_q.b);
-          default: rec[lane0_q.slot].o_b <= unit_mul_logic(lane0_q.a, lane0_q.b);
+          3'd0: rec[lane0_q.slot].o_r <= wb0;
+          3'd1: rec[lane0_q.slot].o_g <= wb0;
+          3'd2: rec[lane0_q.slot].o_b <= wb0;
+          // EVERY arm takes `wb`, not `prod`. Job 3 taking the raw product
+          // was a real bug: MODULATE2X's doubling lives in writeback_val, so
+          // its ALPHA came out half -- 17 where the oracle said 34 -- while
+          // its RGB was right, which is the kind of asymmetry that reads as a
+          // channel-ordering mistake. writeback_val returns the product
+          // unchanged for every recipe that wants it unchanged, so there is
+          // no case where `prod` is the correct thing to store.
+          3'd3: rec[lane0_q.slot].o_a <= wb0;
+          3'd4: rec[lane0_q.slot].o_r <= wb0;
+          3'd5: rec[lane0_q.slot].o_g <= wb0;
+          default: rec[lane0_q.slot].o_b <= wb0;
         endcase
         rec[lane0_q.slot].done[lane0_q.job] <= 1'b1;
         rec[lane0_q.slot].busy[lane0_q.job] <= 1'b0;
+        if (rec[lane0_q.slot].recipe == R_MODULATE2X && prod0 > 8'd127)
+          rec[lane0_q.slot].sat2x <= 1'b1;
       end
       if (lane1_q.valid) begin
+        // ONE PRODUCT PER LANE. The case selects a DESTINATION; it must not
+        // contain the multiply. Written the other way round -- a
+        // `unit_mul_logic(...)` inside each of seven arms -- it is seven
+        // independent `*` operators per lane, fourteen in the block, and the
+        // fitter gave them 7 DSP blocks. That is EXACTLY the failure S15.5
+        // closes with: "Do not write six independent `*` operators and assume
+        // they pack." Having quoted that line in this file's own header while
+        // writing fourteen of them is the reason it is quoted again here.
+        prod1 = unit_mul_logic(lane1_q.a, lane1_q.b);
+        wb1   = writeback_val(rec[lane1_q.slot], lane1_q.job, prod1);
         case (lane1_q.job)
-          3'd0: rec[lane1_q.slot].o_r <= writeback_val(rec[lane1_q.slot], lane1_q.job, unit_mul_logic(lane1_q.a, lane1_q.b));
-          3'd1: rec[lane1_q.slot].o_g <= writeback_val(rec[lane1_q.slot], lane1_q.job, unit_mul_logic(lane1_q.a, lane1_q.b));
-          3'd2: rec[lane1_q.slot].o_b <= writeback_val(rec[lane1_q.slot], lane1_q.job, unit_mul_logic(lane1_q.a, lane1_q.b));
-          3'd3: rec[lane1_q.slot].o_a <= unit_mul_logic(lane1_q.a, lane1_q.b);
-          3'd4: rec[lane1_q.slot].o_r <= unit_mul_logic(lane1_q.a, lane1_q.b);
-          3'd5: rec[lane1_q.slot].o_g <= unit_mul_logic(lane1_q.a, lane1_q.b);
-          default: rec[lane1_q.slot].o_b <= unit_mul_logic(lane1_q.a, lane1_q.b);
+          3'd0: rec[lane1_q.slot].o_r <= wb1;
+          3'd1: rec[lane1_q.slot].o_g <= wb1;
+          3'd2: rec[lane1_q.slot].o_b <= wb1;
+          // EVERY arm takes `wb`, not `prod`. Job 3 taking the raw product
+          // was a real bug: MODULATE2X's doubling lives in writeback_val, so
+          // its ALPHA came out half -- 17 where the oracle said 34 -- while
+          // its RGB was right, which is the kind of asymmetry that reads as a
+          // channel-ordering mistake. writeback_val returns the product
+          // unchanged for every recipe that wants it unchanged, so there is
+          // no case where `prod` is the correct thing to store.
+          3'd3: rec[lane1_q.slot].o_a <= wb1;
+          3'd4: rec[lane1_q.slot].o_r <= wb1;
+          3'd5: rec[lane1_q.slot].o_g <= wb1;
+          default: rec[lane1_q.slot].o_b <= wb1;
         endcase
         rec[lane1_q.slot].done[lane1_q.job] <= 1'b1;
         rec[lane1_q.slot].busy[lane1_q.job] <= 1'b0;
+        if (rec[lane1_q.slot].recipe == R_MODULATE2X && prod1 > 8'd127)
+          rec[lane1_q.slot].sat2x <= 1'b1;
       end
 
       // ---- issue up to two jobs (§15.3: two lanes, two jobs per clock) -----
@@ -534,7 +573,11 @@ module zhao_texture_material_combine_v1 #(
         jobs_by_recipe_r[k] <= jobs_by_recipe_r[k] + jobs_inc[k];
 
       // ---- retire ---------------------------------------------------------
-      if (have_retire && o_ready_i) rec[retire_slot].valid <= 1'b0;
+      if (have_retire && o_ready_i) begin
+        rec[retire_slot].valid <= 1'b0;
+        if (rec[retire_slot].sat2x)
+          saturated_mul2x_o <= saturated_mul2x_o + 1;
+      end
 
       // ---- accept (C0) ----------------------------------------------------
       if (f_valid_i && f_ready_o) begin
@@ -557,6 +600,7 @@ module zhao_texture_material_combine_v1 #(
         rec[alloc_slot].s2_a <= f_s2_a_i;
         rec[alloc_slot].done    <= 7'd0;
         rec[alloc_slot].busy    <= 7'd0;
+        rec[alloc_slot].sat2x   <= 1'b0;
         rec[alloc_slot].refused <= 1'b0;
 
         // ---- the two refusals, decided at acceptance ----------------------
@@ -588,7 +632,6 @@ module zhao_texture_material_combine_v1 #(
           // Computed at acceptance because they need no lane. A recipe here
           // retires on the next cycle with req == 0.
           sat_add = 1'b0;
-          sat_2x  = 1'b0;
           case (f_recipe_i)
             R_PASSTHRU: begin
               rec[alloc_slot].o_r <= f_s0_rgb_i[23:16];
@@ -624,32 +667,11 @@ module zhao_texture_material_combine_v1 #(
                 rec[alloc_slot].o_a <= 8'd0;
               end
             end
-            R_MODULATE2X: begin
-              // MODULATE2X does use products, but its doubling and saturation
-              // sit outside the lane's frozen law, so it is computed here for
-              // exactness and its req mask is cleared. This costs the same two
-              // multipliers' worth of logic it would in a lane; what it avoids
-              // is a second rounding law living inside the lane.
-              t = mul2x9(f_s0_rgb_i[23:16], f_s1_rgb_i[23:16]);
-              rec[alloc_slot].o_r <= t[7:0]; sat_2x |= t[8];
-              t = mul2x9(f_s0_rgb_i[15:8],  f_s1_rgb_i[15:8]);
-              rec[alloc_slot].o_g <= t[7:0]; sat_2x |= t[8];
-              t = mul2x9(f_s0_rgb_i[7:0],   f_s1_rgb_i[7:0]);
-              rec[alloc_slot].o_b <= t[7:0]; sat_2x |= t[8];
-              t = mul2x9(f_s0_a_i,          f_s1_a_i);
-              rec[alloc_slot].o_a <= t[7:0]; sat_2x |= t[8];
-              if (sat_2x) saturated_mul2x_o <= saturated_mul2x_o + 1;
-              rec[alloc_slot].req <= 7'd0;
-            end
-            R_MODULATE: begin
-              // Alpha is a product too, and it is NOT one of the three RGB
-              // jobs, so it is computed at acceptance rather than adding a
-              // fourth job MODULATE does not have in §15.3's table.
-              rec[alloc_slot].o_a <= unit_mul_logic(f_s0_a_i, f_s1_a_i);
-            end
-            R_LERP: begin
-              rec[alloc_slot].o_a <= lerp8(f_s0_a_i, f_s1_a_i, f_weight_i);
-            end
+            // MODULATE, MODULATE2X and LERP compute NOTHING at acceptance
+            // now. Every one of their products -- alpha included -- goes
+            // through a lane, which is the whole point: acceptance-time
+            // arithmetic is a multiplier that exists in parallel with the
+            // lanes and is exactly what kept this block over its DSP budget.
             R_DETAIL_LIGHT: begin
               // No alpha job: this recipe names no mask, so §15.1's exception
               // does not apply and sample 0 owns the base alpha.

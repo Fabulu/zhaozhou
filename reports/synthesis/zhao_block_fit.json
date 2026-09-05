@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "1ad3ba0aea4660da4bc6478194d9241a74f48e29",
-    "newestRunClean":  false,
+    "newestRunCommit":  "68c8d58a0fe1a1ecbf3bfb1124c6ab6e1c6db2a3",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1124,6 +1124,20 @@
                        "ruleViolations":  [
                                               "registers 2631 \u003e allowed 2500 -- state that belongs in memories is in flip-flops"
                                           ]
+                   },
+                   {
+                       "module":  "zhao_texture_island_top",
+                       "status":  "incomplete:failed:quartus_fit.exe",
+                       "sourceCommit":  "68c8d58a0fe1a1ecbf3bfb1124c6ab6e1c6db2a3",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  7205.1,
+                       "sourcesHashed":  15,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  11613,
+                       "blockMemoryBits":  25872,
+                       "dspBlocks":  22,
+                       "virtualPins":  889
                    },
                    {
                        "module":  "zhao_texture_material_combine_v1",

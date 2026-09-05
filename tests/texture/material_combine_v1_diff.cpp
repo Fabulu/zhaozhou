@@ -233,8 +233,8 @@ void test_every_recipe_matches_the_oracle() {
         jobs[mat::kTerrainDetailLight]);
   check(jobs[mat::kTerrainDetailMask] == 200 * 4, "DETAIL_MASK issues four", 200 * 4,
         jobs[mat::kTerrainDetailMask]);
-  check(jobs[mat::kModulate] == 200 * 3, "MODULATE issues three", 200 * 3, jobs[mat::kModulate]);
-  check(jobs[mat::kLerp] == 200 * 3, "LERP issues three", 200 * 3, jobs[mat::kLerp]);
+  check(jobs[mat::kModulate] == 200 * 4, "MODULATE issues four -- 3 RGB + alpha", 200 * 4, jobs[mat::kModulate]);
+  check(jobs[mat::kLerp] == 200 * 4, "LERP issues four -- 3 RGB + alpha", 200 * 4, jobs[mat::kLerp]);
   check(jobs[mat::kTerrainDetailLight] > jobs[mat::kModulate],
         "and DETAIL_LIGHT really is the most expensive recipe -- the two-lane "
         "capacity argument depends on it",
