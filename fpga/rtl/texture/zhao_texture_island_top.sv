@@ -627,7 +627,22 @@ module zhao_texture_island_top #(
   // The response token has no spare bits ({class 2, slot 4, sidx 2, gen 8} is
   // exactly SRCW = 16), which is why this is a side table rather than another
   // field in the token.
-  logic bytesel_m [DEPTH][3];
+  // {fv, fu, bytesel} per sample. The byte select was the first field to need
+  // carrying; the bilinear FRACTIONS need it for the same reason and were the
+  // "additional source-level risk" the audit named without testing:
+  //
+  //   .fu_i(plan_acc_fu), .fv_i(plan_acc_fv)
+  //
+  // read the planner's CURRENT fractions while the sample data arrives through
+  // cache and dispatch latency. Whatever request the planner happens to be
+  // emitting when a response lands supplies that response's weights. With one
+  // fragment in flight and uniform coordinates nothing moves; with varying
+  // coordinates and a cache miss the filter weights belong to a different
+  // texel, and every colour is subtly wrong in a way no counter shows.
+  //
+  // Same fix as the class, the palette binding and the byte select: store at
+  // REQUEST, keyed by the identity the response returns under.
+  logic [16:0] sampmeta_m [DEPTH][3];   // {fv[8], fu[8], bytesel[1]}
 
   logic        plan_req_ready, plan_acc_valid, plan_acc_ready;
   logic [3:0]  plan_acc_en;
@@ -638,8 +653,9 @@ module zhao_texture_island_top #(
   // come back under, so the read below cannot pick up a different sample's bit.
   always_ff @(posedge clk) begin
     if (plan_acc_valid && plan_acc_ready)
-      bytesel_m[plan_acc_src[SRC_SLOT_HI:SRC_SLOT_LO]]
-               [plan_acc_src[SRC_SIDX_LO+1:SRC_SIDX_LO]] <= plan_acc_addr[0];
+      sampmeta_m[plan_acc_src[SRC_SLOT_HI:SRC_SLOT_LO]]
+                [plan_acc_src[SRC_SIDX_LO+1:SRC_SIDX_LO]] <=
+          {plan_acc_fv, plan_acc_fu, plan_acc_addr[0]};
   end
   logic        plan_acc_filter, plan_acc_err;
   logic [7:0]  plan_acc_fu, plan_acc_fv;
@@ -733,6 +749,10 @@ module zhao_texture_island_top #(
 
   assign disp_bil_ready = bil_job_ready;
 
+  // The metadata belonging to the sample whose texels just arrived.
+  wire [16:0] bil_meta = sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+                                   [disp_bil_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
+
   zhao_texture_bilerp_lane #(.TOKW(TOKW)) u_bilerp (
       .clk(clk), .rst_n(rst_n),
       .job_valid_i(disp_bil_valid), .job_ready_o(bil_job_ready),
@@ -740,7 +760,9 @@ module zhao_texture_island_top #(
       .t10_i(disp_bil_data[23:16]),
       .t01_i(disp_bil_data[39:32]),
       .t11_i(disp_bil_data[55:48]),
-      .fu_i(plan_acc_fu), .fv_i(plan_acc_fv),
+      // THE SAMPLE'S OWN fractions, recovered by the identity the response
+      // came back under -- not whatever the planner is emitting right now.
+      .fu_i(bil_meta[8:1]), .fv_i(bil_meta[16:9]),
       .tok_i(disp_bil_tok), .chan_i(2'd0),
       .out_valid_o(bil_out_valid), .out_ready_i(bil_out_ready),
       .out_o(bil_out), .out_tok_o(bil_out_tok), .out_chan_o(bil_out_chan),
@@ -775,8 +797,8 @@ module zhao_texture_island_top #(
       .lu_slot_i(palslot_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]),
       .lu_gen_i (palgen_m [disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]),
       // THE ADDRESSED BYTE, not always the low one. See bytesel_m above.
-      .lu_idx_i(bytesel_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
-                         [disp_clut_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]]
+      .lu_idx_i(sampmeta_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+                          [disp_clut_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]][0]
                 ? disp_clut_data[15:8]
                 : disp_clut_data[7:0]),
       .lu_valid_o(pal_lu_valid_o), .lu_rgb565_o(pal_lu_rgb565),

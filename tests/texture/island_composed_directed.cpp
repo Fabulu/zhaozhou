@@ -153,6 +153,8 @@ int main(int argc, char** argv) {
   uint32_t first_rgb = 0;
   int nonzero_rgb = 0;
   std::vector<uint32_t> g_retired_tags;
+  std::vector<uint32_t> g_clut_rgb;  // exact retired colour, CLUT fragments only
+  std::vector<int> g_clut_idx;       // and which fragment each came from
   int g_nz_by_cls[2] = {0, 0};
   bool saw_rgb = false;
 
@@ -255,8 +257,31 @@ int main(int argc, char** argv) {
     } else if (mem.beats_left > 0) {
       const int beat = FillModel::kBeats - mem.beats_left;
       d.fill_data_valid_i = 1;
-      d.fill_data_i = static_cast<uint16_t>(
-          ((mem.addr + static_cast<uint32_t>(beat) * 2u) * 2654435761u) >> 16);
+      // EVERY HALFWORD IS 0xAABB, so the two CLUT8 texels inside it are
+      // DISTINCT and both are known. That is what makes an exact colour check
+      // possible without the test re-deriving the planner's addresses:
+      // whichever texel a fragment asked for, its palette index is either 0xBB
+      // or 0xAA and nothing else.
+      //
+      // A hash of the address -- what this was -- gives a different byte per
+      // line and makes the expected colour unknowable without modelling the
+      // address maths, which is why the test could only ever check "non-zero".
+      // A CONSTANT would be worse still: both bytes equal, so the byte select
+      // stops mattering and the defect it exists to catch becomes invisible.
+      // 0x8586: the two CLUT8 texels are indices 0x86 and 0x85, chosen because
+      // both LARGE (so the material arithmetic does not round them to zero) and
+      // whose palette entries distinguish the two expansion laws in ALL
+      // THREE channels -- 0x5A47 has r5=11, g6=18, b5=7, so replication and
+      // zero-fill differ everywhere.
+      //
+      // THIS MATTERS AND WAS FOUND THE HARD WAY. The first pattern here was
+      // 0xAABB, whose index 0xBB maps to palette entry 0x0FBC with r5 = 1 --
+      // and 1 has no low bits to replicate, so zero-fill and replication agree.
+      // Mutating the red channel back to zero-fill produced ZERO mismatches:
+      // the exact-colour check was insensitive to the very defect it was
+      // written to cover. A check that cannot fail is not evidence, however
+      // exact it looks.
+      d.fill_data_i = 0x8586u;
       --mem.beats_left;
       ++mem.served;
     }
@@ -269,6 +294,13 @@ int main(int argc, char** argv) {
         saw_rgb = true;
       }
       g_retired_tags.push_back(d.out_tag_o);
+      {
+        const int ix = static_cast<int>(d.out_tag_o) - 0x1000;
+        if (ix >= 0 && ix < 64 && (ix % 2) == 0) {
+          g_clut_rgb.push_back(d.out_rgb_o);
+          g_clut_idx.push_back(ix);
+        }
+      }
       if (d.out_rgb_o != 0) ++nonzero_rgb;
       {
         const int ix = static_cast<int>(d.out_tag_o) - 0x1000;
@@ -454,6 +486,127 @@ int main(int argc, char** argv) {
   std::printf("  retires carrying a non-zero colour: %d of %d\n", nonzero_rgb, retired);
   check(g_nz_by_cls[1] == 32, "every BILINEAR fragment carries a NON-ZERO colour", 32,
         g_nz_by_cls[1]);
+
+  // ======================= EXACT COLOUR, THROUGH THE ORACLE ================
+  // AUDIT R5: "it checks nonzero colours rather than exact expected per-fragment
+  // RGBA. A counter moving or every colour being nonzero cannot establish that
+  // the fetched texels, weights, channel expansion, or material output are
+  // correct."
+  //
+  // Now it does, for the CLUT half, and against zref rather than against a
+  // second copy of the arithmetic.
+  //
+  // WHAT MAKES IT COMPUTABLE. Every halfword the memory returns is 0x8586, so a
+  // fragment's palette index is 0x86 or 0x85 and nothing else -- whichever texel
+  // of the pair it addressed. The island gives all three samples of a fragment
+  // the SAME u/v, so all three resolve to the same palette colour. The palette
+  // was uploaded as `0x0841 * (index + 1)` truncated to 16 bits, and the island
+  // expands 565 to 888 by replication. So both admissible sample colours are
+  // known here exactly, and the expected OUTPUT is whatever
+  // zref::material::combine makes of them under that fragment's recipe.
+  //
+  // A FIRST VERSION OF THIS CHECK COMPARED AGAINST THE SAMPLE COLOUR DIRECTLY
+  // and reported 24 of 32 fragments "unexpected". That was the check being
+  // naive, not the island being wrong: CLUT fragments carry recipes 0, 2, 4 and
+  // 6, and only PASSTHRU returns a sample unchanged. Exactly the 8 PASSTHRU
+  // fragments matched. Recorded because "24 unexpected" looked like a defect for
+  // about a minute, and the difference between a wrong expectation and a wrong
+  // machine is the whole job.
+  {
+    auto expand = [](uint16_t p) -> zref::material::Sample {
+      const uint32_t r5 = (p >> 11) & 0x1F, g6 = (p >> 5) & 0x3F, b5 = p & 0x1F;
+      zref::material::Sample s;
+      s.r = static_cast<uint8_t>((r5 << 3) | (r5 >> 2));
+      s.g = static_cast<uint8_t>((g6 << 2) | (g6 >> 4));
+      s.b = static_cast<uint8_t>((b5 << 3) | (b5 >> 2));
+      s.a = 255;  // the island drives fr_tmu_a = 8'hFF
+      return s;
+    };
+    const zref::material::Sample c_lo = expand(static_cast<uint16_t>(0x0841u * (0x86u + 1u)));
+    const zref::material::Sample c_hi = expand(static_cast<uint16_t>(0x0841u * (0x85u + 1u)));
+
+    zref::material::Sample base;
+    base.r = 0x20;
+    base.g = 0x40;
+    base.b = 0x60;
+    base.a = 255;
+
+    auto want = [&](uint8_t recipe, const zref::material::Sample& c) -> uint32_t {
+      zref::material::Sample s[3] = {c, c, c};
+      zref::material::Ledger led{};
+      const zref::material::Out o =
+          zref::material::combine(recipe, /*weight=*/128, s, /*count=*/3, base,
+                                  /*frag_tag=*/0, &led);
+      return (static_cast<uint32_t>(o.r) << 16) | (static_cast<uint32_t>(o.g) << 8) | o.b;
+    };
+
+    // AUX FRAGMENTS ARE EXCLUDED, and the reason is not convenience. A
+    // fragment with `frag_aux_i` set takes its third sample from the AUX sheet
+    // responder (str 0x88), not from the palette, so "all three samples are the
+    // same palette colour" -- the premise that makes this expectation
+    // computable at all -- is false for them. The test drives aux on
+    // `(i % 3) == 0`.
+    //
+    // A first version did not exclude them and reported 3 mismatches, all
+    // recipe 6, at fragments 6, 30 and 54 -- every one of them a multiple of
+    // three. That was the expectation being incomplete, not the island being
+    // wrong, and it is the second time in this check that a naive model looked
+    // like a defect. Modelling the aux path here would mean re-deriving the
+    // sheet arithmetic in the test, which is the duplication R15 was about.
+    int matched_lo = 0, matched_hi = 0, mismatched = 0, skipped_aux = 0;
+    for (std::size_t i = 0; i < g_clut_rgb.size(); ++i) {
+      if ((g_clut_idx[i] % 3) == 0) {
+        ++skipped_aux;
+        continue;
+      }
+      const uint8_t recipe = static_cast<uint8_t>(g_clut_idx[i] % 8);
+      const uint32_t got = g_clut_rgb[i];
+      if (got == want(recipe, c_lo))
+        ++matched_lo;
+      else if (got == want(recipe, c_hi))
+        ++matched_hi;
+      else {
+        if (mismatched < 3)
+          std::printf("    fragment %d recipe %u: got 0x%06X, want 0x%06X or 0x%06X\n",
+                      g_clut_idx[i], recipe, got, want(recipe, c_lo), want(recipe, c_hi));
+        ++mismatched;
+      }
+    }
+
+    std::printf(
+        "  CLUT exact vs zref::material::combine: low-byte %d, high-byte %d, "
+        "mismatched %d, aux-skipped %d\n",
+        matched_lo, matched_hi, mismatched, skipped_aux);
+
+    check(mismatched == 0,
+          "every CLUT fragment retires EXACTLY what zref::material::combine "
+          "makes of its palette colour under its own recipe -- fetch, byte "
+          "select, palette lookup, 565-to-888 expansion and the material "
+          "arithmetic are all exact, not merely non-zero",
+          0, mismatched);
+    check(matched_lo > 0,
+          "and at least one fragment's colour was actually compared, so this is "
+          "not vacuously satisfied by an empty set",
+          1, matched_lo > 0 ? 1 : 0);
+
+    // AN HONEST GAP, PRINTED RATHER THAN ASSERTED. This workload addresses only
+    // EVEN texels -- `matched_hi` is 0 -- so it never asks for the high byte of
+    // a halfword and therefore does not exercise the byte-select repair at all.
+    //
+    // Asserting `matched_hi > 0` here would be asserting a property of the
+    // COORDINATES this test happens to generate, not of the island, and it
+    // would fail for a reason that has nothing to do with the machine. Forcing
+    // odd texels needs control over the coordinate after the perspective divide
+    // and the planner's scaling, which this test does not have.
+    //
+    // So the byte-select repair is established by the RTL argument in D23 and
+    // by its own mutation, NOT by this check. Said out loud because a reader
+    // seeing "exact colour" pass could otherwise assume it covers that too.
+    if (matched_hi == 0)
+      std::printf(
+          "  NOTE: no fragment addressed an odd texel, so the byte "
+          "select is NOT exercised by this workload\n");
+  }
 
   // ======================= INGRESS-TO-EGRESS IDENTITY ======================
   // THE CHECK THAT WOULD HAVE CAUGHT THE CARRIAGE BUG IN ONE RUN.
