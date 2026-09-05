@@ -1,0 +1,35 @@
+diff --git a/tools/reel/zhao_reel.cpp b/tools/reel/zhao_reel.cpp
+index ac215316..eba397fd 100644
+--- a/tools/reel/zhao_reel.cpp
++++ b/tools/reel/zhao_reel.cpp
+@@ -7095,6 +7095,30 @@ int main(int argc, char** argv) {
+   if (wanted("manafold-taunt2")) rc |= render_scene(subject_u02_clip(12, "manafold-taunt2", u02::kTaunt2Keys, false, &kU02SunTaunt2));
+   if (wanted("manafold-trick")) rc |= render_scene(subject_u02_clip(13, "manafold-trick", u02::kTrickKeys, false, &kU02SunTrick));
+   if (wanted("manafold-damage")) rc |= render_scene(subject_u02_clip(14, "manafold-damage", u02::kDamageKeys, false, &kU02SunHit));
++  // ---- PASS-6 ARCHITECT PROBES (lane-local, never shipped) ---------------
++  // Fog attribution: rest clip with mana/smear independently ablated.
++  if (wanted("manafold-fogprobe-off")) {
++    SceneSubject s = subject_u02_clip(5, "manafold-fogprobe-off", u02::kRestKeys, false, &kU02SunCalm);
++    s.u02_mana = 0; s.u02_smear = 0;
++    rc |= render_scene(s);
++  }
++  if (wanted("manafold-fogprobe-mana")) {
++    SceneSubject s = subject_u02_clip(5, "manafold-fogprobe-mana", u02::kRestKeys, false, &kU02SunCalm);
++    s.u02_mana = 3; s.u02_smear = 0;
++    rc |= render_scene(s);
++  }
++  // Camera variant D: channel at 360k, nothing else moved.
++  if (wanted("manafold-channel-360")) {
++    SceneSubject s = subject_u02_clip(2, "manafold-channel-360", u02::kChannelKeys, false, &kU02SunChannel);
++    s.cam_k = 360000;
++    rc |= render_scene(s);
++  }
++  // The chosen mana under the shipping many-colour rig (Direction 5 s.8).
++  if (wanted("manafold-channel-ml")) {
++    SceneSubject s = subject_u02_clip(2, "manafold-channel-ml", u02::kChannelKeys, false, &kU02SunChannel);
++    s.creature_moving_light = true;
++    rc |= render_scene(s);
++  }
+   if (wanted("manafold-crackle")) {
+     SceneSubject s = subject_u02_clip(0, "manafold-crackle", u02::kIdleKeys, false, &kU02SunChannel);
+     s.u02_mana = 4;  // the crackle IS the lightning candidate
