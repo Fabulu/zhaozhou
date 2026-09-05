@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
     int64_t closest2 = 1LL << 50;
     int32_t worst_ellip = 1 << 30;
     int wc = -1, cc = -1;
-    int32_t inside_pm = 1 << 30; int inside_n = 0;
+    int32_t inside_pm = 1 << 30; int inside_n = 0; int32_t worst_along = 0; long along_sum = 0; int along_n = 0;
     for (int i = 0; i < 16; ++i) {
       u02::Rig g;
       g.reset();
@@ -130,7 +130,15 @@ int main(int argc, char** argv) {
                         ez = ((int64_t)lz << 16) / az;
           const int32_t e = (int32_t)((u02::isqrt64(ex * ex + ey * ey + ez * ez) * 1000) >> 16);
           if (e < inside_pm) inside_pm = e;
-          if (e < 1000) ++inside_n;
+          if (e < 1000) {
+            ++inside_n;
+            // WHERE along the lens long axis? |ly| as a fraction of the
+            // half-length. Near 1000 the ellipsoid OVERSTATES the real lens
+            // (the width profile tapers to zero), so those hits are soft.
+            const int32_t along = (int32_t)((ly < 0 ? -(int64_t)ly : (int64_t)ly) * 1000 / ay);
+            if (along > worst_along) worst_along = along;
+            along_sum += along; ++along_n;
+          }
         }
       }
       for (const V& a : L)
@@ -143,6 +151,8 @@ int main(int argc, char** argv) {
     }
     std::printf("QA %-16s  min vert gap %4lld mm   deepest LEFT vertex vs the RIGHT lens surface: %4d pm (<1000 == INSIDE), %d such verts  %s\n",
                 c.name, (long long)u02::isqrt64(closest2), inside_pm, inside_n, inside_n ? "*** EYES INTERSECT ***" : "clear");
+    if (inside_n) std::printf("      inside verts at |ly| = %ld pm mean, %d pm max of the lens half-length (1000 = the tapered tip)\n",
+                              along_n?along_sum/along_n:0, worst_along);
   }
   if (inject_mm) std::printf("QA: (each eye translated %d mm toward the centre plane)\n", inject_mm);
 

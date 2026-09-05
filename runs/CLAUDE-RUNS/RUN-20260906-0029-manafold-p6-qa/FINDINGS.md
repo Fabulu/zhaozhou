@@ -58,21 +58,31 @@ Composed extremes, 16 corners of roll x gaze-side x gaze-lift x eyeball-shift:
 | 6.0 deg | 14 mm | 0 |
 | 6.5 deg | 7 mm | 0 |
 | **7.0 deg** | **0 mm** | 0 (grazing) |
-| 7.5 deg | 6 mm | **80** |
-| 8.0 deg | 13 mm | **80** |
-| **10.0 deg (the shipped clamp)** | 18 mm | **24** |
+| 7.5 deg | 6 mm | 80 (at the tapered tips - see caveat) |
+| 8.0 deg | 13 mm | 80 (at the tapered tips) |
+| **10.0 deg (the shipped clamp)** | 18 mm | 24 (at |ly| 829 pm) |
 
-Two independent measures agree. The min-vertex gap falls monotonically to
-**exactly 0 mm at 7.0 deg** and then rebounds - the signature of two sparse
-point clouds passing THROUGH each other, which is why nearest-vertex distance
-is not by itself a penetration test (checklist item 16: what does the probe
-under-test?). The ellipsoid containment test - every LEFT star/lens vertex
-against the RIGHT lens own ellipsoid - then finds **24 left-eye vertices inside
-the right lens at the shipped 10 deg cap**.
+The min-vertex gap falls monotonically from 98 mm to **0 mm at 7.0 deg** and
+then rebounds - the signature of two sparse point clouds passing THROUGH each
+other, which is why nearest-vertex distance is not by itself a penetration test
+(checklist item 16: what does the probe under-test?).
 
-**The eyes do touch, at 7 deg, inside the 10 deg the creature is clamped to.**
-Gate A was reporting a real fault and was switched off on the belief that the
-instrument was wrong. The instrument WAS wrong - and its verdict was right.
+**What is DEFINITE:** the two eye assemblies close from 98 mm to **under 1 mm**
+(integer truncation floors it at 0) at 7.0 deg of roll, against the gate own
+12 mm floor. That is a direct vertex-to-vertex measurement and depends on no
+surface model. The eyes touch, at 7 deg, inside the 10 deg the creature is
+clamped to. **Gate A was reporting a real fault and was switched off on the
+belief that the instrument was wrong. The instrument WAS wrong - and its
+verdict was right.**
+
+**What I must NOT overstate, having gone looking for the refutation of my own
+number:** the ellipsoid containment test flags 80 vertices inside at 7.5 deg and
+24 at 10 deg, but those vertices sit at **|ly| = 829-994 pm of the lens
+half-length** - at the tapered tips, where kEyeLensWidthPm falls to 260 and then
+0 and my ellipsoid therefore OVERSTATES the real lens. So sustained
+interpenetration past 7 deg is *indicated, not proven*. The contact at 7 deg
+stands; the depth beyond it does not. A pass-7 gate should test against the real
+swept profile, not an ellipsoid.
 
 **My instrument can fail.** Known-bad: translate each eye 40 mm toward the
 centre plane. Separation moves 98 -> 18 mm at roll 0 and 13 -> 3 mm at 8 deg,
@@ -390,6 +400,7 @@ Each fed a known-bad input or shown structurally inert.
 | Gate | Status | Load-bearing? |
 |---|---|---|
 | 5d gate A (eyes never touch) | Inert - units bug returns 0 m; disabled by hand | **YES - it was right** |
+| my own ellipsoid depth test | Over-reports near the lens tips - stated, not relied on | n/a |
 | 5d gate B (nothing clips) | Runs, on poses corrupted by the 916.7 deg eye-shift | **YES** |
 | 5c rule 1 (overhang cap) | Cannot exceed 0 - units bug | **YES** - real breach 142 mm |
 | 5c rule 2 (>=60% on purple) | Pinned at 1000 pm | **YES** - real value 220 pm |
@@ -461,7 +472,7 @@ probe code converts correctly.
 
 **Verified by me, from builds I made:** every probe number at the shipped SHA;
 the units bug and its five consequences; the true eye separation and the 7 deg
-contact; zero intersections across the shipped bank; the dead apply_eye_roll /
+contact (and the limit of my own ellipsoid depth test); zero intersections across the shipped bank; the dead apply_eye_roll /
 apply_eye_shift / apply_gaze_lr; eye_shift_a16 = 916.7 deg; the star overhang
 and its twinkle cause; the black lens notches; the smear off-by-one and its
 one-byte A/B; the inspect/hover rig collapse; the fog ablation magnitude.
