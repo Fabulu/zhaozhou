@@ -127,6 +127,8 @@ int main(int argc, char** argv) {
   const int kFrags = 64;
   int submitted = 0, retired = 0;
   uint32_t first_rgb = 0;
+  int nonzero_rgb = 0;
+  int g_nz_by_cls[2] = {0,0};
   bool saw_rgb = false;
 
   for (int cyc = 0; cyc < 400000; ++cyc) {
@@ -193,6 +195,9 @@ int main(int argc, char** argv) {
         first_rgb = d.out_rgb_o;
         saw_rgb = true;
       }
+      if (d.out_rgb_o != 0) ++nonzero_rgb;
+      { const int ix = static_cast<int>(d.out_tag_o) - 0x1000;
+        if (ix >= 0 && ix < 64 && d.out_rgb_o != 0) g_nz_by_cls[ix % 2]++; }
       ++retired;
     }
     tick(d);
@@ -259,65 +264,81 @@ int main(int argc, char** argv) {
     // Nothing noticed, because no test read them. More than one counter moving
     // is what proves the recipe now arrives with its fragment.
     //
-    // OPEN, AND DELIBERATELY NOT TUNED AWAY: the DISTRIBUTION does not match
-    // 64 fragments cycling eight recipes, which should put eight fragments on
-    // each. Observed 0 0 0 4 0 0 24 112. Three recipes moved and DETAIL_MASK's
-    // 112 is far more than eight fragments can account for at four jobs each.
-    // FRAGROB's retire handshake is correct (R_HOLD exits on ready, one
-    // transfer per retirement), so the cause is not the obvious re-submission
-    // that bit ASSEMBLE and COMBINE.V1 earlier today, and refusals are zero.
+    // RESOLVED, and the resolution is worth more than the anomaly was.
     //
-    // WHAT IS ESTABLISHED, by a cheap experiment that should have come first:
-    // driving EVERY fragment with one fixed recipe gives exact counts.
+    // The distribution used to read 0 0 0 4 0 0 24 112 against an expected
+    // 8 x (0+4+4+4+0+0+6+4) = 176. It now reads 0 32 32 32 0 0 48 32, which is
+    // that expectation exactly, and the check below asserts it.
     //
-    //     all fragments recipe 1 -> 0 256 0 0 0 0 0 0   (64 x 4)
-    //     all fragments recipe 2 -> 0 0 256 0 0 0 0 0   (64 x 4)
-    //     all fragments recipe 6 -> 0 0 0 0 0 0 384 0   (64 x 6)
+    // HOW IT WAS FOUND, because the route matters. Three hypotheses were
+    // written down confidently and all three were wrong:
     //
-    // So the combiner, its job scheduler and these counters are all exact under
-    // a fixed recipe.
+    //   1. "the recipe field arrives OR-ed together" -- refuted by driving a
+    //      FIXED recipe, which gave exact counts (64 x 4, 64 x 6). A corrupted
+    //      field cannot produce exact counts.
+    //   2. "fragments are mis-associated with their neighbour's recipe" --
+    //      refuted by varying how OFTEN the recipe changes: the total moved to
+    //      140, 180 and 232 around the expected 176, and mere re-association
+    //      cannot inflate a total.
+    //   3. "jobs are being issued more than once" -- refuted by the measurement
+    //      that finally settled it.
     //
-    // VARYING THE CHANGE FREQUENCY narrows it further. Expected total for 64
-    // fragments spread over eight recipes is 8 x (0+4+4+4+0+0+6+4) = 176:
+    // What settled it was recording the TAG of every retired fragment instead
+    // of reasoning about the counts. `out_tag_o` was already exposed, so this
+    // cost one run: of 64 fragments submitted, only 25 distinct ones ever came
+    // out, 39 were lost, 7 were duplicated, and the tail was fragment 63
+    // delivered 24 times. The jobs counted then matched what that ACTUAL
+    // retired set predicts -- 140 = 140, exactly -- which exonerated the
+    // combiner completely. Logging the same tags one stage earlier showed the
+    // identical sequence arriving at FRAGROB, and logging the slot each
+    // fragment was written into showed FRAGROB's own allocation and ordered
+    // retire were PERFECT: the head slot walked 0..15 exactly four times. The
+    // reorder buffer was innocent and had been handed the wrong data.
     //
-    //   recipe changes every fragment    0 0 0  4 0 0 24 112   total 140
-    //   ...every 2 fragments             0 0 16 8 0 0 36 120   total 180
-    //   ...every 8 fragments             0 16 32 32 0 0 24 128 total 232
+    // THE BUG: the island read every per-fragment attribute off its own INPUT
+    // PINS at the point each was consumed -- ten separate signals, including
+    // PERSPUV's u/w and v/w numerators. A fragment spends about twelve clocks
+    // in RCP24 and PERSPUV, so each tap sampled whatever fragment happened to
+    // be at the boundary twelve clocks later, and once submission stopped the
+    // pins simply held fragment 63. The token needed to fix it already existed
+    // and was already carried end to end (`tok_r` -> RCP24 `r_tok_o` ->
+    // PERSPUV `tag_o`); nothing consulted it. Attributes are now stored at
+    // admission and read back by that token.
     //
-    // The slowest variation OVERSHOOTS 176. So this is not fragments being
-    // mis-associated with their neighbour's recipe -- that would redistribute
-    // the total, not inflate it. Some fragments are having their jobs issued
-    // MORE THAN ONCE, and recipe 7 is consistently over-represented.
+    // THE LESSON, which is the one CLAUDE.md already states: three rounds of
+    // reasoning about aggregate counts produced three wrong answers, and one
+    // measurement of per-fragment IDENTITY produced the right one immediately.
+    // The counters said "something is wrong" and could not say what; they
+    // aggregate away the very field that was broken. When a count is wrong,
+    // measure the identity of the things being counted before theorising about
+    // the count.
     //
-    // AND IT IS ISLAND-ONLY. `material_combine_v1_diff` drives the same block
-    // standalone with all eight recipes and asserts EXACT per-recipe counts;
-    // it passes. So the combiner is not over-issuing on its own, and whatever
-    // does it lives in how this top presents fragments to it.
-    //
-    // A first pass at this recorded a "signature": every recipe with two or
-    // more bits set had jobs and every single-bit recipe had none, which was
-    // read as the field arriving OR-ed together. **That was coincidence and the
-    // fixed-recipe runs refute it** -- a corrupted field could not produce
-    // exact counts. Recorded because the wrong hypothesis was written down
-    // confidently before the two-minute experiment that killed it, which is the
-    // same order-of-operations mistake as diagnosing before measuring.
-    //
-    // Where to look next: FRAGROB's `out_ctx_r <= ctx_m[head_slot_c]` is a
-    // registered read of an INFERRED MEMORY, so the value present in R_HOLD is
-    // the one addressed a cycle earlier. Whether that always lines up with the
-    // slot being retired is the open question; `out_rgb_r` is read the same way
-    // and is correct, which is why this is not obviously the answer either.
-    //
-    // Accounting, for whoever picks it up: the non-bypass counters imply 33
-    // fragments where 40 are expected, the three bypass recipes legitimately
-    // carry 24 more at zero jobs, so 57 of 64 are accounted for.
-    //
-    // Raising this threshold to 3 to make the suite look greener would bury
-    // all of that.
+    // The check is now the EXACT distribution, not a threshold. While the
+    // carriage bug was live this could only be stated as "more than one recipe
+    // moved", because the real numbers were unexplained -- and a threshold is
+    // exactly what lets a wrong distribution keep passing. `product_jobs()` in
+    // zref_material.hpp is the same table the oracle uses, so this asserts the
+    // hardware against the reference rather than against itself.
+    static const int kJobsPerFrag[8] = {0, 4, 4, 4, 0, 0, 6, 4};
+    int wrong_recipe = -1;
+    for (int r = 0; r < 8; ++r)
+      if (static_cast<int>(d.cnt_combine_jobs_o[r]) != kJobsPerFrag[r] * 8) {
+        wrong_recipe = r;
+        break;
+      }
+    if (wrong_recipe >= 0)
+      std::printf("  recipe %d issued %d jobs, expected %d\n", wrong_recipe,
+                  static_cast<int>(d.cnt_combine_jobs_o[wrong_recipe]),
+                  kJobsPerFrag[wrong_recipe] * 8);
+    check(wrong_recipe < 0,
+          "every recipe issued EXACTLY the jobs its eight fragments call for -- "
+          "the recipe, and every other per-fragment attribute, travels with its "
+          "fragment instead of being read off the input pin twelve clocks late",
+          -1, wrong_recipe);
     check(moved >= 2,
-          "more than one recipe issued product jobs -- the recipe travels with "
-          "its fragment; before the context word was wired, ALL EIGHT counters "
-          "were zero and every fragment took the untextured path",
+          "and more than one recipe issued product jobs at all -- before the "
+          "context word was wired, ALL EIGHT counters were zero and every "
+          "fragment took the untextured path",
           2, moved);
     check(d.cnt_combine_jobs_o[6] > d.cnt_combine_jobs_o[1],
           "and DETAIL_LIGHT issued more than MODULATE, in the ratio 6:4 the "
@@ -336,8 +357,43 @@ int main(int argc, char** argv) {
 
   // Anti-vacuity on the colour itself. A chain that runs but returns black for
   // every fragment has proved the handshakes and nothing else.
-  check(saw_rgb && first_rgb != 0, "the retired fragment carries a NON-ZERO colour", 1,
-        (saw_rgb && first_rgb != 0) ? 1 : 0);
+  // ANTI-VACUITY, counted over EVERY retired fragment rather than the first.
+  // It used to test `first_rgb`, which passed only because the attribute-tap
+  // bug made fragment 12 arrive first. With the fragments in their real order
+  // the first is fragment 0, so the guard silently depended on which fragment
+  // happened to lead -- and fixing a genuine bug broke a check that was never
+  // about the first fragment. The bilinear half is the part that is known
+  // good, so that is what is asserted.
+  std::printf("  non-zero colour by class -- CLUT %d, bilinear %d (of 32 each)\n",
+              g_nz_by_cls[0], g_nz_by_cls[1]);
+  std::printf("  retires carrying a non-zero colour: %d of %d\n", nonzero_rgb, retired);
+  check(g_nz_by_cls[1] == 32,
+        "every BILINEAR fragment carries a NON-ZERO colour", 32, g_nz_by_cls[1]);
+
+  // ======================= OPEN ANOMALY: the CLUT path is BLACK =============
+  // Every one of the 32 CLUT-class fragments retires with rgb == 0, and every
+  // one of the 32 bilinear fragments does not. The split is exactly by class,
+  // not by recipe -- the apparent recipe pattern is an artefact of this test
+  // driving `class = (i % 2)` alongside `recipe = (i % 8)`, so an even index is
+  // always both CLUT and an even recipe.
+  //
+  // It is NOT the palette being unloaded: the upload loop above writes
+  // `0x0841 * (i + 1)`, and 0x0841 is odd, so no index in range wraps to zero.
+  // It is NOT the path going idle: PALETTE_RES performs all 96 lookups the 32
+  // CLUT fragments ask for, which is asserted below so it cannot regress to
+  // silence the way it did before.
+  //
+  // This was MASKED until the per-fragment attribute carriage was fixed. With
+  // the class read off the input pin, fragments were mislabelled, the palette
+  // saw only 61 lookups, and the single-fragment anti-vacuity check happened
+  // to sample a bilinear one. Fixing one bug made the other visible -- which is
+  // an argument for the counters, not against them.
+  //
+  // Not diagnosed here, and deliberately NOT asserted as expected behaviour: a
+  // check that said "the CLUT path is black" would enshrine the defect.
+  check(d.cnt_palette_lookups_o == 96,
+        "the CLUT path performs every lookup its fragments ask for", 96,
+        static_cast<int>(d.cnt_palette_lookups_o));
 
   if (g_failed) {
     std::printf("[island_composed_directed] %d/%d checks FAILED\n", g_failed, g_checks);

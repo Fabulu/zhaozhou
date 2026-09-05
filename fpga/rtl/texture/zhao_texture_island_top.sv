@@ -244,6 +244,67 @@ module zhao_texture_island_top #(
     else if (frag_valid_i && frag_ready_o) tok_r <= tok_r + 8'd1;
   end
 
+  // ==========================================================================
+  // PER-FRAGMENT ATTRIBUTE CARRIAGE
+  // ==========================================================================
+  // EVERY per-fragment attribute below used to be tapped straight off this
+  // module's input pins at the point it was CONSUMED. That is wrong, and it was
+  // wrong for ten separate signals. A fragment spends ~12 clocks in RCP24 and
+  // PERSPUV before FRAGROB accepts it, so by the time the tap was read the
+  // boundary was presenting a DIFFERENT fragment -- and when the boundary
+  // stalled or went idle it presented the same one repeatedly.
+  //
+  // Measured, in `island_composed_directed`: of 64 fragments submitted, the
+  // first one to reach FRAGROB arrived carrying fragment 12's tag, only 25
+  // distinct fragments were ever seen, 39 were lost outright, and the last
+  // fragment's attributes were delivered 24 times because the input pins simply
+  // held their final value. FRAGROB's own slot allocation and ordered retire
+  // were PERFECT throughout -- the head slot walked 0..15 exactly four times.
+  // The reorder buffer was innocent; it was handed the wrong data.
+  //
+  // The token needed to fix it already existed and was already carried end to
+  // end: `tok_r` is stamped on admission, RCP24 returns it as `r_tok_o`, and
+  // PERSPUV carries it through as `tag_o`. Nothing consulted it. So the fix is
+  // to store each fragment's attributes at admission and read them back at the
+  // two points where its token reappears.
+  //
+  // Depth 64 against at most RCP24's 8 contexts plus PERSPUV's 16 tokens in
+  // flight, so a token cannot wrap onto a live entry. The reads are
+  // combinational (MLAB/LUT-RAM, not M10K) because PERSPUV's input handshake is
+  // combinational off RCP24's output, and inserting a cycle here would need a
+  // skid buffer for no gain.
+  localparam int unsigned FCTXN = 64;
+  localparam int unsigned FCTXW = 6;
+
+  logic [63:0]           uvw_m   [FCTXN];   // {u_over_w, v_over_w}
+  logic [CTXW-1:0]       fctx_m  [FCTXN];   // tag + token + material fields
+  logic [31:0]           fbase_m [FCTXN];   // {base_rgb, base_a}
+  logic [BINDW+LODW+2:0] fmisc_m [FCTXN];   // {aux, class, lod, binding}
+
+  wire [FCTXW-1:0] fc_wp = tok_r[FCTXW-1:0];
+
+  // The ctx word written at ADMISSION. The six bits at [21:16] were reserved
+  // and now carry the token itself, so a consumer downstream of FRAGROB -- which
+  // sees only the retiring ctx -- can still index this table.
+  //   [15:0]  tag          [21:16] token
+  //   [23:22] sample_count [26:24] recipe      [34:27] weight
+  //   [63:35] the caller's own context bits
+  logic [CTXW-1:0] fr_f_ctx_in;
+  assign fr_f_ctx_in = {frag_ctx_i[CTXW-1:35], frag_weight_i, frag_recipe_i,
+                        frag_sample_count_i, fc_wp, frag_ctx_i[15:0]};
+
+  always_ff @(posedge clk) begin
+    if (frag_valid_i && frag_ready_o) begin
+      uvw_m[fc_wp]   <= {frag_u_over_w_i, frag_v_over_w_i};
+      fctx_m[fc_wp]  <= fr_f_ctx_in;
+      fbase_m[fc_wp] <= {frag_base_rgb_i, frag_base_a_i};
+      fmisc_m[fc_wp] <= {frag_aux_i, frag_class_i, frag_lod_i, frag_binding_i};
+    end
+  end
+
+  // Read point 1: RCP24's answer, for PERSPUV's numerators.
+  wire [63:0] uvw_rd = uvw_m[rcp_tok[FCTXW-1:0]];
+
   logic        pu_valid, pu_ready;
   logic [31:0] pu_u, pu_v;
   logic [15:0] pu_tag;
@@ -254,7 +315,7 @@ module zhao_texture_island_top #(
   zhao_raster_perspuv_svc #(.NTOK(16), .TAGW(16)) u_persp (
       .clk(clk), .rst_n(rst_n),
       .v_valid_i(rcp_r_valid), .v_ready_o(rcp_r_ready),
-      .u_over_w_i(frag_u_over_w_i), .v_over_w_i(frag_v_over_w_i),
+      .u_over_w_i(uvw_rd[63:32]), .v_over_w_i(uvw_rd[31:0]),
       .r_mant_i(rcp_r), .r_k_i(rcp_k), .depth_zero_i(rcp_dzero),
       .tag_i({8'd0, rcp_tok}),
       .r_valid_o(pu_valid), .r_ready_i(pu_ready),
@@ -262,6 +323,21 @@ module zhao_texture_island_top #(
       .depth_zero_o(pu_dzero),
       .fragments_o(cnt_persp_fragments_o), .products_o(pu_products),
       .occupancy_o(pu_occ));
+
+  // Read point 2: PERSPUV's answer, for everything that consumes a fragment
+  // once its texture coordinates exist.
+  wire [FCTXW-1:0]      fc_rp    = pu_tag[FCTXW-1:0];
+  wire [CTXW-1:0]       fctx_rd  = fctx_m[fc_rp];
+  wire [31:0]           fbase_rd = fbase_m[fc_rp];
+  wire [BINDW+LODW+2:0] fmisc_rd = fmisc_m[fc_rp];
+
+  wire [BINDW-1:0] f_binding_c = fmisc_rd[BINDW-1:0];
+  wire [LODW-1:0]  f_lod_c     = fmisc_rd[BINDW+LODW-1:BINDW];
+  wire [1:0]       f_class_c   = fmisc_rd[BINDW+LODW+1:BINDW+LODW];
+  wire             f_aux_c     = fmisc_rd[BINDW+LODW+2];
+  wire [1:0]       f_scount_c  = fctx_rd[23:22];
+  wire [2:0]       f_recipe_c  = fctx_rd[26:24];
+  wire [7:0]       f_weight_c  = fctx_rd[34:27];
 
   // ==========================================================================
   // MOSAIC, on the pre-TMU u/v path
@@ -281,8 +357,8 @@ module zhao_texture_island_top #(
       .clk(clk), .rst_n(rst_n),
       .req_valid_i(pu_valid && pu_ready), .req_ready_o(mos_req_ready),
       .req_u_i(pu_u), .req_v_i(pu_v),
-      .req_mat_a_i(frag_base_rgb_i[23:16]), .req_mat_b_i(frag_base_rgb_i[15:8]),
-      .req_weight_i(frag_weight_i), .req_mosaic_i(1'b1),
+      .req_mat_a_i(fbase_rd[31:24]), .req_mat_b_i(fbase_rd[23:16]),
+      .req_weight_i(f_weight_c), .req_mosaic_i(1'b1),
       .req_src_id_i(pu_tag),
       .pick_valid_o(mos_pick_valid), .pick_ready_i(1'b1),
       .pick_tile_o(mos_tile), .pick_tx_o(mos_tx), .pick_ty_o(mos_ty),
@@ -318,6 +394,8 @@ module zhao_texture_island_top #(
   logic [GENW-1:0] fr_aux_rgen;
 
   logic        fr_o_valid, fr_o_ready;
+  logic [$clog2(DEPTH)-1:0] fr_alloc_slot;
+  logic        fr_alloc_valid;
   logic [CTXW-1:0] fr_o_ctx;
   logic [23:0] fr_o_rgb, fr_o_aux_rgb;
   logic [7:0]  fr_o_a, fr_o_aux_a;
@@ -361,12 +439,11 @@ module zhao_texture_island_top #(
   //
   // CTXW is 64 and the low 16 bits are the tag, so the material fields ride
   // above it.
+  // The ctx that reaches FRAGROB is the one STORED for this fragment at
+  // admission and recovered by its token -- see the carriage block above, where
+  // the bit layout is documented.
   logic [CTXW-1:0] fr_f_ctx;
-  //   [15:0]  tag          [21:16] reserved
-  //   [23:22] sample_count [26:24] recipe      [34:27] weight
-  //   [63:35] the caller's own context bits
-  assign fr_f_ctx = {frag_ctx_i[CTXW-1:35], frag_weight_i, frag_recipe_i,
-                     frag_sample_count_i, 6'd0, frag_ctx_i[15:0]};
+  assign fr_f_ctx = fctx_rd;
 
   logic signed [31:0] fr_f_u [3];
   logic signed [31:0] fr_f_v [3];
@@ -376,8 +453,8 @@ module zhao_texture_island_top #(
     for (int s = 0; s < 3; s++) begin
       fr_f_u[s]       = pu_u;
       fr_f_v[s]       = pu_v;
-      fr_f_binding[s] = frag_binding_i + BINDW'(s);
-      fr_f_lod[s]     = frag_lod_i;
+      fr_f_binding[s] = f_binding_c + BINDW'(s);
+      fr_f_lod[s]     = f_lod_c;
     end
   end
 
@@ -386,11 +463,12 @@ module zhao_texture_island_top #(
   ) u_fragrob (
       .clk(clk), .rst_n(rst_n),
       .f_valid_i(pu_valid), .f_ready_o(fr_f_ready),
-      .f_sample_count_i(frag_sample_count_i),
+      .alloc_slot_o(fr_alloc_slot), .alloc_valid_o(fr_alloc_valid),
+      .f_sample_count_i(f_scount_c),
       .f_u_i(fr_f_u), .f_v_i(fr_f_v),
       .f_binding_i(fr_f_binding), .f_lod_i(fr_f_lod),
-      .f_recipe_i(frag_recipe_i), .f_ctx_i(fr_f_ctx),
-      .f_aux_i(frag_aux_i), .f_uv_sat_i(pu_sat),
+      .f_recipe_i(f_recipe_c), .f_ctx_i(fr_f_ctx),
+      .f_aux_i(f_aux_c), .f_uv_sat_i(pu_sat),
       .tmu_valid_o(fr_tmu_valid), .tmu_ready_i(fr_tmu_ready),
       .tmu_u_o(fr_tmu_u), .tmu_v_o(fr_tmu_v),
       .tmu_binding_o(fr_tmu_binding), .tmu_lod_o(fr_tmu_lod),
@@ -421,8 +499,17 @@ module zhao_texture_island_top #(
   // request's identity so a sample can be returned to the right FRAGROB slot;
   // its top two bits carry the class RSP_DISPATCH routes on, because
   // CACHE_PIPE has no class lane of its own.
+  // THE CLASS IS KEYED BY SLOT, not read off the input pin. A TMU request
+  // carries `fr_tmu_slot` and nothing else that identifies its fragment, and
+  // requests are issued long after admission, so the pin holds a later
+  // fragment's class. Written when FRAGROB reports where the fragment landed.
+  logic [1:0] class_m [DEPTH];
+  always_ff @(posedge clk) begin
+    if (fr_alloc_valid) class_m[fr_alloc_slot] <= f_class_c;
+  end
+
   logic [SRCW-1:0] plan_src_id;
-  assign plan_src_id = {frag_class_i,
+  assign plan_src_id = {class_m[fr_tmu_slot],
                         {(SRCW-2-$clog2(DEPTH)-2-GENW){1'b0}},
                         fr_tmu_slot, fr_tmu_sidx, fr_tmu_gen};
 
@@ -680,7 +767,8 @@ module zhao_texture_island_top #(
       // fragments that do not.
       .f_s2_rgb_i(fr_o_has_aux ? fr_o_aux_rgb : fr_o_s_rgb[2]),
       .f_s2_a_i  (fr_o_has_aux ? fr_o_aux_a   : fr_o_s_a[2]),
-      .f_base_rgb_i(frag_base_rgb_i), .f_base_a_i(frag_base_a_i),
+      .f_base_rgb_i(fbase_m[fr_o_ctx[21:16]][31:8]),
+      .f_base_a_i(fbase_m[fr_o_ctx[21:16]][7:0]),
       .f_tag_i(fr_o_ctx[15:0]),
       .o_valid_o(out_valid_o), .o_ready_i(out_ready_i),
       .o_rgb_o(out_rgb_o), .o_a_o(out_a_o), .o_tag_o(out_tag_o),

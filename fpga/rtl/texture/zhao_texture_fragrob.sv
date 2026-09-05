@@ -115,6 +115,14 @@ module zhao_texture_fragrob #(
     // ---- retired fragment out ---------------------------------------------
     output var logic                   o_valid_o,
     input  var logic                   o_ready_i,
+    // WHICH SLOT AN ACCEPTED FRAGMENT LANDED IN, valid with `alloc_valid_o`.
+    // The island keys per-fragment ROUTING state (the sample class) by slot,
+    // because a TMU request identifies its fragment by slot and nothing else
+    // travels with it. Without this port the island had to read the class from
+    // its own input pin at request time -- which is a DIFFERENT fragment, and
+    // is the defect this port exists to make fixable.
+    output var logic [SW-1:0]          alloc_slot_o,
+    output var logic                   alloc_valid_o,
     output var logic [CTXW-1:0]        o_ctx_o,
     output var logic [23:0]            o_rgb_o,
     output var logic [7:0]             o_a_o,
@@ -318,6 +326,8 @@ module zhao_texture_fragrob #(
 
   logic accept_c;
   assign f_ready_o = !init_q && !free_empty_c;
+  assign alloc_slot_o  = alloc_slot_c;
+  assign alloc_valid_o = accept_c;
   assign accept_c  = f_valid_i && f_ready_o;
   assign alloc_ev_c = accept_c;
 
