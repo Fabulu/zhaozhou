@@ -3300,6 +3300,34 @@ This is not a difference of opinion: the ABI is written down and the island
 disagrees with it. It compounds with defect 2 — the wrong byte is selected, and
 then the colour that byte names is expanded wrongly.
 
+### A LATENT instance of the carriage defect, in the binding
+
+Found by turning the same lens on the island's non-`frag_` inputs rather than
+assuming the repair had covered everything.
+
+`bind_base_i` and `bind_mode_i` are consumed at the TMU planner
+instantiation — downstream of admission by the entire RCP24 and PERSPUV
+latency, which is exactly where the ten repaired taps were reading from.
+
+**It is not a bug today.** The island carries ONE global binding, so the value
+is constant across every fragment in flight and a late read returns the same
+thing. That is the same reason the shell may legitimately read `fb_base_i` at
+pixel-write time: frame-scoped configuration, not transaction-scoped data. The
+distinction the ingress gate has to make is scope, not timing.
+
+**It becomes a bug the moment bindings vary per fragment** — and the owner's
+two-level mip blend is the change that does it. That design needs a per-fragment
+palette slot and generation, which is why `frag_pal_slot_i` and
+`frag_pal_gen_i` were added to the ingress packet and are captured at
+admission. A per-fragment `bind_base` has to go the same way, and if it is
+added as a plain input consumed where `bind_base_i` is consumed now, it will
+reproduce the exact defect that lost 39 of 64 fragments.
+
+The gate does not currently watch these, because its island contract is scoped
+to the `frag_` prefix and these are genuinely frame-scoped at this commit.
+Recorded here rather than papered over with an exemption that would claim more
+than it checks.
+
 ### Not fixed here, deliberately
 
 The architecture gates both as WP-M1 behind a reviewed before/after delta,

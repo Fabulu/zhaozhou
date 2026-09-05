@@ -98,6 +98,48 @@ CONTRACTS = [
         # was confirmed by mutation before this was added.
         "aliases": ["fr_f_ctx_in"],
     },
+    {
+        # THE BIGGEST COMPOSITION IN THE TREE -- 21 instantiated blocks.
+        #
+        # CHECKED AND CLEAN when this contract was added: every `render_*` input
+        # is consumed inside the single `zhao_geom_bin_pipe u_render_bin`
+        # instantiation, at its own `tri_valid_i` / `tri_ready_o` handshake.
+        # One consumer, at the admission point, which is what the island got
+        # wrong in ten places.
+        #
+        # It is guarded rather than merely noted because the island's defect was
+        # a CLASS, not an instance: the next per-triangle field added here could
+        # be read from a consumer further down the geometry chain, where the
+        # latency is variable, and nothing would say so.
+        "path": "fpga/rtl/common/zhao_shell_top.sv",
+        "prefix": "render_",
+        "allow_regions": [
+            # the one instantiation that admits the triangle
+            (r"zhao_geom_bin_pipe u_render_bin \(", ");"),
+        ],
+        "allow_lines": [
+            r"^\s*(input|output)\s",
+            # FRAME-SCOPED CONFIGURATION, NOT PER-TRANSACTION DATA. These are
+            # constant for the whole frame, so a consumer reading them late
+            # reads the same value -- which is the entire property the rest of
+            # this gate is about. `zhao_raster_fbwrite` legitimately takes the
+            # framebuffer base and stride at pixel-write time, long after any
+            # triangle was admitted.
+            #
+            # The first version of this contract had no such exemption and
+            # flagged them, which would have read as "the shell has the island's
+            # bug in two places". It does not. The distinction the gate has to
+            # make is transaction-scoped versus frame-scoped, not early versus
+            # late -- and getting that wrong makes it a noise generator that
+            # trains its reader to skip the output.
+            r"render_fb_base_i",
+            r"render_fb_stride_i",
+            r"render_frame_end_i",
+            r"render_frame_begin_i",
+            r"render_grid_w_i",
+            r"render_grid_h_i",
+        ],
+    },
 ]
 
 PORT = re.compile(
