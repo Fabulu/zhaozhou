@@ -71,6 +71,40 @@ Both were correct. The session had drifted onto the software lane and G1-C while
 no fit was running. Corrected immediately: a fit was launched, and every piece of
 work since has been chosen to sit outside the running fit's closure.
 
+## The fast gate was not slow, it was expensive -- and I misread it three times
+
+Three fast-gate runs were started and abandoned in this session. I attributed
+each to machine contention from the running fit, and each time relaunched it.
+That was wrong, and the tell was there from the first run: the output showed the
+SAME three tests started and none finished, run after run.
+
+Measured instead of assumed: `test_shell_meshfetch_path_directed` alone takes
+**446 seconds** and passes its 9 checks. There are five such
+`shell_*_path_directed` tests, all labelled `fast`.
+
+Instrumenting the drain loop showed the fixed `200000` step budget after
+`render_frame_end()` never terminates early -- **no blit ever completes**, so
+that loop is waiting for nothing and simply burns its full count, three times
+per run. But cutting it to 5,000 broke the test (1,728 drawn words against
+1,792) and saved only 57 s of 392 s, which says the drain is NOT where the cost
+is: the run is roughly four million shell evaluations and most of them are in
+the draw loops.
+
+So this is not a hang and not a bug to fix by trimming a constant. These are
+genuinely heavy full-shell tests wearing a `fast` label, and the pre-existing
+`shell_draw_directed` uses the same 200,000 idiom, so it is not something the
+D22 staircase tests introduced.
+
+NOT CHANGED UNILATERALLY. Moving five tests out of `fast` cuts what runs on
+every commit, and `local gates must match CI` is a standing rule -- that is a
+coverage-versus-cost call for the owner, not a quiet relabel by the agent who
+found the gate inconvenient. Recorded here with the measurement so the decision
+can be made on numbers.
+
+The immediate consequence is that a green `fast` gate costs roughly half an
+hour of wall clock in the shell tests alone, which is why every attempt this
+session was cut short by something else needing the machine.
+
 ## In flight
 
 | what | state |
@@ -779,10 +813,19 @@ Every new gate was mutation-tested, and one FAILED its own test first:
 
 ## In flight
 
-perspuv's fit, still in fitter placement (placement prep alone took 01:18:15).
-Full `fast` gate re-running against the corrected tree -- the two earlier
-attempts were started before these edits and were judging a tree that no longer
-existed, which is the stale-binary trap wearing a scheduling costume.
+perspuv's fit LANDED: 82.00 -> 96.62 MHz, 2,204 -> 1,910 ALMs, and the
+boundary problem is gone -- 51 port-start paths with POSITIVE worst slack where
+there were 1,313 at -2.195. It did NOT do what was predicted: registers moved
+3,293 -> 3,157, four per cent. The new limit is `tail_q`, `free_cnt_q` and
+`fragments_o` -- queue bookkeeping and a counter, the second block this week
+whose critical path was its bookkeeping rather than its multipliers. Still
+1,910/900 ALMs and 96.62/125 MHz against its budget, and the row says so.
+
+COMBINE.V1 refit now running -- owner priority 5, the sanctioned next fit, and
+deliberately not a full island refit.
+
+`fast` gate running with the five heavy shell path tests excluded, to get an
+actual verdict on everything else rather than a fourth abandoned run.
 
 ## Next, in the owner's order
 
