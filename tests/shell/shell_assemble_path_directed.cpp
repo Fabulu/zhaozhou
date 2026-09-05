@@ -226,8 +226,15 @@ Pass draw_once(int mode, const uint8_t idx[3]) {
   // one meshlet, one triangle, one triplet
   h.top.asm_vertex_count_i = 4;
   h.top.asm_triangle_count_i = 1;
-  h.top.asm_index_stream_i = ((uint32_t)idx[0]) | ((uint32_t)idx[1] << 8) |
-                             ((uint32_t)idx[2] << 16);
+  // 96 bits wide (4 triplets x 24), so Verilator exposes it as VlWide<3> and
+  // it must be written a word at a time. Only triplet 0 is used; the rest are
+  // zeroed rather than left indeterminate, because an ASSEMBLE that walked
+  // past its triangle_count would then read a defined zero and the overrun
+  // would be visible instead of random.
+  h.top.asm_index_stream_i[0] = ((uint32_t)idx[0]) | ((uint32_t)idx[1] << 8) |
+                                ((uint32_t)idx[2] << 16);
+  h.top.asm_index_stream_i[1] = 0;
+  h.top.asm_index_stream_i[2] = 0;
 
   h.top.setup_mode_i = 1;
   h.top.clip_mode_i = 0;

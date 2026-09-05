@@ -306,3 +306,27 @@ comparison can fail by feeding a permuted index triplet.
 fixed 4,000-character window; the D22 staircase pushed that block to 4,242
 characters, so the last four modules fell outside it and the gate reported them
 missing from a file that contained them. Window replaced with "to end of file".
+
+## D22 step 5 lands — GEOM.ASSEMBLE, 8 checks
+
+```
+assemble named vertices (2, 0, 3); triangles = 1
+sensitivity: a different index triplet changes 1279 words
+```
+
+Five of six staircase steps now have composed evidence: SETUP 5, DEPTHQUANT 7,
+CLIP 10, PROJECT 9, ASSEMBLE 8.
+
+**The one failure was a bench artefact the COUNTER caught and the picture could
+not.** `render_tri_valid_i` is a level held for the whole offer window, so
+driving ASSEMBLE's `m_valid_i` from it re-submitted the same meshlet every cycle
+it was accepted: `triangles = 15` for a one-triangle meshlet. Every re-run
+produced the identical triangle, so the framebuffer comparison was perfectly
+happy. Only the per-meshlet counter disagreed.
+
+That is the same shape as COMBINE.V1's double-issue earlier today — correct
+results produced by a machine doing many times the work, visible only in a
+count. Worth noticing twice in one day.
+
+**Also fixed:** `source_list_parity`'s fixed 4,000-character read window, which
+the staircase outgrew at 4,242 characters. Parity now green at 51 modules.

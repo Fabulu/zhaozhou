@@ -510,7 +510,14 @@ module tb_zhao_shell (
       .MAX_VERTICES(64), .MAX_TRIANGLES(126), .VIDW(16), .SRCW(16)
   ) u_assemble (
       .clk(gpu_clk), .rst_n(rst_n),
-      .m_valid_i(render_tri_valid_i & assemble_mode_i), .m_ready_o(asm_m_ready),
+      // ONE MESHLET PER OFFER. `render_tri_valid_i` is a level that the bench
+      // holds for the whole offer window, so driving m_valid_i from it
+      // directly re-submits the same meshlet every cycle it is accepted --
+      // measured as `triangles = 15` for a one-triangle meshlet. The counter
+      // caught it; the framebuffer could not, because every re-run produced
+      // the identical triangle.
+      .m_valid_i(render_tri_valid_i & assemble_mode_i & ~asm_sent_r),
+      .m_ready_o(asm_m_ready),
       .m_vertex_offset_i(16'd0),
       .m_vertex_count_i(asm_vertex_count_i),
       .m_triangle_count_i(asm_triangle_count_i),
@@ -532,17 +539,24 @@ module tb_zhao_shell (
   // collector, which is the class of fault that looks like a projection bug.
   logic [15:0] asm_v_r [3];
   logic        asm_have_r;
+  logic        asm_sent_r;   // the meshlet has been handed over once
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       asm_v_r[0] <= 16'd0; asm_v_r[1] <= 16'd0; asm_v_r[2] <= 16'd0;
       asm_have_r <= 1'b0;
+      asm_sent_r <= 1'b0;
     end else if (!render_tri_valid_i) begin
       asm_have_r <= 1'b0;
-    end else if (asm_t_valid && !asm_have_r) begin
-      asm_v_r[0] <= asm_v0;
-      asm_v_r[1] <= asm_v1;
-      asm_v_r[2] <= asm_v2;
-      asm_have_r <= 1'b1;
+      asm_sent_r <= 1'b0;
+    end else begin
+      if (render_tri_valid_i && assemble_mode_i && asm_m_ready && !asm_sent_r)
+        asm_sent_r <= 1'b1;
+      if (asm_t_valid && !asm_have_r) begin
+        asm_v_r[0] <= asm_v0;
+        asm_v_r[1] <= asm_v1;
+        asm_v_r[2] <= asm_v2;
+        asm_have_r <= 1'b1;
+      end
     end
   end
 
