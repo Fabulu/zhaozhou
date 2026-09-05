@@ -899,6 +899,24 @@ verilate(test_texture_combine_diff
 add_test(NAME texture_combine_diff COMMAND test_texture_combine_diff)
 set_tests_properties(texture_combine_diff PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# MATERIAL.COMBINE.V1 -- the two-lane scheduled combiner that replaces the
+# block above. The II=1 form fit at 8 DSP against the architecture's rule of 2
+# (docket D19q), so this one is variant A `LOGIC2`: two multipliers attributed
+# to ALM logic, tokenized microjobs, queued continuations. The differential
+# matches results BY TAG rather than by arrival, because §15.6 has the combiner
+# retire out of allocation order -- a position-keyed test would pass only while
+# the scheduler failed to do its job.
+add_executable(test_material_combine_v1_diff texture/material_combine_v1_diff.cpp)
+target_link_libraries(test_material_combine_v1_diff PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_material_combine_v1_diff PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture)
+verilate(test_material_combine_v1_diff
+  PREFIX Vzhao_texture_material_combine_v1
+  TOP_MODULE zhao_texture_material_combine_v1
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v1.sv)
+add_test(NAME material_combine_v1_diff COMMAND test_material_combine_v1_diff)
+set_tests_properties(material_combine_v1_diff PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_executable(test_texture_mosaic_directed texture/texture_mosaic_directed.cpp)
 target_link_libraries(test_texture_mosaic_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_texture_mosaic_directed PRIVATE

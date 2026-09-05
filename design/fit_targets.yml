@@ -174,6 +174,19 @@ targets:
       max_registers: 500
       max_dsp: 2
 
+  # MATERIAL.COMBINE.V1 -- the two-lane scheduled replacement. Same three rules
+  # as the block above, UNCHANGED, because they are the architecture's (S3.3 /
+  # S3.4) and the II=1 form was refuted against them (docket D19q). If this one
+  # also breaches DSP, the LOGIC2 attribute is not doing what S15.5 variant A
+  # says it does and that is the finding.
+  - top: zhao_texture_material_combine_v1
+    sources:
+      - fpga/rtl/texture/zhao_texture_material_combine_v1.sv
+    rules:
+      max_alms: 800        # S15.5 variant A's own bound: "<= 800 ALMs"
+      max_registers: 500   # S3.3
+      max_dsp: 2           # S3.4 tripwire, unchanged
+
   - top: zhao_texture_mosaic
     sources:
       - fpga/rtl/texture/zhao_texture_mod255.sv
@@ -363,6 +376,43 @@ targets:
 # the fit that answers reports/WeNeedSomeMeasurements.md: what does the planned
 # console cost when counted ONCE? It is NOT a functional design -- blocks are
 # not wired to each other -- so no timing number from it means anything.
+  # ==========================================================================
+  # THE COMPOSED TEXTURE ISLAND (G1-D). The number this whole gate is about.
+  # ==========================================================================
+  # Every island figure quoted so far is a SUM OF STANDALONE PER-BLOCK FITS,
+  # and that sum is not the island's size: each standalone row carries virtual
+  # pins and their registers, and nothing is shared across a block boundary.
+  # The tell is already in the census -- totalled by row it comes to 342 DSP
+  # against the device's 112, which cannot be true.
+  #
+  # This top wires the eleven approved components TO EACH OTHER. It is not
+  # zhao_prod_top, which drives every block from a separate LFSR and whose own
+  # header says its number has no functional meaning.
+  #
+  # NO RULES YET, DELIBERATELY. There has never been a composed measurement, so
+  # any threshold here would be a guess dressed as a gate -- and a rule written
+  # beside the first fit it governs is the exact failure CLAUDE.md records. The
+  # architecture's nominal is 6,600 ALM and the redline 7,500; the sum of
+  # standalone rows is 7,913. Which side the composed number lands on is the
+  # question, and it gets answered before it gets gated.
+  - top: zhao_texture_island_top
+    sources:
+      - fpga/rtl/texture/zhao_texture_island_top.sv
+      - fpga/rtl/texture/zhao_texture_fragrob.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+      - fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+      - fpga/rtl/texture/zhao_texture_tmu_plan.sv
+      - fpga/rtl/texture/zhao_texture_cache_pipe.sv
+      - fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
+      - fpga/rtl/texture/zhao_texture_palette_res.sv
+      - fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+      - fpga/rtl/texture/zhao_texture_mosaic.sv
+      - fpga/rtl/texture/zhao_texture_aux_pipe.sv
+      - fpga/rtl/texture/zhao_texture_material_combine_v1.sv
+      - fpga/rtl/texture/zhao_texture_aux_div6.sv
+      - fpga/rtl/texture/zhao_texture_mod255.sv
+      - fpga/rtl/field/zhao_field_rcp24_rom.sv
+
   - top: zhao_prod_top
     sources:
       - fpga/rtl/prod/zhao_prod_top.sv

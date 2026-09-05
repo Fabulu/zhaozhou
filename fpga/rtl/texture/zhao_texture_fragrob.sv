@@ -118,6 +118,20 @@ module zhao_texture_fragrob #(
     output var logic [CTXW-1:0]        o_ctx_o,
     output var logic [23:0]            o_rgb_o,
     output var logic [7:0]             o_a_o,
+    // ---- the three banked sample results, exposed ------------------------
+    // islandrearchitecture5.md line 884: "Sample results must also be banked
+    // by sample index so the material combiner can" read them together. They
+    // ALREADY WERE banked here -- `res_rgb_m [3][DEPTH]` -- and the retire
+    // read took `res_rgb_m[0]` and nothing else, so a three-sample fragment
+    // left this block as sample 0. That is the exact behaviour
+    // MATERIAL.RESOLVE.md complains about in the surviving TEXJOIN, living one
+    // block upstream of where anyone was looking for it.
+    //
+    // `o_rgb_o`/`o_a_o` are RETAINED and unchanged: they are sample 0, every
+    // existing consumer keeps working, and nothing downstream has to move
+    // before the combiner is wired.
+    output var logic [23:0]            o_s_rgb_o [3],
+    output var logic [7:0]             o_s_a_o   [3],
     output var logic [23:0]            o_aux_rgb_o,
     output var logic [7:0]             o_aux_a_o,
     output var logic                   o_has_aux_o,
@@ -409,6 +423,8 @@ module zhao_texture_fragrob #(
 
   logic [23:0]     out_rgb_r, out_aux_rgb_r;
   logic [7:0]      out_a_r, out_aux_a_r;
+  logic [23:0]     out_s_rgb_r [3];
+  logic [7:0]      out_s_a_r   [3];
   logic [CTXW-1:0] out_ctx_r;
   logic            out_hasaux_r, out_sat_r;
   logic [SW-1:0]   r_slot_q;
@@ -418,6 +434,8 @@ module zhao_texture_fragrob #(
   assign o_ctx_o     = out_ctx_r;
   assign o_rgb_o     = out_rgb_r;
   assign o_a_o       = out_a_r;
+  assign o_s_rgb_o   = out_s_rgb_r;
+  assign o_s_a_o     = out_s_a_r;
   assign o_aux_rgb_o = out_aux_rgb_r;
   assign o_aux_a_o   = out_aux_a_r;
   assign o_has_aux_o = out_hasaux_r;
@@ -471,6 +489,10 @@ module zhao_texture_fragrob #(
     // ---- the retire read, and the AUX context read ------------------------
     out_rgb_r     <= res_rgb_m[0][head_slot_c];
     out_a_r       <= res_a_m[0][head_slot_c];
+    for (int s = 0; s < 3; s++) begin
+      out_s_rgb_r[s] <= res_rgb_m[s][head_slot_c];
+      out_s_a_r[s]   <= res_a_m[s][head_slot_c];
+    end
     out_aux_rgb_r <= auxrgb_m[head_slot_c];
     out_aux_a_r   <= auxa_m[head_slot_c];
     out_ctx_r     <= ctx_m[head_slot_c];

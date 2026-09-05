@@ -1,0 +1,593 @@
+// zhao_texture_island_top.sv — the COMPOSED texture island.
+// Authored 2026-09-05 (roadmap G1-D).
+//
+// ===========================================================================
+// WHY THIS FILE EXISTS
+// ===========================================================================
+// Every island number quoted so far is a SUM OF STANDALONE PER-BLOCK FITS, and
+// that sum is not the island's size. Two things make it wrong, and they pull in
+// opposite directions, so the error does not even have a known sign:
+//
+//   * every standalone fit wraps its block in VIRTUAL PINS and the registers
+//     that feed them, so each row carries I/O cost that vanishes once the block
+//     is wired to a neighbour instead of to a pad;
+//   * nothing is shared across block boundaries -- no common control, no merged
+//     constants, no retiming across the seam.
+//
+// The tell that the sum is meaningless is already in the census: totalled by
+// row it comes to **342 DSP blocks against the device's 112**, which is
+// impossible. The rows include mutually exclusive variants (`@lanes2`,
+// `@lanes1-io`, `@pre-rearch`, `svcseed2/3`) and no cross-block packing. A
+// number that cannot be true is a good place to stop adding.
+//
+// `zhao_prod_top` does not answer this either, and its own header says so: it
+// drives every block from a SEPARATE LFSR, which measures eleven blocks that
+// happen to share a die rather than an island that works. The roadmap is blunt
+// about the distinction -- it calls that file "a resource-counting harness, not
+// the console".
+//
+// So this top WIRES THE BLOCKS TO EACH OTHER. Every internal signal below is a
+// real connection between two island components. The only tie-offs are at the
+// island's true external boundary: the fragment stream in from the rasteriser,
+// the memory fill interface, the palette upload port, and the fragment stream
+// out.
+//
+// ===========================================================================
+// THE DATAFLOW, WHICH IS THE POINT
+// ===========================================================================
+//
+//   depth ---> RCP24 ---> PERSPUV ---> FRAGROB ---> COMBINE.V1 ---> out
+//                                        |  ^
+//                              tmu req   |  | sample responses
+//                                        v  |
+//                        TMU_PLAN -> CACHE_PIPE -> RSP_DISPATCH
+//                                                    |      |
+//                                              bilinear   palette
+//                                              BILERP     PALETTE_RES
+//                                        |  ^
+//                              aux req   |  | aux responses
+//                                        v  |
+//                                     AUX_PIPE
+//
+//   MOSAIC sits on the pre-TMU u/v path.
+//
+// ===========================================================================
+// THE THREE PLACES THE BLOCKS DO NOT YET MEET
+// ===========================================================================
+// These are REAL INTEGRATION FINDINGS and they are named rather than papered
+// over. Each is marked `GLUE:` at its site. Glue here means a few gates that a
+// block should eventually own, written in the top so the composition is
+// honest about where the seam is -- NOT an LFSR standing in for a neighbour,
+// which is the harness pattern this file exists to replace.
+//
+//   1. SAMPLE BANKING -- FOUND AND FIXED PROPERLY, recorded because the wrong
+//      fix would have measured fine. FRAGROB appeared to expose one colour, so
+//      the first draft held two past retirements in a shift register here and
+//      called that a sample bank. It banks all three internally already
+//      (`res_rgb_m [3][DEPTH]`); its retire read took `res_rgb_m[0]` and
+//      dropped the rest -- the same "returns sample 0 for every recipe" fault
+//      MATERIAL.RESOLVE.md attributes to the surviving TEXJOIN, sitting one
+//      block upstream of where anyone was looking. FRAGROB now has
+//      `o_s_rgb_o[3]`/`o_s_a_o[3]` and this top wires them straight through.
+//      The shift-register version would have fitted, reported numbers, and
+//      blended each fragment with its two predecessors.
+//
+//   2. TEXEL-TO-CHANNEL. RSP_DISPATCH hands the bilinear class 64 bits -- four
+//      RGB565 texels. BILERP_LANE consumes four EIGHT-BIT channel values plus
+//      the two fractions. Nothing between them extracts a channel, and nothing
+//      sequences the three channels through the one serial lane. The
+//      extraction below does one channel; the three-channel sequencing is NOT
+//      built and the lane will under-report work until it is.
+//
+//   3. RESPONSE CLASS. RSP_DISPATCH needs `rsp_class_i` to route, and
+//      CACHE_PIPE does not carry a class alongside its sample data -- only
+//      `smp_src_id_o`. The class is therefore carried in the TOP TWO BITS of
+//      the source id, which works only because TMU_PLAN's `SRCW` is 16 and the
+//      island's live source ids are far below 2^14. That is a real constraint
+//      on the id space and it is nowhere written down but here.
+
+module zhao_texture_island_top #(
+    parameter int unsigned DEPTH   = 16,   // FRAGROB reorder depth
+    parameter int unsigned CTXW    = 64,
+    parameter int unsigned BINDW   = 8,
+    parameter int unsigned LODW    = 4,
+    parameter int unsigned GENW    = 8,
+    parameter int unsigned LANES   = 4,    // CACHE_PIPE lanes
+    parameter int unsigned SRCW    = 16,
+    parameter int unsigned DATAW   = 64,   // RSP_DISPATCH payload = LANES*16
+    parameter int unsigned TOKW    = 16,
+    parameter int unsigned PAL_SLOTS   = 4,
+    parameter int unsigned PAL_ENTRIES = 256
+) (
+    input  var logic        clk,
+    input  var logic        rst_n,
+
+    // ======================= island boundary: fragments in ==================
+    input  var logic        frag_valid_i,
+    output var logic        frag_ready_o,
+    input  var logic [23:0] frag_depth_i,       // w, for the reciprocal
+    input  var logic [31:0] frag_u_over_w_i,
+    input  var logic [31:0] frag_v_over_w_i,
+    input  var logic [1:0]  frag_sample_count_i,
+    input  var logic [BINDW-1:0] frag_binding_i,
+    input  var logic [LODW-1:0]  frag_lod_i,
+    input  var logic [2:0]  frag_recipe_i,
+    input  var logic [7:0]  frag_weight_i,
+    input  var logic [CTXW-1:0] frag_ctx_i,
+    input  var logic        frag_aux_i,
+    input  var logic [23:0] frag_base_rgb_i,
+    input  var logic [7:0]  frag_base_a_i,
+
+    // ======================= island boundary: binding table =================
+    input  var logic [31:0] bind_base_i,
+    input  var logic [31:0] bind_mode_i,
+
+    // ======================= island boundary: memory fill ===================
+    output var logic        fill_valid_o,
+    input  var logic        fill_ready_i,
+    output var logic [31:0] fill_addr_o,
+    input  var logic        fill_data_valid_i,
+    input  var logic [15:0] fill_data_i,
+
+    // ======================= island boundary: palette upload ================
+    input  var logic        pal_ld_valid_i,
+    input  var logic [1:0]  pal_ld_op_i,
+    input  var logic [$clog2(PAL_SLOTS)-1:0]   pal_ld_slot_i,
+    input  var logic [GENW-1:0]                pal_ld_gen_i,
+    input  var logic [$clog2(PAL_ENTRIES)-1:0] pal_ld_idx_i,
+    input  var logic [15:0] pal_ld_rgb565_i,
+    input  var logic        pal_ld_crc_ok_i,
+
+    // ======================= island boundary: aux sheet =====================
+    input  var logic        sheet_rvalid_i,
+    input  var logic [7:0]  sheet_tag_i,
+    input  var logic [7:0]  sheet_str_i,
+    input  var logic [7:0]  sheet_rtok_i,
+    output var logic        sheet_valid_o,
+    input  var logic        sheet_ready_i,
+    output var logic [5:0]  sheet_u_o,
+    output var logic [5:0]  sheet_v_o,
+
+    // ======================= island boundary: fragments out =================
+    output var logic        out_valid_o,
+    input  var logic        out_ready_i,
+    output var logic [23:0] out_rgb_o,
+    output var logic [7:0]  out_a_o,
+    output var logic [15:0] out_tag_o,
+    output var logic        out_refused_o,
+
+    // ======================= one summary counter per block ==================
+    // Deliberately NOT every counter every block owns. Each output is a pin,
+    // and 60 counter pins would add I/O registers that inflate the very number
+    // this file exists to measure honestly. One per block keeps each block's
+    // counter logic alive -- so it is not optimised away and the measurement
+    // stays truthful -- without paying for the whole census.
+    output var logic [31:0] cnt_fragments_o,
+    output var logic [31:0] cnt_cache_hits_o,
+    output var logic [31:0] cnt_cache_misses_o,
+    output var logic [31:0] cnt_palette_lookups_o,
+    output var logic [31:0] cnt_bilerp_jobs_o,
+    output var logic [31:0] cnt_mosaic_samples_o,
+    output var logic [31:0] cnt_aux_accepted_o,
+    output var logic [31:0] cnt_combine_refused_o,
+    output var logic [31:0] cnt_rcp_completed_o,
+    output var logic [31:0] cnt_persp_fragments_o,
+    output var logic [31:0] cnt_dispatch_accepted_o,
+    output var logic [31:0] cnt_plan_accepted_o
+);
+
+  // ==========================================================================
+  // RCP24 -> PERSPUV
+  // ==========================================================================
+  logic        rcp_r_valid, rcp_r_ready;
+  logic [23:0] rcp_r;
+  logic [5:0]  rcp_k;
+  logic        rcp_dzero;
+  logic [7:0]  rcp_tok;
+  logic        rcp_v_ready;
+  logic [31:0] rcp_accepted, rcp_mul_busy;
+  logic [3:0]  rcp_occ;
+
+  // The island's own fragment counter, used as the token so a response can be
+  // matched to its request. Eight bits is RCP24's TOKW.
+  logic [7:0] tok_r;
+
+  zhao_raster_rcp24_svc #(.NCTX(8), .TOKW(8)) u_rcp (
+      .clk(clk), .rst_n(rst_n),
+      .v_valid_i(frag_valid_i), .v_ready_o(rcp_v_ready),
+      .d_i(frag_depth_i), .v_tok_i(tok_r),
+      .r_valid_o(rcp_r_valid), .r_ready_i(rcp_r_ready),
+      .r_o(rcp_r), .k_o(rcp_k), .d_zero_o(rcp_dzero), .r_tok_o(rcp_tok),
+      .accepted_o(rcp_accepted), .completed_o(cnt_rcp_completed_o),
+      .mul_busy_o(rcp_mul_busy), .occupancy_o(rcp_occ));
+
+  assign frag_ready_o = rcp_v_ready;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) tok_r <= 8'd0;
+    else if (frag_valid_i && frag_ready_o) tok_r <= tok_r + 8'd1;
+  end
+
+  logic        pu_valid, pu_ready;
+  logic [31:0] pu_u, pu_v;
+  logic [15:0] pu_tag;
+  logic        pu_sat, pu_dzero;
+  logic [31:0] pu_products;
+  logic [3:0]  pu_occ;
+
+  zhao_raster_perspuv_svc #(.NTOK(16), .TAGW(16)) u_persp (
+      .clk(clk), .rst_n(rst_n),
+      .v_valid_i(rcp_r_valid), .v_ready_o(rcp_r_ready),
+      .u_over_w_i(frag_u_over_w_i), .v_over_w_i(frag_v_over_w_i),
+      .r_mant_i(rcp_r), .r_k_i(rcp_k), .depth_zero_i(rcp_dzero),
+      .tag_i({8'd0, rcp_tok}),
+      .r_valid_o(pu_valid), .r_ready_i(pu_ready),
+      .u_o(pu_u), .v_o(pu_v), .tag_o(pu_tag), .sat_o(pu_sat),
+      .depth_zero_o(pu_dzero),
+      .fragments_o(cnt_persp_fragments_o), .products_o(pu_products),
+      .occupancy_o(pu_occ));
+
+  // ==========================================================================
+  // MOSAIC, on the pre-TMU u/v path
+  // ==========================================================================
+  // It observes the same u/v the TMU planner will use and picks a tile. It is
+  // fed rather than bypassed so its logic is real in this measurement; its
+  // pick is consumed by the counter only, because the tile selection's
+  // consumer (the plan's base address) is a binding-table concern that this
+  // composition does not yet own.
+  logic mos_req_ready, mos_pick_valid;
+  logic [7:0] mos_tile;
+  logic [5:0] mos_tx, mos_ty;
+  logic [15:0] mos_src;
+  logic mos_idle;
+
+  zhao_texture_mosaic u_mosaic (
+      .clk(clk), .rst_n(rst_n),
+      .req_valid_i(pu_valid && pu_ready), .req_ready_o(mos_req_ready),
+      .req_u_i(pu_u), .req_v_i(pu_v),
+      .req_mat_a_i(frag_base_rgb_i[23:16]), .req_mat_b_i(frag_base_rgb_i[15:8]),
+      .req_weight_i(frag_weight_i), .req_mosaic_i(1'b1),
+      .req_src_id_i(pu_tag),
+      .pick_valid_o(mos_pick_valid), .pick_ready_i(1'b1),
+      .pick_tile_o(mos_tile), .pick_tx_o(mos_tx), .pick_ty_o(mos_ty),
+      .pick_src_id_o(mos_src), .idle_o(mos_idle),
+      .texture_samples_o(cnt_mosaic_samples_o));
+
+  // ==========================================================================
+  // FRAGROB — the hub
+  // ==========================================================================
+  logic        fr_f_ready;
+  logic        fr_tmu_valid, fr_tmu_ready;
+  logic [31:0] fr_tmu_u, fr_tmu_v;
+  logic [BINDW-1:0] fr_tmu_binding;
+  logic [LODW-1:0]  fr_tmu_lod;
+  logic [$clog2(DEPTH)-1:0] fr_tmu_slot;
+  logic [1:0]  fr_tmu_sidx;
+  logic [GENW-1:0] fr_tmu_gen;
+  logic        fr_tmu_rvalid, fr_tmu_rready;
+  logic [23:0] fr_tmu_rgb;
+  logic [7:0]  fr_tmu_a;
+  logic [$clog2(DEPTH)-1:0] fr_tmu_rslot;
+  logic [1:0]  fr_tmu_rsidx;
+  logic [GENW-1:0] fr_tmu_rgen;
+
+  logic        fr_aux_valid, fr_aux_ready;
+  logic [CTXW-1:0] fr_aux_ctx;
+  logic [$clog2(DEPTH)-1:0] fr_aux_slot;
+  logic [GENW-1:0] fr_aux_gen;
+  logic        fr_aux_rvalid, fr_aux_rready;
+  logic [23:0] fr_aux_rgb;
+  logic [7:0]  fr_aux_a;
+  logic [$clog2(DEPTH)-1:0] fr_aux_rslot;
+  logic [GENW-1:0] fr_aux_rgen;
+
+  logic        fr_o_valid, fr_o_ready;
+  logic [CTXW-1:0] fr_o_ctx;
+  logic [23:0] fr_o_rgb, fr_o_aux_rgb;
+  logic [7:0]  fr_o_a, fr_o_aux_a;
+  logic        fr_o_has_aux, fr_o_uv_sat;
+  logic [23:0] fr_o_s_rgb [3];
+  logic [7:0]  fr_o_s_a   [3];
+  logic [31:0] fr_samples, fr_full_clocks, fr_id_errors;
+  logic        fr_wq_overflow, fr_id_error, fr_combiner_unfrozen;
+
+  assign pu_ready = fr_f_ready;
+
+  // FRAGROB takes u/v/binding/lod PER SAMPLE -- three of each. The island's
+  // boundary supplies one u/v pair (the fragment's) and one binding/lod; the
+  // per-sample variation is a binding-table concern this composition does not
+  // own yet, so all three samples are given the same coordinates and are
+  // distinguished by their binding index. That is a real limitation of the
+  // composition, not of FRAGROB, and it is why the binding is offset per
+  // sample rather than replicated: three identical bindings would make the
+  // cache serve one line three times and understate the miss traffic.
+  logic signed [31:0] fr_f_u [3];
+  logic signed [31:0] fr_f_v [3];
+  logic [BINDW-1:0]   fr_f_binding [3];
+  logic [LODW-1:0]    fr_f_lod [3];
+  always_comb begin
+    for (int s = 0; s < 3; s++) begin
+      fr_f_u[s]       = pu_u;
+      fr_f_v[s]       = pu_v;
+      fr_f_binding[s] = frag_binding_i + BINDW'(s);
+      fr_f_lod[s]     = frag_lod_i;
+    end
+  end
+
+  zhao_texture_fragrob #(
+      .DEPTH(DEPTH), .CTXW(CTXW), .BINDW(BINDW), .LODW(LODW), .GENW(GENW)
+  ) u_fragrob (
+      .clk(clk), .rst_n(rst_n),
+      .f_valid_i(pu_valid), .f_ready_o(fr_f_ready),
+      .f_sample_count_i(frag_sample_count_i),
+      .f_u_i(fr_f_u), .f_v_i(fr_f_v),
+      .f_binding_i(fr_f_binding), .f_lod_i(fr_f_lod),
+      .f_recipe_i(frag_recipe_i), .f_ctx_i(frag_ctx_i),
+      .f_aux_i(frag_aux_i), .f_uv_sat_i(pu_sat),
+      .tmu_valid_o(fr_tmu_valid), .tmu_ready_i(fr_tmu_ready),
+      .tmu_u_o(fr_tmu_u), .tmu_v_o(fr_tmu_v),
+      .tmu_binding_o(fr_tmu_binding), .tmu_lod_o(fr_tmu_lod),
+      .tmu_slot_o(fr_tmu_slot), .tmu_sidx_o(fr_tmu_sidx), .tmu_gen_o(fr_tmu_gen),
+      .tmu_rvalid_i(fr_tmu_rvalid), .tmu_rready_o(fr_tmu_rready),
+      .tmu_rgb_i(fr_tmu_rgb), .tmu_a_i(fr_tmu_a),
+      .tmu_rslot_i(fr_tmu_rslot), .tmu_rsidx_i(fr_tmu_rsidx),
+      .tmu_rgen_i(fr_tmu_rgen),
+      .aux_valid_o(fr_aux_valid), .aux_ready_i(fr_aux_ready),
+      .aux_ctx_o(fr_aux_ctx), .aux_slot_o(fr_aux_slot), .aux_gen_o(fr_aux_gen),
+      .aux_rvalid_i(fr_aux_rvalid), .aux_rready_o(fr_aux_rready),
+      .aux_rgb_i(fr_aux_rgb), .aux_a_i(fr_aux_a),
+      .aux_rslot_i(fr_aux_rslot), .aux_rgen_i(fr_aux_rgen),
+      .o_valid_o(fr_o_valid), .o_ready_i(fr_o_ready),
+      .o_ctx_o(fr_o_ctx), .o_rgb_o(fr_o_rgb), .o_a_o(fr_o_a),
+      .o_s_rgb_o(fr_o_s_rgb), .o_s_a_o(fr_o_s_a),
+      .o_aux_rgb_o(fr_o_aux_rgb), .o_aux_a_o(fr_o_aux_a),
+      .o_has_aux_o(fr_o_has_aux), .o_uv_sat_o(fr_o_uv_sat),
+      .fragments_o(cnt_fragments_o), .samples_o(fr_samples),
+      .full_clocks_o(fr_full_clocks), .id_errors_o(fr_id_errors),
+      .wq_overflow_o(fr_wq_overflow), .id_error_o(fr_id_error),
+      .combiner_unfrozen_o(fr_combiner_unfrozen));
+
+  // ==========================================================================
+  // FRAGROB -> TMU_PLAN -> CACHE_PIPE
+  // ==========================================================================
+  // GLUE 3: the response CLASS. See the header. The source id carries the
+  // request's identity so a sample can be returned to the right FRAGROB slot;
+  // its top two bits carry the class RSP_DISPATCH routes on, because
+  // CACHE_PIPE has no class lane of its own.
+  localparam logic [1:0] CLASS_BILINEAR = 2'd2;
+
+  logic [SRCW-1:0] plan_src_id;
+  assign plan_src_id = {CLASS_BILINEAR,
+                        {(SRCW-2-$clog2(DEPTH)-2-GENW){1'b0}},
+                        fr_tmu_slot, fr_tmu_sidx, fr_tmu_gen};
+
+  logic        plan_req_ready, plan_acc_valid, plan_acc_ready;
+  logic [3:0]  plan_acc_en;
+  logic [127:0] plan_acc_addr;
+  logic [SRCW-1:0] plan_acc_src;
+  logic        plan_acc_filter, plan_acc_err;
+  logic [7:0]  plan_acc_fu, plan_acc_fv;
+  logic [2:0]  plan_acc_fmt;
+  logic [3:0]  plan_occ;
+
+  assign fr_tmu_ready = plan_req_ready;
+
+  zhao_texture_tmu_plan #(.SRCW(SRCW)) u_plan (
+      .clk(clk), .rst_n(rst_n),
+      .req_valid_i(fr_tmu_valid), .req_ready_o(plan_req_ready),
+      .req_u_i(fr_tmu_u), .req_v_i(fr_tmu_v),
+      .req_base_i(bind_base_i), .req_mode_i(bind_mode_i),
+      .req_lod_i({{(8-LODW){1'b0}}, fr_tmu_lod}),
+      .req_src_id_i(plan_src_id),
+      .acc_valid_o(plan_acc_valid), .acc_ready_i(plan_acc_ready),
+      .acc_en_o(plan_acc_en), .acc_addr_o(plan_acc_addr),
+      .acc_src_id_o(plan_acc_src), .acc_filter_o(plan_acc_filter),
+      .acc_err_o(plan_acc_err), .acc_fu_o(plan_acc_fu), .acc_fv_o(plan_acc_fv),
+      .acc_fmt_o(plan_acc_fmt),
+      .accepted_o(cnt_plan_accepted_o), .occupancy_o(plan_occ));
+
+  logic        cache_smp_valid, cache_smp_ready;
+  logic [LANES*16-1:0] cache_smp_data;
+  logic [15:0] cache_smp_src;
+  logic [31:0] cache_fills, cache_multicast, cache_replays;
+
+  zhao_texture_cache_pipe #(
+      .LANES(LANES), .LINES(16), .LINE_BYTES(16), .REQN(4)
+  ) u_cache (
+      .clk(clk), .rst_n(rst_n),
+      .acc_valid_i(plan_acc_valid), .acc_ready_o(plan_acc_ready),
+      .acc_en_i(plan_acc_en), .acc_addr_i(plan_acc_addr),
+      .acc_src_id_i(plan_acc_src[15:0]),
+      .smp_valid_o(cache_smp_valid), .smp_ready_i(cache_smp_ready),
+      .smp_data_o(cache_smp_data), .smp_src_id_o(cache_smp_src),
+      .fill_valid_o(fill_valid_o), .fill_ready_i(fill_ready_i),
+      .fill_addr_o(fill_addr_o),
+      .fill_data_valid_i(fill_data_valid_i), .fill_data_i(fill_data_i),
+      .cache_hits_o(cnt_cache_hits_o), .cache_misses_o(cnt_cache_misses_o),
+      .fills_o(cache_fills), .multicast_o(cache_multicast),
+      .replays_o(cache_replays));
+
+  // ==========================================================================
+  // CACHE_PIPE -> RSP_DISPATCH -> {BILERP, PALETTE}
+  // ==========================================================================
+  logic        disp_rsp_ready;
+  logic        disp_clut_valid, disp_clut_ready;
+  logic [DATAW-1:0] disp_clut_data;
+  logic [TOKW-1:0]  disp_clut_tok;
+  logic        disp_near_valid;
+  logic [DATAW-1:0] disp_near_data;
+  logic [TOKW-1:0]  disp_near_tok;
+  logic        disp_bil_valid, disp_bil_ready;
+  logic [DATAW-1:0] disp_bil_data;
+  logic [TOKW-1:0]  disp_bil_tok;
+  logic [31:0] disp_hol;
+  logic [2:0]  disp_occ;
+
+  assign cache_smp_ready = disp_rsp_ready;
+
+  zhao_texture_rsp_dispatch #(
+      .RAWN(4), .CHN(4), .DATAW(DATAW), .TOKW(TOKW)
+  ) u_dispatch (
+      .clk(clk), .rst_n(rst_n),
+      .rsp_valid_i(cache_smp_valid), .rsp_ready_o(disp_rsp_ready),
+      .rsp_data_i(cache_smp_data), .rsp_tok_i(cache_smp_src),
+      .rsp_class_i(cache_smp_src[15:14]),   // GLUE 3, see the header
+      .clut_valid_o(disp_clut_valid), .clut_ready_i(disp_clut_ready),
+      .clut_data_o(disp_clut_data), .clut_tok_o(disp_clut_tok),
+      .near_valid_o(disp_near_valid), .near_ready_i(1'b1),
+      .near_data_o(disp_near_data), .near_tok_o(disp_near_tok),
+      .bil_valid_o(disp_bil_valid), .bil_ready_i(disp_bil_ready),
+      .bil_data_o(disp_bil_data), .bil_tok_o(disp_bil_tok),
+      .accepted_o(cnt_dispatch_accepted_o), .hol_stall_o(disp_hol),
+      .occupancy_o(disp_occ));
+
+  // GLUE 2: texel -> channel. The dispatcher hands four RGB565 texels; the
+  // serial bilinear lane consumes four 8-bit channel values. This extracts ONE
+  // channel (the low byte of each texel). The three-channel sequencing the
+  // lane is designed for -- "serial bilinear CHANNEL engine" -- is NOT built,
+  // so the lane's job counter under-reports by a factor of three until it is.
+  // Written here rather than silently: an under-reporting counter that nobody
+  // has flagged is worse than a missing one.
+  logic        bil_out_valid, bil_out_ready;
+  logic [7:0]  bil_out;
+  logic [TOKW-1:0] bil_out_tok;
+  logic [1:0]  bil_out_chan;
+  logic        bil_job_ready;
+  logic [1:0]  bil_occ;
+
+  assign disp_bil_ready = bil_job_ready;
+
+  zhao_texture_bilerp_lane #(.TOKW(TOKW)) u_bilerp (
+      .clk(clk), .rst_n(rst_n),
+      .job_valid_i(disp_bil_valid), .job_ready_o(bil_job_ready),
+      .t00_i(disp_bil_data[7:0]),
+      .t10_i(disp_bil_data[23:16]),
+      .t01_i(disp_bil_data[39:32]),
+      .t11_i(disp_bil_data[55:48]),
+      .fu_i(plan_acc_fu), .fv_i(plan_acc_fv),
+      .tok_i(disp_bil_tok), .chan_i(2'd0),
+      .out_valid_o(bil_out_valid), .out_ready_i(bil_out_ready),
+      .out_o(bil_out), .out_tok_o(bil_out_tok), .out_chan_o(bil_out_chan),
+      .jobs_o(cnt_bilerp_jobs_o), .occupancy_o(bil_occ));
+
+  logic        pal_lu_valid_o;
+  logic [15:0] pal_lu_rgb565;
+  logic        pal_lu_stale, pal_lu_resident;
+  logic [31:0] pal_stale, pal_cold, pal_e0, pal_e1, pal_e2, pal_e3, pal_ok;
+
+  assign disp_clut_ready = 1'b1;  // the palette lookup is unconditional
+
+  zhao_texture_palette_res #(
+      .SLOTS(PAL_SLOTS), .ENTRIES(PAL_ENTRIES), .GENW(GENW)
+  ) u_palette (
+      .clk(clk), .rst_n(rst_n),
+      .ld_valid_i(pal_ld_valid_i), .ld_ready_o(),
+      .ld_op_i(pal_ld_op_i), .ld_slot_i(pal_ld_slot_i), .ld_gen_i(pal_ld_gen_i),
+      .ld_idx_i(pal_ld_idx_i), .ld_rgb565_i(pal_ld_rgb565_i),
+      .ld_crc_ok_i(pal_ld_crc_ok_i),
+      .lu_valid_i(disp_clut_valid),
+      .lu_slot_i(disp_clut_tok[$clog2(PAL_SLOTS)-1:0]),
+      .lu_gen_i(disp_clut_tok[GENW-1:0]),
+      .lu_idx_i(disp_clut_data[$clog2(PAL_ENTRIES)-1:0]),
+      .lu_valid_o(pal_lu_valid_o), .lu_rgb565_o(pal_lu_rgb565),
+      .lu_stale_o(pal_lu_stale), .lu_resident_o(pal_lu_resident),
+      .lookups_o(cnt_palette_lookups_o), .stale_o(pal_stale), .cold_o(pal_cold),
+      .err_write_outside_o(pal_e0), .err_same_gen_o(pal_e1),
+      .err_incomplete_o(pal_e2), .err_crc_o(pal_e3), .loads_ok_o(pal_ok));
+
+  // ---- sample responses back into FRAGROB ---------------------------------
+  // The bilinear lane's byte becomes the sample's luminance-carrying channel
+  // and the palette's RGB565 is expanded. Which of the two answers a given
+  // request is decided by the class the request was tagged with, which is the
+  // same two bits GLUE 3 carries.
+  assign bil_out_ready  = fr_tmu_rready;
+  assign fr_tmu_rvalid  = bil_out_valid || pal_lu_valid_o;
+  assign fr_tmu_rgb     = pal_lu_valid_o
+                          ? {pal_lu_rgb565[15:11], 3'b000,
+                             pal_lu_rgb565[10:5],  2'b00,
+                             pal_lu_rgb565[4:0],   3'b000}
+                          : {bil_out, bil_out, bil_out};
+  assign fr_tmu_a       = 8'hFF;
+  assign fr_tmu_rslot   = bil_out_tok[$clog2(DEPTH)+2+GENW-1 -: $clog2(DEPTH)];
+  assign fr_tmu_rsidx   = bil_out_tok[GENW+1 -: 2];
+  assign fr_tmu_rgen    = bil_out_tok[GENW-1:0];
+
+  // ==========================================================================
+  // AUX
+  // ==========================================================================
+  logic        aux_req_ready, aux_out_valid;
+  logic [7:0]  aux_out_tok, aux_out_tag, aux_out_str;
+  logic        aux_out_degenerate;
+  logic [31:0] aux_sheet_reads, aux_degenerate;
+
+  assign fr_aux_ready = aux_req_ready;
+
+  zhao_texture_aux_pipe #(.TOKW(8)) u_aux (
+      .clk(clk), .rst_n(rst_n),
+      .req_valid_i(fr_aux_valid), .req_ready_o(aux_req_ready),
+      .req_wx_i(fr_aux_ctx[31:0]), .req_wz_i(fr_aux_ctx[63:32]),
+      .req_env_x0_i(32'sd0), .req_env_x1_i(32'sd65536),
+      .req_env_z0_i(32'sd0), .req_env_z1_i(32'sd65536),
+      .req_tok_i({{(8-$clog2(DEPTH)){1'b0}}, fr_aux_slot}),
+      .sheet_valid_o(sheet_valid_o), .sheet_ready_i(sheet_ready_i),
+      .sheet_u_o(sheet_u_o), .sheet_v_o(sheet_v_o), .sheet_tok_o(),
+      .sheet_rvalid_i(sheet_rvalid_i), .sheet_tag_i(sheet_tag_i),
+      .sheet_str_i(sheet_str_i), .sheet_rtok_i(sheet_rtok_i),
+      .out_valid_o(aux_out_valid), .out_ready_i(fr_aux_rready),
+      .out_tok_o(aux_out_tok), .out_tag_o(aux_out_tag),
+      .out_str_o(aux_out_str), .out_degenerate_o(aux_out_degenerate),
+      .accepted_o(cnt_aux_accepted_o), .sheet_reads_o(aux_sheet_reads),
+      .degenerate_o(aux_degenerate));
+
+  assign fr_aux_rvalid = aux_out_valid;
+  assign fr_aux_rgb    = {aux_out_tag, aux_out_str, 8'd0};
+  assign fr_aux_a      = aux_out_degenerate ? 8'd0 : 8'hFF;
+  assign fr_aux_rslot  = aux_out_tok[$clog2(DEPTH)-1:0];
+  assign fr_aux_rgen   = aux_out_tok;
+
+  // ==========================================================================
+  // FRAGROB -> MATERIAL.COMBINE.V1
+  // ==========================================================================
+  // GLUE 1 IS GONE. The first draft of this file held the last two retirements
+  // in a shift register here and called it a sample bank, because FRAGROB
+  // appeared to expose only one colour. It banks all three internally --
+  // `res_rgb_m [3][DEPTH]` -- and its retire read simply took `res_rgb_m[0]`
+  // and dropped the rest. So the missing piece was two output ports, not a
+  // buffer in the top, and the combiner now reads REAL per-sample results.
+  //
+  // Worth stating plainly because the wrong version would have measured fine:
+  // a shift register of past fragments has a size, fits, and reports numbers.
+  // It would have composed an island whose combiner blended a fragment with
+  // its two predecessors and called that a three-sample material.
+
+  logic comb_f_ready;
+  assign fr_o_ready = comb_f_ready;
+
+  logic [31:0] comb_refused_recipe, comb_sat_add, comb_sat_2x;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0] comb_jobs [8];
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_texture_material_combine_v1 #(.RECS(2)) u_combine (
+      .clk(clk), .rst_n(rst_n),
+      .f_valid_i(fr_o_valid), .f_ready_o(comb_f_ready),
+      .f_sample_count_i(frag_sample_count_i), .f_recipe_i(frag_recipe_i),
+      .f_weight_i(frag_weight_i),
+      .f_s0_rgb_i(fr_o_s_rgb[0]), .f_s0_a_i(fr_o_s_a[0]),
+      .f_s1_rgb_i(fr_o_s_rgb[1]), .f_s1_a_i(fr_o_s_a[1]),
+      // AUX, when the fragment has it, genuinely IS the third sample -- that
+      // is what the aux pipeline computes. Sample bank 2 is the fallback for
+      // fragments that do not.
+      .f_s2_rgb_i(fr_o_has_aux ? fr_o_aux_rgb : fr_o_s_rgb[2]),
+      .f_s2_a_i  (fr_o_has_aux ? fr_o_aux_a   : fr_o_s_a[2]),
+      .f_base_rgb_i(frag_base_rgb_i), .f_base_a_i(frag_base_a_i),
+      .f_tag_i(fr_o_ctx[15:0]),
+      .o_valid_o(out_valid_o), .o_ready_i(out_ready_i),
+      .o_rgb_o(out_rgb_o), .o_a_o(out_a_o), .o_tag_o(out_tag_o),
+      .o_refused_o(out_refused_o),
+      .refused_recipe_o(comb_refused_recipe),
+      .refused_missing_o(cnt_combine_refused_o),
+      .saturated_add_o(comb_sat_add), .saturated_mul2x_o(comb_sat_2x),
+      .jobs_by_recipe_o(comb_jobs));
+
+endmodule
