@@ -631,3 +631,76 @@ one recipe moved — and the anomaly is written down rather than tuned away.
 **These changes invalidate the 7,720 ALM measurement**, which is why they were
 batched into one pass. The island needs re-fitting when the queue clears:
 COMBINE.V1 is running, perspuv is chained.
+
+---
+
+# 15:4x — COMBINE.V1 measured, its critical path found, and a probe committed
+
+## COMBINE.V1: variant A fails its own bar
+
+```
+alms 1994 | registers 1383 | dspBlocks 2 | fmax 29.74 MHz | 9,417 s
+```
+
+§15.5 states when variant A is *preferred*: `<= 800 ALMs and >= 125 MHz`.
+**The DSP rule is met (2, against a tripwire of 2) and nothing else is** — 2.5×
+over on area, 4.2× short on speed. Against the refuted II=1 block (494 ALM,
+8 DSP, 100.12 MHz), six DSPs were bought for 1,500 ALMs and 70 MHz on a device
+using 17 of 112.
+
+Docket D19u. The refuted block **stays**: the replacement has been measured and
+has not earned the deletion.
+
+## The critical path is the §15.4 counters
+
+```
+Decoder5~9 -> Add46~41,  slack -23.624 ns
+```
+
+The datapath is 7–9 bits and cannot make a 23 ns path; the only 32-bit signals
+are the seven counters. `jobs_inc[rec[i].recipe] += 1` is a blocking add on a
+decoded index inside a loop over `RECS x 7` jobs — up to fourteen conditional
+32-bit adds serialised into one carry chain.
+
+Fixed by narrowing the **increment** to 2 bits (at most two jobs issue per
+cycle), leaving only the commit at 32-bit where the eight adds are parallel.
+16 differential checks still pass with the same totals.
+
+**The irony is in the report:** these are the counters that caught the
+double-issue bug this morning, and they are why the block missed timing.
+
+## The path probe is now committed, because it lied once
+
+`tools/quartus/analyse_paths.py`. Written inline twice today; the second time it
+classified all 1,820 combiner paths as virtual-pin starts, because it keyed on
+`:`/`|` — hierarchy punctuation — and a single-module fit has no hierarchy. It
+now reads the top module's PORT LIST and asks membership, asserts both regexes
+at import, and refuses to classify on zero ports or zero paths.
+
+CLAUDE.md's rule, followed rather than quoted: *commit the probe.*
+
+## Two findings from sweeping it over all 15 archived reports
+
+* **`zhao_terrain_residency_v2` is the second-worst block in the tree** at
+  −6.292 ns internal with negative headroom. Outside the island, untouched
+  today, and apparently unexamined.
+* **Most island blocks close individually while the island does not.** For AREA
+  the per-block rows were a tight upper bound (2.4%); for TIMING they are not a
+  bound at all.
+
+## And a correction in the unflattering direction
+
+The triage note first listed the constraint set as unverified and cited
+perspuv's 82 MHz against its −0.463 slack as reason to distrust the table. Both
+dissolved in two minutes: the SDC is a fixed 10.000 ns template for every block,
+and fmax comes from the worst path OVERALL while the column is the worst
+INTERNAL one. perspuv's overall worst is a boundary path at −2.195 ns → exactly
+82.00 MHz. It is boundary-bound with 1.732 ns of headroom.
+
+Kept struck-through, not deleted: an unresolved doubt in a report is a claim
+too, and that one would have made a reader discard a sound table.
+
+## In flight
+
+perspuv's fit (confirming or refuting the per-axis split); the full `fast` gate
+relaunched detached after the task wrapper killed it twice.
