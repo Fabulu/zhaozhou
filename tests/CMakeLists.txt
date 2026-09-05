@@ -840,6 +840,19 @@ target_include_directories(test_zcon_session_directed PRIVATE
 add_test(NAME zcon_session_directed COMMAND test_zcon_session_directed)
 set_tests_properties(zcon_session_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The host's frame actually DRAWS, through the reference renderer, in the place
+# the projection says. Two defects made it here that no counter could see: the
+# resource table keyed by a bare index instead of the wire handle32 (400 frames
+# "rendered" onto a blank canvas, status 0, because a resource miss is not an
+# error), and a near-zero-mean input script that left the markers in the same
+# pixel for the whole run. Both are pinned in this file.
+add_executable(test_desktop_render_directed runtime/desktop_render_directed.cpp)
+target_link_libraries(test_desktop_render_directed PRIVATE zhao_zref)
+target_include_directories(test_desktop_render_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/runtime/include)
+add_test(NAME desktop_render_directed COMMAND test_desktop_render_directed)
+set_tests_properties(desktop_render_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # ---------------------------------------------------------------------------
 # TEXTURE.COMBINE (G1-C, 2026-09-05). The material combiner did not exist: the
 # surviving TEXJOIN returns sample 0 for every recipe, so the island fetched up

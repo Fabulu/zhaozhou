@@ -176,6 +176,26 @@ class Session {
     ++tick_;
   }
 
+  // One fixed tick where the HOST supplies the presentation work.
+  //
+  // The plain tick() asks the simulation to build commands, which is right when
+  // the game owns its own presentation. A host that owns RESOURCES -- forms,
+  // transforms, materials -- builds the frame itself, because the simulation
+  // must not know what a FormPattern is. Both paths advance identically; only
+  // who authors the bytes differs.
+  //
+  // The caller's bytes describe the state BEFORE this tick's advance, so
+  // presentation lags simulation by one frame. That is deliberate and is what
+  // a console does; recording it here stops it being read as a bug later.
+  void tick_with(const std::vector<uint8_t>& commands) {
+    const InputSnapshot in = backend_->poll(tick_);
+    truth_->advance(in);
+    recorded_inputs_.push_back(in);
+    recorded_hashes_.push_back(truth_->hash());
+    backend_->submit(commands);
+    ++tick_;
+  }
+
   // Replay a recorded input stream and report the first tick whose hash
   // differs, or -1 if the run is identical. This is the whole point of
   // recording: a divergence is located, not merely detected.

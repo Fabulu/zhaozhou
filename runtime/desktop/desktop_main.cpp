@@ -21,11 +21,21 @@
 // ---------------------------------------------------------------------------
 // WHAT IS HONESTLY NOT HERE YET
 // ---------------------------------------------------------------------------
-// **Video and audio output.** The backend below builds and accepts command
-// streams but does not yet drive the reference renderer. That wiring is the
-// next software-lane increment and it is deliberately NOT faked here: printing
-// a frame counter and calling it video is exactly the "documented-empty
-// banner" this file is replacing.
+// **Audio output.** None. The tone table exists in the reference; nothing here
+// asks for it yet.
+//
+// **A window.** VIDEO IS RENDERED but not displayed: `submit` runs the frame
+// through `zref::render::SoftwareRenderer` -- the same code the capture tools
+// and the RTL differentials agree with, per the roadmap's instruction to reuse
+// the exact machinery rather than add a renderer beside it -- and `--ppm`
+// writes the canvas out to look at. Opening a window is presentation plumbing
+// and changes nothing above the backend boundary.
+//
+// What is drawn is TWO MARKERS, not two wizards: DrawForm quads at the
+// simulation's positions. That is the whole picture the frozen command set can
+// express for a character today -- meshes need G2's resource formats and G3's
+// geometry path. Stated here so the picture is not mistaken for more than it
+// is.
 //
 // **Real controllers.** Input is scripted or idle. The `Backend::poll`
 // boundary is where a real pad arrives, and nothing above it changes when one
@@ -42,9 +52,12 @@
 #include <string>
 #include <vector>
 
+#include "zcon/frame_build.hpp"
 #include "zcon/session_io.hpp"
 #include "zcon/zcon.hpp"
 #include "zgame/wizards.hpp"
+
+#include "zref/zref_render.hpp"
 
 namespace {
 
@@ -107,10 +120,30 @@ class DesktopBackend : public zcon::Backend {
     return s;
   }
 
+  // Presentation work is now RENDERED, not counted. The roadmap's instruction
+  // was to turn the existing exact reference machinery into a reusable console
+  // backend rather than adding another renderer beside it -- so this calls
+  // zref::render::SoftwareRenderer, the same code the capture tools and the
+  // RTL differentials already agree with.
   void submit(const std::vector<uint8_t>& commands) override {
     ++frames_;
     command_bytes_ += commands.size();
+    if (commands.empty()) return;
+    const zref::render::RenderResult r =
+        renderer_.render_frame(commands, 0, canvas_, rres_);
+    last_status_ = r.status;
+    last_crc_ = r.canvas_crc32c;
+    commands_executed_ += r.commands_executed;
+    resource_misses_ += r.resource_misses;
   }
+
+  zref::render::RenderResources& resources() { return rres_; }
+  const zref::render::RenderCanvas& canvas() const { return canvas_; }
+  uint8_t last_status() const { return last_status_; }
+  uint32_t last_crc() const { return last_crc_; }
+  uint32_t commands_executed() const { return commands_executed_; }
+  uint32_t resource_misses() const { return resource_misses_; }
+  zhao_abi::video_mode latched_mode() const { return renderer_.latched_mode(); }
 
   const char* name() const override { return "desktop"; }
 
@@ -124,19 +157,55 @@ class DesktopBackend : public zcon::Backend {
   std::vector<zcon::InputSnapshot> scripted_;
   uint64_t frames_ = 0;
   uint64_t command_bytes_ = 0;
+  zref::render::SoftwareRenderer renderer_;
+  zref::render::RenderCanvas canvas_;
+  zref::render::RenderResources rres_;  // NOT resources_: that is the
+                                        // published-handle table above.
+  uint8_t last_status_ = 0;
+  uint32_t last_crc_ = 0;
+  uint32_t commands_executed_ = 0;
+  uint32_t resource_misses_ = 0;
 };
 
 // A deterministic demo script, so `--ticks N` alone produces a real match
-// rather than two wizards standing still. Lateral movement with periodic
-// casting: bolts fired with no aim travel toward the opponent.
+// rather than two wizards standing still. Bolts fired with no aim travel
+// toward the opponent.
+//
+// THE SHAPE OF THE MOTION IS DELIBERATE, and the earlier version was wrong in
+// a way only the picture revealed. It drove `stick_lx` from `(t * 7) % 11 - 5`
+// -- a fast sawtooth whose mean is very close to zero, so over 400 ticks each
+// wizard ended within a tenth of a metre of where it started. Every check
+// passed: the simulation advanced, hashes recorded, frames rendered, markers
+// drawn. But at 6 px per metre the markers never left their pixel, and the
+// canvas CRC alternated between exactly two values for every run length. A
+// counter cannot see that; the rendered frame can.
+//
+// So the walk is now a slow TRIANGLE WAVE with a long period, on both axes and
+// in opposite phase for the two pads. It traverses real ground, the two paths
+// cross, and a bolt aimed at the other wizard has something to miss.
 std::vector<zcon::InputSnapshot> demo_script(int n) {
+  // A triangle wave in [-amp, +amp] with period `period` ticks. The
+  // amplitudes below are sized against kMoveScale = 4 and the 32 m ground:
+  // amp 28 over a 45-tick quarter sweeps about 10 m, so the wizards cross
+  // real distance without spending the run pinned against the clamp -- the
+  // first amplitudes tried (96) drove them into the walls and held them
+  // there, which the frames showed and the position print confirmed.
+  const auto tri = [](int t, int period, int amp) {
+    const int p = ((t % period) + period) % period;
+    const int half = period / 2;
+    const int up = p < half ? p : period - p;      // 0..half
+    return static_cast<int8_t>((up * 2 * amp) / half - amp);
+  };
+
   std::vector<zcon::InputSnapshot> v;
   for (int t = 0; t < n; ++t) {
     zcon::InputSnapshot s;
     s.tick = static_cast<uint32_t>(t);
-    s.pad[0].stick_lx = static_cast<int8_t>((t * 7) % 11 - 5);
+    s.pad[0].stick_lx = tri(t, 180, 28);
+    s.pad[0].stick_ly = tri(t + 45, 240, 20);
     s.pad[0].buttons = static_cast<uint16_t>((t % 31 == 0) ? 1 : 0);
-    s.pad[1].stick_lx = static_cast<int8_t>((t * 5) % 9 - 4);
+    s.pad[1].stick_lx = tri(t + 90, 180, 28);   // opposite phase
+    s.pad[1].stick_ly = tri(t + 165, 240, 20);
     s.pad[1].buttons = static_cast<uint16_t>((t % 33 == 0) ? 1 : 0);
     v.push_back(s);
   }
@@ -149,8 +218,10 @@ int usage() {
       "  --ticks N [--seed S] [--cart FILE] [--record FILE]   run a match\n"
       "  --replay FILE                                        verify a recording\n"
       "\n"
-      "Video and audio output are NOT wired yet; this host owns the tick, the\n"
-      "simulation, resources and the recording. See the header comment.\n");
+      "  --ppm FILE                                           write the canvas\n"
+      "\n"
+      "Video RENDERS through the reference software renderer (--ppm to look at\n"
+      "it); audio and a window are not wired. See the header comment.\n");
   return 2;
 }
 
@@ -189,7 +260,7 @@ int do_replay(const std::string& path) {
 int main(int argc, char** argv) {
   int ticks = 0;
   uint64_t seed = 0x5A5A5A5A;
-  std::string cart, record_path, replay_path;
+  std::string cart, record_path, replay_path, ppm_path;
 
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
@@ -206,6 +277,8 @@ int main(int argc, char** argv) {
       next(&record_path);
     } else if (a == "--replay") {
       next(&replay_path);
+    } else if (a == "--ppm") {
+      next(&ppm_path);
     } else {
       return usage();
     }
@@ -216,6 +289,7 @@ int main(int argc, char** argv) {
 
   DesktopBackend be;
   be.set_script(demo_script(ticks));
+  std::vector<uint8_t> frame_bytes;
 
   if (!cart.empty()) {
     const std::vector<uint8_t> bytes = read_file(cart);
@@ -229,21 +303,146 @@ int main(int argc, char** argv) {
                 cart.c_str(), h.index, h.generation, bytes.size());
   }
 
+  // ---- resources ---------------------------------------------------------
+  // A wizard is an 8x8 marker (FormPattern) at a world position
+  // (FormTransform) -- the marker-law lineage `spec/commands.zidl` DrawForm
+  // documents and `sprites.cpp` implements. The HOST builds these from game
+  // state; the simulation never sees them, which is the boundary the software
+  // lane exists to keep.
+  //
+  // THE TABLE IS KEYED BY THE WIRE HANDLE, not by a bare index. handle32 is
+  // {index:24, generation:8}, so a form published at index 1 generation 1 is
+  // 0x101 on the wire. Keying by the index alone missed every lookup and the
+  // host reported 400 rendered frames over a blank canvas -- caught only
+  // because the summary counts painted bytes.
+  zcon::Handle form_h[2], xform_h[2], mat_h[2];
+  for (int p = 0; p < 2; ++p) {
+    zref::render::FormPattern pat;
+    for (int i = 0; i < 64; ++i) {
+      pat.rgb[i * 3 + 0] = static_cast<uint8_t>(p == 0 ? 230 : 60);
+      pat.rgb[i * 3 + 1] = 60;
+      pat.rgb[i * 3 + 2] = static_cast<uint8_t>(p == 0 ? 60 : 230);
+      pat.mask[i] = 1;
+    }
+    form_h[p] = {static_cast<uint32_t>(p * 3 + 0), 1, zcon::ResourceKind::kMeshStream};
+    xform_h[p] = {static_cast<uint32_t>(p * 3 + 1), 1, zcon::ResourceKind::kMeshStream};
+    mat_h[p] = {static_cast<uint32_t>(p * 3 + 2), 1, zcon::ResourceKind::kMaterialSet};
+    be.resources().forms.emplace_back(zcon::detail::handle32(form_h[p]), pat);
+    be.resources().materials.emplace_back(zcon::detail::handle32(mat_h[p]),
+                                          zref::render::Material{200, 200, 200});
+  }
+
   zgame::Wizards truth;
   zcon::Session s(&truth, &be);
   s.start(seed);
-  for (int t = 0; t < ticks; ++t) s.tick();
+
+  // The view. This is `ortho_topdown` from tests/render/render_helpers.hpp,
+  // written out rather than reached for, because the test helper is a test
+  // helper: screen x comes from world X and screen y from world Z, w = 1.
+  // Scale 2048 maps world +-32 m across NDC, so the 32 m ground fills half the
+  // 384-px view and both wizards stay well inside the wall clamp.
+  zcon::ViewSpec view;
+  const int32_t kScale = 2048;
+  view.m[0] = kScale;    // ndc.x <- world.x
+  view.m[6] = kScale;    // ndc.y <- world.z  (top-down)
+  view.m[10] = 1 << 16;
+  view.m[15] = 1 << 16;  // w = 1: orthographic, no divide
+
+  // Game units are fx8.8 on a 0..32 m ground (kOne = 256); world is fx16, and
+  // the field is centred so 16 m sits at the view origin.
+  const int32_t kHalfField = 16 * zgame::kOne;
+  const auto to_world = [](int32_t game_fx8) { return game_fx8 << 8; };
+
+  for (int t = 0; t < ticks; ++t) {
+    // Transforms come from the CURRENT state, rebuilt every tick.
+    be.resources().transforms.clear();
+    for (int p = 0; p < 2; ++p) {
+      zref::render::FormTransform tr;
+      tr.x = to_world(truth.wizard(p).x - kHalfField);
+      tr.y = 0;
+      tr.z = to_world(truth.wizard(p).y - kHalfField);
+      tr.size = 8 << 16;  // screen-space half-extent, with flags b1 below
+      be.resources().transforms.emplace_back(zcon::detail::handle32(xform_h[p]), tr);
+    }
+
+    zcon::FramePlan plan;
+    plan.frame_id = static_cast<uint32_t>(t + 1);
+    plan.sequence = static_cast<uint32_t>(t + 1);
+    plan.resource_epoch = 1;
+    plan.views.push_back(view);
+    for (int p = 0; p < 2; ++p) {
+      if (!truth.wizard(p).alive) continue;  // the dead are not drawn
+      zcon::DrawItem d;
+      d.form = form_h[p];
+      d.material_set = mat_h[p];
+      d.transform = xform_h[p];
+      d.viewport_mask = 0x1;  // Z60: one view
+      d.flags = 0x2;          // b1 = screen-space size (marker law)
+      plan.draws.push_back(d);
+    }
+    frame_bytes = zcon::build_frame(plan);
+    s.tick_with(frame_bytes);
+  }
 
   std::printf(
       "host: %d ticks, seed 0x%llX, backend '%s'\n"
-      "      wizards: p0 hp=%d deaths=%u | p1 hp=%d deaths=%u\n"
+      "      wizards: p0 hp=%d deaths=%u at (%d,%d) | p1 hp=%d deaths=%u at "
+      "(%d,%d)\n"
       "      frames submitted %llu, command bytes %llu, resources %zu\n"
+      "      RENDERED: last status %u, commands executed %u, resource "
+      "misses %u, canvas crc 0x%08X\n"
       "      final state hash 0x%016llX\n",
       ticks, static_cast<unsigned long long>(seed), be.name(),
-      truth.wizard(0).health, truth.wizard(0).deaths, truth.wizard(1).health,
-      truth.wizard(1).deaths, static_cast<unsigned long long>(be.frames()),
+      truth.wizard(0).health, truth.wizard(0).deaths, truth.wizard(0).x,
+      truth.wizard(0).y, truth.wizard(1).health, truth.wizard(1).deaths,
+      truth.wizard(1).x, truth.wizard(1).y, static_cast<unsigned long long>(be.frames()),
       static_cast<unsigned long long>(be.command_bytes()), be.resource_count(),
-      static_cast<unsigned long long>(truth.hash()));
+      be.last_status(), be.commands_executed(), be.resource_misses(),
+      be.last_crc(), static_cast<unsigned long long>(truth.hash()));
+
+  // ANTI-VACUITY. A host that reports 400 rendered frames while every canvas
+  // is still the clear colour has proved nothing, and that exact failure has
+  // already been caught twice in this tree -- once in the wizards replay that
+  // killed nobody, once in a shell test that compared two blank framebuffers
+  // and would have called them equal. So count the canvas bytes that are not
+  // zero and say so. A zero here is a FINDING, not a formatting detail.
+  {
+    std::size_t painted = 0;
+    for (uint8_t b : be.canvas().slot[0])
+      if (b != 0) ++painted;
+    std::printf("      canvas: %zu of %zu bytes non-zero%s\n", painted,
+                be.canvas().slot[0].size(),
+                painted ? "" : "  <-- NOTHING WAS DRAWN");
+  }
+
+  // Write the canvas out so it can be LOOKED AT. A byte count says something
+  // was painted; it cannot say the markers are in the right places, the right
+  // way up, or the right colours -- and this tree has a standing rule that
+  // measurement never substitutes for looking. PPM because it needs no
+  // library and every viewer opens it.
+  if (!ppm_path.empty()) {
+    const zhao_abi::video_mode m = be.latched_mode();
+    const uint32_t w = zref::render::canvas_width(m);
+    const uint32_t h = zref::render::canvas_height(m);
+    const uint8_t* px = be.canvas().slot[0].data();
+    std::vector<uint8_t> out;
+    char hdr[64];
+    const int n = std::snprintf(hdr, sizeof hdr, "P6\n%u %u\n255\n", w, h);
+    out.insert(out.end(), hdr, hdr + n);
+    for (uint32_t i = 0; i < w * h; ++i) {
+      // RGB565 little-endian halfwords, expanded by bit replication so full
+      // scale stays full scale (5-bit 31 -> 255, not 248).
+      const uint16_t v =
+          static_cast<uint16_t>(px[i * 2] | (px[i * 2 + 1] << 8));
+      const uint8_t r5 = (v >> 11) & 0x1F, g6 = (v >> 5) & 0x3F, b5 = v & 0x1F;
+      out.push_back(static_cast<uint8_t>((r5 << 3) | (r5 >> 2)));
+      out.push_back(static_cast<uint8_t>((g6 << 2) | (g6 >> 4)));
+      out.push_back(static_cast<uint8_t>((b5 << 3) | (b5 >> 2)));
+    }
+    std::printf("      ppm: %s (%ux%u) %s\n", ppm_path.c_str(), w, h,
+                write_file(ppm_path, out) ? "written" : "FAILED");
+  }
+  std::fflush(stdout);
   // Flush before the long tail of work. Buffered output lost in a crash makes a
   // late fault look like an early one, which cost real time here: the record
   // path faulted AFTER this summary and presented as "no output at all".
