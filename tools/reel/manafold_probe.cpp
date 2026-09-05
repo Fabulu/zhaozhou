@@ -255,42 +255,64 @@ int main() {
     if (!ok) rc = 1;
   }
 
-  // ---- PASS 2: the EYE-PROTRUSION probe (committed; the read is PROTECTED)
+  // ---- PASS 2/5: the EYE-PROTRUSION gate (committed; PER NAMED PART)
   //
   // Owner: the eyes must keep poking out as 3D things — the artist likes
-  // it. The protected value is the READ the first pass shipped: the lens
-  // crown standing ~37% of the body radius proud (~166 mm, ~13 px), the
-  // star ~100 mm. Growing/splaying the almonds swings their tips further
-  // out along the radial, so every eye-geometry change re-measures here and
-  // pulls kEyeDeepMm/kEyeXMm back to the protected read. Computed in 3D
-  // over the posed face-region vertices against the body ellipsoid — a
-  // rendered-frame measurement would conflate protrusion with perspective.
+  // it ("abstehendes Auge"). PASS 5 RE-BASELINE, after the pass-4 QA
+  // refutation: the old probe took the max over EVERY face vertex, so
+  // WHICH part it measured silently changed when the geometry changed
+  // (10-GATE-CHECKLIST item 16). Pass 3's "protected 164 mm" was the CYAN
+  // STAR poking outside its lens — the exact fault pass 4 was ordered to
+  // remove — while the LENS itself never regressed (1218 → 1228 pm). So
+  // the protected read is now the LENS crown, measured over the lens's own
+  // vertices (matched by part material), and the star/ring are REPORTED so
+  // the extremum's identity can never silently move again. Want more
+  // stand-off? Raise the lens (kEyeDeepMm/kEyeXMm) — never the star arms:
+  // re-lengthening kPupilStarArmShortMm re-breaks star-in-lens containment.
+  // Computed in 3D against the body ellipsoid — a rendered-frame
+  // measurement would conflate protrusion with perspective.
   {
+    // the GATE: the lens crown must stand at least this far out. Derived
+    // from the accepted pass-5 lens read minus honest headroom (never
+    // re-fit this to a failing number — raise the lens instead).
+    constexpr int32_t kLensCrownMinPm = 1215;
     const int32_t rx = u02::fxu(u02::kBodyRadiusMm);
     const int32_t ry = u02::fxu(u02::vmm(u02::kBodyRadiusMm));
     const zc::Clip& still = T.bank.clips[7];  // slot 7: the still pose
     std::array<zc::mat3x4fx, zc::kMaxBones> pose;
     zc::decode_pose(T, still, 0, pose, nullptr, 0);
     const int32_t root_y = still.root[1];
-    int32_t max_e = 0;
+    struct EyePart { const char* name; uint8_t r, g, b; int32_t max_e; };
+    EyePart parts[3] = {
+        {"purple lens", u02::kLensR, u02::kLensG, u02::kLensB, 0},
+        {"cyan star", u02::kStarR, u02::kStarG, u02::kStarB, 0},
+        {"white ring", 246, 242, 250, 0}};
     for (const zc::Meshlet& m : T.mesh) {
+      EyePart* part = nullptr;
+      for (auto& p : parts)
+        if (m.r == p.r && m.g == p.g && m.b == p.b) part = &p;
+      if (!part) continue;
       for (const zc::SkinVertex& sv : m.verts) {
         int32_t x, y, z;
         zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
-        if (x < u02::fxu(300)) continue;  // the face region: forward of +300 mm
         const int64_t ex = (static_cast<int64_t>(x) << 16) / rx;
         const int64_t ey = (static_cast<int64_t>(y - root_y) << 16) / ry;
         const int64_t ez = (static_cast<int64_t>(z) << 16) / rx;
         const int32_t e = static_cast<int32_t>(
             (u02::isqrt64(ex * ex + ey * ey + ez * ez) * 1000) >> 16);
-        if (e > max_e) max_e = e;
+        if (e > part->max_e) part->max_e = e;
       }
     }
-    const int32_t proud_mm =
-        static_cast<int32_t>((static_cast<int64_t>(max_e - 1000) * u02::kBodyRadiusMm) / 1000);
-    std::printf("u02-probe: eye crown ellip %d pm — stands %d mm proud of the body "
-                "(protected read: ~166 mm / 1369 pm; re-tune kEyeDeepMm/kEyeXMm toward it)\n",
-                max_e, proud_mm);
+    for (const auto& p : parts) {
+      const int32_t proud_mm = static_cast<int32_t>(
+          (static_cast<int64_t>(p.max_e - 1000) * u02::kBodyRadiusMm) / 1000);
+      std::printf("u02-probe: eye crown [%s] ellip %d pm — stands %d mm proud of the body\n",
+                  p.name, p.max_e, proud_mm);
+    }
+    const bool lens_ok = parts[0].max_e >= kLensCrownMinPm;
+    std::printf("u02-probe: eye-protrusion gate (LENS >= %d pm): %s\n",
+                kLensCrownMinPm, lens_ok ? "OK" : "FAIL");
+    if (!lens_ok) rc = 1;
   }
   // ---- PASS 4: the JUNCTION SURFACE-CROSSING report (Stage B) ------------
   //
