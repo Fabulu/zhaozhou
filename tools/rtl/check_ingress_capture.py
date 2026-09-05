@@ -145,6 +145,31 @@ CONTRACTS = [
             r"render_grid_h_i",
         ],
     },
+    {
+        # THE FIELD SERVICE PATH -- six blocks, and the same shape that broke
+        # the island: a transaction with a context, dispatched to services whose
+        # latency varies.
+        #
+        # CHECKED AND CLEAN when this contract was added: every `long_*` input
+        # is consumed at ONE instantiation, together with its own
+        # `long_valid_i` / `long_ready_o` handshake.
+        #
+        # That makes three compositions examined for this defect -- the island,
+        # the shell, and this -- and the island is the only one that had it. The
+        # class was real and the spread was not, which is worth knowing before
+        # anyone goes looking for it everywhere.
+        # MUTATION-VERIFIED: a late read of long_s0_i near the end of the
+        # module is caught; the unmutated tree is clean.
+        "path": "fpga/rtl/field/zhao_field_v3_svcpath.sv",
+        "prefix": "long_",
+        "allow_regions": [
+            (r"\.long_valid_i\(long_valid_i\)", ");"),
+        ],
+        "allow_lines": [
+            r"^\s*input\s",
+            r"^\s*output\s",
+        ],
+    },
 ]
 
 PORT = re.compile(
