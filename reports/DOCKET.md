@@ -2806,6 +2806,23 @@ PRECOMPUTED EDGE EQUATIONS to A MESHLET DESCRIPTOR IN MEMORY:
 | 8 | GEOM.ASSETFETCH | the records themselves | 16 |
 | 9 | GEOM.ASSETFETCH | the u8 index stream | 17 |
 
+**The uncontended stall baseline, measured 2026-09-05.** `prefetch_stall_o`
+was tied off when ASSETFETCH was composed and is now connected. Against a bench
+memory that grants immediately and answers in one cycle:
+
+
+
+Twenty-seven cycles of a consumer waiting on a buffer still filling, against 24
+beats of fetch. The consumers begin asking almost as soon as the fetch starts,
+so single buffering already costs about a full fetch per meshlet in the BEST
+case this machine can have. That is the number the block header says should
+decide whether double buffering earns its ~2.4 KB -- and it is non-zero before
+contention exists at all.
+
+**Tread 10 must be read against this.** It introduces a real arbiter, and
+everything in treads 6 through 9 assumed a memory that never says no. Measuring
+the baseline afterwards would give two variables and one number.
+
 Every step draws the SAME triangle both ways and requires a byte-identical
 framebuffer, and every step from 3 onward also MEASURES that its own comparison
 is capable of failing — a habit step 2 forced, where the framebuffer check
