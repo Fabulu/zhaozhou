@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "afb7070fe129a7c997a69ebade1e5bf5c9ebc601",
+    "newestRunCommit":  "d05d42f176c38ea1e240265052244c562d878806",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1147,15 +1147,15 @@
                    {
                        "module":  "zhao_texture_material_combine_v1",
                        "status":  "incomplete:failed:quartus_fit.exe",
-                       "sourceCommit":  "864a2b73341645ee0cd7a25136f12ab9afe4e13e",
+                       "sourceCommit":  "d05d42f176c38ea1e240265052244c562d878806",
                        "rtlCleanAtHead":  true,
-                       "seconds":  2491,
+                       "seconds":  3601.8,
                        "sourcesHashed":  1,
                        "partial":  true,
                        "partialStage":  "analysis_and_synthesis",
-                       "registers":  742,
+                       "registers":  744,
                        "blockMemoryBits":  0,
-                       "dspBlocks":  7,
+                       "dspBlocks":  2,
                        "virtualPins":  596
                    },
                    {

@@ -2847,3 +2847,65 @@ Moving them into the top is a separate act and belongs after D1.
 The last one is the same shape as COMBINE.V1's double-issue earlier the same
 day: **correct results from a machine doing many times the work, visible only
 in a count.**
+
+---
+
+## D19t — G1-D is measured: 7,720 ALM at 69.05 MHz, and three owner questions
+
+**2026-09-05. The composed texture island has a number for the first time.**
+
+```
+alms 7720 of 41910   registers 11790   ramBlocks 18   dspBlocks 17   fmax 69.05 MHz
+```
+
+Third fit attempt; 9,238 s. Full evidence in
+`reports/G1D-COMPOSED-ISLAND-20260905.md`, decision material in
+`reports/G1-CLOSEOUT-DECISION-BRIEF-20260905.md`.
+
+**Settled.** The island is 18.4% of the device and 20.5% of the 10% reserve —
+capacity is not the constraint. And `zhao_texture_material_combine_v1`
+synthesises at **2 DSP** against §3.4's "reject DSP > 2", so §15.5's variant A
+LOGIC2 is measured rather than asserted.
+
+**Reopened.**
+
+*The survivors decision*, with a real number: 7,720 against a 7,500 redline is
+**+2.9%** — a choice, not a forced cut. The two blocks already over their own
+§3.3 lines carry 2,480 ALMs of overrun between them (`fragrob` 1,676/900,
+`perspuv` 2,204/900), eleven times the island's excess.
+
+*The composed acceptance floor*: **69.05 MHz against 105 — 34% short.**
+
+**The cause is located and it is not the flattering one.** All twelve worst
+paths start at a virtual pin, which reads as a measurement artefact. Splitting
+all 2,000 summarised paths by origin refutes it: 405 start at a pin (worst
+−4.482), **1,595 start inside the design (worst −3.63, about 73.4 MHz)**.
+Removing the boundary entirely buys ~4 MHz.
+
+The limit is `zhao_raster_rcp24_svc`. `pick_i` is a combinational round-robin
+scan over all `NCTX` contexts testing `c_val && c_pend`, and its result indexes
+`c_m`/`c_x`/`c_w`/`c_ph` — so a valid bit walks eight levels of priority logic
+into a memory's read-address port. `~DUPLICATE` shows the fitter already
+replicated the register trying to help.
+
+**Deliberately not done:** restructuring RCP24. Registering `pick_i` changes
+arbitration timing in a block ruling R7 constrains to ≥ 1.64 products/clock,
+currently measured at 1.99. The right shape is §15.5's own — both variants
+behind one interface, the fitter decides — not an edit and a hope.
+
+**Also refuted, and recorded rather than re-scoped:** the claim that standalone
+sums overstate the island. For ALMs the correction is 2.4% and changes no
+decision. It survives only where it is dramatic: the census totals 342 DSP
+against a 112-DSP device and the composed island uses 17.
+
+### Three questions for the owner
+
+1. **The redline** — amend, recover from fragrob/perspuv, or cut?
+2. **The floor** — is 105 MHz the requirement for the ISLAND, or for the
+   composed console? The island is measured alone with 889 virtual pins the
+   machine will not have.
+3. **RCP24** — is a registered-pick variant worth building, given it spends
+   throughput margin R7 constrains?
+
+Nothing is blocked on these. COMBINE.V1's fit is running for its ALM and fmax;
+perspuv's is chained behind it to confirm or refute the per-axis split.
