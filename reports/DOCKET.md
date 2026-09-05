@@ -2909,3 +2909,63 @@ against a 112-DSP device and the composed island uses 17.
 
 Nothing is blocked on these. COMBINE.V1's fit is running for its ALM and fmax;
 perspuv's is chained behind it to confirm or refute the per-axis split.
+
+---
+
+## D19u — variant A LOGIC2 is measured and fails its own acceptance condition
+
+**2026-09-05. G1-C's replacement combiner now has a full fit.**
+
+```
+alms 1994 | registers 1383 | dspBlocks 2 | fmax 29.74 MHz | 9,417 s
+```
+
+§15.5 does not merely describe variant A, it states when it is preferred:
+*"two exact 9x9/9x8 multipliers in ALM logic; zero DSP; **preferred if <= 800
+ALMs and >= 125 MHz**."*
+
+| | measured | bar | |
+|---|---|---|---|
+| DSP | 2 | ≤ 2 | **met** |
+| ALMs | 1,994 | ≤ 800 | 2.5× over |
+| fmax | 29.74 MHz | ≥ 125 MHz | 4.2× short |
+
+**The DSP rule is met and nothing else is.**
+
+Against the block it replaced — II=1 at 494 ALM / 524 reg / 8 DSP / 100.12 MHz
+— six DSP blocks were bought for **1,500 ALMs and 70 MHz**, on a device with 112
+DSPs of which the whole composed island uses 17.
+
+**The tripwire was still right to fire.** The II=1 block wrote eight independent
+`*` operators and assumed they would pack; they did not. What §3.4 could not say
+is that the replacement should be measured against its own bar before adoption.
+
+**Where the ALMs actually are:** not in the multipliers. Two 9×9 multipliers in
+logic are ~130 ALMs. The rest is the §15.3 **microjob scheduler** — a record
+file holding three samples, intermediates and three masks, plus a two-lane issue
+loop scanning every record and job every cycle. Correct, and expensive:
+`material_combine_v1_diff` passes 16 checks including exact per-recipe job
+counts, out-of-order retirement and back-pressure.
+
+**No cause is claimed for the 29.74 MHz.** The critical path has not been read —
+one file, and the next action. On the island the obvious explanation turned out
+to be worth 4 MHz of 36.
+
+### The decision
+
+§15.5's own procedure now points at variant B (`DSP2_PACKED_OR_EXPLICIT`,
+capped at the same 2 DSP, *"accepted only if the fitter proves the count and
+composition improves"*). Three options, none picked here:
+
+1. **Build B and compare** — the cap makes it a fair test on ALMs and fmax alone.
+2. **Attack the scheduler, not the multipliers** — that is where the 1,994 ALMs
+   are, and it is orthogonal to which variant supplies the arithmetic.
+3. **Reconsider whether 2 DSP is worth 1,500 ALMs** on a device using 17 of 112
+   — a re-reading of §3.4 in the light of a measurement it did not have, and an
+   owner call rather than a quiet amendment.
+
+**The refuted `zhao_texture_combine` stays**, with its manifest row and
+`texture_combine_diff.cpp`, because the replacement has been measured and has
+not earned the deletion.
+
+Evidence: `reports/G1C-COMBINE-V1-VARIANT-A-MEASURED-20260905.md`.
