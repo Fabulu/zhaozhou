@@ -265,9 +265,31 @@ int main(int argc, char** argv) {
     // 112 is far more than eight fragments can account for at four jobs each.
     // FRAGROB's retire handshake is correct (R_HOLD exits on ready, one
     // transfer per retirement), so the cause is not the obvious re-submission
-    // that bit ASSEMBLE and COMBINE.V1 earlier today. It is not understood, it
-    // is written down, and raising this threshold to 3 to make the suite green
-    // would bury it.
+    // that bit ASSEMBLE and COMBINE.V1 earlier today, and refusals are zero.
+    //
+    // THE SIGNATURE IS SPECIFIC AND IS THE PLACE TO START. Sort the recipes by
+    // their bit pattern:
+    //
+    //     jobs   recipe  bits
+    //      112      7    111
+    //       24      6    110
+    //        4      3    011
+    //        0      2    010
+    //        0      1    001
+    //
+    // Every recipe with TWO OR MORE bits set has jobs; every recipe with
+    // exactly one bit has none. That is not what mis-associating a fragment
+    // with its neighbour looks like -- that would smear across recipes without
+    // regard to their bit patterns. It looks like the three-bit recipe field
+    // arriving with bits OR-ed together or sampled across a transition, which
+    // would turn 001 and 010 into 011 and pile the high patterns up.
+    //
+    // Accounting, for whoever picks this up: the non-bypass counters imply 33
+    // fragments where 40 are expected, the three bypass recipes legitimately
+    // carry 24 more at zero jobs, so 57 of 64 are accounted for and 7 are not.
+    //
+    // Raising this threshold to 3 to make the suite look greener would bury
+    // all of that.
     check(moved >= 2,
           "more than one recipe issued product jobs -- the recipe travels with "
           "its fragment; before the context word was wired, ALL EIGHT counters "
