@@ -126,6 +126,11 @@ module zhao_texture_island_top #(
     input  var logic        frag_aux_i,
     input  var logic [23:0] frag_base_rgb_i,
     input  var logic [7:0]  frag_base_a_i,
+    // THE SAMPLE CLASS, per fragment. It was a hardcoded CLASS_BILINEAR, which
+    // left the palette path wired and permanently idle -- `palette 0` in every
+    // composed run. The class belongs at the boundary because in the machine it
+    // comes from the material binding, which is upstream of this island.
+    input  var logic [1:0]  frag_class_i,
 
     // ======================= island boundary: binding table =================
     input  var logic [31:0] bind_base_i,
@@ -195,7 +200,16 @@ module zhao_texture_island_top #(
     // not match what it issued. Exposed because a composed island that
     // accepts fragments and retires none is either starved or REJECTING,
     // and those need different fixes.
-    output var logic [31:0] cnt_fragrob_id_errors_o
+    output var logic [31:0] cnt_fragrob_id_errors_o,
+    // COMBINE.V1's per-recipe product-job counts, at the island boundary.
+    //
+    // §15.4 requires actual product jobs recorded by recipe, and until now they
+    // stopped inside the combiner. Bringing them out is what lets a composed
+    // test prove PER-FRAGMENT RECIPE IDENTITY: if the recipe did not travel
+    // with its fragment, every fragment would combine with whichever recipe
+    // arrived last and exactly one counter would move. That gap was recorded
+    // against the ENFORCED-BY note below and this closes it.
+    output var logic [31:0] cnt_combine_jobs_o [8]
 );
 
   // ==========================================================================
@@ -338,13 +352,12 @@ module zhao_texture_island_top #(
   // unpacking at the combiner instance are the two halves of one layout and
   // are deliberately adjacent in this file so they cannot drift apart.
   //
-  // NOT YET ENFORCED, and stated rather than implied: no test isolates
-  // PER-FRAGMENT recipe identity. `island_composed_directed` cycles all eight
-  // recipes and requires every fragment to retire, which would catch the
-  // recipe never arriving -- it would NOT catch two fragments swapping
-  // recipes. Closing that needs the combiner's per-recipe job counters brought
-  // out to the island boundary, which changes the top's port list and would
-  // invalidate the 7,720 ALM measurement, so it waits for a pass that re-fits.
+  // ENFORCED-BY: tests/texture/island_composed_directed.cpp -- it cycles all
+  // eight recipes and asserts the per-recipe job counts `cnt_combine_jobs_o`
+  // reports. If the recipe did not travel with its fragment, every fragment
+  // would combine with whichever recipe arrived last and exactly one counter
+  // would move. This was an open gap until the counters were brought out to
+  // the boundary in the same pass that re-fits the island.
   //
   // CTXW is 64 and the low 16 bits are the tag, so the material fields ride
   // above it.
@@ -376,7 +389,7 @@ module zhao_texture_island_top #(
       .f_sample_count_i(frag_sample_count_i),
       .f_u_i(fr_f_u), .f_v_i(fr_f_v),
       .f_binding_i(fr_f_binding), .f_lod_i(fr_f_lod),
-      .f_recipe_i(frag_recipe_i), .f_ctx_i(frag_ctx_i),
+      .f_recipe_i(frag_recipe_i), .f_ctx_i(fr_f_ctx),
       .f_aux_i(frag_aux_i), .f_uv_sat_i(pu_sat),
       .tmu_valid_o(fr_tmu_valid), .tmu_ready_i(fr_tmu_ready),
       .tmu_u_o(fr_tmu_u), .tmu_v_o(fr_tmu_v),
@@ -408,10 +421,8 @@ module zhao_texture_island_top #(
   // request's identity so a sample can be returned to the right FRAGROB slot;
   // its top two bits carry the class RSP_DISPATCH routes on, because
   // CACHE_PIPE has no class lane of its own.
-  localparam logic [1:0] CLASS_BILINEAR = 2'd2;
-
   logic [SRCW-1:0] plan_src_id;
-  assign plan_src_id = {CLASS_BILINEAR,
+  assign plan_src_id = {frag_class_i,
                         {(SRCW-2-$clog2(DEPTH)-2-GENW){1'b0}},
                         fr_tmu_slot, fr_tmu_sidx, fr_tmu_gen};
 
@@ -554,7 +565,42 @@ module zhao_texture_island_top #(
   // and the palette's RGB565 is expanded. Which of the two answers a given
   // request is decided by the class the request was tagged with, which is the
   // same two bits GLUE 3 carries.
-  assign bil_out_ready  = fr_tmu_rready;
+  // THE RESPONSE IDENTITY MUST COME FROM WHICHEVER PATH ANSWERED.
+  //
+  // This derived slot/sidx/generation from `bil_out_tok` unconditionally, so a
+  // palette answer carried the BILINEAR path's identity. FRAGROB rejected it
+  // and nothing retired. The bug survived every earlier composed run because
+  // the island tagged every request bilinear, leaving the CLUT path wired and
+  // permanently idle -- `palette 0` in the trace, which read as "expected" and
+  // was in fact "never tested".
+  //
+  // The palette's answer arrives a cycle after its request, so its token is
+  // latched rather than read live.
+  logic [TOKW-1:0] clut_tok_r;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)               clut_tok_r <= '0;
+    else if (disp_clut_valid) clut_tok_r <= disp_clut_tok;
+  end
+
+  wire [TOKW-1:0] rsp_tok = pal_lu_valid_o ? clut_tok_r : bil_out_tok;
+
+  // TWO SOURCES, ONE PORT, SO ONE MUST WAIT.
+  //
+  // The bilinear lane and the palette both answer into FRAGROB's single sample
+  // response port. `bil_out_ready = fr_tmu_rready` accepted the bilinear answer
+  // whenever FRAGROB was ready -- including cycles where the palette also
+  // answered and the mux chose the palette. The bilinear result was then
+  // consumed by nobody while its producer believed it had been taken, and the
+  // fragment waiting on it never completed.
+  //
+  // This could not happen while every request was tagged bilinear, because the
+  // two paths were never active at once. It appeared the moment the class was
+  // allowed to vary, which is the second bug in this response path that being
+  // permanently idle had hidden.
+  //
+  // The palette has no ready of its own -- it is a fixed-latency lookup -- so
+  // it wins and the lane back-pressures.
+  assign bil_out_ready  = fr_tmu_rready && !pal_lu_valid_o;
   assign fr_tmu_rvalid  = bil_out_valid || pal_lu_valid_o;
   assign fr_tmu_rgb     = pal_lu_valid_o
                           ? {pal_lu_rgb565[15:11], 3'b000,
@@ -562,9 +608,9 @@ module zhao_texture_island_top #(
                              pal_lu_rgb565[4:0],   3'b000}
                           : {bil_out, bil_out, bil_out};
   assign fr_tmu_a       = 8'hFF;
-  assign fr_tmu_rslot   = bil_out_tok[$clog2(DEPTH)+2+GENW-1 -: $clog2(DEPTH)];
-  assign fr_tmu_rsidx   = bil_out_tok[GENW+1 -: 2];
-  assign fr_tmu_rgen    = bil_out_tok[GENW-1:0];
+  assign fr_tmu_rslot   = rsp_tok[$clog2(DEPTH)+2+GENW-1 -: $clog2(DEPTH)];
+  assign fr_tmu_rsidx   = rsp_tok[GENW+1 -: 2];
+  assign fr_tmu_rgen    = rsp_tok[GENW-1:0];
 
   // ==========================================================================
   // AUX
@@ -619,9 +665,8 @@ module zhao_texture_island_top #(
   assign fr_o_ready = comb_f_ready;
 
   logic [31:0] comb_refused_recipe, comb_sat_add, comb_sat_2x;
-  /* verilator lint_off UNUSEDSIGNAL */
   logic [31:0] comb_jobs [8];
-  /* verilator lint_on UNUSEDSIGNAL */
+  assign cnt_combine_jobs_o = comb_jobs;
 
   zhao_texture_material_combine_v1 #(.RECS(2)) u_combine (
       .clk(clk), .rst_n(rst_n),

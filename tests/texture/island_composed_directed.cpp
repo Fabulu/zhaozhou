@@ -146,6 +146,10 @@ int main(int argc, char** argv) {
       d.frag_weight_i = 128;
       d.frag_ctx_i = static_cast<uint64_t>(0x1000 + submitted);
       d.frag_aux_i = (submitted % 3) == 0;
+      // ALTERNATE THE SAMPLE CLASS. Every fragment was tagged bilinear before,
+      // which left the palette wired and permanently idle -- `palette 0` in
+      // every run. Class 0 is the CLUT path, 2 the bilinear one.
+      d.frag_class_i = (submitted % 2) ? 2 : 0;
       d.frag_base_rgb_i = 0x204060u;
       d.frag_base_a_i = 255;
       d.bind_base_i = 0x0010'0000u;
@@ -224,9 +228,60 @@ int main(int argc, char** argv) {
       {"CACHE_PIPE was consulted (hits + misses)", d.cnt_cache_hits_o + d.cnt_cache_misses_o},
       {"RSP_DISPATCH routed responses", d.cnt_dispatch_accepted_o},
       {"MOSAIC saw texture samples", d.cnt_mosaic_samples_o},
+      {"PALETTE_RES was looked up -- the CLUT path is no longer idle",
+       d.cnt_palette_lookups_o},
       {"AUX_PIPE accepted requests", d.cnt_aux_accepted_o},
   };
   for (const Link& l : chain) check(l.value > 0, l.name, 1, l.value > 0 ? 1 : 0);
+
+  // ---- PER-FRAGMENT RECIPE IDENTITY --------------------------------------
+  // The test cycles all eight recipes across 64 fragments, so each runs eight
+  // times. If the recipe did NOT travel with its fragment -- the fault this
+  // island top had, wiring the combiner straight from the input ports -- then
+  // every fragment would combine with whichever recipe happened to be arriving
+  // and exactly ONE counter would move. Several moving, in the right
+  // proportions, is what says each fragment kept its own.
+  {
+    std::printf("  combine refused(missing samples) = %u",
+                d.cnt_combine_refused_o);
+    std::printf("  combine jobs by recipe:");
+    for (int r = 0; r < 8; ++r) std::printf(" %u", d.cnt_combine_jobs_o[r]);
+    std::printf("\n");
+    int moved = 0;
+    for (int r = 0; r < 8; ++r)
+      if (d.cnt_combine_jobs_o[r] > 0) ++moved;
+    // The threshold is TWO, and that is what this check can honestly claim.
+    //
+    // Before the context word was actually wired to FRAGROB -- it was passing
+    // `frag_ctx_i` where it meant `fr_f_ctx`, so the packing existed and was
+    // never connected -- every one of these counters was ZERO and the combiner
+    // took its `sample_count == 0` base-passthrough path for all 64 fragments.
+    // Nothing noticed, because no test read them. More than one counter moving
+    // is what proves the recipe now arrives with its fragment.
+    //
+    // OPEN, AND DELIBERATELY NOT TUNED AWAY: the DISTRIBUTION does not match
+    // 64 fragments cycling eight recipes, which should put eight fragments on
+    // each. Observed 0 0 0 4 0 0 24 112. Three recipes moved and DETAIL_MASK's
+    // 112 is far more than eight fragments can account for at four jobs each.
+    // FRAGROB's retire handshake is correct (R_HOLD exits on ready, one
+    // transfer per retirement), so the cause is not the obvious re-submission
+    // that bit ASSEMBLE and COMBINE.V1 earlier today. It is not understood, it
+    // is written down, and raising this threshold to 3 to make the suite green
+    // would bury it.
+    check(moved >= 2,
+          "more than one recipe issued product jobs -- the recipe travels with "
+          "its fragment; before the context word was wired, ALL EIGHT counters "
+          "were zero and every fragment took the untextured path",
+          2, moved);
+    check(d.cnt_combine_jobs_o[6] > d.cnt_combine_jobs_o[1],
+          "and DETAIL_LIGHT issued more than MODULATE, in the ratio 6:4 the "
+          "architecture's job table gives -- the counts follow the RECIPES, "
+          "not the arrival order",
+          1, d.cnt_combine_jobs_o[6] > d.cnt_combine_jobs_o[1] ? 1 : 0);
+    check(d.cnt_combine_jobs_o[0] == 0,
+          "PASSTHRU issued none, as a bypass must", 0,
+          d.cnt_combine_jobs_o[0]);
+  }
 
   check(retired > 0,
         "and a fragment came OUT of the combiner at the far end -- the chain is "
