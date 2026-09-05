@@ -4872,6 +4872,8 @@ set_tests_properties(lint_raster_tile_pipe PROPERTIES
 # (D10): tests/shell/shell_harness.hpp. The gate test is the executable
 # demos/wound_lab/duo_markers.cpp (600 capture-exact Duo marker frames).
 set(ZHAO_SHELL_RTL
+    # D22 step 1: GEOM.SETUP is now composed into the shell bench, so the
+    # boundary can move back from precomputed edge equations to vertices.
     ${ZHAO_ABI_PKG}
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_sdram_params_pkg.sv
@@ -4918,6 +4920,11 @@ set(ZHAO_SHELL_RTL
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_div255.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_quant.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
+    # D22 step 1: GEOM.SETUP composed into the shell bench, so the input
+    # boundary can move back from precomputed edge equations to VERTICES.
+    # Listed AFTER the packages it depends on -- Verilator resolves in list
+    # order, and a module placed before its package is simply not found.
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_setup.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_shell_top.sv)
 
 # synthesizable-cone lint (the model/tb are excluded by construction)
@@ -4956,6 +4963,35 @@ verilate(demo_duo_markers
 # and the whole raster chain against zref and proves the arithmetic. What only
 # this path can see is the SHELL'S OWN WIRING, which is invisible to every
 # block-level test and to the fitter, which analyses delay and not meaning.
+# D22 step 1's evidence: the SAME triangle drawn through the shell twice --
+# once from precomputed edge equations, once from vertices through the composed
+# GEOM.SETUP -- and required to produce an identical framebuffer.
+add_executable(test_shell_setup_path_directed shell/shell_setup_path_directed.cpp)
+target_link_libraries(test_shell_setup_path_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_shell_setup_path_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry)
+verilate(test_shell_setup_path_directed
+  PREFIX Vtb_zhao_shell TOP_MODULE tb_zhao_shell
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_SHELL_RTL}
+          ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/shell/tb_zhao_shell.sv)
+# NOT in add_test yet, deliberately. The executable builds and its anti-vacuity
+# guard WORKS -- it currently reports "0 non-zero words drawn", which means the
+# minimal setup here does not establish the preconditions shell_draw_directed
+# does (memory arena, framebuffer lease, frame configuration). Registering a red
+# test would redden the lane; registering it green would require deleting the
+# guard that is doing its job. Neither is acceptable, so it stays buildable and
+# unregistered until it draws.
+#
+# The COMPOSITION it exists to test is already proven non-disruptive: with
+# setup_mode_i at 0 the shell is bit-identical, and shell_golden passes 757/757
+# including "byte-identical to committed".
+
 add_executable(test_shell_draw_directed shell/shell_draw_directed.cpp)
 target_link_libraries(test_shell_draw_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_shell_draw_directed PRIVATE

@@ -151,6 +151,19 @@ module tb_zhao_shell (
   input  logic               render_frame_end_i,
   input  logic [5:0]         render_grid_w_i,
   input  logic [5:0]         render_grid_h_i,
+  // ---- D22 step 1: move the input boundary back to SETUP ------------------
+  // The shell has always been fed PRECOMPUTED EDGE EQUATIONS. D22's staircase
+  // starts by moving that boundary backwards one block, so the bench supplies
+  // VERTICES and GEOM.SETUP computes the coefficients inside the composed
+  // design. `setup_mode_i` selects which path drives the raster front end.
+  //
+  // It defaults to 0 -- the precomputed path, bit-identical to before -- so
+  // every existing test and every golden is unaffected by this port existing.
+  // The point of the mode is that the SAME triangle can be drawn both ways and
+  // the two pictures compared, which is the only evidence that actually proves
+  // the newly connected hardware draws.
+  input  logic               setup_mode_i,
+  input  logic signed [47:0] setup_area2_i,
   input  logic               render_tri_valid_i,
   output logic               render_tri_ready_o,
   input  logic signed [22:0] render_kx0_i,
@@ -260,6 +273,63 @@ module tb_zhao_shell (
   assign dbg_render_req_len_o   = u_shell.render_guard_req.len;
   assign dbg_render_req_write_o = u_shell.render_guard_req.write;
 
+  // ---- GEOM.SETUP, composed (D22 step 1) -----------------------------------
+  logic               shell_tri_ready;   // declared before use: Verilator's
+                                         // IMPLICIT warning is an error here
+  logic               su_out_valid;
+  logic               su_tri_ready;
+  logic signed [22:0] su_kx0, su_ky0, su_kx1, su_ky1, su_kx2, su_ky2;
+  logic signed [47:0] su_kc0, su_kc1, su_kc2;
+  logic        [2:0]  su_tl;
+  logic signed [20:0] su_ax, su_ay, su_bx, su_by, su_cx, su_cy;
+
+  zhao_geom_setup u_setup (
+      .clk(gpu_clk), .rst_n(rst_n),
+      .tri_valid_i(render_tri_valid_i & setup_mode_i),
+      .tri_ready_o(su_tri_ready),
+      .tri_ax_i(render_ax_i), .tri_ay_i(render_ay_i),
+      .tri_bx_i(render_bx_i), .tri_by_i(render_by_i),
+      .tri_cx_i(render_cx_i), .tri_cy_i(render_cy_i),
+      .tri_area2_i(setup_area2_i),
+      .tri_min_x_i(render_min_x_i), .tri_max_x_i(render_max_x_i),
+      .tri_min_y_i(render_min_y_i), .tri_max_y_i(render_max_y_i),
+      .tri_src_id_i(render_src_id_i),
+      .out_valid_o(su_out_valid),
+      .out_ready_i(shell_tri_ready),
+      .out_kx0_o(su_kx0), .out_ky0_o(su_ky0), .out_kc0_o(su_kc0),
+      .out_kx1_o(su_kx1), .out_ky1_o(su_ky1), .out_kc1_o(su_kc1),
+      .out_kx2_o(su_kx2), .out_ky2_o(su_ky2), .out_kc2_o(su_kc2),
+      .out_tl_o(su_tl), .out_area2_o(),
+      .out_ax_o(su_ax), .out_ay_o(su_ay),
+      .out_bx_o(su_bx), .out_by_o(su_by),
+      .out_cx_o(su_cx), .out_cy_o(su_cy),
+      .out_min_x_o(), .out_max_x_o(), .out_min_y_o(), .out_max_y_o(),
+      .out_src_id_o(), .triangles_submitted_o()
+  );
+
+  // The mux. In setup mode the shell is driven by SETUP's outputs and the
+  // bench's ready comes from SETUP's input side; otherwise everything is
+  // exactly as before.
+  assign render_tri_ready_o = setup_mode_i ? su_tri_ready : shell_tri_ready;
+
+  wire               m_tri_valid = setup_mode_i ? su_out_valid : render_tri_valid_i;
+  wire signed [22:0] m_kx0 = setup_mode_i ? su_kx0 : render_kx0_i;
+  wire signed [22:0] m_ky0 = setup_mode_i ? su_ky0 : render_ky0_i;
+  wire signed [47:0] m_kc0 = setup_mode_i ? su_kc0 : render_kc0_i;
+  wire signed [22:0] m_kx1 = setup_mode_i ? su_kx1 : render_kx1_i;
+  wire signed [22:0] m_ky1 = setup_mode_i ? su_ky1 : render_ky1_i;
+  wire signed [47:0] m_kc1 = setup_mode_i ? su_kc1 : render_kc1_i;
+  wire signed [22:0] m_kx2 = setup_mode_i ? su_kx2 : render_kx2_i;
+  wire signed [22:0] m_ky2 = setup_mode_i ? su_ky2 : render_ky2_i;
+  wire signed [47:0] m_kc2 = setup_mode_i ? su_kc2 : render_kc2_i;
+  wire        [2:0]  m_tl  = setup_mode_i ? su_tl  : render_tl_i;
+  wire signed [20:0] m_ax = setup_mode_i ? su_ax : render_ax_i;
+  wire signed [20:0] m_ay = setup_mode_i ? su_ay : render_ay_i;
+  wire signed [20:0] m_bx = setup_mode_i ? su_bx : render_bx_i;
+  wire signed [20:0] m_by = setup_mode_i ? su_by : render_by_i;
+  wire signed [20:0] m_cx = setup_mode_i ? su_cx : render_cx_i;
+  wire signed [20:0] m_cy = setup_mode_i ? su_cy : render_cy_i;
+
   zhao_shell_top u_shell (
     .gpu_clk, .vid_clk, .audio_clk, .rst_n,
     .hps_state_i, .hps_byte_len_i,
@@ -306,14 +376,14 @@ module tb_zhao_shell (
     // composition simulable for the first time.
     .render_frame_begin_i(render_frame_begin_i), .render_frame_end_i(render_frame_end_i),
     .render_grid_w_i(render_grid_w_i), .render_grid_h_i(render_grid_h_i),
-    .render_tri_valid_i(render_tri_valid_i), .render_tri_ready_o(render_tri_ready_o),
-    .render_kx0_i(render_kx0_i), .render_ky0_i(render_ky0_i), .render_kc0_i(render_kc0_i),
-    .render_kx1_i(render_kx1_i), .render_ky1_i(render_ky1_i), .render_kc1_i(render_kc1_i),
-    .render_kx2_i(render_kx2_i), .render_ky2_i(render_ky2_i), .render_kc2_i(render_kc2_i),
-    .render_tl_i(render_tl_i),
-    .render_ax_i(render_ax_i), .render_ay_i(render_ay_i),
-    .render_bx_i(render_bx_i), .render_by_i(render_by_i),
-    .render_cx_i(render_cx_i), .render_cy_i(render_cy_i),
+    .render_tri_valid_i(m_tri_valid), .render_tri_ready_o(shell_tri_ready),
+    .render_kx0_i(m_kx0), .render_ky0_i(m_ky0), .render_kc0_i(m_kc0),
+    .render_kx1_i(m_kx1), .render_ky1_i(m_ky1), .render_kc1_i(m_kc1),
+    .render_kx2_i(m_kx2), .render_ky2_i(m_ky2), .render_kc2_i(m_kc2),
+    .render_tl_i(m_tl),
+    .render_ax_i(m_ax), .render_ay_i(m_ay),
+    .render_bx_i(m_bx), .render_by_i(m_by),
+    .render_cx_i(m_cx), .render_cy_i(m_cy),
     .render_min_x_i(render_min_x_i), .render_max_x_i(render_max_x_i),
     .render_min_y_i(render_min_y_i), .render_max_y_i(render_max_y_i),
     .render_src_id_i(render_src_id_i),
