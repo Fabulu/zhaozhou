@@ -2920,6 +2920,14 @@ in a count.**
 
 ## D19t — G1-D is measured: 7,720 ALM at 69.05 MHz, and three owner questions
 
+> **SUPERSEDED BY D19v: these numbers no longer describe the tree.** They were
+> measured before the ingress-capture repair, which added a 64-entry attribute
+> table with combinational LUT-RAM reads on PERSPUV input path, a typed token
+> through FRAGROB, per-slot class and palette-binding tables, four output ports
+> and LODW 4 to 8. The RELATIONSHIPS below - composed against nominal, redline
+> and the standalone sum - are what the next measurement must be read against;
+> the absolute figures are history. No re-fit has been run.
+
 **2026-09-05. The composed texture island has a number for the first time.**
 
 ```
