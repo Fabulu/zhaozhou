@@ -2869,24 +2869,28 @@ to POISON during the fetch pass.
 
 ### What this does NOT close
 
-**THE MEMORY, and it is not glue.** Treads 8 and 9 were glue — the fetcher
-existed, its ports existed, and the wiring was the work. Tread 10 is not that
-shape, and the docket should stop implying it is:
+**THE MEMORY.** Corrected scoping, after reading the shell rather than
+guessing at it. An earlier note here said this needed `zhao_vram_arbiter` put
+in front and was "not a drop-in". That was wrong in the pessimistic direction:
 
-* `zhao_mem_guard` serves ONE client (`req/rsp` plus an `arb_req/arb_rsp`
-  port to the arbiter). The shell has TWO guard clients — MESHFETCH and
-  ASSETFETCH — so composing it needs `zhao_vram_arbiter` in front, not a
-  drop-in.
-* The beat stream then has to come out of `zhao_sdram_model` through that
-  path rather than being played, which means real latency and real
-  back-pressure where the bench currently answers in one cycle.
-* Both fetchers' guard grants become contended for the first time. Every
-  measurement in treads 6 through 9 was taken with an uncontended, always-ready
-  memory.
+* `zhao_shell_top` ALREADY instantiates `zhao_mem_guard` twice —
+  `u_guard_scan` and `u_guard_blit` — so the guard-per-client pattern is
+  established in the file, twice, with working examples to copy.
+* `zhao_vram_arbiter u_arb` is ALREADY instantiated, and its five client slots
+  are `[0]` scanout, `[1]` blit, `[2]` render, with `[3]` and `[4]` tied
+  to `'0`. **Two free slots, for exactly the two fetchers that need them.**
 
-That is the composition the staircase has been walking towards, and it is the
-step where the played answers stop being generous. Scoping it as "the last bit
-of wiring" would set it up to be underestimated.
+So the shape is: a guard per fetcher into slots 3 and 4, and the beats return
+through the same path the scanout and blit clients already use.
+
+What is still NOT glue, and is the point of the tread: both fetchers' grants
+become **contended for the first time**. Every measurement in treads 6 through
+9 was taken against a bench memory that granted immediately and answered in one
+cycle. Tread 10 is where the played answers stop being generous, and
+`prefetch_stall_o` — the counter ASSETFETCH's header names as deciding whether
+double buffering earns its ~2.4 KB — starts reporting something other than
+zero. That counter should be connected BEFORE this tread, not after, or its
+first non-zero reading will have nothing to be compared against.
 
 **The asset fetcher.** `zhao_geom_meshfetch` is the only `zhao_guard_req_t`
 client in the subsystem, and the bench plays THREE interfaces for it: the
