@@ -469,8 +469,11 @@ probe code converts correctly.
 7. **apply_gaze_lr** (5b rule 4, "asymmetry is allowed and wanted") is built and
    never called. Use it or report it.
 8. **Correct the hover caption** - it names a sun that no longer fires.
-9. Carried from the implementer own list, not re-litigated: D.2 fog shell, E.4
-   saturation, F.2-F.6 clip inventory, C.5 deform fill.
+9. **Report kKneadClipPm as blast radius.** Twelve per-clip authored numbers
+   changed; the pass counted two clips. Not a defect - a reporting rule: a
+   per-clip TABLE is per-clip key data.
+10. Carried from the implementer own list, not re-litigated: D.2 fog shell, E.4
+    saturation, F.2-F.6 clip inventory, C.5 deform fill.
 
 ---
 
@@ -510,3 +513,104 @@ tools/reel/rgbframe.py:
 * **rest-eye-notches.png** - manafold-rest f234, side by side with the same crop
   with every pixel of luminance < 90 marked magenta. The marks land on the lens
   tips and rim, not on the terrain or the sky.
+
+---
+
+## 4 and 9. BLAST RADIUS AND ZIXXTRIXX - both CONFIRMED
+
+Verified from a pass-5 baseline built independently in a separate lane
+(manafold-p6-qa-br), never inherited.
+
+### All 16 clips moved - CONFIRMED
+
+Every one of the 16 shipping subjects changed CRC between pass 5 and pass 6.
+**No clip failed to move.** Pass 5 under-reported this class of change (3
+claimed, 7 actual); pass 6 reported it correctly.
+
+| Subject | pass 5 | pass 6 | moved |
+|---|---|---|---|
+| hover | 0x6A6DAEE0 | 0xC8987099 | yes |
+| inspect | 0x86943538 | 0xC8987099 | yes |
+| drift | 0x5564D67D | 0x519C34D1 | yes |
+| channel | 0xB489DCCD | 0xC7454F19 | yes |
+| curious | 0xA0B18C20 | 0xFC9862DA | yes |
+| startle | 0xAD1D4544 | 0x19ED18C8 | yes |
+| rest | 0xBD1CBA93 | 0x7AC3A5F2 | yes |
+| pirouette | 0x8B76DC9C | 0xCE5D4FAE | yes |
+| hasty | 0x1E3F51FB | 0x55A67594 | yes |
+| fall | 0x7C1A45D1 | 0xDCB633CD | yes |
+| hit | 0x427DD81D | 0xA24020B8 | yes |
+| taunt | 0x190BD6FD | 0xAB17AAAD | yes |
+| taunt2 | 0x30CFD6C7 | 0x673841EF | yes |
+| trick | 0xB45E0F6C | 0x49D90F05 | yes |
+| damage | 0xEC1A194F | 0x10536934 | yes |
+| crackle | 0xDB02BAB4 | 0xA86F0841 | yes |
+
+**All 15 CRCs the implementer declared reproduce exactly** from a build made in
+a lane that never saw those numbers.
+
+### The rig collapse, confirmed EMPIRICALLY as well as by code
+
+The unique-colour counts settle section 5 independently:
+
+* At pass 5, hover and inspect were **different** clips - 9,700 vs **24,850**
+  unique colours. Only inspect carried the many-colour moving rig.
+* At pass 6 they are byte-identical at **19,443** colours, and every other clip
+  roughly doubles (rest 7,658 -> 18,350; channel 9,424 -> 17,716).
+
+So the rig was **universalised, not lost** - the count rises on all 15 clips.
+Worth noting for the record: inspect itself came DOWN, 24,850 -> 19,443, because
+it now inherits hover tighter kU02CamK framing. The showcase is slightly less
+rich than it was; the caption declares the merge, so this is disclosed rather
+than hidden, but it is a real change to that tab.
+
+### Zixxtrixx untouched - CONFIRMED
+
+From baselines built in the QA lane at both SHAs:
+
+    69 zixxtrixx-* reel subjects rendered at BOTH SHAs: 69/69 sequence CRCs
+       IDENTICAL, zero mismatches -- including zixxtrixx-moving-light
+       (0xC0DE226E both), the one subject that shares creature_moving_light
+       with the u02 rig raise. (2 of 71 are behind #ifdef at both SHAs.)
+    zixx-golden     45 clip .bin payloads + pose-crcs.txt byte-identical;
+                    `diff -r` clean; rollup md5 of all 45 payloads
+                    eb943076e4b79b3117fb4e7352c38c20 at BOTH SHAs
+    zixx-probe      510 lines identical
+    zixx-meshcheck  47 lines identical (1774 verts, 1098 shared-position
+                    groups, 0 disagreeing binds; every seam split 0 mm)
+
+And structurally: `git diff 7ba516ad..HEAD` touches no zixx-named file, and the
+rig assignment `cr_ctx.moving_rig = g_u02_moving_rig` is guarded by
+`species == Species::kUnnamed02` (zhao_reel.cpp:3586), so the A26 -> A40 rig
+raise **cannot** reach creature 01.
+
+Creature 01 is byte-for-byte unchanged by pass 6.
+
+### "Key data re-authored on exactly TWO clips" - PARTIALLY REFUTED
+
+Baseline 7ba516ad (parent of the first pass-6 commit 62254030).
+
+Strictly by clip-builder bodies, the claim is *generous to itself*: only
+**build_hasty()** had its own body edited (kBobAmpAMm/K/8 swapped for
+kHastyBobAmpMm / kHastyBobCycles, plus kHastyFishtailA16 1500 -> 0).
+**build_trick() is UNCHANGED** - trick re-authoring is a single named constant,
+kTrickPlantRootMm 1670 -> 1644.
+
+But there is a table the claim does not count:
+
+    kKneadClipPm[15]  {1000,600,900,800,350,500,700,0,450,300,350,550,380,0,250}
+                  ->  {1000,850,950,900,700,800,850,0,800,650,700,850,750,0,650}
+
+**Twelve of fifteen slots changed.** That is the per-clip antenna-knead gain -
+twelve hand-authored per-clip numbers, not shared mechanism. It is disclosed in
+the source comment, but "key data was re-authored on exactly TWO clips" is only
+true under a definition of key data that excludes a per-clip authored table.
+
+This is the same *shape* of under-report pass 5 was faulted for (3 claimed, 7
+actual), at a smaller scale and with the change itself disclosed in the source.
+**The honest statement is: one clip builder body, two named per-clip constants,
+and a twelve-slot per-clip table.**
+
+Also worth recording: the 16 subjects span only **14 authored clip slots** -
+hover, inspect and crackle all render slot 0. "All 16 clips moved" is true of
+subjects; the model has fewer clips than subjects.
