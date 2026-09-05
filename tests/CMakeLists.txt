@@ -821,6 +821,13 @@ set(ZHAO_TEXTURE_MOSAIC_SV
 # / platform backend -- and this pins the day-one properties the roadmap asks
 # for: a fixed-tick loop, inputs and state hashes recorded from the first tick,
 # exact replay, and a divergence LOCATED at the tick it happened.
+add_executable(test_zcon_frame_build_directed runtime/zcon_frame_build_directed.cpp)
+target_link_libraries(test_zcon_frame_build_directed PRIVATE zhao_zref)
+target_include_directories(test_zcon_frame_build_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/runtime/include)
+add_test(NAME zcon_frame_build_directed COMMAND test_zcon_frame_build_directed)
+set_tests_properties(zcon_frame_build_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_wizards_directed runtime/wizards_directed.cpp)
 target_include_directories(test_wizards_directed PRIVATE
   ${CMAKE_SOURCE_DIR}/runtime/include)
