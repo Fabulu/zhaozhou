@@ -3081,7 +3081,7 @@ Two defects stand in front of it. **Both were read directly out of the current
 source and are stated as source deductions, not measurements** — no simulation
 or fit was run for either.
 
-### 1. The mip level cannot be non-zero at all
+### 1. The mip level cannot be non-zero at all -- FIXED
 
 ```
 island:   .req_lod_i({{(8-LODW){1'b0}}, fr_tmu_lod})   // LODW=4 -> lands in [3:0]
@@ -3093,6 +3093,13 @@ zero-extends a 4-bit LOD into the **fraction** nibble, so the planner's integer
 level is always zero and enabling `MIP_EN` changes nothing. Everything the
 planner already implements — clamping, selected-level UV scaling, packed
 mip-chain offsets — is unreachable through this wiring.
+
+**FIXED in a4596338.** LODW is now 8 and the connection is direct. Inert at
+that commit and verified so: the composed test drives bind_mode_i = 0, so
+MIP_EN is low and lvl_req is 0 either way; every measured number is unchanged
+and 25 checks pass. Fixed separately from the two gated repairs because it
+changes nothing currently reachable, whereas the byte-select and expansion
+fixes change star and sky bytes.
 
 **The defect and the feature share one fix**: those misplaced fractional bits
 *are* the blend weight the two-level blend needs.
