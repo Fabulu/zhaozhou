@@ -2,9 +2,9 @@
 
 **Date** 2026-09-05
 **Block** `zhao_texture_island_top`, `zhao_texture_fragrob`
-**Test** `tests/texture/island_composed_directed.cpp`, 21 checks
+**Test** `tests/texture/island_composed_directed.cpp`, 24 checks
 **Commits** `b3b267d3` (repair), `a4faca2e` (identity gate), `f9bc57d4`
-(mutation evidence), `dcc28d18` (enforcement)
+(mutation evidence), `dcc28d18` (enforcement), `b3a8a4f6` (palette)
 
 ## What was wrong
 
@@ -98,17 +98,54 @@ the identity of the things being counted before theorising about the count.
 ## Two defects this exposed
 
 Both were **masked** by the carriage bug and became visible only once it was
-fixed. Neither is tuned away.
+fixed. Neither was tuned away; the first is now fixed and the second is
+architectural and recorded.
 
-### 1. The CLUT path returns black
+### 1. The CLUT path returned black — now fixed, and it was two faults
 
-All 32 CLUT-class fragments retire with `rgb == 0`; all 32 bilinear ones do
-not. The split is exactly by class. It is **not** the palette being unloaded —
-the test uploads `0x0841 * (i + 1)`, which cannot wrap to zero for any index in
-range — and **not** the path going idle: PALETTE_RES performs all 96 lookups
-its fragments ask for, which is now asserted so it cannot regress to silence
-the way it did before. Not diagnosed here, and deliberately not asserted as
-expected behaviour: a check saying "the CLUT path is black" would enshrine it.
+All 32 CLUT-class fragments retired with `rgb == 0`; all 32 bilinear ones did
+not. `cnt_palette_lookups_o` moved healthily the whole time.
+
+**Fault one: the test never loaded a palette.** It sent `LD_WRITE` 64 times and
+no `LD_BEGIN`, so `loading_r` was never set and not one write was accepted;
+`LD_END` grants residency only when all 256 entries have arrived, so 64 would
+not have sufficed either.
+
+**Fault two: the island asked the palette the wrong question.**
+
+```systemverilog
+.lu_slot_i(disp_clut_tok[$clog2(PAL_SLOTS)-1:0])   // tok[1:0]
+.lu_gen_i (disp_clut_tok[GENW-1:0])                // tok[7:0]
+```
+
+Two **overlapping** slices of the same word, so the "slot" was the low two bits
+of the "generation" — and that generation was FRAGROB's residency counter,
+which has nothing to do with a palette upload. This is the owner's v2 Appendix
+B line exactly: *"A provenance source ID is not an internal transaction-routing
+ID."* A palette slot and generation are a **material binding**, so they now
+travel with the fragment through the ingress capture, keyed by FRAGROB slot the
+way the sample class is. The routing token's fields are named in localparams
+instead of being sliced by hand twice, which is what let two overlapping ranges
+sit unnoticed.
+
+```
+before   96 lookups, 96 STALE, 0 cold    all 32 CLUT fragments black
+after    96 lookups,  0 stale, 0 cold    all 32 coloured
+```
+
+**A correction belongs here.** The first diagnosis of the blackness asserted
+*"it is NOT the palette being unloaded"*, reasoning that the entry values are
+all non-zero. That checked the data and not the protocol; the values were
+irrelevant because no write was ever accepted. The negative claim was published
+without the evidence a positive one would have required — the third time in
+this pass that a confident statement preceded the cheap experiment that would
+have settled it.
+
+Staleness and coldness are now **counters** rather than internal wires, and are
+asserted at zero. "The lookup happened" and "the lookup found its palette" are
+different facts, and only the first was observable — which is exactly why a
+path answering every request with a miss indication looked healthy for a whole
+pass.
 
 ### 2. Order is not preserved
 
@@ -175,8 +212,8 @@ and the corrected combiner leaf fit is the next bounded attribution experiment.
 
 ## What is NOT claimed
 
-* Not that the island is correct. Two known defects are recorded above, and the
-  ordering one is architectural.
+* Not that the island is correct. The ordering defect above is real and
+  architectural, and no claim is made about anything this test does not drive.
 * Not that the island is timing-closed or that its resources are known. Every
   number in the fit tables predates this change.
 * Not that which upstream service reorders has been identified. The maximum
