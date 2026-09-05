@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "864a2b73341645ee0cd7a25136f12ab9afe4e13e",
+    "newestRunCommit":  "afb7070fe129a7c997a69ebade1e5bf5c9ebc601",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1127,17 +1127,22 @@
                    },
                    {
                        "module":  "zhao_texture_island_top",
-                       "status":  "incomplete:failed:quartus_fit.exe",
-                       "sourceCommit":  "68c8d58a0fe1a1ecbf3bfb1124c6ab6e1c6db2a3",
+                       "status":  "ok",
+                       "sourceCommit":  "afb7070fe129a7c997a69ebade1e5bf5c9ebc601",
                        "rtlCleanAtHead":  true,
-                       "seconds":  7205.1,
+                       "seconds":  9238,
                        "sourcesHashed":  15,
-                       "partial":  true,
-                       "partialStage":  "analysis_and_synthesis",
-                       "registers":  11613,
+                       "alms":  7720,
+                       "registers":  11790,
                        "blockMemoryBits":  25872,
-                       "dspBlocks":  22,
-                       "virtualPins":  889
+                       "ramBlocks":  18,
+                       "dspBlocks":  17,
+                       "virtualPins":  889,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  69.05,
+                       "fmaxClock":  "clk"
                    },
                    {
                        "module":  "zhao_texture_material_combine_v1",

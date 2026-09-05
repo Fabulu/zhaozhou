@@ -394,3 +394,53 @@ condition is broader than the event it records will always fire early.**
 
 Both were located by counting every hop instead of breaking at the first
 interesting signal — the structure step 4 had to learn and step 6 inherited.
+
+---
+
+# THE COMPOSED ISLAND FIT LANDED — 12:22
+
+```
+status  ok      seconds 9238 (2h34m)     sourceCommit afb7070f
+alms    7720    registers 11790          fmax 69.05 MHz
+ramBlocks 18    dspBlocks 17             virtualPins 889
+```
+
+Third attempt. The first died at a 7,200 s watchdog and the second was killed
+on purpose for having snapshotted a top that never retired a fragment. 9,238 s
+means two hours was never going to be enough.
+
+| | ALMs | vs composed |
+|---|---|---|
+| nominal | 6,600 | +1,120 (+17.0%) |
+| **redline** | **7,500** | **+220 (+2.9%)** |
+| standalone sum | 7,913 | −193 (−2.4%) |
+| **composed** | **7,720** | |
+
+## The report's own central argument is largely refuted, and it is written up
+
+§1 said the standalone sum is not the island's size. The saving is **2.4%**.
+The composed island is very nearly the sum of its standalone parts, and the
+889-virtual-pin reading in §4.1 predicted much more than it delivered.
+
+It survives for DSP — the census totals 342 against a 112-DSP device and the
+composed island uses 17 — and for fmax, which no per-block row contains at all.
+It does not survive for ALMs, and saying so matters: otherwise the next person
+inherits "standalone sums overstate" as a rule of thumb that is 2.4% true.
+
+## The finding that actually matters
+
+**fmax 69.05 MHz against a 105 MHz composed acceptance floor — 34% short**, and
+well below the shell's own 99.34 MHz which is already under D19j.
+
+**No explanation is offered.** The critical path has not been read. A composed
+number exists and its cause does not yet, and guessing from the block list is
+the arithmetic form of measuring instead of looking.
+
+## Next, in order
+
+1. Read the fit's timing report and name the critical path. That is one file.
+2. COMBINE.V1's fit is running now (chained, started 11:48) — it settles
+   whether variant A LOGIC2 reaches zero DSP after the multiplier count went
+   from ~14 to 2.
+3. perspuv's per-axis array split: its closure is FREE now that the island fit
+   has cleared.

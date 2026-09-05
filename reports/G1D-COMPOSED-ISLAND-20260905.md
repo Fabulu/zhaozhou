@@ -3,7 +3,7 @@
 **Date** 2026-09-05
 **Top** `fpga/rtl/texture/zhao_texture_island_top.sv`
 **Function** `tests/texture/island_composed_directed.cpp` — 11/11 checks
-**Capacity** fit in progress; numbers land in §4 below
+**Capacity** 7,720 ALM / 69.05 MHz / 17 DSP / 18 M10K — §4
 
 G1-D has two halves and they answer different questions. **Capacity** is the
 fit: how much silicon the island costs once its blocks are wired to each other
@@ -228,71 +228,83 @@ before-figure to difference against, and inventing one would be the
 registered output stage on those reads, which is the same remedy §5 of the
 perspuv report proposes for `e_q`.
 
-### 4.3 Fitter — KILLED AT THE WATCHDOG, and the row says so
+### 4.3 Fitter — COMPLETE
 
 ```
-status        incomplete:failed:quartus_fit.exe
-partial       true
-partialStage  analysis_and_synthesis
-seconds       7205.1          (budget 7200)
-registers     11613
-dspBlocks     22
-virtualPins   889
+status        ok
+seconds       9238            (2h34m, budget 14400)
+sourceCommit  afb7070f
+alms          7720            of 41910
+registers     11790
 blockMemoryBits 25872
-alms          -- ABSENT
-fmaxMhz       -- ABSENT
+ramBlocks     18              of 553
+dspBlocks     17              of 112
+virtualPins   889
+fmaxMhz       69.05           clk
 ```
 
-**The composed island did not complete a fit in two hours.** Analysis &
-Synthesis finished; the fitter did not.
+**The third attempt produced it.** The first was killed at a 7,200 s watchdog;
+the second was killed on purpose because it had snapshotted a top that never
+retired a fragment. This one ran 9,238 s — 2h34m — so the two-hour budget was
+never going to be enough and the four-hour one had about 86 minutes to spare.
 
-**The harvest behaved exactly as G0 rebuilt it to.** The row is `incomplete`,
-not an empty row that passes a gate; it keeps the numbers synthesis genuinely
-produced; and it records **no ALMs and no fmax**, because Analysis & Synthesis
-reports ALMs as N/A and inventing either would be the defect this whole report
-is about. This is the second time the watchdog has fired in production — it
-interrupted a perspuv re-fit at 5,404.9 s against 5,400 s — and the second time
-a previous-measurement-or-nothing rule kept a false number out of the census.
+| | ALMs | vs composed |
+|---|---|---|
+| architecture nominal (§3.3) | 6,600 | **+1,120 (+17.0%)** |
+| **redline** | **7,500** | **+220 (+2.9%)** |
+| sum of standalone per-block rows | 7,913 | −193 (−2.4%) |
+| **composed** | **7,720** | |
 
-**A longer budget is the right answer here and was the WRONG answer for
-perspuv**, which is worth stating because the two look identical from the
-outside. perspuv's overrun has a diagnosed cause a longer run cannot change (a
-2R2W context store that cannot be memory; see
-`PERSPUV-REGISTER-DIAGNOSIS-20260905.md`). This design has no diagnosed defect —
-it is simply 11,613 registers and 22 DSPs being placed for the first time. A
-four-hour re-run is queued behind the COMBINE.V1 fit.
+### 4.4 THE CENTRAL ARGUMENT OF THIS REPORT IS LARGELY REFUTED
 
-**So the headline number this gate exists to produce is still missing**, and
-that is the honest status. What IS established:
+§1 argued that the standalone sum is not the island's size, and gave two
+reasons: virtual-pin cost that disappears when blocks are wired to each other,
+and no cross-block sharing. §4.1 then read the 889-pin count as *evidence* for
+the first.
 
-* the island is COMPOSED and functionally correct end to end (§3);
-* its register, memory, DSP and pin counts are real (§4.1–4.2);
-* the standalone sum remains disproved as an estimate of its size, by its own
-  342-DSP-against-112 arithmetic.
+**The measurement says that saving is 193 ALMs — 2.4%.** The composed island is
+very nearly the sum of its standalone parts.
 
-Against:
+The reasoning was not wrong in kind; it was wrong in MAGNITUDE, and the
+difference matters because the sum was being treated as unusable rather than as
+approximate. A 2.4% correction does not change any decision the 7,913 figure
+would have driven. **Had this gate been skipped on the grounds that the sum was
+"meaningless", nothing would have been learned that the sum did not already
+say — about area.**
 
-| | ALM |
-|---|---|
-| architecture nominal (§3.3, eleven components) | 6,600 |
-| redline | 7,500 |
-| sum of standalone per-block rows | 7,913 |
-| **composed** | *pending* |
+What the sum genuinely could not say is the other two columns:
 
-**No rule is registered for this target yet, deliberately.** There has never
-been a composed measurement, so any threshold would be a guess dressed as a
-gate — and a rule written beside the first fit it governs is the exact failure
-`CLAUDE.md` records. The question gets answered before it gets gated.
+* **fmax, which only exists composed.** 69.05 MHz is not a number any per-block
+  row contains, and it is the finding that matters most below.
+* **DSP, where the sum is genuinely broken.** The census totals 342 against a
+  device with 112 — impossible, as §1 said. The composed island uses **17**.
+  Synthesis had reported 22, so the fitter packed five away; a standalone-row
+  sum can represent neither the packing nor the mutually exclusive variants.
 
-Two earlier fits were killed on purpose rather than kept:
+So §1's conclusion survives for DSP and for fmax and does not survive for ALMs.
+That is worth stating plainly rather than quietly re-scoping the claim, because
+the next person will otherwise inherit a rule of thumb — "standalone sums
+overstate" — that is 2.4% true.
 
-* the combiner fit, because it had snapshotted the source *before* the
-  double-issue fix and therefore described a block doing twice the work;
-* the first island fit, because it had snapshotted the top *before* §3.2–§3.4
-  and therefore described an island that never retires a fragment.
+### 4.5 The two findings that DO change what happens next
 
-Both were within their rights to finish and would have produced confident,
-useless numbers.
+**1. The island is over its redline, and only just.** 7,720 against 7,500 is
++2.9%. That is not a rounding error and it is not a crisis; it is a number a
+survivors decision can act on, and it is the first time that decision has had a
+real one. The 10% fabric reserve on a 41,910-ALM device is 37,719 ALMs, so the
+island at 7,720 is 18.4% of the device and 20.5% of the reserved budget.
+
+**2. fmax is 69.05 MHz against a 105 MHz composed acceptance floor.** This is
+the serious result. It is not marginal — it is **34% short**, and it is well
+below the shell's own 99.34 MHz, which is itself under owner decision D19j for
+being 5.66 MHz short.
+
+**No attempt is made here to explain the 69.05 MHz.** The critical path has not
+been read, and the honest position is that a composed number exists and its
+cause does not yet. Guessing at it from the block list is exactly the
+"measurement never trumps looking" failure in its arithmetic form — the fit
+report names the path, and reading it is the next action, not speculating about
+whether the culprit is the cache, the combiner or the aux divider.
 
 ## 5. Seams that remain, named rather than hidden
 
