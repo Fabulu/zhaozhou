@@ -373,6 +373,26 @@ worth having; a fourth timeout with nothing is not. And raising
 `NUM_PARALLEL_PROCESSORS` to 8 costs nothing in quality and is free speed,
 which is the first thing to change either way.
 
+### The speed lever I did NOT pull, and why
+
+`NUM_PARALLEL_PROCESSORS` is **4** on an **8-core** machine, and the block fit
+inherits it by copying the shell project's QSF. Doubling it is the cheapest
+speedup available and it changes no design decision.
+
+**It was left alone deliberately.** That setting lives in the SHARED shell QSF,
+so changing it changes the measurement basis for every block that has ever been
+fit through this flow — including the shell's own 99.34 MHz, which is currently
+under an owner decision (D19j). Quartus is documented to be deterministic across
+processor counts, but "documented to be" is not the same as "verified here", and
+a settings change that silently makes today's numbers incomparable with
+yesterday's is exactly the kind of quiet drift this report exists to argue
+against.
+
+If the four-hour run times out and the fallback is needed, raising it is the
+first thing to change — **as an explicit, recorded change to the fit flow, with
+one block re-fit at both settings to show the numbers did not move.** That is
+one extra fit to keep a whole census comparable, which is a good trade.
+
 **What will NOT be done is quoting a number this gate did not produce.** The
 census already contains one impossible figure — 342 DSP against a device with
 112 — because sums were taken of things that were never measured together. G1-D

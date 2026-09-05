@@ -330,3 +330,34 @@ count. Worth noticing twice in one day.
 
 **Also fixed:** `source_list_parity`'s fixed 4,000-character read window, which
 the staircase outgrew at 4,242 characters. Parity now green at 51 modules.
+
+## Nudge at 11:15 — fit running, nothing landed, toolchain busy
+
+Island fit at 2h02m of its 4h budget. Both census rows still `incomplete` with
+no ALM and no fmax, which is the honest state.
+
+**D22 step 6 (GEOM.MESHFETCH) wired and committed** — the last tread. All six
+staircase blocks are now composed into the shell bench.
+
+Step 6 has the largest PLAYED SURFACE of any step and the test says so: the
+bench plays the memory guard, the beat stream and the cull service, because
+MESHFETCH is the only `zhao_guard_req_t` client in the subsystem. It proves the
+descriptor path, not the asset fetcher and not culling — the cull answer is a
+constant "visible" so a cull failure cannot pass as a descriptor success.
+
+**A lever deliberately not pulled:** `NUM_PARALLEL_PROCESSORS` is 4 on an
+8-core machine and doubling it is free speed. It lives in the SHARED shell QSF,
+so changing it changes the measurement basis for every block ever fit through
+this flow, including the shell's 99.34 MHz that D19j is deciding on. If the
+fallback is needed it goes first — as a recorded change, with one block re-fit
+at both settings to show the numbers did not move.
+
+**Two build faults worth carrying:** the bench had never imported `zhao_pkg`
+(MESHFETCH is the first composed block with package-typedef ports, and the
+error reads like a missing file rather than a missing import); and a comment
+beginning with the tool's own name is parsed as a lint pragma.
+
+**A measurement artefact that misled me twice:** a single
+`Get-Process quartus*` piped through `Format-Table` intermittently returns
+empty, and I twice nearly reported the fit as finished. Three consecutive
+samples is the fix, and it is now what I do.
