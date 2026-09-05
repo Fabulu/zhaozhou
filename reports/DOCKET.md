@@ -2888,28 +2888,38 @@ to POISON during the fetch pass.
 
 ### What this does NOT close
 
-**THE MEMORY.** Corrected scoping, after reading the shell rather than
-guessing at it. An earlier note here said this needed `zhao_vram_arbiter` put
-in front and was "not a drop-in". That was wrong in the pessimistic direction:
+**THE MEMORY.** Scoped WRONG twice, both times by reasoning about the
+composition without checking where the modules actually live. Third attempt,
+from the source:
 
-* `zhao_shell_top` ALREADY instantiates `zhao_mem_guard` twice —
-  `u_guard_scan` and `u_guard_blit` — so the guard-per-client pattern is
-  established in the file, twice, with working examples to copy.
-* `zhao_vram_arbiter u_arb` is ALREADY instantiated, and its five client slots
-  are `[0]` scanout, `[1]` blit, `[2]` render, with `[3]` and `[4]` tied
-  to `'0`. **Two free slots, for exactly the two fetchers that need them.**
+* First I wrote that it needed `zhao_vram_arbiter` put in front. Wrong: the
+  shell already instantiates the arbiter and `zhao_mem_guard` twice, with
+  client slots `[3]` and `[4]` tied to `'0`.
+* Then I wrote that the shape was "a guard per fetcher into slots 3 and 4".
+  Also wrong, and for a bigger reason.
 
-So the shape is: a guard per fetcher into slots 3 and 4, and the beats return
-through the same path the scanout and blit clients already use.
+**The fetchers are not inside the shell.** `tb_zhao_shell.sv` instantiates
+`zhao_geom_meshfetch`, `zhao_geom_assetfetch`, `zhao_geom_vdecode` and
+`zhao_geom_assemble` **alongside** `zhao_shell_top u_shell`, not within it.
+The guards and the arbiter are INSIDE `u_shell`. There is no path between the
+two, and no amount of wiring in the bench creates one.
 
-What is still NOT glue, and is the point of the tread: both fetchers' grants
-become **contended for the first time**. Every measurement in treads 6 through
-9 was taken against a bench memory that granted immediately and answered in one
-cycle. Tread 10 is where the played answers stop being generous, and
-`prefetch_stall_o` — the counter ASSETFETCH's header names as deciding whether
-double buffering earns its ~2.4 KB — starts reporting something other than
-zero. That counter should be connected BEFORE this tread, not after, or its
-first non-zero reading will have nothing to be compared against.
+So tread 10 is not a wiring step at all. It is one of:
+
+* **Move the geometry fetch chain into `zhao_shell_top`**, where the memory
+  already is. That is the production shape, and it is what the staircase has
+  been walking towards — every tread so far has moved work from the bench into
+  composed production blocks, and this moves the composition itself.
+* Or expose spare guard-client ports on the shell so the bench can reach them,
+  which is a test-harness shape and would not survive into production.
+
+The first is the real answer and it is an architectural step, not glue. What
+survives from the earlier scoping is the part that was checked: the arbiter has
+two free client slots, so the memory side has room once the fetchers are on the
+right side of the boundary.
+
+**And the uncontended baseline is now measured** (27 stalls, above), which is
+what any of this has to be read against.
 
 **The asset fetcher.** `zhao_geom_meshfetch` is the only `zhao_guard_req_t`
 client in the subsystem, and the bench plays THREE interfaces for it: the
