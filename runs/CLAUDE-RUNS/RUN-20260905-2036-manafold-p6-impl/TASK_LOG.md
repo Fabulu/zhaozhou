@@ -136,3 +136,64 @@ one binary each side):
    magenta-pink identity is gone. **The fault has changed sign** — it is no
    longer only "blown", it is "swung". Re-measuring before touching anything,
    per D.1's own first instruction.
+
+### 21:20 — STAGE D.1 (the pink) done, out of architecture order, and why.
+
+D.1 was scheduled after stage B/C. I brought it forward because stage A made the
+body colour the loudest thing in every frame, and **every later by-eye verdict in
+this pass is formed through it.** That is the same argument the architecture uses
+for putting stage A first; it now applies to D.1.
+
+**The architecture's D.1 mechanism was wrong for the pass-6 rig, and here is the
+evidence.** D.1 says: re-measure, then "pull the moving-rig gain until the
+clipped fraction is single digits". I built the meter (`tools/reel/bodymeter.py`,
+committed) using a **differential hide-creature mask** rather than a colour rule
+— a colour mask cannot separate a hot-red lit flank from the terrain, which is
+the exact pixel in question, and this creature has already been misdiagnosed by
+two colour-rule instruments.
+
+Measured on `manafold-fogprobe-off` (creature only, no mana, no smear):
+
+| frame | clip_r% | dark% | mean value | b−g (magenta lean) |
+|---|---|---|---|---|
+| f000 | 19.6 | 34.1 | 138 | 47 |
+| f100 | **36.3** | 22.4 | 165 | 29 |
+| f210 | 7.0 | 28.0 | 126 | 47 |
+| f300 | 0.1 | **54.3** | 79 | 25 |
+
+**The fault is not "blown", it is SWUNG.** Pass 5's static sun clipped 49–57%
+constantly; the moving rig swings clip 0.1→36% and dark 22→54% *within one clip*.
+Half the clip is a blown red flank, half a dark violet plum.
+
+**And the ambient ladder cannot fix it — I rendered the rungs rather than
+assuming.** A32 lifted the away phase 54.3%→47.9% dark while pushing the bright
+phase 36.3%→43.5% clipped. **Ambient translates the swing; it does not narrow
+it.** Pulling gain alone (the architecture's instruction) would have fixed f100
+and made f300 nearly black.
+
+**What I authored:** two named knobs, one at each end of the swing.
+* `kU02MovingRigA40` — a rung above the ladder's old top. The ladder was
+  authored when the moving rig lit ONE showcase subject; it now lights every
+  clip, so the away phase is on every render.
+* `kU02MlSourceGainPm = 560` — a per-creature scale over the four moving
+  sources' gains **and** emissions. Deliberately both: an emission left at full
+  under a reduced gain keeps the hot-red flank and loses only the form under it.
+
+After: dark 29.6 / 22.4 / 25.0 / **33.1** (away phase 54→33), value swing
+79–165 → 111–169, and the magenta lean **b−g 25–47 → 39–52** — the pink stays
+magenta through the bright phase instead of sliding to fire-red.
+
+**LOOKED AT** (`evidence/D1-pink.png`, pass-5 sun / stage-A rig / D.1, at f100
+and f300): at f100 the stage-A rig is a fire-red body with its form gone; D.1 is
+a bright magenta-rose with the bulb's shading gradient back. At f300 the
+stage-A rig is a dark maroon plum with no pink identity left; D.1 is a readable
+rose with only a modest drop from f100. Against the pass-5 shipped look, D.1 is
+**darker and stronger** — Direction 5 §4's literal words.
+
+**Stated honestly: `clip_r_pct` is still 33% at f100 and I am shipping it.** The
+architecture's "single digits" band is the wrong acceptance test here, because
+the clip is on the RED channel alone while G and B still carry form — the pixel
+reads as saturated pink, not as white. `b_minus_g` is the number that tracked
+the read, and it is healthy. **The pigment `BODY_PINK` was not touched**, per
+the recon; if a later eye still wants it moved, that is the next knob and it is
+still there.

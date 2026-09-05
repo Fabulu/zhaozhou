@@ -2631,6 +2631,11 @@ const zc::CreatureLightRig kU02MovingRigA14 = u02_moving_rig_with_ambient(1000);
 const zc::CreatureLightRig kU02MovingRigA20 = u02_moving_rig_with_ambient(1430);
 const zc::CreatureLightRig kU02MovingRigA26 = u02_moving_rig_with_ambient(1860);
 const zc::CreatureLightRig kU02MovingRigA32 = u02_moving_rig_with_ambient(2290);
+// PASS 6 (D.1): a rung ABOVE the ladder's old top. The ladder was authored for
+// the inspect orbit, where the moving rig lit ONE showcase subject; from this
+// pass it lights EVERY clip, so the away phase is something the owner now sees
+// on every render rather than for a third of one orbit.
+const zc::CreatureLightRig kU02MovingRigA40 = u02_moving_rig_with_ambient(2860);
 // The process-wide selection (ladder diagnostics only; default = shipped).
 const zc::CreatureLightRig* g_u02_sun_rig = &kU02SunRig;
 // PASS 4 (reviewer fault 9, one-ladder treatment): the inspect orbit went
@@ -2638,7 +2643,37 @@ const zc::CreatureLightRig* g_u02_sun_rig = &kU02SunRig;
 // lifts the away phase while the four pools stay saturated — picked from a
 // rendered default-vs-A26 pair by eye. kU02MovingRig (.20) stays the named
 // rung below it.
-const zc::CreatureLightRig* g_u02_moving_rig = &kU02MovingRigA26;
+const zc::CreatureLightRig* g_u02_moving_rig = &kU02MovingRigA40;
+
+// ---- PASS 6 STAGE D.1: THE PINK ------------------------------------------
+// Direction 5 §4: "The pink should be a darker, stronger pink, like in the
+// drawings." The art recon established that BODY_PINK already sits on the
+// sheet's crayon core, so this is a LIGHT fix and not a pigment fix -- and
+// measuring it under the pass-6 rig (committed bodymeter.py, over an exact
+// hide-creature differential mask) changed the diagnosis a second time:
+//
+//   pass 5, one static sun:  49-57% of lit pink clipped at red 255, always.
+//   pass 6, the moving rig:  the clip fraction SWINGS 0.1% -> 36.3% across one
+//                            clip and the dark fraction swings 22% -> 54%;
+//                            mean value swings 79 -> 165.
+//
+// The fault is no longer "blown", it is "SWUNG": the four orbiting sources
+// floodlight the creature as they pass and abandon it as they leave. Half the
+// clip is a blown red flank, the other half a dark violet plum, and neither is
+// the sheet's strong saturated magenta.
+//
+// THE AMBIENT LADDER CANNOT FIX THIS -- measured, not assumed. The A20/A26/A32
+// rungs moved peak and floor TOGETHER (A32 lifted the away phase 54.3% -> 47.9%
+// dark while pushing the bright phase 36.3% -> 43.5% clipped). Ambient
+// translates the swing; it does not narrow it.
+//
+// So the other end gets its own named knob: ONE per-mille scale over the four
+// moving sources' gains and emissions. Lower = flatter, more pigment-coloured,
+// less light drama. With the raised ambient floor above, the away phase lifts,
+// the pass phase stops clipping, and what is left in both is the pigment.
+// AUTHORED BY EYE at native against the sheets; the meter is on the comparison
+// side and chose nothing.
+constexpr int kU02MlSourceGainPm = 560;
 
 // Path extents around the hovering conduit (world mm, instance-relative).
 constexpr int32_t kU02WarmOrbitXMm = 1500, kU02WarmOrbitZMm = 1500;
@@ -2693,12 +2728,19 @@ void sample_u02_moving_sources(uint32_t frame, uint32_t frames,
     s.world_z = inst.z + fxm(z_mm);
     s.inner_radius = fxm(inner_mm);
     s.outer_radius = fxm(outer_mm);
-    s.gain_r = gr;
-    s.gain_g = gg;
-    s.gain_b = gb;
-    s.add_r = adr;
-    s.add_g = adg;
-    s.add_b = adb;
+    // PASS 6 D.1: the one named per-creature scale that narrows the swing. It
+    // rides gains AND emissions together on purpose -- an emission left at full
+    // while its gain came down would keep the hot-red flank and lose only the
+    // form underneath it.
+    const auto sc = [](int32_t v) {
+      return static_cast<int32_t>((static_cast<int64_t>(v) * kU02MlSourceGainPm) / 1000);
+    };
+    s.gain_r = sc(gr);
+    s.gain_g = sc(gg);
+    s.gain_b = sc(gb);
+    s.add_r = sc(adr);
+    s.add_g = sc(adg);
+    s.add_b = sc(adb);
   };
   // Colour gains and additive emissions reuse the shipped Zixxtrixx source
   // values (they are per-channel responses, independent of stage scale);
@@ -6969,6 +7011,7 @@ int main(int argc, char** argv) {
     else if (a == "20") g_u02_moving_rig = &kU02MovingRigA20;
     else if (a == "26") g_u02_moving_rig = &kU02MovingRigA26;
     else if (a == "32") g_u02_moving_rig = &kU02MovingRigA32;
+    else if (a == "40") g_u02_moving_rig = &kU02MovingRigA40;
     else {
       std::fprintf(stderr, "U02_ML_AMBIENT=%s unknown (14|20|26|32)\n", amb);
       return 2;
