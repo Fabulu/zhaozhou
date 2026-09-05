@@ -1,7 +1,7 @@
 # Task Log: RUN-20260905-0555 - Creature 02 pass 3 implementation
 
 **Created:** 2026-09-05 05:55 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260905-0555-u02-pass3-implementation/
 
 ---
@@ -150,3 +150,30 @@ Four render-and-look iterations, each with a named finding:
 ### Stage Q in flight (10:35-)
 - Final render: 20 u02 subjects into website/scratch-reel + all 22
   Zixxtrixx subjects for the identity proof (8 parallel jobs).
+
+### Stage Q (10:35-)
+- Final render done: 20 u02 subjects -> website/scratch-reel; 22 zixx
+  subjects -> identity proof ALL-IDENTICAL 22/22
+  (evidence-bank-identity-pass3.txt). Committed 279f683a with QA.md +
+  evidence plates + recon PLATE-side/front beside the sheets.
+- 10-GATE-CHECKLIST.md landed mid-run (7b29fbd, upstream) - read, QA works
+  its items; native strand plate added (checklist B: verify at native).
+- Menu final look (all six on the final build): cyan longer teal smear /
+  three filled blue orbs / sea-green glowing heart / boil-centre big
+  breathing sphere with solid core / stack assembled. All alive.
+- Encoding 20 webms in 4 parallel tovideo groups.
+
+### Run closed (pass 3 PUBLISHED)
+- All 20 u02 webms encoded (VP9 crf16 4:4:4, 60 fps; one shell-precedence
+  retry: groups 2-4 initially ran without the cd and encoded nothing -
+  caught by mtime, re-run with absolute paths).
+- assemble: 2 creatures, 452 renders; exactly one robots noindex meta.
+- DEPLOYED: deploy.ps1 -Project upheaval -Branch main ->
+  https://82356c88.upheaval.pages.dev ; production https://upheaval.pages.dev
+  verified 200 + noindex + all new media serving (inspect, trick, the six
+  mana variants, the pass-2 archive files).
+- Background work: all render/encode processes verified dead (tasklist).
+- Zixxtrixx: ALL-IDENTICAL 22/22 on the final tree.
+- Deferred per plan R14: second trick clip, translucent mist shell (ladder
+  succeeded so never reached), pirouette/rest structural rework, ring-hole
+  egg + front-slot knob turns (logged residuals).

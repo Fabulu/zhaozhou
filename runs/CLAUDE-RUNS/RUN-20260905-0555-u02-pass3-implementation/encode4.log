@@ -1,1 +1,6 @@
-C:\Users\Fabian Trunz\AppData\Local\Programs\Python\Python314\python.exe: can't open file 'C:\\programmieren\\zencrifice\\zixxtrixx-wholebody-s-spring-20260901\\zhaozhou\\tools\\tovideo.py': [Errno 2] No such file or directory
+tovideo: 5 subject(s)
+  unnamed02-mana-cyan: 600 frames, 10.0 s at 60 fps, 2,342,546 B webm (VP9 crf16 4:4:4), poster frame 300
+  unnamed02-mana-blue: 600 frames, 10.0 s at 60 fps, 2,412,345 B webm (VP9 crf16 4:4:4), poster frame 90
+  unnamed02-mana-green: 600 frames, 10.0 s at 60 fps, 2,382,434 B webm (VP9 crf16 4:4:4), poster frame 90
+  unnamed02-mana-boil: 600 frames, 10.0 s at 60 fps, 2,803,962 B webm (VP9 crf16 4:4:4), poster frame 60
+  unnamed02-mana-stack: 600 frames, 10.0 s at 60 fps, 3,087,421 B webm (VP9 crf16 4:4:4), poster frame 300
