@@ -299,12 +299,72 @@ the serious result. It is not marginal — it is **34% short**, and it is well
 below the shell's own 99.34 MHz, which is itself under owner decision D19j for
 being 5.66 MHz short.
 
-**No attempt is made here to explain the 69.05 MHz.** The critical path has not
-been read, and the honest position is that a composed number exists and its
-cause does not yet. Guessing at it from the block list is exactly the
-"measurement never trumps looking" failure in its arithmetic form — the fit
-report names the path, and reading it is the next action, not speculating about
-whether the culprit is the cache, the combiner or the aux divider.
+### 4.6 The critical path, read rather than guessed — and it is RCP24
+
+The fit's own reports were archived to `reports/synthesis/blockpaths/`, so the
+path was read instead of speculated about.
+
+**Worst path overall, slack −4.482 ns:**
+
+```
+From  frag_depth_i[19]                          (a top-level VIRTUAL PIN)
+To    zhao_raster_rcp24_svc:u_rcp|c_x[7][8]
+      14 logic levels · data delay 17.763 ns
+      interconnect 11.153 ns (63%) · cell 6.610 ns (37%) · worst single hop 3.871 ns
+```
+
+All twelve worst paths start at that same pin bit and land in RCP24's context
+array. **The obvious reading is that the boundary is the problem** — a virtual
+pin is placed as arbitrary logic, so 63% interconnect from one looks like an
+artefact of the measurement rather than a property of the design.
+
+**That reading is wrong, and the same report refutes it.** Splitting the 2,000
+summarised paths by where they start:
+
+| paths starting | count | worst slack | implied fmax |
+|---|---|---|---|
+| at a virtual pin | 405 | −4.482 ns | 69.05 MHz |
+| **inside the design** | **1,595** | **−3.63 ns** | **~73.4 MHz** |
+
+If every virtual-pin path were pure artefact and vanished, fmax would move from
+69.05 to about **73.4 MHz**. Still **31.6 MHz short** of the 105 MHz floor. The
+boundary is worth roughly 4 MHz; it is not the finding.
+
+**The finding is `zhao_raster_rcp24_svc`.** Every one of the worst internal
+paths is the same shape:
+
+```
+zhao_raster_rcp24_svc:u_rcp|c_val[6]~DUPLICATE
+  -> zhao_raster_rcp24_svc:u_rcp|c_m.raddr_a[1]~6_O
+```
+
+— the context-valid bit driving the context memory's READ ADDRESS. A valid bit
+computing an address is a long combinational hop into a memory's address port,
+and `~DUPLICATE` says the fitter already replicated the register trying to
+shorten it.
+
+**This is exactly what a composed fit is for.** RCP24 measures fine as a leaf;
+it becomes the island's limit only once it is placed among ten other blocks
+competing for the same fabric. No per-block row contains this.
+
+**Third time today the flattering reading was the wrong one.** The DSP overrun
+looked like the `multstyle` attribute being ignored and was fourteen
+multipliers I had written; the standalone sum looked meaningless and is 2.4%
+off; the critical path looked like a virtual-pin artefact and is RCP24. The
+pattern is consistent enough to be worth naming: **the first explanation that
+absolves the design is the one to check hardest.**
+
+### 4.7 What this does NOT establish
+
+* **Not that RCP24 is badly designed.** It says the `c_val` → `c_m.raddr_a`
+  path does not close at 100 MHz *in this composition*. Whether that is
+  RCP24's structure, its placement among ten neighbours, or the absence of a
+  pipeline stage the composition needs is not answered here.
+* **Not that 105 MHz is unreachable.** One path is named; the work of closing
+  it has not been attempted.
+* **Not a comparison with the shell's 99.34 MHz.** Different design, different
+  constraint set. Putting the two numbers side by side would invite exactly the
+  mismatched-pose comparison `CLAUDE.md` warns about.
 
 ## 5. Seams that remain, named rather than hidden
 
