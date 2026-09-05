@@ -97,7 +97,16 @@ module zhao_texture_island_top #(
     parameter int unsigned DATAW   = 64,   // RSP_DISPATCH payload = LANES*16
     parameter int unsigned TOKW    = 16,
     parameter int unsigned PAL_SLOTS   = 4,
-    parameter int unsigned PAL_ENTRIES = 256
+    parameter int unsigned PAL_ENTRIES = 256,
+    // AUX_TOKW IS NOT 8, AND THAT WAS AN INTEGRATION BUG. FRAGROB
+    // validates a sample response against the slot AND generation it
+    // issued, which is $clog2(DEPTH) + GENW = 12 bits. AUX_PIPE's TOKW
+    // defaults to 8, so the identity could not round-trip and every aux
+    // response came back with the slot sitting where the generation
+    // should be. FRAGROB counted them -- 7 ID errors against exactly 7
+    // aux requests -- which is how it was found. The token is a
+    // parameter; it just had to be told how wide the identity is.
+    parameter int unsigned AUX_TOKW = $clog2(DEPTH) + GENW
 ) (
     input  var logic        clk,
     input  var logic        rst_n,
@@ -142,11 +151,19 @@ module zhao_texture_island_top #(
     input  var logic        sheet_rvalid_i,
     input  var logic [7:0]  sheet_tag_i,
     input  var logic [7:0]  sheet_str_i,
-    input  var logic [7:0]  sheet_rtok_i,
+    input  var logic [AUX_TOKW-1:0] sheet_rtok_i,
     output var logic        sheet_valid_o,
     input  var logic        sheet_ready_i,
     output var logic [5:0]  sheet_u_o,
     output var logic [5:0]  sheet_v_o,
+    // THE SHEET REQUEST'S TOKEN, which the first draft left
+    // unconnected -- `.sheet_tok_o()`. AUX_PIPE matches a sheet response
+    // to its request by this token, so with it dangling the responder
+    // had nothing to echo, every aux result carried a wrong identity,
+    // and FRAGROB rejected all of them. Because FRAGROB retires in
+    // ALLOCATION ORDER, one aux fragment stuck at the head blocked the
+    // entire island: 48 samples fetched, 0 fragments out.
+    output var logic [AUX_TOKW-1:0] sheet_tok_o,
 
     // ======================= island boundary: fragments out =================
     output var logic        out_valid_o,
@@ -173,7 +190,12 @@ module zhao_texture_island_top #(
     output var logic [31:0] cnt_rcp_completed_o,
     output var logic [31:0] cnt_persp_fragments_o,
     output var logic [31:0] cnt_dispatch_accepted_o,
-    output var logic [31:0] cnt_plan_accepted_o
+    output var logic [31:0] cnt_plan_accepted_o,
+    // FRAGROB rejects a sample response whose slot/sidx/generation does
+    // not match what it issued. Exposed because a composed island that
+    // accepts fragments and retires none is either starved or REJECTING,
+    // and those need different fixes.
+    output var logic [31:0] cnt_fragrob_id_errors_o
 );
 
   // ==========================================================================
@@ -288,7 +310,7 @@ module zhao_texture_island_top #(
   logic        fr_o_has_aux, fr_o_uv_sat;
   logic [23:0] fr_o_s_rgb [3];
   logic [7:0]  fr_o_s_a   [3];
-  logic [31:0] fr_samples, fr_full_clocks, fr_id_errors;
+  logic [31:0] fr_samples, fr_full_clocks;
   logic        fr_wq_overflow, fr_id_error, fr_combiner_unfrozen;
 
   assign pu_ready = fr_f_ready;
@@ -301,6 +323,25 @@ module zhao_texture_island_top #(
   // composition, not of FRAGROB, and it is why the binding is offset per
   // sample rather than replicated: three identical bindings would make the
   // cache serve one line three times and understate the miss traffic.
+  // THE RECIPE TRAVELS WITH THE FRAGMENT, in FRAGROB's context word.
+  //
+  // The first version wired the combiner's recipe/weight/sample_count straight
+  // from the island's INPUT ports, so a fragment retiring after N others was
+  // combined with whatever recipe happened to be arriving at that moment. With
+  // a reorder buffer in between, "the current input" and "the fragment being
+  // retired" are different fragments by construction -- and the composed test
+  // would still have passed every handshake check, because a wrong recipe is a
+  // wrong picture, not a stall.
+  //
+  // CTXW is 64 and the low 16 bits are the tag, so the material fields ride
+  // above it.
+  logic [CTXW-1:0] fr_f_ctx;
+  //   [15:0]  tag          [21:16] reserved
+  //   [23:22] sample_count [26:24] recipe      [34:27] weight
+  //   [63:35] the caller's own context bits
+  assign fr_f_ctx = {frag_ctx_i[CTXW-1:35], frag_weight_i, frag_recipe_i,
+                     frag_sample_count_i, 6'd0, frag_ctx_i[15:0]};
+
   logic signed [31:0] fr_f_u [3];
   logic signed [31:0] fr_f_v [3];
   logic [BINDW-1:0]   fr_f_binding [3];
@@ -343,7 +384,7 @@ module zhao_texture_island_top #(
       .o_aux_rgb_o(fr_o_aux_rgb), .o_aux_a_o(fr_o_aux_a),
       .o_has_aux_o(fr_o_has_aux), .o_uv_sat_o(fr_o_uv_sat),
       .fragments_o(cnt_fragments_o), .samples_o(fr_samples),
-      .full_clocks_o(fr_full_clocks), .id_errors_o(fr_id_errors),
+      .full_clocks_o(fr_full_clocks), .id_errors_o(cnt_fragrob_id_errors_o),
       .wq_overflow_o(fr_wq_overflow), .id_error_o(fr_id_error),
       .combiner_unfrozen_o(fr_combiner_unfrozen));
 
@@ -516,21 +557,22 @@ module zhao_texture_island_top #(
   // AUX
   // ==========================================================================
   logic        aux_req_ready, aux_out_valid;
-  logic [7:0]  aux_out_tok, aux_out_tag, aux_out_str;
+  logic [AUX_TOKW-1:0] aux_out_tok;
+  logic [7:0]  aux_out_tag, aux_out_str;
   logic        aux_out_degenerate;
   logic [31:0] aux_sheet_reads, aux_degenerate;
 
   assign fr_aux_ready = aux_req_ready;
 
-  zhao_texture_aux_pipe #(.TOKW(8)) u_aux (
+  zhao_texture_aux_pipe #(.TOKW(AUX_TOKW)) u_aux (
       .clk(clk), .rst_n(rst_n),
       .req_valid_i(fr_aux_valid), .req_ready_o(aux_req_ready),
       .req_wx_i(fr_aux_ctx[31:0]), .req_wz_i(fr_aux_ctx[63:32]),
       .req_env_x0_i(32'sd0), .req_env_x1_i(32'sd65536),
       .req_env_z0_i(32'sd0), .req_env_z1_i(32'sd65536),
-      .req_tok_i({{(8-$clog2(DEPTH)){1'b0}}, fr_aux_slot}),
+      .req_tok_i({fr_aux_slot, fr_aux_gen}),
       .sheet_valid_o(sheet_valid_o), .sheet_ready_i(sheet_ready_i),
-      .sheet_u_o(sheet_u_o), .sheet_v_o(sheet_v_o), .sheet_tok_o(),
+      .sheet_u_o(sheet_u_o), .sheet_v_o(sheet_v_o), .sheet_tok_o(sheet_tok_o),
       .sheet_rvalid_i(sheet_rvalid_i), .sheet_tag_i(sheet_tag_i),
       .sheet_str_i(sheet_str_i), .sheet_rtok_i(sheet_rtok_i),
       .out_valid_o(aux_out_valid), .out_ready_i(fr_aux_rready),
@@ -542,8 +584,8 @@ module zhao_texture_island_top #(
   assign fr_aux_rvalid = aux_out_valid;
   assign fr_aux_rgb    = {aux_out_tag, aux_out_str, 8'd0};
   assign fr_aux_a      = aux_out_degenerate ? 8'd0 : 8'hFF;
-  assign fr_aux_rslot  = aux_out_tok[$clog2(DEPTH)-1:0];
-  assign fr_aux_rgen   = aux_out_tok;
+  assign fr_aux_rslot  = aux_out_tok[AUX_TOKW-1 -: $clog2(DEPTH)];
+  assign fr_aux_rgen   = aux_out_tok[GENW-1:0];
 
   // ==========================================================================
   // FRAGROB -> MATERIAL.COMBINE.V1
@@ -571,8 +613,8 @@ module zhao_texture_island_top #(
   zhao_texture_material_combine_v1 #(.RECS(2)) u_combine (
       .clk(clk), .rst_n(rst_n),
       .f_valid_i(fr_o_valid), .f_ready_o(comb_f_ready),
-      .f_sample_count_i(frag_sample_count_i), .f_recipe_i(frag_recipe_i),
-      .f_weight_i(frag_weight_i),
+      .f_sample_count_i(fr_o_ctx[23:22]), .f_recipe_i(fr_o_ctx[26:24]),
+      .f_weight_i(fr_o_ctx[34:27]),
       .f_s0_rgb_i(fr_o_s_rgb[0]), .f_s0_a_i(fr_o_s_a[0]),
       .f_s1_rgb_i(fr_o_s_rgb[1]), .f_s1_a_i(fr_o_s_a[1]),
       // AUX, when the fragment has it, genuinely IS the third sample -- that

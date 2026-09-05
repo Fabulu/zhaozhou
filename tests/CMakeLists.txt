@@ -917,6 +917,39 @@ verilate(test_material_combine_v1_diff
 add_test(NAME material_combine_v1_diff COMMAND test_material_combine_v1_diff)
 set_tests_properties(material_combine_v1_diff PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# THE COMPOSED ISLAND, functionally. The composed FIT answers capacity; it
+# cannot answer whether the wiring is right, because a top that connects eleven
+# blocks through mismatched handshakes still synthesises and still reports an
+# ALM count -- it simply never moves a fragment. The roadmap's rule for every
+# integration step is a composed test that ACTUALLY DRAWS THROUGH the added
+# hardware, so this drives fragments in at the boundary and requires each
+# block's counter to have moved on the way out.
+add_executable(test_island_composed_directed texture/island_composed_directed.cpp)
+target_link_libraries(test_island_composed_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_island_composed_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture)
+verilate(test_island_composed_directed
+  PREFIX Vzhao_texture_island_top
+  TOP_MODULE zhao_texture_island_top
+  SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_island_top.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_fragrob.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_tmu_plan.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_cache_pipe.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_palette_res.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v1.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME island_composed_directed COMMAND test_island_composed_directed)
+set_tests_properties(island_composed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)
+
 add_executable(test_texture_mosaic_directed texture/texture_mosaic_directed.cpp)
 target_link_libraries(test_texture_mosaic_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_texture_mosaic_directed PRIVATE
