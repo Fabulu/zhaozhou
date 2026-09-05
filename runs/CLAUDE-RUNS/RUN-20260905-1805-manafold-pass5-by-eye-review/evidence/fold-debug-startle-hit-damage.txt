@@ -1,0 +1,1530 @@
+ZIXX_EXP=celmain (experimental lane)
+ZIXX_LIGHT=diagonal-cool-cross (lighting choice lane)
+fold f=0 seg=0 amp=0 agit_env=0 morph=0 3->4 | area_pm=999 ema=1000 coh=320 knead_mm=0 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=1 seg=0 amp=0 agit_env=0 morph=0 3->4 | area_pm=998 ema=1000 coh=320 knead_mm=1 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=2 seg=0 amp=5 agit_env=0 morph=0 3->4 | area_pm=997 ema=1000 coh=320 knead_mm=2 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=3 seg=0 amp=14 agit_env=0 morph=0 3->4 | area_pm=997 ema=1000 coh=320 knead_mm=3 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=4 seg=0 amp=25 agit_env=0 morph=0 3->4 | area_pm=997 ema=1000 coh=320 knead_mm=5 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=5 seg=0 amp=41 agit_env=0 morph=0 3->4 | area_pm=996 ema=1000 coh=320 knead_mm=6 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=6 seg=0 amp=56 agit_env=0 morph=0 3->4 | area_pm=995 ema=1000 coh=320 knead_mm=8 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=7 seg=0 amp=77 agit_env=0 morph=0 3->4 | area_pm=994 ema=1000 coh=320 knead_mm=9 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=8 seg=0 amp=99 agit_env=0 morph=0 3->4 | area_pm=994 ema=1000 coh=320 knead_mm=11 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=9 seg=0 amp=122 agit_env=0 morph=0 3->4 | area_pm=994 ema=1000 coh=320 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=10 seg=0 amp=150 agit_env=0 morph=0 3->4 | area_pm=992 ema=1000 coh=320 knead_mm=13 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=11 seg=0 amp=177 agit_env=0 morph=0 3->4 | area_pm=992 ema=1000 coh=320 knead_mm=14 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=12 seg=0 amp=209 agit_env=0 morph=0 3->4 | area_pm=990 ema=1000 coh=320 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=13 seg=0 amp=240 agit_env=0 morph=0 3->4 | area_pm=989 ema=1000 coh=320 knead_mm=16 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=14 seg=0 amp=272 agit_env=0 morph=0 3->4 | area_pm=987 ema=1000 coh=320 knead_mm=17 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=15 seg=0 amp=307 agit_env=0 morph=0 3->4 | area_pm=988 ema=1000 coh=320 knead_mm=17 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=16 seg=0 amp=340 agit_env=0 morph=0 3->4 | area_pm=994 ema=1000 coh=320 knead_mm=19 agit=260
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=17 seg=0 amp=376 agit_env=0 morph=0 3->4 | area_pm=1000 ema=1000 coh=320 knead_mm=21 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=18 seg=0 amp=414 agit_env=0 morph=0 3->4 | area_pm=1007 ema=1000 coh=320 knead_mm=22 agit=320
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=19 seg=0 amp=450 agit_env=0 morph=0 3->4 | area_pm=1012 ema=1000 coh=320 knead_mm=23 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=20 seg=0 amp=487 agit_env=0 morph=0 3->4 | area_pm=1017 ema=1001 coh=306 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=21 seg=0 amp=523 agit_env=0 morph=0 3->4 | area_pm=1021 ema=1002 coh=292 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=22 seg=0 amp=560 agit_env=0 morph=0 3->4 | area_pm=1025 ema=1003 coh=278 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=23 seg=0 amp=597 agit_env=0 morph=0 3->4 | area_pm=1028 ema=1004 coh=264 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=24 seg=0 amp=633 agit_env=0 morph=0 3->4 | area_pm=1031 ema=1005 coh=250 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=25 seg=0 amp=669 agit_env=0 morph=0 3->4 | area_pm=1033 ema=1006 coh=236 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=26 seg=0 amp=703 agit_env=0 morph=0 3->4 | area_pm=1034 ema=1007 coh=222 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=27 seg=0 amp=735 agit_env=0 morph=0 3->4 | area_pm=1033 ema=1008 coh=208 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=28 seg=0 amp=768 agit_env=0 morph=0 3->4 | area_pm=1035 ema=1009 coh=194 knead_mm=30 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=29 seg=0 amp=799 agit_env=0 morph=0 3->4 | area_pm=1035 ema=1010 coh=180 knead_mm=34 agit=560
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=30 seg=0 amp=829 agit_env=0 morph=0 3->4 | area_pm=1034 ema=1011 coh=166 knead_mm=36 agit=600
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=31 seg=0 amp=857 agit_env=0 morph=0 3->4 | area_pm=1032 ema=1012 coh=152 knead_mm=37 agit=620
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=32 seg=0 amp=882 agit_env=0 morph=0 3->4 | area_pm=1028 ema=1013 coh=138 knead_mm=38 agit=640
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=33 seg=0 amp=906 agit_env=0 morph=0 3->4 | area_pm=1024 ema=1013 coh=138 knead_mm=39 agit=660
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=34 seg=0 amp=926 agit_env=0 morph=0 3->4 | area_pm=1019 ema=1013 coh=138 knead_mm=39 agit=660
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=35 seg=0 amp=946 agit_env=0 morph=0 3->4 | area_pm=1012 ema=1013 coh=138 knead_mm=39 agit=660
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=36 seg=0 amp=962 agit_env=0 morph=0 3->4 | area_pm=1005 ema=1013 coh=138 knead_mm=39 agit=660
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=37 seg=0 amp=977 agit_env=0 morph=0 3->4 | area_pm=997 ema=1012 coh=152 knead_mm=39 agit=660
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=38 seg=0 amp=987 agit_env=0 morph=0 3->4 | area_pm=988 ema=1011 coh=166 knead_mm=39 agit=660
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=39 seg=0 amp=994 agit_env=0 morph=0 3->4 | area_pm=978 ema=1009 coh=194 knead_mm=39 agit=660
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=40 seg=0 amp=998 agit_env=0 morph=0 3->4 | area_pm=966 ema=1007 coh=222 knead_mm=39 agit=660
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=41 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=955 ema=1004 coh=264 knead_mm=40 agit=680
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=42 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=944 ema=1001 coh=306 knead_mm=40 agit=680
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=43 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=931 ema=997 coh=362 knead_mm=40 agit=680
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=44 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=938 ema=994 coh=404 knead_mm=35 agit=580
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=45 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=945 ema=991 coh=446 knead_mm=32 agit=520
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=46 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=951 ema=989 coh=474 knead_mm=30 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=47 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=958 ema=988 coh=488 knead_mm=29 agit=460
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=48 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=964 ema=987 coh=502 knead_mm=28 agit=440
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=49 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=971 ema=986 coh=516 knead_mm=28 agit=440
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=50 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=978 ema=986 coh=516 knead_mm=28 agit=440
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=51 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=983 ema=986 coh=516 knead_mm=28 agit=440
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=52 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=989 ema=986 coh=516 knead_mm=27 agit=420
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=53 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=995 ema=986 coh=516 knead_mm=26 agit=400
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=54 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=999 ema=986 coh=516 knead_mm=25 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=55 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1004 ema=987 coh=502 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=56 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1008 ema=988 coh=488 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=57 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1011 ema=989 coh=474 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=58 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1015 ema=990 coh=460 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=59 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1019 ema=991 coh=446 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=60 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1020 ema=992 coh=432 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=61 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1024 ema=994 coh=404 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=62 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1026 ema=996 coh=376 knead_mm=23 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=63 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1029 ema=998 coh=348 knead_mm=23 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=64 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1027 ema=999 coh=334 knead_mm=20 agit=280
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=65 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1026 ema=1000 coh=320 knead_mm=18 agit=240
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=66 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1024 ema=1001 coh=306 knead_mm=17 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=67 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1022 ema=1002 coh=292 knead_mm=16 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=68 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1021 ema=1003 coh=278 knead_mm=16 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=69 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1020 ema=1004 coh=264 knead_mm=16 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=70 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1018 ema=1004 coh=264 knead_mm=16 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=71 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1016 ema=1004 coh=264 knead_mm=16 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=72 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1015 ema=1004 coh=264 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=73 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1013 ema=1004 coh=264 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=74 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1011 ema=1004 coh=264 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=75 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1008 ema=1004 coh=264 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=76 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1004 ema=1004 coh=264 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=77 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=1002 ema=1004 coh=264 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=78 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=999 ema=1004 coh=264 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=79 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=996 ema=1004 coh=264 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=80 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=991 ema=1004 coh=264 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=81 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=989 ema=1004 coh=264 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=82 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=986 ema=1003 coh=278 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=83 seg=1 amp=1000 agit_env=0 morph=0 3->4 | area_pm=983 ema=1002 coh=292 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=84 seg=2 amp=1000 agit_env=0 morph=0 3->4 | area_pm=981 ema=1001 coh=306 knead_mm=14 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=85 seg=2 amp=1000 agit_env=17 morph=0 3->4 | area_pm=976 ema=1000 coh=320 knead_mm=14 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=86 seg=2 amp=1000 agit_env=69 morph=2 3->4 | area_pm=974 ema=999 coh=334 knead_mm=14 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=87 seg=2 amp=1000 agit_env=152 morph=8 3->4 | area_pm=970 ema=998 coh=348 knead_mm=14 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=88 seg=2 amp=1000 agit_env=256 morph=17 3->4 | area_pm=973 ema=997 coh=362 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=89 seg=2 amp=1000 agit_env=375 morph=27 3->4 | area_pm=973 ema=996 coh=376 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=90 seg=2 amp=1000 agit_env=500 morph=41 3->4 | area_pm=977 ema=995 coh=390 knead_mm=16 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=91 seg=2 amp=1000 agit_env=618 morph=56 3->4 | area_pm=979 ema=994 coh=404 knead_mm=16 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=92 seg=2 amp=1000 agit_env=735 morph=72 3->4 | area_pm=980 ema=994 coh=404 knead_mm=16 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=93 seg=2 amp=1000 agit_env=840 morph=89 3->4 | area_pm=982 ema=994 coh=404 knead_mm=16 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=94 seg=2 amp=1000 agit_env=924 morph=111 3->4 | area_pm=983 ema=994 coh=404 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=95 seg=2 amp=1000 agit_env=979 morph=132 3->4 | area_pm=984 ema=994 coh=404 knead_mm=14 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=96 seg=2 amp=1000 agit_env=1000 morph=155 3->4 | area_pm=986 ema=994 coh=404 knead_mm=13 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=97 seg=2 amp=1000 agit_env=1000 morph=177 3->4 | area_pm=987 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=98 seg=2 amp=1000 agit_env=1000 morph=203 3->4 | area_pm=989 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=99 seg=2 amp=1000 agit_env=1000 morph=230 3->4 | area_pm=991 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=100 seg=2 amp=1000 agit_env=1000 morph=256 3->4 | area_pm=993 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=101 seg=2 amp=1000 agit_env=1000 morph=286 3->4 | area_pm=995 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=102 seg=2 amp=1000 agit_env=1000 morph=315 3->4 | area_pm=997 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=103 seg=2 amp=1000 agit_env=1000 morph=344 3->4 | area_pm=998 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=104 seg=2 amp=1000 agit_env=1000 morph=375 3->4 | area_pm=1000 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=105 seg=2 amp=1000 agit_env=1000 morph=403 3->4 | area_pm=1001 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=106 seg=2 amp=1000 agit_env=1000 morph=435 3->4 | area_pm=1004 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=107 seg=2 amp=1000 agit_env=1000 morph=467 3->4 | area_pm=1005 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=108 seg=2 amp=1000 agit_env=1000 morph=500 3->4 | area_pm=1007 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=109 seg=2 amp=1000 agit_env=1000 morph=529 3->4 | area_pm=1009 ema=994 coh=404 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=110 seg=2 amp=1000 agit_env=1000 morph=560 3->4 | area_pm=1011 ema=995 coh=390 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=111 seg=2 amp=1000 agit_env=1000 morph=590 3->4 | area_pm=1013 ema=996 coh=376 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=112 seg=2 amp=1000 agit_env=1000 morph=621 3->4 | area_pm=1013 ema=997 coh=362 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=113 seg=2 amp=1000 agit_env=1000 morph=652 3->4 | area_pm=1012 ema=997 coh=362 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=114 seg=2 amp=1000 agit_env=1000 morph=682 3->4 | area_pm=1012 ema=997 coh=362 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=115 seg=2 amp=1000 agit_env=1000 morph=711 3->4 | area_pm=1011 ema=997 coh=362 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=116 seg=2 amp=1000 agit_env=1000 morph=738 3->4 | area_pm=1010 ema=997 coh=362 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=117 seg=2 amp=1000 agit_env=1000 morph=765 3->4 | area_pm=1011 ema=997 coh=362 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=118 seg=2 amp=1000 agit_env=1000 morph=793 3->4 | area_pm=1010 ema=997 coh=362 knead_mm=11 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=119 seg=2 amp=1000 agit_env=1000 morph=818 3->4 | area_pm=1010 ema=997 coh=362 knead_mm=10 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=120 seg=2 amp=1000 agit_env=1000 morph=843 3->4 | area_pm=1009 ema=997 coh=362 knead_mm=9 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=121 seg=2 amp=1000 agit_env=981 morph=864 3->4 | area_pm=1008 ema=997 coh=362 knead_mm=9 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=122 seg=2 amp=1000 agit_env=926 morph=886 3->4 | area_pm=1008 ema=997 coh=362 knead_mm=9 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=123 seg=2 amp=1000 agit_env=845 morph=906 3->4 | area_pm=1007 ema=997 coh=362 knead_mm=9 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=124 seg=2 amp=1000 agit_env=742 morph=924 3->4 | area_pm=1005 ema=997 coh=362 knead_mm=10 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=125 seg=2 amp=1000 agit_env=624 morph=941 3->4 | area_pm=1004 ema=997 coh=362 knead_mm=11 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=126 seg=2 amp=1000 agit_env=500 morph=956 3->4 | area_pm=1003 ema=997 coh=362 knead_mm=11 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=127 seg=2 amp=1000 agit_env=380 morph=969 3->4 | area_pm=1002 ema=997 coh=362 knead_mm=11 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=128 seg=2 amp=1000 agit_env=260 morph=979 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=11 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=129 seg=2 amp=1000 agit_env=157 morph=987 3->4 | area_pm=999 ema=997 coh=362 knead_mm=11 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=130 seg=2 amp=1000 agit_env=74 morph=994 3->4 | area_pm=998 ema=997 coh=362 knead_mm=10 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=131 seg=2 amp=1000 agit_env=19 morph=998 3->4 | area_pm=997 ema=997 coh=362 knead_mm=9 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=132 seg=3 amp=1000 agit_env=0 morph=0 3->4 | area_pm=997 ema=997 coh=362 knead_mm=8 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=133 seg=3 amp=998 agit_env=0 morph=0 3->4 | area_pm=995 ema=997 coh=362 knead_mm=7 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=134 seg=3 amp=986 agit_env=0 morph=0 3->4 | area_pm=994 ema=997 coh=362 knead_mm=7 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=135 seg=3 amp=970 agit_env=0 morph=0 3->4 | area_pm=994 ema=997 coh=362 knead_mm=7 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=136 seg=3 amp=946 agit_env=0 morph=0 3->4 | area_pm=995 ema=997 coh=362 knead_mm=9 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=137 seg=3 amp=919 agit_env=0 morph=0 3->4 | area_pm=996 ema=997 coh=362 knead_mm=10 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=138 seg=3 amp=885 agit_env=0 morph=0 3->4 | area_pm=995 ema=997 coh=362 knead_mm=12 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=139 seg=3 amp=845 agit_env=0 morph=0 3->4 | area_pm=997 ema=997 coh=362 knead_mm=14 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=140 seg=3 amp=804 agit_env=0 morph=0 3->4 | area_pm=998 ema=997 coh=362 knead_mm=16 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=141 seg=3 amp=758 agit_env=0 morph=0 3->4 | area_pm=999 ema=997 coh=362 knead_mm=18 agit=240
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=142 seg=3 amp=710 agit_env=0 morph=0 3->4 | area_pm=998 ema=997 coh=362 knead_mm=19 agit=260
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=143 seg=3 amp=661 agit_env=0 morph=0 3->4 | area_pm=999 ema=997 coh=362 knead_mm=21 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=144 seg=3 amp=608 agit_env=0 morph=0 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=22 agit=320
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=145 seg=3 amp=555 agit_env=0 morph=0 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=23 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=146 seg=3 amp=500 agit_env=0 morph=0 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=147 seg=3 amp=449 agit_env=0 morph=0 3->4 | area_pm=1001 ema=997 coh=362 knead_mm=25 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=148 seg=3 amp=395 agit_env=0 morph=0 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=25 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=149 seg=3 amp=343 agit_env=0 morph=0 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=25 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=150 seg=3 amp=294 agit_env=0 morph=0 3->4 | area_pm=1001 ema=997 coh=362 knead_mm=25 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=151 seg=3 amp=246 agit_env=0 morph=0 3->4 | area_pm=1001 ema=997 coh=362 knead_mm=25 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=152 seg=3 amp=200 agit_env=0 morph=0 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=153 seg=3 amp=157 agit_env=0 morph=0 3->4 | area_pm=1001 ema=997 coh=362 knead_mm=24 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=154 seg=3 amp=120 agit_env=0 morph=0 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=23 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=155 seg=3 amp=85 agit_env=0 morph=0 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=22 agit=320
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=156 seg=3 amp=57 agit_env=0 morph=0 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=20 agit=280
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=157 seg=3 amp=34 agit_env=0 morph=0 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=18 agit=240
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=158 seg=3 amp=16 agit_env=0 morph=0 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=15 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=159 seg=3 amp=5 agit_env=0 morph=0 3->4 | area_pm=1000 ema=997 coh=362 knead_mm=13 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=0 seg=0 amp=0 agit_env=0 morph=0 1->4 | area_pm=999 ema=1000 coh=320 knead_mm=0 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=1 seg=0 amp=0 agit_env=0 morph=0 1->4 | area_pm=999 ema=1000 coh=320 knead_mm=0 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=2 seg=0 amp=5 agit_env=0 morph=0 1->4 | area_pm=1000 ema=1000 coh=320 knead_mm=1 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=3 seg=0 amp=17 agit_env=0 morph=0 1->4 | area_pm=1000 ema=1000 coh=320 knead_mm=2 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=4 seg=0 amp=30 agit_env=0 morph=0 1->4 | area_pm=1000 ema=1000 coh=320 knead_mm=4 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=5 seg=0 amp=46 agit_env=0 morph=0 1->4 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=6 seg=0 amp=66 agit_env=0 morph=0 1->4 | area_pm=1001 ema=1000 coh=320 knead_mm=7 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=7 seg=0 amp=89 agit_env=0 morph=0 1->4 | area_pm=1001 ema=1000 coh=320 knead_mm=8 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=8 seg=0 amp=115 agit_env=0 morph=0 1->4 | area_pm=1002 ema=1000 coh=320 knead_mm=9 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=9 seg=0 amp=146 agit_env=0 morph=0 1->4 | area_pm=1002 ema=1000 coh=320 knead_mm=10 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=10 seg=0 amp=174 agit_env=0 morph=0 1->4 | area_pm=1002 ema=1000 coh=320 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=11 seg=0 amp=209 agit_env=0 morph=0 1->4 | area_pm=1003 ema=1000 coh=320 knead_mm=13 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=12 seg=0 amp=242 agit_env=0 morph=0 1->4 | area_pm=1003 ema=1000 coh=320 knead_mm=14 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=13 seg=0 amp=278 agit_env=0 morph=0 1->4 | area_pm=1002 ema=1000 coh=320 knead_mm=15 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=14 seg=0 amp=315 agit_env=0 morph=0 1->4 | area_pm=1002 ema=1000 coh=320 knead_mm=16 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=15 seg=0 amp=353 agit_env=0 morph=0 1->4 | area_pm=1003 ema=1000 coh=320 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=16 seg=0 amp=394 agit_env=0 morph=0 1->4 | area_pm=1003 ema=1000 coh=320 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=17 seg=0 amp=432 agit_env=0 morph=0 1->4 | area_pm=1002 ema=1000 coh=320 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=18 seg=0 amp=473 agit_env=0 morph=0 1->4 | area_pm=1004 ema=1000 coh=320 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=19 seg=0 amp=514 agit_env=0 morph=0 1->4 | area_pm=1003 ema=1000 coh=320 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=20 seg=0 amp=553 agit_env=0 morph=0 1->4 | area_pm=999 ema=1000 coh=320 knead_mm=22 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=21 seg=0 amp=592 agit_env=0 morph=0 1->4 | area_pm=995 ema=1000 coh=320 knead_mm=25 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=22 seg=0 amp=633 agit_env=0 morph=0 1->4 | area_pm=990 ema=1000 coh=320 knead_mm=27 agit=400
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=23 seg=0 amp=671 agit_env=0 morph=0 1->4 | area_pm=983 ema=999 coh=334 knead_mm=29 agit=440
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=24 seg=0 amp=708 agit_env=0 morph=0 1->4 | area_pm=977 ema=998 coh=348 knead_mm=30 agit=460
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=25 seg=0 amp=746 agit_env=0 morph=0 1->4 | area_pm=970 ema=997 coh=362 knead_mm=31 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=26 seg=0 amp=778 agit_env=0 morph=0 1->4 | area_pm=964 ema=995 coh=390 knead_mm=32 agit=500
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=27 seg=0 amp=813 agit_env=0 morph=0 1->4 | area_pm=955 ema=993 coh=418 knead_mm=33 agit=520
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=28 seg=0 amp=844 agit_env=0 morph=0 1->4 | area_pm=949 ema=991 coh=446 knead_mm=33 agit=520
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=29 seg=0 amp=873 agit_env=0 morph=0 1->4 | area_pm=940 ema=988 coh=488 knead_mm=33 agit=520
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=30 seg=0 amp=900 agit_env=0 morph=0 1->4 | area_pm=933 ema=985 coh=530 knead_mm=33 agit=520
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=31 seg=0 amp=924 agit_env=0 morph=0 1->4 | area_pm=925 ema=982 coh=572 knead_mm=33 agit=520
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=32 seg=0 amp=944 agit_env=0 morph=0 1->4 | area_pm=931 ema=979 coh=614 knead_mm=30 agit=460
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=33 seg=0 amp=963 agit_env=0 morph=0 1->4 | area_pm=939 ema=977 coh=642 knead_mm=28 agit=420
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=34 seg=0 amp=977 agit_env=0 morph=0 1->4 | area_pm=946 ema=976 coh=656 knead_mm=27 agit=400
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=35 seg=0 amp=988 agit_env=0 morph=0 1->4 | area_pm=954 ema=975 coh=670 knead_mm=26 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=36 seg=0 amp=996 agit_env=0 morph=0 1->4 | area_pm=961 ema=975 coh=670 knead_mm=26 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=37 seg=0 amp=999 agit_env=0 morph=0 1->4 | area_pm=969 ema=975 coh=670 knead_mm=26 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=38 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=975 ema=975 coh=670 knead_mm=26 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=39 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=981 ema=975 coh=670 knead_mm=26 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=40 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=986 ema=975 coh=670 knead_mm=26 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=41 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=991 ema=976 coh=656 knead_mm=26 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=42 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=997 ema=977 coh=642 knead_mm=26 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=43 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1002 ema=978 coh=628 knead_mm=26 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=44 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1006 ema=979 coh=614 knead_mm=25 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=45 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1012 ema=981 coh=586 knead_mm=25 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=46 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1015 ema=983 coh=558 knead_mm=25 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=47 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1021 ema=985 coh=530 knead_mm=25 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=48 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1023 ema=987 coh=502 knead_mm=25 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=49 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1028 ema=989 coh=474 knead_mm=25 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=50 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1031 ema=991 coh=446 knead_mm=25 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=51 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1033 ema=993 coh=418 knead_mm=25 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=52 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1033 ema=995 coh=390 knead_mm=22 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=53 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1032 ema=997 coh=362 knead_mm=20 agit=260
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=54 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1030 ema=999 coh=334 knead_mm=18 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=55 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1028 ema=1000 coh=320 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=56 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1027 ema=1001 coh=306 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=57 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1024 ema=1002 coh=292 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=58 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1022 ema=1003 coh=278 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=59 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1019 ema=1004 coh=264 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=60 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1015 ema=1004 coh=264 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=61 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1013 ema=1004 coh=264 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=62 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1010 ema=1004 coh=264 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=63 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1008 ema=1004 coh=264 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=64 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1005 ema=1004 coh=264 knead_mm=16 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=65 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1002 ema=1004 coh=264 knead_mm=15 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=66 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=999 ema=1004 coh=264 knead_mm=15 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=67 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=996 ema=1004 coh=264 knead_mm=15 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=68 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=994 ema=1004 coh=264 knead_mm=15 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=69 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=992 ema=1004 coh=264 knead_mm=15 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=70 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=989 ema=1004 coh=264 knead_mm=15 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=71 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=985 ema=1003 coh=278 knead_mm=15 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=72 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=982 ema=1002 coh=292 knead_mm=15 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=73 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=979 ema=1001 coh=306 knead_mm=15 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=74 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=974 ema=1000 coh=320 knead_mm=16 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=75 seg=1 amp=1000 agit_env=0 morph=0 1->4 | area_pm=970 ema=999 coh=334 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=76 seg=2 amp=1000 agit_env=0 morph=0 1->4 | area_pm=972 ema=998 coh=348 knead_mm=16 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=77 seg=2 amp=1000 agit_env=49 morph=2 1->4 | area_pm=973 ema=997 coh=362 knead_mm=16 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=78 seg=2 amp=1000 agit_env=152 morph=8 1->4 | area_pm=975 ema=996 coh=376 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=79 seg=2 amp=1000 agit_env=288 morph=19 1->4 | area_pm=977 ema=995 coh=390 knead_mm=18 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=80 seg=2 amp=1000 agit_env=452 morph=35 1->4 | area_pm=979 ema=994 coh=404 knead_mm=19 agit=240
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=81 seg=2 amp=1000 agit_env=611 morph=54 1->4 | area_pm=981 ema=994 coh=404 knead_mm=19 agit=240
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=82 seg=2 amp=1000 agit_env=768 morph=77 1->4 | area_pm=982 ema=994 coh=404 knead_mm=18 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=83 seg=2 amp=1000 agit_env=896 morph=104 1->4 | area_pm=983 ema=994 coh=404 knead_mm=18 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=84 seg=2 amp=1000 agit_env=975 morph=129 1->4 | area_pm=984 ema=994 coh=404 knead_mm=16 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=85 seg=2 amp=1000 agit_env=1000 morph=161 1->4 | area_pm=986 ema=994 coh=404 knead_mm=14 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=86 seg=2 amp=1000 agit_env=1000 morph=192 1->4 | area_pm=987 ema=994 coh=404 knead_mm=13 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=87 seg=2 amp=1000 agit_env=1000 morph=228 1->4 | area_pm=990 ema=994 coh=404 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=88 seg=2 amp=1000 agit_env=1000 morph=262 1->4 | area_pm=990 ema=994 coh=404 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=89 seg=2 amp=1000 agit_env=1000 morph=301 1->4 | area_pm=992 ema=994 coh=404 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=90 seg=2 amp=1000 agit_env=1000 morph=340 1->4 | area_pm=994 ema=994 coh=404 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=91 seg=2 amp=1000 agit_env=1000 morph=380 1->4 | area_pm=995 ema=994 coh=404 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=92 seg=2 amp=1000 agit_env=1000 morph=420 1->4 | area_pm=998 ema=994 coh=404 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=93 seg=2 amp=1000 agit_env=1000 morph=461 1->4 | area_pm=1000 ema=994 coh=404 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=94 seg=2 amp=1000 agit_env=1000 morph=504 1->4 | area_pm=1000 ema=994 coh=404 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=95 seg=2 amp=1000 agit_env=1000 morph=544 1->4 | area_pm=1003 ema=994 coh=404 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=96 seg=2 amp=1000 agit_env=1000 morph=585 1->4 | area_pm=1006 ema=994 coh=404 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=97 seg=2 amp=1000 agit_env=1000 morph=627 1->4 | area_pm=1007 ema=994 coh=404 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=98 seg=2 amp=1000 agit_env=1000 morph=665 1->4 | area_pm=1009 ema=994 coh=404 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=99 seg=2 amp=1000 agit_env=1000 morph=704 1->4 | area_pm=1012 ema=995 coh=390 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=100 seg=2 amp=1000 agit_env=1000 morph=742 1->4 | area_pm=1011 ema=996 coh=376 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=101 seg=2 amp=1000 agit_env=1000 morph=778 1->4 | area_pm=1011 ema=996 coh=376 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=102 seg=2 amp=1000 agit_env=1000 morph=813 1->4 | area_pm=1010 ema=996 coh=376 knead_mm=11 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=103 seg=2 amp=1000 agit_env=999 morph=844 1->4 | area_pm=1011 ema=996 coh=376 knead_mm=10 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=104 seg=2 amp=1000 agit_env=962 morph=873 1->4 | area_pm=1010 ema=996 coh=376 knead_mm=10 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=105 seg=2 amp=1000 agit_env=871 morph=900 1->4 | area_pm=1010 ema=996 coh=376 knead_mm=10 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=106 seg=2 amp=1000 agit_env=735 morph=925 1->4 | area_pm=1009 ema=996 coh=376 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=107 seg=2 amp=1000 agit_env=576 morph=948 1->4 | area_pm=1009 ema=996 coh=376 knead_mm=13 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=108 seg=2 amp=1000 agit_env=416 morph=965 1->4 | area_pm=1007 ema=996 coh=376 knead_mm=13 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=109 seg=2 amp=1000 agit_env=256 morph=979 1->4 | area_pm=1007 ema=996 coh=376 knead_mm=13 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=110 seg=2 amp=1000 agit_env=127 morph=990 1->4 | area_pm=1005 ema=996 coh=376 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=111 seg=2 amp=1000 agit_env=33 morph=996 1->4 | area_pm=1005 ema=996 coh=376 knead_mm=11 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=112 seg=3 amp=1000 agit_env=0 morph=0 1->4 | area_pm=1005 ema=996 coh=376 knead_mm=9 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=113 seg=3 amp=998 agit_env=0 morph=0 1->4 | area_pm=1003 ema=996 coh=376 knead_mm=8 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=114 seg=3 amp=986 agit_env=0 morph=0 1->4 | area_pm=1003 ema=996 coh=376 knead_mm=8 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=115 seg=3 amp=970 agit_env=0 morph=0 1->4 | area_pm=1003 ema=996 coh=376 knead_mm=8 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=116 seg=3 amp=946 agit_env=0 morph=0 1->4 | area_pm=1003 ema=996 coh=376 knead_mm=9 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=117 seg=3 amp=919 agit_env=0 morph=0 1->4 | area_pm=1003 ema=996 coh=376 knead_mm=10 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=118 seg=3 amp=885 agit_env=0 morph=0 1->4 | area_pm=1001 ema=996 coh=376 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=119 seg=3 amp=845 agit_env=0 morph=0 1->4 | area_pm=1001 ema=996 coh=376 knead_mm=13 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=120 seg=3 amp=804 agit_env=0 morph=0 1->4 | area_pm=1001 ema=996 coh=376 knead_mm=15 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=121 seg=3 amp=758 agit_env=0 morph=0 1->4 | area_pm=1000 ema=996 coh=376 knead_mm=16 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=122 seg=3 amp=710 agit_env=0 morph=0 1->4 | area_pm=1000 ema=996 coh=376 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=123 seg=3 amp=661 agit_env=0 morph=0 1->4 | area_pm=1000 ema=996 coh=376 knead_mm=18 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=124 seg=3 amp=608 agit_env=0 morph=0 1->4 | area_pm=1001 ema=996 coh=376 knead_mm=20 agit=260
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=125 seg=3 amp=555 agit_env=0 morph=0 1->4 | area_pm=1002 ema=996 coh=376 knead_mm=22 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=126 seg=3 amp=500 agit_env=0 morph=0 1->4 | area_pm=1001 ema=996 coh=376 knead_mm=23 agit=320
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=127 seg=3 amp=449 agit_env=0 morph=0 1->4 | area_pm=1001 ema=996 coh=376 knead_mm=24 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=128 seg=3 amp=395 agit_env=0 morph=0 1->4 | area_pm=1001 ema=996 coh=376 knead_mm=24 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=129 seg=3 amp=343 agit_env=0 morph=0 1->4 | area_pm=1000 ema=996 coh=376 knead_mm=24 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=130 seg=3 amp=294 agit_env=0 morph=0 1->4 | area_pm=1001 ema=996 coh=376 knead_mm=24 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=131 seg=3 amp=246 agit_env=0 morph=0 1->4 | area_pm=1001 ema=996 coh=376 knead_mm=24 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=132 seg=3 amp=200 agit_env=0 morph=0 1->4 | area_pm=1000 ema=996 coh=376 knead_mm=24 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=133 seg=3 amp=157 agit_env=0 morph=0 1->4 | area_pm=1001 ema=996 coh=376 knead_mm=24 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=134 seg=3 amp=120 agit_env=0 morph=0 1->4 | area_pm=1000 ema=996 coh=376 knead_mm=23 agit=320
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=135 seg=3 amp=85 agit_env=0 morph=0 1->4 | area_pm=1000 ema=996 coh=376 knead_mm=22 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=136 seg=3 amp=57 agit_env=0 morph=0 1->4 | area_pm=1001 ema=996 coh=376 knead_mm=19 agit=240
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=137 seg=3 amp=34 agit_env=0 morph=0 1->4 | area_pm=1000 ema=996 coh=376 knead_mm=17 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=138 seg=3 amp=16 agit_env=0 morph=0 1->4 | area_pm=1000 ema=996 coh=376 knead_mm=14 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=139 seg=3 amp=5 agit_env=0 morph=0 1->4 | area_pm=1000 ema=996 coh=376 knead_mm=12 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=0 seg=0 amp=0 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=0 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=1 seg=0 amp=0 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=0 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=2 seg=0 amp=2 agit_env=0 morph=0 3->1 | area_pm=999 ema=1000 coh=320 knead_mm=0 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=3 seg=0 amp=5 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=0 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=4 seg=0 amp=11 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=0 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=5 seg=0 amp=17 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=0 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=6 seg=0 amp=28 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=0 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=7 seg=0 amp=35 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=0 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=8 seg=0 amp=46 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=1 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=9 seg=0 amp=59 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=1 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=10 seg=0 amp=72 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=2 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=11 seg=0 amp=86 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=2 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=12 seg=0 amp=104 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=13 seg=0 amp=118 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=14 seg=0 amp=136 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=15 seg=0 amp=155 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=16 seg=0 amp=172 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=17 seg=0 amp=194 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=18 seg=0 amp=216 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=19 seg=0 amp=234 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=20 seg=0 amp=256 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=21 seg=0 amp=280 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=22 seg=0 amp=301 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=23 seg=0 amp=326 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=24 seg=0 amp=352 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=25 seg=0 amp=375 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=26 seg=0 amp=399 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=27 seg=0 amp=424 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=28 seg=0 amp=448 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=20 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=29 seg=0 amp=473 agit_env=0 morph=0 3->1 | area_pm=1008 ema=1000 coh=320 knead_mm=29 agit=540
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=30 seg=0 amp=500 agit_env=0 morph=0 3->1 | area_pm=1009 ema=1000 coh=320 knead_mm=37 agit=700
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=31 seg=0 amp=523 agit_env=0 morph=0 3->1 | area_pm=1011 ema=1000 coh=320 knead_mm=42 agit=800
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=32 seg=0 amp=549 agit_env=0 morph=0 3->1 | area_pm=1011 ema=1000 coh=320 knead_mm=46 agit=880
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=33 seg=0 amp=573 agit_env=0 morph=0 3->1 | area_pm=1010 ema=1000 coh=320 knead_mm=48 agit=920
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=34 seg=0 amp=597 agit_env=0 morph=0 3->1 | area_pm=1011 ema=1000 coh=320 knead_mm=43 agit=820
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=35 seg=0 amp=621 agit_env=0 morph=0 3->1 | area_pm=1010 ema=1000 coh=320 knead_mm=40 agit=760
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=36 seg=0 amp=648 agit_env=0 morph=0 3->1 | area_pm=1009 ema=1000 coh=320 knead_mm=38 agit=720
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=37 seg=0 amp=670 agit_env=0 morph=0 3->1 | area_pm=1009 ema=1000 coh=320 knead_mm=37 agit=700
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=38 seg=0 amp=693 agit_env=0 morph=0 3->1 | area_pm=1007 ema=1000 coh=320 knead_mm=36 agit=680
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=39 seg=0 amp=717 agit_env=0 morph=0 3->1 | area_pm=1006 ema=1000 coh=320 knead_mm=35 agit=660
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=40 seg=0 amp=738 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=34 agit=640
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=41 seg=0 amp=761 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=34 agit=640
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=42 seg=0 amp=784 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=34 agit=640
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=43 seg=0 amp=802 agit_env=0 morph=0 3->1 | area_pm=997 ema=1000 coh=320 knead_mm=34 agit=640
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=44 seg=0 amp=823 agit_env=0 morph=0 3->1 | area_pm=994 ema=1000 coh=320 knead_mm=34 agit=640
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=45 seg=0 amp=843 agit_env=0 morph=0 3->1 | area_pm=991 ema=1000 coh=320 knead_mm=34 agit=640
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=46 seg=0 amp=860 agit_env=0 morph=0 3->1 | area_pm=993 ema=1000 coh=320 knead_mm=33 agit=620
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=47 seg=0 amp=879 agit_env=0 morph=0 3->1 | area_pm=995 ema=1000 coh=320 knead_mm=32 agit=600
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=48 seg=0 amp=896 agit_env=0 morph=0 3->1 | area_pm=996 ema=1000 coh=320 knead_mm=31 agit=580
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=49 seg=0 amp=909 agit_env=0 morph=0 3->1 | area_pm=997 ema=1000 coh=320 knead_mm=30 agit=560
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=50 seg=0 amp=924 agit_env=0 morph=0 3->1 | area_pm=999 ema=1000 coh=320 knead_mm=29 agit=540
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=51 seg=0 amp=938 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=28 agit=520
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=52 seg=0 amp=949 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=28 agit=520
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=53 seg=0 amp=961 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=27 agit=500
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=54 seg=0 amp=972 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=26 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=55 seg=0 amp=979 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=25 agit=460
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=56 seg=0 amp=986 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=24 agit=440
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=57 seg=0 amp=992 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=23 agit=420
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=58 seg=0 amp=996 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=24 agit=440
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=59 seg=0 amp=998 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=25 agit=460
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=60 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=22 agit=400
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=61 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=20 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=62 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=19 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=63 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=18 agit=320
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=64 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=18 agit=320
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=65 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=18 agit=320
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=66 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=17 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=67 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=17 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=68 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=16 agit=280
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=69 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=15 agit=260
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=70 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=14 agit=240
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=71 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=13 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=72 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=13 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=73 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=13 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=74 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=13 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=75 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=999 ema=1000 coh=320 knead_mm=13 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=76 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=999 ema=1000 coh=320 knead_mm=12 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=77 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=998 ema=1000 coh=320 knead_mm=11 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=78 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=999 ema=1000 coh=320 knead_mm=10 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=79 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=999 ema=1000 coh=320 knead_mm=9 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=80 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=81 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=82 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=83 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=84 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=85 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=86 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=87 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=88 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=89 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=90 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=91 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=92 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=93 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=94 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=95 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=96 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=97 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=98 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=99 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=100 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=101 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=102 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=103 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=104 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=105 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=106 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=107 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=108 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=109 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=110 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=111 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=112 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=113 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=114 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=115 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=116 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=117 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=118 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=119 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=120 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=121 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=122 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=123 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=124 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=125 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=126 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=127 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=128 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=129 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=130 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=131 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=132 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=133 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=134 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=135 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=136 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=137 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=138 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=139 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=140 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=141 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=142 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=143 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=144 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1006 ema=1000 coh=320 knead_mm=16 agit=280
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=145 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1007 ema=1000 coh=320 knead_mm=24 agit=440
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=146 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1007 ema=1000 coh=320 knead_mm=31 agit=580
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=147 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1007 ema=1000 coh=320 knead_mm=36 agit=680
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=148 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1006 ema=1000 coh=320 knead_mm=40 agit=760
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=149 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=42 agit=800
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=150 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1006 ema=1000 coh=320 knead_mm=42 agit=800
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=151 seg=1 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1006 ema=1000 coh=320 knead_mm=42 agit=800
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=152 seg=2 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1007 ema=1000 coh=320 knead_mm=41 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=153 seg=2 amp=1000 agit_env=2 morph=0 3->1 | area_pm=1006 ema=1000 coh=320 knead_mm=41 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=154 seg=2 amp=1000 agit_env=19 morph=0 3->1 | area_pm=1006 ema=1000 coh=320 knead_mm=40 agit=760
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=155 seg=2 amp=1000 agit_env=43 morph=2 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=40 agit=760
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=156 seg=2 amp=1000 agit_env=77 morph=2 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=40 agit=760
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=157 seg=2 amp=1000 agit_env=118 morph=5 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=40 agit=760
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=158 seg=2 amp=1000 agit_env=166 morph=11 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=40 agit=760
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=159 seg=2 amp=1000 agit_env=220 morph=14 3->1 | area_pm=998 ema=1000 coh=320 knead_mm=40 agit=760
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=160 seg=2 amp=1000 agit_env=272 morph=19 3->1 | area_pm=996 ema=1000 coh=320 knead_mm=40 agit=760
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=161 seg=2 amp=1000 agit_env=333 morph=25 3->1 | area_pm=993 ema=1000 coh=320 knead_mm=41 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=162 seg=2 amp=1000 agit_env=397 morph=30 3->1 | area_pm=995 ema=1000 coh=320 knead_mm=35 agit=660
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=163 seg=2 amp=1000 agit_env=462 morph=38 3->1 | area_pm=995 ema=1000 coh=320 knead_mm=30 agit=560
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=164 seg=2 amp=1000 agit_env=529 morph=43 3->1 | area_pm=998 ema=1000 coh=320 knead_mm=26 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=165 seg=2 amp=1000 agit_env=595 morph=51 3->1 | area_pm=998 ema=1000 coh=320 knead_mm=23 agit=420
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=166 seg=2 amp=1000 agit_env=658 morph=62 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=21 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=167 seg=2 amp=1000 agit_env=720 morph=69 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=20 agit=360
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=168 seg=2 amp=1000 agit_env=772 morph=76 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=19 agit=340
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=169 seg=2 amp=1000 agit_env=826 morph=86 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=18 agit=320
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=170 seg=2 amp=1000 agit_env=875 morph=99 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=18 agit=320
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=171 seg=2 amp=1000 agit_env=916 morph=108 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=17 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=172 seg=2 amp=1000 agit_env=951 morph=120 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=17 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=173 seg=2 amp=1000 agit_env=977 morph=129 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=17 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=174 seg=2 amp=1000 agit_env=993 morph=143 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=18 agit=320
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=175 seg=2 amp=1000 agit_env=1000 morph=155 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=18 agit=320
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=176 seg=2 amp=1000 agit_env=1000 morph=166 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=15 agit=260
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=177 seg=2 amp=1000 agit_env=1000 morph=179 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=13 agit=220
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=178 seg=2 amp=1000 agit_env=1000 morph=192 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=11 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=179 seg=2 amp=1000 agit_env=1000 morph=205 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=10 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=180 seg=2 amp=1000 agit_env=1000 morph=220 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=9 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=181 seg=2 amp=1000 agit_env=1000 morph=234 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=182 seg=2 amp=1000 agit_env=1000 morph=248 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=183 seg=2 amp=1000 agit_env=1000 morph=260 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=184 seg=2 amp=1000 agit_env=1000 morph=276 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=185 seg=2 amp=1000 agit_env=1000 morph=292 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=186 seg=2 amp=1000 agit_env=1000 morph=307 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=187 seg=2 amp=1000 agit_env=1000 morph=322 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=188 seg=2 amp=1000 agit_env=1000 morph=337 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=189 seg=2 amp=1000 agit_env=1000 morph=353 3->1 | area_pm=999 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=190 seg=2 amp=1000 agit_env=1000 morph=369 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=191 seg=2 amp=1000 agit_env=1000 morph=383 3->1 | area_pm=999 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=192 seg=2 amp=1000 agit_env=1000 morph=400 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=193 seg=2 amp=1000 agit_env=1000 morph=417 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=194 seg=2 amp=1000 agit_env=1000 morph=432 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=195 seg=2 amp=1000 agit_env=1000 morph=450 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=196 seg=2 amp=1000 agit_env=1000 morph=466 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=197 seg=2 amp=1000 agit_env=1000 morph=483 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=198 seg=2 amp=1000 agit_env=1000 morph=500 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=199 seg=2 amp=1000 agit_env=1000 morph=514 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=200 seg=2 amp=1000 agit_env=1000 morph=530 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=201 seg=2 amp=1000 agit_env=1000 morph=547 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=202 seg=2 amp=1000 agit_env=1000 morph=562 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=203 seg=2 amp=1000 agit_env=1000 morph=578 3->1 | area_pm=1006 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=204 seg=2 amp=1000 agit_env=1000 morph=596 3->1 | area_pm=1004 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=205 seg=2 amp=1000 agit_env=1000 morph=611 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=206 seg=2 amp=1000 agit_env=1000 morph=627 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=207 seg=2 amp=1000 agit_env=1000 morph=642 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=208 seg=2 amp=1000 agit_env=1000 morph=658 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=209 seg=2 amp=1000 agit_env=1000 morph=674 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=210 seg=2 amp=1000 agit_env=1000 morph=689 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=211 seg=2 amp=1000 agit_env=1000 morph=704 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=212 seg=2 amp=1000 agit_env=1000 morph=720 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=213 seg=2 amp=1000 agit_env=1000 morph=734 3->1 | area_pm=1005 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=214 seg=2 amp=1000 agit_env=1000 morph=747 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=215 seg=2 amp=1000 agit_env=1000 morph=762 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=216 seg=2 amp=1000 agit_env=1000 morph=777 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=217 seg=2 amp=1000 agit_env=1000 morph=790 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=218 seg=2 amp=1000 agit_env=1000 morph=804 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=219 seg=2 amp=1000 agit_env=1000 morph=816 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=220 seg=2 amp=1000 agit_env=1000 morph=831 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=221 seg=2 amp=1000 agit_env=1000 morph=843 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=222 seg=2 amp=1000 agit_env=994 morph=853 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=223 seg=2 amp=1000 agit_env=979 morph=866 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=224 seg=2 amp=1000 agit_env=954 morph=877 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=225 seg=2 amp=1000 agit_env=920 morph=887 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=226 seg=2 amp=1000 agit_env=879 morph=899 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=227 seg=2 amp=1000 agit_env=831 morph=909 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=228 seg=2 amp=1000 agit_env=778 morph=919 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=229 seg=2 amp=1000 agit_env=725 morph=926 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=230 seg=2 amp=1000 agit_env=664 morph=936 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=231 seg=2 amp=1000 agit_env=600 morph=945 3->1 | area_pm=1000 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=232 seg=2 amp=1000 agit_env=534 morph=952 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=233 seg=2 amp=1000 agit_env=469 morph=959 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=234 seg=2 amp=1000 agit_env=404 morph=965 3->1 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=235 seg=2 amp=1000 agit_env=339 morph=972 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=236 seg=2 amp=1000 agit_env=278 morph=977 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=237 seg=2 amp=1000 agit_env=224 morph=982 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=238 seg=2 amp=1000 agit_env=170 morph=987 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=239 seg=2 amp=1000 agit_env=122 morph=991 3->1 | area_pm=1003 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=240 seg=2 amp=1000 agit_env=79 morph=993 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=241 seg=2 amp=1000 agit_env=46 morph=996 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=242 seg=2 amp=1000 agit_env=19 morph=998 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=243 seg=2 amp=1000 agit_env=2 morph=999 3->1 | area_pm=1002 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=244 seg=0 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=245 seg=0 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=246 seg=0 amp=993 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=247 seg=0 amp=984 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=248 seg=0 amp=971 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=249 seg=0 amp=954 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=3 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=250 seg=0 amp=936 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=251 seg=0 amp=913 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=252 seg=0 amp=889 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=253 seg=0 amp=863 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=254 seg=0 amp=835 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=255 seg=0 amp=807 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=256 seg=0 amp=776 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=257 seg=0 amp=744 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=258 seg=0 amp=713 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=259 seg=0 amp=679 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=9 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=260 seg=0 amp=647 agit_env=0 morph=0 1->3 | area_pm=1005 ema=1000 coh=320 knead_mm=16 agit=280
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=261 seg=0 amp=617 agit_env=0 morph=0 1->3 | area_pm=1008 ema=1000 coh=320 knead_mm=21 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=262 seg=0 amp=583 agit_env=0 morph=0 1->3 | area_pm=1009 ema=1000 coh=320 knead_mm=26 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=263 seg=0 amp=554 agit_env=0 morph=0 1->3 | area_pm=1011 ema=1000 coh=320 knead_mm=29 agit=540
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=264 seg=0 amp=523 agit_env=0 morph=0 1->3 | area_pm=1010 ema=1000 coh=320 knead_mm=31 agit=580
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=265 seg=0 amp=495 agit_env=0 morph=0 1->3 | area_pm=1011 ema=1000 coh=320 knead_mm=32 agit=600
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=266 seg=0 amp=470 agit_env=0 morph=0 1->3 | area_pm=1012 ema=1000 coh=320 knead_mm=35 agit=660
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=267 seg=0 amp=444 agit_env=0 morph=0 1->3 | area_pm=1012 ema=1000 coh=320 knead_mm=38 agit=720
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=268 seg=0 amp=421 agit_env=0 morph=0 1->3 | area_pm=1011 ema=1000 coh=320 knead_mm=39 agit=740
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=269 seg=0 amp=402 agit_env=0 morph=0 1->3 | area_pm=1011 ema=1000 coh=320 knead_mm=41 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=270 seg=0 amp=384 agit_env=0 morph=0 1->3 | area_pm=1008 ema=1000 coh=320 knead_mm=41 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=271 seg=0 amp=371 agit_env=0 morph=0 1->3 | area_pm=1006 ema=1000 coh=320 knead_mm=41 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=272 seg=0 amp=361 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=41 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=273 seg=0 amp=354 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=41 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=274 seg=0 amp=351 agit_env=0 morph=0 1->3 | area_pm=998 ema=1000 coh=320 knead_mm=41 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=275 seg=0 amp=350 agit_env=0 morph=0 1->3 | area_pm=996 ema=1000 coh=320 knead_mm=41 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=276 seg=0 amp=351 agit_env=0 morph=0 1->3 | area_pm=991 ema=1000 coh=320 knead_mm=41 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=277 seg=0 amp=353 agit_env=0 morph=0 1->3 | area_pm=987 ema=1000 coh=320 knead_mm=41 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=278 seg=0 amp=357 agit_env=0 morph=0 1->3 | area_pm=990 ema=1000 coh=320 knead_mm=37 agit=700
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=279 seg=0 amp=362 agit_env=0 morph=0 1->3 | area_pm=992 ema=1000 coh=320 knead_mm=33 agit=620
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=280 seg=0 amp=367 agit_env=0 morph=0 1->3 | area_pm=994 ema=1000 coh=320 knead_mm=31 agit=580
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=281 seg=0 amp=376 agit_env=0 morph=0 1->3 | area_pm=995 ema=1000 coh=320 knead_mm=29 agit=540
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=282 seg=0 amp=383 agit_env=0 morph=0 1->3 | area_pm=997 ema=1000 coh=320 knead_mm=28 agit=520
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=283 seg=0 amp=391 agit_env=0 morph=0 1->3 | area_pm=998 ema=1000 coh=320 knead_mm=27 agit=500
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=284 seg=0 amp=401 agit_env=0 morph=0 1->3 | area_pm=1000 ema=1000 coh=320 knead_mm=27 agit=500
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=285 seg=0 amp=412 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=27 agit=500
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=286 seg=0 amp=423 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=27 agit=500
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=287 seg=0 amp=435 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=26 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=288 seg=0 amp=448 agit_env=0 morph=0 1->3 | area_pm=1005 ema=1000 coh=320 knead_mm=26 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=289 seg=0 amp=461 agit_env=0 morph=0 1->3 | area_pm=1006 ema=1000 coh=320 knead_mm=26 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=290 seg=0 amp=476 agit_env=0 morph=0 1->3 | area_pm=1007 ema=1000 coh=320 knead_mm=26 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=291 seg=0 amp=489 agit_env=0 morph=0 1->3 | area_pm=1009 ema=1000 coh=320 knead_mm=26 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=292 seg=0 amp=506 agit_env=0 morph=0 1->3 | area_pm=1008 ema=1000 coh=320 knead_mm=21 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=293 seg=0 amp=519 agit_env=0 morph=0 1->3 | area_pm=1008 ema=1000 coh=320 knead_mm=17 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=294 seg=0 amp=537 agit_env=0 morph=0 1->3 | area_pm=1007 ema=1000 coh=320 knead_mm=14 agit=240
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=295 seg=0 amp=553 agit_env=0 morph=0 1->3 | area_pm=1007 ema=1000 coh=320 knead_mm=12 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=296 seg=0 amp=569 agit_env=0 morph=0 1->3 | area_pm=1005 ema=1000 coh=320 knead_mm=10 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=297 seg=0 amp=586 agit_env=0 morph=0 1->3 | area_pm=1006 ema=1000 coh=320 knead_mm=9 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=298 seg=0 amp=602 agit_env=0 morph=0 1->3 | area_pm=1005 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=299 seg=0 amp=620 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=300 seg=0 amp=637 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=301 seg=0 amp=654 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=302 seg=0 amp=672 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=303 seg=0 amp=689 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=304 seg=0 amp=706 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=305 seg=0 amp=724 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=306 seg=0 amp=740 agit_env=0 morph=0 1->3 | area_pm=1000 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=307 seg=0 amp=758 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=308 seg=0 amp=776 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=309 seg=0 amp=792 agit_env=0 morph=0 1->3 | area_pm=1000 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=310 seg=0 amp=807 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=311 seg=0 amp=824 agit_env=0 morph=0 1->3 | area_pm=1000 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=312 seg=0 amp=838 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=313 seg=0 amp=855 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=314 seg=0 amp=868 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=315 seg=0 amp=882 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=316 seg=0 amp=897 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=317 seg=0 amp=909 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=318 seg=0 amp=921 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=319 seg=0 amp=933 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=320 seg=0 amp=943 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=321 seg=0 amp=953 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=322 seg=0 amp=962 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=323 seg=0 amp=970 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=324 seg=0 amp=977 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=325 seg=0 amp=984 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=326 seg=0 amp=989 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=327 seg=0 amp=993 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=328 seg=0 amp=996 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=329 seg=0 amp=998 agit_env=0 morph=0 1->3 | area_pm=1005 ema=1000 coh=320 knead_mm=9 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=330 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1005 ema=1000 coh=320 knead_mm=8 agit=120
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=331 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=332 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=333 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=334 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=335 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=336 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=337 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=7 agit=100
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=338 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=339 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=340 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=341 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=342 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=343 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=344 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=345 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=346 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=347 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=6 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=348 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=349 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=350 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=351 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=352 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=353 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=354 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=355 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=356 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=357 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=358 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=359 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=360 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=361 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=362 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=363 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=364 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=365 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=366 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=367 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=368 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=369 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=4 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=370 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=371 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=372 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=373 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1000 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=374 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=375 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=5 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=376 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1005 ema=1000 coh=320 knead_mm=27 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=377 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1005 ema=1000 coh=320 knead_mm=43 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=378 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1006 ema=1000 coh=320 knead_mm=54 agit=960
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=379 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=1000 coh=320 knead_mm=61 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=380 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=997 ema=1000 coh=320 knead_mm=65 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=381 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=988 ema=1000 coh=320 knead_mm=67 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=382 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=995 ema=1000 coh=320 knead_mm=67 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=383 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1000 ema=1000 coh=320 knead_mm=67 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=384 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1005 ema=1000 coh=320 knead_mm=67 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=385 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1008 ema=1000 coh=320 knead_mm=67 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=386 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1007 ema=1000 coh=320 knead_mm=67 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=387 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1006 ema=1000 coh=320 knead_mm=67 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=388 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1005 ema=1000 coh=320 knead_mm=67 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=389 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1001 ema=1000 coh=320 knead_mm=68 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=390 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=996 ema=1000 coh=320 knead_mm=69 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=391 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=990 ema=1000 coh=320 knead_mm=70 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=392 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=983 ema=999 coh=334 knead_mm=72 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=393 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=974 ema=998 coh=348 knead_mm=73 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=394 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=978 ema=997 coh=362 knead_mm=65 agit=1000
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=395 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=983 ema=997 coh=362 knead_mm=59 agit=880
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=396 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=987 ema=997 coh=362 knead_mm=54 agit=780
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=397 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=991 ema=997 coh=362 knead_mm=50 agit=700
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=398 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=994 ema=997 coh=362 knead_mm=47 agit=640
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=399 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=997 ema=997 coh=362 knead_mm=45 agit=600
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=400 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=999 ema=997 coh=362 knead_mm=43 agit=560
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=401 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=997 coh=362 knead_mm=41 agit=520
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=402 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=997 coh=362 knead_mm=40 agit=500
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=403 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1006 ema=997 coh=362 knead_mm=39 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=404 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1007 ema=997 coh=362 knead_mm=39 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=405 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1008 ema=997 coh=362 knead_mm=39 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=406 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1007 ema=997 coh=362 knead_mm=39 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=407 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1008 ema=997 coh=362 knead_mm=39 agit=480
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=408 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1007 ema=997 coh=362 knead_mm=34 agit=380
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=409 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1006 ema=997 coh=362 knead_mm=30 agit=300
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=410 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1005 ema=997 coh=362 knead_mm=27 agit=240
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=411 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1005 ema=997 coh=362 knead_mm=25 agit=200
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=412 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1005 ema=997 coh=362 knead_mm=24 agit=180
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=413 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=997 coh=362 knead_mm=23 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=414 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=997 coh=362 knead_mm=23 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=415 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=997 coh=362 knead_mm=23 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=416 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1004 ema=997 coh=362 knead_mm=23 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=417 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=997 coh=362 knead_mm=23 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=418 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=997 coh=362 knead_mm=23 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=419 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1003 ema=997 coh=362 knead_mm=23 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=420 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1002 ema=997 coh=362 knead_mm=23 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=421 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=1001 ema=997 coh=362 knead_mm=23 agit=160
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=422 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=999 ema=997 coh=362 knead_mm=22 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=423 seg=1 amp=1000 agit_env=0 morph=0 1->3 | area_pm=997 ema=997 coh=362 knead_mm=22 agit=140
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=424 seg=2 amp=1000 agit_env=0 morph=0 1->3 | area_pm=997 ema=997 coh=362 knead_mm=19 agit=80
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=425 seg=2 amp=1000 agit_env=2 morph=0 1->3 | area_pm=998 ema=997 coh=362 knead_mm=16 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=426 seg=2 amp=1000 agit_env=14 morph=0 1->3 | area_pm=997 ema=997 coh=362 knead_mm=15 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=427 seg=2 amp=1000 agit_env=35 morph=0 1->3 | area_pm=999 ema=997 coh=362 knead_mm=14 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=428 seg=2 amp=1000 agit_env=64 morph=2 1->3 | area_pm=999 ema=997 coh=362 knead_mm=13 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=429 seg=2 amp=1000 agit_env=99 morph=5 1->3 | area_pm=999 ema=997 coh=362 knead_mm=12 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=430 seg=2 amp=1000 agit_env=134 morph=8 1->3 | area_pm=1001 ema=997 coh=362 knead_mm=12 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=431 seg=2 amp=1000 agit_env=179 morph=11 1->3 | area_pm=1001 ema=997 coh=362 knead_mm=12 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=432 seg=2 amp=1000 agit_env=230 morph=17 1->3 | area_pm=1001 ema=997 coh=362 knead_mm=12 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=433 seg=2 amp=1000 agit_env=282 morph=19 1->3 | area_pm=1003 ema=997 coh=362 knead_mm=12 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=434 seg=2 amp=1000 agit_env=339 morph=25 1->3 | area_pm=1002 ema=997 coh=362 knead_mm=12 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=435 seg=2 amp=1000 agit_env=392 morph=30 1->3 | area_pm=1001 ema=997 coh=362 knead_mm=11 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=436 seg=3 amp=1000 agit_env=0 morph=0 3->1 | area_pm=1002 ema=997 coh=362 knead_mm=10 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=437 seg=3 amp=998 agit_env=0 morph=0 3->1 | area_pm=1003 ema=997 coh=362 knead_mm=9 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=438 seg=3 amp=986 agit_env=0 morph=0 3->1 | area_pm=1002 ema=997 coh=362 knead_mm=8 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=439 seg=3 amp=970 agit_env=0 morph=0 3->1 | area_pm=1004 ema=997 coh=362 knead_mm=7 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=440 seg=3 amp=946 agit_env=0 morph=0 3->1 | area_pm=1003 ema=997 coh=362 knead_mm=7 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=441 seg=3 amp=919 agit_env=0 morph=0 3->1 | area_pm=1004 ema=997 coh=362 knead_mm=7 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=442 seg=3 amp=885 agit_env=0 morph=0 3->1 | area_pm=1005 ema=997 coh=362 knead_mm=7 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=443 seg=3 amp=845 agit_env=0 morph=0 3->1 | area_pm=1005 ema=997 coh=362 knead_mm=7 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=444 seg=3 amp=804 agit_env=0 morph=0 3->1 | area_pm=1006 ema=997 coh=362 knead_mm=9 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=445 seg=3 amp=758 agit_env=0 morph=0 3->1 | area_pm=1005 ema=997 coh=362 knead_mm=11 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=446 seg=3 amp=710 agit_env=0 morph=0 3->1 | area_pm=1006 ema=997 coh=362 knead_mm=13 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=447 seg=3 amp=661 agit_env=0 morph=0 3->1 | area_pm=1006 ema=997 coh=362 knead_mm=14 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=448 seg=3 amp=608 agit_env=0 morph=0 3->1 | area_pm=1005 ema=997 coh=362 knead_mm=16 agit=20
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=449 seg=3 amp=555 agit_env=0 morph=0 3->1 | area_pm=1005 ema=997 coh=362 knead_mm=17 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=450 seg=3 amp=500 agit_env=0 morph=0 3->1 | area_pm=1004 ema=997 coh=362 knead_mm=18 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=451 seg=3 amp=449 agit_env=0 morph=0 3->1 | area_pm=1005 ema=997 coh=362 knead_mm=18 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=452 seg=3 amp=395 agit_env=0 morph=0 3->1 | area_pm=1004 ema=997 coh=362 knead_mm=18 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=453 seg=3 amp=343 agit_env=0 morph=0 3->1 | area_pm=1003 ema=997 coh=362 knead_mm=18 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=454 seg=3 amp=294 agit_env=0 morph=0 3->1 | area_pm=1004 ema=997 coh=362 knead_mm=18 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=455 seg=3 amp=246 agit_env=0 morph=0 3->1 | area_pm=1003 ema=997 coh=362 knead_mm=18 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=456 seg=3 amp=200 agit_env=0 morph=0 3->1 | area_pm=1002 ema=997 coh=362 knead_mm=18 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=457 seg=3 amp=157 agit_env=0 morph=0 3->1 | area_pm=1003 ema=997 coh=362 knead_mm=18 agit=60
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=458 seg=3 amp=120 agit_env=0 morph=0 3->1 | area_pm=1002 ema=997 coh=362 knead_mm=17 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=459 seg=3 amp=85 agit_env=0 morph=0 3->1 | area_pm=1001 ema=997 coh=362 knead_mm=17 agit=40
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=460 seg=3 amp=57 agit_env=0 morph=0 3->1 | area_pm=1001 ema=997 coh=362 knead_mm=15 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=461 seg=3 amp=34 agit_env=0 morph=0 3->1 | area_pm=1001 ema=997 coh=362 knead_mm=14 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=462 seg=3 amp=16 agit_env=0 morph=0 3->1 | area_pm=999 ema=997 coh=362 knead_mm=13 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
+fold f=463 seg=3 amp=5 agit_env=0 morph=0 3->1 | area_pm=1000 ema=997 coh=362 knead_mm=12 agit=0
+celmain projected_radius_q8 primary=56173 primary_visible=1 dummy=0 dummy_visible=0 ink_width=2
