@@ -474,3 +474,33 @@ ambiguous — naming by PASS is not); the mana-lab reel published as its own
 clearly-marked Experiments section with each variant named by **mechanism**, not
 number; Manafold stays first; exactly one `noindex` **directive** (a second
 match is footer prose).
+
+### 02:05 — A CONSEQUENCE OF A.1 I DID NOT ANTICIPATE, caught by a byte count.
+
+**`manafold-inspect` is now byte-identical to `manafold-hover`.** Both render
+`sequence_crc32c=0xC8987099`. Spotted because their webms came out at the same
+byte size to the digit.
+
+It is not a bug — it is A.1 working. `inspect` existed as **THE ONE** clip
+carrying the many-colour moving rig (Direction 3 §1 called four-light-everywhere
+a regression, and this showcase was the compromise). Direction 5 §8 reversed
+that and made the rig standard, so the only thing distinguishing `inspect` is
+now on every clip. Its `sun = nullptr` makes no difference either: `sun_light`
+gates off under the moving rig regardless.
+
+I kept the tab and **rewrote its caption to say so**, rather than deleting it —
+it is the honest record of a reversal, and the dormant `kU02Sun*` constants are
+still the one-flag revert path. Whether it should ship as a duplicate at all is
+an owner call, and now it is a visible one instead of a silent duplicate.
+
+**Shipping CRCs, all 16** (the blast radius, in evidence rather than in prose):
+hover/inspect `0xC8987099`, drift `0x519C34D1`, channel `0xC7454F19`, curious
+`0xFC9862DA`, startle `0x19ED18C8`, rest `0x7AC3A5F2`, pirouette `0xCE5D4FAE`,
+hasty `0x55A67594`, fall `0xDCB633CD`, hit `0xA24020B8`, taunt `0xAB17AAAD`,
+taunt2 `0x673841EF`, trick `0x49D90F05`, damage `0x10536934`, crackle
+`0xA86F0841`.
+
+Against the three pass-5 baselines I captured: channel `0xB489DCCD` →
+`0xC7454F19`, hasty `0x1E3F51FB` → `0x55A67594`, rest `0xBD1CBA93` →
+`0x7AC3A5F2`. **All moved**, and the unique-colour count roughly doubled on each
+(channel 9,424 → 17,716) — the moving rig plus the richer mana.
