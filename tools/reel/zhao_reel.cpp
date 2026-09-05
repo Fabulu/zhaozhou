@@ -3239,9 +3239,13 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       // frame through the cache (the reviewer's palette-rebuild note).
       const bool fold_mana = c.u02_mana == 3 || c.u02_mana == 6 ||
                              c.u02_mana == 8 || c.u02_mana == 9;
+      // PASS 5 (loop seam): during the fold's RELEASE tail the feed fades
+      // with the release amp, so the trail plane is near-empty at the wrap
+      // (the decay does the rest); everywhere else the scale is 1000.
       const int feed_boost =
-          fold_mana ? u02::kFoldFeedBasePm +
-                          u02::kKneadFeedPm * c.u02_fold_agit / 1000
+          fold_mana ? (u02::kFoldFeedBasePm +
+                       u02::kKneadFeedPm * c.u02_fold_agit / 1000) *
+                          u02::g_u02_fold_release_pm / 1000
                     : 1000;
       for (const u02::ManaSplat& ms : c.u02_mana_splats) {
         // the near-white strand cores and flash glints stay LIVE-ONLY: fed
@@ -6890,14 +6894,19 @@ int main(int argc, char** argv) {
                  "ZIXX_SUNS=%s (Direction 29/30 clip suns + additive-normal %s)\n",
                  suns, g_zixx_suns_enabled ? "on" : "OFF");
   }
-  // PASS 4 (the centrepiece's own FAIL line): U02_ABLATE_KNEAD=1 zeroes the
-  // antenna_knead choreography layer. The mana MUST go limp in that render;
-  // if it does not, the rig-to-mana coupling is decorative and the folding
-  // feature has FAILED (07 §3's ablation law, in reverse).
-  if (const char* ab = std::getenv("U02_ABLATE_KNEAD")) {
-    u02::g_u02_knead_ablate = std::string(ab) == "1" ? 1 : 0;
-    if (u02::g_u02_knead_ablate)
-      std::fprintf(stderr, "U02_ABLATE_KNEAD=1 (the fold choreography is OFF)\n");
+  // PASS 5 (the centrepiece's can-fail line; replaces U02_ABLATE_KNEAD,
+  // which zeroed the choreography and so moved the BONES it claimed to
+  // hold fixed): U02_FOLD_FREEZE=1 keeps every bone animating and freezes
+  // only the mana field's anchor INPUT at the rest layout. The mana MUST
+  // go static/limp while the antenna keeps working; if it still tracks
+  // the antenna, the coupling is decorative and the feature has FAILED.
+  // The affirmative proof of the coupling is the code itself: mote
+  // position is a fixed-weight sum over posed anchors, with no proximity
+  // term anywhere in the mana path (manafold_fx.h).
+  if (const char* fz = std::getenv("U02_FOLD_FREEZE")) {
+    u02::g_u02_fold_freeze = std::string(fz) == "1" ? 1 : 0;
+    if (u02::g_u02_fold_freeze)
+      std::fprintf(stderr, "U02_FOLD_FREEZE=1 (the fold's anchor input is FROZEN at rest)\n");
   }
   // PASS 4 fold diagnostics (default off): the stencil X-ray + telemetry.
   if (const char* fl = std::getenv("U02_FOLD_LOCK"))

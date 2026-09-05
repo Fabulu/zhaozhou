@@ -661,6 +661,19 @@ struct FoldState {
 // pure barycentric shape; U02_FOLD_DEBUG=1 prints the per-frame scalars.
 inline int g_u02_fold_lock = 0;
 inline int g_u02_fold_debug = 0;
+// U02_FOLD_FREEZE=1 (pass 5; replaces the retired U02_ABLATE_KNEAD): the
+// bones keep animating, and ONLY the field's anchor input is frozen at
+// the rest layout. The mana must go static/limp while the antenna keeps
+// working; if it still tracks the antenna, the coupling is decorative and
+// the feature has failed. This isolates what the old ablation could not:
+// zeroing the choreography moved the bones themselves, so its A/B could
+// never separate field-follows-rig from rig-moved-so-projection-moved.
+inline int g_u02_fold_freeze = 0;
+// PASS 5 (loop seam): the fold's RELEASE amp, exported for the smear feed.
+// During the release tail the feed fades with the amp, so the trail plane
+// has decayed to near-empty by the wrap and the always-playing loop does
+// not pop from "trails" to "no trails". 1000 everywhere else.
+inline int32_t g_u02_fold_release_pm = 1000;
 
 /** THE CENTREPIECE: place the folded motes for one conduit. `keys` = the
  *  clip's key count (the shared timeline domain); `crowd_pm` scales the
@@ -671,6 +684,18 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
                          std::vector<ManaSplat>& out) {
   const int32_t* anchors[6] = {A.junction_f, A.neck, A.hinge_a,
                                A.hinge_b,    A.hinge_c, A.junction_b};
+  // U02_FOLD_FREEZE: substitute the rest layout (body-relative) for the
+  // posed anchors. Everything downstream -- KNEAD, GRIP, DRAG, the stencil
+  // sum -- then sees a rig that never moves, while the drawn creature's
+  // bones keep animating. See the comment at g_u02_fold_freeze.
+  int32_t frozen[6][3];
+  if (g_u02_fold_freeze) {
+    for (int i = 0; i < 6; ++i) {
+      for (int k = 0; k < 3; ++k)
+        frozen[i][k] = A.body[k] + fxu(kFoldAnchorRestMm[i][k]);
+      anchors[i] = frozen[i];
+    }
+  }
   // ---- rig-derived scalars (joint state ONLY -- R1) ----------------------
   int32_t rel[6][3];
   for (int i = 0; i < 6; ++i)
@@ -761,6 +786,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   if (g_u02_fold_lock) coh = 1000;
   // ---- the shared timeline (shape choice + morph; key = frame / 2) -------
   const FoldPhase ph = fold_phase(slot, keys, static_cast<int32_t>(frame) * 8);
+  g_u02_fold_release_pm = ph.seg == kSegRelease ? ph.amp_pm : 1000;
   const FoldWeights& fw = fold_weights();
   if (g_u02_fold_debug)
     std::fprintf(stderr,
@@ -780,16 +806,30 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     if (m >= n_shape) {
       // WANDER: slow hashed walks that leave the pocket and curve off oddly
       // (the owner's "drift off in weird ways"); the smear traces them.
+      // PASS 5 (loop seam): the walk's two frequencies are quantised to
+      // whole cycles over the clip, same law as the shape-mote orbits, so
+      // the wanderers are back where they started at the wrap.
       const int per = 240 + static_cast<int>(hm % 200u);
       const uint32_t ph1 = hm & 0xFFFFu;
       const int32_t r1 = fxu(kWanderEscapeMm * (600 + static_cast<int32_t>((hm >> 4) % 400u)) / 1000);
       const int32_t r2 = r1 * 2 / 3;
-      const uint32_t w16 = 65536u / static_cast<uint32_t>(per);
-      P[0] = A.ring[0] + static_cast<int32_t>((static_cast<int64_t>(r1) * fx_cos16(frame * w16 + ph1)) >> 16);
+      const int frames_total = keys * 2 > 0 ? keys * 2 : 1;
+      int cycles = (frames_total + per / 2) / per;
+      if (cycles < 1) cycles = 1;
+      int cycles_slow = cycles / 3;
+      if (cycles_slow < 1) cycles_slow = 1;
+      const uint32_t fmod = frame % static_cast<uint32_t>(frames_total);
+      const uint32_t th = static_cast<uint32_t>(
+          (static_cast<uint64_t>(fmod) * static_cast<uint32_t>(cycles) << 16) /
+          static_cast<uint32_t>(frames_total));
+      const uint32_t th_slow = static_cast<uint32_t>(
+          (static_cast<uint64_t>(fmod) * static_cast<uint32_t>(cycles_slow) << 16) /
+          static_cast<uint32_t>(frames_total));
+      P[0] = A.ring[0] + static_cast<int32_t>((static_cast<int64_t>(r1) * fx_cos16(th + ph1)) >> 16);
       P[1] = A.ring[1] +
-             static_cast<int32_t>((static_cast<int64_t>(r2) * fx_sin16(frame * w16 + (ph1 ^ 0x9A00u))) >> 16) +
-             static_cast<int32_t>((static_cast<int64_t>(fxu(220)) * fx_sin16(frame * (w16 / 3u) + ph1)) >> 16);
-      P[2] = A.ring[2] + static_cast<int32_t>((static_cast<int64_t>(r2) * fx_sin16(frame * w16 + ph1 + 0x4000u)) >> 16);
+             static_cast<int32_t>((static_cast<int64_t>(r2) * fx_sin16(th + (ph1 ^ 0x9A00u))) >> 16) +
+             static_cast<int32_t>((static_cast<int64_t>(fxu(220)) * fx_sin16(th_slow + ph1)) >> 16);
+      P[2] = A.ring[2] + static_cast<int32_t>((static_cast<int64_t>(r2) * fx_sin16(th + ph1 + 0x4000u)) >> 16);
     } else {
       const int stn = m * kStencilPts / (n_shape > 0 ? n_shape : 1);
       const auto bary = [&](uint8_t shape_id, int32_t q[3]) {
@@ -823,17 +863,29 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
             ((static_cast<int64_t>(ox) * sn) >> 16) + ((static_cast<int64_t>(oz) * cs) >> 16));
       }
       // the cloud relax position: hashed offset + ONE slow consistent orbit
-      // (R7: a single angular velocity per mote, long period, no doubling)
+      // (R7: a single angular velocity per mote, long period, no doubling).
+      // PASS 5 (the hover loop-seam, reviewer item 8): the hashed period is
+      // QUANTISED to a whole number of orbits over the clip, so every
+      // mote's orbit phase is identical at frame 0 and at the wrap -- the
+      // release tail zeroed the fold amp but the orbits used to land
+      // mid-turn, and the always-playing loop popped by ~2.4x the house
+      // seam norm. The period only shifts within its own hashed band.
       const int per = kMoteOrbitPeriodMinF +
           static_cast<int>((hm >> 8) % static_cast<uint32_t>(kMoteOrbitPeriodMaxF - kMoteOrbitPeriodMinF));
-      const uint32_t w16 = 65536u / static_cast<uint32_t>(per);
+      const int frames_total = keys * 2 > 0 ? keys * 2 : 1;
+      int cycles = (frames_total + per / 2) / per;
+      if (cycles < 1) cycles = 1;
+      const uint32_t th = static_cast<uint32_t>(
+          (static_cast<uint64_t>(frame % static_cast<uint32_t>(frames_total)) *
+               static_cast<uint32_t>(cycles) << 16) /
+          static_cast<uint32_t>(frames_total));
       const int32_t orad = fxu(kMoteOrbitRMinMm +
           static_cast<int32_t>((hm >> 16) % static_cast<uint32_t>(kMoteOrbitRMaxMm - kMoteOrbitRMinMm)));
       const uint32_t oph = (hm >> 3) & 0xFFFFu;
       int32_t orb[3];
-      orb[0] = static_cast<int32_t>((static_cast<int64_t>(orad) * fx_cos16(frame * w16 + oph)) >> 16);
-      orb[1] = static_cast<int32_t>((static_cast<int64_t>(orad * 3 / 4) * fx_sin16(frame * w16 + oph)) >> 16);
-      orb[2] = static_cast<int32_t>((static_cast<int64_t>(orad / 2) * fx_sin16(frame * w16 + oph + 0x3800u)) >> 16);
+      orb[0] = static_cast<int32_t>((static_cast<int64_t>(orad) * fx_cos16(th + oph)) >> 16);
+      orb[1] = static_cast<int32_t>((static_cast<int64_t>(orad * 3 / 4) * fx_sin16(th + oph)) >> 16);
+      orb[2] = static_cast<int32_t>((static_cast<int64_t>(orad / 2) * fx_sin16(th + oph + 0x3800u)) >> 16);
       int32_t cloud_off[3];
       cloud_off[0] = fxu(fx_jit(hm, kCloudSpreadMm));
       cloud_off[1] = fxu(fx_jit(hm >> 7, kCloudSpreadMm * 3 / 4));
