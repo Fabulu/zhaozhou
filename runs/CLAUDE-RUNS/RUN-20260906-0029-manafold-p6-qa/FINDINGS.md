@@ -494,3 +494,19 @@ inkmask.py current state - not re-tested this pass.
 tools/reel/manafold_qa_extremes.cpp - correct-units eye separation, ellipsoid
 interpenetration, roll and gaze sweeps, whole-bank scan, known-bad injection;
 tools/reel/manafold_qa_stray.cpp - per-meshlet vertex census.
+
+---
+
+## APPENDIX - EVIDENCE PLATES
+
+`evidence/` in this run folder, all rendered from the shipped SHA and read with
+tools/reel/rgbframe.py:
+
+* **channel-full.png** - manafold-channel keys 56 and 115 at 3x, whole frame.
+  Orientation plate: the far eye is visibly proud of the body silhouette.
+* **channel-eyes-zoom.png** - the eyes at 8x across the twinkle (keys 56 / 80 /
+  115 / 139, star spin 0 / 34 / 84 / 119 deg). Shows the star leaving the purple
+  and the black wedges at every lens tip.
+* **rest-eye-notches.png** - manafold-rest f234, side by side with the same crop
+  with every pixel of luminance < 90 marked magenta. The marks land on the lens
+  tips and rim, not on the terrain or the sky.
