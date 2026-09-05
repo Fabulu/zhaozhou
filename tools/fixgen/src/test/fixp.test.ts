@@ -26,8 +26,16 @@ import {
 import { renderCpp, renderTs, renderMem } from "../emit.js";
 import { goldenSinCos, goldenUnit8, goldenNoise2 } from "../golden.js";
 
-test("QFMT_VERSION is 2 (qformats.md 13; 1 -> 2 with amendment C1, the quat16 lane)", () => {
-  assert.equal(QFMT_VERSION, 2);
+// Amendment C2 (2026-09-02) took QFMT_VERSION 2 -> 3 for the particle128 v1
+// numeric law. fixp.ts was updated; this pin was not, so it has been red
+// ever since -- asserting a version the spec had already superseded.
+// spec/qformats.md line 3 states QFMT_VERSION = 3 outright.
+//
+// The pin itself is worth keeping: it is what makes a version bump a
+// deliberate edit rather than a silent drift. It just has to name the
+// CURRENT version.
+test("QFMT_VERSION is 3 (qformats.md 13; 2 -> 3 with amendment C2, particle128)", () => {
+  assert.equal(QFMT_VERSION, 3);
 });
 
 test("round_half_up division and rescale (qformats.md 4)", () => {

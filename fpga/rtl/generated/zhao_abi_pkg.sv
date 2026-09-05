@@ -271,6 +271,27 @@ package zhao_abi_pkg;
     logic [7:0] pad_index;  // u8 @0
   } zhao_pad_frame_t;
 
+  // MaterialSample: 4 B (spec/commands.zidl). REVERSE field order.
+  typedef struct packed {
+    logic [7:0] modes;  // u8 @3
+    logic [7:0] binding_generation;  // u8 @2
+    logic [15:0] binding_slot;  // u16 @0
+  } zhao_material_sample_t;
+
+  // MaterialRecord: 32 B (spec/commands.zidl). REVERSE field order.
+  typedef struct packed {
+    logic [31:0] rsv1;  // u32 @28
+    logic [31:0] rsv0;  // u32 @24
+    logic [31:0] raster_state;  // u32 @20
+    logic [31:0] palette_base;  // u32 @16
+    zhao_material_sample_t sample2;  // 4 B @12
+    zhao_material_sample_t sample1;  // 4 B @8
+    zhao_material_sample_t sample0;  // 4 B @4
+    logic [15:0] flags;  // u16 @2
+    logic [7:0] recipe_weight;  // u8 @1
+    logic [7:0] control;  // u8 @0
+  } zhao_material_record_t;
+
   // Nop 0x0000: 16-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
@@ -1122,6 +1143,60 @@ package zhao_abi_pkg;
       c.ry = v[112 +: 16];
       c.rsv = v[128 +: 32];
       zhao_unpack_pad_frame = c;
+    end
+  endfunction
+
+  function automatic logic [31:0] zhao_pack_material_sample(input zhao_material_sample_t c);
+    logic [31:0] v;
+    begin
+      v[0 +: 16] = c.binding_slot;
+      v[16 +: 8] = c.binding_generation;
+      v[24 +: 8] = c.modes;
+      zhao_pack_material_sample = v;
+    end
+  endfunction
+
+  function automatic zhao_material_sample_t zhao_unpack_material_sample(input logic [31:0] v);
+    zhao_material_sample_t c;
+    begin
+      c.binding_slot = v[0 +: 16];
+      c.binding_generation = v[16 +: 8];
+      c.modes = v[24 +: 8];
+      zhao_unpack_material_sample = c;
+    end
+  endfunction
+
+  function automatic logic [255:0] zhao_pack_material_record(input zhao_material_record_t c);
+    logic [255:0] v;
+    begin
+      v[0 +: 8] = c.control;
+      v[8 +: 8] = c.recipe_weight;
+      v[16 +: 16] = c.flags;
+      v[32 +: 32] = c.sample0;
+      v[64 +: 32] = c.sample1;
+      v[96 +: 32] = c.sample2;
+      v[128 +: 32] = c.palette_base;
+      v[160 +: 32] = c.raster_state;
+      v[192 +: 32] = c.rsv0;
+      v[224 +: 32] = c.rsv1;
+      zhao_pack_material_record = v;
+    end
+  endfunction
+
+  function automatic zhao_material_record_t zhao_unpack_material_record(input logic [255:0] v);
+    zhao_material_record_t c;
+    begin
+      c.control = v[0 +: 8];
+      c.recipe_weight = v[8 +: 8];
+      c.flags = v[16 +: 16];
+      c.sample0 = v[32 +: 32];
+      c.sample1 = v[64 +: 32];
+      c.sample2 = v[96 +: 32];
+      c.palette_base = v[128 +: 32];
+      c.raster_state = v[160 +: 32];
+      c.rsv0 = v[192 +: 32];
+      c.rsv1 = v[224 +: 32];
+      zhao_unpack_material_record = c;
     end
   endfunction
 
@@ -2116,6 +2191,8 @@ package zhao_abi_pkg;
       if ($bits(zhao_mat4fx_t) != 8*64) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rgb565_t) != 8*2) zhao_layout_ok = 1'b0;
       if ($bits(zhao_pad_frame_t) != 8*20) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_material_sample_t) != 8*4) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_material_record_t) != 8*32) zhao_layout_ok = 1'b0;
     end
   endfunction
 

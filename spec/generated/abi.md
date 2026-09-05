@@ -5,8 +5,8 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 6b95fe820b7f9f545f1e553820208fe02e28ca77066b1df55f6af5625023373f
-zidl_sha256         = a2198a6e55f7547754d5d9801a450f473609c97738e4e98684bed303988ca7b1
+abi_identity_sha256 = 185df469ccfd0f438e5bc3cc079a3093842dadb82bb5ebfbb8f62a92ac6030b7
+zidl_sha256         = d964fbaca5d15e97a9cff835bd84adb74bbade2429e1fc08aac6a1c2e9ba90ef
 ```
 
 ABI version **3**, little-endian, command alignment
@@ -497,6 +497,29 @@ TS `zhaoPackDebugRumble(zhaoSampleDebugRumble(), ...)`, SV round-trips it via
 | 12 | 2 | `rx` | i16 |
 | 14 | 2 | `ry` | i16 |
 | 16 | 4 | `rsv` | u32 |
+
+### MaterialSample — 4 B
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 2 | `binding_slot` | u16 |
+| 2 | 1 | `binding_generation` | u8 |
+| 3 | 1 | `modes` | u8 |
+
+### MaterialRecord — 32 B
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 1 | `control` | u8 |
+| 1 | 1 | `recipe_weight` | u8 |
+| 2 | 2 | `flags` | u16 |
+| 4 | 4 | `sample0` | MaterialSample |
+| 8 | 4 | `sample1` | MaterialSample |
+| 12 | 4 | `sample2` | MaterialSample |
+| 16 | 4 | `palette_base` | u32 |
+| 20 | 4 | `raster_state` | u32 |
+| 24 | 4 | `rsv0` | u32 |
+| 28 | 4 | `rsv1` | u32 |
 
 ## Value enums (ABI v2)
 

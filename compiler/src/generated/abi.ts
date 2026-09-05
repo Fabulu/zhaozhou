@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 6b95fe820b7f9f545f1e553820208fe02e28ca77066b1df55f6af5625023373f
-//   zidl_sha256         = a2198a6e55f7547754d5d9801a450f473609c97738e4e98684bed303988ca7b1
+//   abi_identity_sha256 = 185df469ccfd0f438e5bc3cc079a3093842dadb82bb5ebfbb8f62a92ac6030b7
+//   zidl_sha256         = d964fbaca5d15e97a9cff835bd84adb74bbade2429e1fc08aac6a1c2e9ba90ef
 
 // ---------------------------------------------------------------- abi ---
 
@@ -160,6 +160,27 @@ export interface ZhPadFrame {
   rx: number; // i16, @12
   ry: number; // i16, @14
   rsv: number; // u32, @16
+}
+
+/** MaterialSample: 4 bytes (spec/commands.zidl); pads are not modeled */
+export interface ZhMaterialSample {
+  binding_slot: number; // u16, @0
+  binding_generation: number; // u8, @2
+  modes: number; // u8, @3
+}
+
+/** MaterialRecord: 32 bytes (spec/commands.zidl); pads are not modeled */
+export interface ZhMaterialRecord {
+  control: number; // u8, @0
+  recipe_weight: number; // u8, @1
+  flags: number; // u16, @2
+  sample0: ZhMaterialSample; // @4
+  sample1: ZhMaterialSample; // @8
+  sample2: ZhMaterialSample; // @12
+  palette_base: number; // u32, @16
+  raster_state: number; // u32, @20
+  rsv0: number; // u32, @24
+  rsv1: number; // u32, @28
 }
 
 /** 16-byte command record header (capture_format.md 3.1) */
@@ -990,6 +1011,6 @@ export function zhaoPackDebugRumble(r: ZhRecordDebugRumble, w: ZhByteWriter): vo
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 export const ZHAO_GENERATOR_NAME = 'zhaozhou-abi-gen';
-export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x6B, 0x95, 0xFE, 0x82, 0x0B, 0x7F, 0x9F, 0x54, 0x5F, 0x1E, 0x55, 0x38, 0x20, 0x20, 0x8F, 0xE0, 0x2E, 0x28, 0xCA, 0x77, 0x06, 0x6B, 0x1D, 0xF5, 0x5F, 0x6A, 0xF5, 0x62, 0x50, 0x23, 0x37, 0x3F];
-export const ZHAO_ZIDL_SHA256: readonly number[] = [0xA2, 0x19, 0x8A, 0x6E, 0x55, 0xF7, 0x54, 0x77, 0x54, 0xD5, 0xD9, 0x80, 0x1A, 0x45, 0x0F, 0x47, 0x36, 0x09, 0xC9, 0x77, 0x38, 0xE4, 0xE9, 0x86, 0x84, 0xBE, 0xD3, 0x03, 0x98, 0x8C, 0xA7, 0xB1];
+export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x18, 0x5D, 0xF4, 0x69, 0xCC, 0xFD, 0x0F, 0x43, 0x8E, 0x5B, 0xC3, 0xCC, 0x07, 0x9A, 0x30, 0x93, 0x84, 0x2D, 0xAD, 0xB8, 0x2B, 0xB5, 0xEB, 0xFB, 0xB8, 0xF6, 0x2A, 0x92, 0xAC, 0x60, 0x30, 0xB7];
+export const ZHAO_ZIDL_SHA256: readonly number[] = [0xD9, 0x64, 0xFB, 0xAC, 0xA5, 0xD1, 0x5E, 0x97, 0xA9, 0xCF, 0xF8, 0x35, 0xBD, 0x84, 0xAD, 0xB7, 0x4B, 0xBA, 0xDE, 0x24, 0x29, 0xE1, 0xFC, 0x08, 0xAA, 0xC6, 0xA1, 0xC2, 0xE9, 0xBA, 0x90, 0xEF];
 export const ZHAO_ZCAP_SCHEMA_VERSION = 1;

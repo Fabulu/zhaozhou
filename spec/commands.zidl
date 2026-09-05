@@ -217,6 +217,51 @@ struct PadFrame {
   u32 rsv;        // reserved, must be 0 (closes the struct at 20 B / stride 4)
 }
 
+// ---- MATERIAL_SET record (frozen 2026-09-05, roadmap G2-A) -----------------
+//
+// MATERIAL.RESOLVE.md said "the record layout inside MATERIAL_SET is still not
+// frozen -- the draft above is a draft, and the ABI generator owns the emitted
+// constants". Owner ruling D-2 made freezing the three generic families step 2
+// of the implementation order, and D-2 allocated the kinds:
+//   10 TEXTURE_PAGE (0x000E) | 11 MATERIAL_SET (0x000F) | 12 MESH_STREAM (0x0010)
+//
+// So this is the freeze, and it lives here because the generator owns the
+// constants -- a record hand-written into zhao_abi.h would be a second source
+// of truth for a layout the RTL, the packer and the reference all read.
+//
+// SHAPE. The draft used sub-byte widths (u2 sample_count, u3 recipe, u4
+// tmu_mode ...). The .zidl grammar is whole-byte, so the packing is explicit
+// and documented per field rather than implied by a bitfield the three
+// backends would each lay out their own way. 32 bytes exactly: it is the same
+// size as a command record, it is 4-aligned for array use, and a material
+// table is indexed by material_id so a power-of-two stride is a shift.
+//
+// It resolves to EXACTLY what FRAGROB's input packet needs, which is the whole
+// point -- the contract's words: "a material record resolves to exactly what
+// FRAGROB's input packet needs, so the two cannot drift".
+struct MaterialSample {
+  u16 binding_slot;        // texture binding this sample reads
+  u8  binding_generation;  // D-3 residency generation, low 8 bits
+  u8  modes;               // bits 0-3 tmu_mode (nearest/bilinear/CLUT/direct)
+                           // bits 4-5 wrap (0 repeat, 1 clamp, 2 mirror, 3 rsv)
+                           // bits 6-7 mip_policy
+}
+
+struct MaterialRecord {
+  u8  control;        // bits 0-1 sample_count (0..3, the ruling limit)
+                      // bits 2-4 recipe (the six ratified combiner recipes)
+                      // bits 5-7 reserved, must be 0
+  u8  recipe_weight;  // unit8; used by LERP only (value = raw/256)
+  u16 flags;          // bit0 toon, bit1 ink, bit2 alpha_test; 3-15 reserved 0
+  MaterialSample sample0;
+  MaterialSample sample1;
+  MaterialSample sample2;
+  u32 palette_base;   // CLUT modes only; 0 when no sample is a CLUT mode
+  u32 raster_state;   // carried unchanged to the triangle descriptor
+  u32 rsv0;           // reserved, must be 0
+  u32 rsv1;           // reserved, must be 0 (closes the record at 32 B)
+}
+
 // ---- frame control ---------------------------------------------------------
 
 command Nop 0x0000 implemented {

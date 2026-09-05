@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 6b95fe820b7f9f545f1e553820208fe02e28ca77066b1df55f6af5625023373f
-//   zidl_sha256         = a2198a6e55f7547754d5d9801a450f473609c97738e4e98684bed303988ca7b1
+//   abi_identity_sha256 = 185df469ccfd0f438e5bc3cc079a3093842dadb82bb5ebfbb8f62a92ac6030b7
+//   zidl_sha256         = d964fbaca5d15e97a9cff835bd84adb74bbade2429e1fc08aac6a1c2e9ba90ef
 #pragma once
 
 #include <cstdint>
@@ -291,6 +291,42 @@ static_assert(offsetof(ZhPadFrame, rx) == 12, "layout drift: PadFrame.rx");
 static_assert(offsetof(ZhPadFrame, ry) == 14, "layout drift: PadFrame.ry");
 static_assert(offsetof(ZhPadFrame, rsv) == 16, "layout drift: PadFrame.rsv");
 static_assert(sizeof(ZhPadFrame) == 20, "layout drift: PadFrame size");
+
+// MaterialSample: 4 bytes (spec/commands.zidl)
+struct ZhMaterialSample {
+  uint16_t binding_slot;
+  uint8_t binding_generation;
+  uint8_t modes;
+};
+static_assert(offsetof(ZhMaterialSample, binding_slot) == 0, "layout drift: MaterialSample.binding_slot");
+static_assert(offsetof(ZhMaterialSample, binding_generation) == 2, "layout drift: MaterialSample.binding_generation");
+static_assert(offsetof(ZhMaterialSample, modes) == 3, "layout drift: MaterialSample.modes");
+static_assert(sizeof(ZhMaterialSample) == 4, "layout drift: MaterialSample size");
+
+// MaterialRecord: 32 bytes (spec/commands.zidl)
+struct ZhMaterialRecord {
+  uint8_t control;
+  uint8_t recipe_weight;
+  uint16_t flags;
+  ZhMaterialSample sample0;
+  ZhMaterialSample sample1;
+  ZhMaterialSample sample2;
+  uint32_t palette_base;
+  uint32_t raster_state;
+  uint32_t rsv0;
+  uint32_t rsv1;
+};
+static_assert(offsetof(ZhMaterialRecord, control) == 0, "layout drift: MaterialRecord.control");
+static_assert(offsetof(ZhMaterialRecord, recipe_weight) == 1, "layout drift: MaterialRecord.recipe_weight");
+static_assert(offsetof(ZhMaterialRecord, flags) == 2, "layout drift: MaterialRecord.flags");
+static_assert(offsetof(ZhMaterialRecord, sample0) == 4, "layout drift: MaterialRecord.sample0");
+static_assert(offsetof(ZhMaterialRecord, sample1) == 8, "layout drift: MaterialRecord.sample1");
+static_assert(offsetof(ZhMaterialRecord, sample2) == 12, "layout drift: MaterialRecord.sample2");
+static_assert(offsetof(ZhMaterialRecord, palette_base) == 16, "layout drift: MaterialRecord.palette_base");
+static_assert(offsetof(ZhMaterialRecord, raster_state) == 20, "layout drift: MaterialRecord.raster_state");
+static_assert(offsetof(ZhMaterialRecord, rsv0) == 24, "layout drift: MaterialRecord.rsv0");
+static_assert(offsetof(ZhMaterialRecord, rsv1) == 28, "layout drift: MaterialRecord.rsv1");
+static_assert(sizeof(ZhMaterialRecord) == 32, "layout drift: MaterialRecord size");
 
 // 16-byte command record header (capture_format.md 3.1)
 struct ZhCmdHeader {
@@ -1737,8 +1773,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x6B, 0x95, 0xFE, 0x82, 0x0B, 0x7F, 0x9F, 0x54, 0x5F, 0x1E, 0x55, 0x38, 0x20, 0x20, 0x8F, 0xE0, 0x2E, 0x28, 0xCA, 0x77, 0x06, 0x6B, 0x1D, 0xF5, 0x5F, 0x6A, 0xF5, 0x62, 0x50, 0x23, 0x37, 0x3F};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xA2, 0x19, 0x8A, 0x6E, 0x55, 0xF7, 0x54, 0x77, 0x54, 0xD5, 0xD9, 0x80, 0x1A, 0x45, 0x0F, 0x47, 0x36, 0x09, 0xC9, 0x77, 0x38, 0xE4, 0xE9, 0x86, 0x84, 0xBE, 0xD3, 0x03, 0x98, 0x8C, 0xA7, 0xB1};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x18, 0x5D, 0xF4, 0x69, 0xCC, 0xFD, 0x0F, 0x43, 0x8E, 0x5B, 0xC3, 0xCC, 0x07, 0x9A, 0x30, 0x93, 0x84, 0x2D, 0xAD, 0xB8, 0x2B, 0xB5, 0xEB, 0xFB, 0xB8, 0xF6, 0x2A, 0x92, 0xAC, 0x60, 0x30, 0xB7};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xD9, 0x64, 0xFB, 0xAC, 0xA5, 0xD1, 0x5E, 0x97, 0xA9, 0xCF, 0xF8, 0x35, 0xBD, 0x84, 0xAD, 0xB7, 0x4B, 0xBA, 0xDE, 0x24, 0x29, 0xE1, 0xFC, 0x08, 0xAA, 0xC6, 0xA1, 0xC2, 0xE9, 0xBA, 0x90, 0xEF};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi
