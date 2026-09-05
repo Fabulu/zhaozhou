@@ -243,6 +243,20 @@ Today's nearest path uses one lane of four.
   failure shape as having no rule at all. Corrected to `max_m10k` and verified
   by parsing rather than by reading.
 
+## Closed since
+
+**D22 tread 7 verified: 12 of 12.** The twelfth check was instrumentation, not
+the decode — the gate flag must clear when the triangle goes, and the test read
+it after the drain. Separated into a sticky observation latch and it passes.
+
+**The LOD nibble is fixed.** LODW 4 to 8 and the pad removed, so the Q4.4 LOD
+reaches the planner in the nibble it reads. The oracle already declared this
+ABI (`zref_texture.hpp:151`, `U 4.4`) and the planner already read [7:4], so
+the island was the outlier and this is not a judgement call between two
+defensible widths. Inert at the commit and verified so rather than assumed —
+`bind_mode_i = 0` means MIP_EN is low and `lvl_req` is 0 either way, and all 25
+island checks plus the nine-test texture neighbourhood are unchanged.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner

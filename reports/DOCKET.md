@@ -2820,6 +2820,12 @@ a shell that quietly kept reading it draws a different picture rather than
 accidentally agreeing — without that, a dead decode path and a working one are
 indistinguishable.
 
+**All twelve checks pass**, confirmed after the observation flag was separated
+from the gate: `vd_have_r` must clear when the triangle goes away or the next
+one would draw from a stale table, and the test read it after the frame
+drained, so a working decode reported itself as a failure. The reported flag is
+now a sticky "did this table ever fill", cleared only by reset.
+
 It does **not** prove the transform (a record holds MODEL space, the table held
 CLIP space; with no transform block in this shell the records carry the
 clip-space values and the transform is identity by construction — the device
