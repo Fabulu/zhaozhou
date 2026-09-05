@@ -2804,6 +2804,7 @@ PRECOMPUTED EDGE EQUATIONS to A MESHLET DESCRIPTOR IN MEMORY:
 | 6 | GEOM.MESHFETCH | the meshlet itself | 9 |
 | 7 | GEOM.VDECODE | the decoded coordinates | 12 |
 | 8 | GEOM.ASSETFETCH | the records themselves | 16 |
+| 9 | GEOM.ASSETFETCH | the u8 index stream | 17 |
 
 Every step draws the SAME triangle both ways and requires a byte-identical
 framebuffer, and every step from 3 onward also MEASURES that its own comparison
@@ -2834,6 +2835,22 @@ step 6 used answering the cull with a constant VISIBLE), and it does **not**
 advance the GEOM.VDECODE ledger entry, which stays SPECIFIED because
 `zhao_geom_vdecode`'s own header is explicit that it is the record leaf and not
 the batch engine.
+
+**Tread 9, added 2026-09-05.** The u8 INDEX STREAM. The cheapest tread in the
+staircase, because the work was already being done: of ASSETFETCH's 24 beats,
+EIGHT were the index run -- fetched, then discarded, because its index port was
+tied off and GEOM.ASSEMBLE still read the bench's flat stream. This connects
+the port that was already being fed.
+
+Measured: 17 checks, beats still 24 (the fetch is unchanged; only the consumer
+moved), and the decisive one -- **ASSEMBLE named (2, 0, 3), the triplet the
+FETCHED run carried, while the bench's stream was poisoned with (1, 0, 3)**.
+A shell still reading the bench draws the decoy triangle instead.
+
+Checked before building rather than after: ASSETFETCH answers only from
+S_SERVE, so it cannot hand back a half-filled buffer, and ASSEMBLE holds
+ix_req_o with no deadline -- its "no ready" means the RESPONDER cannot stall,
+not that ASSEMBLE cannot wait.
 
 **Tread 8, added 2026-09-05.** The bench stops SYNTHESISING vertex records and
 supplies raw POOL BYTES. GEOM.ASSETFETCH reads the meshlet's footprint out of

@@ -357,6 +357,18 @@ module tb_zhao_shell (
   // The bench also still plays the guard and the beats -- the boundary moves
   // out by one block, not to zero.
   input  logic               assetfetch_mode_i,
+  // ---- TREAD 9: the u8 INDEX STREAM through GEOM.ASSETFETCH ----------------
+  // Tread 8 routed the vertex records through the fetcher and left the index
+  // stream the bench's. The fetcher was ALREADY READING the index line -- of
+  // its 24 beats, 8 were the index run -- and simply throwing the result away
+  // because `ix_req_i` was tied off. This connects it.
+  //
+  // ASSEMBLE's index port has NO READY, by that block's own deliberate choice
+  // ("378 bytes of buffer to save a stream port is the wrong trade at this
+  // depth"). That is exactly why ASSETFETCH buffers the whole footprint rather
+  // than caching it: a cache behind a port that cannot stall is not an
+  // optimisation, it is a protocol violation waiting for a miss.
+  input  logic               indexfetch_mode_i,
   input  logic [63:0]        af_pool_i [32],
   output logic [31:0]        dbg_af_meshlets_o,
   output logic [31:0]        dbg_af_beats_o,
@@ -750,14 +762,24 @@ module tb_zhao_shell (
   // stopped. A responder with its own back-pressure would be a second thing
   // under test.
   logic [7:0] asm_ix_a, asm_ix_b, asm_ix_c;
+  logic       asm_ix_valid;
   always_comb begin
-    asm_ix_a = 8'd0; asm_ix_b = 8'd0; asm_ix_c = 8'd0;
-    for (int unsigned k = 0; k < 4; k++)
-      if (asm_ix_index == 9'(k)) begin
-        asm_ix_a = asm_index_stream_i[k*24 +: 8];
-        asm_ix_b = asm_index_stream_i[k*24 + 8 +: 8];
-        asm_ix_c = asm_index_stream_i[k*24 + 16 +: 8];
-      end
+    if (indexfetch_mode_i) begin
+      // TREAD 9: the triplet comes out of the fetched footprint.
+      asm_ix_a     = af_ix_a;
+      asm_ix_b     = af_ix_b;
+      asm_ix_c     = af_ix_c;
+      asm_ix_valid = af_ix_valid;
+    end else begin
+      asm_ix_a = 8'd0; asm_ix_b = 8'd0; asm_ix_c = 8'd0;
+      asm_ix_valid = 1'b1;
+      for (int unsigned k = 0; k < 4; k++)
+        if (asm_ix_index == 9'(k)) begin
+          asm_ix_a = asm_index_stream_i[k*24 +: 8];
+          asm_ix_b = asm_index_stream_i[k*24 + 8 +: 8];
+          asm_ix_c = asm_index_stream_i[k*24 + 16 +: 8];
+        end
+    end
   end
 
   zhao_geom_assemble #(
@@ -782,7 +804,12 @@ module tb_zhao_shell (
       .m_raster_state_i(32'd0),
       .m_src_id_i(render_src_id_i),
       .ix_req_o(asm_ix_req), .ix_index_o(asm_ix_index),
-      .ix_valid_i(asm_ix_req), .ix_a_i(asm_ix_a), .ix_b_i(asm_ix_b),
+      // TREAD 9: valid follows the SOURCE. The bench responder is always
+      // valid when asked, so this was tied to the request; the fetcher has a
+      // real valid and tying it high would turn a missed answer into a
+      // silently wrong triplet.
+      .ix_valid_i(indexfetch_mode_i ? asm_ix_valid : asm_ix_req),
+      .ix_a_i(asm_ix_a), .ix_b_i(asm_ix_b),
       .ix_c_i(asm_ix_c),
       .t_valid_o(asm_t_valid), .t_ready_i(1'b1),
       .t_v0_o(asm_v0), .t_v1_o(asm_v1), .t_v2_o(asm_v2),
@@ -881,6 +908,8 @@ module tb_zhao_shell (
   logic            af_m_ready, af_s_valid;
   logic            af_v_valid, af_v_ready;
   logic [255:0]    af_v_bytes;
+  logic            af_ix_valid;
+  logic [7:0]      af_ix_a, af_ix_b, af_ix_c;
   logic            af_sent_r;
 
   logic af_beat_valid, af_beat_last;
@@ -939,9 +968,11 @@ module tb_zhao_shell (
       .s_valid_o(af_s_valid), .s_ready_i(1'b1),
       .s_vertex_count_o(), .s_triangle_count_o(), .s_src_id_o(),
       .release_i(1'b0),
-      // The index port stays the bench's this tread; tied off, not wired.
-      .ix_req_i(1'b0), .ix_index_i(9'd0),
-      .ix_valid_o(), .ix_a_o(), .ix_b_o(), .ix_c_o(),
+      // TREAD 9: the index port is wired. `ix_req_i` is gated on the mode so
+      // tread 8's behaviour is unchanged when it is off.
+      .ix_req_i(indexfetch_mode_i & asm_ix_req), .ix_index_i(asm_ix_index),
+      .ix_valid_o(af_ix_valid),
+      .ix_a_o(af_ix_a), .ix_b_o(af_ix_b), .ix_c_o(af_ix_c),
       .v_valid_o(af_v_valid), .v_ready_i(af_v_ready),
       .v_bytes_o(af_v_bytes), .v_src_id_o(),
       .meshlets_fetched_o(dbg_af_meshlets_o), .beats_read_o(dbg_af_beats_o),
