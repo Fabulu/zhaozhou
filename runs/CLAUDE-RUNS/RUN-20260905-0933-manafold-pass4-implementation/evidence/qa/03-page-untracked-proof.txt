@@ -1,0 +1,54 @@
+QA reproduction of the untracked-page build fault — independent of the reviewer.
+
+Worktree:  git worktree add --detach C:\zqaclean HEAD   (2af79e85)
+Build:     tools/reel/build-direct.sh --output C:\zqacleanbuild cel
+Env:       ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross
+
+1. Page absent in the clean checkout:
+   ls C:/zqaclean/tools/reel/manafold_page.h -> No such file or directory
+   All three Zixxtrixx pages ARE present (zixxtrixx_page.h, _page_cel.h, _page_debug.h).
+
+2. The build SUCCEEDS with no error and no warning.
+   (build-direct.sh: "build-direct: done")
+
+3. Render, page ABSENT:
+   u02-s4-front: 4 frames, 77 unique colours, sequence_crc32c=0x84B545D7
+   -> 01-clean-checkout-BLACK.png : a solid black creature.
+
+4. Regenerate with the committed generator:
+   python tools/pack/mkmanafoldpage.py
+   sha256 of generated file == sha256 of the lane's untracked file:
+     e9d5b2961859283fb2274147127243e3f4e7f4d9f82e59aadc7c74f1d0cbf8cb
+   -> regeneration is DETERMINISTIC and byte-identical. Nothing is lost.
+
+5. Rebuild + render, page PRESENT, SAME COMMIT:
+   u02-s4-front: 4 frames, 803 unique colours, sequence_crc32c=0x1B7687CB
+   -> 02-same-commit-with-page-CORRECT.png : the creature renders correctly.
+
+77 vs 803 unique colours. Both of the reviewer's numbers reproduced exactly.
+
+INSTRUMENT HONESTY (gate checklist 1 and 2):
+  subject_u02_s4(view=1) sets NO creature_shade, so it takes the lit celmain
+  path; u02_common() sets s.sun = &kU02SunCalm, the SHIPPING sun rig. An unlit
+  diagnostic could not have exhibited this bug (09-ENGINE-GOTCHAS.md s7).
+
+BLAST RADIUS — established by QA, narrower than "does this pattern spread?":
+  * __has_include appears exactly ONCE in the whole tools/ tree (manafold.h:33).
+  * manafold_page.h is the ONLY untracked source/header file in the repository
+    (git status --untracked-files=all, filtered to .h/.hpp/.cpp/.c/.py -> 1 file).
+  * All three Zixxtrixx page headers are TRACKED.
+  * build-direct.sh build_cel() already hard-errors on a missing
+    zixxtrixx_page_cel.h:  [ -f "$header" ] || { printf 'missing %s\n' ...; exit 1; }
+    Manafold's page has no equivalent guard.
+  => One file, one guard. Not a systemic pattern. The fix is small and local,
+     and the hard-error precedent already exists in the same script.
+
+TWO FALSE STATEMENTS IN THE SOURCE (gate checklist 8 - a comment is untested):
+  manafold.h:31-33 says the page is "gitignored, never tracked".
+    .gitignore:91 still names the PRE-RENAME path 'tools/reel/unnamed02_page.h'.
+    git check-ignore -v tools/reel/manafold_page.h -> NOT IGNORED.
+    So the file is merely uncommitted. Committing it needs NO .gitignore change.
+  manafold.h:31-32 says a fresh clone will "build grey rather than breaking".
+    It builds BLACK (see 1-3 above), and the SAME comment block twelve lines
+    later says "untextured parts render black under celmain - 09-ENGINE-GOTCHAS
+    s7". The file contradicts itself.

@@ -1,0 +1,81 @@
+QA: the eye-protrusion regression — number CONFIRMED, cause REFUTED.
+
+INSTRUMENT FIRST (gate checklist 4 and 7).
+  The eye-crown block of the probe is BYTE-IDENTICAL between
+  dd85b719:tools/reel/u02_probe.cpp and HEAD:tools/reel/manafold_probe.cpp
+  (diff of the two blocks: no output). Same formula, same protected constant.
+  The pass-3 -> pass-4 comparison is therefore like-for-like, not two instruments.
+
+  Pass-3 baseline built by QA from its own worktree (C:\zqap3 @ dd85b719):
+    u02-probe: eye crown ellip 1365 pm — stands 164 mm proud
+  Pass-3's published number REPRODUCED EXACTLY. Calibration good.
+
+  HEAD (C:\zqaclean @ 2af79e85):
+    u02-probe: eye crown ellip 1275 pm — stands 123 mm proud
+  The reviewer's number REPRODUCED EXACTLY. The regression is REAL.
+
+THE REVIEWER'S CAUSE IS WRONG.
+  Reviewer: "The only changed placement constant is kEyeZMm 190 -> 215 ...
+             Pushing the eyes apart along z slid their crowns off the body's
+             forward pole ... Fixing 'they touch' cost 'they stand out'."
+
+  QA reverted kEyeZMm to 190 on HEAD and rebuilt (nothing else changed):
+    kEyeZMm = 215 (HEAD) : 1275 pm / 123 mm
+    kEyeZMm = 190 (p3)   : 1247 pm / 111 mm
+  Reverting the separation makes protrusion TWELVE MILLIMETRES WORSE.
+  kEyeZMm 190->215 IMPROVED protrusion. It is not the cause.
+
+  Also: "the only changed placement constant" is not accurate — kEyeVAngleA16
+  also moved, -4400 -> -3600.
+
+WHAT THE PROBE ACTUALLY MEASURES.
+  manafold_probe.cpp takes the MAX ellipsoid radius over EVERY posed vertex
+  with x >= 300 mm. It is not a lens measurement; it is "whatever face-region
+  vertex sticks out furthest". QA instrumented a scratch copy to report the
+  per-part maximum (part identified by meshlet material colour):
+
+  PASS 3 (dd85b719)                    HEAD (2af79e85)
+    rgb( 64,220,240) 1365 pm / 164 mm    rgb(246,242,250) 1275 pm / 123 mm
+    rgb(116, 58,178) 1218 pm /  98 mm    rgb( 64,220,240) 1269 pm / 121 mm
+    rgb( 64,220,240) 1216 pm /  97 mm    rgb(116, 58,178) 1228 pm / 102 mm
+
+    64,220,240 = kStarR/G/B, the cyan PUPIL STAR (make_star_blade)
+   116, 58,178 = the purple LENS
+   246,242,250 = make_white_ring — a part that DID NOT EXIST in pass 3
+
+  The purple lens did not regress at all: 1218 -> 1228 pm, slightly BETTER.
+  The whole loss is in the CYAN STAR: 1365 -> 1269 pm (164 -> 121 mm).
+
+THE REAL CAUSE, established causally by knob sweep on HEAD:
+    A  HEAD baseline                          star 1269 pm / 121 mm
+    B  kPupilStarArmLongMm  150 -> 185        star 1269 pm / 121 mm  (no effect)
+    C  kEyeZMm              215 -> 190        star 1244 pm / 109 mm  (worse)
+    D  B + C                                  star 1244 pm / 109 mm
+    E  kPupilStarArmShortMm  88 -> 185        crown 1397 pm / 178 mm  RECOVERED
+    F  both arms -> 185                       crown 1397 pm / 178 mm
+
+  kPupilStarArmShortMm — the CROSSED star blade — went 185 -> 88 in Stage E.
+  Restoring it alone recovers protrusion past the protected read.
+  The long arm is tangential to the radial and does nothing.
+
+WHY THAT MATTERS — the "regression" is largely an artifact.
+  The crossed arm was shortened deliberately. HEAD manafold_model.h says:
+    "the crossed (short) arm must FIT the lens half-width (the reviewer's
+     185-vs-125 arithmetic ends here)"
+  And dd85b719's own commit subject is:
+    "Creature 02 pass 3: reviewer verdict — the star still leaves the lens"
+
+  So pass 3's 164 mm protrusion was PRODUCED BY a star arm poking outside the
+  lens — precisely the fault pass 4 was directed to remove. The probe, which
+  maxes over all face-region vertices, was partly measuring the fault.
+
+  Re-lengthening the crossed arm to restore 166 mm would RE-BREAK
+  "the star stays inside the lens". The correct repair is the one the probe's
+  own message names — raise the LENS's own stand-off (kEyeDeepMm / kEyeXMm) —
+  and the gate should be re-baselined against lens geometry, not a max over
+  every face vertex including a star that is now correctly contained.
+
+  The reviewer's PRESCRIPTION (raise kEyeDeepMm/kEyeXMm) is right.
+  Its CAUSE, its severity, and its "one acceptance item broke another" pairing
+  are wrong: the pairing is star-containment vs protrusion, not eye-separation
+  vs protrusion.

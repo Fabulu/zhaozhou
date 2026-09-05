@@ -1,0 +1,120 @@
+QA: shape legibility, knead coverage, mana coverage, Zixxtrixx identity, site.
+
+--- SHAPE LEGIBILITY (reviewer finding 3) : CONFIRMED, wording refined ---
+
+Calibration: QA's own clean-worktree build renders manafold-hover with
+sequence_crc32c=0x5B44FCF2 — the same value the reviewer reported from an
+independent build. (There is no stored shipped meta.txt in the repo to compare
+against; website/scratch-reel is render output and is absent.)
+
+FOLD_LOCK is a live knob: hover normal 0x5B44FCF2 vs U02_FOLD_LOCK=1 0xF975D2E1.
+The instrument can change the picture, so it can fail (gate checklist 6).
+
+Bright-core connected components (cyan & max(g,b)>200), HOLD frames:
+
+  frame variant  core px  comps  top1  top2   top-2 share   bbox
+    128 normal      1318     61  1149    21       88.8%     90 x 96   RING
+    128 LOCK        1260     43   702   385       86.3%     85 x 96
+    140 normal      1167     82   675   181       73.4%     80 x 94   RING
+    140 LOCK        1049     53   647   159       76.8%     76 x 94
+    374 normal      1070     28   890   119       94.3%     98 x 70   STAR
+    374 LOCK         840     32   754    22       92.4%    106 x 70
+    400 normal      1123     33   906   154       94.4%     90 x 60   STAR
+    400 LOCK        1118      9  1100    11       99.4%     82 x 62
+
+CONFIRMED: 73-99% of the bright core sits in TWO components on every HOLD
+frame, in BOTH variants. (Reviewer measured 75-96% on the X-ray; different
+threshold, same conclusion, independently reached.) The fusion is intrinsic —
+locking coherence to maximum and removing the cloud does not un-fuse it.
+
+The brush-vs-shape arithmetic, from the constants:
+  kMoteCount 24, kWanderCount 3  -> 21 shape motes
+  kStencilPts 18                 -> 18 stations
+  kMoteHaloRPxMin/Max 7..10      -> a 14-20 px stroke
+  Rendered core bbox ~80 x 90 px; subtracting one halo diameter each way the
+  stencil polyline is ~60 x 70 px, perimeter ~204 px, /18 stations ~= 11 px
+  between stations under a 14-20 px brush. Neighbours overlap. The polyline
+  closes into a slab before it is drawn. Reviewer's ~10 px CONFIRMED.
+
+REFINEMENT (QA disagrees with the wording, not the conclusion):
+  "The X-ray looks the same" is too strong. At 4-6x the locked render is
+  visibly crisper and the RING's hole is cleaner (06-hold-4x-...png, right
+  column), and component counts drop materially (61->43, 82->53, 33->9).
+  The cloud DOES add diffuse satellite specks. What it does not do is cause
+  the core fusion — top-2 dominance is unchanged. So the reviewer's CAUSE
+  stands; only "looks the same" overstates it.
+
+AT NATIVE 384x240 (05-hold-native-...png) QA cannot name RING and cannot name
+STAR in either variant. The acceptance read fails at the shipping camera.
+
+--- KNEAD COVERAGE (reviewer finding 6) : CONFIRMED EXACTLY ---
+From U02_FOLD_DEBUG=1 renders made by QA (seg 0=GATHER 1=HOLD 2=KNEAD 3=RELEASE):
+
+  clip                frames  GATHER  HOLD  KNEAD  RELEASE
+  manafold-hit           140      62    50      0       28
+  manafold-startle       160      90    42      0       28
+  manafold-curious       180      70    64     18       28
+  manafold-taunt2        240      74    76     62       28
+  manafold-hover         600     214   186    172       28
+  manafold-damage        464     146   186    104       28
+  manafold-rest          400     166   120     86       28
+
+hit and startle NEVER knead. curious kneads 18 frames of 180 (10%).
+Every span matches the reviewer's table frame for frame.
+
+--- THE DEAD KNOB : CONFIRMED ---
+  manafold_art.h:555  constexpr int kKneadClipPm[15] = {..., 0, 250};
+  manafold_clips.h:497  const int gain = slot < 14 ? kKneadClipPm[slot] : 700;
+  Only two references exist in the whole tree. Slot 14 is build_damage()
+  (manafold_clips.h:1141, "DIRECTIONAL DAMAGE, slot 14"). Index 14 is never
+  read; the damage clip runs at 700 against an authored 250 — 2.8x.
+
+--- MANA COVERING THE ANTENNA (reviewer finding 4) : CONFIRMED, RE-RANKED ---
+07-taunt2-160-170-3x.png: on taunt2 f160-170 the loop is submerged in a solid
+cyan mass and is unreadable as a shape. Small precision note: the black ink
+silhouette and a few pink slivers do survive, so "completely invisible" is
+marginally strong — but the read is unambiguously a cloud sitting on the hand.
+
+08-buried-vs-good.png ranks the clips by looking:
+  taunt2 f166      loop completely unreadable        WORST
+  rest f335        loop traceable, mana coats it     moderate
+  pirouette f239   loop READS; mana fills the hole   mild — reviewer's
+                   "buries the loop entirely" overstates this clip
+  drift f179       compact shaped cluster, trailing  GOOD
+  hasty f131       long lagging trail with a VISIBLE GAP between antenna and
+                   the bulk of the mana — the iron-filings read, and the single
+                   best evidence in the pass. PROTECT.
+
+DISCARDED INSTRUMENT (gate checklist 6, recorded rather than quoted):
+QA first tried to rank the fault by peak cyan pixels as a fraction of creature
+pixels. It does not measure the fault: hasty (a GOOD clip) scored 6.2% against
+taunt2's 6.5%. The metric counts mana QUANTITY, not whether it covers the loop.
+Discarded; the ranking above is by looking, which is the acceptance test.
+
+--- ZIXXTRIXX UNTOUCHED : SPOT-CHECKED BY QA ---
+Rendered from QA's own pass-3 worktree build (C:\zqap3 @ dd85b719) and QA's own
+HEAD build, identical env (ZIXX_EXP=celmain):
+  zixxtrixx-walk  160 frames  0x81155EDB both  -> diff -r: BYTE-IDENTICAL
+  zixxtrixx-idle  576 frames  0x118660EF both  -> diff -r: BYTE-IDENTICAL
+  736 frames across 2 subjects verified by QA.
+(The CRC values differ from the reviewer's because the reviewer also set
+ZIXX_LIGHT=diagonal-cool-cross. Both sides of QA's comparison share one env,
+which is what the identity claim needs.)
+INHERITED, not re-derived: zixxtrixx-damage, the remaining 19 sequence CRCs,
+and the ZIXX_SUNS=off gate-off byte-identity.
+
+--- THE SITE ---
+  exactly ONE <meta name="robots"> in website/public/index.html          PASS
+  Manafold appears before Zixxtrixx in the ordering                      PASS
+  THE MANA MENU picker row present and serving                           PASS
+  eye experiment / gaze rows present (eye-x1, x2-, Gaze refs)            PASS
+  archive generations NINE..NINETEEN + the 2026-08-26 first pass present PASS
+  zero unnamed02 current-generation media references                     PASS
+  445 <video> tags: every src present on disk                            PASS
+  ONE MISSING declared media file — REFUTES the reviewer's "0 missing":
+     index.html:98  <video src="renders/manafold-inspect.webm"
+                           poster="renders/manafold-inspect.png" autoplay ...>
+     renders/manafold-inspect.webm exists; renders/manafold-inspect.png DOES NOT.
+     444 of 445 posters are present; this one 404s. Damage is low because the
+     video carries autoplay, so the poster is barely seen — but gate checklist
+     18 says every declared media file must be present.
