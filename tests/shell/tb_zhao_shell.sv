@@ -211,6 +211,42 @@ module tb_zhao_shell (
   //
   // So the vertices SETUP sees in clip mode are CLIP's, not the bench's.
   // Defaults to 0, bit-identical to before.
+  // ---- D22 STEP 4: GEOM.PROJECT ---------------------------------------------
+  // The staircase so far has moved the boundary back one block at a time:
+  //   1  edge coefficients -> GEOM.SETUP
+  //   2  invw24 depth      -> GEOM.DEPTHQUANT
+  //   3  2A and scan box   -> GEOM.CLIP
+  //   4  SCREEN VERTICES   -> GEOM.PROJECT
+  //
+  // Step 4 is the one that ties the front end together, because PROJECT feeds
+  // BOTH downstream blocks. Its own header says so about the second:
+  //
+  //   > clip.w itself, fx16 raw. GEOM.DEPTHQUANT consumes THIS and not
+  //   > out_d_o: the ratified depth law performs its own rcp_u24 on w, and the
+  //   > quotient has already lost the precision reconstruction would need.
+  //
+  // So in project mode the bench stops supplying screen vertices AND stops
+  // supplying `w`: PROJECT produces the screen x/y CLIP consumes, the behind
+  // flags CLIP tests, and the w DEPTHQUANT quantises.
+  //
+  // PROJECT IS PER-VERTEX and CLIP is per-triangle, so the collector below
+  // pushes A, B, C through in turn and latches the three results. That
+  // sequencer is bench scaffolding, not console logic -- in the machine the
+  // vertex stream arrives from GEOM.ASSEMBLE and the collector is that block's
+  // job.
+  input  logic               project_mode_i,
+  input  logic               proj_cfg_we_i,
+  input  logic               proj_cfg_view_i,
+  input  logic [ 4:0]        proj_cfg_addr_i,
+  input  logic [31:0]        proj_cfg_data_i,
+  input  logic signed [31:0] proj_ax_i, proj_ay_i, proj_az_i,
+  input  logic signed [31:0] proj_bx_i, proj_by_i, proj_bz_i,
+  input  logic signed [31:0] proj_cx_i, proj_cy_i, proj_cz_i,
+  output logic               dbg_proj_ready_o,
+  output logic signed [20:0] dbg_proj_ax_o,
+  output logic signed [20:0] dbg_proj_ay_o,
+  output logic [30:0]        dbg_proj_w_o,
+  output logic [2:0]         dbg_proj_behind_o,
   input  logic               clip_mode_i,
   output logic               dbg_clip_valid_o,
   output logic signed [47:0] dbg_clip_area2_o,
@@ -361,8 +397,16 @@ module tb_zhao_shell (
 
   zhao_geom_depthquant #(.SRCW(16)) u_depthquant (
       .clk(gpu_clk), .rst_n(rst_n),
-      .v_valid_i(render_tri_valid_i & depth_mode_i), .v_ready_o(dq_v_ready),
-      .v_w_i(depth_w_i), .v_behind_i(1'b0), .v_profile_i(depth_profile_i),
+      .v_valid_i((render_tri_valid_i & depth_mode_i) |
+                 (project_mode_i & pj_tri_ready)),
+      .v_ready_o(dq_v_ready),
+      // PROJECT's w, not the bench's, once PROJECT is in the path. Its
+      // header is explicit that DEPTHQUANT must take clip.w and not the
+      // reciprocal: the quotient has already lost the precision the depth
+      // law needs.
+      .v_w_i(project_mode_i ? {9'd0, pj_w_r[0]} : depth_w_i),
+      .v_behind_i(project_mode_i ? pj_behind_r[0] : 1'b0),
+      .v_profile_i(depth_profile_i),
       .v_src_id_i(render_src_id_i),
       .d_valid_o(dq_d_valid), .d_ready_i(1'b1),
       .d_invw24_o(dq_invw24), .d_behind_o(dq_d_behind), .d_src_id_o(dq_d_src),
@@ -403,6 +447,91 @@ module tb_zhao_shell (
                              render_fill_word_i[7:0]}
                           : render_fill_word_i;
 
+  // ---- D22 step 4: GEOM.PROJECT and its three-vertex collector --------------
+  logic               pj_v_valid, pj_v_ready, pj_out_valid;
+  logic signed [31:0] pj_vx, pj_vy, pj_vz;
+  logic signed [20:0] pj_out_x, pj_out_y;
+  logic [30:0]        pj_out_w;
+  logic               pj_out_behind;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic signed [31:0] pj_out_d;
+  logic [15:0]        pj_out_src;
+  logic [31:0]        pj_transformed;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // The collector. THREE vertices in, one triangle out.
+  //
+  // `pj_idx_r` is which vertex is being pushed; `pj_got_r` counts how many
+  // have come back. The triangle is offered to CLIP only when all three have
+  // landed -- offering it early would hand CLIP one new vertex and two stale
+  // ones, which is a wrong triangle that still draws.
+  logic [1:0]         pj_idx_r, pj_got_r;
+  logic signed [20:0] pj_x_r [3];
+  logic signed [20:0] pj_y_r [3];
+  logic [30:0]        pj_w_r [3];
+  logic [2:0]         pj_behind_r;
+  logic               pj_tri_ready;
+
+  always_comb begin
+    case (pj_idx_r)
+      2'd0:    begin pj_vx = proj_ax_i; pj_vy = proj_ay_i; pj_vz = proj_az_i; end
+      2'd1:    begin pj_vx = proj_bx_i; pj_vy = proj_by_i; pj_vz = proj_bz_i; end
+      default: begin pj_vx = proj_cx_i; pj_vy = proj_cy_i; pj_vz = proj_cz_i; end
+    endcase
+  end
+
+  // Push while the bench is offering a triangle and fewer than three vertices
+  // have been sent.
+  assign pj_v_valid = render_tri_valid_i & project_mode_i & (pj_idx_r < 2'd3);
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      pj_idx_r    <= 2'd0;
+      pj_got_r    <= 2'd0;
+      pj_behind_r <= 3'd0;
+      for (int k = 0; k < 3; k++) begin
+        pj_x_r[k] <= 21'sd0;
+        pj_y_r[k] <= 21'sd0;
+        pj_w_r[k] <= 31'd0;
+      end
+    end else begin
+      if (!render_tri_valid_i) begin
+        pj_idx_r <= 2'd0;
+        pj_got_r <= 2'd0;
+      end else begin
+        if (pj_v_valid && pj_v_ready && pj_idx_r < 2'd3)
+          pj_idx_r <= pj_idx_r + 2'd1;
+        if (pj_out_valid && pj_got_r < 2'd3) begin
+          pj_x_r[pj_got_r]      <= pj_out_x;
+          pj_y_r[pj_got_r]      <= pj_out_y;
+          pj_w_r[pj_got_r]      <= pj_out_w;
+          pj_behind_r[pj_got_r] <= pj_out_behind;
+          pj_got_r              <= pj_got_r + 2'd1;
+        end
+      end
+    end
+  end
+
+  assign pj_tri_ready       = (pj_got_r == 2'd3);
+  assign dbg_proj_ready_o   = pj_tri_ready;
+  assign dbg_proj_ax_o      = pj_x_r[0];
+  assign dbg_proj_ay_o      = pj_y_r[0];
+  assign dbg_proj_w_o       = pj_w_r[0];
+  assign dbg_proj_behind_o  = pj_behind_r;
+
+  zhao_geom_project u_project (
+      .clk(gpu_clk), .rst_n(rst_n),
+      .cfg_we_i(proj_cfg_we_i), .cfg_view_i(proj_cfg_view_i),
+      .cfg_addr_i(proj_cfg_addr_i), .cfg_data_i(proj_cfg_data_i),
+      .v_valid_i(pj_v_valid), .v_ready_o(pj_v_ready),
+      .vx_i(pj_vx), .vy_i(pj_vy), .vz_i(pj_vz),
+      .view_i(1'b0), .src_id_i(render_src_id_i),
+      .out_valid_o(pj_out_valid), .out_ready_i(1'b1),
+      .out_x_o(pj_out_x), .out_y_o(pj_out_y), .out_d_o(pj_out_d),
+      .out_w_o(pj_out_w), .out_behind_o(pj_out_behind),
+      .out_src_id_o(pj_out_src),
+      .vertices_transformed_o(pj_transformed));
+
   // ---- D22 step 3: GEOM.CLIP ------------------------------------------------
   localparam int unsigned CLIP_ATTRS = 7;
   logic               cl_tri_ready, cl_out_valid;
@@ -419,16 +548,24 @@ module tb_zhao_shell (
 
   zhao_geom_clip #(.ATTRS(CLIP_ATTRS)) u_clip (
       .clk(gpu_clk), .rst_n(rst_n),
-      .tri_valid_i(render_tri_valid_i & clip_mode_i),
+      // In project mode the triangle is offered only once all three vertices
+      // have come back from PROJECT.
+      .tri_valid_i(project_mode_i ? pj_tri_ready
+                                  : (render_tri_valid_i & clip_mode_i)),
       .tri_ready_o(cl_tri_ready),
-      .tri_ax_i(render_ax_i), .tri_ay_i(render_ay_i),
-      .tri_bx_i(render_bx_i), .tri_by_i(render_by_i),
-      .tri_cx_i(render_cx_i), .tri_cy_i(render_cy_i),
+      .tri_ax_i(project_mode_i ? pj_x_r[0] : render_ax_i),
+      .tri_ay_i(project_mode_i ? pj_y_r[0] : render_ay_i),
+      .tri_bx_i(project_mode_i ? pj_x_r[1] : render_bx_i),
+      .tri_by_i(project_mode_i ? pj_y_r[1] : render_by_i),
+      .tri_cx_i(project_mode_i ? pj_x_r[2] : render_cx_i),
+      .tri_cy_i(project_mode_i ? pj_y_r[2] : render_cy_i),
       // No vertex is behind: the bench supplies screen-space vertices that
       // GEOM.PROJECT would already have accepted. A w <= 0 verdict is step 4's
       // concern, and asserting it here would exercise a rejection path this
       // step is not moving.
-      .tri_behind_i(3'b000),
+      // The behind flags are PROJECT's verdict in project mode. Tying them to
+      // zero there would hide exactly the case CLIP exists to reject.
+      .tri_behind_i(project_mode_i ? pj_behind_r : 3'b000),
       .tri_src_id_i(render_src_id_i),
       .tri_attr_a_i('0), .tri_attr_b_i('0), .tri_attr_c_i('0),
       // The scissor is the render grid in whole pixels; sixteen pixels per
@@ -461,19 +598,20 @@ module tb_zhao_shell (
   // THE STEP-3 BOUNDARY. In clip mode every geometric input SETUP sees comes
   // from CLIP -- vertices included, because the winding normalisation may have
   // swapped two of them.
-  wire               c_valid = clip_mode_i ? cl_out_valid
-                                           : (render_tri_valid_i & setup_mode_i);
-  wire signed [20:0] c_ax    = clip_mode_i ? cl_ax    : render_ax_i;
-  wire signed [20:0] c_ay    = clip_mode_i ? cl_ay    : render_ay_i;
-  wire signed [20:0] c_bx    = clip_mode_i ? cl_bx    : render_bx_i;
-  wire signed [20:0] c_by    = clip_mode_i ? cl_by    : render_by_i;
-  wire signed [20:0] c_cx    = clip_mode_i ? cl_cx    : render_cx_i;
-  wire signed [20:0] c_cy    = clip_mode_i ? cl_cy    : render_cy_i;
-  wire signed [47:0] c_area2 = clip_mode_i ? cl_area2 : setup_area2_i;
-  wire signed [11:0] c_min_x = clip_mode_i ? cl_min_x : render_min_x_i;
-  wire signed [11:0] c_max_x = clip_mode_i ? cl_max_x : render_max_x_i;
-  wire signed [11:0] c_min_y = clip_mode_i ? cl_min_y : render_min_y_i;
-  wire signed [11:0] c_max_y = clip_mode_i ? cl_max_y : render_max_y_i;
+  wire               c_valid = (clip_mode_i || project_mode_i)
+                             ? cl_out_valid
+                             : (render_tri_valid_i & setup_mode_i);
+  wire signed [20:0] c_ax    = (clip_mode_i || project_mode_i) ? cl_ax : render_ax_i;
+  wire signed [20:0] c_ay    = (clip_mode_i || project_mode_i) ? cl_ay : render_ay_i;
+  wire signed [20:0] c_bx    = (clip_mode_i || project_mode_i) ? cl_bx : render_bx_i;
+  wire signed [20:0] c_by    = (clip_mode_i || project_mode_i) ? cl_by : render_by_i;
+  wire signed [20:0] c_cx    = (clip_mode_i || project_mode_i) ? cl_cx : render_cx_i;
+  wire signed [20:0] c_cy    = (clip_mode_i || project_mode_i) ? cl_cy : render_cy_i;
+  wire signed [47:0] c_area2 = (clip_mode_i || project_mode_i) ? cl_area2 : setup_area2_i;
+  wire signed [11:0] c_min_x = (clip_mode_i || project_mode_i) ? cl_min_x : render_min_x_i;
+  wire signed [11:0] c_max_x = (clip_mode_i || project_mode_i) ? cl_max_x : render_max_x_i;
+  wire signed [11:0] c_min_y = (clip_mode_i || project_mode_i) ? cl_min_y : render_min_y_i;
+  wire signed [11:0] c_max_y = (clip_mode_i || project_mode_i) ? cl_max_y : render_max_y_i;
 
   zhao_geom_setup u_setup (
       .clk(gpu_clk), .rst_n(rst_n),
@@ -502,15 +640,16 @@ module tb_zhao_shell (
   // The mux. In setup mode the shell is driven by SETUP's outputs and the
   // bench's ready comes from SETUP's input side; otherwise everything is
   // exactly as before.
-  assign render_tri_ready_o = clip_mode_i  ? cl_tri_ready
-                            : setup_mode_i ? su_tri_ready
-                                           : shell_tri_ready;
+  assign render_tri_ready_o = project_mode_i ? (pj_tri_ready & cl_tri_ready)
+                            : clip_mode_i    ? cl_tri_ready
+                            : setup_mode_i   ? su_tri_ready
+                                             : shell_tri_ready;
   assign dbg_su_tri_ready_o    = su_tri_ready;
   assign dbg_su_out_valid_o    = su_out_valid;
   assign dbg_shell_tri_ready_o = shell_tri_ready;
 
-  wire               m_tri_valid = (setup_mode_i || clip_mode_i) ? su_out_valid
-                                                                : render_tri_valid_i;
+  wire               m_tri_valid = (setup_mode_i || clip_mode_i || project_mode_i)
+                                 ? su_out_valid : render_tri_valid_i;
   wire signed [22:0] m_kx0 = setup_mode_i ? su_kx0 : render_kx0_i;
   wire signed [22:0] m_ky0 = setup_mode_i ? su_ky0 : render_ky0_i;
   wire signed [47:0] m_kc0 = setup_mode_i ? su_kc0 : render_kc0_i;

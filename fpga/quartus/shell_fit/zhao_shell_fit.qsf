@@ -181,6 +181,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fill
 # green under Verilator and fatal at the fit. The parity gate checks the order
 # too, and caught this on the first attempt.
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_setup.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_project.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_clip.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_depthquant.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_rcp24_svc.sv
