@@ -130,8 +130,32 @@ inline zc::RingPart make_loop() {
     zc::RingSpec rs;
     rs.y = fxu(y0 + s);
     rs.radius = 0;
-    rs.rx = fxu(taper(kLoopBladeRxMm, s));
-    rs.rz = fxu(taper(kLoopBladeRzMm, s));
+    // PASS 6 B.2: the KNUCKLES, in the skin. The band is the accepted taper
+    // above, untouched; each knuckle adds a flat-topped bump that meets the
+    // band with zero slope, so there is no crease and no waist. MAX, not sum:
+    // two overlapping swells cannot stack into a lump.
+    const auto swell = [&](int32_t at, int32_t rx_mm, int32_t rz_mm,
+                           int32_t& best_x, int32_t& best_z) {
+      const int32_t d = s > at ? s - at : at - s;
+      if (d >= kKnuckleSwellHalfMm) return;
+      // u = 1 - (d/half)^2, then w = u^2 -- per-mille throughout
+      const int32_t u = 1000 - static_cast<int32_t>(
+          (static_cast<int64_t>(d) * d * 1000) /
+          (static_cast<int64_t>(kKnuckleSwellHalfMm) * kKnuckleSwellHalfMm));
+      const int32_t w = static_cast<int32_t>((static_cast<int64_t>(u) * u) / 1000);
+      const int32_t ax = static_cast<int32_t>((static_cast<int64_t>(rx_mm) * w) / 1000);
+      const int32_t az = static_cast<int32_t>((static_cast<int64_t>(rz_mm) * w) / 1000);
+      if (ax > best_x) best_x = ax;
+      if (az > best_z) best_z = az;
+    };
+    int32_t sw_x = 0, sw_z = 0;
+    swell(kKnuckleAtJfMm, kKnuckleSwellJfRxMm, kKnuckleSwellJfRzMm, sw_x, sw_z);
+    swell(kKnuckleAtAMm, kKnuckleSwellARxMm, kKnuckleSwellARzMm, sw_x, sw_z);
+    swell(kKnuckleAtBMm, kKnuckleSwellBRxMm, kKnuckleSwellBRzMm, sw_x, sw_z);
+    swell(kKnuckleAtCMm, kKnuckleSwellCRxMm, kKnuckleSwellCRzMm, sw_x, sw_z);
+    swell(kKnuckleAtEndMm, kKnuckleSwellEndRxMm, kKnuckleSwellEndRzMm, sw_x, sw_z);
+    rs.rx = fxu(taper(kLoopBladeRxMm, s) + sw_x);
+    rs.rz = fxu(taper(kLoopBladeRzMm, s) + sw_z);
     rs.segments = static_cast<uint8_t>(kLoopSegments);
     // weights: a ladder of two-bone blends across the five fold stations
     const auto blend_of = [&](int32_t st) {
@@ -181,37 +205,25 @@ inline zc::RingPart make_loop() {
   return p;
 }
 
-/** One rigid hinge ball on its own bone (bind translation AT the ball centre). */
-inline zc::RingPart make_hinge(uint8_t bone) {
-  zc::RingPart p =
-      make_ball(kHingeRadiusMm, kHingeRings, kHingeSegments, kHingePoleSegments, bone);
-  p.r = kHingeGreyR;
-  p.g = kHingeGreyG;
-  p.b = kHingeGreyB;
-  p.page = kPageAtlasTile;
-  p.v0 = kHingeV0;
-  p.v1 = kHingeV1;
-  return p;
-}
-
-/** A junction knuckle (R11): a hinge-family ball whose centre is OFFSET in
- *  bone-local x/y — the re-entry knuckle sits at the visible surface
- *  crossing, not at the deep closure anchor its bone binds to. */
-inline zc::RingPart make_knuckle(uint8_t bone, int32_t off_x_mm, int32_t off_y_mm) {
-  zc::RingPart p =
-      make_ball(kKnuckleRadiusMm, kHingeRings, kHingeSegments, kHingePoleSegments, bone);
-  for (zc::RingSpec& rs : p.rings) {
-    rs.cx = fxu(off_x_mm);
-    rs.y += fxu(off_y_mm);
-  }
-  p.r = kHingeGreyR;
-  p.g = kHingeGreyG;
-  p.b = kHingeGreyB;
-  p.page = kPageAtlasTile;
-  p.v0 = kHingeV0;
-  p.v1 = kHingeV1;
-  return p;
-}
+// PASS 6 B.2: make_hinge() and make_knuckle() are DELETED, and with them the
+// five separate closed spheres -- three hinge balls and the front-junction and
+// re-entry knuckles. Direction 5 §2b: "smooth skin not visible balls."
+//
+// Deleting them does three things at once, which is why the recon preferred it
+// to re-skinning: it removes the seam and the pinch at every join; it removes
+// the sphere-slides-off-the-centreline artefact at large hinge swings; and it
+// removes the ONE thing the deform sidecar genuinely cannot do, which is
+// stitch two separate closed surfaces into one continuous skin.
+//
+// It also resolves the free-floating dongle (Direction 5 §1) STRUCTURALLY
+// rather than by re-attaching anything. The re-entry knuckle was
+// make_knuckle(kBLoopBase2, ...) parented to the BODY -- that parenting was
+// the whole fault. As a swell on the chain it is skinned to the arm and
+// travels with it by construction: there is nothing left to detach.
+//
+// The rig is UNCHANGED. kBHingeA/B/C, kBJunctionF and kBLoopBase2 all still
+// exist and still drive the chain through the two-bone blend ladder in
+// make_loop(); only their rigid ball parts are gone.
 
 /**
  * One almond lens: a flattened ellipsoid swept along +Y (the almond's long

@@ -101,22 +101,10 @@ inline const zc::CreatureType& type() {
 
     std::vector<zc::RingPart> parts;
     parts.push_back(make_body(kBRoot));
-    parts.push_back([] {
-      zc::RingPart p = make_hinge(kBHingeA);
-      return p;
-    }());
-    parts.push_back(make_hinge(kBHingeB));
-    parts.push_back(make_hinge(kBHingeC));
+    // PASS 6 B.2 (Direction 5 §2b): the three hinge balls and both junction
+    // knuckles are GONE. make_loop() now carries their swell in its own skin,
+    // so the antenna is ONE continuous surface from the body to the re-entry.
     parts.push_back(make_loop());
-    // PASS 4 (Direction 4 §1): the tumour ball (the old neck knuckle,
-    // floating ON the tube) is REMOVED. The front-junction ball rides the
-    // NEW kBJunctionF hinge at the body-surface exit — a ball that is a
-    // joint — and the back ball rides kBLoopBase2, re-sited at the probed
-    // posed surface crossing and placed finally by eye. Page tiles from
-    // birth via make_knuckle (gotcha §0).
-    parts.push_back(make_knuckle(kBJunctionF, 0, kJunctionFBallOffYMm));
-    parts.push_back(
-        make_knuckle(kBLoopBase2, kKnuckleReentryOffXMm, kKnuckleReentryOffYMm));
     // PASS 4 (Stage E): X1 -- the all-polygon TEARDROP eye -- is the
     // default; U02_EYE=x2 keeps the pass-3 almond lens for the A/B (both
     // carry the white annulus on the pupil bone and the de-whited page).

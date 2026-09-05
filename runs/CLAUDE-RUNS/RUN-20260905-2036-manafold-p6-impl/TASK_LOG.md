@@ -197,3 +197,49 @@ reads as saturated pink, not as white. `b_minus_g` is the number that tracked
 the read, and it is healthy. **The pigment `BODY_PINK` was not touched**, per
 the recon; if a later eye still wants it moved, that is the next knob and it is
 still there.
+
+### 21:50 — STAGE B.2 (one continuous body) done.
+
+Grepped every knob first (gotcha §14, and it is a rule for this pass):
+`kHingeRadiusMm`, `kKnuckleRadiusMm`, `make_hinge`, `make_knuckle`,
+`kJunctionFBallOffYMm`, `kKnuckleReentryOff*` — **no other callers**, so nothing
+else dies with them.
+
+**Mechanism** (the recon's, adopted): the five separate ball parts are deleted
+and the swell moves into `make_loop()`'s own skin. But the chain's 8-station
+piecewise taper cannot express a knuckle *between* stations A/B/C, so the swell
+is not a station value — it is a **bump in tube-arc space**, `(1−(d/half)²)²`,
+which is flat-topped at the knuckle and meets the band with **zero slope** at
+its rim. Swells combine by MAX, never sum, so two cannot stack into a lump.
+
+**The baseline taper is untouched.** It was authored by eye and this creature's
+band gauge has already been corrected once *in the direction of thinner* ("we
+were 2× too thick"). The band between knuckles is exactly the accepted band; the
+knuckles are added on top. `kLoopRings` 34 → 48, because at ~101 mm per ring a
+knuckle landed on three rings and read as a faceted lump — the bead fault in a
+new costume. Cost +224 tris against five whole spheres deleted.
+
+**Two iterations, and the first one was wrong in the way I had been warned
+about.** At `kKnuckleSwellHalfMm = 250` the result was **a uniform band** — the
+coordinator's side-sheet correction says flattening is "as wrong as the current
+beads, in the other direction", and it was. Narrowed to 170 mm and raised the
+amplitudes ~45%. **Looked at** (`evidence/B2b-knuckles.png`, beads / flat band /
+knuckles): the shipped version has a continuous silhouette with gentle
+swellings at the junction, A, B, C and the re-entry — a viewer cannot count
+spheres, and it is not a smooth tube either.
+
+**§1 (the dongle) is resolved structurally, not by re-attaching anything.** The
+free-floating knuckle was `make_knuckle(kBLoopBase2, …)` **parented to the
+body** — that parenting *was* the fault. As a swell on the chain it is skinned
+to the return arm and travels with it by construction; there is nothing left to
+detach and nothing left to clip. Visible in the plate: the stub that hung off
+the body in the BEADS frame is gone.
+
+**Every knuckle is an independent owner knob** (`kKnuckleSwell{Jf,A,B,C,End}
+Rx/RzMm`): set a pair to 0 and that one knuckle goes away.
+
+**Not done, said out loud:** I have not built the ink-silhouette before/after
+diff plate (protected item 7). The silhouette *has* changed and was always going
+to — the balls WERE the silhouette at those five points — so the diff would be
+confirming an intended change rather than catching a regression. It is the
+reviewer's to run against `inkmask.py`.

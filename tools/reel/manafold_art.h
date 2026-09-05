@@ -73,7 +73,12 @@ constexpr int kBodyLeanXMm[kBodyRings] = {0, 0, 0, 0, 8, 20, 40, 70, 105, 145, 1
 // PASS 3 (R12): the BALLS are the thickest points on the antenna — raised
 // while the tube gauge drops 0.7x, so every ball reads visibly fatter than
 // the tube it joins at native (Direction 3 §3).
-constexpr int32_t kHingeRadiusMm = 100;
+// PASS 6 B.2: RETIRED. kHingeRadiusMm (100) and kKnuckleRadiusMm (118) built
+// five separate closed spheres that read as beads threaded on a wire. The
+// swell now lives in the loop chain's own per-station skin (kKnuckleSwell*
+// below), so there is nothing left to size. Direction 5 §2b withdrew
+// Direction 3 §3's "the thickest part should be the BALLS": nobody should go
+// looking for the bug that made them chunky -- it was an instruction.
 constexpr int kHingeRings = 7;
 constexpr int kHingeSegments = 10;
 constexpr int kHingePoleSegments = 10;  // uniform (same sliver lesson)
@@ -105,7 +110,12 @@ constexpr int32_t kHingeCXMm = -620, kHingeCYMm = 1150;
 //    is the house precedent (root compensation), not IK.
 //  * the blade tapers per ring: broad shoulder flaring INTO the body at the
 //    neck (the lollipop fix), slim over the peak, modest on the return.
-constexpr int kLoopRings = 34;
+// PASS 6 B.2: 34 -> 48. At 34 rings the 3,450 mm chain samples every ~101 mm,
+// which is too coarse to carry a gentle knuckle -- a swell would land on three
+// rings and read as a faceted lump, the bead fault in a new costume. 48 rings
+// sample every ~73 mm, so a knuckle spans ~7 rings and rounds. Cost: +224
+// triangles on the chain, against 5 whole spheres deleted.
+constexpr int kLoopRings = 48;
 constexpr int kLoopSegments = 8;
 constexpr int32_t kLoopTubeXMm = 90;     // tube bind x (the neck exit)
 constexpr int32_t kLoopNeckExitYMm = 664;   // STRETCHED units from here down
@@ -156,12 +166,64 @@ constexpr int32_t kLoopBladeRzMm[8] = {140, 76, 52, 40, 32, 27, 34, 46};
 // the deep closure anchor out to the probed posed surface crossing on the
 // upper-left flank, then placed finally BY EYE. Both are hinge-family
 // balls with page tiles from birth (gotcha §0).
-constexpr int32_t kKnuckleRadiusMm = 118;
+// (kKnuckleRadiusMm retired with the ball parts -- see B.2 above.)
 // front-junction ball offset from kBJunctionF's bind (small: the bind is
 // already the surface exit; the offset rides the ball up the tube a touch
 // so it straddles the crown surface — by eye)
 constexpr int32_t kJunctionFBallOffYMm = 70;  // centres on the probed crossing (83, 735)
 constexpr int32_t kKnuckleReentryOffXMm = -100, kKnuckleReentryOffYMm = 285;  // probed crossing (-328, 467); eye adjusts
+
+// ---- PASS 6 B.2: THE KNUCKLES LIVE IN THE SKIN ---------------------------
+// Direction 5 §2b: "the antennae balls should be a little less chunky and look
+// more like a part of the same body. Smooth skin not visible balls." The five
+// separate ball parts are DELETED and the swell moves into this chain, which
+// already had a per-station taper.
+//
+// ⚠ THE SHEET DRAWS THE KNUCKLES -- do NOT flatten the band. The side view
+// shows four rounded swellings along the antenna (top-left, upper-right,
+// mid-left, and where the band returns to the body), drawn with concentric
+// detail that marks them as joints. They are absent from the FRONT view only
+// because they are edge-on there. A uniform band would be as wrong as the
+// beads, in the other direction. The target is four gentle knuckles in ONE
+// continuous skin: the outline swells and never pinches to a waist between
+// them, and no viewer at native can count spheres.
+//
+// THE BASELINE TAPER ABOVE IS NOT TOUCHED. It was authored by eye against the
+// sheets and the owner's eye has already corrected this creature's band gauge
+// once, in the direction of THINNER ("we were 2x too thick"). The swells are
+// added on top of it, so the band between knuckles is exactly the shipped,
+// accepted band.
+//
+// Each swell is a raised bump in tube-arc space: (1 - (d/half)^2)^2, which is
+// flat-topped at the station and meets the band with zero slope at its rim, so
+// the skin leaves a knuckle without a crease. Swells combine by MAX, not by
+// sum, so overlapping ones cannot stack into a lump.
+// LOOKED AT, then narrowed: 250 mm spread each bump over 500 mm of a 3,450 mm
+// band, which reads as TAPER rather than as a knuckle -- the flattening the
+// side sheet forbids. 170 mm puts ~4-5 rings across a knuckle: still smooth,
+// but localised enough to read as a joint.
+constexpr int32_t kKnuckleSwellHalfMm = 170;  // half-width along the tube
+// Arc positions, mm from the buried start. The chain's own station arithmetic
+// is stJF 250, stNeck 586, stA 930, stB 1270, stC 1650, stD 2030, end 3450.
+// The front junction rides a touch above its station (the old ball's offset);
+// the re-entry knuckle sits at the visible surface crossing, not at the deep
+// closure anchor, which is what the retired kKnuckleReentryOff* encoded.
+constexpr int32_t kKnuckleAtJfMm = 320;
+constexpr int32_t kKnuckleAtAMm = 930;
+constexpr int32_t kKnuckleAtBMm = 1270;
+constexpr int32_t kKnuckleAtCMm = 1650;
+constexpr int32_t kKnuckleAtEndMm = 3150;
+// How far each knuckle stands PROUD of the band, broadwise (x, in the loop
+// plane) and across the blade (z). Every one is an independent owner knob: set
+// a pair to 0 and that knuckle goes away without touching the others.
+// Authored by eye at native against Side.png -- the retired balls stood ~60 mm
+// proud across the blade, and "a little less chunky" is a reduction, not a
+// removal.
+constexpr int32_t kKnuckleSwellJfRxMm = 56, kKnuckleSwellJfRzMm = 66;
+constexpr int32_t kKnuckleSwellARxMm = 50, kKnuckleSwellARzMm = 74;
+constexpr int32_t kKnuckleSwellBRxMm = 47, kKnuckleSwellBRzMm = 70;
+constexpr int32_t kKnuckleSwellCRxMm = 45, kKnuckleSwellCRzMm = 66;
+constexpr int32_t kKnuckleSwellEndRxMm = 47, kKnuckleSwellEndRzMm = 78;
 
 // ---- the eyes (the whole face) ----
 // Two big purple almond lenses close together on the lower front, angled
