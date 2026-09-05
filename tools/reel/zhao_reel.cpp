@@ -1019,7 +1019,10 @@ struct SceneSubject {
   // S5 (creature 02): draw the shared-ramp centre glow for this subject.
   bool u02_glow = false;
   // creature 02: run the ten-kind mana emitter tables + the bolt.
-  int u02_mana = 0;  // pass 2: the mana-menu candidate (1..6; 0 = none)
+  int u02_mana = 0;  // the mana-menu candidate (pass 3: 1..8; 0 = none)
+  // pass 3 (R6): the smear plane preset for this subject — an index into
+  // u02::kSmearPresets (0 none, 1 short/clean, 2 mid/glitchy, 3 long).
+  int u02_smear = 0;
   // the S5 spike's three-glow staging (diagnostic only)
   bool u02_glow_trio = false;
   // the fx tour: cycle the ten kinds solo, 60 frames each
@@ -2302,6 +2305,11 @@ struct CreatureReelCtx {
   int u02_mana = 0;
   uint32_t u02_frame = 0;
   std::vector<u02::ManaSplat> u02_mana_splats;
+  // pass 3 (R6): the persistence plane — quarter-res RGB accumulation fed
+  // by everything the mana draws, decayed with the quantised glitchy step,
+  // composited additively. Subject-scoped state (the ctx is per subject).
+  int u02_smear_preset = 0;
+  std::vector<uint8_t> u02_smear_buf;
 };
 constexpr uint32_t kZixxMovingSourceCount = 4;
 constexpr uint32_t kZixxMovingSourceWarm = 0;
@@ -3186,6 +3194,37 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   // through the blade).
   if (c.u02_mana != 0 && !c.u02_mana_splats.empty()) {
     const zref::render::Viewport vpp_m{0, 0, w, h};
+    // ---- pass 3 (R6): THE SMEAR PLANE, first — decay with the quantised
+    // glitchy step, feed EVERYTHING the mana draws this frame (pre splats
+    // included), composite additively at chunky 4x under the live bodies.
+    const u02::SmearPreset& sp = u02::kSmearPresets[c.u02_smear_preset & 3];
+    if (sp.gain_pm > 0) {
+      if (c.u02_smear_buf.size() !=
+          static_cast<size_t>(u02::kSmearW) * u02::kSmearH * 3)
+        c.u02_smear_buf.assign(
+            static_cast<size_t>(u02::kSmearW) * u02::kSmearH * 3, 0);
+      u02::smear_update(c.u02_smear_buf.data(), c.u02_frame, sp);
+      for (const u02::ManaSplat& ms : c.u02_mana_splats) {
+        // the near-white strand cores and flash glints stay LIVE-ONLY: fed
+        // into the plane they became solid white confetti blocks that
+        // drowned the continuous filaments they were meant to trail
+        // (looked at on the channel's hottest frames). The coloured halos
+        // carry the ghost.
+        if (ms.ramp == u02::kRampWhite) continue;
+        const zref::render::ProjOut pm = zref::render::project_vertex(
+            c.vp, vpp_m, zref::fx16{ms.x}, zref::fx16{ms.y}, zref::fx16{ms.z}, nullptr);
+        if (!pm.in) continue;
+        u02::GlowFrame gf2 = s_mana_ramps[ms.ramp];
+        if (ms.gain_pm != 1000) {
+          for (int i = 0; i < 64; ++i)
+            for (int ch = 0; ch < 3; ++ch)
+              gf2.pal[i][ch] = static_cast<uint8_t>(gf2.pal[i][ch] * ms.gain_pm / 1000);
+        }
+        u02::smear_feed(c.u02_smear_buf.data(), s_glow_assets, gf2, pm.s.x >> 8,
+                        pm.s.y >> 8, ms.r_px);
+      }
+      u02::smear_composite(c.u02_smear_buf.data(), rgb, w, h, sp.gain_pm);
+    }
     for (const u02::ManaSplat& ms : c.u02_mana_splats) {
       if (ms.pre) continue;
       const zref::render::ProjOut pm = zref::render::project_vertex(
@@ -3472,6 +3511,7 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.gibs = &gibs;
     cr_ctx.u02_glow = sub.u02_glow;
     cr_ctx.u02_glow_trio = sub.u02_glow_trio;
+    cr_ctx.u02_smear_preset = sub.u02_smear;  // pass 3 (R6)
     if (species == Species::kUnnamed02 && sub.u02_trio) {
       for (int e = 0; e < 2; ++e) {
         u02_extra_inst[e].type = dog;
@@ -3848,16 +3888,21 @@ int render_scene(const SceneSubject& sub) {
             };
             u02::FxAnchors fa;
             anchor(u02::kBRoot, fa.body);
+            anchor(u02::kBNeck, fa.neck);
             anchor(u02::kBHingeA, fa.hinge_a);
             anchor(u02::kBHingeB, fa.hinge_b);
             anchor(u02::kBHingeC, fa.hinge_c);
             fa.crown[0] = fa.body[0];
             fa.crown[1] = fa.body[1] + u02::fxu(u02::vmm(u02::kBodyRadiusMm));
             fa.crown[2] = fa.body[2];
-            // the ring-pocket centre: the hinge centroid, so hinge play
-            // moves the mana (Direction 2 §4 — one performance)
+            // the ring-pocket centre. PASS 3 (R8): the A/B/C centroid sat
+            // ~120 mm from ball B — the hole's top EDGE, the owner's exact
+            // complaint — so the NECK EXIT joins the centroid and the
+            // anchor lands in the hole's middle. Still posed bones: hinge
+            // play still moves the mana (one performance).
             for (int k = 0; k < 3; ++k)
-              fa.ring[k] = (fa.hinge_a[k] + fa.hinge_b[k] + fa.hinge_c[k]) / 3;
+              fa.ring[k] = (fa.neck[k] + fa.hinge_a[k] + fa.hinge_b[k] +
+                            fa.hinge_c[k]) / 4;
             cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][0] = fa.body[0];
             cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][1] = fa.body[1];
             cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][2] = fa.body[2];
@@ -4925,6 +4970,11 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // sheet says discharging bolts through the antenna IS this creature);
   // the owner picks the rest of the stack from the mana menu subjects.
   s.u02_mana = slot == 2 ? 4 : 0;
+  // pass 3 (R9): the channel's strand strikes DECAY through the smear
+  // plane instead of vanishing. The SHORT rung: with the buzz re-hashing
+  // every 7 frames, the mid rung held ~8 old paths at once and the pocket
+  // read as a white cloud, not strands (looked at, retuned).
+  s.u02_smear = slot == 2 ? 1 : 0;
   // Pass 3 (Direction 3 §1): the four-light-everywhere look was a
   // REGRESSION — "It should look just like Zixx' lighting with the
   // directional light from the sun." Every clip ships under its own named
@@ -6921,7 +6971,8 @@ int main(int argc, char** argv) {
   if (wanted("unnamed02-trick")) rc |= render_scene(subject_u02_clip(13, "unnamed02-trick", u02::kTrickKeys, false, &kU02SunTrick));
   if (wanted("unnamed02-crackle")) {
     SceneSubject s = subject_u02_clip(0, "unnamed02-crackle", u02::kIdleKeys, false, &kU02SunChannel);
-    s.u02_mana = 4;  // pass 2: the crackle IS the lightning candidate
+    s.u02_mana = 4;  // the crackle IS the lightning candidate
+    s.u02_smear = 1;  // pass 3: strikes ghost through the smear plane
     s.planet = 1;  // fixed camera: the bloom may stage the crackle
     s.planet_sun_x = 58;
     s.planet_sun_y0 = 96;
@@ -6932,15 +6983,22 @@ int main(int argc, char** argv) {
   // Pass 2 (Direction 2 §3): THE MANA MENU — six named candidates, each a
   // short clip on the reworked hover, for the OWNER to pick from by eye.
   {
-    static const struct { const char* name; int cand; } kManaMenu[] = {
-        {"unnamed02-mana-pulsar", 1},   {"unnamed02-mana-plasma", 2},
-        {"unnamed02-mana-bullets", 3},  {"unnamed02-mana-lightning", 4},
-        {"unnamed02-mana-boil", 5},     {"unnamed02-mana-drip", 6},
+    static const struct { const char* name; int cand; int smear; } kManaMenu[] = {
+        // PASS 3 (R13): six variants, all alive; drip is CUT (dead in 579
+        // of 600 frames — shipping it broken overstated the menu). The two
+        // smear rungs double as the owner's decay/glitch picker.
+        {"unnamed02-mana-aqua", 3, 2},   // aquamarine smeared plasma — THE LEAD
+        {"unnamed02-mana-cyan", 6, 3},   // cyan, the long/glitchier smear rung
+        {"unnamed02-mana-blue", 2, 1},   // filled deep blue, minimal smear
+        {"unnamed02-mana-green", 7, 1},  // filled sea-green ("try greens")
+        {"unnamed02-mana-boil", 5, 1},   // the boil CENTRE, grown, outer gone
+        {"unnamed02-mana-stack", 8, 2},  // pulsar + strands + aqua smear
     };
     for (const auto& m : kManaMenu) {
       if (!wanted(m.name)) continue;
       SceneSubject s = subject_u02_clip(0, m.name, u02::kIdleKeys, false, &kU02SunHover);
       s.u02_mana = m.cand;
+      s.u02_smear = m.smear;
       s.note = "mana-menu candidate: the owner picks with his eyes";
       rc |= render_scene(s);
     }

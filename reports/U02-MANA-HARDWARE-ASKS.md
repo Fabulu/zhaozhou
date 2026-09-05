@@ -69,6 +69,19 @@ conduit). The machine's answer is cheaper and better scoped:
 
 * `glow[t] = sat(gather[t] + k · glow[t-1])`, `k` one frozen Q0.16 decay
   constant on the `61/64` model `radial_decay` already uses.
+* **Pass-3 amendment (Direction 3 as amended: "never clears is too much,
+  but longer than usual in games. A bit glitchy"):** the decay constant is
+  an OWNER KNOB, not frozen at one value, and the mode carries an optional
+  **quantised-decay step** — the multiply-by-`k` applied only every N
+  frames (N a small register, 1 = every frame) so the trail stutters down
+  in visible steps instead of fading smoothly. A smooth exponential fade
+  reads as an ordinary motion trail and misses the owner's read entirely;
+  the reel's shipped emulation (pass 3: a 96x60 persistence plane with
+  kSmearKeepPm / kSmearStepFrames / kSmearJitterPm / kSmearHardClearFrames)
+  is the behavioural reference. The per-cell retention jitter and the
+  staggered hard clear are reel-side seasoning; if the block wants them
+  they are one LFSR against the cell index. Spec text only — still costs
+  nothing until the block is built.
 * One additional 96x60 RGB565 plane: **+11.5 KB M10K** (doubling the
   existing POSTBUF allocation).
 * Cost: 5,760 cells × (read + mul + add + write) ≈ **0.25 of one
