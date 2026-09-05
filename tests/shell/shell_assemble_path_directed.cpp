@@ -95,9 +95,9 @@ struct ClipVtx {
 };
 const ClipVtx kTable[4] = {
     {-(1 << 15), -(1 << 15), 1 << 16},  // 0
-    { (7 << 13),  (7 << 13), 1 << 16},  // 1  the DECOY
-    { (3 << 14), -(1 << 14), 1 << 16},  // 2
-    {-(1 << 14),  (3 << 14), 1 << 16},  // 3
+    {(7 << 13), (7 << 13), 1 << 16},    // 1  the DECOY
+    {(3 << 14), -(1 << 14), 1 << 16},   // 2
+    {-(1 << 14), (3 << 14), 1 << 16},   // 3
 };
 
 // The triangle is vertices 2, 0, 3 -- a permutation, so an implementation that
@@ -173,8 +173,7 @@ Pass draw_once(int mode, const uint8_t idx[3]) {
   const zref::mat4fx m = the_matrix();
   const zr::Viewport vp = the_viewport();
   for (int rr = 0; rr < 4; ++rr)
-    for (int cc = 0; cc < 4; ++cc)
-      write_cfg(h, (uint8_t)(rr * 4 + cc), (uint32_t)m.m[rr][cc].raw);
+    for (int cc = 0; cc < 4; ++cc) write_cfg(h, (uint8_t)(rr * 4 + cc), (uint32_t)m.m[rr][cc].raw);
   write_cfg(h, 16, ((uint32_t)vp.y0 << 16) | ((uint32_t)vp.x0 & 0xFFFFu));
   write_cfg(h, 17, ((uint32_t)vp.h << 16) | ((uint32_t)vp.w & 0xFFFFu));
 
@@ -231,8 +230,8 @@ Pass draw_once(int mode, const uint8_t idx[3]) {
   // zeroed rather than left indeterminate, because an ASSEMBLE that walked
   // past its triangle_count would then read a defined zero and the overrun
   // would be visible instead of random.
-  h.top.asm_index_stream_i[0] = ((uint32_t)idx[0]) | ((uint32_t)idx[1] << 8) |
-                                ((uint32_t)idx[2] << 16);
+  h.top.asm_index_stream_i[0] =
+      ((uint32_t)idx[0]) | ((uint32_t)idx[1] << 8) | ((uint32_t)idx[2] << 16);
   h.top.asm_index_stream_i[1] = 0;
   h.top.asm_index_stream_i[2] = 0;
 
@@ -303,8 +302,8 @@ int main(int argc, char** argv) {
   const Pass pre = draw_once(/*mode=*/0, kTriIdx);
   const Pass via = draw_once(/*mode=*/1, kTriIdx);
 
-  std::printf("  assemble named vertices (%u, %u, %u); triangles = %u\n", via.v0,
-              via.v1, via.v2, via.triangles);
+  std::printf("  assemble named vertices (%u, %u, %u); triangles = %u\n", via.v0, via.v1, via.v2,
+              via.triangles);
 
   check(pre.took, "the bench-named pass's triangle was ACCEPTED", 1, pre.took);
   check(via.named,
@@ -315,16 +314,14 @@ int main(int argc, char** argv) {
         "and named exactly the triplet the index stream carried, in order",
         (kTriIdx[0] << 16) | (kTriIdx[1] << 8) | kTriIdx[2],
         (via.v0 << 16) | (via.v1 << 8) | via.v2);
-  check(via.triangles == 1, "one meshlet of one triangle produced one triangle",
-        1, via.triangles);
+  check(via.triangles == 1, "one meshlet of one triangle produced one triangle", 1, via.triangles);
 
   const int nz = nonzero(pre.fb);
   check(nz > 0,
         "the bench-named pass actually drew something -- otherwise this "
         "compares two blank frames",
         1, nz > 0 ? 1 : 0);
-  check(nonzero(via.fb) > 0, "and so did the ASSEMBLE pass", 1,
-        nonzero(via.fb) > 0 ? 1 : 0);
+  check(nonzero(via.fb) > 0, "and so did the ASSEMBLE pass", 1, nonzero(via.fb) > 0 ? 1 : 0);
   check(differing(pre.fb, via.fb) == 0,
         "the same triangle drawn with GEOM.ASSEMBLE naming the vertices "
         "produces an IDENTICAL framebuffer",
@@ -336,15 +333,14 @@ int main(int argc, char** argv) {
   // which is exactly what step 2's framebuffer check turned out to be.
   const Pass other = draw_once(/*mode=*/1, kOtherIdx);
   const int diff = differing(via.fb, other.fb);
-  std::printf("  sensitivity: a different index triplet changes %d words\n",
-              diff);
+  std::printf("  sensitivity: a different index triplet changes %d words\n", diff);
   check(diff > 0,
         "a different index triplet MOVES the picture, so the match above is "
         "real evidence -- the identity triplet (0,1,2) would have passed with "
         "ASSEMBLE dead, which is why the stream is a permutation",
         1, diff > 0 ? 1 : 0);
 
-  std::printf("[shell_assemble_path_directed] %d non-zero words drawn; %d checks %s\n",
-              nz, g_checks, g_failed ? "FAILED" : "passed");
+  std::printf("[shell_assemble_path_directed] %d non-zero words drawn; %d checks %s\n", nz,
+              g_checks, g_failed ? "FAILED" : "passed");
   return g_failed ? 1 : 0;
 }

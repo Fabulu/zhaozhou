@@ -88,9 +88,9 @@ struct ClipVtx {
 };
 const ClipVtx kTable[4] = {
     {-(1 << 15), -(1 << 15), 1 << 16},  // 0
-    { (7 << 13),  (7 << 13), 1 << 16},  // 1  the DECOY
-    { (3 << 14), -(1 << 14), 1 << 16},  // 2
-    {-(1 << 14),  (3 << 14), 1 << 16},  // 3
+    {(7 << 13), (7 << 13), 1 << 16},    // 1  the DECOY
+    {(3 << 14), -(1 << 14), 1 << 16},   // 2
+    {-(1 << 14), (3 << 14), 1 << 16},   // 3
 };
 
 // A 32-byte format-0 record, little-endian, offset 0 at bit 0:
@@ -115,10 +115,10 @@ void make_record(uint32_t w[8], int32_t x, int32_t y, int32_t z) {
 // Coordinates the shell must NOT draw. Driven into the bench's table during the
 // VDECODE pass, so reading the table instead of the decoded record is visible.
 const ClipVtx kPoison[4] = {
-    { (1 << 15),  (1 << 15), 1 << 16},
+    {(1 << 15), (1 << 15), 1 << 16},
     {-(7 << 13), -(7 << 13), 1 << 16},
-    {-(3 << 14),  (1 << 14), 1 << 16},
-    { (1 << 14), -(3 << 14), 1 << 16},
+    {-(3 << 14), (1 << 14), 1 << 16},
+    {(1 << 14), -(3 << 14), 1 << 16},
 };
 
 // The triangle is vertices 2, 0, 3 -- a permutation, so an implementation that
@@ -198,8 +198,7 @@ Pass draw_once(int mode, const uint8_t idx[3]) {
   const zref::mat4fx m = the_matrix();
   const zr::Viewport vp = the_viewport();
   for (int rr = 0; rr < 4; ++rr)
-    for (int cc = 0; cc < 4; ++cc)
-      write_cfg(h, (uint8_t)(rr * 4 + cc), (uint32_t)m.m[rr][cc].raw);
+    for (int cc = 0; cc < 4; ++cc) write_cfg(h, (uint8_t)(rr * 4 + cc), (uint32_t)m.m[rr][cc].raw);
   write_cfg(h, 16, ((uint32_t)vp.y0 << 16) | ((uint32_t)vp.x0 & 0xFFFFu));
   write_cfg(h, 17, ((uint32_t)vp.h << 16) | ((uint32_t)vp.w & 0xFFFFu));
 
@@ -264,8 +263,8 @@ Pass draw_once(int mode, const uint8_t idx[3]) {
   // zeroed rather than left indeterminate, because an ASSEMBLE that walked
   // past its triangle_count would then read a defined zero and the overrun
   // would be visible instead of random.
-  h.top.asm_index_stream_i[0] = ((uint32_t)idx[0]) | ((uint32_t)idx[1] << 8) |
-                                ((uint32_t)idx[2] << 16);
+  h.top.asm_index_stream_i[0] =
+      ((uint32_t)idx[0]) | ((uint32_t)idx[1] << 8) | ((uint32_t)idx[2] << 16);
   h.top.asm_index_stream_i[1] = 0;
   h.top.asm_index_stream_i[2] = 0;
 
@@ -344,24 +343,23 @@ int main(int argc, char** argv) {
   const Pass pre = draw_once(/*mode=*/0, kTriIdx);
   const Pass via = draw_once(/*mode=*/1, kTriIdx);
 
-  std::printf("  vdecode: decoded %u vertices, have=%d, refused=%d, "
-              "format_bad=%u; assemble named (%u, %u, %u)\n",
-              via.vertices, via.decoded ? 1 : 0, via.refused ? 1 : 0,
-              via.format_bad, via.v0, via.v1, via.v2);
+  std::printf(
+      "  vdecode: decoded %u vertices, have=%d, refused=%d, "
+      "format_bad=%u; assemble named (%u, %u, %u)\n",
+      via.vertices, via.decoded ? 1 : 0, via.refused ? 1 : 0, via.format_bad, via.v0, via.v1,
+      via.v2);
 
   check(pre.took, "the bench-table pass's triangle was ACCEPTED", 1, pre.took);
   check(via.decoded,
         "GEOM.VDECODE filled the vertex table from RECORDS -- the shell turned "
         "bytes into vertices instead of being handed coordinates",
         1, via.decoded ? 1 : 0);
-  check(via.vertices == 4,
-        "and decoded exactly the four records it was given", 4, via.vertices);
+  check(via.vertices == 4, "and decoded exactly the four records it was given", 4, via.vertices);
   check(!via.refused,
         "with no record REFUSED -- a malformed record is dropped, not flagged "
         "and emitted, so a refusal here would be a hole in the mesh",
         0, via.refused ? 1 : 0);
-  check(via.format_bad == 0, "and none rejected for format", 0,
-        via.format_bad);
+  check(via.format_bad == 0, "and none rejected for format", 0, via.format_bad);
   check(via.named,
         "GEOM.ASSEMBLE emitted a TriangleDescriptor -- it walked the index "
         "stream rather than the bench walking it",
@@ -370,16 +368,14 @@ int main(int argc, char** argv) {
         "and named exactly the triplet the index stream carried, in order",
         (kTriIdx[0] << 16) | (kTriIdx[1] << 8) | kTriIdx[2],
         (via.v0 << 16) | (via.v1 << 8) | via.v2);
-  check(via.triangles == 1, "one meshlet of one triangle produced one triangle",
-        1, via.triangles);
+  check(via.triangles == 1, "one meshlet of one triangle produced one triangle", 1, via.triangles);
 
   const int nz = nonzero(pre.fb);
   check(nz > 0,
         "the bench-table pass actually drew something -- otherwise this "
         "compares two blank frames",
         1, nz > 0 ? 1 : 0);
-  check(nonzero(via.fb) > 0, "and so did the VDECODE pass", 1,
-        nonzero(via.fb) > 0 ? 1 : 0);
+  check(nonzero(via.fb) > 0, "and so did the VDECODE pass", 1, nonzero(via.fb) > 0 ? 1 : 0);
   check(differing(pre.fb, via.fb) == 0,
         "the same triangle drawn from RECORDS the shell decoded produces an "
         "IDENTICAL framebuffer -- and the bench's table was POISON throughout "
@@ -392,8 +388,7 @@ int main(int argc, char** argv) {
   // which is exactly what step 2's framebuffer check turned out to be.
   const Pass other = draw_once(/*mode=*/1, kOtherIdx);
   const int diff = differing(via.fb, other.fb);
-  std::printf("  sensitivity: a different index triplet changes %d words\n",
-              diff);
+  std::printf("  sensitivity: a different index triplet changes %d words\n", diff);
   check(diff > 0,
         "a different index triplet MOVES the picture, so the match above is "
         "real evidence and not two frames that agree because nothing reached "
@@ -401,7 +396,7 @@ int main(int argc, char** argv) {
         "out to be blind to depth",
         1, diff > 0 ? 1 : 0);
 
-  std::printf("[shell_vdecode_path_directed] %d non-zero words drawn; %d checks %s\n",
-              nz, g_checks, g_failed ? "FAILED" : "passed");
+  std::printf("[shell_vdecode_path_directed] %d non-zero words drawn; %d checks %s\n", nz, g_checks,
+              g_failed ? "FAILED" : "passed");
   return g_failed ? 1 : 0;
 }

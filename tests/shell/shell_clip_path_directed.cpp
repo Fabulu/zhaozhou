@@ -92,8 +92,8 @@ bool the_triangle(zhao_geom::BinTri* out) {
   zref::Clip::Viewport vp;
   vp.w = kGridW * 16;
   vp.h = kGridH * 16;
-  return zhao_geom::make_bin_tri(px(4), px(4), px(kGridW * 16 - 4), px(8),
-                                 px(8), px(kGridH * 16 - 4), vp, 0x2A2A, out);
+  return zhao_geom::make_bin_tri(px(4), px(4), px(kGridW * 16 - 4), px(8), px(8),
+                                 px(kGridH * 16 - 4), vp, 0x2A2A, out);
 }
 
 ShellHarness::RenderTri from_bin_tri(const zhao_geom::BinTri& b) {
@@ -103,8 +103,7 @@ ShellHarness::RenderTri from_bin_tri(const zhao_geom::BinTri& b) {
     t.ky[e] = b.s.e[e].ky;
     t.kc[e] = b.s.e[e].kc;
   }
-  t.tl = (uint8_t)((b.s.e[0].tl ? 1u : 0u) | (b.s.e[1].tl ? 2u : 0u) |
-                   (b.s.e[2].tl ? 4u : 0u));
+  t.tl = (uint8_t)((b.s.e[0].tl ? 1u : 0u) | (b.s.e[1].tl ? 2u : 0u) | (b.s.e[2].tl ? 4u : 0u));
   t.ax = b.ax;
   t.ay = b.ay;
   t.bx = b.bx;
@@ -265,8 +264,7 @@ int main(int argc, char** argv) {
         "the PRECOMPUTED pass actually drew something -- otherwise this "
         "compares two blank frames",
         1, nz > 0 ? 1 : 0);
-  check(nonzero(via.fb) > 0, "and so did the CLIP pass", 1,
-        nonzero(via.fb) > 0 ? 1 : 0);
+  check(nonzero(via.fb) > 0, "and so did the CLIP pass", 1, nonzero(via.fb) > 0 ? 1 : 0);
 
   check(differing(pre.fb, via.fb) == 0,
         "the same triangle drawn with GEOM.CLIP supplying 2A and the scan box "
@@ -279,8 +277,7 @@ int main(int argc, char** argv) {
   // assumed: a wrong scan box must move the picture.
   const Pass badbox = draw_once(/*mode=*/0, /*swap_bc=*/false, true);
   const int box_diff = differing(pre.fb, badbox.fb);
-  std::printf("  sensitivity: a collapsed scan box changes %d framebuffer words\n",
-              box_diff);
+  std::printf("  sensitivity: a collapsed scan box changes %d framebuffer words\n", box_diff);
   check(box_diff > 0,
         "a wrong scan box MOVES the picture, so the match above is real "
         "evidence and not an insensitive comparison",
@@ -289,25 +286,22 @@ int main(int argc, char** argv) {
   // ---- the winding flip, which is the part that is not plumbing -----------
   const Pass cw = draw_once(/*mode=*/2, /*swap_bc=*/true, false);
   std::printf("  clip: 2A = %lld, flip = %d (ccw) | 2A = %lld, flip = %d (cw)\n",
-              (long long)via.area2, via.flipped ? 1 : 0, (long long)cw.area2,
-              cw.flipped ? 1 : 0);
+              (long long)via.area2, via.flipped ? 1 : 0, (long long)cw.area2, cw.flipped ? 1 : 0);
 
   check(cw.flipped,
         "the CLOCKWISE triangle was FLIPPED by GEOM.CLIP -- without this the "
         "normalisation path is never exercised and this whole file passes with "
         "it dead",
         1, cw.flipped ? 1 : 0);
-  check(!via.flipped, "and the counter-clockwise one was not", 0,
-        via.flipped ? 1 : 0);
-  check(via.area2 > 0 && cw.area2 > 0,
-        "both windings leave CLIP with a POSITIVE 2A", 1,
+  check(!via.flipped, "and the counter-clockwise one was not", 0, via.flipped ? 1 : 0);
+  check(via.area2 > 0 && cw.area2 > 0, "both windings leave CLIP with a POSITIVE 2A", 1,
         (via.area2 > 0 && cw.area2 > 0) ? 1 : 0);
   check(differing(via.fb, cw.fb) == 0,
         "and both windings draw the SAME picture -- the flip is a "
         "normalisation, not a different triangle",
         0, differing(via.fb, cw.fb));
 
-  std::printf("[shell_clip_path_directed] %d non-zero words drawn; %d checks %s\n",
-              nz, g_checks, g_failed ? "FAILED" : "passed");
+  std::printf("[shell_clip_path_directed] %d non-zero words drawn; %d checks %s\n", nz, g_checks,
+              g_failed ? "FAILED" : "passed");
   return g_failed ? 1 : 0;
 }

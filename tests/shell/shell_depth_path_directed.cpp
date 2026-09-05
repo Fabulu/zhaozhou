@@ -111,8 +111,8 @@ bool the_triangle(zhao_geom::BinTri* out) {
   zref::Clip::Viewport vp;
   vp.w = kGridW * 16;
   vp.h = kGridH * 16;
-  return zhao_geom::make_bin_tri(px(4), px(4), px(kGridW * 16 - 4), px(8),
-                                 px(8), px(kGridH * 16 - 4), vp, 0x2A2A, out);
+  return zhao_geom::make_bin_tri(px(4), px(4), px(kGridW * 16 - 4), px(8), px(8),
+                                 px(kGridH * 16 - 4), vp, 0x2A2A, out);
 }
 
 ShellHarness::RenderTri from_bin_tri(const zhao_geom::BinTri& b) {
@@ -122,13 +122,17 @@ ShellHarness::RenderTri from_bin_tri(const zhao_geom::BinTri& b) {
     t.ky[e] = b.s.e[e].ky;
     t.kc[e] = b.s.e[e].kc;
   }
-  t.tl = (uint8_t)((b.s.e[0].tl ? 1u : 0u) | (b.s.e[1].tl ? 2u : 0u) |
-                   (b.s.e[2].tl ? 4u : 0u));
-  t.ax = b.ax;  t.ay = b.ay;
-  t.bx = b.bx;  t.by = b.by;
-  t.cx = b.cx;  t.cy = b.cy;
-  t.min_x = b.min_x;  t.max_x = b.max_x;
-  t.min_y = b.min_y;  t.max_y = b.max_y;
+  t.tl = (uint8_t)((b.s.e[0].tl ? 1u : 0u) | (b.s.e[1].tl ? 2u : 0u) | (b.s.e[2].tl ? 4u : 0u));
+  t.ax = b.ax;
+  t.ay = b.ay;
+  t.bx = b.bx;
+  t.by = b.by;
+  t.cx = b.cx;
+  t.cy = b.cy;
+  t.min_x = b.min_x;
+  t.max_x = b.max_x;
+  t.min_y = b.min_y;
+  t.max_y = b.max_y;
   t.src_id = b.src_id;
   return t;
 }
@@ -136,7 +140,7 @@ ShellHarness::RenderTri from_bin_tri(const zhao_geom::BinTri& b) {
 // Draw once. In depth mode the fill word's [31:8] is IGNORED by the bench and
 // GEOM.DEPTHQUANT drives it from `kW`; otherwise the bench packs `invw24`.
 std::vector<uint16_t> draw_once(bool depth_mode, uint32_t invw24, bool* drew_ok,
-                               uint32_t* dq_seen) {
+                                uint32_t* dq_seen) {
   constexpr uint32_t kSlotHalfwords = 245760u / 2u;
   *drew_ok = false;
   if (dq_seen) *dq_seen = 0;
@@ -164,8 +168,7 @@ std::vector<uint16_t> draw_once(bool depth_mode, uint32_t invw24, bool* drew_ok,
   // because the two happened to agree.
   const uint32_t depth_field = depth_mode ? kWrongDepth : (invw24 & 0xFFFFFFu);
   h.top.render_fill_word_i =
-      ((uint64_t)0xA5A5A5u << 40) | ((uint64_t)0x11u << 32) |
-      ((uint64_t)depth_field << 8) | 0x00u;
+      ((uint64_t)0xA5A5A5u << 40) | ((uint64_t)0x11u << 32) | ((uint64_t)depth_field << 8) | 0x00u;
   // DEPTH TESTING IS ON, and that is what makes the picture evidence real.
   //
   // The first version of this test left the render state at 0 -- "depth test
@@ -180,8 +183,7 @@ std::vector<uint16_t> draw_once(bool depth_mode, uint32_t invw24, bool* drew_ok,
   // passes and draws, and a wrong depth below the clear fails and draws
   // nothing. The comparison can now fail.
   h.top.render_state_i = 0x1;  // Z_TEST_EN
-  h.top.render_clear_word_i =
-      ((uint64_t)0x5A5A5Au << 40) | ((uint64_t)kClearDepth << 8);
+  h.top.render_clear_word_i = ((uint64_t)0x5A5A5Au << 40) | ((uint64_t)kClearDepth << 8);
   h.top.render_src_a_i = 0xFF;
   h.top.render_texel_rgb_i = 0xFF00FF;
   h.top.render_texel_a_i = 0xFF;
@@ -239,8 +241,8 @@ std::vector<uint16_t> draw_once(bool depth_mode, uint32_t invw24, bool* drew_ok,
     h.top.render_tri_valid_i = 0;
     h.top.eval();
     if (dq_seen) *dq_seen = h.top.dbg_dq_invw24_o;
-    std::printf("    [depth] DEPTHQUANT produced invw24 = 0x%06X (%s)\n",
-                h.top.dbg_dq_invw24_o, got ? "valid" : "TIMED OUT");
+    std::printf("    [depth] DEPTHQUANT produced invw24 = 0x%06X (%s)\n", h.top.dbg_dq_invw24_o,
+                got ? "valid" : "TIMED OUT");
   }
 
   const ShellHarness::RenderTri t = from_bin_tri(b);
@@ -262,17 +264,14 @@ int main(int argc, char** argv) {
   // THE ORACLE, not the DUT's own answer. See the header: reading invw24 out of
   // the DUT and feeding it back would make the two passes agree whatever
   // DEPTHQUANT computed.
-  const uint32_t want_invw24 =
-      zref::depth_of_raw(kW, zref::gen::DEPTH_PROFILES[kProfile]);
-  std::printf("  zref::depth_of_raw(w=0x%llX, profile %u) = 0x%06X\n",
-              (unsigned long long)kW, kProfile, want_invw24);
+  const uint32_t want_invw24 = zref::depth_of_raw(kW, zref::gen::DEPTH_PROFILES[kProfile]);
+  std::printf("  zref::depth_of_raw(w=0x%llX, profile %u) = 0x%06X\n", (unsigned long long)kW,
+              kProfile, want_invw24);
 
   bool pre_ok = false, via_ok = false;
   uint32_t dq_seen = 0;
-  const std::vector<uint16_t> pre =
-      draw_once(/*depth_mode=*/false, want_invw24, &pre_ok, nullptr);
-  const std::vector<uint16_t> via =
-      draw_once(/*depth_mode=*/true, 0, &via_ok, &dq_seen);
+  const std::vector<uint16_t> pre = draw_once(/*depth_mode=*/false, want_invw24, &pre_ok, nullptr);
+  const std::vector<uint16_t> via = draw_once(/*depth_mode=*/true, 0, &via_ok, &dq_seen);
 
   check(pre_ok, "the precomputed pass's triangle was ACCEPTED", 1, pre_ok);
   check(via_ok, "the depth pass's triangle was ACCEPTED", 1, via_ok);
@@ -314,8 +313,7 @@ int main(int argc, char** argv) {
   std::printf(
       "  sensitivity: a deliberately wrong depth changes %d framebuffer words\n"
       "  -> the framebuffer comparison %s evidence about the depth value\n",
-      wrong_diff,
-      wrong_diff ? "IS" : "is NOT (depth test is off; see check below)");
+      wrong_diff, wrong_diff ? "IS" : "is NOT (depth test is off; see check below)");
 
   int diff = 0, first = -1;
   for (std::size_t i = 0; i < pre.size(); ++i)
@@ -346,7 +344,7 @@ int main(int argc, char** argv) {
   }
   if (diff) std::printf("  first differing word: %d\n", first);
 
-  std::printf("[shell_depth_path_directed] %d non-zero words drawn; %d checks %s\n",
-              nonzero_pre, g_checks, g_failed ? "FAILED" : "passed");
+  std::printf("[shell_depth_path_directed] %d non-zero words drawn; %d checks %s\n", nonzero_pre,
+              g_checks, g_failed ? "FAILED" : "passed");
   return g_failed ? 1 : 0;
 }

@@ -129,9 +129,7 @@ struct Desc {
     wr16(b + 34, 9);
     stamp();
   }
-  void stamp() {
-    wr32(b + mf::kCrcOff, zhao_abi::zhao_crc32c(0, b, mf::kCrcCovered));
-  }
+  void stamp() { wr32(b + mf::kCrcOff, zhao_abi::zhao_crc32c(0, b, mf::kCrcCovered)); }
 };
 
 struct ClipVtx {
@@ -139,9 +137,9 @@ struct ClipVtx {
 };
 const ClipVtx kTable[4] = {
     {-(1 << 15), -(1 << 15), 1 << 16},
-    { (7 << 13),  (7 << 13), 1 << 16},
-    { (3 << 14), -(1 << 14), 1 << 16},
-    {-(1 << 14),  (3 << 14), 1 << 16},
+    {(7 << 13), (7 << 13), 1 << 16},
+    {(3 << 14), -(1 << 14), 1 << 16},
+    {-(1 << 14), (3 << 14), 1 << 16},
 };
 const uint8_t kTriIdx[3] = {2, 0, 3};
 
@@ -214,8 +212,7 @@ Pass draw_once(int mode, bool corrupt_crc) {
   const zref::mat4fx m = the_matrix();
   const zr::Viewport vp = the_viewport();
   for (int rr = 0; rr < 4; ++rr)
-    for (int cc = 0; cc < 4; ++cc)
-      write_cfg(h, (uint8_t)(rr * 4 + cc), (uint32_t)m.m[rr][cc].raw);
+    for (int cc = 0; cc < 4; ++cc) write_cfg(h, (uint8_t)(rr * 4 + cc), (uint32_t)m.m[rr][cc].raw);
   write_cfg(h, 16, ((uint32_t)vp.y0 << 16) | ((uint32_t)vp.x0 & 0xFFFFu));
   write_cfg(h, 17, ((uint32_t)vp.h << 16) | ((uint32_t)vp.w & 0xFFFFu));
 
@@ -250,8 +247,7 @@ Pass draw_once(int mode, bool corrupt_crc) {
   Desc d;
   for (int w = 0; w < 8; ++w) {
     uint64_t v = 0;
-    for (int k = 0; k < 8; ++k)
-      v |= (uint64_t)d.b[w * 8 + k] << (8 * k);
+    for (int k = 0; k < 8; ++k) v |= (uint64_t)d.b[w * 8 + k] << (8 * k);
     h.top.mf_desc_i[w] = v;
   }
   h.top.mf_crc_ok_i = corrupt_crc ? 0 : 1;
@@ -273,9 +269,8 @@ Pass draw_once(int mode, bool corrupt_crc) {
 
   h.top.asm_vertex_count_i = kVertexCount;
   h.top.asm_triangle_count_i = kTriangleCount;
-  h.top.asm_index_stream_i[0] = ((uint32_t)kTriIdx[0]) |
-                                ((uint32_t)kTriIdx[1] << 8) |
-                                ((uint32_t)kTriIdx[2] << 16);
+  h.top.asm_index_stream_i[0] =
+      ((uint32_t)kTriIdx[0]) | ((uint32_t)kTriIdx[1] << 8) | ((uint32_t)kTriIdx[2] << 16);
   h.top.asm_index_stream_i[1] = 0;
   h.top.asm_index_stream_i[2] = 0;
 
@@ -329,9 +324,8 @@ Pass draw_once(int mode, bool corrupt_crc) {
         "    [mf] guard_req %d | granted %d | max beat %d | cull ticks %d | "
         "fetched %u denied %u refused %u\n"
         "    [chain] asm %d | proj %d | clip %d | setup %d\n",
-        saw_greq, saw_grant, maxbeat, saw_cull, h.top.dbg_mf_fetched_o,
-        h.top.dbg_mf_denied_o, h.top.dbg_mf_refused0_o,
-        saw_asm, saw_proj, saw_clip, saw_setup);
+        saw_greq, saw_grant, maxbeat, saw_cull, h.top.dbg_mf_fetched_o, h.top.dbg_mf_denied_o,
+        h.top.dbg_mf_refused0_o, saw_asm, saw_proj, saw_clip, saw_setup);
 
   h.render_frame_end();
   for (int i = 0; i < 200000; ++i) h.step();
@@ -363,9 +357,8 @@ int main(int argc, char** argv) {
   const Pass pre = draw_once(/*mode=*/0, false);
   const Pass via = draw_once(/*mode=*/1, false);
 
-  std::printf(
-      "  meshfetch read: vertices %u, triangles %u, material 0x%04X, vis %u\n",
-      via.vcount, via.tcount, via.material, via.vis);
+  std::printf("  meshfetch read: vertices %u, triangles %u, material 0x%04X, vis %u\n", via.vcount,
+              via.tcount, via.material, via.vis);
 
   check(pre.took, "the bench-asserted pass's triangle was ACCEPTED", 1, pre.took);
   check(via.read,
@@ -375,16 +368,14 @@ int main(int argc, char** argv) {
   check(via.vcount == kVertexCount && via.tcount == kTriangleCount,
         "and the counts came out of the DESCRIPTOR BYTES, not the bench",
         (kVertexCount << 8) | kTriangleCount, (via.vcount << 8) | via.tcount);
-  check(via.material == kMaterial, "as did the material id", kMaterial,
-        via.material);
+  check(via.material == kMaterial, "as did the material id", kMaterial, via.material);
 
   const int nz = nonzero(pre.fb);
   check(nz > 0,
         "the bench-asserted pass actually drew something -- otherwise this "
         "compares two blank frames",
         1, nz > 0 ? 1 : 0);
-  check(nonzero(via.fb) > 0, "and so did the MESHFETCH pass", 1,
-        nonzero(via.fb) > 0 ? 1 : 0);
+  check(nonzero(via.fb) > 0, "and so did the MESHFETCH pass", 1, nonzero(via.fb) > 0 ? 1 : 0);
   check(differing(pre.fb, via.fb) == 0,
         "the same triangle drawn with GEOM.MESHFETCH supplying the meshlet "
         "produces an IDENTICAL framebuffer",
@@ -395,8 +386,8 @@ int main(int argc, char** argv) {
   // sensitivity probe and the contract's own rule at once: "a descriptor that
   // is not trustworthy" must not become geometry.
   const Pass bad = draw_once(/*mode=*/1, /*corrupt_crc=*/true);
-  std::printf("  crc-failed descriptor: read = %d, drew %d words\n",
-              bad.read ? 1 : 0, nonzero(bad.fb));
+  std::printf("  crc-failed descriptor: read = %d, drew %d words\n", bad.read ? 1 : 0,
+              nonzero(bad.fb));
   check(!bad.read,
         "a descriptor whose CRC does not check emits NO meshlet -- MESHFETCH "
         "validates rather than transports",
@@ -406,7 +397,7 @@ int main(int argc, char** argv) {
         "the descriptor actually being read",
         0, nonzero(bad.fb));
 
-  std::printf("[shell_meshfetch_path_directed] %d non-zero words drawn; %d checks %s\n",
-              nz, g_checks, g_failed ? "FAILED" : "passed");
+  std::printf("[shell_meshfetch_path_directed] %d non-zero words drawn; %d checks %s\n", nz,
+              g_checks, g_failed ? "FAILED" : "passed");
   return g_failed ? 1 : 0;
 }

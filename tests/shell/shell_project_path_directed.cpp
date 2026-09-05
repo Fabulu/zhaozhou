@@ -94,9 +94,9 @@ struct ClipVtx {
   int32_t x, y, z;
 };
 const ClipVtx kTri[3] = {
-    {-(1 << 15), -(1 << 15), 1 << 16},   // -0.5, -0.5, 1.0 in fx16
-    { (3 << 14), -(1 << 14), 1 << 16},   // +0.75, -0.25
-    {-(1 << 14),  (3 << 14), 1 << 16},   // -0.25, +0.75
+    {-(1 << 15), -(1 << 15), 1 << 16},  // -0.5, -0.5, 1.0 in fx16
+    {(3 << 14), -(1 << 14), 1 << 16},   // +0.75, -0.25
+    {-(1 << 14), (3 << 14), 1 << 16},   // -0.25, +0.75
 };
 
 // The projection: a plain scale with w = 1, so the perspective divide is exact
@@ -175,8 +175,7 @@ Pass draw_once(int mode, bool wrong_matrix) {
   if (wrong_matrix) m.m[0][0] = zref::fx16{1 << 15};  // half scale in x
   const zr::Viewport vp = the_viewport();
   for (int rr = 0; rr < 4; ++rr)
-    for (int cc = 0; cc < 4; ++cc)
-      write_cfg(h, (uint8_t)(rr * 4 + cc), (uint32_t)m.m[rr][cc].raw);
+    for (int cc = 0; cc < 4; ++cc) write_cfg(h, (uint8_t)(rr * 4 + cc), (uint32_t)m.m[rr][cc].raw);
   write_cfg(h, 16, ((uint32_t)vp.y0 << 16) | ((uint32_t)vp.x0 & 0xFFFFu));
   write_cfg(h, 17, ((uint32_t)vp.h << 16) | ((uint32_t)vp.w & 0xFFFFu));
 
@@ -210,8 +209,7 @@ Pass draw_once(int mode, bool wrong_matrix) {
   // ---- THE ORACLE: project the three vertices in C++ ----------------------
   int32_t sx[3], sy[3];
   for (int k = 0; k < 3; ++k) {
-    const auto p = zr::project_vertex(m, vp, zref::fx16{kTri[k].x},
-                                      zref::fx16{kTri[k].y},
+    const auto p = zr::project_vertex(m, vp, zref::fx16{kTri[k].x}, zref::fx16{kTri[k].y},
                                       zref::fx16{kTri[k].z}, nullptr);
     sx[k] = p.s.x;
     sy[k] = p.s.y;
@@ -223,9 +221,7 @@ Pass draw_once(int mode, bool wrong_matrix) {
   cvp.w = kGridW * 16;
   cvp.h = kGridH * 16;
   zhao_geom::BinTri b;
-  if (!zhao_geom::make_bin_tri(sx[0], sy[0], sx[1], sy[1], sx[2], sy[2], cvp,
-                               0x2A2A, &b))
-    return r;
+  if (!zhao_geom::make_bin_tri(sx[0], sy[0], sx[1], sy[1], sx[2], sy[2], cvp, 0x2A2A, &b)) return r;
 
   ShellHarness::RenderTri t;
   for (int e = 0; e < 3; ++e) {
@@ -233,8 +229,7 @@ Pass draw_once(int mode, bool wrong_matrix) {
     t.ky[e] = b.s.e[e].ky;
     t.kc[e] = b.s.e[e].kc;
   }
-  t.tl = (uint8_t)((b.s.e[0].tl ? 1u : 0u) | (b.s.e[1].tl ? 2u : 0u) |
-                   (b.s.e[2].tl ? 4u : 0u));
+  t.tl = (uint8_t)((b.s.e[0].tl ? 1u : 0u) | (b.s.e[1].tl ? 2u : 0u) | (b.s.e[2].tl ? 4u : 0u));
   t.ax = b.ax;
   t.ay = b.ay;
   t.bx = b.bx;
@@ -310,9 +305,10 @@ Pass draw_once(int mode, bool wrong_matrix) {
       if (h.top.dbg_su_out_valid_o && h.top.dbg_shell_tri_ready_o) ++saw_consume;
       h.step();
     }
-    std::printf("    [chain] proj_ready %d | clip_valid %d | setup_valid %d | "
-                "shell consumed %d\n",
-                saw_proj, saw_clip, saw_setup, saw_consume);
+    std::printf(
+        "    [chain] proj_ready %d | clip_valid %d | setup_valid %d | "
+        "shell consumed %d\n",
+        saw_proj, saw_clip, saw_setup, saw_consume);
   }
 
   h.render_frame_end();
@@ -344,11 +340,10 @@ int main(int argc, char** argv) {
 
   const zref::mat4fx m = the_matrix();
   const zr::Viewport vp = the_viewport();
-  const auto oa = zr::project_vertex(m, vp, zref::fx16{kTri[0].x},
-                                     zref::fx16{kTri[0].y},
+  const auto oa = zr::project_vertex(m, vp, zref::fx16{kTri[0].x}, zref::fx16{kTri[0].y},
                                      zref::fx16{kTri[0].z}, nullptr);
-  std::printf("  oracle vertex A -> screen (%d, %d), w = %d, in = %d\n", oa.s.x,
-              oa.s.y, oa.w, oa.in ? 1 : 0);
+  std::printf("  oracle vertex A -> screen (%d, %d), w = %d, in = %d\n", oa.s.x, oa.s.y, oa.w,
+              oa.in ? 1 : 0);
 
   const Pass pre = draw_once(/*mode=*/0, false);
   const Pass via = draw_once(/*mode=*/1, false);
@@ -360,33 +355,29 @@ int main(int argc, char** argv) {
         "ones, which is a wrong triangle that still draws",
         1, via.ready ? 1 : 0);
 
-  std::printf("  project vertex A -> screen (%d, %d), w = %u, behind = %u\n",
-              via.ax, via.ay, via.w, via.behind);
+  std::printf("  project vertex A -> screen (%d, %d), w = %u, behind = %u\n", via.ax, via.ay, via.w,
+              via.behind);
 
   check(via.ax == oa.s.x && via.ay == oa.s.y,
         "and its vertex A matches zref::render::project_vertex exactly -- the "
         "composed block agrees with the ratified law, not merely with itself",
-        ((long long)oa.s.x << 32) | (uint32_t)oa.s.y,
-        ((long long)via.ax << 32) | (uint32_t)via.ay);
-  check(via.behind == 0, "no vertex is behind for a w = 1 projection", 0,
-        via.behind);
+        ((long long)oa.s.x << 32) | (uint32_t)oa.s.y, ((long long)via.ax << 32) | (uint32_t)via.ay);
+  check(via.behind == 0, "no vertex is behind for a w = 1 projection", 0, via.behind);
 
   // `w` is checked too, and it is the reason step 4 exists in this shape:
   // DEPTHQUANT consumes PROJECT's clip.w, so a w that reached the fragment
   // pipe wrong would produce a wrong depth with everything else correct.
   // ProjOut gained this field on 2026-09-04 precisely because the port had no
   // oracle and "the test's expectation was an uninitialised member for a day".
-  check((int32_t)via.w == oa.w,
-        "and its w matches the oracle -- the field DEPTHQUANT quantises", oa.w,
-        (int32_t)via.w);
+  check((int32_t)via.w == oa.w, "and its w matches the oracle -- the field DEPTHQUANT quantises",
+        oa.w, (int32_t)via.w);
 
   const int nz = nonzero(pre.fb);
   check(nz > 0,
         "the PRECOMPUTED pass actually drew something -- otherwise this "
         "compares two blank frames",
         1, nz > 0 ? 1 : 0);
-  check(nonzero(via.fb) > 0, "and so did the PROJECT pass", 1,
-        nonzero(via.fb) > 0 ? 1 : 0);
+  check(nonzero(via.fb) > 0, "and so did the PROJECT pass", 1, nonzero(via.fb) > 0 ? 1 : 0);
   check(differing(pre.fb, via.fb) == 0,
         "the same triangle drawn with GEOM.PROJECT supplying the screen "
         "vertices produces an IDENTICAL framebuffer",
@@ -395,14 +386,13 @@ int main(int argc, char** argv) {
   // ---- can the comparison fail? ------------------------------------------
   const Pass bad = draw_once(/*mode=*/1, /*wrong_matrix=*/true);
   const int diff = differing(via.fb, bad.fb);
-  std::printf("  sensitivity: halving the matrix's x scale changes %d words\n",
-              diff);
+  std::printf("  sensitivity: halving the matrix's x scale changes %d words\n", diff);
   check(diff > 0,
         "a wrong projection matrix MOVES the picture, so the match above is "
         "real evidence and not an insensitive comparison",
         1, diff > 0 ? 1 : 0);
 
-  std::printf("[shell_project_path_directed] %d non-zero words drawn; %d checks %s\n",
-              nz, g_checks, g_failed ? "FAILED" : "passed");
+  std::printf("[shell_project_path_directed] %d non-zero words drawn; %d checks %s\n", nz, g_checks,
+              g_failed ? "FAILED" : "passed");
   return g_failed ? 1 : 0;
 }

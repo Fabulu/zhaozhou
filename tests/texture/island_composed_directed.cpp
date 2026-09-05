@@ -152,7 +152,7 @@ int main(int argc, char** argv) {
   uint32_t first_rgb = 0;
   int nonzero_rgb = 0;
   std::vector<uint32_t> g_retired_tags;
-  int g_nz_by_cls[2] = {0,0};
+  int g_nz_by_cls[2] = {0, 0};
   bool saw_rgb = false;
 
   for (int cyc = 0; cyc < 400000; ++cyc) {
@@ -269,8 +269,10 @@ int main(int argc, char** argv) {
       }
       g_retired_tags.push_back(d.out_tag_o);
       if (d.out_rgb_o != 0) ++nonzero_rgb;
-      { const int ix = static_cast<int>(d.out_tag_o) - 0x1000;
-        if (ix >= 0 && ix < 64 && d.out_rgb_o != 0) g_nz_by_cls[ix % 2]++; }
+      {
+        const int ix = static_cast<int>(d.out_tag_o) - 0x1000;
+        if (ix >= 0 && ix < 64 && d.out_rgb_o != 0) g_nz_by_cls[ix % 2]++;
+      }
       ++retired;
     }
     tick(d);
@@ -309,8 +311,7 @@ int main(int argc, char** argv) {
       {"CACHE_PIPE was consulted (hits + misses)", d.cnt_cache_hits_o + d.cnt_cache_misses_o},
       {"RSP_DISPATCH routed responses", d.cnt_dispatch_accepted_o},
       {"MOSAIC saw texture samples", d.cnt_mosaic_samples_o},
-      {"PALETTE_RES was looked up -- the CLUT path is no longer idle",
-       d.cnt_palette_lookups_o},
+      {"PALETTE_RES was looked up -- the CLUT path is no longer idle", d.cnt_palette_lookups_o},
       {"AUX_PIPE accepted requests", d.cnt_aux_accepted_o},
   };
   for (const Link& l : chain) check(l.value > 0, l.name, 1, l.value > 0 ? 1 : 0);
@@ -323,8 +324,7 @@ int main(int argc, char** argv) {
   // and exactly ONE counter would move. Several moving, in the right
   // proportions, is what says each fragment kept its own.
   {
-    std::printf("  combine refused(missing samples) = %u",
-                d.cnt_combine_refused_o);
+    std::printf("  combine refused(missing samples) = %u", d.cnt_combine_refused_o);
     std::printf("  combine jobs by recipe:");
     for (int r = 0; r < 8; ++r) std::printf(" %u", d.cnt_combine_jobs_o[r]);
     std::printf("\n");
@@ -421,8 +421,7 @@ int main(int argc, char** argv) {
           "architecture's job table gives -- the counts follow the RECIPES, "
           "not the arrival order",
           1, d.cnt_combine_jobs_o[6] > d.cnt_combine_jobs_o[1] ? 1 : 0);
-    check(d.cnt_combine_jobs_o[0] == 0,
-          "PASSTHRU issued none, as a bypass must", 0,
+    check(d.cnt_combine_jobs_o[0] == 0, "PASSTHRU issued none, as a bypass must", 0,
           d.cnt_combine_jobs_o[0]);
   }
 
@@ -440,14 +439,13 @@ int main(int argc, char** argv) {
   // happened to lead -- and fixing a genuine bug broke a check that was never
   // about the first fragment. Both halves are now asserted; the CLUT half was
   // black for a whole pass and is checked separately below.
-  std::printf("  palette: %u lookups, %u stale, %u cold\n",
-              d.cnt_palette_lookups_o, d.cnt_palette_stale_o,
-              d.cnt_palette_cold_o);
-  std::printf("  non-zero colour by class -- CLUT %d, bilinear %d (of 32 each)\n",
-              g_nz_by_cls[0], g_nz_by_cls[1]);
+  std::printf("  palette: %u lookups, %u stale, %u cold\n", d.cnt_palette_lookups_o,
+              d.cnt_palette_stale_o, d.cnt_palette_cold_o);
+  std::printf("  non-zero colour by class -- CLUT %d, bilinear %d (of 32 each)\n", g_nz_by_cls[0],
+              g_nz_by_cls[1]);
   std::printf("  retires carrying a non-zero colour: %d of %d\n", nonzero_rgb, retired);
-  check(g_nz_by_cls[1] == 32,
-        "every BILINEAR fragment carries a NON-ZERO colour", 32, g_nz_by_cls[1]);
+  check(g_nz_by_cls[1] == 32, "every BILINEAR fragment carries a NON-ZERO colour", 32,
+        g_nz_by_cls[1]);
 
   // ======================= INGRESS-TO-EGRESS IDENTITY ======================
   // THE CHECK THAT WOULD HAVE CAUGHT THE CARRIAGE BUG IN ONE RUN.
@@ -487,15 +485,20 @@ int main(int argc, char** argv) {
     std::vector<int> seen(kFrags, 0);
     for (size_t i = 0; i < g_retired_tags.size(); ++i) {
       const int ix = static_cast<int>(g_retired_tags[i]) - 0x1000;
-      if (ix < 0 || ix >= kFrags) { ++foreign; continue; }
+      if (ix < 0 || ix >= kFrags) {
+        ++foreign;
+        continue;
+      }
       if (seen[ix]++ > 0) ++duplicated;
       if (static_cast<int>(i) != ix) ++out_of_order;
     }
     for (int i = 0; i < kFrags; ++i)
       if (seen[i] == 0) ++missing;
 
-    std::printf("  identity: %d missing, %d duplicated, %d out of order, "
-                "%d foreign\n", missing, duplicated, out_of_order, foreign);
+    std::printf(
+        "  identity: %d missing, %d duplicated, %d out of order, "
+        "%d foreign\n",
+        missing, duplicated, out_of_order, foreign);
 
     int max_disp = 0;
     for (size_t i = 0; i < g_retired_tags.size(); ++i) {
@@ -542,8 +545,10 @@ int main(int argc, char** argv) {
     // the disorder grows, so the defect cannot quietly get worse while it waits
     // for the rearchitecture. Asserting `out_of_order == 0` would leave the
     // suite red; asserting nothing would lose the measurement.
-    std::printf("  ORDER IS NOT PRESERVED: %d fragments out of place "
-                "(known defect, see comment)\n", out_of_order);
+    std::printf(
+        "  ORDER IS NOT PRESERVED: %d fragments out of place "
+        "(known defect, see comment)\n",
+        out_of_order);
     check(max_disp <= 8,
           "fragments retire out of submission order only within the bound "
           "already measured -- a KNOWN DEFECT, guarded so it cannot worsen "
@@ -574,17 +579,15 @@ int main(int argc, char** argv) {
   // Asserted as residency, not just as colour, because "the lookup happened"
   // and "the lookup found its palette" are different facts and only the first
   // was ever observable.
-  check(g_nz_by_cls[0] == 32,
-        "every CLUT fragment carries a NON-ZERO colour", 32, g_nz_by_cls[0]);
-  check(d.cnt_palette_lookups_o == 96,
-        "the CLUT path performs every lookup its fragments ask for", 96,
-        static_cast<int>(d.cnt_palette_lookups_o));
+  check(g_nz_by_cls[0] == 32, "every CLUT fragment carries a NON-ZERO colour", 32, g_nz_by_cls[0]);
+  check(d.cnt_palette_lookups_o == 96, "the CLUT path performs every lookup its fragments ask for",
+        96, static_cast<int>(d.cnt_palette_lookups_o));
   check(d.cnt_palette_stale_o == 0,
         "and every one of them RESOLVES -- no lookup is answered stale, which "
         "is the miss indication that used to be mistaken for a working path",
         0, static_cast<int>(d.cnt_palette_stale_o));
-  check(d.cnt_palette_cold_o == 0,
-        "and none is answered cold", 0, static_cast<int>(d.cnt_palette_cold_o));
+  check(d.cnt_palette_cold_o == 0, "and none is answered cold", 0,
+        static_cast<int>(d.cnt_palette_cold_o));
 
   // The completion merger gives the palette strict priority because PALETTE_RES
   // cannot be back-pressured -- its answer is valid for one clock. That is safe
