@@ -1,0 +1,28 @@
+Zixxtrixx bank identity proof, creature-02 pass 2 (2026-09-05).
+Baseline: stage-0 build at 690c6b44 (matches RUN-20260904-0705's published
+evidence CRCs). Final: the complete pass-2 tree (3faffe5e+site). Both under
+ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross.
+
+zixxtrixx-attack             baseline=0x86A2B30B f=560  final=0x86A2B30B f=560  IDENTICAL
+zixxtrixx-balance            baseline=0x301EFBA6 f=493  final=0x301EFBA6 f=493  IDENTICAL
+zixxtrixx-damage             baseline=0x6C224D56 f=400  final=0x6C224D56 f=400  IDENTICAL
+zixxtrixx-death              baseline=0x2E8755B3 f=192  final=0x2E8755B3 f=192  IDENTICAL
+zixxtrixx-death2             baseline=0x18F0AF79 f=240  final=0x18F0AF79 f=240  IDENTICAL
+zixxtrixx-fall               baseline=0xD18D3D3C f=288  final=0xD18D3D3C f=288  IDENTICAL
+zixxtrixx-hit                baseline=0x116F3C2E f=300  final=0x116F3C2E f=300  IDENTICAL
+zixxtrixx-hitfloor           baseline=0x11DADB9E f=188  final=0x11DADB9E f=188  IDENTICAL
+zixxtrixx-idle               baseline=0x1408F885 f=576  final=0x1408F885 f=576  IDENTICAL
+zixxtrixx-jump-multi         baseline=0xF58DE5AD f=241  final=0xF58DE5AD f=241  IDENTICAL
+zixxtrixx-jump-one           baseline=0x5303C5C0 f=241  final=0x5303C5C0 f=241  IDENTICAL
+zixxtrixx-knockdown          baseline=0x1EB29988 f=196  final=0x1EB29988 f=196  IDENTICAL
+zixxtrixx-look               baseline=0x28D476AA f=384  final=0x28D476AA f=384  IDENTICAL
+zixxtrixx-moving-light       baseline=0xC0DE226E f=600  final=0xC0DE226E f=600  IDENTICAL
+zixxtrixx-run                baseline=0x45A4E913 f=96  final=0x45A4E913 f=96  IDENTICAL
+zixxtrixx-salto-dummy        baseline=0x654D7708 f=295  final=0x654D7708 f=295  IDENTICAL
+zixxtrixx-salto-fly          baseline=0x4FE70E0C f=313  final=0x4FE70E0C f=313  IDENTICAL
+zixxtrixx-salto-nine         baseline=0xC96C63F5 f=435  final=0xC96C63F5 f=435  IDENTICAL
+zixxtrixx-salto-six          baseline=0x456D82CE f=333  final=0x456D82CE f=333  IDENTICAL
+zixxtrixx-slow-taunt         baseline=0x1F35917E f=239  final=0x1F35917E f=239  IDENTICAL
+zixxtrixx-taunt              baseline=0xD79D55E2 f=224  final=0xD79D55E2 f=224  IDENTICAL
+zixxtrixx-walk               baseline=0xF06EF66B f=160  final=0xF06EF66B f=160  IDENTICAL
+RESULT: ALL-IDENTICAL (22 subjects) - Zixxtrixx untouched
