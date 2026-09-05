@@ -1,0 +1,26 @@
+--- inkmask selftest ---
+selftest-identical: 3 frames (6000 ink px total, 0 vacuous), identical: 3/3 -> OK
+  selftest identical: expected PASS, got PASS -> ok
+selftest-legacy-authored-ink: 3 frames (6000 ink px total, 0 vacuous), identical: 3/3 -> OK
+  selftest legacy-authored-ink: expected PASS, got PASS -> ok
+  selftest-dilated-outline: ink mask differs at 0000.rgb (2000 vs 2496 ink px)
+  selftest-dilated-outline: ink mask differs at 0001.rgb (2000 vs 2496 ink px)
+  selftest-dilated-outline: ink mask differs at 0002.rgb (2000 vs 2496 ink px)
+selftest-dilated-outline: 3 frames (6000 ink px total, 0 vacuous), identical: 0/3 -> FAIL
+  selftest dilated-outline: expected FAIL, got FAIL -> ok
+selftest-all-empty: 3 frames, ZERO ink pixels in every frame -> FAIL (vacuous: the instrument matched nothing; the ink colours may have moved -- re-measure them)
+  selftest all-empty: expected FAIL, got FAIL -> ok
+SELFTEST: PASS (the instrument can fail)
+exit=0
+--- inkwidth selftest ---
+selftest 2px ring: measured median 2.0 -> ok
+selftest 5px ring: measured median 5.7 -> ok
+selftest dilation: 2px -> 2.0 vs 6px -> 6.0 (detected)
+selftest empty frame: correctly reports no ink
+SELFTEST: PASS (the instrument can fail)
+exit=0
+--- trajplot selftest ---
+selftest: creature-free frame, plate mask: 0 px (legacy row-median on the same frame: 384 px)
+selftest: moving blob 2400 px, hovering blob 2400 px (truth 2400)
+SELFTEST: PASS (the mask can fail)
+exit=0

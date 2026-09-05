@@ -1,0 +1,15 @@
+=== A CLEAN CHECKOUT OF a6495159 RENDERS MANAFOLD BLACK ===
+worktree: git worktree add --detach C:/zrevclean a6495159   (tracked files only)
+  -> ls C:/zrevclean/tools/reel/manafold_page.h : No such file or directory
+  -> tools/reel/manafold.h:33  #if __has_include("manafold_page.h")   (silently skipped)
+built : build-direct.sh --output C:/zrevclean-build cel   (SUCCEEDS, no warning)
+render: ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross  u02-s4-front
+  clean checkout : 4 frames, 77 unique colours,  sequence_crc32c=0x84B545D7   <-- BLACK
+  working tree   : 4 frames, 803 unique colours, sequence_crc32c=0x1B7687CB   <-- correct
+plate : clean-checkout.png  (left = clean checkout, right = same commit with the page present)
+
+git status: ?? tools/reel/manafold_page.h            (819,853 bytes, UNTRACKED)
+by contrast: git ls-files tools/reel/zixxtrixx_page.h tools/reel/zixxtrixx_page_cel.h  -> both TRACKED
+
+the generator IS committed and IS deterministic:
+  python tools/pack/mkmanafoldpage.py <out.h>  ->  byte-identical to the untracked file (cmp clean)

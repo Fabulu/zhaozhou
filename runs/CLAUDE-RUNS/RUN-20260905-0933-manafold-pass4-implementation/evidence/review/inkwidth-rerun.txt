@@ -1,0 +1,6 @@
+C:/programmieren/zencrifice/zixxtrixx-wholebody-s-spring-20260901/Upheaval/website/scratch-reel/zixxtrixx-walk/0080.rgb: ink 2907 px, width median 2.0  p10 2.0  p90 2.8
+C:/programmieren/zencrifice/zixxtrixx-wholebody-s-spring-20260901/Upheaval/website/scratch-reel/zixxtrixx-idle/0100.rgb: ink 2987 px, width median 2.0  p10 2.0  p90 2.8
+C:/programmieren/zencrifice/zixxtrixx-wholebody-s-spring-20260901/Upheaval/website/scratch-reel/manafold-hover/0100.rgb: ink 606 px, width median 2.0  p10 2.0  p90 2.8
+C:/programmieren/zencrifice/zixxtrixx-wholebody-s-spring-20260901/Upheaval/website/scratch-reel/manafold-drift/0150.rgb: ink 400 px, width median 2.0  p10 2.0  p90 2.0
+C:/programmieren/zencrifice/zixxtrixx-wholebody-s-spring-20260901/Upheaval/website/scratch-reel/manafold-curious/0080.rgb: ink 461 px, width median 2.0  p10 2.0  p90 2.0
+C:/programmieren/zencrifice/zixxtrixx-wholebody-s-spring-20260901/Upheaval/website/scratch-reel/manafold-trick/0100.rgb: ink 376 px, width median 2.0  p10 2.0  p90 2.0

@@ -1,0 +1,28 @@
+manafold-channel           n=420 seam= 1.44 dl_mean= 0.56 dl_max= 1.14@308 worst=308:1.1,252:1.1,266:1.1 mana[min/med/max]=427/692/1079 pink[min/med/max]=3546/3932/4237
+manafold-crackle           n=600 seam= 1.74 dl_mean= 0.89 dl_max= 1.74@308 worst=308:1.7,7:1.7,539:1.6 mana[min/med/max]=45/140/287 pink[min/med/max]=3992/4167/4434
+manafold-curious           n=180 seam= 3.72 dl_mean= 0.66 dl_max= 1.41@150 worst=150:1.4,136:1.4,144:1.4 mana[min/med/max]=185/2307/3089 pink[min/med/max]=64273/65302/67086
+manafold-damage            n=464 seam= 2.99 dl_mean= 0.86 dl_max= 4.42@261 worst=261:4.4,260:4.3,259:4.3 mana[min/med/max]=173/2047/2875 pink[min/med/max]=63518/64866/67026
+manafold-drift             n=300 seam= 1.77 dl_mean= 1.12 dl_max= 5.67@299 worst=299:5.7,298:5.0,228:2.5 mana[min/med/max]=27/1140/1725 pink[min/med/max]=37731/40860/42505
+manafold-fall              n=340 seam= 2.88 dl_mean= 0.60 dl_max= 3.60@339 worst=339:3.6,338:3.5,258:2.2 mana[min/med/max]=363/1672/3141 pink[min/med/max]=46727/50441/55367
+manafold-hasty             n=240 seam= 2.13 dl_mean= 1.79 dl_max= 5.88@239 worst=239:5.9,238:4.8,174:4.1 mana[min/med/max]=16/1492/2373 pink[min/med/max]=38126/39660/42191
+manafold-hit               n=140 seam= 2.43 dl_mean= 0.73 dl_max= 2.88@18 worst=18:2.9,16:2.8,17:2.8 mana[min/med/max]=213/1641/2024 pink[min/med/max]=65063/65404/67185
+manafold-hover             n=600 seam= 4.07 dl_mean= 0.77 dl_max= 1.55@588 worst=588:1.6,150:1.5,144:1.5 mana[min/med/max]=172/1670/2630 pink[min/med/max]=60711/63160/65822
+manafold-inspect           n=600 seam= 4.01 dl_mean= 0.76 dl_max= 1.48@150 worst=150:1.5,144:1.5,366:1.5 mana[min/med/max]=181/1640/2612 pink[min/med/max]=60345/63231/65734
+manafold-mana-aqua         n=600 seam= 3.94 dl_mean= 0.76 dl_max= 1.60@4 worst=4:1.6,3:1.6,5:1.6 mana[min/med/max]=225/1892/2737 pink[min/med/max]=63550/65027/66978
+manafold-mana-blue         n=600 seam= 2.04 dl_mean= 0.82 dl_max= 1.51@1 worst=1:1.5,3:1.3,5:1.3 mana[min/med/max]=23/74/138 pink[min/med/max]=64282/65417/66253
+manafold-mana-boil         n=600 seam= 3.81 dl_mean= 1.00 dl_max= 3.37@372 worst=372:3.4,561:2.8,183:2.7 mana[min/med/max]=81/245/901 pink[min/med/max]=61585/62339/66137
+manafold-mana-cyan         n=600 seam= 4.21 dl_mean= 0.75 dl_max= 1.57@4 worst=4:1.6,3:1.6,5:1.5 mana[min/med/max]=170/2117/2942 pink[min/med/max]=63563/64800/67149
+manafold-mana-green        n=600 seam= 2.34 dl_mean= 0.86 dl_max= 1.53@1 worst=1:1.5,3:1.5,5:1.5 mana[min/med/max]=303/931/1388 pink[min/med/max]=65121/65770/66677
+manafold-mana-stack        n=600 seam= 7.42 dl_mean= 1.20 dl_max= 2.14@308 worst=308:2.1,596:2.1,532:2.1 mana[min/med/max]=385/5192/6820 pink[min/med/max]=56882/58666/65808
+manafold-pirouette         n=240 seam= 3.05 dl_mean= 0.77 dl_max= 1.29@234 worst=234:1.3,228:1.3,232:1.2 mana[min/med/max]=212/1346/1866 pink[min/med/max]=65183/66254/67091
+manafold-rest              n=400 seam= 3.54 dl_mean= 0.64 dl_max= 1.37@150 worst=150:1.4,5:1.3,3:1.3 mana[min/med/max]=171/2225/2874 pink[min/med/max]=64064/65157/67550
+manafold-startle           n=160 seam= 3.42 dl_mean= 0.97 dl_max= 4.68@18 worst=18:4.7,17:4.7,16:4.6 mana[min/med/max]=185/2268/2754 pink[min/med/max]=63079/64266/67121
+manafold-taunt             n=280 seam= 4.11 dl_mean= 1.25 dl_max= 2.14@1 worst=1:2.1,13:2.1,12:2.1 mana[min/med/max]=213/2081/2952 pink[min/med/max]=64403/65274/66887
+manafold-taunt2            n=240 seam= 4.15 dl_mean= 1.17 dl_max= 2.03@144 worst=144:2.0,84:1.9,132:1.8 mana[min/med/max]=219/2677/3659 pink[min/med/max]=62922/64202/67074
+manafold-trick             n=400 seam= 3.42 dl_mean= 1.16 dl_max= 5.34@330 worst=330:5.3,318:5.2,312:5.1 mana[min/med/max]=228/1661/2758 pink[min/med/max]=53919/66138/68519
+
+[exited with code 0]
+reviewer badness sweep, control group (zixxtrixx looping clips)
+zixxtrixx-idle             n=576 seam= 3.54 dl_mean= 1.65
+zixxtrixx-look             n=384 seam= 0.92 dl_mean= 0.39
+zixxtrixx-taunt            n=224 seam= 1.61 dl_mean= 1.29

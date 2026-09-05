@@ -1,0 +1,9 @@
+Zixxtrixx identity, verified by the REVIEWER.
+baseline: pristine worktree at dd85b719 (pass-3 shipped SHA), built by me into C:\zrevbase
+final   : working tree at a6495159, built by me into C:\zrevbuild
+env     : ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross
+
+zixxtrixx-walk       160 frames compared, 0 differ | sequence_crc32c baseline=0xF06EF66B final=0xF06EF66B IDENTICAL
+zixxtrixx-idle       576 frames compared, 0 differ | sequence_crc32c baseline=0x1408F885 final=0x1408F885 IDENTICAL
+zixxtrixx-damage     400 frames compared, 0 differ | sequence_crc32c baseline=0x6C224D56 final=0x6C224D56 IDENTICAL
+ZIXX_SUNS=off zixxtrixx-walk       160 frames compared, 0 differ | sequence_crc32c baseline=0x86536E70 final=0x86536E70 IDENTICAL
