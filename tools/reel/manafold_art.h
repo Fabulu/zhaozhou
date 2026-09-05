@@ -484,9 +484,28 @@ constexpr int kHastyKeys = 120;
 // straight-line travel crossing the fixed shot, the Zixxtrixx walk staging
 // precedent — start half the travel back, cross through centre.
 constexpr int32_t kHastySpeedMmPerKey = 70;  // ~8.4 m across the clip
+// PASS 6 F.1: hasty and drift get their OWN cameras. Both traverse ~8.3 m, and
+// at the pass-5 house camera hasty already played 12% empty desert with 41
+// more frames clipped at the frame edge while drift was edge-clipped for 70.
+// The house camera moving 240k -> 360k makes that strictly worse, so they
+// cannot inherit it. The rule is REFRAME, NEVER SLOW DOWN: the traverse is the
+// trail knob -- the smear plane is screen-space, so the ghost only detaches
+// because the creature has net screen drift -- and shrinking it would delete
+// the effect the owner called perfect. The camera pulls back instead.
+constexpr int32_t kU02CamKTraverse = 148000;
 constexpr int32_t kHastyPitchA16 = 2400;   // body pitched into the travel
 constexpr int32_t kHastyBankA16 = 1900;    // clumsy bank
-constexpr int32_t kHastyFishtailA16 = 1500;// the slight fishtail yaw wobble
+// PASS 6 F.1 (Direction 5 0-QUATER, and it is unambiguous): "hasty anim looks
+// like it's walking with little jumps. This is a floating creature, so make
+// that a bob up and down instead of the sideways shimmy, even if that's cute."
+// The fishtail yaw IS the sideways shimmy -- 8 lateral cycles over 120 keys is
+// exactly a gait. It goes to ZERO, and the owner pre-empted the obvious
+// mistake: "even if that's cute" means do NOT preserve it as a compromise and
+// do not smuggle it back as a small lateral component. Cute is not the bar;
+// floating is. The knob stays so the read is reversible in one edit.
+constexpr int32_t kHastyFishtailA16 = 0;   // was 1500 -- the shimmy that walked
+constexpr int kHastyBobCycles = 5;         // the vertical layer that replaces it
+constexpr int32_t kHastyBobAmpMm = 210;    // deeper than the house hover bob
 constexpr int kHastyFishtailCycles = 8;
 // PASS 3 (Direction 3 §7: "make it longer"): keys 100 -> 170, higher
 // start, and an extra tumble axis (a slow yaw under the pitch tumble).
@@ -658,8 +677,15 @@ constexpr int32_t kStencilFaceYawA16 = -5000;  // ~27 deg toward the camera (the
                                                // offset rotation is -theta about
                                                // +Y; +5000 rotated AWAY, looked at)
 // motes
-constexpr int kMoteCount = 24;
-constexpr int kWanderCount = 3;            // of kMoteCount: the odd drifters
+// PASS 6 E.2 (Direction 5 0-BIS: "try if you can fit some more normal ...
+// particles in"). 24 -> 38. MORE MEANS BREADTH, NOT DEPTH -- measured on the
+// engine recon's own numbers: channel draws 628 aqua px/frame and mana-stack
+// 1,983, i.e. 3.2x the density at the IDENTICAL 22.1% clamp fraction but with
+// 21% LESS hue spread. The ceiling is hit by OVERLAP, not by count. So the
+// count and the spread go up together and kMoteHaloGainPm does NOT move: a
+// rung that reads whiter rather than richer is past the line.
+constexpr int kMoteCount = 38;
+constexpr int kWanderCount = 6;            // of kMoteCount: the odd drifters
 constexpr int32_t kMoteHaloRPxMin = 7, kMoteHaloRPxMax = 10;   // iter 5; iter 2: 8-11 still
                                            // flooded the ~40 px pocket; iter 1: 11-15
                                            // merged into one cloud that
@@ -675,7 +701,7 @@ constexpr int32_t kGripGamma = 14;         // coherence per area-shrink pm
 constexpr int kCohBasePm = 320;            // coherence at rest area (low: the
                                            // limp cloud must read limp)
 constexpr int kCohMinPm = 130;
-constexpr int32_t kCloudSpreadMm = 380;    // low-grip relax offsets
+constexpr int32_t kCloudSpreadMm = 520;    // PASS 6 E.2: breadth, not depth
 constexpr int32_t kKneadJitterMm = 70;     // agitation jitter at full knead
 constexpr int32_t kKneadVelRefMm = 50;     // EXCESS anchor speed (mm/frame over
                                            // the slow-tracked baseline) = full
@@ -703,11 +729,11 @@ constexpr int kDragGainPm = 2600;
 // gentle stream stays under the clamp and keeps its lagging-gap read
 // (protected by both gates). Sized by looking at taunt2/rest vs hasty.
 constexpr int32_t kDragMaxMm = 380;
-constexpr int32_t kWanderEscapeMm = 780;   // the wander motes may leave the pocket
+constexpr int32_t kWanderEscapeMm = 980;   // the wander motes may leave the pocket
 // mote micro-orbit (R7 smoother rotation: ONE angular velocity per mote,
 // long periods, no frequency doubling)
 constexpr int kMoteOrbitPeriodMinF = 130, kMoteOrbitPeriodMaxF = 260;
-constexpr int32_t kMoteOrbitRMinMm = 40, kMoteOrbitRMaxMm = 95;
+constexpr int32_t kMoteOrbitRMinMm = 40, kMoteOrbitRMaxMm = 130;  // E.2: wider
 // the fold-hold-knead timeline (KEYS; frames on screen = 2x)
 constexpr int kGatherKeysBase = 30, kGatherKeysHash = 16;   // 60..90 frames
 constexpr int kHoldKeysBase = 32, kHoldKeysHash = 32;       // 64..128 frames

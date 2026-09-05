@@ -5104,7 +5104,9 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // drift's lateral span (~6.9 m) exceeded the house camera's window and
   // the clip ENDED clipped at the frame edge (looked at): the drift camera
   // pulls back so the whole traverse stays on screen.
-  if (slot == 1) s.cam_k = 185000;
+  // PASS 6 F.1/A.2: the two TRAVELLING clips take their own camera and never
+  // inherit the 360k house framing -- see kU02CamKTraverse.
+  if (slot == 1 || slot == 8) s.cam_k = u02::kU02CamKTraverse;
   // PASS 4 (Stage T -- the reviewer's fault 2b): the fall started ABOVE the
   // frame; 190 of 340 frames showed empty sky. The authored 3.6 m drop
   // stays (Direction 3 asked for it); the CAMERA pulls back and tips up so
@@ -5123,11 +5125,30 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // — "a loop of that to be going on all the time as the creature exists".
   // The channel stacks the lightning strand on top (candidate 9); the form
   // diagnostic (slot 7) stays clean.
-  s.u02_mana = slot == 2 ? 9 : (slot == 7 ? 0 : 3);
+  // PASS 6 E.1 (Direction 5 0-BIS, the owner's literal instruction): "That's
+  // the mana version we will have up on all our renders and videos, it looks
+  // sick." manafold-channel is candidate 9 -- mana_fold PLUS mana_lightning --
+  // and every other clip ran candidate 3, the same fold MINUS the lightning.
+  // The lightning already exists and is already approved by eye; it did not
+  // need inventing, it needed SPREADING. Slot 7 stays clean: it is the form
+  // diagnostic and the whole point of it is an unobstructed look at geometry.
+  s.u02_mana = slot == 7 ? 0 : 9;
   // the fold's smear rides the lead mid/glitchy rung everywhere; the
   // channel keeps the SHORT rung (pass-3 lesson: the strand's ghosts pile
   // up at the mid rung and the pocket reads as cloud, not strands).
-  s.u02_smear = slot == 2 ? 1 : (slot == 7 ? 0 : 3);
+  // PASS 6 E.5: the smear rung is chosen BY MOTION CLASS, because the effect
+  // is screen-space and therefore means different things on a clip that
+  // travels and a clip that does not.
+  //   TRAVELLING (drift 1, hasty 8): rung 3 with the tear -- the approved
+  //   reference look. The creature walks out from under its own ghost and
+  //   leaves the chunky pale-cyan residue the owner called perfect. Untouched.
+  //   STATIONARY (everything else): the new SHORT/TORN rung 5. A stationary
+  //   clip cannot make a trail (no net screen travel), so rung 3 gives it the
+  //   halo AND the haze plateau instead. Rung 5 grants the owner's "some of
+  //   that glitchy smear" -- the tear IS the glitch signature -- on exactly
+  //   the accumulation behaviour channel already ships and the owner already
+  //   likes, so channel's protected read changes only by gaining the tear.
+  s.u02_smear = slot == 7 ? 0 : ((slot == 1 || slot == 8) ? 3 : 5);
   // Pass 3 (Direction 3 §1): the four-light-everywhere look was a
   // REGRESSION — "It should look just like Zixx' lighting with the
   // directional light from the sun." Every clip ships under its own named

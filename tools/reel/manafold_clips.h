@@ -939,7 +939,8 @@ inline zc::Clip build_hasty() {
     c.root[static_cast<size_t>(f) * 3 + 0] =
         fxu(static_cast<int32_t>((f - K / 2) * kHastySpeedMmPerKey));
     c.root[static_cast<size_t>(f) * 3 + 1] =
-        hover_at(f, K, kHoverHeightMm, kBobAmpAMm, kBobAmpBMm, K / 8, K / 20);
+        hover_at(f, K, kHoverHeightMm, kHastyBobAmpMm, kBobAmpBMm,
+                 kHastyBobCycles, K / 20);
     c.deform[static_cast<size_t>(f)] = compress_at(f, K, K / 15, kCompressAmpPm);
   }
   return c;

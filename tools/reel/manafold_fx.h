@@ -157,7 +157,14 @@ constexpr int32_t kStreakSpanPx = 46;
 // the retired strands' budget converts into SURGE MOTES that flow along
 // the strand's path and burst at its ends -- energised particles with one
 // hot filament, not a filament cloud.
-constexpr int kStrandCount = 1;
+// PASS 6 E.3 (Direction 5 0-BIS: "some more lightning particles ... but don't
+// go overboard"). 1 -> 2; the header's own note already allowed two. The THIRD
+// is rejected on the record rather than untried: each strand pushes ~1,330 px
+// of near-white core with depth-test off into a 10-15 px pocket, and the
+// whitening element is the strand, not the motes. Three would hue-neutralise
+// the pocket -- the exact "goes white and erases its own colour" failure
+// 08-LIGHTING documents and the clause the owner attached to the request.
+constexpr int kStrandCount = 2;
 constexpr int kSurgeMotes = 5;             // flowing along the strand
 constexpr int kSurgeFlowFrames = 26;       // one end-to-end trip
 constexpr int32_t kSurgeRPx = 7;
@@ -235,12 +242,25 @@ constexpr int kSmearAlphaMaxPm = 780;
 // rungs only (tear=1); an index offset at composite, near-free.
 struct SmearTear { int rows, frames, cells; };
 constexpr SmearTear kSmearTear = {5, 46, 2};  // kSmearTearRows/Frames/Cells
-constexpr SmearPreset kSmearPresets[5] = {
+// PASS 6 E.5: a SIXTH rung, "SHORT/TORN". Two facts drove it, both measured:
+//   * The plateau. taunt2 opens at 126 white px and climbs to a 700-1100 px
+//     haze that NEVER comes back down, which is why the best frames of every
+//     clip are its first ten (protected item 11) -- the persistence plane
+//     saturates and buries the read it started with.
+//   * The tear IS the glitch. hasty's approved "broken frame buffer" look is
+//     rung 3 PLUS the row tear; channel has never had the tear at all.
+// So this rung is rung 1's keep/step/jitter/clear/gain -- the accumulation
+// behaviour channel already ships and the owner already likes -- with tear=1
+// added. Stationary clips get the owner's "some of that glitchy smear" WITHOUT
+// the accumulation that plateaus. Travelling clips keep rung 3, which is the
+// approved reference look and is not touched.
+constexpr SmearPreset kSmearPresets[6] = {
     {0, 1, 0, 1, 0, 0},          // 0: no smear
     {620, 2, 40, 90, 420, 0},    // 1: SHORT/CLEAN — a readable tail, tidy
     {820, 4, 90, 260, 520, 0},   // 2: MID/GLITCHY — the pass-3 lead rung
-    {900, 6, 160, 430, 520, 1},  // 3: LONG/GLITCHIER — the shipping fold rung
-    {940, 8, 260, 560, 540, 1},  // 4: BROKEN-BUFFER — the new far end (cyan)
+    {900, 6, 160, 430, 520, 1},  // 3: LONG/GLITCHIER — the travelling rung
+    {940, 8, 260, 560, 540, 1},  // 4: BROKEN-BUFFER — the far end (cyan)
+    {620, 2, 40, 90, 420, 1},    // 5: SHORT/TORN — rung 1 + the row tear
 };
 constexpr int kSmearW = 96, kSmearH = 60;  // quarter-res: the fill budget
 // PASS 4 (R5, Direction 4 §2 "the smear needs to be properly hidden
