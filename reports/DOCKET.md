@@ -2718,10 +2718,25 @@ render_{min,max}_{x,y}_i       render_src_{a,id}_i          render_state_i
 render_texel_{rgb,a,idx}_i     render_{fill,clear}_word_i    ...
 ```
 
-**There is no `render_depth_i` and no `render_invw_i`.** So step 2 needs a small
-piece of work the staircase does not list: give the render port a depth value,
-prove the existing fragment pipe uses it, and only then move the boundary so
-DEPTHQUANT computes it.
+**There is no `render_depth_i` and no `render_invw_i`** — and for about ten
+minutes I concluded from that there was no way for a depth value to enter. Wrong
+again. `zhao_raster_tile_pipe.sv:446`:
+
+```systemverilog
+  assign frag_depth = fill_r[31:8];
+```
+
+**The depth arrives packed inside `render_fill_word_i`.** That 64-bit word is
+not a colour; it is a flat-fragment record — `[63:40]` vertex RGB, `[39:32]` the
+effect tag, `[31:8]` the 24-bit `invw24` depth, `[7:0]` the stencil reference —
+and `render_clear_word_i` carries the tile's clear depth the same way at
+`clear_r[31:8]`.
+
+So **step 2 IS a clean boundary move after all**, and the same shape as step 1:
+the bench today supplies a precomputed `invw24` in those bits, and DEPTHQUANT
+would compute it inside the design from `w`. Nothing new has to be added to the
+render port. What DOES have to happen is that the bench stop hand-packing that
+field and hand over `w` instead.
 
 ### My first reading of this was wrong, and the correction is the point
 
@@ -2746,7 +2761,25 @@ machinery is composed and working; only the **value** has no way in.
 
 ### Consequence for sequencing
 
-Step 2 is: add `render_depth_i` (24-bit canonical), route it to the fragment
-job's flat depth, and check it draws — then move the boundary. That is two
-composed tests, not one, and neither is large. Recorded so the next pass does
-not discover mid-step that the staircase has an unlisted tread.
+Step 2 is a straight repeat of step 1's pattern: add `depth_mode_i` to the shell
+bench, feed `zhao_geom_depthquant` the `w` and profile, drive its `d_invw24_o`
+into `fill_word[31:8]` in place of the bench's precomputed value, and require
+the two framebuffers to be **identical**. DEPTHQUANT needs an RCP24 service,
+which the composed island already proves works — `zhao_raster_rcp24_svc` is in
+it and completed 64 reciprocals in the composed test.
+
+### The real lesson here is about me, not the shell
+
+Three readings of the same question, each confidently wrong before the next:
+
+1. *"The shell has no depth path"* — from grepping two files about a hierarchy
+   four levels deep.
+2. *"The path exists but the value has no way in"* — from enumerating the port
+   list without reading what the ports carry.
+3. The truth: the value comes in **packed inside a word named for something
+   else**, which no port-name search can find.
+
+Each wrong answer was **simpler than the truth**, which is the asymmetry
+`CLAUDE.md` records — and each one would have produced real work aimed at the
+wrong place. The only reason this entry is right is that I kept opening the next
+file down instead of writing up the first plausible story.
