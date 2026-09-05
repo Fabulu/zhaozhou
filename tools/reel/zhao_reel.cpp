@@ -2186,6 +2186,20 @@ constexpr ZixxSunSpec kU02SunHover   {14000, kZixxSunHeightMm, 16000, kZixxSunIn
 constexpr ZixxSunSpec kU02SunDrift   {-13000, kZixxSunHeightMm, 17000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(120), fxm(55), fxm(170), fxm(55), fxm(35), fxm(110)};
 constexpr ZixxSunSpec kU02SunChannel {12000, kZixxSunHeightMm, 14000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(180), fxm(35), fxm(220), fxm(100), fxm(20), fxm(150)};
 constexpr ZixxSunSpec kU02SunCalm    {15000, kZixxSunHeightMm, 15000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(130), fxm(45), fxm(160), fxm(60), fxm(28), fxm(95)};
+// Pass 3 (Stage L, Direction 3 §1): the four-light rig was a REGRESSION at
+// bank scale -- every clip returns to ONE directional sun, Zixxtrixx-style,
+// so the missing clips get their own named suns here. Same far-sun law
+// (50 m up: even the fall's ~3.7 m apex stays ~50 deg below the sun), same
+// calm cool mana-violet family, azimuth spread per clip mood. Every value
+// is an owner knob, judged by eye at native.
+constexpr ZixxSunSpec kU02SunCurious   {16000, kZixxSunHeightMm, 13000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(140), fxm(50), fxm(180), fxm(70), fxm(30), fxm(115)};
+constexpr ZixxSunSpec kU02SunStartle   {4000,  kZixxSunHeightMm, 21000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(100), fxm(70), fxm(220), fxm(45), fxm(40), fxm(140)};  // cold shock blue
+constexpr ZixxSunSpec kU02SunPirouette {-15000, kZixxSunHeightMm, 15000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(160), fxm(45), fxm(190), fxm(85), fxm(28), fxm(120)};
+constexpr ZixxSunSpec kU02SunHasty     {13000, kZixxSunHeightMm, 17000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(170), fxm(60), fxm(150), fxm(90), fxm(35), fxm(85)};   // warmer rose: effort
+constexpr ZixxSunSpec kU02SunFall      {-14000, kZixxSunHeightMm, 16800, kZixxSunInnerMm, kZixxSunOuterMm, fxm(90),  fxm(75), fxm(230), fxm(40), fxm(38), fxm(145)};  // ice violet
+constexpr ZixxSunSpec kU02SunHit       {3800,  kZixxSunHeightMm, 21600, kZixxSunInnerMm, kZixxSunOuterMm, fxm(110), fxm(65), fxm(210), fxm(50), fxm(33), fxm(130)};  // bruise
+constexpr ZixxSunSpec kU02SunTaunt     {21600, kZixxSunHeightMm, -3800, kZixxSunInnerMm, kZixxSunOuterMm, fxm(190), fxm(35), fxm(200), fxm(105), fxm(18), fxm(120)}; // magenta show-off
+constexpr ZixxSunSpec kU02SunTaunt2    {11000, kZixxSunHeightMm, 19000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(150), fxm(55), fxm(175), fxm(80), fxm(30), fxm(105)};  // rose dusk
 constexpr ZixxSunSpec kZixxSunIdle       {15556,  kZixxSunHeightMm, 15556,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(240), fxm(70), fxm(12), fxm(150), fxm(65), fxm(5)};  // golden morning
 constexpr ZixxSunSpec kZixxSunWalk       {-12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(18), fxm(80), fxm(280), fxm(10), fxm(35), fxm(135)};  // azure day
 constexpr ZixxSunSpec kZixxSunRun        {12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(280), fxm(90), fxm(10), fxm(150), fxm(42), fxm(3)};  // hot orange
@@ -2255,6 +2269,12 @@ struct CreatureReelCtx {
   // Direction 29 clip sun: when true, moving_sources[0] holds the subject's
   // one sun and the additive gate is raised for this subject's compose only.
   bool sun_light = false;
+  // Pass 3 (Stage L): the u02-owned base rig under a SUN subject (null = the
+  // process-selected rig — Zixxtrixx's path, untouched), and the marker-orb
+  // switch: u02 subjects draw NO orbs (Direction 3 §1, "remove the light
+  // dot"), Zixxtrixx keeps its own.
+  const zc::CreatureLightRig* sun_rig = nullptr;
+  bool moving_markers = true;
   // Direction 26: the moving-light inspection carries FOUR world-space
   // sources -- the original warm lamp plus blue, orange and green. They are
   // one contiguous array so the compositor's point-light globals can name
@@ -2537,6 +2557,18 @@ const zc::CreatureLightRig kU02MovingRig{
     9175,   9830,  12452,   // LOW ambient: .14, .15, .19 — the rim knob
     21627,                  // dim white key: .33
     8520,   11141, 15729};  // blue-leaning crossfill: .13, .17, .24
+
+// Pass 3 (Stage L/M, R5): the u02-owned BASE RIG for every SUN subject.
+// Starts as kCreatureLightDiagonalCoolCross VERBATIM (the rig v1's liked
+// mist was judged under); the AMBIENT rungs are the mist knob — lower is a
+// wider but darker rim — re-authored by the Stage M ladder, by eye, for
+// "thicker than v1 AND the pink glows through". Key/fill opposition kept.
+const zc::CreatureLightRig kU02SunRig{
+    43000,  36000, 35000,   // top diagonal from +X/+Z (Cool Cross)
+    -45000, 35000, -32000,  // strong opposing top-diagonal crossfill
+    26214,  29491, 36700,   // ambient .40/.45/.56 — THE MIST KNOB (Stage M)
+    38011,                  // white key: .58
+    16384,  24904, 36045};  // blue crossfill: .25, .38, .55
 
 // Path extents around the hovering conduit (world mm, instance-relative).
 constexpr int32_t kU02WarmOrbitXMm = 1500, kU02WarmOrbitZMm = 1500;
@@ -2910,6 +2942,9 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     } else if (c.sun_light) {
       // Direction 29: the clip's sun joins the selected rig (Cool Cross stays
       // underneath); emission is ON through the same gate, scoped and restored.
+      // Pass 3: a u02 sun subject composes over its OWN base rig (kU02SunRig,
+      // the Stage M mist knob), subject-scoped exactly like moving_rig.
+      if (c.sun_rig != nullptr) zc::g_creature_light_rig = c.sun_rig;
       zc::g_creature_point_lights = c.moving_sources;
       zc::g_creature_point_light_count = 1;
       zc::g_creature_additive_light = g_zixx_additive_normal;
@@ -3068,7 +3103,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     }
     ++g_exp_frame;
   }
-  if (c.moving_light)
+  if (c.moving_light && c.moving_markers)
     draw_zixx_moving_source_markers(c, rgb, depth, w, h);
   // creature 02: the mana and the belly core draw AFTER the cel ink pass —
   // effects glow over the drawn creature, never inside its ink mask (each
@@ -3366,7 +3401,11 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.poses = &dog_poses;
     cr_ctx.force_micro = sub.creature_force_micro;
     cr_ctx.moving_light = sub.creature_moving_light;
-    if (species == Species::kUnnamed02) cr_ctx.moving_rig = &kU02MovingRig;
+    if (species == Species::kUnnamed02) {
+      cr_ctx.moving_rig = &kU02MovingRig;
+      cr_ctx.sun_rig = &kU02SunRig;         // Stage M's mist knob rides here
+      cr_ctx.moving_markers = false;        // Direction 3 §1: no light dot
+    }
     cr_ctx.sun_light =
         sub.sun != nullptr && g_zixx_suns_enabled && !sub.creature_moving_light;
     if (sub.dummy) {
@@ -4789,6 +4828,12 @@ void u02_common(SceneSubject& s) {
   s.mat_r = 104;  // the dry-ground stage material (the zixx lesson: green
   s.mat_g = 78;   // creature on green ground vanished; grey on brown reads)
   s.mat_b = 58;
+  // Pass 3 (gotcha §12): EVERY u02 subject — the s4 diagnostics included —
+  // defaults to the SHIPPING presentation (a sun over kU02SunRig), so no
+  // future by-eye plate can be judged under a rig the creature does not
+  // ship with. Clips override with their own named suns; only
+  // unnamed02-inspect clears this and raises the four-light rig.
+  s.sun = &kU02SunCalm;
 }
 
 SceneSubject subject_u02_s4(int view) {
@@ -4815,7 +4860,8 @@ SceneSubject subject_u02_s4(int view) {
 }
 
 // ---- creature 02 showcase subjects: one per clip -------------------------
-SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool orbit) {
+SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool orbit,
+                              const ZixxSunSpec* sun) {
   SceneSubject s;
   s.name = name;
   s.creature = slot + 2;
@@ -4829,11 +4875,11 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // sheet says discharging bolts through the antenna IS this creature);
   // the owner picks the rest of the stack from the mana menu subjects.
   s.u02_mana = slot == 2 ? 4 : 0;
-  // Pass 2 (R6 / Direction 2 §6): the many-coloured moving rig IS the
-  // presentation now. The per-clip suns are dropped — sun + four coloured
-  // sources would break the four-source law, and keeping a sun lane would
-  // preserve exactly the old single-rig look the owner retired.
-  s.creature_moving_light = true;
+  // Pass 3 (Direction 3 §1): the four-light-everywhere look was a
+  // REGRESSION — "It should look just like Zixx' lighting with the
+  // directional light from the sun." Every clip ships under its own named
+  // sun over kU02SunRig; only unnamed02-inspect raises the moving rig.
+  s.sun = sun;
   // the skybox bloom serves the showcase clips where the sky is the backdrop
   // (S1 made a creature + planet bloom lawful in one clip)
   if (slot == 2) {  // fixed-camera subjects only: the bloom is painted in
@@ -6775,20 +6821,29 @@ int main(int argc, char** argv) {
   if (wanted("planet-sun-redgiant")) rc |= render_scene(subject_planet_redgiant());
   if (wanted("planet-sun-binary")) rc |= render_scene(subject_planet_binary());
   if (wanted("creature-wave-walk")) rc |= render_scene(subject_creaturewalk());
-  if (wanted("unnamed02-hover")) rc |= render_scene(subject_u02_clip(0, "unnamed02-hover", u02::kIdleKeys, true));
-  if (wanted("unnamed02-drift")) rc |= render_scene(subject_u02_clip(1, "unnamed02-drift", u02::kDriftKeys, false));
-  if (wanted("unnamed02-channel")) rc |= render_scene(subject_u02_clip(2, "unnamed02-channel", u02::kChannelKeys, false));
-  if (wanted("unnamed02-curious")) rc |= render_scene(subject_u02_clip(3, "unnamed02-curious", u02::kCuriousKeys, false));
-  if (wanted("unnamed02-startle")) rc |= render_scene(subject_u02_clip(4, "unnamed02-startle", u02::kStartleKeys, false));
-  if (wanted("unnamed02-rest")) rc |= render_scene(subject_u02_clip(5, "unnamed02-rest", u02::kRestKeys, false));
-  if (wanted("unnamed02-pirouette")) rc |= render_scene(subject_u02_clip(6, "unnamed02-pirouette", u02::kPirouetteKeys, false));
-  if (wanted("unnamed02-hasty")) rc |= render_scene(subject_u02_clip(8, "unnamed02-hasty", u02::kHastyKeys, false));
-  if (wanted("unnamed02-fall")) rc |= render_scene(subject_u02_clip(9, "unnamed02-fall", u02::kFallKeys, false));
-  if (wanted("unnamed02-hit")) rc |= render_scene(subject_u02_clip(10, "unnamed02-hit", u02::kHitKeys, false));
-  if (wanted("unnamed02-taunt")) rc |= render_scene(subject_u02_clip(11, "unnamed02-taunt", u02::kTauntKeys, false));
-  if (wanted("unnamed02-taunt2")) rc |= render_scene(subject_u02_clip(12, "unnamed02-taunt2", u02::kTaunt2Keys, false));
+  if (wanted("unnamed02-hover")) rc |= render_scene(subject_u02_clip(0, "unnamed02-hover", u02::kIdleKeys, true, &kU02SunHover));
+  if (wanted("unnamed02-inspect")) {
+    // Direction 3 §1: EXACTLY ONE subject carries the four coloured moving
+    // lights — this inspection showcase. Hover keys, orbit camera, the u02
+    // moving rig and source paths from pass 2, and NO marker orbs
+    // (moving_markers is cleared for the whole species).
+    SceneSubject s = subject_u02_clip(0, "unnamed02-inspect", u02::kIdleKeys, true, nullptr);
+    s.creature_moving_light = true;
+    rc |= render_scene(s);
+  }
+  if (wanted("unnamed02-drift")) rc |= render_scene(subject_u02_clip(1, "unnamed02-drift", u02::kDriftKeys, false, &kU02SunDrift));
+  if (wanted("unnamed02-channel")) rc |= render_scene(subject_u02_clip(2, "unnamed02-channel", u02::kChannelKeys, false, &kU02SunChannel));
+  if (wanted("unnamed02-curious")) rc |= render_scene(subject_u02_clip(3, "unnamed02-curious", u02::kCuriousKeys, false, &kU02SunCurious));
+  if (wanted("unnamed02-startle")) rc |= render_scene(subject_u02_clip(4, "unnamed02-startle", u02::kStartleKeys, false, &kU02SunStartle));
+  if (wanted("unnamed02-rest")) rc |= render_scene(subject_u02_clip(5, "unnamed02-rest", u02::kRestKeys, false, &kU02SunCalm));
+  if (wanted("unnamed02-pirouette")) rc |= render_scene(subject_u02_clip(6, "unnamed02-pirouette", u02::kPirouetteKeys, false, &kU02SunPirouette));
+  if (wanted("unnamed02-hasty")) rc |= render_scene(subject_u02_clip(8, "unnamed02-hasty", u02::kHastyKeys, false, &kU02SunHasty));
+  if (wanted("unnamed02-fall")) rc |= render_scene(subject_u02_clip(9, "unnamed02-fall", u02::kFallKeys, false, &kU02SunFall));
+  if (wanted("unnamed02-hit")) rc |= render_scene(subject_u02_clip(10, "unnamed02-hit", u02::kHitKeys, false, &kU02SunHit));
+  if (wanted("unnamed02-taunt")) rc |= render_scene(subject_u02_clip(11, "unnamed02-taunt", u02::kTauntKeys, false, &kU02SunTaunt));
+  if (wanted("unnamed02-taunt2")) rc |= render_scene(subject_u02_clip(12, "unnamed02-taunt2", u02::kTaunt2Keys, false, &kU02SunTaunt2));
   if (wanted("unnamed02-crackle")) {
-    SceneSubject s = subject_u02_clip(0, "unnamed02-crackle", u02::kIdleKeys, false);
+    SceneSubject s = subject_u02_clip(0, "unnamed02-crackle", u02::kIdleKeys, false, &kU02SunChannel);
     s.u02_mana = 4;  // pass 2: the crackle IS the lightning candidate
     s.planet = 1;  // fixed camera: the bloom may stage the crackle
     s.planet_sun_x = 58;
@@ -6807,14 +6862,14 @@ int main(int argc, char** argv) {
     };
     for (const auto& m : kManaMenu) {
       if (!wanted(m.name)) continue;
-      SceneSubject s = subject_u02_clip(0, m.name, u02::kIdleKeys, false);
+      SceneSubject s = subject_u02_clip(0, m.name, u02::kIdleKeys, false, &kU02SunHover);
       s.u02_mana = m.cand;
       s.note = "mana-menu candidate: the owner picks with his eyes";
       rc |= render_scene(s);
     }
   }
   if (wanted("u02-trio")) {
-    SceneSubject s = subject_u02_clip(2, "u02-trio", u02::kChannelKeys, false);
+    SceneSubject s = subject_u02_clip(2, "u02-trio", u02::kChannelKeys, false, &kU02SunChannel);
     s.u02_trio = true;
     s.cam_k = 170000;  // pull back: three conduits share the frame
     s.note = "THREE phase-offset conduits, one scene sun + bloom, all effects";
