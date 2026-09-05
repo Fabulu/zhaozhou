@@ -3116,6 +3116,25 @@ still the wrong texel. The path is LIVE, not RIGHT, and the directed test
 asserts residency and non-blackness rather than index correctness — which is
 exactly the gap a colour check cannot see.
 
+### The design's load-bearing claim, checked against the RTL
+
+The architecture puts both texels in ONE planner request across two cache
+lanes rather than issuing two independent requests. That is the decision the
+whole cost argument rests on, so it was checked rather than accepted:
+
+*  already emits  as a four-bit LANE MASK --
+   when filtering,  for nearest. A two-lane mask is the same
+  port, not a new one.
+*  takes  with LANES = 4 and
+   -- a SEPARATE 32-bit address per lane, so two
+  lanes can address two different mip levels at different base offsets.
+* Its all-hit path accepts and retires ONE ACCESS PER CLOCK, which is what
+  makes the pair atomic without new pairing state.
+
+So the shape the design needs is already supported and today's nearest path
+simply uses one lane of four. This is a source deduction about interfaces, not
+a simulation or a fit: nothing has been built or measured.
+
 ### Not fixed here, deliberately
 
 The architecture gates both as WP-M1 behind a reviewed before/after delta,
