@@ -124,6 +124,11 @@ done
 T="$ROOT/tools/reel"
 
 build_reel() {
+  [ -f "$T/manafold_page.h" ] || {
+    printf 'missing %s (generate: python tools/pack/mkmanafoldpage.py)\n' \
+      "$T/manafold_page.h" >&2
+    exit 1
+  }
   printf '%s\n' "LD zhao-reel"
   "$CXX" "${FLAGS[@]}" "$T/zhao_reel.cpp" "${LIBOBJS[@]}" \
     -o "$BIN/zhao-reel.exe"
@@ -132,6 +137,16 @@ build_reel() {
 build_cel() {
   local header="$T/zixxtrixx_page_cel.h"
   [ -f "$header" ] || { printf 'missing %s\n' "$header" >&2; exit 1; }
+  # Manafold's page: without it the creature renders BLACK under celmain,
+  # and a __has_include guard once let that ship silently from a clean
+  # checkout (pass-4 review). The include is now unguarded, so the compile
+  # would fail anyway -- this check exists to fail FIRST with a message
+  # that names the generator instead of a bare missing-header error.
+  [ -f "$T/manafold_page.h" ] || {
+    printf 'missing %s (generate: python tools/pack/mkmanafoldpage.py)\n' \
+      "$T/manafold_page.h" >&2
+    exit 1
+  }
   if command -v cygpath >/dev/null 2>&1; then
     header="$(cygpath -m "$header")"
   fi

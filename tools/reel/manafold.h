@@ -27,13 +27,18 @@
 #include "manafold_clips.h"
 #include "manafold_fx.h"
 
-// The GENERATED page (tools/pack/mkmanafoldpage.py; gitignored, never tracked).
-// Absent, the creature falls back to its flat part materials and still
-// renders — CI and a fresh clone build grey rather than breaking.
-#if __has_include("manafold_page.h")
+// The GENERATED page (tools/pack/mkmanafoldpage.py) is COMMITTED, exactly as
+// Zixxtrixx's pages are: the generator is deterministic, so the tracked
+// header is byte-stable — regenerate and diff after editing the generator.
+// The include is deliberately UNGUARDED. There is no usable fallback:
+// pageless parts do not render grey, they render BLACK under celmain
+// (09-ENGINE-GOTCHAS.md §0/§7), and a __has_include guard here once let a
+// clean checkout build silently and ship a solid-black creature (pass-4
+// review). A missing page must fail the build, loudly — build-direct.sh
+// checks for the file before linking, matching the zixxtrixx_page_cel.h
+// precedent.
 #include "manafold_page.h"
 #define U02_HAVE_PAGE 1
-#endif
 
 namespace u02 {
 
