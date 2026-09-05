@@ -388,3 +388,56 @@ since Direction 4.
 **every clip**, and `kLoopArcMm[5]`/`kLoopReentry*` change the model. **All 15
 clips move.** Not 3, not 7 — all of them, except slot 7 (gain 0, the still
 diagnostic) which still moves by geometry. CRCs go with the stage-G render.
+
+### 00:40 — OWNER 5c and 5d arrived mid-stage. Cost to B.1: RE-TUNING, not redoing.
+
+Reported plainly because the question was asked. **The stage-B.1 eye did not
+need rebuilding.** The lens, the star profile, the white-generated-from-cyan
+construction and the two-transform contract all stand unchanged. What moved:
+* the star arms were **re-based to drawn-flush** and `kStarScalePm = 950` takes
+  them back — one new knob, no new geometry;
+* `kGazeMaxA16` raised 3400 → 4600, because travel no longer has to be bought
+  by shrinking;
+* `apply_eye_roll()` added — a rotation on a bone that already exists.
+
+The expensive part was not the eye. It was **the gate**, and it was worth it.
+
+**What the composed-extremes gate caught, in order:**
+1. **The eyeball-shift mechanism was unsound.** I had moved the eye bone's
+   pivot inward and pushed the lens geometry back out by the same amount, so a
+   rotation would sweep the eye across the body. **It does not cancel:** a ring
+   `cx` offset lives in the bone's ROTATED frame, a bind translation lives in
+   the parent's UNROTATED one, and `face_rest`'s yaw/tilt sits between them —
+   so the lens swung off its authored place and the protrusion gate went red.
+   **Reverted. `kEyeShiftMaxPm` is NOT SHIPPED** and the reason is in
+   `manafold_rig.h`. The fix is to counter-rotate the offset by the rest
+   attitude, or add a translation channel.
+2. **18° roll digs the lens into the body** at the corners where roll, gaze and
+   lift stack. Shipped at **10°** — the owner's own lower bound. This is exactly
+   the interaction that was predicted: the eyes pop out of a *curved* body, so a
+   rolled lens buries its far end while its near end still looks fine.
+3. **My own gate B was measuring the wrong thing.** It gated "no deeper than
+   rest", which fails a roll that merely sinks a *deliberately half-buried* lens
+   further into an **opaque** body — invisible, and not a clip. Reformulated
+   against the body **surface**, so what it forbids is a **gap opening**. The
+   protrusion gate covers the other end; together they bracket the assembly.
+
+**Gate A (the eyes never touch) is REPORTED, NOT ENFORCED, and the source says
+why.** It returns 0 mm at *every* amplitude including a roll of exactly zero,
+where the lenses sit ~130 mm apart by construction — so the instrument is wrong,
+not the geometry. I eliminated two candidate causes by rebuilding (the `sv.b0`
+bone-id read, replaced with a geometric z-sign split; and degenerate poses,
+refuted because gate B on the same poses returns sensible varying numbers; the
+census confirms 7,296 star and 3,520 lens vertices are found). **I did not tune
+the creature to satisfy it.** A gate passing is not the thing looking right, and
+a gate failing for an unknown reason is worth less still.
+
+**And rule 1 of the leash reports 0 mm overhang — which is an honest finding,
+not an inert instrument.** The clips authored their gaze as *fractions* of
+`kGazeMaxA16`, so none of them reaches the clamp: **5c grants the leash and no
+shipped clip uses it.** Spending it is clip authoring — stage F — which this
+pass did not reach.
+
+**LOOKED AT** (`evidence/5c-star-scale.png`, 6x, before/after at three-quarter
+and front): the star now fills the lens the way the sheet draws three nested
+shapes, and the 4-pointed concave star reads clearly in **both** eyes front-on.
