@@ -6,13 +6,39 @@ param(
     # characterized with the same flow rather than a second one.
     [string[]]$ExtraSources,
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
-    # 3000, not 900. MEASURED 2026-08-19: zhao_measure_tokens reported
-    # `timeout` at the 900 s default and then fitted cleanly in 749 s of
-    # quartus_fit on the very next run with a larger budget. A "timeout" row in
-    # the report reads as "this block does not fit", when all it meant was
-    # "we did not wait". Ten rows in the committed report carry that status and
-    # every one of them is suspect for the same reason.
-    [int]$TimeoutSeconds = 3000,
+    # 28800, not 3000, and not 900. THE SAME MISTAKE HAS NOW BEEN MADE TWICE.
+    #
+    # MEASURED 2026-08-19: zhao_measure_tokens reported `timeout` at the 900 s
+    # default and then fitted cleanly in 749 s of quartus_fit on the very next
+    # run with a larger budget. A "timeout" row in the report reads as "this
+    # block does not fit", when all it meant was "we did not wait". Ten rows in
+    # the committed report carry that status and every one is suspect for it.
+    #
+    # MEASURED 2026-09-05, at the raised 3000 s default: the same shape again.
+    # zhao_texture_material_combine_v1 died twice at 3002.7 s and 3003.3 s --
+    # a second apart, under different machine load, which is a deadline and not
+    # contention -- and BOTH were read as `failed:quartus_fit.exe` rather than
+    # as the budget running out. One of them was even blamed on concurrent test
+    # load before the constant was checked.
+    #
+    # THE EVIDENCE FOR 28800. The successful fits in this tree are not short:
+    #
+    #   zhao_texture_island_top      9,238 s   (2h34m)
+    #   zhao_raster_perspuv_svc     10,505 s   (2h55m)
+    #
+    # Both exceed three times the old default. 28800 s is eight hours, roughly
+    # 2.7x the longest run that has ever SUCCEEDED here, which is the headroom
+    # a default needs if a timeout is going to mean something when it fires.
+    #
+    # The cost of a too-large default is a genuinely stuck fit burning a night.
+    # The cost of a too-small one is a row that says a block does not fit when
+    # nobody waited for it, and that has now happened at two different values.
+    # The second failure is worse: it is silent, and it looks like data.
+    #
+    # If a RUNNING fit needs to outlive its budget, the watchdog is a separate
+    # process from Quartus -- killing the watchdog leaves the fitter running,
+    # but the caller then owns the quartus_sta stages and the row.
+    [int]$TimeoutSeconds = 28800,
     # Top-level parameter overrides, NAME=VALUE, emitted into the generated
     # QSF as `set_parameter`. A parameterised block's resource frontier is only
     # measurable if each setting can be fitted, and editing the RTL's default
