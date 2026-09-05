@@ -2810,7 +2810,9 @@ PRECOMPUTED EDGE EQUATIONS to A MESHLET DESCRIPTOR IN MEMORY:
 was tied off when ASSETFETCH was composed and is now connected. Against a bench
 memory that grants immediately and answers in one cycle:
 
-
+```
+meshlets 1, beats 24, denied 0, refused 0, STALLS 27
+```
 
 Twenty-seven cycles of a consumer waiting on a buffer still filling, against 24
 beats of fetch. The consumers begin asking almost as soon as the fetch starts,
