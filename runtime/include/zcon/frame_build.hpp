@@ -55,12 +55,23 @@ struct DrawItem {
   uint16_t flags = 0;
 };
 
+// A view for one viewport. Without one nothing projects, so a frame that draws
+// must set at least one -- and a host that forgot would render an empty canvas
+// and look like a broken renderer.
+struct ViewSpec {
+  uint8_t view_id = 0;
+  uint8_t viewport_id = 0;
+  uint16_t flags = 0;
+  int32_t m[16] = {};  // row-major fx16, as zhao_abi::ZhMat4fx carries it
+};
+
 struct FramePlan {
   uint32_t frame_id = 0;
   uint32_t sequence = 0;
   uint32_t resource_epoch = 0;
   uint32_t deadline_cycles = 0;
   uint16_t flags = 0;
+  std::vector<ViewSpec> views;
   std::vector<DrawItem> draws;
 };
 
@@ -88,6 +99,23 @@ inline std::vector<uint8_t> build_frame(const FramePlan& plan) {
   ::zhao::ZhaoFrameBuilder b;
   b.begin_frame(plan.frame_id, plan.resource_epoch, plan.flags,
                 plan.deadline_cycles);
+
+  for (const ViewSpec& v : plan.views) {
+    zhao_abi::ZhRecordSetView r{};
+    r.hdr.opcode = zhao_abi::ZHAO_OP_SET_VIEW;
+    r.hdr.record_bytes = static_cast<uint16_t>(sizeof(zhao_abi::ZhRecordSetView));
+    r.hdr.source_id = 0u;
+    r.hdr.flags = 0u;
+    r.hdr.reserved0 = 0u;
+    r.payload.view_id = v.view_id;
+    r.payload.viewport_id = v.viewport_id;
+    r.payload.flags = v.flags;
+    int32_t* mm = reinterpret_cast<int32_t*>(&r.payload.view_projection);
+    for (int k = 0; k < 16; ++k) mm[k] = v.m[k];
+    std::vector<uint8_t> vb;
+    zhao_abi::zhao_pack_set_view(r, vb);
+    b.append_record(vb);
+  }
 
   for (const DrawItem& d : plan.draws) {
     // Header fields follow zhao_abi::zhao_sample_draw_form exactly rather than
