@@ -2852,6 +2852,25 @@ to POISON during the fetch pass.
 
 ### What this does NOT close
 
+**THE MEMORY, and it is not glue.** Treads 8 and 9 were glue — the fetcher
+existed, its ports existed, and the wiring was the work. Tread 10 is not that
+shape, and the docket should stop implying it is:
+
+* `zhao_mem_guard` serves ONE client (`req/rsp` plus an `arb_req/arb_rsp`
+  port to the arbiter). The shell has TWO guard clients — MESHFETCH and
+  ASSETFETCH — so composing it needs `zhao_vram_arbiter` in front, not a
+  drop-in.
+* The beat stream then has to come out of `zhao_sdram_model` through that
+  path rather than being played, which means real latency and real
+  back-pressure where the bench currently answers in one cycle.
+* Both fetchers' guard grants become contended for the first time. Every
+  measurement in treads 6 through 9 was taken with an uncontended, always-ready
+  memory.
+
+That is the composition the staircase has been walking towards, and it is the
+step where the played answers stop being generous. Scoping it as "the last bit
+of wiring" would set it up to be underestimated.
+
 **The asset fetcher.** `zhao_geom_meshfetch` is the only `zhao_guard_req_t`
 client in the subsystem, and the bench plays THREE interfaces for it: the
 memory guard, the beat stream carrying the descriptor bytes, and the cull
