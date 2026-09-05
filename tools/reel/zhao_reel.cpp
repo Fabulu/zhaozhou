@@ -2566,9 +2566,53 @@ const zc::CreatureLightRig kU02MovingRig{
 const zc::CreatureLightRig kU02SunRig{
     43000,  36000, 35000,   // top diagonal from +X/+Z (Cool Cross)
     -45000, 35000, -32000,  // strong opposing top-diagonal crossfill
-    26214,  29491, 36700,   // ambient .40/.45/.56 — THE MIST KNOB (Stage M)
+    20971,  23593, 29360,   // ambient .32/.36/.45 — THE MIST KNOB: picked by
+                            // eye from the Stage M ladder (40/32/26/20 classes
+                            // on the shipping hover): rim clearly thicker than
+                            // v1's .40 class, the pink still glows through at
+                            // every orbit phase; .26 went dusky on the away
+                            // phase, .20 was pass-2's murk returning
     38011,                  // white key: .58
     16384,  24904, 36045};  // blue crossfill: .25, .38, .55
+
+// The Stage M AMBIENT LADDER (R5): the rim is the darkest toon band at
+// grazing incidence; ambient sets both its width (lower = wider) and its
+// brightness (lower = darker). v1's liked mist was the .40 class; pass 2's
+// "completely opaque" was the .14 class. Four named rungs, rendered on the
+// SHIPPING hover subject and picked BY EYE (thicker than v1 AND the pink
+// glows through). U02_AMBIENT=40|32|26|20 selects a rung for the ladder
+// plates; the shipped default is kU02SunRig itself. Each rung scales the
+// three ambient channels together, keeping the authored hue ratio.
+constexpr int32_t kU02AmbR = 26214, kU02AmbG = 29491, kU02AmbB = 36700;
+constexpr zc::CreatureLightRig u02_sun_rig_with_ambient(int pm_of_40) {
+  return zc::CreatureLightRig{
+      43000,  36000, 35000, -45000, 35000, -32000,
+      static_cast<int32_t>((static_cast<int64_t>(kU02AmbR) * pm_of_40) / 1000),
+      static_cast<int32_t>((static_cast<int64_t>(kU02AmbG) * pm_of_40) / 1000),
+      static_cast<int32_t>((static_cast<int64_t>(kU02AmbB) * pm_of_40) / 1000),
+      38011, 16384, 24904, 36045};
+}
+const zc::CreatureLightRig kU02SunRigA40 = u02_sun_rig_with_ambient(1000);  // .40/.45/.56 (v1's class)
+const zc::CreatureLightRig kU02SunRigA32 = u02_sun_rig_with_ambient(800);   // .32/.36/.45
+const zc::CreatureLightRig kU02SunRigA26 = u02_sun_rig_with_ambient(650);   // .26/.29/.36
+const zc::CreatureLightRig kU02SunRigA20 = u02_sun_rig_with_ambient(500);   // .20/.23/.28
+// The moving-rig ladder for the inspect subject (judged independently):
+// scales kU02MovingRig's ambient .14/.15/.19 upward by class.
+constexpr zc::CreatureLightRig u02_moving_rig_with_ambient(int pm) {
+  return zc::CreatureLightRig{
+      43000,  36000, 35000, -45000, 35000, -32000,
+      static_cast<int32_t>((static_cast<int64_t>(9175) * pm) / 1000),
+      static_cast<int32_t>((static_cast<int64_t>(9830) * pm) / 1000),
+      static_cast<int32_t>((static_cast<int64_t>(12452) * pm) / 1000),
+      21627, 8520, 11141, 15729};
+}
+const zc::CreatureLightRig kU02MovingRigA14 = u02_moving_rig_with_ambient(1000);  // pass 2's .14/.15/.19
+const zc::CreatureLightRig kU02MovingRigA20 = u02_moving_rig_with_ambient(1430);
+const zc::CreatureLightRig kU02MovingRigA26 = u02_moving_rig_with_ambient(1860);
+const zc::CreatureLightRig kU02MovingRigA32 = u02_moving_rig_with_ambient(2290);
+// The process-wide selection (ladder diagnostics only; default = shipped).
+const zc::CreatureLightRig* g_u02_sun_rig = &kU02SunRig;
+const zc::CreatureLightRig* g_u02_moving_rig = &kU02MovingRig;
 
 // Path extents around the hovering conduit (world mm, instance-relative).
 constexpr int32_t kU02WarmOrbitXMm = 1500, kU02WarmOrbitZMm = 1500;
@@ -3402,9 +3446,9 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.force_micro = sub.creature_force_micro;
     cr_ctx.moving_light = sub.creature_moving_light;
     if (species == Species::kUnnamed02) {
-      cr_ctx.moving_rig = &kU02MovingRig;
-      cr_ctx.sun_rig = &kU02SunRig;         // Stage M's mist knob rides here
-      cr_ctx.moving_markers = false;        // Direction 3 §1: no light dot
+      cr_ctx.moving_rig = g_u02_moving_rig;  // = kU02MovingRig unless laddered
+      cr_ctx.sun_rig = g_u02_sun_rig;        // Stage M's mist knob rides here
+      cr_ctx.moving_markers = false;         // Direction 3 §1: no light dot
     }
     cr_ctx.sun_light =
         sub.sun != nullptr && g_zixx_suns_enabled && !sub.creature_moving_light;
@@ -6709,6 +6753,32 @@ int main(int argc, char** argv) {
     std::fprintf(stderr,
                  "ZIXX_SUNS=%s (Direction 29/30 clip suns + additive-normal %s)\n",
                  suns, g_zixx_suns_enabled ? "on" : "OFF");
+  }
+  // Stage M ladder lane (u02 pass 3, R5): U02_AMBIENT / U02_ML_AMBIENT pick
+  // a named ambient rung for the LADDER PLATES. Unset = the shipped rigs.
+  if (const char* amb = std::getenv("U02_AMBIENT")) {
+    const std::string a = amb;
+    if (a == "40") g_u02_sun_rig = &kU02SunRigA40;
+    else if (a == "32") g_u02_sun_rig = &kU02SunRigA32;
+    else if (a == "26") g_u02_sun_rig = &kU02SunRigA26;
+    else if (a == "20") g_u02_sun_rig = &kU02SunRigA20;
+    else {
+      std::fprintf(stderr, "U02_AMBIENT=%s unknown (40|32|26|20)\n", amb);
+      return 2;
+    }
+    std::fprintf(stderr, "U02_AMBIENT=%s (Stage M sun-rig ambient ladder)\n", amb);
+  }
+  if (const char* amb = std::getenv("U02_ML_AMBIENT")) {
+    const std::string a = amb;
+    if (a == "14") g_u02_moving_rig = &kU02MovingRigA14;
+    else if (a == "20") g_u02_moving_rig = &kU02MovingRigA20;
+    else if (a == "26") g_u02_moving_rig = &kU02MovingRigA26;
+    else if (a == "32") g_u02_moving_rig = &kU02MovingRigA32;
+    else {
+      std::fprintf(stderr, "U02_ML_AMBIENT=%s unknown (14|20|26|32)\n", amb);
+      return 2;
+    }
+    std::fprintf(stderr, "U02_ML_AMBIENT=%s (Stage M moving-rig ambient ladder)\n", amb);
   }
   // V11/V12 bounded owner-choice lane. The selector changes only the generic
   // creature preview rig; baseline is still the default when the variable is

@@ -137,13 +137,18 @@ def build_eye():
     u = np.arange(EYE_TILE)[None, :] / EYE_TILE         # around the ring
     # angular distance from the outward station (u = 0/1 wrap)
     du = np.minimum(u, 1.0 - u) * 2.0                   # 0 at front, 1 at back
-    # the thin white ring: an oval annulus around the outward centre, sized
-    # to balloon just past the star geometry's tips (star arm reaches
-    # |v-0.5| ~ 0.20 at the shipped kPupilStarArmMm)
-    rv = np.abs(v - 0.5) / 0.26
-    ru = du / 0.50
+    # PASS 3 (R3): the white is a COMPACT ring traced around the star
+    # contour — never a length-wise arc. Pass 2's oval annulus stretched
+    # into a 30 px bright slash at the shipped three-quarter because the
+    # 3.6:1 almond elongated it; with the plumper pass-3 almond the ring is
+    # drawn TIGHT around where the star rests (the outward station), its
+    # v extent tied to the grown star's tips (arm 185 mm of the 250 mm
+    # half-length class), its band a few page pixels wide. Purple returns
+    # to the dominant field (the sheet's 65-70%).
+    rv = np.abs(v - 0.5) / 0.30
+    ru = du / 0.36
     rr = np.sqrt(rv * rv + ru * ru + 1e-9)
-    ring = (rr > 0.74) & (rr < 1.02)
+    ring = (rr > 0.82) & (rr < 1.04)
     white = crayon(EYE_RIM_WHITE, EYE_RIM_WHITE * 0.9,
                    EYE_TILE, EYE_TILE, "u02-rim")
     t[ring] = white[ring]

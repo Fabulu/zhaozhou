@@ -138,19 +138,33 @@ constexpr int32_t kLoopBladeRzMm[7] = {180, 165, 95, 45, 38, 42, 60};
 // width doubled. The PROTRUSION READ is protected (artist-approved): after
 // growing/splaying, kEyeDeepMm/kEyeXMm were pulled back so the crown's
 // stand-off read matches the shipped one (re-measured with u02-probe).
-constexpr int32_t kEyeXMm = 405, kEyeYMm = 30, kEyeZMm = 190;  // centre, ±z
-constexpr int32_t kEyeVAngleA16 = -5100;  // Λ: tips converge at the top (~28°)
-constexpr int32_t kEyeYawOutA16 = 900;    // nearly forward (R2: yaw, not width)
+// PASS 3 (R2: the shipping READ governs; the trace is demoted to a sanity
+// bracket). The pass-2 almond (330x92, 3.6:1) foreshortened into a splinter
+// at the shipped three-quarter and its white ring stretched into the
+// brightest arc on the creature. Shortened and FATTENED by eye at the
+// shipping camera toward the sheet's plump teardrop; the apex is raised
+// toward the sheet's high meeting point (the pass-2 residual). The lens is
+// DOMED (kEyeDeepMm up = curvature, not tip stand-off) and partial outward
+// yaw is restored (R4: zero yaw made each lens edge-on in profile — the
+// owner: "invisible from the side; more 3D") — picked from a rendered
+// 0/1200/2400/3600 ladder at front/three-quarter/side under the shipping
+// sun. kEyeXMm is pulled back so the assembly sits inside the silhouette at
+// three-quarter and the crown keeps the protected ~160 mm read (probed).
+constexpr int32_t kEyeXMm = 381, kEyeYMm = 90, kEyeZMm = 190;  // centre, ±z
+constexpr int32_t kEyeVAngleA16 = -4400;  // Λ: tips converge at the top (~24°)
+constexpr int32_t kEyeYawOutA16 = 2400;   // partial outward yaw (R4 ladder pick)
 constexpr int32_t kEyeTiltA16 = 2200;     // the almond's backward lean
 constexpr int32_t kEyeBulgeMm = 88;       // pupil star stands proud of the lens
-constexpr int32_t kEyeLongMm = 330;       // almond half-length (long axis)
-constexpr int32_t kEyeWideMm = 92;        // almond half-width
-constexpr int32_t kEyeDeepMm = 52;        // bulge depth off the body
+constexpr int32_t kEyeLongMm = 250;       // almond half-length (long axis)
+constexpr int32_t kEyeWideMm = 125;       // almond half-width — the plump read
+constexpr int32_t kEyeDeepMm = 90;        // bulge depth off the body (the dome)
 constexpr int kEyeRings = 5;
 constexpr int kEyeFacetSegments = 8;      // the facet read at 240p
-constexpr int32_t kPupilStarArmMm = 135;  // star arm half-length (the sheet's
-constexpr int32_t kPupilStarThinMm = 20;  // fat organic star, not a thin cross)
-constexpr int32_t kPupilStarWideMm = 52;  // blade width
+// PASS 3 (R3): the star GROWS toward the sheet's ~20% lens share (it never
+// grew in pass 2: 5.5-9.8% measured). Judged by eye on the lit path.
+constexpr int32_t kPupilStarArmMm = 185;  // star arm half-length (the sheet's
+constexpr int32_t kPupilStarThinMm = 26;  // fat organic star, not a thin cross)
+constexpr int32_t kPupilStarWideMm = 72;  // blade width
 constexpr uint8_t kLensR = 116, kLensG = 58, kLensB = 178;   // purple (grey pass)
 // The star's SHIPPED pigment lives in mku02page.py (STAR_CYAN, same value):
 // the star must carry a page because untextured parts render black under
@@ -183,8 +197,11 @@ constexpr int32_t kAntennaSwayPm = 45;
 constexpr int kAntennaLagKeys = 4;
 constexpr int32_t kAntennaTiltA16 = 700;
 // the gaze (the pupil pivots sweep the stars across the lenses)
-constexpr int32_t kGazeMaxA16 = 5000;
-constexpr int32_t kGazeLiftMaxA16 = 3200;
+// PASS 3 (F4, Direction 3 §2): star containment — the star plus its white
+// ring must never cross the lens ink at any authored gaze extreme. The
+// clamps are cut with the bigger star and proven by rendering the extremes.
+constexpr int32_t kGazeMaxA16 = 3000;
+constexpr int32_t kGazeLiftMaxA16 = 2000;
 constexpr int32_t kSquintMaxA16 = 9000;    // 1000pm = mostly closed
 constexpr int32_t kBlazeTwinkleA16 = 10923;  // the channel's slow star spin
 // per-clip character
