@@ -213,8 +213,8 @@ Pass draw_once(int mode, bool wrong_matrix) {
     const auto p = zr::project_vertex(m, vp, zref::fx16{kTri[k].x},
                                       zref::fx16{kTri[k].y},
                                       zref::fx16{kTri[k].z}, nullptr);
-    sx[k] = p.x;
-    sy[k] = p.y;
+    sx[k] = p.s.x;
+    sy[k] = p.s.y;
   }
 
   // Build the BinTri from the ORACLE's screen vertices, so the precomputed
@@ -277,18 +277,42 @@ Pass draw_once(int mode, bool wrong_matrix) {
   const bool took = h.render_offer(t);
 
   if (mode >= 1) {
+    // Watch the WHOLE chain, not just PROJECT, and DO NOT BREAK EARLY.
+    //
+    // The first version broke out the instant `dbg_proj_ready_o` went high and
+    // then called render_frame_end(), so the triangle never propagated through
+    // CLIP -> SETUP -> raster and the pass drew nothing. PROJECT's numbers were
+    // already exactly right; the test was ending the frame before the picture
+    // existed.
+    //
+    // That is step 1's lesson repeated verbatim -- its own comment reads "a
+    // fixed 40-cycle drain was far too short ... 'It did not happen in 40
+    // cycles' is not the same fact as 'it does not happen'." A loop that stops
+    // at the first interesting signal answers only about that signal.
+    //
+    // So this runs the full window and counts every hop, which also means a
+    // future break is LOCATED rather than merely detected.
+    int saw_proj = 0, saw_clip = 0, saw_setup = 0, saw_consume = 0;
     for (int i = 0; i < 200000; ++i) {
       h.top.eval();
       if (h.top.dbg_proj_ready_o) {
-        r.ready = true;
-        r.ax = (int32_t)h.top.dbg_proj_ax_o;
-        r.ay = (int32_t)h.top.dbg_proj_ay_o;
-        r.w = h.top.dbg_proj_w_o;
-        r.behind = (uint8_t)h.top.dbg_proj_behind_o;
-        break;
+        if (!r.ready) {
+          r.ready = true;
+          r.ax = (int32_t)h.top.dbg_proj_ax_o;
+          r.ay = (int32_t)h.top.dbg_proj_ay_o;
+          r.w = h.top.dbg_proj_w_o;
+          r.behind = (uint8_t)h.top.dbg_proj_behind_o;
+        }
+        ++saw_proj;
       }
+      if (h.top.dbg_clip_valid_o) ++saw_clip;
+      if (h.top.dbg_su_out_valid_o) ++saw_setup;
+      if (h.top.dbg_su_out_valid_o && h.top.dbg_shell_tri_ready_o) ++saw_consume;
       h.step();
     }
+    std::printf("    [chain] proj_ready %d | clip_valid %d | setup_valid %d | "
+                "shell consumed %d\n",
+                saw_proj, saw_clip, saw_setup, saw_consume);
   }
 
   h.render_frame_end();
@@ -323,7 +347,8 @@ int main(int argc, char** argv) {
   const auto oa = zr::project_vertex(m, vp, zref::fx16{kTri[0].x},
                                      zref::fx16{kTri[0].y},
                                      zref::fx16{kTri[0].z}, nullptr);
-  std::printf("  oracle vertex A -> screen (%d, %d)\n", oa.x, oa.y);
+  std::printf("  oracle vertex A -> screen (%d, %d), w = %d, in = %d\n", oa.s.x,
+              oa.s.y, oa.w, oa.in ? 1 : 0);
 
   const Pass pre = draw_once(/*mode=*/0, false);
   const Pass via = draw_once(/*mode=*/1, false);
@@ -338,13 +363,22 @@ int main(int argc, char** argv) {
   std::printf("  project vertex A -> screen (%d, %d), w = %u, behind = %u\n",
               via.ax, via.ay, via.w, via.behind);
 
-  check(via.ax == oa.x && via.ay == oa.y,
+  check(via.ax == oa.s.x && via.ay == oa.s.y,
         "and its vertex A matches zref::render::project_vertex exactly -- the "
         "composed block agrees with the ratified law, not merely with itself",
-        ((long long)oa.x << 32) | (uint32_t)oa.y,
+        ((long long)oa.s.x << 32) | (uint32_t)oa.s.y,
         ((long long)via.ax << 32) | (uint32_t)via.ay);
   check(via.behind == 0, "no vertex is behind for a w = 1 projection", 0,
         via.behind);
+
+  // `w` is checked too, and it is the reason step 4 exists in this shape:
+  // DEPTHQUANT consumes PROJECT's clip.w, so a w that reached the fragment
+  // pipe wrong would produce a wrong depth with everything else correct.
+  // ProjOut gained this field on 2026-09-04 precisely because the port had no
+  // oracle and "the test's expectation was an uninitialised member for a day".
+  check((int32_t)via.w == oa.w,
+        "and its w matches the oracle -- the field DEPTHQUANT quantises", oa.w,
+        (int32_t)via.w);
 
   const int nz = nonzero(pre.fb);
   check(nz > 0,
