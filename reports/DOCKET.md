@@ -2992,6 +2992,20 @@ perspuv's is chained behind it to confirm or refute the per-axis split.
 
 **2026-09-05. G1-C's replacement combiner now has a full fit.**
 
+> **These figures PREDATE the counter narrowing (2c858dbf).** The critical
+> path they report is the S15.4 counters -- a decoder feeding a wide adder on
+> all 1,820 summarised paths -- and that is exactly what was then narrowed from
+> 32-bit to 2-bit per-cycle increments. Whether it moved 29.74 MHz is the
+> question a re-fit answers and no prediction is offered here.
+>
+> That re-fit has been attempted three times: twice it died at
+> run_block_fit.ps1's 3,000 s default timeout and was misread as a fitter
+> failure, once it was killed deliberately. A fourth is running with a larger
+> budget. The block takes longer than fifty minutes -- its placement
+> preparation alone exceeds half an hour, and it carries 596 virtual pins
+> against 744 registers, so its placement problem is far larger than 1,994
+> ALMs suggests.
+
 ```
 alms 1994 | registers 1383 | dspBlocks 2 | fmax 29.74 MHz | 9,417 s
 ```
