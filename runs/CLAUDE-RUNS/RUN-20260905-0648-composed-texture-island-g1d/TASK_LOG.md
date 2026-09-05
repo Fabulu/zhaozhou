@@ -290,6 +290,24 @@ So the fit is expensive because the block is hard and wide-ported, and there is
 no cheap lever that preserves the answer. BALANCED stays — a real saving at a
 known −2.08 MHz — but it was oversold and this says so.
 
+### And the apparatus audit was already closed
+
+Chasing the fit cost further was re-litigating a settled question. The shell
+QSF records that every fitter and synthesis knob has ALREADY been measured:
+OPTIMIZATION_MODE (+2.08 MHz, kept), OPTIMIZATION_TECHNIQUE (-3.01, reverted),
+register duplication (nil), PHYSICAL_SYNTHESIS_EFFORT normal because it
+"showed no headroom to scale". Advanced Physical Optimization runs because
+FITTER_EFFORT is STANDARD FIT, which is the full-effort setting.
+
+So there is no cheap lever that preserves the measurement, and the one that
+would be cheap -- relaxing the SDC -- destroys it. The fit costs hours because
+the block is hard and wide-ported. BALANCED is the only real saving available
+and it is small.
+
+The lesson is the one this session keeps repeating from a new angle: the answer
+was written down in the file I was already invoking, and I went looking for it
+in the log output instead.
+
 ## D22 tread 9: the index stream, in flight
 
 The cheapest tread in the staircase, because the work was already being done.
