@@ -346,6 +346,28 @@ rather than agreeing by accident.
 stream with the real `zhao_mem_guard` over `zhao_sdram_model`, which the bench
 already instantiates.
 
+## D22 tread 9 lands: nine treads
+
+The u8 index stream now comes out of the fetched footprint. 17 checks, beats
+still 24 -- the fetch is unchanged, only the consumer moved, which is what a
+tread that moves ONE thing should look like.
+
+The decisive check is not the framebuffer: ASSEMBLE named (2, 0, 3), the
+triplet the FETCHED run carried, while the bench stream was poisoned with
+(1, 0, 3). A shell still reading the bench draws the decoy triangle.
+
+Both hazards were checked by reading the block BEFORE building, not debugged
+after: ASSETFETCH answers only from S_SERVE so it cannot return a half-filled
+buffer, and ASSEMBLE holds its request with no deadline because its "no ready"
+constrains the RESPONDER, not the asker. That asymmetry is also the reason the
+fetcher buffers the whole footprint instead of caching it.
+
+Still owed on this tread: prefetch_stall_o is tied off. The block header names
+it as the counter that decides whether double buffering earns its ~2.4 KB, and
+a dangling evidence port is the pattern this bench criticises elsewhere in its
+own comments. The edit is prepared and deliberately not built while the fit and
+other work hold the machine.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner
