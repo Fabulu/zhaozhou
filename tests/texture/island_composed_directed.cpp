@@ -36,6 +36,7 @@
 // already: a 900-tick wizards replay that killed nobody, and a shell test that
 // compared two blank framebuffers and would have called them equal.
 
+#include "zref/zref_material.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <vector>
@@ -395,7 +396,14 @@ int main(int argc, char** argv) {
     // exactly what lets a wrong distribution keep passing. `product_jobs()` in
     // zref_material.hpp is the same table the oracle uses, so this asserts the
     // hardware against the reference rather than against itself.
-    static const int kJobsPerFrag[8] = {0, 4, 4, 4, 0, 0, 6, 4};
+    // THE ORACLE'S OWN TABLE, not a copy of it. AUDIT R15 observed that this
+    // hardcoded its own array while its comment claimed to reference
+    // zref_material -- so the two could disagree, and did: product_jobs said
+    // MASK costs one product and this said zero. Calling the function removes
+    // the possibility rather than correcting one instance of it.
+    int kJobsPerFrag[8];
+    for (int r = 0; r < 8; ++r)
+      kJobsPerFrag[r] = zref::material::product_jobs(static_cast<uint8_t>(r));
     int wrong_recipe = -1;
     for (int r = 0; r < 8; ++r)
       if (static_cast<int>(d.cnt_combine_jobs_o[r]) != kJobsPerFrag[r] * 8) {

@@ -310,7 +310,12 @@ void test_product_job_counts_match_the_architecture() {
   const Row kTable[] = {
       {mat::kPassthru, 0, "PASSTHRU bypasses the lanes"},
       {mat::kAddSat, 0, "ADD_SAT bypasses the lanes"},
-      {mat::kMask, 1, "MASK is one alpha product"},
+      // ZERO, not one. AUDIT R15: MASK is a binary gate -- if s1 alpha is
+      // non-zero copy s0 through, else emit transparent -- so it multiplies
+      // nothing. This row asserted the LABEL rather than the arithmetic, and
+      // was the last place in the tree still claiming a product: the
+      // implementation, the RTL and the composed test all say zero.
+      {mat::kMask, 0, "MASK is a binary gate and costs no product"},
       {mat::kModulate, 4, "MODULATE is 3 RGB + 1 alpha"},
       {mat::kModulate2x, 4, "MODULATE2X is 3 RGB + 1 alpha"},
       {mat::kLerp, 4, "LERP is 3 RGB + 1 alpha, all difference-by-weight"},

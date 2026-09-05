@@ -169,7 +169,20 @@ constexpr uint8_t product_jobs(uint8_t recipe) {
     case kAddSat:
       return 0;
     case kMask:
-      return 1;  // one alpha product
+      // ZERO, and it used to say 1 "one alpha product". AUDIT R15.
+      //
+      // MASK does not multiply anything. Its implementation below is a binary
+      // gate -- `if (s1.a != 0)` copy s0 through, else emit transparent -- so
+      // there is no product to count. The label described an operation the
+      // arithmetic does not perform.
+      //
+      // Everything else already agreed on zero and only this disagreed: the
+      // combine implementation, the RTL (a composed run measures
+      // `0 32 32 32 0 0 48 32`, which is zero for MASK across eight fragments),
+      // and the composed test's expectation. A cost model that overstates a
+      // recipe by one product per fragment feeds S15.4's 80%-capacity argument
+      // a number the hardware never issues.
+      return 0;
     case kModulate:
     case kModulate2x:
     case kLerp:
