@@ -416,6 +416,56 @@ wrong answer is worse than none" lesson into this log repeatedly today, and then
 built one, an hour later, into the tool meant to watch the thing the lesson was
 about.
 
+## The uncontended stall baseline: 27
+
+`prefetch_stall_o` is connected — it was tied off when ASSETFETCH was
+composed, which is the dangling-evidence-port pattern this bench criticises in
+its own comments, on the one counter the block's header nominates for deciding
+whether double buffering earns its ~2.4 KB.
+
+    meshlets 1, beats 24, denied 0, refused 0, STALLS 27
+
+Twenty-seven cycles of a consumer waiting on a buffer still filling, against 24
+beats of fetch, with a bench memory that grants immediately and answers in one
+cycle. The consumers begin asking almost as soon as the fetch starts, so single
+buffering already costs about a full fetch per meshlet **in the best case this
+machine can ever have** — before contention exists at all.
+
+Measured NOW rather than with tread 10 on purpose: tread 10 puts both fetchers
+behind a real arbiter, and everything in treads 6 through 9 assumed a memory
+that never says no. Taking the baseline afterwards leaves two variables and one
+number.
+
+## The same lens, turned on the rest of the tree
+
+The island's defect was a CLASS — ten signals, one shape — so the question is
+whether it is anywhere else. Checked rather than assumed, in both directions:
+
+    zhao_texture_island_top    HAD IT, ten places, repaired and guarded
+    zhao_shell_top (21 blocks) clean -- one consumer, at the admission handshake
+    zhao_field_v3_svcpath      clean -- one consumer, at the admission handshake
+
+**The class was real and the spread was not.** All three are now guarded and
+all three contracts are mutation-verified: a deliberately inserted late read of
+a genuine per-transaction input is caught in each.
+
+**And the shell contract had to be narrowed before it was correct.** Its first
+version treated every `render_*` input as per-transaction and flagged
+`zhao_raster_fbwrite` reading `fb_base_i`, `fb_stride_i` and
+`frame_end_i` — which would have reported two fabricated defects in the
+shell. Those are FRAME-SCOPED: constant across every triangle, so reading them
+late returns the same value. The distinction the gate must make is
+transaction-scoped versus frame-scoped, not early versus late. Shipping the
+first version would have trained its reader to skip the output.
+
+**A LATENT instance, recorded not exempted.** `bind_base_i` and
+`bind_mode_i` are consumed at the TMU planner, downstream of admission by the
+whole RCP24/PERSPUV latency — the same place the ten repaired taps read from.
+Harmless today because the island carries ONE global binding, so the value is
+constant. It becomes the island's bug the moment bindings vary per fragment, and
+the owner's two-level mip blend is exactly that change. No gate exemption was
+added, because an exemption would claim more than the gate checks.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner
