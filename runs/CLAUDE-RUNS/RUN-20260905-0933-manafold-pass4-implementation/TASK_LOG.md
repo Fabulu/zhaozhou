@@ -92,3 +92,23 @@ crown 164mm preserved, meshcheck CLEAN (1852 tris), rendered s4 plates and
 native hover LOOKED at - balls read as balls, tube thin, no tumour.
 Junction gesture-amplitude ladder deferred into Stage FOLD (the knead layer
 is the gesture vocabulary; declared, not skipped).
+
+## Stage D (12:00-12:50) - the honest canvas
+R5: the smear plane carries a per-cell depth (nearest contributing splat
+1/w, recorded at feed, zeroed by hard clear, decay leaves it alone);
+smear_composite applies glow_splat's own test at cell granularity. The 4-px
+blocky occlusion edge is accepted as part of the broken-framebuffer read.
+Before/after pair (pass-3 exe vs pass-4): the aqua wash that painted OVER
+the crown now sits behind the tube/body (evidence/stageD-smear-...). NOTE:
+the pair also carries the Stage-B geometry delta - the mechanism proof is
+the code (the exact splat depth test), the pair is the look proof.
+R10: belly glow OFF on every shipping subject via kBellyGlowGainPm = 0 (the
+revert path; machinery untouched, u02-s5-glow diagnostic keeps it). No dark
+hole, no leftover core on the after renders.
+R11: sun-rig ladder .32/.36/.40 rendered on the shipping rig, looked at:
+.36 SHIPPED (rim still reads, field airier; .40 flattens the rim - the
+"more see-through if possible" with the rim floor honoured). Inspect rig:
+default(.20) vs A26 pair - A26 lifts the away-phase murk, pools stay
+saturated; A26 SHIPPED. Hardware asks amended: glow_persist needs a
+persisted per-cell depth (or documents feed-time-only, which fails the
+ruling).

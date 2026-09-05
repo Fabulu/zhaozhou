@@ -376,6 +376,11 @@ constexpr int32_t kCentreGlowCorePx = 13;    // INNER core: shines THROUGH the
                                              // light lives in the belly
 constexpr int kCentreGlowCoreGainPm = 420;   // core is a tint, not a flood
 constexpr int kCentreGlowGainPm = 380;
+// PASS 4 (Direction 4 §4: "the glowy bit inside the creature: make it go
+// away"): the belly glow's SUBJECT gain, held at 0. This is the revert
+// path — any positive value re-lights the belly through the untouched
+// glow machinery (the mana keeps using glow_splat regardless).
+constexpr int kBellyGlowGainPm = 0;
 // S5 spike staging: three phantom conduit centres sharing one frame ramp
 constexpr int32_t kS5PhantomOffsMm[3][2] = {{0, 0}, {-2700, -1400}, {2500, -2000}};
 

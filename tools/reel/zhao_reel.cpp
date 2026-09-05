@@ -2310,6 +2310,7 @@ struct CreatureReelCtx {
   // composited additively. Subject-scoped state (the ctx is per subject).
   int u02_smear_preset = 0;
   std::vector<uint8_t> u02_smear_buf;
+  std::vector<int32_t> u02_smear_depth;  // R5: per-cell nearest splat depth
 };
 constexpr uint32_t kZixxMovingSourceCount = 4;
 constexpr uint32_t kZixxMovingSourceWarm = 0;
@@ -2580,12 +2581,15 @@ const zc::CreatureLightRig kU02MovingRig{
 const zc::CreatureLightRig kU02SunRig{
     43000,  36000, 35000,   // top diagonal from +X/+Z (Cool Cross)
     -45000, 35000, -32000,  // strong opposing top-diagonal crossfill
-    20971,  23593, 29360,   // ambient .32/.36/.45 — THE MIST KNOB: picked by
-                            // eye from the Stage M ladder (40/32/26/20 classes
-                            // on the shipping hover): rim clearly thicker than
-                            // v1's .40 class, the pink still glows through at
-                            // every orbit phase; .26 went dusky on the away
-                            // phase, .20 was pass-2's murk returning
+    23593,  26542, 33030,   // ambient .36/.40/.50 — THE MIST KNOB. PASS 4
+                            // (Direction 4 §4 "a bit more see-through, if
+                            // possible" — outranks Direction 3's "thicker"
+                            // where they trade): one rung UP from pass 3's
+                            // .32, picked from a rendered .32/.36/.40 ladder
+                            // by eye — at .36 the dark rim still reads while
+                            // the field turns airier; .40 flattens the rim to
+                            // a narrow edge (v1's class). .32 stays the floor
+                            // if a later eye says the rim is lost.
     38011,                  // white key: .58
     16384,  24904, 36045};  // blue crossfill: .25, .38, .55
 
@@ -2607,6 +2611,7 @@ constexpr zc::CreatureLightRig u02_sun_rig_with_ambient(int pm_of_40) {
       38011, 16384, 24904, 36045};
 }
 const zc::CreatureLightRig kU02SunRigA40 = u02_sun_rig_with_ambient(1000);  // .40/.45/.56 (v1's class)
+const zc::CreatureLightRig kU02SunRigA36 = u02_sun_rig_with_ambient(900);   // .36/.40/.50 (pass 4: the "more see-through" bracket's middle)
 const zc::CreatureLightRig kU02SunRigA32 = u02_sun_rig_with_ambient(800);   // .32/.36/.45
 const zc::CreatureLightRig kU02SunRigA26 = u02_sun_rig_with_ambient(650);   // .26/.29/.36
 const zc::CreatureLightRig kU02SunRigA20 = u02_sun_rig_with_ambient(500);   // .20/.23/.28
@@ -2626,7 +2631,12 @@ const zc::CreatureLightRig kU02MovingRigA26 = u02_moving_rig_with_ambient(1860);
 const zc::CreatureLightRig kU02MovingRigA32 = u02_moving_rig_with_ambient(2290);
 // The process-wide selection (ladder diagnostics only; default = shipped).
 const zc::CreatureLightRig* g_u02_sun_rig = &kU02SunRig;
-const zc::CreatureLightRig* g_u02_moving_rig = &kU02MovingRig;
+// PASS 4 (reviewer fault 9, one-ladder treatment): the inspect orbit went
+// murky blue-purple for a third of its turn at the .20 class; the A26 rung
+// lifts the away phase while the four pools stay saturated — picked from a
+// rendered default-vs-A26 pair by eye. kU02MovingRig (.20) stays the named
+// rung below it.
+const zc::CreatureLightRig* g_u02_moving_rig = &kU02MovingRigA26;
 
 // Path extents around the hovering conduit (world mm, instance-relative).
 constexpr int32_t kU02WarmOrbitXMm = 1500, kU02WarmOrbitZMm = 1500;
@@ -3212,7 +3222,11 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
           static_cast<size_t>(u02::kSmearW) * u02::kSmearH * 3)
         c.u02_smear_buf.assign(
             static_cast<size_t>(u02::kSmearW) * u02::kSmearH * 3, 0);
-      u02::smear_update(c.u02_smear_buf.data(), c.u02_frame, sp);
+      if (c.u02_smear_depth.size() !=
+          static_cast<size_t>(u02::kSmearW) * u02::kSmearH)
+        c.u02_smear_depth.assign(static_cast<size_t>(u02::kSmearW) * u02::kSmearH, 0);
+      u02::smear_update(c.u02_smear_buf.data(), c.u02_smear_depth.data(),
+                        c.u02_frame, sp);
       for (const u02::ManaSplat& ms : c.u02_mana_splats) {
         // the near-white strand cores and flash glints stay LIVE-ONLY: fed
         // into the plane they became solid white confetti blocks that
@@ -3229,10 +3243,12 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
             for (int ch = 0; ch < 3; ++ch)
               gf2.pal[i][ch] = static_cast<uint8_t>(gf2.pal[i][ch] * ms.gain_pm / 1000);
         }
-        u02::smear_feed(c.u02_smear_buf.data(), s_glow_assets, gf2, pm.s.x >> 8,
-                        pm.s.y >> 8, ms.r_px);
+        u02::smear_feed(c.u02_smear_buf.data(), c.u02_smear_depth.data(),
+                        s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8, ms.r_px,
+                        pm.s.d);
       }
-      u02::smear_composite(c.u02_smear_buf.data(), rgb, w, h, sp.gain_pm);
+      u02::smear_composite(c.u02_smear_buf.data(), c.u02_smear_depth.data(), rgb,
+                           depth, w, h, sp.gain_pm);
     }
     for (const u02::ManaSplat& ms : c.u02_mana_splats) {
       if (ms.pre) continue;
@@ -4977,7 +4993,10 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   s.orbit = orbit;
   u02_common(s);
   if (!orbit) s.cam_yaw = 0x2000;  // three-quarter: the face and the loop both read
-  s.u02_glow = true;
+  // PASS 4 (Direction 4 §4): the interior glow is REMOVED from every
+  // shipping subject — "make it go away". kBellyGlowGainPm (held 0) is the
+  // revert path; the glow machinery itself stays, the mana uses it.
+  s.u02_glow = u02::kBellyGlowGainPm > 0;
   // Pass 2 (Direction 2 §3): the ten-emitter set is AXED. The channel —
   // the conduit at work — carries the LIGHTNING mana (the Description
   // sheet says discharging bolts through the antenna IS this creature);
@@ -6836,6 +6855,7 @@ int main(int argc, char** argv) {
   if (const char* amb = std::getenv("U02_AMBIENT")) {
     const std::string a = amb;
     if (a == "40") g_u02_sun_rig = &kU02SunRigA40;
+    else if (a == "36") g_u02_sun_rig = &kU02SunRigA36;
     else if (a == "32") g_u02_sun_rig = &kU02SunRigA32;
     else if (a == "26") g_u02_sun_rig = &kU02SunRigA26;
     else if (a == "20") g_u02_sun_rig = &kU02SunRigA20;

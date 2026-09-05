@@ -129,3 +129,20 @@ for the whole frame. Mesh cost is a non-issue (1,45x tris; fill governs).
 Bones are now 11 × 8 B = 88 B/frame. The real fill risk remains DDR and the
 per-pixel path (`PER_PIXEL_BUDGET.md`: "no slack anywhere") — which is
 another reason route-1 smear is the machine's answer.
+
+## Amendment (pass 4, 2026-09-05): `glow_persist` needs a persisted per-cell DEPTH
+
+The owner has rejected draw-on-top persistence ("the smear needs to be
+properly hidden whenever the creature is in front of it"). The reference
+implementation now keeps a second quarter-res plane holding ONE depth value
+per cell — the nearest (largest 1/w) contributing splat depth, written at
+feed time, cleared with the cell's hard clear, untouched by decay — and the
+composite skips any pixel whose surface depth is nearer than the cell's
+remembered depth (exactly the splat path's own test, at cell granularity).
+
+The hardware ask inherits the same contract: `glow_persist` must either
+persist a per-cell depth alongside the colour plane (quarter-res: 96x60
+cells at 384x240, one depth word per cell), or document FEED-TIME occlusion
+only — which cannot occlude a trail after the creature moves in front of
+it, and therefore does not meet the owner's ruling. Spec text only; costs
+nothing until POST.COMPOSITE is built.

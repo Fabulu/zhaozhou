@@ -229,6 +229,15 @@ constexpr SmearPreset kSmearPresets[4] = {
     {900, 6, 160, 430, 520},    // 3: LONG/GLITCHIER — the far end (cyan)
 };
 constexpr int kSmearW = 96, kSmearH = 60;  // quarter-res: the fill budget
+// PASS 4 (R5, Direction 4 §2 "the smear needs to be properly hidden
+// whenever the creature is in front of it"): the plane carries ONE DEPTH
+// VALUE PER CELL — the nearest (largest 1/w) contributing splat depth,
+// recorded at feed, zeroed by the hard clear, untouched by decay. The
+// composite then applies exactly glow_splat's own test at cell
+// granularity: a pixel whose surface is nearer than the cell's remembered
+// depth keeps the surface. The 4-px blocky occlusion edge this produces
+// is PART of the broken-framebuffer aesthetic — accepted, stated, judged
+// by eye. Storage: 96x60 int32 (+11.5 KB-equivalent in the reel).
 
 /** One mana splat, in world space; the reel projects and composes it.
  *  pre=true draws BEFORE the creature compose (a pool the creature and its
@@ -607,16 +616,19 @@ inline void glow_splat(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
 /** The smear plane's per-frame decay/glitch update (R6). Call ONCE per
  *  frame before feeding: applies the quantised decay step, the per-cell
  *  retention jitter, and the staggered bounded hard clear. */
-inline void smear_update(uint8_t* buf, uint32_t frame, const SmearPreset& sp) {
+inline void smear_update(uint8_t* buf, int32_t* dbuf, uint32_t frame,
+                         const SmearPreset& sp) {
   if (sp.gain_pm <= 0) return;
   const bool step = sp.step_frames <= 1 || (frame % static_cast<uint32_t>(sp.step_frames)) == 0;
   for (int i = 0; i < kSmearW * kSmearH; ++i) {
     uint8_t* c = buf + static_cast<size_t>(i) * 3;
     // the bounded hard clear, staggered per cell: PROOF the buffer resets
+    // (the remembered depth resets with it; decay leaves depth alone)
     if (sp.hard_clear_frames > 1) {
       const uint32_t hc = fx_hash(0x5EEDC1EAu, static_cast<uint32_t>(i), 3u);
       if ((frame + hc) % static_cast<uint32_t>(sp.hard_clear_frames) == 0) {
         c[0] = c[1] = c[2] = 0;
+        dbuf[i] = 0;
         continue;
       }
     }
@@ -637,8 +649,9 @@ inline void smear_update(uint8_t* buf, uint32_t frame, const SmearPreset& sp) {
 
 /** Feed one projected splat into the plane (quarter-res, always additive —
  *  the plane remembers EVERYTHING the mana draws, cores included). */
-inline void smear_feed(uint8_t* buf, const GlowAssets& g, const GlowFrame& f,
-                       int32_t cx, int32_t cy, int32_t r) {
+inline void smear_feed(uint8_t* buf, int32_t* dbuf, const GlowAssets& g,
+                       const GlowFrame& f, int32_t cx, int32_t cy, int32_t r,
+                       int32_t splat_d) {
   if (!g.baked) return;
   const int32_t qx = cx / 4, qy = cy / 4;
   int32_t qr = r / 4;
@@ -653,6 +666,9 @@ inline void smear_feed(uint8_t* buf, const GlowAssets& g, const GlowFrame& f,
       const uint8_t t = sp.pix[static_cast<size_t>(sy) * sp.w + sx];
       if (t == 0) continue;
       uint8_t* c = buf + (static_cast<size_t>(y) * kSmearW + x) * 3;
+      // remember the NEAREST contributing splat depth (largest 1/w)
+      int32_t& cd = dbuf[static_cast<size_t>(y) * kSmearW + x];
+      if (splat_d > cd) cd = splat_d;
       // HUE-PRESERVING accumulation: the first build let cells saturate
       // all three channels and the trail's centre went white. The add is
       // scaled so no channel passes 208 — the cell keeps the ramp's own
@@ -677,19 +693,28 @@ inline void smear_feed(uint8_t* buf, const GlowAssets& g, const GlowFrame& f,
 /** Composite the plane onto the frame: an OPAQUE-LEANING BLEND at chunky
  *  4x nearest — the quarter-res blocks ARE part of the broken-framebuffer
  *  read, and blending (never adding) is what keeps the blobs' hue solid
- *  over the bright sky (R7 for the trails). No depth test: a persistence
- *  plane remembers pixels, not geometry. */
-inline void smear_composite(const uint8_t* buf, uint8_t* rgb, uint32_t w, uint32_t h,
+ *  over the bright sky (R7 for the trails). PASS 4 (R5): depth-correct via
+ *  the per-cell remembered splat depth against the frame's depth buffer —
+ *  the owner rejected draw-on-top ("properly hidden whenever the creature
+ *  is in front of it"). */
+inline void smear_composite(const uint8_t* buf, const int32_t* dbuf, uint8_t* rgb,
+                            const int32_t* frame_depth, uint32_t w, uint32_t h,
                             int gain_pm) {
   if (gain_pm <= 0) return;
   for (uint32_t y = 0; y < h; ++y) {
     const uint8_t* row = buf + (static_cast<size_t>(y / 4) * kSmearW) * 3;
+    const int32_t* drow = dbuf + static_cast<size_t>(y / 4) * kSmearW;
     for (uint32_t x = 0; x < w; ++x) {
       const uint8_t* c = row + static_cast<size_t>(x / 4) * 3;
       int m = c[0];
       if (c[1] > m) m = c[1];
       if (c[2] > m) m = c[2];
       if (m < 8) continue;  // fully decayed: gone
+      // R5: the depth test — exactly glow_splat's own comparison, at cell
+      // granularity. A surface nearer than the remembered splat depth
+      // keeps the surface: the creature occludes its own trail.
+      const int32_t cell_d = drow[x / 4];
+      if (!(cell_d > frame_depth[static_cast<size_t>(y) * w + x])) continue;
       int a = m * gain_pm * 6 / 1000;
       if (a > kSmearAlphaMaxPm) a = kSmearAlphaMaxPm;
       uint8_t* px = rgb + (static_cast<size_t>(y) * w + x) * 3;
