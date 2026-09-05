@@ -16,6 +16,13 @@ behaviour blocks have their semantics.
 **Rule:** when an item is finished, move it to DONE with the commit that did it.
 When a new owner document lands, add it here in the same pass that reads it.
 
+**And sweep the REPO ROOT, not only `reports/`.** `bumomapping.md` arrived at the
+root on 2026-09-04, the sweep never looked there, and it sat unread for a day
+until a reviewer in another lane stumbled on it — the exact loss this file exists
+to prevent. Owner documents land wherever they land; the sweep has to go to them.
+Check `git log` for commits whose message is addressed to an agent, too: that one
+was titled *"agent please read"*.
+
 ---
 
 ## P0 — the console cannot ship without these
