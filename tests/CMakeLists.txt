@@ -4993,6 +4993,10 @@ set(ZHAO_SHELL_RTL
     # DEPTHQUANT does not own a reciprocal -- "the console already has ONE
     # rcp_u24 law; a second ROM would be a second law" -- so the service and
     # its ROM come with it.
+    # D22 step 5: GEOM.ASSEMBLE, which names the three vertices PROJECT then
+    # transforms. The bench still holds the vertex TABLE -- that is
+    # GEOM.VDECODE's job and step 5 moves the SELECTION, not the decode.
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_assemble.sv
     # D22 step 4: GEOM.PROJECT, in front of CLIP. It feeds CLIP the screen
     # vertices and behind flags, and DEPTHQUANT the w.
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_project.sv
@@ -5067,6 +5071,31 @@ verilate(demo_duo_markers
 # The precomputed pass is built from zref::render::project_vertex, NOT from the
 # DUT's own answer: feeding the DUT's value back would make both passes agree
 # whatever PROJECT computed.
+# D22 STEP 5: GEOM.ASSEMBLE names the three vertices. Steps 1-4 moved
+# per-triangle ARITHMETIC backwards; this moves the triangle's SELECTION.
+#
+# The index stream is a PERMUTATION (2, 0, 3 out of a four-entry table with a
+# decoy at index 1) on purpose. With the identity triplet (0, 1, 2) a shell
+# that ignored ASSEMBLE entirely and used the first three vertices in order
+# would draw the same picture and the check would be green with the block dead.
+add_executable(test_shell_assemble_path_directed shell/shell_assemble_path_directed.cpp)
+target_link_libraries(test_shell_assemble_path_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_shell_assemble_path_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_shell_assemble_path_directed
+  PREFIX Vtb_zhao_shell TOP_MODULE tb_zhao_shell
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_SHELL_RTL}
+          ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/shell/tb_zhao_shell.sv)
+add_test(NAME shell_assemble_path_directed COMMAND test_shell_assemble_path_directed)
+set_tests_properties(shell_assemble_path_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)
+
 add_executable(test_shell_project_path_directed shell/shell_project_path_directed.cpp)
 target_link_libraries(test_shell_project_path_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_shell_project_path_directed PRIVATE

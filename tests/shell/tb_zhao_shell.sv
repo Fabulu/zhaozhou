@@ -234,6 +234,40 @@ module tb_zhao_shell (
   // sequencer is bench scaffolding, not console logic -- in the machine the
   // vertex stream arrives from GEOM.ASSEMBLE and the collector is that block's
   // job.
+  // ---- D22 STEP 5: GEOM.ASSEMBLE --------------------------------------------
+  // Steps 1-4 moved the boundary back through the per-triangle maths. Step 5
+  // moves it past a different kind of line: the triangle's VERTEX SELECTION.
+  //
+  // Until now the bench has said "here are three vertices". GEOM.ASSEMBLE
+  // instead takes a MESHLET -- a vertex offset, a vertex count, a triangle
+  // count, a material and a raster state -- pulls the u8 local index stream
+  // three at a time, and emits one TriangleDescriptor per triangle carrying
+  // VERTEX IDS. So in assemble mode the bench supplies a meshlet and an index
+  // stream, and the hardware decides which three vertices form the triangle.
+  //
+  // The bench still holds the vertex TABLE and looks up `t_v0_o` .. `t_v2_o`
+  // in it. That table is GEOM.VDECODE's job in the machine (32 bytes per
+  // vertex, naturally aligned, per its contract) and is deliberately NOT
+  // pretended here -- step 5 moves the selection, not the decode.
+  //
+  // Defaults to 0, bit-identical to before.
+  input  logic               assemble_mode_i,
+  input  logic [7:0]         asm_vertex_count_i,
+  input  logic [7:0]         asm_triangle_count_i,
+  // The index stream the walk pulls. Three u8 local indices per triplet; the
+  // bench answers combinationally from a flat vector so the responder cannot
+  // be the thing under test.
+  input  logic [8*3*4-1:0]   asm_index_stream_i,   // up to 4 triplets
+  output logic               dbg_asm_valid_o,
+  output logic [15:0]        dbg_asm_v0_o,
+  output logic [15:0]        dbg_asm_v1_o,
+  output logic [15:0]        dbg_asm_v2_o,
+  output logic [31:0]        dbg_asm_triangles_o,
+  // The vertex TABLE, bench-held: four vertices' worth of clip-space
+  // coordinates, selected by the ID GEOM.ASSEMBLE emits.
+  input  logic signed [31:0] asm_vtx_x_i [4],
+  input  logic signed [31:0] asm_vtx_y_i [4],
+  input  logic signed [31:0] asm_vtx_z_i [4],
   input  logic               project_mode_i,
   input  logic               proj_cfg_we_i,
   input  logic               proj_cfg_view_i,
@@ -447,6 +481,76 @@ module tb_zhao_shell (
                              render_fill_word_i[7:0]}
                           : render_fill_word_i;
 
+  // ---- D22 step 5: GEOM.ASSEMBLE --------------------------------------------
+  logic        asm_m_ready, asm_ix_req, asm_t_valid, asm_t_last;
+  logic [8:0]  asm_ix_index;
+  logic [15:0] asm_v0, asm_v1, asm_v2;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [15:0] asm_material, asm_src;
+  logic [31:0] asm_raster, asm_meshlets, asm_ref_lim, asm_ref_idx;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // The index responder. ASSEMBLE asks for triplet `asm_ix_index` and this
+  // answers from the flat stream the bench supplied -- combinationally, and
+  // always valid, so a missing answer can never be mistaken for a walk that
+  // stopped. A responder with its own back-pressure would be a second thing
+  // under test.
+  logic [7:0] asm_ix_a, asm_ix_b, asm_ix_c;
+  always_comb begin
+    asm_ix_a = 8'd0; asm_ix_b = 8'd0; asm_ix_c = 8'd0;
+    for (int unsigned k = 0; k < 4; k++)
+      if (asm_ix_index == 9'(k)) begin
+        asm_ix_a = asm_index_stream_i[k*24 +: 8];
+        asm_ix_b = asm_index_stream_i[k*24 + 8 +: 8];
+        asm_ix_c = asm_index_stream_i[k*24 + 16 +: 8];
+      end
+  end
+
+  zhao_geom_assemble #(
+      .MAX_VERTICES(64), .MAX_TRIANGLES(126), .VIDW(16), .SRCW(16)
+  ) u_assemble (
+      .clk(gpu_clk), .rst_n(rst_n),
+      .m_valid_i(render_tri_valid_i & assemble_mode_i), .m_ready_o(asm_m_ready),
+      .m_vertex_offset_i(16'd0),
+      .m_vertex_count_i(asm_vertex_count_i),
+      .m_triangle_count_i(asm_triangle_count_i),
+      .m_material_id_i(16'd1), .m_raster_state_i(32'd0),
+      .m_src_id_i(render_src_id_i),
+      .ix_req_o(asm_ix_req), .ix_index_o(asm_ix_index),
+      .ix_valid_i(asm_ix_req), .ix_a_i(asm_ix_a), .ix_b_i(asm_ix_b),
+      .ix_c_i(asm_ix_c),
+      .t_valid_o(asm_t_valid), .t_ready_i(1'b1),
+      .t_v0_o(asm_v0), .t_v1_o(asm_v1), .t_v2_o(asm_v2),
+      .t_material_o(asm_material), .t_raster_o(asm_raster),
+      .t_src_id_o(asm_src), .t_last_o(asm_t_last),
+      .meshlets_o(asm_meshlets), .triangles_o(dbg_asm_triangles_o),
+      .refused_limits_o(asm_ref_lim), .refused_index_o(asm_ref_idx));
+
+  // The descriptor is LATCHED. ASSEMBLE emits one triangle per handshake and
+  // the vertex IDs must hold still while PROJECT walks the three of them --
+  // a combinational path here would change the triangle underneath the
+  // collector, which is the class of fault that looks like a projection bug.
+  logic [15:0] asm_v_r [3];
+  logic        asm_have_r;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      asm_v_r[0] <= 16'd0; asm_v_r[1] <= 16'd0; asm_v_r[2] <= 16'd0;
+      asm_have_r <= 1'b0;
+    end else if (!render_tri_valid_i) begin
+      asm_have_r <= 1'b0;
+    end else if (asm_t_valid && !asm_have_r) begin
+      asm_v_r[0] <= asm_v0;
+      asm_v_r[1] <= asm_v1;
+      asm_v_r[2] <= asm_v2;
+      asm_have_r <= 1'b1;
+    end
+  end
+
+  assign dbg_asm_valid_o = asm_have_r;
+  assign dbg_asm_v0_o    = asm_v_r[0];
+  assign dbg_asm_v1_o    = asm_v_r[1];
+  assign dbg_asm_v2_o    = asm_v_r[2];
+
   // ---- D22 step 4: GEOM.PROJECT and its three-vertex collector --------------
   logic               pj_v_valid, pj_v_ready, pj_out_valid;
   logic signed [31:0] pj_vx, pj_vy, pj_vz;
@@ -472,17 +576,35 @@ module tb_zhao_shell (
   logic [2:0]         pj_behind_r;
   logic               pj_tri_ready;
 
+  // In ASSEMBLE mode the vertex pushed is the one GEOM.ASSEMBLE named, looked
+  // up in the bench's table. Otherwise it is the bench's own A/B/C.
+  logic [1:0] pj_sel;
   always_comb begin
-    case (pj_idx_r)
-      2'd0:    begin pj_vx = proj_ax_i; pj_vy = proj_ay_i; pj_vz = proj_az_i; end
-      2'd1:    begin pj_vx = proj_bx_i; pj_vy = proj_by_i; pj_vz = proj_bz_i; end
-      default: begin pj_vx = proj_cx_i; pj_vy = proj_cy_i; pj_vz = proj_cz_i; end
-    endcase
+    pj_sel = pj_idx_r;
+    if (assemble_mode_i) begin
+      // The ID is a table index here; a real machine would range-check it
+      // against the meshlet's vertex_count, which is GEOM.VDECODE's business.
+      case (pj_idx_r)
+        2'd0:    pj_sel = asm_v_r[0][1:0];
+        2'd1:    pj_sel = asm_v_r[1][1:0];
+        default: pj_sel = asm_v_r[2][1:0];
+      endcase
+      pj_vx = asm_vtx_x_i[pj_sel];
+      pj_vy = asm_vtx_y_i[pj_sel];
+      pj_vz = asm_vtx_z_i[pj_sel];
+    end else begin
+      case (pj_idx_r)
+        2'd0:    begin pj_vx = proj_ax_i; pj_vy = proj_ay_i; pj_vz = proj_az_i; end
+        2'd1:    begin pj_vx = proj_bx_i; pj_vy = proj_by_i; pj_vz = proj_bz_i; end
+        default: begin pj_vx = proj_cx_i; pj_vy = proj_cy_i; pj_vz = proj_cz_i; end
+      endcase
+    end
   end
 
   // Push while the bench is offering a triangle and fewer than three vertices
   // have been sent.
-  assign pj_v_valid = render_tri_valid_i & project_mode_i & (pj_idx_r < 2'd3);
+  assign pj_v_valid = render_tri_valid_i & project_mode_i & (pj_idx_r < 2'd3)
+                    & (~assemble_mode_i | asm_have_r);
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin

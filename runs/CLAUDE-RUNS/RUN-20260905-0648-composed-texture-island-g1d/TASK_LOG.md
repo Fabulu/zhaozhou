@@ -286,3 +286,23 @@ then COMBINE.V1. Two shell step-tests re-running after the PROJECT rewire.
 **Next:** step 4 needs its directed test — a projection matrix in the bench's
 config port, and the same both-windings and sensitivity discipline steps 2 and 3
 paid for.
+
+## Position before reading the next fit result (half-hourly nudge, 11:1x)
+
+**In hand, half-finished:** D22 step 5 (GEOM.ASSEMBLE) is wired into the bench
+and a reconfigure is running. Step 5's directed test is NOT written yet. The
+wiring: ASSEMBLE takes a meshlet + u8 index stream and emits a TriangleDescriptor
+carrying vertex IDs; the bench looks those IDs up in its own vertex table and
+feeds PROJECT. The table is deliberately bench-held — turning 32-byte records
+into coordinates is GEOM.VDECODE's job, and step 5 moves the SELECTION only.
+
+**Next concrete action if nothing else intervenes:** write
+`tests/shell/shell_assemble_path_directed.cpp` on the same pattern as steps 3
+and 4 — draw the same triangle with the vertex IDs coming from ASSEMBLE instead
+of implied by the bench, require an identical framebuffer, and MEASURE that the
+comparison can fail by feeding a permuted index triplet.
+
+**Also fixed this block:** `source_list_parity` read the CMake list through a
+fixed 4,000-character window; the D22 staircase pushed that block to 4,242
+characters, so the last four modules fell outside it and the gate reported them
+missing from a file that contained them. Window replaced with "to end of file".

@@ -68,7 +68,20 @@ string(FIND "${_cml_text}" "set(ZHAO_SHELL_RTL" _i)
 if(_i EQUAL -1)
   message(FATAL_ERROR "source-list parity: ZHAO_SHELL_RTL not found in tests/CMakeLists.txt")
 endif()
-string(SUBSTRING "${_cml_text}" ${_i} 4000 _tail)
+# TO THE END OF THE FILE, not a fixed window.
+#
+# This read 4000 characters. On 2026-09-05 the ZHAO_SHELL_RTL block reached
+# 4,242 characters as the D22 staircase added blocks and the comments
+# explaining them -- so the last 242 characters, which is to say the last FOUR
+# modules, fell outside the window and the check reported them "in the QSF but
+# NOT in tests/CMakeLists.txt". A true statement about the text it read and a
+# false one about the file.
+#
+# It failed loudly, which is the good direction, but it failed for a reason
+# that has nothing to do with what it is guarding: the lists were identical.
+# A gate whose own reading window is a magic number will eventually fire on
+# its own growth, and the person who sees it will start by editing the QSF.
+string(SUBSTRING "${_cml_text}" ${_i} -1 _tail)
 string(FIND "${_tail}" ")" _j)
 string(SUBSTRING "${_tail}" 0 ${_j} _block)
 string(REGEX MATCHALL "fpga/rtl/[^ \t\r\n)]+\\.sv" _cml_paths "${_block}")
