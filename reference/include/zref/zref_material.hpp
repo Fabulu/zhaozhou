@@ -73,9 +73,15 @@
 namespace zref {
 namespace material {
 
-// The six ratified encodings. The numbering matches the constants already in
-// `zhao_raster_texjoin_v2.sv` and `zhao_texture_fragrob.sv` so nothing is
-// renumbered by this file's existence.
+// The eight ratified encodings (islandrearchitecture5.md §15.1). The numbering
+// matches the constants already in `zhao_raster_texjoin_v2.sv` and
+// `zhao_texture_fragrob.sv` so nothing is renumbered by this file's existence.
+//
+// 6 AND 7 WERE MISSING UNTIL 2026-09-05, and their absence was not harmless:
+// this file REFUSED recipe 6 as illegal while §15.4's whole two-lane capacity
+// argument is built on DETAIL_LIGHT being the worst case. Six recipes' worth of
+// tests passed and reported coverage of the six they knew about. Recorded as
+// docket D19q.
 enum Recipe : uint8_t {
   kPassthru = 0,    // sample 0 unchanged
   kModulate = 1,    // s0 * s1
@@ -83,8 +89,44 @@ enum Recipe : uint8_t {
   kLerp = 3,        // lerp(s0, s1, weight)
   kAddSat = 4,      // s0 + s1, saturating
   kMask = 5,        // s0 where s1 passes, else transparent
-  kRecipeCount = 6
+  kTerrainDetailLight = 6,  // (s0 * s1) * s2, three samples
+  kTerrainDetailMask = 7,   // (s0 * s1) RGB, alpha masked by s2
+  kRecipeCount = 8
 };
+
+// ---------------------------------------------------------------------------
+// HOW 6 AND 7 WERE DERIVED, AND THE ONE THING THAT IS STILL OPEN
+// ---------------------------------------------------------------------------
+// §15.1 names them and their sample counts; it does NOT write out their
+// arithmetic. §15.3 gives the product-job counts, and those pin the shape:
+//
+//   DETAIL_LIGHT  3 first-layer RGB products + 3 second-layer RGB products
+//   DETAIL_MASK   3 first-layer RGB products + 1 alpha product
+//
+// Six RGB products over three samples admits one composition: two chained
+// per-channel products, ((s0 * s1) * s2). Three RGB plus one ALPHA product
+// admits one too: an RGB product of s0 and s1, and a single alpha product --
+// and §15.1's alpha sentence says which alpha, explicitly:
+//
+//   > Sample 0 owns base alpha EXCEPT WHERE THE RECIPE NAMES A MASK.
+//
+// DETAIL_MASK names a mask, so its alpha is the product s0.a * s2.a; that is
+// the one alpha job. DETAIL_LIGHT names none, so its alpha is s0.a untouched,
+// which is why it has no alpha job. Both readings are forced by the counts
+// rather than chosen, which is the only reason they are written here at all.
+//
+// TWO ROUNDINGS, not one. §15.6 C2 says the pipeline captures product results,
+// rounds exactly, and enqueues continuations -- so the second layer receives an
+// already-rounded 8-bit intermediate. That is a structural consequence of the
+// continuation queue, not a numeric preference.
+//
+// STILL OPEN, and deliberately not decided here: whether the DETAIL layer is
+// the plain product or MODULATE2X. Detail maps are classically 2x so that 128
+// is neutral, but §15.3 counts both layers as ordinary "RGB products" and
+// MODULATE2X exists as its own recipe with its own rounding. The conservative
+// reading -- plain `unit_mul` for both layers -- is implemented, and it is one
+// line to change in each of the two cases below if the owner rules otherwise.
+// Flagged in docket D19q rather than silently settled.
 
 struct Sample {
   uint8_t r = 0, g = 0, b = 0, a = 0;
@@ -112,7 +154,33 @@ struct Out {
 // passthrough, which is exactly what the surviving TEXJOIN does today and why a
 // wrong material looks plausible.
 constexpr uint8_t samples_required(uint8_t recipe) {
-  return recipe == kPassthru ? 1 : 2;
+  if (recipe == kPassthru) return 1;
+  if (recipe == kTerrainDetailLight || recipe == kTerrainDetailMask) return 3;
+  return 2;
+}
+
+// Product jobs this recipe costs, by §15.3. The combiner's scheduler is sized
+// from these and §15.4 requires them counted per recipe at run time, so the
+// 80%-capacity question is answered from a trace rather than from arithmetic.
+// PASSTHRU and ADD_SAT are bypasses and cost nothing.
+constexpr uint8_t product_jobs(uint8_t recipe) {
+  switch (recipe) {
+    case kPassthru:
+    case kAddSat:
+      return 0;
+    case kMask:
+      return 1;  // one alpha product
+    case kModulate:
+    case kModulate2x:
+    case kLerp:
+      return 3;  // three RGB (or three difference-by-weight) products
+    case kTerrainDetailMask:
+      return 4;  // 3 first-layer RGB + 1 alpha
+    case kTerrainDetailLight:
+      return 6;  // 3 first-layer RGB + 3 second-layer RGB -- the worst case
+    default:
+      return 0;
+  }
 }
 
 namespace detail {
@@ -199,6 +267,7 @@ inline Out combine(uint8_t recipe, uint8_t weight, const Sample* s, uint8_t coun
 
   const Sample& s0 = s[0];
   const Sample& s1 = (count > 1) ? s[1] : s[0];
+  const Sample& s2 = (count > 2) ? s[2] : s0;
 
   switch (recipe) {
     case kPassthru:
@@ -257,6 +326,32 @@ inline Out combine(uint8_t recipe, uint8_t weight, const Sample* s, uint8_t coun
         o.a = 0;
       }
       break;
+
+    case kTerrainDetailLight: {
+      // ((s0 * s1) * s2) per channel: base, detail layer, then light. Two
+      // roundings, because §15.6 C2 rounds the first-layer result before the
+      // continuation consumes it -- the intermediate on the wire is 8 bits.
+      const uint8_t l0r = unit_mul(unit8{s0.r}, unit8{s1.r});
+      const uint8_t l0g = unit_mul(unit8{s0.g}, unit8{s1.g});
+      const uint8_t l0b = unit_mul(unit8{s0.b}, unit8{s1.b});
+      o.r = unit_mul(unit8{l0r}, unit8{s2.r});
+      o.g = unit_mul(unit8{l0g}, unit8{s2.g});
+      o.b = unit_mul(unit8{l0b}, unit8{s2.b});
+      // No alpha job: this recipe names no mask, so sample 0 owns base alpha.
+      o.a = s0.a;
+      break;
+    }
+
+    case kTerrainDetailMask: {
+      // (s0 * s1) on RGB, and the ONE alpha product that makes the third
+      // sample a mask. This recipe does name a mask, so §15.1's exception
+      // applies and the alpha is a product rather than s0's.
+      o.r = unit_mul(unit8{s0.r}, unit8{s1.r});
+      o.g = unit_mul(unit8{s0.g}, unit8{s1.g});
+      o.b = unit_mul(unit8{s0.b}, unit8{s1.b});
+      o.a = unit_mul(unit8{s0.a}, unit8{s2.a});
+      break;
+    }
 
     default:
       // Unreachable: the range check above already refused everything else.

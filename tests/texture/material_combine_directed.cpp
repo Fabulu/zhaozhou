@@ -46,6 +46,16 @@ Out run(uint8_t recipe, uint8_t weight, Sample a, Sample b, uint8_t count,
   return mat::combine(recipe, weight, s, count, base, tag, L);
 }
 
+// Three-sample variant, for the terrain recipes. Separate rather than a
+// defaulted parameter so a two-sample call site cannot silently acquire a
+// third sample it never meant to pass.
+Out run3(uint8_t recipe, uint8_t weight, Sample a, Sample b, Sample c,
+         Ledger* L = nullptr, uint16_t tag = 0xBEEF) {
+  const Sample s[3] = {a, b, c};
+  const Sample base{9, 9, 9, 9};
+  return mat::combine(recipe, weight, s, 3, base, tag, L);
+}
+
 // ---------------------------------------------------------------------------
 // The unit8 law itself, which everything below depends on being understood.
 // ---------------------------------------------------------------------------
@@ -209,10 +219,15 @@ void test_recipe_demanding_more_samples_than_supplied_is_refused() {
         o.r | o.a);
 }
 
-void test_seventh_encoding_is_refused() {
+// The set is closed at EIGHT, not six. This test previously asserted that
+// recipe 6 was illegal and passed while the architecture's 15.1 named it
+// TERRAIN_DETAIL_LIGHT -- the worst case its own capacity argument is built
+// on. A green test defending a wrong belief is worse than no test, so the
+// history is kept here rather than quietly deleted (docket D19q).
+void test_the_set_is_closed_at_eight() {
   Ledger L;
-  const Out o = run(6, 0, Sample{1, 1, 1, 1}, Sample{1, 1, 1, 1}, 2, &L);
-  check(o.refused, "recipe 6 is refused -- the set is closed", 1,
+  const Out o = run(8, 0, Sample{1, 1, 1, 1}, Sample{1, 1, 1, 1}, 2, &L);
+  check(o.refused, "recipe 8 is refused -- the set is closed at eight", 1,
         o.refused ? 1 : 0);
   check(L.refused_unknown_recipe == 1, "and counted", 1,
         L.refused_unknown_recipe);
@@ -220,6 +235,116 @@ void test_seventh_encoding_is_refused() {
   Ledger L2;
   run(255, 0, Sample{1, 1, 1, 1}, Sample{1, 1, 1, 1}, 2, &L2);
   check(L2.refused_unknown_recipe == 1, "so is 255", 1, L2.refused_unknown_recipe);
+
+  // ...and 6 and 7 are NOT refused, given their three samples.
+  Ledger L3;
+  const Out d6 = run3(mat::kTerrainDetailLight, 0, Sample{200, 200, 200, 200},
+                      Sample{128, 128, 128, 128}, Sample{255, 255, 255, 255}, &L3);
+  const Out d7 = run3(mat::kTerrainDetailMask, 0, Sample{200, 200, 200, 200},
+                      Sample{128, 128, 128, 128}, Sample{255, 255, 255, 255}, &L3);
+  check(!d6.refused && !d7.refused,
+        "6 and 7 are ratified recipes, not illegal encodings", 0,
+        (d6.refused ? 1 : 0) + (d7.refused ? 1 : 0));
+  check(L3.refused_unknown_recipe == 0, "and neither was counted as unknown", 0,
+        L3.refused_unknown_recipe);
+}
+
+// ---------------------------------------------------------------------------
+// The two terrain recipes (15.1 / 15.3).
+// ---------------------------------------------------------------------------
+void test_detail_light_is_two_chained_products() {
+  // 200 * 128 = (200*128+128)>>8 = 100; 100 * 255 = (100*255+128)>>8 = 100.
+  // Computed by hand from the frozen product rather than read off the code, so
+  // this is a check and not a restatement.
+  const Out o = run3(mat::kTerrainDetailLight, 0, Sample{200, 200, 200, 77},
+                     Sample{128, 128, 128, 128}, Sample{255, 255, 255, 255});
+  check(o.r == 100, "((200*128)*255) is 100 through two roundings", 100, o.r);
+  check(o.g == 100 && o.b == 100, "on every colour channel", 100, o.g);
+  check(o.a == 77,
+        "and ALPHA IS SAMPLE 0's, untouched -- this recipe names no mask, so "
+        "15.1's exception does not apply and there is no alpha product",
+        77, o.a);
+
+  // The second layer really is applied: halving it must change the answer.
+  const Out h = run3(mat::kTerrainDetailLight, 0, Sample{200, 200, 200, 77},
+                     Sample{128, 128, 128, 128}, Sample{128, 128, 128, 128});
+  check(h.r == 50, "and the light layer is not ignored", 50, h.r);
+
+  // ROUNDING TWICE IS THE SPECIFIED BEHAVIOUR (15.6 C2: the continuation
+  // consumes a rounded 8-bit intermediate), and pinning it needs an input
+  // where the two actually disagree.
+  //
+  // THE FIRST ATTEMPT AT THIS CHECK WAS VACUOUS. It reused the 200/128/255
+  // values above and claimed a single-rounding implementation would return 99;
+  // it returns 100, exactly as two roundings do, so the check could never fail
+  // and a mutation to single rounding passed it. The claim had been written
+  // rather than computed.
+  //
+  // A sweep found 126,293 disagreeing triples, all by exactly one LSB -- never
+  // more -- which is why an arbitrary sample is a poor discriminator and one
+  // must be chosen deliberately. 255/160/160 is one: two roundings give 99,
+  // one gives 100.
+  const Out r2 = run3(mat::kTerrainDetailLight, 0, Sample{255, 255, 255, 0},
+                      Sample{160, 160, 160, 0}, Sample{160, 160, 160, 0});
+  check(r2.r == 99,
+        "two roundings, not one -- the intermediate on the wire is 8 bits, so "
+        "255*160*160 is 99 and not the 100 a single rounding gives",
+        99, r2.r);
+}
+
+void test_detail_mask_products_rgb_and_masks_alpha() {
+  const Out o = run3(mat::kTerrainDetailMask, 0, Sample{200, 100, 50, 240},
+                     Sample{128, 128, 128, 255}, Sample{0, 0, 0, 128});
+  check(o.r == 100, "RGB is the FIRST-layer product only", 100, o.r);
+  check(o.g == 50, "per channel", 50, o.g);
+  check(o.b == 25, "per channel", 25, o.b);
+  // 240 * 128 = (240*128+128)>>8 = 120. The mask's ALPHA drives it; its RGB is
+  // zero here precisely so an implementation reading the mask's colour would
+  // produce black and be caught.
+  check(o.a == 120, "and ALPHA is the one product s0.a * s2.a", 120, o.a);
+
+  // Sample 2's RGB must not leak into the result.
+  const Out white_mask = run3(mat::kTerrainDetailMask, 0, Sample{200, 100, 50, 240},
+                              Sample{128, 128, 128, 255}, Sample{255, 255, 255, 128});
+  check(white_mask.r == o.r && white_mask.g == o.g && white_mask.b == o.b,
+        "the mask's RGB does not reach the output -- only its alpha does", 1,
+        (white_mask.r == o.r && white_mask.g == o.g && white_mask.b == o.b) ? 1 : 0);
+}
+
+void test_the_terrain_recipes_refuse_two_samples() {
+  // The capacity argument depends on these being three-sample recipes. A
+  // two-sample call must be refused, not quietly degraded to the two-sample
+  // form -- which is exactly the surviving TEXJOIN's failure.
+  Ledger L;
+  const Out a = run(mat::kTerrainDetailLight, 0, Sample{1, 1, 1, 1},
+                    Sample{1, 1, 1, 1}, 2, &L);
+  const Out b = run(mat::kTerrainDetailMask, 0, Sample{1, 1, 1, 1},
+                    Sample{1, 1, 1, 1}, 2, &L);
+  check(a.refused && b.refused,
+        "a three-sample recipe given two samples is REFUSED", 2,
+        (a.refused ? 1 : 0) + (b.refused ? 1 : 0));
+  check(L.refused_missing_sample == 2, "and both counted", 2,
+        L.refused_missing_sample);
+}
+
+void test_product_job_counts_match_the_architecture() {
+  // 15.3's table, restated as a check. 15.4 sizes two lanes from these
+  // numbers, so a mismatch here invalidates the capacity argument rather than
+  // merely being untidy.
+  struct Row { uint8_t recipe; uint8_t jobs; const char* name; };
+  const Row kTable[] = {
+      {mat::kPassthru, 0, "PASSTHRU bypasses the lanes"},
+      {mat::kAddSat, 0, "ADD_SAT bypasses the lanes"},
+      {mat::kMask, 1, "MASK is one alpha product"},
+      {mat::kModulate, 3, "MODULATE is three RGB products"},
+      {mat::kModulate2x, 3, "MODULATE2X is three RGB products"},
+      {mat::kLerp, 3, "LERP is three difference-by-weight products"},
+      {mat::kTerrainDetailMask, 4, "DETAIL_MASK is 3 RGB + 1 alpha"},
+      {mat::kTerrainDetailLight, 6, "DETAIL_LIGHT is 3 + 3 -- the worst case"},
+  };
+  for (const Row& e : kTable)
+    check(mat::product_jobs(e.recipe) == e.jobs, e.name, e.jobs,
+          mat::product_jobs(e.recipe));
 }
 
 void test_frag_tag_survives_every_path() {
@@ -227,13 +352,14 @@ void test_frag_tag_survives_every_path() {
   int bad = 0;
   // every recipe, plus the two refusal paths, plus the untextured path
   for (uint8_t r = 0; r < mat::kRecipeCount; ++r) {
-    if (run(r, 128, Sample{1, 1, 1, 1}, Sample{2, 2, 2, 2}, 2, nullptr, kTag)
+    if (run3(r, 128, Sample{1, 1, 1, 1}, Sample{2, 2, 2, 2}, Sample{3, 3, 3, 3},
+             nullptr, kTag)
             .frag_tag != kTag) ++bad;
   }
-  if (run(6, 0, Sample{}, Sample{}, 2, nullptr, kTag).frag_tag != kTag) ++bad;
+  if (run(8, 0, Sample{}, Sample{}, 2, nullptr, kTag).frag_tag != kTag) ++bad;
   if (run(mat::kModulate, 0, Sample{}, Sample{}, 1, nullptr, kTag).frag_tag != kTag) ++bad;
   if (run(mat::kPassthru, 0, Sample{}, Sample{}, 0, nullptr, kTag).frag_tag != kTag) ++bad;
-  check(bad == 0, "frag_tag rides through all nine paths untouched", 0, bad);
+  check(bad == 0, "frag_tag rides through all eleven paths untouched", 0, bad);
 }
 
 // A coverage guard, because the contract warns that this repository "has
@@ -242,15 +368,19 @@ void test_every_recipe_and_refusal_was_reached() {
   Ledger L;
   bool seen[mat::kRecipeCount] = {false};
   for (uint8_t r = 0; r < mat::kRecipeCount; ++r) {
-    const Out o = run(r, 100, Sample{130, 60, 20, 200}, Sample{90, 200, 5, 128}, 2);
+    // THREE samples for every recipe, so the two terrain recipes are exercised
+    // rather than refused. The earlier version passed two and would have
+    // reported full coverage while recipes 6 and 7 never ran.
+    const Out o = run3(r, 100, Sample{130, 60, 20, 200}, Sample{90, 200, 5, 128},
+                       Sample{77, 33, 210, 64});
     seen[r] = !o.refused;
   }
   int unseen = 0;
   for (bool b : seen)
     if (!b) ++unseen;
-  check(unseen == 0, "all six ratified recipes produced a result", 0, unseen);
+  check(unseen == 0, "all EIGHT ratified recipes produced a result", 0, unseen);
 
-  run(6, 0, Sample{}, Sample{}, 2, &L);
+  run(8, 0, Sample{}, Sample{}, 2, &L);
   run(mat::kModulate, 0, Sample{}, Sample{}, 1, &L);
   check(L.refused_unknown_recipe == 1 && L.refused_missing_sample == 1,
         "both refusal classes were reached", 2,
@@ -271,7 +401,11 @@ int main() {
   test_mask_uses_alpha_not_rgb();
   test_zero_samples_returns_base_unchanged();
   test_recipe_demanding_more_samples_than_supplied_is_refused();
-  test_seventh_encoding_is_refused();
+  test_the_set_is_closed_at_eight();
+  test_detail_light_is_two_chained_products();
+  test_detail_mask_products_rgb_and_masks_alpha();
+  test_the_terrain_recipes_refuse_two_samples();
+  test_product_job_counts_match_the_architecture();
   test_frag_tag_survives_every_path();
   test_every_recipe_and_refusal_was_reached();
 
