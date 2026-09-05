@@ -4,7 +4,7 @@ Owner instructions arrive as files in `reports/` and are easy to lose between
 passes. **This is the index.** Before starting any wave, read this file, then
 read the documents it names.
 
-Last swept: 2026-08-31 **late** (plus `bumomapping.md` indexed 2026-09-05) — after `reports/OWNER-RULINGS-COMPLETE-20260831.md`
+Last swept: 2026-08-31 **late** (plus `bumomapping.md` and the three texture/mipmapping briefs indexed 2026-09-05) — after `reports/OWNER-RULINGS-COMPLETE-20260831.md`
 answered **all 28 open questions**. Read that file before this one; it is the
 authority and this is only the index.
 
@@ -112,6 +112,33 @@ local gate can silently skip. That is exactly the failure the standing memory
 ---
 
 ## P1 — the game's main thing
+
+### D3a. The texture island recovery + terrain mipmapping  ·  three owner briefs, 5,653 lines
+> commits titled *"Agent please read"*, all 2026-09-05
+
+**Hardware lane. Unclaimed here — indexed so they are not lost, not to claim them.**
+
+| File | Lines | Status |
+|---|---:|---|
+| `reports/zhaozhou-texture-island-rearchitecture-2026-09-05.txt` | 2365 | ⚠ **SUPERSEDED — do not implement** |
+| `reports/zhaozhou-texture-island-rearchitecture-v2-2026-09-05.txt` | 2867 | **CURRENT.** Recovering the texture island at 100 MHz |
+| `reports/zhaozhou-terrain-mipmapping-architecture-2026-09-05.txt` | 421 | Addition to v2, **not** a replacement for it |
+
+**Read the supersession before reading the briefs.** v2 says of itself that it is
+a *"standalone replacement for the earlier recovery brief, not an addendum
+requiring the implementation agent to reconcile obsolete instructions"* — so v1
+is dead text that still reads as authoritative, sits beside its replacement, and
+is the longer of the two. The mipmapping addendum is explicitly *"a targeted
+addition to the texture recovery work, not a replacement for Revision 2"*.
+
+All three state their own limits plainly: proposed, not implemented; no RTL
+changed or simulated; the mipmapping byte counts are arithmetic rather than
+measured, and no fit was run for it. **Treat them as architecture to validate,
+not as results.**
+
+**Cross-link:** the mipmapping brief is adjacent to **D3b** below (the owner's
+terrain bump-mapping request) — same subsystem, same "terrain is the star of the
+show" motivation. Whoever claims one should read the other.
 
 ### D3b. Detail bump mapping for terrain  ·  `bumomapping.md` (repo root)
 > *"we need detail bump mapping for terrain. please architect it and set it up
