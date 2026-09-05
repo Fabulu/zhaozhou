@@ -2831,6 +2831,14 @@ uint32_t g_exp_frame = 0;
 // inward experiment contour above: it draws only into border-connected
 // background and scales by projected creature size at the actual camera.
 int g_cel_main = 0;
+// PASS 4 instrument honesty (trajplot's background plate): when set, the
+// creature hook draws NOTHING -- same stage, same camera, same terrain and
+// sky, no creature, no creature-attached effect. trajplot.py masks a clip
+// against this creature-free render, which is what makes its mask exact
+// (the old row-median mask reported ~2000 px of terrain horizon on a frame
+// with no creature in it). Unset, this gate is a single skipped branch and
+// every byte is identical.
+int g_hide_creature = 0;
 constexpr int32_t kCelInkFarRadiusQ8 = 120 * 256;
 constexpr int32_t kCelInkMidRadiusQ8 = 200 * 256;
 constexpr int32_t kCelInkCloseRadiusQ8 = 360 * 256;
@@ -2860,6 +2868,7 @@ int cel_main_ink_width(int32_t radius_q8) {
 
 void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
                    uint32_t /*tick*/) {
+  if (g_hide_creature) return;  // trajplot's creature-free background plate
   CreatureReelCtx& c = *static_cast<CreatureReelCtx*>(vctx);
   static std::vector<uint8_t> pre;
   static std::vector<int32_t> pre_depth;
@@ -6809,6 +6818,14 @@ int main(int argc, char** argv) {
     std::fprintf(stderr,
                  "ZIXX_SUNS=%s (Direction 29/30 clip suns + additive-normal %s)\n",
                  suns, g_zixx_suns_enabled ? "on" : "OFF");
+  }
+  // PASS 4 (instrument honesty): ZIXX_HIDE_CREATURE=1 renders every frame
+  // with the creature hook skipped -- trajplot.py's creature-free
+  // background plate. Unset (the normal case) nothing changes.
+  if (const char* hide = std::getenv("ZIXX_HIDE_CREATURE")) {
+    g_hide_creature = std::string(hide) == "1" ? 1 : 0;
+    if (g_hide_creature)
+      std::fprintf(stderr, "ZIXX_HIDE_CREATURE=1 (creature-free background plates)\n");
   }
   // Stage M ladder lane (u02 pass 3, R5): U02_AMBIENT / U02_ML_AMBIENT pick
   // a named ambient rung for the LADDER PLATES. Unset = the shipped rigs.

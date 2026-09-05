@@ -1,0 +1,30 @@
+Stage 0 — baseline + honest instruments (2026-09-05)
+
+BASELINE CALIBRATION (build-direct.sh cel, pristine tree at e08e0119):
+  zixxtrixx-walk sequence_crc32c = 0xF06EF66B  == pass-3 shipped table. Calibrated.
+  before-CRCs recorded: unnamed02-fall 0xCF1E73C1 f=340, unnamed02-taunt 0x56CE25DA f=280.
+  (CRC = the reel's own printed sequence_crc32c; python zlib over files does NOT
+  reproduce it — the reel CRCs the raw pixel buffer per frame, chained.)
+
+INKMASK.PY — the vacuous-proof fix:
+  Mask now matches the QUANTISED ink triples (25,24,25)/(25,24,16) plus the
+  authored (26,24,22). All-empty frames now count VACUOUS and FAIL loudly.
+  selftest: identical->PASS, dilated-outline->FAIL, all-empty->FAIL(vacuous). PASS.
+  Real frames: zixxtrixx-walk 446212 ink px over 160 frames (was 0 before the fix).
+
+TRAJPLOT.PY — the horizon-mask fix:
+  New: mask against a CREATURE-FREE BACKGROUND RENDER (reel gate
+  ZIXX_HIDE_CREATURE=1 skips the creature hook; unset = byte-identical,
+  proven: walk CRC 0xF06EF66B with the gate compiled in and unset).
+  A temporal-median plate was tried first and REJECTED by its own selftest:
+  a hovering creature votes itself into the median and erases itself.
+  Known-bad demo on real frames (unnamed02-fall):
+    frame 0000 (no creature): legacy mask 2034 px (the reviewer's exact number)
+                              plate mask     0 px
+    frame 0170 (creature):    plate 5346 px, legacy 7380 px
+    frame 0300 (creature):    plate 6142 px, legacy 7903 px
+  Without --bg the tool prints a LOUD legacy warning and is not QA evidence.
+  Both selftests committed and passing; frame globs fixed to NNNN.rgb
+  (palette.rgb is not a frame).
+
+C:\zrev reviewer worktree pruned.

@@ -1,0 +1,3 @@
+unnamed02-fall: 340 frames, 4708 unique colours, sequence_crc32c=0xCF1E73C1
+unnamed02-taunt: 280 frames, 3844 unique colours, sequence_crc32c=0x56CE25DA
+zixxtrixx-walk: 160 frames, 13236 unique colours, sequence_crc32c=0xF06EF66B
