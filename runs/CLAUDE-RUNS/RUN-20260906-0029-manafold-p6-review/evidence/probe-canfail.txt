@@ -1,0 +1,7 @@
+CAN-FAIL demonstration -- frames judged BY EYE before the probe ran.
+curious/hover: two clean 4-point stars.  rest/taunt: near star collapsed to a bar.
+
+manafold-curious   sil  2716px  maxElong  2.5  starOutsideBody 290px   x191 156px elong  2.3 outside 156 | x236 122px elong  2.5 outside 122
+manafold-hover     sil  2902px  maxElong  2.7  starOutsideBody 298px   x160 125px elong  2.7 outside 125 | x195  79px elong  2.3 outside 79 | x207  75px elong  2.7 outside 75
+manafold-taunt     sil  2839px  maxElong  6.3  starOutsideBody 668px   x135  72px elong  1.6 outside 72 | x157 302px elong  1.8 outside 302 | x217 108px elong  6.3 outside 108 | x249 180px elong  2.8 outside 179
+manafold-rest      sil  2687px  maxElong  6.3  starOutsideBody 292px   x137 164px elong  4.0 outside 164 | x219  60px elong  6.3 outside 60 | x252  65px elong  1.5 outside 64
