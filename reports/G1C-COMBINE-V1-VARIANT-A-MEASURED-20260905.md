@@ -62,10 +62,51 @@ and it is not free.
 checks against `zref::material::combine`, including exact per-recipe job counts,
 out-of-order retirement and back-pressure. The block is correct and expensive.
 
-**Not that 29.74 MHz is the scheduler's fault specifically.** The critical path
-has not been read. That is one file and it is the next action, exactly as it was
-for the island — where the obvious explanation (virtual pins) turned out to be
-worth 4 MHz of 36.
+## The critical path, read — and it is the COUNTERS
+
+```
+From   Decoder5~9_OTERM21DUPLICATE
+To     Add46~41_OTERM2248_OTERM2772
+Slack  -23.624 ns    (10 ns target -> 33.6 ns period -> 29.74 MHz)
+```
+
+A decoder feeding a wide adder, on all 1,820 summarised paths.
+
+**The datapath cannot be responsible.** Every datapath signal in this block is
+7, 8 or 9 bits; the only 32-bit signals are the seven counters. A 9-bit add does
+not make a 23 ns path.
+
+**The counters can.** `jobs_inc[rec[i].recipe] = jobs_inc[rec[i].recipe] + 1` is
+a BLOCKING add on a DECODED index, inside a nested loop over `RECS x 7` jobs. So
+synthesis must serialise up to fourteen conditional 32-bit adds into one carry
+chain — decode, select, add, repeat — which is exactly `Decoder -> Add`.
+
+**Fixed by narrowing the increment, not the counter.** At most two jobs issue
+per cycle, so the per-cycle increment never exceeds 2 and needs two bits. The
+chain becomes 2-bit adds; only the commit stays 32-bit, where the eight adds are
+independent and parallel. `material_combine_v1_diff` still passes 16 checks,
+including the exact per-recipe job counts — the counters are narrower per cycle
+and still count the same totals.
+
+**The irony is worth keeping.** These are the §15.4 counters that caught the
+double-issue bug this morning, and they are why the block did not close timing.
+A re-fit will say how much of the 29.74 MHz they were worth; **no prediction is
+offered**, because the island's obvious explanation was worth 4 MHz of 36 and
+the honest lesson from that is not to guess the size of an effect before
+measuring it.
+
+### And a measurement tool got it wrong again
+
+The script that split the island's paths into "starts at a virtual pin" versus
+"starts inside the design" — the split that produced the island's decisive
+finding — classified **all 1,820** of this block's paths as virtual-pin starts.
+It keys on `:` or `|` in the node name, which is hierarchy punctuation. A
+single-module fit has no hierarchy, so every internal node looked like a pin.
+
+The tool was right for the island and silently wrong here, and it would have
+supported the flattering conclusion that this block's timing is all boundary
+artefact. It was caught only because `Decoder5` and `Add46` obviously are not
+pins.
 
 **Not a comparison against the island's 69.05 MHz.** Different design, different
 constraint set, 596 virtual pins on a block with 744 synthesis registers.

@@ -450,7 +450,25 @@ module zhao_texture_material_combine_v1 #(
       automatic logic [8:0] t;
       automatic logic       sat_add;
       automatic logic [15:0] ops;
-      automatic logic [31:0] jobs_inc [8];
+      // TWO BITS, NOT THIRTY-TWO, and this is the block's critical path.
+      //
+      // The fit measured 29.74 MHz with the worst path running
+      // `Decoder5~9 -> Add46~41`, slack -23.624 ns. The datapath here is 7 to 9
+      // bits wide and cannot produce a 23 ns path; the only 32-bit signals in
+      // the block are these counters. `jobs_inc[rec[i].recipe] += 1` is a
+      // BLOCKING add on a DECODED index inside a nested loop over RECS x 7
+      // jobs, so synthesis must serialise up to fourteen conditional 32-bit
+      // adds into one carry chain -- decode, select, add, repeat.
+      //
+      // At most TWO jobs issue per cycle (two lanes), so the per-cycle
+      // increment never exceeds 2 and needs two bits. The chain becomes 2-bit
+      // adds and only the commit below is 32-bit, where the eight adds are
+      // independent and parallel rather than chained.
+      //
+      // The irony is worth keeping: these are the §15.4 counters that caught
+      // the double-issue bug this morning, and they are why the block does not
+      // close timing.
+      automatic logic [1:0] jobs_inc [8];
       automatic logic [7:0]  prod0, prod1, wb0, wb1;
 
       // ---- lane results write back (C2: capture, round, enqueue) -----------
@@ -525,7 +543,7 @@ module zhao_texture_material_combine_v1 #(
       end
 
       // ---- issue up to two jobs (§15.3: two lanes, two jobs per clock) -----
-      for (int k = 0; k < 8; k++) jobs_inc[k] = 32'd0;
+      for (int k = 0; k < 8; k++) jobs_inc[k] = 2'd0;
       lane0_q.valid <= 1'b0;
       lane1_q.valid <= 1'b0;
       issued = 0;
@@ -560,7 +578,7 @@ module zhao_texture_material_combine_v1 #(
               // double-issue. An under-reporting counter that nobody checks is
               // the failure mode CLAUDE.md names, and §15.4's whole
               // 80%-capacity argument reads this number.
-              jobs_inc[rec[i].recipe] = jobs_inc[rec[i].recipe] + 1;
+              jobs_inc[rec[i].recipe] = jobs_inc[rec[i].recipe] + 2'd1;
               rec[i].busy[j] <= 1'b1;
               pend0[j] = 1'b0;
               issued   = issued + 1;
@@ -570,7 +588,7 @@ module zhao_texture_material_combine_v1 #(
       end
 
       for (int k = 0; k < 8; k++)
-        jobs_by_recipe_r[k] <= jobs_by_recipe_r[k] + jobs_inc[k];
+        jobs_by_recipe_r[k] <= jobs_by_recipe_r[k] + 32'(jobs_inc[k]);
 
       // ---- retire ---------------------------------------------------------
       if (have_retire && o_ready_i) begin
