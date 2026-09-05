@@ -126,7 +126,7 @@ constexpr int32_t kLoopBuryMm = 250;        // the near end plunges into the bod
 // fold-scale range (the committed closure probe sweeps 700..1160 and
 // asserts it). PASS 4: the old neck->A span (680) splits at the NEW neck
 // hinge (336 + 344 = 680), so every drawn station stays where it was.
-constexpr int32_t kLoopArcMm[6] = {336, 344, 340, 380, 380, 1420};
+constexpr int32_t kLoopArcMm[6] = {336, 344, 340, 380, 380, 1270};
 // fold angles at the neck exit and hinges A..C (angle16, about Z); hinge D
 // has NO authored fold — loop_pose computes it per key (closure). Derived
 // from the sheet's ring read (tall upright egg, W/H ~0.8), tuned by LOOKING.
@@ -136,13 +136,46 @@ constexpr int32_t kLoopFoldBA16 = 11284;      // ~62 deg over the peak
 constexpr int32_t kLoopFoldCA16 = 12740;      // ~70 deg at the rear hinge
 // the re-entry anchor (body-local, the deep point the aimed segment plunges
 // toward; also kBLoopBase2's bind — the drawn re-entry made a named joint)
-constexpr int32_t kLoopReentryXMm = -230;
-constexpr int32_t kLoopReentryYMm = 180;
+// PASS 6 C.4: the anchor is pulled DEEPER, (-230,180) -> (-150,118). This is
+// the closure aim's target, so it sets how deep the return arm ends up. Stage
+// C's bigger folds swing hinge D further, and the arm -- which is designed to
+// overshoot past the anchor -- was coming out the far side: the committed
+// probe measured the arm end at 1444 pm of the body surface against a 1120
+// gate. Lengthening the arm made that WORSE (1977), which is what proved the
+// fault was overshoot and not short reach; the honest lever is the anchor.
+//
+// This keeps the amplitude Direction 5 §2a asked for. Shrinking the authored
+// range to satisfy a closure gate is the trade the direction forbids.
+constexpr int32_t kLoopReentryXMm = -120;
+constexpr int32_t kLoopReentryYMm = 95;
 // the drawn kink/lean lives in the REST POSE on the neck bone (R8): a small
 // yaw opens the front view's slot-hole read and gives the antenna the
 // sheet's asymmetric attitude; the rest tilt at A is the drawn front KINK.
 constexpr int32_t kNeckRestYawA16 = 3300;     // ~18 deg loop-plane yaw
 constexpr int32_t kLoopRestTiltA16 = 800;     // ~4 deg out-of-plane at A
+// ---- PASS 6 STAGE C.1: THE HINGES GET THEIR MISSING AXIS ----------------
+// Direction 5 §2a is a RE-OPENED failure -- "they're still super static" after
+// a whole pass made them the centre of attention -- so the instruction was to
+// find the why before adding more of the same. The recon found it in source
+// and I confirmed it: the antenna could not move the way the owner asked,
+// for three compounding reasons.
+//
+//   PLANAR.      loop_pose() built hinges B and C as quat_z ONLY, and the
+//                knead layer was quat_z everywhere except one neck term. The
+//                whole antenna lived in one plane. "The hinges are all
+//                supposed to be able to move up and down SEPARATELY" is
+//                geometrically impossible with one shared rotation axis --
+//                no amount of amplitude fixes a missing degree of freedom.
+//   CORRELATED.  five hinges driven from one `grip` scalar times fixed
+//                constants, so they were perfectly in step BY CONSTRUCTION.
+//   SMALL.       the peak hinge modulated ~12% of its rest angle, at ~30%
+//                foreshortening from the 45 deg shipping camera.
+//
+// B and C now carry their own out-of-plane rest tilt and their own animated
+// out-of-plane channel. A rest tilt also breaks the exact coplanarity that
+// made the loop read as a flat cut-out from three-quarter.
+constexpr int32_t kLoopRestTiltBA16 = -620;   // ~3.4 deg, opposing A
+constexpr int32_t kLoopRestTiltCA16 = 940;    // ~5.2 deg
 // per-station blade radii (the taper): {buried base, junctionF, neck, A,
 // B, C, D, end}. rx = in the loop plane, rz = across it (the FRONT
 // sheet's blade).
@@ -212,7 +245,11 @@ constexpr int32_t kKnuckleAtJfMm = 320;
 constexpr int32_t kKnuckleAtAMm = 930;
 constexpr int32_t kKnuckleAtBMm = 1270;
 constexpr int32_t kKnuckleAtCMm = 1650;
-constexpr int32_t kKnuckleAtEndMm = 3150;
+// PASS 6: taken from the committed probe's own SURFACE CROSSING 2 report
+// (arc station ~2690 mm), not guessed. At 3150 the re-entry knuckle sat 460 mm
+// PAST the body surface -- entirely buried, so the swell the side sheet draws
+// where the band returns to the body was invisible.
+constexpr int32_t kKnuckleAtEndMm = 2660;
 // How far each knuckle stands PROUD of the band, broadwise (x, in the loop
 // plane) and across the blade (z). Every one is an independent owner knob: set
 // a pair to 0 and that knuckle goes away without touching the others.
@@ -478,7 +515,14 @@ constexpr int32_t kTaunt2LassoA16 = 1900;  // the loop-peak lasso tilt sweep
 // body wobbling above and the antenna flexing at the junction hinges,
 // then rights itself with overshoot.
 constexpr int kTrickKeys = 200;
-constexpr int32_t kTrickPlantRootMm = 1670;   // root height while planted: the
+// PASS 6: 1670 -> 1644. Stage B.2's rebuilt antenna (48 rings instead of 34,
+// the knuckle swells, the shortened return arm) moved which vertex is deepest,
+// and the committed probe caught the headstand DRIFTING OFF THE GROUND --
+// deepest vertex +1 mm where -25 mm is declared. Per the ground-contact law
+// the ABSENCE of declared penetration is a bug exactly as an undeclared
+// penetration is: a headstand resting at zero reads as hovering. The plant
+// height is the knob; the declaration is unchanged.
+constexpr int32_t kTrickPlantRootMm = 1644;   // root height while planted: the
                                               // loop peak (~1665 above root,
                                               // inverted) meets the dirt with
                                               // the declared penetration
@@ -672,18 +716,38 @@ constexpr int kReleaseKeys = 14;           // every clip's tail: amp eases to 0
                                            // so the loop seam carries no pop
 // the choreography amplitudes (angle16; "very mobile" -- authored large,
 // bounded by the 07 bands and the closure probe)
-constexpr int32_t kKneadGripJfA16 = 1500;  // gather: the junctions close...
+constexpr int32_t kKneadGripJfA16 = 2300;  // gather: the junctions close...
                                            // (iter 3: the first authoring
                                            // moved the pocket area by <1% --
                                            // the grip must be SEEN)
-constexpr int32_t kKneadGripNeckA16 = 2600;
-constexpr int32_t kKneadGripAA16 = 2200;
-constexpr int32_t kKneadGripBA16 = 1400;
-constexpr int32_t kKneadGripCA16 = 1800;
-constexpr int32_t kKneadWagJfA16 = 900;   // knead: the two hands work...
-constexpr int32_t kKneadWagNeckA16 = 400;  // (neck stirs out-of-plane)
-constexpr int32_t kKneadWagBA16 = 500;
-constexpr int32_t kKneadWagCA16 = 1000;    // ...in counter-rotation
+constexpr int32_t kKneadGripNeckA16 = 4100;
+constexpr int32_t kKneadGripAA16 = 3500;
+constexpr int32_t kKneadGripBA16 = 2600;
+constexpr int32_t kKneadGripCA16 = 3200;
+// ---- PASS 6 STAGE C.2/C.3: PER-HINGE ENVELOPES AND AMPLITUDE ------------
+// C.2 splits the shared driver. Each hinge samples the SAME fold envelope at
+// its own lag, so the grip travels up the antenna as a wave instead of every
+// joint closing on the same frame -- the house arrival-lag pattern, front
+// leading. Decorrelation must be visible in a per-hinge trajectory plot; a
+// flat line, or five identical lines, IS the finding.
+// Lags are in KEYS and wrap modulo the clip length, so every clip still loops
+// seamlessly (07-MOTION-STYLE: integer cycles per clip).
+constexpr int kKneadLagJfKeys = 0;
+constexpr int kKneadLagNeckKeys = 4;
+constexpr int kKneadLagAKeys = 8;
+constexpr int kKneadLagBKeys = 13;
+constexpr int kKneadLagCKeys = 18;
+// The out-of-plane knead channel that C.1 made possible: B and C swing across
+// the loop plane, not only within it. Their own periods differ from the
+// in-plane wag so the two never lock into one apparent motion.
+constexpr int32_t kKneadOopBA16 = 800;
+constexpr int32_t kKneadOopCA16 = 620;
+constexpr int32_t kKneadOopAA16 = 900;
+constexpr int kKneadOopPeriodKeys = 31;   // deliberately coprime-ish with 22
+constexpr int32_t kKneadWagJfA16 = 1600;  // knead: the two hands work...
+constexpr int32_t kKneadWagNeckA16 = 900;  // (neck stirs out-of-plane)
+constexpr int32_t kKneadWagBA16 = 1100;
+constexpr int32_t kKneadWagCA16 = 1900;    // ...in counter-rotation
 constexpr int32_t kKneadWagB2A16 = 900;    // the back-junction ball slides
 constexpr int kKneadWagPeriodKeys = 22;
 constexpr int32_t kKneadTremorA16 = 130;   // the hold's small tremor
@@ -699,8 +763,26 @@ constexpr int32_t kKneadTremorA16 = 130;   // the hold's small tremor
 // choreography stacked its agitation on the clip's own big gesture and the
 // smear fog buried the loop (taunt2 f166 was the exhibit). damage's 250 is
 // simply REACHED now (the dead-knob fix): it shipped at 700 by accident.
-constexpr int kKneadClipPm[15] = {1000, 600, 900, 800, 350, 500, 700,
-                                  0,    450, 300, 350, 550, 380, 0, 250};
+// PASS 6 C.2 (Direction 5, the struck-out line): kKneadClipPm is NOT a
+// particle knob -- antenna_knead() is a BONE POSE LAYER, and retiring it would
+// stop the antennae gesturing on every clip. It is the antenna-expression knob
+// and §2a's lever, so it is RAISED. channel's 900 is the second highest in the
+// bank and is very likely why that clip reads best; the low clips come up
+// toward it. Slot 7 stays 0 -- it is the still form diagnostic and must not
+// move. SLOT 13 (trick, the headstand) STAYS 0, and that is a finding, not an
+// oversight: raising it to 600 moved the antenna off the ground and the
+// committed probe failed the clip's DECLARED ground contact -- deepest vertex
+// +118 mm where -25 mm is declared, i.e. the headstand started hovering. The
+// trick headstand is protected item 9. Giving that clip expression means
+// re-authoring its contact, which is stage-F work.
+//
+// ⚠ This partially reverts pass-5 QA, which cut rest 700->500 and taunt2
+// 500->380 because the knead's agitation stacked on those clips' own big
+// gestures and the smear fog buried the loop. Said out loud so nobody hunts
+// for a regression. The burying was a SMEAR-plateau fault (stage E.5), not a
+// knead fault, and these two are the clips to re-check first if it returns.
+constexpr int kKneadClipPm[15] = {1000, 850, 950, 900, 700, 800, 850,
+                                  0,    800, 650, 700, 850, 750, 0,   650};
 // PASS 6 (0.2, carried from pass-5 QA): the guard over this array is DERIVED
 // from the array, never hand-written. The literal `< 14` orphaned slot 14 once
 // (damage silently ran at 700 against its authored 250); `< 15` was the same

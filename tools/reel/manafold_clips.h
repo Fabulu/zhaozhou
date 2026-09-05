@@ -159,7 +159,8 @@ inline int32_t angle16_of(int64_t vx, int64_t vy) {
  * deep past the anchor.
  */
 inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32_t c_pm,
-                      int32_t tilt_a16 = 0, int32_t d_play_a16 = 0) {
+                      int32_t tilt_a16 = 0, int32_t d_play_a16 = 0,
+                      int32_t tilt_b_a16 = 0, int32_t tilt_c_a16 = 0) {
   const auto a = [](int32_t base, int32_t pm) {
     return static_cast<int32_t>((static_cast<int64_t>(base) * pm) / 1000);
   };
@@ -174,8 +175,11 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   const zc::quat16 loc_junction = quat_mul(quat_y(kNeckRestYawA16), quat_z(fn));
   const zc::quat16 loc_a =
       quat_mul(quat_z(fa), quat_x(kLoopRestTiltA16 + tilt_a16));
-  const zc::quat16 loc_b = quat_z(fb);
-  const zc::quat16 loc_c = quat_z(fc);
+  // PASS 6 C.1: B and C gain their out-of-plane axis. They were quat_z ONLY,
+  // which is why "each hinge moves up and down separately" was geometrically
+  // impossible however hard the amplitudes were pushed.
+  const zc::quat16 loc_b = quat_mul(quat_z(fb), quat_x(kLoopRestTiltBA16 + tilt_b_a16));
+  const zc::quat16 loc_c = quat_mul(quat_z(fc), quat_x(kLoopRestTiltCA16 + tilt_c_a16));
   g.q[kBJunctionF] = quat_mul(g.q[kBJunctionF], loc_junction);
   g.q[kBHingeA] = quat_mul(g.q[kBHingeA], loc_a);
   g.q[kBHingeB] = quat_mul(g.q[kBHingeB], loc_b);
@@ -201,8 +205,29 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   }
   int32_t vx, vy, vz;  // anchor - P_D, taken into C's local frame
   quat_rot_vec(quat_conj(Q), kLoopReentryXMm - px, kLoopReentryYMm - py, -pz, vx, vy, vz);
-  const int32_t aim = angle16_of(vx, vy);
-  g.q[kBHingeD] = quat_mul(g.q[kBHingeD], quat_z(aim + d_play_a16));
+  // ---- PASS 6 C.4: THE CLOSURE AIM IS NOW 3D ------------------------------
+  // It used to be a Z-FOLD ONLY, and the source said so in its own words: "a
+  // Z-fold can only aim within D's local XY plane, so the out-of-plane
+  // residual is projected away". That was safe while every hinge was quat_z
+  // and the residual was ~zero. C.1 gives B and C a real out-of-plane axis,
+  // which grows exactly that residual -- and the committed probe caught it
+  // immediately: worst arm rim 1539 pm against a 1120 gate, the return arm
+  // visibly missing its re-entry. This was risk 3 in the architecture and it
+  // fired on the first build, which is why it was worth checking first.
+  //
+  // The fix is bounded to this function: aim in TWO stages instead of one.
+  // First the in-plane swing exactly as before; then re-express the target in
+  // the frame that swing produces -- where its x-component is zero by
+  // construction -- and lift out of plane by a rotation about D's own local X.
+  // No square root and no iteration: quat_rot_vec and angle16_of already do
+  // both halves. Composed as quat_z * quat_x, so the lift happens in the
+  // swung frame.
+  const int32_t aim_z = angle16_of(vx, vy);
+  int32_t wx, wy, wz;
+  quat_rot_vec(quat_conj(quat_z(aim_z)), vx, vy, vz, wx, wy, wz);
+  const int32_t aim_x = angle16_of(-wz, wy);
+  g.q[kBHingeD] = quat_mul(g.q[kBHingeD],
+                           quat_mul(quat_z(aim_z + d_play_a16), quat_x(aim_x)));
 }
 inline void loop_rest(Rig& g) { loop_pose(g, 1000, 1000, 1000, 1000); }
 
@@ -542,7 +567,21 @@ inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f) {
   // its authored 250, and the owner's knob did nothing)
   const int gain = slot < static_cast<uint32_t>(kKneadClipSlots) ? kKneadClipPm[slot] : 700;
   if (gain <= 0) return;
-  const FoldPhase ph = fold_phase(slot, keys, f * 16);
+  // PASS 6 C.2: THE SHARED DRIVER IS SPLIT. Every hinge used to read the same
+  // `grip` scalar on the same frame, so they were perfectly correlated by
+  // construction and the antenna could only open and close as one piece.
+  // Each hinge now samples the SAME envelope at its OWN lag, so the grip
+  // travels up the antenna as a wave. The lag wraps modulo the clip length,
+  // so the clip still loops seamlessly.
+  const auto lagged = [&](int lag) {
+    const int fl = ((f - lag) % keys + keys) % keys;
+    return fold_phase(slot, keys, fl * 16);
+  };
+  const FoldPhase ph = lagged(kKneadLagJfKeys);
+  const FoldPhase ph_neck = lagged(kKneadLagNeckKeys);
+  const FoldPhase ph_a = lagged(kKneadLagAKeys);
+  const FoldPhase ph_b = lagged(kKneadLagBKeys);
+  const FoldPhase ph_c = lagged(kKneadLagCKeys);
   const auto a = [&](int32_t base, int32_t env_pm) {
     return static_cast<int32_t>(static_cast<int64_t>(base) * env_pm / 1000 * gain / 1000);
   };
@@ -554,13 +593,30 @@ inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f) {
                               sinp(f, keys, keys / 9 > 0 ? keys / 9 : 1)) >> 16)
       : 0;
   g.q[kBJunctionF] = quat_mul(g.q[kBJunctionF], quat_z(a(kKneadGripJfA16, grip) + trem));
-  g.q[kBNeck] = quat_mul(g.q[kBNeck], quat_z(a(kKneadGripNeckA16, grip) - trem));
-  g.q[kBHingeA] = quat_mul(g.q[kBHingeA], quat_z(a(kKneadGripAA16, grip)));
-  g.q[kBHingeB] = quat_mul(g.q[kBHingeB], quat_z(a(kKneadGripBA16, grip) + trem / 2));
-  g.q[kBHingeC] = quat_mul(g.q[kBHingeC], quat_z(a(kKneadGripCA16, grip)));
+  g.q[kBNeck] = quat_mul(g.q[kBNeck], quat_z(a(kKneadGripNeckA16, ph_neck.amp_pm) - trem));
+  g.q[kBHingeA] = quat_mul(g.q[kBHingeA], quat_z(a(kKneadGripAA16, ph_a.amp_pm)));
+  g.q[kBHingeB] =
+      quat_mul(g.q[kBHingeB], quat_z(a(kKneadGripBA16, ph_b.amp_pm) + trem / 2));
+  g.q[kBHingeC] = quat_mul(g.q[kBHingeC], quat_z(a(kKneadGripCA16, ph_c.amp_pm)));
+  // PASS 6 C.1/C.3: THE OUT-OF-PLANE CHANNEL -- the axis that did not exist
+  // until this pass. A, B and C swing ACROSS the loop plane on their own
+  // period, so "up and down separately" is now something the rig can express.
+  // The period is deliberately different from the in-plane wag's, so the two
+  // never lock into one apparent motion.
+  {
+    const int ocyc = keys / kKneadOopPeriodKeys > 0 ? keys / kKneadOopPeriodKeys : 1;
+    const auto oop = [&](int32_t base, const FoldPhase& p, uint16_t phase) {
+      const int32_t w = sinp(f, keys, ocyc, phase);
+      return static_cast<int32_t>(
+          (static_cast<int64_t>(a(base, p.amp_pm)) * w) >> 16);
+    };
+    g.q[kBHingeA] = quat_mul(g.q[kBHingeA], quat_x(oop(kKneadOopAA16, ph_a, 0)));
+    g.q[kBHingeB] = quat_mul(g.q[kBHingeB], quat_x(oop(kKneadOopBA16, ph_b, 0x3000)));
+    g.q[kBHingeC] = quat_mul(g.q[kBHingeC], quat_x(oop(kKneadOopCA16, ph_c, 0x6800)));
+  }
   // KNEAD: the two hands wedge in counter-rotation; the neck stirs
   // out-of-plane; the back ball slides. One consistent period.
-  if (ph.agit_pm > 0) {
+  if (ph.agit_pm > 0 || ph_b.agit_pm > 0 || ph_c.agit_pm > 0) {
     const int cyc = keys / kKneadWagPeriodKeys > 0 ? keys / kKneadWagPeriodKeys : 1;
     const int32_t w1 = sinp(f, keys, cyc);
     const int32_t w2 = sinp(f, keys, cyc, 0x4000);
@@ -569,13 +625,13 @@ inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f) {
         quat_z(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagJfA16, ph.agit_pm)) * w1) >> 16)));
     g.q[kBHingeC] = quat_mul(
         g.q[kBHingeC],
-        quat_z(-static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagCA16, ph.agit_pm)) * w1) >> 16)));
+        quat_z(-static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagCA16, ph_c.agit_pm)) * w1) >> 16)));
     g.q[kBNeck] = quat_mul(
         g.q[kBNeck],
-        quat_x(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagNeckA16, ph.agit_pm)) * w2) >> 16)));
+        quat_x(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagNeckA16, ph_neck.agit_pm)) * w2) >> 16)));
     g.q[kBHingeB] = quat_mul(
         g.q[kBHingeB],
-        quat_z(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagBA16, ph.agit_pm)) * w2) >> 16)));
+        quat_z(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagBA16, ph_b.agit_pm)) * w2) >> 16)));
     g.q[kBLoopBase2] = quat_mul(
         g.q[kBLoopBase2],
         quat_z(-static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagB2A16, ph.agit_pm)) * w2) >> 16)));

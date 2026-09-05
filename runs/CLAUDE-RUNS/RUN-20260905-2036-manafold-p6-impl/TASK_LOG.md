@@ -317,3 +317,74 @@ one late in the pass.
 (46,184,210), value 82%, essentially the 79% target. And the lens reads properly
 deep in scene. Moving a pigment because a number said so, when the render says
 otherwise, is the exact error `CLAUDE.md` opens with.
+
+### 23:20 — STAGE C (the antenna) done. C.4 fired on the first build, as predicted.
+
+**C.1 — the missing axis.** Hinges B and C were `quat_z` ONLY in `loop_pose()`,
+and `antenna_knead()` was `quat_z` everywhere except one neck term. **"Each hinge
+moves up and down separately" was geometrically impossible**, and no amount of
+amplitude fixes a missing degree of freedom. B and C gain their own out-of-plane
+rest tilt (`kLoopRestTiltB/CA16`) and A/B/C gain an animated out-of-plane channel
+on its own period.
+
+**C.2 — the shared driver is split.** Every hinge read the same `grip` scalar on
+the same frame: correlated by construction. Each now samples the *same* envelope
+at **its own lag** (`kKneadLag*Keys`), so the grip travels up the antenna as a
+wave. The lag wraps modulo the clip length, so every clip still loops seamlessly.
+
+**C.3 — amplitude.** Grip constants up ~55%, wag up ~90%, and `kKneadClipPm`
+raised across the bank toward `channel`'s 900 — the knob Direction 5's struck-out
+line would have retired, and the one §2a actually needs.
+
+**C.4 — the closure. It broke immediately, exactly as risk 3 said it would.**
+The committed probe: **worst arm rim 1539 pm against a 1120 gate.** Checking it
+first, before authoring any clip, was worth the whole stage. What followed is
+worth recording because two of my three hypotheses were wrong:
+
+1. **Extended the aim to 3D** (two-stage: in-plane swing, then re-express the
+   target in that swung frame — where its x is zero by construction — and lift
+   about D's own local X; no square root, no iteration). 1539 → 1450. I got the
+   X-axis sign wrong first; flipping it gave 2657, which *proved* the convention
+   rather than leaving it a guess.
+2. **Bounded the out-of-plane amplitude** at the C–D end, per the architecture's
+   fallback. 1450 → 1444. **Nearly nothing — so out-of-plane was not the cause.**
+   Restored.
+3. **Lengthened the return arm**, on the theory that it could not reach.
+   1444 → **1977, much worse** — which is what proved the fault was the opposite:
+   the arm was *overshooting through the body and out the far side*.
+
+An isolation build with pass-5 amplitudes still failed at **1141**, so the
+baseline was already marginal — B.2's `kLoopRings` 34→48 moved which vertex the
+rim samples. The honest levers were the **anchor depth** (the aim target,
+(-230,180) → (-120,95)) and a **shorter** arm (1420 → 1270). Bank **1064** and
+sweep **1059**, both under 1120: **green, with the full authored range kept.**
+Shrinking the range to satisfy the gate is the trade §2a forbids, and it was not
+made. The margin is ~5% at both ends and the two constraints pull opposite ways
+(low folds want a longer arm, high folds a shorter one), so 1270 is near the
+balance point rather than a comfortable place — flagging that for the reviewer.
+
+**Two bugs the probe found that I would not have seen by looking:**
+* **My re-entry knuckle was buried 460 mm inside the body.** I had guessed
+  `kKnuckleAtEndMm = 3150`; the probe's own SURFACE CROSSING 2 report says the
+  band crosses the surface at arc ~2660. The swell the side sheet draws *where
+  the band returns to the body* was invisible. Now taken from the probe.
+* **`trick`'s headstand had drifted off the ground** — deepest vertex +1 mm
+  where −25 mm is declared. B.2's rebuilt antenna moved the deepest vertex. Per
+  the ground-contact law the *absence* of declared penetration is a bug exactly
+  as an undeclared one is. `kTrickPlantRootMm` 1670 → 1644; now −23 mm, in band.
+* And `kKneadClipPm[13]` (trick) **stays 0**: raising it to 600 moved the antenna
+  off the ground and failed that same gate. Giving the trick antenna expression
+  means re-authoring its contact — stage-F work I did not reach.
+
+**LOOKED AT** (`evidence/C-antenna-sheet.png`, 8 frames of `channel`, pass 5
+over pass 6): the pass-5 row is **eight frames of the same shape** — that is the
+owner's "still super static", visible rather than argued. The pass-6 row opens
+wide, closes, tilts, and moves the peak and the window shape frame to frame.
+**C.6 verified by eye in the same sheet: the mote cloud reshapes with the loop**
+— the fold reacts to the sweep, which is the failure the owner has described
+since Direction 4.
+
+**BLAST RADIUS, stated up front:** `antenna_knead()` and `loop_pose()` are on
+**every clip**, and `kLoopArcMm[5]`/`kLoopReentry*` change the model. **All 15
+clips move.** Not 3, not 7 — all of them, except slot 7 (gain 0, the still
+diagnostic) which still moves by geometry. CRCs go with the stage-G render.
