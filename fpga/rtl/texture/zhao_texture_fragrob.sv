@@ -57,6 +57,9 @@
 module zhao_texture_fragrob #(
     parameter int unsigned DEPTH = 16,
     parameter int unsigned CTXW  = 64,
+    // Width of the ingress TOKEN, carried as a TYPED FIELD beside the
+    // caller's context rather than packed into it. See `f_tok_i`.
+    parameter int unsigned TOKW_F = 6,
     parameter int unsigned BINDW = 8,
     parameter int unsigned LODW  = 4,
     // 8 per ruling X5: a 2-bit generation wraps after four reuses, so a return
@@ -76,7 +79,14 @@ module zhao_texture_fragrob #(
     input  var logic [BINDW-1:0]       f_binding_i  [3],
     input  var logic [LODW-1:0]        f_lod_i      [3],
     input  var logic [2:0]             f_recipe_i,
+    // THE CALLER'S CONTEXT, CARRIED VERBATIM. Not a place to stash island
+    // fields: the caller interprets this word as its own data, so overwriting
+    // any of its bits silently destroys something this module cannot see.
     input  var logic [CTXW-1:0]        f_ctx_i,
+    // The ingress token, so a consumer downstream of this buffer can still
+    // find the fragment's captured attributes -- a separate typed field
+    // precisely because the context above must stay untouched.
+    input  var logic [TOKW_F-1:0]      f_tok_i,
     input  var logic                   f_aux_i,
     input  var logic                   f_uv_sat_i,
 
@@ -124,6 +134,7 @@ module zhao_texture_fragrob #(
     output var logic [SW-1:0]          alloc_slot_o,
     output var logic                   alloc_valid_o,
     output var logic [CTXW-1:0]        o_ctx_o,
+    output var logic [TOKW_F-1:0]      o_tok_o,
     output var logic [23:0]            o_rgb_o,
     output var logic [7:0]             o_a_o,
     // ---- the three banked sample results, exposed ------------------------
@@ -207,6 +218,7 @@ module zhao_texture_fragrob #(
   logic [23:0]        res_rgb_m [3][DEPTH];
   logic [7:0]         res_a_m   [3][DEPTH];
   logic [CTXW-1:0]    ctx_m     [DEPTH];
+  logic [TOKW_F-1:0]  tok_m     [DEPTH];
   logic [23:0]        auxrgb_m  [DEPTH];
   logic [7:0]         auxa_m    [DEPTH];
 
@@ -436,12 +448,14 @@ module zhao_texture_fragrob #(
   logic [23:0]     out_s_rgb_r [3];
   logic [7:0]      out_s_a_r   [3];
   logic [CTXW-1:0] out_ctx_r;
+  logic [TOKW_F-1:0] out_tok_r;
   logic            out_hasaux_r, out_sat_r;
   logic [SW-1:0]   r_slot_q;
 
   assign o_valid_o   = (r_st_q == R_HOLD);
   assign retire_ev_c = o_valid_o && o_ready_i;
   assign o_ctx_o     = out_ctx_r;
+  assign o_tok_o     = out_tok_r;
   assign o_rgb_o     = out_rgb_r;
   assign o_a_o       = out_a_r;
   assign o_s_rgb_o   = out_s_rgb_r;
@@ -479,6 +493,7 @@ module zhao_texture_fragrob #(
         desc_met_m[s][alloc_slot_c] <= {f_binding_i[s], f_lod_i[s]};
       end
       ctx_m[alloc_slot_c] <= f_ctx_i;
+      tok_m[alloc_slot_c] <= f_tok_i;
     end
 
     // ---- descriptor read for issue ----------------------------------------
@@ -506,6 +521,7 @@ module zhao_texture_fragrob #(
     out_aux_rgb_r <= auxrgb_m[head_slot_c];
     out_aux_a_r   <= auxa_m[head_slot_c];
     out_ctx_r     <= ctx_m[head_slot_c];
+    out_tok_r     <= tok_m[head_slot_c];
     ax_ctx_r      <= ctx_m[ax_slot_q];
   end
 

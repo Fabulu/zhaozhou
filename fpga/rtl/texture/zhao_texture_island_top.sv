@@ -302,28 +302,64 @@ module zhao_texture_island_top #(
   logic [63:0]           uvw_m   [FCTXN];   // {u_over_w, v_over_w}
   logic [CTXW-1:0]       fctx_m  [FCTXN];   // tag + token + material fields
   logic [31:0]           fbase_m [FCTXN];   // {base_rgb, base_a}
+  // ONE NAMED ARRAY PER FIELD, and deliberately not one packed word.
+  //
+  // The packed form costs nothing to write and one whole defect to find: the
+  // palette lookup in this file took its slot and generation from two
+  // hand-written slices of the same token that OVERLAPPED, so the "slot" was
+  // the low bits of the "generation" and every CLUT fragment came out black
+  // while the lookup counter looked healthy. Named fields cannot overlap.
   localparam int unsigned PSW = $clog2(PAL_SLOTS);
-  logic [BINDW+LODW+2+PSW+GENW:0] fmisc_m [FCTXN];  // {pal_gen, pal_slot, aux, class, lod, binding}
+  logic [BINDW-1:0] fbind_m [FCTXN];
+  logic [LODW-1:0]  flod_m  [FCTXN];
+  logic [1:0]       fcls_m  [FCTXN];
+  logic             faux_m  [FCTXN];
+  logic [PSW-1:0]   fpsl_m  [FCTXN];
+  logic [GENW-1:0]  fpgn_m  [FCTXN];
+  logic [1:0]       fsc_m   [FCTXN];
+  logic [2:0]       frec_m  [FCTXN];
+  logic [7:0]       fwt_m   [FCTXN];
 
   wire [FCTXW-1:0] fc_wp = tok_r[FCTXW-1:0];
 
-  // The ctx word written at ADMISSION. The six bits at [21:16] were reserved
-  // and now carry the token itself, so a consumer downstream of FRAGROB -- which
-  // sees only the retiring ctx -- can still index this table.
-  //   [15:0]  tag          [21:16] token
-  //   [23:22] sample_count [26:24] recipe      [34:27] weight
-  //   [63:35] the caller's own context bits
+  // THE CALLER'S CONTEXT IS STORED VERBATIM AND NEVER REPACKED.
+  //
+  // An earlier version of this capture wrote the recipe, weight, sample count
+  // and token into bits [34:16] of the caller's own context word. That is not
+  // free space -- the caller interprets that word as its own data, and the
+  // owner's recovery architecture v2 (2.3) rules it out directly: "Packing
+  // recipe bits into that word is not a valid way to retain an independently
+  // opaque context and world X/Z ... Do not silently overwrite caller-owned
+  // bits."
+  //
+  // The island's own fields live in the named arrays above, and the token
+  // travels through FRAGROB as a TYPED FIELD beside the context rather than
+  // inside it, so nothing the caller owns is touched.
+  // HONEST LIMIT: this island consumes only the low 16 bits of the context,
+  // as the fragment tag behind out_tag_o. The remaining bits are stored and
+  // carried through FRAGROB intact, but nothing downstream reads them and no
+  // port exposes them, so NO TEST CAN OBSERVE that they survive. What is
+  // established is the weaker and still necessary property that the island no
+  // longer OVERWRITES them. Surfacing them would cost 64 output pins on a
+  // block whose timing is already boundary-sensitive, so it waits for a
+  // consumer that actually needs them.
   logic [CTXW-1:0] fr_f_ctx_in;
-  assign fr_f_ctx_in = {frag_ctx_i[CTXW-1:35], frag_weight_i, frag_recipe_i,
-                        frag_sample_count_i, fc_wp, frag_ctx_i[15:0]};
+  assign fr_f_ctx_in = frag_ctx_i;
 
   always_ff @(posedge clk) begin
     if (frag_valid_i && frag_ready_o) begin
       uvw_m[fc_wp]   <= {frag_u_over_w_i, frag_v_over_w_i};
       fctx_m[fc_wp]  <= fr_f_ctx_in;
       fbase_m[fc_wp] <= {frag_base_rgb_i, frag_base_a_i};
-      fmisc_m[fc_wp] <= {frag_pal_gen_i, frag_pal_slot_i, frag_aux_i,
-                         frag_class_i, frag_lod_i, frag_binding_i};
+      fbind_m[fc_wp] <= frag_binding_i;
+      flod_m [fc_wp] <= frag_lod_i;
+      fcls_m [fc_wp] <= frag_class_i;
+      faux_m [fc_wp] <= frag_aux_i;
+      fpsl_m [fc_wp] <= frag_pal_slot_i;
+      fpgn_m [fc_wp] <= frag_pal_gen_i;
+      fsc_m  [fc_wp] <= frag_sample_count_i;
+      frec_m [fc_wp] <= frag_recipe_i;
+      fwt_m  [fc_wp] <= frag_weight_i;
     end
   end
 
@@ -354,17 +390,15 @@ module zhao_texture_island_top #(
   wire [FCTXW-1:0]      fc_rp    = pu_tag[FCTXW-1:0];
   wire [CTXW-1:0]       fctx_rd  = fctx_m[fc_rp];
   wire [31:0]           fbase_rd = fbase_m[fc_rp];
-  wire [BINDW+LODW+2+PSW+GENW:0] fmisc_rd = fmisc_m[fc_rp];
-
-  wire [BINDW-1:0] f_binding_c = fmisc_rd[BINDW-1:0];
-  wire [LODW-1:0]  f_lod_c     = fmisc_rd[BINDW+LODW-1:BINDW];
-  wire [1:0]       f_class_c   = fmisc_rd[BINDW+LODW+1:BINDW+LODW];
-  wire             f_aux_c     = fmisc_rd[BINDW+LODW+2];
-  wire [PSW-1:0]   f_pal_slot_c = fmisc_rd[BINDW+LODW+2+PSW:BINDW+LODW+3];
-  wire [GENW-1:0]  f_pal_gen_c  = fmisc_rd[BINDW+LODW+2+PSW+GENW:BINDW+LODW+3+PSW];
-  wire [1:0]       f_scount_c  = fctx_rd[23:22];
-  wire [2:0]       f_recipe_c  = fctx_rd[26:24];
-  wire [7:0]       f_weight_c  = fctx_rd[34:27];
+  wire [BINDW-1:0] f_binding_c  = fbind_m[fc_rp];
+  wire [LODW-1:0]  f_lod_c      = flod_m [fc_rp];
+  wire [1:0]       f_class_c    = fcls_m [fc_rp];
+  wire             f_aux_c      = faux_m [fc_rp];
+  wire [PSW-1:0]   f_pal_slot_c = fpsl_m [fc_rp];
+  wire [GENW-1:0]  f_pal_gen_c  = fpgn_m [fc_rp];
+  wire [1:0]       f_scount_c   = fsc_m  [fc_rp];
+  wire [2:0]       f_recipe_c   = frec_m [fc_rp];
+  wire [7:0]       f_weight_c   = fwt_m  [fc_rp];
 
   // ==========================================================================
   // MOSAIC, on the pre-TMU u/v path
@@ -424,6 +458,7 @@ module zhao_texture_island_top #(
   logic [$clog2(DEPTH)-1:0] fr_alloc_slot;
   logic        fr_alloc_valid;
   logic [CTXW-1:0] fr_o_ctx;
+  logic [FCTXW-1:0] fr_o_tok;
   logic [23:0] fr_o_rgb, fr_o_aux_rgb;
   logic [7:0]  fr_o_a, fr_o_aux_a;
   logic        fr_o_has_aux, fr_o_uv_sat;
@@ -466,9 +501,8 @@ module zhao_texture_island_top #(
   //
   // CTXW is 64 and the low 16 bits are the tag, so the material fields ride
   // above it.
-  // The ctx that reaches FRAGROB is the one STORED for this fragment at
-  // admission and recovered by its token -- see the carriage block above, where
-  // the bit layout is documented.
+  // The context that reaches FRAGROB is the caller's own, stored verbatim at
+  // admission and recovered by this fragment's token.
   logic [CTXW-1:0] fr_f_ctx;
   assign fr_f_ctx = fctx_rd;
 
@@ -486,7 +520,8 @@ module zhao_texture_island_top #(
   end
 
   zhao_texture_fragrob #(
-      .DEPTH(DEPTH), .CTXW(CTXW), .BINDW(BINDW), .LODW(LODW), .GENW(GENW)
+      .DEPTH(DEPTH), .CTXW(CTXW), .TOKW_F(FCTXW), .BINDW(BINDW),
+      .LODW(LODW), .GENW(GENW)
   ) u_fragrob (
       .clk(clk), .rst_n(rst_n),
       .f_valid_i(pu_valid), .f_ready_o(fr_f_ready),
@@ -494,7 +529,7 @@ module zhao_texture_island_top #(
       .f_sample_count_i(f_scount_c),
       .f_u_i(fr_f_u), .f_v_i(fr_f_v),
       .f_binding_i(fr_f_binding), .f_lod_i(fr_f_lod),
-      .f_recipe_i(f_recipe_c), .f_ctx_i(fr_f_ctx),
+      .f_recipe_i(f_recipe_c), .f_ctx_i(fr_f_ctx), .f_tok_i(fc_rp),
       .f_aux_i(f_aux_c), .f_uv_sat_i(pu_sat),
       .tmu_valid_o(fr_tmu_valid), .tmu_ready_i(fr_tmu_ready),
       .tmu_u_o(fr_tmu_u), .tmu_v_o(fr_tmu_v),
@@ -510,7 +545,7 @@ module zhao_texture_island_top #(
       .aux_rgb_i(fr_aux_rgb), .aux_a_i(fr_aux_a),
       .aux_rslot_i(fr_aux_rslot), .aux_rgen_i(fr_aux_rgen),
       .o_valid_o(fr_o_valid), .o_ready_i(fr_o_ready),
-      .o_ctx_o(fr_o_ctx), .o_rgb_o(fr_o_rgb), .o_a_o(fr_o_a),
+      .o_ctx_o(fr_o_ctx), .o_tok_o(fr_o_tok), .o_rgb_o(fr_o_rgb), .o_a_o(fr_o_a),
       .o_s_rgb_o(fr_o_s_rgb), .o_s_a_o(fr_o_s_a),
       .o_aux_rgb_o(fr_o_aux_rgb), .o_aux_a_o(fr_o_aux_a),
       .o_has_aux_o(fr_o_has_aux), .o_uv_sat_o(fr_o_uv_sat),
@@ -840,8 +875,8 @@ module zhao_texture_island_top #(
   zhao_texture_material_combine_v1 #(.RECS(2)) u_combine (
       .clk(clk), .rst_n(rst_n),
       .f_valid_i(fr_o_valid), .f_ready_o(comb_f_ready),
-      .f_sample_count_i(fr_o_ctx[23:22]), .f_recipe_i(fr_o_ctx[26:24]),
-      .f_weight_i(fr_o_ctx[34:27]),
+      .f_sample_count_i(fsc_m[fr_o_tok]), .f_recipe_i(frec_m[fr_o_tok]),
+      .f_weight_i(fwt_m[fr_o_tok]),
       .f_s0_rgb_i(fr_o_s_rgb[0]), .f_s0_a_i(fr_o_s_a[0]),
       .f_s1_rgb_i(fr_o_s_rgb[1]), .f_s1_a_i(fr_o_s_a[1]),
       // AUX, when the fragment has it, genuinely IS the third sample -- that
@@ -849,8 +884,8 @@ module zhao_texture_island_top #(
       // fragments that do not.
       .f_s2_rgb_i(fr_o_has_aux ? fr_o_aux_rgb : fr_o_s_rgb[2]),
       .f_s2_a_i  (fr_o_has_aux ? fr_o_aux_a   : fr_o_s_a[2]),
-      .f_base_rgb_i(fbase_m[fr_o_ctx[21:16]][31:8]),
-      .f_base_a_i(fbase_m[fr_o_ctx[21:16]][7:0]),
+      .f_base_rgb_i(fbase_m[fr_o_tok][31:8]),
+      .f_base_a_i(fbase_m[fr_o_tok][7:0]),
       .f_tag_i(fr_o_ctx[15:0]),
       .o_valid_o(out_valid_o), .o_ready_i(out_ready_i),
       .o_rgb_o(out_rgb_o), .o_a_o(out_a_o), .o_tag_o(out_tag_o),
