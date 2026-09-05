@@ -179,3 +179,28 @@ Channel median frames: one hot filament + surge motes + fold (R4). Trio:
 three conduits EACH with folding mana - the first honest multi-conduit
 render. Eye X1 vs X2 plates + gaze extreme: whites travel with the stars,
 stars stay inside the teardrops; X1 SHIPPED.
+
+## Stage Q (17:00-)
+Zixxtrixx identity: ALL 22 sequence CRCs identical to the pass-3 shipped
+table from a full final-build render; 5-risk set byte-identical vs fresh
+pristine-baseline renders (1,960 frames). ZIXX_SUNS=off gate-off:
+byte-identical baseline-vs-final (960 frames) - checklist 17 proven at
+last. Outline answered: 2.0 px median both creatures at every distance
+(inkwidth.py, can-fail selftest committed). Recon plate beside Front/Side
+sheets: the front's teardrop-lens pair with white rings and pink channel
+now rhymes with the sheet; the loop keeps the pass-3 accepted fold read;
+the body bulb stays rounder than the sheet's onion (pass-3 reviewer fault
+8, not in Direction 4's list - untouched, noted). Site fleet: all 22
+subjects rendered on the final build into website/scratch-reel; encode via
+tovideo running.
+
+## Run close (12:50)
+Encode: all 22 subjects lossless VP9 (parallelised 4-way after the serial
+encoder proved slow); assemble: 456 declared media, 0 missing, exactly one
+robots noindex meta; pass-3 current-gen unnamed02-* media retired
+(archives kept byte-for-byte). DEPLOYED via deploy.ps1 -Project upheaval
+-Branch main; production VERIFIED live: HTTP 200, Manafold first, hover +
+damage webms serving full-size, eye-experiment plates serving, both
+archive generations (2026-08-27 zixx, 2026-09-05 u02) intact, one noindex.
+Background work: tasklist shows no zhao-reel / ffmpeg / g++ / wrangler /
+python processes at close - verified, not assumed.
