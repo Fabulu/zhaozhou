@@ -2400,6 +2400,14 @@ set_tests_properties(texture_cache_pipe_directed PROPERTIES LABELS "fast;nightly
 # The island page directory -- first block of the terrain world layer.
 # Covers the same-cycle fin+claim hazard that a generation guard alone
 # does NOT close, and stale-handle reporting under residency churn.
+# The 8 km floating island: representable AND resident-affordable, which are
+# different claims. 15,625 patches dense against a 1,024 residency -- only the
+# sparse directory makes the island possible at all.
+add_executable(test_island_8km_directed terrain/island_8km_directed.cpp)
+target_link_libraries(test_island_8km_directed PRIVATE zhao_zref)
+add_test(NAME island_8km_directed COMMAND test_island_8km_directed)
+set_tests_properties(island_8km_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_terrain_residency_directed terrain/terrain_residency_directed.cpp)
 target_link_libraries(test_terrain_residency_directed PRIVATE zhao_harness)
 verilate(test_terrain_residency_directed
