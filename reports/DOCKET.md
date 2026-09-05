@@ -2783,3 +2783,67 @@ Each wrong answer was **simpler than the truth**, which is the asymmetry
 `CLAUDE.md` records — and each one would have produced real work aimed at the
 wrong place. The only reason this entry is right is that I kept opening the next
 file down instead of writing up the first plausible story.
+
+---
+
+## D22 — the staircase is complete in the bench; the asset fetcher is not
+
+**2026-09-05. Status change, not a closure.**
+
+All six treads of D22's staircase now have composed evidence in
+`tests/shell/tb_zhao_shell.sv`. The shell's input boundary has moved from
+PRECOMPUTED EDGE EQUATIONS to A MESHLET DESCRIPTOR IN MEMORY:
+
+| step | block | what stopped being supplied | checks |
+|---|---|---|---|
+| 1 | GEOM.SETUP | edge coefficients | 5 |
+| 2 | GEOM.DEPTHQUANT | the `invw24` depth | 7 |
+| 3 | GEOM.CLIP | 2A and the scan box | 10 |
+| 4 | GEOM.PROJECT | the screen vertices | 9 |
+| 5 | GEOM.ASSEMBLE | which three vertices | 8 |
+| 6 | GEOM.MESHFETCH | the meshlet itself | 9 |
+
+Every step draws the SAME triangle both ways and requires a byte-identical
+framebuffer, and every step from 3 onward also MEASURES that its own comparison
+is capable of failing — a habit step 2 forced, where the framebuffer check
+turned out to be blind to depth until depth testing was switched on.
+
+### What this does NOT close
+
+**The asset fetcher.** `zhao_geom_meshfetch` is the only `zhao_guard_req_t`
+client in the subsystem, and the bench plays THREE interfaces for it: the
+memory guard, the beat stream carrying the descriptor bytes, and the cull
+service. Step 6 proves the descriptor path inside the composed shell; it does
+not prove the fetcher, and the cull answer is a constant "visible" precisely so
+a cull failure cannot pass as a descriptor success.
+
+The remaining work is what this entry has said since 2026-09-04: **one asset
+fetcher over `GEOM.ASSET_POOL` serving three consumers** — descriptors, the u8
+index stream, and vertex records. `spec/memory_rules.md` §5f ruled the region
+(22 MiB, `ENGINE1`, read-only, bank 3). The wiring is glue over that one path.
+
+**GEOM.VDECODE.** The bench holds the vertex TABLE and looks up the IDs
+ASSEMBLE names. Turning 32-byte records into coordinates is VDECODE's job and
+step 5 moved the SELECTION, not the DECODE.
+
+**`zhao_shell_top` itself.** Every one of these blocks is composed into the
+BENCH, not into the shell top, which still instantiates one geometry block.
+Moving them into the top is a separate act and belongs after D1.
+
+### Four faults worth keeping, all in the bench, all mine
+
+* **A wait loop that broke at the first interesting signal** ended the frame
+  before the triangle reached the raster — step 1's recorded lesson, repeated
+  verbatim in step 4.
+* **A cull verdict driven from the tick** was high while the block was asking
+  and low while it was listening, so it parked in S_WAIT before any sampling
+  window opened.
+* **A one-shot whose set condition was broader than the event it recorded**
+  fired while ASSEMBLE was merely READY and gated the handshake off forever.
+* **A level held for the whole offer window** re-submitted the same meshlet
+  every cycle: `triangles = 15` for a one-triangle meshlet, with every re-run
+  producing the identical picture. Only the counter disagreed.
+
+The last one is the same shape as COMBINE.V1's double-issue earlier the same
+day: **correct results from a machine doing many times the work, visible only
+in a count.**
