@@ -330,3 +330,51 @@ before this file.
 4. perspuv's context store (see `PERSPUV-REGISTER-DIAGNOSIS-20260905.md`) is the
    largest single register consumer in the island and is inside this fit's
    closure, so it is untouched until the fit clears.
+
+---
+
+## 7. Will this fit finish? — the evidence, and the fallback
+
+Asked directly on 2026-09-05 while the four-hour run was in flight. The honest
+answer is **probably, but it is not certain, and the first timeout is a warning
+rather than bad luck.**
+
+**Why it is a warning.** Analysis & Synthesis on this design takes about four
+minutes. The two-hour run therefore gave the FITTER roughly 115 minutes, and it
+still did not finish. For 11,613 registers and 22 DSPs on a 41,910-ALM device
+that is slow, so something about *this* design is hard to place rather than
+merely large.
+
+**The most likely reason is the 889 virtual pins.** A virtual pin is not free:
+the fitter places it as logic. The island's boundary is genuinely wide — a
+fragment stream in, a memory fill interface, a palette upload port, an aux sheet
+port and a fragment stream out — and every one of those bits becomes something
+to place. That is the same cost §4.1 counts as *evidence* that the standalone
+sum overstates the island, showing up here as fitter time.
+
+**Settings are already at maximum quality**, inherited from the shell fit:
+`FITTER_EFFORT "STANDARD FIT"`, `OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"`,
+Advanced Physical Optimization on, `NUM_PARALLEL_PROCESSORS 4` on an 8-core
+machine. Those were tuned for the shell and are not obviously right for a block
+this shape.
+
+### The fallback, and what it would and would not cost
+
+If the four-hour run also times out, the next attempt drops Advanced Physical
+Optimization and `OPTIMIZATION_MODE`. **The ALM number survives that** — those
+knobs steer timing-driven restructuring, and their measured effect on the shell
+was +2.08 MHz, not an area change. **The fmax does not**: it would become a
+FLOOR rather than the island's speed, and it must be reported with that word
+attached and never quoted as the composed acceptance figure against the 105 MHz
+gate.
+
+That is the honest degradation. An area number with a labelled fmax floor is
+worth having; a fourth timeout with nothing is not. And raising
+`NUM_PARALLEL_PROCESSORS` to 8 costs nothing in quality and is free speed,
+which is the first thing to change either way.
+
+**What will NOT be done is quoting a number this gate did not produce.** The
+census already contains one impossible figure — 342 DSP against a device with
+112 — because sums were taken of things that were never measured together. G1-D
+exists to replace that with a measurement, and a measurement it did not make is
+not an improvement on it.
