@@ -1,0 +1,9 @@
+ZIXX_SUNS=off gate-off byte-identity (checklist 17, twice deferred, now PROVEN).
+Baseline: pristine build at e08e0119 (impl/base). Final: the complete pass-4 tree.
+Both rendered ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross ZIXX_SUNS=off.
+
+zixxtrixx-walk           ZIXX_SUNS=off 160 frames: BYTE-IDENTICAL (baseline vs final build)
+zixxtrixx-idle           ZIXX_SUNS=off 576 frames: BYTE-IDENTICAL (baseline vs final build)
+zixxtrixx-taunt          ZIXX_SUNS=off 224 frames: BYTE-IDENTICAL (baseline vs final build)
+GATE-OFF RESULT: IDENTICAL
+

@@ -150,11 +150,14 @@ kMoteCrowdPm=700 is the named relief valve, engaged when >1 conduit.
 
 ## Zixxtrixx identity and the gate-off path
 
-Recorded in evidence/stageQ-zixx-identity.txt (all 22 sequence CRCs from a
-final-build render against the pass-3 shipped table, byte-wise diff on the
-5-risk set) and evidence/stageQ-gateoff-identity.txt (ZIXX_SUNS=off on the
-pristine baseline vs the final build, byte-wise). Filled in at Stage Q
-close; nothing here is claimed until those files carry the numbers.
+**ALL-IDENTICAL, proven.** evidence/stageQ-zixx-identity.txt: all 22
+sequence CRCs from a full final-build render match the pass-3 shipped
+table exactly, and the 5-risk set (walk, idle, moving-light, damage,
+taunt — 1,960 frames) is BYTE-IDENTICAL against fresh pristine-baseline
+renders made this run. evidence/stageQ-gateoff-identity.txt: ZIXX_SUNS=off
+is BYTE-IDENTICAL between the pristine baseline and the final build
+(walk + idle + taunt, 960 frames) — checklist 17, twice deferred, now
+proven.
 
 ## Deliberate deviations, said out loud
 
