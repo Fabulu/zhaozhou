@@ -226,59 +226,32 @@ inline zc::RingPart make_loop() {
 // make_loop(); only their rigid ball parts are gone.
 
 /**
- * One almond lens: a flattened ellipsoid swept along +Y (the almond's long
- * axis, counter-stretched like everything vertical), thin in X (the bulge
- * depth off the body), wide in Z. 8 segments facet visibly at 240p.
+ * PASS 6 B.1 -- THE LENS. A SYMMETRIC lens, pointed at BOTH ends, ~3.2:1.
+ *
+ * This replaces make_lens_teardrop() (Direction 4's "pointy at the top,
+ * rounder at the bottom") and make_lens() (the pass-3 round-ended ellipsoid
+ * A/B). The sheets show neither: they show a symmetric lens that comes to a
+ * point at each end, and Direction 5 §5 makes the front sheet the authority.
+ * The U02_EYE=x2 A/B branch retires with them -- the question it existed to
+ * answer has been decided by the owner.
+ *
+ * Local +Y is the long axis (tilted into the Λ by the eye bone's rest);
+ * width AND dome depth follow kEyeLensWidthPm, which is symmetric by
+ * construction, so the two ends cannot drift apart the way two separately
+ * authored ends did.
  */
-inline zc::RingPart make_lens(uint8_t bone) {
-  // The pass-3 ALMOND (X2's lens): a symmetric flattened ellipsoid. Kept
-  // for the Stage E A/B; X1's teardrop below is the expected winner.
+inline zc::RingPart make_eye_lens(uint8_t bone) {
   zc::RingPart p;
   p.bone = bone;
   p.cap_base_fix = true;
   p.caps = zc::kCapTop | zc::kCapBot;
-  for (int i = 0; i < kEyeRings; ++i) {
-    const uint16_t theta = static_cast<uint16_t>(((2 * i + 1) * 32768LL) / (2 * kEyeRings));
-    const int32_t sn = zref::fx_sin(zref::angle16{theta}).raw;
-    const int32_t cs = zref::fx_cos(zref::angle16{theta}).raw;
-    zc::RingSpec rs;
-    rs.y = static_cast<int32_t>(((-static_cast<int64_t>(fxu(kEyeLongMm)) * cs) >> 16) *
-                                kVStretchPm / 1000);
-    rs.radius = 0;
-    rs.rx = static_cast<int32_t>((static_cast<int64_t>(fxu(kEyeDeepMm)) * sn) >> 16);
-    rs.rz = static_cast<int32_t>((static_cast<int64_t>(fxu(kEyeWideMm)) * sn) >> 16);
-    rs.segments = static_cast<uint8_t>(kEyeFacetSegments);
-    p.rings.push_back(rs);
-  }
-  p.r = kLensR;
-  p.g = kLensG;
-  p.b = kLensB;
-  p.page = kPageEyeTile;
-  return p;
-}
-
-/** X1: the TEARDROP lens (Direction 4 §3: "very pointy at the top, bottom
- *  is more round" -- an asymmetric per-ring profile no two-constant almond
- *  can express). Local +Y = the long axis (tilted into the Λ by the eye
- *  bone's rest); the width AND the dome depth follow kEyeRingWidthPm, and
- *  the apex rings crowd toward the tip (kEyeApexSharpPm). ~10 rings x 8
- *  segments ≈ 176 tris/eye against a 1,9xx-tri creature. */
-inline zc::RingPart make_lens_teardrop(uint8_t bone) {
-  zc::RingPart p;
-  p.bone = bone;
-  p.cap_base_fix = true;
-  p.caps = zc::kCapTop | zc::kCapBot;
-  for (int i = 0; i < kEyeRings2; ++i) {
-    // stations run bottom (-Y, round) to top (+Y, pointy); the top interval
-    // compresses by kEyeApexSharpPm so the last band is a sharp cone
-    int32_t t_pm = 2000 * i / (kEyeRings2 - 1) - 1000;  // -1000..1000
-    if (t_pm > 0) t_pm = t_pm * kEyeApexSharpPm / 1000 +
-                         t_pm * t_pm / 1000 * (1000 - kEyeApexSharpPm) / 1000;
+  for (int i = 0; i < kEyeLensRings; ++i) {
+    const int32_t t_pm = 2000 * i / (kEyeLensRings - 1) - 1000;  // -1000..1000
+    const int32_t w = kEyeLensWidthPm[i];
     zc::RingSpec rs;
     rs.y = static_cast<int32_t>(
         (static_cast<int64_t>(fxu(kEyeLongMm)) * t_pm / 1000) * kVStretchPm / 1000);
     rs.radius = 0;
-    const int32_t w = kEyeRingWidthPm[i];
     rs.rx = static_cast<int32_t>((static_cast<int64_t>(fxu(kEyeDeepMm)) * w) / 1000);
     rs.rz = static_cast<int32_t>((static_cast<int64_t>(fxu(kEyeWideMm)) * w) / 1000);
     rs.segments = static_cast<uint8_t>(kEyeFacetSegments);
@@ -291,77 +264,90 @@ inline zc::RingPart make_lens_teardrop(uint8_t bone) {
   return p;
 }
 
-/** The WHITE ANNULUS (X1 and X2): a flat torus riding the PUPIL bone
- *  between lens face and star, so the white travels with the star through
- *  every gaze -- tracking BY CONSTRUCTION (the page ring mechanically
- *  cannot track; X3's refusal is recorded in the run log). Built as a
- *  closed ring of small circular sections around a circle in the local
- *  Y-Z plane, pushed +X by kWhiteRingOffXMm. The X-Z section is only an
- *  approximation of a true tube frame at the top/bottom stations -- at a
- *  ~1.5 px tube gauge the difference cannot survive 240p. */
-inline zc::RingPart make_white_ring(uint8_t bone) {
-  zc::RingPart p;
-  p.bone = bone;
-  p.cap_base_fix = true;
-  p.caps = 0;  // a closed loop: first and last stations coincide
-  for (int i = 0; i <= kWhiteRingSegs; ++i) {
-    const uint16_t a = static_cast<uint16_t>((static_cast<int64_t>(i) * 65536 / kWhiteRingSegs) & 0xFFFF);
-    zc::RingSpec rs;
-    rs.y = static_cast<int32_t>(
-        ((static_cast<int64_t>(fxu(kWhiteRingRMm)) *
-          zref::fx_cos(zref::angle16{a}).raw) >> 16) * kVStretchPm / 1000);
-    rs.cz = static_cast<int32_t>(
-        (static_cast<int64_t>(fxu(kWhiteRingRMm)) * zref::fx_sin(zref::angle16{a}).raw) >> 16);
-    rs.cx = fxu(kWhiteRingOffXMm);
-    rs.radius = fxu(kWhiteRingTubeMm);
-    rs.segments = 6;
-    p.rings.push_back(rs);
-  }
-  p.r = 246;
-  p.g = 242;
-  p.b = 250;
-  p.page = kPageAtlasTile;
-  p.v0 = kWhiteV0;
-  p.v1 = kWhiteV1;
-  return p;
-}
-
 /**
- * Half of a pupil star: one thin blade. Two crossed blades per pupil bone
- * (the second quarter-turned) make the four-pointed cyan star — tiny
- * geometry riding its own bone, the zixx pupil lesson at creature-02 scale.
+ * PASS 6 B.1 -- THE STAR UNIT. Direction 5 §5a/§5b.
+ *
+ * ONE call builds either the cyan inner star or the white outer star, from
+ * THE SAME PROFILE TABLE, so the white is literally a dilation of the cyan:
+ * same points, same aim, offset outward by kStarWhiteRimMm. The white cannot
+ * disagree with the star it rings, because it is generated from it. That
+ * retires the pass-5 defect class rather than re-fixing it -- a star could
+ * escape a separately authored ring whose tube gauge moved underneath it, and
+ * now there is no separately authored ring.
+ *
+ * SHAPE: 4-pointed, CONCAVE curved edges drawn out into soft spikes, arms
+ * unequal (bottom long, top medium, sides short), sitting HIGH in the lens.
+ * The old star was two crossed CONVEX blades -- that is why it read as a blob,
+ * and it is why replacing it is a shape fix and not a colour fix. Expressing
+ * the concave scoop needs a width-along-the-axis profile, which is exactly
+ * what a ring stack is: rings march up the long axis and each one is as wide
+ * as the star is at that height, so the silhouette IS the drawn outline.
+ *
+ * ⚠ BOTH PARTS CARRY A PAGE. An untextured part does not render grey under
+ * celmain, it renders BLACK (09-ENGINE-GOTCHAS §0/§7), and this exact star has
+ * already shipped black once.
+ *
+ * ANIMATION CONTRACT (§5b): both parts ride the SAME pupil bone, so a pose
+ * cannot slide the white against the blue -- they are one rigid unit with one
+ * transform, which is the property the owner asked for. (The architecture asked
+ * for literally one mesh; a RingPart carries one material and one page, so one
+ * mesh cannot be two colours without a bespoke UV scheme fighting the ring
+ * builder. Two parts on ONE bone satisfies every stated requirement -- two
+ * transforms per eye, no sliding, one containment rule -- and is recorded here
+ * as a deliberate, reversible deviation rather than a silent one.)
  */
-inline zc::RingPart make_star_blade(uint8_t bone, bool crossed) {
+inline zc::RingPart make_star(uint8_t bone, bool white) {
+  const int32_t rim = white ? kStarWhiteRimMm : 0;
+  const int32_t bot = kStarArmBottomMm + rim;
+  const int32_t top = kStarArmTopMm + rim;
+  // ⚠ THE RIM IS A DILATION IN THE PICTURE PLANE ONLY -- it must NOT thicken
+  // the white in DEPTH. Authored the other way first and it cost a render to
+  // find: a white slab 2*(thin+rim) deep centred on the pupil swallowed the
+  // thinner cyan whole, so the star drew as a white splinter with no cyan
+  // anywhere, from every angle. Both stars are the same thickness; only their
+  // outlines differ, which is what the sheet draws.
+  const int32_t thin = kStarThinMm;
   zc::RingPart p;
   p.bone = bone;
   p.cap_base_fix = true;
   p.caps = zc::kCapTop | zc::kCapBot;
-  if (crossed) p.pitch_q = 1;  // quarter turn: the horizontal arm of the star
-  // PASS 4 (Stage E): PER-AXIS arms -- the long arm rides the lens long
-  // axis; the crossed (short) arm must FIT the lens half-width (the
-  // reviewer's 185-vs-125 arithmetic ends here).
-  const int32_t arm = crossed ? kPupilStarArmShortMm : kPupilStarArmLongMm;
-  const int n = 3;
-  for (int i = 0; i < n; ++i) {
-    const uint16_t theta = static_cast<uint16_t>(((2 * i + 1) * 32768LL) / (2 * n));
-    const int32_t sn = zref::fx_sin(zref::angle16{theta}).raw;
-    const int32_t cs = zref::fx_cos(zref::angle16{theta}).raw;
+  for (int i = 0; i < kStarRings; ++i) {
+    const int32_t yp = kStarProfileYPm[i];
+    const int32_t arm = yp < 0 ? bot : top;
+    // the WIDTH is a true outward offset (+rim), so the white traces the cyan
+    // at a constant remove instead of being a scaled copy that thickens at the
+    // tips; the tips themselves get a rim-wide rounded cap, which is what a
+    // dilation of a point is.
+    const int32_t w =
+        static_cast<int32_t>((static_cast<int64_t>(kStarArmSideMm) * kStarProfileWPm[i]) / 1000) + rim;
     zc::RingSpec rs;
-    rs.y = static_cast<int32_t>((-static_cast<int64_t>(fxu(arm)) * cs) >> 16);
+    rs.y = static_cast<int32_t>(
+        (static_cast<int64_t>(fxu(arm)) * yp / 1000) + fxu(kStarOffsetYMm));
     rs.radius = 0;
-    rs.rx = static_cast<int32_t>((static_cast<int64_t>(fxu(kPupilStarThinMm)) * sn) >> 16);
-    rs.rz = static_cast<int32_t>((static_cast<int64_t>(fxu(kPupilStarWideMm)) * sn) >> 16);
-    rs.segments = 4;
-    rs.cx = fxu(kEyeBulgeMm);  // proud of the lens; the gaze pivot radius
+    rs.rx = fxu(thin);
+    rs.rz = fxu(w);
+    rs.segments = 6;
+    // proud of the lens along +X: the pupil bone pivots at the lens centre, so
+    // this stand-off IS the gaze pivot radius. The cyan rides a hair further
+    // out than its white, so it sits ON it and never sinks into it.
+    // Depth ordering, stated as arithmetic so it cannot silently invert again:
+    // white front face = kEyeBulgeMm + thin; cyan front face = that + proud.
+    rs.cx = fxu(kEyeBulgeMm + (white ? 0 : kStarCyanProudMm));
     p.rings.push_back(rs);
   }
-  p.r = kStarR;
-  p.g = kStarG;
-  p.b = kStarB;
-  // The page is REQUIRED, not decoration: an untextured part renders black
-  // under celmain (09-ENGINE-GOTCHAS.md §7 — the toon ramp and the pre-lit
-  // lanes disagree). The tile is flat cyan; kStar* stay as the fallback.
-  p.page = kPageStarTile;
+  if (white) {
+    p.r = 246;
+    p.g = 242;
+    p.b = 250;
+    p.page = kPageAtlasTile;
+    p.v0 = kWhiteV0;
+    p.v1 = kWhiteV1;
+  } else {
+    p.r = kStarR;
+    p.g = kStarG;
+    p.b = kStarB;
+    p.page = kPageStarTile;
+  }
   return p;
 }
 

@@ -251,57 +251,101 @@ constexpr int32_t kKnuckleSwellEndRxMm = 47, kKnuckleSwellEndRzMm = 78;
 // sun. kEyeXMm is pulled back so the assembly sits inside the silhouette at
 // three-quarter and the crown keeps the protected ~160 mm read (probed).
 constexpr int32_t kEyeXMm = 381, kEyeYMm = 90, kEyeZMm = 215;  // centre, ±z
-                                          // (pass 4: +25 z separation --
-                                          // "they touch at the top. They
-                                          // must not." -- plus the V angle
-                                          // eased below)
-constexpr int32_t kEyeVAngleA16 = -3600;  // Λ: tips converge at the top (eased
-                                          // from -4400: the apexes were meeting)
+constexpr int32_t kEyeVAngleA16 = -3600;  // Λ: tips converge at the TOP, bottoms
+                                          // splay outward and downward (front
+                                          // sheet). An early reading of these
+                                          // sheets had this upside down as a V.
 constexpr int32_t kEyeYawOutA16 = 2400;   // partial outward yaw (R4 ladder pick)
 constexpr int32_t kEyeTiltA16 = 2200;     // the almond's backward lean
-constexpr int32_t kEyeBulgeMm = 88;       // pupil star stands proud of the lens
-constexpr int32_t kEyeLongMm = 250;       // almond half-length (long axis)
-constexpr int32_t kEyeWideMm = 125;       // almond half-width — the plump read
+// PASS 6 B.1: the POP-OUT. Direction 5 §5 and the artist's own sentence,
+// "man sieht es schlecht, aber die Augen stehen leicht nach vorne" -- hard to
+// see, but the eyes stand SLIGHTLY forward -- plus a dedicated inset study on
+// Description.png, "abstehendes Auge schräg von hinten betrachtet", drawn
+// specifically because Front and Side cannot show a forward protrusion.
+// An art recon concluded from those two views that the sheets show no pop-out.
+// They do. It is protected, and "slightly" is the artist's own qualifier:
+// DO NOT ENLARGE IT EITHER. This is also the pivot radius for the gaze.
+constexpr int32_t kEyeBulgeMm = 88;       // star stands proud of the lens
+
+// ---- PASS 6 B.1: THE LENS IS A SYMMETRIC LENS, POINTED AT BOTH ENDS ------
+// Direction 5 §5 makes the FRONT SHEET the authority. Direction 4 recorded a
+// "teardrop, pointy at the top, rounder at the bottom" and baked it into three
+// constants; the art recon traced all three sheets and found a SYMMETRIC lens
+// pointed at BOTH ends, and the coordinator's own reading of Front and Side
+// agrees. The teardrop builder, kEyeApexSharpPm and kEyeRingWidthPm[] are
+// RETIRED with it -- an asymmetric per-ring profile is exactly what a
+// symmetric lens must not have.
+//
+// ⚠ THIS IS THE THIRD EYE READING FROM THIS SHEET SET TO NEED CORRECTING
+// (first the orientation V-vs-Λ, then teardrop-vs-lens, then the pop-out).
+// Every one came from reading PART of the sheet set and generalising. If a
+// later change rests on a sheet reading, trace all three sheets first.
+//
+// Aspect: the recon measured 3.4:1 on the front sheet, the side sheet reads
+// near 3:1. Authored at 3.2:1 between them, by eye -- and it is a knob.
+constexpr int32_t kEyeLongMm = 270;       // lens half-length (the long axis)
+constexpr int32_t kEyeWideMm = 84;        // lens half-width  (3.2:1)
 constexpr int32_t kEyeDeepMm = 90;        // bulge depth off the body (the dome)
-constexpr int kEyeRings = 5;
 constexpr int kEyeFacetSegments = 8;      // the facet read at 240p
-// PASS 3 (R3): the star GROWS toward the sheet's ~20% lens share (it never
-// grew in pass 2: 5.5-9.8% measured). Judged by eye on the lit path.
-// PASS 4 (Stage E). The reviewer's arithmetic: arm 185 vs lens half-width
-// 125 -- the star could not fit across the short axis, so no clamp could
-// ever contain it. The arms are now PER-AXIS and sized to FIT: the long
-// arm rides the lens long axis, the short arm stays under the half-width
-// minus the white ring's territory.
-constexpr int32_t kPupilStarArmLongMm = 150;   // along the lens long axis
-constexpr int32_t kPupilStarArmShortMm = 88;   // across: <= ~80% of
-                                               // (kEyeWideMm - ring margin)
-constexpr int32_t kPupilStarThinMm = 26;  // blade thickness (depth)
-constexpr int32_t kPupilStarWideMm = 64;  // blade width
-// the white annulus (X1/X2): a flat torus riding the PUPIL bone between
-// star and lens -- the whites trace the pupils BY CONSTRUCTION, which is
-// the tracking requirement the static page could never meet.
-constexpr int32_t kWhiteRingRMm = 112;     // major radius (rings the star)
-constexpr int32_t kWhiteRingTubeMm = 22;   // tube gauge (pass 5: 15 -> 22
-                                           // -- at ~1.2 px the shadowed side
-                                           // vanished and the ring read as a
-                                           // one-sided crescent; looked at)
-constexpr int32_t kWhiteRingOffXMm = 60;   // sits between lens face and star
-                                           // (pass 5: 52 -> 60, prouder of
-                                           // the dome so the far side clears
-                                           // the lens limb at three-quarter)
-constexpr int kWhiteRingSegs = 14;         // stations around the torus
-// the X1 TEARDROP profile (Direction 4: "very pointy at the top, bottom is
-// more round... too simple of a primitive"): per-ring width in pm of
-// kEyeWideMm, bottom ring first. The depth (dome) follows the same
-// profile. kEyeApexSharpPm pulls the last rings toward the apex point.
-constexpr int kEyeRings2 = 10;
-constexpr int kEyeRingWidthPm[kEyeRings2] = {330, 620, 830, 950, 1000,
-                                             940,  800, 590, 340, 120};
-constexpr int kEyeApexSharpPm = 780;  // >1000 widens the tip gap; <1000 sharpens
-constexpr uint8_t kLensR = 116, kLensG = 58, kLensB = 178;   // purple (grey pass)
-// The star's SHIPPED pigment lives in mkmanafoldpage.py (STAR_CYAN, same value):
-// the star must carry a page because untextured parts render black under
-// celmain (09-ENGINE-GOTCHAS.md §7). These stay as the pageless fallback.
+// The lens half-width profile, tip to tip, per-mille of kEyeWideMm. Symmetric
+// by construction -- read it backwards and it is the same list. POINTED, not
+// round: the steps are LARGEST at the tips and smallest at the middle, which
+// is what makes an end come to a point instead of capping off as an ellipse.
+constexpr int kEyeLensRings = 11;
+constexpr int kEyeLensWidthPm[kEyeLensRings] = {0,   260, 505, 715, 880, 1000,
+                                                880, 715, 505, 260, 0};
+
+// ---- PASS 6 B.1: ONE STAR UNIT PER EYE ----------------------------------
+// Direction 5 §5a: "we really need the whites to trace the star, not just be a
+// ring. They should maybe even be attached to the same model part, just a
+// white outer star to the blue inner star." The white RING
+// (kWhiteRingRMm/kWhiteRingTubeMm, widened 15->22 in pass 5 to close a "white
+// crescent" complaint) is REPLACED, not tuned, and everything hanging off it
+// dies with it -- including pass 5's containment arithmetic and its false
+// "tube (15)" comment.
+//
+// SHAPE: 4-pointed with CONCAVE, CURVED edges drawn out into soft spikes
+// (both sheets). Our old star was two crossed CONVEX blades, which is why it
+// read as a blob rather than as a star -- the fault was the shape, not the
+// colour. Arms are UNEQUAL: bottom long, top medium, sides short.
+//
+// The profile is a half-width table along the star's long axis, which is what
+// makes the concave scoop authorable: the width falls away FAST from the side
+// tips and then flattens into a thin spike, instead of bulging convexly.
+constexpr int kStarRings = 15;
+// y stations, per-mille of the arm on that side (negative = the long bottom
+// arm, positive = the medium top arm)
+constexpr int kStarProfileYPm[kStarRings] = {-1000, -880, -700, -500, -320,
+                                             -180,  -80,     0,    80,  180,
+                                              320,   500,   700,  880, 1000};
+// half-width at that station, per-mille of kStarArmSideMm. The CONCAVE curve
+// is authored here: 1000 only at the waist, then 780/500/320/200/110/50/0.
+constexpr int kStarProfileWPm[kStarRings] = {   0,   50,  110,  200,  320,
+                                              500,  780, 1000,  780,  500,
+                                              320,  200,  110,   50,    0};
+// LOOKED AT, then grown a lot. The first authored size (118/92/38 against a
+// lens of 270 x 84) rendered as a white splinter: the star was so small that
+// its own white rim swamped the cyan and no star shape read at all. The sheet
+// draws three NESTED shapes filling the lens -- purple, white star, cyan star
+// -- so the star must occupy most of the lens, not sit in the middle of it.
+constexpr int32_t kStarArmBottomMm = 165;  // long   (the drawn asymmetry)
+constexpr int32_t kStarArmTopMm = 128;     // medium
+constexpr int32_t kStarArmSideMm = 52;     // short
+constexpr int32_t kStarThinMm = 16;        // depth: the star is a flat spark
+// The side sheet draws the star sitting HIGH in the lens, not centred.
+constexpr int32_t kStarOffsetYMm = 46;
+// THE WHITE IS A DILATION OF THE CYAN, not an independent shape: same profile
+// table, same points, offset outward by this one rim. It cannot disagree with
+// the star it rings, because it is generated from it.
+constexpr int32_t kStarWhiteRimMm = 16;
+// the cyan rides a hair prouder than its white so it sits ON it, never in it
+constexpr int32_t kStarCyanProudMm = 6;
+// SIZE vs GAZE (owner question 4): the sheet draws the star flush to the lens,
+// which leaves ZERO travel room -- a flush star is an eye that cannot move.
+// Shipped at ~0.78 of drawn-flush so the eyes can dart. One knob to flip back.
+constexpr uint8_t kLensR = 116, kLensG = 58, kLensB = 178;   // purple (fallback;
+                                                            // the eye PAGE is
+                                                            // the authority)
 constexpr uint8_t kStarR = 64, kStarG = 220, kStarB = 240;   // cyan
 
 // ============================== MOTION =====================================
@@ -353,12 +397,28 @@ constexpr int32_t kAntennaTiltA16 = 700;
 // allowed z travel ~= 125 - 88 - 15 = 22 mm -> sin = 22/88 = 0.25 ->
 // ~14.5 deg full angle ~= 2640 angle16. Held under it with margin, then
 // PROVEN by rendering the authored extremes (the eye places the value).
-constexpr int32_t kGazeMaxA16 = 2400;
+// PASS 6 B.1: RAISED, because the feature was below the resolution of the
+// screen. Pass 5's full authored travel was ~1.7 px at native -- an eye that
+// "moves" by less than two pixels does not read as moving at all, and no
+// amount of animation authoring fixes a range that small. Acceptance is in
+// PIXELS at the house camera (a dart must read clearly, roughly >= 4 px),
+// authored by eye and measured on the comparison side.
+// The two axes get very different room: the lens is 3.2:1, so the SIDE sweep
+// runs across its narrow axis and is bounded hard by containment, while the
+// LIFT runs along the long axis where there is far more lens to slide on.
+constexpr int32_t kGazeMaxA16 = 3400;
 // lift: along the long axis the room is (250*0.93 - 150 - 15) ~= 67 mm ->
 // sin = 67/88 = 0.76; the practical clamp stays far below (the squint and
 // the V-angle eat into it) -- picked by the same margin discipline.
-constexpr int32_t kGazeLiftMaxA16 = 2000;
-constexpr int32_t kSquintMaxA16 = 9000;    // 1000pm = mostly closed
+constexpr int32_t kGazeLiftMaxA16 = 5200;
+// PASS 6 B.1: 9000 -> 3200. At 9000 (~49 deg) the "blink" rotated the lens so
+// far toward edge-on that the star swung out of the lens entirely for 10
+// frames every 192 -- a shutter, not a blink, and pass-5 review caught it.
+// The two-transform contract (§5b) says a blink is a PURPLE move, so the
+// mechanism is kept and the amplitude cut to a pinch the star stays on.
+// Cutting the constant rather than re-authoring blink_at() means NO clip
+// retimes: every existing blink schedule is untouched.
+constexpr int32_t kSquintMaxA16 = 3200;    // 1000pm = a pinch, not a shutter
 constexpr int32_t kBlazeTwinkleA16 = 10923;  // the channel's slow star spin
 // per-clip character
 // PASS 3 (Direction 3 §7 drift: "just rotating. That is not how it

@@ -1,0 +1,12 @@
+subject=manafold-still
+mode=Z60 384x240 single view, reference oracle (zref::render)
+frames=4 step=1 ticks (frame f: tick = f*step)
+programs: wave_pool hash=0x8BDCEB63 (27 instrs), impact_wave hash=0x82F5F4E4 (30 instrs)
+field_apps=0 stamps=0 debris=0 shake_frames=0
+palette=2529 unique colours (palette-exact by construction, <=256 enforced)
+
+sequence_crc32c=0xB5DBDA11
+frame_0000_crc32c=0xB3EB680D
+frame_0001_crc32c=0x503C14E6
+frame_0002_crc32c=0xD7D3BCC0
+frame_0003_crc32c=0x88143F8B

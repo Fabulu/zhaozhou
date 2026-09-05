@@ -243,3 +243,77 @@ diff plate (protected item 7). The silhouette *has* changed and was always going
 to — the balls WERE the silhouette at those five points — so the diff would be
 confirming an intended change rather than catching a regression. It is the
 reviewer's to run against `inkmask.py`.
+
+### 22:35 — STAGE B.1 (the eyes) done. Three iterations, two of them mine to own.
+
+**Built:**
+* `make_eye_lens()` — a SYMMETRIC lens pointed at BOTH ends, 3.2:1 (recon says
+  3.4:1 on the front sheet, the side sheet reads ~3:1; authored between them by
+  eye, and it is a knob). `make_lens_teardrop()`, `make_lens()`,
+  `kEyeApexSharpPm`, `kEyeRingWidthPm[]`, `kEyeRings/kEyeRings2` and the
+  `U02_EYE=x2` A/B branch all retire with it.
+* `make_star(bone, white)` — ONE call builds either star from **the same
+  profile table**, so the white is literally a dilation of the cyan: same
+  points, same aim, offset outward by `kStarWhiteRimMm`. `make_white_ring()`,
+  `kWhiteRingRMm/TubeMm/OffXMm/Segs` and the four `make_star_blade` parts are
+  gone, and pass 5's containment arithmetic and its false "tube (15)" comment
+  die with them.
+* 4-pointed, **concave curved edges**, arms unequal (bottom long, top medium,
+  sides short), sitting **high in the lens** per the side sheet.
+* Both stars carry a page (gotcha §0 — this exact star has shipped black once).
+
+**Deviation from the architecture, declared not silent.** The plan says "one
+mesh, one bone, one transform". A `RingPart` carries **one material and one
+page**, so one mesh cannot be two colours without a bespoke UV scheme fighting
+the ring builder. I shipped **two parts on ONE bone**. Every stated requirement
+holds: two transforms per eye, no pose can slide the white against the blue,
+one containment rule. And the *generative* half of §5a survives intact — the
+white is produced from the cyan's own profile, so the defect class §5a wanted
+retired (a star escaping a separately-authored ring whose gauge moved
+underneath it) is genuinely gone, not re-gated.
+
+**Two authoring mistakes, both found by looking, both recorded because they are
+instructive:**
+1. **First size was far too small** (118/92/38 against a 270×84 lens): it
+   rendered as a white splinter, the star's own rim swamping its cyan. The
+   sheet draws three NESTED shapes filling the lens. Grown to 165/128/52.
+2. **The white swallowed the cyan in DEPTH.** I had the rim thicken the white
+   in all three axes, so a white slab `2*(thin+rim)` deep, centred on the pupil,
+   enclosed the thinner cyan completely — the cyan was occluded **from every
+   angle**, and growing the star did not help because the fault was not size.
+   The rim is a dilation **in the picture plane only**; both stars are the same
+   thickness and only their outlines differ. That is also what the sheet draws.
+
+**Gaze and blink.**
+* `kGazeMaxA16` 2400→3400 (side, across the lens's narrow axis — bounded hard
+  by containment), `kGazeLiftMaxA16` 2000→5200 (along the long axis, where
+  there is far more lens to slide on). Pass 5's full travel was ~1.7 px at
+  native — below the resolution of the feature.
+* `apply_gaze_lr()` added for §5b rule 4 (per-eye lag, overshoot, the
+  cross-eyed taunt). The symmetric `apply_gaze()` stays as the common case, so
+  **adding it retimes nothing.**
+* The 43° squint that rotated the star out of the lens for 10 frames every 192
+  is fixed by cutting `kSquintMaxA16` 9000→3200 — a pinch, not a shutter.
+  Cutting the constant rather than re-authoring `blink_at()` means **no clip
+  retimes**.
+
+**LOOKED AT** (`evidence/B1c-eyezoom.png`, 6x): the front view shows exactly
+what the sheets draw — a 4-pointed cyan star with concave edges and a white
+outline tracing its points, on a deep purple pointed lens, the pair tilted into
+a **Λ** with tops converging and bottoms splaying. At three-quarter the near eye
+has a clearly readable star (**the pass-5 "near eye has no pupil" fault is
+gone**).
+
+**Still open, said out loud:** the FAR eye at the shipping three-quarter is
+heavily foreshortened — the 3.2:1 lens goes near edge-on. That is Direction 3
+§2 ("eyes vanish from the side"), which was already open, and this rebuild has
+not closed it. `kEyeYawOutA16` is the knob. I did not touch it because the front
+view is now correct and I would be trading a verified read for an unverified
+one late in the pass.
+
+**Not done:** the purple pigment in `mkmanafoldpage.py` (`EYE_PURPLE`
+104,42,168) was NOT darkened. The recon's "94% value" star reading was measuring
+`kStarR/G/B`, which is only the *fallback* — the page's `STAR_CYAN` is already
+(46,184,210), value 82%, essentially the 79% target. And the lens reads properly
+deep in scene. Moving a pigment because a number said so, when the render says
+otherwise, is the exact error `CLAUDE.md` opens with.

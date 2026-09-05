@@ -227,6 +227,25 @@ inline void apply_gaze(Rig& g, int32_t side_a16, int32_t lift_a16) {
   g.q[kBPupilR] = quat_mul(quat_y(-side), quat_z(lift));
 }
 
+/** PASS 6 B.1 (Direction 5 §5b rule 4): PER-EYE gaze. "Asymmetry is allowed
+ *  and wanted -- two independently aimed stars on one apparent point is what
+ *  sells a googly eye." Both eyes still converge on one target; this is the
+ *  lag, the overshoot and the deliberate cross-eyed taunt. The symmetric
+ *  apply_gaze() above stays as the common case, so no existing clip retimes by
+ *  this being added. Clamped per eye against the same containment limits. */
+inline void apply_gaze_lr(Rig& g, int32_t l_side_a16, int32_t l_lift_a16,
+                          int32_t r_side_a16, int32_t r_lift_a16) {
+  const auto cs = [](int32_t v) {
+    return v < -kGazeMaxA16 ? -kGazeMaxA16 : v > kGazeMaxA16 ? kGazeMaxA16 : v;
+  };
+  const auto cl = [](int32_t v) {
+    return v < -kGazeLiftMaxA16 ? -kGazeLiftMaxA16
+           : v > kGazeLiftMaxA16 ? kGazeLiftMaxA16 : v;
+  };
+  g.q[kBPupilL] = quat_mul(quat_y(-cs(l_side_a16)), quat_z(cl(l_lift_a16)));
+  g.q[kBPupilR] = quat_mul(quat_y(-cs(r_side_a16)), quat_z(cl(r_lift_a16)));
+}
+
 /** Star twinkle: spin the four-point star about its outward axis. */
 inline void apply_twinkle(Rig& g, int32_t spin_a16) {
   g.q[kBPupilL] = quat_mul(g.q[kBPupilL], quat_x(spin_a16));

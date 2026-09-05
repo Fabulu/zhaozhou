@@ -268,7 +268,7 @@ int main() {
   // vertices (matched by part material), and the star/ring are REPORTED so
   // the extremum's identity can never silently move again. Want more
   // stand-off? Raise the lens (kEyeDeepMm/kEyeXMm) — never the star arms:
-  // re-lengthening kPupilStarArmShortMm re-breaks star-in-lens containment.
+  // re-lengthening kStarArmSideMm re-breaks star-in-lens containment.
   // Computed in 3D against the body ellipsoid — a rendered-frame
   // measurement would conflate protrusion with perspective.
   {
@@ -286,7 +286,7 @@ int main() {
     EyePart parts[3] = {
         {"purple lens", u02::kLensR, u02::kLensG, u02::kLensB, 0},
         {"cyan star", u02::kStarR, u02::kStarG, u02::kStarB, 0},
-        {"white ring", 246, 242, 250, 0}};
+        {"white star", 246, 242, 250, 0}};
     for (const zc::Meshlet& m : T.mesh) {
       EyePart* part = nullptr;
       for (auto& p : parts)

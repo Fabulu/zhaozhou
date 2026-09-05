@@ -105,19 +105,20 @@ inline const zc::CreatureType& type() {
     // knuckles are GONE. make_loop() now carries their swell in its own skin,
     // so the antenna is ONE continuous surface from the body to the re-entry.
     parts.push_back(make_loop());
-    // PASS 4 (Stage E): X1 -- the all-polygon TEARDROP eye -- is the
-    // default; U02_EYE=x2 keeps the pass-3 almond lens for the A/B (both
-    // carry the white annulus on the pupil bone and the de-whited page).
-    const char* eye_env = std::getenv("U02_EYE");
-    const bool x2 = eye_env != nullptr && std::string(eye_env) == "x2";
-    parts.push_back(x2 ? make_lens(kBEyeL) : make_lens_teardrop(kBEyeL));
-    parts.push_back(x2 ? make_lens(kBEyeR) : make_lens_teardrop(kBEyeR));
-    parts.push_back(make_white_ring(kBPupilL));
-    parts.push_back(make_white_ring(kBPupilR));
-    parts.push_back(make_star_blade(kBPupilL, false));
-    parts.push_back(make_star_blade(kBPupilL, true));
-    parts.push_back(make_star_blade(kBPupilR, false));
-    parts.push_back(make_star_blade(kBPupilR, true));
+    // PASS 6 B.1 (Direction 5 §5/§5a/§5b): the eye is exactly TWO things that
+    // move -- the STAR (white outer + cyan inner, one rigid unit on the pupil
+    // bone) and the PURPLE (the lens on the eye bone). Not a star, a ring, a
+    // highlight and a pupil kept in agreement by hand.
+    //
+    // The white is pushed FIRST so the cyan draws over it, and both ride the
+    // same pupil bone: no pose can slide one against the other. The U02_EYE
+    // A/B branch is retired -- the owner has decided.
+    parts.push_back(make_eye_lens(kBEyeL));
+    parts.push_back(make_eye_lens(kBEyeR));
+    parts.push_back(make_star(kBPupilL, true));   // white outer star
+    parts.push_back(make_star(kBPupilR, true));
+    parts.push_back(make_star(kBPupilL, false));  // cyan inner star
+    parts.push_back(make_star(kBPupilR, false));
     // Hinge parts are rigid on their own bones whose bind translation IS the
     // ball centre; the loop is one straight-bound chain the fold pose bends.
 
