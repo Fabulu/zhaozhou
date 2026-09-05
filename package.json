@@ -11,6 +11,7 @@
   "scripts": {
     "test": "npm run -w tools/ledger test && npm run -w tools/fixgen test && npm run -w tools/abi-gen test",
     "ledger:check": "npm run -w tools/ledger check",
+    "manifest:check": "python tools/quartus/check_prod_manifest.py",
     "ledger:gen": "npm run -w tools/ledger gen",
     "tables:check": "npm run -w tools/fixgen check",
     "tables:gen": "npm run -w tools/fixgen gen",

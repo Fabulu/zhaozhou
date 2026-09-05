@@ -233,6 +233,13 @@ jobs:
           # script intentionally runs only Zhaozhou-owned tooling workspaces.
           npm run ledger:check
           npm run abi:check
+          # The production manifest gate. It was LOCAL-ONLY until 2026-09-05,
+          # and on the day it was first run in anger it found two real
+          # divergences -- a block instantiated by the generated production top
+          # but missing from that fit's source list, which would have died at
+          # elaboration, and a new top neither counted nor declared absent.
+          # A gate that only ever runs on one laptop is how weeks of drift hide.
+          npm run manifest:check
           npm test
 
   nightly:
