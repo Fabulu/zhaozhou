@@ -90,7 +90,20 @@ module zhao_texture_island_top #(
     parameter int unsigned DEPTH   = 16,   // FRAGROB reorder depth
     parameter int unsigned CTXW    = 64,
     parameter int unsigned BINDW   = 8,
-    parameter int unsigned LODW    = 4,
+    // LODW IS 8 BECAUSE THE PLANNER'S LOD IS Q4.4, NOT AN INTEGER LEVEL.
+    // `zhao_texture_tmu_plan` selects the level with `t0_lod[7:4]` and leaves
+    // [3:0] as the FRACTION. This was 4, and the connection below padded it
+    // into the LOW nibble -- so every possible value became 0x00..0x0F, the
+    // planner's integer level was ALWAYS ZERO, and enabling MIP_EN could not
+    // produce a non-zero mip however the binding was set. Everything the
+    // planner already implements -- clamping, selected-level UV scaling,
+    // packed mip-chain offsets -- was unreachable through that wiring.
+    //
+    // Inert at this commit: the composed test drives `bind_mode_i = 0`, so
+    // MIP_EN is low and `lvl_req` is 0 either way. The fix is here because the
+    // FRACTION it recovers is the blend weight the two-level mip blend needs,
+    // so the defect and that feature share one repair (docket D23).
+    parameter int unsigned LODW    = 8,
     parameter int unsigned GENW    = 8,
     parameter int unsigned LANES   = 4,    // CACHE_PIPE lanes
     parameter int unsigned SRCW    = 16,
@@ -607,7 +620,7 @@ module zhao_texture_island_top #(
       .req_valid_i(fr_tmu_valid), .req_ready_o(plan_req_ready),
       .req_u_i(fr_tmu_u), .req_v_i(fr_tmu_v),
       .req_base_i(bind_base_i), .req_mode_i(bind_mode_i),
-      .req_lod_i({{(8-LODW){1'b0}}, fr_tmu_lod}),
+      .req_lod_i(fr_tmu_lod),   // already Q4.4; see LODW above
       .req_src_id_i(plan_src_id),
       .acc_valid_o(plan_acc_valid), .acc_ready_i(plan_acc_ready),
       .acc_en_o(plan_acc_en), .acc_addr_o(plan_acc_addr),
