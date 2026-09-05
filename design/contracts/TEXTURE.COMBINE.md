@@ -104,10 +104,19 @@ None. It is arithmetic on values handed to it.
 
 ## Scalar reference function
 
-**WRITTEN 2026-09-05** — `zref::material::combine(recipe, weight, samples,
-count, base, frag_tag, ledger)` in `reference/include/zref/zref_material.hpp`.
-It calls `zref::unit_mul` rather than restating the unit8 product, as this
-contract requires.
+**WRITTEN 2026-09-05** — `zref::material::combine`, in
+`reference/include/zref/zref_material.hpp`, taking
+`(recipe, weight, samples, count, base, frag_tag, ledger)`. It calls
+`zref::unit_mul` rather than restating the unit8 product, as this contract
+requires.
+
+<!-- The bare symbol is cited FIRST and on its own, with the parameter list
+     moved out of the backticks. V17 reads this section and takes the first
+     backticked `zref::...`, matching `[A-Za-z0-9_:]+` up to a closing
+     backtick -- so a symbol written with its arguments attached never closes,
+     the rule falls through to the NEXT zref symbol it finds, and reports that
+     "the contract cites zref::unit_mul". The citation was right and the
+     message named a symbol that was merely mentioned in passing. -->
 
 **One thing this contract leaves open, and the oracle refuses to guess.** The
 overflow section says `sample_count == 0` returns "the fragment's vertex

@@ -326,12 +326,25 @@ module zhao_texture_island_top #(
   // THE RECIPE TRAVELS WITH THE FRAGMENT, in FRAGROB's context word.
   //
   // The first version wired the combiner's recipe/weight/sample_count straight
-  // from the island's INPUT ports, so a fragment retiring after N others was
-  // combined with whatever recipe happened to be arriving at that moment. With
-  // a reorder buffer in between, "the current input" and "the fragment being
-  // retired" are different fragments by construction -- and the composed test
-  // would still have passed every handshake check, because a wrong recipe is a
-  // wrong picture, not a stall.
+  // from the island's INPUT ports. With a reorder buffer in between, a fragment
+  // retiring after N others was combined with whatever recipe happened to be
+  // arriving at that moment -- and the composed test still passed every
+  // handshake check, because a wrong recipe is a wrong picture, not a stall.
+  //
+  // ENFORCED-BY: fpga/rtl/texture/zhao_texture_fragrob.sv -- its `ctx_m` array
+  // is written at allocation and read at `head_slot_c` on retirement, so the
+  // context word leaves FRAGROB with the fragment it was allocated for. This
+  // top relies on that and does not re-derive it; the packing below and the
+  // unpacking at the combiner instance are the two halves of one layout and
+  // are deliberately adjacent in this file so they cannot drift apart.
+  //
+  // NOT YET ENFORCED, and stated rather than implied: no test isolates
+  // PER-FRAGMENT recipe identity. `island_composed_directed` cycles all eight
+  // recipes and requires every fragment to retire, which would catch the
+  // recipe never arriving -- it would NOT catch two fragments swapping
+  // recipes. Closing that needs the combiner's per-recipe job counters brought
+  // out to the island boundary, which changes the top's port list and would
+  // invalidate the 7,720 ALM measurement, so it waits for a pass that re-fits.
   //
   // CTXW is 64 and the low 16 bits are the tag, so the material fields ride
   // above it.
