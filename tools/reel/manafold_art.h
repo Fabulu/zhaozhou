@@ -110,11 +110,13 @@ constexpr int kLoopSegments = 8;
 constexpr int32_t kLoopTubeXMm = 90;     // tube bind x (the neck exit)
 constexpr int32_t kLoopNeckExitYMm = 664;   // STRETCHED units from here down
 constexpr int32_t kLoopBuryMm = 250;        // the near end plunges into the body
-// arc lengths along the tube (stretched space): neck->A, A->B, B->C, C->D,
-// and D->end — the AIMED segment, long enough that the closure arithmetic
-// keeps the arm end buried across the whole clip fold-scale range (the
-// committed closure probe sweeps 780..1160 and asserts it).
-constexpr int32_t kLoopArcMm[5] = {680, 340, 380, 380, 1420};
+// arc lengths along the tube (stretched space): junctionF->neck, neck->A,
+// A->B, B->C, C->D, and D->end — the AIMED segment, long enough that the
+// closure arithmetic keeps the arm end buried across the whole clip
+// fold-scale range (the committed closure probe sweeps 700..1160 and
+// asserts it). PASS 4: the old neck->A span (680) splits at the NEW neck
+// hinge (336 + 344 = 680), so every drawn station stays where it was.
+constexpr int32_t kLoopArcMm[6] = {336, 344, 340, 380, 380, 1420};
 // fold angles at the neck exit and hinges A..C (angle16, about Z); hinge D
 // has NO authored fold — loop_pose computes it per key (closure). Derived
 // from the sheet's ring read (tall upright egg, W/H ~0.8), tuned by LOOKING.
@@ -131,26 +133,35 @@ constexpr int32_t kLoopReentryYMm = 180;
 // sheet's asymmetric attitude; the rest tilt at A is the drawn front KINK.
 constexpr int32_t kNeckRestYawA16 = 3300;     // ~18 deg loop-plane yaw
 constexpr int32_t kLoopRestTiltA16 = 800;     // ~4 deg out-of-plane at A
-// per-station blade radii (the taper): {buried base, neck, A, B, C, D, end}.
-// rx = in the loop plane (the side sheet's tube gauge — roughly right
-// before, kept ~105 mid-tube, flared at the shoulder); rz = across the
-// plane (the FRONT sheet's blade: ~45% of body width at the base tapering
-// toward a point over the peak).
-// PASS 3 (R12): the mid-tube gauge drops ~0.7x (the owner: "way too
-// thick"); the broad base flaring INTO the body and the thin tip stay.
-constexpr int32_t kLoopBladeRxMm[7] = {190, 130, 66, 60, 66, 70, 91};
-constexpr int32_t kLoopBladeRzMm[7] = {180, 150, 66, 32, 27, 29, 42};
+// per-station blade radii (the taper): {buried base, junctionF, neck, A,
+// B, C, D, end}. rx = in the loop plane, rz = across it (the FRONT
+// sheet's blade).
+// PASS 4 (Direction 4 §1 thickness): "the frontmost part is still too
+// thick — thin, thickening only a little, VERY CLOSE to where it meets
+// the creature". The flare now lives only at the junction station itself
+// (the ball masks the entry); the free tube runs at the mid gauge from
+// just above the junction ball. The back "thickens out a small amount"
+// at the re-entry (end station up a little, still under the back ball).
+// Brackets, judged by eye at native beside the sheets.
+constexpr int32_t kLoopBladeRxMm[8] = {130, 78, 64, 62, 60, 66, 72, 82};
+constexpr int32_t kLoopBladeRzMm[8] = {140, 76, 52, 40, 32, 27, 34, 46};
 
-// ---- the junction knuckles (R11 / Direction 3 §3: "there are no hinges
-// where the antennae meet the creature") ----
-// Two new hinge-ball parts make the body-side joints THINGS: one at the
-// neck exit (on kBNeck — half-buried at the antenna's base) and one at the
-// re-entry (on kBLoopBase2, offset from the deep anchor out to the visible
-// surface crossing on the upper-left flank). Same construction as balls
-// A/B/C, page tiles from birth (gotcha §0), sized into the ball family.
-constexpr int32_t kKnuckleRadiusMm = 110;
-constexpr int32_t kKnuckleNeckOffXMm = 0, kKnuckleNeckOffYMm = 0;
-constexpr int32_t kKnuckleReentryOffXMm = -70, kKnuckleReentryOffYMm = 270;
+// ---- the junction balls (PASS 4, Direction 4 §1: "the ball inside the
+// antenna is completely wrong — remove it. The other is almost right — it
+// belongs where the antenna meets the creature at the BACK. Add one where
+// the antenna meets the creature at the FRONT.") ----
+// The FRONT ball rides kBJunctionF (a real hinge — its bind IS the
+// antenna's base at the body surface), half-buried in the crown at the
+// visible surface crossing. The BACK ball rides kBLoopBase2, offset from
+// the deep closure anchor out to the probed posed surface crossing on the
+// upper-left flank, then placed finally BY EYE. Both are hinge-family
+// balls with page tiles from birth (gotcha §0).
+constexpr int32_t kKnuckleRadiusMm = 118;
+// front-junction ball offset from kBJunctionF's bind (small: the bind is
+// already the surface exit; the offset rides the ball up the tube a touch
+// so it straddles the crown surface — by eye)
+constexpr int32_t kJunctionFBallOffYMm = 70;  // centres on the probed crossing (83, 735)
+constexpr int32_t kKnuckleReentryOffXMm = -100, kKnuckleReentryOffYMm = 285;  // probed crossing (-328, 467); eye adjusts
 
 // ---- the eyes (the whole face) ----
 // Two big purple almond lenses close together on the lower front, angled

@@ -99,21 +99,23 @@ inline zc::RingPart make_loop() {
   p.caps = zc::kCapTop | zc::kCapBot;  // both ends are buried in the body, but
                                        // a hole is a hole: cap them closed
   const int32_t y0 = kLoopNeckExitYMm - kLoopBuryMm;
-  // stations along the tube, mm from y0: neck exit, hinges A..D, arm end
-  const int32_t stNeck = kLoopBuryMm;
-  const int32_t stA = stNeck + kLoopArcMm[0];
-  const int32_t stB = stA + kLoopArcMm[1];
-  const int32_t stC = stB + kLoopArcMm[2];
-  const int32_t stD = stC + kLoopArcMm[3];
-  const int32_t total = stD + kLoopArcMm[4];
+  // stations along the tube, mm from y0: the front junction (the surface
+  // exit — the old neck), the NEW neck, hinges A..D, arm end (pass 4)
+  const int32_t stJF = kLoopBuryMm;
+  const int32_t stNeck = stJF + kLoopArcMm[0];
+  const int32_t stA = stNeck + kLoopArcMm[1];
+  const int32_t stB = stA + kLoopArcMm[2];
+  const int32_t stC = stB + kLoopArcMm[3];
+  const int32_t stD = stC + kLoopArcMm[4];
+  const int32_t total = stD + kLoopArcMm[5];
   const int32_t blend = 145;  // half-width of each fold blend, mm of tube
                               // (max the station spacing admits; wider blend
                               // = rounder corner, and the five-fold pentagon
                               // plus these blends is the sheet's soft ring)
   // the per-station blade taper (piecewise-linear between stations)
-  const int32_t stKey[7] = {0, stNeck, stA, stB, stC, stD, total};
+  const int32_t stKey[8] = {0, stJF, stNeck, stA, stB, stC, stD, total};
   const auto taper = [&](const int32_t* k, int32_t s) {
-    for (int j = 0; j + 1 < 7; ++j) {
+    for (int j = 0; j + 1 < 8; ++j) {
       if (s <= stKey[j + 1]) {
         const int32_t span = stKey[j + 1] - stKey[j];
         if (span <= 0) return k[j + 1];
@@ -121,7 +123,7 @@ inline zc::RingPart make_loop() {
             (static_cast<int64_t>(k[j + 1] - k[j]) * (s - stKey[j])) / span);
       }
     }
-    return k[6];
+    return k[7];
   };
   for (int i = 0; i < kLoopRings; ++i) {
     const int32_t s = static_cast<int32_t>((static_cast<int64_t>(total) * i) / (kLoopRings - 1));
@@ -138,10 +140,15 @@ inline zc::RingPart make_loop() {
       if (t > 64) t = 64;
       return t;  // 0 = fully lower bone, 64 = fully upper bone
     };
-    const int32_t tN = blend_of(stNeck), tA = blend_of(stA), tB = blend_of(stB),
-                  tC = blend_of(stC), tD = blend_of(stD);
-    if (tA == 0) {  // the buried base and the neck exit: root/neck
+    const int32_t tJ = blend_of(stJF), tN = blend_of(stNeck),
+                  tA = blend_of(stA), tB = blend_of(stB), tC = blend_of(stC),
+                  tD = blend_of(stD);
+    if (tN == 0) {  // the buried base and the junction exit: root/junctionF
       rs.b0 = kBRoot;
+      rs.b1 = kBJunctionF;
+      rs.w0 = static_cast<uint8_t>(64 - tJ);
+    } else if (tA == 0) {  // junctionF -> the new neck hinge
+      rs.b0 = kBJunctionF;
       rs.b1 = kBNeck;
       rs.w0 = static_cast<uint8_t>(64 - tN);
     } else if (tB == 0) {  // neck -> A

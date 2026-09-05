@@ -100,9 +100,13 @@ inline const zc::CreatureType& type() {
     parts.push_back(make_hinge(kBHingeB));
     parts.push_back(make_hinge(kBHingeC));
     parts.push_back(make_loop());
-    // R11: the body-side junction knuckles — the joints the owner asked for
-    // twice, made visible things (page tiles from birth via make_knuckle).
-    parts.push_back(make_knuckle(kBNeck, kKnuckleNeckOffXMm, kKnuckleNeckOffYMm));
+    // PASS 4 (Direction 4 §1): the tumour ball (the old neck knuckle,
+    // floating ON the tube) is REMOVED. The front-junction ball rides the
+    // NEW kBJunctionF hinge at the body-surface exit — a ball that is a
+    // joint — and the back ball rides kBLoopBase2, re-sited at the probed
+    // posed surface crossing and placed finally by eye. Page tiles from
+    // birth via make_knuckle (gotcha §0).
+    parts.push_back(make_knuckle(kBJunctionF, 0, kJunctionFBallOffYMm));
     parts.push_back(
         make_knuckle(kBLoopBase2, kKnuckleReentryOffXMm, kKnuckleReentryOffYMm));
     parts.push_back(make_lens(kBEyeL));

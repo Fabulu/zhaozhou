@@ -3897,7 +3897,11 @@ int render_scene(const SceneSubject& sub) {
             };
             u02::FxAnchors fa;
             anchor(u02::kBRoot, fa.body);
-            anchor(u02::kBNeck, fa.neck);
+            // PASS 4: the ring-centre anchor stays at the FRONT JUNCTION
+            // (the old neck bind) so the pass-3 centring (R8) is preserved
+            // bone-for-bone; the new mid-tube kBNeck joins the anchor set
+            // properly in the folding stage.
+            anchor(u02::kBJunctionF, fa.neck);
             anchor(u02::kBHingeA, fa.hinge_a);
             anchor(u02::kBHingeB, fa.hinge_b);
             anchor(u02::kBHingeC, fa.hinge_c);

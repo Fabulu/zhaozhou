@@ -16,7 +16,9 @@ Targets:
   cel        zhao-reel-cel.exe (default)
   meshcheck  zixx-meshcheck.exe
   probe      zixx-probe.exe
-  all        all four executables
+  mprobe     manafold-probe.exe (the committed Manafold clearance/closure probe)
+  mmeshcheck manafold-meshcheck.exe
+  all        all four core executables
 EOF
 }
 
@@ -38,7 +40,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|all)
       TARGET="$1"
       shift
       ;;
@@ -150,11 +152,25 @@ build_probe() {
     -o "$BIN/zixx-probe.exe"
 }
 
+build_mprobe() {
+  printf '%s\n' "LD manafold-probe"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_probe.cpp" "${LIBOBJS[@]}" \
+    -o "$BIN/manafold-probe.exe"
+}
+
+build_mmeshcheck() {
+  printf '%s\n' "LD manafold-meshcheck"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_meshcheck.cpp" "${LIBOBJS[@]}" \
+    -o "$BIN/manafold-meshcheck.exe"
+}
+
 case "$TARGET" in
   reel) build_reel ;;
   cel) build_cel ;;
   meshcheck) build_meshcheck ;;
   probe) build_probe ;;
+  mprobe) build_mprobe ;;
+  mmeshcheck) build_mmeshcheck ;;
   all)
     build_reel
     build_cel

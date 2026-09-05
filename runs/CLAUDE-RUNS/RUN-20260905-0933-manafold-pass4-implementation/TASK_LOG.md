@@ -74,3 +74,21 @@ manafold-trio; u02:: namespace, kU02*, U02_* lanes, u02-s* diagnostics KEPT
 (R13, documented atop manafold_art.h). Gate: zixxtrixx-walk 0xF06EF66B
 identical; manafold-hover renders; all 600 hover frames byte-identical to the
 pass-3 unnamed02-hover render (only meta.txt's subject name differs).
+
+## Stage B (11:00-12:00) - bones and balls
+kBJunctionF inserted (12 bones of 32): the OLD kBNeck bind (90,664) becomes
+the front junction verbatim - every accepted pivot (lasso, drift trail,
+trick flex, rest yaw/kink) stays where it was, moved to kBJunctionF - and a
+NEW kBNeck hinge joins mid-lower-tube (arc 680 split 336+344). Chain root ->
+junctionF -> neck -> A -> B -> C -> D; closure walk now composes ALL
+pre-applied joint rotations (knead-ready). Tumour ball removed; front ball
+on kBJunctionF at the PROBED crossing (83,735) (probe found it, eye placed
+ball off +70); back ball re-sited to probed crossing (-328,467) via offset
+(-100,285). Taper redrawn 8 stations, thin front (rx 78 at junction, 60-66
+free tube, 82 end), balls 118 > every local tube radius. Probe extended with
+the SURFACE CROSSING report; build-direct.sh gains mprobe/mmeshcheck
+targets. Gates: clearance HOLDS, closure sweep 997pm/bank 1039pm OK, eye
+crown 164mm preserved, meshcheck CLEAN (1852 tris), rendered s4 plates and
+native hover LOOKED at - balls read as balls, tube thin, no tumour.
+Junction gesture-amplitude ladder deferred into Stage FOLD (the knead layer
+is the gesture vocabulary; declared, not skipped).

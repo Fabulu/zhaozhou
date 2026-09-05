@@ -146,7 +146,8 @@ int main() {
     // make_loop's law: the last three rings of the chain.
     const int32_t y0 = u02::kLoopNeckExitYMm - u02::kLoopBuryMm;
     const int32_t total = u02::kLoopBuryMm + u02::kLoopArcMm[0] + u02::kLoopArcMm[1] +
-                          u02::kLoopArcMm[2] + u02::kLoopArcMm[3] + u02::kLoopArcMm[4];
+                          u02::kLoopArcMm[2] + u02::kLoopArcMm[3] + u02::kLoopArcMm[4] +
+                          u02::kLoopArcMm[5];
     int32_t worst_pm = 0;
     int32_t worst_ellip = 0;
     const auto end_ellip = [&](const std::array<zc::mat3x4fx, zc::kMaxBones>& pose) {
@@ -159,8 +160,8 @@ int main() {
       // PASS 3 (the reviewer's ask): test the terminal rings' RIM, not only
       // their centrelines — five sample offsets per ring: centre, ±rx (in
       // the loop plane), ±rz (across it), at the terminal blade radii.
-      const int32_t rim_rx = u02::kLoopBladeRxMm[6];
-      const int32_t rim_rz = u02::kLoopBladeRzMm[6];
+      const int32_t rim_rx = u02::kLoopBladeRxMm[7];
+      const int32_t rim_rz = u02::kLoopBladeRzMm[7];
       const int32_t offs[5][2] = {
           {0, 0}, {rim_rx, 0}, {-rim_rx, 0}, {0, rim_rz}, {0, -rim_rz}};
       for (int ri = u02::kLoopRings - 3; ri < u02::kLoopRings; ++ri) {
@@ -282,6 +283,85 @@ int main() {
     std::printf("u02-probe: eye crown ellip %d pm — stands %d mm proud of the body "
                 "(protected read: ~166 mm / 1369 pm; re-tune kEyeDeepMm/kEyeXMm toward it)\n",
                 max_e, proud_mm);
+  }
+  // ---- PASS 4: the JUNCTION SURFACE-CROSSING report (Stage B) ------------
+  //
+  // The measurement side of ball siting (the probe finds the crossing; the
+  // EYE places the ball): walk the posed loop centreline in the still pose
+  // and report where it crosses the body ellipsoid — once near the front
+  // junction (going up the lower tube) and once on the return arm. The
+  // reported positions are ROOT-LOCAL mm, directly comparable to the bind
+  // constants (kLoopNeckExitYMm, kKnuckleReentryOff*).
+  {
+    const int32_t rx = u02::fxu(u02::kBodyRadiusMm);
+    const int32_t ry = u02::fxu(u02::vmm(u02::kBodyRadiusMm));
+    const zc::Clip& still = T.bank.clips[7];
+    std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+    zc::decode_pose(T, still, 0, pose, nullptr, 0);
+    const zc::mat3x4fx& rm = pose[u02::kBRoot];
+    const int32_t y0 = u02::kLoopNeckExitYMm - u02::kLoopBuryMm;
+    const int32_t total = u02::kLoopBuryMm + u02::kLoopArcMm[0] + u02::kLoopArcMm[1] +
+                          u02::kLoopArcMm[2] + u02::kLoopArcMm[3] + u02::kLoopArcMm[4] +
+                          u02::kLoopArcMm[5];
+    // dense centreline walk: 300 samples, blended exactly like make_loop
+    int32_t prev_e = -1;
+    int32_t prev_lx = 0, prev_ly = 0;
+    int crossing = 0;
+    for (int i = 0; i <= 300; ++i) {
+      const int32_t sarc = static_cast<int32_t>((static_cast<int64_t>(total) * i) / 300);
+      // which bone pair carries this station (make_loop's ladder, centreline)
+      const int32_t stJF = u02::kLoopBuryMm;
+      const int32_t stNeck = stJF + u02::kLoopArcMm[0];
+      const int32_t stA = stNeck + u02::kLoopArcMm[1];
+      const int32_t stB = stA + u02::kLoopArcMm[2];
+      const int32_t stC = stB + u02::kLoopArcMm[3];
+      const int32_t stD = stC + u02::kLoopArcMm[4];
+      const int32_t blend = 145;
+      const auto blend_of = [&](int32_t st) {
+        int32_t t = ((sarc - (st - blend)) * 64) / (2 * blend);
+        if (t < 0) t = 0;
+        if (t > 64) t = 64;
+        return t;
+      };
+      uint8_t b0, b1, w0;
+      const int32_t tJ = blend_of(stJF), tN = blend_of(stNeck), tA = blend_of(stA),
+                    tB = blend_of(stB), tC = blend_of(stC), tD = blend_of(stD);
+      if (tN == 0) { b0 = u02::kBRoot; b1 = u02::kBJunctionF; w0 = static_cast<uint8_t>(64 - tJ); }
+      else if (tA == 0) { b0 = u02::kBJunctionF; b1 = u02::kBNeck; w0 = static_cast<uint8_t>(64 - tN); }
+      else if (tB == 0) { b0 = u02::kBNeck; b1 = u02::kBHingeA; w0 = static_cast<uint8_t>(64 - tA); }
+      else if (tC == 0) { b0 = u02::kBHingeA; b1 = u02::kBHingeB; w0 = static_cast<uint8_t>(64 - tB); }
+      else if (tD == 0) { b0 = u02::kBHingeB; b1 = u02::kBHingeC; w0 = static_cast<uint8_t>(64 - tC); }
+      else { b0 = u02::kBHingeC; b1 = u02::kBHingeD; w0 = static_cast<uint8_t>(64 - tD); }
+      zc::SkinVertex sv{};
+      sv.x = u02::fxu(u02::kLoopTubeXMm);
+      sv.y = u02::fxu(y0 + sarc);
+      sv.z = 0;
+      sv.b0 = b0; sv.b1 = b1; sv.w0 = w0;
+      int32_t x, y, z;
+      zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
+      const int64_t dx = x - rm.m[3], dy = y - rm.m[7], dz = z - rm.m[11];
+      const int64_t lx = (rm.m[0] * dx + rm.m[4] * dy + rm.m[8] * dz) >> 16;
+      const int64_t ly = (rm.m[1] * dx + rm.m[5] * dy + rm.m[9] * dz) >> 16;
+      const int64_t lz = (rm.m[2] * dx + rm.m[6] * dy + rm.m[10] * dz) >> 16;
+      const int64_t ex = (lx << 16) / rx;
+      const int64_t ey = (ly << 16) / ry;
+      const int64_t ez = (lz << 16) / rx;
+      const int32_t e = static_cast<int32_t>(
+          (u02::isqrt64(ex * ex + ey * ey + ez * ez) * 1000) >> 16);
+      const int32_t lmx = static_cast<int32_t>((lx * 1000) >> 16);
+      const int32_t lmy = static_cast<int32_t>((ly * 1000) >> 16);
+      if (prev_e >= 0 && ((prev_e < 1000) != (e < 1000))) {
+        ++crossing;
+        std::printf(
+            "u02-probe: SURFACE CROSSING %d (%s) near root-local (%d, %d) mm "
+            "(arc station %d mm; prev sample (%d, %d))\n",
+            crossing, prev_e < 1000 ? "exiting" : "entering", lmx, lmy, sarc,
+            prev_lx, prev_ly);
+      }
+      prev_e = e;
+      prev_lx = lmx;
+      prev_ly = lmy;
+    }
   }
   return rc;
 }

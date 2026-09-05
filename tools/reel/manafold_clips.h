@@ -167,32 +167,37 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   const int32_t fa = a(kLoopFoldAA16, a_pm);
   const int32_t fb = a(kLoopFoldBA16, b_pm);
   const int32_t fc = a(kLoopFoldCA16, c_pm);
-  // the drawn kink/lean is a REST attitude on the neck bone (R8)
-  const zc::quat16 loc_neck = quat_mul(quat_y(kNeckRestYawA16), quat_z(fn));
+  // PASS 4: the drawn kink/lean is a REST attitude on the FRONT JUNCTION
+  // bone (the old neck bind — accepted silhouette preserved verbatim).
+  // The NEW kBNeck hinge is identity at rest: a pure articulation joint
+  // the knead layer drives; the closure walk composes whatever it carries.
+  const zc::quat16 loc_junction = quat_mul(quat_y(kNeckRestYawA16), quat_z(fn));
   const zc::quat16 loc_a =
       quat_mul(quat_z(fa), quat_x(kLoopRestTiltA16 + tilt_a16));
   const zc::quat16 loc_b = quat_z(fb);
   const zc::quat16 loc_c = quat_z(fc);
-  g.q[kBNeck] = quat_mul(g.q[kBNeck], loc_neck);
+  g.q[kBJunctionF] = quat_mul(g.q[kBJunctionF], loc_junction);
   g.q[kBHingeA] = quat_mul(g.q[kBHingeA], loc_a);
   g.q[kBHingeB] = quat_mul(g.q[kBHingeB], loc_b);
   g.q[kBHingeC] = quat_mul(g.q[kBHingeC], loc_c);
   // ---- the closure aim, in 3D: quaternion-walk the chain to hinge D
-  // exactly as the pose composes it (yaw and tilt included), then choose
-  // D's Z-fold so the last segment points at the re-entry anchor. A Z-fold
+  // exactly as the pose composes it (yaw, tilt AND any knead rotations
+  // already sitting on the junction/neck/hinge bones), then choose D's
+  // Z-fold so the last segment points at the re-entry anchor. A Z-fold
   // can only aim within D's local XY plane, so the out-of-plane residual is
   // projected away — the anchor is deep enough that the committed closure
   // probe still proves burial across the whole fold-scale range.
   int32_t px = kLoopTubeXMm, py = kLoopNeckExitYMm, pz = 0;
-  zc::quat16 Q = loc_neck;
-  const zc::quat16 locs[3] = {loc_a, loc_b, loc_c};
-  for (int i = 0; i < 4; ++i) {
+  zc::quat16 Q = g.q[kBJunctionF];
+  const zc::quat16 locs[4] = {g.q[kBNeck], g.q[kBHingeA], g.q[kBHingeB],
+                              g.q[kBHingeC]};
+  for (int i = 0; i < 5; ++i) {
     int32_t dx, dy, dz;
     quat_rot_vec(Q, 0, kLoopArcMm[i], 0, dx, dy, dz);
     px += dx;
     py += dy;
     pz += dz;
-    if (i < 3) Q = quat_mul(Q, locs[i]);
+    if (i < 4) Q = quat_mul(Q, locs[i]);
   }
   int32_t vx, vy, vz;  // anchor - P_D, taken into C's local frame
   quat_rot_vec(quat_conj(Q), kLoopReentryXMm - px, kLoopReentryYMm - py, -pz, vx, vy, vz);
@@ -426,7 +431,8 @@ inline zc::Clip build_drift() {
     g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_x(bank));
     whole_wobble(g, f, K, kWobbleAmpPm * 3 / 4);
     // the antenna TRAILS against the travel: a standing off-plane lean
-    g.q[kBNeck] = quat_mul(g.q[kBNeck], quat_x(-kDriftTrailA16));
+    // (pass 4: the pivot is the front junction — the old neck bind)
+    g.q[kBJunctionF] = quat_mul(g.q[kBJunctionF], quat_x(-kDriftTrailA16));
     face_rest(g);
     // eyes INTO the travel, one glance back at the second correction
     apply_gaze(g, f >= 104 && f < 122 ? -kGazeMaxA16 / 2 : kGazeMaxA16 / 2,
@@ -842,8 +848,8 @@ inline zc::Clip build_taunt2() {
     // JUNCTION. The neck bone circles (lateral x fore-aft in quadrature),
     // so the whole antenna visibly swings around its base knuckle instead
     // of only rippling — the missing-junction fault the owner named twice.
-    g.q[kBNeck] = quat_mul(
-        g.q[kBNeck],
+    g.q[kBJunctionF] = quat_mul(
+        g.q[kBJunctionF],
         quat_mul(quat_x(static_cast<int32_t>(
                      (static_cast<int64_t>(2300) * ramp / 1000 * sinp(f, K, 4)) >> 16)),
                  quat_z(static_cast<int32_t>(
@@ -934,8 +940,8 @@ inline zc::Clip build_trick() {
       const int32_t flex = static_cast<int32_t>(
           (static_cast<int64_t>(160) * bal / 1000 * sinp(f, K, 8)) >> 16);
       loop_pose(g, 1000 + flex, 1000 - flex / 2, 1000 + flex / 3, 1000 - flex / 4, 0);
-      g.q[kBNeck] = quat_mul(
-          g.q[kBNeck], quat_x(static_cast<int32_t>(
+      g.q[kBJunctionF] = quat_mul(
+          g.q[kBJunctionF], quat_x(static_cast<int32_t>(
                            (static_cast<int64_t>(1100) * bal / 1000 *
                             sinp(f, K, 8, 0x3000)) >> 16)));
     } else {
