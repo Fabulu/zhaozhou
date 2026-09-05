@@ -441,6 +441,23 @@ a charter-allocator decision carrying a formal proof. Getting this the wrong way
 round would mean eighteen people's worth of integration work queued behind a
 question nobody had asked yet.
 
+> **SUPERSEDED 2026-09-05 — THE REGION MAP WAS RULED THE NEXT DAY.**
+> `spec/memory_rules.md` §5f allocates `GEOM.ASSET_POOL` at
+> `0x06A0_0000..0x07FF_FFFF`, 22 MiB, `ENGINE1`, **read-only**, in bank 3
+> alongside `GEOM.PARAMBUF` — with `formal_mem_guard.sv` widened *with* the
+> region (`a1_map` reads `slot0 || slot1 || asset`) rather than around it, plus
+> `a1_asset_ro` and a non-vacuity cover.
+>
+> **So D22's blocker is cleared and the paragraph above is stale.** It is
+> corrected rather than deleted because it nearly cost a second session: read on
+> 2026-09-05 while the composed-island fit ran, it reads as an open P0 and sent
+> me looking for a region map that already existed. This is the docket's own
+> version of *"never compare a current file to an old measurement"* — an entry
+> that was true when written and describes a world that moved.
+>
+> The remaining D22 work is now genuinely the wiring, in
+> `tools/design/compose_order.py`'s order.
+
 ### The order is already decided, and it is the ledger's own
 
 `tools/design/compose_order.py` (committed) topologically sorts the geometry
