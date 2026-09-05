@@ -364,6 +364,25 @@ constexpr int kTrickHomeKey = 186;            // righted (overshoot inside)
 constexpr int32_t kTrickBalanceWobbleA16 = 900;  // inverted-pendulum sway
 constexpr int32_t kTrickOvershootA16 = 2600;     // the righting overshoot
 
+// PASS 4 (Stage H, Direction 4 §3b): DIRECTIONAL HITS. Four named
+// authored contact stations in one clip, the zixxtrixx-damage precedent;
+// no runtime collision -- the contact point is authored per station. It
+// FLOATS: recoil is displacement + overshoot + a slow damped settle in
+// the air. The struck side leads; the antenna whips opposite a beat
+// later; the mana coupling shatters the held shape for free.
+constexpr int kDamageKeys = 232;
+constexpr int kDamageHitKeys[4] = {12, 70, 128, 186};  // one blow per station
+// stations: 0 body-front (+X blow), 1 body-side (+Z), 2 body-back (-X),
+// 3 LOOP-PEAK (struck on the antenna -- the loop takes it, the body
+// follows late and less)
+constexpr int32_t kDamageKnockMm = 520;      // body displacement per blow
+constexpr int32_t kDamagePeakKnockMm = 260;  // the loop-peak hit moves the body less
+constexpr int32_t kDamageWhipPm = 320;       // antenna whip depth (fold-scale)
+constexpr int32_t kDamagePeakWhipPm = 620;   // ...and when struck ON the loop
+constexpr int kDamageWhipLagKeys = 2;        // the whip trails the blow
+constexpr int32_t kDamageWinceSquintPm = 780;
+constexpr int32_t kDamageSquashPm = 2200;    // impact squash, x kCompressAmpPm
+
 // the blink floor (the never-off life law): a quick lid pulse every period,
 // staggered per clip by the offset so no two clips blink in sync
 constexpr int kBlinkPeriodKeys = 96;
@@ -529,12 +548,12 @@ constexpr int32_t kKneadTremorA16 = 130;   // the hold's small tremor
 // per-clip gain (pm) for the always-on knead layer, indexed by slot:
 // 0 hover, 1 drift, 2 channel, 3 curious, 4 startle, 5 rest, 6 pirouette,
 // 7 still(diagnostic: OFF), 8 hasty, 9 fall, 10 hit, 11 taunt, 12 taunt2,
-// 13 trick
+// 13 trick, 14 damage
 // (trick is 0: the committed probe showed the knead grip LIFTING the
 // planted loop peak out of its declared ground contact -- the antenna is
 // busy standing; the mana still reads the balance flex.)
-constexpr int kKneadClipPm[14] = {1000, 600, 900, 800, 350, 700, 700,
-                                  0,    450, 300, 350, 550, 500, 0};
+constexpr int kKneadClipPm[15] = {1000, 600, 900, 800, 350, 700, 700,
+                                  0,    450, 300, 350, 550, 500, 0, 250};
 
 // ============================ END KNOBS ====================================
 

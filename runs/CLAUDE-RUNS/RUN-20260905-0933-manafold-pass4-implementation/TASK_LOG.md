@@ -164,3 +164,18 @@ each conduit's own clip clock, kMoteCrowdPm valve.
 ## Stage Q instrument: inkwidth.py committed with can-fail selftest
 (2px/5px rings measure 2.0/5.7; dilation detected; empty = vacuous).
 Zixxtrixx walk frame 80: ink median 2.0 px.
+
+## Stages H + T close (16:00)
+manafold-damage (slot 14, 232 keys): four authored contact stations in
+sequence - body-front/side/back and LOOP-PEAK (deep whip, body follows
+late and less). Airborne recoil (displacement + overshoot + two damped
+bounces, no ground brace), antenna whips opposite 2 keys late, eyes wince
+toward the blow, squash spikes on impact, and the mana coupling shatters
+the held shape for free. Probed: clearance 416mm OK, closure OK, travel
+probe covers it. LOOKED AT per direction (evidence/stageH-...). Drift
+camera pulled back (cam_k 185000): both ends whole and on screen, level,
+no hillside (evidence/stageT-drift-ends). Fall starts in frame from 0.
+Channel median frames: one hot filament + surge motes + fold (R4). Trio:
+three conduits EACH with folding mana - the first honest multi-conduit
+render. Eye X1 vs X2 plates + gaze extreme: whites travel with the stars,
+stars stay inside the teardrops; X1 SHIPPED.

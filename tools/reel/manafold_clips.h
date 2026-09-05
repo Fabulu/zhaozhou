@@ -1138,6 +1138,86 @@ inline zc::Clip build_trick() {
   return c;
 }
 
+/** DIRECTIONAL DAMAGE, slot 14 (pass 4, Direction 4 §3b). Four blows in
+ *  sequence at the named contact stations. Mechanically, per blow: the
+ *  struck side leads -- the root displaces AWAY from the blow over 3 keys,
+ *  overshoots, and settles IN AIR with two damped bounces (it floats: no
+ *  stagger, no ground brace); the antenna whips OPPOSITE through the
+ *  junction hinges kDamageWhipLagKeys later and rings down; the eyes
+ *  wince (squint spike + gaze snapped toward the blow); the deform squash
+ *  spikes on the impact key. The LOOP-PEAK blow inverts the ratio: the
+ *  antenna takes the hit (deep whip), the body follows late and less. */
+inline zc::Clip build_damage() {
+  const int K = kDamageKeys;
+  zc::Clip c = clip_shell(14, K, kHoverHeightMm);
+  Rig g;
+  // per-station blow directions (unit-ish, the blow ARRIVES from this way;
+  // displacement is opposite): {x, z}
+  static const int32_t kBlowDir[4][2] = {{1000, 0}, {0, 1000}, {-1000, 0}, {300, 0}};
+  for (int f = 0; f < K; ++f) {
+    g.reset();
+    antenna_knead(g, 14, K, f);  // the always-on layer (low gain)
+    int32_t dx = 0, dz = 0;      // root displacement this key
+    int32_t whip = 0;            // signed fold-scale whip (pm)
+    int32_t wince = 0;
+    int32_t gaze_side = 0;
+    int32_t squash = 1000;
+    for (int h = 0; h < 4; ++h) {
+      const int t = f - kDamageHitKeys[h];
+      if (t < 0 || t >= 56) continue;
+      const bool peak = h == 3;
+      const int32_t knock = peak ? kDamagePeakKnockMm : kDamageKnockMm;
+      // displacement: sharp out (3 keys), overshoot, two damped bounces,
+      // home by ~key 48 -- all in the air
+      static const Key kD[] = {{0, 0},   {3, -1000}, {10, -780}, {16, -880},
+                               {26, -420}, {34, -180}, {44, -40}, {55, 0}};
+      const int32_t d = curve(kD, 8, t);
+      dx += static_cast<int32_t>(static_cast<int64_t>(fxu(knock)) * d / 1000 *
+                                 kBlowDir[h][0] / 1000);
+      dz += static_cast<int32_t>(static_cast<int64_t>(fxu(knock)) * d / 1000 *
+                                 kBlowDir[h][1] / 1000);
+      // the whip: opposite, lagged, ringing down
+      const int tw = t - kDamageWhipLagKeys;
+      if (tw >= 0) {
+        static const Key kW[] = {{0, 0},  {3, 1000}, {9, -560}, {16, 340},
+                                 {24, -180}, {34, 80}, {46, 0}, {55, 0}};
+        whip += static_cast<int32_t>(
+            static_cast<int64_t>(peak ? kDamagePeakWhipPm : kDamageWhipPm) *
+            curve(kW, 8, tw) / 1000);
+      }
+      // the wince: squint spike + gaze snapped toward the blow
+      static const Key kWc[] = {{0, 0}, {2, 1000}, {18, 1000}, {30, 250}, {42, 0}, {55, 0}};
+      wince = std::max(wince, static_cast<int32_t>(
+          static_cast<int64_t>(kDamageWinceSquintPm) * curve(kWc, 6, t) / 1000));
+      if (t < 26) gaze_side = kBlowDir[h][1] != 0 ? kGazeMaxA16 * 3 / 4
+                                                  : (kBlowDir[h][0] > 0 ? 0 : 0);
+      // the squash spikes on impact
+      static const Key kSq[] = {{0, 1000}, {2, 1000}, {5, 2600}, {14, 1700},
+                                {28, 1250}, {44, 1050}, {55, 1000}};
+      squash = std::max(squash, static_cast<int32_t>(
+          static_cast<int64_t>(kDamageSquashPm) * curve(kSq, 7, t) / 1000));
+    }
+    // the whip rides the junction + hinges (the same instrument as the
+    // folding, used for impact)
+    loop_pose(g, 1000 + whip / 3, 1000 + whip, 1000 - whip / 2, 1000 + whip / 2,
+              0);
+    face_rest(g);
+    apply_gaze(g, gaze_side, kGazeLiftMaxA16 / 5);
+    apply_squint(g, wince + blink_at(f, 13));
+    g.write(c, f);
+    c.root[static_cast<size_t>(f) * 3 + 0] = dx;
+    c.root[static_cast<size_t>(f) * 3 + 2] = dz;
+    c.root[static_cast<size_t>(f) * 3 + 1] =
+        hover_at(f, K, kHoverHeightMm, kBobAmpAMm * 2 / 3, kBobAmpBMm, K / 30, K / 58);
+    static const Key kSqBase[] = {{0, 1000}, {231, 1000}};
+    (void)kSqBase;
+    c.deform[static_cast<size_t>(f)] = compress_at(
+        f, K, K / 30, static_cast<int32_t>(
+            static_cast<int64_t>(kCompressAmpPm) * squash / 1000));
+  }
+  return c;
+}
+
 /** the still hover, slot 7: the fixed-camera form diagnostic pose. */
 inline zc::Clip build_still() {
   zc::Clip c = clip_shell(7, 2, kHoverHeightMm);

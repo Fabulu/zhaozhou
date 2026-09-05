@@ -5028,6 +5028,10 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // ground so one column's snap speaks for the whole path. Drift (1) and
   // hasty (8) travel; everything else keeps the mound.
   if (slot == 1 || slot == 8) s.bump_ext = 18;
+  // drift's lateral span (~6.9 m) exceeded the house camera's window and
+  // the clip ENDED clipped at the frame edge (looked at): the drift camera
+  // pulls back so the whole traverse stays on screen.
+  if (slot == 1) s.cam_k = 185000;
   // PASS 4 (Stage T -- the reviewer's fault 2b): the fall started ABOVE the
   // frame; 190 of 340 frames showed empty sky. The authored 3.6 m drop
   // stays (Direction 3 asked for it); the CAMERA pulls back and tips up so
@@ -7068,6 +7072,7 @@ int main(int argc, char** argv) {
   if (wanted("manafold-taunt")) rc |= render_scene(subject_u02_clip(11, "manafold-taunt", u02::kTauntKeys, false, &kU02SunTaunt));
   if (wanted("manafold-taunt2")) rc |= render_scene(subject_u02_clip(12, "manafold-taunt2", u02::kTaunt2Keys, false, &kU02SunTaunt2));
   if (wanted("manafold-trick")) rc |= render_scene(subject_u02_clip(13, "manafold-trick", u02::kTrickKeys, false, &kU02SunTrick));
+  if (wanted("manafold-damage")) rc |= render_scene(subject_u02_clip(14, "manafold-damage", u02::kDamageKeys, false, &kU02SunHit));
   if (wanted("manafold-crackle")) {
     SceneSubject s = subject_u02_clip(0, "manafold-crackle", u02::kIdleKeys, false, &kU02SunChannel);
     s.u02_mana = 4;  // the crackle IS the lightning candidate
