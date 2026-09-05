@@ -50,8 +50,14 @@ EYE_RIM_WHITE = np.array([246.0, 242.0, 250.0])
 # fallback). The star NEEDS a page: untextured parts render black under
 # celmain (creature/09-ENGINE-GOTCHAS.md §7 — the toon ramp normalises the
 # pre-lit colour lanes to the light-gain scale and the >>16 floors them).
-STAR_CYAN = np.array([64.0, 220.0, 240.0])
-STAR_CYAN_DEEP = np.array([42.0, 178.0, 202.0])
+# PASS 2: deepened toward the drawn teal — the shipped cyan ran lighter and
+# greener than the sheets' star blue.
+STAR_CYAN = np.array([46.0, 184.0, 210.0])
+STAR_CYAN_DEEP = np.array([30.0, 150.0, 176.0])
+# the lens's own ink (the sheet outlines every almond in heavy black — the
+# cel ink pass draws only the creature silhouette, so the lens/pink contour
+# is painted at the junction band of the page)
+LENS_INK = np.array([24.0, 14.0, 40.0])
 GRAIN_AMP = 0.26        # value amplitude — must beat the light rig's range
 STROKE_AMP = 0.10       # directional crayon-stroke modulation
 
@@ -115,19 +121,36 @@ def build_atlas():
 
 def build_eye():
     """The lens page. U wraps around the lens ring (outward face centred on
-    u=0 by the ring builder's angle law); V runs tip to tip. Purple border at
-    the tips and the silhouette edges, white rim field inside — the cyan star
-    is geometry riding the pupil bone, never paint."""
+    u=0 by the ring builder's angle law); V runs tip to tip.
+
+    PASS 2 REPAINT (Direction 2 §2 + the traced area split): the sheet gives
+    one lens 65-71% PURPLE, a THIN white ring (4-7%) tracing the star, and a
+    big cyan star (the star stays geometry riding the pupil bone). The old
+    page painted a fat white slab over 40% of the circumference — which is
+    why the shipped eye's most common colour was a hueless mid-grey. Purple
+    is the dominant field now; the white survives only as a ring ballooning
+    just past the star's tips, as drawn; the junction band and the tips
+    carry the lens's own ink so the almond separates from the pink at any
+    size (the sheet outlines every lens in heavy black)."""
     t = crayon(EYE_PURPLE, EYE_PURPLE_DEEP, EYE_TILE, EYE_TILE, "u02-eye")
     v = np.arange(EYE_TILE)[:, None] / (EYE_TILE - 1)   # 0..1 tip to tip
     u = np.arange(EYE_TILE)[None, :] / EYE_TILE         # around the ring
     # angular distance from the outward station (u = 0/1 wrap)
     du = np.minimum(u, 1.0 - u) * 2.0                   # 0 at front, 1 at back
-    # the white rim: the inner face away from tips and away from the edge band
-    rim = (np.abs(v - 0.5) < 0.21) & (du < 0.40)
+    # the thin white ring: an oval annulus around the outward centre, sized
+    # to balloon just past the star geometry's tips (star arm reaches
+    # |v-0.5| ~ 0.20 at the shipped kPupilStarArmMm)
+    rv = np.abs(v - 0.5) / 0.26
+    ru = du / 0.50
+    rr = np.sqrt(rv * rv + ru * ru + 1e-9)
+    ring = (rr > 0.74) & (rr < 1.02)
     white = crayon(EYE_RIM_WHITE, EYE_RIM_WHITE * 0.9,
                    EYE_TILE, EYE_TILE, "u02-rim")
-    t[rim] = white[rim]
+    t[ring] = white[ring]
+    # the lens ink: the junction band where the almond meets the body, and
+    # the sharp tips — a painted contour, present at any render size
+    ink = (du > 0.86) | (v < 0.055) | (v > 0.945)
+    t[ink] = LENS_INK
     return np.clip(t, 0, 255)
 
 
