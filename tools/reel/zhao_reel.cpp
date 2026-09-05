@@ -4987,7 +4987,7 @@ void u02_common(SceneSubject& s) {
   s.step = 1;
   s.full_colour = true;
   s.bump_ext = 6;
-  s.cam_k = 240000;
+  s.cam_k = u02::kU02CamK;  // PASS 6 A.2: the house camera, named and at 360k
   s.cam_ps = 16962;  // ~15 deg down, the showcase pitch
   s.cam_pc = 63313;
   s.cam_eye = 12;
@@ -5037,6 +5037,20 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   s.orbit = orbit;
   u02_common(s);
   if (!orbit) s.cam_yaw = 0x2000;  // three-quarter: the face and the loop both read
+  // PASS 6 STAGE A.1 (Direction 5 §8: "the experimental lighting from Zixxtrix
+  // ... it's our standard now"). EVERY clip subject now raises the many-colour
+  // moving rig; until this pass only manafold-inspect did.
+  //
+  // SAID OUT LOUD, because it is a DELIBERATE REVERSAL: Direction 3 §1 called
+  // four-light-everywhere a regression. Direction 5 §8 reverses that, and the
+  // owner is the authority. Two intended consequences:
+  //   * the per-clip kU02Sun* suns STOP FIRING -- cr_ctx.sun_light gates off
+  //     under the moving rig. The sun constants stay in place, DORMANT: they
+  //     are the one-flag revert path and deleting them buys nothing.
+  //   * every plate, CRC and published render moves. That is why this is the
+  //     FIRST visual stage: no verdict is formed under a rig we do not ship.
+  // channel's planet=1 violet bloom is independent of the rig and is preserved.
+  s.creature_moving_light = true;
   // PASS 4 (Stage T -- the reviewer's fault 2, by the Zixxtrixx walk's own
   // precedent): a TRAVELLING clip must stage on FLAT ground. The reel
   // snaps the root to ONE terrain column at the stage centre; at
@@ -7095,6 +7109,36 @@ int main(int argc, char** argv) {
   if (wanted("manafold-taunt2")) rc |= render_scene(subject_u02_clip(12, "manafold-taunt2", u02::kTaunt2Keys, false, &kU02SunTaunt2));
   if (wanted("manafold-trick")) rc |= render_scene(subject_u02_clip(13, "manafold-trick", u02::kTrickKeys, false, &kU02SunTrick));
   if (wanted("manafold-damage")) rc |= render_scene(subject_u02_clip(14, "manafold-damage", u02::kDamageKeys, false, &kU02SunHit));
+  // ---- PASS 6 STAGE 0.2: THE COMMITTED DIAGNOSTICS ------------------------
+  // These are the ablation instrument this creature was missing. The art recon
+  // lost a day to their absence and the architect had to re-create them in a
+  // lane clone, where they were orphaned the moment that run closed. They cost
+  // six lines. They are PERMANENT.
+  //
+  // manafold-still exposes clip slot 7 -- the 2-key form-diagnostic pose that
+  // build_still() has always produced and nothing could render. It is the
+  // cheapest possible look at the GEOMETRY with no motion, no fold and no
+  // smear in the way: four frames, mana off by the slot rule.
+  if (wanted("manafold-still"))
+    rc |= render_scene(subject_u02_clip(7, "manafold-still", 2, false, &kU02SunCalm));
+  // The FOG ABLATION pair (architecture §1.1). Same base clip as manafold-rest,
+  // one knob each: -mana kills the smear plane only, -off kills both. Against
+  // the rest baseline they attribute every pale pixel of the gassy shell to the
+  // smear plane, the mote halos, or the creature. Do not delete these: the
+  // question they answer ("is the fog the smear?") has been re-asked twice.
+  if (wanted("manafold-fogprobe-mana")) {
+    SceneSubject s = subject_u02_clip(5, "manafold-fogprobe-mana", u02::kRestKeys, false, &kU02SunCalm);
+    s.u02_smear = 0;  // motes and creature only
+    s.note = "fog ablation: smear plane OFF, mana ON";
+    rc |= render_scene(s);
+  }
+  if (wanted("manafold-fogprobe-off")) {
+    SceneSubject s = subject_u02_clip(5, "manafold-fogprobe-off", u02::kRestKeys, false, &kU02SunCalm);
+    s.u02_mana = 0;
+    s.u02_smear = 0;  // the bare creature
+    s.note = "fog ablation: smear plane OFF, mana OFF";
+    rc |= render_scene(s);
+  }
   if (wanted("manafold-crackle")) {
     SceneSubject s = subject_u02_clip(0, "manafold-crackle", u02::kIdleKeys, false, &kU02SunChannel);
     s.u02_mana = 4;  // the crackle IS the lightning candidate

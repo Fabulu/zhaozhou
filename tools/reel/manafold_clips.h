@@ -521,7 +521,7 @@ inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f) {
   // every authored slot reads its own gain (pass 5: the guard was `< 14`,
   // which orphaned index 14 -- the damage clip silently ran at 700, 2.8x
   // its authored 250, and the owner's knob did nothing)
-  const int gain = slot < 15 ? kKneadClipPm[slot] : 700;
+  const int gain = slot < static_cast<uint32_t>(kKneadClipSlots) ? kKneadClipPm[slot] : 700;
   if (gain <= 0) return;
   const FoldPhase ph = fold_phase(slot, keys, f * 16);
   const auto a = [&](int32_t base, int32_t env_pm) {

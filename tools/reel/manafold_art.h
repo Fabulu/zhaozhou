@@ -579,6 +579,24 @@ constexpr int32_t kKneadTremorA16 = 130;   // the hold's small tremor
 // simply REACHED now (the dead-knob fix): it shipped at 700 by accident.
 constexpr int kKneadClipPm[15] = {1000, 600, 900, 800, 350, 500, 700,
                                   0,    450, 300, 350, 550, 380, 0, 250};
+// PASS 6 (0.2, carried from pass-5 QA): the guard over this array is DERIVED
+// from the array, never hand-written. The literal `< 14` orphaned slot 14 once
+// (damage silently ran at 700 against its authored 250); `< 15` was the same
+// bug one index later, waiting for the next slot to be added.
+constexpr int kKneadClipSlots =
+    static_cast<int>(sizeof(kKneadClipPm) / sizeof(kKneadClipPm[0]));
+
+// ---- PASS 6 STAGE A: THE JUDGING FRAME ------------------------------------
+// A.2 (architecture §2.1, owner question 3): the house camera for the
+// fixed-camera clips. 240000 -> 360000. This is the one knob in the pass-5
+// inventory with no effect-side cost: it changes NO mana constant and yields
+// more mana, more saturated mana, a readable loop window and an eye assembly
+// that roughly doubles in screen presence. Its cost is FRAMING -- less sky and
+// stage context, and the violet bloom occupies proportionally more backdrop.
+// Per-clip overrides (drift, fall, hasty, trio) stay per-clip and are chosen
+// against their own traverse; nothing inherits this blindly.
+// ONE CONSTANT TO REVERT if the tighter framing reads wrong.
+constexpr int32_t kU02CamK = 360000;
 
 // ============================ END KNOBS ====================================
 
