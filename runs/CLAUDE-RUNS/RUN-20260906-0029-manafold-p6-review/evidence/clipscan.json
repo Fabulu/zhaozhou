@@ -1,0 +1,82 @@
+{
+ "manafold-channel": {
+  "n": 420,
+  "mana_white_med": 74.80380870095901,
+  "mana_sat_med": 54.58171150354002,
+  "pink_clip_med": 14.74289383362945,
+  "pink_clip_max": 36.76929941990183,
+  "pink_dark_med": 27.36425099181465,
+  "pink_dark_max": 53.76593279258402,
+  "fog_med": 86.75554410281379
+ },
+ "manafold-rest": {
+  "n": 400,
+  "mana_white_med": 55.40368991198375,
+  "mana_sat_med": 77.07438930711322,
+  "pink_clip_med": 5.6250651463293355,
+  "pink_clip_max": 15.309653916211294,
+  "pink_dark_med": 8.910382833786821,
+  "pink_dark_max": 17.556987115956392,
+  "fog_med": 57.80593187683564
+ },
+ "manafold-taunt": {
+  "n": 280,
+  "mana_white_med": 60.05480335267569,
+  "mana_sat_med": 70.53642245391919,
+  "pink_clip_med": 5.6189048866834845,
+  "pink_clip_max": 16.233039272759843,
+  "pink_dark_med": 10.044333435793293,
+  "pink_dark_max": 17.732310315430517,
+  "fog_med": 58.10857787223594
+ },
+ "manafold-hasty": {
+  "n": 240,
+  "mana_white_med": 71.29812364024113,
+  "mana_sat_med": 49.352703547053736,
+  "pink_clip_med": 0.10736489772960413,
+  "pink_clip_max": 28.129205921938087,
+  "pink_dark_med": 43.53718894226754,
+  "pink_dark_max": 56.60881174899867,
+  "fog_med": 54.53291156279445
+ },
+ "manafold-hover": {
+  "n": 600,
+  "mana_white_med": 56.067591038888395,
+  "mana_sat_med": 77.64608579180941,
+  "pink_clip_med": 3.4731224033476336,
+  "pink_clip_max": 14.250782472613457,
+  "pink_dark_med": 5.689498083342757,
+  "pink_dark_max": 13.149788217173661,
+  "fog_med": 63.59796149171416
+ },
+ "manafold-curious": {
+  "n": 180,
+  "mana_white_med": 57.175549533273106,
+  "mana_sat_med": 76.56038313246515,
+  "pink_clip_med": 5.942953190132918,
+  "pink_clip_max": 14.719125683060108,
+  "pink_dark_med": 8.953884069267222,
+  "pink_dark_max": 15.665494726268205,
+  "fog_med": 61.7861229361619
+ },
+ "manalab-control-channel": {
+  "n": 800,
+  "mana_white_med": 38.011740708464615,
+  "mana_sat_med": 110.53312338396225,
+  "pink_clip_med": 34.12327863062737,
+  "pink_clip_max": 36.37335233345208,
+  "pink_dark_med": 4.6964399680859525,
+  "pink_dark_max": 6.929008845543207,
+  "fog_med": 52.966175782933675
+ },
+ "manalab-edge-snap-held": {
+  "n": 800,
+  "mana_white_med": 55.70168384291358,
+  "mana_sat_med": 71.79780719925563,
+  "pink_clip_med": 33.08566585948333,
+  "pink_clip_max": 36.42118863049096,
+  "pink_dark_med": 4.703078967512344,
+  "pink_dark_max": 6.543566070398153,
+  "fog_med": 53.54600382933229
+ }
+}

@@ -1,0 +1,7 @@
+clip                    n  medElong    p90    max  frames>4:1  worst frames
+manafold-curious      180      3.40   5.49   5.97       26.7%  0163.png 0162.png 0165.png
+manafold-hover        600      4.20   7.96  14.21       51.7%  0230.png 0009.png 0010.png
+manafold-rest         400      6.63  10.52  19.69       73.8%  0347.png 0355.png 0356.png
+manafold-taunt        280      5.66   6.97   9.52       96.1%  0156.png 0157.png 0155.png
+manafold-taunt2       240      5.79   7.15  13.12       78.3%  0106.png 0150.png 0108.png
+manafold-trick        400      4.27   7.11  18.78       51.2%  0119.png 0111.png 0113.png

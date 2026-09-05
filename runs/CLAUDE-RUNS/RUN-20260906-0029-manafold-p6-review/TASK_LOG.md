@@ -183,3 +183,22 @@ drift : x span 273px, 0% edge-touching. The pass-5 "edge-clipped for 70 frames"
         is FIXED.
 fall  : y span 102px, tumbles, stays in frame.
 hover : y span 42px, 301 reversals in 600 frames.
+
+## 02:10 — per-frame results in, FINDINGS written
+eyescan over every frame of six clips: the star is degenerate (>4:1) on 96.1% of
+`taunt`, 78.3% of `taunt2`, 73.8% of `rest`, 51.7% of `hover`, 51.2% of `trick`,
+26.7% of `curious`. The good frames score 2.3-2.7. So the bar is the NORMAL
+state, not a bad frame. plate-13 samples the worst frame of each clip by badness
+and every one shows the same defect.
+clipscan over every frame: mana is 55-75% hue-neutral on the shipping clips,
+`channel` worst at 74.8%. Pink clipping is now 3.5-5.9% median on fixed-camera
+clips — §4 largely delivered — with `channel` the outlier at 14.7% clipped /
+27.4% dark median.
+Fog settled with a 1D pixel profile (a check that CAN fail, unlike my fog
+fraction): sky dither is bit-identical to the last pixel before the ink, ONE
+transition pixel after it, then full body value. Absent, not thin.
+
+## 02:15 — closing
+FINDINGS.md written: 12 protected items, 14 faults ranked by damage to the read,
+verified vs inherited separated, §2a recorded as NOT ASSESSED with its reason.
+No creature constant changed. Nothing published.

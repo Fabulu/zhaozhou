@@ -1,9 +1,12 @@
-"""Rank EVERY frame of every clip by 'is the star still a star'.
+"""Rank EVERY frame by 'is the star still a star'. Sampling by badness.
 
-Sampling by badness, not by index (CLAUDE.md, Seeing the work properly).
-The number is the star component's major/minor axis ratio: ~1.5-2.5 is the
-drawn 4-point star, >4 is the bar defect the reviewer saw at 12x in `rest`
-and `taunt`. Calibrated on frames judged by eye first -- see probe-canfail.txt.
+The number is the star component's major/minor axis ratio. Calibrated on frames
+judged BY EYE first (evidence/probe-canfail.txt): the clean 4-point stars in
+`curious` and `hover` score 2.3-2.7; the collapsed bar the reviewer photographed
+at 12x in `rest` and `taunt` scores 6.3. A probe that scored them alike would be
+worthless, and two earlier versions of this file did exactly that.
+
+It says WHICH FRAME TO LOOK AT. The verdict stays with the eye.
 """
 import os, sys, json
 import numpy as np
@@ -11,6 +14,7 @@ from PIL import Image
 from scipy import ndimage
 
 S8 = np.ones((3, 3), int)
+
 
 def frame_elong(a):
     r, g, b = (a[..., i].astype(int) for i in range(3))
@@ -31,28 +35,24 @@ def frame_elong(a):
         ys, xs = np.nonzero(m)
         c = np.cov(np.vstack([xs - xs.mean(), ys - ys.mean()]))
         ev = np.linalg.eigvalsh(c)
-        out.append((float(np.sqrt(max(ev[1], 1e-6) / max(ev[0], 1e-6))), int(m.sum()), float(xs.mean()), float(ys.mean())))
+        out.append(float(np.sqrt(max(ev[1], 1e-6) / max(ev[0], 1e-6))))
     return out
 
-def scan(framedir):
-    rows = []
-    for fn in sorted(os.listdir(framedir)):
-        a = np.asarray(Image.open(os.path.join(framedir, fn)).convert("RGB"))
-        e = frame_elong(a)
-        rows.append((fn, max([x[0] for x in e], default=1.0), len(e)))
-    return rows
 
 if __name__ == "__main__":
-    W = sys.argv[1]
+    W, clips = sys.argv[1], sys.argv[2:]
     res = {}
-    for c in sorted(os.listdir(os.path.join(W, "frames"))):
-        if not c.startswith("manafold-"):
-            continue
-        rows = scan(os.path.join(W, "frames", c))
-        vals = [r[1] for r in rows]
-        bad = sorted(rows, key=lambda r: -r[1])[:5]
-        res[c] = dict(n=len(rows), median=float(np.median(vals)), p90=float(np.percentile(vals, 90)),
-                      frac_over4=float(np.mean([v > 4 for v in vals])), worst=[(b[0], round(b[1], 2)) for b in bad])
-        print(f"{c:<24} n={len(rows):4d} med {np.median(vals):5.2f}  p90 {np.percentile(vals,90):5.2f}  "
-              f"frames>4:1 {np.mean([v>4 for v in vals])*100:5.1f}%  worst {bad[0][0]} {bad[0][1]:.1f}")
+    print(f"{'clip':<20} {'n':>4} {'medElong':>9} {'p90':>6} {'max':>6} {'frames>4:1':>11}  worst frames")
+    for c in clips:
+        d = os.path.join(W, "frames", c)
+        rows = []
+        for fn in sorted(os.listdir(d)):
+            e = frame_elong(np.asarray(Image.open(os.path.join(d, fn)).convert("RGB")))
+            rows.append((fn, max(e, default=1.0)))
+        v = np.array([r[1] for r in rows])
+        worst = [r[0] for r in sorted(rows, key=lambda r: -r[1])[:4]]
+        res[c] = dict(n=len(v), med=float(np.median(v)), p90=float(np.percentile(v, 90)),
+                      mx=float(v.max()), over4=float((v > 4).mean()), worst=worst)
+        print(f"{c:<20} {len(v):4d} {np.median(v):9.2f} {np.percentile(v,90):6.2f} {v.max():6.2f} "
+              f"{(v>4).mean()*100:10.1f}%  {' '.join(worst[:3])}")
     json.dump(res, open(os.path.join(W, "evidence", "eyescan.json"), "w"), indent=1)
