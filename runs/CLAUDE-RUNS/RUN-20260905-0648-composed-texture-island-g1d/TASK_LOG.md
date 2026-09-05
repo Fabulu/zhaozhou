@@ -582,3 +582,52 @@ known. What today added is that for ALMs the bound is TIGHT — 2.4% — which i
 new and is what §4.4 of the G1-D report now says.
 
 Full `fast` gate running.
+
+## 15:1x — a fix that was never wired, and two bugs an idle path was hiding
+
+**CORRECTION to this morning's work.** The commit claiming the combiner's
+recipe now rides FRAGROB's context word wrote the packing and did not connect
+it — the instance passed `frag_ctx_i` where it meant `fr_f_ctx`. So the
+combiner read recipe and `sample_count` from the test's raw context value,
+whose `[23:22]` is zero, and all 64 fragments took the untextured
+base-passthrough path issuing NO product jobs. The composed test passed 11
+checks the whole time.
+
+Found by bringing COMBINE.V1's per-recipe counters to the island boundary and
+asserting them: all eight read zero. **Third time today a counter saw what
+results could not, and the first time one caught a fix that never took effect.**
+
+**Two more, both hidden by the palette being permanently idle.** The island
+hardcoded `CLASS_BILINEAR`, so `palette 0` read as "expected" and meant "never
+tested". With the class made a per-fragment boundary input:
+
+* the response identity came from the bilinear token unconditionally, so
+  palette answers carried the wrong slot/generation;
+* lane and palette both answer into ONE port with no arbitration, so
+  coincident answers lost the lane's result while its producer believed it
+  taken.
+
+64 in / 64 out, 0 ID errors, bilerp 131 and palette 61, 15 checks.
+
+### OPEN: the job distribution
+
+```
+combine jobs by recipe: 0 0 0 4 0 0 24 112     (indices 0..7)
+```
+
+64 fragments cycling eight recipes should be eight each. Accounting:
+LERP 4 = 1 fragment, DETAIL_LIGHT 24 = 4, DETAIL_MASK 112 = 28 — and
+MODULATE/MODULATE2X at zero where 8 each was expected. The counts **rise with
+recipe index**, which suggests the recipe value observed is biased high rather
+than randomly wrong.
+
+Ruled out: FRAGROB's retire handshake is correct (`R_HOLD` exits on ready, one
+transfer per retirement), so this is NOT the re-submission pattern that bit
+ASSEMBLE and COMBINE.V1 earlier today. Also ruled out: refusals, which are 0.
+
+Not understood. The assertion is set to what it can honestly claim — more than
+one recipe moved — and the anomaly is written down rather than tuned away.
+
+**These changes invalidate the 7,720 ALM measurement**, which is why they were
+batched into one pass. The island needs re-fitting when the queue clears:
+COMBINE.V1 is running, perspuv is chained.
