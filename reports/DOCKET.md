@@ -2802,11 +2802,31 @@ PRECOMPUTED EDGE EQUATIONS to A MESHLET DESCRIPTOR IN MEMORY:
 | 4 | GEOM.PROJECT | the screen vertices | 9 |
 | 5 | GEOM.ASSEMBLE | which three vertices | 8 |
 | 6 | GEOM.MESHFETCH | the meshlet itself | 9 |
+| 7 | GEOM.VDECODE | the decoded coordinates | 12 |
 
 Every step draws the SAME triangle both ways and requires a byte-identical
 framebuffer, and every step from 3 onward also MEASURES that its own comparison
 is capable of failing — a habit step 2 forced, where the framebuffer check
 turned out to be blind to depth until depth testing was switched on.
+
+**Tread 7, added 2026-09-05.** The bench stops supplying decoded coordinates in
+`asm_vtx_{x,y,z}_i` and supplies the four 32-byte format-0 RECORDS they were
+written into; `zhao_geom_vdecode` decodes them inside the composed shell.
+Measured: 4 records decoded, 0 refused, 0 format_bad, a BYTE-IDENTICAL
+framebuffer, and sensitivity of 1279 words.
+
+The bench's vertex table is driven to **poison** throughout the decode pass, so
+a shell that quietly kept reading it draws a different picture rather than
+accidentally agreeing — without that, a dead decode path and a working one are
+indistinguishable.
+
+It does **not** prove the transform (a record holds MODEL space, the table held
+CLIP space; with no transform block in this shell the records carry the
+clip-space values and the transform is identity by construction — the device
+step 6 used answering the cull with a constant VISIBLE), and it does **not**
+advance the GEOM.VDECODE ledger entry, which stays SPECIFIED because
+`zhao_geom_vdecode`'s own header is explicit that it is the record leaf and not
+the batch engine.
 
 ### What this does NOT close
 
@@ -2822,9 +2842,12 @@ fetcher over `GEOM.ASSET_POOL` serving three consumers** — descriptors, the u8
 index stream, and vertex records. `spec/memory_rules.md` §5f ruled the region
 (22 MiB, `ENGINE1`, read-only, bank 3). The wiring is glue over that one path.
 
-**GEOM.VDECODE.** The bench holds the vertex TABLE and looks up the IDs
+~~**GEOM.VDECODE.** The bench holds the vertex TABLE and looks up the IDs
 ASSEMBLE names. Turning 32-byte records into coordinates is VDECODE's job and
-step 5 moved the SELECTION, not the DECODE.
+step 5 moved the SELECTION, not the DECODE.~~ **Closed by tread 7 above, for
+the record leaf only.** The batch engine — `vertex_count`, addressing across
+burst boundaries, the all-or-nothing batch rule — is still the bench's, and the
+ledger entry stays SPECIFIED.
 
 **`zhao_shell_top` itself.** Every one of these blocks is composed into the
 BENCH, not into the shell top, which still instantiates one geometry block.
