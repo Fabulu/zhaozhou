@@ -700,7 +700,94 @@ INTERNAL one. perspuv's overall worst is a boundary path at −2.195 ns → exac
 Kept struck-through, not deleted: an unresolved doubt in a report is a claim
 too, and that one would have made a reader discard a sound table.
 
+## The island never captured its fragments
+
+The combiner job-distribution anomaly, chased since this morning, was not in
+the combiner. Three hypotheses were written down confidently and all three were
+refuted -- the OR-ed field, the neighbour mis-association, the double issue.
+
+What settled it was recording per-fragment IDENTITY instead of reasoning about
+aggregate counts. `out_tag_o` was already exposed, so it cost one run: of 64
+fragments submitted, only **25 distinct ones ever came out**, 39 were lost, 7
+were duplicated, and the tail was fragment 63 delivered 24 times. The jobs
+counted matched exactly what that actual retired set predicts -- 140 = 140 --
+which exonerated the combiner completely. Logging the same tags one stage
+earlier showed the identical sequence already arriving at FRAGROB; logging the
+slot each fragment was written into showed FRAGROB's allocation and ordered
+retire were PERFECT, its head slot walking 0..15 exactly four times.
+
+THE BUG: the island read every per-fragment attribute off its own INPUT PINS at
+the point each was consumed -- ten separate signals, including PERSPUV's u/w
+and v/w numerators. A fragment spends ~12 clocks in RCP24 and PERSPUV, so every
+tap sampled a different fragment, and once submission stopped the pins held the
+last one. The token to fix it already existed and was carried end to end
+(`tok_r` -> RCP24 `r_tok_o` -> PERSPUV `tag_o`); nothing consulted it.
+
+Attributes are now captured at admission and read back by that token. Three
+counters snapped onto their predicted values in the same run:
+
+    combine jobs   0 0 0 4 0 0 24 112  ->  0 32 32 32 0 0 48 32   (= 8/recipe)
+    bilerp/palette 131 / 61            ->  96 / 96                (= 32/class)
+    aux accepted   37                  ->  22                     (= i%3==0)
+
+This landed the same hour the owner's recovery architecture v2 arrived, whose
+priority 4 is this exact repair -- "the source still reads live U/V numerators,
+material fields, base colour and class at later pipeline stages" -- and whose
+priority 3 asks for the identity test, "not a histogram alone".
+
+## Two defects it had been masking
+
+**The CLUT path was black.** All 32 CLUT fragments retired rgb == 0 while
+`cnt_palette_lookups_o` moved healthily. Two faults: the test never followed the
+palette load protocol (LD_WRITE with no LD_BEGIN, so no write landed, and END
+needs all 256 entries), and the island asked the palette with OVERLAPPING
+slices of the response routing token, so the "slot" was the low two bits of the
+"generation" and the generation was FRAGROB's residency counter. 96 lookups /
+96 STALE / 0 cold -> 96 / 0 / 0, all 32 coloured. Palette staleness and
+coldness are counters now and asserted at zero.
+
+**Order is not preserved.** 10 fragments out of place, max displacement 8, and
+only in the drain phase -- steady-state backpressure hides it. FRAGROB is
+innocent again: it retires in ALLOCATION order, so the permutation is already
+present at its input. That is the misplaced ordering boundary of the owner's
+priority 6, so it is recorded with a regression guard on the measured bound
+rather than patched.
+
+## A correction I had to make to my own report
+
+I published "it is NOT the palette being unloaded", reasoning that the entry
+values written are all non-zero. That checked the data and not the protocol --
+the values were irrelevant because no write was ever accepted. Third time this
+pass a confident claim preceded the cheap experiment that would have settled
+it, and the only one of the three that went out as a negative.
+
+## Evidence, made to detect rather than to pass
+
+Every new gate was mutation-tested, and one FAILED its own test first:
+
+* identity gate vs the exact historical bug -> 38 missing, 38 duplicated. The
+  OLD aggregate checks still PASS that mutation; `moved >= 2` sees four
+  counters moved and is satisfied. That difference is the whole argument.
+* `tools/rtl/check_ingress_capture.py`, wired into `npm run design:report`,
+  enforces the RULE rather than the ten instances. Its first version caught a
+  direct pin tap but PASSED the capture word laundered through one wire --
+  which is precisely the bug it was written for. Now tracks that alias.
+* a sticky flag on the completion merger's load-bearing assumption: the palette
+  cannot be back-pressured, so it must win, and that is safe only while
+  FRAGROB's `tmu_rready_o` is tied high. Nothing stated that anywhere. Verified
+  by making the ready conditional -- flag sets, check fails.
+
 ## In flight
 
-perspuv's fit (confirming or refuting the per-axis split); the full `fast` gate
-relaunched detached after the task wrapper killed it twice.
+perspuv's fit, still in fitter placement (placement prep alone took 01:18:15).
+Full `fast` gate re-running against the corrected tree -- the two earlier
+attempts were started before these edits and were judging a tree that no longer
+existed, which is the stale-binary trap wearing a scheduling costume.
+
+## Next, in the owner's order
+
+Priority 5: refit the narrow-increment combiner as a bounded attribution
+experiment, NOT the whole island -- and the island's 7,720 ALM / 69.05 MHz is
+stale regardless, since the capture table adds combinational LUT-RAM reads on
+PERSPUV's input path. No prediction offered: the last obvious explanation for
+this island was worth 4 MHz of 36.
