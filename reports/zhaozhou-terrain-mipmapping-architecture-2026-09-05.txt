@@ -1,0 +1,421 @@
+ZHAOZHOU -- TERRAIN MIPMAPPING WITHOUT A SECOND TEXTURE MACHINE
+================================================================
+Architecture proposal and incremental cost model
+5 September 2026
+
+Examined hardware snapshot:
+34e4240cd94363c054dbcadc2483afccfe3e192a
+Branch: zixxtrixx-v8-closeout
+
+This is a targeted addition to the texture recovery work, not a replacement
+for Revision 2. No RTL was changed or simulated and no Quartus fit was run
+for this proposal. Byte counts below are arithmetic; RAM block allocations
+and implementation choices are proposed, not achieved measurements.
+
+EXECUTIVE DECISION
+------------------
+Use the existing single primary TMU for mipmapped terrain albedo. Initially
+select ONE mip level and use the existing nearest filter required by CLUT8.
+Add a seven-level pyramid to the separately resident 64x64 signed-XZ detail
+tile specified by TERRAIN.NORMALMAP. Keep one normal-store read and the same
+detail-lighting arithmetic per fragment.
+
+Do NOT make trilinear filtering, anisotropy, runtime mip generation, another
+general sampler, a world-sized unique normal texture, or an entire virtual
+texturing subsystem prerequisites.
+
+The difficult part is not storing smaller pictures. It is supplying a useful
+screen-footprint LOD, preserving that decision through variable latency, and
+prefiltering the per-texel Mosaic material-selection pattern rather than only
+the individual candidate textures.
+
+The normal-map architecture is chosen in the inspected documents, but the
+checked zhao_terrain_normalmap.sv still identifies itself as a known-wrong,
+non-production draft. The resident-tile costs here refer to the intended
+replacement contract, not an already fitted normal-map implementation.
+
+1. WHAT ALREADY EXISTS
+---------------------
+TEXTURE.TMU explicitly includes mip selection and explicitly excludes LOD
+derivation, trilinear and anisotropy. zhao_texture_tmu_plan already implements:
+
+  - MIP_EN at mode bit 20;
+  - MAX_LEVEL at mode bits 19:16;
+  - level-zero power-of-two dimensions at bits 11:8 and 15:12;
+  - Q4.4 req_lod_i, using its HIGH nibble as the requested integer level;
+  - clamping to the permitted level;
+  - selected-level UV scaling and wrapping;
+  - packed mip-chain offsets;
+  - nearest sampling for paletted textures, bilinear for direct formats.
+
+This is implementation reuse, not a proposal to build those operations again.
+The current planner clamps rectangular chains when the smaller dimension
+reaches one; do not assume a conventional rectangular tail down to 1x1.
+Square terrain tiles avoid that issue.
+
+The Mosaic RTL even describes a 5,461-byte mip stride for a 64x64 CLUT8 tile.
+Therefore, audit the actual packer/allocation before charging another 33%:
+some intended resource layouts already account for the chain. A comment
+describing a stride does not prove that the deployed asset bytes populate it.
+
+2. A CONCRETE INTEGRATION DEFECT: THE LOD IS IN THE WRONG NIBBLE
+-------------------------------------------------------------
+At the checked snapshot the island sets LODW=4 and connects:
+
+  .req_lod_i({{(8-LODW){1'b0}}, fr_tmu_lod})
+
+Thus every possible four-bit value becomes 0x00..0x0F. The planner selects
+t0_lod[7:4], which is ALWAYS ZERO for those values. Enabling MIP_EN alone
+cannot make a nonzero mip level work through this default configuration.
+
+Freeze the interface meaning before changing it:
+
+  Preferred initial contract:
+    fragment/sample LOD is an unsigned INTEGER level.
+    At the present four-bit-to-Q4.4 boundary:
+      req_lod_i = {fr_tmu_lod, 4'b0000}
+
+  Alternative:
+    carry a typed eight-bit Q4.4 value through the entire path.
+
+Do not combine the two interpretations. Under the integer contract, level
+3 must reach the TMU as 0x30, not 0x03. Clamping, mode flags and bindings must
+be valid too. Make the adapter parameter-safe rather than assuming every
+future LODW is four.
+
+For an unpadded 64x64 CLUT8 chain, level-start byte offsets are:
+  L0 0; L1 4096; L2 5120; L3 5376; L4 5440; L5 5456; L6 5460.
+Test these against independently generated expected addresses.
+
+3. THE CHEAP ALBEDO PATH
+-----------------------
+Keep terrain's existing CLUT8 nearest semantics and add single-level mip
+selection. This is genuine mipmapping: minification filtering is baked into
+the selected smaller image. It does not require bilinear filtering between
+texels and certainly does not require sampling two mip levels.
+
+Asset preparation:
+  a. Decode source palette indices into the declared colour space.
+  b. Filter colours over the appropriate footprint.
+  c. Quantize the result back to a usable palette.
+  d. Pack every level according to the existing TMU's actual offset law.
+  e. Store dimensions, level cap, format, palette handle and generation in
+     the material binding.
+  f. Verify the packed result by sampling every level with the scalar oracle.
+
+Never average palette INDEX numbers. Palette entry 17 is not a numerical
+colour halfway between palette entries 16 and 18.
+
+Avoid repeated coarse-level quantization bias by retaining higher-precision
+working images or deriving coarse levels from the original source.
+The chosen colour-space/rounding law becomes part of the asset ABI.
+If the shared palette cannot represent coarse averages adequately, use an
+existing direct-colour format for a separately bound coarse tail. That costs
+more tail bytes, not another sampler or a new format decoder.
+
+Default filtering policy:
+  albedo: one selected mip, one nearest texel;
+  detail: one selected mip, one signed-XZ texel from its own resident RAM.
+
+Do not silently enable CLUT bilinear: the existing TMU explicitly rejects it.
+The inspected primary-TMU contract also excludes anisotropy.
+
+4. MIPMAP THE ACTUAL NORMAL REPRESENTATION
+-----------------------------------------
+The selected normal-detail design is NOT a conventional normalized RGB normal
+map. It stores {s8 dz, s8 dx}, representing world-XZ perturbations d=(dx,0,dz),
+and applies a linearized lighting delta:
+
+  delta = rescale_s(strength * SUM_suns(dx*sun_x + dz*sun_z), 23)
+
+Build the pyramid by averaging SIGNED dx and dz, retaining cancellation and
+the specified rounding. Do NOT normalize the averaged pair back to fixed
+length. Normalization would amplify residual noise and destroy the intended
+reduction in subpixel detail.
+
+Before quantization/clamping, the detail-lighting expression is linear in d.
+Therefore mean(d) produces the mean detail term for a fixed light/strength.
+Final clamping and albedo multiplication still make this an approximation to
+a fully supersampled shaded image, not a claim of exact image equivalence.
+
+Preserve level zero exactly. Check zero-mean/detail-off invariants. Permit a
+nonzero coarsest mean when it is genuinely present in the authored tile:
+forcing it to zero is an explicit artistic choice, not neutral filtering.
+
+The seven level dimensions are:
+  64, 32, 16, 8, 4, 2, 1.
+
+There are 5,461 texels total versus 4,096 currently planned:
+  original: 8,192 bytes;
+  complete chain: 10,922 bytes;
+  added tail: 2,730 bytes = about 2.67 KiB.
+
+Hardware:
+  - widen the upload/address representation to cover 5,461 words (13 bits);
+  - store an explicit small level-base table or fixed constants;
+  - select level, scale coordinates, form a registered address, read RAM;
+  - preserve the existing shade arithmetic and throughput;
+  - keep the selected level and configuration version with the fragment tag.
+
+An engineering target is approximately three to four extra M10Ks beyond the
+contract's eight-block base layout, using deliberate banking/packing. This is
+NOT a fitter result: a naive rounded-up depth may allocate more. Prove actual
+RAM modes and port widths, including upload versus render access.
+Do not allocate every tiny mip as a separate full RAM block.
+
+No additional shading DSP lane is inherently required by this nearest-mip
+normal path. Address/LOD registers can add latency without reducing admission
+rate if credits and holding behavior remain correct.
+
+Do not update an active chain in place while fragments read it. Use a drained
+configuration boundary or versioned publication; double-buffer only when
+simultaneous live replacement is actually required.
+
+5. CHOOSE LEVEL FROM SCREEN FOOTPRINT, NOT WORLD DISTANCE ALONE
+--------------------------------------------------------------
+Texture LOD, terrain mesh LOD and world-page residency are different decisions.
+An 8 km world does not imply an 8 km unique high-resolution texture.
+
+The LOD selector needs the rate at which UNWRAPPED perspective-correct UV
+changes across a screen pixel. Measure before mirror/repeat: differences
+across wrapped coordinates create artificial discontinuities.
+
+For a local derivative estimate in raw Q16.16 tile units, one cheap
+axis-aligned footprint estimate/bound from the local Jacobian is:
+
+  Gu = abs(du_raw/dx) + abs(du_raw/dy)
+  Gv = abs(dv_raw/dx) + abs(dv_raw/dy)
+  G  = max(Gu, Gv)
+
+For square 64-texel albedo tiles:
+  rho_albedo = G / 1024                [base texels per pixel]
+
+For the specified normal tile whose texel index is u_raw >> uv_shift:
+  rho_detail = G / 2^uv_shift
+
+Initial conservative selection:
+  L = clamp(ceil(log2(max(rho, 1))), 0, max_level)
+
+This uses comparisons/shifts/leading-bit detection once a footprint is
+available. The ceil policy trades additional blur for reduced undersampling;
+record it as a proposed new LOD law, not the existing planner's implicit law.
+
+When both maps share UVs but uv_shift differs from 10:
+  L_detail approximately = clamp(L_albedo + 10 - uv_shift, 0, 6)
+before independent clamping. Prefer deriving both from the unrounded common
+footprint so saturation of one cannot incorrectly control the other.
+
+How to obtain the footprint cheaply:
+  - First implement an independent software oracle and explicit-LOD path.
+  - Use already available triangle UV-over-W and inverse-W planes.
+  - Compute conservative local bounds during terrain setup, initially on HPS
+    or the reference path, rather than adding extra perspective divides for
+    every shaded pixel.
+  - Bound over the clipped triangle or a smaller raster region, not an entire
+    world patch based only on its centre's distance.
+  - Refine only regions whose perspective variation makes the bound too blurry.
+  - Use a shared hardware setup service only if measured CPU/setup cost needs it.
+
+For u=U/q with affine U and positive affine q, du/dx=(Ux*q-U*qx)/q^2.
+The numerator is affine. Over a clipped region, a maximum absolute numerator
+and a positive minimum q give a conservative derivative bound. Compute these
+with explicit numeric ranges/rounding. Regions approaching q=0 must be clipped
+or subdivided; do not divide a near-plane crossing by a guessed epsilon and
+call it a bound.
+
+This does not promise software setup is free. Measure its triangle/region rate
+on the intended HPS. It deliberately avoids tripling per-fragment RCP work just
+to calculate derivatives.
+
+LOD is per view. Split-screen cameras cannot share a camera-distance LOD
+decision simply because they share terrain and textures.
+
+6. THE IMPORTANT MOSAIC TRAP
+---------------------------
+Mosaic chooses matA or matB PER BASE-LEVEL WORLD TEXEL using a deterministic
+hash of floor(u*64), floor(v*64) and a weight. Mipmapping the two candidate
+textures while continuing to point-sample that original high-frequency pick
+does NOT filter the pick itself. Distant ground can still shimmer between two
+material colours even when both candidate textures are individually blurred.
+
+Treat minified Mosaic as a separately specified filtered-material path.
+
+Recommended cheap implementation:
+  - L0 preserves the frozen Mosaic hash and its exact captures.
+  - For minified levels, use prefiltered transition tails keyed by an allowed
+    material pair and a small quantized weight class.
+  - Generate those tails offline, or boundedly during asset preparation on HPS.
+  - Resolve to ONE resident coarse texture binding, then make ONE TMU request.
+  - Do not turn it into two candidate reads plus a dynamic blend per pixel.
+
+A practical initial authoring bound is 16 weight values including exact 0/255,
+so fourteen interior transition variants per allowed pair. Endpoints reuse the
+original pure-material mip chains.
+
+All mip levels below a 64x64 base occupy 1,365 CLUT8 bytes. Thus:
+  one pair, fourteen interior tails: 19,110 bytes;
+  sixteen allowed pairs: 305,760 bytes, about 299 KiB;
+  thirty-two allowed pairs: about 597 KiB.
+
+Those are illustrative asset budgets, not a mandate to support every pair of
+256 materials. Do not allocate the full material-pair Cartesian product.
+Build from actual allowed transitions and cap the active set.
+
+The coarse tail can be exposed as a separate 32x32 texture root:
+  requested terrain level L>=1 becomes tail level L-1;
+  normalized/unwrapped UV remains unchanged;
+  use the existing packed-chain planner.
+This avoids reserving a useless 64x64 prefix for each interior variant.
+
+A colour-mixture tail approximates the spatial average of the original hash;
+it is not bit-exact finite-footprint filtering of every phase of that hash.
+Declare the minification approximation and test it against supersampled
+reference terrain. Preserve level-zero semantics. Existing frozen captures
+are not silently redefined.
+
+Filter/quantize actual colours, including palette transitions. A shared terrain
+palette simplifies residency; direct RGB565 coarse tails are the fallback when
+palette quantization gives unacceptable banding. They double the quoted tail
+bytes, not the sample count.
+
+Quantized weights and level switching can show bands. Test in motion. Improve
+authoring/prefilter quality first; do not hide them with temporally random mip
+selection that creates another shimmer source.
+
+7. TRANSACTION OWNERSHIP AND BINDING
+-----------------------------------
+Extend the existing recovery packet, not a side channel:
+
+  FragmentTag / SampleTag
+  resolved material binding + immutable version
+  selected integer mip level
+  format and palette slot/generation
+  level-specific coordinates and filter fractions where applicable
+  detail level + detail tile/configuration version
+
+Binding resolution selects the actual texture root, including a Mosaic tail
+when used. Base address, MIP_EN, dimensions and level cap must belong to the
+same binding snapshot. Do not read current global binding pins at later issue.
+
+The planner currently consumes the level in T1. That is fine after producing
+the correct address, but any later stage needing level/format/fractions must
+receive stored metadata associated with the same sample, not the newest plan.
+
+Use the main lifetime owner's tagged final-result association for normal delta
+too. Do not revive a timing-only alignment FIFO across a path that can reorder.
+
+Packed fully resident material chains are the initial residency policy.
+They are small enough that world-sized virtual texturing is unnecessary here.
+If later streaming individual levels becomes useful, retain coarse tails and
+choose an actually resident coarser binding before issue. That requires explicit
+level-base descriptors; do not pretend the old packed-offset formula handles
+holes in the chain.
+
+8. COST MODEL -- INCREMENTAL, NOT WHOLE-RENDERER COST
+---------------------------------------------------
+Unpadded square chains through 1x1:
+
+  64x64 CLUT8, one tile:
+    base 4,096 B; chain 5,461 B; extra 1,365 B.
+
+  256 such material tiles:
+    base 1,048,576 B; chain 1,398,016 B; extra 349,440 B.
+    About 1 MiB -> 1.333 MiB.
+
+  One 64x64 two-component s8 detail tile:
+    base 8,192 B; chain 10,922 B; extra 2,730 B.
+    On-chip, not primary-TMU traffic.
+
+  Optional sixteen-pair/sixteen-weight Mosaic coarse-tail bank:
+    about 299 KiB CLUT8, or about 597 KiB RGB565.
+
+Padding, metadata, upload alignment and memory inference add overhead.
+The 4/3 factor is a square two-dimensional texture calculation, not a claim
+that all possible rectangular formats or padded allocations cost exactly 4/3.
+
+Per-fragment work:
+  nearest + one mip: one texel from the selected level;
+  bilinear + one mip: four taps, same count as non-mipmapped bilinear;
+  trilinear: two mip levels, typically eight taps for bilinear on each.
+
+Our proposed paletted terrain path remains the first case. The normal-store
+path also remains one read. No new material product jobs arise solely from
+choosing a mip. Offline Mosaic tails retain one terrain sample.
+
+External bandwidth may IMPROVE under minification because the working set is
+smaller and reuse improves. This is a performance hypothesis, not a measured
+saving in this FPGA cache. A 33% asset-storage increase is not a 33% per-frame
+bandwidth increase.
+
+New FPGA cost is mostly address/level selection, small metadata and the normal
+mip tail. Automatic footprint generation can be a separate nontrivial cost;
+do not count it as a free leading-zero detector when its gradients do not exist.
+
+No honest ALM total, MHz penalty, or whole-game FPS change is available without
+a source-matched fit and workload. Keep the existing 100 MHz product and
+105 MHz composition gates; register new decisions rather than extending RCP's
+critical path.
+
+9. WHAT COUNTS AS DONE
+----------------------
+A. Explicit-level proof
+  Every mip is uniquely coloured / addressed; request levels 0..6 through the
+  ACTUAL island boundary. Level 3 must not sample level 0. Toggle MIP_EN,
+  MAX_LEVEL, bindings, palettes and stalls. Verify addresses and colours.
+
+B. Normal-pyramid proof
+  Preserve L0; signed positive/negative cancellation; a constant perturbation
+  stays constant; detail strength zero stays bit-exact off; mip reads use the
+  same world-space period. Check coarse means and one-rounding semantics.
+
+C. Real terrain minification proof
+  Receding and grazing-angle terrain, negative UVs, tile/mirror boundaries,
+  mixed materials, two cameras, close-to-far-to-close motion, and edited ground.
+  Compare with an independent supersampled reference. Test the Mosaic selection
+  pattern, not just checkerboards in one candidate tile.
+
+D. Cost and lifetime proof
+  Record level histogram, actual texture requests, cache misses/line-fill bytes,
+  detail reads, setup/LOD cycles, frame cycles and maximum queue occupancy.
+  Use more than one tag wrap and arbitrary backpressure.
+  Refit the stable combined source once, with correct active paths and timing
+  constraints; do not refit the full island after every packer/test change.
+
+IMPLEMENTATION ORDER
+--------------------
+1. Freeze integer-vs-Q4.4 LOD ABI and add the failing explicit-level test.
+2. Fix that adapter and validate existing packed offsets, using offline mips.
+3. Extend the intended normal-tile store and asset contract with the small tail.
+4. Add footprint-derived LOD and view-specific metadata.
+5. Add a bounded minified-Mosaic tail policy, retaining exact level-zero law.
+6. Validate quality, capacity, ownership and one stable physical composition.
+
+This is not a request to abandon texture recovery for another redesign. The
+mip decisions belong in the binding/metadata work already required to make
+the existing texture island meaningful.
+
+SOURCE ANCHORS
+--------------
+All repository anchors below use:
+https://github.com/Fabulu/zhaozhou/blob/34e4240cd94363c054dbcadc2483afccfe3e192a/
+
+  fpga/rtl/texture/zhao_texture_tmu_plan.sv
+    T0 Q4.4 comment; T1 level selection; T2 offsets/scaling; T4 addresses.
+  fpga/rtl/texture/zhao_texture_island_top.sv
+    LODW=4 and req_lod_i zero-extension at u_plan; live binding pins.
+  fpga/rtl/texture/zhao_texture_mosaic.sv
+    Frozen per-world-texel hash/pick; 5,461-byte mip stride.
+  design/contracts/TEXTURE.TMU.md
+    Mip included; LOD derivation/trilinear/aniso excluded; terrain CLUT8 nearest.
+  reports/NORMALMAP-ARCHITECTURE.md
+    Chosen always-resident 64x64 signed-XZ detail tile, separate from TMU.
+  design/contracts/TERRAIN.NORMALMAP.md
+    Texel format, uv_shift, shade law, eight-M10K planned store.
+  fpga/rtl/terrain/zhao_terrain_normalmap.sv
+    Explicit known-wrong/non-production draft status at this snapshot.
+
+Primary API description of one-level versus two-level mip filtering:
+https://wikis.khronos.org/opengl/GLAPI/glTexParameter
+https://wikis.khronos.org/opengl/Sampler_Object
+
+END
