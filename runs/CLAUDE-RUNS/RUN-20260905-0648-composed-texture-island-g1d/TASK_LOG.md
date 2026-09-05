@@ -444,3 +444,40 @@ the arithmetic form of measuring instead of looking.
    from ~14 to 2.
 3. perspuv's per-axis array split: its closure is FREE now that the island fit
    has cleared.
+
+## 12:45 — the toolchain was IDLE, and COMBINE.V1's DSP rule is MET
+
+The nudge's third check fired for real: three samples of `Get-Process quartus*`
+returned zero. Fixed immediately — COMBINE.V1 relaunched with a 4 h budget.
+
+**Its previous run was killed by the watchdog at 3,601.8 s against 3,600.** Same
+failure mode as the island's first attempt, and for a block of only 744
+registers, which is surprising until the pin count is read: **596 virtual pins**
+against 744 registers. That block is pin-dominated, and placing pins is what the
+fitter is spending its hour on.
+
+**The synthesis numbers are the result that matters, and the rule is met:**
+
+```
+registers 744 | blockMemoryBits 0 | dspBlocks 2 | virtualPins 596
+```
+
+**2 DSP.** The architecture's §3.4 tripwire is "reject DSP > 2". The refuted
+II=1 block measured 8; the first LOGIC2 attempt measured 7 because I had written
+fourteen multipliers inside case arms; hoisting one product per lane and moving
+every acceptance-time product into a microjob took it to exactly 2.
+
+So variant A LOGIC2 **does** reach what §15.5 says it reaches. ALMs and fmax
+still pending — those come from the fitter.
+
+## Where I am, before the next result
+
+**In hand:** nothing half-finished. G1-D is written up including its critical
+path. The staircase is complete and committed.
+
+**Next when COMBINE.V1 lands:** if ALMs ≤ 800 and DSP 2, variant A is proven and
+the refuted `zhao_texture_combine` can be deleted — its RTL, its manifest row,
+its entry in `zhao_prod_top`'s source list, and `texture_combine_diff.cpp`,
+together.
+
+**Then:** perspuv's per-axis array split. Its closure is free now.
