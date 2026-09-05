@@ -119,3 +119,31 @@ idle `0x118660EF`, damage `0x1EA126EE` (walk/idle equal QA's own).
   on the baseline frames exactly.
 * **Item 1: PARKED, deliberately** — owner decision between "bigger
   particles" and "nameable shapes". No knob on that axis touched.
+
+## Shipped
+
+* Full bank re-render (22 subjects, shipping rig) + re-encode; every poster
+  regenerated; `manafold-inspect.png` ships for the first time. Root cause
+  of the missing poster found: pass 4's inspect ffmpeg FAILED, leaving a
+  0-byte manafold-inspect.webm; tovideo.py writes the poster only after
+  ffmpeg succeeds. Both repaired.
+* Deployed once: `deploy.ps1 -Project upheaval -Branch main` — production,
+  45 files uploaded. Live verification: index 200 (308,323 B), exactly one
+  noindex, Manafold first then Zixxtrixx, inspect poster 200/35,918 B,
+  inspect webm 200/2,258,752 B, hover/taunt2 webms 200, archive
+  2026-08-28 idle + 2026-09-04 u02-trio 200.
+* Zixxtrixx identity: baseline (pristine cc5ff8d9 worktree build) vs final
+  build — walk/idle/damage sequence CRCs equal (0x81155EDB / 0x118660EF /
+  0x1EA126EE) and 1136/1136 frames sha256-identical.
+* Item 1 left for the owner, untouched, as briefed.
+
+- [x] 2. mana covers the antenna — fixed, by looking
+- [x] 3. knead coverage — fixed (36/48/51 knead frames)
+- [x] 4. build integrity — page committed, hard error, clean-worktree proven
+- [x] 5. eye gate — lens-baselined, gated, star untouched
+- [x] 6. dead knob — damage at authored 250
+- [x] 7. ablation retired — U02_FOLD_FREEZE proven discriminating
+- [x] 8. white ring — reads as a ring
+- [x] 9. loop seam — 4.07 -> 1.89
+- [x] 10. inspect poster — live
+- [x] Zixxtrixx byte-identical — 1136/1136
