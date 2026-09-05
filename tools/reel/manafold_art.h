@@ -513,10 +513,24 @@ constexpr int32_t kKneadVelRefMm = 50;     // EXCESS anchor speed (mm/frame over
                                            // rest), so agitation is now the
                                            // excess over a ~64-frame EMA.
 constexpr int kFoldFeedBasePm = 520;       // the fold's smear feed at rest
+                                           // (pass 5: a 760 ladder rung was
+                                           // rendered and REJECTED by looking
+                                           // -- more feed whitens the trail,
+                                           // because the ramp itself whitens
+                                           // with intensity; 520 stands)
 constexpr int kKneadFeedPm = 380;          // extra smear feed at full agitation
 constexpr int kDragLagFrames = 2;          // + hash%4 per mote (2..5) -- the
                                            // iron-filings lag
 constexpr int kDragGainPm = 2600;
+// PASS 5 (QA item 2: "the mana covers the antenna", taunt2 worst): the
+// drag displacement is CLAMPED by magnitude. On a stationary clip with a
+// violent gesture (the lasso) hinge B's 3-frame summed velocity reached
+// hundreds of mm, and 2.6x that flung the motes clear across the loop --
+// the fog that buried the hand. Travel clips are untouched by
+// construction: their anchor velocities are body-relative, so hasty's
+// gentle stream stays under the clamp and keeps its lagging-gap read
+// (protected by both gates). Sized by looking at taunt2/rest vs hasty.
+constexpr int32_t kDragMaxMm = 380;
 constexpr int32_t kWanderEscapeMm = 780;   // the wander motes may leave the pocket
 // mote micro-orbit (R7 smoother rotation: ONE angular velocity per mote,
 // long periods, no frequency doubling)
@@ -552,8 +566,13 @@ constexpr int32_t kKneadTremorA16 = 130;   // the hold's small tremor
 // (trick is 0: the committed probe showed the knead grip LIFTING the
 // planted loop peak out of its declared ground contact -- the antenna is
 // busy standing; the mana still reads the balance flex.)
-constexpr int kKneadClipPm[15] = {1000, 600, 900, 800, 350, 700, 700,
-                                  0,    450, 300, 350, 550, 500, 0, 250};
+// PASS 5 (QA item 2, judged by LOOKING at the worst frames): rest 700->500
+// and taunt2 500->380 -- on those two stationary clips the added knead
+// choreography stacked its agitation on the clip's own big gesture and the
+// smear fog buried the loop (taunt2 f166 was the exhibit). damage's 250 is
+// simply REACHED now (the dead-knob fix): it shipped at 700 by accident.
+constexpr int kKneadClipPm[15] = {1000, 600, 900, 800, 350, 500, 700,
+                                  0,    450, 300, 350, 550, 380, 0, 250};
 
 // ============================ END KNOBS ====================================
 

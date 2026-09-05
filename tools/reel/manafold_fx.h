@@ -905,15 +905,27 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       P[1] += fxu(fx_jit(hj >> 9, jmm));
       P[2] += fxu(fx_jit(hj >> 17, jmm));
     }
-    // DRAG: the lagged pull along the antenna's sweep (iron filings)
+    // DRAG: the lagged pull along the antenna's sweep (iron filings).
+    // PASS 5: clamped by MAGNITUDE (kDragMaxMm) so a violent stationary
+    // gesture cannot fling the motes across the loop -- see the constant.
     if (!g_u02_fold_lock) {
       const int lag = kDragLagFrames + static_cast<int>((hm >> 21) % 4u);  // 2..5
       const uint32_t bi = stfx.drag_idx + 8u - static_cast<uint32_t>(lag);
+      int32_t dsp[3];
       for (int k = 0; k < 3; ++k) {
         const int64_t v = static_cast<int64_t>(stfx.dragbuf[bi & 7][k]) +
                           stfx.dragbuf[(bi - 1u) & 7][k] + stfx.dragbuf[(bi - 2u) & 7][k];
-        P[k] += static_cast<int32_t>(v * kDragGainPm / 1000);
+        dsp[k] = static_cast<int32_t>(v * kDragGainPm / 1000);
       }
+      const int64_t mag = isqrt64(static_cast<int64_t>(dsp[0]) * dsp[0] +
+                                  static_cast<int64_t>(dsp[1]) * dsp[1] +
+                                  static_cast<int64_t>(dsp[2]) * dsp[2]);
+      const int64_t cap = fxu(kDragMaxMm);
+      if (mag > cap && mag > 0) {
+        for (int k = 0; k < 3; ++k)
+          dsp[k] = static_cast<int32_t>(dsp[k] * cap / mag);
+      }
+      for (int k = 0; k < 3; ++k) P[k] += dsp[k];
     }
     // draw: an opaque heart under an additive halo (R7 -- filled and BIG)
     const int32_t halo = kMoteHaloRPxMin +

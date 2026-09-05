@@ -3254,13 +3254,26 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
         // (looked at on the channel's hottest frames). The coloured halos
         // carry the ghost.
         if (ms.ramp == u02::kRampWhite) continue;
+        // PASS 5 (QA item 2, "the mana covers the antenna"): the FOLD's
+        // trail is fed by the HALO'S COLOUR at the CORE'S FOOTPRINT.
+        // Feeding the full 14-20 px halos painted a pale quarter-res fog
+        // ~3x the core area that sat ON the loop on the stationary clips
+        // (taunt2 f166 was the exhibit); feeding the opaque cores instead
+        // kept the loop visible but turned the trail white (a core's ramp
+        // top is near-white). So: skip the cores, feed the coloured halo
+        // splat, shrink its fed radius to the core's. Looked at on
+        // taunt2/rest vs hasty -- the lagging-gap read survives, in cyan.
+        // Non-fold candidates keep the pass-3 feed.
+        if (fold_mana && ms.opaque) continue;
         const zref::render::ProjOut pm = zref::render::project_vertex(
             c.vp, vpp_m, zref::fx16{ms.x}, zref::fx16{ms.y}, zref::fx16{ms.z}, nullptr);
         if (!pm.in) continue;
         const u02::GlowFrame& gf2 = u02::glow_frame_cached(
             s_feed_cache, c.u02_frame, s_mana_ramps, ms.ramp, ms.gain_pm, feed_boost);
+        const int32_t feed_r =
+            fold_mana ? ms.r_px * u02::kMoteCoreOfHaloPm / 1000 : ms.r_px;
         u02::smear_feed(c.u02_smear_buf.data(), c.u02_smear_depth.data(),
-                        s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8, ms.r_px,
+                        s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8, feed_r,
                         pm.s.d);
       }
       u02::smear_composite(c.u02_smear_buf.data(), c.u02_smear_depth.data(), rgb,
