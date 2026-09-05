@@ -3147,6 +3147,15 @@ So the shape the design needs is already supported, and today's nearest path
 simply uses one lane of four. This is a source deduction about interfaces, not
 a simulation or a fit: nothing has been built or measured.
 
+**And the throughput premise holds too, which is why it is fragile.**
+`zhao_texture_fragrob` issues TMU requests through
+`I_IDLE -> I_READ -> I_HOLD` and back — one request every THREE clocks. So a
+two-clock pair genuinely does hide behind it at today's rates, exactly as the
+architecture argues. That safety is borrowed, not earned: it comes from FRAGROB
+being slow. When the v2 recovery's WP3 makes issue one-per-clock, the pair
+becomes the limit and the blended class caps at half a sample per clock. The
+feature would then be paying for a bottleneck the machine does not have yet.
+
 ### The proposed new sample CLASS is not a free encoding
 
 The architecture fences the blended path with a new class `CLS_CLUT_MIP = 3`,
