@@ -219,8 +219,14 @@ constexpr int32_t kPupilStarWideMm = 64;  // blade width
 // star and lens -- the whites trace the pupils BY CONSTRUCTION, which is
 // the tracking requirement the static page could never meet.
 constexpr int32_t kWhiteRingRMm = 112;     // major radius (rings the star)
-constexpr int32_t kWhiteRingTubeMm = 15;   // tube gauge (~1-2 px)
-constexpr int32_t kWhiteRingOffXMm = 52;   // sits between lens face and star
+constexpr int32_t kWhiteRingTubeMm = 22;   // tube gauge (pass 5: 15 -> 22
+                                           // -- at ~1.2 px the shadowed side
+                                           // vanished and the ring read as a
+                                           // one-sided crescent; looked at)
+constexpr int32_t kWhiteRingOffXMm = 60;   // sits between lens face and star
+                                           // (pass 5: 52 -> 60, prouder of
+                                           // the dome so the far side clears
+                                           // the lens limb at three-quarter)
 constexpr int kWhiteRingSegs = 14;         // stations around the torus
 // the X1 TEARDROP profile (Direction 4: "very pointy at the top, bottom is
 // more round... too simple of a primitive"): per-ring width in pm of
