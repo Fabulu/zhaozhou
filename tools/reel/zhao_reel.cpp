@@ -2554,7 +2554,12 @@ void sample_zixx_moving_colour_sources(uint32_t frame, uint32_t frames,
 const zc::CreatureLightRig kU02MovingRig{
     43000,  36000, 35000,   // the honest top diagonal (Cool Cross's key)
     -45000, 35000, -32000,  // the opposing crossfill direction (kept: R4)
-    9175,   9830,  12452,   // LOW ambient: .14, .15, .19 — the rim knob
+    13120,  14057, 17806,   // ambient .20/.21/.27 — Stage M's independent
+                            // ladder on the inspect subject (14/20/26/32
+                            // classes): .20 keeps the four pools saturated
+                            // (the showcase's point) while the away phase
+                            // stays pink instead of pass-2's murk; .26+
+                            // begin diluting the colour drama
     21627,                  // dim white key: .33
     8520,   11141, 15729};  // blue-leaning crossfill: .13, .17, .24
 

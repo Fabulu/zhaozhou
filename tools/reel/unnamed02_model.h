@@ -187,6 +187,25 @@ inline zc::RingPart make_hinge(uint8_t bone) {
   return p;
 }
 
+/** A junction knuckle (R11): a hinge-family ball whose centre is OFFSET in
+ *  bone-local x/y — the re-entry knuckle sits at the visible surface
+ *  crossing, not at the deep closure anchor its bone binds to. */
+inline zc::RingPart make_knuckle(uint8_t bone, int32_t off_x_mm, int32_t off_y_mm) {
+  zc::RingPart p =
+      make_ball(kKnuckleRadiusMm, kHingeRings, kHingeSegments, kHingePoleSegments, bone);
+  for (zc::RingSpec& rs : p.rings) {
+    rs.cx = fxu(off_x_mm);
+    rs.y += fxu(off_y_mm);
+  }
+  p.r = kHingeGreyR;
+  p.g = kHingeGreyG;
+  p.b = kHingeGreyB;
+  p.page = kPageAtlasTile;
+  p.v0 = kHingeV0;
+  p.v1 = kHingeV1;
+  return p;
+}
+
 /**
  * One almond lens: a flattened ellipsoid swept along +Y (the almond's long
  * axis, counter-stretched like everything vertical), thin in X (the bulge

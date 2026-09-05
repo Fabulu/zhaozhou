@@ -100,6 +100,11 @@ inline const zc::CreatureType& type() {
     parts.push_back(make_hinge(kBHingeB));
     parts.push_back(make_hinge(kBHingeC));
     parts.push_back(make_loop());
+    // R11: the body-side junction knuckles — the joints the owner asked for
+    // twice, made visible things (page tiles from birth via make_knuckle).
+    parts.push_back(make_knuckle(kBNeck, kKnuckleNeckOffXMm, kKnuckleNeckOffYMm));
+    parts.push_back(
+        make_knuckle(kBLoopBase2, kKnuckleReentryOffXMm, kKnuckleReentryOffYMm));
     parts.push_back(make_lens(kBEyeL));
     parts.push_back(make_lens(kBEyeR));
     parts.push_back(make_star_blade(kBPupilL, false));

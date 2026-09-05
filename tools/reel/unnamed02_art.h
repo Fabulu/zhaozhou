@@ -54,12 +54,18 @@ constexpr int kBodyPoleSegments = 16;  // uniform: the segment-taper zipper cut 
 // starts at the equator and pulls much harder, and the upper rings lean
 // forward so the crown flows toward the neck (the lollipop fix's value half;
 // the structural half is the loop shoulder in the model builder).
-constexpr int kBodyTaperPm[kBodyRings] = {1000, 1005, 1010, 1010, 1000, 975,
-                                          930,  865,  775,  655,  520};
-constexpr int kBodyLeanXMm[kBodyRings] = {0, 0, 0, 0, 5, 15, 30, 55, 85, 120, 150};
+// PASS 3 (Direction 3 §4: "a bit more tear shape"): the upper taper pulls
+// harder and the crown lean grows — judged beside the side sheet at
+// matched height.
+constexpr int kBodyTaperPm[kBodyRings] = {1000, 1008, 1015, 1012, 1000, 968,
+                                          915,  838,  730,  595,  450};
+constexpr int kBodyLeanXMm[kBodyRings] = {0, 0, 0, 0, 8, 20, 40, 70, 105, 145, 180};
 
 // ---- the three hinge balls (the drawn nodes the loop articulates around) --
-constexpr int32_t kHingeRadiusMm = 85;
+// PASS 3 (R12): the BALLS are the thickest points on the antenna — raised
+// while the tube gauge drops 0.7x, so every ball reads visibly fatter than
+// the tube it joins at native (Direction 3 §3).
+constexpr int32_t kHingeRadiusMm = 100;
 constexpr int kHingeRings = 7;
 constexpr int kHingeSegments = 10;
 constexpr int kHingePoleSegments = 10;  // uniform (same sliver lesson)
@@ -122,8 +128,21 @@ constexpr int32_t kLoopRestTiltA16 = 800;     // ~4 deg out-of-plane at A
 // before, kept ~105 mid-tube, flared at the shoulder); rz = across the
 // plane (the FRONT sheet's blade: ~45% of body width at the base tapering
 // toward a point over the peak).
-constexpr int32_t kLoopBladeRxMm[7] = {190, 140, 95, 85, 95, 100, 130};
-constexpr int32_t kLoopBladeRzMm[7] = {180, 165, 95, 45, 38, 42, 60};
+// PASS 3 (R12): the mid-tube gauge drops ~0.7x (the owner: "way too
+// thick"); the broad base flaring INTO the body and the thin tip stay.
+constexpr int32_t kLoopBladeRxMm[7] = {190, 130, 66, 60, 66, 70, 91};
+constexpr int32_t kLoopBladeRzMm[7] = {180, 150, 66, 32, 27, 29, 42};
+
+// ---- the junction knuckles (R11 / Direction 3 §3: "there are no hinges
+// where the antennae meet the creature") ----
+// Two new hinge-ball parts make the body-side joints THINGS: one at the
+// neck exit (on kBNeck — half-buried at the antenna's base) and one at the
+// re-entry (on kBLoopBase2, offset from the deep anchor out to the visible
+// surface crossing on the upper-left flank). Same construction as balls
+// A/B/C, page tiles from birth (gotcha §0), sized into the ball family.
+constexpr int32_t kKnuckleRadiusMm = 110;
+constexpr int32_t kKnuckleNeckOffXMm = 0, kKnuckleNeckOffYMm = 0;
+constexpr int32_t kKnuckleReentryOffXMm = -70, kKnuckleReentryOffYMm = 270;
 
 // ---- the eyes (the whole face) ----
 // Two big purple almond lenses close together on the lower front, angled
