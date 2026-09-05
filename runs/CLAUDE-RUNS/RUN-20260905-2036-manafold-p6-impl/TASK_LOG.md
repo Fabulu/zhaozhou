@@ -450,8 +450,18 @@ with it. No 0-byte file resulted, but the FILES THAT EXISTED WERE STALE, which
 looks identical to success in a directory listing. Re-run in the background with
 `python -u`.
 
-**Trap 2, and this one would have shipped:** `channel`, `crackle` and `curious`
-were encoded from the **pre-5c render**. I deleted and re-rendered `ship/` after
+**Trap 2 — SUSPECTED, DEFENDED AGAINST, AND THE SUSPICION WAS WRONG.** I
+believed `channel`, `crackle` and `curious` had been encoded from the
+**pre-5c render**, because I had deleted and re-rendered `ship/` after 5c/5d
+landed and those three webms already existed. I re-encoded them defensively.
+**They came back BYTE-IDENTICAL** (channel 2,457,851 B before and after), which
+is not a coincidence — it is proof they had already been encoded from the
+correct frames, and incidentally a clean demonstration that the render and
+encode are deterministic end to end. Recorded as a wrong call rather than
+quietly deleted: the defensive re-encode cost ten minutes and bought certainty,
+and had I been right it would have prevented three clips shipping with the old
+eye while thirteen carried the new one — with every file present, non-zero and
+decodable. The original reasoning was: I deleted and re-rendered `ship/` after
 the owner's 5c/5d landed, but those three webms were already written — so three
 clips would have gone out with the OLD eye while the other thirteen carried the
 new one, and every file would have been present, non-zero and decodable. Caught
