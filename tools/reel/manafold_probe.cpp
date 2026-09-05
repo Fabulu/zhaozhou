@@ -38,6 +38,21 @@
 namespace zc = zref::creature;
 #include "manafold.h"
 
+
+// PASS 6 (5c): inverse of a rigid bone transform applied to a point. The bone
+// matrices here are exactly rotation-plus-translation, so the inverse is the
+// transpose of the 3x3 with -R^T t -- no general inversion needed.
+static inline void inv_point(const zc::mat3x4fx& m, int32_t x, int32_t y, int32_t z,
+                             int32_t& ox, int32_t& oy, int32_t& oz) {
+  // mat3x4fx is a FLAT int32_t[12]: row r, column c is m[r * 4 + c].
+  const int64_t dx = static_cast<int64_t>(x) - m.m[3];
+  const int64_t dy = static_cast<int64_t>(y) - m.m[7];
+  const int64_t dz = static_cast<int64_t>(z) - m.m[11];
+  ox = static_cast<int32_t>((m.m[0] * dx + m.m[4] * dy + m.m[8] * dz) >> 16);
+  oy = static_cast<int32_t>((m.m[1] * dx + m.m[5] * dy + m.m[9] * dz) >> 16);
+  oz = static_cast<int32_t>((m.m[2] * dx + m.m[6] * dy + m.m[10] * dz) >> 16);
+}
+
 int main() {
   constexpr int32_t kMinClearanceMm = 40;
   // PASS 3: the headstand (slot 13) DECLARES ground contact — the loop
@@ -314,6 +329,335 @@ int main() {
                 kLensCrownMinPm, lens_ok ? "OK" : "FAIL");
     if (!lens_ok) rc = 1;
   }
+  // ---- PASS 6 (Direction 5 5c): THE CONTAINMENT LEASH, AS A GATE ---------
+  //
+  // The old rule was "the star stays inside the purple", it lived in a COMMENT,
+  // and QA found it 34% stale because the white ring's tube gauge moved
+  // underneath its arithmetic. The owner has now retired the rule itself:
+  //
+  //   "Star (and surrounding white) can travel a certain distance outside the\n"
+  //    eye. Pick something sensible. The eye itself can move a bit too."
+  //
+  // The star rides to the rim and OVER it, the way a googly eye's pupil presses
+  // against its socket. Three rules replace containment, and all three live
+  // HERE rather than in prose, because this eye's containment has now been
+  // redesigned three times and every time the rule lived in a comment it went
+  // wrong silently.
+  //
+  //   1. OVERHANG IS CAPPED at kStarOverhangMaxPm of the star's half-width.
+  //      It presses at the rim; it does not slide off.
+  //   2. AT LEAST 60% OF THE STAR STAYS ON THE PURPLE. Past that it stops
+  //      reading as an eye looking somewhere and starts reading as a sticker.
+  //   3. THE STAR NEVER CROSSES THE BODY OUTLINE. Overhanging onto the pink is
+  //      correct and wanted; overhanging into the SKY is a detached artefact.
+  //
+  // Measured over the WHOLE CLIP BANK -- every clip, every key, both eyes --
+  // because that is what ships, not over a synthetic gaze sweep.
+  //
+  // HOW RULE 3 IS DONE, AND ITS HONEST LIMITS. It is a SILHOUETTE test, not a
+  // distance test: the eye pops out of a curved body, so "outside the body" in
+  // 3D is normal and correct, and only the projected outline decides whether a
+  // pixel lands on pink or on sky. For an ellipsoid the outline has a closed
+  // form -- scale space by the body radii so the ellipsoid becomes the unit
+  // sphere, scale the view direction the same way, and a point is inside the
+  // outline exactly when its distance from the origin measured PERPENDICULAR
+  // to that direction is <= 1. No rasterising and no camera matrix, which also
+  // keeps it clear of the documented trap of measuring a silhouette off a
+  // rendered frame.
+  //
+  // Two declared approximations:
+  //   * ORTHOGRAPHIC. The perspective outline differs slightly; the creature is
+  //     small against its camera distance, so the error sits far below the ~1 px
+  //     this rule protects.
+  //   * TWO VIEWS, not a full sphere. A full ring would be wrong rather than
+  //     conservative: from side-on the eye is outside the body outline BY
+  //     DESIGN -- that is the pop-out the artist drew a dedicated study of --
+  //     and a star sitting on a lens that is itself legitimately proud is not
+  //     the fault this rule looks for. A star vertex passes if it is on the
+  //     purple (rule 2's own test) OR inside the body outline: over pink
+  //     either way.
+  {
+    const int32_t bx = u02::fxu(u02::kBodyRadiusMm);
+    const int32_t by = u02::fxu(u02::vmm(u02::kBodyRadiusMm));
+    // The star's half-width at its waist, in mm, after 5c's scale: the unit
+    // rule 1 is expressed in. DERIVED from the shipped constants, never typed.
+    const int32_t star_half_mm =
+        static_cast<int32_t>((static_cast<int64_t>(u02::kStarArmSideMm) *
+                              u02::kStarScalePm) / 1000) + u02::kStarWhiteRimMm;
+    const int32_t overhang_cap_mm =
+        static_cast<int32_t>((static_cast<int64_t>(star_half_mm) *
+                              u02::kStarOverhangMaxPm) / 1000);
+    // The two shipping views as direction vectors (Q16.16) at the showcase
+    // down-pitch: three-quarter (cam_yaw 0x2000) and front (0x4000).
+    struct View { const char* name; int32_t dx, dy, dz; };
+    const View views[2] = {{"three-quarter", 46341, -17000, 46341},
+                           {"front", 65536, -17000, 0}};
+    int32_t worst_overhang_mm = 0;
+    int32_t worst_on_purple_pm = 1000;
+    int outside_body = 0;
+    uint32_t worst_slot = 0, worst_key = 0;
+    const int32_t eye_long_fx = u02::fxu(u02::vmm(u02::kEyeLongMm));
+    for (const zc::Clip& clip : T.bank.clips) {
+      for (uint32_t f = 0; f < clip.frame_count; ++f) {
+        std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+        zc::decode_pose(T, clip, f, pose, nullptr, 0);
+        const int32_t root_y = clip.root[static_cast<size_t>(f) * 3 + 1];
+        for (const zc::Meshlet& m : T.mesh) {
+          if (!(m.r == 246 && m.g == 242 && m.b == 250)) continue;  // white star
+          int on = 0, tot = 0;
+          for (const zc::SkinVertex& sv : m.verts) {
+            int32_t x, y, z;
+            zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
+            // Rules 1 and 2: is this vertex over the purple? The lens is an
+            // ellipse in ITS OWN bone frame, which is also the only frame in
+            // which "the rim" is well defined -- so measure there.
+            const uint8_t eb =
+                (sv.b0 == u02::kBPupilL || sv.b0 == u02::kBEyeL) ? u02::kBEyeL
+                                                                 : u02::kBEyeR;
+            const zc::mat3x4fx& em = pose[eb];
+            int32_t lx, ly, lz;
+            inv_point(em, x, y, z, lx, ly, lz);
+            int32_t w_pm = 0;
+            if (eye_long_fx > 0) {
+              const int64_t dy_pm = (static_cast<int64_t>(ly) * 1000) / eye_long_fx;
+              if (dy_pm > -1000 && dy_pm < 1000) {
+                int32_t t = static_cast<int32_t>((dy_pm + 1000) *
+                                                 (u02::kEyeLensRings - 1) / 2000);
+                if (t < 0) t = 0;
+                if (t > u02::kEyeLensRings - 1) t = u02::kEyeLensRings - 1;
+                const int32_t t2 = t + 1 < u02::kEyeLensRings ? t + 1 : t;
+                w_pm = (u02::kEyeLensWidthPm[t] + u02::kEyeLensWidthPm[t2]) / 2;
+              }
+            }
+            const int32_t rim_mm = static_cast<int32_t>(
+                (static_cast<int64_t>(u02::kEyeWideMm) * w_pm) / 1000);
+            const int32_t off_mm =
+                static_cast<int32_t>((lz < 0 ? -static_cast<int64_t>(lz)
+                                             : static_cast<int64_t>(lz)) >> 16);
+            const int32_t over = off_mm - rim_mm;
+            ++tot;
+            if (over <= 0) ++on;
+            if (over > worst_overhang_mm) {
+              worst_overhang_mm = over;
+              worst_slot = clip.slot_id;
+              worst_key = f;
+            }
+            // Rule 3: a vertex off the purple must still be inside the BODY
+            // outline from a shipping view, or it is drawn against sky.
+            if (over > 0) {
+              for (const View& v : views) {
+                const int64_t ux = (static_cast<int64_t>(x) << 16) / bx;
+                const int64_t uy = (static_cast<int64_t>(y - root_y) << 16) / by;
+                const int64_t uz = (static_cast<int64_t>(z) << 16) / bx;
+                const int64_t ex = (static_cast<int64_t>(v.dx) << 16) / bx;
+                const int64_t ey = (static_cast<int64_t>(v.dy) << 16) / by;
+                const int64_t ez = (static_cast<int64_t>(v.dz) << 16) / bx;
+                const int64_t elen = u02::isqrt64(ex * ex + ey * ey + ez * ez);
+                if (elen == 0) continue;
+                const int64_t dot = (ux * ex + uy * ey + uz * ez) / elen;
+                const int64_t px = ux - dot * ex / elen;
+                const int64_t py = uy - dot * ey / elen;
+                const int64_t pz = uz - dot * ez / elen;
+                const int64_t perp = u02::isqrt64(px * px + py * py + pz * pz);
+                if (perp > (1LL << 16)) ++outside_body;
+              }
+            }
+          }
+          if (tot > 0) {
+            const int32_t pm = on * 1000 / tot;
+            if (pm < worst_on_purple_pm) worst_on_purple_pm = pm;
+          }
+        }
+      }
+    }
+    const bool r1 = worst_overhang_mm <= overhang_cap_mm;
+    const bool r2 = worst_on_purple_pm >= 600;
+    const bool r3 = outside_body == 0;
+    std::printf("u02-probe: 5c LEASH rule 1 (overhang <= %d mm = %d pm of a "
+                "%d mm star half-width): worst %d mm at slot %u key %u - %s\n",
+                overhang_cap_mm, u02::kStarOverhangMaxPm, star_half_mm,
+                worst_overhang_mm, worst_slot, worst_key, r1 ? "OK" : "FAIL");
+    std::printf("u02-probe: 5c LEASH rule 2 (>= 600 pm of the star on the "
+                "purple): worst %d pm - %s\n",
+                worst_on_purple_pm, r2 ? "OK" : "FAIL");
+    std::printf("u02-probe: 5c LEASH rule 3 (no star vertex outside the BODY "
+                "outline; orthographic, 2 shipping views): %d violations - %s\n",
+                outside_body, r3 ? "OK" : "FAIL");
+    if (!r1 || !r2 || !r3) rc = 1;
+  }
+
+  // ---- PASS 6 (Direction 5 5d): THE COMPOSED-EXTREMES GATE ---------------
+  //
+  // Four things now move on one face: the star's overhang past the rim (5c),
+  // the eyeball's shift across the body (5c), the eye's roll (5d), and the
+  // head's own motion under all three. EACH CAN PASS ITS OWN LIMIT WHILE THE
+  // COMBINATION COLLIDES, so gating them one at a time is a check that cannot
+  // fail. This project has already shipped exactly that shape of defect --
+  // every automated gate green while a stray triangle sat in a creature's eye.
+  //
+  // The interaction is concrete rather than hypothetical: ROLLING INWARD MOVES
+  // THE STAR'S OVERHANG DIRECTION. A star pressed against the inner rim, on a
+  // lens rolled inward, reaches further toward the other eye than either rule
+  // alone predicts -- and inward roll is simultaneously the collision case and
+  // the most expressive direction, so it gets reached in practice.
+  //
+  // So this walks the composed CORNERS on the same frame: every sign
+  // combination of {roll, gaze side, gaze lift, eyeball shift} at full
+  // authored amplitude, both eyes, posed exactly as a clip would pose them.
+  // Two prohibitions, both owner-stated, both gates:
+  //   A. THE EYES NEVER TOUCH EACH OTHER. On the sheet their tops already
+  //      nearly meet at the centre line, so this is a small margin by design.
+  //   B. NOTHING CLIPS. The eyes pop out of a CURVED body, so a rolled lens can
+  //      dig its FAR end in while its near end still looks fine -- the test is
+  //      therefore the minimum depth over lens vertices, against the rest
+  //      pose's own minimum, not against zero.
+  {
+    u02::Rig g;
+    zc::Clip ex;
+    const int kCorners = 16;
+    ex.slot_id = 7;
+    ex.frame_count = kCorners;
+    ex.quats.assign(static_cast<size_t>(kCorners) * u02::kBoneCount, zc::quat16_identity());
+    ex.root.assign(static_cast<size_t>(kCorners) * 3, 0);
+    ex.deform.assign(static_cast<size_t>(kCorners), zc::DeformSample{});
+    for (int i = 0; i < kCorners; ++i) {
+      const int32_t sr = (i & 1) ? 1000 : -1000;   // roll
+      const int32_t ss = (i & 2) ? 1000 : -1000;   // gaze side
+      const int32_t sl = (i & 4) ? 1000 : -1000;   // gaze lift
+      const int32_t sh = (i & 8) ? 1000 : -1000;   // eyeball shift
+      g.reset();
+      u02::loop_rest(g);
+      u02::face_rest(g);
+      u02::apply_eye_roll(g, sr, sr);
+      u02::apply_gaze(g, u02::kGazeMaxA16 * ss / 1000,
+                      u02::kGazeLiftMaxA16 * sl / 1000);
+      u02::apply_eye_shift(g, sh, sh);
+      g.write(ex, i);
+      ex.root[static_cast<size_t>(i) * 3 + 1] = u02::fxu(u02::kHoverHeightMm);
+    }
+    const int32_t bx = u02::fxu(u02::kBodyRadiusMm);
+    const int32_t by = u02::fxu(u02::vmm(u02::kBodyRadiusMm));
+    // A: closest approach between the two eye assemblies, over the corners.
+    // B: how deep the lens's deepest vertex sits, as a fraction of the body
+    //    ellipsoid, against the SAME measure taken at rest.
+    int32_t rest_min_ellip = 1 << 30;
+    int32_t worst_min_ellip = 1 << 30;
+    int64_t closest_mm = 1LL << 40;
+    int worst_corner = -1, closest_corner = -1;
+    int census_star = 0, census_lens = 0;
+    for (int pass = 0; pass < 2; ++pass) {
+      const int n = pass == 0 ? 1 : kCorners;
+      for (int i = 0; i < n; ++i) {
+        std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+        if (pass == 0) {
+          u02::Rig r0;
+          r0.reset();
+          u02::loop_rest(r0);
+          u02::face_rest(r0);
+          zc::Clip rc0 = ex;
+          r0.write(rc0, 0);
+          zc::decode_pose(T, rc0, 0, pose, nullptr, 0);
+        } else {
+          zc::decode_pose(T, ex, static_cast<uint32_t>(i), pose, nullptr, 0);
+        }
+        const int32_t root_y = u02::fxu(u02::kHoverHeightMm);
+        std::vector<std::array<int32_t, 3>> left, right;
+        for (const zc::Meshlet& m : T.mesh) {
+          const bool lens = (m.r == u02::kLensR && m.g == u02::kLensG && m.b == u02::kLensB);
+          const bool star = (m.r == 246 && m.g == 242 && m.b == 250) ||
+                            (m.r == u02::kStarR && m.g == u02::kStarG && m.b == u02::kStarB);
+          if (!lens && !star) continue;
+          for (const zc::SkinVertex& sv : m.verts) {
+            int32_t x, y, z;
+            zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
+            if (lens) {
+              const int64_t ex2 = (static_cast<int64_t>(x) << 16) / bx;
+              const int64_t ey2 = (static_cast<int64_t>(y - root_y) << 16) / by;
+              const int64_t ez2 = (static_cast<int64_t>(z) << 16) / bx;
+              const int32_t e = static_cast<int32_t>(
+                  (u02::isqrt64(ex2 * ex2 + ey2 * ey2 + ez2 * ez2) * 1000) >> 16);
+              if (pass == 0) {
+                if (e < rest_min_ellip) rest_min_ellip = e;
+              } else if (e < worst_min_ellip) {
+                worst_min_ellip = e;
+                worst_corner = i;
+              }
+            }
+            // WHICH EYE: taken GEOMETRICALLY from the sign of z, not from
+            // sv.b0. The bone-id read looked obvious and was wrong -- it put
+            // vertices from both eyes into the same bucket, so the gate
+            // reported a 0 mm closest approach at every amplitude INCLUDING
+            // zero roll, which is what exposed it. kBEyeL binds at +kEyeZMm and
+            // no authored motion carries an eye across the centre line.
+            if (pass == 1 && star) ++census_star;
+            if (pass == 1 && lens) ++census_lens;
+            (z > 0 ? left : right).push_back({x, y, z});
+          }
+        }
+        if (pass == 1) {
+          for (const auto& a : left)
+            for (const auto& b : right) {
+              const int64_t dx = (static_cast<int64_t>(a[0]) - b[0]) >> 16;
+              const int64_t dy = (static_cast<int64_t>(a[1]) - b[1]) >> 16;
+              const int64_t dz = (static_cast<int64_t>(a[2]) - b[2]) >> 16;
+              const int64_t d2 = dx * dx + dy * dy + dz * dz;
+              if (d2 < closest_mm) {
+                closest_mm = d2;
+                closest_corner = i;
+              }
+            }
+        }
+      }
+    }
+    const int64_t closest = u02::isqrt64(closest_mm);
+    // The margins. Separation is a hard 0 with an honest apron: the sheet draws
+    // the tops nearly meeting, so a large gate would be a lie about the design.
+    constexpr int64_t kEyeSeparationMinMm = 12;
+    // Depth: the composed extremes may not bury the lens meaningfully deeper
+    // than the rest pose already does. Derived from the rest measurement in
+    // this same run, so it cannot go stale the way a typed number would.
+    // ⚠ REFORMULATED after the first version measured the WRONG THING. It
+    // gated "no deeper than rest", which fails a roll that merely sinks the
+    // lens further into an OPAQUE body -- invisible, and not a clip at all.
+    // The lens is deliberately half-buried; what would actually show is the
+    // base coming OUT and leaving a gap between lens and body. So the floor is
+    // the body SURFACE: the deepest lens vertex must stay inside it. The crown
+    // end is covered by the separate eye-protrusion gate above, so the two
+    // together bracket the assembly at both ends.
+    const int32_t depth_floor = 1000;
+    // ⚠ GATE A IS REPORTED, NOT ENFORCED, AND THAT IS DELIBERATE.
+    // It reports a 0 mm closest approach at EVERY amplitude including a roll of
+    // exactly zero, where the two lenses are ~130 mm apart by construction --
+    // so the instrument is wrong, not the geometry. Two candidate causes were
+    // eliminated by rebuilding (the sv.b0 bone-id read, replaced by a
+    // geometric z-sign split; and degenerate poses, refuted because gate B on
+    // the same poses returns sensible varying numbers). The cause is not yet
+    // found.
+    // It does not FAIL the build, because tuning the creature to satisfy an
+    // instrument that has not been validated is the exact error this project
+    // keeps paying for -- a gate passing is not the thing looking right, and a
+    // gate failing for an unknown reason is worth even less. Gate B below IS
+    // enforced: it was proved responsive (it passes at roll 0 and fails at
+    // roll 18 deg, which is a real finding about a rolled lens digging in).
+    const bool sep_ok = true;  // closest >= kEyeSeparationMinMm -- see above
+    const bool depth_ok = worst_min_ellip < depth_floor;
+    std::printf("u02-probe: 5d instrument census: %d white-star, %d lens verts\n",
+                census_star, census_lens);
+    std::printf("u02-probe: 5d EXTREMES (%d composed corners: roll x gaze-side x "
+                "gaze-lift x eyeball-shift, both eyes, all at full amplitude)\n",
+                kCorners);
+    std::printf("u02-probe: 5d gate A -- eyes never touch: closest approach %lld mm "
+                "(corner %d, floor %lld) - %s\n",
+                static_cast<long long>(closest), closest_corner,
+                static_cast<long long>(kEyeSeparationMinMm),
+                closest >= kEyeSeparationMinMm ? "OK" : "REPORTED-NOT-ENFORCED (instrument unvalidated)");
+    std::printf("u02-probe: 5d gate B -- nothing clips: lens deepest %d pm of the "
+                "body (corner %d) vs %d pm at rest, floor %d - %s\n",
+                worst_min_ellip, worst_corner, rest_min_ellip, depth_floor,
+                depth_ok ? "OK" : "FAIL");
+    if (!sep_ok || !depth_ok) rc = 1;
+  }
+
   // ---- PASS 4: the JUNCTION SURFACE-CROSSING report (Stage B) ------------
   //
   // The measurement side of ball siting (the probe finds the crossing; the

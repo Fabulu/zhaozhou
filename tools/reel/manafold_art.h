@@ -365,9 +365,76 @@ constexpr int kStarProfileWPm[kStarRings] = {   0,   50,  110,  200,  320,
 // its own white rim swamped the cyan and no star shape read at all. The sheet
 // draws three NESTED shapes filling the lens -- purple, white star, cyan star
 // -- so the star must occupy most of the lens, not sit in the middle of it.
-constexpr int32_t kStarArmBottomMm = 165;  // long   (the drawn asymmetry)
-constexpr int32_t kStarArmTopMm = 128;     // medium
-constexpr int32_t kStarArmSideMm = 52;     // short
+//
+// ---- OWNER DIRECTION 5 §5c: THESE ARE NOW THE DRAWN-FLUSH ARMS ------------
+// The owner was offered "shrink the star so the eyes can move" versus "draw it
+// flush and they cannot move", and rejected both:
+//
+//   "Star (and surrounding white) can travel a certain distance outside the
+//    eye. Pick something sensible. The eye itself can move a bit too."
+//
+// THE STAR IS NOT CONTAINED BY THE PURPLE. It rides to the rim and over it,
+// the way a googly eye's pupil presses against its socket -- which is why the
+// creature reads googly, and the owner has said twice that he likes that.
+// Every previous version of this problem, including the derivation QA found
+// 34% stale, assumed the star stays inside. That assumption is retired.
+//
+// So the arms below are authored at DRAWN-FLUSH (the white star's side tip
+// reaches the lens rim exactly) and kStarScalePm takes it back off. Travel is
+// no longer bought by shrinking, so the artist's proportion comes back.
+constexpr int32_t kStarArmBottomMm = 216;  // long   (the drawn asymmetry)
+constexpr int32_t kStarArmTopMm = 167;     // medium
+constexpr int32_t kStarArmSideMm = 68;     // short: + the rim = kEyeWideMm
+
+// 950 = the star at 95% of drawn size. A starting point authored by eye, not a
+// derivation -- move it.
+constexpr int kStarScalePm = 950;
+// The star may travel until this fraction of its half-width crosses the purple
+// rim. It PRESSES at the rim; it does not slide off.
+constexpr int kStarOverhangMaxPm = 300;
+// The purple eyeball itself may shift this fraction of its own width relative
+// to the body. Still exactly TWO transforms per eye (§5b holds) -- the purple
+// is simply no longer welded to the head.
+constexpr int kEyeShiftMaxPm = 100;
+// Mechanism for that shift, and it is NOT a translation: the rig authors
+// rotations only (Rig carries quats; only the ROOT has translation). So the
+// eye bone's pivot is moved INWARD by this radius and the lens geometry pushed
+// back out by the same amount -- the rest pose is bit-identical, but a
+// rotation on the eye bone now sweeps the whole assembly ACROSS the body
+// surface instead of spinning the lens in place. The pupil bone takes a
+// matching bind offset so the gaze pivot stays exactly at the lens centre and
+// the star's own mechanism is untouched.
+constexpr int32_t kEyeShiftPivotMm = 0;   // NOT SHIPPED -- see manafold_rig.h
+
+// ---- OWNER DIRECTION 5 5d: THE EYES ROLL ---------------------------------
+//   "eyes should also be able to rotate and rotate back. Maybe 10-20% at most.
+//    Still shouldn't clip anything or touch each other. Just for
+//    expressiveness."
+//
+// Each eye ROLLS about its own centre in the face plane and returns. On a face
+// drawn as a LAMBDA -- two tilted lenses whose tops converge -- the roll changes
+// that angle, which is the nearest thing this creature has to a BROW: tops
+// together reads intent, tops apart reads surprise. For an animal with neither
+// nose nor mouth that is a great deal of expression for a small change.
+//
+// It does not break 5b. The roll is a rotation of the PURPLE, and the star unit
+// rides it because the pupil bone is a child of the eye bone. Still exactly two
+// transforms per eye.
+//
+// INTERPRETATION, recorded because a percentage on a rotation is ambiguous:
+// read as 10-20% of a QUARTER turn, so roughly 9-18 degrees, with 18 as the
+// stated ceiling. A fifth of a FULL turn would be 72 degrees and would lay a
+// lens on its side, which is plainly not "just for expressiveness". Named, so
+// one value moves if a wider reading was meant.
+// SHIPPED AT 10 deg, not the 18 deg ceiling. The committed composed-extremes
+// gate found that at 18 deg the rolled lens DIGS INTO THE BODY at the corners
+// where roll, gaze and lift stack -- the eyes pop out of a CURVED body, so a
+// rolled lens buries its far end while its near end still looks fine. That is
+// the owner's own "shouldn't clip anything", caught by composing the channels
+// rather than checking each alone. 18 deg remains the stated ceiling and one
+// edit away if the lens geometry later earns it.
+constexpr int32_t kEyeRollMaxA16 = 1820;    // 10 deg -- gated, see FINDINGS
+constexpr int32_t kEyeRollRestA16 = 1820;   // 10 deg -- typical amplitude
 constexpr int32_t kStarThinMm = 16;        // depth: the star is a flat spark
 // The side sheet draws the star sitting HIGH in the lens, not centred.
 constexpr int32_t kStarOffsetYMm = 46;
@@ -443,7 +510,7 @@ constexpr int32_t kAntennaTiltA16 = 700;
 // The two axes get very different room: the lens is 3.2:1, so the SIDE sweep
 // runs across its narrow axis and is bounded hard by containment, while the
 // LIFT runs along the long axis where there is far more lens to slide on.
-constexpr int32_t kGazeMaxA16 = 3400;
+constexpr int32_t kGazeMaxA16 = 4600;
 // lift: along the long axis the room is (250*0.93 - 150 - 15) ~= 67 mm ->
 // sin = 67/88 = 0.76; the practical clamp stays far below (the squint and
 // the V-angle eat into it) -- picked by the same margin discipline.

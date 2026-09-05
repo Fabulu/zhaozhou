@@ -254,6 +254,10 @@ inline zc::RingPart make_eye_lens(uint8_t bone) {
     rs.radius = 0;
     rs.rx = static_cast<int32_t>((static_cast<int64_t>(fxu(kEyeDeepMm)) * w) / 1000);
     rs.rz = static_cast<int32_t>((static_cast<int64_t>(fxu(kEyeWideMm)) * w) / 1000);
+    // §5c: the lens rides back out to its authored place over the eye bone's
+    // relocated pivot, so the REST POSE IS UNCHANGED and a rotation on that
+    // bone sweeps the eye across the body instead of spinning it in place.
+    rs.cx = fxu(kEyeShiftPivotMm);
     rs.segments = static_cast<uint8_t>(kEyeFacetSegments);
     p.rings.push_back(rs);
   }
@@ -297,9 +301,13 @@ inline zc::RingPart make_eye_lens(uint8_t bone) {
  * as a deliberate, reversible deviation rather than a silent one.)
  */
 inline zc::RingPart make_star(uint8_t bone, bool white) {
+  // §5c: the arms are authored DRAWN-FLUSH and scaled back by kStarScalePm.
+  const auto sc = [](int32_t v) {
+    return static_cast<int32_t>((static_cast<int64_t>(v) * kStarScalePm) / 1000);
+  };
   const int32_t rim = white ? kStarWhiteRimMm : 0;
-  const int32_t bot = kStarArmBottomMm + rim;
-  const int32_t top = kStarArmTopMm + rim;
+  const int32_t bot = sc(kStarArmBottomMm) + rim;
+  const int32_t top = sc(kStarArmTopMm) + rim;
   // ⚠ THE RIM IS A DILATION IN THE PICTURE PLANE ONLY -- it must NOT thicken
   // the white in DEPTH. Authored the other way first and it cost a render to
   // find: a white slab 2*(thin+rim) deep centred on the pupil swallowed the
@@ -318,8 +326,8 @@ inline zc::RingPart make_star(uint8_t bone, bool white) {
     // at a constant remove instead of being a scaled copy that thickens at the
     // tips; the tips themselves get a rim-wide rounded cap, which is what a
     // dilation of a point is.
-    const int32_t w =
-        static_cast<int32_t>((static_cast<int64_t>(kStarArmSideMm) * kStarProfileWPm[i]) / 1000) + rim;
+    const int32_t w = static_cast<int32_t>(
+        (static_cast<int64_t>(sc(kStarArmSideMm)) * kStarProfileWPm[i]) / 1000) + rim;
     zc::RingSpec rs;
     rs.y = static_cast<int32_t>(
         (static_cast<int64_t>(fxu(arm)) * yp / 1000) + fxu(kStarOffsetYMm));

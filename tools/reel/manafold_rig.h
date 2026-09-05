@@ -65,14 +65,22 @@ inline zc::Skeleton build_skeleton() {
   // The re-entry anchor is a child of the BODY at the deep plunge target.
   sk.bones[kBLoopBase2] =
       zc::Bone{kBRoot, fxu(kLoopReentryXMm), fxu(kLoopReentryYMm), 0};
+  // PASS 6 (Direction 5 §5c): the eye bone's pivot moves INWARD by
+  // kEyeShiftPivotMm and make_eye_lens pushes the lens geometry back out by the
+  // same amount. Rest is bit-identical; what changes is that a rotation here
+  // now sweeps the eye ACROSS the body surface -- "the eye itself can move a
+  // bit too" -- instead of spinning the lens on the spot. The rig authors
+  // rotations only, so this is how a shift is expressed.
   sk.bones[kBEyeL] = zc::Bone{kBRoot, fxu(kEyeXMm), fxu(vmm(kEyeYMm)), fxu(kEyeZMm)};
   sk.bones[kBEyeR] = zc::Bone{kBRoot, fxu(kEyeXMm), fxu(vmm(kEyeYMm)), -fxu(kEyeZMm)};
   // Pupil pivots sit AT the lens centre; the star GEOMETRY is offset
   // outward (+X) in the part, so pupil-bone rotations sweep the star
   // across the lens face like an eyeball turning (the zixx gaze mechanism,
   // pivot radius = the bulge).
-  sk.bones[kBPupilL] = zc::Bone{kBEyeL, 0, 0, 0};
-  sk.bones[kBPupilR] = zc::Bone{kBEyeR, 0, 0, 0};
+  // ...and the pupil pivot takes the matching offset, so the gaze pivot stays
+  // exactly at the LENS centre and the star's mechanism is untouched by §5c.
+  sk.bones[kBPupilL] = zc::Bone{kBEyeL, fxu(kEyeShiftPivotMm), 0, 0};
+  sk.bones[kBPupilR] = zc::Bone{kBEyeR, fxu(kEyeShiftPivotMm), 0, 0};
   return sk;
 }
 

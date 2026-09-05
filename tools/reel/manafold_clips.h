@@ -239,6 +239,46 @@ inline void face_rest(Rig& g) {
                          quat_mul(quat_x(-kEyeVAngleA16), quat_z(-kEyeTiltA16)));
 }
 
+/** PASS 6 (Direction 5 §5c): "The eye itself can move a bit too."
+ *  `pm` is a fraction of kEyeShiftMaxPm; the result is the rotation about the
+ *  eye bone's relocated pivot that slides the assembly that far across the
+ *  body. Small-angle: a16 ~= (shift_mm / pivot) * 65536 / 2pi, and 10430 is
+ *  65536/2pi. Clamped to the owner's cap by construction. */
+inline int32_t eye_shift_a16(int32_t pm) {
+  if (pm > 1000) pm = 1000;
+  if (pm < -1000) pm = -1000;
+  const int32_t shift_mm = 2 * kEyeWideMm * kEyeShiftMaxPm / 1000 * pm / 1000;
+  return shift_mm * 10430 / (kEyeShiftPivotMm > 0 ? kEyeShiftPivotMm : 1);
+}
+
+/** The eye assembly slides on the body. Composed onto face_rest's attitude, so
+ *  it must be called after it. Both eyes take the same shift: they are one
+ *  face. */
+inline void apply_eye_shift(Rig& g, int32_t side_pm, int32_t lift_pm) {
+  const int32_t sa = eye_shift_a16(side_pm), la = eye_shift_a16(lift_pm);
+  g.q[kBEyeL] = quat_mul(g.q[kBEyeL], quat_mul(quat_y(-sa), quat_z(la)));
+  g.q[kBEyeR] = quat_mul(g.q[kBEyeR], quat_mul(quat_y(-sa), quat_z(la)));
+}
+
+/** PASS 6 (Direction 5 5d): each eye ROLLS about its own outward axis and
+ *  returns. pm is a fraction of kEyeRollMaxA16, per eye, so the two can roll
+ *  together (a brow) or against each other (a quizzical tilt). The star unit
+ *  rides it -- the pupil bone is a child of this one -- so 5b still holds at
+ *  exactly two transforms per eye.
+ *
+ *  INWARD is the expressive direction AND the collision direction: it is the
+ *  sign that carries a rim-pressed star toward the other eye. The composed
+ *  extremes are gated in manafold_probe.cpp, not here. */
+inline void apply_eye_roll(Rig& g, int32_t left_pm, int32_t right_pm) {
+  const auto c = [](int32_t pm) {
+    if (pm > 1000) pm = 1000;
+    if (pm < -1000) pm = -1000;
+    return static_cast<int32_t>((static_cast<int64_t>(kEyeRollMaxA16) * pm) / 1000);
+  };
+  g.q[kBEyeL] = quat_mul(g.q[kBEyeL], quat_x(c(left_pm)));
+  g.q[kBEyeR] = quat_mul(g.q[kBEyeR], quat_x(-c(right_pm)));
+}
+
 /** One apparent gaze on both pupil pivots: +side sweeps the stars toward the
  *  creature's left (+z), +lift sweeps them up. The pivot radius is the bulge. */
 inline void apply_gaze(Rig& g, int32_t side_a16, int32_t lift_a16) {
@@ -250,6 +290,12 @@ inline void apply_gaze(Rig& g, int32_t side_a16, int32_t lift_a16) {
                                                     : lift_a16;
   g.q[kBPupilL] = quat_mul(quat_y(-side), quat_z(lift));
   g.q[kBPupilR] = quat_mul(quat_y(-side), quat_z(lift));
+  // §5c: the eyeball LEADS the star, a little. This is what stops a hard
+  // look-direction reading as a sticker sliding on a fixed field, and it costs
+  // no clip authoring: every existing gaze schedule drives it already.
+  // 5c's eyeball shift is NOT wired here this pass: the pivot mechanism it
+  // needs is unsound against face_rest's rest attitude (see manafold_rig.h),
+  // and the committed extremes gate is what found that. Reported, not silent.
 }
 
 /** PASS 6 B.1 (Direction 5 §5b rule 4): PER-EYE gaze. "Asymmetry is allowed
