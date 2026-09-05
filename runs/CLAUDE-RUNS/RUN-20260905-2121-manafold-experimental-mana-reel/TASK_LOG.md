@@ -105,3 +105,42 @@ pocket intact; the fold's failure to read is downstream of the geometry.
 The real cause of the invisible stones was much duller: they were behind the
 antenna arm, and their shine-through glow was at gain 300, below the point of
 being seen. The probe is committed so the number is reproducible.
+
+## THE RESULT (2026-09-06 ~00:xx)
+**The fold's problem was never the shape mechanism -- it was the BACKGROUND.**
+Every fold so far has been drawn inside a ~40 px loop window with a bright pink
+antenna arm through it, against a bright pink body. `held-still` freezes the
+shape in world space during a hold, the travelling creature leaves it behind,
+and the IDENTICAL shape -- same stencils, same mote count, same colours as the
+control -- becomes nameable on clean sky. `edge-snap-held` adds the outline and
+produces a crisp aqua RING hanging in mid-air at NATIVE 384x240. First nameable
+mana shape this creature has made.
+
+Two ingredients, neither sufficient alone:
+ * SEPARATION makes it nameable   (held-still reads; control does not)
+ * THE EDGE makes it crisp        (edge-snap-held sharp; held-still dotted)
+ * edge-strands is the control for the second: an outline WITHOUT separation
+   reads as structure but not as a shape.
+
+Measured wall (`past-the-wall`): the mana ERASES 30% of the creature's own pink
+(3727 px vs the control's 5355) and collapses the measured body width 135 -> 100.
+"When the mana starts deleting the creature" is a sharper stopping rule than any
+saturation figure.
+
+Measured cost of "more particles" done by count (`breadth-more`): 3.3x density,
+saturation 143.1 -> 85.6 -- exactly the pass-5 regression. Breadth means a BIGGER
+AREA, not a bigger number.
+
+## Deliverables
+ * 10 webm + posters + 4 evidence sheets in
+   `Upheaval/creature/Manafold/media/mana-lab/` (44 MB), all from ONE binary
+   (md5 4f4744c7a2ee9301ff21a9a8bc608b94), all verified to decode at 384x240.
+ * `Upheaval/creature/Manafold/MANA-LAB-FINDINGS.md` -- ranked, with every
+   rejection and its reason.
+ * `zhaozhou/tools/reel/manafold_lab.h` -- lane-only. No shipped constant moved.
+ * tools committed here: sheet.py, compare.py, track.py, stencilprobe.py,
+   encode.py.
+
+## Closed
+Not published (experiments; the shipping pass owns the site). Background tasks
+verified stopped: no zhao-reel, ffmpeg, g++ or python processes remain.
