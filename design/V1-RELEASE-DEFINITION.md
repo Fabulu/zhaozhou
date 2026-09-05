@@ -72,7 +72,10 @@ Where they disagree, the manifest wins and this file is stale.
 | Sampler | `zhao_texture_tmu_pipe` | SELECTED by the manifest, **but NOT in the approved architecture at all** — see `reports/G1-ISLAND-SURVIVORS-20260905.md`. Its functions are split across five approved blocks and its palette becomes `zhao_texture_palette_res`. **Do not repair its palette.** It also has no valid fit. |
 | Fragment transaction | `zhao_raster_texjoin_v2` | SELECTED, MEASURED, and known "wrong about storage" per its own ledger row |
 | Fragment transaction (replacement) | `zhao_texture_fragrob` | BUILT, **not-yet-adopted**, fails its register gate at 2,631 > 2,500 |
-| Material combiner | — | **NOT BUILT.** TEXJOIN returns sample zero for every recipe; three-sample material support does not exist |
+| Material combiner (refuted) | `zhao_texture_combine` | BUILT, MEASURED, **REFUTED** — 494 ALM / 524 reg / **8 DSP** / 100.12 MHz against the architecture's rule of 2 DSP (§3.4). Docket D19q. Kept only until its replacement is measured |
+| Material combiner | `zhao_texture_material_combine_v1` | BUILT, COMPOSED (`island_composed_directed`), **NOT MEASURED**. §15.5 variant A LOGIC2; all eight ratified recipes including the two three-sample terrain ones |
+| Sample banking | `zhao_texture_fragrob` | FIXED 2026-09-05. It banked three sample results internally and its retire read took `res_rgb_m[0]` only, so a three-sample fragment left as sample 0 — the same fault attributed to TEXJOIN, one block upstream. Now exposes `o_s_rgb_o[3]` / `o_s_a_o[3]` |
+| **Composed texture island** | `zhao_texture_island_top` | **COMPOSED** — 64 fragments in, 64 out, every block's counter moving, 0 ID errors (`island_composed_directed`, 11/11). MEASUREMENT PENDING; see `reports/G1D-COMPOSED-ISLAND-20260905.md` |
 
 **The island as implemented is far over its own envelope.** Nine current leaf
 rows of the eleven approved components sum to **8,455 ALM against a 7,500 hard
@@ -99,6 +102,7 @@ composed fit of the eleven exists.
 | Area | Status | Gate |
 |---|---|---|
 | Renderer shell | COMPOSED; corrected fit **99.34 MHz** — below the 105 MHz composed acceptance floor | G1 |
+| Texture island | **COMPOSED 2026-09-05** and functionally proven end to end. Its CAPACITY has never been measured: every figure quoted to date is a sum of standalone per-block fits, which the census itself disproves by totalling 342 DSP against a device with 112. Composed fit in flight | G1 |
 | Static geometry | Components BUILT (setup, clip, project, decode, assemble, assetfetch); the production path from resident assets + draw commands into raster is **not composed** | G3 |
 | Resource upload / residency | Generic HPS burst bridge and blit precedent exist; the general immutable-resource upload transaction is **not built** | G2 |
 | Terrain | Patch/tessellation/deformation/residency machinery BUILT; world streaming (`SW.STREAM`), writeback of layer F, ordinary shading and normal detail **not built** | G2, G4 |

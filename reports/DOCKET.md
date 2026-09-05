@@ -2618,3 +2618,60 @@ Full evidence: `reports/G1C-COMBINER-II1-REFUTED-20260905.md`.
 `zhao_texture_material_combine_v1` to §15.3/§15.5-A with the per-recipe product
 job counters §15.4 requires, then re-fit against the same three unchanged rules.
 The refuted block stays in the tree until its replacement measures better.
+
+---
+
+## D19r — the composed island: four wiring defects, and one that no handshake test could see
+
+**2026-09-05. Closed by the composed test; recorded because of what the fourth
+one implies about test design.**
+
+`zhao_texture_island_top` wires the eleven approved components to each other.
+`island_composed_directed` drives fragments in and requires **every block's
+counter to have moved** on the way out. Final: **64 in, 64 out, 0 ID errors,
+11/11 checks.**
+
+Getting there took four fixes, each hidden behind the last:
+
+1. **Harness.** The fill model served one halfword where `zhao_texture_cache_pipe`
+   counts eight beats per line (`HW_PL = LINE_BYTES/2`). Reported as
+   `cache miss 1, dispatch 0`.
+2. **AUX token width.** FRAGROB validates a response against the slot *and*
+   generation it issued — `$clog2(DEPTH)+GENW` = 12 bits — while `AUX_PIPE`'s
+   `TOKW` defaults to 8, so the identity could not round-trip.
+3. **`sheet_tok_o` left unconnected.** AUX_PIPE matches a sheet response to its
+   request by that token, so the responder had nothing to echo. **This stalled
+   the entire island**, because FRAGROB retires in allocation order and one aux
+   fragment at the head blocks everything behind it. The visible state was
+   `plan 48 | cache 48 | dispatch 48 | bilerp 48 | retired 0` — a perfectly
+   healthy sample path and zero output.
+4. **The recipe was not travelling with the fragment.** The combiner's
+   recipe/weight/sample_count came from the island's *input ports*; with a
+   reorder buffer in between, the fragment arriving and the fragment retiring
+   are different fragments by construction.
+
+**Number 4 is the one worth keeping.** It would have passed every handshake test
+ever written — counters move, fragments retire, throughput is nominal. A wrong
+recipe is a wrong picture, not a stall. Only a composed test that cared about
+the *result* could see it, which is precisely why the roadmap demands a test
+that draws through the added hardware rather than one that checks the added
+hardware is present.
+
+**Separately, found while writing the top:** FRAGROB banks all three sample
+results (`res_rgb_m [3][DEPTH]`) and its retire read was `res_rgb_m[0]` with no
+reader for banks 1 and 2 — the *"returns sample 0 for every recipe"* fault
+`MATERIAL.RESOLVE.md` attributes to the surviving TEXJOIN, living one block
+earlier in the chain. Fixed by exposing `o_s_rgb_o[3]`/`o_s_a_o[3]`.
+
+**And the near miss.** The first draft of the top held two past retirements in a
+shift register and called it a sample bank, because FRAGROB appeared to expose
+one colour. That version would have synthesised, fitted, reported an ALM count,
+and blended every fragment with its two predecessors while calling it
+three-sample material.
+
+Three seams remain, named at their sites: texel-to-channel extraction does one
+channel of three; per-sample coordinates are not varied; and the response class
+rides the top two bits of the source id because `CACHE_PIPE` has no class lane —
+a real constraint on the id space that was nowhere written down.
+
+Full evidence: `reports/G1D-COMPOSED-ISLAND-20260905.md`.
