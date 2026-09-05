@@ -317,6 +317,33 @@ module tb_zhao_shell (
   input  logic signed [31:0] asm_vtx_x_i [4],
   input  logic signed [31:0] asm_vtx_y_i [4],
   input  logic signed [31:0] asm_vtx_z_i [4],
+  // ---- TREAD 7: GEOM.VDECODE ------------------------------------------------
+  // The bench stops supplying DECODED coordinates and supplies the 32-byte
+  // RECORDS they came from. `zhao_geom_vdecode` turns bytes into the vertex,
+  // and the table above stops being an input to the drawing path.
+  //
+  // WHAT THIS TREAD DELIBERATELY DOES NOT PROVE, stated here so the step is not
+  // read as more than it is:
+  //
+  //   * THE TRANSFORM. A record holds a MODEL-space position; the table it
+  //     replaces held CLIP-space. There is no transform block in this shell, so
+  //     the test authors records whose positions ARE the clip-space values and
+  //     the transform is IDENTITY BY CONSTRUCTION. That is the same device step
+  //     6 used when it answered the cull with a constant VISIBLE: hold the
+  //     neighbouring stage at a known value so the tread under test is the only
+  //     thing that can fail.
+  //   * THE BATCH ENGINE. zhao_geom_vdecode's own header says it is the record
+  //     leaf and not GEOM.VDECODE's batch engine -- vertex_count, addressing
+  //     across burst boundaries, and the all-or-nothing batch rule are not
+  //     here. The ledger entry stays SPECIFIED; this tread must not be read as
+  //     advancing it.
+  //   * ANY FORMAT BUT 0. Formats 1 and 2 are bake-off gated.
+  input  logic               vdecode_mode_i,
+  input  logic [255:0]       vd_rec_i [4],
+  output logic               dbg_vd_have_o,
+  output logic [31:0]        dbg_vd_vertices_o,
+  output logic [31:0]        dbg_vd_format_bad_o,
+  output logic               dbg_vd_refused_o,
   input  logic               project_mode_i,
   input  logic               proj_cfg_we_i,
   input  logic               proj_cfg_view_i,
@@ -812,8 +839,78 @@ module tb_zhao_shell (
   logic [2:0]         pj_behind_r;
   logic               pj_tri_ready;
 
+  // ==========================================================================
+  // TREAD 7: the four records, decoded into the table PROJECT reads
+  // ==========================================================================
+  // One record at a time through the leaf decoder, latched by arrival order.
+  // `vd_have_r` gates the drawing path so no vertex is pushed from a
+  // half-filled table -- the failure that would otherwise look like a
+  // projection bug.
+  logic [2:0]         vd_wp_r;      // records pushed, 0..4
+  logic [2:0]         vd_rp_r;      // records decoded, 0..4
+  logic               vd_have_r;
+  logic signed [31:0] vd_x_r [4];
+  logic signed [31:0] vd_y_r [4];
+  logic signed [31:0] vd_z_r [4];
+
+  logic               vd_v_valid, vd_v_ready, vd_d_valid;
+  logic signed [31:0] vd_d_x, vd_d_y, vd_d_z;
+  logic               vd_d_refused;
+
+  assign vd_v_valid = vdecode_mode_i && render_tri_valid_i && (vd_wp_r < 3'd4);
+  // OBSERVATION IS NOT THE GATE. The gate must clear when the triangle goes
+  // away, or the next one would draw from a stale table -- but a test reading
+  // it after the frame drains then sees 0 and calls a working decode a failure,
+  // which is exactly what happened on this tread's first run. So the reported
+  // flag is STICKY: did this table ever fill, cleared only by reset.
+  logic vd_have_seen_r;
+  assign dbg_vd_have_o = vd_have_seen_r;
+
+  zhao_geom_vdecode #(.SRCW(16)) u_vdecode (
+      .clk(gpu_clk), .rst_n(rst_n),
+      .v_valid_i(vd_v_valid), .v_ready_o(vd_v_ready),
+      .v_bytes_i(vd_rec_i[vd_wp_r[1:0]]),
+      .v_format_i(3'd0), .v_src_id_i({13'd0, vd_wp_r}),
+      .d_valid_o(vd_d_valid), .d_ready_i(1'b1),
+      .d_x_o(vd_d_x), .d_y_o(vd_d_y), .d_z_o(vd_d_z),
+      .d_nx_o(), .d_ny_o(), .d_nz_o(),
+      .d_w0_o(), .d_rigid_o(), .d_u_o(), .d_v_o(),
+      .d_bone0_o(), .d_bone1_o(), .d_src_id_o(),
+      .d_refused_o(vd_d_refused),
+      .d_reserved_nz_o(), .d_w0_illegal_o(), .d_format_bad_o(),
+      .vertices_o(dbg_vd_vertices_o), .reserved_nz_o(), .w0_illegal_o(),
+      .format_bad_o(dbg_vd_format_bad_o));
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      vd_wp_r <= 3'd0;
+      vd_rp_r <= 3'd0;
+      vd_have_r <= 1'b0;
+      vd_have_seen_r <= 1'b0;
+      dbg_vd_refused_o <= 1'b0;
+    end else if (!render_tri_valid_i) begin
+      vd_wp_r <= 3'd0;
+      vd_rp_r <= 3'd0;
+      vd_have_r <= 1'b0;
+    end else begin
+      if (vd_v_valid && vd_v_ready) vd_wp_r <= vd_wp_r + 3'd1;
+      if (vd_d_valid) begin
+        vd_x_r[vd_rp_r[1:0]] <= vd_d_x;
+        vd_y_r[vd_rp_r[1:0]] <= vd_d_y;
+        vd_z_r[vd_rp_r[1:0]] <= vd_d_z;
+        vd_rp_r <= vd_rp_r + 3'd1;
+        if (vd_rp_r == 3'd3) begin
+          vd_have_r      <= 1'b1;
+          vd_have_seen_r <= 1'b1;
+        end
+        if (vd_d_refused) dbg_vd_refused_o <= 1'b1;
+      end
+    end
+  end
+
   // In ASSEMBLE mode the vertex pushed is the one GEOM.ASSEMBLE named, looked
-  // up in the bench's table. Otherwise it is the bench's own A/B/C.
+  // up in the bench's table -- or, in VDECODE mode, in the table this shell
+  // decoded for itself. Otherwise it is the bench's own A/B/C.
   logic [1:0] pj_sel;
   always_comb begin
     pj_sel = pj_idx_r;
@@ -825,9 +922,9 @@ module tb_zhao_shell (
         2'd1:    pj_sel = asm_v_r[1][1:0];
         default: pj_sel = asm_v_r[2][1:0];
       endcase
-      pj_vx = asm_vtx_x_i[pj_sel];
-      pj_vy = asm_vtx_y_i[pj_sel];
-      pj_vz = asm_vtx_z_i[pj_sel];
+      pj_vx = vdecode_mode_i ? vd_x_r[pj_sel] : asm_vtx_x_i[pj_sel];
+      pj_vy = vdecode_mode_i ? vd_y_r[pj_sel] : asm_vtx_y_i[pj_sel];
+      pj_vz = vdecode_mode_i ? vd_z_r[pj_sel] : asm_vtx_z_i[pj_sel];
     end else begin
       case (pj_idx_r)
         2'd0:    begin pj_vx = proj_ax_i; pj_vy = proj_ay_i; pj_vz = proj_az_i; end
@@ -840,7 +937,8 @@ module tb_zhao_shell (
   // Push while the bench is offering a triangle and fewer than three vertices
   // have been sent.
   assign pj_v_valid = render_tri_valid_i & project_mode_i & (pj_idx_r < 2'd3)
-                    & (~assemble_mode_i | asm_have_r);
+                    & (~assemble_mode_i | asm_have_r)
+                    & (~vdecode_mode_i | vd_have_r);
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
