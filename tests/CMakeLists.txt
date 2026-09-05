@@ -4986,11 +4986,23 @@ verilate(test_shell_setup_path_directed
 # the PRECOMPUTED pass draws 3,328 non-zero words -- exactly what
 # shell_draw_directed measures, so the bench is correct.
 #
-# The SETUP pass draws NOTHING, and the test says why: its triangle is never
-# accepted. `zhao_geom_setup`'s tri_ready_o does not assert in the composed
-# shell, so the offer times out. That is a wiring or handshake fault in the D22
-# step-1 composition, not a bench problem, and it is exactly what this test was
-# built to expose.
+# The SETUP pass draws NOTHING, and three iterations of this test have narrowed
+# why to one specific place. Probes on the composed signals show:
+#
+#   mode=1 after offer: took=1  su_ready=0  su_valid=1  shell_ready=0
+#
+# So the triangle IS accepted by GEOM.SETUP (took=1), SETUP DOES produce a
+# result (su_valid=1), and SETUP is then STALLED (su_ready=0) because the
+# shell's render-ready never asserts to consume it.
+#
+# Two earlier hypotheses were tested and eliminated by measurement rather than
+# argument: it is not SETUP refusing the input (tri_ready_o is 1 at reset, and
+# took=1), and it is not the frame closing too early (draining 32 cycles before
+# render_frame_end changed su_valid from 0 to 1 but not the outcome).
+#
+# What remains is the shell's acceptance of a triangle arriving on a LATER
+# cycle than the offer. In mode 0 the triangle enters during the offer itself;
+# in setup mode it arrives three stages later, and the shell does not take it.
 #
 # Registering it red would redden the lane; registering it green would mean
 # deleting the anti-vacuity guard that found this. It stays buildable and

@@ -163,6 +163,11 @@ module tb_zhao_shell (
   // the two pictures compared, which is the only evidence that actually proves
   // the newly connected hardware draws.
   input  logic               setup_mode_i,
+  // Observability for the D22 step-1 handshake. Without these, "the triangle
+  // was not accepted" is a symptom with no visible cause.
+  output logic               dbg_su_tri_ready_o,
+  output logic               dbg_su_out_valid_o,
+  output logic               dbg_shell_tri_ready_o,
   input  logic signed [47:0] setup_area2_i,
   input  logic               render_tri_valid_i,
   output logic               render_tri_ready_o,
@@ -311,6 +316,9 @@ module tb_zhao_shell (
   // bench's ready comes from SETUP's input side; otherwise everything is
   // exactly as before.
   assign render_tri_ready_o = setup_mode_i ? su_tri_ready : shell_tri_ready;
+  assign dbg_su_tri_ready_o    = su_tri_ready;
+  assign dbg_su_out_valid_o    = su_out_valid;
+  assign dbg_shell_tri_ready_o = shell_tri_ready;
 
   wire               m_tri_valid = setup_mode_i ? su_out_valid : render_tri_valid_i;
   wire signed [22:0] m_kx0 = setup_mode_i ? su_kx0 : render_kx0_i;
