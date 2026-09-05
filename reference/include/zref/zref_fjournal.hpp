@@ -50,7 +50,7 @@ enum class SlotState : uint8_t {
   kFree = 0,
   kLoading = 1,
   kResident = 2,
-  kEvicting = 3,   // F is being journalled; the slot is not reusable yet
+  kEvicting = 3,  // F is being journalled; the slot is not reusable yet
 };
 
 enum class Refusal : uint8_t {
@@ -76,9 +76,9 @@ struct Slot {
   SlotState state = SlotState::kFree;
   uint32_t page_id = 0;
   bool dirty_f = false;
-  bool f_journalled = false;   // copy issued
-  bool f_acked = false;        // acknowledgement received
-  std::vector<int16_t> f;      // the sheet itself
+  bool f_journalled = false;  // copy issued
+  bool f_acked = false;       // acknowledgement received
+  std::vector<int16_t> f;     // the sheet itself
 };
 
 // The HPS side. It is a mirror ONLY for F, because F is the only layer with no

@@ -77,10 +77,8 @@ void test_every_field_survives_at_its_own_offset() {
   check(r.has_record, "a resident id resolves", 1, r.has_record ? 1 : 0);
   check(mat::sample_count_of(r.record) == 3, "sample_count unpacks from control", 3,
         mat::sample_count_of(r.record));
-  check(mat::recipe_of(r.record) == 4, "recipe unpacks from control", 4,
-        mat::recipe_of(r.record));
-  check(r.record.recipe_weight == 200, "recipe_weight survives", 200,
-        r.record.recipe_weight);
+  check(mat::recipe_of(r.record) == 4, "recipe unpacks from control", 4, mat::recipe_of(r.record));
+  check(r.record.recipe_weight == 200, "recipe_weight survives", 200, r.record.recipe_weight);
   check(r.record.flags == 0x5, "flags survive", 0x5, r.record.flags);
   check(r.record.sample1.binding_slot == 22, "sample1 binding_slot survives", 22,
         r.record.sample1.binding_slot);
@@ -102,10 +100,9 @@ void test_id_past_the_count_is_refused_not_clamped() {
   mat::Ledger L;
 
   const mat::Result at = R.resolve({handle32(1, 1), 4, 0}, &L);  // count is 4
-  check(at.status == mat::Status::kRefusedId, "material_id AT the count is refused",
-        2, static_cast<long long>(at.status));
-  check(!at.has_record, "and returns no record -- not material 0", 0,
-        at.has_record ? 1 : 0);
+  check(at.status == mat::Status::kRefusedId, "material_id AT the count is refused", 2,
+        static_cast<long long>(at.status));
+  check(!at.has_record, "and returns no record -- not material 0", 0, at.has_record ? 1 : 0);
   check(L.refused_id == 1, "and is counted", 1, L.refused_id);
 
   const mat::Result far = R.resolve({handle32(1, 1), 9999, 0}, &L);
@@ -149,14 +146,13 @@ void test_hit_and_miss_return_identical_records() {
   check(second.status == mat::Status::kHit, "the second HITS", 0,
         static_cast<long long>(second.status));
 
-  const bool same =
-      first.record.control == second.record.control &&
-      first.record.recipe_weight == second.record.recipe_weight &&
-      first.record.flags == second.record.flags &&
-      first.record.palette_base == second.record.palette_base &&
-      first.record.raster_state == second.record.raster_state &&
-      first.record.sample0.binding_slot == second.record.sample0.binding_slot &&
-      first.record.sample2.modes == second.record.sample2.modes;
+  const bool same = first.record.control == second.record.control &&
+                    first.record.recipe_weight == second.record.recipe_weight &&
+                    first.record.flags == second.record.flags &&
+                    first.record.palette_base == second.record.palette_base &&
+                    first.record.raster_state == second.record.raster_state &&
+                    first.record.sample0.binding_slot == second.record.sample0.binding_slot &&
+                    first.record.sample2.modes == second.record.sample2.modes;
   check(same, "and both return the IDENTICAL record", 1, same ? 1 : 0);
   check(L.hits == 1 && L.misses == 1, "one hit, one miss", 2, L.hits + L.misses);
 }
@@ -173,8 +169,8 @@ void test_a_resolve_after_republish_must_not_return_the_old_record() {
   const mat::Result before = R.resolve({handle32(9, 1), 2, 0}, &L);
   check(mat::recipe_of(before.record) == 1, "generation 1 gives recipe 1", 1,
         mat::recipe_of(before.record));
-  check(R.resolve({handle32(9, 1), 2, 0}, &L).status == mat::Status::kHit,
-        "and it is cached", 0, 0);
+  check(R.resolve({handle32(9, 1), 2, 0}, &L).status == mat::Status::kHit, "and it is cached", 0,
+        0);
 
   // Republish the SAME index at generation 2 with different contents. No flush
   // is performed, deliberately: D-3 says the tag makes old lines structurally
@@ -185,8 +181,7 @@ void test_a_resolve_after_republish_must_not_return_the_old_record() {
   check(after.status == mat::Status::kMiss,
         "a resolve after republish MISSES -- the old line cannot match", 1,
         static_cast<long long>(after.status));
-  check(mat::recipe_of(after.record) == 4,
-        "and returns the NEW record, not the cached old one", 4,
+  check(mat::recipe_of(after.record) == 4, "and returns the NEW record, not the cached old one", 4,
         mat::recipe_of(after.record));
 }
 
@@ -204,8 +199,7 @@ void test_a_non_resident_set_is_a_residency_fault() {
   // Right index, WRONG generation: also not resident. This is the stale-handle
   // case, and it must not silently resolve against the newer table.
   const mat::Result stale = R.resolve({handle32(3, 7), 0, 0}, &L);
-  check(stale.status == mat::Status::kNotResident,
-        "a stale generation is not resident either", 4,
+  check(stale.status == mat::Status::kNotResident, "a stale generation is not resident either", 4,
         static_cast<long long>(stale.status));
 }
 
@@ -220,8 +214,7 @@ int main() {
   test_a_non_resident_set_is_a_residency_fault();
 
   if (g_failed) {
-    std::printf("[material_resolve_directed] %d/%d checks FAILED\n", g_failed,
-                g_checks);
+    std::printf("[material_resolve_directed] %d/%d checks FAILED\n", g_failed, g_checks);
     return 1;
   }
   std::printf("[material_resolve_directed] %d checks passed\n", g_checks);

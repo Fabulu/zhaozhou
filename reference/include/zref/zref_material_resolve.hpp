@@ -47,11 +47,11 @@ namespace material {
 // The verdict. A resolve either produced a record or it did not, and the reason
 // is never "here is a guess".
 enum class Status : uint8_t {
-  kHit = 0,          // served from the cache
-  kMiss = 1,         // served from memory (a real fetch happened)
-  kRefusedId = 2,    // material_id past the set's count
-  kRefusedRecord = 3,// the stored record is malformed (sample_count > 3)
-  kNotResident = 4,  // the material_set handle names no resident table
+  kHit = 0,            // served from the cache
+  kMiss = 1,           // served from memory (a real fetch happened)
+  kRefusedId = 2,      // material_id past the set's count
+  kRefusedRecord = 3,  // the stored record is malformed (sample_count > 3)
+  kNotResident = 4,    // the material_set handle names no resident table
 };
 
 struct Request {
@@ -80,9 +80,9 @@ struct Ledger {
 // A resident material table: an immutable, indexed set of records plus the
 // 16-bit residency generation it was published under.
 struct Table {
-  uint32_t index = 0;        // handle index
-  uint16_t generation = 0;   // D-3 residency generation (16-bit, never wrapped
-                             // silently -- a wrap requires an epoch transition)
+  uint32_t index = 0;       // handle index
+  uint16_t generation = 0;  // D-3 residency generation (16-bit, never wrapped
+                            // silently -- a wrap requires an epoch transition)
   std::vector<zhao_abi::ZhMaterialRecord> records;
 };
 
@@ -160,8 +160,7 @@ class Resolver {
     const uint32_t idx = handle32 >> 8;
     const uint8_t gen8 = static_cast<uint8_t>(handle32 & 0xFFu);
     for (std::size_t i = tables_.size(); i-- > 0;) {
-      if (tables_[i].index == idx &&
-          static_cast<uint8_t>(tables_[i].generation & 0xFFu) == gen8)
+      if (tables_[i].index == idx && static_cast<uint8_t>(tables_[i].generation & 0xFFu) == gen8)
         return &tables_[i];
     }
     return nullptr;
@@ -185,8 +184,8 @@ class Resolver {
 
     const int line = static_cast<int>(q.material_id % kLines);
     // THE D-3 TAG: physical line tag AND residency generation. Both must match.
-    if (valid_[line] && tag_id_[line] == q.material_id &&
-        tag_index_[line] == t->index && tag_gen_[line] == t->generation) {
+    if (valid_[line] && tag_id_[line] == q.material_id && tag_index_[line] == t->index &&
+        tag_gen_[line] == t->generation) {
       out.status = Status::kHit;
       out.record = line_[line];
       out.has_record = true;

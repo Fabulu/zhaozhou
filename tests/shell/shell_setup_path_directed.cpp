@@ -90,8 +90,7 @@ ShellHarness::RenderTri from_bin_tri(const zhao_geom::BinTri& b) {
     t.ky[e] = b.s.e[e].ky;
     t.kc[e] = b.s.e[e].kc;
   }
-  t.tl = (uint8_t)((b.s.e[0].tl ? 1u : 0u) | (b.s.e[1].tl ? 2u : 0u) |
-                   (b.s.e[2].tl ? 4u : 0u));
+  t.tl = (uint8_t)((b.s.e[0].tl ? 1u : 0u) | (b.s.e[1].tl ? 2u : 0u) | (b.s.e[2].tl ? 4u : 0u));
   t.ax = b.ax;
   t.ay = b.ay;
   t.bx = b.bx;
@@ -107,9 +106,9 @@ ShellHarness::RenderTri from_bin_tri(const zhao_geom::BinTri& b) {
 }
 
 constexpr uint32_t kFbBase = 0;
-constexpr uint32_t kFbStride = 64 * 2;   // bytes per row
+constexpr uint32_t kFbStride = 64 * 2;  // bytes per row
 constexpr uint8_t kGridW = 4, kGridH = 4;
-constexpr uint32_t kWords = 64 * 64;     // words peeked back
+constexpr uint32_t kWords = 64 * 64;  // words peeked back
 
 // Draw the triangle once and return the slot's halfwords.
 //
@@ -179,8 +178,7 @@ std::vector<uint16_t> draw_once(bool setup_mode, bool* drew_ok) {
   if (lease_opens == 0) return std::vector<uint16_t>(kSlotHalfwords, 0);
 
   zhao_geom::BinTri b;
-  if (!the_triangle(kGridW, kGridH, &b))
-    return std::vector<uint16_t>(kSlotHalfwords, 0);
+  if (!the_triangle(kGridW, kGridH, &b)) return std::vector<uint16_t>(kSlotHalfwords, 0);
 
   // THE BOUNDARY. In setup mode the coefficients are not supplied; the bench
   // hands over vertices and the composed GEOM.SETUP computes them.
@@ -215,8 +213,7 @@ std::vector<uint16_t> draw_once(bool setup_mode, bool* drew_ok) {
       if (h.top.dbg_su_out_valid_o && h.top.dbg_shell_tri_ready_o) consumed = true;
       h.step();
     }
-    std::printf("    [setup] shell consumed SETUP's triangle: %d\n",
-                consumed ? 1 : 0);
+    std::printf("    [setup] shell consumed SETUP's triangle: %d\n", consumed ? 1 : 0);
   }
 
   h.render_frame_end();
@@ -270,7 +267,7 @@ int main(int argc, char** argv) {
         0, diff);
   if (diff) std::printf("  first differing word: %d\n", first);
 
-  std::printf("[shell_setup_path_directed] %d non-zero words drawn; %d checks %s\n",
-              nonzero_pre, g_checks, g_failed ? "FAILED" : "passed");
+  std::printf("[shell_setup_path_directed] %d non-zero words drawn; %d checks %s\n", nonzero_pre,
+              g_checks, g_failed ? "FAILED" : "passed");
   return g_failed ? 1 : 0;
 }

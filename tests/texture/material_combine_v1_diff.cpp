@@ -75,8 +75,7 @@ void tick(Dut& d) {
 // Keyed BY TAG on purpose: §15.6 says the combiner may finish fragments out of
 // allocation order, so an index-keyed collection would be testing the wrong
 // thing and would break as soon as the scheduler behaved correctly.
-std::map<uint16_t, Got> run_batch(const std::vector<Frag>& in,
-                                  uint32_t jobs_by_recipe[8] = nullptr,
+std::map<uint16_t, Got> run_batch(const std::vector<Frag>& in, uint32_t jobs_by_recipe[8] = nullptr,
                                   bool stall_consumer = false) {
   Dut d;
   d.rst_n = 0;
@@ -214,35 +213,28 @@ void test_every_recipe_matches_the_oracle() {
             "  first mismatch: tag %u recipe %u w=%u\n"
             "    s0 %3u %3u %3u %3u   s1 %3u %3u %3u %3u   s2 %3u %3u %3u %3u\n"
             "    want %3u %3u %3u %3u   got %3u %3u %3u %3u\n",
-            f.tag, f.recipe, f.weight, f.s[0].r, f.s[0].g, f.s[0].b, f.s[0].a,
-            f.s[1].r, f.s[1].g, f.s[1].b, f.s[1].a, f.s[2].r, f.s[2].g,
-            f.s[2].b, f.s[2].a, want.r, want.g, want.b, want.a, g.r, g.g, g.b,
-            g.a);
+            f.tag, f.recipe, f.weight, f.s[0].r, f.s[0].g, f.s[0].b, f.s[0].a, f.s[1].r, f.s[1].g,
+            f.s[1].b, f.s[1].a, f.s[2].r, f.s[2].g, f.s[2].b, f.s[2].a, want.r, want.g, want.b,
+            want.a, g.r, g.g, g.b, g.a);
       }
     }
   }
 
-  check(missing == 0, "every fragment retired -- none was lost in the scheduler",
-        0, missing);
-  check(mismatched == 0,
-        "every recipe's result matches zref::material::combine exactly", 0,
+  check(missing == 0, "every fragment retired -- none was lost in the scheduler", 0, missing);
+  check(mismatched == 0, "every recipe's result matches zref::material::combine exactly", 0,
         mismatched);
 
   // §15.4's counters. DETAIL_LIGHT must be the block's most expensive recipe,
   // because the entire two-lane capacity argument rests on that being true.
-  check(jobs[mat::kPassthru] == 0, "PASSTHRU issues no product jobs", 0,
-        jobs[mat::kPassthru]);
-  check(jobs[mat::kAddSat] == 0, "ADD_SAT issues no product jobs", 0,
-        jobs[mat::kAddSat]);
+  check(jobs[mat::kPassthru] == 0, "PASSTHRU issues no product jobs", 0, jobs[mat::kPassthru]);
+  check(jobs[mat::kAddSat] == 0, "ADD_SAT issues no product jobs", 0, jobs[mat::kAddSat]);
   check(jobs[mat::kTerrainDetailLight] == 200 * 6,
         "DETAIL_LIGHT issues six product jobs per fragment", 200 * 6,
         jobs[mat::kTerrainDetailLight]);
-  check(jobs[mat::kTerrainDetailMask] == 200 * 4,
-        "DETAIL_MASK issues four", 200 * 4, jobs[mat::kTerrainDetailMask]);
-  check(jobs[mat::kModulate] == 200 * 3, "MODULATE issues three", 200 * 3,
-        jobs[mat::kModulate]);
-  check(jobs[mat::kLerp] == 200 * 3, "LERP issues three", 200 * 3,
-        jobs[mat::kLerp]);
+  check(jobs[mat::kTerrainDetailMask] == 200 * 4, "DETAIL_MASK issues four", 200 * 4,
+        jobs[mat::kTerrainDetailMask]);
+  check(jobs[mat::kModulate] == 200 * 3, "MODULATE issues three", 200 * 3, jobs[mat::kModulate]);
+  check(jobs[mat::kLerp] == 200 * 3, "LERP issues three", 200 * 3, jobs[mat::kLerp]);
   check(jobs[mat::kTerrainDetailLight] > jobs[mat::kModulate],
         "and DETAIL_LIGHT really is the most expensive recipe -- the two-lane "
         "capacity argument depends on it",
@@ -305,8 +297,7 @@ void test_a_cheap_fragment_overtakes_an_expensive_one() {
     if (order.size() >= 2 && next >= batch.size()) break;
   }
 
-  check(order.size() >= 2, "both fragments retired", 2,
-        static_cast<long long>(order.size()));
+  check(order.size() >= 2, "both fragments retired", 2, static_cast<long long>(order.size()));
   if (order.size() >= 2) {
     check(order[0] == 0x2000,
           "the PASSTHRU retires BEFORE the DETAIL_LIGHT it was submitted "
@@ -331,8 +322,7 @@ void test_back_pressure_loses_nothing() {
     f.tag = static_cast<uint16_t>(0x300 + i);
     batch.push_back(f);
   }
-  const std::map<uint16_t, Got> got =
-      run_batch(batch, nullptr, /*stall_consumer=*/true);
+  const std::map<uint16_t, Got> got = run_batch(batch, nullptr, /*stall_consumer=*/true);
 
   int missing = 0, mismatched = 0;
   for (const Frag& f : batch) {
@@ -342,8 +332,8 @@ void test_back_pressure_loses_nothing() {
       continue;
     }
     const mat::Out want = oracle(f);
-    if (it->second.r != want.r || it->second.g != want.g ||
-        it->second.b != want.b || it->second.a != want.a)
+    if (it->second.r != want.r || it->second.g != want.g || it->second.b != want.b ||
+        it->second.a != want.a)
       ++mismatched;
   }
   check(missing == 0, "a stalling consumer loses no fragment", 0, missing);
@@ -377,8 +367,8 @@ void test_refusals_retire_rather_than_vanish() {
         "both malformed fragments retired with their tags", 2,
         static_cast<long long>(got.count(0x4001) + got.count(0x4002)));
   if (got.count(0x4001)) {
-    check(got.at(0x4001).refused, "the three-sample recipe given two is refused",
-          1, got.at(0x4001).refused ? 1 : 0);
+    check(got.at(0x4001).refused, "the three-sample recipe given two is refused", 1,
+          got.at(0x4001).refused ? 1 : 0);
   }
   if (got.count(0x4003)) {
     const Got& g = got.at(0x4003);
@@ -399,8 +389,7 @@ int main(int argc, char** argv) {
   test_refusals_retire_rather_than_vanish();
 
   if (g_failed) {
-    std::printf("[material_combine_v1_diff] %d/%d checks FAILED\n", g_failed,
-                g_checks);
+    std::printf("[material_combine_v1_diff] %d/%d checks FAILED\n", g_failed, g_checks);
     return 1;
   }
   std::printf("[material_combine_v1_diff] %d checks passed\n", g_checks);

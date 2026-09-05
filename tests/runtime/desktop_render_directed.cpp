@@ -57,8 +57,8 @@ void check(bool ok, const char* what, long long expected, long long got) {
 
 // The host's own numbers, restated here rather than shared, so a silent change
 // on either side shows up as a failure instead of tracking along.
-constexpr int32_t kScale = 2048;     // ortho_topdown: world +-32 m across NDC
-constexpr int32_t kMarkerHalf = 8;   // screen-space px half-extent
+constexpr int32_t kScale = 2048;           // ortho_topdown: world +-32 m across NDC
+constexpr int32_t kMarkerHalf = 8;         // screen-space px half-extent
 constexpr uint8_t kScreenSpaceSize = 0x2;  // DrawForm flags b1
 
 zcon::Handle h_form{0, 1, zcon::ResourceKind::kMeshStream};
@@ -77,8 +77,8 @@ zref::render::FormPattern red_marker() {
 
 zcon::ViewSpec top_down_view() {
   zcon::ViewSpec v;
-  v.m[0] = kScale;    // ndc.x <- world.x
-  v.m[6] = kScale;    // ndc.y <- world.z
+  v.m[0] = kScale;  // ndc.x <- world.x
+  v.m[6] = kScale;  // ndc.y <- world.z
   v.m[10] = 1 << 16;
   v.m[15] = 1 << 16;  // w = 1, orthographic
   return v;
@@ -97,8 +97,7 @@ Spot render_marker_at(int32_t wx, int32_t wz, bool key_correctly = true,
   const uint32_t fk = key_correctly ? zcon::detail::handle32(h_form) : h_form.index;
   const uint32_t xk = key_correctly ? zcon::detail::handle32(h_xform) : h_xform.index;
   res.forms.emplace_back(fk, red_marker());
-  res.transforms.emplace_back(
-      xk, zref::render::FormTransform{wx, 0, wz, kMarkerHalf << 16});
+  res.transforms.emplace_back(xk, zref::render::FormTransform{wx, 0, wz, kMarkerHalf << 16});
 
   zcon::FramePlan plan;
   plan.frame_id = 1;
@@ -115,8 +114,7 @@ Spot render_marker_at(int32_t wx, int32_t wz, bool key_correctly = true,
 
   zref::render::SoftwareRenderer r;
   zref::render::RenderCanvas canvas;
-  const zref::render::RenderResult rr =
-      r.render_frame(zcon::build_frame(plan), 0, canvas, res);
+  const zref::render::RenderResult rr = r.render_frame(zcon::build_frame(plan), 0, canvas, res);
   if (misses_out) *misses_out = rr.resource_misses;
 
   const zhao_abi::video_mode m = r.latched_mode();
@@ -161,8 +159,7 @@ void test_a_marker_lands_where_the_projection_says() {
   // +12.06 m in Z drives SCREEN Y, not world y: ortho_topdown reads screen y
   // from world z. A version that read world y would put this back at centre.
   const Spot d = render_marker_at(0, (12 << 16) + (4 << 12));
-  check(d.cy > 160 && d.cy < 170, "world Z drives SCREEN Y (top-down view)",
-        165, d.cy);
+  check(d.cy > 160 && d.cy < 170, "world Z drives SCREEN Y (top-down view)", 165, d.cy);
   check(d.cx >= 191 && d.cx <= 192, "and x is unchanged", 192, d.cx);
 }
 
@@ -172,10 +169,8 @@ void test_the_picture_moves_when_the_position_does() {
   // 400 ticks while every counter reported healthy work.
   const Spot a = render_marker_at(-8 << 16, 0);
   const Spot b = render_marker_at(8 << 16, 0);
-  check(a.cx != b.cx, "distinct world positions give distinct pixels",
-        1, a.cx != b.cx ? 1 : 0);
-  check(b.cx - a.cx == 96,
-        "and the displacement matches the scale: 16 m at 6 px/m", 96,
+  check(a.cx != b.cx, "distinct world positions give distinct pixels", 1, a.cx != b.cx ? 1 : 0);
+  check(b.cx - a.cx == 96, "and the displacement matches the scale: 16 m at 6 px/m", 96,
         b.cx - a.cx);
 }
 
@@ -184,8 +179,7 @@ void test_a_bare_index_key_misses_and_draws_nothing() {
   // the only evidence is the miss counter and the empty canvas.
   uint32_t misses = 0;
   const Spot s = render_marker_at(0, 0, /*key_correctly=*/false, &misses);
-  check(misses == 2,
-        "keying the table by the bare index misses BOTH form and transform", 2,
+  check(misses == 2, "keying the table by the bare index misses BOTH form and transform", 2,
         misses);
   check(s.n == 0, "and nothing is drawn -- silently", 0, s.n);
 
@@ -200,9 +194,8 @@ void test_a_bare_index_key_misses_and_draws_nothing() {
 void test_the_marker_keeps_its_colour_through_rgb565() {
   zref::render::RenderResources res;
   res.forms.emplace_back(zcon::detail::handle32(h_form), red_marker());
-  res.transforms.emplace_back(
-      zcon::detail::handle32(h_xform),
-      zref::render::FormTransform{0, 0, 0, kMarkerHalf << 16});
+  res.transforms.emplace_back(zcon::detail::handle32(h_xform),
+                              zref::render::FormTransform{0, 0, 0, kMarkerHalf << 16});
   zcon::FramePlan plan;
   plan.frame_id = 1;
   plan.sequence = 1;
@@ -243,8 +236,7 @@ int main() {
   test_the_marker_keeps_its_colour_through_rgb565();
 
   if (g_failed) {
-    std::printf("[desktop_render_directed] %d/%d checks FAILED\n", g_failed,
-                g_checks);
+    std::printf("[desktop_render_directed] %d/%d checks FAILED\n", g_failed, g_checks);
     return 1;
   }
   std::printf("[desktop_render_directed] %d checks passed\n", g_checks);

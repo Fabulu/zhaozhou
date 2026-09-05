@@ -34,8 +34,7 @@ namespace ter = zref::terrain;
 
 std::vector<int16_t> flat(std::size_t n) { return std::vector<int16_t>(n, 0); }
 
-void load_resident(ter::Streamer& S, ter::Journal& J, int slot, uint32_t page,
-                   ter::Ledger* L) {
+void load_resident(ter::Streamer& S, ter::Journal& J, int slot, uint32_t page, ter::Ledger* L) {
   S.begin_load(slot, page, L);
   S.loader_write(slot, flat(16), L);
   S.finish_load(slot, J, L);
@@ -51,10 +50,8 @@ void test_a_clean_slot_evicts_without_journalling() {
   check(S.slot(0).state == ter::SlotState::kFree,
         "a CLEAN slot frees immediately -- B and D are reproducible", 0,
         static_cast<long long>(S.slot(0).state));
-  check(J.size() == 0, "and nothing was journalled", 0,
-        static_cast<long long>(J.size()));
-  check(L.journalled == 0, "no journal traffic for clean evictions", 0,
-        L.journalled);
+  check(J.size() == 0, "and nothing was journalled", 0, static_cast<long long>(J.size()));
+  check(L.journalled == 0, "no journal traffic for clean evictions", 0, L.journalled);
 }
 
 void test_a_dirty_slot_is_not_reusable_until_acknowledged() {
@@ -63,8 +60,7 @@ void test_a_dirty_slot_is_not_reusable_until_acknowledged() {
   ter::Ledger L;
   load_resident(S, J, 0, 100, &L);
   S.deform(0, 3, -50);
-  check(S.slot(0).dirty_f, "deformation marks F dirty", 1,
-        S.slot(0).dirty_f ? 1 : 0);
+  check(S.slot(0).dirty_f, "deformation marks F dirty", 1, S.slot(0).dirty_f ? 1 : 0);
 
   // THE BARRIER, first half: without journalling, LOADING is refused.
   const ter::Refusal r1 = S.begin_load(0, 200, &L);
@@ -75,12 +71,10 @@ void test_a_dirty_slot_is_not_reusable_until_acknowledged() {
 
   // Journal it. The slot is STILL not reusable -- the ACK has not arrived.
   S.begin_evict(0, &J, &L);
-  check(S.slot(0).state == ter::SlotState::kEvicting,
-        "journalling moves it to EVICTING, not FREE", 3,
-        static_cast<long long>(S.slot(0).state));
+  check(S.slot(0).state == ter::SlotState::kEvicting, "journalling moves it to EVICTING, not FREE",
+        3, static_cast<long long>(S.slot(0).state));
   const ter::Refusal r2 = S.begin_load(0, 200, &L);
-  check(r2 == ter::Refusal::kAwaitingAck,
-        "and LOADING is still refused while awaiting the ACK", 2,
+  check(r2 == ter::Refusal::kAwaitingAck, "and LOADING is still refused while awaiting the ACK", 2,
         static_cast<long long>(r2));
   check(L.refused_awaiting_ack == 1, "counted", 1, L.refused_awaiting_ack);
 
@@ -88,8 +82,7 @@ void test_a_dirty_slot_is_not_reusable_until_acknowledged() {
   S.ack(0, &L);
   check(S.slot(0).state == ter::SlotState::kFree, "the ACK frees the slot", 0,
         static_cast<long long>(S.slot(0).state));
-  check(S.begin_load(0, 200, &L) == ter::Refusal::kNone,
-        "and LOADING is finally permitted", 0, 0);
+  check(S.begin_load(0, 200, &L) == ter::Refusal::kNone, "and LOADING is finally permitted", 0, 0);
 }
 
 void test_the_loader_may_write_only_a_loading_slot() {
@@ -100,17 +93,14 @@ void test_the_loader_may_write_only_a_loading_slot() {
 
   // RESIDENT is not LOADING. Deny-by-default with state-aware permissions.
   const ter::Refusal r = S.loader_write(0, flat(16), &L);
-  check(r == ter::Refusal::kWriteToNonLoadingSlot,
-        "the loader may not write a RESIDENT slot", 3,
+  check(r == ter::Refusal::kWriteToNonLoadingSlot, "the loader may not write a RESIDENT slot", 3,
         static_cast<long long>(r));
-  check(L.refused_write_non_loading == 1, "counted", 1,
-        L.refused_write_non_loading);
+  check(L.refused_write_non_loading == 1, "counted", 1, L.refused_write_non_loading);
 
   S.begin_evict(0, &J, &L);  // clean -> free
-  check(S.loader_write(0, flat(16), &L) == ter::Refusal::kWriteToNonLoadingSlot,
-        "nor a FREE one", 3, 3);
-  check(L.refused_write_non_loading == 2, "counted again", 2,
-        L.refused_write_non_loading);
+  check(S.loader_write(0, flat(16), &L) == ter::Refusal::kWriteToNonLoadingSlot, "nor a FREE one",
+        3, 3);
+  check(L.refused_write_non_loading == 2, "counted again", 2, L.refused_write_non_loading);
 }
 
 // ---------------------------------------------------------------------------
@@ -135,20 +125,17 @@ void test_ground_the_player_destroyed_survives_eviction_and_return() {
   S.begin_evict(0, &J, &L);
   S.ack(0, &L);
   load_resident(S, J, 0, 200, &L);
-  check(S.slot(0).page_id == 200, "the slot now holds another page", 200,
-        S.slot(0).page_id);
-  check(S.slot(0).f[3] == 0, "whose ground is its own, and flat", 0,
-        S.slot(0).f[3]);
+  check(S.slot(0).page_id == 200, "the slot now holds another page", 200, S.slot(0).page_id);
+  check(S.slot(0).f[3] == 0, "whose ground is its own, and flat", 0, S.slot(0).f[3]);
 
   // Travel back.
   S.begin_evict(0, &J, &L);
   S.ack(0, &L);
   S.begin_load(0, 100, &L);
-  S.loader_write(0, flat(16), &L);   // the loader brings a flat sheet...
-  S.finish_load(0, J, &L);           // ...and the journal overwrites it with F
+  S.loader_write(0, flat(16), &L);  // the loader brings a flat sheet...
+  S.finish_load(0, J, &L);          // ...and the journal overwrites it with F
 
-  check(S.slot(0).f[3] == -50,
-        "THE CRATER IS STILL THERE after eviction and return", -50,
+  check(S.slot(0).f[3] == -50, "THE CRATER IS STILL THERE after eviction and return", -50,
         S.slot(0).f[3]);
   check(S.slot(0).f[4] == -30, "and so is the rest of it", -30, S.slot(0).f[4]);
   check(L.f_reloaded >= 1, "F was reloaded from the journal, not regenerated", 1,
@@ -197,8 +184,7 @@ void test_two_pages_keep_separate_craters() {
   S.loader_write(0, flat(16), &L);
   S.finish_load(0, J, &L);
   check(S.slot(0).f[1] == -22, "and page 20 keeps its own", -22, S.slot(0).f[1]);
-  check(J.size() == 2, "two journal entries, one per page", 2,
-        static_cast<long long>(J.size()));
+  check(J.size() == 2, "two journal entries, one per page", 2, static_cast<long long>(J.size()));
 }
 
 }  // namespace

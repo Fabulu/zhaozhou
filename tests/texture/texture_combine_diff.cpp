@@ -89,8 +89,8 @@ struct Stim {
 // Push one fragment through and return the retired beat. The block is II=1 with
 // one register stage, so a handful of cycles is ample; the loop bound is a
 // guard against a hang becoming a silent pass.
-bool drive(Vzhao_texture_combine& dut, const Stim& t, uint32_t* rgb, uint8_t* a,
-           uint16_t* tag, bool* refused) {
+bool drive(Vzhao_texture_combine& dut, const Stim& t, uint32_t* rgb, uint8_t* a, uint16_t* tag,
+           bool* refused) {
   dut.f_valid_i = 1;
   dut.f_sample_count_i = t.count;
   dut.f_recipe_i = t.recipe;
@@ -171,9 +171,7 @@ int main(int argc, char** argv) {
     // refusal counters compare cleanly and the check still means something.
     {
       const uint32_t pick = rng.next() % (kRetiredBlockRecipeLimit + 1u);
-      t.recipe = (pick == kRetiredBlockRecipeLimit)
-                     ? uint8_t{255}
-                     : static_cast<uint8_t>(pick);
+      t.recipe = (pick == kRetiredBlockRecipeLimit) ? uint8_t{255} : static_cast<uint8_t>(pick);
     }
     t.weight = rng.byte();
     t.count = static_cast<uint8_t>(rng.next() % 4u);  // 0..3
@@ -205,8 +203,7 @@ int main(int argc, char** argv) {
       continue;
     }
 
-    const uint32_t want_rgb =
-        (uint32_t(want.r) << 16) | (uint32_t(want.g) << 8) | want.b;
+    const uint32_t want_rgb = (uint32_t(want.r) << 16) | (uint32_t(want.g) << 8) | want.b;
     if (rgb != want_rgb) ++mismatch_rgb;
     if (a != want.a) ++mismatch_a;
     if (tag != want.frag_tag) ++mismatch_tag;
@@ -226,8 +223,7 @@ int main(int argc, char** argv) {
   check(mismatch_rgb == 0, "RGB matches the oracle on every fragment", 0, mismatch_rgb);
   check(mismatch_a == 0, "alpha matches the oracle on every fragment", 0, mismatch_a);
   check(mismatch_tag == 0, "frag_tag rides through untouched", 0, mismatch_tag);
-  check(mismatch_refused == 0, "the refusal flag agrees with the oracle", 0,
-        mismatch_refused);
+  check(mismatch_refused == 0, "the refusal flag agrees with the oracle", 0, mismatch_refused);
 
   // ---- coverage guard ------------------------------------------------------
   int unreached = 0;
@@ -251,24 +247,23 @@ int main(int argc, char** argv) {
   // ---- the RTL's own counters agree with the oracle's -----------------------
   dut.eval();
   check(dut.refused_recipe_o == oracle_ledger.refused_unknown_recipe,
-        "RTL unknown-recipe count matches the oracle",
-        oracle_ledger.refused_unknown_recipe, dut.refused_recipe_o);
+        "RTL unknown-recipe count matches the oracle", oracle_ledger.refused_unknown_recipe,
+        dut.refused_recipe_o);
   check(dut.refused_missing_o == oracle_ledger.refused_missing_sample,
-        "RTL missing-sample count matches the oracle",
-        oracle_ledger.refused_missing_sample, dut.refused_missing_o);
+        "RTL missing-sample count matches the oracle", oracle_ledger.refused_missing_sample,
+        dut.refused_missing_o);
   check(dut.saturated_add_o == oracle_ledger.saturated_add,
-        "RTL ADD_SAT saturation count matches the oracle",
-        oracle_ledger.saturated_add, dut.saturated_add_o);
+        "RTL ADD_SAT saturation count matches the oracle", oracle_ledger.saturated_add,
+        dut.saturated_add_o);
   check(dut.saturated_mul2x_o == oracle_ledger.saturated_mul2x,
-        "RTL MODULATE2X saturation count matches the oracle",
-        oracle_ledger.saturated_mul2x, dut.saturated_mul2x_o);
+        "RTL MODULATE2X saturation count matches the oracle", oracle_ledger.saturated_mul2x,
+        dut.saturated_mul2x_o);
 
   std::printf(
       "[texture_combine_diff] %d fragments; recipes %d/%d/%d/%d/%d/%d, "
       "untextured %d, refused %d+%d\n",
-      kN, seen_recipe[0], seen_recipe[1], seen_recipe[2], seen_recipe[3],
-      seen_recipe[4], seen_recipe[5], seen_untextured, seen_refuse_unknown,
-      seen_refuse_missing);
+      kN, seen_recipe[0], seen_recipe[1], seen_recipe[2], seen_recipe[3], seen_recipe[4],
+      seen_recipe[5], seen_untextured, seen_refuse_unknown, seen_refuse_missing);
 
   if (g_failed) {
     std::printf("[texture_combine_diff] %d/%d checks FAILED\n", g_failed, g_checks);

@@ -62,9 +62,9 @@ enum class Kind : uint8_t { kTexturePage = 10, kMaterialSet = 11, kMeshStream = 
 
 enum class Outcome : uint8_t {
   kPublished = 0,
-  kRefusedValidation = 1,   // upload_verdict said no; see `verdict`
-  kRefusedNoStorage = 2,    // no fresh, unpinned page available
-  kRefusedIntegrity = 3,    // the bytes did not verify after the copy
+  kRefusedValidation = 1,      // upload_verdict said no; see `verdict`
+  kRefusedNoStorage = 2,       // no fresh, unpinned page available
+  kRefusedIntegrity = 3,       // the bytes did not verify after the copy
   kRefusedGenerationWrap = 4,  // 16-bit generation would wrap; needs an epoch
 };
 
@@ -109,12 +109,10 @@ struct Mapping {
 
 class Arena {
  public:
-  Arena(uint32_t base, uint32_t page_bytes, int page_count)
-      : base_(base), page_bytes_(page_bytes) {
+  Arena(uint32_t base, uint32_t page_bytes, int page_count) : base_(base), page_bytes_(page_bytes) {
     pages_.resize(static_cast<std::size_t>(page_count));
     for (int i = 0; i < page_count; ++i) {
-      pages_[static_cast<std::size_t>(i)].vram_addr =
-          base + static_cast<uint32_t>(i) * page_bytes;
+      pages_[static_cast<std::size_t>(i)].vram_addr = base + static_cast<uint32_t>(i) * page_bytes;
     }
     guard_.base = base;
     guard_.bytes = page_bytes * static_cast<uint32_t>(page_count);
@@ -123,10 +121,9 @@ class Arena {
   // The whole point of the ordering. `verify_ok` stands in for the integrity
   // check that in hardware happens AFTER the bytes land -- it is a parameter
   // rather than a computed CRC because this model owns ordering, not hashing.
-  PublishResult publish(uint32_t resource_index, Kind kind, uint64_t hps_addr,
-                        uint32_t length, const mem::GuardRegion& hps_arena,
-                        uint16_t request_epoch, uint16_t current_epoch, bool verify_ok,
-                        Ledger* L = nullptr) {
+  PublishResult publish(uint32_t resource_index, Kind kind, uint64_t hps_addr, uint32_t length,
+                        const mem::GuardRegion& hps_arena, uint16_t request_epoch,
+                        uint16_t current_epoch, bool verify_ok, Ledger* L = nullptr) {
     PublishResult r;
     r.resource_index = resource_index;
 
@@ -141,8 +138,8 @@ class Arena {
 
     // 2. VALIDATE, through the existing oracle -- not a second copy of it.
     r.verdict = mem::upload_verdict(guard_, hps_arena, hps_addr,
-                                    pages_[static_cast<std::size_t>(dst)].vram_addr,
-                                    length, request_epoch, current_epoch);
+                                    pages_[static_cast<std::size_t>(dst)].vram_addr, length,
+                                    request_epoch, current_epoch);
     if (r.verdict != mem::kUploadOk) {
       r.outcome = Outcome::kRefusedValidation;
       if (L) L->refused_validation++;
@@ -163,8 +160,8 @@ class Arena {
     //    transition and global invalidation, so it is refused here rather than
     //    quietly reusing a number a stale handle could still match.
     Mapping* m = find_mapping(resource_index);
-    const uint16_t next_gen = m ? static_cast<uint16_t>(m->generation + 1)
-                                : static_cast<uint16_t>(1);
+    const uint16_t next_gen =
+        m ? static_cast<uint16_t>(m->generation + 1) : static_cast<uint16_t>(1);
     if (m && next_gen == 0) {
       r.outcome = Outcome::kRefusedGenerationWrap;
       if (L) L->refused_generation_wrap++;

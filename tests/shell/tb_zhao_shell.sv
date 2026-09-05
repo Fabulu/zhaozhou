@@ -169,6 +169,33 @@ module tb_zhao_shell (
   output logic               dbg_su_out_valid_o,
   output logic               dbg_shell_tri_ready_o,
   input  logic signed [47:0] setup_area2_i,
+
+  // ---- D22 STEP 2: GEOM.DEPTHQUANT -----------------------------------------
+  // Step 1 moved the boundary from precomputed edge coefficients to vertices.
+  // Step 2 moves it again, one block further back, for DEPTH.
+  //
+  // The depth value has ALWAYS come in -- it is just not where a port-name
+  // search finds it. `zhao_raster_tile_pipe.sv:446` reads
+  //
+  //     assign frag_depth = fill_r[31:8];
+  //
+  // so `render_fill_word_i` is not a colour but a flat-fragment record:
+  // [63:40] vertex RGB, [39:32] effect tag, [31:8] the 24-bit invw24 depth,
+  // [7:0] stencil reference. The bench has been hand-packing a PRECOMPUTED
+  // invw24 into those bits.
+  //
+  // In depth mode the bench supplies `w` instead and GEOM.DEPTHQUANT computes
+  // the canonical invw24 inside the composed design, driving those same bits.
+  // Same evidence shape as step 1: draw the same triangle both ways, require
+  // identical framebuffers.
+  //
+  // Defaults to 0 -- the precomputed path, bit-identical -- so every existing
+  // test and golden is unaffected by this port existing.
+  input  logic               depth_mode_i,
+  input  logic [39:0]        depth_w_i,          // fx16 raw, S15.16
+  input  logic [1:0]         depth_profile_i,    // per-vertex, not latched
+  output logic               dbg_dq_valid_o,
+  output logic [23:0]        dbg_dq_invw24_o,
   input  logic               render_tri_valid_i,
   output logic               render_tri_ready_o,
   input  logic signed [22:0] render_kx0_i,
@@ -288,6 +315,73 @@ module tb_zhao_shell (
   logic        [2:0]  su_tl;
   logic signed [20:0] su_ax, su_ay, su_bx, su_by, su_cx, su_cy;
 
+  // ---- D22 step 2: DEPTHQUANT and the reciprocal it calls -------------------
+  // DEPTHQUANT does not own a reciprocal; its header is explicit that "the
+  // console already has ONE rcp_u24 law; a second ROM would be a second law",
+  // so it calls zhao_raster_rcp24_svc. That block is the same one the composed
+  // texture island uses, where it completed 64 reciprocals in the composed
+  // test -- so this is a proven service, not a new dependency.
+  logic        dq_v_ready, dq_d_valid;
+  logic [23:0] dq_invw24;
+  logic        dq_d_behind;
+  logic [15:0] dq_d_src;
+  logic        dq_rcp_valid, dq_rcp_rready;
+  logic [23:0] dq_rcp_d;
+  logic        dq_rcp_v_ready, dq_rcp_r_valid;
+  logic [23:0] dq_rcp_r;
+  logic [5:0]  dq_rcp_k;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic        dq_rcp_dzero;
+  logic [7:0]  dq_rcp_tok;
+  logic [3:0]  dq_rcp_occ;
+  logic [31:0] dq_rcp_acc, dq_rcp_comp, dq_rcp_busy;
+  logic [31:0] dq_vertices, dq_near, dq_far, dq_sat, dq_refused;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_geom_depthquant #(.SRCW(16)) u_depthquant (
+      .clk(gpu_clk), .rst_n(rst_n),
+      .v_valid_i(render_tri_valid_i & depth_mode_i), .v_ready_o(dq_v_ready),
+      .v_w_i(depth_w_i), .v_behind_i(1'b0), .v_profile_i(depth_profile_i),
+      .v_src_id_i(render_src_id_i),
+      .d_valid_o(dq_d_valid), .d_ready_i(1'b1),
+      .d_invw24_o(dq_invw24), .d_behind_o(dq_d_behind), .d_src_id_o(dq_d_src),
+      .rcp_valid_o(dq_rcp_valid), .rcp_ready_i(dq_rcp_v_ready),
+      .rcp_d_o(dq_rcp_d),
+      .rcp_rvalid_i(dq_rcp_r_valid), .rcp_rready_o(dq_rcp_rready),
+      .rcp_r_i(dq_rcp_r), .rcp_k_i(dq_rcp_k),
+      .vertices_o(dq_vertices), .clamped_near_o(dq_near),
+      .clamped_far_o(dq_far), .saturated_o(dq_sat), .refused_o(dq_refused));
+
+  zhao_raster_rcp24_svc #(.NCTX(8), .TOKW(8)) u_dq_rcp (
+      .clk(gpu_clk), .rst_n(rst_n),
+      .v_valid_i(dq_rcp_valid), .v_ready_o(dq_rcp_v_ready),
+      .d_i(dq_rcp_d), .v_tok_i(8'd0),
+      .r_valid_o(dq_rcp_r_valid), .r_ready_i(dq_rcp_rready),
+      .r_o(dq_rcp_r), .k_o(dq_rcp_k), .d_zero_o(dq_rcp_dzero),
+      .r_tok_o(dq_rcp_tok),
+      .accepted_o(dq_rcp_acc), .completed_o(dq_rcp_comp),
+      .mul_busy_o(dq_rcp_busy), .occupancy_o(dq_rcp_occ));
+
+  // The computed depth is LATCHED, because the fill word must hold still for
+  // the whole triangle while DEPTHQUANT's answer arrives some cycles after the
+  // vertex was offered. A combinational path here would change the depth
+  // mid-triangle, which is the class of fault that looks like a rendering bug.
+  logic [23:0] dq_invw24_r;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n)          dq_invw24_r <= 24'd0;
+    else if (dq_d_valid) dq_invw24_r <= dq_invw24;
+  end
+
+  assign dbg_dq_valid_o   = dq_d_valid;
+  assign dbg_dq_invw24_o  = dq_invw24_r;
+
+  // THE BOUNDARY. In depth mode the fill word's depth field comes from
+  // DEPTHQUANT; every other field is the bench's, untouched.
+  wire [63:0] m_fill_word = depth_mode_i
+                          ? {render_fill_word_i[63:32], dq_invw24_r,
+                             render_fill_word_i[7:0]}
+                          : render_fill_word_i;
+
   zhao_geom_setup u_setup (
       .clk(gpu_clk), .rst_n(rst_n),
       .tri_valid_i(render_tri_valid_i & setup_mode_i),
@@ -395,7 +489,7 @@ module tb_zhao_shell (
     .render_min_x_i(render_min_x_i), .render_max_x_i(render_max_x_i),
     .render_min_y_i(render_min_y_i), .render_max_y_i(render_max_y_i),
     .render_src_id_i(render_src_id_i),
-    .render_fill_word_i(render_fill_word_i), .render_clear_word_i(render_clear_word_i),
+    .render_fill_word_i(m_fill_word), .render_clear_word_i(render_clear_word_i),
     .render_state_i(render_state_i), .render_src_a_i(render_src_a_i),
     .render_texel_rgb_i(render_texel_rgb_i), .render_texel_a_i(render_texel_a_i),
     .render_texel_idx_i(render_texel_idx_i),

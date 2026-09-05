@@ -236,8 +236,9 @@ int main(int argc, char** argv) {
     constexpr int kN = 4;
     const bool kSat[kN] = {false, true, true, false};
     for (int i = 0; i < kN; ++i) {
-      Frag f{1, {static_cast<uint32_t>(i), 0, 0},   {0, 0, 0},
-             0, 0xE000u + static_cast<uint64_t>(i), false, kSat[i]};
+      Frag f{1,      {static_cast<uint32_t>(i), 0, 0},   {0, 0, 0},
+             0,      0xE000u + static_cast<uint64_t>(i), false,
+             kSat[i]};
       zhao::check(offer(top, f), "sat-pattern fragment accepted", 1, 1);
     }
     for (int c = 0; c < 32; ++c) {
@@ -259,8 +260,7 @@ int main(int argc, char** argv) {
     top.o_ready_i = 1;
     for (int c = 0; c < 64 && static_cast<int>(got.size()) < kN; ++c) {
       top.eval();
-      if (top.o_valid_o)
-        got.emplace_back(top.o_ctx_o, top.o_uv_sat_o ? 1 : 0);
+      if (top.o_valid_o) got.emplace_back(top.o_ctx_o, top.o_uv_sat_o ? 1 : 0);
       zhao::tick(top);
     }
     zhao::check(static_cast<int>(got.size()) == kN, "all four sat-pattern fragments retired", kN,

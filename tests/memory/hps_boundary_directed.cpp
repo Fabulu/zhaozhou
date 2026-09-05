@@ -54,8 +54,7 @@ void test_the_happy_path_moves_ownership_exactly_once_each_way() {
 
   const int s = r.submit(good(0xAA), 1, &L);
   check(s >= 0, "a legal descriptor is accepted", 1, s >= 0 ? 1 : 0);
-  check(r.state(s) == hps::SlotState::kSubmitted,
-        "and the DEVICE now owns the slot", 1,
+  check(r.state(s) == hps::SlotState::kSubmitted, "and the DEVICE now owns the slot", 1,
         static_cast<long long>(r.state(s)));
 
   const int c = r.claim(&L);
@@ -125,8 +124,8 @@ void test_a_stale_epoch_is_refused() {
   hps::Ledger L;
   hps::Descriptor d = good();
   d.epoch = 1;
-  check(r.submit(d, /*current_epoch=*/2, &L) < 0,
-        "a descriptor from a closed epoch is refused", 1, 1);
+  check(r.submit(d, /*current_epoch=*/2, &L) < 0, "a descriptor from a closed epoch is refused", 1,
+        1);
   check(r.last_fault() == hps::Fault::kEpochStale, "as stale", 5,
         static_cast<long long>(r.last_fault()));
   check(L.refused_stale_epoch == 1, "counted", 1, L.refused_stale_epoch);
@@ -157,8 +156,7 @@ void test_neither_side_may_touch_a_slot_it_does_not_own() {
   const int c2 = r.claim(&L);
   check(!r.reap(c2, &c, &L), "the ARM may NOT reap a slot in flight", 0, 0);
 
-  check(L.refused_not_owned == 3, "all three violations counted", 3,
-        L.refused_not_owned);
+  check(L.refused_not_owned == 3, "all three violations counted", 3, L.refused_not_owned);
 }
 
 void test_a_full_ring_is_refused_not_overwritten() {
@@ -166,8 +164,7 @@ void test_a_full_ring_is_refused_not_overwritten() {
   hps::Ledger L;
   check(r.submit(good(1), 1, &L) >= 0, "slot 1", 1, 1);
   check(r.submit(good(2), 1, &L) >= 0, "slot 2", 1, 1);
-  check(r.submit(good(3), 1, &L) < 0, "a full ring REFUSES rather than wrapping",
-        1, 1);
+  check(r.submit(good(3), 1, &L) < 0, "a full ring REFUSES rather than wrapping", 1, 1);
   check(r.last_fault() == hps::Fault::kRingFull, "as full", 2,
         static_cast<long long>(r.last_fault()));
   check(L.refused_ring_full == 1, "counted", 1, L.refused_ring_full);
@@ -190,8 +187,7 @@ void test_a_device_side_failure_returns_a_fault_not_a_lie() {
   check(!c.ok, "a failed transfer reports NOT ok", 0, c.ok ? 1 : 0);
   check(c.fault == hps::Fault::kOutsideArena, "with the fault that caused it", 4,
         static_cast<long long>(c.fault));
-  check(c.tag == 0x77, "and still returns the caller's tag, so it can be traced",
-        0x77, c.tag);
+  check(c.tag == 0x77, "and still returns the caller's tag, so it can be traced", 0x77, c.tag);
 }
 
 }  // namespace

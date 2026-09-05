@@ -57,8 +57,7 @@ void test_draws_validate_and_are_counted() {
     p.resource_epoch = 1;
     for (int i = 0; i < n; ++i) p.draws.push_back(item(static_cast<uint32_t>(i)));
     const zcon::BuiltFrame f = zcon::build_and_validate(p);
-    check(f.ok, "a frame of draws validates", 0,
-          static_cast<long long>(f.verdict.error));
+    check(f.ok, "a frame of draws validates", 0, static_cast<long long>(f.verdict.error));
     // BEGIN + n draws + END
     check(f.verdict.commands_consumed == static_cast<uint32_t>(n + 2),
           "every record was walked by the validator", n + 2,
@@ -81,8 +80,7 @@ void test_the_header_reports_what_was_built() {
   check(h.frame_id == 0x1234, "frame_id survives the seal", 0x1234, h.frame_id);
   check(h.sequence == 0x99, "sequence survives", 0x99, h.sequence);
   check(h.resource_epoch == 0x7, "resource epoch survives", 0x7, h.resource_epoch);
-  check(h.command_count == 7, "command_count is BEGIN + 5 draws + END", 7,
-        h.command_count);
+  check(h.command_count == 7, "command_count is BEGIN + 5 draws + END", 7, h.command_count);
 }
 
 void test_handles_reach_the_wire_in_the_abi_layout() {
@@ -115,16 +113,14 @@ void test_a_corrupted_packet_is_refused() {
   p.resource_epoch = 1;
   p.draws.push_back(item(1));
   zcon::BuiltFrame f = zcon::build_and_validate(p);
-  check(f.ok, "the packet is good before corruption", 0,
-        static_cast<long long>(f.verdict.error));
+  check(f.ok, "the packet is good before corruption", 0, static_cast<long long>(f.verdict.error));
 
   // Flip a byte in the middle of the record stream. The seal's CRCs exist for
   // exactly this, and a builder whose output could be corrupted undetected
   // would make every later decode failure untraceable.
   f.bytes[f.bytes.size() / 2] ^= 0xFF;
   const zref::cmd::Result v = zref::cmd::validate(f.bytes);
-  check(v.error != 0, "a single flipped byte is REFUSED by the validator", 1,
-        v.error != 0 ? 1 : 0);
+  check(v.error != 0, "a single flipped byte is REFUSED by the validator", 1, v.error != 0 ? 1 : 0);
 }
 
 }  // namespace
@@ -137,8 +133,7 @@ int main() {
   test_a_corrupted_packet_is_refused();
 
   if (g_failed) {
-    std::printf("[zcon_frame_build_directed] %d/%d checks FAILED\n", g_failed,
-                g_checks);
+    std::printf("[zcon_frame_build_directed] %d/%d checks FAILED\n", g_failed, g_checks);
     return 1;
   }
   std::printf("[zcon_frame_build_directed] %d checks passed\n", g_checks);

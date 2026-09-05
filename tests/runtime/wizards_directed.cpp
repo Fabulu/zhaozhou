@@ -44,13 +44,12 @@ void test_opening_position_is_deterministic_and_symmetric() {
   zgame::Wizards a, b;
   a.reset(1);
   b.reset(999);  // a different seed must NOT move the opening
-  check(a.hash() == b.hash(), "the opening position does not depend on the seed",
-        1, a.hash() == b.hash() ? 1 : 0);
-  check(a.wizard(0).health == zgame::Wizards::kStartHealth,
-        "both wizards start at full health", zgame::Wizards::kStartHealth,
-        a.wizard(0).health);
-  check(a.wizard(0).x != a.wizard(1).x, "and they do not start on top of each other",
-        1, a.wizard(0).x != a.wizard(1).x ? 1 : 0);
+  check(a.hash() == b.hash(), "the opening position does not depend on the seed", 1,
+        a.hash() == b.hash() ? 1 : 0);
+  check(a.wizard(0).health == zgame::Wizards::kStartHealth, "both wizards start at full health",
+        zgame::Wizards::kStartHealth, a.wizard(0).health);
+  check(a.wizard(0).x != a.wizard(1).x, "and they do not start on top of each other", 1,
+        a.wizard(0).x != a.wizard(1).x ? 1 : 0);
 }
 
 void test_movement_is_fixed_point_and_clamped() {
@@ -71,8 +70,7 @@ void test_movement_is_fixed_point_and_clamped() {
     s.pad[0].stick_lx = -128;
     g.advance(s);
   }
-  check(g.wizard(0).x == 0, "movement clamps at the ground edge, never wraps", 0,
-        g.wizard(0).x);
+  check(g.wizard(0).x == 0, "movement clamps at the ground edge, never wraps", 0, g.wizard(0).x);
 }
 
 void test_cast_travel_detonate_and_damage() {
@@ -83,10 +81,8 @@ void test_cast_travel_detonate_and_damage() {
   cast.pad[0].buttons = 1;  // aim is zero -> fires toward the opponent
   g.advance(cast);
 
-  check(g.bolt(0).active, "casting produces a live bolt", 1,
-        g.bolt(0).active ? 1 : 0);
-  check(g.wizard(0).cooldown > 0, "and starts the cooldown", 1,
-        g.wizard(0).cooldown > 0 ? 1 : 0);
+  check(g.bolt(0).active, "casting produces a live bolt", 1, g.bolt(0).active ? 1 : 0);
+  check(g.wizard(0).cooldown > 0, "and starts the cooldown", 1, g.wizard(0).cooldown > 0 ? 1 : 0);
 
   const int32_t bx0 = g.bolt(0).x;
   g.advance(idle(g.tick()));
@@ -95,8 +91,7 @@ void test_cast_travel_detonate_and_damage() {
   // Let it fly into the opponent.
   const int32_t before = g.wizard(1).health;
   for (int i = 0; i < 80 && g.bolt(0).active; ++i) step(g, 1);
-  check(!g.bolt(0).active, "the bolt eventually detonates", 0,
-        g.bolt(0).active ? 1 : 0);
+  check(!g.bolt(0).active, "the bolt eventually detonates", 0, g.bolt(0).active ? 1 : 0);
   check(g.wizard(1).health < before, "and the opponent took damage", 1,
         g.wizard(1).health < before ? 1 : 0);
 }
@@ -116,10 +111,8 @@ void test_cooldown_prevents_a_second_cast() {
     s.pad[0].buttons = 1;
     g.advance(s);
   }
-  check(g.bolt(0).owner == 0, "still the same bolt, not a re-cast", 0,
-        g.bolt(0).owner);
-  check(g.bolt(0).x != first_x, "which has kept travelling", 1,
-        g.bolt(0).x != first_x ? 1 : 0);
+  check(g.bolt(0).owner == 0, "still the same bolt, not a re-cast", 0, g.bolt(0).owner);
+  check(g.bolt(0).x != first_x, "which has kept travelling", 1, g.bolt(0).x != first_x ? 1 : 0);
 }
 
 void test_death_and_restart() {
@@ -135,19 +128,15 @@ void test_death_and_restart() {
     g.advance(s);
   }
   check(!g.wizard(1).alive, "the opponent dies", 0, g.wizard(1).alive ? 1 : 0);
-  check(g.wizard(1).deaths == 1, "and the death is recorded", 1,
-        g.wizard(1).deaths);
-  check(g.wizard(1).health == 0, "health floors at zero, never negative", 0,
-        g.wizard(1).health);
+  check(g.wizard(1).deaths == 1, "and the death is recorded", 1, g.wizard(1).deaths);
+  check(g.wizard(1).health == 0, "health floors at zero, never negative", 0, g.wizard(1).health);
 
   // Respawn is simulation, not UI.
   step(g, zgame::Wizards::kRespawnTicks + 1);
-  check(g.wizard(1).alive, "and respawns after kRespawnTicks", 1,
-        g.wizard(1).alive ? 1 : 0);
-  check(g.wizard(1).health == zgame::Wizards::kStartHealth,
-        "at full health", zgame::Wizards::kStartHealth, g.wizard(1).health);
-  check(g.wizard(1).deaths == 1, "with the death still on the scoreboard", 1,
-        g.wizard(1).deaths);
+  check(g.wizard(1).alive, "and respawns after kRespawnTicks", 1, g.wizard(1).alive ? 1 : 0);
+  check(g.wizard(1).health == zgame::Wizards::kStartHealth, "at full health",
+        zgame::Wizards::kStartHealth, g.wizard(1).health);
+  check(g.wizard(1).deaths == 1, "with the death still on the scoreboard", 1, g.wizard(1).deaths);
 }
 
 void test_ground_is_destructible_and_permanent() {
@@ -174,8 +163,7 @@ void test_ground_is_destructible_and_permanent() {
   int32_t sum_later = 0;
   for (int y = 0; y < zgame::kGroundH; ++y)
     for (int x = 0; x < zgame::kGroundW; ++x) sum_later += g.ground_at(x, y);
-  check(sum_later == sum_after, "and the crater is PERMANENT", sum_after,
-        sum_later);
+  check(sum_later == sum_after, "and the crater is PERMANENT", sum_after, sum_later);
 }
 
 // ---------------------------------------------------------------------------
@@ -220,12 +208,11 @@ void test_a_whole_match_replays_to_an_identical_hash_stream() {
 
   check(truth.wizard(0).deaths + truth.wizard(1).deaths > 0,
         "the scripted match actually killed somebody -- otherwise this proves "
-        "nothing interesting", 1,
-        truth.wizard(0).deaths + truth.wizard(1).deaths > 0 ? 1 : 0);
+        "nothing interesting",
+        1, truth.wizard(0).deaths + truth.wizard(1).deaths > 0 ? 1 : 0);
 
   const int diverged = s.replay_and_compare(s.inputs(), s.hashes());
-  check(diverged == -1, "900 ticks of match replay to an IDENTICAL hash stream",
-        -1, diverged);
+  check(diverged == -1, "900 ticks of match replay to an IDENTICAL hash stream", -1, diverged);
 }
 
 }  // namespace

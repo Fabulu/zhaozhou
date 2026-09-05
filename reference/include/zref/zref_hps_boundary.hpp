@@ -71,11 +71,11 @@ enum class Fault : uint8_t {
 };
 
 struct Descriptor {
-  uint64_t src = 0;      // HPS address, must be inside the staging arena
-  uint32_t dst = 0;      // device-side destination
+  uint64_t src = 0;  // HPS address, must be inside the staging arena
+  uint32_t dst = 0;  // device-side destination
   uint32_t length = 0;
   uint16_t epoch = 0;
-  uint32_t tag = 0;      // the ARM's own identifier, returned untouched
+  uint32_t tag = 0;  // the ARM's own identifier, returned untouched
 };
 
 struct Completion {
@@ -127,8 +127,7 @@ class Ring {
   int submit(const Descriptor& d, uint16_t current_epoch, Ledger* L = nullptr) {
     // "A userspace pointer is not a DMA address." Alignment is checked before
     // anything else looks at the address.
-    if ((d.src % align_) != 0 || (d.dst % align_) != 0 ||
-        (d.length % align_) != 0) {
+    if ((d.src % align_) != 0 || (d.dst % align_) != 0 || (d.length % align_) != 0) {
       if (L) L->refused_unaligned++;
       return fault_only(Fault::kUnalignedPointer);
     }
@@ -195,9 +194,7 @@ class Ring {
 
   // ---- inspection ---------------------------------------------------------
   SlotState state(int slot) const { return state_[static_cast<std::size_t>(slot)]; }
-  const Descriptor& descriptor(int slot) const {
-    return desc_[static_cast<std::size_t>(slot)];
-  }
+  const Descriptor& descriptor(int slot) const { return desc_[static_cast<std::size_t>(slot)]; }
   Fault last_fault() const { return last_fault_; }
   int slots() const { return static_cast<int>(state_.size()); }
   int count(SlotState s) const {

@@ -84,7 +84,7 @@ void tick(Dut& d) {
 struct FillModel {
   static constexpr int kBeats = 8;  // LINE_BYTES / 2
   uint32_t addr = 0;
-  int delay = 0;      // cycles before the first beat: the memory is not instant
+  int delay = 0;  // cycles before the first beat: the memory is not instant
   int beats_left = 0;
   uint32_t served = 0;
 };
@@ -166,8 +166,7 @@ int main(int argc, char** argv) {
     d.sheet_rtok_i = d.sheet_tok_o;
 
     // memory behind the cache
-    if (d.fill_valid_o && d.fill_ready_i && mem.beats_left == 0 &&
-        mem.delay == 0) {
+    if (d.fill_valid_o && d.fill_ready_i && mem.beats_left == 0 && mem.delay == 0) {
       mem.addr = d.fill_addr_o;
       mem.delay = 2;  // a two-cycle memory, so the cache must actually wait
     }
@@ -202,14 +201,12 @@ int main(int argc, char** argv) {
       "  rcp %u | persp %u | plan %u | cache hit %u miss %u | dispatch %u\n"
       "  bilerp %u | palette %u | mosaic %u | aux %u | fragrob %u\n"
       "  fragrob ID ERRORS %u\n",
-      submitted, retired, mem.served, d.cnt_rcp_completed_o,
-      d.cnt_persp_fragments_o, d.cnt_plan_accepted_o, d.cnt_cache_hits_o,
-      d.cnt_cache_misses_o, d.cnt_dispatch_accepted_o, d.cnt_bilerp_jobs_o,
-      d.cnt_palette_lookups_o, d.cnt_mosaic_samples_o, d.cnt_aux_accepted_o,
+      submitted, retired, mem.served, d.cnt_rcp_completed_o, d.cnt_persp_fragments_o,
+      d.cnt_plan_accepted_o, d.cnt_cache_hits_o, d.cnt_cache_misses_o, d.cnt_dispatch_accepted_o,
+      d.cnt_bilerp_jobs_o, d.cnt_palette_lookups_o, d.cnt_mosaic_samples_o, d.cnt_aux_accepted_o,
       d.cnt_fragments_o, d.cnt_fragrob_id_errors_o);
 
-  check(submitted > 0, "the island ACCEPTED fragments at its boundary", 1,
-        submitted > 0 ? 1 : 0);
+  check(submitted > 0, "the island ACCEPTED fragments at its boundary", 1, submitted > 0 ? 1 : 0);
 
   // ---- the chain, block by block -----------------------------------------
   // Named individually so a break is located, not merely detected. A single
@@ -224,14 +221,12 @@ int main(int argc, char** argv) {
       {"PERSPUV produced fragments", d.cnt_persp_fragments_o},
       {"FRAGROB accepted fragments", d.cnt_fragments_o},
       {"TMU_PLAN accepted sample requests", d.cnt_plan_accepted_o},
-      {"CACHE_PIPE was consulted (hits + misses)",
-       d.cnt_cache_hits_o + d.cnt_cache_misses_o},
+      {"CACHE_PIPE was consulted (hits + misses)", d.cnt_cache_hits_o + d.cnt_cache_misses_o},
       {"RSP_DISPATCH routed responses", d.cnt_dispatch_accepted_o},
       {"MOSAIC saw texture samples", d.cnt_mosaic_samples_o},
       {"AUX_PIPE accepted requests", d.cnt_aux_accepted_o},
   };
-  for (const Link& l : chain)
-    check(l.value > 0, l.name, 1, l.value > 0 ? 1 : 0);
+  for (const Link& l : chain) check(l.value > 0, l.name, 1, l.value > 0 ? 1 : 0);
 
   check(retired > 0,
         "and a fragment came OUT of the combiner at the far end -- the chain is "
@@ -240,13 +235,11 @@ int main(int argc, char** argv) {
 
   // Anti-vacuity on the colour itself. A chain that runs but returns black for
   // every fragment has proved the handshakes and nothing else.
-  check(saw_rgb && first_rgb != 0,
-        "the retired fragment carries a NON-ZERO colour", 1,
+  check(saw_rgb && first_rgb != 0, "the retired fragment carries a NON-ZERO colour", 1,
         (saw_rgb && first_rgb != 0) ? 1 : 0);
 
   if (g_failed) {
-    std::printf("[island_composed_directed] %d/%d checks FAILED\n", g_failed,
-                g_checks);
+    std::printf("[island_composed_directed] %d/%d checks FAILED\n", g_failed, g_checks);
     return 1;
   }
   std::printf("[island_composed_directed] %d checks passed\n", g_checks);

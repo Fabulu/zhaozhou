@@ -50,8 +50,8 @@ zref::mem::GuardRegion hps_arena() {
 res::PublishResult pub(res::Arena& a, uint32_t idx, uint32_t len, res::Ledger* L,
                        bool verify_ok = true, uint16_t request_epoch = 1) {
   // current_epoch is 1; a request naming any other epoch is stale.
-  return a.publish(idx, res::Kind::kTexturePage, kHpsBase, len, hps_arena(),
-                   request_epoch, /*current_epoch=*/1, verify_ok, L);
+  return a.publish(idx, res::Kind::kTexturePage, kHpsBase, len, hps_arena(), request_epoch,
+                   /*current_epoch=*/1, verify_ok, L);
 }
 
 void test_a_first_publish_maps_a_fresh_page() {
@@ -61,10 +61,9 @@ void test_a_first_publish_maps_a_fresh_page() {
   const res::PublishResult r = pub(a, 1, 1024, &L);
 
   check(r.ok(), "a legal upload publishes", 1, r.ok() ? 1 : 0);
-  check(r.generation == 1, "the first publication is generation 1, never 0", 1,
-        r.generation);
-  check(a.free_pages() == free_before - 1, "and consumes exactly one page",
-        free_before - 1, a.free_pages());
+  check(r.generation == 1, "the first publication is generation 1, never 0", 1, r.generation);
+  check(a.free_pages() == free_before - 1, "and consumes exactly one page", free_before - 1,
+        a.free_pages());
   check(L.published == 1, "counted", 1, L.published);
 }
 
@@ -86,8 +85,7 @@ void test_validation_is_delegated_not_reimplemented() {
   check(e.verdict == zref::mem::kUploadEpochStale, "a closed epoch is refused", 4,
         static_cast<long long>(e.verdict));
 
-  check(a.free_pages() == 4, "and NO page was consumed by any refusal", 4,
-        a.free_pages());
+  check(a.free_pages() == 4, "and NO page was consumed by any refusal", 4, a.free_pages());
   check(L.refused_validation == 3, "all three counted", 3, L.refused_validation);
 }
 
@@ -132,11 +130,9 @@ void test_a_republish_never_lands_on_the_page_a_frame_is_reading() {
   check(a.page(first_page).occupied,
         "the old page is still occupied, because a frame is still reading it", 1,
         a.page(first_page).occupied ? 1 : 0);
-  check(L.reclaim_blocked_by_pin == 1,
-        "and the reclaim attempt was refused and COUNTED", 1,
+  check(L.reclaim_blocked_by_pin == 1, "and the reclaim attempt was refused and COUNTED", 1,
         L.reclaim_blocked_by_pin);
-  check(a.mapping(3)->generation == 2, "the generation advanced to 2", 2,
-        a.mapping(3)->generation);
+  check(a.mapping(3)->generation == 2, "the generation advanced to 2", 2, a.mapping(3)->generation);
 }
 
 void test_old_storage_is_reclaimed_only_after_the_last_pin() {
@@ -152,12 +148,10 @@ void test_old_storage_is_reclaimed_only_after_the_last_pin() {
         a.page(old_page).occupied ? 1 : 0);
 
   a.unpin(old_page, &L);
-  check(a.page(old_page).occupied, "one pin still holds it", 1,
-        a.page(old_page).occupied ? 1 : 0);
+  check(a.page(old_page).occupied, "one pin still holds it", 1, a.page(old_page).occupied ? 1 : 0);
 
   a.unpin(old_page, &L);
-  check(!a.page(old_page).occupied,
-        "releasing the LAST pin reclaims it -- not before", 0,
+  check(!a.page(old_page).occupied, "releasing the LAST pin reclaims it -- not before", 0,
         a.page(old_page).occupied ? 1 : 0);
 }
 
@@ -170,8 +164,7 @@ void test_a_pinned_page_may_not_be_written() {
   check(a.may_write(p, &L), "an unpinned page may be written", 1, 1);
   a.pin(5);
   check(!a.may_write(p, &L), "a pinned page may NOT be written", 0, 0);
-  check(L.write_blocked_by_pin == 1, "and the attempt is counted", 1,
-        L.write_blocked_by_pin);
+  check(L.write_blocked_by_pin == 1, "and the attempt is counted", 1, L.write_blocked_by_pin);
 }
 
 void test_exhausted_storage_is_refused_not_stolen() {
@@ -184,8 +177,7 @@ void test_exhausted_storage_is_refused_not_stolen() {
 
   const res::PublishResult r = pub(a, 3, 1024, &L);
   check(r.outcome == res::Outcome::kRefusedNoStorage,
-        "with every page pinned, a new publish is REFUSED", 2,
-        static_cast<long long>(r.outcome));
+        "with every page pinned, a new publish is REFUSED", 2, static_cast<long long>(r.outcome));
   check(L.refused_no_storage == 1, "counted", 1, L.refused_no_storage);
   check(a.mapping(1)->page >= 0 && a.mapping(2)->page >= 0,
         "and no live resource was evicted to make room", 1, 1);
@@ -209,8 +201,8 @@ void test_generations_advance_and_never_silently_wrap() {
   // and counted by construction -- the refusal path exists and is distinct.
   check(res::Outcome::kRefusedGenerationWrap != res::Outcome::kPublished,
         "the wrap refusal is a distinct outcome, not folded into success", 1, 1);
-  check(L2.refused_generation_wrap == 0,
-        "and is not reached in ordinary operation", 0, L2.refused_generation_wrap);
+  check(L2.refused_generation_wrap == 0, "and is not reached in ordinary operation", 0,
+        L2.refused_generation_wrap);
 }
 
 }  // namespace

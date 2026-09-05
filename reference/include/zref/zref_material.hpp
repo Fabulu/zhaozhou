@@ -83,12 +83,12 @@ namespace material {
 // tests passed and reported coverage of the six they knew about. Recorded as
 // docket D19q.
 enum Recipe : uint8_t {
-  kPassthru = 0,    // sample 0 unchanged
-  kModulate = 1,    // s0 * s1
-  kModulate2x = 2,  // s0 * s1 * 2, saturating
-  kLerp = 3,        // lerp(s0, s1, weight)
-  kAddSat = 4,      // s0 + s1, saturating
-  kMask = 5,        // s0 where s1 passes, else transparent
+  kPassthru = 0,            // sample 0 unchanged
+  kModulate = 1,            // s0 * s1
+  kModulate2x = 2,          // s0 * s1 * 2, saturating
+  kLerp = 3,                // lerp(s0, s1, weight)
+  kAddSat = 4,              // s0 + s1, saturating
+  kMask = 5,                // s0 where s1 passes, else transparent
   kTerrainDetailLight = 6,  // (s0 * s1) * s2, three samples
   kTerrainDetailMask = 7,   // (s0 * s1) RGB, alpha masked by s2
   kRecipeCount = 8
@@ -219,8 +219,8 @@ constexpr uint8_t lerp8(uint8_t a, uint8_t b, uint8_t w) {
   // biased toward +inf on darkening lerps.
   const uint32_t mag = static_cast<uint32_t>(d < 0 ? -d : d);
   const uint32_t scaled = (mag * static_cast<uint32_t>(w) + 128u) >> 8;
-  const int32_t r = static_cast<int32_t>(a) + (d < 0 ? -static_cast<int32_t>(scaled)
-                                                     : static_cast<int32_t>(scaled));
+  const int32_t r = static_cast<int32_t>(a) +
+                    (d < 0 ? -static_cast<int32_t>(scaled) : static_cast<int32_t>(scaled));
   return static_cast<uint8_t>(r < 0 ? 0 : (r > 255 ? 255 : r));
 }
 
@@ -237,8 +237,8 @@ constexpr uint8_t lerp8(uint8_t a, uint8_t b, uint8_t w) {
  * @param frag_tag   rides through UNTOUCHED; retirement order depends on it
  * @param L          optional ledger; refusals and saturations are counted here
  */
-inline Out combine(uint8_t recipe, uint8_t weight, const Sample* s, uint8_t count,
-                   Sample base, uint16_t frag_tag, Ledger* L = nullptr) {
+inline Out combine(uint8_t recipe, uint8_t weight, const Sample* s, uint8_t count, Sample base,
+                   uint16_t frag_tag, Ledger* L = nullptr) {
   Out o;
   o.frag_tag = frag_tag;  // set FIRST, so every early return preserves it
 

@@ -154,17 +154,15 @@ void test_session_drives_the_backend_every_tick() {
   s.start(0xC0FFEE);
   for (int i = 0; i < 64; ++i) s.tick();
 
-  check(s.tick_index() == 64, "the session advanced 64 fixed ticks", 64,
-        s.tick_index());
-  check(be.submits == 64, "presentation work was submitted once per tick", 64,
-        be.submits);
+  check(s.tick_index() == 64, "the session advanced 64 fixed ticks", 64, s.tick_index());
+  check(be.submits == 64, "presentation work was submitted once per tick", 64, be.submits);
   check(be.last_command_bytes == 2, "commands were built from state each tick", 2,
         static_cast<long long>(be.last_command_bytes));
   check(s.inputs().size() == 64, "every input snapshot was recorded", 64,
         static_cast<long long>(s.inputs().size()));
   // 65: the pre-input hash at tick 0, plus one per tick.
-  check(s.hashes().size() == 65, "hashes recorded from BEFORE the first input",
-        65, static_cast<long long>(s.hashes().size()));
+  check(s.hashes().size() == 65, "hashes recorded from BEFORE the first input", 65,
+        static_cast<long long>(s.hashes().size()));
 }
 
 void test_replay_reproduces_the_session_exactly() {
@@ -176,8 +174,7 @@ void test_replay_reproduces_the_session_exactly() {
   for (int i = 0; i < 120; ++i) s.tick();
 
   const int diverged = s.replay_and_compare(s.inputs(), s.hashes());
-  check(diverged == -1, "a recorded session replays with identical hashes", -1,
-        diverged);
+  check(diverged == -1, "a recorded session replays with identical hashes", -1, diverged);
 }
 
 void test_a_divergence_is_located_at_the_tick_it_happened() {
@@ -198,16 +195,14 @@ void test_a_divergence_is_located_at_the_tick_it_happened() {
 
   // The drift is applied during advance() of tick index 42, so the hash
   // recorded AFTER that advance -- entry 43 -- is the first that differs.
-  check(at == 43, "the divergence is located at the exact tick, not merely seen",
-        43, at);
+  check(at == 43, "the divergence is located at the exact tick, not merely seen", 43, at);
   check(at != -1, "and it is not reported as identical", 1, at != -1 ? 1 : 0);
 }
 
 void test_handles_carry_a_generation_and_zero_means_unpublished() {
   MockBackend be;
   zcon::Handle never;
-  check(!never.valid(), "a default handle is INVALID -- generation 0", 0,
-        never.valid() ? 1 : 0);
+  check(!never.valid(), "a default handle is INVALID -- generation 0", 0, never.valid() ? 1 : 0);
 
   const uint8_t bytes[4] = {1, 2, 3, 4};
   const zcon::Handle h = be.publish(zcon::ResourceKind::kMeshStream, bytes, 4);
@@ -227,7 +222,7 @@ void test_the_simulation_cannot_see_the_backend() {
   s1.start(7);
   for (int i = 0; i < 50; ++i) s1.tick();
 
-  MockBackend b;                 // a different instance, different call history
+  MockBackend b;  // a different instance, different call history
   b.scripted = a.scripted;
   b.publish(zcon::ResourceKind::kTexturePage, nullptr, 0);  // extra traffic
   ToyTruth t2;
@@ -238,8 +233,7 @@ void test_the_simulation_cannot_see_the_backend() {
   bool same = s1.hashes().size() == s2.hashes().size();
   for (std::size_t i = 0; same && i < s1.hashes().size(); ++i)
     if (s1.hashes()[i] != s2.hashes()[i]) same = false;
-  check(same, "identical inputs give identical state through any backend", 1,
-        same ? 1 : 0);
+  check(same, "identical inputs give identical state through any backend", 1, same ? 1 : 0);
 }
 
 }  // namespace

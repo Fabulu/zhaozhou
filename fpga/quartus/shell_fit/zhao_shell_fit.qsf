@@ -163,6 +163,27 @@ set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_blen
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_div255.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_quant.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_fill.sv
+# ---- D22 staircase: blocks the shell BENCH composes ------------------------
+# Not instantiated by zhao_shell_top -- tb_zhao_shell instantiates them so the
+# shell's input boundary can move backwards one block at a time and the same
+# triangle be drawn both ways. Listed here anyway, because of the gate that
+# caught their absence:
+#
+#   "A module missing from the QSF builds and tests green under Verilator and
+#    cannot be elaborated by Quartus at all."
+#
+# GEOM.SETUP (step 1) went into tests/CMakeLists.txt and NOT here, so
+# source_list_parity had been failing since.
+#
+# THE ORDER MATTERS AND IS NOT DEPENDENCY ORDER. It is tests/CMakeLists.txt's
+# order, index for index, because run_shell_fit.ps1 compares the two lists
+# positionally and refuses to run the fit when they differ -- so a swap is
+# green under Verilator and fatal at the fit. The parity gate checks the order
+# too, and caught this on the first attempt.
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_setup.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/geometry/zhao_geom_depthquant.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/raster/zhao_raster_rcp24_svc.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/field/zhao_field_rcp24_rom.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../rtl/common/zhao_shell_top.sv
 # Added 2026-08-21 with the DEBUG.FRAMEBLIT integration (steps 4-6). These three
 # were wired into zhao_shell_top and the CMake source list, and NOT here -- so
