@@ -538,6 +538,13 @@ targets:
       - fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
       - fpga/rtl/texture/zhao_texture_tmu_pipe.sv
       - fpga/rtl/texture/zhao_texture_tmu_plan.sv
+      # BOTH COMBINERS. zhao_texture_combine is refuted (D19q) and the
+      # generated top still instantiates it, so it must be here or the
+      # production fit dies at elaboration -- registering a block in the
+      # manifest and putting its source in this list are two different
+      # acts, and check_prod_manifest.py caught that they had diverged.
+      - fpga/rtl/texture/zhao_texture_combine.sv
+      - fpga/rtl/texture/zhao_texture_material_combine_v1.sv
       - fpga/rtl/video/zhao_scanout_fetch.sv
       - fpga/rtl/video/zhao_scanout_linebuf.sv
       - fpga/rtl/video/zhao_scanout_serializer.sv

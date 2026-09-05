@@ -49,7 +49,25 @@ top:
   # --- texture island (the production rebuild) -----------------------------
   - zhao_texture_tmu_pipe        # over zhao_texture_tmu
   - zhao_texture_tmu_plan
-  - zhao_texture_combine       # TEXTURE.COMBINE, the material combiner (G1-C)
+  # TEXTURE.COMBINE. TWO ROWS ON PURPOSE, and only for as long as it takes to
+  # measure the second.
+  #
+  # zhao_texture_combine is the II=1 form, REFUTED 2026-09-05 by the
+  # architecture's own tripwire: 8 DSP blocks against S3.4's "reject DSP > 2",
+  # because S15.5 closes with "Do not write six independent `*` operators and
+  # assume they pack" and that is what it does. Docket D19q.
+  #
+  # zhao_texture_material_combine_v1 is the replacement -- S15.5 variant A
+  # LOGIC2, two multipliers attributed to ALM logic, tokenized microjobs,
+  # queued continuations, all EIGHT ratified recipes including the two
+  # three-sample terrain ones the old block refuses as illegal.
+  #
+  # The refuted block stays until its replacement has a MEASUREMENT, so the
+  # island is never left with no combiner and no record of why the shape
+  # changed. When that fit lands, delete this row, its RTL, and
+  # tests/texture/texture_combine_diff.cpp together.
+  - zhao_texture_combine       # REFUTED (D19q); delete when v1 is measured
+  - zhao_texture_material_combine_v1
   - zhao_texture_cache_pipe      # over zhao_texture_cache: C0-C4, M10K-backed
   - zhao_texture_aux_pipe        # over zhao_texture_aux
   - zhao_texture_palette_res
@@ -149,6 +167,21 @@ top:
   - zhao_field_v3_sbank
 
 excluded:
+  # --- composition tops ------------------------------------------------------
+  # zhao_texture_island_top wires the eleven approved texture-island components
+  # to each other so the island can be MEASURED and DRAWN THROUGH as one thing.
+  # It is not a leaf and it is not the machine's top; every block it holds is
+  # counted individually above, so counting it too would double the island.
+  #
+  # It is not a `harness` either, and the distinction matters: a harness drives
+  # blocks from stub stimulus, which is what zhao_prod_top does with its
+  # per-block LFSRs. This carries real fragments through real inter-block
+  # wiring -- 64 in, 64 out, every block's counter moving. Marked `probe`
+  # because that is the nearest existing reason code for "exists to put logic
+  # in front of the fitter"; if a `composition` code is ever added, this is its
+  # first member.
+  - zhao_texture_island_top: probe  the composed G1-D island; its blocks are counted individually
+
   # --- probes and leaf-fit pairs: never in the machine -----------------------
   # These exist to put ONE block, or two adjacent blocks, in front of the
   # fitter. Every one of them is a wrapper around production logic that is
