@@ -188,8 +188,13 @@ constexpr int32_t kKnuckleReentryOffXMm = -100, kKnuckleReentryOffYMm = 285;  //
 // 0/1200/2400/3600 ladder at front/three-quarter/side under the shipping
 // sun. kEyeXMm is pulled back so the assembly sits inside the silhouette at
 // three-quarter and the crown keeps the protected ~160 mm read (probed).
-constexpr int32_t kEyeXMm = 381, kEyeYMm = 90, kEyeZMm = 190;  // centre, ±z
-constexpr int32_t kEyeVAngleA16 = -4400;  // Λ: tips converge at the top (~24°)
+constexpr int32_t kEyeXMm = 381, kEyeYMm = 90, kEyeZMm = 215;  // centre, ±z
+                                          // (pass 4: +25 z separation --
+                                          // "they touch at the top. They
+                                          // must not." -- plus the V angle
+                                          // eased below)
+constexpr int32_t kEyeVAngleA16 = -3600;  // Λ: tips converge at the top (eased
+                                          // from -4400: the apexes were meeting)
 constexpr int32_t kEyeYawOutA16 = 2400;   // partial outward yaw (R4 ladder pick)
 constexpr int32_t kEyeTiltA16 = 2200;     // the almond's backward lean
 constexpr int32_t kEyeBulgeMm = 88;       // pupil star stands proud of the lens
@@ -200,9 +205,31 @@ constexpr int kEyeRings = 5;
 constexpr int kEyeFacetSegments = 8;      // the facet read at 240p
 // PASS 3 (R3): the star GROWS toward the sheet's ~20% lens share (it never
 // grew in pass 2: 5.5-9.8% measured). Judged by eye on the lit path.
-constexpr int32_t kPupilStarArmMm = 185;  // star arm half-length (the sheet's
-constexpr int32_t kPupilStarThinMm = 26;  // fat organic star, not a thin cross)
-constexpr int32_t kPupilStarWideMm = 72;  // blade width
+// PASS 4 (Stage E). The reviewer's arithmetic: arm 185 vs lens half-width
+// 125 -- the star could not fit across the short axis, so no clamp could
+// ever contain it. The arms are now PER-AXIS and sized to FIT: the long
+// arm rides the lens long axis, the short arm stays under the half-width
+// minus the white ring's territory.
+constexpr int32_t kPupilStarArmLongMm = 150;   // along the lens long axis
+constexpr int32_t kPupilStarArmShortMm = 88;   // across: <= ~80% of
+                                               // (kEyeWideMm - ring margin)
+constexpr int32_t kPupilStarThinMm = 26;  // blade thickness (depth)
+constexpr int32_t kPupilStarWideMm = 64;  // blade width
+// the white annulus (X1/X2): a flat torus riding the PUPIL bone between
+// star and lens -- the whites trace the pupils BY CONSTRUCTION, which is
+// the tracking requirement the static page could never meet.
+constexpr int32_t kWhiteRingRMm = 112;     // major radius (rings the star)
+constexpr int32_t kWhiteRingTubeMm = 15;   // tube gauge (~1-2 px)
+constexpr int32_t kWhiteRingOffXMm = 52;   // sits between lens face and star
+constexpr int kWhiteRingSegs = 14;         // stations around the torus
+// the X1 TEARDROP profile (Direction 4: "very pointy at the top, bottom is
+// more round... too simple of a primitive"): per-ring width in pm of
+// kEyeWideMm, bottom ring first. The depth (dome) follows the same
+// profile. kEyeApexSharpPm pulls the last rings toward the apex point.
+constexpr int kEyeRings2 = 10;
+constexpr int kEyeRingWidthPm[kEyeRings2] = {330, 620, 830, 950, 1000,
+                                             940,  800, 590, 340, 120};
+constexpr int kEyeApexSharpPm = 780;  // >1000 widens the tip gap; <1000 sharpens
 constexpr uint8_t kLensR = 116, kLensG = 58, kLensB = 178;   // purple (grey pass)
 // The star's SHIPPED pigment lives in mkmanafoldpage.py (STAR_CYAN, same value):
 // the star must carry a page because untextured parts render black under
@@ -252,7 +279,16 @@ constexpr int32_t kAntennaTiltA16 = 700;
 // PASS 3 (F4, Direction 3 §2): star containment — the star plus its white
 // ring must never cross the lens ink at any authored gaze extreme. The
 // clamps are cut with the bigger star and proven by rendering the extremes.
-constexpr int32_t kGazeMaxA16 = 3000;
+// PASS 4 (Stage E): containment is ARITHMETIC. The star's centre sweeps
+// z ~= kEyeBulgeMm * sin(gaze/2 in angle16 halves); the short arm (88) +
+// the white ring tube (15) must stay inside the lens half-width (125):
+// allowed z travel ~= 125 - 88 - 15 = 22 mm -> sin = 22/88 = 0.25 ->
+// ~14.5 deg full angle ~= 2640 angle16. Held under it with margin, then
+// PROVEN by rendering the authored extremes (the eye places the value).
+constexpr int32_t kGazeMaxA16 = 2400;
+// lift: along the long axis the room is (250*0.93 - 150 - 15) ~= 67 mm ->
+// sin = 67/88 = 0.76; the practical clamp stays far below (the squint and
+// the V-angle eat into it) -- picked by the same margin discipline.
 constexpr int32_t kGazeLiftMaxA16 = 2000;
 constexpr int32_t kSquintMaxA16 = 9000;    // 1000pm = mostly closed
 constexpr int32_t kBlazeTwinkleA16 = 10923;  // the channel's slow star spin
@@ -356,6 +392,7 @@ constexpr uint8_t kPageStarTile = 2;
 constexpr uint8_t kBodyV0 = 8, kBodyV1 = 120;
 constexpr uint8_t kLoopV0 = 136, kLoopV1 = 200;
 constexpr uint8_t kHingeV0 = 208, kHingeV1 = 248;
+constexpr uint8_t kWhiteV0 = 250, kWhiteV1 = 254;  // pass 4: the white ring band
 
 // ============================== PALETTE ====================================
 // Grey until the texture pass; the pinks are chosen by eye in scene at 240p.
@@ -383,6 +420,121 @@ constexpr int kCentreGlowGainPm = 380;
 constexpr int kBellyGlowGainPm = 0;
 // S5 spike staging: three phantom conduit centres sharing one frame ramp
 constexpr int32_t kS5PhantomOffsMm[3][2] = {{0, 0}, {-2700, -1400}, {2500, -2000}};
+
+// ================= THE FOLDING (pass 4 centrepiece knobs) ==================
+// Manafold FOLDS ITS MANA: the antenna is the hand, the mana is a stencil
+// of fat glow motes at FIXED barycentric weights over the posed antenna
+// anchors -- the shape folds because the rig folds, by construction -- and
+// GRIP / KNEAD / DRAG derive purely from joint state. The choreography
+// layer antenna_knead (manafold_clips.h) runs the fold-hold-knead loop in
+// EVERY clip; the mote system (manafold_fx.h) reads only the posed joints.
+
+// deterministic hash (shared by the choreography timeline and the fx lane;
+// zlib-free, integer). Moved here from the fx header so both can see it.
+inline uint32_t fx_hash(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t h = a * 0x9E3779B9u ^ b * 0x85EBCA6Bu ^ c * 0xC2B2AE35u;
+  h ^= h >> 15;
+  h *= 0x2545F491u;
+  h ^= h >> 13;
+  return h;
+}
+inline int32_t fx_jit(uint32_t h, int32_t amp_mm) {
+  if (amp_mm <= 0) return 0;
+  return static_cast<int32_t>(h % static_cast<uint32_t>(2 * amp_mm + 1)) - amp_mm;
+}
+
+// The six fold anchors' REST positions, root-local mm (junctionF, neck,
+// hingeA, hingeB, hingeC, junctionB) -- measured by the committed probe's
+// REST ANCHOR report on the still pose and held here as the OWNER-EDITABLE
+// reference layout the stencil weights are computed against. Re-run the
+// probe and update after any rig/arc change.
+constexpr int32_t kFoldAnchorRestMm[6][3] = {
+    {89, 664, 0},     {45, 996, 14},   {0, 1337, 29},
+    {-231, 1564, 132}, {-566, 1434, 256}, {-230, 179, 0}};
+// the stencil frame: shapes are authored around this pocket centre, at
+// this scale (mm), inside the anchor hexagon (kPocketBoundPm clamps)
+constexpr int32_t kStencilCentreUMm = -240, kStencilCentreVMm = 1120;
+constexpr int32_t kStencilScaleMm = 300;   // iter 1: 230 drew a blob smaller
+                                           // than its own motes; bigger shape,
+constexpr int kPocketBoundPm = 900;        // stencil points clamp inside the hexagon
+// The plan's named fallback, NOW ON (authored, judged by eye): the house
+// camera sits ~45° off the loop plane's ~18° yaw, so a stencil drawn in
+// the plane loses ~45% of its across-axis on screen and the STAR/TRIANGLE
+// died at native (looked at, iter 6). The stencil OFFSETS (never the
+// anchors) rotate about the vertical axis by this yaw toward the camera
+// side; positions stay rig-anchored sums, so the folding law is untouched.
+constexpr int32_t kStencilFaceYawA16 = -5000;  // ~27 deg toward the camera (the
+                                               // offset rotation is -theta about
+                                               // +Y; +5000 rotated AWAY, looked at)
+// motes
+constexpr int kMoteCount = 24;
+constexpr int kWanderCount = 3;            // of kMoteCount: the odd drifters
+constexpr int32_t kMoteHaloRPxMin = 7, kMoteHaloRPxMax = 10;   // iter 5; iter 2: 8-11 still
+                                           // flooded the ~40 px pocket; iter 1: 11-15
+                                           // merged into one cloud that
+                                           // swallowed the antenna (looked at);
+                                           // the STROKE must be thinner than
+                                           // the shape it draws
+constexpr int kMoteCoreOfHaloPm = 580;     // opaque heart under the halo
+constexpr int kMoteHaloGainPm = 340;       // under the ceiling: hue survives
+constexpr int kMoteCrowdPm = 700;          // per-conduit mote scale-down when
+                                           // several conduits are on screen
+// grip / knead / drag (all derived from JOINT STATE, never contact)
+constexpr int32_t kGripGamma = 14;         // coherence per area-shrink pm
+constexpr int kCohBasePm = 320;            // coherence at rest area (low: the
+                                           // limp cloud must read limp)
+constexpr int kCohMinPm = 130;
+constexpr int32_t kCloudSpreadMm = 380;    // low-grip relax offsets
+constexpr int32_t kKneadJitterMm = 70;     // agitation jitter at full knead
+constexpr int32_t kKneadVelRefMm = 50;     // EXCESS anchor speed (mm/frame over
+                                           // the slow-tracked baseline) = full
+                                           // agitation. Iter 3: raw speed
+                                           // saturated on the resting wobble
+                                           // itself (measured 57-82 mm/frame at
+                                           // rest), so agitation is now the
+                                           // excess over a ~64-frame EMA.
+constexpr int kFoldFeedBasePm = 520;       // the fold's smear feed at rest
+constexpr int kKneadFeedPm = 380;          // extra smear feed at full agitation
+constexpr int kDragLagFrames = 2;          // + hash%4 per mote (2..5) -- the
+                                           // iron-filings lag
+constexpr int kDragGainPm = 2600;
+constexpr int32_t kWanderEscapeMm = 780;   // the wander motes may leave the pocket
+// mote micro-orbit (R7 smoother rotation: ONE angular velocity per mote,
+// long periods, no frequency doubling)
+constexpr int kMoteOrbitPeriodMinF = 130, kMoteOrbitPeriodMaxF = 260;
+constexpr int32_t kMoteOrbitRMinMm = 40, kMoteOrbitRMaxMm = 95;
+// the fold-hold-knead timeline (KEYS; frames on screen = 2x)
+constexpr int kGatherKeysBase = 30, kGatherKeysHash = 16;   // 60..90 frames
+constexpr int kHoldKeysBase = 32, kHoldKeysHash = 32;       // 64..128 frames
+constexpr int kKneadKeysBase = 30, kKneadKeysHash = 30;     // 60..120 frames
+constexpr int kReleaseKeys = 14;           // every clip's tail: amp eases to 0
+                                           // so the loop seam carries no pop
+// the choreography amplitudes (angle16; "very mobile" -- authored large,
+// bounded by the 07 bands and the closure probe)
+constexpr int32_t kKneadGripJfA16 = 1500;  // gather: the junctions close...
+                                           // (iter 3: the first authoring
+                                           // moved the pocket area by <1% --
+                                           // the grip must be SEEN)
+constexpr int32_t kKneadGripNeckA16 = 2600;
+constexpr int32_t kKneadGripAA16 = 2200;
+constexpr int32_t kKneadGripBA16 = 1400;
+constexpr int32_t kKneadGripCA16 = 1800;
+constexpr int32_t kKneadWagJfA16 = 900;   // knead: the two hands work...
+constexpr int32_t kKneadWagNeckA16 = 400;  // (neck stirs out-of-plane)
+constexpr int32_t kKneadWagBA16 = 500;
+constexpr int32_t kKneadWagCA16 = 1000;    // ...in counter-rotation
+constexpr int32_t kKneadWagB2A16 = 900;    // the back-junction ball slides
+constexpr int kKneadWagPeriodKeys = 22;
+constexpr int32_t kKneadTremorA16 = 130;   // the hold's small tremor
+// per-clip gain (pm) for the always-on knead layer, indexed by slot:
+// 0 hover, 1 drift, 2 channel, 3 curious, 4 startle, 5 rest, 6 pirouette,
+// 7 still(diagnostic: OFF), 8 hasty, 9 fall, 10 hit, 11 taunt, 12 taunt2,
+// 13 trick
+// (trick is 0: the committed probe showed the knead grip LIFTING the
+// planted loop peak out of its declared ground contact -- the antenna is
+// busy standing; the mana still reads the balance flex.)
+constexpr int kKneadClipPm[14] = {1000, 600, 900, 800, 350, 700, 700,
+                                  0,    450, 300, 350, 550, 500, 0};
 
 // ============================ END KNOBS ====================================
 

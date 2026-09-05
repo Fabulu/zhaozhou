@@ -2311,6 +2311,8 @@ struct CreatureReelCtx {
   int u02_smear_preset = 0;
   std::vector<uint8_t> u02_smear_buf;
   std::vector<int32_t> u02_smear_depth;  // R5: per-cell nearest splat depth
+  u02::FoldState u02_fold[3];            // pass 4: per-conduit fold state
+  int32_t u02_fold_agit = 0;             // this frame's agitation (smear feed)
 };
 constexpr uint32_t kZixxMovingSourceCount = 4;
 constexpr uint32_t kZixxMovingSourceWarm = 0;
@@ -3216,7 +3218,10 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     // ---- pass 3 (R6): THE SMEAR PLANE, first — decay with the quantised
     // glitchy step, feed EVERYTHING the mana draws this frame (pre splats
     // included), composite additively at chunky 4x under the live bodies.
-    const u02::SmearPreset& sp = u02::kSmearPresets[c.u02_smear_preset & 3];
+    const u02::SmearPreset& sp =
+        u02::kSmearPresets[c.u02_smear_preset >= 0 && c.u02_smear_preset < 5
+                               ? c.u02_smear_preset
+                               : 0];
     if (sp.gain_pm > 0) {
       if (c.u02_smear_buf.size() !=
           static_cast<size_t>(u02::kSmearW) * u02::kSmearH * 3)
@@ -3227,6 +3232,17 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
         c.u02_smear_depth.assign(static_cast<size_t>(u02::kSmearW) * u02::kSmearH, 0);
       u02::smear_update(c.u02_smear_buf.data(), c.u02_smear_depth.data(),
                         c.u02_frame, sp);
+      static u02::GlowFrameCache s_feed_cache;
+      // pass 4: the fold's trail feed is CALM at rest and fed by the churn
+      // (a held shape stays crisp, a fast gesture smears); non-fold mana
+      // keeps the pass-3 feed. ONE ramp build per (ramp,gain,boost) per
+      // frame through the cache (the reviewer's palette-rebuild note).
+      const bool fold_mana = c.u02_mana == 3 || c.u02_mana == 6 ||
+                             c.u02_mana == 8 || c.u02_mana == 9;
+      const int feed_boost =
+          fold_mana ? u02::kFoldFeedBasePm +
+                          u02::kKneadFeedPm * c.u02_fold_agit / 1000
+                    : 1000;
       for (const u02::ManaSplat& ms : c.u02_mana_splats) {
         // the near-white strand cores and flash glints stay LIVE-ONLY: fed
         // into the plane they became solid white confetti blocks that
@@ -3237,30 +3253,23 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
         const zref::render::ProjOut pm = zref::render::project_vertex(
             c.vp, vpp_m, zref::fx16{ms.x}, zref::fx16{ms.y}, zref::fx16{ms.z}, nullptr);
         if (!pm.in) continue;
-        u02::GlowFrame gf2 = s_mana_ramps[ms.ramp];
-        if (ms.gain_pm != 1000) {
-          for (int i = 0; i < 64; ++i)
-            for (int ch = 0; ch < 3; ++ch)
-              gf2.pal[i][ch] = static_cast<uint8_t>(gf2.pal[i][ch] * ms.gain_pm / 1000);
-        }
+        const u02::GlowFrame& gf2 = u02::glow_frame_cached(
+            s_feed_cache, c.u02_frame, s_mana_ramps, ms.ramp, ms.gain_pm, feed_boost);
         u02::smear_feed(c.u02_smear_buf.data(), c.u02_smear_depth.data(),
                         s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8, ms.r_px,
                         pm.s.d);
       }
       u02::smear_composite(c.u02_smear_buf.data(), c.u02_smear_depth.data(), rgb,
-                           depth, w, h, sp.gain_pm);
+                           depth, w, h, sp.gain_pm, c.u02_frame, sp.tear);
     }
+    static u02::GlowFrameCache s_draw_cache;
     for (const u02::ManaSplat& ms : c.u02_mana_splats) {
       if (ms.pre) continue;
       const zref::render::ProjOut pm = zref::render::project_vertex(
           c.vp, vpp_m, zref::fx16{ms.x}, zref::fx16{ms.y}, zref::fx16{ms.z}, nullptr);
       if (!pm.in) continue;
-      u02::GlowFrame gf2 = s_mana_ramps[ms.ramp];
-      if (ms.gain_pm != 1000) {
-        for (int i = 0; i < 64; ++i)
-          for (int ch = 0; ch < 3; ++ch)
-            gf2.pal[i][ch] = static_cast<uint8_t>(gf2.pal[i][ch] * ms.gain_pm / 1000);
-      }
+      const u02::GlowFrame& gf2 = u02::glow_frame_cached(
+          s_draw_cache, c.u02_frame, s_mana_ramps, ms.ramp, ms.gain_pm);
       u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
                       ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque);
     }
@@ -3913,11 +3922,12 @@ int render_scene(const SceneSubject& sub) {
             };
             u02::FxAnchors fa;
             anchor(u02::kBRoot, fa.body);
-            // PASS 4: the ring-centre anchor stays at the FRONT JUNCTION
-            // (the old neck bind) so the pass-3 centring (R8) is preserved
-            // bone-for-bone; the new mid-tube kBNeck joins the anchor set
-            // properly in the folding stage.
-            anchor(u02::kBJunctionF, fa.neck);
+            // PASS 4 (the centrepiece): the six fold anchors. The ring
+            // centre keeps the FRONT JUNCTION (the old neck bind) in its
+            // centroid so the pass-3 centring (R8) is preserved.
+            anchor(u02::kBJunctionF, fa.junction_f);
+            anchor(u02::kBNeck, fa.neck);
+            anchor(u02::kBLoopBase2, fa.junction_b);
             anchor(u02::kBHingeA, fa.hinge_a);
             anchor(u02::kBHingeB, fa.hinge_b);
             anchor(u02::kBHingeC, fa.hinge_c);
@@ -3930,7 +3940,7 @@ int render_scene(const SceneSubject& sub) {
             // anchor lands in the hole's middle. Still posed bones: hinge
             // play still moves the mana (one performance).
             for (int k = 0; k < 3; ++k)
-              fa.ring[k] = (fa.neck[k] + fa.hinge_a[k] + fa.hinge_b[k] +
+              fa.ring[k] = (fa.junction_f[k] + fa.hinge_a[k] + fa.hinge_b[k] +
                             fa.hinge_c[k]) / 4;
             cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][0] = fa.body[0];
             cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][1] = fa.body[1];
@@ -3947,10 +3957,27 @@ int render_scene(const SceneSubject& sub) {
                   static_cast<int32_t>((static_cast<int64_t>(ds.flatten) * 500) /
                                        (u02::kCompressAmpPm > 0 ? u02::kCompressAmpPm : 1));
             }
-            if (sub.u02_mana != 0 && ii == 0) {
+            if (sub.u02_mana != 0) {
+              // PASS 4 (Stage MN, the reviewer's flag 2 made honest): the
+              // mana fills for EVERY composed conduit, not ii == 0 only --
+              // no subject had ever rendered several conduits' mana, so
+              // "u02-trio" was a fake witness. Each conduit runs the shared
+              // timeline on ITS OWN clip clock (the trio is phase-offset),
+              // with its own fold state; kMoteCrowdPm is the relief valve.
               cr_ctx.u02_mana = sub.u02_mana;
               cr_ctx.u02_frame = f;
-              u02::mana_fill(sub.u02_mana, f, fa, cr_ctx.u02_mana_splats);
+              int n_conduits = 1;
+              for (int e = 0; e < 2; ++e)
+                if (cr_ctx.u02_extra[e] != nullptr) ++n_conduits;
+              const uint32_t conduit_frame =
+                  ii == 0 ? f
+                          : static_cast<uint32_t>(ip->anim.frame) * 2u + ip->anim.sub;
+              int32_t agit = 0;
+              u02::mana_fill(sub.u02_mana, conduit_frame, ip->anim.slot,
+                             cl->frame_count, fa, cr_ctx.u02_fold[ii],
+                             n_conduits > 1 ? u02::kMoteCrowdPm : 1000,
+                             cr_ctx.u02_mana_splats, &agit);
+              if (ii == 0) cr_ctx.u02_fold_agit = agit;
             }
           }
         }
@@ -4993,20 +5020,37 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   s.orbit = orbit;
   u02_common(s);
   if (!orbit) s.cam_yaw = 0x2000;  // three-quarter: the face and the loop both read
+  // PASS 4 (Stage T -- the reviewer's fault 2, by the Zixxtrixx walk's own
+  // precedent): a TRAVELLING clip must stage on FLAT ground. The reel
+  // snaps the root to ONE terrain column at the stage centre; at
+  // bump_ext 6 the mound rises under real lateral travel and the creature
+  // walked into the hillside (drift sank to a nub, twice shipped). Flat
+  // ground so one column's snap speaks for the whole path. Drift (1) and
+  // hasty (8) travel; everything else keeps the mound.
+  if (slot == 1 || slot == 8) s.bump_ext = 18;
+  // PASS 4 (Stage T -- the reviewer's fault 2b): the fall started ABOVE the
+  // frame; 190 of 340 frames showed empty sky. The authored 3.6 m drop
+  // stays (Direction 3 asked for it); the CAMERA pulls back and tips up so
+  // the creature is on screen from frame 0 -- a staging constant, judged by
+  // rendering frame 0 and looking.
+  if (slot == 9) {
+    s.cam_k = 150000;
+    s.cam_ps = 9000;   // shallower pitch: keep sky headroom for the drop
+    s.cam_pc = 64900;
+  }
   // PASS 4 (Direction 4 §4): the interior glow is REMOVED from every
   // shipping subject — "make it go away". kBellyGlowGainPm (held 0) is the
   // revert path; the glow machinery itself stays, the mana uses it.
   s.u02_glow = u02::kBellyGlowGainPm > 0;
-  // Pass 2 (Direction 2 §3): the ten-emitter set is AXED. The channel —
-  // the conduit at work — carries the LIGHTNING mana (the Description
-  // sheet says discharging bolts through the antenna IS this creature);
-  // the owner picks the rest of the stack from the mana menu subjects.
-  s.u02_mana = slot == 2 ? 4 : 0;
-  // pass 3 (R9): the channel's strand strikes DECAY through the smear
-  // plane instead of vanishing. The SHORT rung: with the buzz re-hashing
-  // every 7 frames, the mid rung held ~8 old paths at once and the pocket
-  // read as a white cloud, not strands (looked at, retuned).
-  s.u02_smear = slot == 2 ? 1 : 0;
+  // PASS 4 (Direction 4 §0, the centrepiece): the FOLD runs on EVERY clip
+  // — "a loop of that to be going on all the time as the creature exists".
+  // The channel stacks the lightning strand on top (candidate 9); the form
+  // diagnostic (slot 7) stays clean.
+  s.u02_mana = slot == 2 ? 9 : (slot == 7 ? 0 : 3);
+  // the fold's smear rides the lead mid/glitchy rung everywhere; the
+  // channel keeps the SHORT rung (pass-3 lesson: the strand's ghosts pile
+  // up at the mid rung and the pocket reads as cloud, not strands).
+  s.u02_smear = slot == 2 ? 1 : (slot == 7 ? 0 : 3);
   // Pass 3 (Direction 3 §1): the four-light-everywhere look was a
   // REGRESSION — "It should look just like Zixx' lighting with the
   // directional light from the sun." Every clip ships under its own named
@@ -6842,6 +6886,20 @@ int main(int argc, char** argv) {
                  "ZIXX_SUNS=%s (Direction 29/30 clip suns + additive-normal %s)\n",
                  suns, g_zixx_suns_enabled ? "on" : "OFF");
   }
+  // PASS 4 (the centrepiece's own FAIL line): U02_ABLATE_KNEAD=1 zeroes the
+  // antenna_knead choreography layer. The mana MUST go limp in that render;
+  // if it does not, the rig-to-mana coupling is decorative and the folding
+  // feature has FAILED (07 §3's ablation law, in reverse).
+  if (const char* ab = std::getenv("U02_ABLATE_KNEAD")) {
+    u02::g_u02_knead_ablate = std::string(ab) == "1" ? 1 : 0;
+    if (u02::g_u02_knead_ablate)
+      std::fprintf(stderr, "U02_ABLATE_KNEAD=1 (the fold choreography is OFF)\n");
+  }
+  // PASS 4 fold diagnostics (default off): the stencil X-ray + telemetry.
+  if (const char* fl = std::getenv("U02_FOLD_LOCK"))
+    u02::g_u02_fold_lock = std::string(fl) == "1" ? 1 : 0;
+  if (const char* fd = std::getenv("U02_FOLD_DEBUG"))
+    u02::g_u02_fold_debug = std::string(fd) == "1" ? 1 : 0;
   // PASS 4 (instrument honesty): ZIXX_HIDE_CREATURE=1 renders every frame
   // with the creature hook skipped -- trajplot.py's creature-free
   // background plate. Unset (the normal case) nothing changes.
@@ -7028,8 +7086,8 @@ int main(int argc, char** argv) {
         // PASS 3 (R13): six variants, all alive; drip is CUT (dead in 579
         // of 600 frames — shipping it broken overstated the menu). The two
         // smear rungs double as the owner's decay/glitch picker.
-        {"manafold-mana-aqua", 3, 2},   // aquamarine smeared plasma — THE LEAD
-        {"manafold-mana-cyan", 6, 3},   // cyan, the long/glitchier smear rung
+        {"manafold-mana-aqua", 3, 3},   // the aqua FOLD on the shipping rung
+        {"manafold-mana-cyan", 6, 4},   // the cyan FOLD on the BROKEN-BUFFER rung
         {"manafold-mana-blue", 2, 1},   // filled deep blue, minimal smear
         {"manafold-mana-green", 7, 1},  // filled sea-green ("try greens")
         {"manafold-mana-boil", 5, 1},   // the boil CENTRE, grown, outer gone

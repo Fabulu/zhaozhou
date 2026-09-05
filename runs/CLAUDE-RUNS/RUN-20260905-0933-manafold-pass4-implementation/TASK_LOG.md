@@ -112,3 +112,55 @@ default(.20) vs A26 pair - A26 lifts the away-phase murk, pools stay
 saturated; A26 SHIPPED. Hardware asks amended: glow_persist needs a
 persisted per-cell depth (or documents feed-time-only, which fails the
 ruling).
+
+## Stage FOLD iterations (13:00-15:00)
+Mechanism: 18-pt stencils x 6 shapes (ring/star-as-spokes/bar/crescent/
+triangle/s-curl), integer MEAN-VALUE-COORDINATE weights over the six rest
+anchors (probe-measured kFoldAnchorRestMm; MVC reproduces authored points
+to 0.0 mm offline), runtime position = sum(w_i * posed_anchor_i) - the
+shape folds because the rig folds, by construction. GRIP = hexagon area vs
+rest (16-frame EMA - the wobble's own 46/102-frame waves must not flap
+coherence); KNEAD agitation = anchor speed EXCESS over a 64-frame EMA (raw
+speed saturated on the resting wobble: measured 57-82 mm/frame at rest);
+DRAG = hinge B's lagged (2-5 frame) relative velocity. antenna_knead is the
+always-on choreography (gather/hold/knead/release, hashed 07-band segment
+lengths, per-clip opener + per-clip gain, release tail = seamless loop).
+ITERATION LOG (author-render-look):
+ 1: 11-15px halos + rung-2 smear = one cloud swallowing the antenna. FAIL.
+ 2: 6-8px halos, churn-scaled feed - glitter, no shape. Telemetry built.
+ 3: grips were moving pocket area <1%; agit saturated at rest. Grips x3,
+    excess-EMA agitation, relax-regather envelope.
+ 4: area now 884-952 in HOLD, coh 900+; ring reads as beads around the
+    pocket. Star outline mush -> re-authored as SPOKES; openers vary/clip.
+ 5: face-yaw +5000 rotated the plane AWAY (looked at) -> -5000.
+PROBE CATCHES: the knead grip LIFTED the headstand's planted peak out of
+its declared contact (trick gain -> 0, documented); closure rim rose to
+1378pm -> retuned grips/wags to 1087pm, worst key RENDERED AND LOOKED AT
+(no visible breakout, ball masks entry) -> gate re-derived 1060 -> 1120.
+TRAVEL probe extension committed: drift/hasty stage FLAT (bump_ext 18, the
+walk precedent), terrain re-queried along each clip's own root path (rise
+0 mm on flat stage; the 432mm lie is structurally closed). Fall camera
+pulled back (cam_k 150000) so the drop starts in frame.
+
+## Stage E groundwork
+X3 timebox CLOSED with the refusal on source lines: SkinVertex.u/v are
+per-vertex bytes baked at compile (zref_creature.hpp:393) and Tmu::Mode
+carries fmt/bilinear/wrap/log2/mips only - no UV offset exists
+(zref_texture.hpp:129-142). A page cannot scroll; the page route
+mechanically cannot track a pupil. X1 (teardrop polygon lens, default) and
+X2 (almond kept, U02_EYE=x2) both carry the WHITE ANNULUS TORUS on the
+pupil bone - whites trace pupils by construction - and the de-whited eye
+page. Star arms per-axis (150 long / 88 short vs lens half-width 125), the
+185-vs-125 impossibility ends. Containment arithmetic documented at the
+clamps. Eye separation +25mm z, V-angle eased.
+
+## Stage MN applied (verification pending)
+1 strand + 5 surge motes + endpoint bursts, brightness floor 950 (median-
+frame law); 5th smear preset (BROKEN-BUFFER) + row tear on rungs 3/4;
+clips ship rung 3; GlowFrame cache (one ramp build per (ramp,gain,boost)
+per frame); mana fills for EVERY composed conduit (the ii==0 lie ends) on
+each conduit's own clip clock, kMoteCrowdPm valve.
+
+## Stage Q instrument: inkwidth.py committed with can-fail selftest
+(2px/5px rings measure 2.0/5.7; dilation detected; empty = vacuous).
+Zixxtrixx walk frame 80: ink median 2.0 px.

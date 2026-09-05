@@ -32,6 +32,8 @@
 #include "zref/zref_star.hpp"
 #include "zref/zref_render.hpp"
 #include "zref/zref_texture.hpp"
+#include "render_helpers.hpp"  // rtest::bump_patch — the reel's own stage
+#include "zrender/internal.hpp"  // zref::render::compose_lattice
 
 namespace zc = zref::creature;
 #include "manafold.h"
@@ -139,7 +141,13 @@ int main() {
     // on the pass-3 geometry, and the worst key (fall slot 9 key 57) was
     // rendered and LOOKED at: no visible breakout. Gate at measured + honest
     // headroom; past it the arm rim is genuinely leaving the body.
-    constexpr int32_t kMaxRimEllipPm = 1060;
+    // PASS 4: the always-on knead layer legitimately moves the return arm
+    // (bounded joint gestures on top of the closure aim), and the measured
+    // bank worst rose 1039 -> 1087 (taunt2 key 83). The worst key was
+    // rendered and LOOKED at (run evidence lasso-166): no visible breakout
+    // -- the back-junction ball masks the entry, the pass-3 rationale
+    // unchanged. Gate = measured + the same honest headroom class.
+    constexpr int32_t kMaxRimEllipPm = 1120;
     const int32_t rx = u02::fxu(u02::kBodyRadiusMm);
     const int32_t ry = u02::fxu(u02::vmm(u02::kBodyRadiusMm));
     // terminal ring stations (mm along the tube from y0), replicated from
@@ -361,6 +369,122 @@ int main() {
       prev_e = e;
       prev_lx = lmx;
       prev_ly = lmy;
+    }
+  }
+  // ---- PASS 4 (Stage T): the TRAVELLING-COLUMN probe ---------------------
+  //
+  // The reviewer's first ask: the reel ground-snaps the root with ONE
+  // column_query at the fixed stage centre, so a clip with real lateral
+  // travel inherits whatever the terrain does under its own path — the
+  // flat-plane clearance bound is NOT conservative for a travelling clip
+  // (it reported 432 mm while drift sank into the hillside). This probe
+  // rebuilds the subject's own stage (rtest::bump_patch, the reel's law),
+  // re-queries the column along each clip's root path, and asserts
+  // clearance-minus-rise stays above the float gate. Travelling clips
+  // stage FLAT (bump_ext 18, the walk precedent); everyone else keeps the
+  // mound (bump_ext 6) and barely moves.
+  {
+    constexpr int32_t kMinClearanceMm2 = 40;
+    for (const zc::Clip& clip : T.bank.clips) {
+      // does this clip travel?  (root x/z span over the whole clip)
+      int32_t min_x = INT32_MAX, max_x = INT32_MIN, min_z = INT32_MAX,
+              max_z = INT32_MIN;
+      for (uint16_t f = 0; f < clip.frame_count; ++f) {
+        const int32_t x = clip.root[static_cast<size_t>(f) * 3 + 0];
+        const int32_t z = clip.root[static_cast<size_t>(f) * 3 + 2];
+        min_x = std::min(min_x, x); max_x = std::max(max_x, x);
+        min_z = std::min(min_z, z); max_z = std::max(max_z, z);
+      }
+      const int32_t span_mm = static_cast<int32_t>(
+          ((static_cast<int64_t>(max_x - min_x) + (max_z - min_z)) * 1000) >> 16);
+      if (span_mm < 500) continue;  // fixed-position clip: centre column rules
+      const bool flat_staged = clip.slot_id == 1 || clip.slot_id == 8;
+      const int bump_ext = flat_staged ? 18 : 6;
+      zref::render::TerrainPatch patch = rtest::bump_patch(161, 161, bump_ext, 8);
+      const zref::terrain::ComposedLattice lat = zref::render::compose_lattice(
+          patch, rtest::xform_identity(), {}, 0, nullptr, nullptr);
+      const zref::terrain::ColumnResult c0 =
+          zref::terrain::column_query(lat, zref::fx16{0}, zref::fx16{0});
+      int32_t worst_rise = 0;
+      uint16_t worst_key = 0;
+      // per-key: min vertex world y (vs the snap plane) and the terrain
+      // rise under the travelled root
+      int32_t worst_eff = INT32_MAX;
+      uint16_t worst_eff_key = 0;
+      for (uint16_t f = 0; f < clip.frame_count; ++f) {
+        const int32_t rx2 = clip.root[static_cast<size_t>(f) * 3 + 0];
+        const int32_t rz2 = clip.root[static_cast<size_t>(f) * 3 + 2];
+        const zref::terrain::ColumnResult cr = zref::terrain::column_query(
+            lat, zref::fx16{rx2}, zref::fx16{rz2});
+        const int32_t rise = cr.cls == zref::terrain::ColumnClass::kSolid &&
+                                     c0.cls == zref::terrain::ColumnClass::kSolid
+                                 ? cr.top.raw - c0.top.raw
+                                 : 0;
+        if (rise > worst_rise) {
+          worst_rise = rise;
+          worst_key = f;
+        }
+        int32_t key_min = INT32_MAX;
+        std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+        zc::decode_pose(T, clip, f, pose, nullptr, 0);
+        const zc::DeformSample d = zc::deformation_sample(T, clip.slot_id, f, 0);
+        for (const zc::Meshlet& m : T.mesh) {
+          for (size_t vi = 0; vi < m.verts.size(); ++vi) {
+            zc::SkinVertex sv = m.verts[vi];
+            if (!m.deform.empty()) sv = zc::deform_skin_vertex(sv, m.deform[vi], d);
+            int32_t x, y, z;
+            zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
+            if (y < key_min) key_min = y;
+          }
+        }
+        const int32_t eff = key_min - rise;
+        if (eff < worst_eff) {
+          worst_eff = eff;
+          worst_eff_key = f;
+        }
+      }
+      const int32_t rise_mm = static_cast<int32_t>((static_cast<int64_t>(worst_rise) * 1000) >> 16);
+      const int32_t eff_mm = static_cast<int32_t>((static_cast<int64_t>(worst_eff) * 1000) >> 16);
+      const bool ok = eff_mm >= kMinClearanceMm2;
+      std::printf(
+          "u02-probe: TRAVEL slot %u (span %d mm, bump_ext %d): max terrain rise "
+          "%d mm under the path (key %u); worst clearance-minus-rise %d mm "
+          "(key %u) — %s\n",
+          clip.slot_id, span_mm, bump_ext, rise_mm, worst_key, eff_mm,
+          worst_eff_key, ok ? "OK" : "FAIL");
+      if (!ok) rc = 1;
+    }
+  }
+
+  // ---- PASS 4 (Stage FOLD): the REST ANCHOR TABLE ------------------------
+  // Root-local posed origins of the six fold anchors in the still pose --
+  // the measurement side of kFoldAnchorRestUV (the authored table is the
+  // knob; this print is the comparison).
+  {
+    const zc::Clip& still = T.bank.clips[7];
+    std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+    zc::decode_pose(T, still, 0, pose, nullptr, 0);
+    const zc::mat3x4fx& rm = pose[u02::kBRoot];
+    const uint8_t bones[6] = {u02::kBJunctionF, u02::kBNeck, u02::kBHingeA,
+                              u02::kBHingeB, u02::kBHingeC, u02::kBLoopBase2};
+    const char* names[6] = {"junctionF", "neck", "hingeA", "hingeB", "hingeC",
+                            "junctionB"};
+    for (int i = 0; i < 6; ++i) {
+      // the posed bone ORIGIN = a vertex at the bone's bind position skinned
+      // with full weight on that bone (the reel's own FxAnchors law)
+      const uint8_t b = bones[i];
+      zc::SkinVertex sv{T.baked.world_x[b], T.baked.world_y[b],
+                        T.baked.world_z[b], b, b, 64, 0, 0};
+      int32_t x, y, z;
+      zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
+      const int64_t dx = x - rm.m[3], dy = y - rm.m[7], dz = z - rm.m[11];
+      const int64_t lx = (rm.m[0] * dx + rm.m[4] * dy + rm.m[8] * dz) >> 16;
+      const int64_t ly = (rm.m[1] * dx + rm.m[5] * dy + rm.m[9] * dz) >> 16;
+      const int64_t lz = (rm.m[2] * dx + rm.m[6] * dy + rm.m[10] * dz) >> 16;
+      std::printf("u02-probe: REST ANCHOR %-9s root-local (%5d, %5d, %5d) mm\n",
+                  names[i], static_cast<int32_t>((lx * 1000) >> 16),
+                  static_cast<int32_t>((ly * 1000) >> 16),
+                  static_cast<int32_t>((lz * 1000) >> 16));
     }
   }
   return rc;

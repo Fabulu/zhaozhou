@@ -371,6 +371,171 @@ inline void whole_wobble(Rig& g, int f, int K, int amp_pm) {
                                    sinp(f, K, cycB, 0x6000)) >> 16)));
 }
 
+// ================== THE FOLD-HOLD-KNEAD TIMELINE (pass 4) ==================
+//
+// One deterministic, hashed, per-clip schedule shared VERBATIM by the
+// antenna choreography (key domain, here) and the mote system (frame
+// domain, manafold_fx.h; key = frame / 2): GATHER (the joints close, the
+// cloud condenses onto stencil k) -> HOLD (the shape stands and READS) ->
+// KNEAD (the two hands work; each mote morphs toward stencil k+1) ->
+// repeat with the next shape. Durations are 07-band lengths hashed per
+// segment (anti-cycle law: never visibly repeating inside a clip), the
+// shape order is hashed with next != current, and every clip's tail is a
+// RELEASE easing the layer to zero so the loop seam carries no pop.
+
+enum FoldSeg : uint8_t { kSegGather = 0, kSegHold, kSegKnead, kSegRelease };
+struct FoldPhase {
+  FoldSeg seg;
+  int32_t amp_pm;    // grip envelope 0..1000 (gather ramps, hold/knead hold)
+  int32_t agit_pm;   // knead-waggle envelope 0..1000 (knead only)
+  int32_t morph_pm;  // 0..1000 progress from shape_from to shape_to
+  uint8_t shape_from, shape_to;
+};
+
+constexpr int kFoldShapeCount = 6;  // ring, star, bar, crescent, triangle, s-curl
+
+/** ease 0..1000 -> 0..1000, smoothstep-ish (integer). */
+inline int32_t fold_ease(int32_t t) {
+  if (t < 0) t = 0;
+  if (t > 1000) t = 1000;
+  return t * t / 1000 * (3000 - 2 * t) / 1000;
+}
+
+/** The shared schedule. `salt` = the clip slot; `keys` = the clip length;
+ *  `kq4` = key position in Q4 (key * 16 + sub-key sixteenths -- the fx lane
+ *  passes frame * 8 so 60 Hz frames land between keys). */
+inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
+  FoldPhase ph{};
+  const int32_t release_at = (keys - kReleaseKeys) * 16;
+  // the opening shape varies PER CLIP (most clips are shorter than one
+  // full cycle, so a fixed opener would make the whole bank read RING);
+  // the hover keeps the RING -- the easiest read on the showcase loop
+  uint8_t shape = salt == 0 ? 0 : static_cast<uint8_t>(fx_hash(salt, 0xBEEFu, 7u) % kFoldShapeCount);
+  uint8_t next_shape = 1;
+  int32_t seg_start = 0;
+  uint32_t n = 0;
+  for (;;) {
+    const uint32_t h = fx_hash(0xF01D5EEDu + salt, n, 0x51u);
+    const int32_t gather = (kGatherKeysBase + static_cast<int32_t>(h % kGatherKeysHash)) * 16;
+    const int32_t hold = (kHoldKeysBase + static_cast<int32_t>((h >> 8) % kHoldKeysHash)) * 16;
+    const int32_t knead = (kKneadKeysBase + static_cast<int32_t>((h >> 16) % kKneadKeysHash)) * 16;
+    next_shape = static_cast<uint8_t>((h >> 24) % kFoldShapeCount);
+    if (next_shape == shape)
+      next_shape = static_cast<uint8_t>((next_shape + 1 + (h >> 28) % (kFoldShapeCount - 1)) %
+                                        kFoldShapeCount);
+    const int32_t g_end = seg_start + gather, h_end = g_end + hold, k_end = h_end + knead;
+    ph.shape_from = shape;
+    ph.shape_to = next_shape;
+    if (kq4 >= release_at) {  // the tail: ease everything home
+      ph.seg = kSegRelease;
+      const int32_t t = (kq4 - release_at) * 1000 / (kReleaseKeys * 16);
+      ph.amp_pm = 1000 - fold_ease(t);
+      ph.agit_pm = 0;
+      ph.morph_pm = 0;
+      return ph;
+    }
+    if (kq4 < g_end) {
+      ph.seg = kSegGather;
+      const int32_t t = (kq4 - seg_start) * 1000 / gather;
+      if (n == 0) {
+        // the clip's first gather rises from zero (matches the release the
+        // loop seam left behind -- no pop at the wrap)
+        ph.amp_pm = fold_ease(t);
+      } else {
+        // between cycles the hands RELAX briefly (the dough is let go),
+        // then re-gather -- continuous with the knead's amp=1000 on both
+        // sides, so the envelope never steps
+        ph.amp_pm = t < 350 ? 1000 - fold_ease(t * 1000 / 350) * 65 / 100
+                            : 350 + fold_ease((t - 350) * 1000 / 650) * 65 / 100;
+      }
+      ph.agit_pm = 0;
+      ph.morph_pm = 0;
+      return ph;
+    }
+    if (kq4 < h_end) {
+      ph.seg = kSegHold;
+      ph.amp_pm = 1000;
+      ph.agit_pm = 0;
+      ph.morph_pm = 0;
+      return ph;
+    }
+    if (kq4 < k_end) {
+      ph.seg = kSegKnead;
+      ph.amp_pm = 1000;
+      const int32_t t = (kq4 - h_end) * 1000 / knead;
+      // the waggle ramps in and out inside the knead (one thing at a time)
+      ph.agit_pm = t < 250 ? fold_ease(t * 4)
+                 : t > 750 ? fold_ease((1000 - t) * 4)
+                           : 1000;
+      ph.morph_pm = fold_ease(t);
+      return ph;
+    }
+    seg_start = k_end;
+    shape = next_shape;
+    ++n;
+    if (n > 64) {  // unreachable guard
+      ph.seg = kSegHold;
+      ph.amp_pm = 1000;
+      return ph;
+    }
+  }
+}
+
+// The ablation gate (07 Â§3 in reverse, the centrepiece's own FAIL line):
+// U02_ABLATE_KNEAD=1 zeroes this layer, and the mana MUST go limp. If it
+// does not, the coupling is decorative and the feature has failed.
+inline int g_u02_knead_ablate = 0;
+
+/** THE ALWAYS-ON KNEAD LAYER: composed onto the junction/neck/hinge bones
+ *  BEFORE the clip's own loop_pose call, so the closure walk accounts for
+ *  every knead rotation (the aim still lands the return arm; the committed
+ *  closure probe gates the bank). The back-junction ball rides its offset
+ *  bind, so kBLoopBase2's rotation SLIDES the ball along the body surface
+ *  (Direction 4: a ball that is a joint). */
+inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f) {
+  if (g_u02_knead_ablate) return;
+  const int gain = slot < 14 ? kKneadClipPm[slot] : 700;
+  if (gain <= 0) return;
+  const FoldPhase ph = fold_phase(slot, keys, f * 16);
+  const auto a = [&](int32_t base, int32_t env_pm) {
+    return static_cast<int32_t>(static_cast<int64_t>(base) * env_pm / 1000 * gain / 1000);
+  };
+  // GATHER/HOLD: the grip -- every fold closes a few degrees
+  const int32_t grip = ph.amp_pm;
+  // HOLD: the small tremor that keeps the grip alive
+  const int32_t trem = ph.seg == kSegHold
+      ? static_cast<int32_t>((static_cast<int64_t>(kKneadTremorA16) *
+                              sinp(f, keys, keys / 9 > 0 ? keys / 9 : 1)) >> 16)
+      : 0;
+  g.q[kBJunctionF] = quat_mul(g.q[kBJunctionF], quat_z(a(kKneadGripJfA16, grip) + trem));
+  g.q[kBNeck] = quat_mul(g.q[kBNeck], quat_z(a(kKneadGripNeckA16, grip) - trem));
+  g.q[kBHingeA] = quat_mul(g.q[kBHingeA], quat_z(a(kKneadGripAA16, grip)));
+  g.q[kBHingeB] = quat_mul(g.q[kBHingeB], quat_z(a(kKneadGripBA16, grip) + trem / 2));
+  g.q[kBHingeC] = quat_mul(g.q[kBHingeC], quat_z(a(kKneadGripCA16, grip)));
+  // KNEAD: the two hands wedge in counter-rotation; the neck stirs
+  // out-of-plane; the back ball slides. One consistent period.
+  if (ph.agit_pm > 0) {
+    const int cyc = keys / kKneadWagPeriodKeys > 0 ? keys / kKneadWagPeriodKeys : 1;
+    const int32_t w1 = sinp(f, keys, cyc);
+    const int32_t w2 = sinp(f, keys, cyc, 0x4000);
+    g.q[kBJunctionF] = quat_mul(
+        g.q[kBJunctionF],
+        quat_z(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagJfA16, ph.agit_pm)) * w1) >> 16)));
+    g.q[kBHingeC] = quat_mul(
+        g.q[kBHingeC],
+        quat_z(-static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagCA16, ph.agit_pm)) * w1) >> 16)));
+    g.q[kBNeck] = quat_mul(
+        g.q[kBNeck],
+        quat_x(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagNeckA16, ph.agit_pm)) * w2) >> 16)));
+    g.q[kBHingeB] = quat_mul(
+        g.q[kBHingeB],
+        quat_z(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagBA16, ph.agit_pm)) * w2) >> 16)));
+    g.q[kBLoopBase2] = quat_mul(
+        g.q[kBLoopBase2],
+        quat_z(-static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagB2A16, ph.agit_pm)) * w2) >> 16)));
+  }
+}
+
 // ---------------------------------------------------------------- clips ----
 
 /** hover-idle, slot 0: the baseline. The hover IS the idle. */
@@ -387,6 +552,7 @@ inline zc::Clip build_hover_idle() {
                               {299, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 0, K, f);  // pass 4: the always-on fold-hold-knead layer
     // pass 3: the whole creature carries the travelling bend (peak leads,
     // body follows); the squash below lags by the same station clock.
     whole_wobble(g, f, K, kWobbleAmpPm);
@@ -425,6 +591,7 @@ inline zc::Clip build_drift() {
                               {132, 1040}, {149, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 1, K, f);  // pass 4: the always-on fold-hold-knead layer
     // banked INTO the travel (+z): a roll about the forward axis
     const int32_t bank = static_cast<int32_t>(
         (static_cast<int64_t>(kDriftBankA16) * curve(kBank, 10, f)) / 1000);
@@ -466,6 +633,7 @@ inline zc::Clip build_channel() {
                                {170, 300}, {200, 0}, {209, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 2, K, f);  // pass 4: the always-on fold-hold-knead layer
     const int open = curve(kLoopOpen, 8, f);
     loop_pose(g, 1000, open, open, open,
               static_cast<int32_t>((static_cast<int64_t>(kAntennaTiltA16) *
@@ -506,6 +674,7 @@ inline zc::Clip build_curious() {
                               {76, 1000}, {89, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 3, K, f);  // pass 4: the always-on fold-hold-knead layer
     const int perk = curve(kPerk, 6, f);
     loop_pose(g, 1000, perk, perk, perk, 0);
     // PASS 2: the yaw is NEGATED — the gaze sweeps the stars toward +z
@@ -561,6 +730,7 @@ inline zc::Clip build_startle() {
                                 {36, 1500}, {52, 1900}, {68, 1100}, {79, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 4, K, f);  // pass 4: the always-on fold-hold-knead layer
     const int whip = curve(kWhip, 9, f);
     loop_pose(g, 1000, whip, whip, whip, 0);
     face_rest(g);
@@ -586,6 +756,7 @@ inline zc::Clip build_rest() {
   Rig g;
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 5, K, f);  // pass 4: the always-on fold-hold-knead layer
     whole_wobble(g, f, K, kWobbleAmpPm / 2);  // pass 3: slower, whole-body
     face_rest(g);
     apply_squint(g, kRestSquintPm + blink_at(f, 77));
@@ -611,6 +782,7 @@ inline zc::Clip build_pirouette() {
   Rig g;
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 6, K, f);  // pass 4: the always-on fold-hold-knead layer
     const uint16_t ph = static_cast<uint16_t>((static_cast<int64_t>(f) * 65536) / K);
     g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_y(static_cast<int32_t>(ph)));
     const int32_t flare = 1000 + static_cast<int32_t>(
@@ -646,6 +818,7 @@ inline zc::Clip build_hasty() {
   Rig g;
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 8, K, f);  // pass 4: the always-on fold-hold-knead layer
     // pitched into the travel, banked, fishtailing — travel is +x, the
     // rest facing, so no yaw circuit at all
     g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_z(-kHastyPitchA16));
@@ -686,6 +859,7 @@ inline zc::Clip build_fall() {
                                 {158, 1050}, {169, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 9, K, f);  // pass 4: the always-on fold-hold-knead layer
     // one full pitch tumble over the drop; 65536 wraps to 0 at the catch
     if (f < kFallCatchKey) {
       const int64_t t = (static_cast<int64_t>(f) << 16) / kFallCatchKey;
@@ -740,6 +914,7 @@ inline zc::Clip build_hit() {
                                 {40, 1600}, {56, 1150}, {69, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 10, K, f);  // pass 4: the always-on fold-hold-knead layer
     const int rec = curve(kRecoil, 8, f);
     loop_pose(g, 1000, rec, rec, rec, 0);
     face_rest(g);
@@ -781,6 +956,7 @@ inline zc::Clip build_taunt() {
                                {139, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 11, K, f);  // pass 4: the always-on fold-hold-knead layer
     // the waggle phase FREEZES during the hold (the frozen extreme is the
     // joke); a 3 pm tremble keeps the life clock honest
     const int fw = f < kTauntHoldStartKey ? f
@@ -838,6 +1014,7 @@ inline zc::Clip build_taunt2() {
                               {106, 0}, {119, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 12, K, f);  // pass 4: the always-on fold-hold-knead layer
     const int ramp = curve(kRamp, 6, f);  // the lasso spins up and back down
     const int32_t tilt = static_cast<int32_t>(
         (static_cast<int64_t>(kTaunt2LassoA16) * ramp / 1000 * sinp(f, K, 4)) >> 16);
@@ -910,6 +1087,7 @@ inline zc::Clip build_trick() {
                                 {182, 1150}, {199, 1000}};
   for (int f = 0; f < K; ++f) {
     g.reset();
+    antenna_knead(g, 13, K, f);  // pass 4: the always-on fold-hold-knead layer
     const int32_t flip = static_cast<int32_t>(
         (static_cast<int64_t>(32768) * curve(kFlip, 11, f)) / 1000);
     g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_z(flip));

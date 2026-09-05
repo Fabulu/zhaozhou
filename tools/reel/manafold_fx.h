@@ -44,28 +44,21 @@
 
 #include <vector>
 
-#include "manafold_art.h"
+#include "manafold_clips.h"
 
 namespace u02 {
 
-// ---- deterministic hash (the crackle's clock; zlib-free, integer) ---------
-inline uint32_t fx_hash(uint32_t a, uint32_t b, uint32_t c) {
-  uint32_t h = a * 0x9E3779B9u ^ b * 0x85EBCA6Bu ^ c * 0xC2B2AE35u;
-  h ^= h >> 15;
-  h *= 0x2545F491u;
-  h ^= h >> 13;
-  return h;
-}
-inline int32_t fx_jit(uint32_t h, int32_t amp_mm) {
-  if (amp_mm <= 0) return 0;
-  return static_cast<int32_t>(h % static_cast<uint32_t>(2 * amp_mm + 1)) - amp_mm;
-}
+// (fx_hash / fx_jit moved to manafold_art.h -- shared with the fold
+// choreography timeline in manafold_clips.h.)
 
 // ---- the anchors (posed bone origins, world fx16) -------------------------
 struct FxAnchors {
-  int32_t body[3];    // kBRoot origin (the belly light)
-  int32_t crown[3];   // the body's top pole
-  int32_t neck[3];    // the neck exit (pass 3: pulls the ring centre DOWN)
+  int32_t body[3];        // kBRoot origin (the belly light)
+  int32_t crown[3];       // the body's top pole
+  int32_t junction_f[3];  // the FRONT JUNCTION (pass 4: the old neck bind;
+                          // keeps the pass-3 ring centring bone-for-bone)
+  int32_t neck[3];        // pass 4: the NEW mid-tube neck hinge
+  int32_t junction_b[3];  // the BACK JUNCTION (kBLoopBase2 posed origin)
   int32_t hinge_a[3];
   int32_t hinge_b[3];
   int32_t hinge_c[3];
@@ -159,7 +152,18 @@ constexpr int32_t kStreakSpanPx = 46;
 // halo), re-hashed every kBoltRehashFrames so it visibly buzzes, ghosting
 // through the smear plane so old paths decay instead of blinking out.
 // Stamp spacing is the checkable gate: zero visible gaps at native.
-constexpr int kStrandCount = 3;
+// PASS 4 (R4, Direction 4 §2: "fewer lightning LINES -- just have them be
+// particles"): ONE strand (the owner knob; the channel may carry 2), and
+// the retired strands' budget converts into SURGE MOTES that flow along
+// the strand's path and burst at its ends -- energised particles with one
+// hot filament, not a filament cloud.
+constexpr int kStrandCount = 1;
+constexpr int kSurgeMotes = 5;             // flowing along the strand
+constexpr int kSurgeFlowFrames = 26;       // one end-to-end trip
+constexpr int32_t kSurgeRPx = 7;
+constexpr int kSurgeGainPm = 420;
+constexpr int32_t kSurgeBurstRPx = 11;     // the endpoint bursts
+constexpr int kSurgeBurstGainPm = 520;
 constexpr int32_t kStrandJitterMm = 60;    // jag SMALL against the ~50 mm
                                            // segment — a filament, not a
                                            // scribble (the dot-cloud fix)
@@ -210,6 +214,7 @@ struct SmearPreset {
   int jitter_pm;          // per-cell retention jitter (+/-)
   int hard_clear_frames;  // full per-cell reset interval
   int gain_pm;            // composite gain onto the frame
+  int tear;               // pass 4 (R6): the row-tear glitch rides this rung
 };
 // what fraction of each splat's ramp feeds the plane per frame: with keep
 // near 1 the plane integrates many frames, so a full-strength feed
@@ -222,11 +227,20 @@ constexpr int kSmearFeedPm = 520;
 // hue with an opacity that follows its remaining brightness — fresh cells
 // are near-solid saturated blobs, decayed cells thin out and dissolve.
 constexpr int kSmearAlphaMaxPm = 780;
-constexpr SmearPreset kSmearPresets[4] = {
-    {0, 1, 0, 1, 0},            // 0: no smear
-    {620, 2, 40, 90, 420},      // 1: SHORT/CLEAN — a readable tail, tidy
-    {820, 4, 90, 260, 520},     // 2: MID/GLITCHY — the lead (aqua) rung
-    {900, 6, 160, 430, 520},    // 3: LONG/GLITCHIER — the far end (cyan)
+// PASS 4 (R6, Direction 4 §2 "glitchier than the others you made"): a
+// FOURTH live rung past the long/glitchy one -- keep higher, steps longer
+// and chunkier, jitter wider -- and the ROW TEAR: on hashed frames a
+// horizontal band of the plane composites with a 1-2 cell x-offset, the
+// VHS tear of a genuinely broken buffer. Tear rides the two glitchier
+// rungs only (tear=1); an index offset at composite, near-free.
+struct SmearTear { int rows, frames, cells; };
+constexpr SmearTear kSmearTear = {5, 46, 2};  // kSmearTearRows/Frames/Cells
+constexpr SmearPreset kSmearPresets[5] = {
+    {0, 1, 0, 1, 0, 0},          // 0: no smear
+    {620, 2, 40, 90, 420, 0},    // 1: SHORT/CLEAN — a readable tail, tidy
+    {820, 4, 90, 260, 520, 0},   // 2: MID/GLITCHY — the pass-3 lead rung
+    {900, 6, 160, 430, 520, 1},  // 3: LONG/GLITCHIER — the shipping fold rung
+    {940, 8, 260, 560, 540, 1},  // 4: BROKEN-BUFFER — the new far end (cyan)
 };
 constexpr int kSmearW = 96, kSmearH = 60;  // quarter-res: the fill budget
 // PASS 4 (R5, Direction 4 §2 "the smear needs to be properly hidden
@@ -382,9 +396,44 @@ inline void mana_lightning(uint32_t frame, const FxAnchors& A,
               kBoltSeed + static_cast<uint32_t>(i) * 0x9E37u, pts, kStrandJitterMm);
     // constant presence with a per-frame flicker — a buzz, not a strobe
     const uint32_t hf = fx_hash(kBoltSeed ^ 0xF11Cu, frame, static_cast<uint32_t>(i));
-    const int flick = 880 + static_cast<int>(hf % 240u);
+    // pass 4 (R4): the brightness FLOOR is raised -- the median frame must
+    // read as lightning, not glitter (the review's own sampling law)
+    const int flick = 950 + static_cast<int>(hf % 130u);
     bolt_stamp(out, pts, kBoltSegs, kBoltCoreGainPm * flick / 1000,
                kBoltHaloGainPm * flick / 1000);
+  }
+  // pass 4 (R4): the SURGE MOTES -- the retired strands' energy, flowing
+  // along the live strand's path and bursting at its ends. Positions are
+  // re-derived from the same bolt path (deterministic; the path is the
+  // rig-anchored diameter), so the surge follows every re-hash.
+  {
+    const uint32_t h0 = fx_hash(kBoltSeed, phase, 0x51A0u);
+    const uint32_t ang = h0 & 0xFFFFu;
+    const int32_t half = fxu(kStrandSpanMm / 2);
+    const int32_t dx = static_cast<int32_t>((static_cast<int64_t>(half) * fx_cos16(ang)) >> 16);
+    const int32_t dy = static_cast<int32_t>((static_cast<int64_t>(half) * fx_sin16(ang)) >> 16);
+    int32_t s0[3] = {A.ring[0] + dx, A.ring[1] + dy, A.ring[2]};
+    int32_t e0[3] = {A.ring[0] - dx, A.ring[1] - dy, A.ring[2]};
+    for (int m = 0; m < kSurgeMotes; ++m) {
+      const uint32_t hm = fx_hash(0x5069u, static_cast<uint32_t>(m), 0x11u);
+      const int32_t t = static_cast<int32_t>(
+          ((frame + hm % 97u) % static_cast<uint32_t>(kSurgeFlowFrames)) * 1000 /
+          static_cast<uint32_t>(kSurgeFlowFrames));
+      int32_t q[3];
+      for (int k = 0; k < 3; ++k) q[k] = lerp32(s0[k], e0[k], t, 1000);
+      q[0] += fxu(fx_jit(hm >> 3, 90));
+      q[1] += fxu(fx_jit(hm >> 9, 90));
+      mana_push(out, q[0], q[1], q[2], kSurgeRPx, kRampCyan, kSurgeGainPm, true, false);
+      mana_push(out, q[0], q[1], q[2], kSurgeRPx * 55 / 100, kRampCyan, 1000, true,
+                false, /*opaque=*/true);
+    }
+    // the endpoint bursts breathe on the re-hash cadence
+    const int32_t bt = static_cast<int32_t>(frame % static_cast<uint32_t>(kBoltRehashFrames));
+    const int32_t br = kSurgeBurstRPx - bt;
+    if (br > 3) {
+      mana_push(out, s0[0], s0[1], s0[2], br, kRampCyan, kSurgeBurstGainPm, true, false);
+      mana_push(out, e0[0], e0[1], e0[2], br, kRampCyan, kSurgeBurstGainPm, true, false);
+    }
   }
   // a small anamorphic glint at the pocket centre on each re-hash frame
   if (frame % kBoltRehashFrames == 0) {
@@ -432,6 +481,398 @@ inline void mana_bullets(uint32_t frame, const FxAnchors& A, uint8_t ramp,
             ramp, 130, true, true);
 }
 
+// ======================= THE FOLDING (pass 4 centrepiece) ==================
+//
+// The owner: "fold the mana into recognizable shapes. Then knead it into
+// new shapes... it needs to look like they really affect the particles
+// with their movement, not necessarily by touching them." The mechanism:
+// each shape is a STENCIL of fat glow motes at FIXED generalized
+// barycentric weights (mean-value coordinates, integer) over the six posed
+// antenna anchors -- so the shape folds because the RIG folds, by
+// construction; there is no other position law (R1: never collision, never
+// proximity). GRIP (anchor-polygon area vs rest) drives coherence, KNEAD
+// (anchor velocity) drives agitation, and DRAG (hinge B's lagged velocity)
+// pulls the whole mass across the gap a beat late -- the iron-filings read.
+
+constexpr int kStencilPts = 18;
+
+// The six shape stencils, authored in pocket coordinates (u across the
+// hole, v up; per-mille of kStencilScaleMm). Chosen for legibility with
+// blobby strokes at ~37 px: RING (the opener), FOUR-POINT STAR (the
+// identity, rhymes with the pupil), BAR (max contrast), CRESCENT (the
+// Description sheet's rear view), TRIANGLE, S-CURL.
+struct StencilPt { int16_t u_pm, v_pm; };
+inline const StencilPt (&fold_stencils())[6][kStencilPts] {
+  static StencilPt st[6][kStencilPts];
+  static bool built = false;
+  if (!built) {
+    const auto scp = [](int i, int n, int32_t r_pm, int32_t ph16, int16_t& u, int16_t& v) {
+      const uint16_t a = static_cast<uint16_t>((static_cast<int64_t>(i) * 65536 / n + ph16) & 0xFFFF);
+      u = static_cast<int16_t>((static_cast<int64_t>(r_pm) * zref::fx_cos(zref::angle16{a}).raw) >> 16);
+      v = static_cast<int16_t>((static_cast<int64_t>(r_pm) * zref::fx_sin(zref::angle16{a}).raw) >> 16);
+    };
+    for (int i = 0; i < kStencilPts; ++i) {
+      // 0 RING: a full circle
+      scp(i, kStencilPts, 1000, 0, st[0][i].u_pm, st[0][i].v_pm);
+      // 1 FOUR-POINT STAR, drawn as SPOKES (iter 5: the outline read as a
+      // wobbly ring; motes along four radial arms + a centre pair read as
+      // the pupil star's own iconography)
+      {
+        if (i < 2) {
+          st[1][i].u_pm = static_cast<int16_t>(i == 0 ? 0 : 90);
+          st[1][i].v_pm = static_cast<int16_t>(i == 0 ? 0 : -90);
+        } else {
+          const int arm = (i - 2) / 4;          // 4 arms x 4 stations
+          const int stn = (i - 2) % 4;
+          static const int16_t r_of[4] = {320, 620, 900, 1150};
+          const uint16_t a = static_cast<uint16_t>(0x2000 + arm * 0x4000);
+          const int32_t r = r_of[stn];
+          st[1][i].u_pm = static_cast<int16_t>((static_cast<int64_t>(r) * zref::fx_cos(zref::angle16{a}).raw) >> 16);
+          st[1][i].v_pm = static_cast<int16_t>((static_cast<int64_t>(r) * zref::fx_sin(zref::angle16{a}).raw) >> 16);
+        }
+      }
+      // 2 BAR: a thick diagonal stroke (two passes along the length)
+      {
+        const int half = kStencilPts / 2;
+        const int j = i % half;
+        const int32_t t = -1000 + 2000 * j / (half - 1);
+        const int32_t off = i < half ? 190 : -190;  // stroke thickness
+        st[2][i].u_pm = static_cast<int16_t>(t * 707 / 1000 - off * 707 / 1000);
+        st[2][i].v_pm = static_cast<int16_t>(t * 707 / 1000 + off * 707 / 1000);
+      }
+      // 3 CRESCENT: a 260-degree open arc (the rear-view sheet's moon)
+      {
+        const int32_t span = 47000;  // ~260 deg in angle16
+        const uint16_t a = static_cast<uint16_t>((0x5000 + static_cast<int64_t>(i) * span / (kStencilPts - 1)) & 0xFFFF);
+        st[3][i].u_pm = static_cast<int16_t>((static_cast<int64_t>(950) * zref::fx_cos(zref::angle16{a}).raw) >> 16);
+        st[3][i].v_pm = static_cast<int16_t>((static_cast<int64_t>(950) * zref::fx_sin(zref::angle16{a}).raw) >> 16);
+      }
+      // 4 TRIANGLE: three straight strokes
+      {
+        const int per = kStencilPts / 3;
+        const int e = i / per, j = i % per;
+        static const int16_t vx[4][2] = {{0, 1000}, {-870, -500}, {870, -500}, {0, 1000}};
+        st[4][i].u_pm = static_cast<int16_t>(vx[e][0] + (vx[e + 1][0] - vx[e][0]) * j / per);
+        st[4][i].v_pm = static_cast<int16_t>(vx[e][1] + (vx[e + 1][1] - vx[e][1]) * j / per);
+      }
+      // 5 S-CURL: a lazy spiral, 1.5 turns, radius decaying
+      {
+        const uint16_t a = static_cast<uint16_t>((static_cast<int64_t>(i) * 98304 / (kStencilPts - 1)) & 0xFFFF);
+        const int32_t r = 1000 - 780 * i / (kStencilPts - 1);
+        st[5][i].u_pm = static_cast<int16_t>((static_cast<int64_t>(r) * zref::fx_cos(zref::angle16{a}).raw) >> 16);
+        st[5][i].v_pm = static_cast<int16_t>((static_cast<int64_t>(r) * zref::fx_sin(zref::angle16{a}).raw) >> 16);
+      }
+    }
+    built = true;
+  }
+  return st;
+}
+
+/** Mean-value coordinates of point p (mm, rest-uv space) over the six rest
+ *  anchors (x,y of kFoldAnchorRestMm, a convex CCW hexagon). Integer-only;
+ *  weights come back normalized Q12. Points are clamped toward the pocket
+ *  centre until inside so every weight is non-negative -- the shape mass
+ *  is bounded by construction (R8). */
+inline void fold_mvc(int32_t pu, int32_t pv, uint16_t w[6]) {
+  const int32_t cu = kStencilCentreUMm, cv = kStencilCentreVMm;
+  for (int shrink = 0; shrink < 12; ++shrink) {
+    int64_t d[6], dx[6], dy[6];
+    for (int i = 0; i < 6; ++i) {
+      dx[i] = kFoldAnchorRestMm[i][0] - pu;
+      dy[i] = kFoldAnchorRestMm[i][1] - pv;
+      d[i] = isqrt64(dx[i] * dx[i] + dy[i] * dy[i]);
+      if (d[i] < 2) {  // on an anchor: all weight there
+        for (int k = 0; k < 6; ++k) w[k] = 0;
+        w[i] = 4096;
+        return;
+      }
+    }
+    int64_t t[6];
+    bool outside = false;
+    for (int i = 0; i < 6; ++i) {
+      const int j = (i + 1) % 6;
+      const int64_t cross = dx[i] * dy[j] - dy[i] * dx[j];
+      const int64_t dot = dx[i] * dx[j] + dy[i] * dy[j];
+      if (cross <= 0) {  // outside (or on) this edge: clamp inward, retry
+        outside = true;
+        break;
+      }
+      t[i] = ((d[i] * d[j] - dot) << 12) / cross;  // tan(half angle), Q12
+    }
+    if (outside) {
+      pu = cu + (pu - cu) * 9 / 10;
+      pv = cv + (pv - cv) * 9 / 10;
+      continue;
+    }
+    int64_t wsum = 0, wq[6];
+    for (int i = 0; i < 6; ++i) {
+      const int h = (i + 5) % 6;
+      wq[i] = ((t[h] + t[i]) << 12) / d[i];
+      wsum += wq[i];
+    }
+    for (int i = 0; i < 6; ++i)
+      w[i] = static_cast<uint16_t>(wsum > 0 ? (wq[i] * 4096) / wsum : 682);
+    return;
+  }
+  for (int k = 0; k < 6; ++k) w[k] = 682;  // degenerate: centroid-ish
+}
+
+/** The per-mote weight tables: [shape][station] -> Q12 weights over the six
+ *  anchors, computed ONCE from the authored stencils in the rest layout. */
+struct FoldWeights {
+  uint16_t w[6][kStencilPts][6];
+};
+inline const FoldWeights& fold_weights() {
+  static FoldWeights fw;
+  static bool built = false;
+  if (!built) {
+    const StencilPt(&st)[6][kStencilPts] = fold_stencils();
+    for (int sh = 0; sh < 6; ++sh)
+      for (int i = 0; i < kStencilPts; ++i) {
+        const int32_t pu = kStencilCentreUMm +
+            static_cast<int32_t>(st[sh][i].u_pm) * kStencilScaleMm / 1000;
+        const int32_t pv = kStencilCentreVMm +
+            static_cast<int32_t>(st[sh][i].v_pm) * kStencilScaleMm / 1000;
+        fold_mvc(pu, pv, fw.w[sh][i]);
+      }
+    built = true;
+  }
+  return fw;
+}
+
+/** Per-conduit, per-subject fold state: previous-frame anchors (the knead
+ *  velocity), the drag ring buffer (hinge B's lagged relative velocity),
+ *  and the smoothed agitation. Deterministic: reset at frame 0. */
+struct FoldState {
+  bool init = false;
+  int32_t prev_rel[6][3];   // anchors relative to the body, fx16
+  int32_t knead_smooth = 0; // smoothed anchor speed, mm/frame (~4-frame EMA)
+  int32_t knead_slow = 0;   // the slow baseline (~64-frame EMA): the clip's
+                            // own resting wobble, which must NOT read as
+                            // kneading (iter 3 -- raw speed saturated at rest)
+  int32_t dragbuf[8][3];    // rel hinge-B velocity ring (fx16/frame)
+  uint32_t drag_idx = 0;
+  int32_t area_ema_pm = 1000;  // ~16-frame smoothed area: the wobble's own
+                               // 46/102-frame waves must not flap coherence
+};
+
+// Diagnostic gates (env, default off): U02_FOLD_LOCK=1 forces full
+// coherence with no cloud/drag/jitter -- a stencil X-RAY that shows the
+// pure barycentric shape; U02_FOLD_DEBUG=1 prints the per-frame scalars.
+inline int g_u02_fold_lock = 0;
+inline int g_u02_fold_debug = 0;
+
+/** THE CENTREPIECE: place the folded motes for one conduit. `keys` = the
+ *  clip's key count (the shared timeline domain); `crowd_pm` scales the
+ *  mote count when several conduits share the frame. Returns the agitation
+ *  (0..1000) so the caller can raise the smear feed with it. */
+inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchors& A,
+                         FoldState& stfx, uint8_t ramp, int crowd_pm,
+                         std::vector<ManaSplat>& out) {
+  const int32_t* anchors[6] = {A.junction_f, A.neck, A.hinge_a,
+                               A.hinge_b,    A.hinge_c, A.junction_b};
+  // ---- rig-derived scalars (joint state ONLY -- R1) ----------------------
+  int32_t rel[6][3];
+  for (int i = 0; i < 6; ++i)
+    for (int k = 0; k < 3; ++k) rel[i][k] = anchors[i][k] - A.body[k];
+  if (frame == 0 || !stfx.init) {
+    for (int i = 0; i < 6; ++i)
+      for (int k = 0; k < 3; ++k) stfx.prev_rel[i][k] = rel[i][k];
+    for (auto& v : stfx.dragbuf) v[0] = v[1] = v[2] = 0;
+    stfx.knead_smooth = 0;
+    stfx.drag_idx = 0;
+    stfx.init = true;
+  }
+  // KNEAD: summed anchor speed (mm/frame), smoothed over ~4 frames
+  int64_t raw = 0;
+  for (int i = 0; i < 6; ++i) {
+    for (int k = 0; k < 3; ++k) {
+      const int64_t dd = rel[i][k] - stfx.prev_rel[i][k];
+      raw += dd < 0 ? -dd : dd;
+    }
+  }
+  const int32_t raw_mm = static_cast<int32_t>((raw * 1000) >> 16);
+  stfx.knead_smooth += (raw_mm - stfx.knead_smooth) / 4;
+  if (stfx.knead_slow == 0) stfx.knead_slow = raw_mm;  // warm start
+  stfx.knead_slow += (raw_mm - stfx.knead_slow) / 64;
+  // agitation is the EXCESS over the slow baseline: the resting wobble
+  // cancels itself out; only a genuinely faster gesture churns the mana
+  const int32_t excess = stfx.knead_smooth - stfx.knead_slow * 12 / 10;
+  const int32_t agit = excess <= 0 ? 0
+                       : excess >= kKneadVelRefMm
+                           ? 1000
+                           : excess * 1000 / kKneadVelRefMm;
+  // DRAG: hinge B's relative velocity, ring-buffered for the per-mote lag
+  {
+    stfx.dragbuf[stfx.drag_idx & 7][0] = rel[3][0] - stfx.prev_rel[3][0];
+    stfx.dragbuf[stfx.drag_idx & 7][1] = rel[3][1] - stfx.prev_rel[3][1];
+    stfx.dragbuf[stfx.drag_idx & 7][2] = rel[3][2] - stfx.prev_rel[3][2];
+    ++stfx.drag_idx;
+  }
+  for (int i = 0; i < 6; ++i)
+    for (int k = 0; k < 3; ++k) stfx.prev_rel[i][k] = rel[i][k];
+  // GRIP: the anchor polygon's area vs its rest area (closed form)
+  int64_t live_area2;
+  {
+    int64_t cx = 0, cy = 0, cz = 0;
+    int32_t rmm[6][3];
+    for (int i = 0; i < 6; ++i) {
+      for (int k = 0; k < 3; ++k)
+        rmm[i][k] = static_cast<int32_t>((static_cast<int64_t>(rel[i][k]) * 1000) >> 16);
+      cx += rmm[i][0]; cy += rmm[i][1]; cz += rmm[i][2];
+    }
+    cx /= 6; cy /= 6; cz /= 6;
+    int64_t sx = 0, sy = 0, sz = 0;
+    for (int i = 0; i < 6; ++i) {
+      const int j = (i + 1) % 6;
+      const int64_t ax = rmm[i][0] - cx, ay = rmm[i][1] - cy, az = rmm[i][2] - cz;
+      const int64_t bx = rmm[j][0] - cx, by = rmm[j][1] - cy, bz = rmm[j][2] - cz;
+      sx += ay * bz - az * by;
+      sy += az * bx - ax * bz;
+      sz += ax * by - ay * bx;
+    }
+    live_area2 = isqrt64(sx * sx + sy * sy + sz * sz);  // 2x area, mm^2
+  }
+  static const int64_t rest_area2 = [] {
+    int64_t cx = 0, cy = 0, cz = 0;
+    for (int i = 0; i < 6; ++i) {
+      cx += kFoldAnchorRestMm[i][0]; cy += kFoldAnchorRestMm[i][1]; cz += kFoldAnchorRestMm[i][2];
+    }
+    cx /= 6; cy /= 6; cz /= 6;
+    int64_t sx = 0, sy = 0, sz = 0;
+    for (int i = 0; i < 6; ++i) {
+      const int j = (i + 1) % 6;
+      const int64_t ax = kFoldAnchorRestMm[i][0] - cx, ay = kFoldAnchorRestMm[i][1] - cy,
+                    az = kFoldAnchorRestMm[i][2] - cz;
+      const int64_t bx = kFoldAnchorRestMm[j][0] - cx, by = kFoldAnchorRestMm[j][1] - cy,
+                    bz = kFoldAnchorRestMm[j][2] - cz;
+      sx += ay * bz - az * by;
+      sy += az * bx - ax * bz;
+      sz += ax * by - ay * bx;
+    }
+    const int64_t a2 = isqrt64(sx * sx + sy * sy + sz * sz);
+    return a2 > 0 ? a2 : 1;
+  }();
+  const int32_t area_pm = static_cast<int32_t>((live_area2 * 1000) / rest_area2);
+  stfx.area_ema_pm += (area_pm - stfx.area_ema_pm) / 16;
+  int32_t coh = kCohBasePm + (1000 - stfx.area_ema_pm) * kGripGamma;
+  if (coh < kCohMinPm) coh = kCohMinPm;
+  if (coh > 1000) coh = 1000;
+  if (g_u02_fold_lock) coh = 1000;
+  // ---- the shared timeline (shape choice + morph; key = frame / 2) -------
+  const FoldPhase ph = fold_phase(slot, keys, static_cast<int32_t>(frame) * 8);
+  const FoldWeights& fw = fold_weights();
+  if (g_u02_fold_debug)
+    std::fprintf(stderr,
+                 "fold f=%u seg=%d amp=%d agit_env=%d morph=%d %d->%d | "
+                 "area_pm=%d ema=%d coh=%d knead_mm=%d agit=%d\n",
+                 frame, static_cast<int>(ph.seg), ph.amp_pm, ph.agit_pm,
+                 ph.morph_pm, ph.shape_from, ph.shape_to, area_pm, stfx.area_ema_pm, coh,
+                 stfx.knead_smooth, agit);
+  // ---- the motes ---------------------------------------------------------
+  int n_motes = kMoteCount * crowd_pm / 1000;
+  if (n_motes < 6) n_motes = 6;
+  const int n_wander = kWanderCount;
+  const int n_shape = n_motes - n_wander;
+  for (int m = 0; m < n_motes; ++m) {
+    const uint32_t hm = fx_hash(0xF01Du, static_cast<uint32_t>(m), 0xA7u);
+    int32_t P[3];
+    if (m >= n_shape) {
+      // WANDER: slow hashed walks that leave the pocket and curve off oddly
+      // (the owner's "drift off in weird ways"); the smear traces them.
+      const int per = 240 + static_cast<int>(hm % 200u);
+      const uint32_t ph1 = hm & 0xFFFFu;
+      const int32_t r1 = fxu(kWanderEscapeMm * (600 + static_cast<int32_t>((hm >> 4) % 400u)) / 1000);
+      const int32_t r2 = r1 * 2 / 3;
+      const uint32_t w16 = 65536u / static_cast<uint32_t>(per);
+      P[0] = A.ring[0] + static_cast<int32_t>((static_cast<int64_t>(r1) * fx_cos16(frame * w16 + ph1)) >> 16);
+      P[1] = A.ring[1] +
+             static_cast<int32_t>((static_cast<int64_t>(r2) * fx_sin16(frame * w16 + (ph1 ^ 0x9A00u))) >> 16) +
+             static_cast<int32_t>((static_cast<int64_t>(fxu(220)) * fx_sin16(frame * (w16 / 3u) + ph1)) >> 16);
+      P[2] = A.ring[2] + static_cast<int32_t>((static_cast<int64_t>(r2) * fx_sin16(frame * w16 + ph1 + 0x4000u)) >> 16);
+    } else {
+      const int stn = m * kStencilPts / (n_shape > 0 ? n_shape : 1);
+      const auto bary = [&](uint8_t shape_id, int32_t q[3]) {
+        const uint16_t* wt = fw.w[shape_id][stn];
+        for (int k = 0; k < 3; ++k) {
+          int64_t acc = 0;
+          for (int i = 0; i < 6; ++i) acc += static_cast<int64_t>(wt[i]) * anchors[i][k];
+          q[k] = static_cast<int32_t>(acc >> 12);
+        }
+      };
+      int32_t Pf[3], Pt[3];
+      bary(ph.shape_from, Pf);
+      bary(ph.shape_to, Pt);
+      // per-mote staggered, eased morph (a deterministic path each)
+      const int32_t stag = static_cast<int32_t>(hm % 300u);
+      int32_t mp = ph.morph_pm <= stag ? 0 : (ph.morph_pm - stag) * 1000 / (1000 - stag);
+      mp = fold_ease(mp);
+      int32_t Pst[3];
+      for (int k = 0; k < 3; ++k) Pst[k] = lerp32(Pf[k], Pt[k], mp, 1000);
+      // the authored face yaw (kStencilFaceYawA16): rotate the stencil
+      // OFFSET about the vertical axis so the shape survives the house
+      // camera's foreshortening; the anchor sum itself is untouched
+      {
+        const int32_t sn = fx_sin16(static_cast<uint32_t>(kStencilFaceYawA16));
+        const int32_t cs = fx_cos16(static_cast<uint32_t>(kStencilFaceYawA16));
+        const int32_t ox = Pst[0] - A.ring[0];
+        const int32_t oz = Pst[2] - A.ring[2];
+        Pst[0] = A.ring[0] + static_cast<int32_t>(
+            ((static_cast<int64_t>(ox) * cs) >> 16) - ((static_cast<int64_t>(oz) * sn) >> 16));
+        Pst[2] = A.ring[2] + static_cast<int32_t>(
+            ((static_cast<int64_t>(ox) * sn) >> 16) + ((static_cast<int64_t>(oz) * cs) >> 16));
+      }
+      // the cloud relax position: hashed offset + ONE slow consistent orbit
+      // (R7: a single angular velocity per mote, long period, no doubling)
+      const int per = kMoteOrbitPeriodMinF +
+          static_cast<int>((hm >> 8) % static_cast<uint32_t>(kMoteOrbitPeriodMaxF - kMoteOrbitPeriodMinF));
+      const uint32_t w16 = 65536u / static_cast<uint32_t>(per);
+      const int32_t orad = fxu(kMoteOrbitRMinMm +
+          static_cast<int32_t>((hm >> 16) % static_cast<uint32_t>(kMoteOrbitRMaxMm - kMoteOrbitRMinMm)));
+      const uint32_t oph = (hm >> 3) & 0xFFFFu;
+      int32_t orb[3];
+      orb[0] = static_cast<int32_t>((static_cast<int64_t>(orad) * fx_cos16(frame * w16 + oph)) >> 16);
+      orb[1] = static_cast<int32_t>((static_cast<int64_t>(orad * 3 / 4) * fx_sin16(frame * w16 + oph)) >> 16);
+      orb[2] = static_cast<int32_t>((static_cast<int64_t>(orad / 2) * fx_sin16(frame * w16 + oph + 0x3800u)) >> 16);
+      int32_t cloud_off[3];
+      cloud_off[0] = fxu(fx_jit(hm, kCloudSpreadMm));
+      cloud_off[1] = fxu(fx_jit(hm >> 7, kCloudSpreadMm * 3 / 4));
+      cloud_off[2] = fxu(fx_jit(hm >> 13, kCloudSpreadMm / 2));
+      // coherence blends the mote from its relaxed cloud onto the stencil
+      for (int k = 0; k < 3; ++k) {
+        const int32_t cloud = Pst[k] + cloud_off[k] + orb[k];
+        const int32_t tight = Pst[k] + orb[k] / 4;
+        P[k] = lerp32(cloud, tight, coh, 1000);
+      }
+    }
+    // KNEAD agitation: per-mote jitter that churns with fast gestures
+    if (agit > 0 && !g_u02_fold_lock) {
+      const uint32_t hj = fx_hash(frame / 2u, static_cast<uint32_t>(m), 0x177u);
+      const int32_t jmm = kKneadJitterMm * agit / 1000;
+      P[0] += fxu(fx_jit(hj, jmm));
+      P[1] += fxu(fx_jit(hj >> 9, jmm));
+      P[2] += fxu(fx_jit(hj >> 17, jmm));
+    }
+    // DRAG: the lagged pull along the antenna's sweep (iron filings)
+    if (!g_u02_fold_lock) {
+      const int lag = kDragLagFrames + static_cast<int>((hm >> 21) % 4u);  // 2..5
+      const uint32_t bi = stfx.drag_idx + 8u - static_cast<uint32_t>(lag);
+      for (int k = 0; k < 3; ++k) {
+        const int64_t v = static_cast<int64_t>(stfx.dragbuf[bi & 7][k]) +
+                          stfx.dragbuf[(bi - 1u) & 7][k] + stfx.dragbuf[(bi - 2u) & 7][k];
+        P[k] += static_cast<int32_t>(v * kDragGainPm / 1000);
+      }
+    }
+    // draw: an opaque heart under an additive halo (R7 -- filled and BIG)
+    const int32_t halo = kMoteHaloRPxMin +
+        static_cast<int32_t>((hm >> 5) % static_cast<uint32_t>(kMoteHaloRPxMax - kMoteHaloRPxMin + 1));
+    mana_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000, ramp, 1000,
+              true, false, /*opaque=*/true);
+    mana_push(out, P[0], P[1], P[2], halo, ramp, kMoteHaloGainPm, true, false);
+  }
+  return agit;
+}
+
 /** Fill the frame's mana splats for one conduit. `cand` selects the menu
  *  candidate (0 = none). PASS 3 (R13): drip is CUT (dead in 579 of 600
  *  frames); the menu is 1 pulsar, 2 filled deep blue, 3 aquamarine
@@ -440,8 +881,9 @@ inline void mana_bullets(uint32_t frame, const FxAnchors& A, uint8_t ramp,
  *  plasma (the long/glitchier smear rung), 7 filled sea-green, 8 THE
  *  STACK (pulsar + strands + aqua smear — the likely shipping stack,
  *  judged assembled). Every body is filled (R7) and centre-anchored (R8). */
-inline void mana_fill(int cand, uint32_t frame, const FxAnchors& A,
-                      std::vector<ManaSplat>& out) {
+inline void mana_fill(int cand, uint32_t frame, uint32_t slot, int keys,
+                      const FxAnchors& A, FoldState& stfx, int crowd_pm,
+                      std::vector<ManaSplat>& out, int32_t* agit_out = nullptr) {
   switch (cand) {
     case 1: {  // the caged pulsar — now with a FILLED heart
       const int32_t breathe = static_cast<int32_t>(
@@ -472,15 +914,27 @@ inline void mana_fill(int cand, uint32_t frame, const FxAnchors& A,
       }
       break;
     }
-    case 3:  // aquamarine smeared plasma — THE LEAD (R13 #1)
-      mana_bullets(frame, A, kRampAqua, out);
+    case 3: {  // THE FOLD, aquamarine — pass 4: the shipping mana. The
+               // antenna folds the motes into shapes and kneads them
+               // (bullets retired; the fold IS the plasma now).
+      const int32_t ag = mana_fold(frame, slot, keys, A, stfx, kRampAqua, crowd_pm, out);
+      if (agit_out) *agit_out = ag;
       break;
-    case 6:  // cyan smeared plasma — the long/glitchier rung (R13 #2)
-      mana_bullets(frame, A, kRampCyan, out);
+    }
+    case 6: {  // THE FOLD, cyan — the long/glitchier smear rung
+      const int32_t ag = mana_fold(frame, slot, keys, A, stfx, kRampCyan, crowd_pm, out);
+      if (agit_out) *agit_out = ag;
       break;
+    }
     case 4:
       mana_lightning(frame, A, out);
       break;
+    case 9: {  // the CHANNEL stack: the fold + the lightning strand
+      const int32_t ag = mana_fold(frame, slot, keys, A, stfx, kRampAqua, crowd_pm, out);
+      mana_lightning(frame, A, out);
+      if (agit_out) *agit_out = ag;
+      break;
+    }
     case 5: {  // the boil CENTRE, grown 1.6x, outer removed (R13 #5)
       int32_t wob[3];
       centre_wobble(frame, 5u, kCentreWobbleMm, wob);
@@ -492,10 +946,11 @@ inline void mana_fill(int cand, uint32_t frame, const FxAnchors& A,
                 false, false);  // the churning CLUT rotation lives in the ramp
       break;
     }
-    case 8: {  // THE STACK: caged pulsar + buzzing strands + aqua smear
-      mana_fill(1, frame, A, out);
+    case 8: {  // THE STACK: caged pulsar + strand + the aqua fold
+      mana_fill(1, frame, slot, keys, A, stfx, crowd_pm, out);
       mana_lightning(frame, A, out);
-      mana_bullets(frame, A, kRampAqua, out);
+      const int32_t ag = mana_fold(frame, slot, keys, A, stfx, kRampAqua, crowd_pm, out);
+      if (agit_out) *agit_out = ag;
       break;
     }
     default:
@@ -613,6 +1068,43 @@ inline void glow_splat(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
   }
 }
 
+/** PASS 4 (the reviewer's palette-rebuild note made a fix): a per-frame
+ *  cache of gain-scaled ramps. Before this, every splat with gain != 1000
+ *  rebuilt a 64x3 palette -- TWICE per splat when the smear is on. */
+struct GlowFrameCache {
+  uint32_t frame = 0xFFFFFFFFu;
+  int n = 0;
+  struct E { uint8_t ramp; int16_t gain; int16_t boost; GlowFrame gf; } e[40];
+};
+inline const GlowFrame& glow_frame_cached(GlowFrameCache& c, uint32_t frame,
+                                          const GlowFrame ramps[], uint8_t ramp,
+                                          int gain_pm, int boost_pm = 1000) {
+  if (c.frame != frame) {
+    c.frame = frame;
+    c.n = 0;
+  }
+  for (int i = 0; i < c.n; ++i)
+    if (c.e[i].ramp == ramp && c.e[i].gain == gain_pm && c.e[i].boost == boost_pm)
+      return c.e[i].gf;
+  GlowFrame gf = ramps[ramp];
+  const int scale = gain_pm * boost_pm / 1000;
+  if (scale != 1000) {
+    for (int i = 0; i < 64; ++i)
+      for (int ch = 0; ch < 3; ++ch) {
+        const int v = gf.pal[i][ch] * scale / 1000;
+        gf.pal[i][ch] = static_cast<uint8_t>(v > 255 ? 255 : v);
+      }
+  }
+  if (c.n < 40) {
+    c.e[c.n] = GlowFrameCache::E{ramp, static_cast<int16_t>(gain_pm),
+                                 static_cast<int16_t>(boost_pm), gf};
+    return c.e[c.n++].gf;
+  }
+  static GlowFrame overflow;
+  overflow = gf;
+  return overflow;
+}
+
 /** The smear plane's per-frame decay/glitch update (R6). Call ONCE per
  *  frame before feeding: applies the quantised decay step, the per-cell
  *  retention jitter, and the staggered bounded hard clear. */
@@ -699,13 +1191,33 @@ inline void smear_feed(uint8_t* buf, int32_t* dbuf, const GlowAssets& g,
  *  is in front of it"). */
 inline void smear_composite(const uint8_t* buf, const int32_t* dbuf, uint8_t* rgb,
                             const int32_t* frame_depth, uint32_t w, uint32_t h,
-                            int gain_pm) {
+                            int gain_pm, uint32_t frame = 0, int tear = 0) {
   if (gain_pm <= 0) return;
+  // pass 4 (R6): the row tear -- on hashed frames a horizontal band of the
+  // plane reads with an x offset. Pure index arithmetic.
+  int tear_y0 = -1, tear_y1 = -1, tear_dx = 0;
+  if (tear) {
+    const uint32_t ht = fx_hash(0x7EA2u, frame / 2u, 0x33u);
+    if ((ht % static_cast<uint32_t>(kSmearTear.frames)) < 6u) {
+      tear_y0 = static_cast<int>((ht >> 8) % static_cast<uint32_t>(kSmearH - kSmearTear.rows));
+      tear_y1 = tear_y0 + kSmearTear.rows;
+      tear_dx = 1 + static_cast<int>((ht >> 20) % static_cast<uint32_t>(kSmearTear.cells));
+      if (ht & 0x40000000u) tear_dx = -tear_dx;
+    }
+  }
   for (uint32_t y = 0; y < h; ++y) {
-    const uint8_t* row = buf + (static_cast<size_t>(y / 4) * kSmearW) * 3;
-    const int32_t* drow = dbuf + static_cast<size_t>(y / 4) * kSmearW;
+    const int cy = static_cast<int>(y / 4);
+    const uint8_t* row = buf + (static_cast<size_t>(cy) * kSmearW) * 3;
+    const int32_t* drow = dbuf + static_cast<size_t>(cy) * kSmearW;
+    const bool torn = cy >= tear_y0 && cy < tear_y1;
     for (uint32_t x = 0; x < w; ++x) {
-      const uint8_t* c = row + static_cast<size_t>(x / 4) * 3;
+      int cxi = static_cast<int>(x / 4);
+      if (torn) {
+        cxi += tear_dx;
+        if (cxi < 0) cxi += kSmearW;
+        if (cxi >= kSmearW) cxi -= kSmearW;
+      }
+      const uint8_t* c = row + static_cast<size_t>(cxi) * 3;
       int m = c[0];
       if (c[1] > m) m = c[1];
       if (c[2] > m) m = c[2];
@@ -713,7 +1225,7 @@ inline void smear_composite(const uint8_t* buf, const int32_t* dbuf, uint8_t* rg
       // R5: the depth test — exactly glow_splat's own comparison, at cell
       // granularity. A surface nearer than the remembered splat depth
       // keeps the surface: the creature occludes its own trail.
-      const int32_t cell_d = drow[x / 4];
+      const int32_t cell_d = drow[cxi];
       if (!(cell_d > frame_depth[static_cast<size_t>(y) * w + x])) continue;
       int a = m * gain_pm * 6 / 1000;
       if (a > kSmearAlphaMaxPm) a = kSmearAlphaMaxPm;

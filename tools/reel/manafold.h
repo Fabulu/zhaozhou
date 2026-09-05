@@ -18,6 +18,9 @@
 #ifndef ZHAO_REEL_MANAFOLD_H
 #define ZHAO_REEL_MANAFOLD_H
 
+#include <cstdlib>
+#include <string>
+
 #include "manafold_art.h"
 #include "manafold_model.h"
 #include "manafold_rig.h"
@@ -109,8 +112,15 @@ inline const zc::CreatureType& type() {
     parts.push_back(make_knuckle(kBJunctionF, 0, kJunctionFBallOffYMm));
     parts.push_back(
         make_knuckle(kBLoopBase2, kKnuckleReentryOffXMm, kKnuckleReentryOffYMm));
-    parts.push_back(make_lens(kBEyeL));
-    parts.push_back(make_lens(kBEyeR));
+    // PASS 4 (Stage E): X1 -- the all-polygon TEARDROP eye -- is the
+    // default; U02_EYE=x2 keeps the pass-3 almond lens for the A/B (both
+    // carry the white annulus on the pupil bone and the de-whited page).
+    const char* eye_env = std::getenv("U02_EYE");
+    const bool x2 = eye_env != nullptr && std::string(eye_env) == "x2";
+    parts.push_back(x2 ? make_lens(kBEyeL) : make_lens_teardrop(kBEyeL));
+    parts.push_back(x2 ? make_lens(kBEyeR) : make_lens_teardrop(kBEyeR));
+    parts.push_back(make_white_ring(kBPupilL));
+    parts.push_back(make_white_ring(kBPupilR));
     parts.push_back(make_star_blade(kBPupilL, false));
     parts.push_back(make_star_blade(kBPupilL, true));
     parts.push_back(make_star_blade(kBPupilR, false));

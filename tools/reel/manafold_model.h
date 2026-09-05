@@ -219,6 +219,8 @@ inline zc::RingPart make_knuckle(uint8_t bone, int32_t off_x_mm, int32_t off_y_m
  * depth off the body), wide in Z. 8 segments facet visibly at 240p.
  */
 inline zc::RingPart make_lens(uint8_t bone) {
+  // The pass-3 ALMOND (X2's lens): a symmetric flattened ellipsoid. Kept
+  // for the Stage E A/B; X1's teardrop below is the expected winner.
   zc::RingPart p;
   p.bone = bone;
   p.cap_base_fix = true;
@@ -243,6 +245,75 @@ inline zc::RingPart make_lens(uint8_t bone) {
   return p;
 }
 
+/** X1: the TEARDROP lens (Direction 4 §3: "very pointy at the top, bottom
+ *  is more round" -- an asymmetric per-ring profile no two-constant almond
+ *  can express). Local +Y = the long axis (tilted into the Λ by the eye
+ *  bone's rest); the width AND the dome depth follow kEyeRingWidthPm, and
+ *  the apex rings crowd toward the tip (kEyeApexSharpPm). ~10 rings x 8
+ *  segments ≈ 176 tris/eye against a 1,9xx-tri creature. */
+inline zc::RingPart make_lens_teardrop(uint8_t bone) {
+  zc::RingPart p;
+  p.bone = bone;
+  p.cap_base_fix = true;
+  p.caps = zc::kCapTop | zc::kCapBot;
+  for (int i = 0; i < kEyeRings2; ++i) {
+    // stations run bottom (-Y, round) to top (+Y, pointy); the top interval
+    // compresses by kEyeApexSharpPm so the last band is a sharp cone
+    int32_t t_pm = 2000 * i / (kEyeRings2 - 1) - 1000;  // -1000..1000
+    if (t_pm > 0) t_pm = t_pm * kEyeApexSharpPm / 1000 +
+                         t_pm * t_pm / 1000 * (1000 - kEyeApexSharpPm) / 1000;
+    zc::RingSpec rs;
+    rs.y = static_cast<int32_t>(
+        (static_cast<int64_t>(fxu(kEyeLongMm)) * t_pm / 1000) * kVStretchPm / 1000);
+    rs.radius = 0;
+    const int32_t w = kEyeRingWidthPm[i];
+    rs.rx = static_cast<int32_t>((static_cast<int64_t>(fxu(kEyeDeepMm)) * w) / 1000);
+    rs.rz = static_cast<int32_t>((static_cast<int64_t>(fxu(kEyeWideMm)) * w) / 1000);
+    rs.segments = static_cast<uint8_t>(kEyeFacetSegments);
+    p.rings.push_back(rs);
+  }
+  p.r = kLensR;
+  p.g = kLensG;
+  p.b = kLensB;
+  p.page = kPageEyeTile;
+  return p;
+}
+
+/** The WHITE ANNULUS (X1 and X2): a flat torus riding the PUPIL bone
+ *  between lens face and star, so the white travels with the star through
+ *  every gaze -- tracking BY CONSTRUCTION (the page ring mechanically
+ *  cannot track; X3's refusal is recorded in the run log). Built as a
+ *  closed ring of small circular sections around a circle in the local
+ *  Y-Z plane, pushed +X by kWhiteRingOffXMm. The X-Z section is only an
+ *  approximation of a true tube frame at the top/bottom stations -- at a
+ *  ~1.5 px tube gauge the difference cannot survive 240p. */
+inline zc::RingPart make_white_ring(uint8_t bone) {
+  zc::RingPart p;
+  p.bone = bone;
+  p.cap_base_fix = true;
+  p.caps = 0;  // a closed loop: first and last stations coincide
+  for (int i = 0; i <= kWhiteRingSegs; ++i) {
+    const uint16_t a = static_cast<uint16_t>((static_cast<int64_t>(i) * 65536 / kWhiteRingSegs) & 0xFFFF);
+    zc::RingSpec rs;
+    rs.y = static_cast<int32_t>(
+        ((static_cast<int64_t>(fxu(kWhiteRingRMm)) *
+          zref::fx_cos(zref::angle16{a}).raw) >> 16) * kVStretchPm / 1000);
+    rs.cz = static_cast<int32_t>(
+        (static_cast<int64_t>(fxu(kWhiteRingRMm)) * zref::fx_sin(zref::angle16{a}).raw) >> 16);
+    rs.cx = fxu(kWhiteRingOffXMm);
+    rs.radius = fxu(kWhiteRingTubeMm);
+    rs.segments = 6;
+    p.rings.push_back(rs);
+  }
+  p.r = 246;
+  p.g = 242;
+  p.b = 250;
+  p.page = kPageAtlasTile;
+  p.v0 = kWhiteV0;
+  p.v1 = kWhiteV1;
+  return p;
+}
+
 /**
  * Half of a pupil star: one thin blade. Two crossed blades per pupil bone
  * (the second quarter-turned) make the four-pointed cyan star — tiny
@@ -254,13 +325,17 @@ inline zc::RingPart make_star_blade(uint8_t bone, bool crossed) {
   p.cap_base_fix = true;
   p.caps = zc::kCapTop | zc::kCapBot;
   if (crossed) p.pitch_q = 1;  // quarter turn: the horizontal arm of the star
+  // PASS 4 (Stage E): PER-AXIS arms -- the long arm rides the lens long
+  // axis; the crossed (short) arm must FIT the lens half-width (the
+  // reviewer's 185-vs-125 arithmetic ends here).
+  const int32_t arm = crossed ? kPupilStarArmShortMm : kPupilStarArmLongMm;
   const int n = 3;
   for (int i = 0; i < n; ++i) {
     const uint16_t theta = static_cast<uint16_t>(((2 * i + 1) * 32768LL) / (2 * n));
     const int32_t sn = zref::fx_sin(zref::angle16{theta}).raw;
     const int32_t cs = zref::fx_cos(zref::angle16{theta}).raw;
     zc::RingSpec rs;
-    rs.y = static_cast<int32_t>((-static_cast<int64_t>(fxu(kPupilStarArmMm)) * cs) >> 16);
+    rs.y = static_cast<int32_t>((-static_cast<int64_t>(fxu(arm)) * cs) >> 16);
     rs.radius = 0;
     rs.rx = static_cast<int32_t>((static_cast<int64_t>(fxu(kPupilStarThinMm)) * sn) >> 16);
     rs.rz = static_cast<int32_t>((static_cast<int64_t>(fxu(kPupilStarWideMm)) * sn) >> 16);

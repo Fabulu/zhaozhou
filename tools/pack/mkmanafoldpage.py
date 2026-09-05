@@ -145,18 +145,25 @@ def build_eye():
     # v extent tied to the grown star's tips (arm 185 mm of the 250 mm
     # half-length class), its band a few page pixels wide. Purple returns
     # to the dominant field (the sheet's 65-70%).
-    rv = np.abs(v - 0.5) / 0.30
-    ru = du / 0.36
-    rr = np.sqrt(rv * rv + ru * ru + 1e-9)
-    ring = (rr > 0.82) & (rr < 1.04)
-    white = crayon(EYE_RIM_WHITE, EYE_RIM_WHITE * 0.9,
-                   EYE_TILE, EYE_TILE, "u02-rim")
-    t[ring] = white[ring]
+    # PASS 4 (Stage E): the white ring is DELETED from the page. The page
+    # route mechanically cannot track a moving pupil (the ring was painted
+    # at ONE gaze station while the star rides a bone -- the pass-3
+    # review's core finding); the white is polygon geometry on the pupil
+    # bone now, and the lens page is the pure purple field the sheet gives
+    # it (65-71% purple share).
     # the lens ink: the junction band where the almond meets the body, and
     # the sharp tips — a painted contour, present at any render size
     ink = (du > 0.86) | (v < 0.055) | (v > 0.945)
     t[ink] = LENS_INK
     return np.clip(t, 0, 255)
+
+
+def paint_white_band(atlas):
+    """PASS 4: rows 250..254 of the atlas are the white-ring band (the
+    polygon annulus samples here; gotcha §0 -- every part carries a page)."""
+    w = crayon(EYE_RIM_WHITE, EYE_RIM_WHITE * 0.94, 6, atlas.shape[1], "u02-white")
+    atlas[249:255, :] = w
+    return atlas
 
 
 def build_star():
@@ -191,6 +198,7 @@ def mip_words(rgb, levels):
 
 def emit(dst: Path):
     atlas = build_atlas()
+    atlas = paint_white_band(atlas)
     eye = build_eye()
     star = build_star()
     awords = mip_words(atlas, 8)   # 256 -> 2 (max_level 7)
