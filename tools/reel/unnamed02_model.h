@@ -99,42 +99,67 @@ inline zc::RingPart make_loop() {
   p.caps = zc::kCapTop | zc::kCapBot;  // both ends are buried in the body, but
                                        // a hole is a hole: cap them closed
   const int32_t y0 = kLoopNeckExitYMm - kLoopBuryMm;
-  const int32_t total =
-      kLoopBuryMm + kLoopArcMm[0] + kLoopArcMm[1] + kLoopArcMm[2] + kLoopArcMm[3] + kLoopBuryMm;
-  // hinge stations along the tube, in mm from y0
-  const int32_t stA = kLoopBuryMm + kLoopArcMm[0];
+  // stations along the tube, mm from y0: neck exit, hinges A..D, arm end
+  const int32_t stNeck = kLoopBuryMm;
+  const int32_t stA = stNeck + kLoopArcMm[0];
   const int32_t stB = stA + kLoopArcMm[1];
   const int32_t stC = stB + kLoopArcMm[2];
-  const int32_t blend = 260;  // half-width of each hinge blend, mm of tube
+  const int32_t stD = stC + kLoopArcMm[3];
+  const int32_t total = stD + kLoopArcMm[4];
+  const int32_t blend = 145;  // half-width of each fold blend, mm of tube
+                              // (max the station spacing admits; wider blend
+                              // = rounder corner, and the five-fold pentagon
+                              // plus these blends is the sheet's soft ring)
+  // the per-station blade taper (piecewise-linear between stations)
+  const int32_t stKey[7] = {0, stNeck, stA, stB, stC, stD, total};
+  const auto taper = [&](const int32_t* k, int32_t s) {
+    for (int j = 0; j + 1 < 7; ++j) {
+      if (s <= stKey[j + 1]) {
+        const int32_t span = stKey[j + 1] - stKey[j];
+        if (span <= 0) return k[j + 1];
+        return k[j] + static_cast<int32_t>(
+            (static_cast<int64_t>(k[j + 1] - k[j]) * (s - stKey[j])) / span);
+      }
+    }
+    return k[6];
+  };
   for (int i = 0; i < kLoopRings; ++i) {
     const int32_t s = static_cast<int32_t>((static_cast<int64_t>(total) * i) / (kLoopRings - 1));
     zc::RingSpec rs;
     rs.y = fxu(y0 + s);
     rs.radius = 0;
-    rs.rx = fxu(kLoopBladeRxMm);
-    rs.rz = fxu(kLoopBladeRzMm);
+    rs.rx = fxu(taper(kLoopBladeRxMm, s));
+    rs.rz = fxu(taper(kLoopBladeRzMm, s));
     rs.segments = static_cast<uint8_t>(kLoopSegments);
-    // weights: root below A-blend; blend root->A across stA; A->B across stB;
-    // B->C across stC; C above.
+    // weights: a ladder of two-bone blends across the five fold stations
     const auto blend_of = [&](int32_t st) {
       int32_t t = ((s - (st - blend)) * 64) / (2 * blend);
       if (t < 0) t = 0;
       if (t > 64) t = 64;
       return t;  // 0 = fully lower bone, 64 = fully upper bone
     };
-    const int32_t tA = blend_of(stA), tB = blend_of(stB), tC = blend_of(stC);
-    if (tB == 0) {  // below the B corner: root/A
+    const int32_t tN = blend_of(stNeck), tA = blend_of(stA), tB = blend_of(stB),
+                  tC = blend_of(stC), tD = blend_of(stD);
+    if (tA == 0) {  // the buried base and the neck exit: root/neck
       rs.b0 = kBRoot;
+      rs.b1 = kBNeck;
+      rs.w0 = static_cast<uint8_t>(64 - tN);
+    } else if (tB == 0) {  // neck -> A
+      rs.b0 = kBNeck;
       rs.b1 = kBHingeA;
       rs.w0 = static_cast<uint8_t>(64 - tA);
-    } else if (tC == 0) {  // between: A/B
+    } else if (tC == 0) {  // A -> B
       rs.b0 = kBHingeA;
       rs.b1 = kBHingeB;
       rs.w0 = static_cast<uint8_t>(64 - tB);
-    } else {  // top: B/C
+    } else if (tD == 0) {  // B -> C
       rs.b0 = kBHingeB;
       rs.b1 = kBHingeC;
       rs.w0 = static_cast<uint8_t>(64 - tC);
+    } else {  // C -> D and the aimed return arm
+      rs.b0 = kBHingeC;
+      rs.b1 = kBHingeD;
+      rs.w0 = static_cast<uint8_t>(64 - tD);
     }
     // chain rings are creature-global: carry the tube x
     rs.cx = fxu(kLoopTubeXMm);

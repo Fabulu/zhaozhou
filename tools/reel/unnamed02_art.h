@@ -50,9 +50,13 @@ constexpr int kBodyPoleSegments = 16;  // uniform: the segment-taper zipper cut 
 // per-mille of the sphere ring, and a per-ring forward lean. 1000/0
 // everywhere = the pure sphere (the S4 gate ball). Authored at the form
 // milestone by eye against Side.png.
-constexpr int kBodyTaperPm[kBodyRings] = {1000, 1000, 1000, 1000, 1000, 1000,
-                                          985,  950,  890,  790,  660};
-constexpr int kBodyLeanXMm[kBodyRings] = {0, 0, 0, 0, 0, 0, 0, 15, 40, 70, 90};
+// PASS 2 (R1/eye recon): the sheet is a teardrop, not a sphere — the taper
+// starts at the equator and pulls much harder, and the upper rings lean
+// forward so the crown flows toward the neck (the lollipop fix's value half;
+// the structural half is the loop shoulder in the model builder).
+constexpr int kBodyTaperPm[kBodyRings] = {1000, 1005, 1010, 1010, 1000, 975,
+                                          930,  865,  775,  655,  520};
+constexpr int kBodyLeanXMm[kBodyRings] = {0, 0, 0, 0, 5, 15, 30, 55, 85, 120, 150};
 
 // ---- the three hinge balls (the drawn nodes the loop articulates around) --
 constexpr int32_t kHingeRadiusMm = 85;
@@ -73,40 +77,80 @@ constexpr int32_t kHingeCXMm = -620, kHingeCYMm = 1150;
 // hinge bones sit ON the tube at the fold stations; constant fold
 // rotations (loop_rest, called by every clip) bend tube AND hinge balls
 // into the drawn shape. Articulation modulates the same rotations.
-constexpr int32_t kLoopBladeRxMm = 105;  // broad in the loop plane
-constexpr int32_t kLoopBladeRzMm = 32;   // narrow across it (front = blade)
-constexpr int kLoopRings = 26;
+//
+// PASS 2 STRUCTURE (R1 + R3, one job):
+//  * the loop is SHRUNK (~0.6x — the eye recon refuted "a quarter short":
+//    it was ~1.7x too LARGE; the tube gauge relative to the body was right)
+//  * the fold count grows: neck (its own bone now — folding the antenna no
+//    longer leans the body and the eyes), A, B, C and the new D on the
+//    return arm, so the four-corner paperclip becomes a rounder pentagon
+//  * the loop CLOSES BY CONSTRUCTION: loop_pose computes hinge D's fold in
+//    closed form so the last segment always aims at the re-entry anchor —
+//    no fold scale can detach the return arm (the dongle and the
+//    punch-through become unrepresentable). Closed-form per-key arithmetic
+//    is the house precedent (root compensation), not IK.
+//  * the blade tapers per ring: broad shoulder flaring INTO the body at the
+//    neck (the lollipop fix), slim over the peak, modest on the return.
+constexpr int kLoopRings = 34;
 constexpr int kLoopSegments = 8;
 constexpr int32_t kLoopTubeXMm = 90;     // tube bind x (the neck exit)
 constexpr int32_t kLoopNeckExitYMm = 664;   // STRETCHED units from here down
-constexpr int32_t kLoopBuryMm = 250;        // both ends plunge into the body
-// arc lengths along the tube (stretched space, from the sheet anchors by eye)
-constexpr int32_t kLoopArcMm[4] = {1441, 540, 949, 1227};
-// fold angles at the neck exit and the three hinges (angle16, about Z);
-// derived from the sheet's anchor directions, then tuned by LOOKING
-constexpr int32_t kLoopFoldRootA16 = 1038;    // ~6 deg back lean at the neck
-constexpr int32_t kLoopFoldAA16 = 9903;       // ~54 deg at the front hinge
-constexpr int32_t kLoopFoldBA16 = 17500;      // ~96 deg over the peak (opens the loop)
-constexpr int32_t kLoopFoldCA16 = 9800;       // ~54 deg at the rear hinge (return arm dives into the body)
+constexpr int32_t kLoopBuryMm = 250;        // the near end plunges into the body
+// arc lengths along the tube (stretched space): neck->A, A->B, B->C, C->D,
+// and D->end — the AIMED segment, long enough that the closure arithmetic
+// keeps the arm end buried across the whole clip fold-scale range (the
+// committed closure probe sweeps 780..1160 and asserts it).
+constexpr int32_t kLoopArcMm[5] = {680, 340, 380, 380, 1330};
+// fold angles at the neck exit and hinges A..C (angle16, about Z); hinge D
+// has NO authored fold — loop_pose computes it per key (closure). Derived
+// from the sheet's ring read (tall upright egg, W/H ~0.8), tuned by LOOKING.
+constexpr int32_t kLoopFoldNeckA16 = 1450;    // ~8 deg back lean at the neck
+constexpr int32_t kLoopFoldAA16 = 7280;       // ~40 deg at the front hinge
+constexpr int32_t kLoopFoldBA16 = 11284;      // ~62 deg over the peak
+constexpr int32_t kLoopFoldCA16 = 12740;      // ~70 deg at the rear hinge
+// the re-entry anchor (body-local, the deep point the aimed segment plunges
+// toward; also kBLoopBase2's bind — the drawn re-entry made a named joint)
+constexpr int32_t kLoopReentryXMm = -230;
+constexpr int32_t kLoopReentryYMm = 180;
+// the drawn kink/lean lives in the REST POSE on the neck bone (R8): a small
+// yaw opens the front view's slot-hole read and gives the antenna the
+// sheet's asymmetric attitude; the rest tilt at A is the drawn front KINK.
+constexpr int32_t kNeckRestYawA16 = 3300;     // ~18 deg loop-plane yaw
+constexpr int32_t kLoopRestTiltA16 = 800;     // ~4 deg out-of-plane at A
+// per-station blade radii (the taper): {buried base, neck, A, B, C, D, end}.
+// rx = in the loop plane (the side sheet's tube gauge — roughly right
+// before, kept ~105 mid-tube, flared at the shoulder); rz = across the
+// plane (the FRONT sheet's blade: ~45% of body width at the base tapering
+// toward a point over the peak).
+constexpr int32_t kLoopBladeRxMm[7] = {190, 140, 95, 85, 95, 100, 130};
+constexpr int32_t kLoopBladeRzMm[7] = {180, 165, 95, 45, 38, 42, 60};
 
 // ---- the eyes (the whole face) ----
 // Two big purple almond lenses close together on the lower front, angled
 // outward in a V; a four-pointed cyan star rides a pupil bone inside each.
 // The lens is REAL FACETED GEOMETRY (the direction's partly-polygonal read);
 // the white rim is paint at the texture pass.
-constexpr int32_t kEyeXMm = 425, kEyeYMm = -70, kEyeZMm = 150;  // centre, ±z
-constexpr int32_t kEyeVAngleA16 = 2600;   // outward V (roll about +X)
-constexpr int32_t kEyeYawOutA16 = 3600;   // lenses face along the body surface
+// PASS 2 (R2 + the eye recon): the sheet's eyes are a wide Λ — long pointed
+// almonds converging at the TOP near the midline, splayed ~28° each, upper
+// tips near 0.68 R above the ball centre. The old values drew a pinched V of
+// two short pills turned 20° sideways. Width was already right (R2): the
+// apparent narrowness was the yaw foreshortening, so the yaw is cut, not the
+// width doubled. The PROTRUSION READ is protected (artist-approved): after
+// growing/splaying, kEyeDeepMm/kEyeXMm were pulled back so the crown's
+// stand-off read matches the shipped one (re-measured with u02-probe).
+constexpr int32_t kEyeXMm = 405, kEyeYMm = 30, kEyeZMm = 190;  // centre, ±z
+constexpr int32_t kEyeVAngleA16 = -5100;  // Λ: tips converge at the top (~28°)
+constexpr int32_t kEyeYawOutA16 = 900;    // nearly forward (R2: yaw, not width)
 constexpr int32_t kEyeTiltA16 = 2200;     // the almond's backward lean
 constexpr int32_t kEyeBulgeMm = 88;       // pupil star stands proud of the lens
-constexpr int32_t kEyeLongMm = 250;       // almond half-length (long axis)
+constexpr int32_t kEyeLongMm = 330;       // almond half-length (long axis)
 constexpr int32_t kEyeWideMm = 92;        // almond half-width
-constexpr int32_t kEyeDeepMm = 58;        // bulge depth off the body
+constexpr int32_t kEyeDeepMm = 52;        // bulge depth off the body
 constexpr int kEyeRings = 5;
 constexpr int kEyeFacetSegments = 8;      // the facet read at 240p
-constexpr int32_t kPupilStarArmMm = 78;   // star arm half-length (inside the rim)
-constexpr int32_t kPupilStarThinMm = 16;  // blade thinness
-constexpr int32_t kPupilStarWideMm = 30;  // blade width
+constexpr int32_t kPupilStarArmMm = 135;  // star arm half-length (the sheet's
+constexpr int32_t kPupilStarThinMm = 20;  // fat organic star, not a thin cross)
+constexpr int32_t kPupilStarWideMm = 52;  // blade width
 constexpr uint8_t kLensR = 116, kLensG = 58, kLensB = 178;   // purple (grey pass)
 // The star's SHIPPED pigment lives in mku02page.py (STAR_CYAN, same value):
 // the star must carry a page because untextured parts render black under
@@ -123,10 +167,14 @@ constexpr int kStartleKeys = 80;
 constexpr int kRestKeys = 200;
 constexpr int kPirouetteKeys = 120;
 // the hover: two incommensurate bobs (periods in keys; integer cycles/loop)
-constexpr int32_t kBobAmpAMm = 26, kBobAmpBMm = 11;
+// PASS 2: the eye recon measured the old bob at 2–4 px over whole clips — a
+// flat line. The floor is raised so motion clears the noise floor at 240p.
+constexpr int32_t kBobAmpAMm = 90, kBobAmpBMm = 34;
 constexpr int kBobPeriodAKeys = 25, kBobPeriodBKeys = 60;
-// the constant compression (Q0.16 flatten peak; slight but UNMISTAKABLE)
-constexpr int32_t kCompressAmpPm = 3300;   // ~5% vertical at the equator
+// the constant compression (Q0.16 flatten peak; slight but UNMISTAKABLE —
+// PASS 2: the old 3300 was ~4 px, swallowed by the toon band edge. Direction
+// 2 §4 wants MORE stretch than Zixxtrixx.)
+constexpr int32_t kCompressAmpPm = 9000;
 constexpr int32_t kSpreadRatioPm = 550;    // the positive-volume partner
 constexpr int kCompressPeriodKeys = 30;
 constexpr int32_t kCompressLoopCouplePm = 14;  // sympathetic hinge-root bob
@@ -157,10 +205,13 @@ constexpr int32_t kPirouetteFlarePm = 90;
 // ============================== STAGE ======================================
 
 constexpr int32_t kStageCentreMm = 0;     // the fixed camera aims at world x=0
-constexpr int32_t kHoverHeightMm = 900;   // body CENTRE above terrain
-constexpr int32_t kRestHeightMm = 845;    // the rest clip lower hover (the body
-                                          // half-height is ~747 stretched: 640
-                                          // would have SUNK the belly 107 mm)
+// PASS 2: Direction 1's headline is IT FLOATS, and at 900 the belly ink sat
+// on the dirt line (~150 mm of air = 1–2 px). Raised until there is VISIBLE
+// air under the creature at native res, judged by looking.
+constexpr int32_t kHoverHeightMm = 1250;  // body CENTRE above terrain
+constexpr int32_t kRestHeightMm = 1130;   // the rest clip lower hover (body
+                                          // half-height ~747 stretched; this
+                                          // keeps real air even at bob minima)
 
 // ============================== PAGE =======================================
 // tiles: 0 = the atlas (body/loop/hinge V row bands), 1 = the eye page,

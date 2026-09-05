@@ -121,21 +121,83 @@ struct Rig {
   }
 };
 
+/** Integer square root (64-bit), for the closure aim's vector magnitude. */
+inline int64_t isqrt64(int64_t v) {
+  if (v <= 0) return 0;
+  int64_t r = v;
+  int64_t last = 0;
+  for (int i = 0; i < 40 && r != last; ++i) {
+    last = r;
+    r = (r + v / r) / 2;
+  }
+  return r;
+}
+
+/** angle16 of a direction vector under the loop-plane convention
+ *  dir(a) = (-sin a, +cos a): returns a with sin(a) = -vx/|v|, cos(a) = vy/|v|. */
+inline int32_t angle16_of(int64_t vx, int64_t vy) {
+  const int64_t mag = isqrt64(vx * vx + vy * vy);
+  if (mag == 0) return 0;
+  const int32_t s = asin16(static_cast<int32_t>((-vx * 60000) / mag), 60000);
+  return vy >= 0 ? s : 32768 - s;
+}
+
 /**
  * The loop pose: the constant drawn-shape fold (all scales 1000), and the
- * articulation vocabulary — per-hinge per-mille scaling of the same four
- * fold angles, plus an out-of-plane tilt. Every clip speaks through these.
+ * articulation vocabulary — per-hinge per-mille scaling of the fold angles
+ * at the neck and hinges A..C, plus an out-of-plane tilt. Every clip speaks
+ * through these.
+ *
+ * THE LOOP CLOSES BY CONSTRUCTION (pass 2, R3): hinge D's fold is not an
+ * authored angle — it is computed here, per key, so the return arm's last
+ * segment always AIMS at the re-entry anchor (kLoopReentry*, = kBLoopBase2's
+ * bind). Whatever the fold scales do, the arm plunges into the body: the
+ * floating dongle and the punch-through are unrepresentable. This is
+ * closed-form pose arithmetic (the root-compensation precedent), not IK.
+ * `d_play_a16` adds hinge-play ON TOP of the closure aim (taunts): the aim
+ * still lands the arm because the play is bounded and the segment overshoots
+ * deep past the anchor.
  */
-inline void loop_pose(Rig& g, int32_t root_pm, int32_t a_pm, int32_t b_pm, int32_t c_pm,
-                      int32_t tilt_a16 = 0) {
+inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32_t c_pm,
+                      int32_t tilt_a16 = 0, int32_t d_play_a16 = 0) {
   const auto a = [](int32_t base, int32_t pm) {
     return static_cast<int32_t>((static_cast<int64_t>(base) * pm) / 1000);
   };
-  g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_z(a(kLoopFoldRootA16, root_pm)));
-  g.q[kBHingeA] = quat_mul(g.q[kBHingeA], quat_z(a(kLoopFoldAA16, a_pm)));
-  g.q[kBHingeB] = quat_mul(g.q[kBHingeB], quat_z(a(kLoopFoldBA16, b_pm)));
-  g.q[kBHingeC] = quat_mul(g.q[kBHingeC], quat_z(a(kLoopFoldCA16, c_pm)));
-  if (tilt_a16 != 0) g.q[kBHingeA] = quat_mul(g.q[kBHingeA], quat_x(tilt_a16));
+  const int32_t fn = a(kLoopFoldNeckA16, neck_pm);
+  const int32_t fa = a(kLoopFoldAA16, a_pm);
+  const int32_t fb = a(kLoopFoldBA16, b_pm);
+  const int32_t fc = a(kLoopFoldCA16, c_pm);
+  // the drawn kink/lean is a REST attitude on the neck bone (R8)
+  const zc::quat16 loc_neck = quat_mul(quat_y(kNeckRestYawA16), quat_z(fn));
+  const zc::quat16 loc_a =
+      quat_mul(quat_z(fa), quat_x(kLoopRestTiltA16 + tilt_a16));
+  const zc::quat16 loc_b = quat_z(fb);
+  const zc::quat16 loc_c = quat_z(fc);
+  g.q[kBNeck] = quat_mul(g.q[kBNeck], loc_neck);
+  g.q[kBHingeA] = quat_mul(g.q[kBHingeA], loc_a);
+  g.q[kBHingeB] = quat_mul(g.q[kBHingeB], loc_b);
+  g.q[kBHingeC] = quat_mul(g.q[kBHingeC], loc_c);
+  // ---- the closure aim, in 3D: quaternion-walk the chain to hinge D
+  // exactly as the pose composes it (yaw and tilt included), then choose
+  // D's Z-fold so the last segment points at the re-entry anchor. A Z-fold
+  // can only aim within D's local XY plane, so the out-of-plane residual is
+  // projected away — the anchor is deep enough that the committed closure
+  // probe still proves burial across the whole fold-scale range.
+  int32_t px = kLoopTubeXMm, py = kLoopNeckExitYMm, pz = 0;
+  zc::quat16 Q = loc_neck;
+  const zc::quat16 locs[3] = {loc_a, loc_b, loc_c};
+  for (int i = 0; i < 4; ++i) {
+    int32_t dx, dy, dz;
+    quat_rot_vec(Q, 0, kLoopArcMm[i], 0, dx, dy, dz);
+    px += dx;
+    py += dy;
+    pz += dz;
+    if (i < 3) Q = quat_mul(Q, locs[i]);
+  }
+  int32_t vx, vy, vz;  // anchor - P_D, taken into C's local frame
+  quat_rot_vec(quat_conj(Q), kLoopReentryXMm - px, kLoopReentryYMm - py, -pz, vx, vy, vz);
+  const int32_t aim = angle16_of(vx, vy);
+  g.q[kBHingeD] = quat_mul(g.q[kBHingeD], quat_z(aim + d_play_a16));
 }
 inline void loop_rest(Rig& g) { loop_pose(g, 1000, 1000, 1000, 1000); }
 
