@@ -850,6 +850,11 @@ set_tests_properties(zcon_session_directed PROPERTIES LABELS "fast;nightly" TIME
 #     sweep of the modulate-by-255 identity boundary across all 256 inputs;
 #   texture_combine_diff      -- the RTL against that oracle, with a coverage
 #     guard that every recipe and both refusal classes were actually reached.
+add_executable(test_material_resolve_directed texture/material_resolve_directed.cpp)
+target_link_libraries(test_material_resolve_directed PRIVATE zhao_zref)
+add_test(NAME material_resolve_directed COMMAND test_material_resolve_directed)
+set_tests_properties(material_resolve_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_material_combine_directed texture/material_combine_directed.cpp)
 target_link_libraries(test_material_combine_directed PRIVATE zhao_zref)
 add_test(NAME material_combine_directed COMMAND test_material_combine_directed)

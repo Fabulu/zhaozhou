@@ -2,7 +2,7 @@
 
 > Ledger: `design/blocks.yml` · gpu clock · maturity SPECIFIED
 > RTL: not built
-> Reference: `zref::material::resolve` — PLANNED AND NOT WRITTEN
+> Reference: `zref::material::resolve` — **WRITTEN 2026-09-05**, `reference/include/zref/zref_material_resolve.hpp`
 
 ## Purpose and exclusions
 
@@ -143,15 +143,26 @@ of a meshlet and usually many meshlets.
 
 ## Scalar reference function
 
-**PLANNED AND NOT WRITTEN**: `zref::material::resolve` and
-`zref::material::record_legal`. Named without paths because neither exists.
+**WRITTEN 2026-09-05** — both, in
+`reference/include/zref/zref_material_resolve.hpp`. They could not be written
+earlier: the record they return was not frozen. It is now
+`zhao_abi::ZhMaterialRecord` (32 B), emitted by the ABI generator, and this
+oracle reads it rather than restating it.
 
 ## Directed tests
 
-**PLANNED AND NOT WRITTEN**: every field of the record at its own offset; a
-`material_id` at the set count refused; `sample_count` 3 accepted and 4
-refused; a cache hit and miss returning identical records; and the coherence
-case — **a resolve after a table republish must not return the old record**.
+**WRITTEN 2026-09-05** — `tests/texture/material_resolve_directed.cpp`, 32
+checks, green. Every case this section named, with one refinement found while
+writing them: **`sample_count == 4` cannot be tested, because the frozen layout
+makes it unrepresentable.** It is two bits. A malformed record is therefore
+exercised through the things the layout DOES permit — a set reserved control
+bit and a non-zero reserved word — which is a better test than the one asked
+for, because it checks a case that can actually occur.
+
+The coherence case is the one that matters: a republish at a new generation is
+followed by a resolve that MISSES and returns the new record, with **no flush
+performed**, because D-3's tag is what makes the old line structurally
+unmatchable and a flush would hide a tag bug rather than prevent one.
 
 ## Randomized differential tests
 
