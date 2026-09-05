@@ -4,7 +4,7 @@ Owner instructions arrive as files in `reports/` and are easy to lose between
 passes. **This is the index.** Before starting any wave, read this file, then
 read the documents it names.
 
-Last swept: 2026-08-31 **late** — after `reports/OWNER-RULINGS-COMPLETE-20260831.md`
+Last swept: 2026-08-31 **late** (plus `bumomapping.md` indexed 2026-09-05) — after `reports/OWNER-RULINGS-COMPLETE-20260831.md`
 answered **all 28 open questions**. Read that file before this one; it is the
 authority and this is only the index.
 
@@ -105,6 +105,22 @@ local gate can silently skip. That is exactly the failure the standing memory
 ---
 
 ## P1 — the game's main thing
+
+### D3b. Detail bump mapping for terrain  ·  `bumomapping.md` (repo root)
+> *"we need detail bump mapping for terrain. please architect it and set it up
+> for production. I hope it is not too expensive but terrain is the star of the
+> show and we neglected giving it first class treatment."*
+
+**Unclaimed, and it was nearly lost.** Landed 2026-09-04 as `bumomapping.md` at
+the **repo root**, not in `reports/`, so the docket sweep did not see it; it was
+found by a creature-lane reviewer a day later and indexed here by the creature
+coordinator. **Whoever owns terrain should claim it** — the creature lane read
+it and did not start it.
+
+Note the owner's own caveat, *"I hope it is not too expensive"*: this is a
+per-pixel terrain feature and `PER_PIXEL_BUDGET.md` says there is no slack
+anywhere on that path, so the cost answer is part of the architecture, not an
+afterthought.
 
 ### D4. The 8 km world is unbuilt, not unarchitected  ·  `reports/Missingterrain`
 > *"We really need to get to implementing the main thing of our game at some
