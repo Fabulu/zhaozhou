@@ -106,21 +106,43 @@ int main(int argc, char** argv) {
   for (int i = 0; i < 8; ++i) tick(d);
   d.rst_n = 1;
 
-  // ---- load a palette so the CLUT path has something resident -------------
-  // Without this the palette answers "cold" and its lookup counter still moves,
-  // which is enough for the chain test -- but a resident palette makes the
-  // returned colour meaningful instead of a miss indication.
-  for (int i = 0; i < 64; ++i) {
-    d.pal_ld_valid_i = 1;
-    d.pal_ld_op_i = 1;
-    d.pal_ld_slot_i = 0;
-    d.pal_ld_gen_i = 1;
-    d.pal_ld_idx_i = static_cast<uint8_t>(i);
+  // ---- load a palette, FOLLOWING THE LOAD PROTOCOL ------------------------
+  // This loop used to send op == 1 (LD_WRITE) sixty-four times and nothing
+  // else. PALETTE_RES requires BEGIN -> every entry -> END:
+  //
+  //   * LD_WRITE is ignored unless `loading_r`, which only LD_BEGIN sets, so
+  //     not one of those writes landed;
+  //   * LD_END makes the slot resident only if ALL `PAL_ENTRIES` arrived and
+  //     the CRC is good, so 64 of 256 would not have sufficed either.
+  //
+  // The palette was therefore never resident and `gen_r[0]` stayed 0 against a
+  // lookup generation of 1. MEASURED: 96 lookups, 96 STALE, 0 cold -- every
+  // CLUT fragment retired black while the lookup counter moved and the path
+  // looked busy and healthy.
+  //
+  // Worth recording because the first diagnosis of that blackness asserted
+  // "it is NOT the palette being unloaded", on the grounds that the entry
+  // VALUES written here are all non-zero. That checked the data and not the
+  // protocol -- the values were irrelevant because no write was accepted. A
+  // negative claim needs the same evidence as a positive one.
+  const int kPalEntries = 256;
+  d.pal_ld_valid_i = 1;
+  d.pal_ld_slot_i = 0;
+  d.pal_ld_gen_i = 1;
+  d.pal_ld_crc_ok_i = 1;
+  d.pal_ld_op_i = 0;  // LD_BEGIN
+  d.pal_ld_idx_i = 0;
+  tick(d);
+  for (int i = 0; i < kPalEntries; ++i) {
+    d.pal_ld_op_i = 1;  // LD_WRITE
+    d.pal_ld_idx_i = static_cast<uint16_t>(i);
     d.pal_ld_rgb565_i = static_cast<uint16_t>(0x0841 * (i + 1));
-    d.pal_ld_crc_ok_i = 1;
     tick(d);
   }
+  d.pal_ld_op_i = 2;  // LD_END
+  tick(d);
   d.pal_ld_valid_i = 0;
+  tick(d);
 
   // ---- drive fragments ----------------------------------------------------
   FillModel mem;
@@ -155,6 +177,10 @@ int main(int argc, char** argv) {
       d.frag_class_i = (submitted % 2) ? 2 : 0;
       d.frag_base_rgb_i = 0x204060u;
       d.frag_base_a_i = 255;
+      // the fragment names its own palette binding: slot 0, generation 1,
+      // which is what the upload loop above wrote
+      d.frag_pal_slot_i = 0;
+      d.frag_pal_gen_i = 1;
       d.bind_base_i = 0x0010'0000u;
       d.bind_mode_i = 0;
     } else {
@@ -364,8 +390,11 @@ int main(int argc, char** argv) {
   // bug made fragment 12 arrive first. With the fragments in their real order
   // the first is fragment 0, so the guard silently depended on which fragment
   // happened to lead -- and fixing a genuine bug broke a check that was never
-  // about the first fragment. The bilinear half is the part that is known
-  // good, so that is what is asserted.
+  // about the first fragment. Both halves are now asserted; the CLUT half was
+  // black for a whole pass and is checked separately below.
+  std::printf("  palette: %u lookups, %u stale, %u cold\n",
+              d.cnt_palette_lookups_o, d.cnt_palette_stale_o,
+              d.cnt_palette_cold_o);
   std::printf("  non-zero colour by class -- CLUT %d, bilinear %d (of 32 each)\n",
               g_nz_by_cls[0], g_nz_by_cls[1]);
   std::printf("  retires carrying a non-zero colour: %d of %d\n", nonzero_rgb, retired);
@@ -474,30 +503,40 @@ int main(int argc, char** argv) {
           8, max_disp);
   }
 
-  // ======================= OPEN ANOMALY: the CLUT path is BLACK =============
-  // Every one of the 32 CLUT-class fragments retires with rgb == 0, and every
-  // one of the 32 bilinear fragments does not. The split is exactly by class,
-  // not by recipe -- the apparent recipe pattern is an artefact of this test
-  // driving `class = (i % 2)` alongside `recipe = (i % 8)`, so an even index is
-  // always both CLUT and an even recipe.
+  // ======================= THE CLUT PATH, RESOLVED =========================
+  // Every CLUT-class fragment used to retire BLACK while every bilinear one did
+  // not, with `cnt_palette_lookups_o` moving healthily the whole time. Two
+  // independent faults, both invisible to a lookup count:
   //
-  // It is NOT the palette being unloaded: the upload loop above writes
-  // `0x0841 * (i + 1)`, and 0x0841 is odd, so no index in range wraps to zero.
-  // It is NOT the path going idle: PALETTE_RES performs all 96 lookups the 32
-  // CLUT fragments ask for, which is asserted below so it cannot regress to
-  // silence the way it did before.
+  //   1. THE TEST never loaded a palette. It sent LD_WRITE 64 times and no
+  //      LD_BEGIN, so `loading_r` was never set and not one write landed; and
+  //      LD_END grants residency only if all 256 entries arrived, so 64 would
+  //      not have been enough either.
   //
-  // This was MASKED until the per-fragment attribute carriage was fixed. With
-  // the class read off the input pin, fragments were mislabelled, the palette
-  // saw only 61 lookups, and the single-fragment anti-vacuity check happened
-  // to sample a bilinear one. Fixing one bug made the other visible -- which is
-  // an argument for the counters, not against them.
+  //   2. THE ISLAND asked the palette the wrong question. `lu_slot_i` and
+  //      `lu_gen_i` were OVERLAPPING slices of the response routing token --
+  //      the "slot" was the low two bits of the "generation", and the
+  //      generation was FRAGROB's residency counter, which has nothing to do
+  //      with a palette upload. A palette slot and generation are a MATERIAL
+  //      BINDING; they now travel with the fragment.
   //
-  // Not diagnosed here, and deliberately NOT asserted as expected behaviour: a
-  // check that said "the CLUT path is black" would enshrine the defect.
+  // Measured, before and after: 96 lookups / 96 stale / 0 cold, every CLUT
+  // fragment black -> 96 lookups / 0 stale / 0 cold, all 32 non-zero.
+  //
+  // Asserted as residency, not just as colour, because "the lookup happened"
+  // and "the lookup found its palette" are different facts and only the first
+  // was ever observable.
+  check(g_nz_by_cls[0] == 32,
+        "every CLUT fragment carries a NON-ZERO colour", 32, g_nz_by_cls[0]);
   check(d.cnt_palette_lookups_o == 96,
         "the CLUT path performs every lookup its fragments ask for", 96,
         static_cast<int>(d.cnt_palette_lookups_o));
+  check(d.cnt_palette_stale_o == 0,
+        "and every one of them RESOLVES -- no lookup is answered stale, which "
+        "is the miss indication that used to be mistaken for a working path",
+        0, static_cast<int>(d.cnt_palette_stale_o));
+  check(d.cnt_palette_cold_o == 0,
+        "and none is answered cold", 0, static_cast<int>(d.cnt_palette_cold_o));
 
   if (g_failed) {
     std::printf("[island_composed_directed] %d/%d checks FAILED\n", g_failed, g_checks);

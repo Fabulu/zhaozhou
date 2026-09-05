@@ -132,6 +132,13 @@ module zhao_texture_island_top #(
     // comes from the material binding, which is upstream of this island.
     input  var logic [1:0]  frag_class_i,
 
+    // THE FRAGMENT'S PALETTE BINDING -- which CLUT it samples and which upload
+    // generation it expects. This is a MATERIAL BINDING and belongs to the
+    // fragment. It used to be taken from the response routing token, which is
+    // a different namespace entirely; see the palette wiring below.
+    input  var logic [$clog2(PAL_SLOTS)-1:0] frag_pal_slot_i,
+    input  var logic [GENW-1:0]              frag_pal_gen_i,
+
     // ======================= island boundary: binding table =================
     input  var logic [31:0] bind_base_i,
     input  var logic [31:0] bind_mode_i,
@@ -209,7 +216,16 @@ module zhao_texture_island_top #(
     // with its fragment, every fragment would combine with whichever recipe
     // arrived last and exactly one counter would move. That gap was recorded
     // against the ENFORCED-BY note below and this closes it.
-    output var logic [31:0] cnt_combine_jobs_o [8]
+    output var logic [31:0] cnt_combine_jobs_o [8],
+
+    // PALETTE RESIDENCY OUTCOME. These two are counters and not diagnostics
+    // because "the lookup happened" and "the lookup found its palette" are
+    // different facts, and only the first was observable. Every CLUT fragment
+    // retired black for a whole pass while `cnt_palette_lookups_o` moved
+    // healthily; the fault was 96 lookups all STALE, and nothing exposed that.
+    // A path that answers with a miss indication is doing no work.
+    output var logic [31:0] cnt_palette_stale_o,
+    output var logic [31:0] cnt_palette_cold_o
 );
 
   // ==========================================================================
@@ -279,7 +295,8 @@ module zhao_texture_island_top #(
   logic [63:0]           uvw_m   [FCTXN];   // {u_over_w, v_over_w}
   logic [CTXW-1:0]       fctx_m  [FCTXN];   // tag + token + material fields
   logic [31:0]           fbase_m [FCTXN];   // {base_rgb, base_a}
-  logic [BINDW+LODW+2:0] fmisc_m [FCTXN];   // {aux, class, lod, binding}
+  localparam int unsigned PSW = $clog2(PAL_SLOTS);
+  logic [BINDW+LODW+2+PSW+GENW:0] fmisc_m [FCTXN];  // {pal_gen, pal_slot, aux, class, lod, binding}
 
   wire [FCTXW-1:0] fc_wp = tok_r[FCTXW-1:0];
 
@@ -298,7 +315,8 @@ module zhao_texture_island_top #(
       uvw_m[fc_wp]   <= {frag_u_over_w_i, frag_v_over_w_i};
       fctx_m[fc_wp]  <= fr_f_ctx_in;
       fbase_m[fc_wp] <= {frag_base_rgb_i, frag_base_a_i};
-      fmisc_m[fc_wp] <= {frag_aux_i, frag_class_i, frag_lod_i, frag_binding_i};
+      fmisc_m[fc_wp] <= {frag_pal_gen_i, frag_pal_slot_i, frag_aux_i,
+                         frag_class_i, frag_lod_i, frag_binding_i};
     end
   end
 
@@ -329,12 +347,14 @@ module zhao_texture_island_top #(
   wire [FCTXW-1:0]      fc_rp    = pu_tag[FCTXW-1:0];
   wire [CTXW-1:0]       fctx_rd  = fctx_m[fc_rp];
   wire [31:0]           fbase_rd = fbase_m[fc_rp];
-  wire [BINDW+LODW+2:0] fmisc_rd = fmisc_m[fc_rp];
+  wire [BINDW+LODW+2+PSW+GENW:0] fmisc_rd = fmisc_m[fc_rp];
 
   wire [BINDW-1:0] f_binding_c = fmisc_rd[BINDW-1:0];
   wire [LODW-1:0]  f_lod_c     = fmisc_rd[BINDW+LODW-1:BINDW];
   wire [1:0]       f_class_c   = fmisc_rd[BINDW+LODW+1:BINDW+LODW];
   wire             f_aux_c     = fmisc_rd[BINDW+LODW+2];
+  wire [PSW-1:0]   f_pal_slot_c = fmisc_rd[BINDW+LODW+2+PSW:BINDW+LODW+3];
+  wire [GENW-1:0]  f_pal_gen_c  = fmisc_rd[BINDW+LODW+2+PSW+GENW:BINDW+LODW+3+PSW];
   wire [1:0]       f_scount_c  = fctx_rd[23:22];
   wire [2:0]       f_recipe_c  = fctx_rd[26:24];
   wire [7:0]       f_weight_c  = fctx_rd[34:27];
@@ -504,9 +524,25 @@ module zhao_texture_island_top #(
   // requests are issued long after admission, so the pin holds a later
   // fragment's class. Written when FRAGROB reports where the fragment landed.
   logic [1:0] class_m [DEPTH];
+  // The palette binding is keyed the same way and for the same reason: a
+  // sample response identifies its fragment by FRAGROB slot and nothing else.
+  logic [$clog2(PAL_SLOTS)-1:0] palslot_m [DEPTH];
+  logic [GENW-1:0]              palgen_m  [DEPTH];
   always_ff @(posedge clk) begin
-    if (fr_alloc_valid) class_m[fr_alloc_slot] <= f_class_c;
+    if (fr_alloc_valid) begin
+      class_m  [fr_alloc_slot] <= f_class_c;
+      palslot_m[fr_alloc_slot] <= f_pal_slot_c;
+      palgen_m [fr_alloc_slot] <= f_pal_gen_c;
+    end
   end
+
+  // THE RESPONSE ROUTING TOKEN'S FIELDS, named once. The palette wiring below
+  // used to slice this word by hand with two overlapping ranges, so nothing
+  // caught that they overlapped.
+  localparam int unsigned SRC_GEN_LO  = 0;
+  localparam int unsigned SRC_SIDX_LO = GENW;
+  localparam int unsigned SRC_SLOT_LO = GENW + 2;
+  localparam int unsigned SRC_SLOT_HI = SRC_SLOT_LO + $clog2(DEPTH) - 1;
 
   logic [SRCW-1:0] plan_src_id;
   assign plan_src_id = {class_m[fr_tmu_slot],
@@ -638,12 +674,23 @@ module zhao_texture_island_top #(
       .ld_idx_i(pal_ld_idx_i), .ld_rgb565_i(pal_ld_rgb565_i),
       .ld_crc_ok_i(pal_ld_crc_ok_i),
       .lu_valid_i(disp_clut_valid),
-      .lu_slot_i(disp_clut_tok[$clog2(PAL_SLOTS)-1:0]),
-      .lu_gen_i(disp_clut_tok[GENW-1:0]),
+      // THE PALETTE'S SLOT AND GENERATION ARE THE FRAGMENT'S BINDING, not the
+      // response's routing token. These two ports used to read
+      // `disp_clut_tok[$clog2(PAL_SLOTS)-1:0]` and `disp_clut_tok[GENW-1:0]`
+      // -- OVERLAPPING slices of the same word, so the "slot" was the low two
+      // bits of the "generation", and the generation was FRAGROB's residency
+      // counter, which has nothing to do with a palette upload.
+      //
+      // MEASURED before the repair: 96 lookups, 96 STALE, 0 cold. The slot was
+      // resident and the generation never matched, so every CLUT fragment
+      // retired black while the lookup counter moved and looked healthy.
+      .lu_slot_i(palslot_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]),
+      .lu_gen_i (palgen_m [disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]),
       .lu_idx_i(disp_clut_data[$clog2(PAL_ENTRIES)-1:0]),
       .lu_valid_o(pal_lu_valid_o), .lu_rgb565_o(pal_lu_rgb565),
       .lu_stale_o(pal_lu_stale), .lu_resident_o(pal_lu_resident),
-      .lookups_o(cnt_palette_lookups_o), .stale_o(pal_stale), .cold_o(pal_cold),
+      .lookups_o(cnt_palette_lookups_o),
+      .stale_o(cnt_palette_stale_o), .cold_o(cnt_palette_cold_o),
       .err_write_outside_o(pal_e0), .err_same_gen_o(pal_e1),
       .err_incomplete_o(pal_e2), .err_crc_o(pal_e3), .loads_ok_o(pal_ok));
 
