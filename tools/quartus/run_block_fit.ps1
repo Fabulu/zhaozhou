@@ -48,6 +48,27 @@ param(
     #
     # Pair with -RowLabel so seed points do not overwrite each other in a
     # report that merges by module name.
+    # OVERRIDE THE FITTER'S OPTIMISATION MODE FOR THIS RUN ONLY.
+    #
+    # The shell QSF sets OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT" and that
+    # default is deliberate and documented there -- sixteen rounds of RTL
+    # surgery were run against it. It is also the most expensive mode there is,
+    # and it is spent whether or not the constraint is reachable.
+    #
+    # MEASURED: zhao_texture_material_combine_v1 (1,994 ALMs, 596 virtual pins)
+    # spends 32 minutes in placement PREPARATION alone under it, and
+    # zhao_raster_perspuv_svc (2,204 ALMs) spends 78. Both then need hours more.
+    #
+    # When the question is "did this change move the number AT ALL" rather than
+    # "what is the best this block can do", a pessimistic answer in an hour is
+    # worth more than an exact one in six -- a block sitting at 29.74 MHz
+    # against a 125 MHz target is being rearchitected regardless of the third
+    # significant figure. Pass 'BALANCED' for that.
+    #
+    # A run using this is NOT comparable with a HIGH PERFORMANCE EFFORT row and
+    # the JSON records which mode produced it, so the two cannot be silently
+    # placed in the same table.
+    [string]$OptimizationMode = '',
     [int]$Seed = 0,
     [switch]$KeepWorkspace
 )
@@ -412,6 +433,9 @@ try {
         $qsf = $qsf -replace '^set_global_assignment -name TOP_LEVEL_ENTITY.*', "set_global_assignment -name TOP_LEVEL_ENTITY $mod"
         $qsf = $qsf -replace '^set_global_assignment -name SDC_FILE.*', 'set_global_assignment -name SDC_FILE blockfit.sdc'
         $qsf = $qsf -replace '\.\./\.\./rtl/', "$rtlAbs/"
+        if ($OptimizationMode -ne '') {
+            $qsf = $qsf -replace '^set_global_assignment -name OPTIMIZATION_MODE.*', "set_global_assignment -name OPTIMIZATION_MODE `"$OptimizationMode`""
+        }
 
         # THE VIRTUAL-PIN ASYMMETRY, and it is deliberate.
         #
@@ -566,6 +590,11 @@ try {
         # actually measured at, and rows without one predate this change.
         $rowModule = if ($RowLabel) { "$mod$RowLabel" } else { $mod }
         $row = [ordered]@{ module = $rowModule; status = 'unknown'; sourceCommit = $head; rtlCleanAtHead = $rtlClean }
+        # WHICH FITTER MODE PRODUCED THIS ROW. Recorded because a BALANCED run
+        # and a HIGH PERFORMANCE EFFORT run are not comparable numbers, and a
+        # table that mixes them silently is worse than one that omits the fast
+        # rows entirely. Empty means the shell QSF default was used.
+        if ($OptimizationMode -ne '') { $row.optimizationMode = $OptimizationMode }
         if ($TopParameters) { $row.topParameters = ($TopParameters -join ' ') }
         # A parameter VARIANT is a second measurement of the SAME block, not a
         # second block. Marked so a census that totals DSPs by row cannot count
