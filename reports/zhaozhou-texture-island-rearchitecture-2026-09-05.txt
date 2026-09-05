@@ -1,0 +1,2365 @@
+ZHAOZHOU: RECOVERING THE 69 MHz TEXTURE ISLAND
+============================================
+A source-grounded implementation and validation brief
+5 September 2026
+
+Repository: Fabulu/zhaozhou
+Hardware branch: zixxtrixx-v8-closeout
+Source baseline: 5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1
+Baseline commit time: 2026-09-05 12:33:53 UTC / 14:33:53 CEST
+Measured island source: afb7070fe129a7c997a69ebade1e5bf5c9ebc601
+Provisional target: Cyclone V 5CSEBA6U23I7
+Measured tool: Quartus Prime Lite 17.0.2
+
+STATUS: PROPOSED RECOVERY ARCHITECTURE. Not implemented or physically validated
+by this review. No repository files were changed. This review inspected source,
+contracts, architecture documents, tests and committed timing reports. It did
+not execute the RTL suite or run Quartus. Source-demonstrable defects, measured
+paths, reported historical results and proposed improvements are distinguished
+below. Proposed numbers are gates or analytical bounds, not achieved results.
+
+
+FRESHNESS ADDENDUM -- READ BEFORE THE HISTORICAL DIAGNOSIS
+========================================================
+Final checked hardware HEAD: b7b62542aabf03ac568cdb7f3ab290176bc34478
+Commit time: 2026-09-05 13:03:25 UTC / 15:03:25 CEST.
+
+This commit arrived during the review, after the source baseline above. The
+comparison contains two commits and changes only the island top, its composed
+test and the run log. The arithmetic/service component files examined below
+were not changed by that comparison. No replacement composed fit accompanies it.
+
+WHAT THE NEW COMMIT CONFIRMS AND FIXES
+-------------------------------------
+The agent independently confirms the unwired fr_f_ctx identified in section 2.2.
+The old 64-fragment test had executed the zero-sample, untextured base-colour
+bypass for EVERY fragment, with zero material product jobs, while passing its
+11 assertions. The new commit connects .f_ctx_i(fr_f_ctx).
+
+It also replaces the permanently bilinear response class with frag_class_i,
+latches the palette response token, chooses response identity from the winning
+source, and prevents the bilinear producer from being consumed on a cycle when
+the palette wins. These are real corrections. The exact old context-wire and
+palette/bilinear collision bugs must NOT be presented as still unfixed at this
+new HEAD. Sections 2.2, 2.3 and the relevant parts of 2.7 retain their baseline
+form so the reason for the recovery is auditable.
+
+WHAT REMAINS WRONG
+------------------
+The packed context is still built from LIVE ingress ports when a much older
+fragment reaches FRAGROB. Delayed reciprocal results still take LIVE ingress
+numerators. The new class is also read LIVE at the later TMU issue point; it is
+not saved with the original fragment. The code now transports a context word,
+but that does not establish that it captured the RIGHT fragment's context.
+
+The new run reports 64 in / 64 out, zero identity errors, 131 bilinear jobs and
+61 palette lookups. Its material job histogram is:
+
+  observed: 0  0  0  4  0  0 24 112
+
+The test inputs cycle all eight recipes eight times with three samples per
+fragment. For that workload, absent declared faults or cancellations, the current
+combiner's actual job law gives:
+
+  expected: 0 32 32 32  0  0 48  32
+
+That expected histogram follows the implementation's recipe masks, not an old
+architecture table that omitted alpha products. The difference is not a cosmetic
+statistic. It is consistent with the remaining late capture of live recipes;
+that mechanism is visible in source, but an instrumented run must still establish
+its contribution to this particular observed histogram.
+
+The new assertions are not an adequate ownership proof. 'At least two recipe
+counters moved' does not establish each fragment's recipe. 'DETAIL_LIGHT jobs >
+MODULATE jobs' does not prove a 6:4 ratio; 24 > 0 passes that check. The test still
+asserts only retired > 0, not retired == 64, and does not compare each output
+against its accepted input's exact result. Do not bless the known-wrong histogram
+with a weaker threshold. Add the exact scoreboard from sections 15 and Appendix A.
+
+One further verified detail: the new test still attempts 64 palette WRITE
+operations without BEGIN or END, while the instantiated palette requires a
+complete transactional load. The palette implementation refuses writes outside
+an open load. A lookup counter moving therefore does not prove valid palette
+colours. Load a complete palette legally, assert loads_ok/residency, and check
+stale/cold/error results as well as colour. Do not let undefined/uninitialized
+payload make a nonzero-colour test look convincing.
+
+HOW THIS CHANGES THE RECOVERY
+----------------------------
+Keep the useful new fixes; build the ownership repair on top of them. Do not
+revert them merely to match the old fit. Do not claim a new clock speed from
+these changes. Exporting eight 32-bit job counters also changes the physical
+boundary, and the corrected active paths change what is exercised. The 69.05 MHz
+result remains historical evidence for its pinned configuration, not a timing
+certificate for b7b62542.
+
+The remaining priorities are unchanged: correct capture at ingress; one central
+lifetime/retirement owner; queued, pipelined reciprocal service; paired streaming
+perspective; overlapping descriptor reads; cache feedback cuts; pipelined material
+jobs; and exact mixed-workload validation. See sources R23-R25 below.
+
+PURPOSE
+-------
+Stop treating this as an invitation to continue unrelated roadmap work. Recover
+one exact, correctly connected, adequately provisioned texture subsystem before
+spending more integration margin on unrelated capabilities. Preserve terrain,
+material semantics, exact arithmetic, and the 100 MHz product clock. Do not
+silently turn a missed clock into a lower product specification.
+
+This is NOT a recommendation to throw out the console. It is a targeted recovery
+of transaction ownership, a few expensive scheduling/datapath structures, cache
+feedback, and the test/fit boundary. It covers every component of the island and
+its interfaces, without redesigning the language, game, emulator or Field engine.
+
+CONTENTS
+--------
+  0. Decision summary and what should happen first
+  1. The measurements and their actual meaning
+  2. Source defects that prevent trustworthy timing-only optimization
+  3. The production topology: one owner, many services
+  4. Transaction, ordering, credit and memory laws
+  5. RCP24: remove scans and pipeline exact arithmetic
+  6. Perspective: replace the token table with a paired stream
+  7. FRAGROB, descriptor expansion and final retirement
+  8. Cache: cut the miss-classification feedback path
+  9. Bindings, Mosaic and the TMU planner
+ 10. Response dispatch, direct formats, palette and filtering
+ 11. Material combiner: two lanes without two giant cones
+ 12. AUX: keep the arithmetic, repair flow control
+ 13. Throughput, capacity and resource accounting
+ 14. Timing methodology and fit acceptance
+ 15. Tests that must fail on the current mistakes
+ 16. Execution order, work packages and stop conditions
+ 17. What not to do; what is genuinely promising
+ 18. Source catalogue and evidence anchors
+ Appendix A. Small arithmetic and protocol checks
+ Appendix B. Delivery checklist for the implementation agent
+
+
+0. DECISION SUMMARY
+===================
+
+[Evidence: R1-R22; freshness corrections R23-R25. Recommendations are proposed.]
+
+The bad news is real: the measured connected island has 69.05 MHz restricted
+Fmax, not a demonstrated 105 MHz implementation. The better news is that the
+reports and source expose specific structures, not an unexplained failure of
+the whole console concept.
+
+There are THREE different problems, and they need separate scorecards:
+
+  A. CLOCK PERIOD: RCP24 is the dominant measured internal limiter. The same
+     archived report also contains violating paths in PERSPUV, COMBINE.V1,
+     CACHE_PIPE, FRAGROB and their connections. Fixing RCP24 alone cannot be
+     assumed to deliver 105 MHz.
+
+  B. WORK PER CLOCK: FRAGROB's sample-issue FSM is serialized. With no stalls,
+     I_IDLE -> I_READ -> I_HOLD -> I_IDLE emits at most one sample every three
+     clocks. The current bilinear composition calculates only one byte and
+     repeats it as RGB. Correct full-colour filtering has a different demand.
+     A higher clock on those paths is not sufficient capacity evidence.
+
+  C. TRANSACTION CORRECTNESS: the top pairs delayed results with live inputs,
+     leaves its newly packed material context unconnected, loses filtering
+     metadata across cache latency, and lacks a correct completion merger.
+     The combiner can reorder after FRAGROB has already performed its purported
+     final retirement. The current composed test can pass these mistakes.
+
+The recommended architecture is not a new speculative feature set. The existing
+reports/islandrearchitecture5.md already specifies a transaction token BEFORE
+reciprocal work, a final ROB AFTER combination, queue-based reciprocal control,
+a streaming perspective pair, and meaningful physical wrappers. Much of the
+problem is that the implemented composition does not yet realize that design.
+This brief makes the repair executable and corrects remaining ambiguities in it.
+
+Immediate priority, in order:
+
+  1. Freeze the measured source and add failing per-fragment exact tests.
+  2. Repair the fit methodology without deleting the old evidence.
+  3. Establish central ownership from ingress to final output acceptance.
+  4. In parallel, build the queue-based exact RCP24 and paired perspective path.
+  5. Repair FRAGROB sample throughput, final retirement, and return validation.
+  6. Cut the measured combiner and cache feedback cones.
+  7. Complete real format/filter/binding/AUX paths and validate capacity.
+  8. Refit the functional island, then the actual renderer composition.
+
+Do not wait for a new status document before writing the first failing test.
+Do not postpone recipe-identity tests merely to preserve a fit's port list.
+Testbench-only instrumentation and comparisons of existing output ports can
+expose the bug without adding any production I/O. A historical fit stays valid
+for its historical source; it is not an excuse to leave the source untested.
+
+Expected outcome: a much more credible route to 100 MHz operation with the
+existing 105 MHz full-composition headroom requirement. A specific achieved
+frequency, ALM saving, or elapsed completion time cannot be promised from static
+inspection. The architecture must earn those numbers through fits and traces.
+
+
+1. THE MEASUREMENTS: DO NOT CONFUSE THE THREE MACHINES
+====================================================
+
+[Evidence: R3-R7, R20-R22, R26; V1-V2.]
+
+1.1 The measured texture island
+------------------------------
+
+The committed result for zhao_texture_island_top is:
+
+  sourceCommit                 afb7070fe129a7c997a69ebade1e5bf5c9ebc601
+  ALMs                         7,720
+  registers                    11,790
+  block memory bits            25,872
+  M10K blocks                  18
+  DSP blocks                   17
+  virtual pins                 889
+  restricted Fmax              69.05 MHz
+  synthesis/fit elapsed        9,238 seconds
+  imposed clock period         10.000 ns (100 MHz)
+
+The architecture nominal area was 6,600 ALMs; the cited hard area limit was
+7,500. The overrun is 220 ALMs, 2.93%. That is manageable in scale, but not an
+automatic waiver. The useful device budget with 10% fabric reserved is 37,719
+ALMs out of 41,910. That number is the 90%-usable budget, NOT the reserve itself.
+
+The island being 18.4% of the FPGA does not establish that the complete console
+fits. The corrected functional implementation may also contain logic missing
+from, bypassed by, or optimized out of the measured composition. Count it again.
+
+1.2 The shell and the new source are different configurations
+------------------------------------------------------------
+
+The separate corrected renderer-shell result of 99.34 MHz is not an earlier
+version of the same measurement. Do not call this a regression from 99 to 69.
+
+The reviewed source is newer than the measured source. In particular, PERSPUV
+has had its U/V arrays split, and the reviewed FRAGROB has registered outputs for
+all three sample banks. Do not diagnose those newer implementations as though
+the old fit measured them, nor claim their savings from the old fit.
+
+1.3 The important paths, including the next bottlenecks
+------------------------------------------------------
+
+These are representative violating paths actually visible in the archived
+setup summary. Except where explicitly stated, they are NOT claimed to be the
+worst path of the entire component. The export contains 2,000 selected paths,
+not every path in the implemented netlist.
+
+  Path family / example                                    Slack at 10 ns
+  -----------------------------------------------------------------------
+  external depth -> RCP24 seed/context                        -4.482 ns
+    frag_depth_i[19] -> u_rcp|c_x[7][8]
+
+  RCP24 internal ready/valid selection -> context address     -3.630 ns
+    u_rcp|c_val[6]~DUPLICATE -> u_rcp|c_m.raddr_a[...]
+
+  RCP24 context/address -> multiply result                    negative
+    context read/address cone -> u_rcp|m1_p_q[...]
+
+  combiner byte operand -> final/intermediate result          -1.590 ns
+    u_combine|lane0_q.b[5] -> u_combine|rec[1].o_b[3]
+
+  cache comparison -> earlier pipeline state                  -1.586 ns
+    u_cache|c2_tag[2][13] -> u_cache|c1_tag[2][18]
+
+  perspective queue pointer -> multiply result                -1.493 ns
+    u_persp|wq_rp[0][3] -> u_persp|p1_prod_q[0][...]
+
+  reciprocal completion control -> perspective storage       -1.360 ns
+    u_rcp|c_pend[3] -> u_persp|e_mant[3][6]
+
+  perspective retire head -> FRAGROB auxiliary queue         -1.166 ns
+    u_persp|head_q[3] -> u_fragrob|axg_m[...]
+
+The first internal RCP path corresponds approximately to 73.4 MHz if evaluated
+with the current timing relationships. Removing all external-pin paths does
+not turn that into 105 MHz. It buys roughly four MHz in that arithmetic, not
+36 MHz. Conversely, these calculations are not replacement fits: placement,
+clock skew and critical paths change when the design changes.
+
+The combiner's issue-selection paths and cache miss-counter/fill-state paths
+also violate timing. This is why one pipeline register in RCP24 is a useful
+experiment but not a complete recovery plan.
+
+1.4 Hold timing: a measurement-model problem is present, but not an acquittal
+---------------------------------------------------------------------------
+
+The raw hold summary reports -5.005 ns. The worst detailed path is:
+
+  pal_ld_gen_i[0] -> u_palette|ld_gen_r[0]
+  data arrival: 1.003 ns
+  required arrival: 6.008 ns
+  launch clock network delay: 0
+  destination clock arrival: approximately 6.008 ns
+  combinational data logic levels: 0
+
+This is not evidence that a palette-generation comparator needs five ns of
+repair. The input is modeled with zero launch delay while the capture clock has
+substantial routed insertion delay. The block-fit script sets input and output
+delays to 0.000 and virtualizes ports. The worst hold failure is boundary-driven.
+
+HOWEVER: the displayed worst boundary paths can conceal internal hold failures.
+Run internal-register-to-internal-register hold reports separately at every
+corner, plus properly constrained actual external interfaces. Never respond by
+false-pathing the whole design, arbitrarily increasing input delay, or declaring
+that 69 MHz is automatically safe. Same-edge hold problems are not generally
+cured by a slower clock. The reported Fmax is not a substitute for setup, hold, recovery, removal and
+pulse-width signoff; both the archived tool report and vendor documentation warn
+against treating it as a complete signoff result. [V1,V2]
+
+
+2. SOURCE DEFECTS THAT MAKE A TIMING-ONLY PATCH UNSAFE
+====================================================
+
+[Evidence: R1-R2, R8-R18; apply R23-R25 freshness corrections.]
+
+These findings concern baseline 5b2c8bc, not a claim that a local RTL run
+has reproduced each fault. The front addendum identifies the specific corrections
+already made by b7b62542 and takes precedence over baseline present-tense wording. The first work package must turn them into executable
+counterexamples. The important point is that fixing latency while leaving wrong
+ownership often changes WHICH fragment receives the wrong data.
+
+2.1 Delayed reciprocal, live numerator
+--------------------------------------
+
+The top accepts a fragment when frag_valid_i && frag_ready_o. That readiness is
+RCP24's readiness. But the later u_persp instance takes:
+
+  valid       = rcp_r_valid
+  reciprocal  = rcp_r
+  numerator U = frag_u_over_w_i
+  numerator V = frag_v_over_w_i
+
+The numerators are live ingress ports, not storage indexed by the returned
+reciprocal token. After accepting A, the producer may legally present B. When A's
+reciprocal completes, the top can combine it with B's or a later numerator.
+
+REPAIR: capture the complete transaction at ingress. Carry an internal tag
+through RCP24 and read A's descriptor by that tag. Do not force the upstream
+producer to keep all data constant until the entire fragment completes; that
+would conceal the bug by destroying the intended concurrency.
+
+2.2 The material context packing is not connected
+------------------------------------------------
+
+The top computes fr_f_ctx containing recipe, weight and sample_count. Its
+FRAGROB instance nevertheless connects:
+
+  .f_recipe_i(frag_recipe_i), .f_ctx_i(frag_ctx_i)
+
+not .f_ctx_i(fr_f_ctx). The later combiner interprets bits of FRAGROB's returned
+context as recipe/weight/count. The apparently protective packed word has no
+consumer. The comments added at the reviewed HEAD do not repair this wiring.
+
+Connecting that word alone is NOT sufficient: the packing still reads the live
+ingress ports after variable reciprocal/perspective latency. Also the same
+opaque context is used elsewhere as world X/Z. Stop overloading one undocumented
+64-bit word with unrelated meanings. Use separately typed fields and storage.
+
+2.3 The current test can return the untextured base and still pass
+---------------------------------------------------------------
+
+island_composed_directed cycles input recipes, but verifies only some activity,
+some retirement and a nonzero first colour. It does not require an exact count
+of 64 retirements in an assertion, compare each result with a reference, check
+ordering, or assert zero printed identity errors.
+
+Its low-valued context tags leave the upper material fields zero. Because the
+packed context is not connected, the downstream sample_count can decode as zero.
+The combiner explicitly handles count zero by returning the supplied base colour.
+A constant nonzero base therefore defeats the supposed anti-vacuity test.
+
+Checking recipe job counters would help detect missing work, but aggregate
+per-recipe counts still cannot detect two fragments swapping recipes. Only an
+identity-aware per-fragment expected result or equivalent semantic assertion can.
+
+2.4 Per-sample bindings do not control the actual lookup
+------------------------------------------------------
+
+FRAGROB is given binding+s to distinguish its three samples. Yet the TMU planner
+is fed the live bind_base_i and bind_mode_i, not a table lookup using
+fr_tmu_binding. Offsetting an unused binding does not create different texture
+accesses. All three samples also receive one replicated perspective U/V pair.
+
+REPAIR: store each sample's raw coordinates, binding handle and LOD. Resolve its
+binding to the corresponding base/mip/format/palette/generation packet. A shared
+coordinate transform is permissible only when the actual material specifies it.
+
+2.5 Cache latency loses filter metadata
+---------------------------------------
+
+CACHE_PIPE carries addresses/data and a source/token field. The top supplies the
+bilerp lane with plan_acc_fu and plan_acc_fv from the current planner access
+rather than the access whose cache response is being decoded. Variable misses,
+queueing and backpressure make the mismatch unavoidable under legal traffic.
+
+REPAIR: allocate sample metadata before dispatch. Keep fu/fv, format, class,
+palette handle, status and any nibble selection tied to sample_tag until decode
+finishes. Carry a narrow reference, not a duplicate wide fragment, through queues.
+
+2.6 The filter composition is not full-colour bilinear filtering
+--------------------------------------------------------------
+
+The current top extracts the low byte of each 16-bit texel, submits one channel
+job, and replicates the returned byte into all three RGB channels. Those bytes
+are not general RGB565 channel values. Full RGB decoding and three independent
+channel jobs are missing. Required alpha handling depends on the declared format.
+
+REPAIR: decode with the exact format oracle; emit R/G/B jobs (and alpha only when
+required); collect all required channels under one sample identity; commit one
+complete sample. Do not round bilinear horizontal intermediates prematurely.
+
+2.7 Palette, nearest and response merging are not production-correct
+------------------------------------------------------------------
+
+The current composition forces the bilinear class. The direct-nearest output is
+accepted and unused. Palette slot/generation inputs are derived from transaction
+token bits rather than a resolved palette handle. The result merge ORs palette
+and bilerp validity, prioritizes palette colour, but routes identity from the
+bilerp token. Bilerp readiness is not restricted to the selected producer.
+
+If both classes become active, a result can be consumed but overwritten by the
+other, assigned the wrong identity, or lost under output stall. The palette
+lookup itself has no response-ready port, so its pulse must be buffered with
+capacity reserved before the lookup is issued.
+
+REPAIR: full tagged completion packets, independent class output storage, and
+one fair merger that asserts ready only to the winner. Invalid/stale formats
+must create a defined error completion or frame fault, not a silently dropped
+sample that leaves the ROB waiting forever.
+
+2.8 Mosaic activity is not Mosaic functionality
+----------------------------------------------
+
+Mosaic is fed from the perspective stream, but its selected tile is not used to
+form the texture address. Its material candidates are taken from live base-colour
+bytes. Its readiness is ignored. An activity counter does not establish that its
+hash/pick datapath survives synthesis or affects a rendered pixel.
+
+REPAIR: store real material candidates and weight. Put the tile choice on the
+actual binding/address path. Prove changing the pick changes the expected texel.
+Inspect fitter resource-by-entity and output fan-in; unused arithmetic may be
+optimized away even when an adjacent accepted-request counter is retained.
+
+2.9 Final ordering is located on the wrong side of combination
+-------------------------------------------------------------
+
+The top drains FRAGROB into COMBINE.V1 and connects the combiner directly to the
+island output. COMBINE.V1 explicitly permits completion out of allocation order.
+It also selects a completed output slot combinationally. FRAGROB cannot impose
+final order if a later block reorders AFTER it, nor safely manage final ownership
+if it frees a transaction before the final result is committed.
+
+REPAIR: FRAGROB remains owner through combination. The combiner writes tagged
+final results back. Only the central ordered retire stage feeds the raster
+consumer. Latch the entire selected output packet while stalled; a newly
+completed lower-index slot must not change an already offered output.
+
+2.10 FRAGROB has a serialized issue engine and an AUX read hazard
+---------------------------------------------------------------
+
+The TMU issue FSM takes three states per request, even with ready held high.
+This is not an initiation-interval-one memory pipeline. Pipelining the descriptor
+read, rather than globally waiting for it, is mandatory for the intended demand.
+
+Its AUX path also raises ax_pend_q in the cycle that it changes ax_slot_q, while
+ax_ctx_r is assigned from ctx_m[ax_slot_q] in a separate clocked process. On that
+edge the RAM read sees the OLD address. In the following cycle aux_valid_o is
+already asserted. An always-ready consumer can accept the old context before
+the new address's data arrives. Add an explicit address/read/capture-valid stage
+or a properly pipelined descriptor reader.
+
+The reviewed three-sample retire outputs are already registered. Do NOT claim
+that their previous combinational-output arrangement is still present. Preserve
+that improvement and measure the reviewed implementation separately.
+
+2.11 AUX ignores the backpressure its interface advertises
+---------------------------------------------------------
+
+AUX_PIPE has req_ready_o = 1. Its a7_v_q is overwritten by div_ov each cycle,
+regardless of sheet_ready_i. A sheet request not accepted immediately can vanish
+or be replaced. Its eight-entry return queue has two possible producers and no
+full/credit gating. Sixteen live parent fragments alone do not prove an
+eight-entry return queue can never overflow.
+
+REPAIR: explicit ingress credits, a buffered sheet-request stage, and reserved
+return capacity. Keep the exact six-bit divider; it is not the part to reinvent.
+
+2.12 Return identity checks and counters need completion
+--------------------------------------------------------
+
+Current FRAGROB TMU validation checks slot-valid and generation, but not every
+required condition: legal sample index, required bit, and duplicate-arrival
+rejection must precede any memory write. Accepting an unrequested sample can
+pollute an equality-based completion mask. Simultaneous invalid TMU and AUX
+returns also use separate increments of the same error counter; compute one net
+increment rather than allowing the last nonblocking assignment to win.
+
+These are targeted integrity repairs at the same boundaries being retimed, not
+an invitation to launch a repository-wide unrelated correctness campaign.
+
+
+3. THE PRODUCTION TOPOLOGY: ONE OWNER, MANY SERVICES
+===================================================
+
+[Evidence: R1, R19; proposed topology.]
+
+Use the existing survivor-island architecture as the semantic destination:
+
+  post-Early-Z survivor
+            |
+     ingress capture / admission
+            |
+  FRAGROB: allocate slot + generation + original ordering position
+            |                         |
+            |                         +--> AUX descriptor/read/service
+            v                                      |
+       reciprocal queue                            |
+            v                                      |
+       RCP24 scheduled pipeline                    |
+            v                                      |
+       tagged reciprocal result                    |
+            v                                      |
+       pipelined per-sample descriptor expansion    |
+            v                                      |
+       streaming perspective PAIR                  |
+            v                                      |
+       Mosaic/binding resolution when applicable   |
+            v                                      |
+       TMU planner -> cache -> class decode        |
+                              |                     |
+                     nearest / palette / bilerp    |
+                              |                     |
+                     tagged sample commit ---------+
+                              |
+                   per-fragment completion events
+                              |
+                     combine-ready token queue
+                              |
+                     material combiner
+                              |
+                   FRAGROB final-result writeback
+                              |
+                    ordered output capture
+                              |
+                       RASTER.FRAGMENT
+
+A fragment has exactly one owner. Arithmetic services own their internal jobs,
+not the fragment lifetime. Separate result storage permits service completion
+out of order without changing external fragment order.
+
+The first ingress adapter may accept the current restricted island packet for
+regression compatibility. The production internal packet must contain the full
+sample and AUX information. Do not pretend the old external interface can express
+three independently bound coordinates and simultaneously serve as two world
+coordinates plus all material fields.
+
+Do not create a second general sampler, a slower private texture clock, or a
+new floating-point approximation. None of those addresses the observed mistakes.
+
+
+4. TRANSACTION, CREDIT AND MEMORY LAWS
+=====================================
+
+[Evidence: R1, R8-R19, V3-V4; proposed invariants.]
+
+4.1 Define the records once
+---------------------------
+
+Generate or share a conservative packed-struct definition for:
+
+  FragmentRecord:
+    downstream raster context (pixel/tile/depth/blend/provenance as required)
+    raw reciprocal denominator
+    sample_count and required_mask
+    recipe, weight, base RGB, base alpha
+    sample[3]: raw U-over-W, V-over-W, binding slot/generation, LOD, flags
+    auxiliary world X/Z and auxiliary binding/envelope reference
+    Mosaic candidate IDs/weight/enable, where required
+    error/status aggregation
+
+  FragmentTag:
+    slot, generation, plus a flush epoch if chosen by the agreed protocol
+
+  SampleTag:
+    FragmentTag + sample index
+
+  SampleMetadata:
+    format, filter class, fu/fv, palette handle, subword selection,
+    binding epoch/generation, error flags
+
+  SampleResult:
+    SampleTag + complete colour/alpha + status
+
+  CombineResult:
+    FragmentTag + final colour/alpha + status
+
+The exact widths follow the real ABI and existing fixed-point laws. This list
+is not permission to replace source IDs with transaction IDs: provenance and
+return routing are different fields. Keep opaque raster context opaque.
+
+A slot is released only after its final output handshake. No live input field
+may be consulted to interpret a delayed result. Same-cycle input advance is a
+normal test case, not an adversarial misuse.
+
+4.2 Preserve ordering once, at the final boundary
+------------------------------------------------
+
+Allocate the ordering position BEFORE RCP24. Return ordering from RCP24, memory,
+class decode and combination may differ. The final ROB is the only authoritative
+ordering point. There must not be a second expensive complete fragment ROB inside
+PERSPUV merely to restore order already owned by the parent.
+
+Maintain an allocation-order ring of slot IDs or an equivalent proven circular
+allocation scheme. Do not conflate physical slot index with allocation age.
+
+4.3 Stable ready/valid and local credits
+---------------------------------------
+
+A held output must preserve valid and EVERY payload field until accepted.
+A priority encoder selecting a different completed slot while ready is low
+violates this law even if no arithmetic result is lost internally.
+
+For a nonstallable pipeline, reserve an output-storage credit on input acceptance:
+
+  outstanding = accepted - consumed_or_cancelled
+  credit       = output_capacity - outstanding
+
+Here outstanding includes both in-flight and queued results. Do not count only
+already-produced results and discover overflow when delayed results arrive.
+Credit returns on final dequeue, or on a documented cancellation that cannot
+produce another response. One net counter update handles simultaneous events.
+
+A fixed pipeline CAN tolerate unbounded downstream stalls with finite storage
+if admission stops and every already-admitted result has reserved space. No
+unbounded stall-duration assumption is needed in that design. Adequate capacity
+relative to latency is required for throughput, not for that safety argument.
+
+Do not quote average rates as burst bounds. Four multiplications per reciprocal
+limits long-run reciprocal throughput; it does NOT prove reciprocal completions
+cannot arrive in adjacent clocks. Credit or buffer those bursts explicitly.
+
+Use small registered/skid boundaries to cut cross-component ready cones. A chain
+of combinational ready assignments through five elastic stages is still a
+combinational path; describing each stage as 'local' does not remove it.
+
+4.4 Memory ownership must be a physical port schedule
+----------------------------------------------------
+
+For every proposed RAM, write down:
+
+  word width/depth; physical banking; read address producer;
+  write address producer; maximum distinct addresses each clock;
+  read latency; read-during-write policy; initialization/validity policy.
+
+Two independent writes plus an independent read require three address accesses,
+not an ordinary simple-dual-port RAM. Calling an array a bank does not change
+that. Conversely, two reads and writes at only two shared addresses may fit a
+true dual-port structure; count addresses and collision semantics, not verbs.
+Intel's published RAM guidance is explicit about this distinction. [V3,V4]
+
+Keep small validity/mask/queue-control state in flops where indexed updates are
+useful. Put wide persistent payload in suitable memories. Use static bank
+instances, clocked reads and writes, and explicit fabric capture stages where
+needed. Do not attach an asynchronous reset to payload RAM ports or reset every
+payload entry. Reset validity, then initialize control in a bounded sweep.
+
+Clock-enable and read-during-write behavior must match the selected device and
+inference pattern. Use a small synthesis probe rather than trusting a comment
+that claims an array 'must infer RAM'. Acceptance evidence includes the inferred
+memory names, not only total M10K usage.
+
+4.5 Finite tags need a finite-lifetime proof
+------------------------------------------
+
+Keep the ratified eight-bit generation unless an explicit interface revision is
+approved. Reject sidx=3. Reject unrequested, duplicate, stale and post-abort
+returns BEFORE writing payload or completion masks.
+
+Generation is not an infinite-age defense. Stop admission on abort, invalidate
+live parents, cancel/drain all child queues, advance generations as specified,
+and acknowledge the flush before allowing old identities to be reused. Prove
+that no old response can survive the permitted wrap interval.
+
+All token widths are derived. A future change from 16 to 32 slots changes
+SLOT_W. Do not silently squeeze wider identities into the cache's fixed 16-bit
+field. Keep class metadata separate where possible rather than stealing high
+bits of a provenance field.
+
+
+5. RCP24: REMOVE SCANS AND PIPELINE THE EXACT ARITHMETIC
+======================================================
+
+[Evidence: R8, R19; proposed implementation.]
+
+5.1 Why registering pick_i alone is not the final answer
+-------------------------------------------------------
+
+RCP24 currently performs free-context selection, ready-context selection and
+done-context selection with combinational searches. The ready selection feeds
+context lookup and ultimately multiplication. Normalization and seed lookup
+also begin at raw input ports. The result is selected combinationally from live
+contexts. The timing report identifies several parts of this organization.
+
+A registered-pick experimental variant is useful for attribution, but it must
+reserve the chosen job when picked, not when it eventually reaches the multiply.
+Otherwise successive clocks can select the same pending job. Similarly, the
+completion test must know about every new in-flight stage; inserting a register
+without extending busy/phase tracking can declare a context finished early.
+
+Do not build a sequence of half-fixes and call each one the architecture. Build
+the already specified queue-based service as the main candidate; keep the small
+registered-pick variant only as a bounded diagnostic comparison if necessary.
+
+5.2 Queue organization
+-----------------------
+
+Use eight contexts initially and the existing exact reciprocal semantics:
+
+  FREE_CTX:  context IDs ready for allocation
+  NEW_JOB:   newly initialized contexts awaiting MW0
+  CONT_JOB:  contexts made ready by an arithmetic writeback
+  RESULT:    stable completed reciprocal packets
+
+NEW_JOB and CONT_JOB are separate because allocation and writeback may both
+produce work on the same clock. They each have one producer and do not imply a
+two-write-port queue. The issue arbiter selects one ready job with a bounded
+fair policy. A small round-robin arbiter between two heads is not an eight-entry
+search through wide context state.
+
+There is exactly one outstanding job per context. State transitions are:
+
+  FREE -> INITIALIZING -> READY -> RESERVED/IN_FLIGHT -> READY or COMPLETE
+
+Reservation happens when a queue entry is removed into the issue pipeline.
+A context is never enqueued twice for the same phase. A final result receives
+storage credit before it can complete. Free the internal context either when
+its result enters independently owned result storage, or when that result is
+accepted downstream: choose ONE rule and include it in occupancy accounting.
+The parent fragment remains live in FRAGROB in either case.
+
+5.3 Front end and arithmetic pipeline
+-------------------------------------
+
+Proposed explicit register boundaries:
+
+  N0: accept {raw denominator, FragmentTag} into credited ingress storage.
+  N1: balanced leading-zero count and zero classification.
+  N2: normalization shift and exponent capture.
+  N3: seed-ROM output capture / immutable context initialization.
+
+  J0: select NEW_JOB or CONT_JOB; latch context ID and phase; reserve it.
+  J1: synchronous context read / capture the actual operands and status.
+  J2: phase selection and, for MX, t = 2^31 - w; register 32-bit operands.
+  J3: explicit multiply; pipeline inside the arithmetic block as required.
+  J4: phase-specific exact rescale and writeback.
+  J5: final reciprocal rounding/clamp into a stable result packet when needed.
+
+These are semantic boundaries, not a claim that every implementation needs
+exactly this many physical stages. Merge only after timing evidence shows it
+safe; split the multiplier if its mapped implementation needs it. The critical
+rule is that arbitration, variable addressing, subtraction and multiplication
+must not all share one register-to-register interval.
+
+Latency is not initiation interval. With multiple independent contexts, a deeper
+pipeline can continue launching one microjob each clock. Conversely, a stage
+added to a globally busy FSM can reduce throughput. Test both explicitly.
+
+5.4 Preserve the arithmetic and prove any narrowing
+---------------------------------------------------
+
+The existing four-job algorithm is:
+
+  MW0: w = (m * x) >> 24
+  MX0: x = ((x * (2^31 - w) + 2^29) >> 30), stored as 32 bits
+  MW1: repeat MW
+  MX1: repeat MX
+  result = (x + 64) >> 7, then the existing 24-bit clamp/zero law
+
+Keep the seed table, rounding locations, truncation and modular semantics.
+The current 32x64 expression is a promising physical-width reduction target.
+The earlier architecture reports an exhaustive maximum w of 0x401FEF88, below
+2^31, making the MX second operand nonnegative and 31-bit within that audited
+domain. That is a REPOSITORY-REPORTED proof result, not reproduced in this review.
+
+Do not infer a 31-bit bound for EVERY possible t from an upper bound on w
+alone: w=0 gives t=2^31, which needs 32 unsigned bits. A zero-input bypass or
+an independently proved positive lower bound on w may exclude that case from
+the nonzero iteration, but explicit unsigned 32-bit operands safely cover it.
+
+Before narrowing, rerun an exhaustive audit against the exact current ROM and
+all reachable denominator/phase cases, including zero. Check m, x, w and t at
+each iteration. Then use explicit unsigned 32x32 operands with a 64-bit product.
+Store bounded fields at their proved widths. Invalid external values must follow
+the agreed error contract rather than entering a narrowed unproved domain.
+
+Do not replace exact reciprocal with a new approximation. Do not assume that
+writing a narrower expression automatically saves three DSP blocks: inspect the
+mapped DSP implementation and measure. The approved RCP target is three DSPs,
+with four as its stated hard ceiling; those are gates, not our achieved result.
+
+5.5 Context memory without accidental extra ports
+-------------------------------------------------
+
+Separate immutable and mutable data. Immutable m/exponent/seed/tag is written
+on allocation and read on issue. Mutable iterate/intermediate values are written
+by the single arithmetic writeback stream and read by the issue stream.
+
+Avoid initializing mutable result RAM and writing arithmetic results to another
+address of that RAM on the same clock. The seed can remain in immutable storage;
+MW0/MX0 select the seed while later phases select the updated iterate. Completion
+uses the final writeback value or a specifically staged read, not a live scan.
+
+For eight small contexts, an explicitly budgeted flop implementation may beat
+several poorly utilized M10Ks. Compare that variant with a legal-port RAM layout.
+Do not force RAM for aesthetics, but do not call 1,000 unbudgeted registers free.
+Keep operand-width recovery separate from storage-topology recovery in evidence.
+
+5.6 Throughput and output safety tests
+--------------------------------------
+
+Long-run arithmetic ceiling: one reciprocal per four multiply launches on one
+lane. Four jobs per reciprocal is NOT a four-cycle response-spacing guarantee.
+Require exact four-job counts for non-bypassed inputs and a declared zero-input
+policy. Preserve deterministic counters when introducing a zero bypass.
+
+Measure launch utilization, reciprocal completions/clock, occupancy, each queue's
+stall reason, and maximum starvation. Context count must cover the new feedback
+latency. If eight is insufficient, measure the cause before increasing it.
+
+A blocked RESULT head is a latched packet. Later completions cannot change its
+tag, reciprocal, exponent or flags. Test with a higher-index result held while
+a lower-index context completes; this targets the current combinational-selector
+failure class.
+
+IMPORTANT: the 1.64-products/clock requirement cited in recent discussion belongs
+to the two-lane perspective throughput context, not to a one-multiplier RCP24.
+It is not a meaningful direct acceptance condition for RCP24. Give each service
+its own units: RCP microjobs/clock and reciprocals/clock; perspective products/
+clock and UV pairs/clock; final island fragments/frame.
+
+
+6. PERSPECTIVE: REPLACE THE TOKEN-TABLE SCHEDULER WITH A PAIR STREAM
+=================================================================
+
+[Evidence: R9, R19; proposed implementation.]
+
+6.1 The latest array split is not a complete port or timing repair
+-----------------------------------------------------------------
+
+The reviewed source splits e_num and e_q into U/V arrays. That removes one kind
+of cross-axis array inference ambiguity. It does not remove the path:
+
+  work-queue pointer -> work-queue read -> token-table read -> multiplication
+
+Nor does it make every result array one-write-port. e_q_u/e_q_v are cleared on
+acceptance at tail_q and written at arithmetic completion at p3_i_q. Those can
+be two independent writes, in addition to the output read. A claim that splitting
+names alone gives a simple-dual-port result store is incomplete.
+
+6.2 The simpler production form
+-------------------------------
+
+The parent already owns all lifetime and ordering. Each perspective request is
+one complete sample descriptor:
+
+  {SampleTag, U-over-W, V-over-W, reciprocal mantissa/exponent, metadata ref}
+
+Launch U and V together through the same fixed-latency stage structure. Neither
+axis requires an independent work-discovery queue or a private sixteen-entry
+fragment ROB. The two products belong to the same sample and have the same
+latency. Keep them together through saturation and output capture.
+
+  P0: credited capture of both operands, reciprocal, tag and metadata ref.
+  P1: explicit signed product stage for U and V, two physical lanes.
+  P2: exact rounding-bias formation/addition.
+  P3: exact arithmetic rescale.
+  P4: saturation of both coordinates; OR their status; produce one pair.
+  P5: stable pair output FIFO / local consumer capture if needed.
+
+Retain the current numerical law until a separately proved width reduction is
+available. Signed numerator times unsigned mantissa must be expressed with
+explicit sign extension. Avoid accidental unsigned multiplication or truncating
+the product merely because final coordinates are 32 bits. Validate legal exponent
+bounds and existing malformed-input behavior before narrowing shifts or bias.
+
+A zero-denominator/error request takes a tagged deterministic bypass that merges
+back without losing identity. It must not silently disappear or overtake output
+where ordered service semantics are required. The final parent ROB handles
+external ordering, so local out-of-order bypass is legal if correctly tagged.
+
+6.3 Capacity and acceptance
+---------------------------
+
+Target initiation interval: one COMPLETE UV pair per clock when credited.
+That is two arithmetic products per clock, not two fragments. Preserve the
+existing measured-service throughput test or replace it with a stronger paired
+one that names its units and legal workload explicitly.
+
+Reserve output capacity for every accepted pair. Depth should sustain the
+pipeline's latency and declared burst target, with admission stopping safely
+under arbitrary downstream stall. Record utilization, input gaps and blocked
+output separately; do not report input starvation as an arithmetic limitation.
+
+The expected advantage is removal of the table storage and pointer-to-multiply
+cone, not merely shifting the same arrays into different variable names. Measure
+ALMs, registers, DSPs, RAM inference and pair throughput together.
+
+
+7. FRAGROB, DESCRIPTOR EXPANSION AND FINAL RETIREMENT
+====================================================
+
+[Evidence: R10, R19; proposed implementation.]
+
+7.1 Allocate BEFORE reciprocal and retain ownership THROUGH combination
+-----------------------------------------------------------------------
+
+Move its architectural role, rather than wrapping the existing incorrectly
+ordered chain with another full ROB. Keep a single central free/ordering manager,
+per-slot masks, immutable descriptors, sample result banks and final result bank.
+Existing useful free-list, generation and registered-read mechanisms may be
+reused after their boundary assumptions are updated.
+
+On ingress acceptance:
+
+  allocate slot and ordering position;
+  increment its generation;
+  capture all descriptors/meta/base/context;
+  issue one reciprocal only when the material needs perspective work;
+  issue one AUX descriptor event if required;
+  create an immediate completion-check event for genuine no-work bypasses.
+
+On final output acceptance, and only then:
+
+  invalidate the transaction;
+  advance the ordering ring;
+  return its slot.
+
+7.2 Replace the serialized sample FSM with an overlapping memory pipeline
+------------------------------------------------------------------------
+
+The current issue sequence spends one clock choosing a descriptor, one reading,
+and another offering it, then returns to idle. With three samples per fragment,
+that is nine issue clocks per fragment before any cache cost. No amount of calling
+those states 'pipeline stages' changes their serialized control.
+
+Production expansion should overlap different samples:
+
+  cycle t:     issue descriptor read for sample 0
+  cycle t+1:   capture sample 0; issue descriptor read for sample 1
+  cycle t+2:   present sample 0; capture sample 1; issue sample 2 read
+  cycle t+3:   present sample 1; capture sample 2; optionally read next fragment
+  cycle t+4:   present sample 2; advance the next fragment's pipeline
+
+Every register carries a valid bit and SampleTag. A stall may pause admission
+at a registered credited boundary; it must not mix a new address with an old
+data word. At steady state, the descriptor engine can issue one sample each
+clock, including across parent boundaries when downstream capacity exists.
+
+Use a reciprocal-result FIFO plus a per-parent sample cursor, as the earlier
+architecture proposes. That eliminates the three-write sample-work queue.
+But size it for actual completion bursts or use result credits: average RCP
+rate is insufficient justification for a two-entry buffer.
+
+7.3 Bank storage and expose the actual samples
+---------------------------------------------
+
+Use static banks by sample index for descriptors and results. Parallel writes
+of an accepted three-sample descriptor go to three physical banks, not three
+addresses in one ordinary RAM. Capture synchronous outputs before combining.
+
+The newer FRAGROB already has registered o_s_rgb/o_s_a outputs for all three
+samples. Reuse that correctness improvement. Do not reintroduce live head-index
+reads to avoid a clock. If the final architecture reads result banks by a combine
+request token instead of the retire head, the token must be latched with the RAM
+address and matched to the arriving words.
+
+7.4 Completion events, not a table-wide scan
+-------------------------------------------
+
+A sample or AUX return validates identity and updates only its indexed state.
+Then it schedules a completion-check token. A short stage sees the updated masks
+and enqueues a combine request once all required data is present. A per-slot
+combine_enqueued bit prevents double scheduling when two returns arrive together.
+
+Two sources may create events in one clock. Give them separate small skids or a
+banked two-producer structure. Explicitly distinguish duplicate events (harmless
+if deduplicated) from duplicate sample results (a fault, never an overwrite).
+
+The combiner writes FINAL_RESULT[slot] and final_ready. It does not free the
+fragment. This naturally permits fast material recipes to complete ahead of slow
+ones without corrupting external order.
+
+7.5 Pipelined final retirement
+------------------------------
+
+Replace the head lookup -> mask lookup -> selected payload interval with a
+registered head descriptor and a separate completeness/read step. For throughput,
+prefetch the next eligible final result while the current one is in a stable
+output register or skid. Preserve the no-overwrite and no-reuse rules.
+
+Initial target: one final fragment per clock on the all-bypass/hot path, subject
+to the declared downstream acceptance and the true workload. A three-state FSM
+that retires once every three clocks should be counted as such, not described as
+II=1 merely because its RAM is synchronous.
+
+7.6 AUX read and accounting repairs
+-----------------------------------
+
+Fix the ax_slot/ax_ctx validity mismatch with an explicit read-valid pipeline.
+The valid bit becomes visible only with the context for the same token.
+
+Validate sample index <3, required bit set, arrived bit clear, slot-valid and
+generation before committing TMU data. Combine simultaneous error increments
+once. Prove all counters and free/live counts against accepted handshakes.
+
+Keep sixteen slots initially to retain the approved baseline, but measure the
+whole transaction residency time. Little's-law accounting matters: required live
+slots is approximately arrival rate times average lifetime, with additional burst
+margin. Sixteen cannot be assumed adequate for an arbitrarily deep service chain.
+A 16/32-slot comparison is a later measured capacity decision, not a default
+substitute for fixing serialization or missing credits.
+
+
+8. CACHE_PIPE: CUT THE MISS-CLASSIFICATION FEEDBACK PATH
+======================================================
+
+[Evidence: R3, R11; proposed implementation.]
+
+8.1 The observed issue is a control loop across pipeline stages
+--------------------------------------------------------------
+
+The current source compares C2 tags, computes miss information, and includes
+!c3_miss in c1_go. The measured path from c2_tag into c1_tag and fill/miss state
+is consistent with that backward dependency. The RAM banking work was useful,
+but a synchronous RAM does not make the entire surrounding pipeline fast.
+
+Keep the working static lane data banks, explicit validity and exact address/tag
+semantics. Do not build a new unrelated cache policy or add multiple outstanding
+misses before fixing this concrete feedback path.
+
+8.2 Register classification and use a bounded probe window
+----------------------------------------------------------
+
+Proposed decomposition:
+
+  C0: capture/queue the request token and addresses.
+  C1: issue registered addresses to the lane RAMs with probe identity/epoch.
+  C2: capture RAM tag, valid and data outputs with the matching request.
+  C3: register per-lane hit/need decisions.
+  C4: commit a hit result or dispatch a registered miss descriptor.
+
+C1 admission depends on local probe credits and previously registered miss state,
+not combinational tag equality being evaluated several stages downstream.
+
+Because the first miss is now discovered later, younger probes may already be
+in flight. Preserve the current in-order/replay model explicitly:
+
+  - identify each probe's request position and replay epoch;
+  - on the oldest miss, record the oldest uncommitted request;
+  - discard younger speculative decisions from the old probe epoch;
+  - release their PROBE credits, not their external transaction identities;
+  - service the fill completely;
+  - restart issue from the oldest uncommitted request;
+  - never emit two sample responses for one external request.
+
+An extra cycle of miss-detection latency is acceptable. Lost or duplicated
+responses are not. This design avoids propagating same-cycle tag comparison
+through the entire issue enable and counter network.
+
+8.3 Reserve capacity before an unstallable read
+------------------------------------------------
+
+A synchronous RAM result that cannot be stopped needs storage reserved before
+its address is launched. Track in-flight probe/decision reservations as well as
+already queued responses. The response FIFO simply being non-full TODAY does
+not prove it can hold all results already launched.
+
+A practical first candidate has a probe/decision window at least as deep as its
+unstallable stages, plus registered output elasticity. Derive the exact depth
+from the implementation. Demonstrate continuous all-hit acceptance after fill
+and safe suspension under output stall. Retain a single miss engine initially.
+
+8.4 Fill protocol, generation and counters
+------------------------------------------
+
+The line has eight halfword beats at the current 16-byte line size. A line becomes
+valid only after every required beat is captured. A miss may multicast a line
+to multiple static lane banks using a registered mask. Snapshot that mask and
+line identity; later requests must not alter an outstanding fill.
+
+Preserve request identity on every replay. Keep external accepts, lane hits,
+line fills, multicast lanes and speculative replays as different counters. A
+replay is not a second sample retirement. Move noncritical event accumulation
+behind registered event pulses if counter fanout contributes to timing; preserve
+exact counts, including multi-lane events in one clock.
+
+Test alternating addresses colliding in the same cache index, partial fills,
+misses on different taps, fill backpressure, output backpressure, replays during
+new arrivals, and binding-generation changes at the permitted boundary. Do not
+claim a clock fix from an all-hot one-line benchmark alone.
+
+
+9. BINDINGS, MOSAIC AND THE TMU PLANNER
+=====================================
+
+[Evidence: R1, R12, R18-R19, R23.]
+
+9.1 Capture static work once, not from live global ports
+-------------------------------------------------------
+
+The binding table owns resolved base address, format/filter policy, dimensions,
+mip descriptors, palette handle and generation. Program it outside the hot
+per-sample loop using the declared resource-upload/residency boundary.
+
+A frame references immutable/pinned binding generations. A lookup either returns
+that binding or reports stale/not-resident according to the contract. Do not
+silently substitute whichever binding currently occupies the slot.
+
+At the sample boundary, use SampleTag to resolve its stored binding. Carry a
+resolved binding record or a short-lived resident reference through the planner.
+No later stage may sample bind_base_i or bind_mode_i without a corresponding
+transaction handshake and lifetime guarantee.
+
+9.2 Put Mosaic on the real data path
+------------------------------------
+
+Mosaic is a material/tile selector, not a texel sampler. Its exact hash, modulo,
+negative-coordinate fold and weight extrema are frozen semantic laws.
+
+Keep the existing exact shift/add implementation where verified. Connect:
+
+  stored candidates + projected/sample coordinates + enable
+       -> Mosaic pick
+       -> selected tile/binding/mip base
+       -> actual planner addresses
+
+Do not derive candidates from RGB bytes. Carry its token through every added
+stage. Either include it in the ordinary credited stream or provide proper
+fork/join buffering if other work proceeds in parallel. Ignoring req_ready is
+not a fork implementation.
+
+The selected tile and folded coordinates must be reconciled with the reference's
+coordinate units and wrap behavior. Do not accidentally apply the mirror fold
+twice or feed a folded coordinate to the world-space hash. Preserve fold-only
+walls/undersides when Mosaic selection is disabled.
+
+Only add more register cuts in the hash/modulo path if the complete connected
+implementation actually needs them. The old isolated ~79 MHz result is historical
+evidence, not a diagnosis of the now-connected production shape. A counter-only
+Mosaic in a fit is insufficient evidence in either direction.
+
+9.3 Keep the planner's useful arithmetic staging
+------------------------------------------------
+
+The current TMU_PLAN already separates request capture, mode selection,
+coordinate/fraction formation, wrapping/row calculation, and final addresses.
+Its recent bounded-coordinate work should not be thrown away blindly.
+
+Replace repeated static binding/mip calculations with resolved descriptors when
+that matches the approved architecture. Preserve the existing format encodings,
+wrap encodings, signed/floored behavior, REP4 edge cases and error handling. The
+source records several errors caused by guessing those encodings; do not repeat
+them during a 'cleanup'.
+
+Attach SampleMetadata before the cache request is accepted. A convenient form:
+
+  SAMPLE_META[slot][sidx] := {fu,fv,format,class,palette,subword,status}
+  cache_request          := {SampleTag, enabled taps, byte addresses}
+
+This metadata slot lives until that sample has finished decoding. If any stage
+permits multiple outstanding lookups for the same sample, add an explicit lookup
+sub-identity rather than overwriting its metadata.
+
+Current class is forced to bilinear in the top; production class must come from
+the resolved format/filter semantics. An unsupported combination is refused
+explicitly and completed/faulted coherently; it is never an unconsumed response.
+
+
+10. RESPONSE DISPATCH, DIRECT FORMATS, PALETTE AND FILTERING
+=========================================================
+
+[Evidence: R1, R13-R15, R23-R25.]
+
+10.1 Keep decoupling, stop copying wide payload everywhere
+---------------------------------------------------------
+
+RSP_DISPATCH's raw FIFO and separate class queues are a useful separation of
+cache work from slow filtering. Its admitted head-of-line limitation is real:
+a full class at the raw FIFO head can delay other classes behind it. That is
+acceptable initially if measured against the actual mix, not hidden.
+
+The current implementation copies raw data into a raw FIFO and then class FIFOs.
+A production option is one RAM-backed raw-result store with token/reference
+queues into each class. Use registered front entries, a clear owner for each
+payload slot, and a release on decode consumption. Do not create a multi-read RAM
+that all three classes must read simultaneously without providing banking or
+arbitration. The shared cache produces at most one new raw sample per clock;
+capacity must be calculated for that supply and actual class read demands.
+
+Prefer the smallest change that meets timing/area after the functional paths are
+connected. The dispatcher is not the dominant measured setup limiter, so it is
+not the first block to rewrite for aesthetic reasons.
+
+The current unknown-class drop behavior must be replaced or constrained by an
+enforced impossible-input contract. Otherwise it strands the parent sample.
+A defined error completion is preferable to silently losing a transaction.
+
+10.2 Direct-nearest path
+-----------------------
+
+Decode the precise requested texel/subword using SampleMetadata. Preserve the
+reference expansion, alpha and format semantics. 'RGB565 expansion' is not a
+license to choose between bit replication and zero fill by taste; call the
+existing oracle in the differential and implement its exact rule.
+
+Return a complete SampleResult. The current near_ready=1 with unused outputs is
+not an implemented nearest path. Add a nearest-only scene whose expected colours
+cannot be reproduced by the bilinear or base-colour bypass.
+
+10.3 Palette lookup and residency
+---------------------------------
+
+Use the palette slot and generation from the binding. They are not bits of the
+fragment/sample generation. Preserve separate identities through lookup:
+
+  lookup request = {palette slot, palette generation, index, SampleTag}
+  lookup result  = {colour, resident/stale/error verdict, SampleTag}
+
+The existing palette has an explicit BEGIN/WRITE/END protocol, completeness
+tracking and CRC verdict. Keep those checks. The island bench must actually
+perform a legal complete load; issuing WRITE operations alone is not evidence
+that a resident palette exists.
+
+The current implementation invalidates a slot while loading. The earlier
+architecture proposes inactive-bank loading followed by atomic commit. Do not
+mix their guarantees. For this recovery, either pin and forbid reload of active
+frame palettes, retaining the tested loader, or implement the approved banked
+commit as a separately tested step. In both cases no accepted sample may read
+new bytes under an old binding without a defined stale result.
+
+The lookup output is not backpressurable. Reserve completion storage before
+issuing the read. Carry SampleTag through the same latency as colour/status.
+Do not let a valid pulse vanish while another decode class owns the sample
+commit port. Test concurrent load/lookup boundaries, missing entries, duplicate
+writes, CRC failure, stale generation and generation wrap/flush constraints.
+
+10.4 Full-colour bilinear completion
+------------------------------------
+
+Retain zhao_texture_bilerp_lane's exact arithmetic as the starting point:
+
+  exact horizontal intermediates;
+  vertical accumulation;
+  ONE final rounding, not rounded horizontal colours fed to a second filter.
+
+The existing lane can accept one channel job per clock and contains the two
+horizontal products plus the vertical product. Its top-level integration is what
+fails to supply complete colour work.
+
+A footprint record holds four decoded texels, fu/fv, format/alpha policy and
+SampleTag. A small channel sequencer emits the required channels. Each job has
+{SampleTag, channel}; each result updates exactly that channel. A required/arrived
+channel mask schedules ONE completed SampleResult. No partial colour is exposed.
+
+Do not assume alpha always requires filtering, and do not assume it never does.
+Use the supported format's rule. CLUT filtering, when legal, needs palette-resolved
+colours for the taps, not interpolation of palette index numbers. Keep illegal
+format/filter combinations explicitly rejected rather than inventing semantics.
+
+Initially retain the current one-channel-per-clock lane to avoid changing both
+functionality and the service rate at once. The older architecture's one-DSP,
+II=3 channel engine remains a possible resource variant only after full-colour
+channel demand is measured. Do not charge an II=1 rate with an II=3 resource fit.
+
+A pipelined multiply/rounding split may help a future limiting filter path, but
+keep exact intermediate widths. Use output credits to remove long combinational
+ready chains when connecting it to the rest of the island.
+
+10.5 One completion merger, no ambiguous OR
+--------------------------------------------
+
+Nearest, palette and bilinear have separate stable output skids/FIFOs. A small
+fair arbiter chooses one complete SampleResult each clock. Only that producer
+receives ready. Identity and colour/status are selected together.
+
+Two-entry skids are a starting configuration, not a proof for all burst patterns.
+Reserve output capacity for nonstallable producers. Under sustained convergence,
+backpressure propagates to class admission, not to already-launched palette
+reads that have nowhere to put results. The single result-bank write port is
+safe only because this merger enforces one commit per clock.
+
+
+11. MATERIAL COMBINER: TWO LANES WITHOUT TWO GIANT CONES
+=======================================================
+
+[Evidence: R3, R16, R19.]
+
+11.1 Keep all eight recipes and their exact job counts
+-----------------------------------------------------
+
+The two-DSP synthesis result is useful but not a timing pass. The archived
+composition contains a path from a registered byte operand through multiplication,
+rounding and recipe-dependent writeback into a record. There are also nested
+record/job selection cones feeding new lane operands.
+
+Preserve the currently implemented material semantics, checked against
+zref::material::combine. In particular, the reviewed job masks are:
+
+  PASSTHRU        0 products
+  MODULATE        4 products (RGB plus alpha)
+  MODULATE2X      4 products
+  LERP            4 products (RGB plus alpha)
+  ADD_SAT         0 products
+  MASK            0 products under the current select semantics
+  DETAIL_LIGHT    6 products (three first-layer, three dependent second-layer)
+  DETAIL_MASK     4 products
+
+The earlier architecture's three-product RGB table is incomplete for recipes
+that also multiply/interpolate alpha. Count the actual law. Sample_count zero
+is a declared untextured base-colour path, not proof a textured recipe worked.
+
+The current unit product is ((a*b)+128)>>8 with its existing clamp behavior.
+Do not replace it with division by 255. MODULATE2X doubles AFTER the unit product
+rounding. LERP rounds an unsigned magnitude and reapplies direction, which is
+not automatically equivalent to a signed difference rounded toward positive
+infinity. Preserve those details and saturation-counter semantics.
+
+11.2 Separate scheduling, operand selection, product and writeback
+-----------------------------------------------------------------
+
+Proposed stage boundaries:
+
+  M0: select a ready job ID, reserve it, latch {record/tag, job, recipe flags}.
+  M1: read/capture operands; form signed-direction/magnitude info for LERP.
+  M2: product only, with explicitly selected physical byte-product lane.
+  M3: unit rounding/clamp.
+  M4: recipe-dependent doubling/sign-add/select; register the channel result.
+  M5: indexed writeback, completion mask update, dependent-job event.
+
+This is intentionally more explicit than the current combinational helper called
+inside writeback. Physically merge adjacent cheap stages only after a fit shows
+margin; the source-level function boundary is not a pipeline boundary.
+
+Carry all tags and recipe-control information with the job. Busy is set at
+reservation and cleared only at writeback/cancellation. Otherwise deeper
+arithmetic stages recreate the duplicate-issue bug already found here.
+
+11.3 Replace the nested scan with ready jobs, not larger scanned records
+-----------------------------------------------------------------------
+
+The current loop scans records and then seven job bits with an 'issued < 2'
+priority dependency. Increasing RECS from two to eight does not automatically
+make a production combiner; it makes that scan and wide record selection bigger.
+
+Use a small record directory plus queued ready work. A practical implementation
+can maintain two ready-job lanes with a deterministic bank mapping and a local
+conflict rule, or an issue group that reads one record and emits two eligible
+jobs from it. Continuations are created by result events. Initial jobs are
+expanded from the recipe descriptor rather than written simultaneously to six
+arbitrary FIFO addresses.
+
+Make the physical operand read schedule explicit. Two jobs from different
+records require two record reads; two jobs from one record can share a captured
+wide read. A legal dual-port/replicated immutable payload organization can supply
+those reads. Mutable channel intermediates can be statically banked. Do not
+silently demand two reads and an unrelated write from one simple-dual-port bank.
+
+The central FRAGROB already stores sample payload. A combiner may consume a
+registered snapshot from its read service rather than retaining unnecessary
+copies in eight wide flop records. If records are used, immutable and mutable
+payload must have clear owners and write-port limits.
+
+Low-index priority is not an age policy. The claim that bounded work per record
+prevents starvation needs proof under continuous replacement of lower-index
+records. Use bounded arbitration or demonstrate the exact bound under the legal
+arrival model; do not rely on that informal argument.
+
+11.4 Return to FRAGROB; preserve a held result
+--------------------------------------------
+
+The combiner produces tagged final results out of order. A stable result FIFO
+feeds the central final-result write port. The parent is not freed here. This
+removes the false assumption that FRAGROB can order output before a subsequent
+out-of-order combiner.
+
+The two-DSP ceiling remains a gate. The comments calling the current variant
+'zero DSP' are contradicted by the measured two-DSP result; use the actual
+mapped implementation. Compare two byte-product physical styles only with the
+same semantics, pipeline, workload and constraints. Do not unroll six or eight
+independent multipliers to obtain a prettier clock result at an unapproved cost.
+
+
+12. AUX: KEEP THE MATH, REPAIR ADMISSION AND RETURN STORAGE
+=========================================================
+
+[Evidence: R1, R10, R17, R23.]
+
+12.1 The divider is not the first thing to replace
+-------------------------------------------------
+
+The existing A0/A0b cut separates subtract/shift from clamp classification before
+the six-bit restoring divider. That is a sensible prior improvement. Its exact
+negative/saturated/degenerate coordinate law must remain unchanged.
+
+The immediate defects are flow control and context association, not a need to
+invent a new divider. A degenerate envelope still produces exactly one tagged
+completion without a sheet read.
+
+12.2 Credits before the fixed pipeline
+--------------------------------------
+
+Introduce an AUX descriptor queue and outstanding-credit count. A descriptor is
+admitted only when storage is reserved for its eventual request/result. Track
+all accepted work, including work still inside normalization/division.
+
+A0 carries the actual world coordinate and envelope from the parent snapshot.
+Metadata indexing must refer to the same token when the divider is issued and
+when it returns. Retain the previous side-channel alignment fix.
+
+At divider output, capture a complete sheet-request packet in a FIFO. If the
+sheet interface is not ready, the packet stays valid and stable. Never overwrite
+it with the next divider result. Credit availability ensures every already-issued
+job can be captured even after admission stops.
+
+12.3 Return convergence
+-----------------------
+
+Sheet responses and degenerate bypasses may arrive together. Either provide two
+physically banked enqueue ports with proven queue capacity, or give each source
+its own skid and merge one complete tagged AUX result per clock. The latter is
+usually easier to reason about and avoids a two-write payload RAM.
+
+The current eight-entry queue with no full check is not sufficient evidence.
+A sixteen-entry candidate matches the initial maximum parent population, but
+independent service capacities and flush policy still need to be proved. Safe
+smaller admission limits are possible; measure their capacity impact.
+
+Do not interpret {sheet tag, strength, zero} as an arbitrary RGB third texture
+sample without proving that mapping against the material/reference contract.
+AUX and primary sample 2 are distinct concepts. Capture AUX sideband separately
+and apply it where the reference law applies it. The present unconditional
+substitution must either be justified for the selected recipe or removed.
+
+Acceptance includes long sheet stalls, simultaneous bypass/response, out-of-order
+sheet returns if the interface permits them, output stalls, and exact matching
+of world coordinates, envelope and parent identity.
+
+
+13. THROUGHPUT, CAPACITY AND RESOURCE ACCOUNTING
+===============================================
+
+[Evidence: R8-R19; arithmetic under stated assumptions, not measurements.]
+
+13.1 Count clocks and work separately
+-------------------------------------
+
+At 60 frames/second:
+
+  frequency       raw clocks/frame       80% example usable clocks/frame
+  ----------------------------------------------------------------------
+   69.05 MHz        1,150,833.33                   920,666.67
+  100.00 MHz        1,666,666.67                 1,333,333.33
+  105.00 MHz        1,750,000.00                 1,400,000.00
+
+The 80% column is an illustrative service-time reserve matching the earlier
+budget reasoning. It is not the same thing as 10% FPGA fabric reserve and must
+not be subtracted a second time from an already-reserved workload budget.
+
+RCP24's ideal one-lane four-job arithmetic bound at 100 MHz is 416,666.67
+reciprocals/frame before reserve and 333,333.33 with that 80% allocation. At
+69.05 MHz the corresponding figures are 287,708.33 and 230,166.67. Real throughput
+is lower when scheduling, context limits or downstream stalls waste launches.
+
+These numbers explain why clock matters, but they are NOT game-FPS predictions.
+The actual post-Early-Z survivor count and all other stages determine capacity.
+
+13.2 The serialized FRAGROB problem in comparable units
+-------------------------------------------------------
+
+For three samples per fragment:
+
+  current maximum sample issue rate = 1/3 sample/clock
+  sample issue work per fragment   = 9 clocks
+
+For an illustrative 276,480-fragment three-sample workload, issue alone consumes:
+
+  276,480 * 3 * 3 = 2,488,320 clocks
+
+That is 149.3% of the raw 100 MHz frame, before misses or other stalls. This is
+an analytical stress case, not a claim that every actual frame has that mix.
+
+An overlapping one-sample/clock descriptor pipeline reduces that particular
+issue term to 829,440 clocks, without changing any material or reducing fidelity.
+The potential gain is in that service term, not a promised 3x whole-game speedup.
+
+13.3 Full-colour filtering must enter the budget
+------------------------------------------------
+
+For an II=1 channel lane:
+
+  J_filter = 3 * N_RGB_filtered_samples
+             + N_additional_alpha_channel_jobs
+
+At one channel per clock, J_filter is a lower bound on filter clocks. If the
+one-DSP II=3 variant is chosen, the service term is approximately 3*J_filter,
+plus pipeline fill/drain and stalls. Do not compare that variant's DSP count with
+the II=1 variant's rate.
+
+For the illustrative all-filtered three-sample workload above, RGB alone is
+2,488,320 channel jobs. A single one-channel/clock lane cannot meet a raw 100 MHz
+frame for that particular stress case. That does NOT prove the intended mixed
+nearest/filter workload requires extra lanes. It proves that the mix must be
+measured rather than inferred from the incomplete one-byte top.
+
+The older architecture's ~180,000 channel-job workload is a specific model, not
+an immutable universal property of terrain or future bump mapping. Keep the
+selected v1 workload, but measure its actual classes, alpha work and recipes.
+
+13.4 A useful first performance report
+--------------------------------------
+
+For every recorded workload, report:
+
+  N_survivors; N_untextured; N_samples by count and format;
+  N_nearest; N_palette; N_bilinear; N_channel_jobs;
+  N_AUX and N_degenerate; recipe histogram and exact product histogram;
+  RCP accepted/jobs/completed; UV pairs; cache accesses/line fills/replays;
+  final fragments retired; total cycles; each queue's full/starved cycles;
+  peak occupancy and maximum observed transaction lifetime.
+
+Approximate stage-service lower bounds are:
+
+  RCP             4*N_RCP / measured job-launch utilization
+  perspective     N_perspective_pairs / pair issue rate
+  descriptor      N_samples / descriptor issue rate
+  cache           accesses plus the actual fill/replay model
+  filtering       channel jobs / channel issue rate
+  material        material products / (2 * product-lane utilization)
+  final output    N_fragments / final-retire rate
+
+Their maximum is a necessary lower bound, not the full execution time. Dependencies,
+finite queues, memory arbitration, bursts and head-of-line stalls can make the
+composition slower. Validate with the actual cycle trace, not only this maximum.
+
+13.5 Resource plan
+------------------
+
+Retain the earlier 6,600-ALM objective / 7,500 hard island budget as the initial
+comparison envelope, with the existing stated register and DSP limits recorded
+separately. Do not waive a rule merely because the measured partial island is
+small relative to the whole FPGA.
+
+Likely sources of recovery, to be measured:
+
+  - explicit RCP operand-width narrowing after exhaustive proof;
+  - replacing PERSPUV's token tables/queues with a paired stream;
+  - eliminating repeated wide fragment/footprint queues;
+  - RAM-backed descriptors/results with legal physical ports;
+  - small registered control rather than wide feedback and priority cones.
+
+Likely new costs that must be INCLUDED:
+
+  - complete ingress metadata and lifetime storage;
+  - real binding/Mosaic consumption and full decode paths;
+  - correct colour/channel collection and per-class completion skids;
+  - final-result storage and ordered retirement after combination;
+  - pipeline registers, credits and trustworthy status/counters.
+
+The approved expectation of more M10Ks is reasonable: using 32-56 rather than
+18 can be a good trade if it removes thousands of general registers and closes
+timing. It is not a license to allocate a memory per bit or ignore port count.
+Only a correctly connected production hierarchy provides the actual total.
+
+There is a plausible DSP route without cutting filter rate: a measured reduction
+of RCP from six to three DSPs would recover three, the difference between the old
+17-DSP island and the earlier 14-DSP ceiling, all else equal. This is a candidate
+budget reconciliation, NOT a prediction that synthesis will necessarily do it.
+
+
+14. TIMING METHODOLOGY AND FIT ACCEPTANCE
+========================================
+
+[Evidence: R3-R7, V1-V4; proposed acceptance methodology.]
+
+14.1 Preserve the historical measurement
+----------------------------------------
+
+Archive the exact measured source closure, top parameters, include files, ROMs,
+QSF, SDC, tool version, seed, script hash, machine record and full reports. That
+remains the 69.05 MHz experiment. A new implementation is a new experiment, not a
+retroactive repair of that record.
+
+Hash dependencies, not merely the top file. Record source changes that are only
+comments separately from changes to elaborated logic. A passing fit row older
+than its changed logic is not evidence for current HEAD.
+
+14.2 Three distinct fit configurations
+--------------------------------------
+
+A. LEGACY CHARACTERIZATION
+   Reproduce the historical virtual-pin topology and settings for comparison.
+   Label its zero-delay port model and incomplete functional paths explicitly.
+
+B. REGISTERED FUNCTIONAL ISLAND WRAPPER
+   Drive actual functional input packets from launch registers; capture outputs
+   in a real registered ready/valid consumer. Use the true common root clock.
+   Keep all supported data paths observably connected; a counter beside dead
+   arithmetic is insufficient. Use realistic registered memory/sheet interfaces
+   for timing-boundary purposes, not independent LFSRs on every child block.
+
+   The wrapper is a diagnostic composition, not a substitute for the whole
+   platform. Its external ports still need correct modeling, or their excluded
+   characterization scope must be explicitly reported. Do not hide a new
+   boundary hold problem by calling the wrapper a timing pass.
+
+C. ACTUAL RENDERER + ISLAND
+   Integrate the selected functional island after Early-Z and before the real
+   fragment endpoint. Use actual arbitration, clock topology, memory and reset
+   assumptions. This is where the 105 MHz full-composition gate is ultimately
+   checked. The full platform later adds its own documented obligations.
+
+14.3 Correct the boundary constraints, not the answer
+-----------------------------------------------------
+
+The current script creates a 10 ns clock and applies 0.000 input/output delays
+to all data ports. The report's worst hold path reveals the resulting launch/
+capture mismatch. Audit clock-port virtualization and the wildcard virtual-pin
+assignment as well as the I/O delays.
+
+Use real launch/capture registers for internal block characterization. For true
+external interfaces, specify justified min/max input and output delays relative
+to the correct clock model. Document generated clocks and reset synchronization.
+No timing exception is accepted unless the protocol proves the path is not
+sampled in the ordinary one-cycle manner. Never apply a multicycle exception
+simply because the hardware currently misses a single-cycle requirement.
+
+14.4 Required reports, not just a single Fmax line
+-------------------------------------------------
+
+Every candidate report contains:
+
+  setup and hold by timing corner;
+  internal register-to-register worst paths, independently of external ports;
+  external input/output paths and their constraint assumptions;
+  recovery/removal and pulse-width summaries;
+  unconstrained paths and justified exceptions;
+  top path families grouped by source and destination component;
+  data delay versus clock skew, fanout and logic depth;
+  ALMs, registers, DSPs, M10Ks and inferred memory names by entity;
+  pruning/unconnected-output evidence for every claimed capability.
+
+Export enough paths per component that a large RCP cone cannot hide the next
+cache or combiner limiter. A global top-2,000 list is useful reconnaissance,
+not a proof that an absent block has no violations.
+
+Use the script's actual supported Quartus 17 commands. Verify any new Tcl command
+against that installed tool's help rather than copying a newer Pro-only option.
+
+14.5 Clock gates
+-----------------
+
+Keep the established hierarchy of goals:
+
+  100 MHz       product operation
+  105 MHz       full-composition acceptance/headroom floor
+  110 MHz       architecture objective
+  115+ MHz      desirable island margin before full composition
+
+The earlier architecture gives higher wrapper objectives for certain individual
+blocks. Record them; do not silently call 101 MHz a pass against a 125 MHz leaf
+objective. Equally, an isolated wrapper target and the full-console obligation
+must not be confused. A gate table must name hierarchy, parameters and constraint
+set beside every threshold.
+
+Report at least three seeds for the stabilized candidate under the same settings,
+with all results and the worst result visible. One lucky seed is not reserve.
+Seed sweeps and fitter-effort adjustments follow structural fixes; they are not
+the main plan for a ~52% frequency increase from 69.05 to 105.
+
+14.6 Avoid build-process races
+------------------------------
+
+Use immutable snapshots or dedicated worktrees and isolated build/fit directories.
+Do not synthesize files that another agent is editing. Do not run mutating tests
+in the same tree as the baseline build. Keep each fit's child-process identity
+and logs; a broad process-name kill can interfere with another measurement.
+
+Parallel independent module work is fine. Shared top/interface changes and final
+composition need one owner. Preserve the current source-list parity and manifest
+checks, but do not mistake them for functional connectivity proof.
+
+
+15. TESTS THAT MUST FAIL ON THE CURRENT MISTAKES
+================================================
+
+[Evidence: R1-R2, R8-R18, R23-R25; tests proposed, not executed here.]
+
+15.1 First test: mixed per-fragment identity
+-------------------------------------------
+
+Write an island differential whose expected output is computed at INPUT
+HANDSHAKE from an immutable software copy of that fragment and its resources.
+Use deliberately different depths, signed numerators, base colours, recipes,
+weights, bindings, LODs, palette generations and AUX coordinates.
+
+After each input handshake, immediately change the input ports to a different
+legal request or poison values while valid is low. This directly detects late
+reads of live ports. Delay reciprocal completion with real service behavior;
+introduce cache misses and output stalls so fixed-latency accidents cannot mask it.
+
+Expected output is indexed by original transaction/retirement identity, not by
+whatever recipe is live at output time. Assert:
+
+  all N accepted; exactly N retired;
+  every expected tag once, in the specified final order;
+  exact RGB/alpha/status equality for every fragment;
+  no unexpected refusal, stale, duplicate or dropped result;
+  complete drain to zero live entries and empty queues.
+
+The final timeout path is a failure even if some fragments retired. For the
+existing 64-fragment case, assert submitted==64 AND retired==64. Printing those
+numbers or using them only as a loop-break condition is not equivalent.
+
+15.2 Material tests that defeat the current false pass
+-------------------------------------------------------
+
+Use base colours deliberately different from every expected texture result.
+Include PASSTHRU, all two-sample recipes, DETAIL_LIGHT and DETAIL_MASK with
+three distinct sample colours and variable alpha. Use weights 0, 1, 127, 128,
+254 and 255, and source pairs that exercise increasing and decreasing LERP.
+
+Assert exact product counts by recipe and saturation events as well as output.
+Also swap two fragment recipes while preserving the aggregate histogram: the
+identity differential must fail even though the per-recipe counters agree.
+
+Include sample_count zero as an explicit separate expected base path. It must
+not accidentally account for the success of a supposedly textured test.
+
+15.3 Flow-control and memory tests
+-----------------------------------
+
+Exercise long and randomized stalls at every ready/valid boundary, including
+sheet_ready and final out_ready. Change other unrelated inputs during stalls.
+Assert offered packets remain stable. With one producer blocked, continue legal
+work in another class to test convergence and fairness.
+
+For each RAM reader, use distinguishable values at adjacent addresses and
+alternate them every cycle. This catches the AUX one-cycle address/data mismatch
+and the more general registered-address/capture-valid error.
+
+For fixed pipelines, fill every reserved output slot, stop the consumer, allow
+all in-flight results to arrive, and prove no overwrite. Then resume and require
+exact drain. Test simultaneous arrivals from multiple producers and push/pop
+coincidence. Match queue arithmetic to its physical write ports.
+
+15.4 Token, reset and malformed-input tests
+-------------------------------------------
+
+Cover more than 256 allocations/reuses, slot wrap, generation transitions,
+abort with work outstanding, stale responses after cancellation, and reset
+release. Verify old work cannot match a recycled transaction.
+
+Inject illegal sidx=3, valid but unrequested samples, duplicates, wrong generation,
+unknown decode class, incomplete palettes and malformed binding modes. Every
+case has a declared bounded outcome and exact fault count. No invalid response
+is allowed to corrupt a live record or leave the machine waiting forever.
+
+15.5 Arithmetic tests
+----------------------
+
+RCP24: exhaust all 24-bit denominators if feasible in the existing audit flow,
+or exhaust the mathematically sufficient normalized domain plus prove the
+normalization reduction. Check intermediate bounds and exact results, not only
+final images. Include zero and every ROM-bin boundary.
+
+Perspective: rails of signed numerators; all legal exponents; rounding half-cases;
+positive/negative overflow; zero/error bypass; paired U/V identity. Test any
+width-reduced multiplier against the existing full-width reference.
+
+Filtering: four different texels, all extreme channel values, fu/fv boundary
+values and random fractions; full RGB and applicable alpha. Preserve the exact
+single-rounding bilerp result. Direct/CLUT format tests include subword selection.
+
+Mosaic: negative world coordinates, period boundaries, weight 0/255, fold-only
+mode, and source-level equality to the frozen hash and mirror laws.
+
+AUX: envelope boundaries, degenerate envelopes, negative/saturated coordinates,
+variable sheet latency and no-read degenerate completion.
+
+15.6 Capacity tests and acceptance sensitivity
+----------------------------------------------
+
+Add warm-cache nearest, warm-cache filtered, three-sample terrain, mixed material,
+AUX-heavy, palette-heavy, controlled miss, cache-index conflict and adversarial
+stall workloads. Report each separately rather than hiding a bad case in a mean.
+
+At least one test must demonstrate each optimization's intended sensitivity:
+
+  disabling the descriptor pipeline returns the sample issue term toward II=3;
+  breaking a token/context connection fails the identity differential;
+  returning base colour fails textured cases;
+  suppressing one RGB channel fails colour comparison;
+  changing Mosaic's selected tile changes the expected address/result;
+  dropping a completion stalls/fails exact drain;
+  double-issuing a job fails counts even if the colour is unchanged.
+
+Do not let the same implementation compute both the DUT result and the expected
+result. Reuse the canonical scalar laws, but keep the transaction orchestration
+of the scoreboard independent of the RTL's queues and scheduling.
+
+Tests can inspect internal simulation-only signals or bind assertions without
+adding hundreds of physical debug pins. The production counter interface should
+be narrow and registered where possible. Changes to real counters still need
+resource/timing measurement; simulation-only observability does not justify
+rewriting historical fit claims.
+
+
+16. EXECUTION ORDER, WORK PACKAGES AND STOP CONDITIONS
+======================================================
+
+[Evidence: Proposed execution plan, derived from the preceding findings.]
+
+WP0 -- Freeze and establish the failure baseline
+  Save the measured source/configuration, reviewed source and exact dependency
+  hashes. Add the mixed-identity and complete-drain tests. Run them before repairs
+  and keep the first failures. Record the old weak test as a connectivity smoke
+  test, not an end-to-end proof. Produce internal/boundary timing classification.
+
+  Exit: reproducible failures tied to specific code, not just suspicious comments.
+
+WP1 -- Repair ownership and the fit boundary
+  One integrator owns the generated packet definitions, ingress capture and final
+  ROB lifetime. Move allocation ahead of RCP. Preserve every field by token.
+  Remove direct live-input dependencies. Establish the registered functional
+  wrapper and justified clock/I/O model. Correct data/identity output merging.
+
+  Exit: exact basic nearest and base-path transactions under variable stalls;
+  original order preserved through out-of-order service completion. A wrapper
+  result cannot substitute for the full functional gate.
+
+WP2 -- RCP24 and perspective, independently then together
+  Implement queued RCP control and exact-width proof/candidate; implement paired
+  perspective with no private fragment table. Keep the old versions available
+  for arithmetic differential comparison. Measure each, then their connection.
+
+  Exit: exact results, stable outputs, sustained service rate, explicit stage
+  latency, current resource map and setup/hold reports. No successful clock result
+  obtained by accidentally halving useful work per clock.
+
+WP3 -- FRAGROB sample and retirement throughput
+  Implement overlapping descriptor reads, single-owner result banks, event-driven
+  combine readiness and final retirement. Fix AUX read-valid alignment, duplicate
+  checks and simultaneous counter events.
+
+  Exit: one-sample/clock descriptor service when credited, exact final order,
+  no slot reuse before final output acceptance, bounded behavior at full capacity.
+
+WP4 -- Measured cache and combiner timing cones
+  Register cache classification and implement speculative-probe cancellation/
+  replay accounting. Split material product and recipe writeback. Replace nested
+  job scans with a bounded ready-job organization. Refit representative pairs.
+
+  Exit: the named path families are removed or shown to have positive margin;
+  any newly exposed limiter is explicitly named rather than hidden behind Fmax.
+
+WP5 -- Real classes, bindings, Mosaic and AUX
+  Wire actual binding-resolved addresses, carry filter metadata through misses,
+  complete RGB/alpha collection, palette/nearest paths, fair sample commit,
+  Mosaic consumption and credited AUX requests/returns. Retain exact semantics.
+
+  Exit: all eight recipes and all promised format/filter/AUX paths pass exact
+  mixed-workload tests. No activity-only, base-only or counter-only substitute.
+
+WP6 -- Functional island physical and capacity closure
+  Fit the selected connected implementation with preserved parameters, all required
+  paths live, stable diagnostic interface and three seeds. Run complete workloads
+  at the product clock budget, not only individual service microbenchmarks.
+
+  Exit: current functional, capacity and physical scorecards all pass. Area/DSP/
+  register exceptions require an explicit approved decision supported by the full
+  remaining-machine budget, not the island's size in isolation.
+
+WP7 -- Actual renderer composition and honest handoff
+  Adopt the selected implementation in the actual production manifest/hierarchy.
+  Integrate after Early-Z and before the real fragment endpoint. Run frame captures
+  that actually draw, compare exact results and measure the combined hierarchy.
+
+  Exit: 105 MHz full-composition acceptance under the documented assumptions,
+  safe setup/hold/reset interfaces, required frame capacities, and no silent
+  fallback to the old or partially connected path.
+
+Work may overlap where interfaces are stable: RCP, paired perspective, cache and
+combiner leaf work can proceed independently. Only one owner changes the top,
+shared packet definitions and final lifetime model. Every work package has a
+passing local gate and its own immutable evidence; do not batch all discoveries
+into a giant undiagnosable 'integration done' commit.
+
+STOP CONDITIONS
+---------------
+Stop and investigate, rather than advancing the roadmap, when:
+
+  - exact colour/status or identity diverges;
+  - output changes while held;
+  - an accepted transaction has no terminal result;
+  - inferred storage violates the declared port/banking plan;
+  - an apparent speedup comes from skipped colour channels, recipes or samples;
+  - the fit source differs from the tested source;
+  - a required path is optimized away or driven by a constant;
+  - a timing pass depends on an unjustified exception or model change;
+  - per-stage averages look good but a declared workload still misses its budget.
+
+The recovery is complete when a selected machine passes, not when every task
+has a paragraph saying why its remaining gap belongs to someone else.
+
+
+
+17. WHAT NOT TO DO; WHAT IS GENUINELY PROMISING
+==============================================
+
+[Evidence: Assessment from the preceding source and timing evidence; not a timing guarantee.]
+
+17.1 Do not convert uncertainty into either doom or reassurance
+--------------------------------------------------------------
+This review does not establish that 105 MHz is unattainable. It identifies why
+the measured implementation fails. Conversely, a named critical path is not
+proof that one added register will close every relevant path. At least four
+families of expensive structures and several inter-block connections appear in
+the archived failure list. The functional omissions also mean the corrected
+machine must be remeasured with more real work, not less.
+
+The encouraging fact is the nature of those failures: priority selection into
+indexed storage, several operations combined in one cycle, backward cache-miss
+feedback, and repeated storage/ownership machinery. Those structures offer
+specific cuts and simplifications. This is more actionable than discovering
+that the required arithmetic's irreducible operations exceed the device's total
+capacity. The review has not found evidence of that latter impossibility.
+
+17.2 The recommended intervention is structural but bounded
+-----------------------------------------------------------
+Retain the exact reciprocal law, format decoding, interpolation, material recipes,
+Mosaic hash and AUX coordinate law. Keep useful existing implementations as
+oracles or leaves. Replace the organization that combines them badly.
+
+The intended intervention is not 'rewrite eleven arithmetic units'. It is:
+
+  - one correct transaction owner and final ordered-retirement mechanism;
+  - a queue-driven reciprocal engine with honest pipeline boundaries;
+  - a paired perspective stream instead of private reordering and axis queues;
+  - overlapping descriptor and result reads rather than stop-and-wait FSMs;
+  - a registered cache miss/classification boundary with accounted replay;
+  - a short-stage material-job machine and tagged completion paths.
+
+The other components mostly need correct metadata, buffering, credit and format
+integration. They must still be measured: a source inspection cannot promise
+that they will never become the next timing limit.
+
+17.3 Rejected shortcuts
+------------------------
+Do not lower the product clock or cut terrain quality as the first response to
+this implementation. Such a product change would require an explicit separate
+decision backed by complete workload evidence.
+
+Do not put each slow leaf on its own private clock. Clock-domain crossings add
+protocol, buffering and verification costs and do not repair insufficient work
+per second. A multi-clock architecture is an alternative architecture, not a
+free timing waiver.
+
+Do not replace exact arithmetic with approximate reciprocals or change rounding
+because a smaller expression fits. The shared executable law is one of this
+project's strongest assets.
+
+Do not fix a queue bottleneck by unboundedly increasing its depth. Depth absorbs
+bursts and latency; it does not raise a permanently insufficient service rate.
+Nor should every register array be forced into RAM: small control bits with
+independent updates belong in registers when the port analysis says so.
+
+Do not repeat an unchanged high-effort fit indefinitely, substitute a favourable
+seed for structural margin, or report a weaker constraint as a design speedup.
+Preserve the original reference measurement and show the new tested configuration
+beside it, with resource and throughput columns.
+
+Do not freeze broken code to preserve a measurement. Preserve its immutable
+revision and evidence, then fix it. Adding testbench-only scoreboards does not
+require changing a production port list. A correct functional path matters more
+than keeping a stale number 'current' by refusing to improve the design.
+
+17.4 The first checkpoint that would materially reduce the risk
+--------------------------------------------------------------
+The first useful checkpoint is not a new full-console feature. It is an exact
+mixed-recipe stream passing through the corrected ownership path, combined with
+an isolated, queued RCP candidate that removes the measured scan/address cone
+without losing required product throughput. That establishes both that latency
+can safely change and that the leading timing problem responds to a targeted
+architectural intervention.
+
+Next, pass the paired perspective path and demonstrate overlapping descriptor
+issue at the intended rate. Then refit the corrected composition and read the
+NEXT worst paths. This sequence replaces a frightening headline with a series
+of falsifiable claims. It does not promise the final result before it is measured.
+
+Bottom line: there are enough concrete, repairable-looking structural mistakes
+here to justify a serious recovery effort without sacrificing the console's
+central capabilities. There is not enough evidence to call the recovery already
+solved. Execute the gates, preserve the failures, and make the selected machine
+rather than the roadmap checklist the unit of progress.
+
+
+18. SOURCE CATALOGUE AND EVIDENCE ANCHORS
+========================================
+
+All repository links below are immutable commit-pinned links. A link to a newer
+commit does not imply that an older fit measured that source. The source ranges
+and symbol names help the implementation agent relocate the evidence if line
+numbers change after rebasing. Vendor documents provide general tool/memory
+principles; a later manual is not a promise about an untested feature in Quartus
+17.0.2. The installed version must compile the proposed code and report its
+actual inference.
+
+Evidence labels:
+  MEASURED: committed physical/timing results, not rerun by this review.
+  SOURCE: inspected executable RTL/test wiring or control structure.
+  REPO CLAIM: an earlier document's result which must retain its provenance.
+  PROPOSED: the recovery architecture and acceptance tests in this brief.
+
+[R1] SOURCE -- baseline island top; sections 2-4 and 9-12.
+  fpga/rtl/texture/zhao_texture_island_top.sv
+  Inspect u_rcp/u_persp; fr_f_ctx and u_fragrob; plan_src_id; u_plan/u_bilerp; response mux; u_aux/u_combine. Ranges 205-260, 310-400, 405-646.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/fpga/rtl/texture/zhao_texture_island_top.sv
+
+[R2] SOURCE -- baseline composed test; sections 2.3 and 15.
+  tests/texture/island_composed_directed.cpp
+  Inspect palette load, kFrags, input update loop, and final check() calls. The loop termination condition is not a retirement-count assertion.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/tests/texture/island_composed_directed.cpp
+
+[R3] MEASURED -- full composed timing summary; section 1.3.
+  reports/synthesis/blockpaths/zhao_texture_island_top.setup.summary.rpt
+  2,000 exported paths. Search From/To for u_rcp, u_persp, u_cache, u_combine and u_fragrob. Counts of exported paths are not counts of all failing paths.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/reports/synthesis/blockpaths/zhao_texture_island_top.setup.summary.rpt
+
+[R4] MEASURED -- detailed hold paths; section 1.4.
+  reports/synthesis/blockpaths/zhao_texture_island_top.hold.rpt
+  First path: pal_ld_gen_i[0] to palette ld_gen_r[0]. Read data and clock arrival components, not slack alone.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/reports/synthesis/blockpaths/zhao_texture_island_top.hold.rpt
+
+[R5] MEASURED -- raw TimeQuest report; sections 1 and 14.
+  reports/synthesis/blockpaths/zhao_texture_island_top.sta.rpt
+  Device, 10 ns clock, restricted Fmax, multicorner setup/hold and reset timing panels. The report itself warns about Fmax versus signoff.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/reports/synthesis/blockpaths/zhao_texture_island_top.sta.rpt
+
+[R6] MEASURED / REPO CLAIM -- fit ledger.
+  reports/synthesis/zhao_block_fit.json
+  Use the texture-island row with sourceCommit afb7070f, not the JSON file HEAD as the synthesis source. Distinguish partial combiner synthesis from completed fit.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/reports/synthesis/zhao_block_fit.json
+
+[R7] SOURCE -- fit script; sections 1.4 and 14.
+  tools/quartus/run_block_fit.ps1
+  Inspect generated SDC, zero input/output delays, virtual-pin settings, snapshot source selection and report archiving; approximately lines 330-700.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/tools/quartus/run_block_fit.ps1
+
+[R8] SOURCE -- RCP24 service; section 5.
+  fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+  free_v/free_i; pick_v/pick_i; done_v/done_i; c_m/c_x/c_w; normalization and seed; m1_p_q and phase writeback. Preserve exact unsigned widths/rounding.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
+
+[R9] SOURCE -- perspective service; section 6.
+  fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+  e_num_u/e_num_v and e_q_u/e_q_v; per-axis wq; p1_prod_q; acceptance writes and P4 writeback; head_done and combinational outputs. Approximately 115-405.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/fpga/rtl/raster/zhao_raster_perspuv_svc.sv
+
+[R10] SOURCE -- FRAGROB; section 7.
+  fpga/rtl/texture/zhao_texture_fragrob.sv
+  tmu_ok_c, aux_ok_c, I_IDLE/I_READ/I_HOLD, AUX ax_slot_q/ax_ctx_r/ax_pend_q, R_IDLE/R_READ/R_HOLD and simultaneous id_errors_o updates. Approximately 160-end.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/fpga/rtl/texture/zhao_texture_fragrob.sv
+
+[R11] SOURCE -- cache; section 8.
+  fpga/rtl/texture/zhao_texture_cache_pipe.sv
+  g_lane memories; rq_ip/rq_rp/rq_wp; c3_need_c/m_any_c/c3_miss; c1_go; fill and response accounting. Approximately 110-345 establishes the backward cone.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/fpga/rtl/texture/zhao_texture_cache_pipe.sv
+
+[R12] SOURCE -- TMU planner; section 9.
+  fpga/rtl/texture/zhao_texture_tmu_plan.sv
+  Five elastic stages, mode encodings, MAXLOG2 and acc_fu/fv/fmt/filter metadata. Keep the actual frozen encodings rather than inventing conventional values.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/fpga/rtl/texture/zhao_texture_tmu_plan.sv
+
+[R13] SOURCE -- response dispatch; section 10.
+  fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
+  raw/class queues, class-dependent head_room, unknown-class default, and held class outputs; approximately 1-220.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/fpga/rtl/texture/zhao_texture_rsp_dispatch.sv
+
+[R14] SOURCE -- bilinear lane; section 10.
+  fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+  B0/B1/B2, exact horizontal intermediates, vertical accumulation and final rounding; token/channel carry and transitive ready chain.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/fpga/rtl/texture/zhao_texture_bilerp_lane.sv
+
+[R15] SOURCE -- resident palette; section 10.
+  fpga/rtl/texture/zhao_texture_palette_res.sv
+  BEGIN/WRITE/END, mem_wr_c, seen_r, gen/resident verdict, fixed-latency lookup and absence of output ready; approximately 1-200 and continuation.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/fpga/rtl/texture/zhao_texture_palette_res.sv
+
+[R16] SOURCE -- material combiner; section 11.
+  fpga/rtl/texture/zhao_texture_material_combine_v1.sv
+  req_mask, issuable, nested issue loops, unit_mul_logic, writeback_val, busy/done masks, combinational retirement and RECS=2. Approximately 1-610.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/fpga/rtl/texture/zhao_texture_material_combine_v1.sv
+
+[R17] SOURCE -- AUX; section 12.
+  fpga/rtl/texture/zhao_texture_aux_pipe.sv
+  req_ready_o, a7_v_q update, sheet handshake, RQ_N=8, rqcnt and two producers; approximately 120-end.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/fpga/rtl/texture/zhao_texture_aux_pipe.sv
+
+[R18] SOURCE -- Mosaic; section 9.
+  fpga/rtl/texture/zhao_texture_mosaic.sv
+  Frozen world-space hash, mirror fold, modulo-2^32 before XOR and modulo-255 selection. The island must consume its tile output.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/fpga/rtl/texture/zhao_texture_mosaic.sv
+
+[R19] REPO ARCHITECTURE -- previous survivor architecture, especially sections 5-8 and 15.
+  reports/islandrearchitecture5.md
+  Already specifies pre-RCP ownership, queues, paired perspective, return validation and final combine writeback. RCP width bound is a reported audit result, not a proof newly run here. Its schedules/resource ambitions are not achieved measurements.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/reports/islandrearchitecture5.md
+
+[R20] REPO CLAIM / MEASURED POINTERS -- composed island report.
+  reports/G1D-COMPOSED-ISLAND-20260905.md
+  Physical measurements and acknowledged seams. Its functional claims must be checked against the actual top and assertions, not taken as sufficient evidence.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/reports/G1D-COMPOSED-ISLAND-20260905.md
+
+[R21] REPO CLAIM -- closeout decision brief.
+  reports/G1-CLOSEOUT-DECISION-BRIEF-20260905.md
+  Owner questions and priority-scan diagnosis; keep shell-versus-island distinctions and correct the usable-budget/reserve terminology.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/reports/G1-CLOSEOUT-DECISION-BRIEF-20260905.md
+
+[R22] REPO ARCHITECTURE -- production selection, not proof of adoption.
+  design/prod_manifest.yml
+  Check selected, superseded, probe and not-yet-adopted modules against the real functional hierarchy before publishing any combined resource total.
+  https://github.com/Fabulu/zhaozhou/blob/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1/design/prod_manifest.yml
+
+[R23] SOURCE -- final checked top; freshness addendum overrides old wiring findings.
+  fpga/rtl/texture/zhao_texture_island_top.sv
+  fr_f_ctx is now connected; palette identity and bilinear collision gating are repaired. Live ingress numerators/context/class and the wider ownership problems remain.
+  https://github.com/Fabulu/zhaozhou/blob/b7b62542aabf03ac568cdb7f3ab290176bc34478/fpga/rtl/texture/zhao_texture_island_top.sv
+
+[R24] SOURCE -- final checked test; freshness addendum and Appendix A.
+  tests/texture/island_composed_directed.cpp
+  Lines 110-130 still contain WRITE-only palette loading. Recipe inputs cycle 0..7. Final checks use moved>=2 and one inequality, not exact histogram, exact colour/order or retired==64.
+  https://github.com/Fabulu/zhaozhou/blob/b7b62542aabf03ac568cdb7f3ab290176bc34478/tests/texture/island_composed_directed.cpp
+
+[R25] REPO CONFIRMATION -- fresh correction commit and observed histogram.
+  Commit b7b62542, 13:03:25 UTC, 5 September 2026.
+  https://github.com/Fabulu/zhaozhou/commit/b7b62542aabf03ac568cdb7f3ab290176bc34478
+  Changes relative to reviewed baseline:
+  https://github.com/Fabulu/zhaozhou/compare/5b2c8bc131a4a4b6c659623f1d993099d4ecb2a1...b7b62542aabf03ac568cdb7f3ab290176bc34478
+
+[R26] HISTORICAL PHYSICAL SOURCE -- not the current source baseline.
+  https://github.com/Fabulu/zhaozhou/tree/afb7070fe129a7c997a69ebade1e5bf5c9ebc601
+
+[V1] Vendor warning reproduced in the actual Quartus 17.0.2 report.
+  See R5, immediately below the Fmax summary: use clock constraints and the
+  other slack reports for signoff. This is the version-specific evidence.
+
+[V2] Altera, Quartus Prime Pro Edition Timing Analyzer User Guide, version 25.3,
+  Report Fmax Summary. Used for general interpretation, not a 17.0.2 feature claim.
+  https://docs.altera.com/r/docs/683243/25.3/quartus-prime-pro-edition-user-guide-timing-analyzer/report-fmax-summary
+
+[V3] Intel Quartus Prime Standard Edition Design Recommendations, version 18.1,
+  True Dual-Port Synchronous RAM. Two independent address ports; simultaneous
+  read/write operations do not imply four independent addresses.
+  https://docs.altera.com/r/docs/683323/18.1/intel-quartus-prime-standard-edition-user-guide-design-recommendations/true-dual-port-synchronous-ram
+
+[V4] Intel Quartus Prime Standard Edition Design Recommendations, version 18.1,
+  Use Synchronous Memory Blocks; Avoid Unsupported Reset and Control Conditions.
+  Registered read outputs and supported control are central to RAM inference.
+  https://docs.altera.com/r/docs/683323/18.1/intel-quartus-prime-standard-edition-user-guide-design-recommendations/use-synchronous-memory-blocks
+  https://docs.altera.com/r/docs/683323/18.1/intel-quartus-prime-standard-edition-user-guide-design-recommendations/avoid-unsupported-reset-and-control-conditions
+
+Section-to-source map:
+  0-1: R3-R7, R19-R22, R26; V1-V2.
+  2-4: R1-R2, R8-R18, R23-R25; V3-V4 for memory principles.
+  5: R8, R19; proposed scheduling/port plan is this review's design.
+  6: R9; proposed paired stream is this review's elaboration of R19.
+  7: R10, R19; exact pipeline/credit corrections are proposed here.
+  8: R3, R11; miss-classification/replay implementation is proposed here.
+  9: R1, R12, R18-R19, R23.
+ 10: R1, R13-R15, R23-R25.
+ 11: R3, R16, R19.
+ 12: R1, R10, R17, R23.
+ 13: source initiation intervals plus stated analytical assumptions; R19.
+ 14: R3-R7; V1-V4; proposed acceptance procedure, not new measured results.
+ 15-17 and appendices: proposed tests, execution policy and deductions from the
+  named source structures; no claim that these tests have already been run.
+
+
+APPENDIX A. SMALL ARITHMETIC AND PROTOCOL CHECKS
+===============================================
+
+A1. Clock and area arithmetic
+-----------------------------
+  69.05 / 105                         = 0.657619
+  shortfall relative to 105 MHz       = 34.2381%
+  105 / 69.05 - 1                     = 52.0637% improvement required
+  1000 / 69.05                        = 14.4823 ns equivalent period
+  1000 / 105                          = 9.52381 ns target period
+  7,720 - 7,500                       = 220 ALMs
+  220 / 7,500                         = 2.93333%
+  41,910 * 0.9                        = 37,719 usable ALMs
+  41,910 * 0.1                        = 4,191 reserved ALMs
+
+These are arithmetic transformations of the reported numbers. They are not
+predictions of a new fit, nor a proof that the target period can be achieved.
+
+A2. Current material-job law and the fresh 64-fragment test
+----------------------------------------------------------
+The required jobs for one legal fragment of each recipe, from req_mask(), are:
+
+  recipe          jobs     for eight fragments
+  ------------------------------------------------
+  PASSTHRU          0               0
+  MODULATE          4              32
+  MODULATE2X        4              32
+  LERP              4              32
+  ADD_SAT           0               0
+  MASK              0               0
+  DETAIL_LIGHT      6              48
+  DETAIL_MASK       4              32
+  ------------------------------------------------
+  total                           176
+
+The reported fresh histogram totals 140, with DETAIL_MASK alone accounting for
+112 rather than 32. More than one counter moving proves only more than one job
+class was exercised. Even an EXACT aggregate histogram is necessary but not
+sufficient: swapping two fragments' recipes could leave it unchanged.
+
+For the test's accepted inputs, assuming all 64 are accepted with no abort:
+  retired fragments                 64, exactly once each
+  source tags                       0x1000..0x103F, exactly in required order
+  required primary sample results   192, unless an explicitly specified refusal
+  fragments requesting AUX          22 (indices 0,3,...,63)
+  nominal CLUT/bilinear split        32 fragments each, before channel expansion
+
+Do not call 96 bilinear sample completions '96 RGB channel jobs'. Completing
+full RGB filtering would require three colour-channel jobs per filtered RGB565
+sample. Optional alpha work depends on the format's actual rule.
+
+The production test must derive every expectation from the CAPTURED accepted
+input packet, not reconstruct a packet from what input ports happen to show
+when a later output appears.
+
+A3. Minimal late-capture counterexample
+---------------------------------------
+  edge 0: accept A, tag A, numerator 0x00010000, recipe MODULATE.
+  edge 1: accept or offer B, with a different numerator and recipe.
+  later:  reciprocal(A) becomes valid while ingress ports show B or C.
+
+Current baseline wiring sends reciprocal(A) and LIVE numerator(B/C) together
+into PERSPUV. Later, FRAGROB packs LIVE recipe(B/C/last) rather than recipe(A).
+The new fr_f_ctx connection repairs neither late read.
+
+An even simpler test accepts A, then deasserts frag_valid_i and aggressively
+changes all unaccepted ingress data. The implementation must ignore those values.
+Changing the final output by changing an invalid input is a direct witness of
+unowned live data. Preserve normal ready/valid rules while a VALID input is
+stalled; poison only after transfer or while valid is low.
+
+A4. Latency is not initiation interval
+---------------------------------------
+Current descriptor reader, continuously ready downstream:
+  cycle n:   IDLE chooses descriptor A.
+  cycle n+1: READ waits for/captures A.
+  cycle n+2: HOLD transfers A.
+  cycle n+3: IDLE chooses descriptor B.
+  cycle n+5: HOLD transfers B.
+
+The transfer spacing is three cycles. A correct overlapping pipeline could read
+A at n, B at n+1 and C at n+2, and later deliver them on consecutive cycles.
+Each item can still have several cycles of latency. The improvement comes from
+overlap, not from pretending synchronous memory has zero latency.
+
+With an 80% design-cycle allowance at 100 MHz/60 Hz:
+  floor(0.8 * 100,000,000 / 60) = 1,333,333 cycles
+  II=3 descriptor issue ceiling = 444,444 samples, before all other losses
+  II=1 descriptor issue ceiling = 1,333,333 samples, before other bottlenecks
+
+Those are ceilings, not delivered frame capacity. Cache misses, filter work,
+combination, service bubbles and memory traffic still impose their own limits.
+
+A5. Held-output counterexample
+-------------------------------
+An out-of-order service offers completed slot 1 with valid=1 while ready=0.
+Before the consumer accepts it, slot 0 completes. A combinational lowest-slot
+selector now offers slot 0 under the same held valid. The consumer did not
+request that change. A stable output register or locked selected slot prevents
+it. Final frame ordering is a separate obligation enforced by central FRAGROB.
+
+A6. Credit invariant for an unstalled arithmetic pipeline
+--------------------------------------------------------
+Let Q be the reserved response capacity. Let outstanding include EVERY accepted
+job whose reserved capacity has not been released, whether still computing,
+waiting on memory or already in the result FIFO. Admission requires:
+
+  outstanding < Q
+  next_outstanding = outstanding + accepted - final_output_consumed
+
+Each admitted job reserves one eventual result slot. The response queue cannot
+overflow even if the consumer stalls indefinitely, provided accepted work cannot
+produce more results than were reserved and no other producer steals that space.
+The pipeline eventually stops ACCEPTING jobs, not necessarily mid-computation.
+Latency and burst timing determine utilization and sensible Q, not the validity
+of this reservation invariant. Multiple result producers need enough physical
+write bandwidth or separately credited holding slots and arbitration.
+
+A7. RAM-port accounting
+-----------------------
+A single true dual-port block can access two independent addresses per clock.
+It may read and write at either address, subject to the device's supported
+read-during-write behavior. It does not automatically supply independent addresses
+for acceptance initialization, arithmetic writeback, and retirement read.
+
+For PERSPUV result storage, remove the acceptance-time zero write for nonzero
+jobs by carrying a validity/zero case, or redesign as a stream. Splitting U/V
+arrays alone does not remove that extra write per axis or the unregistered
+retirement read. A real inference report is the acceptance criterion.
+
+
+APPENDIX B. IMPLEMENTATION-AGENT DELIVERY CHECKLIST
+==================================================
+
+[ ] Rebase this brief's findings onto the current hardware branch. Preserve the
+    b7b62542 corrections; do not repeat repaired baseline bugs as new findings.
+    Record the exact source and dependency hashes used for every result.
+
+[ ] Start by making the ownership, stalled-output, channel, palette-load and
+    malformed/duplicate-response tests fail on known-bad code. Replace weak
+    recipe plurality/inequality checks with exact per-input scoreboards.
+
+[ ] Establish one generated transaction packet, one ingress capture event and
+    one final lifetime owner. No later computation reads unrelated live ingress
+    data. A provenance source ID is not an internal transaction-routing ID.
+
+[ ] Deliver a queued RCP candidate with separate input, selection, memory read,
+    product, rescale and output boundaries. Prove any width reduction and measure
+    both numerical equivalence and useful product launches per cycle.
+
+[ ] Deliver paired streaming perspective and overlapping descriptor reads.
+    Show achieved issue/retirement intervals under continuous legal traffic and
+    backpressure, not just pipeline latency or a claimed number of stages.
+
+[ ] Register the measured cache classification/feedback cone without losing,
+    duplicating or misordering replayed accesses. Account for in-flight probes
+    and response reservations, not only currently occupied FIFO entries.
+
+[ ] Deliver the complete primary-sample decode/colour collection path, valid
+    palette loading, actual binding and Mosaic consumption, credited AUX, and a
+    fair tagged completion merger. No unused or fake RGB/AUX substitute.
+
+[ ] Split material scheduling/product/rounding/writeback; keep exact recipe
+    laws and two product lanes within the approved resource ceiling. Return
+    results to central FRAGROB; preserve final raster order and held stability.
+
+[ ] Publish one functional/capacity/physical scorecard per selected composition,
+    with source-matched tests, all-corner timing, inferred-memory/port evidence,
+    full resource usage, seed range, and representative worst legal workloads.
+
+[ ] Stop unrelated hardware roadmap expansion until the recovery gate passes.
+    The final handoff must state what actually runs through the selected machine,
+    what is physically closed, what remains unproved, and which exact next gate
+    would disprove the current conclusion. Do not replace unresolved failures
+    with a renamed task, a weaker assertion, or a lower unstated target.
+
+END OF BRIEF
