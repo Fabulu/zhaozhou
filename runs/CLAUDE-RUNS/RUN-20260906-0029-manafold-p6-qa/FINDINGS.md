@@ -559,10 +559,18 @@ The unique-colour counts settle section 5 independently:
   roughly doubles (rest 7,658 -> 18,350; channel 9,424 -> 17,716).
 
 So the rig was **universalised, not lost** - the count rises on all 15 clips.
-Worth noting for the record: inspect itself came DOWN, 24,850 -> 19,443, because
-it now inherits hover tighter kU02CamK framing. The showcase is slightly less
-rich than it was; the caption declares the merge, so this is disclosed rather
-than hidden, but it is a real change to that tab.
+Stronger than the CRC: at HEAD, `diff -r manafold-hover manafold-inspect`
+reports only meta.txt differing (it carries the subject name); all 600 frames
+and the palette are byte-identical. At pass 5 the same diff reports 601
+differing files.
+
+**But the rig every clip now carries is NOT the rig pass-5 inspect carried.**
+g_u02_moving_rig moved kU02MovingRigA26 -> A40 (ambient 1860 -> 2860) and the
+four sources are scaled by the new kU02MlSourceGainPm = 560. That is why
+inspect own colour count came DOWN, 24,850 -> 19,443, while every other clip
+roughly doubled: the showcase tab now shows a retuned, slightly less rich rig
+plus hover tighter kU02CamK framing. Nothing was lost - the rig was **retuned
+as it was spread**, and the caption declares the merge but not the retune.
 
 ### Zixxtrixx untouched - CONFIRMED
 
