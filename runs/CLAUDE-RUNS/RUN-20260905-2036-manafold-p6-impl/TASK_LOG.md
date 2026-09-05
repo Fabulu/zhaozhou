@@ -441,3 +441,36 @@ pass did not reach.
 **LOOKED AT** (`evidence/5c-star-scale.png`, 6x, before/after at three-quarter
 and front): the star now fills the lens the way the sheet draws three nested
 shapes, and the 4-pointed concave star reads clearly in **both** eyes front-on.
+
+### 01:40 — STAGE G: publish. Two traps hit, both caught.
+
+**Trap 1 — the encode was killed at a 10-minute foreground limit** after 3 of 16
+clips, and its log carried only the exit code because the buffered output died
+with it. No 0-byte file resulted, but the FILES THAT EXISTED WERE STALE, which
+looks identical to success in a directory listing. Re-run in the background with
+`python -u`.
+
+**Trap 2, and this one would have shipped:** `channel`, `crackle` and `curious`
+were encoded from the **pre-5c render**. I deleted and re-rendered `ship/` after
+the owner's 5c/5d landed, but those three webms were already written — so three
+clips would have gone out with the OLD eye while the other thirteen carried the
+new one, and every file would have been present, non-zero and decodable. Caught
+by comparing file mtimes against the render's, not by any gate. Queued for
+re-encode.
+
+**`manafold-channel.webm` verified end to end** (the lingering ffmpeg the other
+lane spotted): `ffprobe` reports 384x240 yuv444p, **420 frames — exactly the
+render's frame count**. It completed and it decodes.
+
+**Media verification is by DECODER, not byte length** — a truncated file has a
+length, and pass 4's 0-byte webm shipped because the poster is only written
+after ffmpeg succeeds, so a present poster says nothing about its video.
+`verify_media.py` walks every `src` in `creatures.json`, checks present +
+non-zero + decodes, and checks a poster exists beside every webm.
+
+**Site:** archives copied as `archive-pass5-u02-*` before the new generation
+replaced them (the two existing archive tabs both carry today's date, which is
+ambiguous — naming by PASS is not); the mana-lab reel published as its own
+clearly-marked Experiments section with each variant named by **mechanism**, not
+number; Manafold stays first; exactly one `noindex` **directive** (a second
+match is footer prose).
