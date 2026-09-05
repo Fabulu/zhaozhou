@@ -3135,6 +3135,36 @@ So the shape the design needs is already supported, and today's nearest path
 simply uses one lane of four. This is a source deduction about interfaces, not
 a simulation or a fit: nothing has been built or measured.
 
+### The proposed new sample CLASS is not a free encoding
+
+The architecture fences the blended path with a new class `CLS_CLUT_MIP = 3`,
+alongside `CLS_CLUT=0`, `CLS_NEAR=1`, `CLS_BIL=2`. The 2-bit field has the
+spare value, but the dispatcher does not:
+
+* `zhao_texture_rsp_dispatch` holds THREE class queues — `cq_wp[3]` — and its
+  routing loop is `for (int i = 0; i < 3; i++)` with
+  `cpsh = dispatch_fire && (head_cls == 2'(i))`. Encoding 3 matches no `i`,
+  so nothing is pushed.
+* And the entry is still consumed, because `head_room` ends:
+
+```systemverilog
+default:  head_room = 1'b1;   // an unknown class is dropped, not stalled
+```
+
+So a class-3 response is popped from the raw FIFO and pushed to no queue. The
+fragment waiting on that sample never completes, and FRAGROB retires in
+allocation order, so one stuck head blocks the island — the signature the
+aux-token bug produced.
+
+**This is a correction to the architecture's own description of it.** It called
+this a *silent* unknown-class drop; it is not silent, it is commented on the
+line that does it, and dropping was chosen deliberately over stalling because
+stalling deadlocks. The behaviour is intended. What follows from it is the part
+that matters: **taking encoding 3 requires a fourth class queue**, with its own
+depth, its own occupancy counter and its own head-of-line consequences, not
+merely a spare number. Any cost estimate that treats the new class as free is
+short by that queue.
+
 ### Not fixed here, deliberately
 
 The architecture gates both as WP-M1 behind a reviewed before/after delta,
