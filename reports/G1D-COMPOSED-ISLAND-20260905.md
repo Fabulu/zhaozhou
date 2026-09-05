@@ -228,9 +228,49 @@ before-figure to difference against, and inventing one would be the
 registered output stage on those reads, which is the same remedy §5 of the
 perspuv report proposes for `e_q`.
 
-### 4.3 Fitter — in progress
+### 4.3 Fitter — KILLED AT THE WATCHDOG, and the row says so
 
-ALMs and fmax come from the fitter, which is still running. Against:
+```
+status        incomplete:failed:quartus_fit.exe
+partial       true
+partialStage  analysis_and_synthesis
+seconds       7205.1          (budget 7200)
+registers     11613
+dspBlocks     22
+virtualPins   889
+blockMemoryBits 25872
+alms          -- ABSENT
+fmaxMhz       -- ABSENT
+```
+
+**The composed island did not complete a fit in two hours.** Analysis &
+Synthesis finished; the fitter did not.
+
+**The harvest behaved exactly as G0 rebuilt it to.** The row is `incomplete`,
+not an empty row that passes a gate; it keeps the numbers synthesis genuinely
+produced; and it records **no ALMs and no fmax**, because Analysis & Synthesis
+reports ALMs as N/A and inventing either would be the defect this whole report
+is about. This is the second time the watchdog has fired in production — it
+interrupted a perspuv re-fit at 5,404.9 s against 5,400 s — and the second time
+a previous-measurement-or-nothing rule kept a false number out of the census.
+
+**A longer budget is the right answer here and was the WRONG answer for
+perspuv**, which is worth stating because the two look identical from the
+outside. perspuv's overrun has a diagnosed cause a longer run cannot change (a
+2R2W context store that cannot be memory; see
+`PERSPUV-REGISTER-DIAGNOSIS-20260905.md`). This design has no diagnosed defect —
+it is simply 11,613 registers and 22 DSPs being placed for the first time. A
+four-hour re-run is queued behind the COMBINE.V1 fit.
+
+**So the headline number this gate exists to produce is still missing**, and
+that is the honest status. What IS established:
+
+* the island is COMPOSED and functionally correct end to end (§3);
+* its register, memory, DSP and pin counts are real (§4.1–4.2);
+* the standalone sum remains disproved as an estimate of its size, by its own
+  342-DSP-against-112 arithmetic.
+
+Against:
 
 | | ALM |
 |---|---|
