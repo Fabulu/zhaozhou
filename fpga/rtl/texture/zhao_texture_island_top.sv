@@ -225,7 +225,14 @@ module zhao_texture_island_top #(
     // healthily; the fault was 96 lookups all STALE, and nothing exposed that.
     // A path that answers with a miss indication is doing no work.
     output var logic [31:0] cnt_palette_stale_o,
-    output var logic [31:0] cnt_palette_cold_o
+    output var logic [31:0] cnt_palette_cold_o,
+
+    // STICKY: a sample response was produced and nobody took it. One bit and
+    // not a count, because the question is "did this ever happen", and one
+    // occurrence already means a fragment waits forever. See the completion
+    // merger below for why this is currently unreachable and why that is an
+    // assumption rather than a property.
+    output var logic        err_rsp_dropped_o
 );
 
   // ==========================================================================
@@ -734,6 +741,34 @@ module zhao_texture_island_top #(
   //
   // The palette has no ready of its own -- it is a fixed-latency lookup -- so
   // it wins and the lane back-pressures.
+  //
+  // THIS IS SAFE ONLY BECAUSE `zhao_texture_fragrob.tmu_rready_o` IS TIED
+  // HIGH. That is a cross-module invariant, it is load-bearing, and nothing
+  // stated it until now:
+  //
+  //   * PALETTE_RES has no `lu_ready_i`. Its answer is valid for exactly one
+  //     clock and cannot be held.
+  //   * `disp_clut_ready` is tied high, so a lookup is issued without asking
+  //     whether its answer can be taken.
+  //   * So if FRAGROB ever stops being unconditionally ready, the palette
+  //     answer is DROPPED. The fragment waiting on that sample never
+  //     completes, and because FRAGROB retires in allocation order, one stuck
+  //     head blocks the whole island -- the exact signature the aux-token bug
+  //     produced earlier ("48 samples fetched, 0 fragments out").
+  //
+  // The strict priority is therefore not a fairness choice; it is the only
+  // safe order given one lane cannot wait. Making the merger round-robin
+  // WITHOUT first giving the palette a holding register would introduce the
+  // very drop this flag watches for.
+  //
+  // Unreachable today, which is why it is a flag and not a repair: a tripwire
+  // on an assumption, so the day the assumption changes it is reported instead
+  // of being discovered as a hang.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)                                err_rsp_dropped_o <= 1'b0;
+    else if (pal_lu_valid_o && !fr_tmu_rready) err_rsp_dropped_o <= 1'b1;
+  end
+
   assign bil_out_ready  = fr_tmu_rready && !pal_lu_valid_o;
   assign fr_tmu_rvalid  = bil_out_valid || pal_lu_valid_o;
   assign fr_tmu_rgb     = pal_lu_valid_o

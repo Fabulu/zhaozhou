@@ -538,6 +538,17 @@ int main(int argc, char** argv) {
   check(d.cnt_palette_cold_o == 0,
         "and none is answered cold", 0, static_cast<int>(d.cnt_palette_cold_o));
 
+  // The completion merger gives the palette strict priority because PALETTE_RES
+  // cannot be back-pressured -- its answer is valid for one clock. That is safe
+  // only while FRAGROB's response ready is tied high. This flag is the tripwire
+  // on that cross-module assumption: if a palette answer is ever produced and
+  // not taken, a fragment waits forever and the island wedges in allocation
+  // order, which is a hang rather than a wrong pixel.
+  check(d.err_rsp_dropped_o == 0,
+        "no sample response was produced and dropped -- the merger's "
+        "unconditional-consumer assumption still holds",
+        0, static_cast<int>(d.err_rsp_dropped_o));
+
   if (g_failed) {
     std::printf("[island_composed_directed] %d/%d checks FAILED\n", g_failed, g_checks);
     return 1;
