@@ -834,3 +834,14 @@ experiment, NOT the whole island -- and the island's 7,720 ALM / 69.05 MHz is
 stale regardless, since the capture table adds combinational LUT-RAM reads on
 PERSPUV's input path. No prediction offered: the last obvious explanation for
 this island was worth 4 MHz of 36.
+
+## 2026-09-05 — terrain mip two-level blend architecture (sub-agent)
+Wrote `reports/TERRAIN-MIP-TWO-LEVEL-BLEND-ARCHITECTURE-20260905.md` — the
+owner-ruled "nearest within two mips, blended" design. Architecture only; no
+RTL/test/tool changed; combine_v1 fit closure untouched and its file unread.
+Key rulings proposed: Q4.4 LOD ABI end to end (fixes the nibble defect), the
+pair issued as ONE planner request on two cache lanes, a credit-governed
+palette blend station (reserve-before-issue), lerp8 magnitude-rounding law
+governs. Three adjacent defects recorded in its §9: CLUT byte-select dropped
+at the composed island, palette 565→888 zero-fill vs oracle replication,
+dispatch silent unknown-class drop.
