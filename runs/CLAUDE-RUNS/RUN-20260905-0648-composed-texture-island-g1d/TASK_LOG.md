@@ -215,6 +215,57 @@ defensible widths. Inert at the commit and verified so rather than assumed —
 `bind_mode_i = 0` means MIP_EN is low and `lvl_req` is 0 either way, and all 25
 island checks plus the nine-test texture neighbourhood are unchanged.
 
+## D22 tread 8 lands: the shell fetches its own records
+
+GEOM.ASSETFETCH composed. The bench stops synthesising vertex records and
+supplies raw pool bytes; the fetcher reads the meshlet footprint out of them and
+streams 32-byte records to VDECODE, closing MESHFETCH → ASSETFETCH → VDECODE.
+Measured: `meshlets 1, beats 24, denied 0, refused 0`, four records decoded,
+byte-identical framebuffer, sensitivity 1279 words, 16 checks.
+
+**24 beats is exactly three 64-byte lines** — index run of one, vertex run of
+two. That is the phase structure the block implements, and it is why my first
+beat player could never have worked: it granted once and streamed the whole
+pool, so the index phase would have swallowed everything and the vertex phase
+never started. Reading the fetcher's state machine before running was what
+caught it.
+
+Two of my own process failures on the way, both already written down in
+CLAUDE.md and both committed anyway:
+
+* I read `BUILD_RC` off a PowerShell PIPELINE ending in `Select-String` rather
+  than off cmake, so a build that produced no executable reported success and
+  the "missing" exe was blamed on the wrong thing. CLAUDE.md: *"Read the
+  build's exit code, not the pipeline's."*
+* The verilate rule could not see the new source until `cmake --preset`
+  regenerated the graph — the stale-`build.ninja` trap, hit for the second time
+  today.
+
+## The fitter mode is now a knob, and the pessimism is priced
+
+Owner call: get a cheap, pessimistic combiner fit rather than an exact one,
+because a block at 29.74 MHz against a 125 MHz target is being rearchitected
+regardless of the third significant figure. The only question this run answers
+is whether the counter narrowing moved the number AT ALL.
+
+`run_block_fit.ps1` gained `-OptimizationMode`. The default is unchanged and
+the row records the mode when it is overridden, because a BALANCED row and a
+HIGH PERFORMANCE EFFORT row are not comparable and a table that mixes them
+silently is worse than one that omits the fast rows.
+
+**The pessimism is quantified from a measurement already in the tree**: the
+shell QSF records OPTIMIZATION_MODE at +2.08 MHz, alongside
+OPTIMIZATION_TECHNIQUE (−3.01, reverted) and register duplication (nil). So a
+BALANCED row reads about 2 MHz low — roughly 7% here, and nowhere near enough
+to change a rearchitect-or-not verdict.
+
+And nothing was wrong with the fitter, which was worth checking rather than
+assuming: `"HIGH PERFORMANCE EFFORT"` is deliberate and documented, the block
+carries **596 virtual pins against 744 registers** so the placement problem is
+far larger than its 1,994 ALMs suggest, and perspuv at 2,204 ALMs spent 78
+minutes in the same stage. The scaling is consistent. The only bug was the
+3,000 s timeout.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner
