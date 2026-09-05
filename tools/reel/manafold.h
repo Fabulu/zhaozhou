@@ -26,6 +26,10 @@
 #include "manafold_rig.h"
 #include "manafold_clips.h"
 #include "manafold_fx.h"
+// LANE-ONLY (Owner Direction 6, the experimental mana reel): the variant
+// table, the forked fold and the lab clip. Ships nothing; touches no
+// shipped constant. Delete this include and the push_back below to revert.
+#include "manafold_lab.h"
 
 // The GENERATED page (tools/pack/mkmanafoldpage.py) is COMMITTED, exactly as
 // Zixxtrixx's pages are: the generator is deterministic, so the tracked
@@ -150,6 +154,7 @@ inline const zc::CreatureType& type() {
     bank.clips.push_back(build_taunt2());      // slot 12
     bank.clips.push_back(build_trick());       // slot 13 (pass 3: headstand)
     bank.clips.push_back(build_damage());      // slot 14 (pass 4: directional hits)
+    bank.clips.push_back(lab::build_manalab());  // slot 15 (LANE-ONLY: Direction 6)
 
     zc::CreatureType type;
     type.type_id = 3;  // 1 watchdog, 2 zixxtrixx, 3 manafold

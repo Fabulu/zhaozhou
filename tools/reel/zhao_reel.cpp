@@ -3238,7 +3238,13 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       // keeps the pass-3 feed. ONE ramp build per (ramp,gain,boost) per
       // frame through the cache (the reviewer's palette-rebuild note).
       const bool fold_mana = c.u02_mana == 3 || c.u02_mana == 6 ||
-                             c.u02_mana == 8 || c.u02_mana == 9;
+                             c.u02_mana == 8 || c.u02_mana == 9 ||
+                             // LANE-ONLY (Direction 6): the lab's variants are
+                             // fold mana too -- without this they silently take
+                             // the pass-3 feed (full halo radius, no release
+                             // fade) and every lab trail would be a different
+                             // thing from the shipping trail it is compared to.
+                             c.u02_mana >= u02::lab::kLabCandBase;
       // PASS 5 (loop seam): during the fold's RELEASE tail the feed fades
       // with the release amp, so the trail plane is near-empty at the wrap
       // (the decay does the rest); everywhere else the scale is 1000.
@@ -3990,6 +3996,14 @@ int render_scene(const SceneSubject& sub) {
                   ii == 0 ? f
                           : static_cast<uint32_t>(ip->anim.frame) * 2u + ip->anim.sub;
               int32_t agit = 0;
+              // LANE-ONLY (Direction 6): candidates >= kLabCandBase are the
+              // experimental mana reel's variant table, forked into
+              // manafold_lab.h so no shipped constant is touched.
+              if (sub.u02_mana >= u02::lab::kLabCandBase) {
+                u02::lab::lab_fill(sub.u02_mana, conduit_frame, ii, fa,
+                                   cr_ctx.u02_fold[ii],
+                                   cr_ctx.u02_mana_splats, &agit);
+              } else
               u02::mana_fill(sub.u02_mana, conduit_frame, ip->anim.slot,
                              cl->frame_count, fa, cr_ctx.u02_fold[ii],
                              n_conduits > 1 ? u02::kMoteCrowdPm : 1000,
@@ -7128,6 +7142,29 @@ int main(int argc, char** argv) {
       s.note = "mana-menu candidate: the owner picks with his eyes";
       rc |= render_scene(s);
     }
+  }
+  // ===================== THE EXPERIMENTAL MANA REEL =======================
+  // LANE-ONLY (Owner Direction 6). Ten subjects, ONE clip (slot 15), one
+  // choreography, one camera, one light rig -- only the mana configuration
+  // differs. Sameness everywhere else is what makes the ten comparable.
+  for (int vi = 0; vi < u02::lab::kLabVariantCount; ++vi) {
+    const u02::lab::LabVariant& V = u02::lab::kLabVariants[vi];
+    std::string nm = std::string("manalab-") + V.name;
+    if (!wanted(nm.c_str())) continue;
+    SceneSubject s = subject_u02_clip(15, nm.c_str(), u02::lab::kLabKeys, false,
+                                      &kU02SunChannel);
+    s.name = nm.c_str();
+    s.u02_mana = u02::lab::kLabCandBase + vi;
+    s.u02_smear = V.smear_rung;
+    // the clip TRAVELS (beat 2), so it stages on flat ground -- the reel
+    // snaps the root to one terrain column and at bump_ext 6 the mound rises
+    // under lateral travel and the creature walks into the hillside (shipped
+    // twice on drift/hasty before it was caught).
+    s.bump_ext = 18;
+    // pass 6's decided framing, less a little window for the traverse
+    s.cam_k = u02::lab::kLabCamK;
+    s.note = V.mechanism;
+    rc |= render_scene(s);
   }
   if (wanted("manafold-trio")) {
     SceneSubject s = subject_u02_clip(2, "manafold-trio", u02::kChannelKeys, false, &kU02SunChannel);
