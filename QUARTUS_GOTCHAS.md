@@ -48,3 +48,41 @@ Call `verilator_bin.exe` directly, or run it from Git Bash. And when a checking
 tool prints nothing at all, confirm it ran before recording that it passed --
 this is the same class as a regex that matches nothing and reports "no problems
 found".
+
+---
+
+## 17. `ctest` needs `zhao-env` sourced too, not just `cmake`
+
+Added 2026-09-05.
+
+CLAUDE.md's build note says to configure from PowerShell with
+`tools/env/zhao-env.ps1` sourced, and explains what happens to `cmake` if you
+do not. **The same applies to `ctest`, and the failure looks completely
+different.**
+
+Without the env, `ctest` resolves to a different binary and reports:
+
+```
+Test project /c/programmieren/zencrifice/zhaozhou/build
+...
+	 80 - material_combine_directed (BAD_COMMAND)
+	 81 - texture_combine_diff      (BAD_COMMAND)
+	 ... 500 more
+```
+
+`BAD_COMMAND` on *every* test, with a POSIX project path — while
+`CTestTestfile.cmake` in that same directory plainly says
+`Build directory: C:/programmieren/...`. So the build tree is fine and the
+runner is wrong.
+
+**This reads exactly like a broken build tree**, and it cost two rounds of
+"nothing is built, reconfigure everything" before the tell was noticed: the
+project path `ctest` prints is POSIX while the file it is reading is Windows. A
+whole suite failing identically is a property of the runner, not of 500 tests.
+
+With the env sourced, `ctest` resolves to
+`C:\programmieren\dsstuff\mingw64\bin\ctest.exe`, prints a Windows project
+path, and the same 16 tests pass in 192 s.
+
+**The general rule:** when every member of a large set fails the same way,
+suspect the thing they share before the things they do not.
