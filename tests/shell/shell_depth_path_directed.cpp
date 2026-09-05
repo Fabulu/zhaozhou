@@ -99,6 +99,14 @@ constexpr uint32_t kProfile = 0;
 // would agree for the wrong reason.
 constexpr uint64_t kW = 4ull << 16;  // 4 m in fx16 raw
 
+// The tile's clear depth, chosen to sit BELOW the depth `kW` produces
+// (0x400000) so the correct fragment passes the strict `d_new > d_old` test,
+// and ABOVE the wrong depth the sensitivity probe uses so that one fails.
+// Both halves matter: a clear depth above the correct value would make the
+// correct pass draw nothing, and two blank frames match.
+constexpr uint32_t kClearDepth = 0x300000u;
+constexpr uint32_t kWrongDepth = 0x100000u;
+
 bool the_triangle(zhao_geom::BinTri* out) {
   zref::Clip::Viewport vp;
   vp.w = kGridW * 16;
@@ -154,11 +162,26 @@ std::vector<uint16_t> draw_once(bool depth_mode, uint32_t invw24, bool* drew_ok,
   // filled with a WRONG value (all ones) so that a shell which ignored
   // `depth_mode_i` would draw a visibly different picture rather than passing
   // because the two happened to agree.
-  const uint32_t depth_field = depth_mode ? 0xFFFFFFu : (invw24 & 0xFFFFFFu);
+  const uint32_t depth_field = depth_mode ? kWrongDepth : (invw24 & 0xFFFFFFu);
   h.top.render_fill_word_i =
       ((uint64_t)0xA5A5A5u << 40) | ((uint64_t)0x11u << 32) |
       ((uint64_t)depth_field << 8) | 0x00u;
-  h.top.render_clear_word_i = 0x5A5A5A5A5A5A5A5Aull;
+  // DEPTH TESTING IS ON, and that is what makes the picture evidence real.
+  //
+  // The first version of this test left the render state at 0 -- "depth test
+  // off, depth written, blend REPLACE", zhao_raster_fragment's own description
+  // of the zero state -- and a sensitivity probe then measured that a
+  // deliberately wrong depth changed ZERO framebuffer words. The identical
+  // framebuffers were true and empty.
+  //
+  // zhao_raster_fragment bit [0] is Z_TEST_EN and the test is the qformats §8
+  // one, quoted in its header: "pass <=> d_new > d_old (strict; ties fail)".
+  // So the tile is cleared to a depth BELOW the fragment's: the correct depth
+  // passes and draws, and a wrong depth below the clear fails and draws
+  // nothing. The comparison can now fail.
+  h.top.render_state_i = 0x1;  // Z_TEST_EN
+  h.top.render_clear_word_i =
+      ((uint64_t)0x5A5A5Au << 40) | ((uint64_t)kClearDepth << 8);
   h.top.render_src_a_i = 0xFF;
   h.top.render_texel_rgb_i = 0xFF00FF;
   h.top.render_texel_a_i = 0xFF;
@@ -284,7 +307,7 @@ int main(int argc, char** argv) {
   // the picture moved. Whatever the answer, it is reported rather than assumed.
   bool third_ok = false;
   const std::vector<uint16_t> wrongdepth =
-      draw_once(/*depth_mode=*/false, want_invw24 ^ 0x0FFFFFu, &third_ok, nullptr);
+      draw_once(/*depth_mode=*/false, kWrongDepth, &third_ok, nullptr);
   int wrong_diff = 0;
   for (std::size_t i = 0; i < pre.size(); ++i)
     if (pre[i] != wrongdepth[i]) ++wrong_diff;
