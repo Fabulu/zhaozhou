@@ -368,6 +368,54 @@ a dangling evidence port is the pattern this bench criticises elsewhere in its
 own comments. The edit is prepared and deliberately not built while the fit and
 other work hold the machine.
 
+## The fit outlives its watchdog
+
+Owner asked for a longer budget without stopping the run. The budget could not
+be changed in place — `run_block_fit.ps1` computes its deadline in memory at
+launch, so editing the script cannot reach a run already going.
+
+What could be done: the watchdog is a SEPARATE PROCESS from Quartus.
+`quartus_fit.exe` (3188) was a child of the script's PowerShell (4368), and
+Windows does not take children down with the parent. Killing 4368 left 3188
+running with no deadline at all, verified immediately after.
+
+**The cost, taken deliberately:** the script would have run `quartus_sta` twice
+after the fitter — once for timing, once with `report.tcl` — and parsed the
+results into the JSON row. Nothing does that now, so those stages and the row
+are mine to run when the fitter finishes. The workspace survives because
+`-KeepWorkspace` was passed and no cleanup will run.
+
+The DEFAULT is separately raised 3,000 → 28,800 s, with the evidence beside the
+constant: the same mistake has now been made at two different values (900 in
+August, 3,000 today), and the fits that actually succeed here take 9,238 s and
+10,505 s. A too-small timeout produces a row saying a block does not fit when
+nobody waited, and that failure is silent and looks like data.
+
+## The watcher, and the false verdict it nearly delivered
+
+Built a 30-minute poller that reports stage transitions and gives up at 04:00.
+Its first version used **log growth** as the liveness signal.
+
+Measured before arming it properly, at 22:31:
+
+    log last written   20:44:47   -- silent for 107 minutes
+    CPU consumed       4,402 s, climbing ~50 s per minute
+
+Quartus does not log during placement preparation. The fit was burning close to
+a full core and saying nothing. That heuristic would have declared a healthy
+fit **wedged at about 00:30** and woken the owner to say so.
+
+**Liveness is CPU, not chatter.** Rebuilt on that, exiting on: the fitter gone,
+04:00, or CPU failing to advance across two consecutive polls — an hour of
+genuinely doing nothing rather than an hour of quiet work. It never kills
+anything; a timer has already made that decision twice today and was wrong both
+times.
+
+Worth recording plainly: I wrote the "an instrument that returns a confident
+wrong answer is worse than none" lesson into this log repeatedly today, and then
+built one, an hour later, into the tool meant to watch the thing the lesson was
+about.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner
