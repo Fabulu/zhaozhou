@@ -169,79 +169,37 @@ Three failures, two of them mine:
   returned 2 with the binary working perfectly.
 * `format_check` still undiagnosed.
 
-## The combiner refit failed, and the cause is probably me
+## The combiner refit failed TWICE, and my explanation was wrong
 
-`incomplete:failed:quartus_fit.exe`, 3,002 s, no ALM and no fmax. The row keeps
-744 registers and 2 DSP and reports incomplete rather than becoming an empty
-row that passes a gate.
+First attempt: `incomplete:failed:quartus_fit.exe` at 3,002.7 s, no ALM, no
+fmax. I blamed myself — five heavy Verilator tests, a full build and a configure
+running on eight cores while Quartus placed — and wrote that into a commit
+message and into this log as "probably me".
 
-While Quartus was placing I had five heavy Verilator tests at -j2, a full build
-and a configure running on eight cores. **That is a real limit on "a running fit
-is not a reason to idle": the work picked must not STARVE the fit.** Fifty
-minutes of fitter time was spent and lost to keeping busy, which is worse than
-having waited. Relaunched with `-KeepWorkspace` so a second failure can be read
-instead of guessed at, and the machine kept quiet around it.
+Second attempt, relaunched alone with the machine quiet and the workspace kept:
+**3,003.3 s**, identical failure.
 
-## The fit window spent checking a subagent instead of relaying it
+Two independent runs stopping within a second of each other is not resource
+starvation. `run_block_fit.ps1` carries `[int]$TimeoutSeconds = 3000`, and both
+runs died at the deadline. The block simply takes longer than fifty minutes;
+its placement PREPARATION alone measured 32 minutes, and perspuv — a smaller
+block by ALMs — took 10,505 s end to end.
 
-An architecture for the owner's two-level mip blend was commissioned and
-landed. It reported three adjacent defects and three contract conflicts. All of
-it was checked against source rather than passed on, and that was worth doing:
-three claims held, two needed correcting, and one correction changes what the
-feature costs.
+**The script's own header already said this.** It records that
+`zhao_measure_tokens` once reported `timeout` at the 900 s default and then
+fitted cleanly in 749 s of quartus_fit on the very next run with a larger
+budget. The lesson was written down, in the file I was invoking, and I read past
+it to reach for a more interesting explanation that happened to be about my own
+behaviour.
 
-**HELD, all three defects:**
+That is the session's recurring failure in yet another costume: a confident
+cause published before the two-minute check that would have settled it. The
+check here was one grep for the timeout constant.
 
-1. The mip level can never be non-zero — the island zero-extends a 4-bit LOD
-   into the Q4.4 FRACTION nibble while the planner reads [7:4].
-2. Every CLUT lookup reads the same byte — `lu_idx_i` takes
-   `disp_clut_data[7:0]` of a 64-bit word and the texel selector reaches the
-   bilerp lane and nothing else.
-3. The 565→888 expansion ZERO-FILLS where the ABI replicates.
-   `zref_texture.hpp` names `zref::sky::rgb565::to_rgb888` as the expansion and
-   it does `(r5 << 3) | (r5 >> 2)`, so 31 → 255; the island appends zeros, so
-   31 → 248 and white returns 248, 252, 248. Worst at the top of the range and
-   exactly zero at the bottom, which is why it survives a "did anything paint"
-   check.
-
-Defects 2 and 3 COMPOUND: the wrong byte is selected, then the colour that byte
-names is expanded wrongly.
-
-**CORRECTED, twice:**
-
-* The `lerp8` conflict was misattributed to islandrearchitecture5.md §15.1,
-  which actually defers to a signed rescale. The real disagreement is with
-  `spec/qformats.md`'s ratified round-half-up — 0 where the oracle's magnitude
-  rounding gives −1, on exactly the products a blend generates when the higher
-  mip is darker. Still a genuine conflict; still an owner ruling.
-* **`CLS_CLUT_MIP = 3` is not a free encoding.** The 2-bit class field has a
-  spare value; `zhao_texture_rsp_dispatch` does not. Three queues,
-  `for (i = 0; i < 3; i++)`, and `head_room`'s `default: 1'b1` — so a class-3
-  response is CONSUMED and pushed nowhere, the waiting fragment never retires,
-  and one stuck head blocks the island. Taking encoding 3 costs a fourth queue
-  with its own depth and head-of-line behaviour. Any estimate treating the new
-  class as free is short by that queue. Its "silent drop" wording was also
-  wrong: the drop is commented on the line that does it, and was chosen
-  deliberately over stalling because stalling deadlocks.
-
-**And its load-bearing structural claim HOLDS.** The planner already emits
-`acc_en_o` as a four-bit lane mask and the cache takes a separate 32-bit
-address per lane, so two mip levels on two lanes is an existing request shape.
-Today's nearest path uses one lane of four.
-
-## Housekeeping that turned out to matter
-
-* All three fast-gate failures were mine and are fixed: the QSF parity gate
-  caught VDECODE added to one toolchain's list and not the other; `desktop_smoke`
-  was passing a bare positional to a host that had grown flags; and eight files
-  from this session were unformatted, the tread-7 test having inherited it by
-  being copied from an unformatted sibling.
-* **The island had no fit rules at all.** Its 7,500 ALM redline lived in prose,
-  which is why G1-D's 7,720 was caught by a human reading a table rather than by
-  a gate. Encoded from the brief's line 2923 — and my first attempt used
-  `max_ram_blocks`, a key `fit_rules.ps1` SILENTLY DROPS, which is the same
-  failure shape as having no rule at all. Corrected to `max_m10k` and verified
-  by parsing rather than by reading.
+Relaunched with `-TimeoutSeconds 21600`. The starvation concern is not
+baseless — running five heavy tests beside a fit is still a bad idea — but it
+was not the cause, and the commit that claimed it needs the correction more than
+the caution needs repeating.
 
 ## Closed since
 
