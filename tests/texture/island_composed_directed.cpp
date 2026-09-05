@@ -274,10 +274,25 @@ int main(int argc, char** argv) {
     //     all fragments recipe 2 -> 0 0 256 0 0 0 0 0   (64 x 4)
     //     all fragments recipe 6 -> 0 0 0 0 0 0 384 0   (64 x 6)
     //
-    // So the combiner, its job scheduler and these counters are all exact. The
-    // fault appears ONLY when the recipe VARIES per fragment, which means the
-    // context word reaching the combiner does not always belong to the fragment
-    // being retired -- a per-fragment ALIGNMENT problem, not a corrupted field.
+    // So the combiner, its job scheduler and these counters are all exact under
+    // a fixed recipe.
+    //
+    // VARYING THE CHANGE FREQUENCY narrows it further. Expected total for 64
+    // fragments spread over eight recipes is 8 x (0+4+4+4+0+0+6+4) = 176:
+    //
+    //   recipe changes every fragment    0 0 0  4 0 0 24 112   total 140
+    //   ...every 2 fragments             0 0 16 8 0 0 36 120   total 180
+    //   ...every 8 fragments             0 16 32 32 0 0 24 128 total 232
+    //
+    // The slowest variation OVERSHOOTS 176. So this is not fragments being
+    // mis-associated with their neighbour's recipe -- that would redistribute
+    // the total, not inflate it. Some fragments are having their jobs issued
+    // MORE THAN ONCE, and recipe 7 is consistently over-represented.
+    //
+    // AND IT IS ISLAND-ONLY. `material_combine_v1_diff` drives the same block
+    // standalone with all eight recipes and asserts EXACT per-recipe counts;
+    // it passes. So the combiner is not over-issuing on its own, and whatever
+    // does it lives in how this top presents fragments to it.
     //
     // A first pass at this recorded a "signature": every recipe with two or
     // more bits set had jobs and every single-bit recipe had none, which was
