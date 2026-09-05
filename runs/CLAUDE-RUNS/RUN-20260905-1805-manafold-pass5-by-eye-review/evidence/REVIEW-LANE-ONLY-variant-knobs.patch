@@ -1,0 +1,60 @@
+diff --git a/tools/reel/manafold_art.h b/tools/reel/manafold_art.h
+index d710732b..b0660eff 100644
+--- a/tools/reel/manafold_art.h
++++ b/tools/reel/manafold_art.h
+@@ -479,7 +479,7 @@ constexpr int32_t kFoldAnchorRestMm[6][3] = {
+ // the stencil frame: shapes are authored around this pocket centre, at
+ // this scale (mm), inside the anchor hexagon (kPocketBoundPm clamps)
+ constexpr int32_t kStencilCentreUMm = -240, kStencilCentreVMm = 1120;
+-constexpr int32_t kStencilScaleMm = 300;   // iter 1: 230 drew a blob smaller
++inline int32_t kStencilScaleMm = 300;   // iter 1: 230 drew a blob smaller
+                                            // than its own motes; bigger shape,
+ constexpr int kPocketBoundPm = 900;        // stencil points clamp inside the hexagon
+ // The plan's named fallback, NOW ON (authored, judged by eye): the house
+@@ -492,9 +492,9 @@ constexpr int32_t kStencilFaceYawA16 = -5000;  // ~27 deg toward the camera (the
+                                                // offset rotation is -theta about
+                                                // +Y; +5000 rotated AWAY, looked at)
+ // motes
+-constexpr int kMoteCount = 24;
++inline int kMoteCount = 24;
+ constexpr int kWanderCount = 3;            // of kMoteCount: the odd drifters
+-constexpr int32_t kMoteHaloRPxMin = 7, kMoteHaloRPxMax = 10;   // iter 5; iter 2: 8-11 still
++inline int32_t kMoteHaloRPxMin = 7, kMoteHaloRPxMax = 10;   // iter 5; iter 2: 8-11 still
+                                            // flooded the ~40 px pocket; iter 1: 11-15
+                                            // merged into one cloud that
+                                            // swallowed the antenna (looked at);
+diff --git a/tools/reel/zhao_reel.cpp b/tools/reel/zhao_reel.cpp
+index ac215316..85d0427a 100644
+--- a/tools/reel/zhao_reel.cpp
++++ b/tools/reel/zhao_reel.cpp
+@@ -5089,6 +5089,7 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
+     s.planet_sun_y0 = 96;
+     s.planet_sun_y1 = 132;
+   }
++  if (const char* v = std::getenv("U02_EXP_CAMK")) s.cam_k = std::atoi(v);
+   return s;
+ }
+ 
+@@ -6848,6 +6849,22 @@ int main(int argc, char** argv) {
+     return rc;
+   }
+   g_out = argc > 1 ? argv[1] : ".";
++  // REVIEW-LANE ONLY (never committed to the shipped tree): owner-decision
++  // plates for the parked shape-legibility item. Overrides the three knobs
++  // named in MANAFOLD-INDEX section 7 plus the subject camera.
++  if (const char* v = std::getenv("U02_EXP_HALO")) {
++    int lo=0, hi=0; if (std::sscanf(v, "%d,%d", &lo, &hi) == 2) {
++      u02::kMoteHaloRPxMin = lo; u02::kMoteHaloRPxMax = hi;
++      std::fprintf(stderr, "U02_EXP_HALO=%d,%d ", lo, hi); }
++  }
++  if (const char* v = std::getenv("U02_EXP_STENCIL")) {
++    u02::kStencilScaleMm = std::atoi(v);
++    std::fprintf(stderr, "U02_EXP_STENCIL=%d ", u02::kStencilScaleMm);
++  }
++  if (const char* v = std::getenv("U02_EXP_MOTES")) {
++    u02::kMoteCount = std::atoi(v);
++    std::fprintf(stderr, "U02_EXP_MOTES=%d ", u02::kMoteCount);
++  }
+   // RUN 1939/2234 experiment gate. Unset (the normal case) leaves every
+   // render byte-identical. Faceted cel holds a face at one band; smoothcel3
+   // thresholds interpolated light per fragment. Thick modes use the contour
