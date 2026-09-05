@@ -148,6 +148,7 @@ int main(int argc, char** argv) {
   FillModel mem;
   const int kFrags = 64;
   int submitted = 0, retired = 0;
+  int gap = 0;  // poisoned cycles deliberately inserted mid-stream
   uint32_t first_rgb = 0;
   int nonzero_rgb = 0;
   std::vector<uint32_t> g_retired_tags;
@@ -156,7 +157,14 @@ int main(int argc, char** argv) {
 
   for (int cyc = 0; cyc < 400000; ++cyc) {
     // fragment in
-    if (submitted < kFrags) {
+    // A DELIBERATE GAP after every fourth fragment, so the poison below lands
+    // while earlier fragments are still in flight rather than only during the
+    // final drain. Without it `frag_valid_i` is high continuously until the
+    // last fragment and there is no idle cycle to poison.
+    const bool present = (gap == 0) && (submitted < kFrags);
+    if (gap > 0) --gap;
+
+    if (present) {
       d.frag_valid_i = 1;
       d.frag_depth_i = 0x010000u + static_cast<uint32_t>(submitted * 37);
       d.frag_u_over_w_i = 0x00020000u + static_cast<uint32_t>(submitted * 131);
@@ -184,7 +192,44 @@ int main(int argc, char** argv) {
       d.bind_base_i = 0x0010'0000u;
       d.bind_mode_i = 0;
     } else {
+      // ================ INVALID-INPUT POISON ================================
+      // Owner recovery architecture v2, priority 3: "A single-fragment
+      // invalid-input-poison test should precede elaborate RAM or bit-OR
+      // theories."
+      //
+      // This is the BEHAVIOURAL counterpart to
+      // tools/rtl/check_ingress_capture.py. That gate reads the source and
+      // proves nobody WROTE a late read; this proves nobody PERFORMS one,
+      // which also covers reads its contract does not know to look for.
+      //
+      // Poison is applied only while `frag_valid_i` is LOW, so no accept can
+      // occur on these cycles and the values are pure don't-care. A consumer
+      // that samples its attributes late reads THESE instead of its own
+      // fragment's, and the job histogram, the sample-class split, the aux
+      // count and the retired colours all move.
+      //
+      // It ALTERNATES rather than holding a constant. A constant poison makes
+      // the recipe constant too, and a wrong-but-constant recipe still yields
+      // a tidy-looking histogram -- which is how the original defect survived
+      // being looked at. `frag_pal_slot_i` is never 0, so any late read of the
+      // palette binding lands on an unloaded slot and goes stale.
+      const uint32_t k = static_cast<uint32_t>(cyc);
       d.frag_valid_i = 0;
+      d.frag_u_over_w_i = 0xDEAD0000u ^ (k * 2654435761u);
+      d.frag_v_over_w_i = 0xBEEF0000u ^ (k * 40503u);
+      d.frag_depth_i = 0x00FF0000u ^ (k * 97u);
+      d.frag_recipe_i = static_cast<uint8_t>((k * 5u + 3u) & 7u);
+      d.frag_weight_i = static_cast<uint8_t>(k * 31u);
+      d.frag_sample_count_i = static_cast<uint8_t>(1 + (k & 1u));
+      d.frag_class_i = static_cast<uint8_t>((k & 1u) ? 0 : 2);
+      d.frag_ctx_i = static_cast<uint64_t>(0xF00DF00Du) ^ k;
+      d.frag_aux_i = (k & 1u) != 0;
+      d.frag_binding_i = static_cast<uint8_t>(0x50 + (k & 7u));
+      d.frag_lod_i = static_cast<uint8_t>(k & 3u);
+      d.frag_base_rgb_i = 0xFF00FFu ^ (k << 3);
+      d.frag_base_a_i = static_cast<uint8_t>(k * 17u);
+      d.frag_pal_slot_i = static_cast<uint8_t>(1 + (k & 1u));  // never slot 0
+      d.frag_pal_gen_i = static_cast<uint8_t>(0x20 + (k & 15u));
     }
 
     // aux sheet responder
@@ -229,7 +274,10 @@ int main(int argc, char** argv) {
       ++retired;
     }
     tick(d);
-    if (accepted) ++submitted;
+    if (accepted) {
+      ++submitted;
+      if ((submitted % 4) == 0) gap = 3;
+    }
     if (submitted >= kFrags && retired >= kFrags) break;
   }
 
