@@ -129,6 +129,7 @@ inline const zc::CreatureType& type() {
     bank.clips.push_back(build_hit());         // slot 10
     bank.clips.push_back(build_taunt());       // slot 11
     bank.clips.push_back(build_taunt2());      // slot 12
+    bank.clips.push_back(build_trick());       // slot 13 (pass 3: headstand)
 
     zc::CreatureType type;
     type.type_id = 3;  // 1 watchdog, 2 zixxtrixx, 3 unnamed02

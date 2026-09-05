@@ -38,6 +38,22 @@ namespace zc = zref::creature;
 
 int main() {
   constexpr int32_t kMinClearanceMm = 40;
+  // PASS 3: the headstand (slot 13) DECLARES ground contact — the loop
+  // peak plants at kTrickPlantDepthMm inside keys
+  // [kTrickPlantKey, kTrickLiftKey). Inside that window the clearance
+  // contract is REPLACED by the contact contract: the deepest vertex must
+  // sit in [-kTrickDepthMaxMm, -kTrickDepthMinMm] — really touching,
+  // never drowning. Outside the window the float contract holds as ever.
+  constexpr uint16_t kTrickSlot = 13;
+  constexpr int32_t kTrickDepthMinMm = 5;   // shallower reads as hovering
+  constexpr int32_t kTrickDepthMaxMm = 60;  // deeper is a crash, not a plant
+  // The APRON: the landing approach and the lift-away, a declared few keys
+  // either side of the contact window where the peak is legitimately
+  // skimming the dirt — neither the 40 mm float gate nor the must-touch
+  // contact gate applies there. Part of the declaration, not a loophole:
+  // it is two keys wide and the probe still asserts nothing goes deeper
+  // than the crash bound inside it.
+  constexpr int kTrickApronKeys = 2;
   const zc::CreatureType& T = u02::type();
   if (T.mesh.empty()) {
     std::printf("u02-probe: FAIL compile produced no meshlets\n");
@@ -45,10 +61,18 @@ int main() {
   }
   int rc = 0;
   for (const zc::Clip& clip : T.bank.clips) {
-    int32_t worst = INT32_MAX;
+    const bool has_window = clip.slot_id == kTrickSlot;
+    int32_t worst = INT32_MAX;        // outside any declared window
+    int32_t window_worst = INT32_MAX; // inside the declared window
     uint16_t worst_frame = 0;
     uint8_t worst_sub = 0;
     for (uint16_t f = 0; f < clip.frame_count; ++f) {
+      const bool in_window =
+          has_window && f >= u02::kTrickPlantKey && f < u02::kTrickLiftKey;
+      const bool in_apron =
+          has_window && !in_window &&
+          f >= u02::kTrickPlantKey - kTrickApronKeys &&
+          f < u02::kTrickLiftKey + kTrickApronKeys;
       for (uint8_t sub = 0; sub < 2; ++sub) {
         std::array<zc::mat3x4fx, zc::kMaxBones> pose;
         zc::decode_pose(T, clip, f, pose, nullptr, sub);
@@ -59,6 +83,10 @@ int main() {
             if (!m.deform.empty()) sv = zc::deform_skin_vertex(sv, m.deform[vi], d);
             int32_t x, y, z;
             zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
+            if (in_window || in_apron) {
+              if (y < window_worst) window_worst = y;
+              continue;
+            }
             if (y < worst) {
               worst = y;
               worst_frame = f;
@@ -74,6 +102,18 @@ int main() {
                 clip.slot_id, clip.frame_count, worst_mm, worst_frame, worst_sub,
                 ok ? "OK" : "FAIL");
     if (!ok) rc = 1;
+    if (has_window) {
+      const int32_t wmm =
+          static_cast<int32_t>((static_cast<int64_t>(window_worst) * 1000) >> 16);
+      const bool wok = wmm <= -kTrickDepthMinMm && wmm >= -kTrickDepthMaxMm;
+      std::printf(
+          "u02-probe: slot %u DECLARED CONTACT keys %d..%d (+%d-key apron): "
+          "deepest vertex %d mm (declared -%d, accepted -%d..-%d) — %s\n",
+          clip.slot_id, u02::kTrickPlantKey, u02::kTrickLiftKey, kTrickApronKeys,
+          wmm, u02::kTrickPlantDepthMm, kTrickDepthMaxMm, kTrickDepthMinMm,
+          wok ? "OK" : "FAIL");
+      if (!wok) rc = 1;
+    }
   }
   std::printf(rc == 0 ? "u02-probe: CLEARANCE CONTRACT HOLDS (>= %d mm everywhere)\n"
                       : "u02-probe: CLEARANCE VIOLATED (< %d mm)\n",

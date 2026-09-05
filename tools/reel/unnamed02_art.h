@@ -203,7 +203,9 @@ constexpr int kPirouetteKeys = 120;
 // PASS 2: the eye recon measured the old bob at 2–4 px over whole clips — a
 // flat line. The floor is raised so motion clears the noise floor at 240p.
 constexpr int32_t kBobAmpAMm = 90, kBobAmpBMm = 34;
-constexpr int kBobPeriodAKeys = 25, kBobPeriodBKeys = 60;
+// PASS 3 (Direction 3 §7 idle: "a bit too fast and nervous"): periods up
+// ~1.5x, amplitudes kept.
+constexpr int kBobPeriodAKeys = 37, kBobPeriodBKeys = 95;
 // the constant compression (Q0.16 flatten peak; slight but UNMISTAKABLE —
 // PASS 2: the old 3300 was ~4 px, swallowed by the toon band edge. Direction
 // 2 §4 wants MORE stretch than Zixxtrixx.)
@@ -211,6 +213,18 @@ constexpr int32_t kCompressAmpPm = 9000;
 constexpr int32_t kSpreadRatioPm = 550;    // the positive-volume partner
 constexpr int kCompressPeriodKeys = 30;
 constexpr int32_t kCompressLoopCouplePm = 14;  // sympathetic hinge-root bob
+// PASS 3 — THE WHOLE-CREATURE WOBBLE (Direction 3 §4), mechanically: a
+// slow bend STARTS at the loop peak (hinge B leads), travels down through
+// C and A into the neck, and ARRIVES IN THE BODY as a lean-plus-squash a
+// few keys later — front leads, bottom follows. Two incommensurate periods
+// (the 46/102-frame class at 60 fps = 23/51 keys); root PITCH (up/down
+// angling) rides the slow wave alongside the existing yaw channels.
+constexpr int32_t kWobbleAmpPm = 130;      // hinge-scale swing (per station)
+constexpr int32_t kWobbleLeanA16 = 950;    // the body lean, arriving late
+constexpr int32_t kWobblePitchA16 = 780;   // root pitch (up/down angling)
+constexpr int kWobbleLagKeys = 5;          // per-station arrival lag
+constexpr int kWobblePerAKeys = 23;        // ~46 frames on screen
+constexpr int kWobblePerBKeys = 51;        // ~102 frames on screen
 // the antenna's life
 constexpr int32_t kAntennaSwayPm = 45;
 constexpr int kAntennaLagKeys = 4;
@@ -224,8 +238,15 @@ constexpr int32_t kGazeLiftMaxA16 = 2000;
 constexpr int32_t kSquintMaxA16 = 9000;    // 1000pm = mostly closed
 constexpr int32_t kBlazeTwinkleA16 = 10923;  // the channel's slow star spin
 // per-clip character
-constexpr int32_t kDriftLeanA16 = 1300;
-constexpr int32_t kDriftRadiusMm = 600;
+// PASS 3 (Direction 3 §7 drift: "just rotating. That is not how it
+// works."): rebuilt as a WIND-BLOWN LATERAL GLIDE — the body banks into a
+// sideways slide, translates across the shot in a lazy S, the antenna
+// trails against the travel, and it over-banks and recovers twice.
+constexpr int32_t kDriftBankA16 = 2600;      // the working bank into the slide
+constexpr int32_t kDriftOverBankA16 = 1500;  // the two over-bank corrections
+constexpr int32_t kDriftSpeedMmPerKey = 46;  // lateral ground covered per key
+constexpr int32_t kDriftSCurveMm = 700;      // the lazy S's fore-aft swing
+constexpr int32_t kDriftTrailA16 = 1400;     // antenna trailing off-plane
 constexpr int kDriftSwayPeriodKeys = 25;
 constexpr int kDriftCompressPeriodKeys = 25;
 constexpr int kChannelCompressPeriodKeys = 42;
@@ -239,23 +260,55 @@ constexpr int32_t kRestSquintPm = 520;
 constexpr int32_t kPirouetteFlarePm = 90;
 // PASS 2 — the new clips (Direction 2 §5) and the eye-life floor (§4).
 constexpr int kHastyKeys = 120;
-constexpr int32_t kHastyRadiusMm = 900;    // wider, faster circuit than drift
+// PASS 3 (Direction 3 §7: "do not run in a circle. Run in ONE DIRECTION"):
+// straight-line travel crossing the fixed shot, the Zixxtrixx walk staging
+// precedent — start half the travel back, cross through centre.
+constexpr int32_t kHastySpeedMmPerKey = 70;  // ~8.4 m across the clip
 constexpr int32_t kHastyPitchA16 = 2400;   // body pitched into the travel
 constexpr int32_t kHastyBankA16 = 1900;    // clumsy bank
 constexpr int32_t kHastyFishtailA16 = 1500;// the slight fishtail yaw wobble
 constexpr int kHastyFishtailCycles = 8;
-constexpr int kFallKeys = 100;
-constexpr int32_t kFallHeightMm = 2400;    // blown this high above the hover
-constexpr int kFallCatchKey = 70;          // the tumble ends, the catch begins
+// PASS 3 (Direction 3 §7: "make it longer"): keys 100 -> 170, higher
+// start, and an extra tumble axis (a slow yaw under the pitch tumble).
+constexpr int kFallKeys = 170;
+constexpr int32_t kFallHeightMm = 3600;    // blown this high above the hover
+constexpr int kFallCatchKey = 130;         // the tumble ends, the catch begins
+constexpr int32_t kFallYawTumbleA16 = 21845;  // the extra axis: 1/3 turn over the drop
 constexpr int32_t kFallStreamPm = 700;     // the antenna streams (folds open)
 constexpr int kHitKeys = 70;
 constexpr int32_t kHitKnockMm = 430;       // knocked back this far
 constexpr int32_t kHitSquashXPm = 2600;    // impact squash, x kCompressAmpPm
 constexpr int kTauntKeys = 140;
-constexpr int32_t kTauntPlayA16 = 1250;    // hinge-D play swing (the closure holds)
-constexpr int32_t kTauntWagglePm = 170;    // per-hinge asymmetric waggle depth
+constexpr int32_t kTauntPlayA16 = 1900;    // hinge-D play swing (the closure holds)
+// PASS 3 (Direction 3 §7: "can be more fun"): comedy is the HOLD — a big
+// anticipation wind-up, then the waggle FROZEN at its extreme for a
+// readable beat with the wink, then a smug settle-bob.
+constexpr int32_t kTauntWagglePm = 380;    // per-hinge asymmetric waggle depth
+constexpr int kTauntWindupEndKey = 36;     // anticipation: crouch + pull back
+constexpr int kTauntHoldStartKey = 62;     // the waggle freezes at its extreme
+constexpr int kTauntHoldEndKey = 86;       // >= 16-key beat, wink inside it
 constexpr int kTaunt2Keys = 120;
 constexpr int32_t kTaunt2LassoA16 = 1900;  // the loop-peak lasso tilt sweep
+// PASS 3 — THE HEADSTAND TRICK (owner-suggested, uncuttable): it pitches
+// over, PLANTS the loop peak on the ground (declared, authored contact —
+// the probe asserts the window and depth), balances upside down with the
+// body wobbling above and the antenna flexing at the junction hinges,
+// then rights itself with overshoot.
+constexpr int kTrickKeys = 200;
+constexpr int32_t kTrickPlantRootMm = 1670;   // root height while planted: the
+                                              // loop peak (~1665 above root,
+                                              // inverted) meets the dirt with
+                                              // the declared penetration
+constexpr int32_t kTrickPlantDepthMm = 25;    // DECLARED penetration at plant
+constexpr int kTrickFlipStartKey = 42;        // the pitch-over begins
+constexpr int kTrickPlantKey = 78;            // contact window opens
+constexpr int kTrickLiftKey = 156;            // contact window closes (the
+                                              // peak DRAGS a few keys into
+                                              // the righting — probed)
+constexpr int kTrickHomeKey = 186;            // righted (overshoot inside)
+constexpr int32_t kTrickBalanceWobbleA16 = 900;  // inverted-pendulum sway
+constexpr int32_t kTrickOvershootA16 = 2600;     // the righting overshoot
+
 // the blink floor (the never-off life law): a quick lid pulse every period,
 // staggered per clip by the offset so no two clips blink in sync
 constexpr int kBlinkPeriodKeys = 96;

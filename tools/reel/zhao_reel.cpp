@@ -2200,6 +2200,7 @@ constexpr ZixxSunSpec kU02SunFall      {-14000, kZixxSunHeightMm, 16800, kZixxSu
 constexpr ZixxSunSpec kU02SunHit       {3800,  kZixxSunHeightMm, 21600, kZixxSunInnerMm, kZixxSunOuterMm, fxm(110), fxm(65), fxm(210), fxm(50), fxm(33), fxm(130)};  // bruise
 constexpr ZixxSunSpec kU02SunTaunt     {21600, kZixxSunHeightMm, -3800, kZixxSunInnerMm, kZixxSunOuterMm, fxm(190), fxm(35), fxm(200), fxm(105), fxm(18), fxm(120)}; // magenta show-off
 constexpr ZixxSunSpec kU02SunTaunt2    {11000, kZixxSunHeightMm, 19000, kZixxSunInnerMm, kZixxSunOuterMm, fxm(150), fxm(55), fxm(175), fxm(80), fxm(30), fxm(105)};  // rose dusk
+constexpr ZixxSunSpec kU02SunTrick     {17000, kZixxSunHeightMm, 12500, kZixxSunInnerMm, kZixxSunOuterMm, fxm(165), fxm(50), fxm(185), fxm(88), fxm(28), fxm(118)};  // showtime violet
 constexpr ZixxSunSpec kZixxSunIdle       {15556,  kZixxSunHeightMm, 15556,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(240), fxm(70), fxm(12), fxm(150), fxm(65), fxm(5)};  // golden morning
 constexpr ZixxSunSpec kZixxSunWalk       {-12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(18), fxm(80), fxm(280), fxm(10), fxm(35), fxm(135)};  // azure day
 constexpr ZixxSunSpec kZixxSunRun        {12619,  kZixxSunHeightMm, 18022,  kZixxSunInnerMm, kZixxSunOuterMm, fxm(280), fxm(90), fxm(10), fxm(150), fxm(42), fxm(3)};  // hot orange
@@ -6917,6 +6918,7 @@ int main(int argc, char** argv) {
   if (wanted("unnamed02-hit")) rc |= render_scene(subject_u02_clip(10, "unnamed02-hit", u02::kHitKeys, false, &kU02SunHit));
   if (wanted("unnamed02-taunt")) rc |= render_scene(subject_u02_clip(11, "unnamed02-taunt", u02::kTauntKeys, false, &kU02SunTaunt));
   if (wanted("unnamed02-taunt2")) rc |= render_scene(subject_u02_clip(12, "unnamed02-taunt2", u02::kTaunt2Keys, false, &kU02SunTaunt2));
+  if (wanted("unnamed02-trick")) rc |= render_scene(subject_u02_clip(13, "unnamed02-trick", u02::kTrickKeys, false, &kU02SunTrick));
   if (wanted("unnamed02-crackle")) {
     SceneSubject s = subject_u02_clip(0, "unnamed02-crackle", u02::kIdleKeys, false, &kU02SunChannel);
     s.u02_mana = 4;  // pass 2: the crackle IS the lightning candidate
