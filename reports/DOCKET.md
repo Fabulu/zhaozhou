@@ -3042,3 +3042,78 @@ LUT-RAM reads on PERSPUV's input path. No prediction is offered — the island's
 last obvious explanation was worth 4 MHz of 36. Per owner priority 5 the
 corrected **combiner** leaf fit is the next bounded attribution experiment, not
 a full island refit.
+
+## D23 — terrain mipmapping: two defects VERIFIED IN SOURCE before any of it can work
+
+**2026-09-05. Owner ruling landed, architecture delivered, and two blockers
+confirmed by inspection — not by a fit and not by simulation.**
+
+The owner ruled OUT full trilinear as a requirement and ruled IN the cheap
+option: *"Sample one texel from level L / Sample one texel from level L+1 /
+Decode both palette entries / Blend the two resulting colours using fractional
+LOD. Blend colours, never palette indices."* Architecture:
+`reports/TERRAIN-MIP-TWO-LEVEL-BLEND-ARCHITECTURE-20260905.md`.
+
+Two defects stand in front of it. **Both were read directly out of the current
+source and are stated as source deductions, not measurements** — no simulation
+or fit was run for either.
+
+### 1. The mip level cannot be non-zero at all
+
+```
+island:   .req_lod_i({{(8-LODW){1'b0}}, fr_tmu_lod})   // LODW=4 -> lands in [3:0]
+planner:  lvl_req = m_mip_en ? t0_lod[7:4] : 4'd0;     // reads [7:4] -- always zero
+```
+
+The field is Q4.4: integer level in `[7:4]`, fraction in `[3:0]`. The island
+zero-extends a 4-bit LOD into the **fraction** nibble, so the planner's integer
+level is always zero and enabling `MIP_EN` changes nothing. Everything the
+planner already implements — clamping, selected-level UV scaling, packed
+mip-chain offsets — is unreachable through this wiring.
+
+**The defect and the feature share one fix**: those misplaced fractional bits
+*are* the blend weight the two-level blend needs.
+
+### 2. Every CLUT lookup reads the same byte, whichever texel was addressed
+
+```
+.lu_idx_i(disp_clut_data[$clog2(PAL_ENTRIES)-1:0])   // = [7:0], always
+```
+
+`disp_clut_data` is `DATAW` = 64 bits (4 lanes x 16). A CLUT8 halfword holds
+**two** texels, and which one is wanted depends on the addressed u — carried as
+`plan_acc_fu`, which reaches the bilerp lane and **nothing else**. Grepping the
+island for any other byte selection off that word returns zero hits. So odd
+texels decode the wrong byte, always.
+
+**This qualifies D19v.** That entry reports making the CLUT path return colour
+instead of black, and it did. It did not make the path correct: the palette is
+now resident and answering, and roughly half the indices it is asked for are
+still the wrong texel. The path is LIVE, not RIGHT, and the directed test
+asserts residency and non-blackness rather than index correctness — which is
+exactly the gap a colour check cannot see.
+
+### Not fixed here, deliberately
+
+The architecture gates both as WP-M1 behind a reviewed before/after delta,
+because they change star and sky bytes from wrong-against-the-oracle to
+right-against-it. The owner's constraint is that the terrain path must not
+silently change materials that depend on raw palette-index semantics; folding
+these in quietly would break that, and skipping them would let the blend path
+inherit wrong indices. So they are a gated step with a visible delta, not a
+drive-by fix.
+
+### Three conflicts that need an owner ruling
+
+1. The mipmapping architecture's own §3 states "one selected mip, one nearest
+   texel" and "certainly does not require sampling two mip levels". The new
+   ruling supersedes that sentence for terrain albedo, and its `ceil` LOD policy
+   conflicts with the floor-plus-fraction a blend requires.
+2. **`lerp8` exists in two non-identical formulations in this repo** —
+   `islandrearchitecture5.md` §15.1's `(x+128)>>8` against the reference
+   oracle's magnitude-rounded form. They disagree on negative half-LSB
+   products. "Defined rounding" is not optional for a blend, so one must
+   govern; the proposal is the oracle.
+3. `TEXTURE.TMU`'s text forbids this as written. A two-level nearest blend is
+   not intra-level filtering, but the contract needs an explicit carve-out
+   rather than an implementation that quietly disagrees with it.
