@@ -186,6 +186,18 @@ module zhao_texture_material_combine_v1 #(
     logic [7:0]  o_r,  o_g,  o_b,  o_a;   // intermediates, then the result
     logic [6:0]  req;                      // required microjobs
     logic [6:0]  done;                     // completed microjobs
+    // IN FLIGHT. A job issued this cycle does not set `done` until its lane
+    // result lands two cycles later, so without this the scheduler sees it as
+    // still pending and ISSUES IT AGAIN, every cycle, until the first result
+    // arrives. The block did exactly that: DETAIL_LIGHT was issuing about
+    // twelve jobs per fragment instead of six.
+    //
+    // The results still matched the oracle throughout, because re-computing
+    // the same product is idempotent and the second-layer dependency gate
+    // happened to keep the destructive case out. Only the per-recipe job
+    // counter showed it -- and only after the counter's OWN double-issue bug
+    // was fixed, which is the one that made 2,398 jobs read as 1,199.
+    logic [6:0]  busy;                     // issued, result not yet back
   } rec_t;
 
   rec_t rec [RECS];
@@ -228,10 +240,11 @@ module zhao_texture_material_combine_v1 #(
   // exactly its own channel -- which is what lets a continuation be enqueued
   // "after first-layer results" without a table-wide scan.
   function automatic logic [6:0] issuable(input logic [6:0] req,
-                                          input logic [6:0] done);
+                                          input logic [6:0] done,
+                                          input logic [6:0] busy);
     logic [6:0] pend;
     begin
-      pend = req & ~done;
+      pend = req & ~done & ~busy;
       // jobs 4,5,6 gate on jobs 0,1,2 respectively
       pend[4] = pend[4] & done[0];
       pend[5] = pend[5] & done[1];
@@ -437,6 +450,7 @@ module zhao_texture_material_combine_v1 #(
       automatic logic [8:0] t;
       automatic logic       sat_add, sat_2x;
       automatic logic [15:0] ops;
+      automatic logic [31:0] jobs_inc [8];
 
       // ---- lane results write back (C2: capture, round, enqueue) -----------
       // The rounding happened in the lane; here the result lands in the record
@@ -455,6 +469,7 @@ module zhao_texture_material_combine_v1 #(
           default: rec[lane0_q.slot].o_b <= unit_mul_logic(lane0_q.a, lane0_q.b);
         endcase
         rec[lane0_q.slot].done[lane0_q.job] <= 1'b1;
+        rec[lane0_q.slot].busy[lane0_q.job] <= 1'b0;
       end
       if (lane1_q.valid) begin
         case (lane1_q.job)
@@ -467,15 +482,17 @@ module zhao_texture_material_combine_v1 #(
           default: rec[lane1_q.slot].o_b <= unit_mul_logic(lane1_q.a, lane1_q.b);
         endcase
         rec[lane1_q.slot].done[lane1_q.job] <= 1'b1;
+        rec[lane1_q.slot].busy[lane1_q.job] <= 1'b0;
       end
 
       // ---- issue up to two jobs (§15.3: two lanes, two jobs per clock) -----
+      for (int k = 0; k < 8; k++) jobs_inc[k] = 32'd0;
       lane0_q.valid <= 1'b0;
       lane1_q.valid <= 1'b0;
       issued = 0;
       for (int i = 0; i < RECS; i++) begin
         if (issued < 2 && rec[i].valid) begin
-          pend0 = issuable(rec[i].req, rec[i].done);
+          pend0 = issuable(rec[i].req, rec[i].done, rec[i].busy);
           for (int j = 0; j < 7; j++) begin
             if (issued < 2 && pend0[j]) begin
               ops = operands(rec[i], j[2:0]);
@@ -492,14 +509,29 @@ module zhao_texture_material_combine_v1 #(
                 lane1_q.a     <= ops[15:8];
                 lane1_q.b     <= ops[7:0];
               end
-              // §15.4: count ACTUAL jobs issued, by recipe.
-              jobs_by_recipe_r[rec[i].recipe] <= jobs_by_recipe_r[rec[i].recipe] + 1;
+              // §15.4: count ACTUAL jobs issued, by recipe. ACCUMULATED into
+              // a blocking local and committed ONCE below, because both lanes
+              // can issue for the same recipe in one cycle -- and two
+              // non-blocking assignments to the same counter in one cycle keep
+              // only the last, so the counter incremented by ONE for two jobs.
+              //
+              // It was found by the differential: every colour matched the
+              // oracle and only the counts were short, by exactly 1 in 1,200
+              // and 1 in 600 -- the two runs that happen to end with a
+              // double-issue. An under-reporting counter that nobody checks is
+              // the failure mode CLAUDE.md names, and §15.4's whole
+              // 80%-capacity argument reads this number.
+              jobs_inc[rec[i].recipe] = jobs_inc[rec[i].recipe] + 1;
+              rec[i].busy[j] <= 1'b1;
               pend0[j] = 1'b0;
               issued   = issued + 1;
             end
           end
         end
       end
+
+      for (int k = 0; k < 8; k++)
+        jobs_by_recipe_r[k] <= jobs_by_recipe_r[k] + jobs_inc[k];
 
       // ---- retire ---------------------------------------------------------
       if (have_retire && o_ready_i) rec[retire_slot].valid <= 1'b0;
@@ -524,6 +556,7 @@ module zhao_texture_material_combine_v1 #(
         rec[alloc_slot].s2_b <= f_s2_rgb_i[7:0];
         rec[alloc_slot].s2_a <= f_s2_a_i;
         rec[alloc_slot].done    <= 7'd0;
+        rec[alloc_slot].busy    <= 7'd0;
         rec[alloc_slot].refused <= 1'b0;
 
         // ---- the two refusals, decided at acceptance ----------------------
