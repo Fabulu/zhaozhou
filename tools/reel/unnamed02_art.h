@@ -257,7 +257,9 @@ constexpr uint8_t kHingeGreyR = 132, kHingeGreyG = 130, kHingeGreyB = 136;
 // ============================== EFFECTS ====================================
 // The centre glow (S5): ONE shared ramp per frame, one baked sprite per
 // process, one splat per conduit. Colours chosen by eye at 240p in scene.
-constexpr uint8_t kGlowLo[3] = {40, 8, 64};      // deep violet skirt
+constexpr uint8_t kGlowLo[3] = {0, 0, 0};        // BLACK floor: a ramp
+                                                 // floor above zero rims
+                                                 // every blob (gotcha §11)
 constexpr uint8_t kGlowMid[3] = {150, 40, 200};  // the mana magenta body
 constexpr uint8_t kGlowHi[3] = {255, 190, 255};  // white-pink core
 constexpr int32_t kCentreGlowRadiusPx = 46;  // OUTER halo: rims the ~32 px body

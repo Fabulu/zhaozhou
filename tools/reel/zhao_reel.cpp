@@ -1019,13 +1019,11 @@ struct SceneSubject {
   // S5 (creature 02): draw the shared-ramp centre glow for this subject.
   bool u02_glow = false;
   // creature 02: run the ten-kind mana emitter tables + the bolt.
-  bool u02_fx = false;
+  int u02_mana = 0;  // pass 2: the mana-menu candidate (1..6; 0 = none)
   // the S5 spike's three-glow staging (diagnostic only)
   bool u02_glow_trio = false;
   // the fx tour: cycle the ten kinds solo, 60 frames each
-  bool u02_fx_tour = false;
   // the ADDLIGHTNING crackle variant: bolts + sparks every frame
-  bool u02_crackle = false;
   // three phase-offset conduits sharing one stage (the budget proof)
   bool u02_trio = false;
   // S3 (creature 02): DRAW_POPULATION flags. b0 points, b1 tris, b2 additive
@@ -2277,6 +2275,12 @@ struct CreatureReelCtx {
   zc::CreatureInstance* u02_extra[2] = {nullptr, nullptr};
   int32_t u02_glow_centres[3][3] = {};  // one glow per composed conduit
   int u02_glow_count = 0;
+  // pass 2: the mana menu — world-space splat list filled per frame by
+  // u02::mana_fill, composed by the hook (pre splats before the creature,
+  // post splats after, each depth-tested at its own projected 1/w)
+  int u02_mana = 0;
+  uint32_t u02_frame = 0;
+  std::vector<u02::ManaSplat> u02_mana_splats;
 };
 constexpr uint32_t kZixxMovingSourceCount = 4;
 constexpr uint32_t kZixxMovingSourceWarm = 0;
@@ -2769,10 +2773,10 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   CreatureReelCtx& c = *static_cast<CreatureReelCtx*>(vctx);
   static std::vector<uint8_t> pre;
   static std::vector<int32_t> pre_depth;
-  if (g_exp_contour || g_exp_boil || g_cel_main)
-    pre.assign(rgb, rgb + static_cast<size_t>(w) * h * 3);
-  if (g_cel_main)
-    pre_depth.assign(depth, depth + static_cast<size_t>(w) * h);
+  // (pass 2: the snapshot moved BELOW the u02 pre-compose glow/mana splats,
+  // so a light pool never enters the cel-ink mask — the pulsar's halo was
+  // getting a black outline as if it were creature surface. Zixxtrixx
+  // subjects draw no pre-compose splats, so their bytes cannot move.)
   int32_t primary_radius_q8 = 0;
   int32_t dummy_radius_q8 = 0;
   bool primary_radius_visible = false;
@@ -2861,6 +2865,33 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       if (cr_glow_n < 2) ++cr_glow_n;
     }
   }
+  // ---- pass 2: the mana menu, PRE-compose layer — the pools the creature
+  // and its arms occlude (the caged pulsar's halo, the plasma blobs, the
+  // boil's outer). Each splat depth-tests at its own projected 1/w.
+  static u02::GlowFrame s_mana_ramps[u02::kRampCount];
+  if (c.u02_mana != 0 && !c.u02_mana_splats.empty()) {
+    u02::glow_bake(s_glow_assets);
+    u02::mana_build_ramps(s_mana_ramps, c.u02_frame);
+    const zref::render::Viewport vpp_m{0, 0, w, h};
+    for (const u02::ManaSplat& ms : c.u02_mana_splats) {
+      if (!ms.pre) continue;
+      const zref::render::ProjOut pm = zref::render::project_vertex(
+          c.vp, vpp_m, zref::fx16{ms.x}, zref::fx16{ms.y}, zref::fx16{ms.z}, nullptr);
+      if (!pm.in) continue;
+      u02::GlowFrame gf2 = s_mana_ramps[ms.ramp];
+      if (ms.gain_pm != 1000) {
+        for (int i = 0; i < 64; ++i)
+          for (int ch = 0; ch < 3; ++ch)
+            gf2.pal[i][ch] = static_cast<uint8_t>(gf2.pal[i][ch] * ms.gain_pm / 1000);
+      }
+      u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
+                      ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque);
+    }
+  }
+  if (g_exp_contour || g_exp_boil || g_cel_main)
+    pre.assign(rgb, rgb + static_cast<size_t>(w) * h * 3);
+  if (g_cel_main)
+    pre_depth.assign(depth, depth + static_cast<size_t>(w) * h);
   {
     zc::CreatureInstance* insts[4] = {c.inst, c.dummy, c.u02_extra[0], c.u02_extra[1]};
     if (c.force_micro) {
@@ -3064,6 +3095,27 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   // S5 layer two: the small core drawn OVER the composed body, no depth
   // test -- the belly-light shining through the skin. Same frame ramp,
   // scaled by its own calm gain.
+  // ---- pass 2: the mana menu, POST-compose layer — bullets, bolts, the
+  // drip, the caged core (depth-tested at each splat's own 1/w so the body
+  // occludes honestly; the caged core sets depth_test=false and shines
+  // through the blade).
+  if (c.u02_mana != 0 && !c.u02_mana_splats.empty()) {
+    const zref::render::Viewport vpp_m{0, 0, w, h};
+    for (const u02::ManaSplat& ms : c.u02_mana_splats) {
+      if (ms.pre) continue;
+      const zref::render::ProjOut pm = zref::render::project_vertex(
+          c.vp, vpp_m, zref::fx16{ms.x}, zref::fx16{ms.y}, zref::fx16{ms.z}, nullptr);
+      if (!pm.in) continue;
+      u02::GlowFrame gf2 = s_mana_ramps[ms.ramp];
+      if (ms.gain_pm != 1000) {
+        for (int i = 0; i < 64; ++i)
+          for (int ch = 0; ch < 3; ++ch)
+            gf2.pal[i][ch] = static_cast<uint8_t>(gf2.pal[i][ch] * ms.gain_pm / 1000);
+      }
+      u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
+                      ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque);
+    }
+  }
   if (c.u02_glow && cr_glow_n > 0) {
     u02::GlowFrame core;
     u02::glow_build_ramp(core, u02::kGlowLo, u02::kGlowMid, u02::kGlowHi,
@@ -3679,7 +3731,7 @@ int render_scene(const SceneSubject& sub) {
         if (ec.cls == zref::terrain::ColumnClass::kSolid) cr_ctx.u02_extra[e]->y = ec.top.raw;
       }
       // ---- creature 02: posed anchors + the mana emitter tables ----------
-      if (species == Species::kUnnamed02 && (sub.u02_fx || sub.u02_glow)) {
+      if (species == Species::kUnnamed02 && (sub.u02_mana != 0 || sub.u02_glow)) {
         const zc::Clip* cl = nullptr;
         for (const zc::Clip& cc : dog->bank.clips)
           if (cc.slot_id == dog_inst.anim.slot) cl = &cc;
@@ -3687,6 +3739,7 @@ int render_scene(const SceneSubject& sub) {
           cr_ctx.u02_add_pop.parts.clear();
           cr_ctx.u02_tri_pop.parts.clear();
           cr_ctx.u02_opq_pop.parts.clear();
+          cr_ctx.u02_mana_splats.clear();
           cr_ctx.u02_glow_count = 0;
           zc::CreatureInstance* all[3] = {&dog_inst, cr_ctx.u02_extra[0],
                                           cr_ctx.u02_extra[1]};
@@ -3712,6 +3765,10 @@ int render_scene(const SceneSubject& sub) {
             fa.crown[0] = fa.body[0];
             fa.crown[1] = fa.body[1] + u02::fxu(u02::vmm(u02::kBodyRadiusMm));
             fa.crown[2] = fa.body[2];
+            // the ring-pocket centre: the hinge centroid, so hinge play
+            // moves the mana (Direction 2 §4 — one performance)
+            for (int k = 0; k < 3; ++k)
+              fa.ring[k] = (fa.hinge_a[k] + fa.hinge_b[k] + fa.hinge_c[k]) / 3;
             cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][0] = fa.body[0];
             cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][1] = fa.body[1];
             cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][2] = fa.body[2];
@@ -3727,15 +3784,10 @@ int render_scene(const SceneSubject& sub) {
                   static_cast<int32_t>((static_cast<int64_t>(ds.flatten) * 500) /
                                        (u02::kCompressAmpPm > 0 ? u02::kCompressAmpPm : 1));
             }
-            if (sub.u02_fx) {
-              const uint32_t loop_frames = static_cast<uint32_t>(cl->frame_count) * 2u;
-              const uint32_t lframe =
-                  (f + static_cast<uint32_t>(ii) * loop_frames / 3) %
-                  (loop_frames > 0 ? loop_frames : 1);
-              const int solo = sub.u02_fx_tour ? static_cast<int>((f / 60) % 10) : -1;
-              u02::fx_fill(dog_inst.anim.slot, lframe, loop_frames, fa,
-                           cr_ctx.u02_add_pop, cr_ctx.u02_tri_pop, cr_ctx.u02_opq_pop,
-                           solo, sub.u02_crackle);
+            if (sub.u02_mana != 0 && ii == 0) {
+              cr_ctx.u02_mana = sub.u02_mana;
+              cr_ctx.u02_frame = f;
+              u02::mana_fill(sub.u02_mana, f, fa, cr_ctx.u02_mana_splats);
             }
           }
         }
@@ -4771,9 +4823,12 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   s.orbit = orbit;
   u02_common(s);
   if (!orbit) s.cam_yaw = 0x2000;  // three-quarter: the face and the loop both read
-  s.u02_fx = true;
   s.u02_glow = true;
-  s.pop_flags = 0x0001;  // the droplets: opaque points (no tri cones)
+  // Pass 2 (Direction 2 §3): the ten-emitter set is AXED. The channel —
+  // the conduit at work — carries the LIGHTNING mana (the Description
+  // sheet says discharging bolts through the antenna IS this creature);
+  // the owner picks the rest of the stack from the mana menu subjects.
+  s.u02_mana = slot == 2 ? 4 : 0;
   // Pass 2 (R6 / Direction 2 §6): the many-coloured moving rig IS the
   // presentation now. The per-clip suns are dropped — sun + four coloured
   // sources would break the four-source law, and keeping a sun lane would
@@ -6734,7 +6789,7 @@ int main(int argc, char** argv) {
   if (wanted("unnamed02-taunt2")) rc |= render_scene(subject_u02_clip(12, "unnamed02-taunt2", u02::kTaunt2Keys, false));
   if (wanted("unnamed02-crackle")) {
     SceneSubject s = subject_u02_clip(0, "unnamed02-crackle", u02::kIdleKeys, false);
-    s.u02_crackle = true;
+    s.u02_mana = 4;  // pass 2: the crackle IS the lightning candidate
     s.planet = 1;  // fixed camera: the bloom may stage the crackle
     s.planet_sun_x = 58;
     s.planet_sun_y0 = 96;
@@ -6742,12 +6797,21 @@ int main(int argc, char** argv) {
     s.note = "the ADDLIGHTNING variant: the conduit crackles continuously";
     rc |= render_scene(s);
   }
-  if (wanted("u02-fx-tour")) {
-    SceneSubject s = subject_u02_clip(0, "u02-fx-tour", 300, false);
-    s.u02_fx_tour = true;
-    s.planet = 0;  // the dusk sky: each kind read solo against the dark plate
-    s.note = "the ten mana kinds solo, 60 frames each, in kind order";
-    rc |= render_scene(s);
+  // Pass 2 (Direction 2 §3): THE MANA MENU — six named candidates, each a
+  // short clip on the reworked hover, for the OWNER to pick from by eye.
+  {
+    static const struct { const char* name; int cand; } kManaMenu[] = {
+        {"unnamed02-mana-pulsar", 1},   {"unnamed02-mana-plasma", 2},
+        {"unnamed02-mana-bullets", 3},  {"unnamed02-mana-lightning", 4},
+        {"unnamed02-mana-boil", 5},     {"unnamed02-mana-drip", 6},
+    };
+    for (const auto& m : kManaMenu) {
+      if (!wanted(m.name)) continue;
+      SceneSubject s = subject_u02_clip(0, m.name, u02::kIdleKeys, false);
+      s.u02_mana = m.cand;
+      s.note = "mana-menu candidate: the owner picks with his eyes";
+      rc |= render_scene(s);
+    }
   }
   if (wanted("u02-trio")) {
     SceneSubject s = subject_u02_clip(2, "u02-trio", u02::kChannelKeys, false);

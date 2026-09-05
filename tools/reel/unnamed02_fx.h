@@ -1,25 +1,48 @@
-// Unnamed02 — the effects: TEN mana kinds, the FX.LIGHTNING bolt, the
-// centre glow. This file IS the effects knob block: every rate, life,
-// speed, size and colour below is an owner knob.
+// Unnamed02 — the effects: THE MANA MENU (pass 2), the FX.LIGHTNING bolt,
+// the centre glow. This file IS the effects knob block: every rate, life,
+// size and colour below is an owner knob.
+//
+// Direction 2 §3 AXED the ten-emitter particle set ("too tiny and too many.
+// We want cheaper, easier, but more impressive and way more good looking")
+// and asked for MANY examples to pick from. This header therefore carries
+// SIX NAMED CANDIDATES, each a variant on the proven glow-splat machinery
+// (big soft additive splats — a particle caps at 15.9 px of flat colour and
+// can never be a soft blob, 09-ENGINE-GOTCHAS §11):
+//
+//   1 caged pulsar   — a core inside the ring pocket, a breathing halo the
+//                      arms silhouette against (the pulse is 30 px of halo
+//                      swing, not a 9-count palette flicker)
+//   2 big plasma     — three large Lorentzian blobs, blue/violet/gold
+//   3 plasma bullets — mini splats launched from the ring, each trailing
+//                      stamped ghosts (smear route 2: the deliberately
+//                      steppy "dropped frame buffer" read)
+//   4 LIGHTNING      — the FX.LIGHTNING recurrence kept verbatim, drawn as
+//                      a CONTINUOUS two-layer path (stamps along segments,
+//                      hot core over calm halo), decaying ghost of the
+//                      previous strike, an anamorphic flash on the strike
+//                      frame. Direction 2 §0: actual lightning.
+//   5 two-tone boil  — blue core / violet outer on counter-rotating ramps
+//                      (CLUT rotation: churn for zero pixel cost)
+//   6 the drip       — a few LARGE opaque droplets, the one non-additive
+//                      read (kept from the old set's only good idea)
 //
 // Consumer contract: include after `namespace zc = zref::creature;` with the
 // zref headers available. Everything here is reel-side AUTHORING over
-// exported engine primitives — no engine change, no interaction with the
-// ≤2 suns/flares caps.
+// exported engine primitives — no engine change.
 //
 // COLOUR LAW (proven at spike S3): additive colours must sit UNDER the
-// channel ceiling or they whiten on the pink pigment — every additive kind
-// below is authored calm (Direction 30's lesson, on particles).
+// channel ceiling or they whiten on the pink pigment.
 //
 // THE BOLT follows reports/ADDLIGHTNING.md's FX.LIGHTNING recurrence
 // exactly — P_i = lerp(start, end, i/N) + perp1·jitter(seed, phase, i) +
 // perp2·jitter(seed², phase, i), ≤24 segments, ≤2 bounded branches — so
 // this authoring migrates unchanged onto the FORGE.PRIM ribbon evaluator
-// the day it lands. Today each segment is one additive tri bead through
-// the Population path (the executable route the direction confirms).
+// the day it lands (the hardware ask is on the record in zhaozhou/reports/).
 
 #ifndef ZHAO_REEL_UNNAMED02_FX_H
 #define ZHAO_REEL_UNNAMED02_FX_H
+
+#include <vector>
 
 #include "unnamed02_art.h"
 
@@ -45,275 +68,303 @@ struct FxAnchors {
   int32_t hinge_a[3];
   int32_t hinge_b[3];
   int32_t hinge_c[3];
+  int32_t ring[3];    // the ring-pocket centre (hinge centroid) — the mana
+                      // moves when the hinges play: the rig and the effect
+                      // are one performance (Direction 2 §4)
 };
 
-// ---- the ten kinds: named knobs -------------------------------------------
-// slot counts are LIVE particle caps per kind; a clip runs only its set.
-constexpr int kMotesN = 18;          // 1 cyan orbit shimmer — all clips
-constexpr int kSparksN = 12;         // 2 white-cyan hinge bursts — startle, channel
-constexpr int kWispsN = 10;          // 3 magenta crown risers — hover, rest
-constexpr int kRingN = 16;           // 4 violet release torus — channel release
-constexpr int kHelixN = 14;          // 5 teal counter-helices — channel, pirouette
-constexpr int kDropletsN = 8;        // 6 deep-blue OPAQUE drips — hover, drift
-constexpr int kDrainN = 16;          // 7 green inward streamers — channel draw-in
-constexpr int kGlintsN = 6;          // 8 cyan TRI star pops — all clips, sparse
-constexpr int kBoltSegs = 12;        // 9 the main bolt (hinge B -> belly)
-constexpr int kBolt2Segs = 8;        //   the branch bolt (hinge A -> hinge C)
-constexpr int kShieldN = 10;         // 10 gold-amber equatorial band — channel, curious
-
-constexpr int32_t kBoltJitterMm = 130;
-constexpr int kBoltRehashFrames = 3;   // the strike clock: a new jagged path
+// ---- the bolt (FX.LIGHTNING recurrence — kept verbatim) -------------------
+constexpr int kBoltSegs = 16;          // the main bolt (hinge B -> crown)
+constexpr int kBolt2Segs = 8;          // the branch (hinge A -> hinge C)
+constexpr int32_t kBoltJitterMm = 175;
+constexpr int kBoltStrikeFrames = 14;  // one strike lives this long
 constexpr uint32_t kBoltSeed = 0xC0DA11CEu;
+constexpr int32_t kBoltStampMm = 45;   // stamp spacing along a segment (~2 px)
 
-// calm additive colours (the ceiling law) — {r,g,b} per kind
-constexpr uint8_t kColMotes[3] = {30, 120, 140};
-constexpr uint8_t kColSparks[3] = {95, 120, 130};
-constexpr uint8_t kColWisps[3] = {150, 55, 115};
-constexpr uint8_t kColRing[3] = {115, 55, 165};
-constexpr uint8_t kColHelix[3] = {40, 140, 125};
-constexpr uint8_t kColDroplets[3] = {45, 70, 165};  // OPAQUE: full-value blue
-constexpr uint8_t kColDrain[3] = {60, 150, 70};
-constexpr uint8_t kColGlints[3] = {60, 180, 190};
-constexpr uint8_t kColBolt[3] = {225, 205, 250};    // the one deliberately hot kind
-constexpr uint8_t kColShield[3] = {175, 125, 45};
+// ---- the mana ramps (lo MUST be black: a floor above zero rims every
+// blob — the edge-free law, 09-ENGINE-GOTCHAS §11) --------------------------
+constexpr uint8_t kManaBlueMid[3] = {40, 85, 215};
+constexpr uint8_t kManaBlueHi[3] = {150, 215, 255};
+constexpr uint8_t kManaVioletMid[3] = {125, 45, 205};
+constexpr uint8_t kManaVioletHi[3] = {225, 175, 255};
+constexpr uint8_t kManaGoldMid[3] = {175, 120, 35};
+constexpr uint8_t kManaGoldHi[3] = {255, 225, 150};
+constexpr uint8_t kManaCyanMid[3] = {35, 125, 160};
+constexpr uint8_t kManaCyanHi[3] = {195, 250, 255};
+constexpr uint8_t kManaWhiteMid[3] = {160, 160, 190};
+constexpr uint8_t kManaWhiteHi[3] = {245, 240, 255};
+constexpr uint8_t kManaDripMid[3] = {40, 62, 150};   // the opaque deep blue
+constexpr uint8_t kManaDripHi[3] = {90, 130, 220};
+enum ManaRamp : uint8_t {
+  kRampGlow = 0,   // the shipped centre-glow ramp (kGlowLo/Mid/Hi)
+  kRampBlue,
+  kRampViolet,
+  kRampGold,
+  kRampCyan,
+  kRampWhite,
+  kRampDrip,
+  kRampCount
+};
 
-// ---- helpers --------------------------------------------------------------
-inline void fx_push(zref::render::Population& pop, int32_t x, int32_t y, int32_t z,
-                    uint8_t size, const uint8_t c[3]) {
-  pop.parts.push_back(zref::render::Particle{x, y, z, size, c[0], c[1], c[2]});
+// ---- the candidate knobs --------------------------------------------------
+constexpr int32_t kPulsarCorePx = 13;      // inside the ~10-15 px ring pocket
+constexpr int32_t kPulsarHaloMinPx = 60;   // the halo BREATHES — this is the
+constexpr int32_t kPulsarHaloMaxPx = 90;   // pulse, 30 px of swing at ~4 Hz
+constexpr int kPulsarBreathFrames = 15;    // 60 fps / 15 = 4 Hz
+constexpr int kPulsarCoreGainPm = 620;
+constexpr int kPulsarHaloGainPm = 310;
+constexpr int32_t kPlasmaRPx[3] = {46, 36, 28};
+constexpr int kPlasmaGainPm = 480;
+constexpr int32_t kPlasmaOrbitMm = 620;
+constexpr int kPlasmaOrbitFrames = 300;
+constexpr int kBulletsN = 10;
+constexpr int kBulletLifeFrames = 48;
+constexpr int32_t kBulletRPx = 8;
+constexpr int kBulletGainPm = 780;
+constexpr int kBulletGhosts = 3;           // smear route 2: stamped ghosts
+constexpr int kBulletGhostStepFrames = 2;
+constexpr int32_t kBulletSpeedMmPerFrame = 42;
+constexpr int kBoltCoreGainPm = 1000;
+constexpr int32_t kBoltCoreRPx = 3;
+constexpr int kBoltHaloGainPm = 290;
+constexpr int32_t kBoltHaloRPx = 9;
+constexpr int kBoltGhostGainPm = 240;      // the previous strike, decaying
+constexpr int kStreakGainPm = 420;         // the anamorphic strike flash
+constexpr int32_t kStreakSpanPx = 46;
+constexpr int32_t kBoilCorePx = 30;
+constexpr int32_t kBoilOuterPx = 48;
+constexpr int kBoilCoreGainPm = 520;
+constexpr int kBoilOuterGainPm = 380;
+constexpr int kBoilRotDiv = 3;             // CLUT rotation: churn, zero pixels
+constexpr int kDripN = 4;
+constexpr int kDripLifeFrames = 60;
+constexpr int32_t kDripR0Px = 12, kDripR1Px = 7;   // shrinks as it falls
+
+/** One mana splat, in world space; the reel projects and composes it.
+ *  pre=true draws BEFORE the creature compose (a pool the creature and its
+ *  arms occlude — the caged-pulsar read); post splats depth-test against
+ *  their own projected depth. */
+struct ManaSplat {
+  int32_t x, y, z;      // world fx16
+  int32_t r_px;
+  uint8_t ramp;
+  int16_t gain_pm;
+  bool depth_test;
+  bool opaque;          // the drip: writes colour instead of adding
+  bool pre;
+};
+
+inline void mana_push(std::vector<ManaSplat>& out, int32_t x, int32_t y, int32_t z,
+                      int32_t r_px, uint8_t ramp, int gain_pm, bool depth_test,
+                      bool pre, bool opaque = false) {
+  if (gain_pm <= 0 || r_px <= 0) return;
+  out.push_back(ManaSplat{x, y, z, r_px, ramp, static_cast<int16_t>(gain_pm),
+                          depth_test, opaque, pre});
 }
-inline int32_t lerp32(int32_t a, int32_t b, int32_t num, int32_t den) {
-  return a + static_cast<int32_t>((static_cast<int64_t>(b - a) * num) / den);
-}
-inline int32_t fx_sin16(uint32_t ph) {  // Q16.16 sin of a 0..65535 phase
+
+inline int32_t fx_sin16(uint32_t ph) {
   return zref::fx_sin(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw;
 }
 inline int32_t fx_cos16(uint32_t ph) {
   return zref::fx_cos(zref::angle16{static_cast<uint16_t>(ph & 0xFFFF)}).raw;
 }
+inline int32_t lerp32(int32_t a, int32_t b, int32_t num, int32_t den) {
+  return a + static_cast<int32_t>((static_cast<int64_t>(b - a) * num) / den);
+}
 
-/**
- * FX.LIGHTNING position evaluator (the ADDLIGHTNING recurrence, software
- * preview): deterministic jagged polyline start->end, re-hashed every
- * kBoltRehashFrames (the strike clock), jitter in the two perpendiculars.
- * Emits one additive tri bead per segment; the rehash frame flashes larger.
- */
-inline void bolt_beads(zref::render::Population& pop, const int32_t s[3], const int32_t e[3],
-                       int segs, uint32_t frame, uint32_t seed) {
-  const uint32_t phase = frame / kBoltRehashFrames;
-  const bool flash = (frame % kBoltRehashFrames) == 0;
-  // axis + two crude perpendiculars (the loop plane is X-Y, so perp1 = the
-  // in-plane normal and perp2 = Z; exact orthonormality is not the point —
-  // bounded deterministic jag is)
-  const int64_t ax = e[0] - s[0], ay = e[1] - s[1];
-  (void)ax;
-  (void)ay;
-  for (int i = 1; i < segs; ++i) {
+/** The FX.LIGHTNING path evaluator (the ADDLIGHTNING recurrence, verbatim):
+ *  deterministic jagged polyline start->end for one strike phase. Fills
+ *  `pts` with segs+1 world positions. This authoring migrates unchanged
+ *  onto the FORGE.PRIM ribbon evaluator when the block is built. */
+inline void bolt_path(const int32_t s[3], const int32_t e[3], int segs, uint32_t phase,
+                      uint32_t seed, int32_t pts[][3]) {
+  for (int i = 0; i <= segs; ++i) {
+    for (int k = 0; k < 3; ++k) pts[i][k] = lerp32(s[k], e[k], i, segs);
+    if (i == 0 || i == segs) continue;  // the anchors stay anchored
     const uint32_t h1 = fx_hash(seed, phase, static_cast<uint32_t>(i));
     const uint32_t h2 = fx_hash(seed * seed | 1u, phase, static_cast<uint32_t>(i));
-    int32_t p[3];
-    for (int k = 0; k < 3; ++k) p[k] = lerp32(s[k], e[k], i, segs);
-    // perp1: in the loop plane, perpendicular-ish to the run: jitter x/y
-    p[0] += fxu(fx_jit(h1, kBoltJitterMm));
-    p[1] += fxu(fx_jit(h1 >> 11, kBoltJitterMm / 2));
-    // perp2: across the plane
-    p[2] += fxu(fx_jit(h2, kBoltJitterMm * 2 / 3));
-    fx_push(pop, p[0], p[1], p[2], flash ? 76 : 52, kColBolt);
+    pts[i][0] += fxu(fx_jit(h1, kBoltJitterMm));
+    pts[i][1] += fxu(fx_jit(h1 >> 11, kBoltJitterMm / 2));
+    pts[i][2] += fxu(fx_jit(h2, kBoltJitterMm * 2 / 3));
   }
 }
 
-/**
- * Fill the frame's populations for one conduit. `frame` is the presentation
- * frame within the clip loop (loop_frames long). Additive kinds go to
- * add_pop (drawn flags 0x0007), the droplets to opq_pop (0x0003).
- * Kind sets per clip follow the plan's table; channel is the only clip
- * running everything.
- */
-inline void fx_fill(int clip_slot, uint32_t frame, uint32_t loop_frames,
-                    const FxAnchors& A, zref::render::Population& add_pop,
-                    zref::render::Population& tri_pop,
-                    zref::render::Population& opq_pop, int solo = -1,
-                    bool crackle = false) {
-  const bool ch = clip_slot == 2;
-  const uint32_t lf = loop_frames > 0 ? loop_frames : 1;
-  // solo >= 0: the fx-tour — ONE kind at a time, forced active regardless of
-  // clip. crackle: the ADDLIGHTNING "lightning version" — bolts every frame.
-  const auto on = [&](int kind, bool clip_cond) {
-    if (solo >= 0) return solo == kind;
-    return clip_cond;
-  };
-
-  // 1 motes — every clip: the baseline shimmer, slow orbit about the body
-  if (on(0, true))
-  for (int i = 0; i < kMotesN; ++i) {
-    const uint32_t h = fx_hash(1, 0, static_cast<uint32_t>(i));
-    const int32_t rad = fxu(720 + static_cast<int32_t>(h % 300));
-    const uint32_t ph = frame * 65536 / 240 + i * 65536 / kMotesN + (h & 0xFFFF);
-    const int32_t y = A.body[1] + fxu(150) + fxu(fx_jit(h >> 7, 300)) +
-                      static_cast<int32_t>((static_cast<int64_t>(fxu(140)) *
-                                            fx_sin16(frame * 65536 / 120 + i * 9000)) >> 16);
-    fx_push(add_pop, A.body[0] + static_cast<int32_t>((static_cast<int64_t>(rad) * fx_cos16(ph)) >> 16),
-            y, A.body[2] + static_cast<int32_t>((static_cast<int64_t>(rad) * fx_sin16(ph)) >> 16),
-            40, kColMotes);
-  }
-
-  // 2 sparks — startle + channel: fast radial hinge bursts, short life
-  if (on(1, clip_slot == 4 || ch || crackle)) {
-    for (int i = 0; i < kSparksN; ++i) {
-      const uint32_t h = fx_hash(2, static_cast<uint32_t>(i), 7u);
-      const uint32_t cycle = 78;
-      const uint32_t t = (frame + h % cycle) % cycle;
-      if (t >= 26) continue;  // duty 1/3
-      const int32_t* hinge = i % 3 == 0 ? A.hinge_a : i % 3 == 1 ? A.hinge_b : A.hinge_c;
-      const uint32_t burst = (frame + h % cycle) / cycle;  // re-aim per burst
-      const uint32_t hd = fx_hash(2, static_cast<uint32_t>(i), burst);
-      const int32_t dist = fxu(static_cast<int32_t>(26 * t));
-      const uint32_t dir = hd & 0xFFFF;
-      fx_push(add_pop,
-              hinge[0] + static_cast<int32_t>((static_cast<int64_t>(dist) * fx_cos16(dir)) >> 16),
-              hinge[1] + static_cast<int32_t>((static_cast<int64_t>(dist / 2) *
-                                               fx_sin16(dir * 3)) >> 16),
-              hinge[2] + static_cast<int32_t>((static_cast<int64_t>(dist) * fx_sin16(dir)) >> 16),
-              static_cast<uint8_t>(40 - t), kColSparks);
+/** Stamp one bolt path as a CONTINUOUS two-layer chain of splats: a hot
+ *  narrow core over a calm wide halo, every ~kBoltStampMm along each
+ *  segment (beads at the vertices alone leave visible gaps — the shipped
+ *  crackle read as disconnected triangles). */
+inline void bolt_stamp(std::vector<ManaSplat>& out, const int32_t pts[][3], int segs,
+                       int gain_core_pm, int gain_halo_pm) {
+  for (int i = 0; i < segs; ++i) {
+    // segment length in mm (fx16 -> mm)
+    int64_t dx = (pts[i + 1][0] - pts[i][0]) >> 16;
+    int64_t dy = (pts[i + 1][1] - pts[i][1]) >> 16;
+    int64_t dz = (pts[i + 1][2] - pts[i][2]) >> 16;
+    int64_t len = dx * dx + dy * dy + dz * dz;
+    // integer sqrt via float-free approx: step count from the dominant axis
+    int64_t adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy, adz = dz < 0 ? -dz : dz;
+    int64_t approx = adx + ady + adz;  // upper bound on length
+    (void)len;
+    int n = static_cast<int>(approx / kBoltStampMm);
+    if (n < 1) n = 1;
+    if (n > 24) n = 24;
+    for (int t = 0; t < n; ++t) {
+      const int32_t x = lerp32(pts[i][0], pts[i + 1][0], t, n);
+      const int32_t y = lerp32(pts[i][1], pts[i + 1][1], t, n);
+      const int32_t z = lerp32(pts[i][2], pts[i + 1][2], t, n);
+      mana_push(out, x, y, z, kBoltHaloRPx, kRampCyan, gain_halo_pm, true, false);
+      mana_push(out, x, y, z, kBoltCoreRPx, kRampWhite, gain_core_pm, true, false);
     }
   }
-
-  // 3 wisps — hover + rest: magenta risers off the crown, fading as they climb
-  if (on(2, clip_slot == 0 || clip_slot == 5)) {
-    for (int i = 0; i < kWispsN; ++i) {
-      const uint32_t h = fx_hash(3, static_cast<uint32_t>(i), 3u);
-      const uint32_t t = (frame + h % 150) % 150;
-      const int32_t y = A.crown[1] + fxu(static_cast<int32_t>(8 * t));
-      const int32_t lat = fxu(fx_jit(h >> 5, 120)) +
-                          static_cast<int32_t>((static_cast<int64_t>(fxu(90)) *
-                                                fx_sin16(t * 1200 + (h & 0xFFFF))) >> 16);
-      const uint8_t size = static_cast<uint8_t>(48 - t * 28 / 150);
-      fx_push(add_pop, A.crown[0] + lat, y, A.crown[2] + fx_jit(h >> 9, 3) * 40, size, kColWisps);
-    }
-  }
-
-  // 4 ring-pulse — the channel's release beat: an expanding equatorial torus
-  if (on(3, ch && frame >= 280)) {
-    const uint32_t rt = (frame >= 280 ? frame - 280 : frame) % 70;
-    for (int i = 0; i < kRingN; ++i) {
-      const uint32_t ph = i * 65536 / kRingN + rt * 300;
-      const int32_t rad = fxu(500 + static_cast<int32_t>(rt * 24));
-      fx_push(add_pop,
-              A.body[0] + static_cast<int32_t>((static_cast<int64_t>(rad) * fx_cos16(ph)) >> 16),
-              A.body[1],
-              A.body[2] + static_cast<int32_t>((static_cast<int64_t>(rad) * fx_sin16(ph)) >> 16),
-              static_cast<uint8_t>(44 - rt / 4), kColRing);
-    }
-  }
-
-  // 5 helix-stream — channel + pirouette: two counter-rotating bead helices
-  if (on(4, ch || clip_slot == 6)) {
-    for (int i = 0; i < kHelixN; ++i) {
-      const int dir = (i & 1) ? 1 : -1;
-      const uint32_t ph = static_cast<uint32_t>(
-          static_cast<int64_t>(dir) * frame * 500 + i * 65536 / kHelixN * 2);
-      const int32_t y = A.body[1] - fxu(430) +
-                        fxu(static_cast<int32_t>((frame * 6 + i * 157) % 1300));
-      const int32_t rad = fxu(520);
-      fx_push(add_pop,
-              A.body[0] + static_cast<int32_t>((static_cast<int64_t>(rad) * fx_cos16(ph)) >> 16),
-              y,
-              A.body[2] + static_cast<int32_t>((static_cast<int64_t>(rad) * fx_sin16(ph)) >> 16),
-              36, kColHelix);
-    }
-  }
-
-  // 6 droplets — hover + drift: OPAQUE deep-blue drips off the loop underside
-  if (on(5, clip_slot == 0 || clip_slot == 1)) {
-    for (int i = 0; i < kDropletsN; ++i) {
-      const uint32_t h = fx_hash(6, static_cast<uint32_t>(i), 11u);
-      const uint32_t t = (frame + h % 90) % 90;
-      int32_t sp[3];
-      for (int k = 0; k < 3; ++k)
-        sp[k] = lerp32(A.hinge_a[k], A.hinge_c[k], static_cast<int32_t>(h % 64), 64);
-      const int32_t drop = fxu(static_cast<int32_t>((6 * t * t) / 10));
-      if (sp[1] - drop < fxu(120)) continue;  // the despawn floor line
-      fx_push(opq_pop, sp[0] + fx_jit(h >> 8, 2) * 30, sp[1] - drop, sp[2], 32, kColDroplets);
-    }
-  }
-
-  // 7 drain-streamers — the channel's draw-in: spawn on a far shell, pulled in
-  if (on(6, ch && frame < 130)) {
-    const uint32_t T = 90;
-    for (int i = 0; i < kDrainN; ++i) {
-      const uint32_t h = fx_hash(7, static_cast<uint32_t>(i), 5u);
-      const uint32_t t = (frame + h % T) % T;
-      const uint32_t dir = h & 0xFFFF;
-      const int32_t el = static_cast<int32_t>((h >> 16) % 20000) - 10000;
-      // dist = shell * (1 - (t/T)^2): the pull ACCELERATES inward
-      const int64_t tt = static_cast<int64_t>(t) * t * 65536 / (T * T);
-      const int32_t dist = static_cast<int32_t>(
-          (static_cast<int64_t>(fxu(1125)) * (65536 - tt)) >> 16);
-      fx_push(add_pop,
-              A.body[0] + static_cast<int32_t>((static_cast<int64_t>(dist) * fx_cos16(dir)) >> 16),
-              A.body[1] + static_cast<int32_t>((static_cast<int64_t>(dist) * el) >> 16),
-              A.body[2] + static_cast<int32_t>((static_cast<int64_t>(dist) * fx_sin16(dir)) >> 16),
-              36, kColDrain);
-    }
-  }
-
-  // 8 star-glints — all clips, sparse: TRI pops at loop stations echoing the
-  // pupil star; each holds 32 frames (>= the 16-frame register floor)
-  if (on(7, true))
-  for (int i = 0; i < kGlintsN; ++i) {
-    const uint32_t epoch = frame / 32;
-    const uint32_t h = fx_hash(8, static_cast<uint32_t>(i), epoch);
-    if (h % 3 != 0) continue;  // sparse
-    const uint32_t st = h % 128;
-    int32_t p[3];
-    if (st < 64) {
-      for (int k = 0; k < 3; ++k) p[k] = lerp32(A.hinge_a[k], A.hinge_b[k], st, 64);
-    } else {
-      for (int k = 0; k < 3; ++k) p[k] = lerp32(A.hinge_b[k], A.hinge_c[k], st - 64, 64);
-    }
-    fx_push(tri_pop, p[0], p[1] + fxu(fx_jit(h >> 9, 60)), p[2] + fxu(fx_jit(h >> 13, 40)), 52,
-            kColGlints);
-  }
-
-  // 9 bolt-beads — the channel's blaze: the FX.LIGHTNING bead-chain. The
-  // main bolt arcs hinge B -> the body CROWN (visible above the silhouette;
-  // a centre-aimed bolt hid entirely behind the body's own depth) and the
-  // branch crosses the loop's open window hinge A -> hinge C, against the
-  // bloomed sky where additive reads hottest.
-  if (on(8, (ch && frame >= 112 && frame < 280) || crackle)) {
-    bolt_beads(tri_pop, A.hinge_b, A.crown, kBoltSegs, frame, kBoltSeed);
-    if (crackle || (frame >= 160 && frame < 240))  // the branch (<= 2 branches)
-      bolt_beads(tri_pop, A.hinge_a, A.hinge_c, kBolt2Segs, frame, kBoltSeed * 2654435761u);
-  }
-
-  // 10 shield-orbit — channel + curious: the slow gold equatorial band
-  if (on(9, ch || clip_slot == 3)) {
-    for (int i = 0; i < kShieldN; ++i) {
-      const uint32_t ph = frame * 65536 / 300 + i * 65536 / kShieldN;
-      const int32_t rad = fxu(720);
-      const int32_t y = A.body[1] +
-                        static_cast<int32_t>((static_cast<int64_t>(fxu(90)) *
-                                              fx_sin16(ph * 2 + 8000)) >> 16);
-      fx_push(add_pop,
-              A.body[0] + static_cast<int32_t>((static_cast<int64_t>(rad) * fx_cos16(ph)) >> 16),
-              y,
-              A.body[2] + static_cast<int32_t>((static_cast<int64_t>(rad) * fx_sin16(ph)) >> 16),
-              56, kColShield);
-    }
-  }
-  (void)lf;
 }
 
-// ---- the centre glow (S5) -------------------------------------------------
+/** LIGHTNING (candidate 4 / the channel's blaze): the current strike at
+ *  full heat decaying over its life, the PREVIOUS strike as a fading ghost
+ *  (a bolt that vanishes reads as noise; one that decays reads as a
+ *  strike), and the anamorphic flash bar on the strike frame. */
+inline void mana_lightning(uint32_t frame, const FxAnchors& A,
+                           std::vector<ManaSplat>& out) {
+  const uint32_t phase = frame / kBoltStrikeFrames;
+  const int age = static_cast<int>(frame % kBoltStrikeFrames);
+  int32_t pts[kBoltSegs + 1][3];
+  // the current strike: heat falls over the strike's life
+  const int heat = 1000 - age * 900 / kBoltStrikeFrames;
+  bolt_path(A.hinge_b, A.crown, kBoltSegs, phase, kBoltSeed, pts);
+  bolt_stamp(out, pts, kBoltSegs, kBoltCoreGainPm * heat / 1000,
+             kBoltHaloGainPm * heat / 1000);
+  // the previous strike, ghosting out (smear: a decaying afterimage)
+  if (phase > 0) {
+    bolt_path(A.hinge_b, A.crown, kBoltSegs, phase - 1, kBoltSeed, pts);
+    bolt_stamp(out, pts, kBoltSegs, 0, kBoltGhostGainPm * (1000 - age * 110) / 1000);
+  }
+  // the branch, every third strike
+  if (phase % 3 == 0) {
+    int32_t bp[kBolt2Segs + 1][3];
+    bolt_path(A.hinge_a, A.hinge_c, kBolt2Segs, phase, kBoltSeed * 2654435761u, bp);
+    bolt_stamp(out, bp, kBolt2Segs, kBoltCoreGainPm * heat / 1400,
+               kBoltHaloGainPm * heat / 1400);
+  }
+  // the anamorphic flash bar through the strike midpoint, strike frame only
+  if (age == 0) {
+    const int32_t mx = (A.hinge_b[0] + A.crown[0]) / 2;
+    const int32_t my = (A.hinge_b[1] + A.crown[1]) / 2;
+    const int32_t mz = (A.hinge_b[2] + A.crown[2]) / 2;
+    for (int i = -3; i <= 3; ++i) {
+      const int32_t r = 8 - (i < 0 ? -i : i) * 2;  // 2..8..2 px
+      // ~kStreakSpanPx of horizontal spread expressed in world mm (~12.3/px)
+      mana_push(out, mx + fxu(i * kStreakSpanPx * 25 / 12), my, mz, r, kRampWhite,
+                kStreakGainPm, false, false);
+    }
+  }
+}
+
+/** Fill the frame's mana splats for one conduit. `cand` selects the menu
+ *  candidate (1..6, 0 = none). The showcase channel/crackle clips run
+ *  candidate 4 — the Description sheet says lightning IS this creature. */
+inline void mana_fill(int cand, uint32_t frame, const FxAnchors& A,
+                      std::vector<ManaSplat>& out) {
+  switch (cand) {
+    case 1: {  // the caged pulsar
+      const int32_t breathe = static_cast<int32_t>(
+          (static_cast<int64_t>(kPulsarHaloMaxPx - kPulsarHaloMinPx) *
+           ((65536 + fx_sin16(frame * 65536 / kPulsarBreathFrames)) / 2)) >> 16);
+      mana_push(out, A.ring[0], A.ring[1], A.ring[2], kPulsarHaloMinPx + breathe,
+                kRampCyan, kPulsarHaloGainPm, true, true);  // pre: arms occlude it
+      mana_push(out, A.ring[0], A.ring[1], A.ring[2], kPulsarCorePx, kRampCyan,
+                kPulsarCoreGainPm, false, false);  // no depth test: through the blade
+      break;
+    }
+    case 2: {  // big plasma blobs — blue, violet, gold, drifting slowly
+      const uint32_t ph = frame * 65536 / kPlasmaOrbitFrames;
+      const uint8_t ramps[3] = {kRampBlue, kRampViolet, kRampGold};
+      for (int i = 0; i < 3; ++i) {
+        const uint32_t p = ph + static_cast<uint32_t>(i) * 65536 / 3;
+        const int32_t ox = static_cast<int32_t>(
+            (static_cast<int64_t>(fxu(kPlasmaOrbitMm)) * fx_cos16(p)) >> 16);
+        const int32_t oz = static_cast<int32_t>(
+            (static_cast<int64_t>(fxu(kPlasmaOrbitMm)) * fx_sin16(p)) >> 16);
+        const int32_t oy = static_cast<int32_t>(
+            (static_cast<int64_t>(fxu(260)) * fx_sin16(p * 2 + 9000)) >> 16);
+        mana_push(out, A.body[0] + ox, A.body[1] + fxu(150) + oy, A.body[2] + oz,
+                  kPlasmaRPx[i], ramps[i], kPlasmaGainPm, true, true);
+      }
+      break;
+    }
+    case 3: {  // smeared plasma bullets out of the ring
+      for (int i = 0; i < kBulletsN; ++i) {
+        const uint32_t h = fx_hash(31, static_cast<uint32_t>(i), 7u);
+        const uint32_t life = kBulletLifeFrames;
+        for (int gstep = 0; gstep <= kBulletGhosts; ++gstep) {
+          const int64_t fghost =
+              static_cast<int64_t>(frame) - gstep * kBulletGhostStepFrames;
+          if (fghost < 0) continue;
+          const uint32_t t = static_cast<uint32_t>((fghost + h % life) % life);
+          const uint32_t burst = static_cast<uint32_t>((fghost + h % life) / life);
+          const uint32_t hd = fx_hash(31, static_cast<uint32_t>(i), burst);
+          const uint32_t dir = hd & 0xFFFF;
+          const int32_t el = static_cast<int32_t>((hd >> 16) % 26000) - 6000;
+          const int32_t dist = fxu(static_cast<int32_t>(kBulletSpeedMmPerFrame * t));
+          const int32_t droop = fxu(static_cast<int32_t>((2 * t * t) / 10));
+          const int gain = kBulletGainPm * (gstep == 0 ? 1000
+                                            : gstep == 1 ? 480
+                                            : gstep == 2 ? 240
+                                                         : 110) / 1000;
+          mana_push(out,
+                    A.ring[0] + static_cast<int32_t>(
+                        (static_cast<int64_t>(dist) * fx_cos16(dir)) >> 16),
+                    A.ring[1] + static_cast<int32_t>(
+                        (static_cast<int64_t>(dist) * el / 32768)) - droop,
+                    A.ring[2] + static_cast<int32_t>(
+                        (static_cast<int64_t>(dist) * fx_sin16(dir)) >> 16),
+                    kBulletRPx, kRampBlue, gain, true, false);
+        }
+      }
+      break;
+    }
+    case 4:
+      mana_lightning(frame, A, out);
+      break;
+    case 5: {  // two-tone boil: the churn is CLUT rotation (see ramp build)
+      mana_push(out, A.ring[0], A.ring[1], A.ring[2], kBoilOuterPx, kRampViolet,
+                kBoilOuterGainPm, true, true);
+      mana_push(out, A.ring[0], A.ring[1], A.ring[2], kBoilCorePx, kRampBlue,
+                kBoilCoreGainPm, false, false);
+      break;
+    }
+    case 6: {  // the drip: large opaque droplets off the loop underside
+      for (int i = 0; i < kDripN; ++i) {
+        const uint32_t h = fx_hash(66, static_cast<uint32_t>(i), 11u);
+        const uint32_t t = (frame + h % kDripLifeFrames) % kDripLifeFrames;
+        int32_t sp[3];
+        for (int k = 0; k < 3; ++k)
+          sp[k] = lerp32(A.hinge_a[k], A.hinge_c[k], static_cast<int32_t>(h % 64), 64);
+        const int32_t drop = fxu(static_cast<int32_t>((8 * t * t) / 10));
+        if (sp[1] - drop < fxu(160)) continue;  // despawn above the dirt
+        const int32_t r = kDripR0Px - static_cast<int32_t>(
+            (kDripR0Px - kDripR1Px) * static_cast<int32_t>(t) /
+            static_cast<int32_t>(kDripLifeFrames));
+        mana_push(out, sp[0] + fx_jit(h >> 8, 2) * 30, sp[1] - drop, sp[2], r,
+                  kRampDrip, 1000, true, false, /*opaque=*/true);
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+// ---- the centre glow (S5) + the mana ramp/splat machinery -----------------
 //
 // ONE baked radial CLUT8 sprite (the engine's §4 halo_atmo corona bake) +
-// ONE 64-entry ramp built per FRAME (not per instance). Two layers: the
-// outer aura BEFORE the compose, depth-tested against the conduit centre's
-// own 1/w (paints over sky AND the terrain behind it); the small core AFTER
-// the compose with no depth test — the light lives in the belly.
+// the unratified Lorentzian bloom (the PLASMA profile — tight saturated
+// core, a skirt that never quite reaches zero), and one 64-entry ramp per
+// ramp id per FRAME. Layers: pre-compose splats before the creature (the
+// pools it occludes), post-compose splats after (depth-tested against
+// their own projected 1/w, or not — the belly core).
 
 struct GlowAssets {
-  zref::star::Sprite8 sprite;  // baked once per process
+  zref::star::Sprite8 sprite;   // §4 halo_atmo linear cone
+  zref::star::Sprite8 bloom;    // corona_sprite_bloom(24) — the plasma one
   bool baked = false;
 };
 
@@ -324,17 +375,20 @@ struct GlowFrame {
 inline void glow_bake(GlowAssets& g) {
   if (g.baked) return;
   g.sprite = zref::star::corona_sprite(0);  // §4 halo_atmo profile
+  g.bloom = zref::star::corona_sprite_bloom(24);
   g.baked = true;
 }
 
 /** 64-entry ramp: lo -> mid over [0,32), mid -> hi over [32,64). [0] stays
- *  black (the additive identity the corona bake's exterior relies on). */
+ *  black (the additive identity the corona bake's exterior relies on).
+ *  `rot` rotates indices 1..63 (the boil's churn — zero pixel cost). */
 inline void glow_build_ramp(GlowFrame& f, const uint8_t lo[3], const uint8_t mid[3],
-                            const uint8_t hi[3], int gain_pm) {
+                            const uint8_t hi[3], int gain_pm, int rot = 0) {
   for (int i = 0; i < 64; ++i) {
-    const uint8_t* a = i < 32 ? lo : mid;
-    const uint8_t* b = i < 32 ? mid : hi;
-    const int t = (i & 31) * 2 + 1;  // 1..63 of 64
+    const int j = i == 0 ? 0 : 1 + (i - 1 + rot) % 63;
+    const uint8_t* a = j < 32 ? lo : mid;
+    const uint8_t* b = j < 32 ? mid : hi;
+    const int t = (j & 31) * 2 + 1;  // 1..63 of 64
     for (int c = 0; c < 3; ++c) {
       int v = (a[c] * (64 - t) + b[c] * t) / 64;
       v = v * gain_pm / 1000;
@@ -345,12 +399,32 @@ inline void glow_build_ramp(GlowFrame& f, const uint8_t lo[3], const uint8_t mid
   f.pal[0][0] = f.pal[0][1] = f.pal[0][2] = 0;  // additive identity
 }
 
+/** Build the frame's mana ramps. `frame` drives the boil's counter-rotating
+ *  CLUT churn. Index by ManaRamp. */
+inline void mana_build_ramps(GlowFrame ramps[kRampCount], uint32_t frame) {
+  constexpr uint8_t kBlack[3] = {0, 0, 0};
+  glow_build_ramp(ramps[kRampGlow], kGlowLo, kGlowMid, kGlowHi, 1000);
+  const int rot = static_cast<int>((frame / kBoilRotDiv) % 63);
+  glow_build_ramp(ramps[kRampBlue], kBlack, kManaBlueMid, kManaBlueHi, 1000, rot);
+  glow_build_ramp(ramps[kRampViolet], kBlack, kManaVioletMid, kManaVioletHi, 1000,
+                  63 - rot);
+  glow_build_ramp(ramps[kRampGold], kBlack, kManaGoldMid, kManaGoldHi, 1000);
+  glow_build_ramp(ramps[kRampCyan], kBlack, kManaCyanMid, kManaCyanHi, 1000);
+  glow_build_ramp(ramps[kRampWhite], kBlack, kManaWhiteMid, kManaWhiteHi, 1000);
+  glow_build_ramp(ramps[kRampDrip], kManaDripMid, kManaDripMid, kManaDripHi, 1000);
+}
+
 /** One additive glow splat at canvas (cx,cy), half-size r px, depth-tested
- *  against the given centre depth (Q16.16 1/w), never writing depth. */
+ *  against the given centre depth (Q16.16 1/w), never writing depth.
+ *  `bloom` selects the Lorentzian plasma profile; `opaque` writes the ramp
+ *  colour instead of adding (the drip's solid read) where the sprite is
+ *  bright enough to be a body rather than a fringe. */
 inline void glow_splat(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
                        const GlowAssets& g, const GlowFrame& f, int32_t cx, int32_t cy,
-                       int32_t r, int32_t centre_d, bool depth_test = true) {
+                       int32_t r, int32_t centre_d, bool depth_test = true,
+                       bool bloom = false, bool opaque = false) {
   if (r <= 0 || !g.baked) return;
+  const zref::star::Sprite8& sp = bloom ? g.bloom : g.sprite;
   const int32_t qx0 = cx - r, qy0 = cy - r;
   int32_t x0 = qx0, y0 = qy0, x1 = cx + r, y1 = cy + r;
   if (x0 < 0) x0 = 0;
@@ -359,14 +433,21 @@ inline void glow_splat(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
   if (y1 > static_cast<int32_t>(h)) y1 = static_cast<int32_t>(h);
   const int64_t wq = 2 * static_cast<int64_t>(r);
   for (int32_t y = y0; y < y1; ++y) {
-    const int32_t sy = static_cast<int32_t>((static_cast<int64_t>(y - qy0) * g.sprite.h) / wq);
+    const int32_t sy = static_cast<int32_t>((static_cast<int64_t>(y - qy0) * sp.h) / wq);
     for (int32_t x = x0; x < x1; ++x) {
       const size_t idx = static_cast<size_t>(y) * w + x;
       if (depth_test && !(centre_d > depth[idx])) continue;  // occluded by nearer surface
-      const int32_t sx = static_cast<int32_t>((static_cast<int64_t>(x - qx0) * g.sprite.w) / wq);
-      const uint8_t t = g.sprite.pix[static_cast<size_t>(sy) * g.sprite.w + sx];
+      const int32_t sx = static_cast<int32_t>((static_cast<int64_t>(x - qx0) * sp.w) / wq);
+      const uint8_t t = sp.pix[static_cast<size_t>(sy) * sp.w + sx];
       if (t == 0) continue;
       const size_t ri = idx * 3;
+      if (opaque) {
+        if (t < 20) continue;  // the fringe stays additive-free: hard droplet
+        rgb[ri] = f.pal[t][0];
+        rgb[ri + 1] = f.pal[t][1];
+        rgb[ri + 2] = f.pal[t][2];
+        continue;
+      }
       const auto add = [](uint8_t d, uint8_t s) {
         const int v = d + s;
         return static_cast<uint8_t>(v > 255 ? 255 : v);
