@@ -65,6 +65,12 @@ param(
     # against a 125 MHz target is being rearchitected regardless of the third
     # significant figure. Pass 'BALANCED' for that.
     #
+    # THE PESSIMISM IS QUANTIFIED, not vague. The shell QSF records that this
+    # mode was MEASURED at +2.08 MHz against the alternative, so a BALANCED row
+    # reads roughly 2 MHz low. On a block at 29.74 MHz that is about 7% -- far
+    # too small to change a rearchitect-or-not verdict, which is exactly why
+    # the trade is worth taking when that is the question being asked.
+    #
     # A run using this is NOT comparable with a HIGH PERFORMANCE EFFORT row and
     # the JSON records which mode produced it, so the two cannot be silently
     # placed in the same table.
