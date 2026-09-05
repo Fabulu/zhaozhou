@@ -2574,3 +2574,47 @@ that workspace is from an earlier run and is not the one still on disk.
 first:** widen the rule's floor if 167,936 over-counts, or name the specific
 array that went to MLAB. Guessing between them from the numbers alone is exactly
 what this docket entry is complaining about.
+
+---
+
+## D19q — the II=1 material combiner is refuted by its own tripwire (G1-C)
+
+**2026-09-05. Closed by the measurement; no owner decision needed, recorded so
+the shape change is traceable.**
+
+`zhao_texture_combine` fit at commit `28db7708`: **494 ALM, 524 registers,
+8 DSP, 100.12 MHz**, status `failed:structure` on two rules —
+`DSP 8 > allowed 2` and `registers 524 > allowed 500`.
+
+The DSP rule came from `islandrearchitecture5.md` §3.4, not from this pass, and
+`design/fit_targets.yml` recorded the response to a firing **before** the fit
+ran: *"If this fires, that IS the evidence for moving to the two-lane scheduled
+form."* So the rule stays at 2. Raising it to 8 now would be the "rule written
+after the fit it governs" failure `CLAUDE.md` names.
+
+§15.5 closes with the exact instruction the block violates: **"Do not write six
+independent `*` operators and assume they pack."** The block has eight inferred
+`unit_mul` sites and the fitter gave each its own DSP block.
+
+**The first reading of the result was wrong and is kept in the report.** The
+island totals 7,913 ALM against a 7,500 redline but only 14 of 112 DSP, which
+made "keep the DSPs, ALMs are the scarce resource" look reasonable. It is not a
+trade: §15.5's preferred variant LOGIC2 is **zero DSP at ≤800 ALM** — cheaper on
+both axes, because two shared multipliers over three cycles is less silicon than
+eight always-live ones. The trade only appears if the parallel structure is
+already assumed.
+
+**A separate gap found while reading §15 to answer this:** the architecture
+names **eight** recipes; both the RTL and the reference model
+(`zref_material.hpp`, `kRecipeCount = 6`) stop at six and refuse recipe 6 as
+illegal. The two missing are `TERRAIN_DETAIL_LIGHT` and `TERRAIN_DETAIL_MASK` —
+the three-sample terrain recipes, and DETAIL_LIGHT is the worst case the entire
+§15.4 two-lane capacity argument rests on. 50 passing checks across two test
+files cover six of eight recipes and report coverage of the six they know about.
+
+Full evidence: `reports/G1C-COMBINER-II1-REFUTED-20260905.md`.
+
+**Next:** extend the reference to all eight recipes, then build
+`zhao_texture_material_combine_v1` to §15.3/§15.5-A with the per-recipe product
+job counters §15.4 requires, then re-fit against the same three unchanged rules.
+The refuted block stays in the tree until its replacement measures better.
