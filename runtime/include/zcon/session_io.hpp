@@ -37,6 +37,35 @@
 
 namespace zcon {
 
+// ---------------------------------------------------------------------------
+// WHAT A CLEAN REPLAY DOES AND DOES NOT PROVE
+// ---------------------------------------------------------------------------
+// Measured 2026-09-05 by flipping one bit at three offsets in a 300-tick
+// recording and replaying each:
+//
+//   offset 8263  -> DIVERGED at hash index 279
+//   offset 7167  -> DIVERGED at hash index 142
+//   offset  843  -> OK, identical hash stream
+//
+// The first two are the point of the format working: a desync is LOCATED, at
+// the tick it happened, which is the whole reason inputs and hashes are
+// recorded separately.
+//
+// **The third is not a bug and it is the thing to understand.** A recording
+// carries input bytes that provably cannot change authoritative state -- the
+// right stick is read only on a tick that fires a bolt, so its value on every
+// other tick is inert. Corrupt one of those and the simulation replays
+// identically, because it genuinely would have.
+//
+// So the replay answers "did the simulation diverge", and it does NOT answer
+// "is this file intact". Those are different questions and only the first is
+// what the roadmap asks for ("a desync is a diff between two hash streams,
+// found at the tick it happened"). **There is deliberately no CRC over the
+// recording**: adding one would answer the second question and would also
+// invite the mistake of treating a passing CRC as evidence about the
+// simulation, which it is not. If recordings ever cross a network or a machine
+// boundary, integrity belongs in that transport, not smuggled in here.
+//
 // "ZREC", version 1. The version is checked, not assumed: a recording from a
 // future format must be refused rather than misread.
 constexpr uint32_t kRecMagic = 0x43455250u;  // 'PREC' little-endian on disk

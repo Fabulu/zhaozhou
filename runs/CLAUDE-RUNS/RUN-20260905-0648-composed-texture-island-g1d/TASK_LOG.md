@@ -511,3 +511,41 @@ been run since, and it is what CI will run.
 **Deliberately NOT started:** an RCP24 registered-pick variant. It is the named
 cause of the island's fmax, and it spends throughput margin ruling R7
 constrains — an owner call, listed as question 3 in the brief.
+
+## 14:00 — determinism verified, and shown to be able to fail
+
+The roadmap makes determinism a day-one property. The host was heavily changed
+today, so record/replay was re-verified end to end:
+
+```
+record  300 ticks, seed 0x1234        -> match.zrec, 8,432 bytes
+replay  OK -- 300 ticks, identical hash stream
+```
+
+**And then made to fail, because a replay that always says OK proves nothing.**
+One bit flipped at three offsets:
+
+```
+offset 8263 -> DIVERGED at hash index 279 of 301
+offset 7167 -> DIVERGED at hash index 142 of 301
+offset  843 -> OK, identical hash stream
+```
+
+The first two are the format working: a desync is LOCATED at the tick it
+happened, which is why inputs and hashes are recorded separately.
+
+**The third is not a defect and is worth understanding.** A recording carries
+input bytes that provably cannot change authoritative state — the right stick
+is read only on a tick that fires a bolt, so its value on every other tick is
+inert. Corrupt one and the simulation replays identically, because it genuinely
+would have.
+
+So the replay answers *"did the simulation diverge"* and NOT *"is this file
+intact"*. Only the first is what the roadmap asks for. `session_io.hpp` now
+says so, and says why there is deliberately no CRC: it would answer the second
+question and invite treating a passing CRC as evidence about the first.
+
+**A gotcha worth carrying:** the desktop host exe needs `zhao-env` sourced too.
+Without it, it fails with `0xC0000139` STATUS_ENTRYPOINT_NOT_FOUND, which reads
+like a corrupt binary and is a missing runtime DLL on PATH. Same family as
+`ctest` reporting BAD_COMMAND on all 500 tests.
