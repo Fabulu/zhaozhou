@@ -100,7 +100,7 @@ constexpr int32_t kLoopBuryMm = 250;        // the near end plunges into the bod
 // and D->end — the AIMED segment, long enough that the closure arithmetic
 // keeps the arm end buried across the whole clip fold-scale range (the
 // committed closure probe sweeps 780..1160 and asserts it).
-constexpr int32_t kLoopArcMm[5] = {680, 340, 380, 380, 1330};
+constexpr int32_t kLoopArcMm[5] = {680, 340, 380, 380, 1420};
 // fold angles at the neck exit and hinges A..C (angle16, about Z); hinge D
 // has NO authored fold — loop_pose computes it per key (closure). Derived
 // from the sheet's ring read (tall upright egg, W/H ~0.8), tuned by LOOKING.
@@ -201,6 +201,30 @@ constexpr int kRestCompressPeriodKeys = 50;
 constexpr int kRestBobPeriodKeys = 40;
 constexpr int32_t kRestSquintPm = 520;
 constexpr int32_t kPirouetteFlarePm = 90;
+// PASS 2 — the new clips (Direction 2 §5) and the eye-life floor (§4).
+constexpr int kHastyKeys = 120;
+constexpr int32_t kHastyRadiusMm = 900;    // wider, faster circuit than drift
+constexpr int32_t kHastyPitchA16 = 2400;   // body pitched into the travel
+constexpr int32_t kHastyBankA16 = 1900;    // clumsy bank
+constexpr int32_t kHastyFishtailA16 = 1500;// the slight fishtail yaw wobble
+constexpr int kHastyFishtailCycles = 8;
+constexpr int kFallKeys = 100;
+constexpr int32_t kFallHeightMm = 2400;    // blown this high above the hover
+constexpr int kFallCatchKey = 70;          // the tumble ends, the catch begins
+constexpr int32_t kFallStreamPm = 700;     // the antenna streams (folds open)
+constexpr int kHitKeys = 70;
+constexpr int32_t kHitKnockMm = 430;       // knocked back this far
+constexpr int32_t kHitSquashXPm = 2600;    // impact squash, x kCompressAmpPm
+constexpr int kTauntKeys = 140;
+constexpr int32_t kTauntPlayA16 = 1250;    // hinge-D play swing (the closure holds)
+constexpr int32_t kTauntWagglePm = 170;    // per-hinge asymmetric waggle depth
+constexpr int kTaunt2Keys = 120;
+constexpr int32_t kTaunt2LassoA16 = 1900;  // the loop-peak lasso tilt sweep
+// the blink floor (the never-off life law): a quick lid pulse every period,
+// staggered per clip by the offset so no two clips blink in sync
+constexpr int kBlinkPeriodKeys = 96;
+constexpr int kBlinkLenKeys = 5;
+constexpr int32_t kBlinkDepthPm = 870;
 
 // ============================== STAGE ======================================
 

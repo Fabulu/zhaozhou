@@ -6727,6 +6727,11 @@ int main(int argc, char** argv) {
   if (wanted("unnamed02-startle")) rc |= render_scene(subject_u02_clip(4, "unnamed02-startle", u02::kStartleKeys, false));
   if (wanted("unnamed02-rest")) rc |= render_scene(subject_u02_clip(5, "unnamed02-rest", u02::kRestKeys, false));
   if (wanted("unnamed02-pirouette")) rc |= render_scene(subject_u02_clip(6, "unnamed02-pirouette", u02::kPirouetteKeys, false));
+  if (wanted("unnamed02-hasty")) rc |= render_scene(subject_u02_clip(8, "unnamed02-hasty", u02::kHastyKeys, false));
+  if (wanted("unnamed02-fall")) rc |= render_scene(subject_u02_clip(9, "unnamed02-fall", u02::kFallKeys, false));
+  if (wanted("unnamed02-hit")) rc |= render_scene(subject_u02_clip(10, "unnamed02-hit", u02::kHitKeys, false));
+  if (wanted("unnamed02-taunt")) rc |= render_scene(subject_u02_clip(11, "unnamed02-taunt", u02::kTauntKeys, false));
+  if (wanted("unnamed02-taunt2")) rc |= render_scene(subject_u02_clip(12, "unnamed02-taunt2", u02::kTaunt2Keys, false));
   if (wanted("unnamed02-crackle")) {
     SceneSubject s = subject_u02_clip(0, "unnamed02-crackle", u02::kIdleKeys, false);
     s.u02_crackle = true;

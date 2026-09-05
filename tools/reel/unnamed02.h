@@ -119,6 +119,11 @@ inline const zc::CreatureType& type() {
     bank.clips.push_back(build_rest());        // slot 5
     bank.clips.push_back(build_pirouette());   // slot 6
     bank.clips.push_back(build_still());       // slot 7 (form diagnostics)
+    bank.clips.push_back(build_hasty());       // slot 8 (Direction 2 §5)
+    bank.clips.push_back(build_fall());        // slot 9
+    bank.clips.push_back(build_hit());         // slot 10
+    bank.clips.push_back(build_taunt());       // slot 11
+    bank.clips.push_back(build_taunt2());      // slot 12
 
     zc::CreatureType type;
     type.type_id = 3;  // 1 watchdog, 2 zixxtrixx, 3 unnamed02

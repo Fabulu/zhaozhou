@@ -101,8 +101,12 @@ int main() {
                           u02::kLoopArcMm[2] + u02::kLoopArcMm[3] + u02::kLoopArcMm[4];
     int32_t worst_pm = 0;
     int32_t worst_ellip = 0;
-    const auto end_ellip = [&](const std::array<zc::mat3x4fx, zc::kMaxBones>& pose,
-                               int32_t root_x, int32_t root_y, int32_t root_z) {
+    const auto end_ellip = [&](const std::array<zc::mat3x4fx, zc::kMaxBones>& pose) {
+      // Test in the ROOT-LOCAL frame: invert the root's affine (R^T (p - t))
+      // before the ellipsoid test. Subtracting only the translation lied
+      // twice — first on a jump clip (x/z moved), then on the fall (the
+      // TUMBLE rotates the body, and the anchor rotates with it).
+      const zc::mat3x4fx& rm = pose[u02::kBRoot];
       int32_t worst = 0;
       for (int ri = u02::kLoopRings - 3; ri < u02::kLoopRings; ++ri) {
         const int32_t s =
@@ -116,11 +120,13 @@ int main() {
         sv.w0 = 64;
         int32_t x, y, z;
         zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
-        // body-local: subtract the FULL root translation (a jump clip moves
-        // x/z too — testing against an unmoved ellipsoid lied here once)
-        const int64_t ex = (static_cast<int64_t>(x - root_x) << 16) / rx;
-        const int64_t ey = (static_cast<int64_t>(y - root_y) << 16) / ry;
-        const int64_t ez = (static_cast<int64_t>(z - root_z) << 16) / rx;
+        const int64_t dx = x - rm.m[3], dy = y - rm.m[7], dz = z - rm.m[11];
+        const int64_t lx = (rm.m[0] * dx + rm.m[4] * dy + rm.m[8] * dz) >> 16;
+        const int64_t ly = (rm.m[1] * dx + rm.m[5] * dy + rm.m[9] * dz) >> 16;
+        const int64_t lz = (rm.m[2] * dx + rm.m[6] * dy + rm.m[10] * dz) >> 16;
+        const int64_t ex = (lx << 16) / rx;
+        const int64_t ey = (ly << 16) / ry;
+        const int64_t ez = (lz << 16) / rx;
         const int32_t e = static_cast<int32_t>(
             (u02::isqrt64(ex * ex + ey * ey + ez * ez) * 1000) >> 16);
         if (e > worst) worst = e;
@@ -129,10 +135,10 @@ int main() {
     };
     // (a) the synthetic sweep: one clip, one key per fold scale
     {
-      const int kSteps = 20;
+      const int kSteps = 24;
       zc::Clip sweep = u02::clip_shell(7, kSteps, u02::kHoverHeightMm);
       for (int i = 0; i < kSteps; ++i) {
-        const int32_t pm = 780 + (1160 - 780) * i / (kSteps - 1);
+        const int32_t pm = 700 + (1160 - 700) * i / (kSteps - 1);
         u02::Rig g;
         g.reset();
         u02::loop_pose(g, pm, pm, pm, pm);
@@ -142,10 +148,8 @@ int main() {
       for (int i = 0; i < kSteps; ++i) {
         std::array<zc::mat3x4fx, zc::kMaxBones> pose;
         zc::decode_pose(T, sweep, static_cast<uint16_t>(i), pose, nullptr, 0);
-        const int32_t e = end_ellip(pose, sweep.root[static_cast<size_t>(i) * 3 + 0],
-                                    sweep.root[static_cast<size_t>(i) * 3 + 1],
-                                    sweep.root[static_cast<size_t>(i) * 3 + 2]);
-        const int32_t pm = 780 + (1160 - 780) * i / (kSteps - 1);
+        const int32_t e = end_ellip(pose);
+        const int32_t pm = 700 + (1160 - 700) * i / (kSteps - 1);
         if (e > worst_ellip) {
           worst_ellip = e;
           worst_pm = pm;
@@ -156,7 +160,7 @@ int main() {
           rc = 1;
         }
       }
-      std::printf("u02-probe: closure sweep 780..1160 worst arm-end %d pm of surface (at pm %d)"
+      std::printf("u02-probe: closure sweep 700..1160 worst arm-end %d pm of surface (at pm %d)"
                   " — %s (gate %d)\n",
                   worst_ellip, worst_pm, worst_ellip <= kMaxEndEllipPm ? "OK" : "FAIL",
                   kMaxEndEllipPm);
@@ -168,9 +172,7 @@ int main() {
       for (uint16_t f = 0; f < clip.frame_count; ++f) {
         std::array<zc::mat3x4fx, zc::kMaxBones> pose;
         zc::decode_pose(T, clip, f, pose, nullptr, 0);
-        const int32_t e = end_ellip(pose, clip.root[static_cast<size_t>(f) * 3 + 0],
-                                    clip.root[static_cast<size_t>(f) * 3 + 1],
-                                    clip.root[static_cast<size_t>(f) * 3 + 2]);
+        const int32_t e = end_ellip(pose);
         if (e > bank_worst) {
           bank_worst = e;
           bank_slot = clip.slot_id;
@@ -198,7 +200,7 @@ int main() {
   {
     const int32_t rx = u02::fxu(u02::kBodyRadiusMm);
     const int32_t ry = u02::fxu(u02::vmm(u02::kBodyRadiusMm));
-    const zc::Clip& still = T.bank.clips.back();  // slot 7: the rest pose
+    const zc::Clip& still = T.bank.clips[7];  // slot 7: the still pose
     std::array<zc::mat3x4fx, zc::kMaxBones> pose;
     zc::decode_pose(T, still, 0, pose, nullptr, 0);
     const int32_t root_y = still.root[1];
