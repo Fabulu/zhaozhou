@@ -814,6 +814,20 @@ set(ZHAO_TEXTURE_MOSAIC_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv)
 
 # ---------------------------------------------------------------------------
+# The shared console runtime boundary (software lane, 2026-09-05).
+# runtime/ held one 64-line stub that replays packets through the empty shell;
+# it loads no cartridge, owns no resources, polls nothing and advances nothing.
+# zcon.hpp is the middle of the three boundaries -- game truth / console runtime
+# / platform backend -- and this pins the day-one properties the roadmap asks
+# for: a fixed-tick loop, inputs and state hashes recorded from the first tick,
+# exact replay, and a divergence LOCATED at the tick it happened.
+add_executable(test_zcon_session_directed runtime/zcon_session_directed.cpp)
+target_include_directories(test_zcon_session_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/runtime/include)
+add_test(NAME zcon_session_directed COMMAND test_zcon_session_directed)
+set_tests_properties(zcon_session_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
 # TEXTURE.COMBINE (G1-C, 2026-09-05). The material combiner did not exist: the
 # surviving TEXJOIN returns sample 0 for every recipe, so the island fetched up
 # to three samples per fragment and combined none of them.
