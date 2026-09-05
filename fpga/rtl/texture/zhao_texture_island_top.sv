@@ -604,10 +604,43 @@ module zhao_texture_island_top #(
                         {(SRCW-2-$clog2(DEPTH)-2-GENW){1'b0}},
                         fr_tmu_slot, fr_tmu_sidx, fr_tmu_gen};
 
+  // THE CLUT BYTE SELECT, CARRIED PER SAMPLE. AUDIT R5 / docket D23.
+  //
+  // For CLUT8 the planner's address is BYTE granular -- `t3_base + total_c[k]`,
+  // one byte per texel -- while CACHE_PIPE returns 16-bit halfwords. Which of
+  // the two texels in that halfword was asked for is therefore `addr[0]`, and
+  // the palette lookup read `disp_clut_data[7:0]` unconditionally: ALWAYS the
+  // low byte, so every odd texel decoded its neighbour's palette index.
+  //
+  // The selector cannot simply be read at the palette. That lookup happens in
+  // the RESPONSE path, keyed by the routing token, long after the request; and
+  // `plan_acc_addr` at that moment belongs to whatever request the planner is
+  // emitting now. Reading it there would be the late-read defect this island
+  // was already repaired for once, and `check_ingress_capture.py` exists
+  // because of it.
+  //
+  // So it travels, keyed by the SAMPLE's identity -- FRAGROB slot and sample
+  // index -- exactly as the sample class and the palette binding already do. It
+  // is per SAMPLE and not per fragment, because a fragment's three samples have
+  // three different coordinates and so three different byte positions.
+  //
+  // The response token has no spare bits ({class 2, slot 4, sidx 2, gen 8} is
+  // exactly SRCW = 16), which is why this is a side table rather than another
+  // field in the token.
+  logic bytesel_m [DEPTH][3];
+
   logic        plan_req_ready, plan_acc_valid, plan_acc_ready;
   logic [3:0]  plan_acc_en;
   logic [127:0] plan_acc_addr;
   logic [SRCW-1:0] plan_acc_src;
+
+  // Written on the request handshake, indexed by the identity the response will
+  // come back under, so the read below cannot pick up a different sample's bit.
+  always_ff @(posedge clk) begin
+    if (plan_acc_valid && plan_acc_ready)
+      bytesel_m[plan_acc_src[SRC_SLOT_HI:SRC_SLOT_LO]]
+               [plan_acc_src[SRC_SIDX_LO+1:SRC_SIDX_LO]] <= plan_acc_addr[0];
+  end
   logic        plan_acc_filter, plan_acc_err;
   logic [7:0]  plan_acc_fu, plan_acc_fv;
   logic [2:0]  plan_acc_fmt;
@@ -741,7 +774,11 @@ module zhao_texture_island_top #(
       // retired black while the lookup counter moved and looked healthy.
       .lu_slot_i(palslot_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]),
       .lu_gen_i (palgen_m [disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]),
-      .lu_idx_i(disp_clut_data[$clog2(PAL_ENTRIES)-1:0]),
+      // THE ADDRESSED BYTE, not always the low one. See bytesel_m above.
+      .lu_idx_i(bytesel_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+                         [disp_clut_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]]
+                ? disp_clut_data[15:8]
+                : disp_clut_data[7:0]),
       .lu_valid_o(pal_lu_valid_o), .lu_rgb565_o(pal_lu_rgb565),
       .lu_stale_o(pal_lu_stale), .lu_resident_o(pal_lu_resident),
       .lookups_o(cnt_palette_lookups_o),
@@ -819,10 +856,30 @@ module zhao_texture_island_top #(
 
   assign bil_out_ready  = fr_tmu_rready && !pal_lu_valid_o;
   assign fr_tmu_rvalid  = bil_out_valid || pal_lu_valid_o;
+  // RGB565 -> RGB888 BY REPLICATION, not by zero-fill. AUDIT R5/D23.
+  //
+  // This appended zeros: {r5, 3'b000}. The ABI is written down --
+  // zref_texture.hpp names `zref::sky::rgb565::to_rgb888` as THE expansion, and
+  // that function replicates the high bits:
+  //
+  //     r = (r5 << 3) | (r5 >> 2);      31 -> 255
+  //     g = (g6 << 2) | (g6 >> 4);      63 -> 255
+  //     b = (b5 << 3) | (b5 >> 2);
+  //
+  // Zero-fill caps every channel below its intended maximum: 31 became 248, so
+  // full white returned 248, 252, 248. The error is exactly zero at the bottom
+  // of each channel and worst at the top, which is why it survived every
+  // "did anything paint" check the composed test had.
+  //
+  // It also made the reference unusable as an oracle for this path: every
+  // palette pixel differed from zref by this amount, so a per-texel comparison
+  // could not have been written against it until this matched.
+  wire [7:0] pal_r8 = {pal_lu_rgb565[15:11], pal_lu_rgb565[15:13]};
+  wire [7:0] pal_g8 = {pal_lu_rgb565[10:5],  pal_lu_rgb565[10:9]};
+  wire [7:0] pal_b8 = {pal_lu_rgb565[4:0],   pal_lu_rgb565[4:2]};
+
   assign fr_tmu_rgb     = pal_lu_valid_o
-                          ? {pal_lu_rgb565[15:11], 3'b000,
-                             pal_lu_rgb565[10:5],  2'b00,
-                             pal_lu_rgb565[4:0],   3'b000}
+                          ? {pal_r8, pal_g8, pal_b8}
                           : {bil_out, bil_out, bil_out};
   assign fr_tmu_a       = 8'hFF;
   assign fr_tmu_rslot   = rsp_tok[$clog2(DEPTH)+2+GENW-1 -: $clog2(DEPTH)];
