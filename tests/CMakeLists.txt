@@ -4980,37 +4980,13 @@ verilate(test_shell_setup_path_directed
   SOURCES ${ZHAO_SHELL_RTL}
           ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
           ${CMAKE_CURRENT_SOURCE_DIR}/shell/tb_zhao_shell.sv)
-# NOT in add_test yet, deliberately -- and the reason is now SPECIFIC rather
-# than vague. With the preconditions shell_draw_directed pays for (SDRAM init,
-# fb base/stride, distinctive fill words, and a DISPLAY BLIT lease per D19f),
-# the PRECOMPUTED pass draws 3,328 non-zero words -- exactly what
-# shell_draw_directed measures, so the bench is correct.
-#
-# The SETUP pass draws NOTHING, and three iterations of this test have narrowed
-# why to one specific place. Probes on the composed signals show:
-#
-#   mode=1 after offer: took=1  su_ready=0  su_valid=1  shell_ready=0
-#
-# So the triangle IS accepted by GEOM.SETUP (took=1), SETUP DOES produce a
-# result (su_valid=1), and SETUP is then STALLED (su_ready=0) because the
-# shell's render-ready never asserts to consume it.
-#
-# Two earlier hypotheses were tested and eliminated by measurement rather than
-# argument: it is not SETUP refusing the input (tri_ready_o is 1 at reset, and
-# took=1), and it is not the frame closing too early (draining 32 cycles before
-# render_frame_end changed su_valid from 0 to 1 but not the outcome).
-#
-# What remains is the shell's acceptance of a triangle arriving on a LATER
-# cycle than the offer. In mode 0 the triangle enters during the offer itself;
-# in setup mode it arrives three stages later, and the shell does not take it.
-#
-# Registering it red would redden the lane; registering it green would mean
-# deleting the anti-vacuity guard that found this. It stays buildable and
-# unregistered until the handshake is fixed.
-#
-# The COMPOSITION it exists to test is already proven non-disruptive: with
-# setup_mode_i at 0 the shell is bit-identical, and shell_golden passes 757/757
-# including "byte-identical to committed".
+# D22 step 1's composed evidence, and it PASSES: the same triangle drawn twice
+# through the same shell -- once from precomputed edge equations, once from
+# vertices with the coefficients CLEARED so a shell ignoring setup_mode would
+# draw nothing -- produces a byte-identical framebuffer, 3,328 non-zero words
+# each. Registered only now that it earns it.
+add_test(NAME shell_setup_path_directed COMMAND test_shell_setup_path_directed)
+set_tests_properties(shell_setup_path_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
 add_executable(test_shell_draw_directed shell/shell_draw_directed.cpp)
 target_link_libraries(test_shell_draw_directed PRIVATE zhao_harness zhao_zref)

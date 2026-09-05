@@ -200,23 +200,25 @@ std::vector<uint16_t> draw_once(bool setup_mode, bool* drew_ok) {
   }
 
   h.render_frame_begin(kGridW, kGridH);
-  h.top.eval();
-  std::printf("  [probe mode=%d] before offer: su_ready=%d su_valid=%d shell_ready=%d\n",
-              setup_mode ? 1 : 0, (int)h.top.dbg_su_tri_ready_o,
-              (int)h.top.dbg_su_out_valid_o, (int)h.top.dbg_shell_tri_ready_o);
   const bool took = h.render_offer(t);
-  // GEOM.SETUP is a THREE-STAGE pipeline. In mode 0 the triangle reaches the
-  // shell during the offer; in setup mode it arrives three cycles later, which
-  // is AFTER render_frame_end() closes the frame if the bench does not wait.
-  // That is why the first run of this test accepted the triangle (took=1) and
-  // still drew nothing -- the probe showed su_ready=1 and took=1 in both modes,
-  // which ruled out the handshake and left only the timing.
-  if (setup_mode)
-    for (int i = 0; i < 32; ++i) h.step();
-  h.top.eval();
-  std::printf("  [probe mode=%d] after offer: took=%d su_ready=%d su_valid=%d shell_ready=%d\n",
-              setup_mode ? 1 : 0, took ? 1 : 0, (int)h.top.dbg_su_tri_ready_o,
-              (int)h.top.dbg_su_out_valid_o, (int)h.top.dbg_shell_tri_ready_o);
+
+  // Wait for the shell to actually TAKE SETUP's output, rather than guessing a
+  // cycle count. A fixed 40-cycle drain was far too short: the trace showed
+  // su_valid rising at cycle 2 and holding, with the shell's ready low for
+  // every one of those cycles -- and render_offer, which works in mode 0,
+  // waits up to 200,000. "It did not happen in 40 cycles" is not the same
+  // fact as "it does not happen".
+  if (setup_mode) {
+    bool consumed = false;
+    for (int i = 0; i < 200000 && !consumed; ++i) {
+      h.top.eval();
+      if (h.top.dbg_su_out_valid_o && h.top.dbg_shell_tri_ready_o) consumed = true;
+      h.step();
+    }
+    std::printf("    [setup] shell consumed SETUP's triangle: %d\n",
+                consumed ? 1 : 0);
+  }
+
   h.render_frame_end();
   for (int i = 0; i < 200000; ++i) h.step();
 
