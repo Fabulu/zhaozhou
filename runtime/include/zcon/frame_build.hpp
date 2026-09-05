@@ -66,6 +66,20 @@ struct ViewSpec {
 };
 
 struct FramePlan {
+  // THE VIDEO MODE, and it is optional on purpose.
+  //
+  // `SetPresentationContract` latches EFFECTIVE NEXT FRAME (video_rules §1.1),
+  // so a frame that sets it is choosing the mode for its SUCCESSOR, not for
+  // itself. A host that set it every frame would be correct and a host that
+  // sets it once at startup would also be correct; what would NOT be correct is
+  // this file deciding for either of them.
+  //
+  // `has_mode == false` emits no record at all, which leaves the renderer's own
+  // latch alone. That is why it is not simply a `mode` field defaulted to Z60:
+  // a default would silently re-assert a mode every frame and mask a host that
+  // forgot to choose one.
+  bool has_mode = false;
+  uint8_t mode = 0;             // zhao_abi::video_mode
   uint32_t frame_id = 0;
   uint32_t sequence = 0;
   uint32_t resource_epoch = 0;
@@ -99,6 +113,14 @@ inline std::vector<uint8_t> build_frame(const FramePlan& plan) {
   ::zhao::ZhaoFrameBuilder b;
   b.begin_frame(plan.frame_id, plan.resource_epoch, plan.flags,
                 plan.deadline_cycles);
+
+  if (plan.has_mode) {
+    auto spc = zhao_abi::zhao_sample_set_presentation_contract();
+    spc.payload.mode = static_cast<zhao_abi::video_mode>(plan.mode);
+    std::vector<uint8_t> v;
+    zhao_abi::zhao_pack_set_presentation_contract(spc, v);
+    b.append_record(v);
+  }
 
   for (const ViewSpec& v : plan.views) {
     zhao_abi::ZhRecordSetView r{};

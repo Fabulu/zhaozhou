@@ -341,12 +341,29 @@ int main(int argc, char** argv) {
   // helper: screen x comes from world X and screen y from world Z, w = 1.
   // Scale 2048 maps world +-32 m across NDC, so the 32 m ground fills half the
   // 384-px view and both wizards stay well inside the wall clamp.
-  zcon::ViewSpec view;
+  // DUO: TWO VIEWS, ONE PER WIZARD. The roadmap's first playable slice names
+  // "two wizards, two controllers, two views", and two views is the one of the
+  // three the console's own video law has an opinion about: Duo stores its two
+  // 256x192 canvases as CONTIGUOUS PACKED BLOCKS, not interleaved
+  // (video_rules.md §3.1), and the mode LATCHES EFFECTIVE NEXT FRAME (§1.1).
+  //
+  // Both views use the same top-down projection here. They are not yet
+  // per-wizard cameras -- that needs the view matrix to follow a wizard, which
+  // is a gameplay-to-camera binding this host does not own yet. What IS proven
+  // is that the frame carries two views, the renderer honours the viewport
+  // mask, and the Duo canvas is the packed layout the scanout expects.
+  zcon::ViewSpec view0, view1;
   const int32_t kScale = 2048;
-  view.m[0] = kScale;    // ndc.x <- world.x
-  view.m[6] = kScale;    // ndc.y <- world.z  (top-down)
-  view.m[10] = 1 << 16;
-  view.m[15] = 1 << 16;  // w = 1: orthographic, no divide
+  for (zcon::ViewSpec* v : {&view0, &view1}) {
+    v->m[0] = kScale;    // ndc.x <- world.x
+    v->m[6] = kScale;    // ndc.y <- world.z  (top-down)
+    v->m[10] = 1 << 16;
+    v->m[15] = 1 << 16;  // w = 1: orthographic, no divide
+  }
+  view0.view_id = 0;
+  view0.viewport_id = 0;
+  view1.view_id = 1;
+  view1.viewport_id = 1;
 
   // Game units are fx8.8 on a 0..32 m ground (kOne = 256); world is fx16, and
   // the field is centred so 16 m sits at the view origin.
@@ -369,14 +386,24 @@ int main(int argc, char** argv) {
     plan.frame_id = static_cast<uint32_t>(t + 1);
     plan.sequence = static_cast<uint32_t>(t + 1);
     plan.resource_epoch = 1;
-    plan.views.push_back(view);
+    // The mode is set on the FIRST frame only. It latches for the next frame,
+    // so re-asserting it every frame would be harmless and would also hide a
+    // host that never chose one -- see the note on `has_mode`.
+    plan.has_mode = (t == 0);
+    plan.mode = 2;  // zhao_abi::VIDEO_DUO
+    plan.views.push_back(view0);
+    plan.views.push_back(view1);
     for (int p = 0; p < 2; ++p) {
       if (!truth.wizard(p).alive) continue;  // the dead are not drawn
       zcon::DrawItem d;
       d.form = form_h[p];
       d.material_set = mat_h[p];
       d.transform = xform_h[p];
-      d.viewport_mask = 0x1;  // Z60: one view
+      // BOTH views draw BOTH wizards. A mask of 0x1 for player 0 and 0x2 for
+      // player 1 would look like split-screen and would in fact be each player
+      // seeing only themselves -- the opponent would vanish, which is a
+      // gameplay change smuggled in as a rendering choice.
+      d.viewport_mask = 0x3;
       d.flags = 0x2;          // b1 = screen-space size (marker law)
       plan.draws.push_back(d);
     }
