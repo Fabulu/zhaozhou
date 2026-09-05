@@ -549,3 +549,36 @@ question and invite treating a passing CRC as evidence about the first.
 Without it, it fails with `0xC0000139` STATUS_ENTRYPOINT_NOT_FOUND, which reads
 like a corrupt binary and is a missing runtime DLL on PATH. Same family as
 `ctest` reporting BAD_COMMAND on all 500 tests.
+
+## 14:45 — the gate CI runs was RED, and it was my doing
+
+Running every npm gate CI runs found `ledger:check` failing with two errors,
+both introduced today. `abi:check`, `tables:check` and `manifest:check` were
+green. **CI would have failed on this session's work**, and nothing else I had
+run would have told me.
+
+**V20** — `zhao_texture_island_top.sv` claimed "different fragments by
+construction" with no `ENFORCED-BY` within ten lines. Named the real enforcer:
+FRAGROB's `ctx_m`, written at allocation and read at `head_slot_c` on
+retirement. And wrote down the gap rather than letting the tag imply more than
+it does: **no test isolates per-fragment recipe identity.** The composed test
+would catch the recipe never arriving; it would not catch two fragments
+swapping recipes. Closing that needs counters at the island boundary, which
+changes the port list and invalidates the 7,720 ALM number — so it waits for a
+pass that re-fits.
+
+**V17** was a checker fragility, not a drift. The contract cites
+`zref::material::combine` correctly, but the rule takes the first backticked
+`zref::…` matching `[A-Za-z0-9_:]+` **up to a closing backtick** — a symbol
+written with its parameter list attached never closes, so the rule falls
+through to the next `zref::` it finds and reported `zref::unit_mul`. The
+citation was right and the message named a symbol mentioned in passing.
+
+`ledger: check OK — 107 blocks / 40 ops` now.
+
+**Worth noting from the census it prints:** *"per-block fits do not share, so
+every census total is an UPPER BOUND, not a prediction."* That was already
+known. What today added is that for ALMs the bound is TIGHT — 2.4% — which is
+new and is what §4.4 of the G1-D report now says.
+
+Full `fast` gate running.
