@@ -121,6 +121,58 @@ that reports too few is trusted for weeks. So:
 This is the same law as *measurement never trumps looking*, one level up: the
 tool that does the measuring is itself a thing that has to be looked at.
 
+## The first explanation that absolves the design is the one to check hardest
+
+Added 2026-09-05, after the same mistake three times in one day. This is the
+"broken instrument" law's twin: that one is about TOOLS reading low, this one is
+about DIAGNOSES landing soft. Each of these was reached honestly, was plausible,
+and was wrong in the direction that meant less work:
+
+* **The combiner fit reported 8 DSP against a rule of 2**, and the obvious
+  reading was that `multstyle = "logic"` was being ignored by Quartus. It was
+  not. The block contained about fourteen multipliers, because
+  `unit_mul_logic(...)` sat inside every arm of two seven-arm case statements.
+  The tool was fine; the RTL was what the architecture's own sentence forbids.
+* **The composed island came in 2.4% under the sum of standalone fits**, having
+  been argued at length to be much smaller because 889 virtual pins inflate the
+  standalone rows. The argument was right in kind and wrong in magnitude, and
+  the write-up now says so rather than re-scoping the claim, because otherwise
+  the next person inherits "standalone sums overstate" as a rule that is 2.4%
+  true.
+* **Every one of the twelve worst timing paths started at a virtual pin**,
+  which reads exactly like a measurement artefact of a leaf fit. Splitting all
+  2,000 summarised paths by origin showed 1,595 start INSIDE the design, worst
+  slack −3.63 against the pins' −4.482. Deleting the boundary entirely would
+  buy about 4 MHz of 36 needed. The artefact was real and almost irrelevant.
+
+**The tell is the same every time: the comfortable explanation arrives first
+and explains ALMOST all of the evidence.** The check that separates them is
+cheap and specific — count the multiplier sites, difference the two totals,
+split the paths by where they start — and in all three cases the data to do it
+was already on disk.
+
+So: when a diagnosis means the design is fine, spend the extra five minutes.
+When it means the design is wrong, it will get checked anyway.
+
+## Counters see what pictures cannot
+
+Added 2026-09-05, twice in one day, both times a machine doing several times the
+work while producing byte-identical output:
+
+* the material combiner **issued every microjob about twice** — a job sets its
+  `done` bit only when its result lands, so `issuable()` reissued everything in
+  flight. Every colour still matched the oracle exactly, because recomputing a
+  product is idempotent;
+* the shell bench **re-submitted one meshlet fifteen times**, because
+  `m_valid_i` was driven from a level held for the whole offer window. Every
+  re-run produced the identical triangle.
+
+Neither was visible in a framebuffer comparison, a golden CRC, or any
+result-checking test — and the second was found only because the first had
+taught the habit of asserting an exact per-recipe job count. A test that checks
+WHAT came out cannot see HOW MANY TIMES the machine did it, and throughput
+budgets are written against the second number.
+
 ## Instructions are not delivered until they are read
 
 Owner direction was posted four times because it kept not reaching the working
