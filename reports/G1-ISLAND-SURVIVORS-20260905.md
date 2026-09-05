@@ -177,3 +177,39 @@ FRAGROB-level one.
 **Left as a failing gate deliberately.** It fails honestly, it costs nothing to
 leave failing, and lowering the bar while the island is 1.7× over would be
 exactly the "green box" management the roadmap warns against.
+
+
+---
+
+## 6. The perspective pair could not be re-measured in 90 minutes
+
+Attempted 2026-09-05 with a 5,400-second budget. Result:
+
+    zhao_raster_perspuv_svc   incomplete:failed:quartus_fit.exe   5404.9s
+    KEEPING the previous measurement (2204 ALM / 6 DSP) rather than erasing it
+
+**Two G0 fixes are confirmed working by this run**, which is worth as much as
+the measurement would have been:
+
+* **The watchdog actually interrupted the tool.** 5,404.9 s against a 5,400 s
+  budget. The old code checked elapsed time only *between* invocations, so it
+  could not stop anything — it watched `tmu_pipe` run 42% past its budget the
+  day before and would then have blanked the row.
+* **The failed run kept the previous measurement** instead of replacing it with
+  nulls. Before G0, a killed fit wrote a row with every resource field null,
+  and `check_fit_rules.ps1` reported PASS on it.
+
+**So the stale row stands, and is still labelled stale.** 2,204 ALM against a
+900 target remains the largest single overrun in the island (§2), and it is
+still measured against source that has since changed (D19o).
+
+**And the failure is itself evidence.** A block that cannot complete a fit in
+ninety minutes is in the same family as D19m's finding: *a design whose storage
+is in the wrong place stops being MEASURABLE before it stops being BUILDABLE.*
+`perspuv_svc` carries 3,293 registers against a 700 target — 370% over — and
+that is the number the fitter is struggling with.
+
+**Next step is not a longer timeout.** It is to look at where those 3,293
+registers are, exactly as `tmu_pipe`'s 72,824 were looked at: read the
+Analysis & Synthesis RAM Summary, which completes in minutes, rather than
+waiting on a fitter that may never converge.

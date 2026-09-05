@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "b34b3c06905beac0015bf40fc6375a0e6416bd36",
+    "newestRunCommit":  "b1d501d672299bd5647d62fb3ff1bf99bdd87783",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -643,7 +643,10 @@
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  82,
-                       "fmaxClock":  "clk"
+                       "fmaxClock":  "clk",
+                       "lastAttemptStatus":  "incomplete:failed:quartus_fit.exe",
+                       "lastAttemptSeconds":  5404.9,
+                       "lastAttemptCommit":  "b1d501d672299bd5647d62fb3ff1bf99bdd87783"
                    },
                    {
                        "module":  "zhao_raster_rcp24_svc",
