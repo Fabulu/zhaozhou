@@ -42,6 +42,7 @@
 
 #include "geom_dev.hpp"
 #include "shell_harness.hpp"
+#include "zref/zref_render.hpp"
 #include "zhao_sim.hpp"
 
 using zhao_shell::ShellHarness;
@@ -110,36 +111,86 @@ constexpr uint32_t kFbStride = 64 * 2;   // bytes per row
 constexpr uint8_t kGridW = 4, kGridH = 4;
 constexpr uint32_t kWords = 64 * 64;     // words peeked back
 
-// Draw the triangle once and return the framebuffer words.
-std::vector<uint16_t> draw_once(bool setup_mode) {
+// Draw the triangle once and return the slot's halfwords.
+//
+// The preconditions below are NOT incidental. An earlier version of this file
+// omitted them and drew nothing at all -- which the anti-vacuity check caught,
+// and which would otherwise have compared two blank framebuffers and "passed".
+// They are taken from shell_draw_directed, which paid for each one:
+//   * the SDRAM model must reach init_done, or "nothing landed" is a startup
+//     artefact rather than a wiring fault;
+//   * fb_base and fb_stride must be set, or every tile row resolves to the same
+//     address (D19h);
+//   * distinctive fill/clear words, or a correct render writes zeros into
+//     memory that is already zero and success is indistinguishable from a dead
+//     path;
+//   * and a DISPLAY BLIT must grant a framebuffer lease (D19f) -- FBWRITE may
+//     only write while one is live, and a mode packet alone grants nothing.
+std::vector<uint16_t> draw_once(bool setup_mode, bool* drew_ok) {
+  constexpr uint32_t kSlotHalfwords = 245760u / 2u;
+  *drew_ok = false;
+
   ShellHarness h;
   h.reset();
   h.top.fb_writer_i = 1;  // the renderer owns the lease, not the blit
+  h.step();
 
-  h.top.render_fb_base_i = kFbBase;
-  h.top.render_fb_stride_i = kFbStride;
+  bool inited = false;
+  for (int i = 0; i < 200000 && !inited; ++i) {
+    h.step();
+    inited = h.top.init_done_o != 0;
+  }
+  if (!inited) return std::vector<uint16_t>(kSlotHalfwords, 0);
+
+  h.top.render_fb_base_i = 0;
+  h.top.render_fb_stride_i = kGridW * 16 * 2;
   h.top.render_fill_word_i = 0xA5A5A5A5A5A5A5A5ull;
   h.top.render_clear_word_i = 0x5A5A5A5A5A5A5A5Aull;
+  h.top.render_src_a_i = 0xFF;
+  h.top.render_texel_rgb_i = 0xFF00FF;
+  h.top.render_texel_a_i = 0xFF;
 
-  zhao_geom::BinTri b;
-  if (!the_triangle(kGridW, kGridH, &b)) {
-    std::printf("the oracle refused the triangle\n");
-    return std::vector<uint16_t>();
+  {
+    std::vector<uint8_t> canvas(zref::render::kSlotBytes, 0x11);
+    const uint32_t arena = 0x0010'0000u;
+    h.mem_write(arena, canvas);
+    zhao_shell::PacketSpec ps;
+    ps.frame_id = 1;
+    ps.sequence = 1;
+    ps.mode = 2;  // DUO
+    ps.has_blit = true;
+    ps.blit_dst = 0;
+    ps.blit_src = arena;
+    ps.blit_len = (uint32_t)canvas.size();
+    ps.blit_crc = zhao_abi::zhao_crc32c(0, canvas.data(), canvas.size());
+    if (!h.publish(0, zhao_shell::build_packet(ps)))
+      return std::vector<uint16_t>(kSlotHalfwords, 0);
   }
 
-  // THE BOUNDARY. In setup mode the coefficients are NOT supplied; the bench
-  // hands over vertices and the composed GEOM.SETUP computes them. `area2` is
-  // an input to SETUP in both cases -- it comes from the binner, upstream of
-  // the boundary this step moves.
+  int lease_opens = 0;
+  bool was = false;
+  for (int i = 0; i < 3000000; ++i) {
+    h.step();
+    const bool now = h.top.dbg_fb_lease_valid_o != 0;
+    if (now && !was) ++lease_opens;
+    was = now;
+    if (lease_opens > 0 && !now) break;
+  }
+  if (lease_opens == 0) return std::vector<uint16_t>(kSlotHalfwords, 0);
+
+  zhao_geom::BinTri b;
+  if (!the_triangle(kGridW, kGridH, &b))
+    return std::vector<uint16_t>(kSlotHalfwords, 0);
+
+  // THE BOUNDARY. In setup mode the coefficients are not supplied; the bench
+  // hands over vertices and the composed GEOM.SETUP computes them.
   h.top.setup_mode_i = setup_mode ? 1 : 0;
-  h.top.setup_area2_i = static_cast<int64_t>(b.s.area2);
+  h.top.setup_area2_i = (int64_t)b.s.area2;
 
   ShellHarness::RenderTri t = from_bin_tri(b);
   if (setup_mode) {
-    // Deliberately CLEARED, so a shell that ignored setup_mode and used these
-    // would draw nothing and the comparison would fail loudly rather than pass
-    // by accident. This is the difference between testing the new path and
-    // merely running with it enabled.
+    // Deliberately CLEARED, so a shell that ignored setup_mode would draw
+    // nothing and this would fail loudly rather than pass by accident.
     for (int e = 0; e < 3; ++e) {
       t.kx[e] = 0;
       t.ky[e] = 0;
@@ -149,12 +200,13 @@ std::vector<uint16_t> draw_once(bool setup_mode) {
   }
 
   h.render_frame_begin(kGridW, kGridH);
-  h.render_offer(t);
+  const bool took = h.render_offer(t);
   h.render_frame_end();
-  for (int i = 0; i < 4000; ++i) h.step();
+  for (int i = 0; i < 200000; ++i) h.step();
 
-  std::vector<uint16_t> fb(kWords);
-  for (uint32_t w = 0; w < kWords; ++w) fb[w] = peek(h, w);
+  std::vector<uint16_t> fb(kSlotHalfwords);
+  for (uint32_t w = 0; w < kSlotHalfwords; ++w) fb[w] = peek(h, w);
+  *drew_ok = took;
   return fb;
 }
 
@@ -163,8 +215,11 @@ std::vector<uint16_t> draw_once(bool setup_mode) {
 int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
 
-  const std::vector<uint16_t> pre = draw_once(/*setup_mode=*/false);
-  const std::vector<uint16_t> via = draw_once(/*setup_mode=*/true);
+  bool pre_ok = false, via_ok = false;
+  const std::vector<uint16_t> pre = draw_once(/*setup_mode=*/false, &pre_ok);
+  const std::vector<uint16_t> via = draw_once(/*setup_mode=*/true, &via_ok);
+  check(pre_ok, "the precomputed pass's triangle was ACCEPTED", 1, pre_ok ? 1 : 0);
+  check(via_ok, "the setup pass's triangle was ACCEPTED", 1, via_ok ? 1 : 0);
 
   // Anti-vacuity FIRST. If the precomputed pass drew nothing, two identical
   // blank framebuffers would "match" and prove nothing at all -- which is
