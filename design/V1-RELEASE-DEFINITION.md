@@ -103,7 +103,9 @@ composed fit of the eleven exists.
 |---|---|---|
 | Renderer shell | COMPOSED; corrected fit **99.34 MHz** — below the 105 MHz composed acceptance floor | G1 |
 | Texture island | **COMPOSED 2026-09-05** and functionally proven end to end. Its CAPACITY has never been measured: every figure quoted to date is a sum of standalone per-block fits, which the census itself disproves by totalling 342 DSP against a device with 112. Composed fit in flight | G1 |
-| Static geometry | Components BUILT (setup, clip, project, decode, assemble, assetfetch); the production path from resident assets + draw commands into raster is **not composed** | G3 |
+| Static geometry | **COMPOSED IN THE BENCH 2026-09-05** — all six D22 treads draw through the shell: SETUP 5 checks, DEPTHQUANT 7, CLIP 10, PROJECT 9, ASSEMBLE 8, MESHFETCH 9. The boundary now starts at a meshlet descriptor in memory. **NOT ADOPTED:** every block is in `tb_zhao_shell`, not in `zhao_shell_top`, which still instantiates one geometry block | G3 |
+| Asset fetch | **NOT BUILT.** The bench plays MESHFETCH's guard, beat stream and cull. D22's remaining work is one fetcher over `GEOM.ASSET_POOL` (`memory_rules.md` §5f: 22 MiB, ENGINE1, read-only, bank 3) serving three consumers — descriptors, the u8 index stream, vertex records | G3 |
+| Vertex decode | **NOT COMPOSED.** The bench holds the vertex table; GEOM.VDECODE turns 32-byte records into coordinates and step 5 moved the SELECTION, not the DECODE | G3 |
 | Resource upload / residency | Generic HPS burst bridge and blit precedent exist; the general immutable-resource upload transaction is **not built** | G2 |
 | Terrain | Patch/tessellation/deformation/residency machinery BUILT; world streaming (`SW.STREAM`), writeback of layer F, ordinary shading and normal detail **not built** | G2, G4 |
 | Creatures | Assets and decode/skinning work exist; production pose orchestration, lighting and asset-to-renderer integration **not built** | G4 |
