@@ -1,0 +1,88 @@
+REVIEWER MEASUREMENTS — creature 02 pass 2
+All on the shipped lit path (ZIXX_EXP=celmain, the u02 many-coloured moving
+rig), native 384x240, frames read with tools/reel/rgbframe.py.
+Reviewer build: build-direct.sh cel at HEAD 3c211c85.
+Baseline build: build-direct.sh cel at 690c6b44 (pre-implementation).
+
+--- 1. THE COMMITTED PROBE, RE-RUN BY THE REVIEWER (reproduces exactly) ---
+clearance   : 339..510 mm over all 13 clips, both subs — CONTRACT HOLDS
+closure sweep 700..1160 : worst arm-end 887 pm (gate 920)   [impl claimed 887]
+closure clip bank       : worst arm-end 886 pm, slot 9 key 57 [impl claimed 886]
+eye crown               : 1356 pm = 160 mm proud            [impl claimed 160]
+
+--- 2. REVIEWER PROBE — the two gaps in the committed closure pass ---
+(source: evidence/review/review_probe.cpp)
+gap (1) the bank loop tests sub=0 only, so the 60 Hz INTERPOLATED midpoints
+        are never closure-tested.
+  RESULT: centreline worst 886 pm at slot 9 key 57 SUB 0 — the midpoints are
+  never worse. The departure is SOUND; interpolation never opens the loop.
+gap (2) it tests three ring CENTRELINE points; the terminal blade radius is
+        130 mm against a 450 mm body, so the rim can sit outside while the
+        centre passes.
+  RESULT: real terminal-ring rim vertices reach 1206 pm — 20.6% outside the
+  body ellipsoid, same frame (slot 9 key 57). Not a visible punch-through in
+  the render (the body is a tapered teardrop, not the probe's ellipsoid), but
+  the 920 gate is measuring a much more forgiving thing than "buried".
+
+--- 3. GAS RIM — pass 1 vs pass 2, same measure, threshold sweep ---
+Dark band inside the cel ink, 72 rays/frame, 24 frames of unnamed02-hover,
+each pass on ITS OWN shipped path.
+  thresh   pass1 mean / p90 / max / no-rim rays   pass2 mean / p90 / max / no-rim
+  0.60      0.1 /  0 / 10 / 97%                    1.5 /  4 / 45 / 76%
+  0.72      2.2 /  8 / 30 / 78%                    3.1 / 11 / 48 / 64%
+  0.85      3.0 / 10 / 30 / 76%                    4.4 / 15 / 64 / 53%
+  0.92      3.1 / 10 / 30 / 73%                    5.5 / 18 / 64 / 45%
+=> THICKER at every threshold (mean 1.4-1.8x, max 30 -> 48..64 px). But the
+   median is 0-1 px and 45-76% of silhouette rays carry NO rim, so the
+   TASK_LOG's "rings the whole silhouette" is not supported.
+
+--- 4. EXPRESSIVENESS (ink-derived silhouette; fixed-camera clips) ---
+clip        frames  bob px  area swing  turnover/frm  H/W swing  star path px
+taunt          280    20.5      23.7%        6.1%        10.4%        577
+startle        160    31.5      28.5%        5.9%         8.7%        511
+fall           200    95.7     117.1%       13.7%       141.7%        546
+hover          600    26.2      51.5%        2.7%        93.6%(orbit)  909
+Benchmark: pass 1 moved 4 px across a 180-frame clip and the eyes never moved.
+Stars are detected in 83% (taunt) / 92% (startle) of frames — the dropouts are
+consistent with the claimed blink floor.
+
+--- 5. MANA MENU — effect isolated against a cross-candidate per-pixel min ---
+(all six share one base animation and camera, so the min is an effect-free plate)
+candidate   area mean   min    max   pulse   peak   extent mean/max   dead frames
+pulsar          3656   2134   5351   1.46x    192      147 / 180          0/600
+plasma          4872   3259   6795   1.39x    169      185 / 204          0/600
+bullets         2801   1424   3917   1.40x    234      258 / 363          0/600
+lightning        489     89   1091   2.23x    232       61 / 129          0/600
+boil            4911   2339   5300   1.08x    192      125 / 182          0/600
+drip               5      0     27   5.50x    104        5 / 135        579/600
+=> The pulsar DOES now pulse: 3,217 px of swing, against the old strobe's
+   150 px of 92,160. Genuine fix.
+=> Lightning is real and recurs (highest pulse ratio) but is 10x smaller in
+   footprint than boil, and renders as discrete beads, not a filament.
+=> Drip is effectively absent: under 20 px of effect in 579 of 600 frames,
+   and 2-3 hard-edged blue squares when present.
+
+--- 6. EYE LENS COMPOSITION (lit path) ---
+view                     lens px   purple   white   teal
+s4-front (Lambda)            710    81.5%   10.0%   9.0%
+taunt f100 (shipped 3/4)     399    90.2%    0.3%   9.8%
+hover f75 (shipped 3/4)      728    78.0%   19.9%   5.5%
+Stage D targets: purple 65-70%, white a THIN RING at 4-7%, star grown WIDER
+than the purple band. Purple overshot (78-90%); the star never grew (5.5-9.8%,
+nowhere near "wider than the purple band"); white is over target and, more to
+the point, shaped as a long bright arc rather than a ring.
+
+--- 7. ZIXXTRIXX IDENTITY — REPRODUCED INDEPENDENTLY BY THE REVIEWER ---
+Pristine baseline built from git archive of 690c6b44 into a clean tree, own
+build-direct.sh cel; both builds run ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross.
+  subject                 baseline      final        verdict
+  zixxtrixx-moving-light  0xC0DE226E    0xC0DE226E   IDENTICAL  <- exercises the
+                                                                   changed rig ptr
+  zixxtrixx-walk          0xF06EF66B    0xF06EF66B   IDENTICAL
+  zixxtrixx-idle          0x1408F885    0x1408F885   IDENTICAL
+  zixxtrixx-attack        0x86A2B30B    0x86A2B30B   IDENTICAL
+  zixxtrixx-death         0x2E8755B3    0x2E8755B3   IDENTICAL
+  zixxtrixx-taunt         0xD79D55E2    0xD79D55E2   IDENTICAL
+All six match the implementer's published CRCs. The only shared-code edit is
+the cel-ink snapshot move, guarded by `c.u02_mana != 0` which no Zixxtrixx
+subject sets — reasoning confirmed empirically, not just by inspection.
