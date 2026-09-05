@@ -2969,3 +2969,76 @@ composition improves"*). Three options, none picked here:
 not earned the deletion.
 
 Evidence: `reports/G1C-COMBINE-V1-VARIANT-A-MEASURED-20260905.md`.
+
+## D19v — the island never captured its fragments, and its counters could not say so
+
+**Status** repaired and gated. **Evidence**
+`reports/G1D-INGRESS-CAPTURE-REPAIR-20260905.md`, 25 checks in
+`island_composed_directed`.
+
+The combiner job-distribution anomaly opened in D19t was not in the combiner.
+The island read **every per-fragment attribute off its own input pins at the
+point each was consumed** — ten signals, including PERSPUV's `u/w` and `v/w`
+numerators. A fragment spends ~12 clocks in RCP24 and PERSPUV, so each tap
+sampled a different fragment, and once submission stopped the pins held the
+last one.
+
+**What the counters could not say.** 64 fragments in, 64 out, every block's
+counter moving, totals plausible — while only **25 distinct fragments existed**,
+39 were lost and one was delivered 24 times. Three hypotheses were written down
+confidently and all three were refuted (the OR-ed field, neighbour
+mis-association, double issue). Recording per-fragment **identity** settled it
+in one run, using a port that was already exposed.
+
+Counters aggregate away the field a transport bug destroys. `CLAUDE.md` says
+"counters see what pictures cannot"; the converse is now also earned —
+**counters cannot see identity**. When a count is wrong, measure the identity
+of the things being counted before theorising about the count.
+
+**What moved**, each independently predicted by the test's drive pattern:
+
+| | before | after |
+|---|---|---|
+| combine jobs by recipe | `0 0 0 4 0 0 24 112` | `0 32 32 32 0 0 48 32` |
+| bilerp / palette | 131 / 61 | 96 / 96 |
+| aux accepted | 37 | 22 |
+| distinct fragments out | 25 of 64 | 64 of 64 |
+
+**FRAGROB was innocent throughout** — its head slot walked `0..15` exactly four
+times. It was handed the wrong data.
+
+### Two defects it had been masking
+
+* **The CLUT path was black.** The test never followed the palette load
+  protocol, *and* the island asked the palette with two **overlapping** slices
+  of the response routing token — the "slot" was the low two bits of the
+  "generation", which was FRAGROB's residency counter. 96 lookups / 96 stale /
+  0 cold → 96 / 0 / 0. Owner v2, Appendix B: *"A provenance source ID is not an
+  internal transaction-routing ID."* Staleness and coldness are counters now.
+* **Order is not preserved** — 10 fragments out of place, displacement 8, drain
+  phase only. The permutation is present at FRAGROB's *input*, so this is the
+  misplaced ordering boundary of owner priority 6. Recorded with a regression
+  guard on the measured bound, not patched.
+
+### Gates, each mutation-verified
+
+`tools/rtl/check_ingress_capture.py` enforces the rule rather than the ten
+instances, wired into `npm run design:report`. **Its first version failed its
+own mutation test** — it caught a direct pin tap but passed the capture word
+laundered through one wire, which is exactly the bug it was written for. A
+sticky flag now guards the completion merger's undocumented cross-module
+assumption (the palette cannot be back-pressured, so it must win, which is safe
+only while FRAGROB's `tmu_rready_o` is tied high).
+
+Under the historical-bug mutation **the old aggregate checks still pass**;
+`moved >= 2` sees four counters moved and is satisfied. That is the argument for
+per-input identity over population statistics, demonstrated rather than
+asserted.
+
+### What this invalidates
+
+**D19t's 7,720 ALM / 69.05 MHz is stale.** The capture table adds combinational
+LUT-RAM reads on PERSPUV's input path. No prediction is offered — the island's
+last obvious explanation was worth 4 MHz of 36. Per owner priority 5 the
+corrected **combiner** leaf fit is the next bounded attribution experiment, not
+a full island refit.
