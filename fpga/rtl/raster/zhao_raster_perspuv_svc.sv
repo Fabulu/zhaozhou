@@ -123,10 +123,28 @@ module zhao_raster_perspuv_svc #(
   // ------------------------------------------------------------- entries ----
   logic                  e_val  [NTOK];
   logic [1:0]            e_have [NTOK];
-  logic signed [31:0]    e_num  [NTOK][2];
+  // SPLIT PER AXIS, and the reason is PORT COUNT rather than tidiness.
+  //
+  // As `e_num [NTOK][2]` this needs TWO INDEPENDENT READ ADDRESSES in one
+  // cycle: `ax` runs over both axes and the two axes are driven by separate
+  // work queues, so `pk_i[0]` and `pk_i[1]` are unrelated. An M10K offers two
+  // ports in total, so a 2R2W array cannot be one and 1,024 bits stayed in
+  // flip-flops.
+  //
+  // The second dimension is not shared state -- axis 0 never reads axis 1's
+  // entry -- so `[NTOK][2]` is two independent `[NTOK]` arrays wearing one
+  // name. Split, each has exactly one read address and one write address,
+  // which is what a simple dual-port memory does.
+  //
+  // Diagnosed in reports/PERSPUV-REGISTER-DIAGNOSIS-20260905.md as STATIC
+  // ANALYSIS, explicitly not a measurement. The fit that follows this change
+  // is what confirms or refutes it.
+  logic signed [31:0]    e_num_u [NTOK];
+  logic signed [31:0]    e_num_v [NTOK];
   logic [23:0]           e_mant [NTOK];
   logic [5:0]            e_k    [NTOK];
-  logic signed [31:0]    e_q    [NTOK][2];
+  logic signed [31:0]    e_q_u  [NTOK];
+  logic signed [31:0]    e_q_v  [NTOK];
   logic                  e_sat  [NTOK];
   logic                  e_dz   [NTOK];
   logic [TAGW-1:0]       e_tag  [NTOK];
@@ -219,8 +237,8 @@ module zhao_raster_perspuv_svc #(
   assign head_done = e_val[head_q] && (e_have[head_q] == 2'b11);
 
   assign r_valid_o    = head_done;
-  assign u_o          = e_q[head_q][0];
-  assign v_o          = e_q[head_q][1];
+  assign u_o          = e_q_u[head_q];
+  assign v_o          = e_q_v[head_q];
   assign tag_o        = e_tag[head_q];
   assign sat_o        = e_sat[head_q];
   assign depth_zero_o = e_dz[head_q];
@@ -295,12 +313,12 @@ module zhao_raster_perspuv_svc #(
             wq_wp[ax] <= wq_wp[ax] + (TW+1)'(1);
           end
         e_have[tail_q]    <= depth_zero_i ? 2'b11 : 2'b00;
-        e_num[tail_q][0]  <= u_over_w_i;
-        e_num[tail_q][1]  <= v_over_w_i;
+        e_num_u[tail_q]   <= u_over_w_i;
+        e_num_v[tail_q]   <= v_over_w_i;
         e_mant[tail_q]    <= r_mant_i;
         e_k[tail_q]       <= r_k_i;
-        e_q[tail_q][0]    <= 32'sd0;
-        e_q[tail_q][1]    <= 32'sd0;
+        e_q_u[tail_q]     <= 32'sd0;
+        e_q_v[tail_q]     <= 32'sd0;
         e_sat[tail_q]     <= 1'b0;
         e_dz[tail_q]      <= depth_zero_i;
         e_tag[tail_q]     <= tag_i;
@@ -319,7 +337,11 @@ module zhao_raster_perspuv_svc #(
         if (pk_v[ax]) begin
           p1_i_q[ax]    <= pk_i[ax];
           p1_k_q[ax]    <= e_k[pk_i[ax]];
-          p1_prod_q[ax] <= 64'(e_num[pk_i[ax]][ax]) * $signed({40'd0, e_mant[pk_i[ax]]});
+          // The per-axis select is explicit. Each arm reads ONE array at ONE
+          // address, which is the whole point of the split.
+          p1_prod_q[ax] <= (ax == 0)
+              ? 64'(e_num_u[pk_i[0]]) * $signed({40'd0, e_mant[pk_i[0]]})
+              : 64'(e_num_v[pk_i[1]]) * $signed({40'd0, e_mant[pk_i[1]]});
           wq_rp[ax] <= wq_rp[ax] + (TW+1)'(1);
         end
       end
@@ -359,7 +381,8 @@ module zhao_raster_perspuv_svc #(
       // fragment on one clock.
       for (int unsigned ax = 0; ax < 2; ax++) begin
         if (p3_v_q[ax]) begin
-          e_q[p3_i_q[ax]][ax]    <= q_c[ax];
+          if (ax == 0) e_q_u[p3_i_q[0]] <= q_c[0];
+          else         e_q_v[p3_i_q[1]] <= q_c[1];
           e_have[p3_i_q[ax]][ax] <= 1'b1;
         end
       end
