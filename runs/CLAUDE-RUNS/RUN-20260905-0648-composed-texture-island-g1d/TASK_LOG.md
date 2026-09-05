@@ -135,3 +135,82 @@ first time.
 **Then, in order:** fit `zhao_texture_material_combine_v1` (settles whether
 LOGIC2 actually reaches zero DSP, and unblocks deleting the refuted block); then
 perspuv's per-axis array split, which its closure currently forbids.
+
+---
+
+# Second block — after the island fit was killed at the watchdog
+
+## The island fit did not finish
+
+7,205.1 s against a 7,200 s budget. Analysis & Synthesis completed and the
+fitter did not, so **ALMs and fmax are still unknown** and the row says
+`incomplete` / `partial: true` with those fields ABSENT rather than zero.
+
+Real numbers from synthesis: **11,613 registers, 22 DSP, 25,872 block-memory
+bits, 889 virtual pins**. The pin count is the direct evidence that the 7,913
+standalone sum overstates: eleven separate fits each pinned out a full
+interface and paid registers to feed pads that will not exist.
+
+A four-hour re-run is in flight (`quartus_fit` since 09:13), with a COMBINE.V1
+fit chained behind it.
+
+## COMBINE.V1: the DSP overrun was mine, not the tool's
+
+The fit measured **7 DSP** against a rule of 2, which looked like
+`(* multstyle = "logic" *)` being ignored. It was not.
+
+`unit_mul_logic(...)` sat inside **every arm of both write-back case
+statements** — seven arms per lane, fourteen independent `*` operators — plus
+four more from `mul2x9` being called per channel, plus two alpha products at
+acceptance. About eight distinct multipliers; the fitter packed them into
+seven DSPs.
+
+That is the exact failure §15.5 closes with, and I had quoted that line in
+that file's own header while writing fourteen of them.
+
+Now **two** call sites, one per lane. Every product including alpha is a
+microjob. `mul2x9` and `lerp8` are deleted so nothing can hide in them.
+
+Two consequences recorded rather than smoothed: MODULATE/MODULATE2X/LERP now
+issue FOUR jobs where §15.3's table says three (the table counts RGB only, but
+the ratified arithmetic multiplies alpha), and job 3 had been storing the raw
+product so MODULATE2X's alpha came out half — 17 where the oracle said 34 —
+while its RGB was right.
+
+## D22 steps 2 and 3
+
+**Step 2 (GEOM.DEPTHQUANT)** composed. Its first version's picture evidence was
+EMPTY: with depth testing off a wrong depth changed zero framebuffer words. The
+test measured that and said so, then depth testing was enabled and a wrong
+depth now moves 1,586 words.
+
+**Step 3 (GEOM.CLIP)** composed, in front of SETUP: the bench stops supplying
+2A and the scan box. It moves more than two numbers — CLIP normalises winding —
+so the test draws BOTH windings and asserts the flip fired, because a test fed
+only one winding exercises that path zero times.
+
+## Gates repaired
+
+* `source_list_parity` had been RED since step 1 left `zhao_geom_setup` out of
+  the shell QSF. Green at 49 modules, same set and same order.
+* `check_prod_manifest.py` was local-only; now `npm run manifest:check` and in
+  CI. It found two real divergences the first time it ran in anger.
+* clang-format drift across 23 files.
+* `QUARTUS_GOTCHAS` 15/16/17: Quartus 17.0.2 rejects `inside` while Verilator
+  lints it clean; PowerShell leaves `$LASTEXITCODE` EMPTY when it cannot run a
+  file at all; and `ctest` needs `zhao-env` sourced or every one of 500 tests
+  reports `BAD_COMMAND`.
+
+## Where I am, written down before the next fit result
+
+**In flight:** the island's 4 h fit, then COMBINE.V1. A reconfigure is running
+so the step-3 test can build.
+
+**Next when the island lands:** fill §4.3 of
+`reports/G1D-COMPOSED-ISLAND-20260905.md` with ALM / fmax and compare against
+6,600 nominal / 7,500 redline / 7,913 standalone sum.
+
+**Then:** read COMBINE.V1's DSP count — if the two-lane form still exceeds 2,
+variant A LOGIC2 does not do what §15.5 says and that is an owner question, not
+another rewrite. Then perspuv's per-axis array split, which the island fit's
+closure currently forbids.
