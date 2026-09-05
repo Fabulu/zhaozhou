@@ -361,3 +361,36 @@ beginning with the tool's own name is parsed as a lint pragma.
 `Get-Process quartus*` piped through `Format-Table` intermittently returns
 empty, and I twice nearly reported the fit as finished. Three consecutive
 samples is the fix, and it is now what I do.
+
+## D22 step 6 lands — the staircase is complete
+
+```
+[mf]    guard_req 0 | granted 1 | max beat 8 | cull ticks 1 | fetched 1 denied 0 refused 0
+[chain] asm 1 | proj 1 | clip 2 | setup 532
+meshfetch read: vertices 4, triangles 1, material 0x0777, vis 1
+crc-failed descriptor: read = 0, drew 0 words
+```
+
+All six steps have composed evidence: SETUP 5, DEPTHQUANT 7, CLIP 10,
+PROJECT 9, ASSEMBLE 8, MESHFETCH 9.
+
+**Two bench faults, both mine, both found by instrumenting rather than
+guessing.**
+
+*The cull verdict arrived with the tick instead of after it.* `cull_tick_o` is
+asserted in S_CULL and the block then moves to S_WAIT to listen for
+`cull_valid_i`; driving valid FROM the tick makes it high while the block is
+asking and low while it is listening. It parked in S_WAIT during
+`render_offer`, before any sampling window opened — so the trace read
+"cull ticks 0" while the descriptor had been fetched and not refused.
+
+*The one-shot fired earlier than the event it recorded.* `asm_sent_r` was set
+on `render_tri_valid_i && assemble_mode_i && asm_m_ready`, which omits the
+meshfetch gate that `m_valid_i` carries. It latched while ASSEMBLE was merely
+READY and the meshlet did not exist, then gated `m_valid_i` off forever. The
+trace read `asm 0 | proj 0 | clip 0 | setup 0` with the descriptor correctly
+fetched, validated and culled one block upstream. **A one-shot whose set
+condition is broader than the event it records will always fire early.**
+
+Both were located by counting every hop instead of breaking at the first
+interesting signal — the structure step 4 had to learn and step 6 inherited.

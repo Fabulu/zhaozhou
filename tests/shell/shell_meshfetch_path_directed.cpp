@@ -302,8 +302,18 @@ Pass draw_once(int mode, bool corrupt_crc) {
   h.render_frame_begin(kGridW, kGridH);
   const bool took = h.render_offer(t);
 
+  int saw_greq = 0, saw_grant = 0, saw_cull = 0, maxbeat = 0;
+  int saw_asm = 0, saw_proj = 0, saw_clip = 0, saw_setup = 0;
   for (int i = 0; i < 200000; ++i) {
     h.top.eval();
+    if (h.top.dbg_mf_greq_o) ++saw_greq;
+    if (h.top.dbg_mf_granted_o) ++saw_grant;
+    if (h.top.dbg_mf_cull_tick_o) ++saw_cull;
+    if ((int)h.top.dbg_mf_beat_o > maxbeat) maxbeat = h.top.dbg_mf_beat_o;
+    if (h.top.dbg_asm_valid_o) ++saw_asm;
+    if (h.top.dbg_proj_ready_o) ++saw_proj;
+    if (h.top.dbg_clip_valid_o) ++saw_clip;
+    if (h.top.dbg_su_out_valid_o) ++saw_setup;
     if (h.top.dbg_mf_valid_o && !r.read) {
       r.read = true;
       r.vcount = h.top.dbg_mf_vcount_o;
@@ -313,6 +323,15 @@ Pass draw_once(int mode, bool corrupt_crc) {
     }
     h.step();
   }
+
+  if (mode >= 1)
+    std::printf(
+        "    [mf] guard_req %d | granted %d | max beat %d | cull ticks %d | "
+        "fetched %u denied %u refused %u\n"
+        "    [chain] asm %d | proj %d | clip %d | setup %d\n",
+        saw_greq, saw_grant, maxbeat, saw_cull, h.top.dbg_mf_fetched_o,
+        h.top.dbg_mf_denied_o, h.top.dbg_mf_refused0_o,
+        saw_asm, saw_proj, saw_clip, saw_setup);
 
   h.render_frame_end();
   for (int i = 0; i < 200000; ++i) h.step();

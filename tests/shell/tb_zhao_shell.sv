@@ -288,6 +288,18 @@ module tb_zhao_shell (
   output logic [7:0]         dbg_mf_tcount_o,
   output logic [15:0]        dbg_mf_material_o,
   output logic [1:0]         dbg_mf_vis_o,
+  // Why a meshlet did or did not come out. MESHFETCH refuses for seven
+  // distinct reasons and counts them apart on purpose -- its contract says
+  // three different failures with three different causes, and one counter for
+  // all of them would name none. Exposing them means a silent non-emission is
+  // LOCATED rather than merely observed.
+  output logic               dbg_mf_greq_o,
+  output logic               dbg_mf_granted_o,
+  output logic [3:0]         dbg_mf_beat_o,
+  output logic               dbg_mf_cull_tick_o,
+  output logic [31:0]        dbg_mf_fetched_o,
+  output logic [31:0]        dbg_mf_denied_o,
+  output logic [31:0]        dbg_mf_refused0_o,
   input  logic               assemble_mode_i,
   input  logic [7:0]         asm_vertex_count_i,
   input  logic [7:0]         asm_triangle_count_i,
@@ -532,9 +544,10 @@ module tb_zhao_shell (
   logic [1:0]        mf_r_vis;
   /* verilator lint_off UNUSEDSIGNAL */
   logic signed [31:0] mf_cull_cx, mf_cull_cy, mf_cull_cz, mf_cull_radius;
-  logic [31:0] mf_considered, mf_culled, mf_fetched, mf_denied;
-  logic [31:0] mf_refused [7];
+  logic [31:0] mf_considered, mf_culled;
   /* verilator lint_on UNUSEDSIGNAL */
+  logic [31:0] mf_fetched, mf_denied;
+  logic [31:0] mf_refused [7];
 
   logic signed [31:0] mf_xform [12];
   always_comb begin
@@ -586,8 +599,26 @@ module tb_zhao_shell (
   // THE PLAYED CULL. Always ready, answers VISIBLE. Culling has its own unit
   // evidence; answering "reject" here would make step 6 a test of the cull
   // path with the descriptor path silently unexercised.
+  // THE VERDICT COMES AFTER THE TICK, NOT WITH IT.
+  //
+  // `cull_tick_o` is asserted in S_CULL and the block then moves to S_WAIT to
+  // await `cull_valid_i`. Driving valid FROM the tick makes it high only while
+  // the block is asking and low by the time it is listening -- so it parks in
+  // S_WAIT forever. And it does so during `render_offer`, before any sampling
+  // window opens, which is why the trace read "cull ticks 0" while the
+  // descriptor had been fetched and not refused: the tick had already come and
+  // gone.
+  //
+  // The verdict is therefore LATCHED once the tick is seen and held.
+  logic mf_cull_seen_r;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n)                     mf_cull_seen_r <= 1'b0;
+    else if (!render_tri_valid_i)   mf_cull_seen_r <= 1'b0;
+    else if (mf_cull_tick)          mf_cull_seen_r <= 1'b1;
+  end
+
   assign mf_cull_ready  = 1'b1;
-  assign mf_cull_valid  = mf_cull_tick;
+  assign mf_cull_valid  = mf_cull_seen_r;
   assign mf_cull_vis    = 2'b01;
   assign mf_cull_reject = 1'b0;
 
@@ -645,6 +676,15 @@ module tb_zhao_shell (
   assign dbg_mf_tcount_o   = mf_tc_r;
   assign dbg_mf_material_o = mf_mat_r;
   assign dbg_mf_vis_o      = mf_vis_r;
+  assign dbg_mf_greq_o     = mf_guard_req.valid;
+  assign dbg_mf_granted_o  = mf_granted_r;
+  assign dbg_mf_beat_o     = mf_beat_r;
+  assign dbg_mf_cull_tick_o= mf_cull_seen_r;
+  assign dbg_mf_fetched_o  = mf_fetched;
+  assign dbg_mf_denied_o   = mf_denied;
+  assign dbg_mf_refused0_o = mf_refused[0] | mf_refused[1] | mf_refused[2] |
+                             mf_refused[3] | mf_refused[4] | mf_refused[5] |
+                             mf_refused[6];
 
   // ---- D22 step 5: GEOM.ASSEMBLE --------------------------------------------
   logic        asm_m_ready, asm_ix_req, asm_t_valid, asm_t_last;
@@ -718,7 +758,20 @@ module tb_zhao_shell (
       asm_have_r <= 1'b0;
       asm_sent_r <= 1'b0;
     end else begin
-      if (render_tri_valid_i && assemble_mode_i && asm_m_ready && !asm_sent_r)
+      // THE ONE-SHOT MUST MIRROR THE ACTUAL HANDSHAKE, not a weaker condition.
+      //
+      // This read `render_tri_valid_i && assemble_mode_i && asm_m_ready`, which
+      // omits the meshfetch gate that `m_valid_i` carries. So in step-6 mode it
+      // fired while ASSEMBLE was merely READY and the meshlet did not exist
+      // yet -- then latched `asm_sent_r`, which gates `m_valid_i` off forever.
+      // ASSEMBLE never received anything, and the trace read
+      // `asm 0 | proj 0 | clip 0 | setup 0` with the descriptor correctly
+      // fetched, validated and culled one block upstream.
+      //
+      // A one-shot whose set condition is broader than the event it is
+      // recording will always fire early. Same expression, both places.
+      if (render_tri_valid_i && assemble_mode_i && asm_m_ready && !asm_sent_r
+          && (~meshfetch_mode_i | mf_have_r))
         asm_sent_r <= 1'b1;
       if (asm_t_valid && !asm_have_r) begin
         asm_v_r[0] <= asm_v0;
