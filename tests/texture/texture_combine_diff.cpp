@@ -25,6 +25,33 @@
 #include "zhao_sim.hpp"
 #include "zref/zref_material.hpp"
 
+// ===========================================================================
+// THIS TESTS A RETIRED BLOCK, AT ITS OWN REDUCED SCOPE. READ THIS FIRST.
+// ===========================================================================
+// `zhao_texture_combine` is the II=1 combiner, REFUTED on 2026-09-05 by its own
+// pre-committed tripwire: it fit at 8 DSP blocks against islandrearchitecture5
+// §3.4's "reject DSP > 2", because §15.5's closing instruction -- "Do not write
+// six independent `*` operators and assume they pack" -- is exactly what it
+// does. Docket D19q. Its replacement is
+// `zhao_texture_material_combine_v1`, covered by
+// `tests/texture/material_combine_v1_diff.cpp`.
+//
+// The block is kept in the tree until its replacement has been MEASURED, so
+// that G1-C is never left with no combiner and no record of why the shape
+// changed. This test is kept with it, and its scope is now explicitly the SIX
+// recipes that block implements.
+//
+// THE ARCHITECTURE RATIFIES EIGHT. Recipes 6 and 7 -- TERRAIN_DETAIL_LIGHT and
+// TERRAIN_DETAIL_MASK -- exist, and DETAIL_LIGHT is the worst case §15.4's
+// entire two-lane capacity argument rests on. This block refuses both as
+// unknown encodings. That is a REAL GAP IN THE BLOCK, not a property of the
+// recipe set, and it is why the limit below is written as an explicit constant
+// with this paragraph attached rather than as a quiet `% 6`.
+//
+// A GREEN RESULT HERE IS NOT EVIDENCE ABOUT THE PRODUCTION COMBINER. When the
+// replacement is measured and this block is deleted, delete this file with it.
+constexpr uint8_t kRetiredBlockRecipeLimit = 6;
+
 namespace {
 
 int g_checks = 0;
@@ -133,7 +160,21 @@ int main(int argc, char** argv) {
   for (int i = 0; i < kN; ++i) {
     Stim t;
     // Recipes 0..7 so the two refused encodings (6, 7) are reached often.
-    t.recipe = static_cast<uint8_t>(rng.next() % 8u);
+    // Six implemented recipes, plus 255 to exercise the unknown-recipe
+    // refusal.
+    //
+    // 255 AND NOT 6, deliberately. Recipe 6 is unknown to THIS BLOCK but is
+    // TERRAIN_DETAIL_LIGHT to the oracle, so the two would refuse the same
+    // fragment for different reasons and their refusal LEDGERS would disagree
+    // even though both said "refused" -- an accounting mismatch that reads as
+    // an arithmetic bug. 255 is outside the ratified set on both sides, so the
+    // refusal counters compare cleanly and the check still means something.
+    {
+      const uint32_t pick = rng.next() % (kRetiredBlockRecipeLimit + 1u);
+      t.recipe = (pick == kRetiredBlockRecipeLimit)
+                     ? uint8_t{255}
+                     : static_cast<uint8_t>(pick);
+    }
     t.weight = rng.byte();
     t.count = static_cast<uint8_t>(rng.next() % 4u);  // 0..3
     // Bias toward the unit8 corners, which is where the rounding law bites and
@@ -190,9 +231,12 @@ int main(int argc, char** argv) {
 
   // ---- coverage guard ------------------------------------------------------
   int unreached = 0;
-  for (int r = 0; r < mat::kRecipeCount; ++r)
+  for (int r = 0; r < kRetiredBlockRecipeLimit; ++r)
     if (seen_recipe[r] == 0) ++unreached;
-  check(unreached == 0, "every ratified recipe was exercised", 0, unreached);
+  check(unreached == 0,
+        "every recipe THIS RETIRED BLOCK implements was exercised -- six of the "
+        "architecture's eight; see the banner",
+        0, unreached);
   check(seen_refuse_unknown > 0, "the unknown-recipe refusal was reached", 1,
         seen_refuse_unknown > 0 ? 1 : 0);
   check(seen_refuse_missing > 0, "the missing-sample refusal was reached", 1,
