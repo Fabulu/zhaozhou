@@ -1,0 +1,19 @@
+u02-probe: slot 0 (300 keys): min clearance 386 mm at key 253 sub 0 — OK
+u02-probe: slot 1 (150 keys): min clearance 432 mm at key 88 sub 0 — OK
+u02-probe: slot 2 (210 keys): min clearance 450 mm at key 115 sub 0 — OK
+u02-probe: slot 3 (90 keys): min clearance 432 mm at key 23 sub 0 — OK
+u02-probe: slot 4 (80 keys): min clearance 494 mm at key 8 sub 0 — OK
+u02-probe: slot 5 (200 keys): min clearance 337 mm at key 150 sub 1 — OK
+u02-probe: slot 6 (120 keys): min clearance 414 mm at key 65 sub 0 — OK
+u02-probe: slot 7 (2 keys): min clearance 510 mm at key 0 sub 0 — OK
+u02-probe: slot 8 (120 keys): min clearance 402 mm at key 70 sub 0 — OK
+u02-probe: slot 9 (170 keys): min clearance 495 mm at key 140 sub 0 — OK
+u02-probe: slot 10 (70 keys): min clearance 477 mm at key 61 sub 0 — OK
+u02-probe: slot 11 (140 keys): min clearance 245 mm at key 24 sub 0 — OK
+u02-probe: slot 12 (120 keys): min clearance 386 mm at key 45 sub 0 — OK
+u02-probe: slot 13 (200 keys): min clearance 71 mm at key 75 sub 1 — OK
+u02-probe: slot 13 DECLARED CONTACT keys 78..156 (+2-key apron): deepest vertex -20 mm (declared -25, accepted -60..-5) — OK
+u02-probe: CLEARANCE CONTRACT HOLDS (>= 40 mm everywhere)
+u02-probe: closure sweep 700..1160 worst arm RIM 1011 pm of surface (at pm 700) — OK (rim gate 1060; centreline gate 920 unchanged)
+u02-probe: closure over the clip bank (both subs): worst arm RIM 1032 pm (slot 12 key 37) — OK (rim gate 1060)
+u02-probe: eye crown ellip 1365 pm — stands 164 mm proud of the body (protected read: ~166 mm / 1369 pm; re-tune kEyeDeepMm/kEyeXMm toward it)

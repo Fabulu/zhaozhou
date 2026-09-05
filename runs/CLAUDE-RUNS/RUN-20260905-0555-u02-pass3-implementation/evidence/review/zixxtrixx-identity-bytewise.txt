@@ -1,0 +1,22 @@
+Zixxtrixx identity, re-established by the REVIEWER from a build it made itself.
+
+Baseline build : git worktree at 6d45f267 (the pass-3 architecture commit, the
+                 last tree before any pass-3 code), built with
+                 tools/reel/build-direct.sh cel into a clean output dir.
+Final build    : the shipped tree (eae651dc), same script, its own output dir.
+Both           : ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross.
+Comparison     : BYTE-FOR-BYTE over every .rgb frame (diff -rq) -- not a CRC,
+                 and deliberately not an ink mask (see
+                 inkmask-is-vacuous-everywhere.txt).
+
+  zixxtrixx-walk           161 frames   0 differing files
+  zixxtrixx-moving-light   601 frames   0 differing files
+  zixxtrixx-idle           577 frames   0 differing files
+  zixxtrixx-salto-dummy    296 frames   0 differing files
+  zixxtrixx-attack         561 frames   0 differing files
+
+RESULT: 5 of 22 subjects byte-identical, chosen to cover the risk --
+moving-light is the only subject that keeps the marker orbs and raises the
+moving rig (both touched this pass), and salto-dummy puts two creatures in one
+frame. The other 17 subjects are INHERITED from the run's own CRC table; I did
+not re-render them.

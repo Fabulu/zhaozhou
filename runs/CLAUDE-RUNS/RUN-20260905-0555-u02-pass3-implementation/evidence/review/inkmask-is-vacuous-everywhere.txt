@@ -1,0 +1,48 @@
+inkmask.py matches ZERO pixels on EVERY subject tested -- Zixxtrixx included.
+
+tools/reel/inkmask.py asserts the silhouette ink is exactly (26, 24, 22).
+Census of exact-ink pixels, 12 frames sampled per subject, on the reviewer's
+own renders of the shipped build (ZIXX_EXP=celmain,
+ZIXX_LIGHT=diagonal-cool-cross):
+
+  zixxtrixx-walk           exact-ink px per frame: min 0  med 0  max 0
+  zixxtrixx-idle           exact-ink px per frame: min 0  med 0  max 0
+  zixxtrixx-moving-light   exact-ink px per frame: min 0  med 0  max 0
+  unnamed02-hover          exact-ink px per frame: min 0  med 0  max 0
+  unnamed02-trick          exact-ink px per frame: min 0  med 0  max 0
+  unnamed02-taunt          exact-ink px per frame: min 0  med 0  max 0
+
+WHY. The ink IS written as exactly (26,24,22) into the frame buffer, and then
+quantised to RGB565 on the way out. The dark outline colours actually present
+in the frames are:
+
+  zixxtrixx-walk    (25,24,25) x1938, (25,24,16) x969, (33,24,25) x727
+  unnamed02-hover   (25,24,25) x528,  (25,24,16) x268
+
+R 26 -> 25 (5 bits), B 22 -> 16 or 25 (5 bits, plus dither). The constant in
+the tool is the PRE-quantisation value, so the mask is empty on both the
+256-colour Zixxtrixx path and the full-colour u02 path.
+
+CONSEQUENCE. np.array_equal(empty, empty) is always True, so check() cannot
+fail on any subject. Every "ink-mask identical" line in this project's record
+is a comparison of two empty sets:
+
+  RUN-20260903-2309-zixxtrixx-suns-every-clip -- "ink-mask silhouette identity
+    6674/6674 frames", the headline motion-untouched proof for Direction 30
+    (evidence-motion-untouched.md item 3, evidence-inkmask-raw.txt)
+  RUN-20260904-0437-zixxtrixx-suns-calmed -- "Ink-mask identity: 22/22
+    subjects, every frame -> the animation bank is untouched"
+
+The pass-3 implementer flagged this honestly, but as a u02-only caveat. It is
+not u02-only: it is project-wide, and it removes the silhouette leg from two
+Zixxtrixx lighting passes' motion-untouched evidence. Those passes also
+carried CRC identity, which IS sound and does the same job better; the
+ink-mask leg was never evidence at all. Nothing has to be re-done -- but no
+future claim may lean on this tool as written.
+
+FIX (for whoever touches it next): quantise the constant the same way the
+frame is quantised, or match a small tolerance ball around it -- and make the
+tool FAIL LOUDLY when the mask is empty on either side, which is the check
+that would have caught this on day one. The same trap is live in
+trajplot.py's docstring, which says its mask follows "the same law inkmask.py
+uses".

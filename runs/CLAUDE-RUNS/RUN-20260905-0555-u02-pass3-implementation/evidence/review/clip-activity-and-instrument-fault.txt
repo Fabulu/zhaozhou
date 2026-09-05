@@ -1,0 +1,58 @@
+A. PER-CLIP EYE AND POSE ACTIVITY (reviewer's own measure)
+
+Reader: tools/reel/rgbframe.py. Masks: the committed
+trajplot.creature_mask -- see part B before trusting it.
+cyan  = pupil-star pigment present on screen
+lens  = the purple lens field
+dpose = fraction of the creature mask that changes vs the previous frame
+        AFTER re-centring on the centroid, so it is pose change, not travel
+
+                        cyan     cyan   frames w/    lens    dpose   dpose
+                         med      p2p    ~no star     med      mean     max
+  unnamed02-taunt        203      109       0/280     580     0.132   0.247
+  unnamed02-curious      323      303       0/180     617     0.052   0.213
+  unnamed02-hasty         54      128      55/240     425     0.231   0.967
+  unnamed02-trick         31      223       0/400     307     0.095   0.331
+  unnamed02-drift        154      281      40/300     410     0.182   0.991
+  unnamed02-fall           0      282     190/340       0     0.173   0.971
+  unnamed02-hover         36      298      33/600     364     0.057   0.289
+
+  * fall: 190 of 340 frames carry no star AND no lens because the creature is
+    ABOVE THE FRAME for the opening of the clip (plate 10).
+  * trick: cyan median 31 -- the face is turned away or inverted for most of
+    the headstand, so whatever eye work exists there is not seen.
+  * The dpose MAX column is contaminated for hasty/drift/fall by the subject
+    entering or leaving frame. The MEAN column is the honest one, and on it
+    the TAUNT (0.132) carries MORE per-frame pose change than curious (0.052)
+    or hover (0.057). My first read of the taunt, from a uniform 10-frame
+    sample, was "essentially static". That was WRONG and I am recording the
+    refutation: the taunt is low-amplitude, not frozen. Uniform sampling
+    found the typical frame and I drew the wrong conclusion from it, which is
+    the exact trap CLAUDE.md names.
+
+B. INSTRUMENT FAULT: trajplot.creature_mask SELECTS THE HORIZON
+
+  unnamed02-fall frame 0000 contains NO creature -- it is above the frame.
+  The committed mask still returns 2034 pixels, in a band at y = 175..195
+  spanning x = 0..383. That is the terrain horizon line, not the creature.
+  Plate 21 shows the selection painted yellow over the frame.
+
+  Row-median background subtraction flags the row where sky meets ground,
+  because that row's median is not either of the two things in it. The
+  consequence is that every trajplot series on these clips carries a constant
+  ~2000 px of horizon, and the frames where the subject is absent still look
+  alive. The QA's own headline -- "hover cx/cy p2p 14/13 px with area
+  breathing 2054 px -- no flat line on any channel of any clip" -- is stated
+  in the same units as the contamination (2054 vs 2034), so the "no flat
+  line" conclusion is not established by that instrument.
+
+  This is the FIFTH wrong diagnostic in the family rgbframe.py's own
+  docstring catalogues (a contact tracker that classified sky as ground, an
+  unsound 2D contact measure, a segmentation that masked in terrain because
+  the camera moves, and two channel-rotating readers). It is the same failure
+  as the third one on that list.
+
+  FIX: mask by connected component -- take the largest blob and drop
+  full-width bands -- or gate on a saturation/hue rule the terrace cannot
+  satisfy, and assert a plausible bounding box. Whatever is chosen, the tool
+  must report "subject not found" rather than a number.

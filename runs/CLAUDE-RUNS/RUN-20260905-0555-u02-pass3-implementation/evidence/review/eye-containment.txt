@@ -1,0 +1,60 @@
+THE STAR AND THE LENS -- measured on the comparison side, after looking.
+
+A. IT DOES NOT BREAK THE SILHOUETTE (my own first read, refuted)
+
+Looking at plate 03 at 8x I called the far star "floating on the sky outside
+the ink". I then flood-filled the background from the frame border, stopping
+at the cel ink, and counted star pixels landing in it:
+
+  u02-s4-front  cyan 278 px   cyan outside the ink silhouette:  0
+  u02-s4-tq     cyan 194 px   cyan outside the ink silhouette:  0
+  u02-s4-side   cyan  28 px   cyan outside the ink silhouette:  0
+
+The eye assembly stands proud of the body and the ink wraps around it, so the
+star stays inside the drawn outline. My first impression was wrong. Recorded.
+
+B. IT DOES BREAK THE LENS
+
+Star pixels 8-adjacent to bare flesh or to ink -- i.e. running to the lens rim
+rather than sitting inside a white ring:
+
+  u02-s4-front  104 of 278  (37%)
+  u02-s4-tq      75 of 194  (39%)
+  u02-s4-side    20 of  28  (71%)
+
+And plate 05 (curious, the four gaze extremes) shows it plainly at the
+shipping camera: on two of the four the far star sits almost entirely OFF its
+lens, on bare pink flesh, with the white left behind as a crescent beside it.
+
+C. THE MECHANISM, FROM THE SHIPPED CONSTANTS
+
+  unnamed02_art.h
+    kEyeWideMm        125   lens half-width
+    kPupilStarArmMm   185   star arm half-length
+    kEyeBulgeMm        88   the star stands this far proud of the lens
+    kGazeMaxA16      3000   gaze sweep, uncapped by any lens-space clamp
+
+  185 > 125. The star's arm is HALF AGAIN the lens's half-width, so across the
+  lens's short axis the star overhangs the rim by 60 mm before the gaze moves
+  at all. No clamp can contain it; the geometry cannot fit. Growing the star
+  toward the sheet's ~20% area share (plan R3) was right, but it was grown
+  against the lens's LONG axis while the short axis was left at 125.
+
+  Second mechanism: mku02page.py paints the white ring "TIGHT around where the
+  star rests (the outward station)" -- i.e. at ONE fixed place on the lens
+  page -- while the star is separate geometry riding the pupil bone. The
+  moment the gaze moves, the star leaves its ring. That is why the white reads
+  as a rim arc on the lens instead of a ring around the star: it is a ring
+  around where the star USED to be.
+
+D. THE SIDE READ
+
+  cyan pixels visible:  front 278   three-quarter 194   side 28
+
+  At 90 deg the star is at 10% of its frontal presence -- 28 pixels in a 5x16
+  slit (plate 04). Direction 3 asked for the eyes to read from the side "as
+  the side sheet shows", where the eye is the largest feature on the bulb. The
+  partial yaw restored in pass 3 (kEyeYawOutA16 2400) plus the dome
+  (kEyeDeepMm 52 -> 90) improved the three-quarter read, which is the shipping
+  camera and is the important one -- but at true profile the eye is still a
+  purple stripe with a blue edge, not an eye.

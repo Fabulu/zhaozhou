@@ -1,0 +1,70 @@
+Mana cost -- the reviewer's own numbers. Reference renderer, one target at a
+time, back to back on the same machine, ZIXX_EXP=celmain
+ZIXX_LIGHT=diagonal-cool-cross.
+
+WALL CLOCK (whole frame, so scene and camera are in it)
+
+  unnamed02-rest       401 frames  no mana,      fixed camera    99 ms/frame
+  unnamed02-channel    421 frames  strands+smear+bloom, fixed   130 ms/frame
+  u02-trio             421 frames  "three conduits",    fixed   115 ms/frame
+  unnamed02-hover      601 frames  no mana,      ORBIT camera   126 ms/frame
+  unnamed02-mana-aqua  601 frames  full smeared plasma, fixed    90 ms/frame
+
+Read those last two carefully. Wall clock cannot isolate the mana here: the
+ORBIT camera costs more than the entire mana stack. hover, with NO mana at
+all, runs 126 ms/frame; mana-aqua, with the full filled plasma AND the
+persistence plane, runs 90. Cross-subject timing is not an instrument for
+this question, and I am recording that so the next agent does not repeat it.
+
+PIXEL VISITS (the QA's own unit; one full-screen pass = 92,160 visits)
+
+  kStrandCount 3, kBoltSegs 16 segments per strand
+  stamps/segment = Manhattan(segment)/kBoltStampMm(22), capped at 24
+                 ~3.5 at the ~51 mm segment kStrandSpanMm(820)/16 implies
+  per stamp: halo disc r = kBoltHaloRPx 7 -> ~154 px
+             core disc r = kBoltCoreRPx 3 -> ~28 px
+  3 x 16 x 3.5 x 182 = ~30,600 visits = 33% of one full-screen pass.
+
+  The QA's ~38% is the right order of magnitude. The plan's 0.8% estimate was
+  wrong by roughly 40x. FLAG 2 IS CONFIRMED, and the implementer deserves
+  credit for surfacing it rather than quietly restating the plan.
+
+WHAT THE COST NOTE LEAVES OUT
+
+  * Every splat with gain_pm != 1000 rebuilds a 64-entry x 3-channel palette
+    before it is drawn (both u02_mana_splats loops in zhao_reel.cpp): 192
+    writes per splat, and TWICE per splat when the smear plane is on, because
+    smear_feed runs its own copy of that loop. At ~340 strand splats that is
+    ~65k additional operations per frame -- the same order as the pixel
+    visits, and absent from the arithmetic.
+  * smear_feed is a whole second traversal of every non-white splat.
+
+WHY IT IS THIS EXPENSIVE: OVERLAP, NOT COVERAGE. kStrandSpanMm 820 lands as
+roughly 60-80 px at the shipping camera and carries ~56 stamps. That is about
+1.2 px between stamp centres, each stamping a 14 px-diameter disc: every
+filament pixel is visited on the order of TEN times. That is the ribbon
+argument made concrete -- a FORGE.PRIM ribbon evaluator visits each strand
+pixel once and would cut this by about an order of magnitude, with no change
+to the look.
+
+"SEVERAL CONDUITS" HAS NEVER BEEN MEASURED BY ANYONE
+
+  zhao_reel.cpp:  if (sub.u02_mana != 0 && ii == 0) { ... mana_fill(...) }
+
+  Mana is filled for INSTANCE 0 ONLY. u02-trio -- the subject whose own note
+  reads "THREE phase-offset conduits, one scene sun + bloom, all effects" --
+  draws ONE conduit's mana and two plain bodies. That is why it times faster
+  than the single-conduit channel (it also pulls the camera back to cam_k
+  170000). No subject in the bank has ever rendered several conduits' mana.
+  The QA's cost note is headed "three-conduit stack case"; the renderer does
+  not run that case.
+
+THE PLAIN ANSWER ASKED FOR
+
+  As shipped, the mana is affordable for ONE conduit in the reference
+  renderer -- measured, not argued. For several conduits it is UNMEASURED,
+  and the stamped-disc construction is the wrong shape for it: the ~10x
+  overdraw is intrinsic to stamping, not to the look the owner picked. It
+  becomes affordable at scale once the ribbon block exists. The honest
+  statement today is "one conduit, measured; many conduits, unknown, and the
+  subject that claims to test it does not".
