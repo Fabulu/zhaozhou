@@ -266,29 +266,44 @@ far larger than its 1,994 ALMs suggest, and perspuv at 2,204 ALMs spent 78
 minutes in the same stage. The scaling is consistent. The only bug was the
 3,000 s timeout.
 
-## BALANCED is not the lever I implied, and the real one is refused
+## The fitter-mode detour: two conclusions, both unsound, both published
 
-Revising a claim made an hour ago rather than letting it stand. BALANCED's
-placement preparation ran about 25 minutes against HIGH PERFORMANCE EFFORT's
-32 — a modest saving, not the order of magnitude the framing suggested. The
-optimisation mode is not where the cost is.
+This is the worst sequence of the session and it is recorded in full because
+the shape of it matters more than the outcome.
 
-Where it is: **596 virtual pins against 744 registers.** Every virtual pin is a
-placeable cell, so the placement problem is far larger than 1,994 ALMs implies,
-and no fitter mode changes that. Characterising a wide-interface leaf block is
-intrinsically expensive, and this block's interface is three samples of RGB plus
-alpha plus context.
+1. I proposed BALANCED as a cheap characterisation fit and implied it would be
+   a large saving.
+2. I then measured its placement preparation at ~25 minutes against 32 and
+   said the saving was modest.
+3. I then measured it at 54 minutes and said the mode had made things WORSE.
 
-**The one lever that would genuinely make it fast is refused.** Relaxing the SDC
-from 100 MHz would stop the fitter chasing an unreachable target — and would
-also stop it optimising the moment it met the relaxed constraint, so the reported
-fmax would floor at whatever we asked for. That does not cheapen the
-measurement, it destroys it: the entire question is whether the counter
-narrowing moved 29.74 MHz, and a constraint-limited number cannot answer it.
+**None of those comparisons was valid.** The BALANCED run had a full shell
+verilate build running beside it; the earlier run did not; and other work was
+happening on this machine that I had no visibility of whatever. I timed runs
+under different and partly unknown load and attributed every difference to the
+setting.
 
-So the fit is expensive because the block is hard and wide-ported, and there is
-no cheap lever that preserves the answer. BALANCED stays — a real saving at a
-known −2.08 MHz — but it was oversold and this says so.
+CLAUDE.md states the law directly: *"A measurement across MISMATCHED POSES
+measures the pose. Compare like with like, or do not compare."* I broke it
+twice within an hour, in opposite directions, and published both readings as
+findings.
+
+**And the question was already settled before I touched it.** The shell QSF
+carries a closed apparatus audit: every fitter and synthesis knob measured,
+OPTIMIZATION_MODE at +2.08 MHz and KEPT, OPTIMIZATION_TECHNIQUE at −3.01 and
+reverted, register duplication nil, PHYSICAL_SYNTHESIS_EFFORT normal because it
+"showed no headroom to scale". Adding a knob to un-pull a lever that had been
+measured and deliberately pulled was wrong regardless of any timing.
+
+The knob is reverted. The running fit is not killed and not restarted — it
+keeps its budget and reports with the mode recorded, which is accurate about
+how it was produced.
+
+**What was actually true and survives all of it:** the block carries 596
+virtual pins against 744 registers, so its placement problem is far larger than
+1,994 ALMs suggests; the 3,000 s timeout was the real bug; and relaxing the SDC
+would floor the reported fmax at whatever we asked for, which is why it stays
+at 100 MHz.
 
 ### And the apparatus audit was already closed
 
