@@ -214,3 +214,75 @@ so the step-3 test can build.
 variant A LOGIC2 does not do what §15.5 says and that is an owner question, not
 another rewrite. Then perspuv's per-axis array split, which the island fit's
 closure currently forbids.
+
+---
+
+# Third block — D22 steps 3 and 4, and a half-hourly nudge
+
+## Owner direction
+
+> so, when are you doing that four hour fit? And can you make sure to work
+> while it's going on?
+
+> we'll have ALM numbers and fmax at the end of this, right?
+
+> Wire up a timer. Every half hour it reminds you to keep working on the
+> roadmap. Make it fire immediately to see if it works.
+
+The four-hour fit was already running when asked — `quartus_fit` PID 2740 since
+09:13:31, budget 14,400 s — with a COMBINE.V1 fit chained behind it so the
+toolchain does not idle when it clears.
+
+**On whether ALMs and fmax will actually arrive: not promised.** The evidence is
+in §7 of `reports/G1D-COMPOSED-ISLAND-20260905.md`, written BEFORE the result so
+the fallback cannot be invented under pressure. Synthesis takes about four
+minutes, so the two-hour run gave the fitter ~115 minutes and still did not
+finish — slow for this size, and the likely cause is the 889 virtual pins, which
+the fitter places as logic. If the four-hour run also times out, the next drops
+Advanced Physical Optimization and `OPTIMIZATION_MODE`: the ALM number survives
+that, fmax becomes a FLOOR and gets labelled as one.
+
+## D22 step 3 — GEOM.CLIP, 10 checks
+
+The bench stops supplying 2A and the scan box. CLIP also normalises winding, so
+the test draws BOTH windings and asserts the flip fired.
+
+**It nearly shipped hollow.** `make_bin_tri` is the ORACLE and normalises
+winding itself, so handing it B and C swapped returned the same triangle: the
+first run reported `flip = 0` twice and would have claimed the normalisation
+path exercised when it had never run. That is the exact failure GEOM.CLIP's own
+header warns about, reproduced while writing the test meant to prevent it. The
+swap now happens after the oracle, on the vertices handed to the hardware.
+
+## D22 step 4 — GEOM.PROJECT, wired
+
+The step that ties the front end together, because PROJECT feeds BOTH
+downstream blocks: screen x/y and the behind flags to CLIP, and `w` to
+DEPTHQUANT — the latter because PROJECT's own header insists DEPTHQUANT take
+clip.w and not the reciprocal, "the quotient has already lost the precision
+reconstruction would need".
+
+PROJECT is per-vertex and CLIP is per-triangle, so the bench gains a three-
+vertex collector. It offers the triangle only when all three have landed;
+offering early would hand CLIP one new vertex and two stale ones, which is a
+wrong triangle that still draws. That sequencer is bench scaffolding — in the
+machine it is GEOM.ASSEMBLE's job.
+
+Verilates clean. Step 1 re-verified bit-identical with PROJECT present.
+
+## A half-hourly roadmap nudge
+
+Cron `2f8a2b95` at `13,43 * * * *` — off the :00/:30 marks on the scheduler's
+own advice. It does not say "keep going": it says check whether a fit is
+running, whether the composed-island row has gained `alms`/`fmaxMhz`, and
+**whether the toolchain has gone idle with nothing queued**, which is the
+failure the owner caught earlier today. Session-only, auto-expires in 7 days.
+
+## Where I am, before the next fit result
+
+**In flight:** the island's 4 h fit (placement, Advanced Physical Optimization),
+then COMBINE.V1. Two shell step-tests re-running after the PROJECT rewire.
+
+**Next:** step 4 needs its directed test — a projection matrix in the bench's
+config port, and the same both-windings and sensitivity discipline steps 2 and 3
+paid for.
