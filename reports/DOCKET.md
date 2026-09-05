@@ -3118,20 +3118,20 @@ exactly the gap a colour check cannot see.
 
 ### The design's load-bearing claim, checked against the RTL
 
-The architecture puts both texels in ONE planner request across two cache
-lanes rather than issuing two independent requests. That is the decision the
-whole cost argument rests on, so it was checked rather than accepted:
+The architecture puts both texels in ONE planner request across two cache lanes
+rather than issuing two independent requests. That is the decision the whole
+cost argument rests on, so it was checked rather than accepted:
 
-*  already emits  as a four-bit LANE MASK --
-   when filtering,  for nearest. A two-lane mask is the same
-  port, not a new one.
-*  takes  with LANES = 4 and
-   -- a SEPARATE 32-bit address per lane, so two
+* `zhao_texture_tmu_plan` already emits `acc_en_o` as a four-bit LANE MASK
+  — `4'b1111` when filtering, `4'b0001` for nearest. A two-lane mask is the
+  same port, not a new one.
+* `zhao_texture_cache_pipe` takes `acc_en_i[LANES-1:0]` with LANES = 4 and
+  `acc_addr_i[LANES*32-1:0]` — a SEPARATE 32-bit address per lane, so two
   lanes can address two different mip levels at different base offsets.
 * Its all-hit path accepts and retires ONE ACCESS PER CLOCK, which is what
   makes the pair atomic without new pairing state.
 
-So the shape the design needs is already supported and today's nearest path
+So the shape the design needs is already supported, and today's nearest path
 simply uses one lane of four. This is a source deduction about interfaces, not
 a simulation or a fit: nothing has been built or measured.
 
