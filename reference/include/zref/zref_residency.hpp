@@ -66,6 +66,11 @@ enum class Outcome : uint8_t {
   kRefusedNoStorage = 2,       // no fresh, unpinned page available
   kRefusedIntegrity = 3,       // the bytes did not verify after the copy
   kRefusedGenerationWrap = 4,  // 16-bit generation would wrap; needs an epoch
+  // The upload is longer than one page, and this allocator hands out exactly
+  // one. Distinct from the two refusals it would otherwise be mistaken for: a
+  // page WAS available, so it is not kRefusedNoStorage, and `upload_verdict`
+  // genuinely ACCEPTED the bounds, so it is not kRefusedValidation.
+  kRefusedOversize = 5,
 };
 
 struct Page {
@@ -84,6 +89,7 @@ struct Ledger {
   uint32_t refused_no_storage = 0;
   uint32_t refused_integrity = 0;
   uint32_t refused_generation_wrap = 0;
+  uint32_t refused_oversize = 0;  // longer than one page; see kRefusedOversize
   uint32_t reclaim_blocked_by_pin = 0;  // an attempt to reclaim a pinned page
   uint32_t write_blocked_by_pin = 0;    // an attempt to write into a pinned page
 };
@@ -126,6 +132,32 @@ class Arena {
                         uint16_t current_epoch, bool verify_ok, Ledger* L = nullptr) {
     PublishResult r;
     r.resource_index = resource_index;
+
+    // 0. IT MUST FIT IN A PAGE. AUDIT R8.
+    //
+    //    This allocator hands out ONE fixed-size page, and `upload_verdict` is
+    //    called below against a guard region covering the WHOLE ARENA:
+    //
+    //        guard_.bytes = page_bytes * page_count
+    //
+    //    So without this check a length larger than a page is "in bounds" -- it
+    //    simply runs off the end of the page it was given and into the next
+    //    one, which may be PINNED. The audit's counterexample: publish A into
+    //    page 0, publish and pin B into page 1, republish A elsewhere to free
+    //    page 0, then publish C with two pages' worth of length. Page 0 is
+    //    chosen, the arena-wide bounds accept it, and C's footprint covers
+    //    pinned B -- with every pin counter still reading zero.
+    //
+    //    Checked BEFORE allocation, so an oversize request does not consume a
+    //    free page on its way to being refused.
+    //
+    //    The bound is `>`, not `>=`: an upload of exactly one page is legal and
+    //    ordinary, and refusing it would trade one defect for another.
+    if (length > page_bytes_) {
+      r.outcome = Outcome::kRefusedOversize;
+      if (L) L->refused_oversize++;
+      return r;
+    }
 
     // 1. ALLOCATE FRESH, UNPINNED. Chosen before validation so that a refusal
     //    never leaves a half-claimed page, and never touches the live one.

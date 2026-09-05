@@ -885,6 +885,14 @@ target_link_libraries(test_residency_directed PRIVATE zhao_zref)
 add_test(NAME residency_directed COMMAND test_residency_directed)
 set_tests_properties(residency_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# AUDIT R8: a single-page allocator validated an upload against the WHOLE
+# arena, so a length longer than a page was accepted and overlapped its
+# pinned neighbour with every pin counter reading zero.
+add_executable(test_residency_oversize_directed memory/residency_oversize_directed.cpp)
+target_link_libraries(test_residency_oversize_directed PRIVATE zhao_zref)
+add_test(NAME residency_oversize_directed COMMAND test_residency_oversize_directed)
+set_tests_properties(residency_oversize_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_material_resolve_directed texture/material_resolve_directed.cpp)
 target_link_libraries(test_material_resolve_directed PRIVATE zhao_zref)
 add_test(NAME material_resolve_directed COMMAND test_material_resolve_directed)
