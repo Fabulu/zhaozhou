@@ -197,6 +197,67 @@ laundered through one extra wire, which is precisely the historical bug. A gate
 that passes the defect it was built for is worse than no gate; it now tracks
 that alias, and refuses to run if the alias no longer exists.
 
+## Two corrections the owner's brief forced on the repair itself
+
+The recovery architecture v2 arrived while this was being fixed, and its §2.2
+and §2.3 diagnose the same defect independently from source alone. Two of its
+rulings applied to **my repair**, not to the original code.
+
+**It packed fields into the caller's context.** The first version of the capture
+wrote recipe, weight, sample count and token into bits `[34:16]` of the caller's
+own context word. §2.3 rules that out directly — *"Packing recipe bits into that
+word is not a valid way to retain an independently opaque context and world
+X/Z … Do not silently overwrite caller-owned bits."* Fixing a late-capture bug
+by destroying caller data is not a fix. The token is now a **typed field** on
+FRAGROB (`f_tok_i` / `o_tok_o`) carried beside the context, and the context is
+stored and forwarded verbatim.
+
+**The packed word is gone entirely.** Every carried attribute is now its own
+named array. The packed form costs nothing to write and cost one whole defect
+to find — the palette's slot and generation were two hand-written slices of the
+same token that **overlapped**. Named fields cannot overlap.
+
+That refactor is behaviour-preserving: every measured number is identical
+before and after, which is why it is a separate commit.
+
+**An honest limit, recorded in the source.** This island consumes only the low
+16 bits of the context, as the tag behind `out_tag_o`. The rest is carried
+through FRAGROB intact, but nothing reads it and no port exposes it, so **no
+test can observe that it survives**. What is established is the weaker and still
+necessary property that the island no longer overwrites it. Surfacing it would
+cost 64 output pins on a block where 405 of 2,000 summarised paths already start
+at virtual pins, so it waits for a consumer that needs it.
+
+## Invalid-input poison
+
+Priority 3 also asks for a poison test, and it is the behavioural counterpart to
+the static gate: the gate proves nobody **wrote** a late read, the poison proves
+nobody **performs** one — including reads the gate's contract does not know to
+look for.
+
+Every ingress port is driven with legal-to-present, wrong-to-use values on every
+cycle `frag_valid_i` is low, with a deliberate three-cycle gap after every
+fourth fragment so the poison lands **mid-stream** while earlier fragments are
+still in flight, not only during the drain. It alternates rather than holding a
+constant, because a constant makes the recipe constant too and a
+wrong-but-constant recipe still yields a tidy-looking histogram — which is how
+the original defect survived being looked at.
+
+With poison active every measurement is unchanged and 25 checks pass.
+
+**And its mutation result is worth reading carefully.** Reintroducing two late
+reads gives:
+
+```
+CLUT colour 20 of 32, palette lookups 38 of 96   -> 2 checks FAIL
+combine jobs by recipe 0 32 32 32 0 0 48 32      -> unchanged, CORRECT
+```
+
+The job histogram is **completely blind** to that mutation, because the combiner
+reads its recipe from the capture table rather than from the mutated path. An
+aggregate that looks right is not evidence that the thing it aggregates is
+right — the same lesson as the original bug, arriving from the other direction.
+
 ## What this invalidates
 
 **The 7,720 ALM / 69.05 MHz island measurement is stale.** The repair adds a
