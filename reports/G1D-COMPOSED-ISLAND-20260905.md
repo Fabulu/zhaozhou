@@ -171,8 +171,66 @@ it needs a class-varying workload, which belongs with the seam in §5.3.
 
 ## 4. Capacity
 
-**Fit in progress** (`quartus_map` started 06:27:58 on the corrected top). The
-number goes here with its DSP count, register count and fmax, against:
+### 4.1 Analysis & Synthesis — complete
+
+```
+Analysis & Synthesis Status : Successful - Sat Sep 05 06:31:07 2026
+Top-level Entity Name       : zhao_texture_island_top
+Logic utilization (in ALMs) : N/A          <- synthesis never reports ALMs
+Total registers             : 11,613
+Total virtual pins          : 889
+Total block memory bits     : 25,872
+Total DSP Blocks            : 22
+```
+
+**The virtual pin count is the direct evidence for §1.** 889 pins for the whole
+island, because only its external boundary is exposed. Eleven standalone fits
+each pinned out their own full interface — `zhao_texture_fragrob` alone declares
+54 ports — and every one of those pins carries registers that exist solely to
+feed a pad that will not be there. That cost is in the standalone sum and is not
+in the island.
+
+**22 DSP of 112.** Note this is NOT comparable to the "14 DSP" quoted from the
+standalone texture rows: the composed island also contains RCP24 and PERSPUV
+(6 each), which that total omitted. Like-for-like comparison waits on the
+per-block breakdown in the fitter report.
+
+### 4.2 What inferred as memory, and one thing that did not
+
+Thirteen memories inferred, all Simple Dual Port:
+
+| RAM | depth x width |
+|---|---|
+| `palette_res mem_r` | 1024 x 16 |
+| `cache_pipe data_r` x4 lanes | 128 x 16 |
+| **`fragrob desc_u_m[2][0][31]__1`** | **16 x 228** |
+| `fragrob ctx_m` x2 | 16 x 64 |
+| `fragrob auxrgb_m` / `auxa_m` / `axg_m` / `axq_m` / `order_m` | 16 x 16/8/8/4/4 |
+| `aux_pipe sd_tok` | 16 x 12 |
+
+The 228-bit-wide one is worth reading carefully: **Quartus merged FRAGROB's
+`desc_u_m`, `desc_v_m` and `desc_met_m` into a single memory** — 3 samples x
+(32 + 32 + 12) = 228 bits exactly. The survivors report listed those three
+separately as "wide payload"; they are one array now, and they are in memory.
+
+**`res_rgb_m` and `res_a_m` are NOT in that list.** 3 x (24 + 8) = 96 bits per
+slot, 1,536 bits total, still in flip-flops — and that is plausibly a cost of
+the §3.5 fix. Exposing the three sample banks added a second, COMBINATIONAL read
+of those arrays at `head_slot_c`, and combinational logic between an array read
+and the first register is exactly what blocks absorption into an M10K's output
+register (QUARTUS_GOTCHAS §14).
+
+So the sample-bank fix may have bought correctness at the price of 1,536 bits
+staying in flops. **Recorded as a suspicion with a mechanism, not a
+measurement** — the pre-fix composed synthesis was never run, so there is no
+before-figure to difference against, and inventing one would be the
+"declared-today versus measured-a-week-ago" error. The way to settle it is a
+registered output stage on those reads, which is the same remedy §5 of the
+perspuv report proposes for `e_q`.
+
+### 4.3 Fitter — in progress
+
+ALMs and fmax come from the fitter, which is still running. Against:
 
 | | ALM |
 |---|---|
