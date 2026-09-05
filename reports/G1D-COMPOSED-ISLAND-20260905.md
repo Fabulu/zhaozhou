@@ -228,7 +228,30 @@ before-figure to difference against, and inventing one would be the
 registered output stage on those reads, which is the same remedy §5 of the
 perspuv report proposes for `e_q`.
 
-### 4.3 Fitter — COMPLETE
+### 4.3 Fitter — COMPLETE, AND NOW STALE
+
+> **These numbers no longer describe the tree.** They were measured at
+> `afb7070f`, before the ingress-capture repair. Since then the island has
+> gained a 64-entry per-fragment attribute table with combinational LUT-RAM
+> reads on PERSPUV's input path, a typed token field through FRAGROB, per-slot
+> class and palette-binding tables, four new output ports, and an LODW change
+> from 4 to 8. Every one of those moves area, and the last two move the pin
+> count that 405 of the 2,000 summarised paths already start at.
+>
+> **No prediction of the new figures is offered.** This island's last obvious
+> explanation was worth 4 MHz of 36. The re-fit is deliberately batched behind
+> the corrected combiner leaf fit, per the owner's v2 priority 5: *"Do not
+> launch an expensive complete-island refit after each speculative glue edit."*
+>
+> The comparison table below is kept because the RELATIONSHIP it records —
+> composed against nominal, redline, and the standalone sum — is what the next
+> measurement must be read against. The absolute numbers in it are history.
+>
+> One thing here transfers directly: this fit needed 9,238 s against a 14,400 s
+> budget. The combiner leaf fit was failing at `[int]$TimeoutSeconds = 3000`
+> and reporting it as a fitter failure, twice, before that was diagnosed.
+
+
 
 ```
 status        ok
