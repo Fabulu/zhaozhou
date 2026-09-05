@@ -245,7 +245,13 @@ module zhao_texture_island_top #(
     // occurrence already means a fragment waits forever. See the completion
     // merger below for why this is currently unreachable and why that is an
     // assumption rather than a property.
-    output var logic        err_rsp_dropped_o
+    output var logic        err_rsp_dropped_o,
+
+    // Sticky: the bilinear lane retired a channel out of order. The three-
+    // channel accumulator pairs R, G and B by ARRIVAL ORDER, so a reordering
+    // would silently combine one sample's red with another's blue and every
+    // direct-colour pixel would be wrong with no counter moving.
+    output var logic        err_bil_chan_o
 );
 
   // ==========================================================================
@@ -741,32 +747,118 @@ module zhao_texture_island_top #(
   // Written here rather than silently: an under-reporting counter that nobody
   // has flagged is worse than a missing one.
   logic        bil_out_valid, bil_out_ready;
-  logic [7:0]  bil_out;
+  logic        bil_lane_valid, bil_lane_ready;
+  logic [7:0]  bil_out, bil_lane_out;
+  logic [23:0] bil_rgb;
+  logic [1:0]  bil_expect_r;
+  logic [TOKW-1:0] bil_lane_tok;
   logic [TOKW-1:0] bil_out_tok;
   logic [1:0]  bil_out_chan;
   logic        bil_job_ready;
   logic [1:0]  bil_occ;
 
-  assign disp_bil_ready = bil_job_ready;
-
   // The metadata belonging to the sample whose texels just arrived.
   wire [16:0] bil_meta = sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
                                    [disp_bil_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
 
+  // ==========================================================================
+  // THREE-CHANNEL BILINEAR SEQUENCING. AUDIT R5.
+  // ==========================================================================
+  // This issued ONE job with `chan_i = 2'd0`, filtered the LOW BYTE of each of
+  // the four texel halfwords, and replicated the single result to all three
+  // output channels: `{bil_out, bil_out, bil_out}`. Every direct-colour
+  // fragment therefore came out grey, and no exact-colour oracle could be
+  // written for the bilinear half at all -- which is why R5 could only say the
+  // composed test checks "nonzero colours".
+  //
+  // The lane was always built for this: it carries `chan_i` in and
+  // `out_chan_o` out, and never used them. What was missing was the
+  // SEQUENCER around it.
+  //
+  // THE SHAPE. Each cache response carries four RGB565 texels, one per lane.
+  // A channel is filtered independently, so one response becomes THREE jobs --
+  // R, then G, then B -- each with that channel extracted from all four texels
+  // and expanded to 8 bits by REPLICATION, the same law the palette path uses
+  // and the one zref_texture.hpp names. The dispatch entry is held until the
+  // third job is accepted, so a response is consumed exactly once.
+  //
+  // COLLECTION IS IN ORDER, and that is a property of the lane rather than an
+  // assumption: jobs for one sample are issued back to back and the lane
+  // retires in order, so R, G and B return in the order they were issued and
+  // carry `out_chan_o` to prove it. The channel is CHECKED on arrival rather
+  // than inferred from a counter -- see `err_bil_chan_o`.
+  logic [1:0] bil_phase_r;
+
+  // The four texels, as halfwords rather than as their low bytes.
+  wire [15:0] btx [4];
+  assign btx[0] = disp_bil_data[15:0];
+  assign btx[1] = disp_bil_data[31:16];
+  assign btx[2] = disp_bil_data[47:32];
+  assign btx[3] = disp_bil_data[63:48];
+
+  // Channel extraction with the ABI's replication, per texel.
+  function automatic logic [7:0] chan8(input logic [15:0] h, input logic [1:0] c);
+    case (c)
+      2'd0:    chan8 = {h[15:11], h[15:13]};   // red   5 -> 8
+      2'd1:    chan8 = {h[10:5],  h[10:9]};    // green 6 -> 8
+      default: chan8 = {h[4:0],   h[4:2]};     // blue  5 -> 8
+    endcase
+  endfunction
+
+  // Hold the response until its third job is taken.
+  assign disp_bil_ready = bil_job_ready && (bil_phase_r == 2'd2);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) bil_phase_r <= 2'd0;
+    else if (disp_bil_valid && bil_job_ready)
+      bil_phase_r <= (bil_phase_r == 2'd2) ? 2'd0 : (bil_phase_r + 2'd1);
+  end
+
   zhao_texture_bilerp_lane #(.TOKW(TOKW)) u_bilerp (
       .clk(clk), .rst_n(rst_n),
       .job_valid_i(disp_bil_valid), .job_ready_o(bil_job_ready),
-      .t00_i(disp_bil_data[7:0]),
-      .t10_i(disp_bil_data[23:16]),
-      .t01_i(disp_bil_data[39:32]),
-      .t11_i(disp_bil_data[55:48]),
+      .t00_i(chan8(btx[0], bil_phase_r)),
+      .t10_i(chan8(btx[1], bil_phase_r)),
+      .t01_i(chan8(btx[2], bil_phase_r)),
+      .t11_i(chan8(btx[3], bil_phase_r)),
       // THE SAMPLE'S OWN fractions, recovered by the identity the response
       // came back under -- not whatever the planner is emitting right now.
       .fu_i(bil_meta[8:1]), .fv_i(bil_meta[16:9]),
-      .tok_i(disp_bil_tok), .chan_i(2'd0),
-      .out_valid_o(bil_out_valid), .out_ready_i(bil_out_ready),
-      .out_o(bil_out), .out_tok_o(bil_out_tok), .out_chan_o(bil_out_chan),
+      .tok_i(disp_bil_tok), .chan_i(bil_phase_r),
+      .out_valid_o(bil_lane_valid), .out_ready_i(bil_lane_ready),
+      .out_o(bil_lane_out), .out_tok_o(bil_lane_tok), .out_chan_o(bil_out_chan),
       .jobs_o(cnt_bilerp_jobs_o), .occupancy_o(bil_occ));
+
+  // ---- collect R, G, B into one colour --------------------------------------
+  // Only the BLUE result presents a fragment sample downstream; R and G are
+  // absorbed into the accumulator. So the response port sees one answer per
+  // sample, exactly as it did before, and nothing downstream had to change.
+  logic [7:0] bil_r_r, bil_g_r;
+
+  assign bil_lane_ready = (bil_out_chan != 2'd2) ? 1'b1 : bil_out_ready;
+  assign bil_out_valid  = bil_lane_valid && (bil_out_chan == 2'd2);
+  assign bil_out        = bil_lane_out;
+  assign bil_out_tok    = bil_lane_tok;
+  assign bil_rgb        = {bil_r_r, bil_g_r, bil_lane_out};
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      bil_r_r <= 8'd0;
+      bil_g_r <= 8'd0;
+      err_bil_chan_o <= 1'b0;
+    end else if (bil_lane_valid && bil_lane_ready) begin
+      case (bil_out_chan)
+        2'd0: bil_r_r <= bil_lane_out;
+        2'd1: bil_g_r <= bil_lane_out;
+        default: ;  // blue is used combinationally above
+      endcase
+      // THE ORDER IS CHECKED, NOT ASSUMED. If the lane ever retires out of
+      // order, the accumulator would silently pair one sample's red with
+      // another's blue and every direct-colour pixel would be quietly wrong.
+      if (bil_out_chan != bil_expect_r) err_bil_chan_o <= 1'b1;
+      bil_expect_r <= (bil_out_chan == 2'd2) ? 2'd0 : (bil_out_chan + 2'd1);
+    end
+  end
 
   logic        pal_lu_valid_o;
   logic [15:0] pal_lu_rgb565;
@@ -902,7 +994,8 @@ module zhao_texture_island_top #(
 
   assign fr_tmu_rgb     = pal_lu_valid_o
                           ? {pal_r8, pal_g8, pal_b8}
-                          : {bil_out, bil_out, bil_out};
+                          // THREE CHANNELS, not one replicated three times.
+                          : bil_rgb;
   assign fr_tmu_a       = 8'hFF;
   assign fr_tmu_rslot   = rsp_tok[$clog2(DEPTH)+2+GENW-1 -: $clog2(DEPTH)];
   assign fr_tmu_rsidx   = rsp_tok[GENW+1 -: 2];

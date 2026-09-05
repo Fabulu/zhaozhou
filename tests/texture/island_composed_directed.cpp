@@ -155,6 +155,8 @@ int main(int argc, char** argv) {
   std::vector<uint32_t> g_retired_tags;
   std::vector<uint32_t> g_clut_rgb;  // exact retired colour, CLUT fragments only
   std::vector<int> g_clut_idx;       // and which fragment each came from
+  std::vector<uint32_t> g_bil_rgb;   // and the same for the BILINEAR half
+  std::vector<int> g_bil_idx;
   int g_nz_by_cls[2] = {0, 0};
   bool saw_rgb = false;
 
@@ -299,6 +301,9 @@ int main(int argc, char** argv) {
         if (ix >= 0 && ix < 64 && (ix % 2) == 0) {
           g_clut_rgb.push_back(d.out_rgb_o);
           g_clut_idx.push_back(ix);
+        } else if (ix >= 0 && ix < 64) {
+          g_bil_rgb.push_back(d.out_rgb_o);
+          g_bil_idx.push_back(ix);
         }
       }
       if (d.out_rgb_o != 0) ++nonzero_rgb;
@@ -606,6 +611,86 @@ int main(int argc, char** argv) {
       std::printf(
           "  NOTE: no fragment addressed an odd texel, so the byte "
           "select is NOT exercised by this workload\n");
+  }
+
+  // ======================= AND THE BILINEAR HALF, EXACTLY ==================
+  // R5's remaining half. This could not be written at all until three-channel
+  // sequencing existed: the island filtered ONE channel and replicated it to
+  // all three outputs, so every direct-colour fragment came out grey and there
+  // was nothing to compare against but "non-zero".
+  //
+  // WHAT MAKES IT COMPUTABLE. All four texels of a bilinear sample come from
+  // the same memory pattern 0x8586, so they are identical -- and a bilinear
+  // filter of four equal values is that value, whatever the fractions are. The
+  // sample colour is therefore 0x8586 unpacked as RGB565 and expanded by
+  // replication, exactly as the lane now does per channel:
+  //
+  //     r5 = 16 -> 132,  g6 = 44 -> 178,  b5 = 6 -> 49
+  //
+  // Note that this is deliberately NOT a test of the filter weights -- equal
+  // texels make the fractions unobservable. It tests channel EXTRACTION,
+  // expansion, ordering and the material arithmetic. The fractions carrying
+  // correctly is a separate property and this test does not establish it.
+  {
+    zref::material::Sample c;
+    c.r = 132;
+    c.g = 178;
+    c.b = 49;
+    c.a = 255;
+
+    zref::material::Sample base;
+    base.r = 0x20;
+    base.g = 0x40;
+    base.b = 0x60;
+    base.a = 255;
+
+    auto want = [&](uint8_t recipe) -> uint32_t {
+      zref::material::Sample s3[3] = {c, c, c};
+      zref::material::Ledger led{};
+      const zref::material::Out o =
+          zref::material::combine(recipe, /*weight=*/128, s3, /*count=*/3, base,
+                                  /*frag_tag=*/0, &led);
+      return (static_cast<uint32_t>(o.r) << 16) | (static_cast<uint32_t>(o.g) << 8) | o.b;
+    };
+
+    int matched = 0, mismatched = 0, skipped_aux = 0, grey = 0;
+    for (std::size_t i = 0; i < g_bil_rgb.size(); ++i) {
+      if ((g_bil_idx[i] % 3) == 0) {
+        ++skipped_aux;
+        continue;
+      }
+      const uint32_t got = g_bil_rgb[i];
+      const uint8_t r = static_cast<uint8_t>(got >> 16);
+      const uint8_t g = static_cast<uint8_t>(got >> 8);
+      const uint8_t b = static_cast<uint8_t>(got);
+      if (r == g && g == b) ++grey;
+      if (got == want(static_cast<uint8_t>(g_bil_idx[i] % 8)))
+        ++matched;
+      else {
+        if (mismatched < 3)
+          std::printf("    bilinear fragment %d recipe %u: got 0x%06X, want 0x%06X\n", g_bil_idx[i],
+                      g_bil_idx[i] % 8, got, want(static_cast<uint8_t>(g_bil_idx[i] % 8)));
+        ++mismatched;
+      }
+    }
+
+    std::printf(
+        "  BILINEAR exact vs zref::material::combine: matched %d, "
+        "mismatched %d, aux-skipped %d, grey %d\n",
+        matched, mismatched, skipped_aux, grey);
+
+    check(mismatched == 0,
+          "every BILINEAR fragment retires EXACTLY what zref::material::combine "
+          "makes of its filtered texel under its own recipe -- channel "
+          "extraction, replication expansion, three-channel ordering and the "
+          "material arithmetic are all exact",
+          0, mismatched);
+    check(grey == 0,
+          "and NONE of them is grey -- before three-channel sequencing the "
+          "island filtered one channel and replicated it, so every "
+          "direct-colour fragment had r == g == b and this check could not "
+          "have been written",
+          0, grey);
   }
 
   // ======================= INGRESS-TO-EGRESS IDENTITY ======================
