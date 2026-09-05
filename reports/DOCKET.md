@@ -3109,11 +3109,29 @@ drive-by fix.
    texel" and "certainly does not require sampling two mip levels". The new
    ruling supersedes that sentence for terrain albedo, and its `ceil` LOD policy
    conflicts with the floor-plus-fraction a blend requires.
-2. **`lerp8` exists in two non-identical formulations in this repo** —
-   `islandrearchitecture5.md` §15.1's `(x+128)>>8` against the reference
-   oracle's magnitude-rounded form. They disagree on negative half-LSB
-   products. "Defined rounding" is not optional for a blend, so one must
-   govern; the proposal is the oracle.
+2. **The reference oracle's `lerp8` knowingly departs from the ratified
+   rounding law, and a blend makes that matter.** This was checked rather than
+   taken on report, and the first statement of it was wrong in a way worth
+   recording: it was framed as `islandrearchitecture5.md` §15.1's `(x+128)>>8`
+   against the oracle. That is not the conflict. §15.1 gives
+   `lerp8(a,b,w) = sat_u8(a + rescale_s((b-a)*w, 8))` and defers to a SIGNED
+   rescale; `(a*b+128)>>8` is `unit_mul8`, a different, unsigned operator.
+
+   The real disagreement is with `spec/qformats.md`, which ratifies
+   **round-half-up** for `unit8` and defines it at line 53 as
+   `floor((n + floor(d/2))/d)`. For a product of −128 with d = 256 that is
+   `floor(0) = 0`. The oracle instead rounds the MAGNITUDE and reapplies the
+   sign, giving −1, and its own comment says why: *"the sign is reapplied
+   afterwards so the rounding is symmetric about zero rather than biased toward
+   +inf on darkening lerps."*
+
+   So the oracle is deliberately not doing what the spec says, on exactly the
+   negative half-LSB products a two-level blend generates whenever the higher
+   mip is darker. Hardware built to the spec and hardware built to the oracle
+   would differ by one LSB, and both could claim to be correct. **One of the two
+   documents has to move**; this is an owner ruling, not an implementation
+   choice, and it must be settled before any blend RTL is written rather than
+   discovered as a differential failure afterwards.
 3. `TEXTURE.TMU`'s text forbids this as written. A two-level nearest blend is
    not intra-level filtering, but the contract needs an explicit carve-out
    rather than an implementation that quietly disagrees with it.
