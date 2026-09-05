@@ -194,6 +194,27 @@ module tb_zhao_shell (
   input  logic               depth_mode_i,
   input  logic [39:0]        depth_w_i,          // fx16 raw, S15.16
   input  logic [1:0]         depth_profile_i,    // per-vertex, not latched
+  // ---- D22 STEP 3: GEOM.CLIP ------------------------------------------------
+  // Step 1 replaced precomputed edge coefficients with vertices. Step 2
+  // replaced the precomputed depth with w. Step 3 moves the boundary again:
+  // the bench stops supplying setup_area2_i and the scan box (render_min_x_i
+  // .. render_max_y_i), and GEOM.CLIP computes them -- together with the
+  // WINDING NORMALISATION, which is the part that makes this more than
+  // plumbing.
+  //
+  // CLIP may swap B and C to make 2A positive, and when it does it swaps their
+  // ATTRIBUTES with them. Its own header says why that swap lives beside the
+  // decision: "Swapping the positions and not the attributes produces a
+  // triangle that is geometrically correct and shaded wrong, on exactly the
+  // back-facing half of the scene -- so it survives any test whose triangles
+  // are all wound one way."
+  //
+  // So the vertices SETUP sees in clip mode are CLIP's, not the bench's.
+  // Defaults to 0, bit-identical to before.
+  input  logic               clip_mode_i,
+  output logic               dbg_clip_valid_o,
+  output logic signed [47:0] dbg_clip_area2_o,
+  output logic               dbg_clip_flip_o,
   output logic               dbg_dq_valid_o,
   output logic [23:0]        dbg_dq_invw24_o,
   input  logic               render_tri_valid_i,
@@ -382,16 +403,85 @@ module tb_zhao_shell (
                              render_fill_word_i[7:0]}
                           : render_fill_word_i;
 
-  zhao_geom_setup u_setup (
+  // ---- D22 step 3: GEOM.CLIP ------------------------------------------------
+  localparam int unsigned CLIP_ATTRS = 7;
+  logic               cl_tri_ready, cl_out_valid;
+  logic signed [20:0] cl_ax, cl_ay, cl_bx, cl_by, cl_cx, cl_cy;
+  logic signed [47:0] cl_area2;
+  logic signed [11:0] cl_min_x, cl_max_x, cl_min_y, cl_max_y;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [15:0] cl_src_id;
+  logic [CLIP_ATTRS*32-1:0] cl_attr_a, cl_attr_b, cl_attr_c;
+  logic        cl_ret_valid;
+  logic [2:0]  cl_ret_verdict;
+  logic [31:0] cl_sub, cl_clipped, cl_culled;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_geom_clip #(.ATTRS(CLIP_ATTRS)) u_clip (
       .clk(gpu_clk), .rst_n(rst_n),
-      .tri_valid_i(render_tri_valid_i & setup_mode_i),
-      .tri_ready_o(su_tri_ready),
+      .tri_valid_i(render_tri_valid_i & clip_mode_i),
+      .tri_ready_o(cl_tri_ready),
       .tri_ax_i(render_ax_i), .tri_ay_i(render_ay_i),
       .tri_bx_i(render_bx_i), .tri_by_i(render_by_i),
       .tri_cx_i(render_cx_i), .tri_cy_i(render_cy_i),
-      .tri_area2_i(setup_area2_i),
-      .tri_min_x_i(render_min_x_i), .tri_max_x_i(render_max_x_i),
-      .tri_min_y_i(render_min_y_i), .tri_max_y_i(render_max_y_i),
+      // No vertex is behind: the bench supplies screen-space vertices that
+      // GEOM.PROJECT would already have accepted. A w <= 0 verdict is step 4's
+      // concern, and asserting it here would exercise a rejection path this
+      // step is not moving.
+      .tri_behind_i(3'b000),
+      .tri_src_id_i(render_src_id_i),
+      .tri_attr_a_i('0), .tri_attr_b_i('0), .tri_attr_c_i('0),
+      // The scissor is the render grid in whole pixels; sixteen pixels per
+      // tile is the shell's own tile size, so this is the same rectangle the
+      // bench derives its scan box from -- which is why the two agree.
+      .vp_x0_i(12'd0), .vp_y0_i(12'd0),
+      .vp_w_i({4'd0, render_grid_w_i, 4'd0}),
+      .vp_h_i({4'd0, render_grid_h_i, 4'd0}),
+      .cull_mode_i(2'd0),               // NONE: culling is not this step
+      .out_valid_o(cl_out_valid), .out_ready_i(su_tri_ready),
+      .out_ax_o(cl_ax), .out_ay_o(cl_ay),
+      .out_bx_o(cl_bx), .out_by_o(cl_by),
+      .out_cx_o(cl_cx), .out_cy_o(cl_cy),
+      .out_area2_o(cl_area2),
+      .out_min_x_o(cl_min_x), .out_max_x_o(cl_max_x),
+      .out_min_y_o(cl_min_y), .out_max_y_o(cl_max_y),
+      .out_src_id_o(cl_src_id),
+      .out_attr_a_o(cl_attr_a), .out_attr_b_o(cl_attr_b), .out_attr_c_o(cl_attr_c),
+      .out_flip_o(dbg_clip_flip_o),
+      .ret_valid_o(cl_ret_valid), .ret_verdict_o(cl_ret_verdict),
+      .triangles_submitted_o(cl_sub), .triangles_clipped_o(cl_clipped),
+      .triangles_culled_o(cl_culled));
+
+  assign dbg_clip_valid_o = cl_out_valid;
+  assign dbg_clip_area2_o = cl_area2;
+
+  // THE STEP-3 BOUNDARY. In clip mode every geometric input SETUP sees comes
+  // from CLIP -- vertices included, because the winding normalisation may have
+  // swapped two of them.
+  wire               c_valid = clip_mode_i ? cl_out_valid
+                                           : (render_tri_valid_i & setup_mode_i);
+  wire signed [20:0] c_ax    = clip_mode_i ? cl_ax    : render_ax_i;
+  wire signed [20:0] c_ay    = clip_mode_i ? cl_ay    : render_ay_i;
+  wire signed [20:0] c_bx    = clip_mode_i ? cl_bx    : render_bx_i;
+  wire signed [20:0] c_by    = clip_mode_i ? cl_by    : render_by_i;
+  wire signed [20:0] c_cx    = clip_mode_i ? cl_cx    : render_cx_i;
+  wire signed [20:0] c_cy    = clip_mode_i ? cl_cy    : render_cy_i;
+  wire signed [47:0] c_area2 = clip_mode_i ? cl_area2 : setup_area2_i;
+  wire signed [11:0] c_min_x = clip_mode_i ? cl_min_x : render_min_x_i;
+  wire signed [11:0] c_max_x = clip_mode_i ? cl_max_x : render_max_x_i;
+  wire signed [11:0] c_min_y = clip_mode_i ? cl_min_y : render_min_y_i;
+  wire signed [11:0] c_max_y = clip_mode_i ? cl_max_y : render_max_y_i;
+
+  zhao_geom_setup u_setup (
+      .clk(gpu_clk), .rst_n(rst_n),
+      .tri_valid_i(c_valid),
+      .tri_ready_o(su_tri_ready),
+      .tri_ax_i(c_ax), .tri_ay_i(c_ay),
+      .tri_bx_i(c_bx), .tri_by_i(c_by),
+      .tri_cx_i(c_cx), .tri_cy_i(c_cy),
+      .tri_area2_i(c_area2),
+      .tri_min_x_i(c_min_x), .tri_max_x_i(c_max_x),
+      .tri_min_y_i(c_min_y), .tri_max_y_i(c_max_y),
       .tri_src_id_i(render_src_id_i),
       .out_valid_o(su_out_valid),
       .out_ready_i(shell_tri_ready),
@@ -409,12 +499,15 @@ module tb_zhao_shell (
   // The mux. In setup mode the shell is driven by SETUP's outputs and the
   // bench's ready comes from SETUP's input side; otherwise everything is
   // exactly as before.
-  assign render_tri_ready_o = setup_mode_i ? su_tri_ready : shell_tri_ready;
+  assign render_tri_ready_o = clip_mode_i  ? cl_tri_ready
+                            : setup_mode_i ? su_tri_ready
+                                           : shell_tri_ready;
   assign dbg_su_tri_ready_o    = su_tri_ready;
   assign dbg_su_out_valid_o    = su_out_valid;
   assign dbg_shell_tri_ready_o = shell_tri_ready;
 
-  wire               m_tri_valid = setup_mode_i ? su_out_valid : render_tri_valid_i;
+  wire               m_tri_valid = (setup_mode_i || clip_mode_i) ? su_out_valid
+                                                                : render_tri_valid_i;
   wire signed [22:0] m_kx0 = setup_mode_i ? su_kx0 : render_kx0_i;
   wire signed [22:0] m_ky0 = setup_mode_i ? su_ky0 : render_ky0_i;
   wire signed [47:0] m_kc0 = setup_mode_i ? su_kc0 : render_kc0_i;

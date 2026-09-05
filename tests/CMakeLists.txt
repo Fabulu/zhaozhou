@@ -4993,6 +4993,8 @@ set(ZHAO_SHELL_RTL
     # DEPTHQUANT does not own a reciprocal -- "the console already has ONE
     # rcp_u24 law; a second ROM would be a second law" -- so the service and
     # its ROM come with it.
+    # D22 step 3: GEOM.CLIP, in front of SETUP.
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_clip.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_svc.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
@@ -5046,6 +5048,31 @@ verilate(demo_duo_markers
 # computed. And in depth mode the fill word's depth field is filled with all
 # ones, so a shell that ignored depth_mode_i draws a visibly different picture
 # rather than passing by coincidence.
+# D22 STEP 3: GEOM.CLIP in front of SETUP. The bench stops supplying 2A and the
+# scan box; CLIP computes them, and normalises winding on the way.
+#
+# The test draws BOTH windings. A step-3 test fed only counter-clockwise
+# triangles exercises the flip zero times and passes with the whole
+# normalisation path dead -- which is the failure GEOM.CLIP's own header warns
+# about: a triangle "geometrically correct and shaded wrong, on exactly the
+# back-facing half of the scene".
+add_executable(test_shell_clip_path_directed shell/shell_clip_path_directed.cpp)
+target_link_libraries(test_shell_clip_path_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_shell_clip_path_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry)
+verilate(test_shell_clip_path_directed
+  PREFIX Vtb_zhao_shell TOP_MODULE tb_zhao_shell
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_SHELL_RTL}
+          ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/shell/tb_zhao_shell.sv)
+add_test(NAME shell_clip_path_directed COMMAND test_shell_clip_path_directed)
+set_tests_properties(shell_clip_path_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)
+
 add_executable(test_shell_depth_path_directed shell/shell_depth_path_directed.cpp)
 target_link_libraries(test_shell_depth_path_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_shell_depth_path_directed PRIVATE
