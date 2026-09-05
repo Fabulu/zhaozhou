@@ -36,6 +36,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <utility>
 #include <vector>
 
 #include "verilated.h"
@@ -79,18 +80,20 @@ constexpr int32_t px(int32_t whole) { return whole << 8; }
 constexpr uint8_t kGridW = 4, kGridH = 4;
 constexpr uint32_t kSlotHalfwords = 245760u / 2u;
 
-// Two windings of the SAME triangle. `swap_bc` produces the clockwise one,
-// which CLIP must flip; the drawn result has to be identical either way.
-bool the_triangle(bool swap_bc, zhao_geom::BinTri* out) {
+// THE ONE TRIANGLE. The clockwise variant is NOT made here.
+//
+// `make_bin_tri` is the ORACLE, and the oracle normalises winding itself --
+// handing it B and C swapped returns the same positively-wound BinTri, so the
+// first version of this test fed CLIP two identical triangles, saw flip=0
+// twice, and would have reported the normalisation path exercised when it had
+// never run. The swap has to happen AFTER the oracle, on the vertices actually
+// presented to the hardware.
+bool the_triangle(zhao_geom::BinTri* out) {
   zref::Clip::Viewport vp;
   vp.w = kGridW * 16;
   vp.h = kGridH * 16;
-  const int32_t ax = px(4), ay = px(4);
-  const int32_t bx = px(kGridW * 16 - 4), by = px(8);
-  const int32_t cx = px(8), cy = px(kGridH * 16 - 4);
-  if (swap_bc)
-    return zhao_geom::make_bin_tri(ax, ay, cx, cy, bx, by, vp, 0x2A2A, out);
-  return zhao_geom::make_bin_tri(ax, ay, bx, by, cx, cy, vp, 0x2A2A, out);
+  return zhao_geom::make_bin_tri(px(4), px(4), px(kGridW * 16 - 4), px(8),
+                                 px(8), px(kGridH * 16 - 4), vp, 0x2A2A, out);
 }
 
 ShellHarness::RenderTri from_bin_tri(const zhao_geom::BinTri& b) {
@@ -178,13 +181,18 @@ Pass draw_once(int mode, bool swap_bc, bool corrupt_box) {
   if (lease_opens == 0) return r;
 
   zhao_geom::BinTri b;
-  if (!the_triangle(swap_bc, &b)) return r;
+  if (!the_triangle(&b)) return r;
 
   h.top.setup_mode_i = (mode >= 1) ? 1 : 0;
   h.top.clip_mode_i = (mode == 2) ? 1 : 0;
   h.top.setup_area2_i = (int64_t)b.s.area2;
 
   ShellHarness::RenderTri t = from_bin_tri(b);
+  if (swap_bc) {
+    // Present the SAME triangle wound the other way. CLIP must flip it back.
+    std::swap(t.bx, t.cx);
+    std::swap(t.by, t.cy);
+  }
   if (mode >= 1) {
     // Coefficients cleared, as in step 1: a shell ignoring the mode draws
     // nothing rather than quietly drawing the bench's triangle.

@@ -435,8 +435,11 @@ module tb_zhao_shell (
       // tile is the shell's own tile size, so this is the same rectangle the
       // bench derives its scan box from -- which is why the two agree.
       .vp_x0_i(12'd0), .vp_y0_i(12'd0),
-      .vp_w_i({4'd0, render_grid_w_i, 4'd0}),
-      .vp_h_i({4'd0, render_grid_h_i, 4'd0}),
+      // grid tiles x 16 pixels, sized to the port rather than assembled
+      // from a guessed concatenation -- the first version added up to 14
+      // bits for a 12-bit pin.
+      .vp_w_i(12'(render_grid_w_i) << 4),
+      .vp_h_i(12'(render_grid_h_i) << 4),
       .cull_mode_i(2'd0),               // NONE: culling is not this step
       .out_valid_o(cl_out_valid), .out_ready_i(su_tri_ready),
       .out_ax_o(cl_ax), .out_ay_o(cl_ay),
