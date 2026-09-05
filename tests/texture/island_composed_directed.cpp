@@ -267,26 +267,35 @@ int main(int argc, char** argv) {
     // transfer per retirement), so the cause is not the obvious re-submission
     // that bit ASSEMBLE and COMBINE.V1 earlier today, and refusals are zero.
     //
-    // THE SIGNATURE IS SPECIFIC AND IS THE PLACE TO START. Sort the recipes by
-    // their bit pattern:
+    // WHAT IS ESTABLISHED, by a cheap experiment that should have come first:
+    // driving EVERY fragment with one fixed recipe gives exact counts.
     //
-    //     jobs   recipe  bits
-    //      112      7    111
-    //       24      6    110
-    //        4      3    011
-    //        0      2    010
-    //        0      1    001
+    //     all fragments recipe 1 -> 0 256 0 0 0 0 0 0   (64 x 4)
+    //     all fragments recipe 2 -> 0 0 256 0 0 0 0 0   (64 x 4)
+    //     all fragments recipe 6 -> 0 0 0 0 0 0 384 0   (64 x 6)
     //
-    // Every recipe with TWO OR MORE bits set has jobs; every recipe with
-    // exactly one bit has none. That is not what mis-associating a fragment
-    // with its neighbour looks like -- that would smear across recipes without
-    // regard to their bit patterns. It looks like the three-bit recipe field
-    // arriving with bits OR-ed together or sampled across a transition, which
-    // would turn 001 and 010 into 011 and pile the high patterns up.
+    // So the combiner, its job scheduler and these counters are all exact. The
+    // fault appears ONLY when the recipe VARIES per fragment, which means the
+    // context word reaching the combiner does not always belong to the fragment
+    // being retired -- a per-fragment ALIGNMENT problem, not a corrupted field.
     //
-    // Accounting, for whoever picks this up: the non-bypass counters imply 33
+    // A first pass at this recorded a "signature": every recipe with two or
+    // more bits set had jobs and every single-bit recipe had none, which was
+    // read as the field arriving OR-ed together. **That was coincidence and the
+    // fixed-recipe runs refute it** -- a corrupted field could not produce
+    // exact counts. Recorded because the wrong hypothesis was written down
+    // confidently before the two-minute experiment that killed it, which is the
+    // same order-of-operations mistake as diagnosing before measuring.
+    //
+    // Where to look next: FRAGROB's `out_ctx_r <= ctx_m[head_slot_c]` is a
+    // registered read of an INFERRED MEMORY, so the value present in R_HOLD is
+    // the one addressed a cycle earlier. Whether that always lines up with the
+    // slot being retired is the open question; `out_rgb_r` is read the same way
+    // and is correct, which is why this is not obviously the answer either.
+    //
+    // Accounting, for whoever picks it up: the non-bypass counters imply 33
     // fragments where 40 are expected, the three bypass recipes legitimately
-    // carry 24 more at zero jobs, so 57 of 64 are accounted for and 7 are not.
+    // carry 24 more at zero jobs, so 57 of 64 are accounted for.
     //
     // Raising this threshold to 3 to make the suite look greener would bury
     // all of that.
