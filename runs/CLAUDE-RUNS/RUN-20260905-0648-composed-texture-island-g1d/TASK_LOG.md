@@ -266,6 +266,53 @@ far larger than its 1,994 ALMs suggest, and perspuv at 2,204 ALMs spent 78
 minutes in the same stage. The scaling is consistent. The only bug was the
 3,000 s timeout.
 
+## BALANCED is not the lever I implied, and the real one is refused
+
+Revising a claim made an hour ago rather than letting it stand. BALANCED's
+placement preparation ran about 25 minutes against HIGH PERFORMANCE EFFORT's
+32 — a modest saving, not the order of magnitude the framing suggested. The
+optimisation mode is not where the cost is.
+
+Where it is: **596 virtual pins against 744 registers.** Every virtual pin is a
+placeable cell, so the placement problem is far larger than 1,994 ALMs implies,
+and no fitter mode changes that. Characterising a wide-interface leaf block is
+intrinsically expensive, and this block's interface is three samples of RGB plus
+alpha plus context.
+
+**The one lever that would genuinely make it fast is refused.** Relaxing the SDC
+from 100 MHz would stop the fitter chasing an unreachable target — and would
+also stop it optimising the moment it met the relaxed constraint, so the reported
+fmax would floor at whatever we asked for. That does not cheapen the
+measurement, it destroys it: the entire question is whether the counter
+narrowing moved 29.74 MHz, and a constraint-limited number cannot answer it.
+
+So the fit is expensive because the block is hard and wide-ported, and there is
+no cheap lever that preserves the answer. BALANCED stays — a real saving at a
+known −2.08 MHz — but it was oversold and this says so.
+
+## D22 tread 9: the index stream, in flight
+
+The cheapest tread in the staircase, because the work was already being done.
+ASSETFETCH reads the meshlet footprint as three 64-byte lines, and EIGHT of its
+24 beats were the index run — fetched, then discarded, because `ix_req_i` was
+tied off and ASSEMBLE still read the bench's flat stream. Tread 9 connects the
+port that was already being fed.
+
+Checked before building, not after: ASSETFETCH answers with
+`assign ix_valid_o = ix_pend_q` — registered, one cycle late — and ASSEMBLE
+holds `ix_req_o` through S_FETCH until `ix_valid_i` arrives. Its "no ready"
+means the RESPONDER cannot be stalled, not that ASSEMBLE cannot wait, so a
+registered answer is legal. The index buffer is sized `MAX_TRIANGLES * 3` =
+378 bytes, so the one-triangle case is far inside it.
+
+The bench's `asm_index_stream_i` is driven with a DIFFERENT legal triplet
+during the fetch pass, so a shell still reading it draws a different triangle
+rather than agreeing by accident.
+
+**Tread 10 is the last one** and it is scoped: replace the played guard and beat
+stream with the real `zhao_mem_guard` over `zhao_sdram_model`, which the bench
+already instantiates.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner
