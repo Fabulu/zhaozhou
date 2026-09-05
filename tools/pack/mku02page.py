@@ -33,10 +33,16 @@ ATLAS_W, ATLAS_H = 256, 256
 EYE_TILE = 64
 
 # ---- the authored pigments (owner knobs; see unnamed02_art.h for geometry) --
-BODY_PINK = np.array([230.0, 74.0, 146.0])   # the crayon pink, saturated on
-BODY_PINK_DEEP = np.array([196.0, 44.0, 112.0])  # purpose (the pale-scan trap)
-LOOP_PINK = np.array([214.0, 62.0, 132.0])
-HINGE_PINK = np.array([238.0, 98.0, 162.0])
+# PASS 2 (Direction 2 §1d + the form recon's bias finding): the shipped
+# pink ran ~20 counts BLUER than the drawings' crimson-rose and the old
+# blue-heavy rig pushed it further toward lilac. The blue bias comes out —
+# crimson, not magenta. Chosen by LOOKING at native 240p on dark ground
+# under the u02 moving rig (the sheet numbers are a comparison, never the
+# shipped value).
+BODY_PINK = np.array([228.0, 70.0, 124.0])   # the crayon pink, saturated on
+BODY_PINK_DEEP = np.array([190.0, 42.0, 96.0])   # purpose (the pale-scan trap)
+LOOP_PINK = np.array([212.0, 60.0, 116.0])
+HINGE_PINK = np.array([236.0, 96.0, 138.0])
 EYE_PURPLE = np.array([104.0, 42.0, 168.0])
 EYE_PURPLE_DEEP = np.array([76.0, 26.0, 128.0])
 EYE_RIM_WHITE = np.array([246.0, 242.0, 250.0])

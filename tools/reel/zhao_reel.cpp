@@ -2250,6 +2250,10 @@ struct CreatureReelCtx {
   uint32_t gibs_in_view = 0;
   bool force_micro = false;
   bool moving_light = false;
+  // Pass 2 (creature 02, R6): the moving-light base rig is per-subject —
+  // Zixxtrixx keeps the inspection rig; u02 carries its own lower-ambient
+  // variant (the gas rim is thickened through the LIGHT, R4).
+  const zc::CreatureLightRig* moving_rig = &zc::kCreatureLightMovingInspection;
   // Direction 29 clip sun: when true, moving_sources[0] holds the subject's
   // one sun and the additive gate is raised for this subject's compose only.
   bool sun_light = false;
@@ -2509,6 +2513,116 @@ void sample_zixx_moving_colour_sources(uint32_t frame, uint32_t frames,
         kGreenGainB, kGreenAddR, kGreenAddG, kGreenAddB);
 }
 
+// ---- Creature 02: the many-coloured moving rig, u02-scaled (pass 2, R6) ----
+//
+// Direction 2 §6: the many-coloured lighting IS the standard now. The
+// Zixxtrixx paths orbit a ~4 m staged signature-S; the conduit's body ball
+// is 0.9 m hovering at ~1.25 m, so the placement code is reused with
+// u02-OWNED extents — otherwise the coloured pools never land on the animal
+// (08-LIGHTING: check the closest approach against the inner radius).
+//
+// The base rig is a u02 variant of the inspection rig (R4: the gas rim is
+// the dark toon band at grazing incidence, and its width is governed by
+// AMBIENT — lowering ambient grows the rim evenly around the silhouette,
+// while the kept key/fill opposition stops it collapsing into a one-sided
+// terminator). Ambient below even the inspection rig's, fill slightly UP,
+// tuned by looking at the rim at native 384x240.
+const zc::CreatureLightRig kU02MovingRig{
+    43000,  36000, 35000,   // the honest top diagonal (Cool Cross's key)
+    -45000, 35000, -32000,  // the opposing crossfill direction (kept: R4)
+    9175,   9830,  12452,   // LOW ambient: .14, .15, .19 — the rim knob
+    21627,                  // dim white key: .33
+    8520,   11141, 15729};  // blue-leaning crossfill: .13, .17, .24
+
+// Path extents around the hovering conduit (world mm, instance-relative).
+constexpr int32_t kU02WarmOrbitXMm = 1500, kU02WarmOrbitZMm = 1500;
+constexpr int32_t kU02WarmHeightMm = 2500;   // above the loop peak
+constexpr uint32_t kU02WarmTurns = 1;
+constexpr int32_t kU02WarmInnerMm = 900, kU02WarmOuterMm = 3600;
+constexpr int32_t kU02BlueOrbitXMm = 1150, kU02BlueOrbitZMm = 700;
+constexpr int32_t kU02BlueHeightMm = 1250;   // level with the body centre
+constexpr uint32_t kU02BlueTurns = 2;
+constexpr int32_t kU02BlueInnerMm = 520, kU02BlueOuterMm = 1700;
+constexpr int32_t kU02RedOrbitXMm = 950, kU02RedOrbitZMm = 580;
+constexpr int32_t kU02RedHeightMm = 850;
+constexpr int32_t kU02RedBobMm = 250;
+constexpr uint32_t kU02RedTurns = 3;
+constexpr uint16_t kU02RedPhaseA16 = 16384;
+constexpr int32_t kU02RedInnerMm = 520, kU02RedOuterMm = 1600;
+// The red source's gains are u02-owned: the Zixxtrixx red (mult R 1.60) was
+// authored against a GREEN body; on the conduit's R-rich pink it pegs the
+// red channel across the whole pool and reads neon (the channel-ceiling
+// law). Tamed by eye at native.
+constexpr int32_t kU02RedGainR = 58982;   // 0.90
+constexpr int32_t kU02RedGainG = 6554;    // 0.10
+constexpr int32_t kU02RedGainB = 1966;    // 0.03
+constexpr int32_t kU02RedAddR = 19661;    // 0.30 true-red emission
+constexpr int32_t kU02RedAddG = 1311;     // 0.02
+constexpr int32_t kU02RedAddB = 0;
+constexpr int32_t kU02GreenSweepMm = 1100;
+constexpr int32_t kU02GreenSideMm = -600;
+constexpr int32_t kU02GreenSideDriftMm = 200;
+constexpr int32_t kU02GreenHeightMm = 550;   // low, raking the belly
+constexpr uint32_t kU02GreenTurns = 4;
+constexpr int32_t kU02GreenInnerMm = 520, kU02GreenOuterMm = 1600;
+
+void sample_u02_moving_sources(uint32_t frame, uint32_t frames,
+                               const zc::CreatureInstance& inst,
+                               zc::CreaturePointLight* out) {
+  const int32_t centre_x = inst.x - fxm(u02::kStageCentreMm);
+  const auto path_angle = [frame, frames](uint32_t turns, uint16_t phase) {
+    return zref::angle16{static_cast<uint16_t>(
+        (static_cast<uint64_t>(frame) * turns * 65536u) / frames + phase)};
+  };
+  const auto scaled = [](int32_t mm, int32_t trig_raw) {
+    return static_cast<int32_t>(
+        (static_cast<int64_t>(mm) * trig_raw + 32768) >> 16);
+  };
+  const auto place = [&](zc::CreaturePointLight& s, int32_t x_mm, int32_t y_mm,
+                         int32_t z_mm, int32_t inner_mm, int32_t outer_mm,
+                         int32_t gr, int32_t gg, int32_t gb, int32_t adr,
+                         int32_t adg, int32_t adb) {
+    s.world_x = centre_x + fxm(x_mm);
+    s.world_y = inst.y + fxm(y_mm);
+    s.world_z = inst.z + fxm(z_mm);
+    s.inner_radius = fxm(inner_mm);
+    s.outer_radius = fxm(outer_mm);
+    s.gain_r = gr;
+    s.gain_g = gg;
+    s.gain_b = gb;
+    s.add_r = adr;
+    s.add_g = adg;
+    s.add_b = adb;
+  };
+  // Colour gains and additive emissions reuse the shipped Zixxtrixx source
+  // values (they are per-channel responses, independent of stage scale);
+  // only the PATHS are re-authored to the conduit's size. The warm lamp
+  // still emits nothing — restraint is part of the standard look.
+  const zref::angle16 aw = path_angle(kU02WarmTurns, 0);
+  place(out[kZixxMovingSourceWarm], scaled(kU02WarmOrbitXMm, zref::fx_cos(aw).raw),
+        kU02WarmHeightMm, scaled(kU02WarmOrbitZMm, zref::fx_sin(aw).raw),
+        kU02WarmInnerMm, kU02WarmOuterMm, 68813, 47186, 19661, 0, 0, 0);
+  const zref::angle16 ab = path_angle(kU02BlueTurns, 0);
+  place(out[kZixxMovingSourceBlue], scaled(kU02BlueOrbitXMm, zref::fx_cos(ab).raw),
+        kU02BlueHeightMm, scaled(kU02BlueOrbitZMm, zref::fx_sin(ab).raw),
+        kU02BlueInnerMm, kU02BlueOuterMm, kBlueGainR, kBlueGainG, kBlueGainB,
+        kBlueAddR, kBlueAddG, kBlueAddB);
+  const zref::angle16 ar = path_angle(kU02RedTurns, kU02RedPhaseA16);
+  const zref::angle16 ar2 = path_angle(kU02RedTurns * 2, 0);
+  place(out[kZixxMovingSourceOrange],
+        scaled(kU02RedOrbitXMm, zref::fx_cos(ar).raw),
+        kU02RedHeightMm + scaled(kU02RedBobMm, zref::fx_sin(ar2).raw),
+        -scaled(kU02RedOrbitZMm, zref::fx_sin(ar).raw),
+        kU02RedInnerMm, kU02RedOuterMm, kU02RedGainR, kU02RedGainG,
+        kU02RedGainB, kU02RedAddR, kU02RedAddG, kU02RedAddB);
+  const zref::angle16 ag = path_angle(kU02GreenTurns, 0);
+  place(out[kZixxMovingSourceGreen], scaled(kU02GreenSweepMm, zref::fx_sin(ag).raw),
+        kU02GreenHeightMm,
+        kU02GreenSideMm + scaled(kU02GreenSideDriftMm, zref::fx_cos(ag).raw),
+        kU02GreenInnerMm, kU02GreenOuterMm, kGreenGainR, kGreenGainG,
+        kGreenGainB, kGreenAddR, kGreenAddG, kGreenAddB);
+}
+
 // ---- Direction 27 committed diagnostic: solo one moving source ------------
 // The owner could not see three of the four pools, and this creature has
 // already shipped one instrument-invisible light, so the proof tool is
@@ -2758,7 +2872,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     const uint32_t saved_point_count = zc::g_creature_point_light_count;
     const bool saved_additive = zc::g_creature_additive_light;
     if (c.moving_light) {
-      zc::g_creature_light_rig = &zc::kCreatureLightMovingInspection;
+      zc::g_creature_light_rig = c.moving_rig;
       zc::g_creature_point_lights = c.moving_sources;
       zc::g_creature_point_light_count = kZixxMovingSourceCount;
       zc::g_creature_additive_light = g_zixx_additive_normal;  // Direction 30
@@ -3200,6 +3314,7 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.poses = &dog_poses;
     cr_ctx.force_micro = sub.creature_force_micro;
     cr_ctx.moving_light = sub.creature_moving_light;
+    if (species == Species::kUnnamed02) cr_ctx.moving_rig = &kU02MovingRig;
     cr_ctx.sun_light =
         sub.sun != nullptr && g_zixx_suns_enabled && !sub.creature_moving_light;
     if (sub.dummy) {
@@ -3638,11 +3753,15 @@ int render_scene(const SceneSubject& sub) {
       // world-space coordinates live in cr_ctx.moving_sources and are consumed
       // unchanged by both the compositor and the depth-tested visible markers.
       if (sub.creature_moving_light) {
-        sample_zixx_moving_source(f, sub.frames, dog_inst,
-                                  cr_ctx.moving_sources[kZixxMovingSourceWarm]);
-        sample_zixx_moving_colour_sources(f, sub.frames, dog_inst,
-                                          cr_ctx.moving_sources,
-                                          g_zixx_additive_normal);
+        if (species == Species::kUnnamed02) {
+          sample_u02_moving_sources(f, sub.frames, dog_inst, cr_ctx.moving_sources);
+        } else {
+          sample_zixx_moving_source(f, sub.frames, dog_inst,
+                                    cr_ctx.moving_sources[kZixxMovingSourceWarm]);
+          sample_zixx_moving_colour_sources(f, sub.frames, dog_inst,
+                                            cr_ctx.moving_sources,
+                                            g_zixx_additive_normal);
+        }
         apply_zixx_ml_solo(cr_ctx.moving_sources);
       }
       // Direction 29: the clip sun tracks the terrain-snapped instance, so
@@ -4655,11 +4774,11 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   s.u02_fx = true;
   s.u02_glow = true;
   s.pop_flags = 0x0001;  // the droplets: opaque points (no tri cones)
-  // the clip's sun (the same far-sun law; additive rides the normal gate)
-  s.sun = slot == 0   ? &kU02SunHover
-          : slot == 1 ? &kU02SunDrift
-          : slot == 2 ? &kU02SunChannel
-                      : &kU02SunCalm;
+  // Pass 2 (R6 / Direction 2 §6): the many-coloured moving rig IS the
+  // presentation now. The per-clip suns are dropped — sun + four coloured
+  // sources would break the four-source law, and keeping a sun lane would
+  // preserve exactly the old single-rig look the owner retired.
+  s.creature_moving_light = true;
   // the skybox bloom serves the showcase clips where the sky is the backdrop
   // (S1 made a creature + planet bloom lawful in one clip)
   if (slot == 2) {  // fixed-camera subjects only: the bloom is painted in
