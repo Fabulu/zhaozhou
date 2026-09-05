@@ -416,9 +416,26 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
   uint32_t n = 0;
   for (;;) {
     const uint32_t h = fx_hash(0xF01D5EEDu + salt, n, 0x51u);
-    const int32_t gather = (kGatherKeysBase + static_cast<int32_t>(h % kGatherKeysHash)) * 16;
-    const int32_t hold = (kHoldKeysBase + static_cast<int32_t>((h >> 8) % kHoldKeysHash)) * 16;
-    const int32_t knead = (kKneadKeysBase + static_cast<int32_t>((h >> 16) % kKneadKeysHash)) * 16;
+    int32_t gather = (kGatherKeysBase + static_cast<int32_t>(h % kGatherKeysHash)) * 16;
+    int32_t hold = (kHoldKeysBase + static_cast<int32_t>((h >> 8) % kHoldKeysHash)) * 16;
+    int32_t knead = (kKneadKeysBase + static_cast<int32_t>((h >> 16) % kKneadKeysHash)) * 16;
+    // PASS 5 (QA item 3): SHORT CLIPS MUST STILL KNEAD. `hit` (70 keys) and
+    // `startle` (80) never reached the knead segment, and `curious` kneaded
+    // 9 keys of 90 -- the hashed first cycle simply did not fit before the
+    // release tail, so the owner's "then knead it into new shapes ... going
+    // on all the time" was untrue of part of the bank. If the whole first
+    // cycle cannot fit, compress its three segments proportionally so
+    // gather -> hold -> KNEAD -> release all land inside the clip. A clip
+    // whose first cycle already fits takes the same durations as before.
+    if (n == 0 && release_at > 3 * 16 && gather + hold + knead > release_at) {
+      const int32_t cyc = gather + hold + knead;
+      gather = gather * release_at / cyc;
+      hold = hold * release_at / cyc;
+      if (gather < 16) gather = 16;
+      if (hold < 16) hold = 16;
+      knead = release_at - gather - hold;  // no rounding gap: the knead
+      if (knead < 16) knead = 16;          // hands straight to the release
+    }
     next_shape = static_cast<uint8_t>((h >> 24) % kFoldShapeCount);
     if (next_shape == shape)
       next_shape = static_cast<uint8_t>((next_shape + 1 + (h >> 28) % (kFoldShapeCount - 1)) %
@@ -481,10 +498,18 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
   }
 }
 
-// The ablation gate (07 Â§3 in reverse, the centrepiece's own FAIL line):
-// U02_ABLATE_KNEAD=1 zeroes this layer, and the mana MUST go limp. If it
-// does not, the coupling is decorative and the feature has failed.
-inline int g_u02_knead_ablate = 0;
+// THE COUPLING'S PROOF IS THE CODE, not a render (pass 5, both gates
+// agreeing): every mote position is a fixed-weight sum over the POSED
+// anchors (mana_fold / fold_mvc in manafold_fx.h) and no proximity,
+// collision or distance term exists anywhere in the mana path -- grep for
+// one; finding one is the regression. The old U02_ABLATE_KNEAD gate was
+// RETIRED because it zeroed this layer, which moves the BONES it claimed
+// to hold fixed, so its A/B could never separate "the mana follows the
+// rig" from "the projection moved because the rig moved". The can-fail
+// render gate is now U02_FOLD_FREEZE=1 (manafold_fx.h): the bones keep
+// animating and only the field's anchor INPUT is frozen at rest -- if the
+// mana still tracks the antenna in that render, the coupling is
+// decorative and the feature has failed.
 
 /** THE ALWAYS-ON KNEAD LAYER: composed onto the junction/neck/hinge bones
  *  BEFORE the clip's own loop_pose call, so the closure walk accounts for
@@ -493,8 +518,10 @@ inline int g_u02_knead_ablate = 0;
  *  bind, so kBLoopBase2's rotation SLIDES the ball along the body surface
  *  (Direction 4: a ball that is a joint). */
 inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f) {
-  if (g_u02_knead_ablate) return;
-  const int gain = slot < 14 ? kKneadClipPm[slot] : 700;
+  // every authored slot reads its own gain (pass 5: the guard was `< 14`,
+  // which orphaned index 14 -- the damage clip silently ran at 700, 2.8x
+  // its authored 250, and the owner's knob did nothing)
+  const int gain = slot < 15 ? kKneadClipPm[slot] : 700;
   if (gain <= 0) return;
   const FoldPhase ph = fold_phase(slot, keys, f * 16);
   const auto a = [&](int32_t base, int32_t env_pm) {
