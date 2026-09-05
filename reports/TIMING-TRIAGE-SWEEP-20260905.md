@@ -83,8 +83,32 @@ and has no row of its own here at all.
 
 * Nothing about which block is "worst" in any absolute sense — three days of
   drift makes the ordering indicative only.
-* Nothing about whether the constraint set is identical across these fits. The
-  block flow copies one SDC, but that has not been verified per row, and
-  perspuv's 82 MHz measured figure does not sit comfortably with its −0.463
-  slack, which is itself a reason to distrust cross-row arithmetic here.
+* ~~Nothing about whether the constraint set is identical across these fits.~~
+  **CHECKED AND SETTLED, and it corrects a doubt raised in the first version of
+  this document.** `run_block_fit.ps1` generates the SDC per block from a fixed
+  template: `create_clock -name clk -period 10.000` for every block, plus I/O
+  delays whose own comment says *"Without these the Fmax below is not the
+  block."* The constraint IS common at 100 MHz.
+
+  The doubt was raised because perspuv reports 82 MHz while this table shows
+  −0.463 ns, which looked inconsistent. It is not. **fmax comes from the worst
+  path OVERALL; this column is the worst path that starts INSIDE the design.**
+  perspuv's worst path is a boundary one at −2.195 ns:
+
+  ```
+  start at a TOP-LEVEL PORT   1313 paths, worst -2.195   v_valid_i -> Decoder1~0
+  start INSIDE the design      687 paths, worst -0.463   head_q[2] -> v_o[28]
+  -2.195 ns -> 12.195 ns -> 82.00 MHz    <- the recorded fmax, exactly
+  -0.463 ns -> 10.463 ns -> 95.57 MHz    <- what its own logic would allow
+  ```
+
+  So perspuv is **boundary-bound with 1.732 ns of headroom**, and 546 of its
+  paths start at `rst_n`. In the composed island its boundary is real wiring to
+  neighbours rather than virtual pins, which is consistent with it not appearing
+  anywhere near the island's critical path.
+
+  I published the inconsistency as a reason to distrust the table before doing
+  the two-minute arithmetic that dissolved it. Recorded rather than deleted: an
+  unresolved doubt in a report is a claim too, and this one would have made a
+  reader discard a table that is fine.
 * Nothing about the composed console. Every row is a leaf or a single island.
