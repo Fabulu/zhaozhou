@@ -129,3 +129,21 @@ NEXT: D7 §9.2 (knead must rotate AND stretch the shapes, deliberately, no spazz
 ### IN PROGRESS
 Full 22-clip bank render (18/22). Then encode, assemble, deploy.
 `checkmedia.py` running over the whole site in parallel.
+
+### 1430-1520 — PUBLISHED
+- Bank: 22 clips rendered, encoded VP9 lossless 60 fps.
+  ⚠ The background encoder was KILLED at 20 of 22, leaving `taunt2` and `trick`
+  as pass-7 bytes under pass-9 captions -- the silent mixed-vintage fault D7
+  §10.2 warns about. Caught by diffing file mtimes against the render start
+  rather than trusting the job status; both re-encoded explicitly.
+- Decode-verified 93 changed files (22 clips + 71 archive), 0 failures, with a
+  committed `website/tools/decodecheck.sh`.
+  ⚠ The full-site `checkmedia.py` was NOT completed -- it decodes all 569
+  renders, saturated the machine for over an hour and was killed twice. Declared
+  in the commit and in the findings; the untouched 476 were already live.
+- Merged to `main` in BOTH repos, pushed, landing verified.
+- Deployed: `deploy.ps1 -Project upheaval -Branch main`.
+  Production verified: "MANAFOLD, pass 9", seven archive generations (1-7),
+  noindex intact, and pass-3/4/7 archive media all HTTP 200.
+
+### RUN CLOSED
