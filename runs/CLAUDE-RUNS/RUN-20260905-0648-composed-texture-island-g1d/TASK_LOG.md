@@ -1635,3 +1635,45 @@ is the ALM/Fmax measurement the disk had blocked three times.
 **Caution to carry into reading it:** the three seeded runs of the UNCHANGED
 old block spread 63.93–68.63 MHz. Any fmax delta smaller than ~4.7 MHz is
 inside that noise and must not be reported as an architectural result.
+
+## 2026-09-06 ~22:50 — THE FIT KILLER WAS OURS, AND ITS COMMENT SAID THE OPPOSITE
+
+Two 50-minute placements were lost. The second is measurable: workspace created
+**21:19:01**, `quartus_fit` log stops **21:29:31** — ten minutes in,
+mid-placement, no error line, no row. That is an external `Stop-Process`, not a
+Quartus failure. A different fit started 20:43 was still alive at 47 minutes at
+that moment; **two fits were running concurrently.**
+
+`run_block_fit.ps1`'s watchdog killed by **"started after this run began"**, and
+the comment above it claimed that meant *"a concurrent fit in another workspace
+is never touched."* Exactly backwards: started-after protects the EARLIER fit,
+which was never at risk, and puts every LATER fit in the blast radius. Any
+runner reaching its deadline kills whatever another lane started afterwards, on
+different sources. With several lanes each launching tile fits that is the
+normal case, not an edge case.
+
+Now scoped by **parent PID** — only the processes that runner itself launched.
+Exact both ways, fire-tested against the live fit: a foreign owner pid selects
+**0**, and live `quartus_fit 7788` reports parent `15764`, its own runner.
+
+**The comment is the lesson.** It was not vague or stale; it asserted a specific
+protective property the code did not have, and read as reassurance for weeks.
+A comment claiming a safety property is a claim like any other, and one reading
+of "protects the earlier or the later?" would have caught it.
+
+Not the disk, then — the disk was a separate, real incident that cost the first
+placement. Two causes, one symptom.
+
+### Terrain deformation: the owner's question, being answered properly
+
+*"if geom.warp isn't needed, how are we going to do terrain deformation and
+effects?"* Ledger check says the field cone covers it — `TERRAIN.BAKE` and
+`TERRAIN.PATCH` both UNIT_VERIFIED, `FIELD.SEQ.EARTH` SPECIFIED, `GEOM.SKIN`
+UNIT_VERIFIED for creatures — and that GEOM.WARP was for warping MESH vertices,
+never terrain. **But "it is all already covered" is exactly the comfortable
+answer this repo keeps getting bitten by**, so a lane is tracing two concrete
+effects end to end in the code (Volcano rise, a persistent height change; and
+waves, a live one), naming the first link in each chain that is not built, and
+checking specifically whether anything has no route except through the deferred
+block. Rotated sheets are in scope too, since `ComposedLattice` states an
+axis-aligned precondition that would forbid them.
