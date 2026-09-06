@@ -1726,3 +1726,51 @@ composed draw would be unlit.
 No rearchitecture needed. Also owed and recorded: a CLUT4 phase for
 `island_composed_directed` — that fixture drives CLUT8, RGB565, ARGB1555 and
 ARGB4444 but never CLUT4, so this evening's nibble fix has no coverage.
+
+## 2026-09-06 ~23:45 — RCP24 V3 FITTED, AND THE DEMONSTRATOR IS FITTING NOW
+
+**`zhao_raster_rcp24_v3@v3-full` — ok, 1798 s, digest `6553c5cef196`.**
+
+| | svc before | v3 full |
+|---|---|---|
+| ALM | 1,041 / 1,037 / 1,038 | 1,230 |
+| fmax | 68.46 / 68.63 / **63.93** | **90.54 MHz** |
+| registers | 1,101 | 1,944 |
+| DSP | 6 | **3** |
+| M10K | 0 | 6 |
+| pins | 177 | 276 |
+
+**+23.5 MHz and DSP halved.** The seeded triple-fit of the UNCHANGED old block
+(4.7 MHz spread) is the only reason that can be called architectural rather than
+placement luck.
+
+**The fmax is INTERNAL**: of 1,734 paths, 1,695 start at a pin (worst −0.105,
+98.96 MHz) and 39 start inside (worst −1.045, **90.54**). Deleting the boundary
+would buy nothing — the exact opposite of the composed island, where the
+boundary was worth ~9.7 MHz. And the pin count ROSE 177 → 276; more pins usually
+means a worse number, and this got faster anyway.
+
+Next limit named, not guessed: `zhao_raster_ticketq:u_doneq|mem_q[6][3] →
+r_tok_o[2]`. Not the multiplier, not the removed scans.
+
+§10.7 wanted TWO DSP and three were measured — recorded as a miss, with the
+fit-target rule set AT the measurement rather than the target. Full write-up:
+`reports/RCP24-V3-TILE-RESULT-20260906.md`.
+
+### Now fitting: the completion-bank demonstrator
+
+`zhao_texture_v3own@v3-full`, digest `1627c71acdf4`, matching its map-only row.
+Its lane called this "the single most important remaining piece" and confirmed
+§21.8's four pre-fit stop conditions all clear.
+
+**Its rules are FLOORS, which is unusual and deliberate.** The claim under test
+is that payload lives in MEMORY, so the failure to catch is a bank COLLAPSING
+into flip-flops — visible as memory bits going DOWN. `min_memory_bits: 19584` is
+the nine declared banks alone, so the six LUTRAM queues may legitimately move
+while a bank quietly becoming registers cannot hide. And `max_alms: 1800` is
+§21.6's budget against a map-only 6,532 ALUTs, **so it is expected to fail** —
+a gate reporting a real breach is worth more than one set at whatever the design
+happens to be.
+
+Closure is the three `v3own`/`v3bank`/`v3rq` files; everything else is free.
+Step 8 (the composed terrain path) continues in parallel.

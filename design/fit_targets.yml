@@ -195,6 +195,34 @@ targets:
   # produces them. Do NOT inherit svc's max_alms: 650 / max_registers: 600:
   # svc itself already violates both at 1,041 and 1,101, so copying them down
   # would install a gate that fails on arrival and gets ignored.
+  # V3's completion-bank experiment -- section 26.1's FIRST implementation task.
+  # Fitted alone and deliberately not composed: 26.1 says "do not merge those
+  # changes into the composition until the shared record and credit contracts
+  # are fixed", so this measures the structure, not the island.
+  #
+  # THE RULES ARE FLOORS, NOT CEILINGS, WHICH IS UNUSUAL AND DELIBERATE. The
+  # claim under test is that payload lives in MEMORY rather than in fabric, so
+  # the failure to catch is a bank COLLAPSING into flip-flops -- which shows up
+  # as memory bits going DOWN, not up. min_memory_bits is the nine declared
+  # banks alone (3*2560 + 2560 + 2560 + 4096 + 3*896 = 19,584), so the six
+  # LUTRAM queues may legitimately move without failing while a bank quietly
+  # becoming registers cannot hide.
+  #
+  # Section 21.6 budgets 1,800 ALMs for this machinery and the map-only run
+  # showed 6,532 ALUTs, so max_alms is set at the BUDGET and is expected to
+  # fail. That is the point: a gate that reports a real breach is worth more
+  # than one set at whatever the design happens to be.
+  - top: zhao_texture_v3own
+    sources:
+      - fpga/rtl/texture/zhao_texture_v3bank.sv
+      - fpga/rtl/texture/zhao_texture_v3rq.sv
+      - fpga/rtl/texture/zhao_texture_v3own.sv
+    rules:
+      min_m10k: 9
+      min_memory_bits: 19584
+      max_dsp: 0
+      max_alms: 1800
+
   - top: zhao_raster_rcp24_v3
     sources:
       - fpga/rtl/field/zhao_field_rcp24_rom.sv
