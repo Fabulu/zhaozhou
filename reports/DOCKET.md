@@ -3323,6 +3323,23 @@ repaired against, a decision chain landing on a counter's enable, not the
   MODULATE2X doubles alpha; DETAIL_MASK multiplies s0/s1 RGB and s0/s2 alpha.
   It is not a third-sample-weighted colour lerp.
 
+### The first ASSETFETCH reader-side prerequisite is closed
+
+**2026-09-06, ``458418a1``.** ``GEOM.ASSEMBLE`` holds ``ix_req`` throughout its
+fetch state, and ASSETFETCH interpreted that level as a fresh request every
+cycle. The single-bank implementation happened to overwrite the same one-cycle
+answer; the two-bank reader described by the brief would enqueue duplicate
+triangles. ASSETFETCH now captures one triplet index per request episode,
+performs one synchronous read, returns one ``ix_valid`` pulse, and rearms only
+after ``ix_req`` deasserts.
+
+The directed gate holds the request for 12 cycles, poisons the live index after
+acceptance and then rearms a second request: **66 checks pass**. Compiling the
+same gate against the pre-fix RTL makes exactly the two new checks fail (repeated
+valid and the poisoned triplet), so the detector was shown to fire. The 240-job
+random differential remains green: 217 admitted, 23 refused, 11,160 beats,
+**9 checks**.
+
 ## D19w — the guard-verdict mistake was in THREE clients, and the third fails the other way
 
 **2026-09-06.** D22 tread 10 found both geometry fetchers testing

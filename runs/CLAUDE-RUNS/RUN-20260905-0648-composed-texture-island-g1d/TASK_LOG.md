@@ -980,3 +980,33 @@ palette blend station (reserve-before-issue), lerp8 magnitude-rounding law
 governs. Three adjacent defects recorded in its §9: CLUT byte-select dropped
 at the composed island, palette 565→888 zero-fill vs oracle replication,
 dispatch silent unknown-class drop.
+
+## ASSETFETCH: a held index request is now one episode
+
+The composed-island fit was still live, so its exact closure remained untouched.
+The next D19x prerequisite outside that closure was in the geometry reader:
+``GEOM.ASSEMBLE`` holds ``ix_req`` for its whole S_FETCH state, while ASSETFETCH
+turned that level into a synchronous RAM read and ``ix_valid`` pulse every cycle.
+With one unqueued reader those duplicate answers merely overwrite each other;
+with the owner's two-bank reader they become duplicate triangle transactions.
+
+Closed in ``458418a1``. ASSETFETCH captures the triplet index on the first cycle
+of a request episode, performs one read from that captured index, returns one
+valid pulse, and does not rearm until the request deasserts. Release also clears
+all pending index-reader state.
+
+The new directed case keeps ``ix_req`` high for 12 cycles, changes the live index
+immediately after acceptance, and then deasserts/rearms for a second triplet:
+
+    fixed RTL       [assetfetch_rtl_directed] 66 checks passed
+    pre-fix RTL     2 of 66 checks FAILED
+                      repeated ix_valid; live-index poison changed the answer
+    random RTL      217 admitted, 23 refused, 4 empty, 11,160 beats
+                    [assetfetch_random] 9 checks passed
+
+The pre-fix result came from a separately built copy under ``build/``; the test
+therefore demonstrated that both new checks fire rather than merely passing the
+repair. A full CMake preset refresh was not claimed: it hit the already-documented
+``configure_file`` permission failures while regenerating unrelated Verilator
+targets. Both named tests were instead verilated, statically linked and run
+directly with the pinned Windows toolchain, one job at a time beside Quartus.
