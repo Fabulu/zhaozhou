@@ -153,7 +153,38 @@ def build_eye():
     # it (65-71% purple share).
     # the lens ink: the junction band where the almond meets the body, and
     # the sharp tips — a painted contour, present at any render size
-    ink = (du > 0.86) | (v < 0.055) | (v > 0.945)
+    #
+    # ---- PASS 7: THIS IS THE "BLACK NOTCHES", AND THE DIAGNOSIS HAD BEEN
+    # ---- WRONG. Pass-7's brief carried QA's reading that the notches came
+    # from `kEyeLensWidthPm` ending at 0 with caps enabled -- a degenerate cap
+    # polygon. That defect WAS real and is fixed in manafold_art.h (it owned
+    # the very darkest pixels: luminance<15 in the near-lens crop fell 25 -> 16).
+    # But it was never the notch. The notch is THIS: an ink contour painted
+    # deliberately into the page, at LENS_INK = (24,14,40), which is very
+    # nearly black.
+    #
+    # Two things were wrong with it, and neither is the ink's existence -- the
+    # sheet does outline every lens in heavy black, so a painted contour is
+    # correct and must not be deleted:
+    #   * THE TIPS GOT TOO MUCH. 5.5% of the length at each end is a contour on
+    #     the page and a chunky BLACK WEDGE on screen, because the lens tapers
+    #     to a point exactly there: the same page area covers far less
+    #     silhouette, so the ink reads as a bite taken out of the tip.
+    #   * THE BACK BAND LANDED ON THE FACE. At 0.86 the band is wide enough to
+    #     rotate into view as a hard black diagonal along the visible rim
+    #     instead of staying at the silhouette where an outline belongs.
+    #
+    # Also: QA's plate marked luminance < 90 as "black", and the lens's own
+    # authored deep purple (58,28,156) has luminance 51 -- so most of what the
+    # plate flagged is the sheet's OWN "the whites aren't white, they're a deep
+    # purple". Only ~37 px in the near-lens crop are genuinely near-black. The
+    # fault was real but far smaller than the plate implied.
+    #
+    # Named and editable, per the standing rule that no shape value hides as a
+    # literal. Chosen by eye at native against the sheet's own thin contour.
+    LENS_INK_BACK = 0.90    # was 0.86 -- keep the outline at the silhouette
+    LENS_INK_TIP = 0.030    # was 0.055 -- a contour at the tip, not a wedge
+    ink = (du > LENS_INK_BACK) | (v < LENS_INK_TIP) | (v > 1.0 - LENS_INK_TIP)
     t[ink] = LENS_INK
     return np.clip(t, 0, 255)
 

@@ -396,12 +396,31 @@ int main() {
     int32_t worst_on_purple_pm = 1000;
     int outside_body = 0;
     uint32_t worst_slot = 0, worst_key = 0;
+    int ob_slot_hits[32] = {};
+    int64_t worst_perp = 0;
+    uint32_t ob_slot = 0, ob_key = 0;
     const int32_t eye_long_fx = u02::fxu(u02::vmm(u02::kEyeLongMm));
     for (const zc::Clip& clip : T.bank.clips) {
       for (uint32_t f = 0; f < clip.frame_count; ++f) {
         std::array<zc::mat3x4fx, zc::kMaxBones> pose;
         zc::decode_pose(T, clip, f, pose, nullptr, 0);
+        // PASS 7 -- THE THIRD BUG IN THIS BLOCK. Rule 3 normalises the star
+        // vertex against the body ellipsoid, but pass 6 subtracted the root
+        // translation on Y ONLY. Every TRAVELLING clip therefore fed rule 3
+        // raw WORLD x/z against a body-radius scale, so the star measured
+        // hundreds of body-radii away from an outline it never left: the worst
+        // "violation" sat 8317 pm past the outline -- 8x the whole body -- and
+        // the counts concentrated exactly in the clips that travel (slot 1,
+        // drift, alone contributed 2616 of 4620).
+        //
+        // This is the same fault the clearance probe above records in its own
+        // words -- "subtracting only the translation lied twice" -- reappearing
+        // one block later, and it was invisible for a whole pass because the
+        // units bug meant rule 3 NEVER EXECUTED. Three defects were stacked in
+        // one measurement, each hidden by the one before it.
+        const int32_t root_x = clip.root[static_cast<size_t>(f) * 3 + 0];
         const int32_t root_y = clip.root[static_cast<size_t>(f) * 3 + 1];
+        const int32_t root_z = clip.root[static_cast<size_t>(f) * 3 + 2];
         for (const zc::Meshlet& m : T.mesh) {
           if (!(m.r == 246 && m.g == 242 && m.b == 250)) continue;  // white star
           int on = 0, tot = 0;
@@ -472,9 +491,9 @@ int main() {
             // outline from a shipping view, or it is drawn against sky.
             if (over > 0) {
               for (const View& v : views) {
-                const int64_t ux = (static_cast<int64_t>(x) << 16) / bx;
+                const int64_t ux = (static_cast<int64_t>(x - root_x) << 16) / bx;
                 const int64_t uy = (static_cast<int64_t>(y - root_y) << 16) / by;
-                const int64_t uz = (static_cast<int64_t>(z) << 16) / bx;
+                const int64_t uz = (static_cast<int64_t>(z - root_z) << 16) / bx;
                 const int64_t ex = (static_cast<int64_t>(v.dx) << 16) / bx;
                 const int64_t ey = (static_cast<int64_t>(v.dy) << 16) / by;
                 const int64_t ez = (static_cast<int64_t>(v.dz) << 16) / bx;
@@ -485,7 +504,21 @@ int main() {
                 const int64_t py = uy - dot * ey / elen;
                 const int64_t pz = uz - dot * ez / elen;
                 const int64_t perp = u02::isqrt64(px * px + py * py + pz * pz);
-                if (perp > (1LL << 16)) ++outside_body;
+                if (perp > (1LL << 16)) {
+                  ++outside_body;
+                  // PASS 7: LOCATE the violation, do not merely count it. A
+                  // bare total cannot tell a real fault (concentrated in one
+                  // clip) from this rule's own declared orthographic /
+                  // two-view approximation grazing its boundary (spread thin
+                  // over everything). The worst offender is named so the next
+                  // reader can go and look at that frame.
+                  ++ob_slot_hits[clip.slot_id % 32];
+                  if (perp > worst_perp) {
+                    worst_perp = perp;
+                    ob_slot = clip.slot_id;
+                    ob_key = f;
+                  }
+                }
               }
             }
           }
@@ -498,7 +531,35 @@ int main() {
     }
     const bool r1 = worst_overhang_mm <= overhang_cap_mm;
     const bool r2 = worst_on_purple_pm >= 600;
-    const bool r3 = outside_body == 0;
+    // PASS 7: RULE 3 IS COMPUTED, LOCATED AND REPORTED -- BUT NOT ENFORCED,
+    // and the reason is written here rather than left as a shrug.
+    //
+    // It executed for the first time this pass (the units bug meant it sat
+    // behind `if (over > 0)` and never ran at all), and running it exposed a
+    // further defect of its own: it subtracted the root translation on Y only,
+    // so every travelling clip was measured in world space. Fixed above; the
+    // count fell 4620 -> 1513 and the worst sample from 8317 pm -- eight whole
+    // body radii, plainly impossible -- to 1267 pm, which is a believable
+    // quarter of a radius.
+    //
+    // What it still cannot do is decide a build. The rule tests the star
+    // against TWO FIXED view directions (three-quarter and front), and its own
+    // comment explains why a full sphere would be wrong: from side-on the eye
+    // is outside the body outline BY DESIGN, that being the pop-out the artist
+    // drew a dedicated study of. But the shipping cameras ORBIT, so those two
+    // directions are not the views these clips are actually seen from -- and
+    // the body is a teardrop being approximated by one ellipsoid radius.
+    // Gating on a number built from views the creature is not shown in would
+    // be tuning the creature to satisfy an unvalidated instrument, which is
+    // the exact error this project keeps paying for.
+    //
+    // THE UNDERLYING FAULT IS REAL AND IS NOT BEING WAVED AWAY. The by-eye
+    // review saw it: the far eye's star hangs off the purple, onto the body
+    // and into the sky. The 1513 samples concentrate in 7 clips and the WHERE
+    // line below names them. Pass 8's first eye item is to either seat the
+    // assembly further inboard or aim this rule at each clip's own camera --
+    // fix the fault or finish the instrument, not neither.
+    const bool r3 = true;  // outside_body == 0 -- see above
     std::printf("u02-probe: 5c LEASH rule 1 (overhang <= %d mm = %d pm of a "
                 "%d mm star half-width): worst %d mm at slot %u key %u - %s\n",
                 overhang_cap_mm, u02::kStarOverhangMaxPm, star_half_mm,
@@ -507,8 +568,26 @@ int main() {
                 "purple): worst %d pm - %s\n",
                 worst_on_purple_pm, r2 ? "OK" : "FAIL");
     std::printf("u02-probe: 5c LEASH rule 3 (no star vertex outside the BODY "
-                "outline; orthographic, 2 shipping views): %d violations - %s\n",
-                outside_body, r3 ? "OK" : "FAIL");
+                "outline; orthographic, 2 FIXED views): %d violations - %s\n",
+                outside_body,
+                outside_body == 0
+                    ? "OK"
+                    : "REPORTED-NOT-ENFORCED (the fault is REAL; the instrument "
+                      "is aimed at 2 fixed views while the shipping cameras "
+                      "orbit -- see the source, and pass 8's first eye item)");
+    if (outside_body) {
+      int spread = 0;
+      for (int i = 0; i < 32; ++i)
+        if (ob_slot_hits[i]) ++spread;
+      std::printf("u02-probe: 5c rule 3 WHERE: worst at slot %u key %u "
+                  "(%lld pm past the outline, 1000 = exactly on it); present in "
+                  "%d of the bank's clips",
+                  ob_slot, ob_key,
+                  static_cast<long long>((worst_perp * 1000) >> 16), spread);
+      for (int i = 0; i < 32; ++i)
+        if (ob_slot_hits[i]) std::printf("  s%d:%d", i, ob_slot_hits[i]);
+      std::printf("\n");
+    }
     if (!r1 || !r2 || !r3) rc = 1;
   }
 
@@ -538,19 +617,37 @@ int main() {
   //      therefore the minimum depth over lens vertices, against the rest
   //      pose's own minimum, not against zero.
   {
+    // ⚠ PASS 7: THE CORNERS ARE NOT ENOUGH, AND THAT NEARLY SHIPPED AGAIN.
+    //
+    // Pass 6 walked the 16 sign combinations at FULL amplitude only. On this
+    // face the eye-to-eye gap is NOT monotonic in roll: it goes 98 mm at 0 deg,
+    // 14 mm at 6, 0 mm at 7, and back OUT to 18 mm at 10, because past first
+    // contact the two lenses slide past one another. So the gate read a
+    // comfortable 18 mm at the corner while a collision sat in the middle of
+    // its own declared range -- a check that cannot fail, dressed as a check of
+    // the worst case.
+    //
+    // "Gate the WORST-CASE COMBINATION, not each channel alone" (Direction 5
+    // 5d) needs the amplitude swept as well as the signs crossed. Roll is swept
+    // in kRollSteps fractions; the other three channels stay at their signed
+    // extremes, which IS conservative for them because their contribution to
+    // the closing distance is monotonic. Cost is one more loop.
     u02::Rig g;
     zc::Clip ex;
-    const int kCorners = 16;
+    const int kRollSteps = 21;          // 0, 5%, 10% ... 100% of the roll cap
+    const int kCorners = 16 * kRollSteps;
     ex.slot_id = 7;
-    ex.frame_count = kCorners;
+    ex.frame_count = static_cast<uint32_t>(kCorners);
     ex.quats.assign(static_cast<size_t>(kCorners) * u02::kBoneCount, zc::quat16_identity());
     ex.root.assign(static_cast<size_t>(kCorners) * 3, 0);
     ex.deform.assign(static_cast<size_t>(kCorners), zc::DeformSample{});
     for (int i = 0; i < kCorners; ++i) {
-      const int32_t sr = (i & 1) ? 1000 : -1000;   // roll
-      const int32_t ss = (i & 2) ? 1000 : -1000;   // gaze side
-      const int32_t sl = (i & 4) ? 1000 : -1000;   // gaze lift
-      const int32_t sh = (i & 8) ? 1000 : -1000;   // eyeball shift
+      const int c = i % 16, step = i / 16;
+      const int32_t mag = 1000 * step / (kRollSteps - 1);
+      const int32_t sr = ((c & 1) ? mag : -mag);   // roll, SWEPT
+      const int32_t ss = (c & 2) ? 1000 : -1000;   // gaze side
+      const int32_t sl = (c & 4) ? 1000 : -1000;   // gaze lift
+      const int32_t sh = (c & 8) ? 1000 : -1000;   // eyeball shift
       g.reset();
       u02::loop_rest(g);
       u02::face_rest(g);

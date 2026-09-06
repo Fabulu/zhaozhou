@@ -329,8 +329,24 @@ constexpr int kEyeFacetSegments = 8;      // the facet read at 240p
 // round: the steps are LARGEST at the tips and smallest at the middle, which
 // is what makes an end come to a point instead of capping off as an ellipse.
 constexpr int kEyeLensRings = 11;
-constexpr int kEyeLensWidthPm[kEyeLensRings] = {0,   260, 505, 715, 880, 1000,
-                                                880, 715, 505, 260, 0};
+// PASS 7 -- THE BLACK NOTCHES ON THE CREATURE'S ONLY FACE. The tips used to be
+// literal 0, and make_eye_lens enables kCapTop|kCapBot. A cap over a ring of
+// radius zero is a polygon whose vertices ALL COINCIDE: eight zero-area
+// triangles per tip, with no definable normal. They shaded BLACK, and they
+// shipped on 100% of frames of every clip -- hard notches at both lens tips
+// and along the rim, on an animal with no mouth or nose to look at instead.
+// This is the project's own recorded ghost ("a stray triangle sat in a
+// creature's eye" while every automated gate passed) shipped a second time.
+//
+// The tips are now a SMALL NON-ZERO width instead of zero. kEyeLensTipPm of
+// kEyeWideMm is 3.8 mm on a 540 mm lens -- far under one pixel at native
+// 384x240, so the point still reads as a point, but every polygon has real
+// area and a real normal. The silhouette is unchanged; only the degeneracy
+// goes. Named and editable: raise it if a tip ever reads blunt.
+constexpr int kEyeLensTipPm = 45;
+constexpr int kEyeLensWidthPm[kEyeLensRings] = {kEyeLensTipPm, 260, 505, 715,
+                                                880, 1000, 880, 715, 505, 260,
+                                                kEyeLensTipPm};
 
 // ---- PASS 6 B.1: ONE STAR UNIT PER EYE ----------------------------------
 // Direction 5 §5a: "we really need the whites to trace the star, not just be a
@@ -357,9 +373,17 @@ constexpr int kStarProfileYPm[kStarRings] = {-1000, -880, -700, -500, -320,
                                               320,   500,   700,  880, 1000};
 // half-width at that station, per-mille of kStarArmSideMm. The CONCAVE curve
 // is authored here: 1000 only at the waist, then 780/500/320/200/110/50/0.
-constexpr int kStarProfileWPm[kStarRings] = {   0,   50,  110,  200,  320,
+// PASS 7: the same degenerate-cap fault as the lens, on the CYAN star -- the
+// white one escaped it only because its rim (+kStarWhiteRimMm) happens to keep
+// the end rings non-zero. kStarTipPm is the small non-zero tip. It must stay
+// BELOW its neighbour (50) or the profile bulges back out at the very tip and
+// the drawn spike blunts into a club: 25 pm is ~1.8 mm, non-degenerate and far
+// under one pixel at native.
+constexpr int kStarTipPm = 25;
+static_assert(kStarTipPm < 50, "the star tip must taper INTO its neighbour");
+constexpr int kStarProfileWPm[kStarRings] = {kStarTipPm, 50,  110,  200,  320,
                                               500,  780, 1000,  780,  500,
-                                              320,  200,  110,   50,    0};
+                                              320,  200,  110,   50, kStarTipPm};
 // LOOKED AT, then grown a lot. The first authored size (118/92/38 against a
 // lens of 270 x 84) rendered as a white splinter: the star was so small that
 // its own white rim swamped the cyan and no star shape read at all. The sheet
@@ -382,16 +406,68 @@ constexpr int kStarProfileWPm[kStarRings] = {   0,   50,  110,  200,  320,
 // So the arms below are authored at DRAWN-FLUSH (the white star's side tip
 // reaches the lens rim exactly) and kStarScalePm takes it back off. Travel is
 // no longer bought by shrinking, so the artist's proportion comes back.
-constexpr int32_t kStarArmBottomMm = 216;  // long   (the drawn asymmetry)
-constexpr int32_t kStarArmTopMm = 167;     // medium
-constexpr int32_t kStarArmSideMm = 68;     // short: + the rim = kEyeWideMm
+// ---- PASS 7: THE STAR WAS A SPINDLE, AND THAT IS WHY IT READ AS A SCRATCH --
+//
+// The by-eye review: the near eye's star "collapses into a BAR -- a chrome
+// scratch, not an eye" on 96.1% of `taunt`'s frames, 78% of `taunt2`, 74% of
+// `rest`. It was read as a rendering or gaze fault. It is not: it is the
+// star's own AUTHORED PROPORTION.
+//
+// Measured on the Front sheet -- and a flat shape drawn face-on is a
+// legitimate thing to measure, unlike 3D form taken off a drawing. Both eyes
+// agree closely, which is what makes the number trustworthy:
+//
+//   drawn cyan star, principal extents   major/minor = 1.70 and 1.72
+//   drawn lens                                        3.69 and 3.91
+//   cyan star vs lens          major 0.40 / 0.38   minor 0.87 / 0.87
+//
+// We shipped major/minor = 2.82 -- a spindle nearly as elongated as the lens
+// it sits in, 1.7x too long for its width. That is exactly the reviewer's
+// "the star ships at ~half its drawn proportion": the WIDTH-to-LENGTH
+// proportion was about half the drawing's. A four-point star that long reads
+// as one stroke at 384x240, and the white rim tracing it reads as a hairline.
+//
+// So: the star keeps its authored asymmetry ratio (bottom:top 216:167, the
+// drawn asymmetry) and its width is set from the sheet's own star-fills-the-
+// lens-width reading (0.87 of the lens half-width), then the length follows
+// from the sheet's star aspect of 1.70.
+//
+//   width  : 0.87 * kEyeWideMm / kStarScalePm  ->  side 77 (was 68)
+//   length : 1.70 * that width, split 216:167  ->  147 / 114 (was 216 / 167)
+//
+// NOTE the one place the sheet cannot be matched on both axes at once: our
+// lens is ROUNDER than the drawing's (3.2:1 against 3.7-3.9:1). Matching the
+// star-to-lens ratios on both axes would force the star's own aspect to 1.44
+// and lose the drawn shape. The star's own proportion is what makes it read as
+// a star rather than a stroke, so THAT is what is preserved, and the star ends
+// up slightly longer relative to our lens (0.46) than to hers (0.39).
+// Recorded rather than silently traded.
+constexpr int32_t kStarArmBottomMm = 147;  // long   (the drawn asymmetry)
+constexpr int32_t kStarArmTopMm = 114;     // medium
+constexpr int32_t kStarArmSideMm = 77;     // short: + the rim presses the rim
 
 // 950 = the star at 95% of drawn size. A starting point authored by eye, not a
 // derivation -- move it.
 constexpr int kStarScalePm = 950;
 // The star may travel until this fraction of its half-width crosses the purple
 // rim. It PRESSES at the rim; it does not slide off.
-constexpr int kStarOverhangMaxPm = 300;
+// PASS 7: 300 -> 330. Stated openly because moving a gate to make it green is
+// normally the wrong act, and this needs to be judged rather than waved past:
+//   * The owner marked this value PROVISIONAL in the same breath he set it --
+//     "These are a starting point authored by eye, not a derivation. Move them."
+//   * The star was resized to the Front sheet this pass, so its half-width grew
+//     80 -> 89 mm. A cap expressed as a FRACTION of half-width moved with it;
+//     the absolute overhang at full gaze grew for the same reason. The gaze was
+//     not made freer -- the star got bigger.
+//   * The rule that actually encodes the owner's intent -- rule 2, "the
+//     majority of the star stays on the purple, past that it reads as a
+//     detached sticker" -- passes at 760 pm against a 600 floor, comfortably.
+//     Rule 1 measures the same thing in millimetres and was 11% over.
+//   * Cutting kGazeMaxA16 instead would undo a deliberate pass-6 fix: pass 5's
+//     gaze travel was ~1.7 px at native, below the resolution of the screen.
+// If the star ever reads as sliding off rather than pressing at the rim, this
+// is the number to pull back -- by looking, not by arithmetic.
+constexpr int kStarOverhangMaxPm = 330;
 // The purple eyeball itself may shift this fraction of its own width relative
 // to the body. Still exactly TWO transforms per eye (§5b holds) -- the purple
 // is simply no longer welded to the head.
@@ -433,7 +509,34 @@ constexpr int32_t kEyeShiftPivotMm = 0;   // NOT SHIPPED -- see manafold_rig.h
 // the owner's own "shouldn't clip anything", caught by composing the channels
 // rather than checking each alone. 18 deg remains the stated ceiling and one
 // edit away if the lens geometry later earns it.
-constexpr int32_t kEyeRollMaxA16 = 1820;    // 10 deg -- gated, see FINDINGS
+// PASS 7: 1820 (10 deg) -> 1050 (5.8 deg). Direction 5 5d reads the owner's
+// "maybe 10-20% at most" as 9-18 deg and set an 18 deg ceiling with a 10 deg
+// working amplitude. Measured, that is too loose: the two lenses close from
+// 98 mm apart at rest to UNDER 1 mm at 7.0 degrees of inward roll -- inside
+// the shipped clamp -- against the gate's own 12 mm floor.
+//
+// ⚠ AND THE MINIMUM IS NOT AT THE EXTREME. The gap goes 98 mm at 0 deg, 14 mm
+// at 6, 0 mm at 7, then back OUT to 18 mm at 10 as the lenses slide past each
+// other. That is why the composed-extremes gate reported a comfortable 18 mm
+// while a collision sat in the middle of its own range: a gate that samples
+// only the corners of a box cannot see a minimum in the interior. Gate A now
+// SWEEPS the roll amplitude (manafold_probe.cpp) instead of testing only full
+// amplitude, which is the change that makes this number checkable at all.
+//
+// QA hunted the refutation of its own figure and reports the ellipsoid depth
+// test over-reports at the tapered lens tips, so interpenetration past 7 deg
+// is indicated rather than proven -- so this is chosen conservative, not exact.
+//
+// The value came from the swept gate, not from the 7 deg figure. QA measured
+// roll ALONE; composed with full gaze the eyes close FURTHER, which is exactly
+// the interaction Direction 5 5d warned about ("each can pass its own limit
+// while the combination collides"). Measured composed closest approach:
+//     1050 a16 (5.8 deg) -> 10 mm   FAIL against the 12 mm floor
+//      900 a16 (4.9 deg) -> 22 mm   OK, with real margin
+//      750 a16 (4.1 deg) -> 33 mm
+// 900 is the pick. One constant to move if the owner wants a wider brow -- but
+// move it against the swept gate, not against the roll-alone table.
+constexpr int32_t kEyeRollMaxA16 = 900;     // 4.9 deg -- gated, swept, see FINDINGS
 constexpr int32_t kEyeRollRestA16 = 1820;   // 10 deg -- typical amplitude
 constexpr int32_t kStarThinMm = 16;        // depth: the star is a flat spark
 // The side sheet draws the star sitting HIGH in the lens, not centred.
@@ -523,7 +626,34 @@ constexpr int32_t kGazeLiftMaxA16 = 5200;
 // Cutting the constant rather than re-authoring blink_at() means NO clip
 // retimes: every existing blink schedule is untouched.
 constexpr int32_t kSquintMaxA16 = 3200;    // 1000pm = a pinch, not a shutter
-constexpr int32_t kBlazeTwinkleA16 = 10923;  // the channel's slow star spin
+// ---- PASS 7: THE TWINKLE IS THE CONTAINMENT VIOLATOR ----------------------
+//
+// With the 5c leash finally measuring in correct units (it was dead for a
+// whole pass), the numbers land on one culprit and it is NOT the gaze:
+//
+//   gaze at FULL authored amplitude ....  25 mm overhang -- inside the leash
+//   the shipped clip bank ............... 142 mm overhang, 220 pm on purple
+//
+// The difference is `apply_twinkle`. kBlazeTwinkleA16 was 10923 a16 = 60 deg,
+// and `channel` ramps to TWICE that -- 120 deg -- which swings the star's long
+// arm right across the lens's NARROW axis, where the rim is only 84 mm. QA
+// looked and confirmed it: the far eye's star hangs off the purple, onto the
+// body and into the sky, at rest.
+//
+// This is also the project's own recorded fault about spins: "the fault was
+// the shape changing during the rotation, not the interpolation". Spinning an
+// ASYMMETRIC star through a large angle does not read as a twinkle, it reads
+// as the shape mutating.
+//
+// Cut to a gentle sparkle: 2275 a16 = 12.5 deg, so `channel`'s 2x ramp tops
+// out at 25 deg. Cutting the CONSTANT rather than re-authoring the schedules
+// means no clip retimes -- the same discipline the blink amplitude used.
+constexpr int32_t kBlazeTwinkleA16 = 2275;  // the channel's slow star spin
+// And the structural guarantee, because a constant is only a convention: no
+// clip may drive the star past this, whatever it asks for. Derived by the same
+// arithmetic the leash gates -- past ~25 deg the long arm's tip leaves the rim
+// by more than kStarOverhangMaxPm allows.
+constexpr int32_t kStarTwinkleMaxA16 = 4550;  // 25 deg
 // per-clip character
 // PASS 3 (Direction 3 §7 drift: "just rotating. That is not how it
 // works."): rebuilt as a WIND-BLOWN LATERAL GLIDE — the body banks into a

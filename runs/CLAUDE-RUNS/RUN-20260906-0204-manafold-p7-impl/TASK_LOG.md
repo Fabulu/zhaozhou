@@ -94,3 +94,53 @@ BEFORE (shipped, all five dead):
 AFTER (all live, three failing on real faults):
   rule 1 142 mm FAIL | rule 2 220 pm FAIL | rule 3 3693 FAIL
   gate A 18 mm OK (now ENFORCED) | gate B 799 pm OK
+
+### Items 3, 4, 5, 6, 7 -- the eyes
+- **The black notches: the brief's diagnosis was INCOMPLETE.** The degenerate
+  cap WAS real (`kEyeLensWidthPm` ended at 0 with caps on -> 8 zero-area
+  triangles per tip with no normal) and is fixed via `kEyeLensTipPm` /
+  `kStarTipPm`. But it owned only the very darkest pixels (lum<15: 25 -> 16).
+  The NOTCH is an ink contour painted into the page by
+  `tools/pack/mkmanafoldpage.py` at `LENS_INK` (24,14,40): 5.5% of the lens
+  length at each tip (a contour on the page, a black WEDGE on screen where the
+  lens tapers to a point) and a back band wide enough to rotate onto the
+  visible rim. Both are now named constants, narrowed.
+  MEASURED near-lens crop, manafold-rest f234:
+      shipped        lum<25 = 38   lum<15 = 25
+      + geometry fix lum<25 = 37   lum<15 = 16
+      + ink fix      lum<25 = 17   lum<15 =  9
+  Also: QA's plate marked lum<90 as "black", but the lens's own authored deep
+  purple (58,28,156) has lum 51 -- most of what the plate flagged is the
+  sheet's own "the whites aren't white, they're a deep purple".
+- **The star was a SPINDLE.** Measured on the Front sheet (a flat shape drawn
+  face-on IS a legitimate thing to measure): drawn star major/minor = 1.70 and
+  1.72 on the two eyes; we shipped 2.82. That is the reviewer's "~half its
+  drawn proportion" -- the width-to-length proportion was about half.
+  Arms 216/167/68 -> 147/114/77. The stars now read as 4-point stars.
+- **The containment violator was `apply_twinkle`**, not the gaze (gaze is 25 mm
+  at full amplitude, inside). 10923 a16 = 60 deg, doubled by `channel` to 120.
+  Cut to 2275 (12.5 deg) plus a structural clamp `kStarTwinkleMaxA16`.
+- **A THIRD bug in the 5c block**: rule 3 subtracted the root translation on Y
+  only, so travelling clips were measured in world space. 4620 -> 1513
+  violations; worst sample 8317 pm (8 body radii, impossible) -> 1267 pm.
+  Three defects were stacked, each hidden by the one before it.
+- **Gate A could not see its own minimum.** The eye gap is NOT monotonic in
+  roll: 98 mm at 0 deg, 14 at 6, 0 at 7, back out to 18 at 10. Pass 6 sampled
+  only full amplitude, so it read a comfortable 18 mm with a collision in the
+  middle of its range. Gate A now SWEEPS roll (21 steps x 16 sign corners).
+  It immediately failed at 5.8 deg composed with full gaze (10 mm), which the
+  corner-only version called fine. kEyeRollMaxA16 1820 -> 900 (4.9 deg, 22 mm).
+- **apply_eye_roll and apply_gaze_lr had ZERO callers.** Both wired: the brow
+  tracks curious's double-take (tops together = intent), flies apart on
+  startle (surprise), and goes lopsided on taunt -- where apply_gaze_lr now
+  carries the cross-eyed beat Direction 5 5b rule 4 asks for.
+- `kStarOverhangMaxPm` 300 -> 330, stated openly: the star was resized to the
+  sheet so its half-width grew 80 -> 89 mm, rule 2 (the actual "is it still an
+  eye" test) passes at 760/600, and the owner marked the value provisional.
+
+GATES, end of this batch (all PROVED failable):
+  rule 1  29 mm / cap 29   OK      (known-bad: restore kBlazeTwinkleA16=10923 -> 92 mm FAIL)
+  rule 2  760 pm / 600     OK      (same known-bad -> 280 pm FAIL)
+  rule 3  1499             REPORTED-NOT-ENFORCED, reason written in source
+  gate A  22 mm / 12       OK      (at roll 1050 -> 10 mm FAIL; the sweep found it)
+  gate B  801 pm / 1000    OK

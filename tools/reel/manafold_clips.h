@@ -341,10 +341,20 @@ inline void apply_gaze_lr(Rig& g, int32_t l_side_a16, int32_t l_lift_a16,
   g.q[kBPupilR] = quat_mul(quat_y(-cs(r_side_a16)), quat_z(cl(r_lift_a16)));
 }
 
-/** Star twinkle: spin the four-point star about its outward axis. */
+/** Star twinkle: spin the four-point star about its outward axis.
+ *
+ *  PASS 7: CLAMPED. This was the 5c leash's actual violator -- 142 mm of
+ *  overhang against a 24 mm cap and 220 pm of the star on the purple against a
+ *  600 pm floor, while the gaze (25 mm at full amplitude) sat comfortably
+ *  inside. Every clip's schedule is left exactly as authored; the clamp is the
+ *  structural guarantee that no future schedule can walk the star off the eye
+ *  again, the way tuning a constant alone would allow. */
 inline void apply_twinkle(Rig& g, int32_t spin_a16) {
-  g.q[kBPupilL] = quat_mul(g.q[kBPupilL], quat_x(spin_a16));
-  g.q[kBPupilR] = quat_mul(g.q[kBPupilR], quat_x(spin_a16));
+  const int32_t s = spin_a16 > kStarTwinkleMaxA16    ? kStarTwinkleMaxA16
+                    : spin_a16 < -kStarTwinkleMaxA16 ? -kStarTwinkleMaxA16
+                                                     : spin_a16;
+  g.q[kBPupilL] = quat_mul(g.q[kBPupilL], quat_x(s));
+  g.q[kBPupilR] = quat_mul(g.q[kBPupilR], quat_x(s));
 }
 
 /** Squint 0..1000: the faceted lenses rotate toward edge-on (a shutter).
@@ -844,6 +854,12 @@ inline zc::Clip build_curious() {
                              {78, 0}, {89, 0}};
   static const Key kPerk[] = {{0, 1000}, {12, 1000}, {26, 880}, {58, 880},
                               {76, 1000}, {89, 1000}};
+  // PASS 7: the brow, keyed against the SAME beats as kSide so the tilt reads
+  // as part of the look rather than as a separate wobble. Negative draws the
+  // tops together (intent); it eases off on the glance away at 44.
+  static const Key kBrow[] = {{0, 0},    {8, -250}, {16, -900}, {38, -900},
+                              {44, 150}, {50, 150}, {54, -1000}, {66, -900},
+                              {78, 0},   {89, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
     antenna_knead(g, 3, K, f);  // pass 4: the always-on fold-hold-knead layer
@@ -861,6 +877,17 @@ inline zc::Clip build_curious() {
                static_cast<int32_t>((static_cast<int64_t>(kGazeMaxA16) *
                                      curve(kSide, 10, f)) / 1000),
                kGazeLiftMaxA16 / 4);
+    // PASS 7 (Direction 5 5d): THE BROW. apply_eye_roll() shipped with ZERO
+    // CALLERS -- the owner asked for it explicitly ("eyes should also be able
+    // to rotate and rotate back... just for expressiveness") and nothing in the
+    // bank used it, so 0 of 2204 frames intersected only because the feature
+    // was inert. On a face drawn as a LAMBDA the roll changes the lambda angle,
+    // which is the only brow this animal has: no mouth, no nose, nothing else.
+    //
+    // Here it tracks the double-take: the tops draw TOGETHER as it fixes on
+    // the thing (intent), release on the glance away, and snap back harder on
+    // the second look. Same sign on both eyes = a symmetric brow.
+    apply_eye_roll(g, curve(kBrow, 9, f), curve(kBrow, 9, f));
     // pass 3 (Direction 3 §4): the body angles UP toward the thing too
     g.q[kBRoot] = quat_mul(
         g.q[kBRoot], quat_z(static_cast<int32_t>(
@@ -908,6 +935,11 @@ inline zc::Clip build_startle() {
     face_rest(g);
     apply_squint(g, curve(kWide, 6, f) + blink_at(f, 70));
     apply_gaze(g, 0, f >= 12 && f < 40 ? kGazeLiftMaxA16 / 2 : 0);
+    // PASS 7 (Direction 5 5d): "tops rolling apart reads surprised or soft".
+    // The startle's whole payoff is the eyes flying wide, so the brow goes the
+    // OPPOSITE way from curious's -- positive, tops apart -- on the same curve
+    // the widen already uses, which costs no new schedule.
+    apply_eye_roll(g, curve(kWide, 6, f), curve(kWide, 6, f));
     g.write(c, f);
     c.root[static_cast<size_t>(f) * 3 + 0] = static_cast<int32_t>(
         (static_cast<int64_t>(fxu(kStartleJumpMm)) * curve(kBack, 9, f)) / 1000);
@@ -1127,6 +1159,14 @@ inline zc::Clip build_taunt() {
                               {102, 0}, {139, 0}};
   static const Key kWinkL[] = {{0, 0}, {64, 0}, {70, 820}, {82, 820}, {88, 0},
                                {139, 0}};
+  // PASS 7: the lopsided brow -- the left top drives in hard through the hold,
+  // the right only drifts. That asymmetry IS the smirk.
+  static const Key kBrowL[] = {{0, 0}, {40, 0}, {58, -400}, {66, -1000},
+                               {88, -1000}, {139, 0}};
+  static const Key kBrowR[] = {{0, 0}, {44, 0}, {62, -120}, {86, -260},
+                               {104, 0}, {139, 0}};
+  // and the cross-eyed beat, held inside the frozen hold and released with it
+  static const Key kCross[] = {{0, 0}, {60, 0}, {68, 900}, {86, 900}, {96, 0}};
   for (int f = 0; f < K; ++f) {
     g.reset();
     antenna_knead(g, 11, K, f);  // pass 4: the always-on fold-hold-knead layer
@@ -1161,7 +1201,26 @@ inline zc::Clip build_taunt() {
     face_rest(g);
     apply_twinkle(g, static_cast<int32_t>(
                          (static_cast<int64_t>(kBlazeTwinkleA16) * sinp(f, K, 2)) >> 16));
-    apply_gaze(g, 0, kGazeLiftMaxA16 / 3);
+    // PASS 7 (Direction 5 5d + 5b rule 4): the taunt gets an ASYMMETRIC brow
+    // and the cross-eyed beat, and both were dead code before this pass.
+    //
+    // The brow is deliberately lopsided -- one top drawn in hard, the other
+    // barely -- which is the cocky smirk this clip's whole joke is built on,
+    // and it lands on the same 62..86 frozen hold that carries the wink.
+    apply_eye_roll(g, curve(kBrowL, 6, f), curve(kBrowR, 6, f));
+    // apply_gaze_lr() ALSO shipped with zero callers. Direction 5 5b rule 4:
+    // "Asymmetry is allowed and wanted -- two independently aimed stars on one
+    // apparent point is what sells a googly eye... cross-eyed is a CHOICE for a
+    // taunt, not a default." This is that choice, and the only place in the
+    // bank that takes it: through the hold the two stars converge inward on
+    // each other. Everywhere else the symmetric apply_gaze() still runs, so no
+    // other clip changes by this existing.
+    {
+      const int32_t cross = curve(kCross, 5, f);
+      const int32_t side = static_cast<int32_t>(
+          (static_cast<int64_t>(kGazeMaxA16) * cross) / 1000);
+      apply_gaze_lr(g, -side, kGazeLiftMaxA16 / 3, side, kGazeLiftMaxA16 / 3);
+    }
     apply_squint_lr(g, curve(kWinkL, 6, f) + blink_at(f, 21), blink_at(f, 21));
     g.write(c, f);
     // wind-up crouch, then the smug settle: slower, bigger bobs after the hold
