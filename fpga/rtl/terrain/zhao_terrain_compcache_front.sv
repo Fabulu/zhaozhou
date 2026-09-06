@@ -94,7 +94,19 @@ module zhao_terrain_compcache_front #(
     output logic               st_ready_o,
     input  logic signed [31:0] st_top_i,     // live_top, fx16 raw
     input  logic signed [31:0] st_bottom_i,  // bottom surface, fx16 raw
+    // Port-for-port with zhao_terrain_patch's st_src_id_o. NOT STORED, and
+    // that is a choice with a price: a per-vertex src_id would be another
+    // 2 x 1,089 x 16 b ~ 4 M10K for a field the tessellator does not read, the
+    // same argument that keeps the per-vertex dirty bit out (see below). The
+    // consequence is that THE DIFFERENTIAL CANNOT READ IT BACK: it pins the
+    // order-is-the-index law by driving the vertex index in on this port and
+    // checking it against fill_records_o -- the write cursor, i.e. the address
+    // the record is landing at -- on the cycle the record is accepted, and then
+    // against the height read back from that vertex. If a readback port is ever
+    // wanted, it is 16 flops (the src_id of the last accepted record).
+    /* verilator lint_off UNUSEDSIGNAL */
     input  logic        [15:0] st_src_id_i,
+    /* verilator lint_on UNUSEDSIGNAL */
 
     // The 33 column x's and 33 row z's. Written before or during the record
     // stream; they are the placement, not the composition, so they do not
@@ -152,7 +164,17 @@ module zhao_terrain_compcache_front #(
   localparam int unsigned VERTS = LAT_W * LAT_H;           // 1,089
   localparam int unsigned CELLS = (LAT_W - 1) * (LAT_H - 1);  // 1,024
   localparam int unsigned VW    = $clog2(VERTS);
-  localparam int unsigned CW    = $clog2(CELLS);
+  // THE FULL ARRAY, NOT ONE PARITY. sub_m is 2*CELLS deep because it holds both
+  // buffers, so its address needs $clog2(2*CELLS) = 11 bits. The first draft
+  // used $clog2(CELLS) = 10, and `(fill_par_q ? CELLS : 0) + cell` truncated
+  // 1024 to zero: BOTH PARITIES ALIASED ONTO THE SAME 1,024 CELLS. The cell
+  // plane was single-buffered while the heights were double-buffered, so a fill
+  // of patch N+1 rewrote the substance under a tessellator still reading patch
+  // N -- real cell states, from the wrong patch, which renders. The lattice
+  // side had it right (LAW = $clog2(LAT_N), the WHOLE array); this line took
+  // the size of one half. Verilator says it outright: "Bit extraction of
+  // array[2047:0] requires 11 bit index, not 10 bits".
+  localparam int unsigned CW    = $clog2(2 * CELLS);
 
   // One array, both parities, both surfaces. ONE write address and ONE read
   // address across the whole thing, which is what a simple-dual-port M10K
@@ -249,10 +271,18 @@ module zhao_terrain_compcache_front #(
 
   wire lat_in_range_c = (lat_vi_i < 6'(LAT_W)) && (lat_vj_i < 6'(LAT_H));
 
+  // The out-of-range fold to vertex 0 is its own wire rather than a ternary
+  // inside the address sum: in the sum it sits in 32-bit context and the
+  // 12-bit arms get expanded (WIDTHEXPAND). The answer is poisoned by
+  // `req_ok_q` regardless of what this address reads.
+  wire [11:0] rd_vidx_c = lat_in_range_c ? vidx_c : 12'd0;
+  wire [ 5:0] rd_vi_c   = lat_in_range_c ? lat_vi_i : 6'd0;
+  wire [ 5:0] rd_vj_c   = lat_in_range_c ? lat_vj_i : 6'd0;
+
   wire [LAW-1:0] rd_addr_c =
       LAW'( (serve_par_q  ? PAR_STRIDE : 0) +
             (lat_surface_i ? SURF_STRIDE : 0) +
-            (lat_in_range_c ? vidx_c : 12'd0) );
+            int'(rd_vidx_c) );
 
   // ---- the memories -------------------------------------------------------
   // Clock only, no reset, no logic between the array read and the register it
@@ -267,12 +297,23 @@ module zhao_terrain_compcache_front #(
     lat_rd_q <= lat_m[rd_addr_c];
   end
 
-  wire cs_w_in_range_c = (cs_w_ci_i < 5'(LAT_W - 1)) && (cs_w_cj_i < 5'(LAT_H - 1));
+  // COMPARE AT A WIDTH THAT CAN HOLD THE BOUND. `5'(LAT_W - 1)` is `5'(32)`,
+  // which truncates to ZERO, so the first draft's test was `cs_w_ci_i < 0` --
+  // false for every input. Every cell write was dropped, every cell read
+  // counted as out of range and returned substance 3, and the entire layer-D
+  // plane was dead while every height was perfect. Verilator names it exactly:
+  // "Comparison is constant due to unsigned arithmetic". Zero-extend the 5-bit
+  // port and state the bound in 6 bits: at the production 32 x 32 plane every
+  // value a 5-bit port can carry IS in range, which is the right answer, and a
+  // shrunken lattice (the parameters exist for that) still rejects.
+  wire cs_w_in_range_c = ({1'b0, cs_w_ci_i} < 6'(LAT_W - 1)) &&
+                         ({1'b0, cs_w_cj_i} < 6'(LAT_H - 1));
   wire [CW-1:0] cs_wr_addr_c =
       CW'( (fill_par_q ? CELLS : 0) +
            (cs_w_in_range_c ? (int'(cs_w_cj_i) * (LAT_W - 1) + int'(cs_w_ci_i)) : 0) );
 
-  wire cs_rd_in_range_c = (cs_ci_i < 5'(LAT_W - 1)) && (cs_cj_i < 5'(LAT_H - 1));
+  wire cs_rd_in_range_c = ({1'b0, cs_ci_i} < 6'(LAT_W - 1)) &&
+                          ({1'b0, cs_cj_i} < 6'(LAT_H - 1));
   wire [CW-1:0] cs_rd_addr_c =
       CW'( (serve_par_q ? CELLS : 0) +
            (cs_rd_in_range_c ? (int'(cs_cj_i) * (LAT_W - 1) + int'(cs_ci_i)) : 0) );
@@ -290,8 +331,8 @@ module zhao_terrain_compcache_front #(
       wx_m[(fill_par_q ? LAT_W : 0) + int'(wx_wr_c)] <= pos_val_i;
     if (pos_we_i && pos_axis_i && pos_idx_i < 6'(LAT_H))
       wz_m[(fill_par_q ? LAT_H : 0) + int'(wx_wr_c)] <= pos_val_i;
-    wx_rd_q <= wx_m[(serve_par_q ? LAT_W : 0) + int'(lat_in_range_c ? lat_vi_i : 6'd0)];
-    wz_rd_q <= wz_m[(serve_par_q ? LAT_H : 0) + int'(lat_in_range_c ? lat_vj_i : 6'd0)];
+    wx_rd_q <= wx_m[(serve_par_q ? LAT_W : 0) + int'(rd_vi_c)];
+    wz_rd_q <= wz_m[(serve_par_q ? LAT_H : 0) + int'(rd_vj_c)];
   end
 
   // ---- the registered answer ---------------------------------------------
@@ -389,6 +430,17 @@ module zhao_terrain_compcache_front #(
         serve_par_q      <= fill_par_q;
         serve_valid_q    <= 1'b1;
         patches_filled_q <= patches_filled_q + 1'b1;
+        // AND MOVE THE FILL POINTER OFF THE BUFFER WE JUST HANDED OVER.
+        // fill_par_q used to stay put until the next fill_start_i, so between
+        // a handover and the next start it EQUALLED serve_par_q -- and the two
+        // write ports that are not gated on fill_active_q, the placement planes
+        // (pos_we_i) and the cell plane (cs_we_i), therefore wrote straight
+        // into the patch the tessellator was reading. The port comments invite
+        // exactly that: they say the placement is "written BEFORE or during the
+        // record stream". The record path was never exposed (st_ready_o gates
+        // on fill_active_q); these two were. One assignment closes it, and the
+        // next fill_go_c writes the same value, so nothing else changes.
+        fill_par_q       <= ~fill_par_q;
       end else if (serve_valid_q && serve_release_i) begin
         serve_valid_q <= 1'b0;
       end
@@ -411,8 +463,14 @@ module zhao_terrain_compcache_front #(
   // THE PROPERTIES THIS BLOCK EXISTS TO KEEP.
   //
   // Immediate assertions in a clocked block, the idiom used by
-  // zhao_geom_assetfetch.sv and zhao_texture_cache_pipe.sv, so they run under
-  // Verilator in the differential rather than only under a formal frontend.
+  // zhao_geom_assetfetch.sv and zhao_texture_cache_pipe.sv, so they run in the
+  // differential under a simulator rather than only under a formal frontend.
+  //
+  // A COMMENT LINE MUST NOT BEGIN WITH THE SIMULATOR'S NAME. The previous
+  // wording broke this line across the comment so that one line started with
+  // that word, and the lexer reads a comment beginning with it as a PRAGMA:
+  // "%Error-BADVLTPRAGMA: Unknown verilator comment". The file did not lex at
+  // all -- which is the evidence that it had never been through the tool.
   // `rst_n` is deliberately not read synchronously here (SYNCASYNCNET); a plain
   // armed flag is what the assertions actually want.
   //

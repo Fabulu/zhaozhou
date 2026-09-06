@@ -980,7 +980,7 @@ verilate(test_island_composed_directed
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_bilerp_lane.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mosaic.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_pipe.sv
-    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v1.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v2.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_aux_div6.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_mod255.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
@@ -2427,6 +2427,18 @@ target_link_libraries(test_island_8km_directed PRIVATE zhao_zref)
 add_test(NAME island_8km_directed COMMAND test_island_8km_directed)
 set_tests_properties(island_8km_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# The island RENDERED, and flown across. The directory, the streamer and the
+# software reference renderer's terrain path in one place: an island-scale frame
+# whose DrawProcedural records come from island::visible_set rather than from a
+# hand-registered patch, and the 8 km traversal reports/Missingterrain asks for
+# ("the crucial validation should be an 8 km traversal capture, not a static
+# image"). Every previous frame in this tree emitted exactly ONE DrawProcedural.
+# `--fire=N` perturbs one input so exactly one claim breaks; see the file header.
+add_executable(test_island_scene_traversal terrain/island_scene_traversal.cpp)
+target_link_libraries(test_island_scene_traversal PRIVATE zhao_zref)
+add_test(NAME island_scene_traversal COMMAND test_island_scene_traversal)
+set_tests_properties(island_scene_traversal PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # TERRAIN.ISLAND -- the island directory RTL against zref::island::Directory.
 # The block's whole job is a MAPPING from a store's hit/miss plus two gates to
 # one of four answers, so the test compares outcomes, handles, tags AND the
@@ -2442,6 +2454,61 @@ verilate(test_island_dir_rtl_directed
           ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_island_dir.sv)
 add_test(NAME island_dir_rtl_directed COMMAND test_island_dir_rtl_directed)
 set_tests_properties(island_dir_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# TERRAIN.COMPCACHE -- the on-chip patch front, against zref::terrain::ComposedLattice.
+# The block is a STORE, so the oracle is its CONTENTS AND ADDRESSING: a transposed
+# index, a swapped surface plane or a parity served while it is still filling all
+# return REAL composed heights from the wrong place, and a lattice wrong by one
+# vertex is a terrain that renders. So this compares EVERY vertex of BOTH surfaces
+# and EVERY cell against the reference structure rather than sampling, with the
+# expectation stream shifted one cycle to pin the registered port, and with both
+# the producer and the two request streams stalling so a dropped or duplicated
+# answer cannot hide behind a consumer that is always ready.
+add_executable(test_compcache_front_rtl_directed terrain/compcache_front_rtl_directed.cpp)
+target_link_libraries(test_compcache_front_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_compcache_front_rtl_directed
+  PREFIX Vtb_compcache_front
+  TOP_MODULE tb_compcache_front
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_compcache_front.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_compcache_front.sv
+  VERILATOR_ARGS --assert)
+add_test(NAME compcache_front_rtl_directed COMMAND test_compcache_front_rtl_directed)
+set_tests_properties(compcache_front_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# ...and the lint gate every other terrain block already has. This one is not
+# decoration: the block was committed with a comment line that BEGAN with the
+# simulator's name, which the lexer reads as a pragma, so the file did not lex
+# at all -- "%Error-BADVLTPRAGMA: Unknown verilator comment". -Wall then named
+# both of the real defects outright ("Bit extraction of array[2047:0] requires
+# 11 bit index, not 10 bits" and "Comparison is constant due to unsigned
+# arithmetic"). An RTL file with no lint test is an RTL file nothing has read.
+add_test(NAME lint_terrain_compcache_front
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_compcache_front
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_compcache_front.sv)
+set_tests_properties(lint_terrain_compcache_front PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# TERRAIN.VISIBLE -- the visible-patch builder, against zref::island::visible_set.
+# It COMPOSES TERRAIN.ISLAND rather than reimplementing its gates, so this test
+# also watches the directory's own counters: this block is its only client, and
+# a query invented or an answer swallowed shows as a divergence between the two
+# ledgers that no comparison of the emitted list could see.
+# THE ORDER IS ASSERTED, not just the set -- a stream consumer depends on it and
+# a permutation draws the same ground.
+add_executable(test_visible_rtl_directed terrain/visible_rtl_directed.cpp)
+target_link_libraries(test_visible_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_visible_rtl_directed
+  PREFIX Vtb_island_visible
+  TOP_MODULE tb_island_visible
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_island_dir.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_visible.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_island_visible.sv)
+add_test(NAME visible_rtl_directed COMMAND test_visible_rtl_directed)
+set_tests_properties(visible_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
 add_executable(test_terrain_residency_directed terrain/terrain_residency_directed.cpp)
 target_link_libraries(test_terrain_residency_directed PRIVATE zhao_harness)

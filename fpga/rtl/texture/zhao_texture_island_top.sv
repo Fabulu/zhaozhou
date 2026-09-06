@@ -219,6 +219,11 @@ module zhao_texture_island_top #(
     output var logic [31:0] cnt_mosaic_samples_o,
     output var logic [31:0] cnt_aux_accepted_o,
     output var logic [31:0] cnt_combine_refused_o,
+    // V2 counts PHASE LAUNCHES, not fragments. A recipe costing two phases
+    // must show two here; a combiner quietly re-issuing work shows it as a
+    // phase count that outruns the schedule, which is the one thing a
+    // colour-checking test cannot see.
+    output var logic [31:0] cnt_combine_phases_o,
     output var logic [31:0] cnt_rcp_completed_o,
     output var logic [31:0] cnt_persp_fragments_o,
     output var logic [31:0] cnt_dispatch_accepted_o,
@@ -346,6 +351,81 @@ module zhao_texture_island_top #(
         // Above FMT_ARGB4444. This is the planner's own `fmt_bad`, and it
         // cannot route anywhere; it exists so the comparison below reports it.
         class_of = CLS_ERR;
+    endcase
+  endfunction
+
+  // ==========================================================================
+  // DEFECT (d), FIRST HALF: THE ONE SHARED FORMAT-CONTROLLED DECODE
+  // ==========================================================================
+  // ONE BLOCK, NOT THREE. Section 5A.7 item 5. Before this, the island had two
+  // half-decodes and one refusal: `chan8()` extracted RGB565 channels with no
+  // format input, the nearest station returned `near_ok_c = 1'b0` because it
+  // had nothing to decode with, and alpha was the literal 8'hFF. All three are
+  // the SAME missing law, so all three are now this one function.
+  //
+  // IT IS NOT A NEW LAW. This is `decode16` from `zhao_texture_tmu.sv` and
+  // `zhao_texture_tmu_pipe.sv`, transcribed unchanged, and it is the same
+  // arithmetic as the reference oracle in `reference/src/zrender/texture.cpp`
+  // (the direct-colour arm of `zref::Tmu::sample`, with `exp5`/`exp4`) --
+  // which is what the composed test compares against, so a divergence here
+  // shows up as a colour mismatch rather than as a passing run.
+  //
+  //   5 -> 8 and 6 -> 8 are the FROZEN expansions (spec/stars_and_flares.md
+  //   section 2, `zref::sky::rgb565::to_rgb888`): replicate the high bits, so
+  //   31 -> 255 and 63 -> 255 exactly. Zero-fill caps every channel below full
+  //   scale and is the AUDIT R5/D23 defect repaired for the palette below.
+  //
+  //   4 -> 8 is `{n, n}` and 1 -> 8 is 0 or 255. Those two laws are UNWRITTEN
+  //   in the spec; bit replication is the consistent extension of the two that
+  //   are written -- the unique expansion that round-trips both 0 and full
+  //   scale -- and the reference implements exactly this, so the choice is
+  //   recorded in two places that are checked against each other.
+  //
+  // THE RETURN IS {a, r, g, b}, alpha in the HIGH byte, so `[23:0]` is the
+  // colour the response port already carries and `[31:24]` is the alpha it
+  // never had.
+  //
+  // RGB565 IS THE `default` ARM ON PURPOSE. A format that reaches here and is
+  // not a direct one is a routing fault, not a colour: it is REFUSED before
+  // this value is used (see `fmt_is_direct` and `near_ok_c`), so the arm keeps
+  // the function total rather than defining a decode for CLUT8.
+  function automatic logic [31:0] decode16(input logic [15:0] h, input logic [2:0] fmt);
+    logic [7:0] a_, r_, g_, b_;
+    begin
+      case (fmt)
+        FMT_ARGB1555: begin
+          a_ = h[15] ? 8'd255 : 8'd0;
+          r_ = {h[14:10], h[14:12]};
+          g_ = {h[9:5],   h[9:7]};
+          b_ = {h[4:0],   h[4:2]};
+        end
+        FMT_ARGB4444: begin
+          a_ = {h[15:12], h[15:12]};
+          r_ = {h[11:8],  h[11:8]};
+          g_ = {h[7:4],   h[7:4]};
+          b_ = {h[3:0],   h[3:0]};
+        end
+        default: begin  // FMT_RGB565
+          a_ = 8'd255;
+          r_ = {h[15:11], h[15:13]};
+          g_ = {h[10:5],  h[10:9]};
+          b_ = {h[4:0],   h[4:2]};
+        end
+      endcase
+      decode16 = {a_, r_, g_, b_};
+    end
+  endfunction
+
+  // IS THIS FORMAT ONE THIS DECODE CAN ANSWER? Every direct-colour format is
+  // listed by name and nothing is folded into a default, for the same reason
+  // `class_of` above lists them all: adding a format to the planner and
+  // forgetting it here must be a COUNTED REFUSAL, not a silent reuse of the
+  // RGB565 arm. A CLUT format arriving at a direct-colour station is a routing
+  // fault and lands here as `0`, which is what `cnt_near_refused_o` counts.
+  function automatic logic fmt_is_direct(input logic [2:0] fmt);
+    case (fmt)
+      FMT_RGB565, FMT_ARGB1555, FMT_ARGB4444: fmt_is_direct = 1'b1;
+      default:                                fmt_is_direct = 1'b0;
     endcase
   endfunction
 
@@ -904,7 +984,23 @@ module zhao_texture_island_top #(
   //
   // Same fix as the class, the palette binding and the byte select: store at
   // REQUEST, keyed by the identity the response returns under.
-  logic [16:0] sampmeta_m [DEPTH][3];   // {fv[8], fu[8], bytesel[1]}
+  // {fmt, fv, fu, bytesel} per sample.
+  //
+  // THE FORMAT JOINS THE TABLE, and it is here for exactly the reason the byte
+  // select and the fractions are: the decode happens in the RESPONSE path, keyed
+  // by the routing token, many clocks after the request, and `plan_acc_fmt` at
+  // that moment belongs to whatever request the planner is emitting NOW. Reading
+  // it there is the late-ingress defect this table exists to prevent.
+  //
+  // THREE BITS, AND THAT WIDTH IS THE MODE WORD'S OWN. `m_fmt` is
+  // `t0_mode[2:0]` (`zhao_texture_tmu_plan.sv`), so three bits is the full
+  // field the caller can name -- including the codes above FMT_ARGB4444 that
+  // the planner flags as `fmt_bad`. Narrowing it to the two bits the five legal
+  // formats need would silently alias a malformed format onto a legal one and
+  // turn a countable routing fault into a wrong colour, which is the whole
+  // failure mode `fmt_is_direct` and `cnt_near_refused_o` exist to make
+  // visible.
+  logic [19:0] sampmeta_m [DEPTH][3];   // {fmt[3], fv[8], fu[8], bytesel[1]}
 
   logic        plan_req_ready, plan_acc_valid, plan_acc_ready;
   logic [3:0]  plan_acc_en;
@@ -917,7 +1013,7 @@ module zhao_texture_island_top #(
     if (plan_acc_valid && plan_acc_ready)
       sampmeta_m[plan_acc_src[SRC_SLOT_HI:SRC_SLOT_LO]]
                 [plan_acc_src[SRC_SIDX_LO+1:SRC_SIDX_LO]] <=
-          {plan_acc_fv, plan_acc_fu, plan_acc_addr[0]};
+          {plan_acc_fmt, plan_acc_fv, plan_acc_fu, plan_acc_addr[0]};
   end
   logic        plan_acc_filter, plan_acc_err;
   logic [7:0]  plan_acc_fu, plan_acc_fv;
@@ -1062,12 +1158,13 @@ module zhao_texture_island_top #(
   logic [DATAW-1:0] disp_clut_data;
   logic [TOKW-1:0]  disp_clut_tok;
   logic        disp_near_valid, disp_near_ready;
-  // STILL UNREAD, AND THE DIFFERENCE MATTERS. Before this pass the VALID, the
-  // DATA and the TOKEN were all unread, which is why the sample vanished and
-  // the island hung. Now the valid and the token drive a real terminal
-  // completion; only the PAYLOAD is unread, because decoding it needs the
-  // format-controlled decode of defect (d). An unread payload is a refused
-  // sample -- counted, retiring, visible. An unread token was a deadlock.
+  // ALL THREE ARE READ NOW, AND THE ORDER THEY BECAME SO IS THE HISTORY OF THIS
+  // LANE. Originally the VALID, the DATA and the TOKEN were all unread, which is
+  // why the sample vanished and the island hung. Defect (a) gave the valid and
+  // the token a real terminal completion, leaving the PAYLOAD unread because
+  // decoding it needed a format -- a refused sample, counted and retiring and
+  // visible, where an unread token had been a deadlock. Defect (d) supplied the
+  // format, so the payload is now decoded: see `near_dec` below.
   logic [DATAW-1:0] disp_near_data;
   logic [TOKW-1:0]  disp_near_tok;
   logic        disp_bil_valid, disp_bil_ready;
@@ -1124,6 +1221,7 @@ module zhao_texture_island_top #(
   logic        bil_lane_valid, bil_lane_ready;
   logic [7:0]  bil_out, bil_lane_out;
   logic [23:0] bil_rgb;
+  logic [7:0]  bil_a;    // the filtered alpha, defect (d)
   logic [1:0]  bil_expect_r;
   logic [TOKW-1:0] bil_lane_tok;
   logic [TOKW-1:0] bil_out_tok;
@@ -1132,12 +1230,29 @@ module zhao_texture_island_top #(
   logic [1:0]  bil_occ;
 
   // The metadata belonging to the sample whose texels just arrived.
-  wire [16:0] bil_meta = sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+  wire [19:0] bil_meta = sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
                                    [disp_bil_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
+  // THE FORMAT THIS SAMPLE WAS REQUESTED UNDER, recovered the same way its
+  // fractions are. Before defect (d) landed, the four taps below were decoded
+  // as RGB565 whatever the binding said, so a bilinear fetch of an ARGB4444
+  // sheet was filtered on the wrong bit fields and retired a confident, wrong
+  // colour with no counter moving.
+  wire [2:0]  bil_fmt  = bil_meta[19:17];
 
   // ==========================================================================
-  // THREE-CHANNEL BILINEAR SEQUENCING. AUDIT R5.
+  // FOUR-CHANNEL BILINEAR SEQUENCING. AUDIT R5, EXTENDED BY DEFECT (d).
   // ==========================================================================
+  // R5 MADE IT THREE; DEFECT (d) MAKES IT FOUR. Alpha is a filtered channel
+  // like any other and the reference bilerps it -- `zref::Tmu::sample` runs
+  // the same `bilerp` over `ca[0..3]` that it runs over r, g and b. With
+  // ARGB4444 the four taps carry four DIFFERENT alphas, so taking tap 0's
+  // alpha -- or the old literal 8'hFF -- is a wrong answer, not a
+  // simplification.
+  //
+  // IT COSTS NO SILICON. The lane is one channel wide by charter and already
+  // carries a 2-bit `chan_i`/`out_chan_o`; a fourth phase is one more CLOCK
+  // per sample through the same multiplier, not a fourth lane. What it does
+  // change is `cnt_bilerp_jobs_o`, which is now FOUR per filtered sample.
   // This issued ONE job with `chan_i = 2'd0`, filtered the LOW BYTE of each of
   // the four texel halfwords, and replicated the single result to all three
   // output channels: `{bil_out, bil_out, bil_out}`. Every direct-colour
@@ -1170,31 +1285,45 @@ module zhao_texture_island_top #(
   assign btx[2] = disp_bil_data[47:32];
   assign btx[3] = disp_bil_data[63:48];
 
-  // Channel extraction with the ABI's replication, per texel.
-  function automatic logic [7:0] chan8(input logic [15:0] h, input logic [1:0] c);
-    case (c)
-      2'd0:    chan8 = {h[15:11], h[15:13]};   // red   5 -> 8
-      2'd1:    chan8 = {h[10:5],  h[10:9]};    // green 6 -> 8
-      default: chan8 = {h[4:0],   h[4:2]};     // blue  5 -> 8
-    endcase
+  // Channel extraction, THROUGH THE ONE SHARED DECODE. This used to hold its
+  // own hardwired 5:6:5 field positions with no format input -- the second
+  // half of defect (d). It now selects a byte out of `decode16`, so the
+  // bilinear taps and the nearest station cannot drift apart: there is one
+  // law and two readers of it.
+  function automatic logic [7:0] chan8(input logic [15:0] h, input logic [2:0] fmt,
+                                       input logic [1:0] c);
+    logic [31:0] dc;
+    begin
+      dc = decode16(h, fmt);
+      case (c)
+        2'd0:    chan8 = dc[23:16];   // red
+        2'd1:    chan8 = dc[15:8];    // green
+        2'd2:    chan8 = dc[7:0];     // blue
+        default: chan8 = dc[31:24];   // alpha
+      endcase
+    end
   endfunction
 
-  // Hold the response until its third job is taken.
-  assign disp_bil_ready = bil_job_ready && (bil_phase_r == 2'd2);
+  // Hold the response until its FOURTH job is taken.
+  assign disp_bil_ready = bil_job_ready && (bil_phase_r == 2'd3);
 
+  // The phase is 2 bits and the sequence is 0,1,2,3, so the wrap is the
+  // counter's own. It is still written as an explicit compare rather than a
+  // bare increment, because a width change would otherwise silently turn the
+  // sequence into something else.
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) bil_phase_r <= 2'd0;
     else if (disp_bil_valid && bil_job_ready)
-      bil_phase_r <= (bil_phase_r == 2'd2) ? 2'd0 : (bil_phase_r + 2'd1);
+      bil_phase_r <= (bil_phase_r == 2'd3) ? 2'd0 : (bil_phase_r + 2'd1);
   end
 
   zhao_texture_bilerp_lane #(.TOKW(TOKW)) u_bilerp (
       .clk(clk), .rst_n(rst_n),
       .job_valid_i(disp_bil_valid), .job_ready_o(bil_job_ready),
-      .t00_i(chan8(btx[0], bil_phase_r)),
-      .t10_i(chan8(btx[1], bil_phase_r)),
-      .t01_i(chan8(btx[2], bil_phase_r)),
-      .t11_i(chan8(btx[3], bil_phase_r)),
+      .t00_i(chan8(btx[0], bil_fmt, bil_phase_r)),
+      .t10_i(chan8(btx[1], bil_fmt, bil_phase_r)),
+      .t01_i(chan8(btx[2], bil_fmt, bil_phase_r)),
+      .t11_i(chan8(btx[3], bil_fmt, bil_phase_r)),
       // THE SAMPLE'S OWN fractions, recovered by the identity the response
       // came back under -- not whatever the planner is emitting right now.
       .fu_i(bil_meta[8:1]), .fv_i(bil_meta[16:9]),
@@ -1203,34 +1332,38 @@ module zhao_texture_island_top #(
       .out_o(bil_lane_out), .out_tok_o(bil_lane_tok), .out_chan_o(bil_out_chan),
       .jobs_o(cnt_bilerp_jobs_o), .occupancy_o(bil_occ));
 
-  // ---- collect R, G, B into one colour --------------------------------------
-  // Only the BLUE result presents a fragment sample downstream; R and G are
-  // absorbed into the accumulator. So the response port sees one answer per
-  // sample, exactly as it did before, and nothing downstream had to change.
-  logic [7:0] bil_r_r, bil_g_r;
+  // ---- collect R, G, B, A into one sample -----------------------------------
+  // Only the LAST result presents a fragment sample downstream; the earlier
+  // channels are absorbed into the accumulator. So the response port still
+  // sees one answer per sample and nothing downstream had to change -- the
+  // only difference from R5 is WHICH channel is last, and it is now alpha.
+  logic [7:0] bil_r_r, bil_g_r, bil_b_r;
 
-  assign bil_lane_ready = (bil_out_chan != 2'd2) ? 1'b1 : bil_out_ready;
-  assign bil_out_valid  = bil_lane_valid && (bil_out_chan == 2'd2);
+  assign bil_lane_ready = (bil_out_chan != 2'd3) ? 1'b1 : bil_out_ready;
+  assign bil_out_valid  = bil_lane_valid && (bil_out_chan == 2'd3);
   assign bil_out        = bil_lane_out;
   assign bil_out_tok    = bil_lane_tok;
-  assign bil_rgb        = {bil_r_r, bil_g_r, bil_lane_out};
+  assign bil_rgb        = {bil_r_r, bil_g_r, bil_b_r};
+  assign bil_a          = bil_lane_out;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       bil_r_r <= 8'd0;
       bil_g_r <= 8'd0;
+      bil_b_r <= 8'd0;
       err_bil_chan_o <= 1'b0;
     end else if (bil_lane_valid && bil_lane_ready) begin
       case (bil_out_chan)
         2'd0: bil_r_r <= bil_lane_out;
         2'd1: bil_g_r <= bil_lane_out;
-        default: ;  // blue is used combinationally above
+        2'd2: bil_b_r <= bil_lane_out;
+        default: ;  // alpha is used combinationally above
       endcase
       // THE ORDER IS CHECKED, NOT ASSUMED. If the lane ever retires out of
       // order, the accumulator would silently pair one sample's red with
       // another's blue and every direct-colour pixel would be quietly wrong.
       if (bil_out_chan != bil_expect_r) err_bil_chan_o <= 1'b1;
-      bil_expect_r <= (bil_out_chan == 2'd2) ? 2'd0 : (bil_out_chan + 2'd1);
+      bil_expect_r <= (bil_out_chan == 2'd3) ? 2'd0 : (bil_out_chan + 2'd1);
     end
   end
 
@@ -1362,21 +1495,50 @@ module zhao_texture_island_top #(
   // `cnt_near_refused_o` and it retires the fragment. It is never silently
   // popped.
   //
-  // WHY A REFUSAL AND NOT THE COLOUR. Decoding the texel needs the format, and
-  // defect (d) is deferred: the island has NO format-controlled decode. Its
-  // only extractor, `chan8()`, is hardwired RGB565 with no format input, and
-  // the sample metadata table carries no format field, so there is nothing here
-  // that can tell an RGB565 texel from an ARGB1555 or ARGB4444 one. Guessing
-  // RGB565 would ship a confidently wrong colour on two of the three direct
-  // formats and would be indistinguishable from a correct one. A counted
-  // refusal is a lie nobody can mistake for the truth.
+  // WHY IT WAS A REFUSAL AND NOT THE COLOUR, AND WHY IT IS THE COLOUR NOW.
+  // Decoding the texel needs the format, and until defect (d) landed the island
+  // had NO format-controlled decode: its only extractor, `chan8()`, was
+  // hardwired RGB565 with no format input, and the sample metadata table
+  // carried no format field, so nothing here could tell an RGB565 texel from an
+  // ARGB1555 or ARGB4444 one. Guessing RGB565 would have shipped a confidently
+  // wrong colour on two of the three direct formats, indistinguishable from a
+  // correct one, so `near_ok_c` was tied to `1'b0` and every nearest sample
+  // completed with SMP_ERR_RGB.
   //
-  // THIS IS A PLACEHOLDER WITH A KNOWN REPLACEMENT. Section 5A.7 item 5 of the
-  // pre-fit brief: the nearest decode station is the SAME format-controlled
-  // decode law defect (d) needs -- one shared block, not three. When (d) lands,
-  // this refusal becomes that decode and `cnt_near_refused_o` should go to
-  // zero on every run that is not deliberately testing a bad format.
-  wire near_ok_c = 1'b0;   // no format-controlled decode yet; see above
+  // THAT PLACEHOLDER HAS BEEN REPLACED, and it had to be: `near_ok_c = 1'b0`
+  // made this whole station DEAD CODE. Synthesis strips dead code, so a fit run
+  // against it under-reports the design's area by an entire decode station --
+  // and the fit this island is queued for exists to attack an area pathology.
+  // A placeholder that hides silicon from the tool measuring silicon is worse
+  // than a wrong colour.
+  //
+  // MEASURED BEFORE THE REPAIR, with an RGB565/nearest fixture: 96 nearest
+  // samples, 96 retiring 0xFF00FF, `cnt_near_refused_o == 96`. It was invisible
+  // for as long as every request in the suite was CLUT8, because CLUT8 routes
+  // to CLS_CLUT and never reaches this lane at all.
+  //
+  // WHAT IT IS NOW. The sample's own format, recovered from `sampmeta_m` by the
+  // identity the response came back under -- never from `plan_acc_fmt`, which
+  // belongs to whatever request the planner is emitting this clock -- through
+  // the ONE shared `decode16` the bilinear taps also use. Section 5A.7 item 5:
+  // one block, not three.
+  wire [19:0] near_meta = sampmeta_m[disp_near_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+                                    [disp_near_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
+  wire [2:0]  near_fmt  = near_meta[19:17];
+
+  // ONE TEXEL, LANE 0. A nearest request plans `acc_en_o = 4'b0001` -- the
+  // planner's `filter_eff` is low, so lanes 1..3 are never fetched and the
+  // words the cache copies into them are untagged RAM. Reading anything but
+  // `[15:0]` here would be reading another texture.
+  wire [31:0] near_dec  = decode16(disp_near_data[15:0], near_fmt);
+
+  // A REAL PREDICATE, AND IT CAN STILL SAY NO. `cnt_near_refused_o` must read
+  // zero on ordinary traffic -- that is the evidence the decode landed -- and
+  // must still count a genuine fault. Two faults reach here: a CLUT format at a
+  // direct-colour station, which is a routing error, and a format above
+  // FMT_ARGB4444, which is the planner's own `fmt_bad`. Both are undecodable,
+  // both complete with the error colour, and both are counted.
+  wire near_ok_c = fmt_is_direct(near_fmt);
 
   // ==========================================================================
   // THE COMPLETION MERGER
@@ -1517,19 +1679,33 @@ module zhao_texture_island_top #(
   // THE COLOUR, IN THE SAME PRIORITY ORDER AS THE TOKEN ABOVE. An errored
   // completion overrides everything: the identity still comes from whichever
   // lane answered, but the payload is the declared error colour.
-  assign fr_tmu_rgb     = smp_err_c ? SMP_ERR_RGB
-                        : pal_ok_c  ? {pal_r8, pal_g8, pal_b8}
+  // THE NEAREST LANE IS IN THE CHAIN NOW, in the same priority order as
+  // `rsp_tok` and `smp_err_c` above: palette, nearest, unknown-class, bilinear.
+  // It needs no `!pal_lu_valid_o` guard of its own -- a valid palette lookup is
+  // either `pal_ok_c` and taken one arm earlier, or `pal_bad_c` and already
+  // folded into `smp_err_c` -- but the ORDER is what makes that true, so the
+  // two chains must be edited together.
+  assign fr_tmu_rgb     = smp_err_c       ? SMP_ERR_RGB
+                        : pal_ok_c        ? {pal_r8, pal_g8, pal_b8}
+                        : disp_near_valid ? near_dec[23:0]
                           // THREE CHANNELS, not one replicated three times.
-                                    : bil_rgb;
+                                          : bil_rgb;
 
   // ==========================================================================
-  // DEFECT (d) -- ALPHA AND FORMAT DECODE -- IS DEFERRED, AND HERE IS EXACTLY
-  // WHAT IS MISSING SO THE NEXT PASS DOES NOT HAVE TO REDISCOVER IT
+  // DEFECT (d) -- ALPHA AND FORMAT DECODE. THE RECORD OF WHAT WAS MISSING IS
+  // KEPT VERBATIM BELOW; WHAT CLOSED IT IS STATED AFTER IT.
   // ==========================================================================
-  // This assignment is `8'hFF` for BOTH branches, unconditionally. That is a
-  // gap and not a convention, and the proof is one screen down: the AUX path at
-  // `fr_aux_a` forms a REAL alpha from `aux_out_degenerate`. So the island can
-  // express a non-opaque sample; the texture path simply never does.
+  // The four holes are left in their original words rather than deleted,
+  // because three of them are closed by a change spread across this file and
+  // the fourth is still open -- and a reader who cannot see what the gap WAS
+  // cannot tell which is which. The assignment they describe was:
+  //
+  //     assign fr_tmu_a = smp_err_c ? SMP_ERR_A : 8'hFF;
+  //
+  // `8'hFF` for BOTH branches, unconditionally. That is a gap and not a
+  // convention, and the proof is one screen down: the AUX path at `fr_aux_a`
+  // forms a REAL alpha from `aux_out_degenerate`. So the island can express a
+  // non-opaque sample; the texture path simply never did.
   //
   // CONSEQUENCE: every texture sample is opaque. Any ARGB texture and any
   // index-based transparency is silently lost, and the combiner always receives
@@ -1564,10 +1740,37 @@ module zhao_texture_island_top #(
   //      `{fv, fu, bytesel}`) carries no format field and no nibble select, so
   //      even a correct decoder here would have nothing to switch on.
   //
-  // Until all four land, this stays 255 AND THE NEAREST PATH STAYS A REFUSAL,
-  // because those are the same missing block: section 5A.7 item 5 requires ONE
-  // shared format-controlled decode law, not three copies.
-  assign fr_tmu_a       = smp_err_c ? SMP_ERR_A : 8'hFF;
+  // ==========================================================================
+  // WHAT DEFECT (d) CLOSED, AND WHAT IT DID NOT
+  // ==========================================================================
+  // CLOSED. Items 1, 2 and 4 above. There is one shared `decode16`; the
+  // bilinear taps and the nearest station both go through it; alpha is a real
+  // decoded value on both paths, filtered as a fourth channel where the sample
+  // is filtered; and `sampmeta_m` carries the format so the decode can switch
+  // on it without a late ingress read.
+  //
+  // STILL OPEN -- ITEM 3, CLUT4'S NIBBLE. It cannot be fixed at this line for
+  // the reason written above: the planner's texel-to-byte divide has already
+  // discarded the sub-byte position by the time an address exists, so the
+  // nibble select must be captured at PLANNING alongside the byte select. The
+  // metadata table now has the shape for it -- adding a `nibble` bit beside
+  // `bytesel` is one more field -- but the capture is in `zhao_texture_tmu_plan`
+  // and this pass did not open that file. FMT_CLUT4 therefore still reaches the
+  // palette as a BYTE, which is the wrong index for every odd texel.
+  //
+  // ALSO STILL OPEN: index transparency. A CLUT8 sample's alpha is 255 below,
+  // and that is HONEST rather than a leftover hardwire -- a palette entry is an
+  // RGB565 word and carries no alpha, so the reference returns 255 for CLUT8
+  // and RGB565 too and the two agree for a real reason. An index-transparency
+  // rule (index 0 is clear, or a per-binding key) would have to be applied to
+  // the raw index BEFORE the palette lookup replaces it, and no such rule is
+  // written down anywhere yet. When one is, it belongs on the `pal_ok_c` arm.
+  assign fr_tmu_a       = smp_err_c       ? SMP_ERR_A
+                          // A palette entry is RGB565: opaque, and the
+                          // reference says 255 here as well.
+                        : pal_ok_c        ? 8'hFF
+                        : disp_near_valid ? near_dec[31:24]
+                                          : bil_a;
   assign fr_tmu_rslot   = rsp_tok[$clog2(DEPTH)+2+GENW-1 -: $clog2(DEPTH)];
   assign fr_tmu_rsidx   = rsp_tok[GENW+1 -: 2];
   assign fr_tmu_rgen    = rsp_tok[GENW-1:0];
@@ -1666,7 +1869,19 @@ module zhao_texture_island_top #(
   logic [ROBTAGW-1:0] comb_o_tag;
   logic        comb_o_refused;
 
-  zhao_texture_material_combine_v1 #(.RECS(2), .TAGW(ROBTAGW)) u_combine (
+  // COMBINE V2, the paired-phase combiner. V1 put `unit_mul_logic(...)` inside
+  // every arm of two seven-arm case statements -- about fourteen multiplier
+  // sites against an architecture whose own sentence allows two -- and the
+  // previous composed fit's worst path (-5.737 ns) sat inside it. V2 issues
+  // each recipe as PHASES through two registered product sites instead.
+  //
+  // NCTX is not RECS. V1's RECS was how many sample records one job carried;
+  // NCTX is how many material jobs are in flight, and the brief is explicit
+  // that it is "a latency-hiding choice, not the global fragment capacity" --
+  // the island's OWNER CREDIT (OWNER_DEPTH = FCTXN) is what bounds fragments.
+  // Wiring FCTXN in here would conflate the two bounds and silently give the
+  // combiner 64 contexts' worth of storage to hold two numbers.
+  zhao_texture_material_combine_v2 #(.NCTX(8), .TAGW(ROBTAGW)) u_combine (
       .clk(clk), .rst_n(rst_n),
       .f_valid_i(fr_o_valid), .f_ready_o(comb_f_ready),
       .f_sample_count_i(fsc_m[fr_o_tok]), .f_recipe_i(frec_m[fr_o_tok]),
@@ -1687,7 +1902,8 @@ module zhao_texture_island_top #(
       .refused_recipe_o(comb_refused_recipe),
       .refused_missing_o(cnt_combine_refused_o),
       .saturated_add_o(comb_sat_add), .saturated_mul2x_o(comb_sat_2x),
-      .jobs_by_recipe_o(comb_jobs));
+      .jobs_by_recipe_o(comb_jobs),
+      .phases_issued_o(cnt_combine_phases_o));
 
   // -------- reorder buffer --------------------------------------------------
   logic [32:0] rob_m [FCTXN];      // {refused, a, rgb}
