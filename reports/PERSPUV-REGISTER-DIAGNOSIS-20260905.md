@@ -6,6 +6,77 @@
 **Standing measurement** 2,204 ALM / 3,293 registers, and marked **STALE** in
 `reports/G1-ISLAND-SURVIVORS-20260905.md`
 
+## THE FIT ANSWERED, AND IT REFUTES THE MECHANISM (2026-09-06)
+
+*Added at the top because the rest of this document is a prediction, and the
+prediction was wrong in its central claim. Read this first.*
+
+This report said, in the section below, that the next perspuv fit would confirm
+or refute it. **That fit ran, and the answer has been sitting in
+`reports/synthesis/zhao_block_fit.json` unread.** The split landed at
+`b78996bc` (2026-09-05 12:55) and the fit ran at `5651d96c` (15:15) -- the
+split's symbols `e_num_u` / `e_num_v` appear in the fitted source, so this row
+measures the change:
+
+| | before the split | after | delta |
+|---|---|---|---|
+| ALM | 2,204 | **1,910** | −294 (−13.3%) |
+| registers | 3,293 | **3,157** | −136 (−4.1%) |
+| block memory bits | — | **256** | |
+| M10K blocks | — | **1** | |
+| Fmax | — | **96.62 MHz** | |
+
+**The split bought a real 13% of ALM and did NOT do what this report said it
+would.** The prediction was that `e_num` and `e_q` -- 2,048 bits, "62% of the
+block" -- would become memory once each array had one read and one write
+address. 256 memory bits inferred in total, across the whole block. 136
+registers left. Two thousand bits did not move.
+
+### And the explanation this report talked the next reader OUT of is the
+### surviving one
+
+The section below considers QUARTUS_GOTCHAS §14 -- combinational logic between
+an array read and the first register blocks absorption into the M10K's output
+register -- observes that it is true of `e_q`, whose read is asynchronous and
+feeds a port directly:
+
+```systemverilog
+  assign u_o = e_q[head_q][0];
+  assign v_o = e_q[head_q][1];
+```
+
+and then sets it aside: *"it is not the whole story, and stopping there would
+send the next person to add an output register that does not fix it. **The
+binding constraint is port count.**"*
+
+Port count has now been fixed and nothing inferred. So port count was not the
+binding constraint, or not the only one, and **the ordinary explanation this
+report steered away from is the one still standing** -- the one
+QUARTUS_GOTCHAS already names.
+
+That is the failure mode CLAUDE.md records under *the first explanation that
+absolves the design*, with the polarity flipped: here the comfortable
+explanation was the more INTERESTING one. A subtle two-port argument displaced a
+boring documented gotcha, and it displaced it explicitly, in writing, with a
+warning not to go back. The cheap check that separates them is the one that has
+now been done by accident: make the port-count change alone and see whether
+anything infers.
+
+### What this means for §8.8
+
+The rule is `<= 900 ALMs, <= 700 registers`. At 1,910 / 3,157 the ALM figure is
+2.1x over and the register figure is 4.5x over. **The register gap is not
+closable by further splitting** -- every array is already single-ported per
+axis. The next thing to test is whether registering the read (an output register
+on `e_q`, so the path from array to port is not combinational) lets the context
+store infer, and that is a MEASUREMENT to make, not a conclusion to write down
+here. This report has already spent its credibility on one static analysis.
+
+Not applied: `zhao_raster_perspuv_svc.sv` is inside the composed-island fit
+running now (QUARTUS_GOTCHAS 11, the live-tree trap).
+
+---
+
 ## What this is and is not
 
 This is **static analysis of the source**, not a measurement. The recommended
