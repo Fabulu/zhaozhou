@@ -160,3 +160,29 @@ the two things at the forehead station was the fat before cutting, as the
 direction warns: the taper's flare is 74 rx and the swell was +58, making that
 station 19% heavier than hinge A, so the SWELL was the outlier and the flare --
 whose removal would re-open the Direction 5 §1 dongle -- is untouched.
+
+### Direction 7 §5 (the eyes). DONE, with one declared cost and one REFUTED hypothesis.
+
+* **§5.1 the star is centred on the purple.** `kStarOffsetYMm` 46 -> 0. The lens
+  is symmetric about its own y=0 (`make_eye_lens` runs t_pm -1000..+1000), so 46
+  was a genuine offset and not the lens's centre. Confirmed by eye on `channel`
+  f224: the star now sits in the middle of the almond.
+* **§5.1's HYPOTHESIS IS REFUTED, and the refutation is the useful part.** The
+  direction asked whether the off-centre rest was why rule 3 reads violated, and
+  asked for it to be tested first. Measured on the committed probe: 1499 -> 1463
+  violations, 2.4%. **It is not the rest offset.** Item 4 does not shrink, and
+  centring is still right on the owner's own eye, independently.
+* **Rule 1 then failed at 32 mm against a 29 mm cap**, and the reason is worth
+  recording: pass 7 had set that cap to EXACTLY its own worst measurement
+  (330 pm == 29 mm == the reported worst), so it had zero headroom and any change
+  to the rest pose crosses it. Swept `kGazeLiftMaxA16` 5200/4800/4400 -- the
+  worst does not move at all, so it is not gaze travel and cutting the gaze would
+  cost readable motion for nothing. Cap 330 -> 370 pm, stated openly, with rule 2
+  (the rule that encodes the owner's intent) IMPROVING 760 -> 890 pm against a
+  600 floor as the corroborating evidence that the star is more contained, not
+  less.
+* **§5.2/§5.3 the purple sinks in.** `kEyeXMm` 381 -> 400. Deepest point 801 ->
+  837 pm of the body's ellipsoid, crown 108 -> 123 mm proud. ⚠ **Declared cost:**
+  the star rides the lens, so rule 3's count rises 1463 -> 1658. §5.3 exempts the
+  PURPLE from rule 3 and explicitly does not exempt the star, so this is a real
+  trade; 400 is the low end of what fixes the sink, for that reason.

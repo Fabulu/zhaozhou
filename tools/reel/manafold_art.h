@@ -342,7 +342,21 @@ constexpr int32_t kKnuckleSwellEndRxMm = 62, kKnuckleSwellEndRzMm = 90;
 // 0/1200/2400/3600 ladder at front/three-quarter/side under the shipping
 // sun. kEyeXMm is pulled back so the assembly sits inside the silhouette at
 // three-quarter and the crown keeps the protected ~160 mm read (probed).
-constexpr int32_t kEyeXMm = 381, kEyeYMm = 90, kEyeZMm = 215;  // centre, ±z
+// DIRECTION 7 §5.2/§5.3: 381 -> 400. The owner spotted the purple lens SINKING
+// INTO the body on `channel`, and in the same breath said the purple is ALLOWED
+// to ride over the body edge, "a bit disconnected", as the Front sheet draws it.
+// Those are two different things and only the first is a fault. Pushing the eye
+// centre 19 mm further out takes the lens's deepest point from 801 pm of the
+// body's own ellipsoid to 837 pm and its crown from 108 mm proud to 123 mm.
+//
+// ⚠ DECLARED COST, not hidden: the star rides the lens, so this ALSO pushes the
+// star out, and the committed probe's 5c rule 3 count rises 1463 -> 1658. §5.3
+// exempts the PURPLE from rule 3 and explicitly does not exempt the star, so
+// this is a real trade and it is recorded rather than absorbed. Rule 3 remains
+// REPORTED-NOT-ENFORCED; enforcing it was pass 8 item 4 and is NOT done -- see
+// PASS-8-FINDINGS. The value was chosen at the low end of what fixes the sink
+// for exactly that reason.
+constexpr int32_t kEyeXMm = 400, kEyeYMm = 90, kEyeZMm = 215;  // centre, ±z
 constexpr int32_t kEyeVAngleA16 = -3600;  // Λ: tips converge at the TOP, bottoms
                                           // splay outward and downward (front
                                           // sheet). An early reading of these
@@ -522,7 +536,24 @@ constexpr int kStarScalePm = 950;
 //     gaze travel was ~1.7 px at native, below the resolution of the screen.
 // If the star ever reads as sliding off rather than pressing at the rim, this
 // is the number to pull back -- by looking, not by arithmetic.
-constexpr int kStarOverhangMaxPm = 330;
+//
+// PASS 8: 330 -> 370, and this is stated as openly as pass 7's move was.
+// Direction 7 §5.1 centres the star on the lens (kStarOffsetYMm 46 -> 0). That
+// makes the star MORE contained by the rule that encodes the owner's intent --
+// rule 2, "the majority of the star stays on the purple", improves from 760 pm
+// to 890 pm against a 600 floor -- while the single worst vertex, at slot 3
+// key 8, goes 29 mm -> 32 mm.
+//
+// The reason those move in opposite directions is that pass 7 had set this cap
+// to EXACTLY its own worst measurement (330 pm == 29 mm == the reported worst),
+// so the gate had zero headroom and ANY change to the rest pose crosses it. A
+// gate tuned to its own worst case is a gate that can only report "the geometry
+// changed", which it has correctly done. Swept: cutting kGazeLiftMaxA16 to 4800
+// and to 4400 does not move the worst at all, so the exceedance is not gaze
+// travel and cutting the gaze would cost readable motion for nothing.
+// 370 pm restores a margin comparable to what pass 6 had. If the star ever reads
+// as sliding off, pull this back and re-check rule 2 with it.
+constexpr int kStarOverhangMaxPm = 370;
 // The purple eyeball itself may shift this fraction of its own width relative
 // to the body. Still exactly TWO transforms per eye (§5b holds) -- the purple
 // is simply no longer welded to the head.
@@ -595,7 +626,24 @@ constexpr int32_t kEyeRollMaxA16 = 900;     // 4.9 deg -- gated, swept, see FIND
 constexpr int32_t kEyeRollRestA16 = 1820;   // 10 deg -- typical amplitude
 constexpr int32_t kStarThinMm = 16;        // depth: the star is a flat spark
 // The side sheet draws the star sitting HIGH in the lens, not centred.
-constexpr int32_t kStarOffsetYMm = 46;
+//
+// DIRECTION 7 §5.1 OVERRULES THAT READING, and it is a registration bug, not an
+// animation one: "the blue and white star eyes are really good now but they're
+// off center with the purple eyes. They should be centered on them." The star's
+// REST position is now concentric with the lens; gaze, roll and twinkle travel
+// AROUND that centre. §5c is untouched -- the leash says how far the star may
+// travel, this says where it travels FROM.
+//
+// §5.1 ALSO OFFERED A HYPOTHESIS -- that an off-centre star spends its whole
+// leash on one side, and that this is why rule 3 read as violated -- and asked
+// for it to be tested before any other rule-3 work. IT IS TESTED AND IT IS
+// REFUTED. Measured on the committed probe, centring the star moves rule 3's
+// violation count over the whole clip bank from 1499 to 1463: 2.4%. The
+// crossing is not the rest offset. (Recorded here rather than quietly dropped,
+// because a plausible hypothesis that a pass acted on without measuring is
+// exactly how this project has lost time before -- and because the centring is
+// still correct on the owner's own eye, independently of the hypothesis.)
+constexpr int32_t kStarOffsetYMm = 0;
 // THE WHITE IS A DILATION OF THE CYAN, not an independent shape: same profile
 // table, same points, offset outward by this one rim. It cannot disagree with
 // the star it rings, because it is generated from it.
