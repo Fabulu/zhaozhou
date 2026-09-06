@@ -1477,3 +1477,46 @@ still being written would produce targets that silently measure nothing.
 I briefed two lanes that the tree had moved since the pin `d884ce01`. It had
 not — one commit separates them, and every repair I named landed nine commits
 BEFORE the pin. Both lanes were sent corrections; §2 is current as written.
+
+## 2026-09-06 ~20:30 — THE FIRST V3 PHYSICAL NUMBERS
+
+Both V3 lanes have landed real fit rows. Not composed numbers, and not
+promises — cheap per-tile synthesis, which is exactly what §0 point L asks for
+before another multi-hour composition run.
+
+| row | ALM | fmax | regs | DSP | M10K |
+|---|---|---|---|---|---|
+| `zhao_probe_banked_rf@v3hot` | 372 | **93.14** | **10** | 0 | 12 |
+| `zhao_raster_rcp24_svc` (before) | 1041 | 68.46 | 1101 | **6** | 0 |
+| `zhao_raster_rcp24_svcseed2` | 1037 | 68.63 | 1104 | 6 | 0 |
+| `zhao_raster_rcp24_svcseed3` | 1038 | 63.93 | 1105 | 6 | 0 |
+| `zhao_raster_rcp24_v3@v3-nctx8` | — | — | 1414 | **3** | — |
+| `zhao_raster_rcp24_v3@v3-after` | — | — | 1940 | 3 | — |
+| `zhao_texture_v3own` | — | — | 4220 | 0 | — |
+| `zhao_texture_fragrob-v3cmp` | — | — | 3291 | 0 | — |
+
+**Two results worth reading carefully, and one worth reading sceptically.**
+
+* **DSP 6 → 3 on the RCP tile.** The composed island breached its DSP rule at
+  17 against 14, so halving one block's six is material rather than cosmetic.
+  §10's exact 32×32 product plus signed-wrap correction appears to be doing
+  what it claimed.
+* **372 ALM / 93.14 MHz / TEN registers / 12 M10K** on the banked probe. Ten
+  registers for twelve M10Ks is the structural claim made physical: payload in
+  memory rather than in flops. Against a 100 MHz product clock, 93 is the first
+  number all session that is in the right neighbourhood.
+* **BUT the register rows are map-only and they went UP**, 1,065 → 1,414 at
+  NCTX 8 and 1,940 at the wider setting. That is the honest half. Queues and
+  bounded execution contexts are state; the bet is that they buy back more in
+  the stores than they cost in control, and **a map-only row carries no ALMs
+  and no fmax by construction**, so nothing here yet says whether that bet pays.
+  The three seed rows also spread 63.93–68.63 MHz on the SAME source, which is
+  a useful reminder of how much of a single fmax figure is placement noise.
+
+Note the seeded rows exist at all because the lane ran the old block three
+times: comparing one new number against one old number would have attributed
+placement variance to the architecture.
+
+Both lanes still running. Not interrupting them, and not queueing a composed
+fit — §26.1's first task is precisely these tiles, and the composition waits on
+the shared record and credit contracts.
