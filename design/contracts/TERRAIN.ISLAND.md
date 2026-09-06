@@ -1,6 +1,6 @@
 # Contract — TERRAIN.ISLAND (Island patch directory)
 
-> Ledger: `design/blocks.yml` · gpu clock · maturity REFERENCE_COMPLETE
+> Ledger: `design/blocks.yml` · gpu clock · maturity UNIT_VERIFIED
 > RTL: `fpga/rtl/terrain/zhao_terrain_island_dir.sv`
 > Reference model: `zref::island::Directory` — `reference/include/zref/zref_island.hpp`
 > Test: `tests/terrain/island_dir_rtl_directed.cpp`

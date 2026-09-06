@@ -1703,7 +1703,7 @@ blocks:
     counters: [island_resident, island_open_sky, island_out_of_extent, island_bad_pitch]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: SPECIFIED
         date: "2026-09-06"
@@ -1713,6 +1713,10 @@ blocks:
         date: "2026-09-06"
         commit: "f416c3f6"
         evidence: reference/include/zref/zref_island.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-09-06"
+        commit: "ed7c8723"
+        evidence: tests/terrain/island_dir_rtl_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
