@@ -110,3 +110,77 @@ motes and not a gain. `kFoldEdgeHaloRPx` 8->5, `kFoldEdgeCoreRPx` 3->2.
 
 Next: E.2 (released eye fix), then **STAGE F, F.0 framing first**. F is the
 spine and is never trimmed. Remaining after F: P.1/P.2/P.4, publish.
+
+### Stages 0, S, M, E.2, F.0-F.4, P.1-P.3 all landed on `main`
+
+### WHERE I AM (rule 0.4) — the full bank render is running
+
+Started `bank.sh`: all 22 live subjects into `Upheaval/website/scratch-reel`.
+**No rebuild and no source edit until it finishes** (the live-tree trap).
+Status accumulates in `bank.status`, one line per subject with its own RC and
+frame count — read THAT, never the pipeline's.
+
+Next steps, in order:
+1. (while it runs) write `PASS-11-FINDINGS.md`. No build, no source edit.
+2. When the bank lands: re-render `manafold-antenna-fixed` + `-quarter` for the
+   **F.5 plate package** — the F3/F4 plate renders predate the lead-boost
+   backoff 1450 -> 1250, so they are NOT the shipped state and must not be the
+   owner's judgement package.
+3. Zixxtrixx 16-subject CRC gate from a self-built baseline.
+4. `tovideo.py` -> `assemble.py` -> archive the outgoing generation -> deploy.
+
+Two faults found today worth carrying out of this run:
+* **A full disk imitates a rendering bug.** `cannot open .../0038.rgb`.
+* **A backslash-t inside a string became a literal TAB** in three separate
+  tools today, including `deploy.ps1`'s checkmedia caller — where it would have
+  refused every publish while blaming the media. Look at the BYTES.
+
+### Done while the bank rendered (nothing in its closure)
+
+* **Archived pass 10 BEFORE anything overwrote it** — 22 clips + posters to
+  `archive-pass10-u02-*`, **decode-verified with ffprobe, 0 failures of 22**.
+* Pass 10 archive entry + `archive_note` EIGHT -> NINE generations.
+* Blurb rewritten for pass 11, **after the last constant moved**.
+* `MANAFOLD-INDEX` entries for the pass-11 findings and the particle lab.
+* **Un-stranded the particle lab's report**: its findings doc and 14 plates
+  cherry-picked to `main`; the driver and its experimental constants stay on
+  `manafold-p11-particle-lab`. The brief's "do not merge" was right about the
+  CODE and wrong about the REPORT.
+* Blast radius checked by diff: only `manafold_*` and `zhao_reel.cpp` changed,
+  and every `zhao_reel.cpp` hunk is inside a u02 path or an inert getenv.
+  **No Zixxtrixx or engine source touched.** The CRC gate is still owed as the
+  proof.
+* Lane audit: this lane shows **no** NOT-ON-ANY-REMOTE and **no** UNPUSHED.
+* Looked at the lab's `05-THE-EDGE-native.png` myself rather than relaying it
+  unseen: the radius change is real and MODERATE at native — the particles read
+  as beads on a path instead of a blur. Worth the owner's eye, not worth
+  shipping over his head.
+
+### Still owed
+
+F.5 package (staged in `f5.sh`), Zixxtrixx CRC, encode + assemble + deploy.
+
+### Close-out gates
+
+* **Zixxtrixx CRC: 16 of 16 identical, 0 differing**, against a baseline built
+  by me from `3b2b8b91` in its own git worktree and its own output tree.
+  Committed as `probes/zixxcrc.sh` so the numbers are reproducible.
+* **Probe against the shipped build: every gate green** — closure sweep 989 /
+  clip bank 1072 (gate 1120), C.1 tip travel 255 mm LIVE, mist follow OK, all
+  7 shipping mist rows attached with `parked` at exactly 0, ladder continuity
+  OK, E.2 depth ordering OK with 54 mm margin and the star a form at 547 pm.
+* **Six known-bad legs, six failures**, every fault injected into the SHIPPED
+  path. Transcripts committed.
+* **Pass-10 archive taken BEFORE the encode overwrote anything**, 22 clips +
+  posters, ffprobe-verified, 0 failures.
+* Encode of the 22-clip bank running; spot-checked decodes match their source
+  frame counts exactly (420 / 600 / 180), so CPU contention with the CRC
+  renders did not damage them.
+
+### Note for the next pass
+
+I ran the CRC renders CONCURRENTLY with the encode. It roughly halved the speed
+of both and it was still the right call over idling — but the earlier
+`fog1200` render that died silently at frame 198 was almost certainly the same
+contention, so treat a render that stops mid-write with no error as a
+resource problem first and a renderer problem second.
