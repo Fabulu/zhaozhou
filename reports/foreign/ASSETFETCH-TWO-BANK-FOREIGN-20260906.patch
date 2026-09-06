@@ -1,0 +1,188 @@
+diff --git a/fpga/rtl/geometry/zhao_geom_assetfetch.sv b/fpga/rtl/geometry/zhao_geom_assetfetch.sv
+index b969ea0e..6c50dc73 100644
+--- a/fpga/rtl/geometry/zhao_geom_assetfetch.sv
++++ b/fpga/rtl/geometry/zhao_geom_assetfetch.sv
+@@ -26,13 +26,21 @@
+ // open; a demand-miss stream re-opens rows in an order nobody chose.
+ //
+ // ---------------------------------------------------------------------------
+-// COMPACT SINGLE-BANK CHECKPOINT, ON PURPOSE
++// TWO COMPACT BANKS, SERIALIZED IDENTITY CHECKPOINT
+ // ---------------------------------------------------------------------------
+-// The owner recovery brief's WP6 orders this migration: prove compact
+-// single-bank bytes first, then add two banks/lookahead/readers/release. This
+-// checkpoint keeps the old reader timing and one-fill-engine law while removing
+-// fetched-line padding from payload RAM. The next checkpoint may add bank
+-// identity; it must not hide a compaction error inside simultaneous overlap.
++// WP6 first proved compact bytes in one bank. This checkpoint duplicates that
++// exact compact representation and captures two distinct identities:
++//
++//   fill_bank_q  -- chosen once when a legal meshlet is admitted; every return
++//                   word for that job writes only this bank;
++//   serve_bank_q -- copied from fill_bank_q only at handoff; every index and
++//                   vertex read for that job uses only this bank.
++//
++// next_bank_q alternates only when a legal job reserves storage. A footprint
++// refusal cannot move it. Timing remains deliberately SERIALIZED -- fill,
++// handoff, serve, release, then the next admission -- so this proves bank
++// identity before descriptor lookahead or fill/consume overlap can hide an
++// ownership error. No overlap is claimed here.
+ `default_nettype none
+ 
+ module zhao_geom_assetfetch
+@@ -193,6 +201,14 @@ module zhao_geom_assetfetch
+   logic [9:0]                     ix_nbytes_q;
+   logic [9:0]                     vx_nwords_q;
+ 
++  // Physical payload ownership. `next_bank_q` changes only when a legal job
++  // reserves storage; fill and serving identities are then held independently.
++  // The current FSM is serialized, but naming both now makes a stuck-reader-bank
++  // error observable before overlap is introduced.
++  logic                           fill_bank_q;
++  logic                           serve_bank_q;
++  logic                           next_bank_q;
++
+   // --------------------------------------------------- admission (comb) ----
+   // Exactly zref::assetfetch::plan, in the same ORDER, because the taxonomy's
+   // order is part of the law and a differing order silently reclassifies
+@@ -246,14 +262,14 @@ module zhao_geom_assetfetch
+   endfunction
+ 
+   // ------------------------------------------------------------ storage ----
+-  // Two copies of the compact index buffer so a triplet's two words are read in
+-  // ONE cycle. The default format uses 48 useful words and allocates 64 per copy
+-  // for bounded adjacent reads and the later bank/address concatenation.
+-  // Vertices occupy exactly 256 useful words. Whole fetched-line prefixes and
+-  // suffixes never consume payload RAM.
+-  logic [63:0] ix_ram_a [0:IX_WORDS-1];
+-  logic [63:0] ix_ram_b [0:IX_WORDS-1];
+-  logic [63:0] vx_ram   [0:VX_WORDS-1];
++  // Two PHYSICAL compact banks. The separate unpacked bank dimension prevents
++  // an adjacent index-word read from carrying into the other bank; the local
++  // address remains IXAW/VXAW bits and bank ownership is selected explicitly.
++  // Each index bank still has two copies so a straddling triplet reads both
++  // words in one cycle.
++  logic [63:0] ix_ram_a [0:1][0:IX_WORDS-1];
++  logic [63:0] ix_ram_b [0:1][0:IX_WORDS-1];
++  logic [63:0] vx_ram   [0:1][0:VX_WORDS-1];
+ 
+   logic [63:0]      ix_qa, ix_qb, vx_q;
+   logic [IXAW-1:0]  ix_ra, ix_rb;
+@@ -265,13 +281,13 @@ module zhao_geom_assetfetch
+ 
+   always_ff @(posedge clk) begin
+     if (ix_we) begin
+-      ix_ram_a[ix_wa] <= wdata;
+-      ix_ram_b[ix_wa] <= wdata;
++      ix_ram_a[fill_bank_q][ix_wa] <= wdata;
++      ix_ram_b[fill_bank_q][ix_wa] <= wdata;
+     end
+-    if (vx_we) vx_ram[vx_wa] <= wdata;
+-    ix_qa <= ix_ram_a[ix_ra];
+-    ix_qb <= ix_ram_b[ix_rb];
+-    vx_q  <= vx_ram[vx_ra];
++    if (vx_we) vx_ram[fill_bank_q][vx_wa] <= wdata;
++    ix_qa <= ix_ram_a[serve_bank_q][ix_ra];
++    ix_qb <= ix_ram_b[serve_bank_q][ix_rb];
++    vx_q  <= vx_ram[serve_bank_q][vx_ra];
+   end
+ 
+   // ------------------------------------------------------------------------
+@@ -381,6 +397,8 @@ module zhao_geom_assetfetch
+   logic [15:0] ix_byte_c;
+   logic [8:0]  ix_index_q;
+   logic [2:0]  ix_sel_q;
++  logic        ix_straddle_c;
++  logic        ix_straddle_q;
+   logic        ix_episode_q;
+   logic        ix_read_q;
+   logic        ix_pend_q;
+@@ -390,16 +408,22 @@ module zhao_geom_assetfetch
+   // one pulse. Re-reading it every held cycle happens to be harmless with the
+   // current one-cycle consumer, but becomes a queue-corrupting duplicate as soon
+   // as banked readers add latency (owner recovery brief section 14.1).
++  // Read the following LOCAL word only when one of the three bytes crosses the
++  // 64-bit boundary (offset 6 or 7). For offsets 0..5, copy B reads the same
++  // local address and its result is masked; it can neither carry into another
++  // physical bank nor make stale adjacent data part of the answer.
+   always_comb begin
+-    ix_byte_c = 16'(ix_index_q) * 16'(IX_PER_TRI);
+-    ix_ra     = IXAW'(ix_byte_c[15:3]);
+-    ix_rb     = IXAW'(ix_byte_c[15:3] + 13'd1);
++    ix_byte_c     = 16'(ix_index_q) * 16'(IX_PER_TRI);
++    ix_straddle_c = (ix_byte_c[2:0] >= 3'd6);
++    ix_ra         = IXAW'(ix_byte_c[15:3]);
++    ix_rb         = IXAW'(ix_byte_c[15:3]
++                    + (ix_straddle_c ? 13'd1 : 13'd0));
+   end
+ 
+-  // Sixteen bytes, then three of them. A 16:1 byte select is one LUT level per
+-  // output byte and the straddle disappears into it.
++  // Sixteen bytes, then three of them. The high word is relevant only for a
++  // straddling request; masking it makes that containment a data-path fact.
+   logic [127:0] ix_pair_c;
+-  assign ix_pair_c = {ix_qb, ix_qa};
++  assign ix_pair_c = {ix_straddle_q ? ix_qb : 64'd0, ix_qa};
+ 
+   always_comb begin
+     ix_a_o = ix_pair_c[7'({ix_sel_q, 3'd0})          +: 8];
+@@ -446,6 +470,7 @@ module zhao_geom_assetfetch
+       ix_episode_q <= 1'b0;
+       ix_index_q <= '0;
+       ix_sel_q  <= '0;
++      ix_straddle_q <= 1'b0;
+       v_ix_q    <= '0;
+       v_word_q  <= '0;
+       v_full_q  <= 1'b0;
+@@ -465,6 +490,9 @@ module zhao_geom_assetfetch
+       vx_nlines_q <= '0;
+       ix_nbytes_q <= '0;
+       vx_nwords_q <= '0;
++      fill_bank_q  <= 1'b0;
++      serve_bank_q <= 1'b0;
++      next_bank_q  <= 1'b0;
+       meshlets_fetched_o  <= '0;
+       beats_read_o        <= '0;
+       guard_denied_o      <= '0;
+@@ -485,7 +513,10 @@ module zhao_geom_assetfetch
+         ix_episode_q <= 1'b1;
+         ix_read_q    <= 1'b1;
+       end
+-      if (ix_read_q) ix_sel_q <= ix_byte_c[2:0];
++      if (ix_read_q) begin
++        ix_sel_q       <= ix_byte_c[2:0];
++        ix_straddle_q  <= ix_straddle_c;
++      end
+ 
+       // UNOWNED: a beat with no request outstanding. Today this cannot happen
+       // -- one logical request is in flight and only S_FILL consumes beats --
+@@ -524,6 +555,11 @@ module zhao_geom_assetfetch
+             // Partial geometry reads as a modelling error rather than a fault.
+             refused_footprint_o <= refused_footprint_o + 32'd1;
+           end else begin
++            // Reserve one physical bank at this admitted-job boundary. Refused
++            // footprints never enter this arm and therefore never perturb the
++            // A/B/A sequence.
++            fill_bank_q <= next_bank_q;
++            next_bank_q <= ~next_bank_q;
+             ix_line0_q  <= ZHAO_VRAM_ADDR_BITS'({ix_abs_c[26:6], 6'd0});
+             vx_line0_q  <= ZHAO_VRAM_ADDR_BITS'({vx_abs_c[26:6], 6'd0});
+             ix_boff_q   <= ix_abs_c[5:0];
+@@ -610,6 +646,9 @@ module zhao_geom_assetfetch
+         end
+ 
+         S_HAND: if (s_ready_i) begin
++          // Capture the bank handed to the consumers. Reader selection never
++          // follows next_bank_q or a later fill decision.
++          serve_bank_q <= fill_bank_q;
+           meshlets_fetched_o <= meshlets_fetched_o + 32'd1;
+           v_ix_q    <= '0;
+           v_word_q  <= '0;
+@@ -666,6 +705,7 @@ module zhao_geom_assetfetch
+             ix_pend_q    <= 1'b0;
+             ix_read_q    <= 1'b0;
+             ix_episode_q <= 1'b0;
++            ix_straddle_q <= 1'b0;
+             v_full_q     <= 1'b0;
+             v_stage_q    <= 3'd0;
+             v_ix_q       <= '0;
