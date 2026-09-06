@@ -212,9 +212,8 @@ void test_the_schedule_issues_exactly_its_phases() {
     else want += 2;   // MODULATE, MODULATE2X, LERP, DETAIL_MASK
   }
 
-  std::printf("  phases issued %u, the schedule owes %u, over %zu fragments
-", phases, want,
-              batch.size());
+  std::printf("  phases issued %u, the schedule owes %u, over %zu fragments\n",
+              phases, want, batch.size());
   check(phases == want,
         "the paired schedule issued EXACTLY the phases it owes -- not one "
         "re-run, which is the fault V1 had while every colour stayed exact",
@@ -280,6 +279,7 @@ void test_every_recipe_matches_the_oracle() {
   // because the entire two-lane capacity argument rests on that being true.
   check(jobs[mat::kPassthru] == 0, "PASSTHRU issues no product jobs", 0, jobs[mat::kPassthru]);
   check(jobs[mat::kAddSat] == 0, "ADD_SAT issues no product jobs", 0, jobs[mat::kAddSat]);
+  check(jobs[mat::kMask] == 0, "MASK issues no product jobs", 0, jobs[mat::kMask]);
   check(jobs[mat::kTerrainDetailLight] == 200 * 6,
         "DETAIL_LIGHT issues six product jobs per fragment", 200 * 6,
         jobs[mat::kTerrainDetailLight]);
@@ -287,6 +287,9 @@ void test_every_recipe_matches_the_oracle() {
         jobs[mat::kTerrainDetailMask]);
   check(jobs[mat::kModulate] == 200 * 4, "MODULATE issues four -- 3 RGB + alpha", 200 * 4,
         jobs[mat::kModulate]);
+  check(jobs[mat::kModulate2x] == 200 * 4,
+        "MODULATE2X issues four -- 3 RGB + alpha", 200 * 4,
+        jobs[mat::kModulate2x]);
   check(jobs[mat::kLerp] == 200 * 4, "LERP issues four -- 3 RGB + alpha", 200 * 4,
         jobs[mat::kLerp]);
   check(jobs[mat::kTerrainDetailLight] > jobs[mat::kModulate],
@@ -432,6 +435,80 @@ void test_refusals_retire_rather_than_vanish() {
   }
 }
 
+void test_output_stall_keeps_every_context_reserved() {
+  Dut d;
+  d.rst_n = 0;
+  d.o_ready_i = 0;
+  d.f_valid_i = 0;
+  for (int i = 0; i < 4; ++i) tick(d);
+  d.rst_n = 1;
+
+  int accepted = 0;
+  d.f_valid_i = 1;
+  d.f_sample_count_i = 1;
+  d.f_recipe_i = mat::kPassthru;
+  d.f_weight_i = 0;
+  d.f_s0_a_i = 0xA5;
+  d.f_s1_rgb_i = 0;
+  d.f_s1_a_i = 0;
+  d.f_s2_rgb_i = 0;
+  d.f_s2_a_i = 0;
+  d.f_base_rgb_i = 0;
+  d.f_base_a_i = 0;
+
+  for (int cyc = 0; cyc < 256; ++cyc) {
+    d.f_tag_i = static_cast<uint16_t>(0x5000 + accepted);
+    d.f_s0_rgb_i = static_cast<uint32_t>(accepted + 1) << 16;
+    d.eval();
+    const bool admit = d.f_ready_o != 0;
+    tick(d);
+    if (admit) ++accepted;
+  }
+
+  check(accepted == 8,
+        "a stopped output reserves all eight contexts -- loading the held "
+        "register does not create a ninth credit",
+        8, accepted);
+  check(!d.f_ready_o, "input remains blocked while none of those outputs is accepted", 0,
+        d.f_ready_o ? 1 : 0);
+  check(d.o_valid_o, "one completed result is held at the stopped output", 1,
+        d.o_valid_o ? 1 : 0);
+
+  const uint32_t held_rgb = d.o_rgb_o;
+  const uint8_t held_a = d.o_a_o;
+  const uint16_t held_tag = static_cast<uint16_t>(d.o_tag_o);
+  const bool held_refused = d.o_refused_o != 0;
+  bool stable = true;
+  for (int cyc = 0; cyc < 64; ++cyc) {
+    // Poison every live input while the accepted transaction is stalled.
+    d.f_tag_i = static_cast<uint16_t>(0x7000 + cyc);
+    d.f_s0_rgb_i = 0x00FFFFFFu ^ static_cast<uint32_t>(cyc);
+    d.f_s0_a_i = static_cast<uint8_t>(cyc);
+    d.eval();
+    stable = stable && d.o_valid_o && d.o_rgb_o == held_rgb && d.o_a_o == held_a &&
+             static_cast<uint16_t>(d.o_tag_o) == held_tag &&
+             (d.o_refused_o != 0) == held_refused && !d.f_ready_o;
+    tick(d);
+  }
+  check(stable, "valid && !ready holds RGBA, tag, status, and input backpressure stable", 1,
+        stable ? 1 : 0);
+
+  // No same-cycle full-to-free bypass: the outgoing acceptance returns its
+  // context on this edge, and only the following cycle may accept item nine.
+  d.o_ready_i = 1;
+  d.eval();
+  check(!d.f_ready_o, "the acceptance edge does not bypass a still-full FREE queue", 0,
+        d.f_ready_o ? 1 : 0);
+  tick(d);
+  check(d.f_ready_o, "one accepted output returns exactly one context credit", 1,
+        d.f_ready_o ? 1 : 0);
+  d.eval();
+  const bool ninth_admit = d.f_ready_o != 0;
+  tick(d);
+  if (ninth_admit) ++accepted;
+  check(accepted == 9, "the ninth input is admitted only after that credit returns", 9, accepted);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -442,6 +519,7 @@ int main(int argc, char** argv) {
   test_a_cheap_fragment_overtakes_an_expensive_one();
   test_back_pressure_loses_nothing();
   test_refusals_retire_rather_than_vanish();
+  test_output_stall_keeps_every_context_reserved();
 
   if (g_failed) {
     std::printf("[material_combine_v2_diff] %d/%d checks FAILED\n", g_failed, g_checks);
