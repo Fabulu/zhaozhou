@@ -533,6 +533,78 @@ nothing; the failures live where a patch leaves, loses its page, and comes back.
 REPUBLISHING the same resource, so anything that merely stopped being wanted
 held its page forever.
 
+## D22 tread 10: real memory, and the protocol nobody was speaking
+
+The bench's last played input was MEMORY itself. GEOM.ASSETFETCH now asks
+`zhao_shell_top`'s own MEM.GUARD, which forwards to MEM.VRAM.ARBITER on client
+slot 3, which offers to MEM.SDRAM.CTRL, and the beats come back out of the DRAM
+model past refresh and CAS latency with scanout reading the framebuffer all
+frame. The played pool holds DECOY records throughout.
+
+    played: beats 24, stalls 30, painted 1792
+    REAL:   beats 24, stalls 360, painted 1792, 24 beats out of the DRAM
+
+**30 to 360.** Twelve times the uncontended baseline, which is the number the
+register file could never have produced and the reason that baseline was
+recorded before the tread.
+
+**And the find: both geometry fetchers had the guard protocol wrong.** They
+wanted `ready && ok` in ONE cycle. `zhao_mem_guard` cannot do that -- ready
+is the level `!fwd_active`, ok is a pulse the cycle AFTER the accept, and the
+accept is what raises fwd_active. A passing request looked like a denial with no
+violation flag, silently. `zhao_raster_fbwrite` and `zhao_debug_frameblit`
+already waited a cycle and fbwrite's header even quotes the guard line: **four
+clients, two protocols, and the two that were wrong are exactly the two whose
+memory was played.** Three unit benches went red on the repair, each because it
+was the model the block had been written to match:
+
+    assetfetch_rtl_directed      16 of 28 FAILED  ->  56 checks passed
+    assetfetch_random             4 of  9 FAILED  ->   9 checks passed
+    geom_meshfetch_rtl_directed   6 of  7 FAILED  ->   7 checks passed
+
+That first row twice over: it reported 28 checks while failing 16 and reports 56
+now. A failing test that also stops counting reads low, like every other broken
+instrument.
+
+**One geometry client, not two.** `zhao_vram_arbiter` tags the controller by
+CASTING THE SLOT INDEX, so slot 3 is ENGINE1 and slot 4 is DEBUG, and the guard
+grants the asset pool to ENGINE1 alone. MESHFETCH has no identity the memory law
+admits; its half of the protocol repair is REASONED, not measured, and says so.
+
+## R6: the island orders at its boundary now, exactly
+
+The composed test asserted max displacement <= 8 and called it a regression
+guard on a known defect. The old comment concluded the repair was the recovery
+architecture's rearchitecture -- move the allocation ahead of the reciprocal
+work. Too pessimistic by one idea: the interior is SUPPOSED to reorder, so order
+at the EDGE. A submission sequence stamped at admission, carried through the
+combiner beside the caller's tag, restored in a reorder buffer that cannot
+overflow because FRAGROB admits at most FCTXN fragments.
+
+    0 out of order, max displacement 0, 11 fragments held at the boundary
+
+That last number is why the first two mean anything.
+
+## And the island was binding a ONE-BY-ONE TEXTURE
+
+The remaining gap was a printed note: no fragment addressed an odd texel, so the
+CLUT byte select was unexercised. The note blamed the harness's reach --
+"forcing odd texels needs control over the coordinate after the perspective
+divide, which this test does not have".
+
+Wrong, and comfortably so. `bind_mode_i` was 0, and bits [11:8]/[15:12] are
+log2 width and height: a 1x1 sheet. Every coordinate resolved to texel (0, 0).
+Sweeping the u coordinate across FIVE orders of magnitude moved nothing -- same
+one cache miss against 192 hits, same colours. The coordinate path was not being
+composed at all.
+
+    64x64 sheet:  miss 1 -> 6,  CLUT low 21/high 0 -> low 12/high 9, 0 mismatched
+
+Mutating the select to the low byte reproduces the old reading exactly and fails
+only the new check -- because the exact-colour check accepts either byte, so a
+byte-select regression scores zero mismatches and looks perfect. What catches it
+is requiring that both bytes were seen.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner
