@@ -1112,6 +1112,76 @@ constexpr int kGatherKeysBase = 30, kGatherKeysHash = 16;   // 60..90 frames
 constexpr int kHoldKeysBase = 32, kHoldKeysHash = 32;       // 64..128 frames
 constexpr int kKneadKeysBase = 30, kKneadKeysHash = 30;     // 60..120 frames
 constexpr int kReleaseKeys = 14;           // every clip's tail: amp eases to 0
+// ---- DIRECTION 7 §3: THE SHAPES ARE INTERMITTENT -------------------------
+// "We also want more shapes, and shapes should not be the standard look, they
+// should happen intermittently. Standard should still be the channel mana we
+// set out as with the enhancements we made."
+//
+// This SUPERSEDES Direction 4's "a loop of that going on all the time". The
+// fold is punctuation now, not a permanent state, which is also what makes it
+// affordable to spend more on each shape (§2's edge).
+//
+// The mechanism was already in the creature and nobody had used it: the mote
+// cloud's COHERENCE is derived from the antenna's own enclosed area, so when
+// the hands open the shape dissolves into the channel cloud by itself. All that
+// was missing was a segment in which the hands are open. DRIFT is that segment,
+// and it sits at the head of every cycle, so a clip also OPENS in the standard
+// look rather than mid-fold.
+constexpr int kDriftKeysBase = 44, kDriftKeysHash = 40;     // 88..168 frames
+// The hands do not go fully slack -- the antenna keeps its living sway and a
+// little grip, or the transition into a gather reads as a snap. This is the
+// amp floor the drift eases down to and back out of.
+constexpr int32_t kDriftAmpFloorPm = 150;
+
+// ---- DIRECTION 7 §2: THE SHAPE IS DRAWN AS AN EDGE -----------------------
+// "Mana menu with Edge drawn, not held looks incredible, that's mana being
+// folded." The owner picked the EDGE and explicitly did not pick the HOLD, and
+// his next sentence -- "shapes are clipping into the antennae" -- only makes
+// sense if the shapes sit at the antenna rather than parked in mid-air. So the
+// edge ships and the world-space hold does not.
+//
+// ⚠ RECORDED TENSION: the pass-6 lab found SEPARATION was what made a shape
+// nameable at all, and the pass-7 reviewer confirmed a held ring at true
+// native. The owner has looked at the real thing and prefers the edge at the
+// antennae, and his eye wins -- but that means THE EDGE MUST CARRY THE
+// LEGIBILITY ALONE. If a shape stops being nameable sitting on the creature,
+// that is to be said with plates, not fixed by quietly reintroducing the hold.
+//
+// The lab's own measurement, carried over: an outline stamped in the LIGHTNING
+// primitive put 366 near-white px on screen and dropped saturation to 108.9
+// against a control's 142.1, because bolt_stamp hard-codes a white core. A
+// white outline reads as a glitch; an aqua one reads as folded mana. So the
+// edge is stamped in the fold's own ramp, and its core carries the SOFT body
+// treatment pass 8 gave the motes rather than an additive white.
+constexpr int32_t kFoldEdgeCoreRPx = 3;
+constexpr int32_t kFoldEdgeHaloRPx = 8;
+constexpr int kFoldEdgeCoreGainPm = 430;
+constexpr int kFoldEdgeHaloGainPm = 220;   // pass 8: pulled back after looking -- the pocket was filling
+constexpr int32_t kFoldEdgeJitterMm = 24;
+constexpr int kFoldEdgeSegs = 4;           // stamps per station-to-station link
+// The edge only exists while the shape does. Below this coherence there is no
+// shape to outline and the outline would be a scribble over the cloud.
+constexpr int32_t kFoldEdgeCohMinPm = 620;
+// §2's "rotate the mana on all axis" and "shapes should look a bit malleable
+// like they're being knead". Slow and incommensurate on purpose -- two turns
+// whose periods do not divide into each other never line up into a tumble, and
+// a tumbling shape stops being nameable, which is the one property §2's own
+// recorded tension says the edge has to carry alone.
+constexpr int32_t kStencilRotXAmpA16 = 3600;   // ~20 deg
+constexpr int32_t kStencilRotZAmpA16 = 2600;   // ~14 deg
+constexpr int kStencilRotXFrames = 430;
+constexpr int kStencilRotZFrames = 310;
+// Malleability: how much the shape's proportion may change at FULL knead
+// agitation, and how fast it works. Anisotropic (one axis out, one in) so the
+// shape is squeezed rather than scaled.
+constexpr int32_t kStencilKneadAmpPm = 260;
+constexpr int kStencilKneadFrames = 52;
+// §2: "Shapes are clipping into the antennae a bit though so you have to
+// switch them about" -- MOVE THE SHAPES, NOT THE ANTENNAE. One declared offset
+// of the whole shape out of the antenna band's plane, so the clipping is
+// authored away rather than left accidental (the ground-contact law
+// generalised: undeclared intersection is the fault).
+constexpr int32_t kStencilClearXMm = 60, kStencilClearYMm = 40, kStencilClearZMm = 90;
                                            // so the loop seam carries no pop
 // the choreography amplitudes (angle16; "very mobile" -- authored large,
 // bounded by the 07 bands and the closure probe)

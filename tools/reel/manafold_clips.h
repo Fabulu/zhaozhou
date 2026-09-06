@@ -570,7 +570,13 @@ inline void whole_wobble(Rig& g, int f, int K, int amp_pm) {
 // shape order is hashed with next != current, and every clip's tail is a
 // RELEASE easing the layer to zero so the loop seam carries no pop.
 
-enum FoldSeg : uint8_t { kSegGather = 0, kSegHold, kSegKnead, kSegRelease };
+// DIRECTION 7 §3: kSegDrift is new and it is FIRST in every cycle. In it the
+// hands are open, the loop returns toward its rest area, and the mote cloud's
+// coherence -- which is derived from that area, in manafold_fx.h -- falls back
+// to the channel look on its own. That is the "standard" the owner asks for,
+// and the fold becomes punctuation between drifts rather than a permanent
+// state (Direction 4's "going on all the time" is superseded).
+enum FoldSeg : uint8_t { kSegDrift = 0, kSegGather, kSegHold, kSegKnead, kSegRelease };
 struct FoldPhase {
   FoldSeg seg;
   int32_t amp_pm;    // grip envelope 0..1000 (gather ramps, hold/knead hold)
@@ -603,6 +609,7 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
   uint32_t n = 0;
   for (;;) {
     const uint32_t h = fx_hash(0xF01D5EEDu + salt, n, 0x51u);
+    int32_t drift = (kDriftKeysBase + static_cast<int32_t>((h >> 4) % kDriftKeysHash)) * 16;
     int32_t gather = (kGatherKeysBase + static_cast<int32_t>(h % kGatherKeysHash)) * 16;
     int32_t hold = (kHoldKeysBase + static_cast<int32_t>((h >> 8) % kHoldKeysHash)) * 16;
     int32_t knead = (kKneadKeysBase + static_cast<int32_t>((h >> 16) % kKneadKeysHash)) * 16;
@@ -614,20 +621,27 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
     // cycle cannot fit, compress its three segments proportionally so
     // gather -> hold -> KNEAD -> release all land inside the clip. A clip
     // whose first cycle already fits takes the same durations as before.
-    if (n == 0 && release_at > 3 * 16 && gather + hold + knead > release_at) {
-      const int32_t cyc = gather + hold + knead;
+    // DIRECTION 7 §3: the drift joins the compression, and it is compressed
+    // HARDER than the rest -- a short clip that spent most of itself drifting
+    // would never show a shape at all, which trades one fault (the fold ran
+    // permanently) for its mirror image.
+    if (n == 0 && release_at > 4 * 16 && drift + gather + hold + knead > release_at) {
+      const int32_t cyc = drift + gather + hold + knead;
+      drift = drift * release_at / cyc / 2;
       gather = gather * release_at / cyc;
       hold = hold * release_at / cyc;
+      if (drift < 16) drift = 16;
       if (gather < 16) gather = 16;
       if (hold < 16) hold = 16;
-      knead = release_at - gather - hold;  // no rounding gap: the knead
-      if (knead < 16) knead = 16;          // hands straight to the release
+      knead = release_at - drift - gather - hold;  // no rounding gap: the knead
+      if (knead < 16) knead = 16;                  // hands straight to release
     }
     next_shape = static_cast<uint8_t>((h >> 24) % kFoldShapeCount);
     if (next_shape == shape)
       next_shape = static_cast<uint8_t>((next_shape + 1 + (h >> 28) % (kFoldShapeCount - 1)) %
                                         kFoldShapeCount);
-    const int32_t g_end = seg_start + gather, h_end = g_end + hold, k_end = h_end + knead;
+    const int32_t d_end = seg_start + drift;
+    const int32_t g_end = d_end + gather, h_end = g_end + hold, k_end = h_end + knead;
     ph.shape_from = shape;
     ph.shape_to = next_shape;
     if (kq4 >= release_at) {  // the tail: ease everything home
@@ -638,13 +652,33 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
       ph.morph_pm = 0;
       return ph;
     }
+    if (kq4 < d_end) {
+      // DIRECTION 7 §3: the DRIFT. The hands ease open to a floor and hold
+      // there; they do NOT go slack, or the next gather reads as a snap.
+      ph.seg = kSegDrift;
+      const int32_t t = (kq4 - seg_start) * 1000 / drift;
+      const int32_t ease_keys = 250;  // per-mille of the drift spent easing
+      int32_t e;
+      if (t < ease_keys) e = 1000 - fold_ease(t * 1000 / ease_keys);
+      else if (t > 1000 - ease_keys) e = fold_ease((1000 - t) * 1000 / ease_keys);
+      else e = 0;
+      // the clip's FIRST drift starts from zero, matching the release the loop
+      // seam left behind, exactly as the first gather used to
+      if (n == 0) e = 0;
+      ph.amp_pm = kDriftAmpFloorPm + (1000 - kDriftAmpFloorPm) * e / 1000;
+      ph.agit_pm = 0;
+      ph.morph_pm = 0;
+      ph.shape_to = shape;  // nothing is being formed: do not advertise a shape
+      return ph;
+    }
     if (kq4 < g_end) {
       ph.seg = kSegGather;
-      const int32_t t = (kq4 - seg_start) * 1000 / gather;
+      const int32_t t = (kq4 - d_end) * 1000 / gather;
       if (n == 0) {
-        // the clip's first gather rises from zero (matches the release the
-        // loop seam left behind -- no pop at the wrap)
-        ph.amp_pm = fold_ease(t);
+        // the clip's first gather rises from the drift's floor (DIRECTION 7
+        // §3; it used to rise from zero, which is now the drift's job)
+        ph.amp_pm = kDriftAmpFloorPm +
+                    (1000 - kDriftAmpFloorPm) * fold_ease(t) / 1000;
       } else {
         // between cycles the hands RELAX briefly (the dough is let go),
         // then re-gather -- continuous with the knead's amp=1000 on both

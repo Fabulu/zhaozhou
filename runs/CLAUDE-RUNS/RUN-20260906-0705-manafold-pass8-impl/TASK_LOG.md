@@ -233,3 +233,45 @@ Gates after: meshcheck CLEAN (2448 tris), closure sweep 989 pm and clip-bank
 loop_pose and compensates by construction), clearance holds, slot-13 declared
 contact -35 mm inside the -60..-5 band, 5d gate A 22 mm, gate B 837 pm.
 Bandprobe: halfX 50..125, ratio 250%.
+
+### Direction 7 §3 (shapes are intermittent) and §2 (edge-drawn). DONE, with §2's tension REPORTED not papered over.
+
+**§3 needed almost no new machinery, because the creature already had it and
+nobody had used it.** The mote cloud's COHERENCE is derived from the antenna's
+own enclosed area, so when the hands open the shape dissolves into the channel
+cloud by itself. The only thing missing was a segment in which the hands are
+open. `kSegDrift` is that segment, hashed 88..168 frames, at the HEAD of every
+cycle so a clip also OPENS in the standard look instead of mid-fold. Direction
+4's "a loop of that going on all the time" is superseded, as §3 says.
+The short-clip compression now includes the drift and compresses it HARDER than
+the other segments -- a short clip that spent itself drifting would never show a
+shape at all, which is the fault's mirror image.
+
+**§2, the edge.** Ported the lab's edge into the shipping fold: `fold_edge_link`
+(which links close for RING/TRIANGLE, run open for CRESCENT/S-CURL, skip the
+BAR's seam and stay within an arm for the STAR), stamped along `bolt_path` in
+the fold's OWN ramp with pass 8's soft body as its core -- never the lightning
+primitive's hard-coded white, which the lab measured putting 366 near-white px
+on screen and dropping saturation to 108.9. Lit only above
+`kFoldEdgeCohMinPm`: below that there is no shape to outline.
+**The world-space HOLD is deliberately NOT integrated**, per §2.
+
+Also §2: the fold now rotates the shape on **all three axes** (the authored
+facing yaw plus two slow incommensurate turns about X and Z), and the shape is
+**malleable** -- the stencil offset is scaled anisotropically by the knead
+agitation, so it changes PROPORTION under handling rather than size. And the
+clipping fix is positional as instructed: `kStencilClear{X,Y,Z}Mm` moves THE
+SHAPE out of the antenna band's plane, not the antenna.
+One `place()` lambda does all of it, shared by the outline and the motes, so
+they cannot disagree about where the shape is.
+
+⚠ **§2's recorded tension, reported rather than resolved:** on `channel` the
+pocket now reads as bright turquoise folded mana with a visible outline, and the
+mana clearly does something different at different times -- but **the shape is
+not yet nameable sitting on the antenna**. That is exactly what the direction
+said to say with plates rather than fix by quietly reintroducing the hold, and
+the hold has not been reintroduced. Plates: pG.png (four beats of channel),
+pH.png (the pocket at 7x).
+
+Gates after: meshcheck CLEAN, clearance holds, closure 1013 pm vs 1120,
+declared contact -35 mm in band, rule 1 OK, rule 2 890 pm, both 5d gates green.

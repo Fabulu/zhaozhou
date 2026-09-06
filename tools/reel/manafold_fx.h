@@ -675,6 +675,12 @@ inline void mana_bullets(uint32_t frame, const FxAnchors& A, uint8_t ramp,
 // pulls the whole mass across the gap a beat late -- the iron-filings read.
 
 constexpr int kStencilPts = 18;
+// Stencil ids, for readability: 0 RING, 1 STAR, 2 BAR, 3 CRESCENT,
+// 4 TRIANGLE, 5 S-CURL. Moved here from the lane-only lab header by pass 8,
+// because the shipping edge (Direction 7 §2) needs them and the shipping path
+// must not depend on a fork that ships nothing.
+constexpr uint8_t kShRing = 0, kShStar = 1, kShBar = 2, kShCrescent = 3,
+                  kShTriangle = 4, kShCurl = 5;
 
 // The six shape stencils, authored in pocket coordinates (u across the
 // hole, v up; per-mille of kStencilScaleMm). Chosen for legibility with
@@ -753,6 +759,31 @@ inline const StencilPt (&fold_stencils())[6][kStencilPts] {
  *  weights come back normalized Q12. Points are clamped toward the pocket
  *  centre until inside so every weight is non-negative -- the shape mass
  *  is bounded by construction (R8). */
+/** DIRECTION 7 S2: does the shape's outline run from station i to station
+ *  i+1 (mod 18)? RING and TRIANGLE close; CRESCENT and S-CURL are open arcs;
+ *  the BAR is two separate passes so its seam is skipped; the STAR is four
+ *  spokes, so segments run only WITHIN an arm. Ported verbatim from the
+ *  experimental reel's lab_edge_link, which is where the owner saw it.
+ *  Duplicated rather than shared because manafold_lab.h is a lane-only fork
+ *  that ships nothing, and the shipping path must not depend on it. */
+inline bool fold_edge_link(uint8_t shape, int i) {
+  switch (shape) {
+    case kShRing:
+    case kShTriangle:
+      return true;  // closed: 17 -> 0 included
+    case kShCrescent:
+    case kShCurl:
+      return i < kStencilPts - 1;  // open arc: no wrap
+    case kShBar:
+      return i < kStencilPts - 1 && i != (kStencilPts / 2) - 1;  // skip the seam
+    case kShStar:
+      if (i < 2) return false;
+      return ((i - 2) % 4) != 3 && i < kStencilPts - 1;
+    default:
+      return false;
+  }
+}
+
 inline void fold_mvc(int32_t pu, int32_t pv, uint16_t w[6]) {
   const int32_t cu = kStencilCentreUMm, cv = kStencilCentreVMm;
   for (int shrink = 0; shrink < 12; ++shrink) {
@@ -975,6 +1006,120 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
                  frame, static_cast<int>(ph.seg), ph.amp_pm, ph.agit_pm,
                  ph.morph_pm, ph.shape_from, ph.shape_to, area_pm, stfx.area_ema_pm, coh,
                  stfx.knead_smooth, agit);
+  // ---- DIRECTION 7 S2: the shape is PLACED, then DRAWN AS AN EDGE --------
+  //
+  // `place()` is the ONE place the stencil's offset from the pocket centre is
+  // rotated and kneaded, so the outline and the motes cannot disagree about
+  // where the shape is -- the same defect class as pass 5's star and its
+  // separately authored ring.
+  //
+  // ROTATE ON ALL AXES. Pass 7 had a single authored yaw (kStencilFaceYawA16)
+  // whose job is to face the shape at the house camera. The owner asks for the
+  // fold to "rotate the mana on all axis", so two slow, incommensurate turns
+  // about X and Z ride on top of that fixed yaw. The yaw itself stays fixed and
+  // authored: it is the thing that keeps the shape facing the camera at all.
+  //
+  // MALLEABLE. "the shapes should look a bit malleable like they're being
+  // knead" -- the stencil offset is scaled ANISOTROPICALLY by the knead
+  // agitation the antenna is already producing, one axis out and the other in,
+  // so the shape changes PROPORTION rather than size. A uniform scale would
+  // read as the shape moving toward the camera, not as being squeezed. Driven
+  // by `agit`, the same signal the mote jitter uses, so a shape only goes soft
+  // while the creature is actually kneading it.
+  const uint32_t rot_ph = frame;
+  const int32_t rx_a16 = static_cast<int32_t>(
+      (static_cast<int64_t>(kStencilRotXAmpA16) *
+       fx_sin16(rot_ph * 65536u / static_cast<uint32_t>(kStencilRotXFrames))) >> 16);
+  const int32_t rz_a16 = static_cast<int32_t>(
+      (static_cast<int64_t>(kStencilRotZAmpA16) *
+       fx_sin16(rot_ph * 65536u / static_cast<uint32_t>(kStencilRotZFrames) + 0x3000u)) >> 16);
+  const int32_t knead_pm = kStencilKneadAmpPm * agit / 1000;
+  const auto place = [&](int32_t P[3]) {
+    int32_t o[3] = {P[0] - A.ring[0], P[1] - A.ring[1], P[2] - A.ring[2]};
+    if (knead_pm != 0) {
+      const int32_t kq = static_cast<int32_t>(
+          (static_cast<int64_t>(knead_pm) *
+           fx_sin16(rot_ph * 65536u /
+                    static_cast<uint32_t>(kStencilKneadFrames))) >> 16);
+      o[0] = static_cast<int32_t>((static_cast<int64_t>(o[0]) * (1000 + kq)) / 1000);
+      o[1] = static_cast<int32_t>((static_cast<int64_t>(o[1]) * (1000 - kq)) / 1000);
+    }
+    const auto turn = [](int32_t& a, int32_t& b, int32_t ang) {
+      const int32_t sn = fx_sin16(static_cast<uint32_t>(ang));
+      const int32_t cs = fx_cos16(static_cast<uint32_t>(ang));
+      const int32_t na = static_cast<int32_t>(
+          ((static_cast<int64_t>(a) * cs) >> 16) - ((static_cast<int64_t>(b) * sn) >> 16));
+      const int32_t nb = static_cast<int32_t>(
+          ((static_cast<int64_t>(a) * sn) >> 16) + ((static_cast<int64_t>(b) * cs) >> 16));
+      a = na;
+      b = nb;
+    };
+    turn(o[0], o[2], kStencilFaceYawA16);  // Y: the authored facing
+    turn(o[1], o[2], rx_a16);              // X
+    turn(o[0], o[1], rz_a16);              // Z
+    // "Shapes are clipping into the antennae a bit though so you have to switch
+    // them about": MOVE THE SHAPES, NOT THE ANTENNAE. One declared offset of
+    // the whole shape, out of the antenna band's own plane.
+    P[0] = A.ring[0] + o[0] + fxu(kStencilClearXMm);
+    P[1] = A.ring[1] + o[1] + fxu(kStencilClearYMm);
+    P[2] = A.ring[2] + o[2] + fxu(kStencilClearZMm);
+  };
+
+  // THE EDGE. Drawn only while there IS a shape: below kFoldEdgeCohMinPm the
+  // cloud has dispersed into the standard channel look (S3's drift) and an
+  // outline over it would be a scribble rather than a shape.
+  if (coh >= kFoldEdgeCohMinPm) {
+    const int32_t lit = (coh - kFoldEdgeCohMinPm) * 1000 /
+                        (1000 - kFoldEdgeCohMinPm > 0 ? 1000 - kFoldEdgeCohMinPm : 1);
+    int32_t S[kStencilPts][3];
+    for (int i = 0; i < kStencilPts; ++i) {
+      const uint16_t* wf = fw.w[ph.shape_from][i];
+      const uint16_t* wt = fw.w[ph.shape_to][i];
+      for (int k = 0; k < 3; ++k) {
+        int64_t af = 0, at = 0;
+        for (int j = 0; j < 6; ++j) {
+          af += static_cast<int64_t>(wf[j]) * anchors[j][k];
+          at += static_cast<int64_t>(wt[j]) * anchors[j][k];
+        }
+        S[i][k] = lerp32(static_cast<int32_t>(af >> 12),
+                         static_cast<int32_t>(at >> 12), ph.morph_pm, 1000);
+      }
+      place(S[i]);
+    }
+    const uint32_t ph_e = frame / 3u;  // the outline BUZZES, it does not crawl
+    int32_t pts[kFoldEdgeSegs + 1][3];
+    for (int i = 0; i < kStencilPts; ++i) {
+      if (!fold_edge_link(ph.shape_to, i)) continue;
+      const int j = (i + 1) % kStencilPts;
+      bolt_path(S[i], S[j], kFoldEdgeSegs, ph_e, kBoltSeed ^ (0x5EDu * (i + 1)),
+                pts, kFoldEdgeJitterMm);
+      for (int sgi = 0; sgi < kFoldEdgeSegs; ++sgi) {
+        int64_t dx = (pts[sgi + 1][0] - pts[sgi][0]) >> 16;
+        int64_t dy = (pts[sgi + 1][1] - pts[sgi][1]) >> 16;
+        int64_t dz = (pts[sgi + 1][2] - pts[sgi][2]) >> 16;
+        const int64_t adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy,
+                      adz = dz < 0 ? -dz : dz;
+        int nst = static_cast<int>((adx + ady + adz) / kBoltStampMm);
+        if (nst < 1) nst = 1;
+        if (nst > 24) nst = 24;
+        for (int t = 0; t < nst; ++t) {
+          const int32_t x = lerp32(pts[sgi][0], pts[sgi + 1][0], t, nst);
+          const int32_t y = lerp32(pts[sgi][1], pts[sgi + 1][1], t, nst);
+          const int32_t z = lerp32(pts[sgi][2], pts[sgi + 1][2], t, nst);
+          mana_push(out, x, y, z, kFoldEdgeHaloRPx, ramp,
+                    kFoldEdgeHaloGainPm * lit / 1000, true, false);
+          // The core is pass 8's SOFT body, in the fold's own ramp. The lab
+          // measured that an outline stamped with the lightning primitive's
+          // hard-coded white core put 366 near-white px on screen and dropped
+          // saturation to 108.9 against a 142.1 control. A white outline reads
+          // as a glitch; an aqua one reads as mana that has been folded.
+          mana_push(out, x, y, z, kFoldEdgeCoreRPx, mana_core_ramp(ramp),
+                    1000, false, false, /*opaque=*/true, /*soft=*/true);
+        }
+      }
+    }
+  }
+
   // ---- the motes ---------------------------------------------------------
   int n_motes = kMoteCount * crowd_pm / 1000;
   if (n_motes < 6) n_motes = 6;
@@ -1029,19 +1174,10 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       mp = fold_ease(mp);
       int32_t Pst[3];
       for (int k = 0; k < 3; ++k) Pst[k] = lerp32(Pf[k], Pt[k], mp, 1000);
-      // the authored face yaw (kStencilFaceYawA16): rotate the stencil
-      // OFFSET about the vertical axis so the shape survives the house
-      // camera's foreshortening; the anchor sum itself is untouched
-      {
-        const int32_t sn = fx_sin16(static_cast<uint32_t>(kStencilFaceYawA16));
-        const int32_t cs = fx_cos16(static_cast<uint32_t>(kStencilFaceYawA16));
-        const int32_t ox = Pst[0] - A.ring[0];
-        const int32_t oz = Pst[2] - A.ring[2];
-        Pst[0] = A.ring[0] + static_cast<int32_t>(
-            ((static_cast<int64_t>(ox) * cs) >> 16) - ((static_cast<int64_t>(oz) * sn) >> 16));
-        Pst[2] = A.ring[2] + static_cast<int32_t>(
-            ((static_cast<int64_t>(ox) * sn) >> 16) + ((static_cast<int64_t>(oz) * cs) >> 16));
-      }
+      // DIRECTION 7 S2: the SAME placement the edge uses -- authored facing
+      // yaw, the two slow turns, the knead's malleability, the clearance
+      // offset. Shared so the outline and the motes cannot disagree.
+      place(Pst);
       // the cloud relax position: hashed offset + ONE slow consistent orbit
       // (R7: a single angular velocity per mote, long period, no doubling).
       // PASS 5 (the hover loop-seam, reviewer item 8): the hashed period is

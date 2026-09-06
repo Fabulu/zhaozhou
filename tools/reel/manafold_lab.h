@@ -160,10 +160,8 @@ struct LabVariant {
   uint8_t ramp;
 };
 
-// Stencil ids, for readability: 0 RING, 1 STAR, 2 BAR, 3 CRESCENT,
-// 4 TRIANGLE, 5 S-CURL.
-constexpr uint8_t kShRing = 0, kShStar = 1, kShBar = 2, kShCrescent = 3,
-                  kShTriangle = 4, kShCurl = 5;
+// Stencil ids now live in manafold_fx.h (pass 8: the shipping edge needs them).
+// This fork uses them from there.
 
 // The four most distinct silhouettes, in the order they read best.
 #define LAB_SHAPES_4 4, {kShRing, kShTriangle, kShBar, kShCrescent}
