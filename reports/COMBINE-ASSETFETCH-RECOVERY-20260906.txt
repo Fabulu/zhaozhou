@@ -15,6 +15,15 @@ Suggested durable repository location:
 Index this in DOCKET.md as the COMBINE/asset-fetch specialization of the existing
 texture recovery V2, not as a replacement for unrelated terrain/Field contracts.
 
+POST-REVIEW ERRATUM -- MESHFETCH DESCRIPTOR WIDTH (6 September 2026)
+---------------------------------------------------------------------
+Section 12.3 incorrectly called GEOM.MESHFETCH a 32-byte/four-word requester.
+The frozen contract and RTL are both 64 bytes/eight packed words: bytes 32..35
+carry generation and mesh identity, bytes 36..59 are the reserved-zero fence,
+and bytes 60..63 carry the CRC. The shared adapter remains length-generic and a
+synthetic 32-byte request is useful count/drain coverage, but it is not the
+production descriptor ABI. The corrected section is retained below in place.
+
 STATUS
 ------
 This is a source-grounded implementation brief, not fitted replacement RTL.
@@ -876,26 +885,25 @@ A guard OK is not returned data. An arbiter grant is not a completed line.
 The adapter retains the logical owner through the full return or explicit
 drain/fault. Its selected request remains stable while the guard is blocked.
 
-12.3 Two burst scales, not one
-------------------------------
-Geometry requests use BYTES:
-  ASSETFETCH: 64 bytes -> eight packed 64-bit words;
-  MESHFETCH: 32 bytes -> four packed 64-bit words.
+12.3 The frozen production requests are both 64 bytes
+------------------------------------------------------
+Geometry request lengths are BYTES:
+  ASSETFETCH line:       64 bytes -> eight packed 64-bit words;
+  MESHFETCH descriptor: 64 bytes -> eight packed 64-bit words.
 
 Physical SDRAM req.len uses 16-bit WORDS, up to eight per physical burst:
   one full physical burst = 16 bytes;
-  one 64-byte logical line = four full physical bursts;
-  one 32-byte descriptor = two physical bursts.
+  one 64-byte logical request = four full physical bursts.
 
 The arbiter performs this splitting and may interleave other clients between
 bursts. Do not release a geometry owner after the first physical credit return.
 Do not count SCANOUT words as part of the pending geometry line. [R10,R11]
 
-Keep MESHFETCH's existing 32-byte checked footprint. Do not normalize it to
-an unchecked 64-byte read just to simplify the adapter. Store expected return
-count so both lengths work. Any existing geometry beat/last generator assuming
-eight words must be generalized and tested for four/eight, not bypassed by
-fetching a neighboring descriptor.
+Keep MESHFETCH's frozen 64-byte footprint. A 32-byte read would omit required
+schema and CRC bytes rather than safely compacting the descriptor. The adapter
+should still derive expected return count from the accepted request's own
+length; its four-word synthetic fixture proves that generic mechanism, while
+MESHFETCH's leaf gate separately proves its real request remains eight words.
 
 12.4 Physical owner versus logical owner
 ----------------------------------------

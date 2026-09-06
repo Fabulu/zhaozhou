@@ -3373,6 +3373,17 @@ A separately built mutation which writes retained words at the old raw-line
 offset while keeping compact readers fails **30 of 152** exact-byte checks, so
 the compaction detector is nonvacuous.
 
+**MESHFETCH descriptor-width correction, 2026-09-06, `fa5eabd8`.** The recovery
+brief §12.3 and the adapter's first four/eight-word fixture called requester A's
+32-byte synthetic request a descriptor. That contradicts the frozen ABI and the
+built leaf: a descriptor is **64 bytes/eight words**, with required generation,
+mesh-id, reserved-zero and CRC fields in bytes 32..63. The adapter remains
+length-generic and may keep a four-word count/drain probe, but production
+MESHFETCH must not use it. Its RTL header and contract now state the current
+asset-pool/ENGINE1 route, and its leaf gate samples the emitted request length
+directly. Fixed RTL passes **8 checks**; mutating only `guard_req_o.len` from 64
+to 32 fails exactly the new width check (**1 of 8**, exit 1).
+
 ## D19w — the guard-verdict mistake was in THREE clients, and the third fails the other way
 
 **2026-09-06.** D22 tread 10 found both geometry fetchers testing

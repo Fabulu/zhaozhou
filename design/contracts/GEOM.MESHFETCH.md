@@ -1,6 +1,7 @@
 # Contract — GEOM.MESHFETCH (Meshlet fetch and cull)
 
-> Ledger: `design/blocks.yml` · owner ZH-037 · phase 8 · maturity SPECIFIED
+> Ledger: `design/blocks.yml` · owner ZH-037 · phase 8 · maturity REFERENCE_COMPLETE
+> RTL: **`fpga/rtl/geometry/zhao_geom_meshfetch.sv`**
 
 ## Purpose and exclusions
 
@@ -100,12 +101,18 @@ machine, at a clean worktree, on the commit each row names.
 next candidate for the same lever: four multipliers on a path that already takes
 10 cycles for a per-instance rate.
 
-The **descriptor fetch** is still not built, and it is the reason this block
-stays SPECIFIED: `zref::MeshFetch` resolves to nothing and the meshlet schema is
-unfrozen. Nothing was invented to fill that gap. Three integration questions the
-cull cannot answer for itself — which space `bound_centre` arrives in and how a
-model transform scales the radius, the descriptor format, and who drives the
-active-camera mask — are on `docs/OWNER_DOCKET.md`.
+The **descriptor-fetch third is built** in
+`fpga/rtl/geometry/zhao_geom_meshfetch.sv`. It captures ingress at job
+acceptance, requests the frozen 64-byte descriptor, stores eight 64-bit words,
+validates in the oracle's refusal order, transforms the local bound, and drives
+the existing cull service. Its leaf directed gate is
+`tests/geometry/geom_meshfetch_rtl_directed.cpp`; the formal refusal property is
+`tests/formal/geom_meshfetch_refuse.sby`.
+
+The remaining production work is composition, not inventing a schema or an
+asset region: `spec/memory_rules.md` §5f allocates `GEOM.ASSET_POOL`, and
+MESHFETCH shares its single permitted ENGINE1 physical client with ASSETFETCH
+through `zhao_geom_mem_adapter`.
 
 ## Clock and reset semantics
 Single `gpu_clk` domain, synchronous active-low `rst_n`, like every other
@@ -126,6 +133,17 @@ cull, which is the safe direction (nothing is rejected).
 
 64 bytes, 64-byte aligned, so one descriptor is exactly one aligned burst and
 never straddles a row.
+
+**This is eight packed 64-bit words, not four.** A later recovery brief and the
+first logical-owner-adapter fixture called MESHFETCH a 32-byte requester, but
+that shorthand contradicts this frozen layout: bytes 32..35 carry generation
+and mesh identity, bytes 36..59 are the reserved-zero compatibility fence, and
+bytes 60..63 carry the CRC. The adapter may remain length-generic, but production
+MESHFETCH must request all 64 bytes. The RTL's emitted `len` is checked directly
+rather than inferred from the eight beats supplied by its bench.
+
+ENFORCED-BY: `tests/geometry/geom_meshfetch_rtl_directed.cpp` (descriptor request
+length)
 
 | off | size | field | notes |
 |---|---|---|---|
@@ -267,13 +285,14 @@ and is already proved.
 
 ## Latency (fixed or variable)
 
-Variable, and only two of the block's three thirds can answer yet.
+Variable. The service latencies are fixed once accepted; the descriptor path
+also waits on shared memory and downstream result backpressure.
 
 | third | latency | measured by |
 | --- | --- | --- |
 | LOD ladder (`zhao_geom_lod`) | **fixed, 5 clocks** from the accepting edge to the `valid_o` pulse; one evaluation in flight at a time (`ready_o` low meanwhile) | asserted on every evaluation in `tests/differential/geom_lod_directed.cpp` |
 | cull (`zhao_geom_cull`) | 185 cycles per camera on a matrix write; **10 cycles** on the per-instance path | `tests/differential/geom_cull_directed.cpp` |
-| descriptor fetch | UNKNOWN — unbuilt, and it is a memory path, so its latency is MEM.GUARD's before it is this block's | — |
+| descriptor fetch (`zhao_geom_meshfetch`) | variable MEM.GUARD wait + exactly eight accepted data beats; once the final beat lands, ten sequenced bound-transform clocks precede the cull request | `tests/geometry/geom_meshfetch_rtl_directed.cpp` |
 
 The LOD ladder's five is a DESIGN CHOICE, not a limit: it sequences five
 products through one multiplier and cost 12 of 18 DSPs to do so. If a future
@@ -368,22 +387,18 @@ The cases that matter are the boundaries, not the happy path:
   the rounding direction;
 * `bound_radius == 0`: refused, because a zero bound silently culls everything.
 
-## Randomized differential tests
-`tests/geometry/geom_meshfetch_random.cpp`, RTL against `zref::meshfetch`.
+## Randomized reference-invariant tests
+`tests/geometry/geom_meshfetch_random.cpp` exercises five oracle invariants over
+20,000 iterations each on a named seed, biased toward count limits, plane
+boundaries, scale edges and corrupt descriptors. It is deliberately not called
+an RTL differential: it can find a rule that fails on the ninth descriptor, but
+cannot expose an oracle and RTL that are confidently wrong in the same way.
 
-Random descriptors, instances and camera sets, with the generator biased toward
-the boundary rather than uniform: counts at 63/64/65 and 125/126/127, spheres
-straddling a plane, scales near 1.0 and far from it, and a meaningful fraction
-of deliberately corrupt descriptors.
+Mutation evidence: widening the CRC window from 60 to 64 bytes refuses every
+otherwise-legal descriptor and fails two of the five properties.
 
-**A random test that never produces a refusal is testing one code path.** The
-generator must report its own refusal mix so a change that accidentally makes
-corruption unreachable is visible as a shift in that mix rather than as silent
-loss of coverage.
-
-Mutation sweep expected, matching the standard the other two thirds already
-meet: `zhao_geom_lod` 26 attempted / 25 caught / 1 equivalent proved,
-`zhao_geom_cull` 32 / 30 / 2 proved.
+A true randomized RTL differential remains future evidence for a higher
+maturity state; this contract does not silently relabel the oracle-only sweep.
 
 ## Formal properties
 `tests/formal/geom_meshfetch_refuse.sby`:
@@ -407,7 +422,7 @@ Measured, per third, on this machine at a clean worktree:
 |---|---|---|---|
 | `zhao_geom_lod` | 1,183 | 6 | at `09bbe05`, after sequencing five products through one multiplier (was 1,303 / 18) |
 | `zhao_geom_cull` | 1,102 | 15 | the obvious next candidate for the same lever — four multipliers on a path that already takes 10 cycles |
-| descriptor fetch | — | — | unbuilt |
+| descriptor fetch (`zhao_geom_meshfetch`) | — | — | RTL and leaf proof exist; no independent source-matched block fit is claimed here |
 
 **Ceiling for the composed block: 3,000 ALMs and 24 DSPs.** That is the two
 measured thirds plus room for a fetch state machine, and it is a budget to be
@@ -433,50 +448,18 @@ regress.*
 
 ## Notes
 
-Meshlet limits are Phase-0 data (P2 risk 1) — schema fields stay unfrozen.
+Meshlet limits and the 64-byte descriptor layout are frozen owner rulings; a
+future descriptor format must use a new `format_id`, never reinterpret these
+bytes.
 
-## REFERENCE_COMPLETE is blocked, and the blocker is in this file
+## Historical maturity blocker — superseded
 
-**2026-09-04.** `zref::MeshFetch` now exists
-(`reference/include/zref/zref_meshfetch.hpp`) with 19 directed checks passing,
-so the reference model is written. The ledger row is nevertheless still
-`SPECIFIED`, and the attempt to advance it is what found the reason.
+On 2026-09-04, the ledger could not advance because this contract cited a
+randomized RTL differential and a formal harness that did not yet exist. The
+oracle-only randomized invariants landed first; the descriptor RTL, leaf
+directed test and `tests/formal/geom_meshfetch_refuse.sby` then made those old
+"unbuilt" statements false. The ledger now records REFERENCE_COMPLETE.
 
-The ledger's V17 rule rejected the advance for **two citations in this
-contract that name files nobody wrote**:
-
-* `tests/geometry/geom_meshfetch_random.cpp` — §"Randomized differential
-  tests", described as *"RTL against `zref::meshfetch`"*;
-* `tests/formal/geom_meshfetch_refuse.sby` — §"Formal properties".
-
-Both were written when this block was SPECIFIED, when V17 does not run. Neither
-is a mistake in intent: **both genuinely require the RTL**, because a
-*differential* needs two implementations and a formal property needs a module
-to bind to. There is nothing to write them against yet.
-
-**So the ladder as configured cannot mark this reference model complete until
-its RTL exists**, which is worth stating plainly rather than working around.
-The options, none of them taken here:
-
-1. ~~Write the randomized test against the ORACLE ALONE~~ — **DONE**,
-   `tests/geometry/geom_meshfetch_random.cpp`, 5 properties over 20,000
-   iterations each on a named seed. It fuzzes invariants rather than differing
-   two implementations, and says so in its own header: it cannot catch an
-   oracle confidently wrong the same way everywhere, but it catches the class a
-   directed test structurally cannot — a rule that holds on the eight
-   descriptors someone thought of and fails on the ninth.
-
-   Mutation tested: widening the CRC window from 60 to 64 bytes — which would
-   make the CRC cover itself and never match — fails 2 of the 5 properties with
-   all 20,000 legal descriptors refused.
-
-   **Only the `.sby` remains**, and it needs a module to bind to.
-2. Let the contract mark RTL-era artifacts as planned in a form V17 can tell
-   apart from a claim. That is a change to the rule, not to this block.
-3. Leave it `SPECIFIED` until the RTL lands, which is what is done for now —
-   the oracle's value does not depend on the row, and forcing the row would
-   have meant editing a contract to satisfy a grep.
-
-**The oracle is committed and tested regardless**; only the maturity label is
-waiting. That distinction is the whole point of recording it here instead of
-advancing the row and leaving two dead citations behind it.
+No higher maturity is claimed by this descriptor-width correction. Advancing it
+must use the repository's normal evidence gate rather than treating the
+existence of files as proof of every required state.

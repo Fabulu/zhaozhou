@@ -1077,6 +1077,28 @@ compaction. Both variants were verilated and statically linked directly under
 named ``build/focused-assetfetch-compact`` directories, one job at a time; no
 broad CMake regeneration was used or claimed.
 
+## MESHFETCH descriptor width: frozen 64 bytes, not the brief's 32
+
+The recovery brief §12.3 and the shared-adapter fixture disagreed with the
+already-frozen source contract: ``zhao_geom_meshfetch`` stores eight words,
+requests ``len = 64``, and uses bytes 32..63 for generation, mesh identity,
+reserved-zero enforcement and CRC. A 32-byte request is therefore not a smaller
+legal descriptor; it silently omits required fields. The adapter remains
+length-generic, so its four-word case is retained as a synthetic count/drain
+probe rather than a production ABI claim.
+
+``fa5eabd8`` added a direct leaf assertion over the emitted packed guard request,
+not merely the eight beats the harness happened to supply, and refreshed the
+stale source header. Focused direct Verilator/static-MinGW evidence:
+
+    fixed RTL        [geom_meshfetch_rtl_directed] 8 checks passed
+    len 64 -> 32     [geom_meshfetch_rtl_directed] 1/8 checks FAILED
+                     MUTATION_EXIT=1
+
+The mutation changed only ``guard_req_o.len``; all seven older checks remained
+green, so the new check is the discriminator. The contract and received brief
+now carry the correction. No active texture-island fit source was touched.
+
 ## 2026-09-06 — WHERE I AM, written BEFORE the fit result is read
 
 Composed island fit alive: pid 10768, ~2,996 s CPU, started 11:16:57. Watchdog
