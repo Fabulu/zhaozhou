@@ -100,6 +100,30 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# -RowLabel IS CONCATENATED WITH NO SEPARATOR, so it has to bring its own.
+#
+# The row name is built as "$mod$RowLabel" (see the per-row provenance block
+# below). That is deliberate -- it is what lets a label be `-d64` or `@v3-before`
+# or `-2974-superseded` -- but it means a label without a leading separator
+# GLUES: MEASURED 2026-09-06, `-RowLabel v3-full` on zhao_raster_rcp24_v3 wrote
+# `zhao_raster_rcp24_v3v3-full`, which reads as a different module entirely and
+# would have sat in the merged report orphaned from the `@v3-before`,
+# `@v3-after2` and `@v3-nctx8` rows it exists to be compared against. It was
+# caught by eye three minutes in; had it been caught after the fit, it would have
+# cost the whole run, because the row name is baked into the digest file and the
+# report at write time.
+#
+# Every RowLabel ever used in this tree already starts with `@` or `-`, so this
+# refuses nothing that has ever legitimately run. It fails HERE, in preflight,
+# rather than after the fitter has spent hours -- the same reason the missing
+# -ExtraSources check refuses early rather than reporting 'failed:quartus_map'.
+if ($RowLabel -and $RowLabel[0] -notmatch '[@\-_.]') {
+    throw ("-RowLabel '" + $RowLabel + "' does not start with a separator. The row " +
+           "name is `$mod`$RowLabel with nothing between them, so this would be " +
+           "written as a glued name and merge into the report as a module nobody " +
+           "recognises. Use '@" + $RowLabel + "' or '-" + $RowLabel + "'.")
+}
+
 # Per-block capacity characterization against a provisional device.
 #
 # WHY THIS EXISTS rather than run_shell_fit.ps1 with a different top: the
