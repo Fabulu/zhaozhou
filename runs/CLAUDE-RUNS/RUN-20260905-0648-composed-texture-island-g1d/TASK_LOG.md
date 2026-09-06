@@ -881,6 +881,78 @@ black one; and four F-stage locals inferred latches.
 
 ## And GEOM.MEM.ADAPTER is fitting
 
+## The pre-fit addendum arrived, and it is right about all of it
+
+Owner direction: check everything in detail before the next fit and deliver a
+rearchitect brief. Five agents verified the addendum's findings against the
+source in parallel; the brief is
+``reports/ZHAOZHOU-PREFIT-VERIFICATION-AND-REARCHITECT-20260906.txt``, 613
+lines, with a copy at the zencrifice root for handover.
+
+**Every claim checked holds. Three are WORSE than stated, two are new, and one
+of mine was wrong.**
+
+### The V2 draft's five blockers -- all real, all fixed
+
+The sharpest was mine and recent: ``w_v <= m_v`` registered validity one edge
+later than the ``m_ctx`` / ``m_ph`` / result it gated, so the write enable
+belonged to the PREVIOUS transaction. Gone; F is combinational from the stable M
+registers and the write plus its enqueue happen on ``m_v`` at one edge.
+
+Also: the "synchronous" reads were asynchronous wires with the writes inside an
+asynchronous-reset block -- the shape that stops arrays inferring, which this
+island has now demonstrated twice. Four clock-only reset-free memory processes
+and a real alignment stage. The product-job counter counted admitted FRAGMENTS
+(one for a bypass costing zero, one for a DETAIL_LIGHT costing six). Phase zero
+inherited the previous occupant's saturation flag. And a sixth the addendum did
+not list: the context was released when DONE was popped rather than when the
+output was accepted.
+
+### W7 closed: the differential passes, and the phase count is exact
+
+    [material_combine_v2_diff] 27 checks passed
+    phases issued 560, the schedule owes 560, over 320 fragments
+
+**The phase count is the new evidence.** V1 issued every microjob about twice
+while every colour stayed exact, because recomputing a product is idempotent --
+a result check cannot see a schedule. Mutating DETAIL_LIGHT from three phases to
+two fails on four independent axes: product jobs 800 against 1,200, the phase
+count 520 against 560, DETAIL_LIGHT no longer the most expensive recipe, and
+twelve corrupted colours.
+
+### The three that are worse than the addendum says
+
+**AUX context is not a window.** ``aux_ready_i`` is tied high through the
+island, so the mismatched tuple is the ONLY cycle every request gets: every AUX
+sheet lookup uses the previous fragment's world X/Z under the current fragment's
+identity. The differential records the slot and generation and never compares
+the context -- the one observable that would fail.
+
+**The cache's lost result is LIVE.** Its header says "Nothing instantiates this
+yet"; it is in the island and the production top with real backpressure. The
+owner's sequence reproduced from source: accepted 0-7, returned 0,1,2,3,6,7. It
+does not deadlock -- it returns correct-looking data under a mismatched tag.
+
+**The bilinear test's other three taps are never fetched.** With
+``acc_en = 0001`` lanes 1-3 are never needed, filled or written, yet the
+response copies all four. ``disp_bil_data[63:16]`` is uninitialised RAM that
+only ``fu=fv=0`` discards, and the test's own comment claiming the four texels
+are identical is false.
+
+### And the severity multiplier
+
+FRAGROB retires in ALLOCATION ORDER with no timeout, so any ONE lost sample
+stalls the entire island rather than one fragment. That turns every hole in the
+sample paths from a wrong pixel into a dead island, and is why typed sample
+completions became a fit blocker.
+
+### What I got wrong
+
+My RAM diagnosis over-generalised. ``rob_m[seq_head_r]``'s three output slices
+read the SAME word, so "read from several places" was wrong about several
+arrays. What survives is the inventory fact, not the mechanism I attached to it
+-- and PERSPUV had already taught me that exact lesson once, in this same run.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner
