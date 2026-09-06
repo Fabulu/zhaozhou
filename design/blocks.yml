@@ -4260,12 +4260,39 @@ blocks:
     backpressure: none
     latency: variable
     target_throughput: deadline-driven
+    reference_model: zref::island::Streamer
+    tests:
+      directed: tests/terrain/island_stream_directed.cpp
     maturity: SPECIFIED
     maturity_log: []
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: leaf.
+    notes: >-
+      leaf.
+
+      REFERENCE MODEL REGISTERED 2026-09-06, AND THE MATURITY DELIBERATELY LEFT
+      AT SPECIFIED. `zref::island::Streamer` models terrain-island PAGE
+      streaming only -- a view produces publish / evict / return decisions
+      against `zref::residency::Arena`, measured over 80 frames crossing an
+      8 km island and coming home: 1,485 published, 1,404 evicted, 702
+      RETURNED, 0 refused, peak 81 of 256 pages. Eviction and RETURN are the
+      part that matters; a first frame under no pressure proves nothing.
+
+      That is not this block's whole purpose, which is asset streaming and
+      preparation generally, so the maturity does not move. It is registered
+      so the next person finds it instead of writing a third model.
+
+      AND THE CROSS-REFERENCE IS THE POINT. Its first version keyed pages on
+      patch coordinates alone, which is precisely the shape TERRAIN.RESIDENCY's
+      entry already records as superseded -- "two islands may legally overlap
+      in local patch coordinates". A second residency model written without
+      reading the first one's canonical key
+      ({resource_epoch, island_id, patch_ix, patch_iz}) reintroduced a defect
+      that had already been found once. The key now carries the island id, and
+      the collision is a directed check, because the failure is invisible to
+      every streaming figure -- the counts were byte-identical with the id
+      dropped.
 
   - id: SW.ZREF
     name: ZRef scalar oracle library
