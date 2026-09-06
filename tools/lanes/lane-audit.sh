@@ -19,6 +19,18 @@
 #   NOT-ON-ANY-REMOTE  HEAD is on no remote branch -- work exists in one place
 #   UNPUSHED:n         n commits reachable from no remote ref
 #   DIRTY:n            uncommitted tracked changes (ignores .wrangler, stackdumps)
+#   SIZE               how much disk the lane holds
+#
+# SIZE is reported because on 2026-09-06 this project filled a 952 GB disk to
+# ZERO while a render was running. Twenty-four finished agent lanes were still
+# on disk, each a full clone with its own build tree and rendered frames.
+# Reclaiming them freed 217 GB. An audit that finds orphaned commits but says
+# nothing about size lets the same lanes kill the machine instead.
+#
+# ⚠ AND `git clean -fd` DOES NOT REACH RENDER FRAMES. They are gitignored, so
+# only `git clean -fdX` removes them. In the coordinator's own lane the
+# committed evidence was 0.2 GB and the ignored working frames were 16.6 GB --
+# eighty times larger, and invisible to the usual clean.
 #
 # It only READS. Nothing is pushed, merged or deleted -- preserving orphaned
 # work is a judgement call (an archive/ branch is usually right; merging
