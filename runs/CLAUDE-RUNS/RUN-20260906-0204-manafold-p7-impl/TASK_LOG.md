@@ -218,3 +218,19 @@ kEyeXMm = 381 mm. That cannot be right, and it is the same FRAME class of bug
 fixed twice in manafold_probe.cpp this pass (bind space vs bone space; root
 translation). Its stray COUNT is still usable -- that only needs the index
 lists -- but do not trust its positions until the frame is checked.
+
+### Merged: the mana/fog lane and the antenna lane
+* `origin/manafold-pass7-antenna` (§2a fixed-camera diagnostic + hinge
+  trajectory tooling) and `origin/manafold-pass7-mana` (`kFogThicknessPm`,
+  `kMoteCoreOfHaloPm`, `kBoltHaloRPx`, `kU02SmearTravellingRung`) both merged
+  into `manafold-pass7`. Tree builds clean; all gates unchanged and green.
+* **The fog is now visibly gas.** evidence/pass6-vs-pass7-rest.png, three
+  frames of manafold-rest at native on the shipping rig: pass 6 is bare
+  sparkle dots on flat ground, pass 7 has chunky glitchy haze around the
+  cluster and trailing off the loop, with the neck still readable through it.
+  Direction 5 section 3's "very visible... still see through" reads as met.
+* Mana saturation is a PARTIAL win and is reported as such by that lane:
+  channel 8.3% -> 7.9% hue-neutral among bright mana pixels, mean saturation
+  roughly flat. The white point-highlights are the opaque corona hearts
+  sampling each ramp's HI end by construction; what actually improved the
+  white-steam READ is the fog adding a large teal area around them.
