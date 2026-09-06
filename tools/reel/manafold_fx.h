@@ -97,6 +97,43 @@ constexpr uint8_t kManaCyanMid[3] = {24, 138, 148};
 constexpr uint8_t kManaCyanHi[3] = {160, 245, 250};
 constexpr uint8_t kManaAquaMid[3] = {28, 190, 172};
 constexpr uint8_t kManaAquaHi[3] = {175, 255, 236};
+// PASS 8 (pass-7 by-eye fault 2: "the mote cores are still white steam").
+// THE MEASURED FACT: restricted to the pixels the effect actually dominates,
+// the motes were 48.7% hue-neutral at mean RGB (215,229,236). THE MECHANISM,
+// traced through the code rather than guessed: each mote is an OPAQUE heart
+// under an ADDITIVE halo. The opaque heart WRITES f.pal[t] -- and at a corona
+// sprite's centre t is at the ramp's top, so the heart writes kManaAquaHi
+// (175,255,236), which is already only 31% saturated. The halo then adds
+// kManaAquaHi * kMoteHaloGainPm/1000 = (59,86,80) ON TOP of it, and
+// (234,255,255) is white. The number and the code agree exactly, which is the
+// corroboration 09-ENGINE-GOTCHAS §16 asks for before acting on a measurement.
+//
+// The fix is NOT a gain (the lab is explicit: kMoteHaloGainPm never moves, and
+// the ceiling is reached by OVERLAP, not by count). It is that an opaque body
+// and an additive fringe want DIFFERENT ends of the ramp, and pass 7 gave them
+// the same one. The heart gets its own ramp, deliberately dark and saturated,
+// authored so that AFTER the halo's known (59,86,80) add it lands near
+// (85,255,236) -- about 67% saturation instead of 8%. The halo keeps
+// kManaAquaHi: an additive fringe SHOULD reach for white at its centre, that
+// is what makes it read as glow.
+// Authored by eye at native, twice. The first values (10,120,100)/(26,186,156)
+// were chosen from the arithmetic alone -- dark enough that the halo's known
+// add would land on a saturated result -- and rendering them showed hard dark
+// green specks under white blobs, which is worse than what it replaced. That is
+// the art law: the arithmetic was right about the sum and wrong about the READ.
+// These are bright enough to be a glowing body in their own right and still
+// 65% saturated, and the halo is now drawn UNDER them.
+// Third authoring pass, and the last two both failed for the same reason: the
+// ramp's LOWER HALF is what most of an opaque disc is made of. A ramp that runs
+// from black gives a disc whose interior is nearly black, so the mote read as a
+// dark green pea inside a white glow. This ramp does NOT start at black -- LO
+// and MID are the same bright aqua, so the body is flat and bright across its
+// whole face and only brightens toward the middle. It is the one place on this
+// creature where a ramp SHOULD have a floor: 09-ENGINE-GOTCHAS §11's rule
+// ("the property that makes a blob look edgeless is the ramp reaching black at
+// its bottom") is about SOFT blobs, and this one is deliberately a body.
+constexpr uint8_t kManaAquaCoreMid[3] = {70, 215, 190};
+constexpr uint8_t kManaAquaCoreHi[3] = {120, 250, 228};
 constexpr uint8_t kManaSeaGreenMid[3] = {26, 158, 92};
 constexpr uint8_t kManaSeaGreenHi[3] = {150, 240, 180};
 constexpr uint8_t kManaDeepBlueMid[3] = {28, 62, 195};
@@ -116,8 +153,19 @@ enum ManaRamp : uint8_t {
   kRampAqua,      // pass 3: the owner's aquamarine lead
   kRampSeaGreen,  // pass 3: the "try greens" ask
   kRampDeepBlue,  // pass 3: the filled deep blue
+  kRampAquaCore,  // pass 8: the mote HEART -- opaque, dark, saturated
   kRampCount
 };
+/** PASS 8: which ramp an OPAQUE heart should write, given the ramp its
+ *  additive halo uses. Identity for every family that has not been given a
+ *  core of its own, so adding one later is a one-line change and nothing
+ *  else moves. Named as a function rather than inlined at the call site so
+ *  the mapping is greppable and so the mote path and any future opaque body
+ *  cannot drift apart. */
+inline uint8_t mana_core_ramp(uint8_t halo_ramp) {
+  return halo_ramp == kRampAqua ? static_cast<uint8_t>(kRampAquaCore) : halo_ramp;
+}
+
 
 // ---- the candidate knobs --------------------------------------------------
 constexpr int32_t kPulsarCorePx = 13;      // inside the ~10-15 px ring pocket
@@ -242,6 +290,34 @@ constexpr int kSmearFeedPm = 520;
 // hue with an opacity that follows its remaining brightness — fresh cells
 // are near-solid saturated blobs, decayed cells thin out and dissolve.
 constexpr int kSmearAlphaMaxPm = 780;
+// PASS 8 (pass-7 by-eye fault 3: "the smear takes its colour from what is
+// behind it" -- glorious aqua on the night clips, flat khaki-grey blocks on the
+// daylight ones, one plane producing the pass's best AND worst pixels purely as
+// a function of the sky). The mechanism is the composite below: it LERPS the
+// cell over the frame at alpha `a`, so at any alpha under about half the result
+// is mostly background, and a saturated aqua lerped 25% over a peach sky is a
+// slightly-cool peach -- which is exactly what "dirt or compression blocks"
+// describes.
+//
+// The fix is a CHROMA FLOOR, not more alpha. More alpha would widen the read of
+// an already-too-wide cloud (fault 7, the traverse framing) and the lab's
+// stopping rule is that the mana must not start deleting the creature. Instead
+// the cell's own colour DIFFERENCE FROM ITS GREY is added after the blend: for
+// an aqua cell that lifts G and B and PULLS R DOWN, which no lerp can do, so
+// the block tilts teal against a warm sky at unchanged brightness and unchanged
+// coverage. It needs no extra decay handling: a decaying cell's stored colour
+// shrinks toward zero, so its chroma shrinks with it by construction.
+//
+// 0 restores pass 7 exactly, which is the point of it being a knob.
+constexpr int kSmearChromaFloorPm = 600;
+constexpr int kSmearVividPm = 1500;
+// PASS 8: the composite's "keep the cell vivid" step was `c[k] * 3 / 2` with a
+// per-channel clamp at 255, and 09-ENGINE-GOTCHAS §9 is exactly about comments
+// like that one. A cell at (142,208,192) becomes (213,255,255) -- the two high
+// channels clip, the low one does not, and the hue the feed went to such trouble
+// to preserve is destroyed AT THE LAST STEP. The scale is now reduced when it
+// would clip, so the ratio survives at any brightness -- the same hue-preserving
+// law smear_feed already uses one function up. 1500 is the old 3/2.
 // PASS 7 (Direction 5 §3): "the gassy outside inside the black line before
 // you get to the real body is actually a cool idea, but it wasn't in the
 // specs. Instead of removing it, let's thicken that fog by a lot, so it's
@@ -329,14 +405,22 @@ struct ManaSplat {
   bool depth_test;
   bool opaque;          // the drip: writes colour instead of adding
   bool pre;
+  // PASS 8: an opaque body with a SOFT edge -- blend toward the ramp colour by
+  // the sprite's own intensity instead of replacing outright. `opaque` alone
+  // cuts hard at t < 20, which at mote scale is a 5 px turquoise SQUARE; and a
+  // purely additive body over this creature's pink sky can only whiten
+  // (09-ENGINE-GOTCHAS §4). Soft is the third option and the one a glowing mana
+  // core actually wants: saturated where it dominates, feathered at the rim,
+  // and incapable of stacking to white because it is a blend, not an add.
+  bool soft;
 };
 
 inline void mana_push(std::vector<ManaSplat>& out, int32_t x, int32_t y, int32_t z,
                       int32_t r_px, uint8_t ramp, int gain_pm, bool depth_test,
-                      bool pre, bool opaque = false) {
+                      bool pre, bool opaque = false, bool soft = false) {
   if (gain_pm <= 0 || r_px <= 0) return;
   out.push_back(ManaSplat{x, y, z, r_px, ramp, static_cast<int16_t>(gain_pm),
-                          depth_test, opaque, pre});
+                          depth_test, opaque, pre, soft});
 }
 
 inline int32_t fx_sin16(uint32_t ph) {
@@ -994,9 +1078,30 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     // draw: an opaque heart under an additive halo (R7 -- filled and BIG)
     const int32_t halo = kMoteHaloRPxMin +
         static_cast<int32_t>((hm >> 5) % static_cast<uint32_t>(kMoteHaloRPxMax - kMoteHaloRPxMin + 1));
-    mana_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000, ramp, 1000,
-              true, false, /*opaque=*/true);
+    // PASS 8 -- THE ORDER IS THE FIX, and it took looking to find it.
+    //
+    // The first pass-8 attempt gave the opaque heart its own dark saturated
+    // ramp and the motes came back 50.5% hue-neutral at mean (217,233,239) --
+    // MORE white than the 48.7% it was meant to cure. Rendering the motes-only
+    // ablation and looking at it said why: the white blobs are ~7 px across and
+    // the heart is ~3, so the white was never mostly the heart. It is the
+    // ADDITIVE HALO, and 09-ENGINE-GOTCHAS §4 already names the law -- additive
+    // over bright pink can only whiten. kManaAquaHi * kMoteHaloGainPm/1000 =
+    // (59,86,80) added to a (200,140,150) sky is (255,226,230): the red clips,
+    // the other two lift, and the spread collapses to hue-neutral. No colour
+    // choice fixes that, because the arithmetic is the background's.
+    //
+    // What fixes it is that the halo was drawn LAST, so it also whitened the
+    // heart. Push the halo FIRST and the opaque heart SECOND and the mote ends
+    // as a SOLID SATURATED BODY with an additive glow around it, instead of a
+    // saturated body buried under an additive glow. Nothing else moves: not the
+    // count, not the radii, not the spread, and NOT kMoteHaloGainPm -- the lab
+    // measured that raising any of those buys overlap and loses the hue, which
+    // is the fault being fixed here. This is a draw-order change and a radius.
     mana_push(out, P[0], P[1], P[2], halo, ramp, kMoteHaloGainPm, true, false);
+    mana_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000,
+              mana_core_ramp(ramp), 1000,
+              true, false, /*opaque=*/true, /*soft=*/true);
   }
   return agit;
 }
@@ -1149,7 +1254,11 @@ inline void mana_build_ramps(GlowFrame ramps[kRampCount], uint32_t frame) {
   glow_build_ramp(ramps[kRampAqua], kBlack, kManaAquaMid, kManaAquaHi, 1000);
   glow_build_ramp(ramps[kRampSeaGreen], kBlack, kManaSeaGreenMid, kManaSeaGreenHi, 1000);
   glow_build_ramp(ramps[kRampDeepBlue], kBlack, kManaDeepBlueMid, kManaDeepBlueHi, 1000);
+  // LO == MID on purpose: a flat bright body, not a fade from black.
+  glow_build_ramp(ramps[kRampAquaCore], kManaAquaCoreMid, kManaAquaCoreMid,
+                  kManaAquaCoreHi, 1000);
 }
+
 
 /** One additive glow splat at canvas (cx,cy), half-size r px, depth-tested
  *  against the given centre depth (Q16.16 1/w), never writing depth.
@@ -1159,7 +1268,7 @@ inline void mana_build_ramps(GlowFrame ramps[kRampCount], uint32_t frame) {
 inline void glow_splat(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
                        const GlowAssets& g, const GlowFrame& f, int32_t cx, int32_t cy,
                        int32_t r, int32_t centre_d, bool depth_test = true,
-                       bool bloom = false, bool opaque = false) {
+                       bool bloom = false, bool opaque = false, bool soft = false) {
   if (r <= 0 || !g.baked) return;
   const zref::star::Sprite8& sp = bloom ? g.bloom : g.sprite;
   const int32_t qx0 = cx - r, qy0 = cy - r;
@@ -1180,6 +1289,16 @@ inline void glow_splat(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
       const size_t ri = idx * 3;
       if (opaque) {
         if (t < 20) continue;  // the fringe stays additive-free: hard droplet
+        if (soft) {
+          // PASS 8: blend by the sprite's own intensity. t runs 1..63 on this
+          // bake, so t/63 is the natural alpha and needs no knob.
+          const int a = static_cast<int>(t) * 1000 / 63;
+          for (int k = 0; k < 3; ++k)
+            rgb[ri + k] = static_cast<uint8_t>(
+                (static_cast<int>(rgb[ri + k]) * (1000 - a) +
+                 static_cast<int>(f.pal[t][k]) * a) / 1000);
+          continue;
+        }
         rgb[ri] = f.pal[t][0];
         rgb[ri + 1] = f.pal[t][1];
         rgb[ri + 2] = f.pal[t][2];
@@ -1358,10 +1477,26 @@ inline void smear_composite(const uint8_t* buf, const int32_t* dbuf, uint8_t* rg
       int a = m * gain_pm * 6 / 1000;
       if (a > kSmearAlphaMaxPm) a = kSmearAlphaMaxPm;
       uint8_t* px = rgb + (static_cast<size_t>(y) * w + x) * 3;
+      int cc[3];
+      int cc_sum = 0;
+      // hue-preserving vivify: never let a channel clip, scale all three
+      const int vivid = m * kSmearVividPm > 255000 ? 255000 / m : kSmearVividPm;
       for (int k = 0; k < 3; ++k) {
-        int cc = c[k] * 3 / 2;  // the cell's own hue, kept vivid
-        if (cc > 255) cc = 255;
-        px[k] = static_cast<uint8_t>((px[k] * (1000 - a) + cc * a) / 1000);
+        cc[k] = c[k] * vivid / 1000;
+        if (cc[k] > 255) cc[k] = 255;
+        cc_sum += cc[k];
+      }
+      const int cc_grey = cc_sum / 3;
+      for (int k = 0; k < 3; ++k) {
+        int v = (px[k] * (1000 - a) + cc[k] * a) / 1000;
+        // PASS 8, the chroma floor (kSmearChromaFloorPm). Signed on purpose:
+        // the channels the cell is WEAK in come down. That is the half a lerp
+        // cannot do, and it is the half that makes a block read as gas rather
+        // than as dirt.
+        v += (cc[k] - cc_grey) * kSmearChromaFloorPm / 1000;
+        if (v < 0) v = 0;
+        if (v > 255) v = 255;
+        px[k] = static_cast<uint8_t>(v);
       }
     }
   }

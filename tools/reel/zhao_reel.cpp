@@ -1023,6 +1023,9 @@ struct SceneSubject {
   // pass 3 (R6): the smear plane preset for this subject — an index into
   // u02::kSmearPresets (0 none, 1 short/clean, 2 mid/glitchy, 3 long).
   int u02_smear = 0;
+  // PASS 8: draw the smear plane and suppress the mana BODIES (see the
+  // manafold-fogprobe-smear subject). Diagnostic only.
+  bool u02_smear_only = false;
   // the S5 spike's three-glow staging (diagnostic only)
   bool u02_glow_trio = false;
   // the fx tour: cycle the ten kinds solo, 60 frames each
@@ -2309,6 +2312,12 @@ struct CreatureReelCtx {
   // by everything the mana draws, decayed with the quantised glitchy step,
   // composited additively. Subject-scoped state (the ctx is per subject).
   int u02_smear_preset = 0;
+  // PASS 8: draw the SMEAR PLANE and suppress the mana BODIES. The splats are
+  // still generated and still FEED the plane -- which is the whole point: the
+  // smear has no source of its own, so `u02_mana = 0` silently kills it too,
+  // and a "smear only" subject built that way would be byte-identical to the
+  // bare creature. See manafold-fogprobe-smear.
+  bool u02_smear_only = false;
   std::vector<uint8_t> u02_smear_buf;
   std::vector<int32_t> u02_smear_depth;  // R5: per-cell nearest splat depth
   u02::FoldState u02_fold[3];            // pass 4: per-conduit fold state
@@ -3034,6 +3043,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     u02::mana_build_ramps(s_mana_ramps, c.u02_frame);
     const zref::render::Viewport vpp_m{0, 0, w, h};
     for (const u02::ManaSplat& ms : c.u02_mana_splats) {
+      if (c.u02_smear_only) break;  // pass 8: the plane only, bodies suppressed
       if (!ms.pre) continue;
       const zref::render::ProjOut pm = zref::render::project_vertex(
           c.vp, vpp_m, zref::fx16{ms.x}, zref::fx16{ms.y}, zref::fx16{ms.z}, nullptr);
@@ -3045,7 +3055,8 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
             gf2.pal[i][ch] = static_cast<uint8_t>(gf2.pal[i][ch] * ms.gain_pm / 1000);
       }
       u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
-                      ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque);
+                      ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque,
+                      ms.soft);
     }
   }
   if (g_exp_contour || g_exp_boil || g_cel_main)
@@ -3324,10 +3335,23 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
         const zref::render::ProjOut pm = zref::render::project_vertex(
             c.vp, vpp_m, zref::fx16{ms.x}, zref::fx16{ms.y}, zref::fx16{ms.z}, nullptr);
         if (!pm.in) continue;
+        // PASS 8 (pass-7 by-eye fault 3, the other half). The plane was fed
+        // from the HALO's ramp -- kManaAquaHi, (175,255,236) -- whose red is so
+        // high that after the feed's own scaling and the composite's `*3/2`
+        // vivify the cell clips to (213,255,255), which is white. A colour
+        // floor cannot rescue a source that has no colour left, so the plane is
+        // now fed from the SATURATED CORE ramp. Conceptually that is also the
+        // right answer: the smear is the trail of the mana's BODY, so it should
+        // carry the body's pigment and not the fringe's.
         const u02::GlowFrame& gf2 = u02::glow_frame_cached(
-            s_feed_cache, c.u02_frame, s_mana_ramps, ms.ramp, ms.gain_pm, feed_boost);
+            s_feed_cache, c.u02_frame, s_mana_ramps,
+            fold_mana ? u02::mana_core_ramp(ms.ramp) : ms.ramp,
+            ms.gain_pm, feed_boost);
+        // PASS 8: its OWN knob now (09-ENGINE-GOTCHAS §14). This used to read
+        // kMoteCoreOfHaloPm, so growing the mote's heart would have widened
+        // every trail as a side effect.
         const int32_t feed_r =
-            fold_mana ? ms.r_px * u02::kMoteCoreOfHaloPm / 1000 : ms.r_px;
+            fold_mana ? ms.r_px * u02::kSmearFeedOfHaloPm / 1000 : ms.r_px;
         u02::smear_feed(c.u02_smear_buf.data(), c.u02_smear_depth.data(),
                         s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8, feed_r,
                         pm.s.d);
@@ -3360,6 +3384,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     }
     static u02::GlowFrameCache s_draw_cache;
     for (const u02::ManaSplat& ms : c.u02_mana_splats) {
+      if (c.u02_smear_only) break;  // pass 8: the plane only, bodies suppressed
       if (ms.pre) continue;
       const zref::render::ProjOut pm = zref::render::project_vertex(
           c.vp, vpp_m, zref::fx16{ms.x}, zref::fx16{ms.y}, zref::fx16{ms.z}, nullptr);
@@ -3367,7 +3392,8 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       const u02::GlowFrame& gf2 = u02::glow_frame_cached(
           s_draw_cache, c.u02_frame, s_mana_ramps, ms.ramp, ms.gain_pm);
       u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
-                      ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque);
+                      ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque,
+                      ms.soft);
     }
   }
   if (c.u02_glow && cr_glow_n > 0) {
@@ -3642,6 +3668,7 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.u02_glow = sub.u02_glow;
     cr_ctx.u02_glow_trio = sub.u02_glow_trio;
     cr_ctx.u02_smear_preset = g_mana_ablate ? 0 : sub.u02_smear;  // pass 3 (R6)
+    cr_ctx.u02_smear_only = sub.u02_smear_only;  // pass 8 (the ablation's 3rd leg)
     if (species == Species::kUnnamed02 && sub.u02_trio) {
       for (int e = 0; e < 2; ++e) {
         u02_extra_inst[e].type = dog;
@@ -7303,6 +7330,41 @@ int main(int argc, char** argv) {
     s.u02_mana = 0;
     s.u02_smear = 0;  // the bare creature
     s.note = "fog ablation: smear plane OFF, mana OFF";
+    rc |= render_scene(s);
+  }
+  // PASS 8 -- THE MISSING THIRD LEG. The pass-7 by-eye review found that the
+  // pair above has THE SMEAR OFF ON BOTH SIDES, so `mana_hue_probe.py diffpair`
+  // over it can only ever attribute MOTE pixels and is STRUCTURALLY INCAPABLE
+  // of seeing the smear plane -- which was pass 7's largest visual change. A
+  // metric that cannot see the thing it scores is 10-GATE-CHECKLIST item 6
+  // wearing a new costume, and it is why pass 7 reported 8.3% -> 7.9% for a
+  // fault that was really 48.7%.
+  //
+  // With this subject the ablation LATTICE is complete and every effect can be
+  // attributed on its own pixels:
+  //     rest            = creature + motes + smear   (the shipped frame)
+  //     fogprobe-smear  = creature + smear           <- THIS ONE
+  //     fogprobe-mana   = creature + motes
+  //     fogprobe-off    = creature
+  //   motes alone  = fogprobe-mana  minus fogprobe-off
+  //   smear alone  = fogprobe-smear minus fogprobe-off   (was: unobtainable)
+  //   overlap      = rest minus (the two singles) minus fogprobe-off
+  // Same base clip, same sun, same keys as the other two: the pair's validity
+  // check (a creature-free corner that is byte-identical) still holds, which is
+  // what makes the subtraction mean anything.
+  if (wanted("manafold-fogprobe-smear")) {
+    SceneSubject s = subject_u02_clip(5, "manafold-fogprobe-smear", u02::kRestKeys, false, &kU02SunCalm);
+    // NOT `u02_mana = 0`: the whole mana block, the smear INCLUDED, is gated
+    // on u02_mana != 0, and the plane's only source is the splats themselves.
+    // Zeroing the mana would have produced a subject byte-identical to
+    // fogprobe-off -- a second probe that cannot see the smear, which is the
+    // very fault this subject exists to remove.
+    s.u02_mana = 3;   // the shipping candidate: same splats, same feed
+    s.u02_smear_only = true;  // ...but the BODIES are not drawn
+    s.u02_smear = 5;  // the smear plane ONLY, at REST'S OWN RUNG (subject_u02_clip:
+                      // slot 5 -> preset 5). A different rung would make the
+                      // subtraction measure the rung, not the plane.
+    s.note = "fog ablation: smear plane ON, mana OFF -- the leg pass 7 lacked";
     rc |= render_scene(s);
   }
   if (wanted("manafold-crackle")) {

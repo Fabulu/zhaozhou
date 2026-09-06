@@ -86,3 +86,77 @@ the house zoom.
 Gates after: meshcheck CLEAN (28 meshlets, 2448 tris), clearance contract holds,
 closure worst rim 1053 pm vs gate 1120, slot-13 declared contact -28 mm
 (declared -25, band -60..-5), 5d gate A 22 mm, gate B 801 pm.
+
+### WHERE I WAS when OWNER-DIRECTION-7 arrived (written BEFORE reading it)
+CLAUDE.md: "write down where you were BEFORE reading it."
+
+In flight, uncommitted, in `zhaozhou/tools/reel`:
+* `manafold_fx.h` -- DONE, unbuilt: `kManaAquaCoreMid/Hi` + `kRampAquaCore` +
+  `mana_core_ramp()`, so the mote's OPAQUE heart stops writing the additive
+  ramp's near-white HI (that is the traced mechanism of the 48.7% hue-neutral
+  reading: heart writes kManaAquaHi (175,255,236), halo then adds (59,86,80) on
+  top of it = white). And `kSmearChromaFloorPm = 600` in `smear_composite`.
+* `zhao_reel.cpp` -- HALF DONE: `manafold-fogprobe-smear` subject added, and
+  the `u02_smear_only` ctx flag + its two `break`s at the splat draw loops.
+  **NEXT STEP: wire `SceneSubject::u02_smear_only` -> `cr_ctx.u02_smear_only`
+  (near line 3644 where u02_smear_preset is wired) and set it on the new
+  subject; `s.u02_mana = 0` on its own would have made the subject
+  byte-identical to fogprobe-off, because the whole mana block including the
+  smear is gated on `u02_mana != 0` and the smear has no source but the splats.
+  That is the SAME structural blindness pass 7 shipped, so it must not ship
+  again.** Then build cel, render the fogprobe trio + rest, and re-measure.
+
+### Items 2, 3 and 10, and Direction 7 §6/§6a. DONE.
+
+**The probe first (item 2's second half).** `manafold-fogprobe-smear` is the
+third leg the pass-7 pair lacked. It could NOT be built as `u02_mana = 0`: the
+whole mana block, the smear included, is gated on `u02_mana != 0` and the plane's
+only source is the splats, so that subject would have been byte-identical to
+fogprobe-off -- a second blind probe. It is `u02_mana = 9` (rest's own
+candidate) with a new `u02_smear_only` flag that suppresses the mana BODIES and
+keeps the FEED. `mana_hue_probe.py` gains a `dominant` mode (the stratification
+the reviewer hand-rolled), a byte-identical-corner VALIDITY check that is printed
+whether it passes or fails, and a `selftest` that proves it reports white on
+white, colour on colour, and can FAIL its own validity check.
+
+**The mote white took three authoring passes and only the third was right, and
+every wrong turn was found by looking, not by the metric.**
+1. Gave the opaque heart a dark saturated ramp (the arithmetic said the halo's
+   known add would then land saturated). Measured WORSE: 50.5%, (217,233,239).
+   The render said why -- the white blobs are ~7 px and the heart is ~3, so the
+   white was never the heart. It is the additive halo, and §4's law is that
+   additive over bright pink can only whiten.
+2. Drew the halo FIRST and the heart SECOND, grew the heart. Still 50.1%. The
+   render showed hard dark-green specks: `opaque` skips t < 20 and the Lorentzian
+   bloom only reaches t >= 20 inside ~28% of its radius, so an "opaque heart" of
+   r_px 8 has ALWAYS painted ~1.6 px whatever kMoteCoreOfHaloPm said. Two passes
+   had been recolouring a speck.
+3. A `soft` splat mode (blend by the sprite's own intensity, so it is saturated
+   where it dominates and feathered at the rim and CANNOT stack to white), a
+   core ramp whose LO == MID so the body is bright across its face rather than
+   nearly black, and r_px 1600 pm of the halo.
+
+Motes: **48.7% -> 22.8% hue-neutral, saturation 39 -> 87, mean RGB
+(215,229,236) -> (163,232,227)**, and by eye the pocket is round turquoise
+bodies inside white glows instead of white steam.
+kMoteHaloGainPm, kMoteCount, the radii and the spread are all UNTOUCHED.
+
+**The smear (item 3).** Two faults, one visible only after the other was fixed:
+the plane was fed from the HALO's near-white ramp, and the composite's
+"kept vivid" `c[k]*3/2` clipped two channels and destroyed the hue at the last
+step (§9's "clearly visible in a comment" again). Fed from the saturated core
+ramp, vivified hue-preservingly (`kSmearVividPm`), plus a signed chroma floor
+(`kSmearChromaFloorPm`) that pulls the channels the cell is WEAK in down -- the
+half a lerp cannot do, and the half that makes a block read as gas not dirt.
+Smear alone: **0.0% neutral, saturation 168, (69,202,180)**.
+09-ENGINE-GOTCHAS §14 applied on the way past: `kMoteCoreOfHaloPm` was also the
+smear's feed radius; split into `kSmearFeedOfHaloPm` BEFORE moving it.
+
+**Item 10:** `kFogThicknessPm`'s comment said 2000 where it ships 4500. Corrected.
+
+**Direction 7 §6 / §6a:** the forehead knuckle down (58 -> 50 rx), every other
+knuckle UP (A 56 -> 64, B 54 -> 62, C 52 -> 60, end 54 -> 62). Checked which of
+the two things at the forehead station was the fat before cutting, as the
+direction warns: the taper's flare is 74 rx and the swell was +58, making that
+station 19% heavier than hinge A, so the SWELL was the outlier and the flare --
+whose removal would re-open the Direction 5 §1 dongle -- is untouched.

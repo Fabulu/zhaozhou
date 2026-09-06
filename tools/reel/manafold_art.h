@@ -291,11 +291,31 @@ constexpr int32_t kKnuckleAtEndMm = 2660;
 // ~2.1x the band it sits on (the sheet reads ~2.0x). The ABSOLUTE knuckle is
 // very slightly smaller than pass 7's -- "less chunky" is honoured -- while the
 // RATIO, which is what the eye actually reads at 240p, nearly doubles.
-constexpr int32_t kKnuckleSwellJfRxMm = 58, kKnuckleSwellJfRzMm = 68;
-constexpr int32_t kKnuckleSwellARxMm = 56, kKnuckleSwellARzMm = 76;
-constexpr int32_t kKnuckleSwellBRxMm = 54, kKnuckleSwellBRzMm = 72;
-constexpr int32_t kKnuckleSwellCRxMm = 52, kKnuckleSwellCRzMm = 68;
-constexpr int32_t kKnuckleSwellEndRxMm = 54, kKnuckleSwellEndRzMm = 80;
+// DIRECTION 7 §6: "the front antennae ball needs some slimming down. the
+// frontmost one that attaches to the forehead". Checked WHICH of the two things
+// at that station is the fat before cutting, because the direction warns that
+// slimming the wrong one pinches the antenna off the head and re-opens the
+// free-floating-dongle fault Direction 5 §1 spent a pass fixing:
+//   the taper's own junctionF flare  : 74 rx  (the band widening into the head)
+//   the knuckle swell on top of it   : +58 rx
+//   -> 128 rx here against 108 at hinge A, so this station is 19% the heaviest
+//      and the SWELL is the part that is out of line with its siblings.
+// So only this knuckle's own two constants move; the flare, the buried base and
+// every other knuckle are untouched. 42/50 puts the station at 112 rx, a touch
+// above hinge A's 108, which is right for the joint that carries the antenna.
+constexpr int32_t kKnuckleSwellJfRxMm = 50, kKnuckleSwellJfRzMm = 58;
+// DIRECTION 7 §6a: the two ends move in OPPOSITE directions, which is why they
+// are separate constants and why no global taper scale can express it --
+// "the front one is just too thick" while "the others are a bit bulby, might
+// even be a bit more but they're barely okay... so the others can become
+// slightly bigger". And the generalisation to carry: BULBY IS THE TARGET READ.
+// Judged by eye AFTER the swellings were restored, not converted literally from
+// the words, because the owner assessed "barely okay" while looking at pass 7's
+// uniform strap -- which is the shape being rebuilt here.
+constexpr int32_t kKnuckleSwellARxMm = 64, kKnuckleSwellARzMm = 86;
+constexpr int32_t kKnuckleSwellBRxMm = 62, kKnuckleSwellBRzMm = 82;
+constexpr int32_t kKnuckleSwellCRxMm = 60, kKnuckleSwellCRzMm = 78;
+constexpr int32_t kKnuckleSwellEndRxMm = 62, kKnuckleSwellEndRzMm = 90;
 
 // ---- the eyes (the whole face) ----
 // Two big purple almond lenses close together on the lower front, angled
@@ -941,7 +961,26 @@ constexpr int32_t kMoteHaloRPxMin = 7, kMoteHaloRPxMax = 10;   // iter 5; iter 2
 // eye at native 384x240 on the shipping rig against manafold-channel: the
 // heart is still a solid, filled body (R7 stands), just no longer the
 // dominant pixel count in the cluster.
-constexpr int kMoteCoreOfHaloPm = 420;     // opaque heart under the halo
+// PASS 8: 420 -> 560, and the heart is now drawn OVER the halo rather than
+// under it (manafold_fx.h explains why -- additive over pink can only whiten,
+// so the saturated body has to be the LAST thing written). A bigger solid body
+// makes the mote read as aqua rather than as a white smudge with an aqua rim.
+// AND THE NUMBER IS BIGGER THAN 1000 ON PURPOSE. `opaque` in glow_splat skips
+// every texel with t < 20, and the Lorentzian bloom profile (a2=576, R_h=120)
+// only reaches t >= 20 inside about 28% of the sprite's radius. So an "opaque
+// heart" of r_px = 8 has ALWAYS painted a disc about 1.6 px across, whatever
+// this constant said -- which is why pass 8's first two attempts at the mote
+// colour changed the measured numbers and not the picture: they were recolouring
+// a speck. 1500 puts the painted disc at ~3-4 px radius, a body rather than a
+// dot. Found by looking at the render, not by reading this file.
+constexpr int kMoteCoreOfHaloPm = 1600;    // opaque heart OVER the halo
+// PASS 8, and it is 09-ENGINE-GOTCHAS §14 exactly: kMoteCoreOfHaloPm was
+// serving TWO features -- the mote's own solid heart AND the radius at which a
+// fold mote feeds the smear plane. Those are different questions, and growing
+// the heart would have silently widened a smear cloud the pass-7 review already
+// calls wider than the animal. Split first, then move. This one keeps the
+// shipped value, so the trail is unchanged by the mote change.
+constexpr int kSmearFeedOfHaloPm = 420;    // fed radius of a fold mote
 constexpr int kMoteHaloGainPm = 340;       // under the ceiling: hue survives
 constexpr int kMoteCrowdPm = 700;          // per-conduit mote scale-down when
                                            // several conduits are on screen
