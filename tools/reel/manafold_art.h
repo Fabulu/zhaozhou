@@ -718,7 +718,29 @@ constexpr int32_t kEyeShiftPivotMm = 0;   // NOT SHIPPED -- see manafold_rig.h
 // move it against the swept gate, not against the roll-alone table.
 constexpr int32_t kEyeRollMaxA16 = 900;     // 4.9 deg -- gated, swept, see FINDINGS
 constexpr int32_t kEyeRollRestA16 = 1820;   // 10 deg -- typical amplitude
-constexpr int32_t kStarThinMm = 16;        // depth: the star is a flat spark
+// ---- PASS 11 E.2: THE NEAR-EYE BAR, RETIRED AS A SHAPE CHANGE -------------
+// Direction 8 §6.4 released this ONE eye item from the fold's fence: it is a
+// constant change, not new machinery, and it retires a fault that has stood
+// three passes -- the near eye reading as "a chrome scratch, not an eye" on
+// 96.1% of taunt's frames.
+//
+// THE MECHANISM, found by the eye lab and measured at last: the LENS carries
+// 180 mm along the outward axis and the star carried 32 mm. A flat plate on a
+// dome. Seen near-side-on the star presents its EDGE -- a 32 mm sliver against
+// a 180 mm lens -- and the white rim, being a dilation in the picture plane
+// only, is all that survives. Hence a white bar where an eye should be.
+//
+// THE FIX IS THE ONE THE SHEET DREW ALL ALONG: the cyan thickens into a SOLID
+// FORM and the white slims to a TRUE OUTLINE. Only x moves. The drawn (y, z)
+// profile, the asymmetric arms and the white-from-cyan derivation are all
+// untouched, so the protected construction stays protected.
+//
+// ⚠ ONE KNOB WAS SERVING TWO FEATURES (gotcha §14) -- kStarThinMm set the
+// depth of BOTH stars, so the cyan could not thicken without the white
+// thickening with it, and a white slab centred on the pupil swallows the cyan
+// whole (that render is on record). Split, so each says its own thing.
+constexpr int32_t kStarCyanThinMm = 46;   // the cyan is a FORM, not a plate
+constexpr int32_t kStarWhiteThinMm = 12;  // the white is an OUTLINE, not a slab
 // The side sheet draws the star sitting HIGH in the lens, not centred.
 //
 // DIRECTION 7 §5.1 OVERRULES THAT READING, and it is a registration bug, not an
@@ -742,8 +764,14 @@ constexpr int32_t kStarOffsetYMm = 0;
 // table, same points, offset outward by this one rim. It cannot disagree with
 // the star it rings, because it is generated from it.
 constexpr int32_t kStarWhiteRimMm = 16;
-// the cyan rides a hair prouder than its white so it sits ON it, never in it
-constexpr int32_t kStarCyanProudMm = 6;
+// the cyan rides prouder than its white so it sits ON it, never in it. PASS 11
+// E.2: 6 -> 20, with the thickening above. The depth ordering this preserves is
+// asserted in the committed probe rather than stated here, because it is a
+// structural fact and this file has shipped false ones (checklist 8/19):
+//     white front face = kEyeBulgeMm + kStarWhiteThinMm
+//     cyan  front face = kEyeBulgeMm + kStarCyanProudMm + kStarCyanThinMm
+// and the second must exceed the first, or the white splinter ships again.
+constexpr int32_t kStarCyanProudMm = 20;
 // SIZE vs GAZE (owner question 4): the sheet draws the star flush to the lens,
 // which leaves ZERO travel room -- a flush star is an eye that cannot move.
 // Shipped at ~0.78 of drawn-flush so the eyes can dart. One knob to flip back.

@@ -353,7 +353,9 @@ inline zc::RingPart make_star(uint8_t bone, bool white) {
   // thinner cyan whole, so the star drew as a white splinter with no cyan
   // anywhere, from every angle. Both stars are the same thickness; only their
   // outlines differ, which is what the sheet draws.
-  const int32_t thin = kStarThinMm;
+  // PASS 11 E.2: each star states its own depth -- the cyan is a form, the
+  // white is an outline. Splitting this is what retires the near-eye bar.
+  const int32_t thin = white ? kStarWhiteThinMm : kStarCyanThinMm;
   zc::RingPart p;
   p.bone = bone;
   p.cap_base_fix = true;
@@ -377,8 +379,9 @@ inline zc::RingPart make_star(uint8_t bone, bool white) {
     // proud of the lens along +X: the pupil bone pivots at the lens centre, so
     // this stand-off IS the gaze pivot radius. The cyan rides a hair further
     // out than its white, so it sits ON it and never sinks into it.
-    // Depth ordering, stated as arithmetic so it cannot silently invert again:
-    // white front face = kEyeBulgeMm + thin; cyan front face = that + proud.
+    // Depth ordering: white front = kEyeBulgeMm + kStarWhiteThinMm; cyan front
+    // = kEyeBulgeMm + kStarCyanProudMm + kStarCyanThinMm. ASSERTED IN THE PROBE
+    // (pass 11 E.2), not merely stated -- an inverted pair shipped once.
     rs.cx = fxu(kEyeBulgeMm + (white ? 0 : kStarCyanProudMm));
     p.rings.push_back(rs);
   }

@@ -81,3 +81,32 @@ order 0 -> S -> M -> F -> F.5 -> E, P interleaved, L spawned.
 In Stage 0: repairing 0.1 (mist-follow gate -> `g_u02_mist.follow_pm` plus a
 `kMistVariants[]` walk) and 0.2 (C.1 liveness gate rebuilt to call
 `loop_pose`). Next step after: prove both failable through the SHIPPED path.
+
+### Stage M closed (pushed 52e50375)
+
+The two things I tried first were WRONG and the plates say so:
+alpha 380->60 left the footprint identical; feed_of_halo 1300->450 barely moved
+it. The plane saturates against cell_cap_pm, so at steady state the per-frame
+feed decides almost nothing. **The fault was EXTENT, and extent is
+`kMistKeepPm`.** 930 -> 420. Shipping row `smidgen`: 180/220/1300/110/keep 420.
+Shell `kFogThicknessPm` 4500 -> 1200, confirmed on `channel` as well as `rest`.
+Exclusion 0 of 5,674,554; failable leg 15.3%.
+
+### Direction 8 §6 landed mid-pass (coordinator relay)
+
+* **E.2 `bar-cyan-fat` is RELEASED from the fence — ship it in pass 11.**
+* F.0 framing is now a PREREQUISITE: the owner judges MY fold after this ships.
+* Eye travel 14° authored / 22° clamp — recorded, NOT shipped.
+* Blink — do not start.
+* Report whether this lane can be deleted; `tools/lanes/lane-audit.sh`.
+
+### Stage L reported back
+
+The white smear inside every folded shape is the **edge halo's RADIUS**, not the
+motes and not a gain. `kFoldEdgeHaloRPx` 8->5, `kFoldEdgeCoreRPx` 3->2.
+`kFoldEdgeCoreGainPm` confirmed dead AND confirmed inconsequential.
+
+### WHERE I AM (rule 0.4)
+
+Next: E.2 (released eye fix), then **STAGE F, F.0 framing first**. F is the
+spine and is never trimmed. Remaining after F: P.1/P.2/P.4, publish.

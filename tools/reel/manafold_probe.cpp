@@ -623,6 +623,51 @@ int main() {
     }
   }
 
+  // ---- PASS 11 E.2: THE STAR DEPTH ORDERING, ASSERTED ---------------------
+  // make_star's own comment used to STATE this ordering. A comment that states
+  // a structural fact is either gated or deleted (checklist 8/19), and this one
+  // has already been wrong once on screen: authored the other way round, a
+  // white slab centred on the pupil swallowed the thinner cyan whole and the
+  // star drew as a WHITE SPLINTER with no cyan from any angle.
+  //
+  // E.2 doubles the stake by splitting kStarThinMm into two constants and
+  // moving the proud stand-off 6 -> 20, so the invariant now depends on three
+  // numbers instead of one. It is arithmetic on the SHIPPED constants, taken
+  // from the same expressions make_star builds its rings from.
+  {
+    const int32_t white_front = u02::kEyeBulgeMm + u02::kStarWhiteThinMm;
+    const int32_t cyan_front =
+        u02::kEyeBulgeMm + u02::kStarCyanProudMm + u02::kStarCyanThinMm;
+    const bool ok = cyan_front > white_front;
+    std::printf("u02-probe: E.2 star depth ordering: white front %d mm, cyan front "
+                "%d mm (margin %d) — %s\n",
+                white_front, cyan_front, cyan_front - white_front,
+                ok ? "OK cyan sits ON its white" : "FAIL");
+    if (!ok) {
+      std::printf("u02-probe: FAIL the white is proud of the cyan. That is the "
+                  "white-splinter render, and it ships an eye with no cyan in "
+                  "it from every angle.\n");
+      rc = 1;
+    }
+    // The near-eye bar itself: the cyan must present a FORM edge-on, not a
+    // plate. The lens carries kEyeWideMm along the same axis; a star whose
+    // half-depth is a small fraction of it is the "chrome scratch" the owner
+    // saw on 96.1% of taunt's frames. This is the shape change made checkable.
+    constexpr int32_t kMinStarDepthOfLensPm = 300;
+    // Both as FULL extents along the outward axis, so the ratio means what it
+    // says: kEyeWideMm and kStarCyanThinMm are both half-measures.
+    const int32_t depth_pm =
+        u02::kStarCyanThinMm * 2 * 1000 / (u02::kEyeWideMm * 2);
+    const bool fat = depth_pm >= kMinStarDepthOfLensPm;
+    std::printf("u02-probe: E.2 cyan star depth is %d pm of the lens's full width "
+                "(floor %d) — %s\n",
+                depth_pm, kMinStarDepthOfLensPm, fat ? "OK a form" : "FAIL a plate");
+    if (!fat) {
+      std::printf("u02-probe: FAIL the near eye will read as a bar again.\n");
+      rc = 1;
+    }
+  }
+
   // ---- PASS 2/5: the EYE-PROTRUSION gate (committed; PER NAMED PART)
   //
   // Owner: the eyes must keep poking out as 3D things — the artist likes
