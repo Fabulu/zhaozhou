@@ -400,6 +400,105 @@ int main(int argc, char** argv) {
        1, (rl.out_of_extent > 0 && rl.resident > 0 && rl.open_sky > 0) ? 1 : 0);
   }
 
+  // ================= BACKPRESSURE, WHICH THIS SUITE DID NOT HAVE ===========
+  // THE DEFECT THIS EXISTS TO CATCH WAS REAL AND THIS FILE COULD NOT SEE IT.
+  //
+  // Every phase above drives `d.a_ready = 1` on every cycle. That covers the
+  // full 15,625-patch sweep and 3,000 randomised draws -- i.e. EVERY INPUT THE
+  // BLOCK HAS -- and it is still blind, because the consumer never once said
+  // "not yet". Composing this block with TERRAIN.VISIBLE found the hole
+  // immediately: on the cycle the store's answer was being registered,
+  // `ans_full_q` was still low, so `q_ready_o` was high and a SECOND query was
+  // accepted; one cycle later its decide overwrote the first answer, unpopped.
+  // 911 queries issued, 854 answered, 57 lost, deadlock.
+  //
+  // Exhaustive over the input space and blind over the handshake is not
+  // exhaustive. The fix (gating the decide on `ans_free_c`) left every number
+  // in this file byte-identical, which is precisely why the file needed this
+  // phase rather than a re-run.
+  //
+  // So: stall the consumer in a pattern that is not a constant, and assert the
+  // two things a lost or duplicated answer breaks -- the COUNT, and the
+  // one-to-one pairing of answers to queries in order.
+  {
+    d.desc_pitch_log2 = 1;
+
+    struct Pattern { const char* name; int period; int high; };
+    // Deliberately including period 1 / high 0 -- a consumer that is NEVER
+    // ready -- because that is the case where a block that accepts a query it
+    // cannot answer will overrun immediately rather than subtly.
+    const Pattern pats[] = {
+        {"ready 1 cycle in 2", 2, 1},
+        {"ready 1 cycle in 4", 4, 1},
+        {"ready 3 cycles in 4", 4, 3},
+        {"ready 1 cycle in 7", 7, 1},
+    };
+
+    for (const Pattern& pt : pats) {
+      const int kN = 400;
+      std::vector<Query> bq;
+      isl::Ledger bl{};
+      int sent = 0, seen = 0, bad = 0, tag_bad = 0;
+      bool have = false;
+      int32_t qx = 0, qz = 0;
+      uint8_t qtag = 0;
+      uint32_t st = 0xB1A5E5u;
+
+      for (int cyc = 0; cyc < 2000000 && seen < kN; ++cyc) {
+        if (!have && sent < kN) {
+          st = st * 1664525u + 1013904223u;
+          // High bits, not low: an LCG's low bits are nearly periodic, and a
+          // sibling lane's "randomised" phase this session drew 240 windows
+          // that were four distinct cases because of exactly that.
+          qx = static_cast<int32_t>((st >> 13) % 140u);
+          st = st * 1664525u + 1013904223u;
+          qz = static_cast<int32_t>((st >> 13) % 140u);
+          qtag = static_cast<uint8_t>(sent & 0xFF);
+          have = true;
+        }
+
+        d.q_valid = have ? 1 : 0;
+        d.q_ix = static_cast<uint32_t>(qx);
+        d.q_iz = static_cast<uint32_t>(qz);
+        d.q_tag = qtag;
+        d.a_ready = ((cyc % pt.period) < pt.high) ? 1 : 0;
+        d.eval();
+
+        const bool took = d.q_valid && d.q_ready;
+        if (d.a_valid && d.a_ready) {
+          if (seen < static_cast<int>(bq.size())) {
+            const isl::Lookup want = dir.find(bq[seen].ix, bq[seen].iz, &bl);
+            if (static_cast<int>(d.a_outcome) != oracle_code(want.outcome)) ++bad;
+            if (d.a_tag != bq[seen].tag) ++tag_bad;
+          }
+          ++seen;
+        }
+        zhao::tick(d);
+        if (took) {
+          bq.push_back({qx, qz, qtag});
+          have = false;
+          ++sent;
+        }
+      }
+
+      std::printf("  backpressure %-20s sent %d answered %d\n", pt.name, sent, seen);
+
+      // THE COUNT IS THE CHECK THAT CATCHES A DROP. A lost answer shows up
+      // here and nowhere else: every answer that DOES arrive is still correct,
+      // which is why a value-comparing test sails past it.
+      ck(seen == kN, "every query issued under backpressure is answered exactly once",
+         kN, seen);
+      ck(sent == static_cast<int>(bq.size()),
+         "and no query was recorded that the block did not accept",
+         static_cast<int>(bq.size()), sent);
+      ck(bad == 0, "with the outcome still matching the oracle under stalling", 0, bad);
+      ck(tag_bad == 0,
+         "and each answer still carrying ITS OWN query's tag -- the pairing a "
+         "dropped answer breaks by sliding every later answer one place",
+         0, tag_bad);
+    }
+  }
+
   if (g_fail) {
     std::printf("[island_dir_rtl_directed] %d of %d checks FAILED\n", g_fail, g_checks);
     zhao::exit_hard(1);
