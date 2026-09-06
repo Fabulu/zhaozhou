@@ -5,6 +5,25 @@ param(
     # NOT in the shell cone (raster, texture, geometry, terrain) can be
     # characterized with the same flow rather than a second one.
     [string[]]$ExtraSources,
+    # ATTRIBUTION WITHOUT A FOUR-HOUR FIT.
+    #
+    # Analysis & Synthesis alone answers the register and memory questions: it
+    # reports Total registers, Total block memory bits, Total DSP Blocks, and --
+    # the one that matters -- the RAM SUMMARY, which NAMES EVERY ARRAY that
+    # inferred. That is exactly what the register rule's own message tells the
+    # reader to consult, and it is a fraction of a full fit.
+    #
+    # The composed island came back at 27,097 registers after 14,004 seconds,
+    # and the question "which arrays are in flops" needs none of the fitter, the
+    # placement or the timing analysis that consumed almost all of it. Owner
+    # direction 2026-09-06: use the four-hour fit VERY sparingly, and get actual
+    # area/register attribution before touching the big capture and order
+    # stores.
+    #
+    # A -MapOnly row carries NO ALMs and NO Fmax, because those are fitter
+    # results. It is marked partial for exactly that reason: an incomplete
+    # measurement labelled complete is how a wrong number gets believed.
+    [switch]$MapOnly,
     [string]$QuartusBin = 'C:\intelFPGA_lite\17.0\quartus\bin64',
     # 28800, not 3000, and not 900. THE SAME MISTAKE HAS NOW BEEN MADE TWICE.
     #
@@ -643,7 +662,9 @@ try {
                 }
             } -ArgumentList $deadline, $runStart
 
-            foreach ($exe in @('quartus_map.exe', 'quartus_fit.exe', 'quartus_sta.exe')) {
+            $stages = if ($MapOnly) { @('quartus_map.exe') }
+                      else { @('quartus_map.exe', 'quartus_fit.exe', 'quartus_sta.exe') }
+            foreach ($exe in $stages) {
                 & (Join-Path $QuartusBin $exe) 'blockfit' *> (Join-Path $dir "$exe.log")
                 if ($LASTEXITCODE -ne 0) { $row.status = "failed:$exe"; $ok = $false; break }
                 # quartus_map is the ONLY stage that reads the sources, so hash
@@ -721,9 +742,15 @@ try {
         # BY HAND from the workspace afterwards. Harvest them here instead, and
         # mark the row INCOMPLETE so nothing mistakes it for a pass.
         $mapSummary = Join-Path $dir 'output_files\blockfit.map.summary'
-        if (-not $ok -and (Test-Path -LiteralPath $mapSummary)) {
+        # `-not $ok` OR `-MapOnly`. A map-only run SUCCEEDS at its only stage, so
+        # `$ok` is true and this harvest -- written for FAILED runs -- would have
+        # skipped the very row it was asked to produce. The status says
+        # `map_only` rather than `incomplete:...` because nothing went wrong:
+        # the run did exactly what it was told and produced exactly the numbers
+        # Analysis & Synthesis can produce.
+        if (($MapOnly -or -not $ok) -and (Test-Path -LiteralPath $mapSummary)) {
             $mt = [IO.File]::ReadAllText($mapSummary)
-            $row.status = 'incomplete:' + $row.status
+            $row.status = if ($MapOnly) { 'map_only' } else { 'incomplete:' + $row.status }
             $row.partial = $true
             $row.partialStage = 'analysis_and_synthesis'
             $row.registers = Get-Field $mt @('Total registers')
@@ -855,6 +882,20 @@ try {
                 foreach ($v in $violations) {
                     Write-Host ("    RULE  {0}: {1}" -f $rowModule, $v) -ForegroundColor Red
                 }
+            }
+        }
+
+        # THE MAP REPORT IS HARVESTED WHATEVER HAPPENED. The block above only
+        # runs when there is an STA report to go with it, so a -MapOnly run --
+        # the one whose entire purpose is the RAM Summary -- would have kept
+        # nothing at all. Same failure as deleting the workspace, one level in.
+        $mapDir = Join-Path $RepoRoot 'reports/synthesis/blockpaths'
+        New-Item -ItemType Directory -Path $mapDir -Force | Out-Null
+        foreach ($mr in @('blockfit.map.rpt', 'blockfit.map.summary')) {
+            $mrSrc = Join-Path $dir ('output_files/' + $mr)
+            if (Test-Path -LiteralPath $mrSrc) {
+                $ext = $mr -replace '^blockfit\.', ''
+                Copy-Item -LiteralPath $mrSrc -Destination (Join-Path $mapDir ($rowModule + '.' + $ext)) -Force
             }
         }
 
