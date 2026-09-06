@@ -44,7 +44,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|all)
       TARGET="$1"
       shift
       ;;
@@ -189,6 +189,12 @@ build_mband() {
   "$CXX" "${FLAGS[@]}" "$T/manafold_bandprobe.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-bandprobe.exe"
 }
 
+build_mc2proto() {
+  printf '%s
+' "LD manafold-c2proto"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_c2proto.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-c2proto.exe"
+}
+
 build_mhinge() {
   printf '%s\n' "LD manafold-hinge-traj"
   "$CXX" "${FLAGS[@]}" "$T/manafold_hinge_traj.cpp" "${LIBOBJS[@]}" \
@@ -204,6 +210,7 @@ case "$TARGET" in
   mmeshcheck) build_mmeshcheck ;;
   mhinge) build_mhinge ;;
   mband) build_mband ;;
+  mc2proto) build_mc2proto ;;
   all)
     build_reel
     build_cel
