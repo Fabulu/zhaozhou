@@ -43,8 +43,12 @@ namespace u02 {
 enum BoneId : uint8_t {
   kBRoot = 0,       // body ball; hover translation + body attitude
   kBJunctionF = 1,  // the FRONT JUNCTION (the old neck bind: the antenna's
-                    // base at the body surface — carries the rest yaw/kink
-                    // and the junction ball; pass 4)
+                    // base at the body surface — carries the rest yaw/kink.
+                    // PASS 11 (QA §7.4): it does NOT carry a junction ball.
+                    // The rigid ball parts went at pass 6; the junction is a
+                    // SWELL in the chain's own skin, and pass 11 F.4 made it
+                    // a long low one so it reads as a thicker antenna rather
+                    // than a bead.)
   kBNeck = 2,       // PASS 9 (Direction 7 §9.1): NO LONGER a mid-tube hinge.
                     // The owner looked at the site and said the kneading joint
                     // "is in the wrong place. It's in the straight antennae

@@ -123,8 +123,11 @@ inline const zc::CreatureType& type() {
     parts.push_back(make_star(kBPupilR, true));
     parts.push_back(make_star(kBPupilL, false));  // cyan inner star
     parts.push_back(make_star(kBPupilR, false));
-    // Hinge parts are rigid on their own bones whose bind translation IS the
-    // ball centre; the loop is one straight-bound chain the fold pose bends.
+    // PASS 11 (QA §7.4): there are no hinge parts and no ball centres. The
+    // rigid spheres went at pass 6 -- the loop is ONE straight-bound chain
+    // that the fold pose bends, and every knuckle and junction is a swell in
+    // that chain's own skin (make_loop). This sentence described the pass-4
+    // rig for six passes after the geometry it named was deleted.
 
     zc::ClipBank bank;
     bank.bone_count = kBoneCount;

@@ -247,7 +247,11 @@ constexpr int32_t kLoopFoldBA16 = 11284;      // ~62 deg over the peak
 constexpr int32_t kLoopFoldCA16 = 12740;      // ~70 deg at the rear hinge
 // the re-entry anchor (body-local, the deep point the aimed segment plunges
 // toward; also kBLoopBase2's bind — the drawn re-entry made a named joint)
-// PASS 6 C.4: the anchor is pulled DEEPER, (-230,180) -> (-150,118). This is
+// PASS 6 C.4: the anchor is pulled DEEPER. (PASS 11, QA §7.7: this named
+// "(-230,180) -> (-150,118)"; the constants ten lines below ship -120 and 95,
+// so the second pair was stale too. The VALUES live below and are the only
+// authority; this comment now says what the change was FOR and lets the
+// constants say what it is.) This is
 // the closure aim's target, so it sets how deep the return arm ends up. Stage
 // C's bigger folds swing hinge D further, and the arm -- which is designed to
 // overshoot past the anchor -- was coming out the far side: the committed
@@ -421,7 +425,14 @@ constexpr int32_t kKnuckleReentryOffXMm = -100, kKnuckleReentryOffYMm = 285;  //
 // Order: Jf, A, B, C, End -- the same order make_loop applies them.
 constexpr int32_t kKnuckleSwellHalfMm[5] = {270, 120, 120, 120, 280};
 // Arc positions, mm from the buried start. The chain's own station arithmetic
-// is stJF 250, stNeck 586, stA 930, stB 1270, stC 1650, stD 2030, end 3450.
+// is stJF 250, stNeck 250, stA 930, stB 1270, stC 1650, stD 2030, end 3300.
+// (PASS 11, QA §7.6: this said stNeck 586 and end 3450. Both were stale --
+// stNeck is COINCIDENT with stJF since Direction 7 §9.1 moved the kneading
+// joint onto the junction, and the total is 3300, which line 207 of this same
+// file already states. THE TABLE IS NOW PRINTED AND ASSERTED BY THE COMMITTED
+// PROBE from kLoopBuryMm and kLoopArcMm -- see manafold_probe.cpp's F.1
+// ladder-continuity gate. A derivation in prose is a derivation that rots;
+// this one rotted twice.)
 // The front junction rides a touch above its station (the old ball's offset);
 // the re-entry knuckle sits at the visible surface crossing, not at the deep
 // closure anchor, which is what the retired kKnuckleReentryOff* encoded.
@@ -943,11 +954,17 @@ constexpr int32_t kHingePhaseStepA16 = 0x2C00;
 // PASS 3 (F4, Direction 3 §2): star containment — the star plus its white
 // ring must never cross the lens ink at any authored gaze extreme. The
 // clamps are cut with the bigger star and proven by rendering the extremes.
-// PASS 4 (Stage E): containment is ARITHMETIC. The star's centre sweeps
-// z ~= kEyeBulgeMm * sin(gaze/2 in angle16 halves); the short arm (88) +
-// the white ring tube (15) must stay inside the lens half-width (125):
-// allowed z travel ~= 125 - 88 - 15 = 22 mm -> sin = 22/88 = 0.25 ->
-// ~14.5 deg full angle ~= 2640 angle16. Held under it with margin, then
+// PASS 4 (Stage E): containment is ARITHMETIC -- and PASS 11 (QA §7.3) MOVED
+// THAT ARITHMETIC INTO THE COMMITTED PROBE, because this is checklist item
+// 19's own cited example and it was still wrong. It read "the short arm (88)
+// + the white ring tube (15) must stay inside the lens half-width (125)";
+// the real constants are kEyeWideMm 84, kStarWhiteRimMm 16, kStarArmSideMm 77,
+// and line ~873 of this same file says "the rim is only 84 mm". Every input
+// was wrong and the conclusion still read as proven.
+//
+// It is recomputed from the real constants and printed every probe run. E.1
+// would have moved two of its inputs, which is precisely when a prose
+// derivation rots -- so it is no longer prose. Acceptance stays what it was:
 // PROVEN by rendering the authored extremes (the eye places the value).
 // PASS 6 B.1: RAISED, because the feature was below the resolution of the
 // screen. Pass 5's full authored travel was ~1.7 px at native -- an eye that
@@ -1261,9 +1278,20 @@ constexpr int32_t kMoteHaloRPxMin = 7, kMoteHaloRPxMax = 10;   // iter 5; iter 2
 // heart" of r_px = 8 has ALWAYS painted a disc about 1.6 px across, whatever
 // this constant said -- which is why pass 8's first two attempts at the mote
 // colour changed the measured numbers and not the picture: they were recolouring
-// a speck. 1500 puts the painted disc at ~3-4 px radius, a body rather than a
-// dot. Found by looking at the render, not by reading this file.
+// a speck. The shipped 1600 puts the painted disc at ~3-4 px radius, a body
+// rather than a dot. Found by looking at the render, not by reading this file.
+// (PASS 11, QA §7.10: the prose said 1500 while the line below shipped 1600.)
 constexpr int kMoteCoreOfHaloPm = 1600;    // opaque heart OVER the halo
+// ⚠ PASS 11: kFoldEdgeCoreGainPm HAS NO READER. The particle lab grepped the
+// whole tree and found exactly one occurrence -- its own definition -- while
+// the edge core stamp pushes a hard-coded 1000. It is a knob that looks like
+// an owner control and is not one. Recorded here, beside the mote constants
+// it sits with, rather than silently: the lab also WIRED it in its own lane
+// and rendered its authored 430, and it changes nothing visible, because it
+// recolours a ~3 px speck under an 8 px halo. So it is a dead knob AND an
+// inconsequential one. Do NOT let wiring it stand in for the real finding,
+// which is that the white smear inside every folded shape is the edge halo's
+// RADIUS (kFoldEdgeHaloRPx). See PARTICLE-LAB-FINDINGS.md.
 // PASS 8, and it is 09-ENGINE-GOTCHAS §14 exactly: kMoteCoreOfHaloPm was
 // serving TWO features -- the mote's own solid heart AND the radius at which a
 // fold mote feeds the smear plane. Those are different questions, and growing
@@ -1505,7 +1533,18 @@ constexpr int32_t kKneadAccentHiPm = 1300;
 // Direction 7 §1's "all the balls move individually" made legible -- while the
 // shared envelope and the per-station lags keep it reading as guided hinges
 // rather than as string.
-constexpr int32_t kKneadLeadBoostPm = 1450;
+// 1450 was authored first and the CLOSURE PROBE caught it before any render:
+// the clip bank's worst arm rim moved 1043 -> 1102 pm against the 1120 gate,
+// leaving 18 pm. It passed, and 18 pm is not headroom -- it is the next small
+// change away from failing, and art.h:188 records what that looks like. Backed
+// off to 1250: the bank comes back to 1072, so 48 pm of headroom instead of 18.
+// (Not all the way back to the stock 1043 -- F.3's phrasing genuinely does reach
+// further on its hardest presses, which is the point of it. 48 pm is a margin;
+// 18 was a coincidence.) The accent still plainly reads; the leading ball was
+// never carried by the last 200 permille. MEASURED AFTER THE CHANGE, not
+// predicted before it -- this comment is in the commit that fixes ten false
+// ones, and a wrong number here would be a joke at the reader's expense.
+constexpr int32_t kKneadLeadBoostPm = 1250;
 constexpr int32_t kKneadWagJfA16 = 1600;  // knead: the two hands work...
 constexpr int32_t kKneadWagNeckA16 = 480;  // (neck stirs out-of-plane)
 constexpr int32_t kKneadWagBA16 = 1100;

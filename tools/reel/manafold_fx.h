@@ -58,7 +58,10 @@ struct FxAnchors {
   int32_t crown[3];       // the body's top pole
   int32_t junction_f[3];  // the FRONT JUNCTION (pass 4: the old neck bind;
                           // keeps the pass-3 ring centring bone-for-bone)
-  int32_t neck[3];        // pass 4: the NEW mid-tube neck hinge
+  int32_t neck[3];        // the neck hinge. PASS 11 (QA §7.9): NOT "mid-tube"
+                          // -- Direction 7 §9.1 moved it onto the front
+                          // junction and manafold_rig.h has said so since
+                          // pass 9.
   int32_t junction_b[3];  // the BACK JUNCTION (kBLoopBase2 posed origin)
   int32_t hinge_a[3];
   int32_t hinge_b[3];

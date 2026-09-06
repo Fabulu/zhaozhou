@@ -264,9 +264,17 @@ inline zc::RingPart make_loop() {
 // the whole fault. As a swell on the chain it is skinned to the arm and
 // travels with it by construction: there is nothing left to detach.
 //
-// The rig is UNCHANGED: kBHingeA/B/C and kBJunctionF all still exist and still
-// drive the chain through the two-bone blend ladder in make_loop(); only their
-// rigid ball parts are gone.
+// The rig is UNCHANGED: kBHingeA/B/C all still exist and still drive the chain
+// through the two-bone blend ladder in make_loop(); only their rigid ball parts
+// are gone.
+//
+// PASS 11 (QA §7.5): kBJunctionF WAS IN THAT LIST AND DOES NOT BELONG THERE
+// EITHER -- the same fault as kBLoopBase2 below, in the same sentence. It is a
+// pure PARENT: it shares kBNeck's pivot exactly (kLoopArcMm[0] == 0), so
+// weighting a ring to it would weight the same point twice, and line ~190 of
+// make_loop says so in as many words. A rotation on it still bends the whole
+// antenna, because every loop bone descends from it -- which is exactly why
+// the false version read as true.
 //
 // PASS 10 C.4 — kBLoopBase2 WAS IN THAT LIST AND DID NOT BELONG THERE. It is
 // not in the blend ladder and drives no vertex: make_loop() never names it, and

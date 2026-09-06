@@ -623,6 +623,54 @@ int main() {
     }
   }
 
+  // ---- PASS 11 P.3 / QA §7.3: THE STAR-CONTAINMENT DERIVATION -------------
+  // This lived in manafold_art.h as prose and it is 10-GATE-CHECKLIST item 19's
+  // OWN CITED EXAMPLE. It read "the short arm (88) + the white ring tube (15)
+  // must stay inside the lens half-width (125)". The real constants are
+  // kEyeWideMm 84, kStarWhiteRimMm 16, kStarArmSideMm 77 -- EVERY INPUT WAS
+  // WRONG, and the conclusion still read as proven. Line ~873 of that same file
+  // contradicted it directly ("the rim is only 84 mm").
+  //
+  // E.2 has just moved constants in this neighbourhood, which is exactly when a
+  // prose derivation rots. So it is arithmetic now, on the shipped constants,
+  // printed every run and asserted.
+  //
+  // ⚠ IT IS A DESCRIBER, NOT A GATE, and the reason is worth more than the
+  // number. Written first as a GATE -- "reach must fit inside the lens
+  // half-width" -- it FAILED the shipped configuration by 5 mm and printed
+  // "the white ring crosses the lens ink" with total confidence. Then the
+  // render was looked at: the eye reads correctly, and E.2's own acceptance
+  // plate had just been accepted on it.
+  //
+  // The bound was an INVENTION. The prose it replaced was about containment
+  // under GAZE TRAVEL -- how far the star's centre may sweep before the ring
+  // crosses the ink -- and a static reach against the half-width is a different
+  // question wearing the same words. The star's widest ring genuinely does sit
+  // ~5 mm proud of the lens's widest point, and that is authored: the sheet
+  // draws a star sitting IN the lens, not inscribed in it.
+  //
+  // So the arithmetic is printed and nothing is asserted, because no bound for
+  // this has been established by eye, and a gate whose threshold is fitted to
+  // whatever the current value happens to be is the gate-fitted-to-its-own-
+  // answer trap -- it would pass forever and mean nothing. This still discharges
+  // QA §7.3: the derivation is out of prose, computed from the real constants,
+  // and can no longer rot. When someone establishes the travel bound by
+  // rendering the extremes, THAT becomes the gate.
+  //
+  // (CLAUDE.md, in one incident: measurement belongs on the comparison side,
+  // and a confident number is not evidence. This one nearly shipped as a red
+  // gate against a good render.)
+  {
+    const int32_t arm = static_cast<int32_t>(
+        (static_cast<int64_t>(u02::kStarArmSideMm) * u02::kStarScalePm) / 1000);
+    const int32_t reach = arm + u02::kStarWhiteRimMm;
+    std::printf("u02-probe: P.3 star containment (DESCRIBER, no bound asserted): "
+                "side arm %d mm scaled by %d pm + white rim %d = %d across; lens "
+                "half-width %d; overhang %d mm\n",
+                u02::kStarArmSideMm, u02::kStarScalePm, u02::kStarWhiteRimMm, reach,
+                u02::kEyeWideMm, reach - u02::kEyeWideMm);
+  }
+
   // ---- PASS 11 P.3 / F.1: THE STATION TABLE, PRINTED AND ASSERTED ---------
   // This lived in the rig header as PROSE: a hand-maintained table of station
   // positions plus the sentence "at blend = 165 that is 330 mm; the closest

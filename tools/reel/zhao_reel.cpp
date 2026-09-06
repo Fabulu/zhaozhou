@@ -7286,11 +7286,15 @@ int main(int argc, char** argv) {
     if (g_mana_ablate)
       std::fprintf(stderr, "MANA_ABLATE=1 (mana+smear forced off on every subject)\n");
   }
-  // PASS 10 STAGE A: U02_MIST_NO_EXCLUDE=1 puts the mist back OVER the
-  // creature -- pass-9 behaviour -- so the A/B and the colour gate's
-  // proved-failable leg both come from ONE BINARY (10-GATE-CHECKLIST item 21:
-  // a comparison split across two builds measures the builds as much as the
-  // flag). It is the measurement lever, never a shipping setting.
+  // U02_COVER_PAINT=1 paints the creature coverage mask green, so the mask the
+  // mist actually received can be RECOVERED from a render rather than
+  // re-derived by a probe that could drift from it.
+  //
+  // (PASS 11, QA §7.11: the five-line block that used to sit here documented
+  // U02_MIST_NO_EXCLUDE -- a different flag, whose own getenv is eight lines
+  // below and was undocumented. A scripted check of every getenv site in this
+  // file found this was the only misplacement of its shape. The block now sits
+  // on the flag it describes.)
   if (const char* cp = std::getenv("U02_COVER_PAINT")) {
     g_u02_cover_paint = std::string(cp) == "1";
     if (g_u02_cover_paint)
@@ -7331,6 +7335,11 @@ int main(int argc, char** argv) {
                  "U02_FOG_THICKNESS=%d pm (M.1 shell ladder; shipping default %d)\n",
                  v, u02::kFogThicknessPm);
   }
+  // PASS 10 STAGE A: U02_MIST_NO_EXCLUDE=1 puts the mist back OVER the
+  // creature -- pass-9 behaviour -- so the A/B and the colour gate's
+  // proved-failable leg both come from ONE BINARY (10-GATE-CHECKLIST item 21:
+  // a comparison split across two builds measures the builds as much as the
+  // flag). It is the measurement lever, never a shipping setting.
   if (const char* nx = std::getenv("U02_MIST_NO_EXCLUDE")) {
     if (std::string(nx) == "1") {
       u02::g_u02_mist_force_no_exclude = true;
@@ -7349,7 +7358,7 @@ int main(int argc, char** argv) {
     else if (a == "26") g_u02_sun_rig = &kU02SunRigA26;
     else if (a == "20") g_u02_sun_rig = &kU02SunRigA20;
     else {
-      std::fprintf(stderr, "U02_AMBIENT=%s unknown (40|32|26|20)\n", amb);
+      std::fprintf(stderr, "U02_AMBIENT=%s unknown (40|36|32|26|20)\n", amb);
       return 2;
     }
     std::fprintf(stderr, "U02_AMBIENT=%s (Stage M sun-rig ambient ladder)\n", amb);
@@ -7362,7 +7371,7 @@ int main(int argc, char** argv) {
     else if (a == "32") g_u02_moving_rig = &kU02MovingRigA32;
     else if (a == "40") g_u02_moving_rig = &kU02MovingRigA40;
     else {
-      std::fprintf(stderr, "U02_ML_AMBIENT=%s unknown (14|20|26|32)\n", amb);
+      std::fprintf(stderr, "U02_ML_AMBIENT=%s unknown (14|20|26|32|40)\n", amb);
       return 2;
     }
     std::fprintf(stderr, "U02_ML_AMBIENT=%s (Stage M moving-rig ambient ladder)\n", amb);

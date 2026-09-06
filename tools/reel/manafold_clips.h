@@ -886,7 +886,11 @@ inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f) {
     g.q[kBHingeC] = quat_mul(g.q[kBHingeC], quat_x(oop(kKneadOopCA16, ph_c, 0x6800)));
   }
   // KNEAD: the two hands wedge in counter-rotation; the neck stirs
-  // out-of-plane; the back ball slides. One consistent period.
+  // out-of-plane; the rear junction's closure ANCHOR slides. One consistent
+  // period. (PASS 11, QA §7.4: this said "the back ball slides" -- the
+  // identical claim pass 10 corrected 60 lines above, inside this same
+  // function, and missed here. There is no back ball; the rigid ball parts
+  // went at pass 6. What kBLoopBase2 slides is loop_pose's aim target.)
   if (ph.agit_pm > 0 || ph_b.agit_pm > 0 || ph_c.agit_pm > 0) {
     const int cyc = keys / kKneadWagPeriodKeys > 0 ? keys / kKneadWagPeriodKeys : 1;
     // PASS 11 F.3: press-recover, not a sine. Same amplitude, different phrasing.
