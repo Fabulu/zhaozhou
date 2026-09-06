@@ -3261,7 +3261,8 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     // glitchy step, feed EVERYTHING the mana draws this frame (pre splats
     // included), composite additively at chunky 4x under the live bodies.
     const u02::SmearPreset& sp =
-        u02::kSmearPresets[c.u02_smear_preset >= 0 && c.u02_smear_preset < 5
+        u02::kSmearPresets[c.u02_smear_preset >= 0 &&
+                                   c.u02_smear_preset < u02::kSmearPresetCount
                                ? c.u02_smear_preset
                                : 0];
     if (sp.gain_pm > 0) {

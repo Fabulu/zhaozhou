@@ -254,7 +254,7 @@ constexpr SmearTear kSmearTear = {5, 46, 2};  // kSmearTearRows/Frames/Cells
 // added. Stationary clips get the owner's "some of that glitchy smear" WITHOUT
 // the accumulation that plateaus. Travelling clips keep rung 3, which is the
 // approved reference look and is not touched.
-constexpr SmearPreset kSmearPresets[6] = {
+constexpr SmearPreset kSmearPresets[] = {
     {0, 1, 0, 1, 0, 0},          // 0: no smear
     {620, 2, 40, 90, 420, 0},    // 1: SHORT/CLEAN — a readable tail, tidy
     {820, 4, 90, 260, 520, 0},   // 2: MID/GLITCHY — the pass-3 lead rung
@@ -262,6 +262,15 @@ constexpr SmearPreset kSmearPresets[6] = {
     {940, 8, 260, 560, 540, 1},  // 4: BROKEN-BUFFER — the far end (cyan)
     {620, 2, 40, 90, 420, 1},    // 5: SHORT/TORN — rung 1 + the row tear
 };
+// PASS 7: the bound is DERIVED FROM THE ARRAY, never written by hand. Pass 5
+// shipped `< 14` on a 15-entry table; pass 6 fixed that one and then shipped
+// `< 5` on this six-entry one, which silently routed rung 5 -- and therefore
+// TWELVE of fifteen clips, `channel` included -- to index 0, "no smear".
+// Anything that indexes this table clamps against kSmearPresetCount.
+constexpr int kSmearPresetCount =
+    static_cast<int>(sizeof(kSmearPresets) / sizeof(kSmearPresets[0]));
+static_assert(kSmearPresetCount == 6,
+              "kSmearPresets grew or shrank: check every clip's rung assignment");
 constexpr int kSmearW = 96, kSmearH = 60;  // quarter-res: the fill budget
 // PASS 4 (R5, Direction 4 §2 "the smear needs to be properly hidden
 // whenever the creature is in front of it"): the plane carries ONE DEPTH
