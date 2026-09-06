@@ -623,6 +623,53 @@ int main() {
     }
   }
 
+  // ---- PASS 11 P.3 / F.1: THE STATION TABLE, PRINTED AND ASSERTED ---------
+  // This lived in the rig header as PROSE: a hand-maintained table of station
+  // positions plus the sentence "at blend = 165 that is 330 mm; the closest
+  // pair here is A->B at 340". Both halves are structural facts about numbers
+  // that live somewhere else, which is exactly the comment that rots -- and
+  // F.1 has just moved one of them. So the derivation moves out of prose and
+  // into arithmetic on the real constants, printed every run.
+  //
+  // THE CONDITION, in one line: make_loop's two-bone ladder flips a branch at
+  // (station - blend), and the previous station's weight must already have
+  // SATURATED by then. That needs consecutive stations at least 2*blend apart.
+  // Violate it and two blends overlap; a ring can only pick ONE bone pair, so
+  // the skin silently stops expressing the fold it was built for.
+  {
+    const int32_t stJF = u02::kLoopBuryMm;
+    const int32_t st[5] = {stJF + u02::kLoopArcMm[0],                          // Neck
+                           stJF + u02::kLoopArcMm[0] + u02::kLoopArcMm[1],     // A
+                           stJF + u02::kLoopArcMm[0] + u02::kLoopArcMm[1] +
+                               u02::kLoopArcMm[2],                            // B
+                           stJF + u02::kLoopArcMm[0] + u02::kLoopArcMm[1] +
+                               u02::kLoopArcMm[2] + u02::kLoopArcMm[3],       // C
+                           stJF + u02::kLoopArcMm[0] + u02::kLoopArcMm[1] +
+                               u02::kLoopArcMm[2] + u02::kLoopArcMm[3] +
+                               u02::kLoopArcMm[4]};                           // D
+    static const char* nm[5] = {"Neck", "A", "B", "C", "D"};
+    bool ok = true;
+    for (int i = 0; i < 5; ++i) {
+      const int32_t gap = (i == 0) ? st[0] - stJF : st[i] - st[i - 1];
+      const int32_t need = 2 * u02::kFoldBlendMm[i];
+      const bool row_ok = (i == 0) || (gap >= need);
+      if (!row_ok) ok = false;
+      std::printf("u02-probe: fold station %-4s at %4d mm, blend +/-%3d, gap from "
+                  "previous %4d mm, needs %4d — %s\n",
+                  nm[i], st[i], u02::kFoldBlendMm[i], gap, need,
+                  (i == 0) ? "(coincident with the front junction, by design)"
+                           : (row_ok ? "OK" : "FAIL blends overlap"));
+    }
+    std::printf("u02-probe: F.1 LADDER CONTINUITY — %s\n",
+                ok ? "OK every station pair clears 2*blend" : "FAIL");
+    if (!ok) {
+      std::printf("u02-probe: FAIL two fold blends overlap. A ring picks ONE bone "
+                  "pair, so the skin stops expressing the fold it was built for — "
+                  "silently, and it looks like an animation bug.\n");
+      rc = 1;
+    }
+  }
+
   // ---- PASS 11 E.2: THE STAR DEPTH ORDERING, ASSERTED ---------------------
   // make_star's own comment used to STATE this ordering. A comment that states
   // a structural fact is either gated or deleted (checklist 8/19), and this one

@@ -7555,11 +7555,56 @@ int main(int argc, char** argv) {
     s.u02_mana = 0;   // an unobstructed look at the joints, not the fold's bloom
     s.u02_smear = 0;
     s.planet = 0;     // channel's off-axis violet bloom would compete with the read
-    s.cam_k = 620000;    // ~1.7x the house zoom: the loop reads large in frame
+    // ---- PASS 11 F.0: THE FRAMING, FIXED BEFORE ANYTHING IS JUDGED ON IT ---
+    // 620000 CROPPED THE OPEN LOOP OFF THE TOP OF THE SCREEN for frames 0-102 --
+    // found by the pass-10 review, reproduced by the pass-11 architect, and this
+    // is the view the owner's §11 antenna verdict is taken on. Direction 8 §6.1
+    // makes that verdict come AFTER pass 11 ships, so a verdict on this subject
+    // would have been a verdict taken on a bad frame.
+    //
+    // 480000 holds every frame but leaves the open extreme only ~4 px of native
+    // margin at frame 0, which is too tight to trust. 460000 holds it with room
+    // and the creature still fills the frame. The 3D framing bound in the
+    // committed probe is what proves it, and that bound is proved failable
+    // against these very numbers' predecessors.
+    s.cam_k = 460000;    // ~1.3x the house zoom: the WHOLE loop stays in frame
     s.cam_bias = -9000;  // aim up off body-centre onto the loop (authored by eye)
+    // DECLARED, not emergent. This subject was only incidentally dry -- the mist
+    // is starved because u02_mana = 0, so nothing fed it. A diagnostic whose
+    // dryness is a side effect of another knob is one edit away from silently
+    // gaining a haze, and this one is the fold's judging view.
+    s.u02_mist = false;
     s.note =
         "Direction 5 SS2a fixed-camera antenna diagnostic: camera and body root "
         "both hold still for the whole clip -- only the hinges move";
+    rc |= render_scene(s);
+  }
+  // ---- PASS 11 F.2: THE QUARTER VIEW, the AUTHORING instrument -------------
+  // manafold-antenna-fixed is the JUDGING view and stays exactly as it is: the
+  // owner's §11 antenna verdict is taken on it, and a view that moves between
+  // passes cannot carry a verdict.
+  //
+  // But F.2 authors an OUT-OF-PLANE channel, and head-on that axis shows up
+  // only as foreshortening -- the hardest thing in the frame to judge and the
+  // easiest to fool yourself about. "Author by eye" needs an eye that can SEE
+  // the axis being authored, so this is the same subject yawed ~35 degrees,
+  // where out-of-plane motion reads as plain lateral displacement.
+  //
+  // It is committed rather than thrown away: the pass that needed it last time
+  // wrote a probe, deleted it, and left its numbers unreproducible (CLAUDE.md).
+  if (wanted("manafold-antenna-quarter")) {
+    SceneSubject s = subject_u02_clip(2, "manafold-antenna-quarter", u02::kChannelKeys,
+                                      false, &kU02SunChannel);
+    s.u02_mana = 0;
+    s.u02_smear = 0;
+    s.u02_mist = false;   // declared dry, same as the fixed view (F.0)
+    s.planet = 0;
+    s.cam_k = 460000;     // F.0's framing, so the two views are like-for-like
+    s.cam_bias = -9000;
+    s.cam_yaw = 6371;     // ~35 degrees in a16 (65536/360*35)
+    s.note =
+        "PASS 11 F.2 authoring view: manafold-antenna-fixed yawed ~35 degrees so "
+        "the out-of-plane knead reads as lateral travel, not foreshortening";
     rc |= render_scene(s);
   }
   // The FOG ABLATION pair (architecture §1.1). Same base clip as manafold-rest,

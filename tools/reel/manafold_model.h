@@ -108,16 +108,18 @@ inline zc::RingPart make_loop() {
   const int32_t stC = stB + kLoopArcMm[3];
   const int32_t stD = stC + kLoopArcMm[4];
   const int32_t total = stD + kLoopArcMm[5];
-  // PASS 8 (pass-7 by-eye fault 1, the MITRE half): 145 -> 165. A fold blend
-  // is the corner's turning radius; at 145 mm on a band 126 mm wide the corner
-  // radius was about one band width, which is what "almost right-angled" and
-  // "mitred" describe. The hard ceiling is half the SHORTEST station spacing
-  // (336/2 = 168) -- past that two blends overlap and the two-bone ladder
-  // below cannot express the ring, because a ring picks ONE bone pair.
-  const int32_t blend = 165;  // half-width of each fold blend, mm of tube
-                              // (max the station spacing admits; wider blend
-                              // = rounder corner, and the five-fold pentagon
-                              // plus these blends is the sheet's soft ring)
+  // PASS 11 F.1: the fold blend is now the named PER-STATION table
+  // kFoldBlendMm (manafold_art.h), not a local literal. It was a literal for
+  // three passes -- an unnamed number deciding whether the antenna reads as a
+  // chain or a hose, which is precisely the kind of value CLAUDE.md says must
+  // be a named, editable knob. See that table for why it is a table.
+  //
+  // (Pass 8's history, kept because it is the risk this change runs in reverse:
+  // 145 -> 165 was raised to fix "mitred corners". A fold blend is the corner's
+  // turning radius, and at 145 mm on a band 126 mm wide the corner radius was
+  // about one band width -- which is what "almost right-angled" describes. But
+  // that was the KNUCKLE-LESS strap. With knuckles the tight blend reads as a
+  // joint, checked by rendering it and looking.)
   // the per-station blade taper (piecewise-linear between stations)
   // PASS 9: SEVEN keys. stNeck is now coincident with stJF (Direction 7 §9.1 --
   // the joints move onto the balls and the junctions), so a key for it would be
@@ -180,8 +182,8 @@ inline zc::RingPart make_loop() {
     rs.rz = fxu(taper(kLoopBladeRzMm, s) + sw_z);
     rs.segments = static_cast<uint8_t>(kLoopSegments);
     // weights: a ladder of two-bone blends across the five fold stations
-    const auto blend_of = [&](int32_t st) {
-      int32_t t = ((s - (st - blend)) * 64) / (2 * blend);
+    const auto blend_of = [&](int32_t st, int32_t bl) {
+      int32_t t = ((s - (st - bl)) * 64) / (2 * bl);
       if (t < 0) t = 0;
       if (t > 64) t = 64;
       return t;  // 0 = fully lower bone, 64 = fully upper bone
@@ -193,13 +195,16 @@ inline zc::RingPart make_loop() {
     // same point twice, while a rotation on it still bends the whole antenna by
     // construction because every loop bone descends from it.
     //
-    // The continuity condition this ladder depends on, stated so the next
-    // station move does not have to rediscover it: a branch flips at
+    // The continuity condition this ladder depends on: a branch flips at
     // (station - blend), and the previous station's weight must already have
-    // SATURATED by then, which needs consecutive stations >= 2*blend apart.
-    // At blend = 165 that is 330 mm; the closest pair here is A->B at 340.
-    const int32_t tN = blend_of(stNeck), tA = blend_of(stA), tB = blend_of(stB),
-                  tC = blend_of(stC), tD = blend_of(stD);
+    // SATURATED by then, which needs consecutive stations >= 2*blend apart. It
+    // is ASSERTED in the committed probe from kFoldBlendMm and kLoopArcMm, not
+    // stated in a comment that the next station move would rot (checklist 19).
+    const int32_t tN = blend_of(stNeck, kFoldBlendMm[0]),
+                  tA = blend_of(stA, kFoldBlendMm[1]),
+                  tB = blend_of(stB, kFoldBlendMm[2]),
+                  tC = blend_of(stC, kFoldBlendMm[3]),
+                  tD = blend_of(stD, kFoldBlendMm[4]);
     if (tA == 0) {  // the buried base -> the front junction
       rs.b0 = kBRoot;
       rs.b1 = kBNeck;

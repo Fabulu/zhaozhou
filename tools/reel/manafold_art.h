@@ -206,6 +206,38 @@ constexpr int32_t kLoopBuryMm = 250;        // the near end plunges into the bod
 //
 // The TOTAL is unchanged at 3300 mm, so the band is the same length it was.
 constexpr int32_t kLoopArcMm[6] = {0, 680, 340, 380, 380, 1270};
+// ---- PASS 11 F.1: THE SPANS STOP BOWING ----------------------------------
+// The pass-10 review's diagnosis was mechanical and correct: "the corners
+// already read; it is the SPANS BETWEEN THEM that bow. Chain versus hose."
+//
+// THE CAUSE IS IN THE SKINNING, NOT THE ANIMATION -- which is why three passes
+// of animating harder never touched it. make_loop() blends each ring across the
+// two-bone ladder inside a window of +/- this many mm around every station, and
+// the stations are 340-380 mm apart. At the old GLOBAL LITERAL of 165 mm that
+// leaves TEN MILLIMETRES of rigid span between A and B, and ~50 on B->C and
+// C->D. The tube is interpolating almost everywhere, and a tube that is
+// interpolating everywhere IS "one continuous bending hose". The corners read
+// anyway because curvature peaks at the stations; the spans could never hold
+// straight, at any animation amplitude.
+//
+// A TABLE, NOT A SCALAR, and that is the point: pass 8 raised 145 -> 165 to fix
+// "mitred corners", so narrowing it again carries that risk in reverse. If one
+// station re-mitres, ITS entry goes up alone instead of the whole antenna going
+// back to a hose. The pass-8 raise was also fixing a KNUCKLE-LESS uniform strap;
+// the knuckles are real and bulby now, and a visible pivot at a swelling is
+// exactly what makes a tight corner read as a joint rather than a mitre.
+//
+// Authored by eye at 90 for every station: the runs between stations read as
+// straight segments with distinct angle changes AT the knuckles, and the pass-7
+// "almost right-angled paper fold" does NOT return. Walk 80-110 per station if
+// one place misbehaves.
+//
+// The ladder's continuity condition RELAXES as the blend narrows (it needs
+// consecutive stations >= 2*blend apart; 165 sat at the ceiling of 168). It is
+// asserted in the committed probe from these very constants rather than stated
+// here, because it is a structural fact -- checklist 8/19.
+// Order: Neck, A, B, C, D.
+constexpr int32_t kFoldBlendMm[5] = {90, 90, 90, 90, 90};
 // fold angles at the neck exit and hinges A..C (angle16, about Z); hinge D
 // has NO authored fold — loop_pose computes it per key (closure). Derived
 // from the sheet's ring read (tall upright egg, W/H ~0.8), tuned by LOOKING.
@@ -1364,9 +1396,33 @@ constexpr int kKneadLagCKeys = 18;
 // The out-of-plane knead channel that C.1 made possible: B and C swing across
 // the loop plane, not only within it. Their own periods differ from the
 // in-plane wag so the two never lock into one apparent motion.
-constexpr int32_t kKneadOopBA16 = 800;
-constexpr int32_t kKneadOopCA16 = 620;
-constexpr int32_t kKneadOopAA16 = 900;
+//
+// ---- PASS 11 F.2: IT EXISTED AND IT WAS INVISIBLE -------------------------
+// The pass-10 review measured the fold PLANAR ACROSS ALL 420 FRAMES, and the
+// reason was not that the channel was missing -- it shipped at pass 6. It was
+// that 900/800/620 a16 is 3.4-4.9 degrees, against IN-PLANE grips of 2300-3500
+// (13-19 degrees). A channel a quarter the size of the motion it hides inside
+// is a channel nobody can see. It measured non-zero and it read as flat: the
+// gap between a number being present and a read being present, which is this
+// project's own law in miniature.
+//
+// Raised ~2.9x to 10-14 degrees, authored by eye against the quarter-view
+// diagnostic (an axis authored by eye needs an eye that can SEE that axis --
+// foreshortening alone cannot be judged head-on).
+//
+// THE CLOSURE IS THE CONSTRAINT, and it has fired before: manafold_art.h:188
+// records a knead amplitude raise taking the arm rim 989 -> 1794 pm against a
+// 1120 gate. So the committed closure sweep is run at every candidate BEFORE
+// any render -- it costs seconds and it is the cheap early check. At these
+// values both legs are UNCHANGED (sweep 989, clip bank 1043, same argmax), and
+// that is a real robustness rather than a dead instrument: at an absurd 12000
+// the clip bank moves to 1253 and FAILS. The gate can move and can fail.
+//
+// ⚠ The real headroom is the CLIP BANK's 77 pm, not the sweep's 131. Raise
+// against the bank.
+constexpr int32_t kKneadOopBA16 = 2200;
+constexpr int32_t kKneadOopCA16 = 1800;
+constexpr int32_t kKneadOopAA16 = 2600;
 constexpr int kKneadOopPeriodKeys = 31;   // deliberately coprime-ish with 22
 constexpr int32_t kKneadWagJfA16 = 1600;  // knead: the two hands work...
 constexpr int32_t kKneadWagNeckA16 = 480;  // (neck stirs out-of-plane)
