@@ -1301,3 +1301,42 @@ printed 15 passed **on a stale binary** — its build returned RC=1 because a
 concurrent lane is mid-edit on `zhao_terrain_compcache_front.sv` and that
 file's lint gate is part of `build.ninja`'s own regeneration. Re-verify both
 when that lane lands. Nothing from a stale binary has been committed.
+
+## 2026-09-06 ~16:05 — WRITTEN BEFORE THE FIT RESULT IS READ
+
+`quartus_fit` completed at ~8,900 s CPU / ~1 h 50 m elapsed; `quartus_sta` is
+running. Numbers not yet looked at.
+
+**In flight right now, so it is not lost when the result redirects everything:**
+
+* **Guard/arbiter/pkg amendments** (agent). Ruling T3 names
+  `ZHAO_CLIENT_TERRAIN_BUILD = 6`; today `zhao_client_e` has no 6,
+  `zhao_vram_arbiter` casts the ARRAY INDEX to the enum so there is no sixth
+  slot to be, and MEM.GUARD has no bank-2 write window at all. Enacting these
+  is what makes TERRAIN.PAGELOADER integrable. Briefed to stop and say so
+  rather than widen the guard if the ruling is ambiguous — an unintegrated
+  block beats a guard with a hole in it.
+* **SW.STREAM contract** (agent). Step 4. Briefed to check the rulings
+  document first, because the PAGELOADER lane found the architecture
+  document's OPEN list is substantially out of date — T1–T12 already answer
+  several of it, including prefetch policy.
+
+**Next after the result, in order:**
+
+1. Fill `reports/G1D-COMPOSED-ISLAND-20260905.md` §4.3 with the V2 numbers and
+   compare against **6,600 nominal / 7,500 redline / 7,913 standalone sum /
+   16,193 the V1 composed run**. Remember the recorded correction: the
+   composed-vs-standalone-sum argument was right in kind and 2.4% in
+   magnitude, so do not restate "standalone sums overstate" as a rule.
+2. The **six texture V20 sites**, unblocked the moment the fit lets go:
+   `cache_pipe:406`, `cache_pipe:627` (a trailing comma swallowed into the
+   ENFORCED-BY path — a one-character fix that has been waiting all day for a
+   gap between fits), `aux_pipe:70`, `fragrob:523`, `island_top:569`, `:1085`.
+3. Build sequence steps 5–9: TERRAIN.SEQ, TERRAIN.WRITEBACK, the composed
+   shell path, and the 8 km traversal capture that is the layer's acceptance
+   gate.
+
+**Standing caution for reading the number:** the fit measures a design whose
+CLUT4 nibble select is still wrong and whose nearest path only started
+decoding today. It is an honest measurement of what is there, not of what is
+finished.
