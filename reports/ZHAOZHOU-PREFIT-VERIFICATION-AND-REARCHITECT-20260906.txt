@@ -1,0 +1,613 @@
+ZHAOZHOU -- PRE-FIT VERIFICATION AND REARCHITECT BRIEF
+=====================================================
+Every addendum finding checked against the source. What is confirmed, what is
+worse than stated, what is newly found, and what I got wrong.
+6 September 2026
+
+Repository: Fabulu/zhaozhou
+Branch: zixxtrixx-v8-closeout
+Written against: 4dadc0d8 (COMBINE v2 blockers repaired)
+Responds to: reports/TEXTURE-ISLAND-PREFIT-ADDENDUM-20260906.txt
+Prior law:   reports/COMBINE-ASSETFETCH-RECOVERY-20260906.txt
+
+STATUS OF THIS DOCUMENT
+-----------------------
+This is a VERIFICATION pass, not a second opinion. Every claim in the addendum
+was checked against the RTL by reading it, and where a claim could be tested by
+transcribing the control logic into a cycle model, it was. No Quartus run, no
+board, no full regression suite backs the statements below unless they say so.
+
+MEASURED  a specifically scoped result committed by the repository.
+SOURCE    behaviour visible in the examined code.
+MODELLED  reproduced in a transcribed control model, not the original RTL.
+FIXED     repaired and committed on this branch, with the commit named.
+
+
+0. HEADLINE
+===========
+
+The addendum is right on every point checked, and on three of them the true
+situation is WORSE than it states. Two further defects were found that it does
+not mention, one of which invalidates a passing test's central claim.
+
+Nothing here argues for cutting texture features. Every finding is a missing
+path, a missing reservation or a fixture that cannot fail -- the machine is
+under-connected and under-tested, not over-ambitious.
+
+  CONFIRMED AND FIXED     COMBINE v2's five pre-fit blockers          4dadc0d8
+  CONFIRMED AND FIXED     PERSPUV's second writer on e_q_u/e_q_v      (below)
+  CONFIRMED, WORSE        FRAGROB AUX context: not a window, ALWAYS
+  CONFIRMED, WORSE        cache lost results: instantiated and live
+  CONFIRMED, WORSE        the bilinear test: taps never even fetched
+  NEW                     three planner outputs are dead
+  NEW                     bind_mode is a global port, so per-fragment
+                          binding is a late read by construction
+  CORRECTED (mine)        the RAM diagnosis over-generalised
+
+
+1. WHAT I GOT WRONG, FIRST
+==========================
+
+1.1 The RAM diagnosis over-generalised. The addendum is right.
+-------------------------------------------------------------
+I wrote that the arrays which stayed in flops are "read from several places"
+and that the fix is to reduce each to a single read address. The addendum's
+correction stands: several suspect arrays have ONE logical read address, and
+`rob_m[seq_head_r]`'s three output slices all read the SAME word. Absence from
+the RAM inventory does not by itself establish a flop count or its cause.
+
+What survives from my finding, and it is narrower: `fsc_m` and `rob_tag_m` are
+the only two of their families that inferred, and the RAM Summary names them.
+That is a fact about the inventory. The MECHANISM I attached to it was a guess
+dressed as a conclusion, and PERSPUV had already taught this exact lesson once.
+
+The correct statement is the addendum's: a named per-array attribution needs the
+fitter's resource-by-entity section, and until then the organisation should be
+designed from the ACCESS STRUCTURE the block actually needs -- captured UV bank,
+captured material/context bank with one registered post-perspective read,
+per-sample metadata with one validated read, final result bank with a
+synchronous head read -- rather than from an inferred cause.
+
+1.2 What the PERSPUV evidence does support
+------------------------------------------
+FIXED, and this one is exact rather than inferred. `e_q_u`/`e_q_v` had TWO write
+addresses: `e_q_u[tail_q] <= 0` at allocation and `e_q_u[p3_i_q[0]] <= q_c[0]`
+at P4. An M10K simple-dual-port has one write port.
+
+The allocation-time zero is also REDUNDANT: `e_q_u[head_q]` is read only when
+`head_done` holds, which requires `e_have[head_q] == 2'b11`, and `e_have[i][0]`
+is set only in the same P4 branch that writes `e_q_u[i]`. No reader can observe
+the initialised value. Removed; both perspuv tests pass unchanged (8 and 12
+checks).
+
+This is the same rule the COMBINE brief states for scratch -- "Do NOT initialize
+scratch on admission: that creates a second writer" -- appearing in a second
+block. It is worth stating as a general law for this codebase.
+
+`e_sat` KEEPS its clear: it is a sticky flag that P4 only ever sets, so without
+the clear a saturation leaks into the next fragment reusing the token. It is 16
+bits and was never a memory candidate.
+
+Remaining PERSPUV work, and it is now aimed correctly: `e_num_u`/`e_num_v` have
+one write address and one read address and still did not infer, so they are the
+genuine QUARTUS_GOTCHAS 14 case -- the read feeds a multiplier combinationally.
+That is where the registered-read experiment belongs, and it is the ONLY array
+it fits. `e_mant` has two read addresses (`pk_i[0]`, `pk_i[1]`) because the
+per-axis split was applied to `e_num` and `e_q` and MISSED it.
+
+
+2. CACHE: THE LOST RESULT IS REAL, LIVE, AND SILENT
+===================================================
+VERIFIED and MODELLED. This is the most serious finding outside COMBINE.
+
+2.1 The mechanism
+-----------------
+  zhao_texture_cache_pipe.sv:300  rs_n     = rs_wp - rs_rp
+  :307                            rs_room  = (rs_n != REQN)
+  :321                            c3_retire = c3_all_hit && rs_room
+  :328                            c1_go     = rq_issuable && !fb_busy_r
+                                              && !c3_miss && rs_room
+
+`rs_room` is a snapshot of TODAY's occupancy and accounts for nothing already in
+C1 or C2. The file's own comment at :324-326 states the intended property --
+"Holding issue on rs_room keeps the pipe from producing results it cannot
+place" -- and that property is false.
+
+When `c3_retire` is 0 because the FIFO is full, NOTHING HOLDS C2:
+  :439  c2_v <= c1_v;              unconditional, outside any `if`
+  :440  if (c1_v) c2_rdat[k] <= ram_dat[k];   payload replaced whenever C1 is
+                                              occupied, with no reference to
+                                              c3_retire or rs_room
+`rq_rp` (:458) does not advance while `rq_ip` (:426) already passed the request.
+
+2.2 Independently reproduced
+----------------------------
+The control logic was transcribed into a cycle model -- pointers, c1_v/c2_v and
+their payloads, with the exact c1_go/c3_retire expressions -- and reproduces the
+addendum's numbers exactly:
+
+  accepted  0 1 2 3 4 5 6 7
+  returned  0 1 2 3     6 7
+  LOST              4 5
+
+Warm line, all lanes hit, smp_ready_i low, REQN=4. At t=7 `rs_room` falls, req 4
+sits in C2, and :439 overwrites it with req 5. At t=8 `c1_go` is 0 so :439
+clears C2 and req 5 is destroyed. When the consumer resumes, probes 6 and 7
+issue and retire, and EACH RETIRE BLINDLY INCREMENTS rq_rp (:458), freeing
+requests 4 and 5's slots while returning 6 and 7's src_id.
+
+2.3 Why it is worse than the addendum says
+------------------------------------------
+The header at :5 says "Nothing instantiates this yet". THAT IS STALE. The block
+is instantiated at zhao_texture_island_top.sv:781-783 with REQN(4) and in
+zhao_prod_top.sv:4348, and its smp_ready_i is real backpressure, not a stub:
+island_top:813 `cache_smp_ready = disp_rsp_ready` and rsp_dispatch:109
+`rsp_ready_o = (raw_n != RAWN)` -- a FIFO-full check that deasserts whenever
+anything downstream backs up.
+
+It does not deadlock. It returns correct-looking data under a mismatched tag,
+which is worse.
+
+The miss path is NOT an accidental rescue: `c3_miss` requires `!fb_busy_r` and
+so does `c1_go`, so the pipe is provably empty during a fill. There is no
+escape hatch.
+
+2.4 The repair: reserve at issue
+--------------------------------
+Invariant: rs_n + non-cancelled probes in flight <= REQN.
+
+  logic [RQW:0] rs_resv;
+  assign resv_room = (rs_resv != REQN);
+  assign c1_go     = rq_issuable && !fb_busy_r && !c3_miss && resv_room;
+  assign c3_retire = c3_all_hit;           // room was reserved two stages ago
+  assign squash_c  = c2_v + c1_v;          // probes killed by a miss
+  if (c3_miss) rs_resv <= rs_resv - squash_c - rs_pop;
+  else         rs_resv <= rs_resv + c1_go   - rs_pop;
+
+`rs_wp++` must NOT decrement rs_resv: retirement TRANSFERS the reservation from
+the pipeline into the FIFO, and only the pop frees it. That is the mechanism.
+
+The replay refund is safe by construction: `c1_go` contains `!c3_miss`, and a
+miss implies `!c3_all_hit`, so a miss and a retire are mutually exclusive. The
+queued `rs_n` reservations stay held while the squashed probes' are refunded.
+
+DO NOT take the fully-stallable C1/C2 alternative in this file. `rd_idx` and
+`rd_daddr` (:331-337) are combinational off `rq_ip`, and `ram_tag`/`ram_dat`
+(:363-364) reload every clock with NO ENABLE, deliberately, per :231-235. Adding
+a read enable is exactly what the M10K inference work at :150-183 fought to
+avoid. The counter costs three bits.
+
+2.5 The test
+------------
+tests/texture/texture_cache_pipe_directed.cpp case 3 already stalls the consumer
+at :150 and misses the defect for two reasons: the working set is COLD, so
+fb_busy_r serialises everything and two hit results never coexist in C1/C2 with
+a full FIFO; and it asserts only `accepted >= REQN` (:162), never that responses
+came back. Warm a line first, then stall, push 8 accesses with distinct src_id,
+release, and assert every issued src_id returns exactly once and in order.
+
+
+3. FRAGROB: THE AUX CONTEXT IS ALWAYS WRONG, NOT SOMETIMES
+==========================================================
+VERIFIED, and this is the sharpest escalation over the addendum.
+
+3.1 The mismatch
+----------------
+  zhao_texture_fragrob.sv:648-654  pop: ax_slot_q <= axq_m[..]; ax_pend_q <= 1
+  :525                             ax_ctx_r <= ctx_m[ax_slot_q];   UNCONDITIONAL
+  :416-419                         aux_valid_o = ax_pend_q;
+                                   aux_ctx_o   = ax_ctx_r;
+                                   aux_slot_o  = ax_slot_q;
+
+Line 525's address is `ax_slot_q` itself -- the register the pop overwrites.
+Both are nonblocking, so on the pop edge `ax_ctx_r` loads ctx_m[OLD slot] while
+ax_slot_q takes the NEW one.
+
+3.2 Why it is not a window
+--------------------------
+island_top.sv:1102 `fr_aux_ready = aux_req_ready`, and aux_pipe.sv:165
+`req_ready_o = 1'b1`. **aux_ready_i is permanently asserted**, so the
+wrong-context cycle is the ONLY cycle every request ever gets. The corrupted
+word is consumed as geometry at island_top.sv:1107 --
+`.req_wx_i(fr_aux_ctx[31:0]), .req_wz_i(fr_aux_ctx[63:32])`. Every AUX sheet
+lookup uses the PREVIOUS AUX fragment's world X/Z under the current fragment's
+slot and generation. Identity checks all pass.
+
+Why no test caught it: fragrob_differential.cpp:182 records aux_slot_o and
+aux_gen_o on the handshake and NEVER COMPARES aux_ctx_o -- the one observable
+that would fail.
+
+Also: ax_slot_q and ax_gen_q are not in the reset list (:549-563), so the first
+AUX request after reset reads ctx_m[0].
+
+3.3 Response validation and issue capacity
+------------------------------------------
+:389-393 checks valid and generation. MISSING on the TMU side: sample-index
+range, requested, issued, not-already-arrived. There is no issued mask in the
+file. An unrequested sample sets arr_q, so `arr_q != req_q` forever and, because
+retire is strictly allocation-ordered, THE WHOLE BLOCK WEDGES.
+
+One correction to the addendum's wording: `sidx==3` does not index into other
+storage -- the write and the bit-select are silently dropped. The harm is
+different and arguably worse: accepted as valid, no id_error counted, sample
+never arrives, same permanent head-of-line deadlock.
+
+Issue capacity: slot capacity is properly reserved (:340), but the WORK QUEUE is
+checked after the fact. The three `wq_m[..] <= ..` writes at :605-614 are
+unconditional and `wq_overflow_o` is raised AFTER them -- a flag, not
+backpressure. Worse, the assertion at :329 compares occupancy against `DEPTH*3`
+and NOT against `WQN=64`: at DEPTH=32 that is 96 > 64, the address aliases, and
+the assertion passes while entries are overwritten. The invariant that matters,
+`WQN >= DEPTH*3`, is asserted nowhere.
+
+Two independent `id_errors_o <= id_errors_o + 1` in one always_ff (:665, :672)
+means simultaneous TMU and AUX faults count as ONE.
+
+
+4. AUX: A NON-STALLABLE PRODUCER DOES NOT MAKE ITS SINK INFINITE
+================================================================
+VERIFIED, all three claims, with three distinct loss modes.
+
+`sheet_ready_i` appears in exactly ONE place in the whole file -- the evidence
+counter at :279. It has zero influence on a7_v_q or any a7_* payload. :272-278
+is an unconditional one-cycle shadow of div_ov, so the offer's lifetime is one
+clock regardless of acceptance.
+
+  MODE 1  offer evaporates: sheet_ready low, div_ov low next cycle, a7_v_q
+          clears, token never issued, FRAGROB slot waits forever. A HANG.
+  MODE 2  offer mutates mid-handshake: valid held while payload changes -- a
+          ready/valid protocol violation in its own right.
+  MODE 3  a degenerate result at the next cycle drops sheet_valid_o AND pushes
+          itself to the return queue, completing ahead of the request it just
+          destroyed.
+
+The return queue (:285-307) has no full term, no admission gate, no reservation.
+Peak push is 2/cycle (a sheet response and a degenerate together) against a pop
+of 1. There is NO sheet_rready_o port at all, so the leaf must sink every
+response. And `rqcnt` is 4 bits for an 8-deep queue: it can reach 15, wrap on
++2, and land on 0 with entries resident, at which point out_valid_o goes false
+and the queue silently stops delivering.
+
+The dual-push case has NEVER been exercised: the test harness makes
+sheet_rvalid_i a combinational loopback of sheet_valid_o, and those two are
+mutually exclusive by construction. In silicon, where a response has latency, it
+happens routinely.
+
+There is no sheet backpressure anywhere in the suite: texture_aux_pipe_directed
+ties sheet_ready_i and out_ready_i high for the entire run, and
+island_composed_directed ties sheet_ready_i high with a zero-latency loopback.
+
+Also: the ordering comment at :215-216 claims degenerates enter the return queue
+"in the same order". They do not -- a degenerate completes in one cycle while an
+earlier non-degenerate waits an unbounded sheet round trip. Harmless today
+because FRAGROB rejoins by token, but it is a documented property the RTL does
+not hold. And `rq_tok[rq_wp] <= sheet_rtok_i` accepts ANY response token.
+
+Repairs: a held offer (a bounded FIFO whose head IS the offer, so valid and
+payload are stable to the acceptance edge by construction), a credit on
+req_ready_o released only at terminal acceptance, a return queue sized to the
+credit with the sheet responder given absolute priority for the free slot
+because it has no ready line. THE DIVIDER AND ITS NUMERICAL LAW DO NOT CHANGE.
+
+
+5. THE COMPOSED TEST IS NOT TESTING WHAT ITS LABELS SAY
+=======================================================
+VERIFIED, and one finding here is worse than the addendum states.
+
+5.1 The mode word decode
+------------------------
+zhao_texture_tmu_plan.sv:231-239 gives the layout. `bind_mode = 0x6600`:
+
+  m_fmt    [2:0]   = 0   FMT_CLUT8
+  m_filter [3]     = 0   FILTER OFF
+  m_wrap_u [5:4]   = 0   REPEAT
+  m_wrap_v [7:6]   = 0   REPEAT
+  m_log2w  [11:8]  = 6   width 64
+  m_log2h  [15:12] = 6   height 64
+  m_maxlvl [19:16] = 0
+  m_mip_en [20]    = 0   MIP OFF
+
+Derived at :241-252: is_clut=1, `filter_eff = m_filter && !is_clut` = 0. So
+`acc_en_o = 4'b0001` -- ONE LANE -- and `fu_c/fv_c = 0` on every transaction for
+the entire run. The addendum's decode is exact.
+
+The test drives 0x6600 for every fragment in both phases (:211, :920) and then
+forces alternate responses into the bilinear consumer with an INDEPENDENT class
+input (:190, :913). Routing is on `cache_smp_src[15:14]` (island_top:821), which
+carries frag_class_i, not the planner's verdict.
+
+5.2 The finding beyond the addendum
+-----------------------------------
+THE THREE OTHER TAPS ARE NEVER FETCHED. cache_pipe:256 `c3_need_c = c2_en &
+~c3_hit_c` and the fill write is masked by fb_mask_r, so with en=0001 lanes 1-3
+are never needed, never filled, and their data_r is never written -- yet :455
+copies ALL FOUR lanes into the response word unconditionally.
+`disp_bil_data[63:16]` is therefore uninitialised RAM, handed to t10/t01/t11 at
+island_top:881-885.
+
+The bilinear exact check passes ONLY because fu=fv=0 makes the filter return
+t00. And the test's own comment at :637-640 -- "All four texels come from the
+same memory pattern 0x8586, so they are identical" -- IS FALSE. Taps 1 to 3 are
+garbage that the zero fractions discard.
+
+5.3 Three planner outputs are dead
+----------------------------------
+NEW. `plan_acc_filter`, `plan_acc_fmt` and `plan_acc_err` are declared
+(island_top:755-757), connected (:771-773) and NEVER READ ANYWHERE. The
+planner's format, filter and error verdicts reach nothing.
+
+5.4 bind_mode cannot be per-fragment as the port stands
+-------------------------------------------------------
+NEW, and it changes what the replacement fixture can do. `bind_mode_i` and
+`bind_base_i` are GLOBAL ISLAND PORTS read by the planner at its own T0
+handshake (:766), many cycles after fragment ingress. Writing them inside the
+submit loop does not attach a mode to a fragment -- it is a late ingress read,
+the exact class check_ingress_capture exists to prevent, and the gate misses it
+because its contract watches the `frag_` prefix only.
+
+So either the mode travels with the fragment as a labelled descriptor, or CLUT
+and RGB565 run as separate fully-drained phases. Mixing modes per fragment on
+the present port would MEASURE THE BUG.
+
+5.5 The rest, all verified
+--------------------------
+  uniform texels        fill_data_i = 0x8586 for every beat, address-independent;
+                        `mem.addr` is captured at :266 and never read
+  either-of-two          :582-585 accepts want(recipe, c_lo) OR want(recipe,
+                        c_hi); nothing computes this fragment's address
+  AUX excluded          :576-578 and :673-675 `continue` on idx%3==0, exactly
+                        the frag_aux_i set
+  alpha hardcoded       island_top:1088 `fr_tmu_a = 8'hFF`, and the ORACLE
+                        MIRRORS IT at :540 -- the expectation is copied from the
+                        omission it should catch
+  packer unused         zref_texture.hpp, Tmu::plan and Mode::pack are never
+                        included; the mode is a bare literal
+
+5.6 The mode word for a real bilinear request
+---------------------------------------------
+CLUT can never be filtered (:248-249 raises err_c on filter && is_clut), so a
+four-tap request REQUIRES a direct-colour format:
+
+  bind_mode = 0x0000_6609    RGB565, filter on, 64x64, no mip
+  0x660B ARGB1555, 0x660C ARGB4444 -- both needed for real alpha, and note the
+  island's chan8() at :888-893 hardcodes 5:6:5 unpacking, so those formats have
+  no glue yet. That is itself a gap.
+
+
+5A. THE SAMPLE PATHS: ONE LOST SAMPLE STALLS THE WHOLE ISLAND
+=============================================================
+VERIFIED, all five of the addendum's claims, and the consequence is more severe
+than "a fragment waits forever".
+
+5A.0 Why every hole in this section is a deadlock, not a degradation
+--------------------------------------------------------------------
+  zhao_texture_fragrob.sv:470-472
+    head_done_c = val_q[head] && (arr_q[head] == req_q[head])
+                               && (!auxreq_q[head] || auxarr_q[head]);
+
+Retirement is gated on arrivals EXACTLY EQUALLING requests. There is no timeout,
+no error completion, no way to retire a fragment whose sample never returned --
+grep for timeout/watchdog/deadline in that file finds nothing. And retirement is
+strictly ALLOCATION-ORDERED (:422-444, head_q / order_m), so the stuck fragment
+sits at the head and every later fragment queues behind it. `live_cnt_q`
+saturates, `frag_ready_o` drops: THE ISLAND DEADLOCKS.
+
+That is the "48 samples fetched, 0 fragments out" signature the island top's own
+comment at :1044-1045 already names for an earlier aux-token bug.
+
+5A.1 (a) The nearest path returns to nobody
+-------------------------------------------
+  island_top:824-825   .near_valid_o(disp_near_valid), .near_ready_i(1'b1),
+                       .near_data_o(disp_near_data), .near_tok_o(disp_near_tok)
+
+A whole-file grep for `disp_near` returns FOUR lines: three declarations and
+this instantiation. The nets are read by nothing -- no decode, no completion,
+not even a counter. `near_ready_i` tied high makes the class-1 pop fire whenever
+the queue is non-empty, so it drains one entry per clock INTO OPEN AIR. And
+:1061 forms `fr_tmu_rvalid` from the other two lanes only.
+
+LATENT, NOT FIRING: the composed test drives frag_class_i as 0 or 2 only. Class
+1 is never exercised, which is why it has not surfaced. It is a trapdoor on an
+unvalidated 2-bit island input.
+
+5A.2 (b) An unknown class is popped and destroyed
+-------------------------------------------------
+  rsp_dispatch:125-136   default: head_room = 1'b1;  // dropped, not stalled
+  :177                   dispatch_fire pops the raw FIFO
+  :186                   per-class push matches nothing when head_cls == 3
+
+The comment describes the behaviour accurately; the behaviour is what is wrong.
+There is no counter -- `accepted_o` counts raw pushes, so the discard is
+invisible in the evidence ports. Nothing between the island pin and the
+dispatcher validates the class against {0,1,2}.
+
+5A.3 (c) The palette's own refusal is ignored
+----------------------------------------------
+`pal_lu_stale` and `pal_lu_resident` appear at exactly two places in the island:
+the declaration (:954) and the connection (:986). Neither reaches the mux:
+
+  :1061  fr_tmu_rvalid = bil_out_valid || pal_lu_valid_o;
+  :1084  fr_tmu_rgb    = pal_lu_valid_o ? {pal_r8,pal_g8,pal_b8} : bil_rgb;
+
+The leaf is explicit that this is not allowed (palette_res:87-91): "The caller
+must take the cold path; the colour returned is NOT usable." The leaf is
+CORRECT -- it forwards a same-clock BEGIN and advances the generation at BEGIN
+precisely so a mid-load lookup cannot answer. The defect is entirely
+caller-side.
+
+And the shipped word is not a defined black. `l1_data_q` is loaded
+unconditionally from an array deliberately never reset (:112-129), so it is the
+PREVIOUS palette's entry under a live binding to a different palette -- the
+"creature briefly wearing another creature's colours" case the leaf's own header
+names -- or a half-written entry, or uninitialised memory.
+
+IT FIRES TODAY: cnt_palette_stale_o and cnt_palette_cold_o are wired out. The
+island counts the event and ships the colour anyway.
+
+5A.4 (d) Alpha, CLUT4 and the ARGB formats
+-------------------------------------------
+  island_top:1088   assign fr_tmu_a = 8'hFF;   unconditional, both branches
+
+The AUX path DOES form a real alpha (:1123), so this is a gap and not a
+convention. Beyond it:
+
+  * direct-colour extraction is hardwired RGB565 -- chan8() has no format input
+  * CLUT selects a BYTE, never a nibble. The planner carries t1_clut4/t2_clut4/
+    t3_clut4 through every stage and emits FMT_CLUT4, and the island never
+    consumes it. THE NIBBLE IS UNRECOVERABLE DOWNSTREAM: the texel-to-byte
+    divide already discarded it, so it must be captured at planning.
+  * sampmeta_m (:740) is {fv, fu, bytesel} -- no format, no nibble select
+  * ARGB1555 and ARGB4444 have NO DECODE anywhere in the island
+
+Every sample is opaque. Any ARGB texture and any index-based transparency is
+silently lost; the combiner always receives 255.
+
+5A.5 (e) Two authorities disagree, and it fires on every odd fragment
+---------------------------------------------------------------------
+The planner resolves format and filter from bind_mode_i and publishes
+acc_fmt_o / acc_filter_o / acc_err_o. The island routes on a SEPARATE input,
+frag_class_i, packed into the top two bits of the source id. The planner's three
+verdicts are never read.
+
+In the composed test they disagree NOW: bind_mode 0x6600 resolves CLUT8,
+nearest, `acc_en_o = 4'b0001`; half the fragments are tagged CLS_BIL. For every
+one of those:
+
+  * only lane 0 was enabled, but cache_pipe:453-455 writes the result slot from
+    ALL FOUR lanes unconditionally, while hit/miss classification considers only
+    enabled lanes. Lanes 1-3 return UNTAG-CHECKED RAM CONTENTS at footprint
+    addresses the planner computed regardless of filter -- potentially another
+    texture entirely.
+  * those four words are fed to chan8() as RGB565 when lane 0 actually holds a
+    pair of CLUT8 palette indices.
+
+Not "approximately right": a palette index byte and three stale words
+interpreted as colour channels, then bilinearly filtered and written as the
+fragment's colour.
+
+5A.6 Two more found while tracing
+----------------------------------
+  * `bil_expect_r` (island_top:842) has NO RESET ASSIGNMENT. The reset branch at
+    :934-937 assigns bil_r_r, bil_g_r and err_bil_chan_o and not this. Undefined
+    at power-up and never realigned after a reset landing mid-group, so
+    err_bil_chan_o can assert spuriously or miss a real misordering.
+  * The bilinear group TOKEN is never checked. :938-949 validates the channel
+    SEQUENCE (0,1,2) but never that all three carry the same lane token, and
+    bil_r_r/bil_g_r have no hold -- a later group can overwrite an earlier held
+    R/G before its B arrives. Sequence identity is not sample identity.
+
+5A.7 The repair: typed sample completions
+------------------------------------------
+THE INVARIANT, stated so it can be tested: every request accepted into the
+sample path produces EXACTLY ONE terminal completion, carrying the identity it
+was issued under, and that completion is either valid data or an explicitly
+enumerated refusal. No path may consume a request without producing one.
+
+  1. ONE RESOLVED SAMPLE DESCRIPTOR, formed once at planner acceptance from the
+     planner's own resolution and carried end to end: identity, format, filter,
+     decode {byte_select, NIBBLE_SELECT, fu, fv, pal_slot, pal_gen}, status.
+     The nibble select must be captured here or it is gone. pal_slot/pal_gen
+     move from per-fragment to per-sample.
+
+     CLASS IS DERIVED FROM {format, filter}, NEVER SUPPLIED INDEPENDENTLY. If
+     frag_class_i survives as a compatibility port, assert agreement and count
+     err_class_mismatch_o -- but route from the descriptor. This alone kills
+     (e) and the lane mismatch it causes.
+
+  2. ONE metadata read after the raw FIFO, before class dispatch. Today
+     sampmeta_m is read independently by the bilinear path (:850-851) and the
+     palette path (:981-984) -- two ports, two chances to disagree. Read once,
+     validate identity against the still-live generation, latch the descriptor
+     into the class packet; downstream reads the packet, never the table.
+
+  3. A TYPED COMPLETION and a merger that carries it:
+       COMPLETE_OK       + rgb888 + alpha8
+       COMPLETE_REFUSED  + {UNSUPPORTED_FORMAT, MODE_ERROR}
+       COMPLETE_ERROR    + {PALETTE_STALE, PALETTE_NONRESIDENT,
+                            UNKNOWN_CLASS, IDENTITY_MISMATCH}
+     FRAGROB gains a sample-response status input, and A NON-OK COMPLETION
+     STILL INCREMENTS arr_q so head_done_c is reached and the fragment retires
+     with a defined error colour and a sticky flag. That is the point: an error
+     must be as retirable as a success. Every deadlock above becomes a visible,
+     counted, retiring wrong pixel.
+
+  4. RESERVE a result slot before issuing each palette lookup. The strict
+     -priority merger is safe only because fragrob:395 ties tmu_rready_o high,
+     and the island already flags that dependency via err_rsp_dropped_o. The
+     typed design must not inherit it.
+
+  5. The nearest decode/completion station is the SAME format-controlled decode
+     law (d) needs -- one shared block, not three.
+
+5A.8 What the tests must drive
+-------------------------------
+The current fixture cannot see (a) or (b) at all. Acceptance must drive
+frag_class_i across ALL FOUR values including 3, drive bind_mode_i across each
+format and both filter settings, mix them within one frame, and assert the
+closing invariant directly:
+
+    fragments retired + fragments error-retired == fragments admitted
+
+with arr_q never able to fall permanently short of req_q. A counter-only check
+passes on every defect in this section.
+
+
+6. THE WORK QUEUE
+=================
+Ordered by what unblocks what. Items marked (fit) must land before the next
+composed fit; the rest can follow.
+
+  W1  (fit, DONE 4dadc0d8) COMBINE v2 blockers A-E, plus the context-release
+      rule from section 5 of the prior brief that the draft also had wrong.
+  W2  (fit, DONE)          PERSPUV e_q_u/e_q_v second writer removed.
+  W3  (fit) CACHE reservation counter, section 2.4, with the three assertions
+      and the warm-then-stall test. This is the highest-priority remaining
+      correctness item: it is live, silent and returns wrong-tagged data.
+  W4  (fit) FRAGROB AUX read/valid stage, section 3.1. Three lines of state and
+      one clock of AUX latency. Add the aux_ctx_o comparison to the
+      differential -- the missing observable is why this survived.
+  W5  (fit) FRAGROB acceptance predicate: range, requested, issued,
+      not-arrived. Plus the two-bit id_errors delta.
+  W6  (fit) AUX held offer + credit + bounded return queue, section 4.
+  W7  (fit) COMBINE v2 differential against zref::material::combine, including
+      the exact phase count. V2 MUST NOT BE FITTED BEFORE THIS.
+  W8       FRAGROB work-queue reservation and the WQN >= DEPTH*3 elaboration
+      assertion.
+  W9  (fit) TYPED SAMPLE COMPLETIONS, section 5A.7. Raised to a fit blocker
+      after verification: the nearest path returns to nobody, an unknown class
+      is destroyed, and the palette's own refusal is ignored -- and because
+      FRAGROB retires in allocation order with no timeout, ANY ONE of these
+      stalls the entire island rather than one fragment. Includes deriving the
+      class from the planner's resolution instead of an independent input,
+      which is the defect that fires on every odd fragment today.
+  W9b      Format decode: real alpha, CLUT4 nibble captured at planning,
+      ARGB1555/4444 decode. The nibble is unrecoverable downstream.
+  W9c      bil_expect_r reset, and the bilinear group token check.
+  W10      The composed fixture rebuild, section 5.6 and the addendum's list:
+      real mode records, unequal texels, address-specific expectations, live
+      fractions, non-opaque alpha, AUX included, and a mutation that proves the
+      fixture can fail.
+  W11      PERSPUV registered read on e_num_u/e_num_v ONLY, and the missing
+      per-axis split of e_mant.
+  W12      8 km terrain hardware, after the above.
+
+RELEASE GATE FOR THE NEXT COMPOSED FIT: W3, W4, W5, W6 and W7 complete, each
+with a test that has been shown to FAIL without its fix. The addendum's own
+argument applies -- the fitter should judge the replacement architecture, not a
+mistranscription of it, and that is equally true of the blocks around COMBINE.
+
+
+7. A LAW THIS CODEBASE HAS NOW LEARNED THREE TIMES
+==================================================
+Do not initialise a per-entry store at allocation. It creates a second write
+address, which is the one thing an M10K simple-dual-port cannot have.
+
+  COMBINE   the prior brief states it for scratch, in as many words
+  PERSPUV   e_q_u/e_q_v had it, and it was redundant as well as costly
+  COMBINE v2  the draft reintroduced the FLAG half of it -- phase 0 inheriting
+            the previous occupant's saturation
+
+Where the initialisation is genuinely needed -- a sticky flag like `e_sat` --
+keep it and keep the array in flops, deliberately, because the array is small
+and the alternative is a correctness bug. State which of the two applies at
+every such site.
