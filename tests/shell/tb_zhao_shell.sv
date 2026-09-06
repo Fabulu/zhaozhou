@@ -414,9 +414,27 @@ module tb_zhao_shell (
   input  logic signed [31:0] proj_bx_i, proj_by_i, proj_bz_i,
   input  logic signed [31:0] proj_cx_i, proj_cy_i, proj_cz_i,
   output logic               dbg_proj_ready_o,
+  // ALL THREE VERTICES, not one.
+  //
+  // D22 step 4's evidence compared vertex A against the oracle and nothing
+  // else, because only `pj_*_r[0]` was exposed. B and C were projected inside
+  // the design and never checked -- their contribution reached the assertions
+  // only through the drawn picture, which is a test of the whole chain and not
+  // of the projection. `dbg_proj_behind_o` was already three bits wide, so two
+  // of the three vertices had a flag exposed and no coordinates to go with it.
+  //
+  // A per-vertex oracle comparison on one vertex of three is not a
+  // per-vertex comparison. The picture agreeing is the same evidence step 4
+  // already had before PROJECT was composed at all.
   output logic signed [20:0] dbg_proj_ax_o,
   output logic signed [20:0] dbg_proj_ay_o,
   output logic [30:0]        dbg_proj_w_o,
+  output logic signed [20:0] dbg_proj_bx_o,
+  output logic signed [20:0] dbg_proj_by_o,
+  output logic [30:0]        dbg_proj_bw_o,
+  output logic signed [20:0] dbg_proj_cx_o,
+  output logic signed [20:0] dbg_proj_cy_o,
+  output logic [30:0]        dbg_proj_cw_o,
   output logic [2:0]         dbg_proj_behind_o,
   input  logic               clip_mode_i,
   output logic               dbg_clip_valid_o,
@@ -1219,6 +1237,12 @@ module tb_zhao_shell (
   assign dbg_proj_ax_o      = pj_x_r[0];
   assign dbg_proj_ay_o      = pj_y_r[0];
   assign dbg_proj_w_o       = pj_w_r[0];
+  assign dbg_proj_bx_o      = pj_x_r[1];
+  assign dbg_proj_by_o      = pj_y_r[1];
+  assign dbg_proj_bw_o      = pj_w_r[1];
+  assign dbg_proj_cx_o      = pj_x_r[2];
+  assign dbg_proj_cy_o      = pj_y_r[2];
+  assign dbg_proj_cw_o      = pj_w_r[2];
   assign dbg_proj_behind_o  = pj_behind_r;
 
   zhao_geom_project u_project (

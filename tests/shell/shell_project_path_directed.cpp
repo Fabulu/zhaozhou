@@ -128,8 +128,11 @@ struct Pass {
   std::vector<uint16_t> fb;
   bool took = false;
   bool ready = false;
-  int32_t ax = 0, ay = 0;
-  uint32_t w = 0;
+  // All three projected vertices, not just A. See the comparison below for why
+  // one of three was never a per-vertex check.
+  int32_t sx[3] = {0, 0, 0};
+  int32_t sy[3] = {0, 0, 0};
+  uint32_t sw[3] = {0, 0, 0};
   uint8_t behind = 0;
 };
 
@@ -293,9 +296,15 @@ Pass draw_once(int mode, bool wrong_matrix) {
       if (h.top.dbg_proj_ready_o) {
         if (!r.ready) {
           r.ready = true;
-          r.ax = (int32_t)h.top.dbg_proj_ax_o;
-          r.ay = (int32_t)h.top.dbg_proj_ay_o;
-          r.w = h.top.dbg_proj_w_o;
+          r.sx[0] = (int32_t)h.top.dbg_proj_ax_o;
+          r.sy[0] = (int32_t)h.top.dbg_proj_ay_o;
+          r.sw[0] = h.top.dbg_proj_w_o;
+          r.sx[1] = (int32_t)h.top.dbg_proj_bx_o;
+          r.sy[1] = (int32_t)h.top.dbg_proj_by_o;
+          r.sw[1] = h.top.dbg_proj_bw_o;
+          r.sx[2] = (int32_t)h.top.dbg_proj_cx_o;
+          r.sy[2] = (int32_t)h.top.dbg_proj_cy_o;
+          r.sw[2] = h.top.dbg_proj_cw_o;
           r.behind = (uint8_t)h.top.dbg_proj_behind_o;
         }
         ++saw_proj;
@@ -355,13 +364,50 @@ int main(int argc, char** argv) {
         "ones, which is a wrong triangle that still draws",
         1, via.ready ? 1 : 0);
 
-  std::printf("  project vertex A -> screen (%d, %d), w = %u, behind = %u\n", via.ax, via.ay, via.w,
-              via.behind);
+  // ALL THREE, against the oracle, one at a time.
+  //
+  // This used to compare vertex A and stop, because only `pj_*_r[0]` was
+  // exposed by the bench -- B and C reached the assertions only through the
+  // drawn picture. That is a test of the whole chain, and it is the same
+  // evidence step 4 had BEFORE GEOM.PROJECT was composed at all: the triangle
+  // came out right either way. A per-vertex oracle comparison on one vertex of
+  // three is not a per-vertex comparison.
+  //
+  // It matters beyond tidiness. The collector writes `pj_*_r[pj_got_r]` as
+  // vertices arrive, so an off-by-one or a stale hold shows up as B and C
+  // carrying A's numbers or each other's -- and vertex A would still be right.
+  int vtx_matched = 0, vtx_mismatched = 0;
+  for (int k = 0; k < 3; ++k) {
+    const auto ok = zr::project_vertex(m, vp, zref::fx16{kTri[k].x}, zref::fx16{kTri[k].y},
+                                       zref::fx16{kTri[k].z}, nullptr);
+    std::printf("  vertex %c -> project (%d, %d) w %u   oracle (%d, %d) w %d\n",
+                (char)('A' + k), via.sx[k], via.sy[k], via.sw[k], ok.s.x, ok.s.y, ok.w);
+    if (via.sx[k] == ok.s.x && via.sy[k] == ok.s.y && via.sw[k] == (uint32_t)ok.w)
+      ++vtx_matched;
+    else
+      ++vtx_mismatched;
+  }
 
-  check(via.ax == oa.s.x && via.ay == oa.s.y,
-        "and its vertex A matches zref::render::project_vertex exactly -- the "
-        "composed block agrees with the ratified law, not merely with itself",
-        ((long long)oa.s.x << 32) | (uint32_t)oa.s.y, ((long long)via.ax << 32) | (uint32_t)via.ay);
+  check(vtx_mismatched == 0,
+        "and EVERY ONE of the three vertices matches zref::render::project_vertex "
+        "exactly, screen x, screen y and w -- the composed block agrees with the "
+        "ratified law per vertex, not merely on the one the bench used to expose",
+        0, vtx_mismatched);
+  check(vtx_matched == 3,
+        "with all three actually compared, so the check above is not satisfied "
+        "by an empty set",
+        3, vtx_matched);
+
+  // DISTINCTNESS. Three vertices that all matched could still be three copies
+  // of one if the oracle and the design agreed on the same collector bug --
+  // they do not here, but a comparison that cannot tell three from one is not
+  // worth much.
+  const bool distinct = !(via.sx[0] == via.sx[1] && via.sx[1] == via.sx[2] &&
+                          via.sy[0] == via.sy[1] && via.sy[1] == via.sy[2]);
+  check(distinct,
+        "and the three are genuinely DIFFERENT screen points, so a collector "
+        "that wrote one vertex into all three slots could not pass",
+        1, distinct ? 1 : 0);
   check(via.behind == 0, "no vertex is behind for a w = 1 projection", 0, via.behind);
 
   // `w` is checked too, and it is the reason step 4 exists in this shape:
@@ -369,8 +415,8 @@ int main(int argc, char** argv) {
   // pipe wrong would produce a wrong depth with everything else correct.
   // ProjOut gained this field on 2026-09-04 precisely because the port had no
   // oracle and "the test's expectation was an uninitialised member for a day".
-  check((int32_t)via.w == oa.w, "and its w matches the oracle -- the field DEPTHQUANT quantises",
-        oa.w, (int32_t)via.w);
+  check((int32_t)via.sw[0] == oa.w, "and vertex A's w matches the oracle -- the field DEPTHQUANT quantises",
+        oa.w, (int32_t)via.sw[0]);
 
   const int nz = nonzero(pre.fb);
   check(nz > 0,
