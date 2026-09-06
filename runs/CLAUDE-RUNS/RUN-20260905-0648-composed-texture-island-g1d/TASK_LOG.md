@@ -1010,3 +1010,37 @@ repair. A full CMake preset refresh was not claimed: it hit the already-document
 ``configure_file`` permission failures while regenerating unrelated Verilator
 targets. Both named tests were instead verilated, statically linked and run
 directly with the pinned Windows toolchain, one job at a time beside Quartus.
+
+## GEOM.MEM-ADAPTER: overlong returns now retain ownership through physical LAST
+
+The texture-island fit and its wrapper remained live, so the exact fit closure was
+again left untouched. The next safe D19x ownership defect was in the already
+landed shared ENGINE1 adapter. On the eighth useful payload word without
+``m_beat_last``, it counted LONG but immediately returned to IDLE. The ninth
+through twelfth words therefore arrived after the logical owner had been
+released, were counted UNOWNED, and a queued descriptor could cross the adapter
+boundary before the physical response ended.
+
+Closed in ``c1d066b8``. ``zhao_geom_mem_adapter`` now enters an explicit drain
+state at that mismatch. It emits no surplus beat to either requester, retains the
+recorded owner, holds both requesters, counts one LONG response, and returns to
+IDLE only on downstream ``LAST``.
+
+The focused test queues a four-word A descriptor immediately after an overlong
+eight-word B payload has crossed the adapter boundary:
+
+    fixed RTL       [geom_mem_adapter_directed] 35 checks passed
+                    jobs A 3, jobs B 5, denied 1, contention 1
+                    short 0, long 1, unowned 0
+    pre-fix RTL     2 of 35 checks FAILED
+                    queued A accepted before physical LAST
+                    four B surplus beats misclassified UNOWNED
+                    MUTATION_EXIT=1
+
+Both variants were verilated and statically linked directly, one job at a time,
+under ``build/focused-geom-mem-overlong*``. The pre-fix source came from the
+committed parent and used the same strengthened test, so the two new ownership
+checks were demonstrated nonvacuous. The first direct fixed build exposed the
+known MinGW/Verilator libstdc++ ABI mismatch at link; rebuilding all translation
+units consistently with ``_GLIBCXX_USE_CXX11_ABI=0`` produced the passing gate.
+No broad CMake regeneration was used or claimed.

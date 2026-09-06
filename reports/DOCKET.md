@@ -3340,6 +3340,22 @@ valid and the poisoned triplet), so the detector was shown to fire. The 240-job
 random differential remains green: 217 admitted, 23 refused, 11,160 beats,
 **9 checks**.
 
+**2026-09-06, ``c1d066b8``.** The shared ENGINE1 adapter now retains the recorded
+logical owner when the expected useful-word count arrives without downstream
+``LAST``. It reports LONG once, discards surplus words in an explicit drain
+state, blocks both requesters through physical ``LAST``, and only then admits the
+next logical request. Previously it returned to IDLE at the useful count, so the
+remaining owned beats were misclassified UNOWNED and a queued request crossed
+the adapter boundary before the physical response had ended -- contrary to the
+one-logical-request-in-flight proof required by §12.4.
+
+The strengthened four/eight-word directed gate passes **35 checks**. Its overlong
+64-byte case queues a 32-byte descriptor during the surplus, proves that request
+remains held through physical ``LAST``, then proves its four returned words are
+uncontaminated. Compiling the same gate against the pre-fix RTL fails exactly the
+two ownership discriminators: the queued request is accepted early and four
+surplus beats are counted UNOWNED.
+
 ## D19w — the guard-verdict mistake was in THREE clients, and the third fails the other way
 
 **2026-09-06.** D22 tread 10 found both geometry fetchers testing
