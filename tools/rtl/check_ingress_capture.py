@@ -69,17 +69,27 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 # read of exactly the kind this file exists to prevent, and the gate misses it
 # because the island contract watches the `frag_` prefix only.
 #
-# It is NOT added as a `bind_` contract today for one reason worth stating: the
-# gate would go red immediately and stay red, because the defect is real and its
-# repair is a work item (the mode must travel with the fragment as a labelled
-# descriptor, or CLUT and direct-colour must run as separate drained phases).
-# A gate that is red for months is a gate people learn to ignore, which is worse
-# than the hole.
+# IT IS NOW A CONTRACT WITH A PINNED BASELINE, and the reasoning that kept it
+# out has been answered rather than overruled. The objection was correct: the
+# gate would go red immediately and stay red, and a gate that is red for months
+# is one people learn to ignore, which is worse than the hole.
 #
-# So it is recorded here and in
+# What changed is that V3 makes it a LAW (section 0 point F: "Resolve actual
+# bindings rather than using late global base/mode pins"), and the
+# diagnosis-verification lane found the consequence of leaving it unwatched:
+# a V3 that keeps a global mode/base pin PASSES THE GATE THAT EXISTS TO PREVENT
+# EXACTLY THAT, because the island contract watches the `frag_` prefix only.
+# An unwatched known defect became a way for its own replacement to be wrong.
+#
+# The resolution is `known_offences`: the exact current count, pinned. The gate
+# fails if the count goes UP -- a regression -- and it also fails if the count
+# goes DOWN, which is the half that makes this work rather than rot. A baseline
+# that only fails upward silently outlives its defect and then guards nothing;
+# one that fails downward forces whoever fixes the defect to retire the
+# baseline, which is how this reaches zero and goes green for a real reason.
+#
+# Recorded also in reports/V3-DIAGNOSIS-VERIFICATION-20260906.md and
 # reports/ZHAOZHOU-PREFIT-VERIFICATION-AND-REARCHITECT-20260906.txt section 5.4.
-# When the descriptor lands, add the contract and delete this comment -- and if
-# you are reading this and the descriptor has landed, the comment is the bug.
 
 CONTRACTS = [
     {
@@ -418,6 +428,33 @@ def main(argv):
         v = check(contract, verbose)
         if v is None:
             return 2
+        pinned = contract.get("known_offences")
+        if pinned is not None:
+            if len(v) == pinned:
+                print("check_ingress_capture: %s -- %d PINNED late read(s), "
+                      "unchanged. %s"
+                      % (contract["path"], pinned, contract.get("known_why", "")))
+                for line_no, names, src in v:
+                    print("    (pinned) %s:%d  %s"
+                          % (contract["path"], line_no, ",".join(names)))
+                continue
+            if len(v) > pinned:
+                print("check_ingress_capture: REGRESSION in %s -- %d late "
+                      "read(s), baseline is %d"
+                      % (contract["path"], len(v), pinned))
+            else:
+                print("check_ingress_capture: %s now has %d late read(s) "
+                      "against a baseline of %d -- BETTER THAN PINNED, and that "
+                      "is a failure on purpose: retire or lower the baseline in "
+                      "this file, or it will outlive the defect and guard "
+                      "nothing."
+                      % (contract["path"], len(v), pinned))
+            for line_no, names, src in v:
+                print("    %s:%d  %s" % (contract["path"], line_no,
+                                         ",".join(names)))
+            total += 1
+            continue
+
         if v:
             print("check_ingress_capture: LATE INGRESS READ in %s"
                   % contract["path"])
