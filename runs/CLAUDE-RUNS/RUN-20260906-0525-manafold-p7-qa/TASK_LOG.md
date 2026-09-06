@@ -460,20 +460,53 @@ is safe today; the GUARD is the dead thing.)
 * 12 unreferenced orphan files on disk; posters are 1152x720 against 384x240
   clips (a deliberate 3x supersample).
 
+### Media audit, addenda from the final report
+* `checkmedia.py` **never opens `index.html`** — it is manifest-driven only, so
+  nothing binds the page's references to the files it validates. The three-way
+  981 reconciliation that makes the count trustworthy is MY check, not the
+  tool's.
+* It routes `.gif` through `decode_png`, which has no frame-count check.
+* Poster outlier: `renders/zixxtrixx-v11-light-comparison.png` is 768x520 where
+  every other poster is 1152x720.
+* The 12 orphans, named: four `renders/SHEET-*.png`, `renders/u02-fx-tour.
+  {webm,png}`, `renders/u02-trio.{webm,png}`, and
+  `renders/native/zixxtrixx-{slither,strike}.png` alongside
+  `renders/zixxtrixx-{slither,strike}.png`.
+* The strict sweep worth keeping: over all 486 declared webms, "webms with
+  nonzero rc OR any stderr: **0**" — so there is no silent truncation anywhere
+  on the site today. That is the check `checkmedia.py` should be doing, and the
+  one-line fix (fail on non-empty stderr) makes it do it.
+
 ## Gate item 28 — BACKGROUND WORK, AND THE TRAP FIRED AGAIN HERE
-Checked with `Get-CimInstance Win32_Process`, not by assumption. Found:
-* `python tools/checkmedia.py .` (PID 16908) **STILL RUNNING**, spawning ffmpeg
-  children, an hour after the sub-investigation that launched it reported the
-  run had "exceeded my 10-min tool timeout and was killed". **The TOOL CALL
-  timed out; the PROCESS did not.** It was still decoding
-  `archive-2026-09-01-generation-eleven-attack.webm` when I found it.
-* Plus an orphaned `ffprobe` (PID 23796) from the same sweep.
+Checked with `Get-CimInstance Win32_Process`, not by assumption. Found ALIVE:
+* `python tools/checkmedia.py .` (PID 16908), actively spawning ffmpeg children
+  and still decoding `archive-2026-09-01-generation-eleven-attack.webm`, long
+  after the sub-investigation that launched it had stopped returning tool output.
+* An orphaned `ffprobe` (PID 23796) from the same sweep.
 Killed the tree and re-verified: no `zhao-reel`, `manafold-probe`,
 `manafold-qa-p7`, `ffmpeg`, `ffprobe`, `wrangler` or `zixx` process alive.
-This is CLAUDE.md's "stopping an agent does not stop its background work",
-reproduced verbatim inside the QA run that was auditing for it. A tool-call
-timeout is not a kill, and an agent's own report that it "was killed" is not
-evidence that it was.
+
+**The instructive part is the coupling.** That live child was ALSO why the media
+agent's completion notification had not reached me: the notification fires only
+when an agent stops with no live background children. So from my side the
+investigation looked finished while its work was still running, and the evidence
+that it was still running was the same process that was suppressing the notice.
+Killing it delivered the notification.
+
+CLAUDE.md: "stopping an agent does not stop its background work ... kill the
+background tasks too, then verify nothing is running before assuming a lane is
+closed." Reproduced inside the QA run that was auditing for it. **A tool call
+returning is not a process exiting, and an agent going quiet is not an agent
+being done.**
+
+CORRECTION, entered after the media agent's final report arrived: an earlier
+draft of this entry quoted that agent as having reported the run "was killed".
+It reports no such thing — it records an earlier full-site run that exited 127
+without executing (wrong cwd in a backgrounded shell) which it initially misread
+as a timeout, and states that the re-run with absolute paths is the real result.
+The finding above is what I OBSERVED directly; the quote was mine, not its, and
+is withdrawn. Logged rather than silently edited, since this run's whole subject
+is claims that outrun their evidence.
 
 ## Lane hygiene
 `C:\programmieren\zencrifice\zhaozhou` and `...\Upheaval` were never touched:
