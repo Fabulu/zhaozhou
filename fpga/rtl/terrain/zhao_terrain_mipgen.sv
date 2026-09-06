@@ -55,7 +55,14 @@ module zhao_terrain_mipgen #(
     // to be 33: the LAW above names 33, 17 and 9, and a different edge length
     // is a different law with different shared vertices.
     parameter int unsigned FINE   = 33,
-    parameter int unsigned SURFS  = 2     // top and bottom
+    parameter int unsigned SURFS  = 2,    // top and bottom
+    // The directory's identity widths, so a completion from here can be
+    // matched against the entry that asked for it. Defaults are
+    // zhao_terrain_residency_v2's own (256 sets x 4 ways, generation u8 per
+    // ruling T10); they are parameters rather than imports because this block
+    // does not otherwise know what a slot IS.
+    parameter int unsigned SLOTW  = 10,
+    parameter int unsigned GENW   = 8
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -66,6 +73,32 @@ module zhao_terrain_mipgen #(
     input  var logic          start_i,
     output var logic          busy_o,
     output var logic          done_o,     // one pulse, after the last sample
+
+    // ---- WHICH PAGE THIS SCAN WAS FOR ---------------------------------------
+    // `done_o` alone was a bare pulse with no page identity, and the comment
+    // above already said it "is one of [the directory's] three inputs" -- but
+    // TERRAIN.RESIDENCY matches a completion on {slot, gen, epoch}, so a pulse
+    // it cannot attribute is a pulse it cannot act on.
+    //
+    // The consequence was measured by the composed terrain test on 2026-09-07,
+    // not inferred: a claim sets `mips_stale`, so the loader's `fin` parks the
+    // entry in ST_MIPGEN and only a SECOND completion clears it. With no
+    // second completion in the tree, EIGHT PAGES were fetched, CRC-verified
+    // and byte-identical in their slots while `resident_o` stayed at ZERO.
+    // The assembled machine could not turn a loaded page into ground.
+    //
+    // The identity is CAPTURED AT `start_i` and returned unaltered. This block
+    // does not interpret it -- it has no business knowing what a slot means,
+    // and a scan that could rewrite the identity it was given would be a second
+    // source of truth, which is the same reason the fine port carries no
+    // coordinate.
+    input  var logic [SLOTW-1:0] job_slot_i,
+    input  var logic [GENW-1:0]  job_gen_i,
+    input  var logic [31:0]      job_epoch_i,
+
+    output var logic [SLOTW-1:0] done_slot_o,
+    output var logic [GENW-1:0]  done_gen_o,
+    output var logic [31:0]      done_epoch_o,
 
     // ---- the fine lattice, in scan order -------------------------------------
     // Row-major within a surface, surfaces in order. The order IS the address:
@@ -143,6 +176,9 @@ module zhao_terrain_mipgen #(
       col_q <= '0; row_q <= '0; surf_q <= '0;
       busy_q <= 1'b0;
       done_o <= 1'b0;
+      done_slot_o  <= '0;
+      done_gen_o   <= '0;
+      done_epoch_o <= '0;
       m17_valid_o <= 1'b0;
       m9_valid_o  <= 1'b0;
       samples_o <= '0; m17_writes_o <= '0; m9_writes_o <= '0; aborts_o <= '0;
@@ -154,6 +190,13 @@ module zhao_terrain_mipgen #(
       if (start_i) begin
         // A restart mid-scan abandons the partial result and says so.
         if (busy_q) aborts_o <= aborts_o + 32'd1;
+        // The identity travels with the scan it belongs to. Capturing it here
+        // rather than reading the ports at `done_o` is the ingress-capture
+        // rule: by the time the scan finishes, thousands of clocks later, the
+        // ports belong to whichever page was queued next.
+        done_slot_o  <= job_slot_i;
+        done_gen_o   <= job_gen_i;
+        done_epoch_o <= job_epoch_i;
         col_q  <= '0;
         row_q  <= '0;
         surf_q <= '0;

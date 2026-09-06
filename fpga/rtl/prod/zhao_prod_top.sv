@@ -3779,6 +3779,9 @@ module zhao_prod_top (
     else u54_lfsr_q <= {u54_lfsr_q[62:0], (^(u54_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [1-1:0] u54_busy_o;
   logic [1-1:0] u54_done_o;
+  logic [10-1:0] u54_done_slot_o;
+  logic [8-1:0] u54_done_gen_o;
+  logic [32-1:0] u54_done_epoch_o;
   logic [1-1:0] u54_fine_ready_o;
   logic [1-1:0] u54_m17_valid_o;
   logic [9-1:0] u54_m17_addr_o;
@@ -3798,9 +3801,15 @@ module zhao_prod_top (
       .start_i(u54_src[0 +: 1]),
       .busy_o(u54_busy_o),
       .done_o(u54_done_o),
-      .fine_valid_i(u54_src[7 +: 1]),
+      .job_slot_i(u54_src[7 +: 10]),
+      .job_gen_i(u54_src[14 +: 8]),
+      .job_epoch_i(u54_src[21 +: 32]),
+      .done_slot_o(u54_done_slot_o),
+      .done_gen_o(u54_done_gen_o),
+      .done_epoch_o(u54_done_epoch_o),
+      .fine_valid_i(u54_src[28 +: 1]),
       .fine_ready_o(u54_fine_ready_o),
-      .fine_h_i(u54_src[14 +: 16]),
+      .fine_h_i(u54_src[35 +: 16]),
       .m17_valid_o(u54_m17_valid_o),
       .m17_addr_o(u54_m17_addr_o),
       .m17_surf_o(u54_m17_surf_o),
@@ -3817,7 +3826,7 @@ module zhao_prod_top (
   logic u54_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u54_fold_q <= 1'b0;
-    else u54_fold_q <= u54_fold_q ^ (^u54_busy_o) ^ (^u54_done_o) ^ (^u54_fine_ready_o) ^ (^u54_m17_valid_o) ^ (^u54_m17_addr_o) ^ (^u54_m17_surf_o) ^ (^u54_m17_h_o) ^ (^u54_m9_valid_o) ^ (^u54_m9_addr_o) ^ (^u54_m9_surf_o) ^ (^u54_m9_h_o) ^ (^u54_samples_o) ^ (^u54_m17_writes_o) ^ (^u54_m9_writes_o) ^ (^u54_aborts_o);
+    else u54_fold_q <= u54_fold_q ^ (^u54_busy_o) ^ (^u54_done_o) ^ (^u54_done_slot_o) ^ (^u54_done_gen_o) ^ (^u54_done_epoch_o) ^ (^u54_fine_ready_o) ^ (^u54_m17_valid_o) ^ (^u54_m17_addr_o) ^ (^u54_m17_surf_o) ^ (^u54_m17_h_o) ^ (^u54_m9_valid_o) ^ (^u54_m9_addr_o) ^ (^u54_m9_surf_o) ^ (^u54_m9_h_o) ^ (^u54_samples_o) ^ (^u54_m17_writes_o) ^ (^u54_m9_writes_o) ^ (^u54_aborts_o);
 
   // ---- zhao_terrain_normals ----
   logic [63:0] u55_lfsr_q;
