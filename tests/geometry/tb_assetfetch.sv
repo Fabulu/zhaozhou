@@ -63,7 +63,13 @@ module tb_assetfetch
     output logic [31:0] beats_read,
     output logic [31:0] guard_denied,
     output logic [31:0] refused_footprint,
-    output logic [31:0] prefetch_stall
+    output logic [31:0] prefetch_stall,
+    // Beat-protocol faults (owner brief 11.4). Surfaced so the leaf test can
+    // drive a short and a long line and see the block REFUSE them, rather than
+    // trusting beat_last and building a record out of stale RAM.
+    output logic [31:0] err_beat_truncated,
+    output logic [31:0] err_beat_overrun,
+    output logic [31:0] err_beat_unowned
 );
 
   zhao_guard_req_t req;
@@ -122,7 +128,10 @@ module tb_assetfetch
       .beats_read_o        (beats_read),
       .guard_denied_o      (guard_denied),
       .refused_footprint_o (refused_footprint),
-      .prefetch_stall_o    (prefetch_stall)
+      .prefetch_stall_o    (prefetch_stall),
+      .err_beat_truncated_o(err_beat_truncated),
+      .err_beat_overrun_o  (err_beat_overrun),
+      .err_beat_unowned_o  (err_beat_unowned)
   );
 
 endmodule

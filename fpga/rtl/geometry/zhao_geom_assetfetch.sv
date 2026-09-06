@@ -99,7 +99,28 @@ module zhao_geom_assetfetch
     output var logic [31:0]       beats_read_o,
     output var logic [31:0]       guard_denied_o,
     output var logic [31:0]       refused_footprint_o,
-    output var logic [31:0]       prefetch_stall_o
+    output var logic [31:0]       prefetch_stall_o,
+
+    // ---- BEAT PROTOCOL FAULTS (owner recovery brief 11.4, 2026-09-06) -------
+    // "Do not make beat_last alone authority for arbitrary received length.
+    //  Early last is truncation; late/extra data is a protocol fault. Old RAM
+    //  contents cannot supply missing words of a supposedly complete vertex."
+    //
+    // A 64-byte asset line is EXACTLY eight packed 64-bit words. Until now this
+    // block counted beats and believed `beat_last_i` about where the line
+    // ended, so a short line produced a meshlet whose missing words were
+    // whatever the RAM last held -- a complete-looking vertex record built
+    // partly from the previous meshlet. That is a silent wrong picture, not a
+    // stall, which is why it needs counters rather than a stall metric.
+    //
+    // Three DISTINCT counters, not one "errors" total: they have different
+    // causes and different fixes. Truncation is the memory or the arbiter
+    // ending a burst early; overrun is a burst that did not stop; unowned is a
+    // response arriving with no request outstanding, which after the two-bank
+    // rework would mean a beat landing in the wrong bank.
+    output var logic [31:0]       err_beat_truncated_o,
+    output var logic [31:0]       err_beat_overrun_o,
+    output var logic [31:0]       err_beat_unowned_o
 );
 
   // -------------------------------------------------------------- sizes ----
@@ -401,6 +422,9 @@ module zhao_geom_assetfetch
       meshlets_fetched_o  <= '0;
       beats_read_o        <= '0;
       guard_denied_o      <= '0;
+      err_beat_truncated_o <= 32'd0;
+      err_beat_overrun_o   <= 32'd0;
+      err_beat_unowned_o   <= 32'd0;
       refused_footprint_o <= '0;
       prefetch_stall_o    <= '0;
     end else begin
@@ -408,6 +432,17 @@ module zhao_geom_assetfetch
       // permits: it sits in S_FETCH until ix_valid_i, with no deadline.
       ix_pend_q <= (st_q == S_SERVE) && ix_req_i;
       if ((st_q == S_SERVE) && ix_req_i) ix_sel_q <= ix_byte_c[2:0];
+
+      // UNOWNED: a beat with no request outstanding. Today this cannot happen
+      // -- one logical request is in flight and only S_FILL consumes beats --
+      // and it is counted anyway, because the two-bank rework makes "which
+      // bank does this word belong to" a real question and a beat arriving
+      // between requests would land in whichever bank was last reserved.
+      // A counter that reads zero for a whole architecture is the cheapest
+      // possible evidence that the next one is still zero.
+      if (beat_valid_i && (st_q != S_FILL)) begin
+        err_beat_unowned_o <= err_beat_unowned_o + 32'd1;
+      end
 
       // Every cycle a consumer waits on a buffer that is still filling. This is
       // the measurement that decides whether double buffering is worth ~2.4 KB,
@@ -480,7 +515,21 @@ module zhao_geom_assetfetch
         S_FILL: if (beat_valid_i) begin
           beats_read_o <= beats_read_o + 32'd1;
           beat_q       <= beat_q + 3'd1;
-          if (beat_last_i) begin
+          // TRUNCATION: `last` before the eighth word of the line. The job is
+          // abandoned rather than handed on -- a partial meshlet reads as a
+          // modelling error, exactly as a refused footprint does, and the
+          // block's own rule is that a refused meshlet emits NOTHING rather
+          // than the part that fits.
+          if (beat_last_i && (beat_q != 3'd7)) begin
+            err_beat_truncated_o <= err_beat_truncated_o + 32'd1;
+            st_q <= S_IDLE;
+          end else if (!beat_last_i && (beat_q == 3'd7)) begin
+            // OVERRUN: an eighth word that did not say it was the last, so a
+            // ninth is coming. Also abandoned: the line's destination range is
+            // full and the next word would land outside it.
+            err_beat_overrun_o <= err_beat_overrun_o + 32'd1;
+            st_q <= S_IDLE;
+          end else if (beat_last_i) begin
             if (!phase_q) begin
               if (line_q + 8'd1 == ix_nlines_q) begin
                 phase_q <= 1'b1;

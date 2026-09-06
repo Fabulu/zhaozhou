@@ -66,7 +66,17 @@ void build_pool() {
   }
 }
 
-uint8_t pool_abs_byte(uint32_t abs) { return g_pool[abs - af::kAssetPoolBase]; }
+uint8_t pool_abs_byte(uint32_t abs) {
+  // BOUNDS-CHECKED, and the check is part of the model rather than defensive
+  // padding. An OVERRUN beat is by definition a word the guard never
+  // authorised, so there is no pool byte for it -- returning 0 says that,
+  // where an unchecked index reads whatever happens to sit next in the host
+  // process and calls it asset data. The first version was unchecked and the
+  // overrun scenario segfaulted with no output at all, which is the buffered-
+  // output trap CLAUDE.md names: a late fault presenting as no start.
+  const uint32_t off = abs - af::kAssetPoolBase;
+  return (off < g_pool.size()) ? g_pool[off] : 0u;
+}
 
 // ---------------------------------------------------------------------------
 // The played guard.
@@ -75,6 +85,11 @@ struct Guard {
   Vtb_assetfetch& d;
   std::vector<uint32_t> asked;  // every line address, IN ORDER
   bool deny = false;            // deny the next accepted request
+  // BEAT-PROTOCOL INJECTION (owner recovery brief 11.4). A 64-byte line is
+  // exactly eight packed 64-bit words; these make the responder end one early
+  // or run one long, which is what the block must refuse instead of believing.
+  int truncate_at = -1;         // assert `last` on this beat instead of 7
+  bool overrun = false;         // withhold `last` on beat 7 and send a ninth
   bool shape_error = false;     // the block asked for something illegal
 
   // Beat delivery state for the line currently in flight.
@@ -123,7 +138,8 @@ struct Guard {
         }
         return w;
       }();
-      d.beat_last = (beat == 7);
+      d.beat_last = (truncate_at >= 0) ? (beat == truncate_at)
+                                       : (overrun ? (beat == 8) : (beat == 7));
       drove = true;
       return;  // one line at a time; no new request while beats flow
     }
@@ -171,7 +187,8 @@ struct Guard {
 
   void post_edge() {
     if (streaming && drove) {
-      if (beat == 7) {
+      const int last_beat = (truncate_at >= 0) ? truncate_at : (overrun ? 8 : 7);
+      if (beat == last_beat) {
         streaming = false;
       } else {
         ++beat;
@@ -458,6 +475,7 @@ int main(int argc, char** argv) {
        "a denial is NOT counted as a footprint refusal -- different faults");
   }
 
+
   // ---- the block recovers and serves the next meshlet --------------------
   serve_case(s, 128, 4096, 5, 3, "after a denial");
 
@@ -486,6 +504,66 @@ int main(int argc, char** argv) {
     // And the next meshlet is served correctly rather than inheriting state.
     serve_case(s, 192, 4104, 6, 5, "after an early release");
   }
+
+  // THESE RUN LAST, AND THAT IS NOT TIDINESS. Both scenarios ABANDON a job
+  // mid-line, which is the whole point of them, so each one adds an admission
+  // that no oracle above accounts for. Placed earlier they made four later
+  // cumulative checks fail -- "after a denial: admitted matches the oracle" and
+  // its neighbours -- which looked like the new fault handling breaking the
+  // block and was the test's own bookkeeping.
+  // ================= A LINE THAT ENDS EARLY, AND ONE THAT DOES NOT ==========
+  // Owner recovery brief 11.4: "Do not make beat_last alone authority for
+  // arbitrary received length. Early last is truncation; late/extra data is a
+  // protocol fault. Old RAM contents cannot supply missing words of a
+  // supposedly complete vertex."
+  //
+  // Before this, the block counted beats and believed `beat_last`. A line that
+  // stopped at word five produced a meshlet whose last three words were
+  // whatever the RAM held from the PREVIOUS meshlet -- a vertex record that
+  // decodes cleanly, passes its format check, and is partly somebody else's.
+  // That is a silent wrong picture, so the evidence has to be a counter and a
+  // refusal, not a stall or a timeout.
+  {
+    const uint32_t before = dut.err_beat_truncated;
+    s.g.truncate_at = 5;              // `last` on word five of eight
+    af::Request r;
+    r.vertex_offset = 0;
+    r.index_offset = 4096;
+    r.vertex_count = 4;
+    r.triangle_count = 4;
+    const bool servable = s.offer(r);
+    s.g.truncate_at = -1;
+
+    ck(!servable,
+       "a TRUNCATED line yields no servable meshlet -- a partial meshlet emits "
+       "NOTHING rather than the part that fits, the same rule a refused "
+       "footprint follows");
+    ck(dut.err_beat_truncated == before + 1,
+       "and it is counted as a TRUNCATION, distinctly");
+    ck(dut.err_beat_overrun == 0,
+       "not as an overrun -- the two have different causes and different fixes");
+  }
+
+  {
+    const uint32_t before = dut.err_beat_overrun;
+    s.g.overrun = true;               // no `last` on word eight; a ninth follows
+    af::Request r;
+    r.vertex_offset = 0;
+    r.index_offset = 4096;
+    r.vertex_count = 4;
+    r.triangle_count = 4;
+    const bool servable = s.offer(r);
+    s.g.overrun = false;
+
+    ck(!servable, "an OVERRUNNING line yields no servable meshlet either");
+    ck(dut.err_beat_overrun == before + 1,
+       "and it is counted as an OVERRUN -- the ninth word would land outside "
+       "the line's reserved destination range");
+  }
+
+  ck(dut.err_beat_unowned == 0,
+     "and no beat ever arrived without a request outstanding, which is the "
+     "counter the two-bank rework will make load-bearing");
 
   if (g_fail != 0) {
     std::printf("[assetfetch_rtl_directed] %d of %d checks FAILED\n", g_fail, g_checks);

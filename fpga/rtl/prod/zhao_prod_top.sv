@@ -1191,6 +1191,9 @@ module zhao_prod_top (
   logic [32-1:0] u17_guard_denied_o;
   logic [32-1:0] u17_refused_footprint_o;
   logic [32-1:0] u17_prefetch_stall_o;
+  logic [32-1:0] u17_err_beat_truncated_o;
+  logic [32-1:0] u17_err_beat_overrun_o;
+  logic [32-1:0] u17_err_beat_unowned_o;
   zhao_geom_assetfetch u17_i (
       .clk(clk),
       .rst_n(rst_n),
@@ -1227,12 +1230,15 @@ module zhao_prod_top (
       .beats_read_o(u17_beats_read_o),
       .guard_denied_o(u17_guard_denied_o),
       .refused_footprint_o(u17_refused_footprint_o),
-      .prefetch_stall_o(u17_prefetch_stall_o)
+      .prefetch_stall_o(u17_prefetch_stall_o),
+      .err_beat_truncated_o(u17_err_beat_truncated_o),
+      .err_beat_overrun_o(u17_err_beat_overrun_o),
+      .err_beat_unowned_o(u17_err_beat_unowned_o)
   );
   logic u17_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u17_fold_q <= 1'b0;
-    else u17_fold_q <= u17_fold_q ^ (^u17_m_ready_o) ^ (^u17_zhao_guard_req_t) ^ (^u17_s_valid_o) ^ (^u17_s_vertex_count_o) ^ (^u17_s_triangle_count_o) ^ (^u17_s_src_id_o) ^ (^u17_ix_valid_o) ^ (^u17_ix_a_o) ^ (^u17_ix_b_o) ^ (^u17_ix_c_o) ^ (^u17_v_valid_o) ^ (^u17_v_bytes_o) ^ (^u17_v_src_id_o) ^ (^u17_meshlets_fetched_o) ^ (^u17_beats_read_o) ^ (^u17_guard_denied_o) ^ (^u17_refused_footprint_o) ^ (^u17_prefetch_stall_o);
+    else u17_fold_q <= u17_fold_q ^ (^u17_m_ready_o) ^ (^u17_zhao_guard_req_t) ^ (^u17_s_valid_o) ^ (^u17_s_vertex_count_o) ^ (^u17_s_triangle_count_o) ^ (^u17_s_src_id_o) ^ (^u17_ix_valid_o) ^ (^u17_ix_a_o) ^ (^u17_ix_b_o) ^ (^u17_ix_c_o) ^ (^u17_v_valid_o) ^ (^u17_v_bytes_o) ^ (^u17_v_src_id_o) ^ (^u17_meshlets_fetched_o) ^ (^u17_beats_read_o) ^ (^u17_guard_denied_o) ^ (^u17_refused_footprint_o) ^ (^u17_prefetch_stall_o) ^ (^u17_err_beat_truncated_o) ^ (^u17_err_beat_overrun_o) ^ (^u17_err_beat_unowned_o);
 
   // ---- zhao_geom_attrsetup ----
   logic [63:0] u18_lfsr_q;

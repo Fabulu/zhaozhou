@@ -1095,7 +1095,11 @@ module tb_zhao_shell (
       .meshlets_fetched_o(dbg_af_meshlets_o), .beats_read_o(dbg_af_beats_o),
       .guard_denied_o(dbg_af_denied_o),
       .refused_footprint_o(dbg_af_refused_o),
-      .prefetch_stall_o(dbg_af_stall_o));
+      .prefetch_stall_o(dbg_af_stall_o),
+      // Beat-protocol faults (owner brief 11.4). Left unconnected here on
+      // purpose: the shell bench does not fabricate short or long lines, and a
+      // counter tied to a debug pin nobody asserts on is a pin, not evidence.
+      .err_beat_truncated_o(), .err_beat_overrun_o(), .err_beat_unowned_o());
 
   // ==========================================================================
   // TREAD 7: the four records, decoded into the table PROJECT reads
