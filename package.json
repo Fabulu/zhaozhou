@@ -17,7 +17,7 @@
     "tables:gen": "npm run -w tools/fixgen gen",
     "abi:check": "npm run -w tools/abi-gen check",
     "abi:gen": "npm run -w tools/abi-gen gen",
-    "design:report": "python tools/design/check_port_coverage.py && python tools/design/check_counters.py --quiet && python tools/design/check_array_storage.py && python tools/design/check_seam_widths.py && python tools/quartus/check_rule_freshness.py && python tools/rtl/check_ingress_capture.py"
+    "design:report": "python tools/design/check_port_coverage.py && python tools/design/check_counters.py --quiet && python tools/design/check_array_storage.py && python tools/design/check_seam_widths.py && python tools/quartus/check_rule_freshness.py && python tools/rtl/check_ingress_capture.py && python tools/rtl/check_guard_verdict.py"
   },
   "devDependencies": {
     "clang-format": "1.8.0"

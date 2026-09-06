@@ -3171,6 +3171,55 @@ perspuv's is chained behind it to confirm or refute the per-axis split.
 
 ---
 
+## D19w — the guard-verdict mistake was in THREE clients, and the third fails the other way
+
+**2026-09-06.** D22 tread 10 found both geometry fetchers testing
+`BTguard_rsp_i.ready && guard_rsp_i.okBT` in one cycle, which
+`BTzhao_mem_guardBT` cannot produce. Fixing two instances leaves the RULE
+unenforced, so `BTtools/rtl/check_guard_verdict.pyBT` now enforces it, wired into
+`BTnpm run design:reportBT`.
+
+**It found a third, in MEM.SCANOUT's fetcher, and the polarity is inverted.**
+
+```systemverilog
+  F_REQ: if (guard_rsp.ready) begin
+           if (guard_rsp.violation) ... // retry the line
+           else                     ... // -> F_BEATS
+         end
+```
+
+The fetchers tested `ready && ok`, so they read every PASS as a denial and
+stalled. This tests `ready && violation`, so it reads every DENIAL as a pass and
+drops into F_BEATS to wait for beats a refused request will never send. Same
+misreading, opposite failure.
+
+**The retry path and `BTviolation_nowBT` were both structurally dead**, and the
+comment on the arm -- *"denied (impossible in Phase 2)"* -- is true of the region
+rules and was NOT the reason the arm never ran. That is the shape this docket
+keeps recording: an explanation that is correct about the observation and wrong
+about the mechanism, which is how a dead safety path keeps its cover.
+
+A dead retry on the DISPLAY fetch is not cosmetic. It is the difference between
+a mis-programmed scanout base retrying its line and the display pipe stalling on
+beats that are not coming. F_VERD added; the arm is reachable.
+
+### The gate, and the two things that were done to it before trusting it
+
+**It reported three offences that were all PROSE** on its first run -- including
+two inside the very comments documenting the repair, and one in
+`BTzhao_raster_fbwriteBT`'s header where it QUOTES the guard line to explain why
+that block gets it right. A gate that flags the documentation of a fix as the
+absence of the fix trains the reader to ignore it. Comments are stripped first.
+
+**And it self-tests at import**, on a known-bad and a known-good arm, refusing to
+run if either verdict is wrong -- the rule CLAUDE.md states after a detector was
+written with an escape a shell heredoc ate, so it matched nothing and printed
+reassurance for its whole life.
+
+Its client list is WRITTEN OUT rather than discovered, for the same reason: a
+scanner that finds its own inputs reports "0 problems" just as happily when its
+pattern stops matching.
+
 ## D19v — COMBINE.V1 uses 2 DSP, claims ZERO, and the gate is set at exactly 2
 
 **2026-09-06. Measured, from the committed fit row; no new fit needed to find

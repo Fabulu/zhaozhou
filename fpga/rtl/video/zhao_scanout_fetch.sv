@@ -79,6 +79,26 @@ module zhao_scanout_fetch
     F_ARM      = 3'd0,  // per-line arm (skips Duo border lines)
     F_WAIT     = 3'd1,  // wait for the EMPTY credit on the target buffer
     F_REQ      = 3'd2,  // offer a 64-B guard read; wait ready
+    // THE GUARD'S VERDICT IS A SEPARATE CYCLE. Found 2026-09-06 by the new
+    // `check_guard_verdict` gate, written after D22 tread 10 found the same
+    // shape in both geometry fetchers.
+    //
+    // `zhao_mem_guard` drives `rsp.ready` as the LEVEL `!fwd_active` and pulses
+    // `rsp.ok` / `rsp.violation` the cycle AFTER the accept -- and the accept is
+    // what raises `fwd_active`. So `ready && violation` could never be true, and
+    // F_REQ's denial arm and `violation_now` were both STRUCTURALLY DEAD.
+    //
+    // The polarity here is the OPPOSITE of the fetchers' and worth naming. They
+    // tested `ready && ok`, so they read every PASS as a denial. This tested
+    // `ready && violation`, so it reads every DENIAL as a pass and drops into
+    // F_BEATS to wait for beats a refused request will never send. The comment
+    // on that arm said "denied (impossible in Phase 2)" -- true of the region
+    // rules, and NOT the reason the arm never ran.
+    //
+    // A dead retry path on the DISPLAY fetch is not cosmetic: it is the
+    // difference between a mis-programmed scanout base retrying its line and
+    // the display pipe stalling on beats that are not coming.
+    F_VERD     = 3'd5,  // the guard's verdict, one cycle after it accepted
     F_BEATS    = 3'd3,  // collect 8 beats -> 8 words into the line buffer
     F_PARK     = 3'd4   // frame fully fetched; park until the next dec_sync
   } fetch_state_e;
@@ -194,7 +214,9 @@ module zhao_scanout_fetch
   assign fill_addr = fill_words[6:0];
   assign fill_data = beat_data;
   assign fill_we   = (state == F_BEATS) && beat_valid;
-  assign req_active= (state == F_REQ) || (state == F_BEATS);
+  // F_VERD counts as in flight: the guard is holding the request, and a trace
+  // that said otherwise would show a one-cycle gap that does not exist.
+  assign req_active= (state == F_REQ) || (state == F_VERD) || (state == F_BEATS);
 
   // ---- completion / abort are COMBINATIONAL levels of the completing
   // cycle so they always carry the CURRENT fill_line_buf (the select only
@@ -212,8 +234,7 @@ module zhao_scanout_fetch
                          ((fetch_mode != ZHAO_MODE_DUO) || (seg_idx == 1'b1));
   assign flush_now     = dec_sync ||
                          (frame_start_sync && (mode_sync != fetch_mode));
-  assign violation_now = (state == F_REQ) && guard_rsp.ready &&
-                         guard_rsp.violation;
+  assign violation_now = (state == F_VERD) && guard_rsp.violation;
 
   assign fill_line_done = line_complete;
   // frame re-arm / mode flush discards BOTH buffers (the per-frame
@@ -288,18 +309,28 @@ module zhao_scanout_fetch
           end
 
           F_REQ: begin
+            // Accepted. The verdict lands the NEXT cycle -- see F_VERD's note
+            // at the enum for why it cannot land in this one.
             if (guard_rsp.ready) begin
-              if (guard_rsp.violation) begin
-                // denied (impossible in Phase 2): discard + retry the line
-                state        <= F_ARM;
-                seg_idx      <= 1'b0;
-                req_idx      <= 4'd0;
-                fill_words   <= 8'd0;
-              end else begin
-                state    <= F_BEATS;
-                beat_cnt <= 3'd0;
-              end
+              state <= F_VERD;
             end
+          end
+
+          F_VERD: begin
+            if (guard_rsp.violation) begin
+              // denied: discard + retry the line. REACHABLE NOW -- this arm
+              // used to be tested against `ready && violation`, which the guard
+              // cannot produce, so the retry never ran for any reason.
+              state        <= F_ARM;
+              seg_idx      <= 1'b0;
+              req_idx      <= 4'd0;
+              fill_words   <= 8'd0;
+            end else if (guard_rsp.ok) begin
+              state    <= F_BEATS;
+              beat_cnt <= 3'd0;
+            end
+            // Neither bit yet: WAIT. Reading silence as either answer is the
+            // whole class of mistake this state exists to end.
           end
 
           F_BEATS: begin
