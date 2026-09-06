@@ -143,7 +143,15 @@ constexpr int32_t kBoltCoreRPx = 3;        // the hot core: 3 px fuses the
                                            // filament at native (2 px read
                                            // as dots against the ghost)
 constexpr int kBoltHaloGainPm = 260;
-constexpr int32_t kBoltHaloRPx = 7;
+// PASS 7: widened 7 -> 9. The strand's hot core (kBoltCoreRPx, near-white,
+// kBoltCoreGainPm=1000) is the by-eye review's named whitening element and
+// is left exactly as-is -- 2px core radius was tried and rejected before
+// ("read as dots against the ghost"), and the strand's identity is not
+// this pass's job to touch. Instead the CALM CYAN HALO around it gets more
+// area, which is breadth on the correct side of the ratio: more properly-
+// saturated cyan pixels per strand sample, same core, same gain. Chosen by
+// eye at native on manafold-channel.
+constexpr int32_t kBoltHaloRPx = 9;
 constexpr int kStreakGainPm = 420;         // the anamorphic strike flash
 constexpr int32_t kStreakSpanPx = 46;
 // PASS 3 (R9): lightning is 2-3 CONTINUOUS strands that BUZZ across the
@@ -234,6 +242,30 @@ constexpr int kSmearFeedPm = 520;
 // hue with an opacity that follows its remaining brightness — fresh cells
 // are near-solid saturated blobs, decayed cells thin out and dissolve.
 constexpr int kSmearAlphaMaxPm = 780;
+// PASS 7 (Direction 5 §3): "the gassy outside inside the black line before
+// you get to the real body is actually a cool idea, but it wasn't in the
+// specs. Instead of removing it, let's thicken that fog by a lot, so it's
+// still see through, but way less so. It should be very visible."
+//
+// THIS IS ITS OWN KNOB, deliberately separate from each SmearPreset's own
+// gain_pm above. gain_pm carries a rung's IDENTITY (short/clean vs
+// long/glitchy vs broken-buffer) and is tuned against that rung's own
+// decay/tear timing; folding "how thick does the fog read" into the same
+// number is exactly the kBellyGlowGainPm mistake on record (one knob doing
+// two jobs, so fixing one silently breaks the other). kFogThicknessPm scales
+// EVERY rung's composite gain by the same factor at the one call site
+// (zhao_reel.cpp's smear_composite call) and nothing else touches it: no
+// rung's own gain_pm, decay, jitter, hard-clear or tear timing changes, so
+// every rung keeps the identity it was tuned for and simply reads solidly
+// thicker. 1000 = untouched (pass 6 behaviour). Chosen by eye at native
+// 384x240 under the shipping rig (ZIXX_EXP=celmain,
+// ZIXX_LIGHT=diagonal-cool-cross) against manafold-rest and
+// manafold-channel: 1000 read as barely-there wisps once the off-by-one fix
+// (kSmearPresetCount) stopped masking it as "no smear plane at all"; 2000
+// was the first value where the gassy shell read as deliberately thick fog
+// rather than a faint halo, while individual frames still showed the body
+// through it -- "still see through, but way less so".
+constexpr int kFogThicknessPm = 4500;
 // PASS 4 (R6, Direction 4 §2 "glitchier than the others you made"): a
 // FOURTH live rung past the long/glitchy one -- keep higher, steps longer
 // and chunkier, jitter wider -- and the ROW TEAR: on hashed frames a
@@ -262,6 +294,9 @@ constexpr SmearPreset kSmearPresets[] = {
     {940, 8, 260, 560, 540, 1},  // 4: BROKEN-BUFFER — the far end (cyan)
     {620, 2, 40, 90, 420, 1},    // 5: SHORT/TORN — rung 1 + the row tear
 };
+// PASS 7: named, not a bare "3" at the one call site that must skip the fog
+// knob (kFogThicknessPm) -- the travelling clips' approved reference trail.
+constexpr int kU02SmearTravellingRung = 3;
 // PASS 7: the bound is DERIVED FROM THE ARRAY, never written by hand. Pass 5
 // shipped `< 14` on a 15-entry table; pass 6 fixed that one and then shipped
 // `< 5` on this six-entry one, which silently routed rung 5 -- and therefore

@@ -2893,6 +2893,13 @@ int g_cel_main = 0;
 // with no creature in it). Unset, this gate is a single skipped branch and
 // every byte is identical.
 int g_hide_creature = 0;
+// PASS 7 MANA LANE (measurement side, default off): MANA_ABLATE=1 forces
+// u02_mana and u02_smear to 0 on every subject, regardless of what the
+// subject itself requests -- a general-purpose ablation twin for the
+// mana_hue_probe.py diff-pair attribution, for clips (channel, mana-stack)
+// that have no committed fogprobe twin of their own. Ships nothing: unset,
+// this is a single skipped assignment and every byte is identical.
+int g_mana_ablate = 0;
 constexpr int32_t kCelInkFarRadiusQ8 = 120 * 256;
 constexpr int32_t kCelInkMidRadiusQ8 = 200 * 256;
 constexpr int32_t kCelInkCloseRadiusQ8 = 360 * 256;
@@ -3325,8 +3332,31 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
                         s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8, feed_r,
                         pm.s.d);
       }
+      // PASS 7 (Direction 5 §3, "thicken that fog by a lot"): kFogThicknessPm
+      // is the fog's OWN knob, applied here and nowhere else -- sp.gain_pm
+      // itself, and every other field of the rung, is untouched, so the
+      // rung's decay/tear IDENTITY survives and only the composite's
+      // opacity changes.
+      //
+      // SCOPED to the STATIONARY haze, not the travelling comet-trail:
+      // "the gassy outside inside the black line before you get to the real
+      // body" (Direction 5 §3) reads as the pocket's own local haze, on the
+      // clips the owner actually watches (channel, rest, taunt2 -- all rung
+      // 5). Rung 3 (index kU02SmearTravellingRung) is drift/hasty's own
+      // trail, and PASS 6 F.1's own header comment calls it "the approved
+      // reference look ... untouched" -- a promise this pass should not
+      // silently break by routing a global multiplier through it. Rendered
+      // both ways and looked: at kFogThicknessPm's full value, hasty's
+      // comet tail roughly doubled in screen length and read as a different
+      // effect, not a thicker version of the same one. So the fog knob
+      // applies everywhere EXCEPT that one preset index; if the owner wants
+      // the travel trail thickened too, this is the one line to change.
+      const bool is_travelling_rung =
+          c.u02_smear_preset == u02::kU02SmearTravellingRung;
+      const int fog_gain_pm =
+          sp.gain_pm * (is_travelling_rung ? 1000 : u02::kFogThicknessPm) / 1000;
       u02::smear_composite(c.u02_smear_buf.data(), c.u02_smear_depth.data(), rgb,
-                           depth, w, h, sp.gain_pm, c.u02_frame, sp.tear);
+                           depth, w, h, fog_gain_pm, c.u02_frame, sp.tear);
     }
     static u02::GlowFrameCache s_draw_cache;
     for (const u02::ManaSplat& ms : c.u02_mana_splats) {
@@ -3611,7 +3641,7 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.gibs = &gibs;
     cr_ctx.u02_glow = sub.u02_glow;
     cr_ctx.u02_glow_trio = sub.u02_glow_trio;
-    cr_ctx.u02_smear_preset = sub.u02_smear;  // pass 3 (R6)
+    cr_ctx.u02_smear_preset = g_mana_ablate ? 0 : sub.u02_smear;  // pass 3 (R6)
     if (species == Species::kUnnamed02 && sub.u02_trio) {
       for (int e = 0; e < 2; ++e) {
         u02_extra_inst[e].type = dog;
@@ -4023,7 +4053,7 @@ int render_scene(const SceneSubject& sub) {
                   static_cast<int32_t>((static_cast<int64_t>(ds.flatten) * 500) /
                                        (u02::kCompressAmpPm > 0 ? u02::kCompressAmpPm : 1));
             }
-            if (sub.u02_mana != 0) {
+            if (sub.u02_mana != 0 && !g_mana_ablate) {
               // PASS 4 (Stage MN, the reviewer's flag 2 made honest): the
               // mana fills for EVERY composed conduit, not ii == 0 only --
               // no subject had ever rendered several conduits' mana, so
@@ -7025,6 +7055,14 @@ int main(int argc, char** argv) {
     g_hide_creature = std::string(hide) == "1" ? 1 : 0;
     if (g_hide_creature)
       std::fprintf(stderr, "ZIXX_HIDE_CREATURE=1 (creature-free background plates)\n");
+  }
+  // PASS 7 MANA LANE (measurement side): MANA_ABLATE=1 forces mana+smear off
+  // on every subject -- a general-purpose ablation twin for mana_hue_probe.py
+  // on clips with no committed fogprobe pair of their own.
+  if (const char* ab = std::getenv("MANA_ABLATE")) {
+    g_mana_ablate = std::string(ab) == "1" ? 1 : 0;
+    if (g_mana_ablate)
+      std::fprintf(stderr, "MANA_ABLATE=1 (mana+smear forced off on every subject)\n");
   }
   // Stage M ladder lane (u02 pass 3, R5): U02_AMBIENT / U02_ML_AMBIENT pick
   // a named ambient rung for the LADDER PLATES. Unset = the shipped rigs.

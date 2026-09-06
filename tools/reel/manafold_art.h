@@ -759,7 +759,24 @@ constexpr int32_t kMoteHaloRPxMin = 7, kMoteHaloRPxMax = 10;   // iter 5; iter 2
                                            // swallowed the antenna (looked at);
                                            // the STROKE must be thinner than
                                            // the shape it draws
-constexpr int kMoteCoreOfHaloPm = 580;     // opaque heart under the halo
+// PASS 7 (Direction 5 fault #1, by-eye review: mana measured 55-75%
+// hue-neutral, channel worst at 74.8%). NOT the mote halo -- the halo
+// samples the ramp's MID band (kManaAquaMid = {28,190,172}, genuinely
+// teal) and was already left alone (kMoteHaloGainPm never moves, the
+// standing instruction). The white read comes from the OPAQUE HEART: it
+// paints glow_splat's corona sprite un-blended, and the sprite's own
+// centre -- where the heart is solid -- samples the ramp's near-white HI
+// end by construction (every kMana*Hi in this file is a pale glow-core
+// colour, the same convention star/eye glow ramps use). So a BIGGER
+// heart is literally a bigger solid white disc. This is an AREA/BREADTH
+// fix, not a depth or gain fix (kMoteHaloGainPm and kMoteCount are both
+// untouched): shrinking the heart's share of each mote's radius grows the
+// properly-saturated halo ring's share of the same footprint, with no
+// change to how many motes draw or how brightly. 580 -> 420, chosen by
+// eye at native 384x240 on the shipping rig against manafold-channel: the
+// heart is still a solid, filled body (R7 stands), just no longer the
+// dominant pixel count in the cluster.
+constexpr int kMoteCoreOfHaloPm = 420;     // opaque heart under the halo
 constexpr int kMoteHaloGainPm = 340;       // under the ceiling: hue survives
 constexpr int kMoteCrowdPm = 700;          // per-conduit mote scale-down when
                                            // several conduits are on screen
