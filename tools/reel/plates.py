@@ -8,6 +8,15 @@ this creature have been confidently wrong; two of them were bad readers).
     python plates.py grid  OUT.png SCALE LABEL:frame.rgb [LABEL:frame.rgb ...]
     python plates.py sheet OUT.png SCALE COLS dir/*.rgb        (contact sheet)
     python plates.py pair  OUT.png SCALE before.rgb after.rgb  (A/B, stacked)
+    python plates.py crop  OUT.png SCALE COLS LABEL:frame.rgb@X,Y,W,H [...]
+
+`crop` exists because the by-eye passes keep needing the same picture -- one
+small region of the creature (an eye, a lens tip, the loop window) blown up so
+the shape is legible -- and each pass had been hand-rolling it. The crop box is
+in NATIVE 384x240 pixels and is applied BEFORE the scale, so the coordinates
+mean the same thing whatever zoom you ask for. Out-of-range boxes RAISE; a
+silently clamped crop would move what is being measured between frames, which
+is gate checklist item 17.
 
 Labels are drawn in a 5x7 bitmap font so a plate is self-describing when it is
 looked at three passes later out of context.
@@ -84,6 +93,10 @@ BAND = 12  # label strip height
 
 def grid(out, scale, items, cols=None):
     tiles = [(label, _up(load(path), scale)) for label, path in items]
+    _emit(out, scale, tiles, cols)
+
+
+def _emit(out, scale, tiles, cols=None):
     cols = cols or len(tiles)
     rows = (len(tiles) + cols - 1) // cols
     th, tw = tiles[0][1].shape[:2]
@@ -98,6 +111,42 @@ def grid(out, scale, items, cols=None):
     print("plates:", out, f"{W}x{H}", len(tiles), "tiles")
 
 
+def _parse_box(spec):
+    """`path@X,Y,W,H` -> (path, (x, y, w, h)). No box -> (path, None)."""
+    if "@" not in spec:
+        return spec, None
+    path, box = spec.rsplit("@", 1)
+    x, y, w, h = (int(v) for v in box.split(","))
+    if w <= 0 or h <= 0:
+        raise ValueError(f"crop {box}: width and height must be positive")
+    return path, (x, y, w, h)
+
+
+def _crop(img, box):
+    if box is None:
+        return img
+    x, y, w, h = box
+    ih, iw = img.shape[:2]
+    if x < 0 or y < 0 or x + w > iw or y + h > ih:
+        raise ValueError(
+            f"crop {x},{y},{w},{h} falls outside the {iw}x{ih} frame. "
+            "Not clamping: a silently moved crop measures a different thing "
+            "(gate checklist item 17)."
+        )
+    return img[y:y + h, x:x + w]
+
+
+def cropgrid(out, scale, cols, items):
+    tiles = []
+    for label, spec in items:
+        path, box = _parse_box(spec)
+        tiles.append((label, _up(_crop(load(path), box), scale)))
+    shapes = {t[1].shape[:2] for t in tiles}
+    if len(shapes) != 1:
+        raise ValueError(f"crop boxes must all be the same size, got {shapes}")
+    _emit(out, scale, tiles, cols)
+
+
 def main():
     cmd = sys.argv[1]
     out, scale = sys.argv[2], int(sys.argv[3])
@@ -109,6 +158,9 @@ def main():
         for pat in sys.argv[5:]:
             paths.extend(sorted(glob.glob(pat)))
         grid(out, scale, [(os.path.basename(p)[:4], p) for p in paths], cols)
+    elif cmd == "crop":
+        cols = int(sys.argv[4])
+        cropgrid(out, scale, cols, [a.split(":", 1) for a in sys.argv[5:]])
     elif cmd == "pair":
         grid(out, scale, [("BEFORE", sys.argv[4]), ("AFTER", sys.argv[5])], 2)
     else:
