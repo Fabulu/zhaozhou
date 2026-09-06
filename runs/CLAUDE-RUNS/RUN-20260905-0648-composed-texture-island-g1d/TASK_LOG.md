@@ -825,6 +825,62 @@ list, *"the fit would die at elaboration"*. That last is the exact failure the
 manifest gate's own CI comment records finding the day it was first run in
 anger. Ledger, manifest and source list really are three acts.
 
+## G1-D LANDED, AND IT IS 16,193 ALM
+
+14,004 s at ``ea4870d3``. **2.16x the redline**, three rules fired.
+
+    alms      16,193   (nominal 6,600 / redline 7,500 / standalone sum 7,913)
+    registers 27,097   (rule 9,000)
+    dsp           17   (rule 14)
+    fmax       63.54 MHz
+    virtual pins 1,259
+
+More than double the previous 7,720 / 11,790 / 69.05, which predates the
+ingress-capture repair, the R6 boundary and the widened combiner tag. **The
+worst path is now INSIDE MATERIAL.COMBINE.V1** -- ``u_combine|Mux136~0`` at
+−5.737 ns, worse than any path the pre-repair census found anywhere, which
+corroborates the owner's brief from the island level.
+
+## Attribution WITHOUT a second four-hour fit
+
+Owner direction: attribution before touching the capture and order stores, and
+spend the big fit very sparingly. **Analysis & Synthesis answers it alone**, in
+minutes -- ``run_block_fit.ps1 -MapOnly``, added for this.
+
+**Nineteen arrays inferred as RAM, and the list is the finding because of what
+is missing from it.** Of the island's fourteen per-fragment attribute arrays,
+**exactly one** (``fsc_m``) inferred; of the reorder buffer's three stores,
+**exactly one** (``rob_tag_m``). Same shape, same depth as their neighbours.
+What separates them is the number of READ ADDRESSES.
+
+So *"the table is in flops, move it to M10K"* has a true premise and the **wrong
+prescription**. An M10K has two ports; an array read at three points cannot be
+one however it is declared. The fix restructures the READ POINTS.
+
+**Same mechanism as PERSPUV**, and now with evidence on both: ``e_tag``
+(single read) inferred, ``e_num_u`` and ``e_q_u`` did not — the mechanism
+that block's own diagnosis talked its reader out of.
+
+The report also deleted itself: ``run_block_fit`` discarded the workspace, and
+the map report is the ONE the register rule tells you to read. Second time in
+this project. It is harvested now, whatever the run's outcome.
+
+## COMBINE v2, drafted
+
+Brief sections 4-6, beside V1 rather than replacing it. Two registered product
+lanes (exactly two ``*`` sites), the fixed paired schedule, eight bounded
+contexts, separate NEW/CONT/DONE/FREE queues, one writer and one reader per
+store, a HELD output, and Q/R/O/M/F/W stages that forbid the brief's banned
+one-cycle cones structurally. Every equation is the oracle's.
+
+**Lints clean under -Wall and that is ALL that is established** — no
+differential, no fit. Three faults found while linting, all mine: the completion
+word dropped a bit; the refusal flag was built from the saturation flag and an
+always-false term, so a refused fragment would have retired as a successful
+black one; and four F-stage locals inferred latches.
+
+## And GEOM.MEM.ADAPTER is fitting
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner
