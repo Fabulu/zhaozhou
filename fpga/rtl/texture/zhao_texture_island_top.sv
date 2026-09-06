@@ -200,6 +200,25 @@ module zhao_texture_island_top #(
     // Times a fragment finished ahead of an earlier one and had to wait at the
     // boundary (audit R6). Zero on a run means the ordering guarantee was
     // never TESTED, not that it holds.
+    // ---- TRIPWIRES THAT WERE DANGLING -------------------------------------
+    // fr_wq_overflow, fr_id_error and aux_degenerate were declared, connected
+    // to their submodule's output port, and READ BY NOTHING -- each name
+    // appears exactly twice in this file, the declaration and the connection.
+    // A tripwire nobody can see is decoration: the block dutifully raised it
+    // and synthesis dutifully deleted it.
+    //
+    // V3 section 0 point G says to preserve these, and preserving something
+    // requires being able to observe it, so they reach the boundary now rather
+    // than after the rewrite -- otherwise "preserved" would mean "still
+    // invisible, in a new file".
+    //
+    // STICKY, not pass-through. Each is a fault, and a fault that is true for
+    // one clock in a hundred thousand is exactly the one a sampling consumer
+    // misses; latching means a test that looks once at the end still sees it.
+    // ENFORCED-BY: tests/texture/island_composed_directed.cpp
+    output var logic err_fragrob_wq_overflow_o,
+    output var logic err_fragrob_id_error_o,
+    output var logic err_aux_degenerate_o,
     output var logic [31:0] cnt_reorder_held_o,
     // High-water mark of live owner credits. A run whose peak never approached
     // OWNER_DEPTH has not tested the ceiling, whatever else it proved.
@@ -812,6 +831,7 @@ module zhao_texture_island_top #(
   logic [7:0]  fr_o_s_a   [3];
   logic [31:0] fr_samples, fr_full_clocks;
   logic        fr_wq_overflow, fr_id_error, fr_combiner_unfrozen;
+
 
   assign pu_ready = fr_f_ready;
 
@@ -1810,6 +1830,22 @@ module zhao_texture_island_top #(
       .out_str_o(aux_out_str), .out_degenerate_o(aux_out_degenerate),
       .accepted_o(cnt_aux_accepted_o), .sheet_reads_o(aux_sheet_reads),
       .degenerate_o(aux_degenerate));
+
+  // The sticky tripwire latches. `aux_degenerate` is a 32-bit COUNT rather
+  // than a flag, so its tripwire is "the count ever moved" -- taken as
+  // non-zero rather than as an edge, because a count that is already non-zero
+  // at the first look has still tripped.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      err_fragrob_wq_overflow_o <= 1'b0;
+      err_fragrob_id_error_o    <= 1'b0;
+      err_aux_degenerate_o      <= 1'b0;
+    end else begin
+      if (fr_wq_overflow)          err_fragrob_wq_overflow_o <= 1'b1;
+      if (fr_id_error)             err_fragrob_id_error_o    <= 1'b1;
+      if (aux_degenerate != 32'd0) err_aux_degenerate_o      <= 1'b1;
+    end
+  end
 
   assign fr_aux_rvalid = aux_out_valid;
   assign fr_aux_rgb    = {aux_out_tag, aux_out_str, 8'd0};

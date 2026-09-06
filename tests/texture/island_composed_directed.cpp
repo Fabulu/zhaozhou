@@ -1069,6 +1069,31 @@ int main(int argc, char** argv) {
   const uint32_t palette_after_p1 = d.cnt_palette_lookups_o;
 
   check(o1.retired == kPhaseN, "phase 1 retired every fragment it submitted", kPhaseN, o1.retired);
+
+  // ---- THE THREE TRIPWIRES THAT USED TO DANGLE ---------------------------
+  // `wq_overflow_o`, `id_error_o` and AUX's `degenerate_o` were declared,
+  // connected to their submodule's port, and READ BY NOTHING -- each name
+  // appeared exactly twice in the island, the declaration and the connection.
+  // The blocks raised them faithfully and synthesis deleted them, so three
+  // faults V3 section 0 point G says to PRESERVE were unobservable at the
+  // boundary. They are sticky latches now, and this is the first thing that
+  // has ever looked at them.
+  //
+  // Asserting zero is only worth anything because the latch is sticky: a fault
+  // true for one clock in a hundred thousand is precisely the one an
+  // end-of-run sample misses, which is why the island latches rather than
+  // passing through.
+  check(d.err_fragrob_wq_overflow_o == 0,
+        "FRAGROB's work queue never overflowed -- a tripwire that was dangling "
+        "until now, so this is the first run in which its silence means "
+        "anything",
+        0, static_cast<long>(d.err_fragrob_wq_overflow_o));
+  check(d.err_fragrob_id_error_o == 0,
+        "and FRAGROB never raised its identity error", 0,
+        static_cast<long>(d.err_fragrob_id_error_o));
+  check(d.err_aux_degenerate_o == 0,
+        "and AUX reported no degenerate envelope", 0,
+        static_cast<long>(d.err_aux_degenerate_o));
   check(d.err_class_mismatch_o == 0,
         "PHASE 1 DROVE A MODE AND A CLASS THAT AGREE: the planner's derived "
         "class equals the one carried in the source id on every transaction. "
