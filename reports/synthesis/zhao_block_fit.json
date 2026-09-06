@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "5cae3bc7e4422b856957613453d69552775ec9f1",
-    "newestRunClean":  true,
+    "newestRunCommit":  "064d5fad73646c6b66f325faf29d1f4196c5ac1c",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1147,17 +1147,27 @@
                    },
                    {
                        "module":  "zhao_texture_island_top",
-                       "status":  "map_only",
-                       "sourceCommit":  "18b72a7e61b668d8a4e05f6f0cb77fa76d60aae2",
-                       "rtlCleanAtHead":  true,
-                       "seconds":  333.7,
+                       "status":  "failed:structure",
+                       "sourceCommit":  "064d5fad73646c6b66f325faf29d1f4196c5ac1c",
+                       "rtlCleanAtHead":  false,
+                       "seconds":  7454.8,
                        "sourcesHashed":  15,
-                       "partial":  true,
-                       "partialStage":  "analysis_and_synthesis",
-                       "registers":  26383,
-                       "blockMemoryBits":  34080,
+                       "alms":  16192,
+                       "registers":  28490,
+                       "blockMemoryBits":  36024,
+                       "ramBlocks":  32,
                        "dspBlocks":  17,
-                       "virtualPins":  1291
+                       "virtualPins":  1484,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  67.57,
+                       "fmaxClock":  "clk",
+                       "ruleViolations":  [
+                                              "registers 28490 \u003e allowed 9000 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)",
+                                              "ALM 16192 \u003e allowed 7500",
+                                              "DSP 17 \u003e allowed 14"
+                                          ]
                    },
                    {
                        "module":  "zhao_texture_material_combine_v1",

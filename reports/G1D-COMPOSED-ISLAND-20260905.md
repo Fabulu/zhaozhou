@@ -228,6 +228,104 @@ before-figure to difference against, and inventing one would be the
 registered output stage on those reads, which is the same remedy §5 of the
 perspuv report proposes for `e_q`.
 
+### 4.3c THE V2 REFIT — COMBINE is off the critical path entirely, and the ALM did not move
+
+Measured 2026-09-06, `zhao_texture_island_top` with
+`zhao_texture_material_combine_v2` and the W9b decode station, source commit
+`064d5fad`, 7,454.8 s.
+
+| | V1 refit (4.3a) | **V2 refit** | rule |
+|---|---|---|---|
+| ALM | 16,193 | **16,192** | 7,500 |
+| fmax | 63.54 MHz | **67.57 MHz** | 100 |
+| registers | 27,097 | **28,490** | 9,000 |
+| DSP | — | **17** | 14 |
+| M10K / memory bits | — | **32 / 36,024** | 64 |
+| virtual pins | — | 1,484 | — |
+| worst path | **−5.737 ns, inside COMBINE.V1** | −4.800 ns, a virtual pin into PALETTE_RES | — |
+
+#### What the rearchitecture actually bought
+
+**COMBINE appears on ZERO of the 3,904 summarised paths.** Not "improved" —
+absent. In the V1 refit it *was* the worst path. That is the paired-phase
+rearchitecture doing exactly the thing it was written to do, and it is the
+only unambiguous win here.
+
+fmax moved 63.54 → 67.57 MHz, **+6.3%**. Against a 100 MHz product clock that
+is not close, and it was never going to be: removing one block from the
+critical path exposes the next one.
+
+#### The ALM did not move — and the honest reason is that TWO things changed
+
+16,193 → 16,192 is one ALM. It would be very easy to read that as "the
+rearchitecture bought nothing", and that reading is **not supported**, because
+this fit is confounded and I made it so:
+
+* V2 replaced a combiner that had about fourteen multiplier sites (one
+  `unit_mul_logic` inside every arm of two seven-arm case statements);
+* **W9b added a decode station that was previously DEAD CODE.** `near_ok_c` was
+  hardwired to `1'b0`, so the whole nearest path plus its alpha was stripped by
+  synthesis and *never appeared in the V1 number at all*. The bilerp sequencer
+  also went 3 → 4 phases for filtered alpha.
+
+So the V1 figure measured a design with a missing organ. The two changes went
+into one fit because the owner's instruction was to spend the four-hour fit
+**very sparingly**, and that was the right trade — but it means the correct
+statement is "V2's saving and W9b's addition are within one ALM of each
+other", and neither is separately measured. Registers moving **+1,393** in the
+same window is consistent with that: the decode station and the widened
+`sampmeta_m` (17 → 20 bits) are new state.
+
+#### The pin artefact — checked, because last time it was the comfortable answer
+
+The five worst paths all start at `pal_ld_gen_i[1]`, a virtual pin, which is
+exactly the shape §"first explanation that absolves the design" warns about.
+Splitting all 3,904 paths by origin:
+
+| origin | count | worst slack | implied fmax |
+|---|---|---|---|
+| starts at a PIN | 3,715 (95.2%) | −4.800 ns | 67.57 MHz |
+| starts INSIDE the design | 189 (4.8%) | −2.936 ns | **77.30 MHz** |
+
+**This time the artefact really is dominant, and that is the opposite of the
+last time this split was run** (1,595 of 2,000 started inside, and the boundary
+was worth ~4 MHz of 36). The check is cheap and the answer is not stable
+between fits, which is the argument for running it every time rather than
+inheriting either conclusion.
+
+But the number that matters is the second row: **even deleting the fit
+boundary entirely leaves 77.30 MHz against a 100 MHz target.** The boundary is
+worth ~9.7 MHz; the remaining ~23 MHz is real work.
+
+#### Where the internal limit now lives
+
+Internal path endpoints, by module:
+
+| module | paths |
+|---|---|
+| `zhao_texture_fragrob` | 136 |
+| `zhao_raster_perspuv_svc` | 35 |
+| `zhao_raster_rcp24_svc` | 18 |
+
+**FRAGROB is now the internal bottleneck**, and its worst path ends in an
+inferred `altsyncram` write-enable. That is the big capture/order store the
+owner said to get attribution for *before* touching — and this fit is that
+attribution. The next architectural move is FRAGROB's, not the combiner's.
+
+#### What must NOT be concluded
+
+* Not that V2 bought nothing. The confound above is mine and it is not
+  separable from this run.
+* Not that the design is 67.57 MHz. That is the leaf-fit boundary number; the
+  design's own logic is at 77.30 and neither is the composed-in-shell number.
+* Not that 32 M10K is the memory story. **55 arrays inferred as RAM** but only
+  36,024 bits landed in block memory, so most of them are small enough to sit
+  in MLAB or logic — the 28,490-register question is not answered by the RAM
+  summary alone, and 4.3b's finding that it is a PORT COUNT question stands.
+* The fit is of a design whose CLUT4 nibble select is still wrong and whose
+  nearest path started decoding the same day. An honest measurement of what is
+  there, not of what is finished.
+
 ### 4.3b THE REGISTER ATTRIBUTION, from a map-only run — and it is a PORT
 ### COUNT question, not a "put it in memory" one
 
