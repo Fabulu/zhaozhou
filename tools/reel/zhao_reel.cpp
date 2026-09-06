@@ -1026,6 +1026,11 @@ struct SceneSubject {
   // PASS 8: draw the smear plane and suppress the mana BODIES (see the
   // manafold-fogprobe-smear subject). Diagnostic only.
   bool u02_smear_only = false;
+  // DIRECTION 7 §8: the MIST plane -- the soft creature-following haze that
+  // leaves the wrong-frame-buffer ghost. Its own flag, so it can be ablated
+  // (manafold-fogprobe-mist) and so a subject can have smear without mist or
+  // the reverse -- which is what makes either one measurable on its own pixels.
+  bool u02_mist = false;
   // the S5 spike's three-glow staging (diagnostic only)
   bool u02_glow_trio = false;
   // the fx tour: cycle the ten kinds solo, 60 frames each
@@ -2325,6 +2330,19 @@ struct CreatureReelCtx {
   int32_t u02_prev_body[3] = {0, 0, 0};
   bool u02_prev_body_valid = false;
   int u02_speed_mul_pm = 1000;
+  // DIRECTION 7 §4/§8: the RAW posed speed, kept alongside the smear's derived
+  // multiplier because the mist has its own, much higher, base floor -- §8 asks
+  // for the mist AT REST, where the smear is allowed to thin almost away.
+  int32_t u02_speed_mm = 0;
+  // DIRECTION 7 §8: THE MIST PLANE -- a second, coarser, creature-FOLLOWING
+  // ghost. Separate storage from the smear so that pass 8's colour work and
+  // hasty's praised rung-3 trail cannot be disturbed by anything done here.
+  bool u02_mist = false;
+  std::vector<uint8_t> u02_mist_buf;
+  std::vector<int32_t> u02_mist_depth;
+  int32_t u02_mist_prev_px[2] = {0, 0};   // the creature's last screen position
+  bool u02_mist_prev_px_valid = false;
+  int32_t u02_mist_res[2] = {0, 0};       // sub-cell shift residual (fx)
   std::vector<uint8_t> u02_smear_buf;
   std::vector<int32_t> u02_smear_depth;  // R5: per-cell nearest splat depth
   u02::FoldState u02_fold[3];            // pass 4: per-conduit fold state
@@ -3282,6 +3300,91 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   // through the blade).
   if (c.u02_mana != 0 && !c.u02_mana_splats.empty()) {
     const zref::render::Viewport vpp_m{0, 0, w, h};
+    // ---- DIRECTION 7 §8: THE MIST, and it MOVES WITH THE CREATURE --------
+    // "besides the particles there should be some of that mist that leaves the
+    // wrong frame buffer ghost image. That's missing... bring it back."
+    // "and it needs to move with the creature. Leaving stuff hanging in space
+    // just looks like a glitch."
+    //
+    // It composites BEFORE the smear on purpose, so the layering matches what
+    // each thing is: broad soft haze at the back, the tighter trail over it,
+    // the particles' own bodies on top of both. Drawing the mist last would put
+    // a wash over the crisp motes the owner has said are good.
+    //
+    // The follow is the whole feature. c.u02_body is the POSED body centre --
+    // the same anchor Direction 7 §4's speed comes from, and the only one that
+    // carries the clip's root displacement -- so projecting it gives the
+    // creature's own screen motion, and shifting the plane by kMistFollowPm of
+    // that keeps the haze on the animal while the fraction it gives up each
+    // frame becomes the trail. The residual is carried in fixed point because
+    // a bob of a third of a cell per frame would otherwise round to zero every
+    // frame forever, and a "creature-relative" plane that never actually
+    // shifts is a screen-space plane with a better comment.
+    if (c.u02_mist) {
+      if (c.u02_mist_buf.size() !=
+          static_cast<size_t>(u02::kMistW) * u02::kMistH * 3)
+        c.u02_mist_buf.assign(
+            static_cast<size_t>(u02::kMistW) * u02::kMistH * 3, 0);
+      if (c.u02_mist_depth.size() !=
+          static_cast<size_t>(u02::kMistW) * u02::kMistH)
+        c.u02_mist_depth.assign(
+            static_cast<size_t>(u02::kMistW) * u02::kMistH, 0);
+      const zref::render::ProjOut pb = zref::render::project_vertex(
+          c.vp, vpp_m, zref::fx16{c.u02_body[0]}, zref::fx16{c.u02_body[1]},
+          zref::fx16{c.u02_body[2]}, nullptr);
+      if (pb.in) {
+        const int32_t bx = pb.s.x >> 8, by = pb.s.y >> 8;
+        if (c.u02_mist_prev_px_valid) {
+          const int32_t mvx = bx - c.u02_mist_prev_px[0];
+          const int32_t mvy = by - c.u02_mist_prev_px[1];
+          // pixels -> sub-cell fixed point, scaled by the follow fraction
+          c.u02_mist_res[0] += static_cast<int32_t>(
+              (static_cast<int64_t>(mvx) << u02::kMistShiftFxBits) *
+              u02::g_u02_mist.follow_pm / 1000 / u02::kMistBlock);
+          c.u02_mist_res[1] += static_cast<int32_t>(
+              (static_cast<int64_t>(mvy) << u02::kMistShiftFxBits) *
+              u02::g_u02_mist.follow_pm / 1000 / u02::kMistBlock);
+          const int dxc = c.u02_mist_res[0] >> u02::kMistShiftFxBits;
+          const int dyc = c.u02_mist_res[1] >> u02::kMistShiftFxBits;
+          c.u02_mist_res[0] -= dxc << u02::kMistShiftFxBits;
+          c.u02_mist_res[1] -= dyc << u02::kMistShiftFxBits;
+          u02::mist_shift(c.u02_mist_buf.data(), c.u02_mist_depth.data(), dxc, dyc);
+        }
+        c.u02_mist_prev_px[0] = bx;
+        c.u02_mist_prev_px[1] = by;
+        c.u02_mist_prev_px_valid = true;
+      }
+      u02::mist_update(c.u02_mist_buf.data(), c.u02_mist_depth.data(), c.u02_frame);
+      static u02::GlowFrameCache s_mist_cache;
+      const bool fold_mana_m = c.u02_mana == 3 || c.u02_mana == 6 ||
+                               c.u02_mana == 8 || c.u02_mana == 9 ||
+                               c.u02_mana >= u02::lab::kLabCandBase;
+      for (const u02::ManaSplat& ms : c.u02_mana_splats) {
+        // same two exclusions as the smear: the near-white strand cores would
+        // put white confetti in the haze (the fault pass 8 spent itself on),
+        // and the opaque hearts are the particles' own bodies, which the mist
+        // is explicitly NOT made of -- "that doesn't even need shape".
+        if (ms.ramp == u02::kRampWhite) continue;
+        if (fold_mana_m && ms.opaque) continue;
+        const zref::render::ProjOut pm = zref::render::project_vertex(
+            c.vp, vpp_m, zref::fx16{ms.x}, zref::fx16{ms.y}, zref::fx16{ms.z}, nullptr);
+        if (!pm.in) continue;
+        // fed from the SATURATED CORE ramp, exactly as pass 8 established for
+        // the smear: a plane fed from the halo's near-white fringe has no
+        // colour left for the chroma floor to rescue.
+        const u02::GlowFrame& gfm = u02::glow_frame_cached(
+            s_mist_cache, c.u02_frame, s_mana_ramps,
+            fold_mana_m ? u02::mana_core_ramp(ms.ramp) : ms.ramp, ms.gain_pm, 1000);
+        const int32_t mist_r = ms.r_px * u02::kMistFeedOfHaloPm / 1000;
+        u02::mist_feed(c.u02_mist_buf.data(), c.u02_mist_depth.data(),
+                       s_glow_assets, gfm, pm.s.x >> 8, pm.s.y >> 8, mist_r,
+                       pm.s.d);
+      }
+      const int mist_gain_pm =
+          u02::g_u02_mist.gain_pm * u02::mist_speed_mul_pm(c.u02_speed_mm) / 1000;
+      u02::mist_composite(c.u02_mist_buf.data(), c.u02_mist_depth.data(), rgb,
+                          depth, w, h, mist_gain_pm, c.u02_frame);
+    }
     // ---- pass 3 (R6): THE SMEAR PLANE, first — decay with the quantised
     // glitchy step, feed EVERYTHING the mana draws this frame (pre splats
     // included), composite additively at chunky 4x under the live bodies.
@@ -3678,6 +3781,7 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.u02_glow_trio = sub.u02_glow_trio;
     cr_ctx.u02_smear_preset = g_mana_ablate ? 0 : sub.u02_smear;  // pass 3 (R6)
     cr_ctx.u02_smear_only = sub.u02_smear_only;  // pass 8 (the ablation's 3rd leg)
+    cr_ctx.u02_mist = g_mana_ablate ? false : sub.u02_mist;  // D7 §8
     if (species == Species::kUnnamed02 && sub.u02_trio) {
       for (int e = 0; e < 2; ++e) {
         u02_extra_inst[e].type = dog;
@@ -4088,9 +4192,15 @@ int render_scene(const SceneSubject& sub) {
                 }
                 const int64_t d_fx = static_cast<int64_t>(
                     zref::isqrt_u64(static_cast<uint64_t>(d2)));
-                cr_ctx.u02_speed_mul_pm = u02::smear_speed_mul_pm(
-                    static_cast<int32_t>((d_fx * 1000) >> 16));
+                // DIRECTION 7 §8: keep the RAW speed too. The mist derives its
+                // own multiplier from it with a much higher floor, so the two
+                // planes cannot be coupled through one number
+                // (09-ENGINE-GOTCHAS §14).
+                cr_ctx.u02_speed_mm = static_cast<int32_t>((d_fx * 1000) >> 16);
+                cr_ctx.u02_speed_mul_pm =
+                    u02::smear_speed_mul_pm(cr_ctx.u02_speed_mm);
               } else {
+                cr_ctx.u02_speed_mm = 0;
                 cr_ctx.u02_speed_mul_pm = u02::smear_speed_mul_pm(0);
               }
               for (int k = 0; k < 3; ++k) cr_ctx.u02_prev_body[k] = fa.body[k];
@@ -5254,6 +5364,15 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // longer decided here at all -- speed decides it (u02_speed_mul_pm).
   s.u02_smear =
       slot == 7 ? 0 : ((slot == 1 || slot == 8 || slot == 9) ? 3 : 5);
+  // DIRECTION 7 §8: the MIST rides EVERY clip that has mana, travelling or
+  // not. That is the point of it -- the smear is speed-driven and thins to its
+  // floor when the creature holds still, which is exactly the state the owner
+  // was looking at when he said the mist was missing. It is creature-relative,
+  // so a stationary clip still gets the haze ON the animal rather than a
+  // screen-space halo it cannot walk out of. Slot 7 (the form diagnostic) opts
+  // out with the rest of the effects: an unobstructed look at geometry is what
+  // that subject is for.
+  s.u02_mist = slot != 7;
   // Pass 3 (Direction 3 §1): the four-light-everywhere look was a
   // REGRESSION — "It should look just like Zixx' lighting with the
   // directional light from the sun." Every clip ships under its own named
@@ -7355,14 +7474,17 @@ int main(int argc, char** argv) {
   if (wanted("manafold-fogprobe-mana")) {
     SceneSubject s = subject_u02_clip(5, "manafold-fogprobe-mana", u02::kRestKeys, false, &kU02SunCalm);
     s.u02_smear = 0;  // motes and creature only
-    s.note = "fog ablation: smear plane OFF, mana ON";
+    s.u02_mist = false;  // PASS 9: and the mist too, or this leg silently
+                         // becomes "motes + mist" and the subtraction lies
+    s.note = "fog ablation: smear plane OFF, mist OFF, mana ON";
     rc |= render_scene(s);
   }
   if (wanted("manafold-fogprobe-off")) {
     SceneSubject s = subject_u02_clip(5, "manafold-fogprobe-off", u02::kRestKeys, false, &kU02SunCalm);
     s.u02_mana = 0;
     s.u02_smear = 0;  // the bare creature
-    s.note = "fog ablation: smear plane OFF, mana OFF";
+    s.u02_mist = false;  // PASS 9: bare means bare
+    s.note = "fog ablation: smear plane OFF, mist OFF, mana OFF";
     rc |= render_scene(s);
   }
   // PASS 8 -- THE MISSING THIRD LEG. The pass-7 by-eye review found that the
@@ -7397,8 +7519,54 @@ int main(int argc, char** argv) {
     s.u02_smear = 5;  // the smear plane ONLY, at REST'S OWN RUNG (subject_u02_clip:
                       // slot 5 -> preset 5). A different rung would make the
                       // subtraction measure the rung, not the plane.
-    s.note = "fog ablation: smear plane ON, mana OFF -- the leg pass 7 lacked";
+    s.u02_mist = false;  // PASS 9: this leg is the SMEAR's own pixels. Leaving
+                         // the mist on would have made pass 9's new layer
+                         // indistinguishable from pass 8's plane -- the exact
+                         // blindness this subject was added to remove.
+    s.note = "fog ablation: smear plane ON, mist OFF, mana OFF -- the leg pass 7 lacked";
     rc |= render_scene(s);
+  }
+  // PASS 9 -- THE FOURTH LEG, for the same reason the third one exists.
+  // Direction 7 §8 adds the MIST: a second, creature-following ghost plane.
+  // Without this subject the lattice would attribute the mist's pixels to the
+  // smear, and the two planes would be permanently unmeasurable apart -- which
+  // is how pass 7 reported 8.3% for a 48.7% fault. The lattice is now:
+  //     rest            = creature + motes + smear + mist   (the shipped frame)
+  //     fogprobe-mist   = creature + mist            <- THIS ONE
+  //     fogprobe-smear  = creature + smear
+  //     fogprobe-mana   = creature + motes
+  //     fogprobe-off    = creature
+  // Same base clip, sun and keys as the other three, so the validity check (a
+  // creature-free corner that is byte-identical across the pair) still holds.
+  if (wanted("manafold-fogprobe-mist")) {
+    SceneSubject s = subject_u02_clip(5, "manafold-fogprobe-mist", u02::kRestKeys, false, &kU02SunCalm);
+    // Same construction as fogprobe-smear and for the same reason: the mana
+    // block is gated on u02_mana != 0 and the mist's only source is the splats,
+    // so zeroing the mana would produce a subject byte-identical to
+    // fogprobe-off -- a probe that cannot see the thing it is named after.
+    s.u02_mana = 3;
+    s.u02_smear_only = true;  // the mana BODIES are suppressed
+    s.u02_smear = 0;          // ...and so is the smear plane
+    s.u02_mist = true;        // leaving the mist alone on its own pixels
+    s.note = "fog ablation: mist plane ON, smear OFF, mana bodies OFF";
+    rc |= render_scene(s);
+  }
+  // PASS 9 (Direction 7 §8/§10.2/§10.3): the MIST VARIANT SHEET. One clip per
+  // row of u02::kMistVariants, same slot/sun/keys/camera as manafold-rest so
+  // the only difference between any two of them is the mist configuration --
+  // "compare like with like, or do not compare". `parked` is the control that
+  // proves the creature-follow does something; `white` is §10.3's licensed
+  // experiment and ships nothing.
+  for (int mv = 0; mv < u02::kMistVariantCount; ++mv) {
+    char nm[64];
+    std::snprintf(nm, sizeof(nm), "manafold-mist-%s", u02::kMistVariants[mv].name);
+    if (!wanted(nm)) continue;
+    u02::g_u02_mist = u02::kMistVariants[mv].cfg;
+    SceneSubject s = subject_u02_clip(5, nm, u02::kRestKeys, false, &kU02SunCalm);
+    s.u02_mist = true;
+    s.note = u02::kMistVariants[mv].note;
+    rc |= render_scene(s);
+    u02::g_u02_mist = u02::MistCfg{};  // never leak a variant into the next subject
   }
   if (wanted("manafold-crackle")) {
     SceneSubject s = subject_u02_clip(0, "manafold-crackle", u02::kIdleKeys, false, &kU02SunChannel);
