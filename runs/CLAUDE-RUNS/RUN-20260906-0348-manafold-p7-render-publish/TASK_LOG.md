@@ -231,3 +231,83 @@ before the run, `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross`,
 diff to 0 differing frames of 600. The Inspect caption's byte-identity claim
 therefore still holds in pass 7, verified from this binary rather than
 inherited from pass 6's report.
+
+### Clip lengths, pass 6 vs pass 7 -- all 16 IDENTICAL
+Checked because `tovideo.py` selects each poster by a NAMED FRAME INDEX, so a
+clip that changed length would silently move its poster onto a different beat
+and the card would stop showing the moment it was chosen for. Pass-6 lengths
+read by DECODING the archive webms (`nb_read_frames`), pass-7 lengths counted
+from the `.rgb` frames:
+
+  hover 600 · inspect 600 · channel 420 · trick 400 · damage 464 · hasty 240
+  fall 340 · hit 140 · taunt 280 · taunt2 240 · drift 300 · curious 180
+  startle 160 · rest 400 · pirouette 240 · crackle 600
+
+Every one the same. This also independently confirms the implementer's
+"channel and taunt retime nothing but move".
+
+### Encode fidelity, checked rather than assumed
+VP9 CRF16 / yuv444p is lossy, so the contract's claim that it is
+"indistinguishable on flat shading at this resolution" is a claim. Decoded
+`manafold-hover.webm` frame 160 back out and compared against its source
+`.rgb`: max per-channel delta 15/10/14, mean delta where changed 1.15. Side by
+side at 7x on the eye, the four-point star, its white outline and the ink are
+all intact. The contract holds on this creature.
+
+### THE LIVE SITE BEFORE STATE (so the after-check can actually prove a change)
+    curl https://upheaval.pages.dev/
+    HTTP 200, 322,798 bytes
+    "MANAFOLD, pass 6"      present
+    "2026-09-06"            ABSENT (no Pass 6 archive tab)
+    name="robots"           exactly 1
+322,798 B is byte-for-byte the size of the committed pass-6 `public/index.html`,
+so production is serving exactly the pass-6 build. After the deploy the page
+must say "MANAFOLD, pass 7" and carry the 2026-09-06 archive tab; if it does
+not, the deploy was demoted to a preview and `-Branch` was the reason.
+
+### The generated texture page is NOT stale -- checked, not assumed
+CLAUDE.md: "a generated file that nobody regenerates is a stale file with a
+reassuring provenance line at the top." Pass 7 narrowed the lens ink INSIDE
+`tools/pack/mkmanafoldpage.py`, so if the committed `manafold_page.h` had not
+been regenerated, every frame I rendered would still carry the pass-6 notches
+and the whole ink fix would be invisible while the source said it was done.
+
+Regenerated to a scratch path (never over the committed file, which would
+dirty the tree the CRCs were taken from) and compared:
+
+    python tools/pack/mkmanafoldpage.py <scratch>/regen_manafold_page.h
+    cmp <scratch>/regen_manafold_page.h tools/reel/manafold_page.h  -> IDENTICAL
+
+819,853 B both. So the committed page IS the pass-7 page, and as a free
+by-product this is the two-regens-identical determinism check that
+CREATURE.json lists in required_checks.
+
+### The committed 3D probe, run from MY OWN build (gate item 7: reproduce, don't inherit)
+`build-direct.sh --output <lane>/build mprobe` -> `MPROBE_BUILD_RC=0`. Built
+while ffmpeg was encoding but with NO render running, and
+`zhao-reel-cel.exe` kept its 03:50 timestamp -- it was not relinked, so the
+CRCs above still belong to the binary that produced the frames.
+
+Every headline number the implementer reported comes back IDENTICAL:
+
+    CLEARANCE CONTRACT HOLDS (>= 40 mm everywhere), 16 slots
+    slot 13 (trick) DECLARED CONTACT keys 78..156: deepest vertex -23 mm
+        (declared -25, accepted -60..-5)                          OK
+    5c rule 1  overhang worst 29 mm / cap 29                      OK
+    5c rule 2  worst 760 pm / floor 600                           OK
+    5c rule 3  1499 violations       REPORTED-NOT-ENFORCED
+    5d gate A  closest approach 22 mm / floor 12                  OK
+    5d gate B  lens deepest 801 pm / floor 1000                   OK
+    eyeball-shift NOT SHIPPED -- a DECLARED gap, and the probe says so itself
+
+This settles the one caption on the card that makes a PHYSICAL claim: Trick's
+"-25 mm declared ground contact" is still true in pass 7, measured by the
+committed probe walking posed vertices against terrain height -- never from
+rendered pixels, which CLAUDE.md records as unsound under perspective.
+
+Rule 3 remains a real, unfixed fault (the star crossing the body outline in 7
+clips) reported and not enforced, because the instrument is aimed at 2 fixed
+orthographic views while the shipping cameras orbit. Its worst VISIBLE
+manifestation -- the white spike shooting off channel's far eye into the sky
+-- is gone; I looked. It is pass 8's first eye item and it ships declared,
+not hidden.
