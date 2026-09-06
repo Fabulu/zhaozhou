@@ -643,6 +643,55 @@ All three are now exposed and compared on x, y and w, with a DISTINCTNESS check
 beside them, so a collector that wrote one vertex into all three slots could not
 pass by having them all agree.
 
+## The guard-verdict mistake was in THREE clients, and the rule is now a gate
+
+Fixing two instances leaves the rule unenforced, so
+``tools/rtl/check_guard_verdict.py`` enforces it, wired into
+``npm run design:report``. It found a third client immediately, and the polarity
+is inverted: MEM.SCANOUT's fetcher tested ``ready && violation``, so where the
+fetchers read every PASS as a denial and stalled, scanout reads every DENIAL as
+a pass and drops into F_BEATS to wait for beats a refused request never sends.
+
+The retry path and ``violation_now`` were both structurally dead, and the arm's
+comment -- *"denied (impossible in Phase 2)"* -- is true of the region rules and
+was NOT why the arm never ran. F_VERD added; ``shell_draw_directed`` (20 checks,
+the whole display path) passes with the extra cycle.
+
+**Two things were done to the gate before trusting it.** It reported three
+offences on its first run that were all PROSE, including two inside the comments
+documenting this repair and one in fbwrite's header where it QUOTES the guard
+line to explain why that block gets it right -- a gate that flags the
+documentation of a fix as the absence of the fix trains the reader to ignore it.
+And it self-tests at import on a known-bad and a known-good arm.
+
+**Then its coverage audit found a bug in itself.** The client list is checked
+against the tree so it cannot rot; the first audit reported
+``zhao_debug_frameblit`` as "no longer a client", because it declares
+``input zhao_pkg::zhao_guard_rsp_t`` and my discovery regex had no provision
+for a package qualifier. A detector reading low on its first run, inside the tool
+written to enforce a different instance of that law. Seven clients, all clean.
+
+## R7: the particle expansion is blocked on the wrong thing
+
+Two places -- the header and the PART.EXPAND contract -- said turning a world
+radius into a screen half-side "needs a decision first". It does not.
+``zref::render::draw_form_marker`` implements it, and
+``tests/render/render_directed.cpp`` exercises that exact branch with
+``flags = 0``:
+
+    half_sub = rescale_s32(fx_mul(size_fx16, c.s.d), 8)     // size * (1/w)
+
+with the inversion trap recorded beside it. A particle expansion using it would
+be CALLING a ratified law. The warning against inventing a projection is a good
+warning and, standing unqualified, it was doing the opposite of its job.
+
+**What is actually missing is ``base_radius_fx16``** -- the per-species base
+radius ``particle_radius()`` multiplies. ``species`` is a u7 and no species
+table exists in ``reference/``, ``spec/`` or ``design/``. That is content
+and therefore the owner's, and guessing it would be the real instance of the
+failure the warning describes. The block stays unfixed, now against the right
+blocker.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner
