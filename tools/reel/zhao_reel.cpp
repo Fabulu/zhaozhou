@@ -7682,6 +7682,46 @@ int main(int argc, char** argv) {
     s.note = V.mechanism;
     rc |= render_scene(s);
   }
+  // ======================== THE EYE LAB (Direction 7 12) ==================
+  // LANE-ONLY. ONE clip (slot 16), one choreography, one camera, one light
+  // rig -- only the EYE configuration differs, which is what makes the rows
+  // comparable. Rendered at the SHIPPING framing on purpose: the verdict is
+  // "does it read at native 384x240", and a lab camera that flatters the eye
+  // answers a question nobody asked.
+  for (int vi = 0; vi < u02::eyelab::kEyeVariantCount; ++vi) {
+    const u02::eyelab::EyeVariant& V = u02::eyelab::kEyeVariants[vi];
+    std::string nm = std::string("eyelab-") + V.name;
+    if (!wanted(nm.c_str())) continue;
+    // ⚠ THE TRAP THIS GUARD EXISTS TO CLOSE. u02::type() is a function-local
+    // static: the mesh AND the clip bank are built ONCE, from whatever
+    // U02_EYELAB said at first touch. So a single process can only ever render
+    // ONE variant's geometry -- and without this check, asking for
+    // `eyelab-travel-45` in a process started with U02_EYELAB=control-shipped
+    // would cheerfully write CONTROL frames into a directory named travel-45.
+    //
+    // That is the exact shape of fault this project keeps paying for: a
+    // plausible-looking plate of the wrong thing, with no error anywhere. So
+    // it FAILS LOUDLY instead. One process per variant.
+    if (vi != u02::eyelab::variant_index()) {
+      std::fprintf(stderr,
+                   "eyelab: refusing to render %s -- this process built the "
+                   "creature for '%s'. Set U02_EYELAB=%s and run again.\n",
+                   nm.c_str(), u02::eyelab::variant().name, V.name);
+      rc |= 1;
+      continue;
+    }
+    SceneSubject s = subject_u02_clip(16, nm.c_str(), u02::eyelab::kEyeLabKeys,
+                                      false, &kU02SunCalm);
+    s.name = nm.c_str();
+    // The mana is OFF. It is the brightest thing on the creature and it sits
+    // right beside the face; judging an eye through it is judging the mana.
+    // Slot 7 (the form diagnostic) takes exactly this decision for exactly
+    // this reason, so this follows an existing precedent rather than a new
+    // preference.
+    s.u02_mana = 0;
+    s.note = V.mechanism;
+    rc |= render_scene(s);
+  }
   if (wanted("manafold-trio")) {
     SceneSubject s = subject_u02_clip(2, "manafold-trio", u02::kChannelKeys, false, &kU02SunChannel);
     s.u02_trio = true;

@@ -8,6 +8,7 @@
 #define ZHAO_REEL_MANAFOLD_MODEL_H
 
 #include "manafold_art.h"
+#include "manafold_eyelab.h"  // LANE-ONLY (Direction 7 12): the eye-lab variant table
 #include "manafold_rig.h"
 
 namespace u02 {
@@ -72,6 +73,17 @@ inline zc::RingPart make_body(uint8_t bone) {
     int32_t s = static_cast<int32_t>(255 - (a * 255) / (half_h > 0 ? half_h : 1));
     if (s < 1) s = 1;
     if (s > 255) s = 255;
+    // ---- EYE LAB, LANE-ONLY: the blink-vs-breath channel collision --------
+    // There is ONE DeformSample per frame and every opted-in part shares it
+    // (see manafold_eyelab.h). So a blink spike on the sample squashes the
+    // BODY too. `blink-strength-split` is the variant that answers it by
+    // cutting the body's own authority hard, leaving the same signal reading
+    // as an eye event with a faint body settle under it. It is a real trade
+    // and the plates are supposed to show what it costs the bounce.
+    if (eyelab::variant().blink_split) {
+      s = s * eyelab::kBlinkBodyStrengthSplit / 255;
+      if (s < 1) s = 1;
+    }
     rs.deform_strength = static_cast<uint8_t>(s);
     rs.deform_center_x = 0;
     rs.deform_center_y = 0;
@@ -298,6 +310,28 @@ inline zc::RingPart make_eye_lens(uint8_t bone) {
     // bone sweeps the eye across the body instead of spinning it in place.
     rs.cx = fxu(kEyeShiftPivotMm);
     rs.segments = static_cast<uint8_t>(kEyeFacetSegments);
+    // ---- EYE LAB, LANE-ONLY: the lens opts into the deform sidecar --------
+    // Two jobs at once, and they are the same mechanism:
+    //   12.3  THE BLINK. kRadial on the lens's LOCAL LONG AXIS (+Y is the long
+    //         axis here) contracts the lens tip-to-tip about its own centre --
+    //         which on a lens tilted into the Lambda IS the vertical squash the
+    //         owner chose. No new geometry, exactly as 12.3 asks.
+    //   7.7   THE PULSATION. Today make_body is the ONLY part that opts in, so
+    //         the lens is RIGID while the surface under it inflates. Opting in
+    //         makes the lens breathe WITH the body instead of being left behind
+    //         by it, which is what "resolve against the posed, deformed
+    //         surface" has to mean for a part that is skinned rather than
+    //         projected.
+    // deform_center is LOCAL to the part's bone and the compiler adds the bind
+    // translation, so (0,0,0) is exactly the lens centre.
+    if (eyelab::variant().breathe_eye) {
+      rs.deform_role = zc::DeformRole::kRadial;
+      rs.deform_axis = 1;
+      rs.deform_strength = 255;
+      rs.deform_center_x = 0;
+      rs.deform_center_y = 0;
+      rs.deform_center_z = 0;
+    }
     p.rings.push_back(rs);
   }
   p.r = kLensR;
@@ -341,9 +375,16 @@ inline zc::RingPart make_eye_lens(uint8_t bone) {
  */
 inline zc::RingPart make_star(uint8_t bone, bool white) {
   // §5c: the arms are authored DRAWN-FLUSH and scaled back by kStarScalePm.
-  const auto sc = [](int32_t v) {
-    return static_cast<int32_t>((static_cast<int64_t>(v) * kStarScalePm) / 1000);
+  // EYE LAB (12.2): the lane's scale, defaulting to the shipped kStarScalePm
+  // on the control variant. One knob, exactly as the owner left it.
+  const int32_t scale_pm = eyelab::variant().star_scale_pm;
+  const auto sc = [scale_pm](int32_t v) {
+    return static_cast<int32_t>((static_cast<int64_t>(v) * scale_pm) / 1000);
   };
+  // EYE LAB (12.1): "the star sits HIGH, as drawn". This SUPERSEDES 5.1's
+  // concentric rest. 0 on the control variant, so the control really is the
+  // shipped eye.
+  const int32_t star_off_mm = eyelab::variant().star_offset_mm;
   const int32_t rim = white ? kStarWhiteRimMm : 0;
   const int32_t bot = sc(kStarArmBottomMm) + rim;
   const int32_t top = sc(kStarArmTopMm) + rim;
@@ -369,7 +410,7 @@ inline zc::RingPart make_star(uint8_t bone, bool white) {
         (static_cast<int64_t>(sc(kStarArmSideMm)) * kStarProfileWPm[i]) / 1000) + rim;
     zc::RingSpec rs;
     rs.y = static_cast<int32_t>(
-        (static_cast<int64_t>(fxu(arm)) * yp / 1000) + fxu(kStarOffsetYMm));
+        (static_cast<int64_t>(fxu(arm)) * yp / 1000) + fxu(star_off_mm));
     rs.radius = 0;
     rs.rx = fxu(thin);
     rs.rz = fxu(w);
@@ -380,6 +421,25 @@ inline zc::RingPart make_star(uint8_t bone, bool white) {
     // Depth ordering, stated as arithmetic so it cannot silently invert again:
     // white front face = kEyeBulgeMm + thin; cyan front face = that + proud.
     rs.cx = fxu(kEyeBulgeMm + (white ? 0 : kStarCyanProudMm));
+    // ---- EYE LAB, LANE-ONLY: the star RIDES the lens's squash -------------
+    // 12.3: "the star rides it. It must not slide against the purple during
+    // the blink." kFollower is that guarantee expressed as CONSTRUCTION rather
+    // than as a schedule: a follower takes its carrier point's displacement as
+    // a PURE TRANSLATION and keeps its own dimensions and normals rigid. The
+    // star is carried by the squash; it is never squashed by it, and it cannot
+    // drift relative to the lens because it is not independently animated.
+    //
+    // The white and the cyan take the SAME profile table and therefore the
+    // SAME carrier at every ring, so 5b's "never animate the white separately
+    // from the blue" is preserved by the same fact.
+    if (eyelab::variant().breathe_eye) {
+      rs.deform_role = zc::DeformRole::kFollower;
+      rs.deform_axis = 1;
+      rs.deform_strength = 255;
+      rs.deform_center_x = 0;
+      rs.deform_center_y = 0;
+      rs.deform_center_z = 0;
+    }
     p.rings.push_back(rs);
   }
   if (white) {

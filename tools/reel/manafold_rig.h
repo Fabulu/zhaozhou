@@ -37,6 +37,7 @@
 #define ZHAO_REEL_MANAFOLD_RIG_H
 
 #include "manafold_art.h"
+#include "manafold_eyelab.h"  // LANE-ONLY: kEyeTravelPivotXMm
 
 namespace u02 {
 
@@ -79,12 +80,32 @@ enum BoneId : uint8_t {
                     // Still no vertex is skinned to it -- that is deliberate,
                     // and the joint AT the re-entry ball remains a DECLARED
                     // GAP (see kLoopArcMm, and pass 10's C.2 prototype).
-  kBEyeL = 8,       // left lens
-  kBEyeR = 9,       // right lens
-  kBPupilL = 10,    // left star
-  kBPupilR = 11,    // right star
+  // ---- EYE LAB (Direction 7 12.4), LANE-ONLY, INERT AT REST --------------
+  // The two travel pivots. A bone rotates about ITS OWN origin, and the eye
+  // bone's origin IS the lens centre, so nothing available on kBEyeL can make
+  // the eye TRAVEL -- it can only spin the lens on the spot. These sit on the
+  // BODY'S OWN VERTICAL AXIS instead, so a rotation here carries the whole eye
+  // assembly (lens + both stars + their orientation) around the head on an arc.
+  //
+  // They must be inserted BEFORE the eye bones, not appended: the skeleton
+  // contract is PARENT-BEFORE-CHILD, and appending them at 12/13 while their
+  // children sit at 8..11 breaks it. Every reference to these ids is symbolic
+  // (checked: nothing in the tree indexes a manafold bone by literal), so the
+  // renumber is safe and the rest pose is bit-identical -- identity quats on a
+  // (0, 0, 0)-relative bind change nothing.
+  //
+  // The X of the axis is kEyeTravelPivotXMm, NOT zero: the body's horizontal
+  // section is a circle, but the teardrop lean puts its centre 33 mm forward at
+  // the eye's height, and swinging about x=0 would drag the eye through that
+  // lean and sink it. See manafold_eyelab.h.
+  kBEyeTravelL = 8,
+  kBEyeTravelR = 9,
+  kBEyeL = 10,      // left lens
+  kBEyeR = 11,      // right lens
+  kBPupilL = 12,    // left star
+  kBPupilR = 13,    // right star
 };
-constexpr int kBoneCount = 12;
+constexpr int kBoneCount = 14;
 
 /**
  * Bind translations: each hinge bone's pivot sits AT its ball's own centre
@@ -116,8 +137,19 @@ inline zc::Skeleton build_skeleton() {
   // now sweeps the eye ACROSS the body surface -- "the eye itself can move a
   // bit too" -- instead of spinning the lens on the spot. The rig authors
   // rotations only, so this is how a shift is expressed.
-  sk.bones[kBEyeL] = zc::Bone{kBRoot, fxu(kEyeXMm), fxu(vmm(kEyeYMm)), fxu(kEyeZMm)};
-  sk.bones[kBEyeR] = zc::Bone{kBRoot, fxu(kEyeXMm), fxu(vmm(kEyeYMm)), -fxu(kEyeZMm)};
+  // EYE LAB: the travel pivots, on the body's own axis at the eye's height.
+  // Bind is a pure translation like every other bone; at identity the eye
+  // bones below land exactly where they always did.
+  sk.bones[kBEyeTravelL] =
+      zc::Bone{kBRoot, fxu(eyelab::kEyeTravelPivotXMm), fxu(vmm(kEyeYMm)), 0};
+  sk.bones[kBEyeTravelR] =
+      zc::Bone{kBRoot, fxu(eyelab::kEyeTravelPivotXMm), fxu(vmm(kEyeYMm)), 0};
+  // The eye bones are now children of their travel pivot, so their bind is the
+  // DELTA from the axis rather than from the root. Same world position.
+  sk.bones[kBEyeL] = zc::Bone{kBEyeTravelL, fxu(kEyeXMm - eyelab::kEyeTravelPivotXMm),
+                              0, fxu(kEyeZMm)};
+  sk.bones[kBEyeR] = zc::Bone{kBEyeTravelR, fxu(kEyeXMm - eyelab::kEyeTravelPivotXMm),
+                              0, -fxu(kEyeZMm)};
   // Pupil pivots sit AT the lens centre; the star GEOMETRY is offset
   // outward (+X) in the part, so pupil-bone rotations sweep the star
   // across the lens face like an eyeball turning (the zixx gaze mechanism,

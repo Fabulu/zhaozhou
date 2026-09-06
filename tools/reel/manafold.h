@@ -30,6 +30,9 @@
 // table, the forked fold and the lab clip. Ships nothing; touches no
 // shipped constant. Delete this include and the push_back below to revert.
 #include "manafold_lab.h"
+// LANE-ONLY (Owner Direction 7 12): the EYE LAB. Ships nothing; the control
+// variant is the shipped eye verbatim, so slot 16 is additive in every sense.
+#include "manafold_eyelab_clip.h"
 
 // The GENERATED page (tools/pack/mkmanafoldpage.py) is COMMITTED, exactly as
 // Zixxtrixx's pages are: the generator is deterministic, so the tracked
@@ -144,6 +147,7 @@ inline const zc::CreatureType& type() {
     bank.clips.push_back(build_trick());       // slot 13 (pass 3: headstand)
     bank.clips.push_back(build_damage());      // slot 14 (pass 4: directional hits)
     bank.clips.push_back(lab::build_manalab());  // slot 15 (LANE-ONLY: Direction 6)
+    bank.clips.push_back(eyelab::build_eyelab());  // slot 16 (LANE-ONLY: Direction 7 12)
 
     zc::CreatureType type;
     type.type_id = 3;  // 1 watchdog, 2 zixxtrixx, 3 manafold
