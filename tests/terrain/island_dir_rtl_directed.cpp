@@ -71,10 +71,27 @@ int main(int argc, char** argv) {
   desc.extent_ix = static_cast<uint16_t>(kSide);
   desc.extent_iz = static_cast<uint16_t>(kSide);
 
+  // THE SHAPED ISLAND THE SPEC COSTS OUT, not a rectangle. A floating island is
+  // not a square, and the corners are exactly the sky that must cost nothing:
+  //
+  //   3.25 km^2 / (64 m)^2 = 793.5 patches  ->  radius = sqrt(793.5/pi) = 15.9
+  //
+  // Copied deliberately from island_8km_directed so the two tests describe ONE
+  // island. My first version used the stream test's 45-row band -- 5,625
+  // patches -- and then asserted the 793 figure against it, which is a
+  // measurement taken across two different fixtures and exactly the mistake
+  // this project keeps writing down.
   isl::Directory dir(desc);
   uint32_t h = 1;
-  for (int32_t iz = 40; iz < 85; ++iz)
-    for (int32_t ix = 0; ix < kSide; ++ix) dir.set(ix, iz, h++);
+  {
+    const double radius = 15.9;
+    const int32_t cx = kSide / 2, cz = kSide / 2;
+    for (int32_t iz = 0; iz < kSide; ++iz)
+      for (int32_t ix = 0; ix < kSide; ++ix) {
+        const double dx = ix - cx, dz = iz - cz;
+        if (dx * dx + dz * dz <= radius * radius) dir.set(ix, iz, h++);
+      }
+  }
 
   d.rst_n = 0;
   d.q_valid = 0;
@@ -88,13 +105,19 @@ int main(int argc, char** argv) {
 
   // ---- load the modelled store with exactly the same ground ---------------
   h = 1;
-  for (int32_t iz = 40; iz < 85; ++iz)
-    for (int32_t ix = 0; ix < kSide; ++ix) {
-      d.gw_en = 1;
-      d.gw_addr = static_cast<uint16_t>((iz << 7) | ix);
-      d.gw_handle = h++;
-      zhao::tick(d);
-    }
+  {
+    const double radius = 15.9;
+    const int32_t cx = kSide / 2, cz = kSide / 2;
+    for (int32_t iz = 0; iz < kSide; ++iz)
+      for (int32_t ix = 0; ix < kSide; ++ix) {
+        const double dx = ix - cx, dz = iz - cz;
+        if (dx * dx + dz * dz > radius * radius) continue;
+        d.gw_en = 1;
+        d.gw_addr = static_cast<uint16_t>((iz << 7) | ix);
+        d.gw_handle = h++;
+        zhao::tick(d);
+      }
+  }
   d.gw_en = 0;
   zhao::tick(d);
 
@@ -104,7 +127,7 @@ int main(int argc, char** argv) {
   // tag comparison.
   std::vector<Query> qs;
   uint8_t tag = 0;
-  for (int32_t iz = 38; iz < 88; ++iz) {          // crosses both ground edges
+  for (int32_t iz = 45; iz < 80; ++iz) {          // crosses the disc's edges
     qs.push_back({60, iz, tag++});
     qs.push_back({0, iz, tag++});
     qs.push_back({kSide - 1, iz, tag++});
@@ -193,11 +216,62 @@ int main(int argc, char** argv) {
      "so the comparison above is not satisfied by one outcome repeated",
      1, (oracle_led.resident > 0 && oracle_led.open_sky > 0 && oracle_led.out_of_extent > 0) ? 1
                                                                                             : 0);
-  ck(oracle_led.open_sky > oracle_led.resident,
-     "with SKY the commonest answer, which is the property the whole block "
-     "exists for -- a store whose miss meant failure would report 94.9% of an "
-     "island as broken",
-     1, oracle_led.open_sky > oracle_led.resident ? 1 : 0);
+  // THE SKY-IS-COMMONEST CLAIM NEEDS THE WHOLE GRID, NOT THIS QUERY SET.
+  //
+  // My first version asserted `open_sky > resident` right here, on the directed
+  // queries above -- and it failed, correctly. Those queries deliberately walk
+  // the ground band (iz 38..88 straddles the solid rows 40..84), so 135 of 155
+  // land on ground. That is a fine set for checking OUTCOMES and terrible for
+  // checking a RATIO: it asserts a property of the island's grid from a sample
+  // chosen for a different purpose entirely.
+  //
+  // The 94.9% figure is about the grid, so the grid is what has to be swept.
+  {
+    std::size_t next2 = 0, answered = 0;
+    uint32_t rtl_res = d.cnt_resident, rtl_sky = d.cnt_open_sky;
+    isl::Ledger full{};
+    const int32_t total = kSide * kSide;
+
+    for (int cyc = 0; cyc < 4000000 && answered < static_cast<std::size_t>(total); ++cyc) {
+      const bool more = next2 < static_cast<std::size_t>(total);
+      d.q_valid = more ? 1 : 0;
+      if (more) {
+        d.q_ix = static_cast<uint32_t>(static_cast<int32_t>(next2) % kSide);
+        d.q_iz = static_cast<uint32_t>(static_cast<int32_t>(next2) / kSide);
+        d.q_tag = static_cast<uint8_t>(next2 & 0xFF);
+      }
+      d.a_ready = 1;
+      d.eval();
+      const bool took = d.q_valid && d.q_ready;
+      if (d.a_valid && d.a_ready) {
+        const int32_t i = static_cast<int32_t>(answered);
+        dir.find(i % kSide, i / kSide, &full);
+        ++answered;
+      }
+      zhao::tick(d);
+      if (took) ++next2;
+    }
+
+    const uint32_t swept_res = d.cnt_resident - rtl_res;
+    const uint32_t swept_sky = d.cnt_open_sky - rtl_sky;
+    std::printf("  full grid sweep: %d patches -> rtl resident %u sky %u | oracle %u / %u\n",
+                total, swept_res, swept_sky, full.resident, full.open_sky);
+
+    ck(answered == static_cast<std::size_t>(total), "the whole grid was swept",
+       total, static_cast<long long>(answered));
+    ck(swept_res == full.resident && swept_sky == full.open_sky,
+       "and over the WHOLE grid the counters still match the oracle exactly",
+       full.resident, swept_res);
+    ck(swept_res == 793,
+       "with 793 patches of ground -- the figure terrain_rules 1.4 costs out "
+       "from the island's 3.25 square km, derived independently",
+       793, swept_res);
+    ck(swept_sky > swept_res * 10,   // 14,832 / 793 = 18.7x
+       "and SKY more than ten times commoner than ground, which is the property "
+       "the whole block exists for: a store whose miss meant failure would "
+       "report the overwhelming majority of an island as broken",
+       1, swept_sky > swept_res * 10 ? 1 : 0);
+  }
 
   // ---- a malformed descriptor -------------------------------------------
   // BAD PITCH OUTRANKS OUT OF EXTENT, and the order is load-bearing: a
