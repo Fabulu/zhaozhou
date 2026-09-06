@@ -154,6 +154,38 @@ package zhao_pkg;
   localparam logic [31:0] ZHAO_GEOM_ASSET_BASE    = 32'h06A0_0000;
   localparam logic [31:0] ZHAO_GEOM_ASSET_SPAN    = 32'h0160_0000; // 23,068,672
 
+  // ---------------------------------------------------------------------
+  // TERRAIN.PAGE_POOL -- the bank-2 region (ruling T2, spec/memory_rules.md
+  // 5b, 2026-09-06)
+  //
+  // WHY IT EXISTS: TERRAIN.PAGELOADER writes whole 21,376-byte pages into
+  // local SDRAM and every one of those writes landed on MEM.GUARD's
+  // `default: pass_ok = 1'b0`. Bank 2 had no window at all, for anybody, so
+  // the block was buildable, tested and UNINTEGRABLE -- exactly the state
+  // GEOM.MESHFETCH was in before the asset pool existed.
+  //
+  // THE BOUNDS ARE THE RULING'S, EXACTLY, AND NOT ONE BYTE MORE.
+  // T2 writes the region as 0x0400_0000 .. 0x054D_FFFF inclusive, "1,024 x
+  // 21,376 B". 1024 * 21376 = 21,889,024 = 0x014E_0000, so the half-open end
+  // is 0x054E_0000 and the two spellings agree to the byte -- there is no
+  // rounding to argue about and no slack to take. The five OTHER bank-2
+  // regions T2 names (RESIDENT_MIP_POOL, COMPOSED_HEIGHT, COMPOSED_VELOCITY,
+  // WRITEBACK_STAGING, COMPOSED_MIP_POOL) are NOT opened here: no block
+  // writes them yet, and a window opened ahead of its writer is a hole with a
+  // plan attached.
+  //
+  // BASE + SPAN = 0x054E_0000, far below the 27-bit top 0x0800_0000, so the
+  // sum cannot wrap 32 bits -- the defect the blit clamp exists for. Both
+  // values are elaboration-time constants: no map input moves this window and
+  // it is not frame-scoped.
+  //
+  // IT IS A KNOB. Both constants are editable and the pool can move to any
+  // unmapped range; nothing derives them. `zref::terrain::kPagePoolBase` and
+  // `kPagePoolSlots` carry the same numbers on the reference side and static
+  // assert the same end address.
+  localparam logic [31:0] ZHAO_TERRAIN_PAGE_POOL_BASE = 32'h0400_0000;
+  localparam logic [31:0] ZHAO_TERRAIN_PAGE_POOL_SPAN = 32'h014E_0000; // 1024 * 21,376
+
   // Duo canvas map (spec/video_rules.md §3.1): two 256x192 views vertically
   // centered at x offsets 0 / 256, y offset 24; border rows are black and
   // part of the displayed stream.
@@ -249,6 +281,20 @@ package zhao_pkg;
     ZHAO_CLIENT_ENGINE0  = 3'd2, // reserved guaranteed slot
     ZHAO_CLIENT_ENGINE1  = 3'd3, // reserved guaranteed slot
     ZHAO_CLIENT_DEBUG    = 3'd4, // debug reads (best-effort class, Phase 3+)
+    // 3'd5 IS DELIBERATELY UNSPENT. Ruling T3: "Client ID 5 remains available
+    // for a measured split if board evidence proves ENGINE1 arbitration is the
+    // limiter. Do not spend it pre-emptively." The gap in this enum IS that
+    // reservation, held where anyone adding a client will read it. It is also
+    // why the next value is 6 rather than 5 -- the number was ruled, not
+    // chosen. `zhao_vram_arbiter` carries a matching dead port at index 5,
+    // because in that block the ARRAY INDEX *is* the client id.
+    // TERRAIN.BUILD -- best-effort / background: HPS->local page loads,
+    // F-sheet writeback, prefetch, staging and journal traffic (ruling T3,
+    // spec/memory_rules.md 5d). It does NOT join the guaranteed round robin
+    // when a page is late; a streaming miss draws a proxy and records
+    // pressure. MEM.GUARD gives it exactly one window: TERRAIN.PAGE_POOL,
+    // WRITE-ONLY (see ZHAO_TERRAIN_PAGE_POOL_BASE below).
+    ZHAO_CLIENT_TERRAIN_BUILD = 3'd6,
     ZHAO_CLIENT_NONE     = 3'd7
   } zhao_client_e;
 

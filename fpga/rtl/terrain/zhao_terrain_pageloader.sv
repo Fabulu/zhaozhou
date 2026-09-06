@@ -65,19 +65,30 @@
 // ---------------------------------------------------------------------------
 // WHAT IS NOT WRITTEN, AND IS THEREFORE A PARAMETER OR A PORT
 // ---------------------------------------------------------------------------
-// The client identity is RULED (T3: `ZHAO_CLIENT_TERRAIN_BUILD = 6`) and NOT
-// ENACTED: `zhao_pkg::zhao_client_e` declares 0,1,2,3,4,7 and stops, and
-// `zhao_vram_arbiter` has five client ports whose ARRAY INDEX is cast straight
-// to the enum -- so slot identity and client identity are one fact and there is
-// no sixth slot for a sixth client. Nor does MEM.GUARD have any window that
-// admits a WRITE to bank 2: its map is two frame-buffer slots plus a read-only
-// geometry asset pool, and `default: pass_ok = 1'b0` refuses everything else.
+// The client identity is RULED (T3: `ZHAO_CLIENT_TERRAIN_BUILD = 6`) and, since
+// 2026-09-06, ENACTED. `zhao_pkg::zhao_client_e` declares 6 (with 5 left as the
+// deliberate hole T3 reserves); `zhao_vram_arbiter` carries seven client ports
+// rather than five, because the ARRAY INDEX is cast straight to the enum there
+// and slot identity and client identity are one fact; and MEM.GUARD has a
+// bank-2 window at last -- TERRAIN.PAGE_POOL, [0x0400_0000, 0x054E_0000),
+// WRITE-ONLY, client 6 alone, constant bounds. This paragraph used to say the
+// opposite of all three, and it was right when it said it.
 //
-// So today NO client identity can legally write a terrain page, and this block
-// says so by taking the identity as an INPUT and by counting `guard_denied_o`
-// as a real fault rather than an expected steady state. That is exactly what
-// GEOM.MESHFETCH had to do before `memory_rules.md` sec 5f existed. The
-// amendments wanted are named in design/contracts/TERRAIN.PAGELOADER.md.
+// THE IDENTITY STAYS AN INPUT ANYWAY, and `guard_denied_o` stays a fault
+// counter. Which client a deployment presents is configuration, not a property
+// of moving a page; hard-wiring the constant would remove a knob to save
+// nothing. And with the window in place a denial no longer means "the machine
+// has no room for this block" -- it means this block computed an address the
+// pool does not contain, which is a bug and should be counted as one.
+//
+// WHAT THE WINDOW DOES NOT DO. T2 wants a STATE-AWARE permission -- "a loader
+// may write only a LOADING slot" -- and the guard's is spatial: the whole pool,
+// for this client, write-only. The guard has one muxed request port and no
+// residency context, and the interface that would carry slot state to it is
+// ruled nowhere. So the last line of defence against writing the WRONG slot is
+// in this file: `SLOTW` is one bit wider than the pool needs precisely so an
+// out-of-range slot ARRIVES as out-of-range and is refused instead of being
+// truncated into a live page. That was already true; it now matters more.
 //
 // Conservative SystemVerilog subset (charter sec 2). Lint gate:
 // `lint_terrain_pageloader`.
@@ -93,9 +104,13 @@ module zhao_terrain_pageloader
     parameter int unsigned CRC_HI      = 21320,
     parameter int unsigned BURST_BYTES = 64,
 
-    // TERRAIN.PAGE_POOL (ruling T2). A PARAMETER because MEM.GUARD does not yet
-    // have this region: the ruled value is the default so the eventual guard
-    // amendment is a confirmation rather than a discovery.
+    // TERRAIN.PAGE_POOL (ruling T2). MEM.GUARD now HAS this region, and the
+    // amendment confirmed these defaults rather than discovering them --
+    // `zhao_pkg::ZHAO_TERRAIN_PAGE_POOL_BASE` is 0x0400_0000 and the window
+    // spans exactly REGION_SLOTS * PAGE_BYTES. They stay PARAMETERS: the pool
+    // can move to any unmapped range, and a block that hard-codes an address
+    // the guard also hard-codes gives the owner one knob with two halves that
+    // have to be moved together and no gate that says so.
     parameter logic [ZHAO_VRAM_ADDR_BITS-1:0] REGION_BASE  = 27'h400_0000,
     parameter int unsigned                    REGION_SLOTS = 1024,
 

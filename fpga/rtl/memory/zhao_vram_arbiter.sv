@@ -27,6 +27,27 @@
 //      past the served member).
 //   4. DEBUG — best-effort class, served only when nothing else is pending
 //      (empty in Phase-2 traffic; the port is the reservation).
+//   5. TERRAIN_BUILD — background class, served only when NOTHING else is
+//      pending, DEBUG included. Ruling T3: it is "best-effort / background"
+//      and "does not join guaranteed round-robin merely because a page is
+//      late" — when a page misses, the renderer draws a declared proxy and
+//      records pressure rather than stealing scanout or render service. So it
+//      sits at the bottom on purpose, and its starvation under sustained load
+//      is the RULED behaviour, not a defect. The liveness bound B is untouched:
+//      a background client can hold at most ONE in-flight burst, which the
+//      bound already carries, and it can never take a boundary from a
+//      guaranteed client.
+//
+// SEVEN PORTS, AND INDEX 5 IS DEAD ON PURPOSE. The array index is cast
+// straight to zhao_client_e, so SLOT IDENTITY IS CLIENT IDENTITY in this
+// block — that is exactly why slot 3 IS ENGINE1 and slot 4 IS DEBUG. Ruling
+// T3 numbers the terrain client 6 and reserves 5 ("do not spend it
+// pre-emptively"), so the array runs 0..6 with a HOLE at 5 rather than packing
+// terrain into slot 5 and breaking the identity. The reserved port is not
+// merely never selected: `port_grant[5]` is forced low below, so a request
+// there is REFUSED rather than latched into a slot that could never be served.
+// An accepted-but-unservable request is a silent wedge; a refused one is
+// visible at the requester.
 //
 // Credits (credit-based edge law): each client holds a 32-word pool (one max
 // 64-B request). A granted request deducts its word count up front; the
@@ -53,9 +74,10 @@ module zhao_vram_arbiter
   input  logic clk,
   input  logic rst_n,
 
-  // client ports (zhao_client_e order: scanout, blit, engine0, engine1, debug)
-  input  zhao_arb_req_t [4:0] client_req,
-  output zhao_arb_rsp_t [4:0] client_rsp,
+  // client ports (zhao_client_e order: scanout, blit, engine0, engine1,
+  // debug, RESERVED (5, ruling T3), terrain_build)
+  input  zhao_arb_req_t [6:0] client_req,
+  output zhao_arb_rsp_t [6:0] client_rsp,
 
   // SDRAM edge (the credit port of zhao_sdram_ctrl)
   output zhao_arb_req_t ctrl_req,
@@ -64,8 +86,8 @@ module zhao_vram_arbiter
 
   // counter snapshot law (D9)
   input  logic             frame_tick,
-  output logic [4:0][31:0] vram_bytes,
-  output logic [4:0][31:0] vram_bytes_shadow,
+  output logic [6:0][31:0] vram_bytes,
+  output logic [6:0][31:0] vram_bytes_shadow,
   output logic [31:0]      scanout_preempted
 );
 
@@ -73,14 +95,19 @@ module zhao_vram_arbiter
   localparam int unsigned CREDIT_INIT    = 32;  // words (one 64-B request)
   localparam logic [2:0]  SCANOUT_ID = 3'(ZHAO_CLIENT_SCANOUT);
   localparam logic [2:0]  DEBUG_ID   = 3'(ZHAO_CLIENT_DEBUG);
+  localparam logic [2:0]  TERRAIN_ID = 3'(ZHAO_CLIENT_TERRAIN_BUILD);
+  // The unspent client id of ruling T3. Its port exists only so that
+  // index == id stays true; nothing may ever be accepted on it.
+  localparam logic [2:0]  RESERVED_ID = 3'd5;
+  localparam int unsigned NCLIENT     = 7;
 
   // -------------------------------------------------------------- per-client
-  logic [4:0]  pend_active;
-  logic [4:0]  pend_write;
-  logic [26:0] pend_addr  [0:4];   // next burst byte address
-  logic [5:0]  pend_words [0:4];   // words not yet accepted by the ctrl
-  logic [5:0]  credits    [0:4];
-  logic [5:0]  age        [0:4];   // cycles eligible-but-unserved (saturating)
+  logic [6:0]  pend_active;
+  logic [6:0]  pend_write;
+  logic [26:0] pend_addr  [0:6];   // next burst byte address
+  logic [5:0]  pend_words [0:6];   // words not yet accepted by the ctrl
+  logic [5:0]  credits    [0:6];
+  logic [5:0]  age        [0:6];   // cycles eligible-but-unserved (saturating)
   logic [2:0]  rr_ptr;             // next RR member in {1,2,3}
   logic [2:0]  last_issuer;        // owner of the in-flight ctrl burst
 
@@ -94,9 +121,10 @@ module zhao_vram_arbiter
   endfunction
 
   // ------------------------------------------------------------- eligibility
-  logic [4:0] eligible;
+  logic [6:0] eligible;
   always_comb begin
-    for (int k = 0; k < 5; k++) eligible[k] = pend_active[k] && (pend_words[k] != 6'd0);
+    for (int k = 0; k < NCLIENT; k++)
+      eligible[k] = pend_active[k] && (pend_words[k] != 6'd0);
   end
 
   // burst a client may issue now: min(remaining, 8, row tail) in words
@@ -164,7 +192,14 @@ module zhao_vram_arbiter
     end else if (eligible[DEBUG_ID]) begin
       sel_valid = 1'b1;
       sel       = DEBUG_ID;
+    end else if (eligible[TERRAIN_ID]) begin
+      // background class, BELOW debug (ruling T3). Reached only when no
+      // guaranteed client and no debug read is pending.
+      sel_valid = 1'b1;
+      sel       = TERRAIN_ID;
     end
+    // RESERVED_ID appears in no arm above: the unspent client of ruling T3
+    // cannot be served, and cannot be accepted either (see port_grant).
   end
 
 
@@ -219,9 +254,9 @@ module zhao_vram_arbiter
   // Same shape as the Early-Z floor fix in round 12 -- when a select feeds
   // arithmetic, computing every branch and selecting the RESULT is shorter
   // than selecting the operand and then computing.
-  logic [3:0] bw_all [0:4];
+  logic [3:0] bw_all [0:6];
   always_comb begin
-    for (int k = 0; k < 5; k++)
+    for (int k = 0; k < NCLIENT; k++)
       bw_all[k] = burst_words(pend_words[k], pend_addr[k][11:1]);
   end
 
@@ -252,9 +287,9 @@ module zhao_vram_arbiter
   // ------------------------------------------------------- port handshake ---
   // grant_k: the window accepts client k's request at this edge (one
   // outstanding per client, credit-covered, legal length)
-  logic [4:0] port_grant;
+  logic [6:0] port_grant;
   always_comb begin
-    for (int k = 0; k < 5; k++) begin
+    for (int k = 0; k < NCLIENT; k++) begin
       logic [5:0] w_k;
       logic [5:0] ret_words_k;
       w_k         = words_of(client_req[k].len);
@@ -263,13 +298,18 @@ module zhao_vram_arbiter
       port_grant[k] = client_req[k].valid && !pend_active[k] && (w_k != 6'd0)
                       && ((credits[k] + ret_words_k) >= w_k);
     end
+    // The unspent client of ruling T3 accepts NOTHING. Without this the port
+    // would latch a request, deduct credits and count bytes for a slot the
+    // selector can never pick — a request taken and never served, which reads
+    // at the requester as a hang rather than as a refusal.
+    port_grant[RESERVED_ID] = 1'b0;
   end
 
   // ------------------------------------------------------------- seq core ---
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      pend_active       <= 5'b0;
-      pend_write        <= 5'b0;
+      pend_active       <= 7'b0;
+      pend_write        <= 7'b0;
       rr_ptr            <= 3'd1;
       last_issuer       <= 3'd0;
       offer_valid       <= 1'b0;
@@ -281,7 +321,7 @@ module zhao_vram_arbiter
       offer_sup         <= 1'b0;
       scanout_preempted <= 32'd0;
       vram_bytes_shadow <= '0;
-      for (int k = 0; k < 5; k++) begin
+      for (int k = 0; k < NCLIENT; k++) begin
         pend_addr[k]  <= 27'd0;
         pend_words[k] <= 6'd0;
         credits[k]    <= 6'(CREDIT_INIT);
@@ -292,7 +332,7 @@ module zhao_vram_arbiter
       // ---- D9: shadow latch on frame_tick --------------------------------
       if (frame_tick) vram_bytes_shadow <= vram_bytes;
 
-      for (int k = 0; k < 5; k++) begin
+      for (int k = 0; k < NCLIENT; k++) begin
         logic [5:0] w_k;
         logic [5:0] ret_words_k;
         w_k         = words_of(client_req[k].len);
@@ -354,7 +394,7 @@ module zhao_vram_arbiter
       end
 
       // ---- aging (saturating; resets when served or idle) ----------------
-      for (int k = 0; k < 5; k++) begin
+      for (int k = 0; k < NCLIENT; k++) begin
         if (eligible[k] && !(ctrl_grant && offer_valid && (offer_client == 3'(k)))) begin
           if (age[k] != 6'd63) age[k] <= age[k] + 6'd1;
         end else begin
@@ -367,7 +407,7 @@ module zhao_vram_arbiter
   // client responses: registered grant pulse; credit returns pass through
   genvar gj;
   generate
-    for (gj = 0; gj < 5; gj++) begin : g_rsp
+    for (gj = 0; gj < NCLIENT; gj++) begin : g_rsp
       always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) client_rsp[gj].grant <= 1'b0;
         else        client_rsp[gj].grant <= port_grant[gj];

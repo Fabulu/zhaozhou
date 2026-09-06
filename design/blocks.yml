@@ -1616,18 +1616,41 @@ blocks:
       absent from `upstream` rather than asserted against a block nobody has
       written.
 
-      NOT INTEGRABLE YET, AND THE BLOCK SAYS SO RATHER THAN PRETENDING. No
-      client identity can legally write a terrain page today, for three
-      independent reasons: zhao_client_e has no client 6; zhao_vram_arbiter has
-      five ports and casts the ARRAY INDEX to the enum, so slot identity IS
-      client identity and there is no sixth slot to be; and MEM.GUARD's map is
-      two framebuffer windows plus a read-only geometry pool with
-      `default: pass_ok = 1'b0`, so no window admits a bank-2 write for anyone.
-      Region base and slot count are therefore parameters (defaulting to ruling
-      T2's values) and both client identities are input ports, following
-      GEOM.MESHFETCH's precedent. The bench INSTANTIATES the real zhao_mem_guard
-      as an observer and asserts it never passed one of these writes -- the
-      refusal is measured, not claimed.
+      NO LONGER UNINTEGRABLE -- merely unintegrated. All three blockers were
+      enacted on 2026-09-06: zhao_client_e gained ZHAO_CLIENT_TERRAIN_BUILD = 6
+      (leaving 5 a deliberate hole, which IS ruling T3's "do not spend it
+      pre-emptively"); zhao_vram_arbiter went five -> seven ports, WIDENED
+      rather than packed because the array index IS the client id there, with
+      port 5 dead by construction and its grant forced low so a request there
+      is refused rather than latched into a slot that could never be served;
+      and MEM.GUARD gained a write-only TERRAIN.PAGE_POOL window at
+      [0x0400_0000, 0x054E_0000), which is T2's inclusive range TO THE BYTE.
+
+      THE FORMAL PROOF WAS RE-RUN, which ruling T3 asks for, and it is the
+      evidence that matters here rather than the test counts.
+      mem_guard_no_escape PASSES before and after, with the new cover statement
+      REACHED so the window is not proved vacuously; and
+      mem_vram_arbiter_liveness gives IDENTICAL verdicts on all four tasks with
+      seven ports as with five -- including both tight-bound tasks still
+      failing at 51 and 33 -- which is the proof that a background client at
+      the bottom of the order does not move the guaranteed-client service law.
+
+      The bench expectation flipped with it: the observer used to assert the
+      real guard NEVER passed one of these writes, and now asserts 334 passed,
+      334 forwarded, 0 refused on a clean page -- exactly, not "at least". A
+      third real guard instance on bench-driven wires supplies the negative
+      direction the loader cannot produce, since the loader only ever issues
+      legal requests. 154 -> 179 checks.
+
+      WHAT IS STILL WEAKER THAN THE RULING, stated rather than glossed: T2 wants
+      "a loader may write only a LOADING slot", and state-aware permission is
+      NOT implemented. The guard has one muxed request port and no residency
+      context; the interface that would carry it is unruled. The residual is
+      exact -- a faulty TERRAIN_BUILD may write a page slot other than the one
+      it was told to load. It cannot reach a framebuffer, the asset pool, the
+      rest of bank 2, or anything outside the map, so the no-escape theorem is
+      intact; the worst case is corrupt ground for one page, caught by the CRC
+      before publication.
 
       THE DESTINATION IS COMPUTED, NEVER ACCEPTED: REGION_BASE + slot *
       PAGE_BYTES, with the slot range-refused first, so writing outside the

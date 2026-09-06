@@ -653,8 +653,12 @@ module zhao_shell_top
   // MEM: two guard instances (client field selects the region law), the
   // arbiter, the SDRAM controller, and the HPS bridge
   // ==========================================================================
-  zhao_arb_req_t [4:0] client_req;
-  zhao_arb_rsp_t [4:0] client_rsp;
+  // SEVEN arbiter ports since the terrain amendment (ruling T3): index IS the
+  // client id, so 5 is the unspent reservation and 6 is TERRAIN.BUILD. Neither
+  // is driven here -- TERRAIN.PAGELOADER is not in the shell yet -- and both
+  // are tied off below beside slot 4.
+  zhao_arb_req_t [6:0] client_req;
+  zhao_arb_rsp_t [6:0] client_rsp;
   zhao_arb_req_t       ctrl_req;
   zhao_arb_rsp_t       ctrl_rsp;
   logic                hold_refresh;
@@ -923,9 +927,19 @@ module zhao_shell_top
   assign client_req[3] = geom_arb_req;
   // Slot 4 stays tied off: it is DEBUG by position, and DEBUG owns nothing.
   assign client_req[4] = '0;
+  // Slot 5 is the client id ruling T3 reserves and forbids spending; the
+  // arbiter refuses it at the port, and it is tied off here as well so the
+  // refusal is never even exercised from this shell.
+  assign client_req[5] = '0;
+  // Slot 6 is TERRAIN.BUILD. MEM.GUARD now has its window (TERRAIN.PAGE_POOL,
+  // write-only), but TERRAIN.PAGELOADER is not composed into this shell, so
+  // the port is a reservation exactly as slot 4 is. Wiring the loader in is
+  // its own pass: it needs the page-pool guard instance, the HPS bridge share
+  // and the residency directory, none of which are here.
+  assign client_req[6] = '0;
 
 
-  logic [4:0][31:0] vram_bytes, vram_bytes_shadow;
+  logic [6:0][31:0] vram_bytes, vram_bytes_shadow;
 
   zhao_vram_arbiter u_arb (
     .clk               (gpu_clk),
@@ -1352,7 +1366,8 @@ module zhao_shell_top
                     ^ bridge_req_grant ^ blit_hps_grant ^ ^blit_hps_rsp
                     ^ ^hps_arb_c0_bursts ^ ^hps_arb_c1_bursts ^ ^hps_arb_c1_wait
                     ^ ^client_rsp[2] ^ ^client_rsp[3]
-                    ^ ^client_rsp[4] ^ ^{client_rsp[0].credits}
+                    ^ ^client_rsp[4] ^ ^client_rsp[5] ^ ^client_rsp[6]
+                    ^ ^{client_rsp[0].credits}
                     ^ client_rsp[0].grant ^ client_rsp[1].grant
                     // `guard_wlast_o` marks the last beat of a guard request.
                     // The write queue does not need it: it enqueues four words
@@ -1364,13 +1379,22 @@ module zhao_shell_top
                     // is the burst's last beat, which the write queue does
                     // not need because the arbiter counts words.
                     ^ render_wlast ^ render_gv ^ ^render_gv_req
+                    // The GEOMETRY guard's trace-only outputs, sunk the same
+                    // way. They were MISSING: `lint_shell_top` passed on
+                    // 2026-09-05 15:29 (build/Testing/Temporary logs) and was
+                    // red on the two signals below when this terrain pass
+                    // arrived, so `u_guard_geom` was composed in without its
+                    // pulse and its latched request joining the sink that every
+                    // other guard's do. `geom_gv_cnt` was already consumed by
+                    // the violation total above; only these two were adrift.
                     // The slot manager's observability: exposed for tracing and
                     // for the counters, consumed by neither yet.
                     ^ slot_lease_grant ^ slot_lease_refused
                     ^ ^slot_ready_gpu ^ slot_displayed_v ^ slot_displayed_s
                     ^ ^slot_state_gpu[0] ^ ^slot_state_gpu[1]
                     ^ ^slot_leases_granted ^ ^slot_stale_events
-                    ^ ^blits_published ^ ^blits_rejected;
+                    ^ ^blits_published ^ ^blits_rejected
+                    ^ geom_gv ^ ^geom_gv_req;
   /* verilator lint_on UNUSEDSIGNAL */
 
   // ==========================================================================
@@ -1909,10 +1933,13 @@ module zhao_shell_top
   always_comb begin
     vram_total = 64'd0;
     hps_total  = 64'd0;
-    for (int k = 0; k < 5; k++) begin
-      vram_total = vram_total + {32'd0, vram_bytes_shadow[k]};
-      hps_total  = hps_total  + {32'd0, hps_bytes_shadow[k]};
-    end
+    // TWO LOOPS, TWO BOUNDS. The VRAM arbiter has SEVEN client slots since the
+    // terrain amendment and the HPS arbiter still has five; one shared `k < 5`
+    // would silently stop counting the two new VRAM clients the moment either
+    // is driven -- a total that reads LOW, which is the failure this tree keeps
+    // relearning.
+    for (int k = 0; k < 7; k++) vram_total = vram_total + {32'd0, vram_bytes_shadow[k]};
+    for (int k = 0; k < 5; k++) hps_total  = hps_total  + {32'd0, hps_bytes_shadow[k]};
   end
 
   zhao_counter_snap_t prov [0:8];

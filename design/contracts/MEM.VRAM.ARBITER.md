@@ -80,3 +80,5 @@ Budget group `platform` (§25 14% ceiling). Small — mux + counters.
 ## Notes
 
 Best-effort class ports exist but are unwired in Phase 2 (plan §6 deferred) — the class reservation is part of this contract, not an afterthought.
+
+**Seven client ports since 2026-09-06 (ruling T3).** The array index IS the client id — `ctrl_req.client = zhao_client_e'(offer_client)` — so slot identity and client identity are one fact, and adding `ZHAO_CLIENT_TERRAIN_BUILD = 6` means an array of 0..6 with a HOLE at 5 rather than packing terrain into the next free slot. Client 5 is the id T3 reserves and forbids spending; its port is dead by construction (no arbitration arm names it) and `port_grant[5]` is forced low, so a request there is refused rather than latched into a slot that can never be served — an accepted-but-unservable request reads at the requester as a hang. TERRAIN_BUILD is arbitrated **below DEBUG**, background class, never promoted for lateness. `mem_vram_arbiter_liveness` was re-run with seven ports: `bmc` PASS at RR 52 / scanout 34, both `expect fail` tightness tasks still FAIL at bound−1, `cover` PASS — the bounds are unchanged and still exact.

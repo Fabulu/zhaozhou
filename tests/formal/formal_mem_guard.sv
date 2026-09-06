@@ -185,7 +185,8 @@ module formal_mem_guard
         || (arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD && arb_req.write
             && fwd_in_terrain));
 
-      // DEBUG still owns nothing and must never be forwarded
+      // DEBUG still owns nothing and must never be forwarded, and neither
+      // does the client id ruling T3 leaves unspent
       a1_client: assert (arb_req.client == ZHAO_CLIENT_SCANOUT
                       || arb_req.client == ZHAO_CLIENT_BLIT_DMA
                       || arb_req.client == ZHAO_CLIENT_ENGINE0
@@ -193,10 +194,11 @@ module formal_mem_guard
                       || arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD);
 
       // A forward NEVER escapes THE MAP, whatever the map inputs say. The map
-      // now has three regions rather than two; this widened when the region
-      // did, which is the honest form -- the alternative, leaving the old
-      // two-slot assertion and exempting ENGINE1, would have kept a green
-      // proof by removing the new region from its scope.
+      // has FOUR regions now -- two framebuffer slots, the asset pool and the
+      // terrain page pool -- and this line widened each time one was added,
+      // which is the honest form. The alternative, leaving the old assertion
+      // and exempting the new client from it, keeps a proof green by removing
+      // the new region from its scope.
       a1_map: assert (fwd_in_slot0 || fwd_in_slot1 || fwd_in_asset
                    || fwd_in_terrain);
 

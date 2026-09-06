@@ -315,6 +315,44 @@ A permission that depends on the slot's *state* cannot be checked once at
 configuration time, which is why the residency directory and the guard are
 coupled rather than independent.
 
+### What is ENACTED, 2026-09-06 — and what is not
+
+**Exactly one of the six regions above is in `MEM.GUARD` today.**
+
+| Range | Region | Owner | Access |
+|---|---|---|---|
+| `0x0400_0000` .. `0x054D_FFFF` | `TERRAIN.PAGE_POOL` | `TERRAIN_BUILD` (client 6) | **write-only** |
+
+`zhao_pkg` carries it as `ZHAO_TERRAIN_PAGE_POOL_BASE` / `_SPAN`
+(`0x0400_0000` / `0x014E_0000`); 1,024 × 21,376 = 21,889,024 = `0x014E_0000`,
+so the half-open end `0x054E_0000` is the ruling's inclusive `0x054D_FFFF` to
+the byte. Both are elaboration-time constants — no map input reaches this
+window, so unlike the framebuffer one it is **not frame-scoped**, and
+`BASE + SPAN` cannot wrap 32 bits.
+
+**Write-only, and that is the narrow reading rather than an oversight.**
+TERRAIN.PAGELOADER deposits pages; it never reads local SDRAM. T3 also names
+F-sheet writeback as TERRAIN_BUILD traffic and that will one day need a read of
+this pool — it gets its own arm, with its own proof, in the pass that builds it.
+
+**The other five bank-2 regions are still unmapped**, `default: pass_ok = 1'b0`.
+A window is opened WITH the block that writes it, never ahead of it.
+
+**STATE-AWARENESS IS NOT ENACTED.** "A loader may write only a `LOADING` slot"
+needs residency state the guard does not have: one muxed request port, no slot
+context, and an address→slot decode by 21,376 (not a power of two) that would
+land on the verdict path of the block whose counter enable was already the
+largest negative-slack family in the composed shell. The interface that would
+carry that state — who owns the bitmap, how it crosses to the guard, what a
+stale copy means — is not ruled anywhere and was not invented.
+
+The residual, precisely: a faulty TERRAIN_BUILD may write a page slot other than
+the one it was told to load. It cannot reach a framebuffer, the asset pool, the
+rest of bank 2, or anything outside the map — the no-escape theorem is unchanged
+— so the worst case is corrupt ground for one page, caught by the CRC the
+directory checks before publishing. Tightening this to the LOADING slot is
+separate, ruled work and it needs the residency→guard interface first.
+
 ## 5c. Local-SDRAM bank 3 — GEOM.PARAMBUF (ruling R7)
 
 | Range | Region | Size |
@@ -410,6 +448,29 @@ problem for one frame; a starved scanout is a broken console.
 ENGINE1 arbitration is the limiter. **Do not spend it pre-emptively.**
 
 Re-run the MEM.ARBITER liveness and guard proofs after adding client 6.
+
+**Enacted 2026-09-06.** `zhao_pkg::zhao_client_e` gains
+`ZHAO_CLIENT_TERRAIN_BUILD = 3'd6`; 5 is left as a hole in the enum, which IS
+the reservation. `zhao_vram_arbiter` widens from five client ports to **seven**
+rather than packing terrain into slot 5, because in that block the ARRAY INDEX
+IS THE CLIENT ID (`ctrl_req.client = zhao_client_e'(offer_client)`) — slot 3 is
+ENGINE1 and slot 4 is DEBUG for exactly that reason. Port 5 is dead by
+construction: no arbitration arm names it, and `port_grant[5]` is forced low so
+a request there is REFUSED rather than latched into a slot that could never be
+served.
+
+TERRAIN_BUILD is arbitrated **below DEBUG**: served only when nothing else is
+pending, never promoted for lateness. Its starvation under sustained load is the
+ruled behaviour (the renderer draws a declared proxy and records pressure), not
+a defect.
+
+Both proofs were re-run, before and after. `mem_guard_no_escape`: bmc and cover
+PASS both times, with `c_forward_terrain` reached at step 4 (non-vacuous).
+`mem_vram_arbiter_liveness`: identical verdicts before and after — `bmc` PASS at
+RR 52 / scanout 34, `bmc_tight_rr` and `bmc_tight_scanout` FAIL at bound−1 as
+they must, `cover` PASS. **The bounds are still exact with seven ports**, which
+is the evidence that a background client at the bottom of the order does not
+move the guaranteed-client service law.
 
 ## 5e. The canonical terrain key (ruling T1)
 

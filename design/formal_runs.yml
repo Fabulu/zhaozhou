@@ -90,6 +90,17 @@ runs:
       not merely satisfied. Refresh-free by horizon (depth 130 << the 780
       cycle refresh interval), which the harness itself asserts.
 
+      RE-RUN 2026-09-06 (terrain memory amendment, ruling T3): the arbiter
+      widened from FIVE client ports to SEVEN -- client 6 is TERRAIN.BUILD and
+      client 5 is the unspent reservation, because in this block the array
+      index IS the client id. The harness widened with it and the Phase-2 G=2
+      environment is unchanged (clients 2..6 held at zero). All four tasks
+      returned exactly what they returned before: bmc PASS, bmc_tight_rr FAIL,
+      bmc_tight_scanout FAIL, cover PASS -- so the bounds are still 52 / 34 and
+      still TIGHT with the two new ports present. Measured before AND after in
+      the same session (18 min vs 27 min wall, sharing the machine with a
+      running Quartus fit).
+
   - property: tests/formal/mem_guard_no_escape.sby
     status: green
     date: "2026-08-16"
@@ -109,6 +120,27 @@ runs:
       containment (the old contiguous form would have admitted reads
       from the new hole); bmc + cover green via
       formal_mem_guard_no_escape, all cover traces produced.
+
+      RE-RUN 2026-09-06 (terrain memory amendment, rulings T2/T3). A FOURTH
+      window was added: TERRAIN.PAGE_POOL, [0x0400_0000, 0x054E_0000),
+      WRITE-only, ZHAO_CLIENT_TERRAIN_BUILD alone, constant bounds. As with the
+      asset pool, the harness widened WITH the region rather than around it --
+      a1_map now reads slot0 || slot1 || asset || terrain -- and the window's
+      direction and ownership are stated as their own theorems (a1_terrain_wo,
+      a1_terrain_owner) rather than left as consequences of pass_ok's spelling.
+      c_forward_terrain keeps them non-vacuous and was reached at step 4.
+      Baseline bmc + cover PASS before the change; bmc + cover PASS after.
+
+      SHOWN TO FIRE, four perturbations, each restored: dropping `req.write`
+      from terrain_ok fails a1_region and a1_terrain_wo; widening the window by
+      64 KiB fails a1_map and a1_region; giving ENGINE1 the terrain window fails
+      a1_region and a1_terrain_owner; withdrawing the case arm leaves
+      c_forward_terrain UNREACHED, which is the cover task doing the one job it
+      exists for.
+
+      NOTE ON PROVENANCE: the `commit` fields above are from when this tree was
+      a git checkout. It is not one now, so this re-run carries a date and no
+      hash rather than a hash that would be invented.
 
   - property: tests/formal/mem_sdram_refresh_bound.sby
     status: banked

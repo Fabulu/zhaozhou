@@ -215,6 +215,22 @@ excluded:
   - zhao_terrain_visible: unused  the visible-patch builder; TERRAIN.LOD does not consume it yet
   - zhao_terrain_compcache_front: unused  TERRAIN.COMPCACHE's on-chip patch front; nothing composes PATCH -> TESS through it yet, and putting it in the production top before that composition exists would fit a store nothing reads
 
+  # TERRAIN.PAGELOADER -- the HPS-to-local page mover. It was UNACCOUNTED here
+  # (this gate was red on it) until the memory amendment of 2026-09-06, and the
+  # reason it could not simply be promoted has now changed rather than gone
+  # away. Before: it was unintegrABLE -- no client id, no arbiter slot, no guard
+  # window that admits a bank-2 write. All three landed
+  # (ZHAO_CLIENT_TERRAIN_BUILD = 6; seven arbiter ports; TERRAIN.PAGE_POOL
+  # write-only in MEM.GUARD), so it is now merely UNINTEGRATED: zhao_shell_top
+  # ties client_req[6] off because the loader is not composed into the shell,
+  # which needs its own guard instance, a share of the HPS bridge, and the
+  # residency directory.
+  #
+  # WHEN THAT COMPOSITION LANDS THIS STOPS BEING AN `unused` LINE, and the same
+  # three separate acts TERRAIN.VISIBLE's note names are needed: the ledger
+  # entry, this line, and design/fit_targets.yml's zhao_prod_top source list.
+  - zhao_terrain_pageloader: unused  the terrain page mover; the guard window and the client id now exist, but zhao_shell_top does not compose it yet
+
   # --- probes and leaf-fit pairs: never in the machine -----------------------
   # These exist to put ONE block, or two adjacent blocks, in front of the
   # fitter. Every one of them is a wrapper around production logic that is
@@ -259,6 +275,33 @@ excluded:
   - zhao_texture_fragrob: not-yet-adopted  built beside zhao_raster_texjoin_v2 per S6.1; v2 stays counted until FRAGROB is fit
   - zhao_raster_perspuv: superseded  by zhao_raster_perspuv_svc (two lanes)
   - zhao_raster_rcp24: superseded  by zhao_raster_rcp24_svc (scheduled)
+
+  # --- V3 RCP arithmetic tile: built beside the shipped block, not adopted ----
+  # TEXTURE-ISLAND-V3-ARCHITECTURE-20260906.txt S26.1: "the RCP arithmetic tile
+  # can establish its own exact-tool packing. Do not merge those changes into the
+  # composition until the shared record and credit contracts are fixed."
+  #
+  # zhao_raster_rcp24_svc stays the counted implementation. The V3 tile measures
+  # 3 DSP against its 6 and is bit-exact over all 16,777,215 denominators, but
+  # adopting it would claim a composition that S26.1 explicitly defers -- and the
+  # same one-implementation rule that keeps FRAGROB out keeps this out.
+  #
+  # zhao_raster_rcp24_mul and zhao_raster_ticketq are leaves of the tile and are
+  # declared beside it rather than left to inherit its status, because a module
+  # accounted for only by being inside an excluded top is accounted for by
+  # accident.
+  - zhao_raster_rcp24_v3: not-yet-adopted  V3 tile per S10; zhao_raster_rcp24_svc stays counted until it is composed
+  - zhao_raster_rcp24_mul: not-yet-adopted  the exact 32x32 product, inside zhao_raster_rcp24_v3
+  - zhao_raster_ticketq: not-yet-adopted  the queue that replaces the scans, inside zhao_raster_rcp24_v3
+
+  # The V3 texture-island owner/completion experiment (section 26.1). These are the
+  # FIRST implementation task and are deliberately not composed: section 26.1 says
+  # "Do not merge those changes into the composition until the shared record and
+  # credit contracts are fixed". zhao_texture_island_top stays counted until they
+  # replace it.
+  - zhao_texture_v3bank: not-yet-adopted  the section 6 bank primitive, one instance per declared bank
+  - zhao_texture_v3own: not-yet-adopted  the 64-owner transaction file and completion pipeline
+  - zhao_texture_v3rq: not-yet-adopted  the once-only ready-ticket queue
   - zhao_terrain_residency: superseded  by zhao_terrain_residency_v2 (256x4 ways)
   - zhao_raster_blend: superseded  split into blend_fin + blend_prod, which zhao_raster_fragment instantiates
 

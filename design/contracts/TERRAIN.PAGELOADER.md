@@ -172,41 +172,52 @@ Every seam stalls, and every one is exercised:
 Reads the HPS staging arena declared by `cfg_hps_arena_base_i/bytes_i` and
 nothing else. Writes `TERRAIN.PAGE_POOL` slot `job.slot` and nothing else.
 
-**The client identity is ruled and not enacted, and the block says so out
-loud.** T3 adds `ZHAO_CLIENT_TERRAIN_BUILD = 6` as a best-effort background
-client. Today:
+**The client identity is RULED AND NOW ENACTED (2026-09-06).** T3 adds
+`ZHAO_CLIENT_TERRAIN_BUILD = 6` as a best-effort background client. All three
+amendments this contract asked for have landed:
 
-* `zhao_pkg::zhao_client_e` declares 0,1,2,3,4 and 7. There is no 6.
-* `zhao_vram_arbiter` has **five** client ports and casts the array *index*
-  straight to the enum (`zhao_client_e'(offer_client)`), so slot identity and
-  client identity are one fact — there is no sixth slot for a sixth client.
-* `zhao_mem_guard`'s map is FB slot 0, FB slot 1, and a **read-only** geometry
-  asset pool. `default: pass_ok = 1'b0` refuses everything else. **No window
-  admits a write to bank 2 at all**, for any client.
+1. `zhao_pkg::zhao_client_e` declares `ZHAO_CLIENT_TERRAIN_BUILD = 3'd6`, with
+   5 left as a deliberate hole — that hole IS T3's "do not spend it
+   pre-emptively".
+2. `zhao_vram_arbiter` carries **seven** client ports. Widened rather than
+   packed, because the array index IS the client id in that block
+   (`ctrl_req.client = zhao_client_e'(offer_client)`); port 5 exists so the
+   identity holds and is dead by construction — no arbitration arm names it and
+   `port_grant[5]` is forced low, so a request there is refused rather than
+   accepted into a slot that could never be served. TERRAIN_BUILD is arbitrated
+   BELOW DEBUG, never promoted for lateness (T3).
+3. `zhao_mem_guard` has `TERRAIN.PAGE_POOL`: `[0x0400_0000, 0x054E_0000)`,
+   **write-only**, **client 6 alone**, constant bounds, no map input consulted.
 
-So no client identity can legally write a terrain page today. The identity is
-therefore an **input port** (the precedent `GEOM.MESHFETCH` set for exactly this
-situation) and `guard_denied_o` is a real fault counter, not an expected steady
-state. The directed suite measures the claim rather than asserting it: the real
-`zhao_mem_guard` is instantiated in the bench as an observer on the same request
-wires, and `shadow_ok_seen` — did it *ever* pass one of these — is checked to be
-zero.
+**What is NOT enacted, said plainly.** T2 asks for a *state-aware* permission —
+"a loader may write only a `LOADING` slot" — and the window is spatial. The
+guard has one muxed request port and no residency context; the interface that
+would carry slot state to it is not ruled anywhere. The residual is that a
+faulty TERRAIN_BUILD could write a page slot other than the one it was told to
+load: it cannot reach a framebuffer, the asset pool, the rest of bank 2, or
+anything outside the map, so the no-escape theorem is unchanged and the worst
+case is corrupt ground for one page, caught by the CRC before publication. This
+block already refuses an out-of-pool slot itself (`SLOTW` is one bit wider than
+the pool so the refusal is reachable rather than truncated).
 
-**Amendments wanted** (reported, not written, and each already ruled):
+`cfg_vram_client_i` stays an **input port** rather than becoming a hard-wired
+constant. The identity is now legal, but which client a deployment presents is
+still configuration, and hard-wiring it would remove a knob to save nothing.
+`guard_denied_o` remains a real fault counter: with the window in place a denial
+means the loader computed an address the pool does not contain, which is a bug,
+not a steady state.
 
-1. `zhao_pkg::zhao_client_e` gains `ZHAO_CLIENT_TERRAIN_BUILD = 3'd6` (T3).
-2. `zhao_vram_arbiter`'s client array widens past five ports, **or** terrain
-   traffic joins an existing physical slot through a local adapter the way
-   `zhao_geom_mem_adapter` multiplexes ENGINE1. The arbiter's positional client
-   identity makes this a real design choice, not plumbing.
-3. `zhao_mem_guard` gains the bank-2 terrain windows of T2 / §5b, **state-aware**
-   ("a loader may write only a `LOADING` slot"), which couples the guard to the
-   residency directory and is the substantive part.
-4. `tests/formal/mem_guard_no_escape.sby` and the MEM.ARBITER liveness proof are
-   re-run afterwards — T3 says so explicitly.
-
-Until (1)–(3) land, this block is buildable, testable and unintegrable, and that
-is the honest state.
+**The bench measures both directions rather than asserting either.** The real
+`zhao_mem_guard` is instantiated as an observer on the loader's own request
+wires and now counts: 334 passed, 334 forwarded, 0 refused on a clean page —
+exactly, not "at least". A second real guard on bench-driven wires is asked
+about the refusals the observer can never see, because the loader only issues
+legal requests: a different client writing in the pool (all seven other ids,
+including the unspent 5 and the NONE encoding), the ruled client writing outside
+it (both edges at the byte, both framebuffer slots, the asset pool, and two of
+the bank-2 regions T2 names but nobody has opened), and a READ where a write was
+granted. Every one of those checks was shown to FAIL under a deliberate
+perturbation of the guard and restored.
 
 ## Q formats and rounding
 
@@ -359,15 +370,19 @@ pin.
 None yet. The one worth an SBY is the containment theorem — *no guard request
 this block emits lies outside `[REGION_BASE + slot·PAGE_BYTES,
 + PAGE_BYTES)`* — which is currently structural (the address is computed from a
-range-checked slot) and therefore cheap to prove and worth proving once the
-guard has a terrain window to check it against.
+range-checked slot) and therefore cheap to prove — and the guard now HAS a
+terrain window to check it against, so the excuse for not proving it has
+expired.
 
 ## Integration capture cases
 
-**None. Nothing is integrated and nothing is on hardware.** The block cannot be
-integrated until the three amendments above land, because there is no client
-identity and no guard window that admits a terrain write. The bench proves that
-by instantiating the real guard and watching it refuse.
+**None yet, but the reason has changed.** The three amendments above have
+landed, so the block is no longer unintegrable: there is a client identity, an
+arbiter port that carries it, and a guard window that admits its writes. What
+remains is composition work rather than a ruling — `zhao_shell_top` ties
+`client_req[6]` off because TERRAIN.PAGELOADER is not in the shell yet, and
+wiring it in needs its own guard instance, a share of the HPS bridge and the
+residency directory. That is a pass, not a question.
 
 ## Synthesis / resource ceiling
 

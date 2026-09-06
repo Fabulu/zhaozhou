@@ -10,6 +10,11 @@
 //   everything else: unmapped — violation by construction.
 //   ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
 //
+// Phase-3 extensions, each a window opened WITH the block that needed it:
+//   GEOM.ASSET_POOL   : [0x06A0_0000, 0x0800_0000)  22 MiB, ENGINE1, READ-only
+//   TERRAIN.PAGE_POOL : [0x0400_0000, 0x054E_0000)  20.875 MiB,
+//                       TERRAIN.BUILD, WRITE-only (ruling T2 / §5b)
+//
 // Ownership law:
 //   * SCANOUT owns BOTH slots, READ-ONLY (a write is a violation).
 //   * BLIT_DMA owns exactly the CMD-granted slot window
@@ -19,7 +24,14 @@
 //     map_valid=0 (no grant this frame) => deny-all.
 //     ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
 //   * ENGINE0/ENGINE1/DEBUG own nothing in Phase 2 (reserved ports) —
-//     violation by construction.
+//     violation by construction. (ENGINE0 and ENGINE1 acquired windows in
+//     Phase 3; DEBUG still owns nothing, and neither does the unspent
+//     client 5.)
+//     ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+//   * TERRAIN.BUILD owns TERRAIN.PAGE_POOL, WRITE-ONLY. Spatially the WHOLE
+//     pool, not the LOADING slot T2 eventually wants — the difference is
+//     spelled out at `terrain_ok` below rather than left for a reader to
+//     discover.
 //     ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
 //
 // Request law: len 1..64 bytes; byte_enable must be the FULL contiguous mask
@@ -144,6 +156,56 @@ module zhao_mem_guard
                   && (addr32 >= ZHAO_GEOM_ASSET_BASE)
                   && (end32  <= ZHAO_GEOM_ASSET_BASE + ZHAO_GEOM_ASSET_SPAN);
 
+  // terrain page pool: WRITE-ONLY, TERRAIN.BUILD's bank-2 region (ruling T2,
+  // spec/memory_rules.md 5b). This is the FOURTH window, and like the asset
+  // pool it is stated plainly rather than folded into an existing one.
+  //
+  // IT IS THE NARROWEST READING OF T2 THAT LETS A PAGE BE LOADED AT ALL:
+  //   * ONE region of the six T2 names in bank 2. RESIDENT_MIP_POOL,
+  //     COMPOSED_HEIGHT, COMPOSED_VELOCITY, WRITEBACK_STAGING and
+  //     COMPOSED_MIP_POOL stay unmapped until the blocks that write them
+  //     exist. TERRAIN.PAGELOADER writes pages and nothing else.
+  //   * ONE client. Only ZHAO_CLIENT_TERRAIN_BUILD reaches it (the case arm
+  //     below); ENGINE1 does not, DEBUG does not, and the framebuffer writers
+  //     do not.
+  //   * WRITE ONLY. `req.write` is REQUIRED, which is the opposite of the
+  //     asset pool's `!req.write` and is the narrow choice in both cases: this
+  //     client's only job today is depositing pages. T3 also names F-sheet
+  //     writeback as TERRAIN.BUILD traffic, and that will one day need to READ
+  //     this pool -- when the block that does it exists, it brings its own arm
+  //     and its own proof. Admitting the read now would admit it for a
+  //     writeback path that has never been written.
+  //   * CONSTANT BOUNDS. No map input is consulted, so this window is not
+  //     frame-scoped and cannot be moved by a grant; BASE + SPAN is
+  //     0x054E_0000 exactly, computed at elaboration, so the wrap the blit
+  //     clamp exists to prevent cannot arise here.
+  //
+  // WHAT THIS WINDOW DOES **NOT** DO, SAID OUT LOUD.
+  // T2 asks for STATE-AWARE permission -- "a loader may write only a LOADING
+  // slot" -- and this is not that. The guard has one muxed request port and no
+  // residency context; knowing which slot is LOADING means a 1,024-entry state
+  // shadow plus an address-to-slot decode by 21,376 (not a power of two) on the
+  // verdict path of the block whose counter enable was already the largest
+  // negative-slack family in the composed shell. The interface that would carry
+  // that state -- who owns the bitmap, how it crosses to the guard, what a
+  // stale copy means -- is NOT ruled anywhere, so it is not invented here.
+  //
+  // The residual, precisely: a faulty TERRAIN.BUILD may write a page slot other
+  // than the one it was told to load. It cannot touch a framebuffer, cannot
+  // touch the asset pool, cannot touch the rest of bank 2, and cannot leave the
+  // map -- so the no-escape theorem is unchanged and the worst case is corrupt
+  // GROUND for one page, caught by the CRC the directory checks before it
+  // publishes. TERRAIN.PAGELOADER already refuses an out-of-pool slot itself
+  // (its slot index is one bit wider than the pool so the refusal is reachable
+  // rather than truncated). Tightening this to the LOADING slot is a separate,
+  // ruled piece of work and it needs the residency-to-guard interface first.
+  // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+  logic terrain_ok;
+  assign terrain_ok = req.write
+                    && (addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
+                    && (end32  <= ZHAO_TERRAIN_PAGE_POOL_BASE
+                                  + ZHAO_TERRAIN_PAGE_POOL_SPAN);
+
   // ONE WINDOW, ONE OWNER AT A TIME. Both writers are checked against the same
   // clamped slot span; what separates them is which one the lease names. A
   // writer without the lease is refused exactly as a request outside the window
@@ -154,7 +216,9 @@ module zhao_mem_guard
       ZHAO_CLIENT_BLIT_DMA: pass_ok = shape_ok && blit_ok && (fb_writer == 1'b0);
       ZHAO_CLIENT_ENGINE0:  pass_ok = shape_ok && blit_ok && (fb_writer == 1'b1);
       ZHAO_CLIENT_ENGINE1:  pass_ok = shape_ok && asset_ok;
-      default: pass_ok = 1'b0;      // DEBUG still owns nothing
+      ZHAO_CLIENT_TERRAIN_BUILD: pass_ok = shape_ok && terrain_ok;
+      default: pass_ok = 1'b0;      // DEBUG still owns nothing, and neither
+                                    // does the unspent client 5
     endcase
   end
 
