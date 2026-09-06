@@ -144,3 +144,53 @@ GATES, end of this batch (all PROVED failable):
   rule 3  1499             REPORTED-NOT-ENFORCED, reason written in source
   gate A  22 mm / 12       OK      (at roll 1050 -> 10 mm FAIL; the sweep found it)
   gate B  801 pm / 1000    OK
+
+## Close-out
+
+### The push claim, checked FIRST
+Pass 6's work IS on the remote (`Upheaval origin/main` 040996c, two commits
+ahead of the p6 lane; `zhaozhou origin/main` 44080919 contains the p6 head).
+BUT six QA commits were stranded, unmerged, on
+`origin/zixxtrixx-wholebody-s-spring` -- including both committed QA probes and
+the three evidence plates this pass depended on. Merged so they cannot be
+orphaned again. Every push this pass was verified with
+`git fetch && git branch -r --contains <sha>` as it happened.
+
+### THREE bugs were stacked in one measurement
+Each invisible until the one in front of it was removed:
+ 1. bare `>> 16` on fx16 called mm  -> everything under 1000 mm truncated to 0
+ 2. `inv_point` on a SKINNING matrix returns BIND space  -> lz carried +/-215 mm
+ 3. root translation subtracted on Y only -> travelling clips read world space
+Fixing only #1 reports 378 mm of overhang against a 24 mm cap. The truth is 142.
+A creature tuned to satisfy 378 would have moved a long way the wrong direction.
+Bug #3's worst "violation" was 8317 pm past the outline -- eight body radii.
+
+### What is NOT done (stated, not omitted)
+ 1. Rule 3's underlying fault is REAL and unfixed: 1499 samples over 7 clips,
+    the star crossing the body outline into sky. REPORTED-NOT-ENFORCED because
+    the rule aims at 2 FIXED views while the shipping cameras orbit. Pass 8's
+    first eye item: fix the fault or finish the instrument, not neither.
+ 2. The near eye still reads thin at steep camera angles. The star is a FLAT
+    PLATE on a dome; a flat shape has no defence against edge-on. Mechanism
+    identified, not solved.
+ 3. Direction 5 5c's eyeball shift still NOT SHIPPED -- now a DECLARED gap.
+ 4. Clip inventory F.2-F.6 not attempted.
+ 5. `edge-snap-held` (Direction 6 RESULT) not integrated.
+ 6. Antenna knuckles (2b) not addressed.
+ 7. hasty's loop-seam pop and the 25-40 px traverse framing not addressed.
+ 8. NOT PUBLISHED -- site media are pass-6 renders and the geometry, star and
+    smear all changed, so a publish would show pass-6 clips under pass-7
+    captions.
+
+### Blast radius, the fuller way
+Pass 6 said "two clips re-authored" while kKneadClipPm moved on 12 of 15 slots.
+For pass 7:
+ * EVERY Manafold clip's rendered output changes (the texture page was
+   regenerated for the lens ink; lens, star and smear all moved). No Manafold
+   CRC survives.
+ * THREE clips changed authored POSE data: curious, startle, taunt.
+ * channel and taunt retime nothing but move, via the twinkle constant.
+ * All 12 clips that fell through the smear bound now composite a smear plane
+   they never had -- the largest single visual change in the pass, from a
+   one-character bound.
+ * Zixxtrixx untouched: no file in its closure was edited.
