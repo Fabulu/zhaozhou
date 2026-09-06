@@ -3171,6 +3171,86 @@ perspuv's is chained behind it to confirm or refute the per-axis split.
 
 ---
 
+## D19y — the pre-fit addendum, verified line by line, and the repairs it forced
+
+**2026-09-06.** The owner's second brief --
+``reports/TEXTURE-ISLAND-PREFIT-ADDENDUM-20260906.txt`` -- reviewed the island
+before the next composed fit and reviewed the COMBINE V2 draft that landed
+mid-review. Five agents verified its findings against the source in parallel.
+The response is
+``reports/ZHAOZHOU-PREFIT-VERIFICATION-AND-REARCHITECT-20260906.txt``.
+
+**Every claim checked holds.** Three are worse than stated, two defects are new,
+and one of my own conclusions was wrong.
+
+### The release gate, and where it stands
+
+| | item | state |
+|---|---|---|
+| W1 | COMBINE v2's five blockers | **done** ``4dadc0d8`` |
+| W2 | PERSPUV second write address | **done** |
+| W3 | cache response reservation | **done** ``7d71235a`` |
+| W4 | FRAGROB AUX read/valid stage | done, verifying |
+| W5 | FRAGROB acceptance predicate | done, verifying |
+| W6 | AUX held offer + credit + bounded queue | in progress |
+| W7 | COMBINE v2 differential | **done** ``84c70bde`` |
+| W9 | typed sample completions | in progress |
+| W11 | PERSPUV registered read + e_mant split | **done** ``7d71235a`` |
+
+### The three that are worse than the addendum states
+
+**AUX context is not a timing window.** ``aux_ready_i`` is tied high through
+the island, so the mismatched tuple is the ONLY cycle every request gets: every
+AUX sheet lookup used the PREVIOUS fragment's world X/Z under the current
+fragment's identity. The differential recorded the slot and generation and never
+compared the context -- the one observable that would have failed.
+
+**The cache's lost result was live.** Its header said *"Nothing instantiates
+this yet"*; it is in the island and the production top with real backpressure
+from the dispatcher's FIFO-full. The owner's sequence reproduced from source:
+issued 100..107, returned 100 101 102 103 106 107. It does not deadlock -- it
+returns correct-looking data under a mismatched tag.
+
+**The bilinear test's other three taps are never fetched.** With
+``acc_en = 0001`` lanes 1-3 are never needed, never filled and never written,
+yet the response word copies all four unconditionally.
+``disp_bil_data[63:16]`` is uninitialised RAM that only ``fu=fv=0``
+discards, and the test's own comment claiming the four texels are identical is
+FALSE.
+
+### The severity multiplier
+
+FRAGROB retires in ALLOCATION ORDER with no timeout, so any ONE lost sample
+stalls the entire island rather than one fragment. That is why typed sample
+completions became a fit blocker rather than a tidy-up: every hole in the sample
+paths is a dead island, not a wrong pixel.
+
+### Two of my own errors, both caught by evidence rather than by review
+
+**The RAM diagnosis over-generalised.** ``rob_m[seq_head_r]``'s three output
+slices read the SAME word, so "read from several places" was wrong about several
+arrays. What survives is the inventory fact, not the mechanism I attached to it.
+
+**And removing PERSPUV's allocation-time zero broke depth-zero.** My
+justification was that ``e_have[i][0]`` is set only where ``e_q_u[i]`` is
+written; that is false at accept, which sets ``e_have`` to ``2'b11``
+directly for a depth-zero fragment, so the output read a slot nothing wrote.
+**Both perspuv tests passed anyway** -- Verilator zero-fills arrays and the
+depth-zero fragment is stimulus index 0, landing in a never-written slot. A
+second depth-zero fragment reusing a slot would have emitted the previous
+fragment's coordinates in simulation too. Repaired at the OUTPUT with a bypass
+to zero, which is what the serial reference forces, and which keeps the single
+write address that made the array inferrable.
+
+### The law this run has now learned three times
+
+Do not initialise a per-entry store at allocation: it creates a second write
+address, the one thing an M10K simple-dual-port cannot have. COMBINE's brief
+states it for scratch; PERSPUV had it in ``e_q_u``; the V2 draft reintroduced
+the FLAG half of it. And where the initialisation IS needed -- a sticky flag
+like ``e_sat`` -- keep it, keep the array in flops deliberately, and say which
+of the two applies at every such site.
+
 ## D19x — OWNER BRIEF: the COMBINE / ASSETFETCH recovery architecture
 
 **Received 2026-09-06, filed at
