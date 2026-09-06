@@ -615,3 +615,58 @@ empty before deletion rather than assumed stale.
 A restore-from-copy harness on a full disk is a way to lose source. If this
 harness is used again it should verify the backup is non-empty before writing
 the mutation.
+
+## DISK FREED, FULL FIT RELAUNCHED -- WHERE I AM BEFORE THE RESULTS COME BACK
+
+The disk-full blocker cleared on its own (another lane released space): C: went
+0 -> 19.6 GB -> 165 GB free. The full fit is running again, `quartus_fit` alive,
+snapshot digest **6553c5cef196** -- byte-identical to the `@v3-after2` MapOnly row
+and to the bytes every test measured. So the ALM/Fmax row, when it lands, will be
+about exactly the code that produced the register/DSP numbers.
+
+**Two false starts, both caught before they cost fitter hours:**
+
+1. `-Module` does NOT supply its own source file. The first relaunch declared only
+   the three ExtraSources and preflight refused it -- correctly, and with the right
+   reason: "Running anyway would spend the fitter's time to report
+   'failed:quartus_map', which reads in the report as 'this block does not fit'."
+2. `run_block_fit.ps1:612` builds the row name as `"$mod$RowLabel"` -- **no
+   separator**. My earlier rows only have their `@` because I passed it inside the
+   label. `-RowLabel v3-full` therefore produced `zhao_raster_rcp24_v3v3-full`,
+   which would have orphaned the row from its own before/after/nctx8 family. Killed
+   the fit three minutes in, deleted the malformed digest file, relaunched with
+   `-RowLabel '@v3-full'`. Cheap now, invisible later.
+
+**WHAT I WAS DOING WHEN THE FIT WENT OUT, so the results do not erase it:**
+
+* Open: `design/fit_targets.yml` entry for the tile. Written up but NOT added,
+  because `max_alms` / `max_registers` / `max_m10k` need this fit. Do not inherit
+  svc's `max_alms: 650` / `max_registers: 600` -- svc itself is at 1041/1101.
+* Open: re-running fire tests F1-F6 against the SHIPPED bytes. F1-F6 were proven
+  on digest `fa1354165244`, F7 on `6553c5cef196`; the difference is comments plus
+  the simulation-only assertion, corroborated by identical synthesis numbers.
+  **This is blocked by the fit, not by the disk** -- the mutations edit files
+  inside the running fit's closure, which is the live-tree trap. It runs after.
+* Corrected: the default run reports **52 checks**, not 56. 56 was the
+  `--exhaustive` run. The 52 number is what CI's `raster_rcp24_v3_directed` prints.
+
+**Committed and pushed while the fit runs** (the lane had been entirely
+uncommitted for hours -- three untracked RTL files, the tests, and every report
+row):
+
+* `6d8459e9` the tile, its tests, and the four MapOnly rows. Staged as a single
+  hunk of `tests/CMakeLists.txt` via `git apply --cached`, because that file also
+  carries the texture and terrain lanes' uncommitted work and committing it whole
+  would have taken theirs.
+* `5de89e38` the fire-test probe out of the run folder into `tools/rtl/`, with the
+  restore rewritten and the rebuild script's paths derived from `$PSScriptRoot`.
+
+**Noted, not acted on:** my `prod_manifest.yml` declarations were already in HEAD
+-- they got swept into another lane's commit (`4c2f7891`) while my RTL stayed
+untracked. Three lanes are writing this working tree at once; that is how a file
+gets committed by somebody who was not editing it.
+
+**Checked and settled cheaply:** the V20 detector is a labelled IMMEDIATE
+assertion, and neither `rebuild_rcp24_v3.ps1` nor the CMake target passes
+`--assert` (only 3 targets in the whole suite do). F7 fired it under exactly those
+flags, so the detector is live in CI as registered. No change needed.
