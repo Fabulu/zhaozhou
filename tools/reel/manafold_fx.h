@@ -1103,6 +1103,14 @@ inline int g_pl_pshape        = 0;
 inline int g_pl_pcon          = 0;
 // mm of stamp separation per halo pixel, for the multi-stamp shapes
 inline int g_pl_shape_sep     = 11;
+// The mote's own solid heart pushes a hard-coded gain of 1000 too -- the same
+// shape of omission as the dead kFoldEdgeCoreGainPm one line up. Exposed so
+// the lab can darken the body without shrinking it.
+inline int g_pl_core_gain     = 1000;
+// mm of edge path per stamp. kBoltStampMm = 22 is deliberately "under one core
+// radius" so the outline is gap-free -- which is also what makes hundreds of
+// ADDITIVE halo stamps pile onto one another along one path.
+inline int g_pl_edge_stamp    = kBoltStampMm;
 
 // ---- the PARTICLE SHAPE menu (axis 1 of Direction 8 §5) -------------------
 // One particle is a set of stamps. The shipped particle is a SPHERE: an
@@ -1127,11 +1135,11 @@ inline void pl_stamp_mote(std::vector<ManaSplat>& out, const int32_t P[3],
     default:
     case 0:
       mana_push(out, P[0], P[1], P[2], halo, ramp, g, true, false);
-      mana_push(out, P[0], P[1], P[2], core, cr, 1000, true, false, true, true);
+      mana_push(out, P[0], P[1], P[2], core, cr, g_pl_core_gain, true, false, true, true);
       break;
     case 1: {  // SPARK -- crisp: half the halo, and the body is NOT soft
       mana_push(out, P[0], P[1], P[2], halo * 55 / 100, ramp, g, true, false);
-      mana_push(out, P[0], P[1], P[2], core * 60 / 100, cr, 1000, true, false,
+      mana_push(out, P[0], P[1], P[2], core * 60 / 100, cr, g_pl_core_gain, true, false,
                 true, false);
       break;
     }
@@ -1145,7 +1153,7 @@ inline void pl_stamp_mote(std::vector<ManaSplat>& out, const int32_t P[3],
       static const int32_t ox[4] = {1, 0, -1, 0}, oy[4] = {0, 1, 0, -1};
       for (int q = 0; q < 4; ++q)
         mana_push(out, P[0] + ox[q] * rr, P[1] + oy[q] * rr, P[2],
-                  core * 50 / 100, cr, 1000, true, false, true, true);
+                  core * 50 / 100, cr, g_pl_core_gain, true, false, true, true);
       break;
     }
     case 4: {  // DASH -- three bodies along the travel direction
@@ -1165,19 +1173,19 @@ inline void pl_stamp_mote(std::vector<ManaSplat>& out, const int32_t P[3],
       for (int t = -1; t <= 1; ++t) {
         const int32_t sc = t == 0 ? 100 : 62;
         mana_push(out, P[0] + d[0] * t, P[1] + d[1] * t, P[2] + d[2] * t,
-                  core * sc / 100, cr, 1000, true, false, true, true);
+                  core * sc / 100, cr, g_pl_core_gain, true, false, true, true);
       }
       break;
     }
     case 5: {  // SPARKLE -- centre body + four axis pips
       mana_push(out, P[0], P[1], P[2], halo, ramp, g, true, false);
-      mana_push(out, P[0], P[1], P[2], core * 85 / 100, cr, 1000, true, false,
+      mana_push(out, P[0], P[1], P[2], core * 85 / 100, cr, g_pl_core_gain, true, false,
                 true, true);
       const int32_t rr = fxu(halo * g_pl_shape_sep * 9 / 10);
       static const int32_t ox[4] = {1, 0, -1, 0}, oy[4] = {0, 1, 0, -1};
       for (int q = 0; q < 4; ++q)
         mana_push(out, P[0] + ox[q] * rr, P[1] + oy[q] * rr, P[2],
-                  core * 34 / 100, cr, 1000, true, false, true, true);
+                  core * 34 / 100, cr, g_pl_core_gain, true, false, true, true);
       break;
     }
   }
@@ -1409,7 +1417,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
         int64_t dz = (pts[sgi + 1][2] - pts[sgi][2]) >> 16;
         const int64_t adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy,
                       adz = dz < 0 ? -dz : dz;
-        int nst = static_cast<int>((adx + ady + adz) / kBoltStampMm);
+        int nst = static_cast<int>((adx + ady + adz) / g_pl_edge_stamp);
         if (nst < 1) nst = 1;
         if (nst > 24) nst = 24;
         for (int t = 0; t < nst; ++t) {

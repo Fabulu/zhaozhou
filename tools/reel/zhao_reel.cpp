@@ -7293,6 +7293,8 @@ int main(int argc, char** argv) {
         {"PL_PSHAPE", &u02::g_pl_pshape},
         {"PL_PCON", &u02::g_pl_pcon},
         {"PL_SHAPE_SEP", &u02::g_pl_shape_sep},
+        {"PL_CORE_GAIN", &u02::g_pl_core_gain},
+        {"PL_EDGE_STAMP", &u02::g_pl_edge_stamp},
     };
     bool any = false;
     for (const PLKnob& k : pl) {
