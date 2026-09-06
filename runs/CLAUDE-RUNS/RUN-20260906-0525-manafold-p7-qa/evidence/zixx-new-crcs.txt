@@ -1,0 +1,6 @@
+zixxtrixx-attack 0x86A2B30B 560 15710
+zixxtrixx-balance 0x301EFBA6 493 12595
+zixxtrixx-bow 0xEC2CAD71 144 11561
+zixxtrixx-corpse 0x4B449AB5 128 1933
+zixxtrixx-damage 0x6C224D56 400 13974
+zixxtrixx-death 0x2E8755B3 192 13673

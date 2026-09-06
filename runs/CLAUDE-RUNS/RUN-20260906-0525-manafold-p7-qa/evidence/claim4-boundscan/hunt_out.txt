@@ -1,0 +1,70 @@
+=== A. EXPLICIT SIZE vs INITIALIZER COUNT MISMATCH ===
+  (0)
+
+=== B. UNREACHABLE TAIL: max literal index used < entries-1, and no sizeof/Count constant ===
+  (0)
+
+=== C. GUARDS: every <,<=,>,>=,% literal near an index of a table (no delta filter) ===
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_clips.h:200  kLoopArcMm[] has 6 entries; guard `< 4`
+      idx  : quat_rot_vec(Q, 0, kLoopArcMm[i], 0, dx, dy, dz);
+      guard: if (i < 4) Q = quat_mul(Q, locs[i]);
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_art.h:129
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_clips.h:200  kLoopArcMm[] has 6 entries; guard `< 5`
+      idx  : quat_rot_vec(Q, 0, kLoopArcMm[i], 0, dx, dy, dz);
+      guard: for (int i = 0; i < 5; ++i) {
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_art.h:129
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_clips.h:204  locs[] has 4 entries; guard `< 5`
+      idx  : if (i < 4) Q = quat_mul(Q, locs[i]);
+      guard: for (int i = 0; i < 5; ++i) {
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_clips.h:196
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_fx.h:593  r_of[] has 4 entries; guard `< 2`
+      idx  : const int32_t r = r_of[stn];
+      guard: if (i < 2) {
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_fx.h:591
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_model.h:108  kLoopArcMm[] has 6 entries; guard `< 8`
+      idx  : const int32_t stC = stB + kLoopArcMm[3];
+      guard: for (int j = 0; j + 1 < 8; ++j) {
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_art.h:129
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_model.h:109  kLoopArcMm[] has 6 entries; guard `< 8`
+      idx  : const int32_t stD = stC + kLoopArcMm[4];
+      guard: for (int j = 0; j + 1 < 8; ++j) {
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_art.h:129
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_model.h:110  kLoopArcMm[] has 6 entries; guard `< 8`
+      idx  : const int32_t total = stD + kLoopArcMm[5];
+      guard: for (int j = 0; j + 1 < 8; ++j) {
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_art.h:129
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zhao_reel.cpp:88  hdr[] has 2 entries; guard `< 4`
+      idx  : uint8_t hdr[8];
+      guard: for (int i = 0; i < 4; ++i) hdr[i] = static_cast<uint8_t>(w >> (8 * i));
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zixx_golden.cpp:55
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zhao_reel.cpp:89  hdr[] has 2 entries; guard `< 4`
+      idx  : for (int i = 0; i < 4; ++i) hdr[i] = static_cast<uint8_t>(w >> (8 * i));
+      guard: for (int i = 0; i < 4; ++i) hdr[i] = static_cast<uint8_t>(w >> (8 * i));
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zixx_golden.cpp:55
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zhao_reel.cpp:90  hdr[] has 2 entries; guard `< 4`
+      idx  : for (int i = 0; i < 4; ++i) hdr[4 + i] = static_cast<uint8_t>(h >> (8 * i));
+      guard: for (int i = 0; i < 4; ++i) hdr[i] = static_cast<uint8_t>(w >> (8 * i));
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zixx_golden.cpp:55
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zhao_reel.cpp:717  kTrans[] has 3 entries; guard `< 4`
+      idx  : const int32_t v = (static_cast<int32_t>(rs.cur[idx]) * kTrans[ch] + 128) / 256;
+      guard: for (int pt = 1; pt < 4; ++pt)
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zhao_reel.cpp:713
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zixx_probe.cpp:2619  expected[] has 3 entries; guard `< 2`
+      idx  : prev_expected[0] = expected[0];
+      guard: for (int rung = 0; rung < 2; ++rung)
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zixx_probe.cpp:2591
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zixx_probe.cpp:2620  expected[] has 3 entries; guard `< 2`
+      idx  : prev_expected[1] = expected[1];
+      guard: for (int rung = 0; rung < 2; ++rung)
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zixx_probe.cpp:2591
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zixx_probe.cpp:2621  expected[] has 3 entries; guard `< 2`
+      idx  : prev_expected[2] = expected[2];
+      guard: for (int rung = 0; rung < 2; ++rung)
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zixx_probe.cpp:2591
+  C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\zixxtrixx.h:6170  ring[] has 6 entries; guard `<= 8`
+      idx  : constexpr int32_t kFbSpring[4] = {280, 340, 300, 380}; // pull to the rest S
+      guard: if (j <= 8) return 1;
+      decl : C:/programmieren/zencrifice/manafold-p7-qa/zhaozhou/tools/reel\manafold_lab.h:442
+  (15)
+
+tables: 210  files: 29

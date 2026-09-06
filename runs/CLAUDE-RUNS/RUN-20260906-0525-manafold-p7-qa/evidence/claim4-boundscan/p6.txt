@@ -1,0 +1,115 @@
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\manafold_clips.h:200
+    indexes kLoopArcMm[] which has 6 entries, but a guard says 4
+    index : quat_rot_vec(Q, 0, kLoopArcMm[i], 0, dx, dy, dz);
+    guard : if (i < 4) Q = quat_mul(Q, locs[i]);
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\manafold_art.h:129
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\manafold_clips.h:200
+    indexes kLoopArcMm[] which has 6 entries, but a guard says 5
+    index : quat_rot_vec(Q, 0, kLoopArcMm[i], 0, dx, dy, dz);
+    guard : for (int i = 0; i < 5; ++i) {
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\manafold_art.h:129
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\manafold_lab.h:415
+    indexes kLabVariants[] which has 10 entries, but a guard says 6
+    index : const int32_t scale = kLabVariants[vi].stencil_scale_mm;
+    guard : for (int sh = 0; sh < 6; ++sh)
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\manafold_lab.h:172
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\manafold_probe.cpp:187
+    indexes kLoopBladeRzMm[] which has 8 entries, but a guard says 5
+    index : const int32_t rim_rz = u02::kLoopBladeRzMm[7];
+    guard : for (int oi = 0; oi < 5; ++oi) {
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\manafold_art.h:190
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zhao_reel.cpp:713
+    indexes kTrans[] which has 3 entries, but a guard says 4
+    index : static const int32_t kTrans[3] = {256, 154, 64};  // /256
+    guard : for (int pt = 1; pt < 4; ++pt)
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zhao_reel.cpp:713
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zhao_reel.cpp:717
+    indexes kTrans[] which has 3 entries, but a guard says 4
+    index : const int32_t v = (static_cast<int32_t>(rs.cur[idx]) * kTrans[ch] + 128) / 256;
+    guard : for (int pt = 1; pt < 4; ++pt)
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zhao_reel.cpp:713
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zhao_reel.cpp:3264
+    indexes kSmearPresets[] which has 6 entries, but a guard says 5
+    index : u02::kSmearPresets[c.u02_smear_preset >= 0 && c.u02_smear_preset < 5
+    guard : u02::kSmearPresets[c.u02_smear_preset >= 0 && c.u02_smear_preset < 5
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\manafold_fx.h:257
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6171
+    indexes kFbCouple[] which has 4 entries, but a guard says 3
+    index : constexpr int32_t kFbCouple[4] = {160, 220, 190, 260}; // neighbour bend
+    guard : if (j <= 3) return 0;
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6171
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6172
+    indexes kFbDamp[] which has 4 entries, but a guard says 3
+    index : constexpr int32_t kFbDamp[4] = {155, 140, 148, 120};   // per-mille per step
+    guard : if (j <= 3) return 0;
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6172
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6172
+    indexes kFbDamp[] which has 4 entries, but a guard says 8
+    index : constexpr int32_t kFbDamp[4] = {155, 140, 148, 120};   // per-mille per step
+    guard : if (j <= 8) return 1;
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6172
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6173
+    indexes kFbInertia[] which has 4 entries, but a guard says 3
+    index : constexpr int32_t kFbInertia[4] = {80, 55, 32, 65};    // root spin coupling
+    guard : if (j <= 3) return 0;
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6173
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6173
+    indexes kFbInertia[] which has 4 entries, but a guard says 8
+    index : constexpr int32_t kFbInertia[4] = {80, 55, 32, 65};    // root spin coupling
+    guard : if (j <= 8) return 1;
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6173
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6174
+    indexes kFbAero[] which has 4 entries, but a guard says 3
+    index : constexpr int32_t kFbAero[4] = {320, 450, 260, 700};   // slow flutter drive
+    guard : if (j <= 3) return 0;
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6174
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6174
+    indexes kFbAero[] which has 4 entries, but a guard says 8
+    index : constexpr int32_t kFbAero[4] = {320, 450, 260, 700};   // slow flutter drive
+    guard : if (j <= 8) return 1;
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6174
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6364
+    indexes kSagEnv[] which has 5 entries, but a guard says 4
+    index : static const int kSagEnv[5] = {0, 600, 1000, 800, 400};  // per neck segment
+    guard : for (int k = 1; k <= 4; ++k) {
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6979
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6372
+    indexes kSagEnv[] which has 5 entries, but a guard says 4
+    index : extra[k] = (kS2Sag * kSagEnv[k]) / 1000;
+    guard : for (int k = 1; k <= 4; ++k) {
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6979
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6818
+    indexes kStrikeOpen[] which has 5 entries, but a guard says 4
+    index : (static_cast<int64_t>(kStrikeOpen[k] - kStanceSlope[k]) * jab) / 1000);
+    guard : for (int k = 1; k <= 4; ++k) {
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6787
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6912
+    indexes kBowOpen[] which has 5 entries, but a guard says 4
+    index : (static_cast<int64_t>(kBowOpen[k] - kStanceSlope[k]) * dip) / 1000);
+    guard : for (int k = 1; k <= 4; ++k)
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6890
+
+C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6989
+    indexes kSagEnv[] which has 5 entries, but a guard says 4
+    index : extra[k] = (3800 * kSagEnv[k]) / 1000 + (500 * sigh * kSagEnv[k] / 1000) / 1000;
+    guard : for (int k = 1; k <= 4; ++k)
+    table : C:/Users/FABIAN~1/AppData/Local/Temp/claude/C--programmieren-zencrifice/aac20814-0a0b-4331-a482-7e0d58f4147f/scratchpad/p6tree/tools/reel\zixxtrixx.h:6979
+
+tables: 133   files: 27   SUSPECTS: 19

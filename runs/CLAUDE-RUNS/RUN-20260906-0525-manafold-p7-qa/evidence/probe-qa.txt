@@ -1,0 +1,46 @@
+u02-probe: slot 0 (300 keys): min clearance 386 mm at key 253 sub 0 — OK
+u02-probe: slot 1 (150 keys): min clearance 432 mm at key 88 sub 0 — OK
+u02-probe: slot 2 (210 keys): min clearance 450 mm at key 115 sub 0 — OK
+u02-probe: slot 3 (90 keys): min clearance 432 mm at key 23 sub 0 — OK
+u02-probe: slot 4 (80 keys): min clearance 494 mm at key 8 sub 0 — OK
+u02-probe: slot 5 (200 keys): min clearance 337 mm at key 150 sub 1 — OK
+u02-probe: slot 6 (120 keys): min clearance 414 mm at key 65 sub 0 — OK
+u02-probe: slot 7 (2 keys): min clearance 510 mm at key 0 sub 0 — OK
+u02-probe: slot 8 (120 keys): min clearance 282 mm at key 90 sub 0 — OK
+u02-probe: slot 9 (170 keys): min clearance 495 mm at key 140 sub 0 — OK
+u02-probe: slot 10 (70 keys): min clearance 477 mm at key 61 sub 0 — OK
+u02-probe: slot 11 (140 keys): min clearance 245 mm at key 24 sub 0 — OK
+u02-probe: slot 12 (120 keys): min clearance 386 mm at key 45 sub 0 — OK
+u02-probe: slot 13 (200 keys): min clearance 76 mm at key 75 sub 1 — OK
+u02-probe: slot 13 DECLARED CONTACT keys 78..156 (+2-key apron): deepest vertex -23 mm (declared -25, accepted -60..-5) — OK
+u02-probe: slot 14 (232 keys): min clearance 416 mm at key 91 sub 0 — OK
+u02-probe: slot 15 (400 keys): min clearance 391 mm at key 109 sub 0 — OK
+u02-probe: CLEARANCE CONTRACT HOLDS (>= 40 mm everywhere)
+u02-probe: closure sweep 700..1160 worst arm RIM 1059 pm of surface (at pm 700) — OK (rim gate 1120; centreline gate 920 unchanged)
+u02-probe: closure over the clip bank (both subs): worst arm RIM 1064 pm (slot 12 key 34) — OK (rim gate 1120)
+u02-probe: eye crown [purple lens] ellip 1242 pm — stands 108 mm proud of the body
+u02-probe: eye crown [cyan star] ellip 1257 pm — stands 115 mm proud of the body
+u02-probe: eye crown [white star] ellip 1267 pm — stands 120 mm proud of the body
+u02-probe: eye-protrusion gate (LENS >= 1215 pm): OK
+u02-probe: 5c LEASH rule 1 (overhang <= 29 mm = 330 pm of a 89 mm star half-width): worst 29 mm at slot 3 key 8 - OK
+u02-probe: 5c LEASH rule 2 (>= 600 pm of the star on the purple): worst 760 pm - OK
+u02-probe: 5c LEASH rule 3 (no star vertex outside the BODY outline; orthographic, 2 FIXED views): 1499 violations - REPORTED-NOT-ENFORCED (the fault is REAL; the instrument is aimed at 2 fixed views while the shipping cameras orbit -- see the source, and pass 8's first eye item)
+u02-probe: 5c rule 3 WHERE: worst at slot 6 key 5 (1267 pm past the outline, 1000 = exactly on it); present in 7 of the bank's clips  s0:368  s1:90  s2:18  s3:202  s5:176  s6:476  s12:169
+u02-probe: 5d instrument census: 153216 white-star, 73920 lens verts
+u02-probe: 5d EXTREMES (336 composed corners: roll x gaze-side x gaze-lift x eyeball-shift, both eyes, all at full amplitude)
+u02-probe: 5d gate A -- eyes never touch: closest approach 22 mm (corner 320, floor 12) - OK
+u02-probe: 5d channel state: roll SHIPPED (cap 900 a16), gaze SHIPPED, eyeball-shift NOT SHIPPED (kEyeShiftPivotMm=0, so eye_shift_a16(1000)=0) -- Direction 5 5c's eyeball shift is a DECLARED GAP, not a silent one
+u02-probe: 5d gate B -- nothing clips: lens deepest 801 pm of the body (corner 96) vs 802 pm at rest, floor 1000 - OK
+u02-probe: SURFACE CROSSING 1 (exiting) near root-local (81, 743) mm (arc station 330 mm; prev sample (83, 732))
+u02-probe: SURFACE CROSSING 2 (entering) near root-local (-312, 509) mm (arc station 2651 mm; prev sample (-317, 518))
+u02-probe: TRAVEL slot 1 (span 8253 mm, bump_ext 18): max terrain rise 0 mm under the path (key 0); worst clearance-minus-rise 436 mm (key 88) — OK
+u02-probe: TRAVEL slot 4 (span 748 mm, bump_ext 6): max terrain rise 0 mm under the path (key 0); worst clearance-minus-rise 494 mm (key 8) — OK
+u02-probe: TRAVEL slot 8 (span 8330 mm, bump_ext 18): max terrain rise 0 mm under the path (key 0); worst clearance-minus-rise 308 mm (key 90) — OK
+u02-probe: TRAVEL slot 14 (span 1558 mm, bump_ext 6): max terrain rise 0 mm under the path (key 0); worst clearance-minus-rise 422 mm (key 92) — OK
+u02-probe: TRAVEL slot 15 (span 1684 mm, bump_ext 6): max terrain rise 0 mm under the path (key 0); worst clearance-minus-rise 393 mm (key 110) — OK
+u02-probe: REST ANCHOR junctionF root-local (   89,   664,     0) mm
+u02-probe: REST ANCHOR neck      root-local (   45,   996,    14) mm
+u02-probe: REST ANCHOR hingeA    root-local (    0,  1337,    29) mm
+u02-probe: REST ANCHOR hingeB    root-local ( -231,  1564,   132) mm
+u02-probe: REST ANCHOR hingeC    root-local ( -574,  1435,   235) mm
+u02-probe: REST ANCHOR junctionB root-local ( -120,    95,     0) mm

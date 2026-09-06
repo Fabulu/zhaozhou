@@ -1,0 +1,14 @@
+qa-p7 E1: star verts walked 593712
+qa-p7 E1: rule 1 worst overhang 29 mm (cap 29) | rule 2 760 pm
+qa-p7 E1: rule 3 SHIPPED (root TRANSLATION only) = 1499 violations
+qa-p7 E1: rule 3 ROTATION-CORRECTED (full root-local) = 1512 violations
+qa-p7 E1b: shipped violations by how SIDE-ON the fixed view is to the creature's own facing:
+             front-ish (<40 deg)       270
+             oblique (40-70)           982
+             side-on (>70)             247
+qa-p7 E3: star colour filter changed to a value nothing carries.
+qa-p7 E3: star verts walked 0
+qa-p7 E3: rule 1 0 mm / cap 29 -> OK | rule 2 1000 pm / 600 -> OK | rule 3 0 violations
+qa-p7 E2: gate A with GAZE amplitude swept too (3696 corners = 16 signs x 21 roll steps x 11 gaze steps)
+qa-p7 E2: closest approach 22 mm (floor 12) at corner 320 = roll 1000 pm of cap, gaze 0 pm of cap -> OK
+qa-p7 E2: shipped gate A (gaze pinned at full) reports 22 mm; this sweep reports 22 mm
