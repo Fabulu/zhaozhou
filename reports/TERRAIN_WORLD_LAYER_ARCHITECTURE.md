@@ -536,11 +536,55 @@ CLAUDE.md seeing-the-work rules.
 
 ---
 
-## 7. OPEN — needs an owner ruling
+## 7. OPEN — ~~needs an owner ruling~~ **ALL TEN WERE RULED ON 2026-09-02**
 
-Every item below is genuinely unwritten in the tree. Each is one answerable
-question. Nothing above builds a law on any of them; where a block touches
-one, it refuses loudly or parameterises.
+> **THIS SECTION WAS STALE FOR FOUR DAYS AND IT COST REAL TIME.** Every item
+> below was answered by rulings T1–T12 in
+> `reports/OWNER-RULINGS-BUILDABILITY-20260902.md` (≈ lines 540–760). This
+> document was not updated, so it went on saying "genuinely unwritten in the
+> tree" about questions that had answers.
+>
+> **Two independent lanes found this on 2026-09-06**, hours apart, each having
+> first believed the block it was building was blocked. `TERRAIN.PAGELOADER`
+> was told by §5 that it needed nothing; it found T2/T3/T5/T7/T10 waiting.
+> `SW.STREAM` was told by §5 step 4 that it "needs OPEN 1 for the key law and
+> OPEN 7 for prefetch policy"; both are ruled, and nothing was blocked.
+>
+> A document that reports MORE open questions than exist is the mirror image
+> of the broken-instrument law: it does not make the design look better, it
+> makes it look unbuildable, and the cost is paid in lanes that stop to ask
+> instead of building. The questions are kept below because they record what
+> was actually asked and why — but the verdict column is the current truth.
+
+| §7 item | answered by | the ruling, in one line |
+|---|---|---|
+| 1 residency key law | **T1** | `{resource_epoch, island_id, patch_ix, patch_iz}`; the tag gains `island_id` |
+| 2 guard map | **T2** | the exact bank-2 table; `TERRAIN.PAGE_POOL` @ `0x0400_0000`, 1,024 × 21,376 B |
+| 3 memory client | **T3** | client 6, `TERRAIN_BUILD`, best-effort |
+| 4 writeback vs canonical mirror | **T4** | B/D never written back; **F must be**, behind an ACK barrier |
+| 5 command ABI | **T5** | one `SubmitTerrainSet` for the whole set, not one `DrawProcedural` per patch |
+| 6 composed-cache overflow | **T6** | the five-step ladder, then a frame fault |
+| 7 prefetch policy | **T7** | working set, look-ahead, and the 32-page ceiling |
+| 8 mip derivation side | **T8** | the FPGA, after CRC, exact decimation, no second HPS law |
+| 9 visible-set collision law | **T9** | set-associative replaces direct-map; **no software non-collision rule exists** |
+| 10 level teardown | **T11** | `END_FLUSH` / `BEGIN` / `ABORT`, not full console reset |
+
+**Two cautions that survive the rulings**, because "ruled" is not "ruled on
+everything a builder needs":
+
+* **T6 and T7 govern different pressures and must not be conflated.** T7's
+  32-page-per-frame budget overflow is proxy-and-continue, RECORDED, and
+  explicitly not a frame fault. T6's frame fault is for >256 required
+  *dynamic* patches in the composed cache. Reusing T6 for T7's case would
+  fault frames the rulings say to render.
+* **T7 gives gameplay-required patches no rank and no overflow behaviour.**
+  Its proxy-and-continue is written for "a normal streaming miss"; a patch the
+  player is standing on is not one, and proxy ground under a player is a
+  player falling through the world. `zref::swstream::WorldStreamer` refuses
+  loudly there (`unruled_gameplay_starvation`) rather than inventing policy.
+  **That one is genuinely open.**
+
+The original questions follow, unedited, as the record of what was asked.
 
 1. **Residency key law:** what is the directory's lookup key — world-absolute
    patch coordinates at one canonical pitch, or (island_id, ix, iz)? The built
