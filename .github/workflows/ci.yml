@@ -251,8 +251,18 @@ jobs:
           #     in one cycle, which zhao_mem_guard cannot produce. Three clients
           #     had it wrong; two read every PASS as a denial and the third
           #     reads every DENIAL as a pass.
-          # Both GATE (non-zero on violation) rather than report, which is why
-          # they are here and design:report as a whole is not.
+          #   check_v3_banks         -- the texture island V3 transaction file is
+          #     physically what section 6 of its architecture declares: the right
+          #     depth x width, synchronous, one writer and one reader, and no
+          #     logic between an array read and its first register. Section 0's
+          #     last paragraph says why it is machine-checked rather than
+          #     written down: "the next agent cannot implement another large
+          #     asynchronous table, call it a transaction file, and declare the
+          #     architecture complete." It runs its own 19 deliberately-wrong
+          #     fixtures before it will report on the tree, so a clean run is
+          #     evidence rather than a comfortable zero.
+          # All three GATE (non-zero on violation) rather than report, which is
+          # why they are here and design:report as a whole is not.
           npm run rtl:gates
           npm test
 
