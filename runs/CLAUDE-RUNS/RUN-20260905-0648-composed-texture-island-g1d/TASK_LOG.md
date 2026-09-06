@@ -1431,3 +1431,49 @@ guard/arbiter T3 amendment lane from before.
 
 Still live and NOT superseded: **D22 step 4, GEOM.PROJECT evidence.** Taking
 that now — it is geometry and collides with no lane.
+
+## 2026-09-06 ~19:45 — V3 LANES BUILDING; THREE GATES NOW WATCH THEM
+
+No fit running, and deliberately none queued: §26.1 forbids a composed run
+before the owner/completion structure is proven, and §0 point L says prove
+structure with cheap synthesis first. The lanes use `-MapOnly` (~90 s).
+
+**Six V3 RTL files exist already**: `zhao_texture_v3bank/v3own/v3rq.sv` and
+`zhao_raster_rcp24_v3/rcp24_mul/ticketq.sv`.
+
+### The gates that now stand between a V3 draft and "architecture-complete"
+
+* **`check_v3_banks.py`** (bank lane) — §6's declared table as data. It reports
+  **"13 declared, 0 found, 13 pending"** rather than "clean", which is the
+  right shape: a checker with nothing to check must not return a comfortable
+  zero. Runs 18 deliberately-wrong fixtures before it will report on the tree.
+* **`check_global_binding.py`** (mine) — closes the hole the diagnosis lane
+  found, where `check_ingress_capture.py` is structurally blind to the very
+  defect it is cited against, so a V3 keeping a global mode pin would PASS the
+  gate meant to prevent it. Pinned at 2, failing in BOTH directions.
+* **`run_block_fit.ps1`'s `sourceDigest`** — §0 point L. A row's commit did not
+  identify its bytes; `rtlCleanAtHead` was already false on the composed run
+  and nothing acted on it.
+
+All three are in `npm run rtl:gates`, which passes.
+
+### §21's gates, recorded so nobody grades on a curve
+
+Goal 5,500–6,600 ALM and 6,000–8,000 registers. Redlines 7,500 ALM / 9,000
+registers / 14 DSP. Memory 56 M10K core, 64 with credited elastic buffering —
+and the document is explicit that this is *"an explicit proposal to spend up to
+the escalation threshold, not a claim that 56 already includes every queue"*.
+
+The sentence to keep: **"A design exceeding them is reported as a failed
+allocation, not quietly accepted because it is smaller than 16,192 ALMs."**
+Anything under 16k will feel like a win. That is the trap.
+
+Fit targets for the V3 blocks are NOT added yet, on purpose: the lanes were
+told to report the entries they want, and inventing module names for blocks
+still being written would produce targets that silently measure nothing.
+
+### Corrected
+
+I briefed two lanes that the tree had moved since the pin `d884ce01`. It had
+not — one commit separates them, and every repair I named landed nine commits
+BEFORE the pin. Both lanes were sent corrections; §2 is current as written.
