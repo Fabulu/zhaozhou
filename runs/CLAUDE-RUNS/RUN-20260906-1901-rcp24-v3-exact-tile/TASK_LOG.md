@@ -670,3 +670,24 @@ gets committed by somebody who was not editing it.
 assertion, and neither `rebuild_rcp24_v3.ps1` nor the CMake target passes
 `--assert` (only 3 targets in the whole suite do). F7 fired it under exactly those
 flags, so the detector is live in CI as registered. No change needed.
+
+### Check counts settled, and both now measured on the SHIPPED bytes
+
+    default      52 checks passed
+    --exhaustive 56 checks passed
+
+Both numbers are real and neither replaces the other: the exhaustive run adds the
+2^24 sweep and its companions on top of the default 52. Earlier reporting quoted
+56 without saying which run produced it, which is how a number starts drifting.
+
+Re-run just now against the binary built from the CURRENT tree -- digest
+`6553c5cef196`, the bytes that are committed -- so the headline result is no
+longer inherited from the pre-V20 build:
+
+    E  exhaustive: 16777215/16777215 answered in 67108876 clocks (4.00 each),
+       peak occupancy 16
+
+identical to the original sweep, and the throughput and negative-correction
+counts (124,848 in B.2, 48 in B.1) reproduce exactly. What is still outstanding
+is the FIRE tests F1-F6 on these bytes; those mutate files inside the running
+fit's closure and wait for it to finish.
