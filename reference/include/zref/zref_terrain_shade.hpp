@@ -54,9 +54,39 @@
 //
 // **(a) is the recommendation** -- it keeps the detail out of a function that
 // terrain and creatures share, and it is a pure refactor whose golden CRCs
-// must not move. **This is an owner decision and the RTL is blocked on it**,
-// which is exactly the sort of thing that should surface before a block is
-// built rather than after.
+// must not move.
+//
+// ---------------------------------------------------------------------------
+// RESOLVED: (a) WAS TAKEN AND BUILT. THIS BLOCK IS NOT BLOCKED.
+// *(Corrected 2026-09-06, external audit finding R9.)*
+// ---------------------------------------------------------------------------
+// The paragraph above used to end "**This is an owner decision and the RTL is
+// blocked on it**". That sentence was true when written and has not been true
+// for some time, and it is the worst kind of stale note: it tells the next
+// person not to start.
+//
+// Option (a) exists in `reference/src/zrender/terrain.cpp`:
+//
+//   * `shade_flat_tri_dir_unclamped(...)` -- the signed primitive, no clamp;
+//   * `shade_flat_tri_dir(...)` -- the clamped wrapper, byte-identical to what
+//     every existing caller got before, which is the acceptance test the
+//     refactor set itself;
+//   * and the terrain detail path composes exactly the ruled order,
+//     `ndl = clamp01(raw + detail)`, with the detail inside THIS light's clamp.
+//
+// So TERRAIN.SHADE's input contract is settled and the block can be built.
+//
+// WHAT IS STILL NOT FINISHED, so nobody reads the above as more than it is:
+// the detail path is **gated off** -- `kTerrainDetailStrength = 0`, chosen so
+// the arithmetic is a bit-exact no-op and every golden CRC is unchanged while
+// the gate is shut. And when it is opened, what it computes today is a
+// PER-TRIANGLE, POSITION-DERIVED perturbation using the fixed light constants,
+// not the per-pixel world-anchored normal texture the feature is ultimately
+// for. Neither the normal-detail feature nor the moving-sun acceptance
+// demonstration should be counted from this.
+//
+// The strength that ships is chosen BY LOOKING, at 240p, in motion, against
+// what it sits on -- a value that measures fine and pegs a channel is wrong.
 #pragma once
 
 #include <cstdint>
