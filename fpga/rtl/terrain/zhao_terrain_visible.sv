@@ -75,7 +75,8 @@
 //
 // The claim is CHECKED rather than assumed: every query carries a rolling tag
 // and `err_tag_o` latches if an answer ever arrives carrying a tag the retire
-// cursor did not expect. A silently misaligned cursor would attach the right
+// cursor did not expect.
+// ENFORCED-BY: tests/terrain/visible_rtl_directed.cpp A silently misaligned cursor would attach the right
 // handle to the wrong coordinate, which is a wrong patch drawn in the right
 // place -- and nothing downstream could tell.
 //

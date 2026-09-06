@@ -61,6 +61,10 @@ CLIENTS = [
     # caught it the moment the file existed -- which is what the audit is for.
     "fpga/rtl/geometry/zhao_geom_mem_adapter.sv",
     "fpga/rtl/raster/zhao_raster_fbwrite.sv",
+    # TERRAIN.PAGELOADER. Added with the block, not after it -- the coverage
+    # audit is only exact if a new client joins this list in the same change
+    # that creates it.
+    "fpga/rtl/terrain/zhao_terrain_pageloader.sv",
     "fpga/rtl/debug/zhao_debug_frameblit.sv",
     "fpga/rtl/video/zhao_scanout_fetch.sv",
     # Pass-through wrapper: it routes the port down to zhao_scanout_fetch and

@@ -2464,6 +2464,23 @@ set_tests_properties(island_dir_rtl_directed PROPERTIES LABELS "fast;nightly" TI
 # expectation stream shifted one cycle to pin the registered port, and with both
 # the producer and the two request streams stalling so a dropped or duplicated
 # answer cannot hide behind a consumer that is always ready.
+#
+# IT CARRIES BOTH PHASES, and the second is not decoration. Sections 1-15 are the
+# exhaustive-directed suite above; section 16 is a RANDOMISED phase over 18,000
+# cycles -- six patch generations, drawn stall patterns on the producer and both
+# consumers, out-of-range requests mixed into in-range ones, both dual_i values,
+# release pulses of every width 1..5 -- checking every answer against
+# zref::terrain::ComposedLattice and all seven counters against an expectation
+# maintained from the STIMULUS, on every cycle. Its draws come from the HIGH bits
+# of a 64-bit LCG and it PRINTS AND ASSERTS its own measured distribution, because
+# a phase that reports thousands of cases while testing four is the failure mode
+# it exists to avoid.
+#
+# The two phases catch different things, and that is demonstrated rather than
+# claimed: an overrun counter qualified on the rising edge of st_valid_i passes
+# every one of the directed checks and fails only here, on the producer that
+# streams back to back and never lowers valid. So the ledger may honestly name
+# this one file for both `directed:` and `random:`.
 add_executable(test_compcache_front_rtl_directed terrain/compcache_front_rtl_directed.cpp)
 target_link_libraries(test_compcache_front_rtl_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_compcache_front_rtl_directed
@@ -6247,3 +6264,49 @@ verilate(test_skin_norm_rtl_directed
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_skin_norm.sv)
 add_test(NAME skin_norm_rtl_directed COMMAND test_skin_norm_rtl_directed)
 set_tests_properties(skin_norm_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# TERRAIN.PAGELOADER -- one whole 21,376-byte page, HPS DDR -> local SDRAM,
+# against zref::terrain::page_load (which composes zref::mem::upload_verdict
+# rather than restating it).
+#
+# The bench plays MEM.HPS.BRIDGE and MEM.GUARD, and INSTANTIATES the real
+# zhao_mem_guard alongside as an observer: `tools/rtl/check_guard_verdict.py`
+# records that two geometry fetchers read every guard PASS as a denial for
+# months precisely because every played guard raised `ready` and `ok` together.
+# The played model here is transcribed from the real block's two-cycle
+# protocol, and the real block's own verdict on these requests is measured
+# rather than assumed.
+#
+# Stalls are a first-class phase, not a footnote: bridge latency, inter-beat
+# gaps, guard `ready` hold and write-beat pacing are all knobs, and the exact
+# 334 / 334 / 2,672 burst / request / beat counts are asserted under every one
+# of them -- a machine doing its work twice produces byte-identical output and
+# only a count can see it.
+add_executable(test_pageloader_rtl_directed terrain/pageloader_rtl_directed.cpp)
+target_link_libraries(test_pageloader_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_pageloader_rtl_directed
+  PREFIX Vtb_pageloader
+  TOP_MODULE tb_pageloader
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_guard.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageloader.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_pageloader.sv)
+add_test(NAME pageloader_rtl_directed COMMAND test_pageloader_rtl_directed)
+set_tests_properties(pageloader_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ...and the lint gate. A sibling block reached "committed" without ever having
+# been lexed, because it had no lint test and a comment line beginning with the
+# simulator's name is read as a pragma. An RTL file with no lint test is an RTL
+# file nothing has read.
+add_test(NAME lint_terrain_pageloader
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_pageloader
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageloader.sv)
+set_tests_properties(lint_terrain_pageloader PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

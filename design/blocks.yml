@@ -96,6 +96,15 @@ counter_catalog:
   - compcache_fill_overrun
   - compcache_lat_oob
   - compcache_cs_oob
+  - pageloader_pages_loaded
+  - pageloader_pages_faulted
+  - pageloader_pages_refused
+  - pageloader_crc_fails
+  - pageloader_hdr_ident_fails
+  - pageloader_incomplete
+  - pageloader_guard_denied
+  - pageloader_bridge_errs
+  - pageloader_load_bytes
   # TERRAIN.MIPGEN (ruling T8)
   - mipgen_samples
   - mipgen_writes
@@ -603,7 +612,7 @@ blocks:
     inputs: [hps_axi, client_req]
     outputs: [client_rsp, hps_axi]
     upstream: [DEBUG.TRACE, MEM.HPS.ARBITER]
-    downstream: [CMD.DMA, PART.STATE]
+    downstream: [CMD.DMA, PART.STATE, TERRAIN.PAGELOADER]
     backpressure: credit
     latency: variable
     target_throughput: 1 burst in flight per client
@@ -702,7 +711,7 @@ blocks:
     owner_issue: ZH-029
     inputs: [client_req, guard_policy]
     outputs: [arb_req, guard_violation]
-    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, GEOM.POSE, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT, DEBUG.FRAMEBLIT, MEM.UPLOAD, GEOM.ASSETFETCH]
+    upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, GEOM.POSE, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT, DEBUG.FRAMEBLIT, MEM.UPLOAD, GEOM.ASSETFETCH, TERRAIN.PAGELOADER]
     downstream: [MEM.VRAM.ARBITER]
     backpressure: ready_valid
     latency: fixed:1
@@ -1565,6 +1574,86 @@ blocks:
   # TERRAIN — Mantle (fpga/rtl/terrain)
   # ===========================================================================
 
+  - id: TERRAIN.PAGELOADER
+    name: Whole-page prefetch
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Moves ONE whole 21,376-byte terrain page from the HPS staging arena into one TERRAIN.PAGE_POOL slot, CRC-checks it in flight over bytes [64, 21320), and reports success or failure plus the CRC it saw to TERRAIN.RESIDENCY. It never publishes: ruling T7's 'a half-loaded or CRC-failed page is never rendered' is the directory's to enforce and this block's to make enforceable. Closes step 3 of the world-layer build sequence and reports/Missingterrain's 'prefetching from cartridge/HPS DDR into local SDRAM'."
+    contract: design/contracts/TERRAIN.PAGELOADER.md
+    phase: 6
+    owner_issue: ZH-126
+    inputs: [page_load_jobs]
+    outputs: [loader_completions]
+    upstream: [MEM.HPS.BRIDGE]
+    downstream: [TERRAIN.RESIDENCY, MEM.GUARD, TERRAIN.MIPGEN]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: "one 21,376-byte page per 12,028 gpu clocks, measured on the sim bridge profile"
+    reference_model: zref::terrain::page_load
+    tests:
+      directed: tests/terrain/pageloader_rtl_directed.cpp
+      random: tests/terrain/pageloader_rtl_directed.cpp
+    counters: [pageloader_pages_loaded, pageloader_pages_faulted, pageloader_pages_refused, pageloader_crc_fails, pageloader_hdr_ident_fails, pageloader_incomplete, pageloader_guard_denied, pageloader_bridge_errs, pageloader_load_bytes]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-06"
+        commit: "973682f8"
+        evidence: design/contracts/TERRAIN.PAGELOADER.md
+      - state: UNIT_VERIFIED
+        date: "2026-09-06"
+        commit: "973682f8"
+        evidence: tests/terrain/pageloader_rtl_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      Its job source will be TERRAIN.SEQ, which is step 5 of the world-layer
+      build sequence and does not exist yet -- so that edge is deliberately
+      absent from `upstream` rather than asserted against a block nobody has
+      written.
+
+      NOT INTEGRABLE YET, AND THE BLOCK SAYS SO RATHER THAN PRETENDING. No
+      client identity can legally write a terrain page today, for three
+      independent reasons: zhao_client_e has no client 6; zhao_vram_arbiter has
+      five ports and casts the ARRAY INDEX to the enum, so slot identity IS
+      client identity and there is no sixth slot to be; and MEM.GUARD's map is
+      two framebuffer windows plus a read-only geometry pool with
+      `default: pass_ok = 1'b0`, so no window admits a bank-2 write for anyone.
+      Region base and slot count are therefore parameters (defaulting to ruling
+      T2's values) and both client identities are input ports, following
+      GEOM.MESHFETCH's precedent. The bench INSTANTIATES the real zhao_mem_guard
+      as an observer and asserts it never passed one of these writes -- the
+      refusal is measured, not claimed.
+
+      THE DESTINATION IS COMPUTED, NEVER ACCEPTED: REGION_BASE + slot *
+      PAGE_BYTES, with the slot range-refused first, so writing outside the
+      region is a state the block cannot reach. SLOTW is deliberately one bit
+      wider than the pool needs: at 10 bits slot 1024 truncates to slot 0 and
+      overwrites a live page, and a truncation is a clamp with no counter.
+
+      ONE RULING REVERSED THE ARCHITECTURE SKETCH. Section 2.3 said `fin` is
+      WITHHELD on a CRC mismatch. Ruling T10 and TERRAIN.RESIDENCY's actual
+      fin_ok_i/fin_crc_i ports both postdate it and say the opposite, and they
+      are right: withholding leaves the slot in LOADING forever, so a corrupt
+      page would permanently retire one of 1,024 slots with nothing counted.
+      Every job now produces exactly one completion.
+
+      TWO FIRE TESTS EARNED THEIR KEEP AND CHANGED THE SUITE. Merging the guard
+      arms originally moved ONE number -- guard_denied 3341 against 3342 -- while
+      the page still loaded byte-perfect and every result assertion stayed
+      green; a check for zero denials on a clean load was added because breaking
+      it on purpose showed the hole. Issuing every write twice produced a
+      BYTE-IDENTICAL VRAM image and was visible only in counters.
+
+      STILL UNRULED: which CRC declaration governs when the job's
+      expected_page_crc32c and the page header's own word disagree. Both are
+      written; nothing says which wins. Both are checked behind
+      CHECK_HEADER_CRC rather than one being picked silently.
+
   - id: TERRAIN.PATCH
     name: Terrain patch state engine
     kind: rtl
@@ -1881,7 +1970,7 @@ blocks:
     owner_issue: ZH-123
     inputs: [patch_claims, loader_completions, deformation_marks]
     outputs: [residency_answers, eviction_writebacks]
-    upstream: [TERRAIN.PATCH]
+    upstream: [TERRAIN.PATCH, TERRAIN.PAGELOADER]
     downstream: [TERRAIN.MIPGEN, TERRAIN.LOD, TERRAIN.ISLAND]
     backpressure: ready_valid
     latency: fixed:2
@@ -1918,7 +2007,7 @@ blocks:
     owner_issue: ZH-122
     inputs: [page_height_lattice]
     outputs: [page_height_mips]
-    upstream: [TERRAIN.PATCH, TERRAIN.RESIDENCY]
+    upstream: [TERRAIN.PATCH, TERRAIN.RESIDENCY, TERRAIN.PAGELOADER]
     downstream: [TERRAIN.LOD]
     backpressure: ready_valid
     latency: fixed:1

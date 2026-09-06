@@ -167,6 +167,24 @@ CONTRACTS = [
         "aliases": ["rad_c"],
     },
     {
+        # TERRAIN.PAGELOADER -- registered with the block rather than after it.
+        # A page load runs for ~11,000 cycles, so "the caller holds its inputs
+        # steady" is not a defence here the way it is for a one-cycle service:
+        # the sequencer will have moved on to the next job long before this one
+        # finishes, and a live read of `j_hps_addr_i` on burst 300 would fetch
+        # from whatever address happened to be presented then. Everything is
+        # latched in S_IDLE and the machine reads `job_*` afterwards.
+        "path": "fpga/rtl/terrain/zhao_terrain_pageloader.sv",
+        "prefix": "j_",
+        "allow_regions": [
+            (r"S_IDLE: begin", "        end"),
+        ],
+        "allow_lines": [
+            r"^\s*(input|output)\s",
+            r"^\s*assign j_ready_o\s*=",
+        ],
+    },
+    {
         "path": "fpga/rtl/texture/zhao_texture_island_top.sv",
         "prefix": "frag_",
         # The capture process and the block that ADMITS the fragment are the
