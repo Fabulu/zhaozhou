@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "064d5fad73646c6b66f325faf29d1f4196c5ac1c",
+    "newestRunCommit":  "4e7e6f9df408caeda198e6deffd3bddc988e1459",
     "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -223,7 +223,10 @@
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  122.1,
-                       "fmaxClock":  "clk"
+                       "fmaxClock":  "clk",
+                       "lastAttemptStatus":  "map_only",
+                       "lastAttemptSeconds":  54.4,
+                       "lastAttemptCommit":  "bd5ecd215dca1063892f3c3d26e4e1520d51125a"
                    },
                    {
                        "module":  "zhao_geom_setup",
@@ -688,6 +691,22 @@
                        "fmaxClock":  "clk"
                    },
                    {
+                       "module":  "zhao_raster_rcp24_svc@v3-before",
+                       "status":  "map_only",
+                       "sourceCommit":  "bd5ecd215dca1063892f3c3d26e4e1520d51125a",
+                       "rtlCleanAtHead":  false,
+                       "sourceDigest":  "e11495c175460f148406f2621132affd3a7d3a4b77952e77a4194a5770de7084",
+                       "variantOf":  "zhao_raster_rcp24_svc",
+                       "seconds":  144.8,
+                       "sourcesHashed":  2,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  1065,
+                       "blockMemoryBits":  0,
+                       "dspBlocks":  6,
+                       "virtualPins":  177
+                   },
+                   {
                        "module":  "zhao_raster_rcp24_svcseed2",
                        "status":  "ok",
                        "sourceCommit":  "1c0a7f44ebb82cb3fd5dd74bd182a5385dff3f1e",
@@ -726,6 +745,55 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  63.93,
                        "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_raster_rcp24_v3@v3-after",
+                       "status":  "map_only",
+                       "sourceCommit":  "5cdc0ad26b380717f95cfa09f8b03727bd8da108",
+                       "rtlCleanAtHead":  false,
+                       "sourceDigest":  "fa13541652446080ec68447d5b6497539c57ee8164213b66d5fefbbb19cfb805",
+                       "variantOf":  "zhao_raster_rcp24_v3",
+                       "seconds":  209.4,
+                       "sourcesHashed":  4,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  1940,
+                       "blockMemoryBits":  2582,
+                       "dspBlocks":  3,
+                       "virtualPins":  276
+                   },
+                   {
+                       "module":  "zhao_raster_rcp24_v3@v3-after2",
+                       "status":  "map_only",
+                       "sourceCommit":  "4e7e6f9df408caeda198e6deffd3bddc988e1459",
+                       "rtlCleanAtHead":  false,
+                       "sourceDigest":  "6553c5cef1965e50316afbf8d67368d8cfc7fbcf91a3e4e39d825788b31be1eb",
+                       "variantOf":  "zhao_raster_rcp24_v3",
+                       "seconds":  111.7,
+                       "sourcesHashed":  4,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  1940,
+                       "blockMemoryBits":  2582,
+                       "dspBlocks":  3,
+                       "virtualPins":  276
+                   },
+                   {
+                       "module":  "zhao_raster_rcp24_v3@v3-nctx8",
+                       "status":  "map_only",
+                       "sourceCommit":  "5cdc0ad26b380717f95cfa09f8b03727bd8da108",
+                       "rtlCleanAtHead":  false,
+                       "sourceDigest":  "fa13541652446080ec68447d5b6497539c57ee8164213b66d5fefbbb19cfb805",
+                       "topParameters":  "NCTX=8",
+                       "variantOf":  "zhao_raster_rcp24_v3",
+                       "seconds":  146.1,
+                       "sourcesHashed":  4,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  1414,
+                       "blockMemoryBits":  1366,
+                       "dspBlocks":  3,
+                       "virtualPins":  276
                    },
                    {
                        "module":  "zhao_raster_resolve",
@@ -1146,6 +1214,39 @@
                                           ]
                    },
                    {
+                       "module":  "zhao_texture_fragrob-d64",
+                       "status":  "map_only",
+                       "sourceCommit":  "5cdc0ad26b380717f95cfa09f8b03727bd8da108",
+                       "rtlCleanAtHead":  false,
+                       "sourceDigest":  "4fe96726afebcdacc243c8db6c05380a454ca93af39b451e883ab72d4a5f3bdf",
+                       "topParameters":  "DEPTH=64",
+                       "variantOf":  "zhao_texture_fragrob",
+                       "seconds":  409.9,
+                       "sourcesHashed":  1,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  9431,
+                       "blockMemoryBits":  26496,
+                       "dspBlocks":  0,
+                       "virtualPins":  953
+                   },
+                   {
+                       "module":  "zhao_texture_fragrob-v3cmp",
+                       "status":  "map_only",
+                       "sourceCommit":  "5cdc0ad26b380717f95cfa09f8b03727bd8da108",
+                       "rtlCleanAtHead":  false,
+                       "sourceDigest":  "4fe96726afebcdacc243c8db6c05380a454ca93af39b451e883ab72d4a5f3bdf",
+                       "variantOf":  "zhao_texture_fragrob",
+                       "seconds":  341.3,
+                       "sourcesHashed":  1,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  3291,
+                       "blockMemoryBits":  6560,
+                       "dspBlocks":  0,
+                       "virtualPins":  943
+                   },
+                   {
                        "module":  "zhao_texture_island_top",
                        "status":  "failed:structure",
                        "sourceCommit":  "064d5fad73646c6b66f325faf29d1f4196c5ac1c",
@@ -1393,6 +1494,21 @@
                        "dspBlocksAvailable":  112,
                        "fmaxMhz":  88.54,
                        "fmaxClock":  "clk"
+                   },
+                   {
+                       "module":  "zhao_texture_v3own",
+                       "status":  "map_only",
+                       "sourceCommit":  "4e7e6f9df408caeda198e6deffd3bddc988e1459",
+                       "rtlCleanAtHead":  false,
+                       "sourceDigest":  "1627c71acdf419abb09cd9669969df9df67d83c32d01868847d43f7f5a614e89",
+                       "seconds":  263.7,
+                       "sourcesHashed":  3,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  4220,
+                       "blockMemoryBits":  20640,
+                       "dspBlocks":  0,
+                       "virtualPins":  952
                    },
                    {
                        "module":  "zhao_video_framectl",

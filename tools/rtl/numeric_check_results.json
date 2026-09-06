@@ -1,0 +1,11 @@
+{
+  "seed": "0x5a48414f",
+  "random_cases_per_family": 250000,
+  "u32_tiled_and_MX_pairs_checked": 250256,
+  "MX_negative_correction_cases": 124679,
+  "MW_width_and_product_cases": 250000,
+  "perspective_product_and_split_shift_cases": 250576,
+  "CLUT4_halfword_position_cases": 262144,
+  "status": "PASS",
+  "scope": "Python integer identities and boundary/random tests only; no RTL simulation, no Quartus run, no claimed silicon proof"
+}
