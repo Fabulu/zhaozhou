@@ -605,6 +605,44 @@ only the new check -- because the exact-colour check accepts either byte, so a
 byte-select regression scores zero mismatches and looks perfect. What catches it
 is requiring that both bytes were seen.
 
+## The toolchain was idle, so the composed island is refitting
+
+Started 2026-09-06 against HEAD. The committed row -- 7,720 ALM, 69.05 MHz, 17
+DSP at `afb7070f` -- predates the ingress-capture repair AND today's R6 ordering
+boundary, which added a reorder buffer with a 64-to-1 mux of 33 bits on the emit
+path and widened the combiner tag from 16 to 22 bits. That last one touches the
+record file in every combiner slot, so it moves area INSIDE the closure as well
+as at the island level. No prediction offered; this island's last obvious
+explanation was worth 4 MHz of 36.
+
+## D19v, found while the fit runs: 2 DSP, ZERO claimed, gate at exactly 2
+
+No new fit was needed -- it was already in the committed row. COMBINE.V1
+measures `dspBlocks 2`, and its rule violations list ALM, registers and fmax but
+NOT DSP, because the target gates at `max_dsp: 2`, inherited unchanged from the
+refuted II=1 block. The block's own header says `multstyle = "logic"` makes it
+use ZERO DSP, which is variant A's stated advantage over B. Two call sites, two
+DSP blocks, one each.
+
+The target's comment predicted the wrong failure mode: it watches for a BREACH,
+and this landed exactly on the ceiling. **The gap between what the block claims
+and what the gate allows is exactly two, and the measurement sat in it.** The
+mechanism is that the attribute sits on a function-local automatic variable, and
+the shell QSF already records that this same attribute "was believed for weeks".
+
+## D22 step 4 compared ONE vertex of three
+
+Found while asking what step 4's evidence was actually missing. The bench
+exposed only `pj_x_r[0]`, so vertex A was compared against
+`zref::render::project_vertex` and B and C reached the assertions only through
+the drawn picture -- which is the same evidence step 4 had BEFORE GEOM.PROJECT
+was composed at all. `dbg_proj_behind_o` was already three bits wide, so two of
+the three vertices had a flag exposed and no coordinates to go with it.
+
+All three are now exposed and compared on x, y and w, with a DISTINCTNESS check
+beside them, so a collector that wrote one vertex into all three slots could not
+pass by having them all agree.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner

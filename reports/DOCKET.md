@@ -2836,14 +2836,27 @@ PRECOMPUTED EDGE EQUATIONS to A MESHLET DESCRIPTOR IN MEMORY:
 | 7 | GEOM.VDECODE | the decoded coordinates | 12 |
 | 8 | GEOM.ASSETFETCH | the records themselves | 16 |
 | 9 | GEOM.ASSETFETCH | the u8 index stream | 17 |
+| 10 | (the memory itself) | grants, beats and latency | 12 |
 
-**The uncontended stall baseline, measured 2026-09-05.** `prefetch_stall_o`
-was tied off when ASSETFETCH was composed and is now connected. Against a bench
-memory that grants immediately and answers in one cycle:
+**The uncontended stall baseline, measured 2026-09-05, and what real memory
+did to it.** `prefetch_stall_o` was tied off when ASSETFETCH was composed and is
+now connected. Against a bench memory that grants immediately and answers in one
+cycle:
 
 ```
 meshlets 1, beats 24, denied 0, refused 0, STALLS 27
 ```
+
+**27 became 30 on 2026-09-06** when both fetchers were taught the guard's real
+two-cycle handshake -- one extra cycle per 64-byte line, three lines, exactly
+the change's own prediction and a small corroboration that the repair does what
+it says.
+
+**And 30 became 360 through real memory** (tread 10). Twelve times the
+uncontended figure, against an identical fetch of 24 beats and a byte-identical
+frame. That ratio is the whole reason this baseline was recorded before the
+tread rather than after it: a stall count with nothing to compare against is a
+number, not a measurement.
 
 Twenty-seven cycles of a consumer waiting on a buffer still filling, against 24
 beats of fetch. The consumers begin asking almost as soon as the fetch starts,
