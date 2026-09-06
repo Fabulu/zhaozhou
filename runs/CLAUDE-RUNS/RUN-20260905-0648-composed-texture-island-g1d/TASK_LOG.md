@@ -1388,3 +1388,46 @@ the next architectural move — not the combiner.
 FRAGROB is where both the internal timing and the register count now live. Do
 not fit again until there is something new to measure — the owner's "VERY
 sparingly" stands, and one 2 h run has just been spent.
+
+## 2026-09-06 ~19:00 — V3 ARRIVES, AND THE ROADMAP'S NEXT ITEMS ARE NOW STALE
+
+Owner delivered `ZHAOZHOU_TEXTURE_ISLAND_V3_ARCHITECTURE_2026-09-06.txt`
+(32,924 words, 27 sections, 5 appendices, pinned to `d884ce01`), filed durably
+as `reports/TEXTURE-ISLAND-V3-ARCHITECTURE-20260906.txt` with its checker at
+`tools/rtl/architecture_numeric_checks.py`. Ran the checker rather than quoting
+it: PASS, and its four families sum to exactly the 1,012,976 claimed — the
+124,679 negative-correction cases are a SUBSET of the first family, not a fifth
+addend.
+
+**The fit and the brief agree, arrived at independently.** §4.3c's path-origin
+split — written before the document arrived — found FRAGROB owning 136 of the
+189 internal paths with its worst ending in an inferred altsyncram write-enable.
+§0 names that same "return-to-RAM-write-enable cone" as the thing to replace.
+
+### THREE ROADMAP ITEMS ARE NOW SUPERSEDED, recorded so the nudge is not
+### followed off a cliff
+
+* **"Start the next fit if the toolchain is idle" — NO.** §26.1 is explicit:
+  *"Do not begin with a giant top-level rewrite or another full-island fit"*
+  and §0 point L: *"Prove structure with cheap synthesis and microbenchmarks
+  before another multi-hour composition fit."* The demonstrator lane runs
+  `-MapOnly` (minutes, and it reports the RAM Summary that names every array
+  that inferred, which is the evidence actually wanted). A composed fit now
+  would spend two hours measuring the architecture we have decided to replace.
+* **"COMBINE.V1's DSP measurement" — gone.** V1 is no longer instantiated; V2
+  is, and it is on zero of 3,904 paths. The live DSP question is the tile's:
+  17 against a rule of 14, and §10's exact 32x32 reduction is the lane.
+* **"perspuv's per-axis array split" — done and superseded.** W11 split it;
+  §11 now replaces both tables with one paired streaming pipeline.
+
+### Lanes running
+
+V3 demonstrator (§26.1), RCP tile (§10, explicitly parallel-safe), a bank
+conformance checker making §6's table machine-checkable, and a verification of
+§2's diagnosis against HEAD — because the tree has moved since `d884ce01`
+(nearest station decodes, `sampmeta_m` is 20 bits, bilerp is 4 phases, V2 is
+in), and building on stale premises is the expensive failure. Plus the
+guard/arbiter T3 amendment lane from before.
+
+Still live and NOT superseded: **D22 step 4, GEOM.PROJECT evidence.** Taking
+that now — it is geometry and collides with no lane.
