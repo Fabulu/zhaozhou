@@ -6531,3 +6531,67 @@ add_test(NAME lint_terrain_seq
 set_tests_properties(lint_terrain_seq PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# STEP 8 -- THE COMPOSED TERRAIN WORLD PATH.
+#
+# TERRAIN.SEQ + TERRAIN.RESIDENCY(v2) + TERRAIN.PAGELOADER + TERRAIN.WRITEBACK
+# + MEM.HPS.ARBITER in ONE Verilator top, with the harness supplying only the
+# frame ring, HPS DDR, the page pool's fabric and the journal doorbell. Every
+# block is the real RTL; nothing that exists is modelled.
+#
+# WHY IT IS EXPECTED TO FIND THINGS. reports/G1D-COMPOSED-ISLAND-20260905.md:
+# the first composed test of individually-verified texture blocks found five
+# real defects no unit suite could see. Every block composed here already has a
+# green suite; what none of them had was a NEIGHBOUR. The three seams this
+# reaches for the first time are TERRAIN.SEQ against a real directory,
+# TERRAIN.PAGELOADER's completion into that directory, and -- the one that
+# matters -- the loader's page-pool WRITES against the writeback's page-pool
+# READS, which is the only place T4's barrier can be measured in bytes rather
+# than in job order.
+#
+# The oracle is fed the REAL directory's answers rather than invented ones, so
+# the claim is exactly "whatever zhao_terrain_residency_v2 said,
+# zhao_terrain_seq did with it what zref::terrain::seq::Sequencer says to do".
+# The directory's own answers are checked separately against
+# zref::terrain::residency_set_index, so a directory fault cannot be laundered
+# into a sequencing verdict.
+add_executable(test_world_composed_directed terrain/world_composed_directed.cpp)
+target_link_libraries(test_world_composed_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_world_composed_directed
+  PREFIX Vtb_terrain_world
+  TOP_MODULE tb_terrain_world
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_guard.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_arbiter.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_seq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_residency_v2.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageloader.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_writeback.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_world.sv)
+add_test(NAME world_composed_directed COMMAND test_world_composed_directed)
+set_tests_properties(world_composed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+# ...and the lint gate every other terrain bench has. A comment line beginning
+# with the simulator's name is parsed as a pragma and stops the file lexing,
+# which happened six times in one day; an RTL file with no lint test is an RTL
+# file nothing has read. This one lints the BENCH's top, because the bench is
+# where the composition lives and the blocks under it have their own gates.
+add_test(NAME lint_terrain_world
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module tb_terrain_world
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_guard.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_arbiter.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_seq.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_residency_v2.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageloader.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_writeback.sv
+                 ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_world.sv)
+set_tests_properties(lint_terrain_world PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
