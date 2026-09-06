@@ -336,6 +336,8 @@ module zhao_shell_top
   // VIDEO: mode + scanout + scaler + framectl (the zhao_video_tb wiring,
   // now against the real memory chain)
   // ==========================================================================
+  logic        hb_wr_ready;
+  logic [31:0] hb_wr_early;
   logic [15:0] vx, vy;
   logic        vhsync, vvsync, vhblank, vvblank;
   logic        frame_start, frame_end, vswap_dec;
@@ -1359,7 +1361,8 @@ module zhao_shell_top
     .frame_tick    (gpu_tick.pulse),
     .hps_bytes     (hps_bytes),
     .hps_bytes_shadow (hps_bytes_shadow),
-    .hps_err_count (hps_err_count_o)
+    .hps_err_count (hps_err_count_o),
+    .wr_ready (hb_wr_ready), .wr_early_beats (hb_wr_early)
   );
 
   /* verilator lint_off UNUSEDSIGNAL */

@@ -38,6 +38,18 @@ module zhao_hps_bridge
   input  logic                wr_valid,    // write beats (after grant)
   input  logic [63:0]         wr_data,
   input  logic                wr_last,
+  // THE WRITE CHANNEL HAD NO READY, AND A BEAT PRESENTED TOO EARLY VANISHED.
+  // Beats are consumed only once `issued` is true -- the HPS has granted the
+  // request -- but `req_grant` is asserted a cycle EARLIER, at acceptance. A
+  // client that starts streaming on its own grant, which this file's own
+  // header invites ("the client streams wr_valid/wr_data beats after its
+  // request is accepted"), had those beats dropped on the floor with nothing
+  // recording it. The burst then completed short while the byte count still
+  // looked right, because the count comes from `busy_len`, not from beats.
+  //
+  // `wr_ready` is the level a client must gate on: combinational off `issued`,
+  // so a beat may be presented in the same cycle it rises.
+  output logic                wr_ready,
   output zhao_hps_burst_rsp_t rsp,         // read beats / err (registered)
 
   // HPS side (harness in sim; framework adapter seam in hardware)
@@ -67,7 +79,13 @@ module zhao_hps_bridge
   // reintroduce this.
   output logic [6:0][31:0] hps_bytes,
   output logic [6:0][31:0] hps_bytes_shadow,
-  output logic [31:0]      hps_err_count
+  output logic [31:0]      hps_err_count,
+  // Beats offered while `wr_ready` was LOW. Zero for a compliant client; the
+  // point is that this was previously UNCOUNTABLE -- the beat disappeared and
+  // nothing anywhere recorded it. Kept separate from hps_err_count, which
+  // counts malformed REQUESTS: conflating a client's streaming slip with a
+  // malformed request would send the next reader to the wrong block.
+  output logic [31:0]      wr_early_beats
 );
 
   // one burst in flight (single client port in Phase 2; the per-client busy
@@ -78,6 +96,11 @@ module zhao_hps_bridge
   logic [2:0]  busy_client;
   logic [6:0]  busy_len;
   logic        issued;       // HPS accepted the request
+
+  // The write channel's ready is EXACTLY the condition the beat-accept tests,
+  // written once so the two cannot drift. A ready that says yes where the
+  // accept says no would be worse than no ready at all.
+  assign wr_ready = busy && busy_write && issued;
 
   logic malformed;
   assign malformed = (req.len == 7'd0) || (req.len > 7'd64) || (req.addr[5:0] != 6'd0);
@@ -104,6 +127,7 @@ module zhao_hps_bridge
       hps_bytes        <= '0;
       hps_bytes_shadow <= '0;
       hps_err_count    <= 32'd0;
+      wr_early_beats   <= 32'd0;
     end else begin
       // defaults: one-cycle pulses / pass-through registers
       req_grant    <= 1'b0;
@@ -140,6 +164,10 @@ module zhao_hps_bridge
       end
 
       // ---- write beats: client -> HPS (registered) -----------------------
+      // A beat offered while `wr_ready` is low is not consumed and never was.
+      // Counting it makes the loss visible instead of silent.
+      if (wr_valid && !wr_ready) wr_early_beats <= wr_early_beats + 32'd1;
+
       if (busy && busy_write && issued && wr_valid) begin
         hps_wr_valid <= 1'b1;
         hps_wr_data  <= wr_data;

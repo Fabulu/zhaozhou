@@ -42,6 +42,11 @@ module tb_zhao_hps_bridge
   output logic [31:0] hps_bytes_0, hps_bytes_1, hps_bytes_2,
                       hps_bytes_3, hps_bytes_4,
                       hps_bytes_5, hps_bytes_6,
+  // Exposed so a bench can SEE them. wr_ready is the level a client must gate
+  // its beats on, and wr_early_beats counts the ones offered before it rose --
+  // which used to vanish with nothing recording them.
+  output logic        wr_ready,
+  output logic [31:0] wr_early_beats,
   output logic [31:0] hps_err_count
 );
 
@@ -83,6 +88,7 @@ module tb_zhao_hps_bridge
     .hps_wr_valid, .hps_wr_data, .hps_wr_last,
     .hps_rd_valid, .hps_rd_data, .hps_rd_last,
     .frame_tick,
+    .wr_ready, .wr_early_beats,
     .hps_bytes (hb_flat), .hps_bytes_shadow (), .hps_err_count
   );
 

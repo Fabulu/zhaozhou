@@ -72,6 +72,8 @@ module zhao_hps_arb_compose (
 
   zhao_pkg::zhao_hps_burst_req_t c0_req, c1_req, b_req;
   zhao_pkg::zhao_hps_burst_rsp_t c0_rsp, c1_rsp, b_rsp;
+  logic        ac_wr_ready;
+  logic [31:0] ac_wr_early;
   logic b_grant, b_wr_valid, b_wr_last;
   logic [63:0] b_wr_data;
 
@@ -154,7 +156,8 @@ module zhao_hps_arb_compose (
       .frame_tick      (frame_tick_i),
       .hps_bytes       (hps_bytes_unused),
       .hps_bytes_shadow(hps_bytes_shadow_unused),
-      .hps_err_count   (hps_err_count_o)
+      .hps_err_count (hps_err_count_o),
+      .wr_ready (ac_wr_ready), .wr_early_beats (ac_wr_early)
   );
 
 endmodule : zhao_hps_arb_compose
