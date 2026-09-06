@@ -312,6 +312,34 @@ inferred `altsyncram` write-enable. That is the big capture/order store the
 owner said to get attribution for *before* touching — and this fit is that
 attribution. The next architectural move is FRAGROB's, not the combiner's.
 
+#### 67.57 MHz IS OPTIMISTIC, AND NOT BECAUSE OF ANY BLOCK BEING REARCHITECTED
+
+Added after `reports/V3-DIAGNOSIS-VERIFICATION-20260906.md`, because this
+section is the number people will quote.
+
+**AUX's hardcoded envelope constant-folds away the island's slowest path.** The
+envelope is wired as the literal `0..65536`, so synthesis propagates the
+constant and deletes the arithmetic behind it. That arithmetic contains AUX's
+own worst measured path — `req_env_x1_i[20] → …ru_q[0][11]`, **−8.199 ns,
+54.95 MHz** — which is slower than anything in the composed run's 3,904
+summarised paths.
+
+So the composed fit does not measure AUX with a real envelope. When AUX is
+completed it will **add** area and a path that this baseline never carried, and
+the fmax will move DOWN for a reason that has nothing to do with COMBINE,
+FRAGROB, PERSPUV or RCP.
+
+Mosaic is worse than "exercised and counted": **all seven of its outputs
+dangle** and `pick_ready_i` is tied high, so only its counter survives
+synthesis at all.
+
+The consequence for V3 planning is specific and worth stating plainly: **do not
+treat 67.57 MHz as the number to beat.** It is the number a design produces
+when two of its blocks are partly optimised away. A V3 that lands at 70 MHz
+with AUX and Mosaic real would be a substantially better machine than this
+figure suggests, and one that lands at 67 with them still folded would be no
+better at all.
+
 #### What must NOT be concluded
 
 * Not that V2 bought nothing. The confound above is mine and it is not
