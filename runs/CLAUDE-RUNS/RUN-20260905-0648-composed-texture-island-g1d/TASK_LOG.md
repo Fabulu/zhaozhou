@@ -466,6 +466,73 @@ constant. It becomes the island's bug the moment bindings vary per fragment, and
 the owner's two-level mip blend is exactly that change. No gate exemption was
 added, because an exemption would claim more than the gate checks.
 
+## The audit arrived, and four hard contradictions are repaired
+
+`reports/AUDIT.md` landed from the owner: substantial reference work but NOT one
+coherent full-console reference. Its first four items are done, each verified in
+source before being touched and each mutation-tested.
+
+**R1 + R2 were one problem.** The resolver refused `recipe >= 6` while the
+combiner implemented eight and drove all eight in its differential -- so a legal
+terrain record was refused at the door of the block that exists to execute it.
+The proper fix takes the ceiling from the enum, which needs that header, which
+was impossible while both defined a different `zref::material::Ledger`. The
+literal is exactly what let them drift. Fixed, plus the crossing test the audit
+asked for by name -- and that file COMPILING is the R2 proof.
+
+**R8: the residency arena accepted uploads longer than a page**, because it
+validated against a guard covering the whole arena. The audit's counterexample
+reproduced before the fix: `outcome 0, length 512 into a 256-byte page`,
+overlapping a PINNED neighbour with every pin counter at zero. That is why
+counting pin refusals was never evidence that pins are honoured.
+
+**R15: `product_jobs(kMask)` claimed a product MASK does not perform.** It is a
+binary gate. The implementation, the RTL and the composed test all said zero and
+only the cost model disagreed -- and S15.4's capacity argument reads that
+number. The island test now CALLS `product_jobs()` instead of keeping a copy, so
+the drift is closed rather than corrected.
+
+## R5 closed: the texture island is exact on both halves
+
+Three-channel bilinear sequencing built -- the lane always carried `chan_i` and
+`out_chan_o` and neither was used, so every direct-colour fragment came out
+GREY and there was nothing correct to compare against. bilerp jobs 96 -> 288.
+
+    CLUT     21 matched, 0 mismatched
+    BILINEAR 21 matched, 0 mismatched, 0 grey
+
+both against `zref::material::combine` rather than a second copy of the
+arithmetic. Four island defects fixed along the way: the CLUT byte select (every
+odd texel decoded its neighbour's index), the 565->888 expansion (zero-fill
+where the ABI replicates), the bilinear FRACTIONS read live from the planner --
+the audit's flagged-but-untested risk -- and single-channel filtering.
+
+**And the exact check passed while being unable to fail.** Mutating red back to
+zero-fill produced ZERO mismatches, because the palette entry in use had
+`r5 = 1` and 1 has no low bits to replicate. A pattern that distinguishes the
+laws in all three channels fixed it. Then the NEXT mutation "passed" too -- and
+that was a STALE BINARY: a leftover test process held the executable, the link
+failed, and I read the result off a pipeline instead of off cmake. Twice in one
+session, both times the trap CLAUDE.md names.
+
+## 8 km floating island: built, and streamed
+
+The sparse island directory was explicitly unbuilt ("Phase-6 loader work") and
+is the thing that makes the island possible at all: 15,625 patches against a
+1,024 residency, so absence must mean OPEN SKY rather than a miss. Solid ground
+came to **793 patches** -- the exact figure terrain_rules 1.4 costs out, derived
+here independently from its 3.25 km².
+
+Then streamed, over 80 frames crossing the island and coming home:
+
+    published 1485, evicted 1404, RETURNED 702, refused 0, peak 81
+
+**Return is the test, not streaming.** A first frame under no pressure proves
+nothing; the failures live where a patch leaves, loses its page, and comes back.
+`Arena::release` had to be added -- a page could previously only be freed by
+REPUBLISHING the same resource, so anything that merely stopped being wanted
+held its page forever.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner
