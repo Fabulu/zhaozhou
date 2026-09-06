@@ -24,10 +24,10 @@ Blocks: **111** (91 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | raster | · | · | 5 | · | · | · | · | · | 5 |
 | surface | · | · | 2 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
-| terrain | · | 3 | 12 | · | · | · | · | · | 15 |
+| terrain | · | 2 | 13 | · | · | · | · | · | 15 |
 | texture | 2 | · | 5 | · | · | · | · | · | 7 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 33 | 14 | 48 | 16 | · | · | · | 6 | 111 |
+| **all** | 33 | 13 | 49 | 16 | · | · | · | 6 | 111 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -102,6 +102,7 @@ Blocks: **111** (91 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | TERRAIN.ISLAND | UNIT_VERIFIED | 2026-09-06 | `ed7c8723` | tests/terrain/island_dir_rtl_directed.cpp |
 | TERRAIN.VISIBLE | SPECIFIED | 2026-09-06 | `1cc9ef68` | design/contracts/TERRAIN.VISIBLE.md |
 | TERRAIN.VISIBLE | REFERENCE_COMPLETE | 2026-09-06 | `1cc9ef68` | reference/include/zref/zref_island.hpp |
+| TERRAIN.VISIBLE | UNIT_VERIFIED | 2026-09-06 | `96425bb1` | tests/terrain/visible_rtl_directed.cpp |
 | TERRAIN.RESIDENCY | SPECIFIED | 2026-09-03 | `eadf1dfa` | design/contracts/TERRAIN.RESIDENCY.md |
 | TERRAIN.RESIDENCY | UNIT_VERIFIED | 2026-09-03 | `eadf1dfa` | tests/terrain/terrain_residency_v2_directed.cpp |
 | TERRAIN.MIPGEN | SPECIFIED | 2026-09-03 | `bb46109b` | design/contracts/TERRAIN.MIPGEN.md |

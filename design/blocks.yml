@@ -1945,7 +1945,7 @@ blocks:
     counters: [visible_examined, visible_emitted, visible_sky, visible_out_of_extent, visible_bad_pitch]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: REFERENCE_COMPLETE
+    maturity: UNIT_VERIFIED
     maturity_log:
       - state: SPECIFIED
         date: "2026-09-06"
@@ -1955,6 +1955,10 @@ blocks:
         date: "2026-09-06"
         commit: "1cc9ef68"
         evidence: reference/include/zref/zref_island.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-09-06"
+        commit: "96425bb1"
+        evidence: tests/terrain/visible_rtl_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
