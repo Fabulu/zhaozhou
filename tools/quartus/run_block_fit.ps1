@@ -611,6 +611,45 @@ try {
         # actually measured at, and rows without one predate this change.
         $rowModule = if ($RowLabel) { "$mod$RowLabel" } else { $mod }
         $row = [ordered]@{ module = $rowModule; status = 'unknown'; sourceCommit = $head; rtlCleanAtHead = $rtlClean }
+
+        # THE COMMIT IS NOT THE BYTES, AND THIS ROW ALREADY KNEW IT.
+        #
+        # `sourceCommit` is the git HEAD that happened to exist when the runner
+        # started. `rtlCleanAtHead` records whether the tree matched it -- and
+        # on the 2026-09-06 composed island run it was FALSE, which means the
+        # commit named in that row does not identify the code that was
+        # compiled. A reader totalling by commit would be totalling a fiction.
+        #
+        # V3 sec 0 point L asks for exactly this fix: "Publish the actual fitted
+        # source snapshot, not merely the Git HEAD that happened to exist when a
+        # runner started", and sec 26.2 makes it an acceptance condition --
+        # "source snapshots, tests, synthesis, and fit results refer to the same
+        # bytes".
+        #
+        # So the row now carries a digest OF THE BYTES. `sourceDigest` is a
+        # SHA-256 over the per-file (name, hash) pairs in sorted order, which is
+        # stable across runs and independent of git state: two rows with the
+        # same digest fitted the same code, whatever their commits say, and two
+        # rows with the same commit and different digests did not. The
+        # per-file manifest is written beside the reports so a disagreement can
+        # be localised to a file instead of merely detected.
+        $manifestLines = @()
+        foreach ($k in ($srcBefore.Keys | Sort-Object)) {
+            $manifestLines += ('{0}  {1}' -f $srcBefore[$k], (Split-Path -Leaf $k))
+        }
+        $manifestText = ($manifestLines -join "`n")
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        $row.sourceDigest = -join ($sha.ComputeHash(
+            [System.Text.Encoding]::UTF8.GetBytes($manifestText)) | ForEach-Object { $_.ToString('x2') })
+        $sha.Dispose()
+        $manifestDir = Join-Path $RepoRoot 'reports/synthesis/blockpaths'
+        if (-not (Test-Path -LiteralPath $manifestDir)) {
+            New-Item -ItemType Directory -Force -Path $manifestDir | Out-Null
+        }
+        $manifestPath = Join-Path $manifestDir ("$rowModule.sources.sha256")
+        $manifestText | Out-File -FilePath $manifestPath -Encoding utf8
+        Write-Host ("source digest: {0} over {1} file(s) -> {2}" -f `
+            $row.sourceDigest.Substring(0, 12), $srcBefore.Count, (Split-Path -Leaf $manifestPath))
         if ($TopParameters) { $row.topParameters = ($TopParameters -join ' ') }
         # A parameter VARIANT is a second measurement of the SAME block, not a
         # second block. Marked so a census that totals DSPs by row cannot count
@@ -991,6 +1030,12 @@ try {
             $kept | Add-Member -NotePropertyName 'lastAttemptStatus'  -NotePropertyValue $row.status  -Force
             $kept | Add-Member -NotePropertyName 'lastAttemptSeconds' -NotePropertyValue $row.seconds -Force
             $kept | Add-Member -NotePropertyName 'lastAttemptCommit'  -NotePropertyValue $row.sourceCommit -Force
+            # ...and the DIGEST of the bytes that attempt compiled. Without this
+            # a kept row keeps a commit for the attempt and no record of what
+            # the attempt actually contained, which is the same gap one level
+            # down: the reader can see that a newer run happened and still
+            # cannot tell whether it was the same code.
+            $kept | Add-Member -NotePropertyName 'lastAttemptDigest'  -NotePropertyValue $row.sourceDigest -Force
             $merged[$row.module] = $kept
             Write-Warning ("{0}: this run ended '{1}'; KEEPING the previous measurement ({2} ALM / {3} DSP) rather than erasing it" -f $row.module, $row.status, $prior.alms, $prior.dspBlocks)
         } else {
