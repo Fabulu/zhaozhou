@@ -1598,3 +1598,40 @@ re-downloading 17.0.2 needs an Intel account, so that is the owner's call), and
 
 **Toolchain is alive again**: the RCP tile's full fit is running (47 min), which
 is the ALM/Fmax measurement the disk had blocked three times.
+
+## 2026-09-06 ~22:20 — WRITTEN BEFORE THE RCP TILE FIT RESULT IS READ
+
+`quartus_fit` has gone; the row has not been looked at.
+
+**In hand right now, so the result cannot displace it:**
+
+* **TERRAIN.SEQ landed and is committed** (`357224d6`) — step 5, 75 checks,
+  5.38 clocks per resident static record. Its differential found a real defect
+  on its FIRST run: the compose-slot index held under a low valid bit, so a
+  static issue's slot number depended on which patch composed earlier —
+  history reaching a frame-scoped allocator. Ledger green, 112 blocks.
+* **Rule V8 caught a WRONG EDGE, not a missing bridge.** SW.STREAM is
+  hps-clocked and SEQ is gpu-clocked; the sealed list actually reaches the GPU
+  through the frame ring and CMD.SCHEDULER. `async_bridge: true` would have
+  silenced the rule by claiming a bridge nobody built. Edge removed instead.
+* **TERRAIN.WRITEBACK is still in flight** — its contract appeared minutes ago.
+* **GEOM.WARP: recon says DO NOT BUILD.** It is registered `deferred: true`,
+  `cut_order: 5`, deferred by owner ruling 2026-08-31 §6.3 and ratified into
+  V1-RELEASE-DEFINITION.md:136. The spec is filed as REVIVAL-READY TEXT, not a
+  build order. Second time today recon found a tasking premise wrong.
+
+**Next, in order, once the row is read:**
+
+1. Record the RCP tile's ALM/Fmax against DSP 6 → 3 and registers 1,065 →
+   1,414/1,940. **The trade is the question**: 875 more registers for 3 fewer
+   DSPs is only worth it if the ALMs and the clock came out right, and neither
+   was measurable until now.
+2. Add the `fit_targets.yml` entry the lane asked for — it deliberately left
+   `max_alms`/`max_registers`/`max_m10k` blank pending exactly this row, and
+   warned NOT to inherit svc's `max_alms: 650` / `max_registers: 600`, since
+   svc already violates both at 1041/1101.
+3. Finish TERRAIN.WRITEBACK; then step 8, the composed shell path.
+
+**Caution to carry into reading it:** the three seeded runs of the UNCHANGED
+old block spread 63.93–68.63 MHz. Any fmax delta smaller than ~4.7 MHz is
+inside that noise and must not be reported as an architectural result.
