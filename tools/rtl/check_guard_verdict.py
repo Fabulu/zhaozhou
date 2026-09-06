@@ -60,6 +60,16 @@ CLIENTS = [
     "fpga/rtl/raster/zhao_raster_fbwrite.sv",
     "fpga/rtl/debug/zhao_debug_frameblit.sv",
     "fpga/rtl/video/zhao_scanout_fetch.sv",
+    # Pass-through wrapper: it routes the port down to zhao_scanout_fetch and
+    # tests no verdict itself. Listed so the coverage audit stays exact rather
+    # than carrying an exception.
+    "fpga/rtl/video/zhao_video_scanout.sv",
+    # A SYNTHESIS PROBE, and it is a real client -- it drives a guard and reads
+    # the answer. Its header says the guard is already integrated in
+    # zhao_shell_top and re-instantiating it would be measuring the same block
+    # twice; that is about AREA, not about protocol, and the protocol still has
+    # to be right or the probe measures a path that never completes.
+    "fpga/rtl/synth/zhao_probe_render_fb.sv",
 ]
 
 # `if (foo_rsp.ready)` / `else if (guard_rsp_i.ready)` -- the accepting arm.
@@ -168,9 +178,62 @@ def _selftest():
                 % ("one-cycle" if want else "two-cycle", "missed" if want else "flagged"))
 
 
+def discover():
+    """Every RTL file that declares a `zhao_guard_rsp_t` INPUT.
+
+    THE HAND LIST IS THE AUTHORITY AND THIS IS ITS AUDITOR, not the other way
+    round. Listing clients deliberately is what stops a scanner whose pattern
+    quietly stops matching from reporting "0 problems"; but a hand list also
+    rots the moment someone adds a client, and a gate that silently skips the
+    one new file is exactly the instrument that reads low.
+
+    So: the list is checked, and a client that is not on it is an ERROR rather
+    than something quietly picked up. Adding a guard client is a deliberate act
+    and so is putting it under this gate.
+    """
+    import os
+    found = []
+    for root, _dirs, files in os.walk("fpga/rtl"):
+        for f in files:
+            if not f.endswith(".sv"):
+                continue
+            path = os.path.join(root, f).replace(chr(92), "/")
+            try:
+                text = io.open(path, encoding="utf-8").read()
+            except OSError:
+                continue
+            text = re.sub(r"//.*", "", text)
+            # an INPUT of the response type: this module consumes a verdict.
+            # OPTIONAL PACKAGE QUALIFIER. Without it this regex missed
+            # `input zhao_pkg::zhao_guard_rsp_t guard_rsp_i` in
+            # zhao_debug_frameblit, and reported that file as having STOPPED
+            # being a client -- a discovery pattern reading low on its very
+            # first run, which is the law this tree keeps relearning.
+            if re.search(r"input\s+(var\s+)?(\w+::)?zhao_guard_rsp_t", text):
+                found.append(path)
+    return sorted(found)
+
+
 def main():
     _selftest()
     offences = 0
+
+    listed = set(CLIENTS)
+    actual = set(discover())
+    missing = sorted(actual - listed)
+    stale = sorted(listed - actual)
+    for path in missing:
+        print("check_guard_verdict: %s consumes a guard verdict and is NOT in CLIENTS" % path)
+        offences += 1
+    for path in stale:
+        print("check_guard_verdict: %s is in CLIENTS but no longer consumes a guard verdict" % path)
+        offences += 1
+    if missing or stale:
+        print("")
+        print("The client list is checked against the tree so it cannot rot into a")
+        print("gate that skips the one file nobody added. Update CLIENTS deliberately.")
+        print("")
+
     for path in CLIENTS:
         bad = scan(path)
         if not bad:
