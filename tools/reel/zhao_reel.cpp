@@ -7551,6 +7551,42 @@ int main(int argc, char** argv) {
     s.note = "fog ablation: mist plane ON, smear OFF, mana bodies OFF";
     rc |= render_scene(s);
   }
+  // PASS-9 REVIEW INSTRUMENT (by-eye review, 2026-09-06). The fogprobe lattice
+  // above lives entirely on manafold-rest's DAY sky. Pass 9 reported that the
+  // mist "reads cyan on night skies, green-teal on day skies" and raised the
+  // owner's "greenish" as an open flag -- but the only instrument that can
+  // isolate the mist's own pixels could only ever look at ONE of the two skies.
+  // A probe that cannot see half the question is 09-ENGINE-GOTCHAS §9 again.
+  //
+  // These two are the SAME PAIR on manafold-channel's slot/keys/sun, so
+  // (mist-night minus off-night) is the mist's own contribution over the
+  // VIOLET NIGHT sky, comparable like-with-like against the rest pair.
+  // They ship nothing and are diagnostics only.
+  if (wanted("manafold-fogprobe-mist-night")) {
+    SceneSubject s = subject_u02_clip(2, "manafold-fogprobe-mist-night", u02::kChannelKeys,
+                                      false, &kU02SunChannel);
+    s.u02_mana = 3;
+    s.u02_smear_only = true;
+    s.u02_smear = 0;
+    s.u02_mist = true;
+    // KEEP the skybox bloom (slot 2 sets planet=1). The FIRST version of this
+    // probe turned it off "so the wash cannot land in the subtraction" -- and
+    // the violet night sky IS that bloom, so it rendered manafold-rest's salmon
+    // day sky under a night-sky name and would have answered the wrong question
+    // (09-ENGINE-GOTCHAS 12). The bloom is deterministic and identical on both
+    // legs, so it cancels in the subtraction anyway. Caught by painting the mask.
+    s.note = "review: mist plane ON over the NIGHT sky, smear OFF, mana bodies OFF";
+    rc |= render_scene(s);
+  }
+  if (wanted("manafold-fogprobe-off-night")) {
+    SceneSubject s = subject_u02_clip(2, "manafold-fogprobe-off-night", u02::kChannelKeys,
+                                      false, &kU02SunChannel);
+    s.u02_mana = 0;
+    s.u02_smear = 0;
+    s.u02_mist = false;
+    s.note = "review: the bare creature over the NIGHT sky -- the night pair's baseline";
+    rc |= render_scene(s);
+  }
   // PASS 9 (Direction 7 §8/§10.2/§10.3): the MIST VARIANT SHEET. One clip per
   // row of u02::kMistVariants, same slot/sun/keys/camera as manafold-rest so
   // the only difference between any two of them is the mist configuration --
