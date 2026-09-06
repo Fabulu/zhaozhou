@@ -92,8 +92,19 @@
 // costs is buffering, not correctness: §15.2's own argument is that the TMU
 // supplies one sample per clock, so a two-sample recipe cannot retire faster
 // than one per two clocks whatever the queue holds.
+// TAG WIDTH IS A PARAMETER, defaulting to the 16 bits every existing caller
+// passes. The tag is a pure passthrough here -- stored at admission, returned
+// at retirement, never interpreted -- so widening it costs one field and lets a
+// caller carry something of its own alongside the fragment through a block that
+// deliberately retires OUT OF ORDER. The composed island uses that to carry a
+// submission sequence number, which is what makes restoring order at the island
+// boundary possible without a CAM.
+//
+// It is a parameter rather than a widening because the tag is the caller's
+// namespace: this block must not acquire an opinion about what is in it.
 module zhao_texture_material_combine_v1 #(
-    parameter int RECS = 2
+    parameter int RECS = 2,
+    parameter int TAGW = 16
 ) (
     input  logic        clk,
     input  logic        rst_n,
@@ -116,14 +127,14 @@ module zhao_texture_material_combine_v1 #(
     // rather than guessed at here.
     input  logic [23:0] f_base_rgb_i,
     input  logic [7:0]  f_base_a_i,
-    input  logic [15:0] f_tag_i,
+    input  logic [TAGW-1:0] f_tag_i,
 
     // ---- fragment out ------------------------------------------------------
     output logic        o_valid_o,
     input  logic        o_ready_i,
     output logic [23:0] o_rgb_o,
     output logic [7:0]  o_a_o,
-    output logic [15:0] o_tag_o,
+    output logic [TAGW-1:0] o_tag_o,
     output logic        o_refused_o,
 
     // ---- counters ----------------------------------------------------------
@@ -179,7 +190,7 @@ module zhao_texture_material_combine_v1 #(
     logic [2:0]  recipe;
     logic [1:0]  count;
     logic [7:0]  weight;
-    logic [15:0] tag;
+    logic [TAGW-1:0] tag;
     logic [7:0]  s0_r, s0_g, s0_b, s0_a;
     logic [7:0]  s1_r, s1_g, s1_b, s1_a;
     logic [7:0]  s2_r, s2_g, s2_b, s2_a;

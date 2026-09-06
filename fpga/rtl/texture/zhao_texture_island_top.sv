@@ -197,6 +197,10 @@ module zhao_texture_island_top #(
     output var logic [7:0]  out_a_o,
     output var logic [15:0] out_tag_o,
     output var logic        out_refused_o,
+    // Times a fragment finished ahead of an earlier one and had to wait at the
+    // boundary (audit R6). Zero on a run means the ordering guarantee was
+    // never TESTED, not that it holds.
+    output var logic [31:0] cnt_reorder_held_o,
 
     // ======================= one summary counter per block ==================
     // Deliberately NOT every counter every block owns. Each output is a pin,
@@ -317,6 +321,10 @@ module zhao_texture_island_top #(
   // skid buffer for no gain.
   localparam int unsigned FCTXN = 64;
   localparam int unsigned FCTXW = 6;
+  // The combiner tag carries the caller's 16-bit tag AND the submission
+  // sequence, so the island can restore order after a block that retires out
+  // of order by design.
+  localparam int unsigned ROBTAGW = 16 + FCTXW;
 
   logic [63:0]           uvw_m   [FCTXN];   // {u_over_w, v_over_w}
   logic [CTXW-1:0]       fctx_m  [FCTXN];   // tag + token + material fields
@@ -338,6 +346,20 @@ module zhao_texture_island_top #(
   logic [1:0]       fsc_m   [FCTXN];
   logic [2:0]       frec_m  [FCTXN];
   logic [7:0]       fwt_m   [FCTXN];
+  // THE SUBMISSION SEQUENCE NUMBER (audit R6). Stamped at admission and
+  // carried out through the combiner so the island can restore the caller's
+  // order at its own boundary.
+  //
+  // It is a counter and not the token, because the token comes from a POOL:
+  // a slot is reused as soon as its fragment retires, so token order is
+  // allocation order only while nothing has retired yet. A free-running count
+  // is submission order by construction.
+  //
+  // FCTXW bits is exact, not a guess. FRAGROB admits at most FCTXN fragments,
+  // so two in flight never differ by FCTXN or more, and the low FCTXW bits
+  // therefore distinguish every live fragment. The counter is allowed to wrap.
+  logic [FCTXW-1:0] fseq_m  [FCTXN];
+  logic [FCTXW-1:0] seq_alloc_r;
 
   wire [FCTXW-1:0] fc_wp = tok_r[FCTXW-1:0];
 
@@ -364,6 +386,15 @@ module zhao_texture_island_top #(
   // consumer that actually needs them.
   logic [CTXW-1:0] fr_f_ctx_in;
   assign fr_f_ctx_in = frag_ctx_i;
+
+  always_ff @(posedge clk) begin
+    if (!rst_n) begin
+      seq_alloc_r <= '0;
+    end else if (frag_valid_i && frag_ready_o) begin
+      fseq_m[fc_wp] <= seq_alloc_r;
+      seq_alloc_r   <= seq_alloc_r + 1'b1;
+    end
+  end
 
   always_ff @(posedge clk) begin
     if (frag_valid_i && frag_ready_o) begin
@@ -1057,7 +1088,37 @@ module zhao_texture_island_top #(
   logic [31:0] comb_jobs [8];
   assign cnt_combine_jobs_o = comb_jobs;
 
-  zhao_texture_material_combine_v1 #(.RECS(2)) u_combine (
+  // ==========================================================================
+  // THE ORDERING BOUNDARY (audit R6)
+  //
+  // The audit's finding, and it was a fair one: the composed test asserted a
+  // BOUNDED displacement -- no fragment more than 8 places from where it was
+  // submitted -- and a bounded defect is not an ordering guarantee. Raster and
+  // blend semantics need the boundary itself.
+  //
+  // The reordering is not a fault to be removed. TMU responses come back out of
+  // order because the memory does, and `zhao_texture_material_combine_v1`
+  // retires out of order on purpose -- its own leaf test exercises that, because
+  // a one-sample recipe genuinely finishes before a three-sample one that
+  // started earlier and holding it back would cost throughput for nothing. So
+  // the machine reorders INSIDE and orders at its EDGE, which is where the
+  // caller's semantics live.
+  //
+  // A REORDER BUFFER, NOT A CAM AND NOT A STALL. The sequence stamped at
+  // admission indexes an FCTXN-entry table directly; completed fragments are
+  // written wherever they land and the head pointer walks forward as entries
+  // become present. It cannot overflow: FRAGROB admits at most FCTXN
+  // fragments, so at most FCTXN sequence numbers are live and each has its own
+  // slot. The combiner's `o_ready_i` is therefore tied high -- a completing
+  // fragment always has somewhere to go, and back-pressure from downstream
+  // parks in the buffer instead of stalling the pipe.
+  logic        comb_o_valid, comb_o_ready;
+  logic [23:0] comb_o_rgb;
+  logic [7:0]  comb_o_a;
+  logic [ROBTAGW-1:0] comb_o_tag;
+  logic        comb_o_refused;
+
+  zhao_texture_material_combine_v1 #(.RECS(2), .TAGW(ROBTAGW)) u_combine (
       .clk(clk), .rst_n(rst_n),
       .f_valid_i(fr_o_valid), .f_ready_o(comb_f_ready),
       .f_sample_count_i(fsc_m[fr_o_tok]), .f_recipe_i(frec_m[fr_o_tok]),
@@ -1071,13 +1132,68 @@ module zhao_texture_island_top #(
       .f_s2_a_i  (fr_o_has_aux ? fr_o_aux_a   : fr_o_s_a[2]),
       .f_base_rgb_i(fbase_m[fr_o_tok][31:8]),
       .f_base_a_i(fbase_m[fr_o_tok][7:0]),
-      .f_tag_i(fr_o_ctx[15:0]),
-      .o_valid_o(out_valid_o), .o_ready_i(out_ready_i),
-      .o_rgb_o(out_rgb_o), .o_a_o(out_a_o), .o_tag_o(out_tag_o),
-      .o_refused_o(out_refused_o),
+      .f_tag_i({fseq_m[fr_o_tok], fr_o_ctx[15:0]}),
+      .o_valid_o(comb_o_valid), .o_ready_i(comb_o_ready),
+      .o_rgb_o(comb_o_rgb), .o_a_o(comb_o_a), .o_tag_o(comb_o_tag),
+      .o_refused_o(comb_o_refused),
       .refused_recipe_o(comb_refused_recipe),
       .refused_missing_o(cnt_combine_refused_o),
       .saturated_add_o(comb_sat_add), .saturated_mul2x_o(comb_sat_2x),
       .jobs_by_recipe_o(comb_jobs));
+
+  // -------- reorder buffer --------------------------------------------------
+  logic [32:0] rob_m [FCTXN];      // {refused, a, rgb}
+  logic        rob_full_m [FCTXN];
+  logic [15:0] rob_tag_m [FCTXN];
+  logic [FCTXW-1:0] seq_head_r;
+
+  wire [FCTXW-1:0] comb_seq = comb_o_tag[ROBTAGW-1:16];
+  assign comb_o_ready = 1'b1;      // cannot back up: one slot per live fragment
+
+  // HEAD-OF-LINE STALL IS DELIBERATE, and it is the honest cost of this
+  // boundary. If a fragment is admitted and never completes -- the condition
+  // `err_rsp_dropped_o` counts -- the head stops and the island stops emitting,
+  // rather than quietly skipping it and shipping a reordered stream. A lost
+  // fragment was already a fault; this makes it a LOUD one. A timeout that
+  // released the head would turn a stuck machine back into a silently
+  // out-of-order one, which is the thing this block exists to prevent.
+  wire rob_hit = rob_full_m[seq_head_r];
+
+  assign out_valid_o   = rob_hit;
+  assign out_rgb_o     = rob_m[seq_head_r][23:0];
+  assign out_a_o       = rob_m[seq_head_r][31:24];
+  assign out_refused_o = rob_m[seq_head_r][32];
+  assign out_tag_o     = rob_tag_m[seq_head_r];
+
+  // OBSERVABILITY, because an ordering boundary that works silently is
+  // indistinguishable from one that was never needed. `cnt_reorder_held_o`
+  // counts cycles in which a completed fragment was waiting behind an earlier
+  // one; a run where it stays at zero has not exercised this at all, and a
+  // test asserting strict order on such a run proves nothing.
+  logic [31:0] rob_held_r;
+  assign cnt_reorder_held_o = rob_held_r;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      seq_head_r <= '0;
+      rob_held_r <= 32'd0;
+      for (int i = 0; i < FCTXN; i++) rob_full_m[i] <= 1'b0;
+    end else begin
+      if (comb_o_valid) begin
+        rob_m[comb_seq]      <= {comb_o_refused, comb_o_a, comb_o_rgb};
+        rob_tag_m[comb_seq]  <= comb_o_tag[15:0];
+        rob_full_m[comb_seq] <= 1'b1;
+        // A fragment that completed while an EARLIER one is still missing is
+        // exactly the event this boundary exists for. Counted at arrival, not
+        // per stalled cycle, so the number is "how many times did order have
+        // to be restored" rather than "how long was the queue".
+        if (comb_seq != seq_head_r) rob_held_r <= rob_held_r + 32'd1;
+      end
+      if (out_valid_o && out_ready_i) begin
+        rob_full_m[seq_head_r] <= 1'b0;
+        seq_head_r             <= seq_head_r + 1'b1;
+      end
+    end
+  end
 
 endmodule

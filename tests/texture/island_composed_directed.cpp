@@ -758,48 +758,54 @@ int main(int argc, char** argv) {
     check(duplicated == 0, "no fragment is retired TWICE", 0, duplicated);
     check(missing == 0, "no submitted fragment is LOST", 0, missing);
 
-    // ===================== OPEN DEFECT: ORDER IS NOT PRESERVED =============
-    // The island does NOT return fragments in submission order, and this check
-    // does not pretend otherwise. Measured: fragments 0..51 retire in perfect
-    // order and the tail permutes --
+    // ===================== THE ORDERING BOUNDARY (audit R6) ================
+    // This used to be an OPEN DEFECT with a regression guard. The audit was
+    // right that a bounded defect is not an ordering guarantee:
     //
     //     ... 48 49 50 51 56 60 57 61 62 63 58 59 52 53 54 55
     //
-    // 10 fragments out of place, maximum displacement 8.
+    // 10 fragments out of place, maximum displacement 8, and the test asserted
+    // `max_disp <= 8` so it could not silently worsen. That is a guard, not a
+    // boundary, and raster and blend semantics need the boundary.
     //
-    // FRAGROB IS NOT THE FAULT. It retires strictly in ALLOCATION order -- its
-    // head slot was measured walking 0..15 exactly four times -- so the retire
-    // order IS the order fragments reached it. The permutation is therefore
-    // already present at its INPUT: the variable-latency services ahead of it
-    // (RCP24, whose reciprocal normalisation depends on the operand, and
-    // PERSPUV) complete out of order, and FRAGROB's ordered retire is measured
-    // against its own arrivals rather than against ingress. In steady state
-    // backpressure hides this by keeping the chain in lockstep; it only becomes
-    // visible while the pipeline DRAINS, which is why the disorder is confined
-    // to the tail and why no earlier test saw it. That the maximum displacement
-    // equals RCP24's eight contexts is suggestive, but which service reorders
-    // has not been measured and is not claimed here.
+    // WHAT WAS ACTUALLY WRONG, and it is not what the old comment guessed. The
+    // permutation is real and it is not FRAGROB's: FRAGROB retires strictly in
+    // allocation order, so the disorder is already present at its input, from
+    // the variable-latency services ahead of it -- and then MATERIAL.COMBINE
+    // reorders again, deliberately, because a one-sample recipe finishes before
+    // a three-sample one that started earlier and holding it back would cost
+    // throughput for nothing.
     //
-    // This is the MISPLACED ORDERING BOUNDARY named in the owner's recovery
-    // architecture (v2, priority 6): allocate the fragment record BEFORE the
-    // reciprocal work and retire only after material combination, rather than
-    // establishing order at a ROB that sits downstream of where order is lost.
-    // Repairing it is that rearchitecture, not a patch, so it is recorded here
-    // rather than worked around.
+    // So the fix is NOT to make the interior ordered. It is to ORDER AT THE
+    // EDGE: the island stamps a submission sequence at admission, carries it
+    // through the combiner beside the caller's tag, and restores order in a
+    // reorder buffer at its own output. The buffer cannot overflow -- FRAGROB
+    // admits at most 64 fragments, so at most 64 sequence numbers are live and
+    // each has its own slot -- so the combiner never stalls for it.
     //
-    // The bound below is a REGRESSION GUARD, not an endorsement: it fails if
-    // the disorder grows, so the defect cannot quietly get worse while it waits
-    // for the rearchitecture. Asserting `out_of_order == 0` would leave the
-    // suite red; asserting nothing would lose the measurement.
-    std::printf(
-        "  ORDER IS NOT PRESERVED: %d fragments out of place "
-        "(known defect, see comment)\n",
-        out_of_order);
-    check(max_disp <= 8,
-          "fragments retire out of submission order only within the bound "
-          "already measured -- a KNOWN DEFECT, guarded so it cannot worsen "
-          "while the ordering boundary is where it is",
-          8, max_disp);
+    // The old comment attributed the defect to the "misplaced ordering
+    // boundary" of the recovery architecture and said repairing it was that
+    // rearchitecture rather than a patch. That was too pessimistic by one
+    // idea: moving the boundary does not require moving the allocation.
+    std::printf("  fragments out of submission order at the boundary: %d\n", out_of_order);
+    check(out_of_order == 0,
+          "the island returns fragments in STRICT SUBMISSION ORDER at its "
+          "boundary -- not within a bound, exactly",
+          0, out_of_order);
+    check(max_disp == 0, "so no fragment is displaced at all", 0, max_disp);
+
+    // AND THE REORDERING REALLY HAPPENED. Without this the check above passes
+    // just as well on a workload that never reordered, and an ordering boundary
+    // that was never exercised is not evidence of anything. The counter is the
+    // number of times a fragment completed while an earlier one was still
+    // missing; the old measurement says that is at least ten.
+    const uint32_t held = d.cnt_reorder_held_o;
+    std::printf("  fragments that completed early and WAITED at the boundary: %u\n", held);
+    check(held > 0,
+          "and the boundary was actually exercised -- fragments did complete "
+          "out of order inside and were held, so strict order out is a "
+          "restoration rather than a workload that never disturbed it",
+          1, held > 0 ? 1 : 0);
   }
 
   // ======================= THE CLUT PATH, RESOLVED =========================
