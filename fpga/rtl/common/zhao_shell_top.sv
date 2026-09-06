@@ -1176,7 +1176,10 @@ module zhao_shell_top
   );
 
   // HPS bridge: the DMA's burst port through the verified bridge core
-  logic [4:0][31:0] hps_bytes, hps_bytes_shadow;
+  // Seven: see zhao_hps_bridge's port comment. Five silently discarded
+  // client 6's bytes, so the accounting read zero for the two terrain
+  // movers that use it.
+  logic [6:0][31:0] hps_bytes, hps_bytes_shadow;
 
   // ==========================================================================
   // THE BLIT PATH: DEBUG.FRAMEBLIT + VIDEO.SLOTMGR
@@ -1933,13 +1936,20 @@ module zhao_shell_top
   always_comb begin
     vram_total = 64'd0;
     hps_total  = 64'd0;
-    // TWO LOOPS, TWO BOUNDS. The VRAM arbiter has SEVEN client slots since the
-    // terrain amendment and the HPS arbiter still has five; one shared `k < 5`
-    // would silently stop counting the two new VRAM clients the moment either
-    // is driven -- a total that reads LOW, which is the failure this tree keeps
-    // relearning.
+    // BOTH BOUNDS ARE SEVEN NOW, and the note that used to sit here was right
+    // about the danger and wrong about the date. It said the HPS arbiter "still
+    // has five", which was true until TERRAIN.PAGELOADER and TERRAIN.WRITEBACK
+    // began moving bytes as ZHAO_CLIENT_TERRAIN_BUILD = 6 over the HPS bridge.
+    // `hps_bytes[6]` was then an out-of-range write, which SystemVerilog
+    // DISCARDS SILENTLY -- so the counter did not merely stop at five, it read
+    // zero for the two blocks that use it, while the transfers themselves
+    // worked perfectly.
+    //
+    // Exactly the failure the old note named -- "a total that reads LOW" -- and
+    // it arrived by the bound being correct when written and never revisited
+    // when the client set grew.
     for (int k = 0; k < 7; k++) vram_total = vram_total + {32'd0, vram_bytes_shadow[k]};
-    for (int k = 0; k < 5; k++) hps_total  = hps_total  + {32'd0, hps_bytes_shadow[k]};
+    for (int k = 0; k < 7; k++) hps_total  = hps_total  + {32'd0, hps_bytes_shadow[k]};
   end
 
   zhao_counter_snap_t prov [0:8];

@@ -125,8 +125,8 @@ module zhao_hps_arb_compose (
       .c1_wait_cycles_o(c1_wait_cycles_o)
   );
 
-  logic [4:0][31:0] hps_bytes_unused;
-  logic [4:0][31:0] hps_bytes_shadow_unused;
+  logic [6:0][31:0] hps_bytes_unused;
+  logic [6:0][31:0] hps_bytes_shadow_unused;
 
   zhao_hps_bridge u_bridge (
       .clk  (clk),

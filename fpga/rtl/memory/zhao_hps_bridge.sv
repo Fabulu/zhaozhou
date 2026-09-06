@@ -55,8 +55,18 @@ module zhao_hps_bridge
 
   // counters (D9) and status
   input  logic             frame_tick,
-  output logic [4:0][31:0] hps_bytes,
-  output logic [4:0][31:0] hps_bytes_shadow,
+  // SEVEN, not five. `busy_client` is a 3-bit client id and the arbiter was
+  // widened five -> seven ports on 2026-09-06 when ruling T3 added
+  // ZHAO_CLIENT_TERRAIN_BUILD = 6. This array was not widened with it, so
+  // `hps_bytes[6]` was an out-of-range write -- which SystemVerilog DISCARDS
+  // SILENTLY. Every byte TERRAIN.PAGELOADER and TERRAIN.WRITEBACK moved was
+  // unaccounted, and the counter that should have shown it read zero.
+  //
+  // Sized from the client enum rather than from the number of ports that
+  // happened to exist when it was written, so the next client widening cannot
+  // reintroduce this.
+  output logic [6:0][31:0] hps_bytes,
+  output logic [6:0][31:0] hps_bytes_shadow,
   output logic [31:0]      hps_err_count
 );
 

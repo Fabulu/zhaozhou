@@ -41,6 +41,7 @@ module tb_zhao_hps_bridge
   input  logic        frame_tick,
   output logic [31:0] hps_bytes_0, hps_bytes_1, hps_bytes_2,
                       hps_bytes_3, hps_bytes_4,
+                      hps_bytes_5, hps_bytes_6,
   output logic [31:0] hps_err_count
 );
 
@@ -57,12 +58,20 @@ module tb_zhao_hps_bridge
   assign rsp_last       = crsp.last;
   assign rsp_err        = crsp.err;
 
-  logic [4:0][31:0] hb_flat;
+  // SEVEN. The bridge's byte accounting was widened five -> seven because
+  // ZHAO_CLIENT_TERRAIN_BUILD = 6 now moves bytes over it, and an out-of-range
+  // write to a 5-entry array is discarded SILENTLY -- so the counter read zero
+  // for TERRAIN.PAGELOADER and TERRAIN.WRITEBACK while their transfers worked.
+  // Slots 5 and 6 are exposed here so a bench can SEE them; a flattening that
+  // stopped at four would have hidden exactly the entries the widening is for.
+  logic [6:0][31:0] hb_flat;
   assign hps_bytes_0 = hb_flat[0];
   assign hps_bytes_1 = hb_flat[1];
   assign hps_bytes_2 = hb_flat[2];
   assign hps_bytes_3 = hb_flat[3];
   assign hps_bytes_4 = hb_flat[4];
+  assign hps_bytes_5 = hb_flat[5];
+  assign hps_bytes_6 = hb_flat[6];
 
   zhao_hps_bridge u_bridge (
     .clk, .rst_n,
