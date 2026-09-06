@@ -115,6 +115,11 @@ top:
   # naming collision.
   - zhao_geom_meshfetch
   - zhao_geom_assetfetch
+  # GEOM.MEM.ADAPTER shares the ONE permitted ENGINE1 client between the two
+  # fetchers. It is production, not a harness part: D22 tread 10 established
+  # that a second geometry fetcher has no client identity the guard admits and
+  # the arbiter carries, so this is the only route MESHFETCH has to real memory.
+  - zhao_geom_mem_adapter
   - zhao_geom_skin_norm
 
   # --- terrain (the 8 km island) -------------------------------------------

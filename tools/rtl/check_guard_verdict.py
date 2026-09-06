@@ -57,6 +57,9 @@ import sys
 CLIENTS = [
     "fpga/rtl/geometry/zhao_geom_assetfetch.sv",
     "fpga/rtl/geometry/zhao_geom_meshfetch.sv",
+    # The adapter is a guard client in its own right, and its coverage audit
+    # caught it the moment the file existed -- which is what the audit is for.
+    "fpga/rtl/geometry/zhao_geom_mem_adapter.sv",
     "fpga/rtl/raster/zhao_raster_fbwrite.sv",
     "fpga/rtl/debug/zhao_debug_frameblit.sv",
     "fpga/rtl/video/zhao_scanout_fetch.sv",

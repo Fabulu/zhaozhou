@@ -486,6 +486,7 @@ targets:
       - fpga/rtl/geometry/zhao_geom_lod.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
+      - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
       - fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
       - fpga/rtl/geometry/zhao_geom_parambuf.sv
       - fpga/rtl/geometry/zhao_geom_pose_cache.sv
