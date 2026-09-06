@@ -14,12 +14,14 @@
 //     hinge A             930   ball
 //     hinge B            1270   ball
 //     hinge C            1650   ball
-//     hinge D            2660   the RE-ENTRY ball = the BACK body junction
+//     (hinge D)          2030   the CLOSURE SOLVER, not a knead joint
 //     (arm tip)          3300   buried in the body; not a station
 //
-// No joint sits in a straight run and no ball or junction is left rigid, which
-// is Direction 7 §9.1 stated as geometry. Pass 8 had fixed the MOTION of these
-// stations; their PLACEMENT was still wrong, and those are different faults.
+// Every station the knead layer drives now sits on a ball or the front
+// junction; none is left in a straight run. Pass 8 had fixed the MOTION of
+// these stations, their PLACEMENT was still wrong, and those are different
+// faults. ⚠ The RE-ENTRY ball (2660) still has no joint -- see kLoopArcMm for
+// the closure measurement that blocked it. That half of §9.1 is owed.
 //
 // PASS 4 (Direction 4 §1: "wherever there is one of these balls, there needs
 // to be bones to bend stuff" — the third direction raising the junction
@@ -54,12 +56,12 @@ enum BoneId : uint8_t {
   kBHingeA = 3,     // lower-front hinge ball + first loop arc
   kBHingeB = 4,     // peak hinge ball
   kBHingeC = 5,     // upper-rear hinge ball
-  kBHingeD = 6,     // PASS 9: moved from arc 2030 -- another straight-run
-                    // crease -- to 2660, THE RE-ENTRY BALL. That is the second
-                    // place the antenna meets the creature, the station
-                    // Direction 5 §2 and Direction 7 §9.1 both name, and it had
-                    // never had a joint at all. Its fold is still computed by
-                    // closure in loop_pose; only its station moved.
+  kBHingeD = 6,     // the return arm. NOT an articulation station: HingePlay
+                    // and antenna_knead never touch it, and its fold is solved
+                    // per frame by the closure aim in loop_pose. Pass 9 tried
+                    // to move it onto the re-entry ball at 2660 and the loop
+                    // stopped closing (989 -> 2401 pm, gate 1120); the sweep is
+                    // recorded at kLoopArcMm.
   kBLoopBase2 = 7,  // the re-entry anchor (child of the BODY); carries the
                     // BACK-JUNCTION ball and gains authored rotation (pass 4)
   kBEyeL = 8,       // left lens

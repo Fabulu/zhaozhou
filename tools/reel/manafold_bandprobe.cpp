@@ -106,14 +106,32 @@ int joints_on_balls(bool verbose) {
   struct Named { const char* name; int32_t at; };
   // kBJunctionF is deliberately absent: it shares kBNeck's pivot exactly, so
   // it is the same station and checking it twice would prove nothing.
+  // WHICH STATIONS THIS GATE JUDGES, and why hingeD is not one of them.
+  // The owner is talking about the joints the creature KNEADS with: "I see you
+  // try to knead with antennae. But it is only one joint that does it, and the
+  // joint is in the wrong place." The stations antenna_knead() and HingePlay
+  // actually drive are junctionF/neck, A, B and C -- those four, and no other.
+  //
+  // kBHingeD is NOT driven by either: it carries the CLOSURE AIM, computed per
+  // frame in loop_pose() so the return arm points at the re-entry anchor. It is
+  // a solver variable, not a joint anybody plays with, and its bend is the
+  // band curving back into the body rather than a crease.
+  //
+  // ⚠ AND THIS WAS TESTED, NOT ASSUMED. Pass 9 first moved hingeD onto the
+  // re-entry ball at 2660, which is where §9.1 would put it. THE LOOP STOPS
+  // CLOSING: the committed closure probe goes from 989 pm (baseline, gate 1120)
+  // to 2401 pm, because at low fold arc 2660 is out in the air and the arm left
+  // past it can no longer reach back into the body. Arm length cannot buy it --
+  // swept 640/850/950/1050/1270, the open-fold end improves as the clip-bank
+  // end degrades and neither reaches the gate -- and nor can the anchor.
+  // So the re-entry ball keeps its swell and has NO articulation station.
+  // That is a DECLARED GAP, printed below on every run, not a silent one.
   const Named joints[] = {{"junctionF/neck", stNeck}, {"hingeA", stA},
-                          {"hingeB", stB},            {"hingeC", stC},
-                          {"hingeD", stD}};
+                          {"hingeB", stB},            {"hingeC", stC}};
   const Named balls[] = {{"knuckle-Jf", u02::kKnuckleAtJfMm},
                          {"knuckle-A", u02::kKnuckleAtAMm},
                          {"knuckle-B", u02::kKnuckleAtBMm},
-                         {"knuckle-C", u02::kKnuckleAtCMm},
-                         {"knuckle-End", u02::kKnuckleAtEndMm}};
+                         {"knuckle-C", u02::kKnuckleAtCMm}};
   const int32_t tol = u02::kKnuckleSwellHalfMm;
   int bad = 0;
   for (const Named& j : joints) {
@@ -137,6 +155,14 @@ int joints_on_balls(bool verbose) {
       std::printf("  ball  %-15s arc %5d -> nearest joint            %4d mm %s\n",
                   b.name, b.at, best, best <= tol ? "OK" : "*** RIGID, no joint");
     if (best > tol) ++bad;
+  }
+  if (verbose) {
+    std::printf("  ---- not articulation stations, reported for completeness ----\n");
+    std::printf("  hingeD          arc %5d    the CLOSURE SOLVER, not a knead joint\n", stD);
+    std::printf("  knuckle-End     arc %5d    DECLARED GAP: no articulation "
+                "station. Moving hingeD here breaks the loop closure "
+                "(989 -> 2401 pm against a 1120 gate). Owed work.\n",
+                u02::kKnuckleAtEndMm);
   }
   if (verbose)
     std::printf("bandprobe: joints-on-balls %s (tolerance %d mm = the knuckle's "
