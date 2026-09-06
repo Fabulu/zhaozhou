@@ -4770,6 +4770,7 @@ module zhao_prod_top (
   logic [16-1:0] u70_acc_src_id_o;
   logic [1-1:0] u70_acc_filter_o;
   logic [1-1:0] u70_acc_err_o;
+  logic [4-1:0] u70_acc_nib_o;
   logic [8-1:0] u70_acc_fu_o;
   logic [8-1:0] u70_acc_fv_o;
   logic [3-1:0] u70_acc_fmt_o;
@@ -4793,6 +4794,7 @@ module zhao_prod_top (
       .acc_src_id_o(u70_acc_src_id_o),
       .acc_filter_o(u70_acc_filter_o),
       .acc_err_o(u70_acc_err_o),
+      .acc_nib_o(u70_acc_nib_o),
       .acc_fu_o(u70_acc_fu_o),
       .acc_fv_o(u70_acc_fv_o),
       .acc_fmt_o(u70_acc_fmt_o),
@@ -4802,7 +4804,7 @@ module zhao_prod_top (
   logic u70_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u70_fold_q <= 1'b0;
-    else u70_fold_q <= u70_fold_q ^ (^u70_req_ready_o) ^ (^u70_acc_valid_o) ^ (^u70_acc_en_o) ^ (^u70_acc_addr_o) ^ (^u70_acc_src_id_o) ^ (^u70_acc_filter_o) ^ (^u70_acc_err_o) ^ (^u70_acc_fu_o) ^ (^u70_acc_fv_o) ^ (^u70_acc_fmt_o) ^ (^u70_accepted_o) ^ (^u70_occupancy_o);
+    else u70_fold_q <= u70_fold_q ^ (^u70_req_ready_o) ^ (^u70_acc_valid_o) ^ (^u70_acc_en_o) ^ (^u70_acc_addr_o) ^ (^u70_acc_src_id_o) ^ (^u70_acc_filter_o) ^ (^u70_acc_err_o) ^ (^u70_acc_nib_o) ^ (^u70_acc_fu_o) ^ (^u70_acc_fv_o) ^ (^u70_acc_fmt_o) ^ (^u70_accepted_o) ^ (^u70_occupancy_o);
 
   // ---- zhao_twod_plane ----
   logic [63:0] u71_lfsr_q;

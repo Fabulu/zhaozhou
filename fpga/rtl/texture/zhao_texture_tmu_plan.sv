@@ -101,6 +101,16 @@ module zhao_texture_tmu_plan #(
     output var logic [SRCW-1:0]  acc_src_id_o,
     output var logic             acc_filter_o,
     output var logic             acc_err_o,
+    // CLUT4'S NIBBLE, one bit per lane. It exists because the address below
+    // DESTROYS it: a CLUT4 address is `total >> 1`, so the texel index's low
+    // bit -- which of the two nibbles in that byte -- is shifted out and cannot
+    // be recovered from anything the island receives. Before this port, every
+    // odd CLUT4 texel read its neighbour's palette index, and nothing counted
+    // it because the lookup itself succeeded.
+    //
+    // Zero for every other format, so a consumer that ignores it is correct
+    // everywhere except CLUT4, which is exactly where it must not be ignored.
+    output var logic [  3:0]     acc_nib_o,
     output var logic [  7:0]     acc_fu_o,
     output var logic [  7:0]     acc_fv_o,
     output var logic [  2:0]     acc_fmt_o,
@@ -316,6 +326,7 @@ module zhao_texture_tmu_plan #(
   logic [1:0]         t2_wu, t2_wv;
   logic [2:0]         t2_fmt;
   logic               t2_filt, t2_err, t2_clut4, t2_16bpp;
+  logic [3:0]         nib_c;
   logic [SRCW-1:0]    t2_src;
 
   // ---- T3: wrap and row bases ---------------------------------------------
@@ -348,10 +359,13 @@ module zhao_texture_tmu_plan #(
     total_c[1] = t3_lvloff + t3_row0 + TW'(t3_uw1);
     total_c[2] = t3_lvloff + t3_row1 + TW'(t3_uw0);
     total_c[3] = t3_lvloff + t3_row1 + TW'(t3_uw1);
-    for (int unsigned k = 0; k < 4; k++)
+    for (int unsigned k = 0; k < 4; k++) begin
       addr_c[k] = t3_16bpp ? (t3_base + 32'({1'b0, total_c[k]} << 1))
                 : t3_clut4 ? (t3_base + 32'(total_c[k] >> 1))
                 : (t3_base + 32'(total_c[k]));
+      // The bit the CLUT4 shift above throws away, kept before it is lost.
+      nib_c[k] = t3_clut4 ? total_c[k][0] : 1'b0;
+    end
   end
 
   assign acc_valid_o = t4_v;
@@ -466,6 +480,7 @@ module zhao_texture_tmu_plan #(
           acc_src_id_o <= t3_src;
           acc_filter_o <= t3_filt;
           acc_err_o    <= t3_err;
+          acc_nib_o    <= nib_c;
           acc_fu_o     <= t3_fu;
           acc_fv_o     <= t3_fv;
           acc_fmt_o    <= t3_fmt;

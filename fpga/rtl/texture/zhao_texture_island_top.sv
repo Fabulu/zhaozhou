@@ -1022,7 +1022,11 @@ module zhao_texture_island_top #(
   // turn a countable routing fault into a wrong colour, which is the whole
   // failure mode `fmt_is_direct` and `cnt_near_refused_o` exist to make
   // visible.
-  logic [19:0] sampmeta_m [DEPTH][3];   // {fmt[3], fv[8], fu[8], bytesel[1]}
+  // 21 bits: {nib[1], fmt[3], fv[8], fu[8], bytesel[1]}. The nibble is APPENDED
+  // at the top rather than inserted, so every existing bit keeps its index and
+  // the readers below did not have to be renumbered -- a renumbering is exactly
+  // the kind of edit that silently moves one consumer and not another.
+  logic [20:0] sampmeta_m [DEPTH][3];
 
   logic        plan_req_ready, plan_acc_valid, plan_acc_ready;
   logic [3:0]  plan_acc_en;
@@ -1035,11 +1039,18 @@ module zhao_texture_island_top #(
     if (plan_acc_valid && plan_acc_ready)
       sampmeta_m[plan_acc_src[SRC_SLOT_HI:SRC_SLOT_LO]]
                 [plan_acc_src[SRC_SIDX_LO+1:SRC_SIDX_LO]] <=
-          {plan_acc_fmt, plan_acc_fv, plan_acc_fu, plan_acc_addr[0]};
+          {plan_acc_nib, plan_acc_fmt, plan_acc_fv, plan_acc_fu, plan_acc_addr[0]};
   end
   logic        plan_acc_filter, plan_acc_err;
   logic [7:0]  plan_acc_fu, plan_acc_fv;
   logic [2:0]  plan_acc_fmt;
+  // Lane 0's nibble is the one that matters: a CLUT is never filtered, so the
+  // planner drives acc_en = 4'b0001 for every palette request and only lane 0
+  // is fetched. The other three are carried anyway rather than dropped at the
+  // port, so that if a filtered palette ever became legal this would be a
+  // widening rather than a re-plumbing.
+  logic [3:0]  plan_acc_nib_lanes;
+  wire         plan_acc_nib = plan_acc_nib_lanes[0];
   logic [3:0]  plan_occ;
 
   assign fr_tmu_ready = plan_req_ready;
@@ -1054,7 +1065,8 @@ module zhao_texture_island_top #(
       .acc_valid_o(plan_acc_valid), .acc_ready_i(plan_acc_ready),
       .acc_en_o(plan_acc_en), .acc_addr_o(plan_acc_addr),
       .acc_src_id_o(plan_acc_src), .acc_filter_o(plan_acc_filter),
-      .acc_err_o(plan_acc_err), .acc_fu_o(plan_acc_fu), .acc_fv_o(plan_acc_fv),
+      .acc_err_o(plan_acc_err), .acc_nib_o(plan_acc_nib_lanes),
+      .acc_fu_o(plan_acc_fu), .acc_fv_o(plan_acc_fv),
       .acc_fmt_o(plan_acc_fmt),
       .accepted_o(cnt_plan_accepted_o), .occupancy_o(plan_occ));
 
@@ -1258,7 +1270,7 @@ module zhao_texture_island_top #(
   logic [1:0]  bil_occ;
 
   // The metadata belonging to the sample whose texels just arrived.
-  wire [19:0] bil_meta = sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+  wire [20:0] bil_meta = sampmeta_m[disp_bil_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
                                    [disp_bil_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
   // THE FORMAT THIS SAMPLE WAS REQUESTED UNDER, recovered the same way its
   // fractions are. Before defect (d) landed, the four taps below were decoded
@@ -1423,17 +1435,33 @@ module zhao_texture_island_top #(
       // retired black while the lookup counter moved and looked healthy.
       .lu_slot_i(palslot_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]),
       .lu_gen_i (palgen_m [disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]),
-      // THE ADDRESSED BYTE, not always the low one. See bytesel_m above.
-      .lu_idx_i(sampmeta_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
-                          [disp_clut_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]][0]
-                ? disp_clut_data[15:8]
-                : disp_clut_data[7:0]),
+      // THE ADDRESSED BYTE, not always the low one -- and for CLUT4 the
+      // addressed NIBBLE of that byte. A CLUT4 address is `total >> 1`, so one
+      // fetched byte carries TWO texels; taking the whole byte gave every odd
+      // texel its neighbour's palette index, and nothing counted it because the
+      // lookup itself succeeded. The nibble is zero-extended: CLUT4 addresses
+      // 16 entries of the 256-entry palette.
+      .lu_idx_i(clut_idx_c),
       .lu_valid_o(pal_lu_valid_o), .lu_rgb565_o(pal_lu_rgb565),
       .lu_stale_o(pal_lu_stale), .lu_resident_o(pal_lu_resident),
       .lookups_o(cnt_palette_lookups_o),
       .stale_o(cnt_palette_stale_o), .cold_o(cnt_palette_cold_o),
       .err_write_outside_o(pal_e0), .err_same_gen_o(pal_e1),
       .err_incomplete_o(pal_e2), .err_crc_o(pal_e3), .loads_ok_o(pal_ok));
+
+  // The palette index, byte-selected then nibble-selected. Written out rather
+  // than nested in the port map so the CLUT4 arm is visible to a reader and to
+  // a grep, and so the format that decides it is named at the point of use.
+  wire [20:0] clut_meta_c =
+      sampmeta_m[disp_clut_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+                [disp_clut_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
+  wire [7:0]  clut_byte_c = clut_meta_c[0] ? disp_clut_data[15:8]
+                                           : disp_clut_data[7:0];
+  wire [7:0]  clut_idx_c  =
+      (clut_meta_c[19:17] == FMT_CLUT4)
+        ? (clut_meta_c[20] ? {4'd0, clut_byte_c[7:4]}
+                           : {4'd0, clut_byte_c[3:0]})
+        : clut_byte_c;
 
   // ---- sample responses back into FRAGROB ---------------------------------
   // The bilinear lane's byte becomes the sample's luminance-carrying channel
@@ -1550,7 +1578,7 @@ module zhao_texture_island_top #(
   // belongs to whatever request the planner is emitting this clock -- through
   // the ONE shared `decode16` the bilinear taps also use. Section 5A.7 item 5:
   // one block, not three.
-  wire [19:0] near_meta = sampmeta_m[disp_near_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
+  wire [20:0] near_meta = sampmeta_m[disp_near_tok[SRC_SLOT_HI:SRC_SLOT_LO]]
                                     [disp_near_tok[SRC_SIDX_LO+1:SRC_SIDX_LO]];
   wire [2:0]  near_fmt  = near_meta[19:17];
 

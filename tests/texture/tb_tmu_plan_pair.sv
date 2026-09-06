@@ -58,6 +58,7 @@ module tb_tmu_plan_pair (
   logic [31:0] nc_samples, nc_robfull;
   logic        nc_plan_filter, nc_plan_err;
   logic [ 7:0] nc_plan_fu, nc_plan_fv;
+  logic [3:0] nc_plan_nib;
   logic [ 2:0] nc_plan_fmt;
   logic [31:0] nc_plan_accepted;
   logic [31:0] nc_cachewait, nc_filtbusy, nc_outstall;
@@ -138,6 +139,7 @@ module tb_tmu_plan_pair (
       .acc_src_id_o(b_acc_src_id_o),
       .acc_filter_o(nc_plan_filter),
       .acc_err_o   (nc_plan_err),
+      .acc_nib_o   (nc_plan_nib),
       .acc_fu_o    (nc_plan_fu),
       .acc_fv_o    (nc_plan_fv),
       .acc_fmt_o   (nc_plan_fmt),
