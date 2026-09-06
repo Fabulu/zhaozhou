@@ -113,11 +113,12 @@ module zhao_geom_mem_adapter
 );
 
   // ------------------------------------------------------------------ FSM --
-  typedef enum logic [1:0] {
-    A_IDLE = 2'd0,   // nothing in flight; arbitrate
-    A_REQ  = 2'd1,   // offering the selected request to the guard
-    A_VERD = 2'd2,   // the guard's verdict, one cycle after it accepted
-    A_FILL = 2'd3    // the logical request's words are returning
+  typedef enum logic [2:0] {
+    A_IDLE  = 3'd0,  // nothing in flight; arbitrate
+    A_REQ   = 3'd1,  // offering the selected request to the guard
+    A_VERD  = 3'd2,  // the guard's verdict, one cycle after it accepted
+    A_FILL  = 3'd3,  // the logical request's useful words are returning
+    A_DRAIN = 3'd4   // discard an overlong return through physical LAST
   } astate_e;
 
   astate_e st_q;
@@ -230,11 +231,10 @@ module zhao_geom_mem_adapter
       rsp_ok_q   <= 1'b0;      // one-cycle verdict pulses
       rsp_viol_q <= 1'b0;
 
-      // A word arriving with nothing in flight. Cannot happen with one logical
-      // request and a controller that answers in order; counted because the
-      // whole point of a logical-owner record is that a word landing in the
-      // wrong place must be visible rather than plausible.
-      if (m_beat_valid_i && (st_q != A_FILL)) begin
+      // A word arriving with no logical owner. An overlong return in A_DRAIN
+      // still belongs to the recorded request even though its useful count is
+      // complete, so it is discarded there rather than mislabelled UNOWNED.
+      if (m_beat_valid_i && (st_q != A_FILL) && (st_q != A_DRAIN)) begin
         err_unowned_o <= err_unowned_o + 32'd1;
       end
 
@@ -280,19 +280,16 @@ module zhao_geom_mem_adapter
           if (m_beat_valid_i) begin
             recv_q <= recv_q + 4'd1;
             if (recv_q + 4'd1 == expect_q) begin
-              // The logical request is complete. ONLY NOW is the owner
-              // released -- not on the first physical credit return.
-              st_q <= A_IDLE;
-              // Complete from our side, and downstream has NOT said last, so it
-              // still has words to send. That is a LONG line.
-              //
-              // The first version counted this as SHORT, and it was a wrong
-              // label on a right alarm -- the counter fired correctly and named
-              // the opposite fault, which is precisely how a diagnosis sends
-              // the next person to reshape something already correct. SHORT is
-              // `last` arriving BEFORE the expected count; LONG is the memory
-              // not being finished at it.
-              if (!m_beat_last_i) err_long_o <= err_long_o + 32'd1;
+              // The requester's useful record is complete. Release the owner
+              // only if the physical return agrees. Otherwise retain ownership
+              // in A_DRAIN through physical LAST so surplus words cannot be
+              // mistaken for an idle gap or captured by a later request.
+              if (m_beat_last_i) begin
+                st_q <= A_IDLE;
+              end else begin
+                err_long_o <= err_long_o + 32'd1;
+                st_q       <= A_DRAIN;
+              end
             end else if (m_beat_last_i) begin
               // Downstream said last before the expected count: the line ended
               // early and the rest of the record would be stale RAM.
@@ -301,16 +298,15 @@ module zhao_geom_mem_adapter
             end
           end
         end
+
+        A_DRAIN: begin
+          // Surplus words belong to the overlong physical response and are not
+          // exposed to either requester. Keeping the adapter occupied until its
+          // LAST preserves the one-request-in-flight ownership law.
+          if (m_beat_valid_i && m_beat_last_i) st_q <= A_IDLE;
+        end
         default: st_q <= A_IDLE;
       endcase
-
-      // A word after the count was reached, in the same cycle the owner is
-      // released, would land nowhere. Counted separately from SHORT because a
-      // burst that does not stop and a burst that stops early need different
-      // fixes.
-      if ((st_q == A_FILL) && m_beat_valid_i && (recv_q >= expect_q)) begin
-        err_long_o <= err_long_o + 32'd1;
-      end
     end
   end
 

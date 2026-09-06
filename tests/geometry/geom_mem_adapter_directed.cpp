@@ -355,32 +355,54 @@ int main(int argc, char** argv) {
 
   // ---- a memory that does not stop ----------------------------------------
   // Section 11.4: "late/extra data is a protocol fault". The adapter must
-  // finish the line at its own count and REPORT the surplus, not absorb it and
-  // not let it reach the requester as a ninth word.
+  // finish the useful line at its own count, report the surplus, and RETAIN the
+  // physical owner through downstream LAST. A queued request is held until that
+  // drain completes, so the ninth word can never become its first.
   {
     Seen a, b;
     s.over_serve = true;
     dut.b_valid = 1;
     dut.b_addr = 0x06A0100u;
     dut.b_len = 64;
-    run(s, 400, &a, &b);
-    s.over_serve = false;
+
+    // Let B cross the adapter boundary, then queue A while B is still issuing.
+    // `run` clears a valid only after the accepting edge.
+    for (int i = 0; i < 20 && dut.b_valid; ++i) run(s, 1, &a, &b);
+    ck(!dut.b_valid, "the overlong B fixture was accepted before A queued", 0,
+       dut.b_valid ? 1 : 0);
+
+    dut.a_valid = 1;
+    dut.a_addr = 0x05000C0u;
+    dut.a_len = 32;
+    while (!s.serving) run(s, 1, &a, &b);
+    while (s.serving) run(s, 1, &a, &b);
 
     ck(b.beats == 8,
        "an over-serving memory still delivers exactly EIGHT words to the "
        "requester -- the surplus is not passed on",
        8, b.beats);
-    ck(b.lasts == 1, "with exactly one LAST", 1, b.lasts);
-    ck(dut.err_unowned > unowned_clean,
-       "and the surplus IS reported, as words with no logical request "
-       "recorded -- absorbed silently, it would be indistinguishable from a "
-       "memory that behaved",
-       1, static_cast<long long>(dut.err_unowned - unowned_clean));
-    ck(dut.err_long > long_clean,
-       "and it is classified as LONG, not short -- a memory that has not "
-       "finished at the expected count sent too much, and the first version "
-       "of this counter said the opposite",
-       1, static_cast<long long>(dut.err_long - long_clean));
+    ck(b.lasts == 1, "with exactly one logical LAST", 1, b.lasts);
+    ck(a.beats == 0,
+       "and no surplus word leaks into the queued descriptor request", 0,
+       a.beats);
+    ck(dut.a_valid,
+       "the queued request remains unaccepted through the physical surplus "
+       "and LAST");
+    ck(dut.err_unowned == unowned_clean,
+       "surplus words retain B ownership while draining, so they are not "
+       "misclassified as UNOWNED",
+       unowned_clean, static_cast<long long>(dut.err_unowned));
+    ck(dut.err_long == long_clean + 1,
+       "the overlong physical response is classified exactly once as LONG", 1,
+       static_cast<long long>(dut.err_long - long_clean));
+
+    // The cycle after physical LAST may finally admit and serve queued A.
+    s.over_serve = false;
+    run(s, 200, &a, &b);
+    ck(!dut.a_valid && a.ok,
+       "the queued request is admitted after, not during, the drain");
+    ck(a.beats == 4 && a.last_at == 4,
+       "and it receives an uncontaminated four-word descriptor", 4, a.beats);
     ck(dut.err_short == 0,
        "with no SHORT reported anywhere in this run: nothing ended early",
        0, static_cast<long long>(dut.err_short));
