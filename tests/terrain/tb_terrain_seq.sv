@@ -25,6 +25,12 @@ module tb_terrain_seq (
     input  logic clk,
     input  logic rst_n,
 
+    // THE DIRECTORY'S LOOKUP READY, as a stall knob. Default 0 means "always
+    // accepts", so every case written before this port existed behaves exactly
+    // as it did. Raise it to reproduce the arbitration loss that used to
+    // deadlock the frame: the real directory serves one address per clock and
+    // a losing query is never answered.
+    input  logic        lu_stall,
     input  logic        fr_start,
     input  logic [31:0] fr_epoch,
     input  logic [15:0] fr_patch_count,
@@ -188,6 +194,8 @@ module tb_terrain_seq (
       .rec_src_id_i   (rec_src_id),
 
       .lu_valid_o    (lu_valid),
+
+      .lu_ready_i      (!lu_stall),
       .lu_epoch_o    (lu_epoch),
       .lu_island_o   (lu_island),
       .lu_ix_o       (lu_ix),

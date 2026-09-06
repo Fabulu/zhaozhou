@@ -108,6 +108,9 @@ module zhao_terrain_residency_v2 #(
     // RESERVED, LOADING or in MIPGEN is not ground yet, and answering with it
     // composes an unwritten height lattice.
     input  var logic                      lu_valid_i,
+    // See the assignment for why a QUERY has a ready: a caller that pulses for
+    // one cycle and waits cannot tolerate losing the arbitration.
+    output var logic                      lu_ready_o,
     input  var logic [31:0]               lu_epoch_i,
     input  var logic [31:0]               lu_island_i,
     input  var logic signed [15:0]        lu_ix_i,
@@ -419,6 +422,27 @@ module zhao_terrain_residency_v2 #(
   assign fin_ready_o   = ready_o && !hazard_c && (ev_c == EV_FIN);
   assign dm_ready_o    = ready_o && !hazard_c && (ev_c == EV_DIRTY);
   assign unpin_ready_o = ready_o && !hazard_c && (ev_c == EV_UNPIN);
+
+  // A LOOKUP GETS A READY TOO, because the assumption below it turned out to
+  // be false of a caller written later.
+  //
+  // The note above says a losing query "is simply not answered this clock" and
+  // that "both callers already tolerate that -- they are queries, not
+  // transactions". TERRAIN.SEQ does not tolerate it: it asserts lu_valid_o for
+  // exactly one cycle (`assign lu_valid_o = (st == S_LOOKUP)`) and then moves
+  // unconditionally to S_WAIT_LU to wait for an answer that will never come.
+  // The composed terrain test injected ONE mutation on the offer cycle and the
+  // frame never completed -- silently, with err_stray_ans_o low, because
+  // neither block believed anything had gone wrong.
+  //
+  // This is exactly the shape of defect the repository keeps meeting: a
+  // documented assumption about callers, correct when written, quietly
+  // violated by the next caller. The fix is to stop assuming and say it on a
+  // wire, in the same form the mutation ports already use.
+  //
+  // Identical condition to `s0_is_lookup`'s accept below, written once so the
+  // two cannot drift.
+  assign lu_ready_o    = ready_o && !hazard_c && (ev_c == EV_NONE);
   assign pin_ready_o   = ready_o && !hazard_c && (ev_c == EV_PIN);
 
   // ---- stage 0: address the banks -----------------------------------------

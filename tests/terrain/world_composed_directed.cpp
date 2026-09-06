@@ -805,16 +805,35 @@ int main(int argc, char** argv) {
     const Frame O = run_frame(w, cs, 2, 32, 0, 0xA0u, 8000ull, /*collide_lookup=*/1);
     d.cfg_dir_gate_i = 1;
 
-    defect(O.done,
-           "TERRAIN.SEQ deadlocks when one directory mutation lands on the lookup cycle",
-           "zhao_terrain_seq.sv:451 S_LOOKUP -> S_WAIT_LU unconditionally and lu_valid_o is "
-           "one cycle wide; zhao_terrain_residency_v2.sv:418-423 accepts a lookup only while "
-           "ev_c == EV_NONE, and an unaccepted lookup is never answered and never counted. "
-           "The frame did not finish.");
-    ck(d.h_lu_dropped >= 1, "the harness saw the lookup go unanswered", 1, d.h_lu_dropped);
+    // ---- REPAIRED 2026-09-07, and this check is flipped to prove it --------
+    // This case used to assert the DEFECT: S_LOOKUP advanced unconditionally
+    // while `lu_valid_o` was one cycle wide, and the directory accepts a
+    // lookup only while `ev_c == EV_NONE` -- so a lookup that lost the
+    // arbitration was never answered, never counted, and the frame waited for
+    // ever with no error bit anywhere.
+    //
+    // The directory's own comment had said a ready was unnecessary because
+    // "both callers already tolerate that -- they are queries, not
+    // transactions". TERRAIN.SEQ did not tolerate it. The repair gives the
+    // query a `lu_ready_o` in the same form the mutation ports already use,
+    // and SEQ now holds S_LOOKUP until the offer is taken.
+    //
+    // The assertion is INVERTED rather than deleted, so this case still fails
+    // if the ready is ever removed again -- a defect case that is simply
+    // dropped once fixed leaves nothing watching the repair.
+    ck(O.done,
+       "THE FRAME NOW COMPLETES with a directory mutation landing on the lookup "
+       "cycle. This deadlocked before lu_ready_o existed, and the collision is "
+       "still injected here -- the case was inverted, not removed",
+       1, O.done ? 1 : 0);
+    ck(d.h_lu_dropped == 0,
+       "and NO lookup went unanswered: the offer is held until the directory "
+       "takes it, rather than fired once into an arbitration it can lose",
+       0, d.h_lu_dropped);
     ck(d.seq_err_stray_ans == 0,
-       "and neither block raised any error bit about it (that is the problem)", 0,
-       d.seq_err_stray_ans);
+       "with no stray answer either -- holding the offer must not produce a "
+       "second answer for one query",
+       0, d.seq_err_stray_ans);
     std::printf("   offers=%u dropped=%u records_consumed=%u fr_busy=%d\n",
                 d.h_lu_offers, d.h_lu_dropped, O.c[0], int(d.fr_busy));
   }

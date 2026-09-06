@@ -135,6 +135,10 @@ module zhao_terrain_seq #(
     // The directory answers a lookup with fixed latency and no ready, so the
     // request is a single-cycle offer and the answer is awaited.
     output var logic               lu_valid_o,
+    // The directory arbitrates one address per clock and a losing query is not
+    // answered. Without this the offer was fire-and-forget into a state that
+    // waits for ever.
+    input  var logic               lu_ready_i,
     output var logic [31:0]        lu_epoch_o,
     output var logic [31:0]        lu_island_o,
     output var logic signed [15:0] lu_ix_o,
@@ -441,7 +445,16 @@ module zhao_terrain_seq #(
         if (!more_wanted)                       st_n = S_DONE;
         else if (rec_valid_i)                   st_n = fault_q ? S_FETCH : S_LOOKUP;
       end
-      S_LOOKUP:                                 st_n = S_WAIT_LU;
+      // HOLD UNTIL THE LOOKUP IS TAKEN. This used to advance unconditionally,
+      // so a lookup that lost the directory's one-address-per-clock
+      // arbitration was never answered and the frame waited for ever --
+      // silently, since err_stray_ans_o only fires on an answer that ARRIVES
+      // unexpectedly, never on one that never comes.
+      //
+      // The directory's own comment said queries need no ready because "both
+      // callers already tolerate that". This one did not; it now waits for the
+      // ready rather than assuming the offer landed.
+      S_LOOKUP:  if (lu_ready_i)                st_n = S_WAIT_LU;
       S_WAIT_LU: if (lu_ans_valid_i) begin
         if (lu_ans_hit_i) begin
           // prefetch-only, or a required patch that could not get a slot:

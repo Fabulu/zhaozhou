@@ -501,6 +501,8 @@ module tb_terrain_world
       .rec_src_id_i   (rec_src_id),
 
       .lu_valid_o    (lu_valid),
+
+      .lu_ready_i    (lu_ready_real),
       .lu_epoch_o    (seq_lu_epoch),
       .lu_island_o   (lu_island),
       .lu_ix_o       (q_lu_ix),
@@ -641,6 +643,9 @@ module tb_terrain_world
   assign mut_open = !cfg_dir_gate_i || (!lu_hold_q && !lu_valid);
 
   logic               shim_lu_valid;
+  // The directory's real lookup ready, now that it has one. The shim below
+  // no longer has to guess whether an offer landed.
+  logic lu_ready_real;
   logic [31:0]        shim_lu_island, shim_lu_epoch;
   logic signed [15:0] shim_lu_ix, shim_lu_iz;
 
@@ -710,6 +715,8 @@ module tb_terrain_world
       .ready_o(res_ready),
 
       .lu_valid_i (shim_lu_valid),
+
+      .lu_ready_o (lu_ready_real),
       .lu_epoch_i (shim_lu_epoch),
       .lu_island_i(shim_lu_island),
       .lu_ix_i    (shim_lu_ix),
