@@ -88,3 +88,12 @@ runs/CLAUDE-RUNS/RUN-20260829-2226-zixxtrixx-v10-lighting-spring-repair/work/zha
 runs/CLAUDE-RUNS/RUN-20260830-0329-creature-authoring-blueprint/work/Upheaval-blueprint/
 runs/CLAUDE-RUNS/RUN-20260830-0329-creature-authoring-blueprint/work/zhaozhou-blueprint/
 fit-round2.log
+
+# Quartus RAW map reports. The composed island's is 2.2 MB and grows with the
+# design, so it trips the >2 MiB commit hook and leaves the tree permanently
+# dirty -- a tracked file that can never be committed again is worse than an
+# untracked one. The NUMBERS are committed: reports/synthesis/zhao_block_fit.json
+# carries the row, *.map.summary and *.fit.summary carry the harvested totals,
+# and *.setup.rpt carries the paths. Only the multi-megabyte dump is dropped.
+# Smaller blocks' map.rpt files stay tracked; this rule is the size, not the kind.
+reports/synthesis/blockpaths/zhao_texture_island_top.map.rpt
