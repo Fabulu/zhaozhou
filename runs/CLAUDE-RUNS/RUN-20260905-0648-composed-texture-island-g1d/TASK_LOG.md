@@ -1774,3 +1774,44 @@ happens to be.
 
 Closure is the three `v3own`/`v3bank`/`v3rq` files; everything else is free.
 Step 8 (the composed terrain path) continues in parallel.
+
+## 2026-09-07 ~00:20 — CLUT4 COVERED, AND THE GUARD READ ARM STARTED
+
+**The CLUT4 debt is closed.** 111 → 119 checks. Shown to fire: reverting the
+island to the pre-repair whole-byte index gives `got 0x5A3442, want 0x187542`
+and **28 of 32 wrong**, with exactly one check moving. Restored byte-identical.
+
+**The anti-degeneracy guard caught MY OWN broken stimulus on its first run.**
+`f.X = (i * 5 + (i & 1)) & 63` is EVEN FOR EVERY i — `i*5` carries i's parity
+and the `+1` cancels it on precisely the odd ones. The colour check passed on 32
+fragments that never touched the nibble; only "the phase draws BOTH parities"
+caught it, reporting `odd texels 0`. Without it this would have claimed coverage
+it did not have — worse than the honest gap it was written to close.
+
+The convention was taken from the ORACLE, not chosen: `zref::Tmu::plan` sets
+`nibble = total & 1` and `sample()` takes `nibble ? (byte >> 4) : (byte & 0x0F)`,
+so even → low nibble, odd → high. Writing the image the other way would have
+made the fixture agree with a WRONG RTL — the failure a self-consistent test
+cannot see.
+
+One more stale-binary catch: the mutant's first build returned RC=1 and the exe
+ran anyway reporting 119 passed. That was the old binary.
+
+### Started: the MEM.GUARD read arm
+
+This morning's guard lane gave client 6 a WRITE-ONLY page-pool window and
+withheld the read with a stated reason — *"that block does not exist"*. It
+exists now. TERRAIN.WRITEBACK's bench already MEASURES the refusal (130
+presented, 130 refused, 0 passed), and those counts inverting is the change's
+acceptance test.
+
+Briefed with the non-negotiables: the formal proof re-run and reported
+VERBATIM with a cover for the read forward so a pass cannot be vacuous;
+`a1_terrain_wo` (no forward into the pool is ever a read) reasoned about rather
+than deleted, since it is the theorem this contradicts; and a stop-and-say-so
+instruction if the arm cannot be added safely — an unintegrated block beats a
+guard with a hole in it.
+
+Still running: step 8 (the composed terrain path) and the demonstrator fit
+(28 min, floors-not-ceilings rules, `max_alms` expected to fail against
+§21.6's 1,800 budget).
