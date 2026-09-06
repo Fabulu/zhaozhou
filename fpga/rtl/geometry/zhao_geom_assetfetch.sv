@@ -345,11 +345,19 @@ module zhao_geom_assetfetch
   // base is 64-aligned, so the WORD is (ix_boff + 3n) >> 3 -- but the three
   // bytes may straddle into the next word, which is why two are read.
   logic [15:0] ix_byte_c;
+  logic [8:0]  ix_index_q;
   logic [2:0]  ix_sel_q;
+  logic        ix_episode_q;
+  logic        ix_read_q;
   logic        ix_pend_q;
 
+  // ASSEMBLE holds ix_req_i throughout S_FETCH. Treat that level as ONE request
+  // episode: capture its triplet once, issue one synchronous RAM read and return
+  // one pulse. Re-reading it every held cycle happens to be harmless with the
+  // current one-cycle consumer, but becomes a queue-corrupting duplicate as soon
+  // as banked readers add latency (owner recovery brief section 14.1).
   always_comb begin
-    ix_byte_c = 16'(ix_boff_q) + 16'(ix_index_i) * 16'(IX_PER_TRI);
+    ix_byte_c = 16'(ix_boff_q) + 16'(ix_index_q) * 16'(IX_PER_TRI);
     ix_ra     = IXAW'(ix_byte_c[15:3]);
     ix_rb     = IXAW'(ix_byte_c[15:3] + 13'd1);
   end
@@ -401,6 +409,9 @@ module zhao_geom_assetfetch
       line_q    <= '0;
       beat_q    <= '0;
       ix_pend_q <= 1'b0;
+      ix_read_q <= 1'b0;
+      ix_episode_q <= 1'b0;
+      ix_index_q <= '0;
       ix_sel_q  <= '0;
       v_ix_q    <= '0;
       v_word_q  <= '0;
@@ -428,10 +439,18 @@ module zhao_geom_assetfetch
       refused_footprint_o <= '0;
       prefetch_stall_o    <= '0;
     end else begin
-      // The index answer is one cycle behind its request, which GEOM.ASSEMBLE
-      // permits: it sits in S_FETCH until ix_valid_i, with no deadline.
-      ix_pend_q <= (st_q == S_SERVE) && ix_req_i;
-      if ((st_q == S_SERVE) && ix_req_i) ix_sel_q <= ix_byte_c[2:0];
+      // One held legacy request level is one episode, not one request per
+      // cycle. Capture first, then issue the synchronous read from that captured
+      // index; the caller may change ix_index_i immediately after acceptance.
+      ix_pend_q <= ix_read_q;
+      ix_read_q <= 1'b0;
+      if ((st_q != S_SERVE) || !ix_req_i) ix_episode_q <= 1'b0;
+      if ((st_q == S_SERVE) && ix_req_i && !ix_episode_q && !release_i) begin
+        ix_index_q   <= ix_index_i;
+        ix_episode_q <= 1'b1;
+        ix_read_q    <= 1'b1;
+      end
+      if (ix_read_q) ix_sel_q <= ix_byte_c[2:0];
 
       // UNOWNED: a beat with no request outstanding. Today this cannot happen
       // -- one logical request is in flight and only S_FILL consumes beats --
@@ -602,11 +621,14 @@ module zhao_geom_assetfetch
           // still on the wires. Stale valid is the worst kind of wrong: the
           // consumer has no way to tell it from a fresh one.
           if (release_i) begin
-            st_q      <= S_IDLE;
-            v_full_q  <= 1'b0;
-            v_stage_q <= 3'd0;
-            v_ix_q    <= '0;
-            v_word_q  <= '0;
+            st_q         <= S_IDLE;
+            ix_pend_q    <= 1'b0;
+            ix_read_q    <= 1'b0;
+            ix_episode_q <= 1'b0;
+            v_full_q     <= 1'b0;
+            v_stage_q    <= 3'd0;
+            v_ix_q       <= '0;
+            v_word_q     <= '0;
           end
         end
 

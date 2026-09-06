@@ -130,7 +130,7 @@ a reader.
 **Early release is LEGAL and the block must survive it.** `GEOM.ASSEMBLE` can
 refuse every triplet in a meshlet (`refused_index_o`) and want nothing further,
 while vertex records are still queued. So release tears down the vertex stream
-state along with the buffer.
+and any pending index-read state along with the buffer.
 
 The first RTL did not, and the failure is worth naming: `v_valid` stayed
 asserted into the next meshlet with the previous meshlet's record still on the
@@ -141,9 +141,15 @@ ENFORCED-BY: `tests/geometry/assetfetch_rtl_directed.cpp` (early release)
 
 ## Backpressure
 
-Ready/valid on the meshlet input. `ix_*` is answered combinationally from the
-buffer, which is the only shape `GEOM.ASSEMBLE`'s port permits. `v_*` is
-ready/valid because `GEOM.VDECODE` has a `v_ready_o`.
+Ready/valid on the meshlet input. `GEOM.ASSEMBLE` holds `ix_req` throughout its
+fetch state, so that level is one request **episode**, not a request every cycle.
+ASSETFETCH captures the triplet index once, issues one synchronous two-copy RAM
+read, returns exactly one `ix_valid` pulse, and will not accept another episode
+until `ix_req` deasserts. `v_*` is ready/valid because `GEOM.VDECODE` has a
+`v_ready_o`.
+
+ENFORCED-BY: `tests/geometry/assetfetch_rtl_directed.cpp` (held index request,
+post-accept live-index poison, deassert/rearm)
 
 ## Counters
 

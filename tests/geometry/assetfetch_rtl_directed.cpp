@@ -479,6 +479,53 @@ int main(int argc, char** argv) {
   // ---- the block recovers and serves the next meshlet --------------------
   serve_case(s, 128, 4096, 5, 3, "after a denial");
 
+  // ---- ONE HELD INDEX REQUEST LEVEL IS ONE REQUEST EPISODE ----------------
+  // GEOM.ASSEMBLE keeps ix_req high throughout S_FETCH. The buffer must capture
+  // that first offer, issue one RAM read and return one valid pulse; otherwise a
+  // banked/queued reader would enqueue the same triangle on every wait cycle.
+  {
+    af::Request r;
+    r.vertex_offset = 224;
+    r.index_offset = 4112;
+    r.vertex_count = 8;
+    r.triangle_count = 4;
+    const af::Plan p = af::plan(r);
+    ck(s.offer(r), "held-index fixture is servable");
+
+    dut.ix_index = 0;
+    dut.ix_req = 1;
+    s.step();                    // accept triplet 0
+    dut.ix_index = 1;            // poison live input immediately after accept
+
+    int valid_pulses = 0;
+    af::Triplet held_got{0xFF, 0xFF, 0xFF};
+    for (int i = 0; i < 12; ++i) {
+      if (dut.ix_valid) {
+        ++valid_pulses;
+        held_got = af::Triplet{static_cast<uint8_t>(dut.ix_a),
+                               static_cast<uint8_t>(dut.ix_b),
+                               static_cast<uint8_t>(dut.ix_c)};
+      }
+      s.step();
+    }
+    dut.ix_req = 0;
+    s.step();                    // deassertion rearms the next episode
+
+    ck(valid_pulses == 1,
+       "a held ix_req episode returns exactly one ix_valid pulse");
+    ck(held_got.a == pool_abs_byte(p.index_addr) &&
+           held_got.b == pool_abs_byte(p.index_addr + 1) &&
+           held_got.c == pool_abs_byte(p.index_addr + 2),
+       "the held request returns captured triplet 0 after live index poison");
+
+    const af::Triplet rearmed = s.triplet(1);
+    ck(rearmed.a == pool_abs_byte(p.index_addr + 3) &&
+           rearmed.b == pool_abs_byte(p.index_addr + 4) &&
+           rearmed.c == pool_abs_byte(p.index_addr + 5),
+       "request deassertion rearms exactly one later triplet episode");
+    s.release();
+  }
+
   // ---- EARLY RELEASE: the stream state must be torn down with the buffer --
   // A consumer may finish with a meshlet before its vertex stream is drained --
   // GEOM.ASSEMBLE can refuse every triplet and want nothing more. The first
