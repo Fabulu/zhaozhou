@@ -251,9 +251,18 @@ inline zc::RingPart make_loop() {
 // the whole fault. As a swell on the chain it is skinned to the arm and
 // travels with it by construction: there is nothing left to detach.
 //
-// The rig is UNCHANGED. kBHingeA/B/C, kBJunctionF and kBLoopBase2 all still
-// exist and still drive the chain through the two-bone blend ladder in
-// make_loop(); only their rigid ball parts are gone.
+// The rig is UNCHANGED: kBHingeA/B/C and kBJunctionF all still exist and still
+// drive the chain through the two-bone blend ladder in make_loop(); only their
+// rigid ball parts are gone.
+//
+// PASS 10 C.4 — kBLoopBase2 WAS IN THAT LIST AND DID NOT BELONG THERE. It is
+// not in the blend ladder and drives no vertex: make_loop() never names it, and
+// nothing else binds to it either. The sentence read as finished code while the
+// bone it named moved nothing, which is the dangerous shape of a false comment
+// — an owner instruction was reported delivered and was inert.
+// What it DOES do, since pass 10 C.1: loop_pose aims the closure at its POSED
+// anchor, so its rotation slides the re-entry point along the body surface and
+// re-aims the return arm. That is a real effect with no skinning behind it.
 
 /**
  * PASS 6 B.1 -- THE LENS. A SYMMETRIC lens, pointed at BOTH ends, ~3.2:1.

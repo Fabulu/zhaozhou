@@ -82,3 +82,52 @@ pass-11 design round should start.
 alone. 0.3's declared gap stays loud (`kReentryJointLanded` stays false). This is
 also the answer to owner question 3, taken at its stated default: **yes** — ship
 C.1's posed-anchor slide without a bend at the ball this pass.
+
+### STAGE A — LANDED. The spine.
+
+`mist_composite` gains a per-pixel `cover` input; a covered pixel never receives
+mist. The mask is **the same one the cel ink is grown from**, hoisted out of that
+block, plus the ink ring — not a second derivation of the same idea.
+
+Evidence, all one binary:
+* mask painted green and LOOKED at first (R2), before any bound was wired to it.
+  Selected: body, antenna, eye, ink ring. Not selected: sky, terrain, mist cells,
+  the motes.
+* `probes/stagea_hue_gate.py`: **0.0 deg** hue rotation on the antenna band with
+  STAGE A on; **115.0 deg** with it off, saturation 172.5 -> 73.8. Watched
+  failing through the shipping compositor, not a copy.
+* **R4, the protected travelling trails: PASS.** `hasty` f120 and `fall` f90,
+  Stage A on vs off: the chunky teal streak and the plume are IDENTICAL; only
+  0.6%/0.7% of pixels move and they are the creature's own. The fix improves
+  those clips too — the body keeps its crimson and the ink line stays crisp.
+
+**The loud missing-mask warning earned its keep on its first run** by catching my
+own error: the first render omitted `ZIXX_EXP=celmain`, so it had no mask AND was
+under the wrong rig (gotcha 12). A silent fallback would have produced a
+confident, wrong "before" plate.
+
+### C.1 — live, and the amplitude needs authoring
+
+Aiming the closure at the POSED anchor works, but **it had to be proved rather
+than assumed.** The closure metric did not move at all after the change, which is
+the classic tell. A first falsification test (bump the constant 13x, watch the
+number) was WEAK and I nearly accepted it: the reported number is a MAX over the
+bank, and the key holding that max is in a clip the knob does not touch, so a
+real effect elsewhere is invisible to it.
+
+Replaced with a direct, committed measurement in `manafold_probe.cpp`: how far
+the posed anchor actually travels from its bind position, per clip.
+**13 mm, on 14 of 16 clips — LIVE.** A flat zero now FAILS the probe, so this
+cannot quietly die again.
+
+But 13 mm re-aims a 1270 mm arm by 0.6 degrees — under a pixel. The knob works
+and now has to be *authored*. The closure gate is insensitive to it (the anchor
+stays at radius 153 mm inside a 450 mm body, so burial holds by construction):
+39 mm at 2700, 78 mm at 5400, 116 mm at 8100, and the bank worst stays 1043 pm
+against the 1120 gate at every one. So the amplitude is a by-eye call, which is
+what it should be. Rendering 900 vs 5400 on `manafold-antenna-fixed` to look.
+
+### 0.6 — the pass-9 record corrected (appended, never rewritten)
+Three items: the overstated "not one smear code path is touched"; the follow
+figures (the true range is ~2x the published one, and "deltas to 258" cannot be
+per-channel); and cross-pass ablation deltas declared VOID.

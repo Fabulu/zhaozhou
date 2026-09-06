@@ -62,8 +62,23 @@ enum BoneId : uint8_t {
                     // to move it onto the re-entry ball at 2660 and the loop
                     // stopped closing (989 -> 2401 pm, gate 1120); the sweep is
                     // recorded at kLoopArcMm.
-  kBLoopBase2 = 7,  // the re-entry anchor (child of the BODY); carries the
-                    // BACK-JUNCTION ball and gains authored rotation (pass 4)
+  kBLoopBase2 = 7,  // the re-entry anchor (child of the BODY). PASS 10 C.4 --
+                    // WHAT IS TRUE, replacing "carries the BACK-JUNCTION ball
+                    // and gains authored rotation (pass 4)", which was false in
+                    // both halves and shipped in four consecutive passes:
+                    //   * it SKINS NOTHING. No make_* call binds a vertex to
+                    //     it; the back ball became a swell on the chain's own
+                    //     skin at pass 6, and nothing replaced it here.
+                    //   * its rotation did nothing until PASS 10 either. The
+                    //     closure aimed at kLoopReentryXMm/YMm, the BIND
+                    //     constants, so kKneadWagB2A16 drove this bone every
+                    //     frame and moved no pixel.
+                    // It is now a real control: loop_pose aims at this bone's
+                    // POSED anchor, so its rotation slides the re-entry point
+                    // along the body surface and re-aims the whole return arm.
+                    // Still no vertex is skinned to it -- that is deliberate,
+                    // and the joint AT the re-entry ball remains a DECLARED
+                    // GAP (see kLoopArcMm, and pass 10's C.2 prototype).
   kBEyeL = 8,       // left lens
   kBEyeR = 9,       // right lens
   kBPupilL = 10,    // left star

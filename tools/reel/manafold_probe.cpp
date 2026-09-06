@@ -25,6 +25,8 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include <cmath>
+#include <vector>
 
 #include "zref/zref.hpp"
 #include "zref/zref_trig.hpp"
@@ -268,6 +270,243 @@ int main() {
                 " (slot %u key %u) — %s (rim gate %d)\n",
                 bank_worst, bank_slot, bank_key, ok ? "OK" : "FAIL", kMaxRimEllipPm);
     if (!ok) rc = 1;
+
+    // ---- PASS 10 C.1: THE GATE THAT kBLoopBase2 IS NOT DEAD ---------------
+    //
+    // QA's finding was that this bone skins nothing AND aims at nothing posed,
+    // while three comments claimed otherwise -- a bone the owner's instruction
+    // was reported delivered on, moving no pixel for four passes. C.1 makes
+    // loop_pose aim the closure at its POSED anchor, so its rotation slides the
+    // re-entry point along the body surface.
+    //
+    // A fix like that is exactly the kind that can land inert, and this project
+    // has shipped inert fixes repeatedly. So the effect is MEASURED, not
+    // asserted: walk the shipped bank and report how far the posed anchor
+    // actually travels from its bind position. A flat zero here means the bone
+    // is dead again and the comments have gone false again -- so a flat zero
+    // FAILS, loudly, instead of passing quietly.
+    {
+      int64_t worst_slide_mm = 0;
+      uint16_t slide_slot = 0, slide_key = 0;
+      int moving_clips = 0;
+      for (const zc::Clip& clip : T.bank.clips) {
+        int64_t clip_worst = 0;
+        for (uint16_t f = 0; f < clip.frame_count; ++f) {
+          const zc::quat16 qb =
+              clip.quats[static_cast<size_t>(f) * u02::kBoneCount + u02::kBLoopBase2];
+          int32_t ax, ay, az;
+          u02::quat_rot_vec(qb, u02::kLoopReentryXMm, u02::kLoopReentryYMm, 0, ax, ay, az);
+          const int64_t dx = ax - u02::kLoopReentryXMm, dy = ay - u02::kLoopReentryYMm;
+          const int64_t d = u02::isqrt64(dx * dx + dy * dy + static_cast<int64_t>(az) * az);
+          if (d > clip_worst) clip_worst = d;
+          if (d > worst_slide_mm) {
+            worst_slide_mm = d;
+            slide_slot = clip.slot_id;
+            slide_key = f;
+          }
+        }
+        if (clip_worst > 0) ++moving_clips;
+      }
+      // The bound is deliberately modest: this is a "the mechanism is live"
+      // gate, not an amplitude judgement. Amplitude is kKneadWagB2A16, and it
+      // is authored BY EYE against the render, never fitted to this number.
+      constexpr int64_t kMinSlideMm = 2;
+      const bool live = worst_slide_mm >= kMinSlideMm;
+      std::printf("u02-probe: C.1 posed re-entry anchor slides up to %lld mm from bind "
+                  "(slot %u key %u; %d of %zu clips move it) — %s "
+                  "(kBLoopBase2 must not be dead; floor %lld mm)\n",
+                  static_cast<long long>(worst_slide_mm), slide_slot, slide_key,
+                  moving_clips, T.bank.clips.size(), live ? "LIVE" : "DEAD",
+                  static_cast<long long>(kMinSlideMm));
+      if (!live) {
+        std::printf("u02-probe: FAIL kBLoopBase2 moves the closure anchor nowhere. "
+                    "The bone is inert again and every comment naming it is now false.\n");
+        rc = 1;
+      }
+    }
+  }
+
+  // ---- PASS 10, 0.2: THE MIST-FOLLOW GATE — QA's #1 ----------------------
+  //
+  // The owner's named "weapon" had NO GATE. Setting kMistFollowPm = 0 -- the
+  // behaviour he rejected in his own words, "leaving stuff hanging in space
+  // just looks like a glitch" -- passed every gate on this project.
+  //
+  // WHERE IT LIVES SO IT CANNOT BE SATISFIED BY A RE-IMPLEMENTATION OF ITSELF:
+  // after 0.1 the reel has no private copy of the follow arithmetic, so this
+  // gate drives u02::mist_follow_step and u02::mist_shift -- THE SAME TWO
+  // FUNCTIONS THE REEL CALLS. A bug in either fails here and on screen
+  // together, which is the only arrangement worth having.
+  {
+    const int W = u02::kMistW, H = u02::kMistH;
+    std::vector<uint8_t> buf(static_cast<size_t>(W) * H * 3, 0);
+    std::vector<int32_t> dep(static_cast<size_t>(W) * H, 0);
+
+    // the plane's content centroid, in CELLS
+    const auto centroid = [&](const std::vector<uint8_t>& b, double* cx, double* cy) {
+      double sx = 0, sy = 0, sw = 0;
+      for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) {
+          const uint8_t* p = b.data() + (static_cast<size_t>(y) * W + x) * 3;
+          const int m = std::max(p[0], std::max(p[1], p[2]));
+          if (m < 6) continue;
+          sx += static_cast<double>(x) * m;
+          sy += static_cast<double>(y) * m;
+          sw += m;
+        }
+      if (sw <= 0) return false;
+      *cx = sx / sw;
+      *cy = sy / sw;
+      return true;
+    };
+    // a seeded blob, re-laid every run so the test is deterministic
+    const auto seed = [&]() {
+      std::fill(buf.begin(), buf.end(), 0);
+      std::fill(dep.begin(), dep.end(), 0);
+      for (int y = H / 2 - 4; y <= H / 2 + 4; ++y)
+        for (int x = W / 2 - 4; x <= W / 2 + 4; ++x) {
+          uint8_t* p = buf.data() + (static_cast<size_t>(y) * W + x) * 3;
+          p[0] = 90; p[1] = 200; p[2] = 170;
+          dep[static_cast<size_t>(y) * W + x] = 1 << 20;
+        }
+    };
+
+    // ONE named case: drive the real functions over `frames` frames of a
+    // displacement series and report how far the plane's content actually
+    // travelled, in cells.
+    const auto run = [&](const char* name, int follow_pm, int frames,
+                         int dx_per_frame_x10, int bob_amp, double* moved) {
+      seed();
+      double x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+      centroid(buf, &x0, &y0);
+      u02::MistFollowState st;
+      for (int f = 0; f < frames; ++f) {
+        const int32_t bx = static_cast<int32_t>(
+            static_cast<int64_t>(f) * dx_per_frame_x10 / 10);
+        const int32_t by = static_cast<int32_t>(
+            (static_cast<int64_t>(bob_amp) *
+             zref::fx_sin(zref::angle16{static_cast<uint16_t>((f * 65536 / 40) & 0xFFFF)}).raw) >> 16);
+        int dxc = 0, dyc = 0;
+        if (u02::mist_follow_step(st, bx, by, follow_pm, &dxc, &dyc))
+          u02::mist_shift(buf.data(), dep.data(), dxc, dyc);
+      }
+      const bool any = centroid(buf, &x1, &y1);
+      // AN EMPTY PLANE IS NOT "IT DID NOT MOVE". The first version of this test
+      // drove the blob 30 cells across a 48-cell plane, so it left entirely,
+      // the centroid found nothing, and that came back as 0.00 -- reading
+      // exactly like a dead follow. Distinguish the two, loudly.
+      if (!any) {
+        *moved = -1.0;
+        std::printf("u02-probe: mist-follow [%s] follow_pm %4d -> PLANE EMPTY after "
+                    "%d frames (the seed shifted off it: a TEST fault, not a "
+                    "follow measurement)\n", name, follow_pm, frames);
+        return;
+      }
+      *moved = std::sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
+      std::printf("u02-probe: mist-follow [%s] follow_pm %4d -> plane content moved "
+                  "%.2f cells over %d frames\n", name, follow_pm, *moved, frames);
+    };
+
+    // ---- 0.1's EQUIVALENCE PROOF, committed rather than argued -------------
+    // The extraction is only safe if it is behaviour-preserving, and "I moved
+    // it verbatim" is a claim, not evidence. This drives the extracted function
+    // and a FROZEN COPY of the pass-9 inline arithmetic over the same long
+    // pseudo-random displacement series and requires identical (dxc, dyc) on
+    // every single frame. The copy below is a reference fossil -- it is not on
+    // any shipping path and must never be "kept in sync"; if it ever disagrees,
+    // the refactor changed behaviour and that is the finding.
+    {
+      u02::MistFollowState st;
+      int32_t ref_prev[2] = {0, 0}, ref_res[2] = {0, 0};
+      bool ref_valid = false;
+      uint32_t h = 0x1234567u;
+      int mismatches = 0, steps = 0;
+      for (int f = 0; f < 4000; ++f) {
+        h = h * 1664525u + 1013904223u;
+        const int32_t bx = static_cast<int32_t>((h >> 8) % 800) - 400;
+        h = h * 1664525u + 1013904223u;
+        const int32_t by = static_cast<int32_t>((h >> 8) % 500) - 250;
+        const int fp = (f % 7 == 0) ? 0 : u02::kMistFollowPm;  // exercise 0 too
+
+        int dxc = 0, dyc = 0;
+        const bool shifted = u02::mist_follow_step(st, bx, by, fp, &dxc, &dyc);
+
+        int rdx = 0, rdy = 0;
+        const bool ref_shifted = ref_valid;
+        if (ref_valid) {
+          const int32_t mvx = bx - ref_prev[0];
+          const int32_t mvy = by - ref_prev[1];
+          ref_res[0] += static_cast<int32_t>(
+              (static_cast<int64_t>(mvx) << u02::kMistShiftFxBits) * fp / 1000 /
+              u02::kMistBlock);
+          ref_res[1] += static_cast<int32_t>(
+              (static_cast<int64_t>(mvy) << u02::kMistShiftFxBits) * fp / 1000 /
+              u02::kMistBlock);
+          rdx = ref_res[0] >> u02::kMistShiftFxBits;
+          rdy = ref_res[1] >> u02::kMistShiftFxBits;
+          ref_res[0] -= rdx << u02::kMistShiftFxBits;
+          ref_res[1] -= rdy << u02::kMistShiftFxBits;
+        }
+        ref_prev[0] = bx;
+        ref_prev[1] = by;
+        ref_valid = true;
+
+        ++steps;
+        if (shifted != ref_shifted || dxc != rdx || dyc != rdy) {
+          if (++mismatches <= 3)
+            std::printf("u02-probe: 0.1 EQUIVALENCE MISMATCH at step %d: "
+                        "extracted (%d,%d,%d) vs pass-9 inline (%d,%d,%d)\n",
+                        f, static_cast<int>(shifted), dxc, dyc,
+                        static_cast<int>(ref_shifted), rdx, rdy);
+        }
+      }
+      std::printf("u02-probe: 0.1 mist_follow_step equivalence vs the frozen "
+                  "pass-9 inline arithmetic: %d steps, %d mismatches — %s\n",
+                  steps, mismatches, mismatches == 0 ? "IDENTICAL" : "DIVERGED");
+      if (mismatches != 0) rc = 1;
+    }
+
+    // (a) A LINEAR TRAVERSE. The shipped follow must carry the plane with the
+    // creature; the rejected follow_pm = 0 must leave it where it was.
+    double traverse_live = 0, traverse_dead = 0;
+    run("traverse, shipped", u02::kMistFollowPm, 40, 25, 0, &traverse_live);
+    run("traverse, follow=0", 0, 40, 25, 0, &traverse_dead);
+
+    // (b) A PURE BOB at a THIRD OF A CELL PER FRAME -- the residual's whole
+    // job. Without fixed-point accumulation this rounds to zero every frame
+    // forever, and a "creature-relative" plane that never shifts is a
+    // screen-space plane with a better comment.
+    double bob_live = 0;
+    run("sub-cell bob, shipped", u02::kMistFollowPm, 240, 0, 3, &bob_live);
+
+    constexpr double kMinTraverseCells = 4.0;   // it must plainly track
+    constexpr double kMaxDeadCells     = 0.25;  // follow=0 must plainly not
+    constexpr double kMinBobCells      = 0.75;  // the residual must accumulate
+    const bool ok = traverse_live >= kMinTraverseCells && traverse_dead >= 0.0 &&
+                    traverse_dead <= kMaxDeadCells &&
+                    bob_live >= kMinBobCells;
+    std::printf("u02-probe: MIST FOLLOW GATE — traverse %.2f (>= %.2f), "
+                "follow=0 %.2f (<= %.2f), sub-cell bob %.2f (>= %.2f) — %s\n",
+                traverse_live, kMinTraverseCells, traverse_dead, kMaxDeadCells,
+                bob_live, kMinBobCells, ok ? "OK" : "FAIL");
+    if (!ok) rc = 1;
+
+    // PROVED FAILABLE, THROUGH THE REAL PATH, EVERY RUN. The gate is re-run
+    // with follow_pm forced to 0 -- the configuration the owner rejected -- and
+    // is REQUIRED to fail. If it passes, the gate above proves nothing and says
+    // so. This is the difference between a gate and a rumour with an exit code.
+    {
+      const bool would_pass_at_zero = traverse_dead >= kMinTraverseCells;
+      std::printf("u02-probe: mist-follow SELFTEST: at follow_pm = 0 the plane "
+                  "moves %.2f cells, gate floor %.2f — the rejected setting is %s\n",
+                  traverse_dead, kMinTraverseCells,
+                  would_pass_at_zero ? "NOT CAUGHT (gate is a rumour)" : "CAUGHT");
+      if (would_pass_at_zero) {
+        std::printf("u02-probe: FAIL the mist-follow gate cannot detect "
+                    "kMistFollowPm = 0.\n");
+        rc = 1;
+      }
+    }
   }
 
   // ---- PASS 2/5: the EYE-PROTRUSION gate (committed; PER NAMED PART)

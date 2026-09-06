@@ -2340,9 +2340,10 @@ struct CreatureReelCtx {
   bool u02_mist = false;
   std::vector<uint8_t> u02_mist_buf;
   std::vector<int32_t> u02_mist_depth;
-  int32_t u02_mist_prev_px[2] = {0, 0};   // the creature's last screen position
-  bool u02_mist_prev_px_valid = false;
-  int32_t u02_mist_res[2] = {0, 0};       // sub-cell shift residual (fx)
+  // PASS 10, 0.1: the follow state moved into u02::MistFollowState, and the
+  // arithmetic that steps it moved into u02::mist_follow_step, so a gate can
+  // reach it. The reel keeps NO private copy of that arithmetic.
+  u02::MistFollowState u02_mist_follow;
   std::vector<uint8_t> u02_smear_buf;
   std::vector<int32_t> u02_smear_depth;  // R5: per-cell nearest splat depth
   u02::FoldState u02_fold[3];            // pass 4: per-conduit fold state
@@ -3355,25 +3356,11 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
           zref::fx16{c.u02_body[2]}, nullptr);
       if (pb.in) {
         const int32_t bx = pb.s.x >> 8, by = pb.s.y >> 8;
-        if (c.u02_mist_prev_px_valid) {
-          const int32_t mvx = bx - c.u02_mist_prev_px[0];
-          const int32_t mvy = by - c.u02_mist_prev_px[1];
-          // pixels -> sub-cell fixed point, scaled by the follow fraction
-          c.u02_mist_res[0] += static_cast<int32_t>(
-              (static_cast<int64_t>(mvx) << u02::kMistShiftFxBits) *
-              u02::g_u02_mist.follow_pm / 1000 / u02::kMistBlock);
-          c.u02_mist_res[1] += static_cast<int32_t>(
-              (static_cast<int64_t>(mvy) << u02::kMistShiftFxBits) *
-              u02::g_u02_mist.follow_pm / 1000 / u02::kMistBlock);
-          const int dxc = c.u02_mist_res[0] >> u02::kMistShiftFxBits;
-          const int dyc = c.u02_mist_res[1] >> u02::kMistShiftFxBits;
-          c.u02_mist_res[0] -= dxc << u02::kMistShiftFxBits;
-          c.u02_mist_res[1] -= dyc << u02::kMistShiftFxBits;
+        // PASS 10, 0.1: ONE call, to the same function the gate drives.
+        int dxc = 0, dyc = 0;
+        if (u02::mist_follow_step(c.u02_mist_follow, bx, by,
+                                  u02::g_u02_mist.follow_pm, &dxc, &dyc))
           u02::mist_shift(c.u02_mist_buf.data(), c.u02_mist_depth.data(), dxc, dyc);
-        }
-        c.u02_mist_prev_px[0] = bx;
-        c.u02_mist_prev_px[1] = by;
-        c.u02_mist_prev_px_valid = true;
       }
       u02::mist_update(c.u02_mist_buf.data(), c.u02_mist_depth.data(), c.u02_frame);
       static u02::GlowFrameCache s_mist_cache;

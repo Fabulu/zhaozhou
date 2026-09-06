@@ -297,10 +297,28 @@ constexpr int32_t kLoopBladeRzMm[7] = {140, 72, 34, 27, 23, 29, 40};
 // the antenna meets the creature at the FRONT.") ----
 // The FRONT ball rides kBJunctionF (a real hinge — its bind IS the
 // antenna's base at the body surface), half-buried in the crown at the
-// visible surface crossing. The BACK ball rides kBLoopBase2, offset from
-// the deep closure anchor out to the probed posed surface crossing on the
-// upper-left flank, then placed finally BY EYE. Both are hinge-family
-// balls with page tiles from birth (gotcha §0).
+// visible surface crossing.
+// PASS 10 C.4 — THE SECOND HALF OF THIS PARAGRAPH WAS FALSE and shipped in
+// four consecutive passes. It said "The BACK ball rides kBLoopBase2, offset
+// from the deep closure anchor out to the probed posed surface crossing on the
+// upper-left flank, then placed finally BY EYE." There is no back ball part
+// riding anything: the rigid ball parts were deleted at pass 6 (Direction 5
+// §2b, "smooth skin not visible balls") and the swell moved into the loop
+// chain's own skin. NOTHING IS SKINNED TO kBLoopBase2.
+//
+// AND THE TWO CONSTANTS BELOW ARE DEAD. Writing the correction above, the
+// replacement sentence claimed they were still read as the offset the swell is
+// authored around. That was checked before it shipped -- `grep -rn` over every
+// header and probe -- and it was false too: kJunctionFBallOffYMm and
+// kKnuckleReentryOff{X,Y}Mm have NO reader anywhere in the tree. They are the
+// ball parts' surviving placement numbers, orphaned when the parts went. They
+// are kept, named and declared dead rather than deleted, because they record
+// the probed surface crossings the swells were authored to; a future re-entry
+// joint (pass 10 C.2's declared gap) wants exactly those numbers.
+//
+// The lesson is the one 10-GATE-CHECKLIST item 8 keeps paying for: the pass
+// FIXING a false comment nearly wrote a new one, because "surely these are
+// used for something" felt like knowledge. It was not checked; then it was.
 // (kKnuckleRadiusMm retired with the ball parts -- see B.2 above.)
 // front-junction ball offset from kBJunctionF's bind (small: the bind is
 // already the surface exit; the offset rides the ball up the tube a touch
@@ -1326,7 +1344,20 @@ constexpr int32_t kKneadWagJfA16 = 1600;  // knead: the two hands work...
 constexpr int32_t kKneadWagNeckA16 = 480;  // (neck stirs out-of-plane)
 constexpr int32_t kKneadWagBA16 = 1100;
 constexpr int32_t kKneadWagCA16 = 1900;    // ...in counter-rotation
-constexpr int32_t kKneadWagB2A16 = 900;    // the back-junction ball slides
+// PASS 10 C.1. Raised 900 -> 5400 BY EYE, now that this knob does anything at
+// all. It drives kBLoopBase2, and until C.1 the closure aimed at bind constants
+// so this rotation moved no pixel for four passes. It now slides the closure's
+// anchor along the body surface: 13 mm at the old 900, 78 mm here, which is
+// about three pixels of re-aim at the arm's far end.
+// HONEST ABOUT WHAT THAT BUYS: a modest re-aim of the whole return arm, not a
+// bend. The arm still has no joint in it -- the strut between the re-entry ball
+// and the body stays straight, because that joint is C.2 and C.2 ABORTED (see
+// manafold_c2proto.cpp). Do not read this constant as delivering §9.1's rear
+// junction; it delivers the half of it that costs no skinning.
+// The closure is insensitive to it -- the anchor stays at radius 153 mm inside
+// a 450 mm body, so burial holds by construction. Swept and measured: bank
+// worst RIM stays 1043 pm against the 1120 gate at 900, 2700, 5400 and 8100.
+constexpr int32_t kKneadWagB2A16 = 5400;
 constexpr int kKneadWagPeriodKeys = 22;
 constexpr int32_t kKneadTremorA16 = 130;   // the hold's small tremor
 // per-clip gain (pm) for the always-on knead layer, indexed by slot:

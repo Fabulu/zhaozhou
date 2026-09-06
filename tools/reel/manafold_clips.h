@@ -229,8 +229,30 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
     pz += dz;
     if (i < 4) Q = quat_mul(Q, locs[i]);
   }
+  // ---- PASS 10 C.1: AIM AT THE POSED ANCHOR, NOT THE BIND ONE -------------
+  // kBLoopBase2 was dead twice over. It skins nothing (nothing is bound to it;
+  // its ball part went when the knuckles moved into the chain's own skin at
+  // pass 6), AND its authored rotation could not move anything either, because
+  // the closure read kLoopReentryXMm/YMm -- BIND constants -- as its target.
+  // kKneadWagB2A16 has been driving it 900 a16 every frame since pass 4 and
+  // moving precisely nothing, while three separate comments said otherwise.
+  //
+  // The anchor is a point on the body, kLoopReentry* from the body centre, so
+  // carrying it by kBLoopBase2's own rotation SLIDES IT ALONG THE BODY SURFACE
+  // -- it stays at the same radius by construction. The whole return arm then
+  // visibly re-aims as the knead wags that bone, which is one of the owner's
+  // two named junctions (Direction 7 section 9.1, "the two spots where the
+  // antennae meet the creature") coming alive at ZERO skinning cost.
+  //
+  // The free-floating-dongle fault stays structurally excluded: the aim still
+  // lands on a point inside the body, so the arm still plunges into it.
+  //
+  // At rest this is bit-identical -- loop_rest() poses a fresh rig where
+  // kBLoopBase2 is identity, so the rotated offset IS the bind offset.
+  int32_t rax, ray, raz;
+  quat_rot_vec(g.q[kBLoopBase2], kLoopReentryXMm, kLoopReentryYMm, 0, rax, ray, raz);
   int32_t vx, vy, vz;  // anchor - P_D, taken into C's local frame
-  quat_rot_vec(quat_conj(Q), kLoopReentryXMm - px, kLoopReentryYMm - py, -pz, vx, vy, vz);
+  quat_rot_vec(quat_conj(Q), rax - px, ray - py, raz - pz, vx, vy, vz);
   // ---- PASS 6 C.4: THE CLOSURE AIM IS NOW 3D ------------------------------
   // It used to be a Z-FOLD ONLY, and the source said so in its own words: "a
   // Z-fold can only aim within D's local XY plane, so the out-of-plane
@@ -735,9 +757,18 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
 /** THE ALWAYS-ON KNEAD LAYER: composed onto the junction/neck/hinge bones
  *  BEFORE the clip's own loop_pose call, so the closure walk accounts for
  *  every knead rotation (the aim still lands the return arm; the committed
- *  closure probe gates the bank). The back-junction ball rides its offset
- *  bind, so kBLoopBase2's rotation SLIDES the ball along the body surface
- *  (Direction 4: a ball that is a joint). */
+ *  closure probe gates the bank). That ordering is now load-bearing in a
+ *  second way: pass 10 C.1 has loop_pose read kBLoopBase2's POSED anchor, and
+ *  this function is what poses it.
+ *
+ *  PASS 10 C.4 — a FOURTH false comment, which QA did not catch: this said
+ *  "the back-junction ball rides its offset bind, so kBLoopBase2's rotation
+ *  SLIDES the ball along the body surface". There is no back-junction ball —
+ *  the rigid ball parts went at pass 6 — and until C.1 the rotation slid
+ *  nothing at all, because the closure aimed at bind constants. What is true
+ *  now: kBLoopBase2's rotation slides the closure's ANCHOR POINT along the
+ *  body surface, and the return arm re-aims at it. No geometry is skinned to
+ *  the bone; the effect is entirely through the aim. */
 inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f) {
   // every authored slot reads its own gain (pass 5: the guard was `< 14`,
   // which orphaned index 14 -- the damage clip silently ran at 700, 2.8x

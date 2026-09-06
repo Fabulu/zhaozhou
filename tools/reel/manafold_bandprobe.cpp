@@ -96,13 +96,44 @@ std::vector<Row> profile(const std::vector<zc::Meshlet>& mesh, size_t first,
 // is AT that ball as far as the eye is concerned; one outside it creases bare
 // band. That makes the tolerance a property of the geometry rather than a
 // number somebody picked.
-int joints_on_balls(bool verbose) {
-  const int32_t stJF = u02::kLoopBuryMm;
-  const int32_t stNeck = stJF + u02::kLoopArcMm[0];
-  const int32_t stA = stNeck + u02::kLoopArcMm[1];
-  const int32_t stB = stA + u02::kLoopArcMm[2];
-  const int32_t stC = stB + u02::kLoopArcMm[3];
-  const int32_t stD = stC + u02::kLoopArcMm[4];
+// PASS 10, 0.3 -- THE STATION TABLE IS NOW A PARAMETER.
+//
+// QA's #3 and #4 together: the ball list omitted `knuckle-End`, the ONE ball
+// with no joint -- so the gate's own list quietly excluded the failure it needs
+// to catch -- and `--selftest` re-implemented the distance loop on local arrays
+// instead of calling this function, over a DIFFERENT ball set (five here, four
+// in the gate). A bug in the real loop or its wiring would have passed the
+// selftest undetected.
+//
+// Both are fixed by one change: the stations come in as an argument, so the
+// selftest can inject pass 8's layout and drive THE REAL FUNCTION.
+struct JointStations {
+  int32_t neck, a, b, c, d;
+};
+inline JointStations shipped_stations() {
+  JointStations s;
+  s.neck = u02::kLoopBuryMm + u02::kLoopArcMm[0];
+  s.a = s.neck + u02::kLoopArcMm[1];
+  s.b = s.a + u02::kLoopArcMm[2];
+  s.c = s.b + u02::kLoopArcMm[3];
+  s.d = s.c + u02::kLoopArcMm[4];
+  return s;
+}
+
+// PASS 10, 0.3: ONE FLAG, ONE PLACE. While the joint AT the re-entry ball is
+// unlanded this is false, `knuckle-End` is enumerated as a DECLARED GAP with
+// its blocking measurement printed, and it is counted and named rather than
+// silently left out of the list. When a re-entry joint lands, this flips and
+// the gate enforces all five. Pass 10's C.2 prototype ABORTED, so it stays
+// false and the gap stays loud.
+constexpr bool kReentryJointLanded = false;
+
+int joints_on_balls(bool verbose, const JointStations& st = shipped_stations()) {
+  const int32_t stNeck = st.neck;
+  const int32_t stA = st.a;
+  const int32_t stB = st.b;
+  const int32_t stC = st.c;
+  const int32_t stD = st.d;
   struct Named { const char* name; int32_t at; };
   // kBJunctionF is deliberately absent: it shares kBNeck's pivot exactly, so
   // it is the same station and checking it twice would prove nothing.
@@ -128,12 +159,17 @@ int joints_on_balls(bool verbose) {
   // That is a DECLARED GAP, printed below on every run, not a silent one.
   const Named joints[] = {{"junctionF/neck", stNeck}, {"hingeA", stA},
                           {"hingeB", stB},            {"hingeC", stC}};
+  // PASS 10, 0.3: ALL FIVE BALLS ARE ENUMERATED. knuckle-End is on the list it
+  // was missing from; whether its absence of a joint COUNTS is decided by
+  // kReentryJointLanded, in one place, and either way it is printed by name.
   const Named balls[] = {{"knuckle-Jf", u02::kKnuckleAtJfMm},
                          {"knuckle-A", u02::kKnuckleAtAMm},
                          {"knuckle-B", u02::kKnuckleAtBMm},
-                         {"knuckle-C", u02::kKnuckleAtCMm}};
+                         {"knuckle-C", u02::kKnuckleAtCMm},
+                         {"knuckle-End", u02::kKnuckleAtEndMm}};
   const int32_t tol = u02::kKnuckleSwellHalfMm;
   int bad = 0;
+  int declared_gaps = 0;
   for (const Named& j : joints) {
     int32_t best = 1 << 30; const char* who = "(none)";
     for (const Named& b : balls) {
@@ -151,22 +187,50 @@ int joints_on_balls(bool verbose) {
       const int32_t d = j.at > b.at ? j.at - b.at : b.at - j.at;
       if (d < best) best = d;
     }
+    // The re-entry ball is the one DECLARED gap. It is enumerated, measured and
+    // named on every run; it simply does not fail the exit code while the flag
+    // says the joint is unlanded. That is the difference between a gap the
+    // project has decided to carry and a gap nobody mentioned.
+    const bool is_declared_gap =
+        !kReentryJointLanded && b.at == u02::kKnuckleAtEndMm;
+    const bool fails = best > tol && !is_declared_gap;
     if (verbose)
       std::printf("  ball  %-15s arc %5d -> nearest joint            %4d mm %s\n",
-                  b.name, b.at, best, best <= tol ? "OK" : "*** RIGID, no joint");
-    if (best > tol) ++bad;
+                  b.name, b.at, best,
+                  best <= tol ? "OK"
+                              : (is_declared_gap ? "*** RIGID -- DECLARED GAP (see below)"
+                                                 : "*** RIGID, no joint"));
+    if (fails) ++bad;
+    if (is_declared_gap && best > tol) ++declared_gaps;
   }
   if (verbose) {
     std::printf("  ---- not articulation stations, reported for completeness ----\n");
     std::printf("  hingeD          arc %5d    the CLOSURE SOLVER, not a knead joint\n", stD);
-    std::printf("  knuckle-End     arc %5d    DECLARED GAP: no articulation "
-                "station. Moving hingeD here breaks the loop closure "
-                "(989 -> 2401 pm against a 1120 gate). Owed work.\n",
-                u02::kKnuckleAtEndMm);
+    std::printf("  knuckle-End     arc %5d    DECLARED GAP (%d counted): no "
+                "articulation station.\n"
+                "      pass 9: moving hingeD here breaks closure, 989 -> 2401 pm "
+                "against a 1120 gate; arm length and anchor swept, no help.\n"
+                "      pass 10: the two-segment redesign was PROTOTYPED and "
+                "ABORTED. Splitting the arm 630+640 cannot reach the anchor at "
+                "9 of 24 fold scales (D sits up to 1575 mm away, the chain "
+                "reaches 1270), and the reachable form -- D aiming as today with "
+                "a bounded bend at the ball -- holds only 7.5 deg before the rim "
+                "gate breaks, under the ~10 deg that reads at 240p.\n"
+                "      THE REASON, for pass 11: the straight strut already sits "
+                "at 991 pm of a 1120 pm gate. There are 129 pm of headroom in "
+                "total, so no visible joint fits here until the arm/anchor "
+                "GEOMETRY changes. Nobody has yet swept those against a "
+                "two-segment form; that is where the design round starts.\n",
+                u02::kKnuckleAtEndMm, declared_gaps);
   }
   if (verbose)
-    std::printf("bandprobe: joints-on-balls %s (tolerance %d mm = the knuckle's "
-                "own half-width)\n", bad ? "FAIL" : "PASS", tol);
+    std::printf("bandprobe: joints-on-balls %s over %d balls and %d joints "
+                "(tolerance %d mm = the knuckle's own half-width; %d declared "
+                "gap%s not counted as failures)\n",
+                bad ? "FAIL" : "PASS",
+                static_cast<int>(sizeof(balls) / sizeof(balls[0])),
+                static_cast<int>(sizeof(joints) / sizeof(joints[0])), tol,
+                declared_gaps, declared_gaps == 1 ? "" : "s");
   return bad;
 }
 
@@ -214,30 +278,30 @@ int selftest() {
     return 1;
   }
   {
-    // the pass-8 stations replayed: neck at 586 and hingeD at 2030, both in a
-    // smooth run. Arithmetic on local copies -- nothing here touches the real
-    // constants.
-    const int32_t stale[2] = {586, 2030};
-    const int32_t balls[5] = {u02::kKnuckleAtJfMm, u02::kKnuckleAtAMm,
-                              u02::kKnuckleAtBMm, u02::kKnuckleAtCMm,
-                              u02::kKnuckleAtEndMm};
-    for (int k = 0; k < 2; ++k) {
-      int32_t best = 1 << 30;
-      for (int i2 = 0; i2 < 5; ++i2) {
-        const int32_t d = stale[k] > balls[i2] ? stale[k] - balls[i2]
-                                               : balls[i2] - stale[k];
-        if (d < best) best = d;
-      }
-      if (best <= u02::kKnuckleSwellHalfMm) {
-        std::printf("selftest FAIL: pass-8 station %d sits %d mm from a ball "
-                    "against a %d mm tolerance -- this gate cannot fail\n",
-                    stale[k], best, u02::kKnuckleSwellHalfMm);
-        return 1;
-      }
-      std::printf("bandprobe selftest: pass-8 station %d WOULD be caught "
-                  "(%d mm from the nearest ball, tolerance %d)\n",
-                  stale[k], best, u02::kKnuckleSwellHalfMm);
+    // PASS 10, 0.3 -- THE SELFTEST NOW CALLS THE REAL FUNCTION.
+    //
+    // It used to re-implement the distance loop on local arrays, over a
+    // different ball set than the gate itself used (five here, four there). A
+    // bug in joints_on_balls' own loop, or in how it is wired, would have
+    // passed this undetected -- it was testing a copy of the idea, which is the
+    // thing this project keeps being bitten by.
+    //
+    // Now pass 8's layout is INJECTED into joints_on_balls and the real
+    // function is required to return non-zero. Same code path as the shipping
+    // gate, same ball list, no second implementation to drift.
+    JointStations stale = shipped_stations();
+    stale.neck = 586;   // pass 8: mid-tube, no ball within 340 mm
+    stale.d = 2030;
+    const int caught = joints_on_balls(false, stale);
+    if (caught == 0) {
+      std::printf("selftest FAIL: joints_on_balls() PASSES the pass-8 layout "
+                  "(neck 586, hingeD 2030). The gate cannot fail, so its OK on "
+                  "the shipped geometry means nothing.\n");
+      return 1;
     }
+    std::printf("bandprobe selftest: the REAL joints_on_balls() rejects the "
+                "pass-8 layout (%d violations) — gate proved failable through "
+                "the shipping code path, not a copy of it\n", caught);
   }
   std::printf("bandprobe selftest: OK (bulge found, flat stack flat, joints gated)\n");
   return 0;

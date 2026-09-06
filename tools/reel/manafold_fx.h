@@ -591,9 +591,20 @@ inline const MistVariant kMistVariants[] = {
     {"mid", {300, 260, 1700, 135, kMistFollowPm, 1000, kMistVividPm,
              kMistChromaFloorPm},
      "the candidate default: visible haze, loop still legible"},
+    // PASS 10 A.2: the rung between mid and thick. It exists because STAGE A
+    // moved the wall: the mana-lab stopping rule was "too far is when the mana
+    // starts eating the animal", and with the silhouette excluded the mist
+    // CANNOT eat the animal any more -- so the honest answer to the owner's
+    // standing "give the mana some more of our mist" is a re-judgement, not the
+    // old ceiling. Judged by eye on BOTH sky types and on rest AND hover, which
+    // is the pass-9 mistake (one clip, one sheet) being repaired rather than
+    // repeated.
+    {"rich", {380, 280, 1800, 152, kMistFollowPm, 1000, kMistVividPm,
+              kMistChromaFloorPm},
+     "PASS 10: one rung up from mid, the density the exclusion paid for"},
     {"thick", {460, 300, 1900, 170, kMistFollowPm, 1000, kMistVividPm,
                kMistChromaFloorPm},
-     "the first authored value -- eats the antenna, kept as the wall"},
+     "the first authored value -- ate the antenna BEFORE STAGE A; re-judge it"},
     {"white", {520, 420, 1900, 255, kMistFollowPm, 1100, 2600, 0},
      "DELIBERATELY BLOWN (§10.3): no cell cap, no chroma floor, hard vivify"},
     {"parked", {300, 260, 1700, 135, 0, 1000, kMistVividPm,
@@ -1883,6 +1894,58 @@ inline void smear_composite(const uint8_t* buf, const int32_t* dbuf, uint8_t* rg
  *  by kMistFollowPm and already accumulated through the caller's residual.
  *  Vacated cells clear rather than wrap: a wrap would drag the trail's own tail
  *  back in on the far side, which reads as a second creature. */
+/**
+ * PASS 10, 0.1 -- THE FOLLOW STEP, EXTRACTED SO A GATE CAN REACH IT.
+ *
+ * This arithmetic lived INLINE in zhao_reel.cpp (~3335-3352), and that is
+ * precisely why the owner's named "weapon" had no gate: there was nothing to
+ * call. `kMistFollowPm = 0` -- the behaviour he rejected in his own words,
+ * "leaving stuff hanging in space just looks like a glitch" -- passed every
+ * gate on this project.
+ *
+ * It is moved verbatim, not rewritten. The reel now has no private copy to
+ * diverge from, so the gate in manafold_probe.cpp calls THE SAME FUNCTION THE
+ * REEL CALLS and cannot be satisfied by a re-implementation of itself.
+ *
+ * The residual is carried in fixed point because a bob of a third of a cell per
+ * frame would otherwise round to zero every frame forever, and a
+ * "creature-relative" plane that never actually shifts is a screen-space plane
+ * with a better comment.
+ *
+ * Returns true when a shift was computed (i.e. there was a previous frame to
+ * difference against) -- the caller shifts exactly when the inline code did, so
+ * the refactor is behaviour-preserving.
+ */
+struct MistFollowState {
+  int32_t prev_px[2] = {0, 0};  // the creature's last screen position
+  int32_t res[2] = {0, 0};      // sub-cell shift residual (fx)
+  bool valid = false;
+};
+
+inline bool mist_follow_step(MistFollowState& st, int32_t bx, int32_t by,
+                             int follow_pm, int* dxc, int* dyc) {
+  const bool had_prev = st.valid;
+  *dxc = 0;
+  *dyc = 0;
+  if (had_prev) {
+    const int32_t mvx = bx - st.prev_px[0];
+    const int32_t mvy = by - st.prev_px[1];
+    // pixels -> sub-cell fixed point, scaled by the follow fraction
+    st.res[0] += static_cast<int32_t>(
+        (static_cast<int64_t>(mvx) << kMistShiftFxBits) * follow_pm / 1000 / kMistBlock);
+    st.res[1] += static_cast<int32_t>(
+        (static_cast<int64_t>(mvy) << kMistShiftFxBits) * follow_pm / 1000 / kMistBlock);
+    *dxc = st.res[0] >> kMistShiftFxBits;
+    *dyc = st.res[1] >> kMistShiftFxBits;
+    st.res[0] -= *dxc << kMistShiftFxBits;
+    st.res[1] -= *dyc << kMistShiftFxBits;
+  }
+  st.prev_px[0] = bx;
+  st.prev_px[1] = by;
+  st.valid = true;
+  return had_prev;
+}
+
 inline void mist_shift(uint8_t* buf, int32_t* dbuf, int dx, int dy) {
   if (dx == 0 && dy == 0) return;
   if (dx <= -kMistW || dx >= kMistW || dy <= -kMistH || dy >= kMistH) {
