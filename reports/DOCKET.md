@@ -2786,6 +2786,37 @@ file down instead of writing up the first plausible story.
 
 ---
 
+## D22 — status after tread 10, stated plainly
+
+**2026-09-06.** The staircase is **finished at ten treads**. Every input the
+bench once supplied to the shell's render port has been moved backwards into a
+composed production block, ending with memory itself. What each tread removed,
+in order: edge coefficients, depth, setup, projection, clipping, triangle
+assembly, vertex decode, the asset fetch, the u8 index stream, and the memory
+those fetches read.
+
+**What is NOT closed, and why it is not being closed now.** The geometry blocks
+are composed into ``tb_zhao_shell.sv``, not into ``zhao_shell_top``. Tread 10
+reaches the shell's real memory through exposed guard and beat ports, which this
+docket already judged "a test-harness shape [that] would not survive into
+production" -- and that judgement stands. The production act is moving
+GEOM.MESHFETCH, GEOM.ASSETFETCH, GEOM.VDECODE and GEOM.ASSEMBLE inside the
+shell top.
+
+This entry's own sequencing defers that: *"Moving them into the top is a
+separate act and belongs after D1."* D1 is the fmax campaign and is still
+running. Composing four more blocks into a top whose timing is actively being
+fought would make every D1 measurement a measurement of a different design, and
+the reason for the ordering has not changed. So the staircase closes here and
+the composition waits on D1 rather than being started because the staircase ran
+out of treads.
+
+**What tread 10 bought for that future step, concretely.** The memory side is
+now known rather than assumed: one geometry client (ENGINE1, slot 3, positional
+in the arbiter), one guard, a read-return route that tags by captured owner, and
+a burst tripwire that admits it. And the guard's actual handshake -- which both
+fetchers had wrong until this tread and no played bench could reveal.
+
 ## D22 — the staircase is complete in the bench; the asset fetcher is not
 
 **2026-09-05. Status change, not a closure.**
