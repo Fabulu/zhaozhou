@@ -1,7 +1,7 @@
 # Contract — GEOM.ASSETFETCH (the meshlet asset reader)
 
 > Ledger: `design/blocks.yml` · gpu clock · maturity **SPECIFIED**
-> RTL: *not yet written*
+> RTL: **`fpga/rtl/geometry/zhao_geom_assetfetch.sv`** (compact single-bank WP6 checkpoint)
 > Reference: **`zref::AssetFetch`** (`reference/include/zref/zref_assetfetch.hpp`)
 
 ## Why it exists
@@ -58,9 +58,27 @@ about simplicity, it is about three specific properties a cache would not have:
 3. **Determinism.** Same meshlet, same beats, same order, every run — so the
    differential test is exact rather than statistical.
 
-**Double-buffered**: meshlet *N+1* is fetched while *N* is served, so the
+**Double-buffered target**: meshlet *N+1* is fetched while *N* is served, so the
 prefetch latency is paid once rather than per meshlet. Cost is ~4.8 KB of block
 memory (≈5 M10K).
+
+**WP6 migration checkpoint (2026-09-06): compact one bank first.** The current
+RTL deliberately keeps one fill engine and the existing reader timing while
+proving the bank-local representation independently of overlap. Every returning
+word is classified by its position in the fetched whole-line run. Whole prefix
+and suffix words are discarded; useful index and vertex words are written from
+local RAM offset zero. The exact index-byte count is retained because the final
+word may contain one to seven transferred suffix bytes which are not indices.
+
+For the default limits, one compact bank is 256 vertex words plus 48 meaningful
+index words. The index RAM allocates 64 words per copy so every adjacent two-word
+triplet read is bounded and the later bank/local address split remains simple.
+The double-buffered target is the next step only after this representation is
+byte-exact for every permitted prefix and tail.
+
+ENFORCED-BY: `tests/geometry/assetfetch_rtl_directed.cpp` (**152 checks,
+passing**; all 8 index prefixes × both vertex prefixes, all 8 index-tail
+remainders, zero streams, and the 40-line maximum)
 
 **THE LIMITS ARE KNOBS.** `MAX_VERTICES`, `MAX_TRIANGLES` and the buffer depth
 are named parameters. If a later ruling raises `vertex_count`, this block gets

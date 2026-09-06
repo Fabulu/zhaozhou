@@ -3356,6 +3356,23 @@ uncontaminated. Compiling the same gate against the pre-fix RTL fails exactly th
 two ownership discriminators: the queued request is accepted early and four
 surplus beats are counted UNOWNED.
 
+**WP6 compact single-bank checkpoint, 2026-09-06, ``41baae63``.** ASSETFETCH
+still fetches the exact oracle-planned sequence of aligned 64-byte lines, but now
+discards every whole prefix/suffix word during fill and writes each useful stream
+from local RAM offset zero. It retains the exact index-byte count for the final
+partial word, uses 48 meaningful words in a 64-word index allocation per copy,
+and reduces the vertex payload from the old 264 raw-line words to exactly 256.
+Reader latency, one fill engine and the held-request episode protocol are
+unchanged; overlap is not yet claimed.
+
+The strengthened RTL/oracle gate sweeps all **8 index prefixes × 2 vertex
+prefixes**, uses triangle counts 17..24 to cover all eight final-word byte
+remainders, retains zero-stream cases, and adds the real worst footprint: seven
+index plus 33 vertex lines, **40 lines** total. Fixed RTL passes **152 checks**.
+A separately built mutation which writes retained words at the old raw-line
+offset while keeping compact readers fails **30 of 152** exact-byte checks, so
+the compaction detector is nonvacuous.
+
 ## D19w — the guard-verdict mistake was in THREE clients, and the third fails the other way
 
 **2026-09-06.** D22 tread 10 found both geometry fetchers testing

@@ -1045,6 +1045,38 @@ known MinGW/Verilator libstdc++ ABI mismatch at link; rebuilding all translation
 units consistently with ``_GLIBCXX_USE_CXX11_ABI=0`` produced the passing gate.
 No broad CMake regeneration was used or claimed.
 
+## ASSETFETCH WP6: compact single-bank bytes are proved before overlap
+
+The texture-island fit closure remained untouched. The next ordered WP6 step was
+the existing single-bank payload representation: fetched whole-line padding made
+the raw buffers 56 index words per copy and 264 vertex words, while the useful
+maximums are only 48 and 256.
+
+Closed in ``41baae63``. The fill path now classifies each returned word against
+the captured stream prefix and exact useful extent, discards whole prefix/suffix
+words, and writes useful data from local offset zero. The index metadata retains
+the exact byte count because 378 bytes end partway through the 48th word. Each
+index copy allocates 64 words for a bounded adjacent-word read and future clean
+bank/local addressing; the vertex RAM is exactly 256 words. Request addresses,
+64-byte/eight-beat protocol, one fill engine, reader timing, held-index episodes,
+and explicit release remain unchanged. No fill/consume overlap is claimed yet.
+
+The focused RTL/oracle gate now covers all eight legal index prefixes crossed
+with both legal vertex prefixes. Triangle counts 17..24 cover all eight final-word
+byte remainders; zero streams and a true maximum-prefix 7+33 = 40-line job also
+run. Results:
+
+    fixed compact RTL   [assetfetch_rtl_directed] 152 checks passed
+    raw-offset mutation [assetfetch_rtl_directed] 30 of 152 checks FAILED
+                        MUTATION_EXIT=1
+
+The mutation kept compact readers but wrote retained words at their old raw-line
+offset. Exact index and vertex checks failed across nonzero prefixes, including
+the 40-line maximum, demonstrating that the expanded sweep detects loss of
+compaction. Both variants were verilated and statically linked directly under
+named ``build/focused-assetfetch-compact`` directories, one job at a time; no
+broad CMake regeneration was used or claimed.
+
 ## 2026-09-06 — WHERE I AM, written BEFORE the fit result is read
 
 Composed island fit alive: pid 10768, ~2,996 s CPU, started 11:16:57. Watchdog
