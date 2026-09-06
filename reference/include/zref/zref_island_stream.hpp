@@ -105,7 +105,7 @@ class Streamer {
     // ---- 2. publish what is newly wanted -----------------------------------
     for (const auto& k : want) {
       if (live_.find(k) != live_.end()) { ++st.already; continue; }
-      const uint32_t res_index = resource_index(k.first, k.second);
+      const uint32_t res_index = resource_index(dir_.desc().island_id, k.first, k.second);
       const residency::PublishResult r =
           arena_.publish(res_index, residency::Kind::kTexturePage, /*hps_addr=*/0,
                          /*length=*/page_bytes_, hps_, /*request_epoch=*/1,
@@ -129,12 +129,43 @@ class Streamer {
     hps_ = hps;
   }
 
-  // A patch's resource index. Stable for a given (ix, iz) so that a patch
-  // returning after eviction is recognised as the SAME resource and takes a
-  // generation bump rather than a fresh identity -- which is what makes a
+  // A patch's resource index. Stable for a given (island, ix, iz) so that a
+  // patch returning after eviction is recognised as the SAME resource and takes
+  // a generation bump rather than a fresh identity -- which is what makes a
   // stale handle detectable instead of accidentally valid.
-  static uint32_t resource_index(int32_t ix, int32_t iz) {
-    return (static_cast<uint32_t>(iz) << 16) | (static_cast<uint32_t>(ix) & 0xFFFFu);
+  //
+  // THE ISLAND ID IS IN THE KEY, AND IT WAS NOT.
+  //
+  // The first version of this was `(iz << 16) | (ix & 0xFFFF)` -- patch
+  // coordinates alone. That is precisely the defect TERRAIN.RESIDENCY's ledger
+  // entry records as already superseded, in its own words:
+  //
+  //     "the direct-mapped prototype is superseded because TWO ISLANDS MAY
+  //      LEGALLY OVERLAP IN LOCAL PATCH COORDINATES"
+  //
+  // and its canonical key is `{resource_epoch, island_id, patch_ix, patch_iz}`.
+  // Two islands sharing a local coordinate would have collided here, and the
+  // collision's symptom is one island's page answering for the other's patch --
+  // a stale handle that still matches, which is the exact failure the whole
+  // evict-and-return path exists to detect. Building a second residency model
+  // without reading the first one's key is how that gets reintroduced.
+  //
+  // EXACT, NOT HASHED. A hash would need a collision story and a residency key
+  // that collides is a wrong-patch bug, so the field widths are stated and
+  // asserted instead: 8 bits of island, 12 bits each of ix and iz. 12 bits is
+  // 4,096 patches per axis against the 8 km island's 125, so the bound is not
+  // tight; it is checked rather than assumed because an out-of-range value
+  // would alias silently.
+  static uint32_t resource_index(uint32_t island_id, int32_t ix, int32_t iz) {
+    const uint32_t i = static_cast<uint32_t>(ix) & 0xFFFu;
+    const uint32_t z = static_cast<uint32_t>(iz) & 0xFFFu;
+    return ((island_id & 0xFFu) << 24) | (z << 12) | i;
+  }
+
+  // True when a coordinate fits the key's field widths. Callers that stream a
+  // larger island than the key can address must be told, not silently aliased.
+  static bool key_fits(uint32_t island_id, int32_t ix, int32_t iz) {
+    return island_id <= 0xFFu && ix >= 0 && ix < 4096 && iz >= 0 && iz < 4096;
   }
 
  private:

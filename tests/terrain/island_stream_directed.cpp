@@ -135,7 +135,7 @@ int main() {
     v.radius = radius;
     st.update(v, &L);
 
-    const uint32_t idx = isl::Streamer::resource_index(20, 62);
+    const uint32_t idx = isl::Streamer::resource_index(d.island_id, 20, 62);
     const bool pinned = arena.pin(idx);
     check(pinned, "a visible patch can be pinned", 1, pinned ? 1 : 0);
 
@@ -153,6 +153,46 @@ int main() {
           1, L.reclaim_blocked_by_pin > before ? 1 : 0);
     check(arena.mapping(idx) != nullptr, "the pinned patch is still mapped after the camera left",
           1, arena.mapping(idx) != nullptr ? 1 : 0);
+  }
+
+  // ---- TWO ISLANDS, ONE LOCAL COORDINATE ----------------------------------
+  // The residency key used to be (iz << 16) | ix -- patch coordinates alone.
+  // TERRAIN.RESIDENCY's ledger entry records that exact shape as ALREADY
+  // SUPERSEDED, and says why in its own words: "two islands may legally overlap
+  // in local patch coordinates". Its canonical key carries the island id.
+  //
+  // A collision here does not look like a crash. It looks like one island's
+  // page answering for another island's patch -- a stale handle that still
+  // matches, which is the precise failure the evict-and-return path above
+  // exists to detect and would therefore be masked by.
+  {
+    const uint32_t a = isl::Streamer::resource_index(0x51u, 20, 62);
+    const uint32_t b = isl::Streamer::resource_index(0x52u, 20, 62);
+    check(a != b,
+          "two DIFFERENT islands sharing a local patch coordinate get different "
+          "resource indices -- the island id is in the key, as "
+          "TERRAIN.RESIDENCY's canonical key already required",
+          1, a != b ? 1 : 0);
+
+    const uint32_t same = isl::Streamer::resource_index(0x51u, 20, 62);
+    check(a == same,
+          "and the same island's same patch is still the SAME resource, so a "
+          "patch returning after eviction keeps its identity rather than "
+          "getting a fresh one",
+          1, a == same ? 1 : 0);
+
+    // Neighbouring coordinates must not alias either -- a field-packed key
+    // gets that wrong by one shift, silently.
+    check(isl::Streamer::resource_index(0x51u, 21, 62) != a &&
+              isl::Streamer::resource_index(0x51u, 20, 63) != a,
+          "and neighbours in x and z are distinct from it, so the packing is "
+          "not off by a shift",
+          1, 1);
+
+    check(isl::Streamer::key_fits(0x51u, 124, 124) && !isl::Streamer::key_fits(0x51u, 4096, 0),
+          "the key's field widths are CHECKED rather than assumed -- an island "
+          "larger than the key can address must be told, not aliased",
+          1, 1);
   }
 
   std::printf("[island_stream_directed] %d checks %s\n", g_checks, g_failed ? "FAILED" : "passed");
