@@ -1,0 +1,6 @@
+zixxtrixx-attack 0x86A2B30B
+zixxtrixx-balance 0x301EFBA6
+zixxtrixx-bow 0xEC2CAD71
+zixxtrixx-corpse 0x4B449AB5
+zixxtrixx-damage 0x6C224D56
+zixxtrixx-death 0x2E8755B3

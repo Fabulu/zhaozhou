@@ -282,3 +282,180 @@ built for it. Also visible and unchanged: the antenna is one continuous surface,
 no countable spheres (pass 6's win survives), and the near eye's star is a bar
 while the far eye's is a clean 4-point star (the declared limitation).
 Minor: at cam_k 620000 the loop is CROPPED by the top of frame on early frames.
+
+## Claim 8 (Zixxtrixx untouched) — PROVED BY CRC FROM A BASELINE I BUILT (gate item 21)
+Pass 7 proved this "by inspection" (no zixx file in the diff). The checklist asks
+for CRC from a baseline you built yourself, so I built one.
+Second clone at `manafold-p7-qa/base-zhaozhou` @ **b4e9a311** — the merge
+immediately BEFORE pass 7's first commit (1ab3f91e). `BASE_BUILD_RC=0`,
+binary 2,735,868 B (pass 7's is 2,739,759 B, so they are genuinely different
+builds). Same six subjects, same env, from each binary:
+
+| subject | pass 7 | baseline b4e9a311 | |
+|---|---|---|---|
+| zixxtrixx-attack  | 0x86A2B30B | 0x86A2B30B | IDENTICAL |
+| zixxtrixx-balance | 0x301EFBA6 | 0x301EFBA6 | IDENTICAL |
+| zixxtrixx-bow     | 0xEC2CAD71 | 0xEC2CAD71 | IDENTICAL |
+| zixxtrixx-corpse  | 0x4B449AB5 | 0x4B449AB5 | IDENTICAL |
+| zixxtrixx-damage  | 0x6C224D56 | 0x6C224D56 | IDENTICAL |
+| zixxtrixx-death   | 0x2E8755B3 | 0x2E8755B3 | IDENTICAL |
+
+**CONFIRMED.** The shared `zhao_reel.cpp` edit (the smear clamp and the new
+Manafold subject block) does not reach any Zixxtrixx path. This is the check
+that catches "a stray edit that silently retimed five cameras", and it is clean.
+
+## EVERY GATE FED A KNOWN-BAD INPUT
+| gate | can it fail? | evidence |
+|---|---|---|
+| 5c rule 1 (overhang) | **NO — vacuous** | E3: 0 star verts -> 0 mm vs cap 29, OK |
+| 5c rule 2 (on-purple) | **NO — vacuous** | E3: 0 verts -> 1000 pm vs floor 600, OK |
+| 5c rule 3 (outline) | not enforced anyway | E3: 0 verts -> 0 violations |
+| 5d gate A (eyes touch) | **YES** | E4: FAILs from 1040 a16; also vacuous at 0 verts, but 5d prints a census |
+| 5d gate B (clipping) | YES, fails safe | no lens verts -> worst stays 1<<30, `< 1000` false -> FAIL |
+| eye-protrusion | YES, fails safe | no verts -> max_e 0, `>= 1215` false -> FAIL |
+| clearance contract | YES, fails safe | `T.mesh.empty()` returns 1 up front |
+| hinge_trajplot | **YES** | committed selftest: flat 0.00 vs moving 80.00 mm; r 1.000 vs 0.000 |
+| boundscan.py | YES for its one shape | fires on the p6 tree, silent on the fix — but 16 proven blind spots |
+| checkmedia.py | (see media audit) | |
+| my own skycross v1 | **NO — dead** | 0% coverage; caught by a planted blob |
+
+**The 5c rules are the dead ones.** Three gates pass with zero vertices walked
+and print no warning. The 5d block prints an instrument census; 5c does not.
+Fix: assert a non-zero star-vertex count, and derive the star colour from
+`u02::kStar*` rather than the literal `246,242,250`.
+
+## MINOR / LATENT
+* `manafold_probe.cpp` uses `T.bank.clips[7]` by POSITION with a comment saying
+  "slot 7". It is correct today (manafold.h:138) but it is an index-by-position
+  where every other read is by slot_id. One reorder and the protrusion gate
+  silently measures a different clip.
+* The 5c rules walk `bank.clips` including **slot 15, `lab::build_manalab()`,
+  marked LANE-ONLY** — a clip that never ships is inside the shipping gate's
+  population.
+* `manafold-antenna-fixed` is committed but was NOT among the 22 rendered
+  subjects, so §2a's own diagnostic was never rendered by the pass that built it.
+
+## WHAT IS RIGHT (gate item 24 — the protected list)
+Pass 7 is the most honest pass this creature has had. Protect these:
+1. **The three stacked bugs are real, correctly diagnosed, and correctly fixed.**
+   The units bug, the bind-space frame bug and the Y-only root subtraction are
+   all genuine, and the peeling order described is the order they hide in. The
+   final numbers reproduce EXACTLY from an independent build.
+2. **All 22 CRCs reproduce bit-for-bit**, with frame counts and colour counts,
+   from one binary whose md5 I recorded before the render and re-checked after
+   every later compile. hover == inspect at 0 of 600 frames.
+3. **Gate A's roll sweep was the right call and its diagnosis is sound.** I
+   reproduced the non-monotonic profile independently and it is worse than
+   reported (a second basin). The 21-step resolution is adequate for the range
+   it covers. Do not go back to corner sampling.
+4. **The star re-proportioning is real work, honestly derived**, and the sheet
+   measurement is legitimately like-for-like (the star is a flat object,
+   `kStarThinMm=16`, drawn as a flat graphic; PCA aspect is rotation-invariant).
+   1.70/1.72 reproduces from the sheet independently; shipped is 1.695.
+5. **Zixxtrixx is untouched, proven by CRC across the pass boundary.**
+6. **The tip degeneracy fix is structural**, with a `static_assert` guarding it.
+7. **The eyes read at native.** At 384x240 both eyes read as small stars where
+   pass 6 had streaks. That is the pass's headline and it clears its own bar.
+8. **The §2a instrument reads the posed skeleton, never pixels**, and its
+   selftest genuinely can fail. The fixed-camera diagnostic really is fixed.
+9. **The publish run's self-reporting is exemplary** — it recorded its own
+   gotcha-§8 mistake, refused to inherit numbers, and captioned the cross-eyed
+   taunt as wired-but-not-reading rather than as delivered.
+
+## RANKED FOR PASS 8
+1. **The 5c rules cannot fail.** Three gates pass with zero vertices walked, on a
+   hard-coded literal colour, with no census. Highest leverage: it silently
+   protects nothing, and the star's colour is exactly the sort of thing this
+   creature keeps changing. (E3)
+2. **`curve(kBrow, 9, f)` on a ten-key array** — manafold_clips.h:890. Latent
+   today only because the last two key values are both 0. Fix the call AND give
+   the file the `sizeof`-derived count convention `zixxtrixx.h` already uses; all
+   36 `curve()` calls there pass hand-written literals.
+3. **Rule 3 measures the wrong outline.** The creature's silhouette is the union
+   of its parts and the cel ink follows it, so "outside the body ellipsoid" is
+   not "against sky". Either model the silhouette as the union in 3D, or retire
+   the rule — but do not tune the creature to satisfy 1499.
+4. **Gate A's margin is 15.6%.** Failure begins 0.77 deg above the shipped cap.
+5. **The mana number is unevidenced.** 8.3% -> 7.9% does not reproduce from the
+   committed tool in either mode (0.7% bright / 10.3% diffpair). The #1-ranked
+   fault of the creature has no reproducible measurement. Fix the tool or the
+   claim before anyone tunes against it.
+6. **Seven-plus false comments**, three inside the block pass 7 rewrote, one of
+   which pass 6 already announced it had deleted; plus a cited colour
+   (58,28,156) that exists nowhere in the tree. The pass-5 containment
+   derivation now yields a NEGATIVE allowed gaze from current inputs.
+7. **boundscan.py has 16 proven blind spots** and a permanent floor of 18
+   suspects, so going non-empty signals nothing.
+8. Rule 3's root-ROTATION omission (13 of 1499 — correctness, not urgency).
+9. `clips[7]` by position; slot 15 (LANE-ONLY) inside the shipping gate.
+10. `manafold-antenna-fixed` is never rendered by the publish set.
+
+## VERDICT PER CLAIM
+1. three stacked bugs / final numbers — **CONFIRMED**; a FOURTH exists
+   (`kBrow`, shipped BY pass 7) and a FIFTH (rule 3's outline model)
+2. gate A sweeps, can fail, step fine enough — **CONFIRMED**, + a second basin
+3. rule 3 reported-not-enforced, fault real — **PARTLY REFUTED**: the count is
+   real, "into sky" is not established and is contradicted by the frames
+4. boundscan proved failable, 18 false positives — **CONFIRMED with caveats**;
+   16 blind spots, 2 dissents, and a new real bug it cannot see
+5. black notches: instrument vs real — **CONFIRMED**, instrument fault is larger
+   than stated; plus an eighth false comment
+6. star proportion 1.70 -> 1.695 — **CONFIRMED** independently from the sheet
+7. §2a scoring — **CONFIRMED in substance**; the degrees are not emitted by any
+   committed tool and the true spread is 12-46 deg, not 20-30
+8. Zixxtrixx untouched — **CONFIRMED by CRC from a baseline I built**
+9. media/site — see the media audit section
+10. kFogThicknessPm the only false comment — **REFUTED**, at least seven more
+
+## Claim 9 (media / site) — CONFIRMED, with one misleading proof and 7 blind spots
+`Upheaval/website/tools/checkmedia.py`.
+* **(a) 981 decoded — CONFIRMED**, and 981 reconciles THREE ways: manifest
+  declares 981, index.html references 981, set difference 0 both directions.
+  Independent full-bank sweep: all 486 declared webms decoded, 0 nonzero rc,
+  0 stderr.
+* **(b) "proved failable against a 2000-byte stub" — CONFIRMED BUT MISLEADING.**
+  It fails, but **the SIZE FLOOR rejects it, not the decoder**: `2000 B is below
+  the 8192 B floor`, `2 declared files, 1 decoded` — ffmpeg never touched the
+  stub. The docstring justifies the tool by "ffprobe returns 0 on a truncated
+  stub, so we decode every frame", and then proves it with a fixture that
+  exercises `os.path.getsize`. The claimed capability is untested by the cited
+  test.
+* **(c) production byte-identical — CONFIRMED.** `curl | cmp` against the
+  committed `public/index.html`: exit 0. And the committed page is itself the
+  exact regeneration of `creatures.json` — re-running `assemble.py` differs on
+  ONE line, the build timestamp. Not stale, not hand-edited.
+* **(d) 808 Zixxtrixx decoded — CONFIRMED** (173 + 808 = 981, no overlap).
+* **(e) noindex / ordering / generations — CONFIRMED**, and at 20 generations
+  `assemble.py` HARD-ERRORS rather than silently dropping — proved on a doctored
+  manifest.
+* **Every frame count on disk matches the declared lengths exactly.** No dead
+  media, no 0-frame file, no missing poster.
+
+### checkmedia.py's proven blind spots (fixtures)
+DETECTED: 0-byte; 2000-byte truncation; declared-but-absent; missing poster.
+**SLIPS:** a 400 KB truncation of a 516 KB clip (loses 51 of 240 frames and
+**ffmpeg still exits 0**); a valid webm with 10 frames instead of 240; a valid
+240-frame ENTIRELY BLACK clip; the WRONG CLIP under the right name; a poster
+mismatched to its webm; a 1x1 poster; a file on disk never referenced.
+**Most actionable: `decode_webm` checks only `returncode` while ffmpeg prints
+"File ended prematurely" to the stderr the function already captures and
+DISCARDS.** One line — fail on non-empty stderr — closes it. This is the exact
+shape of the historical dead-`inspect` fault.
+
+### A second gate that cannot fail — `check_css_wiring`
+Its regex matches BOTH the tab family and the archive-generation family, then
+asserts only `max(...) >= MAX_TABS`, so the generation family topping out at 19
+is invisible. Proved: with `MAX_ARCHIVE_GENERATIONS = 20` the check still
+reports PASS and assemble builds a 20-generation page whose generation-20 label
+and panel select nothing — a silent dead tab, the precise failure the guard
+exists to prevent. (The separate assemble-time check does catch it, so the page
+is safe today; the GUARD is the dead thing.)
+
+### Noted, not faults
+* hover and inspect webms have identical byte sizes (3,604,337) but different
+  md5s — coincidence, flagged only because it mimics the historical dead-inspect
+  fault.
+* Archive generations Sixteen/Seventeen/Eighteen share 20 of 22 clips
+  byte-identically: 19 generations structurally, 444 distinct contents of 486.
+* 12 unreferenced orphan files on disk; posters are 1152x720 against 384x240
+  clips (a deliberate 3x supersample).

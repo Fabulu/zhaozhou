@@ -1,0 +1,32 @@
+CC zref_frame
+CC zref
+CC zref_audio
+CC zref_video
+CC zfield/zfield_decode
+CC zfield/zfield_interpret
+CC zfield/zfield_plan
+CC zterrain/terrain_core
+CC zrender/render_frame
+CC zrender/rast
+CC zrender/edgewalk
+CC zrender/geom
+CC zrender/terrain
+CC zrender/sprites
+CC zrender/resolve
+CC zrender/tilestore
+CC zrender/tileresolve
+CC zrender/earlyz
+CC zrender/fragment
+CC zrender/texture
+CC zsky/emit_layers
+CC zsky/star_gamut
+CC zsky/star_bake
+CC zsky/star_flare
+CC zsky/star_field
+CC zsky/star_compose
+CC zsky/env_state
+CC zcreature/creature_core
+CC zcreature/creature_sim
+LD zhao-reel-cel
+build-direct: done (/c/programmieren/zencrifice/manafold-p7-qa/base-build/bin)
+BASE_BUILD_RC=0
