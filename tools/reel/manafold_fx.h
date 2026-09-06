@@ -1071,6 +1071,117 @@ struct FoldState {
 // pure barycentric shape; U02_FOLD_DEBUG=1 prints the per-frame scalars.
 inline int g_u02_fold_lock = 0;
 inline int g_u02_fold_debug = 0;
+
+// ======================= LANE-ONLY: STAGE L PARTICLE LAB ===================
+// NOT FOR MERGE. Direction 8 §5 asks for an EXPERIMENT round on the particles
+// along four axes -- shape, quantity, constellation, size -- with every variant
+// shown FOLDING. That is ~20 variants; twenty builds of the reel is not a lab,
+// it is a week. So the lab's knobs become runtime overrides read from the
+// environment ONCE at start-up, defaulting EXACTLY to the shipped constants, so
+// an unset binary renders the shipped look bit-for-bit. The deliverable of this
+// lane is a PROPOSED-CONSTANTS document; this block is the instrument that
+// produced it and is never merged to main.
+inline int g_pl_mote_count    = kMoteCount;
+inline int g_pl_wander_count  = kWanderCount;
+inline int g_pl_halo_rmin     = kMoteHaloRPxMin;
+inline int g_pl_halo_rmax     = kMoteHaloRPxMax;
+inline int g_pl_core_of_halo  = kMoteCoreOfHaloPm;
+inline int g_pl_halo_gain     = kMoteHaloGainPm;
+inline int g_pl_cloud_spread  = kCloudSpreadMm;
+inline int g_pl_edge_core_r   = kFoldEdgeCoreRPx;
+inline int g_pl_edge_halo_r   = kFoldEdgeHaloRPx;
+inline int g_pl_edge_halo_g   = kFoldEdgeHaloGainPm;
+// THE DEAD KNOB, MADE LIVE IN THE LANE. kFoldEdgeCoreGainPm = 430 sits in
+// manafold_art.h with NO READER anywhere in the tree -- the edge core stamp
+// below pushes a hard-coded 1000. Confirmed by grep: one occurrence, its own
+// definition. Reported in PARTICLE-LAB-FINDINGS.md.
+inline int g_pl_edge_core_g   = 1000;
+inline int g_pl_edge_jit      = kFoldEdgeJitterMm;
+// particle SHAPE mode and CONSTELLATION mode -- the two axes that are not a
+// single number. 0 = the shipped behaviour in both cases.
+inline int g_pl_pshape        = 0;
+inline int g_pl_pcon          = 0;
+// mm of stamp separation per halo pixel, for the multi-stamp shapes
+inline int g_pl_shape_sep     = 11;
+
+// ---- the PARTICLE SHAPE menu (axis 1 of Direction 8 §5) -------------------
+// One particle is a set of stamps. The shipped particle is a SPHERE: an
+// additive halo with a solid soft heart drawn over it (pass 8's order). The
+// other modes are the owner's "different shapes ... of the particular particles
+// themselves". `dir` is the mote's own drag/travel direction in world units,
+// used only by the DASH mode; it may be all-zero.
+//   0 BLOB     the shipped sphere
+//   1 SPARK    small, crisp, hard-edged: no soft falloff, tiny halo
+//   2 HAZE     halo only, wider and softer, no solid body at all
+//   3 ANNULUS  four small solid bodies on a ring: a hollow particle
+//   4 DASH     three bodies strung along the travel direction: an elongated
+//              particle that lies along the motion, the iron-filing read
+//   5 SPARKLE  a centre body plus four axis pips: a tiny four-point star,
+//              which rhymes with the creature's own pupil
+inline void pl_stamp_mote(std::vector<ManaSplat>& out, const int32_t P[3],
+                          int32_t halo, uint8_t ramp, const int32_t dir[3]) {
+  const int32_t g = g_pl_halo_gain;
+  const int32_t core = halo * g_pl_core_of_halo / 1000;
+  const uint8_t cr = mana_core_ramp(ramp);
+  switch (g_pl_pshape) {
+    default:
+    case 0:
+      mana_push(out, P[0], P[1], P[2], halo, ramp, g, true, false);
+      mana_push(out, P[0], P[1], P[2], core, cr, 1000, true, false, true, true);
+      break;
+    case 1: {  // SPARK -- crisp: half the halo, and the body is NOT soft
+      mana_push(out, P[0], P[1], P[2], halo * 55 / 100, ramp, g, true, false);
+      mana_push(out, P[0], P[1], P[2], core * 60 / 100, cr, 1000, true, false,
+                true, false);
+      break;
+    }
+    case 2:  // HAZE -- no solid body; a wider, dimmer additive puff
+      mana_push(out, P[0], P[1], P[2], halo * 140 / 100, ramp, g * 80 / 100,
+                true, false);
+      break;
+    case 3: {  // ANNULUS -- four small bodies on a ring of radius ~0.8 halo
+      mana_push(out, P[0], P[1], P[2], halo, ramp, g * 70 / 100, true, false);
+      const int32_t rr = fxu(halo * g_pl_shape_sep * 8 / 10);
+      static const int32_t ox[4] = {1, 0, -1, 0}, oy[4] = {0, 1, 0, -1};
+      for (int q = 0; q < 4; ++q)
+        mana_push(out, P[0] + ox[q] * rr, P[1] + oy[q] * rr, P[2],
+                  core * 50 / 100, cr, 1000, true, false, true, true);
+      break;
+    }
+    case 4: {  // DASH -- three bodies along the travel direction
+      int32_t d[3] = {dir[0], dir[1], dir[2]};
+      const int64_t m2 = static_cast<int64_t>(d[0]) * d[0] +
+                         static_cast<int64_t>(d[1]) * d[1] +
+                         static_cast<int64_t>(d[2]) * d[2];
+      const int64_t m = isqrt64(m2);
+      const int32_t step = fxu(halo * g_pl_shape_sep * 12 / 10);
+      if (m > 0) {
+        for (int k = 0; k < 3; ++k)
+          d[k] = static_cast<int32_t>(static_cast<int64_t>(d[k]) * step / m);
+      } else {
+        d[0] = step; d[1] = 0; d[2] = 0;  // a resting mote lies flat
+      }
+      mana_push(out, P[0], P[1], P[2], halo * 115 / 100, ramp, g, true, false);
+      for (int t = -1; t <= 1; ++t) {
+        const int32_t sc = t == 0 ? 100 : 62;
+        mana_push(out, P[0] + d[0] * t, P[1] + d[1] * t, P[2] + d[2] * t,
+                  core * sc / 100, cr, 1000, true, false, true, true);
+      }
+      break;
+    }
+    case 5: {  // SPARKLE -- centre body + four axis pips
+      mana_push(out, P[0], P[1], P[2], halo, ramp, g, true, false);
+      mana_push(out, P[0], P[1], P[2], core * 85 / 100, cr, 1000, true, false,
+                true, true);
+      const int32_t rr = fxu(halo * g_pl_shape_sep * 9 / 10);
+      static const int32_t ox[4] = {1, 0, -1, 0}, oy[4] = {0, 1, 0, -1};
+      for (int q = 0; q < 4; ++q)
+        mana_push(out, P[0] + ox[q] * rr, P[1] + oy[q] * rr, P[2],
+                  core * 34 / 100, cr, 1000, true, false, true, true);
+      break;
+    }
+  }
+}
 // U02_FOLD_FREEZE=1 (pass 5; replaces the retired U02_ABLATE_KNEAD): the
 // bones keep animating, and ONLY the field's anchor input is frozen at
 // the rest layout. The mana must go static/limp while the antenna keeps
@@ -1291,7 +1402,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       if (!fold_edge_link(ph.shape_to, i)) continue;
       const int j = (i + 1) % kStencilPts;
       bolt_path(S[i], S[j], kFoldEdgeSegs, ph_e, kBoltSeed ^ (0x5EDu * (i + 1)),
-                pts, kFoldEdgeJitterMm);
+                pts, g_pl_edge_jit);
       for (int sgi = 0; sgi < kFoldEdgeSegs; ++sgi) {
         int64_t dx = (pts[sgi + 1][0] - pts[sgi][0]) >> 16;
         int64_t dy = (pts[sgi + 1][1] - pts[sgi][1]) >> 16;
@@ -1305,28 +1416,29 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
           const int32_t x = lerp32(pts[sgi][0], pts[sgi + 1][0], t, nst);
           const int32_t y = lerp32(pts[sgi][1], pts[sgi + 1][1], t, nst);
           const int32_t z = lerp32(pts[sgi][2], pts[sgi + 1][2], t, nst);
-          mana_push(out, x, y, z, kFoldEdgeHaloRPx, ramp,
-                    kFoldEdgeHaloGainPm * lit / 1000, true, false);
+          mana_push(out, x, y, z, g_pl_edge_halo_r, ramp,
+                    g_pl_edge_halo_g * lit / 1000, true, false);
           // The core is pass 8's SOFT body, in the fold's own ramp. The lab
           // measured that an outline stamped with the lightning primitive's
           // hard-coded white core put 366 near-white px on screen and dropped
           // saturation to 108.9 against a 142.1 control. A white outline reads
           // as a glitch; an aqua one reads as mana that has been folded.
-          mana_push(out, x, y, z, kFoldEdgeCoreRPx, mana_core_ramp(ramp),
-                    1000, false, false, /*opaque=*/true, /*soft=*/true);
+          mana_push(out, x, y, z, g_pl_edge_core_r, mana_core_ramp(ramp),
+                    g_pl_edge_core_g, false, false, /*opaque=*/true, /*soft=*/true);
         }
       }
     }
   }
 
   // ---- the motes ---------------------------------------------------------
-  int n_motes = kMoteCount * crowd_pm / 1000;
+  int n_motes = g_pl_mote_count * crowd_pm / 1000;  // LANE: axis QUANTITY
   if (n_motes < 6) n_motes = 6;
-  const int n_wander = kWanderCount;
+  const int n_wander = g_pl_wander_count < n_motes ? g_pl_wander_count : 0;
   const int n_shape = n_motes - n_wander;
   for (int m = 0; m < n_motes; ++m) {
     const uint32_t hm = fx_hash(0xF01Du, static_cast<uint32_t>(m), 0xA7u);
     int32_t P[3];
+    int32_t con_size_pm = 1000;  // LANE: per-mote size, set by the constellation
     if (m >= n_shape) {
       // WANDER: slow hashed walks that leave the pocket and curve off oddly
       // (the owner's "drift off in weird ways"); the smear traces them.
@@ -1355,7 +1467,38 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
              static_cast<int32_t>((static_cast<int64_t>(fxu(220)) * fx_sin16(th_slow + ph1)) >> 16);
       P[2] = A.ring[2] + static_cast<int32_t>((static_cast<int64_t>(r2) * fx_sin16(th + ph1 + 0x4000u)) >> 16);
     } else {
-      const int stn = m * kStencilPts / (n_shape > 0 ? n_shape : 1);
+      // ---- LANE: axis CONSTELLATION -- how the particles sit relative to
+      // each other along the stencil. 0 is the shipped even march.
+      const int nsh = n_shape > 0 ? n_shape : 1;
+      int stn = m * kStencilPts / nsh;
+      int32_t con_scale_pm = 1000;   // radial echo (TWIN SHELL)
+      int32_t con_tight_pm = 1000;   // per-mote cloud-spread multiplier
+      switch (g_pl_pcon) {
+        default:
+        case 0:
+          break;
+        case 1: {  // CLUMPED: triplets parked on every third station with clear
+                   // gaps between them -- constellations, not an even march
+          const int grp = m / 3;
+          const int ngrp = (nsh + 2) / 3;
+          stn = (grp * kStencilPts / (ngrp > 0 ? ngrp : 1)) % kStencilPts;
+          con_tight_pm = 320;
+          break;
+        }
+        case 2:  // GRADED: big accents every third station, small between, so
+                 // the shape is read from its accents rather than uniformly
+          con_size_pm = (stn % 3 == 0) ? 1550 : 620;
+          break;
+        case 3:  // TWIN SHELL: half the population echoes the outline at a
+                 // larger radius -- a double stroke
+          if ((m & 1) != 0) { con_scale_pm = 1380; con_size_pm = 620; }
+          con_tight_pm = 500;
+          break;
+        case 4:  // BEADED: alternating large and small, spacing kept even
+          con_size_pm = (m & 1) ? 1450 : 700;
+          con_tight_pm = 600;
+          break;
+      }
       const auto bary = [&](uint8_t shape_id, int32_t q[3]) {
         const uint16_t* wt = fw.w[shape_id][stn];
         for (int k = 0; k < 3; ++k) {
@@ -1377,6 +1520,11 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       // yaw, the two slow turns, the knead's malleability, the clearance
       // offset. Shared so the outline and the motes cannot disagree.
       place(Pst);
+      if (con_scale_pm != 1000) {  // LANE: TWIN SHELL echoes about the pocket
+        for (int k = 0; k < 3; ++k)
+          Pst[k] = A.ring[k] + static_cast<int32_t>(
+              (static_cast<int64_t>(Pst[k] - A.ring[k]) * con_scale_pm) / 1000);
+      }
       // the cloud relax position: hashed offset + ONE slow consistent orbit
       // (R7: a single angular velocity per mote, long period, no doubling).
       // PASS 5 (the hover loop-seam, reviewer item 8): the hashed period is
@@ -1402,9 +1550,10 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       orb[1] = static_cast<int32_t>((static_cast<int64_t>(orad * 3 / 4) * fx_sin16(th + oph)) >> 16);
       orb[2] = static_cast<int32_t>((static_cast<int64_t>(orad / 2) * fx_sin16(th + oph + 0x3800u)) >> 16);
       int32_t cloud_off[3];
-      cloud_off[0] = fxu(fx_jit(hm, kCloudSpreadMm));
-      cloud_off[1] = fxu(fx_jit(hm >> 7, kCloudSpreadMm * 3 / 4));
-      cloud_off[2] = fxu(fx_jit(hm >> 13, kCloudSpreadMm / 2));
+      const int32_t csp = g_pl_cloud_spread * con_tight_pm / 1000;
+      cloud_off[0] = fxu(fx_jit(hm, csp));
+      cloud_off[1] = fxu(fx_jit(hm >> 7, csp * 3 / 4));
+      cloud_off[2] = fxu(fx_jit(hm >> 13, csp / 2));
       // coherence blends the mote from its relaxed cloud onto the stencil
       for (int k = 0; k < 3; ++k) {
         const int32_t cloud = Pst[k] + cloud_off[k] + orb[k];
@@ -1420,6 +1569,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       P[1] += fxu(fx_jit(hj >> 9, jmm));
       P[2] += fxu(fx_jit(hj >> 17, jmm));
     }
+    int32_t mdir[3] = {0, 0, 0};  // LANE: travel direction, for the DASH shape
     // DRAG: the lagged pull along the antenna's sweep (iron filings).
     // PASS 5: clamped by MAGNITUDE (kDragMaxMm) so a violent stationary
     // gesture cannot fling the motes across the loop -- see the constant.
@@ -1440,11 +1590,16 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
         for (int k = 0; k < 3; ++k)
           dsp[k] = static_cast<int32_t>(dsp[k] * cap / mag);
       }
-      for (int k = 0; k < 3; ++k) P[k] += dsp[k];
+      for (int k = 0; k < 3; ++k) { P[k] += dsp[k]; mdir[k] = dsp[k]; }
     }
     // draw: an opaque heart under an additive halo (R7 -- filled and BIG)
-    const int32_t halo = kMoteHaloRPxMin +
-        static_cast<int32_t>((hm >> 5) % static_cast<uint32_t>(kMoteHaloRPxMax - kMoteHaloRPxMin + 1));
+    // LANE: axis SIZE (the population's radius band) and the constellation's
+    // per-mote size multiplier.
+    const int32_t rspan = g_pl_halo_rmax - g_pl_halo_rmin + 1;
+    int32_t halo = g_pl_halo_rmin +
+        static_cast<int32_t>((hm >> 5) % static_cast<uint32_t>(rspan > 0 ? rspan : 1));
+    halo = halo * con_size_pm / 1000;
+    if (halo < 2) halo = 2;
     // PASS 8 -- THE ORDER IS THE FIX, and it took looking to find it.
     //
     // The first pass-8 attempt gave the opaque heart its own dark saturated
@@ -1465,10 +1620,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     // count, not the radii, not the spread, and NOT kMoteHaloGainPm -- the lab
     // measured that raising any of those buys overlap and loses the hue, which
     // is the fault being fixed here. This is a draw-order change and a radius.
-    mana_push(out, P[0], P[1], P[2], halo, ramp, kMoteHaloGainPm, true, false);
-    mana_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000,
-              mana_core_ramp(ramp), 1000,
-              true, false, /*opaque=*/true, /*soft=*/true);
+    pl_stamp_mote(out, P, halo, ramp, mdir);  // LANE: axis SHAPE
   }
   return agit;
 }

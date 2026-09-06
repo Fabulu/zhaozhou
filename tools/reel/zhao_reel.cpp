@@ -76,6 +76,10 @@ namespace {
 
 std::string g_out;
 bool g_write = true;  // --check: render + verify CRCs only, write nothing
+// LANE-ONLY (Stage L particle lab), NOT FOR MERGE: PL_FRAMES=lo:hi limits which
+// frames reach disk. Simulation and rendering are untouched, so the written
+// frames are bit-identical to the same frames of a full render.
+int g_pl_frame_lo = -1, g_pl_frame_hi = -1;
 
 // ---------------------------------------------------------------- output ----
 
@@ -4500,7 +4504,10 @@ int render_scene(const SceneSubject& sub) {
     frame_crcs.push_back(zhao_abi::zhao_crc32c(0, rgb.data(), rgb.size()));
     seq_crc = zhao_abi::zhao_crc32c(seq_crc, rgb.data(), rgb.size());
 
-    if (g_write) {
+    const bool in_window =
+        g_pl_frame_lo < 0 ||
+        (static_cast<int>(f) >= g_pl_frame_lo && static_cast<int>(f) <= g_pl_frame_hi);
+    if (g_write && in_window) {
       char fp[600];
       std::snprintf(fp, sizeof(fp), "%s/%04u.rgb", dir.c_str(), f);
       if (!write_rgb(fp, W, H, rgb)) return 2;
@@ -7266,6 +7273,54 @@ int main(int argc, char** argv) {
     u02::g_u02_fold_lock = std::string(fl) == "1" ? 1 : 0;
   if (const char* fd = std::getenv("U02_FOLD_DEBUG"))
     u02::g_u02_fold_debug = std::string(fd) == "1" ? 1 : 0;
+  // ---- LANE-ONLY (Stage L particle lab). NOT FOR MERGE. Every one of these
+  // defaults to the shipped constant, so an unset binary is the shipped look.
+  {
+    struct PLKnob { const char* env; int* dst; };
+    const PLKnob pl[] = {
+        {"PL_MOTE_COUNT", &u02::g_pl_mote_count},
+        {"PL_WANDER", &u02::g_pl_wander_count},
+        {"PL_HALO_RMIN", &u02::g_pl_halo_rmin},
+        {"PL_HALO_RMAX", &u02::g_pl_halo_rmax},
+        {"PL_CORE_OF_HALO", &u02::g_pl_core_of_halo},
+        {"PL_HALO_GAIN", &u02::g_pl_halo_gain},
+        {"PL_CLOUD_SPREAD", &u02::g_pl_cloud_spread},
+        {"PL_EDGE_CORE_R", &u02::g_pl_edge_core_r},
+        {"PL_EDGE_HALO_R", &u02::g_pl_edge_halo_r},
+        {"PL_EDGE_HALO_G", &u02::g_pl_edge_halo_g},
+        {"PL_EDGE_CORE_G", &u02::g_pl_edge_core_g},
+        {"PL_EDGE_JIT", &u02::g_pl_edge_jit},
+        {"PL_PSHAPE", &u02::g_pl_pshape},
+        {"PL_PCON", &u02::g_pl_pcon},
+        {"PL_SHAPE_SEP", &u02::g_pl_shape_sep},
+    };
+    bool any = false;
+    for (const PLKnob& k : pl) {
+      if (const char* v = std::getenv(k.env)) {
+        *k.dst = std::atoi(v);
+        std::fprintf(stderr, "PARTICLE-LAB %s=%d\n", k.env, *k.dst);
+        any = true;
+      }
+    }
+    if (any)
+      std::fprintf(stderr,
+                   "PARTICLE-LAB: lane-only overrides active -- this binary is "
+                   "NOT the shipping look\n");
+  }
+  // PL_FRAMES=lo:hi -- write ONLY frames in [lo,hi]. Every frame is still
+  // simulated and rendered in order, so the fold timeline, the drag ring buffer
+  // and the area EMA are bit-identical to a full render; only the disk write is
+  // skipped. Disk is tight and a lab needs the knead window, not the clip.
+  if (const char* fw = std::getenv("PL_FRAMES")) {
+    const std::string v(fw);
+    const size_t c = v.find(':');
+    if (c != std::string::npos) {
+      g_pl_frame_lo = std::atoi(v.substr(0, c).c_str());
+      g_pl_frame_hi = std::atoi(v.substr(c + 1).c_str());
+      std::fprintf(stderr, "PARTICLE-LAB PL_FRAMES=%d:%d (writes only)\n",
+                   g_pl_frame_lo, g_pl_frame_hi);
+    }
+  }
   // PASS 4 (instrument honesty): ZIXX_HIDE_CREATURE=1 renders every frame
   // with the creature hook skipped -- trajplot.py's creature-free
   // background plate. Unset (the normal case) nothing changes.
