@@ -1248,3 +1248,56 @@ terrain hardware.** No blocking questions; decide and keep moving.
 * TERRAIN.COMPCACHE and TERRAIN.VISIBLE both owe their UNIT_VERIFIED rung,
   which is a separate commit each because V2 checks against the previously
   COMMITTED ledger.
+
+## 2026-09-06 14:28 — THE V2 FIT IS RUNNING
+
+`quartus_fit` pid 32348, snapshot
+`%TEMP%/zhao-block-fit-28184-639242938827611595`, 15 sources. Watcher at
+1800 s, reporting only. Runner's own `TimeoutSeconds` default is 28800, so the
+watchdog cannot fire on a 4 h run — the "enough time" requirement is met by
+the default rather than an override, which is worth knowing before someone
+"helpfully" lowers it.
+
+Launched only after `island_composed_directed` was watched to pass **108/108,
+RC=0**, on a binary confirmed newer than every source it depends on. The
+targeted rebuild before that had failed on a `Permission denied` copying an
+unrelated `.cmake` — a shared-build-dir race with a concurrent lane, not a code
+fault — so the check that mattered was the mtime comparison, not the build.
+
+Closure verified byte-identical to the snapshot AFTER committing files inside
+it, because `git commit` does not rewrite the working tree but it was worth
+proving rather than assuming. **That verification lied once first**: a
+`for f in $(find ...)` loop word-split the snapshot path at the space in the
+user directory, so every `md5sum` got a truncated filename and all 15 files
+"DIFFERED". Read in the safe direction for once — a broken instrument
+reporting a problem that is not there — but the same class of fault.
+
+### What landed since
+
+* **W9b.** `cnt_near_refused_o` 96 → 0. The shared decode already existed twice
+  elsewhere, so it was transcribed rather than authored a third time.
+  `sampmeta_m` 17 → 20 bits, three of them format because that is the mode
+  word's own field width — narrowing to two would alias a malformed format onto
+  a legal one and turn a countable routing fault into a wrong colour. Alpha is
+  real on every path, which matters more than tinting: MASK gates on
+  `s1.a != 0`, so a hardwired opaque alpha PAINTS A SHAPE THAT SHOULD HAVE BEEN
+  CUT AWAY. Costs a clock — filtered alpha must itself be filtered, so bilerp
+  goes 3 → 4 phases and `cnt_bilerp_jobs_o` is now 4 per filtered sample.
+* **TERRAIN.ISLAND's backpressure phase**, the debt this run owed itself.
+  Detector shown to fire: with `ans_free_c` removed, 400 sent → 375 / 325 /
+  388 / 223 answered across four stall patterns. The 3-in-4 row is the one to
+  remember — a consumer ready three quarters of the time still loses answers,
+  so this never needed a pathological bench to hit.
+* **`Stats::peak_resident` fixed.** It was the current live count under a name
+  promising a high-water mark. The traversal test's printed observation is now
+  three assertions, including one that the narrowed window really IS below the
+  peak — otherwise the check could pass by the two merely agreeing.
+
+### Verified vs not, stated exactly
+
+`island_scene_traversal` **231/231 on a real rebuild** (up from 229, which is
+itself the evidence the new assertions compiled in). `island_stream_directed`
+printed 15 passed **on a stale binary** — its build returned RC=1 because a
+concurrent lane is mid-edit on `zhao_terrain_compcache_front.sv` and that
+file's lint gate is part of `build.ninja`'s own regeneration. Re-verify both
+when that lane lands. Nothing from a stale binary has been committed.
