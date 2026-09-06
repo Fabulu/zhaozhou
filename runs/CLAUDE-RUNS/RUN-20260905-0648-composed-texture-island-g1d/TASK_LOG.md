@@ -1136,3 +1136,69 @@ The 15 banned files until this fit lands:
 (`bil_expect_r`) are BLOCKED, not dropped.** Free and being worked instead:
 W10's composed fixture (tests only — `.cpp` is not hashed), the geometry
 ENFORCED-BY sites, ASSETFETCH, and the 8 km terrain work beyond TERRAIN.ISLAND.
+## 2026-09-06 ~13:30 — THE V1 FIT WAS KILLED, ON THE OWNER'S CALL
+
+The composed fit (pid 10768, 1 h 55 m in of ~4 h) was measuring
+`zhao_texture_material_combine_v1`. The owner spotted it: *"why did we launch
+the fit with COMBINE V1? It'll poison the fmax"*. Correct — the previous
+composed fit's worst path was **inside COMBINE.V1 at −5.737 ns**, so this run
+would have reproduced that same critical path and said nothing about the
+rearchitecture.
+
+**How it happened.** V2 was written, its five §9.5 blockers repaired, and its
+differential brought to 27 green checks — and then never wired in. It was
+referenced by nothing but its own test. The owner's sequence had been explicit:
+*"First we need to implement the COMBINE rearchitecture … Only then can we do
+another composed fit."* I did the half of "implement" that produces a verified
+block and skipped the half that puts it in the design.
+
+**The constraint that forced the decision.** `zhao_texture_island_top.sv` is in
+the fit's closure, so the swap could not even be *prepared* while the fit ran —
+it was kill-now or wait two hours to start. The per-block area attribution the
+owner wanted before touching the big stores was already in hand from the
+map-only run (`reports/synthesis/blockpaths/`), so this run's only unique value
+was the composed number, which is the number V1 poisons.
+
+Killed the fitter, the runner and the watcher; verified 0 of each remaining.
+*Stopping an agent does not stop its background work.*
+
+### The swap, and the companion edits it needs
+
+`zhao_texture_island_top.sv` now instantiates `zhao_texture_material_combine_v2
+#(.NCTX(8), .TAGW(ROBTAGW))`. **NCTX is not RECS** — V1's RECS was sample
+records per job; NCTX is material jobs in flight, and the brief calls it "a
+latency-hiding choice, not the global fragment capacity". The island's OWNER
+CREDIT (`OWNER_DEPTH = FCTXN = 64`) is what bounds fragments; wiring FCTXN into
+NCTX would have conflated the two bounds and given the combiner 64 contexts'
+worth of storage to hold two numbers.
+
+Three companion lists had to move with it, and **each one is a separate act**:
+
+* `design/fit_targets.yml` — the composed-island target only. A blanket `sed`
+  also pointed the **standalone `zhao_texture_material_combine_v1` target** at
+  V2, which would have measured the new block against the old block's rules and
+  filed it under the old block's name. Caught and reverted; the production
+  fit's list now carries BOTH sources, since the generated top still names V1
+  elsewhere.
+* `tests/CMakeLists.txt` — the composed-island verilate list. Missing this one
+  broke `build.ninja`'s own regeneration (`MODMISSING … combine_v2`), which
+  blocks every build, not just that target — the trap CLAUDE.md records.
+* `design/prod_manifest.yml` still describes V1 as "the instantiated one" and
+  needs revisiting once the swap settles.
+
+### Blocking the relaunch: the nearest decode station
+
+W10's fixture rebuild measured a real defect: `island_top:~1379`
+`wire near_ok_c = 1'b0;` refuses **every** nearest sample — 96 of 96 RGB565
+nearest samples retired magenta with `cnt_near_refused_o == 96`, invisible for
+as long as every request in the suite was CLUT8.
+
+Owner's call, and it is the right one: *"You shouldn't note it, you should fix
+it before fit."* **Dead code is stripped by synthesis**, so fitting with the
+whole nearest-decode station absent under-reports area — and this fit exists to
+attack a 16k ALM pathology. W9b (the shared format-controlled decode, plus the
+alpha that `fr_tmu_a = 8'hFF` never decodes, plus `chan8()`'s hardwired 5:6:5
+on the bilinear taps) is in flight.
+
+**Order to relaunch:** W9b lands → configure through `cmake --preset` → composed
+island test green → launch, watchdog dead, watcher at 1800 s.
