@@ -138,6 +138,7 @@ int main(int argc, char** argv) {
   qs.push_back({60, kSide, tag++});
   qs.push_back({100000, 60, tag++});
 
+  std::vector<Query> rq;
   isl::Ledger oracle_led{};
   int mismatched = 0, handle_bad = 0, tag_bad = 0, compared = 0;
   std::size_t next = 0;
@@ -305,6 +306,98 @@ int main(int argc, char** argv) {
        oracle_code(want.outcome), seen);
     ck(seen == kBadPitch, "which is BAD_PITCH", kBadPitch, seen);
     ck(d.cnt_bad_pitch > 0, "and it is counted", 1, static_cast<long long>(d.cnt_bad_pitch));
+  }
+
+  // ======================= RANDOMISED, AND NOT DECORATIVE =================
+  // The directed cases above pick their coordinates to exercise named edges.
+  // This DRAWS them, including out-of-range and negative ones, so the outcome
+  // mapping is checked on inputs nobody chose. A deterministic generator, so a
+  // failure is reproducible.
+  {
+    // RESTORE THE DESCRIPTOR. The bad-pitch scenario above deliberately set an
+    // illegal pitch and did not put it back, so every draw here returned
+    // BAD_PITCH while the oracle -- holding a legal descriptor -- returned
+    // something else. All 3,000 mismatched, which is the shape of a systematic
+    // setup error rather than a defect: a real mapping bug does not miss
+    // everything.
+    d.desc_pitch_log2 = 1;
+
+    uint32_t st = 0x151A4Du;
+    auto nxt = [&st]() {
+      st = st * 1664525u + 1013904223u;
+      return st;
+    };
+    const int kN = 3000;
+    int rnd_bad = 0, rnd_handle_bad = 0, rnd_tag_bad = 0;
+    isl::Ledger rl{};
+    int sent = 0, seen = 0;
+
+    // A DRAW IS HELD UNTIL IT IS ACCEPTED. Redrawing the coordinate every
+    // cycle while q_valid is asserted would break the ready/valid contract --
+    // the payload must be stable across a stall -- and it also desynchronises
+    // the expected-answer list from what the block actually consumed. The
+    // first version of this loop did both, and 907 of 3,000 "mismatched": the
+    // 37 resident plus the 870 sky, i.e. every in-extent draw. A defect that
+    // lands on exactly one clean partition of the input is a bench artefact.
+    bool have_draw = false;
+    int32_t qx = 0, qz = 0;
+    uint8_t qtag = 0;
+
+    for (int cyc = 0; cyc < 4000000 && seen < kN; ++cyc) {
+      if (!have_draw && sent < kN) {
+        // A quarter of the draws land outside the extent on purpose, split
+        // between NEGATIVE and BEYOND -- the two ways a coordinate can be out,
+        // and the negative one is where an unsigned compare would wrap it into
+        // the middle of the grid instead of rejecting it.
+        const uint32_t r = nxt();
+        qx = ((r & 3u) == 0u) ? (-static_cast<int32_t>((r >> 8) % 500u) - 1)
+                              : static_cast<int32_t>((r >> 8) % 160u);
+        const uint32_t r2 = nxt();
+        qz = ((r2 & 3u) == 0u) ? (-static_cast<int32_t>((r2 >> 8) % 500u) - 1)
+                               : static_cast<int32_t>((r2 >> 8) % 160u);
+        qtag = static_cast<uint8_t>(sent & 0xFF);
+        have_draw = true;
+      }
+
+      d.q_valid = have_draw ? 1 : 0;
+      d.q_ix = static_cast<uint32_t>(qx);
+      d.q_iz = static_cast<uint32_t>(qz);
+      d.q_tag = qtag;
+      d.a_ready = 1;
+      d.eval();
+
+      const bool took = d.q_valid && d.q_ready;
+      if (d.a_valid && d.a_ready) {
+        if (seen < static_cast<int>(rq.size())) {
+          const isl::Lookup want = dir.find(rq[seen].ix, rq[seen].iz, &rl);
+          if (static_cast<int>(d.a_outcome) != oracle_code(want.outcome)) ++rnd_bad;
+          if (d.a_handle != want.page_handle) ++rnd_handle_bad;
+          if (d.a_tag != rq[seen].tag) ++rnd_tag_bad;
+        }
+        ++seen;
+      }
+      zhao::tick(d);
+      if (took) {
+        rq.push_back({qx, qz, qtag});
+        have_draw = false;
+        ++sent;
+      }
+    }
+
+    std::printf("  randomised: %d draws -> resident %u sky %u out %u\n", seen, rl.resident,
+                rl.open_sky, rl.out_of_extent);
+    ck(seen == kN, "every random draw was answered", kN, seen);
+    ck(rnd_bad == 0, "and every randomised outcome matches the oracle", 0, rnd_bad);
+    ck(rnd_handle_bad == 0, "including its page handle", 0, rnd_handle_bad);
+    ck(rnd_tag_bad == 0, "and the answer carries its own query's tag", 0, rnd_tag_bad);
+    ck(seen == static_cast<int>(rq.size()),
+       "with exactly one answer per accepted query, so the comparison above was "
+       "aligned rather than merely the same length",
+       static_cast<int>(rq.size()), seen);
+    ck(rl.out_of_extent > 0 && rl.resident > 0 && rl.open_sky > 0,
+       "with all three reachable outcomes actually drawn, so this is not a "
+       "randomised walk over one answer",
+       1, (rl.out_of_extent > 0 && rl.resident > 0 && rl.open_sky > 0) ? 1 : 0);
   }
 
   if (g_fail) {

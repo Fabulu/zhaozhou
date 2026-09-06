@@ -1044,3 +1044,41 @@ checks were demonstrated nonvacuous. The first direct fixed build exposed the
 known MinGW/Verilator libstdc++ ABI mismatch at link; rebuilding all translation
 units consistently with ``_GLIBCXX_USE_CXX11_ABI=0`` produced the passing gate.
 No broad CMake regeneration was used or claimed.
+
+## 2026-09-06 — WHERE I AM, written BEFORE the fit result is read
+
+Composed island fit alive: pid 10768, ~2,996 s CPU, started 11:16:57. Watchdog
+dead; one watcher at 1800 s reporting only. Snapshot workspace
+`%TEMP%/zhao-block-fit-14116-639242824999228188`, 15 sources copied.
+
+**In progress when this was written:** TERRAIN.ISLAND ledger registration.
+`island_dir_rtl_directed` now passes **21 checks** including a 3,000-draw
+randomised phase, so the ledger's `random:` entry is honest. `npm run
+ledger:check` reports **17 errors** — the list is in this session's transcript;
+next step is the TERRAIN.ISLAND group (V2 two-step maturity, V12 counter
+catalog, V7 edge symmetry, V17 contract oracle section) and the two GEOMETRY
+V20 ENFORCED-BY sites.
+
+**THE FIT CLOSURE IS A HARD EDIT BAN, and it is wider than "do not corrupt the
+compile".** `run_block_fit.ps1` snapshots its sources, so an edit cannot reach
+the running compile — but the runner re-hashes the LIVE tree before parsing the
+summary, and any difference sets `status =
+contaminated:source-changed-during-fit`, `$ok = $false`, **row discarded**. A
+one-character comment fix therefore throws away four hours. I made exactly that
+edit (a trailing comma in an `ENFORCED-BY` path at
+`zhao_texture_cache_pipe.sv:627`), noticed, and reverted it; the file is
+md5-identical to the snapshot copy again, and the edit landed after the
+post-`quartus_map` checkpoint, so the `(during-map)` arm cannot fire either.
+
+The 15 banned files until this fit lands:
+
+    zhao_field_rcp24_rom       zhao_texture_bilerp_lane   zhao_texture_mosaic
+    zhao_raster_perspuv_svc    zhao_texture_cache_pipe    zhao_texture_palette_res
+    zhao_raster_rcp24_svc      zhao_texture_fragrob       zhao_texture_rsp_dispatch
+    zhao_texture_aux_div6      zhao_texture_island_top    zhao_texture_tmu_plan
+    zhao_texture_aux_pipe      zhao_texture_material_combine_v1
+
+**So W8 (fragrob work-queue reservation), W9b (format decode) and W9c
+(`bil_expect_r`) are BLOCKED, not dropped.** Free and being worked instead:
+W10's composed fixture (tests only — `.cpp` is not hashed), the geometry
+ENFORCED-BY sites, ASSETFETCH, and the 8 km terrain work beyond TERRAIN.ISLAND.

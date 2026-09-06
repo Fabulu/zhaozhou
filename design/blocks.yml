@@ -81,6 +81,10 @@ counter_catalog:
   - residency_evictions
   - residency_dirty_evictions
   - residency_stale_events
+  - island_resident
+  - island_open_sky
+  - island_out_of_extent
+  - island_bad_pitch
   # TERRAIN.MIPGEN (ruling T8)
   - mipgen_samples
   - mipgen_writes
@@ -1692,14 +1696,23 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: one query per residency round trip; one in flight
-    reference_model: zref::island::Directory
+    reference_model: zref::island::Directory::find
     tests:
       directed: tests/terrain/island_dir_rtl_directed.cpp
+      random: tests/terrain/island_dir_rtl_directed.cpp
     counters: [island_resident, island_open_sky, island_out_of_extent, island_bad_pitch]
-    source_ids: false
+    source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-06"
+        commit: "b9bbb40d"
+        evidence: design/contracts/TERRAIN.ISLAND.md
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-06"
+        commit: "f416c3f6"
+        evidence: reference/include/zref/zref_island.hpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1733,7 +1746,7 @@ blocks:
     inputs: [patch_claims, loader_completions, deformation_marks]
     outputs: [residency_answers, eviction_writebacks]
     upstream: [TERRAIN.PATCH]
-    downstream: [TERRAIN.MIPGEN, TERRAIN.LOD]
+    downstream: [TERRAIN.MIPGEN, TERRAIN.LOD, TERRAIN.ISLAND]
     backpressure: ready_valid
     latency: fixed:2
     target_throughput: one mutation or one query per clock
@@ -2002,7 +2015,7 @@ blocks:
     owner_issue: ZH-050
     inputs: [patch_state, lod_targets]
     outputs: [lod_decisions]
-    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR, TERRAIN.MIPGEN, TERRAIN.RESIDENCY]
+    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR, TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.ISLAND]
     downstream: [TERRAIN.PROJECT]
     backpressure: ready_valid
     latency: variable
@@ -2041,7 +2054,7 @@ blocks:
     owner_issue: ZH-051
     inputs: [lod_decisions, terrain_normals]
     outputs: [terrain_primitives, mosaic_candidates]
-    upstream: [TERRAIN.LOD, TERRAIN.NORMALS, TERRAIN.SHADE, TERRAIN.NORMALMAP]
+    upstream: [TERRAIN.LOD, TERRAIN.NORMALS, TERRAIN.SHADE, TERRAIN.NORMALMAP, TERRAIN.ISLAND]
     downstream: [GEOM.CLIP, TEXTURE.MOSAIC]
     backpressure: ready_valid
     latency: variable
@@ -4305,7 +4318,6 @@ blocks:
     backpressure: none
     latency: variable
     target_throughput: deadline-driven
-    reference_model: zref::island::Streamer
     tests:
       directed: tests/terrain/island_stream_directed.cpp
     maturity: SPECIFIED

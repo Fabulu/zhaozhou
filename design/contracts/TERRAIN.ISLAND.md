@@ -1,6 +1,6 @@
 # Contract — TERRAIN.ISLAND (Island patch directory)
 
-> Ledger: `design/blocks.yml` · gpu clock · maturity SPECIFIED
+> Ledger: `design/blocks.yml` · gpu clock · maturity REFERENCE_COMPLETE
 > RTL: `fpga/rtl/terrain/zhao_terrain_island_dir.sv`
 > Reference model: `zref::island::Directory` — `reference/include/zref/zref_island.hpp`
 > Test: `tests/terrain/island_dir_rtl_directed.cpp`
@@ -108,6 +108,44 @@ directed test compares all four against the oracle's ledger rather than checking
 they are non-zero, and additionally requires that a run genuinely contained
 resident, sky **and** out-of-extent answers, so the comparison cannot be
 satisfied by one outcome repeated.
+
+## Scalar reference function
+
+`zref::island::Directory::find` (`reference/include/zref/zref_island.hpp`),
+with `zref::island::Ledger` as the counter oracle.
+
+**The oracle is the OUTCOME MAPPING, not the store.** That distinction is the
+same one `TERRAIN.RESIDENCY` draws and it is deliberate here for a sharper
+reason: the mapping is where a wrong answer is *silent*. A set-associative
+directory that loses a page fails loudly the moment a frame reads it, but
+`OPEN_SKY` returned where `RESIDENT` was correct simply draws nothing, on a
+grid where drawing nothing is the answer 94.9% of the time. There is no
+picture in which that is visible. So the mapping gets a definition outside the
+RTL that implements it, and the differential compares every outcome, every
+page handle, every answer tag and all four counters against it.
+
+`tests/terrain/island_dir_rtl_directed.cpp` — 21 checks:
+
+* the directed cases, which pick coordinates to sit on named edges — the
+  extent boundary, a negative coordinate, an illegal pitch, and the ordering
+  case where an out-of-extent coordinate on an illegal pitch must report
+  `BAD_PITCH`;
+* a **full grid sweep** of all 15,625 patches: RTL 793 resident / 14,832 sky,
+  oracle identical. This is the check that a mapping bug cannot hide in, since
+  it visits every input the block has;
+* a **3,000-draw randomised phase** on coordinates nobody chose, a quarter of
+  them deliberately out of extent and split between negative and beyond —
+  the negative half being where an unsigned compare would wrap a small
+  negative into the middle of the grid and return another patch's ground.
+
+The randomised phase's first version reported 907 mismatches: exactly the 37
+resident plus the 870 sky, i.e. every in-extent draw and no other. **A defect
+that lands on precisely one clean partition of the input is a bench artefact,
+not a block defect** — it was the bench redrawing the coordinate while
+`q_valid` was held, which both breaks the payload-stability half of
+ready/valid and desynchronises the expected-answer list from what the block
+consumed. The check that now guards it asserts one answer per *accepted*
+query, so the comparison is aligned rather than merely the same length.
 
 ## What is not yet established
 
