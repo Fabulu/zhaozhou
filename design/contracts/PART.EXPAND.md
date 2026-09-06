@@ -15,10 +15,27 @@
 > | meaning | sixteenths of a **screen pixel** | **relative world-radius multiplier** |
 > | use | `size << 4` gives S 12.8 subpixels | `radius = base_radius_fx16 * size / 16`, **world scale, never camera-space pixels** |
 >
-> **`size << 4` is not a projection of the C2 field.** Turning a world radius
-> into a screen half-side requires a projection, and qformats §10 says
-> explicitly that inventing one to make the amendment fit is how a plausible
-> wrong number gets shipped — **it needs a decision first.**
+> **`size << 4` is not a projection of the C2 field.** That much stands: a
+> world radius has to be projected and `size << 4` does not project anything.
+>
+> **But the projection is NOT the missing decision** *(corrected 2026-09-06,
+> audit R7)*. `zref::render::draw_form_marker` already implements it, and
+> `tests/render/render_directed.cpp` exercises the world-space branch with
+> `flags = 0`:
+>
+> ```
+>     half_sub = rescale_s32(fx_mul(size_fx16, c.s.d), 8)   // size * (1/w)
+> ```
+>
+> with the inversion trap recorded beside it -- dividing by `c.s.d` computes
+> `size * w` and makes things GROW with distance, which only an ortho matrix
+> hides. A particle expansion using this would be CALLING a ratified law.
+>
+> **What is missing is `base_radius_fx16`**, the per-species base radius that
+> `particle_radius()` multiplies. `species` is a u7 and no species table exists
+> in `reference/`, `spec/` or `design/`. THAT is the owner's decision: a radius
+> per species is content, and guessing one is the actual instance of the
+> failure the warning below describes.
 >
 > `fpga/rtl/particles/zhao_part_expand.sv` already carries this banner. This
 > contract did not, so an agent reading the contract met the dead law with an

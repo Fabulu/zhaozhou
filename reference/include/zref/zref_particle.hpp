@@ -19,11 +19,40 @@
 //   * a WORLD length, not a screen length -- so it must be projected, and
 //     `size << 4` is not a projection.
 //
-// THIS BLOCK IS NOT FIXED HERE, deliberately. Turning a world-space radius into
-// a screen-space half-side is a projection, and inventing one to make an
-// amendment fit would be exactly the kind of plausible wrong number this
-// project has shipped before. It needs the same treatment GEOM.PROJECT's
-// attribute carry got: a decision, then an implementation.
+// THIS BLOCK IS NOT FIXED HERE, deliberately -- but the reason has been
+// corrected, because the original one was wrong and was steering people away
+// from the answer.
+//
+// THE PROJECTION IS NOT THE MISSING PIECE. *(Corrected 2026-09-06, after audit
+// finding R7 sent me looking for the decision that was supposedly needed.)*
+//
+// Turning a world radius into a screen half-extent is already implemented,
+// already tested, and already has its trap written down --
+// `zref::render::draw_form_marker` in `reference/src/zrender/sprites.cpp`, whose
+// world-space branch says:
+//
+//     world-space size: perspective divide at projection scale 1. The depth lane
+//     c.s.d IS 1/w (Q16.16), so the divide is already done -- the screen
+//     half-extent is size * (1/w), a MULTIPLY. Dividing by c.s.d computes
+//     size * w instead, which makes markers GROW with distance; only ortho
+//     matrices (w == 1) hide the inversion.
+//
+//     half_sub = rescale_s32(fx_mul(size_fx16, c.s.d), 8)
+//
+// `tests/render/render_directed.cpp` calls it with `flags = 0`, which selects
+// exactly that branch, so the law is exercised rather than merely present.
+//
+// So a particle expansion that used it would be CALLING a ratified law, not
+// inventing one. The warning that inventing a projection is how a plausible wrong
+// number gets shipped is a good warning and it does not apply here -- and while it
+// stood unqualified it was pointing the next reader away from the answer.
+//
+// WHAT IS ACTUALLY MISSING is `base_radius_fx16`: the PER-SPECIES base radius that
+// `particle_radius(base_radius_fx16, size)` multiplies. `Particle128.species` is a
+// u7 and there is no species table -- not in `reference/`, not in `spec/`, not in
+// `design/`. That is a DATA/ABI question and it is properly the owner's; a radius
+// per species is a content decision, and guessing one would be the actual instance
+// of the failure the warning describes.
 //
 // What IS fixed here is that the next reader is told. The amendment was
 // committed and nothing pointed at the block that had already believed the old
