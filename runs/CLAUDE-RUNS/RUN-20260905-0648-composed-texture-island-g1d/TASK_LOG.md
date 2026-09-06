@@ -1202,3 +1202,49 @@ on the bilinear taps) is in flight.
 
 **Order to relaunch:** W9b lands → configure through `cmake --preset` → composed
 island test green → launch, watchdog dead, watcher at 1800 s.
+
+## 2026-09-06 ~14:15 — AUTONOMOUS FROM HERE
+
+Owner off. Standing goal unchanged: **finish all repairs, fits, and then 8 km
+terrain hardware.** No blocking questions; decide and keep moving.
+
+### The launch sequence, in order, no steps skipped
+
+1. **W9b lands** — the shared format-controlled decode replacing
+   `near_ok_c = 1'b0`, plus the alpha `fr_tmu_a = 8'hFF` never decodes and
+   `chan8()`'s hardwired 5:6:5 on the bilinear taps. Owner's call and the
+   reason is area, not just correctness: dead code is stripped, so fitting
+   without the decode station under-reports the very ALM number the fit exists
+   to attack.
+2. **One clean `cmake --preset windows-native`**, run when NO agent is building.
+   A concurrent reconfigure already failed once on `Permission denied` copying
+   a `.cmake` — a shared-build-dir race, not a code fault. Serialise it.
+3. **`test_island_composed_directed` green** (75 checks, the rebuilt fixture),
+   and `cnt_near_refused_o` at 0 where it was 96. **Do not launch off a build
+   that has not been watched to pass** — the stale-binary trap has already
+   fired twice today, once for me and once for an agent.
+4. **Launch.** `TimeoutSeconds` defaults to 28800 (8 h) so the runner's own
+   watchdog cannot fire on a 4 h fit — that is the "enough time" requirement
+   satisfied by the default, not by an override. Then `watch_fit.ps1` at
+   1800 s, which REPORTS and never kills, and judges liveness by CPU delta
+   rather than log growth.
+5. **While it runs, work only outside the closure.** Re-derive the ban list
+   from the snapshot directory the runner prints, not from memory.
+
+### Debts already owed, so they are not lost
+
+* `island_dir_rtl_directed` needs a **backpressure phase**. Its 21 checks cover
+  every input the block has and drove `a_ready` high on every cycle, which is
+  how a dropped answer survived a full 15,625-patch sweep.
+* Six V20 ENFORCED-BY sites remain, all texture: `cache_pipe:406`,
+  `cache_pipe:627` (a trailing comma swallowed into the path — a one-character
+  fix that is only safe between fits), `aux_pipe:70`, `fragrob:523`,
+  `island_top:569` and `:1085`.
+* `zref::island::Stats::peak_resident` is not a high-water mark: `Stats` is
+  constructed fresh inside every `update()`, so the guard is true whenever
+  anything is live and the field always equals the CURRENT live count.
+  Measured 9 against a true peak of 42.
+* `design/prod_manifest.yml` still describes V1 as "the instantiated one".
+* TERRAIN.COMPCACHE and TERRAIN.VISIBLE both owe their UNIT_VERIFIED rung,
+  which is a separate commit each because V2 checks against the previously
+  COMMITTED ledger.
