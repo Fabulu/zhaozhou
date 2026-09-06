@@ -275,7 +275,8 @@ constexpr uint32_t kImgBase = 0x0010'0000u;
 constexpr uint32_t kBaseClut = 0x0010'0000u;
 constexpr uint32_t kPalBase = 0x0010'1000u;
 constexpr uint32_t kBaseRgb = 0x0010'2000u;
-constexpr uint32_t kImgBytes = 0x4000u;
+constexpr uint32_t kBaseClut4 = 0x0010'3000u;
+constexpr uint32_t kImgBytes = 0x5000u;
 
 constexpr int kPalEntries = 256;
 
@@ -394,6 +395,22 @@ void build_memory() {
     for (int x = 0; x < 64; ++x) {
       const uint32_t t = static_cast<uint32_t>(y) * 64u + static_cast<uint32_t>(x);
       g_mem.bytes[(kBaseClut - kImgBase) + t] = clut_index_at(x, y);
+      // CLUT4: TWO TEXELS PER BYTE, and which nibble is which is the point.
+      // zref::Tmu::plan sets `nibble = total & 1` and sample() takes
+      // `nibble ? (byte >> 4) : (byte & 0x0F)`, so the EVEN texel is the LOW
+      // nibble and the ODD texel is the HIGH one. Writing it the other way
+      // round would make this fixture agree with a wrong RTL.
+      //
+      // The two nibbles of a byte are deliberately DIFFERENT indices. A byte
+      // whose halves agree cannot tell a correct nibble select from a broken
+      // one -- which is exactly how the defect survived: every odd texel read
+      // its neighbour's index and nothing noticed.
+      if ((t & 1u) == 0u)
+        g_mem.bytes[(kBaseClut4 - kImgBase) + (t >> 1)] =
+            static_cast<uint8_t>(t & 15u);
+      else
+        g_mem.bytes[(kBaseClut4 - kImgBase) + (t >> 1)] |=
+            static_cast<uint8_t>(((((t >> 4) + 7u) & 15u) << 4));
       const uint16_t h = rgb565_at(x, y);
       g_mem.bytes[(kBaseRgb - kImgBase) + 2 * t] = static_cast<uint8_t>(h & 0xFF);
       g_mem.bytes[(kBaseRgb - kImgBase) + 2 * t + 1] = static_cast<uint8_t>(h >> 8);
@@ -415,6 +432,19 @@ void build_memory() {
 uint32_t mode_clut8_nearest() {
   zref::Tmu::Mode m;
   m.fmt = zref::Tmu::kClut8;
+  m.bilinear = false;
+  m.wrap_u = zref::Tmu::kRepeat;
+  m.wrap_v = zref::Tmu::kRepeat;
+  m.log2w = 6;
+  m.log2h = 6;
+  m.max_level = 0;
+  m.mip_en = false;
+  return m.pack();
+}
+
+uint32_t mode_clut4_nearest() {
+  zref::Tmu::Mode m;
+  m.fmt = zref::Tmu::kClut4;
   m.bilinear = false;
   m.wrap_u = zref::Tmu::kRepeat;
   m.wrap_v = zref::Tmu::kRepeat;
@@ -1978,6 +2008,115 @@ int main(int argc, char** argv) {
           "and the mode and class agreed for the whole stress phase too, so no "
           "part of this run measures the class-disagreement defect instead of "
           "the property it names",
+          0, static_cast<long>(d.err_class_mismatch_o));
+  }
+
+
+  // ============ PHASE 5: CLUT4, THE NIBBLE THAT HAD NO COVERAGE ============
+  // The nibble select was repaired earlier today and shipped with NO test,
+  // stated plainly in its own commit: this fixture drove CLUT8, RGB565,
+  // ARGB1555 and ARGB4444 and never once REQUESTED CLUT4, so `kClut4` appeared
+  // in the whole file exactly once, inside a class-derivation helper.
+  //
+  // A CLUT4 address is `total >> 1`, so one fetched byte carries TWO texels and
+  // the texel index's low bit chooses between them. Before the repair that bit
+  // was shifted out in the planner and never reached the island, so every ODD
+  // texel read its neighbour's palette index -- and nothing counted it, because
+  // the lookup itself succeeded. A wrong colour that costs no counter is
+  // precisely the defect a composed suite exists to find.
+  {
+    const uint32_t kModeClut4 = mode_clut4_nearest();
+    const uint16_t kTagC4 = 0x7000;
+
+    check(class_of_mode(kModeClut4) == kClsClut,
+          "CLUT4 derives the CLUT class, so it routes to the palette station "
+          "rather than the direct-colour one",
+          kClsClut, class_of_mode(kModeClut4));
+
+    std::vector<FragSpec> p5(kPhaseN);
+    build_frags(p5, kTagC4, kModeClut4, kBaseClut4, /*filtered=*/false);
+
+    // HALF THE FRAGMENTS MUST LAND ON AN ODD TEXEL -- that is the only half the
+    // defect ever touched. `total = Y*64 + X` and 64 is even, so the parity is
+    // X's parity alone; build_frags' X set does not guarantee both, so X is
+    // overridden here and the expectation recomputed.
+    int odd = 0;
+    for (int i = 0; i < kPhaseN; ++i) {
+      FragSpec& f = p5[i];
+      // `i` directly, so consecutive fragments alternate parity. The first
+      // attempt was `(i * 5 + (i & 1)) & 63`, which is EVEN FOR EVERY i --
+      // i*5 has i's parity and the +1 cancels it on the odd ones. The colour
+      // check then passed on 32 fragments that never touched the nibble at
+      // all, and only the both-parities guard below caught it. That is the
+      // guard earning its place on its first run.
+      f.X = i & 63;
+      f.u = coord_for(f.X, 0, /*filtered=*/false);
+      const uint32_t scale = f.depth >> 16;
+      f.uow = static_cast<uint32_t>(f.u) * scale;
+      if (((static_cast<uint32_t>(f.Y) * 64u + static_cast<uint32_t>(f.X)) & 1u) != 0u) ++odd;
+      compute_expectation(f, kModeClut4, kBaseClut4);
+    }
+    check(odd > 0 && odd < kPhaseN,
+          "the phase draws BOTH parities of texel -- without odd ones the "
+          "nibble select is never exercised and a green run would mean nothing",
+          1, (odd > 0 && odd < kPhaseN) ? 1 : 0);
+
+    const uint32_t pal_before = d.cnt_palette_lookups_o;
+    PhaseOut o5;
+    run_phase(d, kModeClut4, kBaseClut4, p5, o5);
+    const uint32_t pal = d.cnt_palette_lookups_o - pal_before;
+
+    std::printf("  PHASE 5 (CLUT4/nearest, mode 0x%08X): submitted %d, retired %d, "
+                "odd texels %d, palette +%u\n",
+                kModeClut4, o5.submitted, o5.retired, odd, pal);
+
+    check(o5.retired == kPhaseN, "phase 5 retired every fragment it submitted",
+          kPhaseN, o5.retired);
+    check(pal > 0,
+          "and the PALETTE was actually consulted -- a CLUT4 run in which no "
+          "lookup happened would prove nothing about the index it used",
+          1, pal > 0 ? 1 : 0);
+
+    std::vector<int> byidx(kPhaseN, -1);
+    for (std::size_t i = 0; i < o5.tags.size(); ++i) {
+      const int ix = static_cast<int>(o5.tags[i]) - static_cast<int>(kTagC4);
+      if (ix >= 0 && ix < kPhaseN) byidx[ix] = static_cast<int>(i);
+    }
+    int checked = 0, bad = 0, wholebyte_same = 0, wholebyte_differs = 0;
+    for (int i = 0; i < kPhaseN; ++i) {
+      if (byidx[i] < 0) continue;
+      ++checked;
+      const uint32_t got = o5.rgb[byidx[i]];
+      if (got != p5[i].want_rgb) {
+        if (bad < 4)
+          std::printf("    CLUT4 frag %d recipe %u texel(%d,%d): got 0x%06X, want 0x%06X\n",
+                      i, p5[i].recipe, p5[i].X, p5[i].Y, got, p5[i].want_rgb);
+        ++bad;
+      }
+      // THE COUNTERFACTUAL: what the island shipped BEFORE the repair, which
+      // took the whole byte as the palette index instead of the nibble.
+      const uint32_t total =
+          static_cast<uint32_t>(p5[i].Y) * 64u + static_cast<uint32_t>(p5[i].X);
+      if ((total & 1u) != 0u)
+        ++wholebyte_differs;
+      else
+        ++wholebyte_same;
+    }
+    check(checked == kPhaseN, "every CLUT4 fragment came back to be compared",
+          kPhaseN, checked);
+    check(bad == 0,
+          "and every CLUT4 fragment retired the colour zref::Tmu::sample gives "
+          "for ITS OWN texel -- the check that was impossible before the "
+          "planner carried the nibble",
+          0, bad);
+    check(wholebyte_differs > 0,
+          "and this stimulus CONTAINS odd texels, so taking the whole byte as "
+          "the index -- what the island did before the repair -- would be a "
+          "different palette entry for each of them. Without this the phase "
+          "could pass against the broken RTL",
+          1, wholebyte_differs > 0 ? 1 : 0);
+    check(d.err_class_mismatch_o == 0,
+          "with no class disagreement anywhere in the CLUT4 phase",
           0, static_cast<long>(d.err_class_mismatch_o));
   }
 
