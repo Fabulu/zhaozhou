@@ -2855,6 +2855,95 @@ advance the GEOM.VDECODE ledger entry, which stays SPECIFIED because
 `zhao_geom_vdecode`'s own header is explicit that it is the record leaf and not
 the batch engine.
 
+**Tread 10, added 2026-09-06.** REAL MEMORY -- the last thing the bench was
+still playing, and the one every earlier tread was measured against.
+
+``af_pool_i`` is a register file the C++ writes and the SystemVerilog indexes.
+It grants immediately, answers in one cycle, has no refresh, no CAS latency and
+no other client. Treads 6 through 9 all ran on it. In the real-memory pass
+GEOM.ASSETFETCH's guard request now goes to ``zhao_shell_top``'s own MEM.GUARD,
+the guard forwards to MEM.VRAM.ARBITER on client slot 3, the arbiter offers to
+MEM.SDRAM.CTRL, and the beats come back out of ``zhao_sdram_model`` -- past
+refresh cycles that close every open row, behind a scanout client reading the
+framebuffer for the whole frame.
+
+**The played pool is POISON in that pass**, filled with the decoy vertices, so
+a shell that quietly kept reading it draws a different triangle. Without that
+device an unconnected memory path and a working one produce the same frame and
+"byte-identical" means nothing.
+
+Measured: **14 checks**, ``REAL: 64-bit beats out of the DRAM > 0`` against
+zero in the played pass, ``guard_violations 0``, ``route_err 0``, the same
+beat count both ways, and a byte-identical framebuffer.
+
+### The three things this tread FOUND
+
+**BOTH GEOMETRY FETCHERS HAD THE GUARD PROTOCOL WRONG, and no bench could see
+it.** They required `guard_rsp_i.ready && guard_rsp_i.ok` in ONE cycle.
+`zhao_mem_guard` can never do that: `rsp.ready = !fwd_active` is a LEVEL and
+`rsp_ok_q` is a PULSE the cycle AFTER the accept -- and the accept is what
+raises `fwd_active`. A passing request therefore looked like A DENIAL WITH NO
+VIOLATION FLAG, silently, with `guard_denied_o` staying at zero.
+
+`zhao_raster_fbwrite` already waited in `W_VERD` and
+`zhao_debug_frameblit` in `B_GUARD_VERDICT`, and fbwrite's own header quotes
+the guard line. **Four clients, two protocols, and the two that were wrong are
+exactly the two whose memory was played.** Both now wait in S_VERD. Three unit
+benches went red on the change and every one was red for the right reason --
+they were the models the blocks had been written to match:
+
+    assetfetch_rtl_directed      16 of 28 FAILED  ->  56 checks passed
+    assetfetch_random             4 of  9 FAILED  ->   9 checks passed
+    geom_meshfetch_rtl_directed   6 of  7 FAILED  ->   7 checks passed
+
+Note that first row. It reported TWENTY-EIGHT checks while failing sixteen and
+reports FIFTY-SIX now: a fetch that never completed took the run down with it
+and the checks past that point never ran. A failing test that also stops
+counting is the broken-instrument law in its most ordinary form.
+
+### The two things this tread FOUND, both of which change what comes next
+
+**Only ONE geometry memory client exists, and it is positional.**
+``zhao_vram_arbiter`` builds the controller's tag by casting the SLOT INDEX --
+``ctrl_req.client = zhao_client_e'(offer_client)`` -- so slot 3 IS ENGINE1 and
+slot 4 IS DEBUG, not by configuration but by construction. And
+``zhao_mem_guard`` grants the asset-pool window to ENGINE1 alone; DEBUG falls to
+``default: pass_ok = 1'b0`` and "still owns nothing".
+
+So the earlier scoping in this entry -- "a guard per fetcher into slots 3 and 4"
+-- is wrong a third time, and for a reason that is not about where modules live.
+**A second geometry fetcher has no client identity that the guard admits and the
+arbiter carries.** GEOM.MESHFETCH sharing ENGINE1 with GEOM.ASSETFETCH through
+one guard, or ``spec/memory_rules.md`` allocating a second geometry client, is a
+memory-law decision. It is recorded rather than fudged by putting a fetcher on a
+slot that gets relabelled DEBUG one level down and refused.
+
+**The read return had exactly one destination.** The shell's read packer was
+wired straight to scanout, because until this tread the shell had one reader.
+The burst-owner tripwire below it said reads must be SCANOUT'S -- the same shape
+as the write-side bug this file already records, where the guard was taught a
+new legal client and the tripwire under it was not, so every legal burst raised
+the shell's own corruption alarm. Both are now owner-routed: the owner is
+captured AT GRANT (the returning word carries no tag, and one burst is in flight
+at a time), and the tripwire admits SCANOUT and ENGINE1 and nothing else.
+
+### What tread 10 does NOT close, stated plainly
+
+**The fetchers are still outside ``zhao_shell_top``.** This entry's own scoping
+above named two options and called the port-exposure one "a test-harness shape
+[that] would not survive into production". That judgement stands and this is
+that shape: ``geom_guard_req_i`` / ``geom_beat_valid_o`` are ports a bench
+reaches, not the production composition.
+
+What it buys is not nothing, and it is worth being exact about which half is
+real. The MEMORY PATH is now genuinely proven -- guard, arbiter, controller,
+DRAM, contention with scanout, refresh -- and the guard's region and client
+rules are exercised for the first time, because a played responder never reads
+those fields at all. The COMPOSITION is not: moving the geometry chain inside
+the shell is still the production step, and it is now known to be cheaper than
+feared on the memory side (one client, one guard) and blocked on a memory-law
+ruling for the second fetcher.
+
 **Tread 9, added 2026-09-05.** The u8 INDEX STREAM. The cheapest tread in the
 staircase, because the work was already being done: of ASSETFETCH's 24 beats,
 EIGHT were the index run -- fetched, then discarded, because its index port was

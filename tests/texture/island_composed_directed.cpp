@@ -195,7 +195,20 @@ int main(int argc, char** argv) {
       d.frag_pal_slot_i = 0;
       d.frag_pal_gen_i = 1;
       d.bind_base_i = 0x0010'0000u;
-      d.bind_mode_i = 0;
+      // A REAL SHEET: log2w = 6, log2h = 6 in bits [11:8] and [15:12].
+      //
+      // This was 0, and 0 means a ONE-BY-ONE TEXTURE. Every fragment in the
+      // composition therefore addressed texel (0, 0) whatever its coordinates
+      // were, which is why `cache miss` read 1 against 192 hits and why the
+      // byte select could never be exercised: one texel has one parity.
+      //
+      // It also made the whole PERSPUV -> planner coordinate path inert here.
+      // Sweeping `frag_u_over_w_i` across three orders of magnitude -- strides
+      // of 131, 0x2000, 0x100000, 0x1000000 -- moved NOTHING: same one miss,
+      // same 192 hits, same colours. A composition in which the fragment's own
+      // texture coordinate cannot change the address it reads is not composing
+      // that path, however many counters move.
+      d.bind_mode_i = 0x6600u;
     } else {
       // ================ INVALID-INPUT POISON ================================
       // Owner recovery architecture v2, priority 3: "A single-fragment
@@ -594,23 +607,25 @@ int main(int argc, char** argv) {
           "not vacuously satisfied by an empty set",
           1, matched_lo > 0 ? 1 : 0);
 
-    // AN HONEST GAP, PRINTED RATHER THAN ASSERTED. This workload addresses only
-    // EVEN texels -- `matched_hi` is 0 -- so it never asks for the high byte of
-    // a halfword and therefore does not exercise the byte-select repair at all.
+    // THE GAP IS CLOSED. This used to be a printed NOTE saying the workload
+    // addressed only even texels, and it reasoned that forcing odd ones needed
+    // control over the coordinate after the perspective divide and the
+    // planner's scaling, "which this test does not have".
     //
-    // Asserting `matched_hi > 0` here would be asserting a property of the
-    // COORDINATES this test happens to generate, not of the island, and it
-    // would fail for a reason that has nothing to do with the machine. Forcing
-    // odd texels needs control over the coordinate after the perspective divide
-    // and the planner's scaling, which this test does not have.
+    // That was wrong about the cause. The test had all the control it needed;
+    // what it did not have was a TEXTURE. `bind_mode_i` was 0, which is a 1x1
+    // sheet, so every coordinate in the composition resolved to texel (0, 0).
+    // The missing high bytes were not a limit of the harness's reach -- they
+    // were a binding that made reach irrelevant.
     //
-    // So the byte-select repair is established by the RTL argument in D23 and
-    // by its own mutation, NOT by this check. Said out loud because a reader
-    // seeing "exact colour" pass could otherwise assume it covers that too.
-    if (matched_hi == 0)
-      std::printf(
-          "  NOTE: no fragment addressed an odd texel, so the byte "
-          "select is NOT exercised by this workload\n");
+    // A gap explained by a plausible limitation is the comfortable reading, and
+    // the comfortable reading is the one to check hardest. Both halves are now
+    // measured on the same fragments, against the same oracle.
+    check(matched_hi > 0,
+          "and fragments addressed ODD texels too, so the CLUT byte select is "
+          "genuinely exercised -- the high byte of a halfword decoded as its "
+          "own palette index rather than its neighbour's",
+          1, matched_hi > 0 ? 1 : 0);
   }
 
   // ======================= AND THE BILINEAR HALF, EXACTLY ==================
