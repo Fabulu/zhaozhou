@@ -108,7 +108,13 @@ inline zc::RingPart make_loop() {
   const int32_t stC = stB + kLoopArcMm[3];
   const int32_t stD = stC + kLoopArcMm[4];
   const int32_t total = stD + kLoopArcMm[5];
-  const int32_t blend = 145;  // half-width of each fold blend, mm of tube
+  // PASS 8 (pass-7 by-eye fault 1, the MITRE half): 145 -> 165. A fold blend
+  // is the corner's turning radius; at 145 mm on a band 126 mm wide the corner
+  // radius was about one band width, which is what "almost right-angled" and
+  // "mitred" describe. The hard ceiling is half the SHORTEST station spacing
+  // (336/2 = 168) -- past that two blends overlap and the two-bone ladder
+  // below cannot express the ring, because a ring picks ONE bone pair.
+  const int32_t blend = 165;  // half-width of each fold blend, mm of tube
                               // (max the station spacing admits; wider blend
                               // = rounder corner, and the five-fold pentagon
                               // plus these blends is the sheet's soft ring)
@@ -138,11 +144,23 @@ inline zc::RingPart make_loop() {
                            int32_t& best_x, int32_t& best_z) {
       const int32_t d = s > at ? s - at : at - s;
       if (d >= kKnuckleSwellHalfMm) return;
-      // u = 1 - (d/half)^2, then w = u^2 -- per-mille throughout
+      // u = 1 - (d/half)^2, then w = SMOOTHSTEP(u) -- per-mille throughout.
+      //
+      // PASS 8: w was u^2, which is zero-slope at the rim (good, no crease) but
+      // also very peaked -- it reaches full height only AT the station and is
+      // already down to 56% at half-width. That is a soft hump, and a soft hump
+      // on a band reads as the band wobbling, not as a joint. The Side sheet
+      // draws ROUND LUMPS: flat over the top, falling away near the rim.
+      // Smoothstep u*u*(3-2u) is 84% at half-width instead of 56%, and is STILL
+      // zero-slope at u=0, so pass 6's no-crease property is preserved exactly.
+      // (A true circular profile, sqrt(1-(d/h)^2), would be rounder still and
+      // would put a visible crease ring at every rim -- that is the bead fault
+      // returning, so it is deliberately not used.)
       const int32_t u = 1000 - static_cast<int32_t>(
           (static_cast<int64_t>(d) * d * 1000) /
           (static_cast<int64_t>(kKnuckleSwellHalfMm) * kKnuckleSwellHalfMm));
-      const int32_t w = static_cast<int32_t>((static_cast<int64_t>(u) * u) / 1000);
+      const int32_t w = static_cast<int32_t>(
+          (static_cast<int64_t>(u) * u * (3000 - 2 * u)) / 1000000);
       const int32_t ax = static_cast<int32_t>((static_cast<int64_t>(rx_mm) * w) / 1000);
       const int32_t az = static_cast<int32_t>((static_cast<int64_t>(rz_mm) * w) / 1000);
       if (ax > best_x) best_x = ax;

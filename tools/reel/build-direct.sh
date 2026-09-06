@@ -20,6 +20,8 @@ Targets:
   mmeshcheck manafold-meshcheck.exe
   mhinge     manafold-hinge-traj.exe (pass 7: the committed antenna hinge
              trajectory dump, decode_pose -> CSV, for Direction 5 §2a)
+  mband      manafold-bandprobe.exe (pass 8: the committed antenna band
+             cross-section profile, read off the COMPILED MESH, for §2b)
   all        all four core executables
 EOF
 }
@@ -42,7 +44,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|all)
       TARGET="$1"
       shift
       ;;
@@ -181,6 +183,12 @@ build_mmeshcheck() {
     -o "$BIN/manafold-meshcheck.exe"
 }
 
+build_mband() {
+  printf '%s
+' "LD manafold-bandprobe"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_bandprobe.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-bandprobe.exe"
+}
+
 build_mhinge() {
   printf '%s\n' "LD manafold-hinge-traj"
   "$CXX" "${FLAGS[@]}" "$T/manafold_hinge_traj.cpp" "${LIBOBJS[@]}" \
@@ -195,6 +203,7 @@ case "$TARGET" in
   mprobe) build_mprobe ;;
   mmeshcheck) build_mmeshcheck ;;
   mhinge) build_mhinge ;;
+  mband) build_mband ;;
   all)
     build_reel
     build_cel

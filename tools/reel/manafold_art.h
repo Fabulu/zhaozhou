@@ -115,7 +115,21 @@ constexpr int32_t kHingeCXMm = -620, kHingeCYMm = 1150;
 // rings and read as a faceted lump, the bead fault in a new costume. 48 rings
 // sample every ~73 mm, so a knuckle spans ~7 rings and rounds. Cost: +224
 // triangles on the chain, against 5 whole spheres deleted.
-constexpr int kLoopRings = 48;
+//
+// PASS 8 (pass-7 by-eye fault 1: "a uniform strap with mitred corners"): 48 ->
+// 64. The mesh probe (manafold_bandprobe.cpp, committed) showed the pass-7
+// knuckles were REALLY THERE -- halfX ran 63..123 mm, a 195% ratio -- so the
+// fault was never "the swells are missing". It was that a 170 mm half-width
+// swell on stations only 340 mm apart FILLS the whole gap: the band never gets
+// to be a band, and every widening lands exactly on a fold, where it reads as
+// a fat mitre rather than as a knuckle. Pass 8 makes each knuckle LOCAL
+// (kKnuckleSwellHalfMm 170 -> 120) and the run between them THIN, which needs
+// a finer sampling to stay round -- at 64 rings the chain samples every ~52 mm,
+// so a 240 mm knuckle still spans ~4.6 rings AND a fold blend spans ~6.3 rings
+// instead of 4.1, which is the other half of fault 1 (the mitre itself).
+// Cost: +256 triangles on the chain. Fill, not geometry, is this engine's
+// constraint (09-ENGINE-GOTCHAS §5).
+constexpr int kLoopRings = 64;
 constexpr int kLoopSegments = 8;
 constexpr int32_t kLoopTubeXMm = 90;     // tube bind x (the neck exit)
 constexpr int32_t kLoopNeckExitYMm = 664;   // STRETCHED units from here down
@@ -186,8 +200,20 @@ constexpr int32_t kLoopRestTiltCA16 = 940;    // ~5.2 deg
 // just above the junction ball. The back "thickens out a small amount"
 // at the re-entry (end station up a little, still under the back ball).
 // Brackets, judged by eye at native beside the sheets.
-constexpr int32_t kLoopBladeRxMm[8] = {130, 78, 64, 62, 60, 66, 72, 82};
-constexpr int32_t kLoopBladeRzMm[8] = {140, 76, 52, 40, 32, 27, 34, 46};
+// PASS 8: the RUN between knuckles is thinned, so the knuckles have something
+// to stand proud OF. Direction 5 §2b asked for "a little less chunky"; the
+// pass-7 band answered by being uniformly chunky instead. The Side sheet's own
+// proportion, measured LIKE FOR LIKE (both in the side projection, both as a
+// fraction of body width, which is the only comparison that means anything --
+// CLAUDE.md's mismatched-pose law): the sheet's band run is ~7.8% of body
+// width and its knuckles ~15.5%; pass 7 shipped 14% and 24%. The band was
+// ~1.8x too broad. That measurement removes a BIAS; it does not choose the
+// value -- these were then set by eye at native, deliberately NOT all the way
+// down to 7.8%, because 88 mm of band is under 4 px on the shipped house zoom
+// and an antenna that thin dissolves into its own ink outline at 240p.
+// The buried base (130/140) is untouched: the sheet does fan out into the body.
+constexpr int32_t kLoopBladeRxMm[8] = {130, 74, 54, 52, 50, 54, 58, 70};
+constexpr int32_t kLoopBladeRzMm[8] = {140, 72, 44, 34, 27, 23, 29, 40};
 
 // ---- the junction balls (PASS 4, Direction 4 §1: "the ball inside the
 // antenna is completely wrong — remove it. The other is almost right — it
@@ -235,7 +261,12 @@ constexpr int32_t kKnuckleReentryOffXMm = -100, kKnuckleReentryOffYMm = 285;  //
 // band, which reads as TAPER rather than as a knuckle -- the flattening the
 // side sheet forbids. 170 mm puts ~4-5 rings across a knuckle: still smooth,
 // but localised enough to read as a joint.
-constexpr int32_t kKnuckleSwellHalfMm = 170;  // half-width along the tube
+// PASS 8: 170 -> 120. At 170 the swell reached 170 mm either side of a station
+// whose neighbours are only 340-380 mm away, so adjacent swells met and the
+// band was scalloped everywhere instead of knuckled in four places. The Side
+// sheet draws LOCAL round lumps with a clean run between them. 120 mm spans
+// ~4.6 rings at the new 64-ring sampling: still smooth, and now local.
+constexpr int32_t kKnuckleSwellHalfMm = 120;  // half-width along the tube
 // Arc positions, mm from the buried start. The chain's own station arithmetic
 // is stJF 250, stNeck 586, stA 930, stB 1270, stC 1650, stD 2030, end 3450.
 // The front junction rides a touch above its station (the old ball's offset);
@@ -256,11 +287,15 @@ constexpr int32_t kKnuckleAtEndMm = 2660;
 // Authored by eye at native against Side.png -- the retired balls stood ~60 mm
 // proud across the blade, and "a little less chunky" is a reduction, not a
 // removal.
-constexpr int32_t kKnuckleSwellJfRxMm = 56, kKnuckleSwellJfRzMm = 66;
-constexpr int32_t kKnuckleSwellARxMm = 50, kKnuckleSwellARzMm = 74;
-constexpr int32_t kKnuckleSwellBRxMm = 47, kKnuckleSwellBRzMm = 70;
-constexpr int32_t kKnuckleSwellCRxMm = 45, kKnuckleSwellCRzMm = 66;
-constexpr int32_t kKnuckleSwellEndRxMm = 47, kKnuckleSwellEndRzMm = 78;
+// PASS 8: raised a little against the thinned run so each knuckle reaches
+// ~2.1x the band it sits on (the sheet reads ~2.0x). The ABSOLUTE knuckle is
+// very slightly smaller than pass 7's -- "less chunky" is honoured -- while the
+// RATIO, which is what the eye actually reads at 240p, nearly doubles.
+constexpr int32_t kKnuckleSwellJfRxMm = 58, kKnuckleSwellJfRzMm = 68;
+constexpr int32_t kKnuckleSwellARxMm = 56, kKnuckleSwellARzMm = 76;
+constexpr int32_t kKnuckleSwellBRxMm = 54, kKnuckleSwellBRzMm = 72;
+constexpr int32_t kKnuckleSwellCRxMm = 52, kKnuckleSwellCRzMm = 68;
+constexpr int32_t kKnuckleSwellEndRxMm = 54, kKnuckleSwellEndRzMm = 80;
 
 // ---- the eyes (the whole face) ----
 // Two big purple almond lenses close together on the lower front, angled
