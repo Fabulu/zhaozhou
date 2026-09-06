@@ -224,13 +224,33 @@ CONTRACTS = [
     },
 ]
 
+# THE PORT NAME IS THE LAST IDENTIFIER, NOT THE ONE AFTER A KNOWN TYPE.
+#
+# The previous version enumerated the type forms it expected -- optional `var`,
+# then one of wire/logic/reg, then an optional PACKAGE-QUALIFIED typedef. An
+# UNQUALIFIED user typedef matched none of them, so the capture group landed on
+# the TYPE:
+#
+#     input  var zhao_client_e      m_client_i,
+#                ^^^^^^^^^^^^^ captured as the port name
+#
+# and every such port silently dropped out of the watch set. Found 2026-09-06 by
+# MUTATING the very defect this gate had just been extended to catch: restoring
+# `guard_req_o.client = m_client_i` in GEOM.ASSETFETCH, and the gate reported the
+# file CLEAN. The meshfetch mutant on the same run fired correctly, which is what
+# made the asymmetry visible at all.
+#
+# That is this tree's most-recorded failure: a detector reading LOW, precise and
+# wrong, with nobody auditing good news. It had been true of every
+# `zhao_guard_rsp_t`, `zhao_client_e` and `zhao_px_stream_t` port under contract
+# since the gate was written.
+#
+# Anchoring on the LAST identifier before an optional unpacked dimension and an
+# optional comma needs no list of type spellings, so a new typedef cannot make
+# it read low again. Verified against seven real declarations from this tree,
+# including the two the old one got wrong.
 PORT = re.compile(
-    r"^\s*input\s+"
-    r"(?:var\s+)?(?:wire\s+|logic\s+|reg\s+)?"
-    r"(?:[A-Za-z_]\w*::[A-Za-z_]\w*\s+)?"
-    r"(?:signed\s+|unsigned\s+)?"
-    r"(?:\[[^\]]*\]\s*)*"
-    r"([A-Za-z_]\w*)",
+    r"^\s*input\s+.*?([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)*,?\s*(?://.*)?$",
     re.M,
 )
 
