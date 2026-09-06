@@ -1564,3 +1564,37 @@ TERRAIN.VISIBLE promoted to UNIT_VERIFIED (27 checks, re-run on a build watched
 to return 0). Ledger is green apart from three V20 sites inside the two V3
 lanes' in-flight files; both lanes have been told, with the trailing-comma trap
 spelled out so they do not lose a day to it as one site did.
+
+## 2026-09-06 ~21:40 — THE DISK HIT ZERO, AND WHAT IT COST
+
+C: reached **0 bytes free of 952 GB**. It killed a full fit 55 minutes into
+placement, failed every Verilator build with "No space left on device", and
+filled *during* a fire-test mutation leaving a **zero-byte backup** — one
+moment from leaving deliberately broken RTL in the tree with a truncated backup
+beside it. That near miss is only a verified near miss, rather than a hope,
+because the four live files hashed identically to their `.sources.sha256`.
+
+~33 GB was ours: **~129,000 `.rgb` raw frame buffers**, 17.9 GB under
+`runs/CLAUDE-RUNS` from finished creature passes on 28–29 August and 15.2 GB in
+`zixxtrixx-wholebody-s-spring-20260901`, a sibling directory **outside zhaozhou
+entirely**. None tracked by git (checked before deleting); every `.webm` and
+`.png` kept. Free went 0 → 247 GB.
+
+**It was already half-fixed and that is the lesson.** `.gitignore` has covered
+`*.rgb` since 2026-08-28, after an over-broad `git add` cost a history rewrite.
+"Never committed" was solved thoroughly; "never accumulates" was never solved.
+The frames stopped being visible to git and went on filling the disk. Recorded
+in CLAUDE.md as its own rule, with `tools/maintenance/purge_render_intermediates.py`
+as the missing half — dry run by default, active runs spared, outputs kept,
+proven in both directions on a fixture.
+
+**Not mostly us, though.** `C:\programmieren` is 360 GB; zencrifice is 83 GB of
+it. `linoleum` 60 GB, `wizardrytranslation` 32 GB, `MergeWorkCbeta` 24 GB —
+other projects, untouched, reported to the owner rather than judged. Flagged
+but NOT deleted inside our own tree: `.tools/quartus-pkg`'s **7.5 GB of spent
+installers** (Quartus runs from `C:\intelFPGA_lite`, so they are used up — but
+re-downloading 17.0.2 needs an Intel account, so that is the owner's call), and
+~15.7 GB of `manafold-*` working directories whose status I do not know.
+
+**Toolchain is alive again**: the RCP tile's full fit is running (47 min), which
+is the ALM/Fmax measurement the disk had blocked three times.

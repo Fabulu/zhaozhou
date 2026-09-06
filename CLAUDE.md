@@ -173,6 +173,37 @@ taught the habit of asserting an exact per-recipe job count. A test that checks
 WHAT came out cannot see HOW MANY TIMES the machine did it, and throughput
 budgets are written against the second number.
 
+## A rule that HIDES waste is not a rule that removes it
+
+Added 2026-09-06, after the machine's C: drive reached **zero bytes free, 952 GB
+of 952 GB**. Quartus died mid-placement 55 minutes into a fit, Verilator builds
+died with "No space left on device", and the disk filled *during* a fire-test
+mutation and left a **zero-byte backup file** — a moment later and the tree
+would have held deliberately broken RTL with a truncated backup beside it.
+
+About 33 GB of it was ours: ~129,000 `.rgb` raw frame buffers, the
+uncompressed intermediates the render pipeline writes and never removes.
+
+**The instructive part is that this was already half-fixed, eight days
+earlier.** `.gitignore` has covered `*.rgb` since 2026-08-28, added after an
+over-broad `git add` swept 867 raw frames into three commits and cost a history
+rewrite. Its comment is exactly right: *the evidence is the PNG contact sheet,
+not the frames it was made from.* So "never committed" was solved thoroughly —
+and "never accumulates" was never solved at all. The frames simply stopped
+being visible to git while continuing to fill the disk.
+
+**Making waste invisible to your tooling is not the same as removing it**, and
+the gap took a dead toolchain to surface because every tool that could have
+noticed had been told to look away.
+
+* `tools/maintenance/purge_render_intermediates.py` is the missing half. Dry
+  run by default; spares anything touched in 48 h and the newest run folders
+  wholesale; never touches `.webm`, `.png`, `.md` or git packs.
+* Its root defaults to the **zencrifice root, not the repo** — 15 of the 33 GB
+  sat in a sibling creature working directory outside `zhaozhou` entirely.
+* When you add an ignore rule, ask what will now delete the thing. If the
+  answer is nothing, you have moved the problem rather than fixed it.
+
 ## Instructions are not delivered until they are read
 
 Owner direction was posted four times because it kept not reaching the working
