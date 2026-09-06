@@ -1340,3 +1340,51 @@ running. Numbers not yet looked at.
 CLUT4 nibble select is still wrong and whose nearest path only started
 decoding today. It is an honest measurement of what is there, not of what is
 finished.
+
+## 2026-09-06 ~17:10 — THE V2 FIT LANDED
+
+`ALM 16,192 · fmax 67.57 MHz · registers 28,490 · DSP 17 · 32 M10K · 7,454.8 s`
+Full analysis in `reports/G1D-COMPOSED-ISLAND-20260905.md` §4.3c.
+
+**The headline is not the ALM.** COMBINE appears on **zero of 3,904 summarised
+paths**, having been the worst path at −5.737 ns in the V1 refit. fmax
+63.54 → 67.57 (+6.3%).
+
+**The ALM did not move (16,193 → 16,192) and the fit is CONFOUNDED — by me.**
+V2 removed a combiner with ~fourteen multiplier sites; W9b added a decode
+station that had been dead code, so the V1 number measured a design with a
+missing organ. Two changes in one fit because the fit is to be spent very
+sparingly — the right trade, but the only honest statement is that V2's saving
+and W9b's addition are within one ALM of each other, and neither is separately
+measured. Registers +1,393 fits that.
+
+**The path-origin split was run because last time it refuted the comfortable
+answer, and this time it confirmed it — which is the argument for running it
+every time.** 3,715 of 3,904 paths start at a virtual pin (worst −4.800,
+67.57 MHz); 189 start inside (worst −2.936, **77.30 MHz**). Last time it was
+1,595 of 2,000 inside. Even deleting the boundary leaves 77.30 against a
+100 MHz target: the boundary is ~9.7 MHz, the remaining ~23 is real work.
+
+**FRAGROB owns 136 of the 189 internal paths**, worst ending in an inferred
+altsyncram write-enable. That is the capture/order store the owner said to get
+attribution for BEFORE touching. This fit is that attribution, and FRAGROB is
+the next architectural move — not the combiner.
+
+### Also closed since
+
+* **The ledger is fully green for the first time**: 111 blocks, schemas +
+  V1–V17 + V19–V23 + staleness. All six texture V20 sites named enforcers,
+  including cache_pipe:627's trailing comma that had waited all day for a gap
+  between fits.
+* **TERRAIN.PAGELOADER** (154 checks) and **SW.STREAM's frame policy**
+  (177 checks) — steps 3 and 4 of the build sequence.
+* **The architecture document's OPEN list is stale.** Two independent lanes
+  found it: all ten of §7's OPEN items are answered by rulings T1–T12, which
+  that document has never been updated to reflect. Worth fixing at source
+  rather than each lane re-deriving it.
+
+### Next
+
+FRAGROB is where both the internal timing and the register count now live. Do
+not fit again until there is something new to measure — the owner's "VERY
+sparingly" stands, and one 2 h run has just been spent.
