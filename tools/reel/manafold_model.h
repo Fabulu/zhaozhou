@@ -119,9 +119,13 @@ inline zc::RingPart make_loop() {
                               // = rounder corner, and the five-fold pentagon
                               // plus these blends is the sheet's soft ring)
   // the per-station blade taper (piecewise-linear between stations)
-  const int32_t stKey[8] = {0, stJF, stNeck, stA, stB, stC, stD, total};
+  // PASS 9: SEVEN keys. stNeck is now coincident with stJF (Direction 7 §9.1 --
+  // the joints move onto the balls and the junctions), so a key for it would be
+  // a zero-width span returning a different value one millimetre later: a ledge
+  // in the skin, not a taper. See kLoopBladeRxMm.
+  const int32_t stKey[7] = {0, stJF, stA, stB, stC, stD, total};
   const auto taper = [&](const int32_t* k, int32_t s) {
-    for (int j = 0; j + 1 < 8; ++j) {
+    for (int j = 0; j + 1 < 7; ++j) {
       if (s <= stKey[j + 1]) {
         const int32_t span = stKey[j + 1] - stKey[j];
         if (span <= 0) return k[j + 1];
@@ -129,7 +133,7 @@ inline zc::RingPart make_loop() {
             (static_cast<int64_t>(k[j + 1] - k[j]) * (s - stKey[j])) / span);
       }
     }
-    return k[7];
+    return k[6];
   };
   for (int i = 0; i < kLoopRings; ++i) {
     const int32_t s = static_cast<int32_t>((static_cast<int64_t>(total) * i) / (kLoopRings - 1));
@@ -182,30 +186,38 @@ inline zc::RingPart make_loop() {
       if (t > 64) t = 64;
       return t;  // 0 = fully lower bone, 64 = fully upper bone
     };
-    const int32_t tJ = blend_of(stJF), tN = blend_of(stNeck),
-                  tA = blend_of(stA), tB = blend_of(stB), tC = blend_of(stC),
-                  tD = blend_of(stD);
-    if (tN == 0) {  // the buried base and the junction exit: root/junctionF
+    // PASS 9 (Direction 7 §9.1): FIVE rungs, one per articulation station, and
+    // every station is now a BALL or a BODY JUNCTION. kBJunctionF drops out of
+    // the ladder and becomes a pure parent: it shares kBNeck's pivot exactly
+    // (kLoopArcMm[0] == 0), so weighting a ring to it would be weighting to the
+    // same point twice, while a rotation on it still bends the whole antenna by
+    // construction because every loop bone descends from it.
+    //
+    // The continuity condition this ladder depends on, stated so the next
+    // station move does not have to rediscover it: a branch flips at
+    // (station - blend), and the previous station's weight must already have
+    // SATURATED by then, which needs consecutive stations >= 2*blend apart.
+    // At blend = 165 that is 330 mm; the closest pair here is A->B at 340.
+    const int32_t tN = blend_of(stNeck), tA = blend_of(stA), tB = blend_of(stB),
+                  tC = blend_of(stC), tD = blend_of(stD);
+    if (tA == 0) {  // the buried base -> the front junction
       rs.b0 = kBRoot;
-      rs.b1 = kBJunctionF;
-      rs.w0 = static_cast<uint8_t>(64 - tJ);
-    } else if (tA == 0) {  // junctionF -> the new neck hinge
-      rs.b0 = kBJunctionF;
       rs.b1 = kBNeck;
       rs.w0 = static_cast<uint8_t>(64 - tN);
-    } else if (tB == 0) {  // neck -> A
+    } else if (tB == 0) {  // the front junction -> ball A
       rs.b0 = kBNeck;
       rs.b1 = kBHingeA;
       rs.w0 = static_cast<uint8_t>(64 - tA);
-    } else if (tC == 0) {  // A -> B
+    } else if (tC == 0) {  // ball A -> ball B
       rs.b0 = kBHingeA;
       rs.b1 = kBHingeB;
       rs.w0 = static_cast<uint8_t>(64 - tB);
-    } else if (tD == 0) {  // B -> C
+    } else if (tD == 0) {  // ball B -> ball C
       rs.b0 = kBHingeB;
       rs.b1 = kBHingeC;
       rs.w0 = static_cast<uint8_t>(64 - tC);
-    } else {  // C -> D and the aimed return arm
+    } else {  // ball C -> the RE-ENTRY BALL (the second body junction) and the
+              // buried return arm past it
       rs.b0 = kBHingeC;
       rs.b1 = kBHingeD;
       rs.w0 = static_cast<uint8_t>(64 - tD);

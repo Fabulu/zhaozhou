@@ -140,7 +140,72 @@ constexpr int32_t kLoopBuryMm = 250;        // the near end plunges into the bod
 // fold-scale range (the committed closure probe sweeps 700..1160 and
 // asserts it). PASS 4: the old neck->A span (680) splits at the NEW neck
 // hinge (336 + 344 = 680), so every drawn station stays where it was.
-constexpr int32_t kLoopArcMm[6] = {336, 344, 340, 380, 380, 1270};
+// PASS 9 -- DIRECTION 7 §9.1: "it's only one joint that does it, and the joint
+// is in the wrong place. It's in the straight antennae bit. The joints need to
+// be where the balls are and also the two spots where the antennae meet the
+// creature."
+//
+// HE IS EXACTLY RIGHT, AND IT IS CHECKABLE. Pass 8's stations and pass 8's
+// knuckles were two different lists that nobody had ever laid side by side:
+//
+//     articulation station   250   586   930  1270  1650  2030
+//     knuckle (a BALL)       320    --   930  1270  1650    --   2660
+//
+// stNeck (586) and stD (2030) sat in the SMOOTH RUN with no ball anywhere near
+// them -- a crease in the middle of a straight span, which is the "kink in a
+// wire" the owner is describing -- while the re-entry ball at 2660, the second
+// place the antenna meets the creature, had NO joint at all. Pass 8 fixed the
+// MOTION (all four stations got tilt and yaw); this is the PLACEMENT, and they
+// are different faults. A station that now moves but sits in the straight run
+// is still wrong.
+//
+// The stations are therefore re-cut onto the balls and the two junctions:
+//
+//     junctionF/neck  250   the front junction: where the antenna meets the
+//                           body, and its ball
+//     hinge A         930   ball  |  hinge B  1270  ball  |  hinge C  1650 ball
+//
+// Those FOUR are every station antenna_knead() and HingePlay actually drive --
+// the joints the creature kneads with, which is what the owner is looking at.
+// hinge D (2030) is NOT one of them: it carries the closure aim computed in
+// loop_pose(), a solver variable rather than a joint anybody plays with.
+//
+// ⚠ AND THE RE-ENTRY BALL (2660) STILL HAS NO JOINT. Pass 9 tried to give it
+// one -- that is where §9.1 points -- and THE LOOP STOPPED CLOSING: the
+// committed closure probe went 989 pm (baseline, gate 1120) to 2401 pm, because
+// at low fold arc 2660 is out in the air and the arm left past it cannot reach
+// back into the body. Arm length cannot buy it (swept 640/850/950/1050/1270:
+// the open-fold end improves exactly as the clip-bank end degrades, and neither
+// reaches the gate) and nor can the re-entry anchor (swept to the body centre).
+// So this half of §9.1 is OWED, not delivered, and the band probe prints it as
+// a declared gap on every run.
+//
+// ⚠ ONE CONSEQUENCE THAT HAD TO BE PAID FOR, and it is worth knowing before
+// touching arc[0] or arc[1] again. Moving the neck to the junction DOUBLES ITS
+// LEVER: its rotation used to act on the 344 mm from the neck to hinge A, and
+// now acts on the whole 680 mm from the junction. At the old amplitudes the
+// loop swung so far that the fixed-length return arm could no longer close it
+// (closure 989 -> 1794 pm against a 1120 gate). kKneadGripNeckA16 4100 -> 2100
+// and kKneadWagNeckA16 900 -> 480 restore it exactly (989 / 1043), and note
+// WHAT THAT MEANS: half the angle over twice the arm is the SAME TIP
+// EXCURSION. The visible swing is unchanged; only where the bend happens moved,
+// which is the entire point of §9.1.
+//
+// ⚠ WHY junctionF AND neck NOW SHARE ONE PIVOT (arc[0] = 0), rather than the
+// neck simply being deleted. The skinning ladder in manafold_model.h pairs two
+// bones per ring, and a station's blend is `blend` mm wide either side, so
+// CONSECUTIVE STATIONS MUST BE AT LEAST 2*blend = 330 mm APART or the ladder's
+// branch flips before the previous station's weight has finished ramping and
+// the skin takes a visible step. There are five places a joint belongs and six
+// bones in the chain, and chain order forbids parking the spare anywhere except
+// past the last station. So the spare rides the front junction as a SECOND
+// rotation about the SAME pivot -- which is not a fudge but the thing Direction
+// 5 §2 asked for at that station anyway ("the parts connected to the body are
+// also hinges"), and it gives the junction the extra freedom §1's "in all
+// directions" wants at the one station that carries the whole antenna.
+//
+// The TOTAL is unchanged at 3300 mm, so the band is the same length it was.
+constexpr int32_t kLoopArcMm[6] = {0, 680, 340, 380, 380, 1270};
 // fold angles at the neck exit and hinges A..C (angle16, about Z); hinge D
 // has NO authored fold — loop_pose computes it per key (closure). Derived
 // from the sheet's ring read (tall upright egg, W/H ~0.8), tuned by LOOKING.
@@ -212,8 +277,19 @@ constexpr int32_t kLoopRestTiltCA16 = 940;    // ~5.2 deg
 // down to 7.8%, because 88 mm of band is under 4 px on the shipped house zoom
 // and an antenna that thin dissolves into its own ink outline at 240p.
 // The buried base (130/140) is untouched: the sheet does fan out into the body.
-constexpr int32_t kLoopBladeRxMm[8] = {130, 74, 54, 52, 50, 54, 58, 70};
-constexpr int32_t kLoopBladeRzMm[8] = {140, 72, 44, 34, 27, 23, 29, 40};
+// PASS 9: SEVEN keys, not eight, because there are now seven taper stations --
+// the buried base, the front junction, A, B, C, the re-entry ball, the tip.
+// The eighth used to be the mid-run "neck" station, which no longer exists as a
+// separate place on the band (see kLoopArcMm above). Leaving it in as a
+// duplicate key would have put a HARD STEP in the taper at the junction: the
+// lookup returns k[1] at exactly s = stJF and k[2] one millimetre later, so two
+// different values on a zero-width span is a visible ledge, not a taper.
+// The junction flare (74/72) and the tip (70/40) are the accepted pass-6/8
+// values and have NOT been re-authored here; only the now-unreachable mid-run
+// key is gone, so the run from the junction to hinge A interpolates in one span
+// instead of two. Judge it on the band probe and by eye, not from this comment.
+constexpr int32_t kLoopBladeRxMm[7] = {130, 74, 52, 50, 54, 58, 70};
+constexpr int32_t kLoopBladeRzMm[7] = {140, 72, 34, 27, 23, 29, 40};
 
 // ---- the junction balls (PASS 4, Direction 4 §1: "the ball inside the
 // antenna is completely wrong — remove it. The other is almost right — it
@@ -1167,14 +1243,47 @@ constexpr int32_t kFoldEdgeCohMinPm = 620;
 // whose periods do not divide into each other never line up into a tumble, and
 // a tumbling shape stops being nameable, which is the one property §2's own
 // recorded tension says the edge has to carry alone.
-constexpr int32_t kStencilRotXAmpA16 = 3600;   // ~20 deg
-constexpr int32_t kStencilRotZAmpA16 = 2600;   // ~14 deg
-constexpr int kStencilRotXFrames = 430;
-constexpr int kStencilRotZFrames = 310;
+// PASS 9 -- DIRECTION 7 §9.2: "kneading should make the particle shapes rotate
+// and stretch. There should be movement. Careful not to spazz out though. It
+// needs to look deliberate."
+//
+// The mechanism was already here and it was TOO SLOW TO SEE, which is why the
+// shapes read as near-static while the antennae worked. The arithmetic, which
+// nobody had done: a 430-frame period is LONGER THAN MOST CLIPS (rest is 400,
+// channel 420), so the shape never completed one turn -- and at 20 degrees of
+// amplitude the peak rate was 0.09 deg/frame. A fifth of a degree a frame is
+// not slow motion, it is no motion. 09-ENGINE-GOTCHAS §9 exactly: a value
+// described as present in a comment and never measured on screen.
+//
+// So: amplitude up and period down, and NOT by "adding more of the same".
+// "Deliberate, not spazzy" is a motion-QUALITY requirement (07-MOTION-STYLE:
+// jitter lives between adjacent frames, so judge per-frame), and the thing that
+// satisfies it here is that these turns stay PURE SINUSOIDS -- exactly two
+// direction reversals per period, no noise term anywhere in the path. A shape
+// that vibrates reads as a bug; one swung smoothly through 50 degrees over four
+// seconds reads as being worked. Amplitude is not what makes motion spazzy;
+// reversal density is, and that is unchanged at 2 per cycle.
+//
+// Peak rate is now ~1.6 deg/frame on X and ~1.5 on Z -- visible, and still an
+// order of magnitude under anything that could read as a flicker.
+// Still incommensurate (190 vs 145 is not a small-integer ratio), because two
+// turns that line up become a tumble and a tumbling shape stops being nameable
+// -- the one property §2's recorded tension says the edge must carry alone.
+constexpr int32_t kStencilRotXAmpA16 = 9000;   // ~49 deg (was ~20)
+constexpr int32_t kStencilRotZAmpA16 = 7000;   // ~38 deg (was ~14)
+constexpr int kStencilRotXFrames = 190;        // was 430 -- longer than the clip
+constexpr int kStencilRotZFrames = 145;        // was 310 -- longer than the clip
 // Malleability: how much the shape's proportion may change at FULL knead
 // agitation, and how fast it works. Anisotropic (one axis out, one in) so the
 // shape is squeezed rather than scaled.
-constexpr int32_t kStencilKneadAmpPm = 260;
+// PASS 9 (§9.2, the STRETCH half -- "rotate AND stretch" names it explicitly,
+// so the shape must not read as a rigid body being spun). 260 -> 380: the
+// proportion change at full agitation goes from +/-26% to +/-38%, which is a
+// squeeze the eye catches at 240p in a ~40 px pocket. The 52-frame period is
+// UNCHANGED and deliberately so -- it is already the fastest thing in the fold
+// at roughly 1.3 s a cycle, and shortening it is precisely how this would start
+// to spazz. Amplitude up, rate held.
+constexpr int32_t kStencilKneadAmpPm = 380;
 constexpr int kStencilKneadFrames = 52;
 // §2: "Shapes are clipping into the antennae a bit though so you have to
 // switch them about" -- MOVE THE SHAPES, NOT THE ANTENNAE. One declared offset
@@ -1189,7 +1298,7 @@ constexpr int32_t kKneadGripJfA16 = 2300;  // gather: the junctions close...
                                            // (iter 3: the first authoring
                                            // moved the pocket area by <1% --
                                            // the grip must be SEEN)
-constexpr int32_t kKneadGripNeckA16 = 4100;
+constexpr int32_t kKneadGripNeckA16 = 2100;
 constexpr int32_t kKneadGripAA16 = 3500;
 constexpr int32_t kKneadGripBA16 = 2600;
 constexpr int32_t kKneadGripCA16 = 3200;
@@ -1214,7 +1323,7 @@ constexpr int32_t kKneadOopCA16 = 620;
 constexpr int32_t kKneadOopAA16 = 900;
 constexpr int kKneadOopPeriodKeys = 31;   // deliberately coprime-ish with 22
 constexpr int32_t kKneadWagJfA16 = 1600;  // knead: the two hands work...
-constexpr int32_t kKneadWagNeckA16 = 900;  // (neck stirs out-of-plane)
+constexpr int32_t kKneadWagNeckA16 = 480;  // (neck stirs out-of-plane)
 constexpr int32_t kKneadWagBA16 = 1100;
 constexpr int32_t kKneadWagCA16 = 1900;    // ...in counter-rotation
 constexpr int32_t kKneadWagB2A16 = 900;    // the back-junction ball slides

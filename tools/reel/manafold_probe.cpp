@@ -183,8 +183,8 @@ int main() {
       // PASS 3 (the reviewer's ask): test the terminal rings' RIM, not only
       // their centrelines — five sample offsets per ring: centre, ±rx (in
       // the loop plane), ±rz (across it), at the terminal blade radii.
-      const int32_t rim_rx = u02::kLoopBladeRxMm[7];
-      const int32_t rim_rz = u02::kLoopBladeRzMm[7];
+      const int32_t rim_rx = u02::kLoopBladeRxMm[6];  // PASS 9: 7 keys, not 8
+      const int32_t rim_rz = u02::kLoopBladeRzMm[6];
       const int32_t offs[5][2] = {
           {0, 0}, {rim_rx, 0}, {-rim_rx, 0}, {0, rim_rz}, {0, -rim_rz}};
       for (int ri = u02::kLoopRings - 3; ri < u02::kLoopRings; ++ri) {
@@ -830,10 +830,15 @@ int main() {
         return t;
       };
       uint8_t b0, b1, w0;
-      const int32_t tJ = blend_of(stJF), tN = blend_of(stNeck), tA = blend_of(stA),
+      // ⚠ THIS LADDER IS A COPY OF make_loop()'s IN manafold_model.h AND MUST
+      // MATCH IT EXACTLY. A probe that skins differently from the model is a
+      // probe that measures a creature nobody ships -- and this file already
+      // carries three separate lessons about instruments that were confidently
+      // wrong. PASS 9 (Direction 7 §9.1) re-cut the stations onto the balls and
+      // the two body junctions; both copies moved together, in one commit.
+      const int32_t tN = blend_of(stNeck), tA = blend_of(stA),
                     tB = blend_of(stB), tC = blend_of(stC), tD = blend_of(stD);
-      if (tN == 0) { b0 = u02::kBRoot; b1 = u02::kBJunctionF; w0 = static_cast<uint8_t>(64 - tJ); }
-      else if (tA == 0) { b0 = u02::kBJunctionF; b1 = u02::kBNeck; w0 = static_cast<uint8_t>(64 - tN); }
+      if (tA == 0) { b0 = u02::kBRoot; b1 = u02::kBNeck; w0 = static_cast<uint8_t>(64 - tN); }
       else if (tB == 0) { b0 = u02::kBNeck; b1 = u02::kBHingeA; w0 = static_cast<uint8_t>(64 - tA); }
       else if (tC == 0) { b0 = u02::kBHingeA; b1 = u02::kBHingeB; w0 = static_cast<uint8_t>(64 - tB); }
       else if (tD == 0) { b0 = u02::kBHingeB; b1 = u02::kBHingeC; w0 = static_cast<uint8_t>(64 - tC); }

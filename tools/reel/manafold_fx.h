@@ -42,6 +42,7 @@
 #ifndef ZHAO_REEL_MANAFOLD_FX_H
 #define ZHAO_REEL_MANAFOLD_FX_H
 
+#include <cstring>  // std::memset -- the mist plane's shift clears vacated cells
 #include <vector>
 
 #include "manafold_clips.h"
@@ -424,6 +425,171 @@ constexpr int kSmearW = 96, kSmearH = 60;  // quarter-res: the fill budget
 // depth keeps the surface. The 4-px blocky occlusion edge this produces
 // is PART of the broken-framebuffer aesthetic — accepted, stated, judged
 // by eye. Storage: 96x60 int32 (+11.5 KB-equivalent in the reel).
+
+// =============================== THE MIST PLANE =============================
+// DIRECTION 7 §8: "besides the particles there should be some of that mist that
+// leaves the wrong frame buffer ghost image. That's missing. That doesn't even
+// need shape, we have enough shape from the particles. But bring it back."
+// ...and §8's second message: "and it needs to move with the creature. Leaving
+// stuff hanging in space just looks like a glitch."
+//
+// THIS IS A SECOND PLANE, NOT A CHANGE TO THE SMEAR. That is deliberate and it
+// is the whole risk control of this pass. Pass 8 fixed a real fault in the
+// smear's colour (motes 48.7% -> 22.8% hue-neutral, smear 0.0% neutral at
+// saturation 168) and the owner has praised hasty's rung-3 trail by name. Both
+// survive here BY CONSTRUCTION: not one smear constant, buffer or code path is
+// touched. The mist is additional, exactly as the direction words it --
+// "BESIDES the particles" -- and it can be switched off with one flag without
+// disturbing anything the last pass earned.
+//
+// WHAT MAKES IT A MIST RATHER THAN A TRAIL, and why each knob exists:
+//   * NO SHAPE OF ITS OWN. kMistFeedOfHaloPm is ~4.5x the smear's fed radius,
+//     so a mote's contribution lands as a broad soft wash instead of the
+//     smear's tight core-sized dot. The direction is explicit that the mist
+//     "doesn't even need shape" because the particles already carry it.
+//   * CHUNKIER BLOCKS. 48x30 composited at 8x nearest, against the smear's
+//     96x60 at 4x. The broken-frame-buffer read comes from big, obviously
+//     wrong blocks; at the smear's resolution a soft wash just looks blurry.
+//   * LONGER PERSISTENCE. Keep/step near the "BROKEN-BUFFER" rung, because a
+//     ghost is by definition an image that outstayed its frame.
+//   * SEE-THROUGH. kMistAlphaMaxPm sits well under the smear's 780: Direction
+//     5 §3's fog is "still see through, way less so, very visible".
+//
+// ---- AND THE PART THAT IS ACTUALLY NEW: IT IS CREATURE-RELATIVE -----------
+// Direction 6 §0-TER listed three options for the stationary-trail problem and
+// option 3 -- "make the smear plane creature-relative so a ghost trails from
+// the creature's own motion rather than screen motion" -- was declared OUT OF
+// SCOPE as new machinery. The owner has now asked for it directly, so it is in
+// scope and this is it.
+//
+// The mechanism is one idea: EACH FRAME THE PLANE IS SHIFTED BY THE CREATURE'S
+// OWN SCREEN-SPACE DISPLACEMENT, scaled by kMistFollowPm.
+//
+//   kMistFollowPm = 1000  the plane rides exactly with the creature. No streak
+//                         at all -- a halo pinned to the animal.
+//   kMistFollowPm =    0  the plane is pinned to the SCREEN. This is the old
+//                         behaviour, and it is the thing the owner rejected:
+//                         "leaving stuff hanging in space just looks like a
+//                         glitch."
+//   in between            the plane follows, but LAGS. The lag is the streak.
+//
+// That middle case is the whole point, and it is the direction's own
+// distinction made mechanical: "anchor the mist to the creature and let its lag
+// produce the streak, so the trail always points back to its source." A ghost
+// that comes OFF the animal is a smear; the same pixels standing still while
+// the animal departs are debris. Because the shift is driven by the creature's
+// posed screen position, the residue can never be left behind in the world --
+// it is structurally incapable of the fault, rather than tuned away from it.
+//
+// The shift is integer cells with a FIXED-POINT RESIDUAL carried across frames
+// (kMistShiftFxBits), so a slow drift of a third of a cell per frame still
+// moves the plane every third frame instead of rounding to zero forever. That
+// rounding-to-zero is exactly how a "creature-relative" plane silently becomes
+// a screen-space one again on the gentle clips, which are the clips this
+// feature exists for.
+constexpr int kMistW = 48, kMistH = 30;  // 8x blocks: chunkier than the smear
+constexpr int kMistBlock = 8;            // composite magnification
+static_assert(kMistW * kMistBlock == 384 && kMistH * kMistBlock == 240,
+              "the mist plane must tile the 384x240 frame exactly");
+// How much of the creature's screen motion the plane follows. See above: this
+// is the one knob that decides "attached smear" vs "debris left in space".
+// Authored by eye: 820 keeps the haze plainly on the animal while the 18% it
+// gives up per frame accumulates into a visible tail behind a travelling one.
+constexpr int kMistFollowPm = 820;
+constexpr int kMistShiftFxBits = 8;  // sub-cell residual precision
+// persistence: near the BROKEN-BUFFER rung, because a ghost outstays its frame
+constexpr int kMistKeepPm = 930;
+constexpr int kMistStepFrames = 5;
+constexpr int kMistJitterPm = 190;
+constexpr int kMistHardClearFrames = 520;
+// the feed. BREADTH is the point -- this is what makes it a mist and not a
+// second trail. The smear feeds at kSmearFeedOfHaloPm = 420 (deliberately
+// SHRUNK to the core's footprint, pass 5); the mist feeds WIDER than the halo.
+constexpr int kMistFeedOfHaloPm = 1700;  // PASS 9: judged on the variant sheet
+constexpr int kMistFeedPm = 260;   // per-frame contribution (it integrates)
+constexpr int kMistCellCapPm = 135;  // hue-preserving cap, under the smear's 208
+// the composite
+constexpr int kMistGainPm = 1000;
+// PASS 9, CHOSEN BY EYE off manafold-mist-{sparing,mid,thick} at native. The
+// first authored value was 460 (the `thick` row) and it CROSSES THE MANA LAB'S
+// WALL -- "too far is when the mana starts eating the animal": the haze became
+// a solid block over the pocket and the antenna stopped reading through it.
+// 300 is the `mid` row: a plainly visible, plainly pixely haze with the loop
+// and every mote still legible under it. `sparing` (200) is the thin end and is
+// kept on the sheet, as is `thick`, so the owner picks rather than accepts.
+constexpr int kMistAlphaMaxPm = 300;  // "still see through, way less so"
+constexpr int kMistVividPm = 1500;    // same hue-preserving vivify as the smear
+constexpr int kMistChromaFloorPm = 600;  // pass 8's fix, so the mist is mana
+                                         // -coloured against ANY sky, not just
+                                         // the night ones
+// the tear, on the mist's own coarser grid. "The tear IS the glitch" (pass 6
+// E.5) and the wrong-frame-buffer read is what the direction asked for by name.
+constexpr SmearTear kMistTear = {4, 38, 2};
+// ---- THE MIST'S TUNABLES, AS A LIVE STRUCT --------------------------------
+// Every one of these is an owner knob (CLAUDE.md: "never remove the owner's
+// control in the name of fidelity"), and the constants above are its SHIPPING
+// DEFAULTS -- they remain the named, editable values. The struct exists so the
+// experiment lane can vary the mist without a second copy of the code, which is
+// how the smear ended up with a preset table and how the fold ended up with a
+// variant table. Nothing outside the mist reads it.
+struct MistCfg {
+  int alpha_max_pm = kMistAlphaMaxPm;
+  int feed_pm = kMistFeedPm;
+  int feed_of_halo_pm = kMistFeedOfHaloPm;
+  int cell_cap_pm = kMistCellCapPm;
+  int follow_pm = kMistFollowPm;
+  int gain_pm = kMistGainPm;
+  int vivid_pm = kMistVividPm;
+  int chroma_floor_pm = kMistChromaFloorPm;
+};
+inline MistCfg g_u02_mist;
+// ---- THE MIST VARIANT TABLE (Direction 7 §8, §10.2, §10.3) ----------------
+// The owner asked for the mist back (§8), then said the new one is "a bit too
+// sparing" (§10.2), then licensed an experiment: "for some experiments let's
+// not care if mist goes white. Might look cool and intended" (§10.3). All three
+// are answered by rendering variants and letting him pick, which is the format
+// that produced the edge-drawn shapes.
+//
+// ⚠ THE WHITE VARIANT IS AN EXPERIMENT, NOT A DEFAULT. §10.3 is a licence for
+// ONE element in experiments and explicitly does not generalise: the channel
+// ceiling is still a real fault everywhere else, and pass 8's saturation gains
+// on the MOTES are protected and untouched by every row here.
+//
+// `parked` is the CONTROL, and it is the reason this table earns its keep. It
+// sets follow to zero, which is the OLD screen-space behaviour -- the thing the
+// owner rejected as "leaving stuff hanging in space". Rendering it beside the
+// others proves the follow does something, on screen, rather than asserting it
+// in a comment (09-ENGINE-GOTCHAS §9: a property nobody has measured on screen
+// is a property nobody has seen).
+struct MistVariant { const char* name; MistCfg cfg; const char* note; };
+inline const MistVariant kMistVariants[] = {
+    {"sparing", {200, 210, 1500, 110, kMistFollowPm, 1000, kMistVividPm,
+                 kMistChromaFloorPm},
+     "thin veil -- the antenna reads through it everywhere"},
+    {"mid", {300, 260, 1700, 135, kMistFollowPm, 1000, kMistVividPm,
+             kMistChromaFloorPm},
+     "the candidate default: visible haze, loop still legible"},
+    {"thick", {460, 300, 1900, 170, kMistFollowPm, 1000, kMistVividPm,
+               kMistChromaFloorPm},
+     "the first authored value -- eats the antenna, kept as the wall"},
+    {"white", {520, 420, 1900, 255, kMistFollowPm, 1100, 2600, 0},
+     "DELIBERATELY BLOWN (§10.3): no cell cap, no chroma floor, hard vivify"},
+    {"parked", {300, 260, 1700, 135, 0, 1000, kMistVividPm,
+                kMistChromaFloorPm},
+     "CONTROL: follow=0, the rejected screen-space behaviour"},
+};
+inline constexpr int kMistVariantCount =
+    static_cast<int>(sizeof(kMistVariants) / sizeof(kMistVariants[0]));
+// DIRECTION 7 §4 applies here too -- but with a much higher floor, because §8
+// asks for the mist at REST. The smear may thin to 38% standing still; the mist
+// is the resting haze, so it never drops below kMistSpeedBasePm.
+constexpr int kMistSpeedBasePm = 750;
+inline int mist_speed_mul_pm(int32_t speed_mm) {
+  if (speed_mm <= 0) return kMistSpeedBasePm;
+  int32_t t = speed_mm * 1000 / kSmearSpeedFullMmPerFrame;
+  if (t > 1000) t = 1000;
+  return kMistSpeedBasePm + (1000 - kMistSpeedBasePm) * t / 1000;
+}
 
 /** One mana splat, in world space; the reel projects and composes it.
  *  pre=true draws BEFORE the creature compose (a pool the creature and its
@@ -1672,6 +1838,189 @@ inline void smear_composite(const uint8_t* buf, const int32_t* dbuf, uint8_t* rg
         // cannot do, and it is the half that makes a block read as gas rather
         // than as dirt.
         v += (cc[k] - cc_grey) * kSmearChromaFloorPm / 1000;
+        if (v < 0) v = 0;
+        if (v > 255) v = 255;
+        px[k] = static_cast<uint8_t>(v);
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// THE MIST PLANE'S THREE-AND-A-HALF FUNCTIONS
+// Modelled on the smear's, deliberately NOT shared with them. A shared
+// implementation would put the smear -- whose colour pass 8 fixed and whose
+// rung-3 trail the owner praised by name -- one edit away from every mist
+// tweak, and 09-ENGINE-GOTCHAS 14 is exactly the story of one knob quietly
+// serving two features. Two planes, two sets of knobs, two blast radii.
+// ---------------------------------------------------------------------------
+
+/** THE HALF: shift the plane by whole cells, so it rides with the creature.
+ *  This is the creature-relative mechanism (Direction 6 0-TER option 3, asked
+ *  for directly in Direction 7 8). `dx`/`dy` are CELL counts, already scaled
+ *  by kMistFollowPm and already accumulated through the caller's residual.
+ *  Vacated cells clear rather than wrap: a wrap would drag the trail's own tail
+ *  back in on the far side, which reads as a second creature. */
+inline void mist_shift(uint8_t* buf, int32_t* dbuf, int dx, int dy) {
+  if (dx == 0 && dy == 0) return;
+  if (dx <= -kMistW || dx >= kMistW || dy <= -kMistH || dy >= kMistH) {
+    std::memset(buf, 0, static_cast<size_t>(kMistW) * kMistH * 3);
+    std::memset(dbuf, 0, static_cast<size_t>(kMistW) * kMistH * sizeof(int32_t));
+    return;
+  }
+  // Walk in the direction that keeps source ahead of destination, so the copy
+  // is safe in place without a scratch buffer.
+  const int y_begin = dy > 0 ? kMistH - 1 : 0;
+  const int y_end   = dy > 0 ? -1 : kMistH;
+  const int y_step  = dy > 0 ? -1 : 1;
+  const int x_begin = dx > 0 ? kMistW - 1 : 0;
+  const int x_end   = dx > 0 ? -1 : kMistW;
+  const int x_step  = dx > 0 ? -1 : 1;
+  for (int y = y_begin; y != y_end; y += y_step) {
+    const int sy = y - dy;
+    for (int x = x_begin; x != x_end; x += x_step) {
+      const int sx = x - dx;
+      uint8_t* d = buf + (static_cast<size_t>(y) * kMistW + x) * 3;
+      int32_t& dd = dbuf[static_cast<size_t>(y) * kMistW + x];
+      if (sx < 0 || sx >= kMistW || sy < 0 || sy >= kMistH) {
+        d[0] = d[1] = d[2] = 0;
+        dd = 0;
+        continue;
+      }
+      const uint8_t* s = buf + (static_cast<size_t>(sy) * kMistW + sx) * 3;
+      d[0] = s[0]; d[1] = s[1]; d[2] = s[2];
+      dd = dbuf[static_cast<size_t>(sy) * kMistW + sx];
+    }
+  }
+}
+
+/** Per-frame decay. Same glitch grammar as the smear -- quantised step,
+ *  per-cell retention jitter, staggered bounded hard clear -- on the mist's
+ *  own longer constants. */
+inline void mist_update(uint8_t* buf, int32_t* dbuf, uint32_t frame) {
+  const bool step = kMistStepFrames <= 1 ||
+                    (frame % static_cast<uint32_t>(kMistStepFrames)) == 0;
+  for (int i = 0; i < kMistW * kMistH; ++i) {
+    uint8_t* c = buf + static_cast<size_t>(i) * 3;
+    if (kMistHardClearFrames > 1) {
+      const uint32_t hc = fx_hash(0x9A17015Du, static_cast<uint32_t>(i), 5u);
+      if ((frame + hc) % static_cast<uint32_t>(kMistHardClearFrames) == 0) {
+        c[0] = c[1] = c[2] = 0;
+        dbuf[i] = 0;
+        continue;
+      }
+    }
+    if (!step || (c[0] | c[1] | c[2]) == 0) continue;
+    const uint32_t hj = fx_hash(0x31157EEDu, static_cast<uint32_t>(i),
+                                frame / static_cast<uint32_t>(kMistStepFrames));
+    int keep = kMistKeepPm + fx_jit(hj, kMistJitterPm);
+    if (keep < 0) keep = 0;
+    if (keep > 1000) keep = 1000;
+    for (int k = 0; k < 3; ++k) {
+      const int v = c[k];
+      int nv = v * keep / 1000;
+      if (nv == v && v > 0) nv = v - 1;  // decay always reaches zero
+      c[k] = static_cast<uint8_t>(nv);
+    }
+  }
+}
+
+/** Feed one projected splat into the mist, BROAD and soft. Same hue-preserving
+ *  accumulation as the smear (a cell that saturates all three channels goes
+ *  white, and white mist is the fault pass 8 spent itself on), at the mist's
+ *  own lower cell cap so the haze stays thin enough to see through. */
+inline void mist_feed(uint8_t* buf, int32_t* dbuf, const GlowAssets& g,
+                      const GlowFrame& f, int32_t cx, int32_t cy, int32_t r,
+                      int32_t splat_d) {
+  if (!g.baked) return;
+  const int32_t qx = cx / kMistBlock, qy = cy / kMistBlock;
+  int32_t qr = r / kMistBlock;
+  if (qr < 1) qr = 1;
+  const zref::star::Sprite8& sp = g.sprite;
+  const int32_t qx0 = qx - qr, qy0 = qy - qr;
+  const int64_t wq = 2 * static_cast<int64_t>(qr);
+  for (int32_t y = qy0 < 0 ? 0 : qy0; y < qy + qr && y < kMistH; ++y) {
+    const int32_t sy = static_cast<int32_t>((static_cast<int64_t>(y - qy0) * sp.h) / wq);
+    for (int32_t x = qx0 < 0 ? 0 : qx0; x < qx + qr && x < kMistW; ++x) {
+      const int32_t sx = static_cast<int32_t>((static_cast<int64_t>(x - qx0) * sp.w) / wq);
+      const uint8_t t = sp.pix[static_cast<size_t>(sy) * sp.w + sx];
+      if (t == 0) continue;
+      uint8_t* c = buf + (static_cast<size_t>(y) * kMistW + x) * 3;
+      int32_t& cd = dbuf[static_cast<size_t>(y) * kMistW + x];
+      if (splat_d > cd) cd = splat_d;
+      int av[3], am = 0, cm = 0;
+      for (int k = 0; k < 3; ++k) {
+        av[k] = f.pal[t][k] * g_u02_mist.feed_pm / 1000;
+        if (av[k] > am) am = av[k];
+        if (c[k] > cm) cm = c[k];
+      }
+      if (am == 0 || cm >= g_u02_mist.cell_cap_pm) continue;
+      const int room = g_u02_mist.cell_cap_pm - cm;
+      const int sc = am > room ? room * 1000 / am : 1000;
+      for (int k = 0; k < 3; ++k) {
+        const int v = c[k] + av[k] * sc / 1000;
+        c[k] = static_cast<uint8_t>(v > 255 ? 255 : v);
+      }
+    }
+  }
+}
+
+/** Composite the mist onto the frame at chunky kMistBlock nearest, with the
+ *  same depth test, hue-preserving vivify and chroma floor the smear uses --
+ *  the parts of pass 8's colour work that are LAWS here, not preferences
+ *  (09-ENGINE-GOTCHAS 4: additive over bright pink can only whiten, so this
+ *  blends; and a plane with no chroma floor takes its colour from the sky). */
+inline void mist_composite(const uint8_t* buf, const int32_t* dbuf, uint8_t* rgb,
+                           const int32_t* frame_depth, uint32_t w, uint32_t h,
+                           int gain_pm, uint32_t frame) {
+  if (gain_pm <= 0) return;
+  int tear_y0 = -1, tear_y1 = -1, tear_dx = 0;
+  {
+    const uint32_t ht = fx_hash(0x6C057A1Bu, frame / 2u, 0x5Bu);
+    if ((ht % static_cast<uint32_t>(kMistTear.frames)) < 6u) {
+      tear_y0 = static_cast<int>((ht >> 8) % static_cast<uint32_t>(kMistH - kMistTear.rows));
+      tear_y1 = tear_y0 + kMistTear.rows;
+      tear_dx = 1 + static_cast<int>((ht >> 20) % static_cast<uint32_t>(kMistTear.cells));
+      if (ht & 0x40000000u) tear_dx = -tear_dx;
+    }
+  }
+  for (uint32_t y = 0; y < h; ++y) {
+    const int cy = static_cast<int>(y / kMistBlock);
+    if (cy >= kMistH) break;
+    const uint8_t* row = buf + (static_cast<size_t>(cy) * kMistW) * 3;
+    const int32_t* drow = dbuf + static_cast<size_t>(cy) * kMistW;
+    const bool torn = cy >= tear_y0 && cy < tear_y1;
+    for (uint32_t x = 0; x < w; ++x) {
+      int cxi = static_cast<int>(x / kMistBlock);
+      if (cxi >= kMistW) break;
+      if (torn) {
+        cxi += tear_dx;
+        if (cxi < 0) cxi += kMistW;
+        if (cxi >= kMistW) cxi -= kMistW;
+      }
+      const uint8_t* c = row + static_cast<size_t>(cxi) * 3;
+      int m = c[0];
+      if (c[1] > m) m = c[1];
+      if (c[2] > m) m = c[2];
+      if (m < 6) continue;  // fully decayed: gone
+      const int32_t cell_d = drow[cxi];
+      if (!(cell_d > frame_depth[static_cast<size_t>(y) * w + x])) continue;
+      int a = m * gain_pm * 6 / 1000;
+      if (a > g_u02_mist.alpha_max_pm) a = g_u02_mist.alpha_max_pm;
+      uint8_t* px = rgb + (static_cast<size_t>(y) * w + x) * 3;
+      int cc[3];
+      int cc_sum = 0;
+      const int vivid = m * g_u02_mist.vivid_pm > 255000 ? 255000 / m
+                                                          : g_u02_mist.vivid_pm;
+      for (int k = 0; k < 3; ++k) {
+        cc[k] = c[k] * vivid / 1000;
+        if (cc[k] > 255) cc[k] = 255;
+        cc_sum += cc[k];
+      }
+      const int cc_grey = cc_sum / 3;
+      for (int k = 0; k < 3; ++k) {
+        int v = (px[k] * (1000 - a) + cc[k] * a) / 1000;
+        v += (cc[k] - cc_grey) * g_u02_mist.chroma_floor_pm / 1000;
         if (v < 0) v = 0;
         if (v > 255) v = 255;
         px[k] = static_cast<uint8_t>(v);

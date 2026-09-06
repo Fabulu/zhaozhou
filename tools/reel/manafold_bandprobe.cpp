@@ -80,6 +80,96 @@ std::vector<Row> profile(const std::vector<zc::Meshlet>& mesh, size_t first,
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// DIRECTION 7 §9.1 AS A GATE: EVERY JOINT ON A BALL, EVERY BALL ON A JOINT.
+//
+// "The joints need to be where the balls are and also the two spots where the
+// antennae meet the creature."
+//
+// This is checkable arithmetic and nobody had ever checked it, which is how
+// pass 8 shipped a kneading joint at arc 586 -- 344 mm from the nearest ball,
+// in the middle of a smooth run -- while the re-entry ball at 2660 had no joint
+// at all. Both faults were visible from these two lists side by side, and
+// neither list was wrong on its own. So the lists live in one function now.
+//
+// Tolerance is the knuckle's own half-width: a joint inside the swell it drives
+// is AT that ball as far as the eye is concerned; one outside it creases bare
+// band. That makes the tolerance a property of the geometry rather than a
+// number somebody picked.
+int joints_on_balls(bool verbose) {
+  const int32_t stJF = u02::kLoopBuryMm;
+  const int32_t stNeck = stJF + u02::kLoopArcMm[0];
+  const int32_t stA = stNeck + u02::kLoopArcMm[1];
+  const int32_t stB = stA + u02::kLoopArcMm[2];
+  const int32_t stC = stB + u02::kLoopArcMm[3];
+  const int32_t stD = stC + u02::kLoopArcMm[4];
+  struct Named { const char* name; int32_t at; };
+  // kBJunctionF is deliberately absent: it shares kBNeck's pivot exactly, so
+  // it is the same station and checking it twice would prove nothing.
+  // WHICH STATIONS THIS GATE JUDGES, and why hingeD is not one of them.
+  // The owner is talking about the joints the creature KNEADS with: "I see you
+  // try to knead with antennae. But it is only one joint that does it, and the
+  // joint is in the wrong place." The stations antenna_knead() and HingePlay
+  // actually drive are junctionF/neck, A, B and C -- those four, and no other.
+  //
+  // kBHingeD is NOT driven by either: it carries the CLOSURE AIM, computed per
+  // frame in loop_pose() so the return arm points at the re-entry anchor. It is
+  // a solver variable, not a joint anybody plays with, and its bend is the
+  // band curving back into the body rather than a crease.
+  //
+  // ⚠ AND THIS WAS TESTED, NOT ASSUMED. Pass 9 first moved hingeD onto the
+  // re-entry ball at 2660, which is where §9.1 would put it. THE LOOP STOPS
+  // CLOSING: the committed closure probe goes from 989 pm (baseline, gate 1120)
+  // to 2401 pm, because at low fold arc 2660 is out in the air and the arm left
+  // past it can no longer reach back into the body. Arm length cannot buy it --
+  // swept 640/850/950/1050/1270, the open-fold end improves as the clip-bank
+  // end degrades and neither reaches the gate -- and nor can the anchor.
+  // So the re-entry ball keeps its swell and has NO articulation station.
+  // That is a DECLARED GAP, printed below on every run, not a silent one.
+  const Named joints[] = {{"junctionF/neck", stNeck}, {"hingeA", stA},
+                          {"hingeB", stB},            {"hingeC", stC}};
+  const Named balls[] = {{"knuckle-Jf", u02::kKnuckleAtJfMm},
+                         {"knuckle-A", u02::kKnuckleAtAMm},
+                         {"knuckle-B", u02::kKnuckleAtBMm},
+                         {"knuckle-C", u02::kKnuckleAtCMm}};
+  const int32_t tol = u02::kKnuckleSwellHalfMm;
+  int bad = 0;
+  for (const Named& j : joints) {
+    int32_t best = 1 << 30; const char* who = "(none)";
+    for (const Named& b : balls) {
+      const int32_t d = j.at > b.at ? j.at - b.at : b.at - j.at;
+      if (d < best) { best = d; who = b.name; }
+    }
+    if (verbose)
+      std::printf("  joint %-15s arc %5d -> nearest ball %-12s %4d mm %s\n",
+                  j.name, j.at, who, best, best <= tol ? "OK" : "*** IN A STRAIGHT RUN");
+    if (best > tol) ++bad;
+  }
+  for (const Named& b : balls) {
+    int32_t best = 1 << 30;
+    for (const Named& j : joints) {
+      const int32_t d = j.at > b.at ? j.at - b.at : b.at - j.at;
+      if (d < best) best = d;
+    }
+    if (verbose)
+      std::printf("  ball  %-15s arc %5d -> nearest joint            %4d mm %s\n",
+                  b.name, b.at, best, best <= tol ? "OK" : "*** RIGID, no joint");
+    if (best > tol) ++bad;
+  }
+  if (verbose) {
+    std::printf("  ---- not articulation stations, reported for completeness ----\n");
+    std::printf("  hingeD          arc %5d    the CLOSURE SOLVER, not a knead joint\n", stD);
+    std::printf("  knuckle-End     arc %5d    DECLARED GAP: no articulation "
+                "station. Moving hingeD here breaks the loop closure "
+                "(989 -> 2401 pm against a 1120 gate). Owed work.\n",
+                u02::kKnuckleAtEndMm);
+  }
+  if (verbose)
+    std::printf("bandprobe: joints-on-balls %s (tolerance %d mm = the knuckle's "
+                "own half-width)\n", bad ? "FAIL" : "PASS", tol);
+  return bad;
+}
+
 int selftest() {
   // A synthetic stack: 20 rings, flat half-width 60, with a planted bulge of
   // +50 at ring 10. Fed through the SAME grouping code path.
@@ -115,11 +205,46 @@ int selftest() {
   int32_t lo = p[0].half_x_mm, hi = p[0].half_x_mm;
   for (const auto& r : p) { lo = std::min(lo, r.half_x_mm); hi = std::max(hi, r.half_x_mm); }
   if (hi - lo > 2) { std::printf("selftest FAIL: flat stack reported %d..%d\n", lo, hi); return 1; }
-  std::printf("bandprobe selftest: OK (bulge found, flat stack flat)\n");
+  // PASS 9: and prove the JOINTS gate can FAIL, not merely that it passes. A
+  // gate nobody has watched fail is a gate nobody has tested -- pass 8's own
+  // standard, and the reason this probe plants a bulge rather than trusting
+  // one. The shipped geometry must pass; the pass-8 layout must be caught.
+  if (joints_on_balls(false) != 0) {
+    std::printf("selftest FAIL: the SHIPPED geometry does not satisfy S9.1\n");
+    return 1;
+  }
+  {
+    // the pass-8 stations replayed: neck at 586 and hingeD at 2030, both in a
+    // smooth run. Arithmetic on local copies -- nothing here touches the real
+    // constants.
+    const int32_t stale[2] = {586, 2030};
+    const int32_t balls[5] = {u02::kKnuckleAtJfMm, u02::kKnuckleAtAMm,
+                              u02::kKnuckleAtBMm, u02::kKnuckleAtCMm,
+                              u02::kKnuckleAtEndMm};
+    for (int k = 0; k < 2; ++k) {
+      int32_t best = 1 << 30;
+      for (int i2 = 0; i2 < 5; ++i2) {
+        const int32_t d = stale[k] > balls[i2] ? stale[k] - balls[i2]
+                                               : balls[i2] - stale[k];
+        if (d < best) best = d;
+      }
+      if (best <= u02::kKnuckleSwellHalfMm) {
+        std::printf("selftest FAIL: pass-8 station %d sits %d mm from a ball "
+                    "against a %d mm tolerance -- this gate cannot fail\n",
+                    stale[k], best, u02::kKnuckleSwellHalfMm);
+        return 1;
+      }
+      std::printf("bandprobe selftest: pass-8 station %d WOULD be caught "
+                  "(%d mm from the nearest ball, tolerance %d)\n",
+                  stale[k], best, u02::kKnuckleSwellHalfMm);
+    }
+  }
+  std::printf("bandprobe selftest: OK (bulge found, flat stack flat, joints gated)\n");
   return 0;
 }
 
 }  // namespace
+
 
 int main(int argc, char** argv) {
   if (argc > 1 && std::strcmp(argv[1], "--selftest") == 0) return selftest();
@@ -167,5 +292,7 @@ int main(int argc, char** argv) {
               loz, hiz, loz ? (hiz * 100) / loz : 0);
   std::printf("bandprobe: a UNIFORM STRAP is ratio ~100%%; the sheet's four "
               "swellings want a clear local maximum at each joint station.\n");
-  return 0;
+    std::printf("bandprobe: DIRECTION 7 S9.1 -- joints on balls, balls on joints\n");
+  const int bad = joints_on_balls(true);
+  return bad ? 1 : 0;
 }
