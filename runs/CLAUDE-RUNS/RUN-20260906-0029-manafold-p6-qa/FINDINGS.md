@@ -622,3 +622,35 @@ and a twelve-slot per-clip table.**
 Also worth recording: the 16 subjects span only **14 authored clip slots** -
 hover, inspect and crackle all render slot 0. "All 16 clips moved" is true of
 subjects; the model has fewer clips than subjects.
+
+---
+
+## APPENDIX - THE SHA THIS AUDIT DESCRIBES, AND THE BRANCH TIP
+
+**Audited:** zhaozhou 83be0c66 / Upheaval bd80b5c - the SHA the pass-6 site was
+published from.
+
+**Since then** the impl lane moved seven commits to **44080919**, a merge from
+origin/main bringing the mana lab: manafold_lab.h (1025 lines) plus manafold.h
++5 and zhao_reel.cpp +39/-1. The source declares it "LANE-ONLY ... Ships
+nothing; touches no shipped constant."
+
+That is the same shape of assertion pass 5 got wrong, so it was tested, not
+trusted, and it **holds - CONFIRMED two ways**:
+
+* **Empirical.** cel rebuilt at 44080919 and all 16 shipping subjects
+  re-rendered: **all 16 sequence CRCs identical to 83be0c66**, zero differences.
+  So every number in this document describes the current tip as well as the
+  audited SHA, and the published webms still correspond to the code at the tip.
+* **Static.** manafold_lab.h lives entirely in `namespace u02::lab`; its 18
+  constants have zero name collisions with the 235 in manafold_art.h. The lab
+  clip is appended at **slot 15**, so slots 0-14 do not renumber, and both new
+  zhao_reel.cpp branches are guarded on `u02_mana >= kLabCandBase`, which no
+  shipping subject reaches (they run mana 9, or 0 for the still diagnostic).
+
+**One coordination note.** At the time of writing, 44080919 is **not on the
+remote** - the QA commits of this run are the branch tip
+(gh/zixxtrixx-wholebody-s-spring = 85a45b9e). The impl lane will therefore hit a
+non-fast-forward on its next push and must pull/rebase these four QA commits
+first. They only add this run folder, two QA-only probe sources and three
+evidence PNGs - no shipped file is touched, so the rebase is mechanical.
