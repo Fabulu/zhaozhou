@@ -240,6 +240,20 @@ jobs:
           # elaboration, and a new top neither counted nor declared absent.
           # A gate that only ever runs on one laptop is how weeks of drift hide.
           npm run manifest:check
+          # THE RTL CONTRACT GATES, and they were LOCAL-ONLY until 2026-09-06 --
+          # the same fault the manifest gate had, in the same file, four lines
+          # up. Both encode a bug that was found once and would otherwise be
+          # free to come back:
+          #   check_ingress_capture  -- no block reads a live ingress pin after
+          #     its capture point (the island lost 39 of 64 fragments to this
+          #     while every activity counter looked healthy)
+          #   check_guard_verdict    -- no MEM.GUARD client tests ready and ok
+          #     in one cycle, which zhao_mem_guard cannot produce. Three clients
+          #     had it wrong; two read every PASS as a denial and the third
+          #     reads every DENIAL as a pass.
+          # Both GATE (non-zero on violation) rather than report, which is why
+          # they are here and design:report as a whole is not.
+          npm run rtl:gates
           npm test
 
   nightly:
