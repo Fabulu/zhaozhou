@@ -194,3 +194,27 @@ For pass 7:
    they never had -- the largest single visual change in the pass, from a
    one-character bound.
  * Zixxtrixx untouched: no file in its closure was edited.
+
+### Post-change checks
+* **QA's stray-triangle probe re-run on the CHANGED eye geometry**: 0 vertices
+  unreferenced by any triangle across all 25 meshlets. The lens and star tip
+  rings were altered this pass, so this is the check that matters most -- the
+  project's recorded ghost is "every automated gate passed while a stray
+  triangle sat in a creature's eye".
+* **Zixxtrixx byte-identity verified by inspection, not asserted.** Diffing the
+  whole branch against the pre-pass-7 base: no `zixxtrixx*.h`, no
+  `reference/src`, no `zixx_*` tool touched. The only shared file edited is
+  `zhao_reel.cpp`, and its entire diff is (a) the Manafold smear clamp and
+  (b) a new Manafold-only subject block -- nothing on any Zixxtrixx path.
+* **The merged antenna tooling runs here**: `manafold-hinge-traj` produces 2521
+  rows, and `hinge_trajplot.py selftest` PASSES -- it distinguishes a flat line
+  (0.00 mm) from motion (80.00 mm) and a locked pair (r=1.000) from an
+  independent one (r=0.000), so that instrument can fail.
+
+### ⚠ FOR PASS 8: a smell in QA's own stray probe, not acted on
+`manafold_qa_stray.cpp` reports every eye vertex skinning to world
+(0,1,-1) mm and "within 100mm of ORIGIN", for an eye whose bone binds at
+kEyeXMm = 381 mm. That cannot be right, and it is the same FRAME class of bug
+fixed twice in manafold_probe.cpp this pass (bind space vs bone space; root
+translation). Its stray COUNT is still usable -- that only needs the index
+lists -- but do not trust its positions until the frame is checked.
