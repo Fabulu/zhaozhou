@@ -769,6 +769,62 @@ host (15816) are both alive, so the host still runs STA and writes the row.
 ``tools/quartus/watch_fit.ps1`` reports and never kills, and measures liveness
 by CPU delta -- log growth would have called a healthy fit hung earlier today.
 
+## GEOM.MEM.ADAPTER: the answer to "MESHFETCH has no memory identity"
+
+Owner brief section 12, and it closes the blocker D22 tread 10 recorded. The
+arbiter casts the SLOT INDEX to the client enum -- slot 3 IS ENGINE1, slot 4 IS
+DEBUG -- and the guard grants the asset pool to ENGINE1 alone. **A spare slot is
+not a spare privilege.** So the two fetchers SHARE the one permitted client
+upstream of the guard, with explicit logical ownership.
+
+What it holds to, all from section 12: the three acceptance boundaries are
+different events (a guard OK is not returned data; an arbiter grant is not a
+completed line, so the owner is not released on the first credit return); TWO
+burst scales, the expected count taken from the accepted request's own length
+rather than a constant; ONE logical request in flight, which is what makes the
+return-routing proof trivial; round-robin at logical-request boundaries rather
+than a descriptor preference that could starve payload filling; and **ENGINE1
+SUBSTITUTED, not forwarded** -- both requesters in the test present SCANOUT and
+the guard sees ENGINE1.
+
+``zhao_shell_top``'s return generator is generalised to match. It counted a
+constant eight, and against a 32-byte descriptor that never fires ``last`` at
+all and carries the count into the NEXT request.
+
+**30 checks.** Both lengths, ownership of beats and verdicts, fairness, a
+three-cycle gap standing in for somebody else's physical burst, a denial
+reaching only the requester that asked, and an over-serving memory whose surplus
+is reported rather than passed on.
+
+### Three faults, all mine, none the adapter's
+
+Its memory model first served a constant eight for BOTH lengths, as a device to
+prove the adapter derives its own count. It was still delivering A's fifth
+through eighth words after the adapter had correctly finished A's four-word
+line, so every later scenario ran against a model mid-burst. Seventeen checks
+failed and ``err_unowned`` reading 4 was the adapter correctly reporting my
+own bench's strays.
+
+Its cycle model observed at the TOP of the loop, before driving that cycle's
+inputs, so everything came back exactly one beat short -- which reads like an
+off-by-one in the adapter and was an off-by-one in when the bench looked.
+
+And the over-serve was first counted as SHORT. The counter fired correctly and
+named the OPPOSITE fault: a memory that has not finished at the expected count
+sent too much. A wrong label on a right alarm is how a diagnosis sends the next
+person to reshape something already correct.
+
+### And the gates caught the registration, in sequence
+
+Each one found the next omission the moment the previous was fixed:
+``check_guard_verdict``'s coverage audit -- written earlier today -- caught the
+adapter as an unlisted guard client on the first module written after it
+existed; then the manifest said UNACCOUNTED; then it said the module is
+instantiated by the generated production top but missing from the fit's source
+list, *"the fit would die at elaboration"*. That last is the exact failure the
+manifest gate's own CI comment records finding the day it was first run in
+anger. Ledger, manifest and source list really are three acts.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner
