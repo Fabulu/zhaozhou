@@ -185,7 +185,40 @@ module zhao_terrain_island_dir
       // ---- decide, one cycle later, on the CAPTURED coordinate -----------
       // The gates read ix_q/iz_q and not the live pins. The descriptor is
       // frame-scoped so reading it live is legitimate; the coordinate is not.
-      if (busy_q && !res_pending_q) begin
+      //
+      // `ans_free_c` IS LOAD-BEARING AND WAS MISSING. Without it this block
+      // DROPS AN ANSWER whenever its consumer applies backpressure, and the
+      // window is exactly one cycle wide:
+      //
+      //   c0  query A accepted            (q_ready needs ans_free -- fine)
+      //   c1  A decided -> res_pending
+      //   c2  store consulted
+      //   c3  store answers; ans_full_q <= 1. But ans_full_q is still 0 DURING
+      //       c3, so q_ready_o is high and query B is accepted on the same
+      //       cycle.
+      //   c4  ans_full_q = 1, holding A's answer. busy_q = 1 for B, so the
+      //       decide below runs -- and if B is out of extent it overwrites
+      //       A's answer, or if B is in extent its store answer overwrites it
+      //       two cycles later. Either way A is gone.
+      //
+      // With `a_ready_i` tied high the overwrite is harmless, because A is
+      // consumed on c4 anyway. That is why this survived a 21-check
+      // differential including a full 15,625-patch grid sweep and 3,000
+      // randomised draws: every one of its four phases drives `d.a_ready = 1`
+      // on every cycle, so the answer register is never actually full.
+      //
+      // It was found by TERRAIN.VISIBLE, which composes this block and stalls
+      // it: 911 queries issued, 854 answers returned, 57 lost, and the
+      // composition deadlocked waiting for answers that no longer existed.
+      //
+      // Gating the decide on `ans_free_c` closes it completely, and closes the
+      // store-answer path with it: `res_ans_valid_i` can only arrive two
+      // cycles after a decide that required `ans_free_c`, and no other query
+      // can be accepted in between (q_ready needs `!busy_q`, and busy_q is
+      // held by the query being decided). It costs nothing when the consumer
+      // is ready -- `ans_free_c` is then constantly true -- so the block's
+      // three-cycle round trip is unchanged.
+      if (busy_q && !res_pending_q && ans_free_c) begin
         busy_q <= 1'b0;
         if (pitch_bad_c) begin
           ans_outcome_q <= OUT_BAD_PITCH;

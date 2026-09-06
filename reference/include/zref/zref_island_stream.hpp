@@ -57,15 +57,13 @@ struct Stats {
   uint32_t peak_resident = 0;  // high-water mark, against the page count
 };
 
-// A square view window in patch coordinates. Square rather than circular on
-// purpose: the visible set is a conservative superset of what is drawn, and a
-// residency policy that is exact about the frustum evicts patches the moment
-// the camera turns. Hysteresis belongs here, not in the draw path.
-struct View {
-  int32_t centre_ix = 0;
-  int32_t centre_iz = 0;
-  int32_t radius = 0;  // patches
-};
+// `View`, `Visible`, `WindowTally` and `visible_set` USED TO LIVE HERE, as a
+// loop inside `update` below. They now live in `zref_island.hpp` (which this
+// header includes, so every existing user still sees `zref::island::View`)
+// because TERRAIN.VISIBLE -- the RTL block that asks the directory which
+// patches a camera can see -- needs the same rule. Two copies of "what is
+// visible" is exactly the drift this tree keeps paying for: the streamer's
+// copy would have been the one under test and the hardware's the one shipped.
 
 class Streamer {
  public:
@@ -81,15 +79,19 @@ class Streamer {
   Stats update(const View& v, residency::Ledger* L = nullptr) {
     Stats st;
 
+    // ONE DEFINITION OF THE VISIBLE SET, shared with TERRAIN.VISIBLE's RTL.
+    // Only patches that EXIST come back; sky is not streamed, which is the
+    // whole reason an 8 km island fits, because most of this window is
+    // nothing.
+    //
+    // The order is dropped on the floor here DELIBERATELY. `visible_set`
+    // guarantees row-major emission because the hardware consumer depends on
+    // it, but this model wants a membership test against `live_`, and a set
+    // says so. The publish loop below therefore still walks in the set's own
+    // order, unchanged from before this function was extracted -- so nothing
+    // about arena allocation moved when the loop did.
     std::set<std::pair<int32_t, int32_t>> want;
-    for (int32_t iz = v.centre_iz - v.radius; iz <= v.centre_iz + v.radius; ++iz) {
-      for (int32_t ix = v.centre_ix - v.radius; ix <= v.centre_ix + v.radius; ++ix) {
-        // Only patches that EXIST. Sky is not streamed, which is the whole
-        // reason an 8 km island fits: most of this window is nothing.
-        if (dir_.find(ix, iz).outcome == Outcome::kResident)
-          want.insert({ix, iz});
-      }
-    }
+    for (const Visible& p : visible_set(dir_, v)) want.insert({p.ix, p.iz});
 
     // ---- 1. evict what is no longer wanted ---------------------------------
     std::vector<std::pair<int32_t, int32_t>> going;

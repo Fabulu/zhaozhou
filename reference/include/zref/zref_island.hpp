@@ -48,6 +48,7 @@
 #include <cstdint>
 #include <map>
 #include <utility>
+#include <vector>
 
 namespace zref {
 namespace island {
@@ -180,6 +181,107 @@ class Directory {
   Desc desc_;
   std::map<std::pair<int32_t, int32_t>, uint32_t> entries_;
 };
+
+
+// ===========================================================================
+// THE VISIBLE SET -- which patches a camera's window actually has ground in.
+// ===========================================================================
+// `Directory::find` answers ONE question about ONE patch. Nothing above it
+// decided WHICH questions to ask, and reports/Missingterrain names that hole
+// exactly:
+//
+//     "Nothing currently does: camera moved -> inspect island directory ->
+//      determine visible patch coordinates -> ... -> issue all visible patches
+//      to the terrain engine."
+//
+// This is the coordinate generator plus filter that closes it, and it lives
+// HERE rather than inside the streamer because two things need it -- the
+// streamer, which turns it into publish/evict, and TERRAIN.VISIBLE, the RTL
+// block that issues it into the terrain engine. When it lived only inside
+// `Streamer::update` the RTL had to be written against a transcription of that
+// loop, which is precisely the drift this tree keeps paying for.
+
+// A square view window in patch coordinates.
+//
+// SQUARE RATHER THAN CIRCULAR, ON PURPOSE. The visible set is a conservative
+// SUPERSET of what is drawn: a residency policy that is exact about the frustum
+// evicts patches the moment the camera turns, and then has to fetch them back
+// on the next turn. Hysteresis belongs in the view, not in the draw path.
+// Rounding the corners off this window would save 21% of the queries and buy a
+// thrash. Do not "improve" it to a circle.
+struct View {
+  int32_t centre_ix = 0;
+  int32_t centre_iz = 0;
+  int32_t radius = 0;  // patches; the window is (2*radius+1) on a side
+};
+
+// One patch that came back RESIDENT, with the handle the caller will draw from.
+struct Visible {
+  int32_t ix = 0;
+  int32_t iz = 0;
+  uint32_t page_handle = 0;
+};
+
+// What the window COST, which is not what it produced.
+//
+// `emitted` is the small number; `examined` is the one the hardware is sized
+// against. A window of radius R asks (2R+1)^2 questions and, on an island whose
+// grid is 94.9% sky, typically answers a small fraction of them with ground.
+// So the tally counts the rejections separately and by reason -- a window that
+// found nothing because it is over open water and a window that found nothing
+// because the camera left the island are different events and must not share a
+// counter.
+struct WindowTally {
+  uint32_t examined = 0;       // queries ASKED
+  uint32_t emitted = 0;        // ...that came back RESIDENT
+  uint32_t sky = 0;            // ...OPEN SKY: inside the island, no ground
+  uint32_t out_of_extent = 0;  // ...outside the island's grid entirely
+  uint32_t bad_pitch = 0;      // ...malformed descriptor; the whole window is
+};
+
+// The visible set, in EMISSION ORDER.
+//
+// ROW-MAJOR: iz outer, ix inner, both ascending. The order is part of the
+// contract and not an artefact of how the loop happens to be nested, because a
+// downstream consumer depends on it -- a hardware scan that walks a row at a
+// time keeps the residency's set index sweeping contiguously, and a test that
+// compared only the SET would pass a block that emitted the right patches in
+// the wrong order, which is a defect no picture would show.
+//
+// A malformed descriptor is NOT short-circuited here. Every cell is still
+// visited and counted as `bad_pitch`, because this function does not own the
+// pitch rule -- `Directory::find` does, and duplicating the gate here is how
+// the two would drift. The cost of a wasted window is the price of having one
+// definition of legality.
+//
+// A negative radius yields an empty window rather than an inverted loop.
+inline std::vector<Visible> visible_set(const Directory& dir, const View& v,
+                                        WindowTally* T = nullptr) {
+  std::vector<Visible> out;
+  if (v.radius < 0) return out;
+  for (int32_t iz = v.centre_iz - v.radius; iz <= v.centre_iz + v.radius; ++iz) {
+    for (int32_t ix = v.centre_ix - v.radius; ix <= v.centre_ix + v.radius; ++ix) {
+      const Lookup r = dir.find(ix, iz);
+      if (T) ++T->examined;
+      switch (r.outcome) {
+        case Outcome::kResident:
+          out.push_back(Visible{ix, iz, r.page_handle});
+          if (T) ++T->emitted;
+          break;
+        case Outcome::kOpenSky:
+          if (T) ++T->sky;
+          break;
+        case Outcome::kOutOfExtent:
+          if (T) ++T->out_of_extent;
+          break;
+        default:
+          if (T) ++T->bad_pitch;
+          break;
+      }
+    }
+  }
+  return out;
+}
 
 }  // namespace island
 }  // namespace zref

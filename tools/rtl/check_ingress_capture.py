@@ -135,6 +135,38 @@ CONTRACTS = [
     },
 
     {
+        # TERRAIN.VISIBLE -- the visible-patch builder. Its ingress is a VIEW,
+        # and the reason it is under contract is that a view is consumed over
+        # THOUSANDS of cycles rather than at one consumption point:
+        # a radius-16 window is ~3,300 clocks of scanning.
+        #
+        # So the failure mode here is worse than the island's. The camera moves
+        # every frame and the caller is entitled to present the next view the
+        # instant the handshake completes. A scan that re-read `v_centre_ix_i`
+        # to form its row restart -- the obvious way to write it -- would splice
+        # the second half of one window onto the first half of another and emit
+        # a patch list that is internally consistent, correctly ordered, and
+        # from nowhere the camera has ever been.
+        #
+        # Everything the scan needs is latched at acceptance: both window
+        # bounds and both cursors. `rad_c` is the combinational widening of
+        # `v_radius_i` used to form those bounds -- it IS the capture, so the
+        # capture block may use it, and it is listed as an alias so that
+        # anything ELSE using it is caught as a late read laundered through one
+        # extra wire.
+        "path": "fpga/rtl/terrain/zhao_terrain_visible.sv",
+        "prefix": "v_",
+        "allow_regions": [
+            (r"if \(v_valid_i && v_ready_o\) begin", "      end"),
+        ],
+        "allow_lines": [
+            r"^\s*(input|output)\s",
+            r"^\s*assign v_ready_o\s*=",
+            r"^\s*wire signed \[31:0\] rad_c\s*=",
+        ],
+        "aliases": ["rad_c"],
+    },
+    {
         "path": "fpga/rtl/texture/zhao_texture_island_top.sv",
         "prefix": "frag_",
         # The capture process and the block that ADMITS the fragment are the

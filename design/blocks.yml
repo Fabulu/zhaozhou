@@ -85,6 +85,11 @@ counter_catalog:
   - island_open_sky
   - island_out_of_extent
   - island_bad_pitch
+  - visible_examined
+  - visible_emitted
+  - visible_sky
+  - visible_out_of_extent
+  - visible_bad_pitch
   # TERRAIN.MIPGEN (ruling T8)
   - mipgen_samples
   - mipgen_writes
@@ -1692,7 +1697,7 @@ blocks:
     inputs: [island_desc, patch_queries]
     outputs: [island_answers]
     upstream: [TERRAIN.RESIDENCY]
-    downstream: [TERRAIN.LOD, TERRAIN.PROJECT]
+    downstream: [TERRAIN.LOD, TERRAIN.PROJECT, TERRAIN.VISIBLE]
     backpressure: ready_valid
     latency: variable
     target_throughput: one query per residency round trip; one in flight
@@ -1737,6 +1742,66 @@ blocks:
       The reference model has existed since 2026-09-06 and was NOT NAMED BY ANY
       BLOCK until this entry, which is how a reference goes missing in practice:
       not by being absent, but by having nothing point at it.
+
+  - id: TERRAIN.VISIBLE
+    name: Visible patch builder
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Turns a camera View -- centre patch coordinate plus radius -- into the stream of patches that have ground in it, by asking TERRAIN.ISLAND about every cell of a square window and forwarding the RESIDENT ones with their page handles, in row-major order. Closes reports/Missingterrain's named hole: TERRAIN.ISLAND answers one question about one patch, and nothing decided WHICH questions to ask."
+    contract: design/contracts/TERRAIN.VISIBLE.md
+    phase: 6
+    owner_issue: ZH-124
+    inputs: [island_desc, view_window]
+    outputs: [visible_patch_stream]
+    upstream: [TERRAIN.ISLAND]
+    downstream: [TERRAIN.LOD, TERRAIN.PROJECT]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: "3.02 clocks per examined patch, measured; (2R+1)^2 patches per view; one view in flight"
+    reference_model: zref::island::visible_set
+    tests:
+      directed: tests/terrain/visible_rtl_directed.cpp
+      random: tests/terrain/visible_rtl_directed.cpp
+    counters: [visible_examined, visible_emitted, visible_sky, visible_out_of_extent, visible_bad_pitch]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: REFERENCE_COMPLETE
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-06"
+        commit: "1cc9ef68"
+        evidence: design/contracts/TERRAIN.VISIBLE.md
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-06"
+        commit: "1cc9ef68"
+        evidence: reference/include/zref/zref_island.hpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      COST IS DOMINATED BY THE PATCHES IT REJECTS, which is why the measured
+      figure is per EXAMINED patch and not per emitted one. On an 8 km island
+      94.9% of the grid is sky, so a radius-16 window asks 1,089 questions to
+      emit a handful; at 3.02 clocks each that is ~3,300 cycles, about 0.2% of
+      a 100 MHz frame.
+
+      THE WINDOW IS SQUARE, NOT CIRCULAR, and that is the reference's law
+      rather than an approximation: the visible set is a conservative superset,
+      and a residency policy exact about the frustum evicts patches the moment
+      the camera turns. Hysteresis belongs in the view, not the draw path.
+
+      TWO CURSORS, NOT A FIFO. Issue and retire walk the identical order, and
+      because the directory answers in order the retire cursor IS the
+      answering coordinate -- so there is no in-flight queue whose depth could
+      be wrong when the directory is later pipelined. err_tag_o latches if a
+      tag ever arrives that the retire cursor did not expect, so the claim is
+      checked rather than assumed.
+
+      COMPOSING IT FOUND A DEFECT IN TERRAIN.ISLAND that that block's own
+      21-check differential could not see: the island dropped an answer under
+      backpressure, and every phase of its differential drove a_ready high on
+      every cycle. 911 queries issued, 854 answered, 57 lost, deadlock.
 
   - id: TERRAIN.RESIDENCY
     name: Page residency directory
@@ -2019,7 +2084,7 @@ blocks:
     owner_issue: ZH-050
     inputs: [patch_state, lod_targets]
     outputs: [lod_decisions]
-    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR, TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.ISLAND]
+    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR, TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.ISLAND, TERRAIN.VISIBLE]
     downstream: [TERRAIN.PROJECT]
     backpressure: ready_valid
     latency: variable
@@ -2058,7 +2123,7 @@ blocks:
     owner_issue: ZH-051
     inputs: [lod_decisions, terrain_normals]
     outputs: [terrain_primitives, mosaic_candidates]
-    upstream: [TERRAIN.LOD, TERRAIN.NORMALS, TERRAIN.SHADE, TERRAIN.NORMALMAP, TERRAIN.ISLAND]
+    upstream: [TERRAIN.LOD, TERRAIN.NORMALS, TERRAIN.SHADE, TERRAIN.NORMALMAP, TERRAIN.ISLAND, TERRAIN.VISIBLE]
     downstream: [GEOM.CLIP, TEXTURE.MOSAIC]
     backpressure: ready_valid
     latency: variable

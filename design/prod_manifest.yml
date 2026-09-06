@@ -199,6 +199,22 @@ excluded:
   # does not contain would inflate every budget it appears in.
   - zhao_texture_material_combine_v2: successor  the paired-phase combiner; V1 is still the instantiated one
 
+  # TERRAIN.VISIBLE -- the visible-patch builder. It COMPOSES
+  # zhao_terrain_island_dir, which is already counted above, and nothing
+  # composes it yet: TERRAIN.LOD is the intended consumer and the seam is not
+  # built. Declared `unused` rather than promoted to a top today because
+  # putting it in zhao_prod_top changes what the next production fit measures,
+  # and that is a decision to take deliberately rather than as a side effect of
+  # adding a block.
+  #
+  # WHEN THE LOD SEAM LANDS THIS BECOMES A `top`, and three separate acts are
+  # needed then, not one: the ledger entry, this line, and
+  # design/fit_targets.yml's zhao_prod_top source list. Note that its composed
+  # directory is ALREADY in that source list, so adding this block adds the
+  # scan logic only.
+  - zhao_terrain_visible: unused  the visible-patch builder; TERRAIN.LOD does not consume it yet
+  - zhao_terrain_compcache_front: unused  TERRAIN.COMPCACHE's on-chip patch front; nothing composes PATCH -> TESS through it yet, and putting it in the production top before that composition exists would fit a store nothing reads
+
   # --- probes and leaf-fit pairs: never in the machine -----------------------
   # These exist to put ONE block, or two adjacent blocks, in front of the
   # fitter. Every one of them is a wrapper around production logic that is
