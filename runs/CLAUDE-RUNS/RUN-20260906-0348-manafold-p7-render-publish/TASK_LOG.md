@@ -311,3 +311,32 @@ orthographic views while the shipping cameras orbit. Its worst VISIBLE
 manifestation -- the white spike shooting off channel's far eye into the sky
 -- is gone; I looked. It is pass 8's first eye item and it ships declared,
 not hidden.
+
+### Pass 6's wins, checked for damage rather than assumed safe
+Eight frames through a full `pirouette` turn, 3x:
+* The antenna is ONE CONTINUOUS SURFACE body-to-re-entry through every angle.
+  No countable spheres -- section 2b's own acceptance sentence still passes.
+  Pass 7 touched the eyes, not the antenna, and the render confirms it.
+* The loop still closes around a real window; the dongle is still resolved.
+* The knuckles still read ANGULAR and faceted (pass 6's over-correction).
+  Declared not attempted this pass; visible, unchanged, and honest.
+
+### VERDICT: worth publishing
+The standing authorisation is for a pass that is DONE and WORTH LOOKING AT.
+This one is: the eyes read as stars at native where they read as streaks
+before, the fog is gas, the smear runs everywhere, and the ugliest visible
+artefact on the old bank -- the white spike off channel's far eye into the
+sky -- is gone. The things that are still wrong are all DECLARED, all
+pre-existing, and none of them regressed: the near eye at steep angles, the
+grey trail, the 25-40 px traverse framing, the faceted knuckles, rule 3.
+Nothing new broke. Publishing.
+
+### Zixxtrixx: untouched, and PROVED at the artefact level
+Two things, and the second is the stronger one:
+* `git status` over `website/public/renders/` lists ONLY `manafold-*` files as
+  modified for the whole of this run. Every Zixxtrixx byte on the site is
+  literally the byte that was already there -- which is a stronger statement
+  for a PUBLISH than re-rendering and comparing CRCs would be, because it is
+  the shipped artefact itself and not a reproduction of it.
+* All 808 Zixxtrixx declared files (410 sources + their derived posters)
+  DECODED: 0 failures. Not probed -- decoded, frame by frame.
