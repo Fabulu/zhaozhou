@@ -134,7 +134,26 @@ module zhao_geom_assetfetch
   // ------------------------------------------------------- latched job -----
   logic [31:0]     voff_q, ioff_q;
   logic [7:0]      vcnt_q, tcnt_q;
+  // ---- INGRESS CAPTURE (owner recovery brief, COMBINE/ASSETFETCH 2026-09-06)
+  // The brief's second prerequisite, verified in source before being touched:
+  //
+  //   "ASSETFETCH still reads its client identity live after acceptance.
+  //    MESHFETCH reads its descriptor address and client live after
+  //    acceptance. These must be captured before prefetching makes overlapping
+  //    requests ordinary."
+  //
+  // This is the SAME rule the composed texture island was repaired against --
+  // owner recovery v2 Appendix B, "no later computation reads unrelated live
+  // ingress data" -- and the same failure mode: the pin is sampled when the
+  // request is FORMED, many cycles after the job was accepted, so it carries
+  // whatever the caller happens to be presenting then. Today one job is in
+  // flight at a time and the caller holds its inputs steady, which is why
+  // nothing has broken. Two banks and descriptor lookahead make a second job
+  // ordinary, and then it is not steady at all.
+  //
+  // Captured at acceptance, beside the fields that already were.
   logic [SRCW-1:0] src_q;
+  zhao_client_e    client_q;
 
   // Absolute LINE-ALIGNED bases, and the byte each stream starts at inside its
   // first line. The absolute address is formed HERE and nowhere upstream, so a
@@ -288,7 +307,7 @@ module zhao_geom_assetfetch
   assign guard_req_o.valid  = (st_q == S_REQ) && req_live_c;
   assign guard_req_o.write  = 1'b0;             // READ ONLY. The pool admits
                                                 // nothing else, by proof.
-  assign guard_req_o.client = m_client_i;
+  assign guard_req_o.client = client_q;   // CAPTURED, not live
   assign guard_req_o.addr   = req_addr_c;
   assign guard_req_o.len    = 7'd64;
   assign guard_req_o.be     = {64{1'b1}};
@@ -372,6 +391,7 @@ module zhao_geom_assetfetch
       vcnt_q    <= '0;
       tcnt_q    <= '0;
       src_q     <= '0;
+      client_q  <= zhao_client_e'(0);
       ix_line0_q  <= '0;
       vx_line0_q  <= '0;
       ix_boff_q   <= '0;
@@ -404,6 +424,7 @@ module zhao_geom_assetfetch
           vcnt_q <= m_vertex_count_i;
           tcnt_q <= m_triangle_count_i;
           src_q  <= m_src_id_i;
+          client_q <= m_client_i;
 
           if (refuse_c) begin
             // A refused meshlet emits NOTHING -- not the part that fits.

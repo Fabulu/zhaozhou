@@ -63,6 +63,58 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 # ---------------------------------------------------------------------------
 CONTRACTS = [
     {
+        # GEOM.ASSETFETCH -- added 2026-09-06 from the owner's COMBINE/ASSETFETCH
+        # recovery brief, whose second prerequisite is exactly this:
+        #
+        #   "ASSETFETCH still reads its client identity live after acceptance.
+        #    MESHFETCH reads its descriptor address and client live after
+        #    acceptance. These must be captured before prefetching makes
+        #    overlapping requests ordinary."
+        #
+        # Both were true, both are now captured, and the rule is guarded so the
+        # two-bank rework cannot reintroduce it while adding the very overlap
+        # that makes it bite. Today one job is in flight and the caller holds
+        # its inputs steady; that is the only reason nothing broke.
+        "path": "fpga/rtl/geometry/zhao_geom_assetfetch.sv",
+        "prefix": "m_",
+        "allow_regions": [
+            # the one acceptance point: S_IDLE latching the job
+            (r"S_IDLE: if \(m_valid_i\) begin", "        end"),
+        ],
+        "allow_lines": [
+            r"^\s*(input|output)\s",
+            # the handshake itself, and the footprint arithmetic that DERIVES
+            # the captured line bases. That arithmetic is combinational on the
+            # ingress offsets BY DESIGN -- its results (ix_line0_q, vx_line0_q,
+            # the counts) are what get latched at acceptance, so it is the
+            # capture rather than a late read.
+            r"^\s*assign m_ready_o\s*=",
+            r"m_valid_i",
+            r"ix_bytes_c\s*=",
+            r"vx_bytes_c\s*=",
+            r"ix_abs_c\s*=",
+            r"vx_abs_c\s*=",
+            r"bad_count_c\s*=",
+            r"bad_align_c\s*=",
+        ],
+    },
+    {
+        # GEOM.MESHFETCH -- same brief, same prerequisite. Its guard request
+        # took BOTH the client and the 64-byte descriptor address straight off
+        # the ingress pins, formed several states after the job was accepted.
+        "path": "fpga/rtl/geometry/zhao_geom_meshfetch.sv",
+        "prefix": "j_",
+        "allow_regions": [
+            (r"S_IDLE: begin\s*\n\s*if \(j_valid_i\) begin", "          end"),
+        ],
+        "allow_lines": [
+            r"^\s*(input|output)\s",
+            r"^\s*assign j_ready_o\s*=",
+            r"j_valid_i",
+        ],
+    },
+
+    {
         "path": "fpga/rtl/texture/zhao_texture_island_top.sv",
         "prefix": "frag_",
         # The capture process and the block that ADMITS the fragment are the

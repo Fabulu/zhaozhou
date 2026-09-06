@@ -1,0 +1,1751 @@
+ZHAOZHOU -- COMBINE AND ASSETFETCH RECOVERY ARCHITECTURE
+====================================================
+Two product lanes. Two meshlet banks. One owner per live transaction.
+6 September 2026
+
+Repository: Fabulu/zhaozhou
+Branch: zixxtrixx-v8-closeout
+Examined immutable revision: 2f98562a3cd6996e63d93fe1a2e61e24a02ea8ec
+Provisional device: Cyclone V 5CSEBA6U23I7
+Pinned implementation toolchain: Quartus Prime Lite 17.0.2
+Product clock: 100 MHz
+
+Suggested durable repository location:
+  reports/COMBINE-ASSETFETCH-RECOVERY-20260906.txt
+Index this in DOCKET.md as the COMBINE/asset-fetch specialization of the existing
+texture recovery V2, not as a replacement for unrelated terrain/Field contracts.
+
+STATUS
+------
+This is a source-grounded implementation brief, not fitted replacement RTL.
+No remote repository was changed. Quartus, Verilator, the full regression suite
+and a physical board were not run during this review. Small reproducible
+arithmetic, scheduling, footprint and ownership models WERE executed locally;
+their exact scope and results appear below and in the companion bundle.
+
+MEASURED means a specifically scoped result committed by the repository.
+SOURCE means behavior visible in the examined code.
+DEDUCED means a consequence of that code or arithmetic.
+PROPOSED means the replacement architecture and acceptance requirements here.
+
+Repository citations [R1] etc. resolve to immutable paths at the end. Vendor
+citations [V1] etc. establish device/tool concepts, not successful mapping of
+this proposal. The hardware branch was rechecked before completion and still
+pointed to the revision above.
+
+CONTENTS
+--------
+  0. Executive decision
+  1. Evidence and corrections
+  2. Mandatory end-to-end lifetime credits
+  3. Exact material laws, including alpha
+  4. Paired-phase COMBINE architecture
+  5. COMBINE storage and port schedule
+  6. COMBINE pipeline and flow control
+  7. Instrumentation, DSP mapping and resource budgets
+  8. COMBINE capacity model
+  9. ASSETFETCH diagnosis and overlap limits
+ 10. Footprints, compaction and concrete RAM packing
+ 11. Two-bank ASSETFETCH architecture
+ 12. Shared ENGINE1 adapter and actual memory protocol
+ 13. MESHFETCH lookahead and production hierarchy
+ 14. Index/vertex consumers and bank release
+ 15. Cancellation, resource versions and faults
+ 16. ASSETFETCH performance measurement
+ 17. File-by-file migration map
+ 18. COMBINE test and mutation plan
+ 19. ASSETFETCH test and mutation plan
+ 20. Physical evidence and fitting discipline
+ 21. Work packages and exit criteria
+ 22. Rejected shortcuts and fallback choices
+ 23. Executed local validation
+ 24. Acceptance checklist and assessment
+ 25. Source catalogue
+
+
+0. EXECUTIVE DECISION
+====================
+
+COMBINE needs a different execution organization, not different material math.
+Preserve all eight recipes. Replace record-by-job priority scans with two
+explicit product lanes, a fixed paired-phase schedule, small ready queues,
+synchronous operand storage and one whole-context writeback per phase.
+
+ASSETFETCH needs overlap and ownership, not two complete fetch engines.
+Preserve the checked footprint planner and corrected guard handshake. Use two
+meshlet payload banks, one fill engine, independent consumers and descriptor
+lookahead. Share one permitted ENGINE1 memory client between descriptor and
+payload requests through a logical-owner adapter.
+
+There are three immediate prerequisites:
+
+  The island's new 64-entry output reorder buffer has no matching admission
+  credit covering final output retirement. Its claimed overflow proof does not
+  follow from FRAGROB's capacity. Long downstream stalls can wrap the table.
+
+  ASSETFETCH still reads its client identity live after acceptance. MESHFETCH
+  reads its descriptor address and client live after acceptance. These must be
+  captured before prefetching makes overlapping requests ordinary.
+
+  The readable committed COMBINE timing exports describe the old 29.74 MHz
+  experiment, not the new manually recorded 36.28 MHz result. Recover matching
+  setup/hold reports before claiming to have identified the new worst cone.
+
+The plan retains normal maps, mipmaps, three logical material samples, alpha,
+real memory arbitration and frame-resource protection. Its purpose is to remove
+uncontrolled work selection and serialized waiting, not reduce the game to fit
+implementation defects. [R1-R11, R15-R18]
+
+
+1. EVIDENCE AND CORRECTIONS
+==========================
+
+1.1 COMBINE's recorded fit
+-------------------------
+The repository reports:
+
+                          older fit       corrected-counter refit
+  ALMs                       1,994                   1,475
+  registers                  1,383                     893
+  DSP blocks                     2                       2
+  M10Ks                          0                       0
+  Fmax                       29.74 MHz                36.28 MHz
+  effort                     HP effort               BALANCED
+
+The newer row reports setup -17.561 ns at a 10 ns constraint, hold -5.284 ns,
+and 13,627 seconds elapsed. Fitter completion succeeded; timing acceptance did
+not. The efforts differ, so the apparent -26% area/-35% registers/+22% frequency
+are not a clean A/B attribution to counter width alone. [R15,R23]
+
+Do NOT add 2.08 MHz to this number because an unrelated shell comparison found
+that effort difference. Tool effort effects depend on design, seed and placement.
+"Probably 38 MHz" is not another measurement.
+
+The current implementation is not acceptable at the product clock. That does
+not imply the equations are intrinsically slow or that every reported violation
+is internal rather than boundary/clock related. The new architecture must
+isolate those distinctions instead of guessing from the headline.
+
+1.2 The reports do not match the new row
+---------------------------------------
+The readable setup summary starts with -23.624 ns, from recipe state toward a
+jobs_by_recipe counter. The STA summary is dated 5 September, 04:54:37 and gives
+setup -23.624 ns and hold -4.940 ns. These are the OLD approximately 29.74 MHz
+experiment, not the new -17.561/-5.284 ns values. [R16,R17]
+
+The large detailed setup export could not be obtained as readable content for
+this review. Nothing here claims to trace the current 36.28 MHz netlist node
+by node. Recover the retained fit database and export matching reports rather
+than running another multi-hour fit just to replace missing files.
+
+The manually written row also retains partial-stage metadata beside fitted
+numbers and rule violations. Separate tool completion, measurement stage,
+resource acceptance and timing acceptance. Keep a full source revision,
+transitive source hashes, parameters, QSF/SDC and effort with every result.
+A status string of "ok" cannot override timing or resource failures. [R15]
+
+1.3 Structural defects remain independently visible
+--------------------------------------------------
+COMBINE still scans records and outstanding/issued/completed job masks. Its
+two lanes may select different contexts, requiring broad operand selection and
+scattered per-job writeback. Describing this as queued does not remove those
+networks. They are valid restructuring targets without claiming every one is
+the new worst path. [R1]
+
+Its output also needs a ready/valid audit. A combinational priority choice among
+completed records is not a held output transaction: a newly completed higher-
+priority record must not replace a result already offered while ready is low.
+The replacement explicitly reserves and holds the output.
+
+1.4 ASSETFETCH's measurement
+---------------------------
+D22 reports, for one small composed workload:
+
+  played memory: 24 packed 64-bit beats, 30 stalls, 1,792 painted pixels
+  SDRAM route:   24 packed 64-bit beats, 360 stalls, identical framebuffer
+                 zero reported guard violations and route errors
+
+This is the guard/arbiter/controller/conservative SDRAM MODEL under scanout
+contention, not board bandwidth or a representative game frame. The fake pool
+was poisoned so silently using it would not pass. [R19,R24]
+
+The current single-bank FSM fills, hands off, serves and waits for release
+before accepting another meshlet. That serialization is visible in source.
+The historical prefetch_stall predicate is not automatically a precise measure
+of real downstream starvation; section 16 separates the counters. [R4]
+
+1.5 Corrections to previous assessments
+--------------------------------------
+The new order-restoration test proves its 64-fragment workload, not sustained
+backpressure safety. Calling R6 fully closed was too broad: FRAGROB releases
+contexts before final island retirement, so it does not bound the parked output.
+
+The 30-to-360 stall increase does not promise a 12x benefit from buffering.
+It exposes costs omitted by the fake memory, not twelvefold avoidable work.
+
+The recipe names are insufficient to infer their math. Current LERP interpolates
+alpha; MODULATE2X doubles alpha; DETAIL_MASK multiplies s0/s1 RGB and s0/s2 alpha.
+It is NOT a third-sample-weighted colour lerp. These exact semantics govern the
+rewrite. [R2]
+
+
+2. MANDATORY END-TO-END LIFETIME CREDITS
+======================================
+
+2.1 Counterexample in the current shape
+--------------------------------------
+The island admits based on RCP readiness. Final output has 64 completion slots,
+a six-bit submission sequence, and permanently ready COMBINE completion. There
+is no matching admission count from external acceptance to final sink transfer.
+[R3]
+
+Hold the sink not-ready:
+  admit and complete sequences 0..63;
+  entry 0 still holds sequence 0;
+  internal contexts have been released and admit more work;
+  sequence 64 completes and overwrites entry 0.
+
+This loses the first result and changes a valid stalled output. A 64-input test
+cannot expose the wrap. A local transition model reproduced the failure shape;
+this is not a claim of a Verilator reproduction of the full current island.
+
+2.2 Required invariant and minimal implementation
+------------------------------------------------
+Within one non-aborted epoch, define cumulative external admissions A and final
+external output transfers E:
+
+  live = A - E
+  0 <= live <= OWNER_DEPTH = 64
+
+Reserve one completion/owner slot at ADMISSION. Return its credit ONLY at final
+external output acceptance, not at RCP/PERSPUV completion, FRAGROB retirement,
+COMBINE completion or transfer into an output skid.
+
+Conservative seam:
+
+  credit_available = live < OWNER_DEPTH
+  rcp_valid         = frag_valid && credit_available
+  frag_ready        = rcp_ready && credit_available
+  admit             = frag_valid && frag_ready
+  emit              = out_valid && out_ready
+
+Gate both caller-ready and RCP-valid. Otherwise RCP can accept a phantom job
+that the caller was told did not handshake. Update the live count with the
+combined admit/emit case once per clock.
+
+Initially do not bypass a full condition using the same-cycle outgoing result.
+A conservative one-cycle bubble at full-to-free avoids cyclic ready paths and
+same-slot clear/write hazards. Optimize it only after the invariant is proven.
+
+2.3 Owner and execution context are different lifetimes
+------------------------------------------------------
+A global owner survives admission through final island retirement. A COMBINE
+context survives only while that service holds a material job. Each needs its
+own credit. Completing a COMBINE context into its reserved owner may free that
+service context without freeing the global slot.
+
+The owner holds immutable fragment identity, submission position and metadata
+still needed by delayed services. COMBINE carries its owner handle and captured
+operands, then returns handle/result. It must not allocate a second independent
+global ordering system.
+
+A low six-bit index identifies a bounded 64-live window only because the credit
+invariant holds. Reset/epoch/cancelled responses are separate: validate the
+existing generation/epoch law at return or guarantee and test quiescent draining.
+Do not assume modulo indexing also excludes a stale response after reset.
+
+2.4 Completion RAM and stable output
+-----------------------------------
+Use synchronous completion storage plus small reserved/done flags. Store RGBA,
+refusal and caller tag together, or synchronize completion and immutable-tag
+reads. Use a registered head read and a held output/skid, not an unregistered
+64-to-1 result/tag mux. Reset validity/control, not payload RAM.
+
+A result fetched into a skid remains globally reserved until the external sink
+accepts it. Do not mark its slot free at RAM read or FIFO pop.
+
+Assert:
+  every completion targets a live matching owner/generation;
+  a slot receives one completion, never a duplicate overwrite;
+  valid && !ready implies stable payload/tag/status;
+  final retirement is the next admission sequence;
+  live equals all outstanding reservations, including output-held results;
+  no service has accepted a fragment absent from external admission.
+
+A lost head fragment is an explicit fault, not permission to skip it on timeout.
+Use the declared refused-result/frame-abort policy after draining or cancelling
+its obligations. Keep internal out-of-order execution: the missing piece is
+correct lifetime reservation, not a demand to serialize every service.
+
+
+3. EXACT MATERIAL LAWS, INCLUDING ALPHA
+======================================
+
+Read directly from the current scalar reference. [R2]
+
+  U(a,b) = (a*b + 128) >> 8
+  M2(a,b) = min(255, 2*U(a,b))
+  A(a,b) = min(255, a+b)
+  L(a,b,w) = clamp8(a + sign(b-a)*((abs(b-a)*w + 128) >> 8))
+
+All inputs are unsigned bytes except the explicitly widened signed difference.
+U(255,255)=254. Weight 255 is not mathematically 1.0. Do not substitute division
+by 255, asymmetric signed rounding, floating point or a combined three-layer
+product with only one final rounding.
+
+Recipe                    RGB                       ALPHA                products
+---------------------------------------------------------------------------------
+0 PASSTHRU                s0                        s0.a                     0
+1 MODULATE                U(s0,s1)                  U(s0.a,s1.a)            4
+2 MODULATE2X              M2(s0,s1)                 M2(s0.a,s1.a)           4
+3 LERP                    L(s0,s1,weight)           L(s0.a,s1.a,weight)     4
+4 ADD_SAT                 A(s0,s1)                  A(s0.a,s1.a)            0
+5 MASK                    s0 if s1.a!=0, else zero  same binary gate         0
+6 TERRAIN_DETAIL_LIGHT    U(U(s0,s1),s2)             s0.a                     6
+7 TERRAIN_DETAIL_MASK     U(s0,s1)                  U(s0.a,s2.a)            4
+
+ADD and MODULATE2X saturation counts are once per fragment if ANY affected
+channel saturates, not once per channel. MASK tests alpha: black opaque masks
+keep s0. Required sample counts are [1,2,2,2,2,2,3,3].
+
+count==0 has precedence and returns BASE RGBA before recipe refusal. No dummy
+sample is required. Insufficient samples produce the oracle's refused result
+and preserve identity. Their executed product count is zero.
+
+Unknown software recipes with nonzero samples are refused. A three-bit hardware
+field cannot encode recipe 8; do not test 8 by truncating it into 0 and claim
+unknown-encoding coverage. Wider command fields are validated at their real
+boundary.
+
+TAGW is opaque. The current C++ helper has a 16-bit caller tag while the island
+carries additional sequencing bits. Check full hardware transport separately
+so the C++ helper's type does not truncate the wider handle.
+
+
+4. PAIRED-PHASE COMBINE ARCHITECTURE
+===================================
+
+4.1 Selected shape
+------------------
+Build zhao_texture_material_combine_v2 beside V1. Use TWO explicit unsigned
+8x8 product lanes, initially EIGHT bounded execution contexts, and one fixed-
+latency phase pipeline. Test four/eight contexts; the count is a latency-hiding
+choice, not the global fragment capacity.
+
+  immutable payload/tag capture
+            |
+         NEW FIFO ------+
+                        +--> select one head --> sync operand/scratch read
+         CONT FIFO -----+                            |
+             ^                                  operand registers
+             |                                       |
+             |                                TWO product lanes
+             |                                       |
+             |                                rounded/post result
+             |                                       |
+             +------- continuation <---------- one writeback
+                                                     |
+                                             completion RAM/FIFO
+                                                     |
+                                                held output
+                                                     |
+                                             reserved owner slot
+
+No record-by-job scan, per-record 20-bit issued/done network, arbitrary
+cross-record lane selection or separate hidden alpha multiplier.
+
+4.2 Paired schedule
+--------------------
+Every product-bearing phase uses both lanes for ONE context.
+
+PASSTHRU / ADD / MASK / zero-sample / refused:
+  One zero-product phase through the same pipeline.
+
+MODULATE / MODULATE2X / LERP:
+  phase 0: R and G;
+  phase 1: B and A, preserving R/G.
+
+DETAIL_MASK:
+  phase 0: U(s0.r,s1.r), U(s0.g,s1.g);
+  phase 1: U(s0.b,s1.b), U(s0.a,s2.a).
+
+DETAIL_LIGHT:
+  phase 0: R1=U(s0.r,s1.r), G1=U(s0.g,s1.g);
+  phase 1: B1=U(s0.b,s1.b), R2=U(R1,s2.r);
+  phase 2: G2=U(G1,s2.g), B2=U(B1,s2.b).
+  alpha: s0.a, no multiplication.
+
+A 32-bit scratch word holds:
+  after phase 0: {R1,G1,unused,s0.a};
+  after phase 1: {R2,G1,B1,s0.a};
+  final:        {R2,G2,B2,s0.a}.
+
+This preserves all six products and both rounding layers without needing a
+three-lane first stage or a general dependency scheduler.
+
+4.3 Why pair within one context
+-------------------------------
+Arbitrary lane selection from two records demands two record reads and two
+potentially scattered writebacks. Pairing within one record gives one address,
+one phase tag and one whole-row write. Every product recipe has an even job
+count, and the fixed DETAIL_LIGHT schedule handles its only special dependency.
+
+Use separate NEW and CONT FIFOs because both may enqueue in one cycle: input
+acceptance and a returning nonfinal phase. A single RAM FIFO with two writers
+would silently introduce another memory-port problem.
+
+Arbitrate ready heads fairly, for example registered round-robin preference
+when both are ready. Do not let continuous new work starve continuations or
+vice versa. Queue entries are context indices/phase bits, not wide payloads.
+
+4.4 One phase in flight per context
+-----------------------------------
+A context exists in exactly one of NEW, CONT, phase pipeline, DONE/output hold
+or FREE. Its next phase becomes eligible only after the previous scratch row
+has been written and its continuation becomes visible. The initial version
+avoids same-edge scratch write/read bypasses and undefined RAM read-during-write.
+
+Zero-product phases use the common pipeline with multipliers disabled. An
+immediate bypass could collide with a returning arithmetic job and create two
+completion writes. The uniform path guarantees at most one writeback per clock.
+It costs one ticket for simple recipes; capacity accounting includes it.
+
+
+5. COMBINE STORAGE AND PORT SCHEDULE
+====================================
+
+Suggested per-context stores:
+  payload: s0/s1/s2 RGBA (96 bits), weight, recipe/count/control;
+           112- or 128-bit row;
+  scratch: 32 channel bits plus earlier-saturation flag where needed;
+  completion: RGBA + refusal/status;
+  immutable tag: TAGW bits, read when completion is output.
+
+For count==0, copy BASE into s0 and select a bypass operation. This avoids
+carrying another permanent base-colour field for every textured context.
+Preserve validation precedence before canonicalizing the input.
+
+Carry the small execution-context ID through stages rather than repeating the
+full opaque tag everywhere. Do not recycle that context before its final tag
+read and output acceptance.
+
+Store          single write source       single read source
+------------------------------------------------------------
+Payload        admitted input            selected phase
+Scratch        nonfinal writeback        selected continuation
+Completion     final writeback           output reader
+Opaque tag     admitted input            output reader
+NEW FIFO       admitted input            scheduler
+CONT FIFO      nonfinal writeback        scheduler
+DONE FIFO      final writeback           output reader
+FREE FIFO      output accepted           admitted input
+
+The schedule deliberately gives each memory at most one read and one write
+per cycle. Scratch and completion are separate because an output read can occur
+while another context reads continuation operands. Payload and scratch are
+separate because admission and writeback can happen together.
+
+Do NOT initialize scratch on admission: that creates a second writer. Phase 0
+ignores old scratch and writes every field its continuation needs. Control and
+validity reset; payload RAM does not.
+
+Use clock-only RAM processes, registered memory outputs before selection, and
+registered selected operands before products. Inspect actual RAM Summary names,
+ports and depths. Declared arrays/attributes/lint do not establish inference.
+Small narrow FIFO heads may be registers; do not turn them into circulating
+128-bit packets.
+
+Every admitted context reserves its completion row and bounded DONE capacity.
+Thus already-issued phases can always write back even if the output stops.
+Popping a DONE index does not release the context; release occurs when its held
+COMBINE output is accepted. Inside the island, that output then occupies a
+separately reserved global owner until final external retirement.
+
+
+6. COMBINE PIPELINE AND FLOW CONTROL
+====================================
+
+6.1 Sequential boundaries
+-------------------------
+Recommended stages, specified edge-by-edge in RTL:
+  Q: selected FIFO ticket/address;
+  R: synchronous payload/scratch read;
+  O: selected operands, lerp magnitude/sign/base, registered;
+  M: two raw products, registered;
+  F: rounding, add/subtract, doubling/saturation, registered;
+  W: one whole scratch/final write, continuation/completion event.
+
+The abstract model uses five issue-to-return clocks. Depending on RAM output
+configuration, implementation may need another clock; update the contract,
+context-depth check and tests honestly. Latency may increase without reducing
+the intended one-ticket-per-clock initiation rate.
+
+Prohibit these one-cycle cones:
+  queue selection -> indexed payload mux -> multiply -> accumulation;
+  DETAIL_LIGHT first-layer multiply -> second-layer multiply;
+  RAM output -> another asynchronous indexed table -> arithmetic;
+  operand selection -> wide diagnostic accumulation.
+
+6.2 Arithmetic implementation
+-----------------------------
+For LERP, difference/sign preparation precedes multiplication. abs(b-a) fits
+in eight bits but the initial signed difference must be widened. Round the
+magnitude, then reapply sign to the held base value.
+
+Declare raw product width and rounding-add width explicitly. MODULATE2X uses
+a nine-bit doubled rounded result before clamp, including alpha. DETAIL_LIGHT
+stores an 8-bit first layer; it is not a fused product.
+
+Both lanes write one whole context word. Carry an earlier saturation flag in
+scratch and emit the one fragment-level event at final writeback. No output
+or product return consults live input recipe, weight or the current FIFO head.
+
+6.3 Stalls and output holding
+-----------------------------
+Input ready falls when no context/NEW capacity remains. After handshake the
+producer is free to change its pins. The core uses only captured data.
+
+No ready ticket inserts a pipeline bubble; issued tickets continue with their
+metadata. A downstream pause stores completed contexts and eventually blocks
+new admissions. It must not stop an instruction halfway between multiply issue
+and the fixed-latency product return.
+
+A held output register/skid reserves space before completion/tag RAM reads.
+Its tag, RGBA and refusal remain stable until accepted. A later completed
+higher-priority record cannot displace it.
+
+The two multipliers are dedicated here. Introducing an externally shared
+multiply arbiter with independent refusals would require a different phase
+acceptance protocol and is out of scope.
+
+6.4 Registered events
+----------------------
+Suggested core events:
+  issue {valid, recipe, products_this_phase=0 or 2};
+  final {valid, refusal_kind, saturated_add, saturated_mul2x};
+  occupancy/error witnesses.
+
+Events are registered at defined points, not reduced combinationally over all
+records. Their conversion into externally visible counters is part of the
+resource/observability contract below.
+
+
+7. INSTRUMENTATION, DSP MAPPING AND RESOURCE BUDGETS
+==================================================
+
+7.1 The counter floor is real
+-----------------------------
+Eight 32-bit jobs-by-recipe counters and four 32-bit refusal/saturation counters
+already hold 384 bits of state. A 500-register limit for the whole legacy-shaped
+block leaves 116 registers for all pipelines, queues, output and control.
+A carefully pipelined replacement may not fit that scope. [R1,R2]
+
+Do not hide this by removing counters or reporting a stripped core as a pass.
+Keep three explicit scopes:
+  CCORE: functional core and registered events;
+  CWRAP: core plus legacy live counter interface;
+  CISLAND: actual production island, charging counters wherever they live.
+
+The first migration can retain CWRAP. A later explicitly versioned telemetry
+change may send events to a shared counter/snapshot bank. That is not free:
+charge the bank in production, preserve observability and test event latency.
+It must not be a bookkeeping maneuver that removes costs from every total.
+
+7.2 Keep counter updates out of the issue cone
+----------------------------------------------
+One selected phase emits a recipe and zero/two products. Register the event,
+then update the selected counter. Preserve the current counter wrap/saturation
+law. Tests drain the bounded event pipeline; do not require combinationally
+visible counts unless the old interface genuinely specified that cycle.
+
+Do not recreate blocking 32-bit additions in nested scheduling loops. If a
+counter itself limits timing, measure and stage it explicitly rather than
+waiving an actively sampled path with a multicycle exception.
+
+7.3 Make logic mapping a measurement
+-------------------------------------
+LOGIC2 is the proposed initial variant: exactly two named product operators
+mapped to general logic, with max_dsp=0 for that variant. Put style controls on
+persistent direct product nets or a small multiplication module; inspect the
+actual assignments/netlist. Vendor documentation explains the scope/direct-
+result requirement, but only the pinned tool's mapping settles it. [R1,V3]
+
+Do NOT force all island/console multipliers to logic. RCP, perspective and
+geometry intentionally use DSPs. A global option in a leaf-only experiment is
+not safe to copy into the production QSF.
+
+If LOGIC2 has a poor result, compare the SAME phase pipeline as an explicitly
+named DSP2 variant. Two DSPs may be the sensible measured trade. They may not
+be reported as a zero-DSP success simply because an inherited max_dsp=2 passes.
+
+7.4 Targets and reservations
+-----------------------------
+Keep the existing 125 MHz leaf headroom and approximately 800-ALM/500-register
+small-variant thresholds as acceptance references, not achieved results. Do
+not move a redline after seeing a failure. Measure CCORE/CWRAP scopes clearly.
+[R20]
+
+Reserve approximately 6-8 M10Ks for separate payload, scratch, completion, tag
+and optional queue stores in the initial RAM-first core. This is a structural
+reservation, not a fit. Small scratch/tag queues may be cheaper in MLAB or
+narrow registers; decide from actual mapping with the same registered ports.
+
+If the compatibility wrapper cannot meet the inherited register/ALM envelope,
+leave the result red and request an explicit telemetry change or measured
+whole-island rebudget. This brief does not authorize silent threshold changes.
+
+Pipeline registers may increase while distributed payload and selection logic
+fall. Judge total timing/resources, not register count alone. The global owner
+RAM also replaces the new muxed completion table; do not add another table and
+ignore the old one's cost.
+
+
+8. COMBINE CAPACITY MODEL
+=========================
+
+Count both products and phase tickets:
+
+  products = 4*(Nmod+Nmod2+Nlerp+Ndetailmask) + 6*Ndetail-light
+  tickets  = Nzero + 2*(Nmod+Nmod2+Nlerp+Ndetailmask) + 3*Ndetail-light
+
+Nzero includes actual bypass/add/mask/refused/zero-sample work. Categories must
+be disjoint: an untextured MODULATE is not also a textured MODULATE job.
+
+There are at most two products and one ticket per clock. Thus intended
+asymptotic service ceilings with ready independent work are:
+  zero-product recipes: one fragment/clock;
+  four-product recipes: one fragment/two clocks;
+  DETAIL_LIGHT: one fragment/three clocks.
+
+These are service ceilings, not frame-rate guarantees. Upstream samples,
+continuation latency, finite contexts and output stalls can reduce them.
+The eight-context/five-cycle abstract queue model reaches these limits on long
+homogeneous streams; actual RTL must reproduce them with real RAM visibility.
+
+At 100 MHz/60 Hz there are about 1,666,667 periods per frame. With a 20% reserve,
+the work envelope is about 1,333,333. Charge observed bubbles and recovery traffic;
+do not spend that reserve again in each subsystem.
+
+Mipmap/palette/bilinear/normal work is upstream sampling cost. COMBINE accepts
+logical sample results. Three logical samples can represent many texture taps;
+this core does not supply a free extra mip-blend engine by sharing its lanes.
+
+
+9. ASSETFETCH DIAGNOSIS AND OVERLAP LIMITS
+========================================
+
+Preserve the useful existing machinery: wide checked footprint arithmetic,
+count/alignment validation, line requests, synchronous storage, two replicated
+index RAMs and the repaired delayed guard verdict. Do not restart the geometry
+format or build a general speculative cache. [R4-R6]
+
+Maximum useful payload:
+  64 vertices x 32 bytes = 2,048 bytes;
+  126 triangles x 3 u8 indices = 378 bytes;
+  total 2,426 bytes.
+
+Current lifetime:
+  accept -> fill index -> fill vertex -> handoff -> serve -> release.
+The next job cannot fill while this one is consumed.
+
+Let F be fill time under a stated memory workload and C be consumption/release
+time. Single banking pays roughly F+C per meshlet. Proper two-bank lookahead
+approaches max(F,C) after startup, plus transition/arbitration overhead.
+
+Overlap-only ideal speedup is (F+C)/max(F,C), between 1 and 2 for repeated equal
+jobs, NOT 12. A cold first meshlet still pays memory latency. If F dominates,
+the next bank often is not ready when consumption ends. If C dominates,
+fetch can hide but consumption remains the limit.
+
+A second bank is useless without a next accepted descriptor and a release rule
+that waits for both consumers. The 360-stall experiment justifies measuring
+those behaviors; it does not prove a specific game-frame speedup.
+
+
+10. FOOTPRINTS, COMPACTION AND CONCRETE RAM PACKING
+=================================================
+
+10.1 Alignment changes the traffic maximum
+------------------------------------------
+Vertex offsets are 32-byte aligned and index offsets are 8-byte aligned;
+external lines are 64 bytes. The code already derives the worst prefixes:
+
+  index: 56-byte prefix + 378 bytes = 434 -> SEVEN lines;
+  vertex: 32-byte prefix + 2,048 bytes = 2,080 -> THIRTY-THREE lines;
+  combined: 40 lines = 2,560 fetched bytes.
+
+A fully line-aligned maximum-size job takes 6+32=38 lines, or 2,432 bytes.
+Neither traffic value is universal. Zero-length streams fetch zero lines.
+Preserve the reference's count/alignment/bounds refusal order, including
+validation of unused offsets where it is currently required. [R4,R5]
+
+Form absolute addresses in widened arithmetic, adding the pool base exactly
+once. Validate the full issued line against the permitted arena, not only useful
+payload bytes followed by an unauthorized rounded overfetch. The current aligned
+pool helps; that fact must remain checked if the allocation changes.
+
+10.2 Compact useful words during fill
+-------------------------------------
+The old buffers keep full line prefixes/suffixes. The new writer can discard
+whole unused words and store the logical index/vertex streams beginning at
+bank offset zero. Both allowed alignments are multiples of eight bytes, so
+prefix removal does not need a general byte-shift network.
+
+For each returning 64-bit word at absolute address B:
+  keep it if it belongs to the useful stream's word range;
+  write at (B-stream_start)/8 in the reserved bank;
+  discard whole prefix/suffix words;
+  keep the exact useful byte count for a final partial index word.
+
+Vertices are full 32-byte records. Indices may end partway through a word;
+unused bytes are never indices merely because they were transferred. Bounds
+and counts, not resetting all RAM payload, prevent exposure of stale padding.
+
+Per compact bank:
+  vertex = 256 x 64-bit words = 2,048 bytes;
+  index = 48 x 64-bit words = 384 bytes, at most 378 meaningful.
+
+Allocate 64 index words/bank to simplify bank/address concatenation and bounded
+adjacent reads. That allocation does not raise the 126-triangle format limit.
+
+10.3 Two-bank M10K-first prototype
+---------------------------------
+
+  vertex_ram[512] of 64 bits
+    address {bank, vertex_word[7:0]}
+    one fill write and one consumer read
+    candidate packing: FOUR M10Ks
+
+  index_ram_A[128] of 64 bits
+  index_ram_B[128] of 64 bits
+    address {bank, index_word[5:0]}
+    identical writes; independent reads for triplet word and next word
+    candidate packing: TWO M10Ks per copy, FOUR total
+
+Total payload-store candidate: EIGHT M10Ks. Metadata, adapter and output staging
+are additional. This is a supported width/depth/port packing calculation, not
+an inferred/fitted count. Simple-dual-port and true-dual-port have different
+available widths and must not be interchanged in a budget. [V1,V2]
+
+Why index copies remain: two independent reads plus simultaneous filling is
+three memory operations. Replication gives each physical RAM one write/one
+read. The old code already uses this technique; preserve it when adding banks.
+
+Why not immediately read whole 256-bit vertices in one clock: the width may
+force more physical slices and output registers despite a small total bit count.
+The four-word reader has a clear bandwidth bound and a smaller port. Measure
+whether a wider reader buys useful throughput before paying for it.
+
+10.4 Possible low incremental M10K cost
+---------------------------------------
+The old raw vertex buffer has 264 words because alignment crosses the 256-word
+threshold. A straightforward 64-bit-wide M10K implementation can already need
+four blocks. Two compact banks total 512 words and can also need four.
+
+Each old 56-word index replica can need two blocks. Each combined 128-word
+two-bank replica can still need two. Thus ordinary packing of these old/new
+payload stores can be eight blocks in BOTH cases.
+
+This is a promising hypothesis, not a measured zero-cost promise. Quartus may
+split tails into MLABs, choose different shapes or add staging. Compare named
+RAM summaries. The defensible statement is that doubling logical banks does
+not necessarily double physical RAM when padding crossed a depth boundary.
+
+10.5 Handoff is a pointer, not a copy
+------------------------------------
+Fill directly into the reserved bank. READY-to-SERVING changes a bank handle
+and generation. Do not implement ping-pong by copying a complete meshlet from
+staging into a consumer buffer; that adds the traffic/ports we are trying to
+avoid.
+
+
+11. TWO-BANK ASSETFETCH ARCHITECTURE
+===================================
+
+11.1 Bank state machine
+-----------------------
+  FREE -> RESERVED -> FILLING -> READY -> SERVING -> DRAINING -> FREE
+                          \-> FAULT/DRAINING ------------------/
+
+RESERVED owns the captured descriptor and destination. FILLING owns every
+outstanding return obligation. READY means all required useful data is present
+and validated. SERVING means downstream accepted that bank's descriptor.
+DRAINING covers pending reads/returns after completion or cancellation.
+
+Use a two-entry ordered bank-descriptor queue. Prepare B while consuming A,
+but do not let a later smaller meshlet bypass an older one if submission order
+has visible raster/blend effects. An occupied READY bank cannot be overwritten.
+When both banks are owned, m_ready falls.
+
+11.2 Capture at admission
+-------------------------
+Capture source/caller ID, vertex BYTE offset, index BYTE offset, counts,
+validated absolute line bases/counts/prefixes, bank/generation, and the actual
+frame/resource identity required by the production caller.
+
+Prefer a trusted fixed ENGINE1 identity at the production adapter. A generic
+leaf-test m_client input can remain, but it must be latched once, never read
+live later.
+
+Keep byte units separate from ASSEMBLE's base VERTEX ID. The assembler adds a
+local u8 index to a base ID; this is not a 32-byte-record address offset. Name
+internal signals accordingly and do not repair a units bug by adding the pool
+base at both ends.
+
+11.3 One fill engine, one logical request in flight
+---------------------------------------------------
+The fill sequencer chooses the oldest reserved bank needing data and reserves
+its exact destination before requesting a line. It records stream kind, line
+number, useful word range and expected packed beat count. Index-then-vertex
+fill order can remain for first equivalence.
+
+Start with ONE logical geometry memory request in flight. A queue of future
+requests or a second reserved bank is not multiple outstanding response state.
+Do not add more outstanding requests until measurement justifies the extra
+routing/credit complexity.
+
+The engine switches banks only between complete logical requests. Scanout can
+interrupt physical burst service through the existing arbiter, but the logical
+line's destination and remaining return count do not change.
+
+11.4 Exact beat acceptance
+--------------------------
+A 64-byte asset line needs eight packed 64-bit words. Assert:
+  no beat without an owned request;
+  no extra beat after completion;
+  last matches the expected count;
+  no READY on an early/truncated last;
+  write index remains inside the reserved bank;
+  request and bank generations match.
+
+Do not make beat_last alone authority for arbitrary received length. Early last
+is truncation; late/extra data is a protocol fault. Old RAM contents cannot
+supply missing words of a supposedly complete vertex.
+
+Raw return data cannot wait for an arbitrary downstream consumer. Reserve the
+bank/elastic destination before issue. If an input skid is added, prove its
+capacity against the actual non-backpressurable burst, not average traffic.
+
+11.5 Concurrent serving and fill
+--------------------------------
+Handoff descriptor/bank/generation stays stable until accepted. Readers then
+use that captured serving identity, not the newest READY or currently filling
+bank. Normal operation writes B while reading A; assert no fill writes to a
+SERVING bank rather than relying on read-during-write settings to mask errors.
+
+The second bank only buys useful work when the next descriptor is available
+and the current bank is not held longer than required. Sections 13/14 close
+those two ends of the pipeline.
+
+
+12. SHARED ENGINE1 ADAPTER AND ACTUAL MEMORY PROTOCOL
+====================================================
+
+12.1 Keep the physical client law
+---------------------------------
+Arbiter slot 3 is ENGINE1; slot 4 is DEBUG because the slot index is cast to the
+client enum. The guard permits the asset pool for ENGINE1, not DEBUG. A spare
+slot is not a spare geometry privilege. [R9,R10]
+
+Recommended production route:
+
+  MESHFETCH descriptors ----+
+                            +--> logical geometry adapter --> one ENGINE1 guard
+  ASSETFETCH payloads ------+                                    |
+                                                         arbiter slot 3
+                                                               |
+                                                         SDRAM controller
+                                                               |
+                                                  physical-owner return routing
+                                                               |
+                                                    logical-owner return routing
+                                                       /                \
+                                                descriptor sink      bank fill
+
+This retains the existing physical client/scanout/refresh laws. It adds modest
+upstream sharing and explicit logical ownership, not another controller or
+unbounded crossbar.
+
+12.2 Three acceptance boundaries
+---------------------------------
+Distinguish adapter acceptance, guard acceptance/verdict, and arbiter/controller
+grant/data completion. Guard ready is a level; ok/violation is a delayed pulse.
+Preserve S_VERD rather than requiring ready&&ok simultaneously. [R4,R7,R9]
+
+A guard OK is not returned data. An arbiter grant is not a completed line.
+The adapter retains the logical owner through the full return or explicit
+drain/fault. Its selected request remains stable while the guard is blocked.
+
+12.3 Two burst scales, not one
+------------------------------
+Geometry requests use BYTES:
+  ASSETFETCH: 64 bytes -> eight packed 64-bit words;
+  MESHFETCH: 32 bytes -> four packed 64-bit words.
+
+Physical SDRAM req.len uses 16-bit WORDS, up to eight per physical burst:
+  one full physical burst = 16 bytes;
+  one 64-byte logical line = four full physical bursts;
+  one 32-byte descriptor = two physical bursts.
+
+The arbiter performs this splitting and may interleave other clients between
+bursts. Do not release a geometry owner after the first physical credit return.
+Do not count SCANOUT words as part of the pending geometry line. [R10,R11]
+
+Keep MESHFETCH's existing 32-byte checked footprint. Do not normalize it to
+an unchecked 64-byte read just to simplify the adapter. Store expected return
+count so both lengths work. Any existing geometry beat/last generator assuming
+eight words must be generalized and tested for four/eight, not bypassed by
+fetching a neighboring descriptor.
+
+12.4 Physical owner versus logical owner
+----------------------------------------
+The shell routes packed read data using physical ownership captured at the
+controller grant. The geometry adapter separately records whether ENGINE1's
+current logical request belongs to MESHFETCH or a particular ASSETFETCH bank.
+
+Record BEFORE issue:
+  descriptor/payload kind;
+  transaction/source ID;
+  bank/generation if payload;
+  stream/line/write offset;
+  expected and received packed word count;
+  cancellation/fault state.
+
+A physical scanout burst between two asset bursts must not reset the logical
+asset record. A later queued geometry request must not capture the earlier
+request's return. One logical request in flight makes this proof simple.
+
+12.5 Fairness and timing
+-------------------------
+Use small request queues and round-robin arbitration at logical-request
+boundaries. A bounded descriptor preference may maintain lookahead, but cannot
+starve payload filling. A long asset job cannot monopolize the adapter until
+all of its lines finish if the next descriptor is needed.
+
+Preserve the physical arbiter's scanout/aging law and controller refresh.
+The conservative controller's full-read grant-to-grant spans are 12/15/18 clocks
+for row hit/miss/conflict, before additional contention. These are simulation
+profile laws, not board performance. Four physical bursts are genuine work for
+a 64-byte line; a 360-cycle multi-line fetch is not 360 removable control cycles.
+[R11]
+
+
+13. MESHFETCH LOOKAHEAD AND PRODUCTION HIERARCHY
+==============================================
+
+13.1 Fix late metadata first
+----------------------------
+SOURCE: ASSETFETCH's later guard request reads m_client_i. MESHFETCH's later
+request reads m_client_i AND m_addr_i after its earlier admission/LOD/cull work.
+[R4,R7]
+
+Counterexample: accept A, then producer moves to B while A is delayed. A's
+later guard operation can fetch B's address or use B's client. A bench holding
+all input pins constant hides it; prefetching exposes it.
+
+Capture accepted fields, or use a fixed trusted physical client where that is
+the production contract. Poison address/client immediately after acceptance
+in the targeted regression. The memory request must still describe A.
+
+13.2 Bounded lookahead
+-----------------------
+Queue eligible meshlet descriptors before the current bank is released.
+At least one next prepared descriptor is necessary; two pending descriptors
+are a reasonable starting bound if resource lifetimes support it.
+
+Preserve LOD/cull behavior. Do not fetch discarded payloads merely to keep the
+port busy. A descriptor can be examined ahead of payload-bank admission, but
+queued work keeps its frame/configuration/resource ownership.
+
+Measure simultaneous consumer work and opposite-bank fill. Two arrays and a
+hand-drawn overlap diagram do not establish that the next descriptor actually
+arrives in time.
+
+13.3 Internalize the production route
+--------------------------------------
+D22 currently puts MESHFETCH, ASSETFETCH, VDECODE and ASSEMBLE beside the shell
+in the bench, using exposed ports to reach real memory. That is useful test
+composition, not the final production hierarchy. [R12,R24]
+
+The final step moves the selected chain and adapter inside zhao_shell_top or
+its selected production subhierarchy. Retire harness-only memory/payload
+bypasses from production; keep them only in named diagnostic wrappers.
+
+Update prod_manifest and generated resource top: newly nested blocks must not
+also remain separately counted roots. Conversely, do not exclude them from
+the census while their supposed replacement is disconnected. Count selected
+implementations exactly once. [R21]
+
+Do this in an isolated source snapshot, not by editing transitive files of a
+running fit. Independent implementation is possible while a fit runs; starving
+or changing the experiment underneath Quartus is not.
+
+13.4 Configuration units and versions
+--------------------------------------
+Transforms/LOD parameters may be captured per job or referenced through an
+immutable versioned frame configuration, according to the existing scope.
+No queued request may consult configuration that can change behind it.
+
+Bank tags and logical request generations can be internal sideband. Do not
+invent a new public asset format or game behavior as part of a fetch optimization.
+If a necessary resource version is genuinely absent from the current ABI,
+record the gap explicitly instead of inferring it from an address.
+
+
+14. INDEX/VERTEX CONSUMERS AND BANK RELEASE
+==========================================
+
+14.1 ASSEMBLE's request is not automatically a queue
+----------------------------------------------------
+The assembler asserts an index request while waiting in its fetch state.
+Increasing response latency without adapting the protocol can admit a held
+request repeatedly and deliver extra stale responses into later triangles.
+[R8]
+
+Preferred internal interface: request valid/ready and response valid/ready,
+carrying triangle index/bank generation, one outstanding initially.
+
+Compatibility shim: accept one legacy request episode, capture its index,
+issue RAM reads once, return one response pulse, and do not reaccept that held
+episode until the requester advances/deasserts according to the contract.
+
+Do not stretch signals in a fake bench until one waveform happens to work.
+A release barrier includes all outstanding index reads and responses.
+
+14.2 Index reads
+-----------------
+For triangle t, compact byte offset b=3*t. Read word floor(b/8) from replica A
+and, when straddling, the following word from B. Capture b's low selector with
+the RAM addresses; extract the bytes after those synchronous responses arrive.
+
+If the triplet does not straddle, mask the irrelevant second word to zero.
+Do not require initialized padding or read into the next bank. Validate t
+against triangle_count; preserve ASSEMBLE's local-index versus vertex-count
+checks. Correct fetching does not legalize an invalid triangle.
+
+14.3 Vertex reads
+------------------
+A vertex is four consecutive 64-bit words. A pipelined reader can approach one
+record per four read clocks after startup with a ready consumer. Retain the
+old reader rate first if that isolates the bank-overlap improvement.
+
+For overlap between assembling the next vertex and holding the previous one,
+reserve an assembly register and separate held output/skid. This can cost about
+512 staging bits before tags/control. Charge them. One 256-bit register cannot
+simultaneously retain a stalled vertex and collect the next one.
+
+Read tickets carry bank generation, vertex index and word number. Complete
+record/tag stays stable under output stall. Never select the output source using
+the fill engine's current bank.
+
+14.4 Release needs both consumers
+---------------------------------
+Vertex production may end before index assembly, or vice versa. Keep the bank
+until all consumers that may read it are done and all pending reader responses
+have drained. Treat last data ACCEPTED, not merely presented, as progress.
+
+Initially preserve the external release operation with a coordinator guaranteeing
+that it means both consumers are finished. A later derived done-ack mechanism
+is possible, but cannot be guessed from v_ready or a single counter.
+Zero-count jobs need explicit correct termination rather than waiting for a
+last vertex/triangle that will never exist.
+
+
+15. CANCELLATION, RESOURCE VERSIONS AND FAULTS
+=============================================
+
+15.1 Early teardown
+--------------------
+If early release is allowed, distinguish cancellation from ordinary completion:
+  stop issuing new work for that bank;
+  mark pending outputs cancelled at the agreed boundary;
+  retain ownership while accepted memory returns and RAM reads drain;
+  discard those old-generation returns;
+  reuse the bank only when no old write can target it.
+
+A generation bit is not permission to route untagged old bus data according
+to the new bank selection. The adapter keeps the old logical owner until the
+whole return stream finishes. Generation checking supplements ownership.
+
+15.2 Resource pins
+-------------------
+Copying bytes into a bank does not remove source-lifetime obligations for queued
+and outstanding external reads. Preserve frame/resource residency pins. A bank
+release does not by itself authorize global asset-page recycling.
+
+The conservative compatible policy retains the frame's resource ownership until
+its required reads/consumers finish. Earlier per-resource release needs explicit
+outstanding-reference accounting and its own tests.
+
+15.3 Fault taxonomy
+--------------------
+Keep separate:
+  malformed count/alignment/footprint;
+  guard violation;
+  capacity backpressure;
+  unexpected/truncated/extra data;
+  stale generation or cancellation;
+  out-of-range index;
+  internal duplicate completion/impossible ownership.
+
+Preserve existing refusal precedence. Do not return zero-filled vertices as
+success or conflate a full bank with malformed input. A failed job needs a
+defined terminal event so its owner can clean up.
+
+A physical timeout is not proof that no more untagged data can arrive. Follow
+the platform drain/abort/reset law; no timer may immediately recycle the bank
+while an old burst can still write it.
+
+15.4 Reference versus cycle model
+----------------------------------
+Material equations remain in zref_material.hpp; byte/footprint truth stays in
+zref_assetfetch.hpp. Small scheduler/bank models specify conservation and order.
+RTL tests prove timing/handshake behavior; composed memory tests prove the actual
+return protocol.
+
+Do not force the software renderer to simulate every clock merely to remain
+an arithmetic oracle. Conversely, a scalar helper is not proof of a correct
+ready/valid protocol or production frame rate.
+
+
+16. ASSETFETCH PERFORMANCE MEASUREMENT
+======================================
+
+Preserve prefetch_stall_o for comparison, but document its exact predicate.
+Measure distinct quantities rather than one misleading stall total:
+
+  descriptor_wait: next useful work lacks its descriptor;
+  guard_wait: captured request awaits acceptance/verdict;
+  memory_wait: accepted logical request lacks returned data;
+  consumer_starved: an actual requested item cannot be supplied;
+  consumer_blocked: item exists but downstream is not ready;
+  overlap_cycles: useful A consumption overlaps B fill;
+  ready_bank_wait and no_free_bank;
+  useful bytes versus transferred bytes;
+  descriptor bytes separately from payload bytes;
+  maximum occupancy and appropriately sampled wait distributions.
+
+Do not allocate a huge new diagnostic block in the critical path. Use registered
+events and a supported existing measurement interface where possible; otherwise
+charge the explicit counter wrapper.
+
+Keep the one-triangle D22 test, but compare old/new paths with hundreds of
+meshlets, multiple bank handoffs and identical byte/memory workloads:
+  balanced F/C, fill-dominated and consume-dominated cases;
+  all legal alignment classes and varying sizes;
+  alternating views/instances/material tags;
+  output pauses and cancellation;
+  continuous scanout, row hits/conflicts and normal refresh;
+  enough bank reuse to wrap narrow indices repeatedly.
+
+Report cold-start separately from steady state. Require exact bytes, no
+cross-bank/unauthorized traffic, exact drain and preserved scanout/refresh.
+Require actual overlap witnesses and compare cycles/meshlet, useful throughput
+and traffic. A warmer/smaller test is not a buffering speedup.
+
+A synthetic controlled F/C trace should approach max(F,C) under the assumptions;
+a production-like mixed trace must demonstrate benefit or state why it does not.
+The optional four-word reader must actually sustain one record/four clocks when
+resident and unblocked, while preserving identity on every pause.
+
+
+17. FILE-BY-FILE MIGRATION MAP
+===============================
+
+NEW names are proposals, not claims that the files already exist.
+
+Texture/material:
+  fpga/rtl/texture/zhao_texture_material_combine_v1.sv
+    Freeze as the historical comparison. Do not polish it indefinitely while
+    calling it replaced, and do not erase its known failures from evidence.
+
+  fpga/rtl/texture/zhao_texture_material_combine_v2.sv -- NEW
+    Paired phases, bounded contexts, separate RAM ports, stable completion,
+    registered events and explicit input/output credit.
+
+  fpga/rtl/texture/zhao_texture_material_mul_pair.sv -- NEW
+    Two named product sites with local style control. LOGIC2/DSP2 are mapping
+    variants of the same math and schedule, not different recipe definitions.
+
+  fpga/rtl/texture/zhao_texture_island_top.sv
+    Admission-to-final-retirement credits and synchronous held result output;
+    replace V1 through an adapter; absorb superseded temporary ownership only
+    after proving full lifetime coverage.
+
+  reference/include/zref/zref_material.hpp
+    Preserve actual equations; correct stale comments separately. Keep one
+    authoritative product_jobs table rather than another test-local copy.
+
+  tests/texture/material_combine_v1_diff.cpp
+    Preserve its useful workload; extend/factor it to drive V2 against the actual
+    oracle. Do not use the local transcription as the final repository oracle.
+
+  tests/texture/island_composed_directed.cpp
+    Add >64 sustained admission attempts under sink stall, wrap/epoch cases,
+    exact per-submission RGBA/address expectations, nonuniform filtering and AUX.
+
+Geometry/memory:
+  fpga/rtl/geometry/zhao_geom_assetfetch.sv
+    First capture client and validate exact response counts as targeted fixes.
+    Keep a frozen/parameterized single-bank reference during migration.
+
+  fpga/rtl/geometry/zhao_geom_assetfetch_v2.sv -- NEW
+    Two-bank manager, compact fill writer, independent readers and release
+    coordinator. Split modules only along actual port/ownership boundaries.
+
+  fpga/rtl/geometry/zhao_geom_mem_adapter.sv -- NEW
+    Two logical requesters, one trusted ENGINE1 client, exact 32/64-byte lengths,
+    complete logical-request ownership and bounded arbitration/drain.
+
+  fpga/rtl/geometry/zhao_geom_meshfetch.sv
+    Capture descriptor address/client; connect real descriptor reads through
+    the adapter; add bounded lookahead without changing LOD/cull semantics.
+
+  fpga/rtl/geometry/zhao_geom_assemble.sv
+    Define one request/response episode or add a compatibility shim; preserve
+    local-index checks and base-vertex-ID units.
+
+  fpga/rtl/geometry/zhao_geom_vdecode.sv
+    Carry captured job/bank identity through record decode; no live fill-bank
+    selector substituted for the accepted record's source.
+
+  fpga/rtl/shell/zhao_shell_top.sv
+    Internalize the production geometry chain and adapter; separate physical
+    burst ownership from logical geometry ownership; retire harness bypasses.
+
+  fpga/rtl/memory/zhao_mem_guard.sv
+  fpga/rtl/memory/zhao_vram_arbiter.sv
+  fpga/rtl/memory/zhao_sdram_ctrl.sv
+    Preserve current security/client/deadline/refresh law. Make only narrow
+    demonstrated interface repairs, not another memory architecture.
+
+  fpga/sim/shell/tb_zhao_shell.sv
+  tests/shell/shell_realmem_path_directed.cpp
+    Preserve poisoned fallback memory. Add sustained descriptor+asset sharing,
+    multiple bank lifetimes, both logical request lengths and interleaved scanout.
+
+  reference/include/zref/zref_assetfetch.hpp
+  design/contracts/GEOM.ASSETFETCH.md
+    Keep external byte/footprint semantics. Document compact storage, new
+    handshakes and bank timing separately from those laws.
+
+  tests/geometry/assetfetch_rtl_directed.cpp
+  tests/geometry/assetfetch_random.cpp
+  tests/geometry/geom_meshfetch_rtl_directed.cpp
+    Use actual delayed guard behavior; extend identity/cancel/exact-byte cases.
+    Do not restore simultaneous ready+ok to make the old test pass.
+
+Build/accounting:
+  design/prod_manifest.yml
+  design/fit_targets.yml
+  tests/CMakeLists.txt
+  production QSF/source-list generator
+  reports/synthesis/zhao_block_fit.json
+  reports/DOCKET.md
+    Select one implementation; include all new files; distinguish diagnostics
+    from the core but charge both; keep LOGIC2's zero-DSP rule; attach matching
+    raw reports; record supersession and remaining acceptance failures.
+
+A nested production block must not also be instantiated as a separate resource
+root. Keeping old source for tests is fine; shipping/counting old and new engines
+together is not the proposed machine.
+
+
+18. COMBINE TEST AND MUTATION PLAN
+==================================
+
+18.1 Arithmetic
+----------------
+Compile the real current zref_material.hpp into the differential. Test every
+recipe, zero/insufficient/required samples, RGB and alpha independently, with
+0,1,127,128,254,255, both LERP directions, weights 0/255, rounding boundaries,
+alpha-only saturation, black opaque masks and varied third-sample alpha.
+
+Exhaustive software-kernel checks are cheap enough for all products and all
+LERP input triples. RTL can use broad random coverage plus carefully selected
+exhaustive subdomains if the full product is too slow. State actual RTL coverage;
+do not borrow the software exhaustive count for the hardware.
+
+Named arithmetic mutations:
+  /255 instead of /256;
+  biased negative signed rounding;
+  LERP alpha multiplied instead of interpolated;
+  MODULATE2X alpha not doubled;
+  DETAIL_LIGHT losing its intermediate rounding;
+  DETAIL_MASK alpha using s1 instead of s2;
+  MASK testing RGB instead of alpha;
+  saturation counted per channel;
+  phase 1 overwriting a scratch value still needed in phase 2;
+  one lane associated with the wrong context.
+
+Each must fail a targeted, nonvacuous check. "Nonblack" is not an arithmetic
+oracle, and testing alpha only at 255 cannot close the alpha law.
+
+18.2 Transaction pressure
+--------------------------
+Drive thousands of fragments, repeated sequence wrap and sink stalls longer
+than all pipeline latencies. Mix simple and dependent recipes, distinct samples,
+changing weights, delayed services and invalid-input poison after acceptance.
+
+Require the old 65th-completion failure to be prevented by admission backpressure,
+then drain every accepted fragment exactly in order. Assert stable offered
+output, no phantom RCP admissions, no double completion and conservation across
+NEW/CONT/pipeline/DONE/output/FREE.
+
+Include duplicate caller tags intentionally. Unless the contract requires unique
+caller tags, the scoreboard must use admission order/owner identity rather than
+a map which merges equal user tags.
+
+Reset/abort tests must state drain versus cancellation. A stale old-generation
+return must not corrupt new work. If safety instead relies on quiescence, prove
+that boundary rather than having both sides assume the other drains.
+
+18.3 Exact composed samples
+----------------------------
+The current test's accepting either of two palette colours is not proof that
+EACH fragment chose its own correct address byte. Four equal texels cannot
+reveal incorrect bilinear weights. Preserve these simple directed cases but
+add an address-sensitive oracle. [R13]
+
+Use the real texture/TMU reference with texels varying by x, y, mip level,
+channel and binding. Compute exact expected addresses, sample values and final
+material RGBA per admission. Include odd/even CLUT addresses, nonuniform
+bilinear values, varying fu/fv, cache stalls, distinct logical samples, AUX,
+and nonzero mips where implemented.
+
+A still-unimplemented path is explicitly pending/red, not quietly excluded
+from a claim that the complete island is exact.
+
+18.4 Structure and observability
+---------------------------------
+Guard against more than two product sites, truncated handles, record-by-job
+priority scans returning, reset-written payloads, unintended extra RAM ports,
+unreserved always-ready completion, and unheld output selection.
+
+Mutation-test static guardrails too. A style checker passing is still not the
+mapped memory/multiplier report. Counters need event-latency and once-per-fragment
+checks as well as total arithmetic.
+
+
+19. ASSETFETCH TEST AND MUTATION PLAN
+====================================
+
+19.1 Exact byte oracle
+----------------------
+Fill memory with address/resource-dependent data, not identical records in both
+banks. Compute descriptor bytes, index triples and vertex records from the
+reference layout. Compare every item and identity, not only painted pixels.
+
+Cover every permitted line-prefix class, maximum/zero counts, straddling index
+triples and arena ends. Preserve the 40-line worst case and check compaction
+without changing useful bytes or external addresses.
+
+Malformed cases: oversize counts, misalignment, widened-address overflow,
+base added twice, illegal client/resource, early/late/missing/extra words,
+response with no owner. Preserve old refusal precedence for old fault classes.
+
+19.2 Actual memory protocol
+----------------------------
+Test both requesters against actual MEM.GUARD, then the shared adapter against
+actual arbiter/controller/model plus scanout. A reasoned MESHFETCH handshake
+repair is not a real-memory MESHFETCH test until it actually reads descriptors.
+
+Drive simultaneous logical clients; alternate 32-byte descriptors and 64-byte
+payload lines; block guard acceptance; deliver a later OK or violation; interleave
+scanout between physical bursts; exercise refresh/row conflicts. Require logical
+owners to survive whole requests and forbid cross-client return contamination.
+
+Poison address/client after request A is accepted while B is offered. The later
+request and data must still belong to A. A bench preserving A's pins indefinitely
+has not tested this contract.
+
+19.3 Bank stress and release
+-----------------------------
+Fill B while A serves. Pause vertex output at every word/record boundary and
+pause ASSEMBLE on straddling indices. Fill both banks, block consumers, then
+verify READY waiting and upstream backpressure without overwrite.
+
+Finish one consumer before the other; the bank remains owned. Cancel at first/
+last line, pending guard verdict, active physical burst, pending RAM response
+and held vertex. Reuse only after the documented drain and reject stale events.
+
+Named mutations:
+  live client/address instead of captured;
+  return routed by current fill bank;
+  release on presented rather than accepted final vertex;
+  release while indices remain outstanding;
+  early last accepted as complete;
+  index prefix retained or vertex base added twice;
+  held index request admitted repeatedly;
+  adjacent-word read crosses bank boundary;
+  logical owner released at first physical credit return;
+  descriptor silently treated as 64 bytes;
+  fake poisoned pool used instead of SDRAM.
+
+Require actual witnesses: both banks reused, both request classes granted,
+both consumers stalled, overlap occurred, a denied request really hit the guard,
+and narrow indices wrapped. These accompany exact outputs; they do not replace
+them.
+
+
+20. PHYSICAL EVIDENCE AND FITTING DISCIPLINE
+============================================
+
+20.1 Matching artifacts
+-----------------------
+Recover current setup/hold exports from the retained 36.28 MHz database if it
+exists. If it does not, label current node attribution unavailable. Never use
+the 29.74 MHz report as though it were new merely because filenames match.
+
+Every result carries full source/transitive hashes, top parameters including
+TAGW/context count, generated packages, tool/device/seed/effort, QSF/SDC and
+exceptions, hierarchical resources, named RAM Summary, DSP mapping, setup/hold,
+ignored assignments and unconstrained paths. State harness/counter scope.
+
+20.2 Representative boundaries
+--------------------------------
+Use representative launch/capture registers and handshake loads for stage
+characterization, alongside the true production leaf. Do not remove boundary
+paths solely to advertise a higher number or blame math for artificial virtual-
+pin constraints without classification.
+
+Classify BOTH endpoints: input/register/output, internal registers, clock/CDC/
+reset. Then trace the actual worst internal nodes. An endpoint named counter
+or queue is not a complete explanation of how its path got long.
+
+The leaf's 125 MHz is headroom; the product is 100 MHz. Preserve the existing
+V2 complete-composition 105 MHz floor/110 MHz objective where applicable.
+A passing isolated leaf is not a whole-console frequency or capacity proof.
+
+20.3 Hold cannot be ignored
+----------------------------
+The reported -5.284 ns hold shortfall is not fixed just by lowering the clock.
+Examine launch/capture edges, clock relations, I/O constraints and minimum-delay
+routes. Boundary artifacts need demonstrated classification and validation of
+the real registered boundary. Internal hold needs physical closure.
+
+No blanket false paths, no timing pass based only on setup, and no "Fitter
+successful" headline substituting for setup/hold acceptance.
+
+20.4 Fail cheaply before placement
+-----------------------------------
+Elaborate and map first. Reject reset-flop payloads, extra RAM ports, missing
+banks or unexpected DSP inference before an expensive fit. Then run one clean
+meaningful variant, read its path, and select the next change for a reason.
+LOGIC2/DSP2 is a bounded decision experiment, not permission for endless seeds.
+
+20.5 Operational isolation
+---------------------------
+One expensive fit at a time on the constrained host. No nine creature-video
+renders, full-shell simulation swarm or concurrent full build. Source review
+and small isolated model work can continue.
+
+Fit immutable snapshots. Preserve logs/workspaces on timeout. Distinguish
+watchdog interruption, process failure, completed timing failure and resource
+failure. Check the actual build exit status before executing a binary; a filtered
+log pipeline is not proof that linking succeeded.
+
+Mutations run in isolated copies or committed/backed-up state. Restoring a test
+must not erase the uncommitted fix being assessed.
+
+
+21. WORK PACKAGES AND EXIT CRITERIA
+===================================
+
+WP0 -- Freeze laws and establish reproducible failures.
+Pin actual material/asset oracles, recover matching fit reports if possible,
+and add owner-wrap and late-address/client regressions. Explicitly distinguish
+unexecuted source deductions from tests that reproduce them.
+
+WP1 -- Close ownership before the larger rewrite.
+Implement admission-to-final-retirement credits, correct RCP-valid gating and
+stable synchronous output. Capture fetch metadata. Exit on long-stall/>64 wrap,
+invalid-input poison, exact drain and unchanged scalar laws.
+
+WP2 -- Build the small paired arithmetic kernel.
+Implement exact phases and two product sites; compare with actual zref, including
+alpha and intermediate rounding. Exit on differential/mutation results and
+verified selected mapping. Do not start by rebuilding the old giant record FSM.
+
+WP3 -- Add the bounded COMBINE scheduler and memories.
+Eight contexts, NEW/CONT/DONE/FREE queues, separate memory ports, fixed-latency
+metadata and reserved output. Add diagnostics without scans. Exit on sustained
+recipe rates, stalls, conservation and real RAM inference. Expose any incompatible
+legacy counter-inclusive budget rather than hiding it.
+
+WP4 -- Fit COMBINE with honest scopes.
+Map CCORE/CWRAP; inspect RAM/DSP; fit a source-matched leaf; classify setup/hold.
+Compare LOGIC2/DSP2 only for a concrete decision. Integrate into the credited
+island with exact colour/identity tests. Function/capacity/timing/resources are
+separate exit answers, not one green label.
+
+WP5 -- Build the shared geometry memory adapter.
+One ENGINE1, both logical requesters, 32/64-byte lengths, owner retained through
+physical bursts. Exit on both requesters really reading modeled SDRAM under
+scanout/refresh, with no DEBUG misuse or descriptor overfetch.
+
+WP6 -- Compact payloads, then add bank overlap.
+Prove compact single-bank bytes first, then two banks/lookahead/readers/release.
+Keep old reader timing until overlap is measured independently. Exit on exact
+bytes, real consume/fill overlap, bounded cancellation and old/new RAM reports.
+
+WP7 -- Integrate the actual production hierarchy.
+Move the geometry chain inside the shell, update manifest/source lists, run
+sustained workload and take coherent physical measurements. Keep major changes
+attributable rather than combining five unmeasured rewrites into one mystery.
+
+Independent software/RTL development can proceed in isolated worktrees. The
+rules constrain shared heavy computation and mutable fit sources, not every
+line of work while Quartus runs.
+
+
+22. REJECTED SHORTCUTS AND FALLBACK CHOICES
+==========================================
+
+Reject two whole fetchers instead of two payload banks, a new memory controller,
+or treating DEBUG as another geometry client.
+
+Reject a single context which waits serially through every pipeline stage while
+advertising two-products-per-clock because it contains two multipliers.
+
+Reject finite order restoration without admission credits, constant 1x1/equal-
+texel tests as the only colour evidence, or counters instead of exact bytes.
+
+Reject changed alpha/rounding/sample semantics to ease fitting, blanket multiplier
+mapping changes, weakened scanout/refresh, relaxed clocks or waived hold.
+
+Reject passing an old counter-inclusive budget by measuring a counter-free core.
+An explicit telemetry redesign is possible, but it must retain observable events
+and charge physical cost somewhere real.
+
+Reasonable measured fallbacks:
+  DSP2 instead of LOGIC2 with identical arithmetic/schedule;
+  existing vertex reader if bank overlap already solves useful starvation;
+  compact single-bank low-area mode for workloads that do not benefit;
+  small registered MLAB scratch/tag storage if actually better;
+  explicit local rebudget based on measured whole-island totals and approval.
+
+Stop when services are correct, bounded, integrated and meet measured capacity/
+resource/timing acceptance. Do not spend another week polishing optional leaf
+variants after the path is good enough for terrain development.
+
+
+23. EXECUTED LOCAL VALIDATION
+==============================
+
+The following were run during preparation. They are proposal-level tests, NOT
+repository RTL simulation, Quartus, physical memory or a full renderer run.
+The workspace reset during packaging; the source/results are rebuilt in the
+companion bundle and rerun where provided. The recorded conclusions remain
+bounded to the following models.
+
+23.1 Arithmetic
+----------------
+A C++17 program transcribed the pinned scalar equations and independently
+expressed the paired-phase calculation. It reported:
+  65,536 byte products;
+  16,777,216 LERP triples;
+  800,000 randomized recipe/count/refusal cases;
+  zero mismatches.
+
+It includes correct alpha, saturation flags, count-zero precedence and two
+software-only invalid recipe values. This checks the proposal against a
+transcription, not the original header; the implementation gate MUST compile
+the actual current zref_material.hpp.
+
+23.2 Owner credits
+-------------------
+A transition model reproduced the uncredited shape with 65 completions and
+zero sink transfers: held head changed from sequence 0 to 64.
+
+The credited model accepted/emitted 8,192 items, under random completion delay,
+long repeated sink stalls and 128 index wraps, with zero loss/duplication/order
+errors, max live=64 and stable held output. The initial run took 17,479 model
+cycles and blocked admission for 9,173 cycles. These are abstract model cycles,
+not the current island's measured runtime.
+
+23.3 Queue feasibility
+------------------------
+Eight contexts, five-cycle phase return, fair NEW/CONT selection, one completion
+consumer, 12,000 fragments per homogeneous test:
+  PASSTHRU:     12,007 cycles, 12,000 tickets,      0 products;
+  MODULATE:     24,009 cycles, 24,000 tickets, 48,000 products;
+  DETAIL_LIGHT: 36,009 cycles, 36,000 tickets, 72,000 products;
+  mixed:        20,980 cycles, 20,969 tickets, 32,888 products.
+
+Thus the phase graph itself permits nearly one ticket/clock and two products/
+clock for product-heavy streams. Real RAM timing, queue implementation, input
+availability, output stalls and Fmax remain RTL/physical acceptance questions.
+
+23.4 Footprint compaction
+--------------------------
+The model checked 1,146 per-stream count/alignment combinations: all vertex
+counts with both prefixes, all triangle counts with all eight prefixes, every
+useful record/triplet against address-dependent bytes. Zero mismatches.
+Maximums were 7 index lines, 33 vertex lines, 2,560 transferred and 2,426 useful
+bytes. Eight M10Ks remains a packing candidate, not an inference result.
+
+23.5 Reproduce
+---------------
+Python uses the standard library/fixed seeds; C++ needs a C++17 compiler:
+  python validate_models.py
+  g++ -std=c++17 -O2 -Wall -Wextra -Werror check_math.cpp -o check_math
+  ./check_math
+Only run the binary after successful compilation. No binary is required in the
+bundle; source and recorded output suffice.
+
+
+24. ACCEPTANCE CHECKLIST AND ASSESSMENT
+=======================================
+
+The implementing agent should return source/parameters, reproduced defects,
+exact tested inputs, mutations detected, pressure/wrap/cancel coverage, useful
+throughput, named RAM ports, complete resources including diagnostics, setup/
+hold/unconstrained-path status, raw reports and remaining decisions.
+
+The non-negotiable checklist:
+  [ ] 65th completion cannot overwrite an unretired first result.
+  [ ] No phantom RCP admission; global credits release only at final sink accept.
+  [ ] Internal reorder allowed; external order exact; output held stable.
+  [ ] Eight current material laws including alpha remain byte-exact.
+  [ ] Two product sites, selected mapping verified, counters honestly charged.
+  [ ] No issue-path record/job scan or unimplemented RAM port.
+  [ ] Both fetchers preserve accepted address/client/configuration.
+  [ ] Both descriptor/payload requesters traverse actual guarded memory.
+  [ ] ENGINE1 sharing preserves SCANOUT and logical multi-burst ownership.
+  [ ] Exact 32/64-byte returns; no early bank publication or stale overwrite.
+  [ ] Reader bank identity held; index request not duplicated by a held signal.
+  [ ] Both consumers and outstanding responses finish before release/reuse.
+  [ ] Compaction covers all legal alignments; real A-consume/B-fill measured.
+  [ ] Source-matched setup/hold/resources; production roots counted once.
+
+COMBINE's expected gain is regularity: one queue-head decision, one context read,
+two products and one whole writeback. Its tiny mathematical kernels do not need
+the current general job-selection structure. A much more credible 100 MHz
+implementation is plausible with this organization; 100/125 MHz and a particular
+ALM total are NOT guaranteed before mapping/placement.
+
+ASSETFETCH's gain is overlap and packing. Two 2.4 KiB-class payload banks are a
+reasonable bounded mechanism, with a plausible path to low incremental M10K use.
+They do not erase external traffic, burst timing or scanout/refresh costs.
+
+Budget expectations are proposals:
+  COMBINE: bounded RAM and pipeline registers replace broad scan/state logic;
+           the inherited 500-register counter-inclusive target may need an
+           explicit telemetry decision or measured rebudget, never a silent pass.
+  Owner:   replace the muxed table with reserved synchronous storage, rather
+           than adding another duplicate table.
+  Fetch:   eight-M10K candidate payload layout plus explicit adapter/control/
+           output staging; no extra arithmetic DSP is inherently necessary.
+
+No new complete-console budget was established here. Preserve the reserve-
+conscious whole-machine budget and do not add overlapping stale leaf numbers.
+
+The work is concrete and bounded: close credits and metadata, replace the
+combiner's scans with paired phases, give geometry two owned banks and one
+properly shared memory client, test exact results under pressure, then measure.
+It does not require discarding the visual features or inventing another console.
+
+
+25. SOURCE CATALOGUE
+====================
+
+All file paths below refer to revision
+2f98562a3cd6996e63d93fe1a2e61e24a02ea8ec unless a commit is named.
+Root prefix for each immutable file URL:
+https://github.com/Fabulu/zhaozhou/blob/2f98562a3cd6996e63d93fe1a2e61e24a02ea8ec/
+
+[R1] fpga/rtl/texture/zhao_texture_material_combine_v1.sv
+Records, mask scans, product sites, counters and output selection.
+
+[R2] reference/include/zref/zref_material.hpp
+product_jobs(), detail::mul2x(), detail::lerp8(), combine(), sample/refusal rules.
+
+[R3] fpga/rtl/texture/zhao_texture_island_top.sv
+RCP input/frag_ready, FCTXN/fseq, COMBINE tag and final reorder table.
+
+[R4] fpga/rtl/geometry/zhao_geom_assetfetch.sv
+Footprint, 7/33-line maxima, replicated index RAM, live client and fill/serve FSM.
+
+[R5] reference/include/zref/zref_assetfetch.hpp
+Byte-footprint, address/alignment and index/record reference laws.
+
+[R6] design/contracts/GEOM.ASSETFETCH.md
+External function, format and intended buffering; prose and implemented timing
+are distinguished rather than assuming the contract is already realized.
+
+[R7] fpga/rtl/geometry/zhao_geom_meshfetch.sv
+Captured job fields, live descriptor address/client, 32-byte request, verdict wait.
+
+[R8] fpga/rtl/geometry/zhao_geom_assemble.sv
+Index request/response state, local-index validation, base-ID arithmetic.
+
+[R9] fpga/rtl/memory/zhao_mem_guard.sv
+Allowed clients/regions, capture and delayed verdict protocol.
+
+[R10] fpga/rtl/memory/zhao_vram_arbiter.sv
+Positional clients, byte-request splitting, physical grants and returned credits.
+
+[R11] fpga/rtl/memory/zhao_sdram_ctrl.sv
+16-bit-word physical bursts, conservative row/refresh timing and grant semantics.
+
+[R12] reports/DOCKET.md
+D22 bench/production boundary and pending hierarchy integration.
+The integration destinations are fpga/rtl/shell/zhao_shell_top.sv and
+fpga/sim/shell/tb_zhao_shell.sv. Boundary clarification commit:
+https://github.com/Fabulu/zhaozhou/commit/2c53b97f9e482b748040ec2ca190c1336db4cfca
+
+[R13] tests/texture/island_composed_directed.cpp
+Current exact-colour tests and address/weight/64-fragment coverage limitations.
+1x1/byte-parity correction commit:
+https://github.com/Fabulu/zhaozhou/commit/0f8fcdad93210980223866649eb25d58c67cd7a2
+
+[R14] tests/shell/shell_realmem_path_directed.cpp
+D22 real-memory test as introduced/reported; not independently executed here.
+
+[R15] reports/synthesis/zhao_block_fit.json
+Manual 36.28 MHz row, source/partial-stage metadata, resources and rule violations.
+
+[R16] reports/synthesis/blockpaths/zhao_texture_material_combine_v1.setup.summary.rpt
+Readable OLD -23.624 ns setup summary, not a new critical-path export.
+
+[R17] reports/synthesis/blockpaths/zhao_texture_material_combine_v1.sta.rpt
+Readable OLD -23.624/-4.940 ns STA summary, dated 5 September 04:54:37.
+
+[R18] reports/zhaozhou-texture-island-rearchitecture-v2-2026-09-05.txt
+Parent recovery architecture; its retained delivered local copy was consulted.
+
+[R19] runs/CLAUDE-RUNS/RUN-20260905-0648-composed-texture-island-g1d/TASK_LOG.md
+D22, 30->360 stalls, R6 and measurement scope. Older contradictory 'in flight'
+paragraphs are not treated as current when later completed results exist.
+
+[R20] design/fit_targets.yml
+Existing local structural/timing tripwires; scope changes require explicit record.
+
+[R21] design/prod_manifest.yml
+Production selections and nested-versus-separate accounting obligations.
+
+[R22] tests/texture/material_combine_v1_diff.cpp
+Existing differential to extend against the actual current scalar reference.
+
+[R23] Corrected-counter fit result:
+https://github.com/Fabulu/zhaozhou/commit/29f99dd5d9f2137e7536139c494c8341265b2117
+The commit's effort-mode extrapolation is not adopted as another measurement.
+
+[R24] D22 modeled memory path and guard mismatch:
+https://github.com/Fabulu/zhaozhou/commit/905782657ee3243a5b3601d2a6cc17eb3893eb6e
+'Real memory' here means the actual controller/arbiter/model route, not a board.
+
+[V1] Altera Cyclone V Device Handbook, M10K mixed-width configurations:
+https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/m10k-blocks-mixed-width-configurations
+Supports physical width/depth/port calculations, not automatic mapping claims.
+
+[V2] Altera Quartus Help 18.0, M10K memory-block definition:
+https://resources.altera.com/quartushelp/18.0/reference/glossary/def_m10k.htm
+Memory mode/size background. Actual inference remains a 17.0.2 experiment.
+
+[V3] Altera Quartus Prime Standard Edition User Guide 18.1, Multiplier Style:
+https://docs.altera.com/r/docs/683283/18.1/quartus-prime-standard-edition-user-guide/multiplier-style-for-inferred-multipliers
+Module/direct-result attribute scope; verify support/effect in the pinned tool.
+
+END OF BRIEF

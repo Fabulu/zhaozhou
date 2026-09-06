@@ -203,6 +203,27 @@ module zhao_geom_meshfetch
   // The descriptor, as eight 64-bit beats. Held whole because the CRC covers
   // bytes 0..59 and a field checked before the last beat lands would be
   // checked against a descriptor that does not exist yet.
+  // ---- INGRESS CAPTURE (owner recovery brief, COMBINE/ASSETFETCH 2026-09-06)
+  // The brief's second prerequisite, verified in source before being touched:
+  //
+  //   "ASSETFETCH still reads its client identity live after acceptance.
+  //    MESHFETCH reads its descriptor address and client live after
+  //    acceptance. These must be captured before prefetching makes overlapping
+  //    requests ordinary."
+  //
+  // This is the SAME rule the composed texture island was repaired against --
+  // owner recovery v2 Appendix B, "no later computation reads unrelated live
+  // ingress data" -- and the same failure mode: the pin is sampled when the
+  // request is FORMED, many cycles after the job was accepted, so it carries
+  // whatever the caller happens to be presenting then. Today one job is in
+  // flight at a time and the caller holds its inputs steady, which is why
+  // nothing has broken. Two banks and descriptor lookahead make a second job
+  // ordinary, and then it is not steady at all.
+  //
+  // Captured at acceptance, beside the fields that already were.
+  zhao_client_e   client_q;
+  logic [26:0]    desc_addr_q;
+
   logic [63:0] d_q [8];
   logic [2:0]  beat_q;
 
@@ -312,8 +333,8 @@ module zhao_geom_meshfetch
 
   assign guard_req_o.valid  = (st_q == S_REQ);
   assign guard_req_o.write  = 1'b0;
-  assign guard_req_o.client = j_client_i;
-  assign guard_req_o.addr   = j_desc_addr_i;
+  assign guard_req_o.client = client_q;      // CAPTURED, not live
+  assign guard_req_o.addr   = desc_addr_q;   // CAPTURED, not live
   assign guard_req_o.len    = 7'd64;
   assign guard_req_o.be     = {64{1'b1}};
 
@@ -350,6 +371,8 @@ module zhao_geom_meshfetch
         S_IDLE: begin
           if (j_valid_i) begin
             inst_q <= j_instance_id_i;
+            client_q    <= j_client_i;
+            desc_addr_q <= j_desc_addr_i;
             fmt_q  <= j_format_i;
             gen_q  <= j_generation_i;
             act_q  <= j_active_mask_i;
