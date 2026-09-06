@@ -397,7 +397,12 @@ inline zc::RingPart make_star(uint8_t bone, bool white) {
   // EYE LAB: the star's half-depth, and the DOME DROP that is the lane's
   // proposed answer to the near-eye bar. Both default to the shipped values on
   // every non-bar variant, so nothing else in the table moves because of them.
-  const int32_t thin = eyelab::variant().star_thin_mm;
+  // EYE LAB: the two stars get SEPARATE depths. The shipped code gives both
+  // the same `thin`, which is only half of its own recorded lesson -- see
+  // manafold_eyelab.h's note on kStarCyanFatMm. Both default to the shipped
+  // value, so every non-bar variant is untouched.
+  const int32_t thin =
+      white ? eyelab::variant().white_thin_mm : eyelab::variant().star_thin_mm;
   const int32_t dome_drop = eyelab::variant().dome_drop_mm;
   zc::RingPart p;
   p.bone = bone;
@@ -437,7 +442,8 @@ inline zc::RingPart make_star(uint8_t bone, bool white) {
     const int64_t ynorm = static_cast<int64_t>(yp) * yp / 1000;  // 0..1000
     const int32_t drop = static_cast<int32_t>(
         (static_cast<int64_t>(dome_drop) * ynorm) / 1000);
-    rs.cx = fxu(kEyeBulgeMm - drop + (white ? 0 : kStarCyanProudMm));
+    rs.cx = fxu(kEyeBulgeMm - drop +
+                (white ? 0 : eyelab::variant().cyan_proud_mm));
     // ---- EYE LAB, LANE-ONLY: the star RIDES the lens's squash -------------
     // 12.3: "the star rides it. It must not slide against the purple during
     // the blink." kFollower is that guarantee expressed as CONSTRUCTION rather

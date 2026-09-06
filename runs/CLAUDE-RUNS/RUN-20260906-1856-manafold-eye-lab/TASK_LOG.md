@@ -73,3 +73,45 @@ travel, the near-eye bar, blink-by-squash, star placement/size.
    eyes are RIGID against the breath today — they do not follow the pulsation
    at all. §7.7's "computed against the neutral shape" fault is live, not
    hypothetical.
+
+### Outcome
+
+27 variants rendered at 520 frames each on the shipping rig
+(`ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross`), judged at native 384x240.
+
+**TRAVEL: 14 deg authored, 22 deg as the clamp.** Built as an arc about the
+body's own vertical axis at `kEyeTravelPivotXMm = 33`. Lens depth 771 pm and
+crown 149 mm at EVERY angle 0..45 -- the conform is free, because the body's
+horizontal cross-section is a circle. At 32/45 the eyes leave the face and read
+as fins. Travel IMPROVES the near eye (bar rate 55.4% -> 32.7% at 14 deg).
+
+**THE NEAR-EYE BAR IS SOLVABLE.** Mechanism: the lens carries 180 mm of extent
+along the eye's outward axis and the star carries 32 mm, so at obliquity the
+lens keeps its silhouette and the star collapses. Answer: the CYAN thickens to a
+solid form (46) and the WHITE slims to a true outline (12) -- the half of
+`make_star`'s own recorded lesson that was never taken. Star-gone rate
+11.5% -> 2.9%; cyan on screen 96 -> 215 px.
+
+### Three faults found, and how
+
+1. **The travel sign was inverted** -- both eyes carried inward, gap 0 mm. The
+   zero sat MID-RAMP (keys 37..59); by 45 deg they had passed through each other
+   and come out clean. An extremes-only gate would have passed it. Gotcha 17 on
+   a new channel.
+2. **The probe's own body map was hollow** -- 11 rings cannot fill 6144
+   azimuth-by-height cells, and empty cells skipped vertices silently. Caught
+   ONLY by the cross-check against `manafold_art.h`'s recorded 123 mm.
+3. **The probe's sink threshold was wrong** -- it fired on the untouched
+   control, because the lens is a dome EMBEDDED in the surface and is always
+   inside the body's envelope. The shipped gate compares against REST; so does
+   this one now.
+
+### And measurement lost to looking three times
+
+`barcensus.py` ranked `bar-domed`(62) first while its star had lost its arms;
+ranked `bar-thicker` well because it removed the cyan being counted; and ranked
+`bar-fat-proud` above `bar-cyan-fat` because it has no term for "do the two eyes
+look like the same organ", which was the thing being decided. Each number was
+correct and answered a question nobody asked. All three are on the record.
+
+Findings: `Upheaval/creature/Manafold/EYE-LAB-FINDINGS.md`. Nothing published.

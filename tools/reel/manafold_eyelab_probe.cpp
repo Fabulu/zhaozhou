@@ -433,11 +433,32 @@ int main(int argc, char** argv) {
     std::printf("u02-eyelab:  %3u   %8d   %8d   %9d\n", f, res[f].lens_deep_pm,
                 res[f].crown_mm, res[f].eye_gap_mm);
 
+  // ---- THE SINK TEST, AND ITS THRESHOLD IS NOT 1000 ---------------------
+  //
+  // ⚠ THIS WAS WRONG IN THE FIRST VERSION, and instructively so: it flagged
+  // "SUNK" on EVERY variant including the untouched control. The lens is a
+  // dome EMBEDDED in the body surface and popping proud of it, so its deepest
+  // vertex is ALWAYS inside the body's radial envelope -- 790 pm at rest here,
+  // 837 pm by the shipped gate's own arithmetic. "Below 1000" is not a fault;
+  // it IS the construction, and a gate that fires on the control is a gate
+  // that has misunderstood the thing it is watching.
+  //
+  // The shipped gate says as much in its own output -- "lens deepest 837 pm vs
+  // 838 pm at REST, floor 1000 - OK" -- which reads like a floor of 1000 and is
+  // actually a comparison against the rest pose. That is the right test, and
+  // this now does the same: the question is never "is the lens inside the
+  // body", it is "does a POSE put it deeper than the rest pose does".
+  const int32_t rest_deep = res[0].lens_deep_pm;
+  const int32_t sink = rest_deep - worst_deep;
+  std::printf("\nu02-eyelab: SINK vs REST %d pm (rest %d pm, worst %d pm at key "
+              "%d). The lens is always inside the body's envelope -- it is a "
+              "dome embedded in the surface -- so the DELTA is the number.\n",
+              sink, rest_deep, worst_deep, worst_deep_f);
   int rc = 0;
-  if (worst_deep < 1000) {
-    std::printf("\nu02-eyelab: SUNK -- the lens crosses into the body by %d pm "
-                "at key %d. §5.3 allows the purple to RIDE OVER the body edge; "
-                "it does not allow it to sink IN.\n", 1000 - worst_deep, worst_deep_f);
+  if (sink > 100) {
+    std::printf("u02-eyelab: SINKS -- %d pm deeper than rest at key %d. §5.3 "
+                "allows the purple to RIDE OVER the body edge; it does not "
+                "allow a pose to push it further IN.\n", sink, worst_deep_f);
     rc = 2;  // reported, not fatal: this lane's job is to report
   }
   if (worst_gap < 12) {

@@ -246,6 +246,8 @@ struct EyeVariant {
   bool compose_extremes;   // stack roll + gaze + twinkle on the travel extreme
   int32_t star_thin_mm;    // the star's half-DEPTH (shipped kStarThinMm = 16)
   int32_t dome_drop_mm;    // THE NEAR-EYE BAR CANDIDATE -- see below
+  int32_t cyan_proud_mm;   // how far the cyan rides in front of its white
+  int32_t white_thin_mm;   // the WHITE's half-depth, separately from the cyan's
 };
 
 // ===================== THE NEAR-EYE BAR: A MECHANISM =======================
@@ -298,72 +300,164 @@ struct EyeVariant {
 // profile table and this touches only x. The protected construction -- the
 // star's shape, its asymmetric arms, the white generated from the cyan by one
 // rim -- is not re-opened. This is PLACEMENT, which is what this lane is for.
-constexpr int32_t kStarDomeDropMm = 62;   // authored by eye against the lens dome
+// ⚠ AUTHORED AT 62 AND REJECTED BY THE RENDER. 62 mm of drop on a star that
+// stands kEyeBulgeMm = 88 mm proud leaves its tips only 26 mm out -- and the
+// LENS's own surface at the height the star's tips reach is about 74 mm out
+// (kEyeDeepMm 90, times the lens width profile's ~820 pm there). So the tips
+// were 48 mm INSIDE the purple and the render showed the star's arms simply
+// gone, which is a worse bar than the one it was meant to fix.
+//
+// The arithmetic that was skipped: to FOLLOW the lens rather than cut through
+// it the drop can be at most 88 - 74 = 14 mm. And 14 mm is the finding, not a
+// smaller version of the fix -- it buys the star 28 mm of extra outward
+// extent, 32 -> 60, against the lens's 180. Doming the star to sit on the lens
+// CANNOT close a 5.6:1 gap, because the lens's dome is the very thing setting
+// the target. Kept as a rejected row rather than deleted.
+constexpr int32_t kStarDomeDropMm = 14;   // the most that follows the lens
+constexpr int32_t kStarDomeDropBuriedMm = 62;   // the rejected value, on the record
+
+// ---- WHAT THE TWO REJECTIONS TOGETHER POINT AT ---------------------------
+//
+// `bar-thicker` proved thickness IS the lever -- at 46 mm the near-eye star
+// stopped being a scratch and became a shape. It failed for a DIFFERENT and
+// separable reason: the white swallowed the cyan.
+//
+// And that reason is now legible. The white is the cyan dilated by
+// kStarWhiteRimMm = 16 mm IN THE PICTURE PLANE, sitting kStarCyanProudMm = 6 mm
+// BEHIND it. At high obliquity you look along the star's own thickness, so
+// what you see is the white's 16 mm rim presented broadside while the cyan's
+// face is edge-on. Six millimetres of proudness is enough to keep the cyan in
+// front on a 16 mm-thick star; on a 46 mm-thick star it is not, because the
+// white's side wall grew and the cyan's stand-off did not.
+//
+// THE PROUDNESS WAS NEVER INDEPENDENT OF THE THICKNESS -- it was tuned once,
+// at one thickness, and reads as a constant. Scaling it with the thickness is
+// what `bar-fat-proud` tests: 46 mm thick with the cyan 18 mm proud, the same
+// ratio the shipped star has at 16 and 6.
+constexpr int32_t kStarFatThinMm = 46;
+constexpr int32_t kStarFatProudMm = 18;
+
+// ---- AND THE ONE THE EVIDENCE ACTUALLY POINTS AT -------------------------
+//
+// make_star already carries the right idea, in a warning written after it cost
+// a render:
+//
+//   "⚠ THE RIM IS A DILATION IN THE PICTURE PLANE ONLY -- it must NOT thicken
+//    the white in DEPTH. Authored the other way first and it cost a render to
+//    find: a white slab 2*(thin+rim) deep centred on the pupil swallowed the
+//    thinner cyan whole, so the star drew as a white splinter with no cyan
+//    anywhere, from every angle."
+//
+// The fix taken was to stop the white being thicker: both stars now use the
+// same `thin`, and the cyan is given kStarCyanProudMm = 6 mm of stand-off.
+// That is HALF of the lesson. Equal thickness still means that when you look
+// along the star's own depth -- which is the near-eye case -- the white
+// presents a side wall exactly as tall as the cyan's, and it is dilated 16 mm
+// wider in every picture-plane direction, so it wins the silhouette. Six
+// millimetres of proudness decides which is in FRONT; it does not decide which
+// is BIGGER on screen, and at obliquity bigger is what wins.
+//
+// The sheet draws a CYAN STAR WITH A WHITE OUTLINE. An outline is thin. So the
+// white should be THINNER IN DEPTH THAN THE CYAN, not merely not-thicker --
+// then the cyan is a solid form from every angle and the white stays what it
+// is drawn as, a rim, from every angle too. That is `bar-cyan-fat`, and it is
+// the only candidate here that makes the near-eye star MORE cyan rather than
+// less.
+constexpr int32_t kStarCyanFatMm = 46;    // the cyan becomes a solid form
+constexpr int32_t kStarWhiteSlimMm = 12;  // the white stays an outline
+constexpr int32_t kStarCyanFatProudMm = 20;
 
 // The ladder the owner asked for: SMALL UPWARD, not down from the ceiling.
 constexpr EyeVariant kEyeVariants[] = {
     {"control-shipped",
      "CONTROL: shipped eye verbatim -- no travel, star concentric at 950 pm",
-     0, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
+     0, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
 
     {"travel-06", "TRAVEL: 6 deg of arc -- the smallest move that is a move",
-     6, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
-    {"travel-14", "TRAVEL: 14 deg of arc", 14, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
+     6, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
+    {"travel-14", "TRAVEL: 14 deg of arc", 14, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
     {"travel-22", "TRAVEL: 22 deg of arc -- half the owner's ceiling",
-     22, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
-    {"travel-32", "TRAVEL: 32 deg of arc", 32, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
+     22, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
+    {"travel-32", "TRAVEL: 32 deg of arc", 32, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
     {"travel-45", "TRAVEL: 45 deg -- the owner's ABSOLUTE MAXIMUM, for the record",
-     45, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
+     45, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
 
     {"travel-22-breathe",
      "TRAVEL + the eye opts into the deform, so it rides the pulsation",
-     22, kStarScalePm, 0, true, false, false, false, kStarThinMm, 0},
+     22, kStarScalePm, 0, true, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
     {"travel-45-breathe",
      "TRAVEL at the ceiling + the eye rides the pulsation",
-     45, kStarScalePm, 0, true, false, false, false, kStarThinMm, 0},
+     45, kStarScalePm, 0, true, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
 
     {"star-high", "STAR: 12.1 -- high in the lens as the sheet draws it",
-     0, kStarScalePm, kStarHighOffsetYMm, false, false, false, false, kStarThinMm, 0},
+     0, kStarScalePm, kStarHighOffsetYMm, false, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
     {"star-big", "STAR: 12.2 -- grown to drawn-flush (1000 pm)",
-     0, 1000, 0, false, false, false, false, kStarThinMm, 0},
+     0, 1000, 0, false, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
     {"star-high-big", "STAR: 12.1 + 12.2 together -- high AND drawn-flush",
-     0, 1000, kStarHighOffsetYMm, false, false, false, false, kStarThinMm, 0},
+     0, 1000, kStarHighOffsetYMm, false, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
     {"star-high-bigger", "STAR: high, and PAST drawn-flush at 1100 pm",
-     0, 1100, kStarHighOffsetYMm, false, false, false, false, kStarThinMm, 0},
+     0, 1100, kStarHighOffsetYMm, false, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
 
     {"blink-ride-breath",
      "BLINK: the lens squashes on the breath's own signal (one channel, honest)",
-     0, kStarScalePm, 0, true, true, false, false, kStarThinMm, 0},
+     0, kStarScalePm, 0, true, true, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
     {"blink-strength-split",
      "BLINK: the sample carries the blink; the body's strength is cut to 28/255",
-     0, kStarScalePm, 0, true, true, true, false, kStarThinMm, 0},
+     0, kStarScalePm, 0, true, true, true, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
 
     {"composed-extreme",
      "GATE: travel 45 + roll + gaze + twinkle + breath, all on one frame",
-     45, 1000, kStarHighOffsetYMm, true, true, false, true, kStarThinMm, 0},
+     45, 1000, kStarHighOffsetYMm, true, true, false, true, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
     {"composed-recommended",
      "GATE: the ranked recommendation, composed the same way",
-     14, 1000, kStarHighOffsetYMm, true, false, false, true, kStarThinMm, 0},
+     14, 1000, kStarHighOffsetYMm, true, false, false, true, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
 
     // ---- THE NEAR-EYE BAR, three answers and one of them is the control ----
     {"bar-control",
      "BAR: the shipped flat star, so the plate has something to be beside",
-     0, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
+     0, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0, kStarCyanProudMm, kStarThinMm},
     {"bar-thicker",
      "BAR: the naive fix -- kStarThinMm 16 -> 46. Expected to reproduce pass "
      "6's white slab swallowing the cyan; on the record either way",
-     0, kStarScalePm, 0, false, false, false, false, 46, 0},
+     0, kStarScalePm, 0, false, false, false, false, 46, 0, kStarCyanProudMm, kStarThinMm},
     {"bar-domed",
      "BAR: the star DOMES to wrap the lens instead of floating flat on it",
-     0, kStarScalePm, 0, false, false, false, false, kStarThinMm, kStarDomeDropMm},
+     0, kStarScalePm, 0, false, false, false, false, kStarThinMm, kStarDomeDropMm, kStarCyanProudMm, kStarThinMm},
     {"bar-domed-high-big",
      "BAR: domed + 12.1 high + 12.2 drawn-flush -- the three eye changes together",
      0, 1000, kStarHighOffsetYMm, false, false, false, false,
-     kStarThinMm, kStarDomeDropMm},
+     kStarThinMm, kStarDomeDropMm, kStarCyanProudMm, kStarThinMm},
+    {"bar-fat-proud",
+     "BAR: thick like bar-thicker, but the cyan's proudness scaled WITH the "
+     "thickness (46/18, the shipped 16/6 ratio) so the white cannot swallow it",
+     0, kStarScalePm, 0, false, false, false, false,
+     kStarFatThinMm, 0, kStarFatProudMm, kStarFatThinMm},
+    {"bar-fat-proud-high-big",
+     "BAR: fat+proud, plus 12.1 high and 12.2 drawn-flush -- all four eye "
+     "changes on one creature, which is the only way a collision shows",
+     0, 1000, kStarHighOffsetYMm, false, false, false, false,
+     kStarFatThinMm, 0, kStarFatProudMm, kStarFatThinMm},
+    {"bar-fat-proud-travel14",
+     "BAR: fat+proud at the travel angle the plates rank first, breathing",
+     14, 1000, kStarHighOffsetYMm, true, false, false, false,
+     kStarFatThinMm, 0, kStarFatProudMm, kStarFatThinMm},
+    {"bar-cyan-fat",
+     "BAR: the CYAN thickens to 46 and the WHITE SLIMS to 12 -- the sheet's "
+     "own reading, a solid cyan star with a thin white outline, in 3D",
+     0, kStarScalePm, 0, false, false, false, false,
+     kStarCyanFatMm, 0, kStarCyanFatProudMm, kStarWhiteSlimMm},
+    {"bar-cyan-fat-high-big",
+     "BAR: cyan-fat + 12.1 high + 12.2 drawn-flush -- every eye change at once",
+     0, 1000, kStarHighOffsetYMm, false, false, false, false,
+     kStarCyanFatMm, 0, kStarCyanFatProudMm, kStarWhiteSlimMm},
+    {"bar-cyan-fat-travel14",
+     "BAR: cyan-fat at 14 deg of travel, breathing -- the lane's recommendation",
+     14, 1000, kStarHighOffsetYMm, true, false, false, false,
+     kStarCyanFatMm, 0, kStarCyanFatProudMm, kStarWhiteSlimMm},
     {"bar-domed-travel14",
      "BAR: domed, at the travel angle the plates rank first",
      14, 1000, kStarHighOffsetYMm, true, false, false, false,
-     kStarThinMm, kStarDomeDropMm},
+     kStarThinMm, kStarDomeDropMm, kStarCyanProudMm, kStarThinMm},
 };
 constexpr int kEyeVariantCount =
     static_cast<int>(sizeof(kEyeVariants) / sizeof(kEyeVariants[0]));
