@@ -187,6 +187,19 @@ targets:
       max_registers: 500   # S3.3
       max_dsp: 2           # S3.4 tripwire, unchanged
 
+  # GEOM.MEM.ADAPTER -- two logical geometry requesters over the one permitted
+  # ENGINE1 client (owner recovery brief section 12). Characterised on its own
+  # because the two-bank ASSETFETCH plan rests on it, and because a block whose
+  # whole job is ownership bookkeeping should be cheap: if sharing one client
+  # costs more than a second guard would, that is a finding and not a detail.
+  #
+  # NO RULES YET, deliberately. The brief gives this block no budget, and a
+  # threshold invented beside the first fit that governs it is the exact failure
+  # CLAUDE.md records. Measure first, gate second.
+  - top: zhao_geom_mem_adapter
+    sources:
+      - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
+
   - top: zhao_texture_mosaic
     sources:
       - fpga/rtl/texture/zhao_texture_mod255.sv

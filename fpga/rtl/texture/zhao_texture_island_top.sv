@@ -201,6 +201,9 @@ module zhao_texture_island_top #(
     // boundary (audit R6). Zero on a run means the ordering guarantee was
     // never TESTED, not that it holds.
     output var logic [31:0] cnt_reorder_held_o,
+    // High-water mark of live owner credits. A run whose peak never approached
+    // OWNER_DEPTH has not tested the ceiling, whatever else it proved.
+    output var logic [31:0] cnt_live_peak_o,
 
     // ======================= one summary counter per block ==================
     // Deliberately NOT every counter every block owns. Each output is a pin,
@@ -274,16 +277,71 @@ module zhao_texture_island_top #(
   // matched to its request. Eight bits is RCP24's TOKW.
   logic [7:0] tok_r;
 
+  // ==========================================================================
+  // THE END-TO-END OWNER CREDIT (owner recovery brief, prerequisite 1)
+  //
+  // MY OVERFLOW PROOF WAS WRONG, and the brief's counterexample is exact:
+  //
+  //     hold the sink not-ready; admit and complete sequences 0..63; entry 0
+  //     still holds sequence 0; INTERNAL CONTEXTS HAVE BEEN RELEASED AND ADMIT
+  //     MORE WORK; sequence 64 completes and overwrites entry 0.
+  //
+  // The reorder buffer's comment claimed it "cannot overflow: FRAGROB admits at
+  // most FCTXN fragments, so at most FCTXN sequence numbers are live". FRAGROB
+  // releases a context at ITS retirement, which is upstream of MATERIAL.COMBINE
+  // and upstream of this buffer. What is parked at the output is therefore NOT
+  // bounded by what FRAGROB is holding, and a 64-fragment test cannot reach the
+  // wrap. A false "cannot overflow" is worse than the bug: it tells the next
+  // reader not to check.
+  //
+  // The credit is the fix the brief specifies. Reserve one owner slot at
+  // ADMISSION; return it ONLY at final external output acceptance -- not at
+  // RCP or PERSPUV completion, not at FRAGROB retirement, not at COMBINE
+  // completion, and not on transfer into any output stage.
+  //
+  // BOTH SIDES ARE GATED. `frag_ready_o` alone is not enough: RCP's own
+  // `v_valid_i` must be gated too, or RCP accepts a job the caller was told did
+  // not handshake -- a phantom that owns no slot and retires into somebody
+  // else's.
+  //
+  // NO SAME-CYCLE BYPASS of the full condition using the outgoing result. A
+  // conservative one-cycle bubble at full-to-free avoids a cyclic ready path
+  // and a same-slot clear/write hazard; the brief says to optimise it only
+  // after the invariant is proven, and it is right.
+  localparam int unsigned OWNER_DEPTH = FCTXN;
+  logic [FCTXW:0] live_r;                      // 0 .. OWNER_DEPTH inclusive
+  wire credit_available = (live_r < OWNER_DEPTH[FCTXW:0]);
+
+  wire admit_c = frag_valid_i && frag_ready_o;
+  wire emit_c  = out_valid_o && out_ready_i;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) live_r <= '0;
+    // One combined case per clock. Written as a single update because admit and
+    // emit can land together and two separate statements would race.
+    else if (admit_c && !emit_c) live_r <= live_r + 1'b1;
+    else if (emit_c && !admit_c) live_r <= live_r - 1'b1;
+  end
+
+  // OBSERVABILITY: the high-water mark, so a run that never approached the
+  // ceiling cannot be read as evidence that the ceiling works.
+  logic [FCTXW:0] live_peak_r;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) live_peak_r <= '0;
+    else if (live_r > live_peak_r) live_peak_r <= live_r;
+  end
+  assign cnt_live_peak_o = {{(32-FCTXW-1){1'b0}}, live_peak_r};
+
   zhao_raster_rcp24_svc #(.NCTX(8), .TOKW(8)) u_rcp (
       .clk(clk), .rst_n(rst_n),
-      .v_valid_i(frag_valid_i), .v_ready_o(rcp_v_ready),
+      .v_valid_i(frag_valid_i && credit_available), .v_ready_o(rcp_v_ready),
       .d_i(frag_depth_i), .v_tok_i(tok_r),
       .r_valid_o(rcp_r_valid), .r_ready_i(rcp_r_ready),
       .r_o(rcp_r), .k_o(rcp_k), .d_zero_o(rcp_dzero), .r_tok_o(rcp_tok),
       .accepted_o(rcp_accepted), .completed_o(cnt_rcp_completed_o),
       .mul_busy_o(rcp_mul_busy), .occupancy_o(rcp_occ));
 
-  assign frag_ready_o = rcp_v_ready;
+  assign frag_ready_o = rcp_v_ready && credit_available;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) tok_r <= 8'd0;
@@ -1107,11 +1165,19 @@ module zhao_texture_island_top #(
   // A REORDER BUFFER, NOT A CAM AND NOT A STALL. The sequence stamped at
   // admission indexes an FCTXN-entry table directly; completed fragments are
   // written wherever they land and the head pointer walks forward as entries
-  // become present. It cannot overflow: FRAGROB admits at most FCTXN
-  // fragments, so at most FCTXN sequence numbers are live and each has its own
-  // slot. The combiner's `o_ready_i` is therefore tied high -- a completing
-  // fragment always has somewhere to go, and back-pressure from downstream
-  // parks in the buffer instead of stalling the pipe.
+  // become present.
+  //
+  // IT CANNOT OVERFLOW BECAUSE OF THE OWNER CREDIT ABOVE, and for no other
+  // reason. This comment used to argue that FRAGROB's capacity bounded it. That
+  // was wrong -- FRAGROB releases a context upstream of here, so admissions are
+  // not bounded by what is parked at the output -- and the owner's recovery
+  // brief supplied the counterexample. The credit is what makes the sequence's
+  // low FCTXW bits identify a live fragment uniquely; without it they identify
+  // a fragment modulo 64, which is not the same thing.
+  //
+  // The combiner's `o_ready_i` is tied high on that basis: a completing
+  // fragment always has a reserved slot, and downstream back-pressure parks in
+  // the buffer instead of stalling the pipe.
   logic        comb_o_valid, comb_o_ready;
   logic [23:0] comb_o_rgb;
   logic [7:0]  comb_o_a;

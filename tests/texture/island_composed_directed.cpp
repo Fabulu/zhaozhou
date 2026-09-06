@@ -867,6 +867,129 @@ int main(int argc, char** argv) {
         "unconditional-consumer assumption still holds",
         0, static_cast<int>(d.err_rsp_dropped_o));
 
+  // ======================= THE OWNER CREDIT, UNDER A STALLED SINK ==========
+  // Owner recovery brief, prerequisite 1. My reorder buffer claimed it could
+  // not overflow "because FRAGROB admits at most FCTXN fragments". The brief's
+  // counterexample is exact and the claim was false:
+  //
+  //     hold the sink not-ready; admit and complete sequences 0..63; entry 0
+  //     still holds sequence 0; INTERNAL CONTEXTS HAVE BEEN RELEASED AND ADMIT
+  //     MORE WORK; sequence 64 completes and overwrites entry 0.
+  //
+  // FRAGROB releases a context at ITS retirement, upstream of the buffer, so
+  // what is parked at the output was never bounded by FRAGROB's capacity.
+  //
+  // A 64-FRAGMENT TEST CANNOT REACH THE WRAP, which is why every check above
+  // passes either way and this phase exists. It runs LAST, after all cumulative
+  // assertions, because it deliberately admits far more work than they account
+  // for -- the lesson from putting two abandoning scenarios mid-file in
+  // assetfetch_rtl_directed.
+  {
+    const int kWant = 200;              // far more than OWNER_DEPTH = 64
+    int p2_submitted = 0, p2_retired = 0;
+    std::vector<uint16_t> p2_tags;
+    uint32_t accepted_while_stalled = 0;
+
+    // The sink is SHUT for the first stretch, then opens. Long enough that a
+    // machine without the credit would admit well past 64 and wrap.
+    const int kStallUntil = 4000;
+
+    for (int cyc = 0; cyc < 400000; ++cyc) {
+      const bool sink_open = (cyc >= kStallUntil);
+      d.out_ready_i = sink_open ? 1 : 0;
+
+      // Submit as fast as the island will take it -- no gaps. Backpressure is
+      // the property under test, so the test must not supply its own.
+      d.frag_valid_i = (p2_submitted < kWant) ? 1 : 0;
+      d.frag_depth_i = 0x010000u + static_cast<uint32_t>(p2_submitted * 37);
+      d.frag_u_over_w_i = 0x00020000u + static_cast<uint32_t>(p2_submitted * 131);
+      d.frag_v_over_w_i = 0x00030000u + static_cast<uint32_t>(p2_submitted * 197);
+      d.frag_sample_count_i = 3;
+      d.frag_binding_i = 1;
+      d.frag_lod_i = 0;
+      d.frag_recipe_i = static_cast<uint8_t>(1 + (p2_submitted % 3));
+      d.frag_weight_i = 128;
+      d.frag_aux_i = 0;
+      d.frag_class_i = (p2_submitted % 2) ? 2 : 0;
+      d.frag_base_rgb_i = 0x204060u;
+      d.frag_base_a_i = 255;
+      d.frag_pal_slot_i = 0;
+      d.frag_pal_gen_i = 1;
+      d.frag_ctx_i = 0x2000u + static_cast<uint32_t>(p2_submitted);
+      d.bind_base_i = 0x0010'0000u;
+      d.bind_mode_i = 0x6600u;
+
+      // the fill responder, unchanged
+      d.fill_data_valid_i = 0;
+      if (d.fill_valid_o && d.fill_ready_i && mem.beats_left == 0 && mem.delay == 0) {
+        mem.delay = 2;  // same two-cycle memory as phase 1
+      } else if (mem.delay > 0) {
+        if (--mem.delay == 0) mem.beats_left = FillModel::kBeats;
+      } else if (mem.beats_left > 0) {
+        d.fill_data_valid_i = 1;
+        d.fill_data_i = 0x8586u;
+        --mem.beats_left;
+        ++mem.served;
+      }
+      d.sheet_rvalid_i = d.sheet_valid_o;
+      d.sheet_tag_i = 0x22;
+      d.sheet_str_i = 0x88;
+      d.sheet_rtok_i = d.sheet_tok_o;
+
+      d.eval();
+      const bool accepted = d.frag_valid_i && d.frag_ready_o;
+      if (accepted && !sink_open) ++accepted_while_stalled;
+      if (d.out_valid_o && d.out_ready_i) {
+        p2_tags.push_back(d.out_tag_o);
+        ++p2_retired;
+      }
+      tick(d);
+      if (accepted) ++p2_submitted;
+      if (p2_submitted >= kWant && p2_retired >= p2_submitted) break;
+    }
+
+    std::printf(
+        "  credit phase: submitted %d, retired %d, accepted while the sink was "
+        "SHUT %u, live peak %u of 64\n",
+        p2_submitted, p2_retired, accepted_while_stalled, d.cnt_live_peak_o);
+
+    // THE CEILING ENGAGED. With the sink shut, admissions must stop at
+    // OWNER_DEPTH and not one more. Without the credit this number keeps
+    // climbing, which is the wrap.
+    check(accepted_while_stalled == 64,
+          "with the sink held SHUT, the island admitted exactly 64 fragments "
+          "and then stopped -- the owner credit is what makes the reorder "
+          "buffer's index identify a live fragment rather than a fragment "
+          "modulo 64",
+          64, static_cast<long>(accepted_while_stalled));
+
+    check(d.cnt_live_peak_o <= 64,
+          "and the live count never exceeded OWNER_DEPTH", 64,
+          static_cast<long>(d.cnt_live_peak_o));
+    check(d.cnt_live_peak_o == 64,
+          "reaching it exactly, so the ceiling was TESTED rather than merely "
+          "not breached",
+          64, static_cast<long>(d.cnt_live_peak_o));
+
+    check(p2_retired == p2_submitted,
+          "every admitted fragment came back out: nothing was lost to a wrap",
+          p2_submitted, p2_retired);
+    check(p2_submitted == kWant, "and all 200 were admitted once the sink opened",
+          kWant, p2_submitted);
+
+    // ORDER AND IDENTITY ACROSS THE WRAP. 200 fragments through a 64-entry
+    // buffer means the sequence wraps three times; each must come out once, in
+    // submission order.
+    int p2_bad = 0;
+    for (std::size_t i = 0; i < p2_tags.size(); ++i)
+      if (p2_tags[i] != static_cast<uint16_t>(0x2000u + i)) ++p2_bad;
+    check(p2_bad == 0,
+          "and all 200 retired in STRICT submission order across three wraps "
+          "of the 64-entry buffer -- the sequence's low bits identify a live "
+          "fragment because the credit bounds how many are live",
+          0, p2_bad);
+  }
+
   if (g_failed) {
     std::printf("[island_composed_directed] %d/%d checks FAILED\n", g_failed, g_checks);
     return 1;
