@@ -1677,3 +1677,52 @@ waves, a live one), naming the first link in each chain that is not built, and
 checking specifically whether anything has no route except through the deferred
 block. Rotated sheets are in scope too, since `ComposedLattice` states an
 axis-aligned precondition that would forbid them.
+
+## 2026-09-06 ~23:20 — THE DEFORMATION QUESTION IS ANSWERED, AND IT MOVES THE ROADMAP
+
+Owner: *"if geom.warp isn't needed, how are we going to do terrain deformation
+and effects?"* Two effects traced through the CODE, not the ledger.
+
+**GEOM.WARP has zero terrain reliance — counted, not assumed.** Every reference
+in the tree is its own deferred feeder edges, GEOM.PROJECT (which takes WCACHE
+as the built alternative), one comment, and the DEFERRED rows. `zref::GeomWarp`
+does not exist in code at all. Reviving it would supply not one missing link.
+The comfortable answer going in was "it is all already covered", so this was
+checked rather than asserted — and it happens to be true.
+
+**THE REAL GAP IS THE BAKE VERB, and it is upstream of everything.** There is
+no bake command on the wire: `spec/commands.zidl` carries only
+`TerrainField 0x0200` and `SurfaceStamp 0x0210` (appearance, no depth field),
+and `zref::terrain::bake_dig` has **exactly one caller in the entire tree** —
+`tools/reel/zhao_reel.cpp:2726`, the reel harness. Not even the reference
+console can punch a permanent hole from a command stream. Below TERRAIN.BAKE the
+chain is built and verified; the first broken link is the very first one.
+
+**Waves:** reference path complete end to end with a committed 27-instruction
+`wave_pool.zprog`. Hardware dies at `zhao_cmd_scheduler.sv:357-378`, which
+routes **four opcodes and zero terrain**.
+
+**Rotated sheets are UNREPRESENTABLE by construction**, not merely
+unimplemented: `ComposedLattice` stores wx per column and wz per row. The
+docket's own resolution is to rotate the ISLAND, which depends on GEOM.LOOM —
+never on GEOM.WARP.
+
+**Honest status: the machine cannot draw ANY terrain from a command stream,
+deformed or not.** Steps 1–6 landed today; step 8's composed shell is absent,
+T5's `SubmitTerrainSet` is in neither the zidl nor the generated ABI, and a
+composed draw would be unlit.
+
+### Build order that follows, and step 8 is started
+
+1. **Step 8, the composed shell path** — both effects die at the same seam, all
+   its rulings exist, and G1-D's lesson is that the first composed test of
+   verified blocks finds what unit suites cannot. **Started.**
+2. The Earth-slice Phase-4 gate (waves).
+3. The bake verb (wounds) — needs ONE Class-C owner ruling: command ABI,
+   stencil handle, patch budget. Architected in the trace report as
+   `TerrainBake 0x0240` speaking `bake_dig`'s exact argument list.
+4. TERRAIN.SHADE (light).
+
+No rearchitecture needed. Also owed and recorded: a CLUT4 phase for
+`island_composed_directed` — that fixture drives CLUT8, RGB565, ARGB1555 and
+ARGB4444 but never CLUT4, so this evening's nibble fix has no coverage.
