@@ -6,15 +6,39 @@ Break it on purpose, watch the alarm go off, put it back."
 
 Each mutation below is a single exact string replacement in one RTL file. The
 script applies it, rebuilds ONLY the one test target, runs it, records the exact
-failure text, and restores the file byte-for-byte from a saved copy -- restored
-from the saved bytes rather than by reversing the replacement, so a mutation that
-matched twice cannot leave residue behind.
+failure text, and restores the file byte-for-byte -- restored from the ORIGINAL
+BYTES rather than by reversing the replacement, so a mutation that matched twice
+cannot leave residue behind.
 
-Usage:  python fire_tests.py [only_id]
+WHY THE RESTORE IS PARANOID. 2026-09-06: the machine's disk filled to zero DURING
+a mutation run. `shutil.copyfile(path, saved)` had already produced a ZERO-BYTE
+backup, and had the failure landed a moment later -- after the mutation write,
+before the restore -- this script would have left a deliberately BROKEN RTL file
+in the tree with an empty backup beside it, and the next reader would have found
+sabotaged source with no way back. It was survived by luck of statement ordering,
+not by design, and the only reason that is a fact rather than a hope is that the
+fit's per-file sha256 manifest could be checked afterwards.
+
+So: the original bytes are held IN MEMORY (a full disk cannot truncate those),
+the on-disk backup is written and SIZE-CHECKED before any mutation is applied,
+and after restoring, the file is re-hashed and compared to the original digest.
+The backup is deleted only once that comparison passes. A failed restore raises
+instead of continuing to the next mutation, because the alternative is mutating
+a second file while the first is still broken.
+
+THIS FILE IS NOT ALLOWED TO LIVE IN A RUN FOLDER. It was written in one, which
+CLAUDE.md names outright: "A run folder is the wrong home for anything durable --
+every pass creates a new one, so a file left in the current run is orphaned by
+the next", and the ground-contact rule adds "a probe that does this was written
+once and thrown away, so its numbers are unreproducible -- commit the probe".
+The fire-test evidence for the V3 tile is only reproducible while this script and
+its rebuild script sit beside the RTL they mutate.
+
+Usage:  python tools/rtl/fire_tests_rcp24_v3.py [only_id]
 """
-import subprocess, sys, os, json, shutil, io
+import subprocess, sys, os, json, shutil, io, hashlib
 
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 MUL = 'fpga/rtl/raster/zhao_raster_rcp24_mul.sv'
 V3 = 'fpga/rtl/raster/zhao_raster_rcp24_v3.sv'
 
@@ -78,7 +102,7 @@ def run(cmd, cwd=REPO):
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BUILD = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%s"' % os.path.join(HERE, 'rebuild.ps1')
+BUILD = 'powershell -NoProfile -ExecutionPolicy Bypass -File "%s"' % os.path.join(HERE, 'rebuild_rcp24_v3.ps1')
 EXE = os.path.join(REPO, 'build-rcp24v3-quick', 'test_rcp24v3.exe')
 
 
@@ -90,7 +114,22 @@ def main():
             continue
         path = os.path.join(REPO, relpath)
         saved = path + '.firebak'
-        shutil.copyfile(path, saved)
+        # The bytes that must come back, held where a full disk cannot reach.
+        original = io.open(path, 'rb').read()
+        original_sha = hashlib.sha256(original).hexdigest()
+        with io.open(saved, 'wb') as fh:
+            fh.write(original)
+            fh.flush()
+            os.fsync(fh.fileno())
+        # VERIFY THE BACKUP BEFORE BREAKING ANYTHING. A short write here means
+        # the disk is full, and the correct response is to stop while the tree
+        # is still intact -- not to mutate and hope the restore has room.
+        if os.path.getsize(saved) != len(original):
+            os.remove(saved)
+            raise SystemExit(
+                'fire tests: backup of %s is %d bytes, expected %d -- refusing to '
+                'mutate. Free disk space and re-run.'
+                % (relpath, os.path.getsize(saved), len(original)))
         try:
             s = io.open(path, encoding='utf-8').read()
             if s.count(old) != 1:
@@ -112,7 +151,19 @@ def main():
                             'exit': rc, 'failures': fails[:12],
                             'failure_count': len(fails)})
         finally:
-            shutil.copyfile(saved, path)
+            # Restore from memory, then PROVE it landed. Deleting the backup
+            # before the hash matches is how a broken file loses its last copy.
+            with io.open(path, 'wb') as fh:
+                fh.write(original)
+                fh.flush()
+                os.fsync(fh.fileno())
+            back = hashlib.sha256(io.open(path, 'rb').read()).hexdigest()
+            if back != original_sha:
+                raise SystemExit(
+                    'fire tests: RESTORE FAILED for %s (sha %s, expected %s). The '
+                    'backup is kept at %s -- restore it by hand before doing '
+                    'anything else with this tree.'
+                    % (relpath, back[:12], original_sha[:12], saved))
             os.remove(saved)
     # Restore the binary to the unmutated source so a later run is not stale.
     run(BUILD)

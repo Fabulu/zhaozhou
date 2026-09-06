@@ -17,19 +17,27 @@
 # as six results. Only the harness's "a mutant that does not compile is NOT a
 # caught mutant" rule kept them out of the evidence.
 $ErrorActionPreference = 'Continue'
-Set-Location C:\programmieren\zencrifice\zhaozhou
+# PATHS ARE DERIVED, NOT TYPED. This script used to hardcode
+# C:\programmieren\zencrifice\zhaozhou in five places, which was fine while it
+# lived in a run folder that nobody would ever move. It is a committed tool now,
+# and a committed tool with one machine's absolute path in it is a tool that
+# works exactly once. $PSScriptRoot is tools/rtl, so the repo root is two up.
+$Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$RepoFwd = $Repo -replace '\\', '/'
+Set-Location $Repo
 . .\tools\env\zhao-env.ps1
 $env:PATH = 'C:\Programmieren\dsstuff\mingw64\bin;' + $env:PATH
-$obj = 'C:\programmieren\zencrifice\zhaozhou\build-rcp24v3-quick'
-& 'C:\programmieren\zencrifice\.tools\oss-cad-suite\bin\verilator_bin.exe' --cc --exe --build -j 4 `
+$obj = Join-Path $Repo 'build-rcp24v3-quick'
+$verilator = (Resolve-Path (Join-Path $Repo '..\.tools\oss-cad-suite\bin\verilator_bin.exe')).Path
+& $verilator --cc --exe --build -j 4 `
   --prefix Vtb_rcp24_v3_pair --top-module tb_rcp24_v3_pair -Mdir $obj `
-  -CFLAGS "-O2 -std=c++17 -IC:/programmieren/zencrifice/zhaozhou/tests/harness -IC:/programmieren/zencrifice/zhaozhou/reference/include" `
+  -CFLAGS "-O2 -std=c++17 -I$RepoFwd/tests/harness -I$RepoFwd/reference/include" `
   -o test_rcp24v3 `
   tests/raster/tb_rcp24_v3_pair.sv `
   fpga/rtl/raster/zhao_raster_rcp24.sv fpga/rtl/raster/zhao_raster_rcp24_v3.sv `
   fpga/rtl/raster/zhao_raster_rcp24_mul.sv fpga/rtl/raster/zhao_raster_ticketq.sv `
   fpga/rtl/field/zhao_field_rcp24_rom.sv `
-  C:/programmieren/zencrifice/zhaozhou/tests/raster/raster_rcp24_v3_directed.cpp `
-  C:/programmieren/zencrifice/zhaozhou/tests/harness/zhao_sim.cpp | Out-Null
+  "$RepoFwd/tests/raster/raster_rcp24_v3_directed.cpp" `
+  "$RepoFwd/tests/harness/zhao_sim.cpp" | Out-Null
 $rc = $LASTEXITCODE
 exit $rc
