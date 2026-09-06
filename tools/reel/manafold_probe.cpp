@@ -26,6 +26,7 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <cstring>  // std::strcmp -- the mist ROW walk names its control
 #include <vector>
 
 #include "zref/zref.hpp"
@@ -285,19 +286,69 @@ int main() {
     // actually travels from its bind position. A flat zero here means the bone
     // is dead again and the comments have gone false again -- so a flat zero
     // FAILS, loudly, instead of passing quietly.
+    //
+    // ---- PASS 11, 0.2: THE GATE NOW CALLS loop_pose ------------------------
+    // The pass-10 version ROTATED THE BIND ANCHOR ITSELF -- it re-implemented
+    // manafold_clips.h's anchor line instead of calling the function that owns
+    // it. So scratch-reverting loop_pose to the pass-9 bind constants left this
+    // gate's print IDENTICAL and rc 0; QA proved exactly that. The FIX was real
+    // (131 of 400 frames move when reverted); only its GATE was a copy. Third
+    // instance of "the selftest proves a copy" in two passes -- see
+    // 10-GATE-CHECKLIST item 31.
+    //
+    // Rebuilt on the c2proto pattern (the best instrument of pass 10) and made
+    // STRICTLY STRONGER than "measure the anchor": it measures the anchor's
+    // CAUSAL INFLUENCE ON THE SOLVER'S OWN OUTPUT. Per clip frame, twice,
+    // through the shipped functions both times:
+    //
+    //   live : g.reset(); antenna_knead(...);                     loop_pose(...)
+    //   mute : g.reset(); antenna_knead(...); kBLoopBase2 = id;   loop_pose(...)
+    //
+    // and compares the RETURN ARM'S TIP -- the point loop_pose aims at the
+    // re-entry anchor. If loop_pose honours the POSED anchor the two tips
+    // separate. If it reads bind constants (the pass-9 fault) the two rigs are
+    // bit-identical, the distance is 0, and the gate FAILS. No anchor
+    // arithmetic is re-derived here, so there is no copy left that could pass.
     {
+      // The tip of the return arm IN THE RIG loop_pose PRODUCED: walk the
+      // authored arcs exactly as the shipped closure walks them, then step
+      // arc[5] along D's FINAL posed frame -- which is the part loop_pose
+      // wrote. Every quaternion read here came out of a shipped function.
+      const auto return_tip = [](const u02::Rig& g, int64_t* tx, int64_t* ty,
+                                 int64_t* tz) {
+        int32_t px = u02::kLoopTubeXMm, py = u02::kLoopNeckExitYMm, pz = 0;
+        zc::quat16 Q = g.q[u02::kBJunctionF];
+        const zc::quat16 locs[5] = {g.q[u02::kBNeck], g.q[u02::kBHingeA],
+                                    g.q[u02::kBHingeB], g.q[u02::kBHingeC],
+                                    g.q[u02::kBHingeD]};
+        for (int i = 0; i < 6; ++i) {
+          int32_t dx, dy, dz;
+          u02::quat_rot_vec(Q, 0, u02::kLoopArcMm[i], 0, dx, dy, dz);
+          px += dx; py += dy; pz += dz;
+          if (i < 5) Q = u02::quat_mul(Q, locs[i]);
+        }
+        *tx = px; *ty = py; *tz = pz;
+      };
+
       int64_t worst_slide_mm = 0;
       uint16_t slide_slot = 0, slide_key = 0;
       int moving_clips = 0;
       for (const zc::Clip& clip : T.bank.clips) {
         int64_t clip_worst = 0;
+        const int keys = static_cast<int>(clip.frame_count);
         for (uint16_t f = 0; f < clip.frame_count; ++f) {
-          const zc::quat16 qb =
-              clip.quats[static_cast<size_t>(f) * u02::kBoneCount + u02::kBLoopBase2];
-          int32_t ax, ay, az;
-          u02::quat_rot_vec(qb, u02::kLoopReentryXMm, u02::kLoopReentryYMm, 0, ax, ay, az);
-          const int64_t dx = ax - u02::kLoopReentryXMm, dy = ay - u02::kLoopReentryYMm;
-          const int64_t d = u02::isqrt64(dx * dx + dy * dy + static_cast<int64_t>(az) * az);
+          u02::Rig live_rig;
+          live_rig.reset();
+          u02::antenna_knead(live_rig, clip.slot_id, keys, static_cast<int>(f));
+          u02::Rig mute_rig = live_rig;
+          mute_rig.q[u02::kBLoopBase2] = zc::quat16_identity();
+          u02::loop_pose(live_rig, 1000, 1000, 1000, 1000);
+          u02::loop_pose(mute_rig, 1000, 1000, 1000, 1000);
+          int64_t lx, ly, lz, mx, my, mz;
+          return_tip(live_rig, &lx, &ly, &lz);
+          return_tip(mute_rig, &mx, &my, &mz);
+          const int64_t dx = lx - mx, dy = ly - my, dz = lz - mz;
+          const int64_t d = u02::isqrt64(dx * dx + dy * dy + dz * dz);
           if (d > clip_worst) clip_worst = d;
           if (d > worst_slide_mm) {
             worst_slide_mm = d;
@@ -312,9 +363,9 @@ int main() {
       // is authored BY EYE against the render, never fitted to this number.
       constexpr int64_t kMinSlideMm = 2;
       const bool live = worst_slide_mm >= kMinSlideMm;
-      std::printf("u02-probe: C.1 posed re-entry anchor slides up to %lld mm from bind "
-                  "(slot %u key %u; %d of %zu clips move it) — %s "
-                  "(kBLoopBase2 must not be dead; floor %lld mm)\n",
+      std::printf("u02-probe: C.1 kBLoopBase2 moves loop_pose's aimed return tip "
+                  "up to %lld mm (slot %u key %u; %d of %zu clips move it) — %s "
+                  "(measured THROUGH loop_pose, never re-derived; floor %lld mm)\n",
                   static_cast<long long>(worst_slide_mm), slide_slot, slide_key,
                   moving_clips, T.bank.clips.size(), live ? "LIVE" : "DEAD",
                   static_cast<long long>(kMinSlideMm));
@@ -426,7 +477,9 @@ int main() {
         const int32_t bx = static_cast<int32_t>((h >> 8) % 800) - 400;
         h = h * 1664525u + 1013904223u;
         const int32_t by = static_cast<int32_t>((h >> 8) % 500) - 250;
-        const int fp = (f % 7 == 0) ? 0 : u02::kMistFollowPm;  // exercise 0 too
+        // the global, not the constant -- see 0.1 above; both sides of the
+        // equivalence use the same fp, so this stays a pure refactor check.
+        const int fp = (f % 7 == 0) ? 0 : u02::g_u02_mist.follow_pm;  // exercise 0 too
 
         int dxc = 0, dyc = 0;
         const bool shifted = u02::mist_follow_step(st, bx, by, fp, &dxc, &dyc);
@@ -466,10 +519,21 @@ int main() {
       if (mismatches != 0) rc = 1;
     }
 
+    // ---- PASS 11, 0.1: THE GATE READS WHAT THE RENDERER READS --------------
+    // Pass 10 shipped this gate driving u02::kMistFollowPm. THE REEL DOES NOT
+    // READ THAT CONSTANT. It assigns u02::g_u02_mist wholesale from
+    // kMistVariants[].cfg per subject (zhao_reel.cpp) and the compositor reads
+    // g_u02_mist.follow_pm. So the gate verified a same-named copy: QA pinned
+    // the SHIPPED field to the rejected 0 and this gate printed
+    // "the rejected setting is CAUGHT", rc 0. The gate now drives THE VERY
+    // GLOBAL THE RENDERER READS, so the known-bad input is fed by editing the
+    // SHIPPED code path (MistCfg's member initialiser) and not the gate's own
+    // parameter. 10-GATE-CHECKLIST item 31.
+    //
     // (a) A LINEAR TRAVERSE. The shipped follow must carry the plane with the
     // creature; the rejected follow_pm = 0 must leave it where it was.
     double traverse_live = 0, traverse_dead = 0;
-    run("traverse, shipped", u02::kMistFollowPm, 40, 25, 0, &traverse_live);
+    run("traverse, shipped", u02::g_u02_mist.follow_pm, 40, 25, 0, &traverse_live);
     run("traverse, follow=0", 0, 40, 25, 0, &traverse_dead);
 
     // (b) A PURE BOB at a THIRD OF A CELL PER FRAME -- the residual's whole
@@ -477,7 +541,7 @@ int main() {
     // forever, and a "creature-relative" plane that never shifts is a
     // screen-space plane with a better comment.
     double bob_live = 0;
-    run("sub-cell bob, shipped", u02::kMistFollowPm, 240, 0, 3, &bob_live);
+    run("sub-cell bob, shipped", u02::g_u02_mist.follow_pm, 240, 0, 3, &bob_live);
 
     constexpr double kMinTraverseCells = 4.0;   // it must plainly track
     constexpr double kMaxDeadCells     = 0.25;  // follow=0 must plainly not
@@ -490,6 +554,56 @@ int main() {
                 traverse_live, kMinTraverseCells, traverse_dead, kMaxDeadCells,
                 bob_live, kMinBobCells, ok ? "OK" : "FAIL");
     if (!ok) rc = 1;
+
+    // ---- PASS 11, 0.1 SECOND LEG: EVERY SHIPPING ROW, NOT JUST THE DEFAULT --
+    // The reel does not render "the default mist". It renders a ROW: every
+    // manafold-mist-<variant> subject assigns g_u02_mist = kMistVariants[i].cfg
+    // wholesale. A gate on the default alone therefore leaves every row an
+    // unguarded hole -- and pass 11 ADDS a row (`smidgen`, Direction 8 §1), so
+    // the hole was about to get wider on the exact pass that cuts the mist.
+    //
+    // Every row must be plainly attached. `parked` is the one exception and it
+    // is asserted EXACTLY zero rather than merely skipped, so the control stays
+    // legible as a deliberate exception instead of a hole with a name.
+    //
+    // kMinLiveFollowPm is a FLOOR, not a target. It is not fitted to the
+    // shipped 820: it is set well below it, high enough that the rejected 0 and
+    // any near-dead value fail, low enough that authoring the follow by eye
+    // stays the owner's knob (CLAUDE.md: never remove the owner's control).
+    {
+      constexpr int kMinLiveFollowPm = 400;
+      int live_rows = 0, bad_rows = 0, controls = 0;
+      for (int i = 0; i < u02::kMistVariantCount; ++i) {
+        const u02::MistVariant& v = u02::kMistVariants[i];
+        const bool is_control = std::strcmp(v.name, "parked") == 0;
+        const int fp = v.cfg.follow_pm;
+        bool ok;
+        if (is_control) {
+          ok = (fp == 0);
+          ++controls;
+        } else {
+          ok = (fp >= kMinLiveFollowPm);
+          if (ok) ++live_rows;
+        }
+        if (!ok) ++bad_rows;
+        std::printf("u02-probe: mist row [%-8s] follow_pm %4d — %s\n", v.name, fp,
+                    ok ? (is_control ? "CONTROL (exactly 0, by design)" : "attached")
+                       : (is_control ? "FAIL the control must be exactly 0"
+                                     : "FAIL detached: this row parks the haze in space"));
+      }
+      const bool rows_ok = (bad_rows == 0);
+      std::printf("u02-probe: MIST ROW ATTACHMENT GATE — %d shipping rows attached, "
+                  "%d control(s) at 0, %d bad (floor %d pm over %d rows) — %s\n",
+                  live_rows, controls, bad_rows, kMinLiveFollowPm,
+                  u02::kMistVariantCount, rows_ok ? "OK" : "FAIL");
+      if (!rows_ok) {
+        std::printf("u02-probe: FAIL a shipping mist row leaves the plane in screen "
+                    "space — the behaviour the owner rejected as \"stuff hanging in "
+                    "space\". Direction 8 protects the ATTACHMENT while the amount "
+                    "is cut; this is that protection.\n");
+        rc = 1;
+      }
+    }
 
     // PROVED FAILABLE, THROUGH THE REAL PATH, EVERY RUN. The gate is re-run
     // with follow_pm forced to 0 -- the configuration the owner rejected -- and
