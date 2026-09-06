@@ -459,3 +459,25 @@ is safe today; the GUARD is the dead thing.)
   byte-identically: 19 generations structurally, 444 distinct contents of 486.
 * 12 unreferenced orphan files on disk; posters are 1152x720 against 384x240
   clips (a deliberate 3x supersample).
+
+## Gate item 28 — BACKGROUND WORK, AND THE TRAP FIRED AGAIN HERE
+Checked with `Get-CimInstance Win32_Process`, not by assumption. Found:
+* `python tools/checkmedia.py .` (PID 16908) **STILL RUNNING**, spawning ffmpeg
+  children, an hour after the sub-investigation that launched it reported the
+  run had "exceeded my 10-min tool timeout and was killed". **The TOOL CALL
+  timed out; the PROCESS did not.** It was still decoding
+  `archive-2026-09-01-generation-eleven-attack.webm` when I found it.
+* Plus an orphaned `ffprobe` (PID 23796) from the same sweep.
+Killed the tree and re-verified: no `zhao-reel`, `manafold-probe`,
+`manafold-qa-p7`, `ffmpeg`, `ffprobe`, `wrangler` or `zixx` process alive.
+This is CLAUDE.md's "stopping an agent does not stop its background work",
+reproduced verbatim inside the QA run that was auditing for it. A tool-call
+timeout is not a kill, and an agent's own report that it "was killed" is not
+evidence that it was.
+
+## Lane hygiene
+`C:\programmieren\zencrifice\zhaozhou` and `...\Upheaval` were never touched:
+both still clean at their own HEADs (2f98562a / 2ad25aa). No other
+`manafold-*` lane was entered. NO creature constant was changed anywhere; the
+only files I added are the two QA experiment probes and this run folder.
+NOTHING WAS PUBLISHED.
