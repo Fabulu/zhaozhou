@@ -1,0 +1,242 @@
+// island_dir_rtl_directed.cpp -- the island directory RTL against its oracle.
+//
+// TERRAIN.ISLAND's reference model is `zref::island::Directory`, and this
+// compares the hardware against it rather than against a second transcription
+// of the outcome rules. The block's entire job is a MAPPING -- from a store's
+// hit or miss, plus two gates, to one of four answers -- so a test that checked
+// only "an answer came back" would check nothing at all.
+//
+// THE ANSWER THAT MATTERS IS OPEN SKY. An 8 km island at the canonical pitch is
+// 125 x 125 = 15,625 patches, of which about 793 are ground -- 5.1%. So 94.9%
+// of every honest query legitimately finds nothing, and the whole reason this
+// block exists is that the store underneath cannot know the difference between
+// "no ground here" and "something went wrong". Both would be a miss.
+#include <cstdint>
+#include <cstdio>
+#include <vector>
+
+#include "verilated.h"
+
+#include "Vtb_island_dir.h"
+
+#include "zhao_sim.hpp"
+#include "zref/zref_island.hpp"
+
+namespace isl = zref::island;
+
+namespace {
+
+int g_checks = 0;
+int g_fail = 0;
+
+void ck(bool ok, const char* what, long long want = 1, long long got = 0) {
+  ++g_checks;
+  if (!ok) {
+    ++g_fail;
+    std::printf("FAIL: %s (expected %lld, got %lld)\n", what, want, got);
+  }
+}
+
+constexpr int32_t kSide = 125;  // 8 km at 64 m patches
+
+// The outcome encoding must match zref::island::Outcome, and this is where a
+// silent divergence would hide: the RTL's localparams and the enum are two
+// declarations of one law.
+constexpr int kResident = 0, kOpenSky = 1, kOutOfExtent = 2, kBadPitch = 3;
+
+int oracle_code(isl::Outcome o) {
+  switch (o) {
+    case isl::Outcome::kResident: return kResident;
+    case isl::Outcome::kOpenSky: return kOpenSky;
+    case isl::Outcome::kOutOfExtent: return kOutOfExtent;
+    default: return kBadPitch;
+  }
+}
+
+struct Query {
+  int32_t ix, iz;
+  uint8_t tag;
+};
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  Verilated::commandArgs(argc, argv);
+  Vtb_island_dir d;
+
+  // ---- the island, and the same solid band the 8 km reference test uses ---
+  isl::Desc desc;
+  desc.island_id = 0x515Au;
+  desc.pitch_log2 = 1;  // canonical 2.0 m -> 64 m patch
+  desc.extent_ix = static_cast<uint16_t>(kSide);
+  desc.extent_iz = static_cast<uint16_t>(kSide);
+
+  isl::Directory dir(desc);
+  uint32_t h = 1;
+  for (int32_t iz = 40; iz < 85; ++iz)
+    for (int32_t ix = 0; ix < kSide; ++ix) dir.set(ix, iz, h++);
+
+  d.rst_n = 0;
+  d.q_valid = 0;
+  d.gw_en = 0;
+  d.a_ready = 1;
+  d.desc_extent_ix = static_cast<uint16_t>(kSide);
+  d.desc_extent_iz = static_cast<uint16_t>(kSide);
+  d.desc_pitch_log2 = 1;
+  for (int i = 0; i < 4; ++i) zhao::tick(d);
+  d.rst_n = 1;
+
+  // ---- load the modelled store with exactly the same ground ---------------
+  h = 1;
+  for (int32_t iz = 40; iz < 85; ++iz)
+    for (int32_t ix = 0; ix < kSide; ++ix) {
+      d.gw_en = 1;
+      d.gw_addr = static_cast<uint16_t>((iz << 7) | ix);
+      d.gw_handle = h++;
+      zhao::tick(d);
+    }
+  d.gw_en = 0;
+  zhao::tick(d);
+
+  // ---- the queries --------------------------------------------------------
+  // Deliberately mixed so no outcome can be produced by a stuck answer, and
+  // ordered so a block that answered the PREVIOUS query would be caught by the
+  // tag comparison.
+  std::vector<Query> qs;
+  uint8_t tag = 0;
+  for (int32_t iz = 38; iz < 88; ++iz) {          // crosses both ground edges
+    qs.push_back({60, iz, tag++});
+    qs.push_back({0, iz, tag++});
+    qs.push_back({kSide - 1, iz, tag++});
+  }
+  qs.push_back({-1, 60, tag++});                   // negative: outside, not huge
+  qs.push_back({60, -1, tag++});
+  qs.push_back({kSide, 60, tag++});                // one past the extent
+  qs.push_back({60, kSide, tag++});
+  qs.push_back({100000, 60, tag++});
+
+  isl::Ledger oracle_led{};
+  int mismatched = 0, handle_bad = 0, tag_bad = 0, compared = 0;
+  std::size_t next = 0;
+  std::vector<int> got_codes;
+
+  for (int cyc = 0; cyc < 200000 && (next < qs.size() || got_codes.size() < qs.size()); ++cyc) {
+    d.q_valid = (next < qs.size()) ? 1 : 0;
+    if (next < qs.size()) {
+      d.q_ix = static_cast<uint32_t>(qs[next].ix);
+      d.q_iz = static_cast<uint32_t>(qs[next].iz);
+      d.q_tag = qs[next].tag;
+    }
+    d.a_ready = 1;
+    d.eval();
+
+    const bool took = d.q_valid && d.q_ready;
+    if (d.a_valid && d.a_ready) {
+      const std::size_t i = got_codes.size();
+      if (i < qs.size()) {
+        const isl::Lookup want = dir.find(qs[i].ix, qs[i].iz, &oracle_led);
+        const int want_code = oracle_code(want.outcome);
+        ++compared;
+        if (static_cast<int>(d.a_outcome) != want_code) {
+          if (mismatched < 3)
+            std::printf("    (%d,%d): rtl %d, oracle %d\n", qs[i].ix, qs[i].iz,
+                        static_cast<int>(d.a_outcome), want_code);
+          ++mismatched;
+        }
+        // THE HANDLE IS ONLY MEANINGFUL ON A HIT, and the reference returns 0
+        // otherwise -- so comparing it unconditionally also proves the block
+        // does not leak a stale handle into a sky answer.
+        if (d.a_handle != want.page_handle) ++handle_bad;
+        if (d.a_tag != qs[i].tag) ++tag_bad;
+      }
+      got_codes.push_back(static_cast<int>(d.a_outcome));
+    }
+    zhao::tick(d);
+    if (took) ++next;
+  }
+
+  std::printf("  %zu queries, %d compared: rtl counters resident %u sky %u out %u badpitch %u\n",
+              qs.size(), compared, d.cnt_resident, d.cnt_open_sky, d.cnt_out_of_extent,
+              d.cnt_bad_pitch);
+  std::printf("  oracle ledger:              resident %u sky %u out %u badpitch %u\n",
+              oracle_led.resident, oracle_led.open_sky, oracle_led.out_of_extent,
+              oracle_led.bad_pitch);
+
+  ck(got_codes.size() == qs.size(), "every query was answered exactly once",
+     static_cast<long long>(qs.size()), static_cast<long long>(got_codes.size()));
+  ck(mismatched == 0,
+     "every outcome matches zref::island::Directory::find -- resident, open "
+     "sky, out of extent and bad pitch, from the oracle rather than from a "
+     "second copy of the rules",
+     0, mismatched);
+  ck(handle_bad == 0,
+     "and every page handle matches, including the zero the reference returns "
+     "for a non-resident answer -- so a sky answer cannot carry a stale handle",
+     0, handle_bad);
+  ck(tag_bad == 0,
+     "with each answer carrying its OWN query's tag, so a block answering the "
+     "previous query could not pass",
+     0, tag_bad);
+
+  // The counters are the block's evidence ports and must agree with the
+  // oracle's ledger, not merely be non-zero.
+  ck(d.cnt_resident == oracle_led.resident, "the resident counter matches the oracle's ledger",
+     oracle_led.resident, d.cnt_resident);
+  ck(d.cnt_open_sky == oracle_led.open_sky, "and the open-sky counter", oracle_led.open_sky,
+     d.cnt_open_sky);
+  ck(d.cnt_out_of_extent == oracle_led.out_of_extent, "and out-of-extent",
+     oracle_led.out_of_extent, d.cnt_out_of_extent);
+
+  // NOT VACUOUS: the run must actually contain each interesting answer.
+  ck(oracle_led.resident > 0 && oracle_led.open_sky > 0 && oracle_led.out_of_extent > 0,
+     "and the run genuinely contained resident, sky AND out-of-extent answers, "
+     "so the comparison above is not satisfied by one outcome repeated",
+     1, (oracle_led.resident > 0 && oracle_led.open_sky > 0 && oracle_led.out_of_extent > 0) ? 1
+                                                                                            : 0);
+  ck(oracle_led.open_sky > oracle_led.resident,
+     "with SKY the commonest answer, which is the property the whole block "
+     "exists for -- a store whose miss meant failure would report 94.9% of an "
+     "island as broken",
+     1, oracle_led.open_sky > oracle_led.resident ? 1 : 0);
+
+  // ---- a malformed descriptor -------------------------------------------
+  // BAD PITCH OUTRANKS OUT OF EXTENT, and the order is load-bearing: a
+  // descriptor that names a pitch the machine does not have cannot be trusted
+  // to say what its extent is either.
+  {
+    isl::Desc bad = desc;
+    bad.pitch_log2 = 7;  // not in {-1, 0, 1, 2}
+    isl::Directory bdir(bad);
+    isl::Ledger bl{};
+    const isl::Lookup want = bdir.find(100000, 60, &bl);
+
+    d.desc_pitch_log2 = 7;
+    d.q_valid = 1;
+    d.q_ix = static_cast<uint32_t>(100000);
+    d.q_iz = 60;
+    d.q_tag = 0xAB;
+    int seen = -1;
+    for (int cyc = 0; cyc < 1000 && seen < 0; ++cyc) {
+      d.a_ready = 1;
+      d.eval();
+      if (d.a_valid) seen = static_cast<int>(d.a_outcome);
+      const bool took = d.q_valid && d.q_ready;
+      zhao::tick(d);
+      if (took) d.q_valid = 0;
+    }
+    ck(seen == oracle_code(want.outcome),
+       "an out-of-extent query on an ILLEGAL PITCH reports BAD PITCH, not out "
+       "of extent -- a malformed descriptor cannot be trusted to say what its "
+       "extent is",
+       oracle_code(want.outcome), seen);
+    ck(seen == kBadPitch, "which is BAD_PITCH", kBadPitch, seen);
+    ck(d.cnt_bad_pitch > 0, "and it is counted", 1, static_cast<long long>(d.cnt_bad_pitch));
+  }
+
+  if (g_fail) {
+    std::printf("[island_dir_rtl_directed] %d of %d checks FAILED\n", g_fail, g_checks);
+    zhao::exit_hard(1);
+  }
+  std::printf("[island_dir_rtl_directed] %d checks passed\n", g_checks);
+  zhao::exit_hard(0);
+}

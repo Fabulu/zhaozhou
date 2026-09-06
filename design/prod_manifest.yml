@@ -123,6 +123,9 @@ top:
   - zhao_geom_skin_norm
 
   # --- terrain (the 8 km island) -------------------------------------------
+  # TERRAIN.ISLAND gives TERRAIN.RESIDENCY's miss its meaning: open sky rather
+  # than a fault, on a grid that is 94.9% sky by design.
+  - zhao_terrain_island_dir
   - zhao_terrain_patch
   - zhao_terrain_tess
   - zhao_terrain_normals

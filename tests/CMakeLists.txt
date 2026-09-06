@@ -2427,6 +2427,22 @@ target_link_libraries(test_island_8km_directed PRIVATE zhao_zref)
 add_test(NAME island_8km_directed COMMAND test_island_8km_directed)
 set_tests_properties(island_8km_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# TERRAIN.ISLAND -- the island directory RTL against zref::island::Directory.
+# The block's whole job is a MAPPING from a store's hit/miss plus two gates to
+# one of four answers, so the test compares outcomes, handles, tags AND the
+# four evidence counters against the oracle's ledger.
+add_executable(test_island_dir_rtl_directed terrain/island_dir_rtl_directed.cpp)
+target_link_libraries(test_island_dir_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_island_dir_rtl_directed
+  PREFIX Vtb_island_dir
+  TOP_MODULE tb_island_dir
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_island_dir.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_island_dir.sv)
+add_test(NAME island_dir_rtl_directed COMMAND test_island_dir_rtl_directed)
+set_tests_properties(island_dir_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_terrain_residency_directed terrain/terrain_residency_directed.cpp)
 target_link_libraries(test_terrain_residency_directed PRIVATE zhao_harness)
 verilate(test_terrain_residency_directed

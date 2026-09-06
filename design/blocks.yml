@@ -1676,6 +1676,51 @@ blocks:
     superseded_by: null
     notes: Crack-safety is a formal candidate (stitch invariants).
 
+  - id: TERRAIN.ISLAND
+    name: Island patch directory
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "The 8 km island's sparse patch directory: given a patch coordinate, answer RESIDENT (with its page handle), OPEN SKY, OUT OF EXTENT or BAD PITCH. Exists because a miss in TERRAIN.RESIDENCY has no meaning on its own -- 793 of an 8 km island's 15,625 patches are ground, so 94.9% of queries legitimately find nothing, and a store that called that a fault would bury the evictions that ARE faults."
+    contract: design/contracts/TERRAIN.ISLAND.md
+    phase: 6
+    owner_issue: ZH-123
+    inputs: [island_desc, patch_queries]
+    outputs: [island_answers]
+    upstream: [TERRAIN.RESIDENCY]
+    downstream: [TERRAIN.LOD, TERRAIN.PROJECT]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: one query per residency round trip; one in flight
+    reference_model: zref::island::Directory
+    tests:
+      directed: tests/terrain/island_dir_rtl_directed.cpp
+    counters: [island_resident, island_open_sky, island_out_of_extent, island_bad_pitch]
+    source_ids: false
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log: []
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      IT COMPOSES THE STORE RATHER THAN DUPLICATING IT, and the arithmetic is
+      why. A dense handle table for a 125 x 125 grid would be 16,384 x 32 bits
+      = 524,288 bits = FIFTY-TWO M10Ks on a 553-block device, to hold a
+      structure whose occupancy peaks near 800. The sparse store already exists
+      as TERRAIN.RESIDENCY's 256-set, 4-way directory over the canonical key;
+      this block adds the extent and pitch gates and the mapping from its
+      hit/miss to the island's four outcomes.
+
+      THE OUTCOME ORDER IS THE REFERENCE'S: bad pitch, then out of extent, then
+      the store. It is load-bearing -- a coordinate outside the extent of an
+      island whose pitch is illegal must report BAD PITCH, because a malformed
+      descriptor cannot be trusted to say what the extent is.
+
+      The reference model has existed since 2026-09-06 and was NOT NAMED BY ANY
+      BLOCK until this entry, which is how a reference goes missing in practice:
+      not by being absent, but by having nothing point at it.
+
   - id: TERRAIN.RESIDENCY
     name: Page residency directory
     kind: rtl
