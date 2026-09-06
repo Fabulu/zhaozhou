@@ -118,11 +118,28 @@ Observed run(Vzhao_geom_meshfetch& t, const Desc& d, const MF::InstanceXform& x,
   // came and went. The symptom was every bound reading (0,0,0) r=0, which looks
   // like broken arithmetic and is actually a testbench that answered out of
   // order.
-  bool granted = false, ticked = false, done = false;
+  // THE GUARD'S VERDICT IS A SEPARATE CYCLE (D22 tread 10, 2026-09-06).
+  //
+  // This played guard used to drive {ready, ok} = 0b110 together. No guard in
+  // the tree does that: `zhao_mem_guard` answers `ready = !fwd_active` -- a
+  // LEVEL -- and pulses `ok` the cycle AFTER the accept, which is the cycle
+  // that raised `fwd_active`. So the two are never high at once on a passing
+  // request, and GEOM.MESHFETCH had been written to match this model rather
+  // than the block.
+  //
+  // Three phases now: ready on the offer cycle, the verdict on the next, and
+  // beats from the one after that.
+  bool granted = false, accepted = false, ticked = false, done = false;
   int beat = 0, cull_delay = 0;
 
   for (int c = 0; c < 200 && !done; ++c) {
-    t.guard_rsp_i = (guard_valid(t) && !granted) ? 0b110 : 0;
+    if (guard_valid(t) && !accepted) {
+      t.guard_rsp_i = 0b100;              // ready, no verdict yet
+    } else if (accepted && !granted) {
+      t.guard_rsp_i = 0b010;              // ok, one cycle later
+    } else {
+      t.guard_rsp_i = 0;
+    }
 
     t.beat_valid_i = 0;
     t.beat_last_i = 0;
@@ -148,7 +165,8 @@ Observed run(Vzhao_geom_meshfetch& t, const Desc& d, const MF::InstanceXform& x,
 
     t.eval();
 
-    if (guard_valid(t) && !granted) granted = true;
+    if (accepted && !granted) granted = true;
+    if (guard_valid(t) && !accepted) accepted = true;
     if (t.beat_valid_i) ++beat;
     if (t.cull_tick_o && !ticked) {
       ticked = true;

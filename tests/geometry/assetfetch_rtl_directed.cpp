@@ -79,6 +79,20 @@ struct Guard {
 
   // Beat delivery state for the line currently in flight.
   bool streaming = false;
+  // THE GUARD'S VERDICT IS A SEPARATE CYCLE (D22 tread 10, 2026-09-06).
+  //
+  // This played guard used to raise ready and ok in the SAME cycle. No guard in
+  // the tree does that: `zhao_mem_guard` answers `ready = !fwd_active` -- a
+  // LEVEL, "the forwarding stage is free" -- and pulses `ok` the cycle AFTER
+  // the accept, which is the cycle that raised `fwd_active`. The two are
+  // therefore never high together on a passing request, and GEOM.ASSETFETCH
+  // had been written to match this model rather than the block it talks to.
+  //
+  // `verdict_pending` is the accept cycle's successor: ready drops, exactly one
+  // of ok and violation pulses, and beats begin the cycle after that.
+  bool verdict_pending = false;
+  bool verdict_ok = false;
+
   uint32_t line_addr = 0;
   int beat = 0;
   // Whether a beat was actually PRESENTED this cycle. The first version
@@ -114,6 +128,22 @@ struct Guard {
       return;  // one line at a time; no new request while beats flow
     }
 
+    if (verdict_pending) {
+      // The verdict cycle: ready is LOW (the forwarding stage is occupied) and
+      // exactly one of ok/violation pulses.
+      verdict_pending = false;
+      if (verdict_ok) {
+        d.g_ok = 1;
+        streaming = true;   // beats begin the cycle after the VERDICT
+      } else {
+        d.g_violation = 1;
+      }
+      // NOT `drove`: no beat was presented this cycle, and post_edge()
+      // advances the beat counter on `streaming && drove`. Setting it here
+      // would skip beat 0 -- the whole first word of every line.
+      return;
+    }
+
     if (d.g_valid) {
       // Stricter than the real guard, on purpose (see the header).
       if (d.g_write != 0) shape_error = true;
@@ -126,15 +156,15 @@ struct Guard {
       }
 
       d.g_ready = 1;
+      verdict_pending = true;
       if (deny) {
-        d.g_violation = 1;
+        verdict_ok = false;
         deny = false;
       } else {
-        d.g_ok = 1;
+        verdict_ok = true;
         asked.push_back(d.g_addr);
         line_addr = d.g_addr;
         beat = 0;
-        streaming = true;  // beats begin the cycle after acceptance
       }
     }
   }
