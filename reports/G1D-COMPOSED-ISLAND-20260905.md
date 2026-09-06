@@ -228,6 +228,68 @@ before-figure to difference against, and inventing one would be the
 registered output stage on those reads, which is the same remedy §5 of the
 perspuv report proposes for `e_q`.
 
+### 4.3b THE REGISTER ATTRIBUTION, from a map-only run — and it is a PORT
+### COUNT question, not a "put it in memory" one
+
+**2026-09-06.** Owner direction: get actual area/register attribution BEFORE
+touching the big capture and order stores, and use the four-hour fit very
+sparingly. Analysis & Synthesis answers this on its own, and it took MINUTES:
+
+```
+Total registers                              26,383
+Number of registers using Clock Enable       24,703
+Total block memory bits                      34,080
+Total DSP blocks                                 17
+```
+
+**Nineteen arrays DID infer as RAM.** The summary names every one:
+
+```
+fsc_m                          rob_tag_m
+perspuv    e_tag
+aux_pipe   sd_tok
+cache      g_lane[0..3].data_r, rq_src, rs_src
+fragrob    ctx_m x2, order_m, auxrgb_m, auxa_m, axq_m, axg_m, desc_u_m
+palette    mem_r
+```
+
+**And that list is the finding, because of what is NOT on it.** Of the island's
+per-fragment attribute table — ``uvw_m``, ``fctx_m``, ``fbase_m``,
+``fbind_m``, ``flod_m``, ``fcls_m``, ``faux_m``, ``fpsl_m``,
+``fpgn_m``, ``frec_m``, ``fwt_m``, ``fseq_m``, ``sampmeta_m`` and
+``fsc_m`` — **exactly ONE inferred.** Of the reorder buffer's three stores
+(``rob_m``, ``rob_tag_m``, ``rob_full_m``), **exactly one inferred.**
+
+They are the same shape and the same depth as their neighbours. What separates
+them is the number of READ ADDRESSES: ``fsc_m`` and ``rob_tag_m`` are each
+read from ONE place, and the arrays that stayed in flops are read from several.
+
+**So the comfortable reading — "the attribute table is in flip-flops, move it to
+M10K" — is the wrong prescription even though its premise is true.** An M10K
+offers two ports. An array read at three points cannot be one however it is
+declared, and adding a ``ramstyle`` attribute to it changes nothing. The fix
+is to reduce each array to a single read address, which is a restructuring of
+the READ POINTS and not of the storage.
+
+**This is the same question PERSPUV's is**, and the evidence now points the same
+way in both places: ``e_tag`` — single read — inferred, while ``e_num_u``
+and ``e_q_u`` did not, even after the per-axis split gave each one write and
+one read ADDRESS but left ``e_q``'s asynchronous read feeding a port directly.
+Two blocks, one mechanism, and it is the mechanism
+``PERSPUV-REGISTER-DIAGNOSIS-20260905.md`` talked its reader out of.
+
+**24,703 of 26,383 registers use a clock enable**, which is what a per-entry
+write-enabled array bank looks like and is consistent with the reading above.
+It is corroboration, not proof: the RAM Summary names arrays, not counts.
+
+#### What must NOT be concluded from this yet
+
+The map report gives no per-array REGISTER COUNT, so "the attribute table is N
+of the 26,383" is still arithmetic-by-declaration — the exact move that made
+PERSPUV's static census wrong. Getting a real per-array count needs the fitter's
+resource-by-entity section, which is another full fit, and the owner's sequence
+puts the COMBINE rearchitecture and the PERSPUV experiment first.
+
 ### 4.3a THE REFIT LANDED — 16,193 ALM, 63.54 MHz, and it fails three rules
 
 **2026-09-06, `ea4870d3`, 14,004 s (3h53m).** This is G1-D's current headline

@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "ea4870d34797bd22e205f22bac57f098bc6f979a",
+    "newestRunCommit":  "18b72a7e61b668d8a4e05f6f0cb77fa76d60aae2",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1128,27 +1128,17 @@
                    },
                    {
                        "module":  "zhao_texture_island_top",
-                       "status":  "failed:structure",
-                       "sourceCommit":  "ea4870d34797bd22e205f22bac57f098bc6f979a",
+                       "status":  "map_only",
+                       "sourceCommit":  "18b72a7e61b668d8a4e05f6f0cb77fa76d60aae2",
                        "rtlCleanAtHead":  true,
-                       "seconds":  14004.1,
+                       "seconds":  333.7,
                        "sourcesHashed":  15,
-                       "alms":  16193,
-                       "registers":  27097,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  26383,
                        "blockMemoryBits":  34080,
-                       "ramBlocks":  25,
                        "dspBlocks":  17,
-                       "virtualPins":  1259,
-                       "almsAvailable":  41910,
-                       "ramBlocksAvailable":  553,
-                       "dspBlocksAvailable":  112,
-                       "fmaxMhz":  63.54,
-                       "fmaxClock":  "clk",
-                       "ruleViolations":  [
-                                              "registers 27097 \u003e allowed 9000 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)",
-                                              "ALM 16193 \u003e allowed 7500",
-                                              "DSP 17 \u003e allowed 14"
-                                          ]
+                       "virtualPins":  1291
                    },
                    {
                        "module":  "zhao_texture_material_combine_v1",
