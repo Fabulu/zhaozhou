@@ -366,15 +366,38 @@ constexpr int kSmearSpeedFullMmPerFrame = 34;
 // (zhao_reel.cpp's smear_composite call) and nothing else touches it: no
 // rung's own gain_pm, decay, jitter, hard-clear or tear timing changes, so
 // every rung keeps the identity it was tuned for and simply reads solidly
-// thicker. 1000 = untouched (pass 6 behaviour). Chosen by eye at native
-// 384x240 under the shipping rig (ZIXX_EXP=celmain,
-// ZIXX_LIGHT=diagonal-cool-cross) against manafold-rest and
-// manafold-channel: 1000 read as barely-there wisps once the off-by-one fix
-// (kSmearPresetCount) stopped masking it as "no smear plane at all"; 2000
-// was the first value where the gassy shell read as deliberately thick fog
-// rather than a faint halo, while individual frames still showed the body
-// through it -- "still see through, but way less so".
-constexpr int kFogThicknessPm = 4500;
+// thicker. 1000 = untouched (pass 6 behaviour).
+//
+// ⚠ FALSE-COMMENT CORRECTION (pass 11, P.3). This block used to end "...2000
+// was the first value where the gassy shell read as deliberately thick fog"
+// while the constant shipped 4500. That is the 10-GATE-CHECKLIST's own cited
+// example of a rationale outliving its number, and it stood through two more
+// passes. The history, in full, because both halves of it are the owner's:
+//
+//   pass 6  1000  the v1 read -- "you could barely see there was some red mist
+//                 around the creature"
+//   pass 7  2000  Direction 5 §3: "thicken that fog by a lot ... way less
+//                 see-through, very visible"
+//   pass ?  4500  the same instruction pushed further
+//   pass 11 1200  DIRECTION 8 §4 REVERSES IT: "we thickened too much and now
+//                 the outer layer is completely opaque. I want to revert that."
+//
+// Direction 8 §4 contains its own correction and it is why the revert does not
+// land back on 1000: "It was too much, you could barely see there was some red
+// mist around the creature. But the concept was cool. I wanted that." He is
+// describing v1 as too faint AND saying it was the good version. So the target
+// is v1's read with a hair more presence -- 1200, authored by eye at native
+// against the shipped 4500 and against a bare leg, never fitted to a number.
+// The acceptance sentence is his: present, felt, not read as a surface.
+constexpr int kFogThicknessPm = 1200;
+// PASS 11 (Direction 8 §4): THE SHELL GOES BACK TO A WHISPER, and the ladder
+// that chose it comes from ONE BINARY. g_u02_fog_thickness_pm is the live
+// value the compositor reads; kFogThicknessPm above is its shipping default
+// and remains the named, editable owner knob. U02_FOG_THICKNESS=<pm> overrides
+// it for the by-eye ladder only -- it is a measurement lever, never a shipping
+// setting, exactly like U02_MIST_NO_EXCLUDE (10-GATE-CHECKLIST item 21: a
+// comparison split across two builds measures the builds).
+inline int g_u02_fog_thickness_pm = kFogThicknessPm;
 // PASS 4 (R6, Direction 4 §2 "glitchier than the others you made"): a
 // FOURTH live rung past the long/glitchy one -- keep higher, steps longer
 // and chunkier, jitter wider -- and the ROW TEAR: on hashed frames a
@@ -504,27 +527,51 @@ constexpr int kMistShiftFxBits = 8;  // sub-cell residual precision
 // U02_MIST_NO_EXCLUDE=1 flips it at runtime, so the comparison comes from ONE
 // binary (10-GATE-CHECKLIST item 21).
 constexpr bool kMistExcludeSilhouette = true;
-// persistence: near the BROKEN-BUFFER rung, because a ghost outstays its frame
-constexpr int kMistKeepPm = 930;
+// persistence: PASS 11 (Direction 8 §1) cut 930 -> 420, and this is the knob
+// that did the work. Walking alpha_max_pm down from `rich`'s 380 to 60 thinned
+// the cloud and LEFT ITS FOOTPRINT UNCHANGED; walking feed_of_halo_pm 1300 ->
+// 450 barely moved the footprint either. Both were plated and looked at. The
+// reason is that the plane integrates for hundreds of frames and saturates
+// against cell_cap_pm, so at steady state the per-frame feed decides almost
+// nothing and how long a cell REMEMBERS decides almost everything.
+//
+// That is what "the effect covers the screen" was: not opacity, EXTENT. And it
+// is why the fix is the persistence rather than the density -- hasty's praised
+// "chunky glitchy haze" is a TRAIL, and a trail is a short memory. 420 keeps
+// the chunky broken-buffer blocks (they are still plainly blocks; the read the
+// owner likes survives) while the haze hugs the mana instead of spilling into
+// clean sky. Authored by eye at native on rest f120 and f300, against `rich`
+// and against a bare leg -- no number chose it.
+constexpr int kMistKeepPm = 420;
 constexpr int kMistStepFrames = 5;
 constexpr int kMistJitterPm = 190;
 constexpr int kMistHardClearFrames = 520;
 // the feed. BREADTH is the point -- this is what makes it a mist and not a
 // second trail. The smear feeds at kSmearFeedOfHaloPm = 420 (deliberately
 // SHRUNK to the core's footprint, pass 5); the mist feeds WIDER than the halo.
-constexpr int kMistFeedOfHaloPm = 1800;  // PASS 10 A.2: the `rich` rung
-constexpr int kMistFeedPm = 280;   // per-frame contribution (it integrates)
-constexpr int kMistCellCapPm = 152;  // hue-preserving cap, under the smear's 208
+constexpr int kMistFeedOfHaloPm = 1300;  // PASS 11: the `smidgen` rung
+constexpr int kMistFeedPm = 220;   // per-frame contribution (it integrates)
+constexpr int kMistCellCapPm = 110;  // hue-preserving cap, under the smear's 208
 // the composite
 constexpr int kMistGainPm = 1000;
-// PASS 9, CHOSEN BY EYE off manafold-mist-{sparing,mid,thick} at native. The
-// first authored value was 460 (the `thick` row) and it CROSSES THE MANA LAB'S
-// WALL -- "too far is when the mana starts eating the animal": the haze became
-// a solid block over the pocket and the antenna stopped reading through it.
-// 300 is the `mid` row: a plainly visible, plainly pixely haze with the loop
-// and every mote still legible under it. `sparing` (200) is the thin end and is
-// kept on the sheet, as is `thick`, so the owner picks rather than accepts.
-constexpr int kMistAlphaMaxPm = 380;  // "still see through, way less so"
+// ⚠ FALSE-COMMENT CORRECTION (pass 11, P.3). This block said "300 is the `mid`
+// row" while the constant shipped 380 -- pass 10 promoted `rich` and did not
+// touch the prose. QA caught it; it is item 12 on QA §7's list and the one that
+// pass 10 CREATED. Corrected here, in the same commit that moves the number,
+// which is the only arrangement that does not rot again.
+//
+// PASS 11 (Direction 8 §1): the shipping defaults are now the `smidgen` row.
+// The owner looked at `rich` on the published page and said "the green cloud is
+// totally out of control. I wanted to have a tiny smidgen of it, now the effect
+// covers the screen." Two honest gates had confirmed `rich` by measurement --
+// the by-eye reviewer called it "the right call" and QA found the whitening in
+// band. Every number was inside every band and the read was wrong: the bands
+// described the pixels, not the READ. So `rich` is a CEILING PROVED TOO HIGH,
+// and nothing here is defended with a number.
+//
+// Chosen by eye at native off the ladder plates in pass11-plates/, against
+// hasty's praised "chunky glitchy haze" -- which is a TRAIL, not a FIELD.
+constexpr int kMistAlphaMaxPm = 180;  // a smidgen, not a shell
 constexpr int kMistVividPm = 1500;    // same hue-preserving vivify as the smear
 constexpr int kMistChromaFloorPm = 600;  // pass 8's fix, so the mist is mana
                                          // -coloured against ANY sky, not just
@@ -553,6 +600,17 @@ struct MistCfg {
   // exclusion (the fault it fixes is independent of density -- `sparing`
   // rotated the band's hue as badly as `mid`).
   bool exclude_silhouette = kMistExcludeSilhouette;
+  // PASS 11 M.2. THE PERSISTENCE, promoted to a knob because it turned out to
+  // be THE knob. Direction 8 §1 asks for "a tiny smidgen" measured against
+  // hasty's praised "chunky glitchy haze" -- which is a TRAIL, not a FIELD.
+  // Walking alpha down from rich to 60 thinned the cloud and left its FOOTPRINT
+  // untouched, and walking feed_of_halo_pm 1300 -> 450 changed the footprint
+  // almost not at all: the plane integrates for hundreds of frames and
+  // saturates against cell_cap_pm, so at steady state the per-frame feed hardly
+  // decides anything. What decides the footprint is how long a cell REMEMBERS.
+  // Same position as the other fields, last so every existing aggregate
+  // initialiser in kMistVariants[] keeps its exact meaning.
+  int keep_pm = kMistKeepPm;
 };
 inline MistCfg g_u02_mist;
 // STAGE A's A/B lever. It lives OUTSIDE MistCfg on purpose: the reel assigns
@@ -584,12 +642,37 @@ inline bool mist_excludes_silhouette() {
 // in a comment (09-ENGINE-GOTCHAS §9: a property nobody has measured on screen
 // is a property nobody has seen).
 struct MistVariant { const char* name; MistCfg cfg; const char* note; };
+// ⚠ PASS 11: every PRE-PASS-11 row now carries its pass-10 persistence (930)
+// EXPLICITLY, because pass 11 changed the DEFAULT to 420. Without that, adding
+// a field would have silently redefined what `rich` means -- the comparison row
+// on the owner's own sheet would have stopped reproducing the thing he
+// rejected, and the sheet would have been quietly lying about its control.
+// A variant row states its own identity; it does not inherit one that moves.
 inline const MistVariant kMistVariants[] = {
+    // PASS 11 (Direction 8 §1): THE ROWS BELOW `sparing`. The owner looked at
+    // the shipped `rich` page and said "the green cloud is totally out of
+    // control. I wanted to have a tiny smidgen of it, now the effect covers
+    // the screen." Two honest gates had confirmed `rich` by measurement --
+    // every number inside every band -- so the bands described the pixels and
+    // not the READ. `rich` is therefore a CEILING THAT HAS BEEN PROVED TOO
+    // HIGH, never a starting point to trim, and nothing below is defended with
+    // a number. The reference the pick is authored against is the one thing he
+    // has consistently praised: hasty's "chunky glitchy haze", which is a
+    // TRAIL, not a FIELD.
+    //
+    // `trace` is the thin bracket of the ladder, kept on the sheet so the owner
+    // picks a rung rather than accepting one (owner question 1c, "nearly none").
+    {"trace", {120, 180, 1300, 90, kMistFollowPm, 1000, kMistVividPm,
+               kMistChromaFloorPm, kMistExcludeSilhouette, 330},
+     "the thin bracket: tighter and fainter still -- owner question 1(c)"},
+    {"smidgen", {180, 220, 1300, 110, kMistFollowPm, 1000, kMistVividPm,
+                 kMistChromaFloorPm, kMistExcludeSilhouette, 420},
+     "PASS 11 SHIPPING DEFAULT: a tiny smidgen -- a trail, not a field"},
     {"sparing", {200, 210, 1500, 110, kMistFollowPm, 1000, kMistVividPm,
-                 kMistChromaFloorPm},
+                 kMistChromaFloorPm, kMistExcludeSilhouette, 930},
      "thin veil -- the antenna reads through it everywhere"},
     {"mid", {300, 260, 1700, 135, kMistFollowPm, 1000, kMistVividPm,
-             kMistChromaFloorPm},
+             kMistChromaFloorPm, kMistExcludeSilhouette, 930},
      "the candidate default: visible haze, loop still legible"},
     // PASS 10 A.2: the rung between mid and thick. It exists because STAGE A
     // moved the wall: the mana-lab stopping rule was "too far is when the mana
@@ -600,15 +683,16 @@ inline const MistVariant kMistVariants[] = {
     // is the pass-9 mistake (one clip, one sheet) being repaired rather than
     // repeated.
     {"rich", {380, 280, 1800, 152, kMistFollowPm, 1000, kMistVividPm,
-              kMistChromaFloorPm},
+              kMistChromaFloorPm, kMistExcludeSilhouette, 930},
      "PASS 10: one rung up from mid, the density the exclusion paid for"},
     {"thick", {460, 300, 1900, 170, kMistFollowPm, 1000, kMistVividPm,
-               kMistChromaFloorPm},
+               kMistChromaFloorPm, kMistExcludeSilhouette, 930},
      "the first authored value -- ate the antenna BEFORE STAGE A; re-judge it"},
-    {"white", {520, 420, 1900, 255, kMistFollowPm, 1100, 2600, 0},
+    {"white", {520, 420, 1900, 255, kMistFollowPm, 1100, 2600, 0,
+               kMistExcludeSilhouette, 930},
      "DELIBERATELY BLOWN (§10.3): no cell cap, no chroma floor, hard vivify"},
     {"parked", {300, 260, 1700, 135, 0, 1000, kMistVividPm,
-                kMistChromaFloorPm},
+                kMistChromaFloorPm, kMistExcludeSilhouette, 930},
      "CONTROL: follow=0, the rejected screen-space behaviour"},
 };
 inline constexpr int kMistVariantCount =
@@ -1998,7 +2082,7 @@ inline void mist_update(uint8_t* buf, int32_t* dbuf, uint32_t frame) {
     if (!step || (c[0] | c[1] | c[2]) == 0) continue;
     const uint32_t hj = fx_hash(0x31157EEDu, static_cast<uint32_t>(i),
                                 frame / static_cast<uint32_t>(kMistStepFrames));
-    int keep = kMistKeepPm + fx_jit(hj, kMistJitterPm);
+    int keep = g_u02_mist.keep_pm + fx_jit(hj, kMistJitterPm);
     if (keep < 0) keep = 0;
     if (keep > 1000) keep = 1000;
     for (int k = 0; k < 3; ++k) {

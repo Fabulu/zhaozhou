@@ -3528,7 +3528,8 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
           c.u02_smear_preset == u02::kU02SmearTravellingRung;
       // DIRECTION 7 §4: and then by the frame's own speed, base floor included.
       const int fog_gain_pm =
-          sp.gain_pm * (is_travelling_rung ? 1000 : u02::kFogThicknessPm) / 1000 *
+          sp.gain_pm * (is_travelling_rung ? 1000 : u02::g_u02_fog_thickness_pm) /
+              1000 *
           c.u02_speed_mul_pm / 1000;
       u02::smear_composite(c.u02_smear_buf.data(), c.u02_smear_depth.data(), rgb,
                            depth, w, h, fog_gain_pm, c.u02_frame, sp.tear);
@@ -7128,6 +7129,9 @@ constexpr LibraryEntry kLibrary[] = {
     {"star-s10-runaway", "Runaway", "High-velocity star, no flare capability", false},
     {nullptr, nullptr, nullptr, false}};
 
+static int g_u02_mist_set[5] = {0, 0, 0, 0, 0};
+static bool g_u02_mist_set_on = false;
+
 int main(int argc, char** argv) {
   if (argc > 1 && std::strcmp(argv[1], "--zixx-target-check") == 0)
     return validate_zixx_target_interactions();
@@ -7291,6 +7295,41 @@ int main(int argc, char** argv) {
     g_u02_cover_paint = std::string(cp) == "1";
     if (g_u02_cover_paint)
       std::fprintf(stderr, "U02_COVER_PAINT=1 (creature coverage mask painted green)\n");
+  }
+  // PASS 11 M.2 (Direction 8 §1): the MIST's by-eye ladder, from ONE binary.
+  // U02_MIST_SET=alpha,feed,halo,cap overrides the four density fields AFTER
+  // the per-subject variant assignment, so a whole ladder can be walked without
+  // a rebuild per rung. It deliberately CANNOT touch follow_pm or
+  // exclude_silhouette: Direction 8 protects the attachment and the exclusion
+  // while the amount is cut, so the lever that cuts the amount is structurally
+  // incapable of cutting either of them. Ladder only; never a shipping setting.
+  if (const char* mset = std::getenv("U02_MIST_SET")) {
+    int a = 0, fd = 0, hl = 0, cp = 0, kp = u02::kMistKeepPm;
+    if (std::sscanf(mset, "%d,%d,%d,%d,%d", &a, &fd, &hl, &cp, &kp) < 4) {
+      std::fprintf(stderr,
+                   "U02_MIST_SET=%s (want alpha,feed,halo,cap[,keep])\n", mset);
+      return 2;
+    }
+    g_u02_mist_set[0] = a; g_u02_mist_set[1] = fd;
+    g_u02_mist_set[2] = hl; g_u02_mist_set[3] = cp; g_u02_mist_set[4] = kp;
+    g_u02_mist_set_on = true;
+    std::fprintf(stderr,
+                 "U02_MIST_SET alpha=%d feed=%d halo=%d cap=%d keep=%d "
+                 "(M.2 ladder)\n", a, fd, hl, cp, kp);
+  }
+  // PASS 11 M.1 (Direction 8 §4): the OUTER SHELL's by-eye ladder, from ONE
+  // binary. The shipping value is u02::kFogThicknessPm; this only moves the
+  // live global the compositor reads, and only for the ladder plates.
+  if (const char* ft = std::getenv("U02_FOG_THICKNESS")) {
+    const int v = std::atoi(ft);
+    if (v < 0 || v > 20000) {
+      std::fprintf(stderr, "U02_FOG_THICKNESS=%s out of range (0..20000 pm)\n", ft);
+      return 2;
+    }
+    u02::g_u02_fog_thickness_pm = v;
+    std::fprintf(stderr,
+                 "U02_FOG_THICKNESS=%d pm (M.1 shell ladder; shipping default %d)\n",
+                 v, u02::kFogThicknessPm);
   }
   if (const char* nx = std::getenv("U02_MIST_NO_EXCLUDE")) {
     if (std::string(nx) == "1") {
@@ -7619,6 +7658,13 @@ int main(int argc, char** argv) {
     std::snprintf(nm, sizeof(nm), "manafold-mist-%s", u02::kMistVariants[mv].name);
     if (!wanted(nm)) continue;
     u02::g_u02_mist = u02::kMistVariants[mv].cfg;
+    if (g_u02_mist_set_on) {
+      u02::g_u02_mist.alpha_max_pm = g_u02_mist_set[0];
+      u02::g_u02_mist.feed_pm = g_u02_mist_set[1];
+      u02::g_u02_mist.feed_of_halo_pm = g_u02_mist_set[2];
+      u02::g_u02_mist.cell_cap_pm = g_u02_mist_set[3];
+      u02::g_u02_mist.keep_pm = g_u02_mist_set[4];
+    }
     SceneSubject s = subject_u02_clip(5, nm, u02::kRestKeys, false, &kU02SunCalm);
     s.u02_mist = true;
     s.note = u02::kMistVariants[mv].note;
