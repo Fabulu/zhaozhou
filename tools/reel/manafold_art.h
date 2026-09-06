@@ -697,6 +697,43 @@ constexpr int kWobblePerBKeys = 51;        // ~102 frames on screen
 constexpr int32_t kAntennaSwayPm = 45;
 constexpr int kAntennaLagKeys = 4;
 constexpr int32_t kAntennaTiltA16 = 700;
+
+// ---- DIRECTION 7 §1: EVERY BALL MOVES INDIVIDUALLY, IN ALL DIRECTIONS -----
+// "All the balls need to be able to move individually, yet it has to look
+// convincingly like they're still on guided hinges. But in all directions, up,
+// down, left, right. That way the antennae can really fold the mana."
+//
+// What actually shipped before this: `loop_pose` already TOOK a per-hinge
+// out-of-plane tilt for A, B and C, but `loop_alive` and `whole_wobble` -- the
+// two layers every clip goes through -- passed ONE tilt value and gave it to A
+// only. B and C carried their rest tilt and nothing else, and kBNeck was driven
+// by nothing at all. So pass 6 C.1's "each hinge moves up and down separately"
+// was possible in the rig and never happened on screen. That is 09-ENGINE-
+// GOTCHAS §9's pattern once more: a capability described in a comment, never
+// measured on a frame.
+//
+// THE CONSTRAINT IS PART OF THE LOOK, so this is deliberately NOT free motion:
+//   * fixed axes composed in a fixed order (fold about Z, tilt about X, yaw
+//     about Y) -- a joint with a rotation ORDER reads as a mechanism; a joint
+//     that can go anywhere reads as string;
+//   * bounded amplitudes, small next to the fold itself;
+//   * per-station PHASE LAG so the motion travels along the antenna instead of
+//     every ball wobbling at once -- travel is what reads as linkage;
+//   * incommensurate rates per axis, so no station ever metronomes.
+// Each station keeps its own scale, so any one ball can be tuned or switched
+// off without touching the others.
+constexpr int32_t kHingeTiltAmpA16 = 1500;   // ~8.2 deg out-of-plane, per hinge
+constexpr int32_t kHingeYawAmpA16 = 1100;    // ~6.0 deg of twist, per hinge
+// neck, A, B, C. The peak is the loosest joint and the neck the stiffest, which
+// is what "guided" means here: the further from the head, the more play.
+constexpr int32_t kHingeAxisScalePm[4] = {620, 1000, 1150, 880};
+// The tilt and the yaw run at their own rates, both slower than the fold, so
+// the three axes never line up into a single swing.
+constexpr int kHingeTiltCycDiv = 3;
+constexpr int kHingeYawCycDiv = 5;
+// Per-station phase step. 0x2C00 of 0x10000 is about a sixth of a cycle: enough
+// that the wave visibly travels, small enough that the chain stays one object.
+constexpr int32_t kHingePhaseStepA16 = 0x2C00;
 // the gaze (the pupil pivots sweep the stars across the lenses)
 // PASS 3 (F4, Direction 3 §2): star containment — the star plus its white
 // ring must never cross the lens ink at any authored gaze extreme. The

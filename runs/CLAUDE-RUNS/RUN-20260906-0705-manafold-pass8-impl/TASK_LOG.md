@@ -205,3 +205,31 @@ the catch (the vertical-motion case the direction asked to be checked
 specifically -- it works, because the trail separates vertically on screen);
 `hasty` keeps its reference trail; `rest` has a modest, present haze instead of
 either nothing or a full cloud.
+
+### Direction 7 §1 (hinges in all directions, individually). DONE.
+**What was actually wrong, and it is §9's pattern again.** `loop_pose` already
+TOOK a per-hinge out-of-plane tilt for A, B and C -- pass 6 C.1 built it -- but
+`loop_alive` and `whole_wobble`, the two layers every clip goes through, passed
+ONE tilt value and handed it to A only. B and C carried their rest tilt and
+nothing else, and `kBNeck` was driven by nothing at all. "Each hinge moves up
+and down separately" was true of the RIG and had never once happened on screen.
+
+Now: a shared `hinge_play()` gives all four stations (neck, A, B, C) their own
+tilt (about X) and yaw (about Y) on top of their fold (about Z), each with its
+own scale (`kHingeAxisScalePm`), its own phase (`kHingePhaseStepA16` per
+station, so the motion TRAVELS along the antenna), and two axes at rates that
+do not divide into each other or into the fold's.
+
+**The constraint is authored as part of the look**, per the direction: fixed
+axes in a fixed composition order at every station, bounded amplitudes small
+next to the fold, phase lag rather than free noise. A joint with a rotation
+ORDER reads as a mechanism; one that can go anywhere reads as string.
+
+`loop_pose`'s signature is append-only and every new argument defaults to zero,
+so no existing call site changes meaning and no clip retimes.
+
+Gates after: meshcheck CLEAN (2448 tris), closure sweep 989 pm and clip-bank
+1053 pm (both unchanged -- expected, the closure aim is computed inside
+loop_pose and compensates by construction), clearance holds, slot-13 declared
+contact -35 mm inside the -60..-5 band, 5d gate A 22 mm, gate B 837 pm.
+Bandprobe: halfX 50..125, ratio 250%.

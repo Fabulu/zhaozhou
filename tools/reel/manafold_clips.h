@@ -158,9 +158,22 @@ inline int32_t angle16_of(int64_t vx, int64_t vy) {
  * still lands the arm because the play is bounded and the segment overshoots
  * deep past the anchor.
  */
+// DIRECTION 7 §1: every station's out-of-plane tilt (about X) AND yaw (about
+// Y), individually, on top of its fold (about Z). The argument order is
+// append-only so every existing call site keeps its exact meaning and no clip
+// retimes; the defaults are all zero, so a caller that does not ask for the new
+// axes gets pass-7 behaviour bit for bit.
+struct HingePlay {
+  int32_t tilt_neck = 0, yaw_neck = 0;
+  int32_t tilt_a = 0, yaw_a = 0;
+  int32_t tilt_b = 0, yaw_b = 0;
+  int32_t tilt_c = 0, yaw_c = 0;
+};
+
 inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32_t c_pm,
                       int32_t tilt_a16 = 0, int32_t d_play_a16 = 0,
-                      int32_t tilt_b_a16 = 0, int32_t tilt_c_a16 = 0) {
+                      int32_t tilt_b_a16 = 0, int32_t tilt_c_a16 = 0,
+                      const HingePlay* play = nullptr) {
   const auto a = [](int32_t base, int32_t pm) {
     return static_cast<int32_t>((static_cast<int64_t>(base) * pm) / 1000);
   };
@@ -173,13 +186,26 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   // The NEW kBNeck hinge is identity at rest: a pure articulation joint
   // the knead layer drives; the closure walk composes whatever it carries.
   const zc::quat16 loc_junction = quat_mul(quat_y(kNeckRestYawA16), quat_z(fn));
-  const zc::quat16 loc_a =
-      quat_mul(quat_z(fa), quat_x(kLoopRestTiltA16 + tilt_a16));
+  // DIRECTION 7 §1: fold (Z) -> tilt (X) -> yaw (Y), in that fixed order at
+  // every station. The ORDER is what makes it read as a hinge rather than as a
+  // free ball joint, so it is written the same way four times on purpose.
+  const int32_t pt_n = play ? play->tilt_neck : 0, py_n = play ? play->yaw_neck : 0;
+  const int32_t pt_a = play ? play->tilt_a : 0, py_a = play ? play->yaw_a : 0;
+  const int32_t pt_b = play ? play->tilt_b : 0, py_b = play ? play->yaw_b : 0;
+  const int32_t pt_c = play ? play->tilt_c : 0, py_c = play ? play->yaw_c : 0;
+  const zc::quat16 loc_a = quat_mul(
+      quat_mul(quat_z(fa), quat_x(kLoopRestTiltA16 + tilt_a16 + pt_a)), quat_y(py_a));
   // PASS 6 C.1: B and C gain their out-of-plane axis. They were quat_z ONLY,
   // which is why "each hinge moves up and down separately" was geometrically
   // impossible however hard the amplitudes were pushed.
-  const zc::quat16 loc_b = quat_mul(quat_z(fb), quat_x(kLoopRestTiltBA16 + tilt_b_a16));
-  const zc::quat16 loc_c = quat_mul(quat_z(fc), quat_x(kLoopRestTiltCA16 + tilt_c_a16));
+  const zc::quat16 loc_b = quat_mul(
+      quat_mul(quat_z(fb), quat_x(kLoopRestTiltBA16 + tilt_b_a16 + pt_b)), quat_y(py_b));
+  const zc::quat16 loc_c = quat_mul(
+      quat_mul(quat_z(fc), quat_x(kLoopRestTiltCA16 + tilt_c_a16 + pt_c)), quat_y(py_c));
+  // kBNeck was driven by NOTHING before Direction 7 §1 -- it existed as an
+  // articulation joint and no shipped layer ever moved it. It moves now.
+  if (pt_n != 0 || py_n != 0)
+    g.q[kBNeck] = quat_mul(g.q[kBNeck], quat_mul(quat_x(pt_n), quat_y(py_n)));
   g.q[kBJunctionF] = quat_mul(g.q[kBJunctionF], loc_junction);
   g.q[kBHingeA] = quat_mul(g.q[kBHingeA], loc_a);
   g.q[kBHingeB] = quat_mul(g.q[kBHingeB], loc_b);
@@ -438,6 +464,38 @@ inline int32_t hover_at(int f, int keys, int32_t base_mm, int32_t amp_a_mm,
   return fxu(base_mm) + a + b;
 }
 
+/** DIRECTION 7 §1: the per-station hinge play, shared by every layer that
+ *  poses the loop, so the two of them cannot drift apart.
+ *
+ *  Station 0 is the neck, 1..3 are hinges A, B and C. Each gets its own scale
+ *  (kHingeAxisScalePm), its own phase (kHingePhaseStepA16 per station, so the
+ *  motion TRAVELS along the antenna instead of every ball wobbling together),
+ *  and two axes running at rates that do not divide into each other or into the
+ *  fold's -- that is what keeps a bounded motion from reading as a metronome
+ *  while still reading as guided.
+ *
+ *  Deterministic and closed-form: no state, no hash, no per-clip table. Same
+ *  frame in, same pose out. */
+inline void hinge_play(HingePlay& hp, int f, int keys, int cyc) {
+  if (cyc < 1) cyc = 1;
+  const int tcyc = cyc * kHingeTiltCycDiv > 0 ? cyc * kHingeTiltCycDiv : 1;
+  const int ycyc = cyc * kHingeYawCycDiv > 0 ? cyc * kHingeYawCycDiv : 1;
+  int32_t t[4], y[4];
+  for (int st = 0; st < 4; ++st) {
+    const int32_t ph = -kHingePhaseStepA16 * st;
+    t[st] = static_cast<int32_t>(
+        (static_cast<int64_t>(kHingeTiltAmpA16) * kHingeAxisScalePm[st] / 1000 *
+         sinp(f, keys, tcyc, ph)) >> 16);
+    y[st] = static_cast<int32_t>(
+        (static_cast<int64_t>(kHingeYawAmpA16) * kHingeAxisScalePm[st] / 1000 *
+         sinp(f, keys, ycyc, ph + 0x4000)) >> 16);  // quarter-cycle off its tilt
+  }
+  hp.tilt_neck = t[0]; hp.yaw_neck = y[0];
+  hp.tilt_a = t[1];    hp.yaw_a = y[1];
+  hp.tilt_b = t[2];    hp.yaw_b = y[2];
+  hp.tilt_c = t[3];    hp.yaw_c = y[3];
+}
+
 /** The antenna's living sway: per-hinge fold-scale modulation with cumulative
  *  phase lag (the front leads, the rear follows) + slow out-of-plane tilt +
  *  the sympathetic compression coupling (one amplitude knob: kCompressAmpPm). */
@@ -459,7 +517,9 @@ inline void loop_alive(Rig& g, int f, int keys, int cyc, int32_t amp_pm,
   const int32_t tilt = static_cast<int32_t>(
       (static_cast<int64_t>(kAntennaTiltA16) * sinp(f, keys, cyc / 2 > 0 ? cyc / 2 : 1, 0x5000)) >>
       16);
-  loop_pose(g, 1000 + couple, 1000 + sa, 1000 + sb, 1000 + sc, tilt);
+  HingePlay hp;
+  hinge_play(hp, f, keys, cyc);  // DIRECTION 7 §1
+  loop_pose(g, 1000 + couple, 1000 + sa, 1000 + sb, 1000 + sc, tilt, 0, 0, 0, &hp);
 }
 
 /** THE WHOLE-CREATURE WOBBLE (pass 3, Direction 3 §4), mechanically: a slow
@@ -482,7 +542,10 @@ inline void whole_wobble(Rig& g, int f, int K, int amp_pm) {
   };
   const int32_t tilt = static_cast<int32_t>(
       (static_cast<int64_t>(kAntennaTiltA16) * sinp(f, K, cycB, 0x5000)) >> 16);
-  loop_pose(g, 1000 + wave(2), 1000 + wave(1), 1000 + wave(0), 1000 + wave(1), tilt);
+  HingePlay hp;
+  hinge_play(hp, f, K, cycA);  // DIRECTION 7 §1
+  loop_pose(g, 1000 + wave(2), 1000 + wave(1), 1000 + wave(0), 1000 + wave(1), tilt,
+            0, 0, 0, &hp);
   // the body arrives LAST: lean (the wave, one more lag station) + pitch
   const int32_t leanw = wave(3);
   g.q[kBRoot] = quat_mul(
