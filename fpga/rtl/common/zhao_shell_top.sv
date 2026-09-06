@@ -1031,21 +1031,47 @@ module zhao_shell_top
   // 64-byte line the fetcher asked for rather than the end of an arbiter
   // burst. The fetcher counts eight beats per line; the arbiter splits that
   // line into four 8-word bursts, and it must not see four `last` pulses.
-  logic [2:0] geom_beat_cnt_r;
+  // AND THE COUNT COMES FROM THE REQUEST, NOT FROM A CONSTANT.
+  //
+  // This counted a fixed eight, because the only geometry client at tread 10
+  // was GEOM.ASSETFETCH and its lines are 64 bytes. The owner's recovery brief
+  // section 12.3 is explicit that there are TWO burst scales -- ASSETFETCH's
+  // 64-byte line is eight packed words, MESHFETCH's 32-byte descriptor is four
+  // -- and that "any existing geometry beat/last generator assuming eight words
+  // must be generalized and tested for four/eight, not bypassed by fetching a
+  // neighboring descriptor".
+  //
+  // A constant eight against a 32-byte request does not merely mis-mark the
+  // end: the counter never reaches eight, so `last` never fires and the count
+  // carries into the NEXT request, putting a `last` in the middle of a line
+  // that has nothing to do with it.
+  //
+  // `len` is bytes and a packed word is eight of them, so the expected count is
+  // `len >> 3`, captured at the same handshake that clears the counter -- the
+  // request is not still on the pins when the beats come back.
+  logic [3:0] geom_expect_r;
+  logic [3:0] geom_beat_cnt_r;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
-    if (!rst_n) geom_beat_cnt_r <= 3'd0;
+    if (!rst_n) geom_beat_cnt_r <= 4'd0;
     // The reset is the guard HANDSHAKE, not `ready && ok`. Those two never
     // coincide: `rsp.ready` is the LEVEL `!fwd_active`, and `rsp.ok` pulses
     // one cycle AFTER the accept, by which time the request is forwarded and
     // ready has already dropped. A condition that cannot be true is a reset
     // that never happens.
-    else if (geom_guard_req_i.valid && geom_guard_rsp_o.ready) geom_beat_cnt_r <= 3'd0;
-    else if (geom_beat_valid_o) geom_beat_cnt_r <= geom_beat_cnt_r + 3'd1;
+    else if (geom_guard_req_i.valid && geom_guard_rsp_o.ready) geom_beat_cnt_r <= 4'd0;
+    else if (geom_beat_valid_o) geom_beat_cnt_r <= geom_beat_cnt_r + 4'd1;
+  end
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) geom_expect_r <= 4'd8;
+    else if (geom_guard_req_i.valid && geom_guard_rsp_o.ready)
+      geom_expect_r <= 4'(geom_guard_req_i.len >> 3);
   end
 
   assign geom_beat_valid_o = packed_valid && rd_owner_geom_r;
   assign geom_beat_data_o  = packed_data;
-  assign geom_beat_last_o  = geom_beat_valid_o && (geom_beat_cnt_r == 3'd7);
+  assign geom_beat_last_o  = geom_beat_valid_o &&
+                             (geom_beat_cnt_r + 4'd1 == geom_expect_r);
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin

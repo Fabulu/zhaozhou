@@ -6067,6 +6067,23 @@ verilate(test_assetfetch_rtl_directed
 add_test(NAME assetfetch_rtl_directed COMMAND test_assetfetch_rtl_directed)
 set_tests_properties(assetfetch_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# GEOM.MEM.ADAPTER -- two logical geometry requesters over the ONE permitted
+# ENGINE1 client (owner recovery brief section 12). The properties under test are
+# ownership ones: whose beats these are, whose verdict that was, and who is
+# starved -- plus the two burst scales, 32 and 64 bytes, against a downstream
+# generator that returns a constant eight words either way.
+add_executable(test_geom_mem_adapter_directed geometry/geom_mem_adapter_directed.cpp)
+target_link_libraries(test_geom_mem_adapter_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_mem_adapter_directed
+  PREFIX Vtb_geom_mem_adapter
+  TOP_MODULE tb_geom_mem_adapter
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_mem_adapter.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_mem_adapter.sv)
+add_test(NAME geom_mem_adapter_directed COMMAND test_geom_mem_adapter_directed)
+set_tests_properties(geom_mem_adapter_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # GEOM.ASSETFETCH -- randomized DIFFERENTIAL. Unlike the meshfetch random file
 # there IS something to differ against here, so this compares the RTL to the
 # oracle over 240 meshlets rather than checking properties.
