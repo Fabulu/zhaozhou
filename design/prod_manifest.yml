@@ -187,6 +187,15 @@ excluded:
   # first member.
   - zhao_texture_island_top: probe  the composed G1-D island; its blocks are counted individually
 
+  # MATERIAL.COMBINE.V2 is the paired-phase replacement built beside V1 per the
+  # owner's recovery brief, which is explicit that V1 stays as the historical
+  # comparison rather than being erased. V2 is not instantiated by anything yet
+  # -- it passes its differential against zref::material::combine and its exact
+  # phase count, and it goes into the island only after the release gate closes.
+  # Declared absent rather than counted, because counting a block the machine
+  # does not contain would inflate every budget it appears in.
+  - zhao_texture_material_combine_v2: successor  the paired-phase combiner; V1 is still the instantiated one
+
   # --- probes and leaf-fit pairs: never in the machine -----------------------
   # These exist to put ONE block, or two adjacent blocks, in front of the
   # fitter. Every one of them is a wrapper around production logic that is

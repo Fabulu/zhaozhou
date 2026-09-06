@@ -4596,8 +4596,12 @@ module zhao_prod_top (
   logic [1-1:0] u67_bil_valid_o;
   logic [64-1:0] u67_bil_data_o;
   logic [16-1:0] u67_bil_tok_o;
+  logic [1-1:0] u67_err_valid_o;
+  logic [64-1:0] u67_err_data_o;
+  logic [16-1:0] u67_err_tok_o;
   logic [32-1:0] u67_accepted_o;
   logic [32-1:0] u67_hol_stall_o;
+  logic [32-1:0] u67_err_unknown_class_o;
   logic [3-1:0] u67_occupancy_o;
   zhao_texture_rsp_dispatch u67_i (
       .clk(clk),
@@ -4619,14 +4623,19 @@ module zhao_prod_top (
       .bil_ready_i(u67_src[42 +: 1]),
       .bil_data_o(u67_bil_data_o),
       .bil_tok_o(u67_bil_tok_o),
+      .err_valid_o(u67_err_valid_o),
+      .err_ready_i(u67_src[49 +: 1]),
+      .err_data_o(u67_err_data_o),
+      .err_tok_o(u67_err_tok_o),
       .accepted_o(u67_accepted_o),
       .hol_stall_o(u67_hol_stall_o),
+      .err_unknown_class_o(u67_err_unknown_class_o),
       .occupancy_o(u67_occupancy_o)
   );
   logic u67_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u67_fold_q <= 1'b0;
-    else u67_fold_q <= u67_fold_q ^ (^u67_rsp_ready_o) ^ (^u67_clut_valid_o) ^ (^u67_clut_data_o) ^ (^u67_clut_tok_o) ^ (^u67_near_valid_o) ^ (^u67_near_data_o) ^ (^u67_near_tok_o) ^ (^u67_bil_valid_o) ^ (^u67_bil_data_o) ^ (^u67_bil_tok_o) ^ (^u67_accepted_o) ^ (^u67_hol_stall_o) ^ (^u67_occupancy_o);
+    else u67_fold_q <= u67_fold_q ^ (^u67_rsp_ready_o) ^ (^u67_clut_valid_o) ^ (^u67_clut_data_o) ^ (^u67_clut_tok_o) ^ (^u67_near_valid_o) ^ (^u67_near_data_o) ^ (^u67_near_tok_o) ^ (^u67_bil_valid_o) ^ (^u67_bil_data_o) ^ (^u67_bil_tok_o) ^ (^u67_err_valid_o) ^ (^u67_err_data_o) ^ (^u67_err_tok_o) ^ (^u67_accepted_o) ^ (^u67_hol_stall_o) ^ (^u67_err_unknown_class_o) ^ (^u67_occupancy_o);
 
   // ---- zhao_texture_tmu_pipe ----
   logic [63:0] u68_lfsr_q;

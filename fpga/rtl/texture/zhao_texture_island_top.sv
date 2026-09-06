@@ -258,8 +258,111 @@ module zhao_texture_island_top #(
     // channel accumulator pairs R, G and B by ARRIVAL ORDER, so a reordering
     // would silently combine one sample's red with another's blue and every
     // direct-colour pixel would be wrong with no counter moving.
-    output var logic        err_bil_chan_o
+    output var logic        err_bil_chan_o,
+
+    // ======================= TYPED SAMPLE COMPLETION EVIDENCE ===============
+    // Pre-fit brief section 5A. Every one of these counts a sample that used
+    // to VANISH -- and a vanished sample is not a wrong pixel, it is a hang:
+    // `zhao_texture_fragrob.sv:470-472` retires only when arrivals exactly
+    // equal requests, there is no timeout in that file, and retirement is
+    // allocation ordered, so ONE lost sample parks the head forever and the
+    // whole island stops. Each counter below therefore marks the conversion of
+    // a deadlock into a visible, retiring error pixel.
+    //
+    // These are counts and not stickies because the interesting question is
+    // "how much of the frame was wrong", and because a single occurrence no
+    // longer means the island is dead.
+
+    // (a) Class-1 (direct nearest) responses given a terminal REFUSAL
+    // completion. Refusal and not colour, because the island has no
+    // format-controlled decode yet -- see the merger below.
+    output var logic [31:0] cnt_near_refused_o,
+
+    // (b) Responses whose class was 3. Routed to an error completion by
+    // RSP_DISPATCH instead of being popped into nothing.
+    output var logic [31:0] err_unknown_class_o,
+
+    // (b, boundary half) Fragments admitted with `frag_class_i == 3`. The
+    // class is sanitised at the island pin so a class 3 cannot reach the
+    // planner at all; this counts how often that sanitisation fired.
+    output var logic [31:0] err_class_invalid_o,
+
+    // (c) Palette lookups the LEAF ITSELF marked unusable -- stale or
+    // non-resident -- which used to be shipped as ordinary colour.
+    output var logic [31:0] err_palette_unusable_o,
+
+    // (e) Requests where the class carried in the source id disagreed with the
+    // class implied by the planner's own `acc_fmt_o`/`acc_filter_o`
+    // resolution. Two authorities, no comparison, until now.
+    output var logic [31:0] err_class_mismatch_o,
+
+    // (e, second half) Sticky: the planner raised `acc_err_o` on an accepted
+    // request. That output was connected and never read by anything, so a
+    // sanitised or rejected mode was completely invisible at the island
+    // boundary.
+    output var logic        err_plan_mode_o
 );
+
+  // ==========================================================================
+  // THE SAMPLE CLASS AND FORMAT ENCODINGS, NAMED ONCE
+  // ==========================================================================
+  // These were literals scattered across the file, which is how (e) survived:
+  // the island routed on `2'd0/2'd2` bit patterns and the planner resolved
+  // `FMT_*` symbols, and nothing put the two vocabularies in the same place
+  // where they could be compared.
+  //
+  // SOURCE OF TRUTH for the class encoding is `zhao_texture_rsp_dispatch.sv`
+  // (CLS_CLUT/CLS_NEAR/CLS_BIL); for the format encoding it is
+  // `zhao_texture_tmu_plan.sv` (FMT_CLUT8..FMT_ARGB4444). Neither exports a
+  // package, so these are copies; they are grouped here so a divergence is one
+  // diff rather than a hunt.
+  localparam logic [1:0] CLS_CLUT = 2'd0;
+  localparam logic [1:0] CLS_NEAR = 2'd1;
+  localparam logic [1:0] CLS_BIL  = 2'd2;
+  localparam logic [1:0] CLS_ERR  = 2'd3;   // not a legal request class
+
+  localparam logic [2:0] FMT_CLUT8    = 3'd0;
+  localparam logic [2:0] FMT_RGB565   = 3'd1;
+  localparam logic [2:0] FMT_CLUT4    = 3'd2;
+  localparam logic [2:0] FMT_ARGB1555 = 3'd3;
+  localparam logic [2:0] FMT_ARGB4444 = 3'd4;
+
+  // THE DERIVATION THE ISLAND SHOULD HAVE BEEN ROUTING ON. Class is a FUNCTION
+  // of {format, filter} and was never an independent fact; see (e) below.
+  // EVERY FORMAT LISTED, none folded into a default, so that adding one to the
+  // planner and forgetting it here is an unroutable CLS_ERR and a counted
+  // mismatch rather than a silent reuse of whatever the last arm decided.
+  function automatic logic [1:0] class_of(input logic [2:0] fmt,
+                                          input logic       filt);
+    case (fmt)
+      FMT_CLUT8, FMT_CLUT4:
+        // A palette is never filtered -- the planner forces `filter_eff` low
+        // for a CLUT and raises `acc_err_o` if one was asked for, so `filt` is
+        // deliberately not consulted on this arm.
+        class_of = CLS_CLUT;
+      FMT_RGB565, FMT_ARGB1555, FMT_ARGB4444:
+        class_of = filt ? CLS_BIL : CLS_NEAR;
+      default:
+        // Above FMT_ARGB4444. This is the planner's own `fmt_bad`, and it
+        // cannot route anywhere; it exists so the comparison below reports it.
+        class_of = CLS_ERR;
+    endcase
+  endfunction
+
+  // THE ERROR COLOUR EVERY REFUSED OR FAILED SAMPLE COMPLETES WITH.
+  //
+  // LOUD ON PURPOSE. The alternative -- black, or alpha 0 -- makes a failed
+  // sample look like a legitimately dark or transparent one, and the entire
+  // point of the typed-completion repair is that a failure stops being
+  // indistinguishable from ordinary output. Magenta at full alpha is visible in
+  // one glance at a frame and cannot be mistaken for art.
+  //
+  // It is a NAMED CONSTANT and not a literal because the owner must be able to
+  // change it: a debug build wants it screaming, a shipping build may want it
+  // to match the surrounding material. That choice belongs to whoever is
+  // looking at the picture.
+  localparam logic [23:0] SMP_ERR_RGB = 24'hFF00FF;
+  localparam logic [7:0]  SMP_ERR_A   = 8'hFF;
 
   // ==========================================================================
   // RCP24 -> PERSPUV
@@ -394,6 +497,53 @@ module zhao_texture_island_top #(
   // hand-written slices of the same token that OVERLAPPED, so the "slot" was
   // the low bits of the "generation" and every CLUT fragment came out black
   // while the lookup counter looked healthy. Named fields cannot overlap.
+  // ==========================================================================
+  // DEFECT (b), THE BOUNDARY HALF: VALIDATE frag_class_i AT THE ISLAND PIN
+  // ==========================================================================
+  // THE DEFECT. `frag_class_i` is a 2-bit island input and NOTHING validated
+  // it. Its value was stored verbatim, travelled to `class_m`, was packed into
+  // the top two bits of the planner's source id, echoed by CACHE_PIPE and used
+  // by RSP_DISPATCH to route. A caller supplying 3 -- a legal bit pattern on an
+  // unconstrained pin -- reached the dispatcher's `default:` arm, which popped
+  // the response and destroyed it.
+  //
+  // THE EVIDENCE. The composed test drives only 0 and 2, which is why this has
+  // never fired. That is not safety; that is an untested trapdoor. Section 5A.8
+  // of the brief requires acceptance to drive ALL FOUR values including 3.
+  //
+  // THE CONSEQUENCE WITHOUT THE FIX. FRAGROB's `head_done_c` never reaches
+  // `arr_q == req_q` for that fragment; retirement is allocation ordered; the
+  // island stops. One bad pin value from a caller kills the frame.
+  //
+  // BOTH HALVES ARE IMPLEMENTED, DELIBERATELY. The dispatcher now completes an
+  // unknown class with an error instead of destroying it (defence in depth,
+  // against corruption between here and there), and the class cannot enter as
+  // 3 in the first place (this). Either alone leaves the other's failure mode
+  // open: without the dispatcher fix a corrupted id still hangs the island;
+  // without this fix every class-3 fragment burns an error completion and a
+  // magenta pixel for a fault that could have been caught at the pin.
+  //
+  // SANITISED TO CLS_NEAR, NOT DROPPED, because the nearest lane is the one
+  // that already terminates in a counted refusal (defect (a) below). The
+  // fragment therefore gets a defined error colour and RETIRES, which is the
+  // section 5A.7 invariant: an error must be as retirable as a success. Since
+  // the refusal is counted separately from `err_class_invalid_o`, the two are
+  // still distinguishable in the evidence.
+  //
+  // WHERE THE SANITISATION LIVES, AND WHY NOT HERE. The obvious shape is a
+  // combinational `frag_class_san_c` beside the pin. That is a LIVE-INGRESS
+  // ALIAS, and `tools/rtl/check_ingress_capture.py` exists to forbid exactly
+  // that pattern: a wire built from an ingress pin is a late read laundered
+  // through one extra wire, which is the historical `fr_f_ctx_in` defect the
+  // gate was written for. It went red on the first draft of this repair, which
+  // is the gate doing its job.
+  //
+  // So the pin is STORED VERBATIM at the capture event, exactly as before, and
+  // both the sanitisation and its counter happen at the READ point, on
+  // captured data -- see `f_class_c` / `f_class_bad_c` below. That also keeps
+  // the raw value recoverable for diagnosis instead of destroying it at the
+  // door.
+
   localparam int unsigned PSW = $clog2(PAL_SLOTS);
   logic [BINDW-1:0] fbind_m [FCTXN];
   logic [LODW-1:0]  flod_m  [FCTXN];
@@ -500,7 +650,13 @@ module zhao_texture_island_top #(
   wire [31:0]           fbase_rd = fbase_m[fc_rp];
   wire [BINDW-1:0] f_binding_c  = fbind_m[fc_rp];
   wire [LODW-1:0]  f_lod_c      = flod_m [fc_rp];
-  wire [1:0]       f_class_c    = fcls_m [fc_rp];
+  // DEFECT (b), THE BOUNDARY HALF, APPLIED HERE ON CAPTURED DATA.
+  // `fcls_m` holds the pin verbatim; this is where an out-of-range class stops
+  // being able to travel. `f_class_bad_c` is the raw verdict, kept so the
+  // counter below can see it after the value has been replaced.
+  wire [1:0]       f_class_raw_c = fcls_m [fc_rp];
+  wire             f_class_bad_c = (f_class_raw_c == CLS_ERR);
+  wire [1:0]       f_class_c    = f_class_bad_c ? CLS_NEAR : f_class_raw_c;
   wire             f_aux_c      = faux_m [fc_rp];
   wire [PSW-1:0]   f_pal_slot_c = fpsl_m [fc_rp];
   wire [GENW-1:0]  f_pal_gen_c  = fpgn_m [fc_rp];
@@ -686,6 +842,17 @@ module zhao_texture_island_top #(
     end
   end
 
+  // DEFECT (b) BOUNDARY EVIDENCE. Counted at FRAGROB ALLOCATION, which happens
+  // exactly once per admitted fragment, so this is "fragments that arrived with
+  // an impossible class" and not "clocks during which the pin was 3". It reads
+  // the captured `f_class_bad_c`, never the pin, so the ingress-capture gate
+  // stays clean -- see the note at the capture site.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) err_class_invalid_o <= 32'd0;
+    else if (fr_alloc_valid && f_class_bad_c)
+      err_class_invalid_o <= err_class_invalid_o + 32'd1;
+  end
+
   // THE RESPONSE ROUTING TOKEN'S FIELDS, named once. The palette wiring below
   // used to slice this word by hand with two overlapping ranges, so nothing
   // caught that they overlapped.
@@ -773,6 +940,99 @@ module zhao_texture_island_top #(
       .acc_fmt_o(plan_acc_fmt),
       .accepted_o(cnt_plan_accepted_o), .occupancy_o(plan_occ));
 
+  // ==========================================================================
+  // DEFECT (e): TWO AUTHORITIES DECIDE THE SAME THING AND NOBODY COMPARED THEM
+  // ==========================================================================
+  // THE DEFECT. TMU_PLAN resolves format and filter out of `bind_mode_i` and
+  // publishes `acc_fmt_o`, `acc_filter_o` and `acc_err_o`. All three are
+  // connected above and, before this block, ALL THREE WERE READ BY NOTHING --
+  // a whole-file grep found only the declarations and the port connections.
+  // The island instead routes on `frag_class_i`, a separate island input, and
+  // the class is a FUNCTION of {format, filter}, so there is only ever one
+  // right answer and two places claiming to hold it.
+  //
+  // THE EVIDENCE THAT IT FIRES TODAY, not latently. The composed test drives
+  // `bind_mode_i = 0x6600`, which resolves to CLUT8, nearest, `acc_en_o =
+  // 4'b0001` -- ONE enabled lane -- while tagging half its fragments CLS_BIL.
+  //
+  // THE CONSEQUENCE. For every one of those fragments:
+  //   * only lane 0 was enabled, but `zhao_texture_cache_pipe.sv:453-455`
+  //     writes the result slot from ALL FOUR lanes unconditionally while
+  //     classifying hit/miss on enabled lanes only. Lanes 1-3 return
+  //     UNTAG-CHECKED RAM contents at addresses the planner computed anyway --
+  //     potentially another texture entirely;
+  //   * those four words are then fed to `chan8()` as RGB565 when lane 0 in
+  //     fact holds a pair of CLUT8 palette INDICES.
+  // The output is a palette index byte and three stale words interpreted as
+  // colour channels, bilinearly filtered, and written as the fragment's colour.
+  // Not "approximately right".
+  //
+  // WHAT THIS PASS DOES, AND WHAT IT DELIBERATELY DOES NOT. The full repair is
+  // section 5A.7's resolved sample descriptor: derive the class from the
+  // planner and delete the independent input. That is a data-path change
+  // touching the token layout, the metadata table and the request path, and it
+  // is NOT attempted here. What is done here is to MAKE THE DISAGREEMENT
+  // VISIBLE -- because right now the island is silently wrong and reads as
+  // healthy, and a counted disagreement is the thing that turns "we believe the
+  // fixture is testing bilinear" into a number. `frag_class_i` still routes.
+  //
+  // WHAT BREAKS WITHOUT THIS. Nothing new breaks -- it is already broken. What
+  // breaks is the ability to KNOW: the next composed run reports colours, the
+  // counters all move, and there is no signal anywhere that half the fragments
+  // decoded another texture's bytes as colour.
+  wire [1:0] plan_class_carried_c = plan_acc_src[SRCW-1 -: 2];
+  wire [1:0] plan_class_derived_c = class_of(plan_acc_fmt, plan_acc_filter);
+  wire       plan_class_mismatch_c =
+      plan_acc_valid && plan_acc_ready &&
+      (plan_class_carried_c != plan_class_derived_c);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      err_class_mismatch_o <= 32'd0;
+      err_plan_mode_o      <= 1'b0;
+    end else begin
+      if (plan_class_mismatch_c)
+        err_class_mismatch_o <= err_class_mismatch_o + 32'd1;
+      // `acc_err_o` is the planner's own verdict that the mode word was
+      // reserved-bit-dirty, asked for a filtered palette, or named a format
+      // above ARGB4444. It was connected and never read. Sticky, because one
+      // occurrence already means the request that went to the cache is not the
+      // request the caller described.
+      if (plan_acc_valid && plan_acc_ready && plan_acc_err)
+        err_plan_mode_o <= 1'b1;
+    end
+  end
+
+`ifndef SYNTHESIS
+  // IT REPORTS; IT DOES NOT HALT, and that is a deliberate choice rather than a
+  // softened assertion.
+  //
+  // The disagreement this watches for is REAL AND PRESENT: the composed fixture
+  // drives bind_mode 0x6600, which the planner resolves as CLUT8 / NEAREST,
+  // while tagging half its fragments as the bilinear class through an
+  // independent input. That is the defect, and repairing it is the fixture
+  // rebuild (W10) -- not something the island can fix by stopping.
+  //
+  // A halting assert here would break the suite on a known, scheduled defect,
+  // and a suite that is red for a scheduled reason teaches people to run it
+  // with assertions off. So the event is COUNTED in err_class_mismatch_o, which
+  // the composed test asserts an exact value against: nonzero today, and zero
+  // when the fixture drives a mode and a class that agree. The number is the
+  // evidence either way.
+  //
+  // The message was also wrong on its first outing -- the two string literals
+  // were concatenated with {} , which Verilog evaluates as a numeric
+  // concatenation and printed a 250-digit integer instead of the text. One
+  // literal now.
+  always_ff @(posedge clk) begin
+    if (rst_n && plan_acc_valid && plan_acc_ready &&
+        (plan_class_carried_c != plan_class_derived_c)) begin
+      $warning("island (e): sample class disagreement -- source id says %0d, planner says %0d (fmt=%0d filter=%0b)",
+               plan_class_carried_c, plan_class_derived_c, plan_acc_fmt, plan_acc_filter);
+    end
+  end
+`endif
+
   logic        cache_smp_valid, cache_smp_ready;
   logic [LANES*16-1:0] cache_smp_data;
   logic [15:0] cache_smp_src;
@@ -801,12 +1061,27 @@ module zhao_texture_island_top #(
   logic        disp_clut_valid, disp_clut_ready;
   logic [DATAW-1:0] disp_clut_data;
   logic [TOKW-1:0]  disp_clut_tok;
-  logic        disp_near_valid;
+  logic        disp_near_valid, disp_near_ready;
+  // STILL UNREAD, AND THE DIFFERENCE MATTERS. Before this pass the VALID, the
+  // DATA and the TOKEN were all unread, which is why the sample vanished and
+  // the island hung. Now the valid and the token drive a real terminal
+  // completion; only the PAYLOAD is unread, because decoding it needs the
+  // format-controlled decode of defect (d). An unread payload is a refused
+  // sample -- counted, retiring, visible. An unread token was a deadlock.
   logic [DATAW-1:0] disp_near_data;
   logic [TOKW-1:0]  disp_near_tok;
   logic        disp_bil_valid, disp_bil_ready;
   logic [DATAW-1:0] disp_bil_data;
   logic [TOKW-1:0]  disp_bil_tok;
+  // DEFECT (b): the dispatcher's terminal path for a class it cannot route.
+  // Only the VALID and the TOKEN are taken. The token is the whole point --
+  // it carries the FRAGROB slot, sample index and generation, which is what
+  // makes the failed sample completable instead of a hole. The data is left
+  // unconnected because it is undecodable by construction: what went wrong is
+  // the routing, so there is no format under which those 64 bits mean
+  // anything. It stays a dispatcher output for a future diagnostic port.
+  logic        disp_err_valid, disp_err_ready;
+  logic [TOKW-1:0]  disp_err_tok;
   logic [31:0] disp_hol;
   logic [2:0]  disp_occ;
 
@@ -821,11 +1096,21 @@ module zhao_texture_island_top #(
       .rsp_class_i(cache_smp_src[15:14]),   // GLUE 3, see the header
       .clut_valid_o(disp_clut_valid), .clut_ready_i(disp_clut_ready),
       .clut_data_o(disp_clut_data), .clut_tok_o(disp_clut_tok),
-      .near_valid_o(disp_near_valid), .near_ready_i(1'b1),
+      // DEFECT (a) REPAIRED. This was `.near_ready_i(1'b1)` with `near_data_o`
+      // and `near_tok_o` going to nets that a whole-file grep found read by
+      // NOTHING -- three declarations and this instantiation, no decode, no
+      // completion, not even a counter. Tied high, the class-1 pop fired
+      // whenever the queue was non-empty and drained one entry per clock INTO
+      // OPEN AIR. `near_ready_i` is now driven by the completion merger, so a
+      // nearest response is popped only when something takes it.
+      .near_valid_o(disp_near_valid), .near_ready_i(disp_near_ready),
       .near_data_o(disp_near_data), .near_tok_o(disp_near_tok),
       .bil_valid_o(disp_bil_valid), .bil_ready_i(disp_bil_ready),
       .bil_data_o(disp_bil_data), .bil_tok_o(disp_bil_tok),
+      .err_valid_o(disp_err_valid), .err_ready_i(disp_err_ready),
+      .err_data_o(), .err_tok_o(disp_err_tok),
       .accepted_o(cnt_dispatch_accepted_o), .hol_stall_o(disp_hol),
+      .err_unknown_class_o(err_unknown_class_o),
       .occupancy_o(disp_occ));
 
   // GLUE 2: texel -> channel. The dispatcher hands four RGB565 texels; the
@@ -1011,9 +1296,118 @@ module zhao_texture_island_top #(
     else if (disp_clut_valid) clut_tok_r <= disp_clut_tok;
   end
 
-  wire [TOKW-1:0] rsp_tok = pal_lu_valid_o ? clut_tok_r : bil_out_tok;
+  // ==========================================================================
+  // DEFECT (c): THE PALETTE'S OWN REFUSAL WAS IGNORED
+  // ==========================================================================
+  // THE DEFECT. `pal_lu_stale` and `pal_lu_resident` appeared at EXACTLY TWO
+  // places in this file: their declaration and their connection to the leaf.
+  // The merger below formed `fr_tmu_rvalid` and `fr_tmu_rgb` from
+  // `pal_lu_valid_o` ALONE, so a lookup the leaf had explicitly marked unusable
+  // was shipped as an ordinary sample colour.
+  //
+  // THE LEAF IS NOT AT FAULT AND MUST NOT BE "FIXED". `zhao_texture_palette_res
+  // .sv:87-91` says it in the port comment -- "The caller must take the cold
+  // path; the colour returned is NOT usable" -- and it is right to say so: it
+  // forwards a same-clock BEGIN and advances the generation AT begin, precisely
+  // so a mid-load lookup cannot answer. The defect is entirely caller-side.
+  //
+  // WHAT THE SHIPPED WORD ACTUALLY WAS. Not a defined black. `l1_data_q` is
+  // loaded unconditionally from `pal_m`, an array DELIBERATELY never reset
+  // (palette_res:112-129, and reset-at-allocation is the exact thing section 7
+  // of the pre-fit brief forbids for M10K). So the colour is the PREVIOUS
+  // palette's entry under a live binding to a different palette -- the
+  // "creature briefly wearing another creature's colours" case the leaf's own
+  // header names -- or a half-written entry, or uninitialised memory.
+  //
+  // IT FIRES TODAY. `cnt_palette_stale_o` and `cnt_palette_cold_o` are already
+  // wired to the island boundary. The island was counting the event and
+  // shipping the colour anyway. A measured 96 lookups / 96 stale run is on
+  // record above.
+  //
+  // THE REPAIR, AND THE INVARIANT IT PRESERVES. The ordinary completion is now
+  // gated on all three bits; the complement is an EXPLICIT, COUNTED ERROR
+  // COMPLETION that still asserts `fr_tmu_rvalid` with the same identity. That
+  // last part is the whole design: FRAGROB increments `arr_q` on any accepted
+  // response, so an error completion advances `arr_q == req_q` exactly as a
+  // success does and the fragment RETIRES. An error must be as retirable as a
+  // success -- otherwise "refuse the bad colour" turns a wrong pixel into a
+  // deadlock, which is strictly worse.
+  //
+  // WHAT BREAKS WITHOUT THE FIX. Every stale or cold lookup paints a texel with
+  // whatever bits happen to be in the palette RAM, with no way to tell it from
+  // an intended colour, on a path the counters report as healthy.
+  wire pal_ok_c  = pal_lu_valid_o && !pal_lu_stale && pal_lu_resident;
+  wire pal_bad_c = pal_lu_valid_o && (pal_lu_stale || !pal_lu_resident);
 
-  // TWO SOURCES, ONE PORT, SO ONE MUST WAIT.
+  // ==========================================================================
+  // DEFECT (a): THE NEAREST PATH RETURNED TO NOBODY
+  // ==========================================================================
+  // THE DEFECT. `.near_ready_i(1'b1)` above, and a whole-file grep for
+  // `disp_near` returning FOUR lines: three declarations and the instantiation.
+  // The data and token nets were read by nothing -- no decode, no completion,
+  // not even a counter -- so the class-1 pop fired whenever the queue was
+  // non-empty and drained one entry per clock into open air. `fr_tmu_rvalid`
+  // was formed from the other two lanes only.
+  //
+  // LATENT, NOT FIRING -- WHICH IS THE PROBLEM. The composed test drives
+  // `frag_class_i` as 0 or 2 only, so class 1 has never been exercised. It is a
+  // trapdoor on a 2-bit island input, and the first real nearest binding would
+  // have hung the island rather than drawn a wrong pixel: FRAGROB has no
+  // timeout, retires in allocation order, and one un-arrived sample parks the
+  // head permanently.
+  //
+  // WHAT THIS PASS DOES, STATED PLAINLY BECAUSE IT IS A REDUCTION. A nearest
+  // response now receives a REAL TERMINAL COMPLETION carrying its own identity
+  // -- but a REFUSAL completion, not a colour. It is counted in
+  // `cnt_near_refused_o` and it retires the fragment. It is never silently
+  // popped.
+  //
+  // WHY A REFUSAL AND NOT THE COLOUR. Decoding the texel needs the format, and
+  // defect (d) is deferred: the island has NO format-controlled decode. Its
+  // only extractor, `chan8()`, is hardwired RGB565 with no format input, and
+  // the sample metadata table carries no format field, so there is nothing here
+  // that can tell an RGB565 texel from an ARGB1555 or ARGB4444 one. Guessing
+  // RGB565 would ship a confidently wrong colour on two of the three direct
+  // formats and would be indistinguishable from a correct one. A counted
+  // refusal is a lie nobody can mistake for the truth.
+  //
+  // THIS IS A PLACEHOLDER WITH A KNOWN REPLACEMENT. Section 5A.7 item 5 of the
+  // pre-fit brief: the nearest decode station is the SAME format-controlled
+  // decode law defect (d) needs -- one shared block, not three. When (d) lands,
+  // this refusal becomes that decode and `cnt_near_refused_o` should go to
+  // zero on every run that is not deliberately testing a bad format.
+  wire near_ok_c = 1'b0;   // no format-controlled decode yet; see above
+
+  // ==========================================================================
+  // THE COMPLETION MERGER
+  // ==========================================================================
+  // FOUR SOURCES, ONE PORT. The priority order is fixed and it is not a
+  // fairness choice:
+  //
+  //   1. PALETTE -- because it CANNOT WAIT. PALETTE_RES has no `lu_ready_i`;
+  //      its answer is valid for exactly one clock and cannot be held. Both an
+  //      ok and a refused palette lookup occupy this slot, because they are the
+  //      same one-clock event with a different verdict.
+  //   2. NEAREST refusal, 3. UNKNOWN-CLASS error -- both come out of the
+  //      dispatcher's per-class queues and can be back-pressured.
+  //   4. BILINEAR -- last because its lane holds its result until taken.
+  //
+  // NO STARVATION, and the argument is short: the dispatcher pops at most ONE
+  // raw entry per clock, so the combined arrival rate into all class queues is
+  // at most one per clock, while this merger retires one per clock. Bilinear
+  // therefore cannot be held off indefinitely by traffic that had to arrive
+  // through the same single port.
+  wire [TOKW-1:0] rsp_tok = pal_lu_valid_o  ? clut_tok_r
+                          : disp_near_valid ? disp_near_tok
+                          : disp_err_valid  ? disp_err_tok
+                                            : bil_out_tok;
+
+  // FOUR SOURCES NOW, ONE PORT, SO THREE MUST WAIT. The history below was
+  // written when there were two, and it is kept verbatim because it is the
+  // argument that fixes the priority ORDER -- the two lanes added since,
+  // nearest and unknown-class, both come out of dispatcher queues that CAN
+  // wait, so they slot in below the palette and above the bilinear lane
+  // without changing a word of it.
   //
   // The bilinear lane and the palette both answer into FRAGROB's single sample
   // response port. `bil_out_ready = fr_tmu_rready` accepted the bilinear answer
@@ -1057,8 +1451,47 @@ module zhao_texture_island_top #(
     else if (pal_lu_valid_o && !fr_tmu_rready) err_rsp_dropped_o <= 1'b1;
   end
 
-  assign bil_out_ready  = fr_tmu_rready && !pal_lu_valid_o;
-  assign fr_tmu_rvalid  = bil_out_valid || pal_lu_valid_o;
+  // The strict priority chain, written once. Each lane may fire only when no
+  // higher-priority lane is presenting this clock.
+  assign disp_near_ready = fr_tmu_rready && !pal_lu_valid_o;
+  assign disp_err_ready  = fr_tmu_rready && !pal_lu_valid_o && !disp_near_valid;
+  assign bil_out_ready   = fr_tmu_rready && !pal_lu_valid_o && !disp_near_valid
+                                         && !disp_err_valid;
+
+  // EVERY LANE COMPLETES. This used to be `bil_out_valid || pal_lu_valid_o`;
+  // the two missing terms are defects (a) and (b), and each missing term was a
+  // sample that never arrived at FRAGROB and therefore a fragment that never
+  // retired and therefore a stalled island.
+  assign fr_tmu_rvalid  = pal_lu_valid_o || disp_near_valid || disp_err_valid
+                                         || bil_out_valid;
+
+  // IS THIS COMPLETION AN ERROR? True for a palette lookup the leaf refused,
+  // for a nearest response we have no decode for, and for a response whose
+  // class was not routable. All three still complete; they just complete with
+  // the error colour instead of a sample colour.
+  wire smp_err_c = pal_bad_c
+                || (!pal_lu_valid_o && disp_near_valid && !near_ok_c)
+                || (!pal_lu_valid_o && !disp_near_valid && disp_err_valid);
+
+  // ---- the counted evidence for (a) and (c) --------------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      err_palette_unusable_o <= 32'd0;
+      cnt_near_refused_o     <= 32'd0;
+    end else begin
+      // Counted at COMPLETION, not at lookup, so the number is "samples that
+      // shipped an error", which is the thing a frame's worth of magenta
+      // should be divisible by. `cnt_palette_stale_o`/`cnt_palette_cold_o`
+      // already count the leaf's verdict; this counts what the island did
+      // about it, and before this repair the two would have disagreed
+      // completely -- the leaf refusing and the island shipping.
+      if (pal_bad_c && fr_tmu_rready)
+        err_palette_unusable_o <= err_palette_unusable_o + 32'd1;
+      if (disp_near_valid && disp_near_ready && !near_ok_c)
+        cnt_near_refused_o <= cnt_near_refused_o + 32'd1;
+    end
+  end
+
   // RGB565 -> RGB888 BY REPLICATION, not by zero-fill. AUDIT R5/D23.
   //
   // This appended zeros: {r5, 3'b000}. The ABI is written down --
@@ -1081,11 +1514,60 @@ module zhao_texture_island_top #(
   wire [7:0] pal_g8 = {pal_lu_rgb565[10:5],  pal_lu_rgb565[10:9]};
   wire [7:0] pal_b8 = {pal_lu_rgb565[4:0],   pal_lu_rgb565[4:2]};
 
-  assign fr_tmu_rgb     = pal_lu_valid_o
-                          ? {pal_r8, pal_g8, pal_b8}
+  // THE COLOUR, IN THE SAME PRIORITY ORDER AS THE TOKEN ABOVE. An errored
+  // completion overrides everything: the identity still comes from whichever
+  // lane answered, but the payload is the declared error colour.
+  assign fr_tmu_rgb     = smp_err_c ? SMP_ERR_RGB
+                        : pal_ok_c  ? {pal_r8, pal_g8, pal_b8}
                           // THREE CHANNELS, not one replicated three times.
-                          : bil_rgb;
-  assign fr_tmu_a       = 8'hFF;
+                                    : bil_rgb;
+
+  // ==========================================================================
+  // DEFECT (d) -- ALPHA AND FORMAT DECODE -- IS DEFERRED, AND HERE IS EXACTLY
+  // WHAT IS MISSING SO THE NEXT PASS DOES NOT HAVE TO REDISCOVER IT
+  // ==========================================================================
+  // This assignment is `8'hFF` for BOTH branches, unconditionally. That is a
+  // gap and not a convention, and the proof is one screen down: the AUX path at
+  // `fr_aux_a` forms a REAL alpha from `aux_out_degenerate`. So the island can
+  // express a non-opaque sample; the texture path simply never does.
+  //
+  // CONSEQUENCE: every texture sample is opaque. Any ARGB texture and any
+  // index-based transparency is silently lost, and the combiner always receives
+  // 255. No counter moves, because there is nothing to count -- the information
+  // was discarded before it was ever formed.
+  //
+  // THE FOUR SEPARATE HOLES, each of which needs its own repair:
+  //
+  //   1. ALPHA. There is no alpha anywhere on this path. It cannot be
+  //      recovered from an RGB565 word (there is none) and must come from the
+  //      decode of ARGB1555/ARGB4444, or from an index-transparency rule
+  //      applied to the raw CLUT index BEFORE the palette lookup replaces it.
+  //
+  //   2. DIRECT-COLOUR EXTRACTION IS HARDWIRED RGB565. `chan8()` above takes
+  //      a halfword and a channel and has NO FORMAT INPUT. Every direct texel
+  //      in this island is decoded as RGB565 whatever the binding asked for.
+  //
+  //   3. CLUT4'S NIBBLE IS UNRECOVERABLE DOWNSTREAM -- this is the one that
+  //      forces the repair upstream, not here. The planner carries
+  //      `t1_clut4`/`t2_clut4`/`t3_clut4` through every stage and emits
+  //      `FMT_CLUT4`, and this island never consumes it: the palette lookup
+  //      above selects a BYTE (`sampmeta_m[...][0] ? data[15:8] : data[7:0]`)
+  //      and never a nibble. It CANNOT be fixed at this line, because the
+  //      texel-to-byte divide in the planner has ALREADY DISCARDED the
+  //      sub-byte position by the time an address exists. The nibble select
+  //      must be captured at PLANNING and carried in `sampmeta_m` beside the
+  //      byte select and the fractions -- which is precisely the resolved
+  //      sample descriptor of section 5A.7 item 1.
+  //
+  //   4. ARGB1555 AND ARGB4444 HAVE NO DECODE ANYWHERE IN THE ISLAND. Not a
+  //      wrong decode -- an absent one. `sampmeta_m` (declared above as
+  //      `{fv, fu, bytesel}`) carries no format field and no nibble select, so
+  //      even a correct decoder here would have nothing to switch on.
+  //
+  // Until all four land, this stays 255 AND THE NEAREST PATH STAYS A REFUSAL,
+  // because those are the same missing block: section 5A.7 item 5 requires ONE
+  // shared format-controlled decode law, not three copies.
+  assign fr_tmu_a       = smp_err_c ? SMP_ERR_A : 8'hFF;
   assign fr_tmu_rslot   = rsp_tok[$clog2(DEPTH)+2+GENW-1 -: $clog2(DEPTH)];
   assign fr_tmu_rsidx   = rsp_tok[GENW+1 -: 2];
   assign fr_tmu_rgen    = rsp_tok[GENW-1:0];

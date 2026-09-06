@@ -196,6 +196,19 @@ module zhao_texture_fragrob #(
   logic [2:0]      arr_q    [DEPTH];
   logic            auxreq_q [DEPTH];
   logic            auxarr_q [DEPTH];
+  // ---- THE ISSUED MASKS, WHICH DID NOT EXIST -----------------------------
+  // reports/ZHAOZHOU-PREFIT-VERIFICATION-AND-REARCHITECT-20260906.txt S3.3:
+  // "MISSING on the TMU side: sample-index range, requested, issued,
+  //  not-already-arrived. THERE IS NO ISSUED MASK IN THE FILE."
+  //
+  // `req_q` says a sample is WANTED. It does not say a request for it has left
+  // the block, so a return that arrives before -- or instead of -- its request
+  // was accepted as genuine. `iss_q`/`auxiss_q` are the missing half: set when
+  // the request is actually HANDSHAKEN out, cleared when its one legitimate
+  // answer is taken. A second copy of the same answer therefore finds its bit
+  // already clear and is refused instead of silently overwriting a good sample.
+  logic [2:0]      iss_q    [DEPTH];
+  logic            auxiss_q [DEPTH];
   // Stored on allocation and carried to retirement, where the material
   // combiner will read it. Unread today for the reason above; the alternative
   // -- not storing it until the combiner exists -- would mean the descriptor
@@ -386,14 +399,84 @@ module zhao_texture_fragrob #(
   // A return is matched by {slot, generation}. A stale return -- one whose slot
   // has been reallocated since it was issued -- is REFUSED and counted, never
   // applied. This is the property GENW=8 exists to protect.
+  //
+  // ---- DEFECT 2: A MATCHING GENERATION IS NOT VALIDATION ------------------
+  // ENFORCED-BY: tests/texture/fragrob_differential.cpp (directed section
+  //              "an out-of-range / unrequested / duplicate return")
+  //
+  // WHAT WAS HERE. Two terms on the TMU side -- `val_q` and generation
+  // equality -- and three on the AUX side. Verified at
+  // reports/ZHAOZHOU-PREFIT-VERIFICATION-AND-REARCHITECT-20260906.txt S3.3 and
+  // reports/TEXTURE-ISLAND-PREFIT-ADDENDUM-20260906.txt S5.2.
+  //
+  // WHY THAT IS FATAL, NOT MERELY LOOSE. `arr_q` is a MASK compared for
+  // equality against `req_q`, and retirement is strictly ALLOCATION-ORDERED
+  // with no timeout. So a return that sets a bit nobody asked for makes
+  // `arr_q != req_q` PERMANENTLY: the head fragment never reports done, the
+  // ordered retire never advances past it, and every slot behind it is stuck
+  // too. THE WHOLE BLOCK WEDGES. That is the failure mode for all four holes:
+  //
+  //   sidx == 3          the write and the bit-select are silently DROPPED --
+  //                      no bank is corrupted, but the sample is accepted as
+  //                      valid, no id_error is counted, and it never arrives.
+  //   not requested      sets a bit outside req_q -> arr_q != req_q forever.
+  //   not issued         an answer to a question this block never asked; it
+  //                      cannot be a genuine result for this owner.
+  //   already arrived    a duplicate OVERWRITES a correct sample, and can
+  //                      mutate a result after the retire read has started.
+  //
+  // All six terms, in the order S5.2 names them:
+  //   live(owner) && generation_matches && sample_index_in_range
+  //   && requested(sample) && issued(sample) && !arrived(sample)
+  //
+  // `tmu_sidx_c` is the range-CLAMPED index. The three-bit selects and the
+  // three-deep banks below are addressed through it and never through the raw
+  // return field, so an out-of-range return cannot reach storage at all --
+  // being refused by the predicate and being unable to address anything are
+  // two independent defences, on purpose.
+  logic       tmu_sidx_ok_c;
+  logic [1:0] tmu_sidx_c;
+  assign tmu_sidx_ok_c = (tmu_rsidx_i != 2'd3);
+  assign tmu_sidx_c    = tmu_sidx_ok_c ? tmu_rsidx_i : 2'd0;
+
   logic tmu_ok_c, aux_ok_c;
-  assign tmu_ok_c = tmu_rvalid_i && val_q[tmu_rslot_i] &&
-                    (gen_q[tmu_rslot_i] == tmu_rgen_i);
-  assign aux_ok_c = aux_rvalid_i && val_q[aux_rslot_i] &&
-                    (gen_q[aux_rslot_i] == aux_rgen_i) &&
-                    auxreq_q[aux_rslot_i];
+  assign tmu_ok_c = tmu_rvalid_i
+                 && val_q[tmu_rslot_i]
+                 && (gen_q[tmu_rslot_i] == tmu_rgen_i)
+                 && tmu_sidx_ok_c
+                 && req_q[tmu_rslot_i][tmu_sidx_c]
+                 && iss_q[tmu_rslot_i][tmu_sidx_c]
+                 && !arr_q[tmu_rslot_i][tmu_sidx_c];
+  assign aux_ok_c = aux_rvalid_i
+                 && val_q[aux_rslot_i]
+                 && (gen_q[aux_rslot_i] == aux_rgen_i)
+                 && auxreq_q[aux_rslot_i]
+                 && auxiss_q[aux_rslot_i]
+                 && !auxarr_q[aux_rslot_i];
   assign tmu_rready_o = 1'b1;
   assign aux_rready_o = 1'b1;
+
+  // ---- DEFECT 3: TWO WRITERS ON ONE COUNTER IN ONE PROCESS ---------------
+  // ENFORCED-BY: tests/texture/fragrob_differential.cpp (directed section
+  //              "simultaneous TMU and AUX identity faults count TWO")
+  //
+  // WHAT WAS HERE. `id_errors_o <= id_errors_o + 32'd1` appeared TWICE in the
+  // control process -- once in the TMU return branch, once in the AUX return
+  // branch. Both are nonblocking assignments to the same register in the same
+  // always_ff, so on a clock where BOTH faults occur the last one wins and the
+  // counter moves by ONE. Two events, one count. S5.3 / S3.3.
+  //
+  // This is the SAME defect as the lost-update fault on free_cnt_q documented
+  // above, and it takes the same repair: compute the net delta ONCE, in one
+  // combinational place, and assign the accumulator ONCE. A telemetry counter
+  // that under-reports exactly when the machine is in the most trouble is
+  // worse than no counter, because a green evidence line is read as health.
+  logic [1:0] id_err_delta_c;
+  always_comb begin
+    id_err_delta_c = 2'd0;
+    if (tmu_rvalid_i && !tmu_ok_c) id_err_delta_c = id_err_delta_c + 2'd1;
+    if (aux_rvalid_i && !aux_ok_c) id_err_delta_c = id_err_delta_c + 2'd1;
+  end
 
   // ==========================================================================
   // AUX ISSUE
@@ -408,7 +491,42 @@ module zhao_texture_fragrob #(
   logic            axq_empty_c;
   assign axq_empty_c = (axq_wp_q == axq_rp_q);
 
+  // ---- DEFECT 1: THE AUX CONTEXT WAS ALWAYS THE PREVIOUS FRAGMENT'S ------
+  // ENFORCED-BY: tests/texture/fragrob_differential.cpp (directed section
+  //              "the AUX context belongs to the AUX slot")
+  //
+  // WHAT WAS HERE. The pop below wrote `ax_slot_q <= <new slot>` and raised
+  // `ax_pend_q` in the same clock, while the bank process ran
+  // `ax_ctx_r <= ctx_m[ax_slot_q]` UNCONDITIONALLY. Both nonblocking, so on the
+  // pop edge ax_ctx_r loaded ctx_m[OLD slot] and ax_slot_q took the NEW one:
+  // valid rose over a tuple whose identity and whose payload came from two
+  // different fragments.
+  //
+  // WHY IT WAS NOT A ONE-CYCLE WINDOW. `aux_ready_i` is tied HIGH through the
+  // whole island -- zhao_texture_island_top.sv:1102 wires it to
+  // zhao_texture_aux_pipe.sv:165 `req_ready_o = 1'b1` -- so the receiver
+  // accepts on the first cycle valid is asserted, every time. The wrong-context
+  // cycle was THE ONLY CYCLE ANY REQUEST EVER GOT. The corrupted word is then
+  // consumed as GEOMETRY at island_top.sv:1107
+  // (`.req_wx_i(fr_aux_ctx[31:0]), .req_wz_i(fr_aux_ctx[63:32])`), so every AUX
+  // sheet lookup in the island sampled the PREVIOUS AUX fragment's world X/Z
+  // under the current fragment's slot and generation -- and every identity
+  // check passed while it happened.
+  // (reports/ZHAOZHOU-PREFIT-VERIFICATION-AND-REARCHITECT-20260906.txt S3.1-3.2)
+  //
+  // THE REPAIR, S5.1's "explicit AUX_READ phase": `ax_rdv_q` is that phase. The
+  // pop LAUNCHES the address and raises ax_rdv_q, which is NOT a request. One
+  // clock later the bank has answered with ctx_m[ax_slot_q] for the slot now
+  // held in ax_slot_q, and only then does ax_pend_q rise. Because the pop is
+  // gated on both flags being clear, ax_slot_q cannot move while a request is
+  // outstanding, so the unconditional re-read below keeps reloading the SAME
+  // word: the whole held tuple is stable to the acceptance edge by
+  // construction, not by the receiver happening to be fast. This is the seam
+  // S5.1 says "must remain correct after context banks are split or their
+  // latency changes" -- adding latency here means adding read states, never
+  // moving the valid.
   logic          ax_pend_q;
+  logic          ax_rdv_q;       // AUX_READ phase: address launched, not a request
   logic [SW-1:0] ax_slot_q;
   logic [GENW-1:0] ax_gen_q;
   logic [CTXW-1:0] ax_ctx_r;      // read from the context bank
@@ -502,9 +620,11 @@ module zhao_texture_fragrob #(
     bank_met_r <= desc_met_m[rd_sidx_q][rd_slot_q];
 
     // ---- sample results, banked by sample index ---------------------------
+    // Addressed through the CLAMPED index: an out-of-range return is already
+    // refused by tmu_ok_c, and additionally cannot name a bank.
     if (tmu_ok_c) begin
-      res_rgb_m[tmu_rsidx_i][tmu_rslot_i] <= tmu_rgb_i;
-      res_a_m  [tmu_rsidx_i][tmu_rslot_i] <= tmu_a_i;
+      res_rgb_m[tmu_sidx_c][tmu_rslot_i] <= tmu_rgb_i;
+      res_a_m  [tmu_sidx_c][tmu_rslot_i] <= tmu_a_i;
     end
     if (aux_ok_c) begin
       auxrgb_m[aux_rslot_i] <= aux_rgb_i;
@@ -522,6 +642,10 @@ module zhao_texture_fragrob #(
     out_aux_a_r   <= auxa_m[head_slot_c];
     out_ctx_r     <= ctx_m[head_slot_c];
     out_tok_r     <= tok_m[head_slot_c];
+    // The AUX context read. UNCONDITIONAL is now safe -- and is deliberately
+    // kept unconditional so the bank keeps the shape a RAM can take -- because
+    // `ax_slot_q` is frozen from the pop until the request is accepted (see the
+    // AUX_READ phase above). Before that, this line raced the pop and lost.
     ax_ctx_r      <= ctx_m[ax_slot_q];
   end
 
@@ -542,7 +666,13 @@ module zhao_texture_fragrob #(
       live_cnt_q  <= '0;
       i_st_q      <= I_IDLE;
       r_st_q      <= R_IDLE;
+      // ax_slot_q and ax_gen_q were NOT in this list. The first AUX request
+      // after reset therefore read ctx_m[0] -- an arbitrary slot's context --
+      // and shipped it under whatever identity the pop supplied. S3.2.
       ax_pend_q   <= 1'b0;
+      ax_rdv_q    <= 1'b0;
+      ax_slot_q   <= '0;
+      ax_gen_q    <= '0;
       axq_wp_q    <= '0;
       axq_rp_q    <= '0;
       rd_slot_q   <= '0;
@@ -560,11 +690,14 @@ module zhao_texture_fragrob #(
         arr_q[k]    <= 3'd0;
         auxreq_q[k] <= 1'b0;
         auxarr_q[k] <= 1'b0;
+        iss_q[k]    <= 3'd0;
+        auxiss_q[k] <= 1'b0;
         recipe_q[k] <= 3'd0;
         sat_q[k]    <= 1'b0;
       end
     end else begin
-      id_error_o <= 1'b0;
+      // `id_error_o` is driven from a single place at the bottom of this
+      // process now; a default-clear here would be a second writer on it.
 
       // The counts move here and ONLY here.
       if (!init_q) begin
@@ -593,6 +726,11 @@ module zhao_texture_fragrob #(
         gen_q[alloc_slot_c]    <= gen_q[alloc_slot_c] + GENW'(1);
         req_q[alloc_slot_c]    <= req_mask_c;
         arr_q[alloc_slot_c]    <= 3'd0;
+        // The issued masks start empty for every new occupant, so a return
+        // still in flight for the PREVIOUS occupant of this slot fails the
+        // issued term as well as the generation term.
+        iss_q[alloc_slot_c]    <= 3'd0;
+        auxiss_q[alloc_slot_c] <= 1'b0;
         auxreq_q[alloc_slot_c] <= f_aux_i;
         auxarr_q[alloc_slot_c] <= 1'b0;
         recipe_q[alloc_slot_c] <= f_recipe_i;
@@ -631,6 +769,10 @@ module zhao_texture_fragrob #(
         I_HOLD: begin
           if (tmu_ready_i) begin
             samples_o <= samples_o + 32'd1;
+            // ISSUED means HANDSHAKEN OUT, not merely queued: this is the
+            // exact edge on which an answer becomes possible, so it is the
+            // exact edge on which the acceptance predicate starts allowing one.
+            iss_q[i_slot_q][i_sidx_q] <= 1'b1;
             i_st_q    <= I_IDLE;
           end
         end
@@ -644,35 +786,53 @@ module zhao_texture_fragrob #(
         axg_m[axq_wp_q[SW-1:0]] <= gen_q[alloc_slot_c] + GENW'(1);
         axq_wp_q <= axq_wp_q + 1;
       end
-      // present one at a time
-      if (!ax_pend_q) begin
+      // Present one at a time, through POP -> AUX_READ -> HOLD, which mirrors
+      // the TMU issue path's I_IDLE/I_READ/I_HOLD for the same reason: a
+      // payload that lives in a bank cannot be presented on the clock its
+      // address is chosen.
+      if (!ax_pend_q && !ax_rdv_q) begin
         if (!axq_empty_c) begin
+          // POP. The address is launched; ax_ctx_r still holds the previous
+          // request's word this clock, which is precisely why valid stays low.
           ax_slot_q <= axq_m[axq_rp_q[SW-1:0]];
           ax_gen_q  <= axg_m[axq_rp_q[SW-1:0]];
           axq_rp_q  <= axq_rp_q + 1;
-          ax_pend_q <= 1'b1;
+          ax_rdv_q  <= 1'b1;
         end
+      end else if (ax_rdv_q) begin
+        // AUX_READ retired: on THIS edge the bank process sampled
+        // ctx_m[ax_slot_q] with ax_slot_q already holding the popped slot, so
+        // ax_ctx_r and ax_slot_q now describe the same fragment. Valid may rise.
+        ax_rdv_q  <= 1'b0;
+        ax_pend_q <= 1'b1;
       end else if (aux_ready_i) begin
+        // Accepted. The AUX request has genuinely left the block, so an AUX
+        // return for this slot is now legal -- and not before.
+        auxiss_q[ax_slot_q] <= 1'b1;
         ax_pend_q <= 1'b0;
       end
 
       // ---- returns ---------------------------------------------------------
-      if (tmu_rvalid_i) begin
-        if (tmu_ok_c) arr_q[tmu_rslot_i][tmu_rsidx_i] <= 1'b1;
-        else begin
-          // A return whose slot was reallocated. Refused and counted; never
-          // applied to whatever now lives in that slot.
-          id_errors_o <= id_errors_o + 32'd1;
-          id_error_o  <= 1'b1;
-        end
+      // A return that fails ANY of the six terms -- reallocated slot, wrong
+      // generation, sample index 3, a sample nobody asked for, a sample no
+      // request was ever issued for, or a duplicate of one already taken -- is
+      // refused and counted, never applied to whatever now lives in that slot.
+      // Accepting the sample CLEARS its issued bit, which is what makes the
+      // second copy of a duplicated answer a refusal instead of an overwrite.
+      if (tmu_ok_c) begin
+        arr_q[tmu_rslot_i][tmu_sidx_c] <= 1'b1;
+        iss_q[tmu_rslot_i][tmu_sidx_c] <= 1'b0;
       end
-      if (aux_rvalid_i) begin
-        if (aux_ok_c) auxarr_q[aux_rslot_i] <= 1'b1;
-        else begin
-          id_errors_o <= id_errors_o + 32'd1;
-          id_error_o  <= 1'b1;
-        end
+      if (aux_ok_c) begin
+        auxarr_q[aux_rslot_i] <= 1'b1;
+        auxiss_q[aux_rslot_i] <= 1'b0;
       end
+
+      // ONE writer, ONE delta, so two faults on one clock count TWO. See the
+      // id_err_delta_c comment above for what the two separate `+ 32'd1`
+      // assignments that used to live here actually counted.
+      id_errors_o <= id_errors_o + {30'd0, id_err_delta_c};
+      id_error_o  <= (id_err_delta_c != 2'd0);
 
       // ---- ordered retire --------------------------------------------------
       case (r_st_q)

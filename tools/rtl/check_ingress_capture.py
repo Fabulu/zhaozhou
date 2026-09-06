@@ -61,6 +61,26 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 #               anchor; anchors are matched as substrings of the enclosing
 #               instantiation or process header
 # ---------------------------------------------------------------------------
+# A CONTRACT THIS GATE DOES NOT YET HAVE, NAMED SO IT IS NOT FORGOTTEN.
+#
+# `bind_mode_i` and `bind_base_i` on zhao_texture_island_top are GLOBAL ports
+# read by zhao_texture_tmu_plan at its OWN T0 handshake, many cycles after the
+# fragment that is supposed to own them was admitted. That is a late ingress
+# read of exactly the kind this file exists to prevent, and the gate misses it
+# because the island contract watches the `frag_` prefix only.
+#
+# It is NOT added as a `bind_` contract today for one reason worth stating: the
+# gate would go red immediately and stay red, because the defect is real and its
+# repair is a work item (the mode must travel with the fragment as a labelled
+# descriptor, or CLUT and direct-colour must run as separate drained phases).
+# A gate that is red for months is a gate people learn to ignore, which is worse
+# than the hole.
+#
+# So it is recorded here and in
+# reports/ZHAOZHOU-PREFIT-VERIFICATION-AND-REARCHITECT-20260906.txt section 5.4.
+# When the descriptor lands, add the contract and delete this comment -- and if
+# you are reading this and the descriptor has landed, the comment is the bug.
+
 CONTRACTS = [
     {
         # GEOM.ASSETFETCH -- added 2026-09-06 from the owner's COMBINE/ASSETFETCH
@@ -141,6 +161,21 @@ CONTRACTS = [
             r"^\s*fbase_m\[fc_wp\]",
             r"^\s*fmisc_m\[fc_wp\]",
             r"if \(frag_valid_i && frag_ready_o\)",
+            # THE OWNER CREDIT'S TWO HANDSHAKE TERMS.
+            #
+            # `admit_c` IS the capture event -- it is the same
+            # `frag_valid_i && frag_ready_o` the store above is gated on,
+            # named once so the credit counter and the store cannot drift
+            # apart. And the RCP service's `v_valid_i` is gated at the
+            # admission boundary, which is where the owner brief requires it:
+            # gating only `frag_ready_o` lets RCP accept a job the caller was
+            # told did not handshake.
+            #
+            # Allowed BY NAME rather than by loosening the pattern, because
+            # every future `frag_valid_i` reference should have to argue for
+            # itself here the way these two do.
+            r"^\s*wire admit_c = frag_valid_i && frag_ready_o;",
+            r"\.v_valid_i\(frag_valid_i && credit_available\)",
         ],
         # A LIVE-INGRESS ALIAS: a wire built combinationally from the ingress
         # pins. It IS the capture word, so the store may use it -- but anything
