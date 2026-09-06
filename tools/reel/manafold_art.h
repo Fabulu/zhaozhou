@@ -140,7 +140,49 @@ constexpr int32_t kLoopBuryMm = 250;        // the near end plunges into the bod
 // fold-scale range (the committed closure probe sweeps 700..1160 and
 // asserts it). PASS 4: the old neck->A span (680) splits at the NEW neck
 // hinge (336 + 344 = 680), so every drawn station stays where it was.
-constexpr int32_t kLoopArcMm[6] = {336, 344, 340, 380, 380, 1270};
+// PASS 9 -- DIRECTION 7 §9.1: "it's only one joint that does it, and the joint
+// is in the wrong place. It's in the straight antennae bit. The joints need to
+// be where the balls are and also the two spots where the antennae meet the
+// creature."
+//
+// HE IS EXACTLY RIGHT, AND IT IS CHECKABLE. Pass 8's stations and pass 8's
+// knuckles were two different lists that nobody had ever laid side by side:
+//
+//     articulation station   250   586   930  1270  1650  2030
+//     knuckle (a BALL)       320    --   930  1270  1650    --   2660
+//
+// stNeck (586) and stD (2030) sat in the SMOOTH RUN with no ball anywhere near
+// them -- a crease in the middle of a straight span, which is the "kink in a
+// wire" the owner is describing -- while the re-entry ball at 2660, the second
+// place the antenna meets the creature, had NO joint at all. Pass 8 fixed the
+// MOTION (all four stations got tilt and yaw); this is the PLACEMENT, and they
+// are different faults. A station that now moves but sits in the straight run
+// is still wrong.
+//
+// The stations are therefore re-cut onto the balls and the two junctions:
+//
+//     junctionF/neck  250   the front junction: where the antenna meets the
+//                           body, and its ball
+//     hinge A         930   ball  |  hinge B  1270  ball  |  hinge C  1650 ball
+//     hinge D        2660   the RE-ENTRY BALL -- the second body junction,
+//                           which had never had a joint
+//     (arm tip)      3300   buried inside the body; no station, nothing to see
+//
+// ⚠ WHY junctionF AND neck NOW SHARE ONE PIVOT (arc[0] = 0), rather than the
+// neck simply being deleted. The skinning ladder in manafold_model.h pairs two
+// bones per ring, and a station's blend is `blend` mm wide either side, so
+// CONSECUTIVE STATIONS MUST BE AT LEAST 2*blend = 330 mm APART or the ladder's
+// branch flips before the previous station's weight has finished ramping and
+// the skin takes a visible step. There are five places a joint belongs and six
+// bones in the chain, and chain order forbids parking the spare anywhere except
+// past the last station. So the spare rides the front junction as a SECOND
+// rotation about the SAME pivot -- which is not a fudge but the thing Direction
+// 5 §2 asked for at that station anyway ("the parts connected to the body are
+// also hinges"), and it gives the junction the extra freedom §1's "in all
+// directions" wants at the one station that carries the whole antenna.
+//
+// The TOTAL is unchanged at 3300 mm, so the band is the same length it was.
+constexpr int32_t kLoopArcMm[6] = {0, 680, 340, 380, 1010, 640};
 // fold angles at the neck exit and hinges A..C (angle16, about Z); hinge D
 // has NO authored fold — loop_pose computes it per key (closure). Derived
 // from the sheet's ring read (tall upright egg, W/H ~0.8), tuned by LOOKING.
@@ -212,8 +254,19 @@ constexpr int32_t kLoopRestTiltCA16 = 940;    // ~5.2 deg
 // down to 7.8%, because 88 mm of band is under 4 px on the shipped house zoom
 // and an antenna that thin dissolves into its own ink outline at 240p.
 // The buried base (130/140) is untouched: the sheet does fan out into the body.
-constexpr int32_t kLoopBladeRxMm[8] = {130, 74, 54, 52, 50, 54, 58, 70};
-constexpr int32_t kLoopBladeRzMm[8] = {140, 72, 44, 34, 27, 23, 29, 40};
+// PASS 9: SEVEN keys, not eight, because there are now seven taper stations --
+// the buried base, the front junction, A, B, C, the re-entry ball, the tip.
+// The eighth used to be the mid-run "neck" station, which no longer exists as a
+// separate place on the band (see kLoopArcMm above). Leaving it in as a
+// duplicate key would have put a HARD STEP in the taper at the junction: the
+// lookup returns k[1] at exactly s = stJF and k[2] one millimetre later, so two
+// different values on a zero-width span is a visible ledge, not a taper.
+// The junction flare (74/72) and the tip (70/40) are the accepted pass-6/8
+// values and have NOT been re-authored here; only the now-unreachable mid-run
+// key is gone, so the run from the junction to hinge A interpolates in one span
+// instead of two. Judge it on the band probe and by eye, not from this comment.
+constexpr int32_t kLoopBladeRxMm[7] = {130, 74, 52, 50, 54, 58, 70};
+constexpr int32_t kLoopBladeRzMm[7] = {140, 72, 34, 27, 23, 29, 40};
 
 // ---- the junction balls (PASS 4, Direction 4 §1: "the ball inside the
 // antenna is completely wrong — remove it. The other is almost right — it

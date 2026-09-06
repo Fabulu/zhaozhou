@@ -4,6 +4,23 @@
 // Parent-before-child, rest rotations identity, bind a pure translation
 // chain (the zref bind convention).
 //
+// PASS 9 (Direction 7 §9.1) -- WHERE THE JOINTS ARE, and it is now checkable
+// against where the BALLS are, which is the comparison nobody had made:
+//
+//     station          arc mm   what is there
+//     junctionF/neck      250   the front junction + its ball  (TWO bones, one
+//                               pivot: see kLoopArcMm's note on the 2*blend
+//                               spacing rule that forces it)
+//     hinge A             930   ball
+//     hinge B            1270   ball
+//     hinge C            1650   ball
+//     hinge D            2660   the RE-ENTRY ball = the BACK body junction
+//     (arm tip)          3300   buried in the body; not a station
+//
+// No joint sits in a straight run and no ball or junction is left rigid, which
+// is Direction 7 §9.1 stated as geometry. Pass 8 had fixed the MOTION of these
+// stations; their PLACEMENT was still wrong, and those are different faults.
+//
 // PASS 4 (Direction 4 §1: "wherever there is one of these balls, there needs
 // to be bones to bend stuff" — the third direction raising the junction
 // hinges): the FRONT JUNCTION becomes a real bone. The old kBNeck bind (the
@@ -26,12 +43,23 @@ enum BoneId : uint8_t {
   kBJunctionF = 1,  // the FRONT JUNCTION (the old neck bind: the antenna's
                     // base at the body surface — carries the rest yaw/kink
                     // and the junction ball; pass 4)
-  kBNeck = 2,       // the NEW mid-lower-tube hinge (pure articulation joint,
-                    // identity at rest — the knead layer's second hand)
+  kBNeck = 2,       // PASS 9 (Direction 7 §9.1): NO LONGER a mid-tube hinge.
+                    // The owner looked at the site and said the kneading joint
+                    // "is in the wrong place. It's in the straight antennae
+                    // bit." It was: this bone sat at arc 586, with no ball
+                    // within 340 mm of it. It now shares kBJunctionF's pivot
+                    // exactly (kLoopArcMm[0] == 0), giving the FRONT JUNCTION a
+                    // second, independently driven rotation instead of putting
+                    // a crease in a smooth run. Still identity at rest.
   kBHingeA = 3,     // lower-front hinge ball + first loop arc
   kBHingeB = 4,     // peak hinge ball
   kBHingeC = 5,     // upper-rear hinge ball
-  kBHingeD = 6,     // the return arm (fold computed by closure in loop_pose)
+  kBHingeD = 6,     // PASS 9: moved from arc 2030 -- another straight-run
+                    // crease -- to 2660, THE RE-ENTRY BALL. That is the second
+                    // place the antenna meets the creature, the station
+                    // Direction 5 §2 and Direction 7 §9.1 both name, and it had
+                    // never had a joint at all. Its fold is still computed by
+                    // closure in loop_pose; only its station moved.
   kBLoopBase2 = 7,  // the re-entry anchor (child of the BODY); carries the
                     // BACK-JUNCTION ball and gains authored rotation (pass 4)
   kBEyeL = 8,       // left lens
