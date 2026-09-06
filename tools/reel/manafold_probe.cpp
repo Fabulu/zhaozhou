@@ -417,6 +417,25 @@ int main() {
             const zc::mat3x4fx& em = pose[eb];
             int32_t lx, ly, lz;
             inv_point(em, x, y, z, lx, ly, lz);
+            // PASS 7 -- THE SECOND BUG IN THIS BLOCK, found by QA and not in
+            // the pass-7 brief's list. inv_point against a SKINNING matrix
+            // (world * inv_bind) returns BIND space, NOT eye-bone space. The
+            // eye bone's bind is a pure translation off the root, so the raw
+            // lz still carries the eye's own +/-kEyeZMm (215 mm) offset. Left
+            // uncorrected it inflates every overhang by ~215 mm: with the
+            // units fixed but the frame still wrong, rule 1 reads 378 mm where
+            // the true figure is 142 mm.
+            //
+            // TWO bugs were stacked in one measurement, and the first one
+            // masked the second -- while everything truncated to zero, a
+            // 215 mm frame error was invisible. Fixing only the units would
+            // have produced a confident, wrong, and much SCARIER number, and
+            // the creature would then have been tuned to satisfy it.
+            lx -= u02::fxu(u02::kEyeXMm);
+            ly -= u02::fxu(u02::vmm(u02::kEyeYMm));
+            lz -= (eb == u02::kBEyeL) ? u02::fxu(u02::kEyeZMm)
+                                      : -u02::fxu(u02::kEyeZMm);
+            (void)lx;
             int32_t w_pm = 0;
             if (eye_long_fx > 0) {
               const int64_t dy_pm = (static_cast<int64_t>(ly) * 1000) / eye_long_fx;
@@ -431,9 +450,16 @@ int main() {
             }
             const int32_t rim_mm = static_cast<int32_t>(
                 (static_cast<int64_t>(u02::kEyeWideMm) * w_pm) / 1000);
-            const int32_t off_mm =
-                static_cast<int32_t>((lz < 0 ? -static_cast<int64_t>(lz)
-                                             : static_cast<int64_t>(lz)) >> 16);
+            // PASS 7 -- THE UNITS BUG THAT KILLED FIVE GATES. fxu(mm) is
+            // mm * 65536 / 1000, so a raw fx16 value is METRES x 65536 and the
+            // conversion back to mm is (raw * 1000) >> 16. Pass 6 wrote a bare
+            // `>> 16` and called the result mm, so EVERY offset under 1000 mm
+            // truncated to zero: rule 1's worst overhang was pinned at 0, rule
+            // 2's on-purple fraction at 1000 pm, and rule 3 -- which sits
+            // behind `if (over > 0)` -- NEVER EXECUTED AT ALL.
+            const int32_t off_mm = static_cast<int32_t>(
+                ((lz < 0 ? -static_cast<int64_t>(lz) : static_cast<int64_t>(lz)) *
+                 1000) >> 16);
             const int32_t over = off_mm - rim_mm;
             ++tot;
             if (over <= 0) ++on;
@@ -597,9 +623,13 @@ int main() {
         if (pass == 1) {
           for (const auto& a : left)
             for (const auto& b : right) {
-              const int64_t dx = (static_cast<int64_t>(a[0]) - b[0]) >> 16;
-              const int64_t dy = (static_cast<int64_t>(a[1]) - b[1]) >> 16;
-              const int64_t dz = (static_cast<int64_t>(a[2]) - b[2]) >> 16;
+              // PASS 7: same units bug. The lenses sit ~130 mm apart, whose
+              // raw fx16 difference is 8519 -- and 8519 >> 16 is 0. That, and
+              // not the bone-id read, is why gate A reported a 0 mm closest
+              // approach at every amplitude INCLUDING zero roll.
+              const int64_t dx = ((static_cast<int64_t>(a[0]) - b[0]) * 1000) >> 16;
+              const int64_t dy = ((static_cast<int64_t>(a[1]) - b[1]) * 1000) >> 16;
+              const int64_t dz = ((static_cast<int64_t>(a[2]) - b[2]) * 1000) >> 16;
               const int64_t d2 = dx * dx + dy * dy + dz * dz;
               if (d2 < closest_mm) {
                 closest_mm = d2;
@@ -625,21 +655,20 @@ int main() {
     // end is covered by the separate eye-protrusion gate above, so the two
     // together bracket the assembly at both ends.
     const int32_t depth_floor = 1000;
-    // ⚠ GATE A IS REPORTED, NOT ENFORCED, AND THAT IS DELIBERATE.
-    // It reports a 0 mm closest approach at EVERY amplitude including a roll of
-    // exactly zero, where the two lenses are ~130 mm apart by construction --
-    // so the instrument is wrong, not the geometry. Two candidate causes were
-    // eliminated by rebuilding (the sv.b0 bone-id read, replaced by a
-    // geometric z-sign split; and degenerate poses, refuted because gate B on
-    // the same poses returns sensible varying numbers). The cause is not yet
-    // found.
-    // It does not FAIL the build, because tuning the creature to satisfy an
-    // instrument that has not been validated is the exact error this project
-    // keeps paying for -- a gate passing is not the thing looking right, and a
-    // gate failing for an unknown reason is worth even less. Gate B below IS
-    // enforced: it was proved responsive (it passes at roll 0 and fails at
-    // roll 18 deg, which is a real finding about a rolled lens digging in).
-    const bool sep_ok = true;  // closest >= kEyeSeparationMinMm -- see above
+    // PASS 7: GATE A IS NOW ENFORCED. Pass 6 reported it and refused to
+    // enforce it, on the correct instinct that an instrument returning 0 mm at
+    // EVERY amplitude -- including a roll of exactly zero, where the lenses are
+    // ~130 mm apart by construction -- was wrong about the geometry rather than
+    // finding something. It was right not to tune the creature to satisfy it.
+    //
+    // The cause was units, not the bone-id read it replaced: the fx16
+    // difference for a 130 mm gap is 8519, and a bare `>> 16` of that is 0.
+    // (So the original sv.b0 read was correct all along; the geometric z-sign
+    // split that replaced it is also correct, and is kept.) With `* 1000`
+    // restored the gate reports a varying, sensible closest approach that
+    // responds to roll -- so it now FAILS THE BUILD, as the owner's "shouldn't
+    // touch each other" always intended.
+    const bool sep_ok = closest >= kEyeSeparationMinMm;
     const bool depth_ok = worst_min_ellip < depth_floor;
     std::printf("u02-probe: 5d instrument census: %d white-star, %d lens verts\n",
                 census_star, census_lens);
@@ -650,7 +679,13 @@ int main() {
                 "(corner %d, floor %lld) - %s\n",
                 static_cast<long long>(closest), closest_corner,
                 static_cast<long long>(kEyeSeparationMinMm),
-                closest >= kEyeSeparationMinMm ? "OK" : "REPORTED-NOT-ENFORCED (instrument unvalidated)");
+                sep_ok ? "OK" : "FAIL");
+    std::printf("u02-probe: 5d channel state: roll SHIPPED (cap %d a16), gaze "
+                "SHIPPED, eyeball-shift NOT SHIPPED (kEyeShiftPivotMm=%d, so "
+                "eye_shift_a16(1000)=%d) -- Direction 5 5c's eyeball shift is a "
+                "DECLARED GAP, not a silent one\n",
+                u02::kEyeRollMaxA16, u02::kEyeShiftPivotMm,
+                u02::eye_shift_a16(1000));
     std::printf("u02-probe: 5d gate B -- nothing clips: lens deepest %d pm of the "
                 "body (corner %d) vs %d pm at rest, floor %d - %s\n",
                 worst_min_ellip, worst_corner, rest_min_ellip, depth_floor,

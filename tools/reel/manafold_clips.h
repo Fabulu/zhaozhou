@@ -245,10 +245,34 @@ inline void face_rest(Rig& g) {
  *  body. Small-angle: a16 ~= (shift_mm / pivot) * 65536 / 2pi, and 10430 is
  *  65536/2pi. Clamped to the owner's cap by construction. */
 inline int32_t eye_shift_a16(int32_t pm) {
+  // PASS 7 -- THE 916.7 DEGREE FALLBACK. kEyeShiftPivotMm is 0 because pass 6
+  // measured the pivot-relocation mechanism unsound against face_rest's rest
+  // attitude and declined to ship it. But the guard below divided by *1* in
+  // that case rather than returning no shift, so eye_shift_a16(1000) returned
+  // 100155 a16 -- 550 degrees per axis, 916.7 degrees composed. Nothing in a
+  // clip called it, so nothing shipped bent; but the COMPOSED-EXTREMES GATE
+  // calls it, which meant the one 5d gate that is actually enforced was
+  // measuring eyes flipped through most of two full turns.
+  //
+  // An unshipped mechanism must contribute NOTHING, not garbage. While the
+  // pivot is 0 this returns 0 and the gate honestly measures the two channels
+  // that ARE shipped (roll and gaze). When the pivot is authored the small
+  // angle formula below takes over unchanged.
+  //
+  // DECLARED GAP: Direction 5 5c's "the eye itself can move a bit too" is
+  // therefore still NOT SHIPPED at the end of pass 7. It is not silently
+  // absent -- kEyeShiftMaxPm keeps its authored 100, and the gate prints the
+  // pivot so the state is visible in every probe run.
+  if (kEyeShiftPivotMm <= 0) return 0;
   if (pm > 1000) pm = 1000;
   if (pm < -1000) pm = -1000;
   const int32_t shift_mm = 2 * kEyeWideMm * kEyeShiftMaxPm / 1000 * pm / 1000;
-  return shift_mm * 10430 / (kEyeShiftPivotMm > 0 ? kEyeShiftPivotMm : 1);
+  // The `> 0 ? : 1` is unreachable past the early return above; it is here so
+  // the compiler does not constant-fold a literal division by zero while the
+  // pivot is unshipped. It must never again be the thing that SUPPLIES a
+  // value -- that is what produced the 916.7 degree fallback.
+  const int32_t pivot = kEyeShiftPivotMm > 0 ? kEyeShiftPivotMm : 1;
+  return shift_mm * 10430 / pivot;
 }
 
 /** The eye assembly slides on the body. Composed onto face_rest's attitude, so
