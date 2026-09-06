@@ -22,6 +22,9 @@ Targets:
              trajectory dump, decode_pose -> CSV, for Direction 5 §2a)
   mband      manafold-bandprobe.exe (pass 8: the committed antenna band
              cross-section profile, read off the COMPILED MESH, for §2b)
+  meyelab    manafold-eyelab-probe.exe (Direction 7 §12: the committed eye
+             probe -- lens vs the POSED DEFORMED body surface, swept, at the
+             extremes of the breath)
   all        all four core executables
 EOF
 }
@@ -44,7 +47,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|meyelab|all)
       TARGET="$1"
       shift
       ;;
@@ -195,6 +198,12 @@ build_mc2proto() {
   "$CXX" "${FLAGS[@]}" "$T/manafold_c2proto.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-c2proto.exe"
 }
 
+build_meyelab() {
+  printf '%s
+' "LD manafold-eyelab-probe"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_eyelab_probe.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-eyelab-probe.exe"
+}
+
 build_mhinge() {
   printf '%s\n' "LD manafold-hinge-traj"
   "$CXX" "${FLAGS[@]}" "$T/manafold_hinge_traj.cpp" "${LIBOBJS[@]}" \
@@ -210,6 +219,7 @@ case "$TARGET" in
   mmeshcheck) build_mmeshcheck ;;
   mhinge) build_mhinge ;;
   mband) build_mband ;;
+  meyelab) build_meyelab ;;
   mc2proto) build_mc2proto ;;
   all)
     build_reel

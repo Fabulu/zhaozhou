@@ -73,8 +73,20 @@ inline void apply_eye_travel_deg(Rig& g, int32_t deg, int32_t pm) {
   if (pm < -1000) pm = -1000;
   const int32_t a = static_cast<int32_t>(
       (static_cast<int64_t>(travel_a16(deg)) * pm) / 1000);
-  g.q[kBEyeTravelL] = quat_y(a);
-  g.q[kBEyeTravelR] = quat_y(-a);
+  // ⚠ THE SIGN WAS WRONG IN THE FIRST BUILD, AND THE PROBE IS WHAT FOUND IT.
+  // Authored as quat_y(+a) on the left, it carried both eyes INWARD across the
+  // midline instead of outward to the flanks: the committed probe reported the
+  // eye-to-eye gap reaching 0 mm at EVERY travel angle from 6 deg upward, and
+  // the plates showed the Lambda inverting into an X.
+  //
+  // AND THE COLLISION SAT IN THE INTERIOR OF THE RANGE -- key 37 to 59, on the
+  // ramp, not at the extreme. At the full 45 deg the eyes had already passed
+  // THROUGH each other and come out the far side with a comfortable gap, so a
+  // gate that checked only the travel extreme would have reported it clean.
+  // That is 09-ENGINE-GOTCHAS 17 exactly (roll: 98 mm at 0 deg, 0 mm at 7,
+  // 18 mm at 10), reproduced on a different channel within one afternoon.
+  g.q[kBEyeTravelL] = quat_y(-a);
+  g.q[kBEyeTravelR] = quat_y(a);
 }
 inline void apply_eye_travel(Rig& g, int32_t pm) {
   apply_eye_travel_deg(g, variant().travel_deg, pm);

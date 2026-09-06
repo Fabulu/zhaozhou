@@ -244,52 +244,126 @@ struct EyeVariant {
   bool blink;              // run the blink schedule
   bool blink_split;        // blink via strength split rather than riding breath
   bool compose_extremes;   // stack roll + gaze + twinkle on the travel extreme
+  int32_t star_thin_mm;    // the star's half-DEPTH (shipped kStarThinMm = 16)
+  int32_t dome_drop_mm;    // THE NEAR-EYE BAR CANDIDATE -- see below
 };
+
+// ===================== THE NEAR-EYE BAR: A MECHANISM =======================
+//
+// The bar has been named for three passes -- "the near eye collapses into a
+// BAR, a chrome scratch, not an eye" on 96% of taunt's frames -- and read each
+// time as a gaze or rendering fault, then as the star's own drawn PROPORTION
+// (pass 7 measured the sheet and widened the star from 2.82 to 1.70
+// major/minor). Widening it helped and did not solve it.
+//
+// LOOKING AT THE LANE'S OWN ZOOMED PLATE gives a third answer, and it is a
+// geometric one that neither previous reading could have reached from a
+// number:
+//
+//   THE LENS HAS DEPTH AND THE STAR HAS ALMOST NONE.
+//
+//   the lens   2 * kEyeDeepMm  = 180 mm of extent along the eye's OUTWARD axis
+//   the star   2 * kStarThinMm =  32 mm
+//
+// At the obliquity where the eye is viewed along its own WIDTH axis -- which
+// is most of a three-quarter camera's range, and all of the side view -- the
+// picture-plane silhouette of each part is carried by its extent along the
+// OUTWARD axis, not by its drawn width. The lens still reads as a lens because
+// its dome gives it 180 mm to project. The star collapses to its own 32 mm.
+// That is a 5.6:1 loss, and it is why the star specifically -- not the lens --
+// becomes the scratch.
+//
+// So the bar is NOT the star being edge-on to the camera. It is the star being
+// FLAT while the thing it sits on is ROUND. A flat plate on a dome, which is
+// what the fault was called before anyone knew why.
+//
+// ⚠ THE OBVIOUS FIX IS THE ONE THAT ALREADY FAILED ONCE. Simply raising
+// kStarThinMm makes both stars thicker, and make_star's own comment records
+// what that cost: "a white slab 2*(thin+rim) deep centred on the pupil
+// swallowed the thinner cyan whole, so the star drew as a white splinter with
+// no cyan anywhere, from every angle." `bar-thicker` is in the table to put
+// that on the record with a plate rather than a memory.
+//
+// THE PROPOSAL IS TO DOME THE STAR INSTEAD. Each ring's outward stand-off
+// falls away toward the star's tips, so the star WRAPS the lens's dome rather
+// than floating flat over it. Two things follow, and only the first is
+// obvious:
+//   * the star gains outward extent -- 32 mm becomes 32 + 2*dome_drop -- so it
+//     has a silhouette to project when seen along the width axis;
+//   * and it CURVES, so the cel ramp can put more than one band across it. A
+//     flat plate under a single key light is one flat colour, which is the
+//     other half of why it reads as a painted scratch rather than a form.
+//
+// ⚠ AND THE FACE-ON SILHOUETTE IS UNCHANGED. The drawn outline is the (y, z)
+// profile table and this touches only x. The protected construction -- the
+// star's shape, its asymmetric arms, the white generated from the cyan by one
+// rim -- is not re-opened. This is PLACEMENT, which is what this lane is for.
+constexpr int32_t kStarDomeDropMm = 62;   // authored by eye against the lens dome
 
 // The ladder the owner asked for: SMALL UPWARD, not down from the ceiling.
 constexpr EyeVariant kEyeVariants[] = {
     {"control-shipped",
      "CONTROL: shipped eye verbatim -- no travel, star concentric at 950 pm",
-     0, kStarScalePm, 0, false, false, false, false},
+     0, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
 
     {"travel-06", "TRAVEL: 6 deg of arc -- the smallest move that is a move",
-     6, kStarScalePm, 0, false, false, false, false},
-    {"travel-14", "TRAVEL: 14 deg of arc", 14, kStarScalePm, 0, false, false, false, false},
+     6, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
+    {"travel-14", "TRAVEL: 14 deg of arc", 14, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
     {"travel-22", "TRAVEL: 22 deg of arc -- half the owner's ceiling",
-     22, kStarScalePm, 0, false, false, false, false},
-    {"travel-32", "TRAVEL: 32 deg of arc", 32, kStarScalePm, 0, false, false, false, false},
+     22, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
+    {"travel-32", "TRAVEL: 32 deg of arc", 32, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
     {"travel-45", "TRAVEL: 45 deg -- the owner's ABSOLUTE MAXIMUM, for the record",
-     45, kStarScalePm, 0, false, false, false, false},
+     45, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
 
     {"travel-22-breathe",
      "TRAVEL + the eye opts into the deform, so it rides the pulsation",
-     22, kStarScalePm, 0, true, false, false, false},
+     22, kStarScalePm, 0, true, false, false, false, kStarThinMm, 0},
     {"travel-45-breathe",
      "TRAVEL at the ceiling + the eye rides the pulsation",
-     45, kStarScalePm, 0, true, false, false, false},
+     45, kStarScalePm, 0, true, false, false, false, kStarThinMm, 0},
 
     {"star-high", "STAR: 12.1 -- high in the lens as the sheet draws it",
-     0, kStarScalePm, kStarHighOffsetYMm, false, false, false, false},
+     0, kStarScalePm, kStarHighOffsetYMm, false, false, false, false, kStarThinMm, 0},
     {"star-big", "STAR: 12.2 -- grown to drawn-flush (1000 pm)",
-     0, 1000, 0, false, false, false, false},
+     0, 1000, 0, false, false, false, false, kStarThinMm, 0},
     {"star-high-big", "STAR: 12.1 + 12.2 together -- high AND drawn-flush",
-     0, 1000, kStarHighOffsetYMm, false, false, false, false},
+     0, 1000, kStarHighOffsetYMm, false, false, false, false, kStarThinMm, 0},
     {"star-high-bigger", "STAR: high, and PAST drawn-flush at 1100 pm",
-     0, 1100, kStarHighOffsetYMm, false, false, false, false},
+     0, 1100, kStarHighOffsetYMm, false, false, false, false, kStarThinMm, 0},
 
     {"blink-ride-breath",
      "BLINK: the lens squashes on the breath's own signal (one channel, honest)",
-     0, kStarScalePm, 0, true, true, false, false},
+     0, kStarScalePm, 0, true, true, false, false, kStarThinMm, 0},
     {"blink-strength-split",
      "BLINK: the sample carries the blink; the body's strength is cut to 28/255",
-     0, kStarScalePm, 0, true, true, true, false},
+     0, kStarScalePm, 0, true, true, true, false, kStarThinMm, 0},
 
     {"composed-extreme",
      "GATE: travel 45 + roll + gaze + twinkle + breath, all on one frame",
-     45, 1000, kStarHighOffsetYMm, true, true, false, true},
+     45, 1000, kStarHighOffsetYMm, true, true, false, true, kStarThinMm, 0},
     {"composed-recommended",
      "GATE: the ranked recommendation, composed the same way",
-     14, 1000, kStarHighOffsetYMm, true, false, false, true},
+     14, 1000, kStarHighOffsetYMm, true, false, false, true, kStarThinMm, 0},
+
+    // ---- THE NEAR-EYE BAR, three answers and one of them is the control ----
+    {"bar-control",
+     "BAR: the shipped flat star, so the plate has something to be beside",
+     0, kStarScalePm, 0, false, false, false, false, kStarThinMm, 0},
+    {"bar-thicker",
+     "BAR: the naive fix -- kStarThinMm 16 -> 46. Expected to reproduce pass "
+     "6's white slab swallowing the cyan; on the record either way",
+     0, kStarScalePm, 0, false, false, false, false, 46, 0},
+    {"bar-domed",
+     "BAR: the star DOMES to wrap the lens instead of floating flat on it",
+     0, kStarScalePm, 0, false, false, false, false, kStarThinMm, kStarDomeDropMm},
+    {"bar-domed-high-big",
+     "BAR: domed + 12.1 high + 12.2 drawn-flush -- the three eye changes together",
+     0, 1000, kStarHighOffsetYMm, false, false, false, false,
+     kStarThinMm, kStarDomeDropMm},
+    {"bar-domed-travel14",
+     "BAR: domed, at the travel angle the plates rank first",
+     14, 1000, kStarHighOffsetYMm, true, false, false, false,
+     kStarThinMm, kStarDomeDropMm},
 };
 constexpr int kEyeVariantCount =
     static_cast<int>(sizeof(kEyeVariants) / sizeof(kEyeVariants[0]));

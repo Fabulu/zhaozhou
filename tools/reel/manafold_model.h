@@ -394,7 +394,11 @@ inline zc::RingPart make_star(uint8_t bone, bool white) {
   // thinner cyan whole, so the star drew as a white splinter with no cyan
   // anywhere, from every angle. Both stars are the same thickness; only their
   // outlines differ, which is what the sheet draws.
-  const int32_t thin = kStarThinMm;
+  // EYE LAB: the star's half-depth, and the DOME DROP that is the lane's
+  // proposed answer to the near-eye bar. Both default to the shipped values on
+  // every non-bar variant, so nothing else in the table moves because of them.
+  const int32_t thin = eyelab::variant().star_thin_mm;
+  const int32_t dome_drop = eyelab::variant().dome_drop_mm;
   zc::RingPart p;
   p.bone = bone;
   p.cap_base_fix = true;
@@ -420,7 +424,20 @@ inline zc::RingPart make_star(uint8_t bone, bool white) {
     // out than its white, so it sits ON it and never sinks into it.
     // Depth ordering, stated as arithmetic so it cannot silently invert again:
     // white front face = kEyeBulgeMm + thin; cyan front face = that + proud.
-    rs.cx = fxu(kEyeBulgeMm + (white ? 0 : kStarCyanProudMm));
+    // ---- EYE LAB: THE DOME ------------------------------------------------
+    // The stand-off falls away toward the star's tips as the SQUARE of the
+    // normalised arm position, which is the parabola that best matches a
+    // shallow spherical cap over this span and needs no trig. At the star's
+    // centre the stand-off is exactly the shipped kEyeBulgeMm, so the gaze
+    // pivot radius -- and therefore every existing gaze, roll and twinkle
+    // amplitude -- is untouched at the one point that defines them.
+    //
+    // The white and the cyan share yp, so they dome IDENTICALLY and cannot
+    // separate. 5b holds by construction, as it does for the follower role.
+    const int64_t ynorm = static_cast<int64_t>(yp) * yp / 1000;  // 0..1000
+    const int32_t drop = static_cast<int32_t>(
+        (static_cast<int64_t>(dome_drop) * ynorm) / 1000);
+    rs.cx = fxu(kEyeBulgeMm - drop + (white ? 0 : kStarCyanProudMm));
     // ---- EYE LAB, LANE-ONLY: the star RIDES the lens's squash -------------
     // 12.3: "the star rides it. It must not slide against the purple during
     // the blink." kFollower is that guarantee expressed as CONSTRUCTION rather
