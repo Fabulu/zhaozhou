@@ -567,11 +567,40 @@ non-increasing, non-zero floor at `wmax`, no intermediate wrap.
 inert and the culler stays at five planes, so distant islands still draw — they
 simply share the floor depth.
 
-**Which profile a view uses is not yet decided.** Ruling #1 permits either two
-reserved bits of `SetView.flags` or a small additive view-depth command, and
-leaves the audit to decide. That is a permanent command ABI and therefore the
-owner's call (Class C); until it lands, nothing selects a profile at runtime and
-`WORLD_STANDARD` is the only one the reference uses.
+**Which profile a view uses IS decided, and this paragraph was stale.**
+*(Corrected 2026-09-06.)* Ruling #1 permitted either two reserved bits of
+`SetView.flags` or a small additive view-depth command and left the audit to
+decide; the audit chose the flag bits and **D10 step 3 landed them** (`ca7b328`).
+`zref::render::render_frame` reads `SetView.flags[1:0]`, refuses the reserved
+value 3 with `ZH_ABI_BAD_VALUE`, and stores the accepted profile per view.
+
+**But nothing yet OBSERVES it, and that is the honest state** (external audit
+2026-09-05, finding R3). Three places currently disagree and each was written
+truthfully at a different time:
+
+| where | what it says |
+|---|---|
+| this section, before today | nothing selects a profile; `WORLD_STANDARD` only |
+| `render_frame.cpp` | `SetView.flags[1:0]` selects; default 0 = `WORLD_LONG` |
+| `rast.cpp` | no profile at all — the depth lane is Q16.16 `1/w` |
+
+The raster's lane is Q16.16 `1/w` by plan W3.5 / D7, and its header calls the
+change to the `invw24` pipeline a *frozen* one-line switch in `project_vertex`.
+That freeze is a PIPELINE-PHASE decision and is not resolved by the ABI ruling,
+which settled how a profile is NAMED and not when the Phase-3 raster stops using
+its own depth lane. `ProjOut` already carries `w` alongside `1/w` for exactly
+this, so the switch stays one line.
+
+**So: parsing and validating a profile is not proof that rendered occlusion
+observes it, and no test should be read as claiming otherwise.** What IS
+established today is the command ABI and the profile table; the raster's
+adoption of `invw24` is Phase-4 work.
+
+Note the two defaults do not agree either: this section said `WORLD_STANDARD`
+(profile 1) and the parser defaults to 0 (`WORLD_LONG`), because a zero-filled
+capture must keep the profile it was recorded under. When the switch is taken,
+that is the first thing to settle -- a default chosen by which file you read is
+how a wrong number becomes an unadjustable one.
 
 **Perspective UV:** interpolate `u_over_w`, `v_over_w` (S 8.24) and `invw24`
 by plane equation; per pixel `u = rescale((s64)u_over_w · rcp_u24(invw24_interp))`.

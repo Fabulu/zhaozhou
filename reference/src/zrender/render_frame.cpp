@@ -149,6 +149,20 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
     // Owner ruling 2026-08-31 section 1: SetView.flags[1:0]. Defaults to 0 =
     // WORLD_LONG, which is what makes an existing zero-filled capture keep the
     // profile it was recorded under.
+    //
+    // STORED, VALIDATED, AND NOT YET OBSERVED. Nothing below reads this. The
+    // raster's depth lane is Q16.16 `1/w` (plan W3.5 / D7) and rast.cpp's own
+    // header calls the change to the invw24 pipeline a FROZEN one-line switch in
+    // `project_vertex` -- `ProjOut` already carries `w` beside `1/w` for
+    // exactly that. The ABI ruling settled how a profile is NAMED; when the
+    // Phase-3 raster stops using its own depth lane is a pipeline-phase
+    // decision and is not settled by it.
+    //
+    // Said here because the alternative is a reader seeing a profile parsed,
+    // range-checked and stored, and concluding that occlusion observes it. It
+    // does not. External audit 2026-09-05, finding R3; spec/qformats.md now
+    // carries the three-way disagreement in full, including that this default
+    // (WORLD_LONG) and the spec's stated default (WORLD_STANDARD) differ.
     uint8_t depth_profile = 0;
   } views[2];
   std::vector<FieldApp> fields;
