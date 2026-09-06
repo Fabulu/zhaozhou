@@ -275,3 +275,23 @@ pH.png (the pocket at 7x).
 
 Gates after: meshcheck CLEAN, clearance holds, closure 1013 pm vs 1120,
 declared contact -35 mm in band, rule 1 OK, rule 2 890 pm, both 5d gates green.
+
+### Closing checks
+* Pass-8 item 11: `check_css_wiring` now also guards the archive-generation
+  selector family (it had only ever checked the three TAB families). Proved
+  failable: `MAX_ARCHIVE_GENERATIONS = 20` against the shipped `style.css`
+  refuses the build with the right message.
+* **All 16 clips render, no crash**, frame counts matching the shipped table.
+  Whole-bank sheets looked at (plates 11, 12).
+* **A/B'd `kEyeXMm` 381 vs 400 BY EYE on `damage` f230 at 9x** rather than
+  trusting the rule-3 count that moved. The far lens crosses the body outline at
+  BOTH values and the difference is a pixel or two, so the crossing is not caused
+  by the push-out; the push-out slightly aggravates a pre-existing fault while
+  fixing the sink the owner named, and §5.3 wants the purple over the edge. 400
+  kept, and the reasoning is in PASS-8-FINDINGS rather than only here.
+* Final gates: meshcheck CLEAN (28 meshlets, 2448 tris), clearance holds,
+  closure 1013 pm vs 1120, declared contact -35 mm in the -60..-5 band, 5c rule 1
+  and 2 OK, 5d gates A 22 mm and B 837 pm. Rule 3 REPORTED-NOT-ENFORCED at 1658,
+  declared.
+* No background processes left running; every render was foreground and its exit
+  code read directly, never a pipeline's.
