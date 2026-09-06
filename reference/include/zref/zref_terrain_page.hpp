@@ -288,6 +288,292 @@ inline PageLoadResult page_load(const PageLoadRequest& r, const uint8_t* page,
   return out;
 }
 
+// ===========================================================================
+// THE LAYER OFFSET TABLE -- and why it did not exist until now
+// ===========================================================================
+// spec/terrain_rules.md sec 2 gives each layer an EXTENT and gives no layer an
+// OFFSET. Every reader who has needed one has summed the column by hand, and a
+// column summed by hand is a column that will one day be summed differently.
+// TERRAIN.WRITEBACK needs layer F's offset to the byte, so the sum lives here
+// once, with a static_assert on every running total and on the grand total
+// against `kPageBodyEnd` -- so a wrong entry cannot quietly agree with itself.
+//
+// The order is the table's order, which IS the layout order: the table's own
+// Total row is 21,320 and it only comes out to 21,320 if the rows are laid end
+// to end under the 64-byte header.
+inline constexpr uint32_t kLayerABytes = 2178;  // A top base height   33x33 h16
+inline constexpr uint32_t kLayerBBytes = 2178;  // B top scar delta    33x33 h16
+inline constexpr uint32_t kLayerCBytes = 2178;  // C bottom height     33x33 h16
+inline constexpr uint32_t kLayerDBytes = 1024;  // D cell state        32x32 u8
+inline constexpr uint32_t kLayerEBytes = 3072;  // E base material     32x32 x3
+inline constexpr uint32_t kLayerFBytes = 8192;  // F surface sheet     64x64 x2
+inline constexpr uint32_t kLayerGBytes = 256;   // G gameplay grid     8x8   x4
+inline constexpr uint32_t kLayerHBytes = 2178;  // H vertex tint       33x33 RGB565
+
+inline constexpr uint32_t kLayerAOff = kPageHeaderBytes;           //     64
+inline constexpr uint32_t kLayerBOff = kLayerAOff + kLayerABytes;  //  2,242
+inline constexpr uint32_t kLayerCOff = kLayerBOff + kLayerBBytes;  //  4,420
+inline constexpr uint32_t kLayerDOff = kLayerCOff + kLayerCBytes;  //  6,598
+inline constexpr uint32_t kLayerEOff = kLayerDOff + kLayerDBytes;  //  7,622
+inline constexpr uint32_t kLayerFOff = kLayerEOff + kLayerEBytes;  // 10,694
+inline constexpr uint32_t kLayerGOff = kLayerFOff + kLayerFBytes;  // 18,886
+inline constexpr uint32_t kLayerHOff = kLayerGOff + kLayerGBytes;  // 19,142
+
+static_assert(kLayerFOff == 10694, "layer F starts at page byte 10,694");
+static_assert(kLayerFOff + kLayerFBytes == 18886, "...and ends at 18,886");
+static_assert(kLayerHOff + kLayerHBytes == kPageBodyEnd,
+              "the layer table must sum to the body end the spec's own Total row gives");
+
+// ---------------------------------------------------------------------------
+// THE SHEET IS SIX BYTES OFF A BURST BOUNDARY, AND THAT IS A DATAPATH FACT
+// ---------------------------------------------------------------------------
+// 10,694 = 64 * 167 + 6. So hardware cannot issue an aligned 64-B read that
+// starts at F: it reads the aligned superset from `kSheetChunkStart` and
+// realigns by the constant lane `kSheetLane`. These constants live here so the
+// RTL's parameters and the test's expectations come from ONE derivation.
+inline constexpr uint32_t kSheetChunkStart =
+    (kLayerFOff / kPageBurstBytes) * kPageBurstBytes;                 // 10,688
+inline constexpr uint32_t kSheetLane = kLayerFOff % 8;                // 6
+inline constexpr uint32_t kSheetBeats = kLayerFBytes / 8;             // 1,024
+// One extra source beat is needed whenever the lane is non-zero: out[j] spans
+// source beats j and j+1. That single beat is what makes the chunk count 129
+// against 128 write bursts, and the off-by-one lives exactly there.
+inline constexpr uint32_t kSheetSrcBeats = kSheetBeats + (kSheetLane != 0 ? 1u : 0u);  // 1,025
+inline constexpr uint32_t kSheetWriteBursts = kLayerFBytes / kPageBurstBytes;          // 128
+// ONE MORE CHUNK THAN BURSTS, UNCONDITIONALLY. The pipeline prefetches chunk 0
+// and then reads chunk g+1 to write burst g, so it always touches WR_BURSTS + 1
+// chunks. At lane 0 the last chunk's bytes would be unused -- one wasted 64-B
+// read out of 129 -- and the alternative is a second pipeline shape for a
+// layout that does not exist. Stated rather than made conditional, so the RTL
+// and this header cannot disagree about a count the suite asserts exactly.
+inline constexpr uint32_t kSheetReadChunks = kSheetWriteBursts + 1u;  // 129
+static_assert(kSheetChunkStart == 10688 && kSheetLane == 6, "the v1 layout's alignment");
+static_assert(kSheetReadChunks == 129 && kSheetWriteBursts == 128,
+              "129 chunks in, 128 bursts out -- asserted, not derived at a call site");
+// The scheme assumes the sheet begins in the FIRST BEAT of its chunk. True of
+// the v1 layout (10,694 % 64 = 6 < 8); the RTL $fatals if an override breaks it.
+static_assert((kLayerFOff % kPageBurstBytes) < 8,
+              "the sheet must begin in its chunk's first beat");
+
+// The payload oracle: exactly the 8,192 bytes T4 says to copy, and nothing else.
+inline void sheet_extract(const uint8_t* page, uint8_t* out) {
+  for (uint32_t i = 0; i < kLayerFBytes; ++i) out[i] = page[kLayerFOff + i];
+}
+
+// ===========================================================================
+// TERRAIN.WRITEBACK -- the F sheet out to the HPS journal, behind an ACK
+// ===========================================================================
+// Ruling T4. B and D are NEVER written back (the HPS keeps the canonical mirror
+// current from the same deterministic commands); layer F has no canonical
+// mirror and therefore MUST be, and the slot may not enter LOADING until the
+// journal acknowledges.
+//
+// The verdict enum BORROWS `mem::UploadVerdict` for 0..7 exactly as
+// `PageLoadVerdict` does, so the two directions of terrain traffic cannot end
+// up with two refusal taxonomies. Value 5 (kUploadCrcFail) is deliberately NOT
+// borrowed: layer F carries no CRC of its own, and the page's CRC covers the
+// body as it was at LOAD time, which is precisely what a stamped sheet is no
+// longer. There is nothing to check the bytes against and the model does not
+// pretend there is.
+enum SheetWritebackVerdict : int {
+  kSheetOk = mem::kUploadOk,                              // 0
+  kSheetUnaligned = mem::kUploadUnaligned,                // 1
+  kSheetZeroLength = mem::kUploadZeroLength,              // 2 (unreachable)
+  kSheetOutsidePool = mem::kUploadOutsideGuard,           // 3
+  kSheetEpochStale = mem::kUploadEpochStale,              // 4
+  kSheetOutsideJournal = mem::kUploadSourceOutsideArena,  // 6
+  kSheetUnreachable = mem::kUploadSourceUnreachable,      // 7
+  // The slot holds a valid page OF ANOTHER PATCH. No content test can catch
+  // that -- another patch's page is internally perfect -- so the 64-byte header
+  // is read first and its restated key is what refuses.
+  kSheetHeaderIdent = 8,
+  // A guard denial or a bridge `err` stopped the transfer.
+  kSheetIncomplete = 9,
+  // The `seq` is already outstanding. Two live tickets with one sequence make
+  // the ACK match ambiguous, and an ambiguous barrier is not a barrier.
+  kSheetSeqInFlight = 10,
+  // The journal acknowledged with ok = 0. The slot is NOT released.
+  kSheetJournalNak = 11,
+};
+
+static_assert(static_cast<int>(kSheetOutsideJournal) == 6,
+              "the arena verdict keeps mem_upload's value");
+static_assert(static_cast<int>(kSheetHeaderIdent) > static_cast<int>(kSheetUnreachable),
+              "the terrain-only verdicts must sit above the borrowed range");
+static_assert(static_cast<int>(kSheetJournalNak) == 11,
+              "the ACK verdicts are the top of the table");
+
+struct SheetWritebackRequest {
+  uint32_t slot = 0;
+  uint8_t generation = 0;
+  uint32_t epoch = 0;
+  uint32_t island_id = 0;
+  int16_t patch_ix = 0;
+  int16_t patch_iz = 0;
+  uint64_t journal_addr = 0;  // where SW.STREAM wants this sheet
+  uint32_t seq = 0;           // the ticket the journal echoes in its ACK
+  uint32_t src_id = 0;
+};
+
+struct SheetWritebackResult {
+  int verdict = kSheetOk;
+  bool ok = false;           // the job succeeded end to end
+  bool wb_released = false;  // a `wb_*` was presented to TERRAIN.RESIDENCY
+  uint32_t bytes_written = 0;
+  uint32_t guard_reqs = 0;  // 1 header + kSheetReadChunks, or 0 if refused
+  uint32_t write_bursts = 0;
+};
+
+// Field for field the counter set the RTL exports, so a test compares ledgers
+// rather than spot-checking non-zero.
+struct SheetWritebackLedger {
+  uint32_t sheets_written = 0;
+  uint32_t sheets_refused = 0;  // judged from the job alone; nothing touched
+  uint32_t sheets_faulted = 0;  // the block had already touched memory
+  uint32_t hdr_ident_fails = 0;
+  uint32_t guard_denied = 0;
+  uint32_t bridge_errs = 0;
+  uint32_t acks_ok = 0;
+  uint32_t acks_nak = 0;
+  uint32_t acks_unmatched = 0;
+  uint32_t acks_after_epoch = 0;
+  uint32_t seq_conflicts = 0;
+  uint32_t wb_bytes = 0;
+};
+
+// Where entry `n` of a journal arena lives. A FUNCTION rather than a stride left
+// to each call site, for `upload_src_of`'s reason: a stride computed twice is a
+// stride that can disagree with itself.
+inline uint64_t sheet_journal_addr(uint32_t entry, uint64_t journal_base) {
+  return journal_base + static_cast<uint64_t>(entry) * kLayerFBytes;
+}
+
+// THE PRE-TRANSFER VERDICT, delegating rather than re-deriving.
+//
+// `upload_verdict` is called with the ROLES REVERSED against the loader's use:
+// the `region` it bounds-checks is where the SOURCE lives (the page pool) and
+// the `hps_arena` is where the DESTINATION lives (the journal). That is the
+// whole point of borrowing it -- the ORDER of the tests is the law, and this
+// direction gets the same order rather than a second one written for it.
+//
+// `seq_in_flight` is the caller's knowledge, not the model's: whether a
+// sequence number is outstanding is a property of a hardware table, and a
+// scalar model that kept its own would be a second table to disagree with.
+inline int sheet_pre_verdict(const SheetWritebackRequest& r,
+                             const mem::GuardRegion& journal_arena, uint32_t pool_base,
+                             uint32_t pool_slots, uint32_t current_epoch, bool seq_in_flight) {
+  // A slot outside the pool is refused BEFORE the address is formed, so a wild
+  // slot index can never become a wild address.
+  if (r.slot >= pool_slots) return kSheetOutsidePool;
+  const mem::GuardRegion pool{pool_base, pool_slots * kPageBytes};
+  // The epoch is tested BELOW at full 32 bits, in upload_verdict's own
+  // position, for the reason page_pre_verdict gives: upload_verdict takes
+  // uint16 epochs and T1's key carries resource_epoch:u32, so truncating here
+  // would make two epochs that differ only above bit 15 compare EQUAL in the
+  // model and unequal in the hardware.
+  const int v =
+      mem::upload_verdict(pool, journal_arena, r.journal_addr,
+                          page_vram_addr(r.slot, pool_base) + kSheetChunkStart,
+                          kLayerFBytes, 0, 0);
+  if (v != mem::kUploadOk) return v;
+  if (r.epoch != current_epoch) return kSheetEpochStale;
+  // Last, because it is the only test whose answer is not a property of the
+  // request: a duplicate sequence is a producer bug, and a producer bug behind
+  // a malformed address is still reported as the malformed address.
+  if (seq_in_flight) return kSheetSeqInFlight;
+  return kSheetOk;
+}
+
+// The whole writeback. `page` is the 21,376 resident bytes of the SLOT the job
+// names -- which is not necessarily the job's own page, and catching that is
+// the header check's job. `journal_out`, if given, receives the 8,192 bytes.
+//
+// `transfer_complete` and `ack` stand in for the guard, the bridge and the far
+// side: what a scalar model cannot derive and hardware absolutely can.
+//   ack < 0 : no acknowledgement yet (the barrier is still held)
+//   ack == 0: the journal refused (kSheetJournalNak)
+//   ack > 0 : acknowledged good
+inline SheetWritebackResult sheet_writeback(const SheetWritebackRequest& r, const uint8_t* page,
+                                            const mem::GuardRegion& journal_arena,
+                                            uint32_t pool_base, uint32_t pool_slots,
+                                            uint32_t current_epoch, bool seq_in_flight,
+                                            bool transfer_complete, int ack,
+                                            bool check_header_ident,
+                                            uint8_t* journal_out = nullptr,
+                                            SheetWritebackLedger* L = nullptr) {
+  SheetWritebackResult out;
+
+  const int pre =
+      sheet_pre_verdict(r, journal_arena, pool_base, pool_slots, current_epoch, seq_in_flight);
+  if (pre != kSheetOk) {
+    out.verdict = pre;
+    if (L) {
+      L->sheets_refused++;
+      if (pre == kSheetSeqInFlight) L->seq_conflicts++;
+    }
+    return out;
+  }
+
+  // THE HEADER IS READ FIRST AND COSTS ONE BURST. Identity before payload: with
+  // MEM.GUARD admitting reads of the WHOLE pool, "journalled another patch's
+  // scars" is reachable, and the page header is the only thing in the tree that
+  // can see it. Zero journal bytes move on this path -- a corruption check that
+  // fires after the corruption is filed has not checked anything.
+  out.guard_reqs = 1;
+  const PageHeader h = parse_page_header(page);
+  if (check_header_ident && (h.format_version != 1 || h.island_id != r.island_id ||
+                             h.patch_ix != r.patch_ix || h.patch_iz != r.patch_iz)) {
+    out.verdict = kSheetHeaderIdent;
+    if (L) {
+      L->sheets_faulted++;
+      L->hdr_ident_fails++;
+    }
+    return out;
+  }
+
+  out.guard_reqs = 1 + kSheetReadChunks;
+  if (!transfer_complete) {
+    out.verdict = kSheetIncomplete;
+    if (L) L->sheets_faulted++;
+    return out;
+  }
+
+  out.write_bursts = kSheetWriteBursts;
+  out.bytes_written = kLayerFBytes;
+  if (journal_out) sheet_extract(page, journal_out);
+  // `sheets_written` counts BYTES THAT RETIRED ON THE BRIDGE, not barriers
+  // released -- the two differ by exactly the outstanding tickets, and a single
+  // counter for both would make "how many sheets are still unacknowledged"
+  // unanswerable at the very moment it matters.
+  if (L) {
+    L->wb_bytes += kLayerFBytes;
+    L->sheets_written++;
+  }
+
+  // THE BARRIER. Every `wb_released` below is caused by an acknowledgement; the
+  // model has no path that sets it otherwise, which is the property the block
+  // exists to have.
+  if (ack < 0) {
+    out.verdict = kSheetOk;  // the bytes are away; the job is not finished
+    out.ok = false;
+    return out;
+  }
+  if (ack == 0) {
+    out.verdict = kSheetJournalNak;
+    if (L) {
+      L->sheets_faulted++;
+      L->acks_nak++;
+    }
+    return out;
+  }
+
+  out.verdict = kSheetOk;
+  out.ok = true;
+  out.wb_released = true;
+  if (L) L->acks_ok++;
+  return out;
+}
+
 }  // namespace terrain
 }  // namespace zref
 

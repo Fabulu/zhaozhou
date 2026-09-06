@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **112** (92 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **113** (93 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -24,10 +24,10 @@ Blocks: **112** (92 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | raster | · | · | 5 | · | · | · | · | · | 5 |
 | surface | · | · | 2 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
-| terrain | · | 2 | 14 | · | · | · | · | · | 16 |
+| terrain | · | 2 | 15 | · | · | · | · | · | 17 |
 | texture | 2 | · | 5 | · | · | · | · | · | 7 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 33 | 13 | 50 | 16 | · | · | · | 6 | 112 |
+| **all** | 33 | 13 | 51 | 16 | · | · | · | 6 | 113 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -90,6 +90,8 @@ Blocks: **112** (92 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | MEASURE.TOKENS | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/measure/measure_tokens_directed.cpp |
 | TERRAIN.PAGELOADER | SPECIFIED | 2026-09-06 | `973682f8` | design/contracts/TERRAIN.PAGELOADER.md |
 | TERRAIN.PAGELOADER | UNIT_VERIFIED | 2026-09-06 | `973682f8` | tests/terrain/pageloader_rtl_directed.cpp |
+| TERRAIN.WRITEBACK | SPECIFIED | 2026-09-06 | `b55959f0` | design/contracts/TERRAIN.WRITEBACK.md |
+| TERRAIN.WRITEBACK | UNIT_VERIFIED | 2026-09-06 | `b55959f0` | tests/terrain/writeback_rtl_directed.cpp |
 | TERRAIN.PATCH | REFERENCE_COMPLETE | 2026-08-16 | `53b7b8a` | reference/include/zref/zref_terrain.hpp |
 | TERRAIN.PATCH | UNIT_VERIFIED | 2026-08-31 | `cc10167` | tests/terrain/terrain_patch_directed.cpp |
 | TERRAIN.SHADE | REFERENCE_COMPLETE | 2026-09-03 | `eca81e6f` | reference/include/zref/zref_terrain_shade.hpp |
@@ -222,7 +224,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 | platform | 14% | 16 | 0% |
 | command_debug | 5% | 9 | 0% |
 | field | 6% | 2 | 0% |
-| geometry_mantle | 20% | 36 | 0% |
+| geometry_mantle | 20% | 37 | 0% |
 | tile | 30% | 14 | 0% |
 | myriad_forge | 9% | 10 | 0% |
 | twod_post | 6% | 5 | 0% |

@@ -65,6 +65,11 @@ CLIENTS = [
     # audit is only exact if a new client joins this list in the same change
     # that creates it.
     "fpga/rtl/terrain/zhao_terrain_pageloader.sv",
+    # TERRAIN.WRITEBACK -- the same port in the other direction. It is the first
+    # guard client in the tree that READS the terrain page pool, and it has TWO
+    # request/verdict pairs (the page header, then each sheet chunk), so it has
+    # two places to make this exact mistake instead of one.
+    "fpga/rtl/terrain/zhao_terrain_writeback.sv",
     "fpga/rtl/debug/zhao_debug_frameblit.sv",
     "fpga/rtl/video/zhao_scanout_fetch.sv",
     # Pass-through wrapper: it routes the port down to zhao_scanout_fetch and
@@ -84,18 +89,35 @@ READY = re.compile(r"\b(\w*rsp\w*)\.ready\b")
 OK = re.compile(r"\b(\w*rsp\w*)\.(ok|violation)\b")
 
 
-def arm_body(lines, i):
+def arm_body(lines, i, col=0):
     """The text of the arm that opens on line i, by brace/begin-end depth.
 
     Deliberately simple: it walks to the matching `end` of the `begin` that
     opens on or just after the `ready` test, and stops at the next unindented
     state label if there is no `begin`. A one-line arm is its own body.
+
+    `col` IS NOT COSMETIC -- IT IS A HOLE THIS TOOL HAD.
+    On the opening line only, the walk starts at the `ready` match rather than
+    at column 0, because the commonest arm shape in this tree is
+
+        end else if (guard_rsp_i.ready) begin
+
+    and that line's LEADING `end` closes the PREVIOUS arm. Counted from column
+    0 it cancelled this arm's `begin`, depth went straight to zero, the walker
+    stopped on the opening line, and the body -- the part that contains the
+    `.ok` -- was never read. The tool therefore reported CLEAN on the exact
+    defect it exists to catch, in that shape.
+
+    Found 2026-09-06 by deliberately breaking TERRAIN.WRITEBACK and watching the
+    alarm NOT go off. A detector that has not been shown to fire has not been
+    tested, and this one had been shown to fire only on a shape whose opening
+    line has no `end` on it.
     """
     depth = 0
     started = False
     out = []
     for k in range(i, min(i + 60, len(lines))):
-        t = lines[k]
+        t = lines[k][col:] if k == i else lines[k]
         out.append((k + 1, t))
         opens = len(re.findall(r"\bbegin\b", t))
         closes = len(re.findall(r"\bend\b(?!case|module|function)", t))
@@ -133,7 +155,7 @@ def scan(path):
         if "output" in line or "assign" in line and "rsp.ready" in line:
             continue
         sig = m.group(1)
-        for (ln, text) in arm_body(lines, i):
+        for (ln, text) in arm_body(lines, i, m.start()):
             mo = OK.search(text)
             if mo and mo.group(1) == sig:
                 bad.append((ln, text.strip()))
@@ -158,6 +180,13 @@ _BAD = chr(10).join([
     "          end",
     "        end",
 ])
+# THE SHAPE THE TOOL USED TO MISS: the arm's opening line carries the previous
+# arm's `end`, which cancelled its own `begin` in the depth walk.
+_BAD_ELSE = chr(10).join([
+    "          end else if (guard_rsp_i.ready) begin",
+    "            if (guard_rsp_i.ok) state <= S_RDATA; else state <= S_IDLE;",
+    "          end",
+])
 _GOOD = chr(10).join([
     "        S_REQ: if (guard_rsp_i.ready) begin",
     "          st_q <= S_VERD;",
@@ -172,7 +201,7 @@ _GOOD = chr(10).join([
 def _selftest():
     import tempfile
     import os
-    for text, want in ((_BAD, True), (_GOOD, False)):
+    for text, want in ((_BAD, True), (_BAD_ELSE, True), (_GOOD, False)):
         fd, name = tempfile.mkstemp(suffix=".sv")
         os.close(fd)
         io.open(name, "w", encoding="utf-8", newline=chr(10)).write(text)
