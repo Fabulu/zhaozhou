@@ -2,7 +2,15 @@
 // arrays read SYNCHRONOUSLY so they can be memory.
 //
 // BESIDE `zhao_texture_cache.sv`, which stays the golden implementation.
-// Nothing instantiates this yet.
+//
+// IT IS LIVE. This header said "Nothing instantiates this yet" until
+// 2026-09-06, by which point the block was instantiated at
+// zhao_texture_island_top.sv:781 with REQN(4) and in zhao_prod_top.sv:4348,
+// with `smp_ready_i` wired to REAL backpressure (island_top:813
+// `cache_smp_ready = disp_rsp_ready`, and rsp_dispatch:109
+// `rsp_ready_o = (raw_n != RAWN)`, a FIFO-full check that deasserts whenever
+// anything downstream backs up). A stale "nobody uses this yet" line is how a
+// correctness bug gets read as a curiosity: see the reservation counter in C4.
 //
 // ---------------------------------------------------------------------------
 // WHAT WAS WRONG, MEASURED FROM TWO DIRECTIONS AT ONCE
@@ -303,8 +311,17 @@ module zhao_texture_cache_pipe #(
   assign smp_data_o   = rs_data[rs_rp[RQW-1:0]];
   assign smp_src_id_o = rs_src[rs_rp[RQW-1:0]];
 
+  // `rs_room` is TODAY's occupancy and NOTHING ELSE. It no longer gates
+  // anything -- it survives as the subject of `a_retire_never_overflows` at the
+  // bottom of this file, which is the property the reservation counter below
+  // has to keep true. Read that counter's comment before reusing this signal.
   logic rs_room;
   assign rs_room = (rs_n != (RQW+1)'(REQN));
+
+  // One name for "a response left the FIFO on this clock". It frees a
+  // reservation and advances `rs_rp`, and those two must never disagree.
+  logic rs_pop;
+  assign rs_pop = smp_valid_o && smp_ready_i;
 
   logic              fb_busy_r, fb_req_r;
   logic [TAG_W-1:0]  fb_tag_r;
@@ -318,14 +335,87 @@ module zhao_texture_cache_pipe #(
   // C3 resolves in order, so the request it describes is always `rq_rp`.
   logic c3_all_hit, c3_retire, c3_miss;
   assign c3_all_hit = c2_v && (c3_need_c == '0);
-  assign c3_retire  = c3_all_hit && rs_room;
   assign c3_miss    = c2_v && m_any_c && !fb_busy_r;
 
+  // ==========================================================================
+  // THE RESPONSE SLOT IS RESERVED AT ISSUE, NOT CHECKED AT RETIREMENT
+  // ==========================================================================
+  // THE DEFECT THIS REPLACES. It was live, silent, and it returned
+  // correct-looking data under the WRONG tag, which is worse than a hang.
+  //
+  // This block used to read:
+  //
+  //     assign c3_retire = c3_all_hit && rs_room;
+  //     assign c1_go     = rq_issuable && !fb_busy_r && !c3_miss && rs_room;
+  //
+  // and claimed, in a comment sitting right here, that "holding issue on
+  // `rs_room` keeps the pipe from producing results it cannot place". THAT
+  // PROPERTY WAS FALSE. `rs_room` is a snapshot of the response FIFO's
+  // occupancy TODAY; it accounts for nothing already in C1 or C2. And C1/C2 do
+  // not stall: `c2_v <= c1_v` below is unconditional, outside any `if`, and the
+  // payload capture under `if (c1_v)` replaces C2's contents whenever C1 is
+  // occupied, with no reference to `c3_retire` or `rs_room`.
+  //
+  // So with the FIFO full and two hit results in flight, C2's result was
+  // overwritten by C1's and then cleared, while `rq_ip` had ALREADY passed both
+  // requests -- and every later retire blindly advances `rq_rp`, freeing the
+  // vanished requests' slots while returning a YOUNGER request's `src_id`. A
+  // consumer keyed on `smp_src_id_o` therefore receives somebody else's texels
+  // for a fragment that will never be answered.
+  //
+  // REPRODUCED. Warm line, all lanes hit, `smp_ready_i` low, REQN = 4:
+  //     accepted   0 1 2 3 4 5 6 7
+  //     returned   0 1 2 3     6 7      <- 4 and 5 destroyed, silently
+  // The miss path is not an accidental rescue: `c3_miss` and `c1_go` both
+  // require `!fb_busy_r`, so the pipe is provably empty during a fill and there
+  // is no replay that recreates the lost probe.
+  // Evidence: reports/ZHAOZHOU-PREFIT-VERIFICATION-AND-REARCHITECT-20260906.txt
+  // section 2, and reports/TEXTURE-ISLAND-PREFIT-ADDENDUM-20260906.txt S4.
+  //
+  // THE INVARIANT THAT ACTUALLY HOLDS:
+  //     rs_n + non-cancelled probe results in flight  <=  REQN
+  //
+  // `rs_resv` counts exactly that sum. A probe may only issue while the count
+  // is below capacity, so by the time it reaches C3 its slot has been paid for
+  // and a hit can ALWAYS retire -- which is why `c3_retire` loses its `rs_room`
+  // term. Retirement TRANSFERS the reservation from the pipeline into the FIFO;
+  // it does NOT free it, so `rs_wp++` must not decrement `rs_resv`. Only the
+  // consumer's pop frees a slot. Getting that backwards re-opens the exact hole
+  // this counter closes, because it would let a fresh probe issue against room
+  // a queued response is still occupying.
+  //
+  // WHY NOT MAKE C1/C2 STALLABLE INSTEAD -- the obvious alternative, and the
+  // expensive wrong road in THIS file. `rd_idx`/`rd_daddr` are combinational
+  // off `rq_ip`, and `ram_tag`/`ram_dat` reload on EVERY clock with NO read
+  // enable, deliberately: see the C2 comment above and the M10K notes at the
+  // top of this file. Holding C2 means adding that enable and holding the RAM
+  // outputs against it, which is precisely the inference the rebuild fought to
+  // win back (5,634 ALM / 3 M10K was the cost of losing it). This counter is
+  // three bits.
+  logic [RQW:0] rs_resv;
+  logic         resv_room;
+  logic [RQW:0] squash_c;
+  assign resv_room = (rs_resv != (RQW+1)'(REQN));
+
+  // The probes a miss kills. C3 (`c2_v`) is the missing probe itself and C1 is
+  // the one behind it; both are squashed below, and both must have their
+  // reservations REFUNDED, because `rq_ip` rewinds and they will be re-probed
+  // under fresh ones. Without the refund the counter would leak two slots per
+  // miss and the cache would wedge after a handful of them.
+  //
+  // Safe by construction: `c1_go` contains `!c3_miss`, and a miss implies
+  // `!c3_all_hit`, so a miss can never coincide with an issue or a retire. The
+  // reservations belonging to already-queued responses are untouched.
+  assign squash_c = (RQW+1)'(c2_v) + (RQW+1)'(c1_v);
+
+  // Room was reserved two stages ago. If this ever needs `rs_room` back, the
+  // counter is broken -- fix the counter, do not re-add the term.
+  assign c3_retire = c3_all_hit;
+
   // A probe may issue when there is something to issue, no miss is being
-  // handled, and the response FIFO could take the result. Holding issue on
-  // `rs_room` keeps the pipe from producing results it cannot place.
+  // handled, and a response slot has been RESERVED for it.
   logic c1_go;
-  assign c1_go = rq_issuable && !fb_busy_r && !c3_miss && rs_room;
+  assign c1_go = rq_issuable && !fb_busy_r && !c3_miss && resv_room;
 
   // Read addresses. Registered, which is what makes the arrays memory.
   logic [IDX_W-1:0] rd_idx  [LANES];
@@ -393,7 +483,7 @@ module zhao_texture_cache_pipe #(
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       rq_wp <= '0; rq_rp <= '0; rq_ip <= '0;
-      rs_wp <= '0; rs_rp <= '0;
+      rs_wp <= '0; rs_rp <= '0; rs_resv <= '0;
       c1_v <= 1'b0;
       c2_v <= 1'b0;
       fb_busy_r <= 1'b0;
@@ -461,7 +551,7 @@ module zhao_texture_cache_pipe #(
         // last lands.
         cache_hits_o <= cache_hits_o + 32'(en_pop_c);
       end
-      if (smp_valid_o && smp_ready_i) rs_rp <= rs_rp + (RQW+1)'(1);
+      if (rs_pop) rs_rp <= rs_rp + (RQW+1)'(1);
 
       // ---- C3: a miss REWINDS the issue pointer and squashes the pipe ------
       // Nothing is lost: a request is only removed from the FIFO when it has
@@ -486,6 +576,26 @@ module zhao_texture_cache_pipe #(
         replays_o <= replays_o + 32'd1;
       end
 
+      // ---- C4: the reservation counter, as ONE combined next-state ---------
+      // ONE unconditional assignment, never a scatter of `if`s: issue, retire,
+      // pop and miss can all land on the same edge, and separate nonblocking
+      // increments would each read the same old value with only the last
+      // surviving -- the trap the `cache_hits_o` popcount comment above
+      // records. Both arms below are single expressions for that reason.
+      //
+      // Note what is NOT here: `rs_wp++`. Retiring MOVES a reservation from the
+      // pipeline into the FIFO and the total is unchanged; only `rs_pop` frees
+      // one. That is the mechanism, and it is the half that is easy to get
+      // wrong -- decrementing on retirement would let the next probe issue
+      // against a slot the queued response still holds, which is the original
+      // defect with extra steps.
+      //
+      // Neither arm can underflow. `c2_v` and `c1_v` each hold a reservation of
+      // their own, so `rs_resv >= squash_c`; and `rs_pop` implies a queued
+      // response, whose reservation is not one of those two.
+      if (c3_miss) rs_resv <= rs_resv - squash_c - (RQW+1)'(rs_pop);
+      else         rs_resv <= rs_resv + (RQW+1)'(c1_go) - (RQW+1)'(rs_pop);
+
       // ---- the fill engine, unchanged in behaviour -------------------------
       if (fb_busy_r) begin
         if (fb_req_r && fill_ready_i) fb_req_r <= 1'b0;
@@ -504,6 +614,62 @@ module zhao_texture_cache_pipe #(
       end
     end
   end
+
+`ifndef SYNTHESIS
+  // ==========================================================================
+  // THE THREE PROPERTIES THE RESERVATION COUNTER EXISTS TO KEEP
+  // ==========================================================================
+  // Simulation-only immediate assertions in a clocked block, matching
+  // zhao_geom_assetfetch.sv:632 -- they run under Verilator in the directed
+  // test rather than only under a formal frontend, because the defect they
+  // guard was found by a cycle model and has to stay caught by an ordinary run.
+  //
+  // ENFORCED-BY: tests/texture/texture_cache_pipe_directed.cpp, case 6.
+  //
+  // `rst_n` is NOT read synchronously here. A net that is an asynchronous reset
+  // in one process and a synchronous condition in another is Verilator's
+  // SYNCASYNCNET, and it is a real caution rather than a style note. The idiom
+  // is zhao_raster_tile_pipe.sv:417's: a plain flag that says "reset has
+  // released", which is all the assertions actually want.
+  logic assert_armed_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) assert_armed_q <= 1'b0;
+    else        assert_armed_q <= 1'b1;
+  end
+
+  always_ff @(posedge clk) begin
+    if (assert_armed_q) begin
+      // 1. Never promise more slots than exist. If this trips, an issue path
+      //    is missing `resv_room` and results will start overwriting one
+      //    another in C2 again.
+      a_resv_never_exceeds_capacity :
+        assert ((rs_resv <= (RQW+1)'(REQN)))
+        else $error("cache_pipe: rs_resv=%0d exceeds REQN=%0d -- a probe issued without a reserved response slot",
+                    rs_resv, REQN);
+
+      // 2. Every entry already queued is still covered by a live reservation.
+      //    This is the half that breaks the moment `rs_wp++` is made to
+      //    decrement `rs_resv`: the FIFO would then hold responses nobody had
+      //    reserved room for, and a fresh probe could issue against an
+      //    occupied slot.
+      a_queued_entries_stay_reserved :
+        assert ((rs_n <= rs_resv))
+        else $error("cache_pipe: rs_n=%0d exceeds rs_resv=%0d -- a retirement freed a reservation instead of transferring it",
+                    rs_n, rs_resv);
+
+      // 3. The property the ORIGINAL comment claimed and did not have.
+      //    `c3_retire` no longer tests `rs_room`, so this is the statement that
+      //    dropping the term was safe: a hit never retires into a full FIFO.
+      //    Before the counter this condition was reachable, and the fallout was
+      //    silent -- C2 was overwritten, `rq_ip` had already passed the
+      //    request, and a later retire returned a younger `src_id` in the older
+      //    request's place.
+      a_retire_never_overflows :
+        assert (!(c3_retire && !rs_room))
+        else $error("cache_pipe: a hit retired into a FULL response FIFO -- the lost-result defect is back");
+    end
+  end
+`endif
 
 endmodule : zhao_texture_cache_pipe
 

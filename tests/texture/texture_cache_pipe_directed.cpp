@@ -20,6 +20,13 @@
 // the defect exactly while looking pipelined, so the test stalls the consumer
 // permanently and requires accesses to keep being accepted until local storage
 // fills -- and no further.
+//
+// A THIRD GATE, added 2026-09-06 (case 6). Accepting an access is not
+// answering it. Case 3 stalls the consumer and checks only that accesses keep
+// being TAKEN; a live defect in the response-FIFO capacity check destroyed
+// results that were already in flight, and every case in this file ran green
+// over it. Case 6 warms a line, stalls, and then checks IDENTITY on the way
+// out: every src_id issued comes back exactly once, in order.
 // ---------------------------------------------------------------------------
 #include <cstdint>
 #include <cstdio>
@@ -265,6 +272,135 @@ int main(int argc, char** argv) {
                 1, clocks <= WANT + 16 ? 1 : 0);
     std::printf("  sustained: %d answered in %d clocks (%.2f each)\n", answered, clocks,
                 static_cast<double>(clocks) / answered);
+  }
+
+  // ---- 6: A WARM WORKING SET, A STALLED CONSUMER, AND NOTHING MAY VANISH --
+  //
+  // THE DEFECT THIS CATCHES. `zhao_texture_cache_pipe.sv` used to gate both
+  // issue and retirement on `rs_room` -- the response FIFO's occupancy TODAY --
+  // while C1 and C2 advanced unconditionally (`c2_v <= c1_v`, outside any
+  // `if`). So with the FIFO full and two hit results in flight, C2's result was
+  // overwritten by C1's and then cleared, with `rq_ip` already past both
+  // requests. Every later retire still advanced `rq_rp`, so the vanished
+  // requests' slots were freed while a YOUNGER request's `src_id` came back in
+  // their place. Not a hang: correct-looking texels under the wrong tag, which
+  // is worse.
+  //
+  //     accepted   0 1 2 3 4 5 6 7
+  //     returned   0 1 2 3     6 7      <- 4 and 5 destroyed, silently
+  //
+  // Verified in reports/ZHAOZHOU-PREFIT-VERIFICATION-AND-REARCHITECT-20260906
+  // .txt section 2 and reproduced by a cycle model of the control logic. The
+  // repair is the reservation counter (`rs_resv`) in C4.
+  //
+  // WHY CASE 3 ABOVE DOES NOT CATCH IT, having stalled the consumer already.
+  // Two reasons, and both are the point of this case:
+  //   * its working set is COLD, so every probe misses, `fb_busy_r` serialises
+  //     the pipe, and two HIT results never coexist in C1/C2 with a full FIFO.
+  //     The defect needs an all-resident line. So warm one first.
+  //   * it asserts only that accesses were ACCEPTED. It never checks that any
+  //     of them came back. A test that watches the input side of a block cannot
+  //     see the output side lose things.
+  // So: warm, stall, push eight accesses with DISTINCT src_ids, release, drain,
+  // and check the identities -- not the timing, and not the byte values, which
+  // were never what broke.
+  {
+    reset();
+
+    // Warm line 0x6000 with one access and let the fill complete. Everything
+    // after this point must be an all-hit probe; `fills_o` below proves it.
+    top.smp_ready_i = 1;
+    top.acc_valid_i = 1;
+    top.acc_en_i = 0xF;
+    for (int k = 0; k < 4; ++k) top.acc_addr_i[k] = 0x6000 + static_cast<uint32_t>(k) * 2u;
+    top.acc_src_id_i = 0x60;
+    top.eval();
+    zhao::tick(top);
+    top.acc_valid_i = 0;
+    for (int c = 0; c < 400 && !top.smp_valid_o; ++c) step(false);
+    zhao::check(top.smp_valid_o == 1, "the warm-up access completed before the stall test", 1,
+                top.smp_valid_o);
+    step(false);  // smp_ready_i is still 1, so this pops the warm-up response
+    const uint32_t fills_warm = top.fills_o;
+
+    // STALL the consumer, then push eight accesses at the now-resident line.
+    // Eight is exactly what fits: REQN=4 retire into the response FIFO, freeing
+    // four request slots, and then issue must stop. Each carries its own
+    // src_id, because identity is the thing under test.
+    top.smp_ready_i = 0;
+    const int N = 8;
+    std::vector<uint16_t> issued;
+    std::vector<uint16_t> returned;
+    for (int c = 0; c < 200 && static_cast<int>(issued.size()) < N; ++c) {
+      const uint16_t id = static_cast<uint16_t>(0x100 + issued.size());
+      top.acc_valid_i = 1;
+      top.acc_en_i = 0xF;
+      for (int k = 0; k < 4; ++k) top.acc_addr_i[k] = 0x6000 + static_cast<uint32_t>(k) * 2u;
+      top.acc_src_id_i = id;
+      top.fill_data_valid_i = 0;
+      top.fill_ready_i = 1;
+      top.eval();
+      // Only count it when the block actually took it; on a cycle where
+      // `acc_ready_o` is low the SAME id is offered again next clock, so the
+      // issued sequence stays dense and the expected return order is trivially
+      // 0x100, 0x101, ... in order.
+      if (top.acc_ready_o) issued.push_back(id);
+      zhao::tick(top);
+    }
+    top.acc_valid_i = 0;
+
+    // RELEASE and drain. Nothing new is offered, so every response from here is
+    // one of the eight.
+    for (int c = 0; c < 600 && static_cast<int>(returned.size()) < N; ++c) {
+      top.acc_valid_i = 0;
+      top.smp_ready_i = 1;
+      top.fill_data_valid_i = 0;
+      top.fill_ready_i = 1;
+      top.eval();
+      if (top.smp_valid_o) returned.push_back(static_cast<uint16_t>(top.smp_src_id_o));
+      zhao::tick(top);
+    }
+
+    std::printf("  warm+stalled: issued");
+    for (uint16_t id : issued) std::printf(" %03X", id);
+    std::printf(" | returned");
+    for (uint16_t id : returned) std::printf(" %03X", id);
+    std::printf("\n");
+
+    // The case is only meaningful if the burst really was all-hit: a fill here
+    // would mean `fb_busy_r` serialised the pipe and the test had quietly
+    // become case 3 again.
+    zhao::check(top.fills_o == fills_warm,
+                "the eight stalled accesses all HIT -- no fill, so C1 and C2 "
+                "really did hold two live results at once",
+                fills_warm, top.fills_o);
+    const int n_issued = static_cast<int>(issued.size());
+    const int n_returned = static_cast<int>(returned.size());
+    zhao::check(n_issued == N, "eight accesses were accepted behind the stalled consumer", N,
+                n_issued);
+
+    // THE ASSERTION THE DEFECT FAILS. Count first -- six of eight came back
+    // before the repair -- then identity and order.
+    zhao::check(n_returned == n_issued,
+                "every access issued behind the stall comes back EXACTLY ONCE -- "
+                "a full response FIFO must not destroy a result already in C1/C2",
+                n_issued, n_returned);
+
+    bool ids_in_order = (n_returned == n_issued);
+    for (int i = 0; i < n_returned && i < n_issued; ++i)
+      if (returned[i] != issued[i]) ids_in_order = false;
+    zhao::check(ids_in_order,
+                "and each src_id returns in ISSUE order -- a younger request's "
+                "id must never appear in an older request's place",
+                1, ids_in_order ? 1 : 0);
+
+    // Cheap and worth having: the ids are a permutation of nothing, they are
+    // the exact set. A duplicate would satisfy a count check on its own.
+    bool no_duplicates = true;
+    for (int i = 0; i < n_returned; ++i)
+      for (int j = i + 1; j < n_returned; ++j)
+        if (returned[i] == returned[j]) no_duplicates = false;
+    zhao::check(no_duplicates, "and no src_id is answered twice", 1, no_duplicates ? 1 : 0);
   }
 
   return zhao::report_and_exit("texture_cache_pipe_directed");

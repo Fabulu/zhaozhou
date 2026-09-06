@@ -71,12 +71,39 @@
 //
 // That was one combinational cone containing a 64-bit add, a 64-bit variable
 // arithmetic shift, two 64-bit magnitude compares and a mux. It is now four
-// registered stages:
+// registered arithmetic stages, in front of which sits a pure OPERAND FETCH:
 //
+//     P0  pop a queue, register the operands   (array reads, NO arithmetic)
 //     P1  the product                     (DSP)
 //     P2  + the round-half-up constant    (64-bit add)
 //     P3  >>> sh                          (64-bit variable shift)
 //     P4  saturate, select, write back    (compares and a mux)
+//
+// ---------------------------------------------------------------------------
+// P0 IS A STORAGE FIX AND IT COSTS ONE CLOCK. SAID HERE, NOT BURIED.
+// ---------------------------------------------------------------------------
+// P0 exists for QUARTUS_GOTCHAS 14: combinational logic between an array read
+// and the first register blocks absorption into the M10K's output register, so
+// an array whose read feeds a MULTIPLIER cannot become memory however few
+// addresses it has. `e_num_u`/`e_num_v` have one write address and one read
+// address and STILL did not infer -- the island's RAM Summary names `e_tag` and
+// nothing else in this block -- which is exactly the case the gotcha describes,
+// and the only array in this file that the "registered read" experiment fits.
+//
+// So the launch stage no longer multiplies. It reads `e_num_*`, `e_mant_*` and
+// `e_k` into flops and stops; the multiply moved to the next clock, where its
+// operands come from registers rather than from an array output. The array read
+// now terminates at a register, which is the shape a block RAM's output
+// register can absorb.
+//
+// LATENCY: one extra clock from accept to `r_valid_o` -- five register stages
+// instead of four. THROUGHPUT IS UNCHANGED: one pop per axis per clock, two
+// products per clock at saturation, and `products_o` still counts AT THE POP so
+// its total and its per-clock rate are the same numbers as before. The token
+// round trip goes from five clocks to six against NTOK = 16 slots, still far
+// short of the one-accept-per-clock interface limit, so the saturated
+// throughput case is not touched by it. `v_ready_o` still comes from local
+// storage only.
 //
 // THE ARITHMETIC IS UNCHANGED. Every expression above is the same expression,
 // evaluated in the same order, with registers between. The paired test drives
@@ -139,9 +166,26 @@ module zhao_raster_perspuv_svc #(
   // Diagnosed in reports/PERSPUV-REGISTER-DIAGNOSIS-20260905.md as STATIC
   // ANALYSIS, explicitly not a measurement. The fit that follows this change
   // is what confirms or refutes it.
+  //
+  // `e_mant` IS SPLIT FOR THE SAME REASON, and it was missed the first time.
+  // One mantissa is captured per fragment and BOTH axes multiply by it, so it
+  // reads like shared state -- and it is not: axis 0 reads it at `pk_i[0]` and
+  // axis 1 at `pk_i[1]`, two unrelated addresses in one cycle, which is the 2R
+  // structure the paragraph above rules out. Two copies of one 24-bit value is
+  // 384 bits of duplication traded against an array that cannot be memory at
+  // all. Both copies are written at `tail_q` from the same `r_mant_i` on the
+  // same clock, so they cannot disagree.
   logic signed [31:0]    e_num_u [NTOK];
   logic signed [31:0]    e_num_v [NTOK];
-  logic [23:0]           e_mant [NTOK];
+  logic [23:0]           e_mant_u [NTOK];
+  logic [23:0]           e_mant_v [NTOK];
+  // NOT SPLIT, and left alone deliberately in this pass: `e_k` carries the same
+  // two read addresses (`pk_i[0]`, `pk_i[1]`). It is 6 x 16 = 96 bits -- the
+  // SAME geometry as the `e_tag` array that DID infer, per the island's RAM
+  // Summary -- and the only structural difference between the two is the
+  // read-address count. That makes the pair the cleanest control in this block
+  // for the next fit, and splitting `e_k` would spend the control to save 96
+  // flops. Left as evidence.
   logic [5:0]            e_k    [NTOK];
   logic signed [31:0]    e_q_u  [NTOK];
   logic signed [31:0]    e_q_v  [NTOK];
@@ -193,9 +237,18 @@ module zhao_raster_perspuv_svc #(
     end
   end
 
-  // ---- P1..P4, one set per axis --------------------------------------------
+  // ---- P0..P4, one set per axis --------------------------------------------
   // The stages are per-lane arrays rather than two copies of the same names,
   // so the U and V paths cannot drift apart by an edit that touches one.
+  //
+  // P0 holds the OPERANDS, not a product. It is the register that terminates
+  // the array read so that read is not a multiplier input; see the header.
+  logic               p0_v_q [2];
+  logic [TW-1:0]      p0_i_q [2];
+  logic signed [31:0] p0_num_q [2];
+  logic [23:0]        p0_mant_q [2];
+  logic [5:0]         p0_k_q [2];
+
   logic               p1_v_q [2];
   logic [TW-1:0]      p1_i_q [2];
   logic signed [63:0] p1_prod_q [2];
@@ -237,10 +290,33 @@ module zhao_raster_perspuv_svc #(
   assign head_done = e_val[head_q] && (e_have[head_q] == 2'b11);
 
   assign r_valid_o    = head_done;
-  assign u_o          = e_q_u[head_q];
-  assign v_o          = e_q_v[head_q];
+  // THE DEPTH-ZERO BYPASS, AND IT REPAIRS MY OWN REGRESSION.
+  //
+  // Removing the allocation-time `e_q_u[tail_q] <= 0` was right about the
+  // second write address and WRONG about being unobservable. My justification
+  // was that `e_have[i][0]` is set only in the P4 branch that writes
+  // `e_q_u[i]`. That is false for depth-zero: accept does
+  //
+  //     e_have[tail_q] <= depth_zero_i ? 2'b11 : 2'b00;
+  //
+  // so a depth-zero fragment is marked COMPLETE with no P4 write ever
+  // occurring, and retirement then read a slot nothing had written -- the
+  // previous occupant's coordinates, or uninitialised memory in hardware.
+  //
+  // The tests passed anyway, and the reason is worth recording: Verilator
+  // zero-initialises arrays AND the depth-zero fragment is stimulus index 0,
+  // landing in a slot never yet written. A SECOND depth-zero fragment reusing
+  // a slot would have emitted the previous fragment's coordinates even in
+  // simulation. Two passing tests, and neither could have failed.
+  //
+  // The fix is a bypass at the OUTPUT, not a write at allocation: it restores
+  // exactly what the serial reference does -- `zhao_raster_perspuv.sv` P_DONE
+  // forces `u_o <= 0; v_o <= 0; sat_o <= 0` for `zero_r` -- while keeping the
+  // one write address that made `e_q_u` inferrable in the first place.
+  assign u_o          = e_dz[head_q] ? 32'sd0 : e_q_u[head_q];
+  assign v_o          = e_dz[head_q] ? 32'sd0 : e_q_v[head_q];
   assign tag_o        = e_tag[head_q];
-  assign sat_o        = e_sat[head_q];
+  assign sat_o        = e_dz[head_q] ? 1'b0 : e_sat[head_q];
   assign depth_zero_o = e_dz[head_q];
 
   always_comb begin
@@ -259,6 +335,7 @@ module zhao_raster_perspuv_svc #(
         wq_rp[ax] <= '0;
       end
       for (int ax = 0; ax < 2; ax++) begin
+        p0_v_q[ax] <= 1'b0;
         p1_v_q[ax] <= 1'b0;
         p2_v_q[ax] <= 1'b0;
         p3_v_q[ax] <= 1'b0;
@@ -315,7 +392,8 @@ module zhao_raster_perspuv_svc #(
         e_have[tail_q]    <= depth_zero_i ? 2'b11 : 2'b00;
         e_num_u[tail_q]   <= u_over_w_i;
         e_num_v[tail_q]   <= v_over_w_i;
-        e_mant[tail_q]    <= r_mant_i;
+        e_mant_u[tail_q]  <= r_mant_i;
+        e_mant_v[tail_q]  <= r_mant_i;
         e_k[tail_q]       <= r_k_i;
         // THE ZERO-INITIALISATION IS GONE, AND ITS ABSENCE IS THE POINT.
         //
@@ -351,16 +429,20 @@ module zhao_raster_perspuv_svc #(
       // free-count race taught: the safest way not to lose one of two
       // same-clock updates to a variable is for there to be no shared
       // variable.
+      //
+      // AND THIS STAGE NO LONGER MULTIPLIES. Every right-hand side below is an
+      // array read and nothing else, so each array's read terminates at a flop.
+      // That is the whole content of the QUARTUS_GOTCHAS 14 repair: the product
+      // moved one clock later, to P1, where its operands are registers.
       for (int unsigned ax = 0; ax < 2; ax++) begin
-        p1_v_q[ax] <= pk_v[ax];
+        p0_v_q[ax] <= pk_v[ax];
         if (pk_v[ax]) begin
-          p1_i_q[ax]    <= pk_i[ax];
-          p1_k_q[ax]    <= e_k[pk_i[ax]];
+          p0_i_q[ax]    <= pk_i[ax];
+          p0_k_q[ax]    <= e_k[pk_i[ax]];
           // The per-axis select is explicit. Each arm reads ONE array at ONE
           // address, which is the whole point of the split.
-          p1_prod_q[ax] <= (ax == 0)
-              ? 64'(e_num_u[pk_i[0]]) * $signed({40'd0, e_mant[pk_i[0]]})
-              : 64'(e_num_v[pk_i[1]]) * $signed({40'd0, e_mant[pk_i[1]]});
+          p0_num_q[ax]  <= (ax == 0) ? e_num_u [pk_i[0]] : e_num_v [pk_i[1]];
+          p0_mant_q[ax] <= (ax == 0) ? e_mant_u[pk_i[0]] : e_mant_v[pk_i[1]];
           wq_rp[ax] <= wq_rp[ax] + (TW+1)'(1);
         end
       end
@@ -373,7 +455,27 @@ module zhao_raster_perspuv_svc #(
       // A few lines above that line sat a comment explaining this very rule
       // for a different signal. Knowing the rule is not the same as applying
       // it, which is why the counter is checked by a test rather than by care.
+      //
+      // It is still counted AT THE POP, not at the new P1. The pop is the
+      // commitment -- an entry leaves the work queue and a product is owed for
+      // it -- and counting there keeps the total and the products-per-clock
+      // rate the same numbers the saturated-throughput case already measures,
+      // rather than shifting them by one stage.
       products_o <= products_o + 32'(pk_v[0]) + 32'(pk_v[1]);
+
+      // ---- P1: the product -------------------------------------------------
+      // The SAME expression, character for character, on the same types:
+      // `p0_num_q` is the signed 32-bit numerator and `p0_mant_q` the 24-bit
+      // mantissa, exactly as they were read out of the arrays. Only where the
+      // operands come from changed -- registers instead of array outputs.
+      for (int unsigned ax = 0; ax < 2; ax++) begin
+        p1_v_q[ax] <= p0_v_q[ax];
+        if (p0_v_q[ax]) begin
+          p1_i_q[ax]    <= p0_i_q[ax];
+          p1_k_q[ax]    <= p0_k_q[ax];
+          p1_prod_q[ax] <= 64'(p0_num_q[ax]) * $signed({40'd0, p0_mant_q[ax]});
+        end
+      end
 
       // ---- P2: + the rounding constant -------------------------------------
       for (int unsigned ax = 0; ax < 2; ax++) begin
