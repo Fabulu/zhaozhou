@@ -186,3 +186,22 @@ whose removal would re-open the Direction 5 §1 dongle -- is untouched.
   the star rides the lens, so rule 3's count rises 1463 -> 1658. §5.3 exempts the
   PURPLE from rule 3 and explicitly does not exempt the star, so this is a real
   trade; 400 is the low end of what fixes the sink, for that reason.
+
+### Direction 7 §4 (the smear scales with speed). DONE.
+`smear_speed_mul_pm(mm this frame)` -> the composite's opacity, with
+`kSmearSpeedBasePm = 380` (never zero) reaching full at
+`kSmearSpeedFullMmPerFrame = 34`, which is `hasty`'s own travel (8330 mm / 120
+keys / 2 frames per key) because the owner names hasty as the reference for the
+moving end. Measured from the POSED root anchor `fa.body`, not from the instance
+placement -- the instance does not move; the clip's root displacement does, and
+only the posed anchor carries it. `fall` (slot 9) joins the travelling rung.
+
+The preset table SURVIVES because a rung is an identity (decay, step, jitter,
+tear), not an intensity -- but intensity is no longer decided per clip at all,
+which is what retires the off-by-one class the direction names.
+
+Looked at: `fall` f200/f250 now carries a large aqua cloud through the drop and
+the catch (the vertical-motion case the direction asked to be checked
+specifically -- it works, because the trail separates vertically on screen);
+`hasty` keeps its reference trail; `rest` has a modest, present haze instead of
+either nothing or a full cloud.

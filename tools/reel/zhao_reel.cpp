@@ -2318,6 +2318,13 @@ struct CreatureReelCtx {
   // and a "smear only" subject built that way would be byte-identical to the
   // bare creature. See manafold-fogprobe-smear.
   bool u02_smear_only = false;
+  // DIRECTION 7 §4: the posed root anchor of the previous frame, and the speed
+  // multiplier derived from it. Tracked here rather than in the clip because
+  // the quantity that matters is the POSED position -- root displacement
+  // included -- and only the render path has it.
+  int32_t u02_prev_body[3] = {0, 0, 0};
+  bool u02_prev_body_valid = false;
+  int u02_speed_mul_pm = 1000;
   std::vector<uint8_t> u02_smear_buf;
   std::vector<int32_t> u02_smear_depth;  // R5: per-cell nearest splat depth
   u02::FoldState u02_fold[3];            // pass 4: per-conduit fold state
@@ -3377,8 +3384,10 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       // the travel trail thickened too, this is the one line to change.
       const bool is_travelling_rung =
           c.u02_smear_preset == u02::kU02SmearTravellingRung;
+      // DIRECTION 7 §4: and then by the frame's own speed, base floor included.
       const int fog_gain_pm =
-          sp.gain_pm * (is_travelling_rung ? 1000 : u02::kFogThicknessPm) / 1000;
+          sp.gain_pm * (is_travelling_rung ? 1000 : u02::kFogThicknessPm) / 1000 *
+          c.u02_speed_mul_pm / 1000;
       u02::smear_composite(c.u02_smear_buf.data(), c.u02_smear_depth.data(), rgb,
                            depth, w, h, fog_gain_pm, c.u02_frame, sp.tear);
     }
@@ -4070,6 +4079,22 @@ int render_scene(const SceneSubject& sub) {
             cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][2] = fa.body[2];
             ++cr_ctx.u02_glow_count;
             if (ii == 0) {
+              // DIRECTION 7 §4: the frame's own travel, from the POSED root.
+              if (cr_ctx.u02_prev_body_valid) {
+                int64_t d2 = 0;
+                for (int k = 0; k < 3; ++k) {
+                  const int64_t dk = fa.body[k] - cr_ctx.u02_prev_body[k];
+                  d2 += dk * dk;
+                }
+                const int64_t d_fx = static_cast<int64_t>(
+                    zref::isqrt_u64(static_cast<uint64_t>(d2)));
+                cr_ctx.u02_speed_mul_pm = u02::smear_speed_mul_pm(
+                    static_cast<int32_t>((d_fx * 1000) >> 16));
+              } else {
+                cr_ctx.u02_speed_mul_pm = u02::smear_speed_mul_pm(0);
+              }
+              for (int k = 0; k < 3; ++k) cr_ctx.u02_prev_body[k] = fa.body[k];
+              cr_ctx.u02_prev_body_valid = true;
               cr_ctx.u02_body[0] = fa.body[0];
               cr_ctx.u02_body[1] = fa.body[1];
               cr_ctx.u02_body[2] = fa.body[2];
@@ -5220,7 +5245,15 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   //   that glitchy smear" -- the tear IS the glitch signature -- on exactly
   //   the accumulation behaviour channel already ships and the owner already
   //   likes, so channel's protected read changes only by gaining the tear.
-  s.u02_smear = slot == 7 ? 0 : ((slot == 1 || slot == 8) ? 3 : 5);
+  // DIRECTION 7 §4: `fall` (slot 9) joins drift and hasty on the TRAVELLING
+  // rung -- "the fall definitely needs the full smear treatment", and hasty's
+  // rung is the one the owner says "looks great for when there's movement", so
+  // the full treatment IS that rung. Slot 7 stays clean: it is the form
+  // diagnostic and an unobstructed look at geometry is the whole point of it,
+  // which is not the same thing as a CLIP standing still. Intensity is no
+  // longer decided here at all -- speed decides it (u02_speed_mul_pm).
+  s.u02_smear =
+      slot == 7 ? 0 : ((slot == 1 || slot == 8 || slot == 9) ? 3 : 5);
   // Pass 3 (Direction 3 §1): the four-light-everywhere look was a
   // REGRESSION — "It should look just like Zixx' lighting with the
   // directional light from the sun." Every clip ships under its own named

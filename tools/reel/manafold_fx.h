@@ -311,6 +311,38 @@ constexpr int kSmearAlphaMaxPm = 780;
 // 0 restores pass 7 exactly, which is the point of it being a knob.
 constexpr int kSmearChromaFloorPm = 600;
 constexpr int kSmearVividPm = 1500;
+// ---- DIRECTION 7 §4: THE SMEAR SCALES WITH SPEED -------------------------
+// "we said no frame buffer glitch smear when standing still. I'd like to
+// qualify that. We want some smear, just not as much. And the fall definitely
+// needs the full smear treatment. The smear in hasty looks great for when
+// there's movement. Probably have a base smear and increase smear with movement
+// speed."
+//
+// The owner gave the mechanism himself, so this is it: ONE continuous knob
+// driven by the creature's own posed root speed, replacing the per-clip
+// intensity judgement. That also retires a whole bug class -- a per-clip preset
+// table with an off-by-one bound has now bitten three passes.
+//
+// The preset table SURVIVES, because a rung is an IDENTITY (decay length, step
+// quantisation, jitter, tear) and not an intensity. Speed multiplies the
+// composite's opacity; the rung still says what kind of smear it is.
+//
+// ⚠ The plane is SCREEN-SPACE, so a trail only SEPARATES when the creature
+// travels across frame. Speed-driven intensity lines up with that naturally,
+// but a clip that is fast without traversing gets intensity and no trail. That
+// is why `fall` -- which moves vertically -- is checked by eye, not assumed.
+//
+// Measured from the posed root anchor (fa.body), which carries the clip's own
+// root displacement, NOT from the instance placement, which does not move.
+constexpr int kSmearSpeedBasePm = 380;   // standing still: never zero
+// The speed at which the multiplier reaches full. `hasty` travels 8330 mm over
+// 120 keys = 69 mm/key = ~34 mm/frame at the shipped two-frames-per-key, and
+// the owner names hasty as the reference for the moving end -- so hasty is
+// exactly full and everything else is read against it. `fall` drops 3600 mm
+// over 130 keys with a t^2 curve, so its peak is ~2*3600/260 = 28 mm/frame:
+// most of the way to full, at the moment of the catch, which is where the
+// treatment should peak.
+constexpr int kSmearSpeedFullMmPerFrame = 34;
 // PASS 8: the composite's "keep the cell vivid" step was `c[k] * 3 / 2` with a
 // per-channel clamp at 255, and 09-ENGINE-GOTCHAS §9 is exactly about comments
 // like that one. A cell at (142,208,192) becomes (213,255,255) -- the two high
@@ -1350,6 +1382,16 @@ inline const GlowFrame& glow_frame_cached(GlowFrameCache& c, uint32_t frame,
   static GlowFrame overflow;
   overflow = gf;
   return overflow;
+}
+
+/** DIRECTION 7 §4: posed-root speed (mm this frame) -> composite multiplier.
+ *  Clamped to [kSmearSpeedBasePm, 1000]. A pure function so it can be reasoned
+ *  about and, if it ever needs to be, tested without a render. */
+inline int smear_speed_mul_pm(int32_t speed_mm) {
+  if (speed_mm <= 0) return kSmearSpeedBasePm;
+  int32_t t = speed_mm * 1000 / kSmearSpeedFullMmPerFrame;
+  if (t > 1000) t = 1000;
+  return kSmearSpeedBasePm + (1000 - kSmearSpeedBasePm) * t / 1000;
 }
 
 /** The smear plane's per-frame decay/glitch update (R6). Call ONCE per
