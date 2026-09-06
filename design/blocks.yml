@@ -105,6 +105,20 @@ counter_catalog:
   - pageloader_guard_denied
   - pageloader_bridge_errs
   - pageloader_load_bytes
+  - seq_records_consumed
+  - seq_patches_issued
+  - seq_prefetch_resident
+  - seq_skipped_not_resident
+  - seq_claims_issued
+  - seq_claims_refused
+  - seq_claims_same
+  - seq_loads_issued
+  - seq_loads_deferred
+  - seq_writebacks_issued
+  - seq_compose_slots_used
+  - seq_pins_issued
+  - seq_drained
+  - seq_frame_faults
   # TERRAIN.MIPGEN (ruling T8)
   - mipgen_samples
   - mipgen_writes
@@ -393,7 +407,7 @@ blocks:
     inputs: [decoded_records, frame_complete]
     outputs: [dispatch, slot_state, guard_policy, fence]
     upstream: [CMD.DECODER, VIDEO.FRAMECTL]
-    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT, MEM.UPLOAD, MATERIAL.RESOLVE, FORGE.SHADOW]
+    downstream: [MEM.GUARD, FIELD.PROGCACHE, DEBUG.COUNTERS, MEASURE.GOVERNOR, MEASURE.TOKENS, TERRAIN.PATCH, SURFACE.STAMP, GEOM.MESHFETCH, PART.STATE, FORGE.PRIM, TWOD.PLANE, TWOD.SPRITE, POST.GATHER, POST.COMPOSITE, DEBUG.FRAMEBLIT, MEM.UPLOAD, MATERIAL.RESOLVE, FORGE.SHADOW, TERRAIN.SEQ]
     backpressure: credit
     latency: variable
     target_throughput: 1 slot transition per clock
@@ -1585,7 +1599,7 @@ blocks:
     owner_issue: ZH-126
     inputs: [page_load_jobs]
     outputs: [loader_completions]
-    upstream: [MEM.HPS.BRIDGE]
+    upstream: [MEM.HPS.BRIDGE, TERRAIN.SEQ]
     downstream: [TERRAIN.RESIDENCY, MEM.GUARD, TERRAIN.MIPGEN]
     backpressure: ready_valid
     latency: variable
@@ -1688,7 +1702,7 @@ blocks:
     owner_issue: ZH-033
     inputs: [dispatch, field_results, baked_scars]
     outputs: [patch_state, subpatch_requests]
-    upstream: [CMD.SCHEDULER, FIELD.SEQ.EARTH, TERRAIN.BAKE]
+    upstream: [CMD.SCHEDULER, FIELD.SEQ.EARTH, TERRAIN.BAKE, TERRAIN.SEQ]
     downstream: [TERRAIN.TESS, TERRAIN.LOD, TERRAIN.VELOCITY, PART.COLLIDE, MEM.GUARD, TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.COMPCACHE]
     backpressure: ready_valid
     latency: variable
@@ -1814,7 +1828,7 @@ blocks:
     owner_issue: ZH-125
     inputs: [patch_state, lattice_placement, cell_state]
     outputs: [lattice_reads, cell_reads]
-    upstream: [TERRAIN.PATCH]
+    upstream: [TERRAIN.PATCH, TERRAIN.SEQ]
     downstream: [TERRAIN.TESS]
     backpressure: ready_valid
     latency: fixed:1
@@ -1922,6 +1936,77 @@ blocks:
       BLOCK until this entry, which is how a reference goes missing in practice:
       not by being absent, but by having nothing point at it.
 
+  - id: TERRAIN.SEQ
+    name: Terrain command sequencer
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Walks the frame's sealed SubmitTerrainSet in list order and drives the terrain pipeline: residency lookup, claim, T4's writeback-before-load for a dirty victim, page load, frame-scoped composed-cache slot allocation, pin, and patch issue. Closes step 5 of the world-layer build sequence and reports/Missingterrain's 'issue all visible patches to the terrain engine' -- the command path that block says does not exist."
+    contract: design/contracts/TERRAIN.SEQ.md
+    phase: 6
+    owner_issue: ZH-127
+    inputs: [terrain_patch_set]
+    outputs: [page_load_jobs, page_writeback_jobs, terrain_patch_jobs]
+    upstream: [CMD.SCHEDULER]
+    downstream: [TERRAIN.RESIDENCY, TERRAIN.PAGELOADER, TERRAIN.PATCH, TERRAIN.COMPCACHE, TERRAIN.LOD]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: "5.38 gpu clocks per resident static record, measured; one record in service at a time"
+    reference_model: zref::terrain::seq::Sequencer
+    tests:
+      directed: tests/terrain/seq_rtl_directed.cpp
+      random: tests/terrain/seq_rtl_directed.cpp
+    counters: [seq_records_consumed, seq_patches_issued, seq_prefetch_resident, seq_skipped_not_resident, seq_claims_issued, seq_claims_refused, seq_claims_same, seq_loads_issued, seq_loads_deferred, seq_writebacks_issued, seq_compose_slots_used, seq_pins_issued, seq_drained, seq_frame_faults]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-06"
+        commit: "78ecbb4b"
+        evidence: design/contracts/TERRAIN.SEQ.md
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-06"
+        commit: "78ecbb4b"
+        evidence: reference/include/zref/zref_terrain_seq.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-09-06"
+        commit: "78ecbb4b"
+        evidence: tests/terrain/seq_rtl_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      SW.STREAM IS NOT AN UPSTREAM EDGE, and rule V8 is why that is worth
+      stating. SW.STREAM is hps-clocked and this block is gpu-clocked, so a
+      direct edge asserts a clock crossing that nothing implements. The sealed
+      list reaches the GPU through the frame ring and CMD.SCHEDULER, which is
+      itself gpu -- so the edge was simply WRONG, and `async_bridge: true`
+      would have quieted the rule by claiming a bridge nobody built.
+
+      T6 AND T7 ARE KEPT APART BY CONSTRUCTION, which is the thing most likely
+      to be got wrong here: composed-slot exhaustion on a REQUIRED DYNAMIC patch
+      faults the frame and drains, while load-budget exhaustion defers and
+      continues with frame_fault asserted LOW. Conflating them would fault
+      frames the rulings say to render. A directed case checks exactly that.
+
+      THE DIFFERENTIAL FOUND A DEFECT ON ITS FIRST RUN: the compose-slot index
+      was held under a low valid bit, so a static issue's slot number was a
+      function of WHICH PATCH COMPOSED EARLIER -- history reaching a
+      frame-scoped allocator, and a frame replayed after a different previous
+      frame would drive different bits. 16 divergences, now mutation M14.
+
+      THE MODEL TAKES THE DIRECTORY'S ANSWER AS AN ARGUMENT rather than
+      modelling a directory, the same boundary TERRAIN.COMPCACHE draws. A model
+      owning its own set-associative cache would have to agree with
+      zhao_terrain_residency_v2 about victims, generations and pins before it
+      could say anything about SEQUENCING, and its first disagreement would be
+      reported as a sequencing defect.
+
+      A `stale_abandoned` counter was drafted and DELETED rather than shipped
+      reading zero -- a counter nothing can increment is exactly the decoration
+      the tripwire rule forbids.
+
   - id: TERRAIN.VISIBLE
     name: Visible patch builder
     kind: rtl
@@ -1997,7 +2082,7 @@ blocks:
     owner_issue: ZH-123
     inputs: [patch_claims, loader_completions, deformation_marks]
     outputs: [residency_answers, eviction_writebacks]
-    upstream: [TERRAIN.PATCH, TERRAIN.PAGELOADER]
+    upstream: [TERRAIN.PATCH, TERRAIN.PAGELOADER, TERRAIN.SEQ]
     downstream: [TERRAIN.MIPGEN, TERRAIN.LOD, TERRAIN.ISLAND]
     backpressure: ready_valid
     latency: fixed:2
@@ -2267,7 +2352,7 @@ blocks:
     owner_issue: ZH-050
     inputs: [patch_state, lod_targets]
     outputs: [lod_decisions]
-    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR, TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.ISLAND, TERRAIN.VISIBLE]
+    upstream: [TERRAIN.PATCH, MEASURE.GOVERNOR, TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.ISLAND, TERRAIN.VISIBLE, TERRAIN.SEQ]
     downstream: [TERRAIN.PROJECT]
     backpressure: ready_valid
     latency: variable

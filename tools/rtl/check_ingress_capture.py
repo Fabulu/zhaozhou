@@ -195,6 +195,28 @@ CONTRACTS = [
         ],
     },
     {
+        # TERRAIN.SEQ -- the record is captured at acceptance, every field.
+        # The record source is a DMA'd ring the frame may still be writing
+        # behind us, and the FSM spends four cycles minimum on one record
+        # before it issues anything: a live read of `rec_flags_i` on the cycle
+        # the compose slot is allocated would classify one record and issue a
+        # different one, and both would be real records of the same sealed
+        # list. Everything is latched in S_FETCH and the machine reads `r_*`.
+        "path": "fpga/rtl/terrain/zhao_terrain_seq.sv",
+        "prefix": "rec_",
+        "allow_regions": [
+            (r"S_FETCH: if \(more_wanted && rec_valid_i\) begin", "        end"),
+        ],
+        "allow_lines": [
+            r"^\s*(input|output)\s",
+            r"^\s*assign rec_ready_o\s*=",
+            # The HANDSHAKE, not the payload. `rec_valid_i` steers the next
+            # state on the same cycle the capture happens; it is the thing
+            # being handshaked, and there is nothing to capture it into.
+            r"^\s*else if \(rec_valid_i\)\s",
+        ],
+    },
+    {
         "path": "fpga/rtl/texture/zhao_texture_island_top.sv",
         "prefix": "frag_",
         # The capture process and the block that ADMITS the fragment are the

@@ -2293,6 +2293,68 @@ verilate(test_fragrob_differential
 add_test(NAME fragrob_differential COMMAND test_fragrob_differential)
 set_tests_properties(fragrob_differential PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# ---------------------------------------------------------------------------
+# TEXTURE V3 -- the owner/completion/retire experiment
+#
+# reports/TEXTURE-ISLAND-V3-ARCHITECTURE-20260906.txt section 26.1: the FIRST
+# implementation task, and deliberately not a top-level rewrite. It replaces
+# the FRAGROB return-to-RAM-write-enable cone (zhao_texture_fragrob.sv:626,
+# `if (tmu_ok_c) res_rgb_m[...][...] <= ...`) with a C0..C4 capture / control /
+# claim / commit / publish pipeline whose payload write enables are all bare
+# flop outputs, and it puts every wide payload into a synchronous M10K-backed
+# bank with a declared port and collision law.
+#
+# THE LINT GATE IS NOT OPTIONAL HERE. A sibling block reached "committed"
+# without ever lexing because it had none, and this very file hit
+# BADVLTPRAGMA on its first lint -- a comment line beginning with the
+# simulator's name is read as a pragma and the file silently stops lexing.
+set(ZHAO_TEX_V3OWN_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3own.sv)
+
+add_executable(test_texture_v3own_adversarial texture/texture_v3own_adversarial.cpp)
+target_link_libraries(test_texture_v3own_adversarial PRIVATE zhao_harness)
+verilate(test_texture_v3own_adversarial
+  PREFIX Vzhao_texture_v3own
+  TOP_MODULE zhao_texture_v3own
+  SOURCES ${ZHAO_TEX_V3OWN_SV}
+  # --assert IS LOAD-BEARING, not decoration. Twenty-three Appendix B.7
+  # contracts are compiled into the RTL (one-hot bank enables,
+  # committed-after-write, ticket-once, in-order emission, output packet
+  # stability under stall). Without this flag the simulator silently ignores
+  # every one of them and the suite still prints a comforting pass -- the
+  # "detector that has not been shown to fire" failure, one level down.
+  VERILATOR_ARGS --assert)
+add_test(NAME texture_v3own_adversarial COMMAND test_texture_v3own_adversarial)
+set_tests_properties(texture_v3own_adversarial PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_texture_v3own
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_v3own
+                 ${ZHAO_TEX_V3OWN_SV})
+set_tests_properties(lint_texture_v3own PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_texture_v3bank
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_v3bank
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv)
+set_tests_properties(lint_texture_v3bank PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_texture_v3rq
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_texture_v3rq
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3bank.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_v3rq.sv)
+set_tests_properties(lint_texture_v3rq PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # The AUX divide as a six-stage pipeline (reports/Addendum). Standalone and
 # verified before it is swapped into zhao_texture_aux.sv.
 add_executable(test_texture_aux_div6_directed texture/texture_aux_div6_directed.cpp)
@@ -6385,5 +6447,87 @@ add_test(NAME lint_terrain_pageloader
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageloader.sv)
 set_tests_properties(lint_terrain_pageloader PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# TERRAIN.WRITEBACK -- the F sheet out to the HPS journal, behind an ACK.
+#
+# The mirror image of TERRAIN.PAGELOADER, and its bench inherits the same two
+# disciplines. The guard is PLAYED with the real block's two-cycle protocol
+# (`ready` a LEVEL, `ok` a PULSE one cycle later) AND instantiated as an
+# observer -- but here the observer must REFUSE every request, because MEM.GUARD
+# gives TERRAIN.BUILD a WRITE-ONLY window over the page pool and this block
+# READS it. `shadow_viol_count == 130` with `shadow_ok_count == 0` is the
+# evidence for the read arm the contract asks for; when that arm lands, those
+# two checks invert and that inversion is its acceptance test.
+#
+# And the counts are exact, not "at least": 130 guard requests, 1,040 read
+# beats, 128 bridge bursts, 1,024 write beats, under every stall profile. A
+# machine doing its work twice produces a byte-identical journal entry.
+add_executable(test_writeback_rtl_directed terrain/writeback_rtl_directed.cpp)
+target_link_libraries(test_writeback_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_writeback_rtl_directed
+  PREFIX Vtb_writeback
+  TOP_MODULE tb_writeback
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_guard.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_writeback.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_writeback.sv)
+add_test(NAME writeback_rtl_directed COMMAND test_writeback_rtl_directed)
+set_tests_properties(writeback_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ...and the lint gate. An RTL file with no lint test is an RTL file nothing has
+# read -- a comment line beginning with the simulator's name is parsed as a
+# pragma and stops the file lexing, which happened five times in one day.
+add_test(NAME lint_terrain_writeback
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_writeback
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_writeback.sv)
+set_tests_properties(lint_terrain_writeback PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# TERRAIN.SEQ -- the terrain command path, against zref::terrain::seq::Sequencer.
+#
+# The block is a PUMP, so the thing under test is a SEQUENCE OF ACTIONS and this
+# test compares the whole observed action log -- kind, order and every payload
+# field -- against the reference's, not just the fourteen counters. A counter
+# cannot see order, and the two orderings that matter here are both invisible in
+# a count: T4's writeback-before-load barrier for a dirty victim, and list order
+# itself, which the determinism ledger names as the whole world layer's anchor.
+#
+# EVERY FRAME IS REPLAYED UNDER FOUR STALL PATTERNS, one of them MOSTLY ready
+# (three cycles in four). TERRAIN.ISLAND's differential passed 21 checks over a
+# full 15,625-patch sweep and 3,000 random draws and still missed a dropped
+# answer, because every phase drove ready HIGH on every cycle -- and the sibling
+# that found it found it at three-in-four. The four logs must be identical.
+add_executable(test_seq_rtl_directed terrain/seq_rtl_directed.cpp)
+target_link_libraries(test_seq_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_seq_rtl_directed
+  PREFIX Vtb_terrain_seq
+  TOP_MODULE tb_terrain_seq
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_seq.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_seq.sv)
+add_test(NAME seq_rtl_directed COMMAND test_seq_rtl_directed)
+set_tests_properties(seq_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ...and the lint gate. A sibling block reached "committed" without ever having
+# been lexed, because it had no lint test and a comment line beginning with the
+# simulator's name is read as a pragma. An RTL file with no lint test is an RTL
+# file nothing has read.
+#
+# It runs the module on its OWN DEFAULTS, which is also how COMPOSE_SLOTS = 256
+# gets elaborated: the bench instantiates it at 16 so T6's fault is reachable in
+# a short frame, and this is what proves the shipped width still builds.
+add_test(NAME lint_terrain_seq
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_seq
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_seq.sv)
+set_tests_properties(lint_terrain_seq PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

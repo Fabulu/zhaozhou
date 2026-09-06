@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **111** (91 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **112** (92 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -24,10 +24,10 @@ Blocks: **111** (91 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | raster | · | · | 5 | · | · | · | · | · | 5 |
 | surface | · | · | 2 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
-| terrain | · | 2 | 13 | · | · | · | · | · | 15 |
+| terrain | · | 2 | 14 | · | · | · | · | · | 16 |
 | texture | 2 | · | 5 | · | · | · | · | · | 7 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 33 | 13 | 49 | 16 | · | · | · | 6 | 111 |
+| **all** | 33 | 13 | 50 | 16 | · | · | · | 6 | 112 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -100,6 +100,9 @@ Blocks: **111** (91 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | TERRAIN.ISLAND | SPECIFIED | 2026-09-06 | `b9bbb40d` | design/contracts/TERRAIN.ISLAND.md |
 | TERRAIN.ISLAND | REFERENCE_COMPLETE | 2026-09-06 | `f416c3f6` | reference/include/zref/zref_island.hpp |
 | TERRAIN.ISLAND | UNIT_VERIFIED | 2026-09-06 | `ed7c8723` | tests/terrain/island_dir_rtl_directed.cpp |
+| TERRAIN.SEQ | SPECIFIED | 2026-09-06 | `78ecbb4b` | design/contracts/TERRAIN.SEQ.md |
+| TERRAIN.SEQ | REFERENCE_COMPLETE | 2026-09-06 | `78ecbb4b` | reference/include/zref/zref_terrain_seq.hpp |
+| TERRAIN.SEQ | UNIT_VERIFIED | 2026-09-06 | `78ecbb4b` | tests/terrain/seq_rtl_directed.cpp |
 | TERRAIN.VISIBLE | SPECIFIED | 2026-09-06 | `1cc9ef68` | design/contracts/TERRAIN.VISIBLE.md |
 | TERRAIN.VISIBLE | REFERENCE_COMPLETE | 2026-09-06 | `1cc9ef68` | reference/include/zref/zref_island.hpp |
 | TERRAIN.VISIBLE | UNIT_VERIFIED | 2026-09-06 | `96425bb1` | tests/terrain/visible_rtl_directed.cpp |
@@ -219,7 +222,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 | platform | 14% | 16 | 0% |
 | command_debug | 5% | 9 | 0% |
 | field | 6% | 2 | 0% |
-| geometry_mantle | 20% | 35 | 0% |
+| geometry_mantle | 20% | 36 | 0% |
 | tile | 30% | 14 | 0% |
 | myriad_forge | 9% | 10 | 0% |
 | twod_post | 6% | 5 | 0% |

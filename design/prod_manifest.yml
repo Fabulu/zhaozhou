@@ -230,6 +230,8 @@ excluded:
   # three separate acts TERRAIN.VISIBLE's note names are needed: the ledger
   # entry, this line, and design/fit_targets.yml's zhao_prod_top source list.
   - zhao_terrain_pageloader: unused  the terrain page mover; the guard window and the client id now exist, but zhao_shell_top does not compose it yet
+  - zhao_terrain_seq: unused  the terrain command sequencer; it drives RESIDENCY, PAGELOADER and COMPCACHE, none of which zhao_shell_top composes yet -- that composition is step 8 of the world-layer build sequence
+  - zhao_terrain_writeback: unused  dirty-page evacuation; same reason
 
   # --- probes and leaf-fit pairs: never in the machine -----------------------
   # These exist to put ONE block, or two adjacent blocks, in front of the
