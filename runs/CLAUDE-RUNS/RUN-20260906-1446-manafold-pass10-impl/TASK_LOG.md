@@ -10,14 +10,14 @@ serial). Architect's cut order if squeezed: **D.3, B.3, D.2 — never A or C.**
 ## Where I am (update BEFORE reading any long-running result)
 
 - [x] Lane cloned, run initialised
-- [ ] Baseline build + baseline render (needed by everything)
-- [ ] C.2 prototype (go/no-go, runs FIRST per R1)
-- [ ] Stage 0 — instruments that cannot lie
-- [ ] Stage A — silhouette exclusion (THE SPINE)
-- [ ] Stage B — plane lifecycle
-- [ ] Stage C — antenna stage 1
-- [ ] Stage D — eyes
-- [ ] Close: re-render, re-encode, archive, publish, findings
+- [x] Baseline build + baseline render
+- [x] C.2 prototype — NO-GO, aborted per the stop rule
+- [x] Stage 0 — instruments that cannot lie
+- [x] Stage A — silhouette exclusion (THE SPINE)
+- [~] Stage B — B.2 discharged by A; B.1 declined with reasons; B.3 cut
+- [~] Stage C — C.1 + C.4 done; C.2 aborted on evidence; C.3 NOT done
+- [ ] Stage D — eyes: NOT DONE (architect cut order)
+- [x] Close: re-rendered, re-encoded, archived, published, findings written
 
 ## Journal
 
@@ -232,3 +232,19 @@ The six were re-encoded and the test re-run: **all 22 differ from their pass-9
 twins.** No stale clip ships. mtime would have been a weaker answer to the same
 question, and archiving-before-replacing is what made the strong one available at
 all -- a second reason it is part of publishing rather than a courtesy.
+
+### PUBLISHED, and verified from outside the deploy
+
+`deploy.ps1 -Project upheaval -Branch main`. Live: index 200,
+`robots: noindex, nofollow` intact (the page stays unlisted), hover.webm 200,
+44 references to the new archive-pass9 generation on the page.
+
+Full decode gate on a quiet machine, scheduled after the encode rather than
+beside it: **1167 declared files, 1167 decoded.**
+
+### Run closed
+- Both repos pushed and each push verified with `git fetch` +
+  `git branch -r --contains` from the lane.
+- Baseline worktree removed; `git worktree list` clean.
+- No `--help` directory created (gotcha 8).
+- Background processes verified stopped (checklist 30).
