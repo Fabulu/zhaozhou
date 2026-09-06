@@ -131,3 +131,104 @@ what it should be. Rendering 900 vs 5400 on `manafold-antenna-fixed` to look.
 Three items: the overstated "not one smear code path is touched"; the follow
 figures (the true range is ~2x the published one, and "deltas to 258" cannot be
 per-channel); and cross-pass ablation deltas declared VOID.
+
+### STAGE 0 COMPLETE. R6 passed — after the first attempt at it lied.
+
+0.1 extraction, 0.2 follow gate, 0.3 five-ball enumeration + real-function
+selftest, 0.6 corrections. All gates watched failing through the shipping path.
+
+**R6 nearly went in the findings as a FAILURE.** The first isolation run measured
+128 of 401 frames differing and looked like the refactor had changed behaviour.
+It had not: the baseline was rendered before C.1 landed, so the comparison was
+measuring C.1. Re-run with C.1 switched off and 0.1 in place: **0 of 401 frames
+differ.** The lesson is the house's own — compare like with like, or do not
+compare — and the 128 frames turned out to be the *useful* number: they are
+C.1's own effect, on 32% of frames, which is far better evidence of liveness
+than the 13 mm figure that made C.1 look marginal.
+
+### SCOPE DECISION, taken deliberately and recorded before acting on it
+
+Remaining plan items are B.1 (seam preroll), B.2 (hover accumulation authoring),
+B.3 (still grid), C.3 (fold de-planarising / stiffening / phrasing), D.1–D.3
+(eyes). The architect's cut order is D.3, then B.3, then D.2 — never A or C.
+
+**A and C are done.** B.1 is the one I actively considered and declined, so the
+reasoning is recorded rather than lost:
+
+> A loop-consistent preroll means running the shared `render_scene` frame loop
+> for a warm-up window and discarding it. That loop also drives sun elevation
+> and **terrain bake steps**, so a naive preroll would apply every dig twice.
+> It is a change to code every subject on the site runs, including Zixxtrixx,
+> whose bit-identity is protected. Doing it properly needs the warm frames
+> fenced off from the bakes and a full CRC re-verification of the other
+> creatures.
+>
+> That is a sound change, but it is not a cheap one, and attempting it in the
+> time left — immediately before a full re-render and publish — is exactly the
+> shape of a partial fix (gotcha 16). **Declined, named, and left with its
+> mechanism written down so pass 11 starts from the design rather than the
+> discovery.**
+
+What the pass spends its remaining time on instead: A.2's density judgement (the
+owner's standing ask, which STAGE A is what made answerable), a measurement of
+whether STAGE A already discharges B.2's hover ghost, and the publish.
+
+### A.2 — `rich`, judged on TWO clips
+
+Sheet at native, exclusion on, `rest` f200: sparing (still thin) / mid (the
+pass-9 default) / **rich (the pick)** / thick (cells agglomerate into a
+rectangular slab that reads as a patch, not gas). Re-judged on `hover` at
+f30/f300/f590 as well, because judging on one clip is the pass-9 mistake this
+pass is meant to repair. Promoted to the shipping default: alpha 380, feed 280,
+feed-of-halo 1800, cell cap 152. No hue touched.
+
+### B.2 — discharged by STAGE A, not by a knob
+
+`hover` f30/f300/f590: loop, ink line and motes legible in all three, at the
+chosen density. The plane still accumulates, but **outside the animal**. The
+reviewer's "a ghost by frame 40" is gone structurally. The section-11 gate is
+unblocked: the owner can judge the antenna on `hover`. The plane-energy
+instrument B.2 planned was not needed and is not done.
+
+### Publish cycle
+
+Outgoing pass-9 generation archived FIRST (44 files, spot-checked byte-identical
+against the live files, registered in `creatures.json` as the eighth
+generation) — archiving is part of publishing, not a courtesy. Full 22-clip bank
+re-rendering from one binary; the mixed vintage Direction 7 section 10
+authorised ends here, and the findings say so out loud so the new consistency is
+not misread as a regression.
+
+### Checklist 22 — Zixxtrixx bit-identity, against a baseline I built myself
+
+Not by inspection. A `git worktree` at the pre-pass commit `c148514b`, built to a
+SEPARATE output path (so the running render never held the binary being linked --
+gotcha 13), and both binaries rendered the same two subjects under the shipping
+invocation:
+
+    zixxtrixx-idle  base=d2e484ad8e4bf37ce61c925537622898  new=same  IDENTICAL
+    zixxtrixx-walk  base=dcaada7b7a4682e4354719ede4d6cc0e  new=same  IDENTICAL
+
+Zixxtrixx is untouched.
+
+### The encoder was killed at 16 of 22 — caught by a CONTENT test, not by mtime
+
+The encode pipeline was stopped partway. This is the pass-9 failure mode
+repeating, and it is the exact way a mixed bank ships silently: the six
+un-encoded clips still held pass-9 media, under pass-10 filenames, on a page
+whose captions describe pass 10.
+
+It was caught the strong way. The outgoing generation had already been archived,
+so every live clip has a byte-exact pass-9 twin sitting beside it, and the test
+is simply: **does `manafold-<clip>.webm` differ in CONTENT from
+`archive-pass9-u02-<clip>.webm`?** Identical means it was never re-encoded.
+
+    RE-ENCODED (16): channel crackle curious damage drift fall hasty hit hover
+                     inspect mana-aqua mana-blue mana-boil mana-cyan mana-green
+                     mana-stack
+    STALE      ( 6): pirouette rest startle taunt taunt2 trick
+
+The six were re-encoded and the test re-run: **all 22 differ from their pass-9
+twins.** No stale clip ships. mtime would have been a weaker answer to the same
+question, and archiving-before-replacing is what made the strong one available at
+all -- a second reason it is part of publishing rather than a courtesy.

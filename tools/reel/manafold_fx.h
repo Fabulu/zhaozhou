@@ -512,9 +512,9 @@ constexpr int kMistHardClearFrames = 520;
 // the feed. BREADTH is the point -- this is what makes it a mist and not a
 // second trail. The smear feeds at kSmearFeedOfHaloPm = 420 (deliberately
 // SHRUNK to the core's footprint, pass 5); the mist feeds WIDER than the halo.
-constexpr int kMistFeedOfHaloPm = 1700;  // PASS 9: judged on the variant sheet
-constexpr int kMistFeedPm = 260;   // per-frame contribution (it integrates)
-constexpr int kMistCellCapPm = 135;  // hue-preserving cap, under the smear's 208
+constexpr int kMistFeedOfHaloPm = 1800;  // PASS 10 A.2: the `rich` rung
+constexpr int kMistFeedPm = 280;   // per-frame contribution (it integrates)
+constexpr int kMistCellCapPm = 152;  // hue-preserving cap, under the smear's 208
 // the composite
 constexpr int kMistGainPm = 1000;
 // PASS 9, CHOSEN BY EYE off manafold-mist-{sparing,mid,thick} at native. The
@@ -524,7 +524,7 @@ constexpr int kMistGainPm = 1000;
 // 300 is the `mid` row: a plainly visible, plainly pixely haze with the loop
 // and every mote still legible under it. `sparing` (200) is the thin end and is
 // kept on the sheet, as is `thick`, so the owner picks rather than accepts.
-constexpr int kMistAlphaMaxPm = 300;  // "still see through, way less so"
+constexpr int kMistAlphaMaxPm = 380;  // "still see through, way less so"
 constexpr int kMistVividPm = 1500;    // same hue-preserving vivify as the smear
 constexpr int kMistChromaFloorPm = 600;  // pass 8's fix, so the mist is mana
                                          // -coloured against ANY sky, not just
