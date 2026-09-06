@@ -1,0 +1,20 @@
+Fitter Status : Successful - Mon Sep 07 01:44:09 2026
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : blockfit
+Top-level Entity Name : zhao_texture_v3own
+Family : Cyclone V
+Device : 5CSEBA6U23I7
+Timing Models : Final
+Logic utilization (in ALMs) : 5,678 / 41,910 ( 14 % )
+Total registers : 4864
+Total pins : 0 / 314 ( 0 % )
+Total virtual pins : 952
+Total block memory bits : 20,640 / 5,662,720 ( < 1 % )
+Total RAM Blocks : 17 / 553 ( 3 % )
+Total DSP Blocks : 0 / 112 ( 0 % )
+Total HSSI RX PCSs : 0
+Total HSSI PMA RX Deserializers : 0
+Total HSSI TX PCSs : 0
+Total HSSI PMA TX Serializers : 0
+Total PLLs : 0 / 6 ( 0 % )
+Total DLLs : 0 / 4 ( 0 % )
