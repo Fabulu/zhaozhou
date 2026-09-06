@@ -941,6 +941,19 @@ verilate(test_material_combine_v1_diff
 add_test(NAME material_combine_v1_diff COMMAND test_material_combine_v1_diff)
 set_tests_properties(material_combine_v1_diff PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# COMBINE V2 -- the paired-phase replacement, against the same oracle and the
+# same workload as V1, plus the exact phase count the fixed schedule owes.
+add_executable(test_material_combine_v2_diff texture/material_combine_v2_diff.cpp)
+target_link_libraries(test_material_combine_v2_diff PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_material_combine_v2_diff PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/texture)
+verilate(test_material_combine_v2_diff
+  PREFIX Vzhao_texture_material_combine_v2
+  TOP_MODULE zhao_texture_material_combine_v2
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_material_combine_v2.sv)
+add_test(NAME material_combine_v2_diff COMMAND test_material_combine_v2_diff)
+set_tests_properties(material_combine_v2_diff PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 # THE COMPOSED ISLAND, functionally. The composed FIT answers capacity; it
 # cannot answer whether the wiring is right, because a top that connects eleven
 # blocks through mismatched handshakes still synthesises and still reports an

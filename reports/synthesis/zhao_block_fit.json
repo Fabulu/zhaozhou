@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "18b72a7e61b668d8a4e05f6f0cb77fa76d60aae2",
+    "newestRunCommit":  "5cae3bc7e4422b856957613453d69552775ec9f1",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -205,6 +205,25 @@
                        "lastAttemptStatus":  "failed:quartus_fit.exe",
                        "lastAttemptCommit":  "cd425be71273d982f7fe62f9b97bfdc02600ed93",
                        "lastAttemptSeconds":  1242.5
+                   },
+                   {
+                       "module":  "zhao_geom_mem_adapter",
+                       "status":  "ok",
+                       "sourceCommit":  "5cae3bc7e4422b856957613453d69552775ec9f1",
+                       "rtlCleanAtHead":  true,
+                       "seconds":  1689.3,
+                       "sourcesHashed":  1,
+                       "alms":  564,
+                       "registers":  411,
+                       "blockMemoryBits":  0,
+                       "ramBlocks":  0,
+                       "dspBlocks":  0,
+                       "virtualPins":  742,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  122.1,
+                       "fmaxClock":  "clk"
                    },
                    {
                        "module":  "zhao_geom_setup",
