@@ -2319,6 +2319,72 @@ verilate(test_raster_rcp24_svc_directed
 add_test(NAME raster_rcp24_svc_directed COMMAND test_raster_rcp24_svc_directed)
 set_tests_properties(raster_rcp24_svc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# ---- V3: the RCP arithmetic tile, standalone -------------------------------
+# reports/TEXTURE-ISLAND-V3-ARCHITECTURE-20260906.txt S26.1: "the RCP arithmetic
+# tile can establish its own exact-tool packing. Do not merge those changes into
+# the composition until the shared record and credit contracts are fixed." So
+# this is a THIRD reciprocal in the tree, tested against the first, and nothing
+# instantiates it yet.
+#
+# tb_rcp24_v3_pair carries three instances, not two. The serial block is the
+# behavioural oracle as before, but S10.5's high-word correction only engages
+# when w > 2^31 and MEASURED over all 16,777,215 denominators the reciprocal's
+# own domain tops out at w = 0x401FEF88. A denominator-driven pair test would
+# therefore pass with the correction deleted, so zhao_raster_rcp24_mul is
+# exposed on its own port and driven over the same (x, w) families
+# tools/rtl/architecture_numeric_checks.py uses.
+add_executable(test_raster_rcp24_v3_directed raster/raster_rcp24_v3_directed.cpp)
+target_link_libraries(test_raster_rcp24_v3_directed PRIVATE zhao_harness)
+verilate(test_raster_rcp24_v3_directed
+  PREFIX Vtb_rcp24_v3_pair
+  TOP_MODULE tb_rcp24_v3_pair
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/raster/tb_rcp24_v3_pair.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+add_test(NAME raster_rcp24_v3_directed COMMAND test_raster_rcp24_v3_directed)
+set_tests_properties(raster_rcp24_v3_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# S10.9: "An exhaustive sweep of all 2^24 denominator values is practical as a
+# repository regression once the implementation exists. This review did not run
+# that sweep against the compiled repository reference or the new RTL." It runs
+# here, nightly only, because the fast lane has to stay a gate and not a soak.
+add_test(NAME raster_rcp24_v3_exhaustive
+         COMMAND test_raster_rcp24_v3_directed --exhaustive)
+set_tests_properties(raster_rcp24_v3_exhaustive PROPERTIES LABELS "nightly" TIMEOUT 5400)
+
+add_test(NAME lint_raster_rcp24_v3
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_raster_rcp24_v3
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v3.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv)
+set_tests_properties(lint_raster_rcp24_v3 PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# The arithmetic core linted ALONE as well. It is the module the differential
+# drives directly and the module that owns the four multiplier sites; a warning
+# that only appears when the tile is elaborated around it would be missed.
+add_test(NAME lint_raster_rcp24_mul
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_raster_rcp24_mul
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv)
+set_tests_properties(lint_raster_rcp24_mul PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_raster_ticketq
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_raster_ticketq
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv)
+set_tests_properties(lint_raster_ticketq PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # The scheduled perspective multiply lane. tb_perspuv_pair carries a THIRD
 # instance -- a standalone rcp24 -- to derive the same mantissa/exponent the
 # reference computes internally, so the two scopes can be compared honestly.

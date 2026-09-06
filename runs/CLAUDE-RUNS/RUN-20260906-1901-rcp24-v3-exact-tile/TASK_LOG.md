@@ -493,3 +493,125 @@ a block that fails hold by 0.817 ns has been sitting in the ledger looking like
 a 68.46 MHz row. That is not something this pass introduced and not something it
 fixes; it is something the before/after comparison has to include or the "after"
 number will be compared against half a baseline.
+
+## V20: two prose claims, closed the true way
+
+`npm run ledger:check` flagged `zhao_raster_rcp24_mul.sv:92` and `:155`. They are
+different KINDS of claim and got different resolutions, which is the point of
+V20 offering three.
+
+**:92 was an ASSUMPTION ON THE CALLER wearing a claim's clothes.** "The pipeline
+is nonstallable by construction and the caller reserves its downstream position
+before issuing" is not a property this module can hold -- it has no ready port
+and cannot refuse anything. V20's third resolution applies: rewritten as an
+explicit assumption naming who upholds it. `zhao_raster_rcp24_v3` reserves a
+context from its free queue before admission, its queues are sized to the
+context count, and `zhao_raster_ticketq.err_o` latches any overflow, surfaced as
+`qerr_o` and asserted low on every pass including the 2^24 sweep. No
+`ENFORCED-BY:` is added, because pointing prose at prose enforces nothing.
+
+**:155 was a real invariant, and is now a real refusal.** "The high half of an
+exact 32x32 product is < 2^32 by construction, so high_sum_c[32] cannot be set."
+That is checkable every clock, so it is checked every clock:
+
+    a_high_carry_never_set: assert (high_sum_c[32] == 1'b0)
+
+following `zhao_geom_assetfetch.sv:696`'s existing shape -- a labelled immediate
+assertion under `ifndef SYNTHESIS`. `ENFORCED-BY:` names it as
+`fpga/rtl/raster/zhao_raster_rcp24_mul.sv:a_high_carry_never_set`, a symbol that
+resolves in the file.
+
+First version read `if (rst_n && l_v_q)` and Verilator refused it:
+
+    %Warning-SYNCASYNCNET: Signal flopped as both synchronous and async: 'rst_n'
+
+Correctly -- `rst_n` is this module's ASYNCHRONOUS reset and reading it
+synchronously is a reset-domain smell even inside a checker. `l_v_q` is itself
+cleared by that async reset, so gating on it alone is the same guard without the
+smell.
+
+### F7: the assertion was shown to fire, ALONE
+
+    ('F7-force-high-carry-bit',
+      + 33'h1_0000_0000 on high_sum_c)
+
+sets bit 32 while leaving bits [31:0] untouched, so the product and both
+extractions stay exactly correct and nothing else can notice:
+
+    [0] %Error: zhao_raster_rcp24_mul.sv:267: Assertion failed in
+        TOP.tb_rcp24_v3_pair.u_mul.a_high_carry_never_set: rcp24_mul: the high
+        half carried out of 32 bits (p11=00000000 crosshi=00000 carry=0)
+
+ONE failure, and it is the assertion. All 56 value checks passed under this
+mutant. A decorative assertion would have let it through silently, which is
+exactly the invisible-corruption case the claim was about.
+
+### The fix costs nothing in silicon, measured rather than assumed
+
+    zhao_raster_rcp24_v3@v3-after   digest fa1354165244   1940 reg  2582 bits  3 DSP
+    zhao_raster_rcp24_v3@v3-after2  digest 6553c5cef196   1940 reg  2582 bits  3 DSP
+
+Different bytes, identical synthesis. The `ifndef SYNTHESIS` block is free, and
+now that is a measurement and not a convention.
+
+    ledger: check OK -- 111 blocks / 40 ops; schemas + V1-V17 + V19-V23 green
+
+## Fit lane note
+
+The first full fit was KILLED mid-placement by the task harness after ~55
+minutes and wrote no row; `quartus_fit` was verified gone and no row exists, so
+no ALM/Fmax number was invented from it. The relaunch was then stopped
+DELIBERATELY, because the V20 edit changed `zhao_raster_rcp24_mul.sv` and a fit
+whose source digest does not match the shipped bytes is evidence about a file
+nobody has. Relaunched a third time against digest 6553c5cef196.
+
+## HARD BLOCKER: THE MACHINE'S DISK IS FULL
+
+    Get-PSDrive C  ->  UsedGB 951.8   FreeGB 0
+
+Quartus failed with
+
+    Fehler beim Ausfuehren des Programms "quartus_map.exe": Es steht nicht genug
+    Speicherplatz auf dem Datentraeger zur Verfuegung.
+
+and the concurrent fire-test re-run died with `tail: write error: No space left
+on device`. This almost certainly also explains the FIRST full fit being killed
+at ~55 minutes with no row: it was in placement, which is where the fitter's `db`
+directory grows.
+
+**It is not this lane's footprint.** Every `zhao-block-fit-*` workspace in TEMP
+was 24 MB or less (13 of them cleared, ~100 MB, which did not move the counter
+off zero). The repository's entire set of build trees is 3.8 GB:
+
+    build 1.68 | build-verify 0.71 | build-casecheck 0.67 | build-lane 0.35
+    build-curve 0.08 | build-fieldv3* 0.18 | others 0.15 | build-rcp24v3-quick ~0
+
+951 GB is consumed somewhere outside the repo. Other lanes' stale build trees
+were NOT deleted -- that is destructive to somebody else's work in progress, it
+would recover under 2 GB, and a disk at absolute zero for unrelated reasons will
+simply refill.
+
+**Consequence: no ALM and no Fmax for the V3 tile.** MapOnly rows carry neither
+by construction, and every attempt at a full fit has now been killed by the
+harness once and by the disk twice. That number is NOT estimated, NOT inferred
+from the MapOnly registers, and NOT carried over from the NCTX=8 point. It is
+simply absent, and the trade it would settle -- 875 more registers for 3 fewer
+DSPs -- is therefore still open.
+
+## A NEAR MISS WORTH RECORDING
+
+The disk filled DURING a fire-test mutation. `fire_tests.py` restores in a
+`finally`, but `shutil.copyfile(path, saved)` had already produced a ZERO-BYTE
+backup, and had the failure landed a moment later -- after the mutation write,
+before the restore -- the repository would have been left holding a deliberately
+broken RTL file with a truncated backup beside it.
+
+It did not, and the reason that is a FACT rather than a hope is the per-file
+manifest: the four live files hash identically to
+`zhao_raster_rcp24_v3@v3-after2.sources.sha256`, the bytes the tests and the
+MapOnly rows actually measured. The stray zero-byte `.firebak` was verified
+empty before deletion rather than assumed stale.
+
+A restore-from-copy harness on a full disk is a way to lose source. If this
+harness is used again it should verify the backup is non-empty before writing
+the mutation.

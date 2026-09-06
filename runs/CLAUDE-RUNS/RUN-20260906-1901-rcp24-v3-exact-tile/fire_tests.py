@@ -43,6 +43,13 @@ MUTATIONS = [
     ('F5-mw0-reads-stale-scratch', V3,
      '        s2_x_q   <= (s1_ph_q == PH_MW0) ? p_x0_q[s1_ctx_q] : s_x_q[s1_ctx_q];',
      '        s2_x_q   <= s_x_q[s1_ctx_q];'),
+    # F7: set the 33rd bit of the high sum WITHOUT disturbing bits [31:0], so
+    # the product and both extractions stay correct and the ONLY thing that can
+    # notice is the a_high_carry_never_set assertion. If that assertion were
+    # decorative, this mutant would pass every one of the 56 checks.
+    ('F7-force-high-carry-bit', MUL,
+     "  assign high_sum_c = {1'b0, l_p11_q} + {16'd0, l_crosshi_q} + {32'd0, l_carry_q};",
+     "  assign high_sum_c = {1'b0, l_p11_q} + {16'd0, l_crosshi_q} + {32'd0, l_carry_q} + 33'h1_0000_0000;"),
     # F6: skip the second Newton MW, which must break BOTH the results and the
     # four-launches-per-reciprocal counter contract.
     ('F6-skip-mw1-phase', V3,
@@ -99,7 +106,8 @@ def main():
                 continue
             rc, out = run('"%s"' % EXE)
             fails = [l for l in out.splitlines()
-                     if 'FAIL' in l or 'MISMATCH' in l.upper()]
+                     if 'FAIL' in l or 'MISMATCH' in l.upper()
+                     or 'Assertion failed' in l or 'rcp24_mul:' in l]
             results.append({'id': mid, 'status': 'FIRED' if rc != 0 else 'SILENT',
                             'exit': rc, 'failures': fails[:12],
                             'failure_count': len(fails)})
