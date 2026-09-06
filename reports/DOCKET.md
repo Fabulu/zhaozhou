@@ -3171,6 +3171,78 @@ perspuv's is chained behind it to confirm or refute the per-axis split.
 
 ---
 
+## D19x — OWNER BRIEF: the COMBINE / ASSETFETCH recovery architecture
+
+**Received 2026-09-06, filed at
+``reports/COMBINE-ASSETFETCH-RECOVERY-20260906.txt``.** Indexed here, per the
+brief's own instruction, as **the COMBINE and asset-fetch SPECIALIZATION of the
+existing texture recovery v2** -- not as a replacement for it, and not as
+anything about the terrain or Field contracts.
+
+Examined revision ``2f98562a``. It is a source-grounded implementation brief,
+not fitted replacement RTL: no Quartus, Verilator or board run was performed for
+it, and it labels every claim MEASURED / SOURCE / DEDUCED / PROPOSED.
+
+**The two headline decisions.** COMBINE needs a different execution
+ORGANIZATION, not different material math -- keep all eight recipes, replace
+record-by-job priority scans with two explicit product lanes, a fixed
+paired-phase schedule, small ready queues, synchronous operand storage and one
+whole-context writeback per phase. ASSETFETCH needs OVERLAP AND OWNERSHIP, not
+two complete fetch engines -- keep the checked footprint planner and the
+repaired guard handshake, add two payload banks, one fill engine, independent
+consumers and descriptor lookahead, and share the one permitted ENGINE1 client
+through a logical-owner adapter.
+
+### The three prerequisites, and where they stand
+
+**1. The island's reorder buffer has no admission credit. OPEN -- and it
+refutes a proof I wrote the same day.** My comment claims the ROB cannot
+overflow because FRAGROB admits at most FCTXN fragments. The brief's
+counterexample is exact and the claim is false:
+
+> hold the sink not-ready; admit and complete sequences 0..63; entry 0 still
+> holds sequence 0; **internal contexts have been released and admit more
+> work**; sequence 64 completes and overwrites entry 0.
+
+FRAGROB releases a context at ITS retirement, which is upstream of COMBINE and
+of the ROB, so admissions are not bounded by what is parked at the output. A
+64-fragment test cannot reach the wrap. The fix is an end-to-end credit --
+reserved at ADMISSION, returned ONLY at final external output acceptance --
+gating both ``frag_ready_o`` and RCP's valid, so RCP cannot take a job the
+caller was told did not handshake.
+
+Not applied yet: ``zhao_texture_island_top.sv`` is inside the composed-island
+fit running now (QUARTUS_GOTCHAS 11).
+
+**2. Both geometry fetchers read ingress pins live after acceptance. CLOSED**
+(``ec3d86f4``). Verified in source, captured at acceptance, and both files put
+under ``check_ingress_capture`` so the two-bank rework cannot reintroduce it
+while adding the overlap that makes it bite. Mutating it back exposed that the
+gate's port regex could not see ANY port declared with an unqualified typedef --
+fixed in ``85865480``.
+
+**3. The committed COMBINE timing exports were the wrong experiment. CLOSED**
+(``6ff9d0fa``). They described the 29.74 MHz run; the 36.28 MHz database
+survived under ``%TEMP%`` and ``quartus_sta`` re-exported matching reports in
+32 seconds rather than a second 13,627-second fit. Setup **−17.561 ns**, hold
+**−5.284 ns**, and the worst cone is now named: **recipe state into the
+``jobs_by_recipe`` counter** -- the same family ``zhao_mem_guard`` was
+repaired against, a decision chain landing on a counter's enable, not the
+``Decoder5~9 -> Add46~41`` the superseded report pointed at.
+
+### Corrections the brief makes to this docket's own claims
+
+* **"R6 fully closed" was too broad.** The order test proves its 64-fragment
+  workload, not sustained backpressure safety -- see prerequisite 1.
+* **The 30-to-360 stall increase does not promise a 12x buffering win.** It
+  exposes costs the fake memory omitted; overlap-only ideal speedup for
+  two-bank ASSETFETCH is ``(F+C)/max(F,C)``, between 1 and 2.
+* **Do not add 2.08 MHz to 36.28** because an unrelated shell comparison found
+  that effort difference. "Probably 38 MHz" is not a measurement.
+* **The recipe NAMES do not imply their math.** LERP interpolates alpha;
+  MODULATE2X doubles alpha; DETAIL_MASK multiplies s0/s1 RGB and s0/s2 alpha.
+  It is not a third-sample-weighted colour lerp.
+
 ## D19w — the guard-verdict mistake was in THREE clients, and the third fails the other way
 
 **2026-09-06.** D22 tread 10 found both geometry fetchers testing
