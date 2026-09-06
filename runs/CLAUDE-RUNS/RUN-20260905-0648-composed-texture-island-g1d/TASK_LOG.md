@@ -692,6 +692,83 @@ and therefore the owner's, and guessing it would be the real instance of the
 failure the warning describes. The block stays unfixed, now against the right
 blocker.
 
+## The owner's COMBINE / ASSETFETCH recovery brief arrived
+
+Filed at ``reports/COMBINE-ASSETFETCH-RECOVERY-20260906.txt`` and indexed as
+docket D19x, per its own instruction: the COMBINE and asset-fetch
+SPECIALIZATION of texture recovery v2, not a replacement for it. Two headline
+decisions -- COMBINE needs a different execution ORGANIZATION rather than
+different material math; ASSETFETCH needs OVERLAP AND OWNERSHIP rather than two
+fetch engines.
+
+### Its three prerequisites
+
+**1. The island's reorder buffer has no admission credit. OPEN.** It refutes a
+proof I wrote this morning, and the counterexample is exact: hold the sink
+not-ready, admit and complete 0..63, and while entry 0 still holds sequence 0
+the INTERNAL CONTEXTS HAVE BEEN RELEASED and admit more work -- sequence 64
+overwrites entry 0. FRAGROB releases upstream of the buffer, so what is parked
+at the output was never bounded by FRAGROB's capacity, and a 64-fragment test
+cannot reach the wrap. A false "cannot overflow" is worse than the bug: it tells
+the next reader not to check.
+
+The fix is written and waiting: reserve at admission, return ONLY at final
+external acceptance, gate ``frag_ready_o`` AND RCP's valid (or RCP takes a job
+the caller was told did not handshake), no same-cycle bypass. It cannot land
+while the island fit runs -- ``run_block_fit.ps1`` re-hashes sources at the end
+and marks a changed run contaminated, so editing now would destroy the
+measurement rather than merely risk it.
+
+**2. Both geometry fetchers read ingress pins live after acceptance. CLOSED.**
+Verified in source: ASSETFETCH's client, MESHFETCH's client AND descriptor
+address, all sampled when the request is FORMED, several states after the job
+was accepted. Captured, and both files put under the ingress gate.
+
+Mutating it back found that **the gate could not see any port declared with an
+unqualified typedef** -- its regex enumerated type spellings and landed the
+capture group on ``zhao_client_e`` instead of ``m_client_i``. True of every
+such port under contract since the gate was written. A detector reading low,
+inside the tool written to enforce a rule about exactly that.
+
+**3. The committed COMBINE timing reports were the wrong experiment. CLOSED,
+and it corrects me.** They were the 29.74 MHz run; I had committed one saying it
+was the census export, using its MTIME as evidence of freshness. The 36.28 MHz
+database survived under ``%TEMP`%` and ``quartus_sta`` re-exported matching
+reports in **32 seconds** instead of a second 13,627-second fit:
+
+    setup  -17.561 ns   rec[0].recipe[0] -> jobs_by_recipe_r[5][30]
+    hold    -5.284 ns   f_s2_rgb_i[6]    -> rec[1].s2_b[6]
+    fitter  1,475 ALM, 893 registers, 2 DSP, 0 M10K
+
+**The worst cone is recipe state driving a counter** -- the same family
+``zhao_mem_guard`` was repaired against, not the ``Decoder5~9 -> Add46~41``
+the superseded report pointed at. And D19v's DSP finding now rests on FITTER
+evidence.
+
+### ASSETFETCH, first two targeted fixes from the migration map
+
+Client captured (above), and **exact response counts validated**: a 64-byte line
+is exactly eight packed words, and the block believed ``beat_last_i`` about
+where a line ended. A line stopping at word five produced a meshlet whose last
+three words were whatever the RAM held from the PREVIOUS meshlet -- a vertex
+record that decodes cleanly, passes its format check, and is partly somebody
+else's. Three named counters (truncated / overrun / unowned), both faults
+abandon the job, 56 -> 62 checks, and disabling the check reproduces the silent
+wrong picture.
+
+The overrun scenario **segfaulted with no output at all** first time, because
+the played responder's pool reader was unchecked and an overrun beat is by
+definition a word outside the authorised line. Buffered output lost in a crash,
+exactly as CLAUDE.md describes it.
+
+### The fit
+
+Owner direction: enough time, no watchdog, periodic check-in. Killed the
+watchdog Start-Job alone (pid 22624); the fitter (836) and the run_block_fit
+host (15816) are both alive, so the host still runs STA and writes the row.
+``tools/quartus/watch_fit.ps1`` reports and never kills, and measures liveness
+by CPU delta -- log growth would have called a healthy fit hung earlier today.
+
 ## In flight
 
 COMBINE.V1 refit, relaunched alone after the first attempt was starved. Owner
