@@ -98,6 +98,69 @@ int main(int argc, char** argv) {
     chk(h.top.hps_bytes_0 == 64, "hps_ddr_bytes_by_client[scanout] += 64", 64, h.top.hps_bytes_0);
   }
 
+  // ---- 3b. A BEAT OFFERED BETWEEN ACCEPT AND ISSUE ---------------------------
+  // The case above ticks TWICE before streaming, with a comment saying beats
+  // "may stream now" -- so it never touches the window where they may not.
+  //
+  // `req_grant` is asserted at acceptance; beats are consumed only once
+  // `issued` is true, one cycle later. A client that streams on its own grant
+  // -- which this bridge's own header invites, "after its request is accepted
+  // (rsp.grant)" -- lost that beat with nothing recording it. It did not even
+  // read as a short burst: the byte count adds `busy_len` at `wr_last`, not one
+  // per beat, so the burst reported its full length with data missing.
+  {
+    const uint32_t early_before = h.top.wr_early_beats;
+
+    h.top.req_valid = 1;
+    h.top.req_write = 1;
+    h.top.req_client = 0;
+    h.top.req_addr = 0x0000'4000;
+    h.top.req_len = 16;
+    h.tick();                       // accepted; req_grant high, issued still 0
+    h.top.req_valid = 0;
+
+    const uint32_t ready_at_accept = h.top.wr_ready;
+
+    // The offending beat, offered exactly where a naive client would put it.
+    h.top.wr_valid = 1;
+    h.top.wr_data = beat_data(0, 0xDEAD);
+    h.top.wr_last = 0;
+    h.tick();                       // issued becomes 1 during this tick
+    h.top.wr_valid = 0;
+
+    chk(ready_at_accept == 0,
+        "wr_ready is LOW in the cycle after acceptance -- the window in which a "
+        "beat used to vanish",
+        0, (long long)ready_at_accept);
+    chk(h.top.wr_early_beats == early_before + 1,
+        "and a beat offered there is COUNTED exactly once. Before wr_early_beats "
+        "existed this beat disappeared and nothing anywhere recorded it",
+        (long long)(early_before + 1), (long long)h.top.wr_early_beats);
+
+    // ...and the burst still completes correctly afterwards, so the counter is
+    // reporting a lost beat rather than a broken bridge.
+    unsigned seen = 0;
+    for (unsigned b = 0; b < 2; b++) {
+      h.top.wr_valid = 1;
+      h.top.wr_data = beat_data(b, 0xDEAD);
+      h.top.wr_last = (b + 1 == 2);
+      h.tick();
+      if (h.top.hps_wr_valid) seen++;
+    }
+    h.top.wr_valid = 0;
+    h.top.wr_last = 0;
+    for (int i = 0; i < 4; i++) h.tick();
+
+    chk(seen == 2,
+        "and the burst still completes normally once wr_ready is high, so the "
+        "counter reports a LOST BEAT rather than a stalled bridge",
+        2, (long long)seen);
+    chk(h.top.wr_early_beats == early_before + 1,
+        "with no further early beats counted while ready was high -- the "
+        "counter tracks the violation, not the traffic",
+        (long long)(early_before + 1), (long long)h.top.wr_early_beats);
+  }
+
   // ---- 4. malformed bursts: err, nothing issued ------------------------------
   {
     const uint64_t issued0 = h.hps_seen_requests;
