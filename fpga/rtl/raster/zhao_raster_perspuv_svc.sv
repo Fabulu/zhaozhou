@@ -317,8 +317,27 @@ module zhao_raster_perspuv_svc #(
         e_num_v[tail_q]   <= v_over_w_i;
         e_mant[tail_q]    <= r_mant_i;
         e_k[tail_q]       <= r_k_i;
-        e_q_u[tail_q]     <= 32'sd0;
-        e_q_v[tail_q]     <= 32'sd0;
+        // THE ZERO-INITIALISATION IS GONE, AND ITS ABSENCE IS THE POINT.
+        //
+        // `e_q_u[tail_q] <= 0` here was a SECOND WRITE ADDRESS -- `tail_q` at
+        // allocation and `p3_i_q[0]` at P4 -- and an M10K simple-dual-port has
+        // one write port. That, not the asynchronous read, is why `e_q_u` and
+        // `e_q_v` stayed in flip-flops while `e_tag`, which has one writer and
+        // one reader, INFERRED. The island's RAM Summary names both outcomes.
+        //
+        // It is redundant as well as costly: `e_q_u[head_q]` is read only when
+        // `head_done` holds, which requires `e_have[head_q] == 2'b11`, and
+        // `e_have[i][0]` is set ONLY in the same P4 branch that writes
+        // `e_q_u[i]`. No reader can observe the initialised value.
+        //
+        // The owner's COMBINE brief states the same rule for that block's
+        // scratch, in the same words: "Do NOT initialize scratch on admission:
+        // that creates a second writer." Two blocks, one law.
+        //
+        // `e_sat` KEEPS its clear at allocation, deliberately: it is a sticky
+        // flag that P4 only ever SETS, so without the clear a saturation would
+        // leak into the next fragment to reuse the token. It is 16 bits in
+        // total and was never a candidate for memory anyway.
         e_sat[tail_q]     <= 1'b0;
         e_dz[tail_q]      <= depth_zero_i;
         e_tag[tail_q]     <= tag_i;

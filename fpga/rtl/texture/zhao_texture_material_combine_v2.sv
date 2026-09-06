@@ -172,6 +172,26 @@ module zhao_texture_material_combine_v2 #(
   endfunction
   /* verilator lint_on UNUSEDSIGNAL */
 
+  // ---- the single write port of each store, driven from ONE place ---------
+  // Combinational selects feeding the clock-only processes above, so the
+  // arrays live in a reset-free block while the control that decides what to
+  // write keeps its reset. That separation is the whole point of 9.5 B.
+  // Driven from exactly one place each, so the memory processes below stay
+  // clock-only with one write address and one read address.
+  logic            adm_we;
+  logic [CW-1:0]   adm_ctx;
+  logic            scr_we;
+  logic [CW-1:0]   scr_ctx;
+  logic [32:0]     scr_row;
+  logic            cmp_we;
+  logic [CW-1:0]   cmp_ctx;
+  logic [33:0]     cmp_row;
+
+  // Forward declarations: the drivers below are written after the pipeline,
+  // because they depend on its M-stage outputs.
+  wire             admit_c_w;
+  wire [CW-1:0]    admit_ctx_w;
+
   // ==========================================================================
   // Stores. One write source and one read source each (section 5).
   // ==========================================================================
@@ -209,6 +229,8 @@ module zhao_texture_material_combine_v2 #(
   assign f_ready_o = !freeq_empty;
   wire admit_c = f_valid_i && f_ready_o;
   wire [CW-1:0] admit_ctx = freeq_m[freeq_rp[CW-1:0]];
+  assign admit_c_w   = admit_c;
+  assign admit_ctx_w = admit_ctx;
 
   // Validation precedence is preserved BEFORE canonicalisation (section 5):
   // an unknown recipe is refused first, then a missing sample, and only then
@@ -241,12 +263,21 @@ module zhao_texture_material_combine_v2 #(
   wire [1:0] q_ph_c = q_from_cont ? contq_ph_m[contq_rp[CW-1:0]] : 2'd0;
 
   // ---- pipeline registers ---------------------------------------------------
-  // W's context and phase are M's: the F stage is combinational into the write,
-  // so there is no separate W register file to carry them. `w_v` alone marks
-  // the write cycle.
-  logic          r_v, o_v, m_v, w_v;
-  logic [CW-1:0] r_ctx, o_ctx, m_ctx;
-  logic [1:0]    r_ph, o_ph, m_ph;
+  // Q -> R (index) -> D (memory output) -> O -> M -> F/W.
+  //
+  // `w_v` IS GONE, and that is addendum 9.5 A. It registered validity one edge
+  // later than the context, phase and result it gated, so the write enable
+  // belonged to the PREVIOUS M-stage occupant while the data belonged to the
+  // current one. Back-to-back phases and bubbles tell the two apart.
+  //
+  // Of the two repairs the addendum offers, this takes the first: F stays
+  // combinational from the stable M registers, and the write plus its
+  // continuation-or-completion enqueue all happen on `m_v` at that same edge.
+  // Nothing is shifted on its own. The other repair -- a real W register for
+  // every field -- is equally valid and costs a stage; this one costs none.
+  logic          r_v, d_v, o_v, m_v;
+  logic [CW-1:0] r_ctx, d_ctx, o_ctx, m_ctx;
+  logic [1:0]    r_ph, d_ph, o_ph, m_ph;
 
   // O-stage operands and control
   logic [7:0]  o_a0, o_b0, o_a1, o_b1;      // lane operands
@@ -280,7 +311,48 @@ module zhao_texture_material_combine_v2 #(
   // ==========================================================================
   // Pipeline
   // ==========================================================================
-  wire [PAYW-1:0] pay_rd = payload_m[r_ctx];
+  // ---- CLOCK-ONLY MEMORY PROCESSES (addendum 9.5 B) ------------------------
+  // These were asynchronous wires. A registered INDEX is not a registered
+  // memory OUTPUT, and the addendum says so plainly: leaving the reads
+  // combinational into the O selection, with the writes sitting inside the
+  // large asynchronous-reset control process, "risks recreating the inference
+  // problem being fixed".
+  //
+  // So one clock-only process per store, NO RESET -- an array in an
+  // asynchronous-reset block is the shape that stops inferring, which the
+  // island's own RAM Summary has now demonstrated twice. Control reset stays
+  // in the control process, where it belongs.
+  //
+  // The read output arrives ONE CYCLE after its index, so `d_*` below carries
+  // the ticket alongside it. That alignment stage is what the first draft
+  // lacked, and its absence is exactly why validity and payload could belong
+  // to different transactions.
+  logic [PAYW-1:0] pay_rd;
+  logic [32:0]     scr_rd;
+  logic [33:0]     cmp_rd;
+  logic [TAGW-1:0] tag_rd;
+
+  always_ff @(posedge clk) begin
+    if (adm_we) payload_m[adm_ctx] <= {refused_c, f_sample_count_i, recipe_in,
+                                       f_weight_i, s2_in, s1_in, s0_in};
+    pay_rd <= payload_m[r_ctx];
+  end
+
+  always_ff @(posedge clk) begin
+    if (scr_we) scratch_m[scr_ctx] <= scr_row;
+    scr_rd <= scratch_m[r_ctx];
+  end
+
+  always_ff @(posedge clk) begin
+    if (adm_we) tag_m[adm_ctx] <= f_tag_i;
+    tag_rd <= tag_m[done_ctx_c];
+  end
+
+  always_ff @(posedge clk) begin
+    if (cmp_we) comp_m[cmp_ctx] <= cmp_row;
+    cmp_rd <= comp_m[done_ctx_c];
+  end
+
   wire [31:0] p_s0 = pay_rd[31:0];
   wire [31:0] p_s1 = pay_rd[63:32];
   wire [31:0] p_s2 = pay_rd[95:64];
@@ -293,7 +365,7 @@ module zhao_texture_material_combine_v2 #(
   wire [1:0]  p_ct = pay_rd[108:107];
   /* verilator lint_on UNUSEDSIGNAL */
   wire        p_rf = pay_rd[109];
-  wire [32:0] scr_rd = scratch_m[r_ctx];
+
 
   // Channel pickers: 0=R 1=G 2=B 3=A
   function automatic logic [7:0] chan(input logic [31:0] s, input logic [1:0] c);
@@ -307,9 +379,9 @@ module zhao_texture_material_combine_v2 #(
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      r_v <= 1'b0; o_v <= 1'b0; m_v <= 1'b0; w_v <= 1'b0;
-      r_ctx <= '0; o_ctx <= '0; m_ctx <= '0;
-      r_ph <= 2'd0; o_ph <= 2'd0; m_ph <= 2'd0;
+      r_v <= 1'b0; d_v <= 1'b0; o_v <= 1'b0; m_v <= 1'b0;
+      r_ctx <= '0; d_ctx <= '0; o_ctx <= '0; m_ctx <= '0;
+      r_ph <= 2'd0; d_ph <= 2'd0; o_ph <= 2'd0; m_ph <= 2'd0;
       phases_issued_o <= 32'd0;
     end else begin
       // ---- Q -> R ----------------------------------------------------------
@@ -318,13 +390,18 @@ module zhao_texture_material_combine_v2 #(
       r_ph  <= q_ph_c;
       if (q_valid_c) phases_issued_o <= phases_issued_o + 32'd1;
 
-      // ---- R -> O : operands selected from the synchronous read -------------
-      o_v      <= r_v;
-      o_ctx    <= r_ctx;
-      o_ph     <= r_ph;
+      // ---- R -> D : the memory output arrives, and the ticket meets it ------
+      d_v   <= r_v;
+      d_ctx <= r_ctx;
+      d_ph  <= r_ph;
+
+      // ---- D -> O : operands selected from the REGISTERED read --------------
+      o_v      <= d_v;
+      o_ctx    <= d_ctx;
+      o_ph     <= d_ph;
       o_recipe <= p_rc;
       o_scratch<= scr_rd;
-      o_final  <= (r_ph + 2'd1 == phases_of(p_rc));
+      o_final  <= (d_ph + 2'd1 == phases_of(p_rc));
       o_keep_a <= p_s0[31:24];
       o_zero   <= 1'b0;
       o_lerp   <= 1'b0;
@@ -338,10 +415,10 @@ module zhao_texture_material_combine_v2 #(
       case (p_rc)
         R_MODULATE, R_MOD2X: begin
           // phase 0: R,G   phase 1: B,A
-          o_a0 <= chan(p_s0, r_ph == 2'd0 ? 2'd0 : 2'd2);
-          o_b0 <= chan(p_s1, r_ph == 2'd0 ? 2'd0 : 2'd2);
-          o_a1 <= chan(p_s0, r_ph == 2'd0 ? 2'd1 : 2'd3);
-          o_b1 <= chan(p_s1, r_ph == 2'd0 ? 2'd1 : 2'd3);
+          o_a0 <= chan(p_s0, d_ph == 2'd0 ? 2'd0 : 2'd2);
+          o_b0 <= chan(p_s1, d_ph == 2'd0 ? 2'd0 : 2'd2);
+          o_a1 <= chan(p_s0, d_ph == 2'd0 ? 2'd1 : 2'd3);
+          o_b1 <= chan(p_s1, d_ph == 2'd0 ? 2'd1 : 2'd3);
         end
         R_LERP: begin
           o_lerp <= 1'b1;
@@ -349,10 +426,10 @@ module zhao_texture_material_combine_v2 #(
           // 6.2): magnitude to the lane, sign and base held for stage F.
           begin
             logic [7:0] a0v, b0v, a1v, b1v;
-            a0v = chan(p_s0, r_ph == 2'd0 ? 2'd0 : 2'd2);
-            b0v = chan(p_s1, r_ph == 2'd0 ? 2'd0 : 2'd2);
-            a1v = chan(p_s0, r_ph == 2'd0 ? 2'd1 : 2'd3);
-            b1v = chan(p_s1, r_ph == 2'd0 ? 2'd1 : 2'd3);
+            a0v = chan(p_s0, d_ph == 2'd0 ? 2'd0 : 2'd2);
+            b0v = chan(p_s1, d_ph == 2'd0 ? 2'd0 : 2'd2);
+            a1v = chan(p_s0, d_ph == 2'd0 ? 2'd1 : 2'd3);
+            b1v = chan(p_s1, d_ph == 2'd0 ? 2'd1 : 2'd3);
             o_lbase0 <= a0v;
             o_lbase1 <= a1v;
             o_lneg0  <= (b0v < a0v);
@@ -365,14 +442,14 @@ module zhao_texture_material_combine_v2 #(
         end
         R_DMASK: begin
           // phase 0: r,g   phase 1: b, and alpha from s0.a x s2.a
-          o_a0 <= chan(p_s0, r_ph == 2'd0 ? 2'd0 : 2'd2);
-          o_b0 <= chan(p_s1, r_ph == 2'd0 ? 2'd0 : 2'd2);
-          o_a1 <= (r_ph == 2'd0) ? chan(p_s0, 2'd1) : chan(p_s0, 2'd3);
-          o_b1 <= (r_ph == 2'd0) ? chan(p_s1, 2'd1) : chan(p_s2, 2'd3);
+          o_a0 <= chan(p_s0, d_ph == 2'd0 ? 2'd0 : 2'd2);
+          o_b0 <= chan(p_s1, d_ph == 2'd0 ? 2'd0 : 2'd2);
+          o_a1 <= (d_ph == 2'd0) ? chan(p_s0, 2'd1) : chan(p_s0, 2'd3);
+          o_b1 <= (d_ph == 2'd0) ? chan(p_s1, 2'd1) : chan(p_s2, 2'd3);
         end
         R_DLIGHT: begin
           // phase 0: R1,G1   phase 1: B1, R2=U(R1,s2.r)   phase 2: G2,B2
-          case (r_ph)
+          case (d_ph)
             2'd0: begin
               o_a0 <= chan(p_s0, 2'd0); o_b0 <= chan(p_s1, 2'd0);
               o_a1 <= chan(p_s0, 2'd1); o_b1 <= chan(p_s1, 2'd1);
@@ -434,7 +511,6 @@ module zhao_texture_material_combine_v2 #(
       m_p1 <= 17'({8'd0, o_a1} * {8'd0, o_b1}) + 17'd128;
 
       // ---- M -> W : rounding, doubling, saturation, sign ---------------------
-      w_v   <= m_v;
     end
   end
 
@@ -508,8 +584,37 @@ module zhao_texture_material_combine_v2 #(
           end
         end
       endcase
-      next_scratch[32] = m_scratch[32] | f_sat;
+      // PHASE ZERO IGNORES OLD SCRATCH -- including its flags (addendum 9.5 D).
+      //
+      // Scratch is deliberately not cleared at admission, because that would be
+      // a second writer. The rule was "phase 0 ignores old scratch", and the
+      // first draft turned it into "phase 0 keeps its old flags": it seeded the
+      // accumulator with `m_scratch[32]`, so a saturating MODULATE2X could leak
+      // its flag into the next fragment to reuse the context. The fix belongs
+      // in the combinational write DATA, not in another RAM writer.
+      next_scratch[32] = (m_ph == 2'd0) ? f_sat : (m_scratch[32] | f_sat);
     end
+  end
+
+  // ---- memory write-port drivers -------------------------------------------
+  // ADMISSION writes payload and tag; the FINAL writeback writes completion;
+  // a NONFINAL writeback writes scratch. Exactly one source each, which is
+  // what lets the processes above stay 1W/1R.
+  always_comb begin
+    adm_we  = admit_c_w;
+    adm_ctx = admit_ctx_w;
+
+    scr_we  = m_v && !m_final;
+    scr_ctx = m_ctx;
+    scr_row = next_scratch;
+
+    cmp_we  = m_v && m_final;
+    cmp_ctx = m_ctx;
+    // 34 bits: {refused, sat, A, B, G, R}. The refusal comes from the JOB, not
+    // from a saturation flag -- the first draft built it from `f_sat` and an
+    // always-false term, so a refused fragment would have retired as a
+    // successful black one.
+    cmp_row = {m_refused, next_scratch};
   end
 
   // ==========================================================================
@@ -533,8 +638,16 @@ module zhao_texture_material_combine_v2 #(
   assign o_refused_o = out_val_q[33];
   assign o_tag_o     = out_tag_q;
 
-  wire out_pop_c  = out_full_q && o_ready_i;
-  wire out_load_c = (!out_full_q || out_pop_c) && !doneq_empty;
+  // THE COMPLETION READ IS SYNCHRONOUS TOO, so the output is a two-step:
+  // issue the read (popping DONE), then load the held register from the
+  // REGISTERED completion and tag outputs on the next edge. One read in
+  // flight at a time, and it is only issued when the held slot is free.
+  logic          done_rd_q;
+  logic [CW-1:0] out_ctx_q;      // whose result is being held
+
+  wire out_pop_c   = out_full_q && o_ready_i;
+  wire out_free_c  = !out_full_q || out_pop_c;
+  wire out_issue_c = out_free_c && !doneq_empty && !done_rd_q;
   wire [CW-1:0] done_ctx_c = doneq_m[doneq_rp[CW-1:0]];
 
   always_ff @(posedge clk or negedge rst_n) begin
@@ -546,6 +659,8 @@ module zhao_texture_material_combine_v2 #(
       out_full_q <= 1'b0;
       out_val_q  <= '0;
       out_tag_q  <= '0;
+      done_rd_q  <= 1'b0;
+      out_ctx_q  <= '0;
       refused_recipe_o <= 32'd0;
       refused_missing_o <= 32'd0;
       saturated_add_o <= 32'd0;
@@ -557,14 +672,12 @@ module zhao_texture_material_combine_v2 #(
     end else begin
       // ---- admission -------------------------------------------------------
       if (admit_c) begin
-        payload_m[admit_ctx] <= {refused_c, f_sample_count_i, recipe_in,
-                                 f_weight_i, s2_in, s1_in, s0_in};
-        tag_m[admit_ctx]     <= f_tag_i;
+        // payload_m and tag_m are written by their own clock-only processes;
+        // this block only moves the QUEUES and the counters.
         newq_m[newq_wp[CW-1:0]] <= admit_ctx;
         newq_wp <= newq_wp + 1'b1;
         freeq_rp <= freeq_rp + 1'b1;
         if (refused_c) refused_missing_o <= refused_missing_o + 32'd1;
-        else jobs_by_recipe_o[recipe_in] <= jobs_by_recipe_o[recipe_in] + 32'd1;
       end
 
       // ---- Q pop -----------------------------------------------------------
@@ -574,14 +687,26 @@ module zhao_texture_material_combine_v2 #(
       end
 
       // ---- W: the one whole-row write --------------------------------------
-      if (w_v) begin
+      // THE PRODUCT-JOB COUNTER COUNTS PRODUCTS (addendum 9.5 C).
+      //
+      // It counted ADMITTED FRAGMENTS: one for a passthrough costing zero
+      // products and one for a DETAIL_LIGHT costing six. A fragment histogram
+      // carrying a product-job name, and the oracle's `product_jobs()` would
+      // have had to be bent to match it -- which is the wrong direction of fix.
+      //
+      // Two lanes fire per product-bearing phase, so two are counted, at the
+      // M stage where the multiply actually launches and with that phase's own
+      // recipe. Bypass phases count ZERO. MODULATE = 2 phases x 2 = 4;
+      // DETAIL_LIGHT = 3 x 2 = 6; DETAIL_MASK = 2 x 2 = 4 -- which is exactly
+      // what zref::material::product_jobs() says, without changing the oracle.
+      if (m_v && !m_zero) begin
+        jobs_by_recipe_o[m_recipe] <= jobs_by_recipe_o[m_recipe] + 32'd2;
+      end
+
+      if (m_v) begin
         if (m_final) begin
-          // 34 bits: {refused, sat, A, B, G, R}. The first draft built the
-          // refusal out of the SATURATION flag and an expression that was
-          // always false -- a refused fragment would have retired as a
-          // successful black one, which is the silent-wrong-answer shape this
-          // whole block is being rewritten away from.
-          comp_m[m_ctx] <= {m_refused, next_scratch};
+          // comp_m is written by its own process; the enqueue happens on this
+          // SAME edge as the write, which is the convention 9.5 A asks for.
           doneq_m[doneq_wp[CW-1:0]] <= m_ctx;
           doneq_wp <= doneq_wp + 1'b1;
           // ONCE PER FRAGMENT, not per channel -- the oracle's own rule.
@@ -590,7 +715,6 @@ module zhao_texture_material_combine_v2 #(
           if (m_recipe == R_ADDSAT && m_addsat_sat)
             saturated_add_o <= saturated_add_o + 32'd1;
         end else begin
-          scratch_m[m_ctx] <= next_scratch;
           contq_ctx_m[contq_wp[CW-1:0]] <= m_ctx;
           contq_ph_m[contq_wp[CW-1:0]]  <= m_ph + 2'd1;
           contq_wp <= contq_wp + 1'b1;
@@ -598,17 +722,32 @@ module zhao_texture_material_combine_v2 #(
       end
 
       // ---- output ----------------------------------------------------------
-      if (out_load_c) begin
-        out_val_q  <= comp_m[done_ctx_c];
-        out_tag_q  <= tag_m[done_ctx_c];
+      // Step 1: issue the completion/tag read and pop DONE.
+      if (out_issue_c) begin
+        doneq_rp  <= doneq_rp + 1'b1;
+        done_rd_q <= 1'b1;
+        out_ctx_q <= done_ctx_c;
+      end
+
+      // Step 2: the registered read has answered; hold it.
+      if (done_rd_q) begin
+        out_val_q  <= cmp_rd;
+        out_tag_q  <= tag_rd;
         out_full_q <= 1'b1;
-        doneq_rp   <= doneq_rp + 1'b1;
-        // The context is released HERE -- when its result has been read out of
-        // completion storage -- and popping DONE alone does not release it.
-        freeq_m[freeq_wp[CW-1:0]] <= done_ctx_c;
-        freeq_wp <= freeq_wp + 1'b1;
+        done_rd_q  <= 1'b0;
       end else if (out_pop_c) begin
         out_full_q <= 1'b0;
+      end
+
+      // THE CONTEXT IS RELEASED WHEN THE OUTPUT IS ACCEPTED, not when DONE is
+      // popped. Section 5 says so in as many words -- "Popping a DONE index
+      // does not release the context; release occurs when its held COMBINE
+      // output is accepted" -- and the first draft released it at the read,
+      // which would let a new fragment overwrite completion storage whose
+      // result was still sitting unaccepted in the held register.
+      if (out_pop_c) begin
+        freeq_m[freeq_wp[CW-1:0]] <= out_ctx_q;
+        freeq_wp <= freeq_wp + 1'b1;
       end
     end
   end
