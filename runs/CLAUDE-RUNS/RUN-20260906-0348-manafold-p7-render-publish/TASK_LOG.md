@@ -340,3 +340,67 @@ Two things, and the second is the stronger one:
   the shipped artefact itself and not a reproduction of it.
 * All 808 Zixxtrixx declared files (410 sources + their derived posters)
   DECODED: 0 failures. Not probed -- decoded, frame by frame.
+
+---
+
+## PUBLISHED
+
+    .\deploy.ps1 -Project upheaval -Branch main
+    Uploaded 45 files (950 already uploaded), 995 total
+    Deployment complete
+
+`-Branch main` given explicitly. The per-deployment alias wrangler prints
+(`eecb68c2.upheaval.pages.dev`) is NOT the evidence -- that URL exists for
+previews too, which is exactly the trap. The evidence is the PRODUCTION host:
+
+    curl https://upheaval.pages.dev/
+    HTTP 200, 333,305 B          (before the deploy: 322,798 B)
+    "MANAFOLD, pass 7"           (before: "MANAFOLD, pass 6")
+    Pass 6 - 2026-09-06 tab      (before: absent)
+    name="robots" content="noindex, nofollow"   exactly 1
+    16 archive-pass6 media refs, 10 manalab variants
+    LIVE PAGE BYTE-IDENTICAL to the locally assembled public/index.html
+
+And the media, end to end -- fetched FROM PRODUCTION and DECODED, because a
+page that references a clip is not a clip that plays:
+
+    manafold-channel.webm        200  2,494,492 B  420 frames decoded
+    manafold-hover.webm          200  3,604,337 B  600 frames decoded
+    archive-pass6-u02-rest.webm  200  2,435,417 B  400 frames decoded
+    manalab-edge-snap-held.webm  200  4,556,599 B  800 frames decoded
+    manafold-channel.png         200     79,778 B  decoded
+
+All five `cmp`-identical to the local files, so production is serving the new
+bytes and not a cached generation.
+
+### Pushes, verified from the remote (gate item 27)
+Pass 6 reported "pushed" with sixteen commits still local, so every push this
+run was checked with `git fetch` + `git branch -r --contains`:
+
+    Upheaval  local main 4b7d35e == origin/main 4b7d35e
+    zhaozhou  local main 5428fa64 == origin/main 5428fa64
+
+A publish deploys from local files and is not a backup; these are.
+
+### Background work, verified stopped (gate item 28)
+No `zhao-reel`, `zhao-reel-cel`, `manafold-probe` or `ffmpeg` process alive.
+The one stray render started this run (the bare no-arg invocation) was killed
+and its 15 junk directories deleted.
+
+### FOR PASS 8
+1. **5c rule 3 is still a real, unfixed fault** -- 1499 samples over 7 clips,
+   reported-not-enforced because the instrument uses 2 fixed orthographic
+   views while the shipping cameras orbit. Fix the fault or finish the
+   instrument, not neither.
+2. **The near eye at steep angles.** The star is a flat plate on a dome. It
+   is what stops the cross-eyed taunt gag from reading even though the gag is
+   correctly wired.
+3. **A STALE COMMENT in `manafold_fx.h`** around `kFogThicknessPm`: the prose
+   says 2000 "was the first value where the gassy shell read as deliberately
+   thick fog", but the shipped constant is 4500. The value moved and the
+   comment did not. Not touched this run -- editing the reel closure would
+   have broken the match between the tree and the CRCs being published -- but
+   it should be corrected before it is read as authority.
+4. **Zixxtrixx sits at EXACTLY MAX_ARCHIVE_GENERATIONS (19).** Its next
+   archive generation needs `assemble.py`'s limit and both `style.css`
+   selector families extended together, or assemble will refuse.
