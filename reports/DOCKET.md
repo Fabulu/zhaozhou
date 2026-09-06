@@ -3158,6 +3158,76 @@ perspuv's is chained behind it to confirm or refute the per-axis split.
 
 ---
 
+## D19v — COMBINE.V1 uses 2 DSP, claims ZERO, and the gate is set at exactly 2
+
+**2026-09-06. Measured, from the committed fit row; no new fit needed to find
+it.**
+
+    zhao_texture_material_combine_v1   alms 1475   registers 893   dspBlocks 2
+    rule violations: ALM 1475 > 800, registers 893 > 500, fmax 36.28 < 125
+
+**DSP is not in that list, and that is the problem.** `design/fit_targets.yml`
+gates the block at `max_dsp: 2` -- S3.4's "reject DSP > 2" tripwire, inherited
+unchanged from the refuted II=1 block. The measurement is exactly 2. No rule
+fires.
+
+But this block's own header says it should be **zero**:
+
+> "`multstyle = \"logic\"` is the whole point of this block. Without it these
+> two `*` operators become two DSP blocks and the exercise has bought nothing;
+> with it they are exact multipliers in ALM logic and the block uses ZERO DSP,
+> **which is variant A's stated advantage over B**."
+
+Two call sites, two DSP blocks, one each. The attribute is doing nothing.
+
+**The fit target predicted this and could not catch it.** Its comment says: *"If
+this one also breaches DSP, the LOGIC2 attribute is not doing what S15.5 variant
+A says it does and that is the finding."* It did not BREACH. It landed exactly
+on the ceiling, and a ceiling inherited from a design that was allowed 2 cannot
+gate a design that claims 0. The gap between what the block says and what the
+gate allows is precisely two, and the measurement sat in it.
+
+### Why the attribute does nothing, and the tree already knew
+
+`multstyle` is attached to a **function-local automatic variable**:
+
+```systemverilog
+  function automatic logic [7:0] unit_mul_logic(...);
+    (* multstyle = "logic" *) logic [16:0] p;
+```
+
+`p` is not a persistent net; the function is inlined at each call site. And
+`fpga/quartus/shell_fit/zhao_shell_fit.qsf` already carries the general lesson,
+in the paragraph about verifying that a directive is echoed back:
+
+> "An assignment Quartus silently ignores looks exactly like one that did not
+> help, **which is how `multstyle` was believed for weeks**."
+
+So the same attribute has already been believed and found inert once in this
+tree, and the block that most depends on it still asserts the old claim in its
+header.
+
+### What this changes
+
+* **Variant A's stated advantage over B is unmeasured, not established.** A is
+  "LOGIC2, zero DSP"; the measurement is 2 DSP. Until the multiplies are
+  genuinely in ALM logic, the A/B comparison has not been run.
+* **This is the third time the comfortable reading arrived first here.** The
+  refuted block's 8 DSP looked like Quartus ignoring `multstyle` and was
+  actually fourteen multiplier sites -- the tool was fine and the RTL was
+  wrong. This is the opposite and it took the *same* evidence to separate them:
+  count the sites, then compare with the DSP count. Two sites, two DSP.
+* **The lever is the QSF, not the source.** `set_global_assignment -name
+  MULTIPLIER_STYLE LOGIC`, with the fitter's own settings table read back to
+  confirm it was honoured -- which is the rule that same QSF states about
+  `OPTIMIZATION_MODE` and does not yet apply to this.
+* **And `max_dsp` for this target should be 0**, not the inherited 2. A gate
+  set to what the previous design was allowed cannot test what this one claims.
+
+Not applied yet: `zhao_texture_material_combine_v1.sv` and the block-fit runner
+are inside the composed-island fit running now (QUARTUS_GOTCHAS 11, the
+live-tree trap). Queued for when that closure clears.
+
 ## D19u — variant A LOGIC2 is measured and fails its own acceptance condition
 
 **2026-09-05. G1-C's replacement combiner now has a full fit.**

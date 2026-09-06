@@ -230,6 +230,15 @@ perspuv report proposes for `e_q`.
 
 ### 4.3 Fitter — COMPLETE, AND NOW STALE
 
+> **STALE A SECOND TIME, AND A REFIT IS RUNNING** (started 2026-09-06). Since
+> the note below was written the island also gained the R6 ORDERING BOUNDARY:
+> a submission sequence stamped at admission, an FCTXN-entry reorder buffer at
+> the output with a 64-to-1 mux of 33 bits on the emit path, and the combiner
+> tag widened from 16 to 22 bits to carry the sequence. That last one touches
+> the record file in every one of MATERIAL.COMBINE.V1's slots, so it moves area
+> INSIDE the closure as well as at the island level. Again no prediction is
+> offered, for the same reason as below.
+>
 > **These numbers no longer describe the tree.** They were measured at
 > `afb7070f`, before the ingress-capture repair. Since then the island has
 > gained a 64-entry per-fragment attribute table with combinational LUT-RAM
