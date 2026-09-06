@@ -494,6 +494,10 @@ module zhao_geom_assetfetch
       // between requests would land in whichever bank was last reserved.
       // A counter that reads zero for a whole architecture is the cheapest
       // possible evidence that the next one is still zero.
+      // ENFORCED-BY: tests/geometry/assetfetch_rtl_directed.cpp:unowned_beat_injection
+      // -- that case drives a stray beat at an IDLE block and requires this
+      // counter to MOVE, so the zero above is a measurement rather than a
+      // counter that cannot count.
       if (beat_valid_i && (st_q != S_FILL)) begin
         err_beat_unowned_o <= err_beat_unowned_o + 32'd1;
       end

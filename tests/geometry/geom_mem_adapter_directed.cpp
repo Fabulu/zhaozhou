@@ -196,6 +196,7 @@ int main(int argc, char** argv) {
 
   dut.rst_n = 0;
   dut.a_valid = dut.b_valid = 0;
+  dut.a_write = dut.b_write = 0;
   for (int i = 0; i < 4; ++i) zhao::tick(dut);
   dut.rst_n = 1;
 
@@ -245,34 +246,49 @@ int main(int argc, char** argv) {
     ck(b.beats == 0, "and B, idle, saw none of it", 0, b.beats);
   }
 
-  // ---- the client the guard actually sees ---------------------------------
+  // ---- read_only_substitution: the client AND the direction the guard sees --
   // Both requesters above presented SCANOUT. The guard grants the asset pool to
   // ENGINE1 alone, so a forwarded client would be refused in production and the
   // leaf test would never know.
+  //
+  // The DIRECTION is the same kind of claim and needs the same kind of proof.
+  // This requester asks to WRITE -- the testbench can drive that field since
+  // this case was written, and before it could, `m_write == 0` was true of a
+  // bench that never asked for anything else and so could not tell a FORCED
+  // zero from a FORWARDED one. Both fields are sampled while `m_valid` is up,
+  // because after the burst the request line is idle and reads zero for a
+  // reason that proves nothing.
   {
     Seen a, b;
     dut.b_valid = 1;
     dut.b_addr = 0x06A0040u;
     dut.b_len = 64;
     dut.b_client = kScanout;
+    dut.b_write = 1;          // the requester asks for a WRITE, on purpose
     int seen_client = -1;
+    int seen_write = -1;
     // Same cycle model as run(): drive, eval, observe, advance.
     for (int i = 0; i < 200; ++i) {
       s.drive();
       dut.eval();
       if (dut.m_valid && seen_client < 0) seen_client = dut.m_client;
+      if (dut.m_valid && seen_write < 0) seen_write = dut.m_write;
       const bool take_b = dut.b_valid && dut.b_ready;
       s.post();
       zhao::tick(dut);
       if (take_b) dut.b_valid = 0;
     }
+    dut.b_write = 0;
     ck(seen_client == kEngine1,
        "the request reaching the guard carries ENGINE1 -- the trusted identity "
        "is SUBSTITUTED here, not forwarded from a requester that asked as "
        "SCANOUT",
        kEngine1, seen_client);
-    ck(dut.m_write == 0, "and it is a READ; the asset window is read-only", 0,
-       static_cast<long long>(dut.m_write));
+    ck(seen_write == 0,
+       "read_only_substitution: a requester that asked to WRITE still reaches "
+       "the guard as a READ -- the asset window is read-only, and the zero is "
+       "FORCED here rather than forwarded",
+       0, seen_write);
   }
 
   // ---- both at once: round robin, and the loser is held not dropped --------

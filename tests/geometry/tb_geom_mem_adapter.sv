@@ -17,6 +17,7 @@ module tb_geom_mem_adapter
     input  logic [26:0] a_addr,
     input  logic [6:0]  a_len,
     input  logic [2:0]  a_client,
+    input  logic        a_write,
     output logic        a_ready,
     output logic        a_ok,
     output logic        a_violation,
@@ -29,6 +30,7 @@ module tb_geom_mem_adapter
     input  logic [26:0] b_addr,
     input  logic [6:0]  b_len,
     input  logic [2:0]  b_client,
+    input  logic        b_write,
     output logic        b_ready,
     output logic        b_ok,
     output logic        b_violation,
@@ -65,7 +67,7 @@ module tb_geom_mem_adapter
   always_comb begin
     areq        = '0;
     areq.valid  = a_valid;
-    areq.write  = 1'b0;
+    areq.write  = a_write;   // a requester CAN ask to write; see the DUT
     areq.client = zhao_client_e'(a_client);
     areq.addr   = a_addr;
     areq.len    = a_len;
@@ -73,7 +75,7 @@ module tb_geom_mem_adapter
 
     breq        = '0;
     breq.valid  = b_valid;
-    breq.write  = 1'b0;
+    breq.write  = b_write;   // ...and the adapter must still issue a READ
     breq.client = zhao_client_e'(b_client);
     breq.addr   = b_addr;
     breq.len    = b_len;

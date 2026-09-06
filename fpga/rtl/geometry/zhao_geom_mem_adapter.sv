@@ -188,6 +188,9 @@ module zhao_geom_mem_adapter
     m_req_o.valid  = (st_q == A_REQ);
     m_req_o.client = ZHAO_CLIENT_ENGINE1;
     m_req_o.write  = 1'b0;   // the asset window is READ-ONLY by construction
+    // FORCED, not forwarded: a requester may present `write` set and this
+    // still issues a read, which is what the leaf test drives.
+    // ENFORCED-BY: tests/geometry/geom_mem_adapter_directed.cpp:read_only_substitution
   end
 
   // ------------------------------------------------------- beat returning --

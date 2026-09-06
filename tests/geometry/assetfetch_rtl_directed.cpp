@@ -635,6 +635,36 @@ int main(int argc, char** argv) {
      "and no beat ever arrived without a request outstanding, which is the "
      "counter the two-bank rework will make load-bearing");
 
+  // ---- unowned_beat_injection: the counter can COUNT ---------------------
+  // The zero just checked is evidence only if this counter is CAPABLE of
+  // moving -- "a number that is exactly zero is a broken instrument until
+  // proven otherwise" (CLAUDE.md). The played guard never presents a beat
+  // without a request, so the DUT port is driven directly here rather than
+  // through Sim::step, which is the only way to reach the case the RTL
+  // comment claims cannot happen today.
+  {
+    ck(dut.m_ready != 0,
+       "unowned_beat_injection begins with the block IDLE -- no request is "
+       "outstanding, which is the whole precondition");
+    const uint32_t before = dut.err_beat_unowned;
+    const uint32_t beats_before = dut.beats_read;
+    dut.beat_valid = 1;
+    dut.beat_data = 0x0123456789ABCDEFull;
+    dut.beat_last = 0;
+    zhao::tick(dut);
+    dut.beat_valid = 0;
+    dut.beat_data = 0;
+    zhao::tick(dut);
+
+    ck(dut.err_beat_unowned == before + 1,
+       "unowned_beat_injection: a beat arriving with the block outside "
+       "S_FILL IS counted as UNOWNED -- the detector fires, so the zero "
+       "above is a measurement and not a counter that cannot count");
+    ck(dut.beats_read == beats_before,
+       "and it is NOT counted as a read beat: an unowned word is a fault, "
+       "not payload");
+  }
+
   if (g_fail != 0) {
     std::printf("[assetfetch_rtl_directed] %d of %d checks FAILED\n", g_fail, g_checks);
     zhao::exit_hard(1);

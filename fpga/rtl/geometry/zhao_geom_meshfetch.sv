@@ -41,39 +41,25 @@
 // SMALL bound, and small deletes geometry.
 //
 // ---------------------------------------------------------------------------
-// THIS BLOCK CANNOT PASS MEM.GUARD TODAY, AND THE GUARD IS RIGHT
+// ONE FROZEN 64-BYTE DESCRIPTOR, THROUGH THE SHARED ENGINE1 CLIENT
 // ---------------------------------------------------------------------------
-// `zhao_mem_guard.sv`'s client case is, in full:
+// The owner ruling freezes a descriptor at 64 bytes, 64-byte aligned. This
+// block therefore issues `len = 64`, stores EIGHT packed 64-bit words, and
+// validates the CRC over bytes 0..59. A 32-byte request is not a compact form of
+// this descriptor: it omits generation, mesh id, reserved bytes and the CRC.
+// ENFORCED-BY: tests/geometry/geom_meshfetch_rtl_directed.cpp:main
 //
-//     ZHAO_CLIENT_SCANOUT:  read, inside the framebuffer slots
-//     ZHAO_CLIENT_BLIT_DMA: write, inside the granted slot
-//     ZHAO_CLIENT_ENGINE0:  write, inside the granted slot
-//     default:              pass_ok = 1'b0    -- "ENGINE1 and DEBUG own nothing"
+// The original header said no asset region or admissible client existed. That
+// was true when the block was written and is no longer true. `memory_rules.md`
+// §5f now allocates `GEOM.ASSET_POOL` to ENGINE1. There is still only ONE
+// physical ENGINE1 slot, so MESHFETCH and ASSETFETCH share it through
+// `zhao_geom_mem_adapter`; adding a second physical client would violate the
+// arbiter's positional client identity.
 //
-// Every region it knows is a FRAMEBUFFER region. A meshlet descriptor lives in
-// asset memory, so there is no client identity under which this read is
-// admitted -- the request below is correctly formed and would be denied.
-//
-// AND THAT IS CORRECT BEHAVIOUR, not a gap. `spec/memory_rules.md` §5 says so
-// in as many words:
-//
-//     Phase 2 allocates exactly [the two FB regions] ... Later phases extend
-//     the map (texture/terrain/particle pools per the charter allocator);
-//     Phase 2 ships ONLY the two FB regions -- everything else is a violation
-//     by construction.
-//
-// So the guard is doing exactly what it was specified to do, and this block
-// needs the PHASE-3 REGION MAP rather than a fix. That the guard admits no
-// region outside the two FB slots is not an assumption made here -- it is
-// proved.
-// ENFORCED-BY: tests/formal/mem_guard_no_escape.sby That distinction decides who
-// owns the next move: extending the map is a charter-allocator decision with a
-// formal proof attached (`tests/formal/mem_guard_no_escape.sby`), not a line
-// this file may add.
-//
-// `j_client_i` is therefore an INPUT -- the caller declares the identity these
-// reads use -- and `guard_denied_o` counts the denial, which makes that counter
-// the measurement for whether the map has been extended yet.
+// `j_client_i` remains an input at this leaf boundary and is captured with the
+// job. At production composition the adapter substitutes the trusted ENGINE1
+// identity and read-only direction before MEM.GUARD. `guard_denied_o` remains a
+// real protocol/region-fault counter, not an expected steady-state path.
 //
 // ENFORCED-BY: tests/geometry/geom_meshfetch_rtl_directed.cpp:main
 `default_nettype none
@@ -97,8 +83,8 @@ module zhao_geom_meshfetch
     input  var logic [15:0]       j_generation_i,    // expected, for stale handles
     input  var logic [1:0]        j_active_mask_i,   // the CALLER drives this
     input  var logic signed [31:0] j_xform_i [12],   // row-major 3x4, fx16
-    // The memory-client identity for the descriptor read. An input because no
-    // existing client owns an asset region -- see the header.
+    // Logical memory-client identity, captured with the job. Production routes
+    // this leaf through zhao_geom_mem_adapter, which substitutes ENGINE1.
     input  var zhao_client_e      j_client_i,
 
     // ---- MEM.GUARD read client ------------------------------------------------
@@ -190,11 +176,9 @@ module zhao_geom_meshfetch
   // verdict 1 cycle after accept". Four clients, two protocols, and the two
   // that were wrong are exactly the two whose memory was played.
   //
-  // HONEST LIMIT: the identical defect is repaired here, but D22 tread 10 only
-  // exercises GEOM.ASSETFETCH against the real guard. GEOM.MESHFETCH has no
-  // client identity the memory law admits yet -- the arbiter tags by slot
-  // index, so slot 3 is ENGINE1 and slot 4 is DEBUG, which owns nothing -- so
-  // this half of the fix is REASONED, not measured.
+  // The leaf repair is exercised against a played guard here. Production now
+  // has the ENGINE1 asset-pool ruling and the shared logical-owner adapter; the
+  // later composition test must exercise this same verdict timing end to end.
   typedef enum logic [2:0] {
     S_IDLE, S_REQ, S_VERD, S_FILL, S_BOUND, S_CULL, S_WAIT, S_EMIT
   } state_e;
@@ -389,10 +373,8 @@ module zhao_geom_meshfetch
 
         S_VERD: begin
           // A guard denial is not a descriptor fault: nothing was read, so
-          // there is nothing to refuse. The job ends and is counted as its own
-          // kind of failure. Today EVERY read lands here -- the guard owns no
-          // asset region, see the header -- so this counter is also the
-          // measurement that says whether that gap has been closed.
+          // there is nothing to refuse. It remains separately attributable to
+          // a bad logical request or production composition error.
           if (guard_rsp_i.ok) begin
             st_q <= S_FILL;
           end else if (guard_rsp_i.violation) begin

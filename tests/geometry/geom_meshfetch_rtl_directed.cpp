@@ -11,7 +11,9 @@
 //   * the WORLD BOUND it presents to the cull service, centre and radius, EXACT
 //     -- this is the arithmetic the block owns and the only place its widths
 //     can disagree with the oracle's `int64_t`;
-//   * the fields it carries through unchanged.
+//   * the fields it carries through unchanged;
+//   * the frozen descriptor request is 64 bytes/eight words. A recovery brief
+//     called it 32 bytes, but bytes 32..63 hold required schema and CRC data.
 //
 // The testbench PLAYS the cull service rather than instantiating
 // `zhao_geom_cull`, which is deliberate: that block has its own differential
@@ -71,12 +73,14 @@ struct Desc {
 // `zhao_guard_req_t` is {valid, write, client[2:0], addr[26:0], len[6:0],
 // be[63:0]} = 103 bits, so Verilator hands it over as a VlWide<4> and the
 // fields have to be picked out by position. `valid` is the MSB, bit 102, which
-// lives at offset 6 of word 3.
+// lives at offset 6 of word 3; `len` is bits 64..70 at the bottom of word 2.
 bool guard_valid(const Vzhao_geom_meshfetch& t) { return ((t.guard_req_o[3] >> 6) & 1u) != 0u; }
+int guard_len(const Vzhao_geom_meshfetch& t) { return static_cast<int>(t.guard_req_o[2] & 0x7fu); }
 
 // What the RTL presented to the cull port, and what it emitted.
 struct Observed {
   bool saw_cull = false;
+  int request_len = -1;
   int32_t cx = 0, cy = 0, cz = 0;
   uint32_t radius = 0;
   bool emitted = false;
@@ -134,6 +138,7 @@ Observed run(Vzhao_geom_meshfetch& t, const Desc& d, const MF::InstanceXform& x,
 
   for (int c = 0; c < 200 && !done; ++c) {
     if (guard_valid(t) && !accepted) {
+      o.request_len = guard_len(t);
       t.guard_rsp_i = 0b100;              // ready, no verdict yet
     } else if (accepted && !granted) {
       t.guard_rsp_i = 0b010;              // ok, one cycle later
@@ -226,7 +231,7 @@ int main(int argc, char** argv) {
   // because the oracle does; if either narrowed, the two would part company on
   // large coordinates and nowhere else.
   {
-    int bad = 0, compared = 0;
+    int bad = 0, bad_len = 0, compared = 0;
     const MF::InstanceXform xs[4] = {
         xform(ONE, ONE, ONE, 0),
         xform(3 * ONE, ONE, 2 * ONE, 7 * ONE),
@@ -259,6 +264,7 @@ int main(int argc, char** argv) {
       v.reject = false;
       const Observed o = run(top, d, x, 0b01, v);
       ++compared;
+      if (o.request_len != static_cast<int>(mf::kDescBytes)) ++bad_len;
       if (!o.saw_cull || o.cx != wc[0] || o.cy != wc[1] || o.cz != wc[2] || o.radius != wr) {
         if (bad < 3)
           std::printf("    rtl (%d,%d,%d) r=%u   oracle (%d,%d,%d) r=%u\n", o.cx, o.cy, o.cz,
@@ -267,6 +273,10 @@ int main(int argc, char** argv) {
       }
     }
     zhao::check(compared == 5, "every transform reached the cull port", 5, compared);
+    zhao::check(bad_len == 0,
+                "every descriptor request is the frozen 64 bytes/eight words -- "
+                "never the recovery brief's stale 32-byte shorthand",
+                0, bad_len);
     zhao::check(bad == 0,
                 "the world bound the RTL presents to the cull service is the "
                 "oracle's, centre and radius, EXACTLY -- including the 64x case "
