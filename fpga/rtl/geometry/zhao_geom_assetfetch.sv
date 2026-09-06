@@ -26,15 +26,13 @@
 // open; a demand-miss stream re-opens rows in an order nobody chose.
 //
 // ---------------------------------------------------------------------------
-// SINGLE BUFFERED, ON PURPOSE, FOR NOW
+// COMPACT SINGLE-BANK CHECKPOINT, ON PURPOSE
 // ---------------------------------------------------------------------------
-// The contract describes double buffering, and this block does not implement
-// it. That is deliberate rather than unfinished: double buffering is an
-// OPTIMISATION whose value is currently unmeasured, and `prefetch_stall_o` is
-// the counter that will say whether it is worth its ~2.4 KB. Building it first
-// and measuring afterwards is how a wrong number becomes an unadjustable wrong
-// number. The buffers are sized and indexed so the second bank is a parameter
-// change, not a rewrite.
+// The owner recovery brief's WP6 orders this migration: prove compact
+// single-bank bytes first, then add two banks/lookahead/readers/release. This
+// checkpoint keeps the old reader timing and one-fill-engine law while removing
+// fetched-line padding from payload RAM. The next checkpoint may add bank
+// identity; it must not hide a compaction error inside simultaneous overlap.
 `default_nettype none
 
 module zhao_geom_assetfetch
@@ -146,8 +144,16 @@ module zhao_geom_assetfetch
   localparam int unsigned VX_MAX_BOFF = LINE_BYTES - VX_ALIGN;   // 32
   localparam int unsigned IX_LINES = (IX_MAX_BOFF + IX_MAX_BYTES + LINE_BYTES - 1) / LINE_BYTES;
   localparam int unsigned VX_LINES = (VX_MAX_BOFF + VX_MAX_BYTES + LINE_BYTES - 1) / LINE_BYTES;
-  localparam int unsigned IX_WORDS = IX_LINES * LINE_WORDS;
-  localparam int unsigned VX_WORDS = VX_LINES * LINE_WORDS;
+
+  // The fetch still covers whole aligned lines, but the RAM stores only useful
+  // words from local offset zero (owner recovery brief section 10.2). Keep 64
+  // index words even though the default format needs 48: the spare adjacent word
+  // makes every two-word triplet read bounded and gives the later banked address
+  // a clean six-bit local field. Raising a format limit still grows the array.
+  localparam int unsigned IX_COMPACT_WORDS = (IX_MAX_BYTES + 7) / 8;
+  localparam int unsigned VX_COMPACT_WORDS = (VX_MAX_BYTES + 7) / 8;
+  localparam int unsigned IX_WORDS = (IX_COMPACT_WORDS < 64) ? 64 : IX_COMPACT_WORDS;
+  localparam int unsigned VX_WORDS = VX_COMPACT_WORDS;
 
   localparam int unsigned IXAW = $clog2(IX_WORDS);
   localparam int unsigned VXAW = $clog2(VX_WORDS);
@@ -182,6 +188,10 @@ module zhao_geom_assetfetch
   logic [ZHAO_VRAM_ADDR_BITS-1:0] ix_line0_q, vx_line0_q;
   logic [5:0]                     ix_boff_q,  vx_boff_q;
   logic [7:0]                     ix_nlines_q, vx_nlines_q;
+  // Exact useful length survives line rounding. Index bytes can end partway
+  // through the last stored word; transferred suffix bytes never become indices.
+  logic [9:0]                     ix_nbytes_q;
+  logic [9:0]                     vx_nwords_q;
 
   // --------------------------------------------------- admission (comb) ----
   // Exactly zref::assetfetch::plan, in the same ORDER, because the taxonomy's
@@ -236,9 +246,11 @@ module zhao_geom_assetfetch
   endfunction
 
   // ------------------------------------------------------------ storage ----
-  // Two copies of the index buffer so a triplet's two words are read in ONE
-  // cycle. It is 56 x 64 bits = 3,584 -- an MLAB apiece -- so duplicating it
-  // is cheaper than the state machine that would read the same RAM twice.
+  // Two copies of the compact index buffer so a triplet's two words are read in
+  // ONE cycle. The default format uses 48 useful words and allocates 64 per copy
+  // for bounded adjacent reads and the later bank/address concatenation.
+  // Vertices occupy exactly 256 useful words. Whole fetched-line prefixes and
+  // suffixes never consume payload RAM.
   logic [63:0] ix_ram_a [0:IX_WORDS-1];
   logic [63:0] ix_ram_b [0:IX_WORDS-1];
   logic [63:0] vx_ram   [0:VX_WORDS-1];
@@ -333,17 +345,39 @@ module zhao_geom_assetfetch
   assign guard_req_o.len    = 7'd64;
   assign guard_req_o.be     = {64{1'b1}};
 
-  // ------------------------------------------------- the write addresses ---
+  // ------------------------------------------------- compact write address --
+  // `fill_word_c` is the word within the fetched whole-line run. Both permitted
+  // stream alignments are word aligned, so compaction is subtraction, not a byte
+  // funnel: discard prefix/suffix words and write useful words from RAM offset 0.
+  logic [10:0] fill_word_c, fill_first_c, fill_count_c, fill_rel_c;
+  logic [9:0]  ix_nwords_c;
+  logic        fill_keep_c;
+
+  always_comb begin
+    fill_word_c = {line_q, beat_q};
+    ix_nwords_c = (ix_nbytes_q + 10'd7) >> 3;
+    if (phase_q) begin
+      fill_first_c = {8'd0, vx_boff_q[5:3]};
+      fill_count_c = 11'(vx_nwords_q);
+    end else begin
+      fill_first_c = {8'd0, ix_boff_q[5:3]};
+      fill_count_c = 11'(ix_nwords_c);
+    end
+    fill_rel_c  = fill_word_c - fill_first_c;
+    fill_keep_c = (fill_word_c >= fill_first_c)
+               && (fill_word_c < fill_first_c + fill_count_c);
+  end
+
   assign wdata = beat_data_i;
-  assign ix_we = (st_q == S_FILL) && !phase_q && beat_valid_i;
-  assign vx_we = (st_q == S_FILL) &&  phase_q && beat_valid_i;
-  assign ix_wa = IXAW'({line_q[IXAW-4:0], beat_q});
-  assign vx_wa = VXAW'({line_q[VXAW-4:0], beat_q});
+  assign ix_we = (st_q == S_FILL) && !phase_q && beat_valid_i && fill_keep_c;
+  assign vx_we = (st_q == S_FILL) &&  phase_q && beat_valid_i && fill_keep_c;
+  assign ix_wa = IXAW'(fill_rel_c);
+  assign vx_wa = VXAW'(fill_rel_c);
 
   // ------------------------------------------------- the index service -----
-  // Triplet n lives at byte ix_boff + 3n. The offset is 8-aligned and the pool
-  // base is 64-aligned, so the WORD is (ix_boff + 3n) >> 3 -- but the three
-  // bytes may straddle into the next word, which is why two are read.
+  // Triplet n lives at compact byte 3n. Whole-line prefixes were discarded
+  // during fill, so every admitted index stream starts at RAM word zero. The
+  // three bytes may straddle into the next word, which is why two are read.
   logic [15:0] ix_byte_c;
   logic [8:0]  ix_index_q;
   logic [2:0]  ix_sel_q;
@@ -357,7 +391,7 @@ module zhao_geom_assetfetch
   // current one-cycle consumer, but becomes a queue-corrupting duplicate as soon
   // as banked readers add latency (owner recovery brief section 14.1).
   always_comb begin
-    ix_byte_c = 16'(ix_boff_q) + 16'(ix_index_q) * 16'(IX_PER_TRI);
+    ix_byte_c = 16'(ix_index_q) * 16'(IX_PER_TRI);
     ix_ra     = IXAW'(ix_byte_c[15:3]);
     ix_rb     = IXAW'(ix_byte_c[15:3] + 13'd1);
   end
@@ -375,9 +409,8 @@ module zhao_geom_assetfetch
   assign ix_valid_o = ix_pend_q;
 
   // ------------------------------------------------ the vertex stream ------
-  // A record is 32-byte aligned inside a 64-byte-aligned pool, so it is FOUR
-  // consecutive words and never five. That is the whole reason the alignment
-  // refusal exists (contract, "Alignment").
+  // A record is 32 bytes = four compact words. Its whole-line prefix was
+  // discarded during fill, so vertex zero begins at RAM word zero.
   logic [7:0]   v_ix_q;        // which vertex
   logic [1:0]   v_word_q;      // which of its four words
   logic [255:0] v_acc_q;
@@ -386,7 +419,7 @@ module zhao_geom_assetfetch
 
   logic [15:0] v_byte_c;
   always_comb begin
-    v_byte_c = 16'(vx_boff_q) + 16'(v_ix_q) * 16'(VX_BYTES);
+    v_byte_c = 16'(v_ix_q) * 16'(VX_BYTES);
     vx_ra    = VXAW'(v_byte_c[15:3] + 13'(v_word_q));
   end
 
@@ -430,6 +463,8 @@ module zhao_geom_assetfetch
       vx_boff_q   <= '0;
       ix_nlines_q <= '0;
       vx_nlines_q <= '0;
+      ix_nbytes_q <= '0;
+      vx_nwords_q <= '0;
       meshlets_fetched_o  <= '0;
       beats_read_o        <= '0;
       guard_denied_o      <= '0;
@@ -491,6 +526,8 @@ module zhao_geom_assetfetch
             vx_boff_q   <= vx_abs_c[5:0];
             ix_nlines_q <= lines_of(ix_abs_c[5:0], ix_bytes_c);
             vx_nlines_q <= lines_of(vx_abs_c[5:0], vx_bytes_c);
+            ix_nbytes_q <= 10'(ix_bytes_c);
+            vx_nwords_q <= 10'(vx_bytes_c >> 3);
             phase_q     <= 1'b0;
             line_q      <= '0;
             beat_q      <= '0;

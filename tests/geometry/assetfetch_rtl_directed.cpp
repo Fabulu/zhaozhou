@@ -443,8 +443,31 @@ int main(int argc, char** argv) {
   // ruling permits and the buffer must handle.
   serve_case(s, 32, 4104, 7, 9, "vertex at byte 32, index at byte 8");
 
-  // The ruling maximum, which is also the buffer's worst case.
-  serve_case(s, 64, 8192, 64, 126, "the ruling maximum");
+  // COMPACT SINGLE-BANK COVERAGE. Index streams have eight legal whole-word
+  // prefixes inside a fetched line and vertices have two. Sweep the cross product
+  // with 17..24 triangles: besides every prefix, 3*count covers every possible
+  // final-word byte remainder. Exact served bytes therefore distinguish compact
+  // address zero from the old raw-line location at both reader ports.
+  for (int vp = 0; vp < 2; ++vp) {
+    for (int ip = 0; ip < 8; ++ip) {
+      char label[128];
+      std::snprintf(label, sizeof label,
+                    "compact vertex prefix %d, index prefix %d, tail %d",
+                    vp * 32, ip * 8, (3 * (17 + ip)) & 7);
+      serve_case(s, static_cast<uint32_t>(vp * 32),
+                 16384u + static_cast<uint32_t>(ip * 8), 3, 17 + ip,
+                 label);
+    }
+  }
+
+  // The ruling maximum when both streams are line aligned: 38 lines.
+  serve_case(s, 64, 8192, 64, 126, "the aligned ruling maximum");
+
+  // Worst allowed prefixes make the same useful payload cover 7+33=40 lines.
+  // The compact RAM remains only 48 meaningful index words and 256 vertex words.
+  serve_case(s, 32, 32768 + 56, 64, 126, "the 40-line ruling maximum");
+  ck(s.g.asked.size() == 40,
+     "the maximum legal prefix fixture really fetched all 40 whole lines");
 
   // Degenerate but legal: no triangles, so the index stream is never read.
   serve_case(s, 96, 8192, 3, 0, "no triangles");
