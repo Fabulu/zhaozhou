@@ -5232,6 +5232,27 @@ verilate(test_shell_indexfetch_path_directed
 add_test(NAME shell_indexfetch_path_directed COMMAND test_shell_indexfetch_path_directed)
 set_tests_properties(shell_indexfetch_path_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1200)
 
+# D22 tread 10: the geometry fetch reads REAL memory through the shell's own
+# guard, arbiter and SDRAM controller. Two full frames through a cycle-accurate
+# DRAM model, so it is nightly rather than fast.
+add_executable(test_shell_realmem_path_directed shell/shell_realmem_path_directed.cpp)
+target_link_libraries(test_shell_realmem_path_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_shell_realmem_path_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/shell
+  ${CMAKE_CURRENT_SOURCE_DIR}/geometry
+  ${CMAKE_SOURCE_DIR}/reference/src)
+verilate(test_shell_realmem_path_directed
+  PREFIX Vtb_zhao_shell TOP_MODULE tb_zhao_shell
+  INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/fpga/rtl/common
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/generated
+               ${CMAKE_SOURCE_DIR}/fpga/rtl/memory
+               ${CMAKE_SOURCE_DIR}/sim/models
+  SOURCES ${ZHAO_SHELL_RTL}
+          ${CMAKE_SOURCE_DIR}/sim/models/zhao_sdram_model.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/shell/tb_zhao_shell.sv)
+add_test(NAME shell_realmem_path_directed COMMAND test_shell_realmem_path_directed)
+set_tests_properties(shell_realmem_path_directed PROPERTIES LABELS "nightly" TIMEOUT 2400)
+
 add_executable(test_shell_project_path_directed shell/shell_project_path_directed.cpp)
 target_link_libraries(test_shell_project_path_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_shell_project_path_directed PRIVATE

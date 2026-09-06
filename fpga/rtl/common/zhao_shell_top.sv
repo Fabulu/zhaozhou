@@ -236,6 +236,32 @@ module zhao_shell_top
 
   input  logic               render_tri_valid_i,
   output logic               render_tri_ready_o,
+  // ---- D22 TREAD 10: the geometry memory clients -----------------------------
+  // The last thing the bench still PLAYED was memory itself. Every earlier
+  // tread took something the bench supplied and gave it to a composed block;
+  // GEOM.MESHFETCH and GEOM.ASSETFETCH still had their guard grants answered
+  // and their beats fabricated by hand, so the whole staircase rested on a
+  // memory that granted immediately and answered in one cycle.
+  //
+  // These two ports put those fetchers behind the REAL MEM.GUARD and
+  // VRAM.ARBITER that this shell already instantiates, on the arbiter's two
+  // previously unused client slots. The bench keeps the fetchers -- relocating
+  // them into production is a separate concern and is recorded as such -- but
+  // it stops inventing the answers.
+  //
+  // Contention is the point. Everything measured in treads 6 through 9 assumed
+  // a memory that never says no, and `prefetch_stall_o` was connected before
+  // this tread precisely so its uncontended reading (27) exists to compare
+  // against.
+  input  var zhao_guard_req_t geom_guard_req_i,
+  output var zhao_guard_rsp_t geom_guard_rsp_o,
+  // ...and the beats coming back. Until this tread the shell had ONE reader,
+  // so read data was wired straight to the scanout packer. Now it has two, and
+  // which one a returning word belongs to is a fact that has to be tracked
+  // rather than assumed.
+  output var logic            geom_beat_valid_o,
+  output var logic [63:0]     geom_beat_data_o,
+  output var logic            geom_beat_last_o,
   input  logic signed [22:0] render_kx0_i, render_ky0_i,
   input  logic signed [47:0] render_kc0_i,
   input  logic signed [22:0] render_kx1_i, render_ky1_i,
@@ -689,7 +715,10 @@ module zhao_shell_top
   // All THREE guards now: scanout, the blit, and the render engine. A render
   // write outside the leased slot is a violation like any other and must not be
   // invisible in the shell's own counter.
-  assign guard_violations_o = scan_gv_cnt + blit_gv_cnt + render_gv_cnt;
+  // The geometry guard's violations are ADDED, not left out. A guard whose
+  // refusals are not totalled is a guard nobody reads.
+  assign guard_violations_o =
+      scan_gv_cnt + blit_gv_cnt + render_gv_cnt + geom_gv_cnt;
 
   // ---- GLUE 10: the blit pacer -------------------------------------------
   // Even with the FB-slot bank split (which removed the single-bank row
@@ -849,7 +878,50 @@ module zhao_shell_top
   );
 
   assign client_req[2] = render_arb_req;
-  assign client_req[3] = '0;
+  // D22 TREAD 10. Slot 3 was tied to '0 and is now the geometry fetch path to
+  // real memory, through the real guard -- the same block the scanout and blit
+  // clients use, not a second copy of its rules.
+  //
+  // ONE geometry client, not two, and the reason is not a simplification.
+  // `zhao_vram_arbiter` builds the controller's client tag by CASTING THE SLOT
+  // INDEX: `ctrl_req.client = zhao_client_e'(offer_client)`. So slot 3 IS
+  // ENGINE1 and slot 4 IS DEBUG -- positional, not configurable. And
+  // `zhao_mem_guard` grants the asset-pool window to ENGINE1 alone; DEBUG
+  // falls to `default: pass_ok = 1'b0` and "still owns nothing".
+  //
+  // A second geometry fetcher therefore has NO LEGAL MEMORY IDENTITY today. It
+  // is not that wiring it is hard: there is no client enum it could present
+  // that both the guard admits and the arbiter would carry. GEOM.MESHFETCH and
+  // GEOM.ASSETFETCH sharing ENGINE1 through one guard, or the memory law
+  // allocating a second geometry client, is a decision for the memory rules --
+  // recorded here rather than fudged by putting a fetcher on a slot that will
+  // be relabelled DEBUG one level down and refused.
+  zhao_arb_req_t geom_arb_req;
+  logic          geom_gv;
+  logic [31:0]   geom_gv_cnt;
+  zhao_guard_req_t geom_gv_req;
+
+  zhao_mem_guard u_guard_geom (
+    .clk        (gpu_clk),
+    .rst_n      (rst_n),
+    .req        (geom_guard_req_i),
+    .rsp        (geom_guard_rsp_o),
+    .map_valid  (1'b0),
+    .blit_slot  (1'b0),
+    .blit_span  (32'd0),
+    // The geometry fetchers READ the Phase-3 asset pool and never write, so
+    // the framebuffer lease owner cannot reach its verdict -- same reasoning
+    // as the scanout guard above.
+    .fb_writer  (1'b0),
+    .arb_req    (geom_arb_req),
+    .arb_rsp    (client_rsp[3]),
+    .guard_violation     (geom_gv),
+    .guard_violations    (geom_gv_cnt),
+    .guard_violation_req (geom_gv_req)
+  );
+
+  assign client_req[3] = geom_arb_req;
+  // Slot 4 stays tied off: it is DEBUG by position, and DEBUG owns nothing.
   assign client_req[4] = '0;
 
 
@@ -928,24 +1000,66 @@ module zhao_shell_top
   assign render_wready = fbw_wready;
   assign shell_err_wfifo_o = wf_err;
 
-  // read-beat packer (glue 2): 4 rdata words -> one 64-bit scanout beat
+  // read-beat packer (glue 2): 4 rdata words -> one 64-bit beat
+  //
+  // D22 TREAD 10 added a SECOND destination. The packer itself is unchanged --
+  // one burst is in flight at a time (`zhao_sdram_ctrl` is strictly in-order,
+  // one burst deep) and a burst is at most 8 words, exactly two whole groups of
+  // four, so a group never straddles two bursts and never two owners. What is
+  // new is that the packed beat is now ROUTED.
+  //
+  // The owner is captured at GRANT, not derived from the returning word: the
+  // word carries no tag, and inferring the owner from the address would be
+  // reconstructing at the far end something that was known for free at the
+  // near one.
   logic [15:0] ctrl_rdata;
   logic        ctrl_rdata_valid;
   logic [47:0] pack_lo;
   logic [1:0]  pack_cnt;
+
+  logic rd_owner_geom_r;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) rd_owner_geom_r <= 1'b0;
+    else if (ctrl_rsp.grant && !ctrl_req.write)
+      rd_owner_geom_r <= (ctrl_req.client == ZHAO_CLIENT_ENGINE1);
+  end
+
+  logic        packed_valid;
+  logic [63:0] packed_data;
+
+  // Beat position WITHIN the guard request, so `last` marks the end of the
+  // 64-byte line the fetcher asked for rather than the end of an arbiter
+  // burst. The fetcher counts eight beats per line; the arbiter splits that
+  // line into four 8-word bursts, and it must not see four `last` pulses.
+  logic [2:0] geom_beat_cnt_r;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) geom_beat_cnt_r <= 3'd0;
+    // The reset is the guard HANDSHAKE, not `ready && ok`. Those two never
+    // coincide: `rsp.ready` is the LEVEL `!fwd_active`, and `rsp.ok` pulses
+    // one cycle AFTER the accept, by which time the request is forwarded and
+    // ready has already dropped. A condition that cannot be true is a reset
+    // that never happens.
+    else if (geom_guard_req_i.valid && geom_guard_rsp_o.ready) geom_beat_cnt_r <= 3'd0;
+    else if (geom_beat_valid_o) geom_beat_cnt_r <= geom_beat_cnt_r + 3'd1;
+  end
+
+  assign geom_beat_valid_o = packed_valid && rd_owner_geom_r;
+  assign geom_beat_data_o  = packed_data;
+  assign geom_beat_last_o  = geom_beat_valid_o && (geom_beat_cnt_r == 3'd7);
+
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
-      pack_lo         <= '0;
-      pack_cnt        <= 2'd0;
-      scan_beat_valid <= 1'b0;
-      scan_beat_data  <= '0;
+      pack_lo      <= '0;
+      pack_cnt     <= 2'd0;
+      packed_valid <= 1'b0;
+      packed_data  <= '0;
     end else begin
-      scan_beat_valid <= 1'b0;
+      packed_valid <= 1'b0;
       if (ctrl_rdata_valid) begin
         if (pack_cnt == 2'd3) begin
-          scan_beat_data  <= {ctrl_rdata, pack_lo};
-          scan_beat_valid <= 1'b1;
-          pack_cnt        <= 2'd0;
+          packed_data  <= {ctrl_rdata, pack_lo};
+          packed_valid <= 1'b1;
+          pack_cnt     <= 2'd0;
         end else begin
           pack_lo[16*pack_cnt +: 16] <= ctrl_rdata;
           pack_cnt                   <= pack_cnt + 2'd1;
@@ -953,6 +1067,9 @@ module zhao_shell_top
       end
     end
   end
+
+  assign scan_beat_valid = packed_valid && !rd_owner_geom_r;
+  assign scan_beat_data  = packed_data;
 
   // burst-owner tracking (integrity tripwire, glue 2): reads must be
   // scanout's, writes must be THE CURRENT FRAMEBUFFER-WRITE LEASE HOLDER'S --
@@ -979,7 +1096,14 @@ module zhao_shell_top
     end else if (ctrl_rsp.grant) begin
       if (ctrl_req.write  && (ctrl_req.client != expected_writer))
         route_err <= 1'b1;
-      if (!ctrl_req.write && (ctrl_req.client != ZHAO_CLIENT_SCANOUT))
+      // TREAD 10: reads may now be SCANOUT'S OR ENGINE1'S. This is the same
+      // mistake the write side already made once and is documented above --
+      // the guard was taught a new legal client and the tripwire below it was
+      // not, so every legal burst raised the shell's own corruption alarm.
+      // Widened DELIBERATELY and no further: ENGINE1 is the one identity
+      // `zhao_mem_guard` grants the asset-pool window to.
+      if (!ctrl_req.write && (ctrl_req.client != ZHAO_CLIENT_SCANOUT)
+                          && (ctrl_req.client != ZHAO_CLIENT_ENGINE1))
         route_err <= 1'b1;
     end
   end

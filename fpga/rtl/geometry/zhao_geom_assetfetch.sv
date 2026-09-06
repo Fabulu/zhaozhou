@@ -222,10 +222,42 @@ module zhao_geom_assetfetch
     vx_q  <= vx_ram[vx_ra];
   end
 
+  // ------------------------------------------------------------------------
+  // THE GUARD'S VERDICT ARRIVES ONE CYCLE AFTER THE ACCEPT (found by D22
+  // tread 10, 2026-09-06)
+  //
+  // This block used to require `guard_rsp_i.ready && guard_rsp_i.ok` IN ONE
+  // CYCLE. Against `zhao_mem_guard` that condition can never be true:
+  //
+  //     rsp.ready = !fwd_active;      // a LEVEL: "the forwarding stage is free"
+  //     rsp_ok_q  <= 1'b1;            // a PULSE, the cycle AFTER the accept
+  //
+  // and the accept is what sets `fwd_active`. So at the accepting cycle ready
+  // is 1 and ok is 0; at the verdict cycle ok is 1 and ready is 0. A passing
+  // request therefore looked like a DENIAL with no violation flag -- silently,
+  // with `guard_denied_o` staying at zero, because the guard only raises
+  // `violation` when it actually refuses.
+  //
+  // It went unseen because every bench PLAYED the guard, and a played
+  // responder answers ready and ok together. That is precisely the class of
+  // fault D22's staircase exists to find: the harness modelled a protocol the
+  // real block does not implement, and everything measured against it agreed.
+  //
+  // S_VERD is the accepting cycle's successor. The request drops when it is
+  // entered -- the guard has already latched it -- and exactly one of ok and
+  // violation pulses there.
+  //
+  // THIS IS A DIVERGENCE, NOT AN AMBIGUITY. Two other guard clients already
+  // had it right and had it NAMED: `zhao_raster_fbwrite` waits in `W_VERD`
+  // and `zhao_debug_frameblit` in `B_GUARD_VERDICT`, and fbwrite's header
+  // even quotes the guard line -- "zhao_mem_guard.sv:186  rsp.ok = rsp_ok_q;
+  // verdict 1 cycle after accept". Four clients, two protocols, and the two
+  // that were wrong are exactly the two whose memory was played.
   // ---------------------------------------------------------------- FSM ----
   typedef enum logic [2:0] {
     S_IDLE   = 3'd0,
     S_REQ    = 3'd1,   // one aligned 64-byte line offered to the guard
+    S_VERD   = 3'd5,   // the guard's verdict, one cycle after it accepted
     S_FILL   = 3'd2,   // its eight beats
     S_HAND   = 3'd3,   // present the buffered meshlet downstream
     S_SERVE  = 3'd4    // answer triplets, stream vertices, await release
@@ -360,7 +392,8 @@ module zhao_geom_assetfetch
       // Every cycle a consumer waits on a buffer that is still filling. This is
       // the measurement that decides whether double buffering is worth ~2.4 KB,
       // rather than the assumption that it is.
-      if ((st_q == S_REQ || st_q == S_FILL) && (ix_req_i || v_ready_i)) begin
+      if ((st_q == S_REQ || st_q == S_VERD || st_q == S_FILL) &&
+          (ix_req_i || v_ready_i)) begin
         prefetch_stall_o <= prefetch_stall_o + 32'd1;
       end
 
@@ -403,18 +436,24 @@ module zhao_geom_assetfetch
               st_q <= S_HAND;
             end
           end else if (guard_rsp_i.ready) begin
-            if (guard_rsp_i.ok) begin
-              beat_q <= '0;
-              st_q   <= S_FILL;
-            end else begin
-              // A denial is not an asset fault: nothing was read, so there is
-              // nothing to refuse. The job ends and is counted as its own kind
-              // of failure -- and this counter is the one that says whether the
-              // Phase-3 region is reaching this block at all.
-              if (guard_rsp_i.violation) guard_denied_o <= guard_denied_o + 32'd1;
-              st_q <= S_IDLE;
-            end
+            st_q <= S_VERD;   // accepted; the verdict is the NEXT cycle
           end
+        end
+
+        S_VERD: begin
+          if (guard_rsp_i.ok) begin
+            beat_q <= '0;
+            st_q   <= S_FILL;
+          end else if (guard_rsp_i.violation) begin
+            // A denial is not an asset fault: nothing was read, so there is
+            // nothing to refuse. The job ends and is counted as its own kind
+            // of failure -- and this counter is the one that says whether the
+            // Phase-3 region is reaching this block at all.
+            guard_denied_o <= guard_denied_o + 32'd1;
+            st_q           <= S_IDLE;
+          end
+          // Neither yet: the guard has not answered. WAIT rather than assume a
+          // denial -- reading silence as refusal is the bug this state fixes.
         end
 
         S_FILL: if (beat_valid_i) begin

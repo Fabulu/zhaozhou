@@ -3122,6 +3122,10 @@ module zhao_prod_top (
   logic [1-1:0] u47_shell_err_cdc_o;
   logic [1-1:0] u47_shell_err_framer_o;
   logic [1-1:0] u47_render_tri_ready_o;
+  logic [1-1:0] u47_zhao_guard_rsp_t;
+  logic [1-1:0] u47_geom_beat_valid_o;
+  logic [64-1:0] u47_geom_beat_data_o;
+  logic [1-1:0] u47_geom_beat_last_o;
   logic [1-1:0] u47_render_drain_done_o;
   logic [1-1:0] u47_render_busy_o;
   logic [32-1:0] u47_render_pixels_o;
@@ -3240,37 +3244,42 @@ module zhao_prod_top (
       .render_grid_h_i(u47_src[140 +: 6]),
       .render_tri_valid_i(u47_src[147 +: 1]),
       .render_tri_ready_o(u47_render_tri_ready_o),
-      .render_kx0_i(u47_src[154 +: 23]),
-      .render_ky0_i(u47_src[161 +: 1]),
-      .render_kc0_i(u47_src[168 +: 48]),
-      .render_kx1_i(u47_src[175 +: 23]),
-      .render_ky1_i(u47_src[182 +: 1]),
-      .render_kc1_i(u47_src[189 +: 48]),
-      .render_kx2_i(u47_src[196 +: 23]),
-      .render_ky2_i(u47_src[203 +: 1]),
-      .render_kc2_i(u47_src[210 +: 48]),
-      .render_tl_i(u47_src[217 +: 3]),
-      .render_ax_i(u47_src[224 +: 21]),
-      .render_ay_i(u47_src[231 +: 1]),
-      .render_bx_i(u47_src[238 +: 21]),
-      .render_by_i(u47_src[245 +: 1]),
-      .render_cx_i(u47_src[252 +: 21]),
-      .render_cy_i(u47_src[259 +: 1]),
-      .render_min_x_i(u47_src[266 +: 12]),
-      .render_max_x_i(u47_src[273 +: 1]),
-      .render_min_y_i(u47_src[280 +: 12]),
-      .render_max_y_i(u47_src[287 +: 1]),
-      .render_src_id_i(u47_src[294 +: 16]),
-      .render_fill_word_i(u47_src[301 +: 64]),
-      .render_clear_word_i(u47_src[308 +: 64]),
-      .render_state_i(u47_src[315 +: 32]),
-      .render_src_a_i(u47_src[322 +: 8]),
-      .render_texel_rgb_i(u47_src[329 +: 24]),
-      .render_texel_a_i(u47_src[336 +: 8]),
-      .render_texel_idx_i(u47_src[343 +: 8]),
-      .render_fb_base_i(u47_src[350 +: 27]),
-      .render_fb_stride_i(u47_src[357 +: 16]),
-      .fb_writer_i(u47_src[364 +: 1]),
+      .zhao_guard_req_t(u47_src[154 +: 1]),
+      .zhao_guard_rsp_t(u47_zhao_guard_rsp_t),
+      .geom_beat_valid_o(u47_geom_beat_valid_o),
+      .geom_beat_data_o(u47_geom_beat_data_o),
+      .geom_beat_last_o(u47_geom_beat_last_o),
+      .render_kx0_i(u47_src[161 +: 23]),
+      .render_ky0_i(u47_src[168 +: 1]),
+      .render_kc0_i(u47_src[175 +: 48]),
+      .render_kx1_i(u47_src[182 +: 23]),
+      .render_ky1_i(u47_src[189 +: 1]),
+      .render_kc1_i(u47_src[196 +: 48]),
+      .render_kx2_i(u47_src[203 +: 23]),
+      .render_ky2_i(u47_src[210 +: 1]),
+      .render_kc2_i(u47_src[217 +: 48]),
+      .render_tl_i(u47_src[224 +: 3]),
+      .render_ax_i(u47_src[231 +: 21]),
+      .render_ay_i(u47_src[238 +: 1]),
+      .render_bx_i(u47_src[245 +: 21]),
+      .render_by_i(u47_src[252 +: 1]),
+      .render_cx_i(u47_src[259 +: 21]),
+      .render_cy_i(u47_src[266 +: 1]),
+      .render_min_x_i(u47_src[273 +: 12]),
+      .render_max_x_i(u47_src[280 +: 1]),
+      .render_min_y_i(u47_src[287 +: 12]),
+      .render_max_y_i(u47_src[294 +: 1]),
+      .render_src_id_i(u47_src[301 +: 16]),
+      .render_fill_word_i(u47_src[308 +: 64]),
+      .render_clear_word_i(u47_src[315 +: 64]),
+      .render_state_i(u47_src[322 +: 32]),
+      .render_src_a_i(u47_src[329 +: 8]),
+      .render_texel_rgb_i(u47_src[336 +: 24]),
+      .render_texel_a_i(u47_src[343 +: 8]),
+      .render_texel_idx_i(u47_src[350 +: 8]),
+      .render_fb_base_i(u47_src[357 +: 27]),
+      .render_fb_stride_i(u47_src[364 +: 16]),
+      .fb_writer_i(u47_src[371 +: 1]),
       .render_drain_done_o(u47_render_drain_done_o),
       .render_busy_o(u47_render_busy_o),
       .render_pixels_o(u47_render_pixels_o),
@@ -3291,12 +3300,12 @@ module zhao_prod_top (
       .phy_dq_o(u47_phy_dq_o),
       .phy_dq_oe_o(u47_phy_dq_oe_o),
       .phy_dqm_o(u47_phy_dqm_o),
-      .phy_dq_i(u47_src[371 +: 16])
+      .phy_dq_i(u47_src[378 +: 16])
   );
   logic u47_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u47_fold_q <= 1'b0;
-    else u47_fold_q <= u47_fold_q ^ (^u47_ring_wr_valid_o) ^ (^u47_ring_wr_slot_o) ^ (^u47_ring_wr_state_o) ^ (^u47_hps_req_valid_o) ^ (^u47_hps_req_write_o) ^ (^u47_hps_req_addr_o) ^ (^u47_hps_req_len_o) ^ (^u47_hps_wr_valid_o) ^ (^u47_hps_wr_data_o) ^ (^u47_hps_wr_last_o) ^ (^u47_aud_wr_ready_o) ^ (^u47_aud_refill_req_o) ^ (^u47_aud_occupancy_o) ^ (^u47_pcm_valid_o) ^ (^u47_pcm_l_o) ^ (^u47_pcm_r_o) ^ (^u47_underrun_status_o) ^ (^u47_audio_underruns_o) ^ (^u47_px_valid_o) ^ (^u47_px_rgb_o) ^ (^u47_px_x_o) ^ (^u47_px_y_o) ^ (^u47_px_hsync_o) ^ (^u47_px_vsync_o) ^ (^u47_px_hblank_o) ^ (^u47_px_vblank_o) ^ (^u47_scaler_violation_o) ^ (^u47_crc_frame_o) ^ (^u47_crc_valid_o) ^ (^u47_crc_bytes_o) ^ (^u47_crc_size_err_o) ^ (^u47_gpu_tick_o) ^ (^u47_gpu_tick_frame_id_o) ^ (^u47_gpu_tick_repeated_o) ^ (^u47_gpu_complete_slot_o) ^ (^u47_deadline_faults_o) ^ (^u47_frame_cycles_o) ^ (u47_slot_state_o_fold) ^ (^u47_fence_valid_o) ^ (^u47_fence_slot_o) ^ (^u47_fence_ok_o) ^ (^u47_fence_status_o) ^ (^u47_mode_act_o) ^ (^u47_dma_done_o) ^ (^u47_dma_status_o) ^ (^u47_blit_done_o) ^ (^u47_blit_status_o) ^ (^u47_pad_frame_flat_o) ^ (u47_pad_sequence_o_fold) ^ (^u47_input_gaps_o) ^ (u47_rumble_duty_o_fold) ^ (^u47_rumble_active_o) ^ (^u47_rumble_pwm_o) ^ (^u47_rumble_drops_o) ^ (^u47_cnt_snap_valid_o) ^ (^u47_cnt_snap_id_o) ^ (^u47_cnt_snap_value_o) ^ (^u47_cnt_window_open_o) ^ (^u47_cnt_cat_violation_o) ^ (^u47_guard_violations_o) ^ (^u47_starvation_o) ^ (^u47_init_done_o) ^ (^u47_refresh_stalls_o) ^ (^u47_bank_conflicts_o) ^ (^u47_scanout_preempted_o) ^ (^u47_hps_err_count_o) ^ (^u47_shell_err_wfifo_o) ^ (^u47_shell_err_route_o) ^ (^u47_shell_err_cdc_o) ^ (^u47_shell_err_framer_o) ^ (^u47_render_tri_ready_o) ^ (^u47_render_drain_done_o) ^ (^u47_render_busy_o) ^ (^u47_render_pixels_o) ^ (^u47_render_bursts_o) ^ (^u47_render_stream_error_o) ^ (^u47_render_drained_o) ^ (^u47_render_fatal_o) ^ (^u47_render_issued_words_o) ^ (^u47_render_retired_words_o) ^ (^u47_render_overflow_o) ^ (^u47_render_fragment_error_o) ^ (^u47_phy_cs_n_o) ^ (^u47_phy_ras_n_o) ^ (^u47_phy_cas_n_o) ^ (^u47_phy_we_n_o) ^ (^u47_phy_a_o) ^ (^u47_phy_ba_o) ^ (^u47_phy_dq_o) ^ (^u47_phy_dq_oe_o) ^ (^u47_phy_dqm_o);
+    else u47_fold_q <= u47_fold_q ^ (^u47_ring_wr_valid_o) ^ (^u47_ring_wr_slot_o) ^ (^u47_ring_wr_state_o) ^ (^u47_hps_req_valid_o) ^ (^u47_hps_req_write_o) ^ (^u47_hps_req_addr_o) ^ (^u47_hps_req_len_o) ^ (^u47_hps_wr_valid_o) ^ (^u47_hps_wr_data_o) ^ (^u47_hps_wr_last_o) ^ (^u47_aud_wr_ready_o) ^ (^u47_aud_refill_req_o) ^ (^u47_aud_occupancy_o) ^ (^u47_pcm_valid_o) ^ (^u47_pcm_l_o) ^ (^u47_pcm_r_o) ^ (^u47_underrun_status_o) ^ (^u47_audio_underruns_o) ^ (^u47_px_valid_o) ^ (^u47_px_rgb_o) ^ (^u47_px_x_o) ^ (^u47_px_y_o) ^ (^u47_px_hsync_o) ^ (^u47_px_vsync_o) ^ (^u47_px_hblank_o) ^ (^u47_px_vblank_o) ^ (^u47_scaler_violation_o) ^ (^u47_crc_frame_o) ^ (^u47_crc_valid_o) ^ (^u47_crc_bytes_o) ^ (^u47_crc_size_err_o) ^ (^u47_gpu_tick_o) ^ (^u47_gpu_tick_frame_id_o) ^ (^u47_gpu_tick_repeated_o) ^ (^u47_gpu_complete_slot_o) ^ (^u47_deadline_faults_o) ^ (^u47_frame_cycles_o) ^ (u47_slot_state_o_fold) ^ (^u47_fence_valid_o) ^ (^u47_fence_slot_o) ^ (^u47_fence_ok_o) ^ (^u47_fence_status_o) ^ (^u47_mode_act_o) ^ (^u47_dma_done_o) ^ (^u47_dma_status_o) ^ (^u47_blit_done_o) ^ (^u47_blit_status_o) ^ (^u47_pad_frame_flat_o) ^ (u47_pad_sequence_o_fold) ^ (^u47_input_gaps_o) ^ (u47_rumble_duty_o_fold) ^ (^u47_rumble_active_o) ^ (^u47_rumble_pwm_o) ^ (^u47_rumble_drops_o) ^ (^u47_cnt_snap_valid_o) ^ (^u47_cnt_snap_id_o) ^ (^u47_cnt_snap_value_o) ^ (^u47_cnt_window_open_o) ^ (^u47_cnt_cat_violation_o) ^ (^u47_guard_violations_o) ^ (^u47_starvation_o) ^ (^u47_init_done_o) ^ (^u47_refresh_stalls_o) ^ (^u47_bank_conflicts_o) ^ (^u47_scanout_preempted_o) ^ (^u47_hps_err_count_o) ^ (^u47_shell_err_wfifo_o) ^ (^u47_shell_err_route_o) ^ (^u47_shell_err_cdc_o) ^ (^u47_shell_err_framer_o) ^ (^u47_render_tri_ready_o) ^ (^u47_zhao_guard_rsp_t) ^ (^u47_geom_beat_valid_o) ^ (^u47_geom_beat_data_o) ^ (^u47_geom_beat_last_o) ^ (^u47_render_drain_done_o) ^ (^u47_render_busy_o) ^ (^u47_render_pixels_o) ^ (^u47_render_bursts_o) ^ (^u47_render_stream_error_o) ^ (^u47_render_drained_o) ^ (^u47_render_fatal_o) ^ (^u47_render_issued_words_o) ^ (^u47_render_retired_words_o) ^ (^u47_render_overflow_o) ^ (^u47_render_fragment_error_o) ^ (^u47_phy_cs_n_o) ^ (^u47_phy_ras_n_o) ^ (^u47_phy_cas_n_o) ^ (^u47_phy_we_n_o) ^ (^u47_phy_a_o) ^ (^u47_phy_ba_o) ^ (^u47_phy_dq_o) ^ (^u47_phy_dq_oe_o) ^ (^u47_phy_dqm_o);
 
   // ---- zhao_surface_sheet ----
   logic [63:0] u48_lfsr_q;

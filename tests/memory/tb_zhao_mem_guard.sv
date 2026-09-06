@@ -131,6 +131,11 @@ module tb_zhao_mem_guard
     .phy_cs_n, .phy_ras_n, .phy_cas_n, .phy_we_n,
     .phy_a, .phy_ba, .phy_dq_o, .phy_dq_oe, .phy_dqm, .phy_dq_i,
     .peek_en, .peek_waddr, .peek_data,
+    // The poke backdoor exists for the shell bench, which has to PLACE an
+    // asset pool in memory before the geometry fetcher reads it. Nothing
+    // here needs it, so it is tied off explicitly rather than left to a
+    // PINMISSING that would read as an oversight.
+    .poke_en(1'b0), .poke_waddr(26'd0), .poke_data(16'd0),
     .err_trcd (), .err_trp (), .err_trc (),
     .err_refresh_interval (), .err_protocol (), .err_mrs (),
     .model_error

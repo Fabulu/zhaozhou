@@ -369,6 +369,26 @@ module tb_zhao_shell (
   // than caching it: a cache behind a port that cannot stall is not an
   // optimisation, it is a protocol violation waiting for a miss.
   input  logic               indexfetch_mode_i,
+  // ---- TREAD 10: REAL MEMORY -------------------------------------------------
+  // The last thing this bench still PLAYED. With `realmem_mode_i` set, the
+  // guard requests from GEOM.MESHFETCH and GEOM.ASSETFETCH go to the SHELL's
+  // own MEM.GUARD and VRAM.ARBITER -- the arbiter's two previously unused
+  // client slots -- and the beats come back from the SDRAM model this bench
+  // already instantiates, instead of from the hand-rolled responders below.
+  //
+  // Every measurement in treads 6 through 9 was taken against a memory that
+  // granted immediately and answered in one cycle. This is where that stops
+  // being true, which is why `prefetch_stall_o` was connected first: its
+  // uncontended reading exists to be compared against.
+  input  logic               realmem_mode_i,
+  // The POKE backdoor, surfaced so a test can place asset bytes in memory
+  // before the machine reads them. Without it a fetcher on real memory reads
+  // whatever the model was initialised to, and a changed picture proves
+  // nothing about the memory path.
+  input  logic               poke_en,
+  input  logic [25:0]        poke_waddr,
+  input  logic [15:0]        poke_data,
+  output logic [31:0]        dbg_geom_grants_o,
   input  logic [63:0]        af_pool_i [32],
   output logic [31:0]        dbg_af_meshlets_o,
   output logic [31:0]        dbg_af_beats_o,
@@ -635,32 +655,52 @@ module tb_zhao_shell (
   logic       mf_granted_r, mf_sent_r;
   logic [3:0] mf_beat_r;
 
+  // GEOM.MESHFETCH keeps the played responder even in real-memory mode, and
+  // that is a finding rather than an omission: the arbiter tags the controller
+  // by SLOT INDEX, so the one free slot the guard grants the asset pool to is
+  // ENGINE1's, and there is no second client identity a geometry fetcher could
+  // present that both the guard admits and the arbiter carries. Tread 10 moves
+  // ASSETFETCH -- the fetcher that actually reads the pool -- and says so.
   always_comb begin
     mf_guard_rsp = '0;
-    if (mf_guard_req.valid && !mf_granted_r) begin
-      mf_guard_rsp.ready = 1'b1;
-      mf_guard_rsp.ok    = 1'b1;
-    end
+    // Same real protocol as the asset responder above: ready is a level, the
+    // verdict is the next cycle.
+    mf_guard_rsp.ready = !mf_granted_r;
+    mf_guard_rsp.ok    = mf_ok_r;
   end
 
-  assign mf_beat_valid = mf_granted_r && (mf_beat_r < 4'd8);
-  assign mf_beat_last  = mf_granted_r && (mf_beat_r == 4'd7);
+  // Beats stream from the cycle after the VERDICT, not the cycle after the
+  // accept. With the old one-cycle protocol the first beat or two arrived
+  // while the fetcher was still deciding whether it had been let in.
+  logic mf_ok_r, mf_fill_r;
+  assign mf_beat_valid = mf_fill_r && (mf_beat_r < 4'd8);
+  assign mf_beat_last  = mf_fill_r && (mf_beat_r == 4'd7);
   assign mf_beat_data  = mf_desc_i[mf_beat_r[2:0]];
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       mf_granted_r <= 1'b0;
+      mf_ok_r      <= 1'b0;
+      mf_fill_r    <= 1'b0;
       mf_beat_r    <= 4'd0;
       mf_sent_r    <= 1'b0;
     end else if (!render_tri_valid_i) begin
       mf_granted_r <= 1'b0;
+      mf_ok_r      <= 1'b0;
+      mf_fill_r    <= 1'b0;
       mf_beat_r    <= 4'd0;
       mf_sent_r    <= 1'b0;
     end else begin
       if (render_tri_valid_i && meshfetch_mode_i && mf_j_ready && !mf_sent_r)
         mf_sent_r <= 1'b1;
-      if (mf_guard_req.valid && !mf_granted_r) mf_granted_r <= 1'b1;
-      if (mf_beat_valid && mf_beat_r < 4'd8)   mf_beat_r <= mf_beat_r + 4'd1;
+      mf_ok_r <= 1'b0;
+      if (mf_guard_req.valid && !mf_granted_r) begin
+        mf_granted_r <= 1'b1;
+        mf_ok_r      <= 1'b1;
+      end else if (mf_ok_r) begin
+        mf_fill_r <= 1'b1;
+      end
+      if (mf_beat_valid && mf_beat_r < 4'd8) mf_beat_r <= mf_beat_r + 4'd1;
     end
   end
 
@@ -919,39 +959,76 @@ module tb_zhao_shell (
   logic [7:0]      af_ix_a, af_ix_b, af_ix_c;
   logic            af_sent_r;
 
+  // THE PLAYED RESPONDER NOW MODELS THE GUARD'S REAL PROTOCOL, and the reason
+  // is the whole point of D22 tread 10. `zhao_mem_guard` answers
+  //
+  //     rsp.ready = !fwd_active     a LEVEL: the forwarding stage is free
+  //     rsp.ok    <= 1'b1           a PULSE, the cycle AFTER the accept
+  //
+  // and the accept is what raises `fwd_active`, so ready and ok are NEVER high
+  // together on a passing request. This responder used to raise both at once,
+  // which is a protocol no guard in the tree implements -- and both geometry
+  // fetchers had been written to match the responder rather than the guard.
+  // A played model of the wrong protocol is worse than no model: everything
+  // measured against it agrees, and agrees about the wrong machine.
+  logic af_ok_r;      // the verdict pulse, one cycle after the accept
+  logic af_fill_r;    // beats stream from the cycle after the verdict
+
   logic af_beat_valid, af_beat_last;
   logic [63:0] af_beat_data;
-  assign af_beat_valid = af_serving_r;
-  assign af_beat_last  = af_serving_r && (af_beat_r == 3'd7);
-  assign af_beat_data  = af_pool_i[{af_line_r[1:0], af_beat_r}];
+  // THE BEATS THEMSELVES. This is what tread 10 is for: below the mux the
+  // right-hand side is a register file this bench fills in from C++, and the
+  // left-hand side is 64 bits that came out of a DRAM after an ACTIVATE, a
+  // READ, three cycles of CAS latency and an arbitration round.
+  assign af_beat_valid = realmem_mode_i ? shell_geom_beat_valid : af_fill_r;
+  assign af_beat_last  = realmem_mode_i ? shell_geom_beat_last
+                                        : (af_fill_r && (af_beat_r == 3'd7));
+  assign af_beat_data  = realmem_mode_i ? shell_geom_beat_data
+                                        : af_pool_i[{af_line_r[1:0], af_beat_r}];
 
+  // In real-memory mode the SHELL answers; otherwise the played responder does.
+  // Both are kept so the two can be compared on the same workload, which is the
+  // only way to tell a contention effect from a regression.
   always_comb begin
     af_guard_rsp = '0;
-    if (af_guard_req.valid && !af_serving_r) begin
-      af_guard_rsp.ready = 1'b1;
-      af_guard_rsp.ok    = 1'b1;
+    if (realmem_mode_i) begin
+      af_guard_rsp = shell_geom_rsp;
+    end else begin
+      af_guard_rsp.ready = !af_serving_r;
+      af_guard_rsp.ok    = af_ok_r;
     end
   end
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       af_serving_r <= 1'b0;
+      af_ok_r      <= 1'b0;
+      af_fill_r    <= 1'b0;
       af_beat_r    <= 3'd0;
       af_line_r    <= 5'd0;
       af_sent_r    <= 1'b0;
     end else if (!render_tri_valid_i) begin
       af_serving_r <= 1'b0;
+      af_ok_r      <= 1'b0;
+      af_fill_r    <= 1'b0;
       af_beat_r    <= 3'd0;
       af_line_r    <= 5'd0;
       af_sent_r    <= 1'b0;
     end else begin
       if (assetfetch_mode_i && af_m_ready && !af_sent_r) af_sent_r <= 1'b1;
+      af_ok_r <= 1'b0;
       if (af_guard_req.valid && !af_serving_r) begin
         af_serving_r <= 1'b1;
+        af_ok_r      <= 1'b1;     // the verdict lands the cycle after the accept
         af_beat_r    <= 3'd0;
         af_line_r    <= af_guard_req.addr[10:6];
-      end else if (af_serving_r) begin
-        if (af_beat_r == 3'd7) af_serving_r <= 1'b0;
+      end else if (af_ok_r) begin
+        af_fill_r <= 1'b1;        // and the beats one cycle after that
+      end else if (af_fill_r) begin
+        if (af_beat_r == 3'd7) begin
+          af_fill_r    <= 1'b0;
+          af_serving_r <= 1'b0;
+        end
         af_beat_r <= af_beat_r + 3'd1;
       end
     end
@@ -964,11 +1041,26 @@ module tb_zhao_shell (
       .m_ready_o(af_m_ready),
       // The footprint is MESHFETCH's own answer when it is in the path, and the
       // bench's fixed offsets otherwise. Pool-relative bytes.
+      // POOL-RELATIVE IN BOTH MODES, and the port comment means it.
+      // GEOM.ASSETFETCH adds `ZHAO_GEOM_ASSET_BASE` itself -- `ix_abs_c` and
+      // `vx_abs_c` are base + offset, and `ix_line0_q` is taken from that -- so
+      // what reaches `guard_req_o.addr` is already absolute.
+      //
+      // Passing absolute offsets here added the base TWICE: 0x06A0_0080 became
+      // 0x0D40_0080, past `POOL_END` (base + span = 0x0800_0000), and the block
+      // refused the whole footprint. It refused it CORRECTLY and counted it in
+      // `refused_footprint_o`, which is why nothing raised a guard violation
+      // and no beat was ever read: the fetch never left S_IDLE.
       .m_vertex_offset_i(32'd0),
-      .m_index_offset_i(32'd128),
+      .m_index_offset_i (32'd128),
       .m_vertex_count_i(meshfetch_mode_i ? mf_vc_r : 8'd4),
       .m_triangle_count_i(meshfetch_mode_i ? mf_tc_r : 8'd1),
-      .m_src_id_i(16'd0), .m_client_i(zhao_client_e'(0)),
+      // ENGINE1 is the one client `zhao_mem_guard` grants the asset pool to.
+      // SCANOUT (0) passed the played responder because a played responder does
+      // not read the field at all -- exactly the kind of thing this staircase
+      // exists to stop being true.
+      .m_src_id_i(16'd0),
+      .m_client_i(realmem_mode_i ? ZHAO_CLIENT_ENGINE1 : zhao_client_e'(0)),
       .guard_req_o(af_guard_req), .guard_rsp_i(af_guard_rsp),
       .beat_valid_i(af_beat_valid), .beat_data_i(af_beat_data),
       .beat_last_i(af_beat_last),
@@ -1277,7 +1369,26 @@ module tb_zhao_shell (
   wire signed [20:0] m_cx = setup_mode_i ? su_cx : render_cx_i;
   wire signed [20:0] m_cy = setup_mode_i ? su_cy : render_cy_i;
 
+  zhao_guard_rsp_t shell_geom_rsp;
+  logic            shell_geom_beat_valid, shell_geom_beat_last;
+  logic [63:0]     shell_geom_beat_data;
+
+  // Count the BEATS the shell actually returned, not the mode bit. "Real
+  // memory mode was on" is a signal that might not be reaching anything; a
+  // 64-bit word arriving from the DRAM side is the event itself. A test that
+  // asserted the mode instead of the traffic would pass with this whole path
+  // disconnected.
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) dbg_geom_grants_o <= 32'd0;
+    else if (shell_geom_beat_valid) dbg_geom_grants_o <= dbg_geom_grants_o + 32'd1;
+  end
+
   zhao_shell_top u_shell (
+      .geom_guard_req_i(realmem_mode_i ? af_guard_req : '0),
+      .geom_guard_rsp_o(shell_geom_rsp),
+      .geom_beat_valid_o(shell_geom_beat_valid),
+      .geom_beat_data_o (shell_geom_beat_data),
+      .geom_beat_last_o (shell_geom_beat_last),
     .gpu_clk, .vid_clk, .audio_clk, .rst_n,
     .hps_state_i, .hps_byte_len_i,
     .ring_wr_valid_o, .ring_wr_slot_o, .ring_wr_state_o, .ring_wr_ready_i,
@@ -1358,6 +1469,7 @@ module tb_zhao_shell (
     .phy_a, .phy_ba,
     .phy_dq_o, .phy_dq_oe, .phy_dqm, .phy_dq_i,
     .peek_en, .peek_waddr, .peek_data,
+    .poke_en, .poke_waddr, .poke_data,
     .err_trcd (model_err_kind[0]), .err_trp (model_err_kind[1]),
     .err_trc (model_err_kind[2]),
     .err_refresh_interval (model_err_kind[3]), .err_protocol (model_err_kind[4]),

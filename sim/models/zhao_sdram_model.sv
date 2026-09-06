@@ -45,6 +45,18 @@ module zhao_sdram_model
   input  logic [25:0] peek_waddr,
   output logic [15:0] peek_data,
 
+  // harness POKE port. The peek side existed so a test could read what the
+  // machine wrote; this is the other half, so a test can place asset bytes in
+  // memory BEFORE the machine reads them. Without it a fetcher pointed at real
+  // memory reads whatever the model was initialised to, and "the picture
+  // changed" says nothing about whether the memory path works.
+  //
+  // Backdoor, not a bus master: it bypasses the SDRAM protocol entirely and is
+  // for placing fixtures, never for modelling a write.
+  input  logic        poke_en,
+  input  logic [25:0] poke_waddr,
+  input  logic [15:0] poke_data,
+
   // sticky error flags (asserted in the C++ tests as zero)
   output logic err_trcd,
   output logic err_trp,
@@ -112,6 +124,8 @@ module zhao_sdram_model
   logic [10:0] wr_col;
 
   assign peek_data = peek_en ? mem[peek_waddr] : 16'd0;
+
+  always_ff @(posedge clk) if (poke_en) mem[poke_waddr] <= poke_data;
 
   assign model_error = err_trcd | err_trp | err_trc
                      | err_refresh_interval | err_protocol | err_mrs;
