@@ -392,7 +392,34 @@ constexpr int32_t kKnuckleReentryOffXMm = -100, kKnuckleReentryOffYMm = 285;  //
 // band was scalloped everywhere instead of knuckled in four places. The Side
 // sheet draws LOCAL round lumps with a clean run between them. 120 mm spans
 // ~4.6 rings at the new 64-ring sampling: still smooth, and now local.
-constexpr int32_t kKnuckleSwellHalfMm = 120;  // half-width along the tube
+// ---- PASS 11 F.4 (Direction 8 3): ONE GLOBAL BECOMES A TABLE --------------
+// "the connecting parts of the creature to the antennae shouldn't be balls,
+// they should just be thicker antennae parts. It needs to look smooth."
+//
+// No ball PARTS exist -- the rigid balls went at pass 6 and both "balls" are
+// swells baked into the chain's own skin. So this is SHAPING, not deletion, and
+// the bones and hinges are untouched exactly as the owner requires: "they're
+// still hinges with bones though so that part stays."
+//
+// What makes a swell read as a BEAD rather than a THICKENING is its aspect: a
+// short, tall bump is a ball threaded on a wire; a long, low one is the band
+// itself getting fatter. One global half-width could not express that, so the
+// two BODY JUNCTIONS (Jf and End) get long, low profiles while A/B/C keep the
+// short, proud ones -- they are the protected bulby knuckles and Direction 7
+// 6a stands: nobody slims them.
+//
+// This is also the convergence of four instructions that have pulled against
+// each other since Direction 5 2b -- "less chunky", "gentle knuckles", "bulby
+// is the target read", and now "not balls, thicker antenna". They are one
+// instruction: THE ANTENNA IS A SINGLE CONTINUOUS FORM WHOSE THICKNESS VARIES.
+// It is never a chain of spheres.
+//
+// (Pass 8's note, still true of A/B/C: 170 -> 120 because at 170 adjacent swells
+// met and the band was scalloped everywhere instead of knuckled in four places.
+// The junctions can be long WITHOUT that fault because their neighbours are far:
+// Jf's nearest station is 610 mm away and End's is 630.)
+// Order: Jf, A, B, C, End -- the same order make_loop applies them.
+constexpr int32_t kKnuckleSwellHalfMm[5] = {270, 120, 120, 120, 280};
 // Arc positions, mm from the buried start. The chain's own station arithmetic
 // is stJF 250, stNeck 586, stA 930, stB 1270, stC 1650, stD 2030, end 3450.
 // The front junction rides a touch above its station (the old ball's offset);
@@ -429,7 +456,10 @@ constexpr int32_t kKnuckleAtEndMm = 2660;
 // So only this knuckle's own two constants move; the flare, the buried base and
 // every other knuckle are untouched. 42/50 puts the station at 112 rx, a touch
 // above hinge A's 108, which is right for the joint that carries the antenna.
-constexpr int32_t kKnuckleSwellJfRxMm = 50, kKnuckleSwellJfRzMm = 58;
+// PASS 11 F.4: proud DOWN as the half-width went UP. The volume is roughly
+// preserved and the aspect is inverted -- the same swelling, spread along the
+// band instead of stacked on it. That is the whole of "a thicker antennae part".
+constexpr int32_t kKnuckleSwellJfRxMm = 34, kKnuckleSwellJfRzMm = 40;
 // DIRECTION 7 §6a: the two ends move in OPPOSITE directions, which is why they
 // are separate constants and why no global taper scale can express it --
 // "the front one is just too thick" while "the others are a bit bulby, might
@@ -441,7 +471,28 @@ constexpr int32_t kKnuckleSwellJfRxMm = 50, kKnuckleSwellJfRzMm = 58;
 constexpr int32_t kKnuckleSwellARxMm = 64, kKnuckleSwellARzMm = 86;
 constexpr int32_t kKnuckleSwellBRxMm = 62, kKnuckleSwellBRzMm = 82;
 constexpr int32_t kKnuckleSwellCRxMm = 60, kKnuckleSwellCRzMm = 78;
-constexpr int32_t kKnuckleSwellEndRxMm = 62, kKnuckleSwellEndRzMm = 90;
+// ---- PASS 11 F.4.2: THE REAR END (Direction 8 3.1) ------------------------
+// "Right now a ball is inside the creature spazzing out, supposed to be the rear
+// end of the antenna. I guess getting rid of it as a ball entirely should solve
+// that anyhow." His own diagnosis, and it is right.
+//
+// THE MECHANISM: this swell sits at kKnuckleAtEndMm = 2660 and the body surface
+// crossing is at ~2690. At half-width 120 the swell STRADDLED THE WATERLINE --
+// its outer half buried, its exposed cap churning at the surface as the return
+// arm re-aimed each frame. A sphere jammed through a surface, moving. That is
+// the accidental-clipping fault: the intersection is real and WANTED (the arm
+// plunges into the body by design), but a bead crossing a surface advertises the
+// crossing, and a long low thickening diving in does not.
+//
+// 90 rz was also the heaviest z on the whole chain -- broader than hinge A's 86,
+// on the station the sheet draws as the band simply returning to the body.
+//
+// Two facts on record fit this exactly and are why it is a REBUILD, not a tweak:
+// QA found kBLoopBase2 SKINS NOTHING (it moves no vertex, and still does not --
+// the effect is entirely through the closure aim), and the pass-10 review found
+// the rear junction finally live but at 78 mm, about 5 px, too small to see.
+// Half-attached and half-driven for several passes.
+constexpr int32_t kKnuckleSwellEndRxMm = 40, kKnuckleSwellEndRzMm = 52;
 
 // ---- the eyes (the whole face) ----
 // Two big purple almond lenses close together on the lower front, angled
@@ -1441,7 +1492,16 @@ constexpr int32_t kKneadWagCA16 = 1900;    // ...in counter-rotation
 // The closure is insensitive to it -- the anchor stays at radius 153 mm inside
 // a 450 mm body, so burial holds by construction. Swept and measured: bank
 // worst RIM stays 1043 pm against the 1120 gate at 900, 2700, 5400 and 8100.
-constexpr int32_t kKneadWagB2A16 = 5400;
+// PASS 11 F.4.3: 5400 -> 9200. The bone is live and the closure aim honours it
+// (Stage 0.2's repaired gate measures 128 mm of tip travel THROUGH loop_pose),
+// but the review's verdict was that 78 mm is ~5 px and cannot be SEEN. A joint
+// nobody can see is not yet the joint the owner asked for twice. Raised by eye
+// against the F.0 camera until the re-entry point's slide reads at native, and
+// bounded -- not chosen -- by the committed closure sweep, run at every
+// candidate before its render. Owner question 3 defaults to (a), a clearly
+// visible working joint: he has asked for these junctions to be hinges twice,
+// and the closure probe bounds it either way.
+constexpr int32_t kKneadWagB2A16 = 9200;
 constexpr int kKneadWagPeriodKeys = 22;
 constexpr int32_t kKneadTremorA16 = 130;   // the hold's small tremor
 // per-clip gain (pm) for the always-on knead layer, indexed by slot:

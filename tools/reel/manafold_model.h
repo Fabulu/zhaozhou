@@ -146,10 +146,13 @@ inline zc::RingPart make_loop() {
     // above, untouched; each knuckle adds a flat-topped bump that meets the
     // band with zero slope, so there is no crease and no waist. MAX, not sum:
     // two overlapping swells cannot stack into a lump.
-    const auto swell = [&](int32_t at, int32_t rx_mm, int32_t rz_mm,
+    // PASS 11 F.4: the half-width is now PER STATION (kKnuckleSwellHalfMm[5]),
+    // so a body junction can be a long low thickening while a knuckle stays a
+    // short proud lump. Same profile function; only the window changes.
+    const auto swell = [&](int32_t at, int32_t half, int32_t rx_mm, int32_t rz_mm,
                            int32_t& best_x, int32_t& best_z) {
       const int32_t d = s > at ? s - at : at - s;
-      if (d >= kKnuckleSwellHalfMm) return;
+      if (d >= half) return;
       // u = 1 - (d/half)^2, then w = SMOOTHSTEP(u) -- per-mille throughout.
       //
       // PASS 8: w was u^2, which is zero-slope at the rim (good, no crease) but
@@ -164,7 +167,7 @@ inline zc::RingPart make_loop() {
       // returning, so it is deliberately not used.)
       const int32_t u = 1000 - static_cast<int32_t>(
           (static_cast<int64_t>(d) * d * 1000) /
-          (static_cast<int64_t>(kKnuckleSwellHalfMm) * kKnuckleSwellHalfMm));
+          (static_cast<int64_t>(half) * half));
       const int32_t w = static_cast<int32_t>(
           (static_cast<int64_t>(u) * u * (3000 - 2 * u)) / 1000000);
       const int32_t ax = static_cast<int32_t>((static_cast<int64_t>(rx_mm) * w) / 1000);
@@ -173,11 +176,16 @@ inline zc::RingPart make_loop() {
       if (az > best_z) best_z = az;
     };
     int32_t sw_x = 0, sw_z = 0;
-    swell(kKnuckleAtJfMm, kKnuckleSwellJfRxMm, kKnuckleSwellJfRzMm, sw_x, sw_z);
-    swell(kKnuckleAtAMm, kKnuckleSwellARxMm, kKnuckleSwellARzMm, sw_x, sw_z);
-    swell(kKnuckleAtBMm, kKnuckleSwellBRxMm, kKnuckleSwellBRzMm, sw_x, sw_z);
-    swell(kKnuckleAtCMm, kKnuckleSwellCRxMm, kKnuckleSwellCRzMm, sw_x, sw_z);
-    swell(kKnuckleAtEndMm, kKnuckleSwellEndRxMm, kKnuckleSwellEndRzMm, sw_x, sw_z);
+    swell(kKnuckleAtJfMm, kKnuckleSwellHalfMm[0],
+          kKnuckleSwellJfRxMm, kKnuckleSwellJfRzMm, sw_x, sw_z);
+    swell(kKnuckleAtAMm, kKnuckleSwellHalfMm[1],
+          kKnuckleSwellARxMm, kKnuckleSwellARzMm, sw_x, sw_z);
+    swell(kKnuckleAtBMm, kKnuckleSwellHalfMm[2],
+          kKnuckleSwellBRxMm, kKnuckleSwellBRzMm, sw_x, sw_z);
+    swell(kKnuckleAtCMm, kKnuckleSwellHalfMm[3],
+          kKnuckleSwellCRxMm, kKnuckleSwellCRzMm, sw_x, sw_z);
+    swell(kKnuckleAtEndMm, kKnuckleSwellHalfMm[4],
+          kKnuckleSwellEndRxMm, kKnuckleSwellEndRzMm, sw_x, sw_z);
     rs.rx = fxu(taper(kLoopBladeRxMm, s) + sw_x);
     rs.rz = fxu(taper(kLoopBladeRzMm, s) + sw_z);
     rs.segments = static_cast<uint8_t>(kLoopSegments);
