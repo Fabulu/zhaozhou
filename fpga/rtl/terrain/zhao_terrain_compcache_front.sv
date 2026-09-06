@@ -94,19 +94,44 @@ module zhao_terrain_compcache_front #(
     output logic               st_ready_o,
     input  logic signed [31:0] st_top_i,     // live_top, fx16 raw
     input  logic signed [31:0] st_bottom_i,  // bottom surface, fx16 raw
-    // Port-for-port with zhao_terrain_patch's st_src_id_o. NOT STORED, and
-    // that is a choice with a price: a per-vertex src_id would be another
-    // 2 x 1,089 x 16 b ~ 4 M10K for a field the tessellator does not read, the
-    // same argument that keeps the per-vertex dirty bit out (see below). The
-    // consequence is that THE DIFFERENTIAL CANNOT READ IT BACK: it pins the
-    // order-is-the-index law by driving the vertex index in on this port and
-    // checking it against fill_records_o -- the write cursor, i.e. the address
-    // the record is landing at -- on the cycle the record is accepted, and then
-    // against the height read back from that vertex. If a readback port is ever
-    // wanted, it is 16 flops (the src_id of the last accepted record).
-    /* verilator lint_off UNUSEDSIGNAL */
-    input  logic        [15:0] st_src_id_i,
-    /* verilator lint_on UNUSEDSIGNAL */
+    // Port-for-port with zhao_terrain_patch's st_src_id_o, and CARRIED rather
+    // than discarded. It is not stored PER VERTEX -- that would be another
+    // 2 x 1,089 x 16 b ~ 4 M10K for a field the tessellator never reads, the
+    // same argument that keeps the per-vertex dirty bit out (see below). What
+    // is stored is ONE id per BUFFER, handed to the serve side by the swap and
+    // read back on serve_src_id_o.
+    //
+    // WHAT THE READBACK IS FOR. A consumer does not ask this block for a
+    // patch. It asks the sequencer, the sequencer arranges a fill, and the
+    // consumer then reads whatever parity the swap has left on the serve port.
+    // Every other signal it could check is self-consistent under the failure
+    // that actually matters: a swap that did not happen, or happened one patch
+    // early, still answers every request with a real composed height from a
+    // real patch, at a plausible world position, with every counter agreeing.
+    // serve_src_id_o is the only thing on the serve side that names WHICH
+    // patch, so a consumer can compare it against the id it asked for BEFORE
+    // it tessellates a couple of thousand triangles of the wrong terrain.
+    //
+    // WHY THE LAST RECORD'S ID AND NOT THE FIRST. A buffer is handed over on
+    // the clock its cursor reaches LAT_W*LAT_H, which is immediately after its
+    // last record, so the last id is written by the same acceptance that
+    // COMPLETED the fill. It therefore witnesses a finished fill; a
+    // first-record capture would name a patch whose fill was abandoned halfway
+    // with exactly the same confidence. It also composes with fill_records_o:
+    // a producer that carries the vertex index in the low bits of src_id makes
+    // serve_src_id_o a second, independent, SERVE-SIDE witness of the
+    // order-is-the-index law, which has to agree with the fill-side one.
+    //
+    // WHY IT IS DOUBLE-BUFFERED, AND WHY A PLAIN `last_src_id_o` WOULD BE
+    // WORSE THAN NOTHING. One flop holding "the src_id of the last record this
+    // block accepted" tracks the buffer being FILLED. While TESS reads patch N
+    // and patch N+1 is landing -- the entire reason this block is
+    // double-buffered -- that flop names N+1. A consumer checking the identity
+    // of what it is reading would be handed the identity of what it is NOT
+    // reading, and would reject the correct patch or accept the wrong one at
+    // precisely the moment the pipeline is doing its job. The id follows the
+    // parity, like every other byte in here.
+    input logic [15:0] st_src_id_i,
 
     // The 33 column x's and 33 row z's. Written before or during the record
     // stream; they are the placement, not the composition, so they do not
@@ -128,9 +153,19 @@ module zhao_terrain_compcache_front #(
     // -----------------------------------------------------------------------
     // SWAP
     // -----------------------------------------------------------------------
-    output logic fill_done_o,    // LAT_W*LAT_H records landed
-    input  logic serve_release_i,  // TESS is finished with the served patch
-    output logic serve_valid_o,  // a complete patch is available to serve
+    output logic fill_done_o,  // LAT_W*LAT_H records landed
+    // TESS is finished with the served patch. A PULSE, not a level: one patch
+    // is retired per RISING EDGE. See the decision at `serve_release_c` -- a
+    // consumer with two patches to retire lowers the line between them, which
+    // it has to do anyway because it cannot have consumed the second one in
+    // zero cycles.
+    input  logic        serve_release_i,
+    output logic        serve_valid_o,    // a complete patch is available to serve
+    // The source id of the patch on the serve port, or SRC_NONE when there is
+    // none. Combinational off serve_valid_o and the parity, so it is stable
+    // for as long as the patch is: a consumer reads it once at the top of the
+    // patch, not per request. See st_src_id_i for what it is for.
+    output logic [15:0] serve_src_id_o,
 
     // -----------------------------------------------------------------------
     // SERVE: registered lattice port, port-for-port into zhao_terrain_tess
@@ -200,6 +235,20 @@ module zhao_terrain_compcache_front #(
   logic serve_valid_q;   // a complete patch is available
   logic dual_q;
 
+  // The per-buffer source id: two flops, not a memory. Written on every
+  // acceptance into the FILL parity, so each buffer ends holding the id of the
+  // last record that landed in it, and read out of the SERVE parity.
+  logic [15:0] src_m [2];
+
+  // Poison for "no patch is being served". The low half of the 0x5BADF00D the
+  // lattice port already poisons with, so a consumer that trips this sees a
+  // value from a family it has recognised since before this block existed. A
+  // real src_id could legally be any 16-bit number, so this is a TELL and not
+  // a proof -- serve_valid_o is the proof.
+  localparam logic [15:0] SRC_NONE = 16'hF00D;
+
+  assign serve_src_id_o = serve_valid_q ? src_m[serve_par_q] : SRC_NONE;
+
   localparam int unsigned CURW = VW + 1;
   logic [CURW-1:0] wcur_q;  // write cursor, one bit wider than VERTS needs so
                             // "at capacity" is representable rather than a wrap
@@ -230,8 +279,65 @@ module zhao_terrain_compcache_front #(
   // bottom on phase 1 from the value CAPTURED at acceptance.
   assign st_ready_o = fill_active_q && !at_capacity_c && !wphase_q;
 
-  wire st_take_c  = st_valid_i && st_ready_o;
-  wire st_spill_c = st_valid_i && fill_active_q && at_capacity_c && !wphase_q;
+  wire st_take_c = st_valid_i && st_ready_o;
+
+  // ---- fill_overrun_o COUNTS REFUSED RECORDS, NOT REFUSED CYCLES ----------
+  // DECISION, 2026-09-06. Under ready/valid a producer holds its payload
+  // stable and valid high until the record is taken. At capacity nothing is
+  // ever taken, so ONE refused record sits on the port for as long as the
+  // producer cares to wait, and counting the condition per clock reports the
+  // producer's PATIENCE rather than the overrun: the same 1,090th record reads
+  // as 1 or as 400 depending only on how long the consumer took to release the
+  // patch that is blocking the swap. That number cannot be used for the thing
+  // the port is named for. One count per distinct OFFER instead; an offer ends
+  // when the producer withdraws valid, or when the record is finally taken.
+  //
+  // AND NOT A RISING EDGE OF st_valid_i, which is the obvious cheap version
+  // and is wrong in the direction that hides things. A producer streaming back
+  // to back never lowers valid, so its first REFUSED record follows an
+  // ACCEPTED one with no edge anywhere in between, and an edge detector would
+  // miss the very first overrun of a full-rate fill -- an instrument reading
+  // low exactly where it matters. The flag clears on a take as well as on a
+  // withdrawal, which covers both shapes of producer.
+  //
+  // AND THE FLAG IS READ BEFORE IT IS WRITTEN, ON PURPOSE, IN THAT ORDER.
+  // The first draft put the flag's update at the TOP of the sequential block
+  // and read it further down through a `wire st_spill_c = st_spill_raw_c &&
+  // !spill_counted_q`. Under SystemVerilog's own semantics that is fine -- a
+  // nonblocking assignment does not land until the NBA region, so the read
+  // gets the pre-edge value -- but it is a read-after-write inside one block
+  // through a continuous assignment, and a simulator is free to inline the
+  // wire into its single consumer. This one does: adding a SECOND always_ff
+  // that merely $display'd `spill_counted_q` changed the count, on identical
+  // stimulus, because materialising the signal changed how it was scheduled.
+  // A property that depends on whether anybody is looking at it is not a
+  // property. So there is no wire, the test is written out at its one use
+  // site, and the update sits immediately AFTER that use -- which reads the
+  // same under blocking and nonblocking rules, and needs no scheduler to be
+  // charitable.
+  logic spill_counted_q;
+  wire  st_spill_raw_c = st_valid_i && fill_active_q && at_capacity_c && !wphase_q;
+
+  // ---- serve_release_i IS AN EVENT, NOT A LEVEL ---------------------------
+  // DECISION, 2026-09-06, and it closes a real control defect rather than only
+  // a counting one. The port means "TESS is finished with the served patch",
+  // which happens once per patch. Read as a level it means something else, and
+  // the difference is not academic: with a fill already complete and waiting
+  // -- the steady state -- a release held high for two clocks hands the new
+  // patch over on the first clock and RELEASES IT ON THE SECOND. A whole patch
+  // retired without one vertex being read, serve_valid_o dropping under a
+  // tessellator that had just been told a patch was there, and
+  // patches_served_o counting it as if it had been consumed. A counter that
+  // counts cycles while claiming to count events is a broken instrument; a
+  // control path that does the same throws away terrain.
+  //
+  // So: one release per RISING EDGE. The cost is that a consumer retiring two
+  // patches must lower the line between them, which it has to do anyway --
+  // it cannot have consumed the second patch in zero cycles -- and a consumer
+  // that ties the port high now serves each patch instead of discarding it,
+  // which is the failure the old reading turned into silence.
+  logic serve_release_q;
+  wire  serve_release_c = serve_release_i && !serve_release_q;
 
   assign fill_done_o = fill_active_q && at_capacity_c;
 
@@ -386,12 +492,18 @@ module zhao_terrain_compcache_front #(
       wphase_q         <= 1'b0;
       bot_q            <= '0;
       dual_q           <= 1'b0;
+      src_m[0]         <= SRC_NONE;
+      src_m[1]         <= SRC_NONE;
+      spill_counted_q  <= 1'b0;
+      serve_release_q  <= 1'b0;
       patches_filled_q <= '0;
       patches_served_q <= '0;
       fill_overrun_q   <= '0;
       lat_oob_q        <= '0;
       cs_oob_q         <= '0;
     end else begin
+      serve_release_q <= serve_release_i;
+
       // ---- fill ---------------------------------------------------------
       if (fill_go_c) begin
         fill_active_q <= 1'b1;
@@ -412,6 +524,11 @@ module zhao_terrain_compcache_front #(
         // is holding.
         bot_q    <= dual_q ? st_bottom_i : st_top_i;
         wphase_q <= 1'b1;
+        // The buffer's identity, overwritten by every record so the buffer
+        // ends holding the id of the record that COMPLETED it. Into the FILL
+        // parity -- writing one flop for "the last id this block saw" would
+        // name the patch being written while a consumer reads the other one.
+        src_m[fill_par_q] <= st_src_id_i;
       end else if (wphase_q) begin
         // Phase 1 is unconditional: the bottom write is already committed by
         // the acceptance, and making it wait on the producer would stall the
@@ -420,12 +537,18 @@ module zhao_terrain_compcache_front #(
         wcur_q   <= wcur_q + 1'b1;
       end
 
-      if (st_spill_c) fill_overrun_q <= fill_overrun_q + 1'b1;
+      // ONE COUNT PER DISTINCT OFFER. Read the flag...
+      if (st_spill_raw_c && !spill_counted_q) fill_overrun_q <= fill_overrun_q + 1'b1;
+      // ...then update it, on the next lines and never on earlier ones: armed
+      // by the first refused clock of an offer, disarmed when the producer
+      // withdraws the offer or the block finally takes the record.
+      if (!st_valid_i || st_take_c) spill_counted_q <= 1'b0;
+      else if (st_spill_raw_c) spill_counted_q <= 1'b1;
 
       // Completing a fill hands the buffer over. It waits for the serve side
       // to be released, so a finished fill does not snatch the lattice out
       // from under a tessellator mid-patch.
-      if (fill_active_q && at_capacity_c && (!serve_valid_q || serve_release_i)) begin
+      if (fill_active_q && at_capacity_c && (!serve_valid_q || serve_release_c)) begin
         fill_active_q    <= 1'b0;
         serve_par_q      <= fill_par_q;
         serve_valid_q    <= 1'b1;
@@ -441,7 +564,7 @@ module zhao_terrain_compcache_front #(
         // on fill_active_q); these two were. One assignment closes it, and the
         // next fill_go_c writes the same value, so nothing else changes.
         fill_par_q       <= ~fill_par_q;
-      end else if (serve_valid_q && serve_release_i) begin
+      end else if (serve_valid_q && serve_release_c) begin
         serve_valid_q <= 1'b0;
       end
 
@@ -451,7 +574,7 @@ module zhao_terrain_compcache_front #(
       // moment -- the steady state, where a fill finishes as a patch is
       // released, every patch. The counter would have under-reported precisely
       // when the pipeline was working.
-      if (serve_valid_q && serve_release_i) patches_served_q <= patches_served_q + 1'b1;
+      if (serve_valid_q && serve_release_c) patches_served_q <= patches_served_q + 1'b1;
 
       // ---- refusals -----------------------------------------------------
       if (lat_req_i && !lat_in_range_c) lat_oob_q <= lat_oob_q + 1'b1;

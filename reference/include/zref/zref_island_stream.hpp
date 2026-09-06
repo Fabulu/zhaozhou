@@ -54,7 +54,8 @@ struct Stats {
   uint32_t returned = 0;       // ...and later came back. THE interesting one.
   uint32_t already = 0;        // visible and already resident: no work
   uint32_t refused = 0;        // residency said no; see the Arena's own ledger
-  uint32_t peak_resident = 0;  // high-water mark, against the page count
+  uint32_t peak_resident = 0;  // the RUN's high-water mark (== Streamer::peak()),
+                               // against the page count -- never this call's live count
 };
 
 // `View`, `Visible`, `WindowTally` and `visible_set` USED TO LIVE HERE, as a
@@ -118,8 +119,19 @@ class Streamer {
       if (seen_.find(k) != seen_.end()) ++st.returned;
     }
 
-    if (live_.size() > st.peak_resident) st.peak_resident = static_cast<uint32_t>(live_.size());
+    // THIS WAS NOT A HIGH-WATER MARK, WHATEVER THE FIELD WAS CALLED.
+    // `Stats` is constructed fresh inside every update(), so `st.peak_resident`
+    // began each call at 0 and the guard `live_.size() > st.peak_resident` was
+    // true whenever anything was live at all -- making the field the CURRENT
+    // live count under a name that promised the opposite. Measured after a
+    // 42-patch flight: a narrower window reported 9 while the true peak was 42,
+    // i.e. the "high-water mark" FOLLOWED THE WATER DOWN.
+    //
+    // It is the member `peak_` that accumulates, so the stats field now simply
+    // reports it. A caller asking a per-call Stats for a running peak is asking
+    // for the run's number, not this call's.
     if (live_.size() > peak_) peak_ = static_cast<uint32_t>(live_.size());
+    st.peak_resident = peak_;
     return st;
   }
 

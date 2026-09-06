@@ -43,9 +43,10 @@ module tb_compcache_front (
     input  logic        dual,
 
     // ---- production instance: swap -----------------------------------------
-    output logic fill_done,
-    input  logic serve_release,
-    output logic serve_valid,
+    output logic        fill_done,
+    input  logic        serve_release,
+    output logic        serve_valid,
+    output logic [15:0] serve_src_id,
 
     // ---- production instance: serve ----------------------------------------
     input  logic        lat_req,
@@ -74,6 +75,7 @@ module tb_compcache_front (
     output logic        s_st_ready,
     input  logic [31:0] s_st_top,
     input  logic [31:0] s_st_bottom,
+    input  logic [15:0] s_st_src_id,
     input  logic        s_dual,
     input  logic        s_cs_we,
     input  logic [ 4:0] s_cs_w_ci,
@@ -81,6 +83,7 @@ module tb_compcache_front (
     input  logic [ 1:0] s_cs_w_substance,
     input  logic        s_serve_release,
     output logic        s_serve_valid,
+    output logic [15:0] s_serve_src_id,
     input  logic        s_lat_req,
     input  logic [ 5:0] s_lat_vi,
     input  logic [ 5:0] s_lat_vj,
@@ -127,6 +130,7 @@ module tb_compcache_front (
       .fill_done_o    (fill_done),
       .serve_release_i(serve_release),
       .serve_valid_o  (serve_valid),
+      .serve_src_id_o (serve_src_id),
 
       .lat_req_i    (lat_req),
       .lat_vi_i     (lat_vi),
@@ -174,7 +178,7 @@ module tb_compcache_front (
       .st_ready_o (s_st_ready),
       .st_top_i   ($signed(s_st_top)),
       .st_bottom_i($signed(s_st_bottom)),
-      .st_src_id_i(16'd0),
+      .st_src_id_i(s_st_src_id),
 
       .pos_we_i  (1'b0),
       .pos_axis_i(1'b0),
@@ -191,6 +195,7 @@ module tb_compcache_front (
       .fill_done_o    (s_nc_fill_done),
       .serve_release_i(s_serve_release),
       .serve_valid_o  (s_serve_valid),
+      .serve_src_id_o (s_serve_src_id),
 
       .lat_req_i    (s_lat_req),
       .lat_vi_i     (s_lat_vi),

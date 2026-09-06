@@ -690,15 +690,19 @@ int main(int argc, char** argv) {
              "the whole 8 km flight replays byte-identically from a rebuilt world");
   }
 
-  // ---- Stats::peak_resident, observed and REPORTED (not fixed here) -------
+  // ---- Stats::peak_resident: the bug this test FOUND, now pinned -----------
   //
   // `island::Stats` is constructed fresh inside every `Streamer::update`, so
   // `st.peak_resident` starts at 0 on each call and the guarded assignment
   // `if (live_.size() > st.peak_resident)` is true every time. It is therefore
   // the CURRENT live count, not a high-water mark, whatever the comment beside
   // it says. `Streamer::peak()` (the member `peak_`) is the real high-water
-  // mark and is what the assertions above use. Reported, not touched:
-  // zref_island_stream.hpp belongs to another lane.
+  // mark and is what the assertions above use.
+  //
+  // FIXED in zref_island_stream.hpp, and the observation below is now an
+  // ASSERTION rather than a printed number -- a bug found by printing
+  // something and leaving it for the next person to re-read is a bug that
+  // comes back.
   if (!steps.empty()) {
     // Deliberately a NARROWER window than anything the flight used. A real
     // high-water mark cannot go down; the number printed below does.
@@ -706,12 +710,16 @@ int main(int argc, char** argv) {
     const isl::Stats narrow =
         streamer.update(isl::view_for_camera(rd, ((60 * patch_m) << 16), cam_z_raw, 1), &rl);
     std::printf("  narrow window: Stats::peak_resident = %u, live = %zu, Streamer::peak() = %u"
-                "   <-- peak_resident FOLLOWED the live count DOWN from %u\n",
+                "   (high-water before the narrowing: %u)\n",
                 narrow.peak_resident, streamer.live_count(), streamer.peak(), high_water_before);
     check_eq(static_cast<long>(streamer.peak()), static_cast<long>(high_water_before),
-             "Streamer::peak() is the real high-water mark and does NOT fall when the window "
-             "shrinks (Stats::peak_resident, printed above, does -- reported, not fixed here: "
-             "zref_island_stream.hpp belongs to another lane)");
+             "Streamer::peak() is a high-water mark and does NOT fall when the window shrinks");
+    check_eq(static_cast<long>(narrow.peak_resident), static_cast<long>(high_water_before),
+             "and Stats::peak_resident reports that same running high-water mark rather than the "
+             "current live count");
+    check_eq(static_cast<long>(narrow.peak_resident > streamer.live_count() ? 1 : 0), 1L,
+             "which is only a meaningful claim because the narrowed window really IS smaller than "
+             "the peak -- asserted too, so the check above cannot pass by the two merely agreeing");
   }
 
   const auto t_end = std::chrono::steady_clock::now();

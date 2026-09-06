@@ -90,6 +90,12 @@ counter_catalog:
   - visible_sky
   - visible_out_of_extent
   - visible_bad_pitch
+  - compcache_fill_records
+  - compcache_patches_filled
+  - compcache_patches_served
+  - compcache_fill_overrun
+  - compcache_lat_oob
+  - compcache_cs_oob
   # TERRAIN.MIPGEN (ruling T8)
   - mipgen_samples
   - mipgen_writes
@@ -1571,7 +1577,7 @@ blocks:
     inputs: [dispatch, field_results, baked_scars]
     outputs: [patch_state, subpatch_requests]
     upstream: [CMD.SCHEDULER, FIELD.SEQ.EARTH, TERRAIN.BAKE]
-    downstream: [TERRAIN.TESS, TERRAIN.LOD, TERRAIN.VELOCITY, PART.COLLIDE, MEM.GUARD, TERRAIN.MIPGEN, TERRAIN.RESIDENCY]
+    downstream: [TERRAIN.TESS, TERRAIN.LOD, TERRAIN.VELOCITY, PART.COLLIDE, MEM.GUARD, TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.COMPCACHE]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 patch-layer update per clock
@@ -1657,7 +1663,7 @@ blocks:
     owner_issue: ZH-034
     inputs: [patch_state, lod_target]
     outputs: [terrain_mesh]
-    upstream: [TERRAIN.PATCH]
+    upstream: [TERRAIN.PATCH, TERRAIN.COMPCACHE]
     downstream: [TERRAIN.NORMALS, FORGE.CLIFF]
     backpressure: ready_valid
     latency: variable
@@ -1684,6 +1690,67 @@ blocks:
     cut_order: null
     superseded_by: null
     notes: Crack-safety is a formal candidate (stitch invariants).
+
+  - id: TERRAIN.COMPCACHE
+    name: Composed-lattice patch front
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Holds ONE patch's composed lattice on chip and serves it to the tessellator through its registered ports. The missing middle both neighbours name: TERRAIN.PATCH's contract says nothing downstream consumes patch_state in RTL, TERRAIN.TESS's says it is not yet composed upstream, and reports/Missingterrain lists the composed cache third among the gaps between the terrain organs and an 8 km world."
+    contract: design/contracts/TERRAIN.COMPCACHE.md
+    phase: 6
+    owner_issue: ZH-125
+    inputs: [patch_state, lattice_placement, cell_state]
+    outputs: [lattice_reads, cell_reads]
+    upstream: [TERRAIN.PATCH]
+    downstream: [TERRAIN.TESS]
+    backpressure: ready_valid
+    latency: fixed:1
+    target_throughput: "one lattice datum per clock, registered; one record per two fill clocks"
+    reference_model: zref::terrain::ComposedLattice
+    tests:
+      directed: tests/terrain/compcache_front_rtl_directed.cpp
+      random: tests/terrain/compcache_front_rtl_directed.cpp
+    counters: [compcache_fill_records, compcache_patches_filled, compcache_patches_served, compcache_fill_overrun, compcache_lat_oob, compcache_cs_oob]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-06"
+        commit: "1cc9ef68"
+        evidence: design/contracts/TERRAIN.COMPCACHE.md
+      - state: UNIT_VERIFIED
+        date: "2026-09-06"
+        commit: "96425bb1"
+        evidence: tests/terrain/compcache_front_rtl_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      ONLY ONE PATCH IS ON CHIP, and the arithmetic forces it. The full
+      256-patch composed store is 8.92 Mbit against 5.53 Mbit of M10K on the
+      whole device -- 161%. The bulk lives in SDRAM, and SDRAM cannot answer
+      TERRAIN.TESS's registered port at one datum per clock, so exactly one
+      patch is staged and double buffered. ~14 M10K for the two surfaces,
+      1 for the cell plane. The SDRAM backing attaches on the FILL side
+      without touching the serve ports.
+
+      WORLD POSITION IS SEPARABLE, so it stores 33 + 33 words rather than
+      1,089 pairs. That is zref::terrain::ComposedLattice's own stated
+      precondition ("must be axis-aligned monotone"), not an approximation --
+      a rotated sheet would have to change the reference first.
+
+      FOUR DEFECTS WERE FOUND BY WRITING THE DIFFERENTIAL, and the shape of
+      them is the lesson. The file HAD NEVER BEEN THROUGH VERILATOR: a comment
+      line beginning with the simulator's name is read as a pragma, so it did
+      not lex, and the lint that was believed to have passed had produced empty
+      output that was read as silence-means-clean. Under it were a cell-plane
+      address one bit too narrow (both parities aliased onto the same 1,024
+      cells), a range test that was constant-false so the ENTIRE layer-D plane
+      was dead -- which masked the first -- and an ungated placement write that
+      could land in the patch being served. A lint gate now exists so this
+      block cannot go unread again.
 
   - id: TERRAIN.ISLAND
     name: Island patch directory
