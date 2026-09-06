@@ -711,19 +711,40 @@ try {
             # read ExitCode back EMPTY here. Supervising from outside keeps that
             # property and still enforces the deadline.
             #
-            # It only kills Quartus processes started AFTER this run began, so a
-            # concurrent fit in another workspace is never touched.
+            # IT KILLS ONLY THE QUARTUS PROCESSES THIS RUNNER ITSELF LAUNCHED,
+            # matched by PARENT PID. The previous predicate was "started after
+            # this run began", and its comment claimed that meant "a concurrent
+            # fit in another workspace is never touched" -- which is exactly
+            # backwards. Started-after protects the EARLIER fit, which was never
+            # at risk, and puts every LATER fit in the blast radius. Any runner
+            # reaching its deadline would kill a fit some other lane started
+            # afterwards, in a different workspace, on different sources.
+            #
+            # That is not hypothetical: on 2026-09-06 two fits ran concurrently
+            # (one from 20:43, one from 21:19) and the later one died ten
+            # minutes in with no error in its log and no row written -- the
+            # signature of an external Stop-Process, not of a Quartus failure.
+            # Two separate 50-minute placements were lost that evening.
+            #
+            # Parent PID is exact in both directions: it cannot miss this
+            # runner's own process, and it cannot reach anybody else's.
             $runStart = Get-Date
             $deadline = $runStart.AddSeconds($TimeoutSeconds)
+            $myPid = $PID
             $watchdog = Start-Job -ScriptBlock {
-                param($deadline, $startedAfter)
+                param($deadline, $ownerPid)
                 while ((Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
-                foreach ($n in 'quartus_map', 'quartus_fit', 'quartus_sta') {
-                    Get-Process -Name $n -ErrorAction SilentlyContinue |
-                        Where-Object { $_.StartTime -ge $startedAfter } |
-                        Stop-Process -Force -ErrorAction SilentlyContinue
-                }
-            } -ArgumentList $deadline, $runStart
+                # Win32_Process rather than Get-Process, because only the CIM
+                # view carries ParentProcessId.
+                Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+                    Where-Object {
+                        $_.ParentProcessId -eq $ownerPid -and
+                        $_.Name -in @('quartus_map.exe', 'quartus_fit.exe', 'quartus_sta.exe')
+                    } |
+                    ForEach-Object {
+                        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+                    }
+            } -ArgumentList $deadline, $myPid
 
             $stages = if ($MapOnly) { @('quartus_map.exe') }
                       else { @('quartus_map.exe', 'quartus_fit.exe', 'quartus_sta.exe') }

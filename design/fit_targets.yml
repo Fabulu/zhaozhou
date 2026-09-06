@@ -179,6 +179,32 @@ targets:
   # S3.4) and the II=1 form was refuted against them (docket D19q). If this one
   # also breaches DSP, the LOGIC2 attribute is not doing what S15.5 variant A
   # says it does and that is the finding.
+  # RCP24 V3 -- the exact-multiplier tile, section 10 of the V3 architecture.
+  # Its own target rather than -ExtraSources, so the row is reproducible and the
+  # closure is declared where the provenance guard can hash it.
+  #
+  # RULES ARE SET AT WHAT IS MEASURED, AND ONLY THAT. max_dsp: 3 is the measured
+  # figure, not svc's 4 and not section 10.7's target of 2 -- the target was
+  # MISSED and is reported as a miss rather than written into the gate as though
+  # it had been met. min_memory_bits keeps the payload and scratch in RAM
+  # (section 21.2); it is deliberately NOT min_m10k, because a small plane may
+  # legitimately land in MLAB while a plane collapsing into fabric cannot hide
+  # behind a bit count.
+  #
+  # max_alms / max_registers / max_m10k are ABSENT ON PURPOSE until a full fit
+  # produces them. Do NOT inherit svc's max_alms: 650 / max_registers: 600:
+  # svc itself already violates both at 1,041 and 1,101, so copying them down
+  # would install a gate that fails on arrival and gets ignored.
+  - top: zhao_raster_rcp24_v3
+    sources:
+      - fpga/rtl/field/zhao_field_rcp24_rom.sv
+      - fpga/rtl/raster/zhao_raster_ticketq.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+      - fpga/rtl/raster/zhao_raster_rcp24_v3.sv
+    rules:
+      max_dsp: 3
+      min_memory_bits: 1800
+
   - top: zhao_texture_material_combine_v1
     sources:
       - fpga/rtl/texture/zhao_texture_material_combine_v1.sv
