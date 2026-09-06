@@ -18,6 +18,8 @@ Targets:
   probe      zixx-probe.exe
   mprobe     manafold-probe.exe (the committed Manafold clearance/closure probe)
   mmeshcheck manafold-meshcheck.exe
+  mhinge     manafold-hinge-traj.exe (pass 7: the committed antenna hinge
+             trajectory dump, decode_pose -> CSV, for Direction 5 §2a)
   all        all four core executables
 EOF
 }
@@ -40,7 +42,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|all)
       TARGET="$1"
       shift
       ;;
@@ -179,6 +181,12 @@ build_mmeshcheck() {
     -o "$BIN/manafold-meshcheck.exe"
 }
 
+build_mhinge() {
+  printf '%s\n' "LD manafold-hinge-traj"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_hinge_traj.cpp" "${LIBOBJS[@]}" \
+    -o "$BIN/manafold-hinge-traj.exe"
+}
+
 case "$TARGET" in
   reel) build_reel ;;
   cel) build_cel ;;
@@ -186,6 +194,7 @@ case "$TARGET" in
   probe) build_probe ;;
   mprobe) build_mprobe ;;
   mmeshcheck) build_mmeshcheck ;;
+  mhinge) build_mhinge ;;
   all)
     build_reel
     build_cel

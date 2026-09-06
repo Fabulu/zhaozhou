@@ -7200,6 +7200,55 @@ int main(int argc, char** argv) {
   // smear in the way: four frames, mana off by the slot rule.
   if (wanted("manafold-still"))
     rc |= render_scene(subject_u02_clip(7, "manafold-still", 2, false, &kU02SunCalm));
+  // ---- PASS 7 (Direction 5 §2a): THE FIXED-CAMERA ANTENNA DIAGNOSTIC -----
+  //
+  // §2a ("do the antenna hinges move separately, with a real range of
+  // motion?") has been misjudged TWICE, and the pass-6 by-eye reviewer
+  // refused to score it a third time: "On an orbiting camera, hinge motion
+  // cannot be separated from camera rotation... that item's been misjudged
+  // twice; I wasn't going to make it three." This subject exists to settle
+  // it. THREE things hold still so only the hinges are left to move:
+  //   * the CAMERA: orbit=false, a constant cam_yaw, no cam_pull, no
+  //     cam_track, no sky_sweep, no shake -- the same "held" contract
+  //     subject_u02_s4's fixed diagnostic views use.
+  //   * the CREATURE ROOT: slot 2 (channel) -- build_channel() never
+  //     touches kBRoot (no yaw, no lateral travel; only the ordinary hover
+  //     bob moves the root, vertically, a known and separate signal).
+  //   * the EFFECTS: mana and smear OFF, same call as manafold-still --
+  //     this is a geometry-legibility diagnostic, not a showcase shot, and
+  //     the fold's bloom would compete with the exact read it exists to
+  //     settle.
+  // The camera is also framed TIGHTER and biased UP off body-centre so the
+  // loop fills the frame instead of sharing it with the whole body (chosen
+  // by rendering and looking, per CLAUDE.md's "author by eye" law -- not
+  // derived from a measurement).
+  //
+  // channel/slot 2 is also manafold_art.h's antenna_knead pick: its
+  // kKneadClipPm gain is the second-highest in the bank, so it is the clip
+  // most likely to show a real hinge range at all.
+  //
+  // The companion instrument is manafold_hinge_traj.cpp (built via
+  // build-direct.sh's `mhinge` target): it reads the same clip's hinge
+  // bone positions straight off zc::decode_pose -- never off a rendered
+  // frame -- so the numeric verdict cannot inherit whatever this camera
+  // gets wrong.
+  //
+  // Committed permanently alongside manafold-still and the fogprobe pair
+  // (CLAUDE.md: "a probe that does this was written once and thrown away,
+  // so its numbers are unreproducible -- commit the probe").
+  if (wanted("manafold-antenna-fixed")) {
+    SceneSubject s = subject_u02_clip(2, "manafold-antenna-fixed", u02::kChannelKeys, false,
+                                      &kU02SunChannel);
+    s.u02_mana = 0;   // an unobstructed look at the joints, not the fold's bloom
+    s.u02_smear = 0;
+    s.planet = 0;     // channel's off-axis violet bloom would compete with the read
+    s.cam_k = 620000;    // ~1.7x the house zoom: the loop reads large in frame
+    s.cam_bias = -9000;  // aim up off body-centre onto the loop (authored by eye)
+    s.note =
+        "Direction 5 SS2a fixed-camera antenna diagnostic: camera and body root "
+        "both hold still for the whole clip -- only the hinges move";
+    rc |= render_scene(s);
+  }
   // The FOG ABLATION pair (architecture §1.1). Same base clip as manafold-rest,
   // one knob each: -mana kills the smear plane only, -off kills both. Against
   // the rest baseline they attribute every pale pixel of the gassy shell to the
