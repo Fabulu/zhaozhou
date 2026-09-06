@@ -2934,6 +2934,10 @@ int g_hide_creature = 0;
 // that have no committed fogprobe twin of their own. Ships nothing: unset,
 // this is a single skipped assignment and every byte is identical.
 int g_mana_ablate = 0;
+// PASS 10 STAGE A (risk R2): U02_COVER_PAINT=1 paints the creature-coverage
+// mask the mist compositor was handed, so a human can LOOK at what it selected
+// before any measurement is trusted against it. Diagnostic only.
+bool g_u02_cover_paint = false;
 constexpr int32_t kCelInkFarRadiusQ8 = 120 * 256;
 constexpr int32_t kCelInkMidRadiusQ8 = 200 * 256;
 constexpr int32_t kCelInkCloseRadiusQ8 = 360 * 256;
@@ -3128,6 +3132,13 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   // ---- RUN 1939 experiment post-pass (env-gated, default off). Placed
   // HERE because the hook returns early when there are no gibs -- the
   // first cut sat after that return and never ran on the idle. ----------
+  // PASS 10 STAGE A: the creature's own coverage for this frame, hoisted out of
+  // the cel-ink pass so the mist compositor can exclude it. It is the SAME mask
+  // the ink is grown from -- not a second derivation of the same idea -- and it
+  // gains the ink ring itself below, so "the creature" means body AND its drawn
+  // outline. Empty when this frame never built one; the mist call site says so
+  // loudly rather than silently compositing over the animal.
+  std::vector<uint8_t> u02_cover;
   if (g_exp_contour || g_exp_boil || g_cel_main) {
     const size_t n = static_cast<size_t>(w) * h;
     std::vector<uint8_t> mask(n, 0);
@@ -3139,6 +3150,9 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       if (rgb_changed || (g_cel_main && depth[i] != pre_depth[i]))
         mask[i] = 1;
     }
+    // STAGE A: the body, taken from the same `mask` the ink pass is grown
+    // from. The ink ring is added to it below, where that ring is computed.
+    if (c.u02_mist) u02_cover = mask;
     if (g_exp_boil) {
       // the redrawn-every-frame look: displace the creature's pixels by a
       // chunky 6x6-cell field that re-rolls every 4 frames. Deterministic
@@ -3264,6 +3278,13 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
         rgb[i * 3 + 1] = kCelInkG;
         rgb[i * 3 + 2] = kCelInkB;
       }
+      // STAGE A: the ink ring IS the creature -- the reviewer's "the mist
+      // softens the ink outline" is the same fault as the hue rotation, one
+      // pixel further out. It grows into the exterior, so it is never already
+      // in `mask` and has to be added here.
+      if (!u02_cover.empty())
+        for (size_t i = 0; i < n; ++i)
+          if (edge[i]) u02_cover[i] = 1;
     }
     ++g_exp_frame;
   }
@@ -3382,8 +3403,39 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       }
       const int mist_gain_pm =
           u02::g_u02_mist.gain_pm * u02::mist_speed_mul_pm(c.u02_speed_mm) / 1000;
+      // PASS 10 STAGE A: the silhouette goes in, and a missing mask is LOUD.
+      // A check that quietly does nothing is worse than no check -- it
+      // manufactures confidence (10-GATE-CHECKLIST item 6). If the coverage
+      // mask was never built for this frame the mist would silently revert to
+      // pass-9 behaviour and repaint the animal, so say so once, per subject.
+      if (u02_cover.empty() && u02::mist_excludes_silhouette()) {
+        static bool warned = false;
+        if (!warned) {
+          std::fprintf(stderr,
+                       "u02 STAGE A: mist is on but NO creature coverage mask was "
+                       "built this frame -- the mist is compositing OVER the "
+                       "creature (pass-9 behaviour). The mask is produced by the "
+                       "cel-ink pass; this subject does not run it.\n");
+          warned = true;
+        }
+      }
       u02::mist_composite(c.u02_mist_buf.data(), c.u02_mist_depth.data(), rgb,
-                          depth, w, h, mist_gain_pm, c.u02_frame);
+                          depth, w, h, mist_gain_pm, c.u02_frame,
+                          u02_cover.empty() ? nullptr : u02_cover.data());
+      // PASS 10 STAGE A, risk R2: PAINT THE MASK AND LOOK AT WHAT IT SELECTED.
+      // The architecture makes this the first thing done with the mask, before
+      // any bound is wired to it -- three instrument faults were caught this
+      // session by exactly this and nothing else. It paints the mask the mist
+      // actually received, after the composite, so it cannot drift from the
+      // thing it is meant to prove.
+      if (g_u02_cover_paint && !u02_cover.empty()) {
+        for (size_t i = 0; i < static_cast<size_t>(w) * h; ++i) {
+          if (!u02_cover[i]) continue;
+          rgb[i * 3] = static_cast<uint8_t>(rgb[i * 3] / 3);
+          rgb[i * 3 + 1] = static_cast<uint8_t>(255 - (255 - rgb[i * 3 + 1]) / 3);
+          rgb[i * 3 + 2] = static_cast<uint8_t>(rgb[i * 3 + 2] / 3);
+        }
+      }
     }
     // ---- pass 3 (R6): THE SMEAR PLANE, first — decay with the quantised
     // glitchy step, feed EVERYTHING the mana draws this frame (pre splats
@@ -7242,6 +7294,24 @@ int main(int argc, char** argv) {
     g_mana_ablate = std::string(ab) == "1" ? 1 : 0;
     if (g_mana_ablate)
       std::fprintf(stderr, "MANA_ABLATE=1 (mana+smear forced off on every subject)\n");
+  }
+  // PASS 10 STAGE A: U02_MIST_NO_EXCLUDE=1 puts the mist back OVER the
+  // creature -- pass-9 behaviour -- so the A/B and the colour gate's
+  // proved-failable leg both come from ONE BINARY (10-GATE-CHECKLIST item 21:
+  // a comparison split across two builds measures the builds as much as the
+  // flag). It is the measurement lever, never a shipping setting.
+  if (const char* cp = std::getenv("U02_COVER_PAINT")) {
+    g_u02_cover_paint = std::string(cp) == "1";
+    if (g_u02_cover_paint)
+      std::fprintf(stderr, "U02_COVER_PAINT=1 (creature coverage mask painted green)\n");
+  }
+  if (const char* nx = std::getenv("U02_MIST_NO_EXCLUDE")) {
+    if (std::string(nx) == "1") {
+      u02::g_u02_mist_force_no_exclude = true;
+      std::fprintf(stderr,
+                   "U02_MIST_NO_EXCLUDE=1 (STAGE A OFF: the mist composites OVER "
+                   "the creature -- pass-9 behaviour, the A/B leg)\n");
+    }
   }
   // Stage M ladder lane (u02 pass 3, R5): U02_AMBIENT / U02_ML_AMBIENT pick
   // a named ambient rung for the LADDER PLATES. Unset = the shipped rigs.

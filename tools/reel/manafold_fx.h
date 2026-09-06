@@ -497,6 +497,13 @@ static_assert(kMistW * kMistBlock == 384 && kMistH * kMistBlock == 240,
 // gives up per frame accumulates into a visible tail behind a travelling one.
 constexpr int kMistFollowPm = 820;
 constexpr int kMistShiftFxBits = 8;  // sub-cell residual precision
+// PASS 10, STAGE A. The mist composites AROUND the creature, never over it --
+// the pass's spine. See mist_composite for the mechanism and the 134-degree
+// measurement it removes. Default TRUE; false reproduces pass 9 exactly and is
+// kept as the A/B leg and as the proved-failable input for the colour gate.
+// U02_MIST_NO_EXCLUDE=1 flips it at runtime, so the comparison comes from ONE
+// binary (10-GATE-CHECKLIST item 21).
+constexpr bool kMistExcludeSilhouette = true;
 // persistence: near the BROKEN-BUFFER rung, because a ghost outstays its frame
 constexpr int kMistKeepPm = 930;
 constexpr int kMistStepFrames = 5;
@@ -541,8 +548,23 @@ struct MistCfg {
   int gain_pm = kMistGainPm;
   int vivid_pm = kMistVividPm;
   int chroma_floor_pm = kMistChromaFloorPm;
+  // STAGE A. Last, and with a default, so every existing aggregate initialiser
+  // in kMistVariants[] keeps its exact meaning and every variant inherits the
+  // exclusion (the fault it fixes is independent of density -- `sparing`
+  // rotated the band's hue as badly as `mid`).
+  bool exclude_silhouette = kMistExcludeSilhouette;
 };
 inline MistCfg g_u02_mist;
+// STAGE A's A/B lever. It lives OUTSIDE MistCfg on purpose: the reel assigns
+// g_u02_mist wholesale from kMistVariants[] per subject and resets it between
+// subjects, so a field inside the struct would be silently overwritten every
+// time a variant leg ran -- which is exactly the leg the A/B needs it for.
+inline bool g_u02_mist_force_no_exclude = false;
+/** The effective STAGE A predicate. One place, so the compositor, the reel's
+ *  missing-mask warning and any gate all ask the same question. */
+inline bool mist_excludes_silhouette() {
+  return g_u02_mist.exclude_silhouette && !g_u02_mist_force_no_exclude;
+}
 // ---- THE MIST VARIANT TABLE (Direction 7 §8, §10.2, §10.3) ----------------
 // The owner asked for the mist back (§8), then said the new one is "a bit too
 // sparing" (§10.2), then licensed an experiment: "for some experiments let's
@@ -1970,10 +1992,36 @@ inline void mist_feed(uint8_t* buf, int32_t* dbuf, const GlowAssets& g,
  *  the parts of pass 8's colour work that are LAWS here, not preferences
  *  (09-ENGINE-GOTCHAS 4: additive over bright pink can only whiten, so this
  *  blends; and a plane with no chroma floor takes its colour from the sky). */
+/**
+ * PASS 10, STAGE A -- THE SPINE: THE MIST COMPOSITES AROUND THE SILHOUETTE.
+ *
+ * `cover` is the creature's own per-pixel coverage (body + cel ink) for this
+ * frame, or nullptr for the pass-9 behaviour. A covered pixel NEVER receives
+ * mist.
+ *
+ * WHY THIS IS THE WHOLE FIX. The only rejection this function used to make was
+ * the depth test below -- so every creature pixel whose remembered splat sat
+ * nearer got repainted. Measured on the antenna band at `rest` f200, the
+ * animal's own skin rotated 134 degrees of hue: RGB 144,46,94 (hue 331,
+ * magenta) became 88,136,154 (hue 197, cyan). `sparing` at alpha 200 does it
+ * too, which is the proof that NO DENSITY VALUE CAN FIX IT -- the fault is the
+ * composite reaching creature pixels at all, not how strongly it lands. Do not
+ * let this be traded for a lower alpha.
+ *
+ * What survives, by construction: the loop window, the sky, the terrain and
+ * the trail behind a travelling creature are all NON-creature pixels, so the
+ * haze in the pocket and the streak on `hasty`/`fall` are untouched. The gas
+ * is outside the animal and the ink line is crisp under it, which is
+ * Direction 5 section 3 delivered.
+ *
+ * The SMEAR is deliberately not given this treatment: its over-creature lerp
+ * is part of the praised halo/trail and sits on the reviewer's protected list.
+ */
 inline void mist_composite(const uint8_t* buf, const int32_t* dbuf, uint8_t* rgb,
                            const int32_t* frame_depth, uint32_t w, uint32_t h,
-                           int gain_pm, uint32_t frame) {
+                           int gain_pm, uint32_t frame, const uint8_t* cover) {
   if (gain_pm <= 0) return;
+  if (!mist_excludes_silhouette()) cover = nullptr;  // the A/B, one binary
   int tear_y0 = -1, tear_y1 = -1, tear_dx = 0;
   {
     const uint32_t ht = fx_hash(0x6C057A1Bu, frame / 2u, 0x5Bu);
@@ -1998,6 +2046,9 @@ inline void mist_composite(const uint8_t* buf, const int32_t* dbuf, uint8_t* rgb
         if (cxi < 0) cxi += kMistW;
         if (cxi >= kMistW) cxi -= kMistW;
       }
+      // STAGE A: the creature's own pixels are not sky. Rejected before
+      // anything else is computed for them.
+      if (cover != nullptr && cover[static_cast<size_t>(y) * w + x]) continue;
       const uint8_t* c = row + static_cast<size_t>(cxi) * 3;
       int m = c[0];
       if (c[1] > m) m = c[1];
