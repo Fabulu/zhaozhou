@@ -204,6 +204,14 @@ targets:
     rules:
       max_dsp: 3
       min_memory_bits: 1800
+      # MEASURED 2026-09-06 by the full fit (digest 6553c5cef196), set at the
+      # measurement with a little headroom rather than at an aspiration. svc's
+      # max_alms: 650 / max_registers: 600 are deliberately NOT inherited: svc
+      # itself already violates both at 1,041 and 1,101, so copying them down
+      # would install a gate that fails on arrival and is then ignored.
+      max_alms: 1400
+      max_registers: 2100
+      max_m10k: 8
 
   - top: zhao_texture_material_combine_v1
     sources:

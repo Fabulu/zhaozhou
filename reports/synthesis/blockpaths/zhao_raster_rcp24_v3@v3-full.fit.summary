@@ -1,0 +1,20 @@
+Fitter Status : Successful - Sun Sep 06 23:00:39 2026
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : blockfit
+Top-level Entity Name : zhao_raster_rcp24_v3
+Family : Cyclone V
+Device : 5CSEBA6U23I7
+Timing Models : Final
+Logic utilization (in ALMs) : 1,230 / 41,910 ( 3 % )
+Total registers : 1944
+Total pins : 0 / 314 ( 0 % )
+Total virtual pins : 276
+Total block memory bits : 2,582 / 5,662,720 ( < 1 % )
+Total RAM Blocks : 6 / 553 ( 1 % )
+Total DSP Blocks : 3 / 112 ( 3 % )
+Total HSSI RX PCSs : 0
+Total HSSI PMA RX Deserializers : 0
+Total HSSI TX PCSs : 0
+Total HSSI PMA TX Serializers : 0
+Total PLLs : 0 / 6 ( 0 % )
+Total DLLs : 0 / 4 ( 0 % )

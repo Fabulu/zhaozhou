@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "4e7e6f9df408caeda198e6deffd3bddc988e1459",
+    "newestRunCommit":  "7d55fa845a630b49a2897545544261a689735045",
     "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -777,6 +777,27 @@
                        "blockMemoryBits":  2582,
                        "dspBlocks":  3,
                        "virtualPins":  276
+                   },
+                   {
+                       "module":  "zhao_raster_rcp24_v3@v3-full",
+                       "status":  "ok",
+                       "sourceCommit":  "7d55fa845a630b49a2897545544261a689735045",
+                       "rtlCleanAtHead":  false,
+                       "sourceDigest":  "6553c5cef1965e50316afbf8d67368d8cfc7fbcf91a3e4e39d825788b31be1eb",
+                       "variantOf":  "zhao_raster_rcp24_v3",
+                       "seconds":  1798,
+                       "sourcesHashed":  4,
+                       "alms":  1230,
+                       "registers":  1944,
+                       "blockMemoryBits":  2582,
+                       "ramBlocks":  6,
+                       "dspBlocks":  3,
+                       "virtualPins":  276,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  90.54,
+                       "fmaxClock":  "clk"
                    },
                    {
                        "module":  "zhao_raster_rcp24_v3@v3-nctx8",
