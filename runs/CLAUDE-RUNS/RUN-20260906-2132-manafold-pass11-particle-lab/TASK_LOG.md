@@ -57,3 +57,38 @@ mist measures the mist.
 ## Subagent Spawns
 
 *none -- this lane does its own work*
+
+### 22:00 - the first plates, and the axis nobody asked for
+- Baseline render (400 frames, U02_FOLD_DEBUG=1) fixes the knead window from the
+  log rather than assumption: seg=1 gather f52, seg=2 hold f124, **seg=3 knead
+  f239-371**, seg=4 release f372. Peak agitation in the window is f287 (740
+  against a 58 mean); morph runs 3->0 (crescent to ring) across it.
+- Plate frames chosen from that: f250 / f287 / f320 / f368.
+- MIST OFF confirms the shapes ARE drawn (Stage S reproduced). What they read as
+  is a scatter of fuzzy balls with a WHITE SMEAR through the middle.
+- The white is the EDGE HALO'S RADIUS. Ablated it five ways; only the radius
+  moved it. Q12 and Q90 put the same white on screen, so it is not the motes.
+
+### 22:20 - two traps, both in CLAUDE.md, both hit anyway
+- A patch script asserted on an INDENTATION mismatch (6 spaces, not 8), printed
+  a traceback, and the build in the same command rebuilt unchanged source and
+  exited 0. Two variants rendered against a binary that had never heard of their
+  knobs and came back looking like the baseline -- an honest-looking negative
+  result. Caught by the tell, deleted, re-shot.
+- The retry's LINK failed ("cannot open output file ... Permission denied", a
+  render still held the exe), printed BUILD_RC=1, and the shell exited 0 on the
+  tail. Read the BUILD's exit code, not the pipeline's.
+- Fix: kill every zhao-reel-cel.exe, rebuild (BUILD_RC=0), re-run, and verify
+  each variant against the binary's own `PARTICLE-LAB <KNOB>=<v>` stderr echo
+  rather than trusting the env line.
+
+### 22:45 - delivered
+- 7 plates x 2 (native + 3x zoom) in Upheaval/creature/Manafold/particle-lab-plates/
+- PARTICLE-LAB-FINDINGS.md: axis-by-axis, an explicit "what folds and what does
+  not", a ranked recommendation (K7) with the plate that justifies it, a
+  proposed-constants block, and what the lane could not do.
+- MANAFOLD-INDEX.md points at it.
+- Pushed to manafold-p11-particle-lab on BOTH repos, each verified from outside
+  the lane with `git fetch` + `git branch -r --contains`. NOT merged to main.
+
+**Status: complete.**

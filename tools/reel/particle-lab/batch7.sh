@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+cd /c/programmieren/zencrifice/manafold-p11-L
+# The combinations: the axes do not act independently, so the recommendation has
+# to be looked at assembled, not inferred from four one-at-a-time sheets.
+./runvar.sh K1-THINEDGE PL_EDGE_CORE_R=2 PL_EDGE_HALO_R=5
+./runvar.sh K2-THIN-RICH PL_EDGE_CORE_R=2 PL_EDGE_HALO_R=5 \
+    PL_CORE_OF_HALO=2200 PL_HALO_RMIN=5 PL_HALO_RMAX=13
+./runvar.sh K3-THIN-RICH-BEAD PL_EDGE_CORE_R=2 PL_EDGE_HALO_R=5 \
+    PL_CORE_OF_HALO=2200 PL_HALO_RMIN=5 PL_HALO_RMAX=13 PL_PCON=4
+./runvar.sh K4-THIN-RICH-CLUMP PL_EDGE_CORE_R=2 PL_EDGE_HALO_R=5 \
+    PL_CORE_OF_HALO=2200 PL_HALO_RMIN=5 PL_HALO_RMAX=13 PL_PCON=1 \
+    PL_MOTE_COUNT=54 PL_WANDER=8
+./runvar.sh K5-THIN-RICH-SPARK PL_EDGE_CORE_R=2 PL_EDGE_HALO_R=5 \
+    PL_CORE_OF_HALO=2200 PL_HALO_RMIN=6 PL_HALO_RMAX=14 PL_PSHAPE=1 \
+    PL_MOTE_COUNT=54 PL_WANDER=8
+./runvar.sh K6-THIN-RICH-BEAD-SPARSE PL_EDGE_CORE_R=2 PL_EDGE_HALO_R=5 \
+    PL_EDGE_STAMP=40 PL_CORE_OF_HALO=2200 PL_HALO_RMIN=5 PL_HALO_RMAX=13 \
+    PL_PCON=4
+echo BATCH7_DONE
