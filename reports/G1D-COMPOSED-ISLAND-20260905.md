@@ -228,6 +228,78 @@ before-figure to difference against, and inventing one would be the
 registered output stage on those reads, which is the same remedy §5 of the
 perspuv report proposes for `e_q`.
 
+### 4.3a THE REFIT LANDED — 16,193 ALM, 63.54 MHz, and it fails three rules
+
+**2026-09-06, `ea4870d3`, 14,004 s (3h53m).** This is G1-D's current headline
+and it supersedes everything in 4.3 below, which is kept as the comparison.
+
+```
+status        failed:structure
+alms          16193           of 41910
+registers     27097
+blockMemoryBits 34080
+ramBlocks     25              of 553
+dspBlocks     17              of 112
+virtualPins   1259
+fmaxMhz       63.54           clk
+```
+
+| | ALMs | vs composed |
+|---|---|---|
+| architecture nominal (§3.3) | 6,600 | **+9,593 (+145%)** |
+| **redline** | **7,500** | **+8,693 (+116%)** |
+| sum of standalone per-block rows | 7,913 | +8,280 (+105%) |
+| previous composed measurement | 7,720 | +8,473 (+110%) |
+| **composed, now** | **16,193** | |
+
+**It more than DOUBLED, and it is 2.16x the redline.** Three rules fired: ALM
+16,193 > 7,500, registers 27,097 > 9,000, DSP 17 > 14.
+
+#### What moved, and what is NOT yet established about why
+
+Against the 7,720 measurement at `afb7070f`, the island has gained the
+ingress-capture repair (a 64-entry per-fragment attribute table), the R6
+ordering boundary (a 64-entry reorder buffer with a 64-to-1 output mux), and a
+combiner tag widened from 16 to 22 bits through every record slot.
+
+    registers   11,790 -> 27,097   (+15,307)
+    ALM          7,720 -> 16,193   (+8,473)
+    memory bits 25,872 -> 34,080   (+8,208, 18 -> 25 M10K)
+    Fmax         69.05 -> 63.54 MHz
+    virtual pins   889 -> 1,259
+
+**The obvious reading is that the attribute table is in flip-flops, and that
+reading is not yet evidence.** The register rule's own message says to read the
+fit's RAM Summary, which NAMES every array that inferred — and that report was
+deleted with the workspace, for the second time in this project. PERSPUV's
+register census had to be done by static analysis for exactly this reason, said
+so in its own header, and was wrong. So the census is not attempted here; the
+runner now harvests the map report, and the next island fit will have one.
+
+What IS established, from the reports that did survive:
+
+* **The worst path is now inside MATERIAL.COMBINE.V1** —
+  `BTu_combine|Mux136~0_OTERM7702BT` at **−5.737 ns**, and the next two are the
+  same source node. That is a different family from the pre-repair census, whose
+  1,595 internal paths topped out at −3.63.
+* **8,208 more memory bits and seven more M10Ks DID infer**, so the new state is
+  not uniformly in flops.
+* **370 more virtual pins**, which inflates a leaf fit's boundary — the effect
+  §4.4 already measured as real and almost irrelevant at 889 pins, and which
+  should be re-measured rather than re-assumed at 1,259.
+
+#### What this changes
+
+The owner's COMBINE/ASSETFETCH recovery brief (`D19x`) argues that COMBINE needs
+a different execution organisation. **This fit corroborates that from the island
+level**: the composed critical path is now inside the combiner, at a worse slack
+than any path the previous census found anywhere.
+
+It also means the island as composed today cannot be presented as fitting a
+Cyclone V budget of any kind, and the honest status of G1-D is that the
+composition WORKS and does not FIT. Those are different acceptance questions and
+this report's §4.7 already separates them.
+
 ### 4.3 Fitter — COMPLETE, AND NOW STALE
 
 > **STALE A SECOND TIME, AND A REFIT IS RUNNING** (started 2026-09-06). Since

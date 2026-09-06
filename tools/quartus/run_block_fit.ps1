@@ -800,6 +800,39 @@ try {
                     Copy-Item -LiteralPath $sumSrc -Destination (Join-Path $pathDir ($rowModule + '.setup.summary.rpt')) -Force
                 }
 
+                # THE RAM SUMMARY, AND THE REST OF THE MAP REPORT.
+                #
+                # This is the report the register rule's own message tells the
+                # reader to consult -- "read blockMemoryBits/ramBlocks beside
+                # this before assuming misplaced payload; the fit's RAM Summary
+                # NAMES EVERY ARRAY that inferred" -- and until 2026-09-06 it was
+                # deleted with the workspace at the end of every run.
+                #
+                # So the one report that diagnoses a resource failure was
+                # discarded precisely on the runs that had one. It has now cost
+                # two diagnoses: PERSPUV's register census had to be done by
+                # STATIC ANALYSIS of the declarations, saying so in its own
+                # header -- "that fit's workspace lives under %TEMP% and is
+                # deleted when the run ends, so there is no RAM Summary on disk
+                # to read" -- and it was wrong. Then the composed island came
+                # back at 27,097 registers after 14,004 seconds and the same
+                # report was gone again.
+                #
+                # A fit that PASSES needs no census. A fit that fails its
+                # resource rules is exactly when one is needed, and that is the
+                # run whose evidence was being thrown away.
+                #
+                # Harvested whole rather than filtered: the summary sections and
+                # the RAM Summary are what get read today, and a filter written
+                # now would be a guess about what the NEXT diagnosis needs.
+                foreach ($mr in @('blockfit.map.rpt', 'blockfit.map.summary', 'blockfit.fit.summary')) {
+                    $mrSrc = Join-Path $dir ('output_files/' + $mr)
+                    if (Test-Path -LiteralPath $mrSrc) {
+                        $ext = $mr -replace '^blockfit\.', ''
+                        Copy-Item -LiteralPath $mrSrc -Destination (Join-Path $pathDir ($rowModule + '.' + $ext)) -Force
+                    }
+                }
+
                 $hold = Get-StaSummary $s 'Hold Summary'
                 if ($null -ne $hold) {
                     $row.holdSlackNs = $hold.slackNs
