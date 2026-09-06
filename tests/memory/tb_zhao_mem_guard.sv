@@ -86,14 +86,17 @@ module tb_zhao_mem_guard
   );
 
   // arbiter: only the guard port is wired (clients 1..4 idle)
-  zhao_arb_req_t [4:0] client_req;
-  zhao_arb_rsp_t [4:0] client_rsp;
+  // Seven ports since the terrain amendment; only the guard's is driven.
+  zhao_arb_req_t [6:0] client_req;
+  zhao_arb_rsp_t [6:0] client_rsp;
   assign client_req[1] = arb_req;
   assign arb_rsp      = client_rsp[1];   // the guard sees the arbiter's rsp
   assign client_req[0] = '0;
   assign client_req[2] = '0;
   assign client_req[3] = '0;
   assign client_req[4] = '0;
+  assign client_req[5] = '0;
+  assign client_req[6] = '0;
 
   logic hold_refresh;
   zhao_arb_req_t ctrl_req;

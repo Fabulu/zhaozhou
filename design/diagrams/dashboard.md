@@ -3,7 +3,7 @@
 > GENERATED from `design/blocks.yml` + `design/ops.yml` by `npm run ledger:gen` — do not edit.
 > Staleness is a CI failure: regenerated output must be byte-identical to the committed file (plan W2/R11).
 
-Blocks: **107** (87 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
+Blocks: **111** (91 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 sinks, 5 stamp modes) · Profiles: **5** (frozen five).
 
 ## Maturity matrix (charter §4 ladder)
 
@@ -24,10 +24,10 @@ Blocks: **107** (87 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | raster | · | · | 5 | · | · | · | · | · | 5 |
 | surface | · | · | 2 | · | · | · | · | · | 2 |
 | sw | 9 | 3 | 3 | · | · | · | · | 2 | 15 |
-| terrain | · | 2 | 9 | · | · | · | · | · | 11 |
+| terrain | · | 3 | 12 | · | · | · | · | · | 15 |
 | texture | 2 | · | 5 | · | · | · | · | · | 7 |
 | video | · | · | 1 | 4 | · | · | · | · | 5 |
-| **all** | 33 | 13 | 45 | 16 | · | · | · | 6 | 107 |
+| **all** | 33 | 14 | 48 | 16 | · | · | · | 6 | 111 |
 
 ## Evidence ledger (maturity > SPECIFIED)
 
@@ -88,11 +88,20 @@ Blocks: **107** (87 FPGA/rtl + 15 software) · Ops: **40** (28 ALU, 1 table, 6 s
 | MEASURE.GOVERNOR | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/measure/measure_governor_directed.cpp |
 | MEASURE.TOKENS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_measure.hpp |
 | MEASURE.TOKENS | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/measure/measure_tokens_directed.cpp |
+| TERRAIN.PAGELOADER | SPECIFIED | 2026-09-06 | `973682f8` | design/contracts/TERRAIN.PAGELOADER.md |
+| TERRAIN.PAGELOADER | UNIT_VERIFIED | 2026-09-06 | `973682f8` | tests/terrain/pageloader_rtl_directed.cpp |
 | TERRAIN.PATCH | REFERENCE_COMPLETE | 2026-08-16 | `53b7b8a` | reference/include/zref/zref_terrain.hpp |
 | TERRAIN.PATCH | UNIT_VERIFIED | 2026-08-31 | `cc10167` | tests/terrain/terrain_patch_directed.cpp |
 | TERRAIN.SHADE | REFERENCE_COMPLETE | 2026-09-03 | `eca81e6f` | reference/include/zref/zref_terrain_shade.hpp |
 | TERRAIN.TESS | REFERENCE_COMPLETE | 2026-08-21 | `ecf2870` | reference/include/zref/zref_terrain_tess.hpp |
 | TERRAIN.TESS | UNIT_VERIFIED | 2026-08-21 | `2575a2e` | tests/terrain/terrain_tess_directed.cpp |
+| TERRAIN.COMPCACHE | SPECIFIED | 2026-09-06 | `1cc9ef68` | design/contracts/TERRAIN.COMPCACHE.md |
+| TERRAIN.COMPCACHE | UNIT_VERIFIED | 2026-09-06 | `96425bb1` | tests/terrain/compcache_front_rtl_directed.cpp |
+| TERRAIN.ISLAND | SPECIFIED | 2026-09-06 | `b9bbb40d` | design/contracts/TERRAIN.ISLAND.md |
+| TERRAIN.ISLAND | REFERENCE_COMPLETE | 2026-09-06 | `f416c3f6` | reference/include/zref/zref_island.hpp |
+| TERRAIN.ISLAND | UNIT_VERIFIED | 2026-09-06 | `ed7c8723` | tests/terrain/island_dir_rtl_directed.cpp |
+| TERRAIN.VISIBLE | SPECIFIED | 2026-09-06 | `1cc9ef68` | design/contracts/TERRAIN.VISIBLE.md |
+| TERRAIN.VISIBLE | REFERENCE_COMPLETE | 2026-09-06 | `1cc9ef68` | reference/include/zref/zref_island.hpp |
 | TERRAIN.RESIDENCY | SPECIFIED | 2026-09-03 | `eadf1dfa` | design/contracts/TERRAIN.RESIDENCY.md |
 | TERRAIN.RESIDENCY | UNIT_VERIFIED | 2026-09-03 | `eadf1dfa` | tests/terrain/terrain_residency_v2_directed.cpp |
 | TERRAIN.MIPGEN | SPECIFIED | 2026-09-03 | `bb46109b` | design/contracts/TERRAIN.MIPGEN.md |
@@ -209,7 +218,7 @@ Per-block percentage budgets are deliberately unfrozen until Phase 0 (charter §
 | platform | 14% | 16 | 0% |
 | command_debug | 5% | 9 | 0% |
 | field | 6% | 2 | 0% |
-| geometry_mantle | 20% | 31 | 0% |
+| geometry_mantle | 20% | 35 | 0% |
 | tile | 30% | 14 | 0% |
 | myriad_forge | 9% | 10 | 0% |
 | twod_post | 6% | 5 | 0% |

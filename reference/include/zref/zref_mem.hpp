@@ -675,10 +675,28 @@ constexpr uint32_t kFbSlot0Base = 0x00000000u;
 // bank split (W2.7): slot 1 lives in DRAM bank 1 — zhao_pkg ZHAO_FB_SLOT1_BASE
 constexpr uint32_t kFbSlot1Base = 0x02000000u;
 constexpr uint32_t kFbSlotSpan = 0x0003C000u;
+// Phase-3 windows (zhao_pkg ZHAO_GEOM_ASSET_* / ZHAO_TERRAIN_PAGE_POOL_*).
+// GEOM.ASSET_POOL is ENGINE1's, READ-only (spec/memory_rules.md 5f).
+constexpr uint32_t kGeomAssetBase = 0x06A00000u;
+constexpr uint32_t kGeomAssetSpan = 0x01600000u;  // 22 MiB, ends at 0x0800_0000
+// TERRAIN.PAGE_POOL is TERRAIN.BUILD's, WRITE-only (ruling T2 / 5b).
+// 1,024 x 21,376 B = 0x014E_0000, so the pool ends at 0x054E_0000 -- the
+// ruling's inclusive 0x054D_FFFF, to the byte.
+constexpr uint32_t kTerrainPagePoolBase = 0x04000000u;
+constexpr uint32_t kTerrainPagePoolSpan = 0x014E0000u;
 
 struct MemoryGuard {
   // client ids (zhao_client_e)
-  enum Client { SCANOUT = 0, BLIT_DMA = 1, ENGINE0 = 2, ENGINE1 = 3, DEBUG = 4 };
+  // Client ids (zhao_client_e). 5 is the unspent reservation of ruling T3 and
+  // is deliberately absent -- naming it here would be spending it.
+  enum Client {
+    SCANOUT = 0,
+    BLIT_DMA = 1,
+    ENGINE0 = 2,
+    ENGINE1 = 3,
+    DEBUG = 4,
+    TERRAIN_BUILD = 6
+  };
 
   struct Req {
     bool valid = false;
@@ -714,8 +732,27 @@ struct MemoryGuard {
         const uint32_t base = m.blit_slot ? kFbSlot1Base : kFbSlot0Base;
         return r.addr >= base && end <= base + m.blit_span;
       }
+      case ENGINE1:
+        // GEOM.ASSET_POOL, READ-only (spec/memory_rules.md 5f). This arm was
+        // MISSING from the oracle while the RTL had it, so the model and the
+        // block disagreed about every meshlet descriptor read. Nothing caught
+        // it because mem_guard_directed's fuzz anchors sit in the framebuffer
+        // range and its client draw is range(5) -- the divergence existed only
+        // at addresses the test never generates. Added with the terrain arm
+        // rather than left, because a reference that is right about the region
+        // being added and wrong about the one beside it is not a reference.
+        return !r.write && r.addr >= kGeomAssetBase &&
+               end <= kGeomAssetBase + kGeomAssetSpan;
+      case TERRAIN_BUILD:
+        // TERRAIN.PAGE_POOL, WRITE-only (ruling T2 / 5b). Constant bounds: no
+        // map input reaches this window, so unlike the framebuffer one it is
+        // not frame-scoped. Spatially the whole pool -- T2's "a loader may
+        // write only a LOADING slot" needs residency state the guard does not
+        // have, and the RTL says so at `terrain_ok`.
+        return r.write && r.addr >= kTerrainPagePoolBase &&
+               end <= kTerrainPagePoolBase + kTerrainPagePoolSpan;
       default:
-        return false;  // ENGINE1 and DEBUG own nothing
+        return false;  // DEBUG owns nothing, and neither does the unspent 5
     }
   }
 };

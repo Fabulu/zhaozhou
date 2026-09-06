@@ -71,6 +71,7 @@
 //      pointer is the only thing that can move them, and it moves only on an
 //      accepted handshake. A held offer should not be a property maintained by
 //      careful case analysis; it should be a property of the structure.
+//      ENFORCED-BY: tests/texture/texture_aux_pipe_directed.cpp
 //
 //   2. THE RETURN QUEUE HAD NO RESERVATION. It pushed unconditionally, with no
 //      full term and no admission gate. Peak push is 2/cycle (a sheet response

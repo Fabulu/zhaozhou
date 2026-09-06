@@ -16,11 +16,29 @@
 //
 // And because a played model can still drift from the block it plays, the real
 // `zhao_mem_guard` is instantiated alongside as a pure observer on the same
-// request wires. It is not in the loader's answer path -- it cannot be, since
-// its region map has no window that admits a terrain write -- but
-// `shadow_ok_seen` records whether it EVER passed one of these requests. That
-// bit staying zero is this test's evidence for the guard amendment the contract
-// asks for, measured rather than asserted.
+// request wires. It is not in the loader's answer path, but it sees every
+// request the loader makes and it counts what it did with them.
+//
+// THAT OBSERVER USED TO MEASURE A REFUSAL. IT NOW MEASURES A PASS.
+// Until 2026-09-06 the guard had no window that admitted a write to bank 2 for
+// anybody, so `shadow_ok_seen` staying ZERO was this file's evidence for the
+// amendment the contract asked for. The amendment landed: `zhao_pkg` has
+// `ZHAO_CLIENT_TERRAIN_BUILD = 6` and the guard has TERRAIN.PAGE_POOL,
+// write-only, for that client alone. So the observer's job flipped from "it
+// never passed one" to "it passed EXACTLY these and no others", and the
+// counters below are what makes the second sentence checkable: a sticky
+// `shadow_ok_seen` can say a pass happened but never that the right NUMBER
+// happened, and this bench's own header records that a machine doing its work
+// twice produces byte-identical output.
+//
+// A SECOND REAL GUARD, DRIVEN BY THE BENCH, PROVES THE REFUSALS.
+// The observer only ever sees legal requests, because the loader only makes
+// legal ones -- so on its own it shows one direction of a two-directional
+// claim. `u_probe_guard` is a third instance wired to bench-controlled request
+// wires and to nothing else, so the C++ can ask the REAL block what it does
+// with a different client in the pool, the ruled client outside it, and a READ
+// where a write was granted. Its counters are deltas, not levels, so a check
+// cannot pass on some earlier request's verdict.
 //
 // ---------------------------------------------------------------------------
 // STALLS ARE FIRST-CLASS, NOT AN AFTERTHOUGHT
@@ -128,7 +146,21 @@ module tb_pageloader
     output var logic [31:0] first_wr_addr,   // address of the first write beat
     output var logic [31:0] last_wr_addr,    // ...and of the last
     output var logic        shadow_ok_seen,  // the REAL guard ever passed one
-    output var logic [31:0] shadow_violations
+    output var logic [31:0] shadow_ok_count,   // ...and how many times
+    output var logic [31:0] shadow_fwd_count,  // ...and how many it FORWARDED
+    output var logic [31:0] shadow_violations,
+
+    // ---- the bench-driven probe into a third real MEM.GUARD ----------------
+    input  var logic        p_valid,
+    input  var logic        p_write,
+    input  var logic [2:0]  p_client,
+    input  var logic [26:0] p_addr,
+    input  var logic [6:0]  p_len,
+    input  var logic [63:0] p_be,
+    output var logic        p_ready,
+    output var logic [31:0] p_ok_count,
+    output var logic [31:0] p_fwd_count,
+    output var logic [31:0] p_viol_count
 );
 
   // one page is 21,376 B = 2,672 beats; four of them fits two slots either side
@@ -379,7 +411,16 @@ module tb_pageloader
 
   // ------------------------------------------- the REAL guard, observing ----
   // Same request wires, no influence on the answer path. `map_valid = 0` and no
-  // lease, which is exactly the machine as it stands: bank 2 has no window.
+  // lease -- and that is not a limitation any more, it is the POINT: the
+  // terrain window consults NO map input, so a guard with no framebuffer lease
+  // at all still admits a legal page write. If this observer only passed when
+  // handed a lease, the window would be frame-scoped and the amendment would be
+  // the wrong shape.
+  //
+  // `shadow_arb_rsp.grant` is tied high, so every forwarded request is taken on
+  // the cycle it is offered and `shadow_fwd_count` counts FORWARDS, one per
+  // request. That is the observable the no-escape theorem is about -- what
+  // reached the arbiter port -- rather than the verdict bit beside it.
   zhao_guard_rsp_t shadow_rsp;
   zhao_arb_req_t   shadow_arb_req;
   zhao_arb_rsp_t   shadow_arb_rsp;
@@ -389,10 +430,25 @@ module tb_pageloader
   assign shadow_arb_rsp.grant   = 1'b1;
   assign shadow_arb_rsp.credits = 8'd32;
 
+  // ONE OBSERVATION PER REQUEST, NOT ONE PER STALLED CYCLE.
+  // The loader holds `guard_req.valid` high until the PLAYED guard says ready,
+  // which under a nonzero `cfg_grant_hold_i` is several cycles. The observer
+  // has its own ready (its downstream grant is tied high, so its forwarding
+  // stage frees every cycle) and would therefore accept the SAME burst once per
+  // stalled cycle -- inflating its counters with an artefact of the observer
+  // arrangement rather than measuring the loader. Presenting the request only
+  // on the cycle the played guard actually takes it makes the observer see
+  // exactly the request stream the loader issued, at any stall profile.
+  zhao_guard_req_t shadow_req;
+  always_comb begin
+    shadow_req       = guard_req;
+    shadow_req.valid = guard_req.valid && guard_rsp.ready;
+  end
+
   zhao_mem_guard u_real_guard (
       .clk(clk),
       .rst_n(rst_n),
-      .req(guard_req),
+      .req(shadow_req),
       .rsp(shadow_rsp),
       .map_valid(1'b0),
       .blit_slot(1'b0),
@@ -406,13 +462,83 @@ module tb_pageloader
   );
 
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n)            shadow_ok_seen <= 1'b0;
-    else if (shadow_rsp.ok) shadow_ok_seen <= 1'b1;
+    if (!rst_n) begin
+      shadow_ok_seen   <= 1'b0;
+      shadow_ok_count  <= 32'd0;
+      shadow_fwd_count <= 32'd0;
+    end else begin
+      // stat_clear_i is folded in, not made an else-if, for the reason the
+      // played bridge above states: a model that stops for the cycle a counter
+      // is zeroed has timing that depends on the observer.
+      if (stat_clear_i) begin
+        shadow_ok_count  <= 32'd0;
+        shadow_fwd_count <= 32'd0;
+      end
+      if (shadow_rsp.ok) begin
+        shadow_ok_seen  <= 1'b1;
+        shadow_ok_count <= (stat_clear_i ? 32'd0 : shadow_ok_count) + 32'd1;
+      end
+      if (shadow_arb_req.valid && shadow_arb_rsp.grant)
+        shadow_fwd_count <= (stat_clear_i ? 32'd0 : shadow_fwd_count) + 32'd1;
+    end
+  end
+
+  // ------------------------------------ the REAL guard, ASKED directly ------
+  // A third instance, on bench-controlled wires. Same parameters as the
+  // observer -- no lease, no map -- because the terrain window does not consult
+  // either, and giving the probe a lease it does not need would let a future
+  // regression hide behind the framebuffer arms.
+  zhao_guard_req_t probe_req;
+  zhao_guard_rsp_t probe_rsp;
+  zhao_arb_req_t   probe_arb_req;
+  zhao_arb_rsp_t   probe_arb_rsp;
+  logic            probe_viol_pulse;
+  logic [31:0]     probe_viol_total;
+  zhao_guard_req_t probe_viol_req;
+
+  assign probe_req.valid  = p_valid;
+  assign probe_req.write  = p_write;
+  assign probe_req.client = zhao_client_e'(p_client);
+  assign probe_req.addr   = p_addr;
+  assign probe_req.len    = p_len;
+  assign probe_req.be     = p_be;
+  assign probe_arb_rsp.grant   = 1'b1;
+  assign probe_arb_rsp.credits = 8'd32;
+  assign p_ready = probe_rsp.ready;
+
+  zhao_mem_guard u_probe_guard (
+      .clk(clk),
+      .rst_n(rst_n),
+      .req(probe_req),
+      .rsp(probe_rsp),
+      .map_valid(1'b0),
+      .blit_slot(1'b0),
+      .blit_span(32'd0),
+      .fb_writer(1'b0),
+      .arb_req(probe_arb_req),
+      .arb_rsp(probe_arb_rsp),
+      .guard_violation(probe_viol_pulse),
+      .guard_violations(probe_viol_total),
+      .guard_violation_req(probe_viol_req)
+  );
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      p_ok_count   <= 32'd0;
+      p_fwd_count  <= 32'd0;
+      p_viol_count <= 32'd0;
+    end else begin
+      if (probe_rsp.ok)                                p_ok_count   <= p_ok_count + 32'd1;
+      if (probe_arb_req.valid && probe_arb_rsp.grant)  p_fwd_count  <= p_fwd_count + 32'd1;
+      if (probe_viol_pulse)                            p_viol_count <= p_viol_count + 32'd1;
+    end
   end
 
   /* verilator lint_off UNUSEDSIGNAL */
   logic unused_shadow;
   assign unused_shadow = shadow_viol_pulse | (|shadow_arb_req) | (|shadow_viol_req)
+                       | (|probe_viol_total) | (|probe_viol_req) | (|probe_arb_req)
+                       | probe_rsp.violation
                        | (|j_ix[31:16]) | (|j_iz[31:16]) | (|j_slot[15:11])
                        | (|mw_addr[15:MW]) | (|mr_addr[15:MW]) | (|hps_req) | (|rd_word_sum[15:MW])
                        | shadow_rsp.ready | shadow_rsp.violation;

@@ -5,7 +5,8 @@
 //      that request lies fully inside its client's OWNED region (the Phase-2
 //      map: scanout read-only within either FB slot (disjoint since the
 //      W2.7 bank split); blit write-only inside the
-//      CMD-granted slot window).
+//      CMD-granted slot window; ENGINE1 read-only inside GEOM.ASSET_POOL;
+//      TERRAIN.BUILD write-only inside TERRAIN.PAGE_POOL).
 //   A2 no partial/malformed forward: a forwarded request has a legal length
 //      (1..64 bytes) and the full contiguous byte mask.
 //   A3 deny-all out of reset: nothing is forwarded in the first cycle after
@@ -134,6 +135,13 @@ module formal_mem_guard
   // Phase-3 asset pool (spec/memory_rules.md 5f): constant bounds, read-only.
   wire fwd_in_asset = (fwd_addr32 >= ZHAO_GEOM_ASSET_BASE)
                    && (fwd_end32 <= ZHAO_GEOM_ASSET_BASE + ZHAO_GEOM_ASSET_SPAN);
+  // TERRAIN.PAGE_POOL (ruling T2 / spec/memory_rules.md 5b): constant bounds,
+  // WRITE-only, TERRAIN.BUILD's alone. Same shape as the asset pool and the
+  // opposite direction, which is why both get their own theorem below rather
+  // than being folded into a1_region and trusted to the spelling of pass_ok.
+  wire fwd_in_terrain = (fwd_addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
+                     && (fwd_end32  <= ZHAO_TERRAIN_PAGE_POOL_BASE
+                                       + ZHAO_TERRAIN_PAGE_POOL_SPAN);
 
   // --------------------------------------------------------- A1 + A2 + A3 --
   always_ff @(posedge clk) begin
@@ -167,24 +175,45 @@ module formal_mem_guard
         // region can never alter a frame buffer -- plus constant bounds, so no
         // map input can move it and BASE+SPAN cannot wrap.
         || (arb_req.client == ZHAO_CLIENT_ENGINE1 && !arb_req.write
-            && fwd_in_asset));
+            && fwd_in_asset)
+        // TERRAIN.BUILD owns TERRAIN.PAGE_POOL, WRITE-ONLY. A fourth window,
+        // and named as one. `arb_req.write` is the load-bearing term in the
+        // other direction from the asset pool's `!write`: this client exists to
+        // deposit pages, so the narrow reading is that it may write there and
+        // do nothing else anywhere. Bounds are constants, so no map input can
+        // move this window and BASE + SPAN (0x054E_0000) cannot wrap.
+        || (arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD && arb_req.write
+            && fwd_in_terrain));
 
       // DEBUG still owns nothing and must never be forwarded
       a1_client: assert (arb_req.client == ZHAO_CLIENT_SCANOUT
                       || arb_req.client == ZHAO_CLIENT_BLIT_DMA
                       || arb_req.client == ZHAO_CLIENT_ENGINE0
-                      || arb_req.client == ZHAO_CLIENT_ENGINE1);
+                      || arb_req.client == ZHAO_CLIENT_ENGINE1
+                      || arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD);
 
       // A forward NEVER escapes THE MAP, whatever the map inputs say. The map
       // now has three regions rather than two; this widened when the region
       // did, which is the honest form -- the alternative, leaving the old
       // two-slot assertion and exempting ENGINE1, would have kept a green
       // proof by removing the new region from its scope.
-      a1_map: assert (fwd_in_slot0 || fwd_in_slot1 || fwd_in_asset);
+      a1_map: assert (fwd_in_slot0 || fwd_in_slot1 || fwd_in_asset
+                   || fwd_in_terrain);
 
       // The asset pool is read-only at the level of the THEOREM, not merely as
       // a consequence of pass_ok's spelling: no forward into it is ever a write.
       a1_asset_ro: assert (!(fwd_in_asset && arb_req.write));
+
+      // The terrain pool is WRITE-ONLY and SINGLY OWNED at the level of the
+      // theorem, not merely as a consequence of pass_ok's spelling. Two
+      // separate assertions rather than one conjunction, so a regression says
+      // WHICH half broke: a read that got in, or a client that is not the
+      // ruled one. T2 gives this region to TERRAIN.BUILD and to nobody else,
+      // and admitting it to a second client would be a worse outcome than
+      // leaving the loader unintegrated.
+      a1_terrain_wo:    assert (!(fwd_in_terrain && !arb_req.write));
+      a1_terrain_owner: assert (!(fwd_in_terrain
+                                  && arb_req.client != ZHAO_CLIENT_TERRAIN_BUILD));
     end
 
     // A3: the forwarding stage powers up empty
@@ -215,6 +244,13 @@ module formal_mem_guard
       // a1_region and the whole of a1_asset_ro could be vacuously true.
       c_forward_asset:  cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_ENGINE1
                                && fwd_in_asset);
+      // Same reason, one region later. Without this the TERRAIN.BUILD arm of
+      // a1_region and BOTH terrain theorems above could be vacuously true --
+      // and a vacuous no-escape proof is exactly what this harness's header
+      // records having shipped once.
+      c_forward_terrain: cover (arb_req.valid
+                                && arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
+                                && fwd_in_terrain);
       c_accept_ok:      cover (rsp.ok);
       c_violation:      cover (guard_violation);
       c_handshake:      cover (arb_req.valid && arb_rsp.grant);

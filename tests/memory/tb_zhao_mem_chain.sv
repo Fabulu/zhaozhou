@@ -60,8 +60,16 @@ module tb_zhao_mem_chain
   output logic [5:0]  model_err_kind   // {mrs,protocol,refresh,trc,trp,trcd}
 );
 
-  zhao_arb_req_t [4:0] client_req;
-  zhao_arb_rsp_t [4:0] client_rsp;
+  // The arbiter carries SEVEN client slots since the terrain amendment
+  // (ruling T3). This bench drives the FIVE the zref::VramArbiter oracle
+  // models -- the differential is a comparison against that oracle, and
+  // widening the bench without widening the oracle would compare the RTL
+  // against nothing. Slots 5 (unspent) and 6 (TERRAIN.BUILD) are tied off, so
+  // every existing check here measures exactly what it measured before.
+  zhao_arb_req_t [6:0] client_req;
+  zhao_arb_rsp_t [6:0] client_rsp;
+  assign client_req[5] = '0;
+  assign client_req[6] = '0;
   zhao_arb_req_t       ctrl_req;
   zhao_arb_rsp_t       ctrl_rsp;
   logic                hold_refresh;
@@ -79,7 +87,7 @@ module tb_zhao_mem_chain
     end
   endgenerate
 
-  logic [4:0][31:0] vb_flat;
+  logic [6:0][31:0] vb_flat;
   assign vram_bytes_0 = vb_flat[0];
   assign vram_bytes_1 = vb_flat[1];
   assign vram_bytes_2 = vb_flat[2];
@@ -130,7 +138,12 @@ module tb_zhao_mem_chain
   assign dbg_ctrl_cur_words = u_ctrl.cur_words;
   assign dbg_sel_valid      = u_arb.sel_valid;
   assign dbg_sel            = u_arb.sel;
-  assign dbg_eligible       = u_arb.eligible;
+  // The arbiter's `eligible` is seven bits wide now; `dbg_eligible` stays five
+  // because the oracle this bench differentiates against models five clients.
+  // Sliced explicitly rather than left to an implicit truncation -- a silent
+  // width cut on a DEBUG probe is how a bench starts reporting about a machine
+  // it is no longer looking at.
+  assign dbg_eligible       = u_arb.eligible[4:0];
   assign dbg_age[0] = u_arb.age[0];
   assign dbg_age[1] = u_arb.age[1];
   assign dbg_age[2] = u_arb.age[2];

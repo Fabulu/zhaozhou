@@ -406,6 +406,14 @@ module zhao_texture_cache_pipe #(
   // Safe by construction: `c1_go` contains `!c3_miss`, and a miss implies
   // `!c3_all_hit`, so a miss can never coincide with an issue or a retire. The
   // reservations belonging to already-queued responses are untouched.
+  // ENFORCED-BY: fpga/rtl/texture/zhao_texture_cache_pipe.sv:a_resv_never_exceeds_capacity
+  //
+  // "Safe by construction" is the sentence that most wants an enforcer, because
+  // it is exactly the claim nobody re-checks after the construction changes.
+  // ENFORCED-BY: fpga/rtl/texture/zhao_texture_cache_pipe.sv:a_resv_never_exceeds_capacity
+  // If a squash ever did coincide with an issue or a retire, that assertion is
+  // what fires: the counter would over- or under-refund and the reservation
+  // count would leave its capacity.
   assign squash_c = (RQW+1)'(c2_v) + (RQW+1)'(c1_v);
 
   // Room was reserved two stages ago. If this ever needs `rs_room` back, the
@@ -624,7 +632,7 @@ module zhao_texture_cache_pipe #(
   // test rather than only under a formal frontend, because the defect they
   // guard was found by a cycle model and has to stay caught by an ordinary run.
   //
-  // ENFORCED-BY: tests/texture/texture_cache_pipe_directed.cpp, case 6.
+  // ENFORCED-BY: tests/texture/texture_cache_pipe_directed.cpp (case 6)
   //
   // `rst_n` is NOT read synchronously here. A net that is an asynchronous reset
   // in one process and a synchronous condition in another is Verilator's

@@ -565,6 +565,7 @@ module zhao_texture_island_top #(
   // The combiner tag carries the caller's 16-bit tag AND the submission
   // sequence, so the island can restore order after a block that retires out
   // of order by design.
+  // ENFORCED-BY: tests/texture/island_composed_directed.cpp
   localparam int unsigned ROBTAGW = 16 + FCTXW;
 
   logic [63:0]           uvw_m   [FCTXN];   // {u_over_w, v_over_w}
@@ -645,6 +646,7 @@ module zhao_texture_island_top #(
   //
   // FCTXW bits is exact, not a guess. FRAGROB admits at most FCTXN fragments,
   // so two in flight never differ by FCTXN or more, and the low FCTXW bits
+  // ENFORCED-BY: tests/texture/island_composed_directed.cpp
   // therefore distinguish every live fragment. The counter is allowed to wrap.
   logic [FCTXW-1:0] fseq_m  [FCTXN];
   logic [FCTXW-1:0] seq_alloc_r;
@@ -1076,6 +1078,11 @@ module zhao_texture_island_top #(
   // breaks is the ability to KNOW: the next composed run reports colours, the
   // counters all move, and there is no signal anywhere that half the fragments
   // decoded another texture's bytes as colour.
+  // ENFORCED-BY: tests/texture/island_composed_directed.cpp
+  //
+  // That test now READS this counter rather than only the colours: its phase 2
+  // asserts err_class_mismatch_o == 0, which is what turned the 396 silent
+  // warnings of the pre-W10 fixture into a check that can fail.
   wire [1:0] plan_class_carried_c = plan_acc_src[SRCW-1 -: 2];
   wire [1:0] plan_class_derived_c = class_of(plan_acc_fmt, plan_acc_filter);
   wire       plan_class_mismatch_c =
@@ -1177,6 +1184,7 @@ module zhao_texture_island_top #(
   // unconnected because it is undecodable by construction: what went wrong is
   // the routing, so there is no format under which those 64 bits mean
   // anything. It stays a dispatcher output for a future diagnostic port.
+  // ENFORCED-BY: tests/texture/island_composed_directed.cpp
   logic        disp_err_valid, disp_err_ready;
   logic [TOKW-1:0]  disp_err_tok;
   logic [31:0] disp_hol;

@@ -521,7 +521,8 @@ module zhao_texture_fragrob #(
   // gated on both flags being clear, ax_slot_q cannot move while a request is
   // outstanding, so the unconditional re-read below keeps reloading the SAME
   // word: the whole held tuple is stable to the acceptance edge by
-  // construction, not by the receiver happening to be fast. This is the seam
+  // construction, not by the receiver happening to be fast.
+  // ENFORCED-BY: tests/texture/fragrob_differential.cpp This is the seam
   // S5.1 says "must remain correct after context banks are split or their
   // latency changes" -- adding latency here means adding read states, never
   // moving the valid.

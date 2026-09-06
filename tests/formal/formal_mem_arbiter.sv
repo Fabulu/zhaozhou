@@ -111,8 +111,12 @@ module formal_mem_arbiter
 
   // ---- client request generation (one outstanding per client) ----------------
   logic [1:0] holding;          // request offered, not yet accepted at port
-  zhao_arb_req_t [4:0] client_req;
-  zhao_arb_rsp_t [4:0] client_rsp;
+  // SEVEN PORTS since the terrain amendment (ruling T3: client 6, with 5 left
+  // unspent). The PROPERTY is unchanged: the Phase-2 guaranteed population is
+  // still G=2, so clients 2..6 are held at zero exactly as engine0/engine1/
+  // debug always were. Widening the array does not widen the environment.
+  zhao_arb_req_t [6:0] client_req;
+  zhao_arb_rsp_t [6:0] client_rsp;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -126,7 +130,7 @@ module formal_mem_arbiter
   end
 
   always_comb begin
-    for (int k = 0; k < 5; k++) begin
+    for (int k = 0; k < 7; k++) begin
       client_req[k] = '0;
       if (k < 2) begin
         client_req[k].valid = holding[k];

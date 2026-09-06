@@ -66,11 +66,28 @@ constexpr uint32_t kArenaBase = 0x20000000u;
 constexpr uint32_t kArenaSize = 4u * tp::kPageBytes;
 constexpr uint32_t kEpoch = 0x0001BEEFu;
 
-// The client identities. Neither is the ruled one -- `ZHAO_CLIENT_TERRAIN_BUILD
-// = 6` is not declared in `zhao_pkg` -- so the bench drives 6 anyway, because
-// the block forwards whatever identity it is given and the shadow guard's
-// verdict on that identity is one of the things being measured.
+// The client identity. `ZHAO_CLIENT_TERRAIN_BUILD = 6` is now DECLARED in
+// `zhao_pkg` (ruling T3), and MEM.GUARD gives that client -- and only that
+// client -- a write window over TERRAIN.PAGE_POOL. The bench drove 6 before the
+// amendment existed, on the grounds that the block forwards whatever identity
+// it is given; the number has not changed, but what the machine does with it
+// has, and section 7 is where that is measured.
 constexpr uint32_t kTerrainBuildClient = 6;
+
+// Every other client id the console has, so "a different client writing there"
+// can be checked as a SET rather than as one example. 5 is the id ruling T3
+// reserves and forbids spending -- it is in the list precisely because nothing
+// declares it, and a guard that admitted an undeclared id would be admitting
+// whatever a stuck bus happened to present.
+constexpr uint32_t kOtherClients[] = {0, 1, 2, 3, 4, 5, 7};
+
+// The pool's own bounds, spelled from the ruling rather than from the RTL, so
+// that a wrong constant in `zhao_pkg` fails here instead of agreeing with
+// itself. T2: 0x0400_0000 .. 0x054D_FFFF inclusive, 1,024 x 21,376 B.
+constexpr uint32_t kPoolBase = 0x04000000u;
+constexpr uint32_t kPoolEnd = 0x054E0000u;  // half-open; 0x054D_FFFF + 1
+
+uint64_t full_be(unsigned len) { return len >= 64 ? ~0ull : ((1ull << len) - 1); }
 
 void wr16(uint8_t* p, uint16_t v) {
   p[0] = static_cast<uint8_t>(v & 0xFF);
@@ -256,6 +273,58 @@ Fin run_job(Bench& b, const Job& j, int fin_hold) {
   return f;
 }
 
+// One request put to the REAL `zhao_mem_guard` instance the bench drives
+// directly, answered in COUNTER DELTAS. Deltas rather than levels because the
+// verdict bits are one-cycle pulses two cycles apart from the accept -- reading
+// them by hand is the exact mistake `tools/rtl/check_guard_verdict.py` exists to
+// catch, and a check that samples the wrong cycle reads "no verdict" as "no
+// pass" and goes green for the wrong reason.
+struct ProbeVerdict {
+  uint32_t ok = 0;
+  uint32_t fwd = 0;   // reached the arbiter port -- what no-escape is ABOUT
+  uint32_t viol = 0;
+};
+
+ProbeVerdict guard_probe(Bench& b, bool write, uint32_t client, uint32_t addr, unsigned len,
+                         uint64_t be) {
+  const uint32_t ok0 = b.d.p_ok_count;
+  const uint32_t fwd0 = b.d.p_fwd_count;
+  const uint32_t viol0 = b.d.p_viol_count;
+  b.d.p_write = write ? 1 : 0;
+  b.d.p_client = static_cast<uint8_t>(client);
+  b.d.p_addr = addr;
+  b.d.p_len = static_cast<uint8_t>(len);
+  b.d.p_be = be;
+  b.d.p_valid = 1;
+  b.d.eval();
+  int spin = 0;
+  while (!b.d.p_ready && spin++ < 64) b.tick();
+  b.tick();  // the accepting edge
+  b.d.p_valid = 0;
+  b.d.eval();
+  for (int i = 0; i < 4; ++i) b.tick();  // the verdict pulse, and its forward
+  ProbeVerdict v;
+  v.ok = b.d.p_ok_count - ok0;
+  v.fwd = b.d.p_fwd_count - fwd0;
+  v.viol = b.d.p_viol_count - viol0;
+  return v;
+}
+
+// The two directions, named, so a failure line says which one broke.
+void probe_admits(Bench& b, const char* what, bool write, uint32_t client, uint32_t addr,
+                  unsigned len) {
+  const ProbeVerdict v = guard_probe(b, write, client, addr, len, full_be(len));
+  ck(v.ok == 1 && v.fwd == 1 && v.viol == 0, what, 1,
+     static_cast<long long>(v.ok * 100 + v.fwd * 10 + v.viol));
+}
+
+void probe_refuses(Bench& b, const char* what, bool write, uint32_t client, uint32_t addr,
+                   unsigned len, uint64_t be) {
+  const ProbeVerdict v = guard_probe(b, write, client, addr, len, be);
+  ck(v.ok == 0 && v.fwd == 0 && v.viol == 1, what, 1,
+     static_cast<long long>(v.ok * 100 + v.fwd * 10 + v.viol));
+}
+
 void set_timing(Bench& b, int req_latency, int beat_gap, int grant_hold, int wready_gap) {
   b.d.cfg_req_latency_i = static_cast<uint8_t>(req_latency);
   b.d.cfg_beat_gap_i = static_cast<uint8_t>(beat_gap);
@@ -306,6 +375,12 @@ int main(int argc, char** argv) {
   b.d.cfg_err_mode_i = 0;
   b.d.cfg_err_burst_i = 0xFFFF;
   b.d.mr_addr = 0;
+  b.d.p_valid = 0;
+  b.d.p_write = 0;
+  b.d.p_client = 0;
+  b.d.p_addr = 0;
+  b.d.p_len = 0;
+  b.d.p_be = 0;
   // The VRAM window is the pool's slot 0; four pages fit, so slots 0..3 are all
   // observable and a page landing in the wrong one is visible rather than lost.
   b.d.cfg_vram_window_base_i = tp::kPagePoolBase;
@@ -379,6 +454,13 @@ int main(int argc, char** argv) {
   // did the work twice; these three numbers can.
   cke(tp::kPageBursts, b.d.bursts_seen, "golden: exactly 334 HPS bursts");
   cke(tp::kPageBursts, b.d.greqs_seen, "golden: exactly 334 guard requests");
+  // THE REAL GUARD, ON THE REAL REQUEST STREAM, COUNTED. Before the amendment
+  // this number was zero and that zero was the evidence. It is now 334 -- the
+  // same count the played guard accepted -- and "exactly", not "at least",
+  // because a machine doing its work twice produces byte-identical output.
+  cke(tp::kPageBursts, b.d.shadow_ok_count, "golden: the real MEM.GUARD passed all 334");
+  cke(tp::kPageBursts, b.d.shadow_fwd_count,
+      "golden: and forwarded all 334 to the arbiter port");
   cke(tp::kPageBeats, b.d.wbeats_seen, "golden: exactly 2,672 write beats");
   cke(0, b.d.vram_oob, "golden: no write outside the page's own slot");
   cke(0, b.d.wlast_bad, "golden: wlast is exactly the 8th beat of every burst");
@@ -743,12 +825,88 @@ int main(int argc, char** argv) {
   }
 
   // ------------------------------------------------------------------------
-  // 7. THE REAL MEM.GUARD, WATCHING THE WHOLE RUN.
+  // 7. THE REAL MEM.GUARD: EXACTLY THESE WRITES AND NO OTHERS.
   // ------------------------------------------------------------------------
   // Not a property of this block -- a measurement of the machine it must join.
-  cke(0, b.d.shadow_ok_seen, "the real MEM.GUARD never passed a terrain write");
-  ck(b.d.shadow_violations > 0, "the real MEM.GUARD refused them, loudly",
-     1, b.d.shadow_violations);
+  //
+  // THIS EXPECTATION IS INVERTED FROM WHAT IT WAS. Until 2026-09-06 the two
+  // lines here read "the real MEM.GUARD never passed a terrain write" and "it
+  // refused them, loudly", because bank 2 had no window for any client and the
+  // block was unintegrable by construction. The guard amendment landed
+  // (ZHAO_CLIENT_TERRAIN_BUILD = 6; TERRAIN.PAGE_POOL, write-only, that client
+  // alone), so the claim being measured flipped -- and a flipped claim is worth
+  // nothing without the other half, which is why the probe below asks the same
+  // real block about the requests it must still refuse.
+  ck(b.d.shadow_ok_seen != 0, "the real MEM.GUARD passes a terrain page write", 1,
+     b.d.shadow_ok_seen);
+  cke(0, b.d.shadow_violations,
+      "the real MEM.GUARD refused NOTHING the loader issued, over the whole run");
+
+  // ---- the other three directions, asked of a real guard directly ---------
+  // "Passes exactly these and no others" is two claims. The observer above can
+  // only ever see the first, because the loader only ever issues legal
+  // requests. `u_probe_guard` is the same RTL on bench-driven wires.
+  {
+    const uint32_t slot_last = tp::kPagePoolSlots - 1;
+    const uint32_t last_page = kPoolBase + slot_last * tp::kPageBytes;
+
+    // --- ADMITTED: the ruled client, writing inside the pool ---------------
+    probe_admits(b, "probe: TERRAIN.BUILD writes the first byte of slot 0", true,
+                 kTerrainBuildClient, kPoolBase, 64);
+    probe_admits(b, "probe: TERRAIN.BUILD writes the last 64 B of the pool", true,
+                 kTerrainBuildClient, kPoolEnd - 64, 64);
+    probe_admits(b, "probe: TERRAIN.BUILD writes the first byte of the last slot", true,
+                 kTerrainBuildClient, last_page, 64);
+
+    // --- REFUSED: a different client writing there -------------------------
+    // Every other id the console has, including the unspent 5 and the NONE
+    // encoding 7. One example would leave the window's ownership resting on
+    // which example was picked.
+    for (uint32_t c : kOtherClients) {
+      char what[96];
+      std::snprintf(what, sizeof(what), "probe: client %u may NOT write the page pool", c);
+      probe_refuses(b, what, true, c, kPoolBase, 64, full_be(64));
+    }
+
+    // --- REFUSED: the ruled client writing OUTSIDE the pool -----------------
+    // The bounds are checked at the byte, in both directions, because "as
+    // narrow as the ruling allows" is a claim about exactly these two edges.
+    probe_refuses(b, "probe: TERRAIN.BUILD may not write 8 B below the pool base", true,
+                  kTerrainBuildClient, kPoolBase - 8, 64, full_be(64));
+    probe_refuses(b, "probe: TERRAIN.BUILD may not write one byte past the pool end", true,
+                  kTerrainBuildClient, kPoolEnd - 63, 64, full_be(64));
+    probe_refuses(b, "probe: TERRAIN.BUILD may not write at the pool end", true,
+                  kTerrainBuildClient, kPoolEnd, 64, full_be(64));
+    probe_refuses(b, "probe: TERRAIN.BUILD may not write framebuffer slot 0", true,
+                  kTerrainBuildClient, 0x00000000u, 64, full_be(64));
+    probe_refuses(b, "probe: TERRAIN.BUILD may not write framebuffer slot 1", true,
+                  kTerrainBuildClient, 0x02000000u, 64, full_be(64));
+    probe_refuses(b, "probe: TERRAIN.BUILD may not write the geometry asset pool", true,
+                  kTerrainBuildClient, 0x06A00000u, 64, full_be(64));
+    // The five OTHER bank-2 regions ruling T2 names are deliberately NOT in the
+    // map: TERRAIN.PAGE_POOL is the only one whose writer exists.
+    probe_refuses(b, "probe: TERRAIN.BUILD may not write the resident mip pool", true,
+                  kTerrainBuildClient, 0x054E0000u, 64, full_be(64));
+    probe_refuses(b, "probe: TERRAIN.BUILD may not write the writeback journal", true,
+                  kTerrainBuildClient, 0x05780000u, 64, full_be(64));
+
+    // --- REFUSED: a READ where a write was granted --------------------------
+    // The window is write-only and that is the narrow reading, not an
+    // oversight: T3 names F-sheet writeback as this client's traffic too, and
+    // the block that does it does not exist yet.
+    probe_refuses(b, "probe: TERRAIN.BUILD may not READ the first byte of slot 0", false,
+                  kTerrainBuildClient, kPoolBase, 64, full_be(64));
+    probe_refuses(b, "probe: TERRAIN.BUILD may not READ the last 64 B of the pool", false,
+                  kTerrainBuildClient, kPoolEnd - 64, 64, full_be(64));
+
+    // --- REFUSED: the shape law still applies inside the new window --------
+    probe_refuses(b, "probe: a byte-enable hole is refused inside the pool", true,
+                  kTerrainBuildClient, kPoolBase, 64, full_be(64) & ~0xFull);
+    probe_refuses(b, "probe: len 0 is refused inside the pool", true, kTerrainBuildClient,
+                  kPoolBase, 0, 0);
+    probe_refuses(b, "probe: len 65 is refused inside the pool", true, kTerrainBuildClient,
+                  kPoolBase, 65, full_be(64));
+  }
 
   // ------------------------------------------------------------------------
   // 8. RANDOMISED DIFFERENTIAL.
@@ -872,6 +1030,9 @@ int main(int argc, char** argv) {
               saw_ident, saw_refuse, kDraws);
   std::printf("bench totals: bursts %u, guard requests %u, write beats %u, cycles %lld\n",
               b.d.bursts_seen, b.d.greqs_seen, b.d.wbeats_seen, b.cycles);
+  std::printf("real guard: passed %u, forwarded %u, refused %u | probe: ok %u, fwd %u, viol %u\n",
+              b.d.shadow_ok_count, b.d.shadow_fwd_count, b.d.shadow_violations, b.d.p_ok_count,
+              b.d.p_fwd_count, b.d.p_viol_count);
 
   std::printf("checks %d, failures %d\n", g_checks, g_fail);
   zhao::exit_hard(g_fail == 0 ? 0 : 1);

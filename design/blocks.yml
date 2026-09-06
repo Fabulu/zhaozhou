@@ -4540,11 +4540,12 @@ blocks:
     outputs: [resident_assets]
     upstream: [SW.RUNTIME.HPS, SW.TOOLS.ASSET]
     downstream: [MEM.UPLOAD]
-    backpressure: none
+    backpressure: credit
     latency: variable
     target_throughput: deadline-driven
     tests:
-      directed: tests/terrain/island_stream_directed.cpp
+      directed: tests/terrain/sw_stream_directed.cpp
+      unit: tests/terrain/island_stream_directed.cpp
     maturity: SPECIFIED
     maturity_log: []
     deferred: false

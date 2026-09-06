@@ -2422,6 +2422,17 @@ target_link_libraries(test_island_stream_directed PRIVATE zhao_zref)
 add_test(NAME island_stream_directed COMMAND test_island_stream_directed)
 set_tests_properties(island_stream_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# SW.STREAM's frame policy at ISLAND SCALE -- the working set (T7), the 32-page
+# budget and what is dropped when a camera outruns it, T5's canonical order and
+# the seal, staging complete before publication, and a dirty F sheet surviving
+# eviction and return. Step 4 of the world-layer build sequence.
+# `tools/sw_stream_firetest.py` perturbs the reference model ten ways and
+# records what fires; see design/contracts/SW.STREAM.md.
+add_executable(test_sw_stream_directed terrain/sw_stream_directed.cpp)
+target_link_libraries(test_sw_stream_directed PRIVATE zhao_zref)
+add_test(NAME sw_stream_directed COMMAND test_sw_stream_directed)
+set_tests_properties(sw_stream_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_island_8km_directed terrain/island_8km_directed.cpp)
 target_link_libraries(test_island_8km_directed PRIVATE zhao_zref)
 add_test(NAME island_8km_directed COMMAND test_island_8km_directed)
