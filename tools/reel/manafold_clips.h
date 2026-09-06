@@ -616,6 +616,69 @@ inline int32_t fold_ease(int32_t t) {
   return t * t / 1000 * (3000 - 2 * t) / 1000;
 }
 
+/** PASS 11 F.3 -- THE PRESS-RECOVER WAVE, which replaces sinp on the knead wag.
+ *
+ *  Same contract as sinp: returns -65536..65536, integer cycles per clip so the
+ *  loop is seamless. What differs is the SHAPE. A sine spends equal time going
+ *  each way and never dwells; this rises fast, DWELLS at the extreme, then eases
+ *  home slowly -- press, hold, release. The speed is on the payoff.
+ *
+ *  ⚠ IT RISES ONCE AND FALLS ONCE PER CYCLE, at every parameter value. The
+ *  rejected spazz reads were reversal DENSITY, not amplitude, so a waveform that
+ *  cannot express a reversal is the guard, rather than a band someone has to
+ *  remember to check. Both limbs are smoothstepped, so there is no velocity step
+ *  at the plateau edges either -- a hold that snaps in is a different fault.
+ *
+ *  `phase_pm` is a phase offset in thousandths of a cycle (the wag's second
+ *  waveform used sinp's 0x4000, a quarter cycle: 250 here).
+ */
+inline int32_t press_wave(int f, int keys, int cycles, int32_t phase_pm = 0) {
+  if (cycles <= 0 || keys <= 0) return 0;
+  int64_t t = (static_cast<int64_t>(f) * cycles * 1000) / keys + phase_pm;
+  t %= 1000;
+  if (t < 0) t += 1000;
+  const int32_t rise = kKneadPressRisePm;
+  const int32_t hold = kKneadPressHoldPm;
+  const int32_t fall = 1000 - rise - hold;
+  int32_t u;  // 0..1000, the press's own progress
+  if (t < rise) {
+    u = fold_ease(static_cast<int32_t>(t * 1000 / (rise > 0 ? rise : 1)));
+  } else if (t < rise + hold) {
+    u = 1000;  // THE HOLD. This is the beat the review said was missing.
+  } else {
+    const int32_t v = static_cast<int32_t>((t - rise - hold) * 1000 /
+                                           (fall > 0 ? fall : 1));
+    u = 1000 - fold_ease(v);
+  }
+  // 0..1000 -> -65536..65536: the press swings through neutral, as the sine did
+  return static_cast<int32_t>((static_cast<int64_t>(u) * 2 - 1000) * 65536 / 1000);
+}
+
+/** PASS 11 F.3 -- the per-cycle accent, and the leading ball.
+ *
+ *  `station` is 0..4 (Jf, Neck, A, B, C). Returns a per-mille gain for THIS
+ *  cycle at THIS station. Hashed off fold_phase's own stream, keyed on the
+ *  cycle index, so it loops with the clip and never visibly repeats.
+ *
+ *  It scales a monotone envelope and therefore cannot introduce a reversal --
+ *  see press_wave. That is deliberate: the accents had to be safe by
+ *  construction, not by a band someone checks afterwards.
+ */
+inline int32_t knead_accent_pm(uint32_t slot, int f, int keys, int cycles,
+                               int station) {
+  if (cycles <= 0 || keys <= 0) return 1000;
+  const uint32_t n = static_cast<uint32_t>(
+      (static_cast<int64_t>(f) * cycles) / keys);
+  const uint32_t h = fx_hash(0xACCE7Fu + slot, n, 0x2Bu);
+  const int32_t span = kKneadAccentHiPm - kKneadAccentLoPm;
+  int32_t g = kKneadAccentLoPm + static_cast<int32_t>(h % static_cast<uint32_t>(span + 1));
+  // ...and one station leads this press.
+  const uint32_t lead = (h >> 19) % 5u;
+  if (static_cast<uint32_t>(station) == lead)
+    g = static_cast<int32_t>((static_cast<int64_t>(g) * kKneadLeadBoostPm) / 1000);
+  return g;
+}
+
 /** The shared schedule. `salt` = the clip slot; `keys` = the clip length;
  *  `kq4` = key position in Q4 (key * 16 + sub-key sixteenths -- the fx lane
  *  passes frame * 8 so 60 Hz frames land between keys). */
@@ -826,20 +889,29 @@ inline void antenna_knead(Rig& g, uint32_t slot, int keys, int f) {
   // out-of-plane; the back ball slides. One consistent period.
   if (ph.agit_pm > 0 || ph_b.agit_pm > 0 || ph_c.agit_pm > 0) {
     const int cyc = keys / kKneadWagPeriodKeys > 0 ? keys / kKneadWagPeriodKeys : 1;
-    const int32_t w1 = sinp(f, keys, cyc);
-    const int32_t w2 = sinp(f, keys, cyc, 0x4000);
+    // PASS 11 F.3: press-recover, not a sine. Same amplitude, different phrasing.
+    const int32_t w1 = press_wave(f, keys, cyc);
+    const int32_t w2 = press_wave(f, keys, cyc, 250);  // a quarter cycle, as 0x4000 was
+    // ...and this cycle is not like the last one. Station indices: Jf 0, Neck 1,
+    // A 2, B 3, C 4 -- one of them leads each press.
+    const auto acc = [&](int station) {
+      return knead_accent_pm(slot, f, keys, cyc, station);
+    };
+    const auto ax = [&](int32_t v, int station) {
+      return static_cast<int32_t>((static_cast<int64_t>(v) * acc(station)) / 1000);
+    };
     g.q[kBJunctionF] = quat_mul(
         g.q[kBJunctionF],
-        quat_z(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagJfA16, ph.agit_pm)) * w1) >> 16)));
+        quat_z(ax(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagJfA16, ph.agit_pm)) * w1) >> 16), 0)));
     g.q[kBHingeC] = quat_mul(
         g.q[kBHingeC],
-        quat_z(-static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagCA16, ph_c.agit_pm)) * w1) >> 16)));
+        quat_z(-ax(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagCA16, ph_c.agit_pm)) * w1) >> 16), 4)));
     g.q[kBNeck] = quat_mul(
         g.q[kBNeck],
-        quat_x(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagNeckA16, ph_neck.agit_pm)) * w2) >> 16)));
+        quat_x(ax(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagNeckA16, ph_neck.agit_pm)) * w2) >> 16), 1)));
     g.q[kBHingeB] = quat_mul(
         g.q[kBHingeB],
-        quat_z(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagBA16, ph_b.agit_pm)) * w2) >> 16)));
+        quat_z(ax(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagBA16, ph_b.agit_pm)) * w2) >> 16), 3)));
     g.q[kBLoopBase2] = quat_mul(
         g.q[kBLoopBase2],
         quat_z(-static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagB2A16, ph.agit_pm)) * w2) >> 16)));

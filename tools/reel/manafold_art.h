@@ -1475,6 +1475,37 @@ constexpr int32_t kKneadOopBA16 = 2200;
 constexpr int32_t kKneadOopCA16 = 1800;
 constexpr int32_t kKneadOopAA16 = 2600;
 constexpr int kKneadOopPeriodKeys = 31;   // deliberately coprime-ish with 22
+// ---- PASS 11 F.3: PHRASING -- the oscillator becomes an animal working -----
+// The pass-10 review: "no accents, no holds, no change of pace". It was right
+// by construction, not by accident: the wag was a pure sinp at a fixed period,
+// so every cycle was identical to every other cycle and every station's gain
+// was constant. A sine is a machine idling. An animal presses, holds, and lets
+// go -- and it does not press equally hard every time.
+//
+// THE SPEED LIVES ON THE PAYOFF, NEVER THE WIND-UP (07-MOTION-STYLE). So the
+// cycle is: fast rise, brief plateau, slow ease home.
+//
+// ⚠ MONOTONE BY CONSTRUCTION, and that is a safety property rather than a
+// stylistic one. The spazz signature this creature has been rejected for twice
+// is REVERSAL DENSITY, not amplitude -- so the waveform rises once and falls
+// once per cycle and can express no wobble at any parameter value. The accents
+// below scale a monotone envelope; they cannot introduce a turn.
+constexpr int32_t kKneadPressRisePm = 250;  // of the cycle: the press itself
+constexpr int32_t kKneadPressHoldPm = 300;  // the plateau -- the HOLD that reads
+                                            // (a beat needs >= 16 frames to
+                                            // register; at channel's clock this
+                                            // plateau is ~32)
+// PER-CYCLE ACCENTS. Some presses are harder than others. Hashed off the same
+// fx_hash stream fold_phase already uses, so the clip still loops seamlessly and
+// the pattern never visibly repeats (the anti-cycle law).
+constexpr int32_t kKneadAccentLoPm = 700;
+constexpr int32_t kKneadAccentHiPm = 1300;
+// A LEADING BALL. Per cycle, one hashed station presses harder than its
+// siblings, so different balls visibly lead different presses. This is
+// Direction 7 §1's "all the balls move individually" made legible -- while the
+// shared envelope and the per-station lags keep it reading as guided hinges
+// rather than as string.
+constexpr int32_t kKneadLeadBoostPm = 1450;
 constexpr int32_t kKneadWagJfA16 = 1600;  // knead: the two hands work...
 constexpr int32_t kKneadWagNeckA16 = 480;  // (neck stirs out-of-plane)
 constexpr int32_t kKneadWagBA16 = 1100;
