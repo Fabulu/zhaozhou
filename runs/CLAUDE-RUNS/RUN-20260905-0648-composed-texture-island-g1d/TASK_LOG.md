@@ -1520,3 +1520,47 @@ placement variance to the architecture.
 Both lanes still running. Not interrupting them, and not queueing a composed
 fit — §26.1's first task is precisely these tiles, and the composition waits on
 the shared record and credit contracts.
+
+## 2026-09-06 ~20:45 — THE 8 KM LANE IS UNBLOCKED THROUGH STEP 6
+
+No fit running; none queued, and that is deliberate (§26.1). The V3 tile fits
+have landed and their numbers are in the previous entry.
+
+**World-layer build sequence status:**
+
+| step | block | state |
+|---|---|---|
+| 1 | TERRAIN.RESIDENCY | UNIT_VERIFIED |
+| 2 | TERRAIN.COMPCACHE | UNIT_VERIFIED |
+| 3 | TERRAIN.PAGELOADER | UNIT_VERIFIED, and no longer unintegrable |
+| 4 | SW.STREAM frame policy | modelled + 177 checks; block stays SPECIFIED, honestly |
+| — | TERRAIN.ISLAND / TERRAIN.VISIBLE | UNIT_VERIFIED |
+| 5 | **TERRAIN.SEQ** | **started** |
+| 6 | **TERRAIN.WRITEBACK** | **started** |
+| 7 | guard map + client amendments | **enacted and re-proved** |
+| 8 | composed shell path | not started |
+| 9 | 8 km traversal capture | not started — the acceptance gate |
+
+**Both remaining datapath steps were unblocked by the rulings, not by new
+work.** §5 said TERRAIN.SEQ "needs OPEN 5 for its input records" — OPEN 5 is
+T5 (one `SubmitTerrainSet`, not one DrawProcedural per patch). It said
+WRITEBACK "needs OPEN 4 — build LAST, since its payload may be 'nothing for
+B/D'" — T4 settles exactly that: B/D are never written back, F must be, behind
+an ACK barrier. So WRITEBACK is built for F alone, and the contract will say
+why B/D are absent rather than leaving a reader to wonder if they were
+forgotten.
+
+**A real dependency the WRITEBACK lane has to resolve first.** Today's guard
+amendment opened a **write-only** page-pool window, and the lane that added it
+declined to admit reads for a stated reason: *"T3 also names F-sheet writeback
+as TERRAIN_BUILD traffic, which will one day need a read here — that block does
+not exist, so admitting the read now would open it for a path nobody has
+written."* That block is now being written. It has been told to establish its
+own access needs from the sources, and — because MEM.GUARD is formally proven
+and its proof was re-run today — to REPORT the narrowest window it needs rather
+than open one itself.
+
+TERRAIN.VISIBLE promoted to UNIT_VERIFIED (27 checks, re-run on a build watched
+to return 0). Ledger is green apart from three V20 sites inside the two V3
+lanes' in-flight files; both lanes have been told, with the trailing-comma trap
+spelled out so they do not lose a day to it as one site did.
