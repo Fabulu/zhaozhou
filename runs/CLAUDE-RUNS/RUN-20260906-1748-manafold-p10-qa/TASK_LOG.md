@@ -136,3 +136,18 @@
 ## Next Steps
 
 - Report merged to `main` in Upheaval; push verified with `git branch -r --contains`.
+- **19:50** Media/site audit folded in. Two more gates that cannot fail:
+  `deploy.ps1`'s noindex check is a substring match (a page whose real tag says
+  `index, follow` with `noindex` only inside an HTML comment DEPLOYS), and
+  `deploy.ps1` never calls `checkmedia.py` — the decode gate has no automated
+  caller anywhere in the repo. Decode gate itself reproduced twice (1167/1167)
+  and proved failable on four bad-input classes; all 22 clips differ from their
+  pass-9 twins at the PIXEL level, not just by hash. One live copy defect: the
+  Manafold `archive_note` says both "EIGHT generations" and "SEVEN generations".
+- **19:55** Owner Direction 7 §12 landed on main mid-session (`e8ba3db`) and
+  answers owner questions 2 and 5 — star HIGH as drawn (reversing §7.5), bigger,
+  squash-blink, eye travel capped at a hard 45°. Ranked list updated to point
+  pass 11 at it, with the derivations that hang off `kStarScalePm` called out.
+- **20:00** Report finalised. Merged to `main` in both repos and verified with
+  `git branch -r --contains`. No processes left running (checked by name via
+  Get-Process, not by a hanging `tasklist | grep`).
