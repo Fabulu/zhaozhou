@@ -656,11 +656,49 @@ targets:
       # two memory kinds -- exactly the error recorded above for min_m10k, made
       # a second time in a different unit.
       #
-      # NOT CHANGED YET, because the row is STALE: `check_fit_rules.ps1` now
-      # reports it as measured two commits before HEAD, and a gate must not be
-      # relaxed against numbers that describe an older block. Refit first, then
-      # decide -- the arithmetic above predicts the same 147 and the prediction
-      # is the check.
+      # REFITTED 2026-09-07, AND THE MLAB HYPOTHESIS ABOVE IS REFUTED.
+      # THIS GATE STAYS EXACTLY WHERE IT IS.
+      #
+      # The prediction held: 150,528 bits again, bit-identical, 147 per entry.
+      # But `fit.rpt` -- added to the harvest that same morning BECAUSE this
+      # gate could not be judged without it -- answers the question the note
+      # above guessed at:
+      #
+      #     [d] ALMs used for memory (up to half of total ALMs) ; 0
+      #         -- Memory LABs (up to half of total LABs)       ; 0
+      #
+      # THE MISSING BITS ARE NOT IN MLAB. They are not in flip-flops either
+      # (1,226 registers against 17,408 bits), not removed ("Registers Removed
+      # During Synthesis" lists three, all `s0_ev~n`, "Lost fanout"), and not in
+      # a ninth memory (the eight altsyncram rows total 150,528, matching the
+      # fitter's own figure exactly).
+      #
+      # Every benign explanation was checked and eliminated: the fields are
+      # written from `s0_crc`, which is input-derived; `s_pack` is
+      # {pin,bd,f,mips,crc,seq} = 6+1+1+1+32+16 = 57 bits with no padding; and
+      # all six accessors have call sites, two of them COMPARISONS
+      # (`s0_crc != s_crc(s)`, `s_pin(s) != {PINW{1'b1}}`).
+      #
+      # Quartus inferred WIDTH_A = 40 for a 57-bit array and said nothing:
+      #     Info (276029) ... "g_bank[0].statram[0][56]__2"
+      #       Info (286033): Parameter WIDTH_A set to 40
+      #
+      # The 17 absent bits are pin(6) + bd + f + mips + crc[31:24] -- EIGHT
+      # BITS OF THE PAGE CRC, on the block whose job is validating residency.
+      # The split does not land on a field boundary, which is what makes it
+      # look like a width truncation rather than a decision.
+      #
+      # SO THE GATE IS RIGHT AND THE DESIGN IS NOT. It was derived correctly
+      # from the declarations and it is failing correctly. Relaxing it here
+      # would have been the third instance in this file of a gate moved on a
+      # diagnosis its own evidence refutes, after min_m10k 17's capacity
+      # argument that ignored MLAB and max_m10k 0's scope error on
+      # GEOM.PROJECT -- and the first two were caught after the fact.
+      #
+      # THE EXPERIMENT THAT SETTLES IT costs one block fit: declare statram 40
+      # bits wide, change nothing else. Same numbers means the 17 bits were
+      # never in the design; different numbers means they are present in a form
+      # no report names. reports/RESIDENCY-V2-MISSING-BITS-20260907.md.
       min_memory_bits: 167936
       # Control state only: rr_q (512), the four-way read registers (656), the
       # s0 capture and the counters. Generous, and still four ORDERS below the

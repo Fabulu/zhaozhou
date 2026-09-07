@@ -832,3 +832,26 @@ Shell suite (checking project_core's new stage): 9 of 16 done, all Passed,
 including shell_project_path_directed (167 s) and shell_clip_path_directed --
 the two that most directly exercise the projector. lint_shell_top green after
 the hb_wr_ready repair.
+
+## 2026-09-07 -- residency_v2 refit: MLAB refuted, the gate holds
+
+Third fit, 6c1d1fa3: 150,528 bits again, prediction held exactly. But fit.rpt
+(harvested this morning FOR this question) says Memory LABs = 0 and ALMs used
+for memory = 0. The missing 17 bits/entry are NOT in MLAB, not in registers
+(1,226 vs 17,408), not removed (3 registers, all s0_ev~n), and not in a ninth
+memory (8 rows total 150,528 = the fitter's own figure).
+
+Verified from source rather than assumed: SETS 256, WAYS 4, PINW 6, SEQW 16 ->
+STATW 57, KEYW 107, declared 167,936 = the rule's threshold exactly.
+
+Eliminated: written-from-constants (s0_crc is input-derived), s_pack too narrow
+(it is 57 bits), nothing-reads-them (all six accessors used, two in
+comparisons).
+
+Absent: pin(6) + bd + f + mips + crc[31:24] -- EIGHT BITS OF THE PAGE CRC.
+
+GATE HELD. Would have been the third relaxed on a refuted diagnosis; first two
+were caught after the fact. Experiment queued: declare statram 40 wide, change
+nothing else -- same numbers proves the bits were never there.
+
+Toolchain refilled: geom_project refit running to judge project_core's cut.

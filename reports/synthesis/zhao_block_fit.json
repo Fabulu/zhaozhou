@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "c4a81822fa874056937f38c75340f06be300e0ba",
+    "newestRunCommit":  "6c1d1fa3205a93d0391faef376f63912972fedfa",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1182,10 +1182,10 @@
                    {
                        "module":  "zhao_terrain_residency_v2",
                        "status":  "failed:structure",
-                       "sourceCommit":  "43b1ba2cd63ffd2145dbd1cf211e8d0f03774c53",
+                       "sourceCommit":  "6c1d1fa3205a93d0391faef376f63912972fedfa",
                        "rtlCleanAtHead":  true,
                        "sourceDigest":  "eba05df24949f64d1cd1758dd5d63e3766cb610a76009e22454bf97b8bc18d40",
-                       "seconds":  4578.2,
+                       "seconds":  4426,
                        "sourcesHashed":  1,
                        "alms":  2234,
                        "registers":  1226,
