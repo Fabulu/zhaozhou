@@ -164,3 +164,21 @@ question rather than decided.
 Not decided by me, per the plan's Q-A5 instruction — both go to the owner:
 * `channel`'s violet planet bloom (the only clip with a backdrop),
 * the smear rung 3-vs-5 motion-class split (D7 §4 speed semantics).
+
+### 20:40 — LANE B CLOSED
+All of B0/B1/B2/B3/B4/B5/B6 committed and pushed; both repos verified
+`0 0` ahead/behind origin/main. Findings at
+`Upheaval/creature/Manafold/PASS-12-FINDINGS-B.md`, plates in `pass12-plates/`.
+
+Final integration build against A's latest (round body, nodules, startle
+splay): BUILD_RC=0, `manafold-channel` renders clean, 420 frames.
+`shellgate.exe` PASS and `--selftest` reports every check failable.
+
+**No publish** — that happens once, after both lanes and Wave 2.
+
+**ONE HAND-OFF, and it is the only incomplete thing:** `manafold_clips.h:734`
+`kFoldShapeCount = 6` -> `u02::kFoldStencilCount` (9), so the picker can reach
+the three new figures. That file is A's; a static_assert guards the unsafe
+direction.
+
+**This lane can be deleted** once that line lands — nothing here is unpushed.
