@@ -97,6 +97,44 @@ matches nothing.
 
 **522 checks**, from 477 at the start of the day.
 
+## §8.3's claim-to-write lease is established — by the §8.2 change, not by a new predicate
+
+§8.3 asks that the lease be expressed **at the physical boundary**:
+
+> sample-bank write enable → current instance owns this slot and source;
+> AUX-bank write enable → current instance owns this slot;
+> FINAL-bank write enable → current instance owns this slot and final claim.
+>
+> Keep actual RAM write enables registered. **Do not insert an uncontrolled late
+> combinational window predicate immediately before a bank write-enable** and
+> recreate the input-to-RAM timing problem the design was built to remove.
+
+Checked rather than assumed, and it holds **without any new logic**:
+
+```systemverilog
+c3t_we_q <= c2t_acc_c ? c1t_bit_c[2:0] : 3'b000;   // registered at C2->C3
+c3a_we_q <= c2a_acc_c;                              // registered
+c3f_we_q <= c2f_acc_c;                              // registered
+
+c2t_acc_c = c1t_v_q && c1t_rng_q && c2t_idok_c
+         && required && issued && !claimed && !committed && !fwd_t_hit_c
+```
+
+and `c2t_idok_c` now carries **current full-ticket membership**. So the RAM write
+enable is exactly *"current instance owns this slot and source"*, it is
+**registered**, and the ownership test sits at C2 rather than in a late window in
+front of the RAM.
+
+**The important part is that this was NOT true before today.** `idok` was
+snapshot-only, so the physical write enable did not reflect current ownership —
+a packet whose owner had retired between snapshot and claim could reach a bank
+write. §8.2's change propagates to the write enables through the existing
+registered path, which is why §8.3 needs no separate edit and, per its own
+warning, should not get one.
+
+The banks confirm it behaviourally: after a refused late return the COMBINE row
+still holds the owner's own result rather than the attacker's payload.
+
 ## Not done
 
 * **V05's write-enable PINS.** The cases now observe the write's *consequence*
@@ -104,10 +142,11 @@ matches nothing.
   return — which is arguably the better evidence, since a harmlessly
   toggling enable is not the harm. The pins themselves still need a probe
   port or a hierarchical reference, and that remains undone.
-* **§8.3's claim-to-write lease** at the physical write enables. The brief warns
-  it must not become "an uncontrolled late combinational window predicate
-  immediately before a bank write-enable", which is a real design constraint and
-  not a rename.
+* **§8.3's registered validation stage**, in the branch where the lease could
+  *not* be established. It can be, so that branch is not needed — but if the
+  ownership test ever has to move later than C2, §8.3 requires an explicit
+  registered stage with its latency and storage accounted for, not a predicate
+  in front of the RAM.
 * **ALM and Fmax** for the migration — the fitter is still placing, and no
   performance number is predicted. Today's record is unambiguous on that:
   accounting predictions land exactly, performance predictions did not.
