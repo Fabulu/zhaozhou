@@ -15,6 +15,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <string>
 
 namespace fs = std::filesystem;
@@ -818,6 +819,138 @@ void test_no_float_audit() {
 
 }  // namespace
 
+// ---------------------------------------------------------------------------
+// OWNER RULING D-5: FOG IS APPLIED AFTER THE TOON QUANTISER
+// ---------------------------------------------------------------------------
+// The defect D-5 exists to prevent, in one sentence: a toon ramp is a
+// QUANTISER, and colour handed to it with fog already mixed in arrives simply
+// as "darker" -- indistinguishable from "less lit". Both snap to the same band
+// edge, so a smooth depth gradient becomes a staircase, and because the fog
+// factor changes as the object moves, the staircase MOVES. That is what makes
+// it read as a bug rather than a style.
+//
+// The observable consequence is sharp and needs no colour arithmetic to check:
+//
+//   IF fog is applied BEFORE the ramp, adding fog shifts every lit value and
+//   therefore MOVES the band boundaries.
+//   IF fog is applied AFTER the ramp, the boundaries cannot move at all --
+//   bands come from lighting alone, which is what they describe.
+//
+// So this test renders the same lit gradient twice, once clear and once under
+// CONSTANT fog, and asserts the band edges land on exactly the same pixels.
+// Constant fog is the sharpest probe available: under the correct order it is a
+// uniform recolour that cannot move an edge, and under the wrong order it is a
+// uniform shift that moves every edge that a threshold sits near.
+void test_d5_fog_after_toon_quantiser() {
+  using namespace zref::render;
+  const int32_t kDim = 64;
+
+  // Three bands, thresholds placed inside the gradient this triangle spans so
+  // that band edges actually appear in the image.
+  ToonRamp ramp;
+  ramp.bands = 3;
+  ramp.threshold[0] = 90 << 16;
+  ramp.threshold[1] = 170 << 16;
+  ramp.level[0] = 60 << 16;
+  ramp.level[1] = 150 << 16;
+  ramp.level[2] = 240 << 16;
+
+  // A left-to-right LIGHT gradient on the Gouraud lanes. Untextured Gouraud
+  // carries pre-lit colour on the 255 scale (Q16.16), which is what the ramp
+  // thresholds.
+  auto vert = [&](int32_t px, int32_t py, int32_t lit, int32_t fogf) {
+    ScreenV v;
+    v.x = px << 8;
+    v.y = py << 8;
+    v.cr = lit << 16;
+    v.cg = lit << 16;
+    v.cb = lit << 16;
+    v.fogf = fogf;
+    return v;
+  };
+
+  auto render = [&](bool fog_on, int32_t fogf) {
+    WorkSurface s;
+    s.reset(kDim, kDim, zref::sky::SkyColor{0, 0, 0});
+    const Viewport vp{0, 0, kDim, kDim};
+    TriMode m;
+    m.depth_test = false;
+    m.depth_write = false;
+    m.use_fixed_depth = true;
+    m.fixed_depth = 1;
+    m.gouraud = true;
+    m.toon = &ramp;
+    m.fog = fog_on;
+    m.fog_r = 200;  // a fog colour far from every band level, so a wrong
+    m.fog_g = 40;   // ordering cannot accidentally land on the right answer
+    m.fog_b = 40;
+    // Two triangles covering the square, lit 20 on the left edge to 250 on the
+    // right, so the gradient crosses BOTH thresholds.
+    const ScreenV a0 = vert(2, 2, 20, fogf);
+    const ScreenV b0 = vert(61, 2, 250, fogf);
+    const ScreenV c0 = vert(61, 61, 250, fogf);
+    const ScreenV d0 = vert(2, 61, 20, fogf);
+    raster_tri(s, vp, a0, b0, c0, 255, 255, 255, m);
+    raster_tri(s, vp, a0, c0, d0, 255, 255, 255, m);
+    return s.rgb;
+  };
+
+  // Where does the colour change along a scanline? Those pixels ARE the band
+  // edges (plus the triangle's own left/right silhouette, which is identical
+  // between the two renders by construction).
+  auto edges = [&](const std::vector<uint8_t>& rgb) {
+    std::vector<int> e;
+    const int32_t row = 32;
+    for (int32_t x = 1; x < kDim; ++x) {
+      const size_t i = (static_cast<size_t>(row) * kDim + x) * 3;
+      const size_t p = (static_cast<size_t>(row) * kDim + (x - 1)) * 3;
+      if (rgb[i] != rgb[p] || rgb[i + 1] != rgb[p + 1] || rgb[i + 2] != rgb[p + 2])
+        e.push_back(x);
+    }
+    return e;
+  };
+
+  const std::vector<uint8_t> clear = render(false, 0x10000);
+  // Half fog: f = 0x8000 is the most sensitive point -- a pre-ramp mix would
+  // move thresholds by roughly half the distance to the fog colour.
+  const std::vector<uint8_t> foggy = render(true, 0x8000);
+
+  const std::vector<int> e_clear = edges(clear);
+  const std::vector<int> e_foggy = edges(foggy);
+
+  // Non-vacuity, both directions. Without these the test passes on an image
+  // with no bands at all, or on a fog switch that does nothing.
+  check(e_clear.size() >= 2,
+         "D-5 setup: the lit gradient actually crosses both band thresholds, so "
+         "there are real band edges to move");
+  check(clear != foggy,
+         "D-5 setup: turning fog on actually changed the image -- otherwise the "
+         "edge comparison below would be trivially satisfied");
+
+  check(e_clear == e_foggy,
+         "D-5: the toon band edges land on exactly the same pixels with and "
+         "without fog -- bands come from LIGHTING alone. If fog were mixed in "
+         "before the quantiser, a constant fog would shift every lit value and "
+         "these edges would move.");
+
+  // And the fade itself is uniform: under constant fog every pixel of a given
+  // band takes the same fogged colour, so the image still holds exactly as many
+  // distinct colours as it did clear. A pre-ramp mix would not preserve that
+  // count in general, and a smooth gradient would smear the bands.
+  auto distinct = [&](const std::vector<uint8_t>& rgb) {
+    std::set<uint32_t> u;
+    for (int32_t x = 0; x < kDim; ++x) {
+      const size_t i = (static_cast<size_t>(32) * kDim + x) * 3;
+      u.insert((static_cast<uint32_t>(rgb[i]) << 16) | (static_cast<uint32_t>(rgb[i + 1]) << 8) |
+               rgb[i + 2]);
+    }
+    return u.size();
+  };
+  check(distinct(clear) == distinct(foggy),
+         "D-5: constant fog recolours the bands without creating or destroying "
+         "any -- the quantiser's output is still exactly as banded as it was");
+}
+
 int main() {
   test_projection_hand_computed();
   test_marker_perspective_sizing();
@@ -834,6 +967,7 @@ int main() {
   test_mode_latch();
   test_duo_packed_layout();
   test_no_float_audit();
+  test_d5_fog_after_toon_quantiser();
   if (failures == 0) std::printf("render_directed: all green\n");
   return failures == 0 ? 0 : 1;
 }

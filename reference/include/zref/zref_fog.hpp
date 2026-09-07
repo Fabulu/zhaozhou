@@ -36,7 +36,7 @@ namespace fog {
  *  calling this, because field_rcp of a non-positive value is not the law's
  *  domain. */
 inline fx16 frame_k(fx16 fog_near, fx16 fog_far, SatLedger* L) {
-  return rcp::field_rcp(fx_sub(fog_far, fog_near, L), L);
+  return zref::field_rcp(fx_sub(fog_far, fog_near, L), L);
 }
 
 /** Per-vertex clear factor, §8's frozen three lines.

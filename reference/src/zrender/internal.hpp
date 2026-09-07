@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include "zref/zref_fog.hpp"
 #include "zref/zref_render.hpp"
 #include "zref/zref_terrain.hpp"
 #include "zref/zref_texture.hpp"
@@ -122,6 +123,28 @@ struct ProjOut {
  *             video_rules.md §2; the game authors its matrix y-down)
  *   depth  = fx_div_exact(1, w)              Q16.16 1/z, D7
  */
+/**
+ * Fill a projected vertex's fog factor, owner ruling D-5.
+ *
+ * THE PRODUCER. Everything else about D-5 -- the lane on ScreenV, the frozen
+ * factor law in zref_fog.hpp, the mix at the final source colour -- is inert
+ * without something that actually computes the number, and a feature that does
+ * not affect the result is not implemented. This is that something.
+ *
+ * `o.w` is the guarded view-space forward distance the depth pipeline already
+ * clamps, which is exactly the `d` §8's law asks for, and it is already carried
+ * on ProjOut. Callers that do not fog simply never call this and the lane keeps
+ * its CLEAR default, so no existing path changes.
+ *
+ * A behind-the-eye vertex (!in, w == 0) is left CLEAR rather than fully fogged:
+ * its primitive is culled, and fogging a vertex nobody draws would only put a
+ * surprising number into a struct.
+ */
+inline void apply_vertex_fog(ProjOut& o, fx16 fog_near, fx16 fog_far, fx16 k, SatLedger* L) {
+  if (!o.in) return;
+  o.s.fogf = fog::vertex_factor(fx16{o.w}, fog_near, fog_far, k, L);
+}
+
 ProjOut project_vertex(const mat4fx& vp, const Viewport& vp_px, fx16 x, fx16 y, fx16 z,
                        SatLedger* L);
 
