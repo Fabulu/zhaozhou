@@ -345,10 +345,27 @@ module zhao_raster_perspuv_svc #(
   logic signed [31:0]    ob_u_c, ob_v_c;
   logic [TAGW-1:0]       ob_tag_c;
   logic                  ob_sat_c, ob_dz_c;
-  assign ob_u_c   = e_dz[head_q] ? 32'sd0 : e_q_u[head_q];
-  assign ob_v_c   = e_dz[head_q] ? 32'sd0 : e_q_v[head_q];
+  // PURE ARRAY READS, NO LOGIC BEFORE THE REGISTER -- QUARTUS_GOTCHAS 14, which
+  // this file's own header already invokes for the INPUT side: "combinational
+  // logic between an array read and the first register blocks absorption into
+  // the M10K's output register, so an array whose read feeds a MULTIPLIER
+  // cannot become memory however few addresses it has."
+  //
+  // The first version of this boundary put the depth-zero ternary HERE, between
+  // the read and the flop, which is exactly the shape the gotcha says blocks
+  // inference -- so it would have added ~83 registers to a block already 4.5x
+  // over its register rule and foreclosed the chance of removing far more.
+  // `e_q_u`/`e_q_v` are 16 x 32 apiece; if they infer, that is ~1,024 flops
+  // that stop being flops.
+  //
+  // The bypass moves AFTER the register instead. Same values: `dz_q` is
+  // captured from the same entry in the same cycle as `u_q`, so applying the
+  // bypass a cycle later selects on the same slot's flag. The output mux is
+  // then a 2:1 on REGISTERS, not a 16-way select on arrays.
+  assign ob_u_c   = e_q_u[head_q];
+  assign ob_v_c   = e_q_v[head_q];
   assign ob_tag_c = e_tag[head_q];
-  assign ob_sat_c = e_dz[head_q] ? 1'b0 : e_sat[head_q];
+  assign ob_sat_c = e_sat[head_q];
   assign ob_dz_c  = e_dz[head_q];
 
   // The boundary itself.
@@ -379,11 +396,15 @@ module zhao_raster_perspuv_svc #(
     end
   end
 
+  // THE DEPTH-ZERO BYPASS, now applied after the boundary. The original comment
+  // above records why it exists at all -- a depth-zero fragment is marked
+  // complete with no P4 write, so retirement would otherwise emit the previous
+  // occupant's coordinates -- and that behaviour is preserved exactly.
   assign r_valid_o    = r_valid_q;
-  assign u_o          = u_q;
-  assign v_o          = v_q;
+  assign u_o          = dz_q ? 32'sd0 : u_q;
+  assign v_o          = dz_q ? 32'sd0 : v_q;
   assign tag_o        = tag_q;
-  assign sat_o        = sat_q;
+  assign sat_o        = dz_q ? 1'b0 : sat_q;
   assign depth_zero_o = dz_q;
 
   always_comb begin
