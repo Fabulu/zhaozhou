@@ -1,16 +1,8 @@
-﻿powershell.exe : preflight: source 'zhao_terrain_mipfeed' for top 'zhao_terrain_pagestream' does not exist. This is a missing file, 
-NOT a block that 
-In Zeile:1 Zeichen:328
-+ ... ao-env.ps1; & powershell -NoProfile -File tools\quartus\run_block_fit ...
-+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (preflight: sour...T a block that :String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
-does not fit.
-In C:\programmieren\zencrifice\zhaozhou\tools\quartus\run_block_fit.ps1:382 Zeichen:17
-+ ...             throw ("preflight: source '" + $src + "' for top '" + $mo ...
-+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : OperationStopped: (preflight: sour...t does not fit.:String) [], RuntimeException
-    + FullyQualifiedErrorId : preflight: source 'zhao_terrain_mipfeed' for top 'zhao_terrain_pagestream' does not exist. This is a  
-   missing file, NOT a block that does not fit.
- 
+﻿preflight: zhao_terrain_pagestream closure from design/fit_targets.yml (3 file(s))
+snapshot: 3 source(s) copied into the workspace; the live tree cannot reach this fit
+provenance guard: 3 declared source(s)
+source digest: b877d3079895 over 3 file(s) -> zhao_terrain_pagestream.sources.sha256
+WARNUNG: INCOMPLETE: zhao_terrain_pagestream kept its synthesis numbers ( registers,  memory bits); ALMs and Fmax were never 
+produced.
+zhao_terrain_pagestream            incomplete:failed:quartus_map.exe    30.1s   ALM -
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (100 block(s); 1 measured this run)

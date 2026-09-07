@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "e45802d162476889f793baa514f9900fc6d85d08",
-    "newestRunClean":  false,
+    "newestRunCommit":  "73c46da70f79eca6aae05798f32c015e86904c80",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -1058,6 +1058,21 @@
                        "ramBlocks":  0,
                        "dspBlocks":  18,
                        "virtualPins":  456
+                   },
+                   {
+                       "module":  "zhao_terrain_pagestream",
+                       "status":  "incomplete:failed:quartus_map.exe",
+                       "sourceCommit":  "73c46da70f79eca6aae05798f32c015e86904c80",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "b877d30798959ebf3bef86060efd21064126782152eeb9ff436a225bd0295b1d",
+                       "seconds":  30.1,
+                       "sourcesHashed":  3,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  null,
+                       "blockMemoryBits":  null,
+                       "dspBlocks":  null,
+                       "virtualPins":  null
                    },
                    {
                        "module":  "zhao_terrain_patch",

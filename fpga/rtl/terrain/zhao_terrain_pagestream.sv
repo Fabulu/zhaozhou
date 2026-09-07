@@ -279,7 +279,18 @@ module zhao_terrain_pagestream
   always_comb begin
     for (int unsigned p = 0; p < NPLANE; p++) begin
       want_c[p]   = want_byte(2'(p), vidx_q);
-      wantal_c[p] = want_c[p] & ~32'(BURST_BYTES - 1);
+      // PARENTHESISED, AND THAT IS NOT STYLE. `~32'(BURST_BYTES - 1)` is
+      // QUARTUS_GOTCHAS 4b: the parser reads the operator and the size as one
+      // token and chokes on the quote --
+      //     Error (10170): syntax error ... near text: "'"; expecting ";"
+      // -- and the fit came back `incomplete:failed:quartus_map` in 30 seconds.
+      // That gotcha was already written down, with nine instances listed in
+      // four other files, and this file was written without reading it. The
+      // meta-lesson at the bottom of that document is exactly this mistake:
+      // "read this file before touching RTL that has never been through the
+      // fitter -- the blocks that break are always the ones only Verilator has
+      // ever seen."
+      wantal_c[p] = want_c[p] & (~(32'(BURST_BYTES - 1)));
       need_c[p]   = !covv_q[p] || (cov_q[p] != wantal_c[p]);
     end
   end
