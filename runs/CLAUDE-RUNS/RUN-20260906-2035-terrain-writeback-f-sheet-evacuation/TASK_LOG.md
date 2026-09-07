@@ -1333,3 +1333,51 @@ One §15.1 instruction is still open: the gate is an aggregate
 per-bank names, logical geometry, physical mode"*. The data now exists in the
 harvested `blockfit.fit.rpt`. Recorded, not built — the owner put tool expansion
 below finishing the island.
+
+---
+
+## COMBINE V2 LANDED, and the v3own REFIT is launched
+
+**`zhao_texture_material_combine_v2`, first fit ever**: 870 ALM, 918 reg, 6 M10K,
+2 DSP, **114.04 MHz — above the product clock**. Status ok.
+`reports/V31-COMBINE-V2-FIRST-FIT-20260907.md`.
+
+Against the V1 that `zhao_prod_top` still instantiates: **41% fewer ALMs and 3.1×
+the clock** (V1 is 36.28 MHz). So the production resource top — which answers
+*"what does the planned console cost when counted ONCE?"* — is currently costing
+a block 70% larger and a third the speed of the one the island contains. That is
+now a decision with numbers, not a naming inconsistency.
+
+**§12.3's COMBINE allowance is confirmed.** The 69-block profile budgets
+*"COMBINE local payload/scratch/tag allowance — 6"* and flags it *"NOT a
+measurement"*. Measured: **exactly 6**.
+
+**Blocker 1 of 8 cleared.**
+
+## POSITION BEFORE THE NEXT FIT LANDS (written first, again)
+
+Launched: `zhao_texture_v3own` refit carrying **T4** (`383e45df`) and the **fence
+rewrite** (`df1deda7`). The shadow-window assertions are all `` `ifndef
+SYNTHESIS ``, so they cannot contaminate it.
+
+**Before-picture — do not re-derive:** reported **77.16**, core→core **77.16**,
+ALM **6,094**, FIT registers **4,756**, 17 M10K / 20,640 bits, 952 virtual pins.
+Worst path `fence_open_q~0 -> fence_open_q~0`, −2.960, **12.804 ns**, of which
+the four `Mux9` levels (the 64-way `gen_n_c[tail_next_c]` select) are **9.136 ns
+— 71%**.
+
+**Prediction on record:** the fence self-loop should fall out of the worst family
+— the adder and the 64-way select are no longer inside the permission loop, only
+a 2:1 mux is. **Falsifier:** if `fence_open_q -> fence_open_q` is still the worst
+path with a similar `Mux9` chain, the rewrite did not move the select and the
+equivalence argument, though sound, addressed the wrong structure.
+
+**Not predicted:** a specific MHz. Three source-reading predictions were
+falsified today; this one names a structure, not a number.
+
+**Also expect:** ALM to move — T4 adds `crs_q` (+64 flops, stated) and the fence
+rewrite adds a second 64-way select in parallel rather than one in series, which
+may cost area to buy depth.
+
+**Next regardless of result:** the remaining seven §12.4 blockers, all stale rows
+needing refits, all texture-island blocks.
