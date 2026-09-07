@@ -374,6 +374,15 @@ targets:
       max_registers: 900
       max_alms: 800
       max_dsp: 0
+      # MEASURED 2026-09-07, Quartus 17.0.2, 5CSEBA6U23I7, 2,018 s:
+      #   ALM 734  registers 692  M10K 1  memory bits 10,240  DSP 0
+      #   Fmax 107.33 MHz on `clk`, against the 100 MHz product clock.
+      # The store inferred as memory to the BIT -- 10,240 is one M10K exactly,
+      # which is what the 40-bit x 8-word x 32-job packing was arranged for --
+      # and the 692 registers are the serialiser, the pointers and the counters
+      # rather than the 7,776 the flop version would have cost. The gates above
+      # were set BEFORE this ran; they are left where they are, because a gate
+      # retuned to the number it just measured is not a gate.
 
   # TERRAIN.MIPGEN is streaming decimation with NO storage -- if a fit reports
   # RAM blocks for it, the block grew a buffer somebody did not intend.

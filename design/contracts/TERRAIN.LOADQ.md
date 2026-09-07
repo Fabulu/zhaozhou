@@ -93,6 +93,26 @@ nothing combinational between (`QUARTUS_GOTCHAS.md` §14). A "FIFO" that infers
 7,776 flops instead of one M10K is the same budget disaster wearing the fix's
 name.
 
+## Fitted, and the storage claim is no longer a claim
+
+Nothing in simulation can tell one M10K from 7,776 flip-flops — a Verilator run
+is identical either way — so the whole storage argument above was **unverified**
+until a fitter said otherwise. Quartus 17.0.2, 5CSEBA6U23I7, 2,018 s:
+
+| | measured | designed for |
+|---|---:|---|
+| block memory bits | **10,240** | 32 × 8 × 40 = 10,240, exactly |
+| M10K | **1** | one |
+| registers | **692** | the serialiser, pointers and counters — *not* 7,776 |
+| ALM | 734 | |
+| DSP | 0 | |
+| Fmax | **107.33 MHz** | 100 MHz product clock |
+
+The store inferred as memory **to the bit**, which is what the 40-bit × 8-word ×
+32-job packing was arranged for, and the register count is the other half of the
+same evidence: a fit that inferred the M10K *and* kept a shadow copy in flops
+would satisfy `min_memory_bits` and still be the disaster the design avoids.
+
 ## Capacity is DEPTH + 1
 
 `DEPTH` is the size of the **store**. One further job sits deserialised at the
