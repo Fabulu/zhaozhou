@@ -302,6 +302,88 @@ int main() {
                 "and every measured cycle delivered a head", kMeasure, pops);
   }
 
+  // ---- S22.6: ready toggling on EVERY edge, across pointer wrap -------------
+  // S22.6 scores each wide queue on a list, and two of its entries had no
+  // counterpart here:
+  //
+  //   "pointer wrap while head/spare still contain older packets"
+  //   "consumer ready toggling on every edge"
+  //
+  // The sustained-rate block above runs pop continuously, which is the easy
+  // schedule for a head/spare pair: the spare simply drains. Toggling ready on
+  // every edge is the hard one -- the spare fills and empties alternately, and a
+  // reservation that is decided one cycle too early or late shows up as a lost
+  // or duplicated ticket rather than as a rate.
+  //
+  // Run long enough that the 64-deep body pointer wraps many times while the
+  // heads still hold older entries, which is the other missing item, and check
+  // IDENTITY and ORDER rather than throughput: every ticket exactly once, in
+  // sequence.
+  {
+    // Drain to a known state first.
+    for (int i = 0; i < 300 && !d->owned_empty_o; ++i) {
+      d->wr_en_i = 0;
+      d->pop_i = d->valid_o;
+      d->eval();
+      tick(d);
+    }
+    d->pop_i = 0;
+    d->eval();
+
+    int next_push = 0, next_pop = 0;
+    int pushed = 0, popped = 0, order_errors = 0;
+    for (int i = 0; i < 4000; ++i) {
+      d->wr_en_i = !d->full_o;
+      d->wr_data_i = static_cast<uint16_t>(next_push & 0x3FFF);
+      // TOGGLE ON EVERY EDGE.
+      d->pop_i = ((i & 1) != 0) && d->valid_o;
+      d->eval();
+      if (d->pop_i) {
+        if (d->data_o != static_cast<uint16_t>(next_pop & 0x3FFF)) ++order_errors;
+        ++next_pop;
+        ++popped;
+      }
+      if (d->wr_en_i) {
+        ++next_push;
+        ++pushed;
+      }
+      tick(d);
+      d->eval();
+    }
+    // Drain the remainder so the totals are comparable.
+    for (int i = 0; i < 400 && !d->owned_empty_o; ++i) {
+      d->wr_en_i = 0;
+      d->pop_i = d->valid_o;
+      d->eval();
+      if (d->pop_i) {
+        if (d->data_o != static_cast<uint16_t>(next_pop & 0x3FFF)) ++order_errors;
+        ++next_pop;
+        ++popped;
+      }
+      tick(d);
+      d->eval();
+    }
+    d->pop_i = 0;
+    d->eval();
+
+    zhao::check(pushed > 2000,
+                "S22.6 the toggling run actually moved traffic (not vacuous)", 1,
+                pushed > 2000 ? 1 : 0);
+    zhao::check(pushed > 64 * 4,
+                "and the 64-deep body pointer wrapped several times while the "
+                "heads held older entries",
+                1, pushed > 256 ? 1 : 0);
+    zhao::check(popped == pushed,
+                "S22.6 every ticket comes out EXACTLY ONCE with consumer ready "
+                "toggling on every edge -- none lost in a reservation, none "
+                "delivered twice",
+                pushed, popped);
+    zhao::check(order_errors == 0,
+                "S22.6 and in sequence: alternating ready never reorders the "
+                "head/spare pair",
+                0, order_errors);
+  }
+
   const int rc = zhao::report_and_exit("texture_v3rq_directed");
   delete d;
   zhao::exit_hard(rc);
