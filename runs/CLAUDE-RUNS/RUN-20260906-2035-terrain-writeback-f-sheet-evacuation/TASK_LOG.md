@@ -333,3 +333,29 @@ NO ROW AT ALL: zhao_raster_blend_prod, zhao_raster_blend_fin, zhao_raster_fill.
 
 NORMALS first when the toolchain frees: its row is both stale and the reason
 the terrain pair looks the way it does.
+
+## 2026-09-07 -- TERRAIN.NORMALS pipelined; the worst number in the tree attacked
+
+The 31.10 MHz pair traced to one cycle in NORMALS holding a 6-way operand mux,
+a 33x33 signed multiply, a sign-extend to 67 bits AND a 67-bit subtract -- with
+a SECOND 67-bit adder hung off the same combinational product at the last step,
+which a comment justified as "keeps the walk at 6".
+
+Registered the product. Walk 6 -> 7 clocks, latency/II 7 -> 8; the contract says
+`latency: variable` and that sentence already paid for the sequencing that made
+this one multiplier. Prediction written INTO THE FILE, not just the commit: the
+pair should move well above 31.10, not to 100, because TESS is the other half
+and is unexamined. If the refit does not move it, the multiply was not the
+limit and the comment is the record of a wrong guess.
+
+61,833 checks pass across four lanes. Fire test: one accumulate arm reverted to
+the unregistered product -> 4,840 of 20,003 random-differential failures, so
+the suite is sensitive to precisely the off-by-one this change invites.
+
+FIT QUEUE now, in order, once residency_v2 clears:
+  1. zhao_pair_tess_normals   -- does the pipeline register move 31.10?
+  2. zhao_terrain_normals     -- leaf row STALE 2, and now stale 3; expect
+                                18 DSP -> ~3 from the shared-multiplier work
+  3. zhao_geom_project        -- never measured
+  4. zhao_pair_pagestream_patch
+  5. zhao_terrain_residency_v2 re-read

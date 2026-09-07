@@ -144,6 +144,44 @@ module zhao_terrain_normals (
 
   logic               m_busy;
   logic        [2:0]  mseq;
+
+  // ---- THE PRODUCT PIPELINE REGISTER, AND WHY IT IS WORTH A CYCLE ---------
+  // `zhao_pair_tess_normals` -- the registered characterisation wrapper that
+  // puts TESS and NORMALS in front of the fitter with the seam internal and
+  // both ends registered -- measured 31.10 MHz against a 100 MHz product
+  // clock. That is the worst recorded number in the tree and it sits on the
+  // terrain geometry path.
+  //
+  // The path that costs it was this, all in ONE cycle:
+  //
+  //     registered edge -> 6-way operand mux -> 33x33 signed multiply
+  //       -> sign-extend to 67 -> 67-bit subtract -> accumulator register
+  //
+  // and at the last step the SAME combinational product fed a SECOND 67-bit
+  // adder in parallel, for `s1_n2`. A 33x33 multiply on Cyclone V is built
+  // from cascaded 18x18 DSP blocks; putting a 67-bit carry chain after it
+  // inside one clock is what a 32 ns period looks like.
+  //
+  // So the product is registered here. The DSP block has an output register
+  // of its own and Quartus uses it when the product is registered, so this
+  // costs no fabric -- it cuts the path into (mux + multiply) and (add), each
+  // of which is roughly half of what was there.
+  //
+  // THE PRICE IS ONE CYCLE. The walk goes from six clocks to seven, latency
+  // and initiation interval from 7 to 8. The contract already declares
+  // `latency: variable`, and the same sentence justified the sequencing that
+  // replaced six parallel multipliers with this one. One cycle out of seven
+  // against a clock that is three times short is a trade worth making, and it
+  // is stated rather than assumed: the fit is what confirms it.
+  //
+  // NOT MEASURED YET. The prediction is that the block-pair moves well above
+  // 31.10 MHz, not that it reaches 100 -- TESS is the other half of that pair
+  // and has not been examined. If a refit does not move it, the multiply was
+  // not the limit and this comment is the record of a wrong guess.
+  logic               m_issue;         // an operand pair is being presented
+  logic signed [65:0] m_p_q;           // the product, one cycle later
+  logic               mp_v_q;          // ... and whether it is a real one
+  logic        [2:0]  mp_step_q;       // ... and which step it belongs to
   logic signed [32:0] l1x, l1y, l1z, l2x, l2y, l2z;  // edges latched at accept
   logic        [15:0] m_src;
   logic signed [32:0] m_a, m_b;
@@ -199,13 +237,19 @@ module zhao_terrain_normals (
   // Sequenced: ready only when the shared multiplier is idle and stage 1 is
   // empty. The old `s1_free` admitted a new triangle every clock, which was
   // correct when all six products existed at once and is not now. Latency and
-  // initiation interval both become 7; the contract already admits `variable`.
+  // initiation interval both become 8 -- seven for the walk since the product
+  // gained a pipeline register, plus the rescale stage; the contract already
+  // admits `variable`.
   assign tri_ready_o = !m_busy && !s1_valid;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       m_busy <= 1'b0;
       mseq  <= 3'd0;
+      m_issue   <= 1'b0;
+      m_p_q     <= '0;
+      mp_v_q    <= 1'b0;
+      mp_step_q <= 3'd0;
       acc0  <= '0;
       acc1  <= '0;
       acc2  <= '0;
@@ -232,37 +276,58 @@ module zhao_terrain_normals (
         if (tri_valid_i) begin
           l1x <= e1x; l1y <= e1y; l1z <= e1z;
           l2x <= e2x; l2y <= e2y; l2z <= e2z;
-          m_src  <= src_id_i;
-          mseq   <= 3'd0;
-          m_busy <= 1'b1;
+          m_src   <= src_id_i;
+          mseq    <= 3'd0;
+          m_busy  <= 1'b1;
+          m_issue <= 1'b1;
         end
       end else if (m_busy) begin
-        // One product per clock, accumulated with its sign. The first term of
-        // each lane assigns and the second subtracts, so no lane needs a clear.
-        unique case (mseq)
-          3'd0: acc0 <=  $signed({{1{m_p[65]}}, m_p});
-          3'd1: acc0 <= acc0 - $signed({{1{m_p[65]}}, m_p});
-          3'd2: acc1 <=  $signed({{1{m_p[65]}}, m_p});
-          3'd3: acc1 <= acc1 - $signed({{1{m_p[65]}}, m_p});
-          3'd4: acc2 <=  $signed({{1{m_p[65]}}, m_p});
-          3'd5: acc2 <= acc2 - $signed({{1{m_p[65]}}, m_p});
-          default: ;
-        endcase
+        // ISSUE and ACCUMULATE are now different cycles. The issue side only
+        // walks the operand mux; the product it produces is consumed on the
+        // next edge from `m_p_q`.
+        if (m_issue) begin
+          if (mseq == 3'(NSTEP - 1)) m_issue <= 1'b0;
+          else                       mseq    <= mseq + 3'd1;
+        end
 
-        if (mseq == 3'(NSTEP - 1)) begin
-          m_busy <= 1'b0;
-          s1_valid <= 1'b1;
-          s1_n0 <= acc0;
-          s1_n1 <= acc1;
-          // acc2's final subtract lands this same edge, so take it from the
-          // combinational value rather than the register, which is one cycle
-          // behind. Same value, one cycle earlier -- keeps the walk at 6.
-          s1_n2 <= acc2 - $signed({{1{m_p[65]}}, m_p});
-          s1_src <= m_src;
-        end else begin
-          mseq <= mseq + 3'd1;
+        // One product per clock, accumulated with its sign, ONE CYCLE BEHIND
+        // its issue. The first term of each lane assigns and the second
+        // subtracts, so no lane needs a clear.
+        if (mp_v_q) begin
+          unique case (mp_step_q)
+            3'd0: acc0 <=  $signed({{1{m_p_q[65]}}, m_p_q});
+            3'd1: acc0 <= acc0 - $signed({{1{m_p_q[65]}}, m_p_q});
+            3'd2: acc1 <=  $signed({{1{m_p_q[65]}}, m_p_q});
+            3'd3: acc1 <= acc1 - $signed({{1{m_p_q[65]}}, m_p_q});
+            3'd4: acc2 <=  $signed({{1{m_p_q[65]}}, m_p_q});
+            3'd5: acc2 <= acc2 - $signed({{1{m_p_q[65]}}, m_p_q});
+            default: ;
+          endcase
+
+          if (mp_step_q == 3'(NSTEP - 1)) begin
+            m_busy   <= 1'b0;
+            s1_valid <= 1'b1;
+            s1_n0 <= acc0;
+            s1_n1 <= acc1;
+            // acc2's final subtract lands on this same edge, so it is taken
+            // from the accumulator plus the registered product rather than
+            // from acc2 one cycle later. This shortcut is why the walk is
+            // seven clocks and not eight -- and it is now ONE 67-bit adder
+            // after a REGISTER, not a second adder hung off the multiply's
+            // combinational output, which is what made it expensive before.
+            s1_n2 <= acc2 - $signed({{1{m_p_q[65]}}, m_p_q});
+            s1_src <= m_src;
+          end
         end
       end
+
+      // The product pipeline itself. It captures unconditionally -- a stale
+      // product is harmless because `mp_v_q` says whether it counts -- so the
+      // multiply's output has nothing in front of it but a register, which is
+      // the entire point.
+      m_p_q     <= m_p;
+      mp_step_q <= mseq;
+      mp_v_q    <= m_busy && m_issue;
 
       if (s1_valid && s2_free) s1_valid <= 1'b0;
 
