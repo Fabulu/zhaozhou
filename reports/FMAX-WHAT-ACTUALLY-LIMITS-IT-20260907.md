@@ -91,7 +91,7 @@ files fail it and are no longer split. One comparison catches a superseded run, 
 renamed variant and a half-written report alike, which is why it replaced any
 idea of blacklisting the word "superseded".
 
-## The five, and what each one is
+## The four, and what each one is
 
 ### The roadmap's COMBINE.V1 item, which turns out to be already answered
 
@@ -130,10 +130,10 @@ limited internally at 77.30 — still **23% short of the product clock**.
 an ALM number against 6,600 nominal / 7,500 redline. **§4.3 has no clock line at
 all**, and that row is now four commits stale besides.
 
-### 4. `zhao_texture_v3own@v3-full` — 89.09 MHz. And `zhao_raster_tilestore` — 96.12 MHz.
+### 3. `zhao_texture_v3own@v3-full` — 89.09 MHz. 4. `zhao_raster_tilestore` — 96.12 MHz.
 
 Marginal: 11% and 4% short. Real, but a different order of problem from the
-first three.
+first two.
 
 ## Fifteen blocks cannot be split at all
 
