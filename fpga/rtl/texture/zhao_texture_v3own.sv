@@ -233,7 +233,6 @@ module zhao_texture_v3own #(
   // NARROW OWNER SCOREBOARD -- fabric, section 8.1
   // ==========================================================================
   logic            live_q [OWNERS];
-  logic [GENW-1:0] gen_q  [OWNERS];
   logic [3:0]      req_q  [OWNERS];
   logic [3:0]      iss_q  [OWNERS];
   logic [3:0]      clm_q  [OWNERS];
@@ -248,6 +247,11 @@ module zhao_texture_v3own #(
   // event 3 ONLY, and this bit inherits event 2's guard duty -- an owner
   // must not be reserved for COMBINE twice, and that is a DIFFERENT fact
   // from having been accepted.
+  // `gen_q [OWNERS]` -- 64 x 8 = 512 flip-flops -- IS GONE. Every functional
+  // reader now uses `win_gen_of_slot()`, the reconstruction the owner's T2
+  // ruling specifies. A literal table survives ONLY in the synthesis-excluded
+  // verification section as `vgen_q`, maintained by its own old-style per-slot
+  // recurrence so the equivalence assertion is not circular.
   logic            crs_q  [OWNERS];   // combine_reserved
   logic            fcl_q  [OWNERS];   // final_claimed
   logic            fdn_q  [OWNERS];   // final_done
@@ -474,7 +478,6 @@ module zhao_texture_v3own #(
   logic [1:0]      fn_q, fn_n_c;
   logic            fence_open_q;
   logic [SLOTW-1:0] fn_slot_q;      // the held request's identity (§6.2)
-  logic [GENW-1:0]  fn_gen_q;
 
   always_comb begin
     fn_n_c = fn_q;
@@ -1036,7 +1039,6 @@ module zhao_texture_v3own #(
   // Appendix B.5's precedence is explicit at the bottom: admission
   // reinitialises its slot and overrides everything else for that slot.
   logic            live_n_c [OWNERS];
-  logic [GENW-1:0] gen_n_c  [OWNERS];
   logic [3:0]      req_n_c  [OWNERS];
   logic [3:0]      iss_n_c  [OWNERS];
   logic [3:0]      clm_n_c  [OWNERS];
@@ -1063,16 +1065,30 @@ module zhao_texture_v3own #(
   // conflating two events in one bit is how a final gets authorised by a
   // reservation. This hoist buys the logic and changes no behaviour.
   logic c4t_gen_ok_c, c4a_gen_ok_c, c4f_gen_ok_c, cmb_gen_ok_c;
-  assign c4t_gen_ok_c = (gen_q[c4t_slot_q] == c4t_gen_q);
-  assign c4a_gen_ok_c = (gen_q[c4a_slot_q] == c4a_gen_q);
-  assign c4f_gen_ok_c = (gen_q[c4f_slot_q] == c4f_gen_q);
-  assign cmb_gen_ok_c = (gen_q[cmb_owner_o[OWNERW-1 -: SLOTW]]
+  // MIGRATED to the reconstruction, per the owner's T2 lifetime ruling:
+  //
+  //   historical_generation(slot) =
+  //       slot < allocation_slot ? allocation_generation
+  //                              : allocation_generation - 1 modulo 256
+  //
+  // and "the current RTL already implements this function as
+  // win_gen_of_slot()". The predicate below is UNCHANGED -- this is the exact
+  // migration, step 1 of the brief's order. The live-owner authority checks the
+  // ruling requires are a SEPARATE, separately testable change.
+  //
+  // The ruling also corrects my own framing: `win_gen_of_slot` reconstructs the
+  // residual generation of DEAD slots as well as live ones, so keeping today's
+  // generation-only predicate does NOT require keeping `gen_q`. I had welded
+  // the policy question to the table removal; they are two changes.
+  assign c4t_gen_ok_c = (win_gen_of_slot(c4t_slot_q) == c4t_gen_q);
+  assign c4a_gen_ok_c = (win_gen_of_slot(c4a_slot_q) == c4a_gen_q);
+  assign c4f_gen_ok_c = (win_gen_of_slot(c4f_slot_q) == c4f_gen_q);
+  assign cmb_gen_ok_c = (win_gen_of_slot(cmb_owner_o[OWNERW-1 -: SLOTW])
                          == cmb_owner_o[GENW-1:0]);
 
   always_comb begin
     for (int unsigned i = 0; i < OWNERS; i++) begin
       live_n_c[i] = live_q[i];
-      gen_n_c [i] = gen_q [i];
       req_n_c [i] = req_q [i];
       iss_n_c [i] = iss_q [i];
       clm_n_c [i] = clm_q [i];
@@ -1143,7 +1159,6 @@ module zhao_texture_v3own #(
       // ---- ADMISSION, last and therefore highest precedence ----
       if (adm_fire_c && (tail_q == SLOTW'(i))) begin
         live_n_c[i] = 1'b1;
-        gen_n_c [i] = adm_gen_c;
         req_n_c [i] = adm_req_i;
         iss_n_c [i] = 4'd0;
         clm_n_c [i] = 4'd0;
@@ -1202,7 +1217,6 @@ module zhao_texture_v3own #(
     if (!rst_n) begin
       for (int unsigned i = 0; i < OWNERS; i++) begin
         live_q[i] <= 1'b0;
-        gen_q [i] <= '0;
         req_q [i] <= 4'd0;
         iss_q [i] <= 4'd0;
         clm_q [i] <= 4'd0;
@@ -1222,13 +1236,11 @@ module zhao_texture_v3own #(
       fn_q <= FN_OPEN;
       fence_open_q <= 1'b1;  // an unwrapped namespace is open
       fn_slot_q <= '0;
-      fn_gen_q <= '0;
       unf_cnt_q  <= '0;
       peak_q     <= '0;
     end else begin
       for (int unsigned i = 0; i < OWNERS; i++) begin
         live_q[i] <= live_n_c[i];
-        gen_q [i] <= gen_n_c [i];
         req_q [i] <= req_n_c [i];
         iss_q [i] <= iss_n_c [i];
         clm_q [i] <= clm_n_c [i];
@@ -1277,7 +1289,6 @@ module zhao_texture_v3own #(
                    || (fn_n_c == FN_REOPEN);
       if ((fn_q == FN_OPEN) && wrap_block_n_c) begin
         fn_slot_q <= tail_next_c;
-        fn_gen_q  <= gen_n_c[tail_next_c];
       end
       unf_cnt_q  <= unf_cnt_q + CNTW'(adm_fire_c) - CNTW'(fetch_fire_c);
 
@@ -1326,7 +1337,17 @@ module zhao_texture_v3own #(
     c1t_res_q  <= c0t_res_q;
     c1t_rng_q  <= c0t_rng_q;
     c1t_live_q <= live_q[c0t_slot_q];
-    c1t_tgen_q <= gen_q [c0t_slot_q];
+    // C1 SNAPSHOT, migrated. These three were MISSING from my own read
+    // inventory and the brief caught them: my search was `gen_q\[` while the
+    // source writes `gen_q [c0t_slot_q]` -- with a space. The brief supplies
+    // `gen_(q|n_c)\s*\[` for exactly that reason.
+    //
+    // "Capture these from the same pre-edge allocator state as the other row
+    // facts. Do not calculate them one clock later from a moved cursor and call
+    // that an unchanged snapshot." `win_gen_of_slot` reads `tail_q` and
+    // `sh_alloc_gen_q`, both registers, so inside this always_ff it sees
+    // pre-edge state on the same edge as every other fact captured here.
+    c1t_tgen_q <= win_gen_of_slot(c0t_slot_q);
     c1t_req_q  <= req_q [c0t_slot_q];
     c1t_iss_q  <= iss_q [c0t_slot_q];
     c1t_clm_q  <= clm_q [c0t_slot_q];
@@ -1367,7 +1388,7 @@ module zhao_texture_v3own #(
     c1a_gen_q  <= c0a_gen_q;
     c1a_res_q  <= c0a_res_q;
     c1a_live_q <= live_q[c0a_slot_q];
-    c1a_tgen_q <= gen_q [c0a_slot_q];
+    c1a_tgen_q <= win_gen_of_slot(c0a_slot_q);
     c1a_req_q  <= req_q [c0a_slot_q];
     c1a_iss_q  <= iss_q [c0a_slot_q];
     c1a_clm_q  <= clm_q [c0a_slot_q];
@@ -1406,7 +1427,7 @@ module zhao_texture_v3own #(
     c1f_gen_q  <= c0f_gen_q;
     c1f_res_q  <= c0f_res_q;
     c1f_live_q <= live_q[c0f_slot_q];
-    c1f_tgen_q <= gen_q [c0f_slot_q];
+    c1f_tgen_q <= win_gen_of_slot(c0f_slot_q);
     c1f_cbi_q  <= cbi_q [c0f_slot_q];
     c1f_fcl_q  <= fcl_q [c0f_slot_q];
     c1f_fdn_q  <= fdn_q [c0f_slot_q];
@@ -1627,6 +1648,35 @@ module zhao_texture_v3own #(
   // One slot checked per cycle, rotating, rather than 64 every cycle: the
   // bench runs long enough to sweep the ring many times over and this keeps
   // simulation honest about cost.
+  // ---- THE VERIFICATION-ONLY GENERATION TABLE -----------------------------
+  // The owner's T2 ruling: "keep a literal gen_q reference only in a
+  // synthesis-excluded verification section. Update it from its OWN old-style
+  // per-slot recurrence, not from the new helper it is intended to check.
+  // Otherwise the apparent equivalence assertion becomes circular."
+  //
+  // So `vgen_q` is maintained exactly the way the deleted table was -- increment
+  // this slot's own byte when the slot is allocated -- and NEVER from
+  // `win_gen_of_slot`. That is what keeps `a_win_gen_of_slot` a real check
+  // rather than a restatement of the helper against itself.
+  logic [GENW-1:0] vgen_q [OWNERS];
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      for (int unsigned i = 0; i < OWNERS; i++) vgen_q[i] <= '0;
+    end else if (adm_fire_c) begin
+      vgen_q[tail_q] <= GENW'(vgen_q[tail_q] + GENW'(1));
+    end
+  end
+
+  // The fence-generation latch is verification-only too: classified rather than
+  // guessed, per the brief. Its ONLY consumer is `a_fence_holds_gen` below --
+  // there is no datapath reader -- so it moves here with the table it compares
+  // against, and its next-state read disappears with it.
+  logic [GENW-1:0] vfn_gen_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n)                     vfn_gen_q <= '0;
+    else if (fn_n_c == FN_REOPEN)   vfn_gen_q <= win_gen_of_slot(tail_next_c);
+  end
+
   logic [SLOTW-1:0] gen_chk_s;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) gen_chk_s <= '0;
@@ -1660,17 +1710,17 @@ module zhao_texture_v3own #(
       // warnings about. It compares against the TABLE instead, which is the
       // thing the derivation actually claims.
       a_win_gen_matches_table : assert (!adm_fire_c
-          || (sh_alloc_gen_q == GENW'(gen_q[tail_q] + GENW'(1))));
+          || (sh_alloc_gen_q == GENW'(vgen_q[tail_q] + GENW'(1))));
 
       // Site 3's derivation, checked against the table it replaced. This is the
       // one Group A site that is not a copy of the other two, and the plan had
       // it wrong once before an assertion corrected it.
       a_win_wrap_p1_matches_table : assert (
-          wrap_at_tail_p1_c == (gen_q[tail_p1_c] == {GENW{1'b1}}));
+          wrap_at_tail_p1_c == (vgen_q[tail_p1_c] == {GENW{1'b1}}));
 
       // And site 2, for the same reason.
       a_win_wrap_matches_table : assert (
-          wrap_block_c == (gen_q[tail_q] == {GENW{1'b1}}));
+          wrap_block_c == (vgen_q[tail_q] == {GENW{1'b1}}));
 
       // 6.1's count, against the two pointers. This is the check that would
       // fail first if retirement ever stopped being oldest-first.
@@ -1776,11 +1826,11 @@ module zhao_texture_v3own #(
       // reachable state and the "decision" evaporates; if one fires, the case is
       // real and the decision is genuinely the owner's.
       a_c4t_never_dead_match : assert (!(c4t_v_q && !live_q[c4t_slot_q]
-                                         && (gen_q[c4t_slot_q] == c4t_gen_q)));
+                                         && (vgen_q[c4t_slot_q] == c4t_gen_q)));
       a_c4a_never_dead_match : assert (!(c4a_v_q && !live_q[c4a_slot_q]
-                                         && (gen_q[c4a_slot_q] == c4a_gen_q)));
+                                         && (vgen_q[c4a_slot_q] == c4a_gen_q)));
       a_c4f_never_dead_match : assert (!(c4f_v_q && !live_q[c4f_slot_q]
-                                         && (gen_q[c4f_slot_q] == c4f_gen_q)));
+                                         && (vgen_q[c4f_slot_q] == c4f_gen_q)));
 
       // THE FULL gen_of_slot IDENTITY -- and the FIRST version of this
       // assertion was WRONG, which is the entire reason it is here.
@@ -1816,7 +1866,7 @@ module zhao_texture_v3own #(
           (((tkt_chk_q - sh_retire_tkt_c) & OWNERW'({OWNERW{1'b1}}))
              < OWNERW'(live_cnt_q))
           == (live_q[tkt_chk_q[SLOTW-1:0]]
-              && (gen_q[tkt_chk_q[SLOTW-1:0]] == tkt_chk_q[OWNERW-1 -: GENW])));
+              && (vgen_q[tkt_chk_q[SLOTW-1:0]] == tkt_chk_q[OWNERW-1 -: GENW])));
 
       // THE SAME IDENTITY, AIMED AT THE BOUNDARY. The check above sweeps the
       // whole namespace uniformly, which sounds thorough and is weak exactly
@@ -1831,9 +1881,9 @@ module zhao_texture_v3own #(
       a_win_live_at_boundary : assert (
           ((OWNERW'(gen_chk_s)) < OWNERW'(live_cnt_q))
           == (live_q[bnd_tkt_c[SLOTW-1:0]]
-              && (gen_q[bnd_tkt_c[SLOTW-1:0]] == bnd_tkt_c[OWNERW-1 -: GENW])));
+              && (vgen_q[bnd_tkt_c[SLOTW-1:0]] == bnd_tkt_c[OWNERW-1 -: GENW])));
 
-      a_win_gen_of_slot : assert (gen_q[gen_chk_s] ==
+      a_win_gen_of_slot : assert (vgen_q[gen_chk_s] ==
           ((gen_chk_s < tail_q) ? sh_alloc_gen_q : GENW'(sh_alloc_gen_q - GENW'(1))));
     end
   end
@@ -1907,7 +1957,7 @@ module zhao_texture_v3own #(
       // move the tail -- these assert that, rather than assuming it.
       a_fence_holds_slot : assert ((fn_q != FN_REOPEN) || (tail_q == fn_slot_q));
       a_fence_holds_gen  : assert ((fn_q != FN_REOPEN)
-                                || (gen_q[fn_slot_q] == fn_gen_q));
+                                || (vgen_q[fn_slot_q] == vfn_gen_q));
 
       // And the reopen authorises EXACTLY ONE admission: 6.2 warns the
       // transitional fence and the sequence-window fence "must not be combined
