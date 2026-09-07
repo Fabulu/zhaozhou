@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "22442fd08b1afe65a94c296412dadffcb9063ff3",
+    "newestRunCommit":  "9c787e4a09ea9099982d736549a3e99ced908fb1",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -678,12 +678,13 @@
                    {
                        "module":  "zhao_raster_perspuv_svc",
                        "status":  "failed:structure",
-                       "sourceCommit":  "5651d96c20b84d464fc7261e8a2daae47e585585",
+                       "sourceCommit":  "9c787e4a09ea9099982d736549a3e99ced908fb1",
                        "rtlCleanAtHead":  true,
-                       "seconds":  10504.8,
+                       "sourceDigest":  "425ba288ef73d0889a3fd067b20b133ee2139b89431ef737d8168f86d8d730c8",
+                       "seconds":  1834.7,
                        "sourcesHashed":  1,
-                       "alms":  1910,
-                       "registers":  3157,
+                       "alms":  1886,
+                       "registers":  3216,
                        "blockMemoryBits":  256,
                        "ramBlocks":  1,
                        "dspBlocks":  6,
@@ -691,11 +692,11 @@
                        "almsAvailable":  41910,
                        "ramBlocksAvailable":  553,
                        "dspBlocksAvailable":  112,
-                       "fmaxMhz":  96.62,
+                       "fmaxMhz":  105.19,
                        "fmaxClock":  "clk",
                        "ruleViolations":  [
-                                              "registers 3157 \u003e allowed 700 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)",
-                                              "ALM 1910 \u003e allowed 900"
+                                              "registers 3216 \u003e allowed 700 -- read blockMemoryBits/ramBlocks beside this before assuming misplaced payload; the fit\u0027s RAM Summary names every array that inferred (QUARTUS_GOTCHAS 14)",
+                                              "ALM 1886 \u003e allowed 900"
                                           ]
                    },
                    {

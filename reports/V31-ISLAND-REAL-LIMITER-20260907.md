@@ -252,3 +252,71 @@ blocks.
 **Recorded as the next candidate**, with the note that a palette load is a
 configuration event, so a registered load interface costs a cycle per word on a
 path that runs rarely — which is the cheapest kind of pipeline register there is.
+
+
+---
+
+# MEASURED: the island's worst path now CLEARS the product clock
+
+*Refit at 1,834 s. Ports unchanged, so scope is unchanged.*
+
+| | before | after |
+|---|---:|---:|
+| **Fmax** | 96.62 | **105.19** |
+| ALM | 1,910 | **1,886** |
+| registers | 3,157 | 3,216 |
+| M10K / bits | 1 / 256 | 1 / 256 |
+| DSP | 6 | 6 |
+
+**105.19 MHz — above the 100 MHz product clock**, from a block that was the
+composed island's worst core→core path. And **every slack in the report is
+positive**: the block no longer misses timing on any path at all.
+
+## Prediction 1: confirmed, and not by inference from the Fmax
+
+The falsifier was *"if the worst path still launches from `head_q` through seven
+arrays, the boundary did not move it."* **`head_q` launches zero of the worst
+forty paths.** It is gone from the critical region entirely. What is left starts
+at input ports with positive slack:
+
+    +0.493  v_valid_i     -> Add13~13_OTERM563
+    +0.611  v_valid_i     -> Add13~9_OTERM565
+    +0.661  r_ready_i     -> Add13~5_OTERM567
+    +0.743  depth_zero_i  -> Mux9~4_OTERM535
+
+ALM went **down 24** as well: a 16-way select across seven arrays cost more than
+the registers that replaced it.
+
+## Prediction 2: FALSIFIED, and it was written down first
+
+The hope was that moving the depth-zero bypass after the register — so the array
+reads terminate at a flop, per `QUARTUS_GOTCHAS` 14 — would let `e_q_u`/`e_q_v`
+(16 × 32 each, ~1,024 flops) infer as memory. The falsifier was *"registers
+roughly unchanged and M10K still 1 means they did not."*
+
+**Registers went UP by 59 and M10K is still 1.** They did not infer. The +59 is
+the boundary's own cost, close to the ~83 estimated, and the ~1,024-flop
+reduction did not happen.
+
+This is the file's own history repeating: its header records that `e_num_u` /
+`e_num_v` *"have one write address and one read address and STILL did not infer
+-- the island's RAM Summary names `e_tag` and nothing else in this block"*. The
+256 memory bits here are exactly `e_tag`, and that is still the only array in
+the file that becomes RAM. Registering the read was **necessary but not
+sufficient**; something else in these arrays' write structure blocks absorption,
+and naming it is a separate investigation.
+
+**Four of today's predictions have now been falsified by the fitter and three
+confirmed.** The falsified ones were all about *magnitude* or *mechanism*
+inferred from reading source; the confirmed ones were all about *structure* —
+which path leaves, which signal disappears. That is a usable rule for the next
+pass: predict what moves, not how far.
+
+## Where this leaves the island
+
+The composed island's worst core→core path was
+`perspuv_svc|head_q -> fragrob|axg_m` at −2.936. Its launching structure is gone
+and the block clears the product clock standalone. **Whether the composed island
+follows is not yet known** — that needs the island refit, which is #2 in the
+order and still stale by four commits. A block-level win is not a composed win,
+and this repository has the scar to prove it.
