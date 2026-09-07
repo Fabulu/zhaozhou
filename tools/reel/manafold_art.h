@@ -1751,9 +1751,15 @@ constexpr int kLassoReleaseKey = 44;      // the whip: the ring leaves
 constexpr int kLassoCatchKey = 104;       // it snags: the antennae take the jerk
 constexpr int kLassoReelKey = 118;        // reeled home
 constexpr int kLassoHomeKey = 146;        // gone: shrunk into the pocket
-constexpr int32_t kLassoThrowMm[3] = {2350, 620, -240};  // apex of the flight
-constexpr int32_t kLassoArcMm = 780;      // the lofted arc over the flight
-constexpr int32_t kLassoOutScalePm = 1600;  // the ring OPENS as it flies
+// AUTHORED DOWN AFTER LOOKING. The first throw (2350 out, 780 of loft) put the
+// ring in the top-right CORNER of the house framing at key 105 -- half off
+// screen, and small, because distance shrinks it faster than the scale grows
+// it. A lasso that leaves the frame is not a lasso anyone watched. Shorter
+// throw, flatter loft, and the ring OPENS more instead: the read is the loop,
+// not the range.
+constexpr int32_t kLassoThrowMm[3] = {1750, 470, -200};  // apex of the flight
+constexpr int32_t kLassoArcMm = 420;      // the lofted arc over the flight
+constexpr int32_t kLassoOutScalePm = 1800;  // the ring OPENS as it flies
 constexpr int32_t kLassoHomeScalePm = 120;  // and closes to nothing on return
 constexpr int32_t kLassoSpinA16 = 2200;     // it spins about the throw axis
 // the wind-up and the whip, in nodule millimetres -- this IS the throw
@@ -1782,7 +1788,12 @@ constexpr int kBlownApexKey = 96;         // the top of the arc
 constexpr int kBlownCatchKey = 164;       // the float grabs again
 constexpr int32_t kBlownHeightMm = 4200;  // higher than fall's 3600: BLOWN
 constexpr int32_t kBlownSinkMm = 210;     // the anticipation dip
-constexpr int32_t kBlownTumbleA16 = 44000;  // 2/3 of a turn, not a full spin
+// AUTHORED DOWN AFTER LOOKING: at 44000 (2/3 of a turn) the creature is fully
+// inverted through the apex and the antenna hides BEHIND the body -- which is
+// the one part of this clip that is supposed to be its show moment (the three
+// nodules streaming by different amounts). 27000 is about 148 degrees: it
+// still reads as something knocked flying, and the antenna stays on screen.
+constexpr int32_t kBlownTumbleA16 = 27000;  // ~148 deg: tumbling, still legible
 constexpr int32_t kBlownYawA16 = 15000;
 constexpr int32_t kBlownStreamMm = 96;    // nodule trail at peak velocity
 constexpr int32_t kBlownCatchSquashPm = 2700;

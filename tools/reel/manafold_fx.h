@@ -1265,7 +1265,7 @@ inline void mana_bullets(uint32_t frame, const FxAnchors& A, uint8_t ramp,
 // The lasso must READ as a loop for its whole flight, so its edge is held
 // above the fold's ordinary draw threshold: the area-derived coherence is
 // measuring the ANTENNA's pocket, which is not where the thrown ring is.
-constexpr int32_t kLassoCohPm = 940;
+constexpr int32_t kLassoCohPm = 1000;
 // A dying conduit drops the lightning STRAND at this life level rather than
 // fading it -- a bolt at low strength reads as a glitch, not as an ebb.
 constexpr int32_t kFoldLightningCutPm = 620;

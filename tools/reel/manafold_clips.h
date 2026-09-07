@@ -2013,6 +2013,32 @@ inline zc::Clip build_nodule_solo() {
 // All ADDITIVE. No existing builder is restructured (implementer 2A is in this
 // file on the eyes at the same time).
 
+/** ⚠ THE DEATH GATE'S FAILABLE LEGS (checklist §0: "every gate proved failable
+ *  through the real code path, with a witnessed failing leg"). Each leg
+ *  REMOVES the mechanism from the same builder the verdict is taken on -- it
+ *  is not a separate broken copy of the clip, which is the trick that lets a
+ *  gate look proven while it is measuring something it can never fail on.
+ *
+ *    1  the corpse KEEPS BREATHING   -- the tail's deform is left running
+ *    2  the corpse RESTS AT ZERO     -- the settle root goes to the surface,
+ *                                       which is the "reads as hovering" fault
+ *                                       the ground-contact law names by name
+ *    3  a strike DROWNS the creature  -- one impact drives the root far below
+ *                                       the settle, which is the crash bound
+ *                                       the airborne gate exists to catch
+ *
+ *  ⚠ LEG 3 WAS SOMETHING ELSE FIRST, AND IT COULD NOT FAIL. It removed the
+ *  impact dips so "the strikes never touch" -- but with the dips gone the
+ *  strikes sit at exactly kDeathRestRootMm, which is the settle height, which
+ *  is 25 mm INSIDE the dirt and therefore passes. Run, watched, and it printed
+ *  all-OK: a leg that cannot fail is the exact thing a failable leg exists to
+ *  rule out, and it was only visible because the leg was actually run rather
+ *  than reasoned about. Leg 2 already covers the not-touching fault.
+ *
+ *  Set before the first call to u02::type() -- the bank is a function-local
+ *  static, so a leg is one process, not a toggle. Default 0 ships. */
+inline int g_u02_death_fail = 0;
+
 constexpr uint16_t kDeathSlot = 17;
 constexpr uint16_t kDeathBSlot = 18;
 constexpr uint16_t kLassoSlot = 19;
@@ -2094,28 +2120,35 @@ inline DeathBeats deathb_beats() {
 inline int32_t death_root_at(const DeathBeats& B, const int32_t* apex,
                              const int* ivt, int nb, int fail_key, int drop_keys,
                              const int32_t* dip, int f) {
+  // FAILABLE LEG 2: the corpse settles at the surface instead of IN it. The
+  // 740 mm is the rest pose's own lowest-vertex offset, so this parks the
+  // creature at exactly zero -- which reads as hovering, which is the fault.
+  const int32_t rest = g_u02_death_fail == 2 ? 740 : kDeathRestRootMm;
   if (f <= fail_key) return kHoverHeightMm;
   if (f < B.impact[0]) {
     const int64_t t = (static_cast<int64_t>(f - fail_key) << 16) / drop_keys;
     const int64_t g = (t * t) >> 16;  // gravity's curve, not a ramp
     return kHoverHeightMm -
-           static_cast<int32_t>(
-               (static_cast<int64_t>(kHoverHeightMm - kDeathRestRootMm) * g) >> 16);
+           static_cast<int32_t>((static_cast<int64_t>(kHoverHeightMm - rest) * g) >> 16);
   }
   for (int i = 0; i < nb; ++i) {
     const int a = B.impact[i], iv = ivt[i];
     if (f < a || f >= a + iv) continue;
     const int lf = f - a, dk = B.dipk[i];
     if (lf < dk) {  // IN the dirt: the strike, and the climb back out of it
-      return kDeathRestRootMm - dip[i] * (dk - lf) / dk;
+      // FAILABLE LEG 3: no dip -- the strikes stop AT the surface. A spear
+      // that stops at the surface reads weightless, and so does a corpse.
+      // FAILABLE LEG 3: one strike DROWNS it -- 5x the authored dip, which is
+      // the crash the airborne/contact bound is there to refuse.
+      const int32_t d = g_u02_death_fail == 3 ? dip[i] * 5 : dip[i];
+      return rest - d * (dk - lf) / dk;
     }
     const int fl = iv - dk > 0 ? iv - dk : 1;
     const int32_t u = (lf - dk) * 1000 / fl;  // 0..1000 across the flight
     // 4*A*u*(1-u): the parabola with its apex at exactly A, mid-flight
-    return kDeathRestRootMm +
-           static_cast<int32_t>((4LL * apex[i] * u * (1000 - u)) / 1000000);
+    return rest + static_cast<int32_t>((4LL * apex[i] * u * (1000 - u)) / 1000000);
   }
-  return kDeathRestRootMm;
+  return rest;
 }
 
 /** ⚠ THE MANA MUST RESPOND — "a dead conduit should not keep folding shapes."
@@ -2305,7 +2338,9 @@ inline zc::Clip build_death_drop() {
     c.root[static_cast<size_t>(f) * 3 + 1] = y;
     // ⚠ THE DEFORM STOPS. Ramping to exactly zero over kDeathDeformFadeKeys
     // after the last strike, and bit-zero from the settle key onward.
-    if (dead) {
+    // FAILABLE LEG 1: the tail's deform is left running -- the corpse keeps
+    // breathing, which is the fault D9 §11.2 names in those words.
+    if (dead && g_u02_death_fail != 1) {
       c.deform[static_cast<size_t>(f)] = zc::DeformSample{};
     } else {
       int32_t flat = 0;
@@ -2450,8 +2485,8 @@ inline zc::Clip build_death_gutter() {
                             kDeathBLetGoKey, kDeathBDropKeys, kDeathBImpactDipMm, f));
     }
     c.root[static_cast<size_t>(f) * 3 + 1] = y;
-    if (dead) {
-      c.deform[static_cast<size_t>(f)] = zc::DeformSample{};  // ⚠ it STOPS
+    if (dead && g_u02_death_fail != 1) {  // ⚠ it STOPS (leg 1 removes that)
+      c.deform[static_cast<size_t>(f)] = zc::DeformSample{};
     } else {
       int32_t flat = 0;
       for (int i = 0; i < kDeathBBounces; ++i) {
@@ -2678,9 +2713,18 @@ inline zc::Clip build_blown() {
     const int32_t stream = 1000 + (vel > 0 ? vel / 3 : -vel / 5) - gather / 5;
     loop_pose(g, stream, stream, stream, stream, 0);
     if (f > kBlownAnticipKey && f < kBlownCatchKey) {
-      const int span = kBlownCatchKey - kBlownAnticipKey;
-      const int32_t t = (f - kBlownAnticipKey) * 1000 / (span > 0 ? span : 1);
-      const int32_t e = fold_ease(t);
+      // ⚠ THE TUMBLE UNWINDS, and the ground-contact probe is why. A one-way
+      // 148-degree tumble left the creature nose-down at the CATCH, and the
+      // antenna went 27 mm into the dirt at key 163 -- an undeclared
+      // penetration, which the law calls a fault however good it looks. The
+      // rotation now peaks at the apex and returns to zero by the catch, which
+      // is also the better read: the catch IS the float taking hold again, and
+      // a floating thing being caught RIGHTS ITSELF. One authored curve
+      // replaced a bug and a beat that was missing.
+      static const Key kTumble[] = {{0, 0}, {kBlownAnticipKey, 0},
+                                    {kBlownApexKey, 1000}, {kBlownCatchKey, 0},
+                                    {kBlownKeys - 1, 0}};
+      const int32_t e = fold_ease(curve(kTumble, 5, f));
       g.q[kBRoot] = quat_mul(
           g.q[kBRoot],
           quat_mul(quat_z(static_cast<int32_t>(

@@ -21,6 +21,7 @@
 // Committed because a thrown-away probe is unreproducible (CLAUDE.md).
 
 #include <cstdio>
+#include <cstdlib>  // std::getenv -- the trajectory dump and the failable legs
 #include <cstdint>
 #include <vector>
 #include <array>
@@ -106,6 +107,19 @@ int main() {
   const int kDeathNb[2] = {u02::kDeathBounces, u02::kDeathBBounces};
   const int kDeathFail[2] = {u02::kDeathFailKey, u02::kDeathBLetGoKey};
 
+  // ⚠ THE DEATH GATE'S FAILABLE LEGS, set BEFORE the bank is built (it is a
+  // function-local static, so this must precede the first u02::type() call).
+  // Each leg removes the mechanism from the SHIPPING builder, so the verdict
+  // below is taken on the same code path the render uses -- a gate proved
+  // against a private broken copy proves nothing.
+  //   U02_DEATH_FAIL=1  the corpse keeps breathing
+  //   U02_DEATH_FAIL=2  the corpse rests at exactly zero (reads as hovering)
+  //   U02_DEATH_FAIL=3  the strikes never enter the dirt
+  if (const char* fl = std::getenv("U02_DEATH_FAIL")) {
+    u02::g_u02_death_fail = std::atoi(fl);
+    std::printf("u02-probe: ⚠ FAILABLE LEG U02_DEATH_FAIL=%d ENGAGED\n",
+                u02::g_u02_death_fail);
+  }
   const zc::CreatureType& T = u02::type();
   if (T.mesh.empty()) {
     std::printf("u02-probe: FAIL compile produced no meshlets\n");
@@ -256,6 +270,27 @@ int main() {
             u02::kDeathSettleDepthMm, kDeathDepthMaxMm, kDeathDepthMinMm,
             rok ? "OK" : "FAIL");
         if (!rok) rc = 1;
+      }
+      // (e) THE DECAY IS THE PLOT. The root trajectory is dumped from the
+      //     CLIP ITSELF -- decode-free, straight off c.root, the numbers that
+      //     ship -- so the plate a reviewer looks at cannot drift from the
+      //     animation. A loop-shaped fault (apexes that do not fall, intervals
+      //     that do not shorten) is invisible in a contact sheet and obvious
+      //     here. Written when U02_TRAJ_DIR is set; the gate runs regardless.
+      if (const char* td = std::getenv("U02_TRAJ_DIR")) {
+        char path[512];
+        std::snprintf(path, sizeof(path), "%s/death-traj-%u.csv", td, clip.slot_id);
+        if (FILE* fp = std::fopen(path, "w")) {
+          std::fprintf(fp, "# key,root_mm  slot %u  fail=%d settle=%d keys=%u\n",
+                       clip.slot_id, kDeathFail[di], B.settle, clip.frame_count);
+          for (uint16_t f = 0; f < clip.frame_count; ++f)
+            std::fprintf(fp, "%u,%d\n", f,
+                         static_cast<int>((static_cast<int64_t>(
+                                               clip.root[static_cast<size_t>(f) * 3 + 1]) *
+                                           1000) >> 16));
+          std::fclose(fp);
+          std::printf("u02-probe: slot %u DEATH trajectory -> %s\n", clip.slot_id, path);
+        }
       }
       // (d) ⚠ THE CORPSE DOES NOT BREATHE. "A corpse that keeps breathing is
       //     not dead" (D9 §11.2). Taken off the PRODUCTION deform stream --
