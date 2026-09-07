@@ -104,3 +104,61 @@ and recorded, so the exception is deliberate and documented.**
   material record, or does it need adding?
 * **Does anything downstream depend on the fogged vertex colour** arriving at the
   ramp — any effect that has quietly come to rely on the current ordering?
+
+---
+
+# AUTHORISED — 2026-09-07
+
+**Owner: *"alright, seems small enough, we're doing it."*** and, after the
+hardware lane's findings, **_"I said to build it, now you can operate as if it's
+there."_**
+
+**The fog stage is authorised to be built, reference-first.** The hardware lane
+had asked for the explicit word before opening vertex-attribute work in
+`GEOM.PROJECT` that a rearchitecture brief defers — **it has it.**
+
+## What the hardware lane found, and why it made this easy
+
+**There is no fog at all today.** `FogMode` defaults to `Off`; nothing in
+`reference/` or `tools/` sets it; nothing computes a factor; nothing performs a
+mix. The *"already fogged"* comments described **a stage that does not exist.**
+
+* **No golden CRC can move** — the oracle and the silicon cannot disagree about
+  something neither of them does.
+* **The work is purely additive.** There is no fogged colour anywhere that would
+  have to be un-fogged first.
+* **This is the cheapest moment it will ever have**, and it stops being cheap the
+  day any content switches fog on.
+
+**Four documents asserted the opposite of the ruling** — `rast.cpp:306`,
+`zref_fragment.hpp:117`, `internal.hpp:79` and `zhao_raster_fragment.sv:92`, the
+last reasoning from superseded §8 text *as ratified law*. **Any one of them would
+have steered an implementer into the wrong build.** All four corrected. *(That is
+the false-comment fault class, in the hardware corpus, in a `.sv` file — see
+`Upheaval/creature/10-GATE-CHECKLIST.md` item 8.)*
+
+## Two corrections to this brief, both strengthening it
+
+1. **The decision is not merely frozen in a rulings file — it is in the SPEC.**
+   `spec/qformats.md` §8 carries **D-5 (2026-09-03)** in full, with the ordering
+   table and an explicit note marking three of its own sentences false. **Only
+   the docket was stale.**
+2. **D-5 fixes TWO errors, not one.** Besides the toon staircase, it names
+   **texture modulation multiplying the fog colour itself.**
+
+**And the old order was never implementable** — `DOCKET` R7 already recorded it:
+*"RASTER.FRAGMENT says colour arrives already fogged; GEOM.PROJECT has no colour
+input to have fogged it with."* **There is no working implementation of the old
+order to be compatible with**, so nobody can argue it on compatibility grounds.
+
+## For the CREATURE lane — "operate as if it's there"
+
+**Manafold and Zixxtrixx may now assume the cel fog ordering exists**: unfogged
+lighting → toon → texture → fog. This is the standing rule applied
+(*"treat the specs of the machine like the specs, not what's there now"*).
+
+⚠ **And a word collision worth stating once, because it will confuse somebody:**
+**Manafold's "fog" is not this fog.** The creature's translucent shell and its
+mana mist (`kFogThicknessPm`, the mist plane) are **creature-authored effects on
+the creature's own material**. They are unrelated to scene distance fog and
+`FogMode`, and **Direction 9 §7's shell work is unaffected** by this either way.

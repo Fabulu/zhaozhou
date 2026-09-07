@@ -266,7 +266,7 @@ only when the game needs a feature.
 |---|---|---|
 | D10 | depth profiles proved but nothing consumes them; 5 mechanical steps + 1 ABI decision | `DEPTH_PROFILE_NEXT_STEPS.md` |
 | D11 | `GEOM.PARAMBUF` — external geometry parameter buffer; supersedes growing the M10K arena | `OWNER-RULINGS-20260831.md` #4 |
-| D12 | cel-material **fog ordering** — ⚠ **RULED 2026-08-31, frozen visual law**; only the IMPLEMENTATION is open. Brief: `CEL-FOG-ORDERING-FOR-HARDWARE.md` | `OWNER-RULINGS-COMPLETE-20260831.md` §5 |
+| D12 | cel-material **fog ordering** — **DECIDED** (D-5, in `spec/qformats.md` §8) and **BUILD AUTHORISED 2026-09-07**, reference-first. There is no fog stage today at all, so the work is purely additive and no CRC can move. Brief: `CEL-FOG-ORDERING-FOR-HARDWARE.md` | `spec/qformats.md` §8 |
 | D13 | pose palettes must not live in M10K (1,344 B/pose) | `ZIXXTRIXX_CEL_IN_HARDWARE.md` |
 | D14 | `TILESTORE.INK` + `POST.INK` — the hard creature feature | `ZIXXTRIXX_CEL_IN_HARDWARE.md` |
 | D15 | seven stub contracts; `MEASURE.HISTOGRAM` deliberately refused | `CONSOLE_REMAINING.md` |
