@@ -985,8 +985,29 @@ module zhao_texture_v3own #(
   // while the memory answers. Section 18.3: "Stop when the next owner is
   // incomplete; do not scan for a younger completed owner to skip the hole."
   // There is no scan here at all -- only fetch_q is ever examined.
+  // S13.1: THE PER-OWNER FETCHED BIT IS GONE FROM THE LOGIC.
+  //
+  //   "F advances only when a final bank read has been reserved. It never scans
+  //    past an incomplete owner. Therefore no owner can be fetched twice if F
+  //    and the reservation counters are correct ... Remove the per-owner
+  //    ftc/fetched array. It represented a property already encoded by a
+  //    monotone ordered cursor."
+  //
+  // `!ftc_q[fetch_q]` was this array's ONLY reader. `fetch_q` is monotone, so it
+  // revisits a slot only after 64 fetches, by which time that slot must have
+  // been re-admitted -- and admission clears ftc. `unf_cnt_q` gates the whole
+  // thing, so the term could never be the reason a fetch was blocked.
+  //
+  // ASSERTED BEFORE REMOVAL, not argued: `a_ftc_bit_is_redundant` checks that
+  // whenever every other condition here holds, `ftc_q[fetch_q]` is already
+  // clear. It passes across the whole 481-check bench, wrap and drain included.
+  //
+  // The ARRAY is deliberately left in place and still maintained: nothing
+  // synthesised reads it now, so Quartus removes its 64 flip-flops as dead
+  // logic, while simulation keeps it alive to go on proving the property. The
+  // check that licensed the removal therefore survives the removal.
   assign fetch_fire_c = (unf_cnt_q != '0)
-                     && live_q[fetch_q] && fdn_q[fetch_q] && !ftc_q[fetch_q]
+                     && live_q[fetch_q] && fdn_q[fetch_q]
                      && ((out_res_q - CNTW'(out_fire_c)) < CNTW'(OUTQD));
 
   // ==========================================================================
@@ -1664,6 +1685,29 @@ module zhao_texture_v3own #(
       // 6.1 again: the live set is one contiguous interval, so the count can
       // never exceed the ring.
       a_win_used_bounded : assert (live_cnt_q <= CNTW'(OWNERS));
+
+      // S13.1: IS THE PER-OWNER FETCHED BIT REDUNDANT? Asserted rather than
+      // argued, because the argument is exactly the kind that sounds airtight
+      // and costs a day when it is not.
+      //
+      // S13.1 claims: "F advances only when a final bank read has been
+      // reserved. It never scans past an incomplete owner. Therefore no owner
+      // can be fetched twice if F and the reservation counters are correct ...
+      // Remove the per-owner ftc/fetched array. It represented a property
+      // already encoded by a monotone ordered cursor."
+      //
+      // `ftc_q`'s ONLY reader is `!ftc_q[fetch_q]` inside fetch_fire_c itself.
+      // `fetch_q` is monotone, so it can only revisit a slot after 64 fetches,
+      // by which time that slot must have been re-admitted -- and admission
+      // clears ftc. If that holds, the term never gates anything and the
+      // 64-flop array is dead.
+      //
+      // This asserts the term is redundant: whenever every OTHER condition of
+      // fetch_fire_c is satisfied, ftc_q[fetch_q] is already clear.
+      a_ftc_bit_is_redundant : assert (
+          !((unf_cnt_q != '0) && live_q[fetch_q] && fdn_q[fetch_q]
+            && ((out_res_q - CNTW'(out_fire_c)) < CNTW'(OUTQD)))
+          || !ftc_q[fetch_q]);
 
       // IS THE T2 DRAIN-GUARD QUESTION EVEN REACHABLE? Turning the open
       // decision into a measurable property rather than leaving it as a
