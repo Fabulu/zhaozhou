@@ -55,3 +55,8 @@
 - Delegated: Explore agent sweeping the ~30 Zixxtrixx OWNER-DIRECTION files + CREATURESANDLIGHTS + Zixx-family reports for house-style rules that bind Manafold.
 - Key evidence found: pink clip-fraction 3.5–5.9% (PASS-7-INPUTS:178) = D5 §4 done; purple sink fixed kEyeXMm=400 with declared rule-3 trade 1499→1658 (PASS-8-FINDINGS); white-mist experiment done pass 9; clip inventory F.2 flight bob genuinely missing, deferred passes 7–11 (PASS-10-FINDINGS §7); pass-11 published 22/22 fresh.
 - Output: Upheaval/creature/Manafold/OWNER-INVENTORY.md
+
+## Close-out
+- OWNER-INVENTORY.md landed on Upheaval main (36fb2eb, verified on origin). Run folder on zhaozhou main (807779e9).
+- Counts: 22 OPEN (12 from D9 incl. late §6.1/§6.2/§9; 10 standing), 6 need the owner, 7 missed entirely, ~30 DONE with evidence, ~15 superseded.
+- No builds, no renders, no background processes launched from this lane. House-style sweep subagent completed and terminated.
