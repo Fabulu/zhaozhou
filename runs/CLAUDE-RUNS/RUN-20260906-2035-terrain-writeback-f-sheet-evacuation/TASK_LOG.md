@@ -1303,3 +1303,33 @@ against the count — so a span of 128 against a count of 0 would have compared
 EQUAL and the assertion would have passed on exactly the corruption it exists to
 find. Widened the count instead of narrowing the span. Truncation always fails
 in the reassuring direction, which is the house law.
+
+## Checked that nothing from the owner is still undelivered
+
+CLAUDE.md: *"Instructions are not delivered until they are read."* The handoff
+commit carried an audit ZIP whose README says the consolidated TXT is **"not a
+literal concatenation of all original code appendices"** — i.e. content exists
+that the TXT drops.
+
+Ran the ZIP's own `recover_original_reports.py --offline` (local git objects
+only, no network, output outside the repository, read-only by construction).
+Three byte-verified originals came back:
+
+* **S01** texture rearchitecture — **already in `reports/`**, and verified
+  byte-identical: the 4,344-byte size difference is exactly 4,344 CR characters.
+* **S02** control fabric — already in `reports/`, and the source of today's
+  §5/§6 work.
+* **S03** terrain 31 MHz — the brief the audit calls *"explicitly deferred"*,
+  consistent with texture-first.
+
+**So nothing is undelivered.** Verified rather than assumed, and the check paid
+for itself: re-reading S01 §15.1 showed it had **predicted the ten physical
+M10Ks** (nine instances, `u_ctx` taking two slices) and had **prescribed the
+refusal** this morning's report made — *"nor may it be assigned to a particular
+queue without the per-instance RAM report."*
+
+One §15.1 instruction is still open: the gate is an aggregate
+`min_memory_bits`, and §15.1 says that is *"useful but not sufficient... require
+per-bank names, logical geometry, physical mode"*. The data now exists in the
+harvested `blockfit.fit.rpt`. Recorded, not built — the owner put tool expansion
+below finishing the island.
