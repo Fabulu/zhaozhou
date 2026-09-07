@@ -1091,3 +1091,50 @@ v3own is running (handoff action 4 forbids a competing fit).
 passing test — `cbi` on `cmb_valid && cmb_ready`), then T2/T3/T5/T6. T4 edits
 `zhao_texture_v3own.sv`, which is IN the running closure, so it cannot start
 until the fit exits.
+
+## While the fit ran: V3.1 §5.7, the local queue fit gate
+
+§5.7 asks for it before the owner demo is rebuilt, and it did not exist.
+
+* `fpga/rtl/synth/zhao_probe_v3rq_queue.sv` — registered stimulus → DUT →
+  registered hash sink, in the shape of the four pair wrappers. Production
+  shape from v3own itself: WIDTH = OWNERW = 14, DEPTH = 64, **CAPACITY = 64
+  explicitly** (§5.3: a body of 64 plus two heads must not advertise 66).
+  Every status output folded into the hash so the fitter cannot delete the
+  logic that produces it. Verilator `-Wall` clean.
+* Lint flagged `stim_q[29:14]` unused. Fixed by USING the bits — unused
+  stimulus lets the fitter fold the datapath and report a queue cheaper than
+  the one that exists. Low half XORs into write data; last two modulate pop
+  duty, which is §5.7's "sustained pop rate".
+* `design/fit_targets.yml` target with `min_fmax_mhz: 100` (§5.7's "intended
+  product constraint", stated not invented), `min/max_m10k: 1` (from the
+  instance walk), `max_dsp: 0`.
+* **NOT LAUNCHED** — handoff action 4 forbids a competing fit.
+
+### The simulation half, and two things it taught
+
+`full_o` was not checked ANYWHERE before today. It is the output the registered
+logical credit exists to drive, so an off-by-two would have shipped as two
+owner credits the island does not have, with every existing check still green.
+
+**Fire-tested rather than assumed**: re-verilated with `-GCAPACITY=66` — the
+exact defect §5.3 names — and four checks failed with `got=0x42`. Note the RTL
+was **not** edited to do this; `zhao_texture_v3rq.sv` is in the running fit's
+closure, and a parameter override mutates elaboration without touching the
+working tree. That is the technique to reuse whenever a fit is live.
+
+**My first version of the test was wrong and the RTL said so.** It drove
+`wr_en_i` into a full queue; `a_rq_no_write_when_full` stopped the run. Writing
+while full is a producer error the queue may assume never happens, not a case it
+absorbs. The test now obeys that and checks what the island depends on: `full_o`
+stays asserted and occupancy holds at capacity, so it never glitches low and
+re-opens admission. 21 checks pass.
+
+### Build note worth keeping
+
+`cmake --build` was avoided (documented stale-binary race). Direct path that
+works while a fit holds the tree: `verilator_bin.exe --cc` into a build dir
+**without spaces** (GNU Make refuses spaces, and the scratchpad path contains
+"Fabian Trunz"), then `g++ -static -static-libgcc -static-libstdc++` over the
+generated sources plus `tests/harness/zhao_sim.cpp`. Without the static flags
+the exe dies at 127 on missing DLLs, which looks exactly like a crash.
