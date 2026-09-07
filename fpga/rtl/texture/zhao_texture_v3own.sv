@@ -705,12 +705,15 @@ module zhao_texture_v3own #(
                       | (same_owner_c ? c4t_mask_q : 4'd0);
 
   logic t_elig_c, a_elig_c, tkt_t_c, tkt_a_c;
-  assign t_elig_c = c4t_v_q && live_q[c4t_slot_q]
-                 && (gen_q[c4t_slot_q] == c4t_gen_q)
+  // The READY-ticket eligibility checks are the SAME shape as the ISSUE lanes:
+  // `live_q[slot] && (gen_q[slot] == gen)`, which is exactly what
+  // `a_win_live_matches_table` asserts equals 6.1's interval test. So this is an
+  // exact substitution, unlike the in-loop comparisons at 1054-1078, where the
+  // guard has no `live_q` term and adding one would be a semantic change.
+  assign t_elig_c = c4t_v_q && win_live({c4t_gen_q, c4t_slot_q})
                  && ((t_cmt_next_c & req_q[c4t_slot_q]) == req_q[c4t_slot_q])
                  && !rdy_q[c4t_slot_q] && !crs_q[c4t_slot_q];
-  assign a_elig_c = c4a_v_q && live_q[c4a_slot_q]
-                 && (gen_q[c4a_slot_q] == c4a_gen_q)
+  assign a_elig_c = c4a_v_q && win_live({c4a_gen_q, c4a_slot_q})
                  && ((a_cmt_next_c & req_q[c4a_slot_q]) == req_q[c4a_slot_q])
                  && !rdy_q[c4a_slot_q] && !crs_q[c4a_slot_q];
   assign tkt_t_c  = t_elig_c;
