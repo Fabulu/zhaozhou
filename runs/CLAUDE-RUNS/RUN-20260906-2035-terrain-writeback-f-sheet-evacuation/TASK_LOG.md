@@ -2038,3 +2038,23 @@ synthesis and something still reads it.
 per site, which should also fall — but four magnitude predictions were falsified
 today against three structural ones, so only the structural claim is made:
 `gen_q` should appear in no path.
+
+## The owner's step 4 (§8.2) is implemented — and honestly qualified
+
+C2 now requires **both** snapshot identity and current full-ticket membership,
+on all three return lanes. §8.1's counterexamples are why: a FUTURE token defeats
+a current-only check, a RETIRED token defeats a snapshot-only one. The brief is
+explicit this was not already satisfied by T2 step 2's `win_live()` on ISSUE.
+
+**V02 done exhaustively** — all 16,384 head residues × 65 occupancies, probed at
+both interval boundaries. 4.26M probes. The previous block sampled 66 positions.
+
+**V03/V04 instrumented, and the result is negative.** Neither schedule occurs
+anywhere in the 496-check bench. That is the brief's "structurally prevented"
+branch, and it means **today's §8.2 change is correct per the ruling but not
+demonstrated load-bearing by the current tests.** Saying otherwise would be
+exactly the untested-detector failure this repository documents.
+
+Not claimed: that the schedules are unreachable. V04 looks plausible for a
+duplicate return arriving as its owner retires. Constructing it — sweeping the
+injection offset against the `out_ready` release edge — is the next step.
