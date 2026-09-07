@@ -263,3 +263,34 @@ refactor, and it needs its own case rather than a ride on a timing fix.
 An exactly-equivalent hoist does exist — lift `gen_q[c4t_slot_q] == c4t_gen_q`
 out of the loop, one 64-way select instead of 64 comparisons — and that is the
 right first move **if** the next refit names these paths. Measure, then move.
+
+
+## The coverage gap step 2 opened, and closing it (case 4b)
+
+Moving the ISSUE lanes to `win_live` introduced a guard whose **reject** path
+nothing exercised. The bench drives those lanes only with live owners, so:
+
+* the **accept** path was covered hard — mis-ordering the ticket fails 43 checks;
+* the **reject** path was never reached at all.
+
+An accept-only test cannot distinguish a correct guard from one that is
+permanently true. Case 4 covered exactly this on the *return* lane and had no
+issue-lane counterpart.
+
+**Case 4b** adds a stale-generation issue, an issue for a slot that is not live,
+and — so it cannot pass on a guard that refuses *everything* — a legitimate issue
+and return that must still complete. `ev_err_issue_o` counts the refusal
+(`iss_tmu_valid_i && !iss_t_ok_c`) so the property is observed, not inferred from
+an absence.
+
+**Fire-tested, and the result makes the case for itself.** With `win_live`
+forced to `1'b1` — a guard that fails open, which is how this kind of guard
+actually fails — the bench reports:
+
+    2 of 481 checks FAILED
+    FAIL: a stale GENERATION on the issue lane is refused        expected 1, got 0
+    FAIL: and an issue for an owner that is not live at all      expected 2, got 1
+
+**Exactly the two new checks, and nothing else.** All 477 pre-existing checks
+pass with a permanently-true guard. Without case 4b, T2 step 2 could have
+disabled owner validation on the issue path and left a green bench behind it.
