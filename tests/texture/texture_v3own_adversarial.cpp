@@ -1612,6 +1612,21 @@ int main(int argc, char** argv) {
     zhao::check(dut->ev_admitted_o == dut->ev_emitted_o,
                 "and the refused packets neither created nor destroyed work",
                 dut->ev_admitted_o, dut->ev_emitted_o);
+    // RESTORED, AND STRENGTHENED. This line was `== 0` before the injection
+    // existed, and the first version of this patch REPLACED it instead of
+    // inserting before it -- the detector was deleted and the suite went green,
+    // which is the exact failure this repository has a law about. It reads
+    // `== attacks` now: every late packet was refused AND counted, and nothing
+    // else in a 16,320-admission run was refused for any reason.
+    //
+    // Measured rather than assumed. §19.7's partition assertion proves exactly
+    // one of {range, stale, unsol, dup, accept} fires per valid beat, and the
+    // bucket had to be read off the hardware to know which: stale=8, with
+    // unsol, dup and range all zero.
+    zhao::check(dut->ev_err_stale_o == static_cast<uint32_t>(attacks),
+                "wrap run: the ONLY stale rejections are the late old packets "
+                "deliberately injected during the drain",
+                static_cast<uint64_t>(attacks), dut->ev_err_stale_o);
 
     zhao::check(dut->ev_err_dup_o == 0, "wrap run: no duplicate rejections", 0,
                 dut->ev_err_dup_o);
