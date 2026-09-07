@@ -107,3 +107,54 @@ that already exist. Checked and corrected rather than left as a plausible caveat
 
 So §16.3's verification obligation for the DONE seam is **met**, and the one item
 that genuinely was missing is the one that got written.
+
+
+---
+
+# §16.5's context-rate recheck — required by my own change, and done
+
+§16.5 makes this mandatory rather than optional:
+
+> Sixteen contexts was the measured knee for the previous pipeline. **If a repair
+> changes the arithmetic feedback loop, admission queue latency or context reuse
+> latency, rerun eight/sixteen/thirty-two-context rate comparisons. The old knee
+> is evidence about the old topology, not a universal number.**
+
+The registered head returns a context to the free queue one cycle later — that
+**is** a change in context reuse latency, so the 16-context knee stopped being
+evidence for this topology the moment the wrapper landed.
+
+Re-measured, saturated lane, `-GNCTX=` at elaboration:
+
+| NCTX | clocks for 4,104 | **per reciprocal** | suite |
+|---:|---:|---:|---|
+| 8 | 23,852 | **5.81** | rate gate fails, 51/52 |
+| **16** | 16,608 | **4.05** | 52 pass |
+| 32 | 16,553 | **4.03** | 52 pass |
+
+**The knee is still sixteen.** Doubling to 32 buys **0.5%** while doubling the
+context storage — `p_m_q`, `p_k_q`, `p_tok_q`, `res_q` and the rest are all
+`[NCTX]`. Halving to 8 costs **43%** and misses the suite's own *"under 4.6
+clocks per reciprocal"* gate by a wide margin, which is the pipeline starving
+rather than a defect: the gate is written for the shipped configuration.
+
+So §16.5's question is answered for the **new** topology rather than inherited
+from the old one: **16 stays**, and the registered head did not move the knee.
+
+§16.5 also endorses the change that triggered this: *"An output-only register cut
+can improve the external interface without changing multiplier initiation
+interval. **That is the preferred first experiment.** An extra stage inside the
+recurrence is a different change and requires its own throughput evidence."* The
+wrapper is an output-only cut, the initiation interval is unchanged at 4.05, and
+no stage was added inside the recurrence.
+
+## §16.6's caution, restated rather than quietly ignored
+
+> 90.54 MHz is a real reported leaf result, **not 100-MHz closure**. Its named
+> register-to-output path does not establish the worst register-to-register path.
+
+Nothing here claims a clock for rcp24. The endpoint-separated report exists
+(`split_setup_paths.py`) and the registered-wrapper pattern exists, but this
+block has **not** been refitted since the change — it is #4 in the refit order.
+Compare against **90.54 reported / 129.18 core→core** on matched scope when it
+runs.
