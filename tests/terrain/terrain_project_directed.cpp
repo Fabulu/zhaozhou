@@ -322,6 +322,69 @@ int main(int argc, char** argv) {
     }
     check(halves > 0, "the odd-viewport sweep reached the fx_mad half", 1,
           static_cast<uint64_t>(halves));
+
+    // ---------------------------------------------------------------------
+    // REACHED IS NOT OBSERVABLE, and the check above only proves the first
+    // ---------------------------------------------------------------------
+    // A mutation sweep dropped the rounding term from `rescale16_mad` in the
+    // shared core -- round-half-up becoming truncation -- and BOTH project
+    // suites passed, this one included, while `halves > 0` asserted all the
+    // while that the case had been reached.
+    //
+    // It had been. The instrumentation above is correct, and 534 of the 801
+    // vertices in a widened sweep hit the mad half exactly.
+    //
+    // THE DIFFERENCE COULD NOT REACH THE OUTPUT. `scr_fx` is fx16 and
+    // `out_x_o` is S12.8 through to_screen_xy's `(x + 128) >>> 8`, so a
+    // one-LSB error in the mad rescale is worth 1/256 of an output LSB. It
+    // survives only when the second rescale's boundary is straddled too:
+    // `scr_fx mod 256 == 127`.
+    //
+    // AND WITH THIS CASE'S MATRIX THAT IS STRUCTURALLY UNREACHABLE -- measured,
+    // not reasoned. A histogram of `scr_fx mod 256` over 801 vertices landed
+    // only in [0,31] and [224,255], never near 127. m33 = 3 raw makes clip.w
+    // tiny, so ndc = c*65536/3 and consecutive vertices step scr_fx by an
+    // exact multiple of 256: THE SWEEP STEP IS ALIASED TO THE OUTPUT
+    // QUANTISATION. A search over every viewport 1..32 against every integer
+    // divisor 1..16 found no combination that escapes it, because for an
+    // integer divisor `ndc mod 512` only ever takes `d` distinct values.
+    //
+    // SO IT IS CONSTRUCTED INSTEAD OF SWEPT. mad = ndc*(vp<<15), which is a
+    // half exactly when ndc*vp is odd, and then scr_fx = (ndc*vp) >> 1. The
+    // output boundary needs that == 127 mod 256, i.e. ndc*vp == 255 mod 512.
+    // For vp = 3 the smallest solutions are ndc = 85, 597, 1109, 1621.
+    //
+    // m33 = kOne makes clip.w exactly 1.0, so ndc IS clip.x and the required
+    // value can simply be asked for. That is why this sub-case uses its own
+    // matrix rather than the one above: the tidy divisor that makes case 7
+    // readable is the same property that makes it unable to fail.
+    int observable = 0;
+    {
+      const int32_t mi[16] = {kOne, 0, 0, 0, 0, kOne, 0, 0,
+                              0, 0, kOne, 0, 0, 0, 0, kOne};
+      const zref::mat4fx mo = mat_of(mi);
+      dev.configure(0, mo, odd_vp);
+      const int32_t ndcs[4] = {85, 597, 1109, 1621};
+      for (int i = 0; i < 4; ++i) {
+        const int32_t n = ndcs[i];
+        // Confirm the construction against the hardware's own arithmetic
+        // before trusting it -- instrumentation only, never the expectation.
+        const int64_t mad = static_cast<int64_t>(n) * (3 << 15);
+        const bool is_half = ((mad & 0xFFFF) == 0x8000);
+        const bool shows = (((((mad + 32768) >> 16) + 128) >> 8) !=
+                            ((((mad) >> 16) + 128) >> 8));
+        if (is_half && shows) ++observable;
+        const TriIn t = tri(n, n, kOne, n + 1, n, kOne, n, n + 1, kOne, src++);
+        expect(dev, t, mo, odd_vp,
+               "a vertex where the fx_mad rounding CHANGES the emitted pixel");
+      }
+      dev.configure(0, m, odd_vp);  // restore this case's own matrix
+    }
+    check(observable > 0,
+          "the constructed vertices make the fx_mad rounding OBSERVABLE at the "
+          "block's output -- reached is not observable, and only this makes the "
+          "case able to fail",
+          1, static_cast<uint64_t>(observable));
   }
 
   // =========================================================================

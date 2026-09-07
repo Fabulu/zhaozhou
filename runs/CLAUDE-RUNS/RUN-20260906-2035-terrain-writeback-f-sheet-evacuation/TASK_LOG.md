@@ -703,3 +703,25 @@ a timing win.
 
 NEXT: register the lattice sample before fx_add_sat. Per-hop numbers on disk to
 size it before writing this time.
+
+## 2026-09-07 -- reached is not observable: the fx_mad case now can fail
+
+Case 7 asserted it reached the fx_mad half and was RIGHT (534/801), yet the
+mutation went undetected: scr_fx is fx16, out is S12.8 via (x+128)>>8, so a
+1-LSB mad error is 1/256 of an output LSB and survives only when
+scr_fx mod 256 == 127.
+
+Histogram over 801 vertices: scr_fx mod 256 landed only in [0,31] and
+[224,255]. m33 = 3 makes ndc = c*65536/3, so scr_fx steps by an exact multiple
+of 256 -- the sweep step aliased to the output quantisation. Searched every
+viewport 1..32 x divisor 1..16: NO combination escapes, because for an integer
+divisor ndc mod 512 takes only d values.
+
+Constructed instead: need ndc*vp == 255 mod 512; for vp=3 that is ndc = 85,
+597, 1109, 1621, and m33 = kOne makes ndc == clip.x so it can be asked for.
+
+  before  2,264 checks  DID NOT NOTICE
+  after   2,313 checks  detected, 8 failed
+
+geom_project_directed still blind -- recorded as a KNOWN hole needing the same
+construction on its own viewport.
