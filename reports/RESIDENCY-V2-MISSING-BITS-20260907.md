@@ -103,17 +103,56 @@ width truncation rather than a design decision.
   extraordinary; the likelier reading is still that something in the RTL makes
   the bits provably redundant in a way three checks did not find.
 
-## The experiment that settles it, and it is cheap
+## The evidence already on hand that 40 is not a width cap
 
-Fit a variant with `statram` **declared 40 bits wide** and everything else
-identical.
+**`keyram` is declared 107 bits wide and inferred at 107, in the same fit, by
+the same tool.** So Quartus is plainly willing to infer memories far wider than
+40 here — the 40 on `statram` is not a device or tool limit being hit. Two
+arrays in one module, same depth, same generate block: one gets its full width
+and the other loses 17 bits. That is the sharpest single fact in this report and
+it needed no extra run.
 
-* If the resource numbers come out **the same**, the top 17 bits were never in
-  the design and the RTL as written does not describe what is being built.
-* If they come out **different**, the 17 bits are present in the current fit in
-  a form no report names, and the reports are the problem.
+## The experiment I first proposed does NOT discriminate — corrected
 
-Either answer is worth having, and it costs one block fit.
+The first version of this section proposed fitting a variant with `statram`
+declared 40 bits wide, and claimed that identical resources would prove the 17
+bits were never there.
+
+**It proves nothing**, and the error is worth recording. A 40-bit declaration
+infers a 40-bit memory under *both* hypotheses, so the memory figures come out
+the same either way. And the competing hypothesis — that the bits are present
+somewhere unreported — is **already refuted by resource accounting**: MLAB is
+zero, registers are 1,226 against 17,408 bits, and the eight memories total the
+fitter's own figure. There is nothing left for the variant to rule out.
+
+An experiment whose two outcomes are predicted to look identical is not an
+experiment. Proposing one is the same error as an anti-vacuity check that
+verifies a case was *reached* rather than *observable*, which this same session
+found in `terrain_project_directed` an hour earlier.
+
+## What would actually discriminate
+
+**Does the inferred width track the declared width?** Fit a variant with
+`STATW` made *larger* — `-TopParameters SEQW=20` gives 61 — using
+`run_block_fit.ps1`'s own override, which exists precisely so a parameterised
+block can be characterised without editing the RTL between fits:
+
+    run_block_fit.ps1 -Module zhao_terrain_residency_v2 \
+        -TopParameters SEQW=20 -RowLabel statw61
+
+* If `statram` still infers at **40**, the width is being pinned regardless of
+  the declaration and bits are being dropped systematically.
+* If it infers at **61**, or splits into two M10Ks, then the tool does track the
+  declaration for this array and the 57-bit case is a specific anomaly worth
+  reporting upstream rather than a general behaviour.
+
+The `keyram` observation above already predicts the second outcome, which makes
+this a real test rather than a confirmation: it can fail.
+
+**And the only thing that settles the functional question is a post-fit netlist
+simulation.** No flow for that exists in this tree — everything simulates the
+RTL source, where all 57 bits exist by construction. That gap is why a
+synthesis-side defect of this shape can survive every suite in the repository.
 
 ## The immediate consequence
 

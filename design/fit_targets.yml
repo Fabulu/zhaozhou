@@ -695,10 +695,31 @@ targets:
       # argument that ignored MLAB and max_m10k 0's scope error on
       # GEOM.PROJECT -- and the first two were caught after the fact.
       #
-      # THE EXPERIMENT THAT SETTLES IT costs one block fit: declare statram 40
-      # bits wide, change nothing else. Same numbers means the 17 bits were
-      # never in the design; different numbers means they are present in a form
-      # no report names. reports/RESIDENCY-V2-MISSING-BITS-20260907.md.
+      # AND THE SHARPEST FACT NEEDED NO EXTRA RUN: keyram is declared 107 bits
+      # wide and inferred at 107, in the SAME fit by the SAME tool. So 40 is
+      # not a device or tool cap. Two arrays in one generate block, same depth:
+      # one gets its full width, the other loses 17 bits.
+      #
+      # The experiment first proposed here -- fit a 40-bit-wide variant -- does
+      # NOT discriminate, and that correction is kept rather than quietly
+      # dropped: a 40-bit declaration infers a 40-bit memory under BOTH
+      # hypotheses, and the competing one is already refuted by resource
+      # accounting. An experiment whose outcomes are predicted to look
+      # identical is not an experiment.
+      #
+      # What discriminates is whether the inferred width TRACKS the declared
+      # one, using the runner's own override so the RTL is not edited between
+      # fits:
+      #     run_block_fit.ps1 -Module zhao_terrain_residency_v2       #         -TopParameters SEQW=20 -RowLabel statw61      (STATW = 61)
+      # Still 40 means the width is pinned regardless of declaration; 61 or a
+      # two-M10K split means the 57-bit case is a specific anomaly. The keyram
+      # observation predicts the second, which makes it a test that can fail.
+      #
+      # The FUNCTIONAL question needs a post-fit netlist simulation, and no
+      # flow for that exists in this tree -- everything simulates the RTL
+      # source, where all 57 bits exist by construction. That gap is why a
+      # synthesis-side defect of this shape survives every suite here.
+      # reports/RESIDENCY-V2-MISSING-BITS-20260907.md.
       min_memory_bits: 167936
       # Control state only: rr_q (512), the four-way read registers (656), the
       # s0 capture and the counters. Generous, and still four ORDERS below the
