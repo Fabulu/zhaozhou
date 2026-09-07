@@ -340,3 +340,60 @@ Five readers: the four in-loop comparisons at 1032–1056 (Group B remainder,
 deliberately deferred — see above, the natural hoist is not behaviour-preserving)
 and `g0_owner_q` (Group C). `gen_q` cannot be deleted, and its 512 flip-flops
 cannot be recovered, until those five go.
+
+
+---
+
+# WHERE T2 STANDS AT THE END OF THE DAY
+
+Of the twelve sites this plan enumerated, **eight are moved** and all are
+cross-checked against the table they replaced, every cycle, by assertions that
+have been shown to fire.
+
+| group | sites | status |
+|---|---|---|
+| **A** admission + wrap | 3 | **moved** — `alloc_gen` and two equalities against zero replace two 64-way selects |
+| **B** ISSUE lanes | 2 | **moved** — the measured limiter; `win_live` replaces `live_q && gen_q==gen` |
+| **B** READY-ticket eligibility | 2 | **moved** — same shape, exact substitution |
+| **B** in-loop comparisons | 4 | **NOT moved** — semantic question, below |
+| **C** `g0_owner_q` lookup | 1 | **moved** — `win_gen_of_slot` |
+
+Every move is verified the same way: 481 bench checks, no assertion fired, and
+each derivation asserted against the structure it replaced. Three of those
+assertions have been fire-tested and caught the exact errors they exist for —
+the tautological form, the naive site-3 form, and the ticket built in public
+order.
+
+## The one open question, and it is genuinely a decision
+
+The four in-loop comparisons at 1057–1081 are:
+
+```systemverilog
+if (c4t_v_q && (c4t_slot_q == SLOTW'(i)) && (gen_q[i] == c4t_gen_q))
+```
+
+Their guard has **no `live_q` term**. Substituting `win_live` would add one, and
+that changes behaviour in a specific reachable case: **a stale event arriving
+after its owner was released but before that slot was reallocated** is accepted
+today and would be rejected after.
+
+The site's own comment calls the comparison *"a fault-injection and
+drain-boundary guard"*, which suggests tightening it is right — but that is a
+correctness decision about drain semantics, not a timing refactor, and §11.1's
+whole lesson this morning was that conflating two events in one bit is how a
+final ends up authorised by a reservation.
+
+**`gen_q`'s 512 flip-flops cannot be recovered until this is settled**, because
+partial removal leaves the table alive. An exactly-equivalent hoist exists as a
+fallback (lift `gen_q[c4t_slot_q] == c4t_gen_q` out of the loop — one 64-way
+select instead of 64 comparisons) and buys the logic without touching semantics.
+
+## Not yet measured
+
+Every move today is verified functionally and **none is measured**. The next
+`zhao_texture_v3own` refit compares against **87.37 reported / 91.32 core→core,
+5,709 ALM, 4,863 registers** on matched scope. The prediction worth recording:
+`gen_q -> iss_q` should be gone from the worst families, because that is the
+path these moves target. Whether ALM or registers fall is **not** predicted —
+the table is still there, and four predictions about magnitude were falsified
+today against three confirmed about structure.
