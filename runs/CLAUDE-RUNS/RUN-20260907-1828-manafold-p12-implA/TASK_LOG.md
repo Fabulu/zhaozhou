@@ -60,3 +60,23 @@ been closed. Reported up, not silently absorbed.
 
 ### 18:47 — baseline build OK
 `build-direct.sh --output ../build cel` -> BUILD_RC=0, `zhao-reel-cel.exe`.
+
+### 19:00-20:30 — the work, in order
+* D4 diagnosed (probe extended with armTip + anchor rows, committed). The
+  plan's suspect kKneadWagB2A16 REFUTED; hinge_play's x3/x5 cycle multipliers
+  found to be a 3.9/6.5 Hz buzz. Ablated before blaming, per 07-MOTION-STYLE.
+* A1 round body; A3 drive fix (churn -62..73%, ranges kept); A4 the nodules
+  (nodule_aim + the solve in loop_pose, slot 16 solo clip, manafold_nodule.cpp
+  gate with two witnessed legs, subject wired in zhao_reel.cpp).
+* A3 placement (anchor up; the aimed segment had to move with it -- two-sided
+  window swept), A5 lobe + mid-antenna, A2 bounce, A6 idle/pitch, D9 §13
+  stretchy spans with the strength ramped to zero along the buried arm.
+* Three faults found by RENDERING that no gate reported: the arm's buried end
+  breaking the silhouette; the safe stretch being invisible; the creature
+  vanishing entirely when the stretch knob was set to 0.
+
+### CLOSING STATE
+All commits pushed and landing verified on both origin/mains. Findings at
+`Upheaval/creature/Manafold/PASS-12-FINDINGS-A.md`; D4 write-up beside it;
+plates in `pass12-plates/`. Background jobs: the Zixxtrixx CRC check
+(`crccheck.sh` -> `crc.log`) is the only one, and it is read out below.
