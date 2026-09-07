@@ -2473,3 +2473,102 @@ arithmetic at all — 243 subtract-and-compare per subpatch, no DSP.
    four blocks' ports; narrowing the ABI is a T5 amendment.
    `check_seam_widths.py` cannot see it — `v_src_id_o` against `src_id_i`
    defeats its stem match, exactly the miss its own header warns about.
+
+---
+
+## 2026-09-07 (night) — six gates that were not reading their own fields
+
+Between fits, with the toolchain busy on `zhao_terrain_pagestream`. Every item
+here is the same defect in different clothes: **a recorded field that nothing
+checked**, or a check that could only fail in one direction.
+
+### 1. `min_fmax_mhz`, because two blocks passed while missing the clock
+
+`fit_rules.ps1`'s own header says *"a fit that meets Fmax while violating its
+memory/DSP structure is not a pass"*. **The converse had no way to be said.**
+PAGESTREAM came back at 97.11 MHz and TERRAIN.CMD at 90.87 — both `ok`, both
+short of the 100 MHz product clock, both noticed only because a human read the
+number beside the row.
+
+Whole MHz only (a rule that could say 99.5 invites tuning the gate to the
+measurement) and **opt-in**: a clock a block was never designed against is a
+surprise, not a gate. My two blocks get it; nobody else's do.
+
+### 2. Fit rows describing blocks that no longer exist
+
+Every row carries `sourceCommit`. Nothing looked at it. **38 of 87 measured rows
+are stale** — nine commits for `zhao_cmd_dma`, eight for `zhao_raster_edgewalk`.
+Of the eighteen rows carrying rules, **ten**. `check_fit_rules.ps1` now marks
+them, prints an otherwise-green PASS in yellow, and totals them.
+
+It immediately stopped me relaxing `zhao_terrain_residency_v2`'s
+`min_memory_bits` on a row two commits old. The arithmetic is written down with
+its prediction — 150,528 / (256 × 4) = **147 exactly**, and 107 + 40 = 147 where
+40 is the M10K's max port width, so keyram's 107 bits and statram's low 40 are
+in block RAM and statram's top 17 are not. They are not in flops either: 1,243
+registers against the 17,408 those bits would need. **Refit queued; the
+prediction is the check.**
+
+### 3. A formal lane that failed every single run
+
+`terrain_bake_delta.sby`'s own header says *"NOT in the automated lane"*. It was
+in the automated lane, with `TIMEOUT 2100`, on a bmc task the registry records
+as having run **10.7 hours** before being killed. Exactly what the MEM lane's
+comment warns against for `mem_sdram_refresh_bound` — which is deliberately
+unregistered for that reason.
+
+Dropping it would have thrown away something real: the **cover** task passes in
+~3 s and is what proves the property non-vacuous. The wrapper gained an optional
+`FORMAL_TASKS`, empty for all sixteen other callers. **4.20 s, PASS**, from a
+1,800-second failure.
+
+### 4. `lane:` — the one field saying where a proof runs
+
+V16 validates this registry's dates, commits, tasks and `covers`. **Not
+`lane:`.** `input_snapshot_atomic` recorded a lane that has never existed (the
+test predates the `formal_` naming). Combined with (3)'s wrong `lane: null`, a
+field that can name a lane which is not there *and* deny one that is.
+`tools/design/check_formal_lanes.py` checks both directions; 25 of 26 resolve.
+
+### 5. The third of the three separate acts
+
+`prod_manifest.yml`'s own note says registering a block takes **three acts** —
+ledger, manifest, fit-target list. I did two for each of today's four blocks.
+The gate was red on all four and was right to be. All declared **`unused`**, not
+promoted: `zhao_shell_top` composes none of the world layer, and promoting one
+would change what the next production fit measures as a side effect.
+
+### 6. A stem matcher that could not see a narrowing I found by hand
+
+`check_seam_widths.py` returned one stem per port and could not tell a role
+prefix from the first word of a name:
+
+```
+v_src_id_o -> v_src_id -> drop "v"   -> "src_id"
+src_id_i   -> src_id   -> drop "src" -> "id"
+```
+
+so it reported that seam as fitting exactly. A port now offers both readings.
+**Narrowings 8 → 10** — the two additions being exactly the pair the repair was
+built to find, **plus one I had not found**: `TERRAIN.SEQ wb_src_id_o [31:0] ->
+TERRAIN.PATCH src_id_i [15:0]`.
+
+### The finding underneath (6)
+
+**A 32-bit `source_id` becomes 16 at the compose lane.** T5, `commands.zidl:404`
+and every `TERRAIN.SEQ` port carry 32; `TERRAIN.PATCH`, `TERRAIN.COMPCACHE` and
+`TERRAIN.TESS` are all 16. Two sources differing only above bit 15 are the same
+patch downstream — and COMPCACHE's `serve_src_id_o` exists precisely so a
+consumer can check *"before it tessellates a couple of thousand triangles of the
+wrong terrain"*. Widening the rendering half is four blocks' ports; narrowing
+the ABI is a T5 amendment. **Item 9 on the owner list.**
+
+### State
+
+* `zhao_terrain_cmd` fitted: 1,069 ALM, 869 reg, **0 memory bits**, 0 DSP,
+  90.87 MHz. The two-passes-not-a-buffer claim held.
+* `zhao_terrain_pagestream` refit running (stale twice: the flags port and the
+  vi/vj correction).
+* `zhao_terrain_residency_v2` refit queued behind it.
+* ledger green at 117 · manifest OK at 195 modules · abi:check clean ·
+  terrain fast lane 50/50.
