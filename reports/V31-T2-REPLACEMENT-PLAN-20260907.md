@@ -189,3 +189,53 @@ table and window coexist, and the intermediate state is where the bug would go.
 Step 1 is what makes the rest reversible one site at a time, which is T1's
 instruction — *"preserve a tested identity-only comparison rather than one giant
 patch"* — applied to the RTL.
+
+
+---
+
+# STEP 2 LANDED for the measured limiter (`2b377444`)
+
+The refit reordered this plan's own priorities. Group A was listed first because
+it is simplest; the fit said otherwise:
+
+    -0.950  gen_q[4][4] -> iss_q[52][0]      core->core, 91.32 MHz
+
+That path is **Group B sites 4 and 5** — `gen_q[iss_t_slot_c] == iss_t_gen_c` at
+lines 459/470, the ISSUE-lane validity checks. So those moved first, and the
+plan's ordering is corrected by measurement rather than by preference.
+
+Both lanes now evaluate §6.1's interval — a 14-bit subtract and compare on
+registers — in place of two 64-way array selects, which is §6.8's *"one bounded
+arithmetic identity check per event lane"* made concrete.
+
+## Step 1 is what made this safe, and that is the point of the whole order
+
+`a_win_live_matches_table` and its boundary-aimed twin have asserted exactly this
+equivalence on **real traffic, every cycle, since step 1** — including the case a
+uniform sweep barely reaches, which is why the second check walks `retire + k`
+for `k = 0..63` across the live edge. The identity was proved before anything
+depended on it.
+
+## Verified
+
+* **477 checks pass**, no assertion fired.
+* **§6.2's trap fire-tested in RTL.** Building the ticket as `{slot, gen}` — the
+  public order, which §6.2 warns against by name — fails **43 checks starting at
+  case 1**. The model test searches for a counterexample to that trap; the bench
+  now demonstrates it on the hardware description too.
+* Verilator `-Wall` clean.
+
+## What is left of the table
+
+Seven readers, and the assertions still cross-check every one of them:
+
+* **Group A** (3 sites) — admission and the wrap fence. Site 3 still needs its
+  own assertion first, per the correction above.
+* **Group B** remainder (4 sites) — the return lanes and the in-loop comparisons
+  at 996–1020, which are the four that are 64-way today.
+* **Group C** (1 site) — `g0_owner_q`.
+
+**Timing benefit unmeasured.** The fit lane is busy with the perspuv refit, and
+three source-reading predictions were falsified today, so no number is claimed
+here. The next v3own refit compares against **87.37 reported / 91.32 core→core**
+on matched scope.
