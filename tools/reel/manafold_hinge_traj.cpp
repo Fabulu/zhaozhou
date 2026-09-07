@@ -66,6 +66,12 @@
 //   hinges, not disguised whole-body rotation.
 // Output: CSV to stdout, one row per hinge per sub-key per frame:
 //   frame,sub,bone,x_world_mm,y_world_mm,z_world_mm,x_local_mm,y_local_mm,z_local_mm,x_own_mm,y_own_mm,z_own_mm
+//
+// PASS 12 adds TWO NON-BONE ROWS for the rear-hinge diagnosis (D4):
+// armTip (the return arm far end, root-local) and anchor (loop_pose
+// closure aim target, the point kKneadWagB2A16 drives). See the block
+// that prints them for why neither is a bone and why neither could be
+// read with skin_vertex on kBLoopBase2.
 
 #include <cstdio>
 #include <cstdint>
@@ -171,6 +177,56 @@ int main(int argc, char** argv) {
             static_cast<int32_t>((static_cast<int64_t>(y) * 1000) >> 16),
             static_cast<int32_t>((static_cast<int64_t>(z) * 1000) >> 16),
             lx_mm, ly_mm, lz_mm, ox_mm, oy_mm, oz_mm);
+      }
+      // ---- PASS 12 D4: THE REAR HINGE -- the two rows this tool was missing
+      // Owner Direction 9 SS1, his THIRD report: "the hinge of the backside of
+      // the antennae still does not connect to the body. It is clipped inside
+      // the body and it spazzes out like crazy."
+      //
+      // Three passes fixed that by hypothesis. What was never measured is the
+      // pair of numbers that separates the two candidate faults -- a PLACEMENT
+      // fault (the junction sits in the wrong place on the body) from a DRIVE
+      // fault (the thing that moves it is too fast and too reversy):
+      //
+      //   armTip  the return arm FAR END, ROOT-LOCAL. The hingeD row reports
+      //           this same point in hingeC own frame, which hides exactly the
+      //           body-relative travel the owner is watching. Skinned rigidly
+      //           to hingeD at the probe point one kLoopArcMm[5] out.
+      //   anchor  loop_pose closure AIM TARGET -- the point kKneadWagB2A16
+      //           actually drives. NOTE it is NOT kBLoopBase2 bone origin and
+      //           it CANNOT be read with skin_vertex: a bone own rotation never
+      //           moves its own origin (this file header explains why).
+      //           loop_pose rotates the BIND OFFSET by kBLoopBase2 local quat,
+      //           which is a rotation about the ROOT origin -- and that is
+      //           precisely what makes the anchor slide along the body surface
+      //           at constant radius. The expression below is the production
+      //           one from manafold_clips.h, reading the clip own stored quat,
+      //           so this measures the SHIPPED drive and not a re-derivation.
+      //           Its "own" columns are zero and its world columns repeat its
+      //           local ones: it is a derived point, not a bone, and it is
+      //           already expressed in the root frame.
+      {
+        zc::SkinVertex tv{T.baked.world_x[u02::kBHingeD],
+                          T.baked.world_y[u02::kBHingeD] + u02::fxu(u02::kLoopArcMm[5]),
+                          T.baked.world_z[u02::kBHingeD], u02::kBHingeD, u02::kBHingeD,
+                          64, 0, 0};
+        int32_t tx, ty, tz;
+        zc::skin_vertex(pose.data(), tv, tx, ty, tz, nullptr);
+        int32_t tlx, tly, tlz;
+        to_local(rm, tx, ty, tz, tlx, tly, tlz);
+        std::printf("%u,%u,armTip,%d,%d,%d,%d,%d,%d,%d,%d,%d\n", f, sub,
+                    static_cast<int32_t>((static_cast<int64_t>(tx) * 1000) >> 16),
+                    static_cast<int32_t>((static_cast<int64_t>(ty) * 1000) >> 16),
+                    static_cast<int32_t>((static_cast<int64_t>(tz) * 1000) >> 16),
+                    tlx, tly, tlz, 0, 0, 0);
+
+        const zc::quat16 qb2 =
+            clip->quats[static_cast<size_t>(f) * u02::kBoneCount + u02::kBLoopBase2];
+        int32_t rax, ray, raz;
+        u02::quat_rot_vec(qb2, u02::kLoopReentryXMm, u02::kLoopReentryYMm, 0, rax, ray,
+                          raz);
+        std::printf("%u,%u,anchor,%d,%d,%d,%d,%d,%d,%d,%d,%d\n", f, sub, rax, ray,
+                    raz, rax, ray, raz, 0, 0, 0);
       }
     }
   }
