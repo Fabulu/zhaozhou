@@ -289,29 +289,93 @@ module zhao_texture_v3own #(
   // owner; taking it from the next-state cannot.
   logic credit_ok_q;
 
-  // THE FENCE IS NOT REGISTERED HERE, DELIBERATELY, AND THE REASON IS A
-  // ONE-CYCLE HOLE THAT A NAIVE REGISTER OPENS.
+  // ==========================================================================
+  // FOURTH, PART TWO: AN ACKNOWLEDGED FENCE WITH ITS OWN PHASE MACHINE
+  // ==========================================================================
+  // The owner's master recovery handoff (2026-09-07, §6.1) states the hazard in
+  // the same words this file used when it stopped short of the fix:
   //
-  // `wrap_block_c` is `gen_q[tail_q] == all ones`, and it becomes true on the
-  // edge that moves `tail_q` onto the wrapping slot. A registered permission
-  // computed from it would still be asserted for the cycle in which it first
-  // becomes true, so ONE admission could pass the fence on a non-quiescent
-  // island -- which is exactly the generation-reuse hazard the fence exists to
-  // prevent, and exactly what case 19 of the adversarial bench checks
-  // ("every wrapping admission happened on a QUIESCENT island"). That check
-  // was fired on purpose before this change: deleting the fence fails it, and
-  // fails "admission was blocked for wrap while the ring was NOT full"
-  // alongside it.
+  //   > For the intermediate per-slot-generation implementation, do not put a
+  //   > flop on wrap_block and call it solved. The tail can advance onto a
+  //   > wrapping slot while the previous permission stays high for one cycle.
+  //   > Compute the permission from the same NEXT-STATE tail/generation event
+  //   > that commits ... A phase machine -- not an indiscriminate delayed quiet
+  //   > bit -- owns reopening.
   //
-  // Closing that hole needs the fence's next state computed from the
-  // NEXT-state generation and tail, plus a phase machine that reopens for
-  // exactly one admission after quiescence -- which is why FOURTH asks for "a
-  // dedicated phase machine and producer acknowledgments" rather than a
-  // register. It is a wrap-protocol change and it is not being made in the
-  // same pass that measured the need for it.
+  // So the permission is computed from `tail_next_c` and `gen_n_c`, the values
+  // that are ABOUT to commit, rather than from `tail_q` and `gen_q`. At cycle N
+  // `wrap_block_n_c` asks "after this edge, will the tail sit on a slot whose
+  // generation is exhausted", which is precisely the question admission at N+1
+  // needs answered. An admission at N itself remains safe: it consumes
+  // `gen_q[tail_q]`, which is not exhausted or `wrap_block_c` would already be
+  // set.
   //
-  // So the reduction stays on the path for now, and the credit comes off it.
-  assign adm_ready_o  = credit_ok_q && (!wrap_block_c || quiet_c);
+  // AND §6.1's OTHER HALF IS WHY adm_ready_o GOT SHORTER: "No ready-queue
+  // pointer subtraction, aggregate occupancy, global service quiet, COMBINE-
+  // ready chain or output-ready full-ring bypass belongs in this cone."
+  // `quiet_c` is a ~25-term reduction over every queue, reservation and stage
+  // in the block, and it was in the admission cone. It is now consumed only by
+  // the fence machine, which has a whole phase to evaluate it.
+  //
+  // That also removes the design's worst path: the four-way endpoint split put
+  // it at -3.194 ns from `u_rq_tmu|wp_q[0]` to `adm_accept_o`, reaching it
+  // through `occ_o -> rq_occ_c == 0 -> quiet_c -> adm_ready_o`. Ten of the ten
+  // worst paths ended at these admission outputs.
+  //
+  // NO SAME-EDGE CREDIT BYPASS, per §6.1: "At full capacity, conservatively
+  // refuse same-edge admission even if output returns a credit on that edge."
+  // `credit_ok_q` is registered from `live_next_c` and nothing bypasses it.
+  logic [SLOTW-1:0] tail_next_c;
+  logic             wrap_block_n_c;
+  assign tail_next_c    = tail_q + (adm_fire_c ? SLOTW'(1) : SLOTW'(0));
+  assign wrap_block_n_c = (gen_n_c[tail_next_c] == {GENW{1'b1}});
+
+  // §6.2's phase sequence, scoped to the LEGACY TRANSITIONAL FENCE that the
+  // same section describes: "may authorize exactly one wrapping admission and
+  // then resume normal checks". The full sequence-window fence belongs to
+  // FIFTH and authorises a new namespace after one complete barrier; §6.2
+  // warns the two "must not be combined into an accidental 64-drain policy or
+  // an indefinitely open reuse permission", so this machine returns to OPEN
+  // after exactly one admission and never holds the permission across two.
+  //
+  //   FN_OPEN     admit on registered local credits
+  //   FN_STOP     admission closed; the reason is latched below
+  //   FN_FINISH   old owners finish through their normal acceptance events
+  //   FN_REOPEN   exactly ONE wrapping admission, then back to FN_OPEN
+  //
+  // TWO OF §6.2's PHASES ARE NOT IMPLEMENTED AND THAT IS DELIBERATE.
+  // QUIESCE_PRODUCERS and DRAIN_RESIDUAL_TRANSPORT require a producer
+  // ACKNOWLEDGEMENT interface -- §6.3: "ACK means all accepted old work has
+  // completed or been canceled under an agreed contract ... A debug idle
+  // signal is not a cancellation agreement." This block has no such port
+  // today, and inventing one from `quiet_c` would be exactly the "delayed
+  // quiet bit" §6.1 forbids. Naming the gap is the honest state; closing it is
+  // an interface change that belongs with the retained-services work.
+  localparam logic [1:0] FN_OPEN   = 2'd0;
+  localparam logic [1:0] FN_STOP   = 2'd1;
+  localparam logic [1:0] FN_FINISH = 2'd2;
+  localparam logic [1:0] FN_REOPEN = 2'd3;
+
+  logic [1:0]      fn_q, fn_n_c;
+  logic            fence_open_q;
+  logic [SLOTW-1:0] fn_slot_q;      // the held request's identity (§6.2)
+  logic [GENW-1:0]  fn_gen_q;
+
+  always_comb begin
+    fn_n_c = fn_q;
+    unique case (fn_q)
+      FN_OPEN:   if (wrap_block_n_c) fn_n_c = FN_STOP;
+      // One cycle to latch the fence reason and the held request's identity,
+      // so the reopening permission below belongs to THAT request and not to
+      // whatever the ring looks like when quiet finally arrives.
+      FN_STOP:   fn_n_c = FN_FINISH;
+      FN_FINISH: if (quiet_c)        fn_n_c = FN_REOPEN;
+      FN_REOPEN: if (adm_fire_c)     fn_n_c = FN_OPEN;
+      default:   fn_n_c = FN_OPEN;
+    endcase
+  end
+
+  assign adm_ready_o  = credit_ok_q && fence_open_q;
   assign adm_fire_c   = adm_valid_i && adm_ready_o;
   assign adm_accept_o = adm_fire_c;
   // Section 5.4: "Never write a payload using next_tail while stamping the
@@ -981,6 +1045,10 @@ module zhao_texture_v3own #(
       fetch_q    <= '0;
       live_cnt_q <= '0;
       credit_ok_q <= 1'b1;   // an empty ring has room
+      fn_q <= FN_OPEN;
+      fence_open_q <= 1'b1;  // an unwrapped namespace is open
+      fn_slot_q <= '0;
+      fn_gen_q <= '0;
       unf_cnt_q  <= '0;
       peak_q     <= '0;
     end else begin
@@ -1007,6 +1075,17 @@ module zhao_texture_v3own #(
       // From the NEXT-state count, so the credit is exact rather than one
       // cycle behind. See the note beside `adm_ready_o`.
       credit_ok_q <= (live_next_c < CNTW'(OWNERS));
+
+      // The fence. `fence_open_q` is registered from the NEXT phase, so at any
+      // cycle it agrees with `fn_q` rather than trailing it -- the same
+      // next-state discipline the credit uses, and the reason a flop on
+      // `wrap_block` would not have worked.
+      fn_q         <= fn_n_c;
+      fence_open_q <= (fn_n_c == FN_OPEN) || (fn_n_c == FN_REOPEN);
+      if ((fn_q == FN_OPEN) && wrap_block_n_c) begin
+        fn_slot_q <= tail_next_c;
+        fn_gen_q  <= gen_n_c[tail_next_c];
+      end
       unf_cnt_q  <= unf_cnt_q + CNTW'(adm_fire_c) - CNTW'(fetch_fire_c);
 
       // A RETAINED high-water mark. Section 19.7: "A statistic rebuilt fresh
@@ -1384,6 +1463,25 @@ module zhao_texture_v3own #(
 
       // An admission must never overwrite a live owner's row (section 6.4).
       a_no_live_overwrite : assert (!adm_fire_c || !live_q[tail_q]);
+
+      // THE FENCE'S REOPENING PERMISSION BELONGS TO THE HELD REQUEST.
+      // Master recovery handoff 6.2: "Every required acknowledgement belongs to
+      // the HELD request and remains valid." The fence latches the slot and
+      // generation that closed it; if the ring could reach FN_REOPEN with the
+      // tail somewhere else, the one authorised wrapping admission would be
+      // spent on a different owner than the one the fence was raised for.
+      // Admission is closed for the whole STOP/FINISH interval, so nothing can
+      // move the tail -- these assert that, rather than assuming it.
+      a_fence_holds_slot : assert ((fn_q != FN_REOPEN) || (tail_q == fn_slot_q));
+      a_fence_holds_gen  : assert ((fn_q != FN_REOPEN)
+                                || (gen_q[fn_slot_q] == fn_gen_q));
+
+      // And the reopen authorises EXACTLY ONE admission: 6.2 warns the
+      // transitional fence and the sequence-window fence "must not be combined
+      // into an accidental 64-drain policy or an indefinitely open reuse
+      // permission". Leaving FN_REOPEN on adm_fire_c is what bounds it.
+      a_fence_open_bounded : assert ((fn_q != FN_REOPEN) || !adm_fire_c
+                                  || (fn_n_c == FN_OPEN));
 
       // The forwarding window this design was proved for.
       a_fwd_window : assert (FWD_WINDOW == 1);

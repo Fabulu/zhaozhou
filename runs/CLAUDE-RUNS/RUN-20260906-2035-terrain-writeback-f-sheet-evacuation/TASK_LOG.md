@@ -888,3 +888,44 @@ queued; the three next in line are cancelled by name. Nothing reverted.
 
 NEXT: FOURTH part two, the acknowledged fence. Hazard already characterised and
 case 19 already fired on purpose.
+
+## 2026-09-07 -- FOURTH part two written; and a self-inflicted build trap
+
+THE FENCE IS IMPLEMENTED. Master handoff §6.1 states the hazard in the same
+words this file used when it stopped short: "do not put a flop on wrap_block
+and call it solved ... compute the permission from the same NEXT-STATE
+tail/generation event that commits". So:
+
+  tail_next_c    = tail_q + (adm_fire_c ? 1 : 0)
+  wrap_block_n_c = (gen_n_c[tail_next_c] == all ones)
+
+and a four-phase machine (OPEN / STOP / FINISH / REOPEN) per §6.2, scoped to
+the "legacy transitional fence" that authorises EXACTLY ONE wrapping admission
+and then resumes normal checks.
+
+adm_ready_o is now `credit_ok_q && fence_open_q` -- quiet_c is OUT of the
+admission cone, which §6.1 requires and which removes the design's worst path
+(-3.194 ns, wp_q -> occ_o -> quiet_c -> adm_ready_o -> adm_accept_o; ten of the
+ten worst paths ended at these outputs).
+
+TWO OF §6.2's PHASES ARE NOT IMPLEMENTED, deliberately and named in the RTL:
+QUIESCE_PRODUCERS and DRAIN_RESIDUAL_TRANSPORT need a producer ACKNOWLEDGEMENT
+interface that does not exist, and §6.3 is explicit that "a debug idle signal
+is not a cancellation agreement" -- synthesising one from quiet_c would be the
+delayed-quiet-bit §6.1 forbids.
+
+fn_slot_q / fn_gen_q were latched but unread (lint caught it). Rather than
+waive them they now do §6.2's job -- "every required acknowledgement belongs to
+the HELD request" -- via three assertions: the reopen's slot and generation
+match the held request, and the permission authorises exactly one admission.
+
+THE BUILD TRAP, SELF-INFLICTED. A stale Verilator object gave an undefined
+ConstPool reference at link. I removed the target's generated directory, which
+deleted a `_copy.cmake` that build.ninja's OWN REGENERATION depends on --
+turning a link error into "ninja: error: rebuilding 'build.ninja'". CLAUDE.md
+documents exactly this and its remedy: regenerate through `cmake --preset`,
+never through another `cmake --build`. Doing so now.
+
+THE LESSON: rm -rf on a verilate target directory is the wrong first remedy for
+a stale-object link error. `cmake --preset` was the right move from the start,
+and the trap is documented one paragraph away from the symptom I hit.
