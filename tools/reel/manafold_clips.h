@@ -1298,6 +1298,20 @@ inline zc::Clip build_startle() {
   for (int f = 0; f < K; ++f) {
     g.reset();
     antenna_knead(g, 4, K, f);  // pass 4: the always-on fold-hold-knead layer
+    // PASS 12 A6 (Direction 3 SS7's third debt): THE SPLAY. antenna_knead has
+    // already filled g.nod with the always-on schedule; this ADDS to it rather
+    // than replacing it, so the startle still breathes and simply flings its
+    // nodules apart on the snap. Signs oppose -- outers one way, middle the
+    // other -- which is what makes it a splay and not a lean. It rides kWide,
+    // the recoil curve the clip already owns, so no new schedule and no new
+    // reversals.
+    {
+      const int32_t sp = static_cast<int32_t>(
+          (static_cast<int64_t>(kStartleSplayMm) * -curve(kWide, 6, f)) / 1000);
+      g.nod.az += sp;
+      g.nod.bz -= sp;
+      g.nod.cz += sp;
+    }
     const int whip = curve(kWhip, 9, f);
     loop_pose(g, 1000, whip, whip, whip, 0);
     face_rest(g);

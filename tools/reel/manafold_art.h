@@ -344,19 +344,30 @@ constexpr int32_t kLoopFoldCA16 = 12740;      // ~70 deg at the rear hinge
 // between the aim target and the crossing, so the crossing holds still.
 //
 // The values are polar, on the round body of SS5 (radius 450, vertical stretch
-// kVStretchPm): about 50 degrees back from vertical, at 55% of the radius --
-//     x = -450 * sin(50) * 0.55 = -190
-//     y =  450 * cos(50) * 1.66 * 0.55 = 264
-// That is the ball's UPPER REAR, which is where the sheet returns the band, and
-// it is 169 mm higher than the shipped anchor. "Moved up", literally.
+// kVStretchPm 1660, so y is compared against 450*1.66 = 747):
+//     |r| = sqrt(140^2 + (200/1.66)^2) = 185 mm of a 450 mm radius
+//     angle from vertical = atan(140/120) = 49 degrees, toward the rear
+// That is the ball's UPPER REAR, which is where the sheet returns the band.
+// The visible junction's MEAN crossing rises from 408 mm to 562 mm of a 747 mm
+// crown, measured across a whole hover loop. "Moved up", literally, and
+// measured rather than asserted.
+//
+// ⚠ AN EARLIER DRAFT OF THIS COMMENT SHIPPED THE WRONG NUMBERS. It described
+// (-190, 264) at 55% of the radius -- the first candidate, before the closure
+// sweep sent the value back twice. It sat above constants that read -140/200
+// for one commit. Recorded because checklist item 8 exists for exactly this and
+// because a comment that explains a DIFFERENT value than the one beneath it is
+// the most convincing kind of wrong.
 //
 // DECLARED PENETRATION (the ground-contact law applied to a body instead of the
-// ground): the anchor is 45% of the radius INSIDE the surface, deliberately, so
-// the return arm still plunges into the body and the free-floating dongle stays
-// structurally unrepresentable. The depth is the knob; kLoopReentryDepthPm
-// records it as a number rather than leaving it implicit in two coordinates.
-// It is measured by probes/d4/d4_burial.py, from the 3D pose, never from
-// pixels.
+// ground): the anchor is 59% of the radius INSIDE the surface -- that is what
+// kLoopReentryDepthPm records -- deliberately, so the return arm still plunges
+// into the body and the free-floating dongle stays structurally
+// unrepresentable. Measured by probes/d4/d4_burial.py, from the 3D pose, never
+// from pixels: 100% of frames buried on both hover and channel, worst rho 0.72.
+//
+// ⚠ AND IT DOES NOT MOVE ALONE: raising this forced kLoopArcMm[5] 1270 -> 1160.
+// See that constant's sweep table. Nothing in the rig announces the coupling.
 constexpr int32_t kLoopReentryDepthPm = 590;  // how far inside the surface, per-mille
 constexpr int32_t kLoopReentryXMm = -140;
 constexpr int32_t kLoopReentryYMm = 200;
@@ -1341,6 +1352,25 @@ constexpr int32_t kNoduleSoloAmpMm = 200;
 //    told. It is stated on the acceptance plate, not hidden behind a gate.
 constexpr int32_t kNoduleSoloMidPm = 300;   // the middle's share of the swing
 constexpr int32_t kNoduleSoloOutPm = 1000;  // the outers' share
+
+// ---- THE STARTLE SPLAY (Direction 3 SS7, "ain't bad, make it better") -----
+// The third of the three motion debts, and the one that had no mechanism until
+// this pass: the startle keeps its recoil and now gains a NODULE SPLAY from
+// SS2's vocabulary -- on the snap, the three nodules fling APART instead of the
+// whole antenna whipping as one piece. That is the difference between a hose
+// flicking and a creature flinching.
+//
+// Sideways is the axis that works here and it is not a stylistic choice: ball
+// A's span points straight up, so its lateral z is the ONLY axis with real
+// travel at that station (198 mm against 3 -- see kNoduleOffsetMaxMm). The
+// splay therefore reads as the antenna opening ACROSS the loop plane, which is
+// also the direction that shows on the standing judging camera.
+//
+// Signs oppose so it is a SPLAY and not a lean: the outers go one way and the
+// middle the other. Amplitude is large -- this is the clip's whole point --
+// but it is a single monotone snap-and-return on the recoil curve the clip
+// already owns, so it costs no new schedule and adds no reversals.
+constexpr int32_t kStartleSplayMm = 150;
 // the gaze (the pupil pivots sweep the stars across the lenses)
 // PASS 3 (F4, Direction 3 §2): star containment — the star plus its white
 // ring must never cross the lens ink at any authored gaze extreme. The
@@ -1958,9 +1988,22 @@ constexpr int32_t kKneadWagCA16 = 1900;    // ...in counter-rotation
 // and the body stays straight, because that joint is C.2 and C.2 ABORTED (see
 // manafold_c2proto.cpp). Do not read this constant as delivering §9.1's rear
 // junction; it delivers the half of it that costs no skinning.
-// The closure is insensitive to it -- the anchor stays at radius 153 mm inside
-// a 450 mm body, so burial holds by construction. Swept and measured: bank
-// worst RIM stays 1043 pm against the 1120 gate at 900, 2700, 5400 and 8100.
+// The closure is insensitive to it -- the anchor stays well inside the body, so
+// burial holds by construction. Swept and measured: bank worst RIM stayed
+// 1043 pm against the 1120 gate at 900, 2700, 5400 and 8100.
+// ⚠ PASS 12: "radius 153 mm" was true of the pass-11 anchor and is not any
+// more -- A3 moved kLoopReentry* up and out to |r| = 185 mm. It is corrected
+// here rather than left as a stale number that happens to support the right
+// conclusion.
+// PASS 12 (D4): 9200 -> 4600, and NOT because this constant was the spazz --
+// D4 measured it the CALMEST tracked point in the creature (2.3 to 6.7
+// reversals per 100 keys against 92 to 101 for the arm it aims), which refuted
+// the pass plan's own prime suspect. It is halved purely because A3 moved the
+// anchor from |r| 153 to 185 mm: the same angle on a longer lever sweeps a
+// proportionally longer arc, so halving the angle holds the SLIDE the owner is
+// meant to see at the amount pass 11 authored by eye. The joint stays live and
+// visible; nothing about its phrasing changed.
+//
 // PASS 11 F.4.3: 5400 -> 9200. The bone is live and the closure aim honours it
 // (Stage 0.2's repaired gate measures 128 mm of tip travel THROUGH loop_pose),
 // but the review's verdict was that 78 mm is ~5 px and cannot be SEEN. A joint
