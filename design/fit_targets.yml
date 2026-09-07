@@ -727,6 +727,17 @@ targets:
   # requires a rule and there was none. That is the same shape as the six gates
   # repaired this morning that were not reading their own fields.
   #
+  # AND THE SOURCE LISTS WERE WRONG WHEN FIRST COMMITTED, in three of the four.
+  # I named them from the WRAPPER'S OWN NAME instead of reading what it
+  # instantiates: "TMU+CACHE" is `zhao_texture_tmu` + `zhao_texture_cache` and
+  # not the `_plan`/`_pipe` blocks that sound like them; "FRAGMENT+TILESTORE"
+  # is `zhao_raster_fragment`, not `zhao_texture_fragrob`; SETUP+BINNER pulls
+  # in `zhao_geom_arena` and `zhao_raster_fill` besides. The tell was in the
+  # numbers before it was in the source: two of these pairs report DSP blocks
+  # that NEITHER of the leaves I had named contains, which cannot happen and
+  # meant I had named the wrong leaves. Each list is now resolved from the
+  # wrapper's actual instantiations and VERIFIED BY LINT, not guessed.
+  #
   # THE RULE IS THE PRODUCT CLOCK AND NOTHING ELSE. These wrappers exist
   # precisely so that a clock number MEANS something: registered stimulus, DUT,
   # registered hash sink, no result reaching a pin. That is the one measurement
@@ -751,22 +762,29 @@ targets:
   - top: zhao_pair_tmu_cache
     sources:
       - fpga/rtl/synth/zhao_pair_tmu_cache.sv
-      - fpga/rtl/texture/zhao_texture_tmu_plan.sv
-      - fpga/rtl/texture/zhao_texture_cache_pipe.sv
+      - fpga/rtl/texture/zhao_texture_tmu.sv
+      - fpga/rtl/texture/zhao_texture_cache.sv
+      - fpga/rtl/texture/zhao_texture_bilerp.sv
     rules:
       min_fmax_mhz: 100
 
   - top: zhao_pair_fragment_tilestore
     sources:
       - fpga/rtl/synth/zhao_pair_fragment_tilestore.sv
-      - fpga/rtl/texture/zhao_texture_fragrob.sv
+      - fpga/rtl/raster/zhao_raster_fragment.sv
       - fpga/rtl/raster/zhao_raster_tilestore.sv
+      - fpga/rtl/raster/zhao_raster_blend_prod.sv
+      - fpga/rtl/raster/zhao_raster_blend_fin.sv
     rules:
       min_fmax_mhz: 100
 
   - top: zhao_pair_setup_binner
     sources:
       - fpga/rtl/synth/zhao_pair_setup_binner.sv
+      - fpga/rtl/geometry/zhao_geom_setup.sv
+      - fpga/rtl/geometry/zhao_geom_binner.sv
+      - fpga/rtl/geometry/zhao_geom_arena.sv
+      - fpga/rtl/raster/zhao_raster_fill.sv
     rules:
       min_fmax_mhz: 100
 
