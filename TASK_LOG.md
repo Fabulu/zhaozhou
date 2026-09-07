@@ -2189,3 +2189,92 @@ new one: **no warp verb exists on the command wire at all**.
 * `zhao_terrain_pagestream` and `zhao_terrain_mipfeed` fits running.
 * The last composition defect needs an owner ruling: a load completing into a
   slot the directory has already put in EVICT_PENDING.
+
+---
+
+## 2026-09-07 (later still) — the command → terrain pipeline
+
+### D4's fourth item, which was nothing at all
+
+`reports/DOCKET.md` D4 lists four things missing from the 8 km world. Three were
+built and unit-verified today or before; the **command→terrain pipeline** was
+not started. The composed bench played `fr_start`, `fr_epoch`, `fr_patch_count`
+and a `rec_*` stream it built in C++, and no command a game could issue made any
+of it happen.
+
+`reports/TERRAIN-COMMAND-PIPELINE-20260907.md` is the recon and the staged plan.
+Three of its five stages are done:
+
+* **Stage 0 — the ABI.** `TerrainEpoch 0x0220` and `SubmitTerrainSet 0x0230`
+  added to `spec/commands.zidl` exactly as ruling T5 gives them, and the
+  generator confirmed both layouts field for field. `reserved`, not
+  `implemented`: the pager behind them is built, the executor's front half is
+  not, and a game issuing one gets `ZH_ABI_UNIMPLEMENTED_COMMAND` — a clean
+  refusal rather than silence.
+* **Stage 1 — the reader.** `zhao_terrain_cmd`, **77 checks, 0 failures**.
+* **Stage 2 — the frame ring.** Driven, with the suite checking that no record
+  is offered before the `fr_start` pulse.
+
+### The finding that changes who owns the next stage
+
+**The shell's record framer carries sixteen payload bytes.**
+`zhao_shell_top.sv:1712` captures record bytes 16–31 into four words.
+`SubmitTerrainSet`'s payload is thirty-two: the half that survives says *where*
+the list is, and the half that is lost contains `patch_count` — T5's **seal**,
+the number `TERRAIN.SEQ` stops at.
+
+That was first written as a terrain problem and checked immediately:
+`TerrainField 0x0200` is a **112-byte record**, already in the ABI and already
+marked `implemented`, truncated the same way. So it is a **command-path**
+decision and the terrain block must not be where it gets worked around.
+`zhao_terrain_cmd` therefore takes its fields already unpacked and says so.
+
+### What the test found that the contract had not
+
+**`err` on the request channel was ignored.** The bridge's comment is
+*"malformed burst / bridge error: nothing issued"* — a refusal of the request,
+arriving with no grant. Watching for it only during the beat stream meant the
+pulse landed while the block was still waiting, was missed, and the next cycle
+granted normally: the command completed happily and the suite reported **eight
+records where it wanted none**.
+
+### Two passes, not a buffer
+
+A corrupt list must issue no loads, and finding out at record 200 is not
+verification. Buffering 256 records is ~7 M10K held for one command; reading the
+list twice is 16 KB against T7's 684 KB of pages. The suite flips a byte in the
+**last** record and requires zero records and zero frames.
+
+### A gate that was wrong in its units
+
+`TERRAIN.MIPFEED` fitted at ALM 343, registers 244, M10K 0, DSP 0, 121.08 MHz —
+structurally exactly right — and `max_alms: 200` failed it. That 200 was derived
+by counting **flip-flops** (~217) and applied to an **ALM** budget. Re-derived
+rather than retuned to 343 (registers 400, ALMs 500); `check_fit_rules.ps1`
+passes it without a refit.
+
+### And gotcha 4b, rediscovered by a fitter
+
+`~32'(BURST_BYTES - 1)` in TERRAIN.PAGESTREAM — `incomplete:failed:quartus_map`
+in 30 seconds. **It has been written down since 2026-09-03**, with nine
+instances listed in four other files, and that document's own meta-lesson is
+this exact mistake. Three new terrain blocks were written today without reading
+it; the other two happened not to contain the construct.
+
+### State
+
+* ledger green at **117 blocks**
+* `TERRAIN.LOADQ` fitted: 1 M10K, 10,240 bits, 692 registers, 734 ALM, 107.33 MHz
+* `TERRAIN.MIPFEED` fitted: 343 ALM, 244 registers, no memory, no DSP, 121.08 MHz
+* `TERRAIN.PAGESTREAM` refit running after the 4b fix
+* `TERRAIN.CMD` fit target written, not yet run
+
+### Open, and needing the owner
+
+1. the command payload seam — framer widening vs. a re-read from memory
+2. `sequence`: u32 in T5, 16 bits on the ring (refused, not truncated)
+3. the set-level `view_mask`/`flags` have no consumer anywhere
+4. what a bad `list_crc32c` does to the **frame** (this block refuses the command)
+5. `TerrainEpoch` BEGIN/END_FLUSH/ABORT — what "drain" means in gates
+6. which plane is surface 0 for load-time mips (carried)
+7. a load completing into a slot already in EVICT_PENDING (carried)

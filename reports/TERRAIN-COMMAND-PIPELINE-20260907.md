@@ -199,7 +199,16 @@ written, not assumed from the shape of a sibling.
 
 ## The staged build, smallest first
 
-**Stage 0 — the ABI, and nothing else.** Add `TerrainEpoch 0x0220` and
+> **STATUS, same day.** Stages 0, 1 and 2 are done and committed; Stage 3 is the
+> open ruling and Stage 4 waits on another. What follows is the plan as written
+> before any of it was built, with the outcome noted against each step rather
+> than the plan rewritten to match — a plan edited to agree with what happened
+> is not a record of a decision.
+
+**Stage 0 — the ABI, and nothing else.** ✅ **DONE** — `spec/commands.zidl` now
+declares `TerrainEpoch 0x0220` and `SubmitTerrainSet 0x0230` as `reserved`, and
+the generator confirmed both layouts field for field against T5. `abi:check`
+clean, 28 outputs match. Add `TerrainEpoch 0x0220` and
 `SubmitTerrainSet 0x0230` to `spec/commands.zidl` exactly as T5 gives them, run
 the ZIDL generator, and let the generated `zhao_abi_pkg.sv` and the C++ ABI
 header confirm the opcodes and sizes. This is a spec edit and a regeneration; no
@@ -207,14 +216,30 @@ RTL. It is also the step T5 explicitly asks for — *"opcodes confirmed by the Z
 generator before commit"* — and it is worth doing on its own, because it is the
 only step here that cannot be got wrong quietly.
 
-**Stage 1 — the reader, with a played bridge.** A block that takes
+**Stage 1 — the reader, with a played bridge.** ✅ **DONE** —
+`zhao_terrain_cmd`, 77 checks, 0 failures. The oracle is
+`zref::swstream::encode_record` read backwards, exactly as planned. Two things
+the plan did not anticipate: the played bridge had to honour `len` (the
+composed world bench's answers eight beats always, and the 32-byte tail burst
+would have folded 32 bytes that are not in the list), and **`err` on the
+REQUEST channel was ignored by the first version** — found by firing the
+verdict, not by reading the contract. A block that takes
 `{epoch, list_addr, list_bytes, patch_count, sequence}` on a simple job port,
 fetches the list, CRC-checks it, and emits the ten-field record stream. Its bench
 plays the bridge and its oracle is `zref::swstream::encode_record` read
 backwards: given bytes the encoder produced, the block must emit the fields the
 encoder was given. That is a differential with a real oracle and no new law.
 
-**Stage 2 — the frame ring.** `fr_start` / `fr_epoch` / `fr_patch_count` /
+**Stage 2 — the frame ring.** ✅ **DONE, in the block** — `fr_start` /
+`fr_epoch` / `fr_patch_count` / `fr_sequence` are driven, and the suite checks
+that **no record is offered before the pulse**, because TERRAIN.SEQ latches the
+frame's identity on it. Composing this with the world bench so it stops playing
+the ring by hand is the remaining half.
+
+And one thing this stage found that the plan had not: **T5's `sequence` is a u32
+and the ring carries 16 bits.** The block refuses a sequence that does not fit
+rather than truncating it — two frames on one ring sequence is a determinism
+failure nothing downstream can see. Which width is wrong is ruling 6 below. `fr_start` / `fr_epoch` / `fr_patch_count` /
 `fr_sequence` into `TERRAIN.SEQ`, and the composed suite stops playing the ring
 by hand. This is where phase I's *"eight records offered, five declared"* check
 becomes a statement about the machine rather than about the bench.
@@ -249,7 +274,16 @@ Each stage is fittable on its own. None of them is an island run.
    an arm that does not exist yet. See above — the precedent is
    `TERRAIN.PAGELOADER`, but a precedent is not a ruling.
 
-5. *(carried, from `TERRAIN.MIPFEED`)* **Which plane is surface 0 for load-time
+5. **The set-level `view_mask` and `flags` have no consumer.** T5 gives
+   `SubmitTerrainSet` both. `TERRAIN.SEQ`'s ring takes `{epoch, patch_count,
+   sequence}` and every *record* carries its own `view_mask`. They are not on
+   `TERRAIN.CMD`'s job port at all, because accepting and dropping them would
+   look like they had been handled.
+
+6. **`sequence`: 32 bits or 16?** T5 says u32; the frame ring says 16.
+   Currently refused rather than truncated.
+
+7. *(carried, from `TERRAIN.MIPFEED`)* **Which plane is surface 0 for load-time
    mips** — layer A, or `compose_top`. Unchanged by anything here, and still the
    one-mux decision it was this morning.
 
