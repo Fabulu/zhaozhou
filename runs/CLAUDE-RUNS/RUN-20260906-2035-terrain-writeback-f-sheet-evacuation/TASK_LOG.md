@@ -2742,3 +2742,40 @@ this path appear anywhere" rule fails the self-test instead of passing it.
 **The fire test runs on SYNTHETIC text, never on `design/fit_targets.yml`** —
 that file is read LIVE by a running fit at preflight (QUARTUS_GOTCHAS §13), so
 editing it to exercise a tool is a way to corrupt a 90-minute measurement.
+
+## §22.10 mutation 10 demonstrated, and the ledger made honest
+
+`occ_o = lcnt_q` → `occ_o = body_occ_c` reinstates the owner's own §5 defect.
+Four checks failed, first by name: *"occupancy is NEVER zero between an accepted
+push and its head arrival"*. Restored, 28 checks pass, digest recorded — §22.10
+asks for exactly that, and for the standard that a mutation which fails to
+COMPILE is not evidence. This one compiled and ran.
+
+**3 of 14 demonstrated**, and the other eleven are listed by name in
+`reports/V31-S2210-MUTATION-LEDGER-20260907.md` rather than left implied. Item 8
+is the instructive gap: it has a passing behavioural case but no mutation, and a
+passing case shows the design is right while a mutation shows the TEST would
+notice if it stopped.
+
+## COMBINE: a deletion trigger that fired and was never executed
+
+`design/prod_manifest.yml` says of `zhao_texture_combine` — refuted as D19q for
+8 DSP against §3.4's "reject DSP > 2" — *"When that fit lands, delete this row,
+its RTL, and tests/texture/texture_combine_diff.cpp together."*
+
+**The fit landed.** `material_combine_v1` is `ok` at 1,475 ALM / 2 DSP / 36.28.
+The trigger fired, nobody acted, and a block the architecture's own tripwire
+refuted is still registered production and still in `zhao_prod_top`. Same shape
+as CLAUDE.md's `.gitignore` lesson: a rule that records what should happen is
+not the thing that makes it happen.
+
+Meanwhile V2 supersedes V1 in the island — 870 vs 1,475 ALM, 114.04 vs 36.28 MHz.
+**Checked rather than assumed**, because "smaller AND faster" is the comfortable
+claim: V2's header quotes the recovery brief's "preserve all eight recipes" and
+says the equations are V1's "byte for byte", and
+`test_every_recipe_matches_the_oracle` runs 200 fragments per recipe across all
+eight against the oracle. It is a like-for-like replacement.
+
+Written up as a RECOMMENDATION, not executed: both are deletions of RTL and
+tests, which is outside what this session decides alone.
+`reports/COMBINE-SUPERSESSION-LEDGER-20260907.md`.
