@@ -3915,3 +3915,168 @@ drive-by fix.
 3. `TEXTURE.TMU`'s text forbids this as written. A two-level nearest blend is
    not intra-level filtering, but the contract needs an explicit carve-out
    rather than an implementation that quietly disagrees with it.
+
+---
+
+## SWEEP 2026-09-07 — the clock, and four gates that had nothing to gate
+
+Everything below came from `fmaxMhz`, a field that has existed as long as the
+rows have and that **nothing had ever read**. It was never right or wrong; it
+was never asked. Asked, it produced three roadmap answers, one withdrawal and
+one repair.
+
+### D22 step 4 — GEOM.PROJECT: it had no fit target at all
+
+The roadmap has asked for GEOM.PROJECT evidence for some time. It is not that
+the evidence was weak — **`zhao_geom_project` has never been fitted, and had no
+entry in `design/fit_targets.yml`.** Sixteen of the twenty-four geometry blocks
+are in the same position. It carries UNIT_VERIFIED on simulation alone.
+
+A target now exists (`aea9d9d6`), written around the claim the block's own
+header makes: *"THE DUPLICATION IS GONE. THIS BLOCK IS NOW A THIN SHELL."* It
+used to hold a complete copy of `project_vertex` that `zhao_terrain_project`
+also held, and its header called that "A COST, NOT A FEATURE". **Only a fit can
+check that the merge happened in silicon** — the differential that verified it
+(12,300 vertices, three ways, zero mismatches) proves the two COMPUTE the same
+values and says nothing about whether the hardware is shared.
+
+Rules derived before the fit, from `zhao_terrain_project`'s row (6,068 ALM /
+6,685 reg / 33 DSP / 23 M10K): `max_m10k: 0` is the sharpest line — a shell
+owning no storage cannot have any; `max_dsp: 40` because much higher means the
+core is not shared after all, which IS the claim under test. Queued.
+
+### COMBINE.V1's DSP measurement — **ANSWERED, AND IT PASSES**
+
+The roadmap has been asking for this. It is done: the live row reads **2 DSP
+against a rule of 2.** The fourteen multipliers — one `unit_mul_logic` inside
+every arm of two seven-arm case statements — were hoisted to one product per
+lane, and lines 492-499 of the file carry the whole story including the S15.5
+line it violated while quoting it.
+
+**What is still open on that block is area and clock, not DSP:** 1,475 ALM
+against `max_alms: 800`, and 36.28 MHz. It has **no path summary on disk**, so
+it cannot be split; a refit with path capture is what it needs.
+
+*(An earlier version of this entry reported it at 29.74 MHz as the worst block
+in the tree. That number came from
+`zhao_texture_material_combine_v1-2974-SUPERSEDED.setup.summary.rpt`. See the
+correction under "instruments" below.)*
+
+### The clock, read properly — four blocks are short, not forty-three
+
+Read straight, `fmaxMhz` says **43 of 51 rows miss the 100 MHz product clock**,
+several by 3x. That reading is nearly useless: a leaf fit wraps its block in
+virtual pins, and the field is whatever the single worst path says — including
+paths through an imaginary pad whose clock skew runs to −6.29 ns against
+−0.5 ns internally.
+
+`tools/quartus/split_setup_paths.py` classifies both endpoints of every
+summarised path as `port` / `reset` / `core`. The number that matters is the
+worst path with `core` at both ends. **Twenty of twenty-two miss the clock as
+reported; four miss it with no boundary to blame:**
+
+    zhao_terrain_residency_v2   61.38   a set index arriving at an M10K address
+    zhao_texture_island_top     77.30   perspuv -> fragrob, a REAL inter-block path
+    zhao_texture_v3own          89.09
+    zhao_raster_tilestore       96.12
+
+Fifteen further blocks have timing but **no path summary at all**, so nothing
+above applies to them — among them `zhao_pair_tess_normals` at 31.10 and
+`zhao_field_seq` at 58.99.
+
+### Four characterisation wrappers, gated for the first time
+
+`fpga/rtl/synth/zhao_pair_*.sv` has held four registered characterisation
+wrappers since 2026-08-23, built because the budget audit said *"raw leaf
+blocks with hundreds of virtual pins are poor physical models"*. **None had a
+fit target, so no number they produced was ever judged**, including
+`zhao_pair_tess_normals` at 31.10 MHz — the worst recorded number in the tree,
+on the terrain geometry path, silent for a fortnight.
+
+They now carry one rule, the product clock, because a meaningful clock number
+is the single thing they exist to produce. **All four fail: 31.10, 37.25,
+55.52, 88.79.** A fifth wrapper, `zhao_pair_pagestream_patch`, was added for
+the PAGESTREAM→PATCH seam and is queued.
+
+### TERRAIN.NORMALS — repaired, unmeasured
+
+The 31.10 MHz traced to one cycle holding a 6-way operand mux, a 33×33 signed
+multiply, a sign-extend to 67 bits and a 67-bit subtract — with a **second**
+67-bit adder hung off the same combinational product at the last step, which a
+comment justified as *"keeps the walk at 6"*.
+
+The product is now registered; walk 6 → 7 clocks, latency and II 7 → 8, which
+`latency: variable` already admits. 61,833 checks pass across four lanes, and
+the suite was **shown to be sensitive** to the off-by-one this invites:
+reverting one accumulate arm to the unregistered product produced 4,840 of
+20,003 random-differential failures.
+
+**The prediction is written into the file, not just the commit:** the pair
+should move well above 31.10, *not* to 100, because TESS is the other half and
+is unexamined. If a refit does not move it, the multiply was not the limit.
+
+### The instruments, which were wrong twice in one day
+
+Both errors are CLAUDE.md's *"never compare a current file to an old
+measurement"*, and both were committed by tooling written that same morning to
+prevent exactly that.
+
+1. **`split_setup_paths.py` globbed every summary in the folder and trusted the
+   filename**, so `...-2974-superseded` was reported as a live block, in a
+   report, under its live name. It now **pairs** each summary against its row's
+   recorded Fmax and refuses to split any that disagrees.
+
+2. **Four pair-vs-leaf-sum comparisons were published, and every one of the
+   four sums contained a stale row**; two also contained leaves with no row,
+   silently summed as zero. The conclusion drawn from them — that the wrappers
+   fold logic away, because "a virtual pin has never consumed a DSP block" — is
+   **withdrawn**. `zhao_terrain_normals`'s 18 DSP predates `bfc74710 "one shared
+   multiplier instead of six"` by two commits; the pair's 9 is TESS's 6 plus one
+   shared multiplier's 3, exactly, with no folding required.
+   `tools/quartus/compare_rows.py` now **refuses** such a sum rather than
+   footnoting it.
+
+**Six leaf rows are stale and three blocks have never been fitted at all**
+(`zhao_raster_blend_prod`, `zhao_raster_blend_fin`, `zhao_raster_fill`), so any
+composed-versus-leaves argument is unavailable until they are refitted.
+
+### The island — handed to a FABLE architect
+
+`zhao_texture_island_top` is 16,192 ALM against a 7,500 redline, 28,490
+registers against 9,000, and 77.30 MHz core-to-core against 100. §4.7 of
+`reports/G1D-COMPOSED-ISLAND-20260905.md` (written today from a map report that
+had been on disk unread for a day) establishes that **48% of its registers sit
+in the top-level glue file itself**, and that §4.3b's "it is a PORT COUNT
+question" is refuted by Quartus's own words: 24 uninferred RAMs, of which 11 are
+*"uninferred due to asynchronous read logic"*.
+
+**§4.7c's "area and clock are ONE defect" is HALF WRONG**, and a FABLE
+architect caught it the same day — see `reports/ISLAND-REARCH-20260907-FABLE.md`.
+Registering the reads is worth about **−10,304 registers** (declaration
+arithmetic: uvw_m 4,096 + fctx_m 4,096 + rob_m 2,112) and will **barely move the
+clock**, because the current fit's worst internal paths are not read muxes at
+all: they are combinational **seam crossings ending in array-WRITE cones** —
+perspuv→fragrob write-enable at five logic levels and 67% interconnect,
+dispatch→fragrob result banks, rcp→perspuv numerator arrays. My §4.6 inheritance
+pointed at RCP24's context array; the current paths do not. **Area and clock are
+two problems, and the read-side fix only buys one of them.**
+
+Also on the record from that pass: the latch is 32 latches in
+`material_combine_v2.sv:653`, not the island top (independently confirmed here);
+`fbase_m`/`fwt_m`/`frec_m` were silently packed into the fsc RAM, which is why
+it is 45 bits wide; the reported 67.57 MHz is set by a **single** virtual pin;
+and the R6 emit mux is itself a measured −1.647 ns path, capping the island's own
+output at 85.9 MHz.
+
+**FOUR ISLAND QUESTIONS NOW NEED AN OWNER**, not one:
+* **V2-or-V3 lane priority.** R6 seam registration is only worth doing if V2
+  must approach 100 MHz as it stands.
+* **The register redline.** V3's own sizing envelope is 6,900–8,900 against the
+  9,000 gate — knowingly tight. Ratify it or move it. (The 7,500 ALM redline
+  likewise predates ingress capture and R6 ordering; comparing a design to a
+  budget that predates two of its organs is not a fair test.)
+* **Ordering.** The architect's numbers say keep **exact** order and make the
+  ROB synchronous: bounded reorder saves ~nothing once the read is synchronous,
+  and is an ABI change downstream. That reverses the assumption I raised it
+  under.
+* **105 or 100 MHz** as the composed acceptance floor.

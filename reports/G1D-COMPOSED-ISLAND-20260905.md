@@ -863,6 +863,51 @@ written down here rather than simply done.
 `zhao_field_rcp24_rom|Ram0` is on the same list, which means **a ROM is being
 built out of logic.**
 
+##### CORRECTED SAME DAY: this section is HALF WRONG, and the wrong half was
+##### about to steer the work
+
+A FABLE architect re-read the paths from the current fit rather than inheriting
+§4.6's, and its split (1,994 core-to-core of 2,000; worst −2.936 ns, confirming
+77.30 MHz) says **the worst internal paths are not read muxes at all.** They are
+combinational **seam crossings ending in array-WRITE cones**:
+
+```
+perspuv -> fragrob   write-enable, 5 logic levels, 67% interconnect
+dispatch -> fragrob  result banks
+rcp -> perspuv       numerator arrays
+```
+
+So registering the reads is worth roughly **−10,304 registers** — real, and the
+largest single area item available — and will **barely move the clock.** Area
+and clock are TWO problems here, not one, and the read-side fix buys only the
+first.
+
+The paragraph above inherited §4.6's RCP24 finding, which was measured against
+an EARLIER fit. It is the same trap this report has now fallen into three times:
+a conclusion carried forward past the measurement that produced it. §4.6's
+provenance should have been checked before its conclusion was reused, and it was
+not.
+
+Two further corrections from the same pass:
+
+* **§4.7d's latch is not in the island top.** It is 32 latches on
+  `refused_recipe_o` in `zhao_texture_material_combine_v2.sv:653` — the earlier
+  grep here normalised the filename away and the wrong file was assumed. Chased
+  separately: the counter is *correctly* always zero, because `f_recipe_i` is
+  three bits, all eight encodings are valid recipes, and the oracle refuses only
+  `recipe >= kRecipeCount` with kRecipeCount == 8. The defect is that
+  `tests/texture/texture_combine_diff.cpp:249` compares it to the oracle and can
+  never fail.
+* **`fbase_m`, `fwt_m` and `frec_m` were silently packed into the fsc RAM**,
+  which is why that altsyncram is 45 bits wide. §4.7a's "only fsc_m and
+  rob_tag_m became memory" undercounts what inferred.
+* **The reported 67.57 MHz is set by a SINGLE virtual pin**, and the R6 emit mux
+  is itself a measured −1.647 ns path — capping the island's own output at
+  85.9 MHz regardless of what happens inside it.
+
+`reports/ISLAND-REARCH-20260907-FABLE.md` carries the derivations and a ranked
+set of proposals.
+
 #### 4.7d One genuine bug found in passing
 
 ```
