@@ -1762,3 +1762,29 @@ and no stage went inside the recurrence.
 §16.6's caution restated rather than quietly dropped: **no clock is claimed for
 rcp24.** It has not refitted since the change; it is #4 in the order, and the
 comparison is against 90.54 reported / 129.18 core→core on matched scope.
+
+## §13.1 / T6's first item: the per-owner fetched bit is gone from the logic
+
+§13.1 instructs it directly — *"Remove the per-owner ftc/fetched array. It
+represented a property already encoded by a monotone ordered cursor."*
+
+`!ftc_q[fetch_q]` was the array's only reader. `fetch_q` is monotone, so it
+revisits a slot only after 64 fetches, by which time that slot must have been
+re-admitted — and admission clears ftc. `unf_cnt_q` gates the whole condition, so
+the term could never be the reason a fetch was blocked.
+
+**Asserted BEFORE removal, not argued.** `a_ftc_bit_is_redundant` checks that
+whenever every other `fetch_fire_c` condition holds, `ftc_q[fetch_q]` is already
+clear. It passed across the whole 481-check bench — wrap and drain included —
+*before* the term came out. That ordering is the whole point: the argument sounds
+airtight, and today's record on airtight-sounding arguments is four falsified
+predictions against three confirmed.
+
+**The array stays in the source and stays maintained.** Nothing synthesised reads
+it, so Quartus removes its 64 flip-flops as dead logic while simulation keeps it
+proving the property. The check that licensed the removal survives the removal —
+if a future change makes the bit load-bearing again, the assertion fires rather
+than the array quietly mattering.
+
+481 checks pass. This is T6's first named item: *"Remove redundant fetched bitmap
+under the F reservation proof."*
