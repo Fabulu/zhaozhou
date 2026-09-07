@@ -90,7 +90,36 @@ losing the timing property nobody wrote down.
   `zhao_texture_v3own.sv`, which is inside the running fit's closure.
 * Not a timing or area result. The model says the representations are
   equivalent; it says nothing about what either costs.
-* Not that snapshot races are covered. T2 also asks to *"prove full token order,
-  membership and snapshot races"*; order and membership are proved here,
-  **snapshot races are not** — they need the concurrent read/update behaviour of
-  the actual scoreboard and belong with T3's 8×8 banks.
+* Not a full snapshot-race proof **in RTL**. The model now covers §6.4's rule
+  (see below), which is the part that is a *decision*; the concurrent
+  read/update behaviour of the actual scoreboard still belongs with T3's 8×8
+  banks.
+
+
+---
+
+## Added later the same day: §6.4's snapshot race
+
+T2's third obligation was *"prove … snapshot races"*, and the model now covers
+it — because §6.4 states the race as a **deliberate conservative choice**, not as
+a consequence:
+
+> Use pre-edge state for permission … Admission and retirement may occur
+> together when pre-edge `used` is below 64. At pre-edge `used == 64`,
+> **initially refuse admission even if an output retires in that same cycle.**
+> That conservative rule avoids a combinational downstream ready bypass and
+> same-slot read/write complications.
+
+Both readings are modelled so the difference is **visible rather than asserted**:
+at the boundary the pre-edge reading refuses and a post-edge reading would have
+permitted. That check is what makes the rule a real choice rather than a
+restatement — if the two agreed, §6.4 would be describing nothing.
+
+Below the boundary the simultaneous admit+retire is legal and verified to leave
+the window consistent: `used` unchanged, both pointers advanced by one, the two
+representations still agreeing on **every** token afterwards, the token admitted
+in the racing cycle live and the one retired in it dead.
+
+**28 checks, `g++ -Wall -Wextra` clean.** What remains for T2 is the RTL swap
+itself — replacing per-slot generation access — which is where the ~477
+flip-flops of `gen_q[64]` actually come back.

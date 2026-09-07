@@ -305,6 +305,77 @@ int main() {
                 1, diverged ? 1 : 0);
   }
 
+  // ---- 6.4: the SNAPSHOT RACE, which is a rule and not an accident ----------
+  // T2 asks to "prove full token order, membership and snapshot races". Order
+  // and membership are above. This is the third, and 6.4 states it as a
+  // deliberate conservative choice rather than a consequence:
+  //
+  //   "Use pre-edge state for permission ... Admission and retirement may occur
+  //    together when pre-edge used is below 64. At pre-edge used == 64,
+  //    INITIALLY REFUSE ADMISSION even if an output retires in that same cycle.
+  //    That conservative rule avoids a combinational downstream ready bypass
+  //    and same-slot read/write complications."
+  //
+  // So the interesting case is exactly the boundary: full, and retiring this
+  // cycle. A post-edge reading would admit; the rule says do not. Both are
+  // modelled here so the difference is visible rather than asserted.
+  {
+    Window w;
+    for (int i = 0; i < kSlots; ++i) (void)w.admit();   // pre-edge used == 64
+
+    const bool pre_edge_permits  = (w.used < kSlots);
+    const bool post_edge_permits = ((w.used - 1) < kSlots);   // if a retire lands
+    zhao::check(!pre_edge_permits,
+                "6.4: at pre-edge used == 64 admission is refused", 0,
+                pre_edge_permits ? 1 : 0);
+    zhao::check(post_edge_permits,
+                "and a POST-edge reading would have permitted it -- so the two "
+                "readings genuinely differ at the boundary and the rule is a "
+                "real choice, not a restatement",
+                1, post_edge_permits ? 1 : 0);
+
+    // Simultaneous admit+retire BELOW the boundary is legal and must leave the
+    // window consistent: used unchanged, both pointers advanced by one.
+    Window x;
+    Literal M;
+    for (int i = 0; i < 10; ++i) { const uint16_t t = x.admit(); M.admit(t); }
+    const int      used_before   = x.used;
+    const uint16_t alloc_before  = x.alloc;
+    const uint16_t retire_before = x.retire;
+
+    const uint16_t t = x.admit();   // same cycle, both events
+    M.admit(t);
+    x.retire_oldest();
+    M.retire_oldest();
+
+    zhao::check(x.used == used_before,
+                "6.4: a simultaneous admit and retire below the boundary leaves "
+                "used unchanged", static_cast<uint64_t>(used_before), x.used);
+    zhao::check(x.alloc == static_cast<uint16_t>((alloc_before + 1) & kMask),
+                "with alloc advanced by one",
+                static_cast<uint16_t>((alloc_before + 1) & kMask), x.alloc);
+    zhao::check(x.retire == static_cast<uint16_t>((retire_before + 1) & kMask),
+                "and retire advanced by one",
+                static_cast<uint16_t>((retire_before + 1) & kMask), x.retire);
+
+    int mismatches = 0;
+    for (uint32_t q = 0; q < kModulus; ++q) {
+      const uint16_t qq = static_cast<uint16_t>(q);
+      if (x.live(qq) != M.live(qq)) ++mismatches;
+    }
+    zhao::check(mismatches == 0,
+                "and the two representations still agree on every token after "
+                "the simultaneous update", 0, mismatches);
+
+    // The retired token must be dead and the freshly admitted one live -- the
+    // race would show up as either being wrong.
+    zhao::check(x.live(t), "the token admitted in the racing cycle is live", 1,
+                x.live(t) ? 1 : 0);
+    zhao::check(!x.live(retire_before),
+                "and the one retired in that same cycle is dead", 0,
+                x.live(retire_before) ? 1 : 0);
+  }
+
   const int rc = zhao::report_and_exit("texture_v3_window_identity");
   zhao::exit_hard(rc);
 }
