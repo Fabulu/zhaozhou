@@ -237,8 +237,39 @@ module zhao_texture_v3rq #(
     if (armed_q) begin
       a_rq_no_overflow      : assert (!ovf_c);
       a_rq_no_write_when_full : assert (!(wr_en_i && full_o));
+      // 5.5: "Do not use a saturating occupancy counter: saturation hides
+      // over-allocation. A COUNTER CROSSING ITS LEGAL RANGE IS A DESIGN ERROR
+      // THAT MUST FIRE A DETECTOR." lcnt_q is not saturating, and this is the
+      // detector. It is a REDUNDANCY check -- full_o gates the push and pop_c
+      // requires a valid head, so the count is structurally bounded -- which
+      // means it fires only if that gating is later broken. That is exactly
+      // what it is for.
+      a_rq_lcnt_in_range : assert (lcnt_q <= (PW+1)'(CAPACITY));
     end
   end
+
+`ifndef SYNTHESIS
+  // ELABORATION-TIME: the queue must not be PARAMETERISED into 5.3's defect.
+  //
+  // 5.3 names it exactly: "CAPACITY = 64 means 64 logical owner tickets
+  // INCLUDING all heads and pending reads. A body of 64 plus two heads must not
+  // silently advertise 66 logical owner credits."
+  //
+  // Until now nothing stopped that. A directed fire test re-elaborated this
+  // module with CAPACITY = 66 and the queue cheerfully accepted 66 tickets --
+  // the RTL had no guard against being configured into the very defect the
+  // section is about, and the only thing that caught it was a test that
+  // happened to be looking. A wrong parameter should stop elaboration, not
+  // wait for a bench.
+  initial begin
+    if (CAPACITY > DEPTH) begin
+      $fatal(1, "v3rq 5.3: CAPACITY (%0d) exceeds the body DEPTH (%0d) -- the logical capacity counts heads and pending reads INSIDE it, so it can never exceed the body", CAPACITY, DEPTH);
+    end
+    if (CAPACITY == 0) begin
+      $fatal(1, "v3rq: CAPACITY of zero advertises a queue that can never accept");
+    end
+  end
+`endif
 
 endmodule
 
