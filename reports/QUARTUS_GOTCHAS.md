@@ -490,6 +490,35 @@ true-dual-port.
 
 ## 11. The fit reads the LIVE working tree, so editing during a fit rewrites what was measured
 
+> **SUPERSEDED FOR `run_block_fit.ps1` ON 2026-09-03, AND THIS HEADING IS NOW
+> WRONG FOR BLOCK FITS. Read this box before obeying the section.**
+>
+> Block fits now **snapshot** their sources: `run_block_fit.ps1` copies every
+> declared source into `<workspace>/src` and points the QSF at the copy. Its own
+> comment states the consequence — *"an ordinary edit to the live tree now
+> cannot affect this run at all"* — and each run prints it: *"snapshot: N
+> source(s) copied into the workspace; the live tree cannot reach this fit."*
+> The provenance guard now hashes the **snapshot**, so it catches something
+> reaching inside the workspace mid-fit, which is a real emergency rather than
+> an ordinary edit.
+>
+> **So editing a `.sv` inside a running BLOCK fit's closure is safe**, and the
+> sentence below beginning "Nothing is copied into the workspace" is false as
+> written. It is kept because the incident and the positive controls under it
+> are still the reason the guard exists.
+>
+> **What is NOT superseded:** §13 — `design/fit_targets.yml` is still re-read
+> live, once per block at preflight, so a truncating in-place rewrite of the
+> config during a campaign can still kill it. Config and sources now have
+> *different* rules, which is exactly the kind of split that gets misremembered
+> as one.
+>
+> **Cost of the stale rule, 2026-09-07:** a whole session's texture work was
+> planned around "cannot edit the closure", and T4 — which the handoff says
+> "can land earlier once isolated" — was deferred for hours on a constraint that
+> had not existed for four days. A rule that forbids something now safe is not
+> free caution; it silently removes work from every session that obeys it.
+
 `run_block_fit.ps1` names every source in the generated QSF by **absolute path
 into the working tree**. Nothing is copied into the workspace. So a file edited
 while a fit is running is the file the fit elaborates — and the row it writes
