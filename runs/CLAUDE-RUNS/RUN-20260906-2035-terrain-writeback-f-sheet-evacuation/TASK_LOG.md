@@ -1013,3 +1013,17 @@ Fixed. Second self-caught defect in that tool.
 Toolchain refilled with TEXTURE: zhao_texture_v3own fitting, for T1's scoped
 before/after timing classification. Fence checks proven sensitive by
 mutation_sweep (detected, 2/469, restored byte-for-byte).
+
+## 2026-09-07 -- the owner's handoff caught 382 registers I had hidden
+
+§10.1 quotes my island census and corrects it: rows total 27,591, not 27,973,
+leaving 382 unexplained. Correct. My ad-hoc script computed "in named blocks"
+as total MINUS top-self (14,514) -- a subtraction presented as a sum. Children
+actually total 14,132; 382 registers and 553 ALUTs belong to neither.
+
+A subtraction can never show a remainder because it defines one away -- the
+same shape as the anti-vacuity failures found elsewhere today.
+
+The COMMITTED tool already summed correctly (14,132). The published error was
+in the throwaway script, which is the rule about committing probes earning
+itself again. entity_census.py now prints the remainder explicitly.

@@ -136,6 +136,25 @@ def report(mod: str) -> int:
     if top["alut"]:
         print("ALUTs     %6d total | %6d IN THE TOP ITSELF (%.0f%%) | %6d in named blocks"
               % (top["alut"], top["alut_self"], 100.0 * top["alut_self"] / top["alut"], kid_alut))
+    # THE REMAINDER IS PRINTED, NOT ABSORBED. The owner's master recovery
+    # handoff (2026-09-07 §10.1) caught this in numbers published from an
+    # earlier ad-hoc version of this census: "The listed self-register rows
+    # total 27,591, not the stated hierarchy total 27,973. Keep the unexplained
+    # 382 as a remainder until the full hierarchy accounts for it."
+    #
+    # That earlier script computed "in named blocks" as total MINUS top-self, a
+    # SUBTRACTION presented as a sum, which silently assumes the hierarchy is
+    # fully accounted for by its depth-1 children. It is not: deeper nodes and
+    # rows this parser does not classify live in the gap. A subtraction can
+    # never show a remainder, because it defines one away.
+    reg_rem = top["reg"] - top["reg_self"] - kid_reg
+    alut_rem = top["alut"] - top["alut_self"] - kid_alut
+    if reg_rem or alut_rem:
+        print("UNACCOUNTED  %6d register(s), %6d ALUT(s) -- neither the top's own"
+              % (reg_rem, alut_rem))
+        print("             nor any depth-1 child's. Deeper nodes, or rows this")
+        print("             parser did not classify. NOT absorbed into either side.")
+
     if top.get("vpins"):
         print("virtual pins %d -- a leaf fit's boundary; see split_setup_paths.py" % top["vpins"])
 
