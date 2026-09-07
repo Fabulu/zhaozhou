@@ -165,17 +165,49 @@ module zhao_raster_rcp24_svc #(
     end
   end
 
+  // ---- S1: THE REGISTERED ISSUE RECORD -------------------------------------
+  // P0-B of the rearchitecture brief of 2026-09-07. The fitted island's worst
+  // internal path was
+  //
+  //   zhao_raster_rcp24_svc:u_rcp|c_val[5] -> ...|c_m.raddr_a[0]   -3.243 ns
+  //
+  // i.e. the round-robin priority scan over `c_val`/`c_pend` reaching the
+  // context storage's READ ADDRESS in its own cycle -- and then, in that same
+  // cycle, the operand mux and the 32x64 multiply. Selection and execution
+  // shared one clock.
+  //
+  // §5.2: "Keep the selection result registered before a wide context mux or
+  // RAM address cone." So the arbiter's answer is registered here, and the
+  // operand read below addresses storage with the REGISTERED record instead of
+  // with the live scan.
+  //
+  // §5.2 also asks that the record carry its identity with it rather than being
+  // re-derived downstream, so the phase is captured at selection.
+  //
+  // WHY THIS DOES NOT OPEN A DUPLICATE-SELECT WINDOW, which §5.3 and the
+  // brief's C01 model both single out as the failure mode of exactly this
+  // change: eligibility is surrendered at SELECTION, not at execution.
+  // `c_pend[pick_i]` is cleared on the same edge that fills this record, so a
+  // context with a job in S1 is already ineligible to the next cycle's scan.
+  logic          s1_v_q;
+  logic [CW-1:0] s1_i_q;
+  logic [1:0]    s1_ph_q;
+
   // ---- M0: operands, exactly the serial block's selection ------------------
+  // Addressed by the registered issue record. The ARITHMETIC IS UNCHANGED --
+  // §5.4: "do not change it to buy a fit". Same operands, same widths, same
+  // wrap; only the index feeding them moved from a combinational scan to a
+  // flip-flop.
   logic [31:0] mul_a_c;
   logic [63:0] mul_b_c, t_c;
   always_comb begin
     // 2^31 - w, wrapping at 64 bits exactly as the reference's uint64 does.
-    t_c     = 64'h0000_0000_8000_0000 - c_w[pick_i];
+    t_c     = 64'h0000_0000_8000_0000 - c_w[s1_i_q];
     // MW phases multiply m by x; MX phases multiply x by (2^31 - w).
-    mul_a_c = (c_ph[pick_i] == PH_MW0 || c_ph[pick_i] == PH_MW1)
-                  ? {8'd0, c_m[pick_i]} : c_x[pick_i];
-    mul_b_c = (c_ph[pick_i] == PH_MW0 || c_ph[pick_i] == PH_MW1)
-                  ? {32'd0, c_x[pick_i]} : t_c;
+    mul_a_c = (s1_ph_q == PH_MW0 || s1_ph_q == PH_MW1)
+                  ? {8'd0, c_m[s1_i_q]} : c_x[s1_i_q];
+    mul_b_c = (s1_ph_q == PH_MW0 || s1_ph_q == PH_MW1)
+                  ? {32'd0, c_x[s1_i_q]} : t_c;
   end
 
   // ---- M1: the registered product ------------------------------------------
@@ -213,7 +245,13 @@ module zhao_raster_rcp24_svc #(
       // A context is finished when it is valid, has no pending job and none in
       // flight — which the phase wrap records by parking at PH_MX1 with
       // c_pend low.
-      if (!done_v && c_val[i] && !c_pend[i] && c_ph[i] == PH_MX1 && !(m1_v_q && m1_i_q == CW'(i))) begin
+      // The S1 term is new with the registered issue record: a context whose
+      // last job has been SELECTED but not yet multiplied has c_pend low and
+      // parks at PH_MX1, so without it a reciprocal would be reported done one
+      // cycle before its final multiply had even been launched.
+      if (!done_v && c_val[i] && !c_pend[i] && c_ph[i] == PH_MX1
+          && !(s1_v_q && s1_i_q == CW'(i))
+          && !(m1_v_q && m1_i_q == CW'(i))) begin
         done_v = 1'b1;
         done_i = CW'(i);
       end
@@ -236,6 +274,7 @@ module zhao_raster_rcp24_svc #(
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       rr_q        <= '0;
+      s1_v_q      <= 1'b0;
       m1_v_q      <= 1'b0;
       accepted_o  <= 32'd0;
       completed_o <= 32'd0;
@@ -260,15 +299,31 @@ module zhao_raster_rcp24_svc #(
         accepted_o     <= accepted_o + 32'd1;
       end
 
-      // ---- M0 launch ------------------------------------------------------
-      m1_v_q <= pick_v;
+      // ---- S1: SELECT AND RESERVE -----------------------------------------
+      // §5.3: "The context leaves eligibility when selection is ACCEPTED into
+      // the issue staging domain, not when the multiply finally begins."
+      // `c_pend` clears here, on the selecting edge, which is what keeps the
+      // added stage from creating a second chance to pick the same job.
+      s1_v_q <= pick_v;
       if (pick_v) begin
-        m1_i_q     <= pick_i;
-        m1_ph_q    <= c_ph[pick_i];
-        m1_p_q     <= 64'(mul_a_c) * mul_b_c;
-        c_pend[pick_i] <= 1'b0;          // in flight; not re-launchable
+        s1_i_q     <= pick_i;
+        s1_ph_q    <= c_ph[pick_i];
+        c_pend[pick_i] <= 1'b0;          // reserved; not re-launchable
         rr_q       <= (pick_i == CW'(NCTX - 1)) ? '0 : pick_i + CW'(1);
         mul_busy_o <= mul_busy_o + 32'd1;
+      end
+
+      // ---- M1: EXECUTE from the registered record --------------------------
+      // The multiply now starts from flops, not from the arbiter's cone. One
+      // launch per clock is still possible, so the shared multiplier's
+      // utilisation -- the thing the four-clock rate actually depends on -- is
+      // unchanged; only a context's own latency grows by one cycle, and with
+      // NCTX contexts in flight that is hidden.
+      m1_v_q <= s1_v_q;
+      if (s1_v_q) begin
+        m1_i_q     <= s1_i_q;
+        m1_ph_q    <= s1_ph_q;
+        m1_p_q     <= 64'(mul_a_c) * mul_b_c;
       end
 
       // ---- M2 writeback ---------------------------------------------------
@@ -304,6 +359,33 @@ module zhao_raster_rcp24_svc #(
       end
     end
   end
+
+`ifndef SYNTHESIS
+  // ---- P0-B's own failure mode, watched in RTL ------------------------------
+  // The rearchitecture brief's C01 model demonstrates that inserting an issue
+  // stage while leaving eligibility attached to EXECUTION creates a
+  // duplicate-select window. These assertions are the detector for that, placed
+  // where they cannot be forgotten in a bench.
+  logic armed_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) armed_q <= 1'b0;
+    else        armed_q <= 1'b1;
+  end
+  always_ff @(posedge clk) begin
+    if (armed_q) begin
+      // A context reserved into S1 must not still look eligible.
+      if (s1_v_q)
+        a_svc_s1_not_eligible : assert (!c_pend[s1_i_q]);
+      // At most one micro-op per context in the whole issue path.
+      if (s1_v_q && m1_v_q)
+        a_svc_one_op_per_ctx : assert (s1_i_q != m1_i_q);
+      // A reserved or executing context must still be allocated -- a killed or
+      // reallocated context must not write back into its successor (§5.3).
+      if (s1_v_q) a_svc_s1_ctx_live : assert (c_val[s1_i_q]);
+      if (m1_v_q) a_svc_m1_ctx_live : assert (c_val[m1_i_q]);
+    end
+  end
+`endif
 
 endmodule : zhao_raster_rcp24_svc
 

@@ -2313,3 +2313,53 @@ number is the one the wrapper is meant to move.
 every worst path in the baseline, and replacing them is the entire point of the
 wrapper. **Falsifier:** if they still originate there, the DONE instance did not
 actually get swapped, or the fitter flattened the wrapper back.
+
+## P0-B implemented: the RCP selection/execution boundary is registered
+
+`zhao_raster_rcp24_svc.sv`. The island's worst internal path was
+`c_val[5] -> c_m.raddr_a[0]` at −3.243 ns: the round-robin priority scan over
+`c_val`/`c_pend` reached the context storage's READ ADDRESS in its own cycle,
+and then the operand mux and the 32×64 multiply in that same cycle. Selection
+and execution shared one clock.
+
+**S1, a registered issue record**, now sits between them. `{context, phase}` is
+captured at selection; the operand read and the multiply address storage from
+flops instead of from the arbiter's cone. The arithmetic is byte-for-byte
+unchanged — §5.4 is explicit that the exact law, wrap and truncation are not to
+be touched to buy a fit, so only the index feeding the operands moved.
+
+**Eligibility is surrendered at SELECTION, not at execution.** §5.3 and the
+brief's C01 model both name this as the way this exact change goes wrong:
+clearing `c_pend` when the multiply begins would leave a one-cycle window in
+which the same job is selected twice.
+
+**Measured, against the recorded baseline:**
+
+| | before | after |
+|---|---|---|
+| checks | 5 pass | 5 pass |
+| multiplier launches / reciprocal | 1628 / 407 = **4.00** | 1628 / 407 = **4.00** |
+| clocks per reciprocal | 4.01 (1631) | 4.01 (1632) |
+
+One extra clock across the whole 407-reciprocal run — the added latency, hidden
+by the other contexts in flight. §16.1's four-clock rate is retained and the
+launch ratio is exactly 4.00, so no job was issued twice.
+
+## The new detectors were shown to FIRE
+
+Four assertions went into the RTL rather than a bench. Fire-tested by building
+the C01 failure mode on purpose — deleting `c_pend[pick_i] <= 0` from selection
+and clearing `c_pend[s1_i_q]` at execution instead:
+
+    %Error: zhao_raster_rcp24_svc.sv:378: Assertion failed in
+      TOP.tb_rcp24_pair.u_svc.a_svc_s1_not_eligible: 'assert' failed.
+
+Immediate. Source restored from the pre-mutation copy and verified clean of the
+marker.
+
+**And the fire test caught the stale-binary trap first.** The first run after
+the mutation printed numbers IDENTICAL to the baseline — 1628 launches, 4.00
+each — which is exactly the documented tell. The exe was timestamped 17:57:09
+against a source of 17:58:57: the mutation had never been compiled and I was
+reading the old binary. Comparing the two mtimes before believing the result is
+what separated "the detector does not fire" from "the detector was never built".
