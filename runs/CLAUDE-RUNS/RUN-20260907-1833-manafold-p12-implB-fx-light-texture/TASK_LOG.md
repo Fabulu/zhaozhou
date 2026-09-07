@@ -83,3 +83,48 @@ defends a mist value.
 
 ### next
 Wave 0 D2 (lightning-restore probe) and D3 (mana-lighting census).
+
+### 19:05 — D2 ANSWERED: restoring the lightning is NOT two constants
+
+Rendered `manafold-fogprobe-mana` (rest clip, mist+smear OFF) at the particle
+lab's own four knead frames f250/f287/f320/f368, and looked at 3x.
+
+**K1 alone does not restore the read.** With the owner's radii in and the mist
+and smear both off, the pocket is still a field of fused aqua beads with a
+white mass in it. No shape.
+
+Four separate causes, found by ablation, each rendered:
+
+1. **The mote cloud IS "the spazzy green cloud".** 38 motes at 7-10 px halos
+   parked on the shape's own stations. The mana lab's `edge-strands` — the row
+   D7 §2/§8 approved by eye ("Edge drawn, not held reads perfectly as shapes")
+   — ran **ten**, with the cloud "thinned to a garnish instead of being the
+   shape". Shipping never took that half of the finding.
+   → `kFoldMoteGarnishPm = 300` (38 -> 11).
+2. **The edge core was stamped at a hard-coded 1000**, not the authored 430.
+   `kFoldEdgeCoreGainPm` was documented in art.h as a dead knob AND an
+   inconsequential one. The first half was true. → wired.
+3. **K1 broke the outline's continuity and nobody costed it.** The edge is a
+   chain of stamped discs; `kBoltStampMm = 22` was sized "under one core"
+   against a 3 px core. D9 §10.1 takes the fold edge's core to 2 and leaves the
+   spacing, so the outline beads. → `kFoldEdgeStampMm = 14`.
+4. **The white smear is the lightning STRAND, not the edge halo.** Ablating
+   `mana_lightning` clears it completely and the aqua outline reads at once.
+
+⚠ **The measurement that would have lied.** The obvious lever for "too white"
+is gain, so a gain ladder went first: `kBoltCoreGainPm` 1000/700/480/300, all
+four rendered at native. **The four rungs are visually indistinguishable.** The
+white is the CHANNEL CEILING, not the gain — enough additive stamps overlap
+that the sum clamps regardless of what each contributes. A gain gate here would
+have reported a 3.3x reduction and shipped an unchanged picture. The real lever
+is OVERLAP. Laddered strands x halo (2x9 shipped, 1x9, 2x6, 1x6, 0 as the
+deliberate too-far rung) → **1x6**: the strand reads as a jagged filament with
+its beads visible, and the folded shape reads underneath it for the first time.
+
+Also probed and REJECTED: `kFoldEdgeHaloGainPm` 220 -> 320 (the lab-approved
+300). Rendered; the difference is marginal and it is not the lever. **So lane B
+needs no second edit to `manafold_art.h` at all** — probed with a scratch edit
+that was reverted in the same call, verified clean by `git status`.
+
+### next
+B1, the mist trail. Then the acceptance plate on the SHIPPING subjects.

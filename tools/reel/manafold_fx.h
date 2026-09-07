@@ -195,15 +195,27 @@ constexpr int32_t kBoltCoreRPx = 3;        // the hot core: 3 px fuses the
                                            // filament at native (2 px read
                                            // as dots against the ghost)
 constexpr int kBoltHaloGainPm = 260;
-// PASS 7: widened 7 -> 9. The strand's hot core (kBoltCoreRPx, near-white,
-// kBoltCoreGainPm=1000) is the by-eye review's named whitening element and
-// is left exactly as-is -- 2px core radius was tried and rejected before
-// ("read as dots against the ghost"), and the strand's identity is not
-// this pass's job to touch. Instead the CALM CYAN HALO around it gets more
-// area, which is breadth on the correct side of the ratio: more properly-
-// saturated cyan pixels per strand sample, same core, same gain. Chosen by
-// eye at native on manafold-channel.
-constexpr int32_t kBoltHaloRPx = 9;
+// PASS 7 widened this 7 -> 9 to buy properly-saturated cyan area around the
+// hot core. PASS 12 TAKES IT BACK to 6, because D9 §3 changed what the pocket
+// is for: it now has to hold a READABLE SHAPE, and 9 px of additive halo every
+// 22 mm along a jagged diameter is not breadth, it is a slab.
+//
+// ⚠ THE MEASUREMENT THAT WOULD HAVE LIED, recorded because it nearly did.
+// The obvious lever for "too white" is the gain, so a gain ladder was rendered
+// first: kBoltCoreGainPm 1000 / 700 / 480 / 300, all four at native in the
+// knead window. THE FOUR RUNGS ARE VISUALLY INDISTINGUISHABLE. Cutting the
+// per-stamp gain by 3.3x changed almost nothing, because the white is not
+// gain-driven -- it is the CHANNEL CEILING. Enough additive stamps overlap
+// that the sum clamps whatever each one contributes, and a knob that feeds a
+// clamped sum is a knob that does nothing. Only ablating the strand entirely
+// cleared it, which is how the cause was pinned.
+//
+// So the lever is OVERLAP, not gain: fewer stamps in the pocket, and less area
+// each. Laddered by eye at native (strands x halo: 2x9 shipped, 1x9, 2x6, 1x6,
+// and 0 as the deliberate too-far rung). 1x6 is the pick -- the strand reads as
+// a jagged FILAMENT with its beads visible instead of a fused white mass, and
+// the folded shape's aqua outline reads underneath it for the first time.
+constexpr int32_t kBoltHaloRPx = 6;
 constexpr int kStreakGainPm = 420;         // the anamorphic strike flash
 constexpr int32_t kStreakSpanPx = 46;
 // PASS 3 (R9): lightning is 2-3 CONTINUOUS strands that BUZZ across the
@@ -224,7 +236,68 @@ constexpr int32_t kStreakSpanPx = 46;
 // whitening element is the strand, not the motes. Three would hue-neutralise
 // the pocket -- the exact "goes white and erases its own colour" failure
 // 08-LIGHTING documents and the clause the owner attached to the request.
-constexpr int kStrandCount = 2;
+// ---- DIRECTION 9 §3: THE MOTE CLOUD IS A GARNISH, NOT THE SHAPE ---------
+// "we no longer have the super awesome shapes of lightning being made, we have
+// a spazzy green cloud that sucks donkey balls trying to make shapes. Take that
+// out almost entirely."
+//
+// The owner's two sentences are ONE mechanism, and that is the pass-12 finding:
+// the cloud is what buried the lightning. The shape is drawn TWICE over -- once
+// as an edge stamped with the bolt primitive, and once as a mote field parked
+// on the same stations. The motes win, because there are 38 of them at 7-10 px
+// halos inside a ~40 px pocket, and a fused field of soft balls is exactly "a
+// spazzy green cloud trying to make shapes".
+//
+// The mana lab already proved the fix and the owner already approved it by eye:
+// `edge-strands` (manafold_lab.h, the row D7 §2/§8 picked -- "Edge drawn, not
+// held reads perfectly as shapes") drew the outline with the strand primitive
+// and ran TEN motes, "the mote cloud thinned to a garnish instead of being the
+// shape". Shipping ran 24 then, and has since grown to 38.
+//
+// ⚠ This scales `kMoteCount` rather than replacing it. kMoteCount stays the
+// owner's knob for how populous the conduit is; this is the separate question
+// of how much of that population the FOLD draws while the edge carries the
+// shape. Two knobs because they are two questions -- and both are read, so
+// neither is a dead knob (manafold_art.h §kFoldEdgeCoreGainPm is what a dead
+// one costs).
+//
+// It lives HERE and not in manafold_art.h only because pass 12 ran two
+// implementers over disjoint file sets and art.h belongs to the other lane.
+// Said out loud so the next pass can move it home rather than wonder.
+constexpr int kFoldMoteGarnishPm = 300;   // 38 -> 11, the lab's approved ten
+
+// ---- PASS 12: THE STAMP SPACING FOLLOWS THE CORE IT DRAWS WITH -----------
+// A CONSEQUENCE OF THE OWNER-ORDERED K1 RADII THAT NOBODY COSTED. The edge is
+// drawn by stamping discs along the outline, and it is continuous only while
+// consecutive stamps overlap -- `kBoltStampMm = 22` is commented, correctly,
+// "stamp spacing: under one core", and it was sized against the STRAND's
+// kBoltCoreRPx of 3. D9 §10.1 takes the FOLD EDGE's core to 2 without touching
+// the spacing, so the same 22 mm now steps further than one core and the
+// outline breaks into a dotted line. Rendered and looked at: the aqua outline
+// IS present at K1 and it IS beaded, which is why thinning alone did not read
+// as a shape.
+//
+// So the edge gets its own spacing, scaled with its own core, and the strand
+// keeps kBoltStampMm -- they are two primitives with two core radii and one
+// shared number was always a coincidence rather than a rule.
+constexpr int32_t kFoldEdgeStampMm = 14;   // 22 * (2/3), one core again
+
+// PASS 12 (D9 §3, "bring back the super awesome shapes of lightning"): 2 -> 1.
+// This RESTORES the pass-4 value, which Direction 4 §2 asked for in as many
+// words -- "fewer lightning LINES -- just have them be particles" -- and which
+// pass 6 raised to 2 under D5 0-BIS's "some more lightning particles ... but
+// don't go overboard". D9 supersedes D5, and the pass-6 note above got the
+// mechanism exactly right while stopping one strand short of acting on it:
+// "each strand pushes ~1,330 px of near-white core with depth-test off into a
+// 10-15 px pocket, and the whitening element is the strand, not the motes."
+// Two strands do to the pocket what it correctly predicted three would.
+//
+// The lightning is NOT reduced by this -- it is relocated. The SHAPE is itself
+// drawn with the bolt primitive (the fold edge, `bolt_path` + kFoldEdgeStampMm
+// below), so "shapes of lightning" is what the edge makes; this free strand is
+// the crackle across the pocket, and one of it is a filament while two is a
+// slab that buries the shape the owner is asking to see.
+constexpr int kStrandCount = 1;
 constexpr int kSurgeMotes = 5;             // flowing along the strand
 constexpr int kSurgeFlowFrames = 26;       // one end-to-end trip
 constexpr int32_t kSurgeRPx = 7;
@@ -1385,7 +1458,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
         int64_t dz = (pts[sgi + 1][2] - pts[sgi][2]) >> 16;
         const int64_t adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy,
                       adz = dz < 0 ? -dz : dz;
-        int nst = static_cast<int>((adx + ady + adz) / kBoltStampMm);
+        int nst = static_cast<int>((adx + ady + adz) / kFoldEdgeStampMm);
         if (nst < 1) nst = 1;
         if (nst > 24) nst = 24;
         for (int t = 0; t < nst; ++t) {
@@ -1400,7 +1473,8 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
           // saturation to 108.9 against a 142.1 control. A white outline reads
           // as a glitch; an aqua one reads as mana that has been folded.
           mana_push(out, x, y, z, kFoldEdgeCoreRPx, mana_core_ramp(ramp),
-                    1000, false, false, /*opaque=*/true, /*soft=*/true);
+                    kFoldEdgeCoreGainPm, false, false, /*opaque=*/true,
+                    /*soft=*/true);
         }
       }
     }
@@ -1408,6 +1482,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
 
   // ---- the motes ---------------------------------------------------------
   int n_motes = kMoteCount * crowd_pm / 1000;
+  n_motes = n_motes * kFoldMoteGarnishPm / 1000;
   if (n_motes < 6) n_motes = 6;
   const int n_wander = kWanderCount;
   const int n_shape = n_motes - n_wander;
