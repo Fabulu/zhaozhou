@@ -1706,3 +1706,36 @@ question is answered.
 * **Deliberately deferred:** the palette load seam — the island's *reported*
   limiter. The running fit will say whether those paths still dominate, and
   guessing before that is exactly what today falsified four times.
+
+## §16.3's test list closed, and §16.5's rate recheck started
+
+**§16.3's verification obligation is met.** Its five named tests, checked item by
+item against the actual benches rather than assumed:
+
+* *ready dropping just after a read launches* — **written today**, adversarial
+  supply/demand over 4,000 cycles, exactly-once and in-order, fire-tested
+  against an unreserved read launch (drain collapses 16 → 2);
+* *shuffled completions* — covered: results are keyed **by token**, so a token
+  paired with the wrong result mismatches;
+* *zero/nonzero interleaving* — covered: zeros are a scheduled phase, every 97th;
+* *slot reuse* — covered: 4,104 requests through 16 contexts, ~256 reuses each;
+* *distinct U/V* — perspuv's bench, a different block.
+
+**I had written that two of these were "still not covered". That was wrong** —
+they were, and leaving it would have sent the next pass to write tests that
+already exist. Checked and corrected.
+
+**§16.5 is triggered by my own change and is now running.** It says: *"If a
+repair changes the arithmetic feedback loop, admission queue latency or CONTEXT
+REUSE LATENCY, rerun eight/sixteen/thirty-two-context rate comparisons. The old
+knee is evidence about the old topology, not a universal number."*
+
+The registered head returns a context to the free queue one cycle later, so
+context reuse latency changed and the 16-context knee is no longer evidence for
+this topology. Building NCTX = 8 / 16 / 32.
+
+§16.5 also endorses the change itself: *"An output-only register cut can improve
+the external interface without changing multiplier initiation interval. That is
+the preferred first experiment."* That is exactly what was done — and §16.6's
+caution is noted too: 90.54 was never 100 MHz closure, and no number is claimed
+for rcp24 until it refits.
