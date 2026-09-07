@@ -103,6 +103,35 @@ identity check per event lane".
 **Group C is one site.** Only `g0_owner_q` genuinely needs "what generation does
 this slot carry", and it is a 6-bit subtract plus a 14-bit add.
 
+## A correction to Group A: site 3 is not as simple as sites 1 and 2
+
+Sites 1 and 2 read `gen_q[tail_q]` — the slot being allocated **now** — and the
+step-1 assertion establishes that this always equals `alloc_gen`. Those two are
+straightforward.
+
+Site 3 (`wrap_at_tail_p1_c`, line 376) reads `gen_q[tail_p1_c]` — a slot
+**ahead** of the tail, which has not yet been reallocated in the current pass and
+therefore still carries the **previous** generation, `alloc_gen − 1`. It is not
+`alloc_gen`, and writing it as such would put the wrap fence one whole namespace
+out.
+
+This is exactly the kind of off-by-one that a fence hides until a 16,320-cycle
+wrap, so it is written down before the code is touched rather than discovered
+in a bench. Two consequences:
+
+* The step-2 rewrite of site 3 must be derived, not pattern-matched from
+  sites 1 and 2.
+* The step-1 assertion should be extended to cover `gen_q[tail_p1_c]` against
+  `alloc_gen − 1` **before** site 3 moves, so the relation is proved on real
+  traffic first — same discipline that made site 1 safe.
+
+Under a full window the whole question dissolves — per-slot exhaustion and
+namespace wrap coincide, because allocation is strictly round-robin so
+`gen_q[s]` is just `floor(ticket/64)` for the ticket that allocated `s`, and
+§6.6's fence lands at the 16,320 allocations the model test counts. But that is
+true of the *finished* replacement, not of the intermediate state where the
+table and window coexist, and the intermediate state is where the bug would go.
+
 ## What must not be assumed
 
 * **§6.8's own caution stands.** *"The net register reduction is smaller than
