@@ -214,7 +214,17 @@ runs:
     status: banked
     date: "2026-08-19"
     commit: cfac156
-    lane: null
+    # THE LANE NOW EXISTS AND RUNS THE COVER TASK ONLY, since 2026-09-07.
+    # `lane: null` was true when written and had stopped being true: the
+    # property WAS registered as `formal_terrain_bake_delta` with TIMEOUT 2100,
+    # so it manufactured a timeout on every nightly -- a test wired to fail
+    # every run, which is noise that hides real failures, while this file said
+    # it had no lane at all.
+    #
+    # Both halves are now honest: the cover task runs in ~4 s and is green, the
+    # bmc task is not run and stays BANKED with the note below, and the entry
+    # says which. See tests/CMakeLists.txt at formal_terrain_bake_delta.
+    lane: formal_terrain_bake_delta
     tasks: [cover]
     covers: true
     notes: >-

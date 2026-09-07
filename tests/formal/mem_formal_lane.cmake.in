@@ -41,8 +41,27 @@ file(MAKE_DIRECTORY "${workdir}")
 # --prefix (not -d): these properties carry multiple tasks (bmc AND cover),
 # and the cover task is load-bearing — it is what proves the bmc task is not
 # passing vacuously.
+#
+# @FORMAL_TASKS@ — A SUBSET, WHEN A PROPERTY SAYS SO ITSELF. Empty for every
+# lane that does not set it, which is all of them but one, so `sby` runs every
+# task exactly as before.
+#
+# The exception is `terrain_bake_delta`, whose own .sby file carries the line
+# "NOT in the automated lane" and whose registry entry records the bmc task
+# running 10.7 hours in "waiting for solver" before being killed. It was
+# registered as a CTest anyway, with TIMEOUT 2100, so it manufactured a timeout
+# on every nightly — which is the exact failure the MEM lane's own comment
+# warns against for mem_sdram_refresh_bound: "putting it in the routine lane
+# would only manufacture timeouts that look like failures".
+#
+# The alternative to a subset was to drop the lane entirely, and that would
+# have thrown away something real: the COVER task passes in ~3 s and is what
+# proves the property is not vacuous. Running the half that finishes is better
+# than running none of it or all of it.
+set(_tasks "@FORMAL_TASKS@")
+separate_arguments(_tasks)
 execute_process(
-  COMMAND "@ZHAO_SBY_BIN@" -f --prefix "${workdir}" "@PROP@.sby"
+  COMMAND "@ZHAO_SBY_BIN@" -f --prefix "${workdir}" "@PROP@.sby" ${_tasks}
   WORKING_DIRECTORY "@FORMAL_SRC_DIR@"
   RESULT_VARIABLE _rc
   OUTPUT_VARIABLE _out
@@ -60,7 +79,11 @@ execute_process(
   TIMEOUT @ZHAO_FORMAL_WRAPPER_TIMEOUT@
 )
 if(_rc EQUAL 0)
-  message(STATUS "formal @PROP@: PASS (bmc + cover)")
+  if(_tasks)
+    message(STATUS "formal @PROP@: PASS (tasks: @FORMAL_TASKS@ -- a SUBSET, see the .sby)")
+  else()
+    message(STATUS "formal @PROP@: PASS (bmc + cover)")
+  endif()
   return()
 endif()
 

@@ -6001,17 +6001,47 @@ if(ZHAO_SBY_BIN)
   set(PROP "terrain_bake_delta")
   set(FORMAL_WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
   set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")
+  # THE COVER TASK ONLY, AND THE PROPERTY FILE ASKED FOR THIS. Its own header
+  # says "NOT in the automated lane", and design/formal_runs.yml records the
+  # reason: the bmc task ran 10.7 HOURS in "waiting for solver" before it was
+  # killed, and terminated without status on a shorter attempt. It was
+  # registered here anyway with TIMEOUT 2100, so it manufactured a timeout on
+  # every nightly -- a test wired to fail every run, which is noise that hides
+  # real failures.
+  #
+  # That is the exact failure the MEM lane's own comment warns against for
+  # mem_sdram_refresh_bound ("putting it in the routine lane would only
+  # manufacture timeouts that look like failures"), and that property is
+  # deliberately NOT registered for it. This one was, and the contradiction
+  # stood between a .sby that said "not automated" and a CMakeLists that
+  # automated it.
+  #
+  # DROPPING THE LANE ENTIRELY WOULD HAVE THROWN SOMETHING AWAY. The cover
+  # task passes in ~3 s and reaches every corner it claims, INCLUDING
+  # c_sat_reachable -- it is what stops the bmc task's absence being mistaken
+  # for "nothing here needed proving". Running the half that finishes is better
+  # than running none of it or all of it.
+  #
+  # The bmc task stays runnable by hand and the registry keeps it BANKED:
+  #     cd tests/formal && sby -f --prefix <dir> terrain_bake_delta.sby bmc
+  # TERRAIN.BAKE is SPECIFIED and cites no formal evidence, so no maturity
+  # claim rests on the half that does not run.
+  set(FORMAL_TASKS "cover")
   configure_file(formal/mem_formal_lane.cmake.in
                  formal/terrain_bake_delta_lane.cmake @ONLY)
+  unset(FORMAL_TASKS)
   set(zhao_formal_script
       "${CMAKE_CURRENT_BINARY_DIR}/formal/terrain_bake_delta_lane.cmake")
   string(REPLACE "/" "\\" zhao_formal_script "${zhao_formal_script}")
   add_test(NAME formal_terrain_bake_delta
            COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
+  # 300, not 2100: the cover task measures ~3 s and the old budget was sized for
+  # a bmc task that is no longer run. A timeout two orders above the work is a
+  # timeout that will never fire for the right reason.
   set_tests_properties(formal_terrain_bake_delta PROPERTIES
     LABELS "formal;nightly"
     RUN_SERIAL TRUE
-    TIMEOUT 2100
+    TIMEOUT 300
     SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 endif()
 
