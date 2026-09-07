@@ -289,7 +289,34 @@ module zhao_raster_perspuv_svc #(
   logic head_done;
   assign head_done = e_val[head_q] && (e_have[head_q] == 2'b11);
 
-  assign r_valid_o    = head_done;
+  // ---- REGISTERED OUTPUT BOUNDARY (added 2026-09-07 from the composed fit) --
+  // The composed island fit named this block's head as its worst core-to-core
+  // path -- the only figure with no boundary to blame:
+  //
+  //   -2.936  zhao_raster_perspuv_svc:u_persp|head_q[1]
+  //           -> zhao_texture_fragrob:u_fragrob|altsyncram:axg_m_rtl_0
+  //
+  // The cause was five outputs driven by dynamically indexing flop arrays with
+  // `head_q`: SEVEN arrays at NTOK = 16, two of them 32 bits, so a 16-way
+  // select sat between a queue pointer and the next block's M10K.
+  //
+  // This file's own header already describes the opposite intent -- "P0 pop a
+  // queue, register the operands (array reads, NO arithmetic)". The internal
+  // pipeline does register its reads; the EXTERNAL outputs bypassed that. It is
+  // the same shape S01 S16.2 records for zhao_raster_ticketq, whose commentary
+  // "says a FIFO head is a register" while `dout_o = mem_q[head_q]`.
+  //
+  // A SKID, NOT A PLAIN REGISTER, so throughput is unchanged: `r_ready_c` is
+  // high whenever the output register will be free, which sustains one transfer
+  // per clock. The payload is captured with its valid, so no combinational
+  // array read leaves this module.
+  //
+  // SELF-CONTAINED. The port list does not change and the handshake absorbs the
+  // extra cycle, so the island top is untouched -- only latency moves, and this
+  // file's header already costs that trade ("the round trip goes from five
+  // clocks to six against NTOK = 16 slots, still far ...").
+  logic r_ready_c;
+  assign r_ready_c = !r_valid_q || r_ready_i;
   // THE DEPTH-ZERO BYPASS, AND IT REPAIRS MY OWN REGRESSION.
   //
   // Removing the allocation-time `e_q_u[tail_q] <= 0` was right about the
@@ -313,11 +340,51 @@ module zhao_raster_perspuv_svc #(
   // exactly what the serial reference does -- `zhao_raster_perspuv.sv` P_DONE
   // forces `u_o <= 0; v_o <= 0; sat_o <= 0` for `zero_r` -- while keeping the
   // one write address that made `e_q_u` inferrable in the first place.
-  assign u_o          = e_dz[head_q] ? 32'sd0 : e_q_u[head_q];
-  assign v_o          = e_dz[head_q] ? 32'sd0 : e_q_v[head_q];
-  assign tag_o        = e_tag[head_q];
-  assign sat_o        = e_dz[head_q] ? 1'b0 : e_sat[head_q];
-  assign depth_zero_o = e_dz[head_q];
+  // `ob_` = output boundary. Prefixed because `sat_c` already names a
+  // per-axis array in this file, and a shadowed name is a defect waiting.
+  logic signed [31:0]    ob_u_c, ob_v_c;
+  logic [TAGW-1:0]       ob_tag_c;
+  logic                  ob_sat_c, ob_dz_c;
+  assign ob_u_c   = e_dz[head_q] ? 32'sd0 : e_q_u[head_q];
+  assign ob_v_c   = e_dz[head_q] ? 32'sd0 : e_q_v[head_q];
+  assign ob_tag_c = e_tag[head_q];
+  assign ob_sat_c = e_dz[head_q] ? 1'b0 : e_sat[head_q];
+  assign ob_dz_c  = e_dz[head_q];
+
+  // The boundary itself.
+  logic                  r_valid_q;
+  logic signed [31:0]    u_q, v_q;
+  logic [TAGW-1:0]       tag_q;
+  logic                  sat_q, dz_q;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      r_valid_q <= 1'b0;
+      u_q       <= '0;
+      v_q       <= '0;
+      tag_q     <= '0;
+      sat_q     <= 1'b0;
+      dz_q      <= 1'b0;
+    end else begin
+      if (head_done && r_ready_c) begin
+        r_valid_q <= 1'b1;
+        u_q       <= ob_u_c;
+        v_q       <= ob_v_c;
+        tag_q     <= ob_tag_c;
+        sat_q     <= ob_sat_c;
+        dz_q      <= ob_dz_c;
+      end else if (r_ready_i) begin
+        r_valid_q <= 1'b0;
+      end
+    end
+  end
+
+  assign r_valid_o    = r_valid_q;
+  assign u_o          = u_q;
+  assign v_o          = v_q;
+  assign tag_o        = tag_q;
+  assign sat_o        = sat_q;
+  assign depth_zero_o = dz_q;
 
   always_comb begin
     occupancy_o = 4'd0;
@@ -360,7 +427,7 @@ module zhao_raster_perspuv_svc #(
       // r_ready_i always high the two events never coincide.
       begin
         automatic logic acc = v_valid_i && v_ready_o;
-        automatic logic ret = head_done && r_ready_i;
+        automatic logic ret = head_done && r_ready_c;
         if (acc && !ret)      free_cnt_q <= free_cnt_q - 1'b1;
         else if (!acc && ret) free_cnt_q <= free_cnt_q + 1'b1;
       end
@@ -522,7 +589,7 @@ module zhao_raster_perspuv_svc #(
       end
 
       // ---- retire ---------------------------------------------------------
-      if (head_done && r_ready_i) begin
+      if (head_done && r_ready_c) begin
         e_val[head_q] <= 1'b0;
         head_q     <= (head_q == TW'(NTOK - 1)) ? '0 : head_q + TW'(1);
       end
