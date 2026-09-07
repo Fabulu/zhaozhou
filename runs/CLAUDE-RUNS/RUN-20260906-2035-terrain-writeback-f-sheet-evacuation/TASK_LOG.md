@@ -196,3 +196,38 @@ sits on a row two commits stale and cannot be judged), then `zhao_geom_project`
 STILL OPEN AND UNTOUCHED: COMBINE.V1's DSP measurement; perspuv's per-axis array
 split; nine items awaiting an owner ruling; the LOD deviation calculator, which
 is blocked on two of them.
+
+## 2026-09-07 -- PAGESTREAM refit FAILED, and what the failure turned out to be
+
+`zhao_terrain_pagestream` refit: 1,649 ALM, 2,043 reg, 0 M10K, 0 DSP -- every
+resource rule passed -- and **93.91 MHz against a 100 MHz clock**, so the
+`min_fmax_mhz` rule added this morning FAILED it. First firing of that rule, on
+the first block that carried it, which is a detector shown to fire.
+
+Splitting all 2,000 summarised paths: 23 negative-slack paths, EVERY ONE ending
+at a virtual pin; worst core-to-core path 107.38 MHz. So the block is not slow.
+
+Two things came out of chasing that:
+
+1. **The seam is the real question and no leaf fit can answer it.**
+   PAGESTREAM's outputs are combinational (4.30 ns of buffer read) and PATCH
+   puts a 33-bit saturating add plus two clamps on those same inputs before its
+   first flop. Each leaf fit sees one half. `zhao_terrain_compose_seam.sv` wires
+   the two together so it can be measured; three GLUE points named at their
+   sites (placement, the DUAL flag, the 32->16 source_id), each existing only
+   in a bench today. Fit target written with the prediction BEFORE the fit.
+   Queued. (87443fc6)
+
+2. **43 of 51 rows with an fmax are below 100 MHz, and nothing had ever read
+   that field.** Split properly, only FIVE miss the clock with no boundary to
+   blame -- and the worst is COMBINE.V1 at 29.74 MHz core-to-core, which is the
+   same defect as its known DSP overrun rather than a second one. Report:
+   `reports/FMAX-WHAT-ACTUALLY-LIMITS-IT-20260907.md`. Probe committed, its
+   self-check shown to fire.
+
+The split changed its own answer twice while being written (aux_pipe 63.63 ->
+120.37 on the both-ends rule, aux_div6 87.45 -> 103.00 on separating reset), so
+the first two versions of this note would both have been wrong.
+
+NEXT: residency_v2 fit is running -- its Fmax row is stale too, not just its
+memory line. Then geom_project, then the compose seam.
