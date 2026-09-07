@@ -798,3 +798,22 @@ the same defect as the ready queue's omitted pending read).
 All nine project lanes pass. Fit queued behind residency_v2 to judge the clock.
 Prediction on record: the second half lands under 10 ns; if not, the split was
 wrong and the chain needs a cut between Add118 and the saturation.
+
+## 2026-09-07 -- lint_shell_top was red; a fix that never reached the producer
+
+Checking that project_core's new stage did not break the shell (geom_project is
+in ZHAO_SHELL_RTL) found lint_shell_top ALREADY red -- verified by linting with
+the previous core, which fails identically. Not my regression.
+
+hb_wr_ready / hb_wr_early are the tail of 98d7030e ("the HPS bridge's write
+channel had no READY, so a beat offered a cycle early vanished"). The bridge
+raises READY, the shell wires it out, nothing connects it back to the producer.
+Harmless today ONLY because both arbiter client write ports are tied to 1'b0.
+
+The trap: zhao_hps_arbiter has no b_wr_ready_i -- b_wr_valid_o is a pure
+output. The READY cannot be honoured by wiring; it needs an arbiter port and a
+stall in its write mux. Until then 98d7030e is present in the bridge and INERT
+at the shell.
+
+Sunk with the reasoning rather than deleted; the lane is green. The full shell
+ctest is still running alongside the fit.

@@ -1400,7 +1400,35 @@ module zhao_shell_top
                     ^ ^slot_state_gpu[0] ^ ^slot_state_gpu[1]
                     ^ ^slot_leases_granted ^ ^slot_stale_events
                     ^ ^blits_published ^ ^blits_rejected
-                    ^ geom_gv ^ ^geom_gv_req;
+                    ^ geom_gv ^ ^geom_gv_req
+                    // THE HPS BRIDGE'S WRITE READY, AND WHY IT IS UNUSED --
+                    // which is a different statement from "it is spare".
+                    //
+                    // `98d7030e` added it because "the HPS bridge's write
+                    // channel had no READY, so a beat offered a cycle early
+                    // vanished". The bridge now raises it, the shell wires it
+                    // out, AND NOTHING CONNECTS IT BACK TO THE PRODUCER. That
+                    // is harmless today only because the producer cannot
+                    // produce: `zhao_hps_arbiter`'s two client write ports are
+                    // both tied off here -- `.c0_wr_valid_i(1'b0)` and
+                    // `.c1_wr_valid_i(1'b0)` -- so `arb_wr_valid` is
+                    // permanently low and no beat can be lost.
+                    //
+                    // THE TRAP IS FOR WHOEVER CONNECTS THE FIRST CLIENT.
+                    // `zhao_hps_arbiter` has no `b_wr_ready_i` at all:
+                    // `b_wr_valid_o` is a pure output (arbiter lines 116-118,
+                    // driven combinationally at 147/162). So the bridge's
+                    // READY cannot be honoured by wiring alone -- it needs a
+                    // port on the arbiter and a stall in its write mux, and
+                    // until that exists 98d7030e's repair is present in the
+                    // bridge and INERT at the shell. A fix that reaches the
+                    // signal but not the producer is a fix that has not
+                    // landed, which is the same shape as an ignore rule that
+                    // hides waste instead of removing it.
+                    //
+                    // Sunk here rather than deleted, because deleting the port
+                    // would remove the evidence that the repair is waiting.
+                    ^ hb_wr_ready ^ ^hb_wr_early;
   /* verilator lint_on UNUSEDSIGNAL */
 
   // ==========================================================================
