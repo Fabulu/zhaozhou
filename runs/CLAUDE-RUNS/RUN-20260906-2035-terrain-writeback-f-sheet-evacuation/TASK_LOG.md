@@ -1739,3 +1739,26 @@ the external interface without changing multiplier initiation interval. That is
 the preferred first experiment."* That is exactly what was done — and §16.6's
 caution is noted too: 90.54 was never 100 MHz closure, and no number is claimed
 for rcp24 until it refits.
+
+## §16.5's recheck: the knee is still 16, re-measured for the NEW topology
+
+| NCTX | clocks / 4,104 | **per reciprocal** | suite |
+|---:|---:|---:|---|
+| 8 | 23,852 | **5.81** | rate gate fails, 51/52 |
+| **16** | 16,608 | **4.05** | 52 pass |
+| 32 | 16,553 | **4.03** | 52 pass |
+
+Doubling to 32 buys **0.5%** while doubling every `[NCTX]` array; halving to 8
+costs **43%**. So sixteen stays, and the registered head did not move the knee.
+
+This was **mandatory, not optional** — §16.5 requires the rerun whenever a repair
+changes context reuse latency, and returning a context one cycle later is exactly
+that. The old knee stopped being evidence the moment the wrapper landed.
+
+§16.5 also endorses the change that triggered it: an output-only register cut is
+*"the preferred first experiment"*, the initiation interval is unchanged at 4.05,
+and no stage went inside the recurrence.
+
+§16.6's caution restated rather than quietly dropped: **no clock is claimed for
+rcp24.** It has not refitted since the change; it is #4 in the order, and the
+comparison is against 90.54 reported / 129.18 core→core on matched scope.
