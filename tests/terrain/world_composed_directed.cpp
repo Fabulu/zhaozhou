@@ -952,8 +952,12 @@ int main(int argc, char** argv) {
     // entry RESERVED -> MIPGEN rather than RESERVED -> RESIDENT_CLEAN; and a
     // lookup hits ONLY on RESIDENT_CLEAN or RESIDENT_DIRTY_F. The second
     // completion that would close MIPGEN cannot be sent by anything in the
-    // tree: `zhao_terrain_mipgen.sv` has no slot, no generation, no epoch and
-    // no completion port -- only a bare `done_o` pulse carrying no page
+    // tree. UPDATED 2026-09-07: `zhao_terrain_mipgen.sv` GAINED
+    // job_slot_i/job_gen_i/job_epoch_i and done_slot_o/done_gen_o/done_epoch_o,
+    // so a completion can now be attributed -- but nothing drives it. MIPGEN
+    // scans a lattice through fine_valid_i/fine_h_i and NOTHING IN fpga/rtl
+    // turns a resident page slot into a lattice stream. That streamer is the
+    // same one TERRAIN.PATCH needs, and it is a BLOCK, not a wire.
     // identity -- and `zhao_terrain_pageloader.sv` is the only `fin` producer
     // in `fpga/rtl/` and emits exactly one per page.
     defect(d.r_resident == 8,
@@ -1296,10 +1300,14 @@ int main(int argc, char** argv) {
     settle(w);
     defect(R2.c[2] == 1,
            "a page loaded into a slot that was in EVICT_PENDING never becomes resident",
-           "zhao_terrain_residency_v2.sv:551-560: the FIN arm advances only from RESERVED, "
-           "LOADING or MIPGEN. A fin arriving in EVICT_PENDING passes the identity check, so "
-           "it is not even counted as stale -- it is silently discarded, and the slot is held "
-           "by a key whose page will never be called ground.");
+           "zhao_terrain_residency_v2.sv: the FIN arm advances only from RESERVED, LOADING "
+           "or MIPGEN, so a fin arriving in EVICT_PENDING is not acted on and the slot is "
+           "held by a key whose page will never be called ground. NO LONGER SILENT since "
+           "2026-09-07: it passes the identity check, so it was not counted stale either -- "
+           "a good completion landing where no arm can use it now reaches stale_events_o. "
+           "COUNTED RATHER THAN ADVANCED on purpose: whether a load into an evicting slot "
+           "should WIN races the writeback this directory itself ordered, and that is "
+           "residency policy, not something to invent in the arm that drops things.");
     std::printf("   the displacing key, re-submitted twice: resident=%u then %u\n",
                 R.c[2], R2.c[2]);
 

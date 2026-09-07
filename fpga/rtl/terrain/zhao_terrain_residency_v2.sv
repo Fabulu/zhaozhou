@@ -583,6 +583,26 @@ module zhao_terrain_residency_v2 #(
                                k_epoch(k), k_gen(k), ST_RESIDENT_CLEAN);
                 swd_c = s_pack(s_pin(s), s_bd(s), s_f(s), 1'b0,
                                s_crc(s), s_seq(s));
+              end else begin
+                // A FIN IN ANY OTHER STATE WAS SILENTLY DISCARDED, and the
+                // composed terrain test found what that costs: a page loaded
+                // into a slot still in EVICT_PENDING passes the identity check
+                // -- the key and generation are right -- so it is not counted
+                // stale either. The load completed, the bytes are in the pool,
+                // and the slot is held for ever by a key whose page will never
+                // be called ground. Re-submitting the same key twice returned
+                // resident=0 both times.
+                //
+                // COUNTED, NOT ADVANCED. Whether a load into an evicting slot
+                // should WIN is a policy question -- it races the writeback
+                // this directory itself ordered -- and inventing an answer
+                // here would be inventing residency policy in the arm that
+                // discards things. What is certainly wrong is silence, so the
+                // event now reaches `stale_events_o` and a reader can see that
+                // a completion arrived somewhere it could do nothing.
+                // (counted in the sequential block below, where every other
+                // event is counted, rather than through a second flag that
+                // could disagree with this arm about what happened)
               end
             end
             EV_DIRTY: begin
@@ -832,6 +852,23 @@ module zhao_terrain_residency_v2 #(
             automatic logic [KEYW-1:0]  k = key_q[ev_way_c];
             automatic logic [STATW-1:0] s = stat_q[ev_way_c];
             if (!ident_ok(k, s0_gen, s0_epoch)) begin
+              stale_events_o <= stale_events_o + 32'd1;
+            end else if (s0_ev == EV_FIN && s0_ok && (s0_crc == s_crc(s)) &&
+                         !(k_state(k) == ST_RESERVED || k_state(k) == ST_LOADING ||
+                           k_state(k) == ST_MIPGEN)) begin
+              // A GOOD COMPLETION THAT LANDED SOMEWHERE IT CAN DO NOTHING.
+              // The identity is right, the CRC is right, and the state is not
+              // one the FIN arm advances -- EVICT_PENDING is the case the
+              // composed terrain test found. It used to fall through in
+              // silence: not counted stale, because the key matched; not
+              // acted on, because no arm claimed it. The load completed, the
+              // bytes are in the pool, and the slot is held for ever by a key
+              // whose page will never be called ground.
+              //
+              // Counted here rather than advanced: whether a load into an
+              // evicting slot should WIN races the writeback this directory
+              // itself ordered, and that is residency policy, not something to
+              // invent in the arm that drops things.
               stale_events_o <= stale_events_o + 32'd1;
             end else begin
               unique case (s0_ev)
