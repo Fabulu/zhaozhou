@@ -115,6 +115,31 @@ therefore still carries the **previous** generation, `alloc_gen − 1`. It is no
 `alloc_gen`, and writing it as such would put the wrap fence one whole namespace
 out.
 
+> **AND THAT PARAGRAPH IS ALSO WRONG — the RTL said so within the hour.**
+>
+> It was turned into an assertion rather than into code, and the assertion
+> failed on the first run. Allocation is strict round-robin and `alloc_gen`
+> increments when the tail wraps 63→0, so within a pass:
+>
+> ```
+> gen_q[s] == alloc_gen        for s already allocated this pass  (s <  tail_q)
+> gen_q[s] == alloc_gen - 1    for s still ahead                  (s >= tail_q)
+> ```
+>
+> `tail_p1` is ahead **except when `tail_q == 63`**, where it wraps to slot 0 —
+> allocated at the *start* of this pass, so it holds `alloc_gen`. My rule was
+> therefore wrong at exactly `tail_q == 63`: **the wrap boundary, the one case
+> the fence exists for.**
+>
+> A fence that is wrong only at the wrap is wrong silently for 16,320
+> allocations. Writing the belief as an assertion cost one build; writing it as
+> RTL would have cost a fit and a bench that passes.
+>
+> **This is the whole argument for T2's assert-then-move order**, and it is now
+> a demonstration rather than a principle. The assertion in the RTL states the
+> full `gen_of_slot(s)` identity over all slots — which is what Groups B and C
+> actually need — rather than the neighbour special case.
+
 This is exactly the kind of off-by-one that a fence hides until a 16,320-cycle
 wrap, so it is written down before the code is touched rather than discovered
 in a bench. Two consequences:
