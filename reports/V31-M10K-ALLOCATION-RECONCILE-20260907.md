@@ -248,3 +248,37 @@ table parsed in this report has the names, geometry and mode, so the data for a
 per-bank gate exists. Recorded as an open item rather than built here: the owner
 put measurement-tool expansion below finishing the island, and this is a gate
 change worth doing deliberately.
+
+
+---
+
+## Postscript 2: the memory finding and a timing pattern converge on the same structures
+
+A sweep for combinational reads of an array indexed by a register — the defect
+class found three separate times today (`ticketq`'s `mem_q[head_q]`, perspuv's
+`e_q_u[head_q]`, the palette load's `gen_r[ld_slot_i]`) — puts
+`zhao_texture_v3own` at the top of the island-live RTL with **eight**:
+
+```systemverilog
+assign cmb_owner_o = cq_own_q[cq_rp_q[CQPW-1:0]];   // x5, the COMBINE outputs
+assign out_owner_o = oq_own_q[oq_rp_q[OQPW-1:0]];   // x3, the final outputs
+```
+
+**Those are the very arrays this report accounted for as the 1,056-bit
+remainder** — the six RAMs consuming **7 of the block's 17 M10Ks at 0.7%
+utilisation**. So one set of structures is simultaneously:
+
+* spending 41% of the block's block-RAM on 5% of its bits, and
+* driving eight module outputs through a combinational read.
+
+**That is T6's question, with evidence attached.** T6 asks to *"separately
+evaluate the selected sixteen-credit RAM packet profile against counted
+four-entry fabric storage"* and to *"measure body/head/pending latency and
+sustained rate"*. Today's fit supplies half the input it needs: at four entries
+deep the RAM mapping is nearly all waste, and the fitter's own column says why —
+*"Fits in MLABs: No — Unsupported Port Usage"*.
+
+**Not acted on.** Four unmeasured RTL changes are already in the tree and §12.5
+requires attributing each delta before treating it as a mechanism. This is
+recorded so T6 starts from the fitter's RAM table and the output-read sweep
+rather than from a reading.
