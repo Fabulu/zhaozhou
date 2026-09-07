@@ -2153,3 +2153,51 @@ the fitter chooses to do with the logic, and every one of those I got wrong
 today.
 
 ALM and Fmax still pending from the fitter, and deliberately not predicted.
+
+---
+
+## §8.3's lease was already established — by the §8.2 change
+
+Checked rather than assumed. All three bank write enables are registered from
+the C2 acceptance:
+
+    c3t_we_q <= c2t_acc_c ? c1t_bit_c[2:0] : 3'b000;
+    c3a_we_q <= c2a_acc_c;
+    c3f_we_q <= c2f_acc_c;
+
+and `c2t_acc_c` now requires `c2t_idok_c`, which carries current membership. So
+the RAM write enable *is* "current instance owns this slot and source",
+registered, with the ownership test at C2 rather than in a late window in front
+of the RAM — which is precisely the shape §8.3 permits and the shape it warns
+against building. It was NOT true this morning: `idok` was snapshot-only, so the
+physical enable did not reflect current ownership. §8.3 therefore needs no edit,
+and by its own warning should not get one.
+
+## §22.8's late old packet, added to case 19
+
+"Return a late old packet during local drain" is one of §22.8's named states and
+is the T2 ruling's own scenario. The wrap fence is the only local drain this
+block has, so the case lives inside case 19 rather than beside it — reaching the
+fence costs 16,320 admissions, and a second drain purely to keep the cases
+visually separate would double the run for no extra evidence.
+
+The attacker takes the SLOT of a still-live draining owner and the GENERATION of
+that slot's previous occupant. Payload is a fixed 40-bit constant, checked
+against every `mkres()` a legitimate owner in the run can produce — a detector a
+collision could spoof is not a detector.
+
+## The stale build graph, second instance, new tell
+
+`cmake --build` failed with `MODMISSING: Cannot find file containing module
+'zhao_raster_ticketq_rh'` for `zhao_raster_rcp24_v3.sv:226` — and the file *is*
+in that test's `SOURCES` in `tests/CMakeLists.txt` (line 2495). The list was
+right; `build/build.ninja` was generated before the line existed, and because
+the failing rule is part of build.ninja's own regeneration, ninja could not
+rebuild the graph that would have fixed it. CLAUDE.md's fix applied exactly:
+regenerate through `cmake --preset windows-native`, never through another
+`cmake --build`. Configure clean, 34.4 s.
+
+**The new tell is worth keeping: the source list naming the file while Verilator
+still cannot find the module means the GRAPH is stale, not the list.** The
+instinct is to go add the file again, which would be a no-op followed by
+confusion.

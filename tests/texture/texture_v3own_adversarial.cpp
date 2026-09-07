@@ -1445,6 +1445,30 @@ int main(int argc, char** argv) {
     int  fenced_with_live_owners = 0;
     int  early_reopens = 0;
     uint32_t drains_before = 0;
+
+    // ---- 22.8: RETURN A LATE OLD PACKET DURING LOCAL DRAIN ------------------
+    // "Return a late old packet during local drain" is one of 22.8's named
+    // states, and the T2 ruling of 2026-09-07 is what it tests:
+    //
+    //   "Matching a slot's residual generation bits does not extend the
+    //    owner's authority after retirement."
+    //
+    // The wrap fence gives the only local drain this block has: admission is
+    // closed, live owners finish, and the island walks down to quiet. That is
+    // exactly when a packet from the slot's PREVIOUS occupant is most likely to
+    // be believed, because the slot is still live and only the generation bits
+    // separate the two.
+    //
+    // The attacker's payload is a fixed 40-bit value rather than mkres() of
+    // something, and it is checked below against every legitimate result the
+    // run can produce -- a detector that a collision could spoof is not a
+    // detector.
+    const uint64_t ATTACK_RES = 0x5A5AA5A5A5ULL;
+    int  attacks = 0;
+    uint16_t last_owner = 0;
+    bool have_owner = false;
+    bool fenced_prev = false;
+
     // Run the ring hot: admit whenever ready, complete immediately.
     std::deque<uint16_t> inflight;
     uint64_t guard = 0;
@@ -1465,6 +1489,19 @@ int main(int argc, char** argv) {
         s.d->tmu_rvalid_i = 1;
         s.d->tmu_rhandle_i = smp(o, 0);
         s.d->tmu_rresult_i = mkres(o);
+      } else if (fenced_prev && have_owner && attacks < 8) {
+        // The fence is holding and there is no legitimate return this cycle,
+        // so the return port is free for the late old packet. Its SLOT is the
+        // one the most recent owner occupies -- still live, still draining --
+        // and its GENERATION is that slot's previous occupant, which retired
+        // one full ring ago.
+        const uint16_t stale =
+            owner_of(slot_of(last_owner),
+                     (gen_of(last_owner) + 255u) & 0xFFu);
+        s.d->tmu_rvalid_i = 1;
+        s.d->tmu_rhandle_i = smp(stale, 0);
+        s.d->tmu_rresult_i = ATTACK_RES;
+        ++attacks;
       }
       uint32_t drains_now = dut->ev_wrap_drains_o;
       bool was_quiet = dut->ev_quiet_o != 0;
@@ -1473,6 +1510,8 @@ int main(int argc, char** argv) {
       adm_ready_pre = s.obs_adm_ready;
       if (s.obs_adm_fire) {
         inflight.push_back(s.obs_adm_owner);
+        last_owner = s.obs_adm_owner;
+        have_owner = true;
         ++admitted;
       } else if (want_admit && !adm_ready_pre && dut->ev_live_o != OWNERS) {
         // refused for a reason other than a full ring: that is the wrap gate
@@ -1503,6 +1542,8 @@ int main(int argc, char** argv) {
           && dut->ev_wrap_drains_o != drains_now)
         ++early_reopens;
 
+      fenced_prev = (!adm_ready_pre && dut->ev_live_o != 0
+                     && dut->ev_live_o != OWNERS);
       drains_before = drains_now;
     }
     (void)drains_before;
@@ -1542,8 +1583,36 @@ int main(int argc, char** argv) {
     zhao::check(dut->ev_admitted_o == dut->ev_emitted_o,
                 "wrap run: admitted == emitted, nothing lost",
                 dut->ev_admitted_o, dut->ev_emitted_o);
-    zhao::check(dut->ev_err_stale_o == 0, "wrap run: no stale rejections", 0,
-                dut->ev_err_stale_o);
+
+    // ---- 22.8's late old packet ---------------------------------------------
+    zhao::check(attacks > 0,
+                "22.8: late old packets were actually injected during the "
+                "local drain -- the case is not vacuous",
+                1, attacks > 0 ? 1 : 0);
+    {
+      // The payload guard promised above: no legitimate result in this run can
+      // collide with the attacker's, so finding ATTACK_RES in the output is
+      // unambiguous.
+      bool collide = false;
+      for (int o = 0; o < 65536 && !collide; ++o)
+        if (mkres(static_cast<uint64_t>(o)) == ATTACK_RES) collide = true;
+      zhao::check(!collide,
+                  "the attacker's payload cannot be produced by any legitimate "
+                  "owner, so the check below cannot be spoofed by a collision",
+                  1, collide ? 0 : 1);
+      int leaked = 0;
+      for (const Emit& e : s.emitted)
+        if (e.res == ATTACK_RES) ++leaked;
+      zhao::check(leaked == 0,
+                  "22.8/T2: a late packet carrying a RETIRED generation for a "
+                  "still-live slot never reaches the output -- residual slot "
+                  "bits do not extend a retired owner's authority",
+                  0, static_cast<uint64_t>(leaked));
+    }
+    zhao::check(dut->ev_admitted_o == dut->ev_emitted_o,
+                "and the refused packets neither created nor destroyed work",
+                dut->ev_admitted_o, dut->ev_emitted_o);
+
     zhao::check(dut->ev_err_dup_o == 0, "wrap run: no duplicate rejections", 0,
                 dut->ev_err_dup_o);
     zhao::check(dut->ev_err_unsol_o == 0, "wrap run: no unsolicited", 0,
