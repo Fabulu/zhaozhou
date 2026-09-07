@@ -3136,3 +3136,28 @@ map no longer lists `uvw_m` under Info 276007, and fitted registers fall by
 check changing. Fmax to be reported with its gating family per M6, never claimed
 — and Stage A sits INSIDE the current gate's seam
 (`rcp24_svc|c_pend → perspuv|e_num_v`), so a family change is likely.
+
+## WHERE I WAS, before the reseed lands
+
+**In hand:** P0-C Stage A is BUILT and GREEN (119 island checks) but UNFITTED.
+Its fit is the next thing the toolchain owes, and it must not share a fit with
+anything else — the architecture declares Stage A and P0-B2's completion
+boundary touch the same seam and whoever goes first, the other rebaselines.
+
+**The reseed's question, and the only thing it decides:** `@p0b-island-s3` is
+the same fifteen sources at digest `c9283ca728dd`, seed 3. `@p0b-island` at the
+default seed reported **78.80**, ALM **13,615**, worst path
+`rcp24_svc|c_pend[7] -> perspuv|e_num_v[13][17]` at **−2.690**. The predecessor
+reported **66.77** with palette gating at **−4.977**.
+
+**No Fmax prediction** — that is the quantity under test.
+**Structural expectation:** the worst path should still LAUNCH from `c_pend[..]`,
+because the eligibility scan is a source structure, not a placement accident.
+**FALSIFIER for the +12 MHz:** if seed 3 lands near 66.77 with palette back at
+the top, the movement was placement luck and G1-D §4.3f's retraction becomes the
+whole story rather than half of it.
+
+Note that BOTH outcomes are already survivable, because the attribution was
+retracted this afternoon. The reseed decides how much of the MOVEMENT is stable,
+not whether the CAUSE was ever established — that question is already answered
+(it was not).
