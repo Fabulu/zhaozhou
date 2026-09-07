@@ -78,10 +78,33 @@ comparison against the in-flight owner tokens the design already holds
 and this session has already made three timing predictions from reading source
 that the fitter falsified. It belongs to T3's bitplane work, measured.
 
-## What is verified
+## What is verified, with the falsifier run
 
-* Verilator `-Wall` lint clean on the three-file closure.
-* Owner adversarial bench: default lane and the `ZHAO_M6` lane.
+Verilator `-Wall` lint clean on the three-file closure, and:
+
+| bench lane | before T4 | after T4 |
+|---|---:|---:|
+| default | **469 pass** | **469 pass** |
+| `ZHAO_M6` (case 22) | **4 FAILED** of 477 | **477 pass** |
+
+**The "before" column is a real run, not a recollection.** The pre-change RTL
+was extracted from git into a scratch tree and rebuilt against the *same* bench
+binary sources. Its four failures are the defect stated in the test's own words:
+
+    FAIL: M6 a final arriving before COMBINE acceptance is an ERROR   expected 1, got 0
+    FAIL: M6 no final payload write is authorised                     expected 0, got 1
+    FAIL: M6 nothing is published                                     expected 0, got 1
+    FAIL: M6 the owner is NOT released                                expected 1, got 0
+
+That matters more than the "after" column. A case that starts passing on the day
+its guard is removed is indistinguishable from one that quietly stopped testing
+anything — and this repository has already been bitten by detectors that never
+fired. **469 before and 469 after** is what "preserving all other finals and
+stalls" looks like as evidence rather than as a claim.
+
+The `ZHAO_M6` env guard and the `WILL_FAIL` ctest entry are both deleted; case
+22 now runs in the default bench, which is **477**. A `WILL_FAIL` test that
+passes is itself a ctest failure — that was the designed signal, and it fired.
 
 ## The finding that cost the most, and it was mine
 
