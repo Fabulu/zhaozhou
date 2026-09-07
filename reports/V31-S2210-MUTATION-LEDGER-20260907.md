@@ -132,16 +132,32 @@ VALUES, in-RTL invariants catch broken ORDERING and broken PARTITIONS.** Item 5
 escaped precisely because it corrupted neither a value nor an invariant that
 existed — it changed WHEN a bit was set, and nothing was watching that.
 
+### `win_live` narrowed from the full 14-bit ticket subtraction to the 6-bit slot
+field, so the generation bits can never reject and two tickets a whole ring
+apart look equally live.
+
+Six checks failed, led by the property the truncation destroys:
+
+    FAIL: a stale GENERATION on the issue lane is refused: expected 0x1, got 0x0
+    FAIL: and an issue for an owner that is not live at all: expected 0x2, got 0x1
+    FAIL: D.6 all 64 emitted: expected 0x40, got 0x3A
+    FAIL: §22.5 every owner reaches COMBINE exactly once after release: expected 0x40, got 0x3E
+    FAIL: §22.5 and every owner is emitted exactly once: expected 0x40, got 0x0
+
+This is the mutation the §6.1 sequence-window law exists to forbid, and it is
+worth noting it damaged THROUGHPUT as well as identity — 58 of 64 emitted, then
+0 — because owners that falsely test live corrupt the retirement accounting too.
+A width choice is a correctness law here, not an optimisation.
+
 ## NOT yet demonstrated — stated so the gap is visible
 
 1. slot-only identity for external validation
-2. truncate membership subtraction before rejecting upper bits
 9. pop a candidate without downstream storage credit
 11. advance F without a reserved packet slot
 13. reopen the namespace before one external adapter acknowledges
 14. force old broken CLUT4, alpha, nearest, or global-binding behaviour
 
-**Eight of fourteen.**
+**Nine of fourteen.**
 
 ## Related mutations run today outside §22.10's list
 
