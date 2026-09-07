@@ -2125,6 +2125,17 @@ verilate(test_raster_toon_directed
 add_test(NAME raster_toon_directed COMMAND test_raster_toon_directed)
 set_tests_properties(raster_toon_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# RASTER.FOG -- owner ruling D-5's step 5, differential against the reference's
+# own mix expression rather than against the spec prose.
+add_executable(test_raster_fog_directed raster/raster_fog_directed.cpp)
+target_link_libraries(test_raster_fog_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_fog_directed
+  PREFIX Vzhao_raster_fog
+  TOP_MODULE zhao_raster_fog
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fog.sv)
+add_test(NAME raster_fog_directed COMMAND test_raster_fog_directed)
+set_tests_properties(raster_fog_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 add_test(NAME geom_attrsetup_directed COMMAND test_geom_attrsetup_directed)
 set_tests_properties(geom_attrsetup_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
