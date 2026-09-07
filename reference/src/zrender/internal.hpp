@@ -76,7 +76,10 @@ struct ScreenV {
   int32_t a = 0;         // Q16.16 interpolated attribute (vertex alpha)
   int32_t u = 0, v = 0;  // Q16.16 TILE units (terrain texturing, §6.2);
                          // read only when raster_tri carries a TextureSpan
-  // Gouraud lanes (qformats §8: the fogged colour "rides the ordinary
+  // Gouraud lanes (qformats §8 SUPERSEDED by owner ruling D-5: these
+  // lanes carry lit, tinted, UNFOGGED colour and fog is a separate
+  // interpolant mixed at the final source colour after toon quantisation.
+  // (historical text: the fogged colour "rides the ordinary
   // Gouraud path" — this IS that path, produced 2026-08-27 as the reference
   // model GEOM.SETUP.md names: "until that exists there is nothing to be
   // bit-exact against"). Q16.16; read only when TriMode.gouraud.

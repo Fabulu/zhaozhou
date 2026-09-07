@@ -114,7 +114,12 @@ struct FragmentPipeline {
     uint8_t addr = 0;                // {row[3:0], col[3:0]}
     uint32_t depth = 0;              // invw24, larger is closer
     uint32_t state = 0;              // the packed state word
-    uint8_t vr = 0, vg = 0, vb = 0;  // vertex RGB: lit, tinted and ALREADY FOGGED
+    // Vertex RGB: lit and tinted. NOT fogged -- owner ruling D-5 (2026-09-03,
+    // spec/qformats.md §8) rules "do not carry an already-fogged vertex
+    // colour"; the fog factor is a separate interpolant and the mix happens at
+    // the final source colour, after toon quantisation. No fog mix is
+    // implemented anywhere in the tree yet, so today these are simply unfogged.
+    uint8_t vr = 0, vg = 0, vb = 0;
     uint8_t va = 0;                  // vertex alpha (PART.SOFT's fade rides here)
     uint8_t tag = 0;                 // the constant-tag source
     uint8_t sten_ref = 0;            // stencil reference AND REPLACE value

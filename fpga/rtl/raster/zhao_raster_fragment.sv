@@ -89,23 +89,38 @@
 // the factor. So no port is invented for it: adding one would be inventing a
 // second alpha lane for a block that already has the right one.
 //
-// FOG IS NOT COMPUTED HERE, AND THAT IS THE SPEC'S DECISION, NOT AN OMISSION.
+// FOG IS NOT COMPUTED HERE, AND THAT IS STILL THE SPEC'S DECISION — BUT NOT
+// FOR THE REASON THIS COMMENT USED TO GIVE.
+//
 // `design/blocks.yml`'s purpose line for this block says "depth/stencil/blend/
-// fog", and that line predates the ratified fog law. spec/qformats.md §8
-// (added 2026-08-17) freezes fog as a PER-VERTEX operation in GEOM.PROJECT —
-// "fog is a vertex-colour operation in GEOM.PROJECT, ordered AFTER lighting
-// and AFTER the global tint … The fogged colour rides the ordinary Gouraud
-// path — the factor is not a separate interpolant and there is no
-// per-fragment fog anywhere in v1 (a per-pixel form would be a RASTER.FRAGMENT
-// recipe change: not costed, not built)". So the colour arriving on
-// `frag_vert_rgb_i` is ALREADY fogged, this block applies no fog of its own,
-// and building a per-fragment fog stage here would contradict a ratified
-// spec. The exempt list (sky family, additive emissive) is honoured by
-// construction: this block cannot fog anything.
+// fog", and that line predates the ratified fog law. This header then cited
+// spec/qformats.md §8 (2026-08-17), which froze fog as a PER-VERTEX operation
+// in GEOM.PROJECT with "the fogged colour rides the ordinary Gouraud path —
+// the factor is not a separate interpolant and there is no per-fragment fog
+// anywhere in v1".
+//
+// **THAT TEXT IS SUPERSEDED.** OWNER RULING D-5 (2026-09-03), now written into
+// spec/qformats.md §8 itself, names those three sentences false and rules
+// "do not carry an already-fogged vertex colour". The factor IS a separate
+// interpolant, carried through GEOM.PARAMBUF and ATTRSTEP, and the mix IS
+// per-fragment — applied to the FINAL SOURCE COLOUR, after material
+// combination and after toon quantisation, before alpha/additive blending.
+//
+// D-5's stated reason is two visible errors in the old order: fog quantised
+// into hard toon bands (a cel ramp cannot tell "less lit" from "further away",
+// so a smooth gradient becomes a moving staircase), and texture modulation
+// multiplying the fog colour itself.
+//
+// So `frag_vert_rgb_i` is NOT "already fogged" — under D-5 nothing upstream of
+// here fogs anything, and as of this writing no fog mix is implemented
+// anywhere in the tree at all. This block still applies no fog of its own,
+// because the mix belongs at the final source colour, which is upstream of the
+// framebuffer blend this block performs.
 // ENFORCED-BY: tests/raster/raster_fragment_directed.cpp:test_fog_is_a_vertex_operation
-// (the §8 vertex mix is computed in the test across a factor sweep and must
-// reach the tile UNALTERED — a block that grew a fog stage would double-apply
-// it and that case would go red).
+// (whatever colour arrives must reach the tile UNALTERED — a block that grew a
+// fog stage would double-apply it and that case would go red. The property the
+// test checks is still exactly right; only the header's account of WHY the
+// colour is already final has changed.)
 //
 // ALSO NOT BUILT, so the next wave knows: no attribute interpolation (colour,
 // alpha, depth and UV all arrive interpolated — GEOM.SETUP's job); no
