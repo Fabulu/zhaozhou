@@ -3395,6 +3395,19 @@ the honest report says the movement is real and the cause is unproven.
 This does not weaken M4's AREA half — +159 leaf against +14 composed on identical
 RTL is not a placement-roulette result. It does retire M4's timing half.
 
+**THE RULE WAS ALREADY PRACTICE, AND THE NEW SECTION DROPPED IT.** G1-D §4.3e,
+written two days earlier, compares its own two fits like this:
+
+    | worst path | −4.800, a virtual pin into PALETTE_RES | −4.977, THE SAME PIN |
+
+It named the gating path's IDENTITY on both sides, established it was unchanged,
+and only then reported 67.57 → 66.77 as essentially flat. §4.3f — mine — recorded
+a before-picture, a prediction and a falsifier, and did not record the gating
+path family. It is not that this discipline was missing from the project; it is
+that a section written to be careful about prediction was careless about
+attribution, which are different things. M6 exists to make the practice explicit
+rather than incidental.
+
 ## M5 — THE ISLAND'S LIMITER IS NOW ONE FAMILY, AND IT IS THE COMPLETION SCAN
 
 All **forty** worst paths in the post-P0-B island launch at
