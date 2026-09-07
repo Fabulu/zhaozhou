@@ -486,6 +486,64 @@ int main(int argc, char** argv) {
                 dut->ev_commits_o >= 1 ? 1 : 0);
   }
 
+  hdr("case 4c (S22.3): AUX before every sample, then samples in REVERSE order");
+  // =========================================================================
+  // S22.3 names its cases and two of them had no counterpart here:
+  //
+  //   "Reverse TMU sample order. Return AUX before all samples, after all
+  //    samples, and on the same edge as the final required sample."
+  //
+  // Case 1 returns in order and its helper is hard-wired that way; case 16 is
+  // out-of-order READINESS at emission, not out-of-order RETURN. Cases 8/9
+  // cover AUX on the same edge, and case 1 covers AUX last. AUX FIRST and
+  // reverse sample order were both missing.
+  //
+  // The property is that a completion's ROW is addressed by its sample index,
+  // never by its arrival position. A pipeline that quietly used arrival order
+  // would still commit the right NUMBER of samples and emit the right count --
+  // and would put the rows in the wrong slots, which only a per-row comparison
+  // catches.
+  {
+    Ob s(dut);
+    s.reset();
+    const int N = 4;
+    std::vector<uint16_t> owners;
+    for (int i = 0; i < N; ++i) {
+      uint16_t o = s.admit(ctx_of(i), 0xF);
+      owners.push_back(o);
+      for (uint32_t k = 0; k < 3; ++k) s.issue_tmu(o, k);
+      s.issue_aux(o);
+      // AUX before ANY sample ...
+      s.ret_aux(o, mkres(o * 4 + 3));
+      // ... then the samples backwards.
+      for (int k = 2; k >= 0; --k)
+        s.ret_tmu(o, static_cast<uint32_t>(k), mkres(o * 4 + static_cast<uint32_t>(k)));
+    }
+    s.idle(400);
+
+    zhao::check(s.emitted.size() == static_cast<size_t>(N),
+                "S22.3 every owner still completes", N, s.emitted.size());
+    zhao::check(s.combined.size() == static_cast<size_t>(N),
+                "S22.3 every COMBINE packet is produced", N, s.combined.size());
+    int row_errors = 0;
+    for (int i = 0; i < N && i < static_cast<int>(s.combined.size()); ++i) {
+      const uint16_t o = owners[i];
+      if (s.combined[i].owner != o) ++row_errors;
+      for (uint32_t k = 0; k < 3; ++k)
+        if (s.combined[i].s[k] != mkres(o * 4 + k)) ++row_errors;
+      if (s.combined[i].ax != mkres(o * 4 + 3)) ++row_errors;
+    }
+    zhao::check(row_errors == 0,
+                "S22.3 each row lands by SAMPLE INDEX, not arrival order -- AUX "
+                "first and samples reversed change nothing about placement",
+                0, row_errors);
+    zhao::check(dut->ev_err_stale_o == 0 && dut->ev_err_unsol_o == 0
+                    && dut->ev_err_dup_o == 0,
+                "S22.3 and no completion was mistaken for stale, unsolicited or "
+                "duplicate merely because it arrived early",
+                0, dut->ev_err_stale_o + dut->ev_err_unsol_o + dut->ev_err_dup_o);
+  }
+
   hdr("case 5/6: unsolicited -- required-but-not-issued, and not-required");
   // =========================================================================
   {
