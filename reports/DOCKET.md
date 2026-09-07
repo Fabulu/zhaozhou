@@ -4240,3 +4240,68 @@ producer**. Harmless only because both arbiter client write ports are tied to
 honoured by wiring; it needs an arbiter port and a stall in its write mux.
 Until then the repair is present in the bridge and **inert at the shell** —
 the same shape as an ignore rule that hides waste instead of removing it.
+
+---
+
+# 2026-09-07 — the texture-first lane, under owner direction `49fc32e9`
+
+*"Finish the texture island. […] A difficult texture step is work to solve, not
+permission to switch to terrain."* Everything below is texture; the shell's open
+`hb_wr_ready` repair and the geometry projector's next DSP cut were both left
+alone deliberately, and are recorded in their own reports so the pass that owns
+them does not start from a reading.
+
+## Landed
+
+| item | what |
+|---|---|
+| **T4** | `cbi_q` now means §11.1's **event 3** (`cmb_valid && cmb_ready`); new `crs_q` carries event 2. A final could previously be authorised — and its payload written — for an owner whose COMBINE input was never taken. |
+| **M6** | Retired from documented-expected-failure to a default-bench case. The `WILL_FAIL` lane fired exactly as designed. |
+| **§5.7** | The local queue fit gate: `zhao_probe_v3rq_queue.sv`, a registered wrapper in the four pair wrappers' shape, plus its fit target. Not launched — a competing fit is forbidden while one runs. |
+| **§5.4** | Its throughput claim — "one external pop per clock after warmup" — measured for the first time. Zero bubbles in 400 cycles. |
+| **§5.3 / capacity** | `full_o` was checked **nowhere**. Now covered, and the CAPACITY contract with it. |
+| **T2** | The identity-only comparison: the bounded interval and the literal 64-entry table agree on all 16,384 tokens across >1M comparisons and many namespace wraps. |
+| **§12.2** | The owner's 17 M10K walked per instance. Nine `v3bank` bodies, 19,584 bits. |
+| **§12.4** | The whole-island reconciliation **refuses**, with eight named refits. |
+
+## Everything above was fire-tested, and three instruments were caught
+
+The pattern held again: **every detector was shown to fire before its result was
+believed.**
+
+* **M6** — the pre-change RTL was rebuilt from git and produced 4 failures that
+  *are* the defect. Without this, a case that starts passing the day it is
+  unguarded is indistinguishable from one that stopped testing anything.
+* **The capacity check** — re-elaborated at `-GCAPACITY=66`, the exact "body of
+  64 plus two heads" defect §5.3 names. Failed with `got=0x42`.
+* **The bubble counter** — supply starved to one cycle in four: 300 bubbles,
+  100 pops of 400. Exactly the expected ratio.
+
+And the parameter-override technique is the reusable part: **`-G` mutates
+elaboration without touching the working tree**, so a fire test costs nothing
+even when the file is under a fit.
+
+## Three documents were wrong, and each cost real time
+
+1. **`QUARTUS_GOTCHAS` §11** said *"Nothing is copied into the workspace"*. Block
+   fits have **snapshotted** since 2026-09-03 — every run prints it. T4 was
+   deferred for hours on a prohibition that had not applied for four days. **A
+   stale prohibition is not free caution**; it silently removes work from every
+   session that obeys it, and it is invisible because obeying it looks like
+   diligence.
+2. **V3.1 §6.1** says pointer equality cannot distinguish empty from full. At a
+   14-bit ticket width against 64 capacity it distinguishes them perfectly;
+   `used` survives on **§6.4's** grounds (registered pre-edge permission), not
+   §6.1's. A correct field with a wrong justification is worth catching, because
+   the justification is what the next person reasons from.
+3. **§12.3's "COMBINE 174-bit" body** is confirmed exactly against the RTL
+   (`14 + 3×40 + 40`) — but it does **not** explain the 1,056-bit memory
+   remainder, and was rejected as an attribution rather than published as one.
+
+## Open, and blocked on the toolchain rather than on thought
+
+Eight refits, all texture-island blocks, named in
+`V31-ISLAND-BUDGET-BLOCKED-20260907.md`. `zhao_texture_material_combine_v2` is
+first: it is the island's **live** combiner, has never been fitted, and got its
+target today. Then `zhao_probe_v3rq_queue`, then a v3own refit that includes T4 —
+the fit running now predates it and answers T1's question, not T4's.
