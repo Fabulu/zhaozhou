@@ -370,6 +370,44 @@ module zhao_texture_v3own #(
   // THE TIMING BENEFIT IS UNMEASURED UNTIL A REFIT. Three predictions made
   // from reading source today were falsified by the fitter; this one is
   // recorded as a structural argument, not a number.
+  // ==========================================================================
+  // T2 STEP 2 -- THE WINDOW IS NOW LOAD-BEARING (S6.1/S6.2)
+  // ==========================================================================
+  // Promoted out of `ifndef SYNTHESIS` because the ISSUE lanes now use it. Step
+  // 1 ran these beside the table and asserted the two agree every cycle; the
+  // refit then named the table as the block's honest limiter --
+  //
+  //     -0.950  gen_q[4][4] -> iss_q[52][0]      (core->core, 91.32 MHz)
+  //
+  // and that path is exactly `gen_q[iss_t_slot_c] == iss_t_gen_c`: a 64-way
+  // select feeding a comparison, per event lane. S6.8 named the mechanism in
+  // advance -- "events no longer need a 64-way generation select ... There is
+  // one bounded arithmetic identity check per event lane instead."
+  //
+  // S6.2's encoding: ticket = {generation, slot}, slot in the LOW bits. The
+  // PUBLIC owner token is the other way round, {slot, generation}, and S6.2
+  // warns "Do not apply a numerical subtraction directly to public_owner ...
+  // Decode it into internal ticket order first." So the tickets below are built
+  // explicitly as {gen, slot} rather than by reusing an owner word.
+  logic [GENW-1:0] sh_alloc_gen_q, sh_retire_gen_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      sh_alloc_gen_q  <= GENW'(1);
+      sh_retire_gen_q <= GENW'(1);
+    end else begin
+      if (adm_fire_c && (tail_q == {SLOTW{1'b1}})) sh_alloc_gen_q  <= sh_alloc_gen_q  + GENW'(1);
+      if (out_fire_c && (emit_q == {SLOTW{1'b1}})) sh_retire_gen_q <= sh_retire_gen_q + GENW'(1);
+    end
+  end
+
+  wire [OWNERW-1:0] win_retire_tkt_c = {sh_retire_gen_q, emit_q};
+
+  // 6.1: live(t) = unsigned_14(t - retire_ticket) < used.
+  function automatic logic win_live(input logic [OWNERW-1:0] tkt);
+    win_live = (((tkt - win_retire_tkt_c) & OWNERW'({OWNERW{1'b1}}))
+                < OWNERW'(live_cnt_q));
+  endfunction
+
   logic [SLOTW-1:0] tail_p1_c;
   logic             wrap_at_tail_p1_c;
   assign tail_p1_c         = tail_q + SLOTW'(1);
@@ -455,8 +493,7 @@ module zhao_texture_v3own #(
   assign iss_t_rng_c  = (iss_t_sidx_c != 2'd3);
   assign iss_t_bit_c  = iss_t_rng_c ? (4'b0001 << iss_t_sidx_c) : 4'b0000;
   assign iss_t_ok_c   = iss_tmu_valid_i && iss_t_rng_c
-                     && live_q[iss_t_slot_c]
-                     && (gen_q[iss_t_slot_c] == iss_t_gen_c)
+                     && win_live({iss_t_gen_c, iss_t_slot_c})
                      && ((req_q[iss_t_slot_c] & iss_t_bit_c) != 4'd0)
                      && ((iss_q[iss_t_slot_c] & iss_t_bit_c) == 4'd0);
 
@@ -466,8 +503,7 @@ module zhao_texture_v3own #(
   assign iss_a_slot_c = iss_aux_owner_i[OWNERW-1 -: SLOTW];
   assign iss_a_gen_c  = iss_aux_owner_i[GENW-1:0];
   assign iss_a_ok_c   = iss_aux_valid_i
-                     && live_q[iss_a_slot_c]
-                     && (gen_q[iss_a_slot_c] == iss_a_gen_c)
+                     && win_live({iss_a_gen_c, iss_a_slot_c})
                      && ((req_q[iss_a_slot_c] & SRC_AUX) != 4'd0)
                      && ((iss_q[iss_a_slot_c] & SRC_AUX) == 4'd0);
 
@@ -1512,20 +1548,6 @@ module zhao_texture_v3own #(
   // numbers -- otherwise the before/after that decides T2 is contaminated by
   // the scaffolding built to check it.
 `ifndef SYNTHESIS
-  // 6.2: "initialize alloc_ticket and retire_ticket to 64, with used = 0", so
-  // the first public token is slot zero, generation one. Here that is a
-  // generation of 1 sitting above a slot pointer of 0.
-  logic [GENW-1:0] sh_alloc_gen_q, sh_retire_gen_q;
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      sh_alloc_gen_q  <= GENW'(1);
-      sh_retire_gen_q <= GENW'(1);
-    end else begin
-      if (adm_fire_c && (tail_q == {SLOTW{1'b1}})) sh_alloc_gen_q  <= sh_alloc_gen_q  + GENW'(1);
-      if (out_fire_c && (emit_q == {SLOTW{1'b1}})) sh_retire_gen_q <= sh_retire_gen_q + GENW'(1);
-    end
-  end
-
   // One slot checked per cycle, rotating, rather than 64 every cycle: the
   // bench runs long enough to sweep the ring many times over and this keeps
   // simulation honest about cost.
@@ -1547,7 +1569,7 @@ module zhao_texture_v3own #(
   wire [OWNERW-1:0] bnd_tkt_c = sh_retire_tkt_c + OWNERW'(gen_chk_s);
 
   wire [OWNERW-1:0] sh_alloc_tkt_c  = {sh_alloc_gen_q,  tail_q};
-  wire [OWNERW-1:0] sh_retire_tkt_c = {sh_retire_gen_q, emit_q};
+  wire [OWNERW-1:0] sh_retire_tkt_c = win_retire_tkt_c;
 
   always_ff @(posedge clk) begin
     if (armed_q) begin
