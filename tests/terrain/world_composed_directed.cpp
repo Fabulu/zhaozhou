@@ -1352,8 +1352,21 @@ int main(int argc, char** argv) {
                   "%u cycles\n",
                   vslot2, d.wat_wr_count, d.wat_wr_first, d.wat_rd_count, d.wat_rd_last,
                   d.h_barrier_stalls);
-      ck(d.h_barrier_stalls > 0, "G2 the barrier actually held the load job back", 1,
-         d.h_barrier_stalls);
+      // REPAIRED 2026-09-07. This asserted that the HARNESS barrier held the
+      // load back, because TERRAIN.SEQ's own S_WB -> S_LOAD advanced on
+      // `wb_ready_i` -- the writeback ACCEPTING the job, not completing it.
+      // SEQ now waits in S_WAIT_WB for the completion of the slot it evicted,
+      // so the harness barrier has nothing left to hold and reports zero.
+      //
+      // The byte-order check below is untouched and is the one that matters:
+      // it still requires the loader's first write to follow the writeback's
+      // last read, and it now passes because of the RTL rather than because of
+      // the harness.
+      ck(d.h_barrier_stalls == 0,
+         "G2 the HARNESS barrier no longer has to hold anything -- TERRAIN.SEQ "
+         "holds it in S_WAIT_WB now, so the knob that used to be load-bearing "
+         "reports zero while the byte order below still holds",
+         0, d.h_barrier_stalls);
       ck(d.wat_rd_count > 0 && d.wat_wr_count > 0,
          "G2 both the writeback's reads and the loader's writes touched the slot", 1,
          (d.wat_rd_count > 0 && d.wat_wr_count > 0) ? 1 : 0);
@@ -1453,25 +1466,39 @@ int main(int argc, char** argv) {
                   d.wb_sheets_faulted - ft_before, d.wb_sheets_written - wr_before);
       ck(d.wat_wr_count == kPageWords, "G3 the loader wrote the whole displacing page",
          kPageWords, d.wat_wr_count);
-      ck(d.wat_rd_count == 8,
-         "G3 the writeback read exactly the header burst and stopped there", 8,
-         d.wat_rd_count);
-      ck(d.wb_hdr_ident_fails - id_before == 1,
-         "G3 it refused the sheet because the header no longer named the evicted page", 1,
-         d.wb_hdr_ident_fails - id_before);
-      ck(d.wb_sheets_faulted - ft_before == 1, "G3 and counted the sheet as faulted", 1,
-         d.wb_sheets_faulted - ft_before);
-      ck(d.wb_sheets_written == wr_before, "G3 nothing new was journalled", 0,
-         d.wb_sheets_written - wr_before);
-      defect(false,
-             "the scar an eviction was supposed to preserve is LOST OUTRIGHT when the "
-             "loader's write cursor reaches the page header before the writeback reads it",
-             "same blocks, same commands, same eviction as G -- only the played fabric's "
-             "bandwidth ratio changed, and neither block owns that ratio. TERRAIN.WRITEBACK "
-             "verifies the evicted page's header before journalling its sheet, the loader "
-             "has already overwritten that header, the sheet is refused and the deformation "
-             "is gone. Nothing upstream waits for the writeback's verdict, so the frame that "
-             "lost it reports nothing.");
+      // REPAIRED 2026-09-07, AND THIS IS THE CASE THAT MATTERED MOST.
+      //
+      // It used to assert the scar was LOST: at this bandwidth ratio the
+      // loader's write cursor reached the evicted page's header before
+      // TERRAIN.WRITEBACK read it, the header no longer named the evicted
+      // page, the sheet was refused, and the player's deformation was gone --
+      // with nothing upstream waiting for the verdict, so the frame that lost
+      // it reported nothing.
+      //
+      // TERRAIN.SEQ now holds S_WAIT_WB until the writeback COMPLETES for the
+      // slot it evicted, so the loader cannot start writing that page while
+      // its header is still being read. The ratio is still shifted here -- the
+      // race is still ATTEMPTED -- and the sheet survives it.
+      // 1,040 beats: TERRAIN.WRITEBACK's own measured figure -- the 64-byte
+      // header burst plus the aligned superset of the 8,192-byte F sheet.
+      // Before the barrier this read stopped at 8, the header alone, because
+      // the identity check refused and there was nothing left to do.
+      ck(d.wat_rd_count == 1040,
+         "G3 the writeback read the header AND the whole sheet, at the very ratio "
+         "that used to cut it off after the header burst",
+         1040, d.wat_rd_count);
+      ck(d.wb_hdr_ident_fails - id_before == 0,
+         "G3 the header still named the evicted page when the writeback read it -- "
+         "the loader had not reached it, because it had not started",
+         0, d.wb_hdr_ident_fails - id_before);
+      ck(d.wb_sheets_faulted - ft_before == 0,
+         "G3 so no sheet faulted at a ratio that used to lose one every time",
+         0, d.wb_sheets_faulted - ft_before);
+      ck(d.wb_sheets_written - wr_before == 1,
+         "G3 AND THE SCAR REACHED THE JOURNAL. This is the check the whole "
+         "barrier exists for: same blocks, same commands, same hostile ratio, "
+         "and the deformation survives",
+         1, d.wb_sheets_written - wr_before);
       (void)vi3;
       (void)jnl_entry3;
       // put the fabric back
@@ -1624,17 +1651,23 @@ int main(int argc, char** argv) {
     // ---- every remaining tripwire, read ----------------------------------
     ck(d.seq_err_stray_ans == 0, "H TERRAIN.SEQ never saw a stray directory answer", 0,
        d.seq_err_stray_ans);
-    // EXACTLY the one G3 produced on purpose, and not a second. A tripwire
-    // relaxed to "at least one" would stop being a tripwire.
-    ck(d.wb_sheets_faulted == 1,
-       "H exactly one sheet faulted mid-transfer -- the one G3 raced on purpose", 1,
-       d.wb_sheets_faulted);
+    // ZERO NOW, and it used to be exactly one -- G3's, produced on purpose by
+    // racing the loader against the writeback's header read. TERRAIN.SEQ's
+    // S_WAIT_WB removed the race, so the whole run faults no sheet at all.
+    // Kept as an EXACT count rather than relaxed to "at least none": a
+    // tripwire that cannot distinguish zero from three is not a tripwire.
+    ck(d.wb_sheets_faulted == 0,
+       "H NOT ONE sheet faulted mid-transfer across the whole run -- G3's "
+       "deliberate race no longer produces one",
+       0, d.wb_sheets_faulted);
     ck(d.wb_acks_after_epoch == 0, "H no acknowledgement arrived after its epoch", 0,
        d.wb_acks_after_epoch);
     ck(d.wb_acks_overdue == 0, "H no acknowledgement went overdue", 0, d.wb_acks_overdue);
     ck(d.wb_acks_nak == 0, "H the journal refused nothing", 0, d.wb_acks_nak);
-    ck(d.wb_hdr_ident_fails == 1,
-       "H and exactly one header identity refusal, likewise G3's", 1, d.wb_hdr_ident_fails);
+    ck(d.wb_hdr_ident_fails == 0,
+       "H and no header identity refusal either -- every evicted page still "
+       "named itself when its sheet was read",
+       0, d.wb_hdr_ident_fails);
     ck(d.pl_pages_refused == 0, "H no load was refused before it started", 0, d.pl_pages_refused);
     ck(d.pl_incomplete == 0, "H no load ended incomplete", 0, d.pl_incomplete);
     ck(d.h_pool_oob == 0, "H every write beat landed inside the page pool", 0, d.h_pool_oob);

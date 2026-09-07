@@ -183,6 +183,9 @@ module zhao_terrain_seq #(
     // ---- writeback job out (T4's F-sheet barrier) ------------------------
     output var logic               wb_valid_o,
     input  var logic               wb_ready_i,
+    // The writeback's COMPLETION, not its acceptance. See S_WAIT_WB.
+    input  var logic               wb_done_valid_i,
+    input  var logic [SLOTW-1:0]   wb_done_slot_i,
     output var logic [SLOTW-1:0]   wb_slot_o,
     output var logic [GENW-1:0]    wb_gen_o,
     output var logic [31:0]        wb_epoch_o,
@@ -257,6 +260,11 @@ module zhao_terrain_seq #(
     output var logic [31:0] compose_slots_used_o,
     output var logic [31:0] pins_issued_o,
     output var logic [31:0] drained_o,
+    // CYCLES spent holding T4's barrier, and cycles is the honest unit here:
+    // the question this answers is "how long is the sequencer stopped", which
+    // is a duration, not an event count. Every other counter in this block
+    // counts events, so the name says which this is.
+    output var logic [31:0] wb_wait_cycles_o,
     output var logic [31:0] frame_faults_o
 );
 
@@ -278,6 +286,8 @@ module zhao_terrain_seq #(
   localparam logic [3:0] S_WB      = 4'd8;
   localparam logic [3:0] S_LOAD    = 4'd9;
   localparam logic [3:0] S_DONE    = 4'd10;
+  // T4'S BARRIER, WHICH USED TO BE A JOB ORDER AND NOT A BYTE ORDER.
+  localparam logic [3:0] S_WAIT_WB = 4'd11;
 
   logic [3:0] st, st_n;
 
@@ -318,6 +328,7 @@ module zhao_terrain_seq #(
   // ---- counters -----------------------------------------------------------
   logic [31:0] c_rec, c_iss, c_pfr, c_skip, c_clm, c_clr, c_cls;
   logic [31:0] c_ld, c_lddef, c_wb, c_cs, c_pin, c_drain, c_flt;
+  logic [31:0] c_wbwait;
 
   logic [31:0]        f_src_q, f_isl_q;
   logic signed [15:0] f_ix_q, f_iz_q;
@@ -406,6 +417,7 @@ module zhao_terrain_seq #(
   assign compose_slots_used_o   = c_cs;
   assign pins_issued_o          = c_pin;
   assign drained_o              = c_drain;
+  assign wb_wait_cycles_o       = c_wbwait;
   assign frame_faults_o         = c_flt;
 
   // ---- the composed-cache allocator, in one line --------------------------
@@ -475,7 +487,33 @@ module zhao_terrain_seq #(
         else if (cl_ans_ev_dirty_i)             st_n = S_WB;
         else                                    st_n = S_LOAD;
       end
-      S_WB:      if (wb_ready_i)                st_n = S_LOAD;
+      // ---- T4's BARRIER, MEASURED IN BYTES ------------------------------
+      // This used to be `S_WB: if (wb_ready_i) st_n = S_LOAD;` -- advancing on
+      // the writeback ACCEPTING the job. Job order was then correct and byte
+      // order was not: the composed terrain test measured the loader's first
+      // write into the victim slot at cycle 115,966 and the writeback's last
+      // read out of it at 119,160.
+      //
+      // AND THE RACE LOSES THE SCAR OUTRIGHT, which is why this is a
+      // correctness fix and not a tidiness one. TERRAIN.WRITEBACK reads the
+      // evicted page's header first and verifies its identity; with the load
+      // already overwriting that header the check fails, `hdr_ident_fails`
+      // rises, `sheets_written` stays 0, and the player's deformation is gone.
+      // Same blocks, same commands, one bandwidth ratio.
+      //
+      // T4 says the F sheet reaches the journal BEFORE the page that displaces
+      // it is written. That is a statement about BYTES, so the barrier waits
+      // for the completion, not the acceptance.
+      S_WB:      if (wb_ready_i)                st_n = S_WAIT_WB;
+      // COST, STATED: this serialises the eviction. The sequencer does not
+      // advance to any other record while a dirty victim is being evacuated,
+      // so an eviction now costs the whole 8,192-byte journal transfer instead
+      // of one handshake. Holding only THIS slot's load while other records
+      // proceed needs a per-slot scoreboard; dirty evictions are rare against
+      // T7's 32-page budget, so the simple form is taken and the cost is
+      // written down rather than hidden. `wb_wait_cycles_o` measures it.
+      S_WAIT_WB: if (wb_done_valid_i && (wb_done_slot_i == a_slot_q))
+                                                st_n = S_LOAD;
       S_LOAD:    if (ld_ready_i)                st_n = S_FETCH;
       S_DONE:                                   st_n = S_IDLE;
       default:                                  st_n = S_IDLE;
@@ -529,8 +567,14 @@ module zhao_terrain_seq #(
       c_cs         <= 32'd0;
       c_pin        <= 32'd0;
       c_drain      <= 32'd0;
+      c_wbwait     <= 32'd0;
       c_flt        <= 32'd0;
     end else begin
+      // HELD-CYCLE ACCOUNTING for T4's barrier, unconditional per clock
+      // so it measures a DURATION rather than the number of times some
+      // other branch happened to run. Cycles is the honest unit: the
+      // question is how long the sequencer is stopped.
+      if (st == S_WAIT_WB) c_wbwait <= c_wbwait + 32'd1;
       st        <= st_n;
       fr_done_o <= (st == S_DONE);
 

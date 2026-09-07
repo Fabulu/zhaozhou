@@ -30,6 +30,17 @@ module tb_terrain_seq (
     // as it did. Raise it to reproduce the arbitration loss that used to
     // deadlock the frame: the real directory serves one address per clock and
     // a losing query is never answered.
+    // How many cycles TERRAIN.WRITEBACK takes to COMPLETE, which T4's barrier
+    // now waits for rather than its acceptance. Zero -- the default -- models
+    // a writeback that finishes the cycle after it accepts, so every case
+    // written before the barrier existed behaves exactly as it did. A case
+    // that wants to measure the stall raises it and reads wb_wait_cycles_o.
+    //
+    // MODELLED IN THE BENCH rather than driven from C++ because the completion
+    // must be CAUSED BY the acceptance: a free-running done signal would
+    // release barriers for evictions that never happened, which is the failure
+    // the barrier exists to prevent.
+    input  logic [15:0] wb_done_delay,
     input  logic        lu_stall,
     input  logic        fr_start,
     input  logic [31:0] fr_epoch,
@@ -162,6 +173,37 @@ module tb_terrain_seq (
   assign ld_slot  = {{(16-SLOTW){1'b0}}, d_ld_slot};
   assign is_slot  = {{(16-SLOTW){1'b0}}, d_is_slot};
   assign is_cslot = {4'd0, d_is_cslot};
+  // ---- the modelled writeback completion ---------------------------------
+  logic              wb_done_valid;
+  logic [SLOTW-1:0]  wb_done_slot;
+  logic [31:0]       wb_wait_cycles;
+  logic [15:0]       wb_cnt;
+  logic              wb_pending;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      wb_done_valid <= 1'b0;
+      wb_done_slot  <= '0;
+      wb_cnt        <= 16'd0;
+      wb_pending    <= 1'b0;
+    end else begin
+      wb_done_valid <= 1'b0;
+      if (wb_valid && wb_ready) begin
+        // Caused by the acceptance, and carrying the slot it was accepted for.
+        wb_pending   <= 1'b1;
+        wb_done_slot <= d_wb_slot;   // the DUT's slot, not the widened port
+        wb_cnt       <= wb_done_delay;
+      end else if (wb_pending) begin
+        if (wb_cnt == 16'd0) begin
+          wb_done_valid <= 1'b1;
+          wb_pending    <= 1'b0;
+        end else begin
+          wb_cnt <= wb_cnt - 16'd1;
+        end
+      end
+    end
+  end
+
 
   zhao_terrain_seq #(
       .COMPOSE_SLOTS(CS),
@@ -232,6 +274,9 @@ module tb_terrain_seq (
 
       .wb_valid_o (wb_valid),
       .wb_ready_i (wb_ready),
+      .wb_done_valid_i (wb_done_valid),
+      .wb_done_slot_i  (wb_done_slot),
+      .wb_wait_cycles_o(wb_wait_cycles),
       .wb_slot_o  (d_wb_slot),
       .wb_gen_o   (wb_gen),
       .wb_epoch_o (wb_epoch),

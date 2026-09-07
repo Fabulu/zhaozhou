@@ -539,6 +539,17 @@ module tb_terrain_world
 
       .wb_valid_o (wb_valid),
       .wb_ready_i (wb_ready),
+      // THE WIDTH STEP IS DELIBERATE AND MUST NOT BE TRUNCATED AWAY.
+      // TERRAIN.WRITEBACK's slot is one bit wider than TERRAIN.SEQ's on
+      // purpose, so a computed slot of 1024 refuses instead of aliasing onto
+      // slot 0. Passing the low ten bits alone would hand exactly that alias
+      // back and release the barrier for a slot SEQ never evicted.
+      //
+      // So the completion is QUALIFIED rather than narrowed: a slot outside
+      // SEQ's range cannot match anything it asked for, and is not offered.
+      .wb_done_valid_i (wbdone_valid && !wbdone_slot_w[SLOTW]),
+      .wb_done_slot_i  (wbdone_slot_w[SLOTW-1:0]),
+      .wb_wait_cycles_o(seq_wb_wait),
       .wb_slot_o  (q_wb_slot),
       .wb_gen_o   (wb_gen),
       .wb_epoch_o (q_wb_epoch),
@@ -692,6 +703,12 @@ module tb_terrain_world
   logic               g_fin_ok;
 
   logic             g_wb_valid, g_wb_ready;
+  // T4's barrier is now driven by TERRAIN.WRITEBACK's OWN completion, which
+  // this bench already taps as wbdone_valid/wbdone_slot_w. Introducing a
+  // second, modelled completion beside the real block would be exactly the
+  // decoration this composed test exists to avoid.
+  logic [31:0]       seq_wb_wait;
+
   logic [SLOTW-1:0] g_wb_slot;
   logic [GENW-1:0]  g_wb_gen;
   logic [31:0]      g_wb_epoch;
