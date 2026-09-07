@@ -329,3 +329,12 @@ a reassuring provenance line at the top. `tools/quartus/check_prod_manifest.py`
 now also checks that everything the top instantiates is in the production fit's
 source list — registering a block in the ledger, the manifest and that list are
 three different acts.
+
+**A source list naming the file while Verilator says `MODMISSING` means the
+GRAPH is stale, not the list.** Second instance of the trap above, 2026-09-07,
+with a different tell: `zhao_raster_rcp24_v3.sv` instantiated
+`zhao_raster_ticketq_rh`, the file was already in that test's `SOURCES`, and the
+build still could not find the module — `build.ninja` predated the line and
+could not regenerate itself because the failing rule is part of its own
+regeneration. The instinct is to add the file again, which is a no-op followed
+by confusion. Regenerate through `cmake --preset`.
