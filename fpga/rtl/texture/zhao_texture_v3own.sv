@@ -1763,6 +1763,32 @@ module zhao_texture_v3own #(
       // never exceed the ring.
       a_win_used_bounded : assert (live_cnt_q <= CNTW'(OWNERS));
 
+      // ---- V03 / V04 REACHABILITY, instrumented before being claimed -------
+      // The brief's V03 and V04 are the two counterexamples of S8.1, and it is
+      // explicit about the standard of evidence: "Ensure the schedule is
+      // actually covered or explain why the unmodified pipeline structurally
+      // prevents it." So these detect whether each schedule OCCURS, rather
+      // than asserting it cannot.
+      //
+      // V03, the FUTURE token: invalid at the C1 snapshot, live by the C2
+      // claim. If this fires, a current-only check would have accepted a packet
+      // whose stored snapshot was never valid for that instance -- and the
+      // snapshot half of the predicate is load-bearing.
+      //
+      // V04, the RETIRED token: live at the C1 snapshot, no longer a member by
+      // the C2 claim. If this fires, a snapshot-only check would have accepted
+      // a packet whose owner's authority had ended -- and the current half,
+      // added today under S8.2, is load-bearing.
+      //
+      // Either outcome is a result. Silence across the bench is the "explain
+      // why it is structurally prevented" branch, and must be reported as such
+      // rather than as coverage.
+      a_v03_future_token_schedule : assert (
+          !(c1t_v_q && !c1t_live_q && win_live({c1t_gen_q, c1t_slot_q})));
+      a_v04_retired_token_schedule : assert (
+          !(c1t_v_q && c1t_live_q && (c1t_tgen_q == c1t_gen_q)
+            && !win_live({c1t_gen_q, c1t_slot_q})));
+
       // S13.2's THREE POSITIONS, asserted as a partition rather than trusted as
       // a naming convention. The section's warning is specific:
       //
