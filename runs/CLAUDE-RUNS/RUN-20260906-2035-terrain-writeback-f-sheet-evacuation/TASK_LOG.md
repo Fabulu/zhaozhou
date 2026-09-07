@@ -2839,3 +2839,47 @@ in those fifteen minutes. A mutation campaign is normally described as testing
 the DESIGN; this one tested the TESTS and found two blind spots.
 
 **541 checks**, restored digest `2733389d405f0d9e`.
+
+## Mutation campaign 6 → 9 of 14, and then a deliberate stop
+
+* **22.10-4** recent-claim forwarding removed → `a_reject_partition_t` fires.
+* **22.10-7** combine_reserved omitted on the credited pop → `a_p22_cbi_implies_crs`
+  fires, an invariant written hours earlier the same day.
+* **22.10-2** membership subtraction truncated to the slot field → six checks,
+  led by "a stale GENERATION on the issue lane is refused", and it broke
+  THROUGHPUT as well as identity (58 of 64 emitted, then 0), because owners that
+  falsely test live corrupt the retirement accounting too.
+
+**The pattern across nine mutations is now stable and worth carrying forward:
+bench checks catch corrupted VALUES; in-RTL invariants catch broken ORDERING and
+broken PARTITIONS.** Item 5 escaped 538 checks precisely because it corrupted
+neither — it changed WHEN a bit was set, and nothing was watching that. The
+remaining mutations most likely to escape are the timing-shaped ones for the
+same reason.
+
+## STOPPING THE BUILDS ON PURPOSE — they are slowing the fit
+
+Checked rather than assumed: `quartus_fit` CPU time went 10,143.6 → 10,239.8 s
+across 45 wall-seconds, so the fit is alive and multi-threaded, not stuck.
+
+But that is also the problem. Each mutation cycle needs a full Verilator rebuild
+of the owner block, and those have grown from ~2 minutes to ~8 as they compete
+with the fit for cores; this island fit is at ~2 h against the previous one's
+~90 min. **The fit is the higher-value deliverable** — it is P0-B's real answer
+and G1-D's headline — so continuing to spend cores on mutation rebuilds is
+optimising the cheaper thing.
+
+Switched to work that needs no compiler.
+
+## G1-D §4.3f written BEFORE the result
+
+The island before-picture, its prediction and its falsifier are now in the report
+ahead of the number, so the comparison cannot be arranged after the fact:
+ALM 13,601, registers 23,181, reported 66.77, core→core 75.51, worst internal
+`c_val[5] -> c_m.raddr_a[0]` at −3.243 ns, against 6,600 / 7,500 / 7,913.
+
+**Structural prediction only:** the `c_m.raddr_a` endpoint must be gone. ALM and
+Fmax deliberately unpredicted, with the reasons recorded — the standalone block
+grew 159 ALM, an independent dispatch→FRAGROB family near −2 ns still exists, and
+docket M1's seed noise is diluted by composition but not abolished. What counts
+as a good result is stated in advance so it cannot be rationalised afterwards.
