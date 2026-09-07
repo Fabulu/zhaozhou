@@ -83,6 +83,11 @@ top:
   - zhao_raster_attrinterp
   - zhao_raster_attrstep
   - zhao_raster_toon
+  # RASTER.FOG, owner ruling D-5 step 5: the fog mix on the FINAL SOURCE COLOUR,
+  # after the toon quantiser and after material combination. Counted because it
+  # is production hardware on the per-pixel path, not an experiment -- even
+  # though no composed top instantiates it yet.
+  - zhao_raster_fog
 
   # --- geometry -------------------------------------------------------------
   - zhao_geom_setup
@@ -90,6 +95,9 @@ top:
   - zhao_geom_cull
   - zhao_geom_lod
   - zhao_geom_project
+  # The per-vertex half of D-5: §8's frozen fog factor from the guarded w that
+  # zhao_geom_project already emits on out_w_o.
+  - zhao_geom_fogfactor
   - zhao_geom_skin
   - zhao_geom_pose_cache
   - zhao_geom_pose_decode
