@@ -159,3 +159,43 @@ The timing benefit. That was the entire point, and only a refit shows it.
 Compare against the island's **67.57 reported / 77.30 core→core** on matched
 scope — remembering that row is four commits stale, so the refit is needed for
 both halves of the comparison.
+
+
+---
+
+## The palette load path is the same defect a THIRD time — and is deliberately left alone
+
+The five paths worse than the one repaired above all start at `pal_ld_gen_i`.
+That is the palette **load/configuration** interface — `ld_valid`, `ld_op`
+(BEGIN/WRITE/END), `ld_slot`, `ld_gen`, `ld_idx`, `ld_rgb565`, `ld_crc_ok` — not
+a per-fragment path. Inside `zhao_texture_palette_res` it reaches:
+
+```systemverilog
+if (ld_gen_i == gen_r[ld_slot_i]) begin      // line 202
+```
+
+An input port indexing an array with **another** input port, compared, and
+landing in a register. Structurally the same shape as `ticketq`'s `mem_q[head_q]`
+and perspuv's `e_q_u[head_q]`: **a dynamically indexed array read with no
+register in front of it.** Three instances found today, in three different
+blocks.
+
+**It is not being fixed in this pass, for two reasons that are worth separating.**
+
+1. **Magnitude is unknown and the honest prior says "small".** These paths are
+   port-terminated in a leaf fit of the island, so they carry virtual-pin delay.
+   CLAUDE.md records the last time this exact shape looked decisive: *"Deleting
+   the boundary entirely would buy about 4 MHz of 36 needed. The artefact was
+   real and almost irrelevant."* Registering the load interface is
+   architecturally right regardless — but claiming it buys the gap between
+   reported 67.57 and core→core 77.30 would be exactly the comfortable reading.
+
+2. **There are already four unmeasured RTL changes stacked** — T4, the fence
+   rewrite, perspuv's output boundary, and `ticketq_rh`. §12.5 says *"attribute
+   each delta before treating it as a mechanism."* A fifth would make the next
+   fit's numbers harder to attribute, not easier. The right move is to measure
+   what is in the tree before adding to it.
+
+**Recorded as the next candidate**, with the note that a palette load is a
+configuration event, so a registered load interface costs a cycle per word on a
+path that runs rarely — which is the cheapest kind of pipeline register there is.
