@@ -152,6 +152,15 @@ inline const zc::CreatureType& type() {
     // so it is COMMITTED rather than a scratch subject -- the same rule that
     // put manafold-still and the fogprobes in the bank permanently.
     bank.clips.push_back(build_nodule_solo());
+    // slots 17..21 (PASS 12 / WAVE 2b, Direction 9 SS11 + SS15): THE
+    // THEATRICAL CLIPS. Two deaths with distinct approaches, the mana lasso,
+    // the blown-up fall and the nodule taunt. Appended, so every existing
+    // slot id and every existing clip is bit-identical.
+    bank.clips.push_back(build_death_drop());    // slot 17
+    bank.clips.push_back(build_death_gutter());  // slot 18
+    bank.clips.push_back(build_lasso());         // slot 19
+    bank.clips.push_back(build_blown());         // slot 20
+    bank.clips.push_back(build_taunt3());        // slot 21
 
     zc::CreatureType type;
     type.type_id = 3;  // 1 watchdog, 2 zixxtrixx, 3 manafold

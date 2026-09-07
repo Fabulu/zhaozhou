@@ -1261,6 +1261,15 @@ inline void mana_bullets(uint32_t frame, const FxAnchors& A, uint8_t ramp,
 // (anchor velocity) drives agitation, and DRAG (hinge B's lagged velocity)
 // pulls the whole mass across the gap a beat late -- the iron-filings read.
 
+// ---- PASS 12 / WAVE 2b: the two knobs the theatrical clips add here -------
+// The lasso must READ as a loop for its whole flight, so its edge is held
+// above the fold's ordinary draw threshold: the area-derived coherence is
+// measuring the ANTENNA's pocket, which is not where the thrown ring is.
+constexpr int32_t kLassoCohPm = 940;
+// A dying conduit drops the lightning STRAND at this life level rather than
+// fading it -- a bolt at low strength reads as a glitch, not as an ebb.
+constexpr int32_t kFoldLightningCutPm = 620;
+
 constexpr int kStencilPts = 18;
 // Stencil ids, for readability: 0 RING, 1 STAR, 2 BAR, 3 CRESCENT,
 // 4 TRIANGLE, 5 S-CURL. Moved here from the lane-only lab header by pass 8,
@@ -1678,6 +1687,35 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   if (g_u02_fold_lock) coh = 1000;
   // ---- the shared timeline (shape choice + morph; key = frame / 2) -------
   FoldPhase ph = fold_phase(slot, keys, static_cast<int32_t>(frame) * 8);
+  // PASS 12 / WAVE 2b (Direction 9 SS11.2): "the mana must respond -- a dead
+  // conduit should not keep folding shapes." fold_life_pm() is 1000 for every
+  // slot in the bank except the two deaths, so this scales nothing anywhere
+  // else; on a death it takes the coherence, the agitation and the mote count
+  // down together and then stops the fold outright at the settle key.
+  const int32_t life_pm = fold_life_pm(slot, keys, static_cast<int32_t>(frame) * 8);
+  if (life_pm <= 0) return 0;  // eternal rest: no shape, no motes, no edge
+  if (life_pm < 1000) {
+    coh = coh * life_pm / 1000;
+    crowd_pm = crowd_pm * life_pm / 1000;
+    ph.agit_pm = ph.agit_pm * life_pm / 1000;
+    ph.amp_pm = ph.amp_pm * life_pm / 1000;
+  }
+  // PASS 12 / WAVE 2b (Direction 9 SS15): THE MANA LASSO. Not a new primitive
+  // -- the throw PINS the fold's figure to stencil 0, THE RING, and then
+  // translates, scales and spins the shape the fold already draws. The
+  // substance, the edge, the motes and the knead are the ordinary ones, which
+  // is what makes the lasso read as the creature's own mana rather than as a
+  // prop. lasso_at() is inert for every other slot.
+  const LassoState lasso = lasso_at(slot, keys, static_cast<int32_t>(frame) * 8);
+  if (lasso.active) {
+    ph.shape_from = 0;  // RING
+    ph.shape_to = 0;
+    ph.morph_pm = 0;
+    // a thrown loop must READ as a loop for the whole flight, so the edge is
+    // held above its draw threshold rather than left to the area-derived
+    // coherence, which is measuring the ANTENNA and not the flying ring
+    if (coh < kLassoCohPm) coh = kLassoCohPm;
+  }
   // PASS 12 DIAGNOSTIC (default off): U02_FOLD_SHAPE=<id> pins the figure so a
   // single stencil can be looked at on its own, through the SHIPPING draw path
   // -- the same morph, the same edge, the same knead. It exists because the
@@ -1749,12 +1787,27 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     turn(o[0], o[2], kStencilFaceYawA16);  // Y: the authored facing
     turn(o[1], o[2], rx_a16);              // X
     turn(o[0], o[1], rz_a16);              // Z
+    // THE LASSO (D9 SS15): the ring OPENS as it flies and CINCHES as it is
+    // reeled home, and it spins about the throw axis on the way. Applied here,
+    // inside the one place the shape's offset is transformed, so the outline
+    // and the motes cannot disagree about where the lasso is -- the same
+    // defect class pass 5's separately-authored star and ring produced.
+    if (lasso.active) {
+      for (int li = 0; li < 3; ++li)
+        o[li] = static_cast<int32_t>((static_cast<int64_t>(o[li]) * lasso.scale_pm) / 1000);
+      turn(o[0], o[1], lasso.spin_a16);
+    }
     // "Shapes are clipping into the antennae a bit though so you have to switch
     // them about": MOVE THE SHAPES, NOT THE ANTENNAE. One declared offset of
     // the whole shape, out of the antenna band's own plane.
-    P[0] = A.ring[0] + o[0] + fxu(kStencilClearXMm);
-    P[1] = A.ring[1] + o[1] + fxu(kStencilClearYMm);
-    P[2] = A.ring[2] + o[2] + fxu(kStencilClearZMm);
+    // ...and the THROW itself: the whole shape is carried out along the
+    // authored flight and back. IT TRAVELS, so its RETURN IS AUTHORED (SS7.8:
+    // "leaving stuff hanging in space just looks like a glitch") -- lasso_at()
+    // brings the offset to exactly zero and the scale to exactly 1000 at
+    // kLassoHomeKey, so the hand-back to the ordinary fold has no step in it.
+    P[0] = A.ring[0] + o[0] + fxu(kStencilClearXMm) + fxu(lasso.off_mm[0]);
+    P[1] = A.ring[1] + o[1] + fxu(kStencilClearYMm) + fxu(lasso.off_mm[1]);
+    P[2] = A.ring[2] + o[2] + fxu(kStencilClearZMm) + fxu(lasso.off_mm[2]);
   };
 
   // THE EDGE. Drawn only while there IS a shape: below kFoldEdgeCohMinPm the
@@ -2026,7 +2079,13 @@ inline void mana_fill(int cand, uint32_t frame, uint32_t slot, int keys,
       break;
     case 9: {  // the CHANNEL stack: the fold + the lightning strand
       const int32_t ag = mana_fold(frame, slot, keys, A, stfx, kRampAqua, crowd_pm, out);
-      mana_lightning(frame, A, out);
+      // PASS 12 / WAVE 2b: the strand is the loudest thing the mana does, so a
+      // dying conduit loses it FIRST and outright rather than fading it -- a
+      // lightning bolt at 12% strength reads as a rendering fault, not as a
+      // creature running out. 1000 for every slot but the two deaths.
+      if (fold_life_pm(slot, keys, static_cast<int32_t>(frame) * 8) >=
+          kFoldLightningCutPm)
+        mana_lightning(frame, A, out);
       if (agit_out) *agit_out = ag;
       break;
     }

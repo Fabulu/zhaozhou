@@ -1304,8 +1304,25 @@ constexpr int32_t kNoduleAmpMm[3][3] = {
 // Ordered to match kKneadClipPm so the two read together. Slot 7 is the
 // 2-key form-diagnostic still and is deliberately 0: a form plate must show
 // the REST shape.
-constexpr int32_t kNoduleClipPm[15] = {800, 700, 1000, 850, 900, 750, 800, 0,
-                                       950, 900, 600,  1000, 1000, 900, 500};
+// PASS 12 / WAVE 2b: EXTENDED to 22. Slots 15..16 are pinned to the 800 the
+// out-of-range fallback was already giving them, so nothing existing moves.
+// Slot 16 is the solo diagnostic and never calls antenna_knead at all; it is
+// listed for the table to be readable straight down, not because it is read.
+// The new clips:
+//   17 death-drop    0  the DEATH authors its own nodule track: a living
+//                       schedule under a dying creature is the exact fault
+//                       "the mana must respond" is warning about
+//   18 death-gutter  0  same, and this one dies nodule by nodule on purpose
+//   19 lasso         0  the throw IS the nodule performance; an ambient
+//                       schedule underneath would fight the wind-up
+//   20 blown         0  the antenna STREAMS from an authored trail
+//   21 taunt3        0  the gesture is the whole point
+// Every one of the five is 0 for the same reason: these clips DRIVE the
+// nodules themselves, and a background oscillator added to an authored gesture
+// is how a deliberate motion becomes a spazzy one.
+constexpr int32_t kNoduleClipPm[22] = {800, 700, 1000, 850, 900, 750, 800, 0,
+                                       950, 900, 600,  1000, 1000, 900, 500,
+                                       800, 800, 0, 0, 0, 0, 0};
 constexpr int kNoduleClipSlots =
     static_cast<int>(sizeof(kNoduleClipPm) / sizeof(kNoduleClipPm[0]));
 
@@ -1521,7 +1538,14 @@ constexpr int kTrickKeys = 200;
 // the ABSENCE of declared penetration is a bug exactly as an undeclared
 // penetration is: a headstand resting at zero reads as hovering. The plant
 // height is the knob; the declaration is unchanged.
-constexpr int32_t kTrickPlantRootMm = 1644;   // root height while planted: the
+// PASS 12 / WAVE 2b: 1644 -> 1706. Wave 1's ROUND BODY (D9 SS5) moved the
+// deepest vertex again -- exactly the event the pass-6 note below records --
+// and the committed probe caught it on unmodified main BEFORE this lane
+// authored anything: deepest -87 mm against a declared -25, and the approach
+// dipping to 19 mm three keys ahead of the window. Both are one number: the
+// plant sits 62 mm too low. Raised by the measured shortfall. The declaration
+// is unchanged; the knob moved, which is what the knob is for.
+constexpr int32_t kTrickPlantRootMm = 1706;   // root height while planted: the
                                               // loop peak (~1665 above root,
                                               // inverted) meets the dirt with
                                               // the declared penetration
@@ -1559,6 +1583,169 @@ constexpr int32_t kDamageSquashPm = 2200;    // impact squash, x kCompressAmpPm
 constexpr int kBlinkPeriodKeys = 96;
 constexpr int kBlinkLenKeys = 5;
 constexpr int32_t kBlinkDepthPm = 870;
+
+// ================ PASS 12 / WAVE 2b -- THE THEATRICAL CLIPS ================
+//
+// Direction 9 SS11 (fall, taunts, DEATHS) and SS15 (the mana lasso). "Make them
+// expressive and theatrical." The creature has no mouth and no nose, so every
+// beat below is carried by the body, the antenna NODULES, the eyes and the
+// mana -- which is why these clips could not be authored until pass 12 built
+// the per-nodule bones (SS2) they are performed on.
+//
+// EVERY VALUE HERE IS A NAMED KNOB. CLAUDE.md rule 6: "never remove the
+// owner's control in the name of fidelity."
+
+// ---- THE DEATH (D9 SS11.2) ------------------------------------------------
+// > "Death can be multiple bounces on the ground before coming to eternal rest."
+//
+// IT FLOATS, SO LOSING THE FLOAT IS THE DEATH. Nothing else signals it: no
+// flail, no clutch, no wound. The float lets go and the round bouncy body
+// does its own physics, finally unopposed.
+//
+// THE DECAY IS A TABLE, NOT A FORMULA, and that is deliberate. A restitution
+// coefficient would make five bounces that are all the same bounce scaled; a
+// table is five bounces the owner can retime one at a time. Both quantities
+// fall, which is what makes it read as physics rather than as a loop: each
+// impact returns LESS HEIGHT and the INTERVAL to the next is SHORTER.
+constexpr int kDeathBounces = 5;
+// apex height in mm above the settle root, per bounce
+constexpr int32_t kDeathApexMm[kDeathBounces] = {1120, 470, 205, 82, 27};
+// keys from this impact to the next (the last entry runs out to the settle)
+constexpr int kDeathIntervalKeys[kDeathBounces] = {32, 22, 15, 10, 7};
+constexpr int kDeathFailKey = 18;          // the float FAILS here: the death
+constexpr int kDeathDropKeys = 24;         // the first fall, hover -> impact 0
+// PROBE-CALIBRATED, NOT GUESSED: slot 7 reports the rest pose's lowest vertex
+// 740 mm below the root, so a corpse showing kDeathSettleDepthMm of declared
+// penetration sits here. The probe re-derives the real number every run and
+// this constant is what moves when it disagrees.
+constexpr int32_t kDeathRestRootMm = 703;
+constexpr int32_t kDeathSettleDepthMm = 25;   // DECLARED penetration at rest
+// 715 -> 703 because the probe MEASURED the corpse at 13 mm deep against
+// this 25 mm declaration. The 740 mm figure the first guess came from is the
+// REST pose's lowest vertex, and a corpse is not in the rest pose: it is
+// tipped kDeathRestRollA16 / kDeathRestPitchA16 with a slack antenna, which
+// moves which vertex is lowest. Measurement on the COMPARISON side, exactly
+// as CLAUDE.md rule 2 says -- it told me the declaration was wrong by 12 mm,
+// and the DECLARATION is what the number now matches.
+// A ball that stops at exactly zero reads as hovering (the ground-contact
+// law), so the impacts drive the root BELOW the settle height and ease back.
+// The dip decays with the bounce like everything else does.
+constexpr int32_t kDeathImpactDipMm[kDeathBounces] = {88, 52, 30, 16, 6};
+constexpr int kDeathImpactDipKeys = 5;     // keys to recover from the dip
+constexpr int kDeathTailKeys = 108;        // THE ETERNAL REST, held
+// "a corpse that keeps breathing is not dead": the deform ramps to EXACTLY
+// zero over these keys after the last impact and is bit-zero thereafter.
+constexpr int kDeathDeformFadeKeys = 22;
+// THE OPENING HOLD, and it exists because the gate found a real fault. The
+// probe reads the PRODUCTION deform stream (deformation_sample, both
+// presentation subs), and at the clip's LAST key that stream interpolates
+// toward key 0 -- so a corpse whose clip opens on a breath breathes ONCE
+// more, at the loop seam, no matter how carefully the tail is zeroed. One
+// non-zero sample of 472 is still a corpse breathing. The deform now eases
+// in from EXACTLY zero over these keys, which both closes the seam and buys
+// an authored beat: the clip opens on a held breath -- the moment before.
+constexpr int kDeathOpenKeys = 8;
+constexpr int32_t kDeathImpactSquashPm = 3100;  // x kCompressAmpPm at strike 0
+// the corpse's final attitude: it does not settle upright like a parked car
+constexpr int32_t kDeathRestRollA16 = 2600;   // tipped over, and it stays
+constexpr int32_t kDeathRestPitchA16 = 1500;
+// the antenna goes SLACK -- the fold scale opens past rest and stops there
+constexpr int32_t kDeathSlackPm = 1240;
+// the nodules hang: the offsets the schedule was driving are replaced by one
+// authored DROOP that arrives over the bounces and then never moves again
+constexpr int32_t kDeathDroopMm[3][3] = {   // [A,B,C][x,y,z]
+    {-26, -14,  10},
+    {-38, -52,  16},
+    {-30, -40,  12},
+};
+// THE SECOND DEATH -- a distinct approach, sharing the corpse contract.
+// The mana goes out FIRST and the body follows: it sags in stages, twice tries
+// to hold itself up and fails, the nodules go limp one at a time, and only
+// then does it drop -- heavily, with two small bounces. Same rest root, same
+// zero deform, same declared depth. Different performance.
+constexpr int kDeathBBounces = 2;
+constexpr int32_t kDeathBApexMm[kDeathBBounces] = {330, 74};
+constexpr int kDeathBIntervalKeys[kDeathBBounces] = {24, 12};
+constexpr int32_t kDeathBImpactDipMm[kDeathBBounces] = {74, 22};
+constexpr int kDeathBSagKeys[3] = {26, 62, 104};      // the three sag stations
+constexpr int32_t kDeathBSagMm[3] = {180, 430, 250};  // sag depth (2 recover)
+constexpr int kDeathBLetGoKey = 132;      // the last recovery fails: the drop
+constexpr int kDeathBDropKeys = 26;
+constexpr int kDeathBTailKeys = 104;
+// the nodules die in order, one per station -- the limp keys
+constexpr int kDeathBLimpKey[3] = {40, 78, 112};
+
+// ---- THE MANA LASSO (D9 SS15) --------------------------------------------
+// > "we should make a lasso again, only now the antennae 'throw' a mana lasso."
+//
+// THE ANTENNAE THROW IT: the wind-up and the release are NODULE motion, so the
+// throw is rig-driven -- "with that ability, the creature folds the mana"
+// (SS2) applied to a gesture. The mana does not fly off on its own.
+//
+// IT IS MADE OF MANA, and a LOOP is a shape the fold vocabulary already knows:
+// the lasso is the RING STENCIL (id 0), pinned, translated along the authored
+// throw and scaled -- not a new primitive. manafold_fx.h reads lasso_at().
+//
+// IT TRAVELS, SO ITS RETURN IS AUTHORED (SS7.8: "leaving stuff hanging in
+// space just looks like a glitch"). It flies out, catches, is REELED BACK IN
+// and shrinks into the pocket. It never simply stops existing mid-air.
+constexpr int kLassoKeys = 168;
+constexpr int kLassoWindStartKey = 10;    // the nodules haul back and down
+constexpr int kLassoReleaseKey = 44;      // the whip: the ring leaves
+constexpr int kLassoCatchKey = 104;       // it snags: the antennae take the jerk
+constexpr int kLassoReelKey = 118;        // reeled home
+constexpr int kLassoHomeKey = 146;        // gone: shrunk into the pocket
+constexpr int32_t kLassoThrowMm[3] = {2350, 620, -240};  // apex of the flight
+constexpr int32_t kLassoArcMm = 780;      // the lofted arc over the flight
+constexpr int32_t kLassoOutScalePm = 1600;  // the ring OPENS as it flies
+constexpr int32_t kLassoHomeScalePm = 120;  // and closes to nothing on return
+constexpr int32_t kLassoSpinA16 = 2200;     // it spins about the throw axis
+// the wind-up and the whip, in nodule millimetres -- this IS the throw
+constexpr int32_t kLassoWindMm[3][3] = {  // [A,B,C][x,y,z] at full wind-up
+    {-52, -30,  22},
+    {-74, -46,  30},
+    {-60, -38,  24},
+};
+constexpr int32_t kLassoWhipMm[3][3] = {  // ...and at the release
+    { 64,  34, -18},
+    { 92,  62, -26},
+    { 74,  48, -20},
+};
+constexpr int32_t kLassoJerkMm = 46;      // the catch yanks the nodules back
+constexpr int32_t kLassoLeanA16 = 2100;   // the body leans into the throw
+
+// ---- BLOWN HIGH UP IN THE AIR (D5 SS7, asked twice; D9 SS11) --------------
+// Distinct from `fall` (slot 9), which drops from a static start already high.
+// This one is the LAUNCH: it is on screen, at hover, and something blows it
+// upward. Anticipation, the blast, air time with the antenna STREAMING behind
+// (the nodules trail -- the new mechanism's show moment), the drop, the catch.
+constexpr int kBlownKeys = 196;
+constexpr int kBlownAnticipKey = 22;      // the gather: it compresses and sinks
+constexpr int kBlownLaunchKey = 30;       // the blast
+constexpr int kBlownApexKey = 96;         // the top of the arc
+constexpr int kBlownCatchKey = 164;       // the float grabs again
+constexpr int32_t kBlownHeightMm = 4200;  // higher than fall's 3600: BLOWN
+constexpr int32_t kBlownSinkMm = 210;     // the anticipation dip
+constexpr int32_t kBlownTumbleA16 = 44000;  // 2/3 of a turn, not a full spin
+constexpr int32_t kBlownYawA16 = 15000;
+constexpr int32_t kBlownStreamMm = 96;    // nodule trail at peak velocity
+constexpr int32_t kBlownCatchSquashPm = 2700;
+
+// ---- THE NODULE TAUNT (D9 SS11, "more fun", third ask) --------------------
+// The first shipped clip whose PERFORMANCE is the per-nodule vocabulary: the
+// owner's own configuration used as a GESTURE rather than as a diagnostic.
+// Four beats, each >= 8 keys, one thing at a time (07-MOTION-STYLE SS4), and
+// every beat is a PRESS with a HOLD -- reversal density stays low on purpose.
+constexpr int kTaunt3Keys = 184;
+constexpr int kTaunt3ShrugKey = 12;       // beat 1: middle down, outers up
+constexpr int kTaunt3ShrugHoldKey = 44;   // ...and HELD, which is the joke
+constexpr int kTaunt3LeanKey = 62;        // beat 2: the slow mocking lean-in
+constexpr int kTaunt3ShimmyKey = 104;     // beat 3: the three balls, in turn
+constexpr int kTaunt3FlickKey = 150;      // beat 4: the dismissal
+constexpr int32_t kTaunt3ShrugMm = 88;    // outer rise / middle drop, in mm
+constexpr int32_t kTaunt3ShimmyMm = 64;
+constexpr int32_t kTaunt3LeanA16 = 2400;
+constexpr int32_t kTaunt3FlickMm = 104;
 
 // ============================== STAGE ======================================
 
@@ -2046,8 +2233,21 @@ constexpr int32_t kKneadTremorA16 = 130;   // the hold's small tremor
 // gestures and the smear fog buried the loop. Said out loud so nobody hunts
 // for a regression. The burying was a SMEAR-plateau fault (stage E.5), not a
 // knead fault, and these two are the clips to re-check first if it returns.
-constexpr int kKneadClipPm[15] = {1000, 850, 950, 900, 700, 800, 850,
-                                  0,    800, 650, 700, 850, 750, 0,   650};
+// PASS 12 / WAVE 2b: EXTENDED to 22, and slots 15..16 are pinned to the
+// values the `slot >= kKneadClipSlots` fallback was already handing them (700)
+// so no existing clip moves by one bit. The new theatrical clips each get an
+// authored gain rather than inheriting a default nobody chose:
+//   17 death-drop  650  the knead is alive until the float fails, then the
+//                       clip's own death fade takes it to zero regardless
+//   18 death-gutter 600 this one is dying from the mana inward: less to start
+//   19 lasso       900  the throw IS antenna work; the knead should read
+//   20 blown       700  house
+//   21 taunt3        0  the taunt's whole performance is the NODULES; a knead
+//                       layer on top is exactly the "one wobbling hose" read
+//                       the owner rejected, and it would blur the gesture
+constexpr int kKneadClipPm[22] = {1000, 850, 950, 900, 700, 800, 850,
+                                  0,    800, 650, 700, 850, 750, 0,   650,
+                                  700,  700, 650, 600, 900, 700, 0};
 // PASS 6 (0.2, carried from pass-5 QA): the guard over this array is DERIVED
 // from the array, never hand-written. The literal `< 14` orphaned slot 14 once
 // (damage silently ran at 700 against its authored 250); `< 15` was the same

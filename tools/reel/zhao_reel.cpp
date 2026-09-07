@@ -5451,6 +5451,22 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
     s.cam_ps = 9000;   // shallower pitch: keep sky headroom for the drop
     s.cam_pc = 64900;
   }
+  // PASS 12 / WAVE 2b: the same staging lesson, applied BEFORE it was learned
+  // the hard way a second time. `blown` (20) goes 4.2 m up -- higher than the
+  // fall -- so it takes the fall's pulled-back, tipped-up framing with a bit
+  // more room. The two DEATHS (17, 18) go the other way: the creature ends up
+  // ON THE GROUND and the house framing is centred on a body that hovers at
+  // 1250 mm, so a corpse at 715 mm would settle into the bottom of the frame.
+  // The bias drops the aim to where the clip actually ends.
+  if (slot == u02::kBlownSlot) {
+    s.cam_k = 168000;
+    s.cam_ps = 9000;
+    s.cam_pc = 64900;
+  }
+  if (slot == u02::kDeathSlot || slot == u02::kDeathBSlot) {
+    s.cam_k = 190000;
+    s.cam_bias = -5200;
+  }
   // PASS 4 (Direction 4 §4): the interior glow is REMOVED from every
   // shipping subject — "make it go away". kBellyGlowGainPm (held 0) is the
   // revert path; the glow machinery itself stays, the mana uses it.
@@ -7737,6 +7753,71 @@ int main(int argc, char** argv) {
         "Direction 9 SS2: EVERY NODULE MOVES INDIVIDUALLY. Segments of 48 keys "
         "-- A alone (vertical then lateral), B alone, C alone, then the middle "
         "DOWN while the outer two swing UP. Camera and body root hold still.";
+    rc |= render_scene(s);
+  }
+  // ---- PASS 12 / WAVE 2b: THE THEATRICAL CLIPS (D9 SS11 + SS15) -----------
+  // Two deaths, the mana lasso, the blown-up fall and the nodule taunt. All
+  // five take the ordinary shipping presentation -- the moving mana rig, the
+  // fold, the smear, the mist -- because a clip judged under a private rig is
+  // a clip nobody has actually seen (pass 6 A.1's lesson).
+  if (wanted("manafold-death-drop")) {
+    SceneSubject s = subject_u02_clip(u02::kDeathSlot, "manafold-death-drop",
+                                      u02::kDeathKeys, false, &kU02SunFall);
+    s.note =
+        "Direction 9 SS11.2, the owner's own mechanism: it FLOATS, so LOSING "
+        "THE FLOAT IS THE DEATH. Five strikes, each returning less height than "
+        "the last and arriving sooner (the decay is a TABLE, not a "
+        "restitution coefficient), then eternal rest -- deform bit-zero, mana "
+        "out, nothing moving. Declared, probed ground contact at every strike "
+        "and at the settle. NOTE: the site loops; the wrap is a restart, not a "
+        "resurrection.";
+    rc |= render_scene(s);
+  }
+  if (wanted("manafold-death-gutter")) {
+    SceneSubject s = subject_u02_clip(u02::kDeathBSlot, "manafold-death-gutter",
+                                      u02::kDeathBKeys, false, &kU02SunHit);
+    s.note =
+        "Direction 9 SS11.2, the SECOND death and a distinct approach: the "
+        "mana goes out FIRST and the body follows. It sags in three stations "
+        "and hauls itself back twice; the three nodules go limp one at a time, "
+        "each dropping the antenna section it carries; the third recovery "
+        "fails and it drops with two small bounces. Same corpse contract.";
+    rc |= render_scene(s);
+  }
+  if (wanted("manafold-lasso")) {
+    SceneSubject s = subject_u02_clip(u02::kLassoSlot, "manafold-lasso",
+                                      u02::kLassoKeys, false, &kU02SunTaunt2);
+    s.note =
+        "Direction 9 SS15: THE ANTENNAE THROW A MANA LASSO. The wind-up and "
+        "the release are NODULE motion -- the mana does not fly off on its "
+        "own. The rope is the RING STENCIL the fold vocabulary already knows, "
+        "not a new primitive. It flies, snags, and is REELED BACK IN hand over "
+        "hand (C, then B, then A): the return is authored, because a rope that "
+        "stops existing mid-air is the glitch SS7.8 names.";
+    rc |= render_scene(s);
+  }
+  if (wanted("manafold-blown")) {
+    SceneSubject s = subject_u02_clip(u02::kBlownSlot, "manafold-blown",
+                                      u02::kBlownKeys, false, &kU02SunStartle);
+    s.note =
+        "Direction 5 SS7, asked twice and never authored: BLOWN HIGH UP IN THE "
+        "AIR. Distinct from `fall`, which begins already high -- this one is at "
+        "the hover and the blast happens on screen. Anticipation, launch, air "
+        "time with the antenna STREAMING (the three nodules trail by different "
+        "amounts because they are three independent things), the drop, the "
+        "catch.";
+    rc |= render_scene(s);
+  }
+  if (wanted("manafold-taunt3")) {
+    SceneSubject s = subject_u02_clip(u02::kTaunt3Slot, "manafold-taunt3",
+                                      u02::kTaunt3Keys, false, &kU02SunTaunt);
+    s.note =
+        "Direction 9 SS11 (\"more fun\", the third ask): the first SHIPPED clip "
+        "whose performance IS the per-nodule vocabulary. The owner's own "
+        "configuration -- middle down, outers up -- used as an insolent SHRUG "
+        "and then HELD; a slow mocking lean; a three-ball shimmy of one press "
+        "each; the dismissal. Press, arrive, hold: no ambient oscillator runs "
+        "underneath (kNoduleClipPm[21] = 0).";
     rc |= render_scene(s);
   }
   // ---- PASS 11 F.2: THE QUARTER VIEW, the AUTHORING instrument -------------

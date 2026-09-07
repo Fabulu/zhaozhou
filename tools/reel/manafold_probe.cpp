@@ -74,6 +74,38 @@ int main() {
   // it is two keys wide and the probe still asserts nothing goes deeper
   // than the crash bound inside it.
   constexpr int kTrickApronKeys = 2;
+  // ---- PASS 12 / WAVE 2b: THE DEATHS' DECLARED GROUND CONTACT -------------
+  //
+  // The ground-contact law's home turf. Two clips now END on the dirt and
+  // strike it several times on the way, so the float contract cannot apply
+  // for their whole length -- and the law says the ABSENCE of declared
+  // penetration is a fault exactly as an undeclared one is: a corpse resting
+  // at zero reads as hovering.
+  //
+  // THREE PHASES, declared per key from the clip's OWN schedule (death_beats()
+  // in manafold_clips.h -- one arithmetic, shared, so the probe cannot bless a
+  // window the clip does not have):
+  //
+  //   FLOAT   f <= the fail key            the ordinary >= 40 mm clearance
+  //   BOUNCE  fail < f < settle            in a strike's contact beat the
+  //                                        deepest vertex must be really in
+  //                                        the dirt, [-kDeathDepthMaxMm,
+  //                                        -kDeathDepthMinMm]; between strikes
+  //                                        it is in the AIR and only the crash
+  //                                        bound applies (a bounce apex of
+  //                                        27 mm is legitimately below the
+  //                                        40 mm float floor -- that is what a
+  //                                        dying bounce IS)
+  //   REST    f >= settle                  the same contact contract, held to
+  //                                        the last key: this is where
+  //                                        kDeathSettleDepthMm is proved
+  constexpr int32_t kDeathDepthMinMm = 8;   // shallower reads as hovering
+  constexpr int32_t kDeathDepthMaxMm = 150; // deeper is buried, not settled
+  const u02::DeathBeats kDB[2] = {u02::death_beats(), u02::deathb_beats()};
+  const uint16_t kDeathSlots[2] = {u02::kDeathSlot, u02::kDeathBSlot};
+  const int kDeathNb[2] = {u02::kDeathBounces, u02::kDeathBBounces};
+  const int kDeathFail[2] = {u02::kDeathFailKey, u02::kDeathBLetGoKey};
+
   const zc::CreatureType& T = u02::type();
   if (T.mesh.empty()) {
     std::printf("u02-probe: FAIL compile produced no meshlets\n");
@@ -82,6 +114,19 @@ int main() {
   int rc = 0;
   for (const zc::Clip& clip : T.bank.clips) {
     const bool has_window = clip.slot_id == kTrickSlot;
+    // which death is this, if any
+    int di = -1;
+    for (int i = 0; i < 2; ++i)
+      if (clip.slot_id == kDeathSlots[i]) di = i;
+    const bool is_death = di >= 0;
+    // PER STRIKE, not pooled: the last bounce is 6 mm of drive and would
+    // vanish behind the first one's 88 mm in a single minimum. A gate that
+    // cannot see the shallow end of the decay is a gate that would bless a
+    // creature whose last two "impacts" never touch the ground.
+    int32_t death_strike_worst[u02::kDeathBounces];
+    for (int i = 0; i < u02::kDeathBounces; ++i) death_strike_worst[i] = INT32_MAX;
+    int32_t death_air_worst = INT32_MAX;      // between strikes: airborne
+    int32_t death_rest_worst = INT32_MAX;     // the eternal rest
     int32_t worst = INT32_MAX;        // outside any declared window
     int32_t window_worst = INT32_MAX; // inside the declared window
     uint16_t worst_frame = 0;
@@ -93,6 +138,23 @@ int main() {
           has_window && !in_window &&
           f >= u02::kTrickPlantKey - kTrickApronKeys &&
           f < u02::kTrickLiftKey + kTrickApronKeys;
+      // PASS 12 / WAVE 2b: which death phase this key is in. Read from the
+      // clip's own DeathBeats, never re-derived from a second copy of the
+      // timing arithmetic.
+      int death_phase = 0;  // 0 float, 1 airborne bounce, 2 contact, 3 rest
+      int death_strike = -1;
+      if (is_death) {
+        const u02::DeathBeats& B = kDB[di];
+        if (f > kDeathFail[di]) {
+          death_phase = 1;
+          for (int i = 0; i < kDeathNb[di]; ++i)
+            if (f >= B.impact[i] && f < B.impact[i] + B.dipk[i]) {
+              death_phase = 2;
+              death_strike = i;
+            }
+          if (f >= B.settle) death_phase = 3;
+        }
+      }
       for (uint8_t sub = 0; sub < 2; ++sub) {
         std::array<zc::mat3x4fx, zc::kMaxBones> pose;
         zc::decode_pose(T, clip, f, pose, nullptr, sub);
@@ -103,6 +165,19 @@ int main() {
             if (!m.deform.empty()) sv = zc::deform_skin_vertex(sv, m.deform[vi], d);
             int32_t x, y, z;
             zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
+            if (death_phase == 1) {
+              if (y < death_air_worst) death_air_worst = y;
+              continue;
+            }
+            if (death_phase == 2) {
+              if (y < death_strike_worst[death_strike])
+                death_strike_worst[death_strike] = y;
+              continue;
+            }
+            if (death_phase == 3) {
+              if (y < death_rest_worst) death_rest_worst = y;
+              continue;
+            }
             if (in_window || in_apron) {
               if (y < window_worst) window_worst = y;
               continue;
@@ -116,8 +191,12 @@ int main() {
         }
       }
     }
+    // PASS 12 / WAVE 2b: a death's float phase is only its first keys, and
+    // `worst` covers exactly those (every later key was classified into a
+    // death phase and skipped above), so the clearance line below still says
+    // something true about the part of the clip that IS floating.
     const int32_t worst_mm = static_cast<int32_t>((static_cast<int64_t>(worst) * 1000) >> 16);
-    const bool ok = worst_mm >= kMinClearanceMm;
+    const bool ok = worst == INT32_MAX ? true : worst_mm >= kMinClearanceMm;
     std::printf("u02-probe: slot %u (%u keys): min clearance %d mm at key %u sub %u — %s\n",
                 clip.slot_id, clip.frame_count, worst_mm, worst_frame, worst_sub,
                 ok ? "OK" : "FAIL");
@@ -133,6 +212,75 @@ int main() {
           wmm, u02::kTrickPlantDepthMm, kTrickDepthMaxMm, kTrickDepthMinMm,
           wok ? "OK" : "FAIL");
       if (!wok) rc = 1;
+    }
+    // ---- PASS 12 / WAVE 2b: THE DEATH CONTRACT --------------------------
+    if (is_death) {
+      const u02::DeathBeats& B = kDB[di];
+      const auto mm = [](int32_t v) {
+        return static_cast<int32_t>((static_cast<int64_t>(v) * 1000) >> 16);
+      };
+      // (a) EVERY STRIKE REALLY TOUCHES. Per strike, so the shallow end of the
+      //     decay is checked as hard as the first blow.
+      for (int i = 0; i < kDeathNb[di]; ++i) {
+        const int32_t v = mm(death_strike_worst[i]);
+        const bool sok = v <= -kDeathDepthMinMm && v >= -kDeathDepthMaxMm;
+        std::printf(
+            "u02-probe: slot %u DEATH strike %d key %d (+%d-key contact beat): "
+            "deepest vertex %d mm (accepted -%d..-%d) - %s\n",
+            clip.slot_id, i, B.impact[i], B.dipk[i], v, kDeathDepthMaxMm,
+            kDeathDepthMinMm, sok ? "OK" : "FAIL");
+        if (!sok) rc = 1;
+      }
+      // (b) BETWEEN STRIKES IT IS IN THE AIR. No float floor -- a 27 mm final
+      //     bounce is BELOW the 40 mm hover gate and that is exactly right --
+      //     but nothing may drown: the crash bound still holds.
+      {
+        const int32_t v = mm(death_air_worst);
+        const bool aok = death_air_worst == INT32_MAX || v >= -kDeathDepthMaxMm;
+        std::printf(
+            "u02-probe: slot %u DEATH airborne (between strikes): deepest "
+            "vertex %d mm (crash bound -%d; NO float floor applies here) - %s\n",
+            clip.slot_id, v, kDeathDepthMaxMm, aok ? "OK" : "FAIL");
+        if (!aok) rc = 1;
+      }
+      // (c) THE ETERNAL REST settles IN the dirt. "A ball that stops at
+      //     exactly zero reads as hovering" -- so the ABSENCE of penetration
+      //     fails here exactly as an undeclared penetration would.
+      {
+        const int32_t v = mm(death_rest_worst);
+        const bool rok = v <= -kDeathDepthMinMm && v >= -kDeathDepthMaxMm;
+        std::printf(
+            "u02-probe: slot %u DEATH eternal rest keys %d..%d: deepest vertex "
+            "%d mm (declared -%d, accepted -%d..-%d) - %s\n",
+            clip.slot_id, B.settle, clip.frame_count, v,
+            u02::kDeathSettleDepthMm, kDeathDepthMaxMm, kDeathDepthMinMm,
+            rok ? "OK" : "FAIL");
+        if (!rok) rc = 1;
+      }
+      // (d) ⚠ THE CORPSE DOES NOT BREATHE. "A corpse that keeps breathing is
+      //     not dead" (D9 §11.2). Taken off the PRODUCTION deform stream --
+      //     deformation_sample(), the same call the renderer makes, at both
+      //     presentation subs -- not off the clip's authored array, because
+      //     the authored array is not what ships.
+      {
+        int nonzero = 0, first_bad = -1;
+        for (uint16_t f = B.settle; f < clip.frame_count; ++f)
+          for (uint8_t sub = 0; sub < 2; ++sub) {
+            const zc::DeformSample d = zc::deformation_sample(T, clip.slot_id, f, sub);
+            if (d.flatten != 0 || d.spread != 0) {
+              ++nonzero;
+              if (first_bad < 0) first_bad = f;
+            }
+          }
+        const bool dok = nonzero == 0;
+        std::printf(
+            "u02-probe: slot %u DEATH deform STOPS at key %d: %d non-zero "
+            "samples in the eternal rest%s - %s\n",
+            clip.slot_id, B.settle, nonzero,
+            first_bad >= 0 ? " (first at key " : "", dok ? "OK" : "FAIL");
+        if (first_bad >= 0) std::printf("            first non-zero key %d)\n", first_bad);
+        if (!dok) rc = 1;
+      }
     }
   }
   std::printf(rc == 0 ? "u02-probe: CLEARANCE CONTRACT HOLDS (>= %d mm everywhere)\n"
