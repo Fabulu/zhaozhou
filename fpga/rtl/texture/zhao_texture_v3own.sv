@@ -239,7 +239,16 @@ module zhao_texture_v3own #(
   logic [3:0]      clm_q  [OWNERS];
   logic [3:0]      cmt_q  [OWNERS];
   logic            rdy_q  [OWNERS];   // ready_claimed
-  logic            cbi_q  [OWNERS];   // combine_issued
+  logic            cbi_q  [OWNERS];   // combine_issued -- ACTUAL acceptance
+  // T4 / 11.1 separates three events the design used to conflate:
+  //   1 local candidate reservation, 2 central bank-read reservation,
+  //   3 actual COMBINE acceptance on valid && ready.
+  // "Only the third sets combine_issued and authorizes a final terminal.
+  //  The old cbi bit was set at the second event." So cbi_q now means
+  // event 3 ONLY, and this bit inherits event 2's guard duty -- an owner
+  // must not be reserved for COMBINE twice, and that is a DIFFERENT fact
+  // from having been accepted.
+  logic            crs_q  [OWNERS];   // combine_reserved
   logic            fcl_q  [OWNERS];   // final_claimed
   logic            fdn_q  [OWNERS];   // final_done
   logic            ftc_q  [OWNERS];   // fetched (section 18.1)
@@ -604,11 +613,11 @@ module zhao_texture_v3own #(
   assign t_elig_c = c4t_v_q && live_q[c4t_slot_q]
                  && (gen_q[c4t_slot_q] == c4t_gen_q)
                  && ((t_cmt_next_c & req_q[c4t_slot_q]) == req_q[c4t_slot_q])
-                 && !rdy_q[c4t_slot_q] && !cbi_q[c4t_slot_q];
+                 && !rdy_q[c4t_slot_q] && !crs_q[c4t_slot_q];
   assign a_elig_c = c4a_v_q && live_q[c4a_slot_q]
                  && (gen_q[c4a_slot_q] == c4a_gen_q)
                  && ((a_cmt_next_c & req_q[c4a_slot_q]) == req_q[c4a_slot_q])
-                 && !rdy_q[c4a_slot_q] && !cbi_q[c4a_slot_q];
+                 && !rdy_q[c4a_slot_q] && !crs_q[c4a_slot_q];
   assign tkt_t_c  = t_elig_c;
   // The deterministic winner named by D.2: READY_TMU takes the coalesced
   // ticket and the AUX insertion is suppressed. Suppression is not a dropped
@@ -906,6 +915,7 @@ module zhao_texture_v3own #(
   logic [3:0]      cmt_n_c  [OWNERS];
   logic            rdy_n_c  [OWNERS];
   logic            cbi_n_c  [OWNERS];
+  logic            crs_n_c  [OWNERS];
   logic            fcl_n_c  [OWNERS];
   logic            fdn_n_c  [OWNERS];
   logic            ftc_n_c  [OWNERS];
@@ -920,6 +930,7 @@ module zhao_texture_v3own #(
       cmt_n_c [i] = cmt_q [i];
       rdy_n_c [i] = rdy_q [i];
       cbi_n_c [i] = cbi_q [i];
+      crs_n_c [i] = crs_q [i];
       fcl_n_c [i] = fcl_q [i];
       fdn_n_c [i] = fdn_q [i];
       ftc_n_c [i] = ftc_q [i];
@@ -956,8 +967,20 @@ module zhao_texture_v3own #(
       if (tkt_t_c && (c4t_slot_q == SLOTW'(i))) rdy_n_c[i] = 1'b1;
       if (tkt_a_c && (c4a_slot_q == SLOTW'(i))) rdy_n_c[i] = 1'b1;
 
-      // ---- COMBINE ISSUE ----
+      // ---- COMBINE RESERVATION (11.1 event 2) ----
+      // The credited pop off the ready queue. This reserves the owner; it does
+      // NOT mean COMBINE has taken the packet, and it must not authorise a
+      // final.
       if (cmb_pop_c && (sel_data_c[OWNERW-1 -: SLOTW] == SLOTW'(i)))
+        crs_n_c[i] = 1'b1;
+
+      // ---- ACTUAL COMBINE ISSUE (11.1 event 3) ----
+      // T4: "Set actual issue on cmb_valid && cmb_ready; keep reservation
+      // separate." The generation is checked for the same reason every other
+      // event in this loop checks it: a stale token naming a reused slot must
+      // not mark the CURRENT owner issued.
+      if (cmb_fire_c && (cmb_owner_o[OWNERW-1 -: SLOTW] == SLOTW'(i))
+          && (gen_q[i] == cmb_owner_o[GENW-1:0]))
         cbi_n_c[i] = 1'b1;
 
       // ---- FETCH LAUNCH (18.1: an owner can be fetched at most once) ----
@@ -980,6 +1003,7 @@ module zhao_texture_v3own #(
         // there (section 9.1: "Admission can create a zero-work ready owner").
         rdy_n_c [i] = (adm_req_i == 4'd0);
         cbi_n_c [i] = 1'b0;
+        crs_n_c [i] = 1'b0;
         fcl_n_c [i] = 1'b0;
         fdn_n_c [i] = 1'b0;
         ftc_n_c [i] = 1'b0;
@@ -1036,6 +1060,7 @@ module zhao_texture_v3own #(
         cmt_q [i] <= 4'd0;
         rdy_q [i] <= 1'b0;
         cbi_q [i] <= 1'b0;
+        crs_q [i] <= 1'b0;
         fcl_q [i] <= 1'b0;
         fdn_q [i] <= 1'b0;
         ftc_q [i] <= 1'b0;
@@ -1061,6 +1086,7 @@ module zhao_texture_v3own #(
         cmt_q [i] <= cmt_n_c [i];
         rdy_q [i] <= rdy_n_c [i];
         cbi_q [i] <= cbi_n_c [i];
+        crs_q [i] <= crs_n_c [i];
         fcl_q [i] <= fcl_n_c [i];
         fdn_q [i] <= fdn_n_c [i];
         ftc_q [i] <= ftc_n_c [i];
@@ -1461,7 +1487,7 @@ module zhao_texture_v3own #(
       // combine_admit(owner) -> ready_claimed && !combine_issued
       a_combine_admit : assert (!cmb_pop_c
                           || (rdy_q[sel_data_c[OWNERW-1 -: SLOTW]]
-                              && !cbi_q[sel_data_c[OWNERW-1 -: SLOTW]]));
+                              && !crs_q[sel_data_c[OWNERW-1 -: SLOTW]]));
 
       // final_read_launch -> unfetched>0 && live && final_done && !fetched
       a_fetch_launch : assert (!fetch_fire_c
