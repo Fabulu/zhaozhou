@@ -6538,6 +6538,44 @@ set_tests_properties(lint_terrain_seq PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # ---------------------------------------------------------------------------
+# TERRAIN.LOADQ -- the load queue, against its reference model.
+#
+# A queue is the block whose test writes itself badly: push some, pop some,
+# check the count. That passes against a queue that REORDERS, one that drops a
+# job when full while ready lies, and one that hands the loader a record with
+# its CRC sheared off -- none of those move a count. So this bench compares the
+# SEQUENCE and every FIELD against zref::terrain::LoadQueue, under the same four
+# stall patterns the sequencer's differential uses, with both sides busy on the
+# same cycle at every occupancy from empty to full.
+#
+# It verilates the module directly: it has no fabric, no memory and no
+# neighbours to play, so a bench around it would be a wrapper with nothing in
+# it. The job payload is 243 bits serialised into eight 40-bit M10K words, and
+# every field of every job is distinct -- a fixture whose upper words are zero
+# cannot tell a working serialiser from one that stops after word 5, and words
+# 6 and 7 are where the CRC and the source id live.
+add_executable(test_loadq_rtl_directed terrain/loadq_rtl_directed.cpp)
+target_link_libraries(test_loadq_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_loadq_rtl_directed
+  PREFIX Vzhao_terrain_loadq
+  TOP_MODULE zhao_terrain_loadq
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loadq.sv)
+add_test(NAME loadq_rtl_directed COMMAND test_loadq_rtl_directed)
+set_tests_properties(loadq_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# ...and the lint gate, on the module's OWN defaults. An RTL file with no lint
+# test is an RTL file nothing has read: a comment line beginning with the
+# simulator's name is parsed as a pragma and stops the file lexing, which bit
+# this repo six times in one day.
+add_test(NAME lint_terrain_loadq
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_loadq
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loadq.sv)
+set_tests_properties(lint_terrain_loadq PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
 # STEP 8 -- THE COMPOSED TERRAIN WORLD PATH.
 #
 # TERRAIN.SEQ + TERRAIN.RESIDENCY(v2) + TERRAIN.PAGELOADER + TERRAIN.WRITEBACK

@@ -96,6 +96,13 @@ counter_catalog:
   - compcache_fill_overrun
   - compcache_lat_oob
   - compcache_cs_oob
+  - loadq_accepted
+  - loadq_issued
+  - loadq_drained
+  - loadq_refused
+  - loadq_level
+  - loadq_inflight
+  - loadq_high_water
   - pageloader_pages_loaded
   - pageloader_pages_faulted
   - pageloader_pages_refused
@@ -1604,6 +1611,90 @@ blocks:
   # TERRAIN — Mantle (fpga/rtl/terrain)
   # ===========================================================================
 
+  - id: TERRAIN.LOADQ
+    name: Page-load job queue
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Takes a page-load job off TERRAIN.SEQ immediately and hands it to TERRAIN.PAGELOADER when that block is free, so the sequencer's walk is never blocked by a load's ACCEPTANCE. TERRAIN.SEQ's law that a miss is skipped rather than waited on held for load COMPLETION and was defeated by load ACCEPTANCE, because TERRAIN.PAGELOADER drives j_ready_o = (state == S_IDLE) and holds it low for the whole 21,376-byte transfer. A FIFO and nothing cleverer, because T4's writeback-before-load barrier lives in TERRAIN.SEQ and a structure here that could reorder a load relative to a writeback would break a law it cannot see."
+    contract: design/contracts/TERRAIN.LOADQ.md
+    phase: 6
+    owner_issue: ZH-126
+    inputs: [page_load_jobs]
+    outputs: [page_load_jobs]
+    upstream: [TERRAIN.SEQ]
+    downstream: [TERRAIN.PAGELOADER]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: "32 jobs accepted per frame with the sequencer never blocked; measured 259 clocks for a legal full 32-miss frame against 176,768 at depth 8 and 53,806 for 8 misses with no queue at all"
+    reference_model: zref::terrain::LoadQueue
+    tests:
+      directed: tests/terrain/loadq_rtl_directed.cpp
+      random: tests/terrain/loadq_rtl_directed.cpp
+    counters: [loadq_accepted, loadq_issued, loadq_drained, loadq_refused, loadq_level, loadq_inflight, loadq_high_water]
+    # The ports carry no `loadq_` prefix because inside the block there is
+    # nothing else they could belong to. The prefix is the LEDGER's, so that
+    # `accepted` is unambiguous across 114 blocks, and the mapping is where the
+    # two namings meet.
+    counter_ports:
+      loadq_accepted: accepted_o
+      loadq_issued: issued_o
+      loadq_drained: drained_o
+      loadq_refused: refused_o
+      loadq_level: level_o
+      loadq_inflight: inflight_o
+      loadq_high_water: high_water_o
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-07"
+        commit: "d613cd1a"
+        evidence: design/contracts/TERRAIN.LOADQ.md
+      - state: UNIT_VERIFIED
+        date: "2026-09-07"
+        commit: "d613cd1a"
+        evidence: tests/terrain/loadq_rtl_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      DEPTH IS 32 BECAUSE A MEASUREMENT SAID SO, and the first version of this
+      block said the opposite. It was eight deep and carried a confident
+      paragraph arguing that ruling T7's 32-page budget was "a budget for a
+      different question". Pointing the composed bench at a LEGAL FULL FRAME
+      killed the paragraph: 32 misses cost 176,768 clocks at depth 8, with the
+      sequencer sitting on a full queue for 176,509 of them -- 10.6% of a
+      1,666,667-clock frame -- against 259 clocks at depth 32. The depth covers
+      the whole frame's miss list, not "the acceptance stall", and eight looked
+      sufficient only because the frame that measured it asked for eight.
+
+      ONE M10K, NOT 7,776 FLOPS. A job is 243 bits and 32 of them in registers
+      would blow the composed island's 9,000-register redline on a FIFO alone,
+      so the record is serialised into 8 words of 40 bits: 32 x 8 = 256 words =
+      10,240 bits, exactly one M10K, addressed as {job[4:0], word[2:0]} with no
+      adder and no modulo. The array is read with a registered address straight
+      into a register per QUARTUS_GOTCHAS section 14 -- a "FIFO" that infers
+      7,776 flops instead of one M10K is the same budget disaster wearing the
+      fix's name.
+
+      CAPACITY IS DEPTH + 1. One job sits deserialised at the output port after
+      it has left the store, so the block holds 33 while it stores 32. Found by
+      the bench rather than stated by the design: the reference model capped at
+      32, the RTL took a 33rd, and every job after that compared one position
+      out of step.
+
+      `level_o` AND `inflight_o` ARE DIFFERENT NUMBERS, and anything asking "is
+      this queue done?" wants the second. The composed suite's first drain
+      check compared against the store's level alone and was wrong by exactly
+      the two jobs that live outside it.
+
+      THE DRAIN IS A MECHANISM WAITING ON A RULING. Whether T6's frame fault
+      should abandon queued loads is not decided, so nothing in the tree asserts
+      `drain_i`; the composed suite fires it directly, because a port that has
+      never been pulsed is a port nobody has tested.
+
   - id: TERRAIN.PAGELOADER
     name: Whole-page prefetch
     kind: rtl
@@ -1615,7 +1706,7 @@ blocks:
     owner_issue: ZH-126
     inputs: [page_load_jobs]
     outputs: [loader_completions]
-    upstream: [MEM.HPS.BRIDGE, TERRAIN.SEQ]
+    upstream: [MEM.HPS.BRIDGE, TERRAIN.SEQ, TERRAIN.LOADQ]
     downstream: [TERRAIN.RESIDENCY, MEM.GUARD, TERRAIN.MIPGEN]
     backpressure: ready_valid
     latency: variable
@@ -2039,7 +2130,7 @@ blocks:
     inputs: [terrain_patch_set]
     outputs: [page_load_jobs, page_writeback_jobs, terrain_patch_jobs]
     upstream: [CMD.SCHEDULER]
-    downstream: [TERRAIN.RESIDENCY, TERRAIN.PAGELOADER, TERRAIN.PATCH, TERRAIN.COMPCACHE, TERRAIN.LOD, TERRAIN.WRITEBACK]
+    downstream: [TERRAIN.RESIDENCY, TERRAIN.LOADQ, TERRAIN.PAGELOADER, TERRAIN.PATCH, TERRAIN.COMPCACHE, TERRAIN.LOD, TERRAIN.WRITEBACK]
     backpressure: ready_valid
     latency: variable
     target_throughput: "5.38 gpu clocks per resident static record, measured; one record in service at a time"
