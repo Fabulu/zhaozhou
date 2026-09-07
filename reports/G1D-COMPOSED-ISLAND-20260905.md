@@ -354,6 +354,53 @@ better at all.
   nearest path started decoding the same day. An honest measurement of what is
   there, not of what is finished.
 
+### 4.3f THE P0-B REFIT — PENDING, and this is the before-picture
+
+Written BEFORE the result, so the comparison cannot be arranged after the fact.
+The fit is `zhao_texture_island_top@p0b-island`, running at the time of writing.
+
+**What changed since 4.3e:** exactly one thing in the island's closure —
+`zhao_raster_rcp24_svc` gained the S1 registered issue record (P0-B), which
+breaks the selection-to-context-read-address hop that owned the island's worst
+internal path. Nothing else in the fifteen island sources moved.
+
+**Before (4.3e):**
+
+| | |
+|---|---|
+| ALM | **13,601** |
+| registers | **23,181** |
+| reported Fmax | **66.77** |
+| core→core | **75.51** |
+| worst internal path | `rcp24_svc:u_rcp|c_val[5]~DUPLICATE -> ...|c_m.raddr_a[0]` at **−3.243 ns** |
+
+Benchmarks: **6,600 nominal / 7,500 redline / 7,913 standalone sum.** At 13,601
+the island is 2.06× nominal, 1.81× redline, 1.72× the standalone sum.
+
+**THE PREDICTION, and it is structural only.** The worst internal path must no
+longer end at `c_m.raddr_a`. The standalone P0-B fit already showed that endpoint
+gone, replaced by `c_val[0] -> Add7~21`, so the composed fit should agree.
+**Falsifier:** if the island still reports `c_val -> c_m.raddr_a`, the composed
+build did not pick up the change and the whole comparison is void.
+
+**ALM AND FMAX ARE NOT PREDICTED, deliberately.**
+
+* The standalone block grew **+159 ALM**. Whether the island grows by that, less,
+  or more is a placement question, not arithmetic.
+* The brief warns an **independent dispatch→FRAGROB family near −2 ns** also
+  exists. Removing one family need not move the clock at all — "removing the
+  worst path is not the same as fixing the clock" already came true today on the
+  §16.3 DONE queue, which cut 207 ALM and moved reported Fmax by 0.13.
+* Docket **M1**: this block's reported Fmax carries ~4.7 MHz of fitter-seed
+  noise. A composed fit dilutes that across a much larger design, which is the
+  reason this measurement is worth more than the standalone one — but it does not
+  abolish it.
+
+**What a good result looks like, stated in advance so it cannot be rationalised
+afterwards:** the `c_m.raddr_a` family gone, and the new worst internal path
+named. Any Fmax movement under ~2 MHz on a composition this size should be
+reported as movement, not as improvement.
+
 ### 4.3e THE 2026-09-07 REFIT, COMPLETE — ALM 16,192 -> 13,601
 
 *6,744 s. Matched scope: DSP 17 both sides, virtual pins 1,484 -> 1,487.*
