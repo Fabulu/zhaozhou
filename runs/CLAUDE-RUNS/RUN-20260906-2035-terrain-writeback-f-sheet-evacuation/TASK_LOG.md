@@ -3092,3 +3092,47 @@ today.
 
 The island reseed continues in parallel; it is unrelated to the restructure and
 settles P0-B's attribution.
+
+## THE ARCHITECT'S DOCUMENT, VERIFIED NOT ACCEPTED — and Stage A built
+
+659 lines at `reports/P0C-RESTRUCTURE-ARCHITECTURE-20260907.md`.
+
+**Its central risk CONFIRMED by hand:** `SRCW = 16` and the pad term
+`SRCW-2-$clog2(DEPTH)-2-GENW` evaluates to **exactly 0** (island_top:966-968),
+so widening the slot 4 → 6 really does force SRCW 16 → 18 and really does ripple
+into `cache_pipe`. It found that itself.
+
+**Its line citations were wrong and are corrected:** `rob_m` 1981 not 1990,
+`rob_tag_m` 1983 not 1992, `fseq_m` 670 not 663, `fctx_m` 591 not 588.
+`island_top.sv` has not been touched since 2026-09-06, so the file did not move
+under it. Minor, but a citation that lands on a comment nine lines away is one a
+reader stops following.
+
+**Endorsed as written:** every deletion-ledger row marked MEASURED or ESTIMATED,
+rows SPLIT where the absence is measured but the saving is not, and §2.3's
+acceptance framing — *"SIGN UNKNOWN ... anyone who requires P0-C to cut composed
+ALM on its own should not approve this plan."* That is the right answer and it is
+stronger than what I asked for.
+
+## Stage A implemented
+
+`uvw_m`'s read is now REGISTERED behind a one-deep skid. It was a dynamically
+indexed combinational read of a 64×64 array — Quartus's own
+`Info (276007): ... uninferred due to ASYNCHRONOUS READ LOGIC` — costing **4,096
+flip-flops**, the largest uninferred structure at this level.
+
+Checked before writing: `perspuv`'s `v_ready_o` is `(free_cnt_q != '0)`, a pure
+register read, so the new `rcp_r_ready = !px_v_q || px_in_ready_c` cannot form a
+combinational loop through it.
+
+**119 island checks pass**, colours bit-exact, counters identical (200 submitted /
+200 retired, live peak 64 of 64) — which matters because the change adds a cycle
+of latency to the RCP→PERSPUV path and those counters are where a lost or
+duplicated beat would show.
+
+**Its FIT is owed and NOT yet run.** Prediction on record from the architecture:
+map no longer lists `uvw_m` under Info 276007, and fitted registers fall by
+3,000-4,200 of the 4,096. Falsifier: still refused, or a drop under 3,000, or any
+check changing. Fmax to be reported with its gating family per M6, never claimed
+— and Stage A sits INSIDE the current gate's seam
+(`rcp24_svc|c_pend → perspuv|e_num_v`), so a family change is likely.
