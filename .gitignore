@@ -97,3 +97,31 @@ fit-round2.log
 # and *.setup.rpt carries the paths. Only the multi-megabyte dump is dropped.
 # Smaller blocks' map.rpt files stay tracked; this rule is the size, not the kind.
 reports/synthesis/blockpaths/zhao_texture_island_top.map.rpt
+
+# ---------------------------------------------------------------------------
+# TRANSIENT FIT CONSOLE LOGS, untracked 2026-09-07
+# ---------------------------------------------------------------------------
+# 45 of these were committed, 37 MB of them, one per block fit ever run. They
+# are the console spew of `run_block_fit.ps1` -- the same status lines it
+# already parses into `reports/synthesis/zhao_block_fit.json` and the reports
+# it harvests into `reports/synthesis/blockpaths/`. THE EVIDENCE IS THE ROW AND
+# THE HARVESTED REPORT, not the terminal output they were read from. Same rule
+# as `*.rgb` above: the contact sheet, not the frames.
+#
+# The immediate cause was worse than clutter. A pull could not proceed --
+# "unable to unlink old 'fit-pairtn.log': Invalid argument" -- because the file
+# was HELD OPEN by a Tee-Object in a running fit, and the rebase that failed
+# left the tree mid-rebase with an autostash. A tracked file that a background
+# process writes for an hour is a tracked file that will block a merge at the
+# worst moment, and the worst moment turned out to be while pulling owner
+# instructions.
+#
+# WHAT NOW REMOVES THEM, because an ignore rule that hides waste is not a rule
+# that removes it (CLAUDE.md, the 952 GB incident): nothing yet, deliberately.
+# They are 37 MB of plain text in the repo root, not 33 GB of raw frames, and
+# they are named per run so they neither grow without bound nor collide. If
+# they ever do become a disk problem the answer is the existing
+# `tools/maintenance/purge_render_intermediates.py`, which already spares
+# anything touched in 48 h. Recorded so the next person does not have to
+# rediscover that the question was asked.
+fit-*.log

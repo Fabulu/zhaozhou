@@ -936,7 +936,36 @@ try {
                 # Harvested whole rather than filtered: the summary sections and
                 # the RAM Summary are what get read today, and a filter written
                 # now would be a guess about what the NEXT diagnosis needs.
-                foreach ($mr in @('blockfit.map.rpt', 'blockfit.map.summary', 'blockfit.fit.summary')) {
+                # AND `blockfit.fit.rpt` JOINED THE LIST ON 2026-09-07, for the
+                # fourth instance of this exact lesson. The comment above says a
+                # filter "would be a guess about what the NEXT diagnosis needs".
+                # The next diagnosis arrived and needed the one file not taken.
+                #
+                # zhao_terrain_residency_v2 refitted at 150,528 block memory bits
+                # against a rule of 167,936. The RAM Summary -- harvested, and
+                # genuinely useful -- says why the total is what it is: keyram
+                # inferred at its full 107 bits, statram at 40, which is the
+                # M10K's maximum port width. 4 x 27,392 + 4 x 10,240 = 150,528
+                # exactly. So 17 bits x 1,024 entries are somewhere else.
+                #
+                # NOT in flip-flops: the row reports 1,226 registers against the
+                # 17,408 bits in question, four orders apart. The rule's note
+                # guesses MLAB. NOTHING HARVESTED CAN CONFIRM OR REFUTE THAT.
+                # `fit.summary` reports one number, "Total block memory bits",
+                # and does not break out MLAB or memory ALMs; the setup report's
+                # 1,324 "MLAB" strings are MLABCELL_X39_Y10_N12 PLACEMENT
+                # COORDINATES of ordinary logic, which is a trap I walked into
+                # for a minute before reading one in full.
+                #
+                # The Fitter's own "Resource Usage Summary" separates M10K from
+                # MLAB and memory ALMs. It lives in fit.rpt, which was deleted
+                # with the workspace. So a gate cannot be judged, because the
+                # difference between "the storage inferred across two memory
+                # kinds" and "17 bits per entry were optimised away" is invisible
+                # in everything we kept -- and those two have very different
+                # consequences for a block that is 60% of the console's overage.
+                foreach ($mr in @('blockfit.map.rpt', 'blockfit.map.summary',
+                                  'blockfit.fit.summary', 'blockfit.fit.rpt')) {
                     $mrSrc = Join-Path $dir ('output_files/' + $mr)
                     if (Test-Path -LiteralPath $mrSrc) {
                         $ext = $mr -replace '^blockfit\.', ''

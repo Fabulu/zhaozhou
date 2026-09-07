@@ -1,7 +1,0 @@
-﻿preflight: zhao_terrain_pagestream closure from design/fit_targets.yml (3 file(s))
-snapshot: 3 source(s) copied into the workspace; the live tree cannot reach this fit
-provenance guard: 3 declared source(s)
-source digest: 50c40cdc660b over 3 file(s) -> zhao_terrain_pagestream.sources.sha256
-    RULE  zhao_terrain_pagestream: Fmax 93.91 MHz < required 100 MHz -- the resource gates can all pass while the clock does not; see this rule's note
-zhao_terrain_pagestream            failed:structure  2180.8s   ALM 1649
-WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (102 block(s); 1 measured this run)

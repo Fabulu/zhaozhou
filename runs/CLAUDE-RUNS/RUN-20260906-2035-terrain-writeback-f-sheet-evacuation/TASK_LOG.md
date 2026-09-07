@@ -417,3 +417,27 @@ ROADMAP NUDGE ITEMS, all three now answered or reassigned:
       (1,475 vs 800) and clock (36.28, no path summary) still open.
   perspuv per-axis split  -- now inside the V3.1 lane and the FABLE report; do
       not touch island RTL independently of them.
+
+## 2026-09-07 -- residency_v2 landed: prediction exact, gate still unjudgeable
+
+Fresh row 43b1ba2c: 2,234 ALM / 1,226 reg / 16 M10K / 150,528 bits / 60.25 MHz.
+
+150,528 is BIT-IDENTICAL to the stale row, so the min_memory_bits FAIL is real
+and the pre-refit prediction (147 bits/entry) is confirmed exactly. The RAM
+Summary is sharper than the note's guess: keyram inferred at its full 107 bits,
+statram at 40 -- the M10K's max port width -- and the missing top 17 are pin
+count plus three flags, with crc(32)+seq(8) making the low 40.
+
+NOT in flops (1,226 registers vs 17,408 bits). Beyond that nothing harvested can
+say where they are, and I nearly claimed otherwise: the setup report's 1,324
+"MLAB" hits are MLABCELL_Xn_Yn_Nn PLACEMENT COORDINATES of ordinary logic, not
+memory. Corrected before it reached a report.
+
+So min_memory_bits is LEFT ALONE. run_block_fit now harvests fit.rpt, whose
+Fitter Resource Usage Summary separates M10K from MLAB -- the fourth instance of
+"the evidence was deleted with the workspace", and the harvest block's own
+comment had predicted exactly this failure mode.
+
+Toolchain refilled immediately: zhao_pair_tess_normals is fitting, to answer
+whether the NORMALS product register moved 31.10 MHz. Prediction on record: it
+moves well above 31.10 but not to 100, because TESS is unexamined.
