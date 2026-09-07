@@ -1645,3 +1645,36 @@ path into fragrob is still there, the block-level win did not compose.
 
 **Not predicted:** the reported figure. The palette-load paths at −4.800 are
 untouched and will likely still set it.
+
+## T2: EIGHT OF TWELVE SITES MOVED, one decision left
+
+| group | sites | status |
+|---|---|---|
+| A — admission + wrap | 3 | **moved** |
+| B — ISSUE lanes (the measured limiter) | 2 | **moved** |
+| B — READY-ticket eligibility | 2 | **moved** |
+| B — in-loop comparisons | 4 | **not moved** — semantic |
+| C — `g0_owner_q` lookup | 1 | **moved** |
+
+Every move: 481 bench checks, no assertion fired, and each derivation asserted
+against the structure it replaced. Three of those assertions have been
+fire-tested and caught the exact errors they exist for — the tautological form,
+the naive site-3 form, and the ticket built in public order.
+
+**The one open question is a decision, not effort.** The four in-loop guards have
+no `live_q` term; adding one via `win_live` would reject a stale event arriving
+after release but before reallocation, which is accepted today. The site calls
+itself *"a fault-injection and drain-boundary guard"*, so tightening may be
+right — but §11.1's lesson this morning was exactly that conflating two events
+in one bit is how a final gets authorised by a reservation. **`gen_q`'s 512
+flip-flops cannot be recovered until this is settled.**
+
+An exactly-equivalent fallback exists: hoist `gen_q[c4t_slot_q] == c4t_gen_q`
+out of the loop — one 64-way select instead of 64 comparisons — which buys the
+logic without touching semantics.
+
+**Nothing from T2 is measured yet.** Next v3own refit compares against
+**87.37 reported / 91.32 core→core, 5,709 ALM, 4,863 reg** on matched scope.
+Prediction: `gen_q -> iss_q` gone from the worst families. NOT predicted: ALM or
+register movement — the table is still there, and today's score on predictions is
+three confirmed (all structural) against four falsified (all about magnitude).
