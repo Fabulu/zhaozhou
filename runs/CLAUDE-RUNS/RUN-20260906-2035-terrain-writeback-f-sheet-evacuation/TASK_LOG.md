@@ -3037,3 +3037,31 @@ placement argument touches them.
 this — *"−4.800, a virtual pin into PALETTE_RES | −4.977, THE SAME PIN"*. The
 discipline existed; my §4.3f dropped it while being scrupulous about prediction.
 Being rigorous about one failure mode does not transfer to another.
+
+## The reseed is a clean experiment, and the M6 sweep is worse news than one error
+
+**Reseed confirmed clean:** `@p0b-island-s3` hashes to digest `c9283ca728dd` —
+IDENTICAL to `@p0b-island`. Same fifteen sources, seed the only variable. CPU
+4,417 → 4,469 across 40 wall-seconds, so it is working.
+
+**Then the new index answered a question I had not thought to ask.** Sweeping
+every base/variant pair on disk for a shared gating family: **0 of 4**.
+
+    rcp24_svc / @p0b-s1        -4.607  -5.411  CHANGED
+    island_top / @p0b-island   -4.977  -2.690  CHANGED
+    v3own / @v3-full           -0.633  -3.194  CHANGED
+    probe_banked_rf / @v3hot   -0.358  -0.736  CHANGED
+
+**Not over-claiming:** these are not four controlled experiments. `v3own` vs
+`@v3-full` are commits far apart, and one row is a synthesis probe. The sweep
+compares whatever shares a base name.
+
+**What it does establish:** a shared gating family between two fits of the same
+module is not the normal case here — it is unobserved in every pair on disk. So
+my island error was not a lapse against a background of sound comparisons; it was
+the first time anyone checked.
+
+**The consequence for how this project reports:** structural claims carry the
+weight — ALM on identical scope, registers against a prediction, what the netlist
+contains. Those survive placement entirely. Frequency deltas need the family
+named on both sides, and now they can have it.
