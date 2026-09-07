@@ -4361,3 +4361,52 @@ Four RTL changes are in the tree without a fit: T4, the fence rewrite, perspuv's
 output boundary, and `ticketq_rh`. §12.5 requires attributing each delta before
 calling it a mechanism, which is why the palette load — the same defect, a fourth
 time — was deliberately **not** touched. The running refit measures the first two.
+
+## End of the 2026-09-07 texture lane — T2 taken as far as evidence allows
+
+**`zhao_raster_perspuv_svc` clears the product clock: 96.62 → 105.19 MHz**, with
+every slack positive and `head_q` launching **zero** of the worst forty paths.
+That was the composed island's worst core→core path. ALM fell 24; the 16-way
+select cost more than the registers replacing it. The paired prediction — that
+`e_q_u`/`e_q_v` would infer as memory — was **falsified** exactly as its recorded
+falsifier said, and the file's own history had already recorded the same outcome
+for `e_num_u`/`e_num_v`.
+
+**T2 stands at 8 of 12 sites moved**, each cross-checked against the table it
+replaced every cycle. Three of those assertions were fire-tested and caught the
+precise errors they exist for: the tautological form, the naive site-3 form, and
+the ticket built in public order. The remaining four in-loop guards got the
+**exactly-equivalent hoist** instead — 256 comparators became 4 selects — so no
+logic waits on the open question.
+
+**And the open question is now bounded rather than open.** Substituting the
+interval test into those four guards changes behaviour only if a C4 event can
+arrive for an owner that is dead but not yet reallocated. That case is now
+**asserted**, and across the entire 481-check bench — including every
+fault-injection case it has — it never occurs. The pipeline argues the same
+structurally. What remains genuinely undecided is behaviour in states neither
+the bench nor the argument covers, which is exactly what a fault-injection guard
+is for, so it is not changed unilaterally. `gen_q`'s 512 flip-flops are the only
+thing still gated on it.
+
+### Predictions, scored
+
+**Three confirmed, four falsified**, and the pattern is worth carrying forward:
+every confirmed prediction was about **structure** — which path leaves, which
+signal disappears from the worst families. Every falsified one was about
+**magnitude or mechanism** inferred from reading source. Predict what moves, not
+how far.
+
+### The honest remaining list
+
+Every item below needs either the toolchain or an owner:
+
+* the island refit (running) — the only thing that says whether perspuv's
+  block-level win composes;
+* six §12.4 refits, and a v3own refit to measure today's eight T2 moves;
+* the T2 drain-guard substitution — an owner ruling, now with a measurement
+  attached;
+* the palette-load seam — deliberately waiting on the running fit's data rather
+  than guessing, which is what today falsified four times;
+* `gen_prod_top.py`'s struct-port bug — recorded, and deprioritised by the
+  owner's own direction.
