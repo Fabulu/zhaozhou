@@ -137,6 +137,22 @@ check count is identical, so nothing was quietly skipped, and its credit phase
 still reports submitted 200 / retired 200 with live peak 64 of 64 while the sink
 is deliberately shut.
 
+## And the island test was shown to GUARD it
+
+119 passing is only evidence if 119 could have failed. The skid was mutated —
+`r_ready_c = 1'b1`, overwriting the output register while it still holds
+un-transferred data, which is the exact error this structure exists to prevent —
+and the island test **failed 31 of 119** with concrete data loss:
+
+    FAIL: phase 1 retired every fragment it submitted   expected 32, got 19
+    FAIL: and every CLUT sample performed its palette lookup  expected 96, got 75
+    FAIL: phase 2 retired every fragment it submitted   expected 32, got 0
+
+So the composed bench genuinely exercises back-pressure through this handshake,
+and the identical 119 before and after is a real result rather than a test that
+stopped looking. The mutant was built from a copy outside the repository, so the
+tree never held broken RTL.
+
 ## Still to measure
 
 The timing benefit. That was the entire point, and only a refit shows it.
