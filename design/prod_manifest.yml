@@ -195,14 +195,37 @@ excluded:
   # both counted individually already.
   - zhao_pair_pagestream_patch: probe  characterisation wrapper, PAGESTREAM+PATCH; both blocks counted individually
 
+  # V3.1 5.7's "local queue fit gate". Same reason code as the pair wrappers: a
+  # registered stimulus -> DUT -> hash sink harness so the queue's status
+  # outputs are not measured terminating at virtual pins. zhao_texture_v3rq is
+  # counted through its real parents, not here.
+  - zhao_probe_v3rq_queue: probe  characterisation wrapper for one production-shaped ready queue (5.7)
+
   # MATERIAL.COMBINE.V2 is the paired-phase replacement built beside V1 per the
   # owner's recovery brief, which is explicit that V1 stays as the historical
-  # comparison rather than being erased. V2 is not instantiated by anything yet
-  # -- it passes its differential against zref::material::combine and its exact
-  # phase count, and it goes into the island only after the release gate closes.
-  # Declared absent rather than counted, because counting a block the machine
-  # does not contain would inflate every budget it appears in.
-  - zhao_texture_material_combine_v2: successor  the paired-phase combiner; V1 is still the instantiated one
+  # comparison rather than being erased.
+  #
+  # CORRECTED 2026-09-07. This entry used to say "V2 is not instantiated by
+  # anything yet ... it goes into the island only after the release gate
+  # closes", and justified declaring it absent on the grounds that "counting a
+  # block the machine does not contain would inflate every budget it appears
+  # in". THE ISLAND CONTAINS IT. `zhao_texture_island_top.sv:1956` instantiates
+  # it unconditionally as `u_combine` with `.NCTX(8)` -- there is no generate
+  # block anywhere in that file -- and the only mention of V1 there is a comment
+  # at line 1915.
+  #
+  # So the stated reason now runs the other way: the island's LIVE combiner is
+  # uncounted here, which understates every island budget rather than inflating
+  # it. Combined with the fact that no fit target defined V2 as a top until
+  # today, its cost was invisible in both accounting domains at once. See
+  # reports/V31-ISLAND-BUDGET-BLOCKED-20260907.md.
+  #
+  # STILL DECLARED ABSENT FROM THE PRODUCTION TOP, deliberately and only that:
+  # zhao_prod_top instantiates V1, and swapping it is a decision about what the
+  # next production fit measures. This file's own TERRAIN.VISIBLE note gives the
+  # rule -- such a change is "a decision to take deliberately rather than as a
+  # side effect". Recording the truth is not the same as making that change.
+  - zhao_texture_material_combine_v2: successor  the paired-phase combiner; the ISLAND instantiates V2, the production top still instantiates V1
 
   # TERRAIN.VISIBLE -- the visible-patch builder. It COMPOSES
   # zhao_terrain_island_dir, which is already counted above, and nothing

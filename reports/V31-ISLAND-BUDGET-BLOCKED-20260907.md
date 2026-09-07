@@ -33,8 +33,31 @@ check inverted part of it and confirmed the rest:
 * The island instantiates **v2**, at line 1956 with `.NCTX(8)`. The one other
   mention of v1 in that file, at line 1915, is a comment.
 * `design/prod_manifest.yml` line 205 says so deliberately: *"V1 is still the
-  instantiated one"* — for the production **resource** top. That is a declared
-  divergence between two accounting domains, not a stale generated file.
+  instantiated one"* — for the production **resource** top. That much is a
+  declared divergence between two accounting domains, not a stale generated
+  file.
+
+  > **CORRECTED LATER THE SAME DAY, and against myself.** The sentence above is
+  > right about `zhao_prod_top`, and I let it stand for the whole manifest
+  > entry. It did not. The entry also claimed *"V2 is not instantiated by
+  > anything yet … it goes into the island only after the release gate closes"*,
+  > and justified declaring V2 absent because *"counting a block the machine
+  > does not contain would inflate every budget it appears in"*.
+  >
+  > **The island contains it** — unconditionally, at line 1956, and there is no
+  > `generate` block anywhere in that file. So the justification runs backwards:
+  > the island's live combiner is **understated**, not inflated. Together with
+  > having had no fit target until today, its cost was invisible in **both**
+  > accounting domains simultaneously.
+  >
+  > The manifest is corrected. The production top still instantiates V1 and was
+  > deliberately left alone — that file's own rule is that such a swap is *"a
+  > decision to take deliberately rather than as a side effect"*.
+  >
+  > Worth naming the pattern: "this divergence is declared" was the comfortable
+  > reading, it explained most of the evidence, and it stopped me reading the
+  > rest of the entry. That is the failure mode this repository already has
+  > written down.
 * **No fit target defined v2 as a top at all.** It existed only as a *source*
   inside the island and the production list.
 
