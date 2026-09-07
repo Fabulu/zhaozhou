@@ -1268,6 +1268,45 @@ constexpr int kStencilPts = 18;
 // must not depend on a fork that ships nothing.
 constexpr uint8_t kShRing = 0, kShStar = 1, kShBar = 2, kShCrescent = 3,
                   kShTriangle = 4, kShCurl = 5;
+// ---- PASS 12: THREE MORE (D7 §3's lost half; inventory B7) ----------------
+// "We also want more shapes, and shapes should not be the standard look, they
+//  should happen intermittently."
+//
+// D7 §3 was implemented as its SECOND half only -- the intermittency landed in
+// pass 7 (kDriftKeys*, the open-handed segment) and "more shapes" was never
+// done. The inventory found it among the seven items that fell off every
+// tracked list. Three figures, chosen to be nameable at ~37 px with a blobby
+// stroke and to be UNLIKE the six already there:
+//
+//   BOLT   a zigzag. It rhymes with the creature's own identity -- this is the
+//          animal whose mana is lightning -- and it is the only figure whose
+//          silhouette is unmistakable even half-formed.
+//   COIL   a tight spiral. The S-CURL is 1.5 lazy turns; this is 2.5 tight
+//          ones, so it reads as WOUND rather than as a loose squiggle.
+//   CROSS  an X. Two straight strokes, maximum contrast against the round
+//          figures, and the only one with a centre crossing.
+//
+// The 18 stations are FIXED (kStencilPts is hard-wired into the weight tables
+// and the mote path); re-authoring the station count is a separate lab and is
+// deliberately out of scope. Every new figure is drawn inside the same 18.
+constexpr uint8_t kShBolt = 6, kShCoil = 7, kShCross = 8;
+// THE ONE AUTHORITY ON HOW MANY FIGURES EXIST.
+//
+// ⚠ IT IS NOT WIRED TO THE PICKER YET, ON PURPOSE, AND THIS IS THE HAND-OFF.
+// `kFoldShapeCount` -- the modulus that decides which figure a clip draws --
+// lives in manafold_clips.h, which belongs to the OTHER implementer this pass.
+// The vocabulary is therefore split across a lane boundary: the table is here,
+// the count is there. So these three are authored, weighted, edge-linked and
+// rendered-ready, and the picker still selects from the first six.
+//
+// ONE LINE completes it: manafold_clips.h's `kFoldShapeCount = 6` becomes
+// `= u02::kFoldStencilCount`. The static_assert below makes the mismatch
+// impossible to ship silently in the other direction -- a count that outruns
+// the table is a read off the end of it.
+constexpr int kFoldStencilCount = 9;
+// The pin's live value; -1 (the default, and the only shipping value) means
+// the picker decides. Set by U02_FOLD_SHAPE in zhao_reel.cpp.
+inline int g_u02_fold_shape_pin = -1;
 
 // The six shape stencils, authored in pocket coordinates (u across the
 // hole, v up; per-mille of kStencilScaleMm). Chosen for legibility with
@@ -1275,8 +1314,8 @@ constexpr uint8_t kShRing = 0, kShStar = 1, kShBar = 2, kShCrescent = 3,
 // identity, rhymes with the pupil), BAR (max contrast), CRESCENT (the
 // Description sheet's rear view), TRIANGLE, S-CURL.
 struct StencilPt { int16_t u_pm, v_pm; };
-inline const StencilPt (&fold_stencils())[6][kStencilPts] {
-  static StencilPt st[6][kStencilPts];
+inline const StencilPt (&fold_stencils())[kFoldStencilCount][kStencilPts] {
+  static StencilPt st[kFoldStencilCount][kStencilPts];
   static bool built = false;
   if (!built) {
     const auto scp = [](int i, int n, int32_t r_pm, int32_t ph16, int16_t& u, int16_t& v) {
@@ -1335,6 +1374,43 @@ inline const StencilPt (&fold_stencils())[6][kStencilPts] {
         st[5][i].u_pm = static_cast<int16_t>((static_cast<int64_t>(r) * zref::fx_cos(zref::angle16{a}).raw) >> 16);
         st[5][i].v_pm = static_cast<int16_t>((static_cast<int64_t>(r) * zref::fx_sin(zref::angle16{a}).raw) >> 16);
       }
+      // 6 BOLT: the zigzag. FOUR strokes down a descending staircase, the
+      // classic lightning glyph. Authored as a polyline through five vertices
+      // so the edge stamps run along real straight runs -- a bolt drawn as a
+      // sampled curve reads as a wiggle, and the whole point of this figure is
+      // that its corners are HARD.
+      {
+        static const int16_t bx[5][2] = {
+            {-380, 1000}, {180, 210}, {-260, 130}, {330, -580}, {-120, -1000}};
+        const int per = kStencilPts / 4;          // 4 runs x 4 stations = 16
+        int e = i / per, j = i % per;
+        if (e > 3) { e = 3; j = per - 1; }        // the 2 spare stations pile
+                                                  // on the tail, which is the
+                                                  // end a bolt should thicken
+        st[6][i].u_pm = static_cast<int16_t>(bx[e][0] + (bx[e + 1][0] - bx[e][0]) * j / per);
+        st[6][i].v_pm = static_cast<int16_t>(bx[e][1] + (bx[e + 1][1] - bx[e][1]) * j / per);
+      }
+      // 7 COIL: 2.5 TIGHT turns. The S-CURL next door is 1.5 lazy ones and
+      // decays to 22% of its radius; this holds a fuller radius longer and then
+      // winds in hard, so the two do not read as the same squiggle at 37 px --
+      // which was the risk with adding a second spiral at all.
+      {
+        const uint16_t a = static_cast<uint16_t>((static_cast<int64_t>(i) * 163840 / (kStencilPts - 1)) & 0xFFFF);
+        const int32_t r = 1000 - 880 * i * i / ((kStencilPts - 1) * (kStencilPts - 1));
+        st[7][i].u_pm = static_cast<int16_t>((static_cast<int64_t>(r) * zref::fx_cos(zref::angle16{a}).raw) >> 16);
+        st[7][i].v_pm = static_cast<int16_t>((static_cast<int64_t>(r) * zref::fx_sin(zref::angle16{a}).raw) >> 16);
+      }
+      // 8 CROSS: two straight strokes through the centre. Maximum contrast
+      // against the five round figures, and the only one with a crossing.
+      {
+        const int half = kStencilPts / 2;
+        const int j = i % half;
+        const int32_t t = -1000 + 2000 * j / (half - 1);
+        // first stroke runs "/" , second "\" -- the two diagonals
+        const int32_t sgn = i < half ? 1 : -1;
+        st[8][i].u_pm = static_cast<int16_t>(t * 707 / 1000);
+        st[8][i].v_pm = static_cast<int16_t>(t * 707 / 1000 * sgn);
+      }
     }
     built = true;
   }
@@ -1362,7 +1438,15 @@ inline bool fold_edge_link(uint8_t shape, int i) {
     case kShCurl:
       return i < kStencilPts - 1;  // open arc: no wrap
     case kShBar:
+    case kShCross:
+      // two separate strokes: the seam between them is not an edge. The CROSS
+      // shares the BAR's construction exactly, so it shares its link rule --
+      // written as a fallthrough rather than a copy, because two rules that
+      // must agree and are stated twice are two rules that will stop agreeing.
       return i < kStencilPts - 1 && i != (kStencilPts / 2) - 1;  // skip the seam
+    case kShBolt:
+    case kShCoil:
+      return i < kStencilPts - 1;  // open polylines: no wrap
     case kShStar:
       if (i < 2) return false;
       return ((i - 2) % 4) != 3 && i < kStencilPts - 1;
@@ -1418,14 +1502,24 @@ inline void fold_mvc(int32_t pu, int32_t pv, uint16_t w[6]) {
 /** The per-mote weight tables: [shape][station] -> Q12 weights over the six
  *  anchors, computed ONCE from the authored stencils in the rest layout. */
 struct FoldWeights {
-  uint16_t w[6][kStencilPts][6];
+  // [shape][station] -> Q12 weights over the SIX ANCHORS. The two sixes used
+  // to look like the same number and were not: the first is the figure count
+  // and the second is the hexagon's corner count. Only the first one moved.
+  uint16_t w[kFoldStencilCount][kStencilPts][6];
 };
+// The picker's modulus must never outrun the table it indexes: kFoldShapeCount
+// lives in manafold_clips.h and kFoldStencilCount here, and a mismatch in this
+// direction is a read off the end of the weight tables. Bumping the picker to
+// nine is safe the moment this holds; bumping it to ten stops the build.
+static_assert(kFoldShapeCount <= kFoldStencilCount,
+              "the fold's shape picker indexes more figures than are authored");
+
 inline const FoldWeights& fold_weights() {
   static FoldWeights fw;
   static bool built = false;
   if (!built) {
-    const StencilPt(&st)[6][kStencilPts] = fold_stencils();
-    for (int sh = 0; sh < 6; ++sh)
+    const StencilPt(&st)[kFoldStencilCount][kStencilPts] = fold_stencils();
+    for (int sh = 0; sh < kFoldStencilCount; ++sh)
       for (int i = 0; i < kStencilPts; ++i) {
         const int32_t pu = kStencilCentreUMm +
             static_cast<int32_t>(st[sh][i].u_pm) * kStencilScaleMm / 1000;
@@ -1583,7 +1677,18 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   if (coh > 1000) coh = 1000;
   if (g_u02_fold_lock) coh = 1000;
   // ---- the shared timeline (shape choice + morph; key = frame / 2) -------
-  const FoldPhase ph = fold_phase(slot, keys, static_cast<int32_t>(frame) * 8);
+  FoldPhase ph = fold_phase(slot, keys, static_cast<int32_t>(frame) * 8);
+  // PASS 12 DIAGNOSTIC (default off): U02_FOLD_SHAPE=<id> pins the figure so a
+  // single stencil can be looked at on its own, through the SHIPPING draw path
+  // -- the same morph, the same edge, the same knead. It exists because the
+  // three figures added this pass (BOLT, COIL, CROSS) cannot be reached by the
+  // picker yet, and a figure nobody has rendered is a figure nobody has
+  // judged. It pins shape_from AND shape_to, so the morph holds still and the
+  // plate shows the figure rather than a blend of two.
+  if (g_u02_fold_shape_pin >= 0) {
+    ph.shape_from = static_cast<uint8_t>(g_u02_fold_shape_pin);
+    ph.shape_to = static_cast<uint8_t>(g_u02_fold_shape_pin);
+  }
   g_u02_fold_release_pm = ph.seg == kSegRelease ? ph.amp_pm : 1000;
   const FoldWeights& fw = fold_weights();
   if (g_u02_fold_debug)

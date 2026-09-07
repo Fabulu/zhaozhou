@@ -411,8 +411,11 @@ inline const FoldWeights& lab_weights(int vi) {
   static bool built[kLabVariantCount] = {};
   if (!built[vi]) {
     const int32_t scale = kLabVariants[vi].stencil_scale_mm;
-    const StencilPt(&st)[6][kStencilPts] = fold_stencils();
-    for (int sh = 0; sh < 6; ++sh)
+    // PASS 12: the figure count is kFoldStencilCount now, not a literal 6.
+    // The lab is a lane-only fork that ships nothing, but it compiles into the
+    // reel, so it follows the table it borrows.
+    const StencilPt(&st)[kFoldStencilCount][kStencilPts] = fold_stencils();
+    for (int sh = 0; sh < kFoldStencilCount; ++sh)
       for (int i = 0; i < kStencilPts; ++i) {
         const int32_t pu =
             kStencilCentreUMm + static_cast<int32_t>(st[sh][i].u_pm) * scale / 1000;

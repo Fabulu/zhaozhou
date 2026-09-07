@@ -7369,6 +7369,13 @@ int main(int argc, char** argv) {
   // PASS 4 fold diagnostics (default off): the stencil X-ray + telemetry.
   if (const char* fl = std::getenv("U02_FOLD_LOCK"))
     u02::g_u02_fold_lock = std::string(fl) == "1" ? 1 : 0;
+  // PASS 12 (B5): pin one fold figure, so a stencil can be judged on its own
+  // through the shipping draw path. Diagnostic only; unset changes nothing.
+  if (const char* fs = std::getenv("U02_FOLD_SHAPE")) {
+    u02::g_u02_fold_shape_pin = std::atoi(fs);
+    std::fprintf(stderr, "U02_FOLD_SHAPE=%d (one figure pinned)\n",
+                 u02::g_u02_fold_shape_pin);
+  }
   if (const char* fd = std::getenv("U02_FOLD_DEBUG"))
     u02::g_u02_fold_debug = std::string(fd) == "1" ? 1 : 0;
   // PASS 4 (instrument honesty): ZIXX_HIDE_CREATURE=1 renders every frame
