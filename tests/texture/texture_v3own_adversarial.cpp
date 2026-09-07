@@ -936,6 +936,8 @@ int main(int argc, char** argv) {
     int admitted = 0;
     bool saw_block_while_busy = false;
     bool quiet_when_wrap_admitted = true;
+    int  fenced_with_live_owners = 0;
+    int  early_reopens = 0;
     uint32_t drains_before = 0;
     // Run the ring hot: admit whenever ready, complete immediately.
     std::deque<uint16_t> inflight;
@@ -972,9 +974,44 @@ int main(int argc, char** argv) {
       }
       if (dut->ev_wrap_drains_o != drains_now && !was_quiet)
         quiet_when_wrap_admitted = false;
+
+      // ---- FOURTH part two: the fence's own two properties ---------------
+      // The master recovery handoff's DRAIN/RESET coverage (§13.2) names both
+      // by hand: "existing owners allowed to finish issuing after new owners
+      // stop" and "no early reopen".
+      //
+      // ADMISSION CLOSED, SERVICE OPEN. §6.2's STOP_NEW_OWNERS says "Do NOT
+      // shut service issue for already admitted owners", so a cycle where
+      // admission is refused for the fence while live owners still accept
+      // issue is the intended behaviour, not a stall. This counts them; zero
+      // would mean the fence is either never exercised or shutting the whole
+      // block.
+      if (!adm_ready_pre && dut->ev_live_o != 0 && dut->ev_live_o != OWNERS)
+        ++fenced_with_live_owners;
+
+      // NO EARLY REOPEN. Admission must never fire while the ring is at a
+      // wrap boundary and the island is not quiet. `ev_wrap_drains_o` moving
+      // is the wrap being taken; `was_quiet` is the island's own report from
+      // the same cycle.
+      if (s.obs_adm_fire && !was_quiet
+          && dut->ev_wrap_drains_o != drains_now)
+        ++early_reopens;
+
       drains_before = drains_now;
     }
     (void)drains_before;
+
+    // ---- the fence's assertions (FOURTH part two) -----------------------
+    zhao::check(early_reopens == 0,
+                "FENCE: admission never fired at a wrap boundary on a "
+                "non-quiescent island -- no early reopen",
+                0, static_cast<uint64_t>(early_reopens));
+    zhao::check(fenced_with_live_owners > 0,
+                "FENCE: admission was closed while live owners kept running, "
+                "so STOP_NEW_OWNERS did not shut service issue -- and the case "
+                "is not vacuous",
+                1, fenced_with_live_owners > 0 ? 1 : 0);
+
     // The issue/return above is one clock behind admission, so drain the rest.
     while (!inflight.empty()) {
       uint16_t o = inflight.front();

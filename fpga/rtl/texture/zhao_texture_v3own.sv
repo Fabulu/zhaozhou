@@ -1081,7 +1081,25 @@ module zhao_texture_v3own #(
       // next-state discipline the credit uses, and the reason a flop on
       // `wrap_block` would not have worked.
       fn_q         <= fn_n_c;
-      fence_open_q <= (fn_n_c == FN_OPEN) || (fn_n_c == FN_REOPEN);
+      // THE PERMISSION IS THE WRAP TEST, NOT JUST THE PHASE. The first version
+      // of this line was `(fn_n_c == FN_OPEN) || (fn_n_c == FN_REOPEN)`, and it
+      // FAILED case 19 twice -- 32 early reopens, and the pre-existing check
+      // "every wrapping admission happened on a QUIESCENT island" went red.
+      //
+      // The reasoning behind it had a hole: I argued an admission in FN_OPEN
+      // was safe because it consumes gen_q[tail_q], "not exhausted or
+      // wrap_block_c would be set" -- but this design STOPPED CHECKING THE
+      // CURRENT SLOT ALTOGETHER, using the next-state test only as a phase
+      // trigger. After 64x255 admissions every slot sits at generation 255, so
+      // the first wrapping admission walked straight through FN_OPEN.
+      //
+      // `wrap_block_n_c` computed at cycle N-1 answers "would an admission at
+      // N consume an exhausted slot", because the slot consumed at N is
+      // tail_next_c(N-1). So it belongs in the PERMISSION, not only in the
+      // transition -- which is what §6.1 means by computing the permission
+      // "from the same next-state tail/generation event that commits".
+      fence_open_q <= ((fn_n_c == FN_OPEN) && !wrap_block_n_c)
+                   || (fn_n_c == FN_REOPEN);
       if ((fn_q == FN_OPEN) && wrap_block_n_c) begin
         fn_slot_q <= tail_next_c;
         fn_gen_q  <= gen_n_c[tail_next_c];

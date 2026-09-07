@@ -929,3 +929,24 @@ never through another `cmake --build`. Doing so now.
 THE LESSON: rm -rf on a verilate target directory is the wrong first remedy for
 a stale-object link error. `cmake --preset` was the right move from the start,
 and the trap is documented one paragraph away from the symptom I hit.
+
+## 2026-09-07 -- FOURTH part two lands; my first fence was worse than none
+
+First version put the wrap test only in the phase TRANSITION, not the
+permission. After 64x255 admissions every slot is at generation 255, so the
+first wrapping admission walked through FN_OPEN. Case 19 failed TWICE: 32 early
+reopens on the new check and the pre-existing "wrapping admission on a
+QUIESCENT island" went red. My fence was worse than what it replaced, and the
+test said so before the commit.
+
+Fixed: fence_open_q <= ((fn_n_c == FN_OPEN) && !wrap_block_n_c) || REOPEN.
+wrap_block_n_c at N-1 answers "would an admission at N consume an exhausted
+slot", which is exactly what §6.1 asks for.
+
+adm_ready_o = credit_ok_q && fence_open_q -- quiet_c out of the admission cone,
+which removes the design's worst path. Two §6.2 phases absent and named
+(producer ACK interface does not exist; §6.3 forbids faking it from quiet_c).
+
+All six v3 lanes green. Next: T1's remaining deliverable is a scoped
+before/after timing classification, which needs a zhao_texture_v3own fit --
+texture work, permitted, queued behind the running geom_project.
