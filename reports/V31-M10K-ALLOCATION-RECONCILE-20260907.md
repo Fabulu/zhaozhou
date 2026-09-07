@@ -163,7 +163,18 @@ measurement says the bodies *are* the answer — but only the wide fields:
 * the four 40-bit `cq_*` and the 40/64-bit `oq_*` fields became RAM;
 * **`cq_own_q` and `oq_own_q` did not.** At 14 bits × 4 they stayed in fabric.
 
-`14×4 + 14×4 = 112`, and `1,168 − 112 = 1,056`. The arithmetic that looked like
+`14×4 + 14×4 = 112`, and `1,168 − 112 = 1,056`.
+
+**Quartus says so itself**, which turns the arithmetic from a plausible
+reconstruction into a quoted fact — the map report names exactly those two
+arrays and no others:
+
+    "cq_own_q" is uninferred due to inappropriate RAM size   (line 824)
+    "oq_own_q" is uninferred due to inappropriate RAM size   (line 853)
+
+`entity_census.py` counts them independently: **2 × "inappropriate RAM size —
+too shallow to be worth an M10K; correctly flops"**, and **0** uninferred for
+asynchronous read. The arithmetic that looked like
 numerology was one term too generous, and the term it was wrong about is the one
 a bit-count model cannot predict — whether the fitter finds a field worth a
 block. **A sum over declared fields is not a fitted memory map**, which is §12.5's
