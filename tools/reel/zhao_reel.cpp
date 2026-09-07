@@ -1031,6 +1031,9 @@ struct SceneSubject {
   // (manafold-fogprobe-mist) and so a subject can have smear without mist or
   // the reverse -- which is what makes either one measurable on its own pixels.
   bool u02_mist = false;
+  // D9 s7/s14: the translucent outer shell. Defaults ON: it is part of the
+  // creature's material, not a per-clip choice.
+  bool u02_shell = true;
   // the S5 spike's three-glow staging (diagnostic only)
   bool u02_glow_trio = false;
   // the fx tour: cycle the ten kinds solo, 60 frames each
@@ -2338,6 +2341,10 @@ struct CreatureReelCtx {
   // ghost. Separate storage from the smear so that pass 8's colour work and
   // hasty's praised rung-3 trail cannot be disturbed by anything done here.
   bool u02_mist = false;
+  // D9 s7/s14: the translucent outer layer. A property of the MODEL, so it is
+  // on for every clip and off only for the diagnostics that exist to show
+  // unobstructed geometry.
+  bool u02_shell = false;
   std::vector<uint8_t> u02_mist_buf;
   std::vector<int32_t> u02_mist_depth;
   // PASS 10, 0.1: the follow state moved into u02::MistFollowState, and the
@@ -3140,6 +3147,8 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   // outline. Empty when this frame never built one; the mist call site says so
   // loudly rather than silently compositing over the animal.
   std::vector<uint8_t> u02_cover;
+  // PASS 12 (D9 s14.1): the cel ink ring alone, for the shell to spare.
+  std::vector<uint8_t> u02_ink;
   if (g_exp_contour || g_exp_boil || g_cel_main) {
     const size_t n = static_cast<size_t>(w) * h;
     std::vector<uint8_t> mask(n, 0);
@@ -3286,9 +3295,33 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       if (!u02_cover.empty())
         for (size_t i = 0; i < n; ++i)
           if (edge[i]) u02_cover[i] = 1;
+      // PASS 12 (D9 s14.1): the shell crosses the ink line, so it needs to know
+      // WHERE THE LINE IS in order to leave it readable. Kept from the same
+      // `edge` the ink was painted from -- never re-derived, because the shell
+      // protecting a differently-computed outline would protect the wrong
+      // pixels and look exactly like a rendering bug.
+      u02_ink = edge;
     }
     ++g_exp_frame;
   }
+  // ---- THE SHELL (D9 s7 + s14) -----------------------------------------
+  // The creature's own translucent outer layer: a band straddling its
+  // silhouette, densest at the ink line, reaching a little outside it and
+  // fading inward over the body's rim.
+  //
+  // It runs HERE -- after the cel ink pass, before the mana -- for two
+  // reasons that are both visible if it runs anywhere else. Before the ink,
+  // the ink would be painted flat over the shell and the gas would stop dead
+  // at the line, which is the exact read s14.1 rejects. After the mana, the
+  // shell would haze the mana as well, and the mana is not inside the
+  // creature's material -- it glows over it.
+  //
+  // s14.3: this is the SHELL, not the mist. The mist runs later, still
+  // excluding every creature pixel.
+  if (c.u02_shell && !u02_cover.empty())
+    u02::shell_paint(rgb, w, h, u02_cover.data(),
+                     u02_ink.empty() ? nullptr : u02_ink.data(),
+                     u02::g_u02_shell_alpha_pm);
   if (c.moving_light && c.moving_markers)
     draw_zixx_moving_source_markers(c, rgb, depth, w, h);
   // creature 02: the mana and the belly core draw AFTER the cel ink pass —
@@ -3829,6 +3862,7 @@ int render_scene(const SceneSubject& sub) {
     cr_ctx.u02_smear_preset = g_mana_ablate ? 0 : sub.u02_smear;  // pass 3 (R6)
     cr_ctx.u02_smear_only = sub.u02_smear_only;  // pass 8 (the ablation's 3rd leg)
     cr_ctx.u02_mist = g_mana_ablate ? false : sub.u02_mist;  // D7 §8
+    cr_ctx.u02_shell = sub.u02_shell;                       // D9 §7/§14
     if (species == Species::kUnnamed02 && sub.u02_trio) {
       for (int e = 0; e < 2; ++e) {
         u02_extra_inst[e].type = dog;
@@ -7338,6 +7372,13 @@ int main(int argc, char** argv) {
       return 2;
     }
     u02::g_u02_fog_thickness_pm = v;
+  }
+  // D9 §7/§14: the shell's by-eye ladder, from ONE binary.
+  if (const char* sa = std::getenv("U02_SHELL_ALPHA")) {
+    const int v = std::atoi(sa);
+    u02::g_u02_shell_alpha_pm = v < 0 ? 0 : v;
+    std::fprintf(stderr, "U02_SHELL_ALPHA=%d (shell ladder lane)\n",
+                 u02::g_u02_shell_alpha_pm);
     std::fprintf(stderr,
                  "U02_FOG_THICKNESS=%d pm (M.1 shell ladder; shipping default %d)\n",
                  v, u02::kFogThicknessPm);
@@ -7566,10 +7607,14 @@ int main(int argc, char** argv) {
   // (CLAUDE.md: "a probe that does this was written once and thrown away,
   // so its numbers are unreproducible -- commit the probe").
   if (wanted("manafold-antenna-fixed")) {
+    // D9 §7/§14: no shell either. This subject exists for an UNOBSTRUCTED look
+    // at geometry, and a translucent layer over the silhouette is exactly the
+    // obstruction it is for.
     SceneSubject s = subject_u02_clip(2, "manafold-antenna-fixed", u02::kChannelKeys, false,
                                       &kU02SunChannel);
     s.u02_mana = 0;   // an unobstructed look at the joints, not the fold's bloom
     s.u02_smear = 0;
+    s.u02_shell = false;
     s.planet = 0;     // channel's off-axis violet bloom would compete with the read
     // ---- PASS 11 F.0: THE FRAMING, FIXED BEFORE ANYTHING IS JUDGED ON IT ---
     // 620000 CROPPED THE OPEN LOOP OFF THE TOP OF THE SCREEN for frames 0-102 --
@@ -7609,10 +7654,14 @@ int main(int argc, char** argv) {
   // It is committed rather than thrown away: the pass that needed it last time
   // wrote a probe, deleted it, and left its numbers unreproducible (CLAUDE.md).
   if (wanted("manafold-antenna-quarter")) {
+    // D9 §7/§14: no shell either. This subject exists for an UNOBSTRUCTED look
+    // at geometry, and a translucent layer over the silhouette is exactly the
+    // obstruction it is for.
     SceneSubject s = subject_u02_clip(2, "manafold-antenna-quarter", u02::kChannelKeys,
                                       false, &kU02SunChannel);
     s.u02_mana = 0;
     s.u02_smear = 0;
+    s.u02_shell = false;
     s.u02_mist = false;   // declared dry, same as the fixed view (F.0)
     s.planet = 0;
     s.cam_k = 460000;     // F.0's framing, so the two views are like-for-like
@@ -7639,8 +7688,15 @@ int main(int argc, char** argv) {
   if (wanted("manafold-fogprobe-off")) {
     SceneSubject s = subject_u02_clip(5, "manafold-fogprobe-off", u02::kRestKeys, false, &kU02SunCalm);
     s.u02_mana = 0;
-    s.u02_smear = 0;  // the bare creature
+    s.u02_smear = 0;     // the bare creature
     s.u02_mist = false;  // PASS 9: bare means bare
+    // PASS 12: the shell STAYS ON here, deliberately. This subject is the
+    // ablation lattice's CREATURE baseline, and every other leg subtracts it.
+    // The shell is part of the creature's material, so switching it off on
+    // this leg alone would push the shell's own pixels into "motes alone",
+    // "smear alone" and "mist alone" all at once -- a probe silently measuring
+    // a fourth thing, which is the exact fault the third and fourth legs were
+    // added to remove. A lattice leg differs from its siblings in ONE term.
     s.note = "fog ablation: smear plane OFF, mist OFF, mana OFF";
     rc |= render_scene(s);
   }

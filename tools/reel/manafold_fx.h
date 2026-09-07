@@ -331,6 +331,198 @@ constexpr int32_t kPlasmaSpreadMm = 240;   // the filled blobs' wobble bound
 // bright peach sky. Core radius as per-mille of its halo radius.
 constexpr int kCoreOfHaloPm = 640;
 
+// ===================== THE SHELL (DIRECTION 9 §7 + §14) ===================
+//
+// "We need the outer part of the creature to be translucent like in the very
+//  first version. Go look it up. Just less translucent. Only a bit see
+//  through, not almost completely invisible."                        (D9 §7)
+//
+// "you should make the fog go outside the lines of the creature a bit, makes
+//  more sense to me. Should get denser the closer it gets to the inside."
+//                                                                    (D9 §14)
+//
+// ---- WHY THIS IS NEW CODE AND NOT A NEW VALUE ---------------------------
+// THE SHELL WAS NEVER A SHELL. `kFogThicknessPm` -- the constant four passes
+// have argued over, set to 1000, 2000, 4500 and 1200, and which D9 §7 calls
+// "the THIRD setting of this value" -- is a global multiplier on the SMEAR
+// PLANE's composite gain. It is one number applied to a screen-space
+// persistence buffer. It has no idea where the creature is.
+//
+// That is why the value kept being wrong in a way nobody could fix by moving
+// it: §14 asks for a density that varies with distance from the silhouette and
+// that extends past the ink, and a scalar on an unrelated plane is
+// STRUCTURALLY INCAPABLE of either. The owner has now described the mechanism
+// precisely enough that the mismatch is unmissable, so the shell gets built as
+// the thing it is: a band around the creature's own silhouette.
+//
+// (kFogThicknessPm survives untouched, because it does do something real to the
+// smear. Its own comment now says what it actually is. It is no longer the
+// shell, and no future pass should re-answer a shell question by moving it.)
+//
+// ---- THE MECHANISM ------------------------------------------------------
+// Pass 10 already built the exact input this needs and used it for one job:
+// `u02_cover`, the creature's per-pixel coverage INCLUDING the cel ink ring,
+// which the mist reads to exclude the animal. The shell reads the same mask
+// and measures DISTANCE FROM ITS EDGE, in both directions:
+//
+//      outside  <-- kShellOutReachPx --|-- kShellInReachPx -->  inside
+//                                 the ink line
+//
+// Density is HIGHEST AT THE LINE and falls off both ways. That satisfies both
+// of the owner's sentences at once: it "goes outside the lines a bit", and out
+// there it "gets denser the closer it gets to the inside". Inward it fades too,
+// over kShellInReachPx, which is D5 §3's original picture -- "the gassy outside
+// inside the black line before you get to the real body" -- so the body's
+// middle stays clean and only its rim is hazed.
+//
+// A LIMB-BRIGHTENED shell (densest at the rim, thinning toward the body's
+// centre) is what a real translucent sphere does, and it is the OPPOSITE of one
+// possible reading of §14. It is not the opposite of what the owner asked: he
+// wrote that sentence about the part that goes OUTSIDE, where "closer to the
+// inside" means "closer to the animal". Both readings agree on everything
+// outside the line and differ only on whether the haze keeps thickening deeper
+// into the body -- which would fog the creature rather than wrap it. Written
+// down because the next pass will read §14 again.
+//
+// ---- WHAT MUST SURVIVE --------------------------------------------------
+// §14.1's acceptance test is THE INK. Pass 10 spent a whole item restoring the
+// outline after the mist erased it, so the shell paints over ink pixels at
+// kShellOverInkPm of its density -- a knob, authored by eye, whose only job is
+// that the line still reads plainly with gas on both sides of it.
+//
+// §14.3: THIS IS NOT THE MIST. The mist's silhouette exclusion is untouched by
+// everything here and stays at 0 creature pixels. The shell crossing the line
+// does not license the mist to.
+constexpr int32_t kShellOutReachPx = 3;   // "a bit" past the ink: an aura
+constexpr int32_t kShellInReachPx = 6;    // the gassy rim inside the line
+// Authored by eye off the ladder in pass12-plates/B4-shell-*.png -- 0 / 200 /
+// 340 / 440 / 520 / 900, ONE binary via U02_SHELL_ALPHA, with 900 as the
+// deliberately-too-far rung (10-GATE-CHECKLIST item 4: ask where the ceiling is
+// BEFORE shipping an increase). At 900 the gas reads as a white glow and the
+// ink greys out, which is the failure s14.1 names. 440 is where the gas is
+// plainly present on both sides of the line, the outward gradient is visible,
+// and the ink is still solid black at 6x.
+constexpr int kShellAlphaMaxPm = 440;     // density AT the line
+// THE FALLOFF PROFILE IS ITS OWN KNOB (§14.2: "the shape of the fade matters as
+// much as its depth"). 1000 = linear ramp; 2000 = fully quadratic, which holds
+// density close to the body and drops it away fast, so the outer edge never
+// reads as a hard-edged halo. Blended between the two, so every value in the
+// range means something rather than only the endpoints.
+constexpr int kShellFalloffGamma = 1750;
+// v1's shell read as a faint whitish-pink haze over the pink body -- looked at
+// in archive-2026-09-04-u02-hover.webm f60 and -channel.webm f180, as §7
+// ordered ("go look it up" is an instruction to look). This is that colour at
+// the presence §7 asks for. The VALUE is chosen by eye in scene and never
+// sampled off the archive: a pale rose that reads pink on one ground reads grey
+// on another (CLAUDE.md, the dorsal-pink lesson).
+constexpr uint8_t kShellTint[3] = {255, 214, 232};
+constexpr int kShellOverInkPm = 260;      // the ink must survive being crossed
+// The live value the compositor reads; the constant above is the shipping
+// default and stays the named owner knob. U02_SHELL_ALPHA=<pm> overrides it for
+// the by-eye ladder ONLY, so the ladder comes from ONE BINARY
+// (10-GATE-CHECKLIST item 21: a comparison split across two builds measures the
+// builds). Never a shipping setting.
+inline int g_u02_shell_alpha_pm = kShellAlphaMaxPm;
+
+/** The falloff profile. `t_pm` is 1000 at the ink line and 0 at the reach, in
+ *  either direction. Linear at gamma 1000, quadratic at 2000, blended between
+ *  so the knob is continuous. */
+inline int shell_profile_pm(int t_pm, int gamma_pm) {
+  if (t_pm <= 0) return 0;
+  if (t_pm > 1000) t_pm = 1000;
+  int k = gamma_pm - 1000;
+  if (k < 0) k = 0;
+  if (k > 1000) k = 1000;
+  const int quad = t_pm * t_pm / 1000;
+  return (t_pm * (1000 - k) + quad * k) / 1000;
+}
+
+/** Paint the translucent shell as a band straddling the creature's silhouette.
+ *
+ *  `cover` is pass 10's per-pixel creature coverage (body + cel ink); `ink` is
+ *  the ink ring alone, or nullptr. Both come from the renderer's OWN masks --
+ *  the shell never re-derives where the creature is, because a second
+ *  derivation is how two things that must agree stop agreeing.
+ *
+ *  Runs AFTER the cel ink pass and BEFORE the mana, so the mana glows over the
+ *  shell exactly as it glows over the creature. */
+inline void shell_paint(uint8_t* rgb, uint32_t w, uint32_t h,
+                        const uint8_t* cover, const uint8_t* ink,
+                        int alpha_max_pm) {
+  if (cover == nullptr || alpha_max_pm <= 0) return;
+  const size_t n = static_cast<size_t>(w) * h;
+  std::vector<int> band(n, 0);       // profile weight in pm; 0 = not in the band
+  std::vector<uint8_t> seen(n, 0);
+  std::vector<size_t> frontier;
+  frontier.reserve(n / 4);
+  // --- outward: grow off the cover, one ring per step --------------------
+  for (size_t i = 0; i < n; ++i)
+    if (cover[i]) { seen[i] = 1; frontier.push_back(i); }
+  for (int32_t r = 1; r <= kShellOutReachPx && !frontier.empty(); ++r) {
+    std::vector<size_t> next;
+    next.reserve(frontier.size());
+    const int t_pm = 1000 - (r * 1000) / (kShellOutReachPx + 1);
+    for (const size_t i : frontier) {
+      const int x = static_cast<int>(i % w), y = static_cast<int>(i / w);
+      for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) {
+          if (dx == 0 && dy == 0) continue;
+          const int nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= static_cast<int>(w) ||
+              ny >= static_cast<int>(h))
+            continue;
+          const size_t j =
+              static_cast<size_t>(ny) * w + static_cast<uint32_t>(nx);
+          if (seen[j]) continue;
+          seen[j] = 1;
+          band[j] = shell_profile_pm(t_pm, kShellFalloffGamma);
+          next.push_back(j);
+        }
+    }
+    frontier.swap(next);
+  }
+  // --- inward: erode into the cover, same profile, its own reach ----------
+  std::fill(seen.begin(), seen.end(), 0);
+  frontier.clear();
+  for (size_t i = 0; i < n; ++i)
+    if (!cover[i]) { seen[i] = 1; frontier.push_back(i); }
+  for (int32_t r = 1; r <= kShellInReachPx && !frontier.empty(); ++r) {
+    std::vector<size_t> next;
+    next.reserve(frontier.size());
+    const int t_pm = 1000 - ((r - 1) * 1000) / kShellInReachPx;
+    for (const size_t i : frontier) {
+      const int x = static_cast<int>(i % w), y = static_cast<int>(i / w);
+      for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) {
+          if (dx == 0 && dy == 0) continue;
+          const int nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= static_cast<int>(w) ||
+              ny >= static_cast<int>(h))
+            continue;
+          const size_t j =
+              static_cast<size_t>(ny) * w + static_cast<uint32_t>(nx);
+          if (seen[j]) continue;
+          seen[j] = 1;
+          band[j] = shell_profile_pm(t_pm, kShellFalloffGamma);
+          next.push_back(j);
+        }
+    }
+    frontier.swap(next);
+  }
+  // --- composite ---------------------------------------------------------
+  for (size_t i = 0; i < n; ++i) {
+    int a = band[i];
+    if (a <= 0) continue;
+    a = a * alpha_max_pm / 1000;
+    if (ink != nullptr && ink[i]) a = a * kShellOverInkPm / 1000;
+    if (a <= 0) continue;
+    uint8_t* px = rgb + i * 3;
+    for (int k = 0; k < 3; ++k)
+      px[k] = static_cast<uint8_t>(
+          (px[k] * (1000 - a) + kShellTint[k] * a) / 1000);
+  }
+}
+
 // ============================ THE SMEAR PLANE ==============================
 // PASS 3 (R6, Direction 3 §6d as amended): the smear is a DECAYING,
 // GLITCHY persistence — "never clears is too much, but longer than usual
@@ -465,6 +657,20 @@ constexpr int kSmearSpeedFullMmPerFrame = 34;
 // is v1's read with a hair more presence -- 1200, authored by eye at native
 // against the shipped 4500 and against a bare leg, never fitted to a number.
 // The acceptance sentence is his: present, felt, not read as a surface.
+// ⚠ PASS 12 NAME CORRECTION -- read this before moving this number again.
+// THIS IS NOT THE SHELL. Everything above is the history of four passes
+// arguing about "the outer layer" through a constant that is a global
+// multiplier on the SMEAR PLANE's composite gain, at one call site, on a
+// screen-space persistence buffer that has no idea where the creature is.
+// D9 §14 asks the shell to be denser near the body and to reach past the ink,
+// and this scalar is structurally incapable of either -- which is why the value
+// kept being wrong in a way nobody could fix by moving it.
+//
+// The shell is now its own thing: kShellAlphaMaxPm / kShellOutReachPx /
+// kShellInReachPx / kShellFalloffGamma and u02::shell_paint, above. This
+// constant KEEPS ITS JOB and its value, because thickening the smear is a real
+// effect the owner has asked for and liked; it simply is not the answer to a
+// shell question, and no future pass should re-answer one by moving it.
 constexpr int kFogThicknessPm = 1200;
 // PASS 11 (Direction 8 §4): THE SHELL GOES BACK TO A WHISPER, and the ladder
 // that chose it comes from ONE BINARY. g_u02_fog_thickness_pm is the live
