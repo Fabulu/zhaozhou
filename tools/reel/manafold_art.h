@@ -1386,8 +1386,16 @@ constexpr int32_t kDriftAmpFloorPm = 150;
 // white outline reads as a glitch; an aqua one reads as folded mana. So the
 // edge is stamped in the fold's own ramp, and its core carries the SOFT body
 // treatment pass 8 gave the motes rather than an additive white.
-constexpr int32_t kFoldEdgeCoreRPx = 3;
-constexpr int32_t kFoldEdgeHaloRPx = 8;
+// PASS 12, OWNER-ORDERED (Direction 9 §10.1, 2026-09-07): "kFoldEdgeHaloRPx
+// 8 -> 5 and kFoldEdgeCoreRPx 3 -> 2. Two constants." The particle lab found
+// the white smear inside every folded shape IS this halo's radius -- it sits
+// exactly where the shape's own outline should be, and every lab variant was
+// rendered FOLDING, so the narrower halo is tested against the hard case.
+// The owner ordered it shipped ALONGSIDE restoring the lightning (§3), not
+// after: a narrower halo is what lets the restored shapes read instead of
+// competing with a bright smear. Previous values 3 / 8 shipped passes 7-11.
+constexpr int32_t kFoldEdgeCoreRPx = 2;
+constexpr int32_t kFoldEdgeHaloRPx = 5;
 constexpr int kFoldEdgeCoreGainPm = 430;
 constexpr int kFoldEdgeHaloGainPm = 220;   // pass 8: pulled back after looking -- the pocket was filling
 constexpr int32_t kFoldEdgeJitterMm = 24;
