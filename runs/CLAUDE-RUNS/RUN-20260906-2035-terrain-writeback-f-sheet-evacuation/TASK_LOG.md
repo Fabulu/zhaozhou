@@ -1226,3 +1226,54 @@ reading explained most of the evidence and stopped me reading the rest.
   the first fit of this block to yield a per-RAM table — the instrument that
   closes the 1,056-bit / 8-block remainder.
 * The fit predates T4; it answers T1's question, not T4's.
+
+---
+
+## THE FIT LANDED — T1 answered, and it found my own regression
+
+`reports/V31-T1-FENCE-FIT-20260907.md`. Scope checked first (both rows 952
+virtual pins, same memory geometry) because T7 requires matched scope.
+
+| | before | after |
+|---|---:|---:|
+| reported | 75.79 | **77.16** |
+| **core→core** | **89.09** | **77.16** |
+| ALM | 5,678 | 6,094 |
+| registers | 4,864 | 4,756 |
+| M10K / bits | 17 / 20,640 | **unchanged** |
+
+**Prediction held.** Not one of the worst 25 paths ends at an admission output;
+the ten that did are gone, and reported/core→core now coincide. Memory did not
+move, as predicted.
+
+**And the fence I added is now the worst path** — 89.09 → 77.16 internal. Both
+new critical families (`fence_open_q` self-loop, eight `credit_ok_q → Mux*`) are
+mine. Reported Fmax improved 1.8%; the real limit got worse, and saying only the
+first would be the flattering half of a true sentence.
+
+**Diagnosed and fixed** (`df1deda7`): 71% of the 12.804 ns path was the 64-way
+`gen_n_c[tail_next_c]` select. Rewritten to precompute both candidates from
+registers — exact, because `gen_n_c` differs from `gen_q` at exactly one index
+and `tail_next_c` never points at it. Timing benefit UNMEASURED; a refit decides.
+
+**The strongest result is the third family:** `gen_q[40][4] → ev_err_issue_o/iss_q`,
+independent of anything I changed. That is T2's target, and §6.8 predicted the
+mechanism. T2 now has a measured timing case, not only a register-count one.
+
+## 1,056-bit remainder CLOSED
+
+The first harvested `blockfit.fit.rpt` gives the RAM table: 15 RAMs, 20,640 bits,
+17 M10K — matching the ledger exactly. The remainder is the `cq_*`/`oq_*` bodies.
+My rejected hypothesis was wrong by exactly 112 = the two 14-bit `*_own` fields,
+which stayed in fabric. Refusing to publish it was right.
+
+**New finding: 7 of 17 M10Ks hold 1,056 bits** — four-deep queues at 0.7%
+utilisation, "Fits in MLABs: No — Unsupported Port Usage". §12.3's 69-block
+proposal counts planes and does not anticipate this.
+
+## Now running / next
+
+* `zhao_texture_material_combine_v2` FIT LAUNCHED — the island's live combiner,
+  never fitted, first of the eight §12.4 blockers.
+* Then a v3own refit carrying T4 + the fence rewrite (this fit predates both).
+* Then `zhao_probe_v3rq_queue` (§5.7).
