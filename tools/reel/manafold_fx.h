@@ -1511,7 +1511,7 @@ struct FoldWeights {
 // lives in manafold_clips.h and kFoldStencilCount here, and a mismatch in this
 // direction is a read off the end of the weight tables. Bumping the picker to
 // nine is safe the moment this holds; bumping it to ten stops the build.
-static_assert(kFoldShapeCount <= kFoldStencilCount,
+static_assert(kFoldShapeCount == kFoldStencilCount,
               "the fold's shape picker indexes more figures than are authored");
 
 inline const FoldWeights& fold_weights() {

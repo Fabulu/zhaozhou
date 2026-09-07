@@ -731,7 +731,15 @@ struct FoldPhase {
   uint8_t shape_from, shape_to;
 };
 
-constexpr int kFoldShapeCount = 6;  // ring, star, bar, crescent, triangle, s-curl
+// MUST equal u02::kFoldStencilCount in manafold_fx.h. It cannot be *derived*
+// from it -- this header is included first, so that symbol does not exist yet --
+// so the equality is enforced by a static_assert in fx.h instead, and that
+// assert is `==`, not `<=`: drift in EITHER direction fails the build.
+// Pass 12 added BOLT, COIL and CROSS and this still said 6, so three figures
+// were authored and unreachable. Same fault class as the table bounds that
+// shipped off-by-one three passes running.
+constexpr int kFoldShapeCount = 9;  // ring, star, bar, crescent, triangle,
+                                    // s-curl, BOLT, COIL, CROSS
 
 /** ease 0..1000 -> 0..1000, smoothstep-ish (integer). */
 inline int32_t fold_ease(int32_t t) {
