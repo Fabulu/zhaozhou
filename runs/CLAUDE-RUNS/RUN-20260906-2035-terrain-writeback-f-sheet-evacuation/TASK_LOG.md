@@ -2100,3 +2100,21 @@ been constructed and has not fired.
 * **§8.3's claim-to-write lease** at the physical write enables — the brief warns
   it must not become "an uncontrolled late combinational window predicate
   immediately before a bank write-enable".
+
+## The owner's V-matrix, worked through
+
+| case | status |
+|---|---|
+| **V01** exact reconstruction | `a_win_gen_of_slot` against an independently maintained `vgen_q`, every cycle; the `tail==63` mutation fire-tested |
+| **V02** live interval membership | **exhaustive** — all 16,384 head residues × 65 occupancies at both boundaries, 4.26M probes; `<=` and public-order mutations fire-tested |
+| **V03** C1 snapshot validity | detector in place, **has not fired** — schedule not constructed, reported as such |
+| **V04** current identity at claim | **REACHABLE** (offset 0), case 4e, and §8.2's term proven load-bearing by mutation |
+| **V05** stale after retirement | TMU (4e), **AUX and FINAL (4f)** — each lane separately, as the ruling requires. *Partial:* observes classification and payload, not the bank write-enable pins |
+| **V06** slot reused, new generation | case 4g — old token delivered before / on / after the capture and claim edges; new owner intact on every axis |
+
+**515 checks**, from 477 this morning.
+
+Still open: V03's construction, V05's write-enable observation, and §8.3's
+claim-to-write lease at the physical write enables — which the brief warns must
+not become "an uncontrolled late combinational window predicate immediately
+before a bank write-enable".
