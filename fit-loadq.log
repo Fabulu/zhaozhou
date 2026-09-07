@@ -1,0 +1,7 @@
+﻿preflight: zhao_terrain_loadq closure from design/fit_targets.yml (1 file(s))
+snapshot: 1 source(s) copied into the workspace; the live tree cannot reach this fit
+provenance guard: 1 declared source(s)
+source digest: 82fbdfb08a30 over 1 file(s) -> zhao_terrain_loadq.sources.sha256
+WARNUNG: INCOMPLETE: zhao_terrain_loadq kept its synthesis numbers ( registers,  memory bits); ALMs and Fmax were never produced.
+zhao_terrain_loadq                 incomplete:failed:quartus_map.exe    57.2s   ALM -
+WROTE C:\programmieren\zencrifice\zhaozhou\reports\synthesis\zhao_block_fit.json (99 block(s); 1 measured this run)

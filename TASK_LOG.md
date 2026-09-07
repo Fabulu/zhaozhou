@@ -1997,3 +1997,95 @@ the islands · D24 ZEMU, whose placement instruction is still outstanding.
 The `zhao_prod_top` fit is still in analysis & synthesis. Five recon agents are
 reading the ~85 unread documents in `reports/` on disjoint lanes, writing
 digests to `reports/digests/`.
+
+---
+
+## 2026-09-07 — TERRAIN.LOADQ, and a paragraph that measurement deleted
+
+### The composition defect that is now closed
+
+`TERRAIN.SEQ`'s law is that a miss is *skipped, never waited on*. It held for
+load COMPLETION and was defeated by load ACCEPTANCE: `TERRAIN.PAGELOADER`
+drives `j_ready_o = (state == S_IDLE)` and holds ready low for the whole
+21,376-byte transfer, so the sequencer sat in `S_LOAD` for all of it with every
+already-resident patch waiting behind the miss.
+
+`zhao_terrain_loadq.sv` sits **between the sequencer and the T4 barrier gate**,
+not after it. That ordering is the design decision: the queue removes the
+acceptance stall, the barrier still holds the load until the writeback lands,
+and neither block had to learn about the other. It is a FIFO because a
+structure that could reorder a load ahead of the writeback guarding it would
+break a law it cannot see.
+
+### The depth, and how the first answer was wrong
+
+The first version was eight deep and carried a confident paragraph explaining
+why T7's 32-page budget was "a budget for a different question". Pointing the
+bench at a **legal full frame** instead of a quiet one killed it:
+
+| frame | queue | cycles | per miss |
+|---|---|---|---:|
+| 8 misses | bypassed | 53,806 | 6,726 |
+| 8 misses | depth 8 | 67 | 8 |
+| 32 misses | depth 8 | 176,768 | 5,524 |
+| 32 misses | depth 32 | 259 | 8 |
+
+10.6% of a 1,666,667-clock frame, 176,509 of those cycles with the sequencer on
+a full queue. The depth covers the whole frame's miss list, not "the acceptance
+stall". Eight looked sufficient only because the frame that measured it asked
+for eight — the house failure mode in its usual costume, surviving one green run
+because that run asked the easy question.
+
+32 jobs × 243 bits is 7,776 flops, which would blow the composed island's 9,000
+register redline on a FIFO alone, so the record is serialised into **one M10K**:
+8 words of 40 bits, 32 × 8 = 256 words = 10,240 bits exactly, addressed as
+`{job[4:0], word[2:0]}`.
+
+### What the bench found that the design had not stated
+
+**Capacity is DEPTH + 1.** One job sits deserialised at the output port after it
+has left the store. The reference model capped at 32, the RTL took a 33rd, and
+every job after that compared one position out of step.
+
+**`level_o` and `inflight_o` are different numbers.** The composed suite's first
+drain check compared against the store's level and was wrong by exactly the two
+jobs that live outside it.
+
+**`TERRAIN.SEQ`'s `wb_wait_cycles_o` was wired to a dead local.** The lint gate
+found it. `h_barrier_stalls` falling to zero is consistent both with the barrier
+having moved into the block and with it having evaporated; only SEQ's own
+counter separates those, and it now does, asserted in phase G2.
+
+### State
+
+* `world_composed_directed`: **146 checks, 0 failures, 3 → 2 composition defects**
+* `loadq_rtl_directed`: **46 checks, 0 failures** — sequence and every field
+  against `zref::terrain::LoadQueue` under four stall patterns, 200 jobs each
+* ledger green at **114 blocks**; contract, counter catalogue and
+  `counter_ports` mapping added
+* commits `d613cd1a`, `e45802d1`, pushed
+
+### The fit, and a guard that broke the build it was guarding
+
+First `-Module zhao_terrain_loadq` run came back
+`incomplete:failed:quartus_map` in 57 s: a bare generate-`if` carrying `$error`
+as an elaboration guard is a syntax error in Quartus 17.0.2 (*"near text: 'if';
+expecting 'endmodule'"*), though Verilator accepts it. **A guard that stops the
+synthesiser reading the file is worse than no guard.** Moved into
+`ifndef SYNTHESIS` / `initial` / `$fatal`, where the lint gate runs it on every
+build. Refitted.
+
+### Where I was when the fit came back
+
+Correcting a **stale defect description** in the composed suite. Its evidence
+line said `zhao_terrain_mipgen.sv` had no slot, generation, epoch or completion
+port — true when written, false within hours; those ports landed the same day.
+The hole is one step further back and is the **next block**: MIPGEN consumes a
+33×33 lattice through `fine_valid_i`, and nothing in `fpga/rtl` turns a resident
+page slot into that stream. Layers A, B and C are 2,178 bytes each at page
+offsets 64, 2242 and 4420 — two of the three not 64-byte aligned — so something
+must read them out of the pool and compose them. `TERRAIN.PATCH` needs the same
+streamer.
+
+A fable agent is running a recon-then-architect pass on **GEOM.WARP**, against
+the owner's question of where terrain deformation and effects actually live.

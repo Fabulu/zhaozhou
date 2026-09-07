@@ -41,10 +41,18 @@
 //  1. A page loaded into this world layer NEVER BECOMES GROUND. A claim sets
 //     `mips_stale`, so the loader's completion parks the entry in ST_MIPGEN,
 //     and only a SECOND completion moves it to RESIDENT_CLEAN -- the only state
-//     a lookup hits on. `zhao_terrain_mipgen.sv` has no slot, generation, epoch
-//     or completion port, and `zhao_terrain_pageloader.sv` is the only `fin`
-//     producer in the tree. Nothing can send that second completion. The
-//     machine as assembled draws no terrain at all. (phase C)
+//     a lookup hits on. `zhao_terrain_pageloader.sv` is the only `fin` producer
+//     in the tree, so nothing can send that second completion. The machine as
+//     assembled draws no terrain at all. (phase C)
+//
+//     THE CAUSE HAS MOVED ONCE ALREADY, WHICH IS WORTH RECORDING. This finding
+//     first read "zhao_terrain_mipgen has no slot, generation, epoch or
+//     completion port". That was true when written and false within hours --
+//     the ports landed the same day. The hole is now one step further back:
+//     MIPGEN consumes a lattice through `fine_valid_i`, and nothing turns a
+//     resident page slot into that stream. A defect description is a
+//     measurement with a date on it, and this one was re-checked rather than
+//     re-quoted.
 //
 //  2. ONE DIRECTORY MUTATION ON THE LOOKUP CYCLE DEADLOCKS THE FRAME.
 //     TERRAIN.SEQ offers its lookup for one cycle with no `ready`;
@@ -994,8 +1002,16 @@ int main(int argc, char** argv) {
            "draw any ground at all",
            "zhao_terrain_residency_v2.sv:530 the claim writes mips_stale = 1; :551-556 the "
            "loader's fin then lands in ST_MIPGEN and does NOT increment resident_o; :557-562 "
-           "only a SECOND fin clears MIPGEN. zhao_terrain_mipgen.sv:53-98 has no slot, gen, "
-           "epoch or completion port, so no wire in the tree can carry that second fin.");
+           "only a SECOND fin clears MIPGEN. THE EVIDENCE LINE HAS MOVED and the older one "
+           "is kept here as a warning: it said zhao_terrain_mipgen had no slot, gen, epoch "
+           "or completion port, which was true when written and false within hours -- those "
+           "ports landed the same day. The block is no longer the missing piece. What is "
+           "missing now is one step further back: MIPGEN consumes a 33x33 lattice through "
+           "fine_valid_i/fine_h_i, and NOTHING in fpga/rtl turns a resident page slot into "
+           "that stream. Layers A, B and C are 2,178 bytes each at page offsets 64, 2242 "
+           "and 4420 -- two of the three not 64-byte aligned -- and something has to read "
+           "them out of the pool and compose them. That streamer is a BLOCK, not a wire, "
+           "and TERRAIN.PATCH needs the same one.");
     std::printf("   eight pages loaded, %u resident: every entry is parked in ST_MIPGEN\n",
                 d.r_resident);
 

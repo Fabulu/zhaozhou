@@ -141,9 +141,25 @@ module zhao_terrain_loadq #(
   // A compile-time refusal rather than a truncation at 3 a.m. Widening a field
   // past the room in eight words must be a build error, not a job that arrives
   // at the loader with its CRC sheared off.
-  if (RECW > WPJ * WW) begin : g_record_too_wide
-    $error("zhao_terrain_loadq: record is wider than WPJ*WW");
+  //
+  // IT LIVES IN AN `initial`, NOT IN A BARE GENERATE-IF, and the first version
+  // did the latter. Verilator accepted it; Quartus 17.0.2 did not, and the fit
+  // came back `incomplete:failed:quartus_map` in 57 seconds with
+  //
+  //     Error (10170): Verilog HDL syntax error ... near text: "if";
+  //                    expecting "endmodule"
+  //
+  // A guard that stops the synthesiser reading the file is worse than no guard:
+  // it fails the build it was meant to protect, for a condition that is not
+  // true. The simulator's elaboration is where this check belongs, and the lint
+  // gate runs on every build.
+`ifndef SYNTHESIS
+  initial begin
+    if (RECW > WPJ * WW)
+      $fatal(1, "zhao_terrain_loadq: record %0d bits is wider than WPJ*WW = %0d",
+             RECW, WPJ * WW);
   end
+`endif
 
   logic [WW-1:0] mem_q [DEPTH * WPJ];
 

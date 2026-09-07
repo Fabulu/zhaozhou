@@ -344,6 +344,37 @@ targets:
     sources:
       - fpga/rtl/terrain/zhao_terrain_residency.sv
 
+  # TERRAIN.LOADQ's whole design decision is that 32 jobs of 243 bits live in
+  # ONE M10K rather than in 7,776 flip-flops, which would blow the composed
+  # island's 9,000-register redline on a FIFO alone. Nothing in simulation can
+  # tell those two apart -- a Verilator run is identical either way -- so the
+  # claim is UNVERIFIED until a fitter says so, and it is exactly the sort of
+  # plausible argument this file exists to stop being taken on trust.
+  - top: zhao_terrain_loadq
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_loadq.sv
+    rules:
+      # THE ACCEPTANCE QUESTION, BOTH DIRECTIONS, AND IN THE RIGHT UNIT.
+      #
+      # min_memory_bits, not min_m10k: this file's own record says a COUNT of
+      # M10K is not a sound floor, because bits can land in MLAB and a wide
+      # array packs in shapes a capacity argument does not predict. That
+      # mistake cost two false failures on 2026-09-04 and is not repeated here.
+      # The store is 32 x 320 = 10,240 bits and the question is whether those
+      # bits became memory at all.
+      min_memory_bits: 10240
+      max_m10k: 2
+      # AND THE OTHER DIRECTION, which is the gate that actually matters: a fit
+      # that inferred the memory and ALSO kept a shadow copy in registers would
+      # satisfy min_memory_bits and still be the 7,776-flop disaster the design
+      # exists to avoid. Genuine flops here are the 243-bit capture register,
+      # the 243-bit output register (320 as declared), pointers, counters and
+      # the four 32-bit counter outputs -- roughly 750. 900 leaves room for
+      # retiming without leaving room for the store.
+      max_registers: 900
+      max_alms: 800
+      max_dsp: 0
+
   # TERRAIN.MIPGEN is streaming decimation with NO storage -- if a fit reports
   # RAM blocks for it, the block grew a buffer somebody did not intend.
   - top: zhao_terrain_mipgen
