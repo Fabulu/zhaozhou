@@ -57,6 +57,32 @@ lives in unmeasured deletions. Part of it is now measured and it is not a
 deletion at all: it is a read-port change on two named arrays, independent of
 the ownership rework and available without it.
 
+## The whole-island census, because two arrays looked like a pattern
+
+Every uninferred RAM in the composed island, from the same map report — 18 of
+them, in two categories that must not be confused:
+
+**Fourteen say "uninferred due to inappropriate RAM SIZE."** Those are CORRECT
+refusals: the array is too small to be worth an M10K. `rcp24_svc|c_k`, `c_tok`,
+`c_zero`, `aux_pipe|sd_satu/sd_satv/sd_degen/off_deg`,
+`material_combine_v2|newq_m/doneq_m/contq_ctx_m/contq_ph_m`,
+`cache_pipe|rq_en`, `rsp_dispatch|raw_c`, `perspuv_svc|e_dz`. Nothing to fix.
+
+**Four say "uninferred due to ASYNCHRONOUS READ LOGIC."** That is the fixable
+pattern — and checking each one shrank the prize rather than growing it:
+
+| array | size | verdict |
+|---|---|---|
+| `uvw_m` (top) | 64b × 64 = **4,096 flops** | **the real target** |
+| `zhao_field_rcp24_rom|Ram0` | 256 × 31b | **by design** — a pure `always_comb` case lookup, §6.2's field_rcp table. Combinational is what it IS. |
+| `fragrob|tok_m` | TOKW_F × 16 | small |
+| `class_m` (top) | 2b × 16 = 32 flops | negligible |
+
+**So the finding is ONE array, not four.** "Four arrays share a fixable pattern"
+was the shape the census first suggested, and it would have been a satisfying
+thing to report; three of the four are either by-design or too small to matter.
+The prize is `uvw_m`'s 4,096 flip-flops and nothing else on this list.
+
 ## Not built
 
 Diagnosis only, produced without a compiler while the island reseed runs. The
