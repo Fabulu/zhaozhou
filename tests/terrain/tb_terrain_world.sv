@@ -23,18 +23,31 @@
 //                                                     >- one played VRAM image
 //     zhao_terrain_writeback   reads  the page pool  -/
 //
-// NOT composed, and the reason is a MISSING BLOCK rather than a choice:
+// NOT composed HERE, and the reason is no longer a missing block:
 //
-//   TERRAIN.SEQ's `is_*` patch issue cannot reach TERRAIN.PATCH, because
-//   nothing in the tree turns a resident page slot into TERRAIN.PATCH's
+//   TERRAIN.SEQ's `is_*` patch issue could not reach TERRAIN.PATCH, because
+//   nothing in the tree turned a resident page slot into TERRAIN.PATCH's
 //   `vtx_*` lattice intake. TERRAIN.PATCH has no memory port at all (its
 //   ports are a vertex stream in and a composed vertex stream out), and the
-//   only RTL that drives `vtx_valid_i` anywhere in `fpga/rtl/` is
+//   only RTL that drove `vtx_valid_i` anywhere in `fpga/rtl/` was
 //   `zhao_prod_top.sv`, from an LFSR. So the chain PATCH -> COMPCACHE -> LOD
-//   -> TESS -> NORMALS is reachable only from a harness on BOTH ends, which
-//   is decoration rather than composition. The issue port is taken by a
-//   harness sink here, its every field is checked, and the missing intake is
-//   reported as a finding.
+//   -> TESS -> NORMALS was reachable only from a harness on BOTH ends, which
+//   is decoration rather than composition.
+//
+//   THAT BLOCK LANDED ON 2026-09-07. `zhao_terrain_pagestream` reads layers A,
+//   B and C out of a pool slot and emits exactly the three planes the compose
+//   lane takes, on one beat, and `tests/terrain/tb_terrain_compose.sv` puts the
+//   two together with no glue on the height path -- section 3.4 running on real
+//   page bytes, checked against `zref::terrain::compose_vertex` at all 1,089
+//   vertices.
+//
+//   It is a SEPARATE bench rather than another limb of this one, deliberately.
+//   This file already carries five real blocks, a played fabric, a directory
+//   shim and a mip chain; the composed height path needs a page and a placement
+//   and nothing else, and hanging it here would make both harder to read for no
+//   claim neither could make alone. The issue port is still taken by a harness
+//   sink here and its every field is still checked -- what has changed is that
+//   the intake is no longer a finding.
 //
 //   The compose-slot half of TERRAIN.COMPCACHE *is* composed: the frame-scoped
 //   allocator lives in TERRAIN.SEQ and its `is_cslot_valid_o` / `is_cslot_o`

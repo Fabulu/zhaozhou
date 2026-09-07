@@ -2278,3 +2278,88 @@ it; the other two happened not to contain the construct.
 5. `TerrainEpoch` BEGIN/END_FLUSH/ABORT — what "drain" means in gates
 6. which plane is surface 0 for load-time mips (carried)
 7. a load completing into a slot already in EVICT_PENDING (carried)
+
+---
+
+## 2026-09-07 (evening) — the command path, composed
+
+### A command starts a frame
+
+Composed suite phase M runs the identical eight-record set twice on a fresh
+directory — once by hand, once from a `SubmitTerrainSet` whose sealed list sits
+in the played HPS arena — and requires the two **action logs** to be identical.
+Not the counters: kind, order and every payload field, because a path that
+issued the same loads in a different order would agree on every counter and be a
+determinism failure. **67 cycles by hand, 147 from the command**, the difference
+being the CRC pass. `world_composed_directed`: **167 checks, 0 failures, 1
+composition defect.**
+
+### §3.4 composed on real page bytes
+
+`tb_terrain_world.sv`'s header said the chain PATCH → COMPCACHE → LOD → TESS →
+NORMALS was *"reachable only from a harness on BOTH ends, which is decoration
+rather than composition"*, and named the missing block. It landed today.
+`tb_terrain_compose.sv` puts PAGESTREAM straight into PATCH — **no glue on the
+height path** — and checks all 1,089 vertices of a real 21,376-byte page against
+`zref::terrain::compose_vertex`. **22 checks, 0 failures.** The world bench's
+header is corrected rather than left standing.
+
+### Two things the tests found about themselves
+
+**A check invented against a misread port.** TERRAIN.CMD refused any `sequence`
+above 65,535 on the belief that the frame ring carried sixteen bits. It carries
+**thirty-two**; the narrowing I had seen is `cl_seq_o`, the *claim* sequence, a
+different signal. Verdict 9 removed and left unallocated, the suite now asserts
+the opposite. **The lint gate caught it, not the directed suite.**
+
+**A fixture case that could not fire.** The compose suite's fifth case was
+written as a saturation case. Both operands are height16 up-converted by an exact
+`raw << 8`, so the widest sum is **16,776,704 against 2³¹** — nothing sourced
+from a page can saturate that add; only the field lanes can. The arithmetic is
+now asserted so the absence of saturation coverage here is a stated fact rather
+than a hole. **The check on the ORACLE found it, not the check on the fixture** —
+the two counts came back 218 and 218 while the intent claimed 218 + 217.
+
+### Fits
+
+| block | ALM | reg | M10K | DSP | Fmax |
+|---|---:|---:|---:|---:|---:|
+| LOADQ | 734 | 692 | **1** (10,240 bits) | 0 | 107.33 |
+| MIPFEED | 343 | 244 | 0 | 0 | 121.08 |
+| PAGESTREAM | 1,629 | 2,014 | 0 | 0 | **97.11** |
+
+PAGESTREAM's structure held — zero memory bits was the acceptance question — but
+**Fmax is 2.9% short of the 100 MHz product clock**, and `fit_rules.ps1` has no
+`min_fmax` to say so. Recorded in the contract and the target rather than passing
+on resource gates alone. The suspect is named (a 64-to-1 byte-lane mux over a
+512-bit register, three of them, feeding the emit path combinationally) and the
+fix is deliberately **not** applied: a per-block fit puts every port on a virtual
+pin, and tuning on that number alone is tuning against an artefact.
+
+`zhao_terrain_cmd` fit running.
+
+### Gate hygiene
+
+* `check_fit_rules.ps1`: loadq, mipfeed, pagestream all PASS.
+* MIPFEED's gate had been **wrong in its units** — 200 was a flip-flop count
+  applied to an ALM budget. Re-derived, not retuned.
+* `formal_terrain_bake_delta` fails every sweep. `design/formal_runs.yml` records
+  it as **banked**: the bmc task ran 10.7 hours in "waiting for solver" before
+  being killed on 2026-08-19 and has never finished. Pre-existing and documented
+  — but a test wired to fail every run is noise that hides real failures.
+  Flagged, not touched: another lane's evidence.
+
+### Open, and needing the owner
+
+1. the command payload seam — the shell framer carries 16 payload bytes and
+   `SubmitTerrainSet` is 32 (and `TerrainField 0x0200` is a 112-byte record
+   already truncated the same way)
+2. **`zhao_hps_arbiter` has two client ports** and terrain now has three HPS
+   readers — rule 5's starvation law is written for two
+3. the set-level `view_mask`/`flags` on `SubmitTerrainSet` have no consumer
+4. what a bad `list_crc32c` does to the **frame**
+5. `TerrainEpoch` BEGIN/END_FLUSH/ABORT — what "drain" means in gates
+6. which plane is surface 0 for load-time mips
+7. a load completing into a slot already in EVICT_PENDING
+8. **`kFlagDual` is not routed** from the patch record to TERRAIN.PATCH's
+   `dual_i` by anything in the tree
