@@ -318,12 +318,25 @@ int main(int argc, char** argv) {
   // tree will change it: a 200 mm vertical request moves ball A by 3 mm, while
   // the same 200 mm SIDEWAYS moves it 198 mm.
   //
-  // The owner's answer to this is already written -- Direction 9 SS13's
-  // stretchy spans, whose stated purpose is "so the balls can move further
-  // apart and become more expressive", and SS13.4: "stretchy spans are what
-  // let the nodules go where they are told". So this is an UNBUILT FEATURE
-  // WITH A NAMED OWNER INSTRUCTION, not a regression, and failing the build on
-  // it would only teach the next pass to delete the check.
+  // ⚠ PASS 12 WAVE 2a: D9 SS13's STRETCHY SPANS ARE NOW BUILT, AND THIS BLOCK
+  // STILL PRINTS -7..+3. THAT IS NOT A FAILED FIX -- IT IS THIS GATE'S BLIND
+  // SPOT, and the number below is honest about bones and silent about skin.
+  //
+  // `posed_ball()` above skins a SYNTHETIC VERTEX AT THE BONE'S OWN BIND
+  // ORIGIN, carrying no deform metadata. The span stretch is a VERTEX effect
+  // applied before rigid skinning, so no vertex the bone gate constructs can
+  // ever carry it. A bone gate measuring bones is right; it just cannot answer
+  // this particular question.
+  //
+  // THE SKIN ANSWER IS MEASURED, in `manafold_spangate.cpp` (build target
+  // `mspan`), through the same production path plus deform_skin_vertex_lanes:
+  //
+  //     ball A vertical SKIN reach, solo-A segment:  37.8 mm -> 172.3 mm
+  //
+  // So the reach is delivered and the ball does go where it is told; what stays
+  // true is that the BONE barely moves, because bones cannot scale. Read the
+  // two gates together. The line below is left printing, and left ungated, for
+  // the same reason it always was.
   //
   // It prints loudly, every run, in the same spirit as kEyeShiftPivotMm's
   // declared gap: not silently absent.
@@ -340,8 +353,9 @@ int main(int argc, char** argv) {
         if (d > hi) hi = d;
       }
       std::printf("    ball %s  %+6.0f .. %+6.0f mm%s\n", kBalls[i].name, lo, hi,
-                  (hi - lo) < 60 ? "   <-- span points along the request; "
-                                   "needs D9 SS13's stretch" : "");
+                  (hi - lo) < 60 ? "   <-- BONE only: the span points along "
+                                   "the request. The SKIN answer is mspan's G4"
+                                 : "");
     }
   }
 

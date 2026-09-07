@@ -83,12 +83,40 @@ enum BoneId : uint8_t {
                     // Still no vertex is skinned to it -- that is deliberate,
                     // and the joint AT the re-entry ball remains a DECLARED
                     // GAP (see kLoopArcMm, and pass 10's C.2 prototype).
-  kBEyeL = 8,       // left lens
-  kBEyeR = 9,       // right lens
-  kBPupilL = 10,    // left star
-  kBPupilR = 11,    // right star
+  // ---- PASS 12 WAVE 2a: THE EYE TRAVEL BONES (Direction 9 SS6, SS12.3) ----
+  //
+  // Two INERT bones on the body's own vertical axis, one per eye, inserted
+  // between the root and the eye. At rest they are identity and their bind is a
+  // pure translation to the axis, so the composed eye bind is unchanged to the
+  // bit and pass 11's accepted face is reproduced exactly, not approximately.
+  //
+  // ⚠ THIS IS ALSO SS12.3's FIX, AND IT COSTS NOTHING EXTRA. The owner:
+  //
+  //   "the eye stuffs don't just need to rotate around the ball, they need to
+  //    rotate around themselves. That's why the white and eyes vanish. They're
+  //    basically 2d so at 45 degrees rotation they vanish."
+  //
+  // A bone rotation carries its CHILDREN'S FRAMES, not just their positions. So
+  // travelling the eye by rotating a parent on the body axis turns the lens and
+  // both stars through the same angle at the same time -- they arrive at the
+  // new place already facing outward, because their local frame came with them.
+  // The flat-plate-viewed-edge-on fault is a property of travel implemented as
+  // a TRANSLATION along the surface; implemented as a rotation about the body
+  // centre it cannot occur. On a sphere the surface normal IS the direction
+  // from the centre, so "turn by the travel angle" and "rotate the parent" are
+  // the same operation -- which is what the owner meant by "should be easier
+  // now it's a ball", and why SS5 and SS6 are one piece of work.
+  //
+  // They stay ONE RIGID UNIT (SS5a/SS5b) by construction: nothing slides
+  // against anything, because nothing moves relative to anything.
+  kBEyeTravelL = 8,   // left eye's carrier, pivoting on the body axis
+  kBEyeTravelR = 9,   // right eye's carrier
+  kBEyeL = 10,      // left lens
+  kBEyeR = 11,      // right lens
+  kBPupilL = 12,    // left star
+  kBPupilR = 13,    // right star
 };
-constexpr int kBoneCount = 12;
+constexpr int kBoneCount = 14;
 
 /**
  * Bind translations: each hinge bone's pivot sits AT its ball's own centre
@@ -98,6 +126,18 @@ constexpr int kBoneCount = 12;
  * (kLoopArcMm, now six spans: junction->neck, neck->A, A->B, B->C, C->D,
  * D->end).
  */
+/** Integer square root, for the eye's bind radius. Local because the rig is a
+ *  header included before the clip helpers that carry the other one. */
+inline int64_t isqrt_i64(int64_t v) {
+  if (v <= 0) return 0;
+  int64_t x = v, y = (x + 1) / 2;
+  while (y < x) {
+    x = y;
+    y = (x + v / x) / 2;
+  }
+  return x;
+}
+
 inline zc::Skeleton build_skeleton() {
   zc::Skeleton sk;
   sk.bone_count = kBoneCount;
@@ -120,8 +160,36 @@ inline zc::Skeleton build_skeleton() {
   // now sweeps the eye ACROSS the body surface -- "the eye itself can move a
   // bit too" -- instead of spinning the lens on the spot. The rig authors
   // rotations only, so this is how a shift is expressed.
-  sk.bones[kBEyeL] = zc::Bone{kBRoot, fxu(kEyeXMm), fxu(vmm(kEyeYMm)), fxu(kEyeZMm)};
-  sk.bones[kBEyeR] = zc::Bone{kBRoot, fxu(kEyeXMm), fxu(vmm(kEyeYMm)), -fxu(kEyeZMm)};
+  // ---- the travel carriers, on the body's vertical axis --------------------
+  //
+  // The pivot MUST be the centre of the sphere the eye is asked to trace, or
+  // the eye leaves the surface as it travels. On the round body (SS5) that is
+  // the root origin, and the knob is kept at zero rather than deleted because
+  // it is the value that would have to move if the body ever leaned again.
+  sk.bones[kBEyeTravelL] = zc::Bone{kBRoot, fxu(kEyeTravelPivotXMm), 0, 0};
+  sk.bones[kBEyeTravelR] = zc::Bone{kBRoot, fxu(kEyeTravelPivotXMm), 0, 0};
+  // ---- the eyes, now children of their carriers ----------------------------
+  //
+  // THE STANDOFF (D9 SS6.1, "maybe just remove them off the body a little").
+  // Pushed along the HORIZONTAL RADIAL direction -- the (x, z) direction from
+  // the body axis -- and not along y. That is deliberate and it is the same
+  // fact that makes tracing work: a rotation about the body axis preserves the
+  // horizontal radius exactly, so a standoff applied in that direction is
+  // CONSTANT all the way round the travel. A standoff along the true ellipsoid
+  // normal would be geometrically prettier and would drift as the eye moved.
+  const int32_t ex0 = kEyeXMm, ez0 = kEyeZMm;
+  const int32_t r0 = static_cast<int32_t>(
+      isqrt_i64(static_cast<int64_t>(ex0) * ex0 + static_cast<int64_t>(ez0) * ez0));
+  const int32_t exs = r0 > 0 ? ex0 + static_cast<int32_t>(
+                                        (static_cast<int64_t>(ex0) * kEyeStandoffMm) / r0)
+                             : ex0;
+  const int32_t ezs = r0 > 0 ? ez0 + static_cast<int32_t>(
+                                        (static_cast<int64_t>(ez0) * kEyeStandoffMm) / r0)
+                             : ez0;
+  sk.bones[kBEyeL] =
+      zc::Bone{kBEyeTravelL, fxu(exs - kEyeTravelPivotXMm), fxu(vmm(kEyeYMm)), fxu(ezs)};
+  sk.bones[kBEyeR] =
+      zc::Bone{kBEyeTravelR, fxu(exs - kEyeTravelPivotXMm), fxu(vmm(kEyeYMm)), -fxu(ezs)};
   // Pupil pivots sit AT the lens centre; the star GEOMETRY is offset
   // outward (+X) in the part, so pupil-bone rotations sweep the star
   // across the lens face like an eyeball turning (the zixx gaze mechanism,

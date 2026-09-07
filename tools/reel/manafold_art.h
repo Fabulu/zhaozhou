@@ -904,6 +904,55 @@ constexpr int kEyeShiftMaxPm = 100;
 // the star's own mechanism is untouched.
 constexpr int32_t kEyeShiftPivotMm = 0;   // NOT SHIPPED -- see manafold_rig.h
 
+// ==== PASS 12 WAVE 2a -- THE EYE TRAVEL (Direction 9 SS6, SS6.1, SS12.3) ====
+//
+//   "the eyes have to move more. 45 deg is back on. You say they vanish, well,
+//    make them trace the body. Should be easier now it's a ball."
+//
+// ⚠ WHAT WAVE 1 FOUND, AND IT IS THE REASON THIS BLOCK IS NEW RATHER THAN
+// RETUNED: THERE WAS NO TRAVEL CHANNEL AT ALL. `kEyeTravelMaxDeg` did not exist
+// anywhere in the tree; `kEyeShiftPivotMm` is 0 and `eye_shift_a16()` returns 0
+// unconditionally, so the only thing resembling travel was inert. Every number
+// Directions 5 through 8 argued about -- 45, then 32, then 14 -- was argued
+// about a mechanism nobody had built. Nothing here inherits any of them.
+//
+// THE MECHANISM is two inert carrier bones on the body's vertical axis
+// (`kBEyeTravelL/R`, manafold_rig.h) with the eyes re-parented onto them. On
+// the ROUND body (SS5) the horizontal section is a circle at EVERY height, so a
+// rotation about that axis holds the eye's distance from the axis exactly
+// constant -- the eye traces the surface for free, at any angle, with no
+// per-frame surface solve and no matrix inverse (so 09-ENGINE-GOTCHAS SS15's
+// bind-space trap never opens).
+//
+// AND IT IS SS12.3's FIX AT THE SAME TIME, at no extra cost -- see the long
+// note in manafold_rig.h. A bone rotation carries its children's FRAMES, so the
+// lens and both stars arrive already turned to face outward. The eye lab's
+// thicken-the-cyan/slim-the-white compensation was written against a fault this
+// removes; see kStarCyanThinMm for what happens to it.
+//
+// 45 degrees, as instructed. The clips use what READS; this is the ceiling.
+constexpr int32_t kEyeTravelMaxDeg = 45;
+constexpr int32_t kEyeTravelMaxA16 =
+    static_cast<int32_t>((static_cast<int64_t>(kEyeTravelMaxDeg) * 65536) / 360);
+// The carrier pivot's offset along x from the root. ZERO on the round body --
+// the body axis IS the root axis now that kBodyLeanXMm is gone -- and kept as a
+// knob because it is exactly the value that would have to move if the body ever
+// leaned again. A pivot off the sphere's centre makes the eye leave the surface
+// as it travels, which is the fault the whole channel exists to avoid.
+constexpr int32_t kEyeTravelPivotXMm = 0;
+// D9 SS6.1: "maybe just remove them off the body a little". The eyes ride
+// PROUD so the breath has somewhere to go before it punches through them, and
+// they are ALLOWED to clip during a bounce -- an authored, declared clip. What
+// is still the fault is sunk-in as a steady state.
+//
+// AUTHORED BY EYE AT THE BOUNCE EXTREMES, not at rest, because at rest any
+// value looks fine and the whole point is what the inhale does. The lens
+// already sits about 13 mm proud of the ellipsoid at its own height; the breath
+// at kCompressAmpPm 12500 swings the surface further than that, so a standoff
+// under ~20 mm is swallowed. It is the knob that trades "floating off the face"
+// against "eaten by the breath" and it is meant to be moved.
+constexpr int32_t kEyeStandoffMm = 22;
+
 // ---- OWNER DIRECTION 5 5d: THE EYES ROLL ---------------------------------
 //   "eyes should also be able to rotate and rotate back. Maybe 10-20% at most.
 //    Still shouldn't clip anything or touch each other. Just for
@@ -958,7 +1007,50 @@ constexpr int32_t kEyeShiftPivotMm = 0;   // NOT SHIPPED -- see manafold_rig.h
 //      750 a16 (4.1 deg) -> 33 mm
 // 900 is the pick. One constant to move if the owner wants a wider brow -- but
 // move it against the swept gate, not against the roll-alone table.
-constexpr int32_t kEyeRollMaxA16 = 900;     // 4.9 deg -- gated, swept, see FINDINGS
+// PASS 12 WAVE 2a -- RE-MEASURED ON THE ROUND BODY, as D9 SS10.2 instructed,
+// and the answer is NOT the one the direction hoped for.
+//
+//   "The 4.9 deg cap is not the owner's number and never was. D5 SS5d asked for
+//    '10-20% at most' = 9-18 deg; pass 7's gate found the eyes closing to 0 mm
+//    at 7 deg ON THE TEARDROP BODY and capped it at a quarter of the owner's
+//    floor WITHOUT EVER ASKING HIM. The round body changes that geometry
+//    entirely. Re-measure; the collision may simply not exist on a sphere."
+//
+// IT STILL EXISTS. Swept through the composed-extremes gate on the ROUND body,
+// with the SS6.1 standoff live and travel and breath in the composed set:
+//
+//     roll   4.94 deg  ->  41 mm      roll   8.24 deg  ->  0 mm   FAIL
+//     roll   6.59 deg  ->  18 mm      roll  10.00 deg  ->  0 mm   FAIL
+//                                     roll  18.00 deg  ->  0 mm   FAIL
+//
+// SO THE REAL NUMBER IS 6.6 DEGREES, and it is authored here as the real
+// number rather than inherited: 1200 a16, 18 mm of margin over the 12 mm floor,
+// 34% more roll than the value the owner never chose. The round body bought
+// something -- 4.94 deg used to leave 22 mm and now leaves 41 -- but it did not
+// buy the owner's range.
+//
+// WHY NOT, mechanically, because "it collides" is not an answer he can act on:
+// the lens is 896 mm long on screen and the two lens CENTRES are 450 mm apart.
+// Rolling about the outward axis swings each tip through 448*sin(roll), so at
+// 9 deg the tips have travelled 70 mm each toward a gap that the Lambda
+// attitude has already narrowed. It is the LENS LENGTH and the EYE SEPARATION
+// that set this ceiling, not the body shape -- which is exactly why making the
+// body round did not move it.
+//
+// THE STANDOFF IS NOT THE LEVER EITHER, and that was measured too rather than
+// assumed. Pushing the eyes further out does buy roll, but it buys it by taking
+// them OFF the face, which SS6.1 names as the remaining fault:
+//
+//     standoff  22 mm, roll 10 deg -> gate A  0 mm FAIL
+//     standoff  60 mm, roll 10 deg -> gate A 10 mm FAIL
+//     standoff 100 mm, roll 10 deg -> gate A 48 mm OK, but gate B 1055 pm FAIL
+//                                     (over 1000 pm IS off the body surface)
+//     standoff 150 mm, roll 18 deg -> gate A  0 mm FAIL anyway
+//
+// 18 deg is unreachable at ANY standoff. If the owner wants 9-18 deg the levers
+// are a SHORTER LENS or WIDER-SET EYES, both of which are changes to the drawn
+// face, so they are his call and not this pass's.
+constexpr int32_t kEyeRollMaxA16 = 1200;    // 6.6 deg -- MEASURED, see above
 constexpr int32_t kEyeRollRestA16 = 1820;   // 10 deg -- typical amplitude
 // ---- PASS 11 E.2: THE NEAR-EYE BAR, RETIRED AS A SHAPE CHANGE -------------
 // Direction 8 §6.4 released this ONE eye item from the fold's fence: it is a
@@ -1002,6 +1094,45 @@ constexpr int32_t kStarWhiteThinMm = 12;  // the white is an OUTLINE, not a slab
 // exactly how this project has lost time before -- and because the centring is
 // still correct on the owner's own eye, independently of the hypothesis.)
 constexpr int32_t kStarOffsetYMm = 0;
+
+// ==== PASS 12 WAVE 2a -- WHY THE STAR IS STILL OFF CENTRE (D9 SS12.1) =======
+//
+//   "They're not centered in the eye enough as it is. They should always be
+//    centered unless they decide to move"
+//
+// kStarOffsetYMm has been 0 since pass 8, so the star's ORIGIN is already
+// exactly on the lens's. The owner is still right, and there are two separate
+// reasons, neither of which that constant can express.
+//
+// ONE -- THE STAR IS NOT VERTICALLY STRETCHED AND THE LENS IS. The viewport is
+// anisotropic (gotcha SS1), which is what kVStretchPm exists for: geometry is
+// authored in ON-SCREEN proportions and pre-stretched in y at build so it
+// arrives on screen shaped the way it was drawn. make_eye_lens does this
+// (`* kVStretchPm / 1000` on every ring y) and so does every bone position via
+// vmm(). make_star NEVER DID. So a star drawn 147 mm from centre to bottom tip
+// renders at 147/1.66 = 60% of that -- a squat lozenge sitting inside a lens
+// that got the full treatment. That reads as small, and small-and-low reads as
+// off centre. It is also SS12.2's "star size toward the drawn proportion",
+// arriving from the opposite direction: the star was not undersized by a scale
+// constant, it was being squashed by a missing one.
+//
+// TWO -- THE STAR'S ARMS ARE ASYMMETRIC AND IT IS CENTRED BY ITS ORIGIN. The
+// drawn star reaches kStarArmBottomMm (147) down and kStarArmTopMm (114) up. A
+// shape centred on its origin therefore hangs (147-114)/2 = 16.5 mm BELOW the
+// lens's centre before anything else happens. Centring the ORIGIN is not
+// centring the STAR, and the eye reads mass, not origins.
+//
+// ⚠ SEPARATE KNOBS ON PURPOSE (gotcha SS14 -- one knob serving two features is
+// how kStarThinMm swallowed the cyan). kStarOffsetYMm stays the "where does the
+// star deliberately sit" knob and stays 0 per SS12.1. kStarCentreYMm is the
+// REGISTRATION correction that puts the drawn mass on the lens centre, and it
+// is derived from the arm table so it cannot go stale when the arms are
+// re-authored. Set it to 0 to see the fault the owner is describing.
+constexpr int32_t kStarCentreYMm = (kStarArmBottomMm - kStarArmTopMm) / 2;  // +16
+// The star's own vertical stretch, per-mille. kVStretchPm restores the drawn
+// proportion; 1000 reproduces the pre-pass-12 squashed star exactly, which is
+// what makes this reversible in one edit rather than a rewrite.
+constexpr int32_t kStarVStretchPm = 1000;
 // THE WHITE IS A DILATION OF THE CYAN, not an independent shape: same profile
 // table, same points, offset outward by this one rim. It cannot disagree with
 // the star it rings, because it is generated from it.

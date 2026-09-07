@@ -514,8 +514,15 @@ inline zc::RingPart make_star(uint8_t bone, bool white) {
     const int32_t w = static_cast<int32_t>(
         (static_cast<int64_t>(sc(kStarArmSideMm)) * kStarProfileWPm[i]) / 1000) + rim;
     zc::RingSpec rs;
+    // PASS 12 WAVE 2a (D9 SS12.1/SS12.2): the star finally gets the vertical
+    // pre-stretch the lens has always had, and a registration term that puts
+    // its asymmetric drawn MASS on the lens centre rather than its origin. See
+    // kStarCentreYMm for why "kStarOffsetYMm is already 0" was not the same
+    // thing as "the star is centred".
     rs.y = static_cast<int32_t>(
-        (static_cast<int64_t>(fxu(arm)) * yp / 1000) + fxu(kStarOffsetYMm));
+        ((static_cast<int64_t>(fxu(arm)) * yp / 1000) + fxu(kStarOffsetYMm) +
+         fxu(kStarCentreYMm)) *
+        kStarVStretchPm / 1000);
     rs.radius = 0;
     rs.rx = fxu(thin);
     rs.rz = fxu(w);

@@ -57,7 +57,16 @@ static inline void inv_point(const zc::mat3x4fx& m, int32_t x, int32_t y, int32_
   oz = static_cast<int32_t>((m.m[2] * dx + m.m[6] * dy + m.m[10] * dz) >> 16);
 }
 
-int main() {
+// PASS 12 WAVE 2a: the one failable leg this omnibus probe carries as a flag.
+// `--fail-mirror` reinstates the MIRRORED eye travel that the one-angle
+// apply_eye_travel signature made unrepresentable, on the production carrier
+// bones, so gate A's verdict on that configuration stays witnessable after the
+// mechanism that produced it is gone.
+static bool g_fail_mirror = false;
+
+int main(int argc, char** argv) {
+  for (int ai = 1; ai < argc; ++ai)
+    if (std::strcmp(argv[ai], "--fail-mirror") == 0) g_fail_mirror = true;
   constexpr int32_t kMinClearanceMm = 40;
   // PASS 3: the headstand (slot 13) DECLARES ground contact — the loop
   // peak plants at kTrickPlantDepthMm inside keys
@@ -1126,10 +1135,24 @@ int main() {
             // 215 mm frame error was invisible. Fixing only the units would
             // have produced a confident, wrong, and much SCARIER number, and
             // the creature would then have been tuned to satisfy it.
-            lx -= u02::fxu(u02::kEyeXMm);
-            ly -= u02::fxu(u02::vmm(u02::kEyeYMm));
-            lz -= (eb == u02::kBEyeL) ? u02::fxu(u02::kEyeZMm)
-                                      : -u02::fxu(u02::kEyeZMm);
+            //
+            // ⚠ PASS 12 WAVE 2a -- THE THIRD GENERATION OF THIS BUG, in the one
+            // block that already documents the other two. The correction above
+            // was written as `fxu(kEyeXMm)` etc: the ART CONSTANTS, not the
+            // rig's actual bind. The moment D9 SS6.1's standoff moved the eye
+            // off those constants, the subtraction went stale by exactly the
+            // standoff and rule 1 read 41 mm where the true overhang was still
+            // 31 mm -- a clean, confident, ten-millimetre lie, and the creature
+            // would have been tuned to satisfy it.
+            //
+            // The renderer's own symbol is `T.baked.world_*`, the BAKED BIND
+            // POSITION build_skeleton actually produced. Reading it means no
+            // future change to where the eye sits can desynchronise this gate
+            // from the thing it measures (checklist item 10: read the
+            // renderer's symbol, never a same-named copy of it).
+            lx -= T.baked.world_x[eb];
+            ly -= T.baked.world_y[eb];
+            lz -= T.baked.world_z[eb];
             (void)lx;
             int32_t w_pm = 0;
             if (eye_long_fx > 0) {
@@ -1310,28 +1333,78 @@ int main() {
     // the closing distance is monotonic. Cost is one more loop.
     u02::Rig g;
     zc::Clip ex;
+    // ⚠ PASS 12 WAVE 2a: TWO MORE CHANNELS JOIN THE COMPOSED SET, and one of
+    // them is SWEPT for the same reason roll is.
+    //
+    // TRAVEL (D9 SS6) did not exist when this gate was written -- there was no
+    // travel channel in the tree at all -- so the composed worst case has never
+    // included the eye actually moving. It is swept, not cornered: the argument
+    // in the note above is about roll, but nothing makes travel's contribution
+    // monotonic either, and gotcha SS17's whole lesson is that the eye lab's own
+    // travel sign bug put a zero gap MID-RAMP while both endpoints looked clean.
+    //
+    // THE TRAVEL SIGN IS A CORNER BIT. Both eyes taking the SAME world rotation
+    // is a head turn and preserves their separation exactly (a rigid rotation
+    // about a shared axis preserves every distance). The MIRRORED variant is the
+    // one that carries them toward each other, and it is exactly the trap the
+    // plan flagged -- so it is measured here rather than assumed unused.
+    //
+    // BREATH is a corner bit too. The body's own deform moves the surface the
+    // lens is measured against, so gate B at rest is not gate B at the inhale --
+    // and D9 SS6.1 authorises the eye to clip DURING A BOUNCE while keeping
+    // sunk-in-as-a-steady-state a fault. Both extremes of the wave are walked.
     const int kRollSteps = 21;          // 0, 5%, 10% ... 100% of the roll cap
-    const int kCorners = 16 * kRollSteps;
+    const int kTravelSteps = 9;         // 0, 12.5% ... 100% of kEyeTravelMaxDeg
+    const int kSignBits = 32;           // roll, gaze side, gaze lift, shift, breath
+    const int kCorners = kSignBits * 2 * kRollSteps * kTravelSteps;
     ex.slot_id = 7;
     ex.frame_count = static_cast<uint32_t>(kCorners);
     ex.quats.assign(static_cast<size_t>(kCorners) * u02::kBoneCount, zc::quat16_identity());
     ex.root.assign(static_cast<size_t>(kCorners) * 3, 0);
     ex.deform.assign(static_cast<size_t>(kCorners), zc::DeformSample{});
     for (int i = 0; i < kCorners; ++i) {
-      const int c = i % 16, step = i / 16;
+      int q = i;
+      const int c = q % kSignBits; q /= kSignBits;
+      // The mirror axis survives as a corner only so --fail-mirror has somewhere
+      // to live; with the leg off, both halves pose identically and the sweep
+      // simply walks each same-sign corner twice.
+      const int tmirror = q % 2; q /= 2;
+      const int step = q % kRollSteps; q /= kRollSteps;
+      const int tstep = q % kTravelSteps;
       const int32_t mag = 1000 * step / (kRollSteps - 1);
+      const int32_t tmag = 1000 * tstep / (kTravelSteps - 1);
       const int32_t sr = ((c & 1) ? mag : -mag);   // roll, SWEPT
       const int32_t ss = (c & 2) ? 1000 : -1000;   // gaze side
       const int32_t sl = (c & 4) ? 1000 : -1000;   // gaze lift
       const int32_t sh = (c & 8) ? 1000 : -1000;   // eyeball shift
+      const int32_t sb = (c & 16) ? 1 : 0;         // breath: exhale / inhale
       g.reset();
       u02::loop_rest(g);
+      // TRAVEL FIRST: it writes the CARRIER, the eye bones' parent, so it does
+      // not compose with face_rest's attitude -- it carries it.
+      u02::apply_eye_travel(g, tmag);
+      // THE FAILABLE LEG for the one-angle decision. apply_eye_travel cannot
+      // express a mirrored pair any more, so the leg writes the carriers
+      // directly -- manufacturing the known-bad configuration that the
+      // signature change removed, exactly as it posed before the change.
+      if (g_fail_mirror && tmirror)
+        g.q[u02::kBEyeTravelR] =
+            u02::quat_mul(g.q[u02::kBEyeTravelR],
+                          u02::quat_y(-2 * u02::eye_travel_a16(tmag)));
       u02::face_rest(g);
       u02::apply_eye_roll(g, sr, sr);
       u02::apply_gaze(g, u02::kGazeMaxA16 * ss / 1000,
                       u02::kGazeLiftMaxA16 * sl / 1000);
       u02::apply_eye_shift(g, sh, sh);
       g.write(ex, i);
+      // The breath at its two extremes, built from the SAME constants the clip
+      // builders use, so a change to the wave's depth reaches this gate.
+      ex.deform[static_cast<size_t>(i)] =
+          sb ? zc::DeformSample{static_cast<uint16_t>(u02::kCompressAmpPm),
+                                static_cast<uint16_t>(
+                                    (static_cast<int64_t>(u02::kCompressAmpPm) *
+                                     u02::kSpreadRatioPm) / 1000)}
+             : zc::DeformSample{};
       ex.root[static_cast<size_t>(i) * 3 + 1] = u02::fxu(u02::kHoverHeightMm);
     }
     const int32_t bx = u02::fxu(u02::kBodyRadiusMm);
@@ -1382,15 +1455,29 @@ int main() {
                 worst_corner = i;
               }
             }
-            // WHICH EYE: taken GEOMETRICALLY from the sign of z, not from
-            // sv.b0. The bone-id read looked obvious and was wrong -- it put
-            // vertices from both eyes into the same bucket, so the gate
-            // reported a 0 mm closest approach at every amplitude INCLUDING
-            // zero roll, which is what exposed it. kBEyeL binds at +kEyeZMm and
-            // no authored motion carries an eye across the centre line.
+            // WHICH EYE: from the vertex's OWN BIND z, which no pose can
+            // change -- not from its posed world z, and not from sv.b0.
+            //
+            // ⚠ PASS 12 WAVE 2a CORRECTED THIS, AND THE COMMENT THAT DEFENDED
+            // IT. The posed-world-z test carried an explicit assumption --
+            // "kBEyeL binds at +kEyeZMm and NO AUTHORED MOTION CARRIES AN EYE
+            // ACROSS THE CENTRE LINE" -- which was true when it was written and
+            // is now false: D9 SS6's travel rotates the eyes about the body
+            // axis, and by 22.5 degrees the near eye's vertices are on the far
+            // side of z = 0. The gate then compared one eye against ITSELF and
+            // reported a 1 mm closest approach at corner 6471. A pristine
+            // instrument reading a collision that does not exist, produced by a
+            // stale assumption in a comment, is exactly the class of failure
+            // this file keeps a ledger of -- so the ledger gets another entry
+            // rather than a silent edit.
+            //
+            // Bind z is immune to all of it: it is a property of the mesh, not
+            // of the pose. (The pass-6 bone-id read failed for a different
+            // reason -- star vertices bind to kBPupilL/R, not kBEyeL/R, so a
+            // bare sv.b0 == kBEyeL test dropped every star into one bucket.)
             if (pass == 1 && star) ++census_star;
             if (pass == 1 && lens) ++census_lens;
-            (z > 0 ? left : right).push_back({x, y, z});
+            (sv.z > 0 ? left : right).push_back({x, y, z});
           }
         }
         if (pass == 1) {

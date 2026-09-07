@@ -504,6 +504,52 @@ inline void apply_eye_shift(Rig& g, int32_t side_pm, int32_t lift_pm) {
   g.q[kBEyeR] = quat_mul(g.q[kBEyeR], quat_mul(quat_y(-sa), quat_z(la)));
 }
 
+/** PASS 12 WAVE 2a (Direction 9 SS6/SS6.1/SS12.3) -- THE EYE TRAVEL.
+ *
+ *  The eye assembly RIDES AROUND THE BODY on its carrier bone, tracing the
+ *  surface. `pm` is a signed fraction of kEyeTravelMaxA16, per eye.
+ *
+ *  ⚠ IT MUST BE CALLED BEFORE face_rest's attitude is composed onto the EYE
+ *  bones -- it writes the CARRIER, which is their parent, so the order between
+ *  them does not actually matter. It is written first anyway, because the
+ *  reading is "the eye goes there, and then it is an eye".
+ *
+ *  ⚠ ONE ANGLE FOR BOTH EYES, AND THAT IS A MEASURED DECISION, not tidiness.
+ *  The signature took a per-eye pm first, and putting travel into the composed
+ *  sweep failed gate A immediately: at corner 1696 -- MIRRORED travel at one
+ *  eighth of the range, 5.6 degrees, with the roll at a quarter of its own cap
+ *  -- the two eye assemblies closed to 0 mm. Mirrored travel carries them
+ *  through each other, and the zero sits deep MID-RAMP with both endpoints
+ *  clean, which is gotcha SS17 exactly and is the same shape as the eye lab's
+ *  own travel sign bug.
+ *
+ *  So the mirrored case is now UNREPRESENTABLE rather than merely discouraged:
+ *  there is one parameter and both carriers take it. That is also the right
+ *  READ -- both eyes taking the same world rotation is a head turn, one eye
+ *  coming toward the viewer while the other goes away, which is precisely the
+ *  near-eye case SS12.2 is about. And their separation is preserved EXACTLY,
+ *  because a rigid rotation about a shared axis preserves every distance.
+ *  (`manafold-probe --fail-mirror` reinstates the mirrored pose on the carriers
+ *  and is the witnessed failing leg for this.)
+ *
+ *  SS12.3 IS SATISFIED HERE WITHOUT A SECOND MECHANISM. The carrier is the
+ *  eye's PARENT, so its rotation turns the lens and both stars through the same
+ *  angle: they arrive facing outward instead of edge-on. Nothing slides against
+ *  anything, so SS5a/SS5b's one-rigid-unit rule is structural rather than
+ *  maintained. */
+inline int32_t eye_travel_a16(int32_t pm) {
+  if (pm > 1000) pm = 1000;
+  if (pm < -1000) pm = -1000;
+  return static_cast<int32_t>((static_cast<int64_t>(kEyeTravelMaxA16) * pm) / 1000);
+}
+
+inline void apply_eye_travel(Rig& g, int32_t pm) {
+  const int32_t a = eye_travel_a16(pm);
+  if (a == 0) return;
+  g.q[kBEyeTravelL] = quat_mul(g.q[kBEyeTravelL], quat_y(a));
+  g.q[kBEyeTravelR] = quat_mul(g.q[kBEyeTravelR], quat_y(a));
+}
+
 /** PASS 6 (Direction 5 5d): each eye ROLLS about its own outward axis and
  *  returns. pm is a fraction of kEyeRollMaxA16, per eye, so the two can roll
  *  together (a brow) or against each other (a quizzical tilt). The star unit
