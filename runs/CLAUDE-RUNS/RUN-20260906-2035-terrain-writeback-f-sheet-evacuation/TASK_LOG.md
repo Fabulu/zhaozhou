@@ -473,3 +473,25 @@ first move should have been to fit it and look, not to read the RTL and guess.
 
 NEXT: TESS's lattice-read-to-vertex path is the terrain geometry lane's real
 clock problem. Toolchain is idle -- queue geom_project and pair_pagestream_patch.
+
+## 2026-09-07 -- TESS's cell_solid named, by census not by reading
+
+Followed the pair's path census into TESS rather than editing again. Worst 200
+TESS->TESS paths: sources solid(49), eg(43), ea, pend_last(85); destinations
+vh(69), subpatch_rejected_o(42), f_kind, pend_slot. Those meet in exactly one
+place -- `cell_solid`, zhao_terrain_tess.sv:304-316: a 64-iteration
+combinational double loop, four comparisons per cell against ea*j_s and eb*j_s,
+reducing to one bit that gates want_issue. j_s is a 4-bit REGISTER (1/2/4/8),
+so those are runtime multiplies, not shifts by a literal.
+
+Proposal written, NOT implemented: the window is a rectangle over an 8x8
+bitmap, so `cell_solid = ((solid & win_mask) == win_mask)` with win_mask
+REGISTERED. The win is registering it, which needs ea/eb/j_s stable a cycle
+early -- and whether they are is a question about the run-cell walk that the
+report does not answer. That is the same trade that just failed to pay on
+NORMALS, so it gets established before it gets built.
+
+reports/TERRAIN-TESS-CLOCK-20260907.md. Names TWO repairs, not one: cell_solid
+(the 40.11 MHz TESS->TESS family) and the lattice-read-to-vy saturating add
+(the 32.42 MHz family). Neither alone reaches 100, and NORMALS at 72.72 is
+still 27% short, so the lane needs work in three places.
