@@ -249,6 +249,29 @@ targets:
       max_registers: 500   # S3.3
       max_dsp: 2           # S3.4 tripwire, unchanged
 
+  # V2 is the block the ISLAND ACTUALLY INSTANTIATES (island top line 1956,
+  # `.NCTX(8)`), and until now it had no fit target of its own -- it appeared
+  # only as a SOURCE inside zhao_texture_island_top and the production list, so
+  # its standalone cost has never been measured. That is what blocked the
+  # whole-island reconciliation the recovery handoff makes a precondition in
+  # S12.4: the ledger's only combiner rows are v1 and the refuted
+  # zhao_texture_combine, and using v1's 1,475 ALMs as v2's would be exactly
+  # the "never compare a current file to an old measurement" error.
+  #
+  # Resolved closure, not guessed from the name: v2 is a LEAF -- the only
+  # `zhao_` token outside its comments is its own module declaration.
+  #
+  # NO ALM OR REGISTER RULE, deliberately, same reasoning as GEOM.MEM.ADAPTER
+  # below. Inventing a bound before the first measurement is how a manufactured
+  # number becomes a redline; S12.4's own warning runs the other way too. The
+  # DSP tripwire DOES carry, because S3.4 constrains the combiner ROLE and v2
+  # holds that role -- and it is the tripwire zhao_texture_combine broke with 8.
+  - top: zhao_texture_material_combine_v2
+    sources:
+      - fpga/rtl/texture/zhao_texture_material_combine_v2.sv
+    rules:
+      max_dsp: 2           # S3.4 tripwire; v1 measured 2, zhao_texture_combine 8
+
   # GEOM.MEM.ADAPTER -- two logical geometry requesters over the one permitted
   # ENGINE1 client (owner recovery brief section 12). Characterised on its own
   # because the two-bank ASSETFETCH plan rests on it, and because a block whose
