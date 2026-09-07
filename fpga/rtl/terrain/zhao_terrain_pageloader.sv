@@ -71,7 +71,10 @@
 // rather than five, because the ARRAY INDEX is cast straight to the enum there
 // and slot identity and client identity are one fact; and MEM.GUARD has a
 // bank-2 window at last -- TERRAIN.PAGE_POOL, [0x0400_0000, 0x054E_0000),
-// WRITE-ONLY, client 6 alone, constant bounds. This paragraph used to say the
+// client 6 alone, constant bounds. THIS BLOCK USES THE WRITE ARM AND ONLY
+// THAT ARM; the region gained a second, READ arm on 2026-09-06 with
+// TERRAIN.WRITEBACK, which is that block's direction and not this one's.
+// This paragraph used to say the
 // opposite of all three, and it was right when it said it.
 //
 // THE IDENTITY STAYS AN INPUT ANYWAY, and `guard_denied_o` stays a fault
@@ -83,7 +86,7 @@
 //
 // WHAT THE WINDOW DOES NOT DO. T2 wants a STATE-AWARE permission -- "a loader
 // may write only a LOADING slot" -- and the guard's is spatial: the whole pool,
-// for this client, write-only. The guard has one muxed request port and no
+// for this client. The guard has one muxed request port and no
 // residency context, and the interface that would carry slot state to it is
 // ruled nowhere. So the last line of defence against writing the WRONG slot is
 // in this file: `SLOTW` is one bit wider than the pool needs precisely so an

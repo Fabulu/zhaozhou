@@ -67,7 +67,8 @@
 // MEM.GUARD MUST GAIN A READ ARM, AND IT IS NOT MADE HERE
 // ---------------------------------------------------------------------------
 // `zhao_mem_guard` gives TERRAIN.BUILD exactly one window, TERRAIN.PAGE_POOL,
-// WRITE-ONLY, and its own comment names this block as the reason the read was
+// WRITE-ONLY UNTIL 2026-09-06, and its own comment named this block as the
+// reason the read was
 // withheld: "that will one day need to READ this pool -- when the block that
 // does it exists, it brings its own arm and its own proof."
 //

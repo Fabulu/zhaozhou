@@ -327,6 +327,14 @@ struct World {
     d.cfg_dir_gate_i = 1;
     d.cfg_mipgen_fin_i = 0;   // OFF by default: the machine exactly as assembled
     d.cfg_wb_barrier_i = 0;   // OFF by default: likewise
+    // ON by default, and that asymmetry is deliberate. The two knobs above
+    // stand in for machinery that DOES NOT EXIST in the tree, so their default
+    // is off and the suite reports what is missing. `zhao_terrain_loadq` is a
+    // real block that is really instantiated, so the default is the machine as
+    // it now stands -- and phase L turns it off to show the old cost coming
+    // back rather than asking anyone to take the improvement on trust.
+    d.cfg_loadq_i = 1;
+    d.cfg_loadq_drain_i = 0;
     d.cfg_wat_auto_i = 1;     // the witness arms itself on the victim
     d.cfg_unpin_delay_i = 6;
     d.cfg_ack_delay_i = 4;
@@ -756,8 +764,12 @@ void settle(World& w, uint64_t cycles = 600000) {
                              d.h_jnl_writes,  d.pl_pages_loaded, d.wb_sheets_written};
     bool moved = false;
     for (int k = 0; k < 6; ++k) { if (now[k] != prev[k]) moved = true; prev[k] = now[k]; }
+    // THE QUEUE COUNTS AS BUSY. Without `lq_level` here a settle could return
+    // with jobs still queued and no block asserting anything -- the same
+    // "nothing is asserted is not nothing is happening" failure this function
+    // was rewritten for once already, reached through the new block.
     const bool busy = moved || d.ld_valid || d.pl_fin_valid || d.wb_valid || d.wbrel_valid ||
-                      d.wbdone_valid || d.fr_busy;
+                      d.wbdone_valid || d.fr_busy || d.lq_inflight != 0;
     quiet = busy ? 0 : (quiet + 1);
     if (quiet > 400) return;
   }
@@ -887,21 +899,38 @@ int main(int argc, char** argv) {
     // THE COST OF A MISS, MEASURED. TERRAIN.SEQ's law is that a miss is
     // "SKIPPED and counted, not stalled on -- the frame must never wait on an
     // 80 microsecond page load mid-walk". It does not wait for the load to
-    // COMPLETE. It does wait for the load JOB to be ACCEPTED, and
+    // COMPLETE. It used to wait for the load JOB to be ACCEPTED, because
     // TERRAIN.PAGELOADER takes one job at a time and holds `j_ready_o` low for
-    // the whole page. There is no queue between them. Reported in cycles,
-    // against the 1,666,667-clock frame.
+    // the whole page, and nothing sat between them. `zhao_terrain_loadq` now
+    // does. Reported in cycles, against the 1,666,667-clock frame.
     std::printf("   B cost: %llu cycles for 8 records with 8 misses = %.0f cycles per miss\n",
                 (unsigned long long)O.cycles, double(O.cycles) / 8.0);
     std::printf("      that is %.1f%% of a 1,666,667-clock frame for EIGHT pages; T7's\n"
                 "      ceiling is 32 per frame.\n",
                 100.0 * double(O.cycles) / 1666667.0);
-    defect(O.cycles < 20000,
-           "TERRAIN.SEQ blocks on TERRAIN.PAGELOADER: there is no load queue between them",
-           "zhao_terrain_seq.sv:466 S_LOAD waits on ld_ready_i, and "
-           "zhao_terrain_pageloader.sv accepts one job and holds j_ready_o low for the whole "
-           "21,376-byte transfer. The sequencer's own law -- a miss is never waited on -- "
-           "holds for load COMPLETION and is defeated by load ACCEPTANCE.");
+    ck(O.cycles < 20000,
+       "B the frame does not wait on load ACCEPTANCE -- eight misses cost well under the "
+       "53,806 cycles the un-queued wiring charged (phase L turns the queue off and "
+       "collects that number again)",
+       1, O.cycles < 20000 ? 1 : 0);
+
+    // THE QUEUE'S OWN ACCOUNT OF THE SAME FRAME. `s_loads_issued` is what the
+    // sequencer believes it emitted; `lq_accepted` is what a block outside it
+    // saw arrive. Those two disagreeing is the only way a job can be lost
+    // between them, and neither block can notice it alone.
+    ck(int(d.lq_accepted) == O.c[7],
+       "B every load the sequencer counted is a load the queue took off it", O.c[7],
+       int(d.lq_accepted));
+    ck(d.lq_refused == 0,
+       "B and nothing was offered to a full queue -- a non-zero refusal means the "
+       "sequencer ignored j_ready_o, not that the queue was too small",
+       0, d.lq_refused);
+    std::printf("      queue: accepted=%u issued=%u high water=%u of 32\n",
+                d.lq_accepted, d.lq_issued, d.lq_high_water);
+    ck(d.lq_high_water > 1,
+       "B and the queue actually HELD jobs -- a high water of one would mean the loader "
+       "was never the bottleneck and this phase proved nothing about queueing",
+       1, d.lq_high_water > 1 ? 1 : 0);
 
     // THE DIRECTORY'S OWN ANSWER, checked against the hash rather than trusted.
     int wrongset = 0, checked = 0;
@@ -1375,6 +1404,17 @@ int main(int argc, char** argv) {
          "holds it in S_WAIT_WB now, so the knob that used to be load-bearing "
          "reports zero while the byte order below still holds",
          0, d.h_barrier_stalls);
+      // AND THE BLOCK THAT TOOK THE JOB OVER SAYS SO ITSELF. `h_barrier_stalls`
+      // going to zero is consistent with the barrier being enforced elsewhere
+      // AND with it not being enforced at all; only TERRAIN.SEQ's own wait
+      // counter separates those two. It was wired to a dead local until the
+      // lint gate found it, which is exactly how long it proved nothing.
+      ck(d.s_wb_wait_cycles > 0,
+         "G2 and TERRAIN.SEQ spent real cycles in S_WAIT_WB -- the barrier moved into the "
+         "block rather than evaporating",
+         1, d.s_wb_wait_cycles > 0 ? 1 : 0);
+      std::printf("   TERRAIN.SEQ waited %u cycles in S_WAIT_WB for the writeback it ordered\n",
+                  d.s_wb_wait_cycles);
       ck(d.wat_rd_count > 0 && d.wat_wr_count > 0,
          "G2 both the writeback's reads and the loader's writes touched the slot", 1,
          (d.wat_rd_count > 0 && d.wat_wr_count > 0) ? 1 : 0);
@@ -1723,6 +1763,201 @@ int main(int argc, char** argv) {
     const int bad = compare("I short", O, E);
     ck(bad == 0, "I the short frame matches the reference action for action", 0, bad);
     settle(w);
+  }
+
+
+  // =========================================================================
+  // L -- THE LOAD QUEUE, MEASURED IN BOTH DIRECTIONS
+  // =========================================================================
+  // Phase B showed the frame is now cheap. That on its own is not evidence
+  // that the QUEUE made it cheap: any of a dozen changes since the 53,806-cycle
+  // measurement could have done it, and a fix nobody re-measured the absence of
+  // is a claim. So this phase runs the identical cold frame twice on a
+  // freshly-reset world, once with `cfg_loadq_i` clear and once set, and puts
+  // the two numbers next to each other.
+  //
+  // It also fires the DRAIN, which nothing in the tree asserts. A port that has
+  // never been pulsed is a port nobody has tested, and the T6 fault path is
+  // exactly where somebody will one day wire this up and assume it works.
+  {
+    std::printf("\n-- L: the load queue, with it and without it --\n");
+    settle(w);
+
+    uint64_t cyc_off = 0, cyc_on = 0;
+
+    // ---- without ----------------------------------------------------------
+    w.reset();                 // config() sets the knob back on...
+    d.cfg_loadq_i = 0;         // ...so it is cleared AFTER the reset, not before
+    d.eval();
+    for (int i = 0; i < 8; ++i) w.stage_page(uint32_t(i), pagesA[i]);
+    {
+      d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+      const Frame O = run_frame(w, setA, 8, 32, 0, 0xE0u);
+      cyc_off = O.cycles;
+      ck(O.c[7] == 8, "L the un-queued run still issues all eight loads", 8, O.c[7]);
+      ck(d.lq_accepted == 0,
+         "L and with the knob clear the queue is genuinely out of the path -- it saw "
+         "nothing at all, so the number below is the old wiring and not a mixture",
+         0, d.lq_accepted);
+      settle(w);
+    }
+
+    // ---- with -------------------------------------------------------------
+    w.reset();
+    d.eval();
+    for (int i = 0; i < 8; ++i) w.stage_page(uint32_t(i), pagesA[i]);
+    {
+      d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+      const Frame O = run_frame(w, setA, 8, 32, 0, 0xE1u);
+      cyc_on = O.cycles;
+      ck(O.c[7] == 8, "L the queued run issues the same eight loads", 8, O.c[7]);
+      ck(int(d.lq_accepted) == 8, "L and the queue took all eight off the sequencer", 8,
+         int(d.lq_accepted));
+      settle(w);
+      ck(int(d.lq_issued) == 8,
+         "L and handed all eight on to the loader -- a queue that accepts more than it "
+         "issues is a queue that is eating jobs", 8, int(d.lq_issued));
+      ck(d.lq_level == 0, "L and ended empty", 0, d.lq_level);
+    }
+
+    std::printf("   L: %llu cycles without the queue, %llu with it -- %.1fx, "
+                "%.0f vs %.0f cycles per miss\n",
+                (unsigned long long)cyc_off, (unsigned long long)cyc_on,
+                cyc_on ? double(cyc_off) / double(cyc_on) : 0.0,
+                double(cyc_off) / 8.0, double(cyc_on) / 8.0);
+
+    ck(cyc_off > cyc_on * 4,
+       "L the queue is what made the frame cheap: removing it puts the acceptance stall "
+       "straight back, at more than four times the cost. This is the check that makes "
+       "phase B's number mean something",
+       1, (cyc_off > cyc_on * 4) ? 1 : 0);
+
+    // ---- DEPTH AGAINST T7's ACTUAL CEILING -------------------------------
+    // Eight misses is a quiet frame and the queue swallowed it whole (high
+    // water 7 of 8). T7 permits THIRTY-TWO pages per frame, which is four
+    // times the depth, so the interesting question is not whether the queue
+    // helps on eight -- it plainly does, 803x above -- but what it does when
+    // the frame is legal and full. The answer decides DEPTH, and it is
+    // measured here rather than argued in a comment, because the first version
+    // of that comment argued 8 was enough on reasoning that this measurement
+    // does not support.
+    {
+      std::printf("\n-- L2: a legal FULL frame, 32 misses against a queue of 32 --\n");
+      w.reset();
+      d.eval();
+      std::vector<Rec> set32;
+      for (int i = 0; i < 32; ++i) {
+        const int16_t ix = int16_t(i);
+        Page pg = make_page(9, ix, 12, uint32_t(0x300 + i));
+        w.stage_page(uint32_t(16 + i), pg);
+        set32.push_back(mk(uint32_t(700 + i), 9, ix, 12, kReq, uint32_t(16 + i), pg.crc));
+      }
+      d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+      const Frame O = run_frame(w, set32, 32, 32, 0, 0xE2u, 4000000ull);
+      ck(O.c[7] == 32, "L2 all thirty-two misses issue a load", 32, O.c[7]);
+      std::printf("   L2: %llu cycles for 32 misses = %.0f per miss; queue accepted=%u "
+                  "high water=%u refused=%u\n",
+                  (unsigned long long)O.cycles, double(O.cycles) / 32.0, d.lq_accepted,
+                  d.lq_high_water, d.lq_refused);
+      std::printf("   L2: that is %.1f%% of a 1,666,667-clock frame spent waiting on load "
+                  "ACCEPTANCE alone\n", 100.0 * double(O.cycles) / 1666667.0);
+      // THE DEPTH IS NOW ASSERTED, because the measurement has been taken and
+      // it chose 32. At depth 8 this frame cost 176,768 cycles and the
+      // sequencer sat on a full queue for 176,509 of them; at T7's own budget
+      // the whole miss list fits and the walk finishes in hundreds of cycles.
+      // A regression that quietly shrinks the queue would put 10.6% of the
+      // frame back, and nothing else in the suite would notice.
+      ck(d.lq_refused == 0,
+         "L2 a LEGAL FULL frame never blocks the sequencer on a full queue -- T7 permits "
+         "32 pages and the queue holds 32, so the walk never waits on acceptance",
+         0, d.lq_refused);
+      ck(O.cycles < 20000,
+         "L2 and the full frame's walk costs the same order as the quiet one, not the "
+         "176,768 cycles depth 8 charged",
+         1, O.cycles < 20000 ? 1 : 0);
+      ck(int(d.lq_accepted) == O.c[7],
+         "L2 the queue took exactly the loads the sequencer issued, no more and no fewer",
+         O.c[7], int(d.lq_accepted));
+      settle(w, 4000000ull);
+      ck(int(d.lq_issued) == int(d.lq_accepted),
+         "L2 and issued every one of them onward -- depth may be too small, but nothing "
+         "is lost when it is",
+         int(d.lq_accepted), int(d.lq_issued));
+      w.reset();
+      for (int i = 0; i < 8; ++i) w.stage_page(uint32_t(i), pagesA[i]);
+    }
+
+    // ---- the drain, fired ------------------------------------------------
+    // Filled deliberately and then thrown away. The fill is driven by the
+    // sequencer's own frame rather than by poking the port, so what gets
+    // drained is a real job list and not a bench fiction.
+    {
+      w.reset();
+      d.eval();
+      for (int i = 0; i < 8; ++i) w.stage_page(uint32_t(i), pagesA[i]);
+      d.stat_clear = 1; zhao::tick(d); d.stat_clear = 0;
+
+      // Start a frame and stop the moment the queue is holding something.
+      d.cfg_load_budget_i = 32;
+      d.fr_epoch = w.epoch;
+      d.fr_patch_count = 8;
+      d.fr_sequence = 0x0700u;
+      d.fr_start = 1; d.eval(); zhao::tick(d); d.fr_start = 0;
+
+      std::size_t next_rec = 0;
+      int held = 0;
+      for (int i = 0; i < 40000 && held < 4; ++i) {
+        d.rec_valid = (next_rec < setA.size()) ? 1 : 0;
+        if (next_rec < setA.size()) {
+          const ss::PatchRecord& r = setA[next_rec].r;
+          d.rec_island = r.island_id; d.rec_ix = uint16_t(r.patch_ix);
+          d.rec_iz = uint16_t(r.patch_iz); d.rec_hps_addr = r.hps_page_addr;
+          d.rec_crc = r.expected_page_crc32c; d.rec_flags = r.flags;
+          d.rec_view_mask = r.view_mask; d.rec_priority = r.priority;
+          d.rec_src_id = r.source_id;
+        }
+        d.is_ready = 1; d.wbdone_ready = 1;
+        d.eval();
+        if (d.rec_valid && d.rec_ready) ++next_rec;
+        held = int(d.lq_inflight);
+        zhao::tick(d);
+      }
+      d.rec_valid = 0;
+      d.eval();
+
+      // INFLIGHT, NOT LEVEL. The drain throws away the job in the write
+      // serialiser and the one in the output register as well as the store's,
+      // and the first version of this check compared against `lq_level` alone
+      // and was off by exactly those two.
+      const uint32_t level_before = d.lq_inflight;
+      const uint32_t drained_before = d.lq_drained;
+      ck(level_before >= 2,
+         "L the drain is fired against a queue that is actually holding jobs -- draining "
+         "an empty queue would prove the port compiles, nothing more",
+         1, level_before >= 2 ? 1 : 0);
+
+      d.cfg_loadq_drain_i = 1;
+      d.eval();
+      zhao::tick(d);
+      d.cfg_loadq_drain_i = 0;
+      d.eval();
+
+      ck(d.lq_inflight == 0, "L one drain pulse empties the queue -- store, serialiser "
+         "and output register alike", 0, d.lq_inflight);
+      ck(d.lq_drained == drained_before + level_before,
+         "L and COUNTS what it threw away, exactly the level it held. A drain that "
+         "silently empties cannot be told from a queue that was never filled",
+         int(drained_before + level_before), int(d.lq_drained));
+      std::printf("   L: drained %u queued jobs, counter now %u\n", level_before, d.lq_drained);
+
+      // NO SETTLE HERE, deliberately. The frame above was abandoned mid-walk to
+      // get jobs into the queue, so `fr_busy` never falls and `settle` would
+      // spin its whole 600,000-cycle budget and then report giving up -- a
+      // frightening line in the log that would mean nothing. The reset is the
+      // correct way out of a frame nobody intends to finish.
+      w.reset();
+      for (int i = 0; i < 8; ++i) w.stage_page(uint32_t(i), pagesA[i]);
+    }
   }
 
   std::printf("\n== %d checks, %d failures, %d composition defects ==\n", g_checks, g_fail,

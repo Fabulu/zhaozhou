@@ -24,7 +24,9 @@
 // anybody, so `shadow_ok_seen` staying ZERO was this file's evidence for the
 // amendment the contract asked for. The amendment landed: `zhao_pkg` has
 // `ZHAO_CLIENT_TERRAIN_BUILD = 6` and the guard has TERRAIN.PAGE_POOL,
-// write-only, for that client alone. So the observer's job flipped from "it
+// for that client alone -- write-only until 2026-09-06, when TERRAIN.WRITEBACK
+// brought the READ arm over the same window. So the observer's job flipped
+// from "it
 // never passed one" to "it passed EXACTLY these and no others", and the
 // counters below are what makes the second sentence checkable: a sticky
 // `shadow_ok_seen` can say a pass happened but never that the right NUMBER

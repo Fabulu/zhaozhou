@@ -6,7 +6,10 @@
 // THE REAL GUARD REFUSES THIS BLOCK TODAY, AND THAT IS THE EVIDENCE
 // ---------------------------------------------------------------------------
 // `zhao_mem_guard` gives TERRAIN.BUILD one window -- TERRAIN.PAGE_POOL,
-// WRITE-ONLY -- and this block READS that pool. So `u_real_guard`, watching the
+// WRITE-ONLY UNTIL 2026-09-06 -- and this block READS that pool. The read arm
+// (`terrain_rd_ok`) landed with this block, so the observer's counts INVERTED:
+// it now passes all 130 and refuses none, where it refused all 130 before.
+// So `u_real_guard`, watching the
 // DUT's own request wires, must refuse every single one, and
 // `shadow_viol_count == shadow_req_count` with `shadow_ok_count == 0` is this
 // bench's evidence for the amendment the contract asks for. It is the exact

@@ -144,6 +144,24 @@ module tb_terrain_world
     // bytes. A one-sided check that only ever fails is not evidence.
     input var logic cfg_wb_barrier_i,
 
+    // THE LOAD QUEUE, MADE A KNOB THE SAME WAY. TERRAIN.SEQ's law is that a
+    // miss is skipped, never waited on; that holds for load COMPLETION and was
+    // defeated by load ACCEPTANCE, because TERRAIN.PAGELOADER drives
+    // `j_ready_o = (state == S_IDLE)` and holds it low for all 21,376 bytes.
+    // `zhao_terrain_loadq` is the block that fixes it. With this CLEAR the
+    // sequencer is wired straight at the loader and the original cost
+    // reproduces; with it SET the queue takes the job and the sequencer walks
+    // on. Both directions are measured, because a fix whose absence was never
+    // re-measured is a claim, not evidence.
+    input var logic cfg_loadq_i,
+
+    // The queue's drain, which a T6 frame fault will eventually own. The
+    // POLICY -- whether a fault abandons queued loads or lets them land -- is
+    // an owner ruling that has not been made, so nothing in the tree asserts
+    // this yet and the suite fires it directly. A drain port that has never
+    // been pulsed is a drain port nobody has tested.
+    input var logic cfg_loadq_drain_i,
+
     // ARM THE BARRIER WITNESS ON THE VICTIM THE DIRECTORY ACTUALLY PICKS.
     // The victim slot is not known until the writeback job is accepted, and by
     // the time the C++ side has read it out of the action log the reads it
@@ -382,6 +400,17 @@ module tb_terrain_world
     output var logic [31:0] h_pins,          // pins the played engine took responsibility for
     output var logic [31:0] h_pin_drops,     // ...and pins its mirror could not hold
     output var logic [31:0] h_barrier_stalls, // cycles the load job was held for the barrier
+    // TERRAIN.SEQ's OWN wait, which is what replaced the harness barrier. It
+    // was wired to a local and never read: a counter nothing looks at is a
+    // counter that is not there, and the lint gate is what noticed.
+    output var logic [31:0] s_wb_wait_cycles,
+    output var logic [31:0] lq_accepted,      // load jobs the queue took off the sequencer
+    output var logic [31:0] lq_issued,        // ...and handed to the loader
+    output var logic [31:0] lq_drained,       // ...and threw away on a drain
+    output var logic [31:0] lq_refused,       // offered while full (should be zero)
+    output var logic [31:0] lq_level,         // entries committed to the store
+    output var logic [31:0] lq_inflight,      // ...plus the two the ports can hide
+    output var logic [31:0] lq_high_water,    // the deepest it ever got
     output var logic [31:0] h_wb_ticket,      // the journal ticket the NEXT sheet will use
     output var logic [15:0] h_wat_slot        // the slot the witness settled on
 );
@@ -549,7 +578,7 @@ module tb_terrain_world
       // SEQ's range cannot match anything it asked for, and is not offered.
       .wb_done_valid_i (wbdone_valid && !wbdone_slot_w[SLOTW]),
       .wb_done_slot_i  (wbdone_slot_w[SLOTW-1:0]),
-      .wb_wait_cycles_o(seq_wb_wait),
+      .wb_wait_cycles_o(s_wb_wait_cycles),
       .wb_slot_o  (q_wb_slot),
       .wb_gen_o   (wb_gen),
       .wb_epoch_o (q_wb_epoch),
@@ -707,7 +736,6 @@ module tb_terrain_world
   // this bench already taps as wbdone_valid/wbdone_slot_w. Introducing a
   // second, modelled completion beside the real block would be exactly the
   // decoration this composed test exists to avoid.
-  logic [31:0]       seq_wb_wait;
 
   logic [SLOTW-1:0] g_wb_slot;
   logic [GENW-1:0]  g_wb_gen;
@@ -883,7 +911,7 @@ module tb_terrain_world
   // rather than as slot 0 overwriting a live page. The zero extension is the
   // integration's, and it is written here rather than assumed.
   logic [MEMSLOT-1:0] pl_j_slot;
-  assign pl_j_slot = {1'b0, q_ld_slot};
+  assign pl_j_slot = {1'b0, pl_src_slot};
 
   // ---- the missing barrier, as a switchable harness gate ------------------
   // `wb_out_q` is high from the cycle TERRAIN.WRITEBACK accepts a job until it
@@ -891,7 +919,115 @@ module tb_terrain_world
   // is not offered to the loader at all.
   logic       wb_out_q, ld_gate, pl_j_ready;
   assign ld_gate = !cfg_wb_barrier_i || !wb_out_q;
-  assign ld_ready = pl_j_ready && ld_gate;
+
+  // =========================================================================
+  // TERRAIN.LOADQ -- and WHERE it sits, which is the whole design decision
+  // =========================================================================
+  // The queue goes BETWEEN THE SEQUENCER AND THE BARRIER GATE, not between the
+  // gate and the loader. That ordering is not cosmetic:
+  //
+  //   SEQ -> [queue] -> (barrier gate) -> PAGELOADER
+  //
+  // The queue exists to stop the sequencer waiting on ACCEPTANCE. The barrier
+  // exists to stop a load STARTING before the writeback it displaces has
+  // landed. Put the queue after the gate and the sequencer still blocks
+  // whenever the barrier is closed -- the exact stall the queue was built to
+  // remove. Put it before, and the job is recorded immediately while the load
+  // itself still waits for the barrier: both laws hold at once, and neither
+  // block had to learn about the other.
+  //
+  // It is a FIFO and it is in front of the gate, so it cannot reorder a load
+  // ahead of the writeback that guards it. That is the property T4 needs and
+  // the reason no cleverer structure belongs here.
+  logic               lq_j_ready, lq_q_valid, lq_q_ready;
+  logic [SLOTW-1:0]   lq_slot;
+  logic [GENW-1:0]    lq_gen;
+  logic [31:0]        lq_epoch, lq_island, lq_expect_crc, lq_src_id;
+  logic signed [15:0] lq_ix, lq_iz;
+  logic [63:0]        lq_hps_addr;
+
+  zhao_terrain_loadq #(
+      // T7's per-frame page budget. See the block's header for the measurement
+      // that moved this from 8, and what 8 cost on a legal full frame.
+      .DEPTH(32),
+      .SLOTW(SLOTW),
+      .GENW (GENW)
+  ) u_lq (
+      .clk  (clk),
+      .rst_n(rst_n),
+
+      .j_valid_i     (ld_valid && cfg_loadq_i),
+      .j_ready_o     (lq_j_ready),
+      .j_slot_i      (q_ld_slot),
+      .j_gen_i       (ld_gen),
+      .j_epoch_i     (q_ld_epoch),
+      .j_island_i    (ld_island),
+      .j_ix_i        (q_ld_ix),
+      .j_iz_i        (q_ld_iz),
+      .j_hps_addr_i  (ld_hps_addr),
+      .j_expect_crc_i(ld_expect_crc),
+      .j_src_id_i    (ld_src_id),
+
+      .q_valid_o     (lq_q_valid),
+      .q_ready_i     (lq_q_ready),
+      .q_slot_o      (lq_slot),
+      .q_gen_o       (lq_gen),
+      .q_epoch_o     (lq_epoch),
+      .q_island_o    (lq_island),
+      .q_ix_o        (lq_ix),
+      .q_iz_o        (lq_iz),
+      .q_hps_addr_o  (lq_hps_addr),
+      .q_expect_crc_o(lq_expect_crc),
+      .q_src_id_o    (lq_src_id),
+
+      .drain_i(cfg_loadq_drain_i),
+
+      .accepted_o  (lq_accepted),
+      .issued_o    (lq_issued),
+      .drained_o   (lq_drained),
+      .refused_o   (lq_refused),
+      .level_o     (lq_level),
+      .inflight_o  (lq_inflight),
+      .high_water_o(lq_high_water)
+  );
+
+  // The bypass. With the queue off the wiring is bit-for-bit what it was, so
+  // phase B's original cost is reproduced rather than remembered.
+  assign ld_ready   = cfg_loadq_i ? lq_j_ready : (pl_j_ready && ld_gate);
+  assign lq_q_ready = pl_j_ready && ld_gate;
+
+  logic               pl_src_valid;
+  logic [SLOTW-1:0]   pl_src_slot;
+  logic [GENW-1:0]    pl_src_gen;
+  logic [31:0]        pl_src_epoch, pl_src_island, pl_src_crc, pl_src_id;
+  logic signed [15:0] pl_src_ix, pl_src_iz;
+  logic [63:0]        pl_src_addr;
+
+  always_comb begin
+    if (cfg_loadq_i) begin
+      pl_src_valid  = lq_q_valid;
+      pl_src_slot   = lq_slot;
+      pl_src_gen    = lq_gen;
+      pl_src_epoch  = lq_epoch;
+      pl_src_island = lq_island;
+      pl_src_ix     = lq_ix;
+      pl_src_iz     = lq_iz;
+      pl_src_addr   = lq_hps_addr;
+      pl_src_crc    = lq_expect_crc;
+      pl_src_id     = lq_src_id;
+    end else begin
+      pl_src_valid  = ld_valid;
+      pl_src_slot   = q_ld_slot;
+      pl_src_gen    = ld_gen;
+      pl_src_epoch  = q_ld_epoch;
+      pl_src_island = ld_island;
+      pl_src_ix     = q_ld_ix;
+      pl_src_iz     = q_ld_iz;
+      pl_src_addr   = ld_hps_addr;
+      pl_src_crc    = ld_expect_crc;
+      pl_src_id     = ld_src_id;
+    end
+  end
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -901,7 +1037,9 @@ module tb_terrain_world
       if (stat_clear) h_barrier_stalls <= 32'd0;
       if (wb_valid && wb_ready)                    wb_out_q <= 1'b1;
       else if (wbdone_valid && wbdone_ready)       wb_out_q <= 1'b0;
-      if (ld_valid && !ld_gate)
+      // Counted at the GATE, wherever the job came from, so the barrier's cost
+      // stays visible once the queue is absorbing the sequencer's stall.
+      if (pl_src_valid && !ld_gate)
         h_barrier_stalls <= (stat_clear ? 32'd0 : h_barrier_stalls) + 32'd1;
     end
   end
@@ -936,17 +1074,17 @@ module tb_terrain_world
       .cfg_hps_arena_bytes_i(cfg_hps_arena_bytes_i),
       .cfg_epoch_i          (cfg_epoch_i),
 
-      .j_valid_i     (ld_valid && ld_gate),
+      .j_valid_i     (pl_src_valid && ld_gate),
       .j_ready_o     (pl_j_ready),
       .j_slot_i      (pl_j_slot),
-      .j_gen_i       (ld_gen),
-      .j_epoch_i     (q_ld_epoch),
-      .j_island_i    (ld_island),
-      .j_ix_i        (q_ld_ix),
-      .j_iz_i        (q_ld_iz),
-      .j_hps_addr_i  (ld_hps_addr),
-      .j_expect_crc_i(ld_expect_crc),
-      .j_src_id_i    (ld_src_id),
+      .j_gen_i       (pl_src_gen),
+      .j_epoch_i     (pl_src_epoch),
+      .j_island_i    (pl_src_island),
+      .j_ix_i        (pl_src_ix),
+      .j_iz_i        (pl_src_iz),
+      .j_hps_addr_i  (pl_src_addr),
+      .j_expect_crc_i(pl_src_crc),
+      .j_src_id_i    (pl_src_id),
 
       .hps_req_o      (pl_hps_req),
       .hps_req_grant_i(pl_hps_grant),

@@ -6575,6 +6575,7 @@ verilate(test_world_composed_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_residency_v2.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageloader.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_writeback.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loadq.sv
           ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_world.sv)
 add_test(NAME world_composed_directed COMMAND test_world_composed_directed)
 set_tests_properties(world_composed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
@@ -6596,6 +6597,7 @@ add_test(NAME lint_terrain_world
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_residency_v2.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageloader.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_writeback.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loadq.sv
                  ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_world.sv)
 set_tests_properties(lint_terrain_world PROPERTIES
   LABELS "lint;fast"
