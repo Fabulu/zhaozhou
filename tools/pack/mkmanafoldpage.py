@@ -41,7 +41,8 @@ EYE_TILE = 64
 # shipped value).
 BODY_PINK = np.array([228.0, 70.0, 124.0])   # the crayon pink, saturated on
 BODY_PINK_DEEP = np.array([190.0, 42.0, 96.0])   # purpose (the pale-scan trap)
-LOOP_PINK = np.array([212.0, 60.0, 116.0])
+LOOP_PINK = np.array([198.0, 52.0, 132.0])      # D9 §0.1: cooler and deeper
+LOOP_PINK_DEEP = np.array([150.0, 30.0, 100.0])  # its own deep, not the body's
 HINGE_PINK = np.array([236.0, 96.0, 138.0])
 EYE_PURPLE = np.array([104.0, 42.0, 168.0])
 EYE_PURPLE_DEEP = np.array([76.0, 26.0, 128.0])
@@ -60,6 +61,36 @@ STAR_CYAN_DEEP = np.array([30.0, 150.0, 176.0])
 LENS_INK = np.array([24.0, 14.0, 40.0])
 GRAIN_AMP = 0.26        # value amplitude — must beat the light rig's range
 STROKE_AMP = 0.10       # directional crayon-stroke modulation
+STROKE_FREQ = 1.0       # stroke band frequency multiplier (1.0 = the body's)
+
+# ---- DIRECTION 9 §0.1 item 3: THE ANTENNA IS ITS OWN SURFACE --------------
+# "The antenna's TEXTURE should read more than the body's. It should not look
+#  like the same surface as the body — give it its own character."
+#
+# The first ask for this, and the owner is describing a real sameness: the loop
+# band already took a different stroke AXIS (along the band rather than across
+# it) and a barely-different pink, and neither survives to the screen. The axis
+# is invisible because the antenna is a THIN limb — you cannot see which way a
+# grain runs on something six pixels wide — and LOOP_PINK sat 16/10/8 counts
+# from BODY_PINK, which is under the light rig's own frame-to-frame swing.
+#
+# ⚠ THE CRAYON-GRAIN TRAP IS THE NAMED RISK HERE and it is in CLAUDE.md by
+# name: a grain clipped narrower than the light rig's range is mathematically
+# present and visually invisible, and it measured fine and looked like flat
+# plastic. So the antenna's grain goes UP, not sideways, and the values below
+# were moved until the difference showed at native — not until they differed.
+#
+# Three levers, in the order they contribute:
+#   1. AMPLITUDE. A thin limb shows less surface, so its grain has to be
+#      coarser than the body's to read at all at 240p. This is the one that
+#      actually does the work.
+#   2. FREQUENCY. Tighter stroke bands read as a crayon dragged along a narrow
+#      form rather than swept across a broad one.
+#   3. PIGMENT. A cooler, deeper rose — far enough from the body to survive the
+#      moving rig, near enough to stay the same animal.
+LOOP_GRAIN_AMP = 0.44   # vs the body's 0.26: the antenna is the coarser surface
+LOOP_STROKE_AMP = 0.24  # vs 0.10
+LOOP_STROKE_FREQ = 2.3  # tighter bands along a narrow limb
 
 # atlas V rows per part family (parts select them via v0/v1)
 BODY_V0, BODY_V1 = 8, 120
@@ -85,19 +116,28 @@ def value_noise(h, w, seed, octaves=((8, 1.0), (24, 0.55), (72, 0.30))):
     return acc / total
 
 
-def crayon(base, deep, h, w, tag, stroke_axis=0):
+def crayon(base, deep, h, w, tag, stroke_axis=0,
+           grain_amp=None, stroke_amp=None, stroke_freq=None):
     """the crayon field: base pigment, multi-scale value grain, directional
-    stroke bands, and a scatter of paper-tooth flecks where the wax skipped."""
+    stroke bands, and a scatter of paper-tooth flecks where the wax skipped.
+
+    grain_amp / stroke_amp / stroke_freq default to the page-wide values; the
+    antenna band overrides them (D9 §0.1 item 3) so it is a different SURFACE
+    and not merely a different hue. Named parameters rather than a branch on
+    the tag, so every band's character stays an owner knob."""
+    grain_amp = GRAIN_AMP if grain_amp is None else grain_amp
+    stroke_amp = STROKE_AMP if stroke_amp is None else stroke_amp
+    stroke_freq = STROKE_FREQ if stroke_freq is None else stroke_freq
     g = value_noise(h, w, seed_of(tag))
     field = np.zeros((h, w, 3))
     t = (g * 0.5 + 0.5)[..., None]
     field = base * (1 - 0.35 * t) + deep * (0.35 * t)
-    field *= (1.0 + GRAIN_AMP * g)[..., None]
+    field *= (1.0 + grain_amp * g)[..., None]
     # stroke bands along one axis (the hand pulling the crayon)
-    ax = np.arange(w if stroke_axis else h)
+    ax = np.arange(w if stroke_axis else h) * stroke_freq
     stroke = 0.5 * np.sin(ax * 0.61 + 0.9) + 0.5 * np.sin(ax * 0.23 + 4.0)
     stroke = stroke[None, :, None] if stroke_axis else stroke[:, None, None]
-    field *= 1.0 + STROKE_AMP * stroke
+    field *= 1.0 + stroke_amp * stroke
     # paper tooth: sparse light flecks
     rng = np.random.RandomState(seed_of(tag + "-tooth"))
     tooth = rng.uniform(0, 1, (h, w)) > 0.988
@@ -111,9 +151,12 @@ def build_atlas():
     a[:] = crayon(BODY_PINK, BODY_PINK_DEEP, ATLAS_H, ATLAS_W, "u02-ground")
     a[BODY_V0:BODY_V1 + 1] = crayon(BODY_PINK, BODY_PINK_DEEP,
                                     BODY_V1 + 1 - BODY_V0, ATLAS_W, "u02-body")
-    a[LOOP_V0:LOOP_V1 + 1] = crayon(LOOP_PINK, BODY_PINK_DEEP,
+    a[LOOP_V0:LOOP_V1 + 1] = crayon(LOOP_PINK, LOOP_PINK_DEEP,
                                     LOOP_V1 + 1 - LOOP_V0, ATLAS_W, "u02-loop",
-                                    stroke_axis=1)
+                                    stroke_axis=1,
+                                    grain_amp=LOOP_GRAIN_AMP,
+                                    stroke_amp=LOOP_STROKE_AMP,
+                                    stroke_freq=LOOP_STROKE_FREQ)
     a[HINGE_V0:HINGE_V1 + 1] = crayon(HINGE_PINK, BODY_PINK,
                                       HINGE_V1 + 1 - HINGE_V0, ATLAS_W, "u02-hinge")
     return a
