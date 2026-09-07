@@ -236,7 +236,38 @@ constexpr int32_t kLoopBuryMm = 250;        // the near end plunges into the bod
 // directions" wants at the one station that carries the whole antenna.
 //
 // The TOTAL is unchanged at 3300 mm, so the band is the same length it was.
-constexpr int32_t kLoopArcMm[6] = {0, 680, 340, 380, 380, 1270};
+// PASS 12 A3: the AIMED segment goes 1270 -> 1200, and it HAD to move.
+//
+// Moving the re-entry anchor UP (Direction 9 SS1) re-aims the return arm across
+// the upper body instead of down into it, and at 1270 the arm then OVERSHOT ITS
+// TARGET AND CAME OUT THE FAR SIDE: the committed closure probe's worst arm rim
+// went 1061 -> 1210 pm against its 1120 gate the moment the anchor moved. That
+// this was an OVERSHOOT and not a shortfall was settled by trying it the other
+// way -- LENGTHENING to 1560 gave 1736, worse.
+//
+// ⚠ THE WINDOW IS NARROW AND IT IS TWO-SIDED, which nothing in the rig
+// announces. Too SHORT and the arm stops reaching in at the open extreme of the
+// fold (the 700..1160 sweep); too LONG and it exits the far side on the bank's
+// own poses. Swept, both bounds, every value:
+//        arm    sweep@700    bank        verdict
+//        1000     1364       1137        fails both
+//        1050     1286       1057        fails the sweep
+//        1100     1210        979        fails the sweep
+//        1150     1133       1001        fails the sweep by 13
+//        1200     1057       1087        both OK
+//        1230     1012       1139        fails the bank
+//        1270     1001       1210        fails the bank (the shipped value)
+// ...then key 6 of the blade taper was slimmed (see kLoopBladeRxMm) because the
+// RENDER showed the arm's buried end emerging through the ball's lower right,
+// and every number above moved. Re-swept after that:
+//        1080     1212        981        fails the sweep
+//        1120     1150        918        fails the sweep
+//        1160     1090        982        BOTH OK, best margin  <-- keeper
+//        1200     1028       1052        both OK
+// The whole window is roughly 1140..1220. Anyone moving kLoopReentryYMm again
+// must re-sweep this number with it: they are one mechanism, and only the gate
+// says so.
+constexpr int32_t kLoopArcMm[6] = {0, 680, 340, 380, 380, 1160};
 // ---- PASS 11 F.1: THE SPANS STOP BOWING ----------------------------------
 // The pass-10 review's diagnosis was mechanical and correct: "the corners
 // already read; it is the SPANS BETWEEN THEM that bow. Chain versus hose."
@@ -292,8 +323,43 @@ constexpr int32_t kLoopFoldCA16 = 12740;      // ~70 deg at the rear hinge
 //
 // This keeps the amplitude Direction 5 §2a asked for. Shrinking the authored
 // range to satisfy a closure gate is the trade the direction forbids.
-constexpr int32_t kLoopReentryXMm = -120;
-constexpr int32_t kLoopReentryYMm = 95;
+// ---- PASS 12 A3: THE ANCHOR MOVES UP AND OUT (Direction 9 SS1) -----------
+// "the hinge of the backside of the antennae still doesn't connect to the
+//  body. It's clipped inside the body and it spazzes out like crazy. Needs to
+//  be moved up and properly connected."  -- his THIRD report of this.
+//
+// D4 measured what "doesn't connect" actually is, and it is NOT a wrong static
+// position: THE JUNCTION MOVES. On the shipped build the point where the arm
+// crosses the body surface wandered 264 mm in y and 224 mm in x across one idle
+// loop -- 35% of the creature's height, every ten seconds. A junction that
+// slides a third of the body cannot read as attached; it reads as a rod in a
+// hole that is itself sliding.
+//
+// WHY THE OLD VALUES CAUSED THAT. (-120, 95) sits at ellipsoid rho 0.09..0.40
+// -- between 9% and 40% of the way to the surface, i.e. deep inside, near the
+// waterline. The closure aims the arm from hingeD (rho 1.2..2.3, outside) at
+// that deep point, so the arm crosses the surface a long way from its target:
+// a SHORT LEVER swinging a LONG ARM, where a few degrees at the anchor sweep
+// the crossing point enormously. Moving the anchor OUT shortens the distance
+// between the aim target and the crossing, so the crossing holds still.
+//
+// The values are polar, on the round body of SS5 (radius 450, vertical stretch
+// kVStretchPm): about 50 degrees back from vertical, at 55% of the radius --
+//     x = -450 * sin(50) * 0.55 = -190
+//     y =  450 * cos(50) * 1.66 * 0.55 = 264
+// That is the ball's UPPER REAR, which is where the sheet returns the band, and
+// it is 169 mm higher than the shipped anchor. "Moved up", literally.
+//
+// DECLARED PENETRATION (the ground-contact law applied to a body instead of the
+// ground): the anchor is 45% of the radius INSIDE the surface, deliberately, so
+// the return arm still plunges into the body and the free-floating dongle stays
+// structurally unrepresentable. The depth is the knob; kLoopReentryDepthPm
+// records it as a number rather than leaving it implicit in two coordinates.
+// It is measured by probes/d4/d4_burial.py, from the 3D pose, never from
+// pixels.
+constexpr int32_t kLoopReentryDepthPm = 590;  // how far inside the surface, per-mille
+constexpr int32_t kLoopReentryXMm = -140;
+constexpr int32_t kLoopReentryYMm = 200;
 // the drawn kink/lean lives in the REST POSE on the neck bone (R8): a small
 // yaw opens the front view's slot-hole read and gives the antenna the
 // sheet's asymmetric attitude; the rest tilt at A is the drawn front KINK.
@@ -355,8 +421,29 @@ constexpr int32_t kLoopRestTiltCA16 = 940;    // ~5.2 deg
 // values and have NOT been re-authored here; only the now-unreachable mid-run
 // key is gone, so the run from the junction to hinge A interpolates in one span
 // instead of two. Judge it on the band probe and by eye, not from this comment.
-constexpr int32_t kLoopBladeRxMm[7] = {130, 74, 52, 50, 54, 58, 70};
-constexpr int32_t kLoopBladeRzMm[7] = {140, 72, 34, 27, 23, 29, 40};
+// PASS 12 A5 (Direction 9 SS0.1 item 2): "The middle of the antenna may want
+// to be a little thinner too." Keys 2..4 are the runs between the balls -- the
+// band itself, away from every junction. They come down ~12%: rx 52/50/54 ->
+// 46/44/48, rz 34/27/23 -> 30/24/20. The buried base (key 0), the junction
+// flare (key 1) and the return (keys 5-6) are NOT touched: this is the middle,
+// as asked, and thinning the flare is the pinch fault named at
+// kKnuckleSwellJfRxMm.
+// ⚠ This is the band GAUGE, not kFoldBlendMm. The pass-11 skinning fix -- the
+// per-station blend table that produced the chain read the owner praised -- is
+// PROTECTED (D9 SS0) and is not opened here or anywhere this pass.
+// PASS 12 A3, key 6 (the BURIED ARM TIP): 70/40 -> 42/26.
+// The before/after render at channel key 170 showed a visible STUB of the
+// return arm breaking the ball's silhouette at the lower right -- present in
+// pass 11 as a sliver, clearly worse here once the anchor moved up. The
+// committed closure probe called it 1087 pm against a 1120 gate and PASSED it,
+// and pass 11's was 1072: by the number this was a 1.4% change, and by the
+// picture it was the difference between a sliver and a stub. The picture wins
+// (CLAUDE.md: "the metric found none of the faults, the render found all
+// three"). A tip that flares to 70 rx has 70 mm of rim to poke through a
+// surface its centreline is safely inside -- and it is BURIED, so nothing is
+// lost by slimming it.
+constexpr int32_t kLoopBladeRxMm[7] = {130, 74, 46, 44, 48, 58, 42};
+constexpr int32_t kLoopBladeRzMm[7] = {140, 72, 30, 24, 20, 29, 26};
 
 // ---- the junction balls (PASS 4, Direction 4 §1: "the ball inside the
 // antenna is completely wrong — remove it. The other is almost right — it
@@ -501,7 +588,16 @@ constexpr int32_t kKnuckleAtEndMm = 2660;
 // PASS 11 F.4: proud DOWN as the half-width went UP. The volume is roughly
 // preserved and the aspect is inverted -- the same swelling, spread along the
 // band instead of stacked on it. That is the whole of "a thicker antennae part".
-constexpr int32_t kKnuckleSwellJfRxMm = 34, kKnuckleSwellJfRzMm = 40;
+// PASS 12 A5 (Direction 9 SS0.1 item 1): "The front lobe still needs MORE
+// slimming. It has come down once and is still too thick." It has: 58 -> 42 at
+// D7 SS6, then 42 -> 34 at pass 11 F.4. This is the third cut, and it is a cut
+// to the SWELL only -- the taper's own junctionF flare (74 rx, the band
+// widening into the head) is untouched, because D7 SS6 warns that slimming the
+// flare pinches the antenna off the head and re-opens the free-floating-dongle
+// fault. 26/31 puts the station at ~100 rx against hinge A's 108: for the first
+// time the front junction is SLIMMER than the balls, which is what the sheet
+// draws and what "too thick" has been asking for three times.
+constexpr int32_t kKnuckleSwellJfRxMm = 26, kKnuckleSwellJfRzMm = 31;
 // DIRECTION 7 §6a: the two ends move in OPPOSITE directions, which is why they
 // are separate constants and why no global taper scale can express it --
 // "the front one is just too thick" while "the others are a bit bulby, might
@@ -534,7 +630,17 @@ constexpr int32_t kKnuckleSwellCRxMm = 60, kKnuckleSwellCRzMm = 78;
 // the effect is entirely through the closure aim), and the pass-10 review found
 // the rear junction finally live but at 78 mm, about 5 px, too small to see.
 // Half-attached and half-driven for several passes.
-constexpr int32_t kKnuckleSwellEndRxMm = 40, kKnuckleSwellEndRzMm = 52;
+// PASS 12 A3 (Direction 9 SS1, "properly connected"): LONGER AND STILL LOW.
+// F.4.2 above cut this swell to stop a BEAD straddling the waterline, and that
+// diagnosis was right -- so the fix here does not undo it. What the D1 render
+// showed at 6x is that with the bead gone there is now NOTHING at the junction
+// at all: the tube's silhouette simply crosses the ball's, with a visible blunt
+// end, like a rod laid against a sphere. A creature has a socket.
+// The accepted mechanism (D8 SS3) is the LONG LOW swell: the half-width goes up
+// a lot and the radii only a little, so the band thickens over a long run into
+// the body instead of stacking a lump on it. Volume roughly preserved, aspect
+// stretched -- exactly the trade F.4 made at the front junction.
+constexpr int32_t kKnuckleSwellEndRxMm = 50, kKnuckleSwellEndRzMm = 62;
 
 // ---- the eyes (the whole face) ----
 // Two big purple almond lenses close together on the lower front, angled
@@ -917,14 +1023,31 @@ constexpr int kPirouetteKeys = 120;
 // the hover: two incommensurate bobs (periods in keys; integer cycles/loop)
 // PASS 2: the eye recon measured the old bob at 2–4 px over whole clips — a
 // flat line. The floor is raised so motion clears the noise floor at 240p.
-constexpr int32_t kBobAmpAMm = 90, kBobAmpBMm = 34;
+// PASS 12 A2 (Direction 9 SS9: "also make body more bouncy it's fun") and A6
+// (Direction 3 SS7's idle debt, never delivered): BIGGER AND SLOWER, which are
+// not in tension -- amplitude and reversal density are different quantities and
+// D7 SS9.2 governs only the second ("careful not to spazz out... it needs to
+// look deliberate"). More travel per beat, fewer beats: that is the definition
+// of deliberate. Amplitudes 90/34 -> 132/50; periods 37/95 -> 48/122, which is
+// the same ~1.3x the pass-3 note applied and still leaves them incommensurate.
+constexpr int32_t kBobAmpAMm = 132, kBobAmpBMm = 50;
 // PASS 3 (Direction 3 §7 idle: "a bit too fast and nervous"): periods up
 // ~1.5x, amplitudes kept.
-constexpr int kBobPeriodAKeys = 37, kBobPeriodBKeys = 95;
+constexpr int kBobPeriodAKeys = 48, kBobPeriodBKeys = 122;
 // the constant compression (Q0.16 flatten peak; slight but UNMISTAKABLE —
 // PASS 2: the old 3300 was ~4 px, swallowed by the toon band edge. Direction
 // 2 §4 wants MORE stretch than Zixxtrixx.)
-constexpr int32_t kCompressAmpPm = 9000;
+// PASS 12 A2 (Direction 9 SS9). The FOURTH time expressiveness has been asked
+// for in these terms, and the calibration is D5 SS6's: more than Zixxtrixx, and
+// now more than the current Manafold. 9000 -> 12500 is +39% of breath depth at
+// the same period, so every clip in the bank inhales and exhales further
+// without one extra reversal (D9 SS10.4 closed the question of a dedicated
+// bounce clip: the breath runs on every clip through the deform channel, so
+// this lands bank-wide, which is the better outcome than a showcase).
+// ⚠ It also drives PASS 12's stretchy spans (Direction 9 SS13) through the same
+// sample -- see kLoopStretchStrength, which is where the honest limitation of
+// that shared channel is written down.
+constexpr int32_t kCompressAmpPm = 12500;
 constexpr int32_t kSpreadRatioPm = 550;    // the positive-volume partner
 constexpr int kCompressPeriodKeys = 30;
 constexpr int32_t kCompressLoopCouplePm = 14;  // sympathetic hinge-root bob
@@ -936,7 +1059,14 @@ constexpr int32_t kCompressLoopCouplePm = 14;  // sympathetic hinge-root bob
 // angling) rides the slow wave alongside the existing yaw channels.
 constexpr int32_t kWobbleAmpPm = 130;      // hinge-scale swing (per station)
 constexpr int32_t kWobbleLeanA16 = 950;    // the body lean, arriving late
-constexpr int32_t kWobblePitchA16 = 780;   // root pitch (up/down angling)
+// PASS 12 A6 (Direction 3 SS7, owed since 2026-09-05 with no delivery on
+// record): "the body should angle up and down, not only left and right." The
+// channel existed at 780 a16 = 4.3 degrees, which at 240p is under two pixels
+// of crown travel -- present in the source, invisible on the screen, which is
+// 09-ENGINE-GOTCHAS SS9's pattern and the reason this read as undelivered for
+// four passes. 1700 a16 = 9.3 degrees, on the SAME slow schedule (cycB), so the
+// beat count is unchanged and only its depth grows.
+constexpr int32_t kWobblePitchA16 = 1700;  // root pitch (up/down angling)
 constexpr int kWobbleLagKeys = 5;          // per-station arrival lag
 constexpr int kWobblePerAKeys = 23;        // ~46 frames on screen
 constexpr int kWobblePerBKeys = 51;        // ~102 frames on screen
@@ -1061,6 +1191,70 @@ constexpr int32_t kHingePhaseStepA16 = 0x2C00;
 // clean).
 constexpr int32_t kNoduleOffsetMaxMm[3] = {200, 200, 200};  // x, y, z
 
+// ==== PASS 12 -- STRETCHY SPANS (Direction 9 SS13) ========================
+//
+// "can we make the antennae parts between the blobs stretchy? That'd have to
+//  stretch the bones too when they stretch. But it'd be awesome. Possible?"
+// "Alright, make them stretchy so the balls can move further apart and become
+//  more expressive"
+//
+// THE BONES DO NOT STRETCH AND MUST NOT. `rigid_fault_of()` (creature_core.cpp)
+// rejects any bone matrix whose rows are not unit-length or not orthogonal, and
+// the quaternion decode, the exact `mat3x4_invert_rigid` (valid only by
+// transposition) and the sharing of decoded matrices between instances all
+// depend on that. SS13.1 rules it out and this pass does not attempt it.
+//
+// STRETCHING IS A VERTEX EFFECT, and the deform sidecar already does vertices
+// BEFORE rigid skinning. The loop chain binds STRAIGHT along +y, so scaling its
+// vertices along y about the tube's base lengthens the whole antenna and moves
+// the balls apart -- the bones stay exactly where they are and the SKIN carries
+// the nodules outward, which is SS13.2's mechanism exactly.
+//
+// The axis choice is forced and is worth writing down, because "expand along
+// the tube" is not what the role's name suggests. `kRadial` CONTRACTS its named
+// axis (by `flatten`) and EXPANDS the two perpendicular lanes (by `spread`).
+// There is no way to expand a named axis. So to stretch along y, y must be one
+// of the PERPENDICULAR lanes, and the named axis has to be x or z:
+//   axis = 0 (x)  ->  x contracts, y and z expand   <-- chosen
+//   axis = 2 (z)  ->  z contracts, x and y expand
+// x is the BROAD in-plane half-width of the blade and z is its thin across-the-
+// blade one. Contracting the broad lane while the length grows is an elastic
+// band thinning as it stretches, which is SS13.4's requirement; contracting the
+// thin lane instead would widen the blade in plane as it lengthened, which is a
+// balloon. So axis 0.
+//
+// ⚠⚠ THE PART SS13.3 ITEM 2 ASKS FOR THAT THIS PASS CANNOT DELIVER, stated
+// here rather than in a findings file, because this constant is where someone
+// will come looking:
+//
+//   The direction asks for the stretch to be COMPUTED FROM THE POSED
+//   INTER-NODULE DISTANCE, so a span stretches by the amount its two nodules
+//   separated. THAT IS NOT EXPRESSIBLE WITH THE CURRENT SIDECAR. `DeformSample`
+//   is ONE {flatten, spread} pair PER KEY PER CLIP -- a single global pair that
+//   every part reads. The only per-part authorship is a static `strength`, and
+//   a static weight on a shared signal cannot carry a per-span, per-frame,
+//   pose-derived quantity. Verified against the struct and against
+//   `deform_skin_vertex`, as SS13.3 item 1 asked ("verify it is expressible
+//   before assuming").
+//
+//   ITS PREREQUISITE IS ALREADY NAMED AND ALREADY FENCED: the SECOND DEFORM
+//   SUB-CHANNEL, which the blink work (inventory B2) is also waiting on and
+//   which PASS-12-PLAN SS9 lists as engine work deferred out of this pass. So
+//   §13 and blink share one prerequisite, which is worth knowing before either
+//   is scheduled again.
+//
+// WHAT SHIPS instead is the mechanism with an HONEST DRIVE: the spans stretch
+// and thin on the body's own breath sample. The balls do move apart and the
+// band does thin, and the whole creature stretches together rather than the
+// antenna stretching on its own schedule. It is less than the direction asks
+// for and it is not silently less.
+//
+// Strength is 0..255 of the global sample. At kCompressAmpPm 12500 the spread
+// delta is 12500 * kSpreadRatioPm/1000 = 6875, so a strength of 170 gives
+// 6875*170/255 / 65536 = 7.0% of length -- about 240 mm on the 3450 mm chain,
+// which separates the balls by tens of millimetres. Authored by eye at native.
+constexpr uint8_t kLoopStretchStrength = 170;
+
 // The always-on nodule schedule. THREE INDEPENDENT NODULES MEANS THREE
 // INDEPENDENT CLOCKS -- if they shared one they would be phase-offset copies of
 // a single curve, which is the exact thing pass 6 C.2 fixed once at the
@@ -1081,10 +1275,18 @@ constexpr int kNodulePerKeys[3][3] = {  // [nodule A,B,C][axis x,y,z]
 // is the loosest and swings most, the front (A) is held by the neck, the rear
 // (C) is held by the closure -- the same reasoning as kHingeAxisScalePm, on a
 // quantity the owner can read: millimetres of ball travel.
+// PASS 12, AUTHORED DOWN AFTER LOOKING (the art loop, and the gate agreed):
+// the first values (70/95/60, 95/130/85, 80/110/70) rendered a CRUMPLED loop on
+// channel at key 170 and pushed the committed closure probe's worst arm rim to
+// 1207 pm against its 1120 gate -- the nodule swing composing with the clip's
+// own fold into a degenerate pose, which is precisely the "swept, not cornered"
+// risk (gotcha SS17) the plan flagged as this item's biggest. Down ~40%. The
+// SOLO diagnostic keeps the full envelope (kNoduleSoloAmpMm), because a
+// diagnostic should show the ceiling and a shipped clip should not live at it.
 constexpr int32_t kNoduleAmpMm[3][3] = {
-    { 70,  95,  60},
-    { 95, 130,  85},
-    { 80, 110,  70},
+    { 42,  57,  36},
+    { 57,  78,  51},
+    { 48,  66,  42},
 };
 // Per-clip gain in per-mille of the amplitudes above, indexed by knead slot.
 // Zero switches the whole layer off for a clip without touching a schedule.
@@ -1768,7 +1970,7 @@ constexpr int32_t kKneadWagCA16 = 1900;    // ...in counter-rotation
 // candidate before its render. Owner question 3 defaults to (a), a clearly
 // visible working joint: he has asked for these junctions to be hinges twice,
 // and the closure probe bounds it either way.
-constexpr int32_t kKneadWagB2A16 = 9200;
+constexpr int32_t kKneadWagB2A16 = 4600;
 constexpr int kKneadWagPeriodKeys = 22;
 constexpr int32_t kKneadTremorA16 = 130;   // the hold's small tremor
 // per-clip gain (pm) for the always-on knead layer, indexed by slot:

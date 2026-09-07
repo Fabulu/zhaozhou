@@ -237,6 +237,65 @@ inline zc::RingPart make_loop() {
     }
     // chain rings are creature-global: carry the tube x
     rs.cx = fxu(kLoopTubeXMm);
+    // ---- PASS 12: THE SPAN STRETCHES (Direction 9 SS13) -------------------
+    // kRadial about the tube's BASE, on axis x: x contracts, y and z expand.
+    // y is the arc, so the chain LENGTHENS and the balls move apart, while the
+    // blade's broad in-plane half-width narrows -- an elastic band, not a
+    // balloon. See kLoopStretchStrength for why the axis cannot be y, and for
+    // the half of SS13 the single-sample sidecar cannot carry.
+    //
+    // THE CENTRE IS THE TUBE'S BASE, not the part's middle, and that is the
+    // load-bearing choice: scaling about y0 leaves the buried base and the
+    // front junction exactly where they are, so the antenna grows OUT of the
+    // head instead of sliding out of it. A centre in the middle of the chain
+    // would push the front junction into the body and pull the return arm out
+    // of it -- the free-floating dongle, re-created by a deform.
+    // ⚠ ROLE AND STRENGTH MUST AGREE. `compile_creature` rejects the whole
+    // creature with "deformation role/strength mismatch" if a role is set and
+    // the strength is 0 -- and a rejected compile renders NOTHING, not a
+    // creature without the effect. Setting kLoopStretchStrength to 0 to turn
+    // this off is the obvious thing to try, so the obvious thing must work:
+    // the role goes to kNone with it. (Found by trying exactly that, as an
+    // ablation, and getting an empty frame.)
+    //
+    // ⚠ THE STRENGTH RAMPS TO ZERO ALONG THE BURIED RETURN ARM, and this is
+    // the whole reason the effect can ship at a visible amount.
+    //
+    // At full strength everywhere, the chain lengthens by ~7% -- which moves
+    // the ARM'S BURIED END ~220 mm further along its own direction, straight
+    // out through the far side of the body. The render showed it as a tube
+    // stub poking from the ball's lower right, and the committed closure probe
+    // reported nothing, because that probe measures BONE geometry and this is a
+    // VERTEX effect. A gate blind spot, named here so the next person does not
+    // trust silence.
+    //
+    // Capping the strength instead was tried: at 60 the stub is gone and the
+    // stretch is also invisible -- ~1 px on a 340 mm span, which is exactly the
+    // crayon-grain failure in CLAUDE.md (mathematically present, visually
+    // absent). So the amount stays and the REACH changes: full strength over
+    // the visible spans between the nodules, ramping to zero by the arm's end,
+    // so the tip does not move at all.
+    //
+    // Displacement is strength*(y - y0), so a linear ramp keeps the mapping
+    // continuous AND monotone: d/dy of [y + s(y)(y-y0)] = 1 + s'(y)(y-y0) +
+    // s(y), which at the worst point here is 1 - 0.145 + 0.07 = 0.93 > 0. The
+    // skin stretches; it never folds back on itself.
+    //
+    // It is also what SS13 actually asked for -- "the antennae parts BETWEEN
+    // THE BLOBS", not the buried return.
+    int32_t stretch = kLoopStretchStrength;
+    if (s > stC) {
+      const int32_t run = total - stC;
+      stretch = run > 0 ? kLoopStretchStrength * (total - s) / run : 0;
+      if (stretch < 0) stretch = 0;
+    }
+    rs.deform_role =
+        stretch > 0 ? zc::DeformRole::kRadial : zc::DeformRole::kNone;
+    rs.deform_axis = 0;
+    rs.deform_strength = static_cast<uint8_t>(stretch);
+    rs.deform_center_x = fxu(kLoopTubeXMm);
+    rs.deform_center_y = fxu(y0);
+    rs.deform_center_z = 0;
     p.rings.push_back(rs);
   }
   p.r = kGreyR;

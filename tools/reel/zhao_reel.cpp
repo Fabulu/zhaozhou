@@ -7700,6 +7700,38 @@ int main(int argc, char** argv) {
         "both hold still for the whole clip -- only the hinges move";
     rc |= render_scene(s);
   }
+  // ---- PASS 12: THE NODULE-SOLO PLATE (Owner Direction 9 SS2) --------------
+  //
+  // "Do not report this as done again without showing each nodule moving
+  //  independently, in a plate the owner can look at."
+  //
+  // This subject IS that plate, and it is the acceptance bar for the headline
+  // item of the pass. Slot 16 (build_nodule_solo) runs four segments: nodule A
+  // alone, then B alone, then C alone, then the owner's own configuration --
+  // the middle one down while the outer two swing up.
+  //
+  // Same camera as manafold-antenna-fixed, deliberately: the judging view is
+  // the one the owner's antenna verdicts have been taken on, and a diagnostic
+  // framed differently from the judging view invites "it looks fine in YOUR
+  // picture". Effects off for the same reason that view has them off -- this is
+  // a look at the joints, not at the fold's bloom.
+  //
+  // COMMITTED, not scratch: the pass-7 lesson is written twenty lines above.
+  if (wanted("manafold-nodule-solo")) {
+    SceneSubject s = subject_u02_clip(16, "manafold-nodule-solo", u02::kNoduleSoloKeys,
+                                      false, &kU02SunChannel);
+    s.u02_mana = 0;
+    s.u02_smear = 0;
+    s.planet = 0;
+    s.u02_mist = false;
+    s.cam_k = 460000;
+    s.cam_bias = -9000;
+    s.note =
+        "Direction 9 SS2: EVERY NODULE MOVES INDIVIDUALLY. Segments of 48 keys "
+        "-- A alone (vertical then lateral), B alone, C alone, then the middle "
+        "DOWN while the outer two swing UP. Camera and body root hold still.";
+    rc |= render_scene(s);
+  }
   // ---- PASS 11 F.2: THE QUARTER VIEW, the AUTHORING instrument -------------
   // manafold-antenna-fixed is the JUDGING view and stays exactly as it is: the
   // owner's §11 antenna verdict is taken on it, and a view that moves between
