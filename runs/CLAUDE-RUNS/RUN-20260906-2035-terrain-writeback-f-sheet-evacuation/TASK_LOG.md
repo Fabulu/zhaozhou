@@ -530,3 +530,20 @@ so the new sweep cannot be a re-test of the solid case.
 
 Verified by re-running the SAME mutation: 0 failures before, 636 after.
 47,221 checks pass on restored RTL.
+
+## 2026-09-07 -- swept every suite sharing the tess fixture, by mutation
+
+Ran the SAME mutation against all four suites that share tess_harness.hpp
+rather than reasoning from greps:
+
+  terrain_tess_directed   6,751     5 failed   punches voids
+  terrain_tess_random     2,277    45 failed   random void cells
+  terrain_tess_normals   46,709   636 failed   after today's fix (was 0)
+  terrain_lod_tess           93     0 failed   CORRECT -- non-dual by design
+
+lod_tess uses make_lattice(false) with job.dual=false, and the reference rule
+is `sol = !lat.dual || substance == kSolid`, so solidity is unconditional on a
+legacy page. "Does not detect" and "has a hole" are different findings; the
+distinction is recorded so nobody widens a suite that is already right.
+
+The hole was in the LARGEST of the four, and only there.

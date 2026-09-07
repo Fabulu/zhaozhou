@@ -207,3 +207,32 @@ That last point is why this is still not implemented in the same pass that
 found it. Five paired assignments in a state machine that emits geometry, with
 41,731 checks resting on it, is not a change to make between two fits without
 the before-measurement in hand.
+
+
+---
+
+## The coverage sweep this provoked, measured rather than grepped
+
+The `cell_solid` rewrite was validated by a fire test — drop the row term from
+the window's outer product, which is a wrong solidity answer that emits or
+drops triangles, and see which suites notice. One did not, so every suite that
+shares the fixture was put through the same mutation rather than reasoned
+about:
+
+| suite | checks | detects the mutation | why |
+|---|---:|---|---|
+| `terrain_tess_directed` | 6,751 | **5 failed** | punches voids |
+| `terrain_tess_random` | 2,277 | **45 failed** | random `kVoidAuthored`/`kVoidBreached` |
+| `terrain_tess_normals` | 41,731 → 46,709 | **0 → 636 failed** | fixture was all-solid; fixed |
+| `terrain_lod_tess` | 93 | 0 failed | **correct** — non-dual by design |
+
+`terrain_lod_tess` builds `make_lattice(false, 2)` with `job.dual = false`, and
+the reference's rule is `sol = !lat.dual || substance(...) == kSolid`. On a
+legacy page solidity is *unconditional*, so that suite is not blind — the
+window genuinely has nothing to say to it. Recording the distinction matters:
+"does not detect the mutation" and "has a coverage hole" are not the same
+finding, and treating them as one would have sent someone to widen a suite that
+is already correct.
+
+**The 41,731-check suite was the only one with the hole, and it was the largest
+of the four.**
