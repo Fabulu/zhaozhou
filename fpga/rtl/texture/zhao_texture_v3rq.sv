@@ -43,7 +43,13 @@
 
 module zhao_texture_v3rq #(
     parameter int unsigned WIDTH = 14,
+    // THE BODY'S PHYSICAL DEPTH. §5.3: "BDEPTH is a physical body parameter."
     parameter int unsigned DEPTH = 64,
+    // THE LOGICAL CAPACITY, which is a different thing and now has its own
+    // name. §5.3: "For the ready queues, CAPACITY = 64 means 64 logical owner
+    // tickets INCLUDING all heads and pending reads. A body of 64 plus two
+    // heads must not silently advertise 66 logical owner credits."
+    parameter int unsigned CAPACITY = DEPTH,
     parameter int unsigned PW    = $clog2(DEPTH)
 ) (
     input  var logic             clk,
@@ -63,7 +69,14 @@ module zhao_texture_v3rq #(
     // TOTAL tickets held, body plus head registers. The drain/quiescence test
     // needs "this queue holds nothing", and a body-only occupancy answers a
     // different question while looking like the right one.
-    output var logic [PW:0]      occ_o
+    output var logic [PW:0]      occ_o,
+
+    // §5.1: "The distinction between !out_valid and owned_empty is
+    // fundamental. A queue can have no visible head while a synchronous read
+    // is in flight." `valid_o` answers "is there something to consume NOW";
+    // this answers "does this queue own anything at all", which is the only
+    // question a drain may ask.
+    output var logic             owned_empty_o
 );
 
   logic [PW:0] wp_q, rp_q;
@@ -80,33 +93,69 @@ module zhao_texture_v3rq #(
   assign valid_o = h_v_q;
   assign data_o  = h_d_q;
   assign pop_c   = pop_i && h_v_q;
-  assign full_o  = (body_occ_c == (PW+1)'(DEPTH));
-  // `ld_q` IS PART OF OCCUPANCY, and leaving it out was a real defect.
+
+  // ==========================================================================
+  // THE REGISTERED LOGICAL CREDIT (§5.3, the brief's THIRD instruction)
+  // ==========================================================================
+  // WHY THIS REPLACED A SUM. The four-way endpoint split of the owner fit puts
+  // the design's worst path at -3.194 ns, and it is
   //
-  // `rp_q` advances when the read is ISSUED, not when it lands, so an entry
-  // leaves `body_occ_c` one full cycle before it appears in a head register.
-  // For that cycle it was counted in NEITHER term and `occ_o` read zero while
-  // the queue still owned the ticket. The port's own comment above names the
-  // trap exactly -- "a body-only occupancy answers a different question while
-  // looking like the right one" -- and the omission made it one term short of
-  // its own contract.
+  //     zhao_texture_v3rq:u_rq_tmu|wp_q[0]  ->  adm_accept_o
   //
-  // THE BLOCK ALREADY KNEW. `reserved_c` below includes `ld_q` for precisely
-  // this reason, so the pending read was understood, counted and used to
-  // throttle launches; it was missing from the ONE expression anybody outside
-  // this file can see.
+  // reaching it through this block: wp_q -> body_occ_c -> occ_o ->
+  // rq_occ_c == 0 -> quiet_c -> adm_ready_o -> adm_accept_o. Ten paths end at
+  // the admission outputs and they are the ten worst in the fit. The brief
+  // named that shape by inspection before any of it was measured.
   //
-  // Found by the owner's control-fabric recovery architecture (2026-09-07 §5),
-  // by hand, in a block that had a lint lane and no directed test.
-  // `tests/texture/texture_v3rq_directed.cpp` is that test now, and it was run
-  // against the unrepaired block first: 1 of 10 checks failed, on this line.
+  // §5.2's correctness patch added `ld_q` to the old sum, which was right and
+  // which made that sum one term wider on exactly this path. §5.2 said so at
+  // the time -- "do not call that the final timing architecture" -- and §5.3
+  // is the answer: a count maintained from ACCEPTED TRANSFERS, so the
+  // consumer sees a register instead of a subtraction and three additions.
   //
-  // CORRECTNESS ONLY, and §5.2 is explicit that it must not be sold as more:
-  // "This first patch is for correctness. It can temporarily make a
-  // combinational count wider. Do not call that the final timing
-  // architecture." §5.3's registered logical credit is the timing answer and
-  // is deliberately not attempted here.
-  assign occ_o   = body_occ_c + (PW+1)'(h_v_q) + (PW+1)'(s_v_q) + (PW+1)'(ld_q);
+  //     push_taken = in_valid && in_ready;
+  //     pop_taken  = out_valid && out_ready;
+  //     L_next     = L + push_taken - pop_taken;
+  //
+  // NO STALENESS IS INTRODUCED, and that is worth stating because a registered
+  // occupancy feeding a DRAIN is exactly where a one-cycle lag would be a
+  // correctness bug rather than a timing win. `wp_q` and `rp_q` are registers
+  // too, so the old `body_occ_c` at cycle N already reflected transfers
+  // through N-1. This count has the same visibility, taken from the same
+  // edges. It is not fresher and it is not staler.
+  //
+  // NO SAME-CYCLE FULL/POP BYPASS, per §5.3: "Do not add a same-cycle
+  // full/pop bypass unless measured throughput requires it. That bypass
+  // connects downstream acceptance back to the producer. Removing one rare
+  // full-boundary bubble is not worth reconstructing the timing loop we are
+  // trying to remove." `in_ready` is the conservative `!full_o`.
+  logic [PW:0] lcnt_q;
+  logic [PW:0] lcnt_next_c;
+
+  wire push_taken_c = wr_en_i && !full_o;
+  wire pop_taken_c  = pop_c;   // valid_o && pop_i, by construction above
+
+  assign lcnt_next_c = lcnt_q + (PW+1)'(push_taken_c) - (PW+1)'(pop_taken_c);
+
+  // Full and empty come from the LOGICAL count, so heads and the pending read
+  // are inside the advertised capacity rather than beyond it.
+  assign full_o       = (lcnt_q >= (PW+1)'(CAPACITY));
+  assign owned_empty_o = (lcnt_q == '0);
+  // OCCUPANCY IS NOW THE REGISTERED LOGICAL COUNT, and the history matters.
+  //
+  // It was `body_occ_c + h_v_q + s_v_q` -- one term short of its own contract,
+  // because `rp_q` advances when a read is ISSUED and the entry then belongs
+  // to neither the body nor a head for one cycle. The port's own comment
+  // above names that trap exactly. §5.2's correctness patch added `ld_q`; the
+  // directed test written for it (one push, no pop, occupancy never zero)
+  // failed 1 of 10 checks on the unrepaired block.
+  //
+  // §5.3 then replaces the whole sum. `lcnt_q` counts accepted pushes minus
+  // accepted pops, so every ticket is inside it wherever it physically sits --
+  // body, pending read, or either head -- and no future stage can fall out of
+  // the accounting the way `ld_q` did. The class of defect is removed, not
+  // just its one instance.
+  assign occ_o = lcnt_q;
 
   // Reserved = held in the head registers + one possible in-flight read. The
   // pop that is happening on THIS edge frees an entry, so it is subtracted
@@ -150,13 +199,15 @@ module zhao_texture_v3rq #(
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      wp_q  <= '0;
-      rp_q  <= '0;
-      ld_q  <= 1'b0;
-      h_v_q <= 1'b0;
-      s_v_q <= 1'b0;
+      wp_q   <= '0;
+      rp_q   <= '0;
+      ld_q   <= 1'b0;
+      h_v_q  <= 1'b0;
+      s_v_q  <= 1'b0;
+      lcnt_q <= '0;
     end else begin
-      if (wr_en_i) wp_q <= wp_q + (PW+1)'(1);
+      lcnt_q <= lcnt_next_c;
+      if (push_taken_c) wp_q <= wp_q + (PW+1)'(1);
       if (ld_c)    rp_q <= rp_q + (PW+1)'(1);
       ld_q  <= ld_c;
       h_v_q <= n_h_v_c;

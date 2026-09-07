@@ -516,10 +516,21 @@ module zhao_texture_v3own #(
   // READY QUEUES -- three, single-writer, depth 64 (section 9.3)
   // ==========================================================================
   logic              rq_full_c [3];
+  // §5.1: owned_empty is the drain's question; !valid_o is the consumer's.
+  logic              rq_empty_c [3];
   logic              rq_valid_c[3];
   logic [OWNERW-1:0] rq_data_c [3];
   logic              rq_pop_c  [3];
+  // §5.1 lists logical_count as an "optional DIAGNOSTIC count" and body_count
+  // as "an internal implementation detail, not a drain signal". Since quiet_c
+  // now takes `owned_empty_o` instead, this array has no consumer in control
+  // logic -- which is the point of the change, not an oversight. Kept wired so
+  // the depth is visible in a waveform, waived with its reason rather than
+  // deleted: a diagnostic removed because a lint rule complained is a
+  // diagnostic nobody chose to lose.
+  /* verilator lint_off UNUSEDSIGNAL */
   logic [SLOTW:0]    rq_occ_c  [3];
+  /* verilator lint_on UNUSEDSIGNAL */
 
   // INSTANTIATED THREE TIMES BY HAND, NOT IN A GENERATE LOOP, and that is the
   // point rather than a missed tidy-up. Each queue has a DIFFERENT single
@@ -541,7 +552,8 @@ module zhao_texture_v3own #(
       .valid_o  (rq_valid_c[0]),
       .data_o   (rq_data_c[0]),
       .pop_i    (rq_pop_c[0]),
-      .occ_o    (rq_occ_c[0])
+      .occ_o    (rq_occ_c[0]),
+      .owned_empty_o(rq_empty_c[0])
   );
 
   // V3-WREN-REG: q0a_v_q
@@ -555,7 +567,8 @@ module zhao_texture_v3own #(
       .valid_o  (rq_valid_c[1]),
       .data_o   (rq_data_c[1]),
       .pop_i    (rq_pop_c[1]),
-      .occ_o    (rq_occ_c[1])
+      .occ_o    (rq_occ_c[1]),
+      .owned_empty_o(rq_empty_c[1])
   );
 
   // V3-WREN-REG: q0i_v_q
@@ -569,7 +582,8 @@ module zhao_texture_v3own #(
       .valid_o  (rq_valid_c[2]),
       .data_o   (rq_data_c[2]),
       .pop_i    (rq_pop_c[2]),
-      .occ_o    (rq_occ_c[2])
+      .occ_o    (rq_occ_c[2]),
+      .owned_empty_o(rq_empty_c[2])
   );
 
   // ==========================================================================
@@ -761,7 +775,7 @@ module zhao_texture_v3own #(
                 && !c0a_v_q && !c1a_v_q && !c3a_v_q && !c4a_v_q
                 && !c0f_v_q && !c1f_v_q && !c3f_v_q && !c4f_v_q
                 && !q0t_v_q && !q0a_v_q && !q0i_v_q
-                && (rq_occ_c[0] == '0) && (rq_occ_c[1] == '0) && (rq_occ_c[2] == '0)
+                && rq_empty_c[0] && rq_empty_c[1] && rq_empty_c[2]
                 && !k0_v_q && !k1_v_q && !k2_v_q
                 && (cq_occ_c == '0) && (cmb_res_q == '0)
                 && !g0_v_q && !g1_v_q && !g2_v_q
