@@ -127,3 +127,68 @@ figure corrected to 30 with reasoning rather than to fit a measurement.
 * Not a prediction of the running fit. The registered credit added a counter and
   the fence added a phase register; both are logic, and neither was expected to
   move block memory.
+
+
+---
+
+# CLOSED — the fitter's RAM table arrived, and the remainder is fully attributed
+
+*Later the same day. The `zhao_texture_v3own` fit finished at 4,213 s and is the
+**first** fit of this block to harvest `blockfit.fit.rpt`, which is exactly the
+instrument this report said was needed.*
+
+The Fitter RAM Summary lists **15 RAMs totalling 20,640 bits / 17 M10K**, which
+matches the ledger row to the bit and to the block.
+
+| group | bits | M10K |
+|---|---:|---:|
+| the 9 `v3bank` instances walked above | 19,584 | 10 |
+| `cq_s0_q`, `cq_s1_q`, `cq_s2_q`, `cq_ax_q` — 4×40 each | 640 | 4 |
+| `oq_ctx_q` — 4×64 | 256 | 2 |
+| `oq_res_q` — 4×40 | 160 | 1 |
+| **total** | **20,640** | **17** |
+
+**The remainder was 1,056 bits and it is 1,056 bits.** The block count reconciles
+too: the instance walk is **10** M10K, not the 9 the gate names, because `u_ctx`
+is 64 bits wide against the M10K's 40-bit port limit and takes two slices —
+§12.1 says this in advance (*"A 64-bit context on an ordinary 40-bit-wide
+simple-dual-port mapping needs two, not one"*), and the fitter confirms it.
+
+## The rejected hypothesis was right in kind and wrong by exactly the amount that mattered
+
+This report proposed the COMBINE and output packet bodies as the explanation,
+computed 1,168 against a remainder of 1,056, and **refused to publish it**. The
+measurement says the bodies *are* the answer — but only the wide fields:
+
+* the four 40-bit `cq_*` and the 40/64-bit `oq_*` fields became RAM;
+* **`cq_own_q` and `oq_own_q` did not.** At 14 bits × 4 they stayed in fabric.
+
+`14×4 + 14×4 = 112`, and `1,168 − 112 = 1,056`. The arithmetic that looked like
+numerology was one term too generous, and the term it was wrong about is the one
+a bit-count model cannot predict — whether the fitter finds a field worth a
+block. **A sum over declared fields is not a fitted memory map**, which is §12.5's
+rule, and this is the cleanest demonstration of it available.
+
+## The finding worth acting on: 41% of the blocks hold 5% of the bits
+
+**Seven of seventeen M10Ks hold 1,056 bits.** Each is a **four-entry** queue
+occupying a whole 10,240-bit block — about **0.7% utilisation**, and `oq_ctx_q`
+spends *two* blocks on 256 bits. The fitter's own column says why they did not go
+to MLABs: *"Fits in MLABs: No — Unsupported Port Usage"*.
+
+That is precisely what §12.1 warns about — *"Independently timed
+readers/writers determine memory geometry as much as total bit count does"* — and
+what §5.6 says about physical mapping: *"A spare M10K is not automatically
+cheaper if it adds inconvenient routing or poorly utilized width slices."*
+
+**This changes the shape of the M10K question.** §12.3's 69-block proposal is
+built from payload geometry; it does not anticipate small in-flight queues each
+claiming a block. Any island budget that counts planes and forgets four-deep
+queues will be short — and here that error would be 7 blocks in one module
+alone. Worth carrying into the whole-island reconciliation rather than
+rediscovering per block.
+
+**Not proposed here:** which of the seven should be fabric instead. That is a
+port-usage question per queue, it interacts with the read-during-write mode the
+table records, and §5.6 asks for both mappings compared *"under the same workload
+and constraints"* rather than argued.
