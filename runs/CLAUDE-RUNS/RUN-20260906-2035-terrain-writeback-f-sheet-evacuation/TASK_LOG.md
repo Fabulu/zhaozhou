@@ -3009,3 +3009,31 @@ is hardest to see.
 Corrected in G1-D §4.3f and docket M4; new docket M6 records the general rule —
 **a composed reported-Fmax delta is attributable only if the gating path family
 is the SAME before and after.**
+
+## M6 applied uniformly, including where it does NOT cost me
+
+Having retracted the island's +12 MHz, the same rule has to be run against the
+session's other Fmax claim rather than only the inconvenient one.
+
+**The T2 owner fit fails the same test.** Baseline worst path `fence_open_q ->
+fence_open_q` (recorded in the T1 fence report); result worst path
+`req_q[2][1] -> iss_q[18][1]`. Different families, so core→core 91.32 → 98.18
+is movement whose cause those two numbers do not establish.
+
+**But the two cases are not equally weak, and flattening them would be its own
+dishonesty.** The island's palette family moved with ONE file changed and no
+structural connection to it — placement roulette. The owner block's change
+deleted 512 flip-flops and 41% of its ALM; that is a structural upheaval which
+would plausibly move many families at once. Plausible is not established. The
+honest form: the block got faster, the change is large enough to explain it, and
+nothing here isolates the two.
+
+**Unaffected in both cases:** the structural claims. ALM on identical scope,
+registers predicted −560 and measured −560, `gen_q` and `ftc_q` in zero paths.
+Those are statements about what the netlist CONTAINS, and no gating-family or
+placement argument touches them.
+
+**And the audit's most useful result:** §4.3e, written two days ago, already did
+this — *"−4.800, a virtual pin into PALETTE_RES | −4.977, THE SAME PIN"*. The
+discipline existed; my §4.3f dropped it while being scrupulous about prediction.
+Being rigorous about one failure mode does not transfer to another.
