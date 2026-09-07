@@ -866,6 +866,68 @@ int main(int argc, char** argv) {
   }
 
   // =========================================================================
+  hdr("case 13b (S22.5): all 64 ready with COMBINE stalled, then released");
+  // =========================================================================
+  // S22.5's hostile schedule: "Fill all sixty-four owners, make them all ready,
+  // and stall COMBINE for a long period ... all other ready rows must remain
+  // eligible without losing a transition. Release the stall and require every
+  // owner exactly once."
+  //
+  // Case 13 stalls the OUTPUT. That is a different back-pressure point: it
+  // blocks retirement, leaving the ready path free. Stalling COMBINE instead
+  // makes ready owners ACCUMULATE, which is what stresses the ready queues and
+  // the round-robin that drains them.
+  //
+  // It also exercises S5.3's capacity contract in the composed owner rather
+  // than in isolation: with 64 owners ready and COMBINE refusing, the ready
+  // queue must hold every one of them and advertise credit for no more. The
+  // isolated queue test proves the arithmetic; this proves the owner actually
+  // relies on it.
+  {
+    Ob s(dut);
+    s.reset();
+    s.cmb_ready = false;                 // COMBINE refuses for the whole fill
+    std::vector<uint16_t> owners;
+    for (int i = 0; i < OWNERS; ++i) {
+      uint16_t o = s.admit(ctx_of(2000 + i), 0x1);
+      owners.push_back(o);
+      s.issue_tmu(o, 0);
+      s.ret_tmu(o, 0, mkres(o * 4 + 0));   // every owner becomes READY
+    }
+    s.idle(200);                          // "a long period"
+
+    zhao::check(dut->ev_live_o == OWNERS,
+                "S22.5 all 64 owners are live and ready while COMBINE refuses",
+                OWNERS, dut->ev_live_o);
+    zhao::check(s.combined.empty(),
+                "S22.5 and COMBINE has taken nothing", 0, s.combined.size());
+    zhao::check(dut->ev_err_issue_o == 0 && dut->ev_err_stale_o == 0
+                    && dut->ev_err_unsol_o == 0 && dut->ev_err_dup_o == 0,
+                "S22.5 no ready row was lost or mistaken for an error while "
+                "waiting -- 'all other ready rows must remain eligible without "
+                "losing a transition'",
+                0, dut->ev_err_issue_o + dut->ev_err_stale_o
+                       + dut->ev_err_unsol_o + dut->ev_err_dup_o);
+
+    // Release, and require EVERY owner exactly once.
+    s.cmb_ready = true;
+    s.idle(6000);
+
+    zhao::check(s.combined.size() == static_cast<size_t>(OWNERS),
+                "S22.5 every owner reaches COMBINE exactly once after release",
+                OWNERS, s.combined.size());
+    zhao::check(s.emitted.size() == static_cast<size_t>(OWNERS),
+                "S22.5 and every owner is emitted exactly once", OWNERS,
+                s.emitted.size());
+    int order_errors = 0;
+    for (int i = 0; i < OWNERS && i < static_cast<int>(s.emitted.size()); ++i)
+      if (s.emitted[i].owner != owners[i]) ++order_errors;
+    zhao::check(order_errors == 0,
+                "S22.5 in allocation order -- a long ready backlog does not "
+                "reorder retirement",
+                0, order_errors);
+  }
+
   hdr("case 14: more than 64 admissions under backpressure -- ready must fall");
   // =========================================================================
   {
