@@ -723,7 +723,60 @@ module zhao_texture_island_top #(
   end
 
   // Read point 1: RCP24's answer, for PERSPUV's numerators.
-  wire [63:0] uvw_rd = uvw_m[rcp_tok[FCTXW-1:0]];
+  //
+  // ---------------------------------------------------------------------------
+  // P0-C STAGE A: THIS READ IS REGISTERED, AND THAT IS WHY uvw_m IS A RAM
+  // ---------------------------------------------------------------------------
+  // It used to be `wire [63:0] uvw_rd = uvw_m[rcp_tok[FCTXW-1:0]];` -- a
+  // dynamically indexed COMBINATIONAL read out of a 64x64 array. Quartus said so
+  // in as many words:
+  //
+  //     Info (276007): RAM logic "uvw_m" is uninferred due to ASYNCHRONOUS READ
+  //     LOGIC
+  //
+  // and the array therefore cost **4,096 flip-flops** in fabric -- the single
+  // largest uninferred structure at this level and a majority of the top's
+  // ~6,981 registers above its member blocks (P0-E-THE-GLUE-POOL-MEASURED).
+  //
+  // Registering the read is what lets it become an M10K, and it is the same
+  // defect §16.2 named in the DONE queue: "a dynamically indexed combinational
+  // output from a flop array".
+  //
+  // THE COST IS A CYCLE, SO IT NEEDS A SKID. A registered read returns its data
+  // one clock after the address, so the RCP beat cannot be passed straight
+  // through to PERSPUV any more. This one-deep stage holds the whole beat --
+  // the RAM data and every scalar that travelled beside it -- and presents it
+  // together. `zhao_raster_perspuv_svc`'s `v_ready_o` is `(free_cnt_q != '0)`,
+  // a pure register read, so `rcp_r_ready` below cannot form a combinational
+  // loop through it.
+  logic        px_v_q;
+  logic [63:0] px_uvw_q;
+  logic [23:0] px_r_q;
+  logic [5:0]  px_k_q;
+  logic        px_dz_q;
+  logic [7:0]  px_tok_q;
+
+  logic px_in_ready_c;   // PERSPUV's own ready, one name for the two uses below
+
+  assign rcp_r_ready = !px_v_q || px_in_ready_c;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      px_v_q <= 1'b0;
+    end else begin
+      if (px_v_q && px_in_ready_c) px_v_q <= 1'b0;
+      if (rcp_r_valid && rcp_r_ready) begin
+        px_v_q <= 1'b1;
+        // THE REGISTERED READ. Written inside the clocked block against a
+        // dynamic index, which is the form Quartus infers as RAM.
+        px_uvw_q <= uvw_m[rcp_tok[FCTXW-1:0]];
+        px_r_q   <= rcp_r;
+        px_k_q   <= rcp_k;
+        px_dz_q  <= rcp_dzero;
+        px_tok_q <= rcp_tok;
+      end
+    end
+  end
 
   logic        pu_valid, pu_ready;
   logic [31:0] pu_u, pu_v;
@@ -734,10 +787,10 @@ module zhao_texture_island_top #(
 
   zhao_raster_perspuv_svc #(.NTOK(16), .TAGW(16)) u_persp (
       .clk(clk), .rst_n(rst_n),
-      .v_valid_i(rcp_r_valid), .v_ready_o(rcp_r_ready),
-      .u_over_w_i(uvw_rd[63:32]), .v_over_w_i(uvw_rd[31:0]),
-      .r_mant_i(rcp_r), .r_k_i(rcp_k), .depth_zero_i(rcp_dzero),
-      .tag_i({8'd0, rcp_tok}),
+      .v_valid_i(px_v_q), .v_ready_o(px_in_ready_c),
+      .u_over_w_i(px_uvw_q[63:32]), .v_over_w_i(px_uvw_q[31:0]),
+      .r_mant_i(px_r_q), .r_k_i(px_k_q), .depth_zero_i(px_dz_q),
+      .tag_i({8'd0, px_tok_q}),
       .r_valid_o(pu_valid), .r_ready_i(pu_ready),
       .u_o(pu_u), .v_o(pu_v), .tag_o(pu_tag), .sat_o(pu_sat),
       .depth_zero_o(pu_dzero),
