@@ -665,3 +665,21 @@ counts the halves it actually hit (instrumentation only, the file's own idiom).
 Three coverage asymmetries closed or recorded today, all one shape: a fixture
 too regular to exercise the rounding it protects. tess_harness.hpp names this
 failure mode explicitly and it keeps recurring.
+
+## 2026-09-07 -- committed the mutation sweep
+
+Three coverage holes of one shape today, all found by the same hand technique.
+Committed as tools/maintenance/mutation_sweep.py so it stops living in whoever
+remembers it.
+
+Safety shaped by the recorded zero-byte-backup incident: never writes its own
+backup, refuses unless the target is clean in git, restores via git checkout in
+a finally, verifies byte-for-byte, refuses if git is unreachable. Also refuses
+an ambiguous --find.
+
+Its own safety path had a defect Python caught and I did not: a `return` inside
+`finally` discards exceptions passing through it. Removed.
+
+Verified three ways: ambiguity refusal, dirty-file refusal, and a real sweep
+where both project suites now detect (22/900 and 42/2264) with the file
+restored and verified.
