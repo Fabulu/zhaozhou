@@ -723,5 +723,8 @@ Constructed instead: need ndc*vp == 255 mod 512; for vp=3 that is ndc = 85,
   before  2,264 checks  DID NOT NOTICE
   after   2,313 checks  detected, 8 failed
 
-geom_project_directed still blind -- recorded as a KNOWN hole needing the same
-construction on its own viewport.
+geom_project_directed still blind -- and WITHDRAWN as a hole an hour later.
+For ANY EVEN viewport dimension, vp<<15 has >=16 trailing zeros, so mad's low
+16 bits are always zero and the rounding is UNREACHABLE. That suite uses
+256x192 and 320x200 -- all even -- so it is correct, not blind. See
+reports/PROJECT-MAD-ROUNDING-20260907.md.
