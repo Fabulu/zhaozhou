@@ -3302,6 +3302,75 @@ the FLAG half of it. And where the initialisation IS needed -- a sticky flag
 like ``e_sat`` -- keep it, keep the array in flops deliberately, and say which
 of the two applies at every such site.
 
+## M1 — A BLOCK'S REPORTED FMAX CARRIES ~4.7 MHz OF FITTER-SEED NOISE
+
+Measured 2026-09-07, and it changes how every single-seed block comparison in
+this docket should be read.
+
+`reports/synthesis/zhao_block_fit.json` holds two rows for the same block at
+**the same source commit** `1c0a7f44`, differing only in fitter seed:
+
+| row | reported Fmax |
+|---|---|
+| `zhao_raster_rcp24_svcseed2` | **68.63** |
+| `zhao_raster_rcp24_svcseed3` | **63.93** |
+
+**4.70 MHz on identical RTL.** The P0-B scheduler change moved the same block's
+reported number by 3.57 MHz, which is INSIDE that band, so that fit established
+neither a regression nor an improvement — and a report claiming either would
+have been a measurement claim the measurement does not carry.
+
+**The rule this sets:** a single-seed reported-Fmax difference under ~5 MHz on a
+leaf block is not evidence. Area is far less seed-sensitive and a 159-ALM change
+on the same fit IS outside the noise. When a small frequency effect actually
+matters, the honest instruments are a composed fit — where the noise dilutes
+across a much larger design — or several seeds of the same source.
+
+This is the "mismatched poses" law from CLAUDE.md in a new costume: the two
+numbers were produced by different fitter seeds, and comparing them measures the
+seed. `reports/P0B-RCP-ISSUE-STAGE-FIT-20260907.md`.
+
+## M2 — COMBINE: A DELETION TRIGGER FIRED AND WAS NEVER EXECUTED
+
+`design/prod_manifest.yml` says of `zhao_texture_combine`, refuted as D19q for
+8 DSP against §3.4's "reject DSP > 2":
+
+> When that fit lands, delete this row, its RTL, and
+> `tests/texture/texture_combine_diff.cpp` together.
+
+**That fit landed.** `zhao_texture_material_combine_v1` is `ok` at 1,475 ALM /
+2 DSP / 36.28 MHz. The refuted block is still registered production and still
+instantiated by `zhao_prod_top`.
+
+Separately `material_combine_v2` (870 ALM, 114.04 MHz) supersedes V1 (1,475 ALM,
+36.28 MHz) and the ISLAND already instantiates V2 while the production top does
+not. V2 is like-for-like, not a reduced V2: its header quotes the recovery
+brief's "preserve all eight recipes", says the equations are V1's "byte for
+byte", and `test_every_recipe_matches_the_oracle` diffs 200 fragments per recipe
+across all eight against the oracle.
+
+Both are deletions and are recommended rather than performed.
+`reports/COMBINE-SUPERSESSION-LEDGER-20260907.md`.
+
+## M3 — THE V3 OWNER IS INSTANTIATED NOWHERE
+
+`zhao_texture_v3own` appears in `fpga/rtl/` only in comments. The composed island
+(13,601 ALM / 23,181 registers / 66.77 MHz) instantiates `zhao_texture_fragrob`,
+and `design/fit_targets.yml`'s island source list carries `fragrob.sv` with no
+`v3own.sv`.
+
+So the T2 migration's measured result — ALM 5,709 → **3,348**, core→core
+91.32 → **98.18**, `gen_q`'s 512 flip-flops gone from every path — is real and
+sits **outside the composed design**. It cannot move the island number until the
+block is instantiated.
+
+**And v3own at 3,348 ALM is TWICE fragrob's 1,676.** A naive swap ADDS ~1,672 ALM
+to a composition already 13,601 against a 7,500 redline. The rearchitecture
+brief's answer is that the saving lives in what the swap makes deletable, which
+is unmeasured — recorded as an open claim rather than an assumption, because
+"the integration will pay for itself" is exactly the comfortable explanation.
+`reports/P0C-V3OWN-NOT-IN-THE-ISLAND-20260907.md`.
+
 ## D19x — OWNER BRIEF: the COMBINE / ASSETFETCH recovery architecture
 
 **Received 2026-09-06, filed at
