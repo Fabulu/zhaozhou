@@ -1138,3 +1138,17 @@ works while a fit holds the tree: `verilator_bin.exe --cc` into a build dir
 "Fabian Trunz"), then `g++ -static -static-libgcc -static-libstdc++` over the
 generated sources plus `tests/harness/zhao_sim.cpp`. Without the static flags
 the exe dies at 127 on missing DLLs, which looks exactly like a crash.
+
+## T2's identity comparison landed (still outside the fit's closure)
+
+`tests/texture/texture_v3_window_identity.cpp`, 20 checks, pure C++ — see
+`reports/V31-T2-WINDOW-IDENTITY-20260907.md`. Interval and literal table agree
+on every one of 16,384 tokens across >1M comparisons and many namespace wraps.
+
+**§6.1 is wrong in one sentence** and the test caught it: pointer equality DOES
+distinguish empty from full at a 14-bit ticket width against 64 capacity. `used`
+survives on §6.4's grounds (registered pre-edge permission), not §6.1's.
+
+**Still not done for T2:** snapshot races, and the actual replacement of
+per-slot generation access — the latter edits `zhao_texture_v3own.sv`, inside
+the running closure.
