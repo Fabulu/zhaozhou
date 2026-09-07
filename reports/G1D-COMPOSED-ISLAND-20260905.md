@@ -354,6 +354,48 @@ better at all.
   nearest path started decoding the same day. An honest measurement of what is
   there, not of what is finished.
 
+### 4.3d THE 2026-09-07 REFIT, MAP STAGE — six of L0's eight arrays converted
+
+*Read while the fitter was still placing, following §4.3b's own precedent that
+Analysis & Synthesis answers attribution questions on its own and in minutes.
+ALM and Fmax are NOT here; they need the completed fit.*
+
+| | 4.3c (Sep 6) | **this refit, map** |
+|---|---:|---:|
+| MAP registers | 27,973 | **23,050** — −4,923, −17.6% |
+| block memory bits | 36,024 | **41,336** — +5,312 |
+| virtual pins | 1,484 | 1,487 |
+| DSP | 17 | 17 |
+| ALM / fmax | 16,192 / 67.57 | *pending the fitter* |
+
+**Roughly 4,900 flip-flops became roughly 5,300 memory bits**, and the entity walk
+puts the **entire** register drop inside `zhao_texture_island_top` itself. Child
+deltas are trivial: `perspuv_svc` +72, `fragrob` +2, `tmu_plan` +1.
+
+**The cause is §10's storage conversion, six of eight done.** Of the eight arrays
+`ISLAND-L0-ARRAY-INVENTORY-20260907.md` enumerated, `fctx_m`, `flod_m`,
+`fpgn_m`, `fcls_m`, `fpsl_m` and `faux_m` now infer as RAM. Only `uvw_m` and
+`class_m` remain in fabric — and `uvw_m` is §10.2's own subject.
+
+**It is not the work of 2026-09-07.** Six island sources changed across ten
+commits since the 4.3c fit; four are from earlier sessions (`b55959f0`,
+`d80f29b4`, `3a06a590`, `a1846867`). The day's own island change,
+`perspuv_svc`'s registered output boundary, is positively excluded from the
+memory rise: its standalone refit measured registers **up** 59 with M10K
+unchanged at 1.
+
+**Against the redlines, nothing has moved yet.** 4.3c's 16,192 ALM stands until
+the fitter reports, and it is still 2.2× the 7,500 redline and 2.5× the 6,600
+nominal. Registers at 23,050 (map) remain far above the 9,000 rule. A register
+drop is not an ALM drop, and this report's own §4.3c records COMBINE V2 buying
+4 MHz while ALM did not move at all — the same trap is available here.
+
+**Read the completed fit's RAM summary before calling this a win.** §12's finding
+the same day was that shallow arrays each consume a whole M10K regardless of
+occupancy — `zhao_texture_v3own` spends 7 of 17 blocks on 1,056 bits — and
+`fpsl_m`/`fcls_m` are narrow. Six conversions could plausibly cost more blocks
+than the 32 already counted.
+
 ### 4.3b THE REGISTER ATTRIBUTION, from a map-only run — and it is a PORT
 ### COUNT question, not a "put it in memory" one
 
