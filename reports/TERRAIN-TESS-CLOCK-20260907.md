@@ -415,3 +415,58 @@ a wrong answer afterwards.
 
 Two wrong guesses and one measurement, in that order, is the wrong order. The
 census names *which signals*; only the per-hop walk names *where the time is*.
+
+---
+
+## The three cuts, chosen by search over the measured boundaries
+
+Every boundary in the walk is a candidate. Enumerating all three-cut sets and
+keeping those where no stage exceeds the 10 ns period:
+
+```
+  worst  stages (ns)                cuts after
+  8.599  3.04 8.56 8.60 7.88        Add65 | Add68 | Mult4
+  8.599  5.30 6.31 8.60 7.88        Add66 | Add68 | Mult4     <-- balanced
+  8.599  8.60 3.01 8.60 7.88        Add67 | Add68 | Mult4
+  9.770  ...                        (the sets that stop before Mult4)
+```
+
+**Every viable set cuts after `Mult4`**, which is the DSP whose output register
+is unused — the same finding as `zhao_project_core`. The balanced choice is
+`Add66 | Add68 | Mult4`, worst stage **8.599 ns → 116.3 MHz**.
+
+In source terms the three registers are:
+
+| cut | after | isolates |
+|---|---|---|
+| 1 | `m_half = rescale1(m_dab)` | the RAM read, the subtract, and the round |
+| 2 | `m_d = m_hc - vh[pend_slot]` | `m_hc`'s saturating add and the subtract |
+| 3 | `m_prod = j_morph * m_d` | the multiply, in its own stage |
+
+leaving `rescale16` and the final `fx_add_sat` in stage four at 7.875 ns.
+
+### The prediction, and what would falsify it
+
+This path is the `lattice mem → TESS` family, currently **33.10 MHz** and the
+block's worst. Three cuts should take it to about **116 MHz**, at which point
+the limiter becomes the next family down — `TESS → TESS` at **37.23 MHz**.
+
+**If that family is the same geomorph chain launched from a register rather
+than from the memory, the same cuts fix it and the block lands near 100.** If it
+is a different chain, the block lands near 37 and needs its own walk. That is
+the falsifier, and it is worth stating because the temptation after three cuts
+will be to read any improvement as success.
+
+### Cost, stated plainly
+
+**Three cycles of latency per vertex**, on a block that emits geometry.
+`latency: variable` in the contract covers it — the same sentence that admitted
+the NORMALS and PAGESTREAM pipeline changes — but the throughput bounds must be
+checked *before* the edit, as they were for `zhao_project_core` (422 → 423
+against a bound of 448). TESS's consumers are `terrain_tess_normals` (47,221
+checks), `terrain_tess_directed` (6,751), `terrain_tess_random` (2,277) and the
+composed chain.
+
+And the mutation sweep exists now to prove those suites still see a wrong
+answer afterwards — which matters more here than usual, because a pipeline cut
+in a geometry emitter can produce output that is *plausible* and misaligned.

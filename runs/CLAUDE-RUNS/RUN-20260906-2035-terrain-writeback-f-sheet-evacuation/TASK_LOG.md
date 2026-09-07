@@ -817,3 +817,18 @@ at the shell.
 
 Sunk with the reasoning rather than deleted; the lane is green. The full shell
 ctest is still running alongside the fit.
+
+## 2026-09-07 -- TESS's three cuts sized by search; shell suite green so far
+
+Enumerated all three-cut sets over the measured boundaries. Best worst-stage
+8.599 ns -> 116.3 MHz, cuts after Add66 | Add68 | Mult4 (register m_half, m_d,
+m_prod). EVERY viable set cuts after the multiply -- same DSP finding as
+project_core.
+
+Falsifier stated: if TESS->TESS (37.23) is the same chain from a register, the
+same cuts fix it and the block nears 100; if not, it lands near 37.
+
+Shell suite (checking project_core's new stage): 9 of 16 done, all Passed,
+including shell_project_path_directed (167 s) and shell_clip_path_directed --
+the two that most directly exercise the projector. lint_shell_top green after
+the hb_wr_ready repair.
