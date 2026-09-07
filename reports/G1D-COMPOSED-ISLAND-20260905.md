@@ -375,6 +375,46 @@ now, for the top four paths alike:
     -2.690  zhao_raster_rcp24_svc:u_rcp|c_pend[7]
               -> zhao_raster_perspuv_svc:u_persp|e_num_v[13][17]
 
+### CORRECTION, same session: the +12 MHz is NOT cleanly attributable to P0-B
+
+Written after checking where the OLD island's worst paths actually were, which I
+should have done before writing the paragraph below.
+
+**The gating family changed identity.** In 4.3e the island's six worst paths were
+PALETTE, launched from the input port `pal_ld_gen_i[4]`:
+
+    -4.977  pal_ld_gen_i[4] -> zhao_texture_palette_res:u_palette|loading_r
+    -4.973  pal_ld_gen_i[4] -> ...|loading_r~DUPLICATE
+    -4.898  pal_ld_gen_i[4] -> ...|res_r[1]
+
+The first rcp24 path ranked **7th**, at −3.243. Sixteen of the worst forty were
+palette. In the new report **palette appears zero times in 8,680 listed paths**,
+and the worst is rcp24's −2.690.
+
+**P0-B's S1 register is inside `zhao_raster_rcp24_svc` and cannot have moved a
+palette port path.** So reported Fmax rose from 66.77 to 78.80 because the
+worst family stopped being palette — and that is not something this change did.
+
+**What IS attributable to P0-B**, and still stands:
+
+* the structural prediction — `c_m.raddr_a` gone from the worst path, replaced by
+  `c_pend -> e_num_*`. That is a source-level consequence of the register and it
+  held exactly.
+* ALM +14 composed against +159 standalone.
+
+**What is NOT attributable, and what I claimed anyway below:** the +12.03 MHz.
+The honest statement is that the island got faster AND the change did what it was
+designed to do, with the causal link between the two unproven. The palette family
+is port-launched, so placement of virtual pins is a candidate explanation, and
+the running reseed will discriminate: if seed 3 puts palette back at −4.977, the
+palette movement is variance and the +12 MHz was never P0-B's.
+
+**This is the "first explanation that absolves" law, and I fell for it.** "My
+change was worth +12 MHz" explained almost all of the evidence, arrived first,
+and I wrote it up as pre-registered fact because the number cleared a bar I had
+set in advance. Clearing a pre-registered bar proves the MOVEMENT is real. It
+proves nothing about the CAUSE.
+
 **+12 MHz is a real improvement, and it was pre-registered as such.** §4.3f's
 before-picture set the bar in advance: *"any Fmax movement under ~2 MHz should be
 reported as movement, not as improvement."* 12.03 MHz is six times that bar and

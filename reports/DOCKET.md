@@ -3343,6 +3343,14 @@ Measured 2026-09-07 on one change (P0-B's registered issue record in
 Same RTL. Same digest for the block. The two fits disagree about the sign of the
 timing result and about the size of the area result by a factor of eleven.
 
+**CORRECTED same session — the timing half of this entry does not hold.** The
+island's gating path family changed identity between the two fits: it was PALETTE
+(port-launched, −4.977) before and rcp24 (−2.690) after, and P0-B cannot have
+moved a palette port path. The +12.03 MHz is real movement with an unproven
+cause, so it is NOT evidence that a leaf fit gets the timing SIGN wrong. **The
+area half stands unaltered: +159 leaf against +14 composed, same RTL, an
+eleven-fold difference that no seed or gating-path argument touches.**
+
 **Why, and it is not "leaf fits read low":** a leaf fit measures a block wired to
 PADS. Its reported Fmax is gated by port paths the design will never have, and
 its placement has no neighbours to absorb a register. Both numbers answer a
