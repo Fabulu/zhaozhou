@@ -1865,3 +1865,30 @@ at a fraction of the cost of 64 comparisons per edge.
 * **§22.2** — invariants now exist and are demonstrated to fire.
 * **§14.2** — NOT done: its nine drain conditions span blocks outside this one,
   several inside the running island fit's closure. Belongs with §10 integration.
+
+## §22's verification matrix audited section by section
+
+The method that found §16.3's gap, applied to §22. Each subsection's named cases
+checked against the actual benches rather than assumed covered.
+
+* **§22.1** identity model — zero/64/wrap were covered; **one, 63, every head
+  position, and the LATER-generation handle were not.** Added: membership as
+  exactly the interval at used = 0/1/63/64 across 66 head positions on a coprime
+  stride (so intervals crossing numeric zero are structural, not lucky), and
+  same-slot handles one generation back **and forward** from every live owner.
+  Fire-tested with `<=` for `<`: 4 of 33 fail.
+* **§22.2** phase-control invariants — **none of the first four existed.** Added
+  all six, including "combine_issued implies combine_reserved" (T4's separation)
+  and "final_claimed implies actual combine_issued" (M6, previously resting on a
+  single directed case). Fire-tested: committing an unclaimed source trips
+  `a_p22_cmt_sub_clm`.
+* **§22.3** completion timing — duplicates and AUX-same-edge/AUX-last were
+  covered; **reverse sample order and AUX-before-all-samples were not.** Added
+  as one case, checking rows land by sample INDEX rather than arrival order.
+* **§22.4** issue races — return-before-issue, malformed index 3, independent
+  TMU/AUX and high-bit generations were covered; **the repeated issue
+  notification was not.** Added, checking both halves: no second outstanding
+  request, and the already-claimed result not erased.
+
+**489 checks pass.** §22.5–22.9 concern T5's candidate registers and later
+integration stages that do not exist yet.
