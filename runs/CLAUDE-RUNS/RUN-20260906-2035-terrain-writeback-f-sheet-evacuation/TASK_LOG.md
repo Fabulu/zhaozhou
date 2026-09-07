@@ -1050,3 +1050,44 @@ ends (so continuous assigns read as registered); then the fix's regex ended in
 a \b that a heredoc turned into a LITERAL BACKSPACE, so it matched nothing and
 printed the reassuring answer. CLAUDE.md records this verbatim. Found with
 cat -A. Write scripts to a file, not through a heredoc, when they have escapes.
+
+---
+
+## POSITION BEFORE THE v3own FIT LANDS (written first, deliberately)
+
+CLAUDE.md: "when the fit comes back: write down where you were BEFORE reading
+it. Fit results redirect the work -- that is what they are for -- and the
+half-finished thing you were holding in your head is exactly what gets lost."
+
+**In progress:** §12 of the master recovery handoff, the allocation that must
+balance. Two reports landed and are pushed (`c80e7a48`, `2c95a19e`).
+
+**What the fit is for, and its before-picture — do not re-derive these:**
+
+* TIMING (T1's last deliverable). Before: core→core 1,510 paths, −1.225,
+  **89.09 MHz**; core→port 239 paths, −3.194, **75.79 MHz**; port→core 89.44;
+  port→port 90.06. All ten worst paths ended at `adm_accept_o` / `adm_ready_o` /
+  `adm_owner_o` via `wp_q → occ_o → rq_occ_c == 0 → quiet_c`.
+  **Prediction on record: those ten are gone**, because `adm_ready_o` is now
+  `credit_ok_q && fence_open_q`. If they are still there, the registered credit
+  did not reach the output and the change is cosmetic.
+* MEMORY. Before: **17 M10K / 20,640 bits** at source `0f5ce601`. The per-
+  instance walk accounts for 19,584 across nine `v3bank` bodies and leaves a
+  **1,056-bit / 8-block REMAINDER**, deliberately unattributed. The fit's
+  per-RAM summary is the instrument that closes it, and this is the FIRST fit
+  of this block to harvest `blockfit.fit.rpt`, so look for that table.
+  Neither change was expected to move block memory — both are logic.
+* ALM. Before: **5,678 against `max_alms: 1800`**. §12.4 says retain-and-fail,
+  reconcile the island, do not relax the gate.
+
+**Next step regardless of the result:** the eight named refits in
+`reports/V31-ISLAND-BUDGET-BLOCKED-20260907.md` — every one a texture-island
+block, so the list is inside the owner's texture-first direction, not a detour.
+`zhao_texture_material_combine_v2` is first: it is the island's live combiner,
+has NEVER been fitted, and its target was added today. Do NOT launch it while
+v3own is running (handoff action 4 forbids a competing fit).
+
+**Still open in §14, unchanged by this fit:** T4 (turn M6 from WILL_FAIL into a
+passing test — `cbi` on `cmb_valid && cmb_ready`), then T2/T3/T5/T6. T4 edits
+`zhao_texture_v3own.sv`, which is IN the running closure, so it cannot start
+until the fit exits.
