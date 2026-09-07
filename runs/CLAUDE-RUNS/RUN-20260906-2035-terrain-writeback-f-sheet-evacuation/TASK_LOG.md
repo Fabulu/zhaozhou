@@ -1381,3 +1381,34 @@ may cost area to buy depth.
 
 **Next regardless of result:** the remaining seven §12.4 blockers, all stale rows
 needing refits, all texture-island blocks.
+
+## §16's DONE-queue seam repaired, while the refit holds the lane
+
+`zhao_raster_ticketq_rh.sv` (`9b6ef66c`). §16.2's claim checked in the source
+(line 18 promises a registered head, line 64 is `dout_o = mem_q[head_q]`) **and
+in the fit** — every worst path of `rcp24_v3@v3-full` runs
+`u_doneq|mem_q[..] -> r_tok_o`, 90.54 reported against 129.18 core→core.
+
+**I deferred this once and the deferral was wrong on its own terms.** The reason
+I wrote down was "the fit lane is busy", but only the *timing* confirmation needs
+Quartus; the functional work does not. Corrected and finished.
+
+A **wrapper**, so §16.4's "do not replace every ticket queue blindly" is
+satisfied structurally — the other three instances are byte-identical, not
+argued to be unaffected. Two heads, because one would cost the throughput gate;
+the pattern is v3rq's, whose one-pop-per-clock was measured this morning.
+
+**Before/after, both real runs:**
+
+| lane | before | after |
+|---|---:|---:|
+| saturated | 16,582 (4.04/recip) | 16,608 (**4.05**) |
+| 1-in-7 | 29,550 (7.20) | 29,655 (7.23) |
+
+52 checks pass both sides; the gate is 4.0–4.6, so §16.1's four-clock rate is
+retained at a cost of **0.16%**.
+
+**Scope stated plainly:** `zhao_raster_rcp24_v3` is `not-yet-adopted` and nothing
+instantiates it — `rcp24_svc` is what the island composes. So this repairs the
+**successor**, as §16 intends, and does not move the island's current numbers.
+Claiming otherwise would be the comfortable reading.
