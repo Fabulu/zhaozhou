@@ -397,3 +397,49 @@ Every move today is verified functionally and **none is measured**. The next
 path these moves target. Whether ALM or registers fall is **not** predicted —
 the table is still there, and four predictions about magnitude were falsified
 today against three confirmed about structure.
+
+
+---
+
+# The open question, now bounded by evidence instead of left open
+
+The four in-loop guards were described above as needing a decision. That was
+right, but it was vaguer than it needed to be, so the question was turned into an
+assertion — the method that has worked all day.
+
+`a_c4t_never_dead_match`, `a_c4a_...`, `a_c4f_...` assert the only case in which
+substituting `win_live` would change anything: **a C4 event arriving for an owner
+that is dead but whose slot has not been reallocated.**
+
+**Across the whole 481-check adversarial bench — including every fault-injection
+case it has: stale returns, unsolicited returns, duplicates, generation wrap and
+drain — none of the three fires.**
+
+The pipeline argues the same structurally. `fdn_q` is set by the **final's** C4;
+the final follows COMBINE; COMBINE follows every sample commit. So all returns
+must clear C4 before the owner is emittable, and release happens at emission. The
+assertions test that argument rather than trusting it, which is the difference
+between a claim and a check.
+
+## What that settles, and what it does not
+
+* **Settles:** substituting `win_live` would be behaviour-preserving in every
+  state the bench reaches, including the abnormal ones it deliberately creates.
+* **Does not settle:** whether the case is reachable in states neither the bench
+  nor the pipeline argument covers — and that region is *precisely what a
+  fault-injection guard is for*. §6.3's warning applies directly: *"Do not
+  quietly assume away holes."*
+
+So the substitution is still **not** made unilaterally. What changed is that the
+decision now comes with a measurement attached rather than a shrug, and it is
+strictly a question about behaviour under fault injection — not about ordinary
+operation, where the two forms are demonstrably identical.
+
+**No logic is left on the table while it waits.** The exactly-equivalent hoist is
+already in: 256 comparators became 4 selects. What remains gated is only
+`gen_q`'s 512 flip-flops, which cannot be recovered until the four guards stop
+reading the table.
+
+**And the property is now enforced either way.** If a future change makes that
+case reachable, these assertions fire on the cycle it happens rather than in a
+silicon debug months later.
