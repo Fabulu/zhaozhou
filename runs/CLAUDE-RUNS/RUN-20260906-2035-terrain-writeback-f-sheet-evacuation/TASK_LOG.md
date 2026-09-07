@@ -2497,3 +2497,31 @@ byte-identical, so no golden moved.
 
 RTL still to come. The oracle defines correct, which is the order the handover's
 own first question demanded.
+
+## The fog RTL — `zhao_raster_fog`, differential against the oracle
+
+D-5's step 5 in hardware, sitting after `zhao_raster_toon` and TEXTURE.COMBINE
+and before `zhao_raster_blend`. Registered output boundary with a skid, per
+QUARTUS_GOTCHAS 14 and §16.2's own lesson: the mix is cheap, the boundary is
+where the timing goes.
+
+**Verified against the reference, not against the spec prose.** The test uses
+the SAME expression `rast.cpp` uses — copied deliberately, so that changing the
+law forces both to be edited in one commit — and demands bit equality:
+**13,416 fragments compared, 0 mismatches, 9 checks pass.** The sweep includes
+both saturation rails and two out-of-range factors, so the clamp is proved to be
+a clamp.
+
+**Fire-tested with the exact defect the polarity discussion is about**: weight by
+`f8` instead of its complement, i.e. inverted fog. Result **13,386 of 13,416
+mismatches**, and the clear-rail assertion — written precisely for this — caught
+it by name: *"at f = 0x10000 (CLEAR) the mix is the exact identity"*. Restored,
+rebuilt, 0 mismatches again, exe newer than source both times.
+
+Two RTL assertions ride along: a clear fragment is bit-identical to its input,
+and a disabled (exempt) fragment cannot be fogged at all — so §8's frozen exempt
+list is honoured by construction rather than by a caller remembering.
+
+**Not done:** instantiating it in a composed top and wiring the ATTRSTEP factor
+lane. The block, its law and its differential exist; nothing renders through it
+yet.
