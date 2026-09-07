@@ -2749,13 +2749,59 @@ constexpr int32_t kU02GreenHeightMm = 550;   // low, raking the belly
 constexpr uint32_t kU02GreenTurns = 4;
 constexpr int32_t kU02GreenInnerMm = 520, kU02GreenOuterMm = 1600;
 
+// ---- DIRECTION 9 §4: ONE MANA LIGHTING FOR THE WHOLE BANK ---------------
+// "all videos have different mana lighting configurations. They all need to be
+//  the same, it's all part of the model."
+//
+// THE CENSUS FOUND THE CAUSE, and it is not a table -- it is a division.
+// `path_angle` below divided by `frames`, THE CLIP'S OWN LENGTH, so the four
+// coloured sources completed a fixed 1/2/3/4 turns over whatever duration the
+// clip happened to have. `hit` is 140 frames and `hover` is 600, so the same
+// light swept the same arc 4.3x faster on one video than the other, and at any
+// given moment the creature was lit from a different direction in every clip.
+// That IS "different lighting configurations", and nobody wrote it down as a
+// choice: it fell out of clip length.
+//
+// The rate is now a property of the MODEL -- the owner's own words, "it's all
+// part of the model". kU02MlTurnFrames is 420, which is `manafold-channel`'s
+// own length, so the HOUSE MANA LOOK (D5 0-BIS, and protected) is the rate the
+// rest of the bank moves to rather than a new rate imposed on all sixteen.
+// channel's lighting is byte-identical across this change; every other clip
+// moves onto it, which is the point.
+//
+// ⚠ THE ONE HONEST LIMIT, stated rather than hidden. A clip loops, so its
+// lights must return to where they started or the loop POPS -- which means the
+// turn count has to stay a whole number. No single rate divides evenly into
+// every clip length in this bank (their gcd is 4 frames), so exact equality and
+// seamless looping cannot both hold. Each clip therefore takes the WHOLE
+// NUMBER OF TURNS NEAREST the model rate. Most lights land within a few percent
+// of it; the slowest source on the shortest clips (`hit` at 140 frames) is the
+// worst case and still comes in far closer than the 4.3x it was. A pop at every
+// loop would have been a worse fault than the one being fixed, and it would
+// have been introduced silently.
+constexpr uint32_t kU02MlTurnFrames = 420;
+
+/** Whole turns for one source on one clip: the model rate, rounded so the loop
+ *  still closes. Floored at 1 -- a source that completed no turn at all would
+ *  read as a static light rather than a sweeping one. */
+inline uint32_t u02_ml_turns(uint32_t base_turns, uint32_t frames) {
+  const uint32_t t =
+      (frames * base_turns + kU02MlTurnFrames / 2) / kU02MlTurnFrames;
+  return t < 1u ? 1u : t;
+}
+
 void sample_u02_moving_sources(uint32_t frame, uint32_t frames,
                                const zc::CreatureInstance& inst,
                                zc::CreaturePointLight* out) {
   const int32_t centre_x = inst.x - fxm(u02::kStageCentreMm);
+  // D9 §4: `turns` is now the source's MODEL rate, converted to this clip's
+  // own whole-turn count by u02_ml_turns. The division by `frames` stays --
+  // that is what closes the loop -- but the numerator no longer holds the
+  // clip's length constant while the denominator varies with it.
   const auto path_angle = [frame, frames](uint32_t turns, uint16_t phase) {
+    const uint32_t t = u02_ml_turns(turns, frames);
     return zref::angle16{static_cast<uint16_t>(
-        (static_cast<uint64_t>(frame) * turns * 65536u) / frames + phase)};
+        (static_cast<uint64_t>(frame) * t * 65536u) / frames + phase)};
   };
   const auto scaled = [](int32_t mm, int32_t trig_raw) {
     return static_cast<int32_t>(
@@ -5454,10 +5500,24 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // out with the rest of the effects: an unobstructed look at geometry is what
   // that subject is for.
   s.u02_mist = slot != 7;
-  // Pass 3 (Direction 3 §1): the four-light-everywhere look was a
-  // REGRESSION — "It should look just like Zixx' lighting with the
-  // directional light from the sun." Every clip ships under its own named
-  // sun over kU02SunRig; only manafold-inspect raises the moving rig.
+  // ⚠ FALSE-COMMENT CORRECTION (pass 12, the D3 census). This block read:
+  // "Every clip ships under its own named sun over kU02SunRig; only
+  // manafold-inspect raises the moving rig." NONE OF THAT HAS BEEN TRUE SINCE
+  // PASS 6, which set creature_moving_light unconditionally forty lines above
+  // and said so in its own comment. cr_ctx.sun_light is
+  // `sub.sun && g_zixx_suns_enabled && !sub.creature_moving_light`, so it is
+  // false for every manafold clip and sample_zixx_clip_sun is never reached:
+  // the fifteen named kU02Sun* moods are DORMANT and light nothing.
+  //
+  // This is 10-GATE-CHECKLIST item 8 exactly -- a comment asserting structure,
+  // ungated, outliving the structure -- and it cost real time this pass,
+  // because "per-clip sun moods are house style and STAY" was carried into the
+  // plan's protected list as though those moods were on screen. They are not.
+  // Whether they SHOULD come back is an owner question and is raised as one in
+  // PASS-12-FINDINGS-B.md, not decided here.
+  //
+  // The pointer is still assigned, because it is the one-flag revert path and
+  // deleting it buys nothing. It is simply not a light today.
   s.sun = sun;
   // the skybox bloom serves the showcase clips where the sky is the backdrop
   // (S1 made a creature + planet bloom lawful in one clip)
