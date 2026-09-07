@@ -1152,3 +1152,32 @@ survives on §6.4's grounds (registered pre-edge permission), not §6.1's.
 **Still not done for T2:** snapshot races, and the actual replacement of
 per-slot generation access — the latter edits `zhao_texture_v3own.sv`, inside
 the running closure.
+
+## T4 LANDED — and the reason it could have landed hours earlier
+
+`383e45df`. `cbi_q` now means §11.1's **event 3** (actual acceptance on
+`cmb_valid && cmb_ready`); a new `crs_q` inherits **event 2** (the credited
+reservation). Previously a final could be accepted, and its payload written, for
+an owner whose COMBINE input had never been taken.
+
+Default lane **469 checks pass** — "preserving all other finals and stalls" holds.
+`ZHAO_M6` lane **477 pass**: M6 was a documented expected failure and now passes.
+
+**The blocking belief was stale, and that is the expensive part.** I deferred T4
+for hours on `QUARTUS_GOTCHAS` §11's live-tree rule. `run_block_fit.ps1` has
+SNAPSHOTTED its sources since 2026-09-03 — it prints *"snapshot: N source(s)
+copied into the workspace; the live tree cannot reach this fit"* on every run,
+and its own comment says *"an ordinary edit to the live tree now cannot affect
+this run at all."* §11 still opened with "Nothing is copied into the workspace".
+Corrected in `0487f1c3` with a superseding box.
+
+**What is NOT superseded:** §13 — `design/fit_targets.yml` IS still read live,
+once per block at preflight. I edited it twice today with a truncating write
+during a fit; safe only because this is a single-block run long past preflight.
+Config and sources now have different rules.
+
+### Still to do on T4
+Remove the `ZHAO_M6` env guard around case 22 and delete the `WILL_FAIL` ctest
+entry `texture_v3own_m6_final_before_accept` — a WILL_FAIL test that passes is
+itself a ctest failure, which is the designed signal. Waiting on the pre-change
+fire-test build that is using the current test file.
