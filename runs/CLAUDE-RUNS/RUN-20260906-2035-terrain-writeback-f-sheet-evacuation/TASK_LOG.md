@@ -1678,3 +1678,31 @@ logic without touching semantics.
 Prediction: `gen_q -> iss_q` gone from the worst families. NOT predicted: ALM or
 register movement — the table is still there, and today's score on predictions is
 three confirmed (all structural) against four falsified (all about magnitude).
+
+## The last safe T2 logic win: the in-loop comparisons hoisted
+
+Exactly equivalent — inside the loop the guard already establishes
+`c4t_slot_q == i`, so `gen_q[i]` IS `gen_q[c4t_slot_q]`. **256 comparators
+become 4 selects** across the four lanes.
+
+Deliberately NOT `win_live`, for the semantic reason already recorded. This buys
+the logic, changes no behaviour, and leaves the decision clearly stated.
+
+481 checks pass, no assertion fired.
+
+**T2 now stands at: every site that can be moved without a semantics decision
+has been moved.** `gen_q` survives as four hoisted selects plus the assertion
+cross-checks; its 512 flip-flops are recoverable only once the drain-guard
+question is answered.
+
+## Honest position with the island fit running
+
+* **Running:** `zhao_texture_island_top` — the only thing that says whether
+  perspuv's block-level win (96.62 → 105.19, clearing the product clock)
+  composes. Prediction and falsifier recorded above.
+* **Needs a decision, not work:** the four in-loop drain guards.
+* **Needs the toolchain:** the six remaining §12.4 refits, and a v3own refit to
+  measure today's eight T2 moves.
+* **Deliberately deferred:** the palette load seam — the island's *reported*
+  limiter. The running fit will say whether those paths still dominate, and
+  guessing before that is exactly what today falsified four times.
