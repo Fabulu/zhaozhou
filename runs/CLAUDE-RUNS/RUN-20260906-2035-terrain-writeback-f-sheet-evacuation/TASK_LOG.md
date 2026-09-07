@@ -231,3 +231,32 @@ the first two versions of this note would both have been wrong.
 
 NEXT: residency_v2 fit is running -- its Fmax row is stale too, not just its
 memory line. Then geom_project, then the compose seam.
+
+## 2026-09-07 -- the pair wrappers, and two of my own errors
+
+Found `fpga/rtl/synth/zhao_pair_*.sv`: four registered characterisation
+wrappers built 2026-08-23 for exactly the reason today's path split rediscovered
+("raw leaf blocks with hundreds of virtual pins are poor physical models").
+
+MY ERROR 1: `zhao_terrain_compose_seam.sv`, written this morning, exposed the
+pair's ports directly and would have measured the same virtual-pin
+contamination it existed to remove. Deleted; replaced by
+`zhao_pair_pagestream_patch.sv` in the established shape.
+
+MY ERROR 2: I then wrote fit targets for the four existing wrappers with source
+lists guessed from their NAMES. Three of four were wrong. Caught by the
+numbers, not by re-reading: two pairs report DSP blocks that neither named leaf
+contains, and no wrapper holds a multiply. Lists now resolved from actual
+instantiations and verified by lint. Nothing had been fitted against a wrong
+list.
+
+AND THE FINDING THAT MATTERS: none of the four had a target, so 31.10 MHz on
+TESS+NORMALS -- the terrain geometry path, worst number in the tree -- has been
+sitting unjudged for a fortnight. All four now gated on the product clock; all
+four fail (31.10, 37.25, 55.52, 88.79).
+
+The pairs are all SMALLER than their leaf sums, and the comfortable reading is
+that the wrappers under-build so the numbers do not count. The DSP column
+refuses it: 30-62% fewer DSPs, and a virtual pin never consumed a DSP. That is
+logic being folded away, so these are the numbers of a REDUCED circuit and the
+full one will not be faster.

@@ -147,6 +147,48 @@ this: `zhao_pair_tess_normals` **31.10**, `zhao_field_seq` 58.99,
 tree**, and it is unexamined. It is also a terrain-path block, which puts it
 directly in front of the standing goal.
 
+## The four pair wrappers, which nothing was gating
+
+`fpga/rtl/synth/` has held four "registered characterisation wrappers" since
+2026-08-23 — registered stimulus, DUT, registered hash sink, built because the
+budget audit said *"raw leaf blocks with hundreds of virtual pins are poor
+physical models"*. That is the conclusion this report reached independently
+today, three weeks late.
+
+**None of the four had a fit target, so no number they produced was ever
+judged.** They now carry one rule, the product clock, because a meaningful
+clock number is the single thing they exist to produce. All four fail:
+
+| wrapper | Fmax | pair ALM / DSP | leaves' sum |
+|---|---:|---:|---:|
+| `zhao_pair_tess_normals` | **31.10** | 1,523 / 9 | 2,100 / 24 |
+| `zhao_pair_tmu_cache` | **37.25** | 2,383 / 6 | 3,068 / 9 |
+| `zhao_pair_fragment_tilestore` | **55.52** | 1,188 / 7 | 1,344 / 10 |
+| `zhao_pair_setup_binner` | **88.79** | 1,405 / 10 | 2,065 / 16 |
+
+### And the comfortable reading of that table is the wrong one
+
+Every pair is smaller than the sum of its leaves, and the easy conclusion is
+that these wrappers under-build the design — constant `cs_substance_i`, job
+fields sliced from one 32-bit stimulus word, correlated inputs — so their clock
+numbers should not be taken seriously.
+
+**The DSP column refuses that reading.** G1-D measured boundary removal worth
+2.4%; these gaps are 12–38% of ALM and **30–62% of DSP**, and a virtual pin has
+never consumed a DSP block. A multiplier count falling from 24 to 9 is logic
+being *deleted*, not a boundary being removed. The wrappers do fold real work
+away.
+
+Which means the error runs **the wrong way for comfort**: these are the Fmax
+numbers of a *reduced* circuit. `zhao_pair_tess_normals` is a partly
+constant-folded TESS+NORMALS that still cannot reach a third of the product
+clock, and the full one will not be faster. The leaf sums are understated too —
+`zhao_raster_blend_prod`, `zhao_raster_blend_fin` and `zhao_raster_fill` have no
+rows at all.
+
+**31.10 MHz on the terrain geometry path is the most consequential number in
+this report**, and it is the one that had no gate.
+
 ## What this changes
 
 **`min_fmax_mhz` as I wrote it this morning is measuring the wrong thing on a
