@@ -1277,3 +1277,29 @@ proposal counts planes and does not anticipate this.
   never fitted, first of the eight §12.4 blockers.
 * Then a v3own refit carrying T4 + the fence rewrite (this fit predates both).
 * Then `zhao_probe_v3rq_queue` (§5.7).
+
+## T2 STEP 1 — the window asserted against this RTL, not just against a model
+
+`reports/V31-T2-REPLACEMENT-PLAN-20260907.md` has all 12 `gen_q` sites in three
+groups (3 disappear, 9 are one shared validity test, 1 is a small lookup).
+
+**The reframing that matters:** three of §6.1's four fields ALREADY EXIST in the
+low bits — `tail_q` = alloc, `emit_q` = retire (increments only, so §6.3's
+oldest-first invariant holds by construction and is already asserted at line
+1536), `live_cnt_q` = used with §6.1's exact update. So T2 is an **extension of
+live machinery**, not a parallel representation to swap in: extend two 6-bit
+pointers to 14 bits and delete the 512-flop table that stores what those 16 bits
+imply. That is §6.8's 576 bits, reached from the other side.
+
+Step 1 adds the shadow window plus three assertions under `` `ifndef SYNTHESIS ``
+— deliberately, so the scaffolding cannot contaminate the before/after fit that
+decides T2. The sharp one checks the identity where it bites: at admission the
+table says `gen_q[tail_q] + 1` and the window says `alloc_gen`; if those ever
+disagree the replacement is unsound, and it fires that cycle.
+
+**I wrote one of them wrong and caught it before it became evidence.**
+`a_win_used_matches_span` first TRUNCATED the 14-bit span to 7 bits to compare
+against the count — so a span of 128 against a count of 0 would have compared
+EQUAL and the assertion would have passed on exactly the corruption it exists to
+find. Widened the count instead of narrowing the span. Truncation always fails
+in the reassuring direction, which is the house law.

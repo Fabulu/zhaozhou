@@ -1487,6 +1487,74 @@ module zhao_texture_v3own #(
     end
   end
 
+  // ==========================================================================
+  // T2 STEP 1 -- THE WINDOW, RUNNING BESIDE THE TABLE (verification only)
+  // ==========================================================================
+  // T1's instruction is to "preserve a tested identity-only comparison rather
+  // than one giant patch", and T2 asks for "independent literal-owner/
+  // generation checks, THEN replace per-slot generation access". The model test
+  // (tests/texture/texture_v3_window_identity.cpp) proves the identity in the
+  // abstract; this asserts it against THIS RTL, every cycle, before any site
+  // moves.
+  //
+  // THREE OF THE WINDOW'S FOUR FIELDS ARE ALREADY HERE, in their low bits:
+  //   6.1 alloc_ticket  <- tail_q      (advances on adm_fire_c)
+  //   6.1 retire_ticket <- emit_q      (increments only -- 6.3 holds by
+  //                                     construction, and is asserted below)
+  //   6.1 used          <- live_cnt_q  (live_cnt_q + adm_fire_c - out_fire_c,
+  //                                     which is 6.1's update exactly)
+  // Only the 8 generation bits on each pointer are missing, and `gen_q[64][8]`
+  // is storing per-slot what those 16 bits imply. That is the 576 state bits
+  // 6.8 names, reached from the other direction.
+  //
+  // GUARDED BY `ifndef SYNTHESIS` DELIBERATELY. Step 1 is a claim about
+  // equivalence, not a design change, and it must not move the next fit's
+  // numbers -- otherwise the before/after that decides T2 is contaminated by
+  // the scaffolding built to check it.
+`ifndef SYNTHESIS
+  // 6.2: "initialize alloc_ticket and retire_ticket to 64, with used = 0", so
+  // the first public token is slot zero, generation one. Here that is a
+  // generation of 1 sitting above a slot pointer of 0.
+  logic [GENW-1:0] sh_alloc_gen_q, sh_retire_gen_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      sh_alloc_gen_q  <= GENW'(1);
+      sh_retire_gen_q <= GENW'(1);
+    end else begin
+      if (adm_fire_c && (tail_q == {SLOTW{1'b1}})) sh_alloc_gen_q  <= sh_alloc_gen_q  + GENW'(1);
+      if (out_fire_c && (emit_q == {SLOTW{1'b1}})) sh_retire_gen_q <= sh_retire_gen_q + GENW'(1);
+    end
+  end
+
+  wire [OWNERW-1:0] sh_alloc_tkt_c  = {sh_alloc_gen_q,  tail_q};
+  wire [OWNERW-1:0] sh_retire_tkt_c = {sh_retire_gen_q, emit_q};
+
+  always_ff @(posedge clk) begin
+    if (armed_q) begin
+      // THE IDENTITY, checked where it actually bites. At admission the table
+      // says the new generation is `gen_q[tail_q] + 1`; the window says it is
+      // the allocation ticket's own generation. If those ever disagree the
+      // whole replacement is unsound, and this fires on the cycle it happens
+      // rather than in a fit weeks later.
+      a_win_gen_matches_table : assert (!adm_fire_c || (adm_gen_c == sh_alloc_gen_q));
+
+      // 6.1's count, against the two pointers. This is the check that would
+      // fail first if retirement ever stopped being oldest-first.
+      // WIDEN THE COUNT, DO NOT NARROW THE SPAN. The first version of this
+      // truncated the 14-bit span to CNTW to compare it, which would have let a
+      // span of 128 against a count of 0 compare EQUAL -- the assertion would
+      // have passed on exactly the corruption it exists to find. Truncation
+      // always fails in the reassuring direction.
+      a_win_used_matches_span : assert (OWNERW'(live_cnt_q) ==
+          ((sh_alloc_tkt_c - sh_retire_tkt_c) & OWNERW'({OWNERW{1'b1}})));
+
+      // 6.1 again: the live set is one contiguous interval, so the count can
+      // never exceed the ring.
+      a_win_used_bounded : assert (live_cnt_q <= CNTW'(OWNERS));
+    end
+  end
+`endif
+
   always_ff @(posedge clk) begin
     if (armed_q) begin
       a_owner_bound      : assert (live_cnt_q <= CNTW'(OWNERS));
