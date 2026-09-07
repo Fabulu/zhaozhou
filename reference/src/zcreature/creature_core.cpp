@@ -189,9 +189,13 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc,
                                  const std::vector<uint8_t>& authored_channels) {
   const int n = c.frame_count;
   const bool has_deform = c.deform.size() == static_cast<size_t>(n);
+  const size_t ex_lanes = static_cast<size_t>(kDeformLaneCount) - 1u;
+  const bool has_deform_ex =
+      ex_lanes != 0 && c.deform_ex.size() == static_cast<size_t>(n) * ex_lanes;
   // A midpoint deformation channel is meaningless without one valid source
   // sample per key. Clear malformed/stale data even on a non-interpolated clip.
   if (!has_deform) c.mid_deform.clear();
+  if (!has_deform_ex) c.mid_deform_ex.clear();
   if (!c.interpolate || n < 2) return;
   const size_t quat_count = static_cast<size_t>(n) * bc;
   const size_t root_count = static_cast<size_t>(n) * 3;
@@ -207,6 +211,10 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc,
     c.mid_deform.assign(static_cast<size_t>(n), DeformSample{});
   else
     c.mid_deform.clear();
+  if (has_deform_ex)
+    c.mid_deform_ex.assign(static_cast<size_t>(n) * ex_lanes, DeformSample{});
+  else
+    c.mid_deform_ex.clear();
   // event-adjacent segments keep the plain nlerp midpoint (monotone at
   // impact/burial/extraction: no smoothing across a gameplay moment)
   std::vector<bool> plain(n, false);
@@ -255,6 +263,21 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc,
       c.mid_deform[static_cast<size_t>(k)] =
           DeformSample{mid_lane(d0.flatten, d1.flatten, d2.flatten, d3.flatten),
                        mid_lane(d0.spread, d1.spread, d2.spread, d3.spread)};
+      // The extra lanes get the SAME curve, one lane at a time. Written here
+      // rather than left to deformation_frame's average fallback because a
+      // bake60 creature would otherwise carry a Catmull-Rom lane 0 beside
+      // linearly-averaged lanes 1..n -- two interpolation laws on one key.
+      if (!c.mid_deform_ex.empty()) {
+        for (size_t l = 0; l < ex_lanes; ++l) {
+          const DeformSample& e0 = c.deform_ex[static_cast<size_t>(k0) * ex_lanes + l];
+          const DeformSample& e1 = c.deform_ex[static_cast<size_t>(k1) * ex_lanes + l];
+          const DeformSample& e2 = c.deform_ex[static_cast<size_t>(k2) * ex_lanes + l];
+          const DeformSample& e3 = c.deform_ex[static_cast<size_t>(k3) * ex_lanes + l];
+          c.mid_deform_ex[static_cast<size_t>(k) * ex_lanes + l] =
+              DeformSample{mid_lane(e0.flatten, e1.flatten, e2.flatten, e3.flatten),
+                           mid_lane(e0.spread, e1.spread, e2.spread, e3.spread)};
+        }
+      }
     }
     for (int b = 0; b < bc; ++b) {
       const quat16& q1 = c.quats[static_cast<size_t>(k1) * bc + b];
@@ -445,20 +468,81 @@ DeformSample deformation_sample(const CreatureType& type, uint16_t slot, uint16_
   return clip->deform[frame];
 }
 
+DeformFrame deformation_frame(const CreatureType& type, uint16_t slot, uint16_t frame,
+                              uint8_t sub) {
+  DeformFrame out;
+  out.lane[0] = deformation_sample(type, slot, frame, sub);
+  if (kDeformLaneCount <= 1) return out;
+
+  const Clip* clip = nullptr;
+  for (const Clip& c : type.bank.clips)
+    if (c.slot_id == slot) clip = &c;
+  if (clip == nullptr || frame >= clip->frame_count) return out;
+  // An extra track is all-or-nothing: a wrong-sized one is IGNORED rather than
+  // partially believed, exactly as lane 0 treats a wrong-sized `deform`. Lane 0
+  // has already been resolved above and cannot be disturbed by anything here.
+  const size_t ex = static_cast<size_t>(kDeformLaneCount) - 1u;
+  const size_t want = static_cast<size_t>(clip->frame_count) * ex;
+  if (clip->deform_ex.size() != want) return out;
+
+  const auto lane_at = [&](const std::vector<DeformSample>& t, uint16_t f, size_t l) {
+    return t[static_cast<size_t>(f) * ex + l];
+  };
+  if (clip->interpolate && sub != 0) {
+    if (clip->mid_deform_ex.size() == want) {
+      for (size_t l = 0; l < ex; ++l) out.lane[l + 1] = lane_at(clip->mid_deform_ex, frame, l);
+      return out;
+    }
+    const uint16_t nf = static_cast<uint16_t>(
+        frame + 1 >= clip->frame_count ? (clip->hold_last ? frame : 0) : frame + 1);
+    for (size_t l = 0; l < ex; ++l) {
+      const DeformSample& a = lane_at(clip->deform_ex, frame, l);
+      const DeformSample& b = lane_at(clip->deform_ex, nf, l);
+      out.lane[l + 1] =
+          DeformSample{static_cast<uint16_t>((static_cast<uint32_t>(a.flatten) + b.flatten) / 2),
+                       static_cast<uint16_t>((static_cast<uint32_t>(a.spread) + b.spread) / 2)};
+    }
+    return out;
+  }
+  for (size_t l = 0; l < ex; ++l) out.lane[l + 1] = lane_at(clip->deform_ex, frame, l);
+  return out;
+}
+
 SkinVertex deform_skin_vertex(const SkinVertex& v, const DeformVertex& meta,
                               const DeformSample& sample) {
+  DeformFrame f;
+  f.lane[0] = sample;
+  return deform_skin_vertex_lanes(v, meta, f);
+}
+
+SkinVertex deform_skin_vertex_lanes(const SkinVertex& v, const DeformVertex& meta,
+                                    const DeformFrame& frame) {
   // This branch is the exact-identity contract: no fixed-point round is allowed
   // to touch an ordinary clip, an unauthorised key, or an unmarked vertex.
-  if (meta.role == DeformRole::kNone || meta.strength == 0 ||
-      (sample.flatten == 0 && sample.spread == 0))
-    return v;
+  if (meta.role == DeformRole::kNone || meta.silent()) return v;
 
   SkinVertex out = v;
-  const int32_t flatten =
-      static_cast<int32_t>((static_cast<uint32_t>(sample.flatten) * meta.strength + 127) / 255);
-  const int32_t spread =
-      static_cast<int32_t>((static_cast<uint32_t>(sample.spread) * meta.strength + 127) / 255);
+  // THE LANE SUM. Each lane's weighted delta is rounded exactly as the single
+  // channel always was, and the rounded terms add. A vertex with authority on
+  // lane 0 alone therefore executes one identical term and nothing else -- the
+  // bit-identity contract is arithmetic, not a promise.
+  int32_t flatten = 0, spread = 0;
+  for (uint8_t l = 0; l < kDeformLaneCount; ++l) {
+    const uint8_t st = meta.strength_of(l);
+    if (st == 0) continue;
+    const DeformSample& sample = frame.lane[l];
+    if (sample.flatten == 0 && sample.spread == 0) continue;
+    flatten += static_cast<int32_t>((static_cast<uint32_t>(sample.flatten) * st + 127) / 255);
+    spread += static_cast<int32_t>((static_cast<uint32_t>(sample.spread) * st + 127) / 255);
+  }
   if (flatten == 0 && spread == 0) return v;
+  // The lanes are independent authorings and their sum is not bounded by any
+  // one of them, so the positive-volume invariant `squash_scale > 0` that a
+  // single u16 flatten guaranteed for free has to be enforced here. Clamping
+  // (rather than rejecting) keeps a shipped clip renderable: the worst a bad
+  // authoring can do is fully collapse the axis, never invert it.
+  if (flatten > 65535) flatten = 65535;
+  if (spread > 65535) spread = 65535;
   const int32_t squash_scale = 65536 - flatten;  // always positive: flatten is u16
   const int32_t spread_scale = 65536 + spread;
   const uint8_t axis = meta.axis < 3 ? meta.axis : 0;
@@ -758,7 +842,9 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
     DeformVertex d;
     d.role = rs.deform_role;
     d.strength = rs.deform_strength;
-    if (d.role == DeformRole::kNone || d.strength == 0) return d;
+    for (uint8_t i = 0; i + 1 < kDeformLaneCount; ++i)
+      d.strength_ex[i] = rs.deform_strength_ex[i];
+    if (d.role == DeformRole::kNone || d.silent()) return d;
     d.center_x = rs.deform_center_x;
     d.center_y = rs.deform_center_y;
     d.center_z = rs.deform_center_z;
@@ -777,7 +863,7 @@ std::vector<Meshlet> build_ring_part(const RingPart& part) {
   const auto drop_identity_sidecar = [](Meshlet& m) {
     bool active = false;
     for (const DeformVertex& d : m.deform)
-      active = active || (d.role != DeformRole::kNone && d.strength != 0);
+      active = active || (d.role != DeformRole::kNone && !d.silent());
     if (!active) m.deform.clear();
   };
   // TEXTURE SEAM LAW (2026-08-26). U is periodic (a full turn is 256) but a
@@ -1051,7 +1137,14 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
         if (reason) *reason = "deformation axis outside 0..2";
         return false;
       }
-      if ((rs.deform_role == DeformRole::kNone) != (rs.deform_strength == 0)) {
+      bool any_ex = false;
+      for (uint8_t i = 0; i + 1 < kDeformLaneCount; ++i)
+        any_ex = any_ex || rs.deform_strength_ex[i] != 0;
+      // The role/strength agreement rule now covers EVERY lane. A ring that
+      // authors authority on lane 2 and forgets the role is the same silent
+      // no-op the original check was written to catch, and the original check
+      // would have missed it -- so it is extended rather than duplicated.
+      if ((rs.deform_role == DeformRole::kNone) != (rs.deform_strength == 0 && !any_ex)) {
         if (reason) *reason = "deformation role/strength mismatch";
         return false;
       }
@@ -1080,7 +1173,10 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
   for (const Clip& c : bank.clips) {
     if (c.quats.size() != static_cast<size_t>(c.frame_count) * bank.bone_count ||
         c.root.size() != static_cast<size_t>(c.frame_count) * 3 ||
-        (!c.deform.empty() && c.deform.size() != c.frame_count)) {
+        (!c.deform.empty() && c.deform.size() != c.frame_count) ||
+        (!c.deform_ex.empty() &&
+         c.deform_ex.size() !=
+             static_cast<size_t>(c.frame_count) * (kDeformLaneCount - 1u))) {
       if (reason) *reason = "clip frame arrays";
       return false;
     }

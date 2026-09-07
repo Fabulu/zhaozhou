@@ -205,6 +205,36 @@ struct DeformSample {
 };
 
 /**
+ * THE DEFORM LANES (pass 12, Direction 9 SS13.3 item 2 + inventory B2).
+ *
+ * One `DeformSample` per key was a SINGLE GLOBAL {flatten, spread} that every
+ * marked vertex read through a static per-vertex `strength`. A static weight on
+ * a shared signal cannot carry a PER-PART, PER-FRAME, POSE-DERIVED quantity,
+ * and three separate asks were blocked on exactly that: the inter-nodule span
+ * stretch (each span stretches by how far ITS OWN two nodules separated), the
+ * nodule vertical travel that needs its span to lengthen, and the lens blink.
+ *
+ * A lane is an INDEPENDENT {flatten, spread} track on the same key. A vertex
+ * carries an authority per lane and its total deformation is the SUM of the
+ * lanes' contributions -- same role, same axis, same centre, so the lanes
+ * compose as one scaling and no new geometry path appears.
+ *
+ * ⚠ IDENTITY BY CONSTRUCTION, and this is the whole reason it is a SUM rather
+ * than a select. Lane 0 is the pre-existing channel: `DeformVertex::strength`
+ * IS lane 0's authority and `Clip::deform` IS lane 0's track, both unrenamed.
+ * Every extra lane defaults to zero authority and an empty track, and a zero
+ * term is skipped BEFORE any fixed-point round -- so a creature that authors
+ * no extra lane executes the identical arithmetic it did before, bit for bit.
+ * (Zixxtrixx is pinned by CRC and authors none.)
+ */
+inline constexpr uint8_t kDeformLaneCount = 5;
+
+/** Every lane of one key, resolved. Lane 0 is the historic single channel. */
+struct DeformFrame {
+  DeformSample lane[kDeformLaneCount];
+};
+
+/**
  * One clip: slot id, frame_count keys, per-frame root displacement (3 x fx16)
  * and bone_count quantized quats (8 B/bone/frame as authored), plus the
  * event tags. Frames loop (the donor's walk/idle cycles); events replay with
@@ -267,6 +297,17 @@ struct Clip {
   std::vector<quat16> mid_quats;         // frame_count * bone_count, or empty
   std::vector<int32_t> mid_root;         // frame_count * 3, or empty
   std::vector<DeformSample> mid_deform;  // frame_count, or empty
+  /**
+   * LANES 1..kDeformLaneCount-1 (pass 12). Either EMPTY -- exact identity on
+   * every extra lane, which is what every clip that predates this carries --
+   * or frame_count * (kDeformLaneCount - 1) samples, FRAME-MAJOR: key f's
+   * lane L (L >= 1) is at [f * (kDeformLaneCount - 1) + (L - 1)].
+   *
+   * Lane 0 stays in `deform`/`mid_deform` above, unrenamed and unmoved, so a
+   * wrong-sized or absent extra track can never disturb it.
+   */
+  std::vector<DeformSample> deform_ex;
+  std::vector<DeformSample> mid_deform_ex;
 };
 
 /**
@@ -419,7 +460,22 @@ struct DeformVertex {
   int32_t carrier_x = 0, carrier_y = 0, carrier_z = 0;  // follower sample point
   DeformRole role = DeformRole::kNone;
   uint8_t axis = 0;      // bind-space cardinal axis: 0=x, 1=y, 2=z
-  uint8_t strength = 0;  // 0..255 local authority
+  uint8_t strength = 0;  // 0..255 local authority ON LANE 0
+  // 0..255 local authority on lanes 1..kDeformLaneCount-1; all zero means this
+  // vertex reads lane 0 alone and its arithmetic is unchanged.
+  uint8_t strength_ex[kDeformLaneCount - 1] = {};
+
+  /** Authority on `lane`, with lane 0 reading the historic `strength`. */
+  uint8_t strength_of(uint8_t lane) const {
+    return lane == 0 ? strength : (lane < kDeformLaneCount ? strength_ex[lane - 1] : 0);
+  }
+  /** True when no lane has any authority (the exact-identity early-out). */
+  bool silent() const {
+    if (strength != 0) return false;
+    for (uint8_t i = 0; i + 1 < kDeformLaneCount; ++i)
+      if (strength_ex[i] != 0) return false;
+    return true;
+  }
 };
 
 /** Resolve the optional authored/presentation sample; bad/absent means identity. */
@@ -433,6 +489,25 @@ DeformSample deformation_sample(const CreatureType& type, uint16_t slot, uint16_
  */
 SkinVertex deform_skin_vertex(const SkinVertex& v, const DeformVertex& meta,
                               const DeformSample& sample);
+
+/** Resolve EVERY lane of one key. Lane 0 is exactly `deformation_sample`. */
+DeformFrame deformation_frame(const CreatureType& type, uint16_t slot, uint16_t frame,
+                              uint8_t sub = 0);
+
+/**
+ * The multi-lane apply: the vertex's authority on each lane weights that lane's
+ * sample, and the weighted deltas SUM before the single scaling. A vertex with
+ * authority on lane 0 alone reduces to the two-argument form above term for
+ * term -- same rounding, same order -- so nothing that predates lanes moves.
+ *
+ * ⚠ It is a DIFFERENT NAME rather than an overload on purpose. Several pinned
+ * Zixxtrixx probes call `deform_skin_vertex(v, meta, {})` for the identity leg,
+ * and a braced `{}` against two class parameter types is ambiguous -- an
+ * overload here would have broken the CRC harness at compile time, in files
+ * whose whole job is to prove nothing moved.
+ */
+SkinVertex deform_skin_vertex_lanes(const SkinVertex& v, const DeformVertex& meta,
+                                    const DeformFrame& frame);
 
 /**
  * Skin one vertex against a decoded palette. Single-rounding law: the FULL
@@ -502,7 +577,11 @@ struct RingSpec {
   // carrier point. Defaults are exact identity and emit no compiled sidecar.
   DeformRole deform_role = DeformRole::kNone;
   uint8_t deform_axis = 0;      // local cardinal axis, 0=x, 1=y, 2=z
-  uint8_t deform_strength = 0;  // 0..255
+  uint8_t deform_strength = 0;  // 0..255 -- LANE 0
+  // 0..255 on lanes 1..kDeformLaneCount-1. Default all-zero, so a ring that
+  // authors nothing here compiles to exactly the sidecar it compiled to before
+  // lanes existed.
+  uint8_t deform_strength_ex[kDeformLaneCount - 1] = {};
   int32_t deform_center_x = 0, deform_center_y = 0, deform_center_z = 0;
 };
 
