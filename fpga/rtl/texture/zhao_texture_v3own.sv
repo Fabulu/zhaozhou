@@ -1705,6 +1705,37 @@ module zhao_texture_v3own #(
       // instead of argued from their names.
       a_interval_partition : assert (live_cnt_q == CNTW'(unf_cnt_q + out_res_q));
 
+      // ---- S22.2's PHASE-CONTROL INVARIANTS ------------------------------
+      // The section says "assert at every edge for every active row" and then
+      // lists them. NONE of the first four were asserted anywhere in this file
+      // -- checked before writing these, the same way S16.3's list was checked.
+      //
+      // Applied to one rotating row per cycle rather than all 64 every edge:
+      // `gen_chk_s` sweeps the ring continuously, so across a bench that runs
+      // tens of thousands of cycles every row is examined many times over, at
+      // a fraction of the simulation cost.
+      //
+      // Gated on `live_q` because the section says "for every ACTIVE row"; a
+      // released row keeps its last values until admission clears them.
+      if (live_q[gen_chk_s]) begin
+        // "committed subset claimed subset issued subset required"
+        a_p22_cmt_sub_clm : assert ((cmt_q[gen_chk_s] & ~clm_q[gen_chk_s]) == 4'd0);
+        a_p22_clm_sub_iss : assert ((clm_q[gen_chk_s] & ~iss_q[gen_chk_s]) == 4'd0);
+        a_p22_iss_sub_req : assert ((iss_q[gen_chk_s] & ~req_q[gen_chk_s]) == 4'd0);
+
+        // "combine_issued implies combine_reserved" -- exactly the separation
+        // T4 introduced today: cbi is 11.1's event 3, crs is event 2, and an
+        // issue that was never reserved would mean the credit was bypassed.
+        a_p22_cbi_implies_crs : assert (!cbi_q[gen_chk_s] || crs_q[gen_chk_s]);
+
+        // "final_claimed implies actual combine_issued" -- M6's property, stated
+        // as a row invariant rather than as a single directed case.
+        a_p22_fcl_implies_cbi : assert (!fcl_q[gen_chk_s] || cbi_q[gen_chk_s]);
+
+        // "final_done implies final_claimed"
+        a_p22_fdn_implies_fcl : assert (!fdn_q[gen_chk_s] || fcl_q[gen_chk_s]);
+      end
+
       // S13.1: IS THE PER-OWNER FETCHED BIT REDUNDANT? Asserted rather than
       // argued, because the argument is exactly the kind that sounds airtight
       // and costs a day when it is not.
