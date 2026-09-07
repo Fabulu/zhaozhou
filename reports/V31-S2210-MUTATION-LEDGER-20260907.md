@@ -35,24 +35,64 @@ half was proved necessary by an opposite mutation.
 Covered behaviourally by case 13 (D.6): the final write does not free the owner,
 checked by stalling through a full ring wrap with distinctive high context bits.
 
+### `zhao_texture_v3own.sv`: `cbi_n_c` set from `cmb_pop_c` (§11.1 event 2, the
+central bank-read RESERVATION) instead of from `cmb_fire_c` (event 3, actual
+COMBINE ACCEPTANCE). Four M6 checks failed:
+
+    FAIL: M6 a final arriving before COMBINE acceptance is an ERROR: expected 0x1, got 0x0
+    FAIL: M6 no final payload write is authorised: expected 0x0, got 0x1
+    FAIL: M6 nothing is published: expected 0x0, got 0x1
+    FAIL: M6 the owner is NOT released: expected 0x1, got 0x0
+
+This closes the gap noted in the first version of this file, where item 8 had a
+passing case but no mutation. It now has both.
+
+### 5. publish before payload write — THE MUTATION ESCAPED, TWICE
+
+The most useful entry here, because nothing failed.
+
+`cmt_n_c` set on the C3 bank-write edge instead of after the write lands at C4.
+**All 538 existing checks passed.** Every one of them observes the END of a
+transaction, and one cycle of early publication changes no final value in a
+bench where nothing reads the bank in between. The harm is downstream and real:
+§6.2 says *"PUBLISH: make that source committed only after its write edge"*
+precisely so a consumer seeing `committed` cannot read the row before the
+payload has landed.
+
+**Then the fix for it escaped as well.** Case 24 was first written against
+`ev_commits_o` — and that counter increments on `c4t_v_q`/`c4a_v_q`, the C4
+stage valid, which is a *different signal* from the commit bitplane the mutation
+altered. The new check passed against the very mutation it was written for.
+
+`cmt_q` is now `verilator public` and case 24 watches it directly. Against the
+mutation both its assertions fail:
+
+    FAIL: §6.2: the source is NOT published on the same edge its bank write
+          enable asserts: expected 0x0, got 0x1
+    FAIL: and the publication DOES happen on a later edge: expected 0x1, got 0x0
+
+Restored: **541 checks pass**, digest `2733389d405f0d9e`.
+
+**The lesson is the sharper half of the campaign's purpose.** A mutation
+campaign is usually described as testing the DESIGN. This one tested the TESTS,
+found a real blind spot in a 538-check suite, and then found a second blind spot
+in the fix — both times because the instrument watched an adjacent signal that
+looked like the right one. Item 8 passing on the first attempt is much weaker
+evidence than item 5 failing twice.
+
 ## NOT yet demonstrated — stated so the gap is visible
 
 1. slot-only identity for external validation
 2. truncate membership subtraction before rejecting upper bits
 4. remove recent-claim forwarding
-5. publish before payload write
 6. replace same-row source OR with last-writer assignment
 7. omit combine_reserved on local candidate insertion
-8. authorize final from reservation instead of actual acceptance
 9. pop a candidate without downstream storage credit
 11. advance F without a reserved packet slot
 13. reopen the namespace before one external adapter acknowledges
 14. force old broken CLUT4, alpha, nearest, or global-binding behaviour
 
-**Three of fourteen.** Item 8 has a behavioural case (case 22, M6) but no
-mutation run against it, and the difference matters: a passing case shows the
-design does the right thing, a mutation shows the TEST would notice if it
-stopped.
+**Five of fourteen.**
 
 ## Related mutations run today outside §22.10's list
 
