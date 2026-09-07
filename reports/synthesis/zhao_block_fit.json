@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "83f050c518fc1855be6c581b98825ad35353dcad",
+    "newestRunCommit":  "19bd8bd2500d3121aad91a45ac453707fd52ada7",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -1633,18 +1633,26 @@
                    },
                    {
                        "module":  "zhao_texture_v3own",
-                       "status":  "map_only",
-                       "sourceCommit":  "4e7e6f9df408caeda198e6deffd3bddc988e1459",
-                       "rtlCleanAtHead":  false,
-                       "sourceDigest":  "1627c71acdf419abb09cd9669969df9df67d83c32d01868847d43f7f5a614e89",
-                       "seconds":  263.7,
+                       "status":  "failed:structure",
+                       "sourceCommit":  "19bd8bd2500d3121aad91a45ac453707fd52ada7",
+                       "rtlCleanAtHead":  true,
+                       "sourceDigest":  "63c80c20a0f3a5062995a19e81312a03e9bd2d956cb5a509b03a48450be6cb47",
+                       "seconds":  4213.8,
                        "sourcesHashed":  3,
-                       "partial":  true,
-                       "partialStage":  "analysis_and_synthesis",
-                       "registers":  4220,
+                       "alms":  6094,
+                       "registers":  4756,
                        "blockMemoryBits":  20640,
+                       "ramBlocks":  17,
                        "dspBlocks":  0,
-                       "virtualPins":  952
+                       "virtualPins":  952,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  77.16,
+                       "fmaxClock":  "clk",
+                       "ruleViolations":  [
+                                              "ALM 6094 \u003e allowed 1800"
+                                          ]
                    },
                    {
                        "module":  "zhao_texture_v3own@v3-full",
