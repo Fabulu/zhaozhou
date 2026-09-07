@@ -2363,3 +2363,28 @@ each — which is exactly the documented tell. The exe was timestamped 17:57:09
 against a source of 17:58:57: the mutation had never been compiled and I was
 reading the old binary. Comparing the two mtimes before believing the result is
 what separated "the detector does not fire" from "the detector was never built".
+
+## Owner ask, mid-run: cel/fog ordering
+
+Answered and partly implemented. The gating question — "does the reference reel
+already do this?" — is **no, and it documented the opposite in four places**:
+`rast.cpp:306` ramps the interpolated lanes, `zref_fragment.hpp:117` called them
+"ALREADY FOGGED", `internal.hpp:79` cited "the fogged colour rides the ordinary
+Gouraud path", and `zhao_raster_fragment.sv:92` cited the superseded §8 text as
+*ratified law* and reasoned from it. All four corrected.
+
+**But no fog mix exists anywhere in the tree.** `fog_near`/`fog_far` live only in
+the ABI wire struct and sky env state; `FogMode` defaults to `Off` and nothing in
+`reference/` or `tools/` ever sets it. So no golden CRC can move and the D-5
+order is purely additive — there is no fogged colour to un-fog. The "ALREADY
+FOGGED" comment described a stage that does not exist.
+
+Two corrections to the handover: the ruling is already written into
+`spec/qformats.md` §8 in full (only the docket was stale — D12 corrected), and
+D-5 names **two** errors, the toon staircase and texture modulation multiplying
+the fog colour. DOCKET R7 also already knew the old order was unimplementable:
+`GEOM.PROJECT` has no colour input to have fogged anything with.
+
+Not built: the ATTRSTEP factor lane and the post-toon mix. It should land in the
+reference first (the reel defines correct) and it touches the vertex-attribute
+path the rearchitecture brief defers — flagged rather than opened unilaterally.
