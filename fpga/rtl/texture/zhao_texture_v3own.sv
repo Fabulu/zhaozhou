@@ -264,8 +264,22 @@ module zhao_texture_v3own #(
   logic            adm_fire_c;
   logic            quiet_c;
 
-  assign adm_gen_c    = gen_q[tail_q] + GENW'(1);
-  assign wrap_block_c = (gen_q[tail_q] == {GENW{1'b1}});
+  // ---- T2 GROUP A: admission and the wrap test leave the table ------------
+  // Derived from the identity `a_win_gen_of_slot` asserts every cycle:
+  //
+  //     gen_q[s] == alloc_gen      for s already allocated this pass (s <  tail_q)
+  //     gen_q[s] == alloc_gen - 1  for s still ahead                 (s >= tail_q)
+  //
+  // At s == tail_q the slot has NOT been reallocated yet, so
+  // `gen_q[tail_q] == alloc_gen - 1`, and therefore:
+  //
+  //     adm_gen_c    = gen_q[tail_q] + 1        ==  alloc_gen
+  //     wrap_block_c = gen_q[tail_q] == 8'hFF   ==  alloc_gen == 8'h00
+  //
+  // Two 64-way selects of an 8-bit array leave the design; the replacements are
+  // an 8-bit register and one equality against zero.
+  assign adm_gen_c    = sh_alloc_gen_q;
+  assign wrap_block_c = (sh_alloc_gen_q == {GENW{1'b0}});
 
   // SECTION 5.5, the BASELINE DRAIN POLICY, implemented rather than discussed.
   //
@@ -411,7 +425,15 @@ module zhao_texture_v3own #(
   logic [SLOTW-1:0] tail_p1_c;
   logic             wrap_at_tail_p1_c;
   assign tail_p1_c         = tail_q + SLOTW'(1);
-  assign wrap_at_tail_p1_c = (gen_q[tail_p1_c] == {GENW{1'b1}});
+  // Site 3 is the one that is NOT a copy of the other two, and the plan got it
+  // wrong once before the assertion corrected it. `tail_p1` is AHEAD of the
+  // tail -- so `alloc_gen - 1` -- EXCEPT when `tail_q == 63`, where it wraps to
+  // slot 0, which was allocated at the START of this pass and holds
+  // `alloc_gen`. That exception is the wrap boundary, the one case the fence
+  // exists for, so getting it wrong would be silent for 16,320 allocations.
+  assign wrap_at_tail_p1_c = (tail_q == {SLOTW{1'b1}})
+                           ? (sh_alloc_gen_q == {GENW{1'b1}})
+                           : (sh_alloc_gen_q == {GENW{1'b0}});
   assign wrap_block_n_c    = adm_fire_c ? wrap_at_tail_p1_c : wrap_block_c;
 
   // §6.2's phase sequence, scoped to the LEGACY TRANSITIONAL FENCE that the
@@ -1578,7 +1600,23 @@ module zhao_texture_v3own #(
       // the allocation ticket's own generation. If those ever disagree the
       // whole replacement is unsound, and this fires on the cycle it happens
       // rather than in a fit weeks later.
-      a_win_gen_matches_table : assert (!adm_fire_c || (adm_gen_c == sh_alloc_gen_q));
+      // NOT `adm_gen_c == sh_alloc_gen_q` any more: Group A made `adm_gen_c`
+      // BE `sh_alloc_gen_q`, so that form became a tautology -- an assertion
+      // that cannot fail, which is the anti-pattern this file is full of
+      // warnings about. It compares against the TABLE instead, which is the
+      // thing the derivation actually claims.
+      a_win_gen_matches_table : assert (!adm_fire_c
+          || (sh_alloc_gen_q == GENW'(gen_q[tail_q] + GENW'(1))));
+
+      // Site 3's derivation, checked against the table it replaced. This is the
+      // one Group A site that is not a copy of the other two, and the plan had
+      // it wrong once before an assertion corrected it.
+      a_win_wrap_p1_matches_table : assert (
+          wrap_at_tail_p1_c == (gen_q[tail_p1_c] == {GENW{1'b1}}));
+
+      // And site 2, for the same reason.
+      a_win_wrap_matches_table : assert (
+          wrap_block_c == (gen_q[tail_q] == {GENW{1'b1}}));
 
       // 6.1's count, against the two pointers. This is the check that would
       // fail first if retirement ever stopped being oldest-first.
