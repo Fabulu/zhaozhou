@@ -83,3 +83,27 @@ specifically *just after a read launches*.
 > What is still not covered from §16.3's list: shuffled completions and
 > zero/nonzero interleaving, both of which belong to `rcp24_v3`'s own bench
 > rather than the queue's.
+
+
+---
+
+## §16.3's test list, item by item — and it is now complete
+
+The section names five tests for this seam. Rather than leave "what is still not
+covered" as a vague tail, each was checked against the actual benches:
+
+| §16.3 asks for | covered by | evidence |
+|---|---|---|
+| **ready dropping just after a read launches** | `raster_ticketq_rh_directed` | **added today** — adversarial supply/demand over 4,000 cycles; exactly-once and in-order; fire-tested against an unreserved read launch |
+| **shuffled completions** | `raster_rcp24_v3_directed` | results are keyed **by token** (`out.got[top.b_tok_o]`), so a token paired with the wrong result lands under the wrong key and mismatches. That is the property, not merely tolerance of reordering |
+| **zero/nonzero interleaving** | `raster_rcp24_v3_directed` | zeros are a **scheduled phase**: `if ((i % 97) == 0) d = 0; // keep meeting it` |
+| **slot reuse** | `raster_rcp24_v3_directed` | 4,104 requests through `NCTX = 16` contexts — roughly 256 reuses each |
+| **distinct U/V** | `raster_perspuv_svc_directed` | a different block; the U/V pair is perspuv's, not rcp24's |
+
+The earlier note in this report said shuffled completions and zero/nonzero
+interleaving were "still not covered". **That was wrong** — they were covered,
+and saying otherwise without looking would have sent the next pass to write tests
+that already exist. Checked and corrected rather than left as a plausible caveat.
+
+So §16.3's verification obligation for the DONE seam is **met**, and the one item
+that genuinely was missing is the one that got written.
