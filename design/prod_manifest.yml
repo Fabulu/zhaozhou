@@ -190,6 +190,11 @@ excluded:
   # first member.
   - zhao_texture_island_top: probe  the composed G1-D island; its blocks are counted individually
 
+  # Same reason code, same shape: a composition top that exists to put a real
+  # inter-block seam in front of the fitter. TERRAIN.PAGESTREAM -> TERRAIN.PATCH,
+  # both counted individually already.
+  - zhao_terrain_compose_seam: probe  the terrain compose seam; its two blocks are counted individually
+
   # MATERIAL.COMBINE.V2 is the paired-phase replacement built beside V1 per the
   # owner's recovery brief, which is explicit that V1 stays as the historical
   # comparison rather than being erased. V2 is not instantiated by anything yet

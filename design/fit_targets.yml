@@ -719,6 +719,46 @@ targets:
   # architecture's nominal is 6,600 ALM and the redline 7,500; the sum of
   # standalone rows is 7,913. Which side the composed number lands on is the
   # question, and it gets answered before it gets gated.
+  # --- the terrain compose seam, the pair the timing evidence pointed at ----
+  # NOT AN ISLAND AND NOT PRETENDING TO BE ONE. Two blocks, one seam, because
+  # one seam is what the PAGESTREAM row raised and neither leaf fit can settle.
+  #
+  # THE ACCEPTANCE QUESTION IS THE CLOCK, so `min_fmax_mhz` is the rule that
+  # matters and the resource lines are there to catch a surprise. PAGESTREAM
+  # standalone reported 93.91 MHz with all 23 negative paths ending at a
+  # virtual pin and the worst internal path at 107.38 MHz; PATCH's own row
+  # never recorded an Fmax at all. Wired together the pins are gone from the
+  # seam and the two halves of the real path finally meet: PAGESTREAM's 4.30 ns
+  # combinational buffer read into PATCH's 33-bit saturating add and two 32-bit
+  # clamps. If that closes at 100 MHz, the standalone FAIL was the artefact it
+  # looks like. If it does not, the block pair needs a register at the seam and
+  # the leaf rows never would have said so.
+  #
+  # THE PREDICTION, WRITTEN BEFORE THE FIT, from the two standalone rows:
+  #   ALM       1,649 + 1,584 = 3,233. G1-D measured the composed island 2.4%
+  #             UNDER its standalone sum, so expect at or a little below this.
+  #             Gate at 3,600 -- loose, because the question is the clock.
+  #   REGISTERS 2,043 + 2,483 = 4,526. Gate 5,000.
+  #   M10K      0 + 0, and both are gated at zero individually for reasons that
+  #             do not change when they are wired together. Gate 0.
+  #   DSP       BOTH BLOCKS ARE ZERO AND THIS TARGET IS NOT. The wrapper's own
+  #             placement glue multiplies `cfg_step * vi`, and that is the
+  #             point of measuring it: nothing in fpga/rtl places a vertex, so
+  #             the multiply exists only in a bench today. A non-zero DSP count
+  #             here is the cost of that gap, and if it is large the answer is
+  #             an accumulator rather than a multiplier. Gate 8.
+  - top: zhao_terrain_compose_seam
+    sources:
+      - fpga/rtl/terrain/zhao_terrain_compose_seam.sv
+      - fpga/rtl/terrain/zhao_terrain_pagestream.sv
+      - fpga/rtl/terrain/zhao_terrain_patch.sv
+    rules:
+      min_fmax_mhz: 100
+      max_alms: 3600
+      max_registers: 5000
+      max_m10k: 0
+      max_dsp: 8
+
   - top: zhao_texture_island_top
     sources:
       - fpga/rtl/texture/zhao_texture_island_top.sv
