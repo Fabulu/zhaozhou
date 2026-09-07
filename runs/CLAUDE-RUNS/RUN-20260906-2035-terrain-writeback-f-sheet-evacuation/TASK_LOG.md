@@ -2974,3 +2974,38 @@ lives in unmeasured deletions. Part of it is now measured and it is not a
 deletion at all — it is a read-port change on ONE named array, independent of the
 ownership rework and available without it. A much cheaper piece of work than the
 restructuring it was bundled with.
+
+## I HAD TO RETRACT THE SESSION'S BEST NUMBER
+
+The island's +12.03 MHz is NOT attributable to P0-B, and I wrote it up as if it
+were.
+
+**What I should have checked first:** where the OLD island's worst paths were.
+They were PALETTE — six of the top six, launched from the input port
+`pal_ld_gen_i[4]`, worst −4.977; sixteen of the worst forty. The first rcp24 path
+ranked SEVENTH at −3.243. In the new report palette appears **zero times in 8,680
+paths**. P0-B's register is inside `zhao_raster_rcp24_svc` and cannot move a
+palette port path.
+
+**Then I checked whether the comparison was even clean**, and it is:
+`git diff` over all fifteen island sources between the two commits shows **one
+file changed**, `rcp24_svc.sv`. Same 1,487 pins, same DSP, same source count. So
+the palette family moved through PLACEMENT — a register added in one block
+changes global placement, and port-launched paths are the most sensitive thing
+there is to that.
+
+**What survives:** the structural prediction (`c_m.raddr_a` gone, replaced by
+`c_pend -> e_num_*`) held exactly, and ALM +14 composed against +159 standalone,
+which no placement argument touches.
+
+**What I got wrong, precisely.** I pre-registered "under ~2 MHz is movement, not
+improvement", saw 12.03, and treated clearing that bar as settling the question.
+**Clearing a pre-registered bar proves the MOVEMENT is real. It proves nothing
+about the CAUSE.** Pre-registration guarded the wrong failure mode and I used it
+as if it guarded both. That is the "first explanation that absolves" law in its
+flattering direction, on the best number of the session, which is exactly when it
+is hardest to see.
+
+Corrected in G1-D §4.3f and docket M4; new docket M6 records the general rule —
+**a composed reported-Fmax delta is attributable only if the gating path family
+is the SAME before and after.**
