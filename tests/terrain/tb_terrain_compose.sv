@@ -105,6 +105,13 @@ module tb_terrain_compose
     input var logic signed [31:0] cfg_step_i,
 
     // ---- the job -----------------------------------------------------------
+    // TERRAIN.PATCH's subpatch dirty mask ACCUMULATES until this clears it, and
+    // its contract says so: "Empties the per-patch list and the subpatch dirty
+    // mask. Asserted once per patch per frame, BEFORE the first record." It is
+    // driven from the C++ side rather than off `v_first_o`, because "before the
+    // first record" is a cycle the streamer has no way to name.
+    input  var logic        pt_list_clear,
+
     input  var logic        j_valid,
     output var logic        j_ready,
     input  var logic [10:0] j_slot,
@@ -308,7 +315,7 @@ module tb_terrain_compose
       .clk  (clk),
       .rst_n(rst_n),
 
-      .list_clear_i(1'b0),
+      .list_clear_i(pt_list_clear),
       .patch_id_i  (16'd0),
 
       .fld_add_valid_i(1'b0),

@@ -172,6 +172,45 @@ CaseCounts fill_page(Pool& p, uint32_t slot) {
   return n;
 }
 
+// A PAGE THAT MOVES THE GROUND IN ONE CORNER ONLY.
+//
+// The mask check needs a fixture whose answer is ASYMMETRIC under transposition,
+// and the main page is no good for it: four vertices in five are dirty, spread
+// over the whole lattice, so the mask is 0xFFFF and would pass with the indices
+// swapped. That is the same shape of vacuous green the file's other phases warn
+// about, and it is worth saying that the transposition bug this check exists for
+// would have survived it.
+//
+// So: flat ground everywhere -- base == bottom, no scar, which composes to
+// exactly `fx(base)` and is NOT dirty -- except a block of low COLUMNS at high
+// ROWS, which lands in one corner of the 4x4 and nowhere near its transpose.
+void fill_corner_page(Pool& p, uint32_t slot, int col_lo, int col_hi, int row_lo,
+                      int row_hi) {
+  for (int vj = 0; vj < kEdge; ++vj) {          // ROW
+    for (int vi = 0; vi < kEdge; ++vi) {        // COLUMN
+      const int k = vj * kEdge + vi;
+      const bool moved = (vi >= col_lo && vi <= col_hi && vj >= row_lo && vj <= row_hi);
+      p.put16(slot, tp::kLayerAOff + 2u * uint32_t(k), int16_t(1000));
+      p.put16(slot, tp::kLayerBOff + 2u * uint32_t(k), int16_t(moved ? 400 : 0));
+      p.put16(slot, tp::kLayerCOff + 2u * uint32_t(k), int16_t(1000));
+    }
+  }
+}
+
+// `sp_mask`, transcribed from `zhao_terrain_patch.sv:205` rather than
+// paraphrased. A BORDER VERTEX MARKS BOTH NEIGHBOURS and a corner marks four --
+// they are physically shared, which is the block's own chosen law 3.
+uint16_t sp_mask(int vi, int vj) {
+  const int col_lo = (vi == 0) ? 0 : ((vi - 1) >> 3);
+  const int col_hi = ((vi >> 3) > 3) ? 3 : (vi >> 3);
+  const int row_lo = (vj == 0) ? 0 : ((vj - 1) >> 3);
+  const int row_hi = ((vj >> 3) > 3) ? 3 : (vj >> 3);
+  uint16_t m = 0;
+  for (int r = row_lo; r <= row_hi; ++r)
+    for (int c = col_lo; c <= col_hi; ++c) m = uint16_t(m | (1u << (r * 4 + c)));
+  return m;
+}
+
 struct World {
   Vtb_terrain_compose& d;
   explicit World(Vtb_terrain_compose& dd) : d(dd) {}
@@ -200,6 +239,7 @@ struct World {
     d.pos_we = 0;
     d.cc_serve_release = 0;
     d.cc_lat_req = 0;
+    d.pt_list_clear = 0;
     config();
     d.eval();
     for (int i = 0; i < 4; ++i) zhao::tick(d);
@@ -766,6 +806,97 @@ int main(int argc, char** argv) {
     ck(d.cc_patches_served == served_before + 1,
        "E and releasing it retires exactly one patch", long(served_before + 1),
        long(d.cc_patches_served));
+  }
+
+
+  // =========================================================================
+  // F -- THE SUBPATCH DIRTY MASK, WHICH IS WHAT THE TRANSPOSITION BROKE
+  // =========================================================================
+  // Phase E found that this block's `vi`/`vj` were swapped against the tree's
+  // convention. The heights survived it -- COMPCACHE stores by arrival cursor --
+  // and the ONE thing that did not is `subpatch_dirty_o`, a 4x4 mask at bit
+  // `row*4 + col`. Transposed, it requests the wrong quarter of a patch:
+  // terrain_rules §4.4's "dirty patches only" pointed at ground that did not
+  // move, and the ground that did left unrequested.
+  //
+  // THE FIX WENT IN WITH NO TEST FOR IT. This is that test.
+  //
+  // The main page cannot serve: four vertices in five are dirty over the whole
+  // lattice, so its mask is 0xFFFF and would have passed transposed. This page
+  // moves the ground in ONE CORNER only -- low columns, high rows -- so the
+  // correct answer and its transpose share no bits at all.
+  {
+    std::printf("\n-- F: the subpatch dirty mask --\n");
+    constexpr int kColLo = 0, kColHi = 7, kRowLo = 24, kRowHi = 32;
+    fill_corner_page(pool, 3, kColLo, kColHi, kRowLo, kRowHi);
+
+    // The expected mask, from the same law the RTL states, over the vertices
+    // the reference calls dirty.
+    uint16_t want_mask = 0;
+    int dirty_verts = 0;
+    for (int vj = 0; vj < kEdge; ++vj) {
+      for (int vi = 0; vi < kEdge; ++vi) {
+        tp::ComposeIn in;
+        in.base = 1000;
+        in.scar = int16_t((vi >= kColLo && vi <= kColHi && vj >= kRowLo && vj <= kRowHi)
+                              ? 400 : 0);
+        in.bottom = 1000;
+        in.dual = true;
+        in.wx = kX0 + kStep * vi;
+        in.wz = kZ0 + kStep * vj;
+        const tp::ComposeOut e = tp::compose_vertex(in, empty, nullptr);
+        if (!e.dirty) continue;
+        ++dirty_verts;
+        want_mask = uint16_t(want_mask | sp_mask(vi, vj));
+      }
+    }
+
+    // THE FIXTURE MUST DISTINGUISH THE TRANSPOSE, asserted before it is used.
+    uint16_t transposed = 0;
+    for (int r = 0; r < 4; ++r)
+      for (int c = 0; c < 4; ++c)
+        if (want_mask & (1u << (r * 4 + c))) transposed = uint16_t(transposed | (1u << (c * 4 + r)));
+    ck(want_mask != 0 && want_mask != 0xFFFFu && (want_mask & transposed) == 0,
+       "F the expected mask is asymmetric and shares NO bit with its transpose -- "
+       "otherwise this phase would pass against the very bug it exists for",
+       1, (want_mask != 0 && want_mask != 0xFFFFu && (want_mask & transposed) == 0) ? 1 : 0);
+    std::printf("   %d dirty vertices; mask want 0x%04X, its transpose 0x%04X\n",
+                dirty_verts, want_mask, transposed);
+
+    w.reset();
+    d.j_flags = uint16_t(zref::swstream::kFlagRequired | zref::swstream::kFlagDual);
+    d.eval();
+    w.load(pool);
+    w.write_placement();
+
+    // CLEAR THE MASK BEFORE THE FIRST RECORD, which is what the block's
+    // contract asks for. Without it the mask still carries phase E's page and
+    // reads 0xFFFF -- a pass that would mean nothing.
+    d.pt_list_clear = 1;
+    d.eval();
+    zhao::tick(d);
+    d.pt_list_clear = 0;
+    d.eval();
+
+    const std::vector<Got> got = stream(w, 3, 0);
+    for (int i = 0; i < 4; ++i) zhao::tick(d);
+    d.eval();
+
+    ck(int(got.size()) == kVerts, "F the corner page composed in full", kVerts,
+       int(got.size()));
+
+    int got_dirty = 0;
+    for (const Got& g : got) if (g.dirty) ++got_dirty;
+    ck(got_dirty == dirty_verts,
+       "F and exactly the vertices the reference calls dirty came back dirty",
+       dirty_verts, got_dirty);
+
+    ck(uint16_t(d.subpatch_dirty) == want_mask,
+       "F THE 4x4 MASK IS THE ONE THE LAW GIVES -- bit row*4 + col, with border "
+       "vertices marking both neighbours. This is the check the vi/vj transposition "
+       "would have failed, and the one that did not exist when it was fixed",
+       long(want_mask), long(d.subpatch_dirty));
+    std::printf("   mask got 0x%04X\n", uint16_t(d.subpatch_dirty));
   }
 
   std::printf("\n== %d checks, %d failures ==\n", g_checks, g_fail);
