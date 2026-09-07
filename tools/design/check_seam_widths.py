@@ -120,16 +120,40 @@ def bits(width: str):
     return int(m.group(1)) - int(m.group(2)) + 1
 
 
-def stem(name: str) -> str:
+def stems(name: str) -> set:
+    """Every name this port could reasonably be matched by.
+
+    A SET, NOT ONE STRING, AND THAT IS THE 2026-09-07 REPAIR. The previous
+    version returned a single stem: strip `_o`/`_i`, then drop the leading
+    `head_` whenever one existed and was short. It could not tell a ROLE prefix
+    (`v_`, `req_`, `cfg_`) from the first word of a NAME, so it dropped both --
+    and a producer and consumer that disagree about whether they carry a prefix
+    stopped matching:
+
+        v_src_id_o  ->  strip _o  ->  v_src_id  ->  drop "v"    ->  "src_id"
+        src_id_i    ->  strip _i  ->  src_id    ->  drop "src"   ->  "id"
+
+    Two different stems for the same signal. That pair is a REAL NARROWING --
+    TERRAIN.PAGESTREAM carries T5's 32-bit `source_id` and TERRAIN.PATCH takes
+    16 -- and this tool reported the seam as fitting exactly, because the two
+    ports never met. It was found by hand instead, which is precisely the miss
+    this file's own footer warns is "far likelier than an absent signal".
+
+    So both readings are offered and a match on EITHER counts. That trades more
+    stem collisions for fewer misses, which is the correct direction for a tool
+    whose failure mode is silence: a collision is a row a reader can dismiss by
+    looking at the port names, and the header already tells them to. A miss is
+    a row nobody ever sees.
+    """
     n = name
     if n.endswith("_o") or n.endswith("_i"):
         n = n[:-2]
-    # Drop a role prefix only if something is left that still looks like a name.
+    out = {n}
     if "_" in n:
         head, rest = n.split("_", 1)
         if rest and len(head) <= 6:
-            return rest
-    return n
+            out.add(rest)
+    return out
 
 
 def edges_from_ledger():
@@ -164,13 +188,31 @@ def main() -> int:
             continue
         _ui, uo = ports_of(mods[mu], mu)
         di, _do = ports_of(mods[md], md)
+        # One port now contributes SEVERAL keys, so the same signal can be
+        # reached from either naming. `setdefault` keeps the first port that
+        # claimed a key, which is the same tie-break the single-stem version
+        # had.
         prod = {}
         for n, w in uo:
-            prod.setdefault(stem(n), (n, w))
+            for k in stems(n):
+                prod.setdefault(k, (n, w))
         cons = {}
         for n, w in di:
-            cons.setdefault(stem(n), (n, w))
-        shared = sorted(set(prod) & set(cons))
+            for k in stems(n):
+                cons.setdefault(k, (n, w))
+        # A PORT PAIR, NOT A KEY, IS THE UNIT. With several keys per port the
+        # same producer/consumer pair can now be reached twice (once by the
+        # full name, once by the prefix-dropped one) and would otherwise be
+        # reported and counted twice. Deduplicate on the pair of port NAMES,
+        # which is what a reader is actually looking at.
+        seen_pairs = set()
+        shared = []
+        for k in sorted(set(prod) & set(cons)):
+            pair = (prod[k][0], cons[k][0])
+            if pair in seen_pairs:
+                continue
+            seen_pairs.add(pair)
+            shared.append(k)
         if not shared:
             unpaired.append((up, dn, len(uo), len(di)))
             continue
