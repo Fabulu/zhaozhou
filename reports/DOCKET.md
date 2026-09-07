@@ -1690,6 +1690,57 @@ The terrain **format** is architected for a sparse streamed 8 km world; the
 pager, patch-residency manager, composed-height cache, and command→terrain
 pipeline.
 
+> **UPDATED 2026-09-07.** All four are now built and unit-verified, and a
+> command drives a frame end to end. What is left is smaller and sharper than
+> this entry describes — see the state below rather than the paragraph above,
+> which is kept because it is what the docket said when the work started.
+>
+> | item | state |
+> |---|---|
+> | world pager | `TERRAIN.SEQ` + `TERRAIN.LOADQ` + `TERRAIN.PAGELOADER` — UNIT_VERIFIED, all fitted |
+> | patch-residency manager | `TERRAIN.RESIDENCY` v2 — UNIT_VERIFIED |
+> | composed-height cache | `TERRAIN.COMPCACHE` — UNIT_VERIFIED, composed |
+> | command→terrain pipeline | `TERRAIN.CMD` + the T5 ABI in `spec/commands.zidl` — UNIT_VERIFIED, fitted |
+>
+> **A loaded page becomes ground.** `TERRAIN.PAGESTREAM` turns a resident slot
+> into a lattice and `TERRAIN.MIPFEED` runs it twice into `TERRAIN.MIPGEN`, so
+> the second completion the directory waits for now exists:
+> `world_composed_directed` measures eight pages loaded and **eight resident**
+> with the harness playing nothing. 167 checks, 0 failures, and the one
+> remaining composition defect needs a ruling rather than code.
+>
+> **A command starts a frame.** Phase M runs the same set by hand and from a
+> `SubmitTerrainSet`, and requires the two ACTION LOGS to be identical — kind,
+> order and every payload field.
+>
+> **A page reaches triangles.** `compose_rtl_directed` runs
+> PAGESTREAM → PATCH → COMPCACHE → TESS → NORMALS with **no adapter anywhere in
+> the chain**: 128 triangles and 128 face normals out of a 21,376-byte page,
+> matching `zref::terrain::tessellate` and `face_normal`. 53 checks.
+>
+> **WHAT IS ACTUALLY LEFT**, all of it either a ruling or one named block:
+>
+> 1. **The LOD deviations have no executable definition anywhere** — the only
+>    driver of `sp_dev1_i` in the tree is an LFSR in `zhao_prod_top.sv`, and
+>    every test writes the numbers by hand. Two rulings and one block;
+>    `reports/TERRAIN-LOD-DEVIATION-20260907.md`.
+> 2. **The command payload seam** — the shell's record framer carries SIXTEEN
+>    payload bytes and `SubmitTerrainSet` is thirty-two, so `patch_count` (T5's
+>    seal) never reaches the scheduler. Not a terrain problem:
+>    `TerrainField 0x0200` is a 112-byte record truncated the same way.
+>    `reports/TERRAIN-COMMAND-PIPELINE-20260907.md`.
+> 3. **`zhao_hps_arbiter` has two client ports** and terrain now has three HPS
+>    readers (PAGELOADER, WRITEBACK, CMD). Rule 5's starvation law is written
+>    for two.
+> 4. **`TerrainEpoch` 0x0220 is reserved and unimplemented** — BEGIN /
+>    END_FLUSH / ABORT, and what "drain" means in gates is not ruled.
+> 5. **Two blocks miss the product clock**: PAGESTREAM 97.11 MHz, CMD
+>    90.87 MHz. `fit_rules.ps1` gained `min_fmax_mhz` on 2026-09-07 so the rows
+>    say so; suspects named, neither acted on from a per-block fit alone.
+> 6. Four smaller rulings: which plane is surface 0 for load-time mips; a load
+>    completing into an EVICT_PENDING slot; what a bad `list_crc32c` does to the
+>    frame; and the set-level `view_mask`/`flags` that have no consumer.
+
 Three sizes are being confused and the doc separates them: raster tile 16×16
 **pixels**; terrain patch 32×32 cells = **64 m**; island = a sparse directory of
 patches in ±32 km fx16. `TERRAIN.LOD` already does ~784 clocks/patch ≈ 2,100
@@ -2415,7 +2466,7 @@ the note's target is 110–115 rather than 100.
 | | item |
 |---|---|
 | **D1** | the Fragment RMW split + address CAM; then the clock-enable fanout |
-| **D4** | the 8 km world — pager, residency, cache, command pipeline |
+| **D4** | the 8 km world — **pager, residency, cache and command pipeline all built and verified 2026-09-07**; what remains is the LOD deviation block, the 16-vs-32-byte command payload seam, the arbiter's two client ports, `TerrainEpoch`, two blocks under the product clock, and four small rulings |
 | **D5/D6** | creature presentation lane; cape bones; per-instance pose overrides |
 | **D7/D8** | Sunder; the tornado (explicitly after D1) |
 | **D9** | PC/console parallel dev, ZEMU, the language |
