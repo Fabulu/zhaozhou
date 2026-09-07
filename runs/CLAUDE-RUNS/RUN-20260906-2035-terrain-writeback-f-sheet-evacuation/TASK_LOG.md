@@ -1518,3 +1518,51 @@ above them. They are assertion-only signals (`ovf_c` feeds nothing but
 `a_rq_no_overflow`), which Quartus reports as unused once it drops assertions.
 
 Only ALM and Fmax remain, and those come from the fitter.
+
+---
+
+## THE REFIT LANDED — the fence rewrite is measured, and it over-recovered
+
+| | reported | **core→core** | ALM | reg |
+|---|---:|---:|---:|---:|
+| `@v3-full` (before today) | 75.79 | **89.09** | 5,678 | 4,864 |
+| `19bd8bd2` fence + credit | 77.16 | **77.16** | 6,094 | 4,756 |
+| `22442fd0` **+ rewrite + T4** | **87.37** | **91.32** | **5,709** | 4,863 |
+
+**Falsifier fired the right way.** `fence_open_q -> fence_open_q` is **not in the
+worst paths at all**. The 64-way `gen_n_c[tail_next_c]` select is out of the
+permission loop.
+
+**Internal ceiling ended HIGHER than it started** — 89.09 → 77.16 → **91.32**.
+And ALM went **down 385** while carrying T4's `crs_q`. Against the original the
+whole day is **+31 ALM (+0.5%)** for a correctness repair, a wrap fence, a
+registered admission credit and **+15.3% reported clock**.
+
+**The new honest limiter is `gen_q -> iss_q`** — the per-slot generation table,
+named for the THIRD time today and exactly T2's target. §6.8 predicted the
+mechanism; the fit has now decided the timing half three times over.
+
+`ALM 5709 > 1800` stands: retained and failing, gate untouched, per §12.4.
+
+## POSITION BEFORE THE NEXT FIT (written first, third time today)
+
+Launched `zhao_raster_perspuv_svc` — #1 in the refit order, because it carries
+today's registered output boundary aimed at the island's worst core→core path.
+
+**Before:** reported **96.62**, ALM **1,910**, registers **3,157**, M10K **1**,
+DSP 6, Fmax 96.62, `failed:structure` on `registers 3157 > 700` and
+`ALM 1910 > 900`.
+
+**Two predictions with falsifiers:**
+1. The `head_q` 16-way select leaves the retirement path. Falsifier: if the worst
+   path still launches from `head_q` through seven arrays, the boundary did not
+   move it.
+2. `e_q_u`/`e_q_v` (16x32 each, ~1,024 flops) may now infer as memory, since
+   their reads terminate at a flop per QUARTUS_GOTCHAS 14. Falsifier: registers
+   roughly unchanged and M10K still 1 means they did not, and something else in
+   the read path blocks absorption.
+
+**Next while it runs:** T2 step 2 — move Group A (admission + wrap) off the
+generation table. Now strongly motivated: the measurement says `gen_q` is the
+limiter, and step 1's assertions already prove the identity holds every cycle.
+v3own is outside this fit's closure.
