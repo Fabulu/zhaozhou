@@ -605,3 +605,25 @@ STATE OF THE BRIEF'S TEN INSTRUCTIONS:
   FOURTH  part one done (credit); part two (fence phase machine) specified
   FIFTH.. not started
   M6's test written early per §0, running as a WILL_FAIL lane
+
+## 2026-09-07 -- GEOM.PROJECT landed; the shell claim is true, my gate was not
+
+5,977 ALM / 6,570 reg / 27 M10K / 33 DSP / 61.09 MHz, against terrain_project's
+6,068 / 6,685 / 23 / 33. Same size.
+
+Entity census splits the header's two claims: the SHELL is 41 ALUTs (0%) --
+"thin shell" CONFIRMED -- while "the duplication is gone" is unmeasurable by a
+leaf fit, because each block instantiates its own core and sharing a module
+definition is not sharing hardware.
+
+max_m10k: 0 was UNSATISFIABLE. The 27 M10K are all inside u_core; I had
+attributed terrain's 23 to "triangle framing" and they are the core's. A rule
+about the shell applied to a closure containing the core. Third such rule in
+that file. Corrected to 30 with the reasoning kept.
+
+zhao_project_core is 39% short of the product clock, core-to-core, and it is
+instantiated on BOTH the geometry and terrain lanes.
+
+Toolchain refilled immediately: pair_tess_normals refitting to test the
+cell_solid mask. Prediction on record: TESS->TESS moves off 40.11; the 32.42
+lattice->vy family does not.

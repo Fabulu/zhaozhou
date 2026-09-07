@@ -296,10 +296,32 @@ targets:
       - fpga/rtl/common/zhao_project_core.sv
       - fpga/rtl/geometry/zhao_geom_project.sv
     rules:
-      # ZERO, and it is the acceptance question. The shell owns a handshake and
-      # a counter; anything that infers as memory here is storage nobody
-      # declared.
-      max_m10k: 0
+      # max_m10k: 0 WAS WRONG AND IS KEPT AS THE RECORD OF WHY. Written as
+      # "ZERO, and it is the acceptance question -- the shell owns a handshake
+      # and a counter; anything that infers as memory here is storage nobody
+      # declared." It measured 27.
+      #
+      # THE ERROR WAS MINE, NOT THE DESIGN'S. I attributed
+      # zhao_terrain_project's 23 M10K to "its triangle framing" and they are
+      # nothing of the kind: the storage belongs to the CORE -- 3,095 bits,
+      # 27 M10K, every one of them inside zhao_project_core:u_core. The shell
+      # owns none, exactly as its header claims: 41 ALUTs and 32 registers,
+      # 0% and 1% of the block.
+      #
+      # So the rule was a statement about the SHELL applied to a fit that
+      # necessarily contains the CORE, and it could not have passed however
+      # thin the shell became. That is the THIRD unsatisfiable rule recorded in
+      # this file, after min_m10k 17's capacity argument that ignored MLAB and
+      # min_memory_bits counting one of the device's two memory kinds.
+      #
+      # A PER-BLOCK FIT MEASURES A CLOSURE. A claim about one entity inside it
+      # belongs to tools/quartus/entity_census.py, which reads the map report's
+      # per-entity SELF figures, not to a rule on the fit total. Checked there,
+      # the shell claim is CONFIRMED.
+      #
+      # What the fit total can honestly bound is the closure -- one shell plus
+      # one core -- against zhao_terrain_project's row for that same core.
+      max_m10k: 30
       # Terrain's 33 with headroom. A second core would roughly double it, which
       # is the failure this catches -- the header's "the duplication is gone"
       # made checkable.
@@ -313,6 +335,15 @@ targets:
       # NO min_fmax_mhz. That rule is opt-in and this is not my block -- a clock
       # a block was never designed against is a surprise, not a gate. Its owner
       # adds it when they have a target.
+      #
+      # AND THE MEASURED CLOCK IS 61.09 MHz, core-to-core inside u_core with no
+      # boundary to blame (tools/quartus/split_setup_paths.py). 39% short. It
+      # is deliberately still not gated HERE, because zhao_project_core is
+      # instantiated by the terrain projector as well: the clock is a property
+      # of the SHARED core, and gating it on this block would put the alarm on
+      # whichever of the two happened to be refitted first. Recorded in
+      # reports/D22-GEOM-PROJECT-FIT-20260907.md instead, where it belongs --
+      # one block's clock problem sitting on two lanes at once.
 
   - top: zhao_geom_mem_adapter
     sources:
