@@ -1412,3 +1412,44 @@ retained at a cost of **0.16%**.
 instantiates it — `rcp24_svc` is what the island composes. So this repairs the
 **successor**, as §16 intends, and does not move the island's current numbers.
 Claiming otherwise would be the comfortable reading.
+
+## THE ISLAND'S REAL LIMITER, FOUND AND REPAIRED
+
+`reports/V31-ISLAND-REAL-LIMITER-20260907.md`, then `4ff7d48c`.
+
+**The block that looks worst was not the problem.** `zhao_texture_aux_pipe`
+reports **63.63 MHz**, the lowest of any island block, against a core→core of
+120.37. Its worst paths all start at the input port `req_wx_i[3]` and run
+combinationally into the divider — and **it does not appear in the composed
+island's worst paths even once.** Chasing it would have been wasted work; the
+alarming number was the artefact.
+
+**The composed fit names the real one:**
+
+    -2.936  zhao_raster_perspuv_svc:u_persp|head_q[1]
+            -> zhao_texture_fragrob:u_fragrob|altsyncram:axg_m_rtl_0
+
+(The five worse paths at −4.800 all start at `pal_ld_gen_i`, an island-top input
+port, so they set the reported 67.57 but have a boundary to blame. −2.936 is the
+honest limiter and agrees with the endpoint split's 77.30.)
+
+**And it is §16.2's defect again, this time in a block the island composes.**
+Seven arrays indexed by `head_q` at NTOK = 16, two of them 32 bits — a 16-way
+select between a queue pointer and the next block's M10K. The file's own header
+says *"P0 pop a queue, register the operands"*; the internal pipeline does, the
+external outputs did not.
+
+**Repaired with a skid** so the handshake absorbs the cycle and the island top is
+untouched. Both internal retirement sites moved to the internal ready together —
+this file records that separating them once produced a free-count that grew
+without bound and hung the lane.
+
+**Verified at both levels with real before runs:**
+
+| | before | after |
+|---|---|---|
+| block | 666 products / 335 clocks, 1.99/clk | **identical** |
+| island composed | *(running)* | **119 checks pass** |
+
+Timing benefit unmeasured until a refit — the lane is busy with the v3own
+T4+fence refit.
