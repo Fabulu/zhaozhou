@@ -99,7 +99,62 @@ happens* changed.
 instructs an implementer to build the wrong order; docket D12 corrected from
 "open question" to "decided, implementation outstanding".
 
-**Not done here:** the fog stage itself — the ATTRSTEP factor lane, and the mix
-at the final source colour between material combination and framebuffer blend.
-That is real RTL plus a matching reference implementation plus tests, and it
-should land in the reference first, because the reel is what defines correct.
+## BUILT, reference-first, on the owner's go-ahead (2026-09-07)
+
+> "Do the rearchitecture. Now's the time. Geom's probably fucked right now
+> anyway." — then, when I reported the lane existed but nothing produced it:
+> "you said fog on my go-ahead? Well make the fog"
+
+So it is made, end to end, in the oracle:
+
+* **The lane.** `ScreenV::fogf`, Q16.16, defaulting to `0x10000` = CLEAR.
+  Interpolated with exactly the alpha lane's shape — one round-half-up division
+  at setup, exact s32 stepping, full barycentric re-evaluation at row starts.
+  D-5 made the factor an ordinary interpolant, so it uses the ordinary machinery.
+* **The law.** `reference/include/zref/zref_fog.hpp` — §8's `frame_k` and
+  `vertex_factor`, frozen arithmetic reproduced exactly, including the disabled
+  case `fog_far <= fog_near` as a deterministic no-op.
+* **The producer**, which is what makes it a feature rather than a possibility:
+  `apply_vertex_fog(ProjOut&, near, far, k, L)`. `ProjOut::w` already carried the
+  guarded forward distance §8's `d` asks for. A behind-the-eye vertex is left
+  CLEAR rather than fully fogged — its primitive is culled, and fogging a vertex
+  nobody draws would only put a surprising number in a struct.
+* **The mix**, at the final source colour: after the toon ramp, after material
+  combination, before the framebuffer blend. `kAlpha` fogs the SOURCE before
+  blending so the destination — fogged when it was written — is not fogged
+  twice. `kAdditive` cannot fog by construction, honouring §8's frozen exempt
+  list.
+
+### One defect in the frozen text, resolved and documented
+
+§8 defines `f = 1` as CLEAR, but its mix formula weights toward `fog_c` by `f8`,
+which at `f8 = 255` ("clear") returns the fog colour — inverted fog. D-5
+**replaced** that mix wholesale ("everything from 'Mix (frozen)' to the end"),
+retaining it only as the record, so the surviving law is the factor, and the
+weight toward `fog_c` is its COMPLEMENT. That is the only reading consistent
+with §8's own polarity comment, and it is argued at the call site rather than
+silently chosen.
+
+Everything else is preserved: the unit8 law (raw/256, not /255) and ONE rounding
+per channel.
+
+### The acceptance test, and it was shown to FIRE
+
+`test_d5_fog_after_toon_quantiser` renders one lit gradient twice — clear, and
+under CONSTANT fog — and asserts the toon band edges land on **exactly the same
+pixels**. Constant fog is the sharpest available probe: under the correct order
+it is a uniform recolour that cannot move an edge; under the wrong order it is a
+uniform shift that moves every edge a threshold sits near.
+
+Fire-tested by building the forbidden order on purpose — fogging the Gouraud
+lanes before `apply_toon_ramp`:
+
+    FAIL: D-5: the toon band edges land on exactly the same pixels with and
+          without fog -- bands come from LIGHTING alone.
+    FAIL: D-5: constant fog recolours the bands without creating or destroying any
+
+Both fired. Source restored, `render_directed` **all green**, and green with fog
+off means byte-identical: no golden moved.
+
+**Still not done:** the RTL. The oracle now defines correct, which is the order
+question 1 demanded.

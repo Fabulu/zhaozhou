@@ -2474,3 +2474,26 @@ register did not break the cone and the change bought nothing.
 the shorter cone pays for it at this block's boundary is the question, and the
 island's −3.243 family is the number that actually matters, which only a
 composed fit can answer.
+
+## Fog is MADE — reference-first, end to end, fire-tested
+
+Owner: *"you said fog on my go-ahead? Well make the fog"*. Done in the oracle:
+the `ScreenV::fogf` lane (alpha's exact interpolation shape), `zref_fog.hpp` with
+§8's frozen factor law, **the producer** `apply_vertex_fog` reading the guarded
+`w` that `ProjOut` already carried, and the mix at the final source colour after
+the ramp — with `kAlpha` fogging the source before blending and `kAdditive`
+unable to fog by construction per the frozen exempt list.
+
+**A real defect in the frozen text had to be resolved:** §8 says `f = 1` is
+CLEAR, but its mix weights toward `fog_c` by `f8`, which inverts fog. D-5
+replaced that mix wholesale, so the surviving law is the factor and the weight is
+its COMPLEMENT — argued at the call site, not silently chosen.
+
+**The acceptance test was shown to fire.** `test_d5_fog_after_toon_quantiser`
+asserts the toon band edges land on identical pixels with and without constant
+fog. Injecting the forbidden pre-ramp order failed both assertions immediately;
+source restored, `render_directed` all green — and green with fog off means
+byte-identical, so no golden moved.
+
+RTL still to come. The oracle defines correct, which is the order the handover's
+own first question demanded.
