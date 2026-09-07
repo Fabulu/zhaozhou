@@ -516,3 +516,17 @@ NEXT for this lane, in order:
      assignment sites, stale mask = wrong solidity answer).
   3. The lattice->vy family is a separate repair: vy[pend_slot] <= m_y lands a
      saturating add on the same edge as the memory read that feeds it.
+
+## 2026-09-07 -- closed the tess_normals coverage hole
+
+Cause: tess_harness.hpp's make_lattice fills cell_state with kSolid everywhere,
+so the solidity window's answer was always yes across all 41,731 checks.
+
+Fix: a SECOND sweep over make_island_voids(), existing sweep untouched. Voids
+straddle the run-cell grid deliberately (a 4x4 block = a whole run-cell at
+levels 0-2; a diagonal of singles = never whole above level 0). Asserts the
+voids actually removed geometry -- 5,232 vs 5,440 triangles, 208 removed --
+so the new sweep cannot be a re-test of the solid case.
+
+Verified by re-running the SAME mutation: 0 failures before, 636 after.
+47,221 checks pass on restored RTL.

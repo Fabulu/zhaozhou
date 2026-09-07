@@ -219,6 +219,46 @@ zt::ComposedLattice make_island() {
   return lat;
 }
 
+/**
+ * The same island with VOID CELLS PUNCHED IN IT, and it exists because a fire
+ * test proved this suite could not see them.
+ *
+ * `make_lattice` fills `cell_state` with `kSolid` everywhere, so in every one
+ * of this file's 41,731 original checks TERRAIN.TESS's solidity window was
+ * asked a question whose answer was always yes. Mutating the window -- the
+ * expression that decides whether a run-cell is skipped -- changed nothing
+ * here, while `terrain_tess_directed` caught it in five checks. A suite with
+ * six times the checks was blind to the logic, which is CLAUDE.md's
+ * "component checks passing is not likeness evidence" one level down:
+ * 41,731 is a number, not coverage.
+ *
+ * THE VOIDS ARE CHOSEN TO STRADDLE THE RUN-CELL GRID, not sprinkled. TESS
+ * walks run-cells of stride 1/2/4/8 by level, and skips one only when EVERY
+ * patch cell under it is solid. A pattern that never fills a whole run-cell
+ * exercises the "partially void" arm at every level and never the "wholly
+ * void" one, so both are built deliberately:
+ *
+ *   - a solid 4x4 block of void at (8..11, 8..11), which is a WHOLE run-cell
+ *     at levels 0-2 and part of one at level 3;
+ *   - a diagonal of single void cells, which is never a whole run-cell at any
+ *     level above 0 and so always lands on the partial arm.
+ *
+ * The oracle reads the same lattice, so the differential is unchanged in
+ * kind -- this is not a new expectation, it is the same expectation asked
+ * somewhere it was never asked before.
+ */
+zt::ComposedLattice make_island_voids() {
+  zt::ComposedLattice lat = make_island();
+  for (int cj = 8; cj < 12; ++cj)
+    for (int ci = 8; ci < 12; ++ci)
+      lat.cell_state[static_cast<size_t>(cj) * 32 + static_cast<size_t>(ci)] =
+          zt::kVoidAuthored;
+  for (int d = 0; d < 32; d += 3)
+    lat.cell_state[static_cast<size_t>(d) * 32 + static_cast<size_t>(d)] =
+        zt::kVoidAuthored;
+  return lat;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -294,6 +334,77 @@ int main(int argc, char** argv) {
         }
       }
     }
+  }
+
+  // =========================================================================
+  // THE VOID SWEEP -- the same chain over a lattice that is not all solid
+  // =========================================================================
+  // Added after a fire test showed the sweep above cannot see TERRAIN.TESS's
+  // solidity window at all: every cell it uses is kSolid, so the window's
+  // answer is always yes and mutating it changes nothing.
+  {
+    const zt::ComposedLattice holed = make_island_voids();
+    uint32_t void_tris = 0;
+    for (int oz = 0; oz < 32; oz += 8) {
+      for (int ox = 0; ox < 32; ox += 8) {
+        for (int level = 0; level <= zt::kMaxLevel; ++level) {
+          for (int surf = 0; surf < 2; ++surf) {
+            zt::SubpatchJob job;
+            job.ox = ox;
+            job.oz = oz;
+            job.level = level;
+            for (int k = 0; k < 4; ++k) job.nlevel[k] = level;
+            job.surface = surf ? zt::Surface::kUnderside : zt::Surface::kTop;
+            job.morph = 0;
+
+            std::vector<zt::MeshTri> mesh;
+            const std::vector<Normal> ns = chain.run(holed, job, &mesh, 0x11111111u);
+            const zt::TessResult want = zt::tessellate(holed, job);
+
+            check(mesh.size() == want.tris.size(),
+                  "void sweep: the hardware emits exactly the oracle's triangle count",
+                  want.tris.size(), mesh.size());
+            check(ns.size() == mesh.size(),
+                  "void sweep: NORMALS answers once per triangle", mesh.size(), ns.size());
+            for (size_t i = 0; i < mesh.size() && i < want.tris.size(); ++i) {
+              const zt::MeshTri& w = want.tris[i];
+              check(mesh[i].ax == w.ax && mesh[i].ay == w.ay && mesh[i].az == w.az &&
+                        mesh[i].bx == w.bx && mesh[i].by == w.by && mesh[i].bz == w.bz &&
+                        mesh[i].cx == w.cx && mesh[i].cy == w.cy && mesh[i].cz == w.cz,
+                    "void sweep: every vertex matches the oracle", 1, 1);
+            }
+            void_tris += static_cast<uint32_t>(mesh.size());
+          }
+        }
+      }
+    }
+
+    // THE CHECK THAT KEEPS THIS FROM BEING VACUOUS. If the voids did not
+    // actually remove geometry, the sweep re-tests the solid case in a new
+    // costume and the window is still never asked a real question.
+    uint32_t solid_tris = 0;
+    for (int oz = 0; oz < 32; oz += 8)
+      for (int ox = 0; ox < 32; ox += 8)
+        for (int level = 0; level <= zt::kMaxLevel; ++level)
+          for (int surf = 0; surf < 2; ++surf) {
+            zt::SubpatchJob job;
+            job.ox = ox;
+            job.oz = oz;
+            job.level = level;
+            for (int k = 0; k < 4; ++k) job.nlevel[k] = level;
+            job.surface = surf ? zt::Surface::kUnderside : zt::Surface::kTop;
+            job.morph = 0;
+            solid_tris += static_cast<uint32_t>(zt::tessellate(island, job).tris.size());
+          }
+    check(void_tris < solid_tris,
+          "void sweep: the voids REMOVED geometry, so the solidity window was "
+          "genuinely exercised",
+          1, void_tris < solid_tris ? 1 : 0);
+    check(void_tris > 0, "void sweep: and did not remove all of it", 1,
+          void_tris > 0 ? 1 : 0);
+    std::printf(
+        "terrain_tess_normals: void sweep %u triangles against %u solid -- %u removed\n",
+        void_tris, solid_tris, solid_tris - void_tris);
   }
 
   // The sweep must have carried real slope, or "ny > 0" would be a statement
