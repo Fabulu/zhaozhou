@@ -233,6 +233,28 @@ excluded:
   - zhao_terrain_seq: unused  the terrain command sequencer; it drives RESIDENCY, PAGELOADER and COMPCACHE, none of which zhao_shell_top composes yet -- that composition is step 8 of the world-layer build sequence
   - zhao_terrain_writeback: unused  dirty-page evacuation; same reason
 
+  # --- the world layer's 2026-09-07 blocks -----------------------------------
+  # Four blocks landed the day the world layer was composed, and they are
+  # UNUSED here for the same reason TERRAIN.SEQ and TERRAIN.PAGELOADER are: they
+  # are integrABLE and not integrated. `zhao_shell_top` composes none of the
+  # terrain world layer, so promoting any of them to a `top` would fit logic
+  # nothing in the production machine drives -- and would change what the next
+  # production fit measures as a SIDE EFFECT of adding a block, which is the
+  # decision TERRAIN.VISIBLE's note above says to take deliberately.
+  #
+  # THIS GATE WAS RED ON ALL FOUR before this entry, and it was right to be:
+  # each was registered in design/blocks.yml and in design/fit_targets.yml on
+  # the day it was written, and NOT here. That is exactly the "three separate
+  # acts" TERRAIN.VISIBLE's note names, discovered by doing two of them and
+  # being caught by the third -- which is what the gate is for.
+  #
+  # Each has its own per-block fit target and a measured row, so none of them is
+  # unmeasured; what they are is uncomposed.
+  - zhao_terrain_loadq: unused  the load queue between SEQ and PAGELOADER; fitted (1 M10K, 734 ALM, 107.33 MHz) but the shell composes neither end
+  - zhao_terrain_pagestream: unused  turns a resident page slot into the 33x33 lattice; fitted, and its consumers PATCH and MIPGEN are themselves uncomposed in the shell
+  - zhao_terrain_mipfeed: unused  runs the streamer twice into MIPGEN for the second residency completion; fitted (343 ALM, no memory, no DSP)
+  - zhao_terrain_cmd: unused  SubmitTerrainSet -> TERRAIN.SEQ's frame ring; fitted (1,069 ALM, no memory), and the command seam it would sit behind is an open ruling -- the shell's record framer carries 16 payload bytes and the command is 32
+
   # --- probes and leaf-fit pairs: never in the machine -----------------------
   # These exist to put ONE block, or two adjacent blocks, in front of the
   # fitter. Every one of them is a wrapper around production logic that is
