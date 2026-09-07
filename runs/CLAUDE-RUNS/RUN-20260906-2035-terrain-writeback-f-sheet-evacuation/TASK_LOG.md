@@ -1603,3 +1603,45 @@ Without case 4b, step 2 could have shipped a permanently-true guard behind a
 green bench.
 
 481 checks pass on the real RTL.
+
+## PERSPUV MEASURED — the island's worst path clears the product clock
+
+| | before | after |
+|---|---:|---:|
+| **Fmax** | 96.62 | **105.19** |
+| ALM | 1,910 | **1,886** |
+| registers | 3,157 | 3,216 |
+| M10K | 1 | 1 |
+
+**Prediction 1 confirmed and not by inference:** `head_q` launches **zero** of
+the worst forty paths, and every remaining slack is **positive** — the block no
+longer misses timing anywhere. ALM went DOWN 24: the 16-way select across seven
+arrays cost more than the registers replacing it.
+
+**Prediction 2 FALSIFIED, as its falsifier said it would be if wrong:**
+`e_q_u`/`e_q_v` did NOT infer as memory. Registers +59, M10K still 1. Registering
+the read was necessary but not sufficient — the file's own header records the
+same outcome for `e_num_u`/`e_num_v`, and `e_tag` remains the only array here
+that becomes RAM.
+
+**Four predictions falsified today, three confirmed.** Every falsified one was
+about MAGNITUDE or MECHANISM inferred from source; every confirmed one was about
+STRUCTURE — which path leaves, which signal disappears. Predict what moves, not
+how far.
+
+## POSITION BEFORE THE ISLAND REFIT (fourth time today)
+
+Launched `zhao_texture_island_top` — #2 in the order, and the only thing that
+says whether a block-level win composes.
+
+**Before (4 commits stale, which is itself why it is on the list):** reported
+**67.57**, core→core **77.30**, ALM 16,192, registers 28,490, 32 M10K, 17 DSP.
+Worst paths: five at −4.800 from `pal_ld_gen_i` (an island input port, so
+boundary-blamed), then **−2.936 `perspuv_svc|head_q -> fragrob|axg_m`** — the
+one just repaired.
+
+**Prediction:** the −2.936 family is gone. **Falsifier:** if a `head_q`-launched
+path into fragrob is still there, the block-level win did not compose.
+
+**Not predicted:** the reported figure. The palette-load paths at −4.800 are
+untouched and will likely still set it.
