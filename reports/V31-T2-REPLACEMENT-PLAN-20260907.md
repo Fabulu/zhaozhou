@@ -294,3 +294,49 @@ actually fails — the bench reports:
 **Exactly the two new checks, and nothing else.** All 477 pre-existing checks
 pass with a permanently-true guard. Without case 4b, T2 step 2 could have
 disabled owner validation on the issue path and left a green bench behind it.
+
+
+---
+
+# GROUP A LANDED, and the mistake I made in prose is now caught in RTL
+
+All three Group A sites now read the window instead of the table:
+
+| site | was | is |
+|---|---|---|
+| `adm_gen_c` | `gen_q[tail_q] + 1` | `alloc_gen` |
+| `wrap_block_c` | `gen_q[tail_q] == 8'hFF` | `alloc_gen == 8'h00` |
+| `wrap_at_tail_p1_c` | `gen_q[tail_p1_c] == 8'hFF` | `(tail_q == 63) ? alloc_gen == 8'hFF : alloc_gen == 8'h00` |
+
+Two 64-way selects of an 8-bit array leave the design.
+
+## The assertions were kept honest, which mattered immediately
+
+`a_win_gen_matches_table` compared `adm_gen_c` against `sh_alloc_gen_q`. Group A
+made `adm_gen_c` **be** `sh_alloc_gen_q` — so that form silently became a
+**tautology**, an assertion that cannot fail. It now compares against the
+**table**, which is what the derivation actually claims, and two more were added
+on the same principle for sites 2 and 3.
+
+## Site 3's fire test is the whole argument for this method
+
+The mutant is the **naive** form — `alloc_gen == 8'h00`, dropping the
+`tail_q == 63` case. That is not an invented error: it is precisely what this
+plan asserted in prose earlier today, before an assertion corrected it.
+
+    %Error: zhao_texture_v3own.sv:1612: Assertion failed in
+            a_win_wrap_p1_matches_table
+
+**Caught immediately.** A fence that is wrong only at the wrap boundary is
+otherwise silent for 16,320 allocations, and no functional check in the bench
+distinguishes the two forms — the mutant's *checks* all pass; only the assertion
+fires.
+
+481 checks pass on the real derivation, no assertion fired.
+
+## What is left of the table
+
+Five readers: the four in-loop comparisons at 1032–1056 (Group B remainder,
+deliberately deferred — see above, the natural hoist is not behaviour-preserving)
+and `g0_owner_q` (Group C). `gen_q` cannot be deleted, and its 512 flip-flops
+cannot be recovered, until those five go.
