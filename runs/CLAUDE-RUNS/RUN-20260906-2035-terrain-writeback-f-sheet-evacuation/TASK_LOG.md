@@ -2118,3 +2118,38 @@ Still open: V03's construction, V05's write-enable observation, and §8.3's
 claim-to-write lease at the physical write enables — which the brief warns must
 not become "an uncontrolled late combinational window predicate immediately
 before a bank write-enable".
+
+## THE REGISTER PREDICTION IS EXACT: −560, measured at map
+
+Read mid-flight; the fitter is still placing.
+
+| | previous (T4+fence) | this refit |
+|---|---:|---:|
+| MAP registers | 4,310 | **3,750** |
+| virtual pins | 952 | 952 |
+| memory bits | 20,640 | 20,640 |
+| DSP | 0 | 0 |
+
+**−560, against a recorded prediction of −560:**
+
+| component | predicted |
+|---|---:|
+| `gen_q` deleted (T2 migration) | −512 |
+| `ftc_q` dead (§13.1) | −64 |
+| window generation counters now synthesised | +16 |
+| **net** | **−560** |
+
+So all three are confirmed independently: the 512-flop table genuinely left
+synthesis, §13.1's fetched bit is gone, and the window counters cost exactly the
+two bytes they look like.
+
+**And this refines today's rule about predictions.** The score was three
+structural predictions confirmed against four magnitude predictions falsified,
+and I wrote "predict what moves, not how far." That was half right. The sharper
+rule: **accounting predictions can be exact; performance predictions cannot.**
+Registers are countable from the source — flip-flops declared, flip-flops
+deleted — so a careful count lands on the number. ALM and Fmax depend on what
+the fitter chooses to do with the logic, and every one of those I got wrong
+today.
+
+ALM and Fmax still pending from the fitter, and deliberately not predicted.
