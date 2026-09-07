@@ -2387,6 +2387,20 @@ add_test(NAME texture_v3rq_directed COMMAND test_texture_v3rq_directed)
 set_tests_properties(texture_v3rq_directed PROPERTIES
   LABELS "fast;nightly" TIMEOUT 300)
 
+# ---- T2's identity-only comparison, before any RTL moves -------------------
+# The recovery handoff's T2 asks for "independent literal-owner/generation
+# checks, THEN replace per-slot generation access", and T1 asks to "preserve a
+# tested identity-only comparison rather than one giant patch".
+#
+# NO verilate(): this compares two REPRESENTATIONS of the same live set, which
+# is a mathematical claim rather than a timing one. Keeping it free of a DUT is
+# the point -- it stays valid while the owner RTL is being rebuilt underneath.
+add_executable(test_texture_v3_window_identity texture/texture_v3_window_identity.cpp)
+target_link_libraries(test_texture_v3_window_identity PRIVATE zhao_harness)
+add_test(NAME texture_v3_window_identity COMMAND test_texture_v3_window_identity)
+set_tests_properties(texture_v3_window_identity PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300)
+
 add_test(NAME lint_texture_v3rq
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_texture_v3rq

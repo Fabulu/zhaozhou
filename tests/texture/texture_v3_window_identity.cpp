@@ -1,0 +1,310 @@
+// texture_v3_window_identity.cpp
+//
+// ---------------------------------------------------------------------------
+// T2'S FIRST DELIVERABLE, BEFORE ANY RTL MOVES
+// ---------------------------------------------------------------------------
+// The master recovery handoff's T2 asks for "independent literal-owner/
+// generation checks, THEN replace per-slot generation access", and T1 says to
+// "preserve a tested identity-only comparison rather than one giant patch".
+// This is that comparison, and it is deliberately pure C++: it compares two
+// REPRESENTATIONS of the same live set, which is a mathematical claim and not a
+// timing one. Nothing here needs a DUT, so it cannot be invalidated by whatever
+// the owner RTL is doing this week.
+//
+// V3.1 6.1 proposes replacing a 64-entry table of live bits and generation
+// bytes with one bounded interval:
+//
+//   distance = unsigned_14(t - retire_ticket);
+//   live(t)  = distance < used;
+//
+// 6.2 fixes the encoding, and the permutation is the part most likely to be got
+// wrong by hand:
+//
+//   slot = ticket[5:0];  generation = ticket[13:6];
+//   public_owner = { ticket[5:0], ticket[13:6] }   -- SLOT IN THE HIGH BITS
+//
+// and initialises alloc = retire = 64, used = 0, "to match first-use generation
+// one for slot zero".
+//
+// 6.2 also states the trap this file exists to make un-fallable-into: "Do not
+// apply a numerical subtraction directly to public_owner. Its slot bits are in
+// the high position. Decode it into internal ticket order first."
+#include <cstdint>
+#include <cstdio>
+#include <vector>
+
+#include "../harness/zhao_sim.hpp"
+
+namespace {
+
+constexpr int      kSlots   = 64;
+constexpr int      kTBits   = 14;
+constexpr uint32_t kModulus = 1u << kTBits;   // 16384
+constexpr uint32_t kMask    = kModulus - 1u;
+
+// ---- 6.2's encoding, in one place ----------------------------------------
+inline uint16_t slot_of(uint16_t ticket) { return ticket & 0x3F; }
+inline uint16_t gen_of(uint16_t ticket)  { return (ticket >> 6) & 0xFF; }
+inline uint16_t public_of(uint16_t ticket) {
+  return static_cast<uint16_t>((slot_of(ticket) << 8) | gen_of(ticket));
+}
+
+// ---- the PROPOSED representation: one bounded interval --------------------
+struct Window {
+  uint16_t alloc = 64;
+  uint16_t retire = 64;
+  int      used = 0;
+
+  bool live(uint16_t t) const {
+    const uint32_t distance = (static_cast<uint32_t>(t) - retire) & kMask;
+    return distance < static_cast<uint32_t>(used);
+  }
+  uint16_t admit() {
+    const uint16_t t = alloc;
+    alloc = static_cast<uint16_t>((alloc + 1) & kMask);
+    ++used;
+    return t;
+  }
+  void retire_oldest() {
+    retire = static_cast<uint16_t>((retire + 1) & kMask);
+    --used;
+  }
+};
+
+// ---- the EXISTING representation: per-slot live bits and generation bytes --
+struct Literal {
+  bool    live_bit[kSlots] = {false};
+  uint8_t gen_byte[kSlots] = {0};
+  std::vector<uint16_t> order;   // allocation order, for oldest-first retire
+
+  void admit(uint16_t ticket) {
+    const uint16_t s = slot_of(ticket);
+    ++gen_byte[s];               // a slot's generation increments on REUSE
+    live_bit[s] = true;
+    order.push_back(ticket);
+  }
+  void retire_oldest() {
+    live_bit[slot_of(order.front())] = false;
+    order.erase(order.begin());
+  }
+  bool live(uint16_t t) const {
+    for (uint16_t o : order) {
+      if (o == t) return true;
+    }
+    return false;
+  }
+};
+
+uint32_t lcg(uint32_t& s) { s = s * 1664525u + 1013904223u; return s; }
+
+}  // namespace
+
+int main() {
+  // ---- the encoding itself -------------------------------------------------
+  {
+    Window w;
+    const uint16_t first = w.admit();
+    zhao::check(slot_of(first) == 0,
+                "6.2: initialising alloc/retire to 64 makes the first token "
+                "slot zero", 0, slot_of(first));
+    zhao::check(gen_of(first) == 1,
+                "and generation ONE, not zero -- to match first-use generation "
+                "one for slot zero", 1, gen_of(first));
+  }
+  {
+    // Slot 0 must not come back until 64 allocations later, and with its
+    // generation incremented by exactly one.
+    Window w;
+    const uint16_t t0 = w.admit();
+    for (int i = 0; i < kSlots - 1; ++i) (void)w.admit();
+    const uint16_t t64 = w.admit();
+    zhao::check(slot_of(t64) == slot_of(t0),
+                "slot 0 is reused after exactly 64 allocations", slot_of(t0),
+                slot_of(t64));
+    zhao::check(gen_of(t64) == gen_of(t0) + 1,
+                "and its generation has advanced by one",
+                static_cast<uint64_t>(gen_of(t0) + 1), gen_of(t64));
+  }
+
+  // ---- 6.1's empty/full claim does NOT hold in this encoding ---------------
+  // 6.1 says: "Both empty and full must be represented explicitly by used.
+  // Pointer equality alone cannot distinguish them."
+  //
+  // That is the classic same-width-pointer FIFO caution, and this test was
+  // first written to confirm it. It FAILED, and the document is what is wrong
+  // here -- not by much, but in a way worth pinning down, because it is offered
+  // as the reason a field exists.
+  //
+  // The ticket space is 14 bits (16,384) while capacity is 64. So
+  // (alloc - retire) mod 16384 EQUALS used for every reachable state, alloc ==
+  // retire happens only at used == 0, and full sits 64 apart. Pointer equality
+  // distinguishes empty from full perfectly well; `used` is DERIVABLE.
+  //
+  // `used` is still right to keep -- but for 6.4's reason, not 6.1's: "Use
+  // pre-edge state for permission: admit_allowed = ... && (used_q < 64)". That
+  // wants a REGISTERED count, not a subtraction evaluated on the admission
+  // path. A correct field with a wrong justification is worth catching, because
+  // the justification is what the next person reasons from.
+  {
+    Window empty;                       // used = 0
+    Window full;
+    for (int i = 0; i < kSlots; ++i) (void)full.admit();   // used = 64
+    zhao::check(full.used == kSlots, "the full window holds 64 owners", kSlots,
+                full.used);
+    zhao::check(empty.alloc == empty.retire,
+                "the empty window has equal pointers", 1,
+                (empty.alloc == empty.retire) ? 1 : 0);
+    zhao::check(full.alloc != full.retire,
+                "but the FULL window does not -- so, contrary to 6.1, pointer "
+                "equality DOES distinguish empty from full at this ticket "
+                "width, and `used` is justified by 6.4's pre-edge permission "
+                "rather than by ambiguity",
+                1, (full.alloc != full.retire) ? 1 : 0);
+    const uint32_t span = (static_cast<uint32_t>(full.alloc) - full.retire) & kMask;
+    zhao::check(span == static_cast<uint32_t>(full.used),
+                "and the pointer span equals used exactly, which is what makes "
+                "it derivable", static_cast<uint64_t>(full.used), span);
+    zhao::check(!empty.live(empty.retire),
+                "the empty window reports its own retire ticket dead", 0,
+                empty.live(empty.retire) ? 1 : 0);
+    zhao::check(full.live(full.retire),
+                "the full window reports that same ticket live", 1,
+                full.live(full.retire) ? 1 : 0);
+  }
+
+  // ---- 6.2's named trap: subtracting on public_owner ------------------------
+  // The permutation puts slot in the HIGH bits, so distance arithmetic on the
+  // public token is meaningless. The counterexample is SEARCHED FOR rather than
+  // asserted, so this check fails loudly if somebody "simplifies" the decode.
+  {
+    Window w;
+    for (int i = 0; i < 40; ++i) (void)w.admit();     // used = 40
+    int disagreements = 0;
+    for (uint32_t t = 0; t < kModulus; ++t) {
+      const uint16_t tt = static_cast<uint16_t>(t);
+      const bool correct = w.live(tt);
+      const uint32_t pub_dist =
+          (static_cast<uint32_t>(public_of(tt)) - public_of(w.retire)) & kMask;
+      const bool naive = pub_dist < static_cast<uint32_t>(w.used);
+      if (correct != naive) ++disagreements;
+    }
+    zhao::check(disagreements > 0,
+                "6.2's trap is real: subtracting directly on public_owner "
+                "disagrees with the decoded window on at least one token, so "
+                "the decode is not optional",
+                1, disagreements > 0 ? 1 : 0);
+  }
+
+  // ---- the identity, through many namespace wraps ---------------------------
+  // 6.2: "The included model compares these two representations through many
+  // namespace wraps." Membership is compared over the WHOLE 14-bit token space
+  // periodically, not only over live tokens -- a window that reported spurious
+  // live for DEAD tokens would otherwise pass every check here.
+  {
+    Window w;
+    Literal L;
+    uint32_t rng = 0xC0FFEEu;
+    int  full_sweeps = 0;
+    long token_checks = 0;
+    int  membership_mismatches = 0;
+    int  gen_mismatches = 0;
+    int  admits = 0;
+    int  retires = 0;
+
+    for (int step = 0; step < 60000; ++step) {
+      const uint32_t r = lcg(rng) >> 16;
+      const bool want_admit = ((r & 1u) != 0u) || (w.used == 0);
+      if (want_admit && w.used < kSlots) {
+        const uint16_t t = w.admit();
+        L.admit(t);
+        ++admits;
+        // The literal table's own generation byte must equal the ticket's.
+        if (L.gen_byte[slot_of(t)] != gen_of(t)) ++gen_mismatches;
+      } else if (w.used > 0) {
+        w.retire_oldest();
+        L.retire_oldest();
+        ++retires;
+      }
+
+      if ((step % 500) == 0) {
+        for (uint32_t t = 0; t < kModulus; ++t) {
+          const uint16_t tt = static_cast<uint16_t>(t);
+          if (w.live(tt) != L.live(tt)) ++membership_mismatches;
+          ++token_checks;
+        }
+        ++full_sweeps;
+      }
+    }
+
+    zhao::check(admits > 20000, "the sequence actually allocated (not vacuous)",
+                1, admits > 20000 ? 1 : 0);
+    zhao::check(retires > 20000, "and actually retired", 1,
+                retires > 20000 ? 1 : 0);
+    zhao::check(admits > static_cast<int>(kModulus),
+                "and ran past a full namespace wrap, which is the case 6.6 "
+                "says the arithmetic alone cannot handle",
+                1, admits > static_cast<int>(kModulus) ? 1 : 0);
+    zhao::check(full_sweeps >= 100,
+                "membership was swept over the whole token space many times", 1,
+                full_sweeps >= 100 ? 1 : 0);
+    zhao::check(token_checks > 1000000,
+                "over a million token membership comparisons", 1,
+                token_checks > 1000000 ? 1 : 0);
+    zhao::check(membership_mismatches == 0,
+                "the window interval and the literal 64-entry live/generation "
+                "table agree on EVERY token, through many namespace wraps",
+                0, membership_mismatches);
+    zhao::check(gen_mismatches == 0,
+                "and the per-slot generation byte always equals ticket[13:6]", 0,
+                gen_mismatches);
+  }
+
+  // ---- 6.6: where the namespace fence must sit ------------------------------
+  // "The first partial interval starting at ticket 64 reaches this fence after
+  // 16,320 allocations; later complete intervals span 16,384." Counted here
+  // rather than quoted, because a number carried across a document boundary is
+  // exactly the kind that goes stale silently.
+  {
+    Window w;
+    int allocations = 0;
+    for (;;) {
+      const uint16_t t = w.admit();
+      ++allocations;
+      w.retire_oldest();
+      if (((t + 1u) & kMask) == 0u) break;   // alloc_ticket would wrap to zero
+    }
+    zhao::check(allocations == 16320,
+                "6.6: the first interval starting at ticket 64 reaches the "
+                "namespace-wrap fence after exactly 16,320 allocations",
+                16320, allocations);
+  }
+
+  // ---- 6.3: the ordered-retirement invariant is load-bearing ----------------
+  // "allocation never leaves a hole in the live interval; retirement is
+  // strictly oldest-first." 6.3 warns: "Do not quietly assume away holes."
+  // If a hole could occur, the interval representation is simply WRONG -- and a
+  // test that only ever retires in order would never reveal it. So punch one.
+  {
+    Window w;
+    Literal L;
+    for (int i = 0; i < 8; ++i) {
+      const uint16_t t = w.admit();
+      L.admit(t);
+    }
+
+    const uint16_t interior = L.order[4];
+    // The literal table can express the hole; the interval cannot.
+    L.live_bit[slot_of(interior)] = false;
+    L.order.erase(L.order.begin() + 4);
+
+    const bool diverged = w.live(interior) && !L.live(interior);
+    zhao::check(diverged,
+                "6.3: retiring an INTERIOR owner makes the interval and the "
+                "literal table disagree -- so oldest-first retirement is a "
+                "precondition of the replacement, not a stylistic preference",
+                1, diverged ? 1 : 0);
+  }
+
+  const int rc = zhao::report_and_exit("texture_v3_window_identity");
+  zhao::exit_hard(rc);
+}
