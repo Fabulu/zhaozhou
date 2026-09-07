@@ -96,6 +96,12 @@ counter_catalog:
   - compcache_fill_overrun
   - compcache_lat_oob
   - compcache_cs_oob
+  - pagestream_lattices
+  - pagestream_refused
+  - pagestream_vertices
+  - pagestream_bursts
+  - pagestream_guard_denied
+  - pagestream_incomplete
   - loadq_accepted
   - loadq_issued
   - loadq_drained
@@ -749,7 +755,7 @@ blocks:
     inputs: [client_req, guard_policy]
     outputs: [arb_req, guard_violation]
     upstream: [CMD.SCHEDULER, TERRAIN.PATCH, TERRAIN.VELOCITY, SURFACE.SHEET, GEOM.MESHFETCH, GEOM.POSE, TEXTURE.CACHE, PART.STATE, RASTER.RESOLVE, POST.GATHER, POST.ECHO, VIDEO.SCANOUT, DEBUG.FRAMEBLIT, MEM.UPLOAD, GEOM.ASSETFETCH, TERRAIN.PAGELOADER, TERRAIN.WRITEBACK]
-    downstream: [MEM.VRAM.ARBITER]
+    downstream: [MEM.VRAM.ARBITER, TERRAIN.PAGESTREAM]
     backpressure: ready_valid
     latency: fixed:1
     target_throughput: 1 checked request per clock
@@ -1611,6 +1617,82 @@ blocks:
   # TERRAIN — Mantle (fpga/rtl/terrain)
   # ===========================================================================
 
+  - id: TERRAIN.PAGESTREAM
+    name: Page slot to height lattice
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Reads layers A, B and C out of one resident TERRAIN.PAGE_POOL slot and emits the patch's 33x33 height lattice, one vertex at a time, row-major, with all three planes present on the same beat. This is the stream TERRAIN.MIPGEN consumes through fine_valid_i and TERRAIN.PATCH consumes through base_i/scar_i/bottom_i, and until it existed nothing in fpga/rtl could turn a resident slot into either -- which is why the composed world layer fetched eight CRC-verified pages and called none of them ground."
+    contract: design/contracts/TERRAIN.PAGESTREAM.md
+    phase: 6
+    owner_issue: ZH-126
+    inputs: [page_lattice_jobs]
+    outputs: [page_lattice_stream]
+    upstream: [TERRAIN.RESIDENCY, MEM.GUARD]
+    downstream: [TERRAIN.MIPGEN, TERRAIN.PATCH]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: "one 33x33 lattice per 3,544 gpu clocks measured on the played fabric at 2-cycle read latency; 105 bursts, derived from the layout rather than observed"
+    reference_model: zref::terrain::page_lattice
+    tests:
+      directed: tests/terrain/pagestream_rtl_directed.cpp
+      random: tests/terrain/pagestream_rtl_directed.cpp
+    counters: [pagestream_lattices, pagestream_refused, pagestream_vertices, pagestream_bursts, pagestream_guard_denied, pagestream_incomplete]
+    counter_ports:
+      pagestream_lattices: lattices_streamed_o
+      pagestream_refused: lattices_refused_o
+      pagestream_vertices: vertices_streamed_o
+      pagestream_bursts: bursts_read_o
+      pagestream_guard_denied: guard_denied_o
+      pagestream_incomplete: incomplete_o
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-07"
+        commit: "795d4420"
+        evidence: design/contracts/TERRAIN.PAGESTREAM.md
+      - state: UNIT_VERIFIED
+        date: "2026-09-07"
+        commit: "795d4420"
+        evidence: tests/terrain/pagestream_rtl_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      THE THREE PLANES ARE READ TOGETHER, NOT ONE AFTER ANOTHER. TERRAIN.PATCH's
+      compose lane takes base, scar and bottom on one beat and the planes are
+      2,178 bytes apart, so three cursors advance in lockstep with a 64-byte
+      staging buffer each. Reading A whole, then B, then C would need 17,424
+      bits of buffering held across the other two passes; this needs 1,536.
+
+      A SAMPLE NEVER STRADDLES ANYTHING, AND THAT IS ARITHMETIC RATHER THAN
+      LUCK. All three offsets are EVEN and the element is two bytes, so sample k
+      of plane P is at page byte P + 2k, also even -- which puts it entirely
+      inside one 64-bit word (lane 0/2/4/6, and 6 + 2 = 8) and entirely inside
+      one 64-byte burst (lane 0..62, and 62 + 2 = 64). Layer F needed a
+      re-laner; these do not. Enforced at elaboration in the RTL and by
+      static_assert in the reference header, because a layout revision that made
+      an offset odd would silently return the two halves of two neighbouring
+      vertices.
+
+      IT DOES NOT COMPOSE. terrain_rules 3.4's
+      compose_top = max(fx(base) + fx(scar), fx(bottom)) is TERRAIN.PATCH's law
+      and zref::terrain::compose_vertex its oracle. A second implementation of
+      that saturating clamp is a second thing to keep in step with 3.4, and its
+      first divergence is ground subtly in the wrong place with every counter
+      agreeing.
+
+      OPEN RULING -- WHICH SURFACE MIPGEN DECIMATES AT LOAD TIME. Ruling T8
+      gives the mip law exactly and says a page becomes RESIDENT only after
+      "resident mips complete", but does NOT say which surface fine33 is at load
+      time. Layer A alone would show unscarred ground at coarse LOD on a scarred
+      patch; compose_top is correct-looking but is 3.4 arithmetic this block
+      deliberately does not own. So this block emits all three planes and the
+      selection sits in the adapter that feeds MIPGEN, where it is one visible
+      wire. Not invented here.
+
   - id: TERRAIN.LOADQ
     name: Page-load job queue
     kind: rtl
@@ -1884,7 +1966,7 @@ blocks:
     owner_issue: ZH-033
     inputs: [dispatch, field_results, baked_scars]
     outputs: [patch_state, subpatch_requests]
-    upstream: [CMD.SCHEDULER, FIELD.SEQ.EARTH, TERRAIN.BAKE, TERRAIN.SEQ]
+    upstream: [CMD.SCHEDULER, FIELD.SEQ.EARTH, TERRAIN.BAKE, TERRAIN.SEQ, TERRAIN.PAGESTREAM]
     downstream: [TERRAIN.TESS, TERRAIN.LOD, TERRAIN.VELOCITY, PART.COLLIDE, MEM.GUARD, TERRAIN.MIPGEN, TERRAIN.RESIDENCY, TERRAIN.COMPCACHE]
     backpressure: ready_valid
     latency: variable
@@ -2265,7 +2347,7 @@ blocks:
     inputs: [patch_claims, loader_completions, deformation_marks]
     outputs: [residency_answers, eviction_writebacks]
     upstream: [TERRAIN.PATCH, TERRAIN.PAGELOADER, TERRAIN.SEQ, TERRAIN.WRITEBACK]
-    downstream: [TERRAIN.MIPGEN, TERRAIN.LOD, TERRAIN.ISLAND, TERRAIN.WRITEBACK]
+    downstream: [TERRAIN.MIPGEN, TERRAIN.LOD, TERRAIN.ISLAND, TERRAIN.WRITEBACK, TERRAIN.PAGESTREAM]
     backpressure: ready_valid
     latency: fixed:2
     target_throughput: one mutation or one query per clock
@@ -2301,7 +2383,7 @@ blocks:
     owner_issue: ZH-122
     inputs: [page_height_lattice]
     outputs: [page_height_mips]
-    upstream: [TERRAIN.PATCH, TERRAIN.RESIDENCY, TERRAIN.PAGELOADER]
+    upstream: [TERRAIN.PATCH, TERRAIN.RESIDENCY, TERRAIN.PAGELOADER, TERRAIN.PAGESTREAM]
     downstream: [TERRAIN.LOD]
     backpressure: ready_valid
     latency: fixed:1

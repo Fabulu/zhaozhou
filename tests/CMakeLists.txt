@@ -6538,6 +6538,45 @@ set_tests_properties(lint_terrain_seq PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # ---------------------------------------------------------------------------
+# TERRAIN.PAGESTREAM -- a resident page slot, as a lattice.
+#
+# EVERY WAY THIS BLOCK CAN BE WRONG PRODUCES 1,089 VERTICES: the wrong slot, the
+# wrong lane, the wrong plane, the wrong scan order, a stale staging buffer.
+# All of them render as terrain and none of them move a count. So the bench
+# compares the whole stream against `zref::terrain::page_lattice`, vertex by
+# vertex and field by field, with a fixture in which each of those confusions
+# produces a different number -- distinct injective values per plane, negative
+# scars so a zero-extending read cannot hide, and neighbouring slots poisoned
+# with patterns that are not this slot's.
+#
+# The REAL zhao_mem_guard watches the DUT's request wires as an observer:
+# TERRAIN.PAGE_POOL gained its read arm on 2026-09-06, so every request must
+# PASS, and the observer's count is the evidence rather than the played model's
+# blanket verdict.
+add_executable(test_pagestream_rtl_directed terrain/pagestream_rtl_directed.cpp)
+target_link_libraries(test_pagestream_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_pagestream_rtl_directed
+  PREFIX Vtb_pagestream
+  TOP_MODULE tb_pagestream
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_guard.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pagestream.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_pagestream.sv)
+add_test(NAME pagestream_rtl_directed COMMAND test_pagestream_rtl_directed)
+set_tests_properties(pagestream_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_terrain_pagestream
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_pagestream
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pagestream.sv)
+set_tests_properties(lint_terrain_pagestream PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
 # TERRAIN.LOADQ -- the load queue, against its reference model.
 #
 # A queue is the block whose test writes itself badly: push some, pop some,

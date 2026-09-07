@@ -43,6 +43,7 @@
 #define ZREF_TERRAIN_PAGE_HPP
 
 #include <cstdint>
+#include <vector>
 
 #include "zhao_abi.h"  // generated (runtime/include): zhao_crc32c
 #include "zref/zref_mem_upload.hpp"
@@ -323,6 +324,84 @@ static_assert(kLayerFOff == 10694, "layer F starts at page byte 10,694");
 static_assert(kLayerFOff + kLayerFBytes == 18886, "...and ends at 18,886");
 static_assert(kLayerHOff + kLayerHBytes == kPageBodyEnd,
               "the layer table must sum to the body end the spec's own Total row gives");
+
+// ---------------------------------------------------------------------------
+// THE THREE HEIGHT PLANES, AS A LATTICE -- the oracle for TERRAIN.PAGESTREAM
+// ---------------------------------------------------------------------------
+// A, B and C are each 33x33 height16, row-major, and `TERRAIN.PATCH`'s compose
+// lane wants all three at ONE vertex on one beat. So the natural reading of a
+// page is not "three planes" but "1,089 triples in scan order", and that is
+// what this returns.
+//
+// EVERY OFFSET IS EVEN AND THAT IS THE WHOLE ALIGNMENT ARGUMENT. 64, 2,242 and
+// 4,420 are even and the element is two bytes, so sample k of plane P sits at
+// page byte `P + 2k`, also even -- which means a 16-bit read never straddles a
+// 64-bit word and never straddles a 64-byte burst (the lane is 0..62 and
+// 62 + 2 = 64 exactly). Layer F needed a re-laner; these do not, and the
+// difference is arithmetic rather than luck. The static_asserts below are what
+// keep it that way when the layout is next revised.
+static_assert((kLayerAOff % 2) == 0, "plane A must start on an even byte");
+static_assert((kLayerBOff % 2) == 0, "plane B must start on an even byte");
+static_assert((kLayerCOff % 2) == 0, "plane C must start on an even byte");
+
+inline constexpr int kLatticeEdge = 33;
+inline constexpr int kLatticeVerts = kLatticeEdge * kLatticeEdge;   // 1,089
+
+static_assert(kLatticeVerts * 2 == static_cast<int>(kLayerABytes),
+              "the 33x33 lattice must account for every byte of plane A");
+
+/** One vertex of a page's height lattice: the three planes, untouched. */
+struct LatticeVertex {
+  int16_t base = 0;    // layer A
+  int16_t scar = 0;    // layer B
+  int16_t bottom = 0;  // layer C
+  int vi = 0;          // 0..32, row
+  int vj = 0;          // 0..32, column
+
+  bool operator==(const LatticeVertex& o) const {
+    return base == o.base && scar == o.scar && bottom == o.bottom && vi == o.vi && vj == o.vj;
+  }
+};
+
+/** height16 at page byte `off`, little-endian, signed. */
+inline int16_t page_h16(const uint8_t* page, uint32_t off) {
+  return static_cast<int16_t>(static_cast<uint16_t>(page[off]) |
+                              (static_cast<uint16_t>(page[off + 1]) << 8));
+}
+
+/**
+ * `page_lattice` -- the 1,089 vertices of one page, ROW-MAJOR, `vi` outer.
+ *
+ * THE ORDER IS THE ADDRESS. TERRAIN.MIPGEN's fine port carries no coordinate
+ * at all and derives everything from scan position, so a consumer that trusted
+ * a coordinate against a differently-ordered scan would decimate the wrong
+ * vertices while every count agreed. `vi`/`vj` are returned because the
+ * subpatch mask needs them, not as a second source of truth.
+ *
+ * IT DOES NOT COMPOSE. terrain_rules SS3.4's
+ * `compose_top = max(fx(base) + fx(scar), fx(bottom))` is
+ * `zref::terrain::compose_vertex`'s law and TERRAIN.PATCH's block. A second
+ * implementation of that saturating clamp is a second thing to keep in step
+ * with SS3.4, and its first divergence is ground subtly in the wrong place with
+ * every counter agreeing.
+ */
+inline std::vector<LatticeVertex> page_lattice(const uint8_t* page) {
+  std::vector<LatticeVertex> out;
+  out.reserve(kLatticeVerts);
+  for (int vi = 0; vi < kLatticeEdge; ++vi) {
+    for (int vj = 0; vj < kLatticeEdge; ++vj) {
+      const uint32_t k = static_cast<uint32_t>(vi * kLatticeEdge + vj);
+      LatticeVertex v;
+      v.base = page_h16(page, kLayerAOff + 2u * k);
+      v.scar = page_h16(page, kLayerBOff + 2u * k);
+      v.bottom = page_h16(page, kLayerCOff + 2u * k);
+      v.vi = vi;
+      v.vj = vj;
+      out.push_back(v);
+    }
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // THE SHEET IS SIX BYTES OFF A BURST BOUNDARY, AND THAT IS A DATAPATH FACT

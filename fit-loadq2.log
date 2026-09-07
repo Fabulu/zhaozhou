@@ -1,0 +1,4 @@
+﻿preflight: zhao_terrain_loadq closure from design/fit_targets.yml (1 file(s))
+snapshot: 1 source(s) copied into the workspace; the live tree cannot reach this fit
+provenance guard: 1 declared source(s)
+source digest: aa3da8986982 over 1 file(s) -> zhao_terrain_loadq.sources.sha256
